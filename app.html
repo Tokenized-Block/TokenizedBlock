@@ -193,6 +193,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jeuTuile::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
 .jeuTuile b{display:block;font-size:10.5px;letter-spacing:.12em;color:var(--accent2);margin-bottom:2px}
 .jeuTuile p{margin:0;font-size:13px;line-height:1.4}
+/* 2026-10-17 soir (Phil) : « Your day » — le ticket est une FACE de block, les etapes sont des boutons, le dernier block ne est en direct */
+.jourTicket{display:flex;gap:12px;align-items:center;margin:8px 0}
+.jourFace{width:76px;height:76px;flex:0 0 76px;border-radius:14px;border:1px solid var(--ligne);background:rgb(var(--accentRgb) / .06);display:grid;place-items:center;overflow:hidden}
+.jourFace svg{width:100%;height:100%}
+.jourFace[data-gagne="0"]{opacity:.38;filter:grayscale(.6)}
+.jourEtapes{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.jourEtapes .bouton{flex:1 1 140px}
+.jourPaires{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+.jourPaires span{font-size:12px;border:1px solid var(--ligne);border-radius:999px;padding:2px 8px}
+.jourPaires span[data-tb="1"]{border-color:var(--accent);color:var(--accent)}
 .jeuPart{display:flex;height:22px;border-radius:8px;overflow:hidden;border:1px solid var(--ligne);margin:8px 0 4px}
 .jeuPart span{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#0b0716;white-space:nowrap}
 .titre{font-weight:700;font-size:16px;letter-spacing:-.2px;margin:0 0 5px}
@@ -3496,6 +3506,37 @@ details[open] > summary::before{transform:rotate(90deg)}
        ⛔ Rien ici ne pretend qu un contrat est ouvert : le tableau des missions le dit, le tirage dit « practice, no prize yet ».
        Fund / Swap / Bridge : section #v-bridge, affichee SOUS le Wallet (ids inchanges : le JS et les tests les trouvent). -->
   <section class="volet" id="v-missions" aria-label="Missions">
+    <!-- 2026-10-17 soir (Phil : « un mix entre tout ca … affiche le nombre de tickets … des boutons pour chaque etape … le ticket est une face
+         … le dernier block apparu avec les combinaisons ») : TA JOURNEE, en tete. Le ticket du jour = la face d une adresse DERIVEE de
+         (wallet, jour) par SHA-256 : la meme pour tout le monde, rejouable. Grisee tant que les 10 $ du jour ne sont pas verifies. -->
+    <div class="carte" id="jourCarte">
+      <span class="jeuKick">TokenizedBlock · Your day</span>
+      <p class="titre jeuTitre">Trade. Hold. Play.</p>
+      <div class="jourTicket">
+        <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
+        <div style="min-width:0">
+          <p class="note" id="jourTicketTxt" style="margin:0">Connect a wallet: today's ticket shows here.</p>
+          <p class="note" id="jourCompte" style="margin:4px 0 0">Your tickets — today 0 · this week 0 · this month 0</p>
+        </div>
+      </div>
+      <div class="jourEtapes">
+        <button type="button" class="bouton" id="jourUnit">1 · Trade UNIT</button>
+        <button type="button" class="bouton sec" id="jourActions">or tokenized stocks</button>
+        <button type="button" class="bouton sec" id="jourMissions">2 · Missions</button>
+        <button type="button" class="bouton sec" id="jourTirages">3 · The draws</button>
+      </div>
+    </div>
+    <div class="carte" id="dernierCarte">
+      <span class="jeuKick">Live · latest block born</span>
+      <div class="jourTicket">
+        <div class="jourFace" id="dernierFace" role="img" aria-label="Face of the latest block born"></div>
+        <div style="min-width:0">
+          <p class="titre" id="dernierNom" style="margin:0">Reading…</p>
+          <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
+          <div class="jourPaires" id="dernierPaires"></div>
+        </div>
+      </div>
+    </div>
     <div class="carte" id="missionsCarte">
       <span class="jeuKick">TokenizedBlock · Missions</span>
       <p class="titre jeuTitre">Your block is your pass.</p>
@@ -3515,7 +3556,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <span style="width:1.4%;background:rgb(var(--accentRgb) / .3)"></span>
       </div>
       <p class="note" style="margin:0">Player 90% · creator 3% · community reserve 5.6% · dev 1.4% (in USDC or in the stock — never in block units).</p>
-      <p class="note" style="margin:6px 0 0">A block — or its brain — posts the job. Example of a mission: <i>say GM back</i>, reward $1 of NVDAc.</p>
+      <!-- ⛔ « or its brain posts the job » RETIRE (Phil : « corrige les incoherences ») : le cerveau ne poste AUCUNE mission aujourd hui. -->
+      <p class="note" style="margin:6px 0 0">The block's creator posts the job. Example of a mission: <i>say GM back</i>, reward $1 of NVDAc.</p>
       <p class="note" style="margin:6px 0 0"><b>The mission board is not open yet</b> — it opens once its contract is signed on Base.</p>
     </div>
     <!-- 2026-10-17 soir — SEASON DRAW v2 QUOTIDIEN (Phil). Donnees : /api/tirage (publiques, rejouables). -->
@@ -4290,8 +4332,76 @@ async function peindreTirage() {
   moi.textContent = (w && w.ticket ? 'You hold today\'s ticket.'
     : 'Your verified volume today: $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' — $' + Math.max(0, seuil - fait).toFixed(2) + ' to go.')
     + (mesJours ? ' · ' + mesJours + ' day' + (mesJours === 1 ? '' : 's') + ' in this month\'s draw.' : '');
+  void peindreJour(t, moiBas, w, fait, seuil);
 }
+
+/* ══ YOUR DAY (2026-10-17 soir, Phil) — le ticket du jour comme une FACE de block, et les compteurs du wallet. La face vient d une adresse
+ *   DERIVEE de (wallet, jour) par SHA-256 : publique, rejouable, la meme partout ; grisee tant que le ticket n est pas gagne (volume VERIFIE
+ *   par le serveur). Rien n est stocke ni signe ici. */
+async function adresseTicket(moiBas, jourId) {
+  const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(moiBas + '|' + jourId)));
+  return '0x' + [...h.slice(0, 20)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+async function peindreJour(t, moiBas, w, fait, seuil) {
+  const face = $('#jourFace'), txt = $('#jourTicketTxt'), cpt = $('#jourCompte');
+  if (!face || !txt || !cpt || !t || !t.jour) return;
+  const sem = (t.semaine.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
+  const mois = (t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
+  const gagne = !!(w && w.ticket);
+  cpt.textContent = 'Your tickets — today ' + (gagne ? 1 : 0) + ' · this week ' + sem + ' · this month ' + mois;
+  try { face.innerHTML = dessin(await adresseTicket(moiBas, t.jour.id), 'T') || ''; } catch (_) { face.innerHTML = ''; }
+  face.setAttribute('data-gagne', gagne ? '1' : '0');
+  txt.textContent = gagne ? 'Today\'s ticket is yours: this face enters today\'s draw, and one more entry for the week and the month.'
+    : 'Today\'s ticket face — yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go).';
+}
+
+/* ══ LE DERNIER BLOCK NE, EN DIRECT — /api/blocks-routeur (naissances par notre routeur, avec leur bloc) et /api/cle/<block> (ses pools =
+ *   ses combinaisons). Une paire sur NOS hooks est marquee ; une paire d un hook tiers est dite telle. Lecture ratee -> dit, rien d invente. */
+const UNIT_APP = '0xb2000000000000000000007afa7ed748b0874f27';
+function symPaire(adr) {
+  const a = String(adr).toLowerCase();
+  if (/^0x0{40}$/.test(a)) return 'ETH';
+  const act = ACTIONS_COINBASE.find((x) => String(x.adr).toLowerCase() === a);
+  if (act) return act.symbole;
+  const dv = (DEVISES_BASE || []).find((x) => String(x.adr || x.adresse).toLowerCase() === a);
+  if (dv) return dv.sym || dv.symbole;
+  return a.slice(0, 6) + '…' + a.slice(-4);
+}
+/* « nos hooks » : estNotreHook, IMPORTE de tokenomics.js (la source canonique). ⛔ 2026-10-17 soir : une copie locale du MEME nom avait ete
+ *   ajoutee ici — SyntaxError « already been declared » qui tuait TOUT le module de l app (attrape au navigateur avant le deploiement). */
+async function peindreDernierBlock() {
+  const nom = $('#dernierNom'), quand = $('#dernierQuand'), paires = $('#dernierPaires'), face = $('#dernierFace');
+  if (!nom) return;
+  let j = null;
+  try { j = await fetch('/api/blocks-routeur', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+  const liste = j && j.ok && Array.isArray(j.blocks) ? j.blocks.filter((b) => b && /^0x[0-9a-f]{40}$/.test(String(b.jeton).toLowerCase()) && Number.isInteger(b.bloc)) : [];
+  if (!liste.length) { nom.textContent = 'The latest birth could not be read just now.'; return; }
+  const d = liste.reduce((x, y) => (y.bloc > x.bloc ? y : x));
+  const adr = String(d.jeton).toLowerCase();
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === adr);
+  let sym = (h && h.sym) || (adr === UNIT_APP ? 'UNIT' : '');
+  /* symbole inconnu de la page : LU sur la chaine (symbol()), jamais devine ; illisible -> l adresse courte */
+  if (!sym) { try { sym = symboleDepuisReponse(await rpc('eth_call', [{ to: adr, data: '0x95d89b41' }, 'latest'])) || ''; } catch (_) { sym = ''; } }
+  nom.textContent = (sym || adr.slice(0, 6) + '…' + adr.slice(-4));
+  try { face.innerHTML = dessin(adr, sym) || ''; } catch (_) { face.innerHTML = ''; }
+  const min = Number.isInteger(j.tete) ? Math.round(((j.tete - d.bloc) * 2) / 60) : null;
+  quand.textContent = 'Born at block ' + d.bloc.toLocaleString('en-US') + (min !== null ? ' · about ' + (min < 120 ? min + ' min' : Math.round(min / 60) + ' h') + ' ago' : '');
+  let c = null;
+  try { c = await fetch('/api/cle/' + adr, { cache: 'no-store' }).then((r) => r.json()); } catch (_) { c = null; }
+  const cles = c && c.ok && Array.isArray(c.cles) ? c.cles : null;
+  if (!cles) { paires.textContent = 'Its pairs could not be read just now.'; return; }
+  paires.innerHTML = cles.map((k) => {
+    const autre = String(k.currency0).toLowerCase() === adr ? k.currency1 : k.currency0, tb = estNotreHook(k.hooks);
+    return '<span data-tb="' + (tb ? 1 : 0) + '" title="' + enTexte(tb ? 'On TokenizedBlock' : 'On another hook') + '">' + enTexte(sym || 'block') + ' / ' + enTexte(symPaire(autre)) + (tb ? '' : ' · other hook') + '</span>';
+  }).join('') || '<span>no pool read yet</span>';
+}
+$('#jourUnit').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
+$('#jourActions').addEventListener('click', () => allerA('trade'));
+$('#jourMissions').addEventListener('click', () => { const e = $('#missionsCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+$('#jourTirages').addEventListener('click', () => { const e = $('#tirCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);
+/* le dernier block ne : relu toutes les 60 s, seulement onglet Missions ouvert et page visible (pas de lecture pour personne) */
+setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDernierBlock(); }, 60000);
 
 document.querySelector('.navIn').addEventListener('click', (e) => {
   const b = e.target.closest('.navB');
@@ -4326,7 +4436,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
-  if (nom === 'missions') void peindreTirage();
+  if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
