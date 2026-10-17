@@ -78,7 +78,7 @@ contract SigneurClaim is Test {
     function setUp() public {
         hook = new HookS();
         blk = new JetonS(); usdc = new JetonS();
-        m = new BlockMissionsV3(address(hook), address(0x9A11), address(0xDE5), address(0xFEE), address(usdc), vm.addr(VK), address(0x6A2D), address(0));
+        m = new BlockMissionsV3(address(hook), address(0x9A11), address(0xDE5), address(0xFEE), address(usdc), vm.addr(VK), address(0x6A2D), address(0), new address[](0));
         (address c0, address c1) = address(usdc) < address(blk) ? (address(usdc), address(blk)) : (address(blk), address(usdc));
         BlockMissionsV3.PoolKey memory k = BlockMissionsV3.PoolKey(c0, c1, 0, 200, address(hook));
         hook.set(m.poolIdOf(k), creator, address(blk));

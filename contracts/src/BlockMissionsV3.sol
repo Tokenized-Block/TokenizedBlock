@@ -136,7 +136,7 @@ contract BlockMissionsV3 {
     error ReserveEmpty(); error SelfDealing(); error TxUsed(); error CapReached(); error BadProof(); error NothingToRefund();
     error NothingToWithdraw(); error TransferFailed(); error Reentrancy(); error NotHolder(); error Paused(); error SignatureExpired();
     error CancelPending(); error CancelStale(); error DeadlineTooFar(); error UnitsToDev(); error SlippageUsdc(); error NotReady();
-    error Shortfall(); error WrongHook(); error NotSold(); error NotPaused(); error StaleWindow();
+    error Shortfall(); error WrongHook(); error NotSold(); error NotPaused(); error StaleWindow(); error NotAdmitted();
 
     modifier nonReentrant() { if (_lock != 1) revert Reentrancy(); _lock = 2; _; _lock = 1; }
     modifier onlyOwner() { if (msg.sender != owner) revert NotOwner(); _; }
@@ -147,6 +147,7 @@ contract BlockMissionsV3 {
             address d = devDirect_[i];
             /* Grok 2026-10-17 : la liste ne contient ni USDC (toujours direct), ni nos contrats, ni le dev, la reserve ou le rail */
             if (d == address(0) || d == usdc || d == hook || d == poolManager || d == devWallet || d == communityReserve || (rail_ != address(0) && d == rail_)) revert BadAddress();
+            if (!_admittedBy(hook, d)) revert NotAdmitted();
             devDirect[d] = true;
             emit DevTokenSet(d, true);
         }
@@ -173,15 +174,25 @@ contract BlockMissionsV3 {
     /// @notice adding or removing a token of the dev-direct list redirects value: same rule as a verifier change (48 h public, open contract).
     function proposeDevToken(address token, bool allowed) external onlyOwner {
         if (token == address(0) || token == USDC || token == HOOK || token == POOL_MANAGER || token == DEV_WALLET || token == COMMUNITY_RESERVE || token == RAIL) revert BadAddress();
+        if (allowed && !_admittedBy(HOOK, token)) revert NotAdmitted();
         nextDevToken = DevTokenProposal(token, allowed, uint64(block.timestamp + ADMIN_DELAY));
         emit DevTokenProposed(token, allowed, nextDevToken.readyAt);
     }
     function acceptDevToken() external onlyOwner {
         DevTokenProposal memory p = nextDevToken;
+        if (p.allowed && !_admittedBy(HOOK, p.token)) revert NotAdmitted(); // the hook may have dropped it during the 48 h
         _accept(Proposal(p.token, p.readyAt), "devToken");
         devDirect[p.token] = p.allowed;
         delete nextDevToken;
         emit DevTokenSet(p.token, p.allowed);
+    }
+
+    /// @notice K1 (Grok, ad5b57b, 2026-10-17): only a currency the hook ADMITS can be paid to the dev directly. A block never is one
+    ///         (MEASURED on Base 2026-10-17, hook 7030 deviseAdmise: the 58 listed stocks 58/58 = 1, USDC = 1, UNIT = 0, an empty address = 0).
+    ///         Closes "a block listed by mistake + a hook pairing block/block": the per-payment guard (tok != t.blockToken) stays as 2nd line.
+    function _admittedBy(address hook, address token) private view returns (bool) {
+        (bool ok, bytes memory ret) = hook.staticcall(abi.encodeWithSignature("deviseAdmise(address)", token));
+        return ok && ret.length >= 32 && abi.decode(ret, (uint256)) == 1;
     }
 
     function _propose(bytes32 what, address v) private returns (Proposal memory p) {

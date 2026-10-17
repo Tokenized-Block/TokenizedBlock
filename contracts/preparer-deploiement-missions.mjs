@@ -59,6 +59,13 @@ const creation = pret ? code + args : null;
 const sha = (hex) => crypto.createHash('sha256').update(Buffer.from(hex.slice(2), 'hex')).digest('hex');
 const meta = typeof art.metadata === 'string' ? JSON.parse(art.metadata) : (art.metadata || {});
 const source = fs.readFileSync(path.join(ICI, 'src/BlockMissionsV3.sol'), 'utf8').replace(/\r\n/g, '\n');
+/* ⛔ 2026-10-17 (MESURE : un forge build en echec a laisse dans out/ l artefact de 6164e90, keccak 0x7b1248ac…, sous la source K1
+ *   0x284b7b68… : le fichier genere aurait porte le sha256 de la NOUVELLE source et le bytecode de l ANCIENNE). L artefact doit avoir
+ *   ete compile depuis CE fichier, octet pour octet (solc hache les octets lus, fins de ligne comprises). */
+const { keccak256 } = await imp('keccak.js');
+const kSource = '0x' + Buffer.from(keccak256(fs.readFileSync(path.join(ICI, 'src/BlockMissionsV3.sol')))).toString('hex');
+const kArtefact = String(((meta.sources || {})['src/BlockMissionsV3.sol'] || {}).keccak256 || '').toLowerCase();
+if (kArtefact !== kSource) throw new Error('stale forge artifact: compiled from ' + (kArtefact || 'an unknown source') + ', the source is ' + kSource + ' -- run forge build first, and fix what stops it');
 const q = (v) => (v ? "'" + v + "'" : 'null');
 const sortie = [
   '/* missions-deploiement.js — GENERE par contracts/preparer-deploiement-missions.mjs. NE PAS EDITER A LA MAIN.',
