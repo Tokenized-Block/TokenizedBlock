@@ -3572,7 +3572,11 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" style="margin:0">Player 90% · creator 3% · community reserve 5.6% · dev 1.4% (in USDC or in the stock — never in block units).</p>
       <!-- ⛔ « or its brain posts the job » RETIRE (Phil : « corrige les incoherences ») : le cerveau ne poste AUCUNE mission aujourd hui. -->
       <p class="note" style="margin:6px 0 0">The block's creator posts the job. Example of a mission: <i>say GM back</i>, reward $1 of NVDAc.</p>
-      <p class="note" style="margin:6px 0 0"><b>The mission board is not open yet</b> — it opens once its contract is signed on Base.</p>
+      <!-- 2026-10-17 soir (Phil : « au lieu de l ecrire build le ») : LE TABLEAU. /api/missions (le contrat) ; chaque mission ouverte a son
+           « I did it — claim » : le hash de ton action -> /api/missions/attestation (verifier) -> claim signe par TON wallet (missions-plan.js).
+           Tant que le contrat n a pas d adresse, la phrase ci-dessous reste, et aucun bouton n est montre. -->
+      <p class="note" id="missionsEtat" style="margin:6px 0 0"><b>The mission board is not open yet</b> — it opens once its contract is signed on Base.</p>
+      <ul class="bcListe" id="missionsListe" style="margin:8px 0 0;padding:0;list-style:none"></ul>
     </div>
     <!-- 2026-10-17 soir — SEASON DRAW v2 QUOTIDIEN (Phil). Donnees : /api/tirage (publiques, rejouables). -->
     <div class="carte" id="tirCarte">
@@ -3827,6 +3831,7 @@ import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
 (() => { try { const st = document.createElement('style'); st.textContent = CUBE3D_CSS; document.head.appendChild(st); } catch (_) {} })();
 import { apparenceDepuisAdresse } from './apparence.js';
 import { faceRevelee, scoreFaces } from './face-du-jour.js';
+import { planReclamer } from './missions-plan.js';
 /* ⛔⛔ L IMAGE GRAVEE (2026-09-22). `budgetSurFace` vient de `photo.js`, qui porte le mur MESURE du
  * precompile B20 : 12 Ko de fichier passent, 13 Ko sont refuses, et le refus persiste en offrant
  * cent millions de gas. Calculer le budget ici plutot que le deviner evite de faire SIGNER une
@@ -4423,6 +4428,41 @@ async function peindreDernierBlock() {
 }
 $('#jourUnit').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
 $('#jourActions').addEventListener('click', () => allerA('trade'));
+/* ══ LE TABLEAU DES MISSIONS (2026-10-17 soir) — lit /api/missions ; « I did it — claim » : attestation du verifier puis claim signe par le
+ *   wallet. Rien n est montre comme jouable tant que le serveur dit PAS_OUVERT. Montants en unites brutes du jeton de recompense. */
+async function peindreMissions() {
+  const etat = $('#missionsEtat'), ul = $('#missionsListe');
+  if (!etat || !ul) return;
+  let j = null;
+  try { j = await fetch('/api/missions', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+  if (!j || !j.ok) { ul.innerHTML = ''; if (j && j.etat === 'NON_LU') etat.textContent = 'The mission board could not be read just now.'; return; }
+  const ouvertes = (j.missions || []).filter((x) => x.lue && x.etat === 'OUVERTE');
+  etat.textContent = ouvertes.length ? ouvertes.length + ' open mission' + (ouvertes.length === 1 ? '' : 's') + ' — hold the block, do it, keep holding through the window, then claim.' : 'No open mission right now.';
+  ul.innerHTML = ouvertes.map((x) => '<li class="filL" data-mission="' + x.id + '"><p class="filT"><b>Mission #' + x.id + '</b> · reward ' + enTexte(x.reward) + ' (raw units) · '
+    + x.done + '/' + x.maxDone + ' done · hold ' + Math.round(x.detention.window / 3600) + ' h</p>'
+    + '<p class="filS">Hold at least ' + enTexte(x.detention.minBlock) + ' raw units of the block' + (BigInt(x.detention.minPaired) > 0n ? ' and ' + enTexte(x.detention.minPaired) + ' of its pair' : '') + '.</p>'
+    + '<input class="champ" data-mtx placeholder="Hash of the transaction where you did it (0x…)" style="width:100%;margin:6px 0">'
+    + '<button type="button" class="bouton" data-claim="' + x.id + '">I did it — claim</button><p class="note" data-metat></p></li>').join('');
+  ul.dataset.contrat = String(j.contrat || '');
+}
+$('#missionsListe').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-claim]'); if (!b) return;
+  const li = b.closest('[data-mission]'), dit = (t) => { li.querySelector('[data-metat]').textContent = t; };
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { dit('Connect your wallet first.'); return; }
+  const tx = String(li.querySelector('[data-mtx]').value || '').trim().toLowerCase();
+  if (!/^0x[0-9a-f]{64}$/.test(tx)) { dit('Paste the hash of the transaction where you did the mission.'); return; }
+  b.disabled = true; dit('Checking your mission and your holding on chain…');
+  try {
+    const r = await fetch('/api/missions/attestation?task=' + li.dataset.mission + '&wallet=' + String(c).toLowerCase() + '&tx=' + tx, { method: 'POST' }).then((x) => x.json());
+    if (!r.ok) { dit(r.pourquoi || 'Not approved.'); return; }
+    const appel = planReclamer({ contrat: $('#missionsListe').dataset.contrat, taskId: Number(li.dataset.mission), txHash: tx, held: r.held, signature: r.signature }).appels[0];
+    dit('Approved. Sign the claim in your wallet…');
+    const env = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, to: appel.to, data: appel.data, value: '0x0' });
+    dit(env.etat === 'CONFIRME' ? 'Claimed — the reward is in your wallet.' : 'Not claimed: ' + String(env.pourquoi || env.etat).slice(0, 140));
+  } catch (err) { dit('Not claimed: ' + String((err && err.message) || err).slice(0, 140)); }
+  finally { b.disabled = false; }
+});
 /* pass skin : le panneau de UNIT, vue Skin (essayer puis acheter 1 USDC) ; l achat signale `skin_mint`, le serveur ouvre 7 jours de tickets */
 $('#jourSkin').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
 $('#jourMissions').addEventListener('click', () => { const e = $('#missionsCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
@@ -4464,7 +4504,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
-  if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock(); }
+  if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock(); void peindreMissions(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();

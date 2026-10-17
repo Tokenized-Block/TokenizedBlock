@@ -4064,6 +4064,8 @@ const SERVIS = [
   'missions-rail.js',
   /* 2026-10-17 soir : Face of the Day (l app score ton ticket contre la face revelee par le bloc E) */
   'face-du-jour.js',
+  /* 2026-10-17 soir : le tableau des missions construit le claim (planReclamer) dans le navigateur */
+  'missions-plan.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',
