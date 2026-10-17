@@ -3545,6 +3545,8 @@ details[open] > summary::before{transform:rotate(90deg)}
              (1 USDC, contrat v2, relu sur la chaine) = le ticket du jour, credite par le serveur au recu (pass-skin) : REEL aujourd hui.
              Le day pass a 10 USDC (BlockRolls) n a pas de contrat signe : pas de bouton mort ici, il arrivera avec le contrat. -->
         <button type="button" class="bouton sec" id="jourSkin">Skin · 1 USDC = today's ticket</button>
+        <!-- Phil (19:40) : « une loop de games » — 5 rolls d affilee, score cumule ; montre seulement avec un wallet (sinon pas de score) -->
+        <button type="button" class="bouton sec" id="jourAuto" hidden>Auto-roll ×5</button>
       </div>
       <!-- HIER : la face revelee par le bloc E, ton score, le gagnant -->
       <div class="jourTicket" id="faceJour" hidden style="margin-top:10px">
@@ -4463,10 +4465,24 @@ async function peindreDernierBlock() {
   nom.textContent = 'Base block ' + Number(t.apercu.bloc).toLocaleString('en-US');
   quand.textContent = 'Every block draws a face. Roll: the block after next decides, live.';
   let c = null; try { c = compte; } catch (_) { c = null; }
+  const ba = $('#jourAuto'); if (ba) ba.hidden = !c;
   if (!c) { moiP.textContent = 'Connect a wallet to score your ticket against it.'; return; }
   const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), t.jour.id)), fr);
   moiP.textContent = s ? 'Right now: ' + s.score + '/5 traits in common.' : '';
 }
+/* AUTO-ROLL ×5 (Phil : « une loop de games ») : 5 rolls d affilee, chacun sur le bloc N+2 du moment ; le cumul est dit (meilleur, total). */
+async function autoRoll() {
+  const b = $('#jourAuto'), q = $('#dernierQuand');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c || b.disabled) return;
+  b.disabled = true;
+  try {
+    for (let i = 0; i < 5; i++) { if (!compte) break; await roll(); }
+    const scores = rollDerniers.slice(0, 5).map((r) => r.score).filter((x) => Number.isInteger(x));
+    if (q && scores.length) q.textContent = 'Last rolls: ' + scores.map((x) => x + '/5').join(' · ') + ' — best ' + Math.max(...scores) + '/5, total ' + scores.reduce((a, x) => a + x, 0) + '/' + (scores.length * 5) + '.';
+  } finally { b.disabled = false; }
+}
+$('#jourAuto').addEventListener('click', () => { void autoRoll(); });
 /* ══ ROLL (Phil 19:55 : « le winner gagne face au random en live ») — practice : aucun paiement ; le bloc N+2 (N = tete au clic) decide ;
  *   sa face est lue sur la chaine, comparee a ton ticket, score affiche. Le roll paye (0,50 USDC, BlockRolls) se branchera ICI, meme
  *   regle, des que le contrat existe et que Phil l a signe. */

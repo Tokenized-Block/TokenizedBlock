@@ -15,7 +15,8 @@ vu(c0 > 0 && c1 > c0, 'la carte Draws precede la carte Missions');
 /* ce qui est SERVI au visiteur : les commentaires HTML (qui racontent pourquoi) sont otes avant de juger les textes */
 const carte = app.slice(c0, c1).replace(/<!--[\s\S]*?-->/g, '');
 const ids = [...carte.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
-vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin']), 'exactement 4 boutons : Roll, Trade UNIT, Trade stocks, Skin (lus : ' + ids.join(', ') + ')');
+vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin', 'jourAuto']), 'exactement 4 boutons visibles + Auto-roll (lus : ' + ids.join(', ') + ')');
+vu(/<button[^>]*\bid="jourAuto"[^>]*\bhidden\b/.test(carte) && /\$\('#jourAuto'\)\.hidden = !c|ba\.hidden = !c/.test(app), 'Auto-roll est cache sans wallet (pas de score sans ticket)');
 vu(!/<button[^>]*\bdisabled\b/.test(carte), 'aucun bouton desactive dans la carte Draws');
 vu(!/Day pass|once their contract|jourPass/i.test(carte), 'aucune promesse de contrat a venir dans la carte');
 const r0 = app.indexOf('async function roll()'), r1 = app.indexOf('const rollDerniers = []');
