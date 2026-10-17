@@ -15,7 +15,7 @@ pragma solidity ^0.8.24;
 ///     (≤ 20 %, escrowed up front) rewards a deeper block holding. Holding through the window, not touching in and out, is what pays.
 ///   - review M1: verifier, guardian and rail changes are PROPOSED then ACCEPTED after ADMIN_DELAY (48 h > CANCEL_DELAY); a pause set by
 ///     the guardian can be lifted by the guardian, or by the owner only ADMIN_DELAY after it.
-///   - review M2: the rail (the only path of the dev's 20 % out of non-USDC tokens) is timelocked and public 48 h before use; a reward
+///   - review M2 (then M2 residual 2): the rail (the only path of the dev's 20 % out of non-USDC tokens) is IMMUTABLE, or none; a reward
 ///     paid in USDC sends the dev's 20 % straight to DEV_WALLET, no rail at all.
 ///   - review L2: a push never turns a SHORTFALL into an IOU: if the contract does not hold the amount, the claim reverts.
 ///   - review L3: finalizeCancel() is closed while paused, opens CANCEL_DELAY after max(request, last unpause) and closes CANCEL_WINDOW
@@ -133,6 +133,8 @@ contract BlockMissionsV3 {
         if (hook == address(0) || poolManager == address(0) || devWallet == address(0) || communityReserve == address(0) || usdc == address(0) || verifier_ == address(0)) revert BadAddress();
         if (devWallet == FORBIDDEN_LEGACY || communityReserve == FORBIDDEN_LEGACY || communityReserve == devWallet) revert BadAddress();
         if (rail_ == devWallet || rail_ == communityReserve) revert BadAddress();
+        /* review F5 (Grok, 2026-10-17): a non-zero rail must be deployed code and none of the contracts it talks to */
+        if (rail_ != address(0) && (rail_.code.length == 0 || rail_ == hook || rail_ == poolManager || rail_ == usdc)) revert BadAddress();
         HOOK = hook; POOL_MANAGER = poolManager; DEV_WALLET = devWallet; COMMUNITY_RESERVE = communityReserve; USDC = usdc; RAIL = rail_;
         verifier = verifier_; guardian = guardian_; owner = msg.sender;
         emit OwnershipTransferred(address(0), msg.sender);
@@ -337,8 +339,6 @@ contract BlockMissionsV3 {
         emit Withdrawn(token, msg.sender, a);
     }
 
-    /// @notice the dev's 20 % of a non-USDC reward token, sold on the (timelocked) rail. Checked on BALANCES: this contract lost exactly
-    ///         `amount`, the dev wallet gained >= minUsdcOut USDC and not one unit of `token`.
     /// @notice a dev share that the fixed rail cannot sell (no route for that token) is released to the COMMUNITY_RESERVE — never to the dev.
     function releaseDevShareToReserve(address token, uint256 amount) external onlyOwner nonReentrant {
         if (amount == 0 || amount > devOwed[token]) revert BadParams();
@@ -346,6 +346,8 @@ contract BlockMissionsV3 {
         _pushOrCredit(token, COMMUNITY_RESERVE, amount);
     }
 
+    /// @notice the dev's 20 % of a non-USDC reward token, sold on the IMMUTABLE rail. Checked on BALANCES: this contract lost exactly
+    ///         `amount`, the PoolManager gained it, the dev wallet gained >= minUsdcOut USDC and not one unit of `token`.
     function convertDevShare(address token, uint256 amount, uint256 minUsdcOut) external onlyOwner nonReentrant {
         address r = RAIL;
         if (r == address(0) || token == USDC || amount == 0 || amount > devOwed[token] || minUsdcOut == 0) revert BadParams();
