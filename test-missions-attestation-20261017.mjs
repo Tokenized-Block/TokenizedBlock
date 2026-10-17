@@ -20,8 +20,8 @@ const CIBLE = '0x' + '49'.repeat(20), TOPIC = '0x' + 'ab'.repeat(32), H = '0x' +
 const m = (v) => BigInt(v).toString(16).padStart(64, '0'), a = (x) => x.slice(2).padStart(64, '0');
 const TETE = 100000, WINDOW = 86400;
 /* chaine : bloc b -> horodatage 1_800_000_000 + 2*b ; le joueur detient 60 BLK, en sort 40 au bloc 80000 et les reprend au bloc 90000 */
-function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null } = {}) {
-  const ts = (b) => 1_800_000_000 + 2 * b;
+function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null, pasBloc = 2 } = {}) {
+  const ts = (b) => 1_800_000_000 + pasBloc * b;
   const finale = 60n * 10n ** 18n;
   const soldeA = (b) => (b >= 80000 && b < 90000 ? finale - 40n * 10n ** 18n : finale) + (sansLog ? 1n : 0n) * (b < 70000 ? 1n : 0n);
   const logs = [
@@ -29,9 +29,9 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
     { address: BLK, topics: [TOPIC_TRANSFER, '0x' + a(AUTRE), '0x' + a(JOUEUR)], data: '0x' + m(40n * 10n ** 18n), blockNumber: '0x' + (90000).toString(16), logIndex: '0x0', transactionHash: '0x' + '02'.repeat(32) },
   ];
   if (poseeAu !== null) logs.push({ address: CONTRAT, topics: [TOPIC_TASK_POSTED, '0x' + m(3), '0x' + a(BLK), '0x' + a(CREA)], data: '0x', blockNumber: '0x' + poseeAu.toString(16), logIndex: '0x0', transactionHash: '0x' + '03'.repeat(32) });
-  return async (meth, p) => {
+  const f = async (meth, p) => {
     if (meth === 'eth_blockNumber') return '0x' + TETE.toString(16);
-    if (meth === 'eth_getBlockByNumber') return { timestamp: '0x' + ts(parseInt(p[0], 16)).toString(16) };
+    if (meth === 'eth_getBlockByNumber') { f.entetes += 1; return { timestamp: '0x' + ts(parseInt(p[0], 16)).toString(16) }; }
     if (meth === 'eth_getTransactionByHash') return { hash: H, from };
     if (meth === 'eth_getTransactionReceipt') return { status: '0x1', transactionHash: H, blockNumber: '0x' + blocTx.toString(16), logs: [{ address: CIBLE, topics: [TOPIC] }] };
     if (meth === 'eth_getLogs') {
@@ -49,6 +49,8 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
     }
     throw new Error('inattendu ' + meth);
   };
+  f.entetes = 0;
+  return f;
 }
 const io = (o = {}) => { const r = chaine(o); return { rpcEtat: r, rpcLogs: r, chaineId: 8453, contrat: CONTRAT, cle: CLE, tranche: 5000, ...(o.io || {}) }; };
 const demande = { taskId: 3, completer: JOUEUR, txHash: H };
@@ -80,6 +82,13 @@ vu(avantPose.etat === 'REFUSE' && /before the mission was posted/.test(avantPose
 vu((await attester(io({ blocTx: 95000, poseeAu: 95000 }), demande)).etat === 'REFUSE', 'meme bloc que la publication -> REFUSE (ordre non tranche)');
 vu((await attester(io({ blocTx: 95000, poseeAu: 60000 }), demande)).ok === true, 'mission publiee AVANT la tx -> signe');
 vu((await attester(io({ blocTx: TETE }), demande)).etat === 'NON_LU', 'tx plus recente que la fin de fenetre -> NON_LU (renvoyer)');
+/* (4) blocDebut EXACT quand les blocs ne font pas 2 s (anvil, autre chaine) : le dernier bloc <= windowEnd - window */
+vu(r.blocs.debut === 99998 - 43200, 'Base (2 s) : debut = fin - 43 200 (' + r.blocs.debut + ')');
+const ioBase = io(); await attester(ioBase, demande);
+vu(ioBase.rpcEtat.entetes <= 4, 'Base : au plus 4 en-tetes lus par attestation (' + ioBase.rpcEtat.entetes + ') - une dichotomie seule en coute ~18');
+const lent = await attester(io({ pasBloc: 1500, blocTx: 99990 }), demande);
+const attendu = Math.floor((1500 * 99998 - 86400) / 1500); /* dernier b avec 1500 b <= 1500 fin - 86400 */
+vu(lent.ok === true && lent.blocs.debut === attendu && lent.held.heldBlock === (60n * 10n ** 18n).toString(), 'blocs a 1 500 s : debut = ' + attendu + ' exactement, held 60 (les sorties de 80 000-90 000 sont hors fenetre) (' + JSON.stringify(lent.blocs || lent) + ')');
 /* la constante de topic = l ABI COMPILEE (pas une signature tapee a la main) */
 const ART = new URL('./contracts/out/BlockMissionsV3.sol/BlockMissionsV3.json', import.meta.url);
 if (existsSync(ART)) {

@@ -22,16 +22,28 @@ async function solde(rpc, jeton, compte, bloc) {
   return BigInt(await rpc('eth_call', [{ to: jeton, data: '0x70a08231' + mot(compte) }, '0x' + bloc.toString(16)]));
 }
 
-/** le bloc de debut : le dernier bloc dont l horodatage est <= windowEnd - window (Base ~2 s/bloc, corrige par lecture). */
+/** le bloc de debut : le DERNIER bloc dont l horodatage est <= windowEnd - window. Estimation a 2 s/bloc (Base), puis recherche exacte :
+ *  ⛔ 2026-10-17 (banc anvil : blocs a 1 500 s) l ancienne version supposait 2 s/bloc, partait sous le bloc 0 et pouvait rendre un bloc
+ *  bien AVANT la cible. Ici : descente bornee jusqu a un bloc <= cible, montee exponentielle jusqu a un bloc > cible, puis dichotomie.
+ *  Sur Base (2 s exactes) : 2 lectures. */
 async function blocDebut(rpcEtat, fin, finTs, window) {
   const cible = finTs - window;
-  let b = fin - Math.ceil(window / 2);
-  for (let k = 0; k < 8; k++) {
-    const ts = parseInt((await rpcEtat('eth_getBlockByNumber', ['0x' + b.toString(16), false])).timestamp, 16);
-    if (ts <= cible) return b;
-    b -= Math.ceil((ts - cible) / 2) + 1;
+  const ts = async (b) => parseInt((await rpcEtat('eth_getBlockByNumber', ['0x' + b.toString(16), false])).timestamp, 16);
+  let lo = -1, hi = fin, b = Math.max(0, fin - Math.ceil(window / 2));
+  for (let k = 0; k < 40 && lo < 0; k++) {
+    const t = await ts(b);
+    if (t <= cible) { lo = b; break; }
+    if (b === 0) throw new Error('the window starts before the first block');
+    hi = b;
+    b = Math.max(0, b - Math.max(1, Math.ceil((t - cible) / 2)) * (k + 1));
   }
-  throw new Error('window start block not found');
+  if (lo < 0) throw new Error('window start block not found');
+  for (let pas = 1, k = 0; k < 40 && lo + pas < hi; pas *= 2, k++) {
+    const b2 = lo + pas;
+    if (await ts(b2) <= cible) lo = b2; else { hi = b2; break; }
+  }
+  for (let k = 0; k < 64 && hi - lo > 1; k++) { const mi = Math.floor((lo + hi) / 2); if (await ts(mi) <= cible) lo = mi; else hi = mi; }
+  return lo;
 }
 
 async function detention(io, jeton, compte, debut, fin) {
