@@ -32,7 +32,10 @@ export const TOPICS_SWAP = new Set([
   '0x' + enHex(keccak256(new TextEncoder().encode('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)'))), // Uniswap v4 PoolManager
   '0x' + enHex(keccak256(new TextEncoder().encode('Swap(address,address,int256,int256,uint160,uint128,int24)'))), // Uniswap v3 / Aerodrome CL
 ]);
-const ENTRY_POINTS = new Set(['0x0000000071727de22e5e9d8baf0edac6f37da032', '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789']);
+/* ⛔ 2026-10-17 soir (chasse missions, MED, confirme) : EntryPoint v0.8 MANQUAIT. Sur un lot v0.8, aucun sender n etait trouve et le payeur
+ *   retombait sur tx.from = le BUNDLER (frais, tickets de saison et preuves de mission credites au mauvais). Adresse VERIFIEE sur Base le
+ *   2026-10-17 : 21 738 octets de code, et la tx 0xc18dc17c… (status 1) lui est envoyee et l emet (sender 0xdd3d…49e1 != tx.from). */
+const ENTRY_POINTS = new Set(['0x0000000071727de22e5e9d8baf0edac6f37da032', '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789', '0x4337084d9e255ff0702461cf8895ce9e3b5ff108']);
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
 
@@ -53,12 +56,17 @@ export function walletsInternes(declares = []) {
 export function payeurDe({ tx, recu, wallet = FEE_WALLET }) {
   const logs = recu && Array.isArray(recu.logs) ? recu.logs : [];
   const senders = [];
+  let inconnu = false;
   for (const l of logs) {
     const tp = (l && l.topics) || [];
-    if (tp.length >= 3 && bas(tp[0]) === TOPIC_USER_OP && ENTRY_POINTS.has(bas(l.address))) {
+    if (tp.length >= 3 && bas(tp[0]) === TOPIC_USER_OP) {
+      if (!ENTRY_POINTS.has(bas(l.address))) { inconnu = true; continue; }
       const s = '0x' + bas(tp[2]).slice(26); if (ADR.test(s) && !senders.includes(s)) senders.push(s);
     }
   }
+  /* un UserOperationEvent d un contrat NON liste (un futur EntryPoint, ou une imitation) : on ne sait pas qui a agi -> personne.
+   *   Jamais le repli sur tx.from, qui serait le bundler. */
+  if (inconnu) return null;
   if (senders.length === 1) return senders[0];
   /* ⛔ chasse 2026-10-17 (MED, PoC) : dans un lot multi-operations, un tiers ajoutait une op qui envoie 1 wei a a6cf et devenait « le »
    *   payeur de tous les frais du lot. Plusieurs senders = AMBIGU -> null : le frais n est pas compte, jamais attribue au mauvais. */

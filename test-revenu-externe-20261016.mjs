@@ -41,8 +41,14 @@ const recuUo = recuDe([op(EP7, SENDER), transfert(USDC, SENDER, A6CF, 20000)]);
 const uo = verifierFrais({ tx: txDe(BUNDLER), recu: recuUo });
 vu(uo.ok && uo.payeur === SENDER, 'UserOperation : le payeur est le sender indexe, pas le bundler (' + uo.payeur + ')');
 /* audit Grok 2026-10-17 : un UserOperationEvent IMITE (emis par un autre contrat) ne designe plus le payeur */
+/* ⛔ 2026-10-17 soir : le repli sur tx.from etait le BUNDLER des qu un EntryPoint n etait pas liste (v0.8 manquait). Un UserOperationEvent
+ *   d un contrat non liste rend desormais le payeur INCONNU -> REFUSE (rien compte), jamais le bundler ni le sender imite. */
 const imite = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op('0x' + '66'.repeat(20), SENDER), transfert(USDC, SENDER, A6CF, 20000)]) });
-vu(imite.ok && imite.payeur === BUNDLER, 'UserOperationEvent imite : ignore, le payeur reste tx.from (' + imite.payeur + ')');
+vu(!imite.ok && imite.etat === 'REFUSE' && /payer could not be read/.test(imite.pourquoi), 'UserOperationEvent d un contrat NON liste : payeur inconnu -> REFUSE, ni bundler ni sender imite');
+const EP8 = '0x4337084d9e255ff0702461cf8895ce9e3b5ff108'; /* verifie sur Base le 2026-10-17 (21 738 o de code, tx 0xc18dc17c… l emet) */
+const v08 = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op(EP8, SENDER), transfert(USDC, SENDER, A6CF, 20000)]) });
+vu(v08.ok && v08.payeur === SENDER, 'EntryPoint v0.8 : le payeur est le sender, pas le bundler (' + v08.payeur + ')');
+vu(payeurDe({ tx: txDe(BUNDLER), recu: recuDe([op(EP8, SENDER)]) }) === SENDER, 'payeurDe v0.8 seul : le sender');
 /* plusieurs operations : celle dont le sender a paye le frais lui-meme ; sinon AMBIGU -> refus */
 const AUTRE = '0x' + '88'.repeat(20);
 /* chasse 2026-10-17 (MED, PoC) : dans un lot multi-ops, un 1 wei vers a6cf faisait de son auteur le payeur de TOUT le lot -> plusieurs senders = REFUSE */
