@@ -50,7 +50,16 @@ async function blocDebut(rpcEtat, fin, finTs, window) {
 async function detention(io, jeton, compte, debut, fin) {
   const [soldeFin, soldeDebutLu] = await Promise.all([solde(io.rpcEtat, jeton, compte, fin), solde(io.rpcEtat, jeton, compte, debut)]);
   const transferts = await lireTransferts({ rpc: io.rpcLogs, jeton, compte, deBloc: debut, aBloc: fin, tranche: io.tranche || 2000 });
-  return minimumFenetre({ jeton, compte, soldeFin, soldeDebutLu, transferts });
+  return { ...minimumFenetre({ jeton, compte, soldeFin, soldeDebutLu, transferts }), soldeFin, soldeDebutLu, transferts: transferts.length };
+}
+
+/** la mesure SEULE (sans mission ni signature) : la fenetre se terminant 2 blocs sous la tete, et la detention exacte d un compte.
+ *  Sert la sonde serveur qui prouve sur Base REELLE ce que les bancs (anvil, fork « warp ») ne prouvent pas : 24 h d histoire. */
+export async function mesurerFenetre(io, jeton, compte, window) {
+  const fin = parseInt(await io.rpcEtat('eth_blockNumber', []), 16) - 2;
+  const finTs = parseInt((await io.rpcEtat('eth_getBlockByNumber', ['0x' + fin.toString(16), false])).timestamp, 16);
+  const debut = await blocDebut(io.rpcEtat, fin, finTs, window);
+  return { fin, finTs, debut, ...(await detention(io, bas(jeton), bas(compte), debut, fin)) };
 }
 
 /**
@@ -118,8 +127,9 @@ export async function attester(io, { taskId, completer, txHash }) {
     db = await detention(io, t.blockToken, c, debut, fin);
     if (BigInt(hold.minPaired) > 0n) dp = await detention(io, t.paired, c, debut, fin);
   } catch (_) { return { ok: false, etat: 'NON_MESURE', pourquoi: 'the holding could not be measured over the whole window (an archive node is needed)' }; }
-  if (!db.ok) return db;
-  if (dp && !dp.ok) return dp;
+  /* seulement l etat et la raison : detention porte aussi des BigInt, que JSON.stringify refuse (la route repondrait NON_LU a tort) */
+  if (!db.ok) return { ok: false, etat: db.etat, pourquoi: db.pourquoi };
+  if (dp && !dp.ok) return { ok: false, etat: dp.etat, pourquoi: dp.pourquoi };
   if (db.minimum < BigInt(hold.minBlock)) return { ok: false, etat: 'REFUSE', pourquoi: 'held at least ' + db.minimum + ' block units over the window; the mission asks ' + hold.minBlock };
   if (dp && dp.minimum < BigInt(hold.minPaired)) return { ok: false, etat: 'REFUSE', pourquoi: 'held at least ' + dp.minimum + ' of the paired asset over the window; the mission asks ' + hold.minPaired };
   /* 4. la signature */

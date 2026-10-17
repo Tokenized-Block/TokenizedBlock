@@ -24,5 +24,5 @@ vu(cles.length === 2 && /cle: process\.env\.MISSIONS_VERIFIER_KEY \|\| null/.tes
 vu(!/console\./.test(bloc), 'aucun console.* dans les routes missions');
 const etat = src.slice(src.indexOf('async function rpcMissionsEtat'), src.indexOf('async function rpcMissionsEtat') + 500);
 vu(/params\[1\] !== 'latest'/.test(etat) && /try \{ return await rpcServeur/.test(etat) && /if \(!historique \|\| !RPC_ARCHIVE\) throw e/.test(etat), 'archive seulement en repli d un eth_call historique');
-vu(/import \{ attester \} from '\.\/missions-attestation\.js'/.test(src) && /import \{ MISSIONS_DEPLOIEMENT \} from '\.\/missions-deploiement\.js'/.test(src), 'imports presents');
+vu(/import \{ attester(, mesurerFenetre)? \} from '\.\/missions-attestation\.js'/.test(src) && /import \{ MISSIONS_DEPLOIEMENT \} from '\.\/missions-deploiement\.js'/.test(src), 'imports presents');
 console.log('ok missions-route - ' + n + ' assertions ; NE PROUVE PAS le chemin avec contrat deploye');

@@ -72,7 +72,9 @@ vu(crea.etat === 'REFUSE' && /creator/.test(crea.pourquoi), 'le createur ne joue
 vu((await attester(io({ from: AUTRE }), demande)).etat === 'REFUSE', 'tx envoyee par un autre wallet -> REFUSE');
 const sous = await attester(io({ minBlock: 30n * 10n ** 18n }), demande);
 vu(sous.etat === 'REFUSE' && /held at least 20000000000000000000/.test(sous.pourquoi), 'detention sous le minimum -> REFUSE avec les chiffres');
-vu((await attester(io({ sansLog: true }), demande)).etat === 'NON_MESURE', 'solde qui bouge sans log -> NON_MESURE, rien signe');
+const sansLog = await attester(io({ sansLog: true }), demande);
+vu(sansLog.etat === 'NON_MESURE', 'solde qui bouge sans log -> NON_MESURE, rien signe');
+vu((() => { try { JSON.stringify(sansLog); return true; } catch (_) { return false; } })(), 'un refus de mesure se serialise en JSON (aucun BigInt fuit vers la route)');
 const paire = await attester(io({ minPaired: 6n * 10n ** 18n }), demande);
 vu(paire.etat === 'REFUSE' && /paired asset/.test(paire.pourquoi), 'paire exigee (6) et tenue 5 -> REFUSE');
 vu((await attester({ ...io(), cle: null }, demande)).etat === 'PAS_OUVERT', 'pas de cle sur le serveur -> PAS_OUVERT');

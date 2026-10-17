@@ -96,7 +96,7 @@ import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, F_USD_V1 } from './tirage-saison.js';
 import { WETH_BASE } from './plan-eth-block.js';
-import { attester } from './missions-attestation.js';
+import { attester, mesurerFenetre } from './missions-attestation.js';
 import { lireMissions } from './missions-lecture.js';
 import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
@@ -995,6 +995,7 @@ async function rpcHistoire(methode, params) {
  *   HISTORIQUE qu il ne sert pas va a l archive si elle est posee. Le reste (tete, en-tetes, tx, recu) ne touche jamais l archive. */
 let archiveMissions = null;
 const attestationsEnCours = new Set();
+let sondeDetentionA = 0;
 async function rpcMissionsEtat(methode, params) {
   const historique = methode === 'eth_call' && Array.isArray(params) && params[1] !== 'latest';
   try { return await rpcServeur(methode, params); } catch (e) { if (!historique || !RPC_ARCHIVE) throw e; }
@@ -5795,6 +5796,28 @@ function traiterRequete(req, res) {
       .then((r) => repondreA(r.ok || r.etat === 'REFUSE' || r.etat === 'PAS_OUVERT' ? 200 : 202, r))
       .catch(() => repondreA(202, { ok: false, etat: 'NON_LU', pourquoi: 'the chain could not be read just now' }))
       .finally(() => attestationsEnCours.delete(k));
+    return;
+  }
+
+  /* ══ SONDE DE DETENTION (2026-10-17) — la mesure du verifier (missions-attestation.mesurerFenetre) sur Base REELLE, 24 h d histoire :
+   *   le seul maillon que ni le banc anvil ni le fork « warp » de Grok n exercent (eth_call historique + getLogs sur ~43 200 blocs).
+   * Lecture seule, soldes PUBLICS d un jeton et d un compte ; aucune cle, aucune signature. Archive posee exigee ; UN appel toutes les
+   *   5 min (le budget d archive est commun) ; la reponse dit les appels d archive consommes. */
+  if (chemin === '/api/missions/sonde-detention' && req.method === 'GET') {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const repondreS = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    const jeton = String(q.get('jeton') || '').toLowerCase(), compte = String(q.get('compte') || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(jeton) || !/^0x[0-9a-f]{40}$/.test(compte)) { repondreS(400, { ok: false, pourquoi: 'jeton and compte addresses are needed' }); return; }
+    if (!RPC_ARCHIVE) { repondreS(200, { ok: false, etat: 'NON_MESURE', pourquoi: 'no archive node on this server' }); return; }
+    if (archiveEpuisee()) { repondreS(202, { ok: false, etat: 'NON_MESURE', pourquoi: 'archive budget used up for today' }); return; }
+    if (Date.now() - sondeDetentionA < 300000) { repondreS(429, { ok: false, pourquoi: 'one probe every 5 minutes', dans: Math.ceil((300000 - (Date.now() - sondeDetentionA)) / 1000) }); return; }
+    sondeDetentionA = Date.now();
+    const avant = archiveCompte.appels, t0 = Date.now();
+    mesurerFenetre({ rpcEtat: rpcMissionsEtat, rpcLogs: rpcHistoire, tranche: 2000 }, jeton, compte, 86400)
+      .then((m) => repondreS(200, { ok: m.ok, etat: m.etat || 'MESURE', pourquoi: m.pourquoi || null, jeton, compte, window: 86400, fin: m.fin, finTs: m.finTs, debut: m.debut,
+        blocs: m.fin - m.debut, minimum: m.minimum === undefined ? null : String(m.minimum), soldeDebutLu: m.soldeDebutLu === undefined ? null : String(m.soldeDebutLu),
+        soldeFin: m.soldeFin === undefined ? null : String(m.soldeFin), transferts: m.transferts ?? null, appelsArchive: archiveCompte.appels - avant, ms: Date.now() - t0 }))
+      .catch((e) => repondreS(202, { ok: false, etat: 'NON_MESURE', pourquoi: masquerCle(String((e && e.message) || e)).slice(0, 160), appelsArchive: archiveCompte.appels - avant, ms: Date.now() - t0 }));
     return;
   }
 
