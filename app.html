@@ -181,6 +181,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* ⛔ APLAT, PAS DEGRADE : une carte en degrade a deux valeurs, donc deux bords perçus. */
 .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:var(--r);
   padding:18px;margin:0 0 var(--pas)}
+/* 2026-10-17 : la barre de progression du tirage de saison (les couleurs du theme, aucune nouvelle) */
+.tirBarre{height:10px;border-radius:999px;background:rgb(var(--accentRgb) / .12);overflow:hidden;margin:10px 0 2px}
+.tirBarre span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s}
 .titre{font-weight:700;font-size:16px;letter-spacing:-.2px;margin:0 0 5px}
 .sous{color:var(--doux);font-size:13px;margin:0 0 14px;line-height:1.5}
 .note{color:var(--doux);font-size:12.5px;line-height:1.55;margin:10px 0 0}
@@ -2810,6 +2813,16 @@ details[open] > summary::before{transform:rotate(90deg)}
           lances ailleurs. On ne capte le 0,5 % que si le trade passe PAR NOTRE Buy/Sell : cet onglet range les blocks
           qui bougent et mene a l achat en un geste. Chiffres DexScreener, dits comme tels. Le wallet signe, toujours. -->
   <section class="volet" id="v-trade" aria-label="Trade blocks">
+    <!-- 2026-10-17 — LE TIRAGE DE SAISON (tweet de Phil : « win … with the fees you already paid »). Un ticket par wallet des que ses frais
+         VERIFIES sur les actions de la semaine atteignent le seuil ; payer plus ne donne rien de plus. Saison BLANCHE : aucun prix, et c est
+         dit. Donnees : /api/tirage (publiques, rejouables). Memes classes que les autres cartes ; seule la barre de progression est neuve. -->
+    <div class="carte" id="tirCarte" style="margin-bottom:14px">
+      <p class="titre">Season Draw</p>
+      <p class="sous" id="tirSous">Trade tokenized stocks here: once your fees this week reach the threshold, you hold one ticket. No entry to pay, and trading more gives no extra ticket.</p>
+      <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
+      <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
+      <p class="note" id="tirSaison" style="margin:2px 0 0"></p>
+    </div>
     <div class="carte">
       <p class="titre">Trending blocks</p>
       <!-- ⛔ LE RESUME CHIFFRE MONTE SOUS LE TITRE (Phil, 2026-09-23). Il vivait tout en BAS de la
@@ -4188,6 +4201,28 @@ import { classer, rangDe } from './classement.js';
 
 const $ = (s) => document.querySelector(s);
 const enTexte = (t) => { const d = document.createElement('div'); d.textContent = String(t); return d.innerHTML; };
+
+/* 2026-10-17 — LA CARTE DU TIRAGE DE SAISON (volet Market). Lit /api/tirage : la saison, le seuil, les wallets avec leurs frais VERIFIES.
+ *   ⛔ Rien n est estime ici : la progression est celle que le serveur a verifiee sur la chaine ; non lu = dit. Saison blanche = dit. */
+async function peindreTirage() {
+  const moi = $('#tirMoi'), sais = $('#tirSaison'), barre = $('#tirRemplir');
+  if (!moi || !sais || !barre) return;
+  let t = null;
+  try { t = await fetch('/api/tirage', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { t = null; }
+  if (!t || t.ok !== true) { sais.textContent = 'The draw could not be read just now.'; return; }
+  const fin = new Date(t.fin), reste = Math.max(0, fin.getTime() - Date.now());
+  const j = Math.floor(reste / 86400000), h = Math.floor((reste % 86400000) / 3600000);
+  sais.textContent = 'Season ' + t.saison.replace(/^S/, '') + ' · ' + t.tickets.length + ' ticket' + (t.tickets.length === 1 ? '' : 's') + ' · closes in ' + j + 'd ' + h + 'h'
+    + (t.mode === 'SHADOW' ? ' · practice season: no prize yet' : '');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { moi.textContent = 'Connect a wallet to see your progress.'; barre.style.width = '0%'; return; }
+  const w = (t.wallets || []).find((x) => String(x.adresse).toLowerCase() === String(c).toLowerCase());
+  const fait = w ? Number(w.fraisUsd) : 0, seuil = Number(t.seuilUsd) || 1;
+  barre.style.width = Math.min(100, Math.round((fait / seuil) * 100)) + '%';
+  moi.textContent = w && w.ticket ? 'You hold a ticket for this season.'
+    : 'Your verified fees this week: $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' — ' + (seuil - fait > 0 ? '$' + (seuil - fait).toFixed(2) + ' to go.' : 'ticket on its way.');
+}
+setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);
 
 document.querySelector('.navIn').addEventListener('click', (e) => {
   const b = e.target.closest('.navB');
@@ -7389,6 +7424,7 @@ async function connecter() {
   }
   if (!compte) { try { etape('wallet_connect_refus'); } catch (_) {} dire('The wallet returned no address.'); return; }
   try { etape('wallet_connect_ok'); } catch (_) {}
+  try { peindreTirage(); } catch (_) {} /* 2026-10-17 : la progression du tirage apparait des la connexion */
   try { noterWalletUtilise(compte); } catch (_) { /* airdrop log optional */ }
   /* ⛔⛔ ON MESURE LA CAPACITE DE GROUPEMENT ICI, A LA CONNEXION, ET PAS AILLEURS. Mesure du
    *     2026-09-28 : `groupe_propose` valait ZERO sur 354 visites — non pas parce qu aucun wallet ne
