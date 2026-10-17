@@ -3515,8 +3515,10 @@ details[open] > summary::before{transform:rotate(90deg)}
   <section class="volet" id="v-missions" aria-label="Game">
     <!-- TA JOURNEE : ton ticket (face derivee de SHA-256(wallet|jour), grise tant que les 10 $ ne sont pas verifies ou sans pass skin)
          FACE A la face gagnante EN DIRECT (celle que tirerait le dernier bloc Base ; seul le bloc E, minuit UTC + 120 s, compte). -->
-    <div class="carte" id="jourCarte">
-      <span class="jeuKick">Game · Your day</span>
+    <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
+    <div class="carte" id="tirCarte">
+      <span class="jeuKick">Game · Draws</span>
+      <p class="titre jeuTitre" style="font-size:16px">Your trades are your ticket. The next Base block draws the face.</p>
       <div class="jeuDuel">
         <div class="jeuCote">
           <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
@@ -3530,13 +3532,20 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <p class="note" id="dernierMoi" style="margin:6px 0 0"></p>
       <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
+      <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
+      <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
       <p class="note" id="jourCompte" style="margin:2px 0 0">Your tickets — today 0 · this week 0 · this month 0</p>
+      <p class="note" id="tirSaison" style="margin:2px 0 0">Reading today's draw…</p>
       <div class="jourEtapes">
-        <button type="button" class="bouton" id="jourUnit">Trade UNIT · $10 = ticket</button>
+        <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
+        <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
+        <button type="button" class="bouton sec" id="jourUnit">Trade UNIT</button>
         <button type="button" class="bouton sec" id="jourActions">Trade stocks</button>
-        <!-- un skin achete = 7 jours de tickets (pass verifie au recu, pass-skin) -->
-        <button type="button" class="bouton sec" id="jourSkin">Skin · 7 days of tickets</button>
+        <!-- un skin achete = le ticket du jour (pass verifie au recu, pass-skin ; Phil 19:40 : « skin 1 day ») -->
+        <button type="button" class="bouton sec" id="jourSkin">Skin · today's ticket</button>
+        <button type="button" class="bouton sec" id="jourTirages">Replay the data</button>
       </div>
+      <p class="note" style="margin:6px 0 0">$10 of UNIT or tokenized-stock trades in a day (UTC) = today's ticket. A skin = today's ticket too. A draw every day; bigger ones when the week and the month close.</p>
       <!-- HIER : la face revelee par le bloc E, ton score, le gagnant -->
       <div class="jourTicket" id="faceJour" hidden style="margin-top:10px">
         <div class="jourFace" id="faceJourArt" role="img" aria-label="Yesterday's Face of the Day"></div>
@@ -3554,17 +3563,41 @@ details[open] > summary::before{transform:rotate(90deg)}
         Player 90% · creator 3% · community reserve 5.6% · dev 1.4%.</p>
       <p class="note" id="missionsEtat" style="margin:6px 0 0">The board waits for its contract on Base.</p>
       <ul class="bcListe" id="missionsListe" style="margin:8px 0 0;padding:0;list-style:none"></ul>
-      <div class="jourEtapes"><button type="button" class="bouton sec" id="jourMissions">Refresh missions</button></div>
+      <div class="jourEtapes">
+        <button type="button" class="bouton sec" id="jourMissions">Refresh missions</button>
+        <!-- CREATE A MISSION (Phil 19:40) : le createur d un block poste « trade my block » — cible = PoolManager, Swap sur SA pool (topic1) ;
+             approve EXACT + postTask (missions-plan.js planPoster), signes par SON wallet. Montre seulement quand le contrat a une adresse. -->
+        <button type="button" class="bouton" id="jourCreerMission" hidden>Create a mission</button>
+      </div>
+      <form id="missionForm" hidden style="margin-top:8px" autocomplete="off">
+        <label class="champ">Your block
+          <select id="mfBlock"><option value="">Reading your blocks…</option></select>
+        </label>
+        <label class="champ">Reward per player, in block units
+          <input id="mfReward" inputmode="decimal" placeholder="100">
+        </label>
+        <label class="champ">Players (max)
+          <input id="mfMax" inputmode="numeric" value="10">
+        </label>
+        <label class="champ">Must hold at least (block units)
+          <input id="mfHold" inputmode="decimal" placeholder="10">
+        </label>
+        <p class="note" style="margin:4px 0">Mission: <b>trade my block on its TokenizedBlock pool</b>, then hold for 24 h. Open 7 days. 10% of each reward is the fee (3% to you, 7% to TokenizedBlock).</p>
+        <button type="submit" class="bouton" id="mfPoster">Post it — escrow the rewards</button>
+        <p class="note" id="mfEtat" style="margin:6px 0 0"></p>
+      </form>
     </div>
-    <!-- DRAWS : jour / semaine / mois, pratique (pot 0, dit). Donnees : /api/tirage, publiques et rejouables. -->
-    <div class="carte" id="tirCarte">
-      <span class="jeuKick">Game · Draws</span>
-      <p class="titre jeuTitre" style="font-size:16px">Your trades are your ticket.</p>
-      <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
-      <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
-      <p class="note" id="tirSaison" style="margin:2px 0 0">Reading today's draw…</p>
-      <div class="jourEtapes"><button type="button" class="bouton sec" id="jourTirages">Replay the draw data</button></div>
-      <details id="missionsLien" style="margin-top:8px">
+    <!-- EARN (Phil 19:40 : « ajoute la partie earn ») : ce que ce wallet a GAGNE, lu — part de createur due (registre), tirages gagnes (hier),
+         missions reclamees (le contrat, quand il existe). Rien d invente : chaque ligne dit sa source. -->
+    <div class="carte" id="earnCarte">
+      <span class="jeuKick">Game · Earn</span>
+      <ul class="bcListe" id="earnListe" style="margin:6px 0 0;padding:0;list-style:none">
+        <li class="filL"><p class="note" style="margin:0">Connect a wallet to see what you earned.</p></li>
+      </ul>
+    </div>
+    <!-- HOW IT WORKS : plie, en bas (le texte long vit ici et dans « ? »). -->
+    <div class="carte" id="regleCarte">
+      <details id="missionsLien">
         <summary class="note" style="cursor:pointer">How it works</summary>
         <p class="sous" id="tirSous" style="margin:6px 0 0">No entry to pay: trade $10 in a day — the UNIT block, or tokenized stocks in the app — and that day is your ticket. Or buy a skin: 7 days of tickets.</p>
         <div class="jeuGrille">
@@ -3809,7 +3842,9 @@ import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
 (() => { try { const st = document.createElement('style'); st.textContent = CUBE3D_CSS; document.head.appendChild(st); } catch (_) {} })();
 import { apparenceDepuisAdresse } from './apparence.js';
 import { faceRevelee, scoreFaces } from './face-du-jour.js';
-import { planReclamer } from './missions-plan.js';
+import { planReclamer, planPoster } from './missions-plan.js';
+import { poolId as poolIdV4 } from './pool.js';
+import { topic as topicDe } from './keccak.js';
 /* ⛔⛔ L IMAGE GRAVEE (2026-09-22). `budgetSurFace` vient de `photo.js`, qui porte le mur MESURE du
  * precompile B20 : 12 Ko de fichier passent, 13 Ko sont refuses, et le refus persiste en offrant
  * cent millions de gas. Calculer le budget ici plutot que le deviner evite de faire SIGNER une
@@ -4394,16 +4429,46 @@ async function peindreDernierBlock() {
   let t = null;
   try { t = await fetch('/api/tirage', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { t = null; }
   if (!t || !t.apercu || !t.jour) { nom.textContent = 'The latest Base block could not be read just now.'; return; }
+  if (rollEnCours) return; /* un roll affiche son bloc cible : la face live ne l ecrase pas */
   const fr = faceRevelee(t.apercu.hash);
   try { face.innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) { face.innerHTML = ''; }
-  const reste = Math.max(0, new Date(t.jour.fin).getTime() + 120000 - Date.now());
-  nom.textContent = 'Base block ' + Number(t.apercu.bloc).toLocaleString('en-US') + ' would draw this face';
-  quand.textContent = 'A preview: the real winning face comes from the first block 2 minutes after midnight UTC — in ' + Math.floor(reste / 3600000) + 'h ' + Math.floor((reste % 3600000) / 60000) + 'm.';
+  nom.textContent = 'Base block ' + Number(t.apercu.bloc).toLocaleString('en-US');
+  quand.textContent = 'Every block draws a face. Roll: the block after next decides, live.';
   let c = null; try { c = compte; } catch (_) { c = null; }
-  if (!c) { moiP.textContent = 'Connect a wallet to see how close your ticket is.'; return; }
+  if (!c) { moiP.textContent = 'Connect a wallet to roll.'; return; }
   const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), t.jour.id)), fr);
-  moiP.textContent = s ? 'Your ticket face matches it on ' + s.score + '/5 right now' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + '.' : '';
+  moiP.textContent = s ? 'Right now: ' + s.score + '/5 traits in common.' : '';
 }
+/* ══ ROLL (Phil 19:55 : « le winner gagne face au random en live ») — practice : aucun paiement ; le bloc N+2 (N = tete au clic) decide ;
+ *   sa face est lue sur la chaine, comparee a ton ticket, score affiche. Le roll paye (0,50 USDC, BlockRolls) se branchera ICI, meme
+ *   regle, des que le contrat existe et que Phil l a signe. */
+let rollEnCours = false;
+async function roll() {
+  const b = $('#jourRoll'), moiP = $('#dernierMoi'), nom = $('#dernierNom'), face = $('#dernierFace');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { moiP.textContent = 'Connect a wallet to roll.'; return; }
+  if (rollEnCours) return;
+  rollEnCours = true; b.disabled = true;
+  try {
+    const tete = parseInt(await rpc('eth_blockNumber', []), 16), cible = tete + 2;
+    nom.textContent = 'Rolling… block ' + cible.toLocaleString('en-US') + ' decides';
+    let bloc = null;
+    for (let k = 0; k < 30 && !bloc; k++) { await new Promise((r) => setTimeout(r, 1500)); try { bloc = await rpc('eth_getBlockByNumber', ['0x' + cible.toString(16), false]); } catch (_) { bloc = null; } }
+    if (!bloc || !/^0x[0-9a-f]{64}$/i.test(String(bloc.hash))) { moiP.textContent = 'Block ' + cible + ' could not be read: no result.'; return; }
+    const fr = faceRevelee(String(bloc.hash).toLowerCase());
+    try { face.innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) {}
+    const jourId = jourDeApp(Date.now());
+    const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourId)), fr);
+    nom.textContent = 'Block ' + cible.toLocaleString('en-US') + ' drew this face';
+    moiP.textContent = s ? (s.score >= 3 ? '🎯 ' : '') + 'You matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + ' — practice roll, no prize yet.' : 'No score.';
+    rollDerniers.unshift({ bloc: cible, score: s ? s.score : null }); rollDerniers.length = Math.min(rollDerniers.length, 5);
+    $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((r) => r.score + '/5').join(' · ');
+    await new Promise((r) => setTimeout(r, 12000));
+  } finally { rollEnCours = false; b.disabled = false; }
+}
+const rollDerniers = [];
+const jourDeApp = (ms) => 'J' + new Date(Math.floor(ms / 86400000) * 86400000).toISOString().slice(0, 10);
+$('#jourRoll').addEventListener('click', () => { void roll(); });
 $('#jourUnit').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
 $('#jourActions').addEventListener('click', () => allerA('trade'));
 /* ══ LE TABLEAU DES MISSIONS (2026-10-17 soir) — lit /api/missions ; « I did it — claim » : attestation du verifier puis claim signe par le
@@ -4422,6 +4487,83 @@ async function peindreMissions() {
     + '<input class="champ" data-mtx placeholder="Hash of the transaction where you did it (0x…)" style="width:100%;margin:6px 0">'
     + '<button type="button" class="bouton" data-claim="' + x.id + '">I did it — claim</button><p class="note" data-metat></p></li>').join('');
   ul.dataset.contrat = String(j.contrat || '');
+  /* le contrat existe : le createur peut poster (bouton montre) */
+  const bc = $('#jourCreerMission'); if (bc) bc.hidden = !j.contrat;
+}
+
+/* ══ CREATE A MISSION (Phil 2026-10-17, 19:40) — le createur poste « trade my block » : cible = PoolManager, topic0 = Swap v4, topic1 = la
+ *   pool du block sur NOTRE hook (la seule qu une mission peut nommer) ; recompense en unites du block, tenue 24 h, 7 jours ouverts.
+ *   planPoster = approve EXACT + postTask, signes par le wallet du createur (2 appels, ou 1 lot si le wallet groupe). */
+const TOPIC_SWAP_APP = topicDe('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)');
+async function mesBlocksPourMission() {
+  const sel = $('#mfBlock'); if (!sel) return;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { sel.innerHTML = '<option value="">Connect your wallet</option>'; return; }
+  let j = null;
+  try { j = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(c).toLowerCase()), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json()); } catch (_) { j = null; }
+  const liste = j && j.ok && Array.isArray(j.blocks) ? j.blocks : [];
+  sel.innerHTML = liste.length ? liste.map((b) => '<option value="' + enTexte(b) + '">' + enTexte(((habitants.find((h) => String(h.adr).toLowerCase() === String(b).toLowerCase()) || {}).sym) || b.slice(0, 6) + '…' + b.slice(-4)) + '</option>').join('')
+    : '<option value="">No block created by this wallet was read</option>';
+}
+$('#jourCreerMission').addEventListener('click', () => { const f = $('#missionForm'); f.hidden = !f.hidden; if (!f.hidden) void mesBlocksPourMission(); });
+$('#missionForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const dit = (t) => { $('#mfEtat').textContent = t; };
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  const contrat = $('#missionsListe').dataset.contrat, block = String($('#mfBlock').value || '').toLowerCase();
+  if (!c) { dit('Connect your wallet first.'); return; }
+  if (!/^0x[0-9a-f]{40}$/.test(contrat)) { dit('The board has no contract yet.'); return; }
+  if (!/^0x[0-9a-f]{40}$/.test(block)) { dit('Pick one of your blocks.'); return; }
+  const dec = 18n; /* B20 : 18 decimales (frappe fixe) */
+  const brut = (s) => { const m = /^(\d+)(?:\.(\d{1,18}))?$/.exec(String(s || '').trim()); if (!m) return null; return BigInt(m[1]) * 10n ** dec + BigInt((m[2] || '').padEnd(18, '0')); };
+  const reward = brut($('#mfReward').value), hold = brut($('#mfHold').value), max = Number($('#mfMax').value);
+  if (reward === null || reward <= 0n || hold === null || hold <= 0n || !(max >= 1 && max <= 10000)) { dit('Reward, holding and players must be positive numbers.'); return; }
+  dit('Reading your block\'s pool on chain…');
+  let cles = null;
+  try { const r = await fetch('/api/cle/' + block, { cache: 'no-store' }).then((x) => x.json()); cles = r && r.ok && Array.isArray(r.cles) ? r.cles : null; } catch (_) { cles = null; }
+  const cle = (cles || []).find((k) => estNotreHook(k.hooks));
+  if (!cle) { dit('No pool of this block on a TokenizedBlock hook was read: a mission needs one.'); return; }
+  const now = Math.floor(Date.now() / 1000);
+  const plan = planPoster({ contrat, cle: { currency0: cle.currency0, currency1: cle.currency1, fee: Number(cle.fee), tickSpacing: Number(cle.tickSpacing), hooks: cle.hooks },
+    params: { rewardToken: block, reward: reward.toString(), maxDone: max, perWallet: 1, expiry: now + 7 * 86400, target: V4_ADRESSES[CHAINE].poolm, topic0: TOPIC_SWAP_APP,
+      descHash: topicDe('trade my block on its TokenizedBlock pool'), topic1: poolIdV4(cle) },
+    hold: { minBlock: hold.toString(), minPaired: 0, bonusMinBlock: 0, bonusBps: 0, window: 86400 }, maintenant: now, poolManager: V4_ADRESSES[CHAINE].poolm });
+  if (plan.etat !== 'PRET') { dit('Not posted: ' + plan.pourquoi); return; }
+  dit('Escrow ' + plan.budget + ' raw units (' + max + ' × reward). Sign ' + plan.appels.length + ' steps in your wallet…');
+  for (const a of plan.appels) {
+    let r;
+    try { r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, to: a.to, data: a.data, value: '0x0' }); }
+    catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+    if (r.etat !== 'CONFIRME') { dit('Not posted: ' + String(r.pourquoi || r.etat).slice(0, 140)); return; }
+  }
+  dit('Mission posted — it is on the board.');
+  void peindreMissions();
+});
+
+/* ══ EARN (Phil 19:40) — ce que ce wallet a gagne : part de createur DUE (registre public, jamais payee par le serveur), tirage d hier,
+ *   missions reclamees (contrat). Chaque ligne nomme sa source ; rien n est invente. */
+async function peindreEarn() {
+  const ul = $('#earnListe'); if (!ul) return;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) return;
+  const moiBas = String(c).toLowerCase(), lignes = [];
+  try {
+    const r = await fetch('/api/registre-createurs', { cache: 'no-store' }).then((x) => x.json());
+    const dus = r && r.ok && r.dusParCreateur ? r.dusParCreateur[moiBas] : null;
+    lignes.push('<b>Creator share owed to you</b> (30% of our fee on buys that came through your block\'s page): ' + (dus ? enTexte(Object.entries(dus).map(([d, m]) => m + ' of ' + symPaire(d)).join(', ')) : 'nothing yet') + '. Paid by a human wallet, never by this page.');
+  } catch (_) { lignes.push('Creator share: could not be read just now.'); }
+  try {
+    const t = await fetch('/api/tirage', { cache: 'no-store' }).then((x) => x.json());
+    const v = t && t.veille;
+    lignes.push('<b>Yesterday\'s draw</b>: ' + (v && v.etat === 'REVELEE' ? (v.gagnant === moiBas ? 'you won (practice season: no prize yet).' : 'not you.') : 'not revealed yet.'));
+    const m = (t && t.mois && t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
+    lignes.push('<b>Entries this month</b>: ' + m + '.');
+  } catch (_) { lignes.push('Draws: could not be read just now.'); }
+  try {
+    const j = await fetch('/api/missions', { cache: 'no-store' }).then((x) => x.json());
+    lignes.push('<b>Mission rewards</b>: ' + (j && j.ok ? 'claims are paid straight to your wallet by the contract; see your wallet.' : 'the board is not open yet.'));
+  } catch (_) { lignes.push('Missions: could not be read just now.'); }
+  ul.innerHTML = lignes.map((l) => '<li class="filL"><p class="note" style="margin:0">' + l + '</p></li>').join('');
 }
 $('#missionsListe').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-claim]'); if (!b) return;
@@ -4482,7 +4624,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
-  if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock(); void peindreMissions(); }
+  if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock(); void peindreMissions(); void peindreEarn(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();

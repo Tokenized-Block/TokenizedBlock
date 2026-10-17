@@ -27,14 +27,15 @@ const v8 = v([{ address: EP8, topics: [UO, '0x' + '0'.repeat(64), P(S), '0x' + '
 vu(v8.ok && v8.payeur === S, 'smart wallet v0.8 : le pass va au sender, pas au bundler');
 /* (2) */
 const jp = joursPass(Date.UTC(2026, 9, 17, 23, 0));
-vu(JOURS_PASS_SKIN === 7 && jp.length === 7 && jp[0] === 'J2026-10-17' && jp[6] === 'J2026-10-23', 'pass : J2026-10-17 .. J2026-10-23');
-/* (3) */
+vu(JOURS_PASS_SKIN === 1 && jp.length === 1 && jp[0] === 'J2026-10-17', 'pass : le jour d achat seulement (Phil 19:40 : « skin 1 day »)');
+vu(joursPass(Date.UTC(2026, 9, 17, 23, 0), 7).length === 7 && joursPass(Date.UTC(2026, 9, 17, 23, 0), 7)[6] === 'J2026-10-23', 'joursPass(n) reste exact pour n jours');
+/* (3) : un pass de 2 jours (17 et 18) pour exercer l union et la fin de pass */
 let e = crediter({}, { saison: 'J2026-10-18', payeur: A('a1'), hash: '0x' + '01'.repeat(32), usd: 12 });
-const passes = { [J]: jp };
+const passes = { [J]: ['J2026-10-17', 'J2026-10-18'] };
 const t18 = ticketsJour(e, 'J2026-10-18', passes);
 vu(t18.length === 2 && t18.includes(J) && t18.includes(A('a1')), 'jour 18 : volume (a1) + pass (J)');
-vu(ticketsJour(e, 'J2026-10-24', passes).length === 0, 'jour 24 : le pass est fini');
-vu(ticketsJour(crediter(e, { saison: 'J2026-10-19', payeur: J, hash: '0x' + '02'.repeat(32), usd: 50 }), 'J2026-10-19', passes).filter((x) => x === J).length === 1, 'volume ET pass le meme jour : UN ticket');
+vu(ticketsJour(e, 'J2026-10-19', passes).length === 0, 'jour 19 : le pass est fini');
+vu(ticketsJour(crediter(e, { saison: 'J2026-10-18', payeur: J, hash: '0x' + '02'.repeat(32), usd: 50 }), 'J2026-10-18', passes).filter((x) => x === J).length === 1, 'volume ET pass le meme jour : UN ticket');
 vu(entreesPeriode(e, ['J2026-10-17', 'J2026-10-18'], 10, passes).length === 3, 'entrees : pass 17 + pass 18 + volume 18');
 /* (4) */
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');

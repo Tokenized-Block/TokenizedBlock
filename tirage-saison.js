@@ -108,7 +108,7 @@ export function joursEntre(debut, fin) {
 }
 /* ══ PASS SKIN (Phil 2026-10-17 soir : « possibilite de buy Skin pour draws pour 1 semaine garanti ») : un skin ACHETE (mint verifie dans le
  *   recu, volume-tirage.js passSkinVerifie) donne le ticket du jour d achat et des 6 jours suivants, sans volume. passes = { wallet: [ids] }. */
-export const JOURS_PASS_SKIN = 7;
+export const JOURS_PASS_SKIN = 1; /* Phil 2026-10-17, 19:40 : « skin 1 day » (etait 7 a 19:00) */
 export function joursPass(ms, n = JOURS_PASS_SKIN) { const d = jourDe(ms).debut; return Array.from({ length: n }, (_, k) => jourDe(d + k * JOUR_MS).id); }
 /** les tickets d un jour : volume >= seuil, OU un pass skin qui couvre ce jour. Liste triee, sans doublon. */
 export function ticketsJour(etatJours, jourId, passes = {}, seuil = SEUIL_VOLUME_JOUR_USD) {
