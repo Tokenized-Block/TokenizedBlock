@@ -1448,6 +1448,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 .trUp{color:var(--vif);font-weight:700;font-size:12.5px}
 .trDown{color:var(--dur);font-weight:700;font-size:12.5px}
 .trAcheter{width:auto;min-height:38px;padding:8px 18px;flex:0 0 auto}
+.trBoutons{display:flex;flex-direction:column;gap:6px;flex:0 0 auto}
 .navB{font-size:10.5px}
 /* 2026-10-10 re-QA 375 px (mesure headless 375x812 : 9 onglets = 373 px pour 355 ; 'Tokenized' 324-383, coupe de 8 px) : sans gouttiere ni marge laterale
    ils tiennent (~337 px) ; plus etroit encore, la barre DEFILE au lieu de couper un onglet. */
@@ -18368,11 +18369,19 @@ function peindreTrending() {
     /* tip 20260923-reclaim-volume: Buy · 0.5% only when fee-capturable (TB hook / known live pool we can trade).
      * Thin external / no pool → Trade on TB (IB reclaim) — never fake fee capture. */
     + (function () {
+        /* ?? 2026-10-17 (Phil : « ajoute bouton buy et paired with it ») - les actions tokenisees (SNDKc, METAc, AAPLc.) n avaient
+         *   QUE « Buy » : cette fonction rendait UN bouton, et « Pair » n etait que le repli des lignes sans Buy. Or une action est LA
+         *   paire du modele memestock. Toute ligne B20 (0xb2.) offre maintenant « Pair » - a cote du Buy s il y en a un - par le MEME
+         *   chemin (data-pairer -> pairerAvec -> Create, paire preselectionnee ; un block ou une action hors liste du hook passe par
+         *   « through its currency », regles du 2026-10-04 / 10-11). Jamais TBLOCK (bloque dans l app), jamais un non-B20. */
+        const pairable = /^0xb2[0-9a-fA-F]{38}$/.test(String(l.adr || '')) && String(l.adr).toLowerCase() !== TBLOCK.toLowerCase();
+        const pairer = '<button type="button" class="bouton sec trAcheter" data-pairer="' + enTexte(l.adr) + '">Pair a block with it</button>';
+        const avecPair = (buy) => (pairable ? '<span class="trBoutons">' + buy + pairer + '</span>' : buy);
         const pool = poolDecouvertPour(l.adr);
         const feeOk = !!(pool && (pool.isTbFeeHook || pool.confiance === 'NOTRE' || pool.confiance === 'SANS_HOOK' || pool.confiance === 'HOOK'));
         const liqOk = (l.liquiditeUsd || 0) >= LIQ_MIN_BUY_USD;
         if (feeOk && liqOk) {
-          return '<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button>';
+          return avecPair('<button type="button" class="bouton trAcheter" data-acheter="' + enTexte(l.adr) + '">Buy</button>');
         }
         /* ⛔⛔ 2026-10-03 (Phil : « nos cibles, les actions tokenisees Coinbase ») — MESURE en prod : les 9 actions sur
          *   Aerodrome (GOOGLc, METAc, MSFTc, NVDAc, TSLAc, AAPLc…, des M$ de volume) n avaient AUCUN Buy ici, alors que leur
@@ -18387,7 +18396,7 @@ function peindreTrending() {
          *   Buy — une decision produit qui n est pas la mienne ; les blocks v4 gardent le chemin d avant (pool decouverte). */
         const actionRegistre = ACTIONS_PAR_ADR.has(String(l.adr || '').toLowerCase());
         if (liqOk && (vR.achetableEnEth || vR.achetableEnUsdc || (vR.achetableIci && actionRegistre))) {
-          return '<button type="button" class="bouton trAcheter" data-acheter-fiche="' + enTexte(l.adr) + '">Buy</button>';
+          return avecPair('<button type="button" class="bouton trAcheter" data-acheter-fiche="' + enTexte(l.adr) + '">Buy</button>');
         }
         /* ⛔⛔ LIBELLE CORRIGE LE 2026-09-23 (Phil : « ca aussi pourquoi ? »). Il disait « Trade on
          *     TB · 0.001 ETH », a cote de lignes qui disent « Buy · 0.5% ». Le lecteur croyait
@@ -18406,7 +18415,7 @@ function peindreTrending() {
          *   donc c est aussi le seul repli qui puisse rapporter quelque chose.
          * ⛔ ET CE N EST PLUS UNE PUB POUR CREATE : « la pub de creer est deja en avant sur le 1er
          *    visuel, ca suffit ». Elle n a rien a faire repetee sur chaque ligne d un classement. */
-        return '<button type="button" class="bouton sec trAcheter" data-pairer="' + enTexte(l.adr) + '">Pair a block with it</button>';
+        return pairable ? pairer : '';
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     /* ⛔⛔ CE `||` NE COUVRE QUE LA LISTE VIDE, et c est correct — mais c etait LE SEUL endroit ou
