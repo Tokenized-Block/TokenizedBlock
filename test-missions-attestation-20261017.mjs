@@ -5,7 +5,9 @@
  * Cle de TEST publique 0xA11CE (celle des tests forge). NE PROUVE PAS : une vraie chaine (archive) ni un claim on-chain de cette signature
  *   (la parite digest JS == contrat et l acceptation par claim() sont prouvees ailleurs : test-verificateur-missions, SigneurSecp256k1.t.sol). */
 import { strict as assert } from 'node:assert';
-import { attester, DELAI_SIGNATURE } from './missions-attestation.js';
+import { attester, DELAI_SIGNATURE, TOPIC_TASK_POSTED } from './missions-attestation.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { topic } from './keccak.js';
 import { SEL } from './missions-lecture.js';
 import { adresseDe, recupererAdresse } from './signeur-secp256k1.js';
 import { donneesClaim, digestClaim, TOPIC_TRANSFER } from './verificateur-missions.js';
@@ -18,7 +20,7 @@ const CIBLE = '0x' + '49'.repeat(20), TOPIC = '0x' + 'ab'.repeat(32), H = '0x' +
 const m = (v) => BigInt(v).toString(16).padStart(64, '0'), a = (x) => x.slice(2).padStart(64, '0');
 const TETE = 100000, WINDOW = 86400;
 /* chaine : bloc b -> horodatage 1_800_000_000 + 2*b ; le joueur detient 60 BLK, en sort 40 au bloc 80000 et les reprend au bloc 90000 */
-function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n } = {}) {
+function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null } = {}) {
   const ts = (b) => 1_800_000_000 + 2 * b;
   const finale = 60n * 10n ** 18n;
   const soldeA = (b) => (b >= 80000 && b < 90000 ? finale - 40n * 10n ** 18n : finale) + (sansLog ? 1n : 0n) * (b < 70000 ? 1n : 0n);
@@ -26,14 +28,15 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
     { address: BLK, topics: [TOPIC_TRANSFER, '0x' + a(JOUEUR), '0x' + a(AUTRE)], data: '0x' + m(40n * 10n ** 18n), blockNumber: '0x' + (80000).toString(16), logIndex: '0x0', transactionHash: '0x' + '01'.repeat(32) },
     { address: BLK, topics: [TOPIC_TRANSFER, '0x' + a(AUTRE), '0x' + a(JOUEUR)], data: '0x' + m(40n * 10n ** 18n), blockNumber: '0x' + (90000).toString(16), logIndex: '0x0', transactionHash: '0x' + '02'.repeat(32) },
   ];
+  if (poseeAu !== null) logs.push({ address: CONTRAT, topics: [TOPIC_TASK_POSTED, '0x' + m(3), '0x' + a(BLK), '0x' + a(CREA)], data: '0x', blockNumber: '0x' + poseeAu.toString(16), logIndex: '0x0', transactionHash: '0x' + '03'.repeat(32) });
   return async (meth, p) => {
     if (meth === 'eth_blockNumber') return '0x' + TETE.toString(16);
     if (meth === 'eth_getBlockByNumber') return { timestamp: '0x' + ts(parseInt(p[0], 16)).toString(16) };
     if (meth === 'eth_getTransactionByHash') return { hash: H, from };
-    if (meth === 'eth_getTransactionReceipt') return { status: '0x1', transactionHash: H, logs: [{ address: CIBLE, topics: [TOPIC] }] };
+    if (meth === 'eth_getTransactionReceipt') return { status: '0x1', transactionHash: H, blockNumber: '0x' + blocTx.toString(16), logs: [{ address: CIBLE, topics: [TOPIC] }] };
     if (meth === 'eth_getLogs') {
       const f = p[0], de = parseInt(f.fromBlock, 16), au = parseInt(f.toBlock, 16);
-      return logs.filter((l) => { const b = parseInt(l.blockNumber, 16); return b >= de && b <= au && l.address === f.address
+      return logs.filter((l) => { const b = parseInt(l.blockNumber, 16); return b >= de && b <= au && l.address === f.address && l.topics[0] === f.topics[0]
         && (f.topics[1] ? l.topics[1] === f.topics[1] : l.topics[2] === f.topics[2]); });
     }
     if (meth === 'eth_call') {
@@ -69,4 +72,18 @@ vu((await attester(io({ sansLog: true }), demande)).etat === 'NON_MESURE', 'sold
 const paire = await attester(io({ minPaired: 6n * 10n ** 18n }), demande);
 vu(paire.etat === 'REFUSE' && /paired asset/.test(paire.pourquoi), 'paire exigee (6) et tenue 5 -> REFUSE');
 vu((await attester({ ...io(), cle: null }, demande)).etat === 'PAS_OUVERT', 'pas de cle sur le serveur -> PAS_OUVERT');
+/* (3) l action doit etre NEUVE : dans la fenetre, et apres la publication de la mission (une vieille tx ne fait pas la mission) */
+const vieille = await attester(io({ blocTx: 1000 }), demande);
+vu(vieille.etat === 'REFUSE' && /before your holding window/.test(vieille.pourquoi), 'tx d avant la fenetre -> REFUSE (' + vieille.pourquoi + ')');
+const avantPose = await attester(io({ blocTx: 95000, poseeAu: 96000 }), demande);
+vu(avantPose.etat === 'REFUSE' && /before the mission was posted/.test(avantPose.pourquoi), 'tx d avant la publication de la mission -> REFUSE');
+vu((await attester(io({ blocTx: 95000, poseeAu: 95000 }), demande)).etat === 'REFUSE', 'meme bloc que la publication -> REFUSE (ordre non tranche)');
+vu((await attester(io({ blocTx: 95000, poseeAu: 60000 }), demande)).ok === true, 'mission publiee AVANT la tx -> signe');
+vu((await attester(io({ blocTx: TETE }), demande)).etat === 'NON_LU', 'tx plus recente que la fin de fenetre -> NON_LU (renvoyer)');
+/* la constante de topic = l ABI COMPILEE (pas une signature tapee a la main) */
+const ART = new URL('./contracts/out/BlockMissionsV3.sol/BlockMissionsV3.json', import.meta.url);
+if (existsSync(ART)) {
+  const ev = JSON.parse(readFileSync(ART, 'utf8')).abi.find((e) => e.type === 'event' && e.name === 'TaskPosted');
+  vu(topic('TaskPosted(' + ev.inputs.map((i) => i.type).join(',') + ')') === TOPIC_TASK_POSTED && ev.inputs[0].indexed && ev.inputs[0].name === 'taskId', 'TOPIC_TASK_POSTED = l ABI compilee, taskId indexe en 1er');
+} else console.log('  (artefact forge absent : parite topic/ABI NON verifiee ici)');
 console.log('ok missions-attestation - ' + n + ' assertions ; NE PROUVE PAS une vraie chaine');

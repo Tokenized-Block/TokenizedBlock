@@ -7,6 +7,11 @@
 import { SEL, appel, decoderTache, decoderDetention } from './missions-lecture.js';
 import { verifierTache, minimumFenetre, lireTransferts, donneesClaim, digestClaim } from './verificateur-missions.js';
 import { adresseDe, signerDigest, recupererAdresse } from './signeur-secp256k1.js';
+import { topic } from './keccak.js';
+
+/* event TaskPosted(uint256 indexed taskId, address indexed blockToken, address indexed creator, address rewardToken, uint256 reward,
+ *   uint32 maxDone, uint64 expiry, bytes32 poolId) — signature recalculee depuis l ABI compilee dans test-missions-attestation. */
+export const TOPIC_TASK_POSTED = topic('TaskPosted(uint256,address,address,address,uint256,uint32,uint64,bytes32)');
 
 const bas = (x) => String(x || '').toLowerCase();
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -70,6 +75,23 @@ export async function attester(io, { taskId, completer, txHash }) {
     finTs = parseInt((await io.rpcEtat('eth_getBlockByNumber', ['0x' + fin.toString(16), false])).timestamp, 16);
     debut = await blocDebut(io.rpcEtat, fin, finTs, hold.window);
   } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the holding window could not be placed on the chain' }; }
+  /* 2 bis. ⛔ 2026-10-17 (trouve en relisant : verifierTache ne regardait pas la DATE, et txUsed est global) : un joueur actif a des dizaines
+   *   de vieilles tx qui portent l evenement demande ; chacune aurait « fait » la mission une fois, sans rien faire de neuf. L action doit
+   *   (a) tomber DANS la fenetre de detention [debut, fin] et (b) venir APRES la publication de la mission : aucun TaskPosted(taskId) entre
+   *   son bloc et la fin (meme bloc = refuse, l ordre n est pas tranche). (a) borne (b) a la taille de la fenetre. */
+  const blocTx = parseInt(recu.blockNumber, 16);
+  if (!Number.isSafeInteger(blocTx)) return { ok: false, etat: 'NON_LU', pourquoi: 'the transaction block could not be read' };
+  if (blocTx > fin) return { ok: false, etat: 'NON_LU', pourquoi: 'this transaction is a few seconds too recent: send it again in a moment' };
+  if (blocTx < debut) return { ok: false, etat: 'REFUSE', pourquoi: 'this action was done before your holding window started (block ' + blocTx + ' < ' + debut + '): do it again' };
+  try {
+    const pas = io.tranche || 2000;
+    for (let de = blocTx; de <= fin; de += pas) {
+      const poses = await io.rpcLogs('eth_getLogs', [{ address: io.contrat, fromBlock: '0x' + de.toString(16), toBlock: '0x' + Math.min(fin, de + pas - 1).toString(16),
+        topics: [TOPIC_TASK_POSTED, '0x' + BigInt(taskId).toString(16).padStart(64, '0')] }]);
+      if (!Array.isArray(poses)) throw new Error('logs not a list');
+      if (poses.length) return { ok: false, etat: 'REFUSE', pourquoi: 'this action was done before the mission was posted: do it again now' };
+    }
+  } catch (_) { return { ok: false, etat: 'NON_MESURE', pourquoi: 'the mission start could not be checked just now' }; }
   /* 3. la detention, exacte, avec son temoin */
   let db, dp = null;
   try {
