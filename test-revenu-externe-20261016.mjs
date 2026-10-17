@@ -32,9 +32,20 @@ vu(verifierFrais({ tx: null, recu: null }).etat === 'NON_LU', 'recu absent : NON
 vu(verifierFrais({ tx: txDe(PAYEUR), recu: recuDe([transfert(USDC, PAYEUR, '0x' + '55'.repeat(20), 40000)]) }).etat === 'REFUSE', 'transfer vers un autre destinataire : rien pour a6cf');
 /* payeur : UserOperation */
 const UO = '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f';
-const recuUo = recuDe([{ address: '0x' + '66'.repeat(20), topics: [UO, '0x' + '0'.repeat(64), adr(SENDER), '0x' + '0'.repeat(64)], data: '0x' }, transfert(USDC, SENDER, A6CF, 20000)]);
+const EP7 = '0x0000000071727de22e5e9d8baf0edac6f37da032'; /* lu sur Base le 2026-10-17, voir revenu-externe.js */
+const op = (emetteur, sender) => ({ address: emetteur, topics: [UO, '0x' + '0'.repeat(64), adr(sender), '0x' + '0'.repeat(64)], data: '0x' });
+const recuUo = recuDe([op(EP7, SENDER), transfert(USDC, SENDER, A6CF, 20000)]);
 const uo = verifierFrais({ tx: txDe(BUNDLER), recu: recuUo });
 vu(uo.ok && uo.payeur === SENDER, 'UserOperation : le payeur est le sender indexe, pas le bundler (' + uo.payeur + ')');
+/* audit Grok 2026-10-17 : un UserOperationEvent IMITE (emis par un autre contrat) ne designe plus le payeur */
+const imite = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op('0x' + '66'.repeat(20), SENDER), transfert(USDC, SENDER, A6CF, 20000)]) });
+vu(imite.ok && imite.payeur === BUNDLER, 'UserOperationEvent imite : ignore, le payeur reste tx.from (' + imite.payeur + ')');
+/* plusieurs operations : celle dont le sender a paye le frais lui-meme ; sinon AMBIGU -> refus */
+const AUTRE = '0x' + '88'.repeat(20);
+const multi = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op(EP7, AUTRE), op(EP7, SENDER), transfert(USDC, SENDER, A6CF, 20000)]) });
+vu(multi.ok && multi.payeur === SENDER, 'lot multi-operations : le sender qui a paye le frais (' + multi.payeur + ')');
+const ambigu = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op(EP7, AUTRE), op(EP7, SENDER), transfert(USDC, '0x' + '99'.repeat(20), A6CF, 20000)]) });
+vu(!ambigu.ok && ambigu.etat === 'REFUSE' && /several operations/.test(ambigu.pourquoi), 'lot multi-operations sans payeur identifiable : REFUSE, jamais un payeur invente');
 vu(payeurDe({ tx: txDe(BUNDLER), recu: recuDe([]) }) === BUNDLER, 'sans UserOperation : tx.from');
 /* internes */
 const internes = walletsInternes([GROK, 'pas-une-adresse']);

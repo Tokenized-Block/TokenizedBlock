@@ -23,7 +23,11 @@ export function devisesComptees(extra = []) {
 
 const enHex = (u8) => [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
 const TOPIC_TRANSFER = '0x' + enHex(keccak256(new TextEncoder().encode('Transfer(address,address,uint256)')));
-const TOPIC_USER_OP = '0x49628fd1471006c1482da88028e9ce4dbb080b815c9b0344d39e5a8e6ec1419f';
+const TOPIC_USER_OP = '0x' + enHex(keccak256(new TextEncoder().encode('UserOperationEvent(bytes32,address,address,uint256,bool,uint256,uint256)')));
+/* ⛔ 2026-10-17 (audit Grok, LOW) : un UserOperationEvent emis par N IMPORTE quel contrat designait le payeur — imitable. Seuls comptent
+ *   ceux des EntryPoints, adresses LUES sur Base le 2026-10-17 (base.drpc.org, 10 derniers blocs : 37 logs de l une, 20 de l autre,
+ *   les deux avec du bytecode) — jamais recopiees de memoire. */
+const ENTRY_POINTS = new Set(['0x0000000071727de22e5e9d8baf0edac6f37da032', '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789']);
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
 
@@ -38,11 +42,25 @@ export function walletsInternes(declares = []) {
   return s;
 }
 
-/** Qui a REELLEMENT paye : tx.from, sauf pour une UserOperation ERC-4337 (le from est le bundler) : le `sender` indexe du log UserOperationEvent. */
-export function payeurDe({ tx, recu }) {
-  for (const l of (recu && Array.isArray(recu.logs) ? recu.logs : [])) {
+/** Qui a REELLEMENT paye : tx.from, sauf pour une UserOperation ERC-4337 (le from est le bundler) : le `sender` indexe du
+ *  UserOperationEvent EMIS PAR UN ENTRYPOINT. Plusieurs operations dans le lot : celle dont le sender a lui-meme envoye un Transfer
+ *  vers le wallet de frais ; sinon c est AMBIGU -> null (le frais n est pas compte : mieux vaut un trou dit qu un payeur invente). */
+export function payeurDe({ tx, recu, wallet = FEE_WALLET }) {
+  const logs = recu && Array.isArray(recu.logs) ? recu.logs : [];
+  const senders = [];
+  for (const l of logs) {
     const tp = (l && l.topics) || [];
-    if (tp.length >= 3 && bas(tp[0]) === TOPIC_USER_OP) { const s = '0x' + bas(tp[2]).slice(26); if (ADR.test(s)) return s; }
+    if (tp.length >= 3 && bas(tp[0]) === TOPIC_USER_OP && ENTRY_POINTS.has(bas(l.address))) {
+      const s = '0x' + bas(tp[2]).slice(26); if (ADR.test(s) && !senders.includes(s)) senders.push(s);
+    }
+  }
+  if (senders.length === 1) return senders[0];
+  if (senders.length > 1) {
+    const w32 = '0x' + bas(wallet).slice(2).padStart(64, '0');
+    const payants = new Set(logs.filter((l) => (l.topics || []).length === 3 && bas(l.topics[0]) === TOPIC_TRANSFER && bas(l.topics[2]) === w32)
+      .map((l) => '0x' + bas(l.topics[1]).slice(26)));
+    const m = senders.filter((s) => payants.has(s));
+    return m.length === 1 ? m[0] : null;
   }
   const f = bas(tx && tx.from);
   return ADR.test(f) ? f : null;
@@ -58,8 +76,8 @@ export function verifierFrais({ tx, recu, internes, devises, wallet = FEE_WALLET
   if (!tx || !recu) return { ok: false, etat: 'NON_LU', pourquoi: 'the transaction or its receipt could not be read yet' };
   if (String(recu.status) !== '0x1') return { ok: false, etat: 'REFUSE', pourquoi: 'this transaction failed on chain' };
   if (bas(recu.transactionHash) !== bas(tx.hash)) return { ok: false, etat: 'REFUSE', pourquoi: 'the receipt is not the one of this transaction' };
-  const payeur = payeurDe({ tx, recu });
-  if (!payeur) return { ok: false, etat: 'REFUSE', pourquoi: 'the payer could not be read' };
+  const payeur = payeurDe({ tx, recu, wallet });
+  if (!payeur) return { ok: false, etat: 'REFUSE', pourquoi: 'the payer could not be read (or several operations in one bundle and none paid the fee itself)' };
   const w32 = '0x' + bas(wallet).slice(2).padStart(64, '0');
   const parDevise = new Map();
   for (const l of (Array.isArray(recu.logs) ? recu.logs : [])) {
