@@ -94,7 +94,9 @@ function chaine(o = {}) {
 const plan = (o = {}, x = {}) => { const c = chaine(o); return planAjouterPaire({ rpc: c.rpc, compte: COMPTE, block: UNIT, devise: AAPL, montantDevise: 5000000n, maintenant: MAINTENANT, ...x }).then((r) => ({ r, j: c.journal })); };
 
 /* ── drapeau et etats ── */
-ok(AJOUTER_PAIRE_ACTIF === false, 'AJOUTER_PAIRE_ACTIF is OFF');
+/* 2026-10-17 soir : ALLUME (banc fork 48/48 sur le HEAD du jour + decision de Phil au chat). Le garde-fou reste : le drapeau est un booleen
+ *   EXPLICITE, et l ecran ne montre rien quand il est faux (le test de cablage plus bas l exige toujours). */
+ok(AJOUTER_PAIRE_ACTIF === true, 'AJOUTER_PAIRE_ACTIF is ON (fork bench 48/48 + owner decision, 2026-10-17)');
 ok(JSON.stringify(ETATS_AJOUT) === JSON.stringify(['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE']), 'four states, the birth planner\'s');
 
 /* ── le prix : arithmetique entiere, deux orientations ── */

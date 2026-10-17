@@ -79,7 +79,7 @@ try {
   try { AP = await imp('ajouter-paire.js'); } catch (e) { console.log('   (ajouter-paire.js : ' + String(e.message).slice(0, 120) + ')'); }
   ok(!!AP && typeof AP.planAjouterPaire === 'function', 'le planificateur planAjouterPaire existe');
   if (!AP || typeof AP.planAjouterPaire !== 'function') throw new Error('RED: no planner');
-  ok(AP.AJOUTER_PAIRE_ACTIF === false, 'drapeau AJOUTER_PAIRE_ACTIF = false (rien n est montre a l ecran)');
+  ok(typeof AP.AJOUTER_PAIRE_ACTIF === 'boolean', 'drapeau AJOUTER_PAIRE_ACTIF explicite (allume le 2026-10-17 soir apres CE banc vert + decision de Phil)');
 
   /* ── TEMOINS NEGATIFS, sur le vrai hook du fork ── */
   const horsListe = PA.ACTIONS_COINBASE.find((a) => D.plancher7030(a.adr) === null);
@@ -92,6 +92,11 @@ try {
 
   /* ── financer le createur en AAPLc (il n en a pas sur la chaine) ── */
   ok(await financer(CREATEUR, MONTANT_DEVISE * 2n), 'fork : le createur recoit ' + (MONTANT_DEVISE * 2n) + ' unites AAPLc d essai');
+  /* ⛔ 2026-10-17 soir : le banc dependait du solde ETH REEL du createur sur mainnet (0x31e0… avait > 0,001 ETH a 14 h, plus a 18 h 45 :
+   *   « you need at least 0.001 ETH for the birth fee »). Un banc ne doit pas dependre d un solde qui bouge : l ETH d essai est pose ici,
+   *   sur le fork seulement, comme l AAPLc juste au-dessus. */
+  await rpc('anvil_setBalance', [CREATEUR, '0x' + (10n ** 17n).toString(16)]);
+  ok(BigInt(await rpc('eth_getBalance', [CREATEUR, 'latest'])) === 10n ** 17n, 'fork : le createur a 0,1 ETH d essai (frais de naissance + gaz)');
 
   /* ── LE PLAN ── */
   const bloc = await rpc('eth_getBlockByNumber', ['latest', false]);
@@ -208,6 +213,8 @@ try {
   await rpc('evm_revert', [instantane]);
   instantane = await rpc('evm_snapshot', []);
   ok(await financer(CREATEUR, MONTANT_DEVISE * 2n), 'B : createur refinance (' + (MONTANT_DEVISE * 2n) + ' AAPLc brut)');
+  /* le revert a remis le solde ETH REEL du createur (< 0,001 ETH ce soir) : l ETH d essai est repose, fork seulement */
+  await rpc('anvil_setBalance', [CREATEUR, '0x' + (10n ** 17n).toString(16)]);
   const b0 = { a6cf: await solde(ETH, A6CF), c: await solde(AAPL, CREATEUR) };
   const planB = await AP.planAjouterPaire({ rpc, compte: CREATEUR, block: UNIT, devise: AAPL, montantDevise: MONTANT_DEVISE, maintenant });
   const iInsB = (planB.appels || []).findIndex((a) => String(a.to).toLowerCase() === H.toLowerCase());

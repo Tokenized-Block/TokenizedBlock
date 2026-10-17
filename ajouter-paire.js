@@ -34,8 +34,11 @@ import { lireReferenceAction, FEEDS_CHAINLINK } from './reference-action.js';
 import { prixEthUsd } from './prix-eth.js';
 import { symboleDepuisReponse } from './texte-onchain.js';
 
-/** ⛔ ETEINT. Allume seulement apres un banc fork entierement vert ET une decision du proprietaire. */
-export const AJOUTER_PAIRE_ACTIF = false;
+/** ALLUME le 2026-10-17 soir : les DEUX conditions sont reunies — banc fork entierement vert sur le HEAD du jour (48/48, base-anvil,
+ *  vrai hook 7030 : UNIT/AAPLc ouverte a cote de UNIT/ETH intacte, 0,001 ETH a a6cf une fois, achat en AAPLc -> 7 bps a a6cf + 3 bps au
+ *  createur, reprise au prix inscrit sans second frais) ET la decision de Phil au chat (« unit/eth est vivant … pour faire les multipools …
+ *  t'as mis standby continue »). Le plan ne signe toujours rien : le wallet du createur signe le lot. */
+export const AJOUTER_PAIRE_ACTIF = true;
 export const ETATS_AJOUT = Object.freeze(['PRET', 'APPROBATIONS', 'REFUSE', 'NON_MESURE']);
 /** Les hooks de naissance dont le marche block/ETH sert de prix (frais LP 0, espacement 200 — la cle de toute naissance). */
 export const HOOKS_MARCHE_EXISTANT = Object.freeze([HOOK_7030, HOOK_V8]);
