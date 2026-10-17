@@ -2247,6 +2247,16 @@ const VOIX_POSTS_IP_MINUTE = 6;
 const VOIX_MAX_BLOCKS = 3000;
 const voixParBlock = new Map();
 const voixPosts = { minute: 0, n: 0, parIp: new Map() };
+/* ══ LES ROLLS DU JEU, POUR LA MAP (Phil 2026-10-17 23:50 : « ajoute sur la Map quand un block fait un roll ») ══════════════════
+ * ⛔ UN ROLL EST UN EVENEMENT HORS CHAINE (practice : le contrat BlockRolls n est pas deploye). Il ne va JAMAIS dans le fil Live
+ *   (/api/live) : un evenement n est pas une transaction. Il a sa propre route, et la Map le dessine a part.
+ * ⛔ EN MEMOIRE SEULE, et c est voulu : perdu au redemarrage, les 200 derniers, AUCUNE identite (ni wallet, ni invite, ni IP) —
+ *   seulement {t, bloc, score}. Le plafond a 200 est l intention (une fenetre de signaux), pas une sauvegarde qui coupe. */
+const JEU_ROLLS_MAX = 200;
+const JEU_ROLLS_IP_MINUTE = 30;
+const JEU_ROLL_CORPS_MAX = 256;
+const jeuRolls = [];
+const jeuRollPosts = { minute: 0, parIp: new Map() };
 /* ══ NOS RAILS, EXPOSES (2026-10-03) — GET /api/rails/plan (rails-api.js) ══════════════════════════════════════════════
  * ⛔ UN PLAN COUTE DES DIZAINES DE LECTURES (marche, cotations, simulation de la transaction exacte) sur le MEME noeud que
  *   tout le site. Plafond global + par IP + deux en vol ; seul un plan PRET est rendu depuis le cache (15 s) — jamais une
@@ -5909,6 +5919,45 @@ function traiterRequete(req, res) {
         + 'and the month\'s draws. Trading more in a day adds nothing. Practice season: no prize yet. Each day is settled by block E, the first Base '
         + 'block stamped at least ' + DELAI_REVELATION_S + ' s after the day closes: its hash picks the day\'s winner and reveals the Face of the Day '
         + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' }));
+    return;
+  }
+
+  /* ══ LES ROLLS DU JEU (Phil 2026-10-17 23:50) — POST /api/jeu/roll {bloc, score} apres un Roll de l onglet Game ; GET /api/jeu/rolls
+   *   -> {ok, rolls:[{t, bloc, score}], maintenant} que la Map relit toutes les 10 s pour faire « rouler » le block UNIT.
+   * ⛔ HORS CHAINE, HORS FIL LIVE (voir jeuRolls). 30 POST par minute et par IP ; corps <= JEU_ROLL_CORPS_MAX octets ; un corps qui n est
+   *   pas EXACTEMENT {bloc: entier > 0, score: entier 0..5} -> 400. Rien n est lu sur la chaine, rien n est ecrit sur disque. */
+  if (chemin === '/api/jeu/rolls' || chemin === '/api/jeu/roll') {
+    const rendreJ = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    if (chemin === '/api/jeu/rolls') {
+      if (req.method !== 'GET' && req.method !== 'HEAD') { rendreJ(405, { ok: false, pourquoi: 'GET only' }); return; }
+      /* `maintenant` : l horloge du serveur, pour que la Map mesure l age d un roll sans comparer deux horloges */
+      rendreJ(200, { ok: true, rolls: jeuRolls.slice(-JEU_ROLLS_MAX), maintenant: Date.now() });
+      return;
+    }
+    if (req.method !== 'POST') { rendreJ(405, { ok: false, pourquoi: 'POST only' }); return; }
+    const ipJ = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const minuteJ = Math.floor(Date.now() / 60000);
+    if (jeuRollPosts.minute !== minuteJ) { jeuRollPosts.minute = minuteJ; jeuRollPosts.parIp.clear(); }
+    const nJ = (jeuRollPosts.parIp.get(ipJ) || 0) + 1;
+    jeuRollPosts.parIp.set(ipJ, nJ);
+    if (nJ > JEU_ROLLS_IP_MINUTE) { rendreJ(429, { ok: false, pourquoi: 'too many rolls from here: ' + JEU_ROLLS_IP_MINUTE + ' a minute' }); return; }
+    let brutJ = '', octetsJ = 0, tropJ = false;
+    req.on('data', (c) => {
+      if (tropJ) return;
+      octetsJ += c.length; brutJ += c;
+      if (octetsJ > JEU_ROLL_CORPS_MAX) { tropJ = true; rendreJ(400, { ok: false, pourquoi: 'body over ' + JEU_ROLL_CORPS_MAX + ' bytes' }); req.destroy(); }
+    });
+    req.on('end', () => {
+      if (tropJ) return;
+      let j;
+      try { j = JSON.parse(brutJ); } catch { rendreJ(400, { ok: false, pourquoi: 'not JSON' }); return; }
+      const forme = j && typeof j === 'object' && !Array.isArray(j) && Object.keys(j).length === 2
+        && Number.isSafeInteger(j.bloc) && j.bloc > 0 && Number.isInteger(j.score) && j.score >= 0 && j.score <= 5;
+      if (!forme) { rendreJ(400, { ok: false, pourquoi: 'expected {bloc: positive integer, score: 0..5} and nothing else' }); return; }
+      jeuRolls.push({ t: Date.now(), bloc: j.bloc, score: j.score });
+      if (jeuRolls.length > JEU_ROLLS_MAX) jeuRolls.splice(0, jeuRolls.length - JEU_ROLLS_MAX);
+      rendreJ(200, { ok: true, n: jeuRolls.length });
+    });
     return;
   }
 

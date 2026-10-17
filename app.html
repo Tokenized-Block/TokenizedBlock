@@ -430,6 +430,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .mapBarre input{flex:1;background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);
   color:var(--texte);font:inherit;padding:11px 12px;min-height:44px}
 .mapLeg{display:flex;gap:14px;align-items:center;color:var(--doux);font-size:11.5px;margin:10px 0 0}
+/* les derniers rolls du jeu sur UNIT (Phil 2026-10-17 23:50) : une ligne d ETAT comme #mapEtat, en monospace ; vide = absente (silence) */
+.mapRolls{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mapRolls:empty{display:none}
 /* ⛔ `margin-left:auto` pousse le lien a droite de la legende sans le sortir du flux : pas de
    `position:absolute`, donc il ne peut pas recouvrir la map ni disparaitre sous elle.
    ⛔⛔ `pointer-events:auto` N EST PAS DECORATIF, ET IL A ETE AJOUTE APRES MESURE. Sur la page
@@ -1531,6 +1534,9 @@ details[open] > summary::before{transform:rotate(90deg)}
                de l univers et le spotlight ; les chances affichees en live, pas aussi petit que les ecrits, a la place de
                Replaying… ». -->
           <span id="mapEtat"></span>
+          <!-- Phil (2026-10-17 23:50) : les 5 derniers rolls du jeu sur UNIT (« Rolls on UNIT: 3/5 · 1/5 »), ecrits par peindreRollsMap ;
+               vide tant qu il n y a pas de roll — rien a lire, rien d affiche. -->
+          <span id="mapRolls" class="mapRolls"></span>
           <!-- Phil (2026-09-19) : ce lien est devenu le bouton du haut « ? What am I looking at » — plus de doublon ici -->
           <!-- ⛔ LE LIEN X A DEMENAGE dans la colonne des controles de la carte (map3d.js) :
                ici il chevauchait les boutons de zoom. Phil, 2026-09-21 : « pas etre dans le champ ». -->
@@ -4507,10 +4513,22 @@ async function roll() {
     moiP.textContent = !c ? 'Connect a wallet: your ticket scores against the next roll.'
       : s ? (s.score >= 3 ? '🎯 ' : '') + 'You matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + ' — practice roll, no prize yet.' : 'No score.';
     if (s) { rollDerniers.unshift({ bloc: cible, score: s.score }); rollDerniers.length = Math.min(rollDerniers.length, 5); $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((r) => r.score + '/5').join(' · '); }
+    /* Phil 23:50 : le roll se voit sur la Map — signale au serveur (bloc + score, aucune identite), la Map le relit (peindreRollsMap).
+     *   Seul un roll SCORE (wallet connecte) est signale : sans ticket il n y a pas de « roll N/5 » a montrer. */
+    if (s) void signalerRoll(cible, s.score);
     await new Promise((r) => setTimeout(r, 12000));
   } finally { rollEnCours = false; b.disabled = false; }
 }
 const rollDerniers = [];
+/* POST /api/jeu/roll {bloc, score} — un evenement HORS CHAINE (practice), sans identite ; le serveur garde les 200 derniers en memoire.
+ * ⛔ Il n entre PAS dans le fil Live : un evenement n est pas une transaction. Un echec reseau ne casse pas le roll (le score est deja a l ecran). */
+async function signalerRoll(bloc, score) {
+  if (!Number.isSafeInteger(bloc) || !Number.isInteger(score) || score < 0 || score > 5) return false;
+  try {
+    const r = await fetch('/api/jeu/roll', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ bloc, score }), signal: AbortSignal.timeout(8000) });
+    return r.ok;
+  } catch (_) { return false; }
+}
 const jourDeApp = (ms) => 'J' + new Date(Math.floor(ms / 86400000) * 86400000).toISOString().slice(0, 10);
 $('#jourRoll').addEventListener('click', () => { void roll(); });
 $('#jourUnit').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
@@ -4710,6 +4728,8 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'social') plierLesCartes();
   if (nom === 'trade') { void peindreStats(); peindreEchelle(); }
   if (nom === 'map') suivreLeCote();
+  /* Phil 23:50 : en ouvrant la Map on relit les rolls tout de suite — un roll fait dans Game roule sous les yeux, pas 10 s plus tard */
+  if (nom === 'map') void peindreRollsMap();
   if (nom === 'brain') peindreChoixBrain();
   /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
    * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
@@ -7213,6 +7233,64 @@ async function rafraichirApresEchanges(evenements) {
     await dormir(260);
   }
 }
+
+/* ══ LES ROLLS DU JEU SUR LA MAP (Phil 2026-10-17 23:50 : « ajoute sur la Map quand un block fait un roll ; inspire-toi de ce qui existe »).
+ *   GET /api/jeu/rolls toutes les ROLLS_MAP_MS, SEULEMENT quand l onglet Map est a l ecran (page visible ET #v-map.on) : personne ne lit
+ *   pour personne. Chaque roll NOUVEAU fait « rouler » le block UNIT avec le langage DEJA la : l onde du moteur 3D avec UN mot
+ *   (« roll 3/5 », comme « Feed », « Kill », « route ») et le pulse de la tuile (.pulse, celui des echanges lus). Les 5 derniers
+ *   s ecrivent dans la legende (#mapRolls) ; sans roll, rien n est ecrit et rien ne bouge.
+ * ⛔ UN ROLL N EST PAS UNE TRANSACTION : il ne passe pas par liveEvts ni par le fil Live. Il a sa route, sa ligne, son dessin.
+ * ⛔ « NOUVEAU » SE MESURE SANS COMPARER DEUX HORLOGES : le serveur rend `maintenant` ; l age d un roll (maintenant - t) est compare au
+ *   temps ecoule depuis le chargement de CETTE page (performance.now()). Au premier passage, seuls les rolls plus jeunes que la page
+ *   roulent (ceux de cette visite — le visiteur qui vient de rouler dans Game le voit en ouvrant la Map) ; l historique ne rejoue pas.
+ *   Ensuite : tout roll absent du passage precedent. Clef = t + bloc + score, l ensemble suit la fenetre du serveur (200). */
+const ROLLS_MAP_MS = 10000;
+let rollsVus = null, rollsEnCours = false;
+const cleRoll = (r) => String(r.t) + ':' + r.bloc + ':' + r.score;
+function mapVisible() {
+  const v = document.getElementById('v-map');
+  return !document.hidden && !!v && v.classList.contains('on');
+}
+function rouler(h, score) {
+  onde(UNIT_APP, accentVif(), 'roll ' + score + '/5');
+  h.el.classList.remove('pulse');
+  void h.el.offsetWidth;
+  h.el.classList.add('pulse');
+  h.el.dataset.dernier = 'ROLL';
+}
+async function peindreRollsMap() {
+  if (!mapVisible() || rollsEnCours) return;
+  rollsEnCours = true;
+  try {
+    let j = null;
+    try { j = await fetch('/api/jeu/rolls', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((r) => r.json()); } catch (_) { j = null; }
+    if (!j || !j.ok || !Array.isArray(j.rolls)) return;
+    const rolls = j.rolls.filter((r) => r && Number.isInteger(r.score) && r.score >= 0 && r.score <= 5 && Number.isFinite(r.t));
+    const leg = $('#mapRolls');
+    if (leg) leg.textContent = rolls.length ? 'Rolls on UNIT: ' + rolls.slice(-5).reverse().map((r) => r.score + '/5').join(' · ') : '';
+    let neufs;
+    if (rollsVus === null) {
+      const ecoule = performance.now(), maintenant = Number(j.maintenant) || 0;
+      neufs = maintenant ? rolls.filter((r) => maintenant - r.t <= ecoule) : [];
+    } else neufs = rolls.filter((r) => !rollsVus.has(cleRoll(r)));
+    rollsVus = new Set(rolls.map(cleRoll));
+    let h = habitantDe(UNIT_APP);
+    /* ⛔ MESURE (serveur local 9097, 2026-10-17 23:58) : /api/nos-blocks sert 2 blocks et UNIT n y est PAS (son createur n est pas le compte
+     *   surveille) ; il n atteint la carte que par la fenetre de 43 200 blocs des creations (~24 h, il en sortira) ou par le trending.
+     *   Sans lui, le roll n aurait eu personne a faire rouler — un signal perdu en silence. Un roll parle de UNIT, et UNIT est un block
+     *   reel de Base (symbole lu sur la chaine : UNIT) : s il manque, il vient sur la carte, du MEME geste que poserNosBlocks pour la
+     *   genese. Sa vie sera lue par le tour normal (lireLaVie) ; tant qu elle ne l est pas, il est pale, jamais « a zero ». */
+    if (!h && neufs.length) {
+      const c = creationsLues.find((x) => String(x.jeton).toLowerCase() === UNIT_APP);
+      try { h = creerHabitant({ jeton: UNIT_APP, symbole: (c && c.symbole) || 'UNIT', vie: null }); if (!anim) animer(); } catch (_) { h = null; }
+    }
+    if (!h || !neufs.length) return;
+    /* au plus 3 par passage, espaces : une rafale de pulses sur le meme cube n en montrerait qu un */
+    for (const r of neufs.slice(-3)) { rouler(h, r.score); await dormir(450); }
+  } finally { rollsEnCours = false; }
+}
+setInterval(() => { if (mapVisible()) void peindreRollsMap(); }, ROLLS_MAP_MS);
+setTimeout(() => { if (mapVisible()) void peindreRollsMap(); }, 2500);
 
 let lectureVieEnCours = false;
 /** ⛔ Ou en est le tour de lecture. Chaque passe lit les 30 suivants ; au bout, on recommence — c est
