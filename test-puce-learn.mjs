@@ -33,13 +33,10 @@ const balise = (() => {
   return html.slice(debut, fin + 9);
 })();
 
-cas('⛔ LA PHRASE COMPLETE PORTE SA PONCTUATION A LA FIN', () => {
-  /* ⛔ C est la demande de Phil : « remets le ? a la bonne place ». En anglais la ponctuation se
-   *   colle au mot — pas d espace avant, contrairement au francais. */
-  assert.match(balise, /What am I looking at\?/,
-    'le libelle long ne se termine plus par « ? » : le point d interrogation a bouge');
-  assert.ok(!/\?\s*<span class="long"/.test(balise),
-    'le « ? » est REVENU en tete du libelle — c est exactement l etat qu on a corrige');
+cas('⛔ LE LIBELLE VISIBLE EST « ? » A TOUTE LARGEUR (Phil 2026-10-17 soir)', () => {
+  /* ⛔ Phil, 2026-10-17 soir : « change "What am I looking at?" par "?" juste ca ». Le libelle LONG devient lui aussi « ? » ;
+   *   la phrase complete reste le NOM ACCESSIBLE (aria-label, cas plus bas). Les gardes « jamais vide » et « bascule CSS » restent. */
+  assert.match(balise, /<span class="long">\s*\?\s*<\/span>/, 'le libelle large n est plus « ? »');
 });
 
 cas('⛔⛔⛔ AUCUNE LARGEUR NE LAISSE LE BOUTON VIDE', () => {
@@ -53,7 +50,7 @@ cas('⛔⛔⛔ AUCUNE LARGEUR NE LAISSE LE BOUTON VIDE', () => {
    *   et ferait reapparaitre le doublon (« ? What am I looking at? »). */
   const dedans = balise.replace(/<[^>]*>/g, '|');
   const morceaux = dedans.split('|').map((s) => s.trim()).filter(Boolean);
-  assert.deepEqual(morceaux, ['?', 'What am I looking at?'],
+  assert.deepEqual(morceaux, ['?', '?'],
     'du texte vit HORS des deux spans : il s afficherait aux deux largeurs — ' + JSON.stringify(morceaux));
 });
 
@@ -66,13 +63,12 @@ cas('⛔⛔⛔ LES DEUX REGLES CSS BASCULENT ENSEMBLE', () => {
     'dans la media query etroite, `.long` est cache SANS que `.court` soit montre : bouton vide');
 });
 
-cas('⛔ LE LIBELLE ACCESSIBLE DIT LA MEME CHOSE QUE L ECRAN', () => {
-  /* ⛔ Un `aria-label` qui derive du texte visible donne deux versions du meme bouton : celle qu on
-   *   lit et celle qu on entend. */
+cas('⛔ LE NOM ACCESSIBLE DIT CE QUE LE « ? » OUVRE', () => {
+  /* ⛔ Depuis le 2026-10-17 soir l ecran ne montre que « ? » : un lecteur d ecran qui n annoncerait que « ? » ne dirait rien.
+   *   Le nom accessible porte la phrase complete — c est la regle d un bouton-icone, pas une divergence. */
   const m = /aria-label="([^"]*)"/.exec(balise);
   assert.ok(m, 'le bouton n a plus d aria-label');
-  assert.equal(m[1], 'What am I looking at?',
-    'l aria-label ne dit pas la meme phrase que le libelle visible');
+  assert.equal(m[1], 'What am I looking at?', 'le nom accessible du bouton « ? » ne dit plus ce qu il ouvre');
 });
 
 console.log('✓ test-puce-learn : ' + n + ' cas');

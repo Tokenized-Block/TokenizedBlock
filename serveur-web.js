@@ -94,7 +94,8 @@ import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
-import { saisonDe, valeurUsd, crediter, tickets, racine, F_USD_V1 } from './tirage-saison.js';
+import { saisonDe, valeurUsd, crediter, tickets, racine, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD } from './tirage-saison.js';
+import { volumeVerifie, poolIdDe } from './volume-tirage.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
 import { lireMissions } from './missions-lecture.js';
@@ -3839,6 +3840,25 @@ const revenu = (() => {
  *   pas) ; prix = celui de l ecran (prixUsdPourPlan ; l ETH natif/WETH par son pool). Non lu -> la devise vaut 0, jamais devinee. */
 const decimalesCache = new Map();
 const WETH_SRV = WETH_BASE.toLowerCase();
+/* Season Draw quotidien : UNIT (symbol() = « UNIT » lu sur Base le 2026-10-17) et SA pool sur notre hook 7030 — l id recalcule = 0x79a40c32…,
+ *   la pool initialisee lue par StateView (test-volume-tirage le verifie). Les actions = jetons d actions connus (descripteur 7030 + Aerodrome). */
+const UNIT_BLOCK = '0xb2000000000000000000007afa7ed748b0874f27';
+const POOLS_UNIT_TB = new Set([poolIdDe({ currency0: '0x' + '0'.repeat(40), currency1: UNIT_BLOCK, fee: 0, tickSpacing: 200, hooks: HOOK_7030 })]);
+const JETONS_ACTIONS = new Set([...DESCRIPTEUR_7030.devises.filter((d) => /c$/.test(d.sym)).map((d) => d.adresse.toLowerCase()), ...[...POOLS_ACTIONS_AERODROME.keys()].map((x) => String(x).toLowerCase())]);
+async function crediterVolumeJour({ h, ligne, tx, recu, v, internes }) {
+  if (ligne !== 'hook_block' && ligne !== 'swap_action') return;
+  revenu.volVus = revenu.volVus || {};
+  if (revenu.volVus[h]) return;
+  const vol = volumeVerifie({ tx, recu, poolManager: V4_ADRESSES[8453].poolm, poolsUnit: POOLS_UNIT_TB, jetonsActions: v.ok ? JETONS_ACTIONS : new Set() });
+  if (!vol.ok || internes.has(vol.payeur)) return;
+  let usd = 0;
+  if (BigInt(vol.unitWei) > 0n) usd += Number(BigInt(vol.unitWei)) / 1e18 * (await prixUsdPourPlan(null) || 0);
+  if (vol.actions.length) usd += await valeurFraisUsd(vol.actions.map((x) => ({ devise: x.jeton, montant: x.montant })));
+  if (!(usd > 0)) return;
+  revenu.volVus[h] = 1;
+  revenu.jours = crediter(revenu.jours || {}, { saison: jourDe(Date.now()).id, payeur: vol.payeur, hash: h, usd });
+  revenuSale = true;
+}
 async function valeurFraisUsd(recus) {
   const prix = {}, decimales = {};
   for (const r of recus || []) {
@@ -5686,6 +5706,10 @@ function traiterRequete(req, res) {
       /* nos wallets de TEST connus (0x31e0… = le wallet de test de Phil, cite dans les rapports du canal) + ceux declares par l env */
       const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
       const v = verifierFrais({ tx, recu, internes, devises: devisesComptees([...POOLS_ACTIONS_AERODROME.keys()]) });
+      /* 2026-10-17 soir — SEASON DRAW QUOTIDIEN : le VOLUME verifie du jour (volume-tirage.js). UNIT : un Swap du PoolManager sur NOTRE pool
+       *   UNIT (le frais du hook est pris DANS ce swap, en ETH natif : verifierFrais ne le voit pas, d ou ce chemin avant son refus).
+       *   Actions : seulement si NOTRE frais est arrive (v.ok). Externes seulement ; un hash ne compte qu UNE fois, tous jours confondus. */
+      try { await crediterVolumeJour({ h, ligne, tx, recu, v, internes }); } catch (_) { /* le volume se relira au prochain envoi du hash */ }
       revenu.tentatives[v.ok ? 'ok' : v.etat] = (revenu.tentatives[v.ok ? 'ok' : v.etat] || 0) + 1;
       if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' ? 202 : 200, { ok: false, etat: v.etat, pourquoi: v.pourquoi }); return; }
       /* ⛔ chasse 2026-10-17 (HIGH, PoC) : `i=1` venait du CLIENT — n importe qui postait le hash d un autre avec i=1 (le premier post gagne)
@@ -5749,15 +5773,23 @@ function traiterRequete(req, res) {
   /* ══ TIRAGE DE SAISON (2026-10-17, v1 BLANCHE) — public et rejouable : la saison, le seuil, chaque wallet avec ses frais verifies et
    *   leurs hashes, les tickets, leur racine merkle. ⛔ Aucun pot en v1 : la reponse le dit. Le gagnant viendra d un bloc fixe a la cloture. */
   if (chemin === '/api/tirage') {
-    const s = saisonDe(Date.now());
-    const etat = (revenu.saisons || {})[s.id] || {};
-    const t = tickets(etat, F_USD_V1);
+    /* 2026-10-17 soir — v2 QUOTIDIEN (Phil) : ticket du JOUR a 10 $ de volume verifie (UNIT sur notre pool, ou actions tokenisees via l app) ;
+     *   chaque jour qualifie = 1 entree au tirage de la SEMAINE et du MOIS. Pas de pot (practice) : l ecran le dit. */
+    const now = Date.now(), j = jourDe(now), s = saisonDe(now), mo = moisDe(now);
+    const jours = revenu.jours || {}, etatJ = jours[j.id] || {};
+    const tJ = tickets(etatJ, SEUIL_VOLUME_JOUR_USD);
+    const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin)), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin));
+    const iso = (x) => new Date(x).toISOString();
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, saison: s.id, debut: new Date(s.debut).toISOString(), fin: new Date(s.fin).toISOString(),
-      seuilUsd: F_USD_V1, mode: 'SHADOW', pot: 0, tickets: t, racine: racine(t),
-      wallets: Object.entries(etat).map(([adresse, w]) => ({ adresse, fraisUsd: w.usd, hashes: w.hashes, ticket: w.usd >= F_USD_V1 })),
-      regle: 'One ticket per wallet whose verified fees on tokenized-stock trades reach $' + F_USD_V1 + ' this week (fees already paid, no new stake; '
-        + 'paying more gives nothing more). Shadow season: no prize. The winner will come from the hash of a block fixed when the season closes.' }));
+    res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD,
+      jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
+        wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: w.usd >= SEUIL_VOLUME_JOUR_USD })) },
+      semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)) },
+      mois: { id: mo.id, debut: iso(mo.debut), fin: iso(mo.fin), entrees: eM, n: eM.length, racine: racine(eM.map((e) => e.adresse)) },
+      regle: 'A day counts when your verified trading volume that day (UTC) reaches $' + SEUIL_VOLUME_JOUR_USD + ': trades of the UNIT block on its '
+        + 'TokenizedBlock pool, or tokenized-stock trades made in the app. Each such day is one ticket for that day\'s draw and one entry for the week\'s '
+        + 'and the month\'s draws. Trading more in a day adds nothing. Practice season: no prize yet. Winners will come from the hash of a block fixed '
+        + 'when each draw closes; anyone can replay it.' }));
     return;
   }
 

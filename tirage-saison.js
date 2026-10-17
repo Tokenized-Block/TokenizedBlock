@@ -83,3 +83,32 @@ export function tirer({ hashE, saison, liste, k = 1 }) {
 
 /** le pot d une saison PAYANTE (pas en v1) : min(disponible, 35 % de N x F). */
 export const plafondPot = (n, f, disponible) => Math.max(0, Math.min(disponible, PART_POT_MAX * n * f));
+
+/* ══ v2 QUOTIDIEN (Phil 2026-10-17 soir : « fait plutot journalier avec plus grosse recompense fin week et encore plus gros fin du mois » ;
+ *   « le ticket d entree c est 10 dollar per day de volume sur le block UNIT » ; « buy/sell tokenized stocks … est bon aussi »).
+ *   Un JOUR (UTC) qualifie un wallet si son VOLUME VERIFIE du jour (volume-tirage.js : UNIT sur notre pool, ou actions tokenisees passees
+ *   par l app) atteint SEUIL_VOLUME_JOUR_USD. Un jour qualifie = 1 ticket au tirage du JOUR, + 1 entree au tirage de la SEMAINE et du
+ *   MOIS (qui joue plus de jours a plus d entrees ; le volume au-dela du seuil ne donne rien de plus dans la journee).
+ *   ⛔ Toujours SANS POT tant qu aucune source de prix n est decidee : l ecran le dit (practice). */
+export const JOUR_MS = 86400000;
+export const SEUIL_VOLUME_JOUR_USD = 10;
+export function jourDe(ms) {
+  const d = Math.floor(ms / JOUR_MS);
+  return { id: 'J' + new Date(d * JOUR_MS).toISOString().slice(0, 10), debut: d * JOUR_MS, fin: (d + 1) * JOUR_MS };
+}
+export function moisDe(ms) {
+  const t = new Date(ms), debut = Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), 1), fin = Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 1);
+  return { id: 'M' + new Date(debut).toISOString().slice(0, 7), debut, fin };
+}
+/** les jours (ids) d une periode [debut, fin[ */
+export function joursEntre(debut, fin) {
+  const out = [];
+  for (let t = Math.floor(debut / JOUR_MS) * JOUR_MS; t < fin; t += JOUR_MS) out.push(jourDe(t).id);
+  return out;
+}
+/** les entrees d une periode : une par (wallet, jour qualifie), triees (adresse puis jour) — publiques et rejouables. */
+export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_USD) {
+  const e = [];
+  for (const j of idsJours) for (const a of tickets((etatJours || {})[j], seuil)) e.push({ adresse: a, jour: j });
+  return e.sort((x, y) => (x.adresse === y.adresse ? x.jour.localeCompare(y.jour) : x.adresse.localeCompare(y.adresse)));
+}

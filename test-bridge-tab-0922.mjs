@@ -100,8 +100,12 @@ const tiny = planBridgeFeeSkim({ amount: '0.000000000000001', fromSym: 'ETH', to
 assert.equal(tiny.ok, false); // fee rounds to 0
 
 const html = readFileSync('./app.html', 'utf8');
-assert.match(html, /data-volet="bridge"/);
+/* 2026-10-17 soir (Phil) : plus d ONGLET Bridge — l onglet devient « Missions », et Fund / Swap / Bridge s affichent SOUS le Wallet.
+ *   La garde garde son intention : le Bridge doit rester ATTEIGNABLE. Donc : la section existe, le Wallet l allume, et tout chemin
+ *   « bridge » (lien de Create, #bridge) mene au Wallet. */
 assert.match(html, /id="v-bridge"/);
+assert.match(html, /v\.id === 'v-' \+ nom \|\| \(nom === 'wallet' && v\.id === 'v-bridge'\)/, 'le Wallet n affiche plus la section Bridge');
+assert.match(html, /const cible = nom === 'bridge' \? 'wallet' : nom;/, 'allerA(\'bridge\') ne mene plus nulle part');
 assert.match(html, /from\s+'\.\/bridge\.js'/);
 /* ⛔⛔ DEUX ASSERTIONS DE PLUS VERROUILLAIENT LE DEFAUT, et elles etaient les pires du lot :
  *     · `assert.match(html, /0\.01%/)` exigeait l ANCIEN tarif quelque part dans le fichier ;

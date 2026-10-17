@@ -1476,7 +1476,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" id="mapCta" class="mapCta">✦ Instant Birth — 0.001 ETH</button>
       <span class="teinteBoite"><button class="puce" id="pTeinte" type="button" style="cursor:pointer" aria-haspopup="true" aria-expanded="false" title="Choose the colours of the site">◐ Colours</button>
         <span class="teinteMenu" id="teinteMenu" role="menu" hidden></span></span>
-      <button class="puce" id="pLearn" style="cursor:pointer" aria-label="What am I looking at?"><span class="court">?</span><span class="long">What am I looking at?</span></button>
+      <button class="puce" id="pLearn" style="cursor:pointer" aria-label="What am I looking at?"><span class="court">?</span><span class="long">?</span></button>
       <!-- ⛔ PHIL (2026-09-19) : « retire base sepolia ». Le bouton reste dans le DOM (le code le lit) mais n est plus
            montre : l app reste sur Base mainnet (CHAINE = 8453 au demarrage, rien ne memorise l autre reseau). -->
       <button class="puce" id="pReseau" style="cursor:pointer;display:none" hidden>Base mainnet</button>
@@ -1935,7 +1935,7 @@ details[open] > summary::before{transform:rotate(90deg)}
              ⇒ Donc : seule la PHRASE est derivee de `HUB_SWAP_LIVE`, le lien ne bouge pas. Le
                `<span>` est vide dans le HTML — si le peintre ne tourne pas, on ne montre AUCUNE
                promesse, et le lien reste utilisable. -->
-        <p class="note" id="cBridgeRetarget"><span id="cBridgeRetargetTexte"></span> Open the <button type="button" class="lienLearn" id="cGoBridge" style="all:unset;color:inherit;text-decoration:underline;cursor:pointer">Bridge</button> tab.</p>
+        <p class="note" id="cBridgeRetarget"><span id="cBridgeRetargetTexte"></span> Open the <button type="button" class="lienLearn" id="cGoBridge" style="all:unset;color:inherit;text-decoration:underline;cursor:pointer">Bridge</button> in the Wallet tab.</p>
         <!-- ⛔ PHIL (2026-09-18) : « check its address first, fais-le au prealable — un bouton qui ne sert a rien, une action
              de plus pour l utilisateur ». La verification part seule (ouverture de Create, et 600 ms apres la derniere
              frappe). Le bouton reste dans le code, cache : il sert de porte de sortie si une lecture a echoue. -->
@@ -2454,22 +2454,7 @@ details[open] > summary::before{transform:rotate(90deg)}
        cette phrase-la. Corriger la copie visible en laissant l aria-label aurait reserve la
        version fausse a ceux qui ne voient pas l ecran. -->
   <section class="volet" id="v-tokenx" aria-label="Mint a new block named after a post or a token">
-    <!-- 2026-10-17 — LE TIRAGE DE SAISON (tweet de Phil : « win … with the fees you already paid » ; Phil : « mets-le dans l onglet
-         Tokenized »). Un ticket par wallet des que ses frais VERIFIES sur les actions de la semaine atteignent le seuil ; payer plus ne donne
-         rien de plus. Saison BLANCHE : aucun prix, et c est dit. Donnees : /api/tirage (publiques, rejouables). UX « jeu » du theme. -->
-    <div class="carte" id="tirCarte" style="margin-bottom:14px">
-      <span class="jeuKick">TokenizedBlock · Season Draw</span>
-      <p class="titre jeuTitre">Your trades are your ticket.</p>
-      <p class="sous" id="tirSous">No entry to pay: the fees you already paid on tokenized stocks this week are your way in.</p>
-      <div class="jeuGrille">
-        <div class="jeuTuile"><b>01 · TRADE</b><p>Buy or sell tokenized stocks in the app.</p></div>
-        <div class="jeuTuile"><b>02 · THE TICKET</b><p>At $1 of fees this week, you hold one ticket. Trading more adds nothing.</p></div>
-        <div class="jeuTuile"><b>03 · THE DRAW</b><p>When the week closes, a future block's hash picks the winner. Anyone can replay it.</p></div>
-      </div>
-      <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
-      <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
-      <p class="note" id="tirSaison" style="margin:2px 0 0">Reading this week's season…</p>
-    </div>
+    <!-- 2026-10-17 soir (Phil) : le Season Draw a demenage dans l onglet Missions (#v-missions). -->
     <!-- 2026-10-11 (test reel de Grok : « la Bank ne se trouve que par Wallet, puis Open the Bank ») : une entree ici aussi -->
     <div class="carte" id="tkBankCarte" style="margin-bottom:14px">
       <p class="titre">TokenizedBank</p>
@@ -3074,26 +3059,7 @@ details[open] > summary::before{transform:rotate(90deg)}
          un profil. Seule la tuile « You hold » a besoin d une adresse connectee. -->
     <!-- ⛔ LE CLASSEMENT EST UN ECHANTILLON, ET IL LE DIT. « Le plus gros » ne vaut que parmi ce que
          cette page a SU LIRE ; la borne rendue par `classement.js` est affichee sous la liste. -->
-    <!-- 2026-10-17 — MISSIONS (BlockMissionsV3, PAS ENCORE DEPLOYE : la carte le dit). Meme UX que /deployer-missions.html (Phil) :
-         le pass, la mission, la victoire, et ou va chaque recompense. Aucun bouton d action tant que le contrat n existe pas. -->
-    <div class="carte" id="missionsCarte">
-      <span class="jeuKick">TokenizedBlock · Missions</span>
-      <p class="titre jeuTitre">Your block is your pass.</p>
-      <p class="sous">Holding a block's units proves you're part of its crew and you play on TokenizedBlock. Missions turn that into rewards.</p>
-      <div class="jeuGrille">
-        <div class="jeuTuile"><b>01 · THE PASS</b><p>Only wallets that hold the block's units can take its missions.</p></div>
-        <div class="jeuTuile"><b>02 · THE MISSION</b><p>The creator sets the reward aside up front — in units, or in the stock the block is paired with.</p></div>
-        <div class="jeuTuile"><b>03 · THE WIN</b><p>Do it and keep holding through the whole window. Selling early ends the run.</p></div>
-      </div>
-      <div class="jeuPart" role="img" aria-label="Player 90%, creator 3%, community reserve 5.6%, dev 1.4%">
-        <span style="width:90%;background:var(--accent)">Player 90%</span>
-        <span style="width:3%;background:var(--accent2)"></span>
-        <span style="width:5.6%;background:rgb(var(--accentRgb) / .55)"></span>
-        <span style="width:1.4%;background:rgb(var(--accentRgb) / .3)"></span>
-      </div>
-      <p class="note" style="margin:0">Player 90% · creator 3% · community reserve 5.6% · dev 1.4% (USDC only).</p>
-      <p class="note" style="margin:6px 0 0"><b>The mission board is not open yet</b> — it opens once its contract is signed on Base.</p>
-    </div>
+    <!-- 2026-10-17 soir (Phil) : la carte Missions a demenage dans l onglet Missions (#v-missions). -->
     <div class="carte" id="carteRang">
       <p class="titre">Biggest blocks</p>
             <!-- ⛔ Phil (2026-09-20) : « on s en fout de TBLOCK et TTB » — residu d une ancienne version ; la phrase dit ce
@@ -3524,6 +3490,54 @@ details[open] > summary::before{transform:rotate(90deg)}
        Fee 0.01% of volume → fee sink on-chain (never shown). Settlement prefer ETH/USDC.
        Fee skim LIVE (ETH/USDC From → client-side send). Net hub swap = Phil GO 1 bps.
        Instant Birth / CreateRouter / V8 / BuySell 0.5% untouched. -->
+  <!-- 2026-10-17 soir — ONGLET MISSIONS (Phil : « sur l onglet bridge tu change pour Missions pour les jobs » ; « rassemble tout ca »).
+       Les missions des blocks et le Season Draw, ensemble : trader UNIT est a la fois le pass de ses missions et le ticket du jour.
+       ⛔ Rien ici ne pretend qu un contrat est ouvert : le tableau des missions le dit, le tirage dit « practice, no prize yet ».
+       Fund / Swap / Bridge : section #v-bridge, affichee SOUS le Wallet (ids inchanges : le JS et les tests les trouvent). -->
+  <section class="volet" id="v-missions" aria-label="Missions">
+    <div class="carte" id="missionsCarte">
+      <span class="jeuKick">TokenizedBlock · Missions</span>
+      <p class="titre jeuTitre">Your block is your pass.</p>
+      <p class="sous">Holding a block's units proves you're part of its crew and you play on TokenizedBlock. Missions turn that into rewards.</p>
+      <div class="jeuGrille">
+        <div class="jeuTuile"><b>01 · THE PASS</b><p>Only wallets that hold the block's units can take its missions.</p></div>
+        <div class="jeuTuile"><b>02 · THE MISSION</b><p>The creator sets the reward aside up front — in units, or in the stock the block is paired with.</p></div>
+        <div class="jeuTuile"><b>03 · THE WIN</b><p>Do it and keep holding through the whole window. Selling early ends the run.</p></div>
+      </div>
+      <!-- ⛔ Phil 2026-10-17 soir : « tu l as ecrit 2 fois » — la barre portait « Player 90% » ET la legende juste dessous le redisait.
+           La barre n a plus de texte (son aria-label le dit) ; la legende est la seule source. Et « dev 1.4% (USDC only) » etait devenu
+           FAUX : le dev recoit l USDC, ou l action elle-meme, ou l UNIT vendu en USDC par le rail — jamais des unites de block. -->
+      <div class="jeuPart" role="img" aria-label="Player 90%, creator 3%, community reserve 5.6%, dev 1.4%">
+        <span style="width:90%;background:var(--accent)"></span>
+        <span style="width:3%;background:var(--accent2)"></span>
+        <span style="width:5.6%;background:rgb(var(--accentRgb) / .55)"></span>
+        <span style="width:1.4%;background:rgb(var(--accentRgb) / .3)"></span>
+      </div>
+      <p class="note" style="margin:0">Player 90% · creator 3% · community reserve 5.6% · dev 1.4% (in USDC or in the stock — never in block units).</p>
+      <p class="note" style="margin:6px 0 0">A block — or its brain — posts the job. Example of a mission: <i>say GM back</i>, reward $1 of NVDAc.</p>
+      <p class="note" style="margin:6px 0 0"><b>The mission board is not open yet</b> — it opens once its contract is signed on Base.</p>
+    </div>
+    <!-- 2026-10-17 soir — SEASON DRAW v2 QUOTIDIEN (Phil). Donnees : /api/tirage (publiques, rejouables). -->
+    <div class="carte" id="tirCarte">
+      <span class="jeuKick">TokenizedBlock · Season Draw</span>
+      <p class="titre jeuTitre">Your trades are your ticket.</p>
+      <p class="sous" id="tirSous">No entry to pay: trade $10 in a day — the UNIT block, or tokenized stocks in the app — and that day is your ticket.</p>
+      <div class="jeuGrille">
+        <div class="jeuTuile"><b>01 · TRADE</b><p>Trade UNIT on its TokenizedBlock market, or tokenized stocks in the app.</p></div>
+        <div class="jeuTuile"><b>02 · THE TICKET</b><p>$10 of volume in a day (UTC) is that day's ticket. Trading more that day adds nothing.</p></div>
+        <div class="jeuTuile"><b>03 · THE DRAWS</b><p>A draw every day, a bigger one when the week closes, the biggest when the month closes. Every day you hold a ticket is one more entry. A future block's hash picks the winners — anyone can replay it.</p></div>
+      </div>
+      <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
+      <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
+      <p class="note" id="tirSaison" style="margin:2px 0 0">Reading today's draw…</p>
+    </div>
+    <div class="carte" id="missionsLien">
+      <p class="titre">One habit, two games</p>
+      <p class="note" style="margin:0">The UNIT you trade is the pass for UNIT's missions — and each day you trade $10 of it is a ticket for the draws.
+        Trading tokenized stocks in the app counts for the draws too.</p>
+    </div>
+  </section>
+
   <section class="volet" id="v-bridge" aria-label="Bridge">
     <div class="carte">
       <p class="titre">Bridge</p>
@@ -3687,7 +3701,8 @@ details[open] > summary::before{transform:rotate(90deg)}
             une ambiguite dans la barre. A annuler d un mot si ca ne lui va pas. -->
     <button class="navB" role="tab" aria-selected="false" data-volet="trade"><b>📈</b>Market</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="creer"><b>✚</b>Create</button>
-    <button class="navB" role="tab" aria-selected="false" data-volet="bridge"><b>⇄</b>Bridge</button>
+    <!-- 2026-10-17 soir (Phil) : l onglet Bridge devient Missions. Fund / Swap / Bridge s affichent sous le Wallet (allerA('bridge') y mene). -->
+    <button class="navB" role="tab" aria-selected="false" data-volet="missions"><b>✓</b>Missions</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="brain"><b>❋</b>Brain</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Feed</button>
@@ -4257,18 +4272,23 @@ async function peindreTirage() {
   if (!moi || !sais || !barre) return;
   let t = null;
   try { t = await fetch('/api/tirage', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { t = null; }
-  if (!t || t.ok !== true) { sais.textContent = 'The draw could not be read just now.'; return; }
-  const fin = new Date(t.fin), reste = Math.max(0, fin.getTime() - Date.now());
-  const j = Math.floor(reste / 86400000), h = Math.floor((reste % 86400000) / 3600000);
-  sais.textContent = 'Season ' + t.saison.replace(/^S/, '') + ' · ' + t.tickets.length + ' ticket' + (t.tickets.length === 1 ? '' : 's') + ' · closes in ' + j + 'd ' + h + 'h'
-    + (t.mode === 'SHADOW' ? ' · practice season: no prize yet' : '');
+  if (!t || t.ok !== true || !t.jour) { sais.textContent = 'The draw could not be read just now.'; return; }
+  /* 2026-10-17 soir — v2 QUOTIDIEN : le jour (ticket a $10 de volume verifie), et les entrees de la semaine et du mois. */
+  const reste = Math.max(0, new Date(t.jour.fin).getTime() - Date.now());
+  const h = Math.floor(reste / 3600000), mn = Math.floor((reste % 3600000) / 60000);
+  const n = t.jour.tickets.length;
+  sais.textContent = 'Today · ' + n + ' ticket' + (n === 1 ? '' : 's') + ' · closes in ' + h + 'h ' + mn + 'm · this week ' + t.semaine.n + ' entr' + (t.semaine.n === 1 ? 'y' : 'ies')
+    + ' · this month ' + t.mois.n + (t.mode === 'SHADOW' ? ' · practice: no prize yet' : '');
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!c) { moi.textContent = 'Connect a wallet to see your progress.'; barre.style.width = '0%'; return; }
-  const w = (t.wallets || []).find((x) => String(x.adresse).toLowerCase() === String(c).toLowerCase());
-  const fait = w ? Number(w.fraisUsd) : 0, seuil = Number(t.seuilUsd) || 1;
+  const moiBas = String(c).toLowerCase();
+  const w = (t.jour.wallets || []).find((x) => String(x.adresse).toLowerCase() === moiBas);
+  const fait = w ? Number(w.volumeUsd) : 0, seuil = Number(t.seuilVolumeUsd) || 10;
+  const mesJours = (t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
   barre.style.width = Math.min(100, Math.round((fait / seuil) * 100)) + '%';
-  moi.textContent = w && w.ticket ? 'You hold a ticket for this season.'
-    : 'Your verified fees this week: $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' — ' + (seuil - fait > 0 ? '$' + (seuil - fait).toFixed(2) + ' to go.' : 'ticket on its way.');
+  moi.textContent = (w && w.ticket ? 'You hold today\'s ticket.'
+    : 'Your verified volume today: $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' — $' + Math.max(0, seuil - fait).toFixed(2) + ' to go.')
+    + (mesJours ? ' · ' + mesJours + ' day' + (mesJours === 1 ? '' : 's') + ' in this month\'s draw.' : '');
 }
 setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);
 
@@ -4277,7 +4297,8 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (!b) return;
   const nom = b.getAttribute('data-volet');
   for (const x of document.querySelectorAll('.navB')) x.setAttribute('aria-selected', x === b ? 'true' : 'false');
-  for (const v of document.querySelectorAll('.volet')) v.classList.toggle('on', v.id === 'v-' + nom);
+  /* 2026-10-17 soir (Phil) : Fund / Swap / Bridge (#v-bridge) s affichent SOUS le Wallet — il n y a plus d onglet Bridge. */
+  for (const v of document.querySelectorAll('.volet')) v.classList.toggle('on', v.id === 'v-' + nom || (nom === 'wallet' && v.id === 'v-bridge'));
   window.scrollTo({ top: 0 });
   document.body.classList.toggle('surMap', nom === 'map');
   /* ⛔ EN REVENANT SUR LA MAP, ON REMESURE. Les blocks ont pu naitre pendant que l onglet etait cache,
@@ -4303,7 +4324,8 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
-  if (nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
+  if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
+  if (nom === 'missions') void peindreTirage();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
@@ -9732,8 +9754,12 @@ function signalerPaye(hash, ligne, essai = 0) {
   } catch (_) {}
 }
 function allerA(nom) {
-  const b = document.querySelector('.navB[data-volet="' + nom + '"]');
+  /* 2026-10-17 soir (Phil) : il n y a plus d onglet Bridge — Fund / Swap / Bridge vivent sous le Wallet (#v-bridge affiche avec lui).
+   *   « Open the Bridge tab », #bridge et tout appel allerA('bridge') menent donc au Wallet, defile jusqu a la section. */
+  const cible = nom === 'bridge' ? 'wallet' : nom;
+  const b = document.querySelector('.navB[data-volet="' + cible + '"]');
   if (b) b.click();
+  if (nom === 'bridge') setTimeout(() => { const s = document.getElementById('v-bridge'); if (s) s.scrollIntoView({ block: 'start' }); }, 60);
 }
 /** tip 20260923-wallet-intent-market: after connect/pret, resume IB or Buy once. */
 async function reprendreIntentApresConnect() {
@@ -21121,12 +21147,12 @@ const ETAPES = [
     d: 'Every block with a live market, and the stocks Coinbase tokenized on Base, ranked by what is moving right now. Tap one to open it and buy or sell — your own wallet shows each step and you sign it.' },
   { t: 'Create — make your own', ic: 0,
     d: 'Pick a name and a symbol; its face and its brain are ready. For 0.001 ETH it is born on Base, its tokens are minted to you, and its market opens.' },
-  { t: 'Bridge — move value', ic: 3,
-    d: 'Move value from one block to another through a hub block, or buy ETH or USDC with a card through Coinbase: it lands in your own wallet.' },
+  { t: 'Missions — jobs and daily draws', ic: 3,
+    d: 'Blocks post missions here: hold the block, do the job, keep holding through the window, and the reward is yours. Trade $10 in a day — the UNIT block or tokenized stocks — and that day is a ticket for the daily draw, with bigger draws when the week and the month close.' },
   { t: 'Brain — what a block feels', ic: 9,
     d: 'Every block has a brain of 128 small neurons, seeded by its address — not a chatbot. It reacts to buys, sales and new holders; you watch it light up. Open its control panel to talk to it and trade. Switch S.I on and it proposes trades inside the limits you set — it never signs: you do.' },
   { t: 'Wallet — your money stays yours', ic: 2,
-    d: 'See what you hold, send and receive, pair one of your blocks with another currency. Every action opens your own wallet: you check it, you sign. A small fee is included in each trade and shown before you sign.' },
+    d: 'See what you hold, send and receive, pair one of your blocks with another currency. Fund your wallet with a card through Coinbase, sell a block through its own market, or move value through a hub block — all here. Every action opens your own wallet: you check it, you sign. A small fee is included in each trade and shown before you sign.' },
   { t: 'Feed — what just happened', ic: 4,
     d: 'Everything happening to blocks on Base, live and read from the chain: births, buys, sales, sends and messages — and what each brain notices.' },
   { t: 'Blocks — the biggest, by stage', ic: 8,

@@ -17,6 +17,8 @@ if (/grid-template-columns:repeat\([78],1fr\)/.test(html)) throw new Error('CSS 
  *    doit exister et etre bien formee. Les controles « un ANCIEN tip n est pas reste » sont
  *    laisses intacts — eux gardent vraiment quelque chose. */
 if (!/data-build="[\w-]+"/.test(html)) throw new Error('ligne de build absente ou mal formee');
-if (!/data-volet="bridge"/.test(html)) throw new Error('Bridge tab missing');
+/* 2026-10-17 soir (Phil) : l onglet Bridge devient « Missions » (Fund / Swap / Bridge sous le Wallet). Le compte reste 9. */
+if (!/data-volet="missions"/.test(html) || !/id="v-missions"/.test(html)) throw new Error('Missions tab missing');
+if (/data-volet="bridge"/.test(nav[0])) throw new Error('an old Bridge tab is still in the bar');
 if (!/data-volet="mien"/.test(html)) throw new Error('My block tab missing');
 console.log('ok nav-8 tip 20260923-nav-boot-fix');
