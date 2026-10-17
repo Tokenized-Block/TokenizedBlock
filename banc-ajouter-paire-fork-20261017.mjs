@@ -54,7 +54,16 @@ const tete = parseInt(await rpc('eth_blockNumber', []), 16);
 const codeHook = await rpc('eth_getCode', [H, 'latest']);
 console.log('fork ' + URL_FORK + ' · ' + client.split(' ')[0] + ' · bloc ' + tete + ' · hook ' + H + ' (' + (codeHook.length - 2) / 2 + ' octets)');
 ok(codeHook.length > 1000, 'le fork porte le hook 7030 deploye');
-const instantane = await rpc('evm_snapshot', []);
+let instantane = await rpc('evm_snapshot', []);
+/** l AAPLc d essai du createur, pris a la pool Aerodrome AAPLc du fork (transfert impersonne : fork seulement) */
+async function financer(qui, montant) {
+  const avant = await solde(AAPL, qui);
+  await rpc('anvil_impersonateAccount', [POOL_AAPL_AERO]);
+  await rpc('anvil_setBalance', [POOL_AAPL_AERO, '0x' + (10n ** 18n).toString(16)]);
+  const r = await envoyer(POOL_AAPL_AERO, { to: AAPL, data: '0xa9059cbb' + pad(qui) + montant.toString(16).padStart(64, '0') });
+  await rpc('anvil_stopImpersonatingAccount', [POOL_AAPL_AERO]);
+  return r.status === '0x1' && (await solde(AAPL, qui)) - avant === montant;
+}
 try {
   /* ── le createur REEL de UNIT, LU au hook (jamais recite) ── */
   const cleEth = cleDePool(ETH, UNIT, { fee: L.FEE_POOL, tickSpacing: L.TICK_SPACING_POOL, hooks: H });
@@ -82,12 +91,7 @@ try {
   ok(r3.etat === 'REFUSE' && !(r3.appels || []).length, 'TEMOIN un block sans marche ETH sur nos hooks de naissance -> REFUSE (prix jamais devine) : ' + r3.pourquoi);
 
   /* ── financer le createur en AAPLc (il n en a pas sur la chaine) ── */
-  const aaplAvantFin = await solde(AAPL, CREATEUR);
-  await rpc('anvil_impersonateAccount', [POOL_AAPL_AERO]);
-  await rpc('anvil_setBalance', [POOL_AAPL_AERO, '0x' + (10n ** 18n).toString(16)]);
-  const fin = await envoyer(POOL_AAPL_AERO, { to: AAPL, data: '0xa9059cbb' + pad(CREATEUR) + (MONTANT_DEVISE * 2n).toString(16).padStart(64, '0') });
-  await rpc('anvil_stopImpersonatingAccount', [POOL_AAPL_AERO]);
-  ok(fin.status === '0x1' && (await solde(AAPL, CREATEUR)) - aaplAvantFin === MONTANT_DEVISE * 2n, 'fork : le createur recoit ' + (MONTANT_DEVISE * 2n) + ' unites AAPLc d essai');
+  ok(await financer(CREATEUR, MONTANT_DEVISE * 2n), 'fork : le createur recoit ' + (MONTANT_DEVISE * 2n) + ' unites AAPLc d essai');
 
   /* ── LE PLAN ── */
   const bloc = await rpc('eth_getBlockByNumber', ['latest', false]);
@@ -197,6 +201,34 @@ try {
   ok(recl.status === '0x1' && recuC === cr, 'reclamer (par n importe qui) verse la part au createur : +' + recuC + ' AAPLc sur SON solde (' + recl.gas + ' gas)');
   ok((await solde(ETH, A6CF)) - av.a6cfEth === F.FRAIS_OUVERTURE_WEI, 'a6cf ETH : toujours +0,001 ETH au total (l achat ne prend pas d ETH)');
   console.log('MESURES ' + JSON.stringify({ bloc: tete, createur: CREATEUR, sqrtVise: String(plan.sqrtVise), L: String(plan.L), depotAAPLc: String(depotA), depotUNIT: String(depotU), cautionAAPLc: String(caution), fraisNaissanceWei: String(F.FRAIS_OUVERTURE_WEI), gasPlan: recus.map((r) => String(r.gas)), gasPlanTotal: String(gasTotal), achatAAPLc: String(ACHAT), recuUNIT: String(recuU), a6cfAAPLc: String(a6cfRecu), createurAAPLc: String(recuC), gasSwap: String(swap.gas) }));
+
+  /* ── SCENARIO B : un lot COUPE EN DEUX (etapes envoyees une a une, arret juste apres l inscription payee) ──
+   * Le re-plan doit finir AU prix deja inscrit au hook, sans second frais ni seconde caution — et le hook doit l accepter. */
+  console.log('— scenario B : reprise apres une inscription payee');
+  await rpc('evm_revert', [instantane]);
+  instantane = await rpc('evm_snapshot', []);
+  ok(await financer(CREATEUR, MONTANT_DEVISE * 2n), 'B : createur refinance (' + (MONTANT_DEVISE * 2n) + ' AAPLc brut)');
+  const b0 = { a6cf: await solde(ETH, A6CF), c: await solde(AAPL, CREATEUR) };
+  const planB = await AP.planAjouterPaire({ rpc, compte: CREATEUR, block: UNIT, devise: AAPL, montantDevise: MONTANT_DEVISE, maintenant });
+  const iInsB = (planB.appels || []).findIndex((a) => String(a.to).toLowerCase() === H.toLowerCase());
+  ok(planB.etat === 'APPROBATIONS' && iInsB >= 0, 'B : plan complet, inscription a l etape ' + (iInsB + 1) + '/' + (planB.appels || []).length);
+  await rpc('anvil_impersonateAccount', [CREATEUR]);
+  const partiels = [];
+  for (const a of planB.appels.slice(0, iInsB + 1)) partiels.push((await envoyer(CREATEUR, a)).status);
+  ok(partiels.every((s) => s === '0x1'), 'B : ' + partiels.length + ' premieres etapes passees (jusqu a l inscription payee incluse), puis ARRET');
+  const planB2 = await AP.planAjouterPaire({ rpc, compte: CREATEUR, block: UNIT, devise: AAPL, montantDevise: MONTANT_DEVISE, maintenant });
+  console.log('   re-plan ' + planB2.etat + ' — ' + planB2.pourquoi);
+  ok((planB2.etat === 'PRET' || planB2.etat === 'APPROBATIONS') && BigInt(planB2.sqrtVise) === BigInt(planB.sqrtVise) && planB2.prix && planB2.prix.repriseInscription === true,
+    'B : re-plan ' + planB2.etat + ' au prix INSCRIT (' + planB2.sqrtVise + ')');
+  ok(!planB2.appels.some((a) => String(a.to).toLowerCase() === H.toLowerCase()) && planB2.appels.every((a) => BigInt(a.value || '0x0') === 0n)
+    && planB2.cout.fraisNaissanceWei === 0n && planB2.cout.caution.montant === 0n, 'B : ni second frais ni seconde caution (' + planB2.appels.length + ' appel(s) : ' + planB2.appels.map((a) => a.nom).join(' | ') + ')');
+  const fins = [];
+  for (const a of planB2.appels) fins.push((await envoyer(CREATEUR, a)).status);
+  await rpc('anvil_stopImpersonatingAccount', [CREATEUR]);
+  ok(fins.every((s) => s === '0x1') && BigInt('0x' + String(await lire(V.stateView, 'getSlot0(bytes32)', idN.slice(2))).slice(2, 66)) === BigInt(planB.sqrtVise), 'B : la fin passe, la pool est ouverte au prix inscrit');
+  const cautionB = await lireU(H, '0x' + selecteur('caution(bytes32)') + idN.slice(2));
+  ok((await solde(ETH, A6CF)) - b0.a6cf === F.FRAIS_OUVERTURE_WEI && cautionB === planB.cout.caution.montant, 'B : a6cf +0,001 ETH UNE fois, caution ' + cautionB + ' UNE fois');
+  ok(await lireU(V.stateView, '0x' + selecteur('getLiquidity(bytes32)') + idN.slice(2)) === BigInt(planB2.L) && BigInt(planB2.L) > 0n, 'B : liquidite de la pool = L du re-plan (' + planB2.L + ')');
 } catch (e) {
   ko += 1; console.log('KO  ' + String((e && e.message) || e).slice(0, 300));
 } finally {
