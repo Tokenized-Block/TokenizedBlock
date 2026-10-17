@@ -20,7 +20,7 @@ const CIBLE = '0x' + '49'.repeat(20), TOPIC = '0x' + 'ab'.repeat(32), H = '0x' +
 const m = (v) => BigInt(v).toString(16).padStart(64, '0'), a = (x) => x.slice(2).padStart(64, '0');
 const TETE = 100000, WINDOW = 86400;
 /* chaine : bloc b -> horodatage 1_800_000_000 + 2*b ; le joueur detient 60 BLK, en sort 40 au bloc 80000 et les reprend au bloc 90000 */
-function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null, pasBloc = 2, chaineLue = 8453, dejaPaye = false } = {}) {
+function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null, pasBloc = 2, chaineLue = 8453, dejaPaye = false, pause = false, faites = 0, done = 0, expiry = 1900000000 } = {}) {
   const ts = (b) => 1_800_000_000 + pasBloc * b;
   const finale = 60n * 10n ** 18n;
   const soldeA = (b) => (b >= 80000 && b < 90000 ? finale - 40n * 10n ** 18n : finale) + (sansLog ? 1n : 0n) * (b < 70000 ? 1n : 0n);
@@ -42,7 +42,11 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
     }
     if (meth === 'eth_call') {
       const { to, data } = p[0], s = data.slice(2, 10), bloc = p[1] === 'latest' ? TETE : parseInt(p[1], 16);
-      if (to === CONTRAT && s === SEL.tasks) return '0x' + [a(BLK), a(AMZ), a(BLK), a(CREA), m(10n ** 18n), m(10), m(0), m(1), m(1900000000), a(CIBLE), TOPIC.slice(2), 'cd'.repeat(32)].join('');
+      if (to === CONTRAT && s === SEL.tasks) return '0x' + [a(BLK), a(AMZ), a(BLK), a(CREA), m(10n ** 18n), m(10), m(done), m(1), m(expiry), a(CIBLE), TOPIC.slice(2), 'cd'.repeat(32)].join('');
+      if (to === CONTRAT && s === SEL.paused) return '0x' + m(pause ? 1 : 0);
+      if (to === CONTRAT && s === selecteur('doneBy(uint256,address)').slice(2)) return '0x' + m(faites);
+      /* la mission 3 existe a partir du bloc poseeAu (taskCount passe de 3 a 4) ; par defaut, postee depuis toujours */
+      if (to === CONTRAT && s === SEL.taskCount) return '0x' + m(poseeAu !== null && bloc < poseeAu ? 3 : 4);
       if (to === CONTRAT && s === SEL.holdOf) return '0x' + [m(minBlock), m(minPaired), m(0), m(0), m(WINDOW)].join('');
       if (to === CONTRAT && s === SEL.verifier) return '0x' + a(verifier);
       if (to === CONTRAT && s === selecteur('txUsed(bytes32)').slice(2) && data.slice(10) === H.slice(2)) return '0x' + m(dejaPaye ? 1 : 0);
@@ -86,6 +90,12 @@ vu(avantPose.etat === 'REFUSE' && /before the mission was posted/.test(avantPose
 vu((await attester(io({ blocTx: 95000, poseeAu: 95000 }), demande)).etat === 'REFUSE', 'meme bloc que la publication -> REFUSE (ordre non tranche)');
 vu((await attester(io({ blocTx: 95000, poseeAu: 60000 }), demande)).ok === true, 'mission publiee AVANT la tx -> signe');
 vu((await attester(io({ blocTx: TETE }), demande)).etat === 'NON_LU', 'tx plus recente que la fin de fenetre -> NON_LU (renvoyer)');
+/* (6) chasse 2026-10-17 soir : pause, mission pleine, deja faite par ce wallet, expiree -> rien signe ; publication dans les 2 derniers blocs */
+vu((await attester(io({ pause: true }), demande)).etat === 'PAS_OUVERT', 'contrat en pause -> PAS_OUVERT');
+vu(/full/.test((await attester(io({ done: 10 }), demande)).pourquoi || ''), 'mission pleine (10/10) -> REFUSE');
+vu(/already completed/.test((await attester(io({ faites: 1 }), demande)).pourquoi || ''), 'deja faite par ce wallet (perWallet 1) -> REFUSE');
+vu(/has ended/.test((await attester(io({ expiry: 1_800_000_000 + 2 * 99990 }), demande)).pourquoi || ''), 'mission expiree a la fin de fenetre -> REFUSE');
+vu((await attester(io({ blocTx: 95000, poseeAu: 99999 }), demande)).etat === 'REFUSE', 'mission postee APRES fin (tete-1) : vieille tx REFUSEE (l ancien scan s arretait a fin)');
 /* (5) Grok A11 / A8b (188a29e) : chaine lue != chaine signee ; tx deja payee (txUsed global on-chain) */
 const autreChaine = await attester(io({ chaineLue: 1 }), demande);
 vu(autreChaine.etat === 'PAS_OUVERT' && /reads chain 1 but signs for chain 8453/.test(autreChaine.pourquoi), 'chaine lue 1, signee 8453 -> rien signe (A11)');
@@ -95,7 +105,7 @@ vu(payee.etat === 'REFUSE' && /already paid/.test(payee.pourquoi), 'tx deja paye
 vu(r.blocs.debut === 99998 - 43200, 'Base (2 s) : debut = fin - 43 200 (' + r.blocs.debut + ')');
 const ioBase = io(); await attester(ioBase, demande);
 vu(ioBase.rpcEtat.entetes <= 4, 'Base : au plus 4 en-tetes lus par attestation (' + ioBase.rpcEtat.entetes + ') - une dichotomie seule en coute ~18');
-const lent = await attester(io({ pasBloc: 1500, blocTx: 99990 }), demande);
+const lent = await attester(io({ pasBloc: 1500, blocTx: 99990, expiry: 2_100_000_000 }), demande);
 const attendu = Math.floor((1500 * 99998 - 86400) / 1500); /* dernier b avec 1500 b <= 1500 fin - 86400 */
 vu(lent.ok === true && lent.blocs.debut === attendu && lent.held.heldBlock === (60n * 10n ** 18n).toString(), 'blocs a 1 500 s : debut = ' + attendu + ' exactement, held 60 (les sorties de 80 000-90 000 sont hors fenetre) (' + JSON.stringify(lent.blocs || lent) + ')');
 /* la constante de topic = l ABI COMPILEE (pas une signature tapee a la main) */

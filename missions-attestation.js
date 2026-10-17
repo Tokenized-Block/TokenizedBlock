@@ -13,6 +13,7 @@ import { topic, selecteur } from './keccak.js';
  *   uint32 maxDone, uint64 expiry, bytes32 poolId) — signature recalculee depuis l ABI compilee dans test-missions-attestation. */
 export const TOPIC_TASK_POSTED = topic('TaskPosted(uint256,address,address,address,uint256,uint32,uint64,bytes32)');
 const SEL_TX_USED = selecteur('txUsed(bytes32)');
+const SEL_DONE_BY = selecteur('doneBy(uint256,address)');
 
 const bas = (x) => String(x || '').toLowerCase();
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -73,17 +74,19 @@ export async function attester(io, { taskId, completer, txHash }) {
   if (!io.cle) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the mission checker key is not set on this server' };
   let signataire;
   try { signataire = bas(adresseDe(io.cle)); } catch (_) { return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the mission checker key on this server is not a valid key' }; }
-  let t, hold, verifier, chaine, dejaPaye;
+  let t, hold, verifier, chaine, dejaPaye, enPause, faitesParLui;
   try {
-    const [rt, rh, rv, rc, ru] = await Promise.all([
+    const [rt, rh, rv, rc, ru, rp, rd] = await Promise.all([
       io.rpcEtat('eth_call', [{ to: io.contrat, data: appel('tasks', taskId) }, 'latest']),
       io.rpcEtat('eth_call', [{ to: io.contrat, data: appel('holdOf', taskId) }, 'latest']),
       io.rpcEtat('eth_call', [{ to: io.contrat, data: '0x' + SEL.verifier }, 'latest']),
       io.rpcEtat('eth_chainId', []),
       io.rpcEtat('eth_call', [{ to: io.contrat, data: SEL_TX_USED + h.slice(2) }, 'latest']),
+      io.rpcEtat('eth_call', [{ to: io.contrat, data: '0x' + SEL.paused }, 'latest']),
+      io.rpcEtat('eth_call', [{ to: io.contrat, data: SEL_DONE_BY + BigInt(taskId).toString(16).padStart(64, '0') + c.slice(2).padStart(64, '0') }, 'latest']),
     ]);
     t = decoderTache(rt); hold = decoderDetention(rh); verifier = '0x' + String(rv).slice(-40).toLowerCase();
-    chaine = parseInt(rc, 16); dejaPaye = BigInt(ru) !== 0n;
+    chaine = parseInt(rc, 16); dejaPaye = BigInt(ru) !== 0n; enPause = BigInt(rp) !== 0n; faitesParLui = Number(BigInt(rd));
   } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the mission could not be read just now' }; }
   if (!t || !hold) return { ok: false, etat: 'NON_LU', pourquoi: 'the mission could not be read' };
   if (verifier !== signataire) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'this server key is not the checker the contract trusts' };
@@ -92,6 +95,12 @@ export async function attester(io, { taskId, completer, txHash }) {
   /* Grok A8b (LOW) : txUsed est GLOBAL on-chain ; une tx deja payee ne repaiera pas -> on ne depense ni archive ni signature pour elle. */
   if (dejaPaye) return { ok: false, etat: 'REFUSE', pourquoi: 'this transaction already paid a mission: do the action again' };
   if (c === t.creator) return { ok: false, etat: 'REFUSE', pourquoi: 'the creator cannot complete their own mission' };
+  /* chasse missions 2026-10-17 (MED, confirme) : le verifier signait pour un contrat en PAUSE et pour une mission PLEINE, ou deja faite par
+   *   ce wallet autant de fois que permis — claim() les refuse ; on ne depense pour elles ni archive ni signature. (Expiree : plus bas,
+   *   comparee a la fin de fenetre.) */
+  if (enPause) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'missions are paused right now' };
+  if (t.done >= t.maxDone) return { ok: false, etat: 'REFUSE', pourquoi: 'this mission is full (' + t.done + '/' + t.maxDone + ')' };
+  if (faitesParLui >= t.perWallet) return { ok: false, etat: 'REFUSE', pourquoi: 'this wallet already completed this mission ' + faitesParLui + ' time(s), the most it allows' };
   /* 1. la tache */
   let tx = null, recu = null;
   try { [tx, recu] = await Promise.all([io.rpcEtat('eth_getTransactionByHash', [h]), io.rpcEtat('eth_getTransactionReceipt', [h])]); } catch (_) { /* dit plus bas */ }
@@ -104,22 +113,20 @@ export async function attester(io, { taskId, completer, txHash }) {
     finTs = parseInt((await io.rpcEtat('eth_getBlockByNumber', ['0x' + fin.toString(16), false])).timestamp, 16);
     debut = await blocDebut(io.rpcEtat, fin, finTs, hold.window);
   } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the holding window could not be placed on the chain' }; }
+  if (finTs >= t.expiry) return { ok: false, etat: 'REFUSE', pourquoi: 'this mission has ended' };
   /* 2 bis. ⛔ 2026-10-17 (trouve en relisant : verifierTache ne regardait pas la DATE, et txUsed est global) : un joueur actif a des dizaines
    *   de vieilles tx qui portent l evenement demande ; chacune aurait « fait » la mission une fois, sans rien faire de neuf. L action doit
-   *   (a) tomber DANS la fenetre de detention [debut, fin] et (b) venir APRES la publication de la mission : aucun TaskPosted(taskId) entre
-   *   son bloc et la fin (meme bloc = refuse, l ordre n est pas tranche). (a) borne (b) a la taille de la fenetre. */
+   *   (a) tomber DANS la fenetre de detention [debut, fin] et (b) venir APRES la publication de la mission.
+   * ⛔ (b) v2, chasse 2026-10-17 soir (LOW+MED, confirmes) : le scan des TaskPosted s arretait a fin (tete - 2) — une mission postee dans les
+   *   2 derniers blocs echappait au scan — et coutait jusqu a ~150 getLogs d archive. Maintenant UNE lecture : taskCount() AU BLOC qui precede
+   *   l action. Si la mission n existait pas encore (taskCount <= taskId), refus. Meme bloc = refuse (l ordre n y est pas tranche). */
   const blocTx = parseInt(recu.blockNumber, 16);
   if (!Number.isSafeInteger(blocTx)) return { ok: false, etat: 'NON_LU', pourquoi: 'the transaction block could not be read' };
   if (blocTx > fin) return { ok: false, etat: 'NON_LU', pourquoi: 'this transaction is a few seconds too recent: send it again in a moment' };
   if (blocTx < debut) return { ok: false, etat: 'REFUSE', pourquoi: 'this action was done before your holding window started (block ' + blocTx + ' < ' + debut + '): do it again' };
   try {
-    const pas = io.tranche || 2000;
-    for (let de = blocTx; de <= fin; de += pas) {
-      const poses = await io.rpcLogs('eth_getLogs', [{ address: io.contrat, fromBlock: '0x' + de.toString(16), toBlock: '0x' + Math.min(fin, de + pas - 1).toString(16),
-        topics: [TOPIC_TASK_POSTED, '0x' + BigInt(taskId).toString(16).padStart(64, '0')] }]);
-      if (!Array.isArray(poses)) throw new Error('logs not a list');
-      if (poses.length) return { ok: false, etat: 'REFUSE', pourquoi: 'this action was done before the mission was posted: do it again now' };
-    }
+    const avant = BigInt(await io.rpcEtat('eth_call', [{ to: io.contrat, data: appel('taskCount') }, '0x' + (blocTx - 1).toString(16)]));
+    if (avant <= BigInt(taskId)) return { ok: false, etat: 'REFUSE', pourquoi: 'this action was done before the mission was posted: do it again now' };
   } catch (_) { return { ok: false, etat: 'NON_MESURE', pourquoi: 'the mission start could not be checked just now' }; }
   /* 3. la detention, exacte, avec son temoin */
   let db, dp = null;
