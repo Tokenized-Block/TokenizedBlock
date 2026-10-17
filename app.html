@@ -4484,7 +4484,8 @@ async function peindreMissions() {
   if (!etat || !ul) return;
   let j = null;
   try { j = await fetch('/api/missions', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
-  if (!j || !j.ok) { ul.innerHTML = ''; if (j && j.etat === 'NON_LU') etat.textContent = 'The mission board could not be read just now.'; return; }
+  /* mesure prod game3 21:36 : PAS_OUVERT laissait le texte precedent (« Reading the board… ») -> chaque etat ecrit le sien */
+  if (!j || !j.ok) { ul.innerHTML = ''; etat.textContent = j && j.etat === 'NON_LU' ? 'The mission board could not be read just now.' : j && j.etat === 'PAS_OUVERT' ? 'The board waits for its contract on Base.' : 'The mission board could not be reached.'; return; }
   const ouvertes = (j.missions || []).filter((x) => x.lue && x.etat === 'OUVERTE');
   etat.textContent = ouvertes.length ? ouvertes.length + ' open mission' + (ouvertes.length === 1 ? '' : 's') + ' — hold the block, do it, keep holding through the window, then claim.' : 'No open mission right now.';
   ul.innerHTML = ouvertes.map((x) => '<li class="filL" data-mission="' + x.id + '"><p class="filT"><b>Mission #' + x.id + '</b> · reward ' + enTexte(x.reward) + ' (raw units) · '
