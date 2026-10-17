@@ -3600,6 +3600,19 @@ details[open] > summary::before{transform:rotate(90deg)}
         <li class="filL"><p class="note" style="margin:0">Connect a wallet to see what you earned.</p></li>
       </ul>
     </div>
+    <!-- SKIN MARKET (Phil 2026-10-17 23:45 : « t as oublie le market skin … encheres pour la revente a n importe quel token ») — le marche
+         EXISTE dans le panneau (bc-market, bcPeindreMarche) ; ici, ses lignes telles quelles (bcLigneSkin -> bcActionMarche signe au wallet).
+         Devises : ETH, USDC, + les actions admises par setCurrency (owner). 10 % de chaque vente -> TokenizedBlock (SALE_FEE_BPS du contrat v2). -->
+    <div class="carte" id="skinCarte">
+      <span class="jeuKick">Game · Skin market</span>
+      <p class="titre jeuTitre" style="font-size:16px">Mint a skin for 1 USDC, dress your block, resell it — fixed price or auction.</p>
+      <p class="note" id="skinEtat" style="margin:4px 0 0">Reading the market on chain…</p>
+      <div id="skinListe" style="margin-top:6px"></div>
+      <div class="jourEtapes">
+        <button type="button" class="bouton" id="skinMint">Mint a skin · 1 USDC</button>
+        <button type="button" class="bouton sec" id="skinOuvrir">Open the full market</button>
+      </div>
+    </div>
     <!-- HOW IT WORKS : plie, en bas (le texte long vit ici et dans « ? »). -->
     <div class="carte" id="regleCarte">
       <details id="missionsLien">
@@ -4565,6 +4578,31 @@ $('#missionForm').addEventListener('submit', async (e) => {
   void peindreMissions();
 });
 
+/* ══ SKIN MARKET dans Game (Phil 23:45) — lit le contrat BlockSkins (lireSkins), montre les skins EN VENTE (prix fixe / enchere) et les
+ *   miennes (vendre / mettre aux encheres), par les MEMES lignes que le panneau (bcLigneSkin) : un clic ouvre le panneau, qui dit le partage
+ *   (90 % vendeur, 10 % TokenizedBlock) et fait signer le wallet. Une lecture ratee est dite, jamais une liste vide a sa place. */
+let skinsJeuEnVol = false;
+async function peindreSkinsJeu() {
+  const etat = $('#skinEtat'), z = $('#skinListe');
+  if (!etat || !z || skinsJeuEnVol) return;
+  skinsJeuEnVol = true;
+  try {
+    let r = null;
+    try { r = await lireSkins({ rpc }); } catch (_) { r = { etat: 'NON_LU' }; }
+    if (!r || r.etat !== 'LU') { etat.textContent = 'The market could not be read right now — nothing is listed rather than a wrong list.'; return; }
+    const moi = compte ? String(compte).toLowerCase() : null, t = Math.floor(Date.now() / 1000);
+    const enVente = r.skins.filter((s) => s.enVente), encheres = enVente.filter((s) => s.enchere).length;
+    const miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
+    etat.textContent = r.total + ' minted · ' + enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' auction' + (encheres === 1 ? '' : 's') + ')' : '')
+      + (moi ? ' · ' + miennes.length + ' yours to sell' : ' · connect a wallet to buy, bid or sell') + '. Pay in ETH or USDC; 10% of each sale goes to TokenizedBlock.';
+    z.textContent = '';
+    for (const s of enVente.slice(0, 12)) z.append(bcLigneSkin(s, moi, t));
+    if (miennes.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'Your skins — set a price, or open an auction (7 days at most):'; z.append(p); for (const s of miennes.slice(0, 8)) z.append(bcLigneSkin(s, moi, t)); }
+  } finally { skinsJeuEnVol = false; }
+}
+$('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
+$('#skinOuvrir').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'market', deplier: true, sansBasculer: true }); } catch (_) {} });
+
 /* ══ EARN (Phil 19:40) — ce que ce wallet a gagne : part de createur DUE (registre public, jamais payee par le serveur), tirage d hier,
  *   missions reclamees (contrat). Chaque ligne nomme sa source ; rien n est invente. */
 async function peindreEarn() {
@@ -4650,7 +4688,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
-  if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock(); void peindreMissions(); void peindreEarn(); }
+  if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock(); void peindreMissions(); void peindreEarn(); void peindreSkinsJeu(); }
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
