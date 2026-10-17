@@ -4013,6 +4013,10 @@ const SERVIS = [
    * signe rien : un bouton, puis le wallet. Aucun lien depuis l app ; `noindex`. */
   'deployer-blockskins.html',
   'blockskins-deploiement.js',
+  /* 2026-10-17 : la page qui propose AU WALLET CONNECTE le deploiement de BlockMissionsV3 et sa donnee figee (preparer-deploiement-missions.mjs).
+   *   Elle ne signe rien ; bouton eteint tant que les 4 adresses de Phil (reserve, verifier, guardian, rail) manquent. noindex, aucun lien. */
+  'deployer-missions.html',
+  'missions-deploiement.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',

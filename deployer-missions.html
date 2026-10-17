@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Missions — TokenizedBlock</title>
+<style>
+:root{color-scheme:dark;--fond:#060f14;--carte:#0c1c24;--bord:#1d3a44;--texte:#e8f4f6;--doux:#9db4ba;--cyan:#2fd0c8;--or:#f6c76e;--rose:#ff7eb6;--vert:#6fe3a5}
+body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#123a44 0%,transparent 60%),radial-gradient(900px 500px at 110% 10%,#3a1838 0%,transparent 55%),var(--fond);color:var(--texte);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+main{max-width:760px;margin:0 auto;padding:28px 16px 72px}
+.kicker{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--or);border:1px solid #5a4a26;border-radius:999px;padding:3px 10px}
+h1{font-size:34px;line-height:1.1;margin:12px 0 6px;background:linear-gradient(90deg,#7ff3ea,#f6c76e 55%,#ff7eb6);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:15px;margin:30px 0 10px;color:#9fd6dd;letter-spacing:.02em}
+p{margin:8px 0}
+.note{color:var(--doux);font-size:14px}
+.grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.tuile{border:1px solid var(--bord);border-radius:16px;padding:16px;background:linear-gradient(180deg,#0f2530,#0a1820);position:relative;overflow:hidden}
+.tuile::before{content:"";position:absolute;inset:-1px -1px auto -1px;height:3px;background:var(--c,var(--cyan))}
+.tuile .num{font-size:12px;color:var(--c,var(--cyan));font-weight:800;letter-spacing:.12em}
+.tuile h3{margin:6px 0 6px;font-size:17px}
+.tuile p{font-size:14px;color:#c9dde1;margin:0}
+.barre{display:flex;height:30px;border-radius:10px;overflow:hidden;border:1px solid var(--bord);margin:10px 0 8px}
+.barre span{display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#04262a;white-space:nowrap}
+.legende{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:6px 14px;font-size:13px;color:#c9dde1}
+.legende i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.carte{border:1px solid var(--bord);border-radius:16px;padding:16px;margin:12px 0;background:var(--carte)}
+.sur li{margin:6px 0}
+details summary{cursor:pointer;color:#9fd6dd;font-weight:700}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:12px 0 0;font-size:13px}
+dt{color:var(--doux)}
+dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace}
+button{appearance:none;border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:800;cursor:pointer;background:linear-gradient(90deg,#2fd0c8,#7ff3ea);color:#04262a;box-shadow:0 6px 24px rgba(47,208,200,.25)}
+button.sec{background:transparent;color:var(--texte);border:1px solid #2a4a55;box-shadow:none}
+button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.ok{color:var(--vert)}.ko{color:#ff8f8f}
+ul{padding-left:20px;margin:8px 0}
+[hidden]{display:none!important}
+@media (max-width:420px){h1{font-size:28px}}
+</style>
+</head>
+<body>
+<main>
+  <span class="kicker">TokenizedBlock · Missions</span>
+  <h1>Your block is your pass.</h1>
+  <p class="note">Holding a block's units proves you're part of its crew and you play on TokenizedBlock. Missions turn that into rewards. One transaction, signed by your wallet, opens the mission board on Base — this page sends nothing by itself.</p>
+
+  <h2>How a mission works</h2>
+  <div class="grille">
+    <div class="tuile" style="--c:var(--cyan)"><div class="num">01 · THE PASS</div><h3>Hold the block</h3><p>Only wallets that hold the block's units can take its missions. The pass is the block itself, nothing else.</p></div>
+    <div class="tuile" style="--c:var(--or)"><div class="num">02 · THE MISSION</div><h3>The creator posts a quest</h3><p>The block's creator sets the reward aside up front — in the block's units, or in the stock or token the block is paired with (AMZN for a block paired with AMZN).</p></div>
+    <div class="tuile" style="--c:var(--rose)"><div class="num">03 · THE WIN</div><h3>Do it, keep holding</h3><p>Do the mission and keep the block — and the paired asset when the mission asks — through the whole window (1 to 7 days). Selling early ends the run.</p></div>
+  </div>
+
+  <h2>Where each reward goes</h2>
+  <div class="carte">
+    <div class="barre" role="img" aria-label="Player 90%, creator 3%, community reserve 5.6%, dev 1.4%">
+      <span style="width:90%;background:#2fd0c8">Player 90%</span>
+      <span style="width:3%;background:#f6c76e" title="Creator 3%"></span>
+      <span style="width:5.6%;background:#ff7eb6" title="Community reserve 5.6%"></span>
+      <span style="width:1.4%;background:#b9a4ff" title="Dev 1.4%"></span>
+    </div>
+    <div class="legende">
+      <span><i style="background:#2fd0c8"></i>Player who did it: 90%</span>
+      <span><i style="background:#f6c76e"></i>Back to the creator: 3%</span>
+      <span><i style="background:#ff7eb6"></i>Community reserve: 5.6%</span>
+      <span><i style="background:#b9a4ff"></i>Dev: 1.4%, in USDC only</span>
+    </div>
+    <p class="note">No converter set: the dev's 1.4% of a reward paid in units or a stock goes to the community reserve too — the dev never holds block units.</p>
+  </div>
+
+  <h2>Why it is safe to play</h2>
+  <div class="carte sur">
+    <ul>
+      <li>A reward is locked the moment the mission is posted. It only leaves to players the mission checker approved, or back to the creator for what was not won. The owner cannot touch it.</li>
+      <li>The mission checker is a key held by TokenizedBlock: it only approves a wallet after reading on chain that the mission was done and the holding lasted the whole window. Each mission and each day has a cap.</li>
+      <li>Changing the key that checks missions, or the guardian, is announced 48 hours ahead while everything stays open, so every creator can take their reward back first.</li>
+      <li>A guardian can pause new missions; taking rewards back never pauses.</li>
+      <li>The wallet that signs here becomes the owner. It cannot touch any reward put aside.</li>
+    </ul>
+  </div>
+
+  <h2>What you sign</h2>
+  <div class="carte">
+    <details>
+      <summary>The 8 values built into the contract</summary>
+      <dl id="dParams"></dl>
+    </details>
+    <p class="note" id="dManque"></p>
+    <p class="note" id="dVerif">Checking the fingerprint…</p>
+  </div>
+
+  <h2>Open the mission board</h2>
+  <div class="carte">
+    <p id="dCompte" class="note">No wallet connected.</p>
+    <p>
+      <button type="button" id="bConnecter" class="sec">Connect wallet</button>
+      <button type="button" id="bDeployer" disabled>Open the mission board</button>
+    </p>
+    <p id="dEtat" class="note"></p>
+    <dl id="dResultat" hidden>
+      <dt>Transaction</dt><dd id="rTx">—</dd>
+      <dt>Contract</dt><dd id="rAdr">—</dd>
+      <dt>Reads back</dt><dd id="rLu">—</dd>
+    </dl>
+  </div>
+</main>
+<script type="module">
+/* deployer-missions.html — propose AU WALLET CONNECTE la transaction de deploiement de BlockMissionsV3, FIGEE dans missions-deploiement.js
+ * (generee par contracts/preparer-deploiement-missions.mjs). Meme regle que deployer-blockskins.html :
+ * ⛔ rien n est envoye sans un appui sur « Deploy » ET la signature du wallet ; aucune cle ; aucun argument saisi a la main.
+ * ⛔ les 8 arguments sont RELUS dans la fin de la donnee figee, compares au champ `constructeur`, et l empreinte est RECALCULEE ici ;
+ *   un ecart, un argument manquant ou un refus -> bouton eteint. Apres deploiement, le contrat est RELU sur la chaine. */
+import { MISSIONS_DEPLOIEMENT as D } from './missions-deploiement.js';
+import { selecteur } from './keccak.js';
+const $ = (s) => document.querySelector(s);
+const eth = () => window.ethereum;
+const CHAINE_HEX = '0x' + D.chaine.toString(16);
+const NOMS = { hook: 'TokenizedBlock hook (which pools are ours)', poolManager: 'Uniswap v4 PoolManager', devWallet: 'Dev wallet (USDC only)', communityReserve: 'Community reserve',
+  usdc: 'USDC', verifier: 'Mission checker key', guardian: 'Guardian (can only pause)', rail: 'Converter (0 = none)' };
+let compte = null, intacte = false, envoi = false;
+const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (D.constructeur[k] || '<span class="ko">missing</span>') + '</dd>').join('')
+  + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
+  + '<dt>Fingerprint</dt><dd>' + (D.sha256Creation ? 'sha256 ' + D.sha256Creation : '—') + '</dd>';
+$('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manquants.map((m) => NOMS[m] + ' is missing'), ...D.refus].join(' · ') + '.</span>' : '';
+(async () => {
+  try {
+    if (!D.pret || !D.creation) throw new Error('not ready');
+    const octets = new Uint8Array(D.creation.slice(2).match(/../g).map((x) => parseInt(x, 16)));
+    const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const fin = D.creation.slice(-8 * 64);
+    const lus = D.ordre.map((k, i) => '0x' + fin.slice(i * 64 + 24, (i + 1) * 64));
+    const memes = D.ordre.every((k, i) => lus[i] === D.constructeur[k]);
+    intacte = h === D.sha256Creation && octets.length === D.octetsCreation && memes;
+    $('#dVerif').className = intacte ? 'note ok' : 'note ko';
+    $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser, and the 8 values read back from the data: they match.' : 'The fingerprint or a value does not match. Nothing can be deployed from this page.';
+  } catch (_) { $('#dVerif').className = 'note ko'; $('#dVerif').textContent = D.pret ? 'The fingerprint could not be computed here. Nothing can be deployed from this page.' : 'Nothing can be deployed until every value above is set.'; }
+  peindre();
+})();
+function peindre() {
+  $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet will own the contract.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#bConnecter').hidden = !!compte;
+  $('#bDeployer').disabled = !compte || !intacte || envoi || !!D.adresse;
+  if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second contract.', 'note ok');
+}
+$('#bConnecter').addEventListener('click', async () => {
+  if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); }
+  catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
+  peindre();
+});
+$('#bDeployer').addEventListener('click', async () => {
+  if (!compte || !intacte || envoi || D.adresse) return;
+  envoi = true; peindre();
+  try {
+    const chaine = await eth().request({ method: 'eth_chainId' });
+    if (String(chaine).toLowerCase() !== CHAINE_HEX) {
+      try { await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAINE_HEX }] }); }
+      catch (_) { dire('Switch your wallet to Base, then try again.', 'note ko'); return; }
+    }
+    dire('Confirm in your wallet…');
+    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: compte, data: D.creation }] });
+    $('#dResultat').hidden = false; $('#rTx').textContent = String(tx);
+    dire('Sent. Waiting for Base to confirm…');
+    let recu = null;
+    for (let i = 0; i < 90 && !recu; i += 1) { await new Promise((r) => setTimeout(r, 2000)); try { recu = await eth().request({ method: 'eth_getTransactionReceipt', params: [tx] }); } catch (_) { recu = null; } }
+    if (!recu) { dire('Not confirmed yet after 3 minutes. Keep the transaction hash above and check it on a block explorer.', 'note ko'); return; }
+    if (recu.status !== '0x1' || !recu.contractAddress) { dire('The transaction was confirmed but failed: no contract was created.', 'note ko'); return; }
+    const adr = String(recu.contractAddress);
+    $('#rAdr').textContent = adr;
+    const lire = async (sig) => ('0x' + String(await eth().request({ method: 'eth_call', params: [{ to: adr, data: selecteur(sig) }, 'latest'] })).slice(-40)).toLowerCase();
+    const GET = { hook: 'HOOK()', poolManager: 'POOL_MANAGER()', devWallet: 'DEV_WALLET()', communityReserve: 'COMMUNITY_RESERVE()', usdc: 'USDC()', verifier: 'verifier()', guardian: 'guardian()', rail: 'RAIL()' };
+    const relu = {};
+    for (const k of D.ordre) relu[k] = await lire(GET[k]);
+    const o = await lire('owner()');
+    const bon = D.ordre.every((k) => relu[k] === D.constructeur[k]) && o === compte.toLowerCase();
+    $('#rLu').textContent = D.ordre.map((k) => k + ' ' + relu[k]).join(' · ') + ' · owner ' + o;
+    dire(bon ? 'Deployed. The contract reads back exactly what was signed. Send its address to the team: the app does not use it yet.' : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
+  } catch (e) {
+    dire(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
+  } finally { envoi = false; peindre(); }
+});
+try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; peindre(); }); } catch (_) {}
+peindre();
+</script>
+</body>
+</html>
