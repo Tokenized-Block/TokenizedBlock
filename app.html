@@ -4410,7 +4410,7 @@ async function peindreDernierBlock() {
   nom.textContent = (sym || adr.slice(0, 6) + '…' + adr.slice(-4));
   try { face.innerHTML = dessin(adr, sym) || ''; } catch (_) { face.innerHTML = ''; }
   const min = Number.isInteger(j.tete) ? Math.round(((j.tete - d.bloc) * 2) / 60) : null;
-  quand.textContent = 'Born at block ' + d.bloc.toLocaleString('en-US') + (min !== null ? ' · about ' + (min < 120 ? min + ' min' : Math.round(min / 60) + ' h') + ' ago' : '');
+  quand.textContent = 'Born in block ' + d.bloc.toLocaleString('en-US') + (min !== null ? ' · about ' + (min < 120 ? min + ' min' : Math.round(min / 60) + ' h') + ' ago' : '');
   let c = null;
   try { c = await fetch('/api/cle/' + adr, { cache: 'no-store' }).then((r) => r.json()); } catch (_) { c = null; }
   const cles = c && c.ok && Array.isArray(c.cles) ? c.cles : null;
