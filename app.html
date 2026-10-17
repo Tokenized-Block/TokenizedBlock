@@ -184,6 +184,17 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 2026-10-17 : la barre de progression du tirage de saison (les couleurs du theme, aucune nouvelle) */
 .tirBarre{height:10px;border-radius:999px;background:rgb(var(--accentRgb) / .12);overflow:hidden;margin:10px 0 2px}
 .tirBarre span{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .4s}
+/* 2026-10-17 (Phil : « applique notre UX » de la page Missions) : la grammaire « jeu » — une etiquette, un titre en degrade, des tuiles
+ *   numerotees, une barre de partage. TOUT derive du theme (--accent, --accent2, --accentRgb) : chaque coloris la repeint. */
+.jeuKick{display:inline-block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent2);border:1px solid rgb(var(--accentRgb) / .35);border-radius:999px;padding:2px 9px}
+.jeuTitre{font-size:22px;line-height:1.15;font-weight:800;margin:8px 0 4px;background:linear-gradient(90deg,var(--accent2),var(--accent));-webkit-background-clip:text;background-clip:text;color:transparent}
+.jeuGrille{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin:10px 0}
+.jeuTuile{border:1px solid var(--ligne);border-radius:12px;padding:10px 12px;background:rgb(var(--accentRgb) / .06);position:relative;overflow:hidden}
+.jeuTuile::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.jeuTuile b{display:block;font-size:10.5px;letter-spacing:.12em;color:var(--accent2);margin-bottom:2px}
+.jeuTuile p{margin:0;font-size:13px;line-height:1.4}
+.jeuPart{display:flex;height:22px;border-radius:8px;overflow:hidden;border:1px solid var(--ligne);margin:8px 0 4px}
+.jeuPart span{display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#0b0716;white-space:nowrap}
 .titre{font-weight:700;font-size:16px;letter-spacing:-.2px;margin:0 0 5px}
 .sous{color:var(--doux);font-size:13px;margin:0 0 14px;line-height:1.5}
 .note{color:var(--doux);font-size:12.5px;line-height:1.55;margin:10px 0 0}
@@ -2443,6 +2454,22 @@ details[open] > summary::before{transform:rotate(90deg)}
        cette phrase-la. Corriger la copie visible en laissant l aria-label aurait reserve la
        version fausse a ceux qui ne voient pas l ecran. -->
   <section class="volet" id="v-tokenx" aria-label="Mint a new block named after a post or a token">
+    <!-- 2026-10-17 — LE TIRAGE DE SAISON (tweet de Phil : « win … with the fees you already paid » ; Phil : « mets-le dans l onglet
+         Tokenized »). Un ticket par wallet des que ses frais VERIFIES sur les actions de la semaine atteignent le seuil ; payer plus ne donne
+         rien de plus. Saison BLANCHE : aucun prix, et c est dit. Donnees : /api/tirage (publiques, rejouables). UX « jeu » du theme. -->
+    <div class="carte" id="tirCarte" style="margin-bottom:14px">
+      <span class="jeuKick">TokenizedBlock · Season Draw</span>
+      <p class="titre jeuTitre">Your trades are your ticket.</p>
+      <p class="sous" id="tirSous">No entry to pay: the fees you already paid on tokenized stocks this week are your way in.</p>
+      <div class="jeuGrille">
+        <div class="jeuTuile"><b>01 · TRADE</b><p>Buy or sell tokenized stocks in the app.</p></div>
+        <div class="jeuTuile"><b>02 · THE TICKET</b><p>At $1 of fees this week, you hold one ticket. Trading more adds nothing.</p></div>
+        <div class="jeuTuile"><b>03 · THE DRAW</b><p>When the week closes, a future block's hash picks the winner. Anyone can replay it.</p></div>
+      </div>
+      <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
+      <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
+      <p class="note" id="tirSaison" style="margin:2px 0 0">Reading this week's season…</p>
+    </div>
     <!-- 2026-10-11 (test reel de Grok : « la Bank ne se trouve que par Wallet, puis Open the Bank ») : une entree ici aussi -->
     <div class="carte" id="tkBankCarte" style="margin-bottom:14px">
       <p class="titre">TokenizedBank</p>
@@ -2813,16 +2840,6 @@ details[open] > summary::before{transform:rotate(90deg)}
           lances ailleurs. On ne capte le 0,5 % que si le trade passe PAR NOTRE Buy/Sell : cet onglet range les blocks
           qui bougent et mene a l achat en un geste. Chiffres DexScreener, dits comme tels. Le wallet signe, toujours. -->
   <section class="volet" id="v-trade" aria-label="Trade blocks">
-    <!-- 2026-10-17 — LE TIRAGE DE SAISON (tweet de Phil : « win … with the fees you already paid »). Un ticket par wallet des que ses frais
-         VERIFIES sur les actions de la semaine atteignent le seuil ; payer plus ne donne rien de plus. Saison BLANCHE : aucun prix, et c est
-         dit. Donnees : /api/tirage (publiques, rejouables). Memes classes que les autres cartes ; seule la barre de progression est neuve. -->
-    <div class="carte" id="tirCarte" style="margin-bottom:14px">
-      <p class="titre">Season Draw</p>
-      <p class="sous" id="tirSous">Trade tokenized stocks here: once your fees this week reach the threshold, you hold one ticket. No entry to pay, and trading more gives no extra ticket.</p>
-      <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
-      <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
-      <p class="note" id="tirSaison" style="margin:2px 0 0"></p>
-    </div>
     <div class="carte">
       <p class="titre">Trending blocks</p>
       <!-- ⛔ LE RESUME CHIFFRE MONTE SOUS LE TITRE (Phil, 2026-09-23). Il vivait tout en BAS de la
@@ -3057,6 +3074,26 @@ details[open] > summary::before{transform:rotate(90deg)}
          un profil. Seule la tuile « You hold » a besoin d une adresse connectee. -->
     <!-- ⛔ LE CLASSEMENT EST UN ECHANTILLON, ET IL LE DIT. « Le plus gros » ne vaut que parmi ce que
          cette page a SU LIRE ; la borne rendue par `classement.js` est affichee sous la liste. -->
+    <!-- 2026-10-17 — MISSIONS (BlockMissionsV3, PAS ENCORE DEPLOYE : la carte le dit). Meme UX que /deployer-missions.html (Phil) :
+         le pass, la mission, la victoire, et ou va chaque recompense. Aucun bouton d action tant que le contrat n existe pas. -->
+    <div class="carte" id="missionsCarte">
+      <span class="jeuKick">TokenizedBlock · Missions</span>
+      <p class="titre jeuTitre">Your block is your pass.</p>
+      <p class="sous">Holding a block's units proves you're part of its crew and you play on TokenizedBlock. Missions turn that into rewards.</p>
+      <div class="jeuGrille">
+        <div class="jeuTuile"><b>01 · THE PASS</b><p>Only wallets that hold the block's units can take its missions.</p></div>
+        <div class="jeuTuile"><b>02 · THE MISSION</b><p>The creator sets the reward aside up front — in units, or in the stock the block is paired with.</p></div>
+        <div class="jeuTuile"><b>03 · THE WIN</b><p>Do it and keep holding through the whole window. Selling early ends the run.</p></div>
+      </div>
+      <div class="jeuPart" role="img" aria-label="Player 90%, creator 3%, community reserve 5.6%, dev 1.4%">
+        <span style="width:90%;background:var(--accent)">Player 90%</span>
+        <span style="width:3%;background:var(--accent2)"></span>
+        <span style="width:5.6%;background:rgb(var(--accentRgb) / .55)"></span>
+        <span style="width:1.4%;background:rgb(var(--accentRgb) / .3)"></span>
+      </div>
+      <p class="note" style="margin:0">Player 90% · creator 3% · community reserve 5.6% · dev 1.4% (USDC only).</p>
+      <p class="note" style="margin:6px 0 0"><b>The mission board is not open yet</b> — it opens once its contract is signed on Base.</p>
+    </div>
     <div class="carte" id="carteRang">
       <p class="titre">Biggest blocks</p>
             <!-- ⛔ Phil (2026-09-20) : « on s en fout de TBLOCK et TTB » — residu d une ancienne version ; la phrase dit ce

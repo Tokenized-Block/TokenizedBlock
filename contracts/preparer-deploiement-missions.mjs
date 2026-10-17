@@ -32,7 +32,15 @@ if (libres.communityReserve === fixes.devWallet) refus.push('communityReserve mu
 if (libres.communityReserve === LEGACY) refus.push('communityReserve cannot be the legacy 0x37eb owner');
 if (/^0x0{40}$/.test(libres.communityReserve)) refus.push('communityReserve cannot be zero');
 if (/^0x0{40}$/.test(libres.verifier)) refus.push('verifier cannot be zero');
-if (libres.rail && (libres.rail === fixes.devWallet || libres.rail === libres.communityReserve)) refus.push('rail cannot be the dev wallet or the reserve');
+/* Grok 2026-10-17 : le contrat accepte un gardien nul (la pause reste a l owner seul) — la page, non : sans gardien, personne ne peut geler
+ *   vite si la cle de verification fuit */
+if (/^0x0{40}$/.test(libres.guardian)) refus.push('guardian cannot be zero (nobody else could pause fast)');
+if (ADR.test(libres.guardian) && [fixes.devWallet, libres.communityReserve, libres.verifier].includes(libres.guardian)) refus.push('guardian must be its own key');
+/* les refus de rail du constructeur (F5), repetes AVANT la signature */
+if (ADR.test(libres.rail) && !/^0x0{40}$/.test(libres.rail)) {
+  if ([fixes.devWallet, libres.communityReserve, fixes.hook, fixes.poolManager, fixes.usdc].includes(libres.rail)) refus.push('rail cannot be the dev wallet, the reserve, the hook, the PoolManager or USDC');
+  refus.push('a non-zero rail must be proven on a fork first (mainnet v1 decision: rail = 0)');
+}
 const art = JSON.parse(fs.readFileSync(path.join(ICI, 'out/BlockMissionsV3.sol/BlockMissionsV3.json'), 'utf8'));
 const code = String(art.bytecode.object);
 if (!/^0x[0-9a-f]+$/.test(code)) throw new Error('bytecode missing or unlinked in the forge artifact');

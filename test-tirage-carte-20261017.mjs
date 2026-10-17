@@ -9,12 +9,15 @@ import { strict as assert } from 'node:assert';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-const v = app.indexOf('<section class="volet" id="v-trade"'), c = app.indexOf('id="tirCarte"'), tb = app.indexOf('Trending blocks</p>', v);
-vu(v > 0 && c > v && c < tb, 'la carte est dans le volet Market, avant Trending blocks');
+/* Phil 2026-10-17 : « mets-le dans l onglet Tokenized » */
+const v = app.indexOf('<section class="volet" id="v-tokenx"'), c = app.indexOf('id="tirCarte"'), tb = app.indexOf('id="tkBankCarte"', v);
+vu(v > 0 && c > v && c < tb && app.indexOf('id="tirCarte"', c + 1) === -1, 'la carte est dans le volet Tokenized, en tete, et une seule fois');
 const f = app.slice(app.indexOf('async function peindreTirage()'), app.indexOf("document.querySelector('.navIn').addEventListener"));
 vu(/fetch\('\/api\/tirage'/.test(f) && /could not be read/.test(f), 'lit /api\/tirage, dit l echec');
 vu(/t\.mode === 'SHADOW' \? ' · practice season: no prize yet'/.test(f), 'dit la saison blanche');
 vu(/Number\(w\.fraisUsd\)/.test(f) && /Connect a wallet to see your progress/.test(f), 'progression = frais verifies du serveur, seulement pour le wallet connecte');
 vu(/etape\('wallet_connect_ok'\); \} catch \(_\) \{\}\s*\r?\n\s*try \{ peindreTirage\(\); \} catch/.test(app), 'repeinte a la connexion');
-vu(/<p class="titre">Season Draw<\/p>/.test(app), 'titre sans emoji');
+const carte = app.slice(c, tb);
+vu(/<p class="titre jeuTitre">Your trades are your ticket\.<\/p>/.test(carte) && !/\u{1F39F}/u.test(carte), 'titre « jeu », sans emoji');
+vu(/03 · THE DRAW/.test(carte) && /a future block's hash picks the winner/.test(carte), 'les 3 tuiles disent le hasard verifiable');
 console.log('ok tirage-carte - ' + n + ' assertions ; NE PROUVE PAS un ticket reel');

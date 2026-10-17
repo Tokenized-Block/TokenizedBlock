@@ -13,7 +13,7 @@ pragma solidity ^0.8.24;
 ///   - HOLD CONDITIONS, both proven: minHoldBlock (mandatory — holding is the ticket) and minHoldPaired (optional; native ETH allowed),
 ///     each = the MINIMUM balance over the task's window (24 h..7 d), signed by the verifier, AND re-read live at claim. A tier bonus
 ///     (≤ 20 %, escrowed up front) rewards a deeper block holding. Holding through the window, not touching in and out, is what pays.
-///   - review M1: verifier, guardian and rail changes are PROPOSED then ACCEPTED after ADMIN_DELAY (48 h > CANCEL_DELAY); a pause set by
+///   - review M1: verifier and guardian changes are PROPOSED then ACCEPTED after ADMIN_DELAY (48 h > CANCEL_DELAY; the rail is immutable); a pause set by
 ///     the guardian can be lifted by the guardian, or by the owner only ADMIN_DELAY after it.
 ///   - review M2 (then M2 residual 2): the rail (the only path of the dev's 20 % out of non-USDC tokens) is IMMUTABLE, or none; a reward
 ///     paid in USDC sends the dev's 20 % straight to DEV_WALLET, no rail at all.
