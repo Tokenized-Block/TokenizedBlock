@@ -3541,10 +3541,13 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
         <button type="button" class="bouton sec" id="jourUnit">Trade UNIT</button>
         <button type="button" class="bouton sec" id="jourActions">Trade stocks</button>
-        <!-- un skin achete = le ticket du jour (pass verifie au recu, pass-skin ; Phil 19:40 : « skin 1 day ») -->
-        <button type="button" class="bouton sec" id="jourSkin">Skin · today's ticket</button>
+        <!-- DAY PASS (Phil 20:30 : « 10 $ pour 1 jour : 5 au pot du jour, 5 au dev ») = BlockRolls buyPass. Le contrat de skins v2 grave
+             MINT_PRICE = 1 USDC (relu sur la chaine avant chaque achat) : ecrire 10 la ou le wallet prend 1 serait faux, donc le pass a 10 USDC
+             vit dans BlockRolls, et ce bouton reste INACTIF (avec la raison) tant que /api/tirage ne sert pas l adresse du contrat signe. -->
+        <button type="button" class="bouton sec" id="jourPass" disabled title="Opens when the BlockRolls contract is signed on Base">Day pass · 10 USDC</button>
       </div>
-      <p class="note" style="margin:6px 0 0">Ticket = $10 of UNIT or tokenized-stock trades today (UTC), or a skin. One draw a day; bigger ones at week and month end.</p>
+      <p class="note" style="margin:6px 0 0">Ticket = $10 of UNIT or tokenized-stock trades today (UTC), or the day pass (5 USDC to the day pot, 5 to TokenizedBlock). One draw a day; bigger ones at week and month end.</p>
+      <p class="note" id="jourPassEtat" style="margin:2px 0 0">Day pass and paid rolls open once their contract is signed on Base.</p>
       <!-- HIER : la face revelee par le bloc E, ton score, le gagnant -->
       <div class="jourTicket" id="faceJour" hidden style="margin-top:10px">
         <div class="jourFace" id="faceJourArt" role="img" aria-label="Yesterday's Face of the Day"></div>
@@ -4448,7 +4451,8 @@ let rollEnCours = false;
 async function roll() {
   const b = $('#jourRoll'), moiP = $('#dernierMoi'), nom = $('#dernierNom'), face = $('#dernierFace');
   let c = null; try { c = compte; } catch (_) { c = null; }
-  if (!c) { moiP.textContent = 'Connect a wallet to roll.'; return; }
+  /* mesure prod 2026-10-17 21:05 : sans wallet, le clic ne changeait RIEN a l ecran (le message etait deja la) -> on mene au Wallet */
+  if (!c) { moiP.textContent = 'Connect a wallet to roll — opening the Wallet tab.'; try { allerA('wallet'); } catch (_) {} return; }
   if (rollEnCours) return;
   rollEnCours = true; b.disabled = true;
   try {
@@ -4584,9 +4588,11 @@ $('#missionsListe').addEventListener('click', async (e) => {
   } catch (err) { dit('Not claimed: ' + String((err && err.message) || err).slice(0, 140)); }
   finally { b.disabled = false; }
 });
-/* pass skin : le panneau de UNIT, vue Skin (essayer puis acheter 1 USDC) ; l achat signale `skin_mint`, le serveur ouvre le ticket du jour (JOURS_PASS_SKIN = 1, Phil 19:40) */
-$('#jourSkin').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
-$('#jourMissions').addEventListener('click', () => { void peindreMissions(); });
+/* day pass (BlockRolls buyPass, 10 USDC) : actif seulement quand /api/tirage sert `rolls.contrat` (adresse du contrat signe) ; alors
+ *   blockrolls-plan.js planPass -> approve EXACT + buyPass, signes par le wallet. Tant que non : inactif, et la raison est ecrite. */
+$('#jourPass').addEventListener('click', () => { const e = $('#jourPassEtat'); if (e) e.textContent = 'Not open yet: the BlockRolls contract is not signed on Base. Nothing was asked.'; });
+/* Refresh : mesure prod 21:05 — sans changement visible le bouton semblait mort ; il dit maintenant qu il relit, et quand */
+$('#jourMissions').addEventListener('click', async () => { const e = $('#missionsEtat'); if (e) e.textContent = 'Reading the board…'; await peindreMissions(); if (e) e.textContent += ' (read at ' + new Date().toISOString().slice(11, 16) + ' UTC)'; });
 setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);
 /* le dernier block ne : relu toutes les 60 s, seulement onglet Missions ouvert et page visible (pas de lecture pour personne) */
 setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDernierBlock(); }, 8000);
