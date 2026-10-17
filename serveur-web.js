@@ -5667,11 +5667,14 @@ function traiterRequete(req, res) {
     payesEnCours.add(h);
     (async () => { try {
       const [tx, recu] = await Promise.all([rpcActivite('eth_getTransactionByHash', [h]), rpcActivite('eth_getTransactionReceipt', [h])]);
-      const internes = walletsInternes([COMPTE_SONDE, ...String(process.env.REVENU_INTERNES || '').split(',')]);
+      /* nos wallets de TEST connus (0x31e0… = le wallet de test de Phil, cite dans les rapports du canal) + ceux declares par l env */
+      const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
       const v = verifierFrais({ tx, recu, internes, devises: devisesComptees([...POOLS_ACTIONS_AERODROME.keys()]) });
       revenu.tentatives[v.ok ? 'ok' : v.etat] = (revenu.tentatives[v.ok ? 'ok' : v.etat] || 0) + 1;
       if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' ? 202 : 200, { ok: false, etat: v.etat, pourquoi: v.pourquoi }); return; }
-      const verif = q.get('i') === '1' ? { ...v, externe: false } : v;
+      /* ⛔ chasse 2026-10-17 (HIGH, PoC) : `i=1` venait du CLIENT — n importe qui postait le hash d un autre avec i=1 (le premier post gagne)
+       *   et lui retirait son ticket / sa ligne externe. Interne / externe se decide SEULEMENT par le wallet payeur (walletsInternes). */
+      const verif = v;
       const jour = new Date().toISOString().slice(0, 10);
       const etat = compterRevenu(revenu, { ligne, verif });
       revenu.externe = etat.externe; revenu.interne = etat.interne;
@@ -5679,7 +5682,10 @@ function traiterRequete(req, res) {
       revenu.vus[h] = { jour, ligne, externe: verif.externe };
       /* 2026-10-17 — ETAPE 2, la vitrine : r=<block> (le client ne l envoie que si la page etait ce block, ref-vitrine.js). Une ligne au
        *   registre PUBLIC, seulement pour un frais EXTERNE verifie ; le createur est LU sur la chaine, jamais pris dans la requete. */
-      const r = String(q.get('r') || '').toLowerCase();
+      /* ⛔⛔ chasse 2026-10-17 (HIGH, PoC) : `r` (le block de la vitrine) venait du CLIENT, et le premier post d un hash gagnait : un tiers
+       *   postait le hash d un acheteur avec r = SON block et se faisait devoir 30 %. Tant que la ref n est pas PORTEE PAR LA TRANSACTION du
+       *   payeur (signee par lui), elle n est plus lue : le registre reste vide plutot que faux. */
+      const r = '';
       if (verif.externe && /^0x[0-9a-f]{40}$/.test(r) && !/^0x0{40}$/.test(r)) {
         const createur = await createurDuBlock(r);
         revenu.registre[h] = ligneRegistre({ hash: h, jour, ligne, bloc: r, verif, createur });

@@ -5,7 +5,7 @@
  *   par `ethRecu` (delta verifie ailleurs) ; (5) compterRevenu est pur, somme en BigInt, une ligne inconnue va dans `autre`.
  * NE PROUVE PAS : la lecture des recus en prod (serveur) ni le delta ETH (veille-frais.js). */
 import { strict as assert } from 'node:assert';
-import { verifierFrais, compterRevenu, walletsInternes, payeurDe, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
+import { verifierFrais, compterRevenu, walletsInternes, payeurDe, devisesComptees, LIGNES_FRAIS, TOPICS_SWAP } from './revenu-externe.js';
 import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
@@ -16,7 +16,10 @@ const A6CF = FEE_WALLET.toLowerCase(), USDC = USDC_BASE.toLowerCase();
 const PAYEUR = '0x' + '11'.repeat(20), GROK = '0x' + '22'.repeat(20), BUNDLER = '0x' + '33'.repeat(20), SENDER = '0x' + '44'.repeat(20);
 const H = '0x' + 'ab'.repeat(32);
 const transfert = (contrat, de, vers, m) => ({ address: contrat, topics: [T, adr(de), adr(vers)], data: '0x' + mot(m) });
-const recuDe = (logs, status = '0x1') => ({ status, transactionHash: H, blockNumber: '0x320a207', logs });
+/* 2026-10-17 (chasse) : un frais nait d un ECHANGE — chaque recu de test porte un log Swap v4, sauf le cas qui prouve le refus */
+const SWAP_V4 = [...TOPICS_SWAP][0];
+const swap = { address: '0x498581ff718922c3f8e6a244956af099b2652b2b', topics: [SWAP_V4, '0x' + '12'.repeat(32), '0x' + '0'.repeat(64)], data: '0x' };
+const recuDe = (logs, status = '0x1', avecSwap = true) => ({ status, transactionHash: H, blockNumber: '0x320a207', logs: avecSwap ? [swap, ...logs] : logs });
 const txDe = (from) => ({ hash: H, from, to: USDC });
 
 const ok1 = verifierFrais({ tx: txDe(PAYEUR), recu: recuDe([transfert(USDC, PAYEUR, A6CF, 40000)]) });
@@ -42,8 +45,11 @@ const imite = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op('0x' + '66'.re
 vu(imite.ok && imite.payeur === BUNDLER, 'UserOperationEvent imite : ignore, le payeur reste tx.from (' + imite.payeur + ')');
 /* plusieurs operations : celle dont le sender a paye le frais lui-meme ; sinon AMBIGU -> refus */
 const AUTRE = '0x' + '88'.repeat(20);
+/* chasse 2026-10-17 (MED, PoC) : dans un lot multi-ops, un 1 wei vers a6cf faisait de son auteur le payeur de TOUT le lot -> plusieurs senders = REFUSE */
 const multi = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op(EP7, AUTRE), op(EP7, SENDER), transfert(USDC, SENDER, A6CF, 20000)]) });
-vu(multi.ok && multi.payeur === SENDER, 'lot multi-operations : le sender qui a paye le frais (' + multi.payeur + ')');
+vu(!multi.ok && multi.etat === 'REFUSE', 'lot multi-operations : AMBIGU -> REFUSE, jamais un payeur choisi (' + JSON.stringify(multi) + ')');
+const don = verifierFrais({ tx: txDe(PAYEUR), recu: recuDe([transfert(USDC, PAYEUR, A6CF, 40000)], '0x1', false) });
+vu(!don.ok && don.etat === 'REFUSE' && /no swap/.test(don.pourquoi), 'un simple virement vers a6cf (sans echange) n est PAS un frais');
 const ambigu = verifierFrais({ tx: txDe(BUNDLER), recu: recuDe([op(EP7, AUTRE), op(EP7, SENDER), transfert(USDC, '0x' + '99'.repeat(20), A6CF, 20000)]) });
 vu(!ambigu.ok && ambigu.etat === 'REFUSE' && /several operations/.test(ambigu.pourquoi), 'lot multi-operations sans payeur identifiable : REFUSE, jamais un payeur invente');
 vu(payeurDe({ tx: txDe(BUNDLER), recu: recuDe([]) }) === BUNDLER, 'sans UserOperation : tx.from');

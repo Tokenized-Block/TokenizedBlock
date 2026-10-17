@@ -27,6 +27,11 @@ const TOPIC_USER_OP = '0x' + enHex(keccak256(new TextEncoder().encode('UserOpera
 /* ⛔ 2026-10-17 (audit Grok, LOW) : un UserOperationEvent emis par N IMPORTE quel contrat designait le payeur — imitable. Seuls comptent
  *   ceux des EntryPoints, adresses LUES sur Base le 2026-10-17 (base.drpc.org, 10 derniers blocs : 37 logs de l une, 20 de l autre,
  *   les deux avec du bytecode) — jamais recopiees de memoire. */
+/* les deux formes d evenement Swap des pools que nos routes traversent, calculees (jamais recopiees) */
+export const TOPICS_SWAP = new Set([
+  '0x' + enHex(keccak256(new TextEncoder().encode('Swap(bytes32,address,int128,int128,uint160,uint128,int24,uint24)'))), // Uniswap v4 PoolManager
+  '0x' + enHex(keccak256(new TextEncoder().encode('Swap(address,address,int256,int256,uint160,uint128,int24)'))), // Uniswap v3 / Aerodrome CL
+]);
 const ENTRY_POINTS = new Set(['0x0000000071727de22e5e9d8baf0edac6f37da032', '0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789']);
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
@@ -55,13 +60,10 @@ export function payeurDe({ tx, recu, wallet = FEE_WALLET }) {
     }
   }
   if (senders.length === 1) return senders[0];
-  if (senders.length > 1) {
-    const w32 = '0x' + bas(wallet).slice(2).padStart(64, '0');
-    const payants = new Set(logs.filter((l) => (l.topics || []).length === 3 && bas(l.topics[0]) === TOPIC_TRANSFER && bas(l.topics[2]) === w32)
-      .map((l) => '0x' + bas(l.topics[1]).slice(26)));
-    const m = senders.filter((s) => payants.has(s));
-    return m.length === 1 ? m[0] : null;
-  }
+  /* ⛔ chasse 2026-10-17 (MED, PoC) : dans un lot multi-operations, un tiers ajoutait une op qui envoie 1 wei a a6cf et devenait « le »
+   *   payeur de tous les frais du lot. Plusieurs senders = AMBIGU -> null : le frais n est pas compte, jamais attribue au mauvais. */
+  if (senders.length > 1) return null;
+  void wallet;
   const f = bas(tx && tx.from);
   return ADR.test(f) ? f : null;
 }
@@ -76,6 +78,11 @@ export function verifierFrais({ tx, recu, internes, devises, wallet = FEE_WALLET
   if (!tx || !recu) return { ok: false, etat: 'NON_LU', pourquoi: 'the transaction or its receipt could not be read yet' };
   if (String(recu.status) !== '0x1') return { ok: false, etat: 'REFUSE', pourquoi: 'this transaction failed on chain' };
   if (bas(recu.transactionHash) !== bas(tx.hash)) return { ok: false, etat: 'REFUSE', pourquoi: 'the receipt is not the one of this transaction' };
+  /* ⛔ chasse 2026-10-17 (MED) : n importe quel virement d une devise admise vers a6cf (un don) comptait comme un FRAIS. Un frais naît
+   *   d un ECHANGE : le recu doit porter un log Swap (Uniswap v4 PoolManager, ou pool v3/Aerodrome CL). */
+  if (!(Array.isArray(recu.logs) && recu.logs.some((l) => l && l.topics && TOPICS_SWAP.has(bas(l.topics[0]))))) {
+    return { ok: false, etat: 'REFUSE', pourquoi: 'no swap in this transaction: a plain transfer to the fee wallet is not a fee' };
+  }
   const payeur = payeurDe({ tx, recu, wallet });
   if (!payeur) return { ok: false, etat: 'REFUSE', pourquoi: 'the payer could not be read (or several operations in one bundle and none paid the fee itself)' };
   const w32 = '0x' + bas(wallet).slice(2).padStart(64, '0');

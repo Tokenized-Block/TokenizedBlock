@@ -19,6 +19,8 @@ vu(servis.includes("'ref-vitrine.js'"), 'ref-vitrine.js est SERVI');
 const paye = srv.slice(srv.indexOf("if (chemin === '/api/paye'"), srv.indexOf("if (chemin === '/api/registre-createurs')"));
 vu(/if \(verif\.externe && \/\^0x\[0-9a-f\]\{40\}\$\/\.test\(r\)/.test(paye), 'registre : frais EXTERNE verifie seulement');
 vu(/const createur = await createurDuBlock\(r\);/.test(paye) && !/q\.get\('c/.test(paye), 'createur lu par createurDuBlock, jamais pris dans la requete');
+/* chasse 2026-10-17 (HIGH) : ni `r` ni `i` ne viennent plus du client */
+vu(!/q\.get\('r'\)/.test(paye) && !/q\.get\('i'\)/.test(paye) && /const verif = v;/.test(paye), '/api/paye ne lit plus r ni i dans la requete');
 vu(paye.indexOf('verifierFrais(') < paye.indexOf('createurDuBlock(r)'), 'la verification du frais precede l attribution');
 const d0 = srv.indexOf('async function createurDuBlock('), f0 = /\r?\n\}\r?\n/.exec(srv.slice(d0));
 const cdb = f0 ? srv.slice(d0, d0 + f0.index) : ''; /* la fonction ENTIERE (une fenetre fixe la coupait des qu elle grandissait) */
