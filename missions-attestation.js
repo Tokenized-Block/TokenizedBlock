@@ -7,11 +7,12 @@
 import { SEL, appel, decoderTache, decoderDetention } from './missions-lecture.js';
 import { verifierTache, minimumFenetre, lireTransferts, donneesClaim, digestClaim } from './verificateur-missions.js';
 import { adresseDe, signerDigest, recupererAdresse } from './signeur-secp256k1.js';
-import { topic } from './keccak.js';
+import { topic, selecteur } from './keccak.js';
 
 /* event TaskPosted(uint256 indexed taskId, address indexed blockToken, address indexed creator, address rewardToken, uint256 reward,
  *   uint32 maxDone, uint64 expiry, bytes32 poolId) — signature recalculee depuis l ABI compilee dans test-missions-attestation. */
 export const TOPIC_TASK_POSTED = topic('TaskPosted(uint256,address,address,address,uint256,uint32,uint64,bytes32)');
+const SEL_TX_USED = selecteur('txUsed(bytes32)');
 
 const bas = (x) => String(x || '').toLowerCase();
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -63,17 +64,24 @@ export async function attester(io, { taskId, completer, txHash }) {
   if (!io.cle) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the mission checker key is not set on this server' };
   let signataire;
   try { signataire = bas(adresseDe(io.cle)); } catch (_) { return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the mission checker key on this server is not a valid key' }; }
-  let t, hold, verifier;
+  let t, hold, verifier, chaine, dejaPaye;
   try {
-    const [rt, rh, rv] = await Promise.all([
+    const [rt, rh, rv, rc, ru] = await Promise.all([
       io.rpcEtat('eth_call', [{ to: io.contrat, data: appel('tasks', taskId) }, 'latest']),
       io.rpcEtat('eth_call', [{ to: io.contrat, data: appel('holdOf', taskId) }, 'latest']),
       io.rpcEtat('eth_call', [{ to: io.contrat, data: '0x' + SEL.verifier }, 'latest']),
+      io.rpcEtat('eth_chainId', []),
+      io.rpcEtat('eth_call', [{ to: io.contrat, data: SEL_TX_USED + h.slice(2) }, 'latest']),
     ]);
     t = decoderTache(rt); hold = decoderDetention(rh); verifier = '0x' + String(rv).slice(-40).toLowerCase();
+    chaine = parseInt(rc, 16); dejaPaye = BigInt(ru) !== 0n;
   } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the mission could not be read just now' }; }
   if (!t || !hold) return { ok: false, etat: 'NON_LU', pourquoi: 'the mission could not be read' };
   if (verifier !== signataire) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'this server key is not the checker the contract trusts' };
+  /* Grok A11 (188a29e, LOW) : un chaineId faux signait un digest que claim() refuse -> on signe seulement pour la chaine LUE. */
+  if (chaine !== io.chaineId) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'this server reads chain ' + chaine + ' but signs for chain ' + io.chaineId };
+  /* Grok A8b (LOW) : txUsed est GLOBAL on-chain ; une tx deja payee ne repaiera pas -> on ne depense ni archive ni signature pour elle. */
+  if (dejaPaye) return { ok: false, etat: 'REFUSE', pourquoi: 'this transaction already paid a mission: do the action again' };
   if (c === t.creator) return { ok: false, etat: 'REFUSE', pourquoi: 'the creator cannot complete their own mission' };
   /* 1. la tache */
   let tx = null, recu = null;

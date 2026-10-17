@@ -7,7 +7,7 @@
 import { strict as assert } from 'node:assert';
 import { attester, DELAI_SIGNATURE, TOPIC_TASK_POSTED } from './missions-attestation.js';
 import { readFileSync, existsSync } from 'node:fs';
-import { topic } from './keccak.js';
+import { topic, selecteur } from './keccak.js';
 import { SEL } from './missions-lecture.js';
 import { adresseDe, recupererAdresse } from './signeur-secp256k1.js';
 import { donneesClaim, digestClaim, TOPIC_TRANSFER } from './verificateur-missions.js';
@@ -20,7 +20,7 @@ const CIBLE = '0x' + '49'.repeat(20), TOPIC = '0x' + 'ab'.repeat(32), H = '0x' +
 const m = (v) => BigInt(v).toString(16).padStart(64, '0'), a = (x) => x.slice(2).padStart(64, '0');
 const TETE = 100000, WINDOW = 86400;
 /* chaine : bloc b -> horodatage 1_800_000_000 + 2*b ; le joueur detient 60 BLK, en sort 40 au bloc 80000 et les reprend au bloc 90000 */
-function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null, pasBloc = 2 } = {}) {
+function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n, blocTx = 99000, poseeAu = null, pasBloc = 2, chaineLue = 8453, dejaPaye = false } = {}) {
   const ts = (b) => 1_800_000_000 + pasBloc * b;
   const finale = 60n * 10n ** 18n;
   const soldeA = (b) => (b >= 80000 && b < 90000 ? finale - 40n * 10n ** 18n : finale) + (sansLog ? 1n : 0n) * (b < 70000 ? 1n : 0n);
@@ -31,6 +31,7 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
   if (poseeAu !== null) logs.push({ address: CONTRAT, topics: [TOPIC_TASK_POSTED, '0x' + m(3), '0x' + a(BLK), '0x' + a(CREA)], data: '0x', blockNumber: '0x' + poseeAu.toString(16), logIndex: '0x0', transactionHash: '0x' + '03'.repeat(32) });
   const f = async (meth, p) => {
     if (meth === 'eth_blockNumber') return '0x' + TETE.toString(16);
+    if (meth === 'eth_chainId') return '0x' + chaineLue.toString(16);
     if (meth === 'eth_getBlockByNumber') { f.entetes += 1; return { timestamp: '0x' + ts(parseInt(p[0], 16)).toString(16) }; }
     if (meth === 'eth_getTransactionByHash') return { hash: H, from };
     if (meth === 'eth_getTransactionReceipt') return { status: '0x1', transactionHash: H, blockNumber: '0x' + blocTx.toString(16), logs: [{ address: CIBLE, topics: [TOPIC] }] };
@@ -44,6 +45,7 @@ function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from 
       if (to === CONTRAT && s === SEL.tasks) return '0x' + [a(BLK), a(AMZ), a(BLK), a(CREA), m(10n ** 18n), m(10), m(0), m(1), m(1900000000), a(CIBLE), TOPIC.slice(2), 'cd'.repeat(32)].join('');
       if (to === CONTRAT && s === SEL.holdOf) return '0x' + [m(minBlock), m(minPaired), m(0), m(0), m(WINDOW)].join('');
       if (to === CONTRAT && s === SEL.verifier) return '0x' + a(verifier);
+      if (to === CONTRAT && s === selecteur('txUsed(bytes32)').slice(2) && data.slice(10) === H.slice(2)) return '0x' + m(dejaPaye ? 1 : 0);
       if (s === '70a08231' && to === BLK) return '0x' + m(soldeA(bloc));
       if (s === '70a08231' && to === AMZ) return '0x' + m(paireTenue);
     }
@@ -82,6 +84,11 @@ vu(avantPose.etat === 'REFUSE' && /before the mission was posted/.test(avantPose
 vu((await attester(io({ blocTx: 95000, poseeAu: 95000 }), demande)).etat === 'REFUSE', 'meme bloc que la publication -> REFUSE (ordre non tranche)');
 vu((await attester(io({ blocTx: 95000, poseeAu: 60000 }), demande)).ok === true, 'mission publiee AVANT la tx -> signe');
 vu((await attester(io({ blocTx: TETE }), demande)).etat === 'NON_LU', 'tx plus recente que la fin de fenetre -> NON_LU (renvoyer)');
+/* (5) Grok A11 / A8b (188a29e) : chaine lue != chaine signee ; tx deja payee (txUsed global on-chain) */
+const autreChaine = await attester(io({ chaineLue: 1 }), demande);
+vu(autreChaine.etat === 'PAS_OUVERT' && /reads chain 1 but signs for chain 8453/.test(autreChaine.pourquoi), 'chaine lue 1, signee 8453 -> rien signe (A11)');
+const payee = await attester(io({ dejaPaye: true }), demande);
+vu(payee.etat === 'REFUSE' && /already paid/.test(payee.pourquoi), 'tx deja payee par une autre mission -> REFUSE avant toute lecture d archive (A8b)');
 /* (4) blocDebut EXACT quand les blocs ne font pas 2 s (anvil, autre chaine) : le dernier bloc <= windowEnd - window */
 vu(r.blocs.debut === 99998 - 43200, 'Base (2 s) : debut = fin - 43 200 (' + r.blocs.debut + ')');
 const ioBase = io(); await attester(ioBase, demande);

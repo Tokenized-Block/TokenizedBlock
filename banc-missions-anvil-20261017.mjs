@@ -110,5 +110,7 @@ vu(await lireU(contrat, '0x' + sel('escrowLeft(uint256)') + mot(0)) === 10n * E1
 /* 4. rejeu et vol de signature */
 const rejeu = await rpc('eth_call', [{ from: JOUEUR, to: claim.to, data: claim.data }, 'latest']).then(() => 'passe', erreur);
 vu(rejeu === selecteur('TxUsed()'), 'le meme claim rejoue : TxUsed (' + rejeu + ')');
+const r5 = await attester(io, { taskId: 0, completer: JOUEUR, txHash: txBonne });
+vu(r5.etat === 'REFUSE' && /already paid/.test(r5.pourquoi), 'attester la tx deja payee : REFUSE, lu dans txUsed() du contrat (Grok A8b)');
 console.log((ko ? 'ECHEC ' : 'ok ') + 'banc-missions-anvil - ' + n + ' assertions, ' + ko + ' KO ; NE PROUVE PAS Base (hook stub)');
 process.exit(ko ? 1 : 0);
