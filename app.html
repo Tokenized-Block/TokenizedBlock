@@ -3533,6 +3533,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="jourActions">or tokenized stocks</button>
         <button type="button" class="bouton sec" id="jourMissions">2 · Missions</button>
         <button type="button" class="bouton sec" id="jourTirages">3 · The draws</button>
+        <!-- 2026-10-17 soir (Phil : « buy Skin pour draws pour 1 semaine garanti ») : un skin achete = 7 jours de tickets (pass verifie au recu) -->
+        <button type="button" class="bouton sec" id="jourSkin">Or a skin: 7 days of tickets</button>
       </div>
     </div>
     <!-- 2026-10-17 soir (Phil, capture : « latest block born mauvais — c est la simulation du block cree au hasard qui definit le block
@@ -4360,11 +4362,14 @@ async function peindreJour(t, moiBas, w, fait, seuil) {
   if (!face || !txt || !cpt || !t || !t.jour) return;
   const sem = (t.semaine.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
   const mois = (t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
-  const gagne = !!(w && w.ticket);
+  /* ticket du jour : volume verifie OU pass skin (le serveur les unit dans jour.tickets) */
+  const gagne = (t.jour.tickets || []).includes(moiBas);
+  const pass = (t.jour.passes || []).find((x) => String(x.adresse).toLowerCase() === moiBas);
   cpt.textContent = 'Your tickets — today ' + (gagne ? 1 : 0) + ' · this week ' + sem + ' · this month ' + mois;
   try { face.innerHTML = dessin(await adresseTicket(moiBas, t.jour.id), 'T') || ''; } catch (_) { face.innerHTML = ''; }
   face.setAttribute('data-gagne', gagne ? '1' : '0');
-  txt.textContent = gagne ? 'Today\'s ticket is yours: this face enters today\'s draw, and one more entry for the week and the month.'
+  txt.textContent = pass ? 'Your skin pass holds today\'s ticket (until ' + String(pass.jusqua).slice(1) + ' UTC): this face enters every draw.'
+    : gagne ? 'Today\'s ticket is yours: this face enters today\'s draw, and one more entry for the week and the month.'
     : 'Today\'s ticket face — yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go).';
   /* FACE OF THE DAY : hier, revelee par le hash du bloc E ; ton ticket d hier score contre elle (traits en commun sur 5) */
   const v = t.veille, zone = $('#faceJour');
@@ -4418,6 +4423,8 @@ async function peindreDernierBlock() {
 }
 $('#jourUnit').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
 $('#jourActions').addEventListener('click', () => allerA('trade'));
+/* pass skin : le panneau de UNIT, vue Skin (essayer puis acheter 1 USDC) ; l achat signale `skin_mint`, le serveur ouvre 7 jours de tickets */
+$('#jourSkin').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
 $('#jourMissions').addEventListener('click', () => { const e = $('#missionsCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 $('#jourTirages').addEventListener('click', () => { const e = $('#tirCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);

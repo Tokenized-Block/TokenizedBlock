@@ -106,9 +106,19 @@ export function joursEntre(debut, fin) {
   for (let t = Math.floor(debut / JOUR_MS) * JOUR_MS; t < fin; t += JOUR_MS) out.push(jourDe(t).id);
   return out;
 }
+/* ══ PASS SKIN (Phil 2026-10-17 soir : « possibilite de buy Skin pour draws pour 1 semaine garanti ») : un skin ACHETE (mint verifie dans le
+ *   recu, volume-tirage.js passSkinVerifie) donne le ticket du jour d achat et des 6 jours suivants, sans volume. passes = { wallet: [ids] }. */
+export const JOURS_PASS_SKIN = 7;
+export function joursPass(ms, n = JOURS_PASS_SKIN) { const d = jourDe(ms).debut; return Array.from({ length: n }, (_, k) => jourDe(d + k * JOUR_MS).id); }
+/** les tickets d un jour : volume >= seuil, OU un pass skin qui couvre ce jour. Liste triee, sans doublon. */
+export function ticketsJour(etatJours, jourId, passes = {}, seuil = SEUIL_VOLUME_JOUR_USD) {
+  const s = new Set(tickets((etatJours || {})[jourId], seuil));
+  for (const [a, ids] of Object.entries(passes || {})) if (Array.isArray(ids) && ids.includes(jourId) && ADR.test(a)) s.add(a);
+  return [...s].sort();
+}
 /** les entrees d une periode : une par (wallet, jour qualifie), triees (adresse puis jour) — publiques et rejouables. */
-export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_USD) {
+export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_USD, passes = {}) {
   const e = [];
-  for (const j of idsJours) for (const a of tickets((etatJours || {})[j], seuil)) e.push({ adresse: a, jour: j });
+  for (const j of idsJours) for (const a of ticketsJour(etatJours, j, passes, seuil)) e.push({ adresse: a, jour: j });
   return e.sort((x, y) => (x.adresse === y.adresse ? x.jour.localeCompare(y.jour) : x.adresse.localeCompare(y.adresse)));
 }

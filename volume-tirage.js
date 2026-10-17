@@ -18,6 +18,23 @@ const DEUX256 = 1n << 256n, DEUX255 = 1n << 255n;
 const signe = (mot) => { const v = BigInt('0x' + mot); return v >= DEUX255 ? v - DEUX256 : v; };
 const abs = (v) => (v < 0n ? -v : v);
 
+/** PASS SKIN : le recu prouve un ACHAT de skin par le payeur — un mint ERC-721 du contrat de skins (Transfer, 4 topics, from 0x0, to = payeur)
+ *  ET au moins `prix` d USDC du payeur vers le wallet de frais (Transfer, 3 topics). Rend { ok, payeur } | { ok:false, etat, pourquoi }. */
+export function passSkinVerifie({ tx, recu, skins, usdc, wallet, prix }) {
+  if (!tx || !recu) return { ok: false, etat: 'NON_LU', pourquoi: 'transaction or receipt not readable yet' };
+  if (String(recu.status) !== '0x1' || bas(recu.transactionHash) !== bas(tx.hash)) return { ok: false, etat: 'REFUSE', pourquoi: 'not a confirmed purchase' };
+  const payeur = payeurDe({ tx, recu });
+  if (!payeur || !ADR.test(payeur)) return { ok: false, etat: 'REFUSE', pourquoi: 'the payer could not be read' };
+  const p32 = '0x' + payeur.slice(2).padStart(64, '0'), w32 = '0x' + bas(wallet).slice(2).padStart(64, '0'), zero = '0x' + '0'.repeat(64);
+  const logs = recu.logs || [];
+  const mint = logs.some((l) => bas(l.address) === bas(skins) && (l.topics || []).length === 4 && bas(l.topics[0]) === TOPIC_TRANSFER && bas(l.topics[1]) === zero && bas(l.topics[2]) === p32);
+  const paye = logs.filter((l) => bas(l.address) === bas(usdc) && (l.topics || []).length === 3 && bas(l.topics[0]) === TOPIC_TRANSFER && bas(l.topics[1]) === p32 && bas(l.topics[2]) === w32)
+    .reduce((s, l) => s + BigInt('0x' + String(l.data).replace(/^0x/, '').slice(0, 64) || '0'), 0n);
+  if (!mint) return { ok: false, etat: 'REFUSE', pourquoi: 'no skin minted to the payer in this transaction' };
+  if (paye < BigInt(prix)) return { ok: false, etat: 'REFUSE', pourquoi: 'the skin price did not reach TokenizedBlock in this transaction' };
+  return { ok: true, payeur };
+}
+
 /** l identifiant v4 d une cle { currency0, currency1, fee, tickSpacing, hooks } = keccak256(abi.encode(key)) */
 export function poolIdDe(k) {
   const a = (x) => bas(x).slice(2).padStart(64, '0');

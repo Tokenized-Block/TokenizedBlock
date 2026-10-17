@@ -94,8 +94,9 @@ import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
-import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS } from './tirage-saison.js';
-import { volumeVerifie, poolIdDe } from './volume-tirage.js';
+import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass } from './tirage-saison.js';
+import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
+import { BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV } from './blockskins.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
@@ -5720,6 +5721,17 @@ function traiterRequete(req, res) {
        *   UNIT (le frais du hook est pris DANS ce swap, en ETH natif : verifierFrais ne le voit pas, d ou ce chemin avant son refus).
        *   Actions : seulement si NOTRE frais est arrive (v.ok). Externes seulement ; un hash ne compte qu UNE fois, tous jours confondus. */
       try { await crediterVolumeJour({ h, ligne, tx, recu, v, internes }); } catch (_) { /* le volume se relira au prochain envoi du hash */ }
+      /* PASS SKIN (Phil 2026-10-17 soir) : un achat de skin VERIFIE dans le recu (mint au payeur + le prix arrive au wallet de frais) = 7 jours
+       *   de tickets garantis. Externes seulement ; un hash ne compte qu une fois. Avant la sortie sur frais : verifierFrais exige un swap. */
+      if (ligne === 'skin_mint' && !(revenu.passVus || {})[h]) {
+        const ps = passSkinVerifie({ tx, recu, skins: BLOCKSKINS_SRV, usdc: USDC_BASE, wallet: FEE_WALLET, prix: SKIN_MINT_USDC_SRV });
+        if (ps.ok && !internes.has(ps.payeur)) {
+          revenu.passVus = { ...(revenu.passVus || {}), [h]: 1 };
+          revenu.passes = revenu.passes || {};
+          revenu.passes[ps.payeur] = [...new Set([...(revenu.passes[ps.payeur] || []), ...joursPass(Date.now())])].sort();
+          revenuSale = true;
+        }
+      }
       revenu.tentatives[v.ok ? 'ok' : v.etat] = (revenu.tentatives[v.ok ? 'ok' : v.etat] || 0) + 1;
       if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' ? 202 : 200, { ok: false, etat: v.etat, pourquoi: v.pourquoi }); return; }
       /* ⛔ chasse 2026-10-17 (HIGH, PoC) : `i=1` venait du CLIENT — n importe qui postait le hash d un autre avec i=1 (le premier post gagne)
@@ -5787,8 +5799,10 @@ function traiterRequete(req, res) {
      *   chaque jour qualifie = 1 entree au tirage de la SEMAINE et du MOIS. Pas de pot (practice) : l ecran le dit. */
     const now = Date.now(), j = jourDe(now), s = saisonDe(now), mo = moisDe(now);
     const jours = revenu.jours || {}, etatJ = jours[j.id] || {};
-    const tJ = tickets(etatJ, SEUIL_VOLUME_JOUR_USD);
-    const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin)), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin));
+    /* tickets = volume >= seuil OU pass skin couvrant le jour (tirage-saison.js ticketsJour) */
+    const passes = revenu.passes || {};
+    const tJ = ticketsJour(jours, j.id, passes, SEUIL_VOLUME_JOUR_USD);
+    const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin), SEUIL_VOLUME_JOUR_USD, passes), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin), SEUIL_VOLUME_JOUR_USD, passes);
     const iso = (x) => new Date(x).toISOString();
     /* FACE OF THE DAY + tirage du jour (2026-10-17 soir) : HIER est resolu par le bloc E = le premier bloc horodate >= cloture + 120 s
      *   (face-du-jour.js). Son hash revele la face du jour ET tire le gagnant (tirer, domaine = id du jour). Resolu UNE fois, en fond,
@@ -5810,14 +5824,15 @@ function traiterRequete(req, res) {
         .then((b) => { if (b && /^0x[0-9a-f]{64}$/i.test(String(b.hash))) Object.assign(apercuFace, { bloc: parseInt(b.number, 16), hash: String(b.hash).toLowerCase(), lu: Date.now() }); })
         .catch(() => {}).finally(() => { apercuFace.enCours = false; });
     }
-    const tV = tickets(jours[veilleJ.id] || {}, SEUIL_VOLUME_JOUR_USD);
+    const tV = ticketsJour(jours, veilleJ.id, passes, SEUIL_VOLUME_JOUR_USD);
     const veille = { id: veilleJ.id, blocE: rev ? rev.bloc : null, hashE: rev ? rev.hash : null, etat: rev ? 'REVELEE' : 'EN_ATTENTE', tickets: tV,
       gagnant: rev && tV.length ? (tirer({ hashE: rev.hash, saison: veilleJ.id, liste: tV }) || [null])[0] : null };
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille,
       apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
-        wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: w.usd >= SEUIL_VOLUME_JOUR_USD })) },
+        wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: tJ.includes(adresse) })),
+        passes: Object.entries(passes).filter(([, ids]) => ids.includes(j.id)).map(([a, ids]) => ({ adresse: a, jusqua: ids[ids.length - 1] })) },
       semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)) },
       mois: { id: mo.id, debut: iso(mo.debut), fin: iso(mo.fin), entrees: eM, n: eM.length, racine: racine(eM.map((e) => e.adresse)) },
       regle: 'A day counts when your verified trading volume that day (UTC) reaches $' + SEUIL_VOLUME_JOUR_USD + ': trades of the UNIT block on its '
