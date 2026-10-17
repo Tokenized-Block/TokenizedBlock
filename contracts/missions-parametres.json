@@ -1,5 +1,5 @@
-{
-  "_lisez-moi": "A REMPLIR PAR PHIL (adresses entieres, copiees de son wallet, jamais de memoire). Puis : cd contracts && forge build && node preparer-deploiement-missions.mjs. rail = 0x0000000000000000000000000000000000000000 -> aucun convertisseur : les 1,4 % dev d une recompense non-USDC vont a la reserve (le plus sur).",
+﻿{
+  "_lisez-moi": "A REMPLIR PAR PHIL (adresses entieres, copiees de son wallet, jamais de memoire). Puis : cd contracts && forge build && node preparer-deploiement-missions.mjs. rail = 0x0000000000000000000000000000000000000000 -> aucun convertisseur (decision lead pour le mainnet v1 : le plus sur).",
   "communityReserve": null,
   "verifier": null,
   "guardian": null,

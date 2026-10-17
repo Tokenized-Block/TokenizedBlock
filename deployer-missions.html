@@ -64,9 +64,9 @@ ul{padding-left:20px;margin:8px 0}
       <span><i style="background:#2fd0c8"></i>Player who did it: 90%</span>
       <span><i style="background:#f6c76e"></i>Back to the creator: 3%</span>
       <span><i style="background:#ff7eb6"></i>Community reserve: 5.6%</span>
-      <span><i style="background:#b9a4ff"></i>Dev: 1.4%, in USDC only</span>
+      <span><i style="background:#b9a4ff"></i>Dev: 1.4%, in USDC or the stock</span>
     </div>
-    <p class="note">No converter set: the dev's 1.4% of a reward paid in units or a stock goes to the community reserve too — the dev never holds block units.</p>
+    <p class="note">Paid in USDC or a tokenized stock: the dev's 1.4% goes to the dev in that token. Paid in block units: it goes to the community reserve — the dev never holds block units.</p>
   </div>
 
   <h2>Why it is safe to play</h2>
@@ -121,6 +121,7 @@ const NOMS = { hook: 'TokenizedBlock hook (which pools are ours)', poolManager: 
 let compte = null, intacte = false, envoi = false;
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
 $('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (D.constructeur[k] || '<span class="ko">missing</span>') + '</dd>').join('')
+  + '<dt>Stocks paid to the dev directly</dt><dd>' + D.devDirect.length + ' tokenized stocks of the hook (the dev\'s 1.4% of a reward in one of them goes to the dev in that stock; block units never)</dd>'
   + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
   + '<dt>Fingerprint</dt><dd>' + (D.sha256Creation ? 'sha256 ' + D.sha256Creation : '—') + '</dd>';
 $('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manquants.map((m) => NOMS[m] + ' is missing'), ...D.refus].join(' · ') + '.</span>' : '';
@@ -129,9 +130,12 @@ $('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manqu
     if (!D.pret || !D.creation) throw new Error('not ready');
     const octets = new Uint8Array(D.creation.slice(2).match(/../g).map((x) => parseInt(x, 16)));
     const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
-    const fin = D.creation.slice(-8 * 64);
-    const lus = D.ordre.map((k, i) => '0x' + fin.slice(i * 64 + 24, (i + 1) * 64));
-    const memes = D.ordre.every((k, i) => lus[i] === D.constructeur[k]);
+    /* les arguments ATTENDUS, recalcules ici depuis les valeurs affichees (8 adresses + la liste des actions payees au dev en direct),
+     *   puis compares a la FIN de la donnee figee : un seul octet different et le bouton reste eteint */
+    const mot = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
+    const nombre = (n) => BigInt(n).toString(16).padStart(64, '0');
+    const attendu = D.ordre.map((k) => mot(D.constructeur[k])).join('') + nombre(9 * 32) + nombre(D.devDirect.length) + D.devDirect.map(mot).join('');
+    const memes = D.creation.toLowerCase().endsWith(attendu) && attendu.length / 2 === D.octetsArgs;
     intacte = h === D.sha256Creation && octets.length === D.octetsCreation && memes;
     $('#dVerif').className = intacte ? 'note ok' : 'note ko';
     $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser, and the 8 values read back from the data: they match.' : 'The fingerprint or a value does not match. Nothing can be deployed from this page.';

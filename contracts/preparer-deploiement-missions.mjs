@@ -2,7 +2,7 @@
  *
  * ⛔ CE SCRIPT NE SIGNE RIEN ET N ENVOIE RIEN. Il ecrit `../missions-deploiement.js` ; la page `deployer-missions.html` la propose au wallet
  *   CONNECTE (celui de Phil). Comme BlockSkins : ce qui est signe est ce qui a ete prouve (le banc fork deploie cette meme donnee).
- * Arguments (ordre du constructeur) : (hook, poolManager, devWallet, communityReserve, usdc, verifier, guardian, rail)
+ * Arguments (ordre du constructeur) : (hook, poolManager, devWallet, communityReserve, usdc, verifier, guardian, rail, devDirect[])
  *   - hook        = HOOK_7030 (tokenomics.js <- hook-7030-descripteur.js)
  *   - poolManager = V4_ADRESSES[8453].poolm (lancer-pool.js)
  *   - devWallet   = FEE_WALLET (frais-creation.js) — decision de Phil 2026-10-16 21:38 (le dev ne recoit que de l USDC)
@@ -16,13 +16,17 @@ import crypto from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const imp = (f) => import(pathToFileURL(path.join(ICI, '..', f)).href);
-const [F, T, L] = await Promise.all([imp('frais-creation.js'), imp('tokenomics.js'), imp('lancer-pool.js')]);
+const [F, T, L, H] = await Promise.all([imp('frais-creation.js'), imp('tokenomics.js'), imp('lancer-pool.js'), imp('hook-7030-descripteur.js')]);
+/* 9e argument (Phil 2026-10-17, confirme dans le chat) : les ACTIONS TOKENISEES du hook 7030 — symbole en « c » — dont le dev recoit sa
+ *   part de 1,4 % directement dans l action. LUES dans le descripteur genere du hook, jamais tapees. Les unites de block n y sont jamais. */
+const devDirect = H.DESCRIPTEUR_7030.devises.filter((d) => /c$/.test(d.sym) && d.adresse !== '0x0000000000000000000000000000000000000000').map((d) => d.adresse.toLowerCase());
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
 const fixes = { hook: bas(T.HOOK_7030), poolManager: bas(L.V4_ADRESSES[8453].poolm), devWallet: bas(F.FEE_WALLET), usdc: bas(F.USDC_BASE) };
 for (const [k, v] of Object.entries(fixes)) if (!ADR.test(v)) throw new Error(k + ' unreadable in the repo');
 const parametresChemin = path.join(ICI, 'missions-parametres.json');
-const p = fs.existsSync(parametresChemin) ? JSON.parse(fs.readFileSync(parametresChemin, 'utf8')) : {};
+/* un BOM (ecrit par certains editeurs Windows) n est pas une erreur de Phil : on l ote avant de lire */
+const p = fs.existsSync(parametresChemin) ? JSON.parse(fs.readFileSync(parametresChemin, 'utf8').replace(/^﻿/, '')) : {};
 const libres = { communityReserve: bas(p.communityReserve), verifier: bas(p.verifier), guardian: bas(p.guardian), rail: bas(p.rail) };
 const manquants = Object.entries(libres).filter(([, v]) => !ADR.test(v)).map(([k]) => k);
 const LEGACY = '0x37eb9b7ce0b51fe12fbf092026e001918128580a';
@@ -46,8 +50,12 @@ const code = String(art.bytecode.object);
 if (!/^0x[0-9a-f]+$/.test(code)) throw new Error('bytecode missing or unlinked in the forge artifact');
 const mot = (a) => a.slice(2).padStart(64, '0');
 const ordre = [fixes.hook, fixes.poolManager, fixes.devWallet, libres.communityReserve, fixes.usdc, libres.verifier, libres.guardian, libres.rail];
+if (!devDirect.length || devDirect.some((a) => !ADR.test(a) || a === fixes.usdc)) throw new Error('dev-direct stock list unreadable');
 const pret = manquants.length === 0 && refus.length === 0;
-const creation = pret ? code + ordre.map(mot).join('') : null;
+/* ABI : 8 mots statiques, puis l offset du tableau (9 x 32 = 0x120), sa longueur, ses elements */
+const nombre = (n) => BigInt(n).toString(16).padStart(64, '0');
+const args = pret ? ordre.map(mot).join('') + nombre(9 * 32) + nombre(devDirect.length) + devDirect.map(mot).join('') : null;
+const creation = pret ? code + args : null;
 const sha = (hex) => crypto.createHash('sha256').update(Buffer.from(hex.slice(2), 'hex')).digest('hex');
 const meta = typeof art.metadata === 'string' ? JSON.parse(art.metadata) : (art.metadata || {});
 const source = fs.readFileSync(path.join(ICI, 'src/BlockMissionsV3.sol'), 'utf8').replace(/\r\n/g, '\n');
@@ -63,6 +71,8 @@ const sortie = [
   "  evm: '" + String((meta.settings && meta.settings.evmVersion) || 'unknown') + "',",
   '  constructeur: Object.freeze(' + JSON.stringify({ ...fixes, ...libres }) + '),',
   '  ordre: ' + JSON.stringify(['hook', 'poolManager', 'devWallet', 'communityReserve', 'usdc', 'verifier', 'guardian', 'rail']) + ',',
+  '  devDirect: Object.freeze(' + JSON.stringify(devDirect) + '),',
+  '  octetsArgs: ' + (args ? args.length / 2 : 'null') + ',',
   '  pret: ' + pret + ',',
   '  manquants: ' + JSON.stringify(manquants) + ',',
   '  refus: ' + JSON.stringify(refus) + ',',

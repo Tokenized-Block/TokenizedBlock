@@ -71,12 +71,21 @@ contract BlockMissionsV3 {
     ///         now IMMUTABLE — fixed, reviewed code with fixed routes — or address(0): then the dev's 20 % of a non-USDC reward goes straight
     ///         to the COMMUNITY_RESERVE at claim time (the dev never holds units, nothing waits on a rail).
     address public immutable RAIL;
+    /// @notice Phil 2026-10-17 (confirmed in chat): the dev's 1.4 % of a reward paid in a TOKENIZED STOCK goes to the dev wallet IN THAT STOCK.
+    ///         The list is fixed at deploy (the hook's tokenized stocks) and changed only through a public 48 h proposal on an open contract.
+    ///         ⛔ A block's own units NEVER go to the dev, whatever the list says (checked against the task's block at every payment).
+    mapping(address => bool) public devDirect;
     struct Proposal { address value; uint64 readyAt; }
     Proposal public nextVerifier;
     Proposal public nextGuardian;
+    struct DevTokenProposal { address token; bool allowed; uint64 readyAt; }
+    DevTokenProposal public nextDevToken;
     bool public paused;
     uint64 public guardianPausedAt; // 0 = the current pause (if any) was set by the owner
     uint64 public lastUnpausedAt;
+    uint64 public pausedSince; // start of the current pause
+    uint256 public pausedTotal; // seconds paused, all closed pauses together
+    uint256 public constant PROPOSAL_TTL = 72 hours;
 
     /// @dev Uniswap v4 PoolKey, same field order and types: poolId = keccak256(abi.encode(key)).
     struct PoolKey { address currency0; address currency1; uint24 fee; int24 tickSpacing; address hooks; }
@@ -100,6 +109,7 @@ contract BlockMissionsV3 {
     mapping(address => mapping(uint256 => uint256)) public tokenClaimsOnDay; // block => day => count
     mapping(address => mapping(address => uint256)) public pending; // token => account => credit (recipient could not receive)
     mapping(uint256 => uint256) public cancelRequestedAt;
+    mapping(uint256 => uint256) public cancelPausedSnapshot; // pausedTotal at the request (the clock counts open time only)
     /// @notice everything this contract OWES in a token: open escrows + credits + dev's share. Review L2: every payment first checks
     ///         balance >= owed, so a token whose balance shrank (rebase, clawback) halts instead of paying task A out of task B's escrow.
     mapping(address => uint256) public owed;
@@ -118,6 +128,8 @@ contract BlockMissionsV3 {
     event Withdrawn(address indexed token, address indexed account, uint256 amount);
     event DevPaid(address indexed token, uint256 amount);
     event DevShareConverted(address indexed token, uint256 amount, uint256 usdcToDev);
+    event DevTokenSet(address indexed token, bool allowed);
+    event DevTokenProposed(address indexed token, bool allowed, uint64 readyAt);
 
     error NotOwner(); error NotCreator(); error BadAddress(); error BadParams(); error FeeOnTransfer(); error Expired(); error NotExpired();
     error ReserveEmpty(); error SelfDealing(); error TxUsed(); error CapReached(); error BadProof(); error NothingToRefund();
@@ -129,7 +141,13 @@ contract BlockMissionsV3 {
     modifier onlyOwner() { if (msg.sender != owner) revert NotOwner(); _; }
     modifier whenNotPaused() { if (paused) revert Paused(); _; }
 
-    constructor(address hook, address poolManager, address devWallet, address communityReserve, address usdc, address verifier_, address guardian_, address rail_) {
+    constructor(address hook, address poolManager, address devWallet, address communityReserve, address usdc, address verifier_, address guardian_, address rail_, address[] memory devDirect_) {
+        for (uint256 i = 0; i < devDirect_.length; i++) {
+            address d = devDirect_[i];
+            if (d == address(0) || d == usdc || d == hook || d == poolManager) revert BadAddress();
+            devDirect[d] = true;
+            emit DevTokenSet(d, true);
+        }
         if (hook == address(0) || poolManager == address(0) || devWallet == address(0) || communityReserve == address(0) || usdc == address(0) || verifier_ == address(0)) revert BadAddress();
         if (devWallet == FORBIDDEN_LEGACY || communityReserve == FORBIDDEN_LEGACY || communityReserve == devWallet) revert BadAddress();
         if (rail_ == devWallet || rail_ == communityReserve) revert BadAddress();
@@ -142,9 +160,27 @@ contract BlockMissionsV3 {
 
     // ───────────────────────────── admin: everything that can redirect value waits ADMIN_DELAY in public (review M1/M2)
     function proposeVerifier(address v) external onlyOwner { if (v == address(0)) revert BadAddress(); nextVerifier = _propose("verifier", v); }
-    function acceptVerifier() external { verifier = _accept(nextVerifier, "verifier"); delete nextVerifier; }
-    function proposeGuardian(address g) external onlyOwner { nextGuardian = _propose("guardian", g); }
-    function acceptGuardian() external { guardian = _accept(nextGuardian, "guardian"); delete nextGuardian; }
+    /* hunt 2026-10-17 (LOW) : accept* by the owner only, and a proposal expires PROPOSAL_TTL after it becomes ready (no armed old rotation) */
+    function acceptVerifier() external onlyOwner { verifier = _accept(nextVerifier, "verifier"); delete nextVerifier; }
+    function proposeGuardian(address g) external onlyOwner { if (g == address(0)) revert BadAddress(); nextGuardian = _propose("guardian", g); }
+    function acceptGuardian() external onlyOwner { guardian = _accept(nextGuardian, "guardian"); delete nextGuardian; }
+    /// @notice hunt 2026-10-17 (MED, PoC: a hostile guardian re-pausing after every owner unpause froze the contract forever, and blocked
+    ///         acceptGuardian): the owner REMOVES the guardian at once. Taking a pause power away can never redirect value: no notice needed.
+    ///         It does not lift a guardian pause by itself — the owner still waits ADMIN_DELAY after it (a hostile owner gains nothing).
+    function revokeGuardian() external onlyOwner { guardian = address(0); delete nextGuardian; emit Accepted("guardian", address(0)); }
+    /// @notice adding or removing a token of the dev-direct list redirects value: same rule as a verifier change (48 h public, open contract).
+    function proposeDevToken(address token, bool allowed) external onlyOwner {
+        if (token == address(0) || token == USDC || token == HOOK || token == POOL_MANAGER) revert BadAddress();
+        nextDevToken = DevTokenProposal(token, allowed, uint64(block.timestamp + ADMIN_DELAY));
+        emit DevTokenProposed(token, allowed, nextDevToken.readyAt);
+    }
+    function acceptDevToken() external onlyOwner {
+        DevTokenProposal memory p = nextDevToken;
+        _accept(Proposal(p.token, p.readyAt), "devToken");
+        devDirect[p.token] = p.allowed;
+        delete nextDevToken;
+        emit DevTokenSet(p.token, p.allowed);
+    }
 
     function _propose(bytes32 what, address v) private returns (Proposal memory p) {
         p = Proposal(v, uint64(block.timestamp + ADMIN_DELAY));
@@ -154,27 +190,36 @@ contract BlockMissionsV3 {
     ///      pauses then accepts would leave creators no exit. Accept only while unpaused AND ADMIN_DELAY after the last unpause
     ///      (ADMIN_DELAY 48 h > CANCEL_DELAY 24 h: every creator can cancel and finalize before a new verifier/guardian/rail applies).
     function _accept(Proposal memory p, bytes32 what) private returns (address) {
-        if (p.readyAt == 0 || block.timestamp < p.readyAt) revert NotReady();
+        if (p.readyAt == 0 || block.timestamp < p.readyAt || block.timestamp > uint256(p.readyAt) + PROPOSAL_TTL) revert NotReady();
         if (paused || block.timestamp < uint256(lastUnpausedAt) + ADMIN_DELAY) revert NotReady();
         emit Accepted(what, p.value);
         return p.value;
     }
 
-    /// @notice pause: owner or guardian. Unpause: the guardian at any time; the owner only if HE paused, or ADMIN_DELAY after a guardian pause.
+    /// @notice pause: owner or guardian. Unpause: the guardian ONLY a pause it set (hunt 2026-10-17, MED: it could lift the owner's emergency
+    ///         brake); the owner his own pause at once, a guardian pause ADMIN_DELAY after it. Only the unpaused -> paused transition records
+    ///         who paused and when (a repeat pause by the guardian no longer turns an owner pause into a guardian pause).
     function setPaused(bool p) external {
         bool g = msg.sender == guardian && guardian != address(0);
         if (msg.sender != owner && !g) revert NotOwner();
         if (p) {
+            if (paused) revert NotReady(); // already paused: nothing to record, nothing to reset
             paused = true;
-            if (g) guardianPausedAt = uint64(block.timestamp);
+            pausedSince = uint64(block.timestamp);
+            guardianPausedAt = g ? uint64(block.timestamp) : 0;
         } else {
             /* review V3 HIGH: a no-op unpause moved lastUnpausedAt and reset every cancel clock at will */
             if (!paused) revert NotPaused();
+            if (g && guardianPausedAt == 0) revert NotOwner(); // the guardian cannot lift the owner's pause
             if (!g && guardianPausedAt != 0 && block.timestamp < guardianPausedAt + ADMIN_DELAY) revert NotReady();
+            pausedTotal += block.timestamp - pausedSince;
             paused = false; guardianPausedAt = 0; lastUnpausedAt = uint64(block.timestamp);
         }
         emit PausedSet(p, msg.sender);
     }
+
+    /// @dev seconds spent paused since deployment, counting a pause still running (the cancel clock runs on OPEN time only).
+    function _pausedTotalNow() private view returns (uint256) { return pausedTotal + (paused ? block.timestamp - pausedSince : 0); }
 
     function transferOwnership(address to) external onlyOwner { if (to == address(0)) revert BadAddress(); pendingOwner = to; emit OwnershipTransferStarted(owner, to); }
     function acceptOwnership() external { if (msg.sender != pendingOwner) revert NotOwner(); emit OwnershipTransferred(owner, msg.sender); owner = msg.sender; pendingOwner = address(0); }
@@ -293,7 +338,7 @@ contract BlockMissionsV3 {
         _pushOrCredit(tok, msg.sender, paid);
         _pushOrCredit(tok, COMMUNITY_RESERVE, toReserve);
         _pushOrCredit(tok, t.creator, toCreator);
-        if (tok == USDC) { _pushOrCredit(tok, DEV_WALLET, toDev); if (toDev != 0) emit DevPaid(tok, toDev); }
+        if (tok == USDC || (tok != t.blockToken && devDirect[tok])) { _pushOrCredit(tok, DEV_WALLET, toDev); if (toDev != 0) emit DevPaid(tok, toDev); }
         else if (RAIL == address(0)) { _pushOrCredit(tok, COMMUNITY_RESERVE, toDev); toReserve += toDev; toDev = 0; } /* no rail: never units to the dev */
         else devOwed[tok] += toDev;
         emit TaskClaimed(id, msg.sender, txHash, paid, toReserve, toDev, toCreator);
@@ -303,8 +348,9 @@ contract BlockMissionsV3 {
     function cancel(uint256 id) external nonReentrant {
         if (msg.sender != _tasks[id].creator) revert NotCreator();
         uint256 at = cancelRequestedAt[id];
-        if (at == 0 || block.timestamp > _cancelBase(at) + CANCEL_DELAY + CANCEL_WINDOW) {
+        if (at == 0 || _ouvertDepuis(id) > CANCEL_DELAY + CANCEL_WINDOW) {
             cancelRequestedAt[id] = block.timestamp;
+            cancelPausedSnapshot[id] = _pausedTotalNow();
             emit CancelRequested(id, block.timestamp);
         }
     }
@@ -312,16 +358,18 @@ contract BlockMissionsV3 {
     function finalizeCancel(uint256 id) external nonReentrant whenNotPaused {
         Task storage t = _tasks[id];
         if (msg.sender != t.creator) revert NotCreator();
-        uint256 at = cancelRequestedAt[id];
-        if (at == 0) revert CancelPending();
-        uint256 base = _cancelBase(at);
-        if (block.timestamp < base + CANCEL_DELAY) revert CancelPending();
-        if (block.timestamp > base + CANCEL_DELAY + CANCEL_WINDOW) revert CancelStale();
+        if (cancelRequestedAt[id] == 0) revert CancelPending();
+        uint256 ouvert = _ouvertDepuis(id);
+        if (ouvert < CANCEL_DELAY) revert CancelPending();
+        if (ouvert > CANCEL_DELAY + CANCEL_WINDOW) revert CancelStale();
         _close(id, t, true);
     }
 
-    /// @dev the cancel clock restarts at the last unpause: players get a full CANCEL_DELAY of open claims after any pause.
-    function _cancelBase(uint256 at) private view returns (uint256) { return lastUnpausedAt > at ? lastUnpausedAt : at; }
+    /// @dev hunt 2026-10-17 (MED, PoC: a pause flicker every < 24 h restarted the clock and trapped every escrow): the cancel clock counts
+    ///      OPEN time since the request — players get CANCEL_DELAY of open claims, and a pause costs creators exactly its own length.
+    function _ouvertDepuis(uint256 id) private view returns (uint256) {
+        return (block.timestamp - cancelRequestedAt[id]) - (_pausedTotalNow() - cancelPausedSnapshot[id]);
+    }
 
     function refund(uint256 id) external nonReentrant {
         Task storage t = _tasks[id];
