@@ -20,7 +20,10 @@ const paye = srv.slice(srv.indexOf("if (chemin === '/api/paye'"), srv.indexOf("i
 vu(/if \(verif\.externe && \/\^0x\[0-9a-f\]\{40\}\$\/\.test\(r\)/.test(paye), 'registre : frais EXTERNE verifie seulement');
 vu(/const createur = await createurDuBlock\(r\);/.test(paye) && !/q\.get\('c/.test(paye), 'createur lu par createurDuBlock, jamais pris dans la requete');
 vu(paye.indexOf('verifierFrais(') < paye.indexOf('createurDuBlock(r)'), 'la verification du frais precede l attribution');
-const cdb = srv.slice(srv.indexOf('async function createurDuBlock('), srv.indexOf('async function createurDuBlock(') + 900);
+const d0 = srv.indexOf('async function createurDuBlock('), f0 = /\r?\n\}\r?\n/.exec(srv.slice(d0));
+const cdb = f0 ? srv.slice(d0, d0 + f0.index) : ''; /* la fonction ENTIERE (une fenetre fixe la coupait des qu elle grandissait) */
+vu(cdb.length > 200, 'createurDuBlock lue en entier');
+vu(/nos\.has\(String\(c\.hooks\)\.toLowerCase\(\)\)/.test(cdb) && /nos\.has\(String\(p\.hook\)\.toLowerCase\(\)\)/.test(cdb), 'les deux sources de pools filtrees sur NOS hooks');
 vu(/for \(const sel of \[SEL_CREATEURS, SEL_CREATEUR_DE\]\)/.test(cdb) && /selecteurSrv\('createurs\(bytes32\)'\)/.test(srv), 'createurs(bytes32) (7030) avant createurDe(bytes32)');
 vu(/chemin === '\/api\/registre-createurs'/.test(srv) && /Owed is not paid/.test(srv), 'route publique du registre, et elle dit que du n est pas paye');
 console.log('ok vitrine-cablage - ' + n + ' assertions ; NE PROUVE PAS un frais attribue reel');
