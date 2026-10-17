@@ -4578,12 +4578,18 @@ async function peindreUnitPools() {
   const cles = r && r.ok && Array.isArray(r.cles) ? r.cles : null;
   if (!cles) { etat.textContent = 'UNIT\'s pools could not be read just now.'; return; }
   const u = UNIT_APP.toLowerCase();
-  const lignes = cles.map((k) => {
+  /* un jeton inconnu de l app (ex. mmETH, mesure 2026-10-18) : son symbol() est LU sur la chaine ; illisible -> adresse courte, jamais devine */
+  const symLu = async (a) => {
+    const s = symPaire(a);
+    if (!/…/.test(s)) return s;
+    try { const h = String(await rpc('eth_call', [{ to: a, data: '0x95d89b41' }, 'latest'])).slice(2); const len = parseInt(h.slice(64, 128), 16); const t = h.slice(128, 128 + len * 2); const txt = new TextDecoder().decode(Uint8Array.from(t.match(/../g).map((x) => parseInt(x, 16)))); return /^[\x20-\x7e]{1,12}$/.test(txt) ? txt : s; } catch (_) { return s; }
+  };
+  const lignes = await Promise.all(cles.map(async (k) => {
     const autre = String(k.currency0).toLowerCase() === u ? k.currency1 : k.currency0;
     const notre = estNotreHook(k.hooks);
-    return '<li class="filL"><p class="filT"><b>UNIT / ' + enTexte(symPaire(autre)) + '</b> — ' + (notre ? 'TokenizedBlock pool: tradable here, 0.1% fee (0.07 app · 0.03 creator)' : 'third-party hook pool (' + enTexte(String(k.hooks).slice(0, 8)) + '…): not quoted here') + '</p></li>';
-  });
-  etat.textContent = cles.length + ' pool' + (cles.length === 1 ? '' : 's') + ' read on chain. $10 of UNIT trades in a day = today\'s ticket.';
+    return '<li class="filL"><p class="filT"><b>UNIT / ' + enTexte(await symLu(autre)) + '</b> — ' + (notre ? 'TokenizedBlock pool: tradable here, 0.1% fee (0.07 app · 0.03 creator)' : 'third-party hook pool (' + enTexte(String(k.hooks).slice(0, 8)) + '…): not quoted here') + '</p></li>';
+  }));
+  etat.textContent = cles.length + ' pool' + (cles.length === 1 ? '' : 's') + ' read on chain. $10 of UNIT trades in a day = today\'s ticket. UNIT\'s creator can open UNIT / stock pools from its page (Add a pair).';
   ul.innerHTML = lignes.join('');
 }
 $('#unitOuvrir').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
