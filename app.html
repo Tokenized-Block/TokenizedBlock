@@ -3519,6 +3519,14 @@ details[open] > summary::before{transform:rotate(90deg)}
           <p class="note" id="jourCompte" style="margin:4px 0 0">Your tickets — today 0 · this week 0 · this month 0</p>
         </div>
       </div>
+      <!-- FACE OF THE DAY (2026-10-17 soir) : hier, la face revelee par le bloc E, ton score, le gagnant du tirage du jour -->
+      <div class="jourTicket" id="faceJour" hidden>
+        <div class="jourFace" id="faceJourArt" role="img" aria-label="Yesterday's Face of the Day"></div>
+        <div style="min-width:0">
+          <p class="note" id="faceJourTxt" style="margin:0"></p>
+          <p class="note" id="faceJourGagnant" style="margin:4px 0 0"></p>
+        </div>
+      </div>
       <div class="jourEtapes">
         <button type="button" class="bouton" id="jourUnit">1 · Trade UNIT</button>
         <button type="button" class="bouton sec" id="jourActions">or tokenized stocks</button>
@@ -3812,6 +3820,7 @@ import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
 /* la feuille du cube 3D, posee une fois */
 (() => { try { const st = document.createElement('style'); st.textContent = CUBE3D_CSS; document.head.appendChild(st); } catch (_) {} })();
 import { apparenceDepuisAdresse } from './apparence.js';
+import { faceRevelee, scoreFaces } from './face-du-jour.js';
 /* ⛔⛔ L IMAGE GRAVEE (2026-09-22). `budgetSurFace` vient de `photo.js`, qui porte le mur MESURE du
  * precompile B20 : 12 Ko de fichier passent, 13 Ko sont refuses, et le refus persiste en offrant
  * cent millions de gas. Calculer le budget ici plutot que le deviner evite de faire SIGNER une
@@ -4353,6 +4362,21 @@ async function peindreJour(t, moiBas, w, fait, seuil) {
   face.setAttribute('data-gagne', gagne ? '1' : '0');
   txt.textContent = gagne ? 'Today\'s ticket is yours: this face enters today\'s draw, and one more entry for the week and the month.'
     : 'Today\'s ticket face — yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go).';
+  /* FACE OF THE DAY : hier, revelee par le hash du bloc E ; ton ticket d hier score contre elle (traits en commun sur 5) */
+  const v = t.veille, zone = $('#faceJour');
+  if (!zone || !v) return;
+  zone.hidden = false;
+  if (v.etat !== 'REVELEE' || !v.hashE) { $('#faceJourTxt').textContent = 'Yesterday\'s Face of the Day is revealed by the first Base block 2 minutes after midnight UTC — reading it.'; $('#faceJourGagnant').textContent = ''; return; }
+  const fr = faceRevelee(v.hashE);
+  try { $('#faceJourArt').innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) { $('#faceJourArt').innerHTML = ''; }
+  const avais = (v.tickets || []).includes(moiBas);
+  let phrase = 'Yesterday\'s Face of the Day — revealed by block ' + Number(v.blocE).toLocaleString('en-US') + '.';
+  if (avais) {
+    const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(moiBas, v.id)), fr);
+    if (s) phrase += ' Your ticket matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + '.';
+  } else phrase += ' You had no ticket yesterday.';
+  $('#faceJourTxt').textContent = phrase;
+  $('#faceJourGagnant').textContent = (v.tickets || []).length ? 'Yesterday\'s draw (practice, no prize): ' + (v.gagnant === moiBas ? 'you!' : String(v.gagnant).slice(0, 6) + '…' + String(v.gagnant).slice(-4)) + ' among ' + v.tickets.length + ' ticket' + (v.tickets.length === 1 ? '' : 's') + '.' : 'Nobody held a ticket yesterday.';
 }
 
 /* ══ LE DERNIER BLOCK NE, EN DIRECT — /api/blocks-routeur (naissances par notre routeur, avec leur bloc) et /api/cle/<block> (ses pools =

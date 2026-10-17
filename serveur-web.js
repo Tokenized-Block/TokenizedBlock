@@ -94,8 +94,9 @@ import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
-import { saisonDe, valeurUsd, crediter, tickets, racine, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD } from './tirage-saison.js';
+import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS } from './tirage-saison.js';
 import { volumeVerifie, poolIdDe } from './volume-tirage.js';
+import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
 import { lireMissions } from './missions-lecture.js';
@@ -997,6 +998,7 @@ async function rpcHistoire(methode, params) {
 let archiveMissions = null;
 const attestationsEnCours = new Set();
 let sondeDetentionA = 0;
+let revelationEnCours = false; /* Face of the Day : une seule resolution du bloc E a la fois */
 const sondeDetentionJour = { jour: '', n: 0 };
 const SONDE_DETENTION_MAX_JOUR = Number.isSafeInteger(Number(process.env.SONDE_DETENTION_MAX_JOUR)) && Number(process.env.SONDE_DETENTION_MAX_JOUR) >= 0
   ? Number(process.env.SONDE_DETENTION_MAX_JOUR) : 6;
@@ -4058,6 +4060,8 @@ const SERVIS = [
   'missions-deploiement.js',
   /* 2026-10-17 soir : la route FIXE du rail et l encodeur des arguments de MissionsDeployer (la page recalcule la donnee avec) */
   'missions-rail.js',
+  /* 2026-10-17 soir : Face of the Day (l app score ton ticket contre la face revelee par le bloc E) */
+  'face-du-jour.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',
@@ -5785,16 +5789,32 @@ function traiterRequete(req, res) {
     const tJ = tickets(etatJ, SEUIL_VOLUME_JOUR_USD);
     const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin)), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin));
     const iso = (x) => new Date(x).toISOString();
+    /* FACE OF THE DAY + tirage du jour (2026-10-17 soir) : HIER est resolu par le bloc E = le premier bloc horodate >= cloture + 120 s
+     *   (face-du-jour.js). Son hash revele la face du jour ET tire le gagnant (tirer, domaine = id du jour). Resolu UNE fois, en fond,
+     *   puis garde (revenu.revelations) ; pas encore resolu -> etat dit, rien d invente. */
+    const veilleJ = jourDe(now - JOUR_MS);
+    revenu.revelations = revenu.revelations || {};
+    const rev = revenu.revelations[veilleJ.id];
+    if (!rev && now >= veilleJ.fin + DELAI_REVELATION_S * 1000 && !revelationEnCours) {
+      revelationEnCours = true;
+      premierBlocApres(rpcServeur, Math.floor(veilleJ.fin / 1000) + DELAI_REVELATION_S)
+        .then((e) => { if (e) { revenu.revelations[veilleJ.id] = { bloc: e.bloc, ts: e.ts, hash: e.hash }; revenuSale = true; } })
+        .catch(() => { /* relu au prochain appel */ }).finally(() => { revelationEnCours = false; });
+    }
+    const tV = tickets(jours[veilleJ.id] || {}, SEUIL_VOLUME_JOUR_USD);
+    const veille = { id: veilleJ.id, blocE: rev ? rev.bloc : null, hashE: rev ? rev.hash : null, etat: rev ? 'REVELEE' : 'EN_ATTENTE', tickets: tV,
+      gagnant: rev && tV.length ? (tirer({ hashE: rev.hash, saison: veilleJ.id, liste: tV }) || [null])[0] : null };
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD,
+    res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: w.usd >= SEUIL_VOLUME_JOUR_USD })) },
       semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)) },
       mois: { id: mo.id, debut: iso(mo.debut), fin: iso(mo.fin), entrees: eM, n: eM.length, racine: racine(eM.map((e) => e.adresse)) },
       regle: 'A day counts when your verified trading volume that day (UTC) reaches $' + SEUIL_VOLUME_JOUR_USD + ': trades of the UNIT block on its '
         + 'TokenizedBlock pool, or tokenized-stock trades made in the app. Each such day is one ticket for that day\'s draw and one entry for the week\'s '
-        + 'and the month\'s draws. Trading more in a day adds nothing. Practice season: no prize yet. Winners will come from the hash of a block fixed '
-        + 'when each draw closes; anyone can replay it.' }));
+        + 'and the month\'s draws. Trading more in a day adds nothing. Practice season: no prize yet. Each day is settled by block E, the first Base '
+        + 'block stamped at least ' + DELAI_REVELATION_S + ' s after the day closes: its hash picks the day\'s winner and reveals the Face of the Day '
+        + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' }));
     return;
   }
 
