@@ -1,0 +1,72 @@
+/* test-missions-attestation-20261017.mjs - LE VERIFIER SIGNE SEULEMENT CE QU IL A PROUVE, ET CE QU IL SIGNE SE RECUPERE EN SA CLE.
+ * AFFIRME (EXECUTE, fausse chaine) : (1) parcours complet -> signature dont l adresse recuperee = verifier() du contrat, held = minimum exact,
+ *   deadline = windowEnd + 50 min ; (2) refus : contrat absent (PAS_OUVERT), cle qui n est pas le verifier, createur qui joue sa mission,
+ *   tache d un autre wallet, detention sous le minimum (avec les chiffres), solde qui bouge sans log (NON_MESURE), paire exigee et non tenue.
+ * Cle de TEST publique 0xA11CE (celle des tests forge). NE PROUVE PAS : une vraie chaine (archive) ni un claim on-chain de cette signature
+ *   (la parite digest JS == contrat et l acceptation par claim() sont prouvees ailleurs : test-verificateur-missions, SigneurSecp256k1.t.sol). */
+import { strict as assert } from 'node:assert';
+import { attester, DELAI_SIGNATURE } from './missions-attestation.js';
+import { SEL } from './missions-lecture.js';
+import { adresseDe, recupererAdresse } from './signeur-secp256k1.js';
+import { donneesClaim, digestClaim, TOPIC_TRANSFER } from './verificateur-missions.js';
+let n = 0;
+const vu = (c, m) => { assert.ok(c, m); n += 1; };
+const CLE = '0x' + (0xA11CEn).toString(16).padStart(64, '0');
+const VERIF = adresseDe(CLE).toLowerCase();
+const CONTRAT = '0x' + 'cc'.repeat(20), BLK = '0x' + 'b2'.repeat(20), AMZ = '0x' + 'a7'.repeat(20), CREA = '0x' + 'c0'.repeat(20), JOUEUR = '0x' + 'b0'.repeat(20), AUTRE = '0x' + 'de'.repeat(20);
+const CIBLE = '0x' + '49'.repeat(20), TOPIC = '0x' + 'ab'.repeat(32), H = '0x' + '77'.repeat(32);
+const m = (v) => BigInt(v).toString(16).padStart(64, '0'), a = (x) => x.slice(2).padStart(64, '0');
+const TETE = 100000, WINDOW = 86400;
+/* chaine : bloc b -> horodatage 1_800_000_000 + 2*b ; le joueur detient 60 BLK, en sort 40 au bloc 80000 et les reprend au bloc 90000 */
+function chaine({ verifier = VERIF, minBlock = 10n ** 19n, minPaired = 0n, from = JOUEUR, sansLog = false, paireTenue = 5n * 10n ** 18n } = {}) {
+  const ts = (b) => 1_800_000_000 + 2 * b;
+  const finale = 60n * 10n ** 18n;
+  const soldeA = (b) => (b >= 80000 && b < 90000 ? finale - 40n * 10n ** 18n : finale) + (sansLog ? 1n : 0n) * (b < 70000 ? 1n : 0n);
+  const logs = [
+    { address: BLK, topics: [TOPIC_TRANSFER, '0x' + a(JOUEUR), '0x' + a(AUTRE)], data: '0x' + m(40n * 10n ** 18n), blockNumber: '0x' + (80000).toString(16), logIndex: '0x0', transactionHash: '0x' + '01'.repeat(32) },
+    { address: BLK, topics: [TOPIC_TRANSFER, '0x' + a(AUTRE), '0x' + a(JOUEUR)], data: '0x' + m(40n * 10n ** 18n), blockNumber: '0x' + (90000).toString(16), logIndex: '0x0', transactionHash: '0x' + '02'.repeat(32) },
+  ];
+  return async (meth, p) => {
+    if (meth === 'eth_blockNumber') return '0x' + TETE.toString(16);
+    if (meth === 'eth_getBlockByNumber') return { timestamp: '0x' + ts(parseInt(p[0], 16)).toString(16) };
+    if (meth === 'eth_getTransactionByHash') return { hash: H, from };
+    if (meth === 'eth_getTransactionReceipt') return { status: '0x1', transactionHash: H, logs: [{ address: CIBLE, topics: [TOPIC] }] };
+    if (meth === 'eth_getLogs') {
+      const f = p[0], de = parseInt(f.fromBlock, 16), au = parseInt(f.toBlock, 16);
+      return logs.filter((l) => { const b = parseInt(l.blockNumber, 16); return b >= de && b <= au && l.address === f.address
+        && (f.topics[1] ? l.topics[1] === f.topics[1] : l.topics[2] === f.topics[2]); });
+    }
+    if (meth === 'eth_call') {
+      const { to, data } = p[0], s = data.slice(2, 10), bloc = p[1] === 'latest' ? TETE : parseInt(p[1], 16);
+      if (to === CONTRAT && s === SEL.tasks) return '0x' + [a(BLK), a(AMZ), a(BLK), a(CREA), m(10n ** 18n), m(10), m(0), m(1), m(1900000000), a(CIBLE), TOPIC.slice(2), 'cd'.repeat(32)].join('');
+      if (to === CONTRAT && s === SEL.holdOf) return '0x' + [m(minBlock), m(minPaired), m(0), m(0), m(WINDOW)].join('');
+      if (to === CONTRAT && s === SEL.verifier) return '0x' + a(verifier);
+      if (s === '70a08231' && to === BLK) return '0x' + m(soldeA(bloc));
+      if (s === '70a08231' && to === AMZ) return '0x' + m(paireTenue);
+    }
+    throw new Error('inattendu ' + meth);
+  };
+}
+const io = (o = {}) => { const r = chaine(o); return { rpcEtat: r, rpcLogs: r, chaineId: 8453, contrat: CONTRAT, cle: CLE, tranche: 5000, ...(o.io || {}) }; };
+const demande = { taskId: 3, completer: JOUEUR, txHash: H };
+/* (1) parcours complet */
+const r = await attester(io(), demande);
+vu(r.ok === true, 'attestation rendue (' + JSON.stringify(r).slice(0, 160) + ')');
+vu(r.held.heldBlock === (20n * 10n ** 18n).toString(), 'held = le MINIMUM exact de la fenetre (20, pas 60)');
+vu(r.held.deadline === r.held.windowEnd + DELAI_SIGNATURE && r.held.windowEnd === 1_800_000_000 + 2 * (TETE - 2), 'windowEnd = bloc de fin, deadline = +50 min');
+const d = donneesClaim({ chainId: 8453, contrat: CONTRAT, taskId: 3, completer: JOUEUR, txHash: H, heldBlock: r.held.heldBlock, heldPaired: '0', window: WINDOW, windowEnd: r.held.windowEnd, deadline: r.held.deadline });
+vu(recupererAdresse(digestClaim(d), r.signature).toLowerCase() === VERIF, 'la signature se recupere en verifier() du contrat');
+/* (2) refus */
+vu((await attester({ ...io(), contrat: null }, demande)).etat === 'PAS_OUVERT', 'contrat non deploye -> PAS_OUVERT');
+vu((await attester(io({ verifier: '0x' + '99'.repeat(20) }), demande)).etat === 'PAS_OUVERT', 'cle du serveur != verifier du contrat -> rien signe');
+/* tx ENVOYEE par le createur : la preuve de tache passerait, seule la garde createur refuse (sinon ce test refusait par accident) */
+const crea = await attester(io({ from: CREA }), { ...demande, completer: CREA });
+vu(crea.etat === 'REFUSE' && /creator/.test(crea.pourquoi), 'le createur ne joue pas sa mission (' + crea.pourquoi + ')');
+vu((await attester(io({ from: AUTRE }), demande)).etat === 'REFUSE', 'tx envoyee par un autre wallet -> REFUSE');
+const sous = await attester(io({ minBlock: 30n * 10n ** 18n }), demande);
+vu(sous.etat === 'REFUSE' && /held at least 20000000000000000000/.test(sous.pourquoi), 'detention sous le minimum -> REFUSE avec les chiffres');
+vu((await attester(io({ sansLog: true }), demande)).etat === 'NON_MESURE', 'solde qui bouge sans log -> NON_MESURE, rien signe');
+const paire = await attester(io({ minPaired: 6n * 10n ** 18n }), demande);
+vu(paire.etat === 'REFUSE' && /paired asset/.test(paire.pourquoi), 'paire exigee (6) et tenue 5 -> REFUSE');
+vu((await attester({ ...io(), cle: null }, demande)).etat === 'PAS_OUVERT', 'pas de cle sur le serveur -> PAS_OUVERT');
+console.log('ok missions-attestation - ' + n + ' assertions ; NE PROUVE PAS une vraie chaine');
