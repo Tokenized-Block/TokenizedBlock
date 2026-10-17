@@ -3535,14 +3535,17 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="jourTirages">3 · The draws</button>
       </div>
     </div>
+    <!-- 2026-10-17 soir (Phil, capture : « latest block born mauvais — c est la simulation du block cree au hasard qui definit le block
+         gagnant ») : LA FACE GAGNANTE DU JOUR, EN DIRECT. Le dernier bloc Base tire, a chaque instant, la face qu il donnerait si la journee
+         fermait maintenant ; seul le bloc E (premier bloc >= minuit UTC + 120 s) compte. Ton ticket est compare a elle en direct. -->
     <div class="carte" id="dernierCarte">
-      <span class="jeuKick">Live · latest block born</span>
+      <span class="jeuKick">Live · today's winning face</span>
       <div class="jourTicket">
-        <div class="jourFace" id="dernierFace" role="img" aria-label="Face of the latest block born"></div>
+        <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
         <div style="min-width:0">
-          <p class="titre" id="dernierNom" style="margin:0">Reading…</p>
+          <p class="titre" id="dernierNom" style="margin:0">Reading the chain…</p>
           <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
-          <div class="jourPaires" id="dernierPaires"></div>
+          <p class="note" id="dernierMoi" style="margin:2px 0 0"></p>
         </div>
       </div>
     </div>
@@ -4394,31 +4397,24 @@ function symPaire(adr) {
 }
 /* « nos hooks » : estNotreHook, IMPORTE de tokenomics.js (la source canonique). ⛔ 2026-10-17 soir : une copie locale du MEME nom avait ete
  *   ajoutee ici — SyntaxError « already been declared » qui tuait TOUT le module de l app (attrape au navigateur avant le deploiement). */
+/* ══ LA FACE GAGNANTE DU JOUR, EN DIRECT (Phil 2026-10-17 soir, remplace « latest block born ») — le DERNIER bloc Base (servi par /api/tirage,
+ *   relu au plus toutes les 6 s) tire la face qu il donnerait si la journee fermait maintenant : un APERCU, seul le bloc E compte. Ton ticket
+ *   du jour lui est compare en direct. Rien n est invente : bloc non lu -> dit. */
 async function peindreDernierBlock() {
-  const nom = $('#dernierNom'), quand = $('#dernierQuand'), paires = $('#dernierPaires'), face = $('#dernierFace');
+  const nom = $('#dernierNom'), quand = $('#dernierQuand'), moiP = $('#dernierMoi'), face = $('#dernierFace');
   if (!nom) return;
-  let j = null;
-  try { j = await fetch('/api/blocks-routeur', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
-  const liste = j && j.ok && Array.isArray(j.blocks) ? j.blocks.filter((b) => b && /^0x[0-9a-f]{40}$/.test(String(b.jeton).toLowerCase()) && Number.isInteger(b.bloc)) : [];
-  if (!liste.length) { nom.textContent = 'The latest birth could not be read just now.'; return; }
-  const d = liste.reduce((x, y) => (y.bloc > x.bloc ? y : x));
-  const adr = String(d.jeton).toLowerCase();
-  const h = habitants.find((x) => String(x.adr).toLowerCase() === adr);
-  let sym = (h && h.sym) || (adr === UNIT_APP ? 'UNIT' : '');
-  /* symbole inconnu de la page : LU sur la chaine (symbol()), jamais devine ; illisible -> l adresse courte */
-  if (!sym) { try { sym = symboleDepuisReponse(await rpc('eth_call', [{ to: adr, data: '0x95d89b41' }, 'latest'])) || ''; } catch (_) { sym = ''; } }
-  nom.textContent = (sym || adr.slice(0, 6) + '…' + adr.slice(-4));
-  try { face.innerHTML = dessin(adr, sym) || ''; } catch (_) { face.innerHTML = ''; }
-  const min = Number.isInteger(j.tete) ? Math.round(((j.tete - d.bloc) * 2) / 60) : null;
-  quand.textContent = 'Born in block ' + d.bloc.toLocaleString('en-US') + (min !== null ? ' · about ' + (min < 120 ? min + ' min' : Math.round(min / 60) + ' h') + ' ago' : '');
-  let c = null;
-  try { c = await fetch('/api/cle/' + adr, { cache: 'no-store' }).then((r) => r.json()); } catch (_) { c = null; }
-  const cles = c && c.ok && Array.isArray(c.cles) ? c.cles : null;
-  if (!cles) { paires.textContent = 'Its pairs could not be read just now.'; return; }
-  paires.innerHTML = cles.map((k) => {
-    const autre = String(k.currency0).toLowerCase() === adr ? k.currency1 : k.currency0, tb = estNotreHook(k.hooks);
-    return '<span data-tb="' + (tb ? 1 : 0) + '" title="' + enTexte(tb ? 'On TokenizedBlock' : 'On another hook') + '">' + enTexte(sym || 'block') + ' / ' + enTexte(symPaire(autre)) + (tb ? '' : ' · other hook') + '</span>';
-  }).join('') || '<span>no pool read yet</span>';
+  let t = null;
+  try { t = await fetch('/api/tirage', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { t = null; }
+  if (!t || !t.apercu || !t.jour) { nom.textContent = 'The latest Base block could not be read just now.'; return; }
+  const fr = faceRevelee(t.apercu.hash);
+  try { face.innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) { face.innerHTML = ''; }
+  const reste = Math.max(0, new Date(t.jour.fin).getTime() + 120000 - Date.now());
+  nom.textContent = 'Base block ' + Number(t.apercu.bloc).toLocaleString('en-US') + ' would draw this face';
+  quand.textContent = 'A preview: the real winning face comes from the first block 2 minutes after midnight UTC — in ' + Math.floor(reste / 3600000) + 'h ' + Math.floor((reste % 3600000) / 60000) + 'm.';
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { moiP.textContent = 'Connect a wallet to see how close your ticket is.'; return; }
+  const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), t.jour.id)), fr);
+  moiP.textContent = s ? 'Your ticket face matches it on ' + s.score + '/5 right now' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + '.' : '';
 }
 $('#jourUnit').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
 $('#jourActions').addEventListener('click', () => allerA('trade'));
@@ -4426,7 +4422,7 @@ $('#jourMissions').addEventListener('click', () => { const e = $('#missionsCarte
 $('#jourTirages').addEventListener('click', () => { const e = $('#tirCarte'); if (e) e.scrollIntoView({ behavior: 'smooth', block: 'start' }); });
 setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) peindreTirage(); }, 60000); }, 0);
 /* le dernier block ne : relu toutes les 60 s, seulement onglet Missions ouvert et page visible (pas de lecture pour personne) */
-setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDernierBlock(); }, 60000);
+setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDernierBlock(); }, 8000);
 
 document.querySelector('.navIn').addEventListener('click', (e) => {
   const b = e.target.closest('.navB');

@@ -998,7 +998,8 @@ async function rpcHistoire(methode, params) {
 let archiveMissions = null;
 const attestationsEnCours = new Set();
 let sondeDetentionA = 0;
-let revelationEnCours = false; /* Face of the Day : une seule resolution du bloc E a la fois */
+let revelationEnCours = false;
+const apercuFace = { bloc: null, hash: null, lu: 0, enCours: false }; /* Face of the Day : une seule resolution du bloc E a la fois */
 const sondeDetentionJour = { jour: '', n: 0 };
 const SONDE_DETENTION_MAX_JOUR = Number.isSafeInteger(Number(process.env.SONDE_DETENTION_MAX_JOUR)) && Number(process.env.SONDE_DETENTION_MAX_JOUR) >= 0
   ? Number(process.env.SONDE_DETENTION_MAX_JOUR) : 6;
@@ -5801,11 +5802,20 @@ function traiterRequete(req, res) {
         .then((e) => { if (e) { revenu.revelations[veilleJ.id] = { bloc: e.bloc, ts: e.ts, hash: e.hash }; revenuSale = true; } })
         .catch(() => { /* relu au prochain appel */ }).finally(() => { revelationEnCours = false; });
     }
+    /* APERCU EN DIRECT (Phil : « la simulation du block cree au hasard qui definit le block gagnant ») : la face que tirerait le DERNIER bloc
+     *   Base si la journee fermait maintenant. Un apercu : seul le bloc E compte. Tete lue au plus toutes les 6 s, en fond. */
+    if (Date.now() - apercuFace.lu > 6000 && !apercuFace.enCours) {
+      apercuFace.enCours = true;
+      rpcServeur('eth_getBlockByNumber', ['latest', false])
+        .then((b) => { if (b && /^0x[0-9a-f]{64}$/i.test(String(b.hash))) Object.assign(apercuFace, { bloc: parseInt(b.number, 16), hash: String(b.hash).toLowerCase(), lu: Date.now() }); })
+        .catch(() => {}).finally(() => { apercuFace.enCours = false; });
+    }
     const tV = tickets(jours[veilleJ.id] || {}, SEUIL_VOLUME_JOUR_USD);
     const veille = { id: veilleJ.id, blocE: rev ? rev.bloc : null, hashE: rev ? rev.hash : null, etat: rev ? 'REVELEE' : 'EN_ATTENTE', tickets: tV,
       gagnant: rev && tV.length ? (tirer({ hashE: rev.hash, saison: veilleJ.id, liste: tV }) || [null])[0] : null };
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille,
+      apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: w.usd >= SEUIL_VOLUME_JOUR_USD })) },
       semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)) },
