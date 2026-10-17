@@ -3975,6 +3975,7 @@ import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PR
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
+import { lireRefVitrine, attribuer as attribuerVitrine, refActive as refVitrineActive } from './ref-vitrine.js';
 import { etatCautionCreateur, sortieCautionPour } from './caution-createur.js';
 /* ⛔⛔ `planEchangeMultiSauts` EST UN SECOND RAIL, PAS UN REMPLACEMENT. `planEchange` garde ses
  *   0,5 % sur le chemin historique ; le rail multi-sauts prend le bareme degressif 0,2 % / 0,1 %.
@@ -9621,10 +9622,27 @@ function etape(nom, uneFois = false) {
 /** 2026-10-16 — le hash d une transaction CONFIRMEE qui peut porter un frais, pour le compteur de revenu (/api/paye).
  *  ⛔ On n envoie QUE le hash et la ligne : le serveur relit tx + recu et ne compte que ce qui est arrive au wallet de frais.
  *  202 = recu pas encore lisible sur son noeud : renvoye 3 fois au plus, 8 s d ecart. Rien n est jamais montre a l ecran. */
+/* 2026-10-17 — VITRINE (etape 2) : arrive par ?block=B&ref=B, le premier contact est garde 30 jours (ref-vitrine.js) et joint aux
+ *   frais suivants (&r=). Le serveur relit tout : la ref ne fait que DESIGNER un block ; montant, payeur et createur sont lus sur la chaine. */
+const CLE_VITRINE = 'tb.vitrine';
+function vitrineActive() {
+  let a = null;
+  try { a = JSON.parse(localStorage.getItem(CLE_VITRINE) || 'null'); } catch (_) { a = null; }
+  return refVitrineActive(a, Date.now());
+}
+try {
+  const r = lireRefVitrine(location.search, { chain: CHAINE });
+  if (r) {
+    let a = null; try { a = JSON.parse(localStorage.getItem(CLE_VITRINE) || 'null'); } catch (_) { a = null; }
+    const b = attribuerVitrine(a, r, Date.now());
+    if (b !== a) localStorage.setItem(CLE_VITRINE, JSON.stringify(b));
+  }
+} catch (_) { /* navigation privee : pas de vitrine retenue */ }
 function signalerPaye(hash, ligne, essai = 0) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash || ''))) return;
   try {
-    fetch('/api/paye?h=' + encodeURIComponent(hash) + '&l=' + encodeURIComponent(ligne || 'autre') + (INTERNE ? '&i=1' : ''), { method: 'POST', keepalive: true })
+    const r = vitrineActive();
+    fetch('/api/paye?h=' + encodeURIComponent(hash) + '&l=' + encodeURIComponent(ligne || 'autre') + (INTERNE ? '&i=1' : '') + (r ? '&r=' + r : ''), { method: 'POST', keepalive: true })
       .then((r) => { if ((r.status === 202 || r.status === 429) && essai < 3) setTimeout(() => signalerPaye(hash, ligne, essai + 1), 8000); })
       .catch(() => {});
   } catch (_) {}

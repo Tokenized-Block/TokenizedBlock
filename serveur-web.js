@@ -93,6 +93,7 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
+import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -116,7 +117,7 @@ import { scanFrais, verifierArrivee, resumerFrais } from './veille-frais.js';
 import { NOS_BLOCKS_GENESE, GRAINE_NOS_BLOCKS, graineNosBlocksAdmise, verifierGraineNos } from './origine.js';
 import { FEE_WALLET, USDC_BASE, CREATE_ROUTER } from './frais-creation.js';
 import { etatLive, htmlLive } from './live.js';
-import { TBLOCK as TBLOCK_JETON, OPTIONS_LANCEMENT } from './tokenomics.js';
+import { TBLOCK as TBLOCK_JETON, OPTIONS_LANCEMENT, HOOK_7030 } from './tokenomics.js';
 import { verifierAchatSkin, validerRecette, SKIN_PRIX_USDC } from './skins.js';
 import { faceDuBlock } from './face.js';
 import { logoSvg, paramsLogoDepuisApparence } from './logo.js';
@@ -3809,11 +3810,43 @@ const revenu = (() => {
   try {
     if (FICHIER_REVENU && existsSync(FICHIER_REVENU)) {
       const x = JSON.parse(readFileSync(FICHIER_REVENU, 'utf8'));
-      if (x && x.vus && x.parJour) return { externe: {}, interne: {}, tentatives: {}, ...x };
+      if (x && x.vus && x.parJour) return { externe: {}, interne: {}, tentatives: {}, registre: {}, ...x };
     }
   } catch (e) { console.log('[revenu] fichier illisible, on repart de zero :', e.message); }
-  return { depuis: new Date().toISOString(), externe: {}, interne: {}, parJour: {}, tentatives: {}, vus: {} };
+  return { depuis: new Date().toISOString(), externe: {}, interne: {}, parJour: {}, tentatives: {}, vus: {}, registre: {} };
 })();
+/* 2026-10-17 — le createur d un block, LU sur la chaine : les pools de nos hooks ou il est une des deux devises (balayage fraisScan),
+ *   `createurs(bytes32)` (hook 7030) puis `createurDe(bytes32)` (hooks V2/V3).
+ * ⛔ MESURE 2026-10-17 sur UNIT (pool 0x79a40c32…, hook 7030) : createurs rend 0x31e0…, createurDe REVERT. Ne lire que createurDe
+ *   (comme /api/parts-createur) sauterait en silence toutes les pools 7030. Rien de lu -> null (la ligne dit CREATEUR_NON_LU). */
+const SEL_CREATEURS = selecteurSrv('createurs(bytes32)'), SEL_CREATEUR_DE = selecteurSrv('createurDe(bytes32)');
+/* ⛔ 2026-10-17 (avant deploy) : le hook 7030 n est PAS dans HOOKS_FRAIS -> le balayage fraisScan ne voit AUCUNE pool 7030, donc aucune
+ *   naissance recente. Les pools viennent d abord des CLES lues (clesCache / resoudreClePool, comme /api/cle : UNIT y rend sa pool 7030
+ *   0x79a40c32…), le balayage n est qu un complement. */
+async function createurDuBlock(b) {
+  let cles = (clesCache.get(b) || {}).cles;
+  if (!Array.isArray(cles) || !cles.length) {
+    try { const r = await resoudreClePool(b); cles = r && r.ok === true && Array.isArray(r.cles) ? r.cles : []; } catch (_) { cles = []; }
+  }
+  /* ⛔ NOS HOOKS SEULEMENT : n importe qui peut ouvrir une pool sur notre block avec SON hook ; un hook qui rend son propre
+   *   `createurs()` se ferait devoir 30 %. Seuls HOOKS_FRAIS (V1..V8) et HOOK_7030 (lus dans le depot) sont interroges. */
+  const nos = new Set([...HOOKS_FRAIS.map((x) => x.adr.toLowerCase()), String(HOOK_7030 || '').toLowerCase()].filter((x) => /^0x[0-9a-f]{40}$/.test(x)));
+  const pools = [
+    ...cles.filter((c) => c && /^0x[0-9a-f]{64}$/i.test(String(c.poolId)) && nos.has(String(c.hooks).toLowerCase()))
+      .map((c) => ({ hook: String(c.hooks).toLowerCase(), id: String(c.poolId).toLowerCase() })),
+    ...fraisScan.pools.filter((p) => nos.has(String(p.hook).toLowerCase()) && (String(p.c0).toLowerCase() === b || String(p.c1).toLowerCase() === b)),
+  ];
+  for (const p of pools) {
+    for (const sel of [SEL_CREATEURS, SEL_CREATEUR_DE]) {
+      try {
+        const x = String(await rpcActivite('eth_call', [{ to: p.hook, data: '0x' + String(sel).replace(/^0x/, '') + String(p.id).slice(2) }, 'latest']));
+        const a = ('0x' + x.slice(26, 66)).toLowerCase();
+        if (/^0x[0-9a-f]{40}$/.test(a) && !/^0x0{40}$/.test(a)) return a;
+      } catch (_) { /* getter absent sur ce hook : on essaie l autre */ }
+    }
+  }
+  return null;
+}
 let revenuSale = !!FICHIER_REVENU && !existsSync(FICHIER_REVENU);
 const payesEnCours = new Set();
 setInterval(() => {
@@ -3837,7 +3870,7 @@ const SERVIS = [
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',
-  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'face-hasard.js', 'lancement-guide.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js', 'choix-de-pool.js', 'pool-sans-hook.js', 'index-routeur.js', 'jetons-nes-launchpads.js', 'multiplicateur-action.js', 'geste-envoi.js', 'frais-du-geste.js',
+  'visage.js', 'logo.js', 'faits.js', 'envoi.js', 'cerveau.js', 'metiers.js', 'frais-creation.js', 'prix-eth.js', 'messages.js', 'paires.js', 'face.js', 'face-hasard.js', 'lancement-guide.js', 'ref-vitrine.js', 'lancer-pool.js', 'nourriture.js', 'apercu.js', 'mes-blocks.js', 'tokenized-bank.js', 'bridge.js', 'x402-pay.js', 'fil-live.js', 'achats.js', 'tokenomics.js', 'lancer-pool-v2.js', 'memoire-chaine.js', 'resume-tx.js', 'origine.js', 'echange.js', 'journal-cerveau.js', 'cerveau-echange.js', 'tweet-grave.js', 'liquidite.js', 'regles-cerveau.js', 'fragments-cerveau.js', 'parole-cerveaux.js', 'export-cerveau.js', 'brain-tasks.js', 'stades.js', 'pools-du-jeton.js', 'messagerie-blocks.js', 'relais-cerveaux.js', 'pnl-swaps.js', 'openlaunch.js', 'openlaunch-launch.js', 'map3d.js', 'trending.js', 'locker.js', 'tirage.js', 'cube3d.js', 'groupe-wallet.js', 'causes-echec.js', 'verif-paiement.js', 'source-visite.js', 'choix-de-pool.js', 'pool-sans-hook.js', 'index-routeur.js', 'jetons-nes-launchpads.js', 'multiplicateur-action.js', 'geste-envoi.js', 'frais-du-geste.js',
   /* ⛔ AJOUTE LE 2026-09-26 — et c est `test-imports-servis` qui l a EXIGE, pas moi : un module
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
@@ -5604,12 +5637,44 @@ function traiterRequete(req, res) {
       revenu.externe = etat.externe; revenu.interne = etat.interne;
       revenu.parJour[jour] = compterRevenu(revenu.parJour[jour] || {}, { ligne, verif });
       revenu.vus[h] = { jour, ligne, externe: verif.externe };
+      /* 2026-10-17 — ETAPE 2, la vitrine : r=<block> (le client ne l envoie que si la page etait ce block, ref-vitrine.js). Une ligne au
+       *   registre PUBLIC, seulement pour un frais EXTERNE verifie ; le createur est LU sur la chaine, jamais pris dans la requete. */
+      const r = String(q.get('r') || '').toLowerCase();
+      if (verif.externe && /^0x[0-9a-f]{40}$/.test(r) && !/^0x0{40}$/.test(r)) {
+        const createur = await createurDuBlock(r);
+        revenu.registre[h] = ligneRegistre({ hash: h, jour, ligne, bloc: r, verif, createur });
+      }
       revenuSale = true;
       console.log('[revenu]', jour, ligne, verif.externe ? 'EXTERNE' : 'interne', JSON.stringify(v.recus));
       repondre(200, { ok: true, externe: verif.externe });
     } catch (e) {
       repondre(202, { ok: false, etat: 'NON_LU', pourquoi: 'the chain could not be read just now' });
     } finally { payesEnCours.delete(h); } })();
+    return;
+  }
+
+  /* ══ REGISTRE DES CREATEURS (2026-10-17, etape 2) — PUBLIC et VERIFIABLE : chaque ligne porte le hash, le payeur, le block, le
+   *   createur lu sur la chaine, les frais recus et la part due (30 % de NOTRE frais, devise par devise, unites brutes).
+   * ⛔ Une part DUE n est PAS un paiement : le serveur ne signe rien ; elle est versee par un wallet humain, et ca se dit ici.
+   * Les lignes CREATEUR_NON_LU sont relues (3 par appel au plus) : le balayage des pools peut ne pas avoir encore vu le block. */
+  if (chemin === '/api/registre-createurs') {
+    (async () => {
+      const lignes = Object.values(revenu.registre || {});
+      for (const l of lignes.filter((x) => x.etat === 'CREATEUR_NON_LU').slice(0, 3)) {
+        const c = await createurDuBlock(l.bloc);
+        if (c) {
+          const v = { payeur: l.payeur, recus: Object.entries(l.frais).map(([devise, montant]) => ({ devise, montant })) };
+          revenu.registre[l.hash] = ligneRegistre({ hash: l.hash, jour: l.jour, ligne: l.ligne, bloc: l.bloc, verif: v, createur: c });
+          revenuSale = true;
+        }
+      }
+      const toutes = Object.values(revenu.registre || {}).sort((a, b) => String(b.jour).localeCompare(String(a.jour)));
+      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+      res.end(JSON.stringify({ ok: true, depuis: revenu.depuis, lignes: toutes, dusParCreateur: totauxParCreateur(toutes),
+        regle: 'A buyer who arrives through a block page link (?block=B&ref=B) and pays one of our fees: the creator of B, read on chain, '
+          + 'is owed 30% of the fee we actually received, per token (we keep floor(70%)). Same wallet as the creator: nothing. '
+          + 'Owed is not paid: payouts are sent by a human wallet, never by this server. Amounts are raw token units.' }));
+    })().catch((e) => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) })); });
     return;
   }
 
