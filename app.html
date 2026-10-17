@@ -4383,13 +4383,8 @@ async function peindreTirage() {
   sais.textContent = 'Today · ' + n + ' ticket' + (n === 1 ? '' : 's') + ' · closes in ' + h + 'h ' + mn + 'm · this week ' + t.semaine.n + ' entr' + (t.semaine.n === 1 ? 'y' : 'ies')
     + ' · this month ' + t.mois.n + (t.mode === 'SHADOW' ? ' · practice: no prize yet' : '');
   let c = null; try { c = compte; } catch (_) { c = null; }
-  if (!c) {
-    moi.textContent = 'Connect a wallet to see your progress.'; barre.style.width = '0%';
-    /* Phil 2026-10-17 23:30 : « fais un vrai roll » sans wallet -> un ticket INVITE (identite de ce navigateur), pour jouer en practice */
-    try { $('#jourFace').innerHTML = dessin(await adresseTicket(identiteJeu(), t.jour.id), 'T') || ''; $('#jourFace').setAttribute('data-gagne', '0'); } catch (_) {}
-    const tx = $('#jourTicketTxt'); if (tx) tx.textContent = 'Guest ticket (practice): roll with it now. Connect a wallet to make it count in the draws.';
-    return;
-  }
+  /* Phil 2026-10-18 00:40 : « retire le guest » — sans wallet, pas de ticket (le Roll tire quand meme la face du bloc, sans score) */
+  if (!c) { moi.textContent = 'Connect a wallet to see your progress.'; barre.style.width = '0%'; return; }
   const moiBas = String(c).toLowerCase();
   const w = (t.jour.wallets || []).find((x) => String(x.adresse).toLowerCase() === moiBas);
   const fait = w ? Number(w.volumeUsd) : 0, seuil = Number(t.seuilVolumeUsd) || 10;
@@ -4404,20 +4399,6 @@ async function peindreTirage() {
 /* ══ YOUR DAY (2026-10-17 soir, Phil) — le ticket du jour comme une FACE de block, et les compteurs du wallet. La face vient d une adresse
  *   DERIVEE de (wallet, jour) par SHA-256 : publique, rejouable, la meme partout ; grisee tant que le ticket n est pas gagne (volume VERIFIE
  *   par le serveur). Rien n est stocke ni signe ici. */
-/* l identite de jeu : le wallet connecte, sinon un INVITE propre a ce navigateur (aleatoire, garde en localStorage ; sans stockage : par
- *   session). Un ticket invite joue le Roll en practice ; seul un wallet entre dans les tirages (le serveur ne connait que des wallets). */
-const CLE_INVITE = 'tblock.game.invite';
-let inviteSession = null;
-function identiteJeu() {
-  let c = null; try { c = compte; } catch (_) { c = null; }
-  if (c) return String(c).toLowerCase();
-  let g = null; try { g = localStorage.getItem(CLE_INVITE); } catch (_) { g = null; }
-  if (!g) {
-    if (!inviteSession) { const b = new Uint8Array(16); crypto.getRandomValues(b); inviteSession = 'guest:' + [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); }
-    g = inviteSession; try { localStorage.setItem(CLE_INVITE, g); } catch (_) {}
-  }
-  return g;
-}
 async function adresseTicket(moiBas, jourId) {
   const h = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(moiBas + '|' + jourId)));
   return '0x' + [...h.slice(0, 20)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -4482,8 +4463,9 @@ async function peindreDernierBlock() {
   nom.textContent = 'Base block ' + Number(t.apercu.bloc).toLocaleString('en-US');
   quand.textContent = 'Every block draws a face. Roll: the block after next decides, live.';
   let c = null; try { c = compte; } catch (_) { c = null; }
-  const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(identiteJeu(), t.jour.id)), fr);
-  moiP.textContent = (s ? 'Right now: ' + s.score + '/5 traits in common.' : '') + (c ? '' : ' Guest ticket — practice.');
+  if (!c) { moiP.textContent = 'Connect a wallet to score your ticket against it.'; return; }
+  const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), t.jour.id)), fr);
+  moiP.textContent = s ? 'Right now: ' + s.score + '/5 traits in common.' : '';
 }
 /* ══ ROLL (Phil 19:55 : « le winner gagne face au random en live ») — practice : aucun paiement ; le bloc N+2 (N = tete au clic) decide ;
  *   sa face est lue sur la chaine, comparee a ton ticket, score affiche. Le roll paye (0,50 USDC, BlockRolls) se branchera ICI, meme
@@ -4492,8 +4474,7 @@ let rollEnCours = false;
 async function roll() {
   const b = $('#jourRoll'), moiP = $('#dernierMoi'), nom = $('#dernierNom'), face = $('#dernierFace');
   let c = null; try { c = compte; } catch (_) { c = null; }
-  /* Phil 2026-10-17 23:30 : « le roll redirige au wallet, fais un vrai roll » -> sans wallet on roule avec le ticket INVITE (practice) */
-  const qui = identiteJeu();
+  /* Phil 23:30 « fais un vrai roll » puis 00:40 « retire le guest » : sans wallet le roll tire la face du bloc N+2, sans score */
   if (rollEnCours) return;
   rollEnCours = true; b.disabled = true;
   try {
@@ -4505,11 +4486,11 @@ async function roll() {
     const fr = faceRevelee(String(bloc.hash).toLowerCase());
     try { face.innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) {}
     const jourId = jourDeApp(Date.now());
-    const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(qui, jourId)), fr);
     nom.textContent = 'Block ' + cible.toLocaleString('en-US') + ' drew this face';
-    moiP.textContent = s ? (s.score >= 3 ? '🎯 ' : '') + 'You matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + (c ? ' — practice roll, no prize yet.' : ' — guest ticket, practice. Connect a wallet to play for real.') : 'No score.';
-    rollDerniers.unshift({ bloc: cible, score: s ? s.score : null }); rollDerniers.length = Math.min(rollDerniers.length, 5);
-    $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((r) => r.score + '/5').join(' · ');
+    const s = c ? scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourId)), fr) : null;
+    moiP.textContent = !c ? 'Connect a wallet: your ticket scores against the next roll.'
+      : s ? (s.score >= 3 ? '🎯 ' : '') + 'You matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + ' — practice roll, no prize yet.' : 'No score.';
+    if (s) { rollDerniers.unshift({ bloc: cible, score: s.score }); rollDerniers.length = Math.min(rollDerniers.length, 5); $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((r) => r.score + '/5').join(' · '); }
     await new Promise((r) => setTimeout(r, 12000));
   } finally { rollEnCours = false; b.disabled = false; }
 }
