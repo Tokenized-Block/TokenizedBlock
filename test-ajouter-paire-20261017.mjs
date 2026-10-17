@@ -17,7 +17,7 @@ let n = 0, ko = 0;
 const ok = (c, m) => { n++; if (c) console.log('ok  ' + m); else { ko++; console.log('KO  ' + m); } };
 let AP;
 try { AP = await import('./ajouter-paire.js'); } catch (e) { ok(false, 'ajouter-paire.js loads (' + e.message.slice(0, 100) + ')'); console.log('KO ' + ko + '/' + n); process.exit(1); }
-const { planAjouterPaire, prixDeLaNouvellePaire, blocsPourDevise, AJOUTER_PAIRE_ACTIF, ETATS_AJOUT } = AP;
+const { planAjouterPaire, prixDeLaNouvellePaire, blocsPourDevise, AJOUTER_PAIRE_ACTIF, ETATS_AJOUT, DEVISES_AJOUTABLES } = AP;
 
 const ETH = '0x0000000000000000000000000000000000000000';
 const COMPTE = '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', AUTRE = '0x1111111111111111111111111111111111111111';
@@ -177,6 +177,22 @@ const sansFeed = ACTIONS_COINBASE.find((a) => plancher7030(a.adr) !== null && !F
   const { r } = await plan({ payee: true, inscrit: COMPTE, prixInscrit: X, createur: COMPTE });
   ok(r.etat === 'APPROBATIONS' && r.sqrtVise === X && r.prix.repriseInscription === true, 'resume: initialize at the price ALREADY registered on the hook (' + X + '), not a recomputed one');
   ok(!r.appels.some((a) => String(a.to).toLowerCase() === H) && r.appels.every((a) => BigInt(a.value || '0x0') === 0n) && r.cout.fraisNaissanceWei === 0n && r.cout.caution.montant === 0n, 'resume: no second fee, no second minimum (' + r.appels.length + ' calls)');
+}
+
+/* ── l ecran : un bouton, CACHE tant que le drapeau est eteint, pour le createur seulement ── */
+{
+  const { readFileSync } = await import('node:fs');
+  const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  const serveur = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
+  ok(/<div id="pAjouterPaire" hidden>/.test(app) && /id="pAjouterPaireBouton"[^>]*>Add a pair</.test(app), 'app.html: an "Add a pair" button in the creator card, hidden by default');
+  ok(/import \{ planAjouterPaire, AJOUTER_PAIRE_ACTIF, DEVISES_AJOUTABLES \} from '\.\/ajouter-paire\.js';/.test(app) && /'ajouter-paire\.js'/.test(serveur), 'the module is imported by app.html AND served (else the page dies on import)');
+  const f = app.slice(app.indexOf('function peindreAjouterPaire('), app.indexOf('let cautionProfilSeq = 0;'));
+  const garde = f.indexOf('if (AJOUTER_PAIRE_ACTIF !== true'), montre = f.indexOf('zone.hidden = false');
+  ok(garde > 0 && montre > garde && f.indexOf('zone.hidden = true') < garde, 'peindreAjouterPaire hides first, returns on the OFF flag, and only then may show the button');
+  const c = app.slice(app.indexOf('async function peindreCautionProfil('));
+  ok(c.indexOf('if (!moi) return;') > 0 && c.indexOf('peindreAjouterPaire(adr);') > c.indexOf('if (!moi) return;'), 'called only for the creator the hook names (after "if (!moi) return")');
+  ok(/envoyerLotAtomique\(\{[^}]*sansRepliV1: true[^}]*calls: plan\.appels/.test(f), 'the batch goes as ONE atomic call set (no fallback to separate sends)');
+  ok(DEVISES_AJOUTABLES.length > 0 && DEVISES_AJOUTABLES.every((d) => plancher7030(d.adresse) !== null && FEEDS_CHAINLINK.has(d.adresse)), 'the screen offers only hook-listed stocks with a Chainlink reference (' + DEVISES_AJOUTABLES.map((d) => d.sym).join(', ') + ')');
 }
 
 console.log(ko ? 'KO ' + ko + '/' + n : 'ok ajouter-paire - ' + n + ' assertions');

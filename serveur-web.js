@@ -4001,6 +4001,8 @@ const SERVIS = [
   'panel.html',
   /* 2026-10-04 : le minimum du createur, lu et rendu depuis la page du block (importe par app.html : absent d ici = 404 = app morte) */
   'caution-createur.js',
+  /* 2026-10-17 : ajouter une seconde paire a un block deja ne (importe par app.html : absent d ici = 404 = app morte) */
+  'ajouter-paire.js',
   /* 2026-10-04 : la grammaire des commandes ecrites au cerveau + les pre-commandes (importe par app.html) */
   'commandes-panel.js',
   'skins.js',

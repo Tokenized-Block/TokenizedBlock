@@ -30,7 +30,7 @@ import { DESCRIPTEUR_7030, plancher7030 } from './hook-7030-descripteur.js';
 import { hookDeLancementPour, minimumCautionCreateur } from './paires.js';
 import { REFUS_FRAIS_HOOK_EN_BLOCK, fraisHookEnBlock, MESSAGE_PAS_ICI } from './pool-sans-hook.js';
 import { FRAIS_OUVERTURE_WEI } from './frais-creation.js';
-import { lireReferenceAction } from './reference-action.js';
+import { lireReferenceAction, FEEDS_CHAINLINK } from './reference-action.js';
 import { prixEthUsd } from './prix-eth.js';
 import { symboleDepuisReponse } from './texte-onchain.js';
 
@@ -41,6 +41,10 @@ export const ETATS_AJOUT = Object.freeze(['PRET', 'APPROBATIONS', 'REFUSE', 'NON
 export const HOOKS_MARCHE_EXISTANT = Object.freeze([HOOK_7030, HOOK_V8]);
 /** Fraicheurs de reference Chainlink acceptees pour fixer un prix PERMANENT (reference-action.js `fraicheurReference`). */
 export const FRAICHEURS_ACCEPTEES = Object.freeze(['A_JOUR', 'DERNIERE_VALEUR']);
+/** Ce que l ecran propose : les devises du hook 7030 qui ont une reference Chainlink (sans elle, le plan REFUSE : prix jamais devine). */
+export const DEVISES_AJOUTABLES = Object.freeze(DESCRIPTEUR_7030.devises
+  .filter((d) => d.sym !== 'ETH' && FEEDS_CHAINLINK.has(d.adresse))
+  .map((d) => Object.freeze({ adresse: d.adresse, sym: d.sym, decimales: d.decimales })));
 
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
 const bas = (a) => String(a || '').toLowerCase();
@@ -149,20 +153,39 @@ export async function planAjouterPaire({ rpc, chaine = 8453, compte, block, devi
   } catch { return nonMesure('the price of this block\'s ETH market could not be read', base); }
   if (!marche) return refus('this block has no ETH market on our hooks to take its price from — the new pool\'s starting price would be a guess, so nothing is offered', base);
 
+  /* les deux prix (ETH/USD, l action) partent maintenant, en parallele des lectures du 3 ; ni l un ni l autre ne jette (etats) */
+  const enVolEth = prixEthUsd({ rpc, stateView: V.stateView });
+  const enVolRef = lireReferenceAction({ rpc, jeton: dv, maintenantSec: Math.floor(maintenant / 1000) });
+
   /* ── 3. droits, soldes, decimales — lus ── */
   let admin, label, decDevise, decBlock, soldeBlock, soldeDevise, soldeEth, symboleBlock = null, delaiRetrait = null, prixInscrit = 0n, inscrit = null, payee = false, cautionne = false;
   try {
-    admin = u(await lire(H, '0x' + selecteur('estAdminDuBlock(address,address)') + pad(bl) + pad(compte))) === 1n;
-    label = u(await lire(H, '0x' + selecteur('porteLeLabel(address)') + pad(bl))) === 1n;
-    decDevise = Number(u(await lire(dv, '0x' + selecteur('decimals()'))));
-    decBlock = Number(u(await lire(bl, '0x' + selecteur('decimals()'))));
-    soldeBlock = u(await lire(bl, '0x' + selecteur('balanceOf(address)') + pad(compte)));
-    soldeDevise = u(await lire(dv, '0x' + selecteur('balanceOf(address)') + pad(compte)));
-    soldeEth = BigInt(await rpc('eth_getBalance', [compte, 'latest']));
-    payee = u(await lire(H, '0x' + selecteur('payee(bytes32)') + id.slice(2))) !== 0n;
-    inscrit = '0x' + String(await lire(H, '0x' + selecteur('inscrit(bytes32)') + id.slice(2))).slice(26, 66);
-    prixInscrit = u(await lire(H, '0x' + selecteur('prixInscrit(bytes32)') + id.slice(2)));
-    cautionne = !/^0x0{40}$/.test('0x' + String(await lire(H, '0x' + selecteur('createurs(bytes32)') + id.slice(2))).slice(26, 66));
+    /* en parallele (11 lectures independantes) : dans l app, en serie, le plan prenait plus d une minute (mesure, fork) ; une seule
+     *   lecture ratee fait toujours tout rater -> NON_MESURE */
+    const r = await Promise.all([
+      lire(H, '0x' + selecteur('estAdminDuBlock(address,address)') + pad(bl) + pad(compte)),
+      lire(H, '0x' + selecteur('porteLeLabel(address)') + pad(bl)),
+      lire(dv, '0x' + selecteur('decimals()')),
+      lire(bl, '0x' + selecteur('decimals()')),
+      lire(bl, '0x' + selecteur('balanceOf(address)') + pad(compte)),
+      lire(dv, '0x' + selecteur('balanceOf(address)') + pad(compte)),
+      rpc('eth_getBalance', [compte, 'latest']),
+      lire(H, '0x' + selecteur('payee(bytes32)') + id.slice(2)),
+      lire(H, '0x' + selecteur('inscrit(bytes32)') + id.slice(2)),
+      lire(H, '0x' + selecteur('prixInscrit(bytes32)') + id.slice(2)),
+      lire(H, '0x' + selecteur('createurs(bytes32)') + id.slice(2)),
+    ]);
+    admin = u(r[0]) === 1n;
+    label = u(r[1]) === 1n;
+    decDevise = Number(u(r[2]));
+    decBlock = Number(u(r[3]));
+    soldeBlock = u(r[4]);
+    soldeDevise = u(r[5]);
+    soldeEth = BigInt(r[6]);
+    payee = u(r[7]) !== 0n;
+    inscrit = '0x' + String(r[8]).slice(26, 66);
+    prixInscrit = u(r[9]);
+    cautionne = !/^0x0{40}$/.test('0x' + String(r[10]).slice(26, 66));
   } catch { return nonMesure('your rights on this block, your balances or the currency could not be read', base); }
   /* le symbole, par LE decodeur de chaine du depot (UTF-8, invisibles retires) — jamais un octet = un caractere */
   try { symboleBlock = symboleDepuisReponse(await lire(bl, '0x' + selecteur('symbol()'))); } catch { symboleBlock = null; }
@@ -174,10 +197,10 @@ export async function planAjouterPaire({ rpc, chaine = 8453, compte, block, devi
   const nomBlock = symboleBlock || 'the block';
 
   /* ── 4. le prix : ETH/USD (mediane de pools) et l action (Chainlink) — lus, sinon rien ── */
-  const ethUsd = await prixEthUsd({ rpc, stateView: V.stateView });
+  const ethUsd = await enVolEth;
   if (ethUsd.etat !== 'LU') return nonMesure('the ETH price could not be agreed (' + (ethUsd.pourquoi || ethUsd.etat) + ')', base);
   const ethUsdE6 = BigInt(Math.round(ethUsd.usd * 1e6));
-  const lu = await lireReferenceAction({ rpc, jeton: dv, maintenantSec: Math.floor(maintenant / 1000) });
+  const lu = await enVolRef;
   const ref = lu && lu.reference;
   if (!ref || ref.etat === 'NON_DISPONIBLE') return refus('no published reference price for ' + desc.sym + ' (Chainlink) — the starting price would be a guess, so nothing is offered', base);
   if (ref.etat !== 'LU') return nonMesure('the ' + desc.sym + ' reference price could not be read', base);
