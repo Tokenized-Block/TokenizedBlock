@@ -61,7 +61,8 @@ function verifierApp(h) {
   const iRoll = h.indexOf('async function roll() {');
   assert.ok(iRoll > 0, 'roll() introuvable');
   const corpsRoll = h.slice(iRoll, h.indexOf('const rollDerniers = [];', iRoll));
-  const iScore = corpsRoll.indexOf('const s = scoreFaces('), iSignal = corpsRoll.indexOf('if (s) void signalerRoll(cible, s.score);');
+  /* 2026-10-18 00:40 (guest retire) : le score n existe qu avec un wallet -> `const s = c ? scoreFaces(` */
+  const iScore = corpsRoll.indexOf('const s = c ? scoreFaces('), iSignal = corpsRoll.indexOf('if (s) void signalerRoll(cible, s.score);');
   assert.ok(iScore > 0 && iSignal > iScore, 'roll() signale le roll APRES avoir calcule le score');
   const iSig = h.indexOf('async function signalerRoll(bloc, score) {');
   assert.ok(iSig > 0, 'signalerRoll introuvable');
