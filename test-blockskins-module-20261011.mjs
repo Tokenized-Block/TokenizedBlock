@@ -12,13 +12,18 @@ let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const R = { id: 'random', angle: 10, h: [20, 30, 359], cube: 0, noyau: 200, fond: 300 };
 const D = BLOCKSKINS_DEPLOIEMENT;
-vu(S.BLOCKSKINS === String(D.adresse || D.precedent.adresse).toLowerCase(), 'l adresse lue n est ni v2 relu ni v1 (precedent)');
+/* 2026-10-18 (v3 a 10 USDC prepare, pas encore signe) : l app prend le PREMIER enregistrement DEPLOYE de la chaine racine -> precedent -> … ;
+ *   son adresse ET son prix (mintPriceUsdc, relu sur la chaine quand l adresse a ete notee) viennent de lui (blockskins-actif.js). */
+const chaine = []; for (let x = D; x; x = x.precedent) chaine.push(x);
+const actif = chaine.find((x) => /^0x[0-9a-f]{40}$/i.test(String(x.adresse || '')));
+vu(!!actif && S.BLOCKSKINS === String(actif.adresse).toLowerCase() && S.BLOCKSKINS_ACTIF === actif, 'l adresse lue n est pas celle du premier enregistrement deploye');
+vu(S.SKIN_MINT_USDC === BigInt(actif.mintPriceUsdc) && S.SKIN_MINT_TEXTE === (S.SKIN_MINT_USDC / 1000000n).toString() + ' USDC', 'le prix de mint ne vient pas de l enregistrement du contrat actif');
 /* Phil, 2026-10-11 : « v2 avant tout mint ». La porte suit l ENREGISTREMENT de deploiement (genere), jamais un drapeau a la main :
- *   ouverte si et seulement si imageDansLeWallet === true (derive de la source) ET une adresse v2 relue ; v1 (0xea6c…, tokenURI sans
+ *   ouverte si et seulement si imageDansLeWallet === true (derive de la source) sur le contrat ACTIF (deploye) ; v1 (0xea6c…, tokenURI sans
  *   image) la garde FERMEE. */
-vu(S.SKIN_MINT_OUVERT === (D.imageDansLeWallet === true && /^0x[0-9a-f]{40}$/i.test(String(D.adresse || ''))), 'la porte du mint ne suit pas l enregistrement de deploiement');
+vu(S.SKIN_MINT_OUVERT === (actif.imageDansLeWallet === true), 'la porte du mint ne suit pas l enregistrement de deploiement');
 vu(S.BLOCKSKINS !== '0xea6ccb19714504ae3286e82febbe627f9d0ce77d' || S.SKIN_MINT_OUVERT === false, 'le mint est OUVERT sur le contrat v1 qui ne montre pas la skin dans un wallet');
-vu(D.adresse !== null || S.SKIN_MINT_OUVERT === false, 'v2 pas deploye (adresse null) mais le mint est ouvert');
+vu(D.adresse !== null || actif !== D, 'v3 pas deploye (adresse null) : l app doit tomber sur le precedent deploye');
 vu(JSON.stringify(S.recetteVersTeintes(R)) === '[10,20,30,359,0,200,300]', 'ordre des teintes faux');
 const p = S.packRecette(R);
 vu(p === (10n | 20n << 9n | 30n << 18n | 359n << 27n | 0n << 36n | 200n << 45n | 300n << 54n) && (p >> 63n) === 0n, 'pack faux : ' + p);
@@ -31,7 +36,7 @@ const B = '0xb200000000000000000000e4b0c5fbe9c8df579e', USDC = '0x833589fcd6edb6
 const m = S.appelMint(B, R);
 vu(m.to === S.BLOCKSKINS && m.data.startsWith('0x' + selecteur('mint(address,uint64)')) && m.data.slice(10, 74).endsWith(B.slice(2)) && BigInt('0x' + m.data.slice(74)) === p && m.value === '0x0', 'mint mal encode');
 const a = S.appelApprouver(USDC, S.SKIN_MINT_USDC);
-vu(a.to === USDC && a.data.startsWith('0x095ea7b3') && a.data.slice(10, 74).endsWith(S.BLOCKSKINS.slice(2)) && BigInt('0x' + a.data.slice(74)) === 1000000n, 'approbation pas exacte');
+vu(a.to === USDC && a.data.startsWith('0x095ea7b3') && a.data.slice(10, 74).endsWith(S.BLOCKSKINS.slice(2)) && BigInt('0x' + a.data.slice(74)) === BigInt(actif.mintPriceUsdc), 'approbation pas exacte (le prix de l enregistrement actif)');
 let leve = false; try { S.appelApprouver(USDC, 0n); } catch (_) { leve = true; } vu(leve, 'approbation de 0 acceptee');
 /* le nom de chaque etape S AFFICHE dans la carte de signature (« Step 2 of 2: ... ») : jamais « NFT » (Phil, 2026-10-11).
  *   ROUGE sur 3693e6f : 'Mint this skin as your NFT — 1 USDC to TokenizedBlock'. */

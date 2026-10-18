@@ -152,11 +152,29 @@ contract BlockSkinsTest is Test {
     }
 
     // ─────────────── mint
-    function test_mint_paie_exactement_1_usdc_au_wallet_des_frais() public {
+    /// @dev v3 (Phil, 2026-10-18 : « tous les skins a 10 dollars ») : le prix est une CONSTANTE lue par l app (MINT_PRICE()) et c est
+    ///      EXACTEMENT ce que le mint prend. Les chiffres sont ecrits en clair ici (10_000_000), jamais relus depuis le contrat teste.
+    function test_mint_price_est_exactement_10_usdc() public {
+        assertEq(s.MINT_PRICE(), 10_000_000, "MINT_PRICE() = 10 USDC (6 decimales)");
+        // une approbation d un micro-USDC de moins que le prix : le mint REVERTE (le prix n est pas « au moins », il est exact)
+        address dave = address(0xDA7E);
+        usdc.mint(dave, 10_000_000);
+        vm.startPrank(dave);
+        usdc.approve(address(s), 9_999_999);
+        vm.expectRevert(BlockSkins.TransferFailed.selector);
+        s.mint(BLOC, recette);
+        usdc.approve(address(s), 10_000_000);
+        s.mint(BLOC, recette);
+        vm.stopPrank();
+        assertEq(usdc.balanceOf(dave), 0, "dave a paye exactement 10 USDC, pas un de plus");
+        assertEq(usdc.balanceOf(FRAIS), 10_000_000, "le wallet des frais a recu exactement 10 USDC");
+    }
+
+    function test_mint_paie_exactement_10_usdc_au_wallet_des_frais() public {
         uint256 avant = usdc.balanceOf(alice);
         uint256 id = _mint(alice);
-        assertEq(usdc.balanceOf(FRAIS), 1e6, "le wallet des frais recoit 1 USDC");
-        assertEq(avant - usdc.balanceOf(alice), 1e6, "l acheteur perd 1 USDC");
+        assertEq(usdc.balanceOf(FRAIS), 10e6, "le wallet des frais recoit 10 USDC");
+        assertEq(avant - usdc.balanceOf(alice), 10e6, "l acheteur perd 10 USDC");
         assertEq(usdc.balanceOf(address(s)), 0, "le contrat ne garde rien");
         assertEq(s.ownerOf(id), alice);
         assertEq(s.balanceOf(alice), 1);
@@ -379,7 +397,7 @@ contract BlockSkinsTest is Test {
         vm.prank(agent);
         s.executeValidated(id, bob);
         assertEq(s.ownerOf(id), bob, "l acheteur recoit le NFT");
-        assertEq(usdc.balanceOf(FRAIS), 1e6 + 2e6, "1 USDC de mint + 10 % de la vente");
+        assertEq(usdc.balanceOf(FRAIS), 10e6 + 2e6, "10 USDC de mint + 10 % de la vente (20 USDC)");
         assertEq(usdc.balanceOf(agent), gAvant, "l agent ne touche rien");
         assertEq(s.balanceOf(agent), 0, "l agent ne detient jamais le NFT");
     }
@@ -517,7 +535,7 @@ contract BlockSkinsTest is Test {
         vm.warp(block.timestamp + 1 hours);
         s.settle(id);
         assertEq(usdc.balanceOf(address(s)), 0);
-        assertEq(usdc.balanceOf(FRAIS), 1e6 + 0.9e6);
+        assertEq(usdc.balanceOf(FRAIS), 10e6 + 0.9e6, "10 USDC de mint + 10 % de l enchere gagnante (9 USDC)");
     }
 
     // ─────────────── tricheries
@@ -536,9 +554,9 @@ contract BlockSkinsTest is Test {
 
     function test_un_vendeur_qui_refuse_l_eth_est_credite_la_vente_passe() public {
         RefuseEth vendeur = new RefuseEth(s);
-        usdc.mint(address(vendeur), 1e6);
+        usdc.mint(address(vendeur), 10e6);
         vm.startPrank(address(vendeur));
-        usdc.approve(address(s), 1e6);
+        usdc.approve(address(s), 10e6);
         uint256 id = s.mint(BLOC, recette);
         s.list(id, address(0), 1 ether);
         vm.stopPrank();
@@ -554,7 +572,7 @@ contract BlockSkinsTest is Test {
         vm.prank(alice);
         s.startAuction(id, address(0), 0.1 ether, 1 hours);
         Reentrant r = new Reentrant(s, address(usdc), BLOC, recette);
-        usdc.mint(address(r), 1e6); // de quoi PAYER le mint qu il va tenter
+        usdc.mint(address(r), 10e6); // de quoi PAYER le mint (10 USDC) qu il va tenter : seul le verrou peut le refuser
         r.encherir{value: 0.1 ether}(id, 0.1 ether);
         vm.prank(bob);
         s.bid{value: 0.2 ether}(id, 0.2 ether);

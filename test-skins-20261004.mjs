@@ -60,7 +60,10 @@ async function jeu(dir, dire) {
 
 console.log('— A. recettes et memo');
 const S = await imp('skins.js');
-ok(S.SKIN_PRIX_USDC === 1000000n, 'A le prix est 1 USDC (1 000 000 unites brutes, 6 decimales)');
+/* 2026-10-18 : le prix n est plus une constante du module — c est le MINT_PRICE du contrat BlockSkins ACTIF, lu dans l enregistrement */
+const { SKIN_MINT_USDC, BLOCKSKINS_ACTIF } = await imp('blockskins-actif.js');
+ok(S.SKIN_PRIX_USDC === SKIN_MINT_USDC && S.SKIN_PRIX_USDC === BigInt(BLOCKSKINS_ACTIF.mintPriceUsdc) && S.SKIN_PRIX_USDC > 0n,
+  'A le prix est celui de l enregistrement du contrat actif (v' + BLOCKSKINS_ACTIF.version + ' : ' + S.SKIN_PRIX_USDC + ' unites brutes, 6 decimales)');
 ok(S.validerRecette(GOLD).ok && S.validerRecette(RND).ok, 'A recette du catalogue et recette « random » : acceptees');
 for (const [nom, r] of [['id inconnu', { id: 'platine' }], ['teinte 360', { ...RND, cube: 360 }], ['teinte negative', { ...RND, noyau: -1 }], ['teinte decimale', { ...RND, angle: 1.5 }],
   ['deux teintes d anneau', { ...RND, h: [1, 2] }], ['teinte en texte', { ...RND, h: ['1', 2, 3] }], ['null', null], ['tableau', []]]) ok(S.validerRecette(r).ok === false, 'A refusee : ' + nom);
@@ -103,7 +106,7 @@ for (const mu of [
 ]) {
   if (SRC.split(mu.de).length !== 2) { ok(false, 'D mutant « ' + mu.nom + ' » : motif introuvable ou multiple'); continue; }
   const dir = fs.mkdtempSync(path.join(tmp, 'm-'));
-  for (const f of ['messages.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(dir, f));
+  for (const f of ['messages.js', 'keccak.js', 'blockskins-actif.js', 'blockskins-deploiement.js']) fs.copyFileSync(path.join(ICI, f), path.join(dir, f));
   fs.writeFileSync(path.join(dir, 'skins.js'), SRC.replace(mu.de, mu.a));
   let rouges = 0, plante = null;
   try { await jeu(dir, (c) => { if (!c) rouges += 1; }); } catch (e) { plante = String(e && e.message).slice(0, 60); }

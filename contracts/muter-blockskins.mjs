@@ -1,7 +1,8 @@
 /* muter-blockskins.mjs — chaque garde du contrat BlockSkins est RETIREE, une a la fois, dans une COPIE ; la suite doit rougir.
  * Un mutant qui reste vert = une garde que la suite ne tient pas. Ne touche jamais au depot : tout se passe dans un dossier temporaire.
  * Usage (depuis contracts/) : node muter-blockskins.mjs      [FORGE=chemin/vers/forge]
- * Mesure du 2026-10-04 : 27 mutants, 0 survivant, 0 ancre introuvable. 2026-10-11 (v2, tokenURI avec image) : +3 mutants. */
+ * Mesure du 2026-10-04 : 27 mutants, 0 survivant, 0 ancre introuvable. 2026-10-11 (v2, tokenURI avec image) : +3 mutants.
+ * 2026-10-18 (v3, MINT_PRICE 10 USDC) : +3 mutants sur le prix (33 au total). */
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,6 +22,11 @@ const lancer = () => {
   catch (e) { return { vert: false, sortie: String(e.stdout || '') + String(e.stderr || '') }; }
 };
 const M = [
+  /* v3 (2026-10-18, Phil : « tous les skins a 10 dollars ») : le prix grave est 10 USDC — un retour a 1 USDC, ou un micro-USDC de trop,
+   *   doit rougir ; sinon la suite ne tient pas le chiffre que l app relit (MINT_PRICE()) */
+  ['prix du mint 10 USDC -> 1 USDC (v2)', 'MINT_PRICE = 10_000_000;', 'MINT_PRICE = 1_000_000;'],
+  ['prix du mint 10 USDC -> 10,000001 USDC', 'MINT_PRICE = 10_000_000;', 'MINT_PRICE = 10_000_001;'],
+  ['prix du mint 10 USDC -> 9,999999 USDC', 'MINT_PRICE = 10_000_000;', 'MINT_PRICE = 9_999_999;'],
   ['frais de vente 10 % -> 1 %', 'SALE_FEE_BPS = 1000;', 'SALE_FEE_BPS = 100;'],
   ['validation non liee a la mise en vente', 'if (v.listing != l.id) revert ListingChanged();', ''],
   ['numero de mise en vente fige', 'uint64 id = ++_listingSeq;', 'uint64 id = 1;'],

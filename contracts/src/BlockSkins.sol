@@ -34,7 +34,7 @@ pragma solidity ^0.8.24;
 /// @dev No external library: a minimal ERC-721 is written here so the whole behaviour is in one file to read.
 contract BlockSkins {
     // ───────────────────────────── constants
-    uint256 public constant MINT_PRICE = 1_000_000; // 1 USDC (6 decimals)
+    uint256 public constant MINT_PRICE = 10_000_000; // 10 USDC (6 decimals) — v3, Phil 2026-10-18: "tous les skins a 10 dollars"
     uint256 public constant SALE_FEE_BPS = 1000; // 10 %
     uint256 public constant MAX_AUCTION = 7 days;
     uint256 public constant EXTENSION = 5 minutes;

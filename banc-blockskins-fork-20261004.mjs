@@ -11,7 +11,8 @@
  *   lus avant/apres et le status des recus, jamais sur un evenement.
  * ⛔ BORNES : un fork (base-anvil, comptes impersonnes, aucune cle) — ne prouve ni un vrai wallet, ni l interface, ni le deploiement
  *   reel (que seul Phil signe). Les jetons d essai sont pris a des pools du fork par transfert impersonne.
- * Usage : (cd contracts && forge build) ; base-anvil --fork-url <rpc Base> --port 8549 ; node banc-blockskins-fork-20261004.mjs */
+ * 2026-10-18 : v3 (MINT_PRICE 10 USDC) — le prix est lu dans l enregistrement (mintPriceUsdc) et relu sur le contrat deploye, jamais tape ici.
+ * Usage : (cd contracts && forge build) ; base-anvil --fork-url <rpc Base> --port 8549 ; node banc-blockskins-fork-20261004.mjs [url du fork] */
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -82,21 +83,25 @@ try {
   ok(taille > 0 && taille <= 24576, 'code deploye : ' + taille + ' octets (limite EIP-170 : 24 576)');
   ok(('0x' + (await lire(S, 'USDC()')).slice(-40)) === USDC && ('0x' + (await lire(S, 'FEE_WALLET()')).slice(-40)) === FRAIS && ('0x' + (await lire(S, 'owner()')).slice(-40)) === phil,
     'il lit le vrai USDC, le wallet des frais du depot, et son owner est le deployeur');
-  for (const a of [alice, bob, carol]) await donner(USDC, AUTRE.pool, a, 60n * 10n ** 6n);
+  /* 2026-10-18 : le prix de mint est celui de l ENREGISTREMENT (mintPriceUsdc, lu dans la source compilee : 10 USDC sur v3), relu ici sur
+   *   le contrat qui vient d etre deploye - jamais tape dans ce banc */
+  const PRIX_MINT = BigInt(DEP.mintPriceUsdc);
+  ok(await lireU(S, 'MINT_PRICE()') === PRIX_MINT, 'MINT_PRICE() relu = mintPriceUsdc de l enregistrement (' + PRIX_MINT + ')');
+  for (const a of [alice, bob, carol]) await donner(USDC, AUTRE.pool, a, 60n * 10n ** 6n + 2n * PRIX_MINT);
   const approuver = (qui, jeton, montant) => envoyer(qui, { to: jeton, data: selecteur('approve(address,uint256)') + adrMot(S) + mot(montant) });
   /* la recette passe par packRecipe DU CONTRAT (aucun empaquetage recopie ici) */
   const teintes = [210, 267, 263, 92, 120, 300, 200];
   const recette = BigInt(await lire(S, 'packRecipe(uint16[7])', teintes.map(mot).join('')));
   const mint = (qui) => envoyer(qui, { to: S, data: selecteur('mint(address,uint64)') + adrMot(NV.adr) + mot(recette) });
 
-  /* ── 1. MINT : 1 USDC au wallet des frais ── */
+  /* ── 1. MINT : MINT_PRICE au wallet des frais ── */
   console.log('— mint');
   let fA = await solde(USDC, FRAIS), aA = await solde(USDC, alice);
-  await approuver(alice, USDC, 2n * 10n ** 6n);
+  await approuver(alice, USDC, 2n * PRIX_MINT);
   const m1 = await mint(alice), m2 = await mint(alice);
   ok(m1.status === '0x1' && m2.status === '0x1', 'deux mints confirmes (gaz ' + m1.gasUsed + ')');
-  ok(await solde(USDC, FRAIS) - fA === 2000000n && aA - await solde(USDC, alice) === 2000000n && await solde(USDC, S) === 0n,
-    'le wallet des frais recoit EXACTEMENT 1 USDC par mint (vrai USDC), l acheteur en perd autant, le contrat ne garde rien');
+  ok(await solde(USDC, FRAIS) - fA === 2n * PRIX_MINT && aA - await solde(USDC, alice) === 2n * PRIX_MINT && await solde(USDC, S) === 0n,
+    'le wallet des frais recoit EXACTEMENT ' + PRIX_MINT + ' unites (' + (PRIX_MINT / 1000000n) + ' USDC) par mint (vrai USDC), l acheteur en perd autant, le contrat ne garde rien');
   ok(('0x' + (await lire(S, 'ownerOf(uint256)', mot(1))).slice(-40)) === alice, 'le NFT n°1 est a l acheteur');
   const sansSou = await compteNeuf('5a55');
   const m0 = await mint(sansSou);

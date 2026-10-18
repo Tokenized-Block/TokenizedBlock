@@ -1,28 +1,30 @@
 // blockskins.js - L APP ET LE CONTRAT BlockSkins DEPLOYE (Phil, 2026-10-11 : « le market des skins : 1 skin a 1 dollar, enchères avec des
 // actions tokenized Coinbase, fees de l app sur chaque achat/vente, ce qui l achete voit son brain prendre l apparence du skin, visible
 // dans le wallet »).
-// Le contrat est DEPLOYE (lu sur la chaine le 2026-10-11) : blockskins-deploiement.js. Ses regles sont GRAVEES : mint 1 USDC au wallet
-//   de frais ; vente/enchere en devise admise (currencyAllowed - ETH et USDC aujourd hui) ; 10 % de chaque vente au wallet de frais ;
+// Le contrat est DEPLOYE (lu sur la chaine le 2026-10-11) : blockskins-deploiement.js. Ses regles sont GRAVEES : mint au prix MINT_PRICE
+//   (1 USDC sur v2 ; 10 USDC sur v3, Phil 2026-10-18 — lu dans l enregistrement, blockskins-actif.js) au wallet de frais ; vente/enchere en devise admise (currencyAllowed - ETH et USDC aujourd hui) ; 10 % de chaque vente au wallet de frais ;
 //   enchere <= 7 jours, prolongee de 5 min sur une offre tardive ; surenchere minimale 5 % ; validation « les deux cochent » executable
 //   par n importe qui (un agent) sans jamais garder les fonds.
 // ⛔ CE MODULE NE SIGNE RIEN ET N ENVOIE RIEN : il encode des appels NON SIGNES et decode des lectures. Le wallet de la personne signe.
 // ⛔ La skin appartient a qui DETIENT le NFT (ownerOf / skinsPage.holder) - jamais a un index de serveur.
 import { BLOCKSKINS_DEPLOIEMENT } from './blockskins-deploiement.js';
+import { BLOCKSKINS_ACTIF, BLOCKSKINS, BLOCKSKINS_VERSION, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT } from './blockskins-actif.js';
 import { selecteur } from './encodeur.js';
 import { ACTIONS_COINBASE } from './paires.js';
 
-/* v2 (tokenURI avec image) quand son adresse a ete RELUE sur la chaine et ecrite par le generateur ; avant, v1 (`precedent`, jamais minte) */
-export const BLOCKSKINS = String(BLOCKSKINS_DEPLOIEMENT.adresse || BLOCKSKINS_DEPLOIEMENT.precedent.adresse).toLowerCase();
+/* ══ 2026-10-18 (Phil 08:40 : « tous les skins a 10 dollars ») : l ADRESSE et le PRIX DE MINT viennent de blockskins-actif.js — le premier
+ *   contrat DEPLOYE de l enregistrement genere (v3 des que son adresse est notee par noter-deploiement-blockskins.mjs ; v2, 1 USDC, avant),
+ *   avec le prix RELU sur la chaine quand l adresse a ete notee. Plus aucune constante de prix tapee ici : l app relit MINT_PRICE() avant
+ *   d acheter et refuse si la chaine dit autre chose que l enregistrement. */
+export { BLOCKSKINS_ACTIF, BLOCKSKINS, BLOCKSKINS_VERSION, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT };
 export const BLOCKSKINS_CHAINE = BLOCKSKINS_DEPLOIEMENT.chaine;
-export const SKIN_MINT_USDC = 1_000_000n; /* MINT_PRICE du contrat (6 decimales) */
 export const SKIN_FRAIS_BPS = 1000n;      /* SALE_FEE_BPS : 10 % */
 export const SKIN_ENCHERE_MAX_S = 604800n; /* MAX_AUCTION : 7 jours */
 export const SKIN_SURENCHERE_BPS = 500n;   /* MIN_RAISE_BPS : +5 % */
 /* ⛔⛔ Phil, 2026-10-11 : « v2 avant tout mint ». Le contrat v1 (0xea6c…e77d) ne montre pas la skin dans un wallet : son tokenURI n a AUCUNE
  *   image, et son JSON brut porte « # » - fetch() (lecteur conforme) le coupe a 29 caracteres sur 219, JSON invalide (mesure sur fork,
  *   skin #1). Le mint ne s ouvre que sur un deploiement dont l enregistrement GENERE dit que le tokenURI porte l image (derive de la
- *   source) ET dont l adresse a ete relue sur la chaine - jamais sur un drapeau pose a la main ici. */
-export const SKIN_MINT_OUVERT = BLOCKSKINS_DEPLOIEMENT.imageDansLeWallet === true && /^0x[0-9a-fA-F]{40}$/.test(String(BLOCKSKINS_DEPLOIEMENT.adresse || ''));
+ *   source) ET dont l adresse a ete relue sur la chaine - jamais sur un drapeau pose a la main ici (SKIN_MINT_OUVERT, blockskins-actif.js). */
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
@@ -51,10 +53,10 @@ export function unpackRecette(n) {
 
 /* ── LES APPELS (non signes) ── */
 const appel = (sig, args, value = 0n, nom = '') => ({ to: BLOCKSKINS, data: '0x' + selecteur(sig) + args.join(''), value: '0x' + BigInt(value).toString(16), nom });
-/** mint : 1 USDC passe du wallet de la personne au wallet de frais ; le NFT est a elle. Suppose l approbation USDC (appelApprouver). */
+/** mint : MINT_PRICE (SKIN_MINT_USDC) passe du wallet de la personne au wallet de frais ; le NFT est a elle. Suppose l approbation USDC (appelApprouver). */
 export function appelMint(block, recette) {
   /* ⛔ le nom de l etape S AFFICHE (« Step 2 of 2: ... ») : jamais « NFT » a l ecran (Phil, 2026-10-11 : « un nouveau type relie au block ») */
-  return appel('mint(address,uint64)', [adrMot(block), mot(packRecette(recette))], 0n, 'Mint this skin for this block — 1 USDC to TokenizedBlock');
+  return appel('mint(address,uint64)', [adrMot(block), mot(packRecette(recette))], 0n, 'Mint this skin for this block — ' + SKIN_MINT_TEXTE + ' to TokenizedBlock');
 }
 /** approve(BlockSkins, montant) EXACT sur un jeton (USDC, une action admise) - jamais illimite. */
 export function appelApprouver(jeton, montant, nom = 'Allow the skins market to take exactly this amount') {
@@ -137,7 +139,7 @@ export function skinPortee(skins, compte, block) {
  *   de deploiement, jamais recopie). Une action tokenisee n y entre que par setCurrency, signe par l owner : pas listee ici avant. */
 export const DEVISES_SKIN = Object.freeze({
   [ETH]: Object.freeze({ sym: 'ETH', dec: 18 }),
-  [bas(BLOCKSKINS_DEPLOIEMENT.constructeur.usdc)]: Object.freeze({ sym: 'USDC', dec: 6 }),
+  [bas(BLOCKSKINS_ACTIF.constructeur.usdc)]: Object.freeze({ sym: 'USDC', dec: 6 }),
 });
 /* ── LES ACTIONS COMME DEVISE (Phil, 2026-10-11 : « enchères avec des actions tokenized Coinbase » ; son choix : « les 9 plus
  *    profondes ») ── chacune > 700 k$ cote USDC sur Aerodrome (etude wse49fh8o, bloc ~52 470 683). Elles n entrent dans le contrat

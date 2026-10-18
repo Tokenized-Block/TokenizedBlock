@@ -30,7 +30,8 @@ const code = await rpc('eth_getCode', [adr, 'latest']);
 ok((code.length - 2) / 2 > 10000, 'code present a ' + adr + ' : ' + (code.length - 2) / 2 + ' octets');
 ok(adrDe(await lire('USDC()')) === USDC_BASE.toLowerCase() && adrDe(await lire('FEE_WALLET()')) === FEE_WALLET.toLowerCase(), 'USDC() et FEE_WALLET() sont ceux du depot');
 ok(adrDe(await lire('owner()')) === de, 'owner() = l expediteur de la tx (' + de + ')');
-ok(BigInt(await lire('MINT_PRICE()')) === 1000000n && BigInt(await lire('totalSupply()')) >= 0n, 'MINT_PRICE() = 1 USDC');
-console.log('\n' + (ko ? ko + ' KO — NE PAS recopier cette adresse.' : 'A recopier dans DEPLOYE (contracts/preparer-deploiement-blockskins.mjs) :')
+/* 2026-10-18 : le prix attendu est celui de l enregistrement (mintPriceUsdc, lu dans la source compilee) — 1 USDC pour v2, 10 USDC pour v3 */
+ok(BigInt(await lire('MINT_PRICE()')) === BigInt(D.mintPriceUsdc) && BigInt(await lire('totalSupply()')) >= 0n, 'MINT_PRICE() = ' + D.mintPriceUsdc + ' (l enregistrement v' + D.version + ')');
+console.log('\n' + (ko ? ko + ' KO — NE PAS noter cette adresse.' : 'Tout concorde. Pour que l app bascule sur ce contrat : node contracts/noter-deploiement-blockskins.mjs ' + hash)
   + "\n  adresse: '" + adr + "',\n  tx: '" + hash + "',\n  bloc: " + bloc + ",\n  owner: '" + de + "',");
 process.exit(ko ? 1 : 0);

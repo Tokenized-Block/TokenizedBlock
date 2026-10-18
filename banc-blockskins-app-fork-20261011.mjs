@@ -8,6 +8,8 @@
  *   4. skinPortee rend la skin DETENUE pour ce block.
  * ⛔ BORNES : un fork (base-anvil, comptes impersonnes, aucune cle). L USDC est pris a Morpho Blue impersonne - ce transfert n existe
  *   pas sur mainnet. Jamais depuis a6cf. Ne prouve ni l interface, ni un vrai wallet.
+ * 2026-10-18 : le contrat joue est le contrat ACTIF de l app (blockskins-actif.js : v2 a 1 USDC aujourd hui, v3 a 10 USDC une fois note) ;
+ *   le prix vient de S.SKIN_MINT_USDC, jamais tape ici.
  * Usage : base-anvil --fork-url <rpc Base> --port 8549 ; node banc-blockskins-app-fork-20261011.mjs [url du fork] */
 import * as S from './blockskins.js';
 import * as F from './frais-creation.js';
@@ -39,12 +41,15 @@ try {
   const R = { id: 'random', angle: 123, h: [45, 67, 89], cube: 211, noyau: 7, fond: 180 };
   const [alice, bob, carol, dave] = [await compte(), await compte(), await compte(), await compte()];
   /* 1. mint */
-  ok((await donnerUsdc(alice, 5000000n)).status === '0x1' && await solde(USDC, alice) === 5000000n, 'alice recoit 5 USDC (fork)');
+  /* 2026-10-18 : le prix est celui de l enregistrement du contrat ACTIF (S.SKIN_MINT_USDC : 1 USDC sur v2, 10 USDC des que v3 est note) */
+  const P = S.SKIN_MINT_USDC;
+  ok(BigInt(await rpc('eth_call', [{ to: S.BLOCKSKINS, data: '0x' + selecteur('MINT_PRICE()') }, 'latest'])) === P, 'MINT_PRICE() du contrat deploye = SKIN_MINT_USDC de l app (' + S.SKIN_MINT_TEXTE + ')');
+  ok((await donnerUsdc(alice, 5n * P)).status === '0x1' && await solde(USDC, alice) === 5n * P, 'alice recoit 5 x le prix en USDC (fork)');
   const f0 = await solde(USDC, FRAIS), sup0 = BigInt(await rpc('eth_call', [{ to: S.BLOCKSKINS, data: '0x' + selecteur('totalSupply()') }, 'latest']));
   const sansApprob = await envoyer(alice, S.appelMint(IB022, R));
   ok(sansApprob.status === '0x0', 'TEMOIN : sans approbation, le mint reverte (rien de pris)');
-  ok((await envoyer(alice, S.appelApprouver(USDC, S.SKIN_MINT_USDC))).status === '0x1' && (await envoyer(alice, S.appelMint(IB022, R))).status === '0x1', 'approbation EXACTE de 1 USDC puis mint : status 1');
-  ok(await solde(USDC, FRAIS) - f0 === 1000000n && await solde(USDC, alice) === 4000000n, 'le wallet de frais a +1 USDC (solde), alice -1 USDC');
+  ok((await envoyer(alice, S.appelApprouver(USDC, S.SKIN_MINT_USDC))).status === '0x1' && (await envoyer(alice, S.appelMint(IB022, R))).status === '0x1', 'approbation EXACTE de ' + S.SKIN_MINT_TEXTE + ' puis mint : status 1');
+  ok(await solde(USDC, FRAIS) - f0 === P && await solde(USDC, alice) === 4n * P, 'le wallet de frais a +' + S.SKIN_MINT_TEXTE + ' (solde), alice -' + S.SKIN_MINT_TEXTE);
   const allowanceRestante = BigInt(await rpc('eth_call', [{ to: USDC, data: '0xdd62ed3e' + pad(alice) + pad(S.BLOCKSKINS) }, 'latest']));
   ok(allowanceRestante === 0n, 'il ne reste AUCUNE autorisation apres le mint (approbation exacte consommee)');
   let v = await S.lireSkins({ rpc });

@@ -4127,8 +4127,10 @@ const SERVIS = [
   /* 2026-10-04 : la grammaire des commandes ecrites au cerveau + les pre-commandes (importe par app.html) */
   'commandes-panel.js',
   'skins.js',
-  /* 2026-10-11 : la skin du block sur le contrat BlockSkins DEPLOYE (importe par app.html : absent d ici = 404 = app morte) et sa fiche */
-  'blockskins.js', 'blockskins-deploiement.js',
+  /* 2026-10-11 : la skin du block sur le contrat BlockSkins DEPLOYE (importe par app.html : absent d ici = 404 = app morte) et sa fiche.
+   *   2026-10-18 : blockskins-actif.js = le contrat ACTIF et son prix de mint, lus dans la fiche (importe par blockskins.js et skins.js :
+   *   absent d ici = 404 = app morte). */
+  'blockskins.js', 'blockskins-actif.js', 'blockskins-deploiement.js',
   /* 2026-10-04 : l etat des devises de paire (born / not_born / not_read) et LA regle de l ecran qui grise (importe par app.html :
    *   absent d ici = 404 = app morte). Sa seule dependance, keccak.js, est deja servie plus haut. */
   'etat-paires.js',

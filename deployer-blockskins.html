@@ -26,13 +26,14 @@ ul{padding-left:20px;margin:8px 0}
 </head>
 <body>
 <main>
-  <h1>Deploy BlockSkins</h1>
+  <h1>Deploy BlockSkins <span id="dVersion"></span></h1>
   <p class="note">One transaction, signed by your wallet, creates the contract on Base. This page sends nothing by itself.</p>
+  <p class="note" id="dActuel"></p>
 
   <h2>What the contract does</h2>
   <div class="carte">
     <ul>
-      <li>Minting a skin costs 1 USDC, sent straight to the fee wallet.</li>
+      <li>Minting a skin costs <span id="dPrixLi">—</span>, sent straight to the fee wallet.</li>
       <li>Wallets can show the skin: its picture is drawn by the contract itself from its seven hues — no server, no IPFS.</li>
       <li>A skin can be sold at a fixed price or by auction (7 days at most). Each sale pays 10% to the fee wallet.</li>
       <li>Sales run in ETH, USDC, or a token the owner has allowed.</li>
@@ -48,6 +49,7 @@ ul{padding-left:20px;margin:8px 0}
       <dt>Network</dt><dd>Base (8453)</dd>
       <dt>USDC</dt><dd id="dUsdc">—</dd>
       <dt>Fee wallet</dt><dd id="dFrais">—</dd>
+      <dt>Mint price</dt><dd id="dPrix">—</dd>
       <dt>Compiler</dt><dd id="dComp">—</dd>
       <dt>Size</dt><dd id="dTaille">—</dd>
       <dt>Fingerprint</dt><dd id="dEmpreinte">—</dd>
@@ -75,8 +77,13 @@ ul{padding-left:20px;margin:8px 0}
  * blockskins-deploiement.js (generee par contracts/preparer-deploiement-blockskins.mjs ; le banc fork deploie cette meme donnee).
  * ⛔ Rien n est envoye sans un appui sur « Deploy » ET la signature du wallet. Aucune cle, aucun argument saisi a la main :
  *   les deux arguments du constructeur sont DANS la donnee figee, et la page les RELIT dans cette donnee avant de les afficher.
- * ⛔ L empreinte est RECALCULEE dans le navigateur ; si elle differe de celle annoncee, le bouton reste eteint. */
+ * ⛔ L empreinte est RECALCULEE dans le navigateur ; si elle differe de celle annoncee, le bouton reste eteint.
+ * 2026-10-18 (Phil : « tous les skins a 10 dollars ») : v3. Le prix affiche est `mintPriceUsdc` de l enregistrement (lu dans la source
+ *   compilee par le generateur), et son PUSH est RETROUVE dans la donnee signee ici meme ; apres la confirmation la page relit MINT_PRICE()
+ *   sur le contrat cree et le compare. Le contrat precedent (v2, `precedent`) reste celui de l app jusqu a ce que l adresse de v3 soit
+ *   notee par contracts/noter-deploiement-blockskins.mjs <tx>. */
 import { BLOCKSKINS_DEPLOIEMENT as D } from './blockskins-deploiement.js';
+import { usdcTexte } from './blockskins-actif.js';
 import { selecteur } from './keccak.js';
 const $ = (s) => document.querySelector(s);
 const eth = () => window.ethereum;
@@ -87,7 +94,17 @@ const deja = !!D.adresse;
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
 /* les deux arguments, LUS dans la fin de la donnee figee (2 mots de 32 octets) — pas dans le champ `constructeur` */
 const fin = D.creation.slice(-128), usdc = '0x' + fin.slice(24, 64), frais = '0x' + fin.slice(88, 128);
+/* le prix de mint : celui de l enregistrement, dont le PUSH doit se trouver dans la donnee signee (sinon rien n est deployable) */
+const prixOk = /^[1-9]\d*$/.test(String(D.mintPriceUsdc));
+const prixHex = prixOk ? BigInt(D.mintPriceUsdc).toString(16).padStart(2 * Math.ceil(BigInt(D.mintPriceUsdc).toString(16).length / 2), '0') : '';
+const prixDansLeCode = prixOk && D.creation.includes((0x5f + prixHex.length / 2).toString(16) + prixHex);
+const prixTexte = prixOk ? usdcTexte(D.mintPriceUsdc) + ' USDC' : 'unknown';
 $('#dUsdc').textContent = usdc; $('#dFrais').textContent = frais;
+$('#dPrix').textContent = prixTexte + (prixOk ? ' (MINT_PRICE ' + D.mintPriceUsdc + ', found in the signed data: ' + (prixDansLeCode ? 'yes' : 'NO') + ')' : '');
+$('#dPrixLi').textContent = prixTexte;
+$('#dVersion').textContent = 'v' + D.version;
+const P = D.precedent;
+$('#dActuel').textContent = P && P.adresse ? 'Today the app uses v' + P.version + ' at ' + P.adresse + ' (mint ' + usdcTexte(P.mintPriceUsdc) + ' USDC). It keeps using it until the new address is noted in the deployment record.' : '';
 $('#dComp').textContent = 'solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm;
 $('#dTaille').textContent = D.octetsCreation + ' bytes of creation code';
 $('#dEmpreinte').textContent = 'sha256 ' + D.sha256Creation;
@@ -95,7 +112,7 @@ $('#dEmpreinte').textContent = 'sha256 ' + D.sha256Creation;
   try {
     const octets = new Uint8Array(D.creation.slice(2).match(/../g).map((x) => parseInt(x, 16)));
     const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
-    intacte = h === D.sha256Creation && octets.length === D.octetsCreation && usdc === D.constructeur.usdc && frais === D.constructeur.walletDesFrais;
+    intacte = h === D.sha256Creation && octets.length === D.octetsCreation && usdc === D.constructeur.usdc && frais === D.constructeur.walletDesFrais && prixDansLeCode;
     $('#dVerif').className = intacte ? 'note ok' : 'note ko';
     $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser: it matches.' : 'The fingerprint does not match. Nothing can be deployed from this page.';
   } catch (_) { $('#dVerif').className = 'note ko'; $('#dVerif').textContent = 'The fingerprint could not be computed here. Nothing can be deployed from this page.'; }
@@ -105,7 +122,7 @@ function peindre() {
   $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet will own the contract.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
   $('#bDeployer').disabled = !compte || !intacte || envoi || deja;
-  if (deja) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second contract.', 'note ok');
+  if (deja) dire('Already deployed at ' + D.adresse + ' (v' + D.version + ', mint ' + prixTexte + '). Deploying again would create a second contract.', 'note ok');
 }
 $('#bConnecter').addEventListener('click', async () => {
   if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
@@ -134,11 +151,13 @@ $('#bDeployer').addEventListener('click', async () => {
     const adr = String(recu.contractAddress);
     $('#rAdr').textContent = adr;
     /* relecture SUR LA CHAINE de ce que le contrat dit de lui-meme */
-    const lire = async (sig) => '0x' + String(await eth().request({ method: 'eth_call', params: [{ to: adr, data: selecteur(sig) }, 'latest'] })).slice(-40);
-    const [u, f, o] = [await lire('USDC()'), await lire('FEE_WALLET()'), await lire('owner()')];
-    const bon = u === usdc && f === frais && o.toLowerCase() === compte.toLowerCase();
-    $('#rLu').textContent = 'USDC ' + u + ' · fee wallet ' + f + ' · owner ' + o;
-    dire(bon ? 'Deployed. The contract reads back what was signed. Send its address to the team: the app does not use it yet.' : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
+    const lireMot = async (sig) => String(await eth().request({ method: 'eth_call', params: [{ to: adr, data: selecteur(sig) }, 'latest'] }));
+    const lire = async (sig) => '0x' + (await lireMot(sig)).slice(-40);
+    const [u, f, o, p] = [await lire('USDC()'), await lire('FEE_WALLET()'), await lire('owner()'), await lireMot('MINT_PRICE()')];
+    const prixLu = /^0x[0-9a-f]{64}$/i.test(p) ? BigInt(p).toString() : null;
+    const bon = u === usdc && f === frais && o.toLowerCase() === compte.toLowerCase() && prixLu === String(D.mintPriceUsdc);
+    $('#rLu').textContent = 'USDC ' + u + ' · fee wallet ' + f + ' · owner ' + o + ' · MINT_PRICE ' + (prixLu === null ? 'unreadable' : usdcTexte(prixLu) + ' USDC (' + prixLu + ')');
+    dire(bon ? 'Deployed. The contract reads back what was signed, mint price ' + prixTexte + '. The app still uses the previous contract: note this one with `node contracts/noter-deploiement-blockskins.mjs ' + String(tx) + '` (it checks the receipt and the read-backs, then the app switches to it).' : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
   } catch (e) {
     dire(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
   } finally { envoi = false; peindre(); }

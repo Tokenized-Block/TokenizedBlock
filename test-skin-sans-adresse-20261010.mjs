@@ -14,7 +14,9 @@ const corps = html.slice(i, suite > 0 ? i + 10 + suite : i + 8000);
 const ecran = [...corps.matchAll(/(?:bcEtape|bcMessage)\([^;]*?\);|textContent\s*=[^;]*;/g)].map((x) => x[0]);
 assert.ok(ecran.length > 3, 'textes d ecran introuvables');
 for (const l of ecran) assert.ok(!/\bbeneficiaire\b|FEE_WALLET|BLOCKSKINS|fraisC/.test(l.replace(/\/\*.*?\*\//g, '')), 'adresse a l ecran : ' + l.trim().slice(0, 120));
-assert.ok(corps.includes("'1 USDC goes to TokenizedBlock."), 'le destinataire n est pas nomme');
+/* 2026-10-18 : le prix n est plus tape — c est SKIN_MINT_TEXTE (le MINT_PRICE du contrat actif, blockskins-actif.js) qui ouvre la phrase */
+assert.ok(corps.includes("SKIN_MINT_TEXTE + ' goes to TokenizedBlock."), 'le destinataire n est pas nomme (ou le prix est tape au lieu de SKIN_MINT_TEXTE)');
+assert.ok(!/'[^']*\b\d+ USDC\b[^']*'/.test(corps.replace(/\/\*[\s\S]*?\*\//g, '')), 'un prix est TAPE dans un texte de bcAcheterSkin');
 assert.match(corps, /appelMint\(a, recette\)/, 'le mint du contrat doit porter le block et la recette');
 assert.match(corps, /if \(prixC !== SKIN_MINT_USDC \|\| fraisC !== beneficiaire\)/, 'la verification contrat/app (prix et destinataire graves) doit rester');
 console.log('ok skin-sans-adresse - ' + ecran.length + ' textes d ecran sans adresse, mint et verification intacts ; NE PROUVE PAS l ecran du wallet');

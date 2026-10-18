@@ -1,4 +1,4 @@
-/* skins.js — ACHETER UNE SKIN POUR UN BLOCK : 1 USDC, et le choix ECRIT DANS LA TRANSACTION.
+/* skins.js — ACHETER UNE SKIN POUR UN BLOCK : le prix du contrat ACTIF (SKIN_PRIX_USDC, lu dans l enregistrement), et le choix ECRIT DANS LA TRANSACTION.
  *
  * Phil, 2026-10-04 : « prix 1 $ par skin » ; « notre gage de securite pour distinguer un B20 d un autre, comme un certificat onchain » ;
  *   « creer une tx x402 pour acheter le skin, ou autre tx ».
@@ -24,9 +24,11 @@
  * ⛔ Aucun secret, aucune cle, aucun envoi ici : ce module construit un appel NON SIGNE et lit des reponses de noeud. */
 import { encodeTransferAvecMemo } from './messages.js';
 import { topic } from './keccak.js';
+import { SKIN_MINT_USDC, SKIN_MINT_TEXTE } from './blockskins-actif.js';
 
-/** 1 USDC (6 decimales). Le prix est celui que Phil a fixe le 2026-10-04. */
-export const SKIN_PRIX_USDC = 1000000n;
+/** Le prix d une skin (6 decimales) : celui du contrat BlockSkins ACTIF, lu dans l enregistrement de deploiement (blockskins-actif.js) —
+ *  1 USDC fixe par Phil le 2026-10-04 (v2) ; 10 USDC des que v3 est note (Phil, 2026-10-18). Jamais une constante tapee ici. */
+export const SKIN_PRIX_USDC = SKIN_MINT_USDC;
 export const SKINS_CATALOGUE = Object.freeze(['gold', 'ice', 'ember', 'toxic', 'violet', 'chrome', 'circuit']);
 const TOPIC_TRANSFER = topic('Transfer(address,address,uint256)');
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -71,7 +73,7 @@ export function lireMemoSkin(texte) {
 export function appelAchatSkin({ usdc, beneficiaire, block, recette }) {
   if (!ADR.test(bas(usdc)) || !ADR.test(bas(beneficiaire))) throw new Error('usdc and beneficiary must be whole addresses');
   return { to: bas(usdc), data: encodeTransferAvecMemo(bas(beneficiaire), SKIN_PRIX_USDC, memoSkin(block, recette)), value: '0x0',
-    nom: 'pay 1 USDC for the skin' };
+    nom: 'pay ' + SKIN_MINT_TEXTE + ' for the skin' };
 }
 
 /**
@@ -100,7 +102,7 @@ export function verifierAchatSkin({ tx, recu, usdc, beneficiaire, block, recette
     try { montant = BigInt(String(l.data)); } catch (_) { montant = -1n; }
     if (montant >= SKIN_PRIX_USDC) { payeur = '0x' + bas(l.topics[1]).slice(26); break; }
   }
-  if (!payeur) return refus('no USDC transfer of at least 1 USDC to the fee wallet was found in this transaction');
+  if (!payeur) return refus('no USDC transfer of at least ' + SKIN_MINT_TEXTE + ' to the fee wallet was found in this transaction');
   const signataire = ADR.test(bas(tx.from)) ? bas(tx.from) : null;
   /* appel direct au contrat USDC : celui qui paie est celui qui signe (un smart wallet, lui, a une transaction signee par un relais) */
   if (bas(tx.to) === U && signataire !== payeur) return refus('the payer is not the signer of this direct transfer');
