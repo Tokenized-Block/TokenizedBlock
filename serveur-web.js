@@ -4458,6 +4458,8 @@ const SERVIS = [
   'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js', 'rolls-en-attente.js',
   /* 2026-10-18 : « Let the brain play » — la proposition suivante (pure), importee par app.html : absent d ici = page morte */
   'brain-jeu.js',
+  /* 2026-10-18 : le Brain OS — nos lectures (safety, explain, wallet, gas), pur, importe par app.html : absent d ici = 404 = page morte */
+  'brain-os.js',
   /* 2026-10-18 : les duels (encodeurs purs + lecteurs d evenements), importes par app.html et brain-jeu.js : absent d ici = page morte */
   'duels-plan-app.js',
   /* 2026-10-18 : TicketPot (pot du jour en parts egales) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non signes */

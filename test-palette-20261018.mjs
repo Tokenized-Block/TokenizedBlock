@@ -99,8 +99,9 @@ async function jeu(dir, dire) {
   const etendue = [...C.COMMANDES, zz];
   dire(C.creerAnalyseur(etendue)('zz').ok === true && P.entreesCommandes(etendue).some((e) => e.modele === 'zz') && C.analyserCommande('zz').ok === false,
     'B table ETENDUE : la nouvelle commande est comprise ET listee, sans rien ecrire d autre');
-  dire(cmds.filter((e) => e.ecrire).every((e) => ['post_task', 'select', 'buy', 'sell', 'swap', 'send'].includes(e.cle))
-    && ['post_task', 'select', 'buy', 'sell', 'swap', 'send'].every((k) => cmds.some((e) => e.cle === k && e.ecrire)),
+  /* 2026-10-18 (Brain OS) : « safety <token> » et « explain <hash> » ECRIVENT aussi leur modele (un block, un hash — jamais choisis par nous) */
+  dire(cmds.filter((e) => e.ecrire).every((e) => ['post_task', 'select', 'buy', 'sell', 'swap', 'send', 'safety', 'explain'].includes(e.cle))
+    && ['post_task', 'select', 'buy', 'sell', 'swap', 'send', 'safety', 'explain'].every((k) => cmds.some((e) => e.cle === k && e.ecrire)),
     'B les commandes a montant / block / adresse ECRIVENT leur modele (a ajuster) ; elles ne partent jamais avec un montant choisi par nous');
   dire(new Set(ids(tout)).size === tout.length, 'B les identifiants de la liste sont uniques (' + tout.length + ')');
   return { P, C };

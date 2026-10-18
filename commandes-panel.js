@@ -35,15 +35,26 @@ export const PRECOMMANDES = Object.freeze([
   /* 2026-10-18 (Phil 09:00 : « le brain lui-meme, qui par une commande peut avoir acces au game ») : le Game par le texte. `roll` = le roll
    *   classique (practice sans contrat ; 0,50 USDC par roll et 10 au plus par lot avec le contrat — le wallet signe) ; `game` = l etat du jeu ;
    *   `post task` ouvre le formulaire Post-a-task PRE-REMPLI (rien n est poste par la commande : le formulaire, puis le wallet). */
-  { cle: 'game', libelle: 'Game', modele: 'game' },
   { cle: 'roll', libelle: 'Roll', modele: 'roll' },
   { cle: 'roll_x5', libelle: 'Roll ×5', modele: 'roll x5' },
   { cle: 'post_task', libelle: 'Post a task', modele: 'post task 100 10 10' },
+  /* ══ LA GRILLE « BRAIN OS » (2026-10-18, Phil : « copy how Base Rooms did it and rebuild an OS for our brains ») : `os: true` = la MEME boucle
+   *   de peinture que les puces (app.html, `for (const p of PRECOMMANDES)`) pose ce bouton dans la grille #bcOs au lieu de la rangee #bcPre ;
+   *   le clic ECRIT le modele dans le champ du Chat (bcEcrireModele), comme une puce — aucun second chemin. Les quatre lectures (brain-os.js :
+   *   safety, explain, wallet, gas) et les quatre lectures du jeu (game, log, level, duel). ⛔ Rien ici ne signe : ce sont des lectures. */
+  { cle: 'safety', libelle: 'Safety', modele: 'safety this', ceBlock: true, os: true },
+  /* ⛔ `aCompleter` : le hash se colle (0x + 64 caracteres) — jamais propose par nous */
+  { cle: 'explain', libelle: 'Explain a tx', modele: 'explain 0x', aCompleter: true, os: true, aide: 'Paste the transaction hash (0x and 64 characters), then send.' },
+  { cle: 'wallet', libelle: 'Wallet', modele: 'wallet', os: true },
+  { cle: 'gas', libelle: 'Gas', modele: 'gas', os: true },
+  { cle: 'game', libelle: 'Game', modele: 'game', os: true },
+  /* 2026-10-18 : le journal du jour (/api/jeu/journal) */
+  { cle: 'log', libelle: 'Log', modele: 'log', os: true },
+  /* 2026-10-18 : le niveau du brain (XP de gestes verifies par le serveur, /api/jeu/niveau) — une lecture, rien a signer */
+  { cle: 'level', libelle: 'Level', modele: 'level', os: true },
   /* 2026-10-18 (Phil : « les brains peuvent se faire des duels ») : `duel` liste les defis ouverts et propose Accept / Challenge — rien ne se
    *   signe par la commande : le wallet signe chaque appel (bcSigner), et sans contrat servi la reponse dit « opens with its contract » */
-  { cle: 'duel', libelle: 'Duel', modele: 'duel' },
-  /* 2026-10-18 : le niveau du brain (XP de gestes verifies par le serveur, /api/jeu/niveau) — une lecture, rien a signer */
-  { cle: 'level', libelle: 'Level', modele: 'level' },
+  { cle: 'duel', libelle: 'Duels', modele: 'duel', os: true },
 ]);
 /* Phil 2026-10-18 : « jouer max 10x en un coup » — la MEME borne que planRolls (blockrolls-plan.js ROLLS_MAX) ; test-commandes-panel l epingle */
 export const ROLLS_PAR_COMMANDE_MAX = 10;
@@ -62,6 +73,11 @@ export const AIDE_COMMANDES = Object.freeze([
   'post task <reward> <players> <hold>    e.g. post task 100 10 10 — opens Post-a-task filled in (block units)',
   'duel                                   open duels: accept one or open a challenge (winner 90%, reward pool 7%, TokenizedBlock 3%)',
   'level                                  its brain’s level: XP from verified play, and the weekly-draw perk',
+  /* 2026-10-18 : le Brain OS — quatre LECTURES (brain-os.js), chaque ligne dit ce qui a ete mesure ou « not read » ; jamais « safe » */
+  'safety <token>                         e.g. safety UNIT — what is measured: B20 code, mint cap, its pool, a buy-then-sell round trip. Never a verdict',
+  'explain <tx hash>                      what a transaction did: status, fee, transfers, swaps, our hooks and game events; the rest is said unknown',
+  'wallet [address]                       what a wallet holds: ETH, USDC, stocks, blocks, today’s ticket, rolls waiting (no address = the connected wallet)',
+  'gas                                    Base fee now, and what a swap or a roll costs, from recent real transactions',
   'A token is ETH, a symbol (USDC, NVDAc…), a whole address, or “this” for the block shown.',
 ]);
 
@@ -92,6 +108,27 @@ export const COMMANDES = Object.freeze([
   /* 2026-10-18 : le niveau du brain (/api/jeu/niveau) — « level », « lvl » ou « xp » */
   { cle: 'level', lire: (t) => (/^(level|lvl|xp)$/i.test(t) ? { ok: true, commande: { type: 'level' } } : null),
     palette: [{ nom: 'Level — its brain’s XP and weekly perk', modele: 'level', mots: 'level xp rank perk brain' }] },
+  /* ══ LE BRAIN OS (2026-10-18) — quatre LECTURES de brain-os.js. STRICT : un jeton = un symbole, une adresse entiere ou « this » ; un hash =
+   *   0x + 64 hex ; une adresse = 0x + 40 hex. Une forme reconnue mais incomplete se REFUSE ici avec la forme attendue — rien n est complete. */
+  { cle: 'safety', lire: (t) => {
+    if (!/^safety\b/i.test(t)) return null;
+    if ((m = new RegExp('^safety ' + JETON + '$', 'i').exec(t))) return { ok: true, commande: { type: 'safety', jeton: m[1] } };
+    return { ok: false, pourquoi: 'safety needs: safety <token> — a symbol (UNIT, NVDAc…), a whole address, or “this” for the block shown' };
+  }, palette: [{ nom: 'Safety — what is measured on this block', modele: PRE.safety.modele, mots: 'safety check rug honeypot tax round trip sell back token', ecrire: true }] },
+  { cle: 'explain', lire: (t) => {
+    if (!/^explain\b/i.test(t)) return null;
+    if ((m = /^explain (0x[0-9a-fA-F]{64})$/i.exec(t))) return { ok: true, commande: { type: 'explain', hash: m[1].toLowerCase() } };
+    /* ⛔ un hash tronque n est JAMAIS complete : on le dit */
+    return { ok: false, pourquoi: 'explain needs: explain <transaction hash — 0x and 64 characters, whole>' };
+  }, palette: [{ nom: 'Explain a transaction', modele: PRE.explain.modele, mots: 'tx hash receipt decode what happened transfers swap', ecrire: true }] },
+  { cle: 'wallet', lire: (t) => {
+    if (!/^wallet\b/i.test(t)) return null;
+    if (/^wallet$/i.test(t)) return { ok: true, commande: { type: 'wallet', adresse: null } };
+    if ((m = new RegExp('^wallet ' + ADRESSE + '$', 'i').exec(t))) return { ok: true, commande: { type: 'wallet', adresse: m[1].toLowerCase() } };
+    return { ok: false, pourquoi: 'wallet takes nothing (the connected wallet) or a whole address, 0x and 40 characters' };
+  }, palette: [{ nom: 'My wallet — what it holds, read on chain', modele: PRE.wallet.modele, mots: 'balance holdings eth usdc stocks blocks rolls ticket' }] },
+  { cle: 'gas', lire: (t) => (/^gas$/i.test(t) ? { ok: true, commande: { type: 'gas' } } : null),
+    palette: [{ nom: 'Gas — Base fee, the cost of a swap and a roll', modele: PRE.gas.modele, mots: 'gas fee gwei price cost cheap' }] },
   { cle: 'roll', lire: (t) => {
     if (!/^rolls?\b/i.test(t)) return null;
     /* roll · roll x5 · roll x 5 · roll 5 · rolls x10 — le nombre est LU, jamais plafonne : « roll x11 » est refuse, pas ramene a 10 */
@@ -163,6 +200,8 @@ export function creerAnalyseur(table) {
  *   game  : { type:'game' }           roll  : { type:'roll', n }  (n = 1..ROLLS_PAR_COMMANDE_MAX ; « roll x11 » est REFUSE, jamais plafonne)
  *   duel  : { type:'duel' }           (« duel » ou « duels »)        log : { type:'log' }  (« log » ou « today » : le journal du jour)
  *   post_task : { type:'post_task', reward, players, hold }  (reward / hold = le texte du nombre, en unites humaines du block ; players = entier)
+ *   safety : { type:'safety', jeton }   explain : { type:'explain', hash }  (0x + 64 hex, en minuscules)
+ *   wallet : { type:'wallet', adresse|null }  (null = le wallet connecte)   gas : { type:'gas' }
  */
 export const analyserCommande = creerAnalyseur(COMMANDES);
 

@@ -753,6 +753,10 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcMsg li.non{color:#fca5a5}
 .bcMsg .bcBoutons{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
 .bcPre{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 8px}
+/* 2026-10-18 : la grille Brain OS — 4 colonnes, qui tiennent dans un panneau de 375 px (8 boutons sur 2 rangees, libelle sur UNE ligne, ellipse) */
+.bcOs{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin:10px 0 0}
+.bcOs .bcOsTitre{grid-column:1/-1;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--doux)}
+.bcOs .puce{min-width:0;padding:6px 6px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bcParler{flex-basis:100%;display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:4px}
 .bcParler .bcSousTitre{flex-basis:100%;margin:4px 0 0}
 .bcPre button{appearance:none;font-family:inherit;cursor:pointer;color:var(--texte)}
@@ -2121,6 +2125,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- 2026-10-09 (Phil : « le chat reste bloque apres une interaction, les boutons d interaction ne sont plus la ») : les gestes
              Brain vivaient seulement dans la vue Market ; un clic basculait sur le Chat et on ne pouvait plus continuer. Ils sont ICI aussi. -->
         <div class="bcPre bcParler" id="bcParlerChat"></div>
+        <!-- 2026-10-18 : la grille « Brain OS » — huit LECTURES (safety, explain, wallet, gas, game, log, level, duels). Chaque bouton ECRIT sa
+             commande dans le champ ci-dessous (la meme boucle que les puces, bcEcrireModele) : on lit, on ajuste, on envoie. Ici, dans la vue Chat,
+             parce que c est la que le champ est visible (lecon : un modele ecrit dans un volet masque est un geste perdu). Rien ici ne signe. -->
+        <div class="bcOs" id="bcOs" role="group" aria-label="Brain OS — read tools"><span class="bcOsTitre">Brain OS · reads, nothing signs</span></div>
         <div class="bcPre" id="bcPre"></div>
         <form onsubmit="return false" id="bcForm" class="bcComposer" autocomplete="off">
           <span class="bcInvite" aria-hidden="true">›</span>
@@ -4116,6 +4124,8 @@ import { planFund as planFundPot, planClaim as planClaimPot, planClose as planCl
 import { prochaineProposition as bjProposition } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
 import * as Duels from './duels-plan-app.js';
+/* 2026-10-18 : le Brain OS — nos propres LECTURES (safety, explain, wallet, gas), sans cle tierce ; pur, le `rpc` de l app lui est passe */
+import * as BrainOs from './brain-os.js';
 import { SKIN_ACTIONS_CANDIDATES as DUEL_ACTIONS_CANDIDATES } from './blockskins.js';
 import { poolId as poolIdV4 } from './pool.js';
 import { topic as topicDe } from './keccak.js';
@@ -24480,6 +24490,8 @@ function bcLigneEtatPlan(p) {
 }
 function bcResoudre(ref) {
   const r = String(ref || '').trim();
+  /* 2026-10-18 (mesure : « safety UNIT » -> « No block named UNIT ») : UNIT est LE block de l app — connu sans attendre l index du Market */
+  if (/^unit$/i.test(r)) return { ok: true, adr: UNIT_APP.toLowerCase(), sym: 'UNIT' };
   if (/^(this|it|block)$/i.test(r)) {
     if (!brainAdr) return { ok: false, pourquoi: 'pick a block first (“this” is the block shown)' };
     const mk = marcheParAdr.get(String(brainAdr).toLowerCase()), lu = bcNoms.get(String(brainAdr).toLowerCase());
@@ -24711,6 +24723,8 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
       return;
     }
     const enCours = bcEtape(m, 'Building the plan…');
+    /* 2026-10-18 (Brain OS) : la surete MESUREE du jeton achete part en meme temps que le plan, et se dit AVANT la signature (plus bas) */
+    const surete = bcLigneSurete(vers);
     let p;
     try {
       const r = await fetch('/api/rails/plan?de=' + (de.adr === ETH_ADR.toLowerCase() ? 'ETH' : de.adr) + '&vers=' + (vers.adr === ETH_ADR.toLowerCase() ? 'ETH' : vers.adr)
@@ -24728,6 +24742,9 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
       return;
     }
     if (accordCerveau) bcEtape(m, accordCerveau, 'oui');
+    /* la ligne de surete du jeton achete (brain-os.js lireSurete) : ce qui a ete mesure, ou « not read » — jamais « safe » ; rien pour une devise */
+    const ligneSurete = await surete;
+    if (ligneSurete) bcEtape(m, ligneSurete.texte, ligneSurete.classe);
     const rs = p.resume || {};
     /* ⛔ LE FRAIS DIT EST CELUI DU PLAN, ET LE BON. Mesure prod (ETH > IB022) : `fraisBps: "0"`, `fraisMarcheBps: 50`, `fraisParHook: true`
      *   — le panneau affichait « Fee: 0 % » sur un echange ou le marche du block preleve 0,5 % par son hook. Un chiffre vrai (le frais
@@ -25041,6 +25058,82 @@ async function bcAccepterDuel(m, id) {
     void lireDuelsServis(true).then(() => { void peindreDuels(); });
   }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
 }
+/* ══ LE BRAIN OS (2026-10-18, Phil : « copy how Base Rooms did it and rebuild an OS for our brains ») — quatre LECTURES de brain-os.js, avec le
+ *   `rpc` de l app et ses routes (/api/avoirs, /api/blocks-de, /api/tirage). ⛔ Chaque ligne ecrite est une mesure, ou dit « not read » ; aucune ne
+ *   dit « safe ». ⛔ Rien ici ne signe, ne propose ni n envoie une transaction. Place AVANT bcExecuterTexte, comme bcCommandeDuel (hors de la tranche
+ *   que test-commandes-jeu decoupe). */
+const bcLireJson = (chemin) => fetch(chemin, { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json());
+/** Les lignes d une lecture, dans le fil : texte + classe (oui / non / rien), telles que brain-os.js les rend. */
+const bcLignesOs = (m, lignes) => { for (const l of lignes || []) bcEtape(m, l.texte, l.classe || ''); };
+/** La surete MESUREE d un jeton (brain-os.js lireSurete, cles de pool lues par /api/cle comme le planificateur), bornee dans le temps. */
+async function bcSureteDe(adr, ms = 45000) {
+  let cles = []; try { cles = await bcAvecDelai(clesReellesDe(adr), 8000); } catch (_) { cles = []; }
+  return bcAvecDelai(BrainOs.lireSurete({ rpc, jeton: adr, chaine: CHAINE, clesExactes: Array.isArray(cles) ? cles : [] }), ms);
+}
+async function bcCommandeSafety(ref) {
+  const m = bcMessage('Brain OS · safety', '', 'Safety');
+  bcVue('chat');
+  const j = bcResoudre(ref);
+  if (!j.ok) { bcEtape(m, 'Safety not read — ' + String(j.pourquoi).replace(/\.+$/, '') + '.', 'non'); return; }
+  if (j.adr === ETH_ADR.toLowerCase()) { bcEtape(m, 'Safety not read — ETH is the currency of Base, not a token contract.', 'non'); return; }
+  const lecture = bcEtape(m, 'Reading ' + j.sym + ' on chain — code, mint cap, its pool, then a buy-then-sell round trip…');
+  let r = null;
+  try { r = await bcSureteDe(j.adr); } catch (_) { r = null; }
+  lecture.remove();
+  if (!r || !Array.isArray(r.lignes)) { bcEtape(m, 'Safety not read — the chain did not answer in time. Nothing is claimed about ' + j.sym + '.', 'non'); return; }
+  bcEtape(m, j.sym + ' · ' + j.adr);
+  bcLignesOs(m, r.lignes);
+  if (r.resume) bcEtape(m, r.resume);
+}
+async function bcCommandeExplain(hash) {
+  const m = bcMessage('Brain OS · explain', '', 'Transaction ' + court(hash));
+  bcVue('chat');
+  const lecture = bcEtape(m, 'Reading the transaction and its receipt…');
+  let r = null;
+  try { r = await bcAvecDelai(BrainOs.expliquerTx({ rpc, hash, chaine: CHAINE }), 30000); } catch (_) { r = null; }
+  lecture.remove();
+  if (!r || !Array.isArray(r.lignes)) { bcEtape(m, 'Transaction not read — the node did not answer in time.', 'non'); return; }
+  bcLignesOs(m, r.lignes);
+  if (Number.isInteger(r.inconnus) && r.inconnus > 0) bcEtape(m, r.inconnus + ' event' + (r.inconnus > 1 ? 's' : '') + ' not recognized — listed as unknown, not interpreted.');
+  m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
+}
+async function bcCommandeWallet(adresse) {
+  const m = bcMessage('Brain OS · wallet', '', 'Wallet');
+  bcVue('chat');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  const a = adresse ? String(adresse).toLowerCase() : c ? String(c).toLowerCase() : null;
+  if (!a) { bcEtape(m, 'Wallet not read — connect a wallet, or write “wallet 0x…” with a whole address (0x and 40 characters).', 'non'); return; }
+  const lecture = bcEtape(m, 'Reading ' + a + (c && a === String(c).toLowerCase() ? ' (your wallet)' : '') + '…');
+  /* les blocks que l app connait deja pour ce wallet : le block affiche, et ceux dont le createur lu est ce wallet */
+  const connus = [brainAdr, ...(creationsLues || []).filter((x) => x && String(x.createur || '').toLowerCase() === a).map((x) => x.jeton)].filter((x) => /^0x[0-9a-fA-F]{40}$/.test(String(x || '')));
+  const nomDe = (b) => { const r = bcResoudre(b); return r.ok && r.sym && !/^0x/.test(r.sym) ? r.sym : null; };
+  let r = null;
+  try { r = await bcAvecDelai(BrainOs.lireWallet({ rpc, lireJson: bcLireJson, adresse: a, blocksConnus: connus, nomDe }), 60000); } catch (_) { r = null; }
+  lecture.remove();
+  if (!r || !Array.isArray(r.lignes)) { bcEtape(m, 'Wallet not read — the chain or the server did not answer in time.', 'non'); return; }
+  bcEtape(m, a);
+  bcLignesOs(m, r.lignes);
+}
+async function bcCommandeGas() {
+  const m = bcMessage('Brain OS · gas', '', 'Gas on Base');
+  bcVue('chat');
+  const lecture = bcEtape(m, 'Reading the base fee and recent transactions…');
+  let r = null;
+  try { r = await bcAvecDelai(BrainOs.lireGas({ rpc, chaine: CHAINE }), 30000); } catch (_) { r = null; }
+  lecture.remove();
+  if (!r || !Array.isArray(r.lignes)) { bcEtape(m, 'Gas not read — the node did not answer in time.', 'non'); return; }
+  bcLignesOs(m, r.lignes);
+}
+/** UNE ligne de surete pour le jeton ACHETE, dite avant toute signature (bcProposerSwap). Une devise du registre ou ETH : rien a mesurer (null). */
+async function bcLigneSurete(vers) {
+  const a = String(vers.adr).toLowerCase();
+  if (a === ETH_ADR.toLowerCase() || DEVISES_BASE.some((d) => String(d.adr).toLowerCase() === a)) return null;
+  try {
+    const r = await bcSureteDe(a, 15000);
+    if (!r || !r.resume) return { texte: 'Safety of ' + vers.sym + ': not read.', classe: 'non' };
+    return { texte: 'Safety of ' + vers.sym + ' — ' + r.resume + ' Write “safety ' + vers.sym + '” for every line.', classe: (r.lignes || []).some((l) => l.classe === 'non') ? 'non' : '' };
+  } catch (_) { return { texte: 'Safety of ' + vers.sym + ': not read.', classe: 'non' }; }
+}
 /** Une commande ECRITE ici (ou une pre-commande touchee) : la grammaire de commandes-panel.js, puis le meme chemin. */
 /* ⛔ `note` = l endroit ou le refus s ecrit. Le ticket de l onglet Trade passe LE SIEN : ecrit dans la note du Chat, un refus du
  *   ticket serait juste et invisible (la vue Chat est masquee a ce moment-la). */
@@ -25073,6 +25166,11 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
   if (c.type === 'roll') { void bcCommandeRoll(c.n); return true; }
   if (c.type === 'post_task') { bcCommandePostTask(c); return true; }
   if (c.type === 'duel') { void bcCommandeDuel(); return true; }
+  /* ── LE BRAIN OS (2026-10-18) : quatre LECTURES (brain-os.js), rien a signer ── */
+  if (c.type === 'safety') { void bcCommandeSafety(c.jeton); return true; }
+  if (c.type === 'explain') { void bcCommandeExplain(c.hash); return true; }
+  if (c.type === 'wallet') { void bcCommandeWallet(c.adresse); return true; }
+  if (c.type === 'gas') { void bcCommandeGas(); return true; }
   const erreur = (t) => { note.className = 'note wKo'; note.textContent = t; return false; };
   if (c.type === 'swap') {
     const de = bcResoudre(c.de);
@@ -26503,7 +26601,8 @@ for (const p of PRECOMMANDES) {
     if (p.cle === 'tasks') { void bcExecuterTexte('tasks'); return; }
     bcEcrireModele(p);
   });
-  $('#bcPre').append(b);
+  /* 2026-10-18 : `os: true` = la grille Brain OS (#bcOs), sinon la rangee des puces — UNE boucle, un seul geste (ecrire le modele) */
+  $(p.os ? '#bcOs' : '#bcPre').append(b);
 }
 /** Un modele ECRIT dans le champ du Chat, a ajuster avant d envoyer (curseur / selection poses) — la puce et la palette, une fonction. */
 function bcEcrireModele(p) {
