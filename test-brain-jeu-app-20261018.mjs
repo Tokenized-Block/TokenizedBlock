@@ -11,7 +11,9 @@ const serveur = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8
 for (const id of ['brainJeuCarte', 'bjJouer', 'bjOff', 'bjBudget', 'bjMaxH', 'bjMaxSkin', 'bjRolls', 'bjMissions', 'bjPost', 'bjSkins', 'bjEtat', 'skinBrain']) vu(app.split('id="' + id + '"').length === 2, 'element #' + id + ' present une fois');
 vu(/id="bjJouer">Let the brain play</.test(app), 'le bouton dit « Let the brain play »');
 vu(/id="bjOff" hidden>Off</.test(app), 'l interrupteur « Off » existe, cache tant que c est eteint');
-vu(app.indexOf('id="brainJeuCarte"') > app.indexOf('id="v-missions"') && app.indexOf('id="brainJeuCarte"') < app.indexOf('id="tirCarte"'), 'la carte est DANS l onglet Game, en tete');
+/* UX 2026-10-18 (Phil : « ameliore l ux ») : le Roll est le premier ecran ; la carte du brain suit, limites repliees, resume peint */
+vu(app.indexOf('id="brainJeuCarte"') > app.indexOf('id="tirCarte"') && app.indexOf('id="brainJeuCarte"') < app.indexOf('id="missionsCarte"'), 'la carte est DANS l onglet Game, juste apres Draws');
+vu(/<details class="bjLimites"[^>]*>\s*<summary class="note" id="bjResume"/.test(app) && /rz\.textContent = 'Limits — '/.test(app) && /if \(d\) d\.open = true;/.test(app), 'limites repliees, resume = reglages enregistres, un refus les ouvre');
 vu(/import \{ prochaineProposition as bjProposition \} from '\.\/brain-jeu\.js';/.test(app), 'app.html importe brain-jeu.js');
 vu(/'brain-jeu\.js',/.test(serveur.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/)[1]), 'brain-jeu.js est dans SERVIS');
 

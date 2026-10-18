@@ -3546,30 +3546,6 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" class="jeuJeu" data-jeu="missionsCarte"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
       <button type="button" class="jeuJeu" data-jeu="skinCarte"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
     </div>
-    <!-- LET THE BRAIN PLAY (Phil 2026-10-18 : « le brain peut jouer aux jeux s il a des fonds et l autorisation, en UN bouton ») — UN bouton,
-         un petit panneau de limites. Allume : toutes les 30 s (la cadence de S.I) brain-jeu.js donne LA proposition suivante (settle, roll,
-         mission, skin) ; elle s ouvre dans le chat du panneau avec UN bouton « Sign » qui passe par bcSigner : le wallet confirme chaque
-         appel. ⛔ Rien ne se signe tout seul ; « Off » arrete la boucle. Reglages gardes dans ce navigateur (localStorage, try/catch). -->
-    <div class="carte" id="brainJeuCarte">
-      <span class="jeuKick">Game · Its brain plays</span>
-      <p class="titre jeuTitre" style="font-size:16px">One button: its brain plays inside your limits. Your wallet signs every move.</p>
-      <div class="bjReglages">
-        <label class="champ">Budget (USDC)<input id="bjBudget" inputmode="decimal" value="5"></label>
-        <label class="champ">Max rolls per hour<input id="bjMaxH" inputmode="numeric" value="6"></label>
-        <label class="champ">Max skin bid (USDC)<input id="bjMaxSkin" inputmode="decimal" value="2"></label>
-      </div>
-      <div class="bjJeux" role="group" aria-label="Which games">
-        <label><input type="checkbox" id="bjRolls" checked> Rolls</label>
-        <label><input type="checkbox" id="bjMissions"> Missions</label>
-        <label><input type="checkbox" id="bjPost"> Post missions</label>
-        <label><input type="checkbox" id="bjSkins"> Skin bids</label>
-      </div>
-      <div class="jourEtapes">
-        <button type="button" class="bouton" id="bjJouer">Let the brain play</button>
-        <button type="button" class="bouton sec" id="bjOff" hidden>Off</button>
-      </div>
-      <p class="note" id="bjEtat" style="margin:6px 0 0">Off. Each move opens in its brain's panel with one “Sign” — your wallet confirms it. Nothing signs by itself.</p>
-    </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
     <div class="carte" id="tirCarte">
       <span class="jeuKick">Game · Draws</span>
@@ -3631,6 +3607,34 @@ details[open] > summary::before{transform:rotate(90deg)}
           <p class="note" id="faceJourGagnant" style="margin:4px 0 0"></p>
         </div>
       </div>
+    </div>
+    <!-- LET THE BRAIN PLAY (Phil 2026-10-18 : « le brain peut jouer aux jeux s il a des fonds et l autorisation, en UN bouton ») — UN bouton,
+         un petit panneau de limites. Allume : toutes les 30 s (la cadence de S.I) brain-jeu.js donne LA proposition suivante (settle, roll,
+         mission, skin) ; elle s ouvre dans le chat du panneau avec UN bouton « Sign » qui passe par bcSigner : le wallet confirme chaque
+         appel. ⛔ Rien ne se signe tout seul ; « Off » arrete la boucle. Reglages gardes dans ce navigateur (localStorage, try/catch).
+         UX 2026-10-18 (Phil : « ameliore l ux ») : la carte vient APRES le jeu (le Roll est le premier ecran) et ses limites sont repliees. -->
+    <div class="carte" id="brainJeuCarte">
+      <span class="jeuKick">Game · Its brain plays</span>
+      <p class="titre jeuTitre" style="font-size:16px">One button: its brain plays inside your limits. Your wallet signs every move.</p>
+      <div class="jourEtapes">
+        <button type="button" class="bouton" id="bjJouer">Let the brain play</button>
+        <button type="button" class="bouton sec" id="bjOff" hidden>Off</button>
+      </div>
+      <p class="note" id="bjEtat" style="margin:6px 0 0">Off. Each move opens in its brain's panel with one “Sign” — your wallet confirms it. Nothing signs by itself.</p>
+      <details class="bjLimites" style="margin-top:6px">
+        <summary class="note" id="bjResume" style="cursor:pointer">Limits</summary>
+        <div class="bjReglages">
+          <label class="champ">Budget (USDC)<input id="bjBudget" inputmode="decimal" value="5"></label>
+          <label class="champ">Max rolls per hour<input id="bjMaxH" inputmode="numeric" value="6"></label>
+          <label class="champ">Max skin bid (USDC)<input id="bjMaxSkin" inputmode="decimal" value="2"></label>
+        </div>
+        <div class="bjJeux" role="group" aria-label="Which games">
+          <label><input type="checkbox" id="bjRolls" checked> Rolls</label>
+          <label><input type="checkbox" id="bjMissions"> Missions</label>
+          <label><input type="checkbox" id="bjPost"> Post missions</label>
+          <label><input type="checkbox" id="bjSkins"> Skin bids</label>
+        </div>
+      </details>
     </div>
     <!-- MISSIONS : la liste du contrat (/api/missions) avec « I did it — claim » ; ELIGIBILITE = le ticket du jour (Phil : « ceux qui
          participent au draw sont eligibles pour les missions », garde serveur) + detenir le block (contrat). -->
@@ -5259,11 +5263,14 @@ function bjPeindre(msg) {
   $('#bjJouer').hidden = on; $('#bjOff').hidden = !on;
   for (const id of ['#bjBudget', '#bjMaxH', '#bjMaxSkin', '#bjRolls', '#bjMissions', '#bjPost', '#bjSkins']) $(id).disabled = on;
   const jeux = [bj.rolls && 'rolls', bj.missions && 'missions', bj.post && 'post missions', bj.skins && 'skin bids'].filter(Boolean).join(', ');
+  /* le resume replie dit les limites ENREGISTREES (jamais un texte fige qui mentirait apres un reglage) */
+  const rz = $('#bjResume'); if (rz) rz.textContent = 'Limits — ' + (jeux || 'no game ticked') + ' · budget ' + usdcTexte(bj.budget) + ' USDC · ' + bj.maxH + ' roll' + (bj.maxH === 1 ? '' : 's') + ' an hour · skin bids up to ' + usdcTexte(bj.maxSkin) + ' USDC';
   $('#bjEtat').textContent = msg || (on ? 'On — ' + jeux + ' · spent ' + usdcTexte(bj.depense) + ' of ' + usdcTexte(bj.budget) + ' USDC · at most ' + bj.maxH + ' roll' + (bj.maxH === 1 ? '' : 's') + ' an hour. Each move waits for your signature in its brain\'s panel.'
     : 'Off. Each move opens in its brain\'s panel with one “Sign” — your wallet confirms it. Nothing signs by itself.');
 }
 function bjAllumer() {
-  const dire = (t) => { $('#bjEtat').textContent = t; };
+  /* un refus ouvre les limites repliees : le champ a corriger est sous les yeux */
+  const dire = (t) => { $('#bjEtat').textContent = t; const d = $('#bjResume') && $('#bjResume').parentElement; if (d) d.open = true; };
   const budget = bjUsdc($('#bjBudget').value), maxSkin = bjUsdc($('#bjMaxSkin').value), maxH = Number($('#bjMaxH').value);
   const rolls = $('#bjRolls').checked, missions = $('#bjMissions').checked, post = $('#bjPost').checked, skins = $('#bjSkins').checked;
   if (budget === null || budget <= 0n) return dire('The budget must be an amount in USDC above zero, like 5 or 2.5.');

@@ -10,8 +10,9 @@ import { strict as assert } from 'node:assert';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-const c0 = app.indexOf('id="tirCarte"'), c1 = app.indexOf('id="missionsCarte"');
-vu(c0 > 0 && c1 > c0, 'la carte Draws precede la carte Missions');
+/* UX 2026-10-18 (Phil : « ameliore l ux ») : Draws d abord, puis « Its brain plays », puis Missions */
+const c0 = app.indexOf('id="tirCarte"'), c1 = app.indexOf('id="brainJeuCarte"');
+vu(c0 > 0 && c1 > c0 && app.indexOf('id="missionsCarte"') > c1, 'la carte Draws precede la carte du brain, qui precede Missions');
 /* ce qui est SERVI au visiteur : les commentaires HTML (qui racontent pourquoi) sont otes avant de juger les textes */
 const carte = app.slice(c0, c1).replace(/<!--[\s\S]*?-->/g, '');
 const ids = [...carte.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
