@@ -25,7 +25,9 @@ export function depensesJeu(logs, contrat) {
     else continue;
     if (!/^0x[0-9a-f]{40}$/.test(joueur) || brut <= 0n) continue;
     const cle = bas(l.transactionHash) + '|' + joueur;
-    const e = parCle.get(cle) || { tx: bas(l.transactionHash), joueur, brut: 0n };
+    /* `bloc` : le bloc du log (le serveur credite le JOUR de ce bloc, pas celui du scan) ; null si le log ne le porte pas */
+    let bloc = null; try { bloc = l.blockNumber != null ? Number(BigInt(l.blockNumber)) : null; } catch (_) { bloc = null; }
+    const e = parCle.get(cle) || { tx: bas(l.transactionHash), joueur, brut: 0n, bloc: Number.isSafeInteger(bloc) ? bloc : null };
     e.brut += brut; parCle.set(cle, e);
   }
   return [...parCle.values()];

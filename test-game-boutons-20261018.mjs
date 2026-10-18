@@ -15,7 +15,9 @@ vu(c0 > 0 && c1 > c0, 'la carte Draws precede la carte Missions');
 /* ce qui est SERVI au visiteur : les commentaires HTML (qui racontent pourquoi) sont otes avant de juger les textes */
 const carte = app.slice(c0, c1).replace(/<!--[\s\S]*?-->/g, '');
 const ids = [...carte.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
-vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin', 'jourAuto', 'jourRollPaye', 'jourPass']), 'exactement 4 boutons visibles + Auto-roll + 2 boutons BlockRolls caches (lus : ' + ids.join(', ') + ')');
+/* 2026-10-18 (revue adverse) : + « Settle pending rolls » (rolls payes en attente) et « Close and draw yesterday's pass pot », caches */
+vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin', 'jourAuto', 'jourRollPaye', 'jourPass', 'rollsRegler', 'jourTirerJour']), 'exactement 4 boutons visibles + Auto-roll + 4 boutons BlockRolls caches (lus : ' + ids.join(', ') + ')');
+vu(/<button[^>]*\bid="rollsRegler"[^>]*\bhidden\b/.test(carte) && /<button[^>]*\bid="jourTirerJour"[^>]*\bhidden\b/.test(carte), 'settle en attente et tirage du pot du jour : caches dans le HTML');
 vu(/<button[^>]*\bid="jourAuto"[^>]*\bhidden\b/.test(carte) && /\$\('#jourAuto'\)\.hidden = !c|ba\.hidden = !c/.test(app), 'Auto-roll est cache sans wallet (pas de score sans ticket)');
 /* BlockRolls (2026-10-18) : les boutons payants sont caches dans le HTML et ne s ouvrent que si le serveur sert rolls.contrat ET un wallet */
 vu(/<button[^>]*\bid="jourRollPaye"[^>]*\bhidden\b/.test(carte) && /<button[^>]*\bid="jourPass"[^>]*\bhidden\b/.test(carte), 'boutons BlockRolls caches dans le HTML');
@@ -28,11 +30,11 @@ vu(/const bpr = \$\('#jourRoll'\); if \(bpr\) bpr\.hidden = on;/.test(pb), 'cont
 const rp = app.slice(app.indexOf('async function rollPaye()'), app.indexOf('async function passPaye()'));
 vu(/\$\('#dernierFace'\)\.innerHTML = logoSvg\(paramsLogoDepuisApparence\(faceRevelee\(st\.blockHash\)/.test(rp) && /rollEnCours = false;/.test(rp), 'le roll paye dessine la face du bloc cible et rend la main a l apercu');
 vu(!/\.jourFace\[data-gagne="0"\]\{[^}]*grayscale/.test(app), 'la face du ticket n est plus grisee');
-/* Auto-roll : le lot avec pass (une signature, settleMany) n est tente QUE si le contrat est servi ET un pass est actif ; sinon practice */
-const ar = app.slice(app.indexOf('async function autoRoll()'), app.indexOf('async function autoRollAvecPass('));
-vu(/if \(rollsCfg && await autoRollAvecPass\(c\)\) return;/.test(ar), 'Auto-roll : lot avec pass seulement si rollsCfg (contrat servi)');
-const arp = app.slice(app.indexOf('async function autoRollAvecPass('), app.indexOf("$('#jourAuto').addEventListener"));
-vu(/if \(!passActif\(pass\)\) return false;/.test(arp) && /planRollsAvecPass\(/.test(arp) && /planSettleMany\(/.test(arp) && /lireRolledTous\(/.test(arp) && /lireSettledTous\(/.test(arp) && /PERDU/.test(arp), 'lot avec pass : pass actif exige, N rolls, settleMany, Rolled/Settled lus, fenetre perdue dite');
+/* Auto-roll (2026-10-18, revue adverse) : contrat servi -> lot REEL (pass actif : rollWithPass ; sinon 5 rolls payes) ; practice sans contrat */
+const ar = app.slice(app.indexOf('async function autoRoll()'), app.indexOf('async function autoRollLot('));
+vu(/if \(rollsCfg\) \{ await autoRollLot\(c\); return; \}/.test(ar), 'Auto-roll : lot reel des que rollsCfg (contrat servi)');
+const arp = app.slice(app.indexOf('async function autoRollLot('), app.indexOf('/* ── petits outils partages'));
+vu(/passActif\(pass\)/.test(arp) && /planRollsAvecPass\(/.test(arp) && /planRolls\(/.test(arp) && /planSettleMany\(/.test(arp) && /lireRolledTous\(/.test(arp) && /lireSettledTous\(/.test(arp) && /PERDU/.test(arp), 'lot : pass ou payant, N rolls, settleMany, Rolled/Settled lus, fenetre perdue dite');
 vu(!/<button[^>]*\bdisabled\b/.test(carte), 'aucun bouton desactive dans la carte Draws');
 /* ce que le visiteur VOIT : les boutons `hidden` (BlockRolls, ouverts seulement par le serveur) sont otes avant de juger les textes */
 const visible = carte.replace(/<button[^>]*\bhidden\b[^>]*>[\s\S]*?<\/button>/g, '');

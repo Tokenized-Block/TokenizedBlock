@@ -19,8 +19,9 @@ for (const f of ['deployer-blockrolls.html', 'blockrolls-deploiement.js', 'block
 vu(/import \{ BLOCKROLLS_DEPLOIEMENT \} from '\.\/blockrolls-deploiement\.js';/.test(srv), 'la fiche est importee (pas une variable d environnement)');
 const t0 = srv.indexOf("if (chemin === '/api/tirage')"), t1 = srv.indexOf('regle: ', t0);
 const tirage = srv.slice(t0, t1);
-vu(/contrat: \/\^0x\[0-9a-f\]\{40\}\$\/i\.test\(String\(BLOCKROLLS_DEPLOIEMENT\.adresse \|\| ''\)\)/.test(tirage) && /: null/.test(tirage), '/api/tirage.rolls.contrat = adresse de la fiche ou null');
-vu(/prixRoll: String\(rc\.rollPrice/.test(tirage) && /prixPass: String\(rc\.passPrice/.test(tirage) && /prizes: \[rc\.prize5, rc\.prize4, rc\.prize3\]/.test(tirage), 'prix et gains lus dans la fiche');
+/* 2026-10-18 : l adresse est calculee une fois (contratRolls : elle sert aussi au pot lu et au bloc servi), puis rendue en rolls.contrat */
+vu(/const contratRolls = \/\^0x\[0-9a-f\]\{40\}\$\/i\.test\(String\(BLOCKROLLS_DEPLOIEMENT\.adresse \|\| ''\)\)/.test(tirage) && /const rolls = \{ contrat: contratRolls,/.test(tirage) && /: null/.test(tirage), '/api/tirage.rolls.contrat = adresse de la fiche ou null');
+vu(/prixRoll: String\(rc\.rollPrice/.test(tirage) && /prixPass: String\(rc\.passPrice/.test(tirage) && /prizes: \[rc\.prize5, rc\.prize4, rc\.prize3, rc\.prize2\]/.test(tirage), 'prix et les 4 gains (2/5 compris) lus dans la fiche');
 vu(!/500000|10000000/.test(tirage), 'aucun prix tape dans la route');
 /* 2026-10-18 14:25 UTC : Phil a signe (tx 0x6412ec99…be ca2, bloc 52 770 558) ; noter-deploiement-blockrolls a verifie input == creation, recu 0x1
  *   et les relectures avant d ecrire. La fiche porte l adresse ET le bloc, ensemble — c est ce qui ouvre les boutons payants (rolls.contrat). */

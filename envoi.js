@@ -241,7 +241,10 @@ export async function envoyerViaSendCalls({ eth, chaineAttendue, compte, to, dat
       return { etat: 'ENVOYE_AA', hash: String(v.hash || ''), gaz: null, batchSize: lot.length, atomiqueExige: version === '2.0.0',
         /* ⛔ LE NOMBRE DE RECUS EST REMONTE : il permet a l appelant de verifier que le lot a bien
          *   applique TOUS ses appels, au lieu de le supposer depuis `batchSize`. */
-        recusOk: (v.recus || []).length };
+        recusOk: (v.recus || []).length,
+        /* 2026-10-18 : TOUS les hashes des recus (un lot 1.0 ou un wallet qui ne groupe pas en une tx en rend plusieurs) — BlockRolls lit
+         *   les Rolled de chacun ; `hash` (le dernier) reste ce qu il etait */
+        hashes: (v.recus || []).map((x) => String((x && x.transactionHash) || '')).filter((h) => /^0x[0-9a-f]{64}$/i.test(h)) };
     }
     if (v.etat === 'PARTIEL') {
       return { etat: 'PARTIEL', pourquoi: v.pourquoi, partiel: true,
@@ -330,6 +333,7 @@ export async function envoyerLotAtomique({ eth, rpc, chaineAttendue, compte, cal
      *   « 1 recu < 3 appels » affichait un emprunt REUSSI comme « Only 0 of 3 steps were confirmed ». Le compte des recus ne vaut
      *   que pour un lot 1.0, qui n exige pas l atomicite. */
     return { etat: 'CONFIRME', hash: aa.hash, gaz: null, batchSize: calls.length,
+      hashes: Array.isArray(aa.hashes) && aa.hashes.length ? aa.hashes : [aa.hash],
       appelsConfirmes: confirmes, atomiqueExige: aa.atomiqueExige === true,
       tousConfirmes: aa.atomiqueExige === true ? true : confirmes === null ? null : confirmes === calls.length };
   }

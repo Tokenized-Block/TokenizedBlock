@@ -4018,6 +4018,21 @@ setInterval(() => { void crediterDetenteursSkins(); }, 600000).unref?.();
  *   contrat BlockRolls DE LA FICHE (adresse ecrite par noter apres la signature) sont lus par fenetres de 2 000 blocs depuis son bloc de
  *   deploiement ; chaque (tx, joueur) externe est credite en USD (USDC brut / 1e6) au jour courant (volume-rolls.js depensesJeu). Un roll sur
  *   pass compte 0 (le pass est compte a l achat). Lecture ratee -> le curseur ne bouge pas, rien n est invente. */
+/* ⛔ 2026-10-18 (revue adverse) : (1) le credit allait au jour du SCAN (Date.now) — un roll de 23:59 lu a 00:01 comptait pour le lendemain ;
+ *   il va desormais au jour UTC du BLOC du log (horodatage lu, garde en cache). Un horodatage illisible -> la fenetre n est PAS creditee et
+ *   le curseur ne bouge pas (relue au tour suivant). (2) Le curseur s arretait sur la tete EXACTE : un noeud en retard rendait une fenetre
+ *   sans ses derniers logs, perdus pour toujours ; il s arrete a tete - ROLLS_MARGE_BLOCS. */
+const ROLLS_MARGE_BLOCS = 3;
+const horodatagesBlocsRolls = new Map();
+async function horodatageBloc(n) {
+  if (horodatagesBlocsRolls.has(n)) return horodatagesBlocsRolls.get(n);
+  const b = await rpcServeur('eth_getBlockByNumber', ['0x' + n.toString(16), false]);
+  const ts = b && parseInt(b.timestamp, 16);
+  if (!Number.isSafeInteger(ts) || ts <= 0) return null;
+  horodatagesBlocsRolls.set(n, ts);
+  if (horodatagesBlocsRolls.size > 5000) horodatagesBlocsRolls.delete(horodatagesBlocsRolls.keys().next().value);
+  return ts;
+}
 let rollsScanEnVol = false;
 async function crediterVolumeRolls() {
   const contrat = String(BLOCKROLLS_DEPLOIEMENT.adresse || '').toLowerCase();
@@ -4026,18 +4041,32 @@ async function crediterVolumeRolls() {
   try {
     const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     if (!Number.isSafeInteger(tete)) return;
+    const sur = tete - ROLLS_MARGE_BLOCS;
     let de = Number.isSafeInteger(revenu.rollsScan) ? revenu.rollsScan + 1 : BLOCKROLLS_DEPLOIEMENT.bloc;
     const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
-    for (let tour = 0; tour < 10 && de <= tete; tour++) {
-      const a = Math.min(tete, de + 1999);
+    for (let tour = 0; tour < 10 && de <= sur; tour++) {
+      const a = Math.min(sur, de + 1999);
       const logs = await rpcServeur('eth_getLogs', [{ address: contrat, fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16), topics: [[TOPIC_ROLLED_SRV, TOPIC_PASS_SRV]] }]);
       if (!Array.isArray(logs)) return;
-      for (const d of depensesJeu(logs, contrat)) {
-        if (!internes.has(d.joueur)) { revenu.jours = crediter(revenu.jours || {}, { saison: jourDe(Date.now()).id, payeur: d.joueur, hash: d.tx, usd: Number(d.brut) / 1e6 }); revenuSale = true; }
+      const depenses = depensesJeu(logs, contrat).filter((d) => !internes.has(d.joueur));
+      /* le jour de CHAQUE bloc, lu AVANT tout credit : une fenetre est creditee entiere ou pas du tout */
+      const jourDuBloc = new Map();
+      for (const d of depenses) {
+        if (!Number.isSafeInteger(d.bloc)) return;
+        if (!jourDuBloc.has(d.bloc)) { const ts = await horodatageBloc(d.bloc); if (ts === null) return; jourDuBloc.set(d.bloc, jourDe(ts * 1000).id); }
       }
+      for (const d of depenses) { revenu.jours = crediter(revenu.jours || {}, { saison: jourDuBloc.get(d.bloc), payeur: d.joueur, hash: d.tx, usd: Number(d.brut) / 1e6 }); revenuSale = true; }
       revenu.rollsScan = a; revenuSale = true; de = a + 1;
     }
   } catch (_) { /* relu au prochain tour, depuis le meme curseur */ } finally { rollsScanEnVol = false; }
+}
+/* le pot des rolls LU sur le contrat (pot()), garde 30 s ; null tant qu il n a pas ete lu */
+const potRollsSrv = { brut: null, lu: 0, enVol: false };
+async function lirePotRollsSrv(contrat) {
+  if (potRollsSrv.enVol || Date.now() - potRollsSrv.lu < 30000) return;
+  potRollsSrv.enVol = true;
+  try { const v = lireUintRolls(await rpcRails('eth_call', [{ to: contrat, data: appelPotRolls() }, 'latest'])); if (v !== null) { potRollsSrv.brut = v.toString(); potRollsSrv.lu = Date.now(); } }
+  catch (_) { /* relu au prochain appel */ } finally { potRollsSrv.enVol = false; }
 }
 setInterval(() => { void crediterVolumeRolls(); }, 120000).unref?.();
 setInterval(() => {
@@ -4202,7 +4231,7 @@ const SERVIS = [
   /* 2026-10-18 : BlockRolls — la page qui propose AU WALLET CONNECTE le deploiement (noindex, aucun lien), sa fiche figee, l encodeur pur de la
    *   config (la page recalcule et refuse une fiche alteree), les appels non signes (roll / pass / settle) et le pont app <-> contrat.
    *   ⛔ absent d ici = 404 = page morte (lecon integrer-sans-serie-complete, 11/10). */
-  'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js',
+  'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js', 'rolls-en-attente.js',
   /* 2026-10-18 : TicketPot (pot du jour en parts egales) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non signes */
   'deployer-ticketpot.html', 'ticketpot-deploiement.js', 'ticketpot-config.js', 'ticketpot-plan.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
@@ -5995,8 +6024,14 @@ function traiterRequete(req, res) {
       gagnant: rev && tV.length ? (tirer({ hashE: rev.hash, saison: veilleJ.id, liste: tV }) || [null])[0] : null };
     /* BlockRolls (2026-10-18) : l adresse SIGNEE (fiche generee) ou null = practice ; les prix viennent de la fiche, jamais tapes ici */
     const rc = BLOCKROLLS_DEPLOIEMENT.constructeur || {};
-    const rolls = { contrat: /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null,
-      prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: [rc.prize5, rc.prize4, rc.prize3].map(String), minScore: rc.minScore };
+    /* 2026-10-18 (revue adverse) : les 4 paliers (2/5 compris, lus dans la fiche), le pot LU sur le contrat (cache 30 s, null si pas lu —
+     *   jamais un 0 ecrit) et le bloc de deploiement (l app relit les rolls en attente depuis lui) */
+    const contratRolls = /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null;
+    if (contratRolls) void lirePotRollsSrv(contratRolls);
+    const rolls = { contrat: contratRolls,
+      prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: [rc.prize5, rc.prize4, rc.prize3, rc.prize2].map(String), minScore: rc.minScore,
+      bloc: contratRolls && Number.isSafeInteger(BLOCKROLLS_DEPLOIEMENT.bloc) ? BLOCKROLLS_DEPLOIEMENT.bloc : null,
+      pot: contratRolls && potRollsSrv.brut !== null ? potRollsSrv.brut : null, potLu: contratRolls && potRollsSrv.lu ? new Date(potRollsSrv.lu).toISOString() : null };
     return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls,
       apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
@@ -6005,8 +6040,9 @@ function traiterRequete(req, res) {
       semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)) },
       mois: { id: mo.id, debut: iso(mo.debut), fin: iso(mo.fin), entrees: eM, n: eM.length, racine: racine(eM.map((e) => e.adresse)) },
       regle: 'A day counts when your verified trading volume that day (UTC) reaches $' + SEUIL_VOLUME_JOUR_USD + ': trades of the UNIT block on its '
-        + 'TokenizedBlock pool, or tokenized-stock trades made in the app. Each such day is one ticket for that day\'s draw and one entry for the week\'s '
-        + 'and the month\'s draws. Trading more in a day adds nothing. Practice season: no prize yet. Each day is settled by block E, the first Base '
+        + 'TokenizedBlock pool, tokenized-stock trades made in the app, and what you spend in BlockRolls (paid rolls and the day pass; a roll taken on a pass '
+        + 'counts once, at the pass). Each such day is one ticket for that day\'s draw and one entry for the week\'s '
+        + 'and the month\'s draws. Trading more in a day adds nothing. The ticket draw is a practice season: no prize yet. Each day is settled by block E, the first Base '
         + 'block stamped at least ' + DELAI_REVELATION_S + ' s after the day closes: its hash picks the day\'s winner and reveals the Face of the Day '
         + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' });
   }
