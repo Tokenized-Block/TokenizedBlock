@@ -1,5 +1,5 @@
 {
-  "_lisez-moi": "A REMPLIR PAR PHIL (adresses entieres, copiees, jamais de memoire). verifier = l ADRESSE de la cle MISSIONS_VERIFIER_KEY du serveur (celle qui signe les parts) ; guardian = une autre cle, qui peut seulement mettre les claims en pause. Le signataire du deploiement devient owner (close des jours, rotation 48 h). Puis : cd contracts && forge build && node preparer-deploiement-ticketpot.mjs",
-  "verifier": null,
-  "guardian": null
+  "_lisez-moi": "Rempli le 2026-10-18 sur decision de Phil (« le verifier c est celui qui signe »). verifier = le wallet qui signe les deploiements, lu comme tx.from du deploiement BlockRolls (0x6412ec99…ca2, bloc 52 770 558) sur Base : sa cle doit etre posee par Phil dans MISSIONS_VERIFIER_KEY sur le serveur. guardian = le dev wallet (blockrolls-deploiement.js constructeur.devWallet), qui peut seulement mettre les claims en pause. Le signataire du deploiement devient owner (close des jours, rotation 48 h : proposeVerifier/acceptVerifier pour passer plus tard a une cle dediee). Puis : cd contracts && forge build && node preparer-deploiement-ticketpot.mjs",
+  "verifier": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
+  "guardian": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4"
 }
