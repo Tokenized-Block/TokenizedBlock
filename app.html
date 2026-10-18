@@ -193,6 +193,16 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jeuTuile::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
 .jeuTuile b{display:block;font-size:10.5px;letter-spacing:.12em;color:var(--accent2);margin-bottom:2px}
 .jeuTuile p{margin:0;font-size:13px;line-height:1.4}
+/* 2026-10-18 (Phil : « onglet lisible pour jouer a differents jeux ») : le BANDEAU des 4 jeux en tete de Game — chaque tuile est un bouton
+ *   qui mene a sa carte ; son etat (ticket, dernier roll, missions ouvertes, skins en vente) est peint par les peintres existants. */
+.jeuBandeau{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px}
+@media (max-width:520px){.jeuBandeau{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.jeuJeu{appearance:none;font:inherit;color:inherit;text-align:left;cursor:pointer;border:1px solid var(--ligne);border-radius:12px;padding:10px 12px;background:rgb(var(--accentRgb) / .06);position:relative;overflow:hidden;min-width:0}
+.jeuJeu::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+.jeuJeu b{display:block;font-size:10.5px;letter-spacing:.12em;color:var(--accent2);margin-bottom:2px}
+.jeuJeu i{display:block;font-style:normal;font-size:18px;line-height:1.1;margin:2px 0}
+.jeuJeu span{display:block;font-size:12px;color:var(--doux);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jeuJeu:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* 2026-10-17 soir (Phil) : « Your day » — le ticket est une FACE de block, les etapes sont des boutons, le dernier block ne est en direct */
 .jourTicket{display:flex;gap:12px;align-items:center;margin:8px 0}
 .jourFace{width:76px;height:76px;flex:0 0 76px;border-radius:14px;border:1px solid var(--ligne);background:rgb(var(--accentRgb) / .06);display:grid;place-items:center;overflow:hidden}
@@ -3521,6 +3531,14 @@ details[open] > summary::before{transform:rotate(90deg)}
   <section class="volet" id="v-missions" aria-label="Game">
     <!-- TA JOURNEE : ton ticket (face derivee de SHA-256(wallet|jour), grise tant que les 10 $ ne sont pas verifies ou sans pass skin)
          FACE A la face gagnante EN DIRECT (celle que tirerait le dernier bloc Base ; seul le bloc E, minuit UTC + 120 s, compte). -->
+    <!-- BANDEAU DES JEUX (Phil 2026-10-18 09:00 : « lisible pour jouer a differents jeux ») : 4 tuiles-boutons, chacune mene a sa carte ;
+         les etats sont peints par peindreJour / roll / peindreMissions / peindreSkinsJeu. Rien d invente : un etat non lu reste « — ». -->
+    <div class="jeuBandeau" role="navigation" aria-label="Games">
+      <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Ticket</b><i id="jbTicket">—</i><span id="jbTicketTxt">today's draw</span></button>
+      <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Rolls</b><i id="jbRoll">⚄</i><span id="jbRollTxt">roll the next block</span></button>
+      <button type="button" class="jeuJeu" data-jeu="missionsCarte"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
+      <button type="button" class="jeuJeu" data-jeu="skinCarte"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
+    </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
     <div class="carte" id="tirCarte">
       <span class="jeuKick">Game · Draws</span>
@@ -3579,6 +3597,13 @@ details[open] > summary::before{transform:rotate(90deg)}
         The doer gets 90%. The 10% fee: 7% to the community earn pool, 3% to TokenizedBlock. To take a task: today's ticket + hold the block.</p>
       <p class="note" id="missionsEtat" style="margin:6px 0 0">The board waits for its contract on Base.</p>
       <ul class="bcListe" id="missionsListe" style="margin:8px 0 0;padding:0;list-style:none"></ul>
+      <!-- Phil 09:00 : « donne deja des suggestions » — trois taches types ; un clic pre-remplit le formulaire (rien n est poste sans signature) -->
+      <p class="note" style="margin:8px 0 0">Task ideas — tap one to prefill:</p>
+      <div class="jourEtapes" id="missionsIdees">
+        <button type="button" class="bouton sec" data-idee='{"reward":"100","max":"10","hold":"10"}'>Trade my block · 100 units × 10 players</button>
+        <button type="button" class="bouton sec" data-idee='{"reward":"25","max":"40","hold":"5"}'>Small reward, many players · 25 × 40</button>
+        <button type="button" class="bouton sec" data-idee='{"reward":"500","max":"2","hold":"100"}'>Big holders only · 500 × 2, hold 100</button>
+      </div>
       <div class="jourEtapes">
         <button type="button" class="bouton sec" id="jourMissions">Refresh missions</button>
         <!-- CREATE A MISSION (Phil 19:40) : le createur d un block poste « trade my block » — cible = PoolManager, Swap sur SA pool (topic1) ;
@@ -4431,6 +4456,7 @@ async function peindreJour(t, moiBas, w, fait, seuil) {
   const gagne = (t.jour.tickets || []).includes(moiBas);
   const pass = (t.jour.passes || []).find((x) => String(x.adresse).toLowerCase() === moiBas);
   cpt.textContent = 'Your tickets — today ' + (gagne ? 1 : 0) + ' · this week ' + sem + ' · this month ' + mois;
+  jb('jbTicket', gagne ? '✓' : '$' + Math.max(0, seuil - fait).toFixed(0)); jb('jbTicketTxt', gagne ? 'today\'s ticket is yours' : 'to go for today\'s ticket');
   try { face.innerHTML = dessin(await adresseTicket(moiBas, t.jour.id), 'T') || ''; } catch (_) { face.innerHTML = ''; }
   face.setAttribute('data-gagne', gagne ? '1' : '0');
   txt.textContent = pass ? 'Your skin pass holds today\'s ticket (until ' + String(pass.jusqua).slice(1) + ' UTC): this face enters every draw.'
@@ -4654,6 +4680,7 @@ async function roll() {
     moiP.textContent = !c ? 'Connect a wallet: your ticket scores against the next roll.'
       : s ? (s.score >= 3 ? '🎯 ' : '') + 'You matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + ' — practice roll, no prize yet.' : 'No score.';
     if (s) { rollDerniers.unshift({ bloc: cible, score: s.score }); rollDerniers.length = Math.min(rollDerniers.length, 5); $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((r) => r.score + '/5').join(' · '); }
+    jb('jbRoll', s ? s.score + '/5' : '⚄'); jb('jbRollTxt', 'block ' + cible.toLocaleString('en-US'));
     /* Phil 23:50 : le roll se voit sur la Map — signale au serveur (bloc + score, aucune identite), la Map le relit (peindreRollsMap).
      *   Seul un roll SCORE (wallet connecte) est signale : sans ticket il n y a pas de « roll N/5 » a montrer. */
     if (s) void signalerRoll(cible, s.score);
@@ -4682,8 +4709,9 @@ async function peindreMissions() {
   let j = null;
   try { j = await fetch('/api/missions', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
   /* mesure prod game3 21:36 : PAS_OUVERT laissait le texte precedent (« Reading the board… ») -> chaque etat ecrit le sien */
-  if (!j || !j.ok) { ul.innerHTML = ''; etat.textContent = j && j.etat === 'NON_LU' ? 'The mission board could not be read just now.' : j && j.etat === 'PAS_OUVERT' ? 'The board waits for its contract on Base.' : 'The mission board could not be reached.'; return; }
+  if (!j || !j.ok) { ul.innerHTML = ''; jb('jbMissions', j && j.etat === 'PAS_OUVERT' ? '0' : '—'); jb('jbMissionsTxt', j && j.etat === 'PAS_OUVERT' ? 'board not open yet' : 'board not read'); etat.textContent = j && j.etat === 'NON_LU' ? 'The mission board could not be read just now.' : j && j.etat === 'PAS_OUVERT' ? 'The board waits for its contract on Base.' : 'The mission board could not be reached.'; return; }
   const ouvertes = (j.missions || []).filter((x) => x.lue && x.etat === 'OUVERTE');
+  jb('jbMissions', String(ouvertes.length)); jb('jbMissionsTxt', 'open task' + (ouvertes.length === 1 ? '' : 's'));
   etat.textContent = ouvertes.length ? ouvertes.length + ' open mission' + (ouvertes.length === 1 ? '' : 's') + ' — hold the block, do it, keep holding through the window, then claim.' : 'No open mission right now.';
   ul.innerHTML = ouvertes.map((x) => '<li class="filL" data-mission="' + x.id + '"><p class="filT"><b>Mission #' + x.id + '</b> · reward ' + enTexte(x.reward) + ' (raw units) · '
     + x.done + '/' + x.maxDone + ' done · hold ' + Math.round(x.detention.window / 3600) + ' h</p>'
@@ -4709,6 +4737,18 @@ async function mesBlocksPourMission() {
     : '<option value="">No block created by this wallet was read</option>';
 }
 $('#jourCreerMission').addEventListener('click', () => { const f = $('#missionForm'); f.hidden = !f.hidden; if (!f.hidden) void mesBlocksPourMission(); });
+/* les idees de taches : pre-remplissent le formulaire et l ouvrent ; rien ne part sans le wallet */
+$('#missionsIdees').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-idee]'); if (!b) return;
+  let d = null; try { d = JSON.parse(b.getAttribute('data-idee')); } catch (_) { d = null; }
+  if (!d) return;
+  $('#mfReward').value = d.reward; $('#mfMax').value = d.max; $('#mfHold').value = d.hold;
+  const f = $('#missionForm'); if (f.hidden) { f.hidden = false; void mesBlocksPourMission(); }
+  try { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
+});
+/* le bandeau des jeux : chaque tuile mene a sa carte */
+for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]')) b.addEventListener('click', () => { const c = document.getElementById(b.getAttribute('data-jeu')); if (c) { try { c.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) { c.scrollIntoView(); } } });
+const jb = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
 $('#missionForm').addEventListener('submit', async (e) => {
   e.preventDefault();
   const dit = (t) => { $('#mfEtat').textContent = t; };
@@ -4784,6 +4824,7 @@ async function peindreSkinsJeu() {
     const moi = compte ? String(compte).toLowerCase() : null, t = Math.floor(Date.now() / 1000);
     const enVente = r.skins.filter((s) => s.enVente), encheres = enVente.filter((s) => s.enchere).length;
     const miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
+    jb('jbSkins', String(enVente.length)); jb('jbSkinsTxt', enVente.length ? 'for sale' : 'mint the first');
     /* Phil 2026-10-18 08:40 : pas de « 0 minted · 0 for sale » — une phrase courte, vraie, qui invite */
     etat.textContent = enVente.length
       ? enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' in auction)' : '') + (moi && miennes.length ? ' · ' + miennes.length + ' yours to list' : '') + '. Each skin sells at a fixed price or in an auction (bids +5%, 7 days max).'
