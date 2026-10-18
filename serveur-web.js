@@ -105,6 +105,7 @@ import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 /* 2026-10-18 : BlockRolls (roll paye 0,50 USDC, day pass 10 USDC) — la fiche GENEREE (preparer-deploiement-blockrolls.mjs) ; `adresse` reste
  *   null tant que Phil n a pas signe : l app ne montre alors AUCUN bouton payant (practice). Aucune variable d environnement ne la remplace. */
 import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
+import { depensesJeu, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PASS as TOPIC_PASS_SRV } from './volume-rolls.js';
 /* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
 import { etatJeuAgent, planRollAgent, planSettleAgent, planTaskAgent, lireGuess as lireGuessAgent } from './jeu-agent.js';
 import { appelPot as appelPotRolls, lireUint as lireUintRolls } from './rolls-jeu.js';
@@ -4013,6 +4014,32 @@ async function crediterDetenteursSkins() {
   } catch (_) { /* relu au prochain appel */ } finally { skinsDetenus.enVol = false; }
 }
 setInterval(() => { void crediterDetenteursSkins(); }, 600000).unref?.();
+/* ══ DEPENSE DE JEU = VOLUME DU TICKET (Phil 2026-10-18 14:30 : « Auto-roll utilisera le pass… ca fera le volume requis ») : les logs du
+ *   contrat BlockRolls DE LA FICHE (adresse ecrite par noter apres la signature) sont lus par fenetres de 2 000 blocs depuis son bloc de
+ *   deploiement ; chaque (tx, joueur) externe est credite en USD (USDC brut / 1e6) au jour courant (volume-rolls.js depensesJeu). Un roll sur
+ *   pass compte 0 (le pass est compte a l achat). Lecture ratee -> le curseur ne bouge pas, rien n est invente. */
+let rollsScanEnVol = false;
+async function crediterVolumeRolls() {
+  const contrat = String(BLOCKROLLS_DEPLOIEMENT.adresse || '').toLowerCase();
+  if (rollsScanEnVol || !/^0x[0-9a-f]{40}$/.test(contrat) || !Number.isSafeInteger(BLOCKROLLS_DEPLOIEMENT.bloc)) return;
+  rollsScanEnVol = true;
+  try {
+    const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    if (!Number.isSafeInteger(tete)) return;
+    let de = Number.isSafeInteger(revenu.rollsScan) ? revenu.rollsScan + 1 : BLOCKROLLS_DEPLOIEMENT.bloc;
+    const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
+    for (let tour = 0; tour < 10 && de <= tete; tour++) {
+      const a = Math.min(tete, de + 1999);
+      const logs = await rpcServeur('eth_getLogs', [{ address: contrat, fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16), topics: [[TOPIC_ROLLED_SRV, TOPIC_PASS_SRV]] }]);
+      if (!Array.isArray(logs)) return;
+      for (const d of depensesJeu(logs, contrat)) {
+        if (!internes.has(d.joueur)) { revenu.jours = crediter(revenu.jours || {}, { saison: jourDe(Date.now()).id, payeur: d.joueur, hash: d.tx, usd: Number(d.brut) / 1e6 }); revenuSale = true; }
+      }
+      revenu.rollsScan = a; revenuSale = true; de = a + 1;
+    }
+  } catch (_) { /* relu au prochain tour, depuis le meme curseur */ } finally { rollsScanEnVol = false; }
+}
+setInterval(() => { void crediterVolumeRolls(); }, 120000).unref?.();
 setInterval(() => {
   if (!revenuSale || !FICHIER_REVENU) return;
   try { writeFileSync(FICHIER_REVENU + '.tmp', JSON.stringify(revenu)); renameSync(FICHIER_REVENU + '.tmp', FICHIER_REVENU); revenuSale = false; }
