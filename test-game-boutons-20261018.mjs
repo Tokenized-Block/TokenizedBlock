@@ -22,6 +22,12 @@ vu(/<button[^>]*\bid="jourRollPaye"[^>]*\bhidden\b/.test(carte) && /<button[^>]*
 const pb = app.slice(app.indexOf('function poserBoutonsRolls('), app.indexOf('async function envoyerAppels('));
 vu(/rollsCfg = t && t\.rolls && t\.rolls\.contrat \? t\.rolls : null;/.test(pb) && /const on = !!\(rollsCfg && c\);/.test(pb) && /bp\.hidden = !on; bd\.hidden = !on;/.test(pb), 'ouverts seulement avec rolls.contrat servi ET un wallet');
 vu(/usdcTexte\(rollsCfg\.prixRoll\)/.test(pb) && /usdcTexte\(rollsCfg\.prixPass\)/.test(pb) && !/0\.50|10 USDC/.test(pb), 'les prix des boutons viennent du serveur, jamais tapes');
+/* Phil 2026-10-18 14:45 : « je roll, toujours le meme bloc gris, rien signe » — contrat + wallet : le roll PAYE remplace l entrainement,
+ *   et il dessine la face tiree (st.blockHash) ; la face du ticket n est plus grisee */
+vu(/const bpr = \$\('#jourRoll'\); if \(bpr\) bpr\.hidden = on;/.test(pb), 'contrat + wallet : le bouton d entrainement s efface, le roll paye est LE bouton');
+const rp = app.slice(app.indexOf('async function rollPaye()'), app.indexOf('async function passPaye()'));
+vu(/\$\('#dernierFace'\)\.innerHTML = logoSvg\(paramsLogoDepuisApparence\(faceRevelee\(st\.blockHash\)/.test(rp) && /rollEnCours = false;/.test(rp), 'le roll paye dessine la face du bloc cible et rend la main a l apercu');
+vu(!/\.jourFace\[data-gagne="0"\]\{[^}]*grayscale/.test(app), 'la face du ticket n est plus grisee');
 /* Auto-roll : le lot avec pass (une signature, settleMany) n est tente QUE si le contrat est servi ET un pass est actif ; sinon practice */
 const ar = app.slice(app.indexOf('async function autoRoll()'), app.indexOf('async function autoRollAvecPass('));
 vu(/if \(rollsCfg && await autoRollAvecPass\(c\)\) return;/.test(ar), 'Auto-roll : lot avec pass seulement si rollsCfg (contrat servi)');

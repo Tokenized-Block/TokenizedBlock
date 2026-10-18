@@ -207,7 +207,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jourTicket{display:flex;gap:12px;align-items:center;margin:8px 0}
 .jourFace{width:76px;height:76px;flex:0 0 76px;border-radius:14px;border:1px solid var(--ligne);background:rgb(var(--accentRgb) / .06);display:grid;place-items:center;overflow:hidden}
 .jourFace svg{width:100%;height:100%}
-.jourFace[data-gagne="0"]{opacity:.38;filter:grayscale(.6)}
+/* Phil 2026-10-18 14:45 : « toujours le meme block gris » — la face du ticket reste EN COULEUR ; « pas encore gagne » se dit par un liseré pointille */
+.jourFace[data-gagne="0"]{border-style:dashed}
 .jourEtapes{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .jeuDuel{display:flex;align-items:flex-start;gap:10px;margin-top:6px}
 .jeuCote{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center}
@@ -4536,6 +4537,8 @@ function poserBoutonsRolls(t, c) {
   if (!bp || !bd) return;
   const on = !!(rollsCfg && c);
   bp.hidden = !on; bd.hidden = !on;
+  /* Phil 14:45 : « j ai rien signe pour jouer » — contrat servi + wallet : le roll d entrainement s efface, le roll PAYE est LE bouton */
+  const bpr = $('#jourRoll'); if (bpr) bpr.hidden = on;
   if (on) { bp.textContent = 'Roll · ' + usdcTexte(rollsCfg.prixRoll) + ' USDC'; bd.textContent = 'Day pass · ' + usdcTexte(rollsCfg.prixPass) + ' USDC'; }
   if (e && !on) e.hidden = true;
 }
@@ -4577,6 +4580,7 @@ async function rollPaye() {
     if (!rolled) { dit('Sent (' + r.hash.slice(0, 10) + '…) but the roll could not be read back yet — check the explorer.'); return; }
     const cible = Number(rolled.targetBlock);
     dit('Rolled #' + rolled.rollId + ' — block ' + cible.toLocaleString('en-US') + ' decides. Waiting for it…');
+    rollEnCours = true; $('#dernierNom').textContent = 'Rolling… block ' + cible.toLocaleString('en-US') + ' decides';
     let tete = 0;
     for (let k = 0; k < 90 && tete <= cible; k++) { await new Promise((o) => setTimeout(o, 2000)); try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
     const er = etatReglement(cible, tete);
@@ -4588,9 +4592,18 @@ async function rollPaye() {
     if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit('Not settled yet: ' + String((rs && (rs.pourquoi || rs.etat)) || 'no answer').slice(0, 160) + ' — settle within ' + er.blocsRestants + ' blocks.'); return; }
     const recuS = await recuDe(rs.hash), st = recuS ? lireSettled(recuS.logs, contrat) : null;
     if (!st) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return; }
+    /* la FACE tiree par le bloc cible, a cote de ton ticket (le contrat l a calculee du meme hash : st.blockHash) */
+    try { $('#dernierFace').innerHTML = logoSvg(paramsLogoDepuisApparence(faceRevelee(st.blockHash), '★')); } catch (_) {}
+    $('#dernierNom').textContent = 'Block ' + cible.toLocaleString('en-US') + ' drew this face';
+    $('#dernierMoi').textContent = (st.score >= 2 ? '🎯 ' : '') + 'You matched ' + st.score + '/5' + (st.payout > 0n ? ' — +' + usdcTexte(st.payout) + ' USDC' : '');
+    rollDerniers.unshift({ bloc: cible, score: st.score }); rollDerniers.length = Math.min(rollDerniers.length, 5);
+    $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((x) => x.score + '/5').join(' · ');
+    jb('jbRoll', st.score + '/5'); jb('jbRollTxt', 'block ' + cible.toLocaleString('en-US'));
+    void signalerRoll(cible, st.score);
     dit('Block ' + cible.toLocaleString('en-US') + ' drew ' + st.score + '/5 against your ticket' + (st.payout > 0n ? ' — you won ' + usdcTexte(st.payout) + ' USDC, paid to your wallet.' : ' — no prize this time (min ' + rollsCfg.minScore + '/5).') + ' Pot now ' + usdcTexte(st.potAfter) + ' USDC.');
-    void peindreDernierBlock();
-  } finally { b.disabled = false; }
+    /* la face tiree reste affichee 12 s avant que l apercu live reprenne la main */
+    await new Promise((o) => setTimeout(o, 12000));
+  } finally { b.disabled = false; rollEnCours = false; }
 }
 async function passPaye() {
   const e = $('#rollsEtat'), b = $('#jourPass');
