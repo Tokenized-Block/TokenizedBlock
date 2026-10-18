@@ -1,0 +1,5 @@
+{
+  "_lisez-moi": "A REMPLIR PAR PHIL (adresses entieres, copiees, jamais de memoire). verifier = l ADRESSE de la cle MISSIONS_VERIFIER_KEY du serveur (celle qui signe les parts) ; guardian = une autre cle, qui peut seulement mettre les claims en pause. Le signataire du deploiement devient owner (close des jours, rotation 48 h). Puis : cd contracts && forge build && node preparer-deploiement-ticketpot.mjs",
+  "verifier": null,
+  "guardian": null
+}

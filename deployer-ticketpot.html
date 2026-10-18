@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Ticket Pot — TokenizedBlock</title>
+<style>
+:root{color-scheme:dark;--fond:#060f14;--carte:#0c1c24;--bord:#1d3a44;--texte:#e8f4f6;--doux:#9db4ba;--cyan:#2fd0c8;--or:#f6c76e;--rose:#ff7eb6;--vert:#6fe3a5}
+body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#123a44 0%,transparent 60%),radial-gradient(900px 500px at 110% 10%,#3a1838 0%,transparent 55%),var(--fond);color:var(--texte);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+main{max-width:760px;margin:0 auto;padding:28px 16px 72px}
+.kicker{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--or);border:1px solid #5a4a26;border-radius:999px;padding:3px 10px}
+h1{font-size:34px;line-height:1.1;margin:12px 0 6px;background:linear-gradient(90deg,#7ff3ea,#f6c76e 55%,#ff7eb6);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:15px;margin:30px 0 10px;color:#9fd6dd;letter-spacing:.02em}
+p{margin:8px 0}
+.note{color:var(--doux);font-size:14px}
+.grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.tuile{border:1px solid var(--bord);border-radius:16px;padding:16px;background:linear-gradient(180deg,#0f2530,#0a1820);position:relative;overflow:hidden}
+.tuile::before{content:"";position:absolute;inset:-1px -1px auto -1px;height:3px;background:var(--c,var(--cyan))}
+.tuile .num{font-size:12px;color:var(--c,var(--cyan));font-weight:800;letter-spacing:.12em}
+.tuile h3{margin:6px 0 6px;font-size:17px}
+.tuile p{font-size:14px;color:#c9dde1;margin:0}
+.carte{border:1px solid var(--bord);border-radius:16px;padding:16px;margin:12px 0;background:var(--carte)}
+.sur li{margin:6px 0}
+details summary{cursor:pointer;color:#9fd6dd;font-weight:700}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:12px 0 0;font-size:13px}
+dt{color:var(--doux)}
+dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace}
+button{appearance:none;border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:800;cursor:pointer;background:linear-gradient(90deg,#2fd0c8,#7ff3ea);color:#04262a;box-shadow:0 6px 24px rgba(47,208,200,.25)}
+button.sec{background:transparent;color:var(--texte);border:1px solid #2a4a55;box-shadow:none}
+button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.ok{color:var(--vert)}.ko{color:#ff8f8f}
+ul{padding-left:20px;margin:8px 0}
+b[data-k]{color:var(--or)}
+[hidden]{display:none!important}
+@media (max-width:420px){h1{font-size:28px}}
+</style>
+</head>
+<body>
+<main>
+  <span class="kicker">TokenizedBlock · Ticket Pot</span>
+  <h1>The day's fees, shared by the day's ticket holders.</h1>
+  <p class="note">One pot of USDC per UTC day. The day's community share of the fees goes in; once the day is closed, every wallet that held that day's ticket can take an equal share. One signature from your wallet opens it on Base. This page sends nothing by itself.</p>
+
+  <h2>How it works</h2>
+  <div class="grille">
+    <div class="tuile" style="--c:var(--cyan)"><div class="num">01 · FUND</div><h3>A pot per day</h3><p>Anyone adds USDC to today's pot or to a past day that is not closed yet. Nothing ever comes back out to the funder.</p></div>
+    <div class="tuile" style="--c:var(--or)"><div class="num">02 · CLOSE</div><h3>The pot freezes</h3><p>The owner closes a finished day; anyone can after <b data-k="fundingHours">…</b> hours. After that the pot cannot grow, so every share is final.</p></div>
+    <div class="tuile" style="--c:var(--rose)"><div class="num">03 · CLAIM</div><h3>Equal shares</h3><p>Each ticket holder gets pot ÷ tickets, once, within <b data-k="graceDays">…</b> days of the day's end. What is left then rolls into the current day's pot.</p></div>
+  </div>
+
+  <h2>What is fixed, and what is not</h2>
+  <div class="carte sur">
+    <ul>
+      <li>No withdrawal, for anyone. USDC leaves the contract only through a claim carrying the verifier's signature, and goes to the ticket holder named in it, never to whoever sends it.</li>
+      <li>One claim per wallet per day; the claims of a day can never add up to more than its frozen pot.</li>
+      <li>The verifier is the TokenizedBlock server key. It signs each share after the day closes; it never holds or moves funds. A leaked key could sign shares only out of closed day pots: the guardian can pause claims at once.</li>
+      <li>Replacing the verifier or the guardian is announced on chain and takes effect only <b data-k="adminHours">…</b> hours later. The guardian pauses claims; it cannot lift the owner's pause, and the owner waits <b data-k="adminHours">…</b> hours to lift the guardian's.</li>
+      <li>The wallet that deploys becomes the owner: it can close days early, pause, and propose changes. It cannot take the pots.</li>
+      <li>The ticket is the 20-byte id the app derives from your wallet and the day; it is written into each claim event as the proof of who held that day's ticket.</li>
+    </ul>
+  </div>
+
+  <h2>What you sign</h2>
+  <div class="carte">
+    <details>
+      <summary>The values built into the contract</summary>
+      <dl id="dParams"></dl>
+    </details>
+    <p class="note" id="dManque"></p>
+    <p class="note" id="dVerif">Checking the fingerprint…</p>
+  </div>
+
+  <h2>Open the ticket pot</h2>
+  <div class="carte">
+    <p id="dCompte" class="note">No wallet connected.</p>
+    <p>
+      <button type="button" id="bConnecter" class="sec">Connect wallet</button>
+      <button type="button" id="bDeployer" disabled>Deploy Ticket Pot</button>
+    </p>
+    <p id="dEtat" class="note"></p>
+    <dl id="dResultat" hidden>
+      <dt>Transaction</dt><dd id="rTx">—</dd>
+      <dt>Ticket Pot</dt><dd id="rAdr">—</dd>
+      <dt>Reads back</dt><dd id="rLu">—</dd>
+    </dl>
+  </div>
+</main>
+<script type="module">
+/* deployer-ticketpot.html — propose AU WALLET CONNECTE la transaction de deploiement de TicketPot, FIGEE dans ticketpot-deploiement.js
+ * (generee par contracts/preparer-deploiement-ticketpot.mjs). Meme regle que deployer-blockrolls.html :
+ * ⛔ rien n est envoye sans un appui ET la signature du wallet ; aucune cle ; aucun argument saisi a la main.
+ * ⛔ les arguments sont RE-ENCODES ici (ticketpot-config.js encoderArgs) depuis les valeurs affichees et compares a la FIN de la donnee
+ *   figee ; l empreinte sha256 est recalculee dans ce navigateur ; un enregistrement `pret: false` n allume rien. Un ecart -> bouton eteint.
+ *   Apres deploiement : USDC(), verifier(), guardian(), owner() (= le wallet connecte), GRACE(), FUNDING_DELAY(), ADMIN_DELAY(),
+ *   totalPots() et domainSeparator() (= ticketpot-plan.js domaineSeparateur, le domaine que le serveur signe) sont RELUS. */
+import { TICKETPOT_DEPLOIEMENT as D } from './ticketpot-deploiement.js';
+import { verifierEnregistrement } from './ticketpot-config.js';
+import { domaineSeparateur, GRACE_S, FUNDING_DELAY_S } from './ticketpot-plan.js';
+import { selecteur } from './keccak.js';
+const $ = (s) => document.querySelector(s);
+const eth = () => window.ethereum;
+const CHAINE_HEX = '0x' + D.chaine.toString(16);
+const C = D.constructeur;
+const ADMIN_DELAY_S = 48 * 3600;
+const NOMS = { usdc: 'USDC', verifier: 'Verifier (the server key that signs the shares)', guardian: 'Guardian (can pause claims)' };
+let compte = null, intacte = false, envoi = false, adresse = D.adresse || null;
+const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
+/* les mots de la page viennent des constantes du module de plan (relues sur le contrat apres deploiement), jamais tapes */
+const MOTS = { fundingHours: String(FUNDING_DELAY_S / 3600), graceDays: String(GRACE_S / 86400), adminHours: String(ADMIN_DELAY_S / 3600) };
+for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (C[k] || '— not set —') + '</dd>').join('')
+  + '<dt>Owner</dt><dd>the wallet that signs the deployment</dd>'
+  + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
+  + '<dt>Fingerprint</dt><dd>' + (D.sha256Creation ? 'sha256 ' + D.sha256Creation + ' · ' + D.octetsCreation + ' bytes' : '—') + '</dd>';
+$('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manquants.map((m) => NOMS[m] + ' is missing'), ...D.refus].join(' · ') + '. Fill contracts/ticketpot-parametres.json, then run the preparer again.</span>' : '';
+(async () => {
+  try {
+    if (!D.pret || !D.creation) throw new Error('not ready');
+    const octets = new Uint8Array(D.creation.slice(2).match(/../g).map((x) => parseInt(x, 16)));
+    const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const v = verifierEnregistrement(D, h);
+    intacte = v.intacte;
+    $('#dVerif').className = intacte ? 'note ok' : 'note ko';
+    $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser; the values above re-encoded and found at the end of the data: they match.' : 'Nothing can be deployed from this page: ' + v.pourquoi.join('; ') + '.';
+  } catch (_) { intacte = false; $('#dVerif').className = 'note ko'; $('#dVerif').textContent = D.pret ? 'The fingerprint could not be computed here. Nothing can be deployed from this page.' : 'Nothing can be deployed until every value is set.'; }
+  peindre();
+})();
+function peindre() {
+  $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet pays the deployment gas and becomes the owner (close days, pause, propose changes; it cannot take the pots).' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#bConnecter').hidden = !!compte;
+  $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;
+  if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second pot.', 'note ok');
+}
+$('#bConnecter').addEventListener('click', async () => {
+  if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); }
+  catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
+  peindre();
+});
+const attendre = async (tx) => { let recu = null; for (let i = 0; i < 90 && !recu; i += 1) { await new Promise((r) => setTimeout(r, 2000)); try { recu = await eth().request({ method: 'eth_getTransactionReceipt', params: [tx] }); } catch (_) { recu = null; } } return recu; };
+const surBase = async () => {
+  const chaine = await eth().request({ method: 'eth_chainId' });
+  if (String(chaine).toLowerCase() === CHAINE_HEX) return true;
+  try { await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAINE_HEX }] }); return true; } catch (_) { return false; }
+};
+const appel = async (to, sig, args = '') => String(await eth().request({ method: 'eth_call', params: [{ to, data: selecteur(sig) + args }, 'latest'] }));
+const lireAdr = async (to, sig) => ('0x' + (await appel(to, sig)).slice(-40)).toLowerCase();
+const lireU = async (to, sig) => BigInt(await appel(to, sig));
+$('#bDeployer').addEventListener('click', async () => {
+  if (!compte || !intacte || envoi || adresse) return;
+  envoi = true; peindre();
+  try {
+    if (!(await surBase())) { dire('Switch your wallet to Base, then try again.', 'note ko'); return; }
+    dire('Confirm in your wallet…');
+    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: compte, data: D.creation }] });
+    $('#dResultat').hidden = false; $('#rTx').textContent = String(tx);
+    dire('Sent. Waiting for Base to confirm…');
+    const recu = await attendre(tx);
+    if (!recu) { dire('Not confirmed yet after 3 minutes. Keep the transaction hash above and check it on a block explorer.', 'note ko'); return; }
+    if (recu.status !== '0x1' || !recu.contractAddress) { dire('The transaction was confirmed but failed: no contract was created.', 'note ko'); return; }
+    const a = String(recu.contractAddress).toLowerCase();
+    $('#rAdr').textContent = a + ' (block ' + parseInt(recu.blockNumber, 16) + ')';
+    const relu = { usdc: await lireAdr(a, 'USDC()'), verifier: await lireAdr(a, 'verifier()'), guardian: await lireAdr(a, 'guardian()') };
+    const owner = await lireAdr(a, 'owner()');
+    const delais = { grace: await lireU(a, 'GRACE()'), funding: await lireU(a, 'FUNDING_DELAY()'), admin: await lireU(a, 'ADMIN_DELAY()') };
+    const total = await lireU(a, 'totalPots()');
+    const domaine = (await appel(a, 'domainSeparator()')).toLowerCase();
+    const bon = D.ordre.every((k) => relu[k] === String(C[k]).toLowerCase()) && owner === compte.toLowerCase()
+      && delais.grace === BigInt(GRACE_S) && delais.funding === BigInt(FUNDING_DELAY_S) && delais.admin === BigInt(ADMIN_DELAY_S) && total === 0n
+      && domaine === domaineSeparateur(D.chaine, a);
+    $('#rLu').textContent = Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · owner ' + owner + ' · grace ' + delais.grace + ' s · funding delay ' + delais.funding + ' s · admin delay ' + delais.admin + ' s · EIP-712 domain ' + (domaine === domaineSeparateur(D.chaine, a) ? 'matches the server' : 'DIFFERS');
+    if (bon) adresse = a;
+    dire(bon ? 'Deployed: the contract reads back exactly what was signed, you are its owner, and its signing domain is the one the server uses. Send the address to the team: the app opens the pot once it knows it.'
+      : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
+  } catch (e) {
+    dire(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
+  } finally { envoi = false; peindre(); }
+});
+try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; peindre(); }); } catch (_) {}
+peindre();
+</script>
+</body>
+</html>
