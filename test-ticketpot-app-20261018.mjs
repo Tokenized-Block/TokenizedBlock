@@ -23,7 +23,7 @@ vu(/if \(!contrat\) return null;/.test(ts) && /veille: ticketpotSrv\.etat \? \{ 
 vu(/mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls, ticketpot: ticketpotJson\(\),/.test(srv), '/api/tirage sert ticketpot');
 vu(!/MISSIONS_VERIFIER_KEY/.test(ts) && !/signerDigest|attesterPart|attesterJour/.test(ts), 'le serveur ne signe RIEN pour le pot (aucune cle, aucune attestation ici)');
 /* (3) */
-vu(/import \{ planFund as planFundPot, (planClaim as planClaimPot, )?dayDeJourId as dayDeJourIdPot \} from '\.\/ticketpot-plan\.js';/.test(app), 'app : planFund (+ planClaim) + dayDeJourId importes');
+vu(/import \{ planFund as planFundPot, [^}]*dayDeJourId as dayDeJourIdPot \} from '\.\/ticketpot-plan\.js';/.test(app), 'app : planFund (+ planClaim, planClose) + dayDeJourId importes');
 const carte = app.slice(app.indexOf('id="tirCarte"'), app.indexOf('id="missionsCarte"'));
 vu(/<p class="note" id="potJour"[^>]*\bhidden\b/.test(carte) && /<label class="champ" id="potFondLab" hidden>[^<]*<input id="potMontant"/.test(carte) && /<button[^>]*\bid="jourFondPot"[^>]*\bhidden\b/.test(carte), 'ligne, montant et bouton caches dans le HTML');
 vu(!/value="1"[^>]*>[^<]*USDC/.test(carte.replace(/<!--[\s\S]*?-->/g, '')) , 'aucun montant fixe dans la carte');

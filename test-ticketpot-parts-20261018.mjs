@@ -44,9 +44,13 @@ const page = readFileSync(new URL('./attester-ticketpot.html', import.meta.url),
 vu(/eth_signTypedData_v4/.test(page) && /JSON\.stringify\(p\.donnees\)/.test(page) && /noindex/.test(page) && !/eth_sendTransaction|sendCalls/.test(page), 'la page signe un MESSAGE type (jamais une transaction)');
 /* (4) */
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-vu(/import \{ planFund as planFundPot, planClaim as planClaimPot, dayDeJourId as dayDeJourIdPot \} from '\.\/ticketpot-plan\.js';/.test(app), 'app : planClaim importe');
+vu(/import \{ planFund as planFundPot, planClaim as planClaimPot, [^}]*dayDeJourId as dayDeJourIdPot \} from '\.\/ticketpot-plan\.js';/.test(app), 'app : planClaim importe');
 const pr = app.slice(app.indexOf('async function peindreReclamerPot('), app.indexOf("$('#jourReclamerPot').addEventListener"));
 vu(/maPartPot = null; b\.hidden = true;/.test(pr) && /if \(!v \|\| !v\.ferme \|\| !c\) return;/.test(pr) && /\(x\) => x\.wallet === moi && x\.signature\)/.test(pr), 'bouton seulement : jour ferme, wallet connecte, part SIGNEE de CE wallet');
 vu(/String\(c\)\.toLowerCase\(\) !== maPartPot\.wallet\) return;/.test(pr) && /planClaimPot\(\{ contrat: maPartPot\.contrat, day: maPartPot\.day, wallet: maPartPot\.wallet, ticket: maPartPot\.ticket, amount: maPartPot\.amount, deadline: maPartPot\.deadline, signature: maPartPot\.signature, ferme: true \}\)/.test(pr) && /await envoyerAppels\(plan\.appels, c\)/.test(pr), 'reclamerPot : le wallet de la part, planClaim avec la signature, envoi par envoyerAppels');
 vu(/void peindreReclamerPot\(tp, c\);/.test(app), 'cable : peint avec le pot');
+/* la FERMETURE : l owner LU (serveur owner()) tout de suite, n importe qui apres closableByAnyoneAt ; jamais un non-owner avant (gas perdu) */
+vu(/owner = \/\^0x\[0-9a-f\]\{64\}\$\/i\.test\(String\(o\)\) \? '0x' \+ String\(o\)\.slice\(-40\)\.toLowerCase\(\) : null;/.test(srv) && /verifier: j\.verifier, owner \};/.test(srv), 'serveur : owner() lu, servi avec le pot ; illisible -> null');
+const pf = app.slice(app.indexOf('function peindreFermerPot('), app.indexOf("$('#jourFermerPot').addEventListener"));
+vu(/b\.hidden = !\(v && !v\.ferme && moi && \(owner \|\| parTous\)\);/.test(pf) && /parTous = v && maintenant >= fermablePot\(v\.day\)/.test(pf) && /planClosePot\(\{ contrat: potCfg\.contrat, day: v\.day, owner, ferme: v\.ferme \}\)/.test(pf) && /await envoyerAppels\(plan\.appels, c\)/.test(pf), 'fermeture : owner lu ou 12 h passees ; planClose ; envoi par envoyerAppels');
 console.log('ok ticketpot-parts - ' + n + ' assertions ; NE PROUVE PAS une signature ni un claim reels');

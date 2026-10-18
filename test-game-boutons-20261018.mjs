@@ -18,7 +18,8 @@ const carte = app.slice(c0, c1).replace(/<!--[\s\S]*?-->/g, '');
 const ids = [...carte.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
 /* 2026-10-18 (revue adverse) : + « Settle pending rolls » (rolls payes en attente) et « Close and draw yesterday's pass pot », caches */
 /* 2026-10-18 : + « Add to today's pot » (TicketPot LIVE), cache sans fiche servie ni wallet */
-vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin', 'jourAuto', 'jourRollPaye', 'jourPass', 'rollsRegler', 'jourTirerJour', 'jourFondPot', 'jourReclamerPot']), 'exactement 4 boutons visibles + Auto-roll + 4 boutons BlockRolls caches + le pot + la part (lus : ' + ids.join(', ') + ')');
+vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin', 'jourAuto', 'jourRollPaye', 'jourPass', 'rollsRegler', 'jourTirerJour', 'jourFondPot', 'jourReclamerPot', 'jourFermerPot']), 'exactement 4 boutons visibles + Auto-roll + 4 boutons BlockRolls caches + le pot, la part, la fermeture (lus : ' + ids.join(', ') + ')');
+vu(/<button[^>]*\bid="jourFermerPot"[^>]*\bhidden\b/.test(carte), 'Close the pot : cache dans le HTML');
 vu(/<button[^>]*\bid="jourReclamerPot"[^>]*\bhidden\b/.test(carte), 'Claim my share : cache dans le HTML (sans signature, pas de bouton)');
 vu(/<button[^>]*\bid="jourFondPot"[^>]*\bhidden\b/.test(carte), 'Add to today\'s pot : cache dans le HTML');
 vu(/<button[^>]*\bid="rollsRegler"[^>]*\bhidden\b/.test(carte) && /<button[^>]*\bid="jourTirerJour"[^>]*\bhidden\b/.test(carte), 'settle en attente et tirage du pot du jour : caches dans le HTML');
