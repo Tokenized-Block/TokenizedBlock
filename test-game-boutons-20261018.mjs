@@ -22,6 +22,11 @@ vu(/<button[^>]*\bid="jourRollPaye"[^>]*\bhidden\b/.test(carte) && /<button[^>]*
 const pb = app.slice(app.indexOf('function poserBoutonsRolls('), app.indexOf('async function envoyerAppels('));
 vu(/rollsCfg = t && t\.rolls && t\.rolls\.contrat \? t\.rolls : null;/.test(pb) && /const on = !!\(rollsCfg && c\);/.test(pb) && /bp\.hidden = !on; bd\.hidden = !on;/.test(pb), 'ouverts seulement avec rolls.contrat servi ET un wallet');
 vu(/usdcTexte\(rollsCfg\.prixRoll\)/.test(pb) && /usdcTexte\(rollsCfg\.prixPass\)/.test(pb) && !/0\.50|10 USDC/.test(pb), 'les prix des boutons viennent du serveur, jamais tapes');
+/* Auto-roll : le lot avec pass (une signature, settleMany) n est tente QUE si le contrat est servi ET un pass est actif ; sinon practice */
+const ar = app.slice(app.indexOf('async function autoRoll()'), app.indexOf('async function autoRollAvecPass('));
+vu(/if \(rollsCfg && await autoRollAvecPass\(c\)\) return;/.test(ar), 'Auto-roll : lot avec pass seulement si rollsCfg (contrat servi)');
+const arp = app.slice(app.indexOf('async function autoRollAvecPass('), app.indexOf("$('#jourAuto').addEventListener"));
+vu(/if \(!passActif\(pass\)\) return false;/.test(arp) && /planRollsAvecPass\(/.test(arp) && /planSettleMany\(/.test(arp) && /lireRolledTous\(/.test(arp) && /lireSettledTous\(/.test(arp) && /PERDU/.test(arp), 'lot avec pass : pass actif exige, N rolls, settleMany, Rolled/Settled lus, fenetre perdue dite');
 vu(!/<button[^>]*\bdisabled\b/.test(carte), 'aucun bouton desactive dans la carte Draws');
 /* ce que le visiteur VOIT : les boutons `hidden` (BlockRolls, ouverts seulement par le serveur) sont otes avant de juger les textes */
 const visible = carte.replace(/<button[^>]*\bhidden\b[^>]*>[\s\S]*?<\/button>/g, '');

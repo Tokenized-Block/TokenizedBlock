@@ -3884,7 +3884,7 @@ import { apparenceDepuisAdresse } from './apparence.js';
 import { faceRevelee, scoreFaces } from './face-du-jour.js';
 import { planReclamer, planPoster } from './missions-plan.js';
 /* 2026-10-18 : BlockRolls — roll paye / day pass, SEULEMENT quand /api/tirage sert rolls.contrat (fiche signee par Phil) ; sinon practice */
-import { planRoll, planPass, planRollAvecPass, planSettle, lireRolled, lireSettled, etatReglement } from './blockrolls-plan.js';
+import { planRoll, planPass, planRollAvecPass, planRollsAvecPass, planSettle, planSettleMany, lireRolled, lireRolledTous, lireSettled, lireSettledTous, etatReglement } from './blockrolls-plan.js';
 import { guessDepuisApparence, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 import { poolId as poolIdV4 } from './pool.js';
 import { topic as topicDe } from './keccak.js';
@@ -4580,10 +4580,51 @@ async function autoRoll() {
   if (!c || b.disabled) return;
   b.disabled = true;
   try {
+    /* avec un PASS actif sur le contrat signe : 5 rolls en UN lot (rollWithPass x5, une signature), regles ensemble (settleMany) ; sinon practice */
+    if (rollsCfg && await autoRollAvecPass(c)) return;
     for (let i = 0; i < 5; i++) { if (!compte) break; await roll(); }
     const scores = rollDerniers.slice(0, 5).map((r) => r.score).filter((x) => Number.isInteger(x));
     if (q && scores.length) q.textContent = 'Last rolls: ' + scores.map((x) => x + '/5').join(' · ') + ' — best ' + Math.max(...scores) + '/5, total ' + scores.reduce((a, x) => a + x, 0) + '/' + (scores.length * 5) + '.';
   } finally { b.disabled = false; }
+}
+/* AUTO-ROLL AVEC PASS (BlockRolls) : rend true si un lot a ete tente (pass actif), false si pas de pass (le practice prend le relais).
+ *   Lot = planRollsAvecPass (<= rollsLeft, 5 au plus) -> Rolled x N au recu -> attente du bloc cible (le meme pour tout le lot) ->
+ *   planSettleMany -> Settled x N -> scores et gains dits. Fenetre 256 blocs : si elle passe, les rolls sont perdus (dit). */
+async function autoRollAvecPass(c) {
+  const e = $('#rollsEtat'), q = $('#dernierQuand'), contrat = rollsCfg.contrat;
+  const dit = (txt) => { e.hidden = false; e.textContent = txt; };
+  let pass = null;
+  try { pass = lirePass(await rpc('eth_call', [{ to: contrat, data: appelPass(c) }, 'latest'])); } catch (_) { pass = null; }
+  if (!passActif(pass)) return false;
+  const guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourDeApp(Date.now()))));
+  if (!guess) { dit('Your ticket face could not be turned into a guess — nothing was asked.'); return true; }
+  const n = Math.min(5, pass.rollsLeft);
+  const plan = planRollsAvecPass({ contrat, guesses: Array.from({ length: n }, () => guess), pass, passRolls: rollsCfg.passRolls });
+  if (plan.etat !== 'PRET') { dit('Not rolled: ' + plan.pourquoi); return true; }
+  dit('Rolling ' + n + ' times with your pass (' + pass.rollsLeft + ' left) — one signature…');
+  const r = await envoyerAppels(plan.appels, c);
+  if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit('Not rolled: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160)); return true; }
+  const recu = await recuDe(r.hash), rolled = recu ? lireRolledTous(recu.logs, contrat) : [];
+  if (!rolled.length) { dit('Sent (' + r.hash.slice(0, 10) + '…) but no roll could be read back yet — check the explorer.'); return true; }
+  const cible = Math.max(...rolled.map((x) => Number(x.targetBlock)));
+  dit(rolled.length + ' rolls in — block ' + cible.toLocaleString('en-US') + ' decides. Waiting…');
+  let tete = 0;
+  for (let k = 0; k < 90 && tete <= cible; k++) { await new Promise((o) => setTimeout(o, 2000)); try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
+  const er = etatReglement(cible, tete);
+  if (er.etat !== 'REGLABLE') { dit(er.etat === 'PERDU' ? 'The 256-block window passed before settling — these rolls are lost (no refund).' : 'The block is not there yet; settle from the explorer within ' + er.blocsAvant + ' blocks.'); return true; }
+  const ps = planSettleMany({ contrat, rollIds: rolled.map((x) => x.rollId) });
+  if (ps.etat !== 'PRET') { dit('Not settled: ' + ps.pourquoi); return true; }
+  dit('Block ' + cible.toLocaleString('en-US') + ' is in — sign the settle for all ' + rolled.length + ' rolls…');
+  const rs = await envoyerAppels(ps.appels, c);
+  if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit('Not settled yet: ' + String((rs && (rs.pourquoi || rs.etat)) || 'no answer').slice(0, 160) + ' — settle within ' + er.blocsRestants + ' blocks.'); return true; }
+  const recuS = await recuDe(rs.hash), st = recuS ? lireSettledTous(recuS.logs, contrat) : [];
+  if (!st.length) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return true; }
+  const gain = st.reduce((a, x) => a + x.payout, 0n), scores = st.map((x) => x.score);
+  for (const x of st) rollDerniers.unshift({ bloc: cible, score: x.score });
+  rollDerniers.length = Math.min(rollDerniers.length, 5);
+  if (q) q.textContent = 'Last rolls: ' + scores.map((x) => x + '/5').join(' · ') + ' — best ' + Math.max(...scores) + '/5.';
+  dit('Block ' + cible.toLocaleString('en-US') + ' drew ' + scores.map((x) => x + '/5').join(', ') + (gain > 0n ? ' — you won ' + usdcTexte(gain) + ' USDC, paid to your wallet.' : ' — no prize this time.') + ' Pot now ' + usdcTexte(st[st.length - 1].potAfter) + ' USDC.');
+  return true;
 }
 $('#jourAuto').addEventListener('click', () => { void autoRoll(); });
 /* ══ ROLL (Phil 19:55 : « le winner gagne face au random en live ») — practice : aucun paiement ; le bloc N+2 (N = tete au clic) decide ;
