@@ -3639,12 +3639,14 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte" id="regleCarte">
       <details id="missionsLien">
         <summary class="note" style="cursor:pointer">How it works</summary>
-        <p class="sous" id="tirSous" style="margin:6px 0 0">No entry to pay: trade $10 in a day — the UNIT block, or tokenized stocks in the app — and that day is your ticket. Or mint a skin (1 USDC): today's ticket. Roll any time: the block after next draws a face, scored against your ticket (practice today; paid rolls and a 10 USDC day pass come with their contract).</p>
+        <!-- Phil 2026-10-18 09:00 : « change pour vraiment écrire » — le jeu tel qu il est construit ; ce qui attend une signature le dit. -->
+        <p class="sous" id="tirSous" style="margin:6px 0 0">Four games, one ticket. Your ticket is a block face made from your wallet and the day — nobody else can hold it, and it is the only key to that day's pot.</p>
         <div class="jeuGrille">
-          <div class="jeuTuile"><b>01 · TRADE</b><p>Trade UNIT on its TokenizedBlock market, or tokenized stocks in the app.</p></div>
-          <div class="jeuTuile"><b>02 · THE TICKET</b><p>$10 of volume in a day (UTC) is that day's ticket. Trading more that day adds nothing.</p></div>
-          <div class="jeuTuile"><b>03 · THE DRAWS</b><p>A draw every day, a bigger one when the week closes, the biggest when the month closes. Every day you hold a ticket is one more entry. A future block's hash picks the winners — anyone can replay it.</p></div>
-          <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward up front. Anyone — person or AI agent — with today's ticket and the block's units can do it. Keep holding through the window; selling early ends the run.</p></div>
+          <div class="jeuTuile"><b>01 · THE TICKET</b><p>Trade $10 of UNIT or tokenized stocks in a day (UTC), or mint a skin, and that day's ticket is yours. More volume that day adds nothing: one wallet, one ticket.</p></div>
+          <div class="jeuTuile"><b>02 · THE DAY POT</b><p>The fees of the day feed that day's pot. After midnight UTC the first block stamped 2 minutes later draws one ticket among the day's holders; its face is revealed and scored against yours. The winner claims the pot with the ticket (contract opens once signed; practice until then). Week and month draws stack every ticket day.</p></div>
+          <div class="jeuTuile"><b>03 · ROLLS</b><p>Roll now for practice: the block after next draws a face, scored against your ticket. With the contract: 0.50 USDC a roll, up to 10 in one signature, 3 traits or more in common pays 5 USDC from the roll pot; a 10 USDC day pass = 30 rolls, half of it to the day pot.</p></div>
+          <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward. A ticket holder who holds the block does it — a person or an AI agent — and the chain proves it. Doer 90%, community earn pool 7%, TokenizedBlock 3%.</p></div>
+          <div class="jeuTuile"><b>05 · SKINS</b><p>Mint a skin for your block, wear it, resell it at a fixed price or in an auction (bids +5%, 7 days max). A minted skin is also that day's ticket.</p></div>
         </div>
       </details>
     </div>
@@ -3814,7 +3816,8 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button class="navB" role="tab" aria-selected="false" data-volet="trade"><b>📈</b>Market</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="creer"><b>✚</b>Create</button>
     <!-- 2026-10-17 soir (Phil) : l onglet Bridge devient Missions. Fund / Swap / Bridge s affichent sous le Wallet (allerA('bridge') y mene). -->
-    <button class="navB" role="tab" aria-selected="false" data-volet="missions"><b>✓</b>Game</button>
+    <!-- Phil 2026-10-18 09:00 : le logo de Game = un DE (reference au roll), meme couleur que les autres (heritee du <b> du nav) -->
+    <button class="navB" role="tab" aria-selected="false" data-volet="missions"><b>⚄</b>Game</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="brain"><b>❋</b>Brain</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="wallet"><b>▤</b>Wallet</button>
     <button class="navB" role="tab" aria-selected="false" data-volet="social"><b>✦</b>Feed</button>

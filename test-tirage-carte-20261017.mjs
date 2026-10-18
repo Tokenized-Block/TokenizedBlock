@@ -22,6 +22,8 @@ vu(/etape\('wallet_connect_ok'\); \} catch \(_\) \{\}\s*\r?\n\s*try \{ peindreTi
 vu(/if \(nom === 'missions'\) \{ void peindreTirage\(\); void peindreDernierBlock\(\); void peindreMissions\(\); void peindreEarn\(\); void peindreSkinsJeu\(\); void peindreUnitPools\(\); \}/.test(app), 'repeinte a l ouverture de l onglet Game (tirage + face + missions + earn + skins + UNIT pools)');
 const carte = app.slice(c, app.indexOf('</section>', c));
 vu(/<p class="titre jeuTitre"[^>]*>Your trades are your ticket\./.test(carte) && !/\u{1F39F}/u.test(carte), 'titre « jeu », sans emoji');
-vu(/\$10 of volume in a day \(UTC\)/.test(carte) && /A draw every day, a bigger one when the week closes, the biggest when the month closes/.test(carte)
-  && /A future block's hash picks the winners/.test(carte), 'les tuiles disent la regle v2 et le hasard verifiable');
+/* Phil 2026-10-18 09:00 : « change pour vraiment ecrire » — les tuiles disent le jeu construit : ticket, pot du jour, rolls, missions, skins */
+vu(/Trade \$10 of UNIT or tokenized stocks in a day \(UTC\), or mint a skin/.test(carte) && /the first block stamped 2 minutes later draws one ticket among the day's holders/.test(carte)
+  && /0\.50 USDC a roll, up to 10 in one signature/.test(carte) && /Doer 90%, community earn pool 7%, TokenizedBlock 3%/.test(carte) && /05 · SKINS/.test(carte),
+  'les tuiles disent le ticket, le pot du jour (bloc E), les rolls, le split des missions, les skins');
 console.log('ok tirage-carte - ' + n + ' assertions ; NE PROUVE PAS un ticket reel');
