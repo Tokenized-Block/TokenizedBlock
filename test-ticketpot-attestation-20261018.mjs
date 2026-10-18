@@ -7,7 +7,7 @@
  * Cle de TEST publique 0xA11CE (celle des tests forge). NE PROUVE PAS : une vraie chaine ni un claim on-chain de ces signatures (le banc fork
  *   banc-ticketpot-fork-20261018.mjs porte une attestation de CE module a claim() du contrat sur un fork de Base). */
 import { strict as assert } from 'node:assert';
-import { attesterPart, attesterJour, ticketDe, lireJour } from './ticketpot-attestation.js';
+import { attesterPart, attesterJour, attesterSemaine, ticketDe, lireJour } from './ticketpot-attestation.js';
 import { selecteur } from './keccak.js';
 import { adresseDe, recupererAdresse } from './signeur-secp256k1.js';
 import * as P from './ticketpot-plan.js';
@@ -92,4 +92,14 @@ vu((() => { try { ticketDe(H[0], '2026-10-18'); return false; } catch (_) { retu
 /* (4) lireJour */
 const j = await lireJour(io(), DAY);
 vu(j.verifier === VERIF && j.chaine === 8453 && j.ferme === true && j.potAtClose === 10_000_000n && j.reste === 10_000_000n && j.enPause === false, 'lireJour decode verifier, chaine, pause, closed, potAtClose, dayPot');
+/* (S) LA SEMAINE PONDEREE (Phil 2026-10-18 : « au nombre de tickets : autant de chances ») — H0 : 7 jours + 3 bonus Week pass = 10 entrees ;
+ *   H1 : 3 jours ; H2 : 0 entree (absent). Pot 13 USDC -> 13 x 10/13 = 10, 13 x 3/13 = 3 ; un bonus sans entree ne cree pas de part. */
+const ent = [...Array(7)].map((_, k) => ({ adresse: H[0], jour: 'J2026-10-1' + k })).concat([...Array(3)].map((_, k) => ({ adresse: H[1], jour: 'J2026-10-1' + k })));
+const s = await attesterSemaine(io({ potAtClose: 13_000_000n }), { day: DAY, entrees: ent, bonus: { [H[0]]: 3, [H[2]]: 3 } });
+vu(s.ok === true && s.total === 13 && s.parWallet[H[0]] === 10 && s.parWallet[H[1]] === 3 && !(H[2] in s.parWallet), 'semaine : entrees + bonus Week pass (H0 10, H1 3), un bonus sans entree ignore');
+const am = Object.fromEntries(s.attestations.map((x) => [x.wallet, x.amount]));
+vu(am[H[0]] === '10000000' && am[H[1]] === '3000000' && s.poussiere === '0', 'parts au prorata : 10/13 et 3/13 de 13 USDC = 10 et 3 USDC, rien ne depasse le pot');
+vu(s.attestations.every((x) => recupererAdresse(x.digest, x.signature).toLowerCase() === VERIF), 'chaque part ponderee est signee par le verifier');
+vu((await attesterPart(io({ potAtClose: 13_000_000n }), { day: DAY, wallet: H[1], ticket: ticketDe(H[1], 'J2026-10-18'), nTickets: 2, amount: 3_000_001n, poids: 3, total: 13 })).ok === false, 'une part ponderee au-dessus de pot x poids/total : refusee (mutant « pas de plafond » rouge)');
+vu((await attesterSemaine(io(), { day: DAY, entrees: [] })).ok === false, 'semaine sans entree : rien a partager');
 console.log('ok ticketpot-attestation - ' + n + ' assertions ; NE PROUVE PAS une vraie chaine');

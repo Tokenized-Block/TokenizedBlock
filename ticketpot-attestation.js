@@ -49,7 +49,7 @@ export async function lireJour(io, day) {
  * partDuJour(potAtClose, nTickets)), deadline? (defaut : claimableUntil(day)), jour? (deja lu par lireJour, pour un lot) }.
  * @returns { ok:true, day, jourId, wallet, ticket, amount, deadline, nTickets, potAtClose, digest, signature } | { ok:false, etat, pourquoi }
  */
-export async function attesterPart(io, { day, wallet, ticket, nTickets, amount = null, deadline = null, jour = null }) {
+export async function attesterPart(io, { day, wallet, ticket, nTickets, amount = null, deadline = null, jour = null, poids = null, total = null }) {
   const w = bas(wallet), t = bas(ticket), d = Number(day), n = Number(nTickets);
   const maintenant = Number.isFinite(io.maintenant) ? Number(io.maintenant) : Math.floor(Date.now() / 1000);
   if (!ADR.test(bas(io.contrat))) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the ticket pot is not deployed yet' };
@@ -71,9 +71,13 @@ export async function attesterPart(io, { day, wallet, ticket, nTickets, amount =
   if (j.enPause) return { ok: false, etat: 'PAS_OUVERT', pourquoi: 'ticket pot claims are paused right now' };
   if (!j.ferme) return { ok: false, etat: 'REFUSE', pourquoi: 'day ' + jourIdDeDay(d) + ' is not closed on chain yet: its pot is not final, nothing is signed before close(day)' };
   if (!/^0{40}$/.test(dejaTicket)) return { ok: false, etat: 'REFUSE', pourquoi: 'this wallet already received its share of day ' + jourIdDeDay(d) + ' (ticket 0x' + dejaTicket + ')' };
-  const part = amount === null ? partDuJour(j.potAtClose, n) : BigInt(amount);
-  if (part <= 0n) return { ok: false, etat: 'REFUSE', pourquoi: 'the share of day ' + jourIdDeDay(d) + ' is 0 raw USDC (pot ' + j.potAtClose + ' for ' + n + ' tickets): nothing to attest' };
-  if (part > partDuJour(j.potAtClose, n)) return { ok: false, etat: 'REFUSE', pourquoi: 'asked ' + part + ' raw USDC, a share of day ' + jourIdDeDay(d) + ' is ' + partDuJour(j.potAtClose, n) + ' (pot ' + j.potAtClose + ' / ' + n + ' tickets)' };
+  /* part PONDEREE (Phil 2026-10-18 : « chaque semaine, autant de chances que de tickets ») : poids/total entrees -> pot * poids / total ;
+   *   sinon la part egale du jour. Jamais plus que ce plafond. */
+  const pondere = Number.isInteger(Number(poids)) && Number(poids) > 0 && Number.isInteger(Number(total)) && Number(total) >= Number(poids);
+  const plafond = pondere ? (j.potAtClose * BigInt(poids)) / BigInt(total) : partDuJour(j.potAtClose, n);
+  const part = amount === null ? plafond : BigInt(amount);
+  if (part <= 0n) return { ok: false, etat: 'REFUSE', pourquoi: 'the share of day ' + jourIdDeDay(d) + ' is 0 raw USDC (pot ' + j.potAtClose + ' for ' + (pondere ? poids + '/' + total + ' entries' : n + ' tickets') + '): nothing to attest' };
+  if (part > plafond) return { ok: false, etat: 'REFUSE', pourquoi: 'asked ' + part + ' raw USDC, a share of day ' + jourIdDeDay(d) + ' is ' + plafond + ' (pot ' + j.potAtClose + (pondere ? ' x ' + poids + '/' + total + ' entries' : ' / ' + n + ' tickets') + ')' };
   if (part > j.reste) return { ok: false, etat: 'REFUSE', pourquoi: 'only ' + j.reste + ' raw USDC left in the pot of day ' + jourIdDeDay(d) + ', a share is ' + part };
   const echeance = deadline === null ? claimableUntil(d) : Number(deadline);
   if (!Number.isInteger(echeance) || echeance < maintenant) return { ok: false, etat: 'REFUSE', pourquoi: 'the deadline is already past' };
@@ -105,4 +109,28 @@ export async function attesterJour(io, { day, tickets }) {
   if (!attestations.length) return { ok: false, etat: refus[0].etat, pourquoi: refus[0].pourquoi, refus };
   const part = partDuJour(j.potAtClose, liste.length);
   return { ok: true, day: d, jourId, nTickets: liste.length, potAtClose: j.potAtClose.toString(), part: part.toString(), poussiere: (j.potAtClose - part * BigInt(liste.length)).toString(), attestations, refus };
+}
+
+/**
+ * LA SEMAINE (Phil 2026-10-18 : « chaque semaine on redistribue les rewards aux eligibles, au nombre de tickets : autant de chances »).
+ * `day` = le jour TicketPot qui porte le pot de la semaine (son dernier jour) ; `entrees` = [{ adresse, jour }] de la semaine
+ * (tirage-saison.js entreesPeriode) + `bonus` = { wallet: n } (Week pass : +3). Chaque wallet recoit floor(pot x ses entrees / total).
+ * Un wallet = une attestation (un claim par wallet et par jour cote contrat). Rend { ok, day, total, parWallet, attestations, refus, poussiere }.
+ */
+export async function attesterSemaine(io, { day, entrees, bonus = {} }) {
+  const d = Number(day), poids = new Map();
+  for (const e of entrees || []) { const a = bas(e && e.adresse); if (ADR.test(a)) poids.set(a, (poids.get(a) || 0) + 1); }
+  for (const [a0, n0] of Object.entries(bonus || {})) { const a = bas(a0), n = Number(n0); if (ADR.test(a) && Number.isInteger(n) && n > 0 && poids.has(a)) poids.set(a, poids.get(a) + n); }
+  const liste = [...poids.keys()].sort(), total = [...poids.values()].reduce((s, x) => s + x, 0);
+  if (!liste.length || total <= 0) return { ok: false, etat: 'REFUSE', pourquoi: 'no entry this week: nothing to share' };
+  let j;
+  try { j = await lireJour(io, d); } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }; }
+  const jourId = jourIdDeDay(d), attestations = [], refus = [];
+  for (const w of liste) {
+    const r = await attesterPart(io, { day: d, wallet: w, ticket: ticketDe(w, jourId), nTickets: liste.length, jour: j, poids: poids.get(w), total });
+    if (r.ok) attestations.push({ ...r, entrees: poids.get(w) }); else refus.push({ wallet: w, etat: r.etat, pourquoi: r.pourquoi });
+  }
+  if (!attestations.length) return { ok: false, etat: refus[0].etat, pourquoi: refus[0].pourquoi, refus };
+  const paye = attestations.reduce((s, x) => s + BigInt(x.amount), 0n);
+  return { ok: true, day: d, jourId, total, parWallet: Object.fromEntries(liste.map((w) => [w, poids.get(w)])), potAtClose: j.potAtClose.toString(), poussiere: (j.potAtClose - paye).toString(), attestations, refus };
 }
