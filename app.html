@@ -4720,7 +4720,7 @@ async function passPaye() {
       + ' Sign ' + plan.appels.length + ' steps in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'No pass bought')); return; }
-    dit('Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes). Today\'s pass pot goes whole to one buyer: after midnight UTC anyone closes the day and draws it here.');
+    dit('Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes). Today\'s pass pot goes whole to one buyer: after midnight UTC anyone (you too) closes the day and draws it here with “Close and draw yesterday\'s pass pot” — a Base block hash picks the buyer.');
   } finally { b.disabled = false; void peindreTirageJourPass(); }
 }
 $('#jourRollPaye').addEventListener('click', () => { void rollPaye(); });
@@ -5277,7 +5277,7 @@ function bjAllumer() {
 function bjEteindre(pourquoi) {
   bj.on = false; bjSauver();
   const z = $('#skinBrain'); if (z) z.hidden = true;
-  bjPeindre(pourquoi || 'Off — its brain stopped. Nothing more will be proposed.' + (bj.pending.length ? ' ' + bj.pending.length + ' roll(s) still to settle: turn it back on, or settle from the explorer within 256 blocks.' : ''));
+  bjPeindre(pourquoi || 'Off — its brain stopped. Nothing more will be proposed.' + (bj.pending.length ? ' ' + bj.pending.length + ' roll(s) still to settle: turn it back on, or use “Settle pending rolls” in the Game tab within 256 blocks.' : ''));
 }
 /* les missions dont ce wallet a COLLE la transaction dans le tableau : l attestation du verifier est demandee une fois par visite */
 async function bjAttestations(ouvertes, moi) {
@@ -5339,10 +5339,13 @@ async function bjTour() {
       const contrat = String(rc.contrat).toLowerCase();
       let bloc = null, pass = null, pot = null, guess = null;
       try { bloc = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { bloc = null; }
-      try { pass = lirePass(await rpc('eth_call', [{ to: contrat, data: appelPass(c) }, 'latest'])); } catch (_) { pass = null; }
+      /* ⛔ un pass ILLISIBLE n est pas « pas de pass » (revue adverse 2026-10-18) : sans lecture, aucun roll n est propose (guess nul) ;
+       *   le settle des rolls en cours, lui, reste propose */
+      const lp = await lirePassSur(contrat, c), passLu = lp.ok;
+      pass = passLu ? lp.pass : null;
       try { pot = lireUint(await rpc('eth_call', [{ to: contrat, data: appelPot() }, 'latest'])); } catch (_) { pot = null; }
       /* Phil 2026-10-18 : chaque roll tire une face neuve au hasard — le brain aussi (plus la face du ticket) */
-      try { const f = tirerFaceDeRoll(); guess = f ? f.guess : null; } catch (_) { guess = null; }
+      try { const f = passLu ? tirerFaceDeRoll() : null; guess = f ? f.guess : null; } catch (_) { guess = null; }
       if (Number.isSafeInteger(bloc)) {
         /* un roll passe sa fenetre de 256 blocs : perdu (le contrat ne le regle plus) — il sort de la liste et c est DIT */
         const perdus = bj.pending.filter((p) => p.contrat === contrat && etatReglement(p.targetBlock, bloc).etat === 'PERDU');
@@ -5423,7 +5426,7 @@ function bjMontrer(p, rolls, walletCarte) {
       const recu = await recuDe(r.hash), lus = recu ? lireRolledTous(recu.logs, rolls.contract) : [];
       for (const x of lus) bj.pending.push({ contrat: rolls.contract, rollId: String(x.rollId), targetBlock: String(x.targetBlock) });
       bj.pending = bj.pending.slice(-50); bjSauver();
-      bcEtape(m, lus.length ? 'Rolled #' + lus.map((x) => x.rollId).join(', #') + ' — block ' + lus.map((x) => Number(x.targetBlock).toLocaleString('en-US')).join(', ') + ' decides; its brain proposes the settle once it is in.' : 'Rolled, but the roll was not read back yet — settle it from the explorer within 256 blocks.', lus.length ? 'oui' : 'non');
+      bcEtape(m, lus.length ? 'Rolled #' + lus.map((x) => x.rollId).join(', #') + ' — block ' + lus.map((x) => Number(x.targetBlock).toLocaleString('en-US')).join(', ') + ' decides; its brain proposes the settle once it is in.' : 'Rolled, but the roll was not read back yet — “Settle pending rolls” in the Game tab picks it up within 256 blocks.', lus.length ? 'oui' : 'non');
       setTimeout(() => { void bjTour(); }, 12000);
     } else if (p.kind === 'SETTLE' && rolls && /^SETTLE:/.test(p.cle)) {
       const ids = p.cle.slice(7).split(',');

@@ -38,7 +38,7 @@ vu(/if \(id !== bjVol\.carte\) return/.test(rs) && /if \(!bj\.on\) return/.test(
 const iRefus = bloc.indexOf('const refus = bjRefusAuSigne(id, p, walletCarte);'), iSigne = bloc.indexOf('bjVol.signe = true;', iRefus), iEnvoi = bloc.indexOf('bcSigner(m, p.calls', iRefus);
 vu(iRefus > 0 && iSigne > iRefus && iEnvoi > iSigne, 'le re-controle passe AVANT tout envoi');
 vu(/bjVol\.ouverte = 0; bjVol\.carte \+= 1; \}/.test(bloc) && /bjVol\.carte \+= 1; const id = bjVol\.carte;/.test(bloc) && /const fini = \(txt\) => \{ if \(id !== bjVol\.carte\) return;/.test(bloc), 'une carte expiree change d id ; sa fin ne libere pas la carte courante');
-vu(/const f = tirerFaceDeRoll\(\); guess = f \? f\.guess : null;/.test(bloc) && !/adresseTicket/.test(app.slice(app.indexOf('async function bjTour()'), app.indexOf('const BJ_TITRES'))), 'le roll du brain tire une face neuve (plus la face du ticket)');
+vu(/const f = passLu \? tirerFaceDeRoll\(\) : null; guess = f \? f\.guess : null;/.test(bloc) && /const lp = await lirePassSur\(contrat, c\), passLu = lp\.ok;/.test(bloc) && !/adresseTicket/.test(app.slice(app.indexOf('async function bjTour()'), app.indexOf('const BJ_TITRES'))), 'le roll du brain tire une face neuve (plus la face du ticket)');
 
 /* la carte Skin market */
 const sk = app.slice(app.indexOf('async function peindreSkinsJeu()'), app.indexOf('/* ⛔ 2026-10-18 (Phil : « tous les skins a 10 dollars ») : le prix d une skin'));

@@ -35,9 +35,10 @@ vu(/phraseSettle\(st\)/.test(rp) && !/no prize this time \(min/.test(rp + lot), 
 /* (3) */
 const regle = tranche('<div class="carte" id="regleCarte">', '</details>');
 vu(!/03 · ROLLS<\/b><p[^>]*>[^<]*Practice: no prize yet/.test(regle) && /never more than the pot holds/.test(regle), 'tuile ROLLS : plus « Practice: no prize yet », le plafond du pot est dit');
-vu(/paid rolls and the day pass all count/.test(regle), 'tuile TICKET : rolls payes et day pass comptent dans les 10 $');
+/* Phil 2026-10-18 : le pass devient le Week pass (meme contrat, meme prix) */
+vu(/paid rolls and the Week pass all count/.test(regle), 'tuile TICKET : rolls payes et Week pass comptent dans les 10 $');
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
-vu(/what you spend in BlockRolls \(paid rolls and the day pass/.test(srv), 'regle servie : la depense BlockRolls compte');
+vu(/what you spend in BlockRolls \(paid rolls and the Week pass/.test(srv), 'regle servie : la depense BlockRolls compte');
 /* (4) */
 vu(/prizes: \[rc\.prize5, rc\.prize4, rc\.prize3, rc\.prize2\]\.map\(String\)/.test(srv), '/api/tirage : 4 paliers, prize2 compris');
 vu(/pot: contratRolls && potRollsSrv\.brut !== null \? potRollsSrv\.brut : null/.test(srv) && /lireUintRolls\(await rpcRails\('eth_call', \[\{ to: contrat, data: appelPotRolls\(\) \}, 'latest'\]\)\)/.test(srv), '/api/tirage : rolls.pot = pot() lu sur la chaine, null tant que pas lu');

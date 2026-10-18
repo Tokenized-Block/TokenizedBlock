@@ -9,7 +9,8 @@
  * NE PROUVE PAS : un roll reel. */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
-import { depensesJeu, TOPIC_ROLLED, TOPIC_PASS } from './volume-rolls.js';
+import { depensesJeu, passesAchetes, TOPIC_ROLLED, TOPIC_PASS } from './volume-rolls.js';
+import { crediterPassSemaine } from './tirage-saison.js';
 import { crediter, jourDe } from './tirage-saison.js';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
@@ -37,8 +38,11 @@ function monter({ tete, tsIllisible = null }) {
   };
   const revenu = {};
   const f = new Function('BLOCKROLLS_DEPLOIEMENT', 'rpcServeur', 'revenu', 'revenuSale', 'walletsInternes', 'COMPTE_SONDE', 'process', 'crediter', 'jourDe', 'depensesJeu', 'TOPIC_ROLLED_SRV', 'TOPIC_PASS_SRV', 'lireUintRolls', 'rpcRails', 'appelPotRolls',
+    /* 2026-10-18 : le Week pass est credite dans la MEME boucle (passesAchetes -> crediterPassSemaine) */
+    'passesAchetes', 'crediterPassSemaine',
     src + '\nreturn crediterVolumeRolls;');
-  const crediterVolumeRolls = f({ adresse: C, bloc: 100 }, rpcServeur, revenu, false, () => new Set(), '0x' + '00'.repeat(20), { env: {} }, crediter, jourDe, depensesJeu, TOPIC_ROLLED, TOPIC_PASS, () => null, async () => null, () => '0x');
+  const crediterVolumeRolls = f({ adresse: C, bloc: 100 }, rpcServeur, revenu, false, () => new Set(), '0x' + '00'.repeat(20), { env: {} }, crediter, jourDe, depensesJeu, TOPIC_ROLLED, TOPIC_PASS, () => null, async () => null, () => '0x',
+    passesAchetes, crediterPassSemaine);
   return { crediterVolumeRolls, revenu, lus };
 }
 /* (1) (2) */
