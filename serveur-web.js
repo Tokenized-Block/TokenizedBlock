@@ -4106,7 +4106,7 @@ async function lireTicketPotSrv() {
     const j = await lireJourTicketPot({ rpc: rpcServeur, contrat }, day);
     /* l owner (close(day) avant 12 h ; n importe qui apres) — lu, jamais suppose ; illisible -> null et l app n offre que la fermeture « anyone » */
     let owner = null;
-    try { const o = await rpcServeur('eth_call', [{ to: contrat, data: '0x' + selecteurSrv('owner()') }, 'latest']); owner = /^0x[0-9a-f]{64}$/i.test(String(o)) ? '0x' + String(o).slice(-40).toLowerCase() : null; } catch (_) { owner = null; }
+    try { const o = await rpcServeur('eth_call', [{ to: contrat, data: selecteurSrv('owner()') }, 'latest']); owner = /^0x[0-9a-f]{64}$/i.test(String(o)) ? '0x' + String(o).slice(-40).toLowerCase() : null; } catch (_) { owner = null; }
     ticketpotSrv.jourId = veilleJ.id; ticketpotSrv.day = day; ticketpotSrv.lu = Date.now(); ticketpotSrv.erreur = null;
     ticketpotSrv.etat = { ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), verifier: j.verifier, owner };
   } catch (e) { ticketpotSrv.erreur = String((e && e.message) || e).slice(0, 120); }

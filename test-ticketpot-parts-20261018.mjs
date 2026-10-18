@@ -51,6 +51,8 @@ vu(/String\(c\)\.toLowerCase\(\) !== maPartPot\.wallet\) return;/.test(pr) && /p
 vu(/void peindreReclamerPot\(tp, c\);/.test(app), 'cable : peint avec le pot');
 /* la FERMETURE : l owner LU (serveur owner()) tout de suite, n importe qui apres closableByAnyoneAt ; jamais un non-owner avant (gas perdu) */
 vu(/owner = \/\^0x\[0-9a-f\]\{64\}\$\/i\.test\(String\(o\)\) \? '0x' \+ String\(o\)\.slice\(-40\)\.toLowerCase\(\) : null;/.test(srv) && /verifier: j\.verifier, owner \};/.test(srv), 'serveur : owner() lu, servi avec le pot ; illisible -> null');
+/* game22 en prod : owner null — selecteur() rend DEJA « 0x… », le '0x' + ajoute doublait le prefixe (eth_call refuse) */
+vu(/data: selecteurSrv\('owner\(\)'\) \}, 'latest'\]\)/.test(srv) && !/'0x' \+ selecteurSrv\('owner\(\)'\)/.test(srv), 'owner() : le selecteur porte deja 0x (pas de double prefixe)');
 const pf = app.slice(app.indexOf('function peindreFermerPot('), app.indexOf("$('#jourFermerPot').addEventListener"));
 vu(/b\.hidden = !\(v && !v\.ferme && moi && \(owner \|\| parTous\)\);/.test(pf) && /parTous = v && maintenant >= fermablePot\(v\.day\)/.test(pf) && /planClosePot\(\{ contrat: potCfg\.contrat, day: v\.day, owner, ferme: v\.ferme \}\)/.test(pf) && /await envoyerAppels\(plan\.appels, c\)/.test(pf), 'fermeture : owner lu ou 12 h passees ; planClose ; envoi par envoyerAppels');
 console.log('ok ticketpot-parts - ' + n + ' assertions ; NE PROUVE PAS une signature ni un claim reels');
