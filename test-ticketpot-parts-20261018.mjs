@@ -35,10 +35,20 @@ vu(verifierSignaturePart({ digest: parts[0].digest, signature: '0x12', verifier:
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const bloc = srv.slice(srv.indexOf("if (chemin === '/api/ticketpot/parts' || chemin === '/api/ticketpot/signature') {"), srv.indexOf("if (chemin === '/api/jeu/niveau') {"));
 vu(bloc.length > 500 && /import \{ partsDuJour as partsTicketPot, verifierSignaturePart \} from '\.\/ticketpot-parts\.js';/.test(srv), 'serveur : le bloc et l import');
-vu(/const parts = j\.ferme \? partsTicketPot\(\{ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j\.potAtClose, signatures: sigs \}\) : \[\];/.test(bloc), 'parts seulement pour un jour FERME, depuis ticketsJour (la meme liste que /api/tirage)');
+vu(/const parts = j\.ferme \? partsTicketPot\(\{ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j\.potAtClose, signatures: sigs, poids \}\) : \[\];/.test(bloc)
+  && /const tickets = semaine \? Object\.keys\(poids\) : ticketsJour\(revenu\.jours \|\| \{\}, jourId, revenu\.passes \|\| \{\}, SEUIL_VOLUME_JOUR_USD\);/.test(bloc), 'parts seulement pour un jour FERME, depuis ticketsJour (jour) ou les entrees de la semaine');
+/* MODE SEMAINE (Phil 2026-10-18 : « chaque week on redistribue au nombre de tickets ») */
+vu(/if \(jourDe\(s\.fin - JOUR_MS\)\.id !== jourId\) return \{ ok: false, etat: 'REFUSE'/.test(bloc), 'semaine : seulement sur le DERNIER jour de la semaine');
+vu(/entreesPeriode\(jours, ids, SEUIL_VOLUME_JOUR_USD, passes, \(revenu\.bonusSemaine \|\| \{\}\)\[s\.id\] \|\| \{\}, bonusNiv\)/.test(bloc), 'semaine : poids = entrees avec les MEMES bonus plafonnes que /api/tirage');
+vu(/\(revenu\.ticketpotSig \|\| \{\}\)\[jourId \+ \(semaine \? '#S' : ''\)\]/.test(bloc) && /const cleSig = jourId \+ \(semaine \? '#S' : ''\);/.test(bloc), 'signatures du jour et de la semaine gardees sous des cles distinctes');
+const PW = partsDuJour({ chainId: 8453, contrat: C, jourId: J, tickets: [], potAtClose: 1000000n, poids: { [W1]: 3, [W2]: 1, ['0x' + 'c3'.repeat(20)]: 0 } });
+vu(PW.length === 2 && PW[0].wallet === W1 && PW[0].amount === '750000' && PW[1].amount === '250000', 'semaine : pot x entrees / total (3/4 et 1/4) ; un poids 0 n a pas de part');
+const PR = partsDuJour({ chainId: 8453, contrat: C, jourId: J, tickets: [], potAtClose: 10n, poids: { [W1]: 1, [W2]: 2 } });
+vu(PR.reduce((s, p) => s + BigInt(p.amount), 0n) <= 10n && PR.find((p) => p.wallet === W1).amount === '3' && PR.find((p) => p.wallet === W2).amount === '6', 'semaine : les floor ne depassent jamais le pot (3 + 6 <= 10)');
+vu(PW[0].digest !== partsDuJour({ chainId: 8453, contrat: C, jourId: J, tickets: [W1, W2], potAtClose: 1000000n })[0].digest, 'semaine et jour : digests differents (une signature ne passe pas d un mode a l autre)');
 vu(/if \(!verifierSignaturePart\(\{ digest: p\.digest, signature, verifier: r\.verifier \}\)\)/.test(bloc) && /if \(!r\.ferme\)/.test(bloc) && /if \(!p\)/.test(bloc), 'POST : jour ferme, holder du jour, signataire = verifier() relu ; sinon rien n est garde');
 vu(!/signerDigest|MISSIONS_VERIFIER_KEY|attesterPart|attesterJour/.test(bloc), 'le serveur ne signe RIEN ici');
-vu(/brutTP\.length > 2048/.test(bloc) && /revenu\.ticketpotSig\[jourId\]\[wallet\] = \{ digest: p\.digest, signature,/.test(bloc) && /revenuSale = true;/.test(bloc), 'corps borne ; signature gardee sous son digest, persistee');
+vu(/brutTP\.length > 2048/.test(bloc) && /revenu\.ticketpotSig\[cleSig\]\[wallet\] = \{ digest: p\.digest, signature,/.test(bloc) && /revenuSale = true;/.test(bloc), 'corps borne ; signature gardee sous son digest (cle jour ou jour#S), persistee');
 vu(/'attester-ticketpot\.html',/.test(srv.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/)[1]), 'attester-ticketpot.html servie');
 const page = readFileSync(new URL('./attester-ticketpot.html', import.meta.url), 'utf8');
 vu(/eth_signTypedData_v4/.test(page) && /JSON\.stringify\(p\.donnees\)/.test(page) && /noindex/.test(page) && !/eth_sendTransaction|sendCalls/.test(page), 'la page signe un MESSAGE type (jamais une transaction)');

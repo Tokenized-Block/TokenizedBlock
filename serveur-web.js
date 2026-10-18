@@ -6300,19 +6300,33 @@ function traiterRequete(req, res) {
     const rendreTP = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
     const contratTP = TICKETPOT_DEPLOIEMENT.adresse;
     if (!contratTP) { rendreTP(200, { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the ticket pot is not deployed yet' }); return; }
-    const partsDe = async (jourId) => {
+    /* mode SEMAINE (Phil 2026-10-18 : « chaque week on redistribue au nombre de tickets ») : le pot de la semaine vit sur son DERNIER jour ;
+     *   poids = entrees de la semaine (jours avec ticket + Week pass +3 + niveau +1/+2, memes plafonds que /api/tirage). Signatures gardees
+     *   sous la cle « jour#S » : une signature d un mode n est jamais rendue dans l autre (le digest differe de toute facon). */
+    const partsDe = async (jourId, semaine = false) => {
       const day = dayDeJourIdPot(jourId);
       if (day === null) return { ok: false, etat: 'REFUSE', pourquoi: 'day is JYYYY-MM-DD' };
+      let poids = null, semaineId = null;
+      if (semaine) {
+        const s = saisonDe(day * JOUR_MS);
+        if (jourDe(s.fin - JOUR_MS).id !== jourId) return { ok: false, etat: 'REFUSE', pourquoi: 'the week pot lives on the LAST day of its week: ' + jourDe(s.fin - JOUR_MS).id };
+        const jours = revenu.jours || {}, passes = revenu.passes || {}, ids = joursEntre(s.debut, s.fin);
+        const bonusNiv = bonusNiveauxSemaine(entreesPeriode(jours, ids, SEUIL_VOLUME_JOUR_USD, passes), (a) => niveauSrv(a).level);
+        poids = {};
+        for (const e of entreesPeriode(jours, ids, SEUIL_VOLUME_JOUR_USD, passes, (revenu.bonusSemaine || {})[s.id] || {}, bonusNiv)) poids[e.adresse] = (poids[e.adresse] || 0) + 1;
+        semaineId = s.id;
+      }
       let j; try { j = await lireJourTicketPot({ rpc: rpcServeur, contrat: contratTP }, day); } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }; }
-      const tickets = ticketsJour(revenu.jours || {}, jourId, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD);
-      const sigs = ((revenu.ticketpotSig || {})[jourId]) || {};
-      const parts = j.ferme ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j.potAtClose, signatures: sigs }) : [];
-      return { ok: true, day, jourId, contrat: contratTP, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), nTickets: tickets.length, parts };
+      const tickets = semaine ? Object.keys(poids) : ticketsJour(revenu.jours || {}, jourId, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD);
+      const sigs = ((revenu.ticketpotSig || {})[jourId + (semaine ? '#S' : '')]) || {};
+      const parts = j.ferme ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j.potAtClose, signatures: sigs, poids }) : [];
+      return { ok: true, day, jourId, mode: semaine ? 'SEMAINE' : 'JOUR', semaine: semaineId, poids, contrat: contratTP, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), nTickets: tickets.length, parts };
     };
     if (chemin === '/api/ticketpot/parts') {
       if (req.method !== 'GET' && req.method !== 'HEAD') { rendreTP(405, { ok: false, pourquoi: 'GET only' }); return; }
-      const jourId = String(new URL(req.url, 'http://x').searchParams.get('day') || jourDe(Date.now() - JOUR_MS).id);
-      partsDe(jourId).then((r) => rendreTP(r.ok ? 200 : r.etat === 'NON_LU' ? 202 : 400, r)).catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }));
+      const qTP = new URL(req.url, 'http://x').searchParams;
+      const jourId = String(qTP.get('day') || jourDe(Date.now() - JOUR_MS).id);
+      partsDe(jourId, qTP.get('week') === '1').then((r) => rendreTP(r.ok ? 200 : r.etat === 'NON_LU' ? 202 : 400, r)).catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }));
       return;
     }
     if (req.method !== 'POST') { rendreTP(405, { ok: false, pourquoi: 'POST only' }); return; }
@@ -6322,16 +6336,18 @@ function traiterRequete(req, res) {
       let b = null; try { b = JSON.parse(brutTP || '{}'); } catch (_) { b = null; }
       const jourId = String((b && b.day) || ''), wallet = String((b && b.wallet) || '').toLowerCase(), signature = String((b && b.signature) || '');
       if (!/^J\d{4}-\d{2}-\d{2}$/.test(jourId) || !/^0x[0-9a-f]{40}$/.test(wallet) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day (JYYYY-MM-DD), wallet and a 65-byte signature are needed' }); return; }
-      const r = await partsDe(jourId);
+      const semaine = !!(b && b.week === true);
+      const r = await partsDe(jourId, semaine);
       if (!r.ok) { rendreTP(r.etat === 'NON_LU' ? 202 : 400, r); return; }
       if (!r.ferme) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day ' + jourId + ' is not closed on chain: nothing is signed before close(day)' }); return; }
       const p = r.parts.find((x) => x.wallet === wallet);
       if (!p) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: wallet + ' held no ticket of ' + jourId }); return; }
       if (!verifierSignaturePart({ digest: p.digest, signature, verifier: r.verifier })) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'this signature does not recover to the verifier ' + r.verifier + ' on the share of ' + wallet }); return; }
-      revenu.ticketpotSig = revenu.ticketpotSig || {}; revenu.ticketpotSig[jourId] = revenu.ticketpotSig[jourId] || {};
-      revenu.ticketpotSig[jourId][wallet] = { digest: p.digest, signature, amount: p.amount, deadline: p.deadline, ticket: p.ticket, recue: new Date().toISOString() };
+      const cleSig = jourId + (semaine ? '#S' : '');
+      revenu.ticketpotSig = revenu.ticketpotSig || {}; revenu.ticketpotSig[cleSig] = revenu.ticketpotSig[cleSig] || {};
+      revenu.ticketpotSig[cleSig][wallet] = { digest: p.digest, signature, amount: p.amount, deadline: p.deadline, ticket: p.ticket, recue: new Date().toISOString() };
       revenuSale = true;
-      rendreTP(200, { ok: true, jourId, wallet, amount: p.amount, deadline: p.deadline });
+      rendreTP(200, { ok: true, jourId, mode: r.mode, wallet, amount: p.amount, deadline: p.deadline });
     })().catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' })); });
     return;
   }

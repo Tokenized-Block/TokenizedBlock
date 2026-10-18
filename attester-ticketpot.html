@@ -33,6 +33,8 @@
     <h1>Sign the shares of a closed day.</h1>
     <p class="note">Each share is a typed message (EIP-712) that the contract checks at claim time. Signing is not a transaction: no gas, nothing moves. Only the verifier wallet the contract trusts can sign; any other wallet is refused by the server.</p>
     <label class="note">Day (UTC) <input id="jour" placeholder="J2026-10-17"></label>
+    <label class="note" style="display:block;margin-top:6px"><input type="checkbox" id="semaine" style="width:auto"> Weekly pot — the last day of the week, shared by entries (each day with a ticket, Week pass +3, brain level +1/+2)</label>
+    <p class="note">On the last day of a week, sign EITHER its day shares OR its weekly shares, never both: the contract pays one claim per wallet for that day, and the first claim wins.</p>
     <p style="margin:10px 0 0"><button type="button" class="bouton sec" id="lire">Read the shares</button> <button type="button" class="bouton sec" id="connecter">Connect wallet</button> <button type="button" class="bouton" id="signer" hidden>Sign the unsigned shares</button></p>
     <p class="note" id="etat">Pick a day, read its shares, connect the verifier wallet, sign.</p>
     <ul id="liste"></ul>
@@ -50,7 +52,7 @@
     const jour = $('#jour').value.trim();
     dire('Reading the shares of ' + jour + '…');
     let j = null;
-    try { j = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(jour), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+    try { j = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(jour) + ($('#semaine').checked ? '&week=1' : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
     const ul = $('#liste'); ul.textContent = '';
     if (!j || !j.ok) { parts = null; dire((j && j.pourquoi) || 'The shares could not be read just now.', 'non'); $('#signer').hidden = true; return; }
     parts = j.parts; verifier = String(j.verifier || '').toLowerCase();
@@ -74,7 +76,7 @@
         let sig = null;
         try { sig = await eth().request({ method: 'eth_signTypedData_v4', params: [compte, JSON.stringify(p.donnees)] }); } catch (e) { dire('Declined: ' + String((e && e.message) || e), 'non'); refus++; break; }
         let r = null;
-        try { r = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.jourId, wallet: p.wallet, signature: sig }) }).then((x) => x.json()); } catch (_) { r = null; }
+        try { r = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.jourId, wallet: p.wallet, signature: sig, week: $('#semaine').checked }) }).then((x) => x.json()); } catch (_) { r = null; }
         if (r && r.ok) faites++; else { refus++; dire('Refused by the server: ' + ((r && r.pourquoi) || 'no answer'), 'non'); break; }
       }
     } finally { b.disabled = false; }
@@ -82,6 +84,7 @@
     if (faites) dire(faites + ' share(s) signed and stored. Holders can now claim from the Game tab.' + (refus ? ' ' + refus + ' refused.' : ''), refus ? 'non' : 'ok');
   }
   $('#lire').addEventListener('click', () => { void lire(); });
+  $('#semaine').addEventListener('change', () => { void lire(); });
   $('#connecter').addEventListener('click', () => { void connecter(); });
   $('#signer').addEventListener('click', () => { void signer(); });
   void lire();

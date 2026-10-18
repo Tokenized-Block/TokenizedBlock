@@ -4962,13 +4962,19 @@ async function peindreReclamerPot(tp, c) {
   maPartPot = null; b.hidden = true;
   const v = tp && tp.veille;
   if (!v || !v.ferme || !c) return;
-  let r = null;
-  try { r = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(v.jourId), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
-  if (!r || !r.ok) return;
-  const moi = String(c).toLowerCase(), p = (r.parts || []).find((x) => x.wallet === moi && x.signature);
-  if (!p) return;
-  maPartPot = { ...p, contrat: r.contrat };
-  b.textContent = 'Claim my share · ' + usdcTexte(p.amount) + ' USDC (' + v.jourId + ')'; b.hidden = false;
+  /* la part du JOUR, et celle de la SEMAINE si la veille est le dernier jour d une semaine (le serveur refuse sinon : ignore) — la premiere
+   *   SIGNEE pour ce wallet ; le contrat n accepte qu un claim par wallet et par jour */
+  const moi = String(c).toLowerCase();
+  for (const sem of [false, true]) {
+    let r = null;
+    try { r = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(v.jourId) + (sem ? '&week=1' : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
+    if (!r || !r.ok) continue;
+    const p = (r.parts || []).find((x) => x.wallet === moi && x.signature);
+    if (!p) continue;
+    maPartPot = { ...p, contrat: r.contrat };
+    b.textContent = 'Claim my ' + (sem ? 'weekly' : '') + ' share · ' + usdcTexte(p.amount) + ' USDC (' + v.jourId + ')'; b.hidden = false;
+    return;
+  }
 }
 async function reclamerPot() {
   const e = $('#rollsEtat'), b = $('#jourReclamerPot');
