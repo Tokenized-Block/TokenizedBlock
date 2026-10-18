@@ -239,6 +239,12 @@ export function lireDayDrawn(logs, contrat) {
   return { day: Number(BigInt(l.topics[1])), winner: '0x' + bas(l.topics[2]).slice(-40), blockHash: '0x' + m[0].toString(16).padStart(64, '0'), amount: m[1], buyers: Number(m[2]) };
 }
 
+/** TOUS les Rolled d un recu (un lot rollWithPass x N en emet un par roll) : l app en tire les rollIds a regler (planSettleMany) */
+export function lireRolledTous(logs, contrat) {
+  const t0 = topic(EV_ROLLED);
+  return (logs || []).filter((x) => bas(x.address) === bas(contrat) && bas(x.topics?.[0]) === t0).map((l) => lireRolled([l], contrat)).filter(Boolean);
+}
+
 /** TOUS les Settled d un recu (settleMany en emet un par roll regle) */
 export function lireSettledTous(logs, contrat) {
   const t0 = topic(EV_SETTLED);

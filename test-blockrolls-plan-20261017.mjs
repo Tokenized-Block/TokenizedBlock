@@ -77,6 +77,7 @@ const S = P.lireSettled([logS], C);
 vu(S && S.blockHash === H && S.face.join() === '0,4,5,7,2' && S.score === 5 && S.payout === 123n && S.potAfter === 456n, 'Settled decode');
 vu(P.lireSettled([{ ...logS, address: A('dd') }], C) === null, 'un log d un autre contrat est ignore');
 vu(P.lireSettledTous([logS, { ...logS, topics: [topic(P.EV_SETTLED), '0x' + mot(8), '0x' + mot(A('a2'))] }, logR], C).map((S) => Number(S.rollId)).join() === '7,8', 'lireSettledTous : un Settled par roll regle, Rolled ignore');
+vu(P.lireRolledTous([logR, { ...logR, topics: [topic(P.EV_ROLLED), '0x' + mot(9), '0x' + mot(A('a1'))] }, logS, { ...logR, address: A('dd') }], C).map((r) => Number(r.rollId)).join() === '7,9', 'lireRolledTous : un Rolled par roll du lot, Settled et autre contrat ignores');
 
 /* (7) delta 2026-10-17 soir : hook + pool id recalcules, setRules, settleMany, planRollsAvecPass, PassBought, jour */
 vu(P.HOOK === HOOK_7030.toLowerCase() && P.HOOK === '0x32f3f572dd17625bab9035789c953e1d001864cc', 'HOOK = tokenomics.js HOOK_7030 (et = la valeur du brief)');
