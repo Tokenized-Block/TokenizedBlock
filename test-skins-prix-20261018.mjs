@@ -86,15 +86,16 @@ function prixTapes(html) {
     'aide Skins': (code.match(/\{ t: 'Skins — dress your block'[\s\S]*?\},/) || [''])[0],
     'carte Skin market': code.slice(code.indexOf('id="skinCarte"'), code.indexOf('id="regleCarte"')),
     'bouton jourSkin': (code.match(/<button[^>]*id="jourSkin"[^>]*>[\s\S]*?<\/button>/) || [''])[0],
-    'How it works (skin)': (code.match(/Or mint a skin \([^)]*\)/) || [''])[0],
+    /* 2026-10-18 (lead) : « How it works » ne cite plus le prix (Phil 09:50 : seulement ce qui marche) ; la zone = toute la carte, sans prix tape */
+    'How it works': code.slice(code.indexOf('id="regleCarte"'), code.indexOf('</section>', code.indexOf('id="regleCarte"'))),
   };
   for (const [z, t] of Object.entries(zones)) { if (!t) hits.push(z + ' : zone introuvable'); else if (PRIX_TAPE.test(t)) hits.push(z + ' : « ' + t.match(PRIX_TAPE)[0] + ' »'); }
   return hits;
 }
 const hits = prixTapes(app);
 vu(hits.length === 0, 'C app.html : aucun prix de skin tape dans les textes servis (' + hits.join(' ; ') + ')');
-vu((appCode.match(/<span class="skinPrix"><\/span>/g) || []).length === 4 && /for \(const e of document\.querySelectorAll\('\.skinPrix'\)\) e\.textContent = SKIN_MINT_TEXTE;/.test(appCode),
-  'C les 4 <span class="skinPrix"> (bouton Draws, titre et bouton de la carte Skin market, How it works) sont remplis depuis SKIN_MINT_TEXTE');
+vu((appCode.match(/<span class="skinPrix"><\/span>/g) || []).length === 3 && /for \(const e of document\.querySelectorAll\('\.skinPrix'\)\) e\.textContent = SKIN_MINT_TEXTE;/.test(appCode),
+  'C les 3 <span class="skinPrix"> (bouton Draws, titre et bouton de la carte Skin market) sont remplis depuis SKIN_MINT_TEXTE');
 vu(/import \{[^}]*\bSKIN_MINT_TEXTE\b[^}]*\} from '\.\/blockskins\.js';/.test(app), 'C app.html importe SKIN_MINT_TEXTE de blockskins.js');
 const achat = corps('async function bcAcheterSkin(');
 vu(/'Pay ' \+ SKIN_MINT_TEXTE/.test(achat) && /a skin is ' \+ SKIN_MINT_TEXTE \+ '\./.test(achat) && /take exactly ' \+ SKIN_MINT_TEXTE\)/.test(achat) && /bcEtape\(m, SKIN_MINT_TEXTE \+ ' goes to TokenizedBlock\./.test(achat) && / — ' \+ SKIN_MINT_TEXTE\);/.test(achat),
