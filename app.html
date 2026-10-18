@@ -4785,7 +4785,11 @@ async function verifierRollsEnAttente() {
     try {
       const tete = parseInt(await rpc('eth_blockNumber', []), 16);
       if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('head unreadable');
-      const de = attenteRolls.jusqua === null ? deploie : Math.max(deploie, attenteRolls.jusqua - 300);
+      /* ⛔ revue adverse (2026-10-18, HIGH) : partir du bloc de DEPLOIEMENT cassait le regleur des que le contrat avait ~10 000 blocs (les
+       *   noeuds publics refusent getLogs aussi profond). Un roll ne se regle que 256 blocs apres sa cible : seuls les ~1 000 derniers blocs
+       *   comptent (cible <= tete, fenetre 256, marge). Plus vieux = perdu de toute facon, et n est plus compte ici. */
+      const FENETRE_UTILE = 1000;
+      const de = Math.max(deploie, tete - FENETRE_UTILE, attenteRolls.jusqua === null ? 0 : attenteRolls.jusqua - 300);
       for (const [x, y] of fenetresLogs(de, tete).slice(0, 40)) {
         const logs = await rpc('eth_getLogs', [filtreLogsJoueur({ contrat, joueur: moi, de: x, a: y })]);
         if (!Array.isArray(logs)) throw new Error('logs unreadable');

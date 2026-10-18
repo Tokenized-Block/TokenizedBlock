@@ -48,4 +48,8 @@ vu(/eth_getBlockByNumber/.test(roll) && !/allerA\('wallet'\)/.test(roll), 'sans 
 vu(/Connect a wallet: your ticket scores against the next roll\./.test(roll), 'sans wallet : le score demande un wallet, dit');
 vu(/\$\('#jourSkin'\)\.addEventListener\('click', \(\) => \{ try \{ choisirBrain\(UNIT_APP\); \} catch \(_\) \{\} try \{ bcOuvrirPop\(\{ vue: 'brain'/.test(app), 'Skin ouvre le panneau de UNIT, vue Skin');
 for (const id of ['skinCarte', 'unitCarte', 'earnCarte']) vu(app.split('id="' + id + '"').length === 2, 'carte ' + id + ' presente une fois');
+/* revue adverse 2026-10-18 (HIGH) : le regleur des rolls en attente ne remonte jamais au-dela des ~1 000 derniers blocs (un roll de plus de
+ *   256 blocs ne se regle plus, et les noeuds publics refusent getLogs profond) — sinon il casse ~5 h apres le deploiement */
+const vr = app.slice(app.indexOf('async function verifierRollsEnAttente()'), app.indexOf('async function reglerRollsEnAttente()'));
+vu(/const FENETRE_UTILE = 1000;/.test(vr) && /const de = Math\.max\(deploie, tete - FENETRE_UTILE,/.test(vr), 'regleur : lecture bornee aux 1 000 derniers blocs, jamais depuis le deploiement');
 console.log('ok game-boutons - ' + n + ' assertions ; NE PROUVE PAS le rendu');
