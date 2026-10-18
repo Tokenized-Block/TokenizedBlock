@@ -21,4 +21,9 @@ vu(/if \(\$\('#jbRoll'\) && \$\('#jbRoll'\)\.textContent === '⚄'\) jb\('jbRoll
 vu(/jb\('jbBrain', on \? 'On' : 'Off'\)/.test(app.slice(app.indexOf('function bjPeindre('), app.indexOf('function bjAllumer('))), 'tuile du brain : On/Off peint par bjPeindre');
 const clic = app.slice(app.indexOf("for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]'))"), app.indexOf("for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]'))") + 700);
 vu(/scrollIntoView/.test(clic) && /if \(el && !el\.hidden && el\.offsetParent !== null\)/.test(clic), 'clic : amene a la carte ; focus seulement sur un bouton visible');
+/* 2026-10-18 : /app.html#game (ou #missions) ouvrait la Map */
+vu(/if \(\['game', 'missions'\]\.includes\(\(location\.hash \|\| ''\)\.replace\(\/\^#\/, ''\)\.split\('\?'\)\[0\]\)\) \{\n  setTimeout\(\(\) => allerA\('missions'\), 0\);/.test(app) && /if \(h === 'game' \|\| h === 'missions'\) allerA\('missions'\);/.test(app), 'lien #game / #missions : ouvre l onglet Game (au chargement et au changement)');
+/* revue adverse 2026-10-18 (MOYEN) : suite arretee apres des envois confirmes */
+const pnc = app.slice(app.indexOf('function phraseNonConfirme('), app.indexOf('function montrerSettled('));
+vu(/if \(r && Array\.isArray\(r\.hashes\) && r\.hashes\.length\) return 'Stopped after '/.test(pnc) && pnc.indexOf('Stopped after') < pnc.indexOf("return prefixe + ': ' + String"), 'une suite arretee apres des envois confirmes ne dit pas « Not rolled »');
 console.log('ok jeu-choix - ' + n + ' assertions ; NE PROUVE PAS le rendu');

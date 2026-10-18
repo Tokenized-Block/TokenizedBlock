@@ -33,6 +33,8 @@ vu(rv.etat === 'REFUSE' && rv.poolTropFine === true && rv.fractionCotee === 10, 
 /* le predicat */
 vu(estRevertDeChaine(new Error('execution reverted')) && estRevertDeChaine('VM Exception while processing transaction: revert'), 'un revert n est pas reconnu');
 vu(!estRevertDeChaine(new Error('HTTP 429')) && !estRevertDeChaine(new Error('rate limit: execution reverted later')) && !estRevertDeChaine(null), 'une panne est prise pour un revert');
+/* 2026-10-18 : un revert dont les OCTETS contiennent 429 (0x82b42900) reste un revert */
+vu(estRevertDeChaine(new Error('execution reverted: 0x82b42900')) && !estRevertDeChaine(new Error('execution reverted (429)')), '« 429 » dans les octets d un revert le classait en limite de debit');
 /* les deux sites */
 const src = readFileSync(new URL('./echange.js', import.meta.url), 'utf8');
 vu(/estRevertDeChaine\(e\) \? await coteAPlusPetit\(/.test(src), 'la branche ETH de planEchange sonde sans regarder la nature de l echec');

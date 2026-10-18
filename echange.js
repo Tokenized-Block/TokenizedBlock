@@ -722,7 +722,8 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
  *    poolTropFine sur un 429). Seul un revert ouvre la sonde ; un message qui parle de debit n est jamais un revert. */
 export function estRevertDeChaine(e) {
   const msg = String((e && e.message) || e || '');
-  return /revert/i.test(msg) && !/rate|limit|429|too many|timeout|timed out|capacity|unavailable|busy/i.test(msg);
+  /* 2026-10-18 : « 429 » seulement comme NOMBRE isole — il apparaissait dans les octets d un revert (0x82b42900) et le classait en limite de debit */
+  return /revert/i.test(msg) && !/rate|limit|\b429\b|too many|timeout|timed out|capacity|unavailable|busy/i.test(msg);
 }
 /** Une pool qui revert sur m cote-t-elle m/10, m/100 ou m/1000 ? Rend le diviseur qui cote (> 0), sinon 0.
  *  ⛔ Seulement apres un ECHEC (zero lecture de plus sur le chemin heureux) ; au plus 3 lectures, en file, arret au premier. */

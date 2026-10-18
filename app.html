@@ -4831,6 +4831,8 @@ function phraseSettle(st) {
 function phraseNonConfirme(r, prefixe) {
   if (r && r.etat === 'EN_ATTENTE') return 'Sent' + (r.hash ? ' (' + String(r.hash).slice(0, 10) + '…)' : '') + ', not confirmed yet — do not resend; check your wallet. If it lands, it shows up here.';
   if (r && r.etat === 'PARTIEL') return prefixe + ': your wallet applied only part of it — check your wallet before anything else.';
+  /* revue adverse 2026-10-18 (MOYEN) : une suite arretee APRES des envois confirmes disait « Not rolled » — ce qui est parti est sur la chaine */
+  if (r && Array.isArray(r.hashes) && r.hashes.length) return 'Stopped after ' + r.hashes.length + ' step' + (r.hashes.length > 1 ? 's' : '') + ' went through (' + String((r.pourquoi || r.etat) || 'no answer').slice(0, 80) + '). What went through is on Base — a roll that was sent shows up under “Settle pending rolls”.';
   return prefixe + ': ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160);
 }
 /* des Settled lus -> la face du dernier, les scores, les gains (cibles = rollId -> bloc cible, pour « Last rolls ») */
@@ -22927,10 +22929,15 @@ if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'creer') {
 if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'bridge') {
   setTimeout(() => allerA('bridge'), 0);
 }
+/* 2026-10-18 : un lien /app.html#game (ou #missions, l id interne du volet) ouvrait la Map — il ouvre l onglet Game */
+if (['game', 'missions'].includes((location.hash || '').replace(/^#/, '').split('?')[0])) {
+  setTimeout(() => allerA('missions'), 0);
+}
 window.addEventListener('hashchange', () => {
   const h = (location.hash || '').replace(/^#/, '').split('?')[0];
   if (h === 'creer') allerA('creer');
   if (h === 'bridge') allerA('bridge');
+  if (h === 'game' || h === 'missions') allerA('missions');
 });
 
 /* ── Bridge (tip 20260922-prepaye-inscrire-dust) ───────────────────────────────────────────────────────── */
