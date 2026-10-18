@@ -24025,18 +24025,22 @@ async function bcCommandeGame() {
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null, tickets = t.jour.tickets || [];
   const reste = Math.max(0, new Date(t.jour.fin).getTime() - Date.now()), h = Math.floor(reste / 3600000), mn = Math.floor((reste % 3600000) / 60000);
-  bcEtape(m, 'Tickets today: ' + tickets.length + ' · closes in ' + h + 'h ' + mn + 'm' + (t.mode === 'SHADOW' ? ' · the ticket draw is a practice season, no prize yet' : '') + '.');
+  bcEtape(m, 'Daily ticket: $10 of UNIT or stock trades, paid rolls or the pass — or a 1 USDC skin. Tickets today: ' + tickets.length + ' · closes in ' + h + 'h ' + mn + 'm' + (t.mode === 'SHADOW' ? ' · the ticket draw has no prize yet (its pot opens with its contract)' : '') + '.');
   if (moi) {
     const w = (t.jour.wallets || []).find((x) => String(x.adresse).toLowerCase() === moi), seuil = Number(t.seuilVolumeUsd) || 10, fait = w ? Number(w.volumeUsd) : 0;
     let guess = null; try { guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(moi, t.jour.id))); } catch (_) { guess = null; }
     const face = guess ? ' Ticket face (colour, orbit, facet, material, ornament): ' + guess.join(', ') + '.' : '';
-    bcEtape(m, (tickets.includes(moi) ? 'Your ticket: held — it enters today\'s draw.' : 'Your ticket: not yet — $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' verified volume today.') + face, tickets.includes(moi) ? 'oui' : '');
+    /* meme lecture que l onglet Game (w.ticket) — un ticket de skin ou de pass n a pas forcement de volume */
+    const tient = !!(w && w.ticket) || tickets.some((x) => String(x && x.adresse ? x.adresse : x).toLowerCase() === moi);
+    bcEtape(m, (tient ? 'Your ticket: held — it enters today\'s draw.' : 'Your ticket: not yet — $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' verified volume today.') + face, tient ? 'oui' : '');
   } else bcEtape(m, 'Connect a wallet to see your ticket.');
   /* le pot : LU sur le contrat quand il est servi ; sinon dit « practice » — jamais un chiffre invente */
   const rc = t.rolls && t.rolls.contrat ? t.rolls : null;
   if (rc) {
     let pot = null; try { pot = lireUint(await rpc('eth_call', [{ to: rc.contrat, data: appelPot() }, 'latest'])); } catch (_) { pot = null; }
-    bcEtape(m, 'Pot: ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + ' · roll ' + usdcTexte(rc.prixRoll) + ' USDC, up to 10 in one go · day pass ' + usdcTexte(rc.prixPass) + ' USDC.');
+    /* Phil 2026-10-18 15:45 : « le brain donne mauvaise info » — dire en une ligne COMMENT on gagne et COMBIEN, lu sur la fiche + le pot lu */
+    const pz = Array.isArray(rc.prizes) ? rc.prizes.map((x) => usdcTexte(x)) : [];
+    bcEtape(m, 'Rolls: ' + usdcTexte(rc.prixRoll) + ' USDC each, up to 10 in one go. Traits in common with the block: ' + (pz.length >= 4 ? '5 → ' + pz[0] + ', 4 → ' + pz[1] + ', 3 → ' + pz[2] + ', 2 → ' + pz[3] + ' USDC' : 'see the Game tab') + '. The roll pot holds ' + (pot === null ? '(not read)' : usdcTexte(pot) + ' USDC') + ' — a win pays at most what it holds.');
   } else bcEtape(m, 'Pot: none yet — practice rolls are free; paid rolls (0.50 USDC) open with their contract.');
   const rolls = r && r.ok && Array.isArray(r.rolls) ? r.rolls.slice(-5) : null;
   bcEtape(m, rolls === null ? 'Recent rolls could not be read.' : rolls.length ? 'Last rolls on UNIT (everyone): ' + rolls.map((x) => x.score + '/5').join(' · ') + '.' : 'No roll yet today.');
