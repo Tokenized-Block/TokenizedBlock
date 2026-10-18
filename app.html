@@ -4773,6 +4773,12 @@ async function peindreEarn() {
     const j = await fetch('/api/missions', { cache: 'no-store' }).then((x) => x.json());
     lignes.push('<b>Mission rewards</b>: ' + (j && j.ok ? 'claims are paid straight to your wallet by the contract; see your wallet.' : 'the board is not open yet.'));
   } catch (_) { lignes.push('Missions: could not be read just now.'); }
+  /* les rolls SCORES signales au serveur (/api/jeu/rolls : bloc + score, aucune identite) — le jeu vivant du jour, pas un gain */
+  try {
+    const r = await fetch('/api/jeu/rolls', { cache: 'no-store' }).then((x) => x.json());
+    const rolls = r && r.ok && Array.isArray(r.rolls) ? r.rolls : null;
+    if (rolls) { const best = rolls.length ? Math.max(...rolls.map((x) => Number(x.score) || 0)) : null; lignes.push('<b>Rolls on UNIT</b> (everyone, recent): ' + rolls.length + (best !== null ? ' · best ' + best + '/5' : '') + '. Practice today: paid rolls and prizes open with their contract.'); }
+  } catch (_) { /* une ligne de moins, rien d invente */ }
   ul.innerHTML = lignes.map((l) => '<li class="filL"><p class="note" style="margin:0">' + l + '</p></li>').join('');
 }
 $('#missionsListe').addEventListener('click', async (e) => {
