@@ -41,7 +41,9 @@ if (/^0x0{40}$/.test(libres.verifier)) refus.push('verifier cannot be zero');
 /* Grok 2026-10-17 : le contrat accepte un gardien nul (la pause reste a l owner seul) — la page, non : sans gardien, personne ne peut geler
  *   vite si la cle de verification fuit */
 if (/^0x0{40}$/.test(libres.guardian)) refus.push('guardian cannot be zero (nobody else could pause fast)');
-if (ADR.test(libres.guardian) && [fixes.devWallet, libres.communityReserve, libres.verifier].includes(libres.guardian)) refus.push('guardian must be its own key');
+/* 2026-10-18 (Phil : trois cles seulement — signeur, dev, Brain UNIT) : le gardien peut SEULEMENT mettre en pause ; il doit etre une autre cle
+ *   que le verifier (dont il garde la fuite) et que la reserve (qui recoit) — le dev wallet, cle distincte, est admis (meme choix que TicketPot) */
+if (ADR.test(libres.guardian) && [libres.communityReserve, libres.verifier].includes(libres.guardian)) refus.push('guardian must be its own key (not the verifier, not the reserve)');
 const art = JSON.parse(fs.readFileSync(path.join(ICI, 'out/MissionsDeployer.sol/MissionsDeployer.json'), 'utf8'));
 const code = String(art.bytecode.object);
 if (!/^0x[0-9a-f]+$/.test(code)) throw new Error('bytecode missing or unlinked in the forge artifact');

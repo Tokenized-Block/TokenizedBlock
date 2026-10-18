@@ -1,7 +1,7 @@
 ﻿{
-  "_lisez-moi": "A REMPLIR PAR PHIL (adresses entieres, copiees de son wallet, jamais de memoire). Puis : cd contracts && forge build && node preparer-deploiement-missions.mjs. rail = 0x0000000000000000000000000000000000000000 -> aucun convertisseur (decision lead pour le mainnet v1 : le plus sur).",
-  "communityReserve": null,
-  "verifier": null,
-  "guardian": null,
+  "_lisez-moi": "Rempli le 2026-10-18 sur decision de Phil. communityReserve = le wallet du Brain UNIT (0x31e0…bde3b : createur de UNIT, lu comme tx.from du deploiement TicketPot 0xae568dec…1761 sur Base) — « le Brain Unit gere le pool commun comme une sous-pool a lui et redistribue seul ». verifier = le wallet qui signe (0x37eb…580a, tx.from du deploiement BlockRolls). guardian = le dev wallet (blockrolls-deploiement.js constructeur.devWallet). rail = 0x0 -> aucun convertisseur (decision lead pour le mainnet v1 : le plus sur). Le contrat refuse communityReserve == devWallet et == 0x37eb (FORBIDDEN_LEGACY). Puis : cd contracts && forge build && node preparer-deploiement-missions.mjs",
+  "communityReserve": "0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b",
+  "verifier": "0x37eb9b7ce0b51fe12fbf092026e001918128580a",
+  "guardian": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
   "rail": "0x0000000000000000000000000000000000000000"
 }
