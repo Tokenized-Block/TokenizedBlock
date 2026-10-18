@@ -104,8 +104,10 @@ eq(d({ silenceH: 30, depuisRappelH: null }).etat, 'DEJA_PERDU',
       '⛔ aucune promesse de RETOUR dans l index : le sens de la fleche n est pas tranche');
     ok(!/\$|price|moon|pump|up\b/i.test(p.replace(/\bupdated\b/g, '')),
       '⛔ aucune promesse de PRIX ni conseil — le block parle d un annuaire, pas de valeur');
-    ok(/measured|we measured/i.test(p),
-      'et la phrase dit que ca vient d une mesure, pas d une intuition');
+    /* Phil 2026-10-18 09:40 : le paragraphe « we measured… » est retire de l ecran ; la phrase dit un FAIT lu (mouvements, silence,
+     *   seuil des marches listes), jamais une intuition ni une promesse — c est ce qu on epingle */
+    ok(/3 trades or more|measured|quiet for|has not moved/i.test(p),
+      'et la phrase dit un fait lu (seuil, silence), pas une intuition');
     /* ⛔ TOUT NOMBRE PORTE SON UNITE. Vu en production le 2026-09-22 : « quiet for more than 23.2. »
      *    — un nombre nu, que le lecteur complete comme il veut (jours ? minutes ?). Un chiffre sans
      *    unite n avertit de rien, il se fait deviner. */

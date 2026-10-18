@@ -19087,7 +19087,10 @@ function peindreTrending() {
          *   donc c est aussi le seul repli qui puisse rapporter quelque chose.
          * ⛔ ET CE N EST PLUS UNE PUB POUR CREATE : « la pub de creer est deja en avant sur le 1er
          *    visuel, ca suffit ». Elle n a rien a faire repetee sur chaque ligne d un classement. */
-        return pairable ? pairer : '';
+        /* Phil 2026-10-18 09:35 (« ils ont leur propre pool, on peut les rediriger ») : une ligne sans Buy honnete (pool d un hook tiers
+         *   que le Quoter refuse — mesure 0x6190b2b0) mene a SON marche, lien externe dit tel quel, a cote de l appairage. */
+        const voir = '<a class="bouton sec trAcheter" href="https://dexscreener.com/base/' + enTexte(String(l.adr).toLowerCase()) + '" target="_blank" rel="noopener">See its market ↗</a>';
+        return pairable ? '<span class="trBoutons">' + voir + pairer + '</span>' : voir;
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     /* ⛔⛔ CE `||` NE COUVRE QUE LA LISTE VIDE, et c est correct — mais c etait LE SEUL endroit ou

@@ -106,8 +106,8 @@ export function decisionEchange(faits) {
       'il a ete cree et mis en marche, mais jamais echange : ' + transferts + ' mouvement(s) en tout. '
       + 'Dans la mesure du 2026-09-22, les deux seuls marches actifs qui restaient inconnus de '
       + 'l index etaient exactement dans ce cas',
-      'Your block has moved ' + transferts + ' time(s) — that is its birth, not trading. Every market '
-      + 'the public index listed had traded at least three times.');
+      /* Phil 2026-10-18 09:40 : « pas utile a ecrire » — une ligne, le fait et le seuil, sans le paragraphe */
+      'Not traded yet: ' + transferts + ' move(s), its birth only. Listed markets had 3 trades or more.');
   }
 
   if (silenceH === null) {
@@ -175,6 +175,7 @@ function sortie(etat, reclame, pourquoi, texte) {
  */
 export function phraseDemande(d) {
   if (!d || !d.reclame || !d.texte) return null;
-  return d.texte + ' Trading it yourself is one way to change that — we measured what listed markets '
-    + 'had in common, not that trading puts a market back.';
+  /* Phil 2026-10-18 09:40 : la phrase « Trading it yourself is one way… we measured… » est retiree de l ecran (« pas utile ») ;
+   *   la borne (la mesure ne prouve pas que trader ramene dans l index) reste dans l en-tete de ce module, pas devant le visiteur. */
+  return d.texte;
 }
