@@ -44,7 +44,13 @@ try {
   const v4 = rows.filter((l) => (l.liquiditeUsd || 0) >= 500 && verdictRoutage({ aMarche: true, dex: l.dex, poolAdr: l.poolAdr }).achetableIci);
   const v4Actions = v4.filter((l) => P.ACTIONS_COINBASE.some((a) => String(a.adr).toLowerCase() === String(l.adr).toLowerCase()));
   console.log('    lignes v4 IN_APP : ' + v4.length + ' · dont actions du registre (Buy via la fiche) : ' + v4Actions.map((l) => l.sym).join(' '));
-  ok(v4Actions.length >= 10 && v4Actions.length < v4.length / 2, 'la borne « actions du registre » mord : ' + v4Actions.length + ' sur ' + v4.length + ' lignes v4');
+  /* 2026-10-18 : l ancienne borne « v4Actions >= 10 » comptait la BRANCHE du verdict (v4 IN_APP), pas l achat. Les actions ont
+   *   migre vers des pools Aerodrome (14/20 a cle v4 servies en Aerodrome, Buy par ETH/USDC) : 3 lignes v4 restaient, KO a tort.
+   *   Invariant vise : TOUTE ligne servie d une action du registre, liquidite >= 500 $, a un Buy — quelle que soit la branche. */
+  const actRows = rows.filter((l) => (l.liquiditeUsd || 0) >= 500 && P.ACTIONS_COINBASE.some((a) => String(a.adr).toLowerCase() === String(l.adr).toLowerCase()));
+  const sansBuy = actRows.filter((l) => { const v = verdictRoutage({ aMarche: true, dex: l.dex, poolAdr: l.poolAdr }); return !(v.achetableEnEth || v.achetableEnUsdc || v.achetableIci); });
+  ok(actRows.length >= 10 && sansBuy.length === 0, 'toute action du registre servie (liq >= 500 $) a un Buy : ' + (actRows.length - sansBuy.length) + '/' + actRows.length + (sansBuy.length ? ' · SANS Buy : ' + sansBuy.map((l) => l.sym).join(' ') : ''));
+  ok(v4Actions.length < v4.length / 2, 'anti-gonflement : les actions ne sont pas la majorite des lignes v4 : ' + v4Actions.length + ' sur ' + v4.length);
   const fiche = rows.filter((l) => (l.liquiditeUsd || 0) >= 500 && (() => { const v = verdictRoutage({ aMarche: true, dex: l.dex, poolAdr: l.poolAdr }); return v.achetableEnEth || v.achetableEnUsdc; })());
   console.log('    lignes servies ' + rows.length + ' · nouveau Buy (fiche) : ' + fiche.map((l) => l.sym).join(' '));
   /* le verdict ouvre Aerodrome (ETH ou USDC) ET Uniswap v3 (USDC) : toutes hors v4, sur une pool a adresse de contrat */
