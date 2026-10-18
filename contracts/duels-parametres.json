@@ -1,0 +1,5 @@
+{
+  "_lisez-moi": "TO FILL BY PHIL / A REMPLIR PAR PHIL (adresses entieres, copiees de son wallet, jamais de memoire). rewardPool = l adresse du pot de recompense COMMUN qui recoit 7 % de chaque duel gagne (pas le wallet dev : refuse). guardian = l adresse qui peut SEULEMENT admettre ou retirer un jeton (action tokenisee) pour les nouveaux duels ; elle ne touche jamais aux fonds. usdc et devWallet ne sont PAS ici : ils sont lus dans le depot (frais-creation.js USDC_BASE et FEE_WALLET, verifies egaux a blockrolls-deploiement.js). Puis : cd contracts && forge build && node preparer-deploiement-duels.mjs",
+  "rewardPool": "",
+  "guardian": ""
+}

@@ -4243,6 +4243,9 @@ const SERVIS = [
   'brain-jeu.js',
   /* 2026-10-18 : TicketPot (pot du jour en parts egales) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non signes */
   'deployer-ticketpot.html', 'ticketpot-deploiement.js', 'ticketpot-config.js', 'ticketpot-plan.js',
+  /* 2026-10-18 : BlockDuels (duels entre deux wallets, 90 / 7 / 3) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non
+   *   signes (duels-plan.js importe blockrolls-plan.js, deja servi). ⛔ absent d ici = 404 = page morte. */
+  'deployer-duels.html', 'duels-deploiement.js', 'duels-config.js', 'duels-plan.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',
