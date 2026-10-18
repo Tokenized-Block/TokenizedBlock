@@ -3070,7 +3070,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261018-game18" hidden>Build <code>20261018-game18</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261018-game19" hidden>Build <code>20261018-game19</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5562,7 +5562,10 @@ async function peindreDuels() {
   if (regle) regle.textContent = on ? 'Open on Base.' : 'Opens with its contract.';
   if (!on) { liste.textContent = ''; return null; }
   void remplirJetonsDuel(contrat);
-  if (!j.ok) { liste.textContent = ''; jb('jbDuels', '—'); jb('jbDuelsTxt', 'not read'); etat.textContent = j.etat === 'NON_LU' ? 'The duels are being read on chain — back in a few seconds.' : 'The duels could not be read just now.'; return null; }
+  /* revue adverse 2026-10-18 (MOYEN) : liste NON LUE -> pas de « Challenge » ni de formulaire (un duel cree sans liste lisible n aurait
+   *   aucun Cancel/Settle/Refund a l ecran) ; ils reviennent avec la lecture */
+  if (!j.ok) { liste.textContent = ''; jb('jbDuels', '—'); jb('jbDuelsTxt', 'not read'); etat.textContent = j.etat === 'NON_LU' ? 'The duels are being read on chain — back in a few seconds.' : 'The duels could not be read just now.'; $('#duelDefier').hidden = true; const fo = $('#duelForm'); if (fo) fo.hidden = true; return null; }
+  { const fo = $('#duelForm'); if (fo) fo.hidden = false; }
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null, tete = Number(j.tete), maintenant = Math.floor(Date.now() / 1000);
   const duels = duelsDe(j), recents = duelsDe(j, 'recents');
@@ -5636,6 +5639,9 @@ async function actionDuel(id, action, li) {
     let solde = null; try { solde = await bcSolde(d.token, c); } catch (_) { solde = null; }
     if (solde === null) { dit('Your ' + symDuel(d.token) + ' balance could not be read — nothing was asked.'); return; }
     if (solde < d.stake) { dit('You hold ' + (await montantDuel(solde, d.token)) + '; this duel needs ' + (await montantDuel(d.stake, d.token)) + ' — nothing was asked.'); return; }
+    /* revue adverse 2026-10-18 : un jeton RETIRE par le gardien fait revert join() APRES l approve — relu avant tout plan */
+    const adm = await admisDuel(contrat, d.token);
+    if (adm !== true) { dit(adm === false ? symDuel(d.token) + ' is no longer admitted by the duels contract — joining would fail; nothing was asked.' : 'Whether ' + symDuel(d.token) + ' is still admitted could not be read — nothing was asked.'); return; }
     plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });
     const fb = li && li.querySelectorAll('.duelFaces .jourFace')[1];
     if (fb) { try { fb.innerHTML = logoSvg(paramsLogoDepuisApparence(face.apparence, 'B')); } catch (_) {} }
@@ -5677,6 +5683,8 @@ async function defierDuel() {
   try {
     const j = await lireDuelsServis(true), contrat = duelContrat(j);
     if (!contrat) { dit('Duels open with their contract.'); return; }
+    /* revue adverse 2026-10-18 : sans liste LUE, rien n est demande — le duel cree ne serait pas visible, ni annulable, ici */
+    if (!j.ok) { dit('The duel list could not be read just now — nothing was asked (your duel would have no Cancel here until it is read).'); return; }
     const token = String($('#duelJeton').value || USDC_BASE).toLowerCase();
     const ok = await admisDuel(contrat, token);
     if (ok !== true) { dit(ok === false ? symDuel(token) + ' is not admitted by the duels contract — nothing was asked.' : 'Whether ' + symDuel(token) + ' is admitted could not be read — nothing was asked.'); return; }
@@ -24953,6 +24961,9 @@ async function bcAccepterDuel(m, id) {
   if (!face) { bcEtape(m, 'Your face could not be drawn — nothing is proposed.', 'non'); return; }
   let solde = null; try { solde = await bcSolde(d.token, compte); } catch (_) { solde = null; }
   if (solde === null || solde < d.stake) { bcEtape(m, solde === null ? 'Your ' + symDuel(d.token) + ' balance could not be read — nothing is proposed.' : 'You hold ' + (await montantDuel(solde, d.token)) + '; this duel needs ' + (await montantDuel(d.stake, d.token)) + '.', 'non'); return; }
+  /* revue adverse 2026-10-18 : jeton retire par le gardien -> join() revert apres l approve ; relu avant de proposer */
+  const adm = await admisDuel(contrat, d.token);
+  if (adm !== true) { bcEtape(m, adm === false ? symDuel(d.token) + ' is no longer admitted by the duels contract — nothing is proposed.' : 'Whether ' + symDuel(d.token) + ' is still admitted could not be read — nothing is proposed.', 'non'); return; }
   const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });
   if (plan.etat !== 'PRET') { bcEtape(m, 'Not planned: ' + plan.pourquoi, 'non'); return; }
   bcEtape(m, 'Your face for duel #' + d.id + ' (new, random — colour, orbit, facet, material, ornament): ' + face.guess.join(', ') + '. Theirs: ' + d.guessA.join(', ') + '. The block 2 blocks after your join draws its face.');

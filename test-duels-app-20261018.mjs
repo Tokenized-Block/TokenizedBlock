@@ -43,6 +43,13 @@ const checks = {
     return iJ > 0 && iB > iJ && iS > iB && (a.match(/bcSigner\(/g) || []).length === 1 && !/envoyerAppels|envoyerDepuisWallet/.test(a); },
   /* integration 2026-10-18 : le bandeau a SIX choix sans contrat (Roll, Ticket, Week pass, Its brain, Skins, Missions), SEPT avec les Duels */
   tuileBandeau: (t) => /\.jeuBandeau\[data-n="7"\]\{grid-template-columns:repeat\(4,minmax\(0,1fr\)\)\}/.test(t) && /if \(bd\) bd\.dataset\.n = on \? '7' : '6';/.test(t),
+  /* revue adverse 2026-10-18 (MOYEN) : liste NON LUE -> ni « Challenge » ni formulaire ; defierDuel refuse sans liste lue */
+  listeNonLue: (t) => /if \(!j\.ok\) \{ liste\.textContent = '';[^\n]*\$\('#duelDefier'\)\.hidden = true; const fo = \$\('#duelForm'\); if \(fo\) fo\.hidden = true; return null; \}/.test(t)
+    && /if \(!j\.ok\) \{ dit\('The duel list could not be read just now — nothing was asked/.test(t.slice(t.indexOf('async function defierDuel('), t.indexOf("$('#duelDefier').addEventListener"))),
+  /* revue adverse 2026-10-18 : un jeton retire par le gardien fait revert join() APRES l approve — admisDuel relu avant planJoin (carte ET chat) */
+  joinAdmis: (t) => { const a = t.slice(t.indexOf('async function actionDuel('), t.indexOf('async function defierDuel(')), b = t.slice(t.indexOf('async function bcAccepterDuel('), t.indexOf('async function bcCommandeGame('));
+    const ok = (s) => s.indexOf('const adm = await admisDuel(contrat, d.token);') > 0 && s.indexOf('const adm = await admisDuel(contrat, d.token);') < s.indexOf('planJoin({ contrat, duel: d') && /if \(adm !== true\) \{/.test(s);
+    return ok(a) && ok(b); },
 };
 for (const [k, f] of Object.entries(checks)) vu(f(APP) === true, 'app.html : ' + k);
 
