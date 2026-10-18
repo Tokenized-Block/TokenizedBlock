@@ -79,7 +79,8 @@ eq(C.missions.createurBps, BigInt(M.FEE_BPS) - BigInt(M.FEE_BPS) * BigInt(M.TB_S
 eq(C.missions.faiseurBps, 10000n - BigInt(M.FEE_BPS), 'missions : le faiseur recoit le reste');
 eq([C.missions.faiseurBps, C.missions.reserveBps, C.missions.devBps], [9000n, 700n, 300n], 'missions : 90 / 7 / 3 aujourd hui (si la source change, ce temoin rougit ET la page suit)');
 eq(C.ticketpot.deploye, !!TICKETPOT_DEPLOIEMENT.adresse, 'ticketpot : deploye <=> adresse');
-eq(C.duels.deploye, false, 'duels : aucune fiche de deploiement dans le depot');
+/* 2026-10-18 18:20 UTC : BlockDuels LIVE — la page lit duels-deploiement.js, comme pour TicketPot */
+eq(C.duels.deploye, !!(await import('./duels-deploiement.js')).DUELS_DEPLOIEMENT.adresse, 'duels : deploye <=> adresse (lue dans la fiche)');
 eq(C.tirage.seuilUsd, TS.SEUIL_VOLUME_JOUR_USD, 'ticket du jour = SEUIL_VOLUME_JOUR_USD');
 eq(C.tirage.joursPassSemaine, TS.JOURS_PASS_SEMAINE, 'week pass : jours');
 eq(C.tirage.bonusPassSemaine, TS.BONUS_PASS_SEMAINE, 'week pass : entrees bonus');
@@ -121,7 +122,9 @@ for (const attendu of ['>0.1%<', '0.07% to TokenizedBlock', '0.03% to the block'
   'A pass loses on average too.', 'within 256 blocks', 'taxBps() = 9999', '0.0099%', '15 of 15']) ok(vrai.includes(attendu), 'rendu reel contient « ' + attendu + ' »');
 ok(/\$10(?!\d)/.test(vrai), 'rendu reel : le seuil du ticket $10');
 /* 2026-10-18 16:50 UTC : TicketPot est LIVE (0xf986…1df1) — il reste Missions et Duels a dire « not deployed » */
-ok(/not deployed/i.test(vrai) && (vrai.match(/not deployed/gi) || []).length >= 2 && !/TicketPot[^.]{0,120}not deployed/i.test(vrai), 'rendu : Missions et Duels dits « not deployed », TicketPot non');
+/* 2026-10-18 18:20 UTC : Missions et Duels sont LIVE aussi — « not deployed » n apparait que pour les fiches SANS adresse (lu, jamais suppose) */
+const nonDeployes = ['missions', 'ticketpot', 'duels'].filter((k) => FR.CHIFFRES[k].deploye !== true).length;
+ok((vrai.match(/not deployed/gi) || []).length === nonDeployes, 'rendu : « not deployed » exactement pour les fiches sans adresse (' + nonDeployes + ')');
 const faux = structuredClone(FR.CHIFFRES);
 faux.hook.walletPpm = 1100n; faux.hook.createurPpm = 400n;
 faux.naissance.totalWei = 2000000000000000n; faux.naissance.creationWei = 1500000000000000n; faux.naissance.inscriptionWei = 500000000000000n;
@@ -138,7 +141,7 @@ for (const attendu of ['>0.15%<', '0.11% to TokenizedBlock', '0.04% to the block
 ok(/\$12(?!\d)/.test(r) && !/\$10(?!\d)/.test(r), 'rendu FAUX : seuil $12, plus de $10');
 for (const ancien of ['0.50 USDC', '>10 USDC<', '0.07%', '0.03%', '0.0007', '24 hours', 'Doer 90%', 'takes 10%', '>1 USDC<', 'at 10 USDC', 'within 256'])
   ok(!r.includes(ancien), 'rendu FAUX ne garde pas « ' + ancien + ' »');
-eq((r.match(/not deployed/gi) || []).length, (vrai.match(/not deployed/gi) || []).length - 1, 'missions deployees -> une mention « not deployed » de moins');
+eq((r.match(/not deployed/gi) || []).length, (vrai.match(/not deployed/gi) || []).length - (FR.CHIFFRES.missions.deploye === true ? 0 : 1), 'missions deployees dans le FAUX -> une mention « not deployed » de moins (sauf si deja deployees dans le vrai)');
 /* donnees en direct : le mode du tirage et le pot des rolls, LUS ; non lus -> dit « not read », jamais 0 */
 ok(/not read/i.test(vrai), 'sans /api/tirage : « not read »');
 const live = FR.rendre(FR.CHIFFRES, { mode: 'SHADOW', rolls: { pot: '250000', potLu: '2026-10-18T15:00:00.000Z' } });

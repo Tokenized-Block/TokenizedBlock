@@ -24,6 +24,7 @@ import { contratActif } from './blockskins-actif.js';
 import { BLOCKSKINS_DEPLOIEMENT } from './blockskins-deploiement.js';
 import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
+import { DUELS_DEPLOIEMENT } from './duels-deploiement.js';
 import { SEUIL_VOLUME_JOUR_USD, JOURS_PASS_SEMAINE, BONUS_PASS_SEMAINE, JOURS_PASS_SKIN } from './tirage-saison.js';
 import { FRAIS_CONTRATS } from './frais-contrats.js';
 
@@ -55,7 +56,7 @@ export const CHIFFRES = Object.freeze({
     reserveBps: missionsTb * BigInt(MI.RESERVE_SHARE_BPS) / 10000n, devBps: missionsTb * (10000n - BigInt(MI.RESERVE_SHARE_BPS)) / 10000n,
     createurBps: BigInt(MI.FEE_BPS) - missionsTb },
   ticketpot: { deploye: deploye(TICKETPOT_DEPLOIEMENT.adresse) },
-  duels: { deploye: false }, /* aucune fiche duels-deploiement.js dans le depot : rien a deployer, rien a montrer */
+  duels: { deploye: deploye(DUELS_DEPLOIEMENT.adresse) }, /* 2026-10-18 18:20 UTC : LIVE 0x6b76…602c (bloc 52 778 966), lu dans la fiche */
   tirage: { seuilUsd: SEUIL_VOLUME_JOUR_USD, joursPassSemaine: JOURS_PASS_SEMAINE, bonusPassSemaine: BONUS_PASS_SEMAINE, joursPassSkin: JOURS_PASS_SKIN },
 });
 

@@ -17,16 +17,21 @@ const r0 = noter({ fiche: R, texte, tx: { input: CRE }, recu: { status: '0x1' },
 /* 2026-10-18 soir : la fiche reelle est PRETE (adresses de Phil : reserve = Brain UNIT, verifier, guardian) mais NON deployee — un input etranger
  *   est refuse ; tant qu elle n etait pas prete, le refus disait « not ready » */
 if (R.pret === false) vu(r0.ok === false && /not ready/.test(r0.pourquoi), 'la fiche reelle n est pas prete : refus dit (manquants : ' + R.manquants.join(', ') + ')');
+/* 2026-10-18 18:20 UTC : DEPLOYEE (board 0xcc9a…ba9f, bloc 52 778 941) — un second noter est refuse : la fiche porte deja son adresse */
+else if (/^0x[0-9a-f]{40}$/.test(String(R.adresse))) vu(r0.ok === false && /already/i.test(r0.pourquoi), 'la fiche reelle est deployee : un second noter est refuse (' + String(r0.pourquoi).slice(0, 60) + ')');
 else vu(r0.ok === false && R.adresse === null && /^0x[0-9a-f]{40}$/.test(String(R.constructeur.communityReserve)), 'la fiche reelle est prete et non deployee : un input qui n est pas sa creation est refuse (' + String(r0.pourquoi).slice(0, 60) + ')');
 /* (2) */
 const C = { ...R.constructeur, communityReserve: A('c0'), verifier: A('e0'), guardian: A('9d') };
-const fiche = { ...R, pret: true, manquants: [], constructeur: C, creation: CRE, factory: null, adresse: null };
+/* 2026-10-18 soir : la fiche reelle est DEPLOYEE (factory, adresse, rail, bloc ecrits) — la fiche de ce banc repart d une fiche VIERGE */
+const fiche = { ...R, pret: true, manquants: [], constructeur: C, creation: CRE, factory: null, adresse: null, rail: null, bloc: null };
+/* le TEXTE aussi repart vierge : les deux lignes ecrites par noter (factory …, adresse …) redeviennent `null,` */
+const texteVierge = texte.replace(/^([ \t]*factory: )[^\r\n]*/m, '$1null,').replace(/^([ \t]*adresse: )[^\r\n]*/m, '$1null,');
 const FAC = A('fa'), V3 = A('33'), RAIL = A('4a');
 const v3 = () => Object.fromEntries(Object.entries(IMMUABLES_V3).map(([champ, sig]) => [sig, C[champ]]));
-const bon = () => ({ fiche, texte, tx: { hash: H, from: A('de'), to: null, input: CRE }, recu: { status: '0x1', contractAddress: FAC, blockNumber: '0x3253f4b' }, lectures: { missions: V3, rail: RAIL, v3Rail: RAIL, railMissions: V3, v3: v3() } });
+const bon = () => ({ fiche, texte: texteVierge, tx: { hash: H, from: A('de'), to: null, input: CRE }, recu: { status: '0x1', contractAddress: FAC, blockNumber: '0x3253f4b' }, lectures: { missions: V3, rail: RAIL, v3Rail: RAIL, railMissions: V3, v3: v3() } });
 const v = noter(bon());
 vu(v.ok === true && v.factory === FAC && v.adresse === V3 && v.rail === RAIL && v.bloc === 52772683, 'inscrit : factory, missions, rail, bloc');
-vu(v.texte.includes("  factory: '" + FAC + "', /* block 52772683, tx " + H) && v.texte.includes("  adresse: '" + V3 + "',") && v.texte.split('\n').length === texte.split('\n').length, 'deux lignes reecrites, rien d autre');
+vu(v.texte.includes("  factory: '" + FAC + "', /* block 52772683, tx " + H) && v.texte.includes("  adresse: '" + V3 + "',") && v.texte.split('\n').length === texteVierge.split('\n').length, 'deux lignes reecrites, rien d autre');
 /* (3) */
 const refuse = (patch, m) => { const x = bon(); patch(x); const r = noter(x); vu(r.ok === false && typeof r.pourquoi === 'string', m + ' : refuse (' + (r.pourquoi || '').slice(0, 60) + ')'); };
 refuse((x) => { x.fiche = { ...fiche, adresse: V3, factory: FAC }; }, 'adresse deja ecrite');

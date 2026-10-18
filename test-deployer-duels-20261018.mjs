@@ -48,7 +48,8 @@ if (!phil.rewardPool || !phil.guardian) {
     'A parametres de Phil incomplets (' + JSON.stringify(D.manquants) + ') : pret false, AUCUNE donnee de creation (rien a signer par erreur)');
 } else ok(D.pret === true && D.constructeur.rewardPool === PARAMS.rewardPool.toLowerCase() && D.constructeur.guardian === PARAMS.guardian.toLowerCase(), 'A parametres de Phil remplis : pret, rewardPool et guardian = duels-parametres.json');
 ok(sha(lire('contracts/src/BlockDuels.sol')) === D.sha256Sources['src/BlockDuels.sol'], 'A generee depuis la source ACTUELLE du contrat (source modifiee sans regenerer = rouge)');
-ok(D.adresse === null && D.bloc === null, 'A PAS deploye : adresse et bloc nuls (ils s ecrivent ENSEMBLE, relus sur la chaine)');
+/* 2026-10-18 18:20 UTC : deploye par Phil (0x6b76…602c, bloc 52 778 966) ; adresse et bloc ecrits ENSEMBLE par noter-deploiement-duels */
+ok((D.adresse === null && D.bloc === null) || (/^0x[0-9a-f]{40}$/.test(String(D.adresse)) && Number.isSafeInteger(D.bloc) && D.bloc > 0), 'A adresse et bloc : tous deux nuls, ou tous deux ecrits (jamais l un sans l autre)');
 const preparer = (sortie, parametres) => execFileSync(process.execPath, ['preparer-deploiement-duels.mjs'], { cwd: path.join(ICI, 'contracts'), env: { ...process.env, SORTIE: sortie, ...(parametres ? { PARAMETRES: parametres } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'duels-dep-'));
 let D2 = null;
@@ -56,7 +57,9 @@ const RP = '0x' + '70'.repeat(20), G = '0x' + '6a'.repeat(20);
 try {
   ok(fs.existsSync(ARTEFACT), 'A artefact forge BlockDuels present (sinon la regeneration ne serait pas verifiee)');
   preparer(path.join(tmp, 'meme.js'));
-  ok(fs.readFileSync(path.join(tmp, 'meme.js'), 'utf8') === lire('duels-deploiement.js'), 'A le preparateur relance regenere l enregistrement du depot a l IDENTIQUE (deterministe)');
+  /* apres la signature, la fiche porte adresse + bloc (noter) ; le preparateur rend null : on compare tout SAUF ces deux lignes */
+  const sansAdr = (t) => String(t).replace(/^[ \t]*adresse: [^\r\n]*/m, 'ADR').replace(/^[ \t]*bloc: [^\r\n]*/m, 'BLOC').replace(/\r\n/g, '\n');
+  ok(sansAdr(fs.readFileSync(path.join(tmp, 'meme.js'), 'utf8')) === sansAdr(lire('duels-deploiement.js')), 'A le preparateur relance regenere l enregistrement du depot a l IDENTIQUE, hors adresse/bloc (deterministe)');
 
   console.log('— A2. avec des parametres complets (fichier temporaire, adresses de test)');
   fs.writeFileSync(path.join(tmp, 'p.json'), String.fromCharCode(0xfeff) + JSON.stringify({ rewardPool: RP, guardian: G.toUpperCase().replace('0X', '0x') }));

@@ -3070,7 +3070,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261018-game19" hidden>Build <code>20261018-game19</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261018-game20" hidden>Build <code>20261018-game20</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5421,7 +5421,8 @@ async function peindreSkinsJeu() {
     /* Phil 2026-10-18 08:40 : pas de « 0 minted · 0 for sale » — une phrase courte, vraie, qui invite */
     etat.textContent = enVente.length
       ? enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' in auction)' : '') + (moi && miennes.length ? ' · ' + miennes.length + ' yours to list' : '') + '. Each skin sells at a fixed price or in an auction (bids +5%, 7 days max).'
-      : 'Nothing listed yet — mint a skin, then sell it at a fixed price or open an auction (bids +5%, 7 days max).';
+      : (moi && miennes.length ? 'Nothing listed yet — you hold ' + miennes.length + ' skin' + (miennes.length === 1 ? '' : 's') + ': sell one at a fixed price or start an auction below (bids +5%, 7 days max).'
+        : 'Nothing listed yet — mint a skin, then sell it at a fixed price or open an auction (bids +5%, 7 days max).' + (moi ? '' : ' Connect a wallet to list yours.'));
     z.textContent = '';
     /* Phil 2026-10-18 (« revente des skins + encheres que les brains voient ») : trois groupes — les encheres EN COURS (offre actuelle, temps
      *   restant : bcLigneSkin les dit), puis les prix fixes et les encheres finies a regler, puis les skins de CE wallet (vendre / encherir). */
@@ -9437,6 +9438,7 @@ async function connecter() {
   if (!compte) { try { etape('wallet_connect_refus'); } catch (_) {} dire('The wallet returned no address.'); return; }
   try { etape('wallet_connect_ok'); } catch (_) {}
   try { peindreTirage(); } catch (_) {} /* 2026-10-17 : la progression du tirage apparait des la connexion */
+  try { void peindreSkinsJeu(); } catch (_) {} /* 2026-10-18 (Phil : « Start an auction n apparait pas ») : tes skins a lister, des la connexion */
   try { noterWalletUtilise(compte); } catch (_) { /* airdrop log optional */ }
   /* ⛔⛔ ON MESURE LA CAPACITE DE GROUPEMENT ICI, A LA CONNEXION, ET PAS AILLEURS. Mesure du
    *     2026-09-28 : `groupe_propose` valait ZERO sur 354 visites — non pas parce qu aucun wallet ne
