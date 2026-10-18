@@ -7507,8 +7507,9 @@ async function peindreRollsMap() {
     try { j = await fetch('/api/jeu/rolls', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((r) => r.json()); } catch (_) { j = null; }
     if (!j || !j.ok || !Array.isArray(j.rolls)) return;
     const rolls = j.rolls.filter((r) => r && Number.isInteger(r.score) && r.score >= 0 && r.score <= 5 && Number.isFinite(r.t));
+    /* Phil 2026-10-18 12:20 : « pourquoi t as ecrit ca sur la Map » — plus de legende texte ; le roll se voit par l onde « roll N/5 » sur UNIT */
     const leg = $('#mapRolls');
-    if (leg) leg.textContent = rolls.length ? 'Rolls on UNIT: ' + rolls.slice(-5).reverse().map((r) => r.score + '/5').join(' · ') : '';
+    if (leg) leg.textContent = '';
     let neufs;
     if (rollsVus === null) {
       const ecoule = performance.now(), maintenant = Number(j.maintenant) || 0;
@@ -21383,6 +21384,9 @@ function haloDeLHumeur(ctx, cx, cy, r, phase, part, biais, th) {
  *   `bwAretes` : ce sont les positions visees par le clic sur la carte « Its wiring » — les ecraser avec celles d une autre toile
  *   ferait viser a cote. Une seule implementation du dessin, deux toiles. */
 function dessinerReseau(vu = null, cible = null) {
+  /* Phil 2026-10-18 12:20 : « le skin ne s applique pas sur l onglet Brain » — la toile PRINCIPALE (#bReseau) porte desormais la skin portee
+   *   par le panneau (essayee ou detenue), comme le cube du panneau : memes teintes d aretes, de noyau et de fond. Original = rien ne change. */
+  if (!cible) { let sk = null; try { sk = bc && bc.skinPortee && bc.skinPortee.payant ? bc.skinPortee : null; } catch (_) { sk = null; } if (sk) cible = { teinteCube: Number.isFinite(sk.cube) ? sk.cube : undefined, teinteNoyau: Number.isFinite(sk.noyau) ? sk.noyau : undefined, fond: Number.isFinite(sk.fond) ? sk.fond : undefined }; }
   const c = cible && cible.canvas ? cible.canvas : $('#bReseau'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
   /* le FOND de la case (skin du panneau seulement) : une teinte, sombre, pour que le cube reste lisible. Sans `cible.fond`, la toile
@@ -24433,6 +24437,8 @@ function bcPorterSkin(id) {
   for (const e of [$('#bcAvatarIn'), document.querySelector('#bcSkinFace svg')]) if (e) e.style.filter = s.filtre || '';
   const toile = $('#bcReseau'); if (toile) toile.style.filter = '';
   bcDessinerCube();
+  /* et la toile de l onglet Brain la porte aussi, tout de suite (pas seulement au prochain battement) */
+  try { dessinerReseau(brainDernierVu); } catch (_) {}
   /* la skin habille le PERIMETRE : l anneau et la lueur sont poses sur le panneau, et tout ce qui cercle le block les suit */
   for (const cadre of [$('#bcPanneau'), $('#bcLanceur')]) {
     if (!cadre) continue;

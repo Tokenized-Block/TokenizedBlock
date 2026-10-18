@@ -88,7 +88,8 @@ function verifierApp(h) {
   assert.ok(/let h = habitantDe\(UNIT_APP\);/.test(peindre), 'le block roule est UNIT, trouve parmi les habitants');
   /* mesure 2026-10-17 : /api/nos-blocks ne sert PAS UNIT — absent de la carte, il y vient (meme geste que poserNosBlocks), sinon le roll est perdu */
   assert.ok(/if \(!h && neufs\.length\) \{[\s\S]*?creerHabitant\(\{ jeton: UNIT_APP, symbole: \(c && c\.symbole\) \|\| 'UNIT', vie: null \}\); if \(!anim\) animer\(\);/.test(peindre), 'UNIT absent de la carte est pose avant de rouler');
-  assert.ok(/leg\.textContent = rolls\.length \? 'Rolls on UNIT: ' \+ rolls\.slice\(-5\)\.reverse\(\)\.map\(\(r\) => r\.score \+ '\/5'\)\.join\(' · '\) : ''/.test(peindre), 'la legende : les 5 derniers, vide sans roll');
+  /* Phil 2026-10-18 12:20 : la legende texte est retiree (« pourquoi t as ecrit ca ») — elle reste VIDE ; l onde dit le roll */
+  assert.ok(/leg\.textContent = '';/.test(peindre) && !/'Rolls on UNIT: '/.test(peindre), 'la legende reste vide (decision de Phil), l onde porte le roll');
   assert.ok(/<span id="mapRolls" class="mapRolls"><\/span>/.test(h) && /\.mapRolls:empty\{display:none\}/.test(h), '#mapRolls existe dans .mapLeg et disparait vide');
   assert.ok(h.indexOf('<span id="mapRolls"') > h.indexOf('<span id="mapEtat">') && h.indexOf('<span id="mapRolls"') < h.indexOf('<p class="note" id="mapHookedPath"'), '#mapRolls est dans la legende de la Map, apres #mapEtat');
   /* « nouveau » sans comparer deux horloges, historique non rejoue, rafale bornee */
