@@ -3070,7 +3070,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261018-game20" hidden>Build <code>20261018-game20</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261018-game21" hidden>Build <code>20261018-game21</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3679,6 +3679,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- le pot du jour des pass : n importe qui ferme le jour (closeDay) puis le tire (drawDay) ; le pot va TOUJOURS a l acheteur tire -->
         <button type="button" class="bouton sec" id="jourTirerJour" hidden>Close and draw yesterday's pass pot</button>
         <button type="button" class="bouton sec" id="jourFondPot" hidden>Add to today's pot</button>
+        <!-- la part signee par le verifier (attester-ticketpot.html) : ce wallet la reclame LUI-MEME (planClaim) ; cache sans signature -->
+        <button type="button" class="bouton" id="jourReclamerPot" hidden>Claim my share</button>
       </div>
       <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
       <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
@@ -4107,7 +4109,7 @@ import { guessDepuisApparence, tirerFaceDeRoll, appelPass, lirePass, passActif, 
 /* 2026-10-18 (revue adverse) : les rolls PAYES en attente de settle, relus sur la chaine — le chemin de retour qui manquait */
 import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu } from './rolls-en-attente.js';
 /* 2026-10-18 : TicketPot LIVE — alimenter le pot du jour (planFund : approve EXACT + fund), le jour UTC du contrat depuis l id du jour */
-import { planFund as planFundPot, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
+import { planFund as planFundPot, planClaim as planClaimPot, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
@@ -4913,6 +4915,7 @@ function peindrePotJour(t, c) {
   potCfg = tp;
   if (!p || !b) return;
   p.hidden = !tp; b.hidden = !(tp && c); if (lab) lab.hidden = !(tp && c);
+  void peindreReclamerPot(tp, c);
   if (!tp) return;
   const v = tp.veille;
   p.textContent = !v ? 'Day pot: live on Base (' + tp.contrat.slice(0, 6) + '…' + tp.contrat.slice(-4) + ') — yesterday\'s pot not read yet.'
@@ -4938,6 +4941,39 @@ async function fondPot() {
   } finally { b.disabled = false; void peindreTirage(); }
 }
 $('#jourFondPot').addEventListener('click', () => { void fondPot(); });
+/* LA RECLAMATION (2026-10-18) : la part de CE wallet pour la veille, signee par le verifier (attester-ticketpot.html) et servie par
+ *   /api/ticketpot/parts ; sans signature, pas de bouton. planClaim : le holder appelle claim() lui-meme ; le contrat paie le holder nomme. */
+let maPartPot = null;
+async function peindreReclamerPot(tp, c) {
+  const b = $('#jourReclamerPot'); if (!b) return;
+  maPartPot = null; b.hidden = true;
+  const v = tp && tp.veille;
+  if (!v || !v.ferme || !c) return;
+  let r = null;
+  try { r = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(v.jourId), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
+  if (!r || !r.ok) return;
+  const moi = String(c).toLowerCase(), p = (r.parts || []).find((x) => x.wallet === moi && x.signature);
+  if (!p) return;
+  maPartPot = { ...p, contrat: r.contrat };
+  b.textContent = 'Claim my share · ' + usdcTexte(p.amount) + ' USDC (' + v.jourId + ')'; b.hidden = false;
+}
+async function reclamerPot() {
+  const e = $('#rollsEtat'), b = $('#jourReclamerPot');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!maPartPot || !c || !b || b.disabled || String(c).toLowerCase() !== maPartPot.wallet) return;
+  const dit = (txt) => { e.hidden = false; e.textContent = txt; };
+  b.disabled = true;
+  try {
+    const plan = planClaimPot({ contrat: maPartPot.contrat, day: maPartPot.day, wallet: maPartPot.wallet, ticket: maPartPot.ticket, amount: maPartPot.amount, deadline: maPartPot.deadline, signature: maPartPot.signature, ferme: true });
+    if (plan.etat !== 'PRET') { dit('Not claimed: ' + plan.pourquoi); return; }
+    dit('Claim your share of ' + maPartPot.jourId + ' (' + usdcTexte(maPartPot.amount) + ' USDC, paid to your wallet by the contract). Sign in your wallet…');
+    const r = await envoyerAppels(plan.appels, c);
+    if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'Not claimed')); return; }
+    dit('Claimed (' + String(r.hash || '').slice(0, 10) + '…): ' + usdcTexte(maPartPot.amount) + ' USDC paid to your wallet.');
+    b.hidden = true;
+  } finally { b.disabled = false; }
+}
+$('#jourReclamerPot').addEventListener('click', () => { void reclamerPot(); });
 /* AUTO-ROLL ×5 (Phil : « une loop de games ») : 5 rolls d affilee, chacun sur le bloc N+2 du moment ; le cumul est dit (meilleur, total). */
 async function autoRoll() {
   const b = $('#jourAuto'), q = $('#dernierQuand');

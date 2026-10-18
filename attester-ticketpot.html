@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Ticket Pot · sign the shares — TokenizedBlock</title>
+<!-- 2026-10-18 (Phil : « je ne mets pas la cle privee, je signe moi-meme ») : LA PAGE DU VERIFIER. Elle lit les parts d un jour FERME sur
+     /api/ticketpot/parts, fait signer chacune par le wallet connecte (eth_signTypedData_v4 : une SIGNATURE DE MESSAGE, pas une transaction,
+     aucun gas, rien ne bouge) et depose la signature sur /api/ticketpot/signature, ou le serveur relit le signataire et n accepte que le
+     verifier du contrat. Un holder reclame ensuite sa part depuis SON wallet (onglet Game, « Claim my share »). Rien ici ne bouge de fonds. -->
+<style>
+  :root{--fond:#0b0716;--carte:#140f26;--ligne:#2a2342;--texte:#efe9ff;--doux:#aaa3c4;--accent:#b79cff}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,Segoe UI,Roboto,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:20px 16px 60px}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:14px 16px;margin:12px 0}
+  .kick{font-size:11px;letter-spacing:.14em;color:var(--accent);text-transform:uppercase}
+  h1{font-size:20px;margin:6px 0 4px}
+  .note{color:var(--doux);font-size:13.5px;margin:4px 0}
+  .bouton{appearance:none;border:0;border-radius:12px;padding:10px 14px;font:inherit;font-weight:600;cursor:pointer;background:var(--accent);color:#120a2a}
+  .bouton.sec{background:transparent;color:var(--texte);border:1px solid var(--ligne)}
+  .bouton:disabled{opacity:.5;cursor:default}
+  input{font:inherit;background:#0f0a1f;color:var(--texte);border:1px solid var(--ligne);border-radius:10px;padding:8px 10px;width:100%;box-sizing:border-box}
+  ul{padding-left:18px;margin:6px 0}
+  li{margin:4px 0;overflow-wrap:anywhere}
+  .ok{color:#8ef0b0}.non{color:#ff9a9a}
+</style>
+</head>
+<body>
+<main>
+  <div class="carte">
+    <span class="kick">TokenizedBlock · Ticket Pot · verifier</span>
+    <h1>Sign the shares of a closed day.</h1>
+    <p class="note">Each share is a typed message (EIP-712) that the contract checks at claim time. Signing is not a transaction: no gas, nothing moves. Only the verifier wallet the contract trusts can sign; any other wallet is refused by the server.</p>
+    <label class="note">Day (UTC) <input id="jour" placeholder="J2026-10-17"></label>
+    <p style="margin:10px 0 0"><button type="button" class="bouton sec" id="lire">Read the shares</button> <button type="button" class="bouton sec" id="connecter">Connect wallet</button> <button type="button" class="bouton" id="signer" hidden>Sign the unsigned shares</button></p>
+    <p class="note" id="etat">Pick a day, read its shares, connect the verifier wallet, sign.</p>
+    <ul id="liste"></ul>
+  </div>
+</main>
+<script type="module">
+  const $ = (s) => document.querySelector(s);
+  const dire = (t, cls) => { const e = $('#etat'); e.textContent = t; e.className = 'note' + (cls ? ' ' + cls : ''); };
+  const usdc = (b) => (Number(BigInt(b)) / 1e6).toFixed(2);
+  let compte = null, parts = null, verifier = null;
+  const veille = () => 'J' + new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  $('#jour').value = new URLSearchParams(location.search).get('day') || veille();
+  const eth = () => { if (!window.ethereum) throw new Error('No wallet found in this browser.'); return window.ethereum; };
+  async function lire() {
+    const jour = $('#jour').value.trim();
+    dire('Reading the shares of ' + jour + '…');
+    let j = null;
+    try { j = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(jour), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+    const ul = $('#liste'); ul.textContent = '';
+    if (!j || !j.ok) { parts = null; dire((j && j.pourquoi) || 'The shares could not be read just now.', 'non'); $('#signer').hidden = true; return; }
+    parts = j.parts; verifier = String(j.verifier || '').toLowerCase();
+    for (const p of parts) { const li = document.createElement('li'); li.textContent = p.wallet + ' — ' + usdc(p.amount) + ' USDC — ' + (p.signature ? 'signed' : 'to sign'); li.className = p.signature ? 'ok' : ''; ul.append(li); }
+    const restantes = parts.filter((p) => !p.signature).length;
+    dire(j.ferme ? parts.length + ' share(s) of ' + jour + ' (pot ' + usdc(j.potAtClose) + ' USDC) — ' + restantes + ' to sign. Verifier: ' + verifier : 'Day ' + jour + ' is not closed on chain yet: its pot is not final, nothing can be signed before close(day).', j.ferme ? '' : 'non');
+    $('#signer').hidden = !(j.ferme && restantes && compte);
+  }
+  async function connecter() {
+    try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]).toLowerCase() : null; } catch (e) { dire(String((e && e.message) || e), 'non'); return; }
+    dire('Connected: ' + compte + (verifier && compte !== verifier ? ' — this is NOT the verifier (' + verifier + '): the server will refuse its signatures.' : ''), verifier && compte !== verifier ? 'non' : '');
+    $('#signer').hidden = !(parts && parts.some((p) => !p.signature) && compte);
+  }
+  async function signer() {
+    if (!parts || !compte) return;
+    const b = $('#signer'); b.disabled = true;
+    let faites = 0, refus = 0;
+    try {
+      for (const p of parts.filter((x) => !x.signature)) {
+        dire('Sign the share of ' + p.wallet + ' (' + usdc(p.amount) + ' USDC) in your wallet…');
+        let sig = null;
+        try { sig = await eth().request({ method: 'eth_signTypedData_v4', params: [compte, JSON.stringify(p.donnees)] }); } catch (e) { dire('Declined: ' + String((e && e.message) || e), 'non'); refus++; break; }
+        let r = null;
+        try { r = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.jourId, wallet: p.wallet, signature: sig }) }).then((x) => x.json()); } catch (_) { r = null; }
+        if (r && r.ok) faites++; else { refus++; dire('Refused by the server: ' + ((r && r.pourquoi) || 'no answer'), 'non'); break; }
+      }
+    } finally { b.disabled = false; }
+    await lire();
+    if (faites) dire(faites + ' share(s) signed and stored. Holders can now claim from the Game tab.' + (refus ? ' ' + refus + ' refused.' : ''), refus ? 'non' : 'ok');
+  }
+  $('#lire').addEventListener('click', () => { void lire(); });
+  $('#connecter').addEventListener('click', () => { void connecter(); });
+  $('#signer').addEventListener('click', () => { void signer(); });
+  void lire();
+</script>
+</body>
+</html>

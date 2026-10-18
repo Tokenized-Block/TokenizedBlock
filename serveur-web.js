@@ -111,6 +111,7 @@ import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
 import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { lireJour as lireJourTicketPot } from './ticketpot-attestation.js';
 import { dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
+import { partsDuJour as partsTicketPot, verifierSignaturePart } from './ticketpot-parts.js';
 import { depensesJeu, passesAchetes, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PASS as TOPIC_PASS_SRV } from './volume-rolls.js';
 /* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
 import { etatJeuAgent, planRollAgent, planSettleAgent, planTaskAgent, lireGuess as lireGuessAgent } from './jeu-agent.js';
@@ -4458,6 +4459,8 @@ const SERVIS = [
   'duels-plan-app.js',
   /* 2026-10-18 : TicketPot (pot du jour en parts egales) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non signes */
   'deployer-ticketpot.html', 'ticketpot-deploiement.js', 'ticketpot-config.js', 'ticketpot-plan.js',
+  /* 2026-10-18 : la page du VERIFIER (Phil signe les parts lui-meme, eth_signTypedData_v4) — noindex, aucun lien depuis l app */
+  'attester-ticketpot.html',
   /* 2026-10-18 : BlockDuels (duels entre deux wallets, 90 / 7 / 3) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non
    *   signes (duels-plan.js importe blockrolls-plan.js, deja servi). ⛔ absent d ici = 404 = page morte. */
   'deployer-duels.html', 'duels-deploiement.js', 'duels-config.js', 'duels-plan.js',
@@ -6283,6 +6286,51 @@ function traiterRequete(req, res) {
    *   { ok, wallet, xp, level, base, next, perk, detail, couverture }. Rien n est lu sur la chaine ici : le registre XP (revenu.xpEtat, rempli
    *   par crediterXp) et les jours avec ticket. Garde 30 s par wallet. perk.appliesThisWeek = niveau >= 3 ET une entree de jour cette semaine
    *   — exactement ce que corpsTirage ajoute au tirage de la semaine (practice : pas de pot). */
+  /* ══ TICKETPOT : LES PARTS A SIGNER ET LES SIGNATURES RECUES (2026-10-18, Phil : « je signe moi-meme »).
+   *   GET /api/ticketpot/parts?day=JYYYY-MM-DD : pour un jour FERME sur la chaine (lireJour), une part par holder du ticket de ce jour
+   *   (ticketsJour, la meme liste que /api/tirage), avec les donnees EIP-712 a signer et la signature deja recue s il y en a une.
+   *   POST /api/ticketpot/signature { day, wallet, signature } : le signataire est RELU (recupererAdresse) et doit etre le verifier() du
+   *   contrat ; sinon rien n est garde. ⛔ Aucune cle ici ; le serveur ne signe rien, ne bouge rien ; le holder reclame depuis SON wallet. */
+  if (chemin === '/api/ticketpot/parts' || chemin === '/api/ticketpot/signature') {
+    const rendreTP = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    const contratTP = TICKETPOT_DEPLOIEMENT.adresse;
+    if (!contratTP) { rendreTP(200, { ok: false, etat: 'PAS_OUVERT', pourquoi: 'the ticket pot is not deployed yet' }); return; }
+    const partsDe = async (jourId) => {
+      const day = dayDeJourIdPot(jourId);
+      if (day === null) return { ok: false, etat: 'REFUSE', pourquoi: 'day is JYYYY-MM-DD' };
+      let j; try { j = await lireJourTicketPot({ rpc: rpcServeur, contrat: contratTP }, day); } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }; }
+      const tickets = ticketsJour(revenu.jours || {}, jourId, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD);
+      const sigs = ((revenu.ticketpotSig || {})[jourId]) || {};
+      const parts = j.ferme ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j.potAtClose, signatures: sigs }) : [];
+      return { ok: true, day, jourId, contrat: contratTP, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), nTickets: tickets.length, parts };
+    };
+    if (chemin === '/api/ticketpot/parts') {
+      if (req.method !== 'GET' && req.method !== 'HEAD') { rendreTP(405, { ok: false, pourquoi: 'GET only' }); return; }
+      const jourId = String(new URL(req.url, 'http://x').searchParams.get('day') || jourDe(Date.now() - JOUR_MS).id);
+      partsDe(jourId).then((r) => rendreTP(r.ok ? 200 : r.etat === 'NON_LU' ? 202 : 400, r)).catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }));
+      return;
+    }
+    if (req.method !== 'POST') { rendreTP(405, { ok: false, pourquoi: 'POST only' }); return; }
+    let brutTP = '', tropTP = false;
+    req.on('data', (c) => { if (tropTP) return; brutTP += c; if (brutTP.length > 2048) { tropTP = true; rendreTP(413, { ok: false, pourquoi: 'request too large' }); req.destroy(); } });
+    req.on('end', () => { if (tropTP) return; (async () => {
+      let b = null; try { b = JSON.parse(brutTP || '{}'); } catch (_) { b = null; }
+      const jourId = String((b && b.day) || ''), wallet = String((b && b.wallet) || '').toLowerCase(), signature = String((b && b.signature) || '');
+      if (!/^J\d{4}-\d{2}-\d{2}$/.test(jourId) || !/^0x[0-9a-f]{40}$/.test(wallet) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day (JYYYY-MM-DD), wallet and a 65-byte signature are needed' }); return; }
+      const r = await partsDe(jourId);
+      if (!r.ok) { rendreTP(r.etat === 'NON_LU' ? 202 : 400, r); return; }
+      if (!r.ferme) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day ' + jourId + ' is not closed on chain: nothing is signed before close(day)' }); return; }
+      const p = r.parts.find((x) => x.wallet === wallet);
+      if (!p) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: wallet + ' held no ticket of ' + jourId }); return; }
+      if (!verifierSignaturePart({ digest: p.digest, signature, verifier: r.verifier })) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'this signature does not recover to the verifier ' + r.verifier + ' on the share of ' + wallet }); return; }
+      revenu.ticketpotSig = revenu.ticketpotSig || {}; revenu.ticketpotSig[jourId] = revenu.ticketpotSig[jourId] || {};
+      revenu.ticketpotSig[jourId][wallet] = { digest: p.digest, signature, amount: p.amount, deadline: p.deadline, ticket: p.ticket, recue: new Date().toISOString() };
+      revenuSale = true;
+      rendreTP(200, { ok: true, jourId, wallet, amount: p.amount, deadline: p.deadline });
+    })().catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' })); });
+    return;
+  }
+
   if (chemin === '/api/jeu/niveau') {
     const rendreN = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': code === 200 ? 'private, max-age=30' : 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { rendreN(405, { ok: false, pourquoi: 'GET only' }); return; }
