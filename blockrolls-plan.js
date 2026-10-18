@@ -7,7 +7,10 @@ import { selecteur, topic } from './keccak.js';
 import { faceRevelee, bandeTeinte, BANDES } from './face-du-jour.js';
 import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
 import { HOOK_7030 } from './tokenomics.js';
-import { poolIdDe } from './volume-tirage.js';
+/* 2026-10-18 : poolId de pool.js (deja servi, importe par app.html) et non poolIdDe de volume-tirage.js, qui tire revenu-externe.js (serveur)
+ *   dans le navigateur — test-imports-servis l a attrape (serie 433 : « la page serait MORTE en prod »). Meme keccak de la meme cle inline ;
+ *   test-blockrolls-plan recalcule l id avec poolIdDe et exige l egalite. */
+import { poolId as poolIdDe } from './pool.js';
 import { FEE_POOL, TICK_SPACING_POOL } from './lancer-pool.js';
 
 export const SIG_ROLL = 'roll(uint8[5])';
