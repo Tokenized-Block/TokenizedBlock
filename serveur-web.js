@@ -107,6 +107,10 @@ import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 /* 2026-10-18 : BlockRolls (roll paye 0,50 USDC, day pass 10 USDC) — la fiche GENEREE (preparer-deploiement-blockrolls.mjs) ; `adresse` reste
  *   null tant que Phil n a pas signe : l app ne montre alors AUCUN bouton payant (practice). Aucune variable d environnement ne la remplace. */
 import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
+/* 2026-10-18 : TicketPot LIVE (0xf986…1df1, bloc 52 776 705) — la fiche notee, et la lecture PURE du jour (lireJour : aucune cle requise) */
+import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
+import { lireJour as lireJourTicketPot } from './ticketpot-attestation.js';
+import { dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 import { depensesJeu, passesAchetes, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PASS as TOPIC_PASS_SRV } from './volume-rolls.js';
 /* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
 import { etatJeuAgent, planRollAgent, planSettleAgent, planTaskAgent, lireGuess as lireGuessAgent } from './jeu-agent.js';
@@ -4088,6 +4092,29 @@ async function lirePotRollsSrv(contrat) {
   catch (_) { /* relu au prochain appel */ } finally { potRollsSrv.enVol = false; }
 }
 setInterval(() => { void crediterVolumeRolls(); }, 120000).unref?.();
+/* ══ TICKETPOT (2026-10-18, LIVE) — le pot de la VEILLE lu sur la chaine toutes les 60 s (lireJour : ferme, potAtClose, reste, pause), servi
+ *   dans /api/tirage.ticketpot. ⛔ AUCUNE cle ici : Phil signe les parts lui-meme avec le wallet verifier (0x37eb…) — le serveur ne signe rien
+ *   et ne bouge rien. Sans fiche notee (adresse null) : null, et aucune lecture de chaine. En memoire ; une lecture ratee garde l etat d avant. */
+const ticketpotSrv = { lu: 0, jourId: null, day: null, etat: null, erreur: null, enVol: false };
+async function lireTicketPotSrv() {
+  const contrat = TICKETPOT_DEPLOIEMENT.adresse;
+  if (!contrat || ticketpotSrv.enVol) return;
+  ticketpotSrv.enVol = true;
+  try {
+    const veilleJ = jourDe(Date.now() - JOUR_MS), day = dayDeJourIdPot(veilleJ.id);
+    const j = await lireJourTicketPot({ rpc: rpcServeur, contrat }, day);
+    ticketpotSrv.jourId = veilleJ.id; ticketpotSrv.day = day; ticketpotSrv.lu = Date.now(); ticketpotSrv.erreur = null;
+    ticketpotSrv.etat = { ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), verifier: j.verifier };
+  } catch (e) { ticketpotSrv.erreur = String((e && e.message) || e).slice(0, 120); }
+  finally { ticketpotSrv.enVol = false; }
+}
+if (TICKETPOT_DEPLOIEMENT.adresse) { setTimeout(() => { void lireTicketPotSrv(); setInterval(() => { void lireTicketPotSrv(); }, 60000).unref?.(); }, 5000).unref?.(); }
+function ticketpotJson() {
+  const contrat = TICKETPOT_DEPLOIEMENT.adresse;
+  if (!contrat) return null;
+  return { contrat, bloc: TICKETPOT_DEPLOIEMENT.bloc, veille: ticketpotSrv.etat ? { jourId: ticketpotSrv.jourId, day: ticketpotSrv.day, ...ticketpotSrv.etat } : null,
+    lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur };
+}
 /* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18) — LECTURE SEULE. Les logs de BlockDuels (Created / Joined / Settled / Cancelled / Refunded),
  *   relus par fenetres de 2 000 blocs, au plus DUELS_FENETRES_PAR_TOUR par tour, avec 300 blocs de recouvrement (doublons comptes une fois).
  *   ⛔ JAMAIS depuis le bloc de deploiement d un coup : on part de max(deploiement, tete - DUELS_RECUL_BLOCS) — un duel non pris expire en
@@ -6235,7 +6262,7 @@ function traiterRequete(req, res) {
       prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: [rc.prize5, rc.prize4, rc.prize3, rc.prize2].map(String), minScore: rc.minScore,
       bloc: contratRolls && Number.isSafeInteger(BLOCKROLLS_DEPLOIEMENT.bloc) ? BLOCKROLLS_DEPLOIEMENT.bloc : null,
       pot: contratRolls && potRollsSrv.brut !== null ? potRollsSrv.brut : null, potLu: contratRolls && potRollsSrv.lu ? new Date(potRollsSrv.lu).toISOString() : null };
-    return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls,
+    return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls, ticketpot: ticketpotJson(),
       apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: tJ.includes(adresse) })),

@@ -3651,6 +3651,11 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- NIVEAU DU BRAIN (2026-10-18) : la ligne du perk n existe a l ecran QUE s il s applique cette semaine (niveau >= 3 ET une entree de jour) -->
       <p class="note" id="jourNiveau" style="margin:2px 0 0" hidden></p>
       <p class="note" id="tirSaison" style="margin:2px 0 0">Reading today's draw…</p>
+      <!-- TICKETPOT (LIVE 2026-10-18, 0xf986…1df1) : le pot du jour en USDC, lu par le serveur (/api/tirage.ticketpot) ; n importe qui
+           l alimente (jamais rendu au donateur). Les parts sont signees par le wallet verifier (Phil) : la reclamation s ouvre avec sa
+           signature — dit tel quel, rien n est promis. Caches sans fiche servie ; le montant est tape, jamais fixe ici. -->
+      <p class="note" id="potJour" style="margin:2px 0 0" hidden></p>
+      <label class="champ" id="potFondLab" hidden>Add to today's pot (USDC)<input id="potMontant" inputmode="decimal" value="1"></label>
       <div class="jourEtapes">
         <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
         <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
@@ -3673,6 +3678,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
         <!-- le pot du jour des pass : n importe qui ferme le jour (closeDay) puis le tire (drawDay) ; le pot va TOUJOURS a l acheteur tire -->
         <button type="button" class="bouton sec" id="jourTirerJour" hidden>Close and draw yesterday's pass pot</button>
+        <button type="button" class="bouton sec" id="jourFondPot" hidden>Add to today's pot</button>
       </div>
       <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
       <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
@@ -4100,6 +4106,8 @@ import { planRoll, planRolls, planPass, planRollAvecPass, planRollsAvecPass, pla
 import { guessDepuisApparence, tirerFaceDeRoll, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 /* 2026-10-18 (revue adverse) : les rolls PAYES en attente de settle, relus sur la chaine — le chemin de retour qui manquait */
 import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu } from './rolls-en-attente.js';
+/* 2026-10-18 : TicketPot LIVE — alimenter le pot du jour (planFund : approve EXACT + fund), le jour UTC du contrat depuis l id du jour */
+import { planFund as planFundPot, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
@@ -4645,7 +4653,7 @@ async function peindreTirage() {
   try { t = await fetch('/api/tirage', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { t = null; }
   if (!t || t.ok !== true || !t.jour) { sais.textContent = 'The draw could not be read just now.'; return; }
   /* 2026-10-18 (revue adverse) : les boutons payants se posent DES QUE /api/tirage repond — pas seulement quand l apercu live existe */
-  { let c0 = null; try { c0 = compte; } catch (_) { c0 = null; } poserBoutonsRolls(t, c0); }
+  { let c0 = null; try { c0 = compte; } catch (_) { c0 = null; } poserBoutonsRolls(t, c0); peindrePotJour(t, c0); }
   /* 2026-10-17 soir — v2 QUOTIDIEN : le jour (ticket a $10 de volume verifie), et les entrees de la semaine et du mois. */
   const reste = Math.max(0, new Date(t.jour.fin).getTime() - Date.now());
   const h = Math.floor(reste / 3600000), mn = Math.floor((reste % 3600000) / 60000);
@@ -4896,6 +4904,40 @@ async function passPaye() {
 }
 $('#jourRollPaye').addEventListener('click', () => { void rollPaye(); });
 $('#jourPass').addEventListener('click', () => { void passPaye(); });
+/* ══ TICKETPOT (LIVE 2026-10-18) : la ligne du pot de la veille, LUE par le serveur (jamais estimee), et « Add to today's pot » (planFund).
+ *   ⛔ La reclamation n est PAS encore cablee : elle demande la signature du wallet verifier (Phil signe lui-meme) — la ligne le dit. */
+let potCfg = null;
+function peindrePotJour(t, c) {
+  const p = $('#potJour'), b = $('#jourFondPot'), lab = $('#potFondLab');
+  const tp = t && t.ticketpot && /^0x[0-9a-fA-F]{40}$/.test(String(t.ticketpot.contrat)) ? t.ticketpot : null;
+  potCfg = tp;
+  if (!p || !b) return;
+  p.hidden = !tp; b.hidden = !(tp && c); if (lab) lab.hidden = !(tp && c);
+  if (!tp) return;
+  const v = tp.veille;
+  p.textContent = !v ? 'Day pot: live on Base (' + tp.contrat.slice(0, 6) + '…' + tp.contrat.slice(-4) + ') — yesterday\'s pot not read yet.'
+    : 'Day pot ' + v.jourId + ': ' + (v.ferme ? usdcTexte(v.potAtClose) + ' USDC frozen, ' + usdcTexte(v.reste) + ' USDC left to claim' : usdcTexte(v.reste) + ' USDC, not closed yet')
+      + (v.enPause ? ' · claims paused' : '') + '. Shares are signed by the verifier wallet; your claim opens here once yours is signed.';
+}
+async function fondPot() {
+  const e = $('#rollsEtat'), b = $('#jourFondPot');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!potCfg || !c || !b || b.disabled) return;
+  const dit = (txt) => { e.hidden = false; e.textContent = txt; };
+  const montant = bjUsdc(($('#potMontant') || {}).value);
+  if (montant === null || montant <= 0n) { dit('The amount must be in USDC, above zero (like 1 or 2.5).'); return; }
+  b.disabled = true;
+  try {
+    const jourId = jourDeApp(Date.now()), day = dayDeJourIdPot(jourId);
+    const plan = planFundPot({ contrat: potCfg.contrat, usdc: USDC_BASE, day, montant: montant.toString() });
+    if (plan.etat !== 'PRET') { dit('Not funded: ' + plan.pourquoi); return; }
+    dit('Add ' + usdcTexte(montant) + ' USDC to the pot of ' + jourId + ': it never comes back to you — it is shared by that day\'s ticket holders. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…');
+    const r = await envoyerAppels(plan.appels, c);
+    if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'Not funded')); return; }
+    dit('Added to the pot of ' + jourId + ' (' + String(r.hash || '').slice(0, 10) + '…). The server re-reads the pot within a minute.');
+  } finally { b.disabled = false; void peindreTirage(); }
+}
+$('#jourFondPot').addEventListener('click', () => { void fondPot(); });
 /* AUTO-ROLL ×5 (Phil : « une loop de games ») : 5 rolls d affilee, chacun sur le bloc N+2 du moment ; le cumul est dit (meilleur, total). */
 async function autoRoll() {
   const b = $('#jourAuto'), q = $('#dernierQuand');

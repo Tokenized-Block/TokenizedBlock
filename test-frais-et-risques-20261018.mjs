@@ -120,7 +120,8 @@ for (const attendu of ['>0.1%<', '0.07% to TokenizedBlock', '0.03% to the block'
   'takes 10% of each sale', '>1 USDC<', 'at 10 USDC is prepared', FR.usdc4(E.uniforme) + ' USDC on average', FR.usdc4(E.meilleur) + ' USDC (', 'Rolls lose on average.',
   'A pass loses on average too.', 'within 256 blocks', 'taxBps() = 9999', '0.0099%', '15 of 15']) ok(vrai.includes(attendu), 'rendu reel contient « ' + attendu + ' »');
 ok(/\$10(?!\d)/.test(vrai), 'rendu reel : le seuil du ticket $10');
-ok(/not deployed/i.test(vrai) && (vrai.match(/not deployed/gi) || []).length >= 3, 'rendu : Missions, TicketPot, Duels dits « not deployed »');
+/* 2026-10-18 16:50 UTC : TicketPot est LIVE (0xf986…1df1) — il reste Missions et Duels a dire « not deployed » */
+ok(/not deployed/i.test(vrai) && (vrai.match(/not deployed/gi) || []).length >= 2 && !/TicketPot[^.]{0,120}not deployed/i.test(vrai), 'rendu : Missions et Duels dits « not deployed », TicketPot non');
 const faux = structuredClone(FR.CHIFFRES);
 faux.hook.walletPpm = 1100n; faux.hook.createurPpm = 400n;
 faux.naissance.totalWei = 2000000000000000n; faux.naissance.creationWei = 1500000000000000n; faux.naissance.inscriptionWei = 500000000000000n;
