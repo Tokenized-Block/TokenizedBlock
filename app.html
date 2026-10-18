@@ -4781,8 +4781,10 @@ async function peindreSkinsJeu() {
     const moi = compte ? String(compte).toLowerCase() : null, t = Math.floor(Date.now() / 1000);
     const enVente = r.skins.filter((s) => s.enVente), encheres = enVente.filter((s) => s.enchere).length;
     const miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
-    etat.textContent = r.total + ' minted · ' + enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' auction' + (encheres === 1 ? '' : 's') + ')' : '')
-      + (moi ? ' · ' + miennes.length + ' yours to sell' : ' · connect a wallet to buy, bid or sell') + '. Pay in ETH or USDC; 10% of each sale goes to TokenizedBlock.';
+    /* Phil 2026-10-18 08:40 : pas de « 0 minted · 0 for sale » — une phrase courte, vraie, qui invite */
+    etat.textContent = enVente.length
+      ? enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' in auction)' : '') + (moi && miennes.length ? ' · ' + miennes.length + ' yours to list' : '') + '. Each skin sells at a fixed price or in an auction (bids +5%, 7 days max).'
+      : 'Nothing listed yet — mint a skin, then sell it at a fixed price or open an auction (bids +5%, 7 days max).';
     z.textContent = '';
     for (const s of enVente.slice(0, 12)) z.append(bcLigneSkin(s, moi, t));
     if (miennes.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'Your skins — set a price, or open an auction (7 days at most):'; z.append(p); for (const s of miennes.slice(0, 8)) z.append(bcLigneSkin(s, moi, t)); }
