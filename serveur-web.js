@@ -96,7 +96,7 @@ import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass } from './tirage-saison.js';
 import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
-import { BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV } from './blockskins.js';
+import { BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv } from './blockskins.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
@@ -3992,6 +3992,27 @@ async function createurDuBlock(b) {
 }
 let revenuSale = !!FICHIER_REVENU && !existsSync(FICHIER_REVENU);
 const payesEnCours = new Set();
+/* ══ SKIN DETENU = TICKET DU JOUR GARANTI (Phil 2026-10-18 13:30 : « le skin garde 1 USDC, equivalent d un ticket journalier que le user
+ *   garde comme garanti au reward »). Toutes les 10 min, les skins sont LUS sur le contrat BlockSkins actif (lireSkins, chaine) ; chaque
+ *   detenteur EXTERNE recoit le jour courant dans revenu.passes (le meme registre que le pass skin) : la liste est figee jour par jour, donc le
+ *   tirage d hier garde les detenteurs d hier. Lecture ratee -> rien n est retire ni ajoute ; le contrat lui-meme (tenu en vente) n est pas un
+ *   detenteur. ⛔ Limite dite a Phil : un skin a 1 USDC = un ticket chaque jour tant qu il est detenu — plusieurs wallets = plusieurs tickets. */
+const skinsDetenus = { lu: 0, enVol: false, n: null };
+async function crediterDetenteursSkins() {
+  if (skinsDetenus.enVol || Date.now() - skinsDetenus.lu < 600000) return;
+  skinsDetenus.enVol = true;
+  try {
+    const r = await lireSkinsSrv({ rpc: rpcServeur });
+    if (!r || r.etat !== 'LU') return;
+    const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
+    const jour = jourDe(Date.now()).id, contrat = String(BLOCKSKINS_SRV).toLowerCase();
+    revenu.passes = revenu.passes || {};
+    const detenteurs = new Set(r.skins.map((s) => String(s.detenteur || '').toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a) && a !== contrat && !/^0x0{40}$/.test(a) && !internes.has(a)));
+    for (const a of detenteurs) { const ids = revenu.passes[a] || []; if (!ids.includes(jour)) { revenu.passes[a] = [...ids, jour].sort(); revenuSale = true; } }
+    skinsDetenus.n = detenteurs.size; skinsDetenus.lu = Date.now();
+  } catch (_) { /* relu au prochain appel */ } finally { skinsDetenus.enVol = false; }
+}
+setInterval(() => { void crediterDetenteursSkins(); }, 600000).unref?.();
 setInterval(() => {
   if (!revenuSale || !FICHIER_REVENU) return;
   try { writeFileSync(FICHIER_REVENU + '.tmp', JSON.stringify(revenu)); renameSync(FICHIER_REVENU + '.tmp', FICHIER_REVENU); revenuSale = false; }
@@ -4155,6 +4176,8 @@ const SERVIS = [
    *   config (la page recalcule et refuse une fiche alteree), les appels non signes (roll / pass / settle) et le pont app <-> contrat.
    *   ⛔ absent d ici = 404 = page morte (lecon integrer-sans-serie-complete, 11/10). */
   'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js',
+  /* 2026-10-18 : TicketPot (pot du jour en parts egales) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non signes */
+  'deployer-ticketpot.html', 'ticketpot-deploiement.js', 'ticketpot-config.js', 'ticketpot-plan.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',
@@ -5910,6 +5933,7 @@ function traiterRequete(req, res) {
   }
   /* 2026-10-18 : le corps de /api/tirage est une FONCTION (hissee), lue aussi par le MCP (tblock_game_state) — une seule source, pas une copie */
   function corpsTirage() {
+    void crediterDetenteursSkins();
     /* 2026-10-17 soir — v2 QUOTIDIEN (Phil) : ticket du JOUR a 10 $ de volume verifie (UNIT sur notre pool, ou actions tokenisees via l app) ;
      *   chaque jour qualifie = 1 entree au tirage de la SEMAINE et du MOIS. Pas de pot (practice) : l ecran le dit. */
     const now = Date.now(), j = jourDe(now), s = saisonDe(now), mo = moisDe(now);
