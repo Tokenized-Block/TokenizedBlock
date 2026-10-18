@@ -22,7 +22,9 @@ const tirage = srv.slice(t0, t1);
 vu(/contrat: \/\^0x\[0-9a-f\]\{40\}\$\/i\.test\(String\(BLOCKROLLS_DEPLOIEMENT\.adresse \|\| ''\)\)/.test(tirage) && /: null/.test(tirage), '/api/tirage.rolls.contrat = adresse de la fiche ou null');
 vu(/prixRoll: String\(rc\.rollPrice/.test(tirage) && /prixPass: String\(rc\.passPrice/.test(tirage) && /prizes: \[rc\.prize5, rc\.prize4, rc\.prize3\]/.test(tirage), 'prix et gains lus dans la fiche');
 vu(!/500000|10000000/.test(tirage), 'aucun prix tape dans la route');
-vu(D.adresse === null && D.bloc === null, 'fiche : rien de deploye aujourd hui (adresse et bloc null)');
+/* 2026-10-18 14:25 UTC : Phil a signe (tx 0x6412ec99…be ca2, bloc 52 770 558) ; noter-deploiement-blockrolls a verifie input == creation, recu 0x1
+ *   et les relectures avant d ecrire. La fiche porte l adresse ET le bloc, ensemble — c est ce qui ouvre les boutons payants (rolls.contrat). */
+vu(D.adresse === '0x0c5b490196f06db40ab8af68ecb2313029460fe9' && D.bloc === 52770558, 'fiche : deploye, adresse et bloc ecrits ensemble (lus au recu)');
 vu(D.chaine === 8453 && D.contrat === 'BlockRolls' && /^0x[0-9a-f]+$/.test(D.creation) && (D.creation.length - 2) / 2 === D.octetsCreation, 'fiche : chaine, nom, taille de la creation');
 vu(createHash('sha256').update(Buffer.from(D.creation.slice(2), 'hex')).digest('hex') === D.sha256Creation, 'fiche : empreinte de la creation recomputee');
 console.log('ok rolls-servis - ' + n + ' assertions ; NE PROUVE PAS un deploiement reel');

@@ -10,12 +10,17 @@ import { noter, RELECTURES } from './contracts/noter-deploiement-blockrolls.mjs'
 import { BLOCKROLLS_DEPLOIEMENT as F } from './blockrolls-deploiement.js';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
-const texte = readFileSync(new URL('./blockrolls-deploiement.js', import.meta.url), 'utf8');
+/* 2026-10-18 14:25 UTC : la fiche reelle porte desormais l adresse signee par Phil. Le test rejoue noter() sur la fiche AVANT
+ *   deploiement (adresse/bloc remis a null, meme creation) et exige en plus que la fiche reelle soit REFUSEE (deja inscrite). */
+const texteReel = readFileSync(new URL('./blockrolls-deploiement.js', import.meta.url), 'utf8');
+const texte = texteReel.replace(/^[ \t]*adresse: '0x[0-9a-f]{40}',/m, '  adresse: null,').replace(/^[ \t]*bloc: \d+,[^\r\n]*/m, '  bloc: null,');
+const F0 = { ...F, adresse: null, bloc: null };
 const C = F.constructeur, A = '0x' + 'ab'.repeat(20), DE = '0x' + 'cd'.repeat(20), H = '0x' + '77'.repeat(32);
 const tx = () => ({ hash: H, from: DE, to: null, input: F.creation });
 const recu = () => ({ status: '0x1', contractAddress: A, blockNumber: '0x3253f4b' });
 const rel = () => ({ 'USDC()': C.usdc, 'DEV_WALLET()': C.devWallet, 'HOOK()': C.hook, 'UNIT_POOL_ID()': C.unitPoolId, 'ROLL_PRICE()': String(C.rollPrice), 'PASS_PRICE()': String(C.passPrice) });
-const bon = () => ({ fiche: F, texte, tx: tx(), recu: recu(), relectures: rel(), createur: '0x' + '31'.repeat(20) });
+const bon = () => ({ fiche: F0, texte, tx: tx(), recu: recu(), relectures: rel(), createur: '0x' + '31'.repeat(20) });
+vu(noter({ ...bon(), fiche: F, texte: texteReel }).ok === false, 'la fiche reelle (deja inscrite) est refusee : rien n est reecrit');
 /* (1) */
 const v = noter(bon());
 vu(v.ok === true && v.adresse === A && v.bloc === 52772683, 'inscrit : adresse + bloc');

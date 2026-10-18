@@ -46,21 +46,27 @@ ok(C.unitPoolId === poolIdDe({ currency0: ETH, currency1: P.UNIT, fee: FEE_POOL,
 ok(C.rollPrice === P.DEFAUTS.rollPrice.toString() && C.passPrice === P.DEFAUTS.passPrice.toString() && C.passRolls === P.DEFAUTS.passRolls && C.passWindow === P.DEFAUTS.passWindowS && C.potShareBps === P.DEFAUTS.potShareBps
   && C.prize5 === P.DEFAUTS.prize5.toString() && C.prize4 === P.DEFAUTS.prize4.toString() && C.prize3 === P.DEFAUTS.prize3.toString() && C.prize2 === P.DEFAUTS.prize2.toString() && C.minScore === P.DEFAUTS.minScore, 'A prix, parts et regles = DEFAUTS de blockrolls-plan.js');
 ok(sha(lire('contracts/src/BlockRolls.sol')) === D.sha256Sources['src/BlockRolls.sol'], 'A generee depuis la source ACTUELLE du contrat (source modifiee sans regenerer = rouge)');
-ok(D.adresse === null && D.bloc === null, 'A PAS deploye : adresse et bloc nuls (ils s ecrivent ENSEMBLE, relus sur la chaine)');
+/* 2026-10-18 14:25 UTC : deploye par Phil ; adresse et bloc ecrits ENSEMBLE par noter-deploiement-blockrolls (relus sur la chaine) */
+ok((D.adresse === null && D.bloc === null) || (/^0x[0-9a-f]{40}$/.test(String(D.adresse)) && Number.isSafeInteger(D.bloc) && D.bloc > 0), 'A adresse et bloc : tous deux nuls, ou tous deux ecrits (jamais l un sans l autre)');
 ok(octets.length - D.octetsArgs <= 49152 && octets.length > 5000, 'A le code de creation tient sous la limite EIP-3860 (49 152 octets)');
 /* deterministe : le preparateur relance vers un fichier temporaire rend les MEMES octets */
 if (fs.existsSync(path.join(ICI, 'contracts/out/BlockRolls.sol/BlockRolls.json'))) {
   const tmp = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'br-dep-')), 'blockrolls-deploiement.js');
   try {
     execFileSync(process.execPath, ['preparer-deploiement-blockrolls.mjs'], { cwd: path.join(ICI, 'contracts'), env: { ...process.env, SORTIE: tmp }, stdio: ['ignore', 'pipe', 'pipe'] });
-    ok(fs.readFileSync(tmp, 'utf8') === lire('blockrolls-deploiement.js'), 'A le preparateur relance regenere l enregistrement a l IDENTIQUE (deterministe)');
+    /* 2026-10-18 : apres la signature, la fiche porte adresse + bloc (ecrits par noter) ; le preparateur, lui, rend null. On compare donc
+     *   tout SAUF ces deux lignes : la creation, la config et les empreintes doivent etre a l identique. */
+    const sansAdr = (t) => String(t).replace(/^[ \t]*adresse: [^\r\n]*/m, 'ADR').replace(/^[ \t]*bloc: [^\r\n]*/m, 'BLOC').replace(/\r\n/g, '\n');
+    ok(sansAdr(fs.readFileSync(tmp, 'utf8')) === sansAdr(lire('blockrolls-deploiement.js')), 'A le preparateur relance regenere l enregistrement a l IDENTIQUE, hors adresse/bloc (deterministe)');
   } catch (e) { ok(false, 'A le preparateur relance : ' + String(e.stderr || e.message).slice(0, 200)); }
   finally { fs.rmSync(path.dirname(tmp), { recursive: true, force: true }); }
 } else console.log('  (artefact forge absent : regeneration NON verifiee ici)');
 
 console.log('— B. le refus de la page (la meme fonction, blockrolls-config.js)');
-const v0 = verifierEnregistrement(D, sha(octets));
-ok(v0.intacte && v0.pourquoi.length === 0, 'B l enregistrement vrai est accepte');
+/* la page refuse de RE-deployer une fiche deja inscrite (voulu) : on juge la fiche telle qu elle etait avant la signature */
+const v0 = verifierEnregistrement({ ...D, adresse: null, bloc: null }, sha(octets));
+ok(v0.intacte && v0.pourquoi.length === 0, 'B l enregistrement vrai (avant signature) est accepte');
+if (D.adresse) ok(!verifierEnregistrement(D, sha(octets)).intacte, 'B la fiche deja deployee est refusee par la page (pas de second deploiement)');
 const falsifie = (patch) => { const d = { ...D, constructeur: { ...D.constructeur }, ...patch }; return verifierEnregistrement(d, sha(Buffer.from(d.creation.slice(2), 'hex'))); };
 const dernier = D.creation.slice(-2) === '03' ? '04' : '03';
 ok(!falsifie({ creation: D.creation.slice(0, -2) + dernier }).intacte, 'B un octet change dans la donnee (le minScore) : refuse, meme avec une empreinte recalculee dessus');
