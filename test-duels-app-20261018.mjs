@@ -16,7 +16,7 @@ const APP = lire('app.html'), SRV = lire('serveur-web.js');
 const entre = (t, a, b) => { const i = t.indexOf(a), j = t.indexOf(b, i + 1); return i >= 0 && j > i ? t.slice(i, j) : ''; };
 
 const checks = {
-  carteCachee: (t) => /<div class="carte" id="duelsCarte" hidden>/.test(t) && /id="jbDuelsTuile" hidden>/.test(t) && t.split('id="duelsCarte"').length === 2,
+  carteCachee: (t) => /<div class="carte" id="duelsCarte" hidden>/.test(t) && /id="jbDuelsTuile"[^>]*\bhidden>/.test(t) && t.split('id="duelsCarte"').length === 2,
   regleSansContrat: (t) => /<b>06 · DUELS<\/b><p>[^<]*Winner|<b>06 · DUELS<\/b><p>[\s\S]{0,700}90% of the pot, 7% goes to the community reward pool, 3% to TokenizedBlock[\s\S]{0,200}<span id="regleDuelsEtat">Opens with its contract\.<\/span>/.test(t),
   aucunBoutonMort: (t) => { const c = entre(t, 'id="duelsCarte"', '<!-- EARN'); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c); },
   horsDraws: (t) => { const c0 = t.indexOf('id="tirCarte"'), c1 = t.indexOf('id="missionsCarte"'), d = t.indexOf('id="duelsCarte"'); return d > c1 && c1 > c0 && d < t.indexOf('id="regleCarte"'); },

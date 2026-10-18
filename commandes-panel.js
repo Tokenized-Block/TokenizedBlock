@@ -61,6 +61,87 @@ export const AIDE_COMMANDES = Object.freeze([
   'A token is ETH, a symbol (USDC, NVDAc…), a whole address, or “this” for the block shown.',
 ]);
 
+/* ══ LA TABLE DES COMMANDES (2026-10-18, palette Ctrl+K) — UNE SEULE, lue par DEUX lecteurs : analyserCommande (le dispatcher du Chat)
+ *   la parcourt dans l ordre ; la palette (palette.js, entreesCommandes) en tire sa liste. Une commande ajoutee ici est comprise ET listee ;
+ *   retiree, elle disparait des deux — elles ne peuvent pas diverger (test-palette-20261018 le prouve sur une table amputee).
+ * Chaque entree : `cle` ; `lire(t)` = la phrase NORMALISEE (espaces reduits) -> null (pas la sienne), { ok:true, commande } ou { ok:false,
+ *   pourquoi } (une forme reconnue mais incomplete se REFUSE ici, elle ne glisse pas a l entree suivante) ; `palette` = les lignes montrees
+ *   par Ctrl+K, chacune un `modele` (le texte ecrit au Chat), un `nom`, des `mots` ; `ecrire: true` = la ligne ECRIT le modele dans le champ
+ *   du Chat, a ajuster avant d envoyer (un montant, un block, une adresse se choisissent — jamais par nous) ; sinon elle l ENVOIE, comme tape.
+ * ⛔ L ORDRE COMPTE : c est celui des `if` d avant, inchange (« show NVDAc » avant « buy », « send » refuse avant le message final). */
+let m;
+/* un modele n est ecrit qu UNE fois : celui de la pre-commande (test-panneau-finitions mute ce texte-la et doit le trouver seul) */
+const PRE = Object.fromEntries(PRECOMMANDES.map((p) => [p.cle, p]));
+export const COMMANDES = Object.freeze([
+  { cle: 'help', lire: (t) => (/^(help|\?)$/i.test(t) ? { ok: true, commande: { type: 'help' } } : null),
+    palette: [{ nom: 'Help — every command', modele: 'help', mots: 'commands list ?' }] },
+  { cle: 'tasks', lire: (t) => (/^(tasks?|what can it do\??)$/i.test(t) ? { ok: true, commande: { type: 'tasks' } } : null),
+    palette: [{ nom: 'What can its brain do?', modele: PRE.tasks.modele, mots: 'tasks accepts refuses brain' }] },
+  { cle: 'game', lire: (t) => (/^game$/i.test(t) ? { ok: true, commande: { type: 'game' } } : null),
+    palette: [{ nom: 'Game — my ticket, the pot, last rolls', modele: PRE.game.modele, mots: 'ticket draw pot rolls today status' }] },
+  /* 2026-10-18 (Phil) : les duels — « duel » ou « duels » ; la commande dit elle-meme si le contrat n est pas ouvert */
+  { cle: 'duel', lire: (t) => (/^duels?$/i.test(t) ? { ok: true, commande: { type: 'duel' } } : null),
+    palette: [{ nom: 'Duels — open challenges, accept or settle', modele: 'duel', mots: 'duel challenge stake versus fight' }] },
+  { cle: 'roll', lire: (t) => {
+    if (!/^rolls?\b/i.test(t)) return null;
+    /* roll · roll x5 · roll x 5 · roll 5 · rolls x10 — le nombre est LU, jamais plafonne : « roll x11 » est refuse, pas ramene a 10 */
+    const refusRoll = { ok: false, pourquoi: 'roll takes 1 to ' + ROLLS_PAR_COMMANDE_MAX + ' rolls in one go: roll, roll x5, roll x10' };
+    if (!(m = /^rolls?(?: ?x ?([0-9]{1,3})| ([0-9]{1,3}))?$/i.exec(t))) return refusRoll;
+    const n = m[1] === undefined && m[2] === undefined ? 1 : Number(m[1] !== undefined ? m[1] : m[2]);
+    if (!Number.isInteger(n) || n < 1 || n > ROLLS_PAR_COMMANDE_MAX) return refusRoll;
+    return { ok: true, commande: { type: 'roll', n } };
+  }, palette: [
+    { nom: 'Roll', modele: PRE.roll.modele, mots: 'dice play practice' },
+    { nom: 'Roll ×5', modele: PRE.roll_x5.modele, mots: 'dice play five' },
+    { nom: 'Roll ×10', modele: 'roll x10', mots: 'dice play ten' },
+  ] },
+  { cle: 'post_task', lire: (t) => {
+    if (!/^post task\b/i.test(t)) return null;
+    if ((m = new RegExp('^post task ' + NOMBRE + ' ([0-9]{1,5}) ' + NOMBRE + '$', 'i').exec(t))) {
+      const players = Number(m[2]);
+      if (players < 1 || players > 10000) return { ok: false, pourquoi: 'post task: 1 to 10 000 players' };
+      return { ok: true, commande: { type: 'post_task', reward: nombre(m[1]), players, hold: nombre(m[3]) } };
+    }
+    return { ok: false, pourquoi: 'post task needs: post task <reward per player> <players> <must hold> — in block units, e.g. post task 100 10 10' };
+  }, palette: [{ nom: 'Post a task', modele: PRE.post_task.modele, mots: 'mission reward players hold board', ecrire: true }] },
+  { cle: 'view', lire: (t) => ((m = /^(market|trade|brain|chat)$/i.exec(t)) ? { ok: true, commande: { type: 'show', tab: m[1].toLowerCase() } } : null),
+    palette: [
+      { nom: 'Panel · Chat view', modele: 'chat', mots: 'panel view talk' },
+      { nom: 'Panel · Market view', modele: 'market', mots: 'panel view live activity' },
+      { nom: 'Panel · Trade view', modele: 'trade', mots: 'panel view ticket holdings' },
+      { nom: 'Panel · Skin view', modele: 'brain', mots: 'panel view brain cube' },
+    ] },
+  { cle: 'select', lire: (t) => ((m = new RegExp('^(?:show|open|select) ' + JETON + '$', 'i').exec(t)) ? { ok: true, commande: { type: 'select', jeton: m[1] } } : null),
+    palette: [{ nom: 'Show a block', modele: PRE.show.modele, mots: 'open select find block stock', ecrire: true }] },
+  { cle: 'buy', lire: (t) => ((m = new RegExp('^buy ' + JETON + ' with ' + NOMBRE + ' ' + JETON + '$', 'i').exec(t))
+    ? { ok: true, commande: { type: 'swap', de: m[3], vers: m[1], montant: nombre(m[2]) } } : null),
+    palette: [{ nom: 'Buy', modele: PRE.buy_stock.modele, mots: 'purchase stock block trade', ecrire: true }] },
+  { cle: 'sell', lire: (t) => ((m = new RegExp('^sell ' + NOMBRE + ' ' + JETON + '(?: (?:for|to|into) ' + JETON + ')?$', 'i').exec(t))
+    ? { ok: true, commande: { type: 'swap', de: m[2], vers: m[3] || null, montant: nombre(m[1]) } } : null),
+    palette: [{ nom: 'Sell', modele: PRE.sell_stock.modele, mots: 'stock block trade', ecrire: true }] },
+  { cle: 'swap', lire: (t) => ((m = new RegExp('^swap ' + NOMBRE + ' ' + JETON + ' (?:to|for|into|->) ' + JETON + '$', 'i').exec(t))
+    ? { ok: true, commande: { type: 'swap', de: m[2], vers: m[3], montant: nombre(m[1]) } } : null),
+    palette: [{ nom: 'Swap', modele: PRE.swap.modele, mots: 'exchange convert trade', ecrire: true }] },
+  { cle: 'send', lire: (t) => {
+    if (!/^send\b/i.test(t)) return null;
+    if ((m = new RegExp('^send ' + NOMBRE + ' ' + JETON + ' to ' + ADRESSE + '$', 'i').exec(t))) {
+      return { ok: true, commande: { type: 'send', jeton: m[2], montant: nombre(m[1]), destinataire: m[3].toLowerCase() } };
+    }
+    /* ⛔ un destinataire incomplet n est JAMAIS complete : on le dit, on ne devine pas */
+    return { ok: false, pourquoi: 'send needs: send <amount> <token> to <the whole address, 0x and 40 characters>' };
+  }, palette: [{ nom: 'Send', modele: PRE.send.modele, mots: 'transfer pay address', ecrire: true }] },
+]);
+
+/** Le dispatcher, construit sur UNE table : celle-ci (analyserCommande) ou, pour un test, une copie amputee. */
+export function creerAnalyseur(table) {
+  return function analyser(texte) {
+    const t = propre(texte);
+    if (!t) return { ok: false, pourquoi: 'write a command, or tap one below' };
+    if (t.length > 200) return { ok: false, pourquoi: 'that is too long for a command' };
+    for (const c of table) { const r = c.lire(t); if (r) return r; }
+    return { ok: false, pourquoi: 'not understood — type “help” to see the commands' };
+  };
+}
 /**
  * @param {string} texte
  * @returns {{ ok:true, commande:object } | { ok:false, pourquoi:string }}
@@ -72,51 +153,7 @@ export const AIDE_COMMANDES = Object.freeze([
  *   duel  : { type:'duel' }           (« duel » ou « duels »)
  *   post_task : { type:'post_task', reward, players, hold }  (reward / hold = le texte du nombre, en unites humaines du block ; players = entier)
  */
-export function analyserCommande(texte) {
-  const t = propre(texte);
-  if (!t) return { ok: false, pourquoi: 'write a command, or tap one below' };
-  if (t.length > 200) return { ok: false, pourquoi: 'that is too long for a command' };
-  let m;
-  if (/^(help|\?)$/i.test(t)) return { ok: true, commande: { type: 'help' } };
-  if (/^(tasks?|what can it do\??)$/i.test(t)) return { ok: true, commande: { type: 'tasks' } };
-  if (/^game$/i.test(t)) return { ok: true, commande: { type: 'game' } };
-  if (/^duels?$/i.test(t)) return { ok: true, commande: { type: 'duel' } };
-  if (/^rolls?\b/i.test(t)) {
-    /* roll · roll x5 · roll x 5 · roll 5 · rolls x10 — le nombre est LU, jamais plafonne : « roll x11 » est refuse, pas ramene a 10 */
-    const refusRoll = { ok: false, pourquoi: 'roll takes 1 to ' + ROLLS_PAR_COMMANDE_MAX + ' rolls in one go: roll, roll x5, roll x10' };
-    if (!(m = /^rolls?(?: ?x ?([0-9]{1,3})| ([0-9]{1,3}))?$/i.exec(t))) return refusRoll;
-    const n = m[1] === undefined && m[2] === undefined ? 1 : Number(m[1] !== undefined ? m[1] : m[2]);
-    if (!Number.isInteger(n) || n < 1 || n > ROLLS_PAR_COMMANDE_MAX) return refusRoll;
-    return { ok: true, commande: { type: 'roll', n } };
-  }
-  if (/^post task\b/i.test(t)) {
-    if ((m = new RegExp('^post task ' + NOMBRE + ' ([0-9]{1,5}) ' + NOMBRE + '$', 'i').exec(t))) {
-      const players = Number(m[2]);
-      if (players < 1 || players > 10000) return { ok: false, pourquoi: 'post task: 1 to 10 000 players' };
-      return { ok: true, commande: { type: 'post_task', reward: nombre(m[1]), players, hold: nombre(m[3]) } };
-    }
-    return { ok: false, pourquoi: 'post task needs: post task <reward per player> <players> <must hold> — in block units, e.g. post task 100 10 10' };
-  }
-  if ((m = /^(market|trade|brain|chat)$/i.exec(t))) return { ok: true, commande: { type: 'show', tab: m[1].toLowerCase() } };
-  if ((m = new RegExp('^(?:show|open|select) ' + JETON + '$', 'i').exec(t))) return { ok: true, commande: { type: 'select', jeton: m[1] } };
-  if ((m = new RegExp('^buy ' + JETON + ' with ' + NOMBRE + ' ' + JETON + '$', 'i').exec(t))) {
-    return { ok: true, commande: { type: 'swap', de: m[3], vers: m[1], montant: nombre(m[2]) } };
-  }
-  if ((m = new RegExp('^sell ' + NOMBRE + ' ' + JETON + '(?: (?:for|to|into) ' + JETON + ')?$', 'i').exec(t))) {
-    return { ok: true, commande: { type: 'swap', de: m[2], vers: m[3] || null, montant: nombre(m[1]) } };
-  }
-  if ((m = new RegExp('^swap ' + NOMBRE + ' ' + JETON + ' (?:to|for|into|->) ' + JETON + '$', 'i').exec(t))) {
-    return { ok: true, commande: { type: 'swap', de: m[2], vers: m[3], montant: nombre(m[1]) } };
-  }
-  if (/^send\b/i.test(t)) {
-    if ((m = new RegExp('^send ' + NOMBRE + ' ' + JETON + ' to ' + ADRESSE + '$', 'i').exec(t))) {
-      return { ok: true, commande: { type: 'send', jeton: m[2], montant: nombre(m[1]), destinataire: m[3].toLowerCase() } };
-    }
-    /* ⛔ un destinataire incomplet n est JAMAIS complete : on le dit, on ne devine pas */
-    return { ok: false, pourquoi: 'send needs: send <amount> <token> to <the whole address, 0x and 40 characters>' };
-  }
-  return { ok: false, pourquoi: 'not understood — type “help” to see the commands' };
-}
+export const analyserCommande = creerAnalyseur(COMMANDES);
 
 /** Un montant tape (« 0.5 ») -> des unites brutes, ou null s il a plus de decimales que le jeton n en porte, ou vaut 0. */
 export function enUnitesBrutes(montant, decimales) {

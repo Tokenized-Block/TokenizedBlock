@@ -75,9 +75,10 @@ const SRC = fs.readFileSync(path.join(ICI, 'commandes-panel.js'), 'utf8').replac
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'cmd-mut-'));
 for (const mu of [
   { nom: 'destinataire tronque accepte', de: "const ADRESSE = '(0x[0-9a-fA-F]{40})';", a: "const ADRESSE = '(0x[0-9a-fA-F]{4,40})';" },
-  { nom: 'buy inverse (on paierait le jeton voulu)', de: "commande: { type: 'swap', de: m[3], vers: m[1], montant: nombre(m[2]) } };", a: "commande: { type: 'swap', de: m[1], vers: m[3], montant: nombre(m[2]) } };" },
+  /* 2026-10-18 : la grammaire est devenue une TABLE (COMMANDES, lue aussi par la palette Ctrl+K) — memes motifs, nouvelle mise en page */
+  { nom: 'buy inverse (on paierait le jeton voulu)', de: "commande: { type: 'swap', de: m[3], vers: m[1], montant: nombre(m[2]) } } : null),", a: "commande: { type: 'swap', de: m[1], vers: m[3], montant: nombre(m[2]) } } : null)," },
   { nom: 'trop de decimales arrondi au lieu de refuse', de: '  if (f.length > decimales) return null;\n', a: '' },
-  { nom: 'phrase libre acceptee', de: "  return { ok: false, pourquoi: 'not understood — type “help” to see the commands' };", a: "  return { ok: true, commande: { type: 'help' } };" },
+  { nom: 'phrase libre acceptee', de: "    return { ok: false, pourquoi: 'not understood — type “help” to see the commands' };", a: "    return { ok: true, commande: { type: 'help' } };" },
   { nom: 'montant nul accepte', de: 'return v > 0n ? v : null;', a: 'return v;' },
   /* 2026-10-18 : la borne de Phil (10 rolls) — relachee, ou remplacee par un plafond silencieux */
   { nom: 'roll x11 accepte (borne relachee)', de: '    if (!Number.isInteger(n) || n < 1 || n > ROLLS_PAR_COMMANDE_MAX) return refusRoll;\n', a: '    if (!Number.isInteger(n) || n < 1) return refusRoll;\n' },

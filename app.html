@@ -897,6 +897,25 @@ dialog.bcPop[open]{animation:bcPop .18s ease-out}
  *   Replie, la recherche et « Agent link » se cachent : deplier les rend. body.bcReplie (pose en JS) plutot que :has. */
 dialog.bcPop.bcReduit .bcCherche,dialog.bcPop.bcReduit #bcLier,dialog.bcPop.bcReduit #bcChercheNote,dialog.bcPop.bcReduit .bcPousse{display:none}
 dialog.bcPop.bcReduit .bcHaut{flex-wrap:nowrap;cursor:pointer}
+#bcPaletteBtn{display:inline-flex;align-items:center;justify-content:center}
+/* replie (une rangee / un rail), la loupe se cache avec la recherche ; deplier la rend. Ctrl+K reste */
+dialog.bcPop.bcReduit #bcPaletteBtn{display:none}
+/* ══ palette Ctrl+K (2026-10-18) : un champ et une liste filtree. Modale (showModal : le focus y reste, Echap ferme), aux tokens du
+ *   coloris ; a 375 px une feuille pleine largeur posee en HAUT (le clavier du telephone occupe le bas). */
+dialog.palette{border:1px solid rgb(var(--accentRgb) / .25);padding:0;margin:10vh auto auto;width:min(560px,calc(100% - 32px));max-width:none;background:var(--fond2);color:var(--texte);
+  border-radius:var(--r);box-shadow:0 18px 50px rgb(0 0 0 / .55);overflow:hidden}
+dialog.palette::backdrop{background:rgb(0 0 0 / .45)}
+.palIn{display:flex;flex-direction:column;max-height:min(70dvh,560px)}
+.palChamp{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--ligne);color:var(--doux)}
+.palChamp input{flex:1;min-width:0;background:transparent;border:0;outline:0;color:var(--texte);font:inherit;font-size:16px;padding:2px 0}
+.palChamp input::placeholder{color:var(--doux);opacity:.75}
+.palListe{list-style:none;margin:0;padding:6px;overflow-y:auto;overscroll-behavior:contain;flex:1 1 auto;min-height:0;scrollbar-width:thin;scrollbar-color:var(--ligne) transparent}
+.palListe li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--rs);cursor:pointer;min-width:0}
+.palListe li[aria-selected="true"]{background:rgb(var(--accentRgb) / .16)}
+.palListe li.palVide{cursor:default;color:var(--doux)}
+.palNom{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.palGroupe{flex:0 0 auto;font-size:11px;font-weight:600;color:var(--doux);text-transform:uppercase;letter-spacing:.4px}
+@media (max-width:600px){dialog.palette{width:100%;margin:0 0 auto;border-width:0 0 1px;border-radius:0 0 var(--r) var(--r)}.palIn{max-height:80dvh}}
 dialog.bcPop.bcReduit #bcAgent{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media (min-width:761px) and (max-width:1099px){dialog.bcPop{width:var(--bcWLibre,clamp(300px,36vw,430px))}}
 @media (min-width:761px){
@@ -2053,6 +2072,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <span class="bcPousse"></span>
         <span class="puce" id="bcAgent" title="Agent: not connected">Agent: not connected</span>
         <button type="button" class="bouton sec" id="bcLier">Agent link</button>
+        <!-- 2026-10-18 : la palette (Ctrl+K, Cmd+K, « / ») — chaque commande du Chat, chaque onglet, chaque jeu du Game -->
+        <button type="button" class="bouton sec" id="bcPaletteBtn" aria-haspopup="dialog" aria-label="Search commands (Ctrl+K)" title="Commands · Ctrl+K"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></button>
         <button type="button" class="bouton sec" id="bcReduire" aria-label="Fold or unfold the control panel" aria-expanded="true">–</button>
         <button type="button" class="bouton sec" id="bcFermer" aria-label="Close the control panel">✕</button>
         <!-- 2026-10-04 (Phil, capture : la place vide a cote de ✕) : « ajoute un mode rechercher pour voir les autres blocks ».
@@ -3565,12 +3586,13 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- UX 2026-10-18 (Phil : « facilite de choix ») : SIX choix, chacun dit son geste et son prix (lus sur la fiche servie, jamais tapes) -->
       <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourRoll"><b>Roll</b><i id="jbRoll">⚄</i><span id="jbRollTxt">the next block decides</span></button>
       <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Ticket</b><i id="jbTicket">—</i><span id="jbTicketTxt">today's draw</span></button>
-      <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourPass"><b>Week pass</b><i id="jbPass">7 days</i><span id="jbPassTxt">a ticket every day</span></button>
-      <button type="button" class="jeuJeu" data-jeu="brainJeuCarte" data-focus="bjJouer"><b>Its brain</b><i id="jbBrain">Off</i><span id="jbBrainTxt">let it play for you</span></button>
-      <button type="button" class="jeuJeu" data-jeu="skinCarte"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
-      <button type="button" class="jeuJeu" data-jeu="missionsCarte"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
+      <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourPass" data-mots="7 days weekly"><b>Week pass</b><i id="jbPass">7 days</i><span id="jbPassTxt">a ticket every day</span></button>
+      <!-- data-palette / data-mots : le nom et les mots-cles de la tuile dans la palette Ctrl+K (rien d affiche) -->
+      <button type="button" class="jeuJeu" data-jeu="brainJeuCarte" data-focus="bjJouer" data-palette="Let the brain play" data-mots="auto bot"><b>Its brain</b><i id="jbBrain">Off</i><span id="jbBrainTxt">let it play for you</span></button>
+      <button type="button" class="jeuJeu" data-jeu="skinCarte" data-mots="skin nft look"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
+      <button type="button" class="jeuJeu" data-jeu="missionsCarte" data-mots="tasks board earn"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
       <!-- DUELS (Phil 2026-10-18) : cachee tant que /api/duels ne sert pas de contrat (pas de tuile vers une carte vide) -->
-      <button type="button" class="jeuJeu" data-jeu="duelsCarte" id="jbDuelsTuile" hidden><b>Duels</b><i id="jbDuels">—</i><span id="jbDuelsTxt">open challenges</span></button>
+      <button type="button" class="jeuJeu" data-jeu="duelsCarte" id="jbDuelsTuile" data-mots="duel challenge stake" hidden><b>Duels</b><i id="jbDuels">—</i><span id="jbDuelsTxt">open challenges</span></button>
     </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
     <div class="carte" id="tirCarte">
@@ -3995,6 +4017,18 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>⬢</b>Tokenized</button>
   </div>
 </nav>
+<!-- 2026-10-18 : LA PALETTE (Ctrl+K · Cmd+K · « / » · le bouton loupe du panneau). Hors des volets : un volet masque masquerait son enfant.
+     La liste est peinte en JS (textContent) depuis COMMANDES, la barre d onglets et les tuiles du Game. -->
+<dialog class="palette" id="palette" aria-label="Commands">
+  <div class="palIn">
+    <div class="palChamp">
+      <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false"><circle cx="7" cy="7" r="4.5" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.4 10.4 14 14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      <input id="palSaisie" type="text" role="combobox" aria-expanded="true" aria-controls="palListe" aria-autocomplete="list" aria-label="Search commands, tabs and games"
+        placeholder="A command, a tab, a game…" spellcheck="false" autocapitalize="off" autocorrect="off" autocomplete="off" enterkeyhint="go">
+    </div>
+    <ul class="palListe" id="palListe" role="listbox" aria-label="Results"></ul>
+  </div>
+</dialog>
 
 <script type="module">
 /* ⛔ LES MEMES MODULES QUE L AUTRE ECRAN. Aucune reimplementation. */
@@ -4287,7 +4321,9 @@ import { origineDepuisFace, phrasesOrigine, nosBlocks, NOS_BLOCKS_GENESE } from 
 import { pensees, ajouterAuJournal, entreeBotAction } from './journal-cerveau.js';
 import { snapshotCerveau, texteSnapshot } from './export-cerveau.js';
 import { resumeTaches, ONCHAIN_TASKS, construireRecuOffre, CIRCUIT_VERSION, SIGNALS_COUNT, planOfferFood, CURRENT_TOY_V1, OFFER_DEPLOY, THRESHOLD, OFFER_TOY_V1, tacheAutorisee } from './brain-tasks.js';
-import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES } from './commandes-panel.js';
+import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES, COMMANDES } from './commandes-panel.js';
+/* 2026-10-18 : la palette Ctrl+K du panneau (filtre et classement purs ; la liste vient de COMMANDES, de la barre d onglets et des tuiles du Game) */
+import { entreesCommandes, entreesOnglets, entreesJeu, filtrerPalette, noterUsage, lireUsages, ecrireUsages, deplacer } from './palette.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
   offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin } from './blockskins.js';
@@ -26149,12 +26185,148 @@ for (const p of PRECOMMANDES) {
   b.addEventListener('click', () => {
     /* « What can it do? » n a rien a ajuster : elle s execute, et ne laisse pas « tasks » dans le champ */
     if (p.cle === 'tasks') { void bcExecuterTexte('tasks'); return; }
-    const s = $('#bcSaisie'); s.value = p.modele; s.focus();
-    const ou = Number.isInteger(p.curseur) ? p.curseur : p.modele.length; try { s.setSelectionRange(ou, ou + (Number.isInteger(p.selection) ? p.selection : 0)); } catch (_) {}
-    const n = $('#bcNote'); n.className = 'note'; n.textContent = p.aCompleter ? (p.aide || 'Paste the recipient’s whole address, then send.') : '';
+    bcEcrireModele(p);
   });
   $('#bcPre').append(b);
 }
+/** Un modele ECRIT dans le champ du Chat, a ajuster avant d envoyer (curseur / selection poses) — la puce et la palette, une fonction. */
+function bcEcrireModele(p) {
+  const s = $('#bcSaisie'); s.value = p.modele; s.focus();
+  const ou = Number.isInteger(p.curseur) ? p.curseur : p.modele.length; try { s.setSelectionRange(ou, ou + (Number.isInteger(p.selection) ? p.selection : 0)); } catch (_) {}
+  const n = $('#bcNote'); n.className = 'note'; n.textContent = p.aCompleter ? (p.aide || 'Paste the recipient’s whole address, then send.') : '';
+}
+/* ══ LA PALETTE (2026-10-18) — Ctrl+K / Cmd+K, « / » hors d un champ, ou la loupe de l en-tete du panneau. ══════════════════════════════
+ * La liste : les commandes du Chat (COMMANDES, la table que analyserCommande parcourt : elles ne peuvent pas diverger), les onglets LUS
+ *   dans la barre (.navB) et les jeux LUS dans les tuiles du Game (.jeuBandeau). Filtre et classement : palette.js (pur, teste).
+ * Choisir une commande = l ENVOYER par le formulaire du Chat (requestSubmit : le meme gestionnaire que la frappe, aucun second chemin) ;
+ *   une commande a montant / block / adresse ECRIT son modele dans le champ (bcEcrireModele, comme sa puce) : on l ajuste, puis on envoie.
+ *   Un onglet : allerA. Un jeu : l onglet Game puis LA tuile (le meme geste : defile jusqu a sa carte, focus sur son bouton).
+ * ⛔ RIEN NE SIGNE ICI : une commande qui mene a une transaction montre sa carte et ses boutons Sign, comme tapee. */
+let palAvant = null, palRendre = true, palToutes = [], palVue = [], palSel = -1, palUsages = {};
+const palTuiles = new Map();
+function palStock() { try { return localStorage; } catch (_) { return null; } }
+function palChampActif(t) {
+  const el = t && t.nodeType === 1 ? t : document.activeElement;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  return /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName);
+}
+function palConstruire() {
+  const onglets = [...document.querySelectorAll('.navIn .navB[data-volet]')].map((b) => ({
+    volet: b.getAttribute('data-volet'),
+    /* le libelle sans son glyphe (le <b>) */
+    nom: [...b.childNodes].filter((x) => x.nodeType === 3).map((x) => x.textContent).join('').trim(),
+  }));
+  palTuiles.clear();
+  const jeux = [...document.querySelectorAll('.jeuBandeau [data-jeu]')].map((b) => {
+    const o = { jeu: b.getAttribute('data-jeu'), focus: b.getAttribute('data-focus') || '',
+      nom: b.getAttribute('data-palette') || (b.querySelector('b') ? b.querySelector('b').textContent.trim() : ''),
+      mots: (b.getAttribute('data-mots') || '') + ' ' + (b.querySelector('span') ? b.querySelector('span').textContent : '') };
+    palTuiles.set('game:' + o.jeu + ':' + o.focus, b);
+    return o;
+  });
+  return [...entreesCommandes(COMMANDES), ...entreesOnglets(onglets), ...entreesJeu(jeux)];
+}
+function palPeindre() {
+  const ul = $('#palListe'), champ = $('#palSaisie');
+  ul.textContent = '';
+  palVue.forEach((e, i) => {
+    const li = document.createElement('li');
+    li.id = 'palO' + i;
+    li.setAttribute('role', 'option');
+    li.setAttribute('aria-selected', String(i === palSel));
+    const nom = document.createElement('span'); nom.className = 'palNom'; nom.textContent = e.nom;
+    const g = document.createElement('span'); g.className = 'palGroupe'; g.textContent = e.groupe;
+    li.append(nom, g);
+    li.addEventListener('mousemove', () => { if (palSel !== i) { palSel = i; palMarquer(); } });
+    li.addEventListener('click', () => palChoisir(e));
+    ul.append(li);
+  });
+  if (!palVue.length) { const li = document.createElement('li'); li.className = 'palVide'; li.setAttribute('role', 'presentation'); li.textContent = 'No match'; ul.append(li); }
+  palMarquer();
+  champ.setAttribute('aria-expanded', String(palVue.length > 0));
+}
+function palMarquer() {
+  const champ = $('#palSaisie');
+  for (const li of document.querySelectorAll('#palListe [role="option"]')) li.setAttribute('aria-selected', String(li.id === 'palO' + palSel));
+  if (palSel >= 0) {
+    champ.setAttribute('aria-activedescendant', 'palO' + palSel);
+    const li = document.getElementById('palO' + palSel); if (li) { try { li.scrollIntoView({ block: 'nearest' }); } catch (_) {} }
+  } else champ.removeAttribute('aria-activedescendant');
+}
+function palFiltrer() {
+  const q = $('#palSaisie').value;
+  palVue = filtrerPalette(palToutes, q, palUsages);
+  /* une phrase complete que la grammaire ACCEPTE (« roll x3 », « show IB022 ») s envoie telle quelle, en tete — le meme envoi */
+  const t = q.replace(/\s+/g, ' ').trim();
+  if (t && analyserCommande(t).ok && !palVue.some((e) => e.faire === 'commande' && e.modele.toLowerCase() === t.toLowerCase())) {
+    palVue.unshift({ id: 'tape', groupe: 'Command', nom: 'Run “' + t.slice(0, 80) + '”', faire: 'commande', modele: t, ecrire: false });
+  }
+  palSel = palVue.length ? 0 : -1;
+  palPeindre();
+}
+function palOuvrir() {
+  /* ⛔ nommee `pal`, jamais `d` : test-panneau-finitions garde le PANNEAU non modal en interdisant ce nom-la suivi de showModal — la palette, elle, est modale */
+  const pal = $('#palette');
+  if (!pal || pal.open) return;
+  palAvant = document.activeElement;
+  palRendre = true;
+  palUsages = lireUsages(palStock());
+  try { palToutes = palConstruire(); } catch (_) { palToutes = entreesCommandes(COMMANDES); }
+  $('#palSaisie').value = '';
+  palFiltrer();
+  try { pal.showModal(); } catch (_) { pal.setAttribute('open', ''); }
+  $('#palSaisie').focus();
+}
+function palFermer() { const d = $('#palette'); if (d && d.open) d.close(); }
+function palChoisir(e) {
+  if (!e) return;
+  if (e.id !== 'tape') { palUsages = noterUsage(palUsages, e.id); ecrireUsages(palStock(), palUsages); }
+  /* le geste choisi pose son propre focus (le champ du Chat, le bouton d une carte) : on ne le rend pas a l element d avant */
+  palRendre = false;
+  palFermer();
+  if (e.faire === 'onglet') { allerA(e.volet); return; }
+  if (e.faire === 'jeu') {
+    allerA('missions');
+    const tuile = palTuiles.get(e.id);
+    if (tuile) setTimeout(() => { try { tuile.click(); } catch (_) {} }, 60);
+    return;
+  }
+  if (e.faire !== 'commande') return;
+  /* le panneau s ouvre la ou l on est (sansBasculer), deplie : c est dans son Chat que la commande s ecrit et se lit */
+  bcOuvrirPop({ sansBasculer: true, deplier: true, vue: 'chat' });
+  if (e.ecrire) {
+    bcVue('chat');
+    bcEcrireModele(PRECOMMANDES.find((p) => p.modele === e.modele) || { modele: e.modele });
+    return;
+  }
+  const s = $('#bcSaisie'), f = $('#bcForm');
+  s.value = e.modele;
+  if (typeof f.requestSubmit === 'function') f.requestSubmit(); else f.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+}
+$('#palSaisie').addEventListener('input', palFiltrer);
+$('#palSaisie').addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); palSel = deplacer(palSel, e.key === 'ArrowDown' ? 1 : -1, palVue.length); palMarquer(); return; }
+  if (e.key === 'Enter') { e.preventDefault(); if (palSel >= 0) palChoisir(palVue[palSel]); return; }
+  /* le focus reste dans la palette : son seul champ */
+  if (e.key === 'Tab') { e.preventDefault(); }
+});
+/* Echap : la modale se ferme d elle-meme (cancel) ; un clic hors de la feuille ferme aussi */
+$('#palette').addEventListener('click', (e) => { if (e.target === $('#palette')) palFermer(); });
+$('#palette').addEventListener('close', () => {
+  if (palRendre && palAvant && document.contains(palAvant) && typeof palAvant.focus === 'function') { try { palAvant.focus(); } catch (_) {} }
+  palAvant = null;
+});
+$('#bcPaletteBtn').addEventListener('click', (e) => { e.stopPropagation(); palOuvrir(); });
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && String(e.key).toLowerCase() === 'k') {
+    e.preventDefault();
+    if ($('#palette').open) palFermer(); else palOuvrir();
+    return;
+  }
+  if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey && !palChampActif(e.target) && !$('#palette').open) { e.preventDefault(); palOuvrir(); }
+});
+/* ══ FIN DE LA PALETTE ══ */
 /* ── le ticket de l onglet Trade ── */
 for (const b of document.querySelectorAll('#bcTicket [data-cote]')) b.addEventListener('click', () => { bc.cote = b.getAttribute('data-cote'); $('#bcMontant').value = ''; bcRepeindre(); });
 $('#bcDevise').addEventListener('change', () => { bc.rapidesDe = null; bcRepeindre(); });
