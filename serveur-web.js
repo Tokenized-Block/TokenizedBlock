@@ -4239,6 +4239,8 @@ const SERVIS = [
    *   config (la page recalcule et refuse une fiche alteree), les appels non signes (roll / pass / settle) et le pont app <-> contrat.
    *   ⛔ absent d ici = 404 = page morte (lecon integrer-sans-serie-complete, 11/10). */
   'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js', 'rolls-en-attente.js',
+  /* 2026-10-18 : « Let the brain play » — la proposition suivante (pure), importee par app.html : absent d ici = page morte */
+  'brain-jeu.js',
   /* 2026-10-18 : TicketPot (pot du jour en parts egales) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non signes */
   'deployer-ticketpot.html', 'ticketpot-deploiement.js', 'ticketpot-config.js', 'ticketpot-plan.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,

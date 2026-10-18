@@ -199,11 +199,14 @@ export function actionsSkin(s, moi, maintenant) {
  *      au plus `parTrade` et dans le budget `reste` ;
  *   3. sinon ENCHERIR au minimum (offreMinimale) sur une enchere en cours d une skin de CE block, memes bornes.
  *  Jamais sa propre annonce, jamais une skin deja proposee dans la session (`dejaProposes` : tokenId en texte). */
-export function propositionSkin({ skins, moi, block, maintenant, achat, devise, parTrade, reste, dejaProposes = new Set() }) {
+export function propositionSkin({ skins, moi, block, maintenant, achat, devise, parTrade, reste, dejaProposes = new Set(), dejaRegles = null }) {
   const m = bas(moi), b = bas(block), dv = bas(devise), t = Number(maintenant);
   if (!ADR.test(m) || !ADR.test(b) || !Array.isArray(skins) || !Number.isFinite(t)) return null;
   const libre = (s) => !dejaProposes.has(String(s.tokenId));
-  const fin = skins.find((s) => libre(s) && s.enVente && s.enchere && t >= Number(s.fin) && (s.encherisseur === m || s.detenteur === m));
+  /* 2026-10-18 (revue adverse) : le REGLEMENT a son propre filtre (`dejaRegles`) — sinon une enchere sur laquelle on a mise n est jamais
+   *   proposee au reglement (meme cle). Sans `dejaRegles` : le comportement d avant (un seul filtre). */
+  const libreRegler = dejaRegles ? (s) => !dejaRegles.has(String(s.tokenId)) : libre;
+  const fin = skins.find((s) => libreRegler(s) && s.enVente && s.enchere && t >= Number(s.fin) && (s.encherisseur === m || s.detenteur === m));
   if (fin) return { genre: 'REGLER', skin: fin, montant: 0n };
   if (!achat || !ADR.test(dv)) return null;
   let p, r;

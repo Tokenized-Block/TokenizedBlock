@@ -197,6 +197,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
  *   qui mene a sa carte ; son etat (ticket, dernier roll, missions ouvertes, skins en vente) est peint par les peintres existants. */
 .jeuBandeau{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px}
 @media (max-width:520px){.jeuBandeau{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.bjReglages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0}
+.bjReglages input{width:100%;min-width:0;box-sizing:border-box}
+@media (max-width:520px){.bjReglages{grid-template-columns:minmax(0,1fr)}}
+.bjJeux{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;font-size:13px}
+.bjJeux label{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .jeuJeu{appearance:none;font:inherit;color:inherit;text-align:left;cursor:pointer;border:1px solid var(--ligne);border-radius:12px;padding:10px 12px;background:rgb(var(--accentRgb) / .06);position:relative;overflow:hidden;min-width:0}
 .jeuJeu::before{content:"";position:absolute;inset:0 0 auto 0;height:2px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
 .jeuJeu b{display:block;font-size:10.5px;letter-spacing:.12em;color:var(--accent2);margin-bottom:2px}
@@ -3541,6 +3546,30 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" class="jeuJeu" data-jeu="missionsCarte"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
       <button type="button" class="jeuJeu" data-jeu="skinCarte"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
     </div>
+    <!-- LET THE BRAIN PLAY (Phil 2026-10-18 : « le brain peut jouer aux jeux s il a des fonds et l autorisation, en UN bouton ») — UN bouton,
+         un petit panneau de limites. Allume : toutes les 30 s (la cadence de S.I) brain-jeu.js donne LA proposition suivante (settle, roll,
+         mission, skin) ; elle s ouvre dans le chat du panneau avec UN bouton « Sign » qui passe par bcSigner : le wallet confirme chaque
+         appel. ⛔ Rien ne se signe tout seul ; « Off » arrete la boucle. Reglages gardes dans ce navigateur (localStorage, try/catch). -->
+    <div class="carte" id="brainJeuCarte">
+      <span class="jeuKick">Game · Its brain plays</span>
+      <p class="titre jeuTitre" style="font-size:16px">One button: its brain plays inside your limits. Your wallet signs every move.</p>
+      <div class="bjReglages">
+        <label class="champ">Budget (USDC)<input id="bjBudget" inputmode="decimal" value="5"></label>
+        <label class="champ">Max rolls per hour<input id="bjMaxH" inputmode="numeric" value="6"></label>
+        <label class="champ">Max skin bid (USDC)<input id="bjMaxSkin" inputmode="decimal" value="2"></label>
+      </div>
+      <div class="bjJeux" role="group" aria-label="Which games">
+        <label><input type="checkbox" id="bjRolls" checked> Rolls</label>
+        <label><input type="checkbox" id="bjMissions"> Missions</label>
+        <label><input type="checkbox" id="bjPost"> Post missions</label>
+        <label><input type="checkbox" id="bjSkins"> Skin bids</label>
+      </div>
+      <div class="jourEtapes">
+        <button type="button" class="bouton" id="bjJouer">Let the brain play</button>
+        <button type="button" class="bouton sec" id="bjOff" hidden>Off</button>
+      </div>
+      <p class="note" id="bjEtat" style="margin:6px 0 0">Off. Each move opens in its brain's panel with one “Sign” — your wallet confirms it. Nothing signs by itself.</p>
+    </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
     <div class="carte" id="tirCarte">
       <span class="jeuKick">Game · Draws</span>
@@ -3679,6 +3708,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <span class="jeuKick">Game · Skin market</span>
       <p class="titre jeuTitre" style="font-size:16px">Mint a skin for <span class="skinPrix"></span>, dress your block, resell it — fixed price or auction.</p>
       <p class="note" id="skinEtat" style="margin:4px 0 0">Reading the market on chain…</p>
+      <!-- la derniere proposition du brain sur le marche (Let the brain play) : la carte a signer est dans le panneau -->
+      <div id="skinBrain" class="bcLigneSkin" hidden></div>
       <div id="skinListe" style="margin-top:6px"></div>
       <div class="jourEtapes">
         <button type="button" class="bouton" id="skinMint">Mint a skin · <span class="skinPrix"></span></button>
@@ -3941,6 +3972,8 @@ import { planRoll, planRolls, planPass, planRollAvecPass, planRollsAvecPass, pla
 import { guessDepuisApparence, tirerFaceDeRoll, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 /* 2026-10-18 (revue adverse) : les rolls PAYES en attente de settle, relus sur la chaine — le chemin de retour qui manquait */
 import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu } from './rolls-en-attente.js';
+/* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
+import { prochaineProposition as bjProposition } from './brain-jeu.js';
 import { poolId as poolIdV4 } from './pool.js';
 import { topic as topicDe } from './keccak.js';
 /* ⛔⛔ L IMAGE GRAVEE (2026-09-22). `budgetSurFace` vient de `photo.js`, qui porte le mur MESURE du
@@ -5169,8 +5202,13 @@ async function peindreSkinsJeu() {
       ? enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' in auction)' : '') + (moi && miennes.length ? ' · ' + miennes.length + ' yours to list' : '') + '. Each skin sells at a fixed price or in an auction (bids +5%, 7 days max).'
       : 'Nothing listed yet — mint a skin, then sell it at a fixed price or open an auction (bids +5%, 7 days max).';
     z.textContent = '';
-    for (const s of enVente.slice(0, 12)) z.append(bcLigneSkin(s, moi, t));
-    if (miennes.length) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'Your skins — set a price, or open an auction (7 days at most):'; z.append(p); for (const s of miennes.slice(0, 8)) z.append(bcLigneSkin(s, moi, t)); }
+    /* Phil 2026-10-18 (« revente des skins + encheres que les brains voient ») : trois groupes — les encheres EN COURS (offre actuelle, temps
+     *   restant : bcLigneSkin les dit), puis les prix fixes et les encheres finies a regler, puis les skins de CE wallet (vendre / encherir). */
+    const titreSkin = (txt) => { const p = document.createElement('p'); p.className = 'note'; p.style.margin = '8px 0 0'; p.textContent = txt; z.append(p); };
+    const enCours = enVente.filter((s) => s.enchere && t < Number(s.fin)), autres = enVente.filter((s) => !(s.enchere && t < Number(s.fin)));
+    if (enCours.length) { titreSkin('Auctions in progress — current bid and time left:'); for (const s of enCours.slice(0, 12)) z.append(bcLigneSkin(s, moi, t)); }
+    if (autres.length) { titreSkin('Fixed price' + (autres.some((s) => s.enchere) ? ' and ended auctions to settle' : '') + ':'); for (const s of autres.slice(0, 12)) z.append(bcLigneSkin(s, moi, t)); }
+    if (miennes.length) { titreSkin('Your skins — sell at a price, or start an auction (7 days at most):'); for (const s of miennes.slice(0, 8)) z.append(bcLigneSkin(s, moi, t)); }
   } finally { skinsJeuEnVol = false; }
 }
 /* ⛔ 2026-10-18 (Phil : « tous les skins a 10 dollars ») : le prix d une skin n est TAPE nulle part dans cette page. Chaque <span class="skinPrix">
@@ -5178,6 +5216,232 @@ async function peindreSkinsJeu() {
  *   actif, « 10 USDC » des que l adresse de v3 est notee dans l enregistrement. Avant tout achat, bcAcheterSkin relit MINT_PRICE() sur la chaine. */
 for (const e of document.querySelectorAll('.skinPrix')) e.textContent = SKIN_MINT_TEXTE;
 $('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
+
+/* ══ LET THE BRAIN PLAY (Phil 2026-10-18 : « le brain peut jouer aux jeux s il a des fonds et l autorisation, en UN bouton : rolls, ticket,
+ *   missions, creer des missions » ; « encheres que les brains voient et sur lesquelles ils encherissent si le skin leur plait »).
+ *   Allume, toutes les 30 s (la cadence de S.I), page visible, wallet connecte, AUCUNE proposition deja ouverte : l app LIT (bloc, pass, pot,
+ *   solde USDC, skins, missions), brain-jeu.js (pur, teste) rend LA proposition suivante, elle s ouvre dans le chat du panneau avec UN
+ *   bouton « Sign » -> bcSigner (le chemin existant : le wallet confirme CHAQUE appel). Signe -> depense comptee, roll suivi jusqu a son settle.
+ *   ⛔ Rien ne se signe tout seul. L autorisation = l interrupteur ; « Off » l eteint. Les reglages vivent dans ce navigateur (try/catch).
+ *   NON MESURE : un cycle complet avec un vrai wallet sur Base (banc fork des rolls : banc-blockrolls-fork-20261017.mjs, pas cette boucle). */
+const BJ_CLE = 'tblock.game.brainplays';
+const bj = { on: false, budget: '5000000', depense: '0', maxH: 6, maxSkin: '2000000', rolls: true, missions: false, post: false, skins: false, block: null, history: [], seen: [], pending: [] };
+const bjVol = { enVol: false, ouverte: 0, signe: false, pauseJusqua: 0, tirage: null, tirageLu: 0, attest: new Map(), carte: 0 };
+/* au clic « Sign », TOUT est relu : la carte est la carte courante, le brain est allume, le wallet est celui de la carte, le budget et la
+ *   limite horaire tiennent ENCORE avec ce cout. Rend la raison du refus, ou null. (revue adverse 2026-10-18) */
+function bjRefusAuSigne(id, p, walletCarte) {
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (id !== bjVol.carte) return 'this proposal expired — a newer one replaces it.';
+  if (!bj.on) return 'its brain is off.';
+  if (!c || String(c).toLowerCase() !== walletCarte) return 'the wallet changed since this was proposed — nothing was sent.';
+  if (BigInt(bj.depense) + BigInt(p.costUsdc) > BigInt(bj.budget)) return 'it would go over your budget (' + usdcTexte(bj.budget) + ' USDC) — nothing was sent.';
+  if (p.kind === 'ROLL') { const h = Math.floor(Date.now() / 1000) - 3600; if (bj.history.filter((x) => x.kind === 'ROLL' && Number(x.t) > h).length >= bj.maxH) return 'it would go over ' + bj.maxH + ' rolls this hour — nothing was sent.'; }
+  return null;
+}
+const bjUsdc = (s) => { const m = /^(\d{1,12})(?:[.,](\d{1,6}))?$/.exec(String(s || '').trim()); return m ? BigInt(m[1]) * 1000000n + BigInt((m[2] || '').padEnd(6, '0')) : null; };
+function bjSauver() { try { localStorage.setItem(BJ_CLE, JSON.stringify(bj)); } catch (_) { /* stockage prive : les reglages vivent le temps de la page */ } }
+function bjCharger() {
+  try {
+    const j = JSON.parse(localStorage.getItem(BJ_CLE) || 'null');
+    const ent = (x) => /^\d{1,30}$/.test(String(x));
+    if (!j || typeof j !== 'object' || !ent(j.budget) || !ent(j.depense) || !ent(j.maxSkin)) return;
+    bj.budget = String(j.budget); bj.depense = String(j.depense); bj.maxSkin = String(j.maxSkin);
+    bj.maxH = Number.isInteger(j.maxH) && j.maxH >= 0 && j.maxH <= 60 ? j.maxH : 6;
+    for (const k of ['on', 'rolls', 'missions', 'post', 'skins']) bj[k] = j[k] === true;
+    bj.block = /^0x[0-9a-f]{40}$/.test(String(j.block)) ? String(j.block) : null;
+    bj.history = Array.isArray(j.history) ? j.history.filter((h) => h && Number.isFinite(Number(h.t)) && typeof h.kind === 'string').slice(-100) : [];
+    bj.seen = Array.isArray(j.seen) ? j.seen.map(String).slice(-200) : [];
+    bj.pending = Array.isArray(j.pending) ? j.pending.filter((p) => p && /^0x[0-9a-f]{40}$/.test(String(p.contrat)) && /^\d+$/.test(String(p.rollId)) && /^\d+$/.test(String(p.targetBlock))).slice(-50) : [];
+  } catch (_) { /* illisible : les reglages par defaut, eteint */ }
+}
+function bjPeindre(msg) {
+  const on = bj.on === true;
+  $('#bjJouer').hidden = on; $('#bjOff').hidden = !on;
+  for (const id of ['#bjBudget', '#bjMaxH', '#bjMaxSkin', '#bjRolls', '#bjMissions', '#bjPost', '#bjSkins']) $(id).disabled = on;
+  const jeux = [bj.rolls && 'rolls', bj.missions && 'missions', bj.post && 'post missions', bj.skins && 'skin bids'].filter(Boolean).join(', ');
+  $('#bjEtat').textContent = msg || (on ? 'On — ' + jeux + ' · spent ' + usdcTexte(bj.depense) + ' of ' + usdcTexte(bj.budget) + ' USDC · at most ' + bj.maxH + ' roll' + (bj.maxH === 1 ? '' : 's') + ' an hour. Each move waits for your signature in its brain\'s panel.'
+    : 'Off. Each move opens in its brain\'s panel with one “Sign” — your wallet confirms it. Nothing signs by itself.');
+}
+function bjAllumer() {
+  const dire = (t) => { $('#bjEtat').textContent = t; };
+  const budget = bjUsdc($('#bjBudget').value), maxSkin = bjUsdc($('#bjMaxSkin').value), maxH = Number($('#bjMaxH').value);
+  const rolls = $('#bjRolls').checked, missions = $('#bjMissions').checked, post = $('#bjPost').checked, skins = $('#bjSkins').checked;
+  if (budget === null || budget <= 0n) return dire('The budget must be an amount in USDC above zero, like 5 or 2.5.');
+  if (maxSkin === null) return dire('The max skin bid must be an amount in USDC (0 = never bid).');
+  if (!Number.isInteger(maxH) || maxH < 0 || maxH > 60) return dire('Max rolls per hour: a whole number from 0 to 60.');
+  if (!rolls && !missions && !post && !skins) return dire('Tick at least one game.');
+  Object.assign(bj, { on: true, budget: budget.toString(), depense: '0', maxSkin: maxSkin.toString(), maxH, rolls, missions, post, skins, block: brainAdr ? String(brainAdr).toLowerCase() : UNIT_APP });
+  bjSauver(); bjPeindre();
+  void bjTour();
+}
+function bjEteindre(pourquoi) {
+  bj.on = false; bjSauver();
+  const z = $('#skinBrain'); if (z) z.hidden = true;
+  bjPeindre(pourquoi || 'Off — its brain stopped. Nothing more will be proposed.' + (bj.pending.length ? ' ' + bj.pending.length + ' roll(s) still to settle: turn it back on, or settle from the explorer within 256 blocks.' : ''));
+}
+/* les missions dont ce wallet a COLLE la transaction dans le tableau : l attestation du verifier est demandee une fois par visite */
+async function bjAttestations(ouvertes, moi) {
+  const out = [];
+  for (const x of ouvertes) {
+    const li = document.querySelector('#missionsListe [data-mission="' + Number(x.id) + '"]');
+    const tx = li ? String((li.querySelector('[data-mtx]') || {}).value || '').trim().toLowerCase() : '';
+    if (!/^0x[0-9a-f]{64}$/.test(tx)) continue;
+    const k = x.id + '|' + tx;
+    if (!bjVol.attest.has(k)) {
+      let r = null;
+      try { r = await fetch('/api/missions/attestation?task=' + Number(x.id) + '&wallet=' + moi + '&tx=' + tx, { method: 'POST', signal: AbortSignal.timeout(15000) }).then((y) => y.json()); } catch (_) { r = null; }
+      if (r) bjVol.attest.set(k, r.ok ? { id: Number(x.id), txHash: tx, held: r.held, signature: r.signature } : false);
+    }
+    const a = bjVol.attest.get(k); if (a) out.push(a);
+  }
+  return out;
+}
+/* la mission que le brain proposerait de poster : « trade my block » sur SA pool de notre hook, montants du formulaire Post-a-task (sinon
+ *   1 USDC x 3, tenue 1 unite). Recompense en USDC seulement si la pool est appariee a l USDC — sinon brain-jeu.js refuse ET le dit. */
+async function bjMissionAPoster(moi) {
+  let j = null;
+  try { j = await fetch('/api/blocks-de?' + new URLSearchParams({ adr: moi }), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json()); } catch (_) { j = null; }
+  const liste = j && j.ok && Array.isArray(j.blocks) ? j.blocks.map((b) => String(b).toLowerCase()).filter((b) => /^0x[0-9a-f]{40}$/.test(b)) : [];
+  const block = liste.includes(String(bj.block)) ? String(bj.block) : liste[0];
+  if (!block) return null;
+  let cles = null;
+  try { const r = await fetch('/api/cle/' + block, { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); cles = r && r.ok && Array.isArray(r.cles) ? r.cles : null; } catch (_) { cles = null; }
+  const cle = (cles || []).find((k) => estNotreHook(k.hooks));
+  if (!cle) return null;
+  const autre = String(cle.currency0).toLowerCase() === block ? String(cle.currency1).toLowerCase() : String(cle.currency0).toLowerCase();
+  const rewardToken = autre === String(USDC_BASE).toLowerCase() ? autre : block;
+  const lire = (id, d, def) => { const m = new RegExp('^(\\d{1,12})(?:\\.(\\d{1,' + d + '}))?$').exec(String(($(id) || {}).value || '').trim()); return m ? BigInt(m[1]) * 10n ** BigInt(d) + BigInt((m[2] || '').padEnd(d, '0') || '0') : def; };
+  const reward = lire('#mfReward', 6, 1000000n), hold = lire('#mfHold', 18, 10n ** 18n), max = Number(($('#mfMax') || {}).value);
+  const now = Math.floor(Date.now() / 1000);
+  return { cle: { currency0: cle.currency0, currency1: cle.currency1, fee: Number(cle.fee), tickSpacing: Number(cle.tickSpacing), hooks: cle.hooks },
+    params: { rewardToken, reward: reward.toString(), maxDone: Number.isInteger(max) && max >= 1 && max <= 10000 ? max : 3, perWallet: 1, expiry: now + 7 * 86400, target: V4_ADRESSES[CHAINE].poolm, topic0: TOPIC_SWAP_APP,
+      descHash: topicDe('trade my block on its TokenizedBlock pool'), topic1: poolIdV4(cle) },
+    hold: { minBlock: hold.toString(), minPaired: 0, bonusMinBlock: 0, bonusBps: 0, window: 86400 }, poolManager: V4_ADRESSES[CHAINE].poolm };
+}
+/** UN tour : lire, demander LA proposition suivante, la montrer. Jamais deux propositions ouvertes ; une proposition ignoree 5 min expire. */
+async function bjTour() {
+  if (!bj.on || bjVol.enVol || document.hidden) return;
+  /* une carte ignoree 5 min expire : son id change, son « Sign » devient inerte (revue adverse : deux cartes signables = budget depasse) */
+  if (bjVol.ouverte) { if (bjVol.signe || Date.now() - bjVol.ouverte < 300000) return; bjVol.ouverte = 0; bjVol.carte += 1; }
+  if (Date.now() < bjVol.pauseJusqua) return;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { bjPeindre('On — connect a wallet: its brain proposes, your wallet signs.'); return; }
+  if (CHAINE !== 8453) { bjPeindre('On — the games are on Base mainnet only.'); return; }
+  bjVol.enVol = true;
+  try {
+    const moi = String(c).toLowerCase();
+    if (!bjVol.tirage || Date.now() - bjVol.tirageLu > 60000) {
+      try { bjVol.tirage = await fetch('/api/tirage', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json()); bjVol.tirageLu = Date.now(); } catch (_) { /* relu au tour suivant */ }
+    }
+    const t = bjVol.tirage, rc = t && t.rolls && /^0x[0-9a-fA-F]{40}$/.test(String(t.rolls.contrat)) ? t.rolls : null;
+    let rolls = null;
+    if (rc && bj.rolls) {
+      const contrat = String(rc.contrat).toLowerCase();
+      let bloc = null, pass = null, pot = null, guess = null;
+      try { bloc = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { bloc = null; }
+      try { pass = lirePass(await rpc('eth_call', [{ to: contrat, data: appelPass(c) }, 'latest'])); } catch (_) { pass = null; }
+      try { pot = lireUint(await rpc('eth_call', [{ to: contrat, data: appelPot() }, 'latest'])); } catch (_) { pot = null; }
+      /* Phil 2026-10-18 : chaque roll tire une face neuve au hasard — le brain aussi (plus la face du ticket) */
+      try { const f = tirerFaceDeRoll(); guess = f ? f.guess : null; } catch (_) { guess = null; }
+      if (Number.isSafeInteger(bloc)) {
+        /* un roll passe sa fenetre de 256 blocs : perdu (le contrat ne le regle plus) — il sort de la liste et c est DIT */
+        const perdus = bj.pending.filter((p) => p.contrat === contrat && etatReglement(p.targetBlock, bloc).etat === 'PERDU');
+        if (perdus.length) { bj.pending = bj.pending.filter((p) => !perdus.includes(p)); bjSauver(); bjPeindre('On — roll' + (perdus.length > 1 ? 's #' : ' #') + perdus.map((p) => p.rollId).join(', #') + ' passed the 256-block window before settling: lost, no refund.'); }
+      }
+      rolls = { contract: contrat, usdc: USDC_BASE, rollPrice: String(rc.prixRoll), guess, pass, pot: pot === null ? null : pot.toString(),
+        block: Number.isSafeInteger(bloc) ? bloc : null, pending: bj.pending.filter((p) => p.contrat === contrat) };
+    }
+    let solde = null;
+    try { solde = await bcSolde(USDC_BASE, c); } catch (_) { solde = null; }
+    let skins = null;
+    if (bj.skins) { try { const r = await lireSkins({ rpc }); if (r && r.etat === 'LU') skins = { list: r.skins, block: bj.block || UNIT_APP, usdc: USDC_BASE }; } catch (_) { skins = null; } }
+    let missions = null;
+    if (bj.missions || bj.post) {
+      let j = null;
+      try { j = await fetch('/api/missions', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { j = null; }
+      const contrat = j && j.ok && /^0x[0-9a-fA-F]{40}$/.test(String(j.contrat)) ? String(j.contrat).toLowerCase() : null;
+      if (contrat) {
+        const ouvertes = (j.missions || []).filter((x) => x.lue && x.etat === 'OUVERTE');
+        missions = { contract: contrat, usdc: USDC_BASE, claimable: bj.missions ? await bjAttestations(ouvertes, moi) : [], post: bj.post ? await bjMissionAPoster(moi) : null,
+          mineOpen: ouvertes.filter((x) => String(x.creator).toLowerCase() === moi).length };
+      }
+    }
+    if (!bj.on || bjVol.ouverte) return; /* eteint (ou une proposition ouverte) pendant la lecture */
+    const p = bjProposition({ authorized: bj.on === true, wallet: moi, now: Math.floor(Date.now() / 1000), budgetUsdc: bj.budget, spentUsdc: bj.depense,
+      balanceUsdc: solde === null ? null : solde.toString(),
+      rules: { rolls: bj.rolls, settle: bj.rolls, missions: bj.missions, postMissions: bj.post, skins: bj.skins, maxRollsPerHour: bj.maxH, maxSkinBidUsdc: bj.maxSkin },
+      history: bj.history, seen: bj.seen, rolls, missions, skins });
+    if (p.kind === 'NONE') {
+      const manque = [bj.rolls && !rc && 'paid rolls are not served yet', (bj.missions || bj.post) && !missions && 'the mission board is not open'].filter(Boolean);
+      bjPeindre('On — ' + p.why + (manque.length ? ' (' + manque.join('; ') + '.)' : ''));
+      return;
+    }
+    bjMontrer(p, rolls, moi);
+  } finally { bjVol.enVol = false; }
+}
+const BJ_TITRES = { ROLL: 'Roll', SETTLE: 'Settle', TAKE_MISSION: 'Claim a mission', POST_MISSION: 'Post a mission', BID_SKIN: 'Bid on a skin', BUY_SKIN: 'Buy a skin' };
+/** la proposition dans le chat du panneau : ce qu elle fait, ses appels, UN « Sign » (bcSigner : le wallet confirme chaque appel), « Dismiss » */
+function bjMontrer(p, rolls, walletCarte) {
+  bjVol.carte += 1; const id = bjVol.carte;
+  bjVol.ouverte = Date.now(); bjVol.signe = false;
+  if (p.cle && !/^(ROLL|SETTLE):/.test(p.cle)) { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
+  try { bcOuvrirPop({ vue: 'chat', sansBasculer: true }); } catch (_) { /* le panneau ne s ouvre pas : la carte est quand meme dans le fil */ }
+  const m = bcMessage('Its brain · plays', 'agent', 'Its brain proposes: ' + BJ_TITRES[p.kind] + (p.costUsdc !== '0' ? ' · ' + usdcTexte(p.costUsdc) + ' USDC' : ' · no USDC'));
+  bcVue('chat');
+  bcEtape(m, p.why);
+  p.calls.forEach((a, i) => bcEtape(m, (i + 1) + '/' + p.calls.length + ' · ' + a.nom));
+  const skin = p.kind === 'BID_SKIN' || p.kind === 'BUY_SKIN';
+  const zs = $('#skinBrain');
+  if (zs && skin) {
+    zs.textContent = '';
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'bouton sec'; b.textContent = 'Open it to sign';
+    b.addEventListener('click', () => { try { bcOuvrirPop({ vue: 'chat', sansBasculer: true }); bcVue('chat'); } catch (_) {} });
+    const s = document.createElement('span'); s.textContent = 'Its brain proposes: ' + BJ_TITRES[p.kind].toLowerCase() + ' for ' + usdcTexte(p.costUsdc) + ' USDC — ' + p.why;
+    zs.append(s, b); zs.hidden = false;
+  }
+  /* une carte perimee qui finit ne libere PAS la carte courante */
+  const fini = (txt) => { if (id !== bjVol.carte) return; bjVol.ouverte = 0; bjVol.signe = false; if (zs && skin) zs.hidden = true; bjPeindre(txt); };
+  bcBoutons(m, [['Sign', async () => {
+    const refus = bjRefusAuSigne(id, p, walletCarte);
+    if (refus) { bcEtape(m, 'Not sent: ' + refus, 'non'); return; }
+    bjVol.signe = true;
+    let r;
+    try { r = await bcSigner(m, p.calls, skin ? 'skin_vente' : null); } catch (e) { r = { ok: false, pourquoi: String((e && e.message) || e) }; }
+    /* compte au budget ce qui est PARTI : confirme, ou diffuse sans confirmation (on ne sait pas : on compte, jamais l inverse) */
+    if (r.ok || r.diffusee) {
+      bj.depense = (BigInt(bj.depense) + BigInt(p.costUsdc)).toString();
+      bj.history.push({ t: Math.floor(Date.now() / 1000), kind: p.kind }); bj.history = bj.history.slice(-100); bjSauver();
+    }
+    /* un roll DIFFUSE sans confirmation est peut-etre sur la chaine : son recu est relu, et s il est la, le roll est suivi pour son settle */
+    if (!r.ok && r.diffusee && r.hash && p.kind === 'ROLL' && rolls) {
+      const recu = await recuDe(r.hash), lus = recu ? lireRolledTous(recu.logs, rolls.contract) : [];
+      for (const x of lus) bj.pending.push({ contrat: rolls.contract, rollId: String(x.rollId), targetBlock: String(x.targetBlock) });
+      if (lus.length) { bj.pending = bj.pending.slice(-50); bjSauver(); bcEtape(m, 'Rolled #' + lus.map((x) => x.rollId).join(', #') + ' after all — its brain proposes the settle once the block is in.', 'oui'); setTimeout(() => { void bjTour(); }, 12000); }
+    }
+    if (!r.ok) { fini('On — ' + (r.refuse ? 'you declined in your wallet; nothing more was sent.' : r.diffusee ? 'sent, not confirmed yet — check your wallet before signing again.' : 'it did not go through.')); return; }
+    if (p.kind === 'ROLL' && rolls) {
+      const recu = await recuDe(r.hash), lus = recu ? lireRolledTous(recu.logs, rolls.contract) : [];
+      for (const x of lus) bj.pending.push({ contrat: rolls.contract, rollId: String(x.rollId), targetBlock: String(x.targetBlock) });
+      bj.pending = bj.pending.slice(-50); bjSauver();
+      bcEtape(m, lus.length ? 'Rolled #' + lus.map((x) => x.rollId).join(', #') + ' — block ' + lus.map((x) => Number(x.targetBlock).toLocaleString('en-US')).join(', ') + ' decides; its brain proposes the settle once it is in.' : 'Rolled, but the roll was not read back yet — settle it from the explorer within 256 blocks.', lus.length ? 'oui' : 'non');
+      setTimeout(() => { void bjTour(); }, 12000);
+    } else if (p.kind === 'SETTLE' && rolls && /^SETTLE:/.test(p.cle)) {
+      const ids = p.cle.slice(7).split(',');
+      bj.pending = bj.pending.filter((x) => !(x.contrat === rolls.contract && ids.includes(String(x.rollId)))); bjSauver();
+      const recu = await recuDe(r.hash), st = recu ? lireSettledTous(recu.logs, rolls.contract) : [];
+      if (st.length) { const gain = st.reduce((a, x) => a + x.payout, 0n); bcEtape(m, 'Drew ' + st.map((x) => x.score + '/5').join(', ') + (gain > 0n ? ' — you won ' + usdcTexte(gain) + ' USDC, paid to your wallet.' : ' — no prize this time.'), gain > 0n ? 'oui' : ''); }
+    }
+    fini();
+  }], ['Dismiss', () => { bcEtape(m, 'Dismissed — nothing was sent.'); bjVol.pauseJusqua = Date.now() + 120000; fini('On — dismissed; its brain waits 2 min before its next move.'); }, true]]);
+  bjPeindre('On — a move waits in its brain\'s panel: ' + BJ_TITRES[p.kind].toLowerCase() + '. Sign it there, or dismiss.');
+}
+bjCharger();
+$('#bjBudget').value = usdcTexte(bj.budget); $('#bjMaxSkin').value = usdcTexte(bj.maxSkin); $('#bjMaxH').value = String(bj.maxH);
+$('#bjRolls').checked = bj.rolls; $('#bjMissions').checked = bj.missions; $('#bjPost').checked = bj.post; $('#bjSkins').checked = bj.skins;
+bjPeindre();
+$('#bjJouer').addEventListener('click', () => bjAllumer());
+$('#bjOff').addEventListener('click', () => bjEteindre());
+setInterval(() => { if (bj.on && !document.hidden) void bjTour(); }, 30000);
 
 /* ══ EARN (Phil 19:40) — ce que ce wallet a gagne : part de createur DUE (registre public, jamais payee par le serveur), tirage d hier,
  *   missions reclamees (contrat). Chaque ligne nomme sa source ; rien n est invente. */
@@ -24974,7 +25238,8 @@ function bcLigneSkin(s, moi, t) {
     duree.value = '86400';
     const lire = () => { const d = bcDevisesSkin()[dev.value]; return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
     const vendre = (genre) => { let x; try { x = lire(); } catch (e) { prix.setCustomValidity(String(e.message)); prix.reportValidity(); return; } prix.setCustomValidity(''); void bcActionMarche(genre, s, x); };
-    const bv = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Sell at this price' }), be = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Auction from this price' });
+    /* Phil 2026-10-18 : « Sell at a price » / « Start an auction » (le prix tape sert aux deux : prix fixe, ou offre d ouverture) */
+    const bv = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Sell at a price' }), be = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Start an auction' });
     bv.addEventListener('click', () => vendre('VENDRE')); be.addEventListener('click', () => vendre('ENCHERE'));
     li.append(bcEl('div', { cls: 'bcVendre' }, [prix, dev, duree, bv, be]));
   }
