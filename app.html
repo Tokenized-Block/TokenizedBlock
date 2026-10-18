@@ -195,7 +195,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jeuTuile p{margin:0;font-size:13px;line-height:1.4}
 /* 2026-10-18 (Phil : « onglet lisible pour jouer a differents jeux ») : le BANDEAU des 4 jeux en tete de Game — chaque tuile est un bouton
  *   qui mene a sa carte ; son etat (ticket, dernier roll, missions ouvertes, skins en vente) est peint par les peintres existants. */
-.jeuBandeau{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0 0 10px}
+.jeuBandeau{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 10px}
 @media (max-width:520px){.jeuBandeau{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .bjReglages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0}
 .bjReglages input{width:100%;min-width:0;box-sizing:border-box}
@@ -3541,10 +3541,13 @@ details[open] > summary::before{transform:rotate(90deg)}
     <!-- BANDEAU DES JEUX (Phil 2026-10-18 09:00 : « lisible pour jouer a differents jeux ») : 4 tuiles-boutons, chacune mene a sa carte ;
          les etats sont peints par peindreJour / roll / peindreMissions / peindreSkinsJeu. Rien d invente : un etat non lu reste « — ». -->
     <div class="jeuBandeau" role="navigation" aria-label="Games">
+      <!-- UX 2026-10-18 (Phil : « facilite de choix ») : SIX choix, chacun dit son geste et son prix (lus sur la fiche servie, jamais tapes) -->
+      <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourRoll"><b>Roll</b><i id="jbRoll">⚄</i><span id="jbRollTxt">the next block decides</span></button>
       <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Ticket</b><i id="jbTicket">—</i><span id="jbTicketTxt">today's draw</span></button>
-      <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Rolls</b><i id="jbRoll">⚄</i><span id="jbRollTxt">roll the next block</span></button>
-      <button type="button" class="jeuJeu" data-jeu="missionsCarte"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
+      <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourPass"><b>Week pass</b><i id="jbPass">7 days</i><span id="jbPassTxt">a ticket every day</span></button>
+      <button type="button" class="jeuJeu" data-jeu="brainJeuCarte" data-focus="bjJouer"><b>Its brain</b><i id="jbBrain">Off</i><span id="jbBrainTxt">let it play for you</span></button>
       <button type="button" class="jeuJeu" data-jeu="skinCarte"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
+      <button type="button" class="jeuJeu" data-jeu="missionsCarte"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
     </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
     <div class="carte" id="tirCarte">
@@ -4597,6 +4600,12 @@ function poserBoutonsRolls(t, c) {
   bp.hidden = !on; bd.hidden = !on;
   /* Phil 14:45 : « j ai rien signe pour jouer » — contrat servi + wallet : le roll d entrainement s efface, le roll PAYE est LE bouton */
   const bpr = $('#jourRoll'); if (bpr) bpr.hidden = on;
+  /* les tuiles de choix disent le PRIX servi (jamais tape) ; un score deja peint sur la tuile Roll n est pas ecrase */
+  if (rollsCfg) {
+    const pz = Array.isArray(rollsCfg.prizes) && rollsCfg.prizes.length ? rollsCfg.prizes[0] : null;
+    if ($('#jbRoll') && $('#jbRoll').textContent === '⚄') jb('jbRollTxt', usdcTexte(rollsCfg.prixRoll) + ' USDC' + (pz ? ' · win up to ' + usdcTexte(pz) : ''));
+    jb('jbPass', usdcTexte(rollsCfg.prixPass) + ' USDC'); jb('jbPassTxt', '7 days of tickets + ' + rollsCfg.passRolls + ' rolls');
+  }
   if (on) { bp.textContent = 'Roll · ' + usdcTexte(rollsCfg.prixRoll) + ' USDC'; bd.textContent = 'Week pass · ' + usdcTexte(rollsCfg.prixPass) + ' USDC'; }
   /* Auto-roll : avec le contrat, 5 rolls REELS (sur le pass s il est actif, sinon payes) — son texte le dit avant le clic */
   const ba = $('#jourAuto');
@@ -5108,7 +5117,13 @@ $('#missionsIdees').addEventListener('click', (e) => {
   try { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
 });
 /* le bandeau des jeux : chaque tuile mene a sa carte */
-for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]')) b.addEventListener('click', () => { const c = document.getElementById(b.getAttribute('data-jeu')); if (c) { try { c.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) { c.scrollIntoView(); } } });
+/* une tuile = un choix : elle amene a sa carte et, si son bouton est VISIBLE, lui donne le focus (un tap de plus = le geste) */
+for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]')) b.addEventListener('click', () => {
+  const c = document.getElementById(b.getAttribute('data-jeu'));
+  if (c) { try { c.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) { c.scrollIntoView(); } }
+  const f = b.getAttribute('data-focus'), el = f ? document.getElementById(f) : null;
+  if (el && !el.hidden && el.offsetParent !== null) { try { el.focus({ preventScroll: true }); } catch (_) {} }
+});
 const jb = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
 $('#missionForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -5264,6 +5279,7 @@ function bjPeindre(msg) {
   for (const id of ['#bjBudget', '#bjMaxH', '#bjMaxSkin', '#bjRolls', '#bjMissions', '#bjPost', '#bjSkins']) $(id).disabled = on;
   const jeux = [bj.rolls && 'rolls', bj.missions && 'missions', bj.post && 'post missions', bj.skins && 'skin bids'].filter(Boolean).join(', ');
   /* le resume replie dit les limites ENREGISTREES (jamais un texte fige qui mentirait apres un reglage) */
+  try { jb('jbBrain', on ? 'On' : 'Off'); jb('jbBrainTxt', on ? 'spent ' + usdcTexte(bj.depense) + ' of ' + usdcTexte(bj.budget) + ' USDC' : 'let it play for you'); } catch (_) { /* tuiles absentes : rien */ }
   const rz = $('#bjResume'); if (rz) rz.textContent = 'Limits — ' + (jeux || 'no game ticked') + ' · budget ' + usdcTexte(bj.budget) + ' USDC · ' + bj.maxH + ' roll' + (bj.maxH === 1 ? '' : 's') + ' an hour · skin bids up to ' + usdcTexte(bj.maxSkin) + ' USDC';
   $('#bjEtat').textContent = msg || (on ? 'On — ' + jeux + ' · spent ' + usdcTexte(bj.depense) + ' of ' + usdcTexte(bj.budget) + ' USDC · at most ' + bj.maxH + ' roll' + (bj.maxH === 1 ? '' : 's') + ' an hour. Each move waits for your signature in its brain\'s panel.'
     : 'Off. Each move opens in its brain\'s panel with one “Sign” — your wallet confirms it. Nothing signs by itself.');
