@@ -13,14 +13,23 @@
  *   4. BUY_SKIN / BID_SKIN : propositionSkin sur le block du brain, en USDC, au plus maxSkinBidUsdc ;
  *   5. POST_MISSION : poster une mission (recompense en USDC : le budget est en USDC) si aucune des siennes n est ouverte.
  * Bornes : rien sans `authorized === true` ni wallet ; aucune depense au-dela de (budget - deja depense) ni du solde USDC LU (solde non lu
- *   = aucune proposition payante : jamais « probablement assez ») ; une offre de skin jamais au-dessus du plafond de la regle. */
+ *   = aucune proposition payante : jamais « probablement assez ») ; une offre de skin jamais au-dessus du plafond de la regle.
+ * DUELS (Phil 2026-10-18 : « les brains peuvent se faire des duels ») — en USDC SEULEMENT (le budget est en USDC : une action ne se compare
+ *   pas), jamais au-dessus de maxDuelStakeUsdc :
+ *   1b. DUEL_SETTLE : regler (settle) ou rembourser (refundExpired) un duel de CE wallet — 0 USDC, juste apres le settle des rolls ;
+ *   3b. DUEL_JOIN : accepter un duel ouvert d un AUTRE wallet dont la mise tient dans le reste du budget, le solde lu et maxDuelStakeUsdc ;
+ *   3c. DUEL_CREATE : sinon en ouvrir UN (mise = maxDuelStakeUsdc), au plus un par heure glissante et jamais tant qu un des siens attend. */
 import { planRoll, planRollAvecPass, planSettle, planSettleMany, etatReglement, refusGuess } from './blockrolls-plan.js';
 import { planPoster, planReclamer, budgetMission } from './missions-plan.js';
 import { propositionSkin, appelApprouver, appelAcheter, appelEncherir, appelRegler } from './blockskins.js';
+import { planCreate, planJoin, planSettle as planSettleDuel, planRefund as planRefundDuel, etatDuel, partage as partageDuel, MISE_MIN as MISE_MIN_DUEL,
+  MARGE_JOIN_S, EXPIRATION_MIN_S, EXPIRATION_MAX_S } from './duels-plan-app.js';
 
-export const KINDS = Object.freeze(['ROLL', 'SETTLE', 'TAKE_MISSION', 'POST_MISSION', 'BID_SKIN', 'BUY_SKIN', 'NONE']);
+export const KINDS = Object.freeze(['ROLL', 'SETTLE', 'TAKE_MISSION', 'POST_MISSION', 'BID_SKIN', 'BUY_SKIN', 'DUEL_CREATE', 'DUEL_JOIN', 'DUEL_SETTLE', 'NONE']);
 export const MAX_ROLLS_HEURE = 60;
-export const REGLES_DEFAUT = Object.freeze({ rolls: true, maxRollsPerHour: 6, settle: true, missions: false, postMissions: false, skins: false, maxSkinBidUsdc: '0' });
+export const DUEL_CREATE_INTERVALLE_S = 3600;
+export const DUEL_EXPIRATION_DEFAUT_S = 3600;
+export const REGLES_DEFAUT = Object.freeze({ rolls: true, maxRollsPerHour: 6, settle: true, missions: false, postMissions: false, skins: false, maxSkinBidUsdc: '0', duels: false, maxDuelStakeUsdc: '0' });
 
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
@@ -31,13 +40,17 @@ const min = (...xs) => xs.reduce((a, x) => (x < a ? x : a));
 export function normaliserRegles(r = {}) {
   const x = r && typeof r === 'object' ? r : {};
   const h = Number(x.maxRollsPerHour);
-  const plafond = brut(x.maxSkinBidUsdc);
+  const plafond = brut(x.maxSkinBidUsdc), plafondDuel = brut(x.maxDuelStakeUsdc);
   return {
     rolls: x.rolls === true, settle: x.settle === true, missions: x.missions === true, postMissions: x.postMissions === true, skins: x.skins === true,
+    duels: x.duels === true,
     maxRollsPerHour: Number.isInteger(h) && h >= 0 ? Math.min(h, MAX_ROLLS_HEURE) : 0,
     maxSkinBidUsdc: plafond === null ? 0n : plafond,
+    maxDuelStakeUsdc: plafondDuel === null ? 0n : plafondDuel,
   };
 }
+/** combien de propositions d un genre dans l heure glissante avant `maintenant` (secondes) */
+const dansLaFenetre = (historique, kind, maintenant, fenetreS) => (Array.isArray(historique) ? historique : []).filter((h) => h && h.kind === kind && Number(h.t) > maintenant - fenetreS && Number(h.t) <= maintenant).length;
 
 /** les appels sous UNE forme pour bcSigner : { to, data, value, nom } */
 const forme = (appels) => appels.map((c) => ({ to: bas(c.to), data: c.data, value: c.value || '0x0', nom: c.nom || c.quoi || 'transaction' }));
@@ -55,7 +68,8 @@ const usdcTxt = (v) => { const e = v / 1000000n, f = (v % 1000000n).toString().p
  *   authorized, wallet, now (s), budgetUsdc, spentUsdc, balanceUsdc (null = non lu), rules, history: [{ t, kind }], seen: [cle…],
  *   rolls:    { contract, usdc, rollPrice, guess, pass: { rollsLeft, expiresAt } | null, pot, block (bloc actuel), pending: [{ rollId, targetBlock }] } | null,
  *   missions: { contract, usdc, claimable: [{ id, txHash, held, signature }], post: { cle, params, hold, poolManager } | null, mineOpen } | null,
- *   skins:    { list (decoderPage), block (le block du brain), usdc } | null }
+ *   skins:    { list (decoderPage), block (le block du brain), usdc } | null,
+ *   duels:    { contract, usdc, guess (une face NEUVE tiree par l app), expiresIn (s), block (bloc actuel), list: [duel (duels-plan-app.js)] } | null }
  */
 export function prochaineProposition(etat = {}) {
   const e = etat && typeof etat === 'object' ? etat : {};
@@ -89,6 +103,23 @@ export function prochaineProposition(etat = {}) {
         : planSettleMany({ contrat: R.contract, rollIds: ids });
       if (plan.etat === 'PRET') return proposition('SETTLE', plan.appels, 'Reveal ' + (ids.length === 1 ? 'roll #' + ids[0] : ids.length + ' rolls (#' + ids.join(', #') + ')') + ' — '
         + reglables[0].e.blocsRestants + ' block(s) left before it is lost. Settling costs no USDC; any prize goes to your wallet.', 0n, 'SETTLE:' + ids.join(','));
+    }
+  }
+  /* 1b. DUEL_SETTLE — un duel de CE wallet a regler (dans ses 256 blocs) ou a rembourser (fenetre passee, ou jamais pris et expire) : 0 USDC.
+   *   Un reglement deja SIGNE (cle dans `seen`, posee par l app apres confirmation) ne revient pas : la liste servie peut retarder. */
+  const D = e.duels && ADR.test(bas(e.duels.contract)) && Array.isArray(e.duels.list) ? e.duels : null;
+  const etatsDuels = D ? D.list.filter((d) => d && d.id !== undefined).map((d) => ({ d, x: etatDuel(d, D.block, t) })) : [];
+  if (regles.duels && D) {
+    const miens = etatsDuels.filter(({ d, x }) => (bas(d.creator) === moi || bas(d.joiner) === moi) && ['REGLABLE', 'REMBOURSABLE', 'EXPIRE'].includes(x.etat)
+      && !vus.has('DUEL_SETTLE:' + d.id))
+      .sort((p, q) => (p.x.etat === 'REGLABLE' ? 0 : 1) - (q.x.etat === 'REGLABLE' ? 0 : 1) || (p.x.blocsRestants ?? 0) - (q.x.blocsRestants ?? 0) || (BigInt(p.d.id) < BigInt(q.d.id) ? -1 : 1));
+    if (miens.length) {
+      const { d, x } = miens[0];
+      const plan = x.etat === 'REGLABLE' ? planSettleDuel({ contrat: D.contract, id: d.id, targetBlock: d.targetBlock, blocActuel: D.block }) : planRefundDuel({ contrat: D.contract, id: d.id });
+      if (plan.etat === 'PRET') return proposition('DUEL_SETTLE', plan.appels, x.etat === 'REGLABLE'
+        ? 'Reveal duel #' + d.id + ' — ' + x.blocsRestants + ' block(s) left to settle it (after that both stakes are refunded). Settling costs no USDC; the winner is paid by the contract.'
+        : 'Duel #' + d.id + (x.etat === 'EXPIRE' ? ' was never accepted and has expired' : ' passed its 256-block window') + ' — refund ' + (x.etat === 'EXPIRE' ? 'the stake' : 'both stakes') + ' in full, no fee. Costs no USDC.',
+      0n, 'DUEL_SETTLE:' + d.id);
     }
   }
   /* la skin : UNE lecture de propositionSkin, au plafond le plus bas (regle, budget, solde) */
@@ -144,6 +175,52 @@ export function prochaineProposition(etat = {}) {
       }
     }
   }
+
+  /* 3b / 3c. DUELS — en USDC seulement ; la mise ne depasse JAMAIS maxDuelStakeUsdc, le reste du budget ni le solde LU */
+  if (regles.duels && D) {
+    const plafondDuel = regles.maxDuelStakeUsdc;
+    const usdcD = bas(D.usdc);
+    if (!ADR.test(usdcD)) pourquoiPas.push('duels: the USDC address is not known');
+    else if (refusGuess(D.guess).length) pourquoiPas.push('duels: no valid face to play with');
+    else if (plafondDuel < MISE_MIN_DUEL) pourquoiPas.push('duels: the max stake is below the contract minimum (' + usdcTxt(MISE_MIN_DUEL) + ')');
+    else if (solde === null) pourquoiPas.push('duels: your USDC balance was not read');
+    else {
+      /* 3b. DUEL_JOIN — le moins cher d abord, puis le plus ancien ; jamais le sien, jamais un autre jeton, jamais a moins d une minute de la fin */
+      const prenables = etatsDuels.filter(({ d, x }) => x.etat === 'OUVERT' && x.resteS >= MARGE_JOIN_S && bas(d.creator) !== moi && bas(d.token) === usdcD && !vus.has('DUEL_JOIN:' + d.id))
+        .map(({ d }) => ({ d, m: brut(d.stake) })).filter(({ m }) => m !== null && m >= MISE_MIN_DUEL)
+        .sort((p, q) => (p.m < q.m ? -1 : p.m > q.m ? 1 : 0) || (BigInt(p.d.id) < BigInt(q.d.id) ? -1 : 1));
+      let refusJoin = null;
+      for (const { d, m } of prenables) {
+        if (m > plafondDuel) { refusJoin = refusJoin || 'duels: the cheapest open duel (' + usdcTxt(m) + ') is above your max stake (' + usdcTxt(plafondDuel) + ')'; continue; }
+        if (m > reste) { refusJoin = refusJoin || 'duels: ' + usdcTxt(m) + ' is above what is left of the budget (' + usdcTxt(reste) + ')'; continue; }
+        if (m > solde) { refusJoin = refusJoin || 'duels: this wallet holds ' + usdcTxt(solde) + ', the duel stake is ' + usdcTxt(m); continue; }
+        const plan = planJoin({ contrat: D.contract, duel: d, guess: D.guess, moi, maintenant: t });
+        if (plan.etat !== 'PRET') { refusJoin = refusJoin || 'duels: ' + plan.pourquoi; continue; }
+        const p = partageDuel(m);
+        return proposition('DUEL_JOIN', plan.appels, 'Accept duel #' + d.id + ' for ' + usdcTxt(m) + ' with a new random face: the block 2 blocks after your join draws its face; the most traits in common wins '
+          + usdcTxt(p.gagnant) + ' (90 % of the ' + usdcTxt(p.pot) + ' pot; 7 % to the community reward pool, 3 % to TokenizedBlock). A tie refunds both, no fee.', m, 'DUEL_JOIN:' + d.id);
+      }
+      if (refusJoin) pourquoiPas.push(refusJoin);
+      /* 3c. DUEL_CREATE — au plus un par heure glissante, et jamais tant qu un des siens attend un adversaire */
+      const ouvertsMiens = etatsDuels.filter(({ d, x }) => bas(d.creator) === moi && x.etat === 'OUVERT').length;
+      const crees = dansLaFenetre(e.history, 'DUEL_CREATE', t, DUEL_CREATE_INTERVALLE_S);
+      const exp = Number(D.expiresIn);
+      const expiresIn = Number.isInteger(exp) && exp >= EXPIRATION_MIN_S && exp <= EXPIRATION_MAX_S ? exp : DUEL_EXPIRATION_DEFAUT_S;
+      if (ouvertsMiens > 0) pourquoiPas.push('duels: one of your challenges is still waiting for an opponent');
+      else if (crees > 0) pourquoiPas.push('duels: one challenge an hour at most');
+      else if (plafondDuel > reste) pourquoiPas.push('duels: a ' + usdcTxt(plafondDuel) + ' challenge is above what is left of the budget (' + usdcTxt(reste) + ')');
+      else if (plafondDuel > solde) pourquoiPas.push('duels: this wallet holds ' + usdcTxt(solde) + ', a challenge is ' + usdcTxt(plafondDuel));
+      else {
+        const plan = planCreate({ contrat: D.contract, token: usdcD, stake: plafondDuel, guess: D.guess, expiresIn });
+        if (plan.etat === 'PRET') {
+          const p = partageDuel(plafondDuel);
+          return proposition('DUEL_CREATE', plan.appels, 'Open a duel for ' + usdcTxt(plafondDuel) + ' with a new random face, open ' + Math.round(expiresIn / 60) + ' min: whoever accepts stakes the same; the block 2 blocks after the join decides — the winner takes '
+            + usdcTxt(p.gagnant) + ' (90 %), 7 % to the community reward pool, 3 % to TokenizedBlock. Not accepted in time: your stake comes back in full.', plafondDuel, 'DUEL_CREATE:' + t);
+        }
+        pourquoiPas.push('duels: ' + plan.pourquoi);
+      }
+    }
+  } else if (regles.duels && !D) pourquoiPas.push('duels: the duels were not read');
 
   /* 4. SKINS — acheter / encherir sur une skin du block du brain, jamais au-dessus du plafond de la regle */
   if (S && ps && (ps.genre === 'ACHETER' || ps.genre === 'ENCHERIR')) {

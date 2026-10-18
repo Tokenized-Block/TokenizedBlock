@@ -109,6 +109,16 @@ import { depensesJeu, passesAchetes, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PAS
 /* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
 import { etatJeuAgent, planRollAgent, planSettleAgent, planTaskAgent, lireGuess as lireGuessAgent } from './jeu-agent.js';
 import { appelPot as appelPotRolls, lireUint as lireUintRolls } from './rolls-jeu.js';
+/* 2026-10-18 (Phil) : LES DUELS (BlockDuels, contrat ecrit en parallele). L app lit /api/duels (LECTURE SEULE : aucun envoi, aucune cle).
+ *   La fiche duels-deploiement.js est GENEREE par la partie contrat ; tant qu elle est absente, ou que son `adresse` n est pas une adresse,
+ *   /api/duels rend PAS_OUVERT et AUCUNE lecture de chaine n a lieu. Chargee par import() DYNAMIQUE : un fichier absent ne fait pas tomber le
+ *   serveur (un import statique d un fichier absent = serveur MORT au demarrage). Export attendu : DUELS_DEPLOIEMENT { adresse, bloc,
+ *   constructeur: { usdc, devWallet, rewardPool, guardian } } (ou `default`). */
+import { lireDuels, duelEnJson, filtreLogsDuels, TAILLE_FENETRE_LOGS as TAILLE_LOGS_DUELS, partage as partageDuel, MISE_MIN as MISE_MIN_DUEL,
+  EXPIRATION_MIN_S as EXP_MIN_DUEL, EXPIRATION_MAX_S as EXP_MAX_DUEL, FINIS as FINIS_DUEL, etatDuel as etatDuelSrv } from './duels-plan-app.js';
+let DUELS_DEPLOIEMENT = null;
+import('./duels-deploiement.js').then((m) => { DUELS_DEPLOIEMENT = (m && (m.DUELS_DEPLOIEMENT || m.default)) || null; })
+  .catch((e) => { if (!/Cannot find module|ERR_MODULE_NOT_FOUND/.test(String((e && e.code) || '') + String((e && e.message) || ''))) console.log('[duels] fiche illisible :', String((e && e.message) || e).slice(0, 160)); });
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -4076,6 +4086,48 @@ async function lirePotRollsSrv(contrat) {
   catch (_) { /* relu au prochain appel */ } finally { potRollsSrv.enVol = false; }
 }
 setInterval(() => { void crediterVolumeRolls(); }, 120000).unref?.();
+/* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18) — LECTURE SEULE. Les logs de BlockDuels (Created / Joined / Settled / Cancelled / Refunded),
+ *   relus par fenetres de 2 000 blocs, au plus DUELS_FENETRES_PAR_TOUR par tour, avec 300 blocs de recouvrement (doublons comptes une fois).
+ *   ⛔ JAMAIS depuis le bloc de deploiement d un coup : on part de max(deploiement, tete - DUELS_RECUL_BLOCS) — un duel non pris expire en
+ *   7 jours au plus, et un duel pris se regle ou se rembourse dans les 256 blocs : plus vieux, il n a plus d action possible.
+ *   ⛔ DENIM (Base, 200 ms/bloc vise novembre 2026) : DUELS_RECUL_BLOCS est calcule a 2 s/bloc ; a 200 ms il couvre ~17 h, pas 7 jours —
+ *   un duel ouvert plus vieux ne serait plus liste ici (ses fonds restent sur le contrat, refundExpired reste appelable par n importe qui).
+ *   En memoire seulement (un redemarrage relit la fenetre : ~150 fenetres, ~4 min a 20 fenetres / 30 s). */
+const DUELS_RECUL_BLOCS = Math.ceil((7 * 86400) / 2) + 2 * 256 + 600;
+const DUELS_FENETRES_PAR_TOUR = 20;
+const duelsSrv = { contrat: null, de: null, jusqua: null, logs: new Map(), tete: null, lu: 0, enVol: false, erreur: null };
+function contratDuels() {
+  const c = String((DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT.adresse) || '').toLowerCase();
+  return /^0x[0-9a-f]{40}$/.test(c) ? c : null;
+}
+async function lireDuelsSrv() {
+  const contrat = contratDuels();
+  if (!contrat || duelsSrv.enVol || Date.now() - duelsSrv.lu < 15000) return;
+  duelsSrv.enVol = true;
+  try {
+    if (duelsSrv.contrat !== contrat) Object.assign(duelsSrv, { contrat, de: null, jusqua: null, logs: new Map(), tete: null });
+    const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('head unreadable');
+    const deploie = Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) && DUELS_DEPLOIEMENT.bloc > 0 ? DUELS_DEPLOIEMENT.bloc : Math.max(0, tete - 5000);
+    if (duelsSrv.de === null) duelsSrv.de = Math.max(deploie, tete - DUELS_RECUL_BLOCS);
+    let x = duelsSrv.jusqua === null ? duelsSrv.de : Math.max(duelsSrv.de, duelsSrv.jusqua - 300);
+    for (let k = 0; k < DUELS_FENETRES_PAR_TOUR && x <= tete; k++) {
+      const y = Math.min(tete, x + TAILLE_LOGS_DUELS - 1);
+      const logs = await rpcServeur('eth_getLogs', [filtreLogsDuels({ contrat, de: x, a: y })]);
+      if (!Array.isArray(logs)) throw new Error('logs unreadable');
+      for (const l of logs) duelsSrv.logs.set(String(l.transactionHash) + ':' + String(l.logIndex), l);
+      duelsSrv.jusqua = y; x = y + 1;
+    }
+    /* borne memoire : au-dela de 20 000 logs, les plus vieux (par bloc) sortent */
+    if (duelsSrv.logs.size > 20000) {
+      const tries = [...duelsSrv.logs.entries()].sort((p, q) => Number(p[1].blockNumber) - Number(q[1].blockNumber));
+      duelsSrv.logs = new Map(tries.slice(-15000));
+    }
+    duelsSrv.tete = tete; duelsSrv.erreur = null;
+  } catch (e) { duelsSrv.erreur = String((e && e.message) || e).slice(0, 120); }
+  finally { duelsSrv.lu = Date.now(); duelsSrv.enVol = false; }
+}
+setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000).unref?.();
 setInterval(() => {
   if (!revenuSale || !FICHIER_REVENU) return;
   try { writeFileSync(FICHIER_REVENU + '.tmp', JSON.stringify(revenu)); renameSync(FICHIER_REVENU + '.tmp', FICHIER_REVENU); revenuSale = false; }
@@ -4241,6 +4293,8 @@ const SERVIS = [
   'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js', 'rolls-en-attente.js',
   /* 2026-10-18 : « Let the brain play » — la proposition suivante (pure), importee par app.html : absent d ici = page morte */
   'brain-jeu.js',
+  /* 2026-10-18 : les duels (encodeurs purs + lecteurs d evenements), importes par app.html et brain-jeu.js : absent d ici = page morte */
+  'duels-plan-app.js',
   /* 2026-10-18 : TicketPot (pot du jour en parts egales) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non signes */
   'deployer-ticketpot.html', 'ticketpot-deploiement.js', 'ticketpot-config.js', 'ticketpot-plan.js',
   /* 2026-10-18 : BlockDuels (duels entre deux wallets, 90 / 7 / 3) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non
@@ -6096,6 +6150,34 @@ function traiterRequete(req, res) {
       if (jeuRolls.length > JEU_ROLLS_MAX) jeuRolls.splice(0, jeuRolls.length - JEU_ROLLS_MAX);
       rendreJ(200, { ok: true, n: jeuRolls.length });
     });
+    return;
+  }
+
+  /* ══ LES DUELS (2026-10-18) — GET /api/duels : les duels lus sur la chaine (lireDuelsSrv), LECTURE SEULE. Sans fiche signee : PAS_OUVERT et
+   *   aucune lecture de chaine. Pas encore lus : NON_LU (jamais une liste vide qui voudrait dire « aucun duel »). Chaque duel ouvert porte les
+   *   blocks de son createur que le serveur connait (createurParBlock) : la Map pose le defi a cote de SON block. */
+  if (chemin === '/api/duels') {
+    const rendreD = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
+    const regles = { miseMin: MISE_MIN_DUEL.toString(), expirationMinS: EXP_MIN_DUEL, expirationMaxS: EXP_MAX_DUEL, partageBps: { gagnant: 9000, pool: 700, dev: 300 } };
+    const contrat = contratDuels();
+    if (!contrat) { rendreD({ ok: false, etat: 'PAS_OUVERT', regles }); return; }
+    void lireDuelsSrv();
+    const k = (DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT.constructeur) || {};
+    const adrOk = (x) => (/^0x[0-9a-f]{40}$/i.test(String(x || '')) ? String(x).toLowerCase() : null);
+    const fiche = { contrat, bloc: Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) ? DUELS_DEPLOIEMENT.bloc : null, usdc: adrOk(k.usdc), devWallet: adrOk(k.devWallet), rewardPool: adrOk(k.rewardPool), regles };
+    if (duelsSrv.contrat !== contrat || duelsSrv.tete === null) { rendreD({ ok: false, etat: 'NON_LU', ...fiche, pourquoi: duelsSrv.erreur || 'first read in progress' }); return; }
+    const { duels, orphelins } = lireDuels({ logs: [...duelsSrv.logs.values()], contrat });
+    const maintenant = Math.floor(Date.now() / 1000);
+    const tous = [...duels.values()].map((d) => ({ d, e: etatDuelSrv(d, duelsSrv.tete, maintenant).etat }));
+    const vivants = tous.filter((x) => !FINIS_DUEL.includes(x.e)).sort((p, q) => (BigInt(q.d.id) > BigInt(p.d.id) ? 1 : -1)).slice(0, 200);
+    const finis = tous.filter((x) => FINIS_DUEL.includes(x.e)).sort((p, q) => (BigInt(q.d.id) > BigInt(p.d.id) ? 1 : -1)).slice(0, 20);
+    const createurs = new Set(vivants.map((x) => x.d.creator)), blocksDe = new Map();
+    for (const [jeton, createur] of createurParBlock) if (createurs.has(createur)) { const l = blocksDe.get(createur) || []; if (l.length < 5) l.push(String(jeton).toLowerCase()); blocksDe.set(createur, l); }
+    const enJson = (x) => ({ ...duelEnJson(x.d), etat: x.e, creatorBlocks: blocksDe.get(x.d.creator) || [] });
+    rendreD({ ok: true, etat: 'LU', ...fiche, tete: duelsSrv.tete, depuis: duelsSrv.de, jusqua: duelsSrv.jusqua, partiel: duelsSrv.jusqua < duelsSrv.tete,
+      lu: new Date(duelsSrv.lu).toISOString(), maintenant, erreur: duelsSrv.erreur, orphelins: orphelins.length,
+      duels: vivants.map(enJson), recents: finis.map(enJson), exemplePartage: Object.fromEntries(Object.entries(partageDuel(1000000n)).map(([c, v]) => [c, v.toString()])) });
     return;
   }
 

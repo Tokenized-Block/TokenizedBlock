@@ -196,8 +196,26 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 2026-10-18 (Phil : « onglet lisible pour jouer a differents jeux ») : le BANDEAU des 4 jeux en tete de Game — chaque tuile est un bouton
  *   qui mene a sa carte ; son etat (ticket, dernier roll, missions ouvertes, skins en vente) est peint par les peintres existants. */
 .jeuBandeau{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 10px}
-@media (max-width:520px){.jeuBandeau{grid-template-columns:repeat(2,minmax(0,1fr))}}
-.bjReglages{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0}
+/* 2026-10-18 : la 7e tuile (Duels) n apparait qu avec son contrat ; le bandeau passe alors a 4 colonnes (2 sur telephone) */
+.jeuBandeau[data-n="7"]{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:520px){.jeuBandeau,.jeuBandeau[data-n="7"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* LES DUELS (2026-10-18) : une ligne par duel — deux faces (createur, adversaire) contre la face du bloc, la mise, l action possible */
+.duelLigne{border:1px solid var(--ligne);border-radius:12px;padding:8px 10px;margin:8px 0 0;background:rgb(var(--accentRgb) / .04);min-width:0}
+.duelLigne[data-moi="1"]{border-color:rgb(var(--accentRgb) / .55)}
+.duelLigne[data-focus="1"]{outline:2px solid var(--accent);outline-offset:2px}
+.duelFaces{display:flex;align-items:center;gap:8px;margin:4px 0;min-width:0}
+.duelFaces .jourFace{width:52px;height:52px;flex:0 0 52px;border-radius:11px}
+.duelFaces .jeuVs{font-size:11px}
+.duelLigne .note{margin:2px 0 0;overflow-wrap:anywhere}
+.duelForm{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0}
+.duelForm select,.duelForm input{width:100%;min-width:0;box-sizing:border-box}
+@media (max-width:520px){.duelForm{grid-template-columns:minmax(0,1fr)}}
+/* le defi sur la Map : une marque SANS TEXTE (Phil : « pas de texte sur la map ») — deux epees dessinees, a cote du block du createur */
+.duelMarque{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:999px;display:grid;place-items:center;background:var(--accent);color:#0b0716;box-shadow:0 0 0 2px rgb(var(--accentRgb) / .35);cursor:pointer;z-index:3;pointer-events:auto}
+.duelMarque svg{width:14px;height:14px}
+.mapDuels{position:absolute;left:8px;top:8px;display:flex;gap:6px;z-index:4;pointer-events:none}
+.mapDuels .duelMarque{position:static}
+.bjReglages{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:8px 0 0}
 .bjReglages input{width:100%;min-width:0;box-sizing:border-box}
 @media (max-width:520px){.bjReglages{grid-template-columns:minmax(0,1fr)}}
 .bjJeux{display:flex;flex-wrap:wrap;gap:6px 14px;margin:8px 0 0;font-size:13px}
@@ -1539,6 +1557,9 @@ details[open] > summary::before{transform:rotate(90deg)}
              pire qu absent — on le cherche. -->
         <div class="mapCadre">
           <div class="mapEnv" id="map" role="application" aria-label="Living blocks map"></div>
+          <!-- DUELS (2026-10-18) : un defi ouvert dont le createur n a pas de block sur la carte — une marque sans texte, HORS de #map (poserBlocks
+               vide #map) ; un defi dont le createur a un block a l ecran est pose SUR ce block (peindreDuelsMap) -->
+          <div class="mapDuels" id="mapDuels"></div>
           <button class="bMasquer" id="bMasquer" aria-expanded="false" aria-controls="cote">Info</button>
         </div>
         <!-- ⛔⛔ LEGENDE RETIREE (Phil, 2026-09-12 : « on explique deja autre part »). Elle disait
@@ -3548,6 +3569,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" class="jeuJeu" data-jeu="brainJeuCarte" data-focus="bjJouer"><b>Its brain</b><i id="jbBrain">Off</i><span id="jbBrainTxt">let it play for you</span></button>
       <button type="button" class="jeuJeu" data-jeu="skinCarte"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
       <button type="button" class="jeuJeu" data-jeu="missionsCarte"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
+      <!-- DUELS (Phil 2026-10-18) : cachee tant que /api/duels ne sert pas de contrat (pas de tuile vers une carte vide) -->
+      <button type="button" class="jeuJeu" data-jeu="duelsCarte" id="jbDuelsTuile" hidden><b>Duels</b><i id="jbDuels">—</i><span id="jbDuelsTxt">open challenges</span></button>
     </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
     <div class="carte" id="tirCarte">
@@ -3630,12 +3653,16 @@ details[open] > summary::before{transform:rotate(90deg)}
           <label class="champ">Budget (USDC)<input id="bjBudget" inputmode="decimal" value="5"></label>
           <label class="champ">Max rolls per hour<input id="bjMaxH" inputmode="numeric" value="6"></label>
           <label class="champ">Max skin bid (USDC)<input id="bjMaxSkin" inputmode="decimal" value="2"></label>
+          <!-- DUELS (Phil 2026-10-18) : la mise d un duel du brain, en USDC, jamais au-dessus (brain-jeu.js maxDuelStakeUsdc). Cache tant que
+               /api/duels ne sert pas de contrat : rien de payant ne se montre avant (lecon « bouton mort vaut brouillon »). -->
+          <label class="champ" id="bjMaxDuelLab" hidden>Max duel stake (USDC)<input id="bjMaxDuel" inputmode="decimal" value="1"></label>
         </div>
         <div class="bjJeux" role="group" aria-label="Which games">
           <label><input type="checkbox" id="bjRolls" checked> Rolls</label>
           <label><input type="checkbox" id="bjMissions"> Missions</label>
           <label><input type="checkbox" id="bjPost"> Post missions</label>
           <label><input type="checkbox" id="bjSkins"> Skin bids</label>
+          <label id="bjDuelsLab" hidden><input type="checkbox" id="bjDuels"> Duels</label>
         </div>
       </details>
     </div>
@@ -3684,6 +3711,32 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="submit" class="bouton" id="mfPoster">Post it — escrow the rewards</button>
         <p class="note" id="mfEtat" style="margin:6px 0 0"></p>
       </form>
+    </div>
+    <!-- DUELS (Phil 2026-10-18 : « les brains peuvent se faire des duels — gagnant 90 %, 7 % pool de reward commun, 3 % dev ») — deux wallets
+         (une personne, ou le brain d un block qui le PROPOSE a son wallet) misent la meme somme en USDC ou en action tokenisee admise ; chacun
+         pose une face neuve tiree au hasard (tirerFaceDeRoll, les 5 traits de BlockRolls) ; le bloc join + 2 tire SA face ; le plus de traits en
+         commun prend 90 % du pot. Egalite : les deux rembourses, sans frais. ⛔ CACHEE tant que /api/duels ne sert pas de contrat : rien de
+         payant ne se montre avant ; la regle vit dans « How it works » (06 · DUELS). Chaque duel en cours a TOUJOURS un chemin de retour :
+         Settle (dans les 256 blocs), Refund (fenetre passee, ou jamais pris et expire), Cancel (le createur, avant qu on le prenne).
+         Placee APRES Missions : la carte Draws (tirCarte -> missionsCarte) garde exactement ses boutons (test-game-boutons). -->
+    <div class="carte" id="duelsCarte" hidden>
+      <span class="jeuKick">Game · Duels</span>
+      <p class="titre jeuTitre" style="font-size:16px">Two faces, one block. The most traits in common takes the pot.</p>
+      <p class="note" id="duelsRegle" style="margin:4px 0 0">Both stake the same. The block 2 blocks after the join draws its face. Winner 90%, community reward pool 7%, TokenizedBlock 3%. A tie refunds both, no fee.</p>
+      <p class="note" id="duelsEtat" style="margin:6px 0 0">Reading the duels on chain…</p>
+      <div id="duelsListe"></div>
+      <!-- ce que le contrat DOIT a ce wallet (un paiement qu un jeton a refuse) : montre seulement s il y en a, avec « Claim » -->
+      <div id="duelsDus"></div>
+      <form class="duelForm" id="duelForm" autocomplete="off" onsubmit="return false">
+        <label class="champ">Stake in<select id="duelJeton"><option value="">USDC</option></select></label>
+        <label class="champ">Stake<input id="duelMise" inputmode="decimal" value="1"></label>
+        <label class="champ">Open for<select id="duelDuree"><option value="600">10 min</option><option value="3600" selected>1 hour</option><option value="86400">1 day</option><option value="604800">7 days</option></select></label>
+      </form>
+      <div class="jourEtapes">
+        <button type="button" class="bouton" id="duelDefier">Challenge · a new random face</button>
+        <button type="button" class="bouton sec" id="duelsLire">Refresh duels</button>
+      </div>
+      <p class="note" id="duelForme" style="margin:6px 0 0" hidden></p>
     </div>
     <!-- EARN (Phil 19:40 : « ajoute la partie earn ») : ce que ce wallet a GAGNE, lu — part de createur due (registre), tirages gagnes (hier),
          missions reclamees (le contrat, quand il existe). Rien d invente : chaque ligne dit sa source. -->
@@ -3735,6 +3788,8 @@ details[open] > summary::before{transform:rotate(90deg)}
           <div class="jeuTuile"><b>03 · ROLLS</b><p id="regleRolls">Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll is paid in USDC and a winning score pays a fixed prize from the roll pot — never more than the pot holds, and the pot can be empty. Without a wallet the roll is practice: no prize.</p></div>
           <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward. A ticket holder who holds the block does it — a person or an AI agent — and the chain proves it. Doer 90%, community earn pool 7%, TokenizedBlock 3%.</p></div>
           <div class="jeuTuile"><b>05 · SKINS</b><p>Mint a skin for your block, wear it, resell it at a fixed price or in an auction (bids +5%, 7 days max). A minted skin is also that day's ticket.</p></div>
+          <!-- DUELS : la regle, et « opens with its contract » tant que le contrat n est pas servi (peindreDuels remplace la derniere phrase) -->
+          <div class="jeuTuile"><b>06 · DUELS</b><p>Two wallets — a person, or a block's brain proposing to its owner — stake the same in USDC or an admitted tokenized stock. Each plays a new random block face; the block 2 blocks after the join draws its face; the most traits in common out of 5 wins 90% of the pot, 7% goes to the community reward pool, 3% to TokenizedBlock. A tie refunds both, no fee. Not accepted in time, or not settled within 256 blocks: refunded in full. <span id="regleDuelsEtat">Opens with its contract.</span></p></div>
         </div>
       </details>
     </div>
@@ -3981,6 +4036,9 @@ import { guessDepuisApparence, tirerFaceDeRoll, appelPass, lirePass, passActif, 
 import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu } from './rolls-en-attente.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition } from './brain-jeu.js';
+/* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
+import * as Duels from './duels-plan-app.js';
+import { SKIN_ACTIONS_CANDIDATES as DUEL_ACTIONS_CANDIDATES } from './blockskins.js';
 import { poolId as poolIdV4 } from './pool.js';
 import { topic as topicDe } from './keccak.js';
 /* ⛔⛔ L IMAGE GRAVEE (2026-09-22). `budgetSurFace` vient de `photo.js`, qui porte le mur MESURE du
@@ -5238,6 +5296,308 @@ async function peindreSkinsJeu() {
 for (const e of document.querySelectorAll('.skinPrix')) e.textContent = SKIN_MINT_TEXTE;
 $('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
 
+/* ══ LES DUELS (Phil 2026-10-18 : « les brains peuvent se faire des duels — gagnant 90 %, 7 % pool de reward commun, 3 % dev »).
+ *   LECTURE : /api/duels (le serveur relit les logs de BlockDuels par fenetres bornees ; l app ne balaie JAMAIS la chaine depuis le deploiement).
+ *   ACTIONS (chacune relit la tete et l etat AVANT de construire l appel, duels-plan-app.js actionsDuel) : Challenge (approve EXACT + create,
+ *   face neuve au hasard), Accept (approve EXACT + join, face neuve), Settle (dans les 256 blocs), Refund (fenetre passee / jamais pris et
+ *   expire), Cancel (le createur, avant qu on le prenne). Le wallet signe chaque appel (envoyerAppels, comme les rolls payes).
+ *   ⛔ Sans contrat servi : la carte, sa tuile et les reglages Duels du brain restent CACHES (aucun bouton payant) ; « How it works » le dit.
+ *   NON MESURE : un duel complet avec deux vrais wallets sur Base (le contrat n est pas deploye a l ecriture de ce code). */
+const duelsCfg = { j: null, lu: 0, enVol: null, focus: null, getter: undefined, admis: new Map(), jetons: null };
+const DUEL_EPEES = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5l7 7M2 2l1.6.4.4 1.6M9.5 11.5l2-2M10.5 10.5l3 3M13.5 2.5l-7 7M14 2l-1.6.4-.4 1.6M6.5 11.5l-2-2M5.5 10.5l-3 3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
+const duelContrat = (j) => (j && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
+/** /api/duels, garde 10 s (2 min tant que le contrat n est pas servi) ; force = relire */
+async function lireDuelsServis(force = false) {
+  const ttl = duelsCfg.j && !duelContrat(duelsCfg.j) ? 120000 : 10000;
+  if (!force && duelsCfg.j && Date.now() - duelsCfg.lu < ttl) return duelsCfg.j;
+  if (duelsCfg.enVol) return duelsCfg.enVol;
+  duelsCfg.enVol = (async () => {
+    try { const j = await fetch('/api/duels', { cache: 'no-store', signal: AbortSignal.timeout(12000) }).then((r) => r.json()); duelsCfg.j = j; duelsCfg.lu = Date.now(); return j; }
+    catch (_) { return duelsCfg.j; }
+  })();
+  try { return await duelsCfg.enVol; } finally { duelsCfg.enVol = null; }
+}
+const duelsDe = (j, cle = 'duels') => (j && j.ok && Array.isArray(j[cle]) ? j[cle].map((x) => Duels.duelDepuisJson(x)).filter(Boolean) : []);
+function symDuel(token) {
+  const t = String(token || '').toLowerCase();
+  if (t === String(USDC_BASE).toLowerCase()) return 'USDC';
+  const a = ACTIONS_COINBASE.find((x) => String(x.adr).toLowerCase() === t);
+  return a ? a.symbole : t.slice(0, 6) + '…' + t.slice(-4);
+}
+async function decDuel(token) { return String(token).toLowerCase() === String(USDC_BASE).toLowerCase() ? 6 : bcDecimales(token); }
+async function montantDuel(brut, token) { try { return bcUnites(brut, await decDuel(token)) + ' ' + symDuel(token); } catch (_) { return BigInt(brut).toString() + ' raw ' + symDuel(token); } }
+const courtAdr = (a) => String(a).slice(0, 6) + '…' + String(a).slice(-4);
+/* le getter d admission du contrat : celui des noms plausibles (Duels.SIGS_ADMIS) qui rend EXACTEMENT 1 pour l USDC (admis a la construction).
+ *   Aucun ne repond : les actions ne sont PAS proposees (fail-closed), l USDC reste. */
+async function getterAdmis(contrat) {
+  if (duelsCfg.getter !== undefined) return duelsCfg.getter;
+  for (const sig of Duels.SIGS_ADMIS) {
+    let v = null;
+    try { v = Duels.lireBool(await rpc('eth_call', [{ to: contrat, data: Duels.appelAdmis(sig, USDC_BASE) }, 'latest'])); } catch (_) { v = null; }
+    if (v === true) { duelsCfg.getter = sig; return sig; }
+  }
+  duelsCfg.getter = null;
+  return null;
+}
+async function admisDuel(contrat, token) {
+  const t = String(token).toLowerCase();
+  if (t === String(USDC_BASE).toLowerCase()) return true;
+  const sig = await getterAdmis(contrat);
+  if (!sig) return null;
+  try { return Duels.lireBool(await rpc('eth_call', [{ to: contrat, data: Duels.appelAdmis(sig, t) }, 'latest'])); } catch (_) { return null; }
+}
+/* le menu « Stake in » : USDC + les actions que le contrat ADMET, lues une fois par visite (les 9 candidates du marche des skins) */
+async function remplirJetonsDuel(contrat) {
+  const sel = $('#duelJeton');
+  if (!sel || duelsCfg.jetons) return;
+  duelsCfg.jetons = [{ adr: String(USDC_BASE).toLowerCase(), sym: 'USDC' }];
+  const sig = await getterAdmis(contrat);
+  if (sig) for (const c of DUEL_ACTIONS_CANDIDATES) { if ((await admisDuel(contrat, c.adr)) === true) duelsCfg.jetons.push({ adr: c.adr, sym: c.sym }); }
+  sel.textContent = '';
+  for (const x of duelsCfg.jetons) { const o = document.createElement('option'); o.value = x.adr; o.textContent = x.sym; sel.append(o); }
+  if (!sig) { const f = $('#duelForme'); if (f) { f.hidden = false; f.textContent = 'Stocks: the contract\'s admitted list could not be read — USDC only for now.'; } }
+}
+const faceDuelHtml = (g, lettre) => { try { const a = Duels.apparenceDepuisGuess(g); return a ? logoSvg(paramsLogoDepuisApparence(a, lettre)) : ''; } catch (_) { return ''; } };
+const faceBlocHtml = (hash) => { try { const f = faceRevelee(hash); return f ? logoSvg(paramsLogoDepuisApparence(f, '★')) : ''; } catch (_) { return ''; } };
+const BOUTON_DUEL = { JOIN: 'Accept · a new random face', CANCEL: 'Cancel · full refund', SETTLE: 'Settle', REFUND: 'Refund in full' };
+/** une ligne de duel : deux faces (et celle du bloc une fois regle), la mise, l etat, l action possible MAINTENANT (jamais un bouton mort) */
+async function ligneDuel(d, moi, tete, maintenant) {
+  const li = document.createElement('div');
+  li.className = 'duelLigne'; li.dataset.duel = d.id;
+  const implique = moi && (d.creator === moi || d.joiner === moi);
+  li.dataset.moi = implique ? '1' : '0';
+  if (duelsCfg.focus === d.id) li.dataset.focus = '1';
+  const e = Duels.etatDuel(d, tete, maintenant), p = Duels.partage(d.stake);
+  const mise = await montantDuel(d.stake, d.token), auG = await montantDuel(p.gagnant, d.token);
+  const faces = document.createElement('div'); faces.className = 'duelFaces';
+  const fa = document.createElement('div'); fa.className = 'jourFace'; fa.setAttribute('role', 'img'); fa.setAttribute('aria-label', 'Face of ' + courtAdr(d.creator)); fa.innerHTML = faceDuelHtml(d.guessA, 'A');
+  const vs = document.createElement('div'); vs.className = 'jeuVs'; vs.textContent = 'vs';
+  const fb = document.createElement('div'); fb.className = 'jourFace'; fb.setAttribute('role', 'img'); fb.setAttribute('aria-label', d.joiner ? 'Face of ' + courtAdr(d.joiner) : 'Waiting for an opponent'); fb.dataset.gagne = d.joiner ? '1' : '0'; fb.innerHTML = d.guessB ? faceDuelHtml(d.guessB, 'B') : '';
+  faces.append(fa, vs, fb);
+  if (d.settled) {
+    const v2 = document.createElement('div'); v2.className = 'jeuVs'; v2.textContent = 'block';
+    const fx = document.createElement('div'); fx.className = 'jourFace'; fx.setAttribute('role', 'img'); fx.setAttribute('aria-label', 'The block face'); fx.innerHTML = faceBlocHtml(d.settled.blockHash);
+    faces.append(v2, fx);
+  }
+  const t1 = document.createElement('p'); t1.className = 'note';
+  t1.textContent = 'Duel #' + d.id + ' · ' + mise + ' each · ' + (d.creator === moi ? 'you' : courtAdr(d.creator)) + (d.joiner ? ' vs ' + (d.joiner === moi ? 'you' : courtAdr(d.joiner)) : '');
+  const t2 = document.createElement('p'); t2.className = 'note';
+  const min = (s) => (s >= 3600 ? Math.floor(s / 3600) + ' h ' : '') + Math.max(0, Math.floor((s % 3600) / 60)) + ' min';
+  if (e.etat === 'OUVERT') t2.textContent = (d.creator === moi ? 'Your challenge — waiting for an opponent, ' + min(e.resteS) + ' left. Cancel returns your stake in full.' : 'Open — ' + min(e.resteS) + ' left. Accept with the same stake: the winner gets ' + auG + ' (90%).');
+  else if (e.etat === 'EXPIRE') t2.textContent = 'Not accepted in time — Refund returns the stake to its creator in full (anyone may send it).';
+  else if (e.etat === 'ATTENTE') t2.textContent = 'Accepted — block ' + Number(d.targetBlock).toLocaleString('en-US') + ' decides, ' + e.blocsAvant + ' block(s) to go.';
+  else if (e.etat === 'REGLABLE') t2.textContent = 'Block ' + Number(d.targetBlock).toLocaleString('en-US') + ' is in — settle within ' + e.blocsRestants + ' blocks (anyone may; the contract pays the winner). After that, both are refunded in full.';
+  else if (e.etat === 'REMBOURSABLE') t2.textContent = 'Not settled within 256 blocks — Refund returns both stakes in full, no fee.';
+  else if (e.etat === 'REGLE') {
+    const s = d.settled, r = Duels.resultatDuel(d, s.blockHash);
+    const accord = r && r.scoreA === s.scoreA && r.scoreB === s.scoreB;
+    t2.textContent = 'Block ' + (d.targetBlock ? Number(d.targetBlock).toLocaleString('en-US') : '') + ' drew this face: ' + s.scoreA + '/5 vs ' + s.scoreB + '/5 — '
+      + (s.scoreA === s.scoreB ? 'a tie: both refunded, no fee.' : (s.winner === moi ? 'you won ' : courtAdr(s.winner) + ' won ') + (await montantDuel(s.payout, d.token)) + ' (90%); ' + (await montantDuel(p.pool, d.token)) + ' to the community reward pool, ' + (await montantDuel(p.dev, d.token)) + ' to TokenizedBlock.')
+      + (r && !accord ? ' ⚠ The app reads ' + r.scoreA + '/5 vs ' + r.scoreB + '/5 from the same block — the contract\'s scores differ.' : '');
+  } else if (e.etat === 'ANNULE') t2.textContent = 'Cancelled — the stake went back to its creator.';
+  else if (e.etat === 'REMBOURSE') t2.textContent = 'Refunded in full.';
+  else t2.textContent = 'Its state could not be read just now.';
+  li.append(faces, t1, t2);
+  const acts = Duels.actionsDuel(d, moi, tete, maintenant);
+  if (acts.length) {
+    const z = document.createElement('div'); z.className = 'jourEtapes';
+    for (const a of acts) { const b = document.createElement('button'); b.type = 'button'; b.className = 'bouton' + (a === 'CANCEL' ? ' sec' : ''); b.dataset.action = a; b.dataset.duel = d.id; b.textContent = BOUTON_DUEL[a]; z.append(b); }
+    li.append(z);
+  }
+  const ne = document.createElement('p'); ne.className = 'note'; ne.dataset.detat = '1'; ne.hidden = true; li.append(ne);
+  return li;
+}
+/** la carte Duels : cachee sans contrat ; sinon les duels qui concernent ce wallet, les defis ouverts, ceux qui attendent un settle, les derniers resultats */
+async function peindreDuels() {
+  const carte = $('#duelsCarte'), tuile = $('#jbDuelsTuile'), regle = $('#regleDuelsEtat'), etat = $('#duelsEtat'), liste = $('#duelsListe');
+  if (!carte || !liste) return null;
+  const j = await lireDuelsServis();
+  const contrat = duelContrat(j), on = !!contrat;
+  carte.hidden = !on; if (tuile) tuile.hidden = !on;
+  /* six choix sans contrat, sept avec (le CSS passe a 4 colonnes sur data-n="7") */
+  const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.n = on ? '7' : '6';
+  for (const id of ['#bjDuelsLab', '#bjMaxDuelLab']) { const x = $(id); if (x) x.hidden = !on; }
+  if (regle) regle.textContent = on ? 'Open on Base.' : 'Opens with its contract.';
+  if (!on) { liste.textContent = ''; return null; }
+  void remplirJetonsDuel(contrat);
+  if (!j.ok) { liste.textContent = ''; jb('jbDuels', '—'); jb('jbDuelsTxt', 'not read'); etat.textContent = j.etat === 'NON_LU' ? 'The duels are being read on chain — back in a few seconds.' : 'The duels could not be read just now.'; return null; }
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  const moi = c ? String(c).toLowerCase() : null, tete = Number(j.tete), maintenant = Math.floor(Date.now() / 1000);
+  const duels = duelsDe(j), recents = duelsDe(j, 'recents');
+  const etat2 = (d) => Duels.etatDuel(d, tete, maintenant).etat;
+  const ouverts = duels.filter((d) => etat2(d) === 'OUVERT');
+  jb('jbDuels', String(ouverts.length)); jb('jbDuelsTxt', 'open challenge' + (ouverts.length === 1 ? '' : 's'));
+  const rang = (d) => (moi && (d.creator === moi || d.joiner === moi) ? 0 : etat2(d) === 'OUVERT' ? 1 : 2);
+  const vivants = [...duels].sort((a, b) => rang(a) - rang(b) || (BigInt(b.id) > BigInt(a.id) ? 1 : -1)).slice(0, 12);
+  const miensFinis = recents.filter((d) => moi && (d.creator === moi || d.joiner === moi)).slice(0, 3);
+  const autresFinis = recents.filter((d) => !miensFinis.includes(d)).slice(0, 3);
+  const lignes = [];
+  for (const d of [...vivants, ...miensFinis, ...autresFinis]) lignes.push(await ligneDuel(d, moi, tete, maintenant));
+  liste.textContent = ''; liste.append(...lignes);
+  const aRegler = duels.filter((d) => ['REGLABLE', 'REMBOURSABLE', 'EXPIRE'].includes(etat2(d)));
+  etat.textContent = (ouverts.length ? ouverts.length + ' open challenge' + (ouverts.length === 1 ? '' : 's') + '.' : 'No open challenge right now — open one below.')
+    + (aRegler.length ? ' ' + aRegler.length + ' duel' + (aRegler.length === 1 ? '' : 's') + ' to settle or refund — anyone may.' : '')
+    + (j.partiel ? ' Still reading older blocks (checked up to ' + Number(j.jusqua).toLocaleString('en-US') + ').' : '') + (c ? '' : ' Connect a wallet to play.');
+  $('#duelDefier').hidden = !c;
+  void peindreDusDuels(contrat, moi);
+  if (duelsCfg.focus) { const f = liste.querySelector('[data-duel="' + duelsCfg.focus + '"]'); if (f) { try { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} } duelsCfg.focus = null; }
+  return { contrat, duels, recents, tete };
+}
+/* LE DERNIER CHEMIN DE RETOUR : un gain ou un remboursement qu un jeton a REFUSE de payer reste sur le contrat (owed) ; seul son destinataire le
+ *   reclame (claim). Lu pour les jetons du menu (USDC + actions admises) ; rien n est montre s il n y a rien. */
+async function peindreDusDuels(contrat, moi) {
+  const z = $('#duelsDus');
+  if (!z) return;
+  if (!moi || !duelsCfg.jetons) { z.textContent = ''; return; }
+  const lignes = [];
+  for (const t of duelsCfg.jetons) {
+    let v = null;
+    try { const h = await rpc('eth_call', [{ to: contrat, data: Duels.appelOwed(t.adr, moi) }, 'latest']); v = /^0x[0-9a-f]{64}$/i.test(String(h)) ? BigInt(h) : null; } catch (_) { v = null; }
+    if (v && v > 0n) {
+      const p = document.createElement('p'); p.className = 'note'; p.textContent = 'The duels contract owes you ' + (await montantDuel(v, t.adr)) + ' (a payment the token refused) — claim it to your wallet.';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'bouton'; b.dataset.claim = t.adr; b.textContent = 'Claim ' + t.sym;
+      const d = document.createElement('div'); d.className = 'duelLigne'; d.dataset.moi = '1'; d.append(p, b); lignes.push(d);
+    }
+  }
+  z.textContent = ''; z.append(...lignes);
+}
+$('#duelsDus').addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-claim]'); if (!b || b.disabled) return;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  const contrat = duelContrat(duelsCfg.j);
+  if (!c || !contrat) return;
+  b.disabled = true;
+  try {
+    const plan = Duels.planClaim({ contrat, token: b.dataset.claim, to: String(c).toLowerCase() });
+    if (plan.etat !== 'PRET') return;
+    const r = await envoyerAppels(plan.appels, c);
+    b.textContent = r && r.etat === 'CONFIRME' ? 'Claimed' : phraseNonConfirme(r, 'Not claimed').slice(0, 80);
+  } finally { b.disabled = false; void peindreDusDuels(contrat, String(c).toLowerCase()); }
+});
+/** UNE action sur un duel : tout est RELU (duels servis, tete, etat) avant de construire l appel ; refus dit, rien n est demande */
+async function actionDuel(id, action, li) {
+  const dit = (t) => { const p = li && li.querySelector('[data-detat]'); if (p) { p.hidden = false; p.textContent = t; } };
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { dit('Connect a wallet first.'); return; }
+  const moi = String(c).toLowerCase();
+  const j = await lireDuelsServis(true), contrat = duelContrat(j);
+  const d = [...duelsDe(j), ...duelsDe(j, 'recents')].find((x) => x.id === String(id));
+  if (!contrat || !d) { dit('This duel could not be read again just now — nothing was asked.'); return; }
+  let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+  if (!Number.isSafeInteger(tete)) { dit('The chain head could not be read — nothing was asked.'); return; }
+  const maintenant = Math.floor(Date.now() / 1000);
+  if (!Duels.actionsDuel(d, moi, tete, maintenant).includes(action)) { dit('Not possible any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ') — nothing was asked.'); void peindreDuels(); return; }
+  let plan = null, face = null;
+  if (action === 'JOIN') {
+    try { face = tirerFaceDeRoll(); } catch (_) { face = null; }
+    if (!face) { dit('Your face could not be drawn — nothing was asked.'); return; }
+    let solde = null; try { solde = await bcSolde(d.token, c); } catch (_) { solde = null; }
+    if (solde === null) { dit('Your ' + symDuel(d.token) + ' balance could not be read — nothing was asked.'); return; }
+    if (solde < d.stake) { dit('You hold ' + (await montantDuel(solde, d.token)) + '; this duel needs ' + (await montantDuel(d.stake, d.token)) + ' — nothing was asked.'); return; }
+    plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });
+    const fb = li && li.querySelectorAll('.duelFaces .jourFace')[1];
+    if (fb) { try { fb.innerHTML = logoSvg(paramsLogoDepuisApparence(face.apparence, 'B')); } catch (_) {} }
+  } else if (action === 'CANCEL') plan = Duels.planCancel({ contrat, id: d.id });
+  else if (action === 'SETTLE') plan = Duels.planSettle({ contrat, id: d.id, targetBlock: d.targetBlock, blocActuel: tete });
+  else if (action === 'REFUND') plan = Duels.planRefund({ contrat, id: d.id });
+  if (!plan || plan.etat !== 'PRET') { dit('Not asked: ' + ((plan && plan.pourquoi) || 'unknown action')); return; }
+  const p = Duels.partage(d.stake);
+  dit(action === 'JOIN' ? 'Accept duel #' + d.id + ': approve exactly ' + (await montantDuel(d.stake, d.token)) + ', then join with this new random face — the block 2 blocks after your join decides; the winner gets ' + (await montantDuel(p.gagnant, d.token)) + '. Sign in your wallet…'
+    : action === 'SETTLE' ? 'Settle duel #' + d.id + ' — anyone may; the contract pays the winner. Sign in your wallet…'
+    : action === 'CANCEL' ? 'Cancel your challenge #' + d.id + ' — your stake comes back in full. Sign in your wallet…'
+    : 'Refund duel #' + d.id + ' in full, no fee. Sign in your wallet…');
+  const r = await envoyerAppels(plan.appels, c);
+  if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not sent')); return; }
+  const lus = await recusLogs(r), evs = Duels.lireEvenementsDuel(lus.logs, contrat);
+  if (action === 'JOIN') {
+    const jn = evs.find((x) => x.type === 'JOINED');
+    if (!jn) { dit('Sent (' + r.hash.slice(0, 10) + '…) but not read back yet — the card shows it once the server reads it.'); }
+    else {
+      dit('Accepted — block ' + jn.targetBlock.toLocaleString('en-US') + ' decides. Waiting for it…');
+      let t2 = 0;
+      for (let k = 0; k < 90 && t2 <= jn.targetBlock; k++) { await new Promise((o) => setTimeout(o, 2000)); try { t2 = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
+      dit(t2 > jn.targetBlock ? 'Block ' + jn.targetBlock.toLocaleString('en-US') + ' is in — press Settle within 256 blocks (anyone may; after that both are refunded).' : 'The block is not in yet — Settle appears here once it is.');
+    }
+  } else if (action === 'SETTLE') {
+    const st = evs.find((x) => x.type === 'SETTLED');
+    dit(st ? 'Settled: ' + st.scoreA + '/5 vs ' + st.scoreB + '/5 — ' + (st.scoreA === st.scoreB ? 'a tie, both refunded.' : (st.winner === moi ? 'you won ' : courtAdr(st.winner) + ' won ') + (await montantDuel(st.payout, d.token)) + '.') : 'Settled (' + r.hash.slice(0, 10) + '…) but not read back yet.');
+  } else dit(evs.some((x) => x.type === 'CANCELLED' || x.type === 'REFUNDED') ? 'Done — refunded in full.' : 'Sent (' + r.hash.slice(0, 10) + '…) — the card updates once the server reads it.');
+  await lireDuelsServis(true); void peindreDuels(); void peindreDuelsMap();
+}
+/** Challenge : jeton ADMIS, mise lue au bon nombre de decimales, solde suffisant, face NEUVE ; approve EXACT + create */
+async function defierDuel() {
+  const f = $('#duelForme'), b = $('#duelDefier');
+  const dit = (t) => { f.hidden = false; f.textContent = t; };
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { dit('Connect a wallet first.'); return; }
+  if (b.disabled) return;
+  b.disabled = true;
+  try {
+    const j = await lireDuelsServis(true), contrat = duelContrat(j);
+    if (!contrat) { dit('Duels open with their contract.'); return; }
+    const token = String($('#duelJeton').value || USDC_BASE).toLowerCase();
+    const ok = await admisDuel(contrat, token);
+    if (ok !== true) { dit(ok === false ? symDuel(token) + ' is not admitted by the duels contract — nothing was asked.' : 'Whether ' + symDuel(token) + ' is admitted could not be read — nothing was asked.'); return; }
+    let dec = null; try { dec = await decDuel(token); } catch (_) { dec = null; }
+    if (!Number.isInteger(dec)) { dit('The decimals of ' + symDuel(token) + ' could not be read — nothing was asked.'); return; }
+    let mise; try { mise = montantVersBrut($('#duelMise').value, dec); } catch (e) { dit('Stake: ' + String((e && e.message) || e)); return; }
+    const expiresIn = Number($('#duelDuree').value);
+    let face = null; try { face = tirerFaceDeRoll(); } catch (_) { face = null; }
+    if (!face) { dit('Your face could not be drawn — nothing was asked.'); return; }
+    const plan = Duels.planCreate({ contrat, token, stake: mise, guess: face.guess, expiresIn });
+    if (plan.etat !== 'PRET') { dit('Not asked: ' + plan.pourquoi); return; }
+    let solde = null; try { solde = await bcSolde(token, c); } catch (_) { solde = null; }
+    if (solde === null) { dit('Your ' + symDuel(token) + ' balance could not be read — nothing was asked.'); return; }
+    if (solde < mise) { dit('You hold ' + (await montantDuel(solde, token)) + '; the stake is ' + (await montantDuel(mise, token)) + ' — nothing was asked.'); return; }
+    const p = Duels.partage(mise);
+    dit('Challenge: ' + (await montantDuel(mise, token)) + ' with a new random face (colour, orbit, facet, material, ornament: ' + face.guess.join(', ') + '). Whoever accepts stakes the same; the winner gets ' + (await montantDuel(p.gagnant, token)) + '. Not accepted in time: your stake comes back in full. Sign ' + plan.appels.length + ' steps in your wallet…');
+    const r = await envoyerAppels(plan.appels, c);
+    if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not opened')); return; }
+    const lus = await recusLogs(r), cr = Duels.lireEvenementsDuel(lus.logs, contrat).find((x) => x.type === 'CREATED');
+    dit(cr ? 'Challenge #' + cr.id + ' is open — it shows on the map next to your block (if you have one). Cancel returns your stake while nobody has accepted.' : 'Sent (' + r.hash.slice(0, 10) + '…) but not read back yet — the card shows it once the server reads it.');
+    duelsCfg.focus = cr ? cr.id : null;
+    await lireDuelsServis(true); void peindreDuels(); void peindreDuelsMap();
+  } finally { b.disabled = false; }
+}
+$('#duelsListe').addEventListener('click', (e) => { const b = e.target.closest('[data-action]'); if (!b || b.disabled) return; b.disabled = true; const li = b.closest('.duelLigne'); void actionDuel(b.dataset.duel, b.dataset.action, li).finally(() => { b.disabled = false; }); });
+$('#duelDefier').addEventListener('click', () => { void defierDuel(); });
+$('#duelsLire').addEventListener('click', async () => { await lireDuelsServis(true); void peindreDuels(); });
+/** ouvrir la carte Duels sur un duel (depuis la Map ou le Chat) */
+function ouvrirDuel(id) {
+  duelsCfg.focus = id ? String(id) : null;
+  allerA('missions');
+  void peindreDuels().then(() => { const c = $('#duelsCarte'); if (!id && c && !c.hidden) { try { c.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {} } });
+}
+/* LE DEFI SUR LA MAP (Phil : « les brains sont les occupants de la map ») — un duel OUVERT est une marque SANS TEXTE (deux epees) posee sur le
+ *   block de son createur s il est a l ecran (blocks connus du serveur : creatorBlocks), sinon dans le coin de la carte. Un clic ouvre la carte
+ *   Duels sur ce duel. Relu toutes les 15 s, seulement Map visible ; rien sans contrat servi. */
+async function peindreDuelsMap() {
+  if (!mapVisible()) return;
+  const j = await lireDuelsServis();
+  for (const x of document.querySelectorAll('.duelMarque')) x.remove();
+  if (!duelContrat(j) || !j.ok) return;
+  const maintenant = Math.floor(Date.now() / 1000), coin = $('#mapDuels');
+  const ouverts = duelsDe(j).filter((d) => Duels.etatDuel(d, j.tete, maintenant).etat === 'OUVERT').slice(0, 12);
+  let nCoin = 0;
+  for (const d of ouverts) {
+    const m = document.createElement('span');
+    m.className = 'duelMarque'; m.dataset.duel = d.id; m.setAttribute('role', 'img'); m.setAttribute('aria-label', 'Open duel #' + d.id); m.innerHTML = DUEL_EPEES;
+    const h = d.creatorBlocks.map((b) => habitantDe(b)).find(Boolean);
+    if (h && h.el) h.el.append(m);
+    else if (coin && nCoin < 6) { coin.append(m); nCoin++; }
+  }
+}
+/* un clic sur une marque : la carte Duels, PAS la fiche du block (capture : la marque vit dans le bouton du block) */
+document.addEventListener('click', (e) => {
+  const m = e.target && e.target.closest ? e.target.closest('.duelMarque') : null;
+  if (!m) return;
+  e.preventDefault(); e.stopPropagation();
+  ouvrirDuel(m.dataset.duel);
+}, true);
+setInterval(() => { if (mapVisible()) void peindreDuelsMap(); }, 15000);
+setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDuels(); }, 20000);
+setTimeout(() => { void peindreDuels(); }, 1500);
+
 /* ══ LET THE BRAIN PLAY (Phil 2026-10-18 : « le brain peut jouer aux jeux s il a des fonds et l autorisation, en UN bouton : rolls, ticket,
  *   missions, creer des missions » ; « encheres que les brains voient et sur lesquelles ils encherissent si le skin leur plait »).
  *   Allume, toutes les 30 s (la cadence de S.I), page visible, wallet connecte, AUCUNE proposition deja ouverte : l app LIT (bloc, pass, pot,
@@ -5246,7 +5606,7 @@ $('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); }
  *   ⛔ Rien ne se signe tout seul. L autorisation = l interrupteur ; « Off » l eteint. Les reglages vivent dans ce navigateur (try/catch).
  *   NON MESURE : un cycle complet avec un vrai wallet sur Base (banc fork des rolls : banc-blockrolls-fork-20261017.mjs, pas cette boucle). */
 const BJ_CLE = 'tblock.game.brainplays';
-const bj = { on: false, budget: '5000000', depense: '0', maxH: 6, maxSkin: '2000000', rolls: true, missions: false, post: false, skins: false, block: null, history: [], seen: [], pending: [] };
+const bj = { on: false, budget: '5000000', depense: '0', maxH: 6, maxSkin: '2000000', rolls: true, missions: false, post: false, skins: false, duels: false, maxDuel: '1000000', block: null, history: [], seen: [], pending: [] };
 const bjVol = { enVol: false, ouverte: 0, signe: false, pauseJusqua: 0, tirage: null, tirageLu: 0, attest: new Map(), carte: 0 };
 /* au clic « Sign », TOUT est relu : la carte est la carte courante, le brain est allume, le wallet est celui de la carte, le budget et la
  *   limite horaire tiennent ENCORE avec ce cout. Rend la raison du refus, ou null. (revue adverse 2026-10-18) */
@@ -5257,6 +5617,10 @@ function bjRefusAuSigne(id, p, walletCarte) {
   if (!c || String(c).toLowerCase() !== walletCarte) return 'the wallet changed since this was proposed — nothing was sent.';
   if (BigInt(bj.depense) + BigInt(p.costUsdc) > BigInt(bj.budget)) return 'it would go over your budget (' + usdcTexte(bj.budget) + ' USDC) — nothing was sent.';
   if (p.kind === 'ROLL') { const h = Math.floor(Date.now() / 1000) - 3600; if (bj.history.filter((x) => x.kind === 'ROLL' && Number(x.t) > h).length >= bj.maxH) return 'it would go over ' + bj.maxH + ' rolls this hour — nothing was sent.'; }
+  /* DUELS (2026-10-18) : la mise relue contre le plafond de la regle, les duels toujours permis, un CREATE par heure glissante */
+  if (/^DUEL_/.test(p.kind) && !bj.duels) return 'duels are not ticked any more — nothing was sent.';
+  if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && BigInt(p.costUsdc) > BigInt(bj.maxDuel)) return 'the stake is above your max duel stake (' + usdcTexte(bj.maxDuel) + ' USDC) — nothing was sent.';
+  if (p.kind === 'DUEL_CREATE') { const h = Math.floor(Date.now() / 1000) - 3600; if (bj.history.some((x) => x.kind === 'DUEL_CREATE' && Number(x.t) > h)) return 'its brain already opened a duel this hour — nothing was sent.'; }
   return null;
 }
 const bjUsdc = (s) => { const m = /^(\d{1,12})(?:[.,](\d{1,6}))?$/.exec(String(s || '').trim()); return m ? BigInt(m[1]) * 1000000n + BigInt((m[2] || '').padEnd(6, '0')) : null; };
@@ -5268,7 +5632,8 @@ function bjCharger() {
     if (!j || typeof j !== 'object' || !ent(j.budget) || !ent(j.depense) || !ent(j.maxSkin)) return;
     bj.budget = String(j.budget); bj.depense = String(j.depense); bj.maxSkin = String(j.maxSkin);
     bj.maxH = Number.isInteger(j.maxH) && j.maxH >= 0 && j.maxH <= 60 ? j.maxH : 6;
-    for (const k of ['on', 'rolls', 'missions', 'post', 'skins']) bj[k] = j[k] === true;
+    if (ent(j.maxDuel)) bj.maxDuel = String(j.maxDuel);
+    for (const k of ['on', 'rolls', 'missions', 'post', 'skins', 'duels']) bj[k] = j[k] === true;
     bj.block = /^0x[0-9a-f]{40}$/.test(String(j.block)) ? String(j.block) : null;
     bj.history = Array.isArray(j.history) ? j.history.filter((h) => h && Number.isFinite(Number(h.t)) && typeof h.kind === 'string').slice(-100) : [];
     bj.seen = Array.isArray(j.seen) ? j.seen.map(String).slice(-200) : [];
@@ -5278,8 +5643,8 @@ function bjCharger() {
 function bjPeindre(msg) {
   const on = bj.on === true;
   $('#bjJouer').hidden = on; $('#bjOff').hidden = !on;
-  for (const id of ['#bjBudget', '#bjMaxH', '#bjMaxSkin', '#bjRolls', '#bjMissions', '#bjPost', '#bjSkins']) $(id).disabled = on;
-  const jeux = [bj.rolls && 'rolls', bj.missions && 'missions', bj.post && 'post missions', bj.skins && 'skin bids'].filter(Boolean).join(', ');
+  for (const id of ['#bjBudget', '#bjMaxH', '#bjMaxSkin', '#bjRolls', '#bjMissions', '#bjPost', '#bjSkins', '#bjMaxDuel', '#bjDuels']) { const el = $(id); if (el) el.disabled = on; }
+  const jeux = [bj.rolls && 'rolls', bj.missions && 'missions', bj.post && 'post missions', bj.skins && 'skin bids', bj.duels && 'duels up to ' + usdcTexte(bj.maxDuel) + ' USDC'].filter(Boolean).join(', ');
   /* le resume replie dit les limites ENREGISTREES (jamais un texte fige qui mentirait apres un reglage) */
   try { jb('jbBrain', on ? 'On' : 'Off'); jb('jbBrainTxt', on ? 'spent ' + usdcTexte(bj.depense) + ' of ' + usdcTexte(bj.budget) + ' USDC' : 'let it play for you'); } catch (_) { /* tuiles absentes : rien */ }
   const rz = $('#bjResume'); if (rz) rz.textContent = 'Limits — ' + (jeux || 'no game ticked') + ' · budget ' + usdcTexte(bj.budget) + ' USDC · ' + bj.maxH + ' roll' + (bj.maxH === 1 ? '' : 's') + ' an hour · skin bids up to ' + usdcTexte(bj.maxSkin) + ' USDC';
@@ -5291,11 +5656,14 @@ function bjAllumer() {
   const dire = (t) => { $('#bjEtat').textContent = t; const d = $('#bjResume') && $('#bjResume').parentElement; if (d) d.open = true; };
   const budget = bjUsdc($('#bjBudget').value), maxSkin = bjUsdc($('#bjMaxSkin').value), maxH = Number($('#bjMaxH').value);
   const rolls = $('#bjRolls').checked, missions = $('#bjMissions').checked, post = $('#bjPost').checked, skins = $('#bjSkins').checked;
+  /* un duel ne se coche que si sa case est MONTREE (contrat servi) : une case cachee cochee par un vieux reglage ne compte pas */
+  const duels = $('#bjDuels').checked && !$('#bjDuelsLab').hidden, maxDuel = bjUsdc($('#bjMaxDuel').value);
   if (budget === null || budget <= 0n) return dire('The budget must be an amount in USDC above zero, like 5 or 2.5.');
   if (maxSkin === null) return dire('The max skin bid must be an amount in USDC (0 = never bid).');
   if (!Number.isInteger(maxH) || maxH < 0 || maxH > 60) return dire('Max rolls per hour: a whole number from 0 to 60.');
-  if (!rolls && !missions && !post && !skins) return dire('Tick at least one game.');
-  Object.assign(bj, { on: true, budget: budget.toString(), depense: '0', maxSkin: maxSkin.toString(), maxH, rolls, missions, post, skins, block: brainAdr ? String(brainAdr).toLowerCase() : UNIT_APP });
+  if (duels && (maxDuel === null || maxDuel < Duels.MISE_MIN)) return dire('Max duel stake: an amount in USDC of at least ' + usdcTexte(Duels.MISE_MIN) + ' (the contract minimum).');
+  if (!rolls && !missions && !post && !skins && !duels) return dire('Tick at least one game.');
+  Object.assign(bj, { on: true, budget: budget.toString(), depense: '0', maxSkin: maxSkin.toString(), maxH, rolls, missions, post, skins, duels, maxDuel: (maxDuel === null ? 0n : maxDuel).toString(), block: brainAdr ? String(brainAdr).toLowerCase() : UNIT_APP });
   bjSauver(); bjPeindre();
   void bjTour();
 }
@@ -5394,25 +5762,39 @@ async function bjTour() {
           mineOpen: ouvertes.filter((x) => String(x.creator).toLowerCase() === moi).length };
       }
     }
+    /* DUELS (2026-10-18) : les duels servis (/api/duels), la tete RELUE ici, une face NEUVE tiree pour un eventuel create / join */
+    let duels = null, duelsServis = false;
+    if (bj.duels) {
+      const jd = await lireDuelsServis(true), cd = duelContrat(jd);
+      duelsServis = !!cd;
+      if (cd && jd.ok) {
+        let tete = null, guessD = null;
+        try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+        try { const f = tirerFaceDeRoll(); guessD = f ? f.guess : null; } catch (_) { guessD = null; }
+        if (Number.isSafeInteger(tete)) duels = { contract: cd, usdc: USDC_BASE, guess: guessD, expiresIn: 3600, block: tete, list: duelsDe(jd) };
+      }
+    }
     if (!bj.on || bjVol.ouverte) return; /* eteint (ou une proposition ouverte) pendant la lecture */
     const p = bjProposition({ authorized: bj.on === true, wallet: moi, now: Math.floor(Date.now() / 1000), budgetUsdc: bj.budget, spentUsdc: bj.depense,
       balanceUsdc: solde === null ? null : solde.toString(),
-      rules: { rolls: bj.rolls, settle: bj.rolls, missions: bj.missions, postMissions: bj.post, skins: bj.skins, maxRollsPerHour: bj.maxH, maxSkinBidUsdc: bj.maxSkin },
-      history: bj.history, seen: bj.seen, rolls, missions, skins });
+      rules: { rolls: bj.rolls, settle: bj.rolls, missions: bj.missions, postMissions: bj.post, skins: bj.skins, maxRollsPerHour: bj.maxH, maxSkinBidUsdc: bj.maxSkin, duels: bj.duels, maxDuelStakeUsdc: bj.maxDuel },
+      history: bj.history, seen: bj.seen, rolls, missions, skins, duels });
     if (p.kind === 'NONE') {
-      const manque = [bj.rolls && !rc && 'paid rolls are not served yet', (bj.missions || bj.post) && !missions && 'the mission board is not open'].filter(Boolean);
+      const manque = [bj.rolls && !rc && 'paid rolls are not served yet', (bj.missions || bj.post) && !missions && 'the mission board is not open', bj.duels && !duelsServis && 'duels open with their contract'].filter(Boolean);
       bjPeindre('On — ' + p.why + (manque.length ? ' (' + manque.join('; ') + '.)' : ''));
       return;
     }
     bjMontrer(p, rolls, moi);
   } finally { bjVol.enVol = false; }
 }
-const BJ_TITRES = { ROLL: 'Roll', SETTLE: 'Settle', TAKE_MISSION: 'Claim a mission', POST_MISSION: 'Post a mission', BID_SKIN: 'Bid on a skin', BUY_SKIN: 'Buy a skin' };
+const BJ_TITRES = { ROLL: 'Roll', SETTLE: 'Settle', TAKE_MISSION: 'Claim a mission', POST_MISSION: 'Post a mission', BID_SKIN: 'Bid on a skin', BUY_SKIN: 'Buy a skin',
+  DUEL_CREATE: 'Open a duel', DUEL_JOIN: 'Accept a duel', DUEL_SETTLE: 'Settle a duel' };
 /** la proposition dans le chat du panneau : ce qu elle fait, ses appels, UN « Sign » (bcSigner : le wallet confirme chaque appel), « Dismiss » */
 function bjMontrer(p, rolls, walletCarte) {
   bjVol.carte += 1; const id = bjVol.carte;
   bjVol.ouverte = Date.now(); bjVol.signe = false;
-  if (p.cle && !/^(ROLL|SETTLE):/.test(p.cle)) { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
+  /* DUEL_SETTLE n entre dans `seen` qu APRES confirmation (un settle refuse doit revenir) ; DUEL_CREATE se borne par l historique */
+  if (p.cle && !/^(ROLL|SETTLE|DUEL_SETTLE|DUEL_CREATE):/.test(p.cle)) { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
   try { bcOuvrirPop({ vue: 'chat', sansBasculer: true }); } catch (_) { /* le panneau ne s ouvre pas : la carte est quand meme dans le fil */ }
   const m = bcMessage('Its brain · plays', 'agent', 'Its brain proposes: ' + BJ_TITRES[p.kind] + (p.costUsdc !== '0' ? ' · ' + usdcTexte(p.costUsdc) + ' USDC' : ' · no USDC'));
   bcVue('chat');
@@ -5458,6 +5840,18 @@ function bjMontrer(p, rolls, walletCarte) {
       bj.pending = bj.pending.filter((x) => !(x.contrat === rolls.contract && ids.includes(String(x.rollId)))); bjSauver();
       const recu = await recuDe(r.hash), st = recu ? lireSettledTous(recu.logs, rolls.contract) : [];
       if (st.length) { const gain = st.reduce((a, x) => a + x.payout, 0n); bcEtape(m, 'Drew ' + st.map((x) => x.score + '/5').join(', ') + (gain > 0n ? ' — you won ' + usdcTexte(gain) + ' USDC, paid to your wallet.' : ' — no prize this time.'), gain > 0n ? 'oui' : ''); }
+    } else if (/^DUEL_/.test(p.kind)) {
+      /* un duel signe : son evenement relu sur le recu ; un settle CONFIRME entre dans `seen` (la liste servie peut retarder de 30 s) */
+      if (p.kind === 'DUEL_SETTLE') { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
+      const jd = duelContrat(duelsCfg.j), recu = await recuDe(r.hash), evs = recu && jd ? Duels.lireEvenementsDuel(recu.logs, jd) : [];
+      const ev = evs[evs.length - 1];
+      bcEtape(m, !ev ? 'Sent — the Duels card shows it once the server reads it.'
+        : ev.type === 'CREATED' ? 'Duel #' + ev.id + ' is open — on the map next to your block; anyone may accept it.'
+        : ev.type === 'JOINED' ? 'Accepted duel #' + ev.id + ' — block ' + ev.targetBlock.toLocaleString('en-US') + ' decides; its brain proposes the settle once it is in.'
+        : ev.type === 'SETTLED' ? 'Duel #' + ev.id + ': ' + ev.scoreA + '/5 vs ' + ev.scoreB + '/5 — ' + (ev.scoreA === ev.scoreB ? 'a tie, both refunded.' : (ev.winner === walletCarte ? 'you won ' : courtAdr(ev.winner) + ' won ') + usdcTexte(ev.payout) + ' USDC.')
+        : 'Duel #' + ev.id + ' refunded in full.', ev ? 'oui' : '');
+      void lireDuelsServis(true).then(() => { void peindreDuels(); });
+      if (p.kind === 'DUEL_JOIN') setTimeout(() => { void bjTour(); }, 12000);
     }
     fini();
   }], ['Dismiss', () => { bcEtape(m, 'Dismissed — nothing was sent.'); bjVol.pauseJusqua = Date.now() + 120000; fini('On — dismissed; its brain waits 2 min before its next move.'); }, true]]);
@@ -5466,6 +5860,7 @@ function bjMontrer(p, rolls, walletCarte) {
 bjCharger();
 $('#bjBudget').value = usdcTexte(bj.budget); $('#bjMaxSkin').value = usdcTexte(bj.maxSkin); $('#bjMaxH').value = String(bj.maxH);
 $('#bjRolls').checked = bj.rolls; $('#bjMissions').checked = bj.missions; $('#bjPost').checked = bj.post; $('#bjSkins').checked = bj.skins;
+$('#bjDuels').checked = bj.duels; $('#bjMaxDuel').value = usdcTexte(bj.maxDuel);
 bjPeindre();
 $('#bjJouer').addEventListener('click', () => bjAllumer());
 $('#bjOff').addEventListener('click', () => bjEteindre());
@@ -5564,6 +5959,9 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
   if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock().catch(() => {}).then(() => { void verifierRollsEnAttente(); void peindreTirageJourPass(); }); void peindreMissions(); void peindreEarn(); void peindreSkinsJeu(); void peindreUnitPools(); }
+  /* 2026-10-18 : les duels (carte Game ; marques sur la Map) — une ligne a part, la ligne au-dessus est epinglee par test-tirage-carte */
+  if (nom === 'missions') void peindreDuels();
+  if (nom === 'map') void peindreDuelsMap();
   /* le frais depend du reseau, et le reseau peut avoir change depuis la derniere visite */
   if (nom === 'creer') {
     remplirSelSiVide(); void assurerPrixEtFraisWei(true).then(() => lireSoldeEthNat(true)); majFraisEtRecap();
@@ -24278,6 +24676,54 @@ const BC_RAISONS = new Map([
   ['dead', 'this block is dead'],
 ]);
 const bcRaison = (p) => BC_RAISONS.get(String(p || '')) || String(p || 'not now');
+/* ══ « duel » (Phil 2026-10-18 : « les brains peuvent se faire des duels ») — les defis ouverts (/api/duels), et deux gestes : Accept (un
+ *   defi d un AUTRE wallet : approve EXACT + join, face NEUVE au hasard, signe par bcSigner un appel a la fois) et Challenge (la carte Duels du
+ *   Game : le formulaire, puis le wallet). ⛔ Rien ne se signe par la commande ; sans contrat servi : « opens with its contract ».
+ *   Place AVANT bcExecuterTexte : hors du bloc game / roll / post task, dont test-commandes-jeu compte les signatures (une seule, dans roll). */
+async function bcCommandeDuel() {
+  const m = bcMessage('Game · duel', '', 'Duels');
+  bcVue('chat');
+  const lecture = bcEtape(m, 'Reading the duels…');
+  const j = await lireDuelsServis(true), contrat = duelContrat(j);
+  lecture.remove();
+  if (!contrat) { bcEtape(m, 'Duels open with their contract: two wallets stake the same, each plays a new random face, the block 2 blocks after the join decides — winner 90%, community reward pool 7%, TokenizedBlock 3%; a tie refunds both.'); return; }
+  if (!j.ok) { bcEtape(m, j.etat === 'NON_LU' ? 'The duels are being read on chain — try again in a few seconds.' : 'The duels could not be read just now.', 'non'); return; }
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  const moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000), duels = duelsDe(j);
+  const prenables = duels.filter((d) => { const e = Duels.etatDuel(d, j.tete, maintenant); return e.etat === 'OUVERT' && e.resteS >= Duels.MARGE_JOIN_S && d.creator !== moi; }).slice(0, 5);
+  const miens = moi ? duels.filter((d) => (d.creator === moi || d.joiner === moi) && Duels.etatDuel(d, j.tete, maintenant).etat !== 'OUVERT') : [];
+  bcEtape(m, prenables.length ? prenables.length + ' open challenge' + (prenables.length === 1 ? '' : 's') + ' you can accept — winner 90%, community reward pool 7%, TokenizedBlock 3%; a tie refunds both:' : 'No open challenge to accept right now.');
+  for (const d of prenables) {
+    const p = Duels.partage(d.stake), reste = Number(d.expiresAt) - maintenant;
+    bcEtape(m, '#' + d.id + ' · ' + (await montantDuel(d.stake, d.token)) + ' each from ' + courtAdr(d.creator) + ' — the winner gets ' + (await montantDuel(p.gagnant, d.token)) + ' · ' + Math.max(1, Math.floor(reste / 60)) + ' min left');
+  }
+  if (miens.length) bcEtape(m, 'Yours in play: #' + miens.map((d) => d.id + ' (' + Duels.etatDuel(d, j.tete, maintenant).etat.toLowerCase() + ')').join(', #') + ' — settle, refund or cancel in the Duels card of the Game tab.');
+  const boutons = prenables.slice(0, 3).map((d) => ['Accept #' + d.id, () => bcAccepterDuel(m, d.id)]);
+  boutons.push(['Open a challenge', () => { ouvrirDuel(null); bcEtape(m, 'The Duels card is open in the Game tab: pick the token, the stake and how long it stays open.'); }, true]);
+  bcBoutons(m, boutons);
+}
+async function bcAccepterDuel(m, id) {
+  if (!(await bcAvecWallet(m, () => bcAccepterDuel(m, id)))) return;
+  const moi = String(compte).toLowerCase();
+  const j = await lireDuelsServis(true), contrat = duelContrat(j), d = duelsDe(j).find((x) => x.id === String(id));
+  if (!contrat || !d) { bcEtape(m, 'Duel #' + id + ' could not be read again — nothing is proposed.', 'non'); return; }
+  let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+  const maintenant = Math.floor(Date.now() / 1000);
+  if (!Number.isSafeInteger(tete) || !Duels.actionsDuel(d, moi, tete, maintenant).includes('JOIN')) { bcEtape(m, 'Duel #' + id + ' cannot be accepted any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ').', 'non'); return; }
+  let face = null; try { face = tirerFaceDeRoll(); } catch (_) { face = null; }
+  if (!face) { bcEtape(m, 'Your face could not be drawn — nothing is proposed.', 'non'); return; }
+  let solde = null; try { solde = await bcSolde(d.token, compte); } catch (_) { solde = null; }
+  if (solde === null || solde < d.stake) { bcEtape(m, solde === null ? 'Your ' + symDuel(d.token) + ' balance could not be read — nothing is proposed.' : 'You hold ' + (await montantDuel(solde, d.token)) + '; this duel needs ' + (await montantDuel(d.stake, d.token)) + '.', 'non'); return; }
+  const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });
+  if (plan.etat !== 'PRET') { bcEtape(m, 'Not planned: ' + plan.pourquoi, 'non'); return; }
+  bcEtape(m, 'Your face for duel #' + d.id + ' (new, random — colour, orbit, facet, material, ornament): ' + face.guess.join(', ') + '. Theirs: ' + d.guessA.join(', ') + '. The block 2 blocks after your join draws its face.');
+  for (const a of plan.appels) bcEtape(m, a.quoi);
+  bcBoutons(m, [['Sign in your wallet', async () => {
+    const s = await bcSigner(m, plan.appels.map((a) => ({ ...a, nom: a.quoi })), null);
+    if (s.ok) bcEtape(m, 'Accepted — settle it in the Duels card of the Game tab once the block is in (within 256 blocks; after that both are refunded).', 'oui');
+    void lireDuelsServis(true).then(() => { void peindreDuels(); });
+  }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
+}
 /** Une commande ECRITE ici (ou une pre-commande touchee) : la grammaire de commandes-panel.js, puis le meme chemin. */
 /* ⛔ `note` = l endroit ou le refus s ecrit. Le ticket de l onglet Trade passe LE SIEN : ecrit dans la note du Chat, un refus du
  *   ticket serait juste et invisible (la vue Chat est masquee a ce moment-la). */
@@ -24307,6 +24753,7 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
   if (c.type === 'game') { void bcCommandeGame(); return true; }
   if (c.type === 'roll') { void bcCommandeRoll(c.n); return true; }
   if (c.type === 'post_task') { bcCommandePostTask(c); return true; }
+  if (c.type === 'duel') { void bcCommandeDuel(); return true; }
   const erreur = (t) => { note.className = 'note wKo'; note.textContent = t; return false; };
   if (c.type === 'swap') {
     const de = bcResoudre(c.de);

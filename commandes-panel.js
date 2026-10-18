@@ -39,6 +39,9 @@ export const PRECOMMANDES = Object.freeze([
   { cle: 'roll', libelle: 'Roll', modele: 'roll' },
   { cle: 'roll_x5', libelle: 'Roll ×5', modele: 'roll x5' },
   { cle: 'post_task', libelle: 'Post a task', modele: 'post task 100 10 10' },
+  /* 2026-10-18 (Phil : « les brains peuvent se faire des duels ») : `duel` liste les defis ouverts et propose Accept / Challenge — rien ne se
+   *   signe par la commande : le wallet signe chaque appel (bcSigner), et sans contrat servi la reponse dit « opens with its contract » */
+  { cle: 'duel', libelle: 'Duel', modele: 'duel' },
 ]);
 /* Phil 2026-10-18 : « jouer max 10x en un coup » — la MEME borne que planRolls (blockrolls-plan.js ROLLS_MAX) ; test-commandes-panel l epingle */
 export const ROLLS_PAR_COMMANDE_MAX = 10;
@@ -54,6 +57,7 @@ export const AIDE_COMMANDES = Object.freeze([
   'game                                   the Game: your ticket, today’s tickets, the pot, the last rolls',
   'roll · roll x5 · roll x10              the classic roll (0.50 USDC a roll with the contract, 10 at most; practice without it)',
   'post task <reward> <players> <hold>    e.g. post task 100 10 10 — opens Post-a-task filled in (block units)',
+  'duel                                   open duels: accept one or open a challenge (winner 90%, reward pool 7%, TokenizedBlock 3%)',
   'A token is ETH, a symbol (USDC, NVDAc…), a whole address, or “this” for the block shown.',
 ]);
 
@@ -65,6 +69,7 @@ export const AIDE_COMMANDES = Object.freeze([
  *   select: { type:'select', jeton }
  *   tab   : { type:'show', tab }      tasks : { type:'tasks' }      help : { type:'help' }
  *   game  : { type:'game' }           roll  : { type:'roll', n }  (n = 1..ROLLS_PAR_COMMANDE_MAX ; « roll x11 » est REFUSE, jamais plafonne)
+ *   duel  : { type:'duel' }           (« duel » ou « duels »)
  *   post_task : { type:'post_task', reward, players, hold }  (reward / hold = le texte du nombre, en unites humaines du block ; players = entier)
  */
 export function analyserCommande(texte) {
@@ -75,6 +80,7 @@ export function analyserCommande(texte) {
   if (/^(help|\?)$/i.test(t)) return { ok: true, commande: { type: 'help' } };
   if (/^(tasks?|what can it do\??)$/i.test(t)) return { ok: true, commande: { type: 'tasks' } };
   if (/^game$/i.test(t)) return { ok: true, commande: { type: 'game' } };
+  if (/^duels?$/i.test(t)) return { ok: true, commande: { type: 'duel' } };
   if (/^rolls?\b/i.test(t)) {
     /* roll · roll x5 · roll x 5 · roll 5 · rolls x10 — le nombre est LU, jamais plafonne : « roll x11 » est refuse, pas ramene a 10 */
     const refusRoll = { ok: false, pourquoi: 'roll takes 1 to ' + ROLLS_PAR_COMMANDE_MAX + ' rolls in one go: roll, roll x5, roll x10' };

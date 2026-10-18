@@ -11,7 +11,9 @@ const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8').replace
 const b0 = app.indexOf('<div class="jeuBandeau"'), b1 = app.indexOf('</div>', b0);
 const band = app.slice(b0, b1);
 const tuiles = [...band.matchAll(/<button[^>]*data-jeu="([^"]+)"[^>]*><b>([^<]+)<\/b>/g)].map((m) => [m[1], m[2]]);
-vu(JSON.stringify(tuiles.map((t) => t[1])) === JSON.stringify(['Roll', 'Ticket', 'Week pass', 'Its brain', 'Skins', 'Missions']), 'six choix dans l ordre (lus : ' + tuiles.map((t) => t[1]).join(', ') + ')');
+/* 2026-10-18 : + Duels, 7e tuile, CACHEE tant que /api/duels ne sert pas de contrat */
+vu(JSON.stringify(tuiles.map((t) => t[1])) === JSON.stringify(['Roll', 'Ticket', 'Week pass', 'Its brain', 'Skins', 'Missions', 'Duels']), 'sept choix dans l ordre (lus : ' + tuiles.map((t) => t[1]).join(', ') + ')');
+vu(/<button[^>]*data-jeu="duelsCarte"[^>]*\bhidden\b/.test(band) && /bd\.dataset\.n = on \? '7' : '6';/.test(app) && /\.jeuBandeau\[data-n="7"\]\{grid-template-columns:repeat\(4,/.test(app), 'Duels : tuile cachee sans contrat ; 7 tuiles -> 4 colonnes');
 for (const [carte, nom] of tuiles) vu(app.split('id="' + carte + '"').length === 2, nom + ' mene a #' + carte + ' qui existe une fois');
 for (const f of [...band.matchAll(/data-focus="([^"]+)"/g)].map((m) => m[1])) vu(app.split('id="' + f + '"').length >= 2, 'focus vers #' + f + ' qui existe');
 vu(!/\d+(\.\d+)? USDC/.test(band.replace(/<!--[\s\S]*?-->/g, '')), 'aucun prix tape dans les tuiles');

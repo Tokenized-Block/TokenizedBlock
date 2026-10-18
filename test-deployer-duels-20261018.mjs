@@ -40,7 +40,8 @@ ok(D.chaine === 8453 && D.contrat === 'BlockDuels' && Object.isFrozen(D) && Obje
 ok(D.constructeur.usdc === USDC_BASE.toLowerCase() && D.constructeur.devWallet === FEE_WALLET.toLowerCase(), 'A usdc = USDC_BASE, devWallet = FEE_WALLET (frais-creation.js), jamais tapes');
 ok(D.constructeur.usdc === BR.constructeur.usdc && D.constructeur.devWallet === BR.constructeur.devWallet && /^0x[0-9a-f]{40}$/.test(BR.adresse || ''),
   'A les MEMES usdc et devWallet que la fiche BlockRolls deployee (' + D.constructeur.devWallet + ')');
-ok('_lisez-moi' in PARAMS && /TO FILL BY PHIL/.test(PARAMS['_lisez-moi']), 'A duels-parametres.json porte le _lisez-moi « TO FILL BY PHIL »');
+/* 2026-10-18 : rempli sur decision de Phil (rewardPool = Brain UNIT, guardian = dev) — le _lisez-moi dit d ou viennent les adresses */
+ok('_lisez-moi' in PARAMS && /PHIL/i.test(PARAMS['_lisez-moi']), 'A duels-parametres.json porte un _lisez-moi qui nomme la decision de Phil');
 const phil = { rewardPool: /^0x[0-9a-fA-F]{40}$/.test(String(PARAMS.rewardPool || '')), guardian: /^0x[0-9a-fA-F]{40}$/.test(String(PARAMS.guardian || '')) };
 if (!phil.rewardPool || !phil.guardian) {
   ok(D.pret === false && D.creation === null && D.sha256Creation === null && JSON.stringify(D.manquants) === JSON.stringify(['rewardPool', 'guardian'].filter((k) => !phil[k])),

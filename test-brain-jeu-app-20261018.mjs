@@ -49,4 +49,30 @@ vu(/Your skins — sell at a price, or start an auction/.test(sk) && /bcLigneSki
 vu(/text: 'Sell at a price' \}\), be = bcEl\('button', \{ type: 'button', cls: 'bouton sec', text: 'Start an auction' \}\)/.test(app), 'bcLigneSkin : « Sell at a price » et « Start an auction »');
 vu(/highest bid ' \+ bcMontantSkin\(s\.offre, s\.devise\)/.test(app) && /ends in ' \+ bcDureeSkin\(s\.fin - t\)/.test(app), 'une enchere en cours dit son offre et son temps restant');
 vu(/const zs = \$\('#skinBrain'\);/.test(bloc), 'la proposition du brain (bid / buy) s affiche dans la carte Skin market');
+/* ── DUELS dans « Let the brain play » (2026-10-18) ── */
+for (const id of ['bjDuels', 'bjMaxDuel', 'bjDuelsLab', 'bjMaxDuelLab']) vu(app.split('id="' + id + '"').length === 2, 'element #' + id + ' present une fois');
+vu(/<label id="bjDuelsLab" hidden><input type="checkbox" id="bjDuels"> Duels<\/label>/.test(app) && /<label class="champ" id="bjMaxDuelLab" hidden>Max duel stake \(USDC\)<input id="bjMaxDuel"/.test(app), 'la case Duels et la mise max existent, CACHEES tant que le contrat n est pas servi');
+vu(/for \(const id of \['#bjDuelsLab', '#bjMaxDuelLab'\]\) \{ const x = \$\(id\); if \(x\) x\.hidden = !on; \}/.test(app), 'peindreDuels les montre seulement avec un contrat servi');
+vu(/const duels = \$\('#bjDuels'\)\.checked && !\$\('#bjDuelsLab'\)\.hidden/.test(bloc), 'une case Duels cachee (cochee par un vieux reglage) ne compte pas');
+vu(/duels: bj\.duels, maxDuelStakeUsdc: bj\.maxDuel \}/.test(bloc) && /history: bj\.history, seen: bj\.seen, rolls, missions, skins, duels \}\);/.test(bloc), 'le module recoit la regle duels, la mise max et les duels lus');
+vu(/const f = tirerFaceDeRoll\(\); guessD = f \? f\.guess : null;/.test(bloc) && /duels = \{ contract: cd, usdc: USDC_BASE, guess: guessD, expiresIn: 3600, block: tete, list: duelsDe\(jd\) \}/.test(bloc), 'le duel du brain joue une face NEUVE ; la tete est relue ; la liste vient de /api/duels');
+vu(/!\/\^\(ROLL\|SETTLE\|DUEL_SETTLE\|DUEL_CREATE\):\/\.test\(p\.cle\)/.test(bloc) && /if \(p\.kind === 'DUEL_SETTLE'\) \{ bj\.seen\.push\(p\.cle\);/.test(bloc), 'un settle de duel n entre dans seen qu apres confirmation');
+vu((bloc.match(/bcSigner\(/g) || []).length === 1, 'toujours UN seul bcSigner dans la boucle (les duels passent par le meme Sign)');
+/* bjRefusAuSigne EXECUTE (extrait de app.html, evalue avec un etat factice) : les couts des duels sont relus AU SIGNE */
+const srcRefus = rs.replace(/\/\*[\s\S]*?\*\//g, '');
+const fabrique = (code) => new Function('bj', 'bjVol', 'compte', 'usdcTexte', code + '\nreturn bjRefusAuSigne;');
+const W = '0x' + '1'.repeat(40), maintenantS = Math.floor(Date.now() / 1000);
+const etatBj = (x = {}) => ({ on: true, budget: '10000000', depense: '0', maxH: 6, maxDuel: '1000000', duels: true, history: [], ...x });
+const refusDe = (code, p, x = {}) => fabrique(code)(etatBj(x), { carte: 3 }, W, (v) => String(v))(3, p, W);
+vu(refusDe(srcRefus, { kind: 'DUEL_JOIN', costUsdc: '1000000' }) === null, 'au Sign : un join a la mise max passe (null)');
+vu(/max duel stake/.test(String(refusDe(srcRefus, { kind: 'DUEL_JOIN', costUsdc: '1000001' }))), 'au Sign : un join au-dessus de la mise max est REFUSE');
+vu(/max duel stake/.test(String(refusDe(srcRefus, { kind: 'DUEL_CREATE', costUsdc: '2000000' }))), 'au Sign : un create au-dessus de la mise max est REFUSE');
+vu(/not ticked/.test(String(refusDe(srcRefus, { kind: 'DUEL_SETTLE', costUsdc: '0' }, { duels: false }))), 'au Sign : duels decoches entre-temps -> REFUSE');
+vu(/this hour/.test(String(refusDe(srcRefus, { kind: 'DUEL_CREATE', costUsdc: '1000000' }, { history: [{ t: maintenantS - 600, kind: 'DUEL_CREATE' }] }))), 'au Sign : un deuxieme create dans l heure -> REFUSE');
+vu(/budget/.test(String(refusDe(srcRefus, { kind: 'DUEL_JOIN', costUsdc: '1000000' }, { depense: '9500000' }))), 'au Sign : le budget relu couvre aussi les duels');
+/* mutants (sur le TEXTE extrait, rien n est ecrit sur disque) : chaque ligne des duels retiree laisse passer ce qu elle refusait */
+const sansLigne = (motif) => { vu(srcRefus.split(motif).length === 2, 'mutant au Sign : le motif existe une fois'); return srcRefus.replace(motif, 'if (false)'); };
+vu(refusDe(sansLigne("if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && BigInt(p.costUsdc) > BigInt(bj.maxDuel))"), { kind: 'DUEL_JOIN', costUsdc: '1000001' }) === null, 'MUTANT plafond de duel au Sign retire : le join trop cher PASSERAIT — l assertion ROUGIT');
+vu(refusDe(sansLigne("if (/^DUEL_/.test(p.kind) && !bj.duels)"), { kind: 'DUEL_SETTLE', costUsdc: '0' }, { duels: false }) === null, 'MUTANT duels-decoches retire : le settle PASSERAIT — l assertion ROUGIT');
+vu(refusDe(sansLigne("if (bj.history.some((x) => x.kind === 'DUEL_CREATE' && Number(x.t) > h))"),{ kind: 'DUEL_CREATE', costUsdc: '1000000' }, { history: [{ t: maintenantS - 600, kind: 'DUEL_CREATE' }] }) === null, 'MUTANT un-create-par-heure retire : le 2e create PASSERAIT — l assertion ROUGIT');
 console.log('ok brain-jeu-app - ' + n + ' assertions');

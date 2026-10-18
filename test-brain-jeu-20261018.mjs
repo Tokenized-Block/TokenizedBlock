@@ -7,6 +7,7 @@ import * as J from './brain-jeu.js';
 import { planRoll, planRollAvecPass, planSettle, planSettleMany } from './blockrolls-plan.js';
 import { planPoster, planReclamer } from './missions-plan.js';
 import { appelApprouver, appelAcheter, appelEncherir, appelRegler, BLOCKSKINS } from './blockskins.js';
+import { planCreate, planJoin, planSettle as planSettleDuel, planRefund as planRefundDuel } from './duels-plan-app.js';
 
 let n = 0;
 const vu = (c, m) => { if (!c) { console.error('KO ' + m); process.exit(1); } n++; };
@@ -132,7 +133,65 @@ vu(J.prochaineProposition(pm({ postMissions: false })).kind === 'NONE', 'regle p
 vu(J.prochaineProposition({ ...pm(), seen: [p1.cle] }).kind === 'NONE', 'mission deja proposee : pas deux fois');
 vu(J.prochaineProposition(pm({}, { post: { ...post, params: { ...post.params, expiry: T - 1 } } })).kind === 'NONE', 'mission refusee par planPoster (expiree) : NONE');
 vu(J.prochaineProposition(base({ rules: regles({ rolls: false, skins: false, missions: false, postMissions: false }) })).kind === 'NONE', 'aucune regle : NONE');
-vu(J.KINDS.join() === 'ROLL,SETTLE,TAKE_MISSION,POST_MISSION,BID_SKIN,BUY_SKIN,NONE', 'les sept genres');
+vu(J.KINDS.join() === 'ROLL,SETTLE,TAKE_MISSION,POST_MISSION,BID_SKIN,BUY_SKIN,DUEL_CREATE,DUEL_JOIN,DUEL_SETTLE,NONE', 'les dix genres (les trois des duels compris)');
+
+/* ── DUELS (2026-10-18) : USDC seulement, jamais au-dessus de maxDuelStakeUsdc / du reste du budget / du solde lu ; settle d abord ── */
+const DC = '0x' + 'e'.repeat(40), NVDA = '0x' + '7'.repeat(40), FACE = [0, 1, 2, 3, 4];
+const duel = (x = {}) => ({ id: '5', creator: AUTRE, token: USDC, stake: 1000000n, guessA: [1, 1, 1, 1, 1], expiresAt: T + 1800, blocCree: 900, joiner: null, guessB: null, targetBlock: null, settled: null, cancelled: false, refunded: false, ...x });
+const du = (list, rx = {}, x = {}) => base({ rules: regles({ rolls: false, skins: false, missions: false, postMissions: false, duels: true, maxDuelStakeUsdc: '2000000', ...rx }),
+  duels: { contract: DC, usdc: USDC, guess: FACE, expiresIn: 3600, block: 1000, list }, ...x });
+const dj = J.prochaineProposition(du([duel()]));
+vu(dj.kind === 'DUEL_JOIN' && dj.costUsdc === '1000000' && dj.cle === 'DUEL_JOIN:5' && memes(dj.calls, planJoin({ contrat: DC, duel: duel(), guess: FACE, moi: W, maintenant: T }).appels), 'duel ouvert a 1 USDC, plafond 2 : DUEL_JOIN = planJoin (approve EXACT + join), cout 1 USDC');
+vu(/1\.8 USDC/.test(dj.why) && /90 %/.test(dj.why) && /7 %/.test(dj.why) && /3 %/.test(dj.why) && /tie refunds both/i.test(dj.why), 'le pourquoi dit le gain (1.8 = 90 % de 2), 7 % / 3 % et l egalite : ' + dj.why.slice(0, 80));
+vu(J.prochaineProposition(du([duel({ stake: 2000000n })])).kind === 'DUEL_JOIN', 'mise = plafond : JOIN (borne incluse)');
+const dc = J.prochaineProposition(du([duel({ stake: 3000000n })]));
+vu(dc.kind === 'DUEL_CREATE' && dc.costUsdc === '2000000' && memes(dc.calls, planCreate({ contrat: DC, token: USDC, stake: 2000000n, guess: FACE, expiresIn: 3600 }).appels), 'mise 3 > plafond 2 : pas de JOIN ; DUEL_CREATE a 2 USDC (planCreate, approve EXACT)');
+vu(J.prochaineProposition(du([duel({ token: NVDA })])).kind === 'DUEL_CREATE', 'duel en action (pas USDC) : pas de JOIN (le budget est en USDC) ; le brain en ouvre un en USDC');
+vu(J.prochaineProposition(du([duel({ expiresAt: T + 30 })])).kind === 'DUEL_CREATE', 'duel qui expire dans 30 s : pas de JOIN (il revertirait apres la signature)');
+vu(J.prochaineProposition({ ...du([duel()]), seen: ['DUEL_JOIN:5'] }).kind === 'DUEL_CREATE', 'duel deja propose : pas deux fois');
+vu(J.prochaineProposition(du([duel({ creator: W })])).kind === 'NONE', 'son propre duel ouvert : ni JOIN ni un deuxieme CREATE');
+vu(J.prochaineProposition(du([duel({ joiner: '0x' + '3'.repeat(40), guessB: FACE, targetBlock: 999 })])).kind === 'DUEL_CREATE', 'duel deja pris par un autre : pas de JOIN');
+const dPlusCher = J.prochaineProposition(du([duel({ id: '8', stake: 1500000n }), duel({ id: '9', stake: 1000000n }), duel({ id: '4', stake: 1000000n })]));
+vu(dPlusCher.kind === 'DUEL_JOIN' && dPlusCher.cle === 'DUEL_JOIN:4', 'plusieurs prenables : le moins cher, puis le plus ancien (#4)');
+vu(J.prochaineProposition(du([duel()], {}, { budgetUsdc: '900000' })).kind === 'NONE' && /budget/.test(J.prochaineProposition(du([duel()], {}, { budgetUsdc: '900000' })).why), 'mise 1 > budget 0.9 : NONE, le refus dit « budget »');
+vu(J.prochaineProposition(du([duel()], {}, { spentUsdc: '9500000' })).kind === 'NONE', 'reste 0.5 apres 9.5 depenses : NONE (ni join a 1, ni create a 2)');
+vu(J.prochaineProposition(du([duel()], {}, { balanceUsdc: null })).kind === 'NONE', 'solde non lu : aucun duel paye');
+vu(J.prochaineProposition(du([duel({ stake: 2000000n })], {}, { balanceUsdc: '1500000' })).kind === 'NONE', 'solde 1.5 < mise 2 : NONE');
+vu(J.prochaineProposition(du([duel()], { maxDuelStakeUsdc: '0' })).kind === 'NONE' && J.prochaineProposition(du([duel()], { maxDuelStakeUsdc: '99999' })).kind === 'NONE', 'plafond 0 ou sous le minimum du contrat : aucun duel');
+vu(J.prochaineProposition(du([duel()], { duels: false })).kind === 'NONE' && J.prochaineProposition(du([duel()], { duels: 'true' })).kind === 'NONE', 'regle duels off (ou « true » en texte) : rien');
+vu(J.prochaineProposition({ ...du([duel()]), duels: { ...du([duel()]).duels, guess: [9, 9, 9, 9, 9] } }).kind === 'NONE', 'face hors bornes : aucun duel');
+const hDuel = (dt) => [{ t: T - dt, kind: 'DUEL_CREATE' }];
+vu(J.prochaineProposition(du([], {}, { history: hDuel(600) })).kind === 'NONE', 'un CREATE il y a 10 min : pas un deuxieme (un par heure)');
+vu(J.prochaineProposition(du([], {}, { history: hDuel(3700) })).kind === 'DUEL_CREATE', 'un CREATE il y a plus d une heure : CREATE');
+vu(J.prochaineProposition(du([], {}, { history: hDuel(600) })).kind === 'NONE' && J.prochaineProposition(du([duel()], {}, { history: hDuel(600) })).kind === 'DUEL_JOIN', 'la limite horaire porte sur CREATE, pas sur JOIN');
+/* SETTLE des duels : 0 USDC, avant tout paiement, seulement les siens */
+const pris = (x = {}) => duel({ creator: W, joiner: AUTRE, guessB: [2, 2, 2, 2, 2], targetBlock: 995, ...x });
+const ds = J.prochaineProposition(du([pris()], {}, { budgetUsdc: '0', balanceUsdc: '0' }));
+vu(ds.kind === 'DUEL_SETTLE' && ds.costUsdc === '0' && ds.cle === 'DUEL_SETTLE:5' && memes(ds.calls, planSettleDuel({ contrat: DC, id: '5', targetBlock: 995, blocActuel: 1000 }).appels), 'son duel reglable : DUEL_SETTLE = planSettle, 0 USDC, meme a budget et solde 0');
+vu(J.prochaineProposition(du([pris({ creator: AUTRE, joiner: W })])).kind === 'DUEL_SETTLE', 'duel ou il est le joueur B : DUEL_SETTLE aussi');
+const dr = J.prochaineProposition(du([pris({ targetBlock: 700 })]));
+vu(dr.kind === 'DUEL_SETTLE' && memes(dr.calls, planRefundDuel({ contrat: DC, id: '5' }).appels) && /both stakes/.test(dr.why), 'fenetre de 256 blocs passee : refundExpired (les deux mises), jamais un duel coince');
+const de = J.prochaineProposition(du([duel({ creator: W, expiresAt: T - 1 })]));
+vu(de.kind === 'DUEL_SETTLE' && memes(de.calls, planRefundDuel({ contrat: DC, id: '5' }).appels), 'son duel jamais pris et expire : refundExpired (sa mise revient)');
+vu(J.prochaineProposition(du([pris({ targetBlock: 1000 })])).kind !== 'DUEL_SETTLE', 'cible pas encore passee : pas de settle (trop tot)');
+vu(J.prochaineProposition(du([pris({ creator: AUTRE, joiner: '0x' + '3'.repeat(40) })], { maxDuelStakeUsdc: '0' })).kind === 'NONE', 'le duel reglable de deux AUTRES wallets : le brain ne le propose pas');
+vu(J.prochaineProposition({ ...du([pris()], { maxDuelStakeUsdc: '0' }), seen: ['DUEL_SETTLE:5'] }).kind === 'NONE', 'un settle deja signe (cle vue) : pas re-propose (la liste servie retarde)');
+vu(J.prochaineProposition(du([pris({ id: '6', targetBlock: 760 }), pris({ id: '7', targetBlock: 995 })])).cle === 'DUEL_SETTLE:6', 'deux reglables : le plus pres de sa fin d abord (#6)');
+vu(J.prochaineProposition(du([pris({ id: '6', targetBlock: 700 }), pris({ id: '7', targetBlock: 995 })])).cle === 'DUEL_SETTLE:7', 'un reglable passe avant un remboursement (le remboursement ne se perd pas)');
+const tout = du([pris()], { rolls: true }, { rolls: { ...base().rolls, pending: pend } });
+vu(J.prochaineProposition(tout).kind === 'SETTLE', 'roll reglable ET duel reglable : le roll d abord (lui se PERD a 256 blocs, le duel se rembourse)');
+vu(J.prochaineProposition(du([pris()], { rolls: true }, { rolls: base().rolls })).kind === 'DUEL_SETTLE', 'duel reglable et roll possible : DUEL_SETTLE avant le roll paye');
+vu(J.prochaineProposition(du([duel()], { rolls: true }, { rolls: base().rolls })).kind === 'ROLL', 'roll possible et duel prenable : le roll passe d abord (ordre fixe), le duel au tour suivant');
+vu(J.prochaineProposition(du([duel()], {}, { duels: null })).kind === 'NONE' && /duels were not read/.test(J.prochaineProposition(du([duel()], {}, { duels: null })).why), 'duels non lus : NONE, dit');
+/* propriete : sur une grille de mises / budgets / soldes, un duel propose ne coute JAMAIS plus que le plafond, le reste, le solde */
+{
+  let mal = 0, vus2 = 0;
+  for (const s of [100000n, 999999n, 1000000n, 2000000n, 2000001n, 5000000n]) for (const b of ['0', '1000000', '2000000', '9000000']) for (const so of ['0', '999999', '2000000', '9000000']) for (const mx of ['99999', '1000000', '2000000']) {
+    const p = J.prochaineProposition(du([duel({ stake: s })], { maxDuelStakeUsdc: mx }, { budgetUsdc: b, balanceUsdc: so }));
+    if (p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') { vus2++; const c = BigInt(p.costUsdc); if (c > BigInt(mx) || c > BigInt(b) || c > BigInt(so) || c < 100000n) mal++; }
+  }
+  vu(vus2 > 10 && mal === 0, 'grille de 288 etats : ' + vus2 + ' duels proposes, 0 au-dessus du plafond / du budget / du solde');
+}
 
 /* ── MUTANTS ── */
 const srcUrl = new URL('./brain-jeu.js', import.meta.url);
@@ -162,5 +221,24 @@ await mutant('limite horaire decalee', 'if (faits >= regles.maxRollsPerHour)', '
   writeFileSync(url2, src.replace(b, ''));
   try { const M = await import(url2.href); vu(M.prochaineProposition(sk([skin({ prix: 6000000n })])).kind === 'NONE', 'une seule garde retiree : la premiere tient encore (defense en profondeur)'); }
   finally { try { unlinkSync(url2); } catch (_) {} }
+}
+/* ── MUTANTS DES DUELS : chaque garde retiree DOIT faire rougir son assertion ── */
+await mutant('plafond de duel retire', 'if (m > plafondDuel) {', 'if (false) {', (M) => M.prochaineProposition(du([duel({ stake: 3000000n })])).kind === 'DUEL_JOIN');
+await mutant('solde de duel ignore', 'if (m > solde) {', 'if (false) {', (M) => M.prochaineProposition(du([duel({ stake: 2000000n })], {}, { balanceUsdc: '1500000' })).kind === 'DUEL_JOIN');
+await mutant('budget de duel ignore', 'if (m > reste) {', 'if (false) {', (M) => M.prochaineProposition(du([duel()], {}, { budgetUsdc: '900000' })).kind === 'DUEL_JOIN');
+await mutant('jeton non USDC accepte', "bas(d.token) === usdcD && !vus.has('DUEL_JOIN:'", "true && !vus.has('DUEL_JOIN:'", (M) => M.prochaineProposition(du([duel({ token: NVDA })])).kind === 'DUEL_JOIN');
+await mutant('un CREATE par heure retire', 'else if (crees > 0)', 'else if (false)', (M) => M.prochaineProposition(du([], {}, { history: hDuel(600) })).kind === 'DUEL_CREATE');
+await mutant('son duel ouvert ignore', 'if (ouvertsMiens > 0)', 'if (false)', (M) => M.prochaineProposition(du([duel({ creator: W })])).kind === 'DUEL_CREATE');
+await mutant('settle de duel deja signe re-propose', "&& !vus.has('DUEL_SETTLE:' + d.id))", '&& true)', (M) => M.prochaineProposition({ ...du([pris()], { maxDuelStakeUsdc: '0' }), seen: ['DUEL_SETTLE:5'] }).kind === 'DUEL_SETTLE');
+await mutant('settle de duel apres le roll', "if (regles.duels && D) {\n    const miens", "if (regles.duels && D && !regles.rolls) {\n    const miens", (M) => M.prochaineProposition(du([pris()], { rolls: true }, { rolls: base().rolls })).kind === 'ROLL');
+await mutant('drapeau duels « true » texte accepte', 'duels: x.duels === true,', 'duels: !!x.duels,', (M) => M.prochaineProposition(du([duel()], { duels: 'true' })).kind === 'DUEL_JOIN');
+/* le join de SON propre duel a DEUX gardes (le filtre ici, puis planJoin) : il faut retirer les deux pour le franchir */
+{
+  const a = "bas(d.creator) !== moi && bas(d.token) === usdcD";
+  vu(src.split(a).length === 2, 'mutant propre duel : le motif existe une fois');
+  const url = new URL('./brain-jeu.mutant-' + process.pid + '-propre.js', import.meta.url);
+  writeFileSync(url, src.replace(a, 'bas(d.token) === usdcD'));
+  try { const M = await import(url.href); vu(M.prochaineProposition(du([duel({ creator: W })])).kind === 'NONE', 'filtre « pas le sien » retire : planJoin refuse encore (defense en profondeur), NONE'); }
+  finally { try { unlinkSync(url); } catch (_) {} }
 }
 console.log('ok brain-jeu - ' + n + ' assertions');
