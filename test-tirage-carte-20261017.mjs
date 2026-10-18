@@ -23,7 +23,9 @@ vu(/if \(nom === 'missions'\) \{ void peindreTirage\(\); void peindreDernierBloc
 const carte = app.slice(c, app.indexOf('</section>', c));
 vu(/<p class="titre jeuTitre"[^>]*>Your trades are your ticket\./.test(carte) && !/\u{1F39F}/u.test(carte), 'titre « jeu », sans emoji');
 /* Phil 2026-10-18 09:00 : « change pour vraiment ecrire » — les tuiles disent le jeu construit : ticket, pot du jour, rolls, missions, skins */
+/* Phil 2026-10-18 09:50 : seulement ce qui marche aujourd hui — aucune promesse de contrat a venir dans les tuiles */
 vu(/Trade \$10 of UNIT or tokenized stocks in a day \(UTC\), or mint a skin/.test(carte) && /the first block stamped 2 minutes later draws one ticket among the day's holders/.test(carte)
-  && /0\.50 USDC a roll, up to 10 in one signature/.test(carte) && /Doer 90%, community earn pool 7%, TokenizedBlock 3%/.test(carte) && /05 · SKINS/.test(carte),
-  'les tuiles disent le ticket, le pot du jour (bloc E), les rolls, le split des missions, les skins');
+  && /Practice: no prize yet\./.test(carte) && /Doer 90%, community earn pool 7%, TokenizedBlock 3%/.test(carte) && /05 · SKINS/.test(carte)
+  && !/contract opens once signed|With the contract|day pass|claims the pot/i.test(app.slice(app.indexOf('id="regleCarte"'), app.indexOf('</section>', app.indexOf('id="regleCarte"'))).replace(/<!--[\s\S]*?-->/g, '')),
+  'les tuiles disent ce qui marche (ticket, tirage du jour practice, rolls practice, missions, skins) et aucune promesse');
 console.log('ok tirage-carte - ' + n + ' assertions ; NE PROUVE PAS un ticket reel');

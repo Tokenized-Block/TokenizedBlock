@@ -3614,7 +3614,12 @@ details[open] > summary::before{transform:rotate(90deg)}
         <label class="champ">Your block
           <select id="mfBlock"><option value="">Reading your blocks…</option></select>
         </label>
-        <label class="champ">Reward per player, in block units
+        <!-- Phil 09:50 : « units de quoi ? tu peux en action tokenized » — le contrat V3 accepte la recompense dans le block OU dans l autre
+             devise de sa pool (ex. NVDAc pour un block paire NVDAc) : le choix est LU dans la cle de la pool, les decimales lues sur la chaine. -->
+        <label class="champ">Reward paid in
+          <select id="mfJeton"><option value="">Pick your block first</option></select>
+        </label>
+        <label class="champ">Reward per player
           <input id="mfReward" inputmode="decimal" placeholder="100">
         </label>
         <label class="champ">Players (max)
@@ -3623,7 +3628,6 @@ details[open] > summary::before{transform:rotate(90deg)}
         <label class="champ">Must hold at least (block units)
           <input id="mfHold" inputmode="decimal" placeholder="10">
         </label>
-        <p class="note" style="margin:4px 0">Task: <b>trade my block on its TokenizedBlock pool</b>, then hold it 24 h. Open 7 days. Doer 90% · community earn pool 7% · TokenizedBlock 3%. You earn through your block's pool (0.03% of every swap), not from the task.</p>
         <button type="submit" class="bouton" id="mfPoster">Post it — escrow the rewards</button>
         <p class="note" id="mfEtat" style="margin:6px 0 0"></p>
       </form>
@@ -3639,13 +3643,17 @@ details[open] > summary::before{transform:rotate(90deg)}
     <!-- UNIT POOLS (Phil 23:45 : « multipool de UNIT ») — les pools de UNIT LUES sur la chaine (/api/cle/UNIT) : ETH sur notre hook 7030
          (cotee, achetable), mmETH sur un hook launchpad tiers (le Quoter la refuse : dite telle quelle). Mesure 2026-10-17 : deviseAdmise(UNIT)
          = 0 sur 7030, donc UNIT ne peut PAS etre la devise d un autre block ; une pool UNIT/action s ouvre par « Add a pair », createur de UNIT. -->
+    <!-- Phil 2026-10-18 09:50 : « ca sert a rien … propose de swap avec toutes les actions » -> un SWAP, pas une liste. Le chemin existe
+         deja dans la fiche de UNIT : vendre UNIT et recevoir une action (selecteur Receive, franchissement Aerodrome), acheter UNIT en
+         payant avec une devise d entree (Pay with). Ce bouton ouvre la fiche, pose le choix, et met le champ sous les yeux. -->
     <div class="carte" id="unitCarte">
-      <span class="jeuKick">Game · UNIT pools</span>
-      <p class="note" id="unitEtat" style="margin:4px 0 0">Reading UNIT's pools on chain…</p>
-      <ul class="bcListe" id="unitPools" style="margin:6px 0 0;padding:0;list-style:none"></ul>
+      <span class="jeuKick">Game · Swap UNIT</span>
+      <label class="champ" style="margin-top:6px">With<select id="unitAvec"><option value="">ETH (its own market)</option></select></label>
       <div class="jourEtapes">
-        <button type="button" class="bouton sec" id="unitOuvrir">Open UNIT</button>
+        <button type="button" class="bouton" id="unitVendre">Sell UNIT for it</button>
+        <button type="button" class="bouton sec" id="unitAcheter">Buy UNIT with it</button>
       </div>
+      <p class="note" id="unitEtat" style="margin:4px 0 0" hidden></p>
     </div>
     <!-- SKIN MARKET (Phil 2026-10-17 23:45 : « t as oublie le market skin … encheres pour la revente a n importe quel token ») — le marche
          EXISTE dans le panneau (bc-market, bcPeindreMarche) ; ici, ses lignes telles quelles (bcLigneSkin -> bcActionMarche signe au wallet).
@@ -3657,19 +3665,19 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div id="skinListe" style="margin-top:6px"></div>
       <div class="jourEtapes">
         <button type="button" class="bouton" id="skinMint">Mint a skin · 1 USDC</button>
-        <button type="button" class="bouton sec" id="skinOuvrir">Open the full market</button>
       </div>
     </div>
     <!-- HOW IT WORKS : plie, en bas (le texte long vit ici et dans « ? »). -->
     <div class="carte" id="regleCarte">
       <details id="missionsLien">
         <summary class="note" style="cursor:pointer">How it works</summary>
-        <!-- Phil 2026-10-18 09:00 : « change pour vraiment écrire » — le jeu tel qu il est construit ; ce qui attend une signature le dit. -->
-        <p class="sous" id="tirSous" style="margin:6px 0 0">Four games, one ticket. Your ticket is a block face made from your wallet and the day — nobody else can hold it, and it is the only key to that day's pot.</p>
+        <!-- Phil 2026-10-18 09:50 : « j en ai marre que tu ecrives a la place de faire » — ces tuiles disent SEULEMENT ce qui marche
+             aujourd hui sur la page. Pot paye, rolls payes, pass : rien ici tant que leur contrat n est pas signe et branche. -->
+        <p class="sous" id="tirSous" style="margin:6px 0 0">Your ticket is a block face made from your wallet and the day — one per wallet per day.</p>
         <div class="jeuGrille">
-          <div class="jeuTuile"><b>01 · THE TICKET</b><p>Trade $10 of UNIT or tokenized stocks in a day (UTC), or mint a skin, and that day's ticket is yours. More volume that day adds nothing: one wallet, one ticket.</p></div>
-          <div class="jeuTuile"><b>02 · THE DAY POT</b><p>The fees of the day feed that day's pot. After midnight UTC the first block stamped 2 minutes later draws one ticket among the day's holders; its face is revealed and scored against yours. The winner claims the pot with the ticket (contract opens once signed; practice until then). Week and month draws stack every ticket day.</p></div>
-          <div class="jeuTuile"><b>03 · ROLLS</b><p>Roll now for practice: the block after next draws a face, scored against your ticket. With the contract: 0.50 USDC a roll, up to 10 in one signature, 3 traits or more in common pays 5 USDC from the roll pot; a 10 USDC day pass = 30 rolls, half of it to the day pot.</p></div>
+          <div class="jeuTuile"><b>01 · THE TICKET</b><p>Trade $10 of UNIT or tokenized stocks in a day (UTC), or mint a skin, and that day's ticket is yours.</p></div>
+          <div class="jeuTuile"><b>02 · THE DAILY DRAW</b><p>After midnight UTC, the first block stamped 2 minutes later draws one ticket among the day's holders and reveals the Face of the Day, scored against yours. Practice: no prize yet.</p></div>
+          <div class="jeuTuile"><b>03 · ROLLS</b><p>Roll: the block after next draws a face, scored against your ticket (traits in common, out of 5). Practice: no prize yet.</p></div>
           <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward. A ticket holder who holds the block does it — a person or an AI agent — and the chain proves it. Doer 90%, community earn pool 7%, TokenizedBlock 3%.</p></div>
           <div class="jeuTuile"><b>05 · SKINS</b><p>Mint a skin for your block, wear it, resell it at a fixed price or in an auction (bids +5%, 7 days max). A minted skin is also that day's ticket.</p></div>
         </div>
@@ -4735,7 +4743,30 @@ async function mesBlocksPourMission() {
   const liste = j && j.ok && Array.isArray(j.blocks) ? j.blocks : [];
   sel.innerHTML = liste.length ? liste.map((b) => '<option value="' + enTexte(b) + '">' + enTexte(((habitants.find((h) => String(h.adr).toLowerCase() === String(b).toLowerCase()) || {}).sym) || b.slice(0, 6) + '…' + b.slice(-4)) + '</option>').join('')
     : '<option value="">No block created by this wallet was read</option>';
+  void jetonsMission();
 }
+/* la devise de la recompense : le block lui-meme, ou l AUTRE devise de sa pool sur notre hook (ex. NVDAc) — V3 accepte les deux, pas
+ *   l ETH natif (une recompense est un ERC-20). Decimales LUES (decimals()) ; non lues -> l option n est pas proposee. */
+const mfDecimales = new Map();
+async function jetonsMission() {
+  const sel = $('#mfJeton'), block = String(($('#mfBlock') || {}).value || '').toLowerCase();
+  if (!sel) return;
+  if (!/^0x[0-9a-f]{40}$/.test(block)) { sel.innerHTML = '<option value="">Pick your block first</option>'; return; }
+  sel.innerHTML = '<option value="">Reading its pool…</option>';
+  let cles = null;
+  try { const r = await fetch('/api/cle/' + block, { cache: 'no-store' }).then((x) => x.json()); cles = r && r.ok && Array.isArray(r.cles) ? r.cles : null; } catch (_) { cles = null; }
+  const cle = (cles || []).find((k) => estNotreHook(k.hooks));
+  const lireDec = async (a) => { if (mfDecimales.has(a)) return mfDecimales.get(a); try { const d = parseInt(String(await rpc('eth_call', [{ to: a, data: '0x313ce567' }, 'latest'])), 16); if (Number.isInteger(d) && d >= 0 && d <= 36) { mfDecimales.set(a, d); return d; } } catch (_) {} return null; };
+  const opts = [];
+  const dB = await lireDec(block);
+  if (dB !== null) opts.push({ adr: block, txt: (((habitants.find((h) => String(h.adr).toLowerCase() === block) || {}).sym) || 'its') + ' units', dec: dB });
+  if (cle) {
+    const autre = String(cle.currency0).toLowerCase() === block ? String(cle.currency1).toLowerCase() : String(cle.currency0).toLowerCase();
+    if (!/^0x0{40}$/.test(autre)) { const dA = await lireDec(autre); if (dA !== null) opts.push({ adr: autre, txt: symPaire(autre) + ' (its pair)', dec: dA }); }
+  }
+  sel.innerHTML = opts.length ? opts.map((o) => '<option value="' + enTexte(o.adr) + '" data-dec="' + o.dec + '">' + enTexte(o.txt) + '</option>').join('') : '<option value="">Its pool could not be read</option>';
+}
+$('#mfBlock').addEventListener('change', () => { void jetonsMission(); });
 $('#jourCreerMission').addEventListener('click', () => { const f = $('#missionForm'); f.hidden = !f.hidden; if (!f.hidden) void mesBlocksPourMission(); });
 /* les idees de taches : pre-remplissent le formulaire et l ouvrent ; rien ne part sans le wallet */
 $('#missionsIdees').addEventListener('click', (e) => {
@@ -4757,9 +4788,12 @@ $('#missionForm').addEventListener('submit', async (e) => {
   if (!c) { dit('Connect your wallet first.'); return; }
   if (!/^0x[0-9a-f]{40}$/.test(contrat)) { dit('Nothing was posted: the board opens once its contract is signed on Base. Your task is ready to post then.'); return; }
   if (!/^0x[0-9a-f]{40}$/.test(block)) { dit('Pick one of your blocks.'); return; }
-  const dec = 18n; /* B20 : 18 decimales (frappe fixe) */
-  const brut = (s) => { const m = /^(\d+)(?:\.(\d{1,18}))?$/.exec(String(s || '').trim()); if (!m) return null; return BigInt(m[1]) * 10n ** dec + BigInt((m[2] || '').padEnd(18, '0')); };
-  const reward = brut($('#mfReward').value), hold = brut($('#mfHold').value), max = Number($('#mfMax').value);
+  /* la recompense dans la devise CHOISIE (block ou sa paire), aux decimales LUES ; la detention reste en unites du block (18, B20) */
+  const optJ = $('#mfJeton').selectedOptions && $('#mfJeton').selectedOptions[0];
+  const jeton = String($('#mfJeton').value || '').toLowerCase(), decJ = optJ ? Number(optJ.dataset.dec) : NaN;
+  if (!/^0x[0-9a-f]{40}$/.test(jeton) || !Number.isInteger(decJ)) { dit('Pick what the reward is paid in.'); return; }
+  const brutDe = (s, d) => { const m = new RegExp('^(\\d+)(?:\\.(\\d{1,' + Math.max(1, d) + '}))?$').exec(String(s || '').trim()); if (!m) return null; return BigInt(m[1]) * 10n ** BigInt(d) + BigInt((m[2] || '').padEnd(d, '0') || '0'); };
+  const reward = brutDe($('#mfReward').value, decJ), hold = brutDe($('#mfHold').value, 18), max = Number($('#mfMax').value);
   if (reward === null || reward <= 0n || hold === null || hold <= 0n || !(max >= 1 && max <= 10000)) { dit('Reward, holding and players must be positive numbers.'); return; }
   dit('Reading your block\'s pool on chain…');
   let cles = null;
@@ -4768,11 +4802,11 @@ $('#missionForm').addEventListener('submit', async (e) => {
   if (!cle) { dit('No pool of this block on a TokenizedBlock hook was read: a mission needs one.'); return; }
   const now = Math.floor(Date.now() / 1000);
   const plan = planPoster({ contrat, cle: { currency0: cle.currency0, currency1: cle.currency1, fee: Number(cle.fee), tickSpacing: Number(cle.tickSpacing), hooks: cle.hooks },
-    params: { rewardToken: block, reward: reward.toString(), maxDone: max, perWallet: 1, expiry: now + 7 * 86400, target: V4_ADRESSES[CHAINE].poolm, topic0: TOPIC_SWAP_APP,
+    params: { rewardToken: jeton, reward: reward.toString(), maxDone: max, perWallet: 1, expiry: now + 7 * 86400, target: V4_ADRESSES[CHAINE].poolm, topic0: TOPIC_SWAP_APP,
       descHash: topicDe('trade my block on its TokenizedBlock pool'), topic1: poolIdV4(cle) },
     hold: { minBlock: hold.toString(), minPaired: 0, bonusMinBlock: 0, bonusBps: 0, window: 86400 }, maintenant: now, poolManager: V4_ADRESSES[CHAINE].poolm });
   if (plan.etat !== 'PRET') { dit('Not posted: ' + plan.pourquoi); return; }
-  dit('Escrow ' + plan.budget + ' raw units (' + max + ' × reward). Sign ' + plan.appels.length + ' steps in your wallet…');
+  dit('Escrow ' + (Number(plan.budget) / 10 ** decJ).toLocaleString('en-US', { maximumFractionDigits: 6 }) + ' ' + (optJ.textContent || '') + ' (' + max + ' × reward). Sign ' + plan.appels.length + ' steps in your wallet…');
   for (const a of plan.appels) {
     let r;
     try { r = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, to: a.to, data: a.data, value: '0x0' }); }
@@ -4783,31 +4817,43 @@ $('#missionForm').addEventListener('submit', async (e) => {
   void peindreMissions();
 });
 
-/* ══ UNIT POOLS (Phil 23:45 : « multipool de UNIT ») — /api/cle/<UNIT> (cles LUES par le serveur) ; une pool sur NOTRE hook est dite
- *   tradable ; une pool d un hook tiers est nommee telle quelle (le Quoter v4 la refuse : mesure 2026-10-17). Rien d invente : non lu = dit. */
-async function peindreUnitPools() {
-  const etat = $('#unitEtat'), ul = $('#unitPools');
-  if (!etat || !ul) return;
-  let r = null;
-  try { r = await fetch('/api/cle/' + UNIT_APP, { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
-  const cles = r && r.ok && Array.isArray(r.cles) ? r.cles : null;
-  if (!cles) { etat.textContent = 'UNIT\'s pools could not be read just now.'; return; }
-  const u = UNIT_APP.toLowerCase();
-  /* un jeton inconnu de l app (ex. mmETH, mesure 2026-10-18) : son symbol() est LU sur la chaine ; illisible -> adresse courte, jamais devine */
-  const symLu = async (a) => {
-    const s = symPaire(a);
-    if (!/…/.test(s)) return s;
-    try { const h = String(await rpc('eth_call', [{ to: a, data: '0x95d89b41' }, 'latest'])).slice(2); const len = parseInt(h.slice(64, 128), 16); const t = h.slice(128, 128 + len * 2); const txt = new TextDecoder().decode(Uint8Array.from(t.match(/../g).map((x) => parseInt(x, 16)))); return /^[\x20-\x7e]{1,12}$/.test(txt) ? txt : s; } catch (_) { return s; }
-  };
-  const lignes = await Promise.all(cles.map(async (k) => {
-    const autre = String(k.currency0).toLowerCase() === u ? k.currency1 : k.currency0;
-    const notre = estNotreHook(k.hooks);
-    return '<li class="filL"><p class="filT"><b>UNIT / ' + enTexte(await symLu(autre)) + '</b> — ' + (notre ? 'TokenizedBlock pool: tradable here, 0.1% fee (0.07 app · 0.03 creator)' : 'third-party hook pool (' + enTexte(String(k.hooks).slice(0, 8)) + '…): not quoted here') + '</p></li>';
-  }));
-  etat.textContent = cles.length + ' pool' + (cles.length === 1 ? '' : 's') + ' read on chain. $10 of UNIT trades in a day = today\'s ticket. UNIT\'s creator can open UNIT / stock pools from its page (Add a pair).';
-  ul.innerHTML = lignes.join('');
+/* ══ SWAP UNIT (Phil 2026-10-18 09:50 : « propose de swap avec toutes les actions tokenized ») — la liste = les actions que la fiche sait
+ *   RECEVOIR (actionsRecevables : marche Aerodrome lu), la meme que son selecteur « Receive ». Le geste reel vit dans la fiche de UNIT : ce
+ *   bouton l ouvre, pose le choix (Receive pour vendre, Pay with pour acheter) et met le champ sous les yeux. Rien n est signe ici. */
+function peindreUnitPools() {
+  const sel = $('#unitAvec');
+  if (!sel) return;
+  let actions = [];
+  try { actions = actionsRecevables({ marches: marcheParAdr, actions: ACTIONS_COINBASE }); } catch (_) { actions = []; }
+  if (!actions.length) actions = (ACTIONS_COINBASE || []).map((x) => ({ adr: String(x.adr).toLowerCase(), symbole: x.symbole }));
+  const garde = sel.value;
+  sel.innerHTML = '<option value="">ETH (its own market)</option>' + actions.map((x) => '<option value="' + enTexte(x.adr) + '">' + enTexte(x.symbole) + ' — tokenized stock</option>').join('');
+  if (garde && [...sel.options].some((o) => o.value === garde)) sel.value = garde;
 }
-$('#unitOuvrir').addEventListener('click', () => { try { void ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { allerA('trade'); } });
+async function swapUnit(sens) {
+  const choix = String($('#unitAvec').value || '').toLowerCase(), e = $('#unitEtat');
+  const dit = (t) => { e.hidden = false; e.textContent = t; };
+  dit('Opening UNIT…');
+  try { await ouvrirProfil(UNIT_APP, 'UNIT'); } catch (_) { dit('UNIT could not be opened just now.'); return; }
+  const poser = (idSel, idBloc) => {
+    const s = $(idSel); if (!s) return false;
+    if (!choix) { s.value = ''; s.dispatchEvent(new Event('change')); return true; }
+    const o = [...s.options].find((x) => String(x.value).toLowerCase() === choix);
+    if (!o) return false;
+    s.value = o.value; s.dispatchEvent(new Event('change'));
+    const b = $(idBloc); if (b) b.hidden = false;
+    return true;
+  };
+  /* la fiche peint ses selecteurs apres lecture du marche : on attend qu ils portent le choix (8 s au plus), sinon on le dit */
+  let ok = false;
+  for (let k = 0; k < 16 && !ok; k++) { ok = sens === 'VENTE' ? poser('#peRecoit', '#peRecoitBloc') : poser('#peDevise', '#peDeviseBloc'); if (!ok) await new Promise((r) => setTimeout(r, 500)); }
+  const champ = $(sens === 'VENTE' ? '#peVente' : '#peAchat');
+  if (champ) { try { champ.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} champ.focus(); }
+  e.hidden = true;
+  if (!ok && choix) dit('UNIT is open; that stock is not offered there right now — pick it in ' + (sens === 'VENTE' ? 'Receive' : 'Pay with') + ' when it appears.');
+}
+$('#unitVendre').addEventListener('click', () => { void swapUnit('VENTE'); });
+$('#unitAcheter').addEventListener('click', () => { void swapUnit('ACHAT'); });
 
 /* ══ SKIN MARKET dans Game (Phil 23:45) — lit le contrat BlockSkins (lireSkins), montre les skins EN VENTE (prix fixe / enchere) et les
  *   miennes (vendre / mettre aux encheres), par les MEMES lignes que le panneau (bcLigneSkin) : un clic ouvre le panneau, qui dit le partage
@@ -4835,7 +4881,6 @@ async function peindreSkinsJeu() {
   } finally { skinsJeuEnVol = false; }
 }
 $('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
-$('#skinOuvrir').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'market', deplier: true, sansBasculer: true }); } catch (_) {} });
 
 /* ══ EARN (Phil 19:40) — ce que ce wallet a gagne : part de createur DUE (registre public, jamais payee par le serveur), tirage d hier,
  *   missions reclamees (contrat). Chaque ligne nomme sa source ; rien n est invente. */
