@@ -96,7 +96,8 @@ import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
 import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
-import { BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv } from './blockskins.js';
+import { BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv, DEVISES_SKIN as DEVISES_SKIN_SRV } from './blockskins.js';
+import { lireEvenementsJeu, evenementsPractice, fusionnerJournal, avecBlocks, TOPICS_ROLLS as TOPICS_ROLLS_JOURNAL, TOPICS_SKINS as TOPICS_SKINS_JOURNAL, JOURNAL_MAX, SOURCE_DUELS } from './journal-jeu.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
@@ -4128,6 +4129,70 @@ async function lireDuelsSrv() {
   finally { duelsSrv.lu = Date.now(); duelsSrv.enVol = false; }
 }
 setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000).unref?.();
+
+/* ══ LE JOURNAL DU JOUR DU JEU (Phil 2026-10-18 : « les brains sont les occupants de la Map ») — journal-jeu.js, GET /api/jeu/journal.
+ * ⛔ LU SUR UN MINUTEUR, JAMAIS PAR REQUETE : un tour toutes les JOURNAL_TOUR_MS, au plus JOURNAL_FENETRES_PAR_TOUR fenetres de
+ *   JOURNAL_PAS_BLOCS, depuis un CURSEUR (le dernier bloc lu). La requete ne lit que la memoire : elle sert l etat, meme perime, avec `lu`.
+ * ⛔ UNE SEULE requete eth_getLogs par fenetre pour les DEUX contrats (address = [BlockRolls, BlockSkins], topics = leurs evenements) ; le
+ *   module pur relit l adresse de CHAQUE log (un topic d un autre contrat est ignore).
+ * ⛔ LA PROFONDEUR EST BORNEE, ET C EST DIT : au demarrage on part du premier bloc du jour UTC (estime par le temps de bloc MESURE sur les
+ *   1 000 derniers blocs, moins une marge), mais jamais plus de JOURNAL_PROFONDEUR_MAX blocs en arriere — SONDE 2026-10-18 (tete
+ *   52 775 340, 2 s/bloc mesures) : publicnode sert eth_getLogs a -2 000 et -9 000 blocs, REFUSE a -20 000 et -45 000 (« Archive requests
+ *   require a personal token ») ; mainnet.base.org rend 429 a toutes. Un serveur qui demarre l apres-midi ne relit donc que ~5 h :
+ *   `couvreLaJournee` le dit (false), jamais un journal « complet » qui ment. Memoire seule : perdu au redemarrage, relu a la borne.
+ * ⛔ Un bloc dont l horodatage n est pas lu -> la fenetre n est PAS consommee (curseur immobile, relue au tour suivant). */
+const JOURNAL_PAS_BLOCS = 2000, JOURNAL_PROFONDEUR_MAX = 9000, JOURNAL_FENETRES_PAR_TOUR = 5, JOURNAL_TOUR_MS = 90000, JOURNAL_GARDE = 400, JOURNAL_ASSOC_MAX = 5000;
+const journalEtat = { curseur: null, couvertureDepuis: null, couvreLaJournee: false, jour: null, lu: null, evenements: [], cibles: new Map(), devisesListees: new Map(), enVol: false };
+const contratsJournal = () => {
+  const r = String(BLOCKROLLS_DEPLOIEMENT.adresse || '').toLowerCase(), s = String(BLOCKSKINS_SRV || '').toLowerCase();
+  return { rolls: /^0x[0-9a-f]{40}$/.test(r) ? r : null, skins: /^0x[0-9a-f]{40}$/.test(s) ? s : null };
+};
+async function lireJournalJeu() {
+  const { rolls, skins } = contratsJournal();
+  if (journalEtat.enVol || (!rolls && !skins)) return;
+  journalEtat.enVol = true;
+  try {
+    const j = jourDe(Date.now());
+    const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    if (!Number.isSafeInteger(tete) || tete <= 1000) return;
+    const sur = tete - ROLLS_MARGE_BLOCS;
+    if (journalEtat.curseur === null) {
+      const tsT = await horodatageBloc(tete), tsA = await horodatageBloc(tete - 1000);
+      if (tsT === null || tsA === null) return;
+      const sParBloc = tsT > tsA ? (tsT - tsA) / 1000 : 2;
+      const depuisMinuit = tete - Math.ceil(Math.max(0, tsT - j.debut / 1000) / sParBloc) - 30;
+      const de = Math.max(depuisMinuit, tete - JOURNAL_PROFONDEUR_MAX, 1);
+      journalEtat.curseur = de - 1; journalEtat.couvertureDepuis = de; journalEtat.couvreLaJournee = de <= depuisMinuit; journalEtat.jour = j.id;
+    } else if (journalEtat.jour !== j.id) {
+      /* un nouveau jour UTC, curseur continu : la journee est couverte depuis le bloc qui suit le dernier lu */
+      journalEtat.jour = j.id; journalEtat.couvertureDepuis = journalEtat.curseur + 1; journalEtat.couvreLaJournee = true;
+    }
+    const adresses = [rolls, skins].filter(Boolean);
+    const topics = [[...(rolls ? TOPICS_ROLLS_JOURNAL : []), ...(skins ? TOPICS_SKINS_JOURNAL : [])]];
+    let de = journalEtat.curseur + 1;
+    for (let tour = 0; tour < JOURNAL_FENETRES_PAR_TOUR && de <= sur; tour++) {
+      const a = Math.min(sur, de + JOURNAL_PAS_BLOCS - 1);
+      const logs = await rpcServeur('eth_getLogs', [{ address: adresses, fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16), topics }]);
+      if (!Array.isArray(logs)) return;
+      const heures = new Map();
+      for (const b of new Set(logs.map((l) => parseInt(l && l.blockNumber, 16)).filter(Number.isSafeInteger))) {
+        const ts = await horodatageBloc(b); if (ts === null) return; heures.set(b, ts);
+      }
+      const r = lireEvenementsJeu(logs, { rolls, skins }, { horodatage: (b) => (heures.has(b) ? heures.get(b) : null), cibles: journalEtat.cibles, devisesListees: journalEtat.devisesListees, devises: DEVISES_SKIN_SRV });
+      if (r.sansHeure) return;
+      for (const [k, v] of r.cibles) journalEtat.cibles.set(k, v);
+      for (const [k, v] of r.devisesListees) journalEtat.devisesListees.set(k, v);
+      for (const m of [journalEtat.cibles, journalEtat.devisesListees]) while (m.size > JOURNAL_ASSOC_MAX) m.delete(m.keys().next().value);
+      journalEtat.evenements = fusionnerJournal(journalEtat.evenements, r.evenements, { depuisMs: jourDe(Date.now()).debut, max: JOURNAL_GARDE });
+      journalEtat.curseur = a; journalEtat.lu = Date.now(); de = a + 1;
+    }
+    if (de > sur) journalEtat.lu = Date.now();
+  } catch (_) { /* relu au prochain tour, depuis le meme curseur */ } finally { journalEtat.enVol = false; }
+}
+if (process.env.TB_JOURNAL !== '0') {
+  setTimeout(() => { void lireJournalJeu(); setInterval(() => { void lireJournalJeu(); }, JOURNAL_TOUR_MS).unref?.(); },
+    Math.max(500, Number(process.env.TB_JOURNAL_PREMIER_MS) || 20000)).unref?.();
+}
 setInterval(() => {
   if (!revenuSale || !FICHIER_REVENU) return;
   try { writeFileSync(FICHIER_REVENU + '.tmp', JSON.stringify(revenu)); renameSync(FICHIER_REVENU + '.tmp', FICHIER_REVENU); revenuSale = false; }
@@ -6152,6 +6217,24 @@ function traiterRequete(req, res) {
       if (jeuRolls.length > JEU_ROLLS_MAX) jeuRolls.splice(0, jeuRolls.length - JEU_ROLLS_MAX);
       rendreJ(200, { ok: true, n: jeuRolls.length });
     });
+    return;
+  }
+  /* ══ LE JOURNAL DU JOUR (Phil 2026-10-18) — GET /api/jeu/journal : les evenements du jour UTC, du plus recent au plus ancien, au plus
+   *   JOURNAL_MAX. ⛔ AUCUNE LECTURE DE CHAINE ICI : la memoire du minuteur (lireJournalJeu) + les rolls practice (LECTURE de jeuRolls,
+   *   dans la route du jeu) ; `block` = le block cree par ce wallet, lu dans l index des createurs (createurParBlock), null sinon. Perime
+   *   possible : `lu` dit quand la chaine a ete lue pour la derniere fois, `couvreLaJournee` si la lecture remonte a minuit UTC. */
+  if (chemin === '/api/jeu/journal') {
+    const rendreJl = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(req.method === 'HEAD' ? undefined : JSON.stringify(o)); };
+    if (req.method !== 'GET' && req.method !== 'HEAD') { rendreJl(405, { ok: false, pourquoi: 'GET only' }); return; }
+    const jJl = jourDe(Date.now());
+    const tousJl = fusionnerJournal(journalEtat.jour === jJl.id ? journalEtat.evenements : [], evenementsPractice(jeuRolls.slice(-JEU_ROLLS_MAX)), { depuisMs: jJl.debut, max: JOURNAL_MAX });
+    const walletsJl = new Set(tousJl.map((e) => e.wallet).filter(Boolean)), blocDeJl = new Map();
+    if (walletsJl.size) for (const [jeton, createur] of createurParBlock) if (walletsJl.has(createur) && !blocDeJl.has(createur)) blocDeJl.set(createur, jeton);
+    const cJl = contratsJournal();
+    rendreJl(200, { ok: true, jour: jJl.id, lu: journalEtat.lu ? new Date(journalEtat.lu).toISOString() : null, maintenant: Date.now(),
+      couvertureDepuis: journalEtat.jour === jJl.id ? journalEtat.couvertureDepuis : null, couvreLaJournee: journalEtat.jour === jJl.id && journalEtat.couvreLaJournee === true,
+      scanJusqua: journalEtat.curseur, sources: { rolls: cJl.rolls, skins: cJl.skins, practice: true, duels: SOURCE_DUELS },
+      evenements: avecBlocks(tousJl, (w) => blocDeJl.get(w) || null) });
     return;
   }
 

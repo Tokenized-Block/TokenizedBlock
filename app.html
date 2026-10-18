@@ -468,6 +468,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* les derniers rolls du jeu sur UNIT (Phil 2026-10-17 23:50) : une ligne d ETAT comme #mapEtat, en monospace ; vide = absente (silence) */
 .mapRolls{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mapRolls:empty{display:none}
+/* LE JOURNAL DU JOUR SUR LA MAP (Phil 2026-10-18) : un bouton « Today » sous « Info », CACHE tant qu il n y a rien a lire ; la liste est
+ *   FERMEE par defaut (aucun texte permanent sur la Map). */
+.bJournal{top:54px}
+.bJournal[hidden],.journalMap[hidden]{display:none}
+#v-map.on .bJournal{top:calc(var(--mapHaut,64px) + 56px)}
+.journalMap{position:absolute;top:98px;right:10px;z-index:7;width:min(320px,calc(100vw - 24px));max-height:min(46dvh,420px);overflow-y:auto;
+  background:rgb(var(--fondRgb) / .92);backdrop-filter:blur(12px);border:1px solid var(--ligne);border-radius:14px;padding:10px 12px;
+  box-shadow:0 14px 40px rgba(0,0,0,.45)}
+#v-map.on .journalMap{position:fixed;top:calc(var(--mapHaut,64px) + 100px);right:12px;z-index:20}
+.journalListe{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;font-size:12px}
+.journalListe li{display:flex;gap:8px;align-items:baseline;line-height:1.35;min-width:0}
+.journalListe time{color:var(--doux);font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:11px;flex:0 0 auto}
+.journalListe span{overflow-wrap:anywhere;min-width:0}
 /* ⛔ `margin-left:auto` pousse le lien a droite de la legende sans le sortir du flux : pas de
    `position:absolute`, donc il ne peut pas recouvrir la map ni disparaitre sous elle.
    ⛔⛔ `pointer-events:auto` N EST PAS DECORATIF, ET IL A ETE AJOUTE APRES MESURE. Sur la page
@@ -1580,6 +1593,9 @@ details[open] > summary::before{transform:rotate(90deg)}
                vide #map) ; un defi dont le createur a un block a l ecran est pose SUR ce block (peindreDuelsMap) -->
           <div class="mapDuels" id="mapDuels"></div>
           <button class="bMasquer" id="bMasquer" aria-expanded="false" aria-controls="cote">Info</button>
+          <!-- Phil 2026-10-18 : le journal du jour (/api/jeu/journal). Bouton cache tant qu il n y a rien ; liste fermee par defaut. -->
+          <button type="button" class="bMasquer bJournal" id="bJourMap" aria-expanded="false" aria-controls="journalMap" hidden>Today</button>
+          <div class="journalMap" id="journalMap" hidden><ol class="journalListe" id="journalMapListe"></ol></div>
         </div>
         <!-- ⛔⛔ LEGENDE RETIREE (Phil, 2026-09-12 : « on explique deja autre part »). Elle disait
              taille = life = prix x supply, les trois tailles, le pale « sans marche » et « life can
@@ -3593,6 +3609,11 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" class="jeuJeu" data-jeu="missionsCarte" data-mots="tasks board earn"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
       <!-- DUELS (Phil 2026-10-18) : cachee tant que /api/duels ne sert pas de contrat (pas de tuile vers une carte vide) -->
       <button type="button" class="jeuJeu" data-jeu="duelsCarte" id="jbDuelsTuile" data-mots="duel challenge stake" hidden><b>Duels</b><i id="jbDuels">—</i><span id="jbDuelsTxt">open challenges</span></button>
+    </div>
+    <!-- Phil 2026-10-18 : le journal du jour, les 10 derniers (/api/jeu/journal, peindreJournalJeu) ; cachee tant qu il n y a rien -->
+    <div class="carte" id="journalCarte" hidden>
+      <span class="jeuKick">Today</span>
+      <ol class="journalListe" id="journalJeuListe" style="margin-top:8px"></ol>
     </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
     <div class="carte" id="tirCarte">
@@ -5985,6 +6006,9 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'map') suivreLeCote();
   /* Phil 23:50 : en ouvrant la Map on relit les rolls tout de suite — un roll fait dans Game roule sous les yeux, pas 10 s plus tard */
   if (nom === 'map') void peindreRollsMap();
+  /* Phil 2026-10-18 : le journal du jour, relu a l ouverture de la Map et du Game */
+  if (nom === 'map') void peindreJournalMap();
+  if (nom === 'missions') void lireJournal();
   if (nom === 'brain') peindreChoixBrain();
   /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
    * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
@@ -8550,6 +8574,98 @@ async function peindreRollsMap() {
 }
 setInterval(() => { if (mapVisible()) void peindreRollsMap(); }, ROLLS_MAP_MS);
 setTimeout(() => { if (mapVisible()) void peindreRollsMap(); }, 2500);
+
+/* ══ LE JOURNAL DU JOUR (Phil 2026-10-18 : « les brains sont les occupants de la Map ») — GET /api/jeu/journal (serveur : journal-jeu.js,
+ *   lu sur un minuteur, jamais par requete). Trois lecteurs, UNE liste en memoire (`journal`, du plus recent au plus ancien, <= 100) :
+ *   (1) la Map, relue toutes les JOURNAL_MAP_MS SEULEMENT quand elle est a l ecran : chaque evenement NOUVEAU fait onduler le block du
+ *       wallet (son block cree, lu par le serveur ; a defaut le block de la skin, ou UNIT pour un roll) — l onde du moteur 3D (1,6 s,
+ *       jouee deux fois, ~3 s) avec UN mot + le pulse de la tuile. Rien d ecrit en permanence : le bouton « Today » n apparait que s il y
+ *       a des evenements, et la liste est fermee par defaut. Les rolls practice restent dessines par peindreRollsMap (pas de double onde).
+ *   (2) la carte « Today » du Game (les 10 derniers), cachee tant qu il n y a rien ; (3) la commande « log » du Brain.
+ * ⛔ « NOUVEAU » comme peindreRollsMap : au premier passage, seuls les evenements plus jeunes que la page (horloge du serveur) ; ensuite,
+ *   tout id absent du passage precedent. ⛔ Rien ne passe par liveEvts ni le fil Live : un evenement du jeu n y est pas une transaction. */
+const JOURNAL_MAP_MS = 25000;
+let journal = [], journalVus = null, journalEnCours = false, journalLuA = 0;
+const heureJournal = (t) => { try { return new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return '—'; } };
+function motJournal(e) {
+  if (e.kind === 'settled') return 'roll ' + e.score + '/5';
+  if (e.kind === 'roll') return 'roll';
+  if (e.kind === 'pass') return 'pass';
+  if (e.kind === 'skin_bid') return 'bid';
+  if (e.kind === 'skin_sold' || e.kind === 'skin_minted') return 'skin';
+  return e.kind === 'duel' ? 'duel' : '';
+}
+function lignesJournal(ol, evts) {
+  if (!ol) return;
+  ol.textContent = '';
+  for (const e of evts) {
+    const li = document.createElement('li'), tm = document.createElement('time'), sp = document.createElement('span');
+    tm.textContent = heureJournal(e.t); try { tm.dateTime = new Date(e.t).toISOString(); } catch (_) { /* sans attribut */ }
+    sp.textContent = e.text; li.append(tm, sp); ol.append(li);
+  }
+}
+function peindreJournalJeu() {
+  const c = $('#journalCarte');
+  if (!c) return;
+  c.hidden = !journal.length;
+  lignesJournal($('#journalJeuListe'), journal.slice(0, 10));
+}
+function peindreListeJournal() {
+  $('#bJourMap').hidden = !journal.length;
+  if (!journal.length) { $('#journalMap').hidden = true; $('#bJourMap').setAttribute('aria-expanded', 'false'); }
+  lignesJournal($('#journalMapListe'), journal);
+  peindreJournalJeu();
+}
+async function lireJournal() {
+  let j = null;
+  try { j = await fetch('/api/jeu/journal', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((r) => r.json()); } catch (_) { j = null; }
+  if (!j || j.ok !== true || !Array.isArray(j.evenements)) return null;
+  journal = j.evenements.filter((e) => e && typeof e.id === 'string' && typeof e.text === 'string' && Number.isFinite(e.t)).slice(0, 100);
+  journalLuA = Date.now();
+  peindreListeJournal();
+  return j;
+}
+async function peindreJournalMap() {
+  if (!mapVisible() || journalEnCours) return;
+  journalEnCours = true;
+  try {
+    const j = await lireJournal();
+    if (!j) return;
+    let neufs;
+    if (journalVus === null) {
+      const ecoule = performance.now(), maintenant = Number(j.maintenant) || 0;
+      neufs = maintenant ? journal.filter((e) => maintenant - e.t <= ecoule) : [];
+    } else neufs = journal.filter((e) => !journalVus.has(e.id));
+    journalVus = new Set(journal.map((e) => e.id));
+    /* au plus 3 par passage (les plus recents), espaces */
+    for (const e of neufs.slice(0, 3)) {
+      if (e.kind === 'practice') continue;
+      const cible = e.block || e.skinBlock || (e.kind === 'roll' || e.kind === 'settled' ? UNIT_APP : null);
+      const h = cible ? habitantDe(cible) : null;
+      if (!h || !mapVisible()) continue;
+      onde(cible, accentVif(), motJournal(e));
+      h.el.classList.remove('pulse');
+      void h.el.offsetWidth;
+      h.el.classList.add('pulse');
+      await dormir(1500);
+      onde(cible, accentVif(), motJournal(e));
+      await dormir(450);
+    }
+  } finally { journalEnCours = false; }
+}
+$('#bJourMap').addEventListener('click', () => {
+  const p = $('#journalMap'), b = $('#bJourMap'), ouvrir = p.hidden;
+  p.hidden = !ouvrir;
+  b.setAttribute('aria-expanded', String(ouvrir));
+});
+setInterval(() => { if (mapVisible()) void peindreJournalMap(); }, JOURNAL_MAP_MS);
+setTimeout(() => { if (mapVisible()) void peindreJournalMap(); }, 3500);
+/* le Game : relu toutes les 30 s seulement quand son onglet est a l ecran */
+function jeuVisible() {
+  const v = document.getElementById('v-missions');
+  return !document.hidden && !!v && v.classList.contains('on');
+}
+setInterval(() => { if (jeuVisible()) void lireJournal(); }, 30000);
 
 let lectureVieEnCours = false;
 /** ⛔ Ou en est le tour de lecture. Chaque passe lit les 30 suivants ; au bout, on recommence — c est
@@ -24787,6 +24903,7 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
   }
   /* ── LE GAME PAR LE TEXTE (2026-10-18, Phil 09:00 : « le brain lui-meme, qui par une commande peut avoir acces au game ») ── */
   if (c.type === 'game') { void bcCommandeGame(); return true; }
+  if (c.type === 'log') { void bcCommandeLog(); return true; }
   if (c.type === 'roll') { void bcCommandeRoll(c.n); return true; }
   if (c.type === 'post_task') { bcCommandePostTask(c); return true; }
   if (c.type === 'duel') { void bcCommandeDuel(); return true; }
@@ -24831,6 +24948,17 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
  *   (planRolls : UN approve EXACT de N x prix + N roll, ou planRollsAvecPass) et le montre — le wallet signe par bcSigner, un clic a la fois ;
  *   `post task` ouvre le formulaire Post-a-task PRE-REMPLI (le formulaire, puis le wallet). Le serveur n a rien a faire : memes fonctions
  *   pures que les boutons du Game (blockrolls-plan.js, rolls-jeu.js), meme ticket du jour (adresseTicket). */
+/* « log » (Phil 2026-10-18) : les 10 derniers evenements du jour, la MEME liste que la Map et le Game (lireJournal, /api/jeu/journal) */
+async function bcCommandeLog() {
+  const m = bcMessage('Game', '', 'Today in the game');
+  bcVue('chat');
+  const lecture = bcEtape(m, 'Reading today…');
+  const j = Date.now() - journalLuA < 20000 ? { ok: true } : await lireJournal();
+  lecture.remove();
+  if (!j) { bcEtape(m, 'Today could not be read just now.', 'non'); return; }
+  if (!journal.length) { bcEtape(m, 'Nothing yet today.'); return; }
+  for (const e of journal.slice(0, 10)) bcEtape(m, heureJournal(e.t) + ' · ' + e.text);
+}
 async function bcCommandeGame() {
   const m = bcMessage('Game', '', 'Today\'s game');
   bcVue('chat');

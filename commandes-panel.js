@@ -55,6 +55,7 @@ export const AIDE_COMMANDES = Object.freeze([
   'market · trade · brain · chat          switch the view',
   'tasks                                  what this block’s brain accepts right now',
   'game                                   the Game: your ticket, today’s tickets, the pot, the last rolls',
+  'log · today                            what happened in the game today (the last 10)',
   'roll · roll x5 · roll x10              the classic roll (0.50 USDC a roll with the contract, 10 at most; practice without it)',
   'post task <reward> <players> <hold>    e.g. post task 100 10 10 — opens Post-a-task filled in (block units)',
   'duel                                   open duels: accept one or open a challenge (winner 90%, reward pool 7%, TokenizedBlock 3%)',
@@ -82,6 +83,9 @@ export const COMMANDES = Object.freeze([
   /* 2026-10-18 (Phil) : les duels — « duel » ou « duels » ; la commande dit elle-meme si le contrat n est pas ouvert */
   { cle: 'duel', lire: (t) => (/^duels?$/i.test(t) ? { ok: true, commande: { type: 'duel' } } : null),
     palette: [{ nom: 'Duels — open challenges, accept or settle', modele: 'duel', mots: 'duel challenge stake versus fight' }] },
+  /* 2026-10-18 : le journal du jour (/api/jeu/journal) — « log » ou « today » */
+  { cle: 'log', lire: (t) => (/^(log|today)$/i.test(t) ? { ok: true, commande: { type: 'log' } } : null),
+    palette: [{ nom: 'Today — what the brains did today', modele: 'log', mots: 'log journal today events feed' }] },
   { cle: 'roll', lire: (t) => {
     if (!/^rolls?\b/i.test(t)) return null;
     /* roll · roll x5 · roll x 5 · roll 5 · rolls x10 — le nombre est LU, jamais plafonne : « roll x11 » est refuse, pas ramene a 10 */
@@ -150,7 +154,7 @@ export function creerAnalyseur(table) {
  *   select: { type:'select', jeton }
  *   tab   : { type:'show', tab }      tasks : { type:'tasks' }      help : { type:'help' }
  *   game  : { type:'game' }           roll  : { type:'roll', n }  (n = 1..ROLLS_PAR_COMMANDE_MAX ; « roll x11 » est REFUSE, jamais plafonne)
- *   duel  : { type:'duel' }           (« duel » ou « duels »)
+ *   duel  : { type:'duel' }           (« duel » ou « duels »)        log : { type:'log' }  (« log » ou « today » : le journal du jour)
  *   post_task : { type:'post_task', reward, players, hold }  (reward / hold = le texte du nombre, en unites humaines du block ; players = entier)
  */
 export const analyserCommande = creerAnalyseur(COMMANDES);
