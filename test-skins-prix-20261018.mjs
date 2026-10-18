@@ -110,7 +110,8 @@ const page = lire('deployer-blockskins.html');
 vu(!PRIX_TAPE.test(sansCommentaires(page)) && /usdcTexte\(D\.mintPriceUsdc\)/.test(page) && /from '\.\/blockskins-actif\.js'/.test(page), 'C deployer-blockskins.html : le prix vient de mintPriceUsdc de l enregistrement (usdcTexte), jamais tape');
 const srv = lire('serveur-web.js');
 vu(/^  'blockskins\.js', 'blockskins-actif\.js', 'blockskins-deploiement\.js',$/m.test(srv), 'C le serveur sert blockskins-actif.js (importe par blockskins.js et skins.js : absent = 404 = app morte)');
-vu(/import \{ BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV \} from '\.\/blockskins\.js';/.test(srv)
+/* 2026-10-18 (lead) : l import porte aussi lireSkins (skin detenu = ticket du jour) ; on exige toujours SKIN_MINT_USDC_SRV de blockskins.js */
+vu(/import \{ BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV(, lireSkins as lireSkinsSrv)? \} from '\.\/blockskins\.js';/.test(srv)
   && /passSkinVerifie\(\{ tx, recu, skins: BLOCKSKINS_SRV, usdc: USDC_BASE, wallet: FEE_WALLET, prix: SKIN_MINT_USDC_SRV \}\)/.test(srv)
   && /prixUsdc: SKIN_PRIX_USDC\.toString\(\)/.test(srv),
   'C le serveur credite le pass avec SKIN_MINT_USDC_SRV (le prix de l enregistrement) et /api/skins/prix rend SKIN_PRIX_USDC (la meme valeur)');
