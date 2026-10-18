@@ -14,7 +14,7 @@
 import { topic, selecteur } from './keccak.js';
 import { vieDuBlock } from './marche.js';
 import { encodeQuote } from './pool.js';
-import { QUOTEUR, estRevertDeChaine } from './echange.js';
+import { QUOTEUR, estRevertDeChaine, estRevertPasAssezDeLiquidite } from './echange.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 import { faitsDuBlock } from './faits.js';
 import { prixEthUsd } from './prix-eth.js';
@@ -100,7 +100,7 @@ async function coter(rpc, quoteur, cle, zeroForOne, montant) {
     const r = await rpc('eth_call', [{ to: quoteur, data: encodeQuote({ cle, zeroForOne, montant }) }, 'latest']);
     if (!r || String(r).length < 66) return { ok: false, revert: false };
     return { ok: true, sortie: BigInt(String(r).slice(0, 66)) };
-  } catch (e) { return { ok: false, revert: estRevertDeChaine(e) }; }
+  } catch (e) { return { ok: false, revert: estRevertDeChaine(e), mince: estRevertPasAssezDeLiquidite(e) }; }
 }
 /** Achat de `entree` puis revente de tout ce qui est recu, sur la MEME pool : ce qui revient, mesure. */
 export async function allerRetour({ rpc, quoteur, cle, jeton, entree }) {
@@ -109,7 +109,9 @@ export async function allerRetour({ rpc, quoteur, cle, jeton, entree }) {
   if (!achat.ok) return { etat: achat.revert ? 'ACHAT_REFUSE' : 'NON_LU', entree };
   if (achat.sortie <= 0n) return { etat: 'ACHAT_REFUSE', entree };
   const vente = await coter(rpc, quoteur, cle, jetonEst0, achat.sortie);
-  if (!vente.ok) return { etat: vente.revert ? 'VENTE_REFUSEE' : 'NON_LU', entree, recu: achat.sortie };
+  /* ⛔ 2026-10-18 (mesure : « safety UNIT ») : le Quoter mesure CHAQUE jambe sur l etat ACTUEL de la pool, pas apres l achat. Une pool a
+   *   liquidite d un seul cote (nos naissances) rend NotEnoughLiquidity a la revente : c est une pool MINCE, pas un refus du hook. */
+  if (!vente.ok) return { etat: vente.mince ? 'VENTE_MINCE' : vente.revert ? 'VENTE_REFUSEE' : 'NON_LU', entree, recu: achat.sortie };
   return { etat: 'LU', entree, recu: achat.sortie, retour: vente.sortie, gardeBps: Number((vente.sortie * 10000n) / entree) };
 }
 
@@ -180,6 +182,10 @@ export async function lireSurete({ rpc, jeton, chaine = 8453, clesExactes = [], 
           lignes.push(ligne('Round trip ' + combien + ' → ' + (Number.isInteger(faits && faits.decimales) ? unites(r.recu, faits.decimales) + ' ' + sym : r.recu + ' raw units')
             + ' → ' + unites(r.retour, decDevise) + ' ' + symDev + ' back: ' + pctBps(Math.max(0, perte)) + ' lost (fees and price impact included).', r.gardeBps < 9000 ? 'non' : ''));
           morceaux.push(combien + ' round trip ' + pctBps(Math.max(0, perte)) + ' lost');
+        } else if (r.etat === 'VENTE_MINCE') {
+          lignes.push(ligne('Buying ' + combien + ' quotes; selling that amount back does not quote right now — the pool holds too little of the other side at today\'s price (NotEnoughLiquidity). This is depth, not a block on selling: it is measured on the pool as it is now, not after your buy.', 'non'));
+          morceaux.push('thin on the sell side right now');
+          break;
         } else if (r.etat === 'VENTE_REFUSEE') {
           lignes.push(ligne('Buying ' + combien + ' quotes, but SELLING it back does not: the pool or its hook refused the sale.', 'non'));
           morceaux.push('selling back does not quote');
