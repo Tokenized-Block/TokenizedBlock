@@ -78,11 +78,15 @@ contract BlockRollsTest is Test {
 
     uint256 constant ROLL = 500_000;
     uint256 constant PASS = 10_000_000;
+    /* paliers de Phil (2026-10-18 12:20) : 2 traits 0,50 · 3 traits 1 · 4 traits 3 · 5 traits 5 USDC ; 0 ou 1 trait : rien */
     uint64 constant PRIX = 5_000_000;
+    uint64 constant P4 = 3_000_000;
+    uint64 constant P3 = 1_000_000;
+    uint64 constant P2 = 500_000;
     uint256 constant T0 = 1_700_006_400; /* 2023-11-15 00:00:00 UTC exactement : 1_700_006_400 / 86400 = 19676 */
     uint32 constant JOUR0 = 19676;
 
-    event RulesSet(uint16 indexed version, uint64 prize5, uint64 prize4, uint64 prize3, uint8 minScore, address by);
+    event RulesSet(uint16 indexed version, uint64 prize5, uint64 prize4, uint64 prize3, uint64 prize2, uint8 minScore, address by);
     event PassBought(address indexed player, uint32 indexed day, uint32 rollsLeft, uint64 expiresAt, uint256 paid, uint256 dayPotAfter);
     event DayClosed(uint32 indexed day, uint256 targetBlock, uint256 buyers, uint256 dayPot, address by);
     event DayDrawn(uint32 indexed day, address indexed winner, bytes32 blockHash, uint256 amount, uint256 buyers);
@@ -100,7 +104,7 @@ contract BlockRollsTest is Test {
     }
 
     function _cfg(address t) internal view returns (BlockRolls.Config memory c) {
-        c = BlockRolls.Config(t, DEV, address(hook), POOL, ROLL, PASS, 30, 24 hours, 5000, PRIX, PRIX, PRIX, 3);
+        c = BlockRolls.Config(t, DEV, address(hook), POOL, ROLL, PASS, 30, 24 hours, 5000, PRIX, P4, P3, P2, 2);
     }
 
     function _deployer(address t) internal returns (BlockRolls) {
@@ -162,8 +166,8 @@ contract BlockRollsTest is Test {
         assertEq(br.PASS_ROLLS(), 30);
         assertEq(br.PASS_WINDOW(), 24 hours);
         assertEq(br.POT_SHARE_BPS(), 5000);
-        (uint64 p5, uint64 p4, uint64 p3, uint8 ms) = br.currentRules();
-        assertEq(p5, PRIX); assertEq(p4, PRIX); assertEq(p3, PRIX); assertEq(ms, 3);
+        (uint64 p5, uint64 p4, uint64 p3, uint64 p2, uint8 ms) = br.currentRules();
+        assertEq(p5, 5_000_000); assertEq(p4, 3_000_000); assertEq(p3, 1_000_000); assertEq(p2, 500_000); assertEq(ms, 2);
         assertEq(br.rulesVersion(), 1);
         assertEq(br.unitCreator(), CREATEUR, "le createur est LU au hook, jamais stocke");
     }
@@ -181,9 +185,12 @@ contract BlockRollsTest is Test {
         c = _cfg(address(usdc)); c.passWindow = 0; _refuse(c);
         c = _cfg(address(usdc)); c.potShareBps = 10001; _refuse(c);
         c = _cfg(address(usdc)); c.prize5 = 1000_000001; _refuse(c); /* prix > 1000 USDC */
-        c = _cfg(address(usdc)); c.prize3 = 1000_000001; _refuse(c);
-        c = _cfg(address(usdc)); c.minScore = 2; _refuse(c); /* minScore < 3 */
+        c = _cfg(address(usdc)); c.prize5 = 1000_000001; c.prize4 = 1000_000001; c.prize3 = 1000_000001; c.prize2 = 1000_000001; _refuse(c); /* ordre tenu, mais > 1000 */
+        c = _cfg(address(usdc)); c.minScore = 1; _refuse(c); /* minScore < 2 */
         c = _cfg(address(usdc)); c.minScore = 6; _refuse(c);
+        c = _cfg(address(usdc)); c.prize4 = 6_000_000; _refuse(c); /* 4/5 paierait plus que 5/5 */
+        c = _cfg(address(usdc)); c.prize2 = 2_000_000; _refuse(c); /* 2/5 paierait plus que 3/5 */
+        c = _cfg(address(usdc)); c.minScore = 2; new BlockRolls(c); /* 2 : admis */
     }
 
     /* ------------------------------------------------------------ prix et partage 50/50 */
@@ -402,20 +409,28 @@ contract BlockRollsTest is Test {
         assertEq(br.pot(), potAvant - gain, "pot diminue exactement du gain");
     }
 
-    function test_PrixFixe5Pour5Et4Et3() public {
+    function test_CinqPaliersDePhil() public {
         (uint256 g5,) = _paiePourScore(5, 100_000_000);
         assertEq(g5, 5_000_000, "5/5 : 5 USDC fixes, pas une part du pot");
         (uint256 g4,) = _paiePourScore(4, 0);
-        assertEq(g4, 5_000_000);
+        assertEq(g4, 3_000_000, "4/5 : 3 USDC");
         (uint256 g3,) = _paiePourScore(3, 0);
-        assertEq(g3, 5_000_000);
+        assertEq(g3, 1_000_000, "3/5 : 1 USDC");
+        (uint256 g2,) = _paiePourScore(2, 0);
+        assertEq(g2, 500_000, "2/5 : 0,50 USDC = le prix du roll rendu");
     }
 
-    function test_SousLeScoreMinimumRien() public {
-        for (uint8 k = 0; k < 3; k++) {
+    function test_ZeroOuUnTraitRien() public {
+        for (uint8 k = 0; k < 2; k++) {
             (uint256 g,) = _paiePourScore(k, k == 0 ? 100_000_000 : 0);
-            assertEq(g, 0, "0, 1 ou 2 traits : rien");
+            assertEq(g, 0, "0 ou 1 trait : rien");
         }
+    }
+
+    function test_DeuxTraitsPlafonneParLePot() public {
+        (uint256 g, uint256 p0) = _paiePourScore(2, 0);
+        assertEq(p0, 250_000);
+        assertEq(g, 250_000, "2/5 avec un pot de 0,25 : 0,25, pas 0,50");
     }
 
     function test_GainPlafonneParLePot() public {
@@ -489,7 +504,9 @@ contract BlockRollsTest is Test {
         assertEq(br.pot(), p0 - p);
         assertGe(usdc.balanceOf(address(br)), br.pot());
         assertEq(s, br.scoreOf(g, br.faceOf(h)));
-        if (s < 3) assertEq(p, 0);
+        if (s < 2) assertEq(p, 0);
+        uint256 prix = s == 5 ? 5_000_000 : s == 4 ? 3_000_000 : s == 3 ? 1_000_000 : s == 2 ? 500_000 : 0;
+        assertEq(p, prix < p0 ? prix : p0, "payout = min(prix du palier, pot)");
     }
 
     function test_FundAjouteAuPot() public {
@@ -512,7 +529,11 @@ contract BlockRollsTest is Test {
         assertEq(br.payoutFor(5), 1_000_000, "plafonne par le pot");
         _fund(9_000_000);
         assertEq(br.payoutFor(5), 5_000_000);
-        assertEq(br.payoutFor(2), 0);
+        assertEq(br.payoutFor(4), 3_000_000);
+        assertEq(br.payoutFor(3), 1_000_000);
+        assertEq(br.payoutFor(2), 500_000);
+        assertEq(br.payoutFor(1), 0);
+        assertEq(br.payoutFor(0), 0);
     }
 
     /* ------------------------------------------------------------ jetons hostiles */
@@ -578,16 +599,16 @@ contract BlockRollsTest is Test {
     function test_SetRulesSeulLeCreateur() public {
         vm.prank(JOUEUR);
         vm.expectRevert(BlockRolls.NotCreator.selector);
-        br.setRules(10_000_000, 5_000_000, 1_000_000, 3);
+        br.setRules(10_000_000, 5_000_000, 1_000_000, 200_000, 3);
         vm.prank(DEV);
         vm.expectRevert(BlockRolls.NotCreator.selector);
-        br.setRules(10_000_000, 5_000_000, 1_000_000, 3);
+        br.setRules(10_000_000, 5_000_000, 1_000_000, 200_000, 3);
         vm.expectEmit(true, false, false, true);
-        emit RulesSet(2, 10_000_000, 5_000_000, 1_000_000, 4, CREATEUR);
+        emit RulesSet(2, 10_000_000, 5_000_000, 1_000_000, 200_000, 4, CREATEUR);
         vm.prank(CREATEUR);
-        br.setRules(10_000_000, 5_000_000, 1_000_000, 4);
-        (uint64 p5, uint64 p4, uint64 p3, uint8 ms) = br.currentRules();
-        assertEq(p5, 10_000_000); assertEq(p4, 5_000_000); assertEq(p3, 1_000_000); assertEq(ms, 4);
+        br.setRules(10_000_000, 5_000_000, 1_000_000, 200_000, 4);
+        (uint64 p5, uint64 p4, uint64 p3, uint64 p2, uint8 ms) = br.currentRules();
+        assertEq(p5, 10_000_000); assertEq(p4, 5_000_000); assertEq(p3, 1_000_000); assertEq(p2, 200_000); assertEq(ms, 4);
         assertEq(br.rulesVersion(), 2);
     }
 
@@ -595,16 +616,16 @@ contract BlockRollsTest is Test {
         hook.set(POOL, AUTRE); /* le hook change de createur : le droit suit */
         vm.prank(CREATEUR);
         vm.expectRevert(BlockRolls.NotCreator.selector);
-        br.setRules(PRIX, PRIX, PRIX, 3);
+        br.setRules(PRIX, P4, P3, P2, 2);
         vm.prank(AUTRE);
-        br.setRules(PRIX, PRIX, PRIX, 3);
+        br.setRules(PRIX, P4, P3, P2, 2);
         hook.set(POOL, address(0)); /* pool inconnue : personne */
         vm.prank(AUTRE);
         vm.expectRevert(BlockRolls.NotCreator.selector);
-        br.setRules(PRIX, PRIX, PRIX, 3);
+        br.setRules(PRIX, P4, P3, P2, 2);
         vm.prank(address(0)); /* pas meme « l adresse zero » : un createur illisible n ouvre rien */
         vm.expectRevert(BlockRolls.NotCreator.selector);
-        br.setRules(PRIX, PRIX, PRIX, 3);
+        br.setRules(PRIX, P4, P3, P2, 2);
     }
 
     function test_SettleManyReentreeRefusee() public {
@@ -631,18 +652,29 @@ contract BlockRollsTest is Test {
 
     function test_SetRulesBornes() public {
         vm.startPrank(CREATEUR);
+        uint64 trop = 1000_000001;
         vm.expectRevert(BlockRolls.BadRules.selector);
-        br.setRules(1000_000001, PRIX, PRIX, 3);
+        br.setRules(trop, P4, P3, P2, 2); /* 5/5 > 1000 USDC */
         vm.expectRevert(BlockRolls.BadRules.selector);
-        br.setRules(PRIX, 1000_000001, PRIX, 3);
+        br.setRules(trop, trop, P3, P2, 2);
         vm.expectRevert(BlockRolls.BadRules.selector);
-        br.setRules(PRIX, PRIX, 1000_000001, 3);
+        br.setRules(trop, trop, trop, P2, 2);
         vm.expectRevert(BlockRolls.BadRules.selector);
-        br.setRules(PRIX, PRIX, PRIX, 2);
+        br.setRules(trop, trop, trop, trop, 2); /* ordre tenu partout, seul le plafond refuse */
         vm.expectRevert(BlockRolls.BadRules.selector);
-        br.setRules(PRIX, PRIX, PRIX, 6);
-        br.setRules(1000_000000, 1000_000000, 1000_000000, 5); /* maxima admis */
-        br.setRules(0, 0, 0, 3); /* un jeu ferme : admis, rien ne sort */
+        br.setRules(PRIX, P4, P3, P2, 1); /* minScore 1 : un trait paierait */
+        vm.expectRevert(BlockRolls.BadRules.selector);
+        br.setRules(PRIX, P4, P3, P2, 6);
+        /* l ORDRE des paliers : un palier plus haut ne paie jamais moins qu un plus bas */
+        vm.expectRevert(BlockRolls.BadRules.selector);
+        br.setRules(P4, PRIX, P3, P2, 2); /* 4/5 > 5/5 */
+        vm.expectRevert(BlockRolls.BadRules.selector);
+        br.setRules(PRIX, P3, P4, P2, 2); /* 3/5 > 4/5 */
+        vm.expectRevert(BlockRolls.BadRules.selector);
+        br.setRules(PRIX, P4, P2, P3, 2); /* 2/5 > 3/5 */
+        br.setRules(1000_000000, 1000_000000, 1000_000000, 1000_000000, 5); /* maxima et egalites admis */
+        br.setRules(0, 0, 0, 0, 2); /* un jeu ferme : admis, rien ne sort */
+        br.setRules(PRIX, P4, P3, P2, 2); /* minScore 2 admis */
         vm.stopPrank();
     }
 
@@ -652,7 +684,7 @@ contract BlockRollsTest is Test {
         _fund(100_000_000);
         uint256 avant = _roll(JOUEUR, face);
         vm.prank(CREATEUR);
-        br.setRules(20_000_000, 1_000_000, 100_000, 3);
+        br.setRules(20_000_000, 1_000_000, 100_000, 100_000, 3);
         uint256 apres = _roll(AUTRE, face); /* meme bloc, meme cible */
         (,,,, uint16 vA) = br.rolls(avant);
         (,,,, uint16 vB) = br.rolls(apres);
@@ -666,20 +698,26 @@ contract BlockRollsTest is Test {
 
     function test_PrixDistinctsParScore() public {
         vm.prank(CREATEUR);
-        br.setRules(20_000_000, 2_000_000, 1_000_000, 3);
+        br.setRules(20_000_000, 2_000_000, 1_000_000, 300_000, 2);
         bytes32 h = keccak256("distincts");
         uint8[5] memory face = br.faceOf(h);
         _fund(100_000_000);
         uint256 r5 = _roll(JOUEUR, face);
         uint256 r4 = _roll(AUTRE, _guessScore(face, 4));
         uint256 r3 = _roll(DONATEUR, _guessScore(face, 3));
+        uint256 r2 = _roll(JOUEUR, _guessScore(face, 2));
+        uint256 r1 = _roll(AUTRE, _guessScore(face, 1));
         _revele(r5, h);
         (, uint256 g5) = br.settle(r5);
         (, uint256 g4) = br.settle(r4);
         (, uint256 g3) = br.settle(r3);
+        (, uint256 g2) = br.settle(r2);
+        (, uint256 g1) = br.settle(r1);
         assertEq(g5, 20_000_000, "5/5 : prize5");
         assertEq(g4, 2_000_000, "4/5 : prize4, pas prize5");
         assertEq(g3, 1_000_000, "3/5 : prize3");
+        assertEq(g2, 300_000, "2/5 : prize2 (ni prize3, ni 0)");
+        assertEq(g1, 0, "1/5 : rien");
     }
 
     function test_SettleableUntilEtDrawableUntil() public {
@@ -727,22 +765,28 @@ contract BlockRollsTest is Test {
         bytes32 h = keccak256("min");
         uint8[5] memory face = br.faceOf(h);
         _fund(100_000_000);
-        uint256 avant = _roll(JOUEUR, _guessScore(face, 3));
+        uint256 avant3 = _roll(JOUEUR, _guessScore(face, 3));
+        uint256 avant2 = _roll(JOUEUR, _guessScore(face, 2));
         vm.prank(CREATEUR);
-        br.setRules(PRIX, PRIX, PRIX, 4);
-        uint256 apres = _roll(AUTRE, _guessScore(face, 3));
-        _revele(avant, h);
-        (, uint256 ga) = br.settle(avant);
-        (, uint256 gb) = br.settle(apres);
-        assertEq(ga, 5_000_000, "3/5 gagne sous les regles d avant");
-        assertEq(gb, 0, "3/5 ne gagne plus sous minScore 4");
+        br.setRules(PRIX, P4, P3, P2, 4);
+        uint256 apres3 = _roll(AUTRE, _guessScore(face, 3));
+        uint256 apres2 = _roll(AUTRE, _guessScore(face, 2));
+        _revele(avant3, h);
+        (, uint256 ga3) = br.settle(avant3);
+        (, uint256 ga2) = br.settle(avant2);
+        (, uint256 gb3) = br.settle(apres3);
+        (, uint256 gb2) = br.settle(apres2);
+        assertEq(ga3, 1_000_000, "3/5 gagne 1 sous les regles d avant");
+        assertEq(ga2, 500_000, "2/5 gagne 0,50 sous les regles d avant (minScore 2)");
+        assertEq(gb3, 0, "3/5 ne gagne plus sous minScore 4");
+        assertEq(gb2, 0, "2/5 ne gagne plus sous minScore 4");
     }
 
     function test_RulesVersionLisible() public {
         vm.prank(CREATEUR);
-        br.setRules(1_000_000, PRIX, PRIX, 3);
-        (uint64 p5,,,) = br.rules(1);
-        (uint64 q5,,,) = br.rules(2);
+        br.setRules(1_000_000, 1_000_000, 1_000_000, P2, 2);
+        (uint64 p5,,,,) = br.rules(1);
+        (uint64 q5,,,,) = br.rules(2);
         assertEq(p5, PRIX); assertEq(q5, 1_000_000);
         _fund(10_000_000);
         assertEq(br.payoutFor(5), 1_000_000, "payoutFor lit les regles COURANTES");

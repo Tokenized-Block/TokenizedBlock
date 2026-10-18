@@ -3,7 +3,7 @@
  *         puis node banc-blockrolls-fork-20261017.mjs [http://127.0.0.1:9619]
  * DEROULE (vraies transactions sur le fork, comptes IMPERSONNES, aucune cle, rien n est envoye a Base) :
  *   1. le createur de UNIT est LU au vrai hook (createurs(poolId UNIT/ETH)) ; deploiement (USDC reel, DEV_WALLET = wallet des frais,
- *      regles par defaut : 5 USDC fixes a partir de 3/5) ; unitCreator() du contrat = ce que le hook dit ;
+ *      regles par defaut : 5 / 3 / 1 / 0,50 USDC pour 5 / 4 / 3 / 2 traits) ; unitCreator() du contrat = ce que le hook dit ;
  *   2. de l USDC reel est pris a une pool du fork (transfert impersonne) pour un donateur et trois joueurs ;
  *   3. fund 50 (planFund), roll paye (planRoll) -> split 0,25 / 0,25 lu sur les SOLDES ; settle trop tot = status 0 ;
  *   3b. setRules : refuse a la joueuse et au deployeur, accepte au createur IMPERSONNE ; le roll d avant garde sa version ;
@@ -61,7 +61,7 @@ ok(codeHook.length > 1000, 'le fork porte le hook 7030 ' + P.HOOK + ' (' + (code
 const CREATEUR = ('0x' + String(await lire(P.HOOK, 'createurs(bytes32)', P.UNIT_POOL_ID.slice(2))).slice(26, 66)).toLowerCase();
 ok(/^0x[0-9a-f]{40}$/.test(CREATEUR) && !/^0x0{40}$/.test(CREATEUR), 'createur de UNIT/ETH LU au hook : ' + CREATEUR);
 /* Config statique = 13 mots a plat (test-blockrolls-plan verifie l ordre contre l ABI) */
-const args = [adrMot(USDC), adrMot(DEV), adrMot(P.HOOK), P.UNIT_POOL_ID.slice(2), mot(D.rollPrice), mot(D.passPrice), mot(D.passRolls), mot(D.passWindowS), mot(D.potShareBps), mot(D.prize5), mot(D.prize4), mot(D.prize3), mot(D.minScore)].join('');
+const args = [adrMot(USDC), adrMot(DEV), adrMot(P.HOOK), P.UNIT_POOL_ID.slice(2), mot(D.rollPrice), mot(D.passPrice), mot(D.passRolls), mot(D.passWindowS), mot(D.potShareBps), mot(D.prize5), mot(D.prize4), mot(D.prize3), mot(D.prize2), mot(D.minScore)].join('');
 
 const deployeur = await compte('0x00000000000000000000000000000000de9107e4');
 const donateur = await compte('0x000000000000000000000000000000000000d0e0');
@@ -73,7 +73,7 @@ if (!ok(d.status === '0x1', 'BlockRolls se deploie (gaz ' + BigInt(d.gasUsed) + 
 const C = d.contractAddress.toLowerCase();
 ok(('0x' + String(await lire(C, 'unitCreator()')).slice(26, 66)).toLowerCase() === CREATEUR, 'unitCreator() du contrat = le createur LU au vrai hook');
 const lireRegles = async () => String(await lire(C, 'currentRules()')).slice(2).match(/.{64}/g).map((w) => BigInt('0x' + w));
-ok(JSON.stringify((await lireRegles()).map(String)) === JSON.stringify(['5000000', '5000000', '5000000', '3']), 'regles par defaut : 5 USDC fixes pour 5/5, 4/5, 3/5 ; minScore 3');
+ok(JSON.stringify((await lireRegles()).map(String)) === JSON.stringify(['5000000', '3000000', '1000000', '500000', '2']), 'regles par defaut (Phil 12:20) : 5 / 3 / 1 / 0,50 USDC pour 5 / 4 / 3 / 2 traits ; minScore 2');
 
 /* 2. USDC reel depuis une pool du fork */
 const pools = [...POOLS_ACTIONS_AERODROME.values()].map((t) => t.pool).filter(Boolean);
@@ -105,18 +105,18 @@ ok(tot.status === '0x0', 'settle envoye trop tot : status 0 (TooEarly)');
 
 /* 3b. les regles : seul le createur de UNIT (impersonne) ; le roll d avant garde sa version */
 const versionDe = async (id) => Number(BigInt('0x' + String(await lire(C, 'rolls(uint256)', mot(id))).slice(2).match(/.{64}/g)[4]));
-const sr = P.planSetRules({ contrat: C, prize5: 20_000_000n, prize4: 2_000_000n, prize3: 1_000_000n, minScore: 4 }).appels[0];
+const sr = P.planSetRules({ contrat: C, prize5: 20_000_000n, prize4: 2_000_000n, prize3: 1_000_000n, prize2: 1_000_000n, minScore: 4 }).appels[0];
 ok((await envoyer(alice, sr)).status === '0x0' && (await envoyer(deployeur, sr)).status === '0x0', 'setRules par la joueuse / par le deployeur : status 0 (NotCreator)');
 await compte(CREATEUR);
 const rsr = await envoyer(CREATEUR, sr);
-ok(rsr.status === '0x1' && JSON.stringify((await lireRegles()).map(String)) === JSON.stringify(['20000000', '2000000', '1000000', '4']), 'setRules par le createur de UNIT (impersonne) : 20 / 2 / 1 USDC, minScore 4 (gaz ' + BigInt(rsr.gasUsed) + ')');
-ok(P.planSetRules({ contrat: C, prize5: 1_000_000_001n, prize4: 0, prize3: 0, minScore: 3 }).etat === 'REFUSE'
-  && (await envoyer(CREATEUR, { to: C, data: selecteur('setRules(uint64,uint64,uint64,uint8)') + mot(1_000_000_001n) + mot(0) + mot(0) + mot(3) })).status === '0x0', 'prix > 1000 USDC : refuse par le plan ET par le contrat (BadRules)');
+ok(rsr.status === '0x1' && JSON.stringify((await lireRegles()).map(String)) === JSON.stringify(['20000000', '2000000', '1000000', '1000000', '4']), 'setRules par le createur de UNIT (impersonne) : 20 / 2 / 1 / 1 USDC, minScore 4 (gaz ' + BigInt(rsr.gasUsed) + ')');
+ok(P.planSetRules({ contrat: C, prize5: 1_000_000_001n, prize4: 0, prize3: 0, prize2: 0, minScore: 3 }).etat === 'REFUSE'
+  && (await envoyer(CREATEUR, { to: C, data: selecteur('setRules(uint64,uint64,uint64,uint64,uint8)') + mot(1_000_000_001n) + mot(0) + mot(0) + mot(0) + mot(3) })).status === '0x0', 'prix > 1000 USDC : refuse par le plan ET par le contrat (BadRules)');
 const pr2 = P.planRoll({ contrat: C, usdc: USDC, guess: guess1 });
 await envoyer(donateur, pr2.appels[0]);
 const R2 = P.lireRolled((await envoyer(donateur, pr2.appels[1])).logs, C);
 ok(R2 && (await versionDe(R1.rollId)) === 1 && (await versionDe(R2.rollId)) === 2, 'le roll d AVANT garde la version 1 des regles, celui d APRES porte la version 2');
-ok((await envoyer(CREATEUR, P.planSetRules({ contrat: C, ...D }).appels[0])).status === '0x1' && String((await lireRegles())[3]) === '3', 'regles remises aux defauts (version 3) pour la suite du banc');
+ok((await envoyer(CREATEUR, P.planSetRules({ contrat: C, ...D }).appels[0])).status === '0x1' && String((await lireRegles())[4]) === '2', 'regles remises aux defauts (version 3) pour la suite du banc');
 
 /* 4. settle du roll paye + parite sur le hash REEL */
 await rpc('anvil_mine', ['0x2']);
@@ -190,7 +190,7 @@ const potApres = await lireU(C, 'pot()');
 ok(paye > 0n && (await solde(alice)) - aAvant === paye && potAvant - potApres === payeTous, 'gains en USDC REEL : joueuse +' + usd(paye) + ' (lu sur les soldes), pot ' + usd(potAvant) + ' -> ' + usd(potApres));
 let potCourant = potAvant, ordreOk = true;
 for (const S of Ss) {
-  const cfg = S.rollId === R2.rollId ? { ...D, prize5: 20_000_000n, prize4: 2_000_000n, prize3: 1_000_000n, minScore: 4 } : D;
+  const cfg = S.rollId === R2.rollId ? { ...D, prize5: 20_000_000n, prize4: 2_000_000n, prize3: 1_000_000n, prize2: 1_000_000n, minScore: 4 } : D;
   if (S.payout !== P.gainPrevu(potCourant, S.score, cfg)) ordreOk = false;
   potCourant -= S.payout;
 }

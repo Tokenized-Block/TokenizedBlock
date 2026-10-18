@@ -1,15 +1,15 @@
-/* blockrolls-config.js — l ENCODAGE du Config de BlockRolls (13 mots statiques, l ordre du struct) et la VERIFICATION d un enregistrement
+/* blockrolls-config.js — l ENCODAGE du Config de BlockRolls (14 mots statiques, l ordre du struct) et la VERIFICATION d un enregistrement
  * de deploiement. Pur, SANS import : la page deployer-blockrolls.html l importe dans le navigateur, le preparateur et les tests dans node.
  * ⛔ Une seule source pour l ordre des champs : le preparateur encode avec, la page RE-ENCODE avec et refuse de signer si la donnee figee
  *   ne finit pas exactement par ce que les valeurs affichees donnent. L ordre est verifie contre l ABI compilee par test-blockrolls-plan. */
-export const ORDRE_CONFIG = Object.freeze(['usdc', 'devWallet', 'hook', 'unitPoolId', 'rollPrice', 'passPrice', 'passRolls', 'passWindow', 'potShareBps', 'prize5', 'prize4', 'prize3', 'minScore']);
-const LARGEURS = Object.freeze({ rollPrice: 256, passPrice: 256, passRolls: 32, passWindow: 64, potShareBps: 16, prize5: 64, prize4: 64, prize3: 64, minScore: 8 });
+export const ORDRE_CONFIG = Object.freeze(['usdc', 'devWallet', 'hook', 'unitPoolId', 'rollPrice', 'passPrice', 'passRolls', 'passWindow', 'potShareBps', 'prize5', 'prize4', 'prize3', 'prize2', 'minScore']);
+const LARGEURS = Object.freeze({ rollPrice: 256, passPrice: 256, passRolls: 32, passWindow: 64, potShareBps: 16, prize5: 64, prize4: 64, prize3: 64, prize2: 64, minScore: 8 });
 const bas = (x) => String(x || '').toLowerCase();
 const adr = (x) => { const s = bas(x); if (!/^0x[0-9a-f]{40}$/.test(s)) throw new Error('bad address ' + x); return s.slice(2).padStart(64, '0'); };
 const b32 = (x) => { const s = bas(x); if (!/^0x[0-9a-f]{64}$/.test(s)) throw new Error('bad bytes32 ' + x); return s.slice(2); };
 const u = (n, bits) => { const v = BigInt(n); if (v < 0n || v >= (1n << BigInt(bits))) throw new Error('uint' + bits + ' out of range: ' + n); return v.toString(16).padStart(64, '0'); };
 
-/** les 416 octets (13 x 32) des arguments du constructeur, hex sans 0x */
+/** les 448 octets (14 x 32) des arguments du constructeur, hex sans 0x */
 export function encoderConfig(c) {
   return adr(c.usdc) + adr(c.devWallet) + adr(c.hook) + b32(c.unitPoolId)
     + ORDRE_CONFIG.slice(4).map((k) => u(c[k], LARGEURS[k])).join('');

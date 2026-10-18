@@ -21,14 +21,14 @@ export const SIG_SETTLE = 'settle(uint256)';
 export const SIG_EXPIRE = 'expire(uint256)';
 export const SIG_FUND = 'fund(uint256)';
 export const SIG_SETTLE_MANY = 'settleMany(uint256[])';
-export const SIG_SET_RULES = 'setRules(uint64,uint64,uint64,uint8)';
+export const SIG_SET_RULES = 'setRules(uint64,uint64,uint64,uint64,uint8)';
 export const SIG_CLOSE_DAY = 'closeDay(uint32)';
 export const SIG_DRAW_DAY = 'drawDay(uint32)';
 const SIG_APPROVE = 'approve(address,uint256)';
 export const EV_ROLLED = 'Rolled(uint256,address,uint8[5],uint256,bool,uint256,uint256)';
 export const EV_SETTLED = 'Settled(uint256,address,bytes32,uint8[5],uint8,uint256,uint256)';
 export const EV_PASS_BOUGHT = 'PassBought(address,uint32,uint32,uint64,uint256,uint256)';
-export const EV_RULES_SET = 'RulesSet(uint16,uint64,uint64,uint64,uint8,address)';
+export const EV_RULES_SET = 'RulesSet(uint16,uint64,uint64,uint64,uint64,uint8,address)';
 export const EV_DAY_CLOSED = 'DayClosed(uint32,uint256,uint256,uint256,address)';
 export const EV_DAY_DRAWN = 'DayDrawn(uint32,address,bytes32,uint256,uint256)';
 /* le jour UTC d un horodatage, comme today() du contrat */
@@ -45,8 +45,10 @@ export const MAX_PRIZE = 1000000000n;
  *    gardien regle (settleMany) sans attendre ; etatReglement() rend blocsRestants, le contrat expose settleableUntil(id). */
 export const SIG_SETTLEABLE_UNTIL = 'settleableUntil(uint256)';
 export const SIG_DRAWABLE_UNTIL = 'drawableUntil(uint32)';
-/* economie du 20:30 : un gain = un PRIX FIXE (5 USDC) plafonne par le pot, a partir de 3 traits sur 5 */
-export const DEFAUTS = Object.freeze({ rollPrice: 500000n, passPrice: 10000000n, passRolls: 30, passWindowS: 86400, potShareBps: 5000, prize5: 5000000n, prize4: 5000000n, prize3: 5000000n, minScore: 3 });
+/* paliers de Phil 2026-10-18 12:20 : un gain = un PRIX FIXE par traits en commun (2 -> 0,50 ; 3 -> 1 ; 4 -> 3 ; 5 -> 5 USDC ; 0 ou 1 -> rien),
+ *   plafonne par le pot au settle. Esperance par roll 0,0549 USDC (exacte, guess uniforme) < 0,25 entres au pot : un roll paye fait GROSSIR
+ *   le pot ; un roll de PASS n y met rien (sa part va au pot du jour) et en sort 0,0549 en moyenne. */
+export const DEFAUTS = Object.freeze({ rollPrice: 500000n, passPrice: 10000000n, passRolls: 30, passWindowS: 86400, potShareBps: 5000, prize5: 5000000n, prize4: 3000000n, prize3: 1000000n, prize2: 500000n, minScore: 2 });
 /* l ordre du guess = l ordre du contrat ; les tailles = celles de l app (une option ajoutee au menu sans le contrat : test-blockrolls-parite rougit) */
 export const TRAITS = Object.freeze(['colorBand', 'orbit', 'facet', 'material', 'ornament']);
 export const TAILLES = Object.freeze([BANDES.length, ORBITES.length, FACETTES.length, MATIERES.length, ORNEMENTS.length]);
@@ -80,7 +82,7 @@ export const scoreTraits = (guess, face) => guess.reduce((s, g, i) => s + (g ===
 /** le gain SI le settle avait lieu avec ce pot : min(prix du score, pot), 0 sous minScore (un autre gagnant regle avant peut reduire le pot) */
 export function gainPrevu(pot, score, cfg = DEFAUTS) {
   if (score < Number(cfg.minScore)) return 0n;
-  const prix = BigInt(score === 5 ? cfg.prize5 : score === 4 ? cfg.prize4 : cfg.prize3);
+  const prix = BigInt(score === 5 ? cfg.prize5 : score === 4 ? cfg.prize4 : score === 3 ? cfg.prize3 : score === 2 ? cfg.prize2 : 0);
   const p = BigInt(pot);
   return prix < p ? prix : p;
 }
@@ -179,14 +181,15 @@ export function planSettleMany({ contrat, rollIds }) {
   } catch (e) { return refuse(String(e.message || e)); }
 }
 
-/** setRules : SEUL le createur de UNIT (lu au hook) ; chaque prix <= 1000 USDC, minScore 3..5 ; ne touche que les rolls crees apres */
-export function planSetRules({ contrat, prize5, prize4, prize3, minScore }) {
-  let p5, p4, p3;
-  try { [p5, p4, p3] = [prize5, prize4, prize3].map((x) => BigInt(x)); } catch (_) { return refuse('prizes are raw USDC integers'); }
-  if ([p5, p4, p3].some((x) => x < 0n || x > MAX_PRIZE)) return refuse('each prize is 0..1000 USDC');
+/** setRules : SEUL le createur de UNIT (lu au hook) ; prize2 <= prize3 <= prize4 <= prize5 <= 1000 USDC, minScore 2..5 ; rolls crees apres */
+export function planSetRules({ contrat, prize5, prize4, prize3, prize2, minScore }) {
+  let p5, p4, p3, p2;
+  try { [p5, p4, p3, p2] = [prize5, prize4, prize3, prize2].map((x) => BigInt(x)); } catch (_) { return refuse('prizes are raw USDC integers'); }
+  if ([p5, p4, p3, p2].some((x) => x < 0n || x > MAX_PRIZE)) return refuse('each prize is 0..1000 USDC');
+  if (!(p2 <= p3 && p3 <= p4 && p4 <= p5)) return refuse('a higher tier never pays less: 2 traits <= 3 <= 4 <= 5');
   const ms = Number(minScore);
-  if (!Number.isInteger(ms) || ms < 3 || ms > 5) return refuse('the minimum winning score is 3, 4 or 5');
-  return { etat: 'PRET', appels: [{ to: bas(contrat), data: '0x' + sel(SIG_SET_RULES) + u(p5) + u(p4) + u(p3) + u(ms), quoi: 'set the prizes to ' + p5 + ' / ' + p4 + ' / ' + p3 + ' raw USDC, min score ' + ms + ' (new rolls only)' }] };
+  if (!Number.isInteger(ms) || ms < 2 || ms > 5) return refuse('the minimum winning score is 2, 3, 4 or 5');
+  return { etat: 'PRET', appels: [{ to: bas(contrat), data: '0x' + sel(SIG_SET_RULES) + u(p5) + u(p4) + u(p3) + u(p2) + u(ms), quoi: 'set the prizes to ' + p5 + ' / ' + p4 + ' / ' + p3 + ' / ' + p2 + ' raw USDC, min score ' + ms + ' (new rolls only)' }] };
 }
 
 /** closeDay : une fois le jour UTC fini (jour < aujourd hui), n importe qui arme le tirage (cible = bloc + 2) */

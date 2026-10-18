@@ -3,7 +3,7 @@
  * ⛔ CE SCRIPT NE SIGNE RIEN ET N ENVOIE RIEN. Il ecrit `../blockrolls-deploiement.js` ; la page `deployer-blockrolls.html` la propose au
  *   wallet CONNECTE (celui de Phil). Ce qui est signe est ce qui a ete prouve : banc-deployer-blockrolls-fork envoie CETTE donnee telle
  *   quelle sur un fork de Base et relit tout.
- * Le constructeur prend UN struct Config (13 mots statiques, encodes a plat par blockrolls-config.js encoderConfig) :
+ * Le constructeur prend UN struct Config (14 mots statiques, encodes a plat par blockrolls-config.js encoderConfig) :
  *   usdc = USDC_BASE et devWallet = FEE_WALLET (frais-creation.js) ; hook = HOOK_7030 (tokenomics.js) ; unitPoolId = poolIdDe(ETH/UNIT,
  *   FEE_POOL, TICK_SPACING_POOL, hook) (volume-tirage.js, lancer-pool.js) ; prix, parts et regles = DEFAUTS de blockrolls-plan.js.
  *   RIEN n est tape a la main ici : chaque valeur est lue dans le depot.
@@ -31,6 +31,7 @@ const config = {
   prize5: P.DEFAUTS.prize5.toString(),
   prize4: P.DEFAUTS.prize4.toString(),
   prize3: P.DEFAUTS.prize3.toString(),
+  prize2: P.DEFAUTS.prize2.toString(),
   minScore: P.DEFAUTS.minScore,
 };
 if (config.unitPoolId !== bas(P.UNIT_POOL_ID)) throw new Error('UNIT pool id differs between volume-tirage.js and blockrolls-plan.js');

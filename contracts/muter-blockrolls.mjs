@@ -24,9 +24,24 @@ const M = [
   /* economie du 20:30 : prix fixes plafonnes par le pot, regles du createur de UNIT, tirage du jour */
   ['EXIGE gain non plafonne par le pot', '        if (payout > pot) payout = pot;\n', ''],
   ['prix sous le score minimum', 'if (score < r.minScore) return 0;', ''],
-  ['prix : 4/5 paie le prix du 5/5', 'return score == 5 ? r.prize5 : score == 4 ? r.prize4 : r.prize3;', 'return score == 5 ? r.prize5 : score == 4 ? r.prize5 : r.prize3;'],
-  ['regles : prix > 1000 USDC admis', 'return p5 <= MAX_PRIZE && p4 <= MAX_PRIZE && p3 <= MAX_PRIZE && minScore >= MIN_SCORE_FLOOR && minScore <= 5;', 'return p4 <= MAX_PRIZE && p3 <= MAX_PRIZE && minScore >= MIN_SCORE_FLOOR && minScore <= 5;'],
-  ['regles : minScore 2 admis', 'return p5 <= MAX_PRIZE && p4 <= MAX_PRIZE && p3 <= MAX_PRIZE && minScore >= MIN_SCORE_FLOOR && minScore <= 5;', 'return p5 <= MAX_PRIZE && p4 <= MAX_PRIZE && p3 <= MAX_PRIZE && minScore <= 5;'],
+  /* paliers de Phil 2026-10-18 12:20 (2 -> 0,50 ; 3 -> 1 ; 4 -> 3 ; 5 -> 5) */
+  ['prix : 4/5 paie le prix du 5/5', 'if (score == 4) return r.prize4;', 'if (score == 4) return r.prize5;'],
+  ['prix : 3/5 paie le prix du 4/5', 'if (score == 3) return r.prize3;', 'if (score == 3) return r.prize4;'],
+  ['EXIGE prize2 ignore (2/5 ne paie rien)', 'if (score == 2) return r.prize2;', ''],
+  ['prize2 : 2/5 paie le prix du 3/5', 'if (score == 2) return r.prize2;', 'if (score == 2) return r.prize3;'],
+  /* ⚠️ « 1/5 paie prize2 » (if (score >= 1) return r.prize2) est un mutant EQUIVALENT, mesure 2026-10-18 (il a survecu) : _prizeFor rend 0
+   *    D ABORD si score < minScore, et minScore >= 2 est garanti (MIN_SCORE_FLOOR -- ses mutants « minScore 1 admis » et « sans plancher »
+   *    sont tues). Un roll a 1 trait n atteint donc jamais cette ligne. « 0 ou 1 trait ne paie rien » est tenu par le plancher + par
+   *    test_ZeroOuUnTraitRien ; on mute le PLANCHER, pas la branche morte. */
+  ['regles : prix > 1000 USDC admis', 'return p5 <= MAX_PRIZE && p2 <= p3', 'return p2 <= p3'],
+  ['EXIGE regles : minScore 1 admis', 'uint8 public constant MIN_SCORE_FLOOR = 2;', 'uint8 public constant MIN_SCORE_FLOOR = 1;'],
+  ['regles : minScore sans plancher', 'minScore >= MIN_SCORE_FLOOR && minScore <= 5;', 'minScore <= 5;'],
+  ['regles : minScore 6 admis', 'minScore >= MIN_SCORE_FLOOR && minScore <= 5;', 'minScore >= MIN_SCORE_FLOOR && minScore <= 6;'],
+  ['EXIGE ordre des paliers : 4/5 > 5/5 admis', '&& p4 <= p5 &&', '&&'],
+  ['ordre des paliers : 3/5 > 4/5 admis', '&& p3 <= p4 &&', '&&'],
+  ['ordre des paliers : 2/5 > 3/5 admis', '&& p2 <= p3 &&', '&&'],
+  ['regles : prize2 non grave', 'rules[v] = Rules(prize5, prize4, prize3, prize2, minScore);', 'rules[v] = Rules(prize5, prize4, prize3, prize3, minScore);'],
+  ['config : prize2 du deploiement ignore', 'rules[1] = Rules(c.prize5, c.prize4, c.prize3, c.prize2, c.minScore);', 'rules[1] = Rules(c.prize5, c.prize4, c.prize3, 0, c.minScore);'],
   ['setRules : n importe qui', 'if (c == address(0) || msg.sender != c) revert NotCreator();', ''],
   ['setRules : createur illisible (0) admis', 'if (c == address(0) || msg.sender != c) revert NotCreator();', 'if (msg.sender != c) revert NotCreator();'],
   ['regles : les COURANTES appliquees aux vieux rolls', 'payout = _prizeFor(rules[r.rulesVersion], score);', 'payout = _prizeFor(rules[rulesVersion], score);'],

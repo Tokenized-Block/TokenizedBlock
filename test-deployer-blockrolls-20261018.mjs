@@ -37,14 +37,14 @@ const octets = Buffer.from(D.creation.slice(2), 'hex');
 ok(/^0x[0-9a-f]+$/.test(D.creation) && octets.length === D.octetsCreation && sha(octets) === D.sha256Creation,
   'A l empreinte sha256 de la donnee se recalcule (' + D.sha256Creation.slice(0, 16) + '…, ' + D.octetsCreation + ' octets)');
 const args = encoderConfig(D.constructeur);
-ok(D.creation.endsWith(args) && args.length / 2 === D.octetsArgs && D.octetsArgs === 13 * 32, 'A elle finit par le Config RE-ENCODE depuis les valeurs affichees (13 mots = 416 octets)');
+ok(D.creation.endsWith(args) && args.length / 2 === D.octetsArgs && D.octetsArgs === 14 * 32, 'A elle finit par le Config RE-ENCODE depuis les valeurs affichees (14 mots = 448 octets)');
 ok(JSON.stringify(D.ordre) === JSON.stringify(ORDRE_CONFIG) && Object.isFrozen(D) && Object.isFrozen(D.constructeur) && D.chaine === 8453 && D.contrat === 'BlockRolls', 'A chaine 8453, contrat BlockRolls, ordre des champs = blockrolls-config.js, objets figes');
 const C = D.constructeur;
 const ETH = '0x' + '0'.repeat(40);
 ok(C.usdc === USDC_BASE.toLowerCase() && C.devWallet === FEE_WALLET.toLowerCase() && C.hook === HOOK_7030.toLowerCase(), 'A usdc = USDC_BASE, devWallet = FEE_WALLET (frais-creation.js), hook = HOOK_7030 (tokenomics.js)');
 ok(C.unitPoolId === poolIdDe({ currency0: ETH, currency1: P.UNIT, fee: FEE_POOL, tickSpacing: TICK_SPACING_POOL, hooks: HOOK_7030 }) && C.unitPoolId === P.UNIT_POOL_ID, 'A unitPoolId = poolIdDe(ETH/UNIT, FEE_POOL, TICK_SPACING_POOL, hook) recalcule ici');
 ok(C.rollPrice === P.DEFAUTS.rollPrice.toString() && C.passPrice === P.DEFAUTS.passPrice.toString() && C.passRolls === P.DEFAUTS.passRolls && C.passWindow === P.DEFAUTS.passWindowS && C.potShareBps === P.DEFAUTS.potShareBps
-  && C.prize5 === P.DEFAUTS.prize5.toString() && C.prize4 === P.DEFAUTS.prize4.toString() && C.prize3 === P.DEFAUTS.prize3.toString() && C.minScore === P.DEFAUTS.minScore, 'A prix, parts et regles = DEFAUTS de blockrolls-plan.js');
+  && C.prize5 === P.DEFAUTS.prize5.toString() && C.prize4 === P.DEFAUTS.prize4.toString() && C.prize3 === P.DEFAUTS.prize3.toString() && C.prize2 === P.DEFAUTS.prize2.toString() && C.minScore === P.DEFAUTS.minScore, 'A prix, parts et regles = DEFAUTS de blockrolls-plan.js');
 ok(sha(lire('contracts/src/BlockRolls.sol')) === D.sha256Sources['src/BlockRolls.sol'], 'A generee depuis la source ACTUELLE du contrat (source modifiee sans regenerer = rouge)');
 ok(D.adresse === null && D.bloc === null, 'A PAS deploye : adresse et bloc nuls (ils s ecrivent ENSEMBLE, relus sur la chaine)');
 ok(octets.length - D.octetsArgs <= 49152 && octets.length > 5000, 'A le code de creation tient sous la limite EIP-3860 (49 152 octets)');
@@ -88,20 +88,20 @@ ok(/recu\.status !== '0x1' \|\| !recu\.contractAddress/.test(script) && /'USDC\(
   && /every\(\(k\) => relu\[k\] === String\(C\[k\]\)\.toLowerCase\(\)\)/.test(script), 'C apres confirmation, elle RELIT USDC(), DEV_WALLET(), HOOK(), UNIT_POOL_ID(), ROLL_PRICE(), PASS_PRICE(), unitCreator(), currentRules() et compare');
 ok(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page), 'C aucune cle, aucune signature de message, aucun champ a saisir');
 /* les chiffres : DERIVES de l enregistrement. On rejoue la derivation et on verifie que chaque mot attendu a sa place (data-k) */
-const mots = { roll: usdc6(C.rollPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - C.potShareBps), prize5: usdc6(C.prize5), prize4: usdc6(C.prize4), prize3: usdc6(C.prize3), minScore: String(C.minScore),
+const mots = { roll: usdc6(C.rollPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - C.potShareBps), prize5: usdc6(C.prize5), prize4: usdc6(C.prize4), prize3: usdc6(C.prize3), prize2: usdc6(C.prize2), minScore: String(C.minScore),
   pass: usdc6(C.passPrice), passRolls: String(C.passRolls), passHours: String(C.passWindow / 3600), passPot: usdc6(BigInt(C.passPrice) * BigInt(C.potShareBps) / 10000n), passDev: usdc6(BigInt(C.passPrice) - BigInt(C.passPrice) * BigInt(C.potShareBps) / 10000n), window: '256' };
-ok(mots.roll === '0.50' && mots.potShare === '50' && mots.devShare === '50' && mots.prize5 === '5' && mots.prize4 === '5' && mots.prize3 === '5' && mots.minScore === '3' && mots.pass === '10' && mots.passRolls === '30' && mots.passHours === '24' && mots.passPot === '5' && mots.passDev === '5',
-  'C les mots derives de l enregistrement sont bien « 0.50 USDC roll, 50 % / 50 %, prix 5/5/5, score min 3, pass 10 = 5 + 5, 30 rolls, 24 h »');
+ok(mots.roll === '0.50' && mots.potShare === '50' && mots.devShare === '50' && mots.prize5 === '5' && mots.prize4 === '3' && mots.prize3 === '1' && mots.prize2 === '0.50' && mots.minScore === '2' && mots.pass === '10' && mots.passRolls === '30' && mots.passHours === '24' && mots.passPot === '5' && mots.passDev === '5',
+  'C les mots derives de l enregistrement sont bien « 0.50 USDC roll, 50 % / 50 %, prix 5 / 3 / 1 / 0.50, score min 2, pass 10 = 5 + 5, 30 rolls, 24 h »');
 const cles = [...page.matchAll(/data-k="(\w+)"/g)].map((m) => m[1]);
 ok(Object.keys(mots).every((k) => cles.includes(k)) && cles.every((k) => k in mots) && /for \(const e of document\.querySelectorAll\('b\[data-k\]'\)\) e\.textContent = MOTS\[e\.dataset\.k\]/.test(script),
   'C chaque chiffre de la page est un data-k rempli depuis MOTS (derive de D.constructeur) : ' + cles.length + ' emplacements, aucun chiffre tape');
 ok(!/0\.50 USDC|5 USDC for 5|10 USDC a pass/.test(page.replace(/<script[\s\S]*<\/script>/, '')), 'C aucun prix n est ecrit en dur dans le HTML (ils viennent de l enregistrement)');
 ok(/No owner\. Nobody can take the pots/.test(page) && /No refund\./.test(page) && /about 8\.5 minutes today, about 51 seconds once Base moves to 200 ms blocks \(Denim\)/.test(page)
-  && /the Base sequencer, which builds the blocks, is the one party that could/.test(page) && /only by the creator of UNIT as the TokenizedBlock hook names it/.test(page) && /at most 1000 USDC a prize, minimum score 3 to 5/.test(page),
+  && /the Base sequencer, which builds the blocks, is the one party that could/.test(page) && /only by the creator of UNIT as the TokenizedBlock hook names it/.test(page) && /at most 1000 USDC a prize, a higher tier never pays less than a lower one, minimum score 2 to 5/.test(page),
   'C le texte dit : pas d owner, pas de remboursement, 256 blocs (8,5 min / 51 s Denim), le sequenceur, le createur de UNIT et ses bornes');
 const sol = lire('contracts/src/BlockRolls.sol');
-ok(/SETTLE_WINDOW = 256;/.test(sol) && /MAX_PRIZE = 1000_000000;/.test(sol) && /MIN_SCORE_FLOOR = 3;/.test(sol) && /BANDS = 6;/.test(sol) && /ORBITS = 10;/.test(sol) && /FACETS = 19;/.test(sol) && /MATERIALS = 9;/.test(sol) && /ORNAMENTS = 8;/.test(sol),
-  'C chaque borne annoncee (256 blocs, 1000 USDC, score 3..5, 6/10/19/9/8) est une constante du contrat');
+ok(/SETTLE_WINDOW = 256;/.test(sol) && /MAX_PRIZE = 1000_000000;/.test(sol) && /MIN_SCORE_FLOOR = 2;/.test(sol) && /p2 <= p3 && p3 <= p4 && p4 <= p5/.test(sol) && /BANDS = 6;/.test(sol) && /ORBITS = 10;/.test(sol) && /FACETS = 19;/.test(sol) && /MATERIALS = 9;/.test(sol) && /ORNAMENTS = 8;/.test(sol),
+  'C chaque borne annoncee (256 blocs, 1000 USDC, paliers ordonnes, score 2..5, 6/10/19/9/8) est une constante du contrat');
 ok(/<meta name="robots" content="noindex">/.test(page) && /paid game of chance/.test(page), 'C noindex ; la page dit que c est un jeu d argent');
 const srv = lire('serveur-web.js');
 console.log('  (serveur-web.js ' + (/deployer-blockrolls\.html/.test(srv) ? 'sert' : 'ne sert PAS encore') + ' la page : il est edite par une autre session, non modifie ici ; a servir : deployer-blockrolls.html, blockrolls-deploiement.js, blockrolls-config.js, keccak.js)');

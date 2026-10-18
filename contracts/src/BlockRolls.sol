@@ -7,10 +7,11 @@ pragma solidity ^0.8.24;
 /// @dev ⛔ CE QUI EST GRAVE ICI, ET POURQUOI :
 ///   - AUCUN proprietaire, AUCUN retrait : l USDC ne sort que par un settle gagnant (pot des rolls) ou un tirage du jour
 ///     (pot du jour). Le createur de UNIT fixe les REGLES (prix des gains, score minimum), rien d autre : ni retrait, ni pause.
-///   - ROLL 0,50 : moitie au pot des rolls, moitie au DEV_WALLET tout de suite. Un gain est un PRIX FIXE (defaut 5 USDC)
-///     par score, PLAFONNE par le pot au moment du settle : payout = min(prize[score], pot). Le pot ne paie jamais plus
-///     qu il ne tient ; N gagnants sur le meme bloc sont payes dans l ORDRE des settles sur ce qui RESTE.
-///   - les REGLES (prize5/4/3 <= 1000 USDC, minScore 3..5) sont fixees par le createur de UNIT -- l adresse que le hook
+///   - ROLL 0,50 : moitie au pot des rolls, moitie au DEV_WALLET tout de suite. Un gain est un PRIX FIXE par nombre de traits
+///     en commun (Phil 2026-10-18 12:20, defauts : 2 -> 0,50 ; 3 -> 1 ; 4 -> 3 ; 5 -> 5 USDC ; 0 ou 1 -> rien), PLAFONNE par le
+///     pot au moment du settle : payout = min(prize[score], pot). Le pot ne paie jamais plus qu il ne tient ; N gagnants sur
+///     le meme bloc sont payes dans l ORDRE des settles sur ce qui RESTE.
+///   - les REGLES (prize2 <= prize3 <= prize4 <= prize5 <= 1000 USDC, minScore 2..5) sont fixees par le createur de UNIT -- l adresse que le hook
 ///     7030 rend pour la pool UNIT/ETH (HOOK.createurs(UNIT_POOL_ID), premier mot), LUE a chaque appel -- et chaque roll
 ///     garde la VERSION des regles de sa creation : un changement ne touche que les rolls crees apres.
 ///   - PASS 10 USDC (skin pass, 24 h, PASS_ROLLS rolls) : moitie au POT DU JOUR (jour UTC = block.timestamp / 86400 a
@@ -32,9 +33,9 @@ contract BlockRolls {
     uint8 public constant MATERIALS = 9;
     uint8 public constant ORNAMENTS = 8;
     uint16 internal constant BPS = 10_000;
-    /* bornes des regles : un prix <= 1000 USDC, un score minimum entre 3 et 5 */
+    /* bornes des regles : un prix <= 1000 USDC, un score minimum entre 2 et 5 (1 trait ne paie jamais : ~35 % des rolls en ont 1) */
     uint64 public constant MAX_PRIZE = 1000_000000;
-    uint8 public constant MIN_SCORE_FLOOR = 3;
+    uint8 public constant MIN_SCORE_FLOOR = 2;
     /* le bloc cible est 2 blocs APRES le roll (ou la fermeture du jour) : son hash n existe pas encore. En BLOCS, pas en
      * secondes : 4 s aujourd hui (2 s/bloc), ~0,4 s apres Denim (200 ms/bloc, Base mainnet vise novembre 2026). */
     uint256 public constant TARGET_DELAY = 2;
@@ -81,6 +82,7 @@ contract BlockRolls {
         uint64 prize5;
         uint64 prize4;
         uint64 prize3;
+        uint64 prize2;
         uint8 minScore;
     }
 
@@ -110,7 +112,7 @@ contract BlockRolls {
     event Rolled(uint256 indexed rollId, address indexed player, uint8[5] guess, uint256 targetBlock, bool withPass, uint256 toPot, uint256 toDev);
     event Settled(uint256 indexed rollId, address indexed player, bytes32 blockHash, uint8[5] face, uint8 score, uint256 payout, uint256 potAfter);
     event Expired(uint256 indexed rollId, address indexed player);
-    event RulesSet(uint16 indexed version, uint64 prize5, uint64 prize4, uint64 prize3, uint8 minScore, address by);
+    event RulesSet(uint16 indexed version, uint64 prize5, uint64 prize4, uint64 prize3, uint64 prize2, uint8 minScore, address by);
     event DayClosed(uint32 indexed day, uint256 targetBlock, uint256 buyers, uint256 dayPot, address by);
     event DayDrawn(uint32 indexed day, address indexed winner, bytes32 blockHash, uint256 amount, uint256 buyers);
 
@@ -141,7 +143,8 @@ contract BlockRolls {
         _lock = 1;
     }
 
-    /* ⚠️ un struct STATIQUE : encode exactement comme 13 mots a plat (le banc fork et preparer-deploiement encodent ainsi) */
+    /* ⚠️ un struct STATIQUE : encode exactement comme 14 mots a plat (le banc fork et preparer-deploiement encodent ainsi ; l ordre
+     *    est verifie contre l ABI compilee par le preparateur et par test-blockrolls-plan) */
     struct Config {
         address usdc;
         address devWallet;
@@ -155,6 +158,7 @@ contract BlockRolls {
         uint64 prize5;
         uint64 prize4;
         uint64 prize3;
+        uint64 prize2;
         uint8 minScore;
     }
 
@@ -162,7 +166,7 @@ contract BlockRolls {
         if (c.usdc == address(0) || c.usdc.code.length == 0 || c.devWallet == address(0)) revert BadConfig();
         if (c.hook.code.length == 0 || c.unitPoolId == bytes32(0)) revert BadConfig();
         if (c.rollPrice == 0 || c.passPrice == 0 || c.passRolls == 0 || c.passWindow == 0) revert BadConfig();
-        if (c.potShareBps > BPS || !_rulesOk(c.prize5, c.prize4, c.prize3, c.minScore)) revert BadConfig();
+        if (c.potShareBps > BPS || !_rulesOk(c.prize5, c.prize4, c.prize3, c.prize2, c.minScore)) revert BadConfig();
         USDC = c.usdc;
         DEV_WALLET = c.devWallet;
         HOOK = c.hook;
@@ -173,8 +177,8 @@ contract BlockRolls {
         PASS_WINDOW = c.passWindow;
         POT_SHARE_BPS = c.potShareBps;
         rulesVersion = 1;
-        rules[1] = Rules(c.prize5, c.prize4, c.prize3, c.minScore);
-        emit RulesSet(1, c.prize5, c.prize4, c.prize3, c.minScore, msg.sender);
+        rules[1] = Rules(c.prize5, c.prize4, c.prize3, c.prize2, c.minScore);
+        emit RulesSet(1, c.prize5, c.prize4, c.prize3, c.prize2, c.minScore, msg.sender);
     }
 
     /* ================================================================ regles */
@@ -185,23 +189,25 @@ contract BlockRolls {
         if (ok && ret.length >= 32) c = abi.decode(ret, (address));
     }
 
-    /// @notice SEUL le createur de UNIT. Prix <= 1000 USDC chacun, minScore 3..5. Ne touche que les rolls crees APRES.
-    function setRules(uint64 prize5, uint64 prize4, uint64 prize3, uint8 minScore) external {
+    /// @notice SEUL le createur de UNIT. prize2 <= prize3 <= prize4 <= prize5 <= 1000 USDC, minScore 2..5. Ne touche que les rolls crees APRES.
+    function setRules(uint64 prize5, uint64 prize4, uint64 prize3, uint64 prize2, uint8 minScore) external {
         address c = unitCreator();
         if (c == address(0) || msg.sender != c) revert NotCreator();
-        if (!_rulesOk(prize5, prize4, prize3, minScore)) revert BadRules();
+        if (!_rulesOk(prize5, prize4, prize3, prize2, minScore)) revert BadRules();
         uint16 v = ++rulesVersion;
-        rules[v] = Rules(prize5, prize4, prize3, minScore);
-        emit RulesSet(v, prize5, prize4, prize3, minScore, msg.sender);
+        rules[v] = Rules(prize5, prize4, prize3, prize2, minScore);
+        emit RulesSet(v, prize5, prize4, prize3, prize2, minScore, msg.sender);
     }
 
-    function currentRules() external view returns (uint64 prize5, uint64 prize4, uint64 prize3, uint8 minScore) {
+    function currentRules() external view returns (uint64 prize5, uint64 prize4, uint64 prize3, uint64 prize2, uint8 minScore) {
         Rules storage r = rules[rulesVersion];
-        return (r.prize5, r.prize4, r.prize3, r.minScore);
+        return (r.prize5, r.prize4, r.prize3, r.prize2, r.minScore);
     }
 
-    function _rulesOk(uint64 p5, uint64 p4, uint64 p3, uint8 minScore) internal pure returns (bool) {
-        return p5 <= MAX_PRIZE && p4 <= MAX_PRIZE && p3 <= MAX_PRIZE && minScore >= MIN_SCORE_FLOOR && minScore <= 5;
+    /// @dev un palier plus haut ne paie jamais moins qu un plus bas (sinon viser 4 traits rapporterait plus que 5) ; le plus haut
+    ///      est plafonne, donc tous le sont.
+    function _rulesOk(uint64 p5, uint64 p4, uint64 p3, uint64 p2, uint8 minScore) internal pure returns (bool) {
+        return p5 <= MAX_PRIZE && p2 <= p3 && p3 <= p4 && p4 <= p5 && minScore >= MIN_SCORE_FLOOR && minScore <= 5;
     }
 
     /* ================================================================ pot des rolls */
@@ -411,7 +417,11 @@ contract BlockRolls {
 
     function _prizeFor(Rules storage r, uint8 score) internal view returns (uint256) {
         if (score < r.minScore) return 0;
-        return score == 5 ? r.prize5 : score == 4 ? r.prize4 : r.prize3;
+        if (score == 5) return r.prize5;
+        if (score == 4) return r.prize4;
+        if (score == 3) return r.prize3;
+        if (score == 2) return r.prize2;
+        return 0;
     }
 
     function _record(uint8[5] calldata g) internal returns (uint256 rollId) {

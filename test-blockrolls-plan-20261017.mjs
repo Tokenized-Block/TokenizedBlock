@@ -3,7 +3,7 @@
  *   topics Rolled/Settled = ceux de l ABI compilee ; (2) approve EXACT du prix (jamais infini), au jeton USDC, pour le contrat ;
  *   (3) guess hors bornes refuse AVANT la signature (6/10/19/9/8), pass actif non rachete, roll de pass sans pass refuse ;
  *   (4) fenetre de settle : cible -> TROP_TOT, cible+1..cible+256 -> REGLABLE, cible+257 -> PERDU (les bornes de settle()/expire()) ;
- *   (5) traitsDepuisHash = les epingles de parite ; gainPrevu = (pot * bps) / 1e4 ; (6) decodage Rolled/Settled d un log ;
+ *   (5) traitsDepuisHash = les epingles de parite ; gainPrevu = min(prix du palier, pot) ; (6) decodage Rolled/Settled d un log ;
  *   (8) planRolls (2026-10-18) : UN approve EXACT de N x prix + N roll(guess), N <= 10 ; MUTANT « approve d un seul roll » rougit.
  * L acceptation reelle par le contrat (vrai USDC de Base sur un fork) est prouvee par banc-blockrolls-fork-20261017.mjs. */
 import { strict as assert } from 'node:assert';
@@ -64,9 +64,11 @@ vu(P.planSettle({ contrat: C, rollId: 3, targetBlock: 1002, blocActuel: 1003 }).
 vu(JSON.stringify(P.traitsDepuisHash('0x494a1264ca7b526bafe16d03fdb088252af07d5ece0f3e9a5e02cdef14e9968c')) === '[0,4,5,7,2]', 'traits = epingle de parite (teinte 360)');
 vu(P.traitsDepuisHash('0x12') === null, 'hash illisible : null, jamais un defaut');
 vu(P.scoreTraits([0, 4, 5, 7, 2], [0, 4, 5, 7, 3]) === 4, 'score = traits egaux');
-vu(P.gainPrevu(100250000n, 5) === 5000000n && P.gainPrevu(100250000n, 4) === 5000000n && P.gainPrevu(100250000n, 3) === 5000000n && P.gainPrevu(100250000n, 2) === 0n, 'gainPrevu = le prix fixe 5 USDC a partir de 3/5');
-vu(P.gainPrevu(250000n, 5) === 250000n && P.gainPrevu(0n, 5) === 0n, 'gainPrevu plafonne par le pot (min(prix, pot))');
-vu(P.gainPrevu(100000000n, 3, { ...P.DEFAUTS, minScore: 4 }) === 0n && P.gainPrevu(100000000n, 5, { ...P.DEFAUTS, prize5: 20000000n }) === 20000000n, 'gainPrevu suit les regles donnees (minScore, prix)');
+vu(P.gainPrevu(100250000n, 5) === 5000000n && P.gainPrevu(100250000n, 4) === 3000000n && P.gainPrevu(100250000n, 3) === 1000000n && P.gainPrevu(100250000n, 2) === 500000n
+  && P.gainPrevu(100250000n, 1) === 0n && P.gainPrevu(100250000n, 0) === 0n, 'gainPrevu = les paliers de Phil : 5 / 3 / 1 / 0,50 USDC, rien a 0 ou 1 trait');
+vu(P.gainPrevu(250000n, 5) === 250000n && P.gainPrevu(100000n, 2) === 100000n && P.gainPrevu(0n, 5) === 0n, 'gainPrevu plafonne par le pot (min(prix, pot)), 2/5 compris');
+vu(P.gainPrevu(100000000n, 3, { ...P.DEFAUTS, minScore: 4 }) === 0n && P.gainPrevu(100000000n, 2, { ...P.DEFAUTS, minScore: 3 }) === 0n && P.gainPrevu(100000000n, 5, { ...P.DEFAUTS, prize5: 20000000n }) === 20000000n, 'gainPrevu suit les regles donnees (minScore, prix)');
+vu(P.DEFAUTS.prize5 === 5000000n && P.DEFAUTS.prize4 === 3000000n && P.DEFAUTS.prize3 === 1000000n && P.DEFAUTS.prize2 === 500000n && P.DEFAUTS.minScore === 2 && P.DEFAUTS.rollPrice === 500000n, 'DEFAUTS = la decision de Phil (12:20) : roll 0,50 ; 5/3/1/0,50 ; score min 2');
 
 /* (6) */
 const logR = { address: C, topics: [topic(P.EV_ROLLED), '0x' + mot(7), '0x' + mot(A('a1'))], data: '0x' + [1, 2, 3, 4, 5, 1002, 0, 250000, 250000].map(mot).join('') };
@@ -92,12 +94,16 @@ if (existsSync(ART)) {
   const pb = art.abi.find((x) => x.type === 'event' && x.name === 'PassBought');
   vu(pb.inputs[0].indexed && pb.inputs[1].indexed && pb.inputs[1].name === 'day', 'PassBought : (player, day) INDEXES -- le serveur filtre le jour sans decoder');
   const ctor = art.abi.find((x) => x.type === 'constructor').inputs[0];
-  vu(ctor.type === 'tuple' && ctor.components.map((i) => i.type).join(',') === 'address,address,address,bytes32,uint256,uint256,uint32,uint64,uint16,uint64,uint64,uint64,uint8', 'constructeur : Config statique = 13 mots a plat -- le banc fork encode dans cet ordre');
+  vu(ctor.type === 'tuple' && ctor.components.map((i) => i.type).join(',') === 'address,address,address,bytes32,uint256,uint256,uint32,uint64,uint16,uint64,uint64,uint64,uint64,uint8'
+    && ctor.components.map((i) => i.name).slice(-5).join() === 'prize5,prize4,prize3,prize2,minScore', 'constructeur : Config statique = 14 mots a plat, ... prize5, prize4, prize3, prize2, minScore');
 }
-const sr = P.planSetRules({ contrat: C, prize5: 20000000n, prize4: '5000000', prize3: 1000000, minScore: 4 });
-vu(sr.etat === 'PRET' && sr.appels[0].data === selecteur(P.SIG_SET_RULES) + mot(20000000) + mot(5000000) + mot(1000000) + mot(4), 'setRules encode');
-vu(P.planSetRules({ contrat: C, prize5: 1000000001n, prize4: 0, prize3: 0, minScore: 3 }).etat === 'REFUSE' && P.planSetRules({ contrat: C, prize5: 0, prize4: 0, prize3: 0, minScore: 2 }).etat === 'REFUSE'
-  && P.planSetRules({ contrat: C, prize5: 0, prize4: 0, prize3: 0, minScore: 6 }).etat === 'REFUSE' && P.planSetRules({ contrat: C, prize5: 1000000000n, prize4: 1000000000n, prize3: 1000000000n, minScore: 5 }).etat === 'PRET', 'setRules : prix > 1000 USDC, minScore 2 ou 6 refuses ; maxima admis');
+const sr = P.planSetRules({ contrat: C, prize5: 20000000n, prize4: '5000000', prize3: 1000000, prize2: 300000, minScore: 4 });
+vu(sr.etat === 'PRET' && sr.appels[0].data === selecteur(P.SIG_SET_RULES) + mot(20000000) + mot(5000000) + mot(1000000) + mot(300000) + mot(4), 'setRules encode (5 mots : p5, p4, p3, p2, minScore)');
+const rs = (p5, p4, p3, p2, ms) => P.planSetRules({ contrat: C, prize5: p5, prize4: p4, prize3: p3, prize2: p2, minScore: ms }).etat;
+vu(rs(1000000001n, 0, 0, 0, 3) === 'REFUSE' && rs(0, 0, 0, 0, 1) === 'REFUSE' && rs(0, 0, 0, 0, 6) === 'REFUSE' && rs(1000000000n, 1000000000n, 1000000000n, 1000000000n, 5) === 'PRET' && rs(0, 0, 0, 0, 2) === 'PRET',
+  'setRules : prix > 1000 USDC, minScore 1 ou 6 refuses ; maxima et minScore 2 admis');
+vu(rs(3000000, 5000000, 1000000, 500000, 2) === 'REFUSE' && rs(5000000, 1000000, 3000000, 500000, 2) === 'REFUSE' && rs(5000000, 3000000, 500000, 1000000, 2) === 'REFUSE' && rs(5000000, 3000000, 1000000, 500000, 2) === 'PRET',
+  'setRules : un palier plus haut qui paierait moins (4>5, 3>4, 2>3) refuse avant la signature, comme le contrat');
 vu(P.jourDe(1700006400) === 19676 && P.jourDe(1700006399) === 19675, 'jourDe = block.timestamp / 86400');
 vu(P.planCloseDay({ contrat: C, day: 19676, maintenant: 1700092799 }).etat === 'REFUSE' && P.planCloseDay({ contrat: C, day: 19676, maintenant: 1700092800 }).appels[0].data === selecteur(P.SIG_CLOSE_DAY) + mot(19676), 'closeDay refuse tant que le jour UTC dure, encode a minuit');
 vu(P.planDrawDay({ contrat: C, day: 19676, targetBlock: 1002, blocActuel: 1002 }).etat === 'REFUSE' && P.planDrawDay({ contrat: C, day: 19676, targetBlock: 1002, blocActuel: 1259 }).etat === 'REFUSE'

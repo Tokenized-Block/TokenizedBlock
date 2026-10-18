@@ -58,7 +58,7 @@ for (const k of Object.keys(relu)) ok(relu[k] === String(C[k]).toLowerCase(), 'r
 ok((await lireU(A, 'PASS_ROLLS()')).toString() === String(C.passRolls) && (await lireU(A, 'PASS_WINDOW()')).toString() === String(C.passWindow) && (await lireU(A, 'POT_SHARE_BPS()')).toString() === String(C.potShareBps),
   'relu PASS_ROLLS / PASS_WINDOW / POT_SHARE_BPS = ' + C.passRolls + ' / ' + C.passWindow + ' / ' + C.potShareBps);
 const regles = (await appel(A, 'currentRules()')).slice(2).match(/.{64}/g).map((w) => BigInt('0x' + w).toString());
-ok(regles.join() === [C.prize5, C.prize4, C.prize3, C.minScore].map(String).join(), 'relu currentRules() = ' + regles.join(' / ') + ' = l enregistrement');
+ok(regles.join() === [C.prize5, C.prize4, C.prize3, C.prize2, C.minScore].map(String).join(), 'relu currentRules() = ' + regles.join(' / ') + ' = l enregistrement');
 const createur = await lireAdr(A, 'unitCreator()');
 const auHook = ('0x' + (await appel(C.hook, 'createurs(bytes32)', C.unitPoolId.slice(2))).slice(26, 66)).toLowerCase();
 ok(/^0x[0-9a-f]{40}$/.test(createur) && !/^0x0{40}$/.test(createur) && createur === auHook, 'relu unitCreator() = ' + createur + ' = createurs(poolId) du VRAI hook 7030 du fork');

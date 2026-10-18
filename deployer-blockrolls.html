@@ -45,7 +45,7 @@ b[data-k]{color:var(--or)}
   <h2>How it works</h2>
   <div class="grille">
     <div class="tuile" style="--c:var(--cyan)"><div class="num">01 · THE ROLL</div><h3><b data-k="roll">…</b> USDC a roll</h3><p><b data-k="potShare">…</b>% goes to the prize pot, <b data-k="devShare">…</b>% to TokenizedBlock at once. You pick five traits; the block two ahead decides.</p></div>
-    <div class="tuile" style="--c:var(--or)"><div class="num">02 · THE WIN</div><h3>Fixed prizes</h3><p><b data-k="prize5">…</b> USDC for 5 traits, <b data-k="prize4">…</b> for 4, <b data-k="prize3">…</b> for 3 — never more than the pot holds. Fewer than <b data-k="minScore">…</b> traits pays nothing.</p></div>
+    <div class="tuile" style="--c:var(--or)"><div class="num">02 · THE WIN</div><h3>Fixed prizes</h3><p><b data-k="prize5">…</b> USDC for 5 traits in common, <b data-k="prize4">…</b> for 4, <b data-k="prize3">…</b> for 3, <b data-k="prize2">…</b> for 2 — never more than the pot holds. Fewer than <b data-k="minScore">…</b> traits pays nothing.</p></div>
     <div class="tuile" style="--c:var(--rose)"><div class="num">03 · THE PASS</div><h3><b data-k="pass">…</b> USDC a pass</h3><p><b data-k="passRolls">…</b> rolls for <b data-k="passHours">…</b> hours, and a ticket in that day's draw: <b data-k="passPot">…</b> USDC goes to the day pot, <b data-k="passDev">…</b> to TokenizedBlock. One ticket per wallet per day; the whole day pot goes to one buyer.</p></div>
   </div>
 
@@ -54,7 +54,7 @@ b[data-k]{color:var(--or)}
     <ul>
       <li>No owner. Nobody can take the pots: the roll pot leaves only through winning rolls, the day pot only through the day's draw.</li>
       <li>No refund. A roll not settled within <b data-k="window">…</b> blocks after its target block is lost — about 8.5 minutes today, about 51 seconds once Base moves to 200 ms blocks (Denim). Anyone can settle any roll, in batches.</li>
-      <li>The prizes and the minimum winning score can be changed, but only by the creator of UNIT as the TokenizedBlock hook names it, within hard bounds (at most 1000 USDC a prize, minimum score 3 to 5), and only for rolls made after the change. The creator cannot touch the pots.</li>
+      <li>The prizes and the minimum winning score can be changed, but only by the creator of UNIT as the TokenizedBlock hook names it, within hard bounds (at most 1000 USDC a prize, a higher tier never pays less than a lower one, minimum score 2 to 5), and only for rolls made after the change. The creator cannot touch the pots.</li>
       <li>The face comes from the hash of a Base block. No player, no server and no creator chooses it; the Base sequencer, which builds the blocks, is the one party that could. The same trust as today's draw.</li>
       <li>The face is computed on chain exactly like the app computes it: the same keccak, the same six colour bands, ten orbits, nineteen facets, nine materials and eight ornaments.</li>
     </ul>
@@ -109,11 +109,11 @@ const CHAINE_HEX = '0x' + D.chaine.toString(16);
 const C = D.constructeur;
 const NOMS = { usdc: 'USDC', devWallet: 'TokenizedBlock wallet (dev share)', hook: 'TokenizedBlock hook (names UNIT\'s creator)', unitPoolId: 'UNIT / ETH pool id (where the creator is read)',
   rollPrice: 'Roll price (raw USDC)', passPrice: 'Pass price (raw USDC)', passRolls: 'Rolls per pass', passWindow: 'Pass window (seconds)', potShareBps: 'Share to the pots (bps)',
-  prize5: 'Prize for 5/5 (raw USDC)', prize4: 'Prize for 4/5 (raw USDC)', prize3: 'Prize for 3/5 (raw USDC)', minScore: 'Minimum winning score' };
+  prize5: 'Prize for 5/5 (raw USDC)', prize4: 'Prize for 4/5 (raw USDC)', prize3: 'Prize for 3/5 (raw USDC)', prize2: 'Prize for 2/5 (raw USDC)', minScore: 'Minimum winning score' };
 let compte = null, intacte = false, envoi = false, adresse = D.adresse || null;
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
 /* les mots de la page viennent de l ENREGISTREMENT, pas d un texte tape : un prix change dans le depot change la page */
-const MOTS = { roll: usdc6(C.rollPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - Number(C.potShareBps)), prize5: usdc6(C.prize5), prize4: usdc6(C.prize4), prize3: usdc6(C.prize3),
+const MOTS = { roll: usdc6(C.rollPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - Number(C.potShareBps)), prize5: usdc6(C.prize5), prize4: usdc6(C.prize4), prize3: usdc6(C.prize3), prize2: usdc6(C.prize2),
   minScore: String(C.minScore), pass: usdc6(C.passPrice), passRolls: String(C.passRolls), passHours: String(Number(C.passWindow) / 3600),
   passPot: usdc6(BigInt(C.passPrice) * BigInt(C.potShareBps) / 10000n), passDev: usdc6(BigInt(C.passPrice) - BigInt(C.passPrice) * BigInt(C.potShareBps) / 10000n), window: '256' };
 for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
@@ -172,7 +172,7 @@ $('#bDeployer').addEventListener('click', async () => {
     const createur = await lireAdr(a, 'unitCreator()');
     const regles = (await appel(a, 'currentRules()')).slice(2).match(/.{64}/g).map((w) => BigInt('0x' + w).toString());
     const bon = ['usdc', 'devWallet', 'hook', 'unitPoolId', 'rollPrice', 'passPrice'].every((k) => relu[k] === String(C[k]).toLowerCase())
-      && regles.join() === [C.prize5, C.prize4, C.prize3, C.minScore].map(String).join() && /^0x[0-9a-f]{40}$/.test(createur) && !/^0x0{40}$/.test(createur);
+      && regles.join() === [C.prize5, C.prize4, C.prize3, C.prize2, C.minScore].map(String).join() && /^0x[0-9a-f]{40}$/.test(createur) && !/^0x0{40}$/.test(createur);
     $('#rLu').textContent = Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · rules ' + regles.join('/') + ' · UNIT creator ' + createur;
     if (bon) adresse = a;
     dire(bon ? 'Deployed: the contract reads back exactly what was signed, and it knows UNIT\'s creator. Send the address to the team: the app opens the game once it knows it.'
