@@ -96,9 +96,10 @@ import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
 import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
-import { BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv, DEVISES_SKIN as DEVISES_SKIN_SRV } from './blockskins.js';
+import { BLOCKSKINS as BLOCKSKINS_SRV, BLOCKSKINS_ACTIF as BLOCKSKINS_ACTIF_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv, DEVISES_SKIN as DEVISES_SKIN_SRV } from './blockskins.js';
 import { lireEvenementsJeu, evenementsPractice, fusionnerJournal, avecBlocks, TOPICS_ROLLS as TOPICS_ROLLS_JOURNAL, TOPICS_SKINS as TOPICS_SKINS_JOURNAL, JOURNAL_MAX, SOURCE_DUELS } from './journal-jeu.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
+import { actionsDesLogs, crediterActions, joursTicketParWallet, niveauWallet, bonusNiveauxSemaine, TOPICS_XP, XP_PAR_ACTION, NIVEAUX_XP } from './niveaux-jeu.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
 import { lireMissions } from './missions-lecture.js';
@@ -4193,6 +4194,68 @@ if (process.env.TB_JOURNAL !== '0') {
   setTimeout(() => { void lireJournalJeu(); setInterval(() => { void lireJournalJeu(); }, JOURNAL_TOUR_MS).unref?.(); },
     Math.max(500, Number(process.env.TB_JOURNAL_PREMIER_MS) || 20000)).unref?.();
 }
+/* ══ NIVEAUX DU BRAIN (2026-10-18, niveaux-jeu.js) — l XP vient de gestes VERIFIES : les logs de NOS contrats (BlockRolls : Rolled paye,
+ *   Settled, PassBought ; BlockSkins actif : SkinMinted, Sold ; BlockMissions : TaskClaimed — crochet, ferme tant qu aucune adresse + bloc
+ *   n est notee), lus par fenetres de 2 000 blocs avec un curseur PAR SOURCE garde dans revenu.xpScan (jamais un balayage depuis le
+ *   deploiement a chaque requete), et les jours avec ticket (revenu.jours / revenu.passes). Les rolls practice n ont pas de wallet : 0 XP.
+ * ⛔ SONDE 2026-10-18 (tete 52 775 375) : publicnode sert eth_getLogs a -9 500 blocs et REFUSE a -12 000 (« Archive requests require a
+ *   personal token ») ; mainnet.base.org rend 429. Sans RPC_ARCHIVE, une source dont le curseur (ou le deploiement) est plus vieux que
+ *   tete - XP_RECUL_MAX commence a tete - XP_RECUL_MAX et le TROU est note (revenu.xpTrous, rendu par /api/jeu/niveau) : de l XP manquant,
+ *   dit, jamais invente. Lecture ratee -> le curseur ne bouge pas (relu au tour suivant). */
+const XP_RECUL_MAX = 9000, XP_FENETRE = 2000, XP_FENETRES_PAR_TOUR = 5;
+function sourcesXp() {
+  const adr = (x) => (/^0x[0-9a-f]{40}$/i.test(String(x || '')) ? String(x).toLowerCase() : null);
+  return [
+    { cle: 'rolls', contrat: adr(BLOCKROLLS_DEPLOIEMENT.adresse), bloc: BLOCKROLLS_DEPLOIEMENT.bloc, topics: [TOPICS_XP.rolled, TOPICS_XP.settled, TOPICS_XP.pass] },
+    { cle: 'skins', contrat: adr(BLOCKSKINS_SRV), bloc: BLOCKSKINS_ACTIF_SRV.blocDeploiement, topics: [TOPICS_XP.skinMinted, TOPICS_XP.skinSold] },
+    { cle: 'missions', contrat: adr(MISSIONS_DEPLOIEMENT.adresse), bloc: MISSIONS_DEPLOIEMENT.bloc, topics: [TOPICS_XP.taskClaimed] },
+  ].filter((s) => s.contrat && Number.isSafeInteger(s.bloc) && s.bloc > 0);
+}
+let xpScanEnVol = false;
+async function crediterXp() {
+  if (xpScanEnVol) return;
+  xpScanEnVol = true;
+  try {
+    const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    if (!Number.isSafeInteger(tete)) return;
+    const sur = tete - ROLLS_MARGE_BLOCS;
+    revenu.xpScan = revenu.xpScan || {}; revenu.xpTrous = revenu.xpTrous || [];
+    const srcs = sourcesXp(), adresses = Object.fromEntries(srcs.map((s) => [s.cle, s.contrat]));
+    for (const s of srcs) {
+      let de = Number.isSafeInteger(revenu.xpScan[s.cle]) ? revenu.xpScan[s.cle] + 1 : s.bloc;
+      if (!RPC_ARCHIVE && de < sur - XP_RECUL_MAX) {
+        revenu.xpTrous.push({ source: s.cle, de, a: sur - XP_RECUL_MAX - 1, note: 'older than the public nodes serve logs' });
+        if (revenu.xpTrous.length > 50) revenu.xpTrous.splice(0, revenu.xpTrous.length - 50);
+        de = sur - XP_RECUL_MAX; revenuSale = true;
+      }
+      for (let tour = 0; tour < XP_FENETRES_PAR_TOUR && de <= sur; tour++) {
+        const a = Math.min(sur, de + XP_FENETRE - 1);
+        let logs;
+        try { logs = await rpcServeur('eth_getLogs', [{ address: s.contrat, fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16), topics: [s.topics] }]); } catch (_) { break; }
+        if (!Array.isArray(logs)) break;
+        revenu.xpEtat = crediterActions(revenu.xpEtat || {}, actionsDesLogs(logs, adresses));
+        revenu.xpScan[s.cle] = a; revenuSale = true; de = a + 1;
+      }
+    }
+  } catch (_) { /* relu au prochain tour, depuis les memes curseurs */ } finally { xpScanEnVol = false; }
+}
+setTimeout(() => { void crediterXp(); }, 20000).unref?.();
+setInterval(() => { void crediterXp(); }, 120000).unref?.();
+/* jours avec ticket par wallet : recalcules au plus toutes les 30 s (revenu.jours + revenu.passes, jusqu a aujourd hui inclus) */
+const joursTicketCache = { t: 0, jour: null, carte: {} };
+function joursTicketSrv() {
+  const j = jourDe(Date.now()).id;
+  if (Date.now() - joursTicketCache.t > 30000 || joursTicketCache.jour !== j) {
+    joursTicketCache.carte = joursTicketParWallet(revenu.jours || {}, revenu.passes || {}, j, SEUIL_VOLUME_JOUR_USD);
+    joursTicketCache.t = Date.now(); joursTicketCache.jour = j;
+  }
+  return joursTicketCache.carte;
+}
+const niveauxCache = new Map();
+function niveauSrv(wallet) {
+  const a = String(wallet || '').toLowerCase();
+  return niveauWallet({ compteurs: ((revenu.xpEtat || {}).xp || {})[a] || {}, joursTicket: joursTicketSrv()[a] || 0 });
+}
 setInterval(() => {
   if (!revenuSale || !FICHIER_REVENU) return;
   try { writeFileSync(FICHIER_REVENU + '.tmp', JSON.stringify(revenu)); renameSync(FICHIER_REVENU + '.tmp', FICHIER_REVENU); revenuSale = false; }
@@ -6130,7 +6193,10 @@ function traiterRequete(req, res) {
     /* tickets = volume >= seuil OU pass skin couvrant le jour (tirage-saison.js ticketsJour) */
     const passes = revenu.passes || {};
     const tJ = ticketsJour(jours, j.id, passes, SEUIL_VOLUME_JOUR_USD);
-    const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin), SEUIL_VOLUME_JOUR_USD, passes, (revenu.bonusSemaine || {})[s.id] || {}), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin), SEUIL_VOLUME_JOUR_USD, passes);
+    /* NIVEAU DU BRAIN (2026-10-18) : +1 entree a L3, +2 a L6 (plafond 2), seulement pour un wallet qui a deja une entree de JOUR cette semaine
+     *   (bonusNiveauxSemaine ET entreesPeriode le verifient) ; niveau = XP verifie (niveauSrv). Le mois ne recoit pas ce bonus. */
+    const bonusNiveauS = bonusNiveauxSemaine(entreesPeriode(jours, joursEntre(s.debut, s.fin), SEUIL_VOLUME_JOUR_USD, passes), (a) => niveauSrv(a).level);
+    const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin), SEUIL_VOLUME_JOUR_USD, passes, (revenu.bonusSemaine || {})[s.id] || {}, bonusNiveauS), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin), SEUIL_VOLUME_JOUR_USD, passes);
     const iso = (x) => new Date(x).toISOString();
     /* FACE OF THE DAY + tirage du jour (2026-10-17 soir) : HIER est resolu par le bloc E = le premier bloc horodate >= cloture + 120 s
      *   (face-du-jour.js). Son hash revele la face du jour ET tire le gagnant (tirer, domaine = id du jour). Resolu UNE fois, en fond,
@@ -6170,15 +6236,41 @@ function traiterRequete(req, res) {
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: tJ.includes(adresse) })),
         passes: Object.entries(passes).filter(([, ids]) => ids.includes(j.id)).map(([a, ids]) => ({ adresse: a, jusqua: ids[ids.length - 1] })) },
-      semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)) },
+      semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)), bonusNiveau: bonusNiveauS },
       mois: { id: mo.id, debut: iso(mo.debut), fin: iso(mo.fin), entrees: eM, n: eM.length, racine: racine(eM.map((e) => e.adresse)) },
       regle: 'A day counts when your verified trading volume that day (UTC) reaches $' + SEUIL_VOLUME_JOUR_USD + ': trades of the UNIT block on its '
         + 'TokenizedBlock pool, tokenized-stock trades made in the app, and what you spend in BlockRolls (paid rolls and the Week pass; a roll taken on a pass '
         + 'counts once, at the pass). Each such day is one ticket for that day\'s draw and one entry for the week\'s '
         + 'and the month\'s draws. Trading more in a day adds nothing. A Week pass bought on the BlockRolls contract holds the ticket for 7 UTC days '
-        + 'from the day of the block it was bought in (still one ticket a day) and adds 3 entries to that week\'s draw. The ticket draw is a practice season: no prize yet. Each day is settled by block E, the first Base '
+        + 'from the day of the block it was bought in (still one ticket a day) and adds 3 entries to that week\'s draw. A brain at level 3 adds 1 entry to the week\'s draw, '
+        + 'at level 6 it adds 2 (never more), and only when that wallet already has an entry that week; levels come from verified play (GET /api/jeu/niveau). The ticket draw is a practice season: no prize yet. Each day is settled by block E, the first Base '
         + 'block stamped at least ' + DELAI_REVELATION_S + ' s after the day closes: its hash picks the day\'s winner and reveals the Face of the Day '
         + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' });
+  }
+
+  /* ══ LE NIVEAU D UN WALLET (2026-10-18, niveaux-jeu.js) — GET /api/jeu/niveau?wallet=0x… (40 hex, rien d autre dans la requete) ->
+   *   { ok, wallet, xp, level, base, next, perk, detail, couverture }. Rien n est lu sur la chaine ici : le registre XP (revenu.xpEtat, rempli
+   *   par crediterXp) et les jours avec ticket. Garde 30 s par wallet. perk.appliesThisWeek = niveau >= 3 ET une entree de jour cette semaine
+   *   — exactement ce que corpsTirage ajoute au tirage de la semaine (practice : pas de pot). */
+  if (chemin === '/api/jeu/niveau') {
+    const rendreN = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': code === 200 ? 'private, max-age=30' : 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'GET' && req.method !== 'HEAD') { rendreN(405, { ok: false, pourquoi: 'GET only' }); return; }
+    const qN = new URL(req.url, 'http://x').searchParams, clesN = [...qN.keys()];
+    const wN = String(qN.get('wallet') || '');
+    if (clesN.length !== 1 || clesN[0] !== 'wallet' || !/^0x[0-9a-fA-F]{40}$/.test(wN)) { rendreN(400, { ok: false, pourquoi: 'expected ?wallet=0x followed by 40 hex characters, and nothing else' }); return; }
+    const aN = wN.toLowerCase(), s = saisonDe(Date.now());
+    const enCache = niveauxCache.get(aN);
+    if (enCache && Date.now() - enCache.t < 30000 && enCache.semaine === s.id) { rendreN(200, enCache.corps); return; }
+    const nv = niveauSrv(aN);
+    const aUneEntree = entreesPeriode(revenu.jours || {}, joursEntre(s.debut, s.fin), SEUIL_VOLUME_JOUR_USD, revenu.passes || {}).some((e) => e.adresse === aN);
+    const corps = { ok: true, wallet: aN, xp: nv.xp, level: nv.level, base: nv.base, next: nv.next,
+      perk: { entries: nv.perk.entrees, draw: 'week', week: s.id, appliesThisWeek: nv.perk.entrees > 0 && aUneEntree, practice: true },
+      detail: nv.detail, xpParAction: XP_PAR_ACTION, niveaux: NIVEAUX_XP,
+      couverture: { depuis: Object.fromEntries(sourcesXp().map((x) => [x.cle, x.bloc])), luJusqua: { ...(revenu.xpScan || {}) }, trous: (revenu.xpTrous || []).slice(-10) } };
+    niveauxCache.set(aN, { t: Date.now(), semaine: s.id, corps });
+    if (niveauxCache.size > 500) niveauxCache.delete(niveauxCache.keys().next().value);
+    rendreN(200, corps);
+    return;
   }
 
   /* ══ LES ROLLS DU JEU (Phil 2026-10-17 23:50) — POST /api/jeu/roll {bloc, score} apres un Roll de l onglet Game ; GET /api/jeu/rolls

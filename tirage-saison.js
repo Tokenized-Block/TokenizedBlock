@@ -119,9 +119,17 @@ export function ticketsJour(etatJours, jourId, passes = {}, seuil = SEUIL_VOLUME
 /** les entrees d une periode : une par (wallet, jour qualifie), triees (adresse puis jour) — publiques et rejouables.
  *  `bonus` = { wallet: n } (WEEK PASS : bonusSemaine[semaine]) ajoute n entrees { adresse, jour: 'BONUS-k', bonus: true }, n entier
  *  plafonne a BONUS_PASS_SEMAINE ; adresse ou nombre illisible -> ignore. */
-export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_USD, passes = {}, bonus = {}) {
+export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_USD, passes = {}, bonus = {}, bonusNiveau = {}) {
   const e = [];
   for (const j of idsJours) for (const a of ticketsJour(etatJours, j, passes, seuil)) e.push({ adresse: a, jour: j });
+  /* NIVEAU DU BRAIN (2026-10-18, niveaux-jeu.js) : `bonusNiveau` = { wallet: n } ajoute n entrees { jour: 'NIVEAU-k', bonus: true, niveau: true },
+   *   n plafonne a BONUS_NIVEAU_MAX, et SEULEMENT pour un wallet qui a deja une entree de JOUR dans la periode (pas d entree -> pas de bonus).
+   *   Lu AVANT le bonus Week pass : une entree BONUS ne qualifie pas un wallet pour le bonus de niveau. */
+  const avecJour = new Set(e.map((x) => x.adresse));
+  for (const [a, nb] of Object.entries(bonusNiveau || {})) {
+    if (!ADR.test(a) || !Number.isInteger(nb) || nb <= 0 || !avecJour.has(a)) continue;
+    for (let k = 1; k <= Math.min(nb, BONUS_NIVEAU_MAX); k++) e.push({ adresse: a, jour: 'NIVEAU-' + k, bonus: true, niveau: true });
+  }
   for (const [a, nb] of Object.entries(bonus || {})) {
     if (!ADR.test(a) || !Number.isInteger(nb) || nb <= 0) continue;
     for (let k = 1; k <= Math.min(nb, BONUS_PASS_SEMAINE); k++) e.push({ adresse: a, jour: 'BONUS-' + k, bonus: true });
@@ -134,6 +142,8 @@ export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_US
  *   semaine ne cumule pas). PUR : rend un NOUVEL etat { passes, bonusSemaine }. */
 export const JOURS_PASS_SEMAINE = 7;
 export const BONUS_PASS_SEMAINE = 3;
+/** plafond des entrees bonus de NIVEAU au tirage de la semaine (niveaux-jeu.js PERKS_NIVEAU : +1 a L3, +2 a L6) */
+export const BONUS_NIVEAU_MAX = 2;
 /** les ids des 7 jours a partir du jour UTC `jour` (entier = ms / 86400000, comme le `day` du contrat) */
 export function joursPassSemaine(jour) { return joursPass(jour * JOUR_MS, JOURS_PASS_SEMAINE); }
 export function crediterPassSemaine(etat, { joueur, jour } = {}) {

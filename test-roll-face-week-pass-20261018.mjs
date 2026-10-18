@@ -89,7 +89,7 @@ const fv = srv.slice(f0, f1);
 vu(f0 > 0 && /for \(const pa of passesAchetes\(logs, contrat\)\)/.test(fv) && /if \(internes\.has\(pa\.joueur\)\) continue;/.test(fv) && /crediterPassSemaine\(\{ passes: revenu\.passes \|\| \{\}, bonusSemaine: revenu\.bonusSemaine \|\| \{\} \}, pa\)/.test(fv), 'crediterVolumeRolls : PassBought des memes logs, internes exclus, crediterPassSemaine');
 vu(/revenu\.passes = cp\.passes; revenu\.bonusSemaine = cp\.bonusSemaine;/.test(fv), 'le credit est ecrit dans revenu.passes et revenu.bonusSemaine');
 const ct = srv.slice(srv.indexOf('function corpsTirage()'), srv.indexOf("regle: 'A day counts"));
-vu(/const eS = entreesPeriode\(jours, joursEntre\(s\.debut, s\.fin\), SEUIL_VOLUME_JOUR_USD, passes, \(revenu\.bonusSemaine \|\| \{\}\)\[s\.id\] \|\| \{\}\)/.test(ct), 'le bonus de LA semaine va a l entree de la semaine');
+vu(/const eS = entreesPeriode\(jours, joursEntre\(s\.debut, s\.fin\), SEUIL_VOLUME_JOUR_USD, passes, \(revenu\.bonusSemaine \|\| \{\}\)\[s\.id\] \|\| \{\}(?:, bonusNiveauS)?\)/.test(ct), 'le bonus de LA semaine va a l entree de la semaine (2026-10-18 : suivi du bonus de niveau, test-niveaux-jeu)');
 vu(/eM = entreesPeriode\(jours, joursEntre\(mo\.debut, mo\.fin\), SEUIL_VOLUME_JOUR_USD, passes\)/.test(ct), 'le mois ne recoit pas le bonus');
 
 /* (6) app */

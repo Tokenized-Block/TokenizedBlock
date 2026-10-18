@@ -14,6 +14,7 @@
 import { createHash } from 'node:crypto';
 import { selecteur } from './keccak.js';
 import { adresseDe, signerDigest, recupererAdresse } from './signeur-secp256k1.js';
+import { BONUS_PASS_SEMAINE, BONUS_NIVEAU_MAX } from './tirage-saison.js';
 import { donneesClaim, digestClaim, dayEnd, claimableUntil, jourIdDeDay, partDuJour, SIG_VERIFIER, SIG_PAUSED, SIG_DAY_POT, SIG_POT_AT_CLOSE, SIG_CLOSED, SIG_TICKET_OF } from './ticketpot-plan.js';
 
 const bas = (x) => String(x || '').toLowerCase();
@@ -116,11 +117,27 @@ export async function attesterJour(io, { day, tickets }) {
  * `day` = le jour TicketPot qui porte le pot de la semaine (son dernier jour) ; `entrees` = [{ adresse, jour }] de la semaine
  * (tirage-saison.js entreesPeriode) + `bonus` = { wallet: n } (Week pass : +3). Chaque wallet recoit floor(pot x ses entrees / total).
  * Un wallet = une attestation (un claim par wallet et par jour cote contrat). Rend { ok, day, total, parWallet, attestations, refus, poussiere }.
+ * ⛔ 2026-10-18 (niveaux du brain) : LES MEMES PLAFONDS QUE entreesPeriode. Avant, `bonus` n etait PAS plafonne ici (un { w: 99 } donnait 99
+ *   parts de plus) et une entree BONUS deja presente dans `entrees` s ajoutait au `bonus` (compte deux fois). Desormais : seules les entrees
+ *   de JOUR comptent dans `entrees` (jour 'JYYYY-MM-DD', une par (wallet, jour), les entrees `bonus: true` sont ignorees) ; les bonus viennent
+ *   des cartes, plafonnes : `bonus` (Week pass) a BONUS_PASS_SEMAINE, `bonusNiveau` (niveau du brain, niveaux-jeu.js) a BONUS_NIVEAU_MAX, et
+ *   seulement pour un wallet qui a au moins une entree de jour (pas d entree -> pas de bonus, pas de part).
  */
-export async function attesterSemaine(io, { day, entrees, bonus = {} }) {
-  const d = Number(day), poids = new Map();
-  for (const e of entrees || []) { const a = bas(e && e.adresse); if (ADR.test(a)) poids.set(a, (poids.get(a) || 0) + 1); }
-  for (const [a0, n0] of Object.entries(bonus || {})) { const a = bas(a0), n = Number(n0); if (ADR.test(a) && Number.isInteger(n) && n > 0 && poids.has(a)) poids.set(a, poids.get(a) + n); }
+export async function attesterSemaine(io, { day, entrees, bonus = {}, bonusNiveau = {} }) {
+  const d = Number(day), poids = new Map(), vusJour = new Set();
+  for (const e of entrees || []) {
+    const a = bas(e && e.adresse), jr = String((e && e.jour) || '');
+    if (!ADR.test(a) || (e && e.bonus === true) || !/^J\d{4}-\d{2}-\d{2}$/.test(jr) || vusJour.has(a + '|' + jr)) continue;
+    vusJour.add(a + '|' + jr); poids.set(a, (poids.get(a) || 0) + 1);
+  }
+  /* les deux cartes lisent les entrees de JOUR (avant tout bonus) : un bonus ne qualifie pas pour l autre */
+  const avecJour = new Set(poids.keys());
+  const ajouter = (carte, plafond) => {
+    const fait = new Set(); /* une cle en MAJUSCULES et la meme en minuscules : une seule fois (sinon le plafond se doublait) */
+    for (const [a0, n0] of Object.entries(carte || {})) { const a = bas(a0), n = Number(n0); if (ADR.test(a) && Number.isInteger(n) && n > 0 && avecJour.has(a) && !fait.has(a)) { fait.add(a); poids.set(a, poids.get(a) + Math.min(n, plafond)); } }
+  };
+  ajouter(bonusNiveau, BONUS_NIVEAU_MAX);
+  ajouter(bonus, BONUS_PASS_SEMAINE);
   const liste = [...poids.keys()].sort(), total = [...poids.values()].reduce((s, x) => s + x, 0);
   if (!liste.length || total <= 0) return { ok: false, etat: 'REFUSE', pourquoi: 'no entry this week: nothing to share' };
   let j;

@@ -42,6 +42,8 @@ export const PRECOMMANDES = Object.freeze([
   /* 2026-10-18 (Phil : « les brains peuvent se faire des duels ») : `duel` liste les defis ouverts et propose Accept / Challenge — rien ne se
    *   signe par la commande : le wallet signe chaque appel (bcSigner), et sans contrat servi la reponse dit « opens with its contract » */
   { cle: 'duel', libelle: 'Duel', modele: 'duel' },
+  /* 2026-10-18 : le niveau du brain (XP de gestes verifies par le serveur, /api/jeu/niveau) — une lecture, rien a signer */
+  { cle: 'level', libelle: 'Level', modele: 'level' },
 ]);
 /* Phil 2026-10-18 : « jouer max 10x en un coup » — la MEME borne que planRolls (blockrolls-plan.js ROLLS_MAX) ; test-commandes-panel l epingle */
 export const ROLLS_PAR_COMMANDE_MAX = 10;
@@ -59,6 +61,7 @@ export const AIDE_COMMANDES = Object.freeze([
   'roll · roll x5 · roll x10              the classic roll (0.50 USDC a roll with the contract, 10 at most; practice without it)',
   'post task <reward> <players> <hold>    e.g. post task 100 10 10 — opens Post-a-task filled in (block units)',
   'duel                                   open duels: accept one or open a challenge (winner 90%, reward pool 7%, TokenizedBlock 3%)',
+  'level                                  its brain’s level: XP from verified play, and the weekly-draw perk',
   'A token is ETH, a symbol (USDC, NVDAc…), a whole address, or “this” for the block shown.',
 ]);
 
@@ -86,6 +89,9 @@ export const COMMANDES = Object.freeze([
   /* 2026-10-18 : le journal du jour (/api/jeu/journal) — « log » ou « today » */
   { cle: 'log', lire: (t) => (/^(log|today)$/i.test(t) ? { ok: true, commande: { type: 'log' } } : null),
     palette: [{ nom: 'Today — what the brains did today', modele: 'log', mots: 'log journal today events feed' }] },
+  /* 2026-10-18 : le niveau du brain (/api/jeu/niveau) — « level », « lvl » ou « xp » */
+  { cle: 'level', lire: (t) => (/^(level|lvl|xp)$/i.test(t) ? { ok: true, commande: { type: 'level' } } : null),
+    palette: [{ nom: 'Level — its brain’s XP and weekly perk', modele: 'level', mots: 'level xp rank perk brain' }] },
   { cle: 'roll', lire: (t) => {
     if (!/^rolls?\b/i.test(t)) return null;
     /* roll · roll x5 · roll x 5 · roll 5 · rolls x10 — le nombre est LU, jamais plafonne : « roll x11 » est refuse, pas ramene a 10 */
@@ -153,6 +159,7 @@ export function creerAnalyseur(table) {
  *   send  : { type:'send', jeton, montant, destinataire }
  *   select: { type:'select', jeton }
  *   tab   : { type:'show', tab }      tasks : { type:'tasks' }      help : { type:'help' }
+ *   level : { type:'level' }
  *   game  : { type:'game' }           roll  : { type:'roll', n }  (n = 1..ROLLS_PAR_COMMANDE_MAX ; « roll x11 » est REFUSE, jamais plafonne)
  *   duel  : { type:'duel' }           (« duel » ou « duels »)        log : { type:'log' }  (« log » ou « today » : le journal du jour)
  *   post_task : { type:'post_task', reward, players, hold }  (reward / hold = le texte du nombre, en unites humaines du block ; players = entier)

@@ -225,6 +225,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jeuJeu b{display:block;font-size:10.5px;letter-spacing:.12em;color:var(--accent2);margin-bottom:2px}
 .jeuJeu i{display:block;font-style:normal;font-size:18px;line-height:1.1;margin:2px 0}
 .jeuJeu span{display:block;font-size:12px;color:var(--doux);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jeuJeu em:not([hidden]){display:block;font-style:normal;font-size:11px;color:var(--accent2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .jeuJeu:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 /* 2026-10-17 soir (Phil) : « Your day » — le ticket est une FACE de block, les etapes sont des boutons, le dernier block ne est en direct */
 .jourTicket{display:flex;gap:12px;align-items:center;margin:8px 0}
@@ -3603,8 +3604,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourRoll"><b>Roll</b><i id="jbRoll">⚄</i><span id="jbRollTxt">the next block decides</span></button>
       <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Ticket</b><i id="jbTicket">—</i><span id="jbTicketTxt">today's draw</span></button>
       <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourPass" data-mots="7 days weekly"><b>Week pass</b><i id="jbPass">7 days</i><span id="jbPassTxt">a ticket every day</span></button>
-      <!-- data-palette / data-mots : le nom et les mots-cles de la tuile dans la palette Ctrl+K (rien d affiche) -->
-      <button type="button" class="jeuJeu" data-jeu="brainJeuCarte" data-focus="bjJouer" data-palette="Let the brain play" data-mots="auto bot"><b>Its brain</b><i id="jbBrain">Off</i><span id="jbBrainTxt">let it play for you</span></button>
+      <!-- data-palette / data-mots : le nom et les mots-cles de la tuile dans la palette Ctrl+K (rien d affiche) ; #jbNiveau : « Lv N » (niveaux-jeu.js) -->
+      <button type="button" class="jeuJeu" data-jeu="brainJeuCarte" data-focus="bjJouer" data-palette="Let the brain play" data-mots="auto bot level xp"><b>Its brain</b><i id="jbBrain">Off</i><span id="jbBrainTxt">let it play for you</span><em id="jbNiveau" hidden></em></button>
       <button type="button" class="jeuJeu" data-jeu="skinCarte" data-mots="skin nft look"><b>Skins</b><i id="jbSkins">—</i><span id="jbSkinsTxt">for sale</span></button>
       <button type="button" class="jeuJeu" data-jeu="missionsCarte" data-mots="tasks board earn"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
       <!-- DUELS (Phil 2026-10-18) : cachee tant que /api/duels ne sert pas de contrat (pas de tuile vers une carte vide) -->
@@ -3641,6 +3642,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
       <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
       <p class="note" id="jourCompte" style="margin:2px 0 0">Your tickets — today 0 · this week 0 · this month 0</p>
+      <!-- NIVEAU DU BRAIN (2026-10-18) : la ligne du perk n existe a l ecran QUE s il s applique cette semaine (niveau >= 3 ET une entree de jour) -->
+      <p class="note" id="jourNiveau" style="margin:2px 0 0" hidden></p>
       <p class="note" id="tirSaison" style="margin:2px 0 0">Reading today's draw…</p>
       <div class="jourEtapes">
         <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
@@ -3685,6 +3688,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte" id="brainJeuCarte">
       <span class="jeuKick">Game · Its brain plays</span>
       <p class="titre jeuTitre" style="font-size:16px">One button: its brain plays inside your limits. Your wallet signs every move.</p>
+      <p class="note" id="bjNiveau" style="margin:2px 0 6px" hidden></p>
       <div class="jourEtapes">
         <button type="button" class="bouton" id="bjJouer">Let the brain play</button>
         <button type="button" class="bouton sec" id="bjOff" hidden>Off</button>
@@ -4596,6 +4600,37 @@ const enTexte = (t) => { const d = document.createElement('div'); d.textContent 
 
 /* 2026-10-17 — LA CARTE DU TIRAGE DE SAISON (volet Market). Lit /api/tirage : la saison, le seuil, les wallets avec leurs frais VERIFIES.
  *   ⛔ Rien n est estime ici : la progression est celle que le serveur a verifiee sur la chaine ; non lu = dit. Saison blanche = dit. */
+/* ══ NIVEAU DU BRAIN (2026-10-18) — /api/jeu/niveau : XP de gestes VERIFIES par le serveur (jours avec ticket, rolls payes, settles, Week pass,
+ *   skins mintes/achetes ; missions quand leur contrat existera). Les rolls practice ne donnent rien. Garde 30 s ici (le serveur aussi).
+ *   Tuile « Its brain » et carte du brain : « Lv N · xp/next ». La ligne du perk (#jourNiveau) n apparait QUE s il s applique cette semaine.
+ *   Sans wallet, ou lecture ratee : tout reste cache (jamais un niveau invente). */
+const niveauLu = { wallet: null, t: 0, corps: null };
+async function lireNiveau(moiBas) {
+  if (!/^0x[0-9a-f]{40}$/.test(String(moiBas || ''))) return null;
+  if (niveauLu.wallet === moiBas && niveauLu.corps && Date.now() - niveauLu.t < 30000) return niveauLu.corps;
+  let j = null;
+  try { j = await fetch('/api/jeu/niveau?wallet=' + moiBas, { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((r) => (r.ok ? r.json() : null)); } catch (_) { j = null; }
+  if (!j || j.ok !== true || !Number.isInteger(j.level) || !Number.isInteger(j.xp)) return null;
+  Object.assign(niveauLu, { wallet: moiBas, t: Date.now(), corps: j });
+  return j;
+}
+const texteNiveau = (j) => 'Lv ' + j.level + ' · ' + j.xp + (Number.isInteger(j.next) ? '/' + j.next : ' (top level)');
+const texteEntrees = (n) => '+' + n + ' entr' + (n === 1 ? 'y' : 'ies');
+async function peindreNiveau(moiBas) {
+  const tuile = $('#jbNiveau'), carte = $('#bjNiveau'), perk = $('#jourNiveau');
+  const cacher = () => { for (const el of [tuile, carte, perk]) if (el) { el.hidden = true; el.textContent = ''; } };
+  const j = moiBas ? await lireNiveau(moiBas) : null;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  /* le wallet a pu changer pendant la lecture : on ne peint pas le niveau d un autre */
+  if (!j || !c || String(c).toLowerCase() !== moiBas) { cacher(); return; }
+  if (tuile) { tuile.textContent = texteNiveau(j); tuile.hidden = false; }
+  if (carte) { carte.textContent = 'Its brain: ' + texteNiveau(j) + ' XP'; carte.hidden = false; }
+  if (perk) {
+    const on = !!(j.perk && j.perk.appliesThisWeek === true && Number.isInteger(j.perk.entries) && j.perk.entries > 0);
+    perk.hidden = !on;
+    perk.textContent = on ? 'Level ' + j.level + ': ' + texteEntrees(j.perk.entries) + ' in this week\'s draw (practice: no prize yet).' : '';
+  }
+}
 async function peindreTirage() {
   const moi = $('#tirMoi'), sais = $('#tirSaison'), barre = $('#tirRemplir');
   if (!moi || !sais || !barre) return;
@@ -4612,8 +4647,9 @@ async function peindreTirage() {
     + ' · this month ' + t.mois.n + (t.mode === 'SHADOW' ? ' · the ticket draw is practice: no prize yet' : '');
   let c = null; try { c = compte; } catch (_) { c = null; }
   /* Phil 2026-10-18 00:40 : « retire le guest » — sans wallet, pas de ticket (le Roll tire quand meme la face du bloc, sans score) */
-  if (!c) { moi.textContent = 'Connect a wallet to see your progress.'; barre.style.width = '0%'; return; }
+  if (!c) { moi.textContent = 'Connect a wallet to see your progress.'; barre.style.width = '0%'; void peindreNiveau(null); return; }
   const moiBas = String(c).toLowerCase();
+  void peindreNiveau(moiBas);
   const w = (t.jour.wallets || []).find((x) => String(x.adresse).toLowerCase() === moiBas);
   const fait = w ? Number(w.volumeUsd) : 0, seuil = Number(t.seuilVolumeUsd) || 10;
   const mesJours = (t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
@@ -24904,6 +24940,7 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
   /* ── LE GAME PAR LE TEXTE (2026-10-18, Phil 09:00 : « le brain lui-meme, qui par une commande peut avoir acces au game ») ── */
   if (c.type === 'game') { void bcCommandeGame(); return true; }
   if (c.type === 'log') { void bcCommandeLog(); return true; }
+  if (c.type === 'level') { void bcCommandeLevel(); return true; }
   if (c.type === 'roll') { void bcCommandeRoll(c.n); return true; }
   if (c.type === 'post_task') { bcCommandePostTask(c); return true; }
   if (c.type === 'duel') { void bcCommandeDuel(); return true; }
@@ -24958,6 +24995,28 @@ async function bcCommandeLog() {
   if (!j) { bcEtape(m, 'Today could not be read just now.', 'non'); return; }
   if (!journal.length) { bcEtape(m, 'Nothing yet today.'); return; }
   for (const e of journal.slice(0, 10)) bcEtape(m, heureJournal(e.t) + ' · ' + e.text);
+}
+/* `level` (2026-10-18) : le niveau du brain LU sur /api/jeu/niveau (lireNiveau) — d ou vient l XP (les compteurs et la table servis, jamais
+ *   tapes ici) et le perk du tirage de la semaine, dit seulement tel qu il est. Une lecture : rien a signer. */
+async function bcCommandeLevel() {
+  const m = bcMessage('Its brain · level', '', 'Level');
+  bcVue('chat');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { bcEtape(m, 'Connect a wallet: the level belongs to the wallet that plays.'); return; }
+  const moiBas = String(c).toLowerCase();
+  const lecture = bcEtape(m, 'Reading the level…');
+  const j = await lireNiveau(moiBas);
+  lecture.remove();
+  if (!j) { bcEtape(m, 'The level could not be read just now.', 'non'); return; }
+  bcEtape(m, texteNiveau(j) + ' XP' + (Number.isInteger(j.next) ? ' — ' + (j.next - j.xp) + ' XP to level ' + (j.level + 1) + '.' : '.'), 'oui');
+  const noms = { jour_ticket: 'days with a ticket', roll: 'paid rolls', settle: 'settled rolls', pass_semaine: 'Week passes', skin: 'skins minted or bought', mission: 'missions done' };
+  const t = j.xpParAction || {}, d = j.detail || {};
+  const parts = Object.keys(noms).filter((k) => Number.isInteger(d[k]) && d[k] > 0 && Number.isInteger(t[k])).map((k) => d[k] + ' ' + noms[k] + ' × ' + t[k]);
+  bcEtape(m, parts.length ? 'XP from verified play: ' + parts.join(' · ') + '. Practice rolls give no XP.' : 'No verified play yet: a day with a ticket, a paid roll, a settle, a Week pass or a skin earns XP. Practice rolls give none.');
+  const p = j.perk || {};
+  if (p.appliesThisWeek === true) bcEtape(m, 'Perk: ' + texteEntrees(p.entries) + ' in this week\'s draw — applied (practice season: no prize yet).', 'oui');
+  else if (Number.isInteger(p.entries) && p.entries > 0) bcEtape(m, 'Perk: ' + texteEntrees(p.entries) + ' in the week\'s draw once you have an entry this week (a day with a ticket).');
+  void peindreNiveau(moiBas);
 }
 async function bcCommandeGame() {
   const m = bcMessage('Game', '', 'Today\'s game');
