@@ -3553,7 +3553,12 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="jourSkin">Skin · 1 USDC = today's ticket</button>
         <!-- Phil (19:40) : « une loop de games » — 5 rolls d affilee, score cumule ; montre seulement avec un wallet (sinon pas de score) -->
         <button type="button" class="bouton sec" id="jourAuto" hidden>Auto-roll ×5</button>
+        <!-- BLOCKROLLS (Phil 20:30 : roll 0,50 USDC, gain fixe ; day pass 10 USDC = 5 pot du jour + 5 dev) : ces deux boutons n apparaissent QUE
+             quand /api/tirage sert rolls.contrat (fiche signee) ; leurs textes viennent des prix servis. Sans contrat : rien (pas de bouton mort). -->
+        <button type="button" class="bouton" id="jourRollPaye" hidden>Roll for real</button>
+        <button type="button" class="bouton sec" id="jourPass" hidden>Day pass</button>
       </div>
+      <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
       <!-- HIER : la face revelee par le bloc E, ton score, le gagnant -->
       <div class="jourTicket" id="faceJour" hidden style="margin-top:10px">
         <div class="jourFace" id="faceJourArt" role="img" aria-label="Yesterday's Face of the Day"></div>
@@ -3878,6 +3883,9 @@ import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
 import { apparenceDepuisAdresse } from './apparence.js';
 import { faceRevelee, scoreFaces } from './face-du-jour.js';
 import { planReclamer, planPoster } from './missions-plan.js';
+/* 2026-10-18 : BlockRolls — roll paye / day pass, SEULEMENT quand /api/tirage sert rolls.contrat (fiche signee par Phil) ; sinon practice */
+import { planRoll, planPass, planRollAvecPass, planSettle, lireRolled, lireSettled, etatReglement } from './blockrolls-plan.js';
+import { guessDepuisApparence, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 import { poolId as poolIdV4 } from './pool.js';
 import { topic as topicDe } from './keccak.js';
 /* ⛔⛔ L IMAGE GRAVEE (2026-09-22). `budgetSurFace` vient de `photo.js`, qui porte le mur MESURE du
@@ -4472,10 +4480,99 @@ async function peindreDernierBlock() {
   quand.textContent = 'Every block draws a face. Roll: the block after next decides, live.';
   let c = null; try { c = compte; } catch (_) { c = null; }
   const ba = $('#jourAuto'); if (ba) ba.hidden = !c;
+  poserBoutonsRolls(t, c);
   if (!c) { moiP.textContent = 'Connect a wallet to score your ticket against it.'; return; }
   const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), t.jour.id)), fr);
   moiP.textContent = s ? 'Right now: ' + s.score + '/5 traits in common.' : '';
 }
+/* ══ BLOCKROLLS DANS L APP (2026-10-18) — le contrat n existe que si /api/tirage sert rolls.contrat (fiche generee, adresse ecrite apres la
+ *   signature de Phil). Alors : « Roll · 0.50 USDC » = approve EXACT + roll(guess) (ou rollWithPass si un pass est actif), lu au recu (Rolled ->
+ *   bloc cible), puis settle(id) des que le bloc cible est passe (fenetre 256 blocs : ~8,5 min aujourd hui, ~51 s apres Denim), lu au recu
+ *   (Settled -> score, gain). « Day pass · 10 USDC » = approve EXACT + buyPass. Le guess = les 5 traits de TON ticket du jour. Chaque montant
+ *   vient des prix servis (la fiche), jamais tape ici. Le wallet signe tout ; rien ne part d ici. */
+let rollsCfg = null;
+function poserBoutonsRolls(t, c) {
+  const bp = $('#jourRollPaye'), bd = $('#jourPass'), e = $('#rollsEtat');
+  rollsCfg = t && t.rolls && t.rolls.contrat ? t.rolls : null;
+  if (!bp || !bd) return;
+  const on = !!(rollsCfg && c);
+  bp.hidden = !on; bd.hidden = !on;
+  if (on) { bp.textContent = 'Roll · ' + usdcTexte(rollsCfg.prixRoll) + ' USDC'; bd.textContent = 'Day pass · ' + usdcTexte(rollsCfg.prixPass) + ' USDC'; }
+  if (e && !on) e.hidden = true;
+}
+async function envoyerAppels(appels, c) {
+  /* un lot atomique si le wallet groupe (wallet_sendCalls 2.0), sinon chaque appel signe a la suite ; un echec arrete tout et est DIT */
+  let r = null;
+  try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, calls: appels, sansRepliV1: true }); } catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+  if (r && r.etat === 'CONFIRME') return r;
+  if (!(r && r.sendCallsUnsupported)) return r;
+  let dernier = null;
+  for (const a of appels) {
+    try { dernier = await envoyerDepuisWallet({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, to: a.to, data: a.data, value: a.value || '0x0' }); }
+    catch (err) { return { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+    if (!dernier || dernier.etat !== 'CONFIRME') return dernier || { etat: 'ECHEC_ENVOI', pourquoi: 'no answer' };
+  }
+  return dernier;
+}
+const recuDe = async (hash) => { for (let k = 0; k < 40; k++) { try { const r = await rpc('eth_getTransactionReceipt', [hash]); if (r) return r; } catch (_) {} await new Promise((o) => setTimeout(o, 1500)); } return null; };
+async function rollPaye() {
+  const e = $('#rollsEtat'), b = $('#jourRollPaye');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!rollsCfg || !c || b.disabled) return;
+  const dit = (txt) => { e.hidden = false; e.textContent = txt; };
+  b.disabled = true;
+  try {
+    const contrat = rollsCfg.contrat;
+    const guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourDeApp(Date.now()))));
+    if (!guess) { dit('Your ticket face could not be turned into a guess — nothing was asked.'); return; }
+    let pass = null;
+    try { pass = lirePass(await rpc('eth_call', [{ to: contrat, data: appelPass(c) }, 'latest'])); } catch (_) { pass = null; }
+    const avecPass = passActif(pass);
+    const plan = avecPass ? planRollAvecPass({ contrat, guess, pass }) : planRoll({ contrat, usdc: USDC_BASE, guess, rollPrice: BigInt(rollsCfg.prixRoll) });
+    if (plan.etat !== 'PRET') { dit('Not rolled: ' + plan.pourquoi); return; }
+    dit(avecPass ? 'Rolling with your pass (' + pass.rollsLeft + ' left) — sign in your wallet…' : 'Roll ' + usdcTexte(rollsCfg.prixRoll) + ' USDC: half to the pot, half to TokenizedBlock. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…');
+    const r = await envoyerAppels(plan.appels, c);
+    if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit('Not rolled: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160)); return; }
+    const recu = await recuDe(r.hash);
+    const rolled = recu ? lireRolled(recu.logs, contrat) : null;
+    if (!rolled) { dit('Sent (' + r.hash.slice(0, 10) + '…) but the roll could not be read back yet — check the explorer.'); return; }
+    const cible = Number(rolled.targetBlock);
+    dit('Rolled #' + rolled.rollId + ' — block ' + cible.toLocaleString('en-US') + ' decides. Waiting for it…');
+    let tete = 0;
+    for (let k = 0; k < 90 && tete <= cible; k++) { await new Promise((o) => setTimeout(o, 2000)); try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
+    const er = etatReglement(cible, tete);
+    if (er.etat !== 'REGLABLE') { dit('Roll #' + rolled.rollId + ': ' + (er.etat === 'PERDU' ? 'the 256-block window passed before it was settled — it is lost (no refund).' : 'the block is not there yet; settle it from the explorer within ' + er.blocsAvant + ' blocks.')); return; }
+    const ps = planSettle({ contrat, rollId: rolled.rollId, targetBlock: cible, blocActuel: tete });
+    if (ps.etat !== 'PRET') { dit('Not settled: ' + ps.pourquoi); return; }
+    dit('Block ' + cible.toLocaleString('en-US') + ' is in — sign the settle to reveal (anyone may, the prize is always yours)…');
+    const rs = await envoyerAppels(ps.appels, c);
+    if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit('Not settled yet: ' + String((rs && (rs.pourquoi || rs.etat)) || 'no answer').slice(0, 160) + ' — settle within ' + er.blocsRestants + ' blocks.'); return; }
+    const recuS = await recuDe(rs.hash), st = recuS ? lireSettled(recuS.logs, contrat) : null;
+    if (!st) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return; }
+    dit('Block ' + cible.toLocaleString('en-US') + ' drew ' + st.score + '/5 against your ticket' + (st.payout > 0n ? ' — you won ' + usdcTexte(st.payout) + ' USDC, paid to your wallet.' : ' — no prize this time (min ' + rollsCfg.minScore + '/5).') + ' Pot now ' + usdcTexte(st.potAfter) + ' USDC.');
+    void peindreDernierBlock();
+  } finally { b.disabled = false; }
+}
+async function passPaye() {
+  const e = $('#rollsEtat'), b = $('#jourPass');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!rollsCfg || !c || b.disabled) return;
+  const dit = (txt) => { e.hidden = false; e.textContent = txt; };
+  b.disabled = true;
+  try {
+    const contrat = rollsCfg.contrat;
+    let pass = null;
+    try { pass = lirePass(await rpc('eth_call', [{ to: contrat, data: appelPass(c) }, 'latest'])); } catch (_) { pass = null; }
+    const plan = planPass({ contrat, usdc: USDC_BASE, passPrice: BigInt(rollsCfg.prixPass), pass });
+    if (plan.etat !== 'PRET') { dit('No pass bought: ' + plan.pourquoi); return; }
+    dit('Day pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: half to today\'s draw pot, half to TokenizedBlock; ' + rollsCfg.passRolls + ' rolls for 24 h and one entry in today\'s pass draw. Sign ' + plan.appels.length + ' steps…');
+    const r = await envoyerAppels(plan.appels, c);
+    if (!r || r.etat !== 'CONFIRME') { dit('No pass bought: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160)); return; }
+    dit('Pass bought — your rolls now use it. Today\'s pass draw pays the whole day pot to one buyer, drawn by a Base block hash after midnight UTC.');
+  } finally { b.disabled = false; }
+}
+$('#jourRollPaye').addEventListener('click', () => { void rollPaye(); });
+$('#jourPass').addEventListener('click', () => { void passPaye(); });
 /* AUTO-ROLL ×5 (Phil : « une loop de games ») : 5 rolls d affilee, chacun sur le bloc N+2 du moment ; le cumul est dit (meilleur, total). */
 async function autoRoll() {
   const b = $('#jourAuto'), q = $('#dernierQuand');

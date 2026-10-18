@@ -102,6 +102,9 @@ import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
 import { lireMissions } from './missions-lecture.js';
 import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
+/* 2026-10-18 : BlockRolls (roll paye 0,50 USDC, day pass 10 USDC) — la fiche GENEREE (preparer-deploiement-blockrolls.mjs) ; `adresse` reste
+ *   null tant que Phil n a pas signe : l app ne montre alors AUCUN bouton payant (practice). Aucune variable d environnement ne la remplace. */
+import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -4143,6 +4146,10 @@ const SERVIS = [
   'face-du-jour.js',
   /* 2026-10-17 soir : le tableau des missions construit le claim (planReclamer) dans le navigateur */
   'missions-plan.js',
+  /* 2026-10-18 : BlockRolls — la page qui propose AU WALLET CONNECTE le deploiement (noindex, aucun lien), sa fiche figee, l encodeur pur de la
+   *   config (la page recalcule et refuse une fiche alteree), les appels non signes (roll / pass / settle) et le pont app <-> contrat.
+   *   ⛔ absent d ici = 404 = page morte (lecon integrer-sans-serie-complete, 11/10). */
+  'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',
@@ -5907,7 +5914,11 @@ function traiterRequete(req, res) {
     const veille = { id: veilleJ.id, blocE: rev ? rev.bloc : null, hashE: rev ? rev.hash : null, etat: rev ? 'REVELEE' : 'EN_ATTENTE', tickets: tV,
       gagnant: rev && tV.length ? (tirer({ hashE: rev.hash, saison: veilleJ.id, liste: tV }) || [null])[0] : null };
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille,
+    /* BlockRolls (2026-10-18) : l adresse SIGNEE (fiche generee) ou null = practice ; les prix viennent de la fiche, jamais tapes ici */
+    const rc = BLOCKROLLS_DEPLOIEMENT.constructeur || {};
+    const rolls = { contrat: /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null,
+      prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: [rc.prize5, rc.prize4, rc.prize3].map(String), minScore: rc.minScore };
+    res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls,
       apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: tJ.includes(adresse) })),

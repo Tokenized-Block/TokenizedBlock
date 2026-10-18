@@ -15,10 +15,17 @@ vu(c0 > 0 && c1 > c0, 'la carte Draws precede la carte Missions');
 /* ce qui est SERVI au visiteur : les commentaires HTML (qui racontent pourquoi) sont otes avant de juger les textes */
 const carte = app.slice(c0, c1).replace(/<!--[\s\S]*?-->/g, '');
 const ids = [...carte.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
-vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin', 'jourAuto']), 'exactement 4 boutons visibles + Auto-roll (lus : ' + ids.join(', ') + ')');
+vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourUnit', 'jourActions', 'jourSkin', 'jourAuto', 'jourRollPaye', 'jourPass']), 'exactement 4 boutons visibles + Auto-roll + 2 boutons BlockRolls caches (lus : ' + ids.join(', ') + ')');
 vu(/<button[^>]*\bid="jourAuto"[^>]*\bhidden\b/.test(carte) && /\$\('#jourAuto'\)\.hidden = !c|ba\.hidden = !c/.test(app), 'Auto-roll est cache sans wallet (pas de score sans ticket)');
+/* BlockRolls (2026-10-18) : les boutons payants sont caches dans le HTML et ne s ouvrent que si le serveur sert rolls.contrat ET un wallet */
+vu(/<button[^>]*\bid="jourRollPaye"[^>]*\bhidden\b/.test(carte) && /<button[^>]*\bid="jourPass"[^>]*\bhidden\b/.test(carte), 'boutons BlockRolls caches dans le HTML');
+const pb = app.slice(app.indexOf('function poserBoutonsRolls('), app.indexOf('async function envoyerAppels('));
+vu(/rollsCfg = t && t\.rolls && t\.rolls\.contrat \? t\.rolls : null;/.test(pb) && /const on = !!\(rollsCfg && c\);/.test(pb) && /bp\.hidden = !on; bd\.hidden = !on;/.test(pb), 'ouverts seulement avec rolls.contrat servi ET un wallet');
+vu(/usdcTexte\(rollsCfg\.prixRoll\)/.test(pb) && /usdcTexte\(rollsCfg\.prixPass\)/.test(pb) && !/0\.50|10 USDC/.test(pb), 'les prix des boutons viennent du serveur, jamais tapes');
 vu(!/<button[^>]*\bdisabled\b/.test(carte), 'aucun bouton desactive dans la carte Draws');
-vu(!/Day pass|once their contract|jourPass/i.test(carte), 'aucune promesse de contrat a venir dans la carte');
+/* ce que le visiteur VOIT : les boutons `hidden` (BlockRolls, ouverts seulement par le serveur) sont otes avant de juger les textes */
+const visible = carte.replace(/<button[^>]*\bhidden\b[^>]*>[\s\S]*?<\/button>/g, '');
+vu(!/Day pass|once their contract|Roll for real/i.test(visible), 'aucune promesse de contrat a venir visible dans la carte');
 const r0 = app.indexOf('async function roll()'), r1 = app.indexOf('const rollDerniers = []');
 vu(r0 > 0 && r1 > r0, 'roll() present');
 const roll = app.slice(r0, r1);
