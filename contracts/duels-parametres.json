@@ -1,5 +1,5 @@
 {
-  "_lisez-moi": "TO FILL BY PHIL / A REMPLIR PAR PHIL (adresses entieres, copiees de son wallet, jamais de memoire). rewardPool = l adresse du pot de recompense COMMUN qui recoit 7 % de chaque duel gagne (pas le wallet dev : refuse). guardian = l adresse qui peut SEULEMENT admettre ou retirer un jeton (action tokenisee) pour les nouveaux duels ; elle ne touche jamais aux fonds. usdc et devWallet ne sont PAS ici : ils sont lus dans le depot (frais-creation.js USDC_BASE et FEE_WALLET, verifies egaux a blockrolls-deploiement.js). Puis : cd contracts && forge build && node preparer-deploiement-duels.mjs",
-  "rewardPool": "",
-  "guardian": ""
+  "_lisez-moi": "Rempli le 2026-10-18 sur decision de PHIL : rewardPool = le wallet du Brain UNIT 0x31e0...bde3b (createur de UNIT, tx.from du deploiement TicketPot 0xae568dec...1761 sur Base), qui gere le pool commun des 7 % ; guardian = le dev wallet (peut SEULEMENT admettre ou retirer un jeton pour les nouveaux duels ; ne touche jamais aux fonds). usdc et devWallet ne sont PAS ici : lus dans le depot (frais-creation.js USDC_BASE et FEE_WALLET, verifies egaux a blockrolls-deploiement.js). Puis : cd contracts && forge build && node preparer-deploiement-duels.mjs",
+  "rewardPool": "0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b",
+  "guardian": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4"
 }
