@@ -14,7 +14,10 @@ const texte = readFileSync(new URL('./missions-deploiement.js', import.meta.url)
 const A = (h) => '0x' + h.repeat(20), H = '0x' + '66'.repeat(32), CRE = '0x60806040' + 'ab'.repeat(40);
 /* (1) */
 const r0 = noter({ fiche: R, texte, tx: { input: CRE }, recu: { status: '0x1' }, lectures: {} });
-vu(r0.ok === false && /not ready/.test(r0.pourquoi) && R.pret === false, 'la fiche reelle n est pas prete : refus dit (manquants : ' + R.manquants.join(', ') + ')');
+/* 2026-10-18 soir : la fiche reelle est PRETE (adresses de Phil : reserve = Brain UNIT, verifier, guardian) mais NON deployee — un input etranger
+ *   est refuse ; tant qu elle n etait pas prete, le refus disait « not ready » */
+if (R.pret === false) vu(r0.ok === false && /not ready/.test(r0.pourquoi), 'la fiche reelle n est pas prete : refus dit (manquants : ' + R.manquants.join(', ') + ')');
+else vu(r0.ok === false && R.adresse === null && /^0x[0-9a-f]{40}$/.test(String(R.constructeur.communityReserve)), 'la fiche reelle est prete et non deployee : un input qui n est pas sa creation est refuse (' + String(r0.pourquoi).slice(0, 60) + ')');
 /* (2) */
 const C = { ...R.constructeur, communityReserve: A('c0'), verifier: A('e0'), guardian: A('9d') };
 const fiche = { ...R, pret: true, manquants: [], constructeur: C, creation: CRE, factory: null, adresse: null };

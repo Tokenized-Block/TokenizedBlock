@@ -43,14 +43,17 @@ if (!phil.verifier || !phil.guardian) {
     'A parametres de Phil incomplets (' + JSON.stringify(D.manquants) + ') : pret false, AUCUNE donnee de creation (rien a signer par erreur)');
 } else ok(D.pret === true && D.constructeur.verifier === PARAMS.verifier.toLowerCase() && D.constructeur.guardian === PARAMS.guardian.toLowerCase(), 'A parametres de Phil remplis : pret, verifier et guardian = ticketpot-parametres.json');
 ok(sha(lire('contracts/src/TicketPot.sol')) === D.sha256Sources['src/TicketPot.sol'], 'A generee depuis la source ACTUELLE du contrat (source modifiee sans regenerer = rouge)');
-ok(D.adresse === null && D.bloc === null, 'A PAS deploye : adresse et bloc nuls (ils s ecrivent ENSEMBLE, relus sur la chaine)');
+/* 2026-10-18 17:40 UTC : deploye par Phil (0xf986…1df1, bloc 52 776 705) ; adresse et bloc ecrits ENSEMBLE par noter-deploiement-ticketpot */
+ok((D.adresse === null && D.bloc === null) || (/^0x[0-9a-f]{40}$/.test(String(D.adresse)) && Number.isSafeInteger(D.bloc) && D.bloc > 0), 'A adresse et bloc : tous deux nuls, ou tous deux ecrits (jamais l un sans l autre)');
 const preparer = (sortie, parametres) => execFileSync(process.execPath, ['preparer-deploiement-ticketpot.mjs'], { cwd: path.join(ICI, 'contracts'), env: { ...process.env, SORTIE: sortie, ...(parametres ? { PARAMETRES: parametres } : {}) }, stdio: ['ignore', 'pipe', 'pipe'] });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'tp-dep-'));
 let D2 = null;
 try {
   if (fs.existsSync(ARTEFACT)) {
     preparer(path.join(tmp, 'meme.js'));
-    ok(fs.readFileSync(path.join(tmp, 'meme.js'), 'utf8') === lire('ticketpot-deploiement.js'), 'A le preparateur relance regenere l enregistrement du depot a l IDENTIQUE (deterministe)');
+    /* apres la signature, la fiche porte adresse + bloc (noter) ; le preparateur rend null : on compare tout SAUF ces deux lignes */
+    const sansAdr = (t) => String(t).replace(/^[ \t]*adresse: [^\r\n]*/m, 'ADR').replace(/^[ \t]*bloc: [^\r\n]*/m, 'BLOC').replace(/\r\n/g, '\n');
+    ok(sansAdr(fs.readFileSync(path.join(tmp, 'meme.js'), 'utf8')) === sansAdr(lire('ticketpot-deploiement.js')), 'A le preparateur relance regenere l enregistrement du depot a l IDENTIQUE, hors adresse/bloc (deterministe)');
 
     console.log('— A2. avec des parametres complets (fichier temporaire, adresses de test)');
     const V = '0x' + '5e'.repeat(20), G = '0x' + '6a'.repeat(20);

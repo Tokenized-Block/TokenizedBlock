@@ -28,6 +28,7 @@ vu(/\$\('#bAdmettre'\)\.textContent = !lus \? 'Allow the stocks' : n \?/.test(sc
 vu(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page) && /<meta name="robots" content="noindex">/.test(page), 'aucune cle, aucun champ, noindex');
 const srv = lire('serveur-web.js'), app = lire('app.html');
 vu(/'admettre-devises-skins\.html',/.test(srv) && !/admettre-devises-skins/.test(app), 'servie par le serveur ; l app n y renvoie pas');
-vu(/const bcDevisesSkin = \(\) => bc\.devisesSkin \|\| DEVISES_SKIN;/.test(app) && /const d = await lireDevisesSkin\(\{ rpc \}\); bc\.devisesSkin = d\.devises;/.test(app) && !/SKIN_ACTIONS_CANDIDATES/.test(app),
+vu(/const bcDevisesSkin = \(\) => bc\.devisesSkin \|\| DEVISES_SKIN;/.test(app) && /const d = await lireDevisesSkin\(\{ rpc \}\); bc\.devisesSkin = d\.devises;/.test(app) && !/SKIN_ACTIONS_CANDIDATES(?! as DUEL_ACTIONS_CANDIDATES)/.test(app),
+  /* 2026-10-18 : les Duels SONDENT cette liste contre le contrat (admisDuel === true) et ne montrent que les jetons ADMIS — pas une liste en dur a l ecran */
   'l app : devises du marche = ETH/USDC + celles LUES admises, jamais la liste des 9 en dur');
 console.log('ok admettre-devises-skins - ' + n + ' assertions ; NE PROUVE PAS la signature reelle');

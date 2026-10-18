@@ -3850,7 +3850,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <!-- DUELS : la regle, et « opens with its contract » tant que le contrat n est pas servi (peindreDuels remplace la derniere phrase) -->
           <div class="jeuTuile"><b>06 · DUELS</b><p>Two wallets — a person, or a block's brain proposing to its owner — stake the same in USDC or an admitted tokenized stock. Each plays a new random block face; the block 2 blocks after the join draws its face; the most traits in common out of 5 wins 90% of the pot, 7% goes to the community reward pool, 3% to TokenizedBlock. A tie refunds both, no fee. Not accepted in time, or not settled within 256 blocks: refunded in full. <span id="regleDuelsEtat">Opens with its contract.</span></p></div>
         </div>
-        <p class="note" style="margin:10px 0 0">What each game costs, what it pays back on average, and what is not live yet: <a class="lienLearn" href="frais-et-risques.html">Fees &amp; risks →</a></p>
+        <p class="note" style="margin:10px 0 0">What each game costs, what it pays back on average, and which pieces still wait for their contract: <a class="lienLearn" href="frais-et-risques.html">Fees &amp; risks →</a></p>
       </details>
     </div>
   </section>
@@ -5703,6 +5703,8 @@ async function defierDuel() {
 }
 $('#duelsListe').addEventListener('click', (e) => { const b = e.target.closest('[data-action]'); if (!b || b.disabled) return; b.disabled = true; const li = b.closest('.duelLigne'); void actionDuel(b.dataset.duel, b.dataset.action, li).finally(() => { b.disabled = false; }); });
 $('#duelDefier').addEventListener('click', () => { void defierDuel(); });
+/* Entree dans le formulaire = le meme geste que le bouton (et jamais un rechargement de page) */
+$('#duelForm').addEventListener('submit', (e) => { e.preventDefault(); void defierDuel(); });
 $('#duelsLire').addEventListener('click', async () => { await lireDuelsServis(true); void peindreDuels(); });
 /** ouvrir la carte Duels sur un duel (depuis la Map ou le Chat) */
 function ouvrirDuel(id) {

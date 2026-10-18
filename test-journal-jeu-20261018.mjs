@@ -149,7 +149,8 @@ function verifierApp(h) {
   const r = [];
   const v = (c, m) => { if (!c) r.push(m); };
   const iP = h.indexOf('async function peindreJournalMap() {');
-  const p = iP > 0 ? h.slice(iP, h.indexOf('\n}\n', iP)) : '';
+  const finP = iP > 0 ? h.slice(iP).search(/\n\}\n/) : -1; /* portable : pas d ancre de position litterale */
+  const p = iP > 0 && finP > 0 ? h.slice(iP, iP + finP) : '';
   v(iP > 0, 'peindreJournalMap absente');
   v(/^async function peindreJournalMap\(\) \{\n  if \(!mapVisible\(\) \|\| journalEnCours\) return;/.test(p), 'la garde de visibilite ouvre peindreJournalMap');
   v(p.indexOf('if (!mapVisible()') >= 0 && p.indexOf('if (!mapVisible()') < p.indexOf('lireJournal('), 'la garde precede la lecture');

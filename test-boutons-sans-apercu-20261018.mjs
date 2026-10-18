@@ -24,8 +24,9 @@ const corps = { ok: true, mode: 'SHADOW', apercu: null, jour: { id: 'J20380', fi
 async function jouer(src, nom, reponse) {
   const { $, els } = dom(); const appels = [];
   const fetch = async () => { if (reponse instanceof Error) throw reponse; return { json: async () => reponse }; };
-  const f = new Function('$', 'fetch', 'compte', 'poserBoutonsRolls', 'rollEnCours', 'peindreJour', src + '\nreturn ' + nom + ';');
-  await f($, fetch, W, (t, c) => appels.push([t, c]), false, async () => {})();
+  /* 2026-10-18 : peindreTirage peint aussi le pot TicketPot (peindrePotJour) — un stub, hors du sujet de ce banc */
+  const f = new Function('$', 'fetch', 'compte', 'poserBoutonsRolls', 'rollEnCours', 'peindreJour', 'peindrePotJour', 'peindreNiveau', src + '\nreturn ' + nom + ';');
+  await f($, fetch, W, (t, c) => appels.push([t, c]), false, async () => {}, () => {}, async () => {})();
   return { els, appels };
 }
 /* (1) */
