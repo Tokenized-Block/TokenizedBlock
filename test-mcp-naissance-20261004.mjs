@@ -1,6 +1,6 @@
 /* test-mcp-naissance-20261004.mjs — LE MCP, LA NAISSANCE PLANIFIEE POUR UN AGENT, ET LA SORTIE DU MINIMUM DU CREATEUR.
  *
- * A. HORS RESEAU — mcp-tblock.js (le protocole) : initialize negocie la version, 4 outils avec schema, notification sans reponse,
+ * A. HORS RESEAU — mcp-tblock.js (le protocole) : initialize negocie la version, 12 outils avec schema (7 + 5 du Game, 2026-10-18), notification sans reponse,
  *    lot refuse, methode / outil inconnus, arguments invalides REFUSES SANS APPELER l outil, REFUSE = une reponse (isError false),
  *    NON_MESURE et « occupe » = isError true.
  * B. HORS RESEAU — naissance-api.js : les refus AVANT toute lecture (0 lecture, compte), la liste des paires, l URI gravee porte
@@ -44,12 +44,14 @@ ok(ini.result.protocolVersion === '2025-03-26' && ini.result.capabilities.tools 
 ok((await rq('initialize', { protocolVersion: '1999-01-01' })).result.protocolVersion === M.MCP_VERSIONS[0], 'version inconnue : il rend la sienne (' + M.MCP_VERSIONS[0] + ')');
 const tl = await rq('tools/list');
 /* 7 outils depuis la telecommande (test-panel-sessions-20261004.mjs) : les 4 planificateurs + l etat du panneau sont en lecture seule ;
- *   ouvrir un panneau et proposer une commande ECRIVENT une file en memoire (jamais la chaine) — annonces comme tels, non destructifs. */
+ *   ouvrir un panneau et proposer une commande ECRIVENT une file en memoire (jamais la chaine) — annonces comme tels, non destructifs.
+ * 2026-10-18 : 7 -> 12 avec le Game (test-mcp-game-20261018.mjs) : tblock_game_state, tblock_plan_roll, tblock_plan_settle, tblock_plan_task,
+ *   tblock_missions — les 5 en lecture seule (appels NON SIGNES). 10 en lecture seule, toujours 2 qui ecrivent une file. */
 const lectureSeule = tl.result.tools.filter((o) => o.annotations.readOnlyHint === true).map((o) => o.name).sort().join();
-ok(tl.result.tools.length === 7 && tl.result.tools.every((o) => o.name && o.description && o.inputSchema && o.inputSchema.type === 'object' && o.annotations)
-  && lectureSeule === 'tblock_creator_minimum,tblock_pairs,tblock_panel_state,tblock_plan_birth,tblock_plan_swap'
+ok(tl.result.tools.length === 12 && tl.result.tools.every((o) => o.name && o.description && o.inputSchema && o.inputSchema.type === 'object' && o.annotations)
+  && lectureSeule === 'tblock_creator_minimum,tblock_game_state,tblock_missions,tblock_pairs,tblock_panel_state,tblock_plan_birth,tblock_plan_roll,tblock_plan_settle,tblock_plan_swap,tblock_plan_task'
   && tl.result.tools.filter((o) => o.annotations.readOnlyHint === false).every((o) => o.annotations.destructiveHint === false),
-  'tools/list : 7 outils decrits, schema objet ; 5 en lecture seule, 2 qui ecrivent une file (non destructifs) — ' + tl.result.tools.map((o) => o.name).join(' '));
+  'tools/list : 12 outils decrits (7 + 5 du Game), schema objet ; 10 en lecture seule, 2 qui ecrivent une file (non destructifs) — ' + tl.result.tools.map((o) => o.name).join(' '));
 ok(await M.traiterMcp({ jsonrpc: '2.0', method: 'notifications/initialized' }, deps) === null, 'une notification ne recoit rien');
 ok((await M.traiterMcp([{ jsonrpc: '2.0', id: 1, method: 'ping' }], deps)).error.code === -32600, 'un lot est refuse (-32600)');
 ok((await M.traiterMcp({ id: 1, method: 'ping' }, deps)).error.code === -32600 && JSON.stringify((await rq('ping')).result) === '{}', 'pas du JSON-RPC 2.0 : -32600 ; ping : {}');
@@ -169,7 +171,7 @@ if (demarre) {
     'POST /mcp initialize : 200 JSON, CORS ouvert, serverInfo tokenizedblock');
   const n1 = await fetch(base + '/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' }) });
   ok(n1.status === 202 && (await n1.text()) === '', 'notification : 202, corps vide');
-  ok((await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).corps.result.tools.length === 7, 'tools/list par HTTP : 7 outils');
+  ok((await mcp({ jsonrpc: '2.0', id: 2, method: 'tools/list' })).corps.result.tools.length === 12, 'tools/list par HTTP : 12 outils (7 + 5 du Game, 2026-10-18)');
   const g = await fetch(base + '/mcp'); const o = await fetch(base + '/mcp', { method: 'OPTIONS' });
   ok(g.status === 405 && /POST/.test(g.headers.get('allow') || '') && o.status === 204 && /POST/.test(o.headers.get('access-control-allow-methods') || ''), 'GET /mcp : 405 (pas de flux) ; OPTIONS : 204 + methodes CORS');
   ok((await mcp('{pas du json')).code === 400, 'JSON casse : 400, erreur de parse');

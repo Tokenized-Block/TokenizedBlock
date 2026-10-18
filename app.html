@@ -3922,7 +3922,7 @@ import { apparenceDepuisAdresse } from './apparence.js';
 import { faceRevelee, scoreFaces } from './face-du-jour.js';
 import { planReclamer, planPoster } from './missions-plan.js';
 /* 2026-10-18 : BlockRolls — roll paye / day pass, SEULEMENT quand /api/tirage sert rolls.contrat (fiche signee par Phil) ; sinon practice */
-import { planRoll, planPass, planRollAvecPass, planRollsAvecPass, planSettle, planSettleMany, lireRolled, lireRolledTous, lireSettled, lireSettledTous, etatReglement } from './blockrolls-plan.js';
+import { planRoll, planRolls, planPass, planRollAvecPass, planRollsAvecPass, planSettle, planSettleMany, lireRolled, lireRolledTous, lireSettled, lireSettledTous, etatReglement } from './blockrolls-plan.js';
 import { guessDepuisApparence, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 import { poolId as poolIdV4 } from './pool.js';
 import { topic as topicDe } from './keccak.js';
@@ -23712,6 +23712,10 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
     choisirBrain(j.adr); bcMessage('Panel', '', 'Showing ' + j.sym + '.'); bcVue('chat'); bcRepeindre();
     return true;
   }
+  /* ── LE GAME PAR LE TEXTE (2026-10-18, Phil 09:00 : « le brain lui-meme, qui par une commande peut avoir acces au game ») ── */
+  if (c.type === 'game') { void bcCommandeGame(); return true; }
+  if (c.type === 'roll') { void bcCommandeRoll(c.n); return true; }
+  if (c.type === 'post_task') { bcCommandePostTask(c); return true; }
   const erreur = (t) => { note.className = 'note wKo'; note.textContent = t; return false; };
   if (c.type === 'swap') {
     const de = bcResoudre(c.de);
@@ -23747,6 +23751,92 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
     return true;
   }
   return erreur('not understood — type “help”');
+}
+/* ══ LE GAME PAR LE TEXTE (2026-10-18, Phil 09:00) — les trois commandes du jeu, dans le fil du Chat. ⛔ RIEN NE SIGNE ICI : `game` lit ;
+ *   `roll` sans contrat servi appelle le roll PRACTICE de l onglet Game (roll(), 0 USDC) ; avec le contrat ET un wallet il CONSTRUIT le plan
+ *   (planRolls : UN approve EXACT de N x prix + N roll, ou planRollsAvecPass) et le montre — le wallet signe par bcSigner, un clic a la fois ;
+ *   `post task` ouvre le formulaire Post-a-task PRE-REMPLI (le formulaire, puis le wallet). Le serveur n a rien a faire : memes fonctions
+ *   pures que les boutons du Game (blockrolls-plan.js, rolls-jeu.js), meme ticket du jour (adresseTicket). */
+async function bcCommandeGame() {
+  const m = bcMessage('Game', '', 'Today\'s game');
+  bcVue('chat');
+  const lecture = bcEtape(m, 'Reading the draw…');
+  let t = null, r = null;
+  try { t = await fetch('/api/tirage', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { t = null; }
+  try { r = await fetch('/api/jeu/rolls', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((x) => x.json()); } catch (_) { r = null; }
+  lecture.remove();
+  if (!t || t.ok !== true || !t.jour) { bcEtape(m, 'The draw could not be read just now.', 'non'); return; }
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  const moi = c ? String(c).toLowerCase() : null, tickets = t.jour.tickets || [];
+  const reste = Math.max(0, new Date(t.jour.fin).getTime() - Date.now()), h = Math.floor(reste / 3600000), mn = Math.floor((reste % 3600000) / 60000);
+  bcEtape(m, 'Tickets today: ' + tickets.length + ' · closes in ' + h + 'h ' + mn + 'm' + (t.mode === 'SHADOW' ? ' · practice season, no prize yet' : '') + '.');
+  if (moi) {
+    const w = (t.jour.wallets || []).find((x) => String(x.adresse).toLowerCase() === moi), seuil = Number(t.seuilVolumeUsd) || 10, fait = w ? Number(w.volumeUsd) : 0;
+    let guess = null; try { guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(moi, t.jour.id))); } catch (_) { guess = null; }
+    const face = guess ? ' Ticket face (colour, orbit, facet, material, ornament): ' + guess.join(', ') + '.' : '';
+    bcEtape(m, (tickets.includes(moi) ? 'Your ticket: held — it enters today\'s draw.' : 'Your ticket: not yet — $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' verified volume today.') + face, tickets.includes(moi) ? 'oui' : '');
+  } else bcEtape(m, 'Connect a wallet to see your ticket.');
+  /* le pot : LU sur le contrat quand il est servi ; sinon dit « practice » — jamais un chiffre invente */
+  const rc = t.rolls && t.rolls.contrat ? t.rolls : null;
+  if (rc) {
+    let pot = null; try { pot = lireUint(await rpc('eth_call', [{ to: rc.contrat, data: appelPot() }, 'latest'])); } catch (_) { pot = null; }
+    bcEtape(m, 'Pot: ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + ' · roll ' + usdcTexte(rc.prixRoll) + ' USDC, up to 10 in one go · day pass ' + usdcTexte(rc.prixPass) + ' USDC.');
+  } else bcEtape(m, 'Pot: none yet — practice rolls are free; paid rolls (0.50 USDC) open with their contract.');
+  const rolls = r && r.ok && Array.isArray(r.rolls) ? r.rolls.slice(-5) : null;
+  bcEtape(m, rolls === null ? 'Recent rolls could not be read.' : rolls.length ? 'Last rolls on UNIT (everyone): ' + rolls.map((x) => x.score + '/5').join(' · ') + '.' : 'No roll yet today.');
+  if (rollDerniers.length) bcEtape(m, 'Your last rolls: ' + rollDerniers.map((x) => x.score + '/5').join(' · ') + '.');
+  bcEtape(m, 'Say “roll”, “roll x5” or “roll x10” to play.');
+}
+async function bcCommandeRoll(n) {
+  const m = bcMessage('Game · roll', '', n === 1 ? 'Roll' : 'Roll ×' + n);
+  bcVue('chat');
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!rollsCfg) {
+    /* PRACTICE (aucun contrat servi) : le roll de l onglet Game, le MEME (roll() : bloc N+2 lu sur la chaine, score contre ton ticket) */
+    bcEtape(m, 'Practice roll' + (n > 1 ? 's ×' + n : '') + ' — 0 USDC, nothing to sign: the block after next decides, live.' + (c ? '' : ' Connect a wallet to score your ticket.'));
+    for (let i = 0; i < n; i++) {
+      const avant = rollDerniers.length ? rollDerniers[0] : null;
+      const l = bcEtape(m, 'Roll ' + (i + 1) + '/' + n + '…');
+      try { await roll(); } catch (_) { /* dit ci-dessous */ }
+      const d = rollDerniers.length ? rollDerniers[0] : null;
+      const nom = $('#dernierNom') ? $('#dernierNom').textContent : '';
+      l.textContent = 'Roll ' + (i + 1) + '/' + n + ': ' + (d && d !== avant ? 'block ' + Number(d.bloc).toLocaleString('en-US') + ' — ' + d.score + '/5' : (nom || 'no result')) + '.';
+      if (d && d !== avant && d.score >= 3) l.className = 'oui';
+    }
+    const scores = rollDerniers.slice(0, n).map((x) => x.score).filter((x) => Number.isInteger(x));
+    if (scores.length > 1) bcEtape(m, 'Best ' + Math.max(...scores) + '/5, total ' + scores.reduce((a, x) => a + x, 0) + '/' + (scores.length * 5) + ' — practice, no prize.');
+    return;
+  }
+  if (!(await bcAvecWallet(m, () => bcCommandeRoll(n)))) return;
+  const contrat = rollsCfg.contrat;
+  let guess = null; try { guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourDeApp(Date.now())))); } catch (_) { guess = null; }
+  if (!guess) { bcEtape(m, 'Your ticket face could not be turned into a guess — nothing was asked.', 'non'); return; }
+  let pass = null; try { pass = lirePass(await rpc('eth_call', [{ to: contrat, data: appelPass(c) }, 'latest'])); } catch (_) { pass = null; }
+  const avecPass = passActif(pass), guesses = Array.from({ length: n }, () => guess);
+  const plan = avecPass ? planRollsAvecPass({ contrat, guesses, pass, passRolls: rollsCfg.passRolls }) : planRolls({ contrat, usdc: USDC_BASE, guesses, rollPrice: BigInt(rollsCfg.prixRoll) });
+  if (plan.etat !== 'PRET') { bcEtape(m, 'Not planned: ' + plan.pourquoi, 'non'); return; }
+  bcEtape(m, 'Guess = your ticket face (' + guess.join(', ') + '). ' + (avecPass ? n + ' roll' + (n > 1 ? 's' : '') + ' on your pass (' + pass.rollsLeft + ' left) — no payment.'
+    : n + ' roll' + (n > 1 ? 's' : '') + ' × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then the roll' + (n > 1 ? 's' : '') + '. Half to the pot, half to TokenizedBlock.'));
+  for (const a of plan.appels) bcEtape(m, a.quoi);
+  bcEtape(m, 'Each step is one signature here; the Game tab\'s “Roll for real” groups them when your wallet can. Settle within 256 blocks from the Game tab, or ask your agent (tblock_plan_settle).');
+  bcBoutons(m, [['Sign in your wallet', async () => {
+    const s = await bcSigner(m, plan.appels.map((a) => ({ ...a, nom: a.quoi })), null);
+    if (s.ok) bcEtape(m, 'Rolled — the block after each roll decides. Settle from the Game tab within 256 blocks (the prize is always yours).', 'oui');
+  }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
+}
+/** « post task <reward> <players> <hold> » : le formulaire Post-a-task de l onglet Game, PRE-REMPLI et ouvert. Rien n est poste par la commande. */
+function bcCommandePostTask(c) {
+  const m = bcMessage('Game · task', '', 'Post a task — reward ' + c.reward + ' · ' + c.players + ' player' + (c.players > 1 ? 's' : '') + ' · hold ' + c.hold + ' (block units)');
+  bcVue('chat');
+  const f = $('#missionForm');
+  if (!f) { bcEtape(m, 'The Post-a-task form is not on this page.', 'non'); return; }
+  try { $('#mfReward').value = c.reward; $('#mfMax').value = String(c.players); $('#mfHold').value = c.hold; } catch (_) { /* un champ absent : le formulaire s ouvre quand meme */ }
+  bcEtape(m, 'The form is filled in on the Game tab: pick your block there, then “Post it — escrow the rewards” — your wallet signs. Nothing is posted by this command.');
+  try { $('#bcPop').close(); } catch (_) {}
+  allerA('missions');
+  f.hidden = false;
+  try { void mesBlocksPourMission(); } catch (_) {}
+  setTimeout(() => { try { f.scrollIntoView({ block: 'center' }); } catch (_) {} }, 60);
 }
 /* ── LE TICKET DE L ONGLET TRADE (2026-10-04) ───────────────────────────────────────────────────────────────────────────────
  * Il n envoie rien : il ECRIT la commande que la barre du Chat aurait recue (`buy this with 0.002 ETH`), qui passe la porte du

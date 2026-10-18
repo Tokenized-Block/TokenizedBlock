@@ -170,8 +170,9 @@ if (demarre) {
     'session inconnue : 404 en HTTP, REFUSE en MCP');
   ok((await post('/api/panel/ouvrir', {})).corps.ok === true && (await post('/api/panel/nimporte', {})).code === 404, 'le panneau peut ouvrir sa propre session ; route inconnue : 404');
   const tl = (await post('/mcp', { jsonrpc: '2.0', id: 9, method: 'tools/list' })).corps.result.tools;
-  ok(tl.length === 7 && ['tblock_panel_open', 'tblock_command', 'tblock_panel_state'].every((x) => tl.some((t) => t.name === x)) && !tl.some((t) => /send|sign|transfer/i.test(t.name)),
-    'tools/list : 7 outils, dont les 3 de la telecommande — et aucun qui envoie ou signe');
+  /* 2026-10-18 : 7 -> 12 (les 5 du Game, test-mcp-game-20261018.mjs) ; toujours aucun outil qui envoie ou signe */
+  ok(tl.length === 12 && ['tblock_panel_open', 'tblock_command', 'tblock_panel_state'].every((x) => tl.some((t) => t.name === x)) && !tl.some((t) => /send|sign|transfer/i.test(t.name)),
+    'tools/list : 12 outils (7 + 5 du Game), dont les 3 de la telecommande — et aucun qui envoie ou signe');
 }
 enfant.kill(); noeud.close();
 try { fs.rmSync(vol, { recursive: true, force: true }); } catch (_) {}

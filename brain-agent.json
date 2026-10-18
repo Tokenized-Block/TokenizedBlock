@@ -166,13 +166,21 @@
     "since": "2026-10-04",
     "endpoint": "POST https://tokenizedblock.space/mcp",
     "transport": "JSON-RPC 2.0, streamable HTTP without sessions, one request per POST (no event stream, no batch)",
-    "tools": ["tblock_pairs", "tblock_plan_birth", "tblock_plan_swap", "tblock_creator_minimum", "tblock_panel_open", "tblock_command", "tblock_panel_state"],
+    "tools": ["tblock_pairs", "tblock_plan_birth", "tblock_plan_swap", "tblock_creator_minimum", "tblock_panel_open", "tblock_command", "tblock_panel_state", "tblock_game_state", "tblock_plan_roll", "tblock_plan_settle", "tblock_plan_task", "tblock_missions"],
     "read_only": "the planning tools return unsigned calls; the user's wallet signs them in order. The server signs, holds and sends nothing.",
+    "game": {
+      "since": "2026-10-18",
+      "state": "tblock_game_state reads the Game tab (GET /api/tirage): today's draw and tickets, the live preview face, the BlockRolls contract when served (prices, pot) or null = practice, the recent practice rolls (GET /api/jeu/rolls); with `wallet`, that wallet's ticket, its 5-trait guess and its draw entries",
+      "roll": "tblock_plan_roll: the classic roll, 0.50 USDC a roll, 1 to 10 rolls in ONE wallet_sendCalls batch - one approve of exactly rolls x 0.50 USDC then roll(guess) x rolls, or rollWithPass x rolls when the wallet holds an active day pass; `guess` defaults to the wallet's ticket face (SHA-256(wallet|day)); REFUSED while no contract is served (practice: free rolls in the Game tab, nothing to sign)",
+      "settle": "tblock_plan_settle: settleableUntil read per roll, the state of each (TROP_TOT, REGLABLE, PERDU after 256 blocks, PAS_EN_ATTENTE), one unsigned settleMany for the settleable ones; anyone may send it, the prize goes to the player",
+      "task": "tblock_plan_task: approve exactly reward x maxDone (raw block units) then postTask 'trade my block on its TokenizedBlock pool' (hold `hold` for 24 h, open 7 days, one per wallet); tblock_missions reads the board (GET /api/missions); both REFUSED while the board's contract is not deployed",
+      "not_simulated": "game plans are built, not simulated: read `etat` and `pourquoi`, then sign"
+    },
     "control_panel": {
       "page": "https://tokenizedblock.space/app.html?panel=1",
       "how": "tblock_panel_open returns a link for the user (the session rides in the URL fragment); tblock_command proposes select | show | trade | swap | send | task | birth | say; tblock_panel_state returns the brain as the panel sees it (cerveau: mood, beat, tasks accepted) and the events the panel reported",
       "wired_to": "the app's own brain for that block (same memory, same food read on chain, same journal) — the panel is a pop-up over the Brain tab, not a second brain",
-      "written_commands": "buy <token> with <amount> <token> | sell <amount> <token> [for <token>] | swap <amount> <token> to <token> | send <amount> <token> to <whole address> | show <token>; anything else is refused, never guessed",
+      "written_commands": "buy <token> with <amount> <token> | sell <amount> <token> [for <token>] | swap <amount> <token> to <token> | send <amount> <token> to <whole address> | show <token> | game | roll [xN, N <= 10] | post task <reward> <players> <hold>; anything else is refused, never guessed",
       "widget": "clients that render MCP Apps show a card (ui://tokenizedblock/panel.html) with the panel link and its events; other clients just get the link",
       "rule": "a command is a proposal shown in the panel. The block's brain gates each task (brain-tasks catalog, deterministic — not a language model); the plan comes from the server planners; only the user's wallet signs, one click at a time",
       "session": "a 128-bit bearer secret kept in memory: 2 hours without activity, lost on a server restart, one command per second; whoever holds it can propose, never sign",

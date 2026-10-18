@@ -50,8 +50,13 @@ function verifierServeur(src) {
   assert.ok(!/rpcServeur|rpcHistoire|rpcRails|fetch\(/.test(bloc), 'aucune lecture de chaine ni appel sortant dans la route');
   /* hors du fil Live : /api/live ne touche pas jeuRolls, et la route jeu ne touche pas le fil */
   assert.ok(!/liveEvts|evenementsLive|\/api\/live/.test(bloc), 'la route jeu ne touche pas le fil Live');
-  const horsRoute = src.slice(0, debut) + src.slice(fin), usages = horsRoute.match(/jeuRolls\.(push|slice|splice|length|shift|unshift)/g) || [];
-  assert.ok(/const jeuRolls = \[\];/.test(horsRoute) && usages.length === 0, 'jeuRolls n est utilise nulle part hors de sa route (vu ' + usages.length + ' usage(s))');
+  /* 2026-10-18 : UN SEUL lecteur hors de la route est admis, nomme ici — l outil MCP tblock_game_state (jeu-agent.js) lit les 10 derniers,
+   *   en LECTURE (slice), jamais push/splice ; tout autre usage (dont /api/live) reste rouge (mutant m15 plus bas). */
+  const LECTEUR_MCP = 'return etatJeuAgent({ tirage: t, wallet: a.wallet || null, rollsRecents: jeuRolls.slice(-10), pot });';
+  const nLecteur = src.split(LECTEUR_MCP).length - 1;
+  assert.ok(nLecteur <= 1, 'le lecteur MCP de jeuRolls est present au plus une fois');
+  const horsRoute = (src.slice(0, debut) + src.slice(fin)).replace(LECTEUR_MCP, ''), usages = horsRoute.match(/jeuRolls\.(push|slice|splice|length|shift|unshift)|jeuRolls\[/g) || [];
+  assert.ok(/const jeuRolls = \[\];/.test(horsRoute) && usages.length === 0, 'jeuRolls n est utilise nulle part hors de sa route et de son lecteur MCP nomme (vu ' + usages.length + ' usage(s))');
 }
 verifierServeur(srv); vu(true, '(a) serveur : routes, plafonds 200 / 30 par min par IP / 256 octets, forme exacte, 400 sinon, memoire seule');
 
@@ -119,6 +124,10 @@ rougit(verifierServeur, muter(srv, 'const JEU_ROLL_CORPS_MAX = 256;', 'const JEU
 rougit(verifierServeur, muter(srv, 'if (jeuRolls.length > JEU_ROLLS_MAX) jeuRolls.splice(0, jeuRolls.length - JEU_ROLLS_MAX);', '', 'm5'), 'm5 serveur : memoire sans borne');
 rougit(verifierServeur, muter(srv, 'jeuRolls.push({ t: Date.now(), bloc: j.bloc, score: j.score });', 'jeuRolls.push({ t: Date.now(), bloc: j.bloc, score: j.score, ip: ipJ });', 'm6'), 'm6 serveur : une identite (IP) gardee');
 rougit(verifierServeur, muter(srv, "Number.isSafeInteger(j.bloc) && j.bloc > 0 && Number.isInteger(j.score) && j.score >= 0 && j.score <= 5", "Number.isSafeInteger(j.bloc) && j.bloc > 0 && Number.isInteger(j.score)", 'm7'), 'm7 serveur : score non borne');
+/* 2026-10-18 : le lecteur MCP admis ne devient pas une porte ouverte — un SECOND usage hors route (ici : l outil ecrit dans jeuRolls) rougit */
+rougit(verifierServeur, muter(srv, 'return etatJeuAgent({ tirage: t, wallet: a.wallet || null, rollsRecents: jeuRolls.slice(-10), pot });',
+  'jeuRolls.push({ t: 0, bloc: 1, score: 5 }); return etatJeuAgent({ tirage: t, wallet: a.wallet || null, rollsRecents: jeuRolls.slice(-10), pot });', 'm15'), 'm15 serveur : l outil MCP ECRIT dans jeuRolls');
+rougit(verifierServeur, muter(srv, 'const jeuRollPosts = { minute: 0, parIp: new Map() };', 'const jeuRollPosts = { minute: 0, parIp: new Map() }; const fuite = () => jeuRolls.slice(-5);', 'm16'), 'm16 serveur : un autre lecteur hors route');
 /* app */
 rougit(verifierApp, muter(html, 'if (s) void signalerRoll(cible, s.score);', '', 'm8'), 'm8 app : le roll n est plus signale');
 rougit(verifierApp, muter(html, 'setInterval(() => { if (mapVisible()) void peindreRollsMap(); }, ROLLS_MAP_MS);', 'setInterval(() => { void peindreRollsMap(); }, ROLLS_MAP_MS);', 'm9'), 'm9 app : le minuteur relit sans regarder la visibilite');

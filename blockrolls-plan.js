@@ -1,5 +1,6 @@
-/* blockrolls-plan.js — les appels NON SIGNES de BlockRolls (contracts/src/BlockRolls.sol) : roll paye (approve EXACT + roll), pass
- * (approve EXACT + buyPass), roll sur pass, settle, expire, fund. Pur : aucun reseau, aucune cle. Le wallet de l utilisateur signe.
+/* blockrolls-plan.js — les appels NON SIGNES de BlockRolls (contracts/src/BlockRolls.sol) : roll paye (approve EXACT + roll), rolls en lot
+ * (UN approve EXACT de N x prix + N roll, N <= 10), pass (approve EXACT + buyPass), roll sur pass, settle, expire, fund. Pur : aucun reseau,
+ * aucune cle. Le wallet de l utilisateur signe.
  * Plus ce que l ecran doit dire AVANT la signature : guess hors bornes refuse, fenetre de settle (trop tot / reglable / perdu), gain prevu,
  * et le decodage des evenements Rolled / Settled d un recu. Selecteurs verifies contre l ABI COMPILEE dans test-blockrolls-plan.
  * ⛔ PAS DEPLOYE. ⛔ C est un tirage PAYANT (decision et responsabilite de conformite : Phil, 2026-10-17). */
@@ -103,6 +104,30 @@ export function planRoll({ contrat, usdc, guess, rollPrice = DEFAUTS.rollPrice }
       approuver(usdc, contrat, rollPrice, 'approve exactly one roll (' + rollPrice + ' raw USDC)'),
       { to: bas(contrat), data: '0x' + sel(SIG_ROLL) + motsGuess(guess), quoi: 'roll: guess the face of the block 2 blocks from now' },
     ] };
+  } catch (e) { return refuse(String(e.message || e)); }
+}
+
+/* Phil 2026-10-18 09:00 : « le roll classique : 0,50 USDC par roll, jouer max 10x en un coup » */
+export const ROLLS_MAX = 10;
+/**
+ * Le roll classique en LOT : UN approve EXACT de N x rollPrice + N roll(guess), pour UN wallet_sendCalls (une signature, N rolls, tous sur
+ * bloc+2 si le lot tient dans un bloc). N <= ROLLS_MAX, sinon tout le lot est refuse ; chaque guess est verifie AVANT la signature (un guess
+ * hors bornes ferait reverter le lot entier dans le wallet). ⛔ L approve couvre le TOTAL, jamais un seul roll : avec un approve d un roll,
+ * les N-1 suivants reverteraient apres la signature (test-blockrolls-plan le prouve par un mutant). Jamais d approbation infinie.
+ */
+export function planRolls({ contrat, usdc, guesses, rollPrice = DEFAUTS.rollPrice }) {
+  if (!Array.isArray(guesses) || guesses.length === 0) return refuse('at least one guess');
+  if (guesses.length > ROLLS_MAX) return refuse('at most ' + ROLLS_MAX + ' rolls in one batch');
+  for (let i = 0; i < guesses.length; i++) {
+    const r = refusGuess(guesses[i]);
+    if (r.length) return refuse('guess #' + (i + 1) + ': ' + r.join('; '));
+  }
+  try {
+    if (BigInt(rollPrice) <= 0n) return refuse('the roll price must be > 0');
+    const total = BigInt(rollPrice) * BigInt(guesses.length);
+    const appels = [approuver(usdc, contrat, total, 'approve exactly ' + guesses.length + ' roll(s) (' + total + ' raw USDC)')];
+    guesses.forEach((g, i) => appels.push({ to: bas(contrat), data: '0x' + sel(SIG_ROLL) + motsGuess(g), quoi: 'roll ' + (i + 1) + '/' + guesses.length + ': guess the face of the block 2 blocks from now' }));
+    return { etat: 'PRET', n: guesses.length, prix: total.toString(), prixUnitaire: BigInt(rollPrice).toString(), appels };
   } catch (e) { return refuse(String(e.message || e)); }
 }
 

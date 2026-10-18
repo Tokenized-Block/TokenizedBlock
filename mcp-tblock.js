@@ -4,6 +4,8 @@
  *   obtient les appels NON SIGNES d une naissance par NOTRE chemin (createPaid + hook de naissance : 0,001 ETH de frais), ceux
  *   d un echange par nos rails, la liste des devises, et la sortie du minimum du createur. Son wallet signe ; ce serveur ne
  *   signe rien, ne tient rien, n envoie rien.
+ * 2026-10-18 (Phil 09:00) : LE GAME aussi — l etat du jeu, le roll classique (0,50 USDC, 10 au plus par lot), le settle, une mission,
+ *   le tableau des missions : 12 outils. Les planificateurs du jeu vivent dans jeu-agent.js (serveur) ; ici, toujours rien.
  * ⛔ CE QUE CE FICHIER EST : un traducteur. Il valide la forme de la requete, appelle l outil INJECTE (`deps`), et rend la
  *   reponse dans la forme MCP. Les planificateurs (naissance-api.js, rails-api.js, caution-createur.js) decident ; ici rien.
  * ⛔ SANS ETAT : pas de session, pas de flux SSE, pas de lot. Une requete POST = une reponse JSON. Une notification (pas d `id`)
@@ -17,7 +19,10 @@ export const MCP_INSTRUCTIONS = 'TokenizedBlock on Base mainnet. The planning to
   + 'the block’s brain accepts or refuses each task and only the user’s wallet signs. Nothing is signed, held or sent by this server. '
   + 'Birth fee: 0.001 ETH (0.0007 at creation + 0.0003 at registration), paid inside those calls. On top, the creator deposits a minimum '
   + '(about $1 of the paired currency) that stays theirs and earns 0.03% of each trade. Amounts are raw integer units. '
-  + 'A plan is simulated when it is built, not executed: read `etat` (PRET, APPROBATIONS, REFUSE, NON_MESURE) and `pourquoi` before signing.';
+  + 'A plan is simulated when it is built, not executed: read `etat` (PRET, APPROBATIONS, REFUSE, NON_MESURE) and `pourquoi` before signing. '
+  + 'The Game (tblock_game_state, tblock_plan_roll, tblock_plan_settle, tblock_plan_task, tblock_missions): the classic roll is 0.50 USDC a roll, up to 10 in one batch, '
+  + 'paid in USDC on the BlockRolls contract when one is served; without it the game is practice (free, nothing to sign) and the roll tools answer REFUSE with that state. '
+  + 'Game plans are NOT simulated.';
 
 /* ── LE WIDGET (MCP Apps, 2026-10-04) : une carte affichee DANS le chat par les clients qui savent le faire. Lu dans le paquet
  *   officiel @modelcontextprotocol/ext-apps 2.0.3 (server/index.js) : l outil porte `_meta.ui.resourceUri` ET l ancienne cle
@@ -102,6 +107,48 @@ export const OUTILS = Object.freeze([
       session: { type: 'string', pattern: '^[0-9a-f]{32}$', description: 'The session returned by tblock_panel_open.' },
       since: { type: 'string', pattern: '^[0-9]{1,9}$', description: 'Optional: only events after this event number.' } } },
     annotations: { readOnlyHint: true, openWorldHint: false }, _meta: META_WIDGET },
+  /* ── LE GAME (2026-10-18, Phil 09:00 : « le MCP du brain et le brain lui-meme, qui par une commande peut avoir acces au game ») : l etat
+   *   du jeu, et les appels NON SIGNES d un roll (<= 10 par lot, 0,50 USDC chacun), d un settle, d une mission. Meme doctrine : lecture
+   *   seule, le wallet signe. Sans contrat servi (fiche non signee) le roll et le settle sont REFUSES avec l etat — jamais un plan invente. */
+  { name: 'tblock_game_state', title: 'Read the Game: today\'s draw, your ticket, the rolls',
+    description: 'Reads the Game tab as the server serves it (GET /api/tirage): today\'s draw (tickets, closing time, practice or paid mode), the live preview face '
+      + '(the face the latest Base block would draw), yesterday\'s revealed day, the BlockRolls contract when one is served (prices, prizes, pot) or null (practice: free rolls, '
+      + 'nothing to sign), and the recent off-chain practice rolls (GET /api/jeu/rolls). With `wallet`: that wallet\'s ticket (held or not, verified volume, skin pass), its '
+      + 'ticket face as the 5-trait guess tblock_plan_roll uses by default, and its entries in this week\'s and month\'s draws. Read-only.',
+    inputSchema: { type: 'object', properties: { wallet: { ...ADRESSE, description: 'Optional: the wallet whose ticket and progress to read.' } }, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: true } },
+  { name: 'tblock_plan_roll', title: 'Plan the classic roll: 0.50 USDC a roll, up to 10 in one batch',
+    description: 'Returns the unsigned calls for `rolls` (1 to 10, default 1) BlockRolls rolls on one guess, for ONE wallet_sendCalls batch signed by `wallet`: '
+      + 'one approve of EXACTLY rolls x 0.50 USDC, then one roll(guess) per roll — or, when that wallet holds an active day pass on the contract, rollWithPass x rolls with no payment. '
+      + 'The block 2 blocks after the roll decides; the roll is scored against the guess (traits in common out of 5), a fixed prize from 3/5. `guess` defaults to the face of the wallet\'s '
+      + 'ticket of the day (SHA-256(wallet|day), the same face the Game tab shows). REFUSED with the state when no contract is served (practice mode, 0 USDC): then nothing is to be signed.',
+    inputSchema: { type: 'object', required: ['wallet'], additionalProperties: false, properties: {
+      wallet: { ...ADRESSE, description: 'The wallet that will sign and play.' },
+      guess: { type: 'string', pattern: '^[0-9]{1,2}(,[0-9]{1,2}){4}$', description: 'Optional: 5 traits "colorBand,orbit,facet,material,ornament" (0..5, 0..9, 0..18, 0..8, 0..7). Default: the wallet\'s ticket face.' },
+      rolls: { type: 'string', pattern: '^(10|[1-9])$', description: 'Optional: how many rolls in the batch, 1 to 10 (default 1).' } } },
+    annotations: { readOnlyHint: true, openWorldHint: true } },
+  { name: 'tblock_plan_settle', title: 'Plan the settle of rolls (reveal and pay)',
+    description: 'Reads settleableUntil(id) for each roll and the head block, says the state of each (TROP_TOT: wait `blocsAvant` blocks; REGLABLE; PERDU: the 256-block window passed; '
+      + 'PAS_EN_ATTENTE: already settled or expired), and returns one unsigned settleMany call for the settleable ones. Anyone may send it: the prize always goes to the player. '
+      + 'REFUSED when no contract is served.',
+    inputSchema: { type: 'object', required: ['rollIds'], additionalProperties: false, properties: {
+      rollIds: { type: 'string', pattern: '^[0-9]{1,20}(,[0-9]{1,20}){0,49}$', description: 'The roll numbers (from the Rolled events), comma-separated, 1 to 50.' } } },
+    annotations: { readOnlyHint: true, openWorldHint: true } },
+  { name: 'tblock_plan_task', title: 'Plan a mission: "trade my block", reward escrowed',
+    description: 'Returns the unsigned calls that post a mission on the Block Missions board for a block: approve EXACTLY reward x maxDone (raw units of the block), then postTask. '
+      + 'The task is "trade my block on its TokenizedBlock pool" (a v4 Swap on the block\'s pool on our hook, the only pool a mission may name), held `hold` raw units for 24 h, '
+      + 'open 7 days, one completion per wallet. The block creator\'s wallet signs. REFUSED while the board\'s contract is not deployed, or when the block has no pool on a TokenizedBlock hook.',
+    inputSchema: { type: 'object', required: ['block', 'reward', 'maxDone', 'hold'], additionalProperties: false, properties: {
+      block: { ...ADRESSE, description: 'The block (B20 token) the mission is about; its units pay the reward.' },
+      reward: { type: 'string', pattern: '^[1-9][0-9]{0,40}$', description: 'Reward per player, raw units of the block (18 decimals).' },
+      maxDone: { type: 'string', pattern: '^[1-9][0-9]{0,4}$', description: 'How many players can complete it, 1 to 10000.' },
+      hold: { type: 'string', pattern: '^[1-9][0-9]{0,40}$', description: 'Minimum holding of the block during the 24 h window, raw units.' } } },
+    annotations: { readOnlyHint: true, openWorldHint: true } },
+  { name: 'tblock_missions', title: 'Read the mission board',
+    description: 'Reads the Block Missions board as the server serves it (GET /api/missions): the contract and each mission (id, reward token and amount, done/maxDone, holding, state). '
+      + 'REFUSED with tableau = PAS_OUVERT while the board\'s contract is not deployed. Read-only, no input.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    annotations: { readOnlyHint: true, openWorldHint: true } },
 ]);
 
 const erreur = (id, code, message) => ({ jsonrpc: '2.0', id: id === undefined ? null : id, error: { code, message } });

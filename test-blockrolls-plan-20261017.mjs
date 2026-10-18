@@ -3,10 +3,11 @@
  *   topics Rolled/Settled = ceux de l ABI compilee ; (2) approve EXACT du prix (jamais infini), au jeton USDC, pour le contrat ;
  *   (3) guess hors bornes refuse AVANT la signature (6/10/19/9/8), pass actif non rachete, roll de pass sans pass refuse ;
  *   (4) fenetre de settle : cible -> TROP_TOT, cible+1..cible+256 -> REGLABLE, cible+257 -> PERDU (les bornes de settle()/expire()) ;
- *   (5) traitsDepuisHash = les epingles de parite ; gainPrevu = (pot * bps) / 1e4 ; (6) decodage Rolled/Settled d un log.
+ *   (5) traitsDepuisHash = les epingles de parite ; gainPrevu = (pot * bps) / 1e4 ; (6) decodage Rolled/Settled d un log ;
+ *   (8) planRolls (2026-10-18) : UN approve EXACT de N x prix + N roll(guess), N <= 10 ; MUTANT « approve d un seul roll » rougit.
  * L acceptation reelle par le contrat (vrai USDC de Base sur un fork) est prouvee par banc-blockrolls-fork-20261017.mjs. */
 import { strict as assert } from 'node:assert';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import * as P from './blockrolls-plan.js';
 import { selecteur, topic } from './keccak.js';
 import { HOOK_7030 } from './tokenomics.js';
@@ -117,4 +118,35 @@ const logP = { address: C, topics: [topic(P.EV_PASS_BOUGHT), '0x' + mot(A('a1'))
 const PB = P.lirePassBought([logP], C);
 vu(PB && PB.player === A('a1') && PB.day === 19676 && PB.rollsLeft === 30 && PB.expiresAt === 1700092800 && PB.paid === 10000000n && PB.dayPotAfter === 5000000n, 'PassBought decode : (player, DAY) pour le ticket du jour');
 vu(P.lirePassBought([logR], C) === null, 'sans PassBought : null');
+
+/* (8) 2026-10-18 (Phil 09:00 : « le roll classique : 0,50 USDC par roll, jouer max 10x en un coup ») : planRolls = UN approve EXACT de
+ *   N x rollPrice + N roll(guess) pour UN wallet_sendCalls. Au-dela de 10 : refuse ; chaque guess verifie ; l approve est compte EXACTEMENT
+ *   (un approve d un seul roll laisserait N-1 roll() reverter dans le wallet apres la signature). */
+const g10 = Array.from({ length: 10 }, (_, i) => [i % 6, i % 10, i % 19, i % 9, i % 8]);
+const lotP = P.planRolls({ contrat: C, usdc: USDC, guesses: g10 });
+vu(lotP.etat === 'PRET' && lotP.appels.length === 11 && lotP.prix === '5000000' && lotP.n === 10, 'planRolls x10 : 11 appels (1 approve + 10 roll), prix total 5 USDC');
+vu(lotP.appels[0].to === USDC && lotP.appels[0].data === '0x095ea7b3' + mot(C) + mot(500000 * 10), 'planRolls : approve EXACT de 10 x 0,50 USDC = 5 000 000, au contrat');
+vu(lotP.appels.slice(1).every((a, i) => a.to === C && a.data === selecteur(P.SIG_ROLL) + g10[i].map(mot).join('')), 'planRolls : chaque roll(guess) dans l ordre des guesses');
+const lot3 = P.planRolls({ contrat: C, usdc: USDC, guesses: g10.slice(0, 3), rollPrice: 1234n });
+vu(lot3.appels.length === 4 && lot3.appels[0].data.endsWith(mot(1234 * 3)) && lot3.prix === String(1234 * 3), 'planRolls x3 au prix lu : approve = 3 x prix');
+vu(P.planRolls({ contrat: C, usdc: USDC, guesses: [...g10, [0, 0, 0, 0, 0]] }).etat === 'REFUSE' && /10/.test(P.planRolls({ contrat: C, usdc: USDC, guesses: [...g10, [0, 0, 0, 0, 0]] }).pourquoi), '11 rolls : tout le lot refuse, la borne nommee');
+vu(P.planRolls({ contrat: C, usdc: USDC, guesses: [] }).etat === 'REFUSE' && P.planRolls({ contrat: C, usdc: USDC, guesses: null }).etat === 'REFUSE', 'lot vide / absent : refuse');
+vu(/guess #2/.test(P.planRolls({ contrat: C, usdc: USDC, guesses: [[0, 0, 0, 0, 0], [0, 0, 19, 0, 0]] }).pourquoi), 'un guess hors bornes refuse TOUT le lot et le nomme');
+vu(P.planRolls({ contrat: C, usdc: USDC, guesses: [[0, 0, 0, 0, 0]], rollPrice: 0 }).etat === 'REFUSE', 'prix 0 : refuse (un roll paye coute quelque chose)');
+vu(P.ROLLS_MAX === 10, 'ROLLS_MAX = 10 (la borne de Phil)');
+/* MUTANT : l approve ne couvre qu UN roll -> le test de l approve doit rougir. Copie a cote de la source (memes imports relatifs), effacee apres. */
+{
+  const srcUrl = new URL('./blockrolls-plan.js', import.meta.url);
+  const src = readFileSync(srcUrl, 'utf8').replace(/\r\n/g, '\n');
+  const de = 'const total = BigInt(rollPrice) * BigInt(guesses.length);';
+  vu(src.split(de).length === 2, 'mutant planRolls : le motif de l approve total existe une fois');
+  const mutUrl = new URL('./blockrolls-plan.mutant-' + process.pid + '.js', import.meta.url);
+  writeFileSync(mutUrl, src.replace(de, 'const total = BigInt(rollPrice);'));
+  try {
+    const M = await import(mutUrl.href);
+    const lm = M.planRolls({ contrat: C, usdc: USDC, guesses: g10 });
+    const approveExact = lm.etat === 'PRET' && lm.appels[0].data === '0x095ea7b3' + mot(C) + mot(500000 * 10);
+    vu(approveExact === false, 'MUTANT approve d un seul roll : l assertion « approve EXACT de N x prix » ROUGIT (' + (lm.appels[0] ? lm.appels[0].data.slice(-8) : '?') + ')');
+  } finally { try { unlinkSync(mutUrl); } catch (_) {} }
+}
 console.log('ok blockrolls-plan - ' + n + ' assertions');

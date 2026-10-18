@@ -2,8 +2,10 @@
  *
  * A. commandes-panel.js (hors reseau) : chaque forme acceptee, chaque refus ; un destinataire tronque n est JAMAIS complete ; les
  *    pre-commandes sont des phrases que la grammaire accepte (celle de « send » est volontairement incomplete et refusee tant que
- *    l adresse manque) ; conversion en unites brutes (trop de decimales = refus, pas d arrondi).
- * B. MUTANTS sur la grammaire.
+ *    l adresse manque) ; conversion en unites brutes (trop de decimales = refus, pas d arrondi). 2026-10-18 : le Game par le texte —
+ *    game, roll [xN] (N <= 10 = ROLLS_MAX de blockrolls-plan, au-dela REFUSE jamais plafonne), post task <reward> <players> <hold> ;
+ *    chaque exemple de l aide est accepte. Le cablage dans app.html : test-commandes-jeu-20261018.mjs.
+ * B. MUTANTS sur la grammaire (dont : roll x11 accepte, roll x11 ramene a 10, post task sans hold).
  * C. app.html : le panneau LIT le snapshot du cerveau de l app (pas une copie) ; widget place entre « Its wiring » et « Its job » ;
  *    pop-up ; texte d agent en textContent ; un envoi propose par un agent exige un clic de plus ; registre avant les blocks du
  *    Market ; la session ne voyage pas dans une URL.
@@ -20,6 +22,7 @@ const imp = (f, dir = ICI) => import(pathToFileURL(path.join(dir, f)).href + '?v
 let n = 0, ko = 0;
 const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
 const A = '0x00000000000000000000000000000000c0ffee77', B = '0xb2000000000000000000000d8ce462e99ee7a47b';
+const { ROLLS_MAX: ROLLS_MAX_PLAN } = await imp('blockrolls-plan.js');
 
 async function jeu(dir, dire) {
   const C = await imp('commandes-panel.js', dir);
@@ -41,6 +44,23 @@ async function jeu(dir, dire) {
     dire(a(t).ok === false, 'A hors grammaire, refuse : ' + JSON.stringify(t.slice(0, 40)));
   }
   dire(C.PRECOMMANDES.length >= 6 && C.PRECOMMANDES.filter((p) => !p.aCompleter).every((p) => a(p.modele).ok === true), 'A chaque pre-commande complete est une phrase que la grammaire ACCEPTE');
+  /* 2026-10-18 (Phil 09:00) : le Game par le texte — game, roll [xN], post task <reward> <players> <hold> */
+  dire(egal(a('game').commande, { type: 'game' }) && egal(a('GAME').commande, { type: 'game' }), 'A game');
+  dire(egal(a('roll').commande, { type: 'roll', n: 1 }) && egal(a('Roll x5').commande, { type: 'roll', n: 5 }) && egal(a('roll x 10').commande, { type: 'roll', n: 10 })
+    && egal(a('roll 3').commande, { type: 'roll', n: 3 }) && egal(a('rolls x10').commande, { type: 'roll', n: 10 }), 'A roll · roll x5 · roll x 10 · roll 3 · rolls x10 : n lu');
+  for (const t of ['roll x11', 'roll 11', 'roll x0', 'roll x100', 'roll me', 'roll x5 please']) { const r = a(t); dire(r.ok === false && /1 to 10/.test(r.pourquoi), 'A roll refuse (' + t + ') : au-dela de 10 c est REFUSE, jamais ramene a 10'); }
+  dire(C.ROLLS_PAR_COMMANDE_MAX === 10 && C.ROLLS_PAR_COMMANDE_MAX === ROLLS_MAX_PLAN, 'A ROLLS_PAR_COMMANDE_MAX = 10 = ROLLS_MAX de blockrolls-plan.js (la borne de Phil, une seule)');
+  dire(egal(a('post task 100 10 10').commande, { type: 'post_task', reward: '100', players: 10, hold: '10' }) && egal(a('Post Task 0,5 1 2.5').commande, { type: 'post_task', reward: '0.5', players: 1, hold: '2.5' }),
+    'A post task <reward> <players> <hold> : montants en texte (virgule toleree), players entier');
+  for (const t of ['post task 100 10', 'post task 100 0 10', 'post task 100 10001 10', 'post task', 'post task 100 ten 10', 'post task 100 10 10 20']) dire(a(t).ok === false, 'A post task refuse : ' + JSON.stringify(t));
+  for (const l of C.AIDE_COMMANDES) {
+    /* chaque exemple de l aide (« e.g. … ») est une phrase que la grammaire ACCEPTE — sauf celui qui porte une adresse a completer (0x…) */
+    const ex = (l.match(/e\.g\. ([^—]+?)(?:\s—|$)/) || [])[1];
+    if (ex && !/…/.test(ex)) dire(a(ex.trim()).ok === true, 'A l exemple de l aide est accepte : ' + ex.trim());
+  }
+  dire(/roll · roll x5 · roll x10/.test(C.AIDE_COMMANDES.join('\n')) && /0\.50 USDC a roll/.test(C.AIDE_COMMANDES.join('\n')) && /^game\b/m.test(C.AIDE_COMMANDES.join('\n')) && /post task <reward> <players> <hold>/.test(C.AIDE_COMMANDES.join('\n')),
+    'A l aide nomme game, roll (0,50 USDC, 10 au plus) et post task');
+  dire(['game', 'roll', 'roll_x5', 'post_task'].every((k) => C.PRECOMMANDES.some((p) => p.cle === k && a(p.modele).ok === true)), 'A les pre-commandes game, roll, roll x5, post task existent et sont acceptees');
   const pS = C.PRECOMMANDES.find((p) => p.cle === 'send');
   dire(pS && pS.aCompleter === true && a(pS.modele).ok === false && a(pS.modele.replace(/0x$/, A)).ok === true, 'A la pre-commande « send » est INCOMPLETE expres : refusee telle quelle, acceptee une fois l adresse collee');
   dire(C.enUnitesBrutes('5,5', 6) === 5500000n && C.enUnitesBrutes('0.01', 8) === 1000000n && C.enUnitesBrutes('1', 18) === 10n ** 18n, 'A unites brutes : 5,5 USDC = 5 500 000 ; 0.01 action (8 decimales) = 1 000 000');
@@ -59,10 +79,16 @@ for (const mu of [
   { nom: 'trop de decimales arrondi au lieu de refuse', de: '  if (f.length > decimales) return null;\n', a: '' },
   { nom: 'phrase libre acceptee', de: "  return { ok: false, pourquoi: 'not understood — type “help” to see the commands' };", a: "  return { ok: true, commande: { type: 'help' } };" },
   { nom: 'montant nul accepte', de: 'return v > 0n ? v : null;', a: 'return v;' },
+  /* 2026-10-18 : la borne de Phil (10 rolls) — relachee, ou remplacee par un plafond silencieux */
+  { nom: 'roll x11 accepte (borne relachee)', de: '    if (!Number.isInteger(n) || n < 1 || n > ROLLS_PAR_COMMANDE_MAX) return refusRoll;\n', a: '    if (!Number.isInteger(n) || n < 1) return refusRoll;\n' },
+  { nom: 'roll x11 ramene a 10 au lieu de refuse', de: '    if (!Number.isInteger(n) || n < 1 || n > ROLLS_PAR_COMMANDE_MAX) return refusRoll;\n    return { ok: true, commande: { type: \'roll\', n } };',
+    a: '    if (!Number.isInteger(n) || n < 1) return refusRoll;\n    return { ok: true, commande: { type: \'roll\', n: Math.min(n, ROLLS_PAR_COMMANDE_MAX) } };' },
+  { nom: 'post task sans hold accepte', de: "    if ((m = new RegExp('^post task ' + NOMBRE + ' ([0-9]{1,5}) ' + NOMBRE + '$', 'i').exec(t))) {", a: "    if ((m = new RegExp('^post task ' + NOMBRE + ' ([0-9]{1,5})(?: ' + NOMBRE + ')?$', 'i').exec(t))) {" },
 ]) {
   if (SRC.split(mu.de).length !== 2) { ok(false, 'B mutant « ' + mu.nom + ' » : motif introuvable ou multiple'); continue; }
   const dir = fs.mkdtempSync(path.join(tmp, 'm-'));
-  fs.writeFileSync(path.join(dir, 'commandes-panel.js'), SRC.replace(mu.de, mu.a));
+  /* `() => mu.a` : un remplacement TEXTE lit `$'` comme « ce qui suit la correspondance » et tronquait le mutant post task (2026-10-18) */
+  fs.writeFileSync(path.join(dir, 'commandes-panel.js'), SRC.replace(mu.de, () => mu.a));
   let rouges = 0, plante = null;
   try { await jeu(dir, (c) => { if (!c) rouges += 1; }); } catch (e) { plante = String(e && e.message).slice(0, 60); }
   ok(rouges > 0 || plante !== null, 'B mutant « ' + mu.nom + ' » : ROUGE (' + (plante ? 'plante : ' + plante : rouges + ' assertion(s)') + ')');

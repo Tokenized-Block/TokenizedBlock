@@ -32,7 +32,16 @@ export const PRECOMMANDES = Object.freeze([
   { cle: 'send', libelle: 'Send', modele: 'send 1 USDC to 0x', aCompleter: true },
   { cle: 'show', libelle: 'Show a block', modele: 'show NVDAc' },
   { cle: 'tasks', libelle: 'What can it do?', modele: 'tasks' },
+  /* 2026-10-18 (Phil 09:00 : « le brain lui-meme, qui par une commande peut avoir acces au game ») : le Game par le texte. `roll` = le roll
+   *   classique (practice sans contrat ; 0,50 USDC par roll et 10 au plus par lot avec le contrat — le wallet signe) ; `game` = l etat du jeu ;
+   *   `post task` ouvre le formulaire Post-a-task PRE-REMPLI (rien n est poste par la commande : le formulaire, puis le wallet). */
+  { cle: 'game', libelle: 'Game', modele: 'game' },
+  { cle: 'roll', libelle: 'Roll', modele: 'roll' },
+  { cle: 'roll_x5', libelle: 'Roll ×5', modele: 'roll x5' },
+  { cle: 'post_task', libelle: 'Post a task', modele: 'post task 100 10 10' },
 ]);
+/* Phil 2026-10-18 : « jouer max 10x en un coup » — la MEME borne que planRolls (blockrolls-plan.js ROLLS_MAX) ; test-commandes-panel l epingle */
+export const ROLLS_PAR_COMMANDE_MAX = 10;
 
 export const AIDE_COMMANDES = Object.freeze([
   'buy <token> with <amount> <token>      e.g. buy NVDAc with 5 USDC',
@@ -42,6 +51,9 @@ export const AIDE_COMMANDES = Object.freeze([
   'show <token>                           e.g. show NVDAc',
   'market · trade · brain · chat          switch the view',
   'tasks                                  what this block’s brain accepts right now',
+  'game                                   the Game: your ticket, today’s tickets, the pot, the last rolls',
+  'roll · roll x5 · roll x10              the classic roll (0.50 USDC a roll with the contract, 10 at most; practice without it)',
+  'post task <reward> <players> <hold>    e.g. post task 100 10 10 — opens Post-a-task filled in (block units)',
   'A token is ETH, a symbol (USDC, NVDAc…), a whole address, or “this” for the block shown.',
 ]);
 
@@ -52,6 +64,8 @@ export const AIDE_COMMANDES = Object.freeze([
  *   send  : { type:'send', jeton, montant, destinataire }
  *   select: { type:'select', jeton }
  *   tab   : { type:'show', tab }      tasks : { type:'tasks' }      help : { type:'help' }
+ *   game  : { type:'game' }           roll  : { type:'roll', n }  (n = 1..ROLLS_PAR_COMMANDE_MAX ; « roll x11 » est REFUSE, jamais plafonne)
+ *   post_task : { type:'post_task', reward, players, hold }  (reward / hold = le texte du nombre, en unites humaines du block ; players = entier)
  */
 export function analyserCommande(texte) {
   const t = propre(texte);
@@ -60,6 +74,23 @@ export function analyserCommande(texte) {
   let m;
   if (/^(help|\?)$/i.test(t)) return { ok: true, commande: { type: 'help' } };
   if (/^(tasks?|what can it do\??)$/i.test(t)) return { ok: true, commande: { type: 'tasks' } };
+  if (/^game$/i.test(t)) return { ok: true, commande: { type: 'game' } };
+  if (/^rolls?\b/i.test(t)) {
+    /* roll · roll x5 · roll x 5 · roll 5 · rolls x10 — le nombre est LU, jamais plafonne : « roll x11 » est refuse, pas ramene a 10 */
+    const refusRoll = { ok: false, pourquoi: 'roll takes 1 to ' + ROLLS_PAR_COMMANDE_MAX + ' rolls in one go: roll, roll x5, roll x10' };
+    if (!(m = /^rolls?(?: ?x ?([0-9]{1,3})| ([0-9]{1,3}))?$/i.exec(t))) return refusRoll;
+    const n = m[1] === undefined && m[2] === undefined ? 1 : Number(m[1] !== undefined ? m[1] : m[2]);
+    if (!Number.isInteger(n) || n < 1 || n > ROLLS_PAR_COMMANDE_MAX) return refusRoll;
+    return { ok: true, commande: { type: 'roll', n } };
+  }
+  if (/^post task\b/i.test(t)) {
+    if ((m = new RegExp('^post task ' + NOMBRE + ' ([0-9]{1,5}) ' + NOMBRE + '$', 'i').exec(t))) {
+      const players = Number(m[2]);
+      if (players < 1 || players > 10000) return { ok: false, pourquoi: 'post task: 1 to 10 000 players' };
+      return { ok: true, commande: { type: 'post_task', reward: nombre(m[1]), players, hold: nombre(m[3]) } };
+    }
+    return { ok: false, pourquoi: 'post task needs: post task <reward per player> <players> <must hold> — in block units, e.g. post task 100 10 10' };
+  }
   if ((m = /^(market|trade|brain|chat)$/i.exec(t))) return { ok: true, commande: { type: 'show', tab: m[1].toLowerCase() } };
   if ((m = new RegExp('^(?:show|open|select) ' + JETON + '$', 'i').exec(t))) return { ok: true, commande: { type: 'select', jeton: m[1] } };
   if ((m = new RegExp('^buy ' + JETON + ' with ' + NOMBRE + ' ' + JETON + '$', 'i').exec(t))) {

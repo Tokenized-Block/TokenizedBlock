@@ -105,6 +105,9 @@ import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 /* 2026-10-18 : BlockRolls (roll paye 0,50 USDC, day pass 10 USDC) — la fiche GENEREE (preparer-deploiement-blockrolls.mjs) ; `adresse` reste
  *   null tant que Phil n a pas signe : l app ne montre alors AUCUN bouton payant (practice). Aucune variable d environnement ne la remplace. */
 import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
+/* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
+import { etatJeuAgent, planRollAgent, planSettleAgent, planTaskAgent, lireGuess as lireGuessAgent } from './jeu-agent.js';
+import { appelPot as appelPotRolls, lireUint as lireUintRolls } from './rolls-jeu.js';
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -5443,6 +5446,23 @@ function traiterRequete(req, res) {
               : { ok: false, etat: 'REFUSE', pourquoi: r.pourquoi };
           },
           tblock_panel_state: async (a) => { const r = registrePanel.lireEvenements(a.session, a.since ? Number(a.since) : 0); return r.ok ? { ...r, etat: 'PRET' } : { ...r, etat: 'REFUSE' }; },
+          /* ── LE GAME (2026-10-18, jeu-agent.js) : lecture seule, appels NON SIGNES ; sans contrat servi -> REFUSE, aucun appel ── */
+          tblock_game_state: async (a) => {
+            const t = corpsTirage();
+            let pot = null;
+            if (t.rolls && t.rolls.contrat) { try { pot = lireUintRolls(await rpcRails('eth_call', [{ to: t.rolls.contrat, data: appelPotRolls() }, 'latest'])); } catch (_) { pot = null; } }
+            return etatJeuAgent({ tirage: t, wallet: a.wallet || null, rollsRecents: jeuRolls.slice(-10), pot });
+          },
+          tblock_plan_roll: avecBudget((a) => planRollAgent({ rpc: rpcRails, contrat: corpsTirage().rolls.contrat, usdc: USDC_BASE, wallet: a.wallet, guess: a.guess ? lireGuessAgent(a.guess) : null,
+            rolls: a.rolls || '1', jourId: jourDe(Date.now()).id, rollPrice: BigInt((BLOCKROLLS_DEPLOIEMENT.constructeur || {}).rollPrice || 0), passRolls: Number((BLOCKROLLS_DEPLOIEMENT.constructeur || {}).passRolls || 0) })),
+          tblock_plan_settle: avecBudget((a) => planSettleAgent({ rpc: rpcRails, contrat: corpsTirage().rolls.contrat, rollIds: a.rollIds })),
+          tblock_plan_task: avecBudget(async (a) => planTaskAgent({ contrat: MISSIONS_DEPLOIEMENT.adresse, block: a.block, reward: a.reward, maxDone: a.maxDone, hold: a.hold,
+            cles: MISSIONS_DEPLOIEMENT.adresse ? await clesRails(a.block) : [], poolManager: V4_ADRESSES[8453].poolm })),
+          tblock_missions: async () => {
+            if (!MISSIONS_DEPLOIEMENT.adresse) return { ok: false, etat: 'REFUSE', tableau: 'PAS_OUVERT', pourquoi: 'the mission board is not deployed yet' };
+            try { const r = await lireMissions({ rpc: rpcServeur, contrat: MISSIONS_DEPLOIEMENT.adresse }); return { ok: true, etat: 'PRET', contrat: MISSIONS_DEPLOIEMENT.adresse, ...r }; }
+            catch (_) { return { ok: false, etat: 'NON_MESURE', pourquoi: 'the mission board could not be read just now' }; }
+          },
         } });
         if (rep === null) { res.writeHead(202, cors); res.end(); return; }
         rendreN(200, rep);
@@ -5884,6 +5904,12 @@ function traiterRequete(req, res) {
   /* ══ TIRAGE DE SAISON (2026-10-17, v1 BLANCHE) — public et rejouable : la saison, le seuil, chaque wallet avec ses frais verifies et
    *   leurs hashes, les tickets, leur racine merkle. ⛔ Aucun pot en v1 : la reponse le dit. Le gagnant viendra d un bloc fixe a la cloture. */
   if (chemin === '/api/tirage') {
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify(corpsTirage()));
+    return;
+  }
+  /* 2026-10-18 : le corps de /api/tirage est une FONCTION (hissee), lue aussi par le MCP (tblock_game_state) — une seule source, pas une copie */
+  function corpsTirage() {
     /* 2026-10-17 soir — v2 QUOTIDIEN (Phil) : ticket du JOUR a 10 $ de volume verifie (UNIT sur notre pool, ou actions tokenisees via l app) ;
      *   chaque jour qualifie = 1 entree au tirage de la SEMAINE et du MOIS. Pas de pot (practice) : l ecran le dit. */
     const now = Date.now(), j = jourDe(now), s = saisonDe(now), mo = moisDe(now);
@@ -5916,12 +5942,11 @@ function traiterRequete(req, res) {
     const tV = ticketsJour(jours, veilleJ.id, passes, SEUIL_VOLUME_JOUR_USD);
     const veille = { id: veilleJ.id, blocE: rev ? rev.bloc : null, hashE: rev ? rev.hash : null, etat: rev ? 'REVELEE' : 'EN_ATTENTE', tickets: tV,
       gagnant: rev && tV.length ? (tirer({ hashE: rev.hash, saison: veilleJ.id, liste: tV }) || [null])[0] : null };
-    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     /* BlockRolls (2026-10-18) : l adresse SIGNEE (fiche generee) ou null = practice ; les prix viennent de la fiche, jamais tapes ici */
     const rc = BLOCKROLLS_DEPLOIEMENT.constructeur || {};
     const rolls = { contrat: /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null,
       prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: [rc.prize5, rc.prize4, rc.prize3].map(String), minScore: rc.minScore };
-    res.end(JSON.stringify({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls,
+    return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls,
       apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: tJ.includes(adresse) })),
@@ -5932,8 +5957,7 @@ function traiterRequete(req, res) {
         + 'TokenizedBlock pool, or tokenized-stock trades made in the app. Each such day is one ticket for that day\'s draw and one entry for the week\'s '
         + 'and the month\'s draws. Trading more in a day adds nothing. Practice season: no prize yet. Each day is settled by block E, the first Base '
         + 'block stamped at least ' + DELAI_REVELATION_S + ' s after the day closes: its hash picks the day\'s winner and reveals the Face of the Day '
-        + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' }));
-    return;
+        + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' });
   }
 
   /* ══ LES ROLLS DU JEU (Phil 2026-10-17 23:50) — POST /api/jeu/roll {bloc, score} apres un Roll de l onglet Game ; GET /api/jeu/rolls
