@@ -116,9 +116,32 @@ export function ticketsJour(etatJours, jourId, passes = {}, seuil = SEUIL_VOLUME
   for (const [a, ids] of Object.entries(passes || {})) if (Array.isArray(ids) && ids.includes(jourId) && ADR.test(a)) s.add(a);
   return [...s].sort();
 }
-/** les entrees d une periode : une par (wallet, jour qualifie), triees (adresse puis jour) — publiques et rejouables. */
-export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_USD, passes = {}) {
+/** les entrees d une periode : une par (wallet, jour qualifie), triees (adresse puis jour) — publiques et rejouables.
+ *  `bonus` = { wallet: n } (WEEK PASS : bonusSemaine[semaine]) ajoute n entrees { adresse, jour: 'BONUS-k', bonus: true }, n entier
+ *  plafonne a BONUS_PASS_SEMAINE ; adresse ou nombre illisible -> ignore. */
+export function entreesPeriode(etatJours, idsJours, seuil = SEUIL_VOLUME_JOUR_USD, passes = {}, bonus = {}) {
   const e = [];
   for (const j of idsJours) for (const a of ticketsJour(etatJours, j, passes, seuil)) e.push({ adresse: a, jour: j });
+  for (const [a, nb] of Object.entries(bonus || {})) {
+    if (!ADR.test(a) || !Number.isInteger(nb) || nb <= 0) continue;
+    for (let k = 1; k <= Math.min(nb, BONUS_PASS_SEMAINE); k++) e.push({ adresse: a, jour: 'BONUS-' + k, bonus: true });
+  }
   return e.sort((x, y) => (x.adresse === y.adresse ? x.jour.localeCompare(y.jour) : x.adresse.localeCompare(y.adresse)));
+}
+/* ══ WEEK PASS (Phil 2026-10-18) : un PassBought du contrat BlockRolls (lu par le serveur, volume-rolls.js passesAchetes) donne le ticket
+ *   des 7 jours UTC a partir du jour du BLOC d achat (revenu.passes, le meme registre que le pass skin : ticketsJour garde UN ticket par
+ *   jour) ET 3 entrees bonus au tirage de la semaine de ce jour (bonusSemaine[semaine][wallet] = 3 : pose, pas ajoute — un 2e pass la meme
+ *   semaine ne cumule pas). PUR : rend un NOUVEL etat { passes, bonusSemaine }. */
+export const JOURS_PASS_SEMAINE = 7;
+export const BONUS_PASS_SEMAINE = 3;
+/** les ids des 7 jours a partir du jour UTC `jour` (entier = ms / 86400000, comme le `day` du contrat) */
+export function joursPassSemaine(jour) { return joursPass(jour * JOUR_MS, JOURS_PASS_SEMAINE); }
+export function crediterPassSemaine(etat, { joueur, jour } = {}) {
+  const a = String(joueur || '').toLowerCase(), e = etat || {};
+  if (!ADR.test(a) || !Number.isSafeInteger(jour) || jour < 0) return etat;
+  const passes = { ...(e.passes || {}) }, bonusSemaine = { ...(e.bonusSemaine || {}) };
+  passes[a] = [...new Set([...(Array.isArray(passes[a]) ? passes[a] : []), ...joursPassSemaine(jour)])].sort();
+  const s = saisonDe(jour * JOUR_MS).id;
+  bonusSemaine[s] = { ...(bonusSemaine[s] || {}), [a]: BONUS_PASS_SEMAINE };
+  return { passes, bonusSemaine };
 }

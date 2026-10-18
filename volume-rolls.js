@@ -32,3 +32,21 @@ export function depensesJeu(logs, contrat) {
   }
   return [...parCle.values()];
 }
+
+/** WEEK PASS (Phil 2026-10-18) : logs -> [{ tx, joueur, jour }] des PassBought DU contrat ; `jour` = le topic `day` emis par le contrat
+ *  (block.timestamp / 86400 : le jour UTC du BLOC d achat, pas celui du scan). Un log en double (meme tx, meme joueur, meme jour) = une
+ *  entree. Log illisible -> ignore. */
+export function passesAchetes(logs, contrat) {
+  const c = bas(contrat), vus = new Set(), out = [];
+  for (const l of logs || []) {
+    if (bas(l && l.address) !== c || !Array.isArray(l.topics) || bas(l.topics[0]) !== TOPIC_PASS || !l.topics[1] || !l.topics[2]) continue;
+    if (!/^0x[0-9a-f]{64}$/i.test(String(l.transactionHash || '')) || mots(l.data).length !== 4) continue;
+    const joueur = adrDe(l.topics[1]);
+    let jour = null; try { jour = Number(BigInt(l.topics[2])); } catch (_) { jour = null; }
+    if (!/^0x[0-9a-f]{40}$/.test(joueur) || !Number.isSafeInteger(jour) || jour < 0) continue;
+    const tx = bas(l.transactionHash), cle = tx + '|' + joueur + '|' + jour;
+    if (vus.has(cle)) continue;
+    vus.add(cle); out.push({ tx, joueur, jour });
+  }
+  return out;
+}

@@ -6,7 +6,7 @@
  *      requestSubmit ; la SEULE voie de signature est bcSigner (le chemin existant du panneau, le wallet de la personne), et elle n est
  *      atteinte que par un BOUTON de la carte (« Sign in your wallet ») — jamais au fil de la commande ;
  *  (3) roll sans contrat = le roll PRACTICE de l onglet Game (roll()), avec contrat + wallet = planRolls (approve EXACT de N x prix) ou
- *      planRollsAvecPass, derriere bcAvecWallet ; le guess = le ticket du jour (adresseTicket, jourDeApp), comme les boutons du Game ;
+ *      planRollsAvecPass, derriere bcAvecWallet ; le guess = une face NEUVE au hasard par roll (Phil 2026-10-18), comme les boutons du Game ;
  *  (4) game lit /api/tirage et /api/jeu/rolls, lit le pot sur le contrat SEULEMENT s il est servi, et dit « practice » sinon ;
  *  (5) post task pre-remplit #mfReward / #mfMax / #mfHold, ouvre le formulaire (Game) et n appelle NI planPoster NI submit ;
  *  (6) planRolls est importe de blockrolls-plan.js ; les puces game / roll / post task sont peintes par la boucle PRECOMMANDES existante.
@@ -50,8 +50,9 @@ ok(/if \(!rollsCfg\) \{/.test(R) && /await roll\(\);/.test(R) && R.indexOf('awai
 ok(/if \(!\(await bcAvecWallet\(m, \(\) => bcCommandeRoll\(n\)\)\)\) return;/.test(R), 'avec contrat : le wallet est exige (bcAvecWallet), la commande se rejoue une fois connecte');
 ok(/planRolls\(\{ contrat, usdc: USDC_BASE, guesses, rollPrice: BigInt\(rollsCfg\.prixRoll\) \}\)/.test(R) && /planRollsAvecPass\(\{ contrat, guesses, pass, passRolls: rollsCfg\.passRolls \}\)/.test(R) && /const avecPass = passActif\(pass\)/.test(R),
   'le plan : planRolls (approve EXACT de N x prix servi) sans pass, planRollsAvecPass avec un pass ACTIF lu sur le contrat');
-ok(/guessDepuisApparence\(apparenceDepuisAdresse\(await adresseTicket\(String\(c\)\.toLowerCase\(\), jourDeApp\(Date\.now\(\)\)\)\)\)/.test(R), 'le guess = le ticket du jour de CE wallet (adresseTicket + jourDeApp), comme les boutons du Game');
-ok(/const avecPass = passActif\(pass\), guesses = Array\.from\(\{ length: n \}, \(\) => guess\);/.test(R), 'N guesses = N fois le ticket (n vient de la grammaire, deja bornee a 10)');
+/* Phil 2026-10-18 : le guess n est plus le ticket — chaque roll tire une face NEUVE au hasard (comme les boutons du Game) */
+ok(/faces = Array\.from\(\{ length: n \}, \(\) => tirerFaceDeRoll\(\)\);/.test(R) && !/adresseTicket\(/.test(R), 'le guess = une face neuve au hasard par roll (tirerFaceDeRoll), plus le ticket');
+ok(/const avecPass = passActif\(pass\), guesses = faces\.map\(\(x\) => x\.guess\);/.test(R), 'N guesses = N faces neuves (n vient de la grammaire, deja bornee a 10)');
 ok(/for \(const a of plan\.appels\) bcEtape\(m, a\.quoi\);/.test(R), 'chaque appel du plan est montre AVANT la signature');
 ok(/rollDerniers\.slice\(0, n\)/.test(R) && /practice, no prize/.test(R), 'practice : le cumul des N rolls (meilleur, total) est dit, « no prize »');
 

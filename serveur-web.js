@@ -94,7 +94,7 @@ import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
-import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass } from './tirage-saison.js';
+import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
 import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
 import { BLOCKSKINS as BLOCKSKINS_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv } from './blockskins.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
@@ -105,7 +105,7 @@ import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 /* 2026-10-18 : BlockRolls (roll paye 0,50 USDC, day pass 10 USDC) — la fiche GENEREE (preparer-deploiement-blockrolls.mjs) ; `adresse` reste
  *   null tant que Phil n a pas signe : l app ne montre alors AUCUN bouton payant (practice). Aucune variable d environnement ne la remplace. */
 import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
-import { depensesJeu, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PASS as TOPIC_PASS_SRV } from './volume-rolls.js';
+import { depensesJeu, passesAchetes, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PASS as TOPIC_PASS_SRV } from './volume-rolls.js';
 /* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
 import { etatJeuAgent, planRollAgent, planSettleAgent, planTaskAgent, lireGuess as lireGuessAgent } from './jeu-agent.js';
 import { appelPot as appelPotRolls, lireUint as lireUintRolls } from './rolls-jeu.js';
@@ -4056,6 +4056,13 @@ async function crediterVolumeRolls() {
         if (!jourDuBloc.has(d.bloc)) { const ts = await horodatageBloc(d.bloc); if (ts === null) return; jourDuBloc.set(d.bloc, jourDe(ts * 1000).id); }
       }
       for (const d of depenses) { revenu.jours = crediter(revenu.jours || {}, { saison: jourDuBloc.get(d.bloc), payeur: d.joueur, hash: d.tx, usd: Number(d.brut) / 1e6 }); revenuSale = true; }
+      /* WEEK PASS (Phil 2026-10-18) : chaque PassBought des MEMES logs = le ticket des 7 jours UTC a partir du jour du BLOC (topic `day` du
+       *   contrat) + 3 entrees bonus au tirage de cette semaine (tirage-saison.js crediterPassSemaine : pose, idempotent). Internes exclus. */
+      for (const pa of passesAchetes(logs, contrat)) {
+        if (internes.has(pa.joueur)) continue;
+        const cp = crediterPassSemaine({ passes: revenu.passes || {}, bonusSemaine: revenu.bonusSemaine || {} }, pa);
+        revenu.passes = cp.passes; revenu.bonusSemaine = cp.bonusSemaine; revenuSale = true;
+      }
       revenu.rollsScan = a; revenuSale = true; de = a + 1;
     }
   } catch (_) { /* relu au prochain tour, depuis le meme curseur */ } finally { rollsScanEnVol = false; }
@@ -5997,7 +6004,7 @@ function traiterRequete(req, res) {
     /* tickets = volume >= seuil OU pass skin couvrant le jour (tirage-saison.js ticketsJour) */
     const passes = revenu.passes || {};
     const tJ = ticketsJour(jours, j.id, passes, SEUIL_VOLUME_JOUR_USD);
-    const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin), SEUIL_VOLUME_JOUR_USD, passes), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin), SEUIL_VOLUME_JOUR_USD, passes);
+    const eS = entreesPeriode(jours, joursEntre(s.debut, s.fin), SEUIL_VOLUME_JOUR_USD, passes, (revenu.bonusSemaine || {})[s.id] || {}), eM = entreesPeriode(jours, joursEntre(mo.debut, mo.fin), SEUIL_VOLUME_JOUR_USD, passes);
     const iso = (x) => new Date(x).toISOString();
     /* FACE OF THE DAY + tirage du jour (2026-10-17 soir) : HIER est resolu par le bloc E = le premier bloc horodate >= cloture + 120 s
      *   (face-du-jour.js). Son hash revele la face du jour ET tire le gagnant (tirer, domaine = id du jour). Resolu UNE fois, en fond,
@@ -6040,9 +6047,10 @@ function traiterRequete(req, res) {
       semaine: { id: s.id, debut: iso(s.debut), fin: iso(s.fin), entrees: eS, n: eS.length, racine: racine(eS.map((e) => e.adresse)) },
       mois: { id: mo.id, debut: iso(mo.debut), fin: iso(mo.fin), entrees: eM, n: eM.length, racine: racine(eM.map((e) => e.adresse)) },
       regle: 'A day counts when your verified trading volume that day (UTC) reaches $' + SEUIL_VOLUME_JOUR_USD + ': trades of the UNIT block on its '
-        + 'TokenizedBlock pool, tokenized-stock trades made in the app, and what you spend in BlockRolls (paid rolls and the day pass; a roll taken on a pass '
+        + 'TokenizedBlock pool, tokenized-stock trades made in the app, and what you spend in BlockRolls (paid rolls and the Week pass; a roll taken on a pass '
         + 'counts once, at the pass). Each such day is one ticket for that day\'s draw and one entry for the week\'s '
-        + 'and the month\'s draws. Trading more in a day adds nothing. The ticket draw is a practice season: no prize yet. Each day is settled by block E, the first Base '
+        + 'and the month\'s draws. Trading more in a day adds nothing. A Week pass bought on the BlockRolls contract holds the ticket for 7 UTC days '
+        + 'from the day of the block it was bought in (still one ticket a day) and adds 3 entries to that week\'s draw. The ticket draw is a practice season: no prize yet. Each day is settled by block E, the first Base '
         + 'block stamped at least ' + DELAI_REVELATION_S + ' s after the day closes: its hash picks the day\'s winner and reveals the Face of the Day '
         + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' });
   }

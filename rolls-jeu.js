@@ -5,7 +5,7 @@
  * ⛔ Phil 2026-10-17 : tirage PAYANT, sa decision. Tant qu aucune adresse de contrat n est servie, l app joue en PRACTICE (0 USDC). */
 import { selecteur } from './keccak.js';
 import { bandeTeinte, BANDES } from './face-du-jour.js';
-import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
+import { ORBITES, FACETTES, MATIERES, ORNEMENTS, apparenceDepuisAdresse } from './apparence.js';
 
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
@@ -16,6 +16,18 @@ export function guessDepuisApparence(a) {
   const g = [BANDES.indexOf(bandeTeinte(a.teinte)), ORBITES.indexOf(a.orbite), FACETTES.indexOf(a.facette), MATIERES.indexOf(a.matiere), ORNEMENTS.indexOf(a.ornement)];
   return g.every((x) => Number.isInteger(x) && x >= 0) ? g : null;
 }
+
+/* LA FACE D UN ROLL (Phil 2026-10-18) : chaque roll tire une NOUVELLE face au hasard — 20 octets -> une adresse -> son apparence
+ *   (apparence.js, la meme fonction que toutes les faces de l app) -> le guess joue. Le ticket du jour reste la face du TIRAGE du jour. */
+/** 20 octets -> { adresse, apparence, guess } ; null si ce ne sont pas 20 octets ou si un trait sort des listes (jamais un guess devine) */
+export function faceDeRoll(octets) {
+  if (!(octets instanceof Uint8Array) || octets.length !== 20) return null;
+  const adresse = '0x' + [...octets].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const apparence = apparenceDepuisAdresse(adresse), guess = guessDepuisApparence(apparence);
+  return guess ? { adresse, apparence, guess } : null;
+}
+/** une face de roll neuve ; alea(k) rend k octets — par defaut crypto.getRandomValues (un alea cryptographique) */
+export const tirerFaceDeRoll = (alea = (k) => crypto.getRandomValues(new Uint8Array(k))) => faceDeRoll(alea(20));
 
 /* ---------------------------------------------------------------- lectures (eth_call) */
 const mot = (n) => BigInt(n).toString(16).padStart(64, '0');

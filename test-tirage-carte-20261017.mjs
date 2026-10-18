@@ -28,7 +28,7 @@ vu(/<p class="titre jeuTitre"[^>]*>Your trades are your ticket\./.test(carte) &&
 /* Phil 2026-10-18 09:50 : seulement ce qui marche aujourd hui — aucune promesse de contrat a venir dans les tuiles */
 /* 2026-10-18 (revue adverse) : BlockRolls est EN LIGNE (0x0c5b…0fe9, bloc 52 770 558) — « day pass » n est plus une promesse : la tuile
  *   TICKET dit que rolls payes et day pass comptent dans les 10 $ (le serveur les credite). Le tirage du jour reste practice (dit). */
-vu(/Reach \$10 in a day \(UTC\) — trades of UNIT or tokenized stocks, paid rolls and the day pass all count — or mint a skin/.test(carte) && /the first block stamped 2 minutes later draws one ticket among the day's holders/.test(carte)
+vu(/Reach \$10 in a day \(UTC\) — trades of UNIT or tokenized stocks, paid rolls and the Week pass all count — or mint a skin/.test(carte) && /the first block stamped 2 minutes later draws one ticket among the day's holders/.test(carte)
   && /Practice: no prize yet\./.test(carte) && /Doer 90%, community earn pool 7%, TokenizedBlock 3%/.test(carte) && /05 · SKINS/.test(carte)
   && !/contract opens once signed|With the contract|claims the pot/i.test(app.slice(app.indexOf('id="regleCarte"'), app.indexOf('</section>', app.indexOf('id="regleCarte"'))).replace(/<!--[\s\S]*?-->/g, '')),
   'les tuiles disent ce qui marche (ticket, tirage du jour practice, rolls practice, missions, skins) et aucune promesse');

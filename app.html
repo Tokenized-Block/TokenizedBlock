@@ -209,6 +209,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jourFace svg{width:100%;height:100%}
 /* Phil 2026-10-18 14:45 : « toujours le meme block gris » — la face du ticket reste EN COULEUR ; « pas encore gagne » se dit par un liseré pointille */
 .jourFace[data-gagne="0"]{border-style:dashed}
+.jourFace.mini{width:40px;height:40px;flex:0 0 40px;border-radius:9px}
 .jourEtapes{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .jeuDuel{display:flex;align-items:flex-start;gap:10px;margin-top:6px}
 .jeuCote{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center}
@@ -3546,14 +3547,20 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="titre jeuTitre" style="font-size:16px">Your trades are your ticket. The next Base block draws the face.</p>
       <div class="jeuDuel">
         <div class="jeuCote">
-          <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
-          <p class="note" id="jourTicketTxt" style="margin:4px 0 0">Connect a wallet: your ticket shows here.</p>
+          <!-- Phil 2026-10-18 : CHAQUE roll tire une NOUVELLE face au hasard (nouvelleFaceRoll) : elle se montre ici, contre la face du bloc ;
+               le ticket du jour (la face du TIRAGE du jour) est petit, juste dessous (#ticketFace). -->
+          <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your roll"></div>
+          <p class="note" id="jourRollTxt" style="margin:4px 0 0">Your roll — a new random face each roll.</p>
         </div>
         <div class="jeuVs" aria-hidden="true">vs</div>
         <div class="jeuCote" id="dernierCarte">
           <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
           <p class="note" id="dernierNom" style="margin:4px 0 0">Reading the chain…</p>
         </div>
+      </div>
+      <div class="jourTicket">
+        <div class="jourFace mini" id="ticketFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
+        <p class="note" id="jourTicketTxt" style="margin:0">Your ticket — connect a wallet: today's draw face shows here.</p>
       </div>
       <p class="note" id="dernierMoi" style="margin:6px 0 0"></p>
       <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
@@ -3577,7 +3584,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- BLOCKROLLS (Phil 20:30 : roll 0,50 USDC, gain fixe ; day pass 10 USDC = 5 pot du jour + 5 dev) : ces deux boutons n apparaissent QUE
              quand /api/tirage sert rolls.contrat (fiche signee) ; leurs textes viennent des prix servis. Sans contrat : rien (pas de bouton mort). -->
         <button type="button" class="bouton" id="jourRollPaye" hidden>Roll for real</button>
-        <button type="button" class="bouton sec" id="jourPass" hidden>Day pass</button>
+        <button type="button" class="bouton sec" id="jourPass" hidden>Week pass</button>
         <!-- 2026-10-18 (revue adverse) : un roll PAYE dont le flux s est arrete avant le settle (signature refusee, recu en retard, onglet
              ferme, commande « roll » du chat) se regle ICI — relu sur les logs du contrat (rolls-en-attente.js). Ouvert seulement s il y en a. -->
         <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
@@ -3685,9 +3692,9 @@ details[open] > summary::before{transform:rotate(90deg)}
              aujourd hui sur la page. Pot paye, rolls payes, pass : rien ici tant que leur contrat n est pas signe et branche. -->
         <p class="sous" id="tirSous" style="margin:6px 0 0">Your ticket is a block face made from your wallet and the day — one per wallet per day.</p>
         <div class="jeuGrille">
-          <div class="jeuTuile"><b>01 · THE TICKET</b><p>Reach $10 in a day (UTC) — trades of UNIT or tokenized stocks, paid rolls and the day pass all count — or mint a skin, and that day's ticket is yours.</p></div>
+          <div class="jeuTuile"><b>01 · THE TICKET</b><p>Reach $10 in a day (UTC) — trades of UNIT or tokenized stocks, paid rolls and the Week pass all count — or mint a skin, and that day's ticket is yours.</p></div>
           <div class="jeuTuile"><b>02 · THE DAILY DRAW</b><p>After midnight UTC, the first block stamped 2 minutes later draws one ticket among the day's holders and reveals the Face of the Day, scored against yours. Practice: no prize yet.</p></div>
-          <div class="jeuTuile"><b>03 · ROLLS</b><p id="regleRolls">Roll: the block after next draws a face, scored against your ticket (traits in common, out of 5). With a wallet, a roll is paid in USDC and a winning score pays a fixed prize from the roll pot — never more than the pot holds, and the pot can be empty. Without a wallet the roll is practice: no prize.</p></div>
+          <div class="jeuTuile"><b>03 · ROLLS</b><p id="regleRolls">Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll is paid in USDC and a winning score pays a fixed prize from the roll pot — never more than the pot holds, and the pot can be empty. Without a wallet the roll is practice: no prize.</p></div>
           <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward. A ticket holder who holds the block does it — a person or an AI agent — and the chain proves it. Doer 90%, community earn pool 7%, TokenizedBlock 3%.</p></div>
           <div class="jeuTuile"><b>05 · SKINS</b><p>Mint a skin for your block, wear it, resell it at a fixed price or in an auction (bids +5%, 7 days max). A minted skin is also that day's ticket.</p></div>
         </div>
@@ -3931,7 +3938,7 @@ import { faceRevelee, scoreFaces } from './face-du-jour.js';
 import { planReclamer, planPoster } from './missions-plan.js';
 /* 2026-10-18 : BlockRolls — roll paye / day pass, SEULEMENT quand /api/tirage sert rolls.contrat (fiche signee par Phil) ; sinon practice */
 import { planRoll, planRolls, planPass, planRollAvecPass, planRollsAvecPass, planSettle, planSettleMany, lireRolled, lireRolledTous, lireSettled, lireSettledTous, etatReglement, planCloseDay, planDrawDay, lireDayDrawn, jourDe as jourContrat } from './blockrolls-plan.js';
-import { guessDepuisApparence, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
+import { guessDepuisApparence, tirerFaceDeRoll, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 /* 2026-10-18 (revue adverse) : les rolls PAYES en attente de settle, relus sur la chaine — le chemin de retour qui manquait */
 import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu } from './rolls-en-attente.js';
 import { poolId as poolIdV4 } from './pool.js';
@@ -4470,7 +4477,7 @@ async function adresseTicket(moiBas, jourId) {
   return '0x' + [...h.slice(0, 20)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 async function peindreJour(t, moiBas, w, fait, seuil) {
-  const face = $('#jourFace'), txt = $('#jourTicketTxt'), cpt = $('#jourCompte');
+  const face = $('#ticketFace'), txt = $('#jourTicketTxt'), cpt = $('#jourCompte');
   if (!face || !txt || !cpt || !t || !t.jour) return;
   const sem = (t.semaine.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
   const mois = (t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
@@ -4481,9 +4488,9 @@ async function peindreJour(t, moiBas, w, fait, seuil) {
   jb('jbTicket', gagne ? '✓' : '$' + Math.max(0, seuil - fait).toFixed(0)); jb('jbTicketTxt', gagne ? 'today\'s ticket is yours' : 'to go for today\'s ticket');
   try { face.innerHTML = dessin(await adresseTicket(moiBas, t.jour.id), 'T') || ''; } catch (_) { face.innerHTML = ''; }
   face.setAttribute('data-gagne', gagne ? '1' : '0');
-  txt.textContent = pass ? 'Your skin pass holds today\'s ticket (until ' + String(pass.jusqua).slice(1) + ' UTC): this face enters every draw.'
-    : gagne ? 'Today\'s ticket is yours: this face enters today\'s draw, and one more entry for the week and the month.'
-    : 'Today\'s ticket face — yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go).';
+  txt.textContent = pass ? 'Your ticket — your pass holds it (until ' + String(pass.jusqua).slice(1) + ' UTC): this face enters today\'s draw.'
+    : gagne ? 'Your ticket — held: this face enters today\'s draw, and one more entry for the week and the month.'
+    : 'Your ticket — this face is yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go).';
   /* FACE OF THE DAY : hier, revelee par le hash du bloc E ; ton ticket d hier score contre elle (traits en commun sur 5) */
   const v = t.veille, zone = $('#faceJour');
   if (!zone || !v) return;
@@ -4535,7 +4542,9 @@ async function peindreDernierBlock() {
   quand.textContent = 'Every block draws a face. Roll: the block after next decides, live.';
   if (!c) { moiP.textContent = 'Connect a wallet to score your ticket against it.'; return; }
   const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), t.jour.id)), fr);
-  moiP.textContent = s ? 'Right now: ' + s.score + '/5 traits in common.' : '';
+  /* un roll a pu commencer pendant l await : il garde l ecran (son bloc, sa face, son score) */
+  if (rollEnCours) return;
+  moiP.textContent = s ? 'Your ticket right now: ' + s.score + '/5 traits in common with this block.' : '';
 }
 /* ══ BLOCKROLLS DANS L APP (2026-10-18) — le contrat n existe que si /api/tirage sert rolls.contrat (fiche generee, adresse ecrite apres la
  *   signature de Phil). Alors : « Roll · 0.50 USDC » = approve EXACT + roll(guess) (ou rollWithPass si un pass est actif), lu au recu (Rolled ->
@@ -4551,13 +4560,13 @@ function poserBoutonsRolls(t, c) {
   bp.hidden = !on; bd.hidden = !on;
   /* Phil 14:45 : « j ai rien signe pour jouer » — contrat servi + wallet : le roll d entrainement s efface, le roll PAYE est LE bouton */
   const bpr = $('#jourRoll'); if (bpr) bpr.hidden = on;
-  if (on) { bp.textContent = 'Roll · ' + usdcTexte(rollsCfg.prixRoll) + ' USDC'; bd.textContent = 'Day pass · ' + usdcTexte(rollsCfg.prixPass) + ' USDC'; }
+  if (on) { bp.textContent = 'Roll · ' + usdcTexte(rollsCfg.prixRoll) + ' USDC'; bd.textContent = 'Week pass · ' + usdcTexte(rollsCfg.prixPass) + ' USDC'; }
   /* Auto-roll : avec le contrat, 5 rolls REELS (sur le pass s il est actif, sinon payes) — son texte le dit avant le clic */
   const ba = $('#jourAuto');
   if (ba) ba.textContent = on ? 'Auto-roll ×5 · pass or ' + usdcTexte(BigInt(rollsCfg.prixRoll) * 5n) + ' USDC' : 'Auto-roll ×5';
   const rg = $('#regleRolls');
-  if (rg && rollsCfg) rg.textContent = 'Roll: the block after next draws a face, scored against your ticket (traits in common, out of 5). With a wallet, a roll costs '
-    + usdcTexte(rollsCfg.prixRoll) + ' USDC (or one roll of a ' + usdcTexte(rollsCfg.prixPass) + ' USDC day pass) and a winning score pays a fixed prize from the roll pot ('
+  if (rg && rollsCfg) rg.textContent = 'Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll costs '
+    + usdcTexte(rollsCfg.prixRoll) + ' USDC (or one of the ' + rollsCfg.passRolls + ' rolls of a ' + usdcTexte(rollsCfg.prixPass) + ' USDC Week pass) and a winning score pays a fixed prize from the roll pot ('
     + (rollsCfg.prizes || []).map((p, i) => (5 - i) + '/5 → ' + usdcTexte(p)).join(', ') + ' USDC) — never more than the pot holds'
     + (rollsCfg.pot != null ? ' (' + usdcTexte(rollsCfg.pot) + ' USDC at the last read)' : '') + '. Without a wallet the roll is practice: no prize.';
   if (e && !on) e.hidden = true;
@@ -4588,16 +4597,33 @@ async function recusLogs(r) {
   for (const h of hs) { const recu = await recuDe(h); if (recu && Array.isArray(recu.logs)) logs.push(...recu.logs); else manque++; }
   return { logs, manque, n: hs.length };
 }
+/* ══ LA FACE DU ROLL (Phil 2026-10-18) : chaque roll — practice, paye, auto-roll, Chat — tire une NOUVELLE face au hasard
+ *   (rolls-jeu.js tirerFaceDeRoll : crypto.getRandomValues 20 octets -> apparenceDepuisAdresse -> guessDepuisApparence), la montre a
+ *   GAUCHE (#jourFace, « Your roll ») contre la face du bloc a droite, et c est ELLE qui est scoree (le roll paye la passe en guess au
+ *   contrat). Le ticket du jour reste la face du tirage du jour (#ticketFace). Rien n est stocke ni signe ici. */
+function peindreFaceRoll(f, txt) {
+  const el = $('#jourFace'), p = $('#jourRollTxt');
+  if (el) { try { el.innerHTML = f ? logoSvg(paramsLogoDepuisApparence(f.apparence, 'R')) : ''; } catch (_) { el.innerHTML = ''; } el.setAttribute('data-gagne', f ? '1' : '0'); }
+  if (p) p.textContent = f ? (txt || 'Your roll — this face plays against the block.') : 'Your roll face could not be drawn.';
+}
+function nouvelleFaceRoll() {
+  let f = null; try { f = tirerFaceDeRoll(); } catch (_) { f = null; }
+  peindreFaceRoll(f);
+  return f;
+}
 async function rollPaye() {
   const e = $('#rollsEtat'), b = $('#jourRollPaye');
   let c = null; try { c = compte; } catch (_) { c = null; }
-  if (!rollsCfg || !c || b.disabled) return;
+  if (!rollsCfg || !c || b.disabled || rollEnCours) return;
   const dit = (txt) => { e.hidden = false; e.textContent = txt; };
   b.disabled = true;
+  /* pose AVANT la signature : la face neuve reste a gauche, l apercu live ne l ecrase pas */
+  rollEnCours = true;
   try {
     const contrat = rollsCfg.contrat;
-    const guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourDeApp(Date.now()))));
-    if (!guess) { dit('Your ticket face could not be turned into a guess — nothing was asked.'); return; }
+    const fr0 = nouvelleFaceRoll();
+    if (!fr0) { dit('Your roll face could not be drawn — nothing was asked.'); return; }
+    const guess = fr0.guess;
     /* ⛔ 2026-10-18 (revue adverse) : un pass ILLISIBLE n est pas « pas de pass » — on faisait payer un roll a quelqu un qui en tenait un */
     const lp = await lirePassSur(contrat, c);
     if (!lp.ok) { dit('Your pass could not be read just now — nothing was asked (a paid roll would charge you even if you hold a pass). Try again in a moment.'); return; }
@@ -4629,12 +4655,12 @@ async function rollPaye() {
     /* la FACE tiree par le bloc cible, a cote de ton ticket (le contrat l a calculee du meme hash : st.blockHash) */
     try { $('#dernierFace').innerHTML = logoSvg(paramsLogoDepuisApparence(faceRevelee(st.blockHash), '★')); } catch (_) {}
     $('#dernierNom').textContent = 'Block ' + cible.toLocaleString('en-US') + ' drew this face';
-    $('#dernierMoi').textContent = (st.score >= 2 ? '🎯 ' : '') + 'You matched ' + st.score + '/5' + (st.payout > 0n ? ' — +' + usdcTexte(st.payout) + ' USDC' : '');
+    $('#dernierMoi').textContent = (st.score >= 2 ? '🎯 ' : '') + 'Your roll matched ' + st.score + '/5' + (st.payout > 0n ? ' — +' + usdcTexte(st.payout) + ' USDC' : '');
     rollDerniers.unshift({ bloc: cible, score: st.score }); rollDerniers.length = Math.min(rollDerniers.length, 5);
     $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((x) => x.score + '/5').join(' · ');
     jb('jbRoll', st.score + '/5'); jb('jbRollTxt', 'block ' + cible.toLocaleString('en-US'));
     void signalerRoll(cible, st.score);
-    dit('Block ' + cible.toLocaleString('en-US') + ' drew ' + st.score + '/5 against your ticket — ' + phraseSettle(st) + '. Pot now ' + usdcTexte(st.potAfter) + ' USDC.');
+    dit('Block ' + cible.toLocaleString('en-US') + ' drew ' + st.score + '/5 against your roll face — ' + phraseSettle(st) + '. Pot now ' + usdcTexte(st.potAfter) + ' USDC.');
     /* la face tiree reste affichee 12 s avant que l apercu live reprenne la main */
     await new Promise((o) => setTimeout(o, 12000));
   } finally { b.disabled = false; rollEnCours = false; void verifierRollsEnAttente(); }
@@ -4651,14 +4677,17 @@ async function passPaye() {
     if (!lp.ok) { dit('Your pass could not be read just now — nothing was asked. Try again in a moment.'); return; }
     const plan = planPass({ contrat, usdc: USDC_BASE, passPrice: BigInt(rollsCfg.prixPass), pass: lp.pass });
     if (plan.etat !== 'PRET') { dit('No pass bought: ' + plan.pourquoi); return; }
-    /* ⛔ 2026-10-18 (revue adverse) : les gains des rolls de PASS sortent du pot des ROLLS (pas du pot du jour) — il peut etre vide : dit AVANT */
+    /* WEEK PASS (Phil 2026-10-18) : le contrat vend toujours SON pass (rolls 24 h + entree au tirage du pass du jour) ; le serveur lit le
+     *   PassBought et ajoute les 7 jours de ticket + 3 entrees bonus de la semaine (crediterVolumeRolls). Le texte ne promet que ca.
+     * ⛔ 2026-10-18 (revue adverse) : les gains des rolls de PASS sortent du pot des ROLLS (pas du pot du jour) — il peut etre vide : dit AVANT */
     const pot = await lirePotRolls(contrat);
-    dit('Day pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: half to today\'s pass-draw pot, half to TokenizedBlock; ' + rollsCfg.passRolls + ' rolls for 24 h and one entry in today\'s pass draw. '
-      + 'A pass-roll win is paid from the roll pot, not from the pass money: ' + (pot === null ? 'the roll pot could not be read just now.' : 'the roll pot holds ' + usdcTexte(pot) + ' USDC now — a pass-roll win pays at most that.')
-      + ' Sign ' + plan.appels.length + ' steps…');
+    dit('Week pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: your ticket in each daily draw for 7 UTC days from today (one a day) and 3 bonus entries in this week\'s draw (practice season, no prize yet), credited once the server reads your purchase on Base. '
+      + 'On top, from the contract: ' + rollsCfg.passRolls + ' rolls for 24 h and an entry in today\'s pass draw; half to that pass-draw pot, half to TokenizedBlock. '
+      + 'A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now — a pass-roll win pays at most that.')
+      + ' Sign ' + plan.appels.length + ' steps in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'No pass bought')); return; }
-    dit('Pass bought — your rolls now use it. Today\'s pass pot goes whole to one buyer: after midnight UTC anyone (you too) closes the day and draws it here with “Close and draw yesterday\'s pass pot” — a Base block hash picks the buyer.');
+    dit('Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes). Today\'s pass pot goes whole to one buyer: after midnight UTC anyone closes the day and draws it here.');
   } finally { b.disabled = false; void peindreTirageJourPass(); }
 }
 $('#jourRollPaye').addEventListener('click', () => { void rollPaye(); });
@@ -4689,10 +4718,13 @@ async function autoRollLot(c) {
   const lp = await lirePassSur(contrat, c);
   if (!lp.ok) { dit('Your pass could not be read just now — nothing was asked (a paid batch would charge you even if you hold a pass). Try again in a moment.'); return; }
   const pass = lp.pass, avecPass = passActif(pass);
-  const guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourDeApp(Date.now()))));
-  if (!guess) { dit('Your ticket face could not be turned into a guess — nothing was asked.'); return; }
   const n = avecPass ? Math.min(5, pass.rollsLeft) : 5;
-  const guesses = Array.from({ length: n }, () => guess);
+  /* Phil 2026-10-18 : UNE face neuve au hasard PAR roll du lot ; le lot tient l ecran (l apercu live ne l ecrase pas) */
+  const faces = Array.from({ length: n }, () => { try { return tirerFaceDeRoll(); } catch (_) { return null; } });
+  if (faces.some((x) => !x)) { dit('A roll face could not be drawn — nothing was asked.'); return; }
+  rollEnCours = true;
+  peindreFaceRoll(faces[0], 'Your roll — ' + n + ' new random faces, one per roll (first shown).');
+  const guesses = faces.map((x) => x.guess);
   const plan = avecPass ? planRollsAvecPass({ contrat, guesses, pass, passRolls: rollsCfg.passRolls }) : planRolls({ contrat, usdc: USDC_BASE, guesses, rollPrice: BigInt(rollsCfg.prixRoll) });
   if (plan.etat !== 'PRET') { dit('Not rolled: ' + plan.pourquoi); return; }
   const pot = await lirePotRolls(contrat);
@@ -4717,6 +4749,11 @@ async function autoRollLot(c) {
   const lusS = await recusLogs(rs), st = lireSettledTous(lusS.logs, contrat);
   if (!st.length) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return; }
   montrerSettled(st, new Map(rolled.map((x) => [String(x.rollId), Number(x.targetBlock)])));
+  /* la meilleure face du lot a gauche (retrouvee par le guess emis dans Rolled) */
+  const meilleur = st.reduce((a, x) => (x.score > a.score ? x : a), st[0]);
+  const rm = rolled.find((x) => String(x.rollId) === String(meilleur.rollId));
+  const fm = rm && Array.isArray(rm.guess) ? faces.find((x) => x.guess.join() === rm.guess.join()) : null;
+  if (fm) peindreFaceRoll(fm, 'Your best roll of ' + st.length + ': ' + meilleur.score + '/5.');
   await new Promise((o) => setTimeout(o, 12000));
 }
 
@@ -4930,6 +4967,8 @@ async function roll() {
   if (rollEnCours) return;
   rollEnCours = true; b.disabled = true;
   try {
+    /* Phil 2026-10-18 : une face NEUVE au hasard par roll, montree a gauche avant que le bloc decide (avec un wallet : sans wallet, pas de score) */
+    const fRoll = c ? nouvelleFaceRoll() : null;
     const tete = parseInt(await rpc('eth_blockNumber', []), 16), cible = tete + 2;
     nom.textContent = 'Rolling… block ' + cible.toLocaleString('en-US') + ' decides';
     let bloc = null;
@@ -4937,11 +4976,10 @@ async function roll() {
     if (!bloc || !/^0x[0-9a-f]{64}$/i.test(String(bloc.hash))) { moiP.textContent = 'Block ' + cible + ' could not be read: no result.'; return; }
     const fr = faceRevelee(String(bloc.hash).toLowerCase());
     try { face.innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) {}
-    const jourId = jourDeApp(Date.now());
     nom.textContent = 'Block ' + cible.toLocaleString('en-US') + ' drew this face';
-    const s = c ? scoreFaces(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourId)), fr) : null;
-    moiP.textContent = !c ? 'Connect a wallet: your ticket scores against the next roll.'
-      : s ? (s.score >= 3 ? '🎯 ' : '') + 'You matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + ' — practice roll, no prize yet.' : 'No score.';
+    const s = fRoll ? scoreFaces(fRoll.apparence, fr) : null;
+    moiP.textContent = !c ? 'Connect a wallet: each roll then draws your own random face to score against the block.'
+      : s ? (s.score >= 3 ? '🎯 ' : '') + 'Your roll matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + ' — practice roll, no prize yet.' : 'No score.';
     if (s) { rollDerniers.unshift({ bloc: cible, score: s.score }); rollDerniers.length = Math.min(rollDerniers.length, 5); $('#dernierQuand').textContent = 'Last rolls: ' + rollDerniers.map((r) => r.score + '/5').join(' · '); }
     jb('jbRoll', s ? s.score + '/5' : '⚄'); jb('jbRollTxt', 'block ' + cible.toLocaleString('en-US'));
     /* Phil 23:50 : le roll se voit sur la Map — signale au serveur (bloc + score, aucune identite), la Map le relit (peindreRollsMap).
@@ -24041,6 +24079,7 @@ async function bcCommandeGame() {
     /* Phil 2026-10-18 15:45 : « le brain donne mauvaise info » — dire en une ligne COMMENT on gagne et COMBIEN, lu sur la fiche + le pot lu */
     const pz = Array.isArray(rc.prizes) ? rc.prizes.map((x) => usdcTexte(x)) : [];
     bcEtape(m, 'Rolls: ' + usdcTexte(rc.prixRoll) + ' USDC each, up to 10 in one go. Traits in common with the block: ' + (pz.length >= 4 ? '5 → ' + pz[0] + ', 4 → ' + pz[1] + ', 3 → ' + pz[2] + ', 2 → ' + pz[3] + ' USDC' : 'see the Game tab') + '. The roll pot holds ' + (pot === null ? '(not read)' : usdcTexte(pot) + ' USDC') + ' — a win pays at most what it holds.');
+    bcEtape(m, 'Week pass ' + usdcTexte(rc.prixPass) + ' USDC: your daily ticket for 7 days, 3 bonus entries in the week\'s draw, and ' + rc.passRolls + ' rolls for 24 h.');
   } else bcEtape(m, 'Pot: none yet — practice rolls are free; paid rolls (0.50 USDC) open with their contract.');
   const rolls = r && r.ok && Array.isArray(r.rolls) ? r.rolls.slice(-5) : null;
   bcEtape(m, rolls === null ? 'Recent rolls could not be read.' : rolls.length ? 'Last rolls shown on the map (everyone): ' + rolls.map((x) => x.score + '/5').join(' · ') + '.' : 'No roll on the map since the server restarted (paid rolls are on chain).');
@@ -24072,17 +24111,19 @@ async function bcCommandeRoll(n) {
   }
   if (!(await bcAvecWallet(m, () => bcCommandeRoll(n)))) return;
   const contrat = rollsCfg.contrat;
-  let guess = null; try { guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(String(c).toLowerCase(), jourDeApp(Date.now())))); } catch (_) { guess = null; }
-  if (!guess) { bcEtape(m, 'Your ticket face could not be turned into a guess — nothing was asked.', 'non'); return; }
+  /* Phil 2026-10-18 : UNE face neuve au hasard PAR roll (rolls-jeu.js tirerFaceDeRoll). Pas peinte dans le Game ici : rien n est encore
+   *   signe (revue adverse : une face peinte avant signature restait affichee apres un Dismiss), et un roll du Game peut tenir l ecran. */
+  let faces = []; try { faces = Array.from({ length: n }, () => tirerFaceDeRoll()); } catch (_) { faces = [null]; }
+  if (!faces.length || faces.some((x) => !x)) { bcEtape(m, 'A roll face could not be drawn — nothing was asked.', 'non'); return; }
   /* un pass ILLISIBLE n est pas « pas de pass » : on ne propose pas de payer (revue adverse 2026-10-18) */
   const lp = await lirePassSur(contrat, c);
   if (!lp.ok) { bcEtape(m, 'Your pass could not be read just now — nothing is proposed (a paid roll would charge you even if you hold a pass). Try again in a moment.', 'non'); return; }
   const pass = lp.pass;
-  const avecPass = passActif(pass), guesses = Array.from({ length: n }, () => guess);
+  const avecPass = passActif(pass), guesses = faces.map((x) => x.guess);
   const plan = avecPass ? planRollsAvecPass({ contrat, guesses, pass, passRolls: rollsCfg.passRolls }) : planRolls({ contrat, usdc: USDC_BASE, guesses, rollPrice: BigInt(rollsCfg.prixRoll) });
   if (plan.etat !== 'PRET') { bcEtape(m, 'Not planned: ' + plan.pourquoi, 'non'); return; }
   const pot = await lirePotRolls(contrat);
-  bcEtape(m, 'Guess = your ticket face (' + guess.join(', ') + '). ' + (avecPass ? n + ' roll' + (n > 1 ? 's' : '') + ' on your pass (' + pass.rollsLeft + ' left) — no payment.'
+  bcEtape(m, 'Guess = a new random face per roll (' + guesses.map((x) => x.join(', ')).join(' · ') + '). ' + (avecPass ? n + ' roll' + (n > 1 ? 's' : '') + ' on your pass (' + pass.rollsLeft + ' left) — no payment.'
     : n + ' roll' + (n > 1 ? 's' : '') + ' × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then the roll' + (n > 1 ? 's' : '') + '. Half to the pot, half to TokenizedBlock.') + phrasePot(pot));
   for (const a of plan.appels) bcEtape(m, a.quoi);
   bcEtape(m, 'Each step is one signature here. Once the block is in, the Game tab shows “Settle pending rolls” — one signature settles them all, within 256 blocks (the prize is always yours).');

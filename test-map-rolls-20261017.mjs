@@ -67,7 +67,9 @@ function verifierApp(h) {
   assert.ok(iRoll > 0, 'roll() introuvable');
   const corpsRoll = h.slice(iRoll, h.indexOf('const rollDerniers = [];', iRoll));
   /* 2026-10-18 00:40 (guest retire) : le score n existe qu avec un wallet -> `const s = c ? scoreFaces(` */
-  const iScore = corpsRoll.indexOf('const s = c ? scoreFaces('), iSignal = corpsRoll.indexOf('if (s) void signalerRoll(cible, s.score);');
+  /* 2026-10-18 (Phil : face neuve par roll) : la face n est tiree qu avec un wallet (`const fRoll = c ? nouvelleFaceRoll() : null`) ->
+   *   `const s = fRoll ? scoreFaces(` garde la meme regle : pas de wallet, pas de score, pas de signal */
+  const iScore = corpsRoll.indexOf('const s = fRoll ? scoreFaces('), iSignal = corpsRoll.indexOf('if (s) void signalerRoll(cible, s.score);');
   assert.ok(iScore > 0 && iSignal > iScore, 'roll() signale le roll APRES avoir calcule le score');
   const iSig = h.indexOf('async function signalerRoll(bloc, score) {');
   assert.ok(iSig > 0, 'signalerRoll introuvable');
