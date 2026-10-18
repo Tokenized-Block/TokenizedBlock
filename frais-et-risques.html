@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TokenizedBlock · Fees &amp; risks</title>
+<meta name="description" content="Every fee and every risk of TokenizedBlock, in plain words, read from the files the app runs.">
+<link rel="icon" href="icon.png" type="image/png">
+<!-- ⛔ PAGE PUBLIQUE « Fees & risks » (2026-10-18). Liee depuis le « ? » (Learn) et le pli « How it works » du Game.
+     ⛔ AUCUN CHIFFRE DANS CE FICHIER : tout le contenu vient de frais-risques.js, qui lit les fiches de deploiement et les modules de frais
+       de l app (test-frais-et-risques-20261018 exige un texte statique SANS chiffre). Le pot des rolls et le mode du tirage viennent de
+       /api/tirage ; non lus -> la page le dit.
+     ⛔ frais.html est une AUTRE page (privee, noindex : l encaissement des parts en attente dans les hooks). Ne pas confondre.
+     Les jetons de couleur sont ceux d app.html (:root + coloris « tb.teinte ») : la page a l air de la notre, sans nouvelle palette. -->
+<style>
+  :root{--h:255;--fond:#0f0a17;--fond2:#1a1228;--carte:hsl(var(--h) 37% 12%);--ligne:#2f2545;--texte:#f3effb;--doux:#b9a9dd;
+    --accent:#a78bfa;--accent2:hsl(var(--h) 100% 87%);--accentRgb:167 139 250;--vif:#3ddc97;--tiede:#f0c674;--dur:#ff6b6b;--r:18px;--rs:12px;--pas:14px}
+  :root[data-teinte="b"]{--h:222;--fond:#060a18;--fond2:#0e1830;--carte:hsl(222 46% 11%);--ligne:#1d2b4d;--texte:#eef3ff;--doux:#a9bce6;
+    --accent:#7ea6ff;--accent2:hsl(222 100% 87%);--accentRgb:126 166 255}
+  :root[data-teinte="c"]{--h:250;--fond:#070616;--fond2:#15123a;--carte:hsl(248 46% 12%);--ligne:#2a2460;--texte:#f1efff;--doux:#b8b3ee;
+    --accent:#9d8cff;--accent2:hsl(300 100% 88%);--accentRgb:157 140 255}
+  :root[data-teinte="d"]{--h:200;--fond:#04090c;--fond2:#0a1b22;--carte:hsl(198 48% 8%);--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;
+    --accent:#35d3f0;--accent2:hsl(168 85% 76%);--accentRgb:53 211 240}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+  body{background:var(--fond);color:var(--texte);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+  .enveloppe{max-width:640px;margin:0 auto;padding:0 16px 48px}
+  .tete{display:flex;align-items:center;gap:10px;padding:16px 0 12px}
+  .marque{font-weight:700;font-size:16px;letter-spacing:-.2px;color:var(--texte);text-decoration:none}
+  .marque span{color:var(--accent2)}
+  .retour{margin-left:auto;font-size:12px;font-weight:600;padding:6px 11px;border-radius:99px;border:1px solid var(--ligne);background:var(--fond2);color:var(--doux);text-decoration:none}
+  .retour:hover{border-color:var(--accent);color:var(--texte)}
+  h1{font-size:22px;letter-spacing:-.3px;margin:6px 0 4px}
+  .sous{color:var(--doux);font-size:13px;margin:0 0 14px;line-height:1.5}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:var(--r);padding:18px;margin:0 0 var(--pas)}
+  .kick{display:inline-block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent2);border:1px solid rgb(var(--accentRgb) / .35);border-radius:999px;padding:2px 9px}
+  h2{font-size:16px;font-weight:700;letter-spacing:-.2px;margin:8px 0 10px}
+  table.frais{width:100%;border-collapse:collapse;font-size:13.5px}
+  table.frais th,table.frais td{padding:9px 6px;border-top:1px solid var(--ligne);vertical-align:top;text-align:left}
+  table.frais tr:first-child th,table.frais tr:first-child td{border-top:0}
+  table.frais th{font-weight:600;width:34%}
+  table.frais td.n{white-space:nowrap;font-weight:700;color:var(--accent2);font-variant-numeric:tabular-nums;width:1%}
+  table.frais td:last-child{color:var(--doux)}
+  .note{color:var(--doux);font-size:12.5px;line-height:1.55;margin:10px 0 0}
+  .etat{color:var(--tiede)}
+  ul.risques{margin:0;padding:0 0 0 18px}
+  ul.risques li{margin:0 0 9px;color:var(--doux);font-size:13.5px}
+  ul.risques li b{color:var(--texte)}
+  a{color:var(--accent2)}
+  .source{margin-top:4px}
+  /* telephone : la table passe en blocs (le nom, puis le montant, puis l explication), aucune barre de defilement horizontale */
+  @media (max-width:520px){
+    table.frais,table.frais tbody,table.frais tr,table.frais th,table.frais td{display:block;width:auto}
+    table.frais tr{padding:9px 0;border-top:1px solid var(--ligne)}
+    table.frais tr:first-child{border-top:0}
+    table.frais th,table.frais td{border:0;padding:1px 0}
+    table.frais td.n{white-space:normal}
+  }
+</style>
+</head>
+<body>
+<div class="enveloppe">
+  <header class="tete">
+    <a class="marque" href="./">Tokenized<span>Block</span></a>
+    <a class="retour" href="./">Back to the app</a>
+  </header>
+  <h1>Fees &amp; risks</h1>
+  <p class="sous">What you pay, who receives it, and what can go wrong — in plain words. Nothing here is a promise of gains.</p>
+  <main id="contenu"><p class="note">Reading the app's files…</p></main>
+</div>
+<script type="module">
+import { CHIFFRES, rendre } from './frais-risques.js';
+/* le coloris choisi dans l app (meme cle), s il existe : la page a la meme couleur que l ecran d ou l on vient */
+try { const t = localStorage.getItem('tb.teinte'); if (t && t !== 'a') document.documentElement.setAttribute('data-teinte', t); } catch (_) { /* prive : coloris par defaut */ }
+const contenu = document.getElementById('contenu');
+contenu.innerHTML = rendre(CHIFFRES, null);
+/* le pot des rolls et le mode du tirage, LUS par notre serveur ; un echec laisse « not read », jamais un zero */
+fetch('/api/tirage', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+  if (d && d.ok) contenu.innerHTML = rendre(CHIFFRES, { mode: d.mode, rolls: d.rolls || null });
+}).catch(() => {});
+</script>
+</body>
+</html>

@@ -4274,6 +4274,10 @@ const SERVIS = [
    *    0 de nos 8 blocks connus de l index public. Un canal ferme de plus. */
   '.well-known/farcaster.json',
   'app.html', 'index.html', 'block-0.html', 'lien-x.html', 'deploy-v2.html', 'deploy-v2.json', 'deploy-v3.html', 'deploy-v3.json', 'deploy-v4.html', 'deploy-v4.json', 'deploy-v5.html', 'deploy-v5.json', 'deploy-v6.html', 'deploy-v6.json', 'deploy-v7.html', 'deploy-v7.json', 'deploy-v8.html', 'deploy-v8.json', 'deploy-pot.html', 'deploy-pot.json', 'pot.html', 'boucle-pot.js', 'keeper-pot.js', 'regle-snapshot.js', 'soldes-jeton.js', 'parts-holders.js', 'merkle-pot.js', 'reclamer.html', 'reclamation.js', 'veille-pot.js', 'veille-frais.js', 'comparer-frais.js', 'frais.html',
+  /* 2026-10-18 : la page PUBLIQUE « Fees & risks » (liee depuis Learn et le Game), son module et ses deux sources neuves cote navigateur.
+   *   Chaque chiffre vient d un module deja servi ; tirage-saison.js (pur, importe keccak.js) et frais-contrats.js (genere des .sol)
+   *   s ajoutent. test-imports-servis suit ses imports, test-frais-et-risques-20261018 exige ces quatre lignes. */
+  'frais-et-risques.html', 'frais-risques.js', 'frais-contrats.js', 'tirage-saison.js',
   'motifs-noto.js', 'photo.js', 'retirer-fond.js', 'apparence.js', 'classement.js', 'consentement.js', 'criblage.js', 'encodeur.js',
   'index-blocks.js', 'keccak.js', 'lancement.js', 'lecteur.js', 'lien-x.js', 'marche.js',
   'montants.js', 'motssimples.js', 'photo.js', 'pointsdevie.js', 'pool.js', 'vitalite.js',

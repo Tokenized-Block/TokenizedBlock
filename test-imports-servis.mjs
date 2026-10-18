@@ -27,7 +27,7 @@ ok(servis.size > 20, 'la liste servie contient ' + servis.size + ' entrees — p
 ok(servis.has('app.html'), 'temoin : app.html est bien dans la liste lue');
 
 /* les pages dont on suit les imports */
-const PAGES = ['pot.html', 'reclamer.html', 'app.html', 'deploy-v6.html', 'deploy-pot.html'];
+const PAGES = ['pot.html', 'reclamer.html', 'app.html', 'deploy-v6.html', 'deploy-pot.html', 'frais-et-risques.html'];
 const vus = new Set();
 const manquants = [];
 let arcs = 0;
