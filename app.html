@@ -19141,8 +19141,11 @@ function peindreTrending() {
          *    visuel, ca suffit ». Elle n a rien a faire repetee sur chaque ligne d un classement. */
         /* Phil 2026-10-18 09:35 (« ils ont leur propre pool, on peut les rediriger ») : une ligne sans Buy honnete (pool d un hook tiers
          *   que le Quoter refuse — mesure 0x6190b2b0) mene a SON marche, lien externe dit tel quel, a cote de l appairage. */
-        const voir = '<a class="bouton sec trAcheter" href="https://dexscreener.com/base/' + enTexte(String(l.adr).toLowerCase()) + '" target="_blank" rel="noopener">See its market ↗</a>';
-        return pairable ? '<span class="trBoutons">' + voir + pairer + '</span>' : voir;
+        /* ⛔ 2026-10-18 13:20 (agent, MESURE fork + chaine) : ces pools de hooks tiers sont VIDES (15/15, NotEnoughLiquidity) et leurs hooks
+         *   portent taxBps() = 9999 — un wallet hors liste blanche revend a 0,0099 % (XSHOP, aller-retour sur fork). Le lien externe envoyait
+         *   vers ce piege : retire. On dit la raison mesuree, sans Buy ; rien n est dit de l intention de quiconque. */
+        const raison = '<span class="note" style="margin:0">No buy: its pool cannot be quoted (empty, or a third-party hook that taxes resale).</span>';
+        return pairable ? '<span class="trBoutons">' + raison + pairer + '</span>' : raison;
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     /* ⛔⛔ CE `||` NE COUVRE QUE LA LISTE VIDE, et c est correct — mais c etait LE SEUL endroit ou
