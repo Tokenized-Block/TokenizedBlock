@@ -59,7 +59,7 @@ ok(/rollDerniers\.slice\(0, n\)/.test(R) && /practice, no prize/.test(R), 'pract
 ok(/fetch\('\/api\/tirage'/.test(G) && /fetch\('\/api\/jeu\/rolls'/.test(G), 'game lit /api/tirage et /api/jeu/rolls');
 const iRc = G.indexOf('const rc = t.rolls && t.rolls.contrat ? t.rolls : null;'), iPot = G.indexOf("appelPot()");
 ok(iRc > 0 && iPot > iRc && /if \(rc\) \{/.test(G) && /Pot: none yet — practice rolls are free/.test(G), 'le pot est lu sur le contrat SEULEMENT s il est servi ; sinon « none yet, practice »');
-ok(/Tickets today: ' \+ tickets\.length/.test(G) && /Your ticket: held/.test(G) && /Connect a wallet to see your ticket\./.test(G) && /Last rolls on UNIT/.test(G) && /Your last rolls: /.test(G),
+ok(/Tickets today: ' \+ tickets\.length/.test(G) && /Your ticket: held/.test(G) && /Connect a wallet to see your ticket\./.test(G) && /Last rolls shown on the map/.test(G) && /since the server restarted \(paid rolls are on chain\)/.test(G) && !/No roll yet today/.test(G) && /Your last rolls: /.test(G),
   'game dit : tickets du jour, ton ticket (ou « connect »), les derniers rolls (tous, et les tiens)');
 ok(/The draw could not be read just now\./.test(G) && /Recent rolls could not be read\./.test(G), 'une lecture ratee est DITE, jamais remplacee par un chiffre');
 
