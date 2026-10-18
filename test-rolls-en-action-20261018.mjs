@@ -191,7 +191,9 @@ try {
   const g = await R.planGainEnAction({ rpc: rpcReel, chaine: 8453, compte: payeur, action: AA, montantUsdc: 5000000n });
   ok(['PRET', 'NON_MESURE'].includes(g.etat), 'mainnet : planGainEnAction 5 USDC -> AAPLc depuis un payeur riche : ' + g.etat + (g.pourquoi ? ' — ' + String(g.pourquoi).slice(0, 120) : ' ; au moins ' + (Number(g.detail.actionAuMoins) / 1e8).toFixed(8) + ' AAPLc, simule ' + g.detail.simule));
   const sansContrat = await R.planRollEnAction({ rpc: rpcReel, chaine: 8453, compte: payeur, contrat: C, usdc: USDC, action: NV, guess: GUESS });
-  ok(sansContrat.etat === 'REFUSE' && /no code/.test(sansContrat.pourquoi), 'mainnet : BlockRolls n est pas deploye -> planRollEnAction REFUSE sur le code, rien de bati');
+  /* 2026-10-18 : rouge UNE fois sous la serie (3 en parallele), vert seul x3 — la raison part dans le libelle (le runner n imprime que les KO) */
+  ok(sansContrat.etat === 'REFUSE' && /no code/.test(sansContrat.pourquoi), 'mainnet : BlockRolls n est pas deploye -> planRollEnAction REFUSE sur le code, rien de bati ('
+    + sansContrat.etat + ' — ' + String(sansContrat.pourquoi || '').slice(0, 120) + ')');
 } catch (err) {
   ok(false, 'lecture reseau impossible — NON MESURE, pas un vert : ' + String(err && err.message).slice(0, 100));
 }
