@@ -4212,6 +4212,7 @@ const SERVIS = [
   /* ⛔ 2026-10-11 : les approbations au MONTANT EXACT (decision de Phil), importees par echange.js et echange-v3.js. Oubliees ici, la
    *   page locale etait MORTE (import 404 : aucun bouton, carte vide) - vu au navigateur, et la garde test-imports-servis l a crie. */
   'approbations-exactes.js',
+  'rolls-en-action.js', /* 2026-10-18 : un roll paye en action tokenisee (vente Aerodrome + approve EXACT + roll, un lot) et le gain converti en action */
   /* 2026-10-04 : le mode essai. `mode-essai.js` est importe par app.html (absent d ici = 404 = app morte) : il ne fait que
    *   DECIDER, et il decide non hors de localhost. `wallet-simule.js` n est charge par la page (`import()`) qu en mode essai :
    *   il est nomme ici pour que la garde des imports le suive, mais il n entre dans le cache — donc il n est SERVI — que si CE
