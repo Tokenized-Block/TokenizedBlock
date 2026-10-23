@@ -130,7 +130,11 @@ export function rendre(C, live) {
   /* le pass perd-il en moyenne ? 30 x EV (meilleur guess) + part du pot du pass (si chaque acheteur a pris UN pass) < prix -- CALCULE, pas affirme */
   const passPerd = passRollsEv.num + passPot * passRollsEv.den < ro.passPrice * passRollsEv.den;
   const potLu = live && live.rolls && live.rolls.pot != null && /^\d+$/.test(String(live.rolls.pot));
-  const modeLu = live && typeof live.mode === 'string';
+  /* ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : plus de « Daily draw » — le pot de la SEMAINE lu par le serveur
+   *   (/api/tirage.ticketpot.semaine : dayPot du dernier jour UTC de la semaine) ; non lu -> « not read », jamais un 0 ecrit */
+  const ps = live && live.ticketpot && live.ticketpot.semaine ? live.ticketpot.semaine : null;
+  const potSemBrut = ps ? String(ps.ferme ? ps.potAtClose : ps.reste) : null;
+  const potSemLu = potSemBrut !== null && /^\d+$/.test(potSemBrut);
   const paliers = C.routeur.paliers.map((p, i, t) => (p.jusquaUsd != null ? pctBps(p.bps) + ' below $' + p.jusquaUsd
     : pctBps(p.bps) + ' from $' + (t[i - 1] ? t[i - 1].jusquaUsd : 0))).join(', ');
 
@@ -167,12 +171,13 @@ export function rendre(C, live) {
       potLu ? 'Read from the contract by our server' + (live.rolls.potLu ? ' at ' + esc(String(live.rolls.potLu).replace('T', ' ').slice(0, 16)) + ' UTC' : '') + '. It can be empty.'
         : 'The pot was not read just now. It can be empty.'),
     ligne('Pass pot', usdc(passPot) + ' per pass', 'The whole pot of a UTC day goes to one pass buyer of that day, drawn from a later block.'),
-    ligne('Daily draw', modeLu ? (live.mode === 'SHADOW' ? 'practice' : esc(live.mode)) : '—',
-      modeLu ? (live.mode === 'SHADOW' ? 'Practice season: tickets are drawn, but there is no prize yet.' : 'Mode as served by our server.') : 'The draw\'s mode was not read just now.'),
-    ligne('Week pass', jours(ti.joursPassSemaine * 86400), 'A ticket every day for ' + jours(ti.joursPassSemaine * 86400) + ' and ' + ti.bonusPassSemaine + ' bonus entries to that week\'s draw.'),
+    ligne('Week\'s reward pot', potSemLu ? usdc(BigInt(potSemBrut)) : '—',
+      'Today\'s ticket = 1 entry in this week\'s reward pot; the pot is shared by entries after the week closes (UTC). '
+      + (potSemLu ? 'Read from the TicketPot contract by our server (pot of ' + esc(String(ps.jourId).slice(1)) + ', the week\'s last day).' : 'The week\'s pot was not read just now.')),
+    ligne('Week pass', jours(ti.joursPassSemaine * 86400), 'A ticket every day for ' + jours(ti.joursPassSemaine * 86400) + ' and ' + ti.bonusPassSemaine + ' bonus entries in that week\'s pot.'),
     ligne('Skin as a ticket', jours(ti.joursPassSkin * 86400), 'Minting a skin gives the ticket of the day it is minted.'),
   ]) + '<p class="note">BlockRolls contract: ' + (deploye(ro.adresse) ? lienBase(ro.adresse) + ' (no owner, no withdrawal: USDC leaves only through a winning settle or a day draw).' : 'not deployed.') + '</p>'
-    + (C.ticketpot.deploye ? '' : pasDeploye('TicketPot (a funded prize pot for the ticket draw): no contract on Base.'))
+    + (C.ticketpot.deploye ? '' : pasDeploye('TicketPot (the week\'s reward pot, shared by entries): no contract on Base.'))
     + (C.duels.deploye ? '' : pasDeploye('Duels: no contract exists for them in this app.')));
 
   const risques = carte('Risks', 'Read this before you sign', '<ul class="risques">'

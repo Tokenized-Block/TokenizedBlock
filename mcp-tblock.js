@@ -110,11 +110,12 @@ export const OUTILS = Object.freeze([
   /* ── LE GAME (2026-10-18, Phil 09:00 : « le MCP du brain et le brain lui-meme, qui par une commande peut avoir acces au game ») : l etat
    *   du jeu, et les appels NON SIGNES d un roll (<= 10 par lot, 0,50 USDC chacun), d un settle, d une mission. Meme doctrine : lecture
    *   seule, le wallet signe. Sans contrat servi (fiche non signee) le roll et le settle sont REFUSES avec l etat — jamais un plan invente. */
-  { name: 'tblock_game_state', title: 'Read the Game: today\'s draw, your ticket, the rolls',
-    description: 'Reads the Game tab as the server serves it (GET /api/tirage): today\'s draw (tickets, closing time, practice or paid mode), the live preview face '
-      + '(the face the latest Base block would draw), yesterday\'s revealed day, the BlockRolls contract when one is served (prices, prizes, pot) or null (practice: free rolls, '
+  { name: 'tblock_game_state', title: 'Read the Game: your ticket, the week\'s pot, the rolls',
+    description: 'Reads the Game tab as the server serves it (GET /api/tirage): today\'s tickets and closing time (today\'s ticket = 1 entry in this week\'s reward pot; '
+      + 'the pot is shared by entries after the week closes, UTC), this week\'s entries and its TicketPot pot as read by the server (null if not read), the live preview face '
+      + '(the face the latest Base block would draw), the BlockRolls contract when one is served (prices, prizes, pot) or null (practice: free rolls, '
       + 'nothing to sign), and the recent off-chain practice rolls (GET /api/jeu/rolls). With `wallet`: that wallet\'s ticket (held or not, verified volume, skin pass), its '
-      + 'ticket face as the 5-trait guess tblock_plan_roll uses by default, and its entries in this week\'s and month\'s draws. Read-only.',
+      + 'ticket face as the 5-trait guess tblock_plan_roll uses by default, and its entries in this week\'s pot (the month count is a tally only). Read-only.',
     inputSchema: { type: 'object', properties: { wallet: { ...ADRESSE, description: 'Optional: the wallet whose ticket and progress to read.' } }, additionalProperties: false },
     annotations: { readOnlyHint: true, openWorldHint: true } },
   { name: 'tblock_plan_roll', title: 'Plan the classic roll: 0.50 USDC a roll, up to 10 in one batch',

@@ -62,7 +62,11 @@ const iRc = G.indexOf('const rc = t.rolls && t.rolls.contrat ? t.rolls : null;')
 ok(iRc > 0 && iPot > iRc && /if \(rc\) \{/.test(G) && /Pot: none yet — practice rolls are free/.test(G), 'le pot est lu sur le contrat SEULEMENT s il est servi ; sinon « none yet, practice »');
 ok(/Tickets today: ' \+ tickets\.length/.test(G) && /Your ticket: held/.test(G) && /Connect a wallet to see your ticket\./.test(G) && /Last rolls shown on the map/.test(G) && /since the server restarted \(paid rolls are on chain\)/.test(G) && !/No roll yet today/.test(G) && /Your last rolls: /.test(G),
   'game dit : tickets du jour, ton ticket (ou « connect »), les derniers rolls (tous, et les tiens)');
-ok(/The draw could not be read just now\./.test(G) && /Recent rolls could not be read\./.test(G), 'une lecture ratee est DITE, jamais remplacee par un chiffre');
+ok(/The game could not be read just now\./.test(G) && /Recent rolls could not be read\./.test(G), 'une lecture ratee est DITE, jamais remplacee par un chiffre');
+/* 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : game dit la MEME regle que l onglet Game — plus de tirage du jour */
+ok(/Today\\'s ticket = 1 entry in this week\\'s reward pot; the pot is shared by entries after the week closes \(UTC\)\./.test(G) && !/today\\'s draw|ticket draw|no prize yet/i.test(G),
+  'game : « 1 entry in this week\'s reward pot », plus aucun tirage du jour ni « no prize yet »');
+ok(/this week\\'s pot: ' \+ \(ps \? usdcTexte\(ps\.ferme \? ps\.potAtClose : ps\.reste\) \+ ' USDC' : '\(not read\)'\)/.test(G), 'game : le pot de la semaine LU par le serveur, sinon « (not read) »');
 
 /* (5) post task */
 ok(/\$\('#mfReward'\)\.value = c\.reward; \$\('#mfMax'\)\.value = String\(c\.players\); \$\('#mfHold'\)\.value = c\.hold;/.test(T), 'post task pre-remplit reward / players / hold');

@@ -3616,7 +3616,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="jeuBandeau" role="navigation" aria-label="Games">
       <!-- UX 2026-10-18 (Phil : « facilite de choix ») : SIX choix, chacun dit son geste et son prix (lus sur la fiche servie, jamais tapes) -->
       <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourRoll"><b>Roll</b><i id="jbRoll">⚄</i><span id="jbRollTxt">the next block decides</span></button>
-      <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Ticket</b><i id="jbTicket">—</i><span id="jbTicketTxt">today's draw</span></button>
+      <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Ticket</b><i id="jbTicket">—</i><span id="jbTicketTxt">1 entry, week's pot</span></button>
       <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourPass" data-mots="7 days weekly"><b>Week pass</b><i id="jbPass">7 days</i><span id="jbPassTxt">a ticket every day</span></button>
       <!-- data-palette / data-mots : le nom et les mots-cles de la tuile dans la palette Ctrl+K (rien d affiche) ; #jbNiveau : « Lv N » (niveaux-jeu.js) -->
       <button type="button" class="jeuJeu" data-jeu="brainJeuCarte" data-focus="bjJouer" data-palette="Let the brain play" data-mots="auto bot level xp"><b>Its brain</b><i id="jbBrain">Off</i><span id="jbBrainTxt">let it play for you</span><em id="jbNiveau" hidden></em></button>
@@ -3649,21 +3649,21 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <div class="jourTicket">
         <div class="jourFace mini" id="ticketFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
-        <p class="note" id="jourTicketTxt" style="margin:0">Your ticket — connect a wallet: today's draw face shows here.</p>
+        <p class="note" id="jourTicketTxt" style="margin:0">Your ticket — connect a wallet: today's ticket face shows here.</p>
       </div>
       <p class="note" id="dernierMoi" style="margin:6px 0 0"></p>
       <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
       <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
       <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
-      <p class="note" id="jourCompte" style="margin:2px 0 0">Your tickets — today 0 · this week 0 · this month 0</p>
+      <p class="note" id="jourCompte" style="margin:2px 0 0">Your ticket today — · your entries this week —</p>
       <!-- NIVEAU DU BRAIN (2026-10-18) : la ligne du perk n existe a l ecran QUE s il s applique cette semaine (niveau >= 3 ET une entree de jour) -->
       <p class="note" id="jourNiveau" style="margin:2px 0 0" hidden></p>
-      <p class="note" id="tirSaison" style="margin:2px 0 0">Reading today's draw…</p>
+      <p class="note" id="tirSaison" style="margin:2px 0 0">Reading this week's entries…</p>
       <!-- TICKETPOT (LIVE 2026-10-18, 0xf986…1df1) : le pot du jour en USDC, lu par le serveur (/api/tirage.ticketpot) ; n importe qui
            l alimente (jamais rendu au donateur). Les parts sont signees par le wallet verifier (Phil) : la reclamation s ouvre avec sa
            signature — dit tel quel, rien n est promis. Caches sans fiche servie ; le montant est tape, jamais fixe ici. -->
       <p class="note" id="potJour" style="margin:2px 0 0" hidden></p>
-      <label class="champ" id="potFondLab" hidden>Add to today's pot (USDC)<input id="potMontant" inputmode="decimal" value="1"></label>
+      <label class="champ" id="potFondLab" hidden>Add to this week's pot (USDC)<input id="potMontant" inputmode="decimal" value="1"></label>
       <div class="jourEtapes">
         <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
         <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
@@ -3686,7 +3686,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
         <!-- le pot du jour des pass : n importe qui ferme le jour (closeDay) puis le tire (drawDay) ; le pot va TOUJOURS a l acheteur tire -->
         <button type="button" class="bouton sec" id="jourTirerJour" hidden>Close and draw yesterday's pass pot</button>
-        <button type="button" class="bouton sec" id="jourFondPot" hidden>Add to today's pot</button>
+        <!-- 2026-10-18 : le pot de la SEMAINE vit sur son dernier jour UTC ; TicketPot refuse fund() d un jour futur (FutureDay) : bouton
+             montre SEULEMENT ce jour-la (ticketpot.semaine.aujourdhui servi), sinon aucun bouton (pas de bouton mort) -->
+        <button type="button" class="bouton sec" id="jourFondPot" hidden>Add to this week's pot</button>
         <!-- la part signee par le verifier (attester-ticketpot.html) : ce wallet la reclame LUI-MEME (planClaim) ; cache sans signature -->
         <button type="button" class="bouton" id="jourReclamerPot" hidden>Claim my share</button>
         <!-- close(day) : l owner tout de suite, n importe qui 12 h apres la fin du jour ; fige le pot (les parts deviennent finales) -->
@@ -3695,14 +3697,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
       <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
       <p class="note" id="jourPassEtat" style="margin:4px 0 0" hidden></p>
-      <!-- HIER : la face revelee par le bloc E, ton score, le gagnant -->
-      <div class="jourTicket" id="faceJour" hidden style="margin-top:10px">
-        <div class="jourFace" id="faceJourArt" role="img" aria-label="Yesterday's Face of the Day"></div>
-        <div style="min-width:0">
-          <p class="note" id="faceJourTxt" style="margin:0"></p>
-          <p class="note" id="faceJourGagnant" style="margin:4px 0 0"></p>
-        </div>
-      </div>
+      <!-- ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll deja en place ») : la « Face of the Day » d hier et son gagnant du jour
+           (paye rien) sont RETIRES de l ecran. Le ticket du jour = 1 entree au pot de la semaine (#potJour). -->
     </div>
     <!-- LET THE BRAIN PLAY (Phil 2026-10-18 : « le brain peut jouer aux jeux s il a des fonds et l autorisation, en UN bouton ») — UN bouton,
          un petit panneau de limites. Allume : toutes les 30 s (la cadence de S.I) brain-jeu.js donne LA proposition suivante (settle, roll,
@@ -3855,7 +3851,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="sous" id="tirSous" style="margin:6px 0 0">Your ticket is a block face made from your wallet and the day — one per wallet per day.</p>
         <div class="jeuGrille">
           <div class="jeuTuile"><b>01 · THE TICKET</b><p>Reach $10 in a day (UTC) — trades of UNIT or tokenized stocks, paid rolls and the Week pass all count — or mint a skin, and that day's ticket is yours.</p></div>
-          <div class="jeuTuile"><b>02 · THE DAILY DRAW</b><p>After midnight UTC, the first block stamped 2 minutes later draws one ticket among the day's holders and reveals the Face of the Day, scored against yours. Practice: no prize yet.</p></div>
+          <div class="jeuTuile"><b>02 · THE WEEK'S POT</b><p>Today's ticket = 1 entry in this week's reward pot; the pot is shared by entries after the week closes (UTC). A Week pass adds 3 entries, a brain at level 3 or 6 adds 1 or 2. Each share is signed by the verifier wallet, and you claim yours from your wallet.</p></div>
           <div class="jeuTuile"><b>03 · ROLLS</b><p id="regleRolls">Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll is paid in USDC and a winning score pays a fixed prize from the roll pot — never more than the pot holds, and the pot can be empty. Without a wallet the roll is practice: no prize.</p></div>
           <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward. A ticket holder who holds the block does it — a person or an AI agent — and the chain proves it. Doer 90%, community earn pool 7%, TokenizedBlock 3%.</p></div>
           <div class="jeuTuile"><b>05 · SKINS</b><p>Mint a skin for your block, wear it, resell it at a fixed price or in an auction (bids +5%, 7 days max). A minted skin is also that day's ticket.</p></div>
@@ -4657,7 +4653,7 @@ async function peindreNiveau(moiBas) {
   if (perk) {
     const on = !!(j.perk && j.perk.appliesThisWeek === true && Number.isInteger(j.perk.entries) && j.perk.entries > 0);
     perk.hidden = !on;
-    perk.textContent = on ? 'Level ' + j.level + ': ' + texteEntrees(j.perk.entries) + ' in this week\'s draw (practice: no prize yet).' : '';
+    perk.textContent = on ? 'Level ' + j.level + ': ' + texteEntrees(j.perk.entries) + ' in this week\'s pot.' : '';
   }
 }
 async function peindreTirage() {
@@ -4665,15 +4661,16 @@ async function peindreTirage() {
   if (!moi || !sais || !barre) return;
   let t = null;
   try { t = await fetch('/api/tirage', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { t = null; }
-  if (!t || t.ok !== true || !t.jour) { sais.textContent = 'The draw could not be read just now.'; return; }
+  if (!t || t.ok !== true || !t.jour) { sais.textContent = 'This week\'s entries could not be read just now.'; return; }
   /* 2026-10-18 (revue adverse) : les boutons payants se posent DES QUE /api/tirage repond — pas seulement quand l apercu live existe */
   { let c0 = null; try { c0 = compte; } catch (_) { c0 = null; } poserBoutonsRolls(t, c0); peindrePotJour(t, c0); }
   /* 2026-10-17 soir — v2 QUOTIDIEN : le jour (ticket a $10 de volume verifie), et les entrees de la semaine et du mois. */
   const reste = Math.max(0, new Date(t.jour.fin).getTime() - Date.now());
   const h = Math.floor(reste / 3600000), mn = Math.floor((reste % 3600000) / 60000);
   const n = t.jour.tickets.length;
+  /* ⛔ 2026-10-18 (Phil : « fini ca ») : plus de tirage du jour ni de mois presente — le ticket du jour = 1 entree au pot de la SEMAINE */
   sais.textContent = 'Today · ' + n + ' ticket' + (n === 1 ? '' : 's') + ' · closes in ' + h + 'h ' + mn + 'm · this week ' + t.semaine.n + ' entr' + (t.semaine.n === 1 ? 'y' : 'ies')
-    + ' · this month ' + t.mois.n + (t.mode === 'SHADOW' ? ' · the ticket draw is practice: no prize yet' : '');
+    + ' in the reward pot. Today\'s ticket = 1 entry in this week\'s reward pot; the pot is shared by entries after the week closes (UTC).';
   let c = null; try { c = compte; } catch (_) { c = null; }
   /* Phil 2026-10-18 00:40 : « retire le guest » — sans wallet, pas de ticket (le Roll tire quand meme la face du bloc, sans score) */
   if (!c) { moi.textContent = 'Connect a wallet to see your progress.'; barre.style.width = '0%'; void peindreNiveau(null); return; }
@@ -4681,11 +4678,12 @@ async function peindreTirage() {
   void peindreNiveau(moiBas);
   const w = (t.jour.wallets || []).find((x) => String(x.adresse).toLowerCase() === moiBas);
   const fait = w ? Number(w.volumeUsd) : 0, seuil = Number(t.seuilVolumeUsd) || 10;
-  const mesJours = (t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
+  /* les entrees de CE wallet dans le pot de la semaine (/api/tirage semaine.entrees : jours + Week pass +3 + niveau, plafonds du serveur) */
+  const mesEntrees = (t.semaine.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
   barre.style.width = Math.min(100, Math.round((fait / seuil) * 100)) + '%';
   moi.textContent = (w && w.ticket ? 'You hold today\'s ticket.'
     : 'Your verified volume today: $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' — $' + Math.max(0, seuil - fait).toFixed(2) + ' to go.')
-    + (mesJours ? ' · ' + mesJours + ' day' + (mesJours === 1 ? '' : 's') + ' in this month\'s draw.' : '');
+    + ' · Your entries in this week\'s pot: ' + mesEntrees + ' of ' + t.semaine.n + '.';
   void peindreJour(t, moiBas, w, fait, seuil);
 }
 
@@ -4700,32 +4698,17 @@ async function peindreJour(t, moiBas, w, fait, seuil) {
   const face = $('#ticketFace'), txt = $('#jourTicketTxt'), cpt = $('#jourCompte');
   if (!face || !txt || !cpt || !t || !t.jour) return;
   const sem = (t.semaine.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
-  const mois = (t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
   /* ticket du jour : volume verifie OU pass skin (le serveur les unit dans jour.tickets) */
   const gagne = (t.jour.tickets || []).includes(moiBas);
   const pass = (t.jour.passes || []).find((x) => String(x.adresse).toLowerCase() === moiBas);
-  cpt.textContent = 'Your tickets — today ' + (gagne ? 1 : 0) + ' · this week ' + sem + ' · this month ' + mois;
+  cpt.textContent = 'Your ticket today ' + (gagne ? 1 : 0) + ' · your entries this week ' + sem + ' of ' + t.semaine.n;
   jb('jbTicket', gagne ? '✓' : '$' + Math.max(0, seuil - fait).toFixed(0)); jb('jbTicketTxt', gagne ? 'today\'s ticket is yours' : 'to go for today\'s ticket');
   try { face.innerHTML = dessin(await adresseTicket(moiBas, t.jour.id), 'T') || ''; } catch (_) { face.innerHTML = ''; }
   face.setAttribute('data-gagne', gagne ? '1' : '0');
-  txt.textContent = pass ? 'Your ticket — your pass holds it (until ' + String(pass.jusqua).slice(1) + ' UTC): this face enters today\'s draw.'
-    : gagne ? 'Your ticket — held: this face enters today\'s draw, and one more entry for the week and the month.'
-    : 'Your ticket — this face is yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go).';
-  /* FACE OF THE DAY : hier, revelee par le hash du bloc E ; ton ticket d hier score contre elle (traits en commun sur 5) */
-  const v = t.veille, zone = $('#faceJour');
-  if (!zone || !v) return;
-  zone.hidden = false;
-  if (v.etat !== 'REVELEE' || !v.hashE) { $('#faceJourTxt').textContent = 'Yesterday\'s Face of the Day is revealed by the first Base block 2 minutes after midnight UTC — reading it.'; $('#faceJourGagnant').textContent = ''; return; }
-  const fr = faceRevelee(v.hashE);
-  try { $('#faceJourArt').innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) { $('#faceJourArt').innerHTML = ''; }
-  const avais = (v.tickets || []).includes(moiBas);
-  let phrase = 'Yesterday\'s Face of the Day — revealed by block ' + Number(v.blocE).toLocaleString('en-US') + '.';
-  if (avais) {
-    const s = scoreFaces(apparenceDepuisAdresse(await adresseTicket(moiBas, v.id)), fr);
-    if (s) phrase += ' Your ticket matched ' + s.score + '/5' + (s.score < 2 ? ' (colour ' + s.ecartTeinte + '° away)' : '') + '.';
-  } else phrase += ' You had no ticket yesterday.';
-  $('#faceJourTxt').textContent = phrase;
-  $('#faceJourGagnant').textContent = (v.tickets || []).length ? 'Yesterday\'s draw (practice, no prize): ' + (v.gagnant === moiBas ? 'you!' : String(v.gagnant).slice(0, 6) + '…' + String(v.gagnant).slice(-4)) + ' among ' + v.tickets.length + ' ticket' + (v.tickets.length === 1 ? '' : 's') + '.' : 'Nobody held a ticket yesterday.';
+  txt.textContent = pass ? 'Your ticket — your pass holds it (until ' + String(pass.jusqua).slice(1) + ' UTC): today = 1 entry in this week\'s pot.'
+    : gagne ? 'Your ticket — held: today = 1 entry in this week\'s reward pot.'
+    : 'Your ticket — this face is yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go): 1 entry in this week\'s pot.';
+  /* ⛔ 2026-10-18 (Phil : « fini ca ») : la Face of the Day d hier et le gagnant du jour (paye rien) ne sont plus peints (t.veille reste servi) */
 }
 
 /* ══ LE DERNIER BLOCK NE, EN DIRECT — /api/blocks-routeur (naissances par notre routeur, avec leur bloc) et /api/cle/<block> (ses pools =
@@ -4907,7 +4890,7 @@ async function passPaye() {
      *   PassBought et ajoute les 7 jours de ticket + 3 entrees bonus de la semaine (crediterVolumeRolls). Le texte ne promet que ca.
      * ⛔ 2026-10-18 (revue adverse) : les gains des rolls de PASS sortent du pot des ROLLS (pas du pot du jour) — il peut etre vide : dit AVANT */
     const pot = await lirePotRolls(contrat);
-    dit('Week pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: your ticket in each daily draw for 7 UTC days from today (one a day) and 3 bonus entries in this week\'s draw (practice season, no prize yet), credited once the server reads your purchase on Base. '
+    dit('Week pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: your daily ticket for 7 UTC days from today (one a day, each = 1 entry in that week\'s reward pot) and 3 bonus entries in this week\'s pot, credited once the server reads your purchase on Base. '
       + 'On top, from the contract: ' + rollsCfg.passRolls + ' rolls for 24 h and an entry in today\'s pass draw; half to that pass-draw pot, half to TokenizedBlock. '
       + 'A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now — a pass-roll win pays at most that.')
       + ' Sign ' + plan.appels.length + ' steps in your wallet…');
@@ -4926,14 +4909,22 @@ function peindrePotJour(t, c) {
   const tp = t && t.ticketpot && /^0x[0-9a-fA-F]{40}$/.test(String(t.ticketpot.contrat)) ? t.ticketpot : null;
   potCfg = tp;
   if (!p || !b) return;
-  p.hidden = !tp; b.hidden = !(tp && c); if (lab) lab.hidden = !(tp && c);
+  /* ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : la ligne montre le pot de la SEMAINE (dayPot du dernier jour UTC de la
+   *   semaine, lu par le serveur toutes les 60 s). Alimenter : SEULEMENT ce dernier jour (le contrat refuse un jour futur : FutureDay) —
+   *   les autres jours, aucun bouton (pas de bouton mort) et la ligne dit quel jour l alimente. */
+  const sem = tp && tp.semaine && /^J\d{4}-\d{2}-\d{2}$/.test(String(tp.semaine.jourId)) ? tp.semaine : null;
+  const fondOk = !!(tp && c && sem && sem.aujourdhui === true && sem.ferme === false);
+  p.hidden = !tp; b.hidden = !fondOk; if (lab) lab.hidden = !fondOk;
   void peindreReclamerPot(tp, c);
   peindreFermerPot(tp, c);
   if (!tp) return;
   const v = tp.veille;
-  p.textContent = !v ? 'Day pot: live on Base (' + tp.contrat.slice(0, 6) + '…' + tp.contrat.slice(-4) + ') — yesterday\'s pot not read yet.'
-    : 'Day pot ' + v.jourId + ': ' + (v.ferme ? usdcTexte(v.potAtClose) + ' USDC frozen, ' + usdcTexte(v.reste) + ' USDC left to claim' : usdcTexte(v.reste) + ' USDC, not closed yet')
-      + (v.enPause ? ' · claims paused' : '') + '. Shares are signed by the verifier wallet; your claim opens here once yours is signed.';
+  const ligneSem = !sem ? 'This week\'s pot: not read yet (TicketPot ' + tp.contrat.slice(0, 6) + '…' + tp.contrat.slice(-4) + ').'
+    : 'This week\'s pot: ' + (sem.ferme ? usdcTexte(sem.potAtClose) + ' USDC frozen, ' + usdcTexte(sem.reste) + ' USDC left to claim' : usdcTexte(sem.reste) + ' USDC')
+      + ' — it lives on ' + sem.jourId.slice(1) + ' (the week\'s last UTC day)' + (sem.aujourdhui ? ', today: it can be funded until midnight UTC' : ', and can be funded on that day') + '.';
+  /* la veille : seulement s il y reste quelque chose a reclamer (une part deja signee) — jamais un « gagnant du jour » */
+  const ligneVeille = v && v.ferme && String(v.reste) !== '0' ? ' Pot of ' + v.jourId.slice(1) + ': ' + usdcTexte(v.reste) + ' USDC left to claim.' : '';
+  p.textContent = ligneSem + ligneVeille + (sem && sem.enPause ? ' · claims paused' : '') + ' Shares are signed by the verifier wallet; your claim opens here once yours is signed.';
 }
 async function fondPot() {
   const e = $('#rollsEtat'), b = $('#jourFondPot');
@@ -4944,13 +4935,17 @@ async function fondPot() {
   if (montant === null || montant <= 0n) { dit('The amount must be in USDC, above zero (like 1 or 2.5).'); return; }
   b.disabled = true;
   try {
-    const jourId = jourDeApp(Date.now()), day = dayDeJourIdPot(jourId);
+    /* le pot de la SEMAINE = le jour servi (dernier jour UTC de la semaine) ; seulement si c est AUJOURD HUI aussi pour cette horloge (le
+     *   contrat refuse un jour futur ; un jour passe ferait un pot d un autre jour) */
+    const jourId = jourDeApp(Date.now()), sem = potCfg.semaine;
+    if (!sem || sem.jourId !== jourId) { dit('This week\'s pot can be funded only on the week\'s last UTC day' + (sem ? ' (' + sem.jourId.slice(1) + ')' : '') + ' — nothing was asked.'); return; }
+    const day = dayDeJourIdPot(jourId);
     const plan = planFundPot({ contrat: potCfg.contrat, usdc: USDC_BASE, day, montant: montant.toString() });
     if (plan.etat !== 'PRET') { dit('Not funded: ' + plan.pourquoi); return; }
-    dit('Add ' + usdcTexte(montant) + ' USDC to the pot of ' + jourId + ': it never comes back to you — it is shared by that day\'s ticket holders. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…');
+    dit('Add ' + usdcTexte(montant) + ' USDC to this week\'s pot (' + jourId + '): it never comes back to you — it is shared by this week\'s entries. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'Not funded')); return; }
-    dit('Added to the pot of ' + jourId + ' (' + String(r.hash || '').slice(0, 10) + '…). The server re-reads the pot within a minute.');
+    dit('Added to this week\'s pot (' + String(r.hash || '').slice(0, 10) + '…). The server re-reads the pot within a minute.');
   } finally { b.disabled = false; void peindreTirage(); }
 }
 $('#jourFondPot').addEventListener('click', () => { void fondPot(); });
@@ -6114,11 +6109,12 @@ async function peindreEarn() {
   } catch (_) { lignes.push('Creator share: could not be read just now.'); }
   try {
     const t = await fetch('/api/tirage', { cache: 'no-store' }).then((x) => x.json());
-    const v = t && t.veille;
-    lignes.push('<b>Yesterday\'s draw</b>: ' + (v && v.etat === 'REVELEE' ? (v.gagnant === moiBas ? 'you won (practice season: no prize yet).' : 'not you.') : 'not revealed yet.'));
-    const m = (t && t.mois && t.mois.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
-    lignes.push('<b>Entries this month</b>: ' + m + '.');
-  } catch (_) { lignes.push('Draws: could not be read just now.'); }
+    /* ⛔ 2026-10-18 (Phil : « fini ca ») : plus de « tirage d hier » (il ne payait rien) — tes entrees au pot de la SEMAINE, et ce pot s il est lu */
+    if (!t || t.ok !== true || !t.semaine) throw new Error('non lu');
+    const m = (t.semaine.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moiBas).length;
+    const ps = t.ticketpot && t.ticketpot.semaine;
+    lignes.push('<b>This week\'s reward pot</b>: your entries ' + m + ' of ' + t.semaine.n + (ps ? ' · the pot holds ' + usdcTexte(ps.ferme ? ps.potAtClose : ps.reste) + ' USDC' : ' · the pot was not read just now') + '. Shared by entries after the week closes (UTC); you claim your signed share here.');
+  } catch (_) { lignes.push('This week\'s pot: could not be read just now.'); }
   try {
     const j = await fetch('/api/missions', { cache: 'no-store' }).then((x) => x.json());
     lignes.push('<b>Mission rewards</b>: ' + (j && j.ok ? 'claims are paid straight to your wallet by the contract; see your wallet.' : 'the board is not open yet.'));
@@ -23200,8 +23196,8 @@ const ETAPES = [
     d: 'Every block with a live market, and the stocks Coinbase tokenized on Base, ranked by what is moving right now. Tap one to open it and buy or sell — your own wallet shows each step and you sign it.' },
   { t: 'Create — make your own', ic: 0,
     d: 'Pick a name and a symbol; its face and its brain are ready. For 0.001 ETH it is born on Base, its tokens are minted to you, and its market opens.' },
-  { t: 'Game — missions and daily draws', ic: 3,
-    d: 'Blocks post missions here: hold the block, do the job, keep holding through the window, and the reward is yours. Trade $10 in a day — the UNIT block or tokenized stocks — and that day is a ticket for the daily draw, with bigger draws when the week and the month close.' },
+  { t: 'Game — missions, rolls and the weekly pot', ic: 3,
+    d: 'Blocks post missions here: hold the block, do the job, keep holding through the window, and the reward is yours. Trade $10 in a day — the UNIT block or tokenized stocks — and that day\'s ticket is 1 entry in this week\'s reward pot, shared by entries after the week closes (UTC). Rolls are paid on their own contract.' },
   { t: 'Brain — what a block feels', ic: 9,
     d: 'Every block has a brain of 128 small neurons, seeded by its address — not a chatbot. It reacts to buys, sales and new holders; you watch it light up. Open its control panel to talk to it and trade. Switch S.I on and it proposes trades inside the limits you set — it never signs: you do.' },
   { t: 'Wallet — your money stays yours', ic: 2,
@@ -25247,30 +25243,34 @@ async function bcCommandeLevel() {
   const parts = Object.keys(noms).filter((k) => Number.isInteger(d[k]) && d[k] > 0 && Number.isInteger(t[k])).map((k) => d[k] + ' ' + noms[k] + ' × ' + t[k]);
   bcEtape(m, parts.length ? 'XP from verified play: ' + parts.join(' · ') + '. Practice rolls give no XP.' : 'No verified play yet: a day with a ticket, a paid roll, a settle, a Week pass or a skin earns XP. Practice rolls give none.');
   const p = j.perk || {};
-  if (p.appliesThisWeek === true) bcEtape(m, 'Perk: ' + texteEntrees(p.entries) + ' in this week\'s draw — applied (practice season: no prize yet).', 'oui');
-  else if (Number.isInteger(p.entries) && p.entries > 0) bcEtape(m, 'Perk: ' + texteEntrees(p.entries) + ' in the week\'s draw once you have an entry this week (a day with a ticket).');
+  if (p.appliesThisWeek === true) bcEtape(m, 'Perk: ' + texteEntrees(p.entries) + ' in this week\'s reward pot — applied.', 'oui');
+  else if (Number.isInteger(p.entries) && p.entries > 0) bcEtape(m, 'Perk: ' + texteEntrees(p.entries) + ' in the week\'s reward pot once you have an entry this week (a day with a ticket).');
   void peindreNiveau(moiBas);
 }
 async function bcCommandeGame() {
   const m = bcMessage('Game', '', 'Today\'s game');
   bcVue('chat');
-  const lecture = bcEtape(m, 'Reading the draw…');
+  const lecture = bcEtape(m, 'Reading the game…');
   let t = null, r = null;
   try { t = await fetch('/api/tirage', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { t = null; }
   try { r = await fetch('/api/jeu/rolls', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((x) => x.json()); } catch (_) { r = null; }
   lecture.remove();
-  if (!t || t.ok !== true || !t.jour) { bcEtape(m, 'The draw could not be read just now.', 'non'); return; }
+  if (!t || t.ok !== true || !t.jour) { bcEtape(m, 'The game could not be read just now.', 'non'); return; }
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null, tickets = t.jour.tickets || [];
   const reste = Math.max(0, new Date(t.jour.fin).getTime() - Date.now()), h = Math.floor(reste / 3600000), mn = Math.floor((reste % 3600000) / 60000);
-  bcEtape(m, 'Daily ticket: $10 of UNIT or stock trades, paid rolls or the pass — or a 1 USDC skin. Tickets today: ' + tickets.length + ' · closes in ' + h + 'h ' + mn + 'm' + (t.mode === 'SHADOW' ? ' · the ticket draw has no prize yet (its pot opens with its contract)' : '') + '.');
+  /* ⛔ 2026-10-18 (Phil : « fini ca ») : la meme phrase que l onglet Game et que la regle de /api/tirage — plus de tirage du jour */
+  const nS = t.semaine && Number.isInteger(t.semaine.n) ? t.semaine.n : null, ps = t.ticketpot && t.ticketpot.semaine;
+  bcEtape(m, 'Daily ticket: $10 of UNIT or stock trades, paid rolls or the pass — or a skin minted that day. Today\'s ticket = 1 entry in this week\'s reward pot; the pot is shared by entries after the week closes (UTC). Tickets today: ' + tickets.length + ' · closes in ' + h + 'h ' + mn + 'm'
+    + ' · entries this week: ' + (nS === null ? '(not read)' : nS) + ' · this week\'s pot: ' + (ps ? usdcTexte(ps.ferme ? ps.potAtClose : ps.reste) + ' USDC' : '(not read)') + '.');
   if (moi) {
     const w = (t.jour.wallets || []).find((x) => String(x.adresse).toLowerCase() === moi), seuil = Number(t.seuilVolumeUsd) || 10, fait = w ? Number(w.volumeUsd) : 0;
     let guess = null; try { guess = guessDepuisApparence(apparenceDepuisAdresse(await adresseTicket(moi, t.jour.id))); } catch (_) { guess = null; }
     const face = guess ? ' Ticket face (colour, orbit, facet, material, ornament): ' + guess.join(', ') + '.' : '';
     /* meme lecture que l onglet Game (w.ticket) — un ticket de skin ou de pass n a pas forcement de volume */
     const tient = !!(w && w.ticket) || tickets.some((x) => String(x && x.adresse ? x.adresse : x).toLowerCase() === moi);
-    bcEtape(m, (tient ? 'Your ticket: held — it enters today\'s draw.' : 'Your ticket: not yet — $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' verified volume today.') + face, tient ? 'oui' : '');
+    const mesE = (t.semaine && t.semaine.entrees || []).filter((e) => String(e.adresse).toLowerCase() === moi).length;
+    bcEtape(m, (tient ? 'Your ticket: held — 1 entry in this week\'s pot (your entries this week: ' + mesE + ').' : 'Your ticket: not yet — $' + fait.toFixed(2) + ' of $' + seuil.toFixed(2) + ' verified volume today.') + face, tient ? 'oui' : '');
   } else bcEtape(m, 'Connect a wallet to see your ticket.');
   /* le pot : LU sur le contrat quand il est servi ; sinon dit « practice » — jamais un chiffre invente */
   const rc = t.rolls && t.rolls.contrat ? t.rolls : null;
@@ -25279,7 +25279,7 @@ async function bcCommandeGame() {
     /* Phil 2026-10-18 15:45 : « le brain donne mauvaise info » — dire en une ligne COMMENT on gagne et COMBIEN, lu sur la fiche + le pot lu */
     const pz = Array.isArray(rc.prizes) ? rc.prizes.map((x) => usdcTexte(x)) : [];
     bcEtape(m, 'Rolls: ' + usdcTexte(rc.prixRoll) + ' USDC each, up to 10 in one go. Traits in common with the block: ' + (pz.length >= 4 ? '5 → ' + pz[0] + ', 4 → ' + pz[1] + ', 3 → ' + pz[2] + ', 2 → ' + pz[3] + ' USDC' : 'see the Game tab') + '. The roll pot holds ' + (pot === null ? '(not read)' : usdcTexte(pot) + ' USDC') + ' — a win pays at most what it holds.');
-    bcEtape(m, 'Week pass ' + usdcTexte(rc.prixPass) + ' USDC: your daily ticket for 7 days, 3 bonus entries in the week\'s draw, and ' + rc.passRolls + ' rolls for 24 h.');
+    bcEtape(m, 'Week pass ' + usdcTexte(rc.prixPass) + ' USDC: your daily ticket for 7 days, 3 bonus entries in the week\'s pot, and ' + rc.passRolls + ' rolls for 24 h.');
   } else bcEtape(m, 'Pot: none yet — practice rolls are free; paid rolls (0.50 USDC) open with their contract.');
   const rolls = r && r.ok && Array.isArray(r.rolls) ? r.rolls.slice(-5) : null;
   bcEtape(m, rolls === null ? 'Recent rolls could not be read.' : rolls.length ? 'Last rolls shown on the map (everyone): ' + rolls.map((x) => x.score + '/5').join(' · ') + '.' : 'No roll on the map since the server restarted (paid rolls are on chain).');

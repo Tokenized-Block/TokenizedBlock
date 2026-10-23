@@ -15,8 +15,14 @@ const v = app.indexOf('<section class="volet" id="v-missions"'), finV = app.inde
 vu(v > 0 && c > v && c < finV && app.indexOf('id="tirCarte"', c + 1) === -1, 'la carte est dans l onglet Missions, une seule fois');
 const f = app.slice(app.indexOf('async function peindreTirage()'), app.indexOf("document.querySelector('.navIn').addEventListener"));
 vu(/fetch\('\/api\/tirage'/.test(f) && /could not be read/.test(f), 'lit /api\/tirage, dit l echec');
-/* 2026-10-18 : « the ticket draw is practice » — c est le TIRAGE DU TICKET qui est sans prix ; les rolls payes, eux, paient (revue adverse) */
-vu(/t\.mode === 'SHADOW' \? ' · the ticket draw is practice: no prize yet'/.test(f), 'dit « the ticket draw is practice: no prize yet »');
+/* 2026-10-18 : « the ticket draw is practice » — c est le TIRAGE DU TICKET qui est sans prix ; les rolls payes, eux, paient (revue adverse)
+ * ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll deja en place ») : le tirage du jour (paye rien) est RETIRE. Re-pointe : la carte
+ *   dit la verite d aujourd hui — le ticket du jour = 1 entree au pot de la SEMAINE — et plus aucun « daily draw / no prize yet / Face of the Day ». */
+vu(/Today\\'s ticket = 1 entry in this week\\'s reward pot; the pot is shared by entries after the week closes \(UTC\)\./.test(f), 'dit « Today\'s ticket = 1 entry in this week\'s reward pot … after the week closes (UTC) »');
+/* tranche peindreTirage -> peindreJour (le roll practice, plus bas, dit a raison « practice roll, no prize yet » : il n est pas le tirage) */
+const fJ = app.slice(app.indexOf('async function peindreTirage()'), app.indexOf('async function peindreDernierBlock()'));
+vu(fJ.length > 1500 && /async function peindreJour\(/.test(fJ) && !/ticket draw|today\\'s draw|no prize yet|Face of the Day|month\\'s draw|faceJour/i.test(fJ.replace(/\/\*[\s\S]*?\*\//g, '')),'peindreTirage / peindreJour : plus de tirage du jour, de mois, ni de « Face of the Day » (code, hors commentaires)');
+vu(/const mesEntrees = \(t\.semaine\.entrees \|\| \[\]\)\.filter/.test(f) && /Your entries in this week\\'s pot: ' \+ mesEntrees \+ ' of ' \+ t\.semaine\.n/.test(f), 'les entrees de CE wallet et de la semaine viennent de /api/tirage semaine.entrees');
 vu(/Number\(w\.volumeUsd\)/.test(f) && /Number\(t\.seuilVolumeUsd\)/.test(f) && /Connect a wallet to see your progress/.test(f),
   'progression = volume verifie du serveur, seuil du serveur, seulement pour le wallet connecte');
 vu(/etape\('wallet_connect_ok'\); \} catch \(_\) \{\}\s*\r?\n\s*try \{ peindreTirage\(\); \} catch/.test(app), 'repeinte a la connexion');
@@ -28,8 +34,13 @@ vu(/<p class="titre jeuTitre"[^>]*>Your trades are your ticket\./.test(carte) &&
 /* Phil 2026-10-18 09:50 : seulement ce qui marche aujourd hui — aucune promesse de contrat a venir dans les tuiles */
 /* 2026-10-18 (revue adverse) : BlockRolls est EN LIGNE (0x0c5b…0fe9, bloc 52 770 558) — « day pass » n est plus une promesse : la tuile
  *   TICKET dit que rolls payes et day pass comptent dans les 10 $ (le serveur les credite). Le tirage du jour reste practice (dit). */
-vu(/Reach \$10 in a day \(UTC\) — trades of UNIT or tokenized stocks, paid rolls and the Week pass all count — or mint a skin/.test(carte) && /the first block stamped 2 minutes later draws one ticket among the day's holders/.test(carte)
-  && /Practice: no prize yet\./.test(carte) && /Doer 90%, community earn pool 7%, TokenizedBlock 3%/.test(carte) && /05 · SKINS/.test(carte)
+/* ⛔ 2026-10-18 (Phil : « fini ca ») : la tuile 02 n est plus THE DAILY DRAW — c est le pot de la SEMAINE (re-pointe, meme intention : la
+ *   tuile dit ce qui marche aujourd hui, sans promesse) */
+const carteVisible = carte.replace(/<!--[\s\S]*?-->/g, '');
+vu(/Reach \$10 in a day \(UTC\) — trades of UNIT or tokenized stocks, paid rolls and the Week pass all count — or mint a skin/.test(carte) && /<b>02 · THE WEEK'S POT<\/b><p>Today's ticket = 1 entry in this week's reward pot; the pot is shared by entries after the week closes \(UTC\)\./.test(carte)
+  && !/DAILY DRAW|Face of the Day|no prize yet|draws one ticket among the day's holders|winner of the day|day's winner/i.test(carteVisible) && /Doer 90%, community earn pool 7%, TokenizedBlock 3%/.test(carte) && /05 · SKINS/.test(carte)
   && !/contract opens once signed|With the contract|claims the pot/i.test(app.slice(app.indexOf('id="regleCarte"'), app.indexOf('</section>', app.indexOf('id="regleCarte"'))).replace(/<!--[\s\S]*?-->/g, '')),
-  'les tuiles disent ce qui marche (ticket, tirage du jour practice, rolls practice, missions, skins) et aucune promesse');
+  'les tuiles disent ce qui marche (ticket, pot de la semaine, rolls, missions, skins) — plus de tirage du jour — et aucune promesse');
+/* le bloc « hier » (#faceJour : la Face of the Day et un gagnant du jour paye rien) n existe plus, ni au HTML ni au JS */
+vu(!/id="faceJour/.test(app) && !/#faceJour/.test(app), 'le bloc #faceJour (gagnant du jour) est retire du HTML et du JS');
 console.log('ok tirage-carte - ' + n + ' assertions ; NE PROUVE PAS un ticket reel');

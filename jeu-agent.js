@@ -124,7 +124,7 @@ export function planTaskAgent({ contrat, block, reward, maxDone, hold, cles, poo
 
 /** L etat du jeu pour un agent : le corps de /api/tirage (tel que le serveur le sert), le wallet s il est donne, les rolls recents */
 export function etatJeuAgent({ tirage, wallet = null, rollsRecents = [], pot = null, jourId = null }) {
-  if (!tirage || tirage.ok !== true || !tirage.jour) return { ok: false, etat: 'NON_MESURE', pourquoi: 'the draw could not be read just now' };
+  if (!tirage || tirage.ok !== true || !tirage.jour) return { ok: false, etat: 'NON_MESURE', pourquoi: 'the game could not be read just now' };
   const w = wallet ? bas(wallet) : null;
   const j = tirage.jour, r = tirage.rolls || {};
   let moi = null;
@@ -136,8 +136,14 @@ export function etatJeuAgent({ tirage, wallet = null, rollsRecents = [], pot = n
       entreesSemaine: (tirage.semaine && tirage.semaine.entrees || []).filter((e) => bas(e.adresse) === w).length,
       entreesMois: (tirage.mois && tirage.mois.entrees || []).filter((e) => bas(e.adresse) === w).length };
   }
-  return { ok: true, etat: 'PRET', mode: tirage.mode, jour: { id: j.id, fin: j.fin, tickets: (j.tickets || []).length, passes: (j.passes || []).length, pot: tirage.pot },
-    apercu: tirage.apercu || null, veille: tirage.veille ? { id: tirage.veille.id, etat: tirage.veille.etat, blocE: tirage.veille.blocE, gagnant: tirage.veille.gagnant, tickets: (tirage.veille.tickets || []).length } : null,
+  /* ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll deja en place ») : plus de tirage du JOUR (un gagnant paye rien) — le ticket du
+   *   jour = 1 entree au pot de la SEMAINE (TicketPot, dernier jour UTC de la semaine). Le pot est celui que le serveur a LU (null sinon). */
+  const s = tirage.semaine || {}, ps = tirage.ticketpot && tirage.ticketpot.semaine ? tirage.ticketpot.semaine : null;
+  return { ok: true, etat: 'PRET', mode: tirage.mode, jour: { id: j.id, fin: j.fin, tickets: (j.tickets || []).length, passes: (j.passes || []).length },
+    semaine: { id: s.id || null, fin: s.fin || null, entrees: Array.isArray(s.entrees) ? s.entrees.length : null,
+      pot: ps ? { jourId: ps.jourId, ferme: ps.ferme, usdc: String(ps.ferme ? ps.potAtClose : ps.reste) } : null,
+      regle: 'today\'s ticket = 1 entry in this week\'s reward pot; the pot is shared by entries after the week closes (UTC)' },
+    apercu: tirage.apercu || null,
     rolls: { contrat: r.contrat || null, jeu: r.contrat ? 'PAID' : 'PRACTICE', prixRoll: r.prixRoll || null, prixPass: r.prixPass || null, passRolls: r.passRolls ?? null, prizes: r.prizes || null, minScore: r.minScore ?? null,
       rollsMax: ROLLS_MAX, pot: pot === null ? null : String(pot) },
     moi, rollsRecents: (rollsRecents || []).slice(-10), regle: tirage.regle || null,

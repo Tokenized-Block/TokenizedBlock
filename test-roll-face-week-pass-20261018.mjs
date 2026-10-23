@@ -120,6 +120,8 @@ vu(iAw > 0 && iRe > iAw, 'apercu live : rollEnCours re-verifie apres l await (ne
 const pb = fn('function poserBoutonsRolls(', 'async function envoyerAppels(');
 vu(/bd\.textContent = 'Week pass · ' \+ usdcTexte\(rollsCfg\.prixPass\) \+ ' USDC';/.test(pb) && !/Day pass/.test(pb), 'bouton « Week pass · <prix servi> USDC »');
 const pp = fn('async function passPaye()', "$('#jourRollPaye').addEventListener");
-vu(/Week pass/.test(pp) && /7 UTC days/.test(pp) && /3 bonus entries/.test(pp) && /rollsCfg\.passRolls \+ ' rolls for 24 h /.test(pp) && /practice season, no prize yet/.test(pp), 'confirmation : 7 jours, 3 bonus, rolls 24 h en plus, draws en practice');
+vu(/Week pass/.test(pp) && /7 UTC days/.test(pp) && /3 bonus entries/.test(pp) && /rollsCfg\.passRolls \+ ' rolls for 24 h /.test(pp)
+  /* ⛔ 2026-10-18 (Phil : « fini ca ») : re-pointe — plus de « daily draw … practice » ; chaque jour = 1 entree au pot de la SEMAINE */
+  && /each = 1 entry in that week\\'s reward pot\) and 3 bonus entries in this week\\'s pot/.test(pp) && !/daily draw|no prize yet/.test(pp), 'confirmation : 7 jours (1 entree au pot de la semaine chacun), 3 bonus, rolls 24 h en plus — plus de tirage du jour');
 vu(!/Day pass/.test(sansCom(app.slice(app.indexOf('id="tirCarte"'), app.indexOf("$('#jourAuto').addEventListener")))), 'plus aucun « Day pass » servi');
 console.log('ok roll-face + week-pass - ' + n + ' assertions ; NE PROUVE PAS un achat reel ni le rendu');

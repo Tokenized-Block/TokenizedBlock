@@ -4109,6 +4109,16 @@ async function lireTicketPotSrv() {
     try { const o = await rpcServeur('eth_call', [{ to: contrat, data: selecteurSrv('owner()') }, 'latest']); owner = /^0x[0-9a-f]{64}$/i.test(String(o)) ? '0x' + String(o).slice(-40).toLowerCase() : null; } catch (_) { owner = null; }
     ticketpotSrv.jourId = veilleJ.id; ticketpotSrv.day = day; ticketpotSrv.lu = Date.now(); ticketpotSrv.erreur = null;
     ticketpotSrv.etat = { ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), verifier: j.verifier, owner };
+    /* 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : le pot de la SEMAINE en cours = dayPot de son DERNIER jour (UTC), lu sur
+     *   CE minuteur (jamais par requete). Le contrat refuse fund() d un jour futur (FutureDay) : il ne s alimente que CE jour-la — dit par l app.
+     *   Lecture ratee : l etat de semaine d avant reste, l erreur est dite. */
+    const sem = saisonDe(Date.now()), finJ = jourDe(sem.fin - JOUR_MS), daySem = dayDeJourIdPot(finJ.id);
+    try {
+      const js = await lireJourTicketPot({ rpc: rpcServeur, contrat }, daySem);
+      ticketpotSrv.semaine = { id: sem.id, jourId: finJ.id, day: daySem, ferme: js.ferme, enPause: js.enPause, potAtClose: js.potAtClose.toString(), reste: js.reste.toString(),
+        aujourdhui: jourDe(Date.now()).id === finJ.id, lu: new Date().toISOString() };
+      ticketpotSrv.erreurSemaine = null;
+    } catch (e) { ticketpotSrv.erreurSemaine = String((e && e.message) || e).slice(0, 120); }
   } catch (e) { ticketpotSrv.erreur = String((e && e.message) || e).slice(0, 120); }
   finally { ticketpotSrv.enVol = false; }
 }
@@ -4116,8 +4126,10 @@ if (TICKETPOT_DEPLOIEMENT.adresse) { setTimeout(() => { void lireTicketPotSrv();
 function ticketpotJson() {
   const contrat = TICKETPOT_DEPLOIEMENT.adresse;
   if (!contrat) return null;
+  /* la semaine servie seulement si c est encore LA semaine en cours (un etat d une semaine passee n est jamais montre comme celui-ci) */
+  const semSrv = ticketpotSrv.semaine && ticketpotSrv.semaine.id === saisonDe(Date.now()).id ? ticketpotSrv.semaine : null;
   return { contrat, bloc: TICKETPOT_DEPLOIEMENT.bloc, veille: ticketpotSrv.etat ? { jourId: ticketpotSrv.jourId, day: ticketpotSrv.day, ...ticketpotSrv.etat } : null,
-    lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur };
+    semaine: semSrv, lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur, erreurSemaine: ticketpotSrv.erreurSemaine || null };
 }
 /* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18) — LECTURE SEULE. Les logs de BlockDuels (Created / Joined / Settled / Cancelled / Refunded),
  *   relus par fenetres de 2 000 blocs, au plus DUELS_FENETRES_PAR_TOUR par tour, avec 300 blocs de recouvrement (doublons comptes une fois).
@@ -6226,7 +6238,10 @@ function traiterRequete(req, res) {
   function corpsTirage() {
     void crediterDetenteursSkins();
     /* 2026-10-17 soir — v2 QUOTIDIEN (Phil) : ticket du JOUR a 10 $ de volume verifie (UNIT sur notre pool, ou actions tokenisees via l app) ;
-     *   chaque jour qualifie = 1 entree au tirage de la SEMAINE et du MOIS. Pas de pot (practice) : l ecran le dit. */
+     *   chaque jour qualifie = 1 entree au tirage de la SEMAINE et du MOIS. Pas de pot (practice) : l ecran le dit.
+     * ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll deja en place ») : PLUS de tirage du jour presente. Le ticket du jour = 1 entree
+     *   au pot de la SEMAINE (TicketPot, dernier jour de la semaine, parts ponderees par entrees). veille / mois restent dans le JSON (d autres
+     *   lecteurs les lisent) ; le mois n est qu un compte. */
     const now = Date.now(), j = jourDe(now), s = saisonDe(now), mo = moisDe(now);
     const jours = revenu.jours || {}, etatJ = jours[j.id] || {};
     /* tickets = volume >= seuil OU pass skin couvrant le jour (tirage-saison.js ticketsJour) */
@@ -6279,12 +6294,13 @@ function traiterRequete(req, res) {
       mois: { id: mo.id, debut: iso(mo.debut), fin: iso(mo.fin), entrees: eM, n: eM.length, racine: racine(eM.map((e) => e.adresse)) },
       regle: 'A day counts when your verified trading volume that day (UTC) reaches $' + SEUIL_VOLUME_JOUR_USD + ': trades of the UNIT block on its '
         + 'TokenizedBlock pool, tokenized-stock trades made in the app, and what you spend in BlockRolls (paid rolls and the Week pass; a roll taken on a pass '
-        + 'counts once, at the pass). Each such day is one ticket for that day\'s draw and one entry for the week\'s '
-        + 'and the month\'s draws. Trading more in a day adds nothing. A Week pass bought on the BlockRolls contract holds the ticket for 7 UTC days '
-        + 'from the day of the block it was bought in (still one ticket a day) and adds 3 entries to that week\'s draw. A brain at level 3 adds 1 entry to the week\'s draw, '
-        + 'at level 6 it adds 2 (never more), and only when that wallet already has an entry that week; levels come from verified play (GET /api/jeu/niveau). The ticket draw is a practice season: no prize yet. Each day is settled by block E, the first Base '
-        + 'block stamped at least ' + DELAI_REVELATION_S + ' s after the day closes: its hash picks the day\'s winner and reveals the Face of the Day '
-        + 'your ticket face is scored against (traits in common, out of 5). Nobody can choose it; anyone can replay it.' });
+        + 'counts once, at the pass); a skin minted that day also holds that day\'s ticket. Today\'s ticket = 1 entry in this week\'s reward pot. '
+        + 'The week\'s pot is the TicketPot pot of the week\'s last UTC day; after the week closes (UTC) it is shared by entries: each wallet\'s share follows '
+        + 'its entries that week, signed by the verifier wallet, and each holder claims it from their own wallet. Trading more in a day adds nothing. '
+        + 'A Week pass bought on the BlockRolls contract holds the ticket for 7 UTC days from the day of the block it was bought in (still one ticket a day) '
+        + 'and adds 3 entries that week. A brain at level 3 adds 1 entry that week, at level 6 it adds 2 (never more), and only when that wallet already '
+        + 'has an entry that week; levels come from verified play (GET /api/jeu/niveau). There is no daily winner and no monthly prize: '
+        + 'the month count is a tally only. Paid rolls are separate: the BlockRolls contract pays a winning roll from its roll pot.' });
   }
 
   /* ══ LE NIVEAU D UN WALLET (2026-10-18, niveaux-jeu.js) — GET /api/jeu/niveau?wallet=0x… (40 hex, rien d autre dans la requete) ->

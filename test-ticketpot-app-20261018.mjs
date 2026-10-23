@@ -28,11 +28,19 @@ const carte = app.slice(app.indexOf('id="tirCarte"'), app.indexOf('id="missionsC
 vu(/<p class="note" id="potJour"[^>]*\bhidden\b/.test(carte) && /<label class="champ" id="potFondLab" hidden>[^<]*<input id="potMontant"/.test(carte) && /<button[^>]*\bid="jourFondPot"[^>]*\bhidden\b/.test(carte), 'ligne, montant et bouton caches dans le HTML');
 vu(!/value="1"[^>]*>[^<]*USDC/.test(carte.replace(/<!--[\s\S]*?-->/g, '')) , 'aucun montant fixe dans la carte');
 const pp = app.slice(app.indexOf('function peindrePotJour('), app.indexOf('async function fondPot()'));
-vu(/\/\^0x\[0-9a-fA-F\]\{40\}\$\/\.test\(String\(t\.ticketpot\.contrat\)\)/.test(pp) && /p\.hidden = !tp; b\.hidden = !\(tp && c\);/.test(pp), 'montre seulement avec la fiche servie ; le bouton seulement avec un wallet');
-vu(/Shares are signed by the verifier wallet; your claim opens here once yours is signed\./.test(pp) && /yesterday\\'s pot not read yet/.test(pp), 'la ligne dit l etat lu et que la reclamation attend la signature du verifier');
+/* ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : la ligne et le fund visent le pot de la SEMAINE (dernier jour UTC). TicketPot
+ *   refuse fund() d un jour futur (FutureDay) : le bouton n existe QUE ce dernier jour (servi : semaine.aujourdhui), pas ferme, avec un wallet. */
+vu(/\/\^0x\[0-9a-fA-F\]\{40\}\$\/\.test\(String\(t\.ticketpot\.contrat\)\)/.test(pp) && /const fondOk = !!\(tp && c && sem && sem\.aujourdhui === true && sem\.ferme === false\);/.test(pp)
+  && /p\.hidden = !tp; b\.hidden = !fondOk; if \(lab\) lab\.hidden = !fondOk;/.test(pp), 'ligne seulement avec la fiche servie ; le bouton seulement avec un wallet ET le dernier jour de la semaine (pot pas ferme)');
+vu(/Shares are signed by the verifier wallet; your claim opens here once yours is signed\./.test(pp) && /This week\\'s pot: not read yet/.test(pp) && /\(the week\\'s last UTC day\)/.test(pp) && !/Day pot/.test(pp),
+  'la ligne dit le pot de la SEMAINE lu (ou « not read yet »), son jour, et que la reclamation attend la signature du verifier — plus de « Day pot »');
+vu(/semaine: semSrv/.test(ts) && /ticketpotSrv\.semaine\.id === saisonDe\(Date\.now\(\)\)\.id/.test(ts) && /const sem = saisonDe\(Date\.now\(\)\), finJ = jourDe\(sem\.fin - JOUR_MS\), daySem = dayDeJourIdPot\(finJ\.id\);/.test(ts)
+  && /await lireJourTicketPot\(\{ rpc: rpcServeur, contrat \}, daySem\)/.test(ts), 'serveur : le pot de la semaine = lireJour(dernier jour de la semaine), sur le MEME minuteur ; servi seulement pour la semaine en cours');
 const fp = app.slice(app.indexOf('async function fondPot()'), app.indexOf("$('#jourFondPot').addEventListener"));
 vu(/const montant = bjUsdc\(\(\$\('#potMontant'\) \|\| \{\}\)\.value\);/.test(fp) && /if \(montant === null \|\| montant <= 0n\)/.test(fp), 'le montant est tape et verifie');
-vu(/planFundPot\(\{ contrat: potCfg\.contrat, usdc: USDC_BASE, day, montant: montant\.toString\(\) \}\)/.test(fp) && /const jourId = jourDeApp\(Date\.now\(\)\), day = dayDeJourIdPot\(jourId\);/.test(fp), 'planFund : contrat servi, USDC_BASE, le jour UTC du contrat');
+vu(/planFundPot\(\{ contrat: potCfg\.contrat, usdc: USDC_BASE, day, montant: montant\.toString\(\) \}\)/.test(fp) && /const jourId = jourDeApp\(Date\.now\(\)\), sem = potCfg\.semaine;/.test(fp)
+  && /if \(!sem \|\| sem\.jourId !== jourId\) \{ dit\(/.test(fp) && /const day = dayDeJourIdPot\(jourId\);/.test(fp) && fp.indexOf('sem.jourId !== jourId') < fp.indexOf('planFundPot('),
+  'planFund : contrat servi, USDC_BASE, le jour UTC — SEULEMENT s il est le dernier jour de la semaine servi (verifie AVANT le plan)');
 vu(/if \(plan\.etat !== 'PRET'\) \{ dit\('Not funded: ' \+ plan\.pourquoi\); return; \}/.test(fp) && /await envoyerAppels\(plan\.appels, c\)/.test(fp) && /it never comes back to you/.test(fp), 'refus dit ; envoi par envoyerAppels ; « never comes back » dit avant la signature');
 vu(/peindrePotJour\(t, c0\); \}/.test(app) && /\$\('#jourFondPot'\)\.addEventListener\('click', \(\) => \{ void fondPot\(\); \}\);/.test(app), 'cable : peindreTirage peint le pot ; le bouton appelle fondPot');
 console.log('ok ticketpot-app - ' + n + ' assertions ; NE PROUVE PAS une lecture ni un fund reel');

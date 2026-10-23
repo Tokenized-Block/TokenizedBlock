@@ -144,10 +144,13 @@ for (const ancien of ['0.50 USDC', '>10 USDC<', '0.07%', '0.03%', '0.0007', '24 
 eq((r.match(/not deployed/gi) || []).length, (vrai.match(/not deployed/gi) || []).length - (FR.CHIFFRES.missions.deploye === true ? 0 : 1), 'missions deployees dans le FAUX -> une mention « not deployed » de moins (sauf si deja deployees dans le vrai)');
 /* donnees en direct : le mode du tirage et le pot des rolls, LUS ; non lus -> dit « not read », jamais 0 */
 ok(/not read/i.test(vrai), 'sans /api/tirage : « not read »');
-const live = FR.rendre(FR.CHIFFRES, { mode: 'SHADOW', rolls: { pot: '250000', potLu: '2026-10-18T15:00:00.000Z' } });
-ok(live.includes('0.25 USDC') && /practice/i.test(live), 'avec /api/tirage : pot lu 0.25 USDC, tirage « practice »');
+/* ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : la ligne « Daily draw … practice » est retiree ; re-pointe sur le pot de la
+ *   SEMAINE lu (ticketpot.semaine), meme intention : une donnee en direct LUE, non lue -> dit, jamais un 0 ecrit */
+const live = FR.rendre(FR.CHIFFRES, { mode: 'SHADOW', rolls: { pot: '250000', potLu: '2026-10-18T15:00:00.000Z' }, ticketpot: { semaine: { jourId: 'J2026-10-25', ferme: false, reste: '1500000', potAtClose: '0' } } });
+ok(live.includes('0.25 USDC') && live.includes('1.50 USDC') && /Today's ticket = 1 entry in this week's reward pot; the pot is shared by entries after the week closes \(UTC\)\./.test(live) && /2026-10-25, the week's last day/.test(live)
+  && !/Daily draw|no prize yet|tickets are drawn/i.test(live), 'avec /api/tirage : pot des rolls 0.25 USDC, pot de la semaine 1.50 USDC lu et son jour — plus de « Daily draw »');
 const live2 = FR.rendre(FR.CHIFFRES, { mode: 'SHADOW', rolls: { pot: null } });
-ok(/pot[^.]*not read/i.test(live2) && !live2.includes('0.00 USDC'), 'pot null -> « not read », jamais un 0 ecrit');
+ok(/pot[^.]*not read/i.test(live2) && !live2.includes('0.00 USDC') && /The week's pot was not read just now\./.test(live2), 'pot null / pot de la semaine absent -> « not read », jamais un 0 ecrit');
 
 /* la mesure des launchpads n est pas une constante de contrat : elle doit rester celle que porte l app (commentaire du fil Trending) */
 const appTxt = lire('app.html');

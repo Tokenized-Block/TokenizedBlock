@@ -72,7 +72,7 @@ export const AIDE_COMMANDES = Object.freeze([
   'roll · roll x5 · roll x10              the classic roll (0.50 USDC a roll with the contract, 10 at most; practice without it)',
   'post task <reward> <players> <hold>    e.g. post task 100 10 10 — opens Post-a-task filled in (block units)',
   'duel                                   open duels: accept one or open a challenge (winner 90%, reward pool 7%, TokenizedBlock 3%)',
-  'level                                  its brain’s level: XP from verified play, and the weekly-draw perk',
+  'level                                  its brain’s level: XP from verified play, and the week-pot perk',
   /* 2026-10-18 : le Brain OS — quatre LECTURES (brain-os.js), chaque ligne dit ce qui a ete mesure ou « not read » ; jamais « safe » */
   'safety <token>                         e.g. safety UNIT — what is measured: B20 code, mint cap, its pool, a buy-then-sell round trip. Never a verdict',
   'explain <tx hash>                      what a transaction did: status, fee, transfers, swaps, our hooks and game events; the rest is said unknown',
