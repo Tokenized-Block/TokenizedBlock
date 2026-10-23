@@ -4163,6 +4163,9 @@ async function lireTicketPotSrv() {
     /* l owner (close(day) avant 12 h ; n importe qui apres) — lu, jamais suppose ; illisible -> null et l app n offre que la fermeture « anyone » */
     let owner = null;
     try { const o = await rpcServeur('eth_call', [{ to: contrat, data: selecteurSrv('owner()') }, 'latest']); owner = /^0x[0-9a-f]{64}$/i.test(String(o)) ? '0x' + String(o).slice(-40).toLowerCase() : null; } catch (_) { owner = null; }
+    /* 2026-10-23 (mesure prod game28) : une lecture ratee au demarrage (rafale d appels) servait owner vide 60 s et cachait « Close the pot ».
+     *   Une lecture ratee garde l owner deja LU (il ne change que par transferOwnership, delai 2 etapes) — jamais un owner suppose. */
+    if (owner === null && ticketpotSrv.etat && ticketpotSrv.etat.owner) owner = ticketpotSrv.etat.owner;
     ticketpotSrv.jourId = veilleJ.id; ticketpotSrv.day = day; ticketpotSrv.lu = Date.now(); ticketpotSrv.erreur = null;
     ticketpotSrv.etat = { ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), verifier: j.verifier, owner };
     /* 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : le pot de la SEMAINE en cours = dayPot de son DERNIER jour (UTC), lu sur

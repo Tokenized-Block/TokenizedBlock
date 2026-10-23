@@ -62,6 +62,8 @@ vu(/String\(c\)\.toLowerCase\(\) !== maPartPot\.wallet\) return;/.test(pr) && /p
 vu(/void peindreReclamerPot\(tp, c\);/.test(app), 'cable : peint avec le pot');
 /* la FERMETURE : l owner LU (serveur owner()) tout de suite, n importe qui apres closableByAnyoneAt ; jamais un non-owner avant (gas perdu) */
 vu(/owner = \/\^0x\[0-9a-f\]\{64\}\$\/i\.test\(String\(o\)\) \? '0x' \+ String\(o\)\.slice\(-40\)\.toLowerCase\(\) : null;/.test(srv) && /verifier: j\.verifier, owner \};/.test(srv), 'serveur : owner() lu, servi avec le pot ; illisible -> null');
+/* game28 en prod : une lecture ratee servait owner vide 60 s — l owner deja lu est garde */
+vu(/if \(owner === null && ticketpotSrv\.etat && ticketpotSrv\.etat\.owner\) owner = ticketpotSrv\.etat\.owner;/.test(srv), 'owner : une lecture ratee garde l owner deja lu');
 /* game22 en prod : owner null — selecteur() rend DEJA « 0x… », le '0x' + ajoute doublait le prefixe (eth_call refuse) */
 vu(/data: selecteurSrv\('owner\(\)'\) \}, 'latest'\]\)/.test(srv) && !/'0x' \+ selecteurSrv\('owner\(\)'\)/.test(srv), 'owner() : le selecteur porte deja 0x (pas de double prefixe)');
 const pf = app.slice(app.indexOf('function peindreFermerPot('), app.indexOf("$('#jourFermerPot').addEventListener"));
