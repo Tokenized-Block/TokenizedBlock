@@ -4110,10 +4110,13 @@ import { apparenceDepuisAdresse } from './apparence.js';
 import { faceRevelee, scoreFaces } from './face-du-jour.js';
 import { planReclamer, planPoster } from './missions-plan.js';
 /* 2026-10-18 : BlockRolls — roll paye / day pass, SEULEMENT quand /api/tirage sert rolls.contrat (fiche signee par Phil) ; sinon practice */
-import { planRoll, planRolls, planPass, planRollAvecPass, planRollsAvecPass, planSettle, planSettleMany, lireRolled, lireRolledTous, lireSettled, lireSettledTous, etatReglement, planCloseDay, planDrawDay, lireDayDrawn, jourDe as jourContrat } from './blockrolls-plan.js';
+import { planRoll, planRolls, planPass, planRollAvecPass, planRollsAvecPass, planSettle, planSettleMany, lireRolled, lireRolledTous, lireSettled, lireSettledTous, etatReglement, planCloseDay, planDrawDay, lireDayDrawn, jourDe as jourContrat, FENETRE as FENETRE_ROLLS } from './blockrolls-plan.js';
 import { guessDepuisApparence, tirerFaceDeRoll, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 /* 2026-10-18 (revue adverse) : les rolls PAYES en attente de settle, relus sur la chaine — le chemin de retour qui manquait */
 import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu } from './rolls-en-attente.js';
+/* 2026-10-23 DENIM (Base : 2 s -> 200 ms/bloc, mainnet vise novembre 2026) : le temps de bloc MESURE par le serveur (/api/tirage tempsDeBloc),
+ *   jamais suppose — les fenetres de 256 blocs disent leur duree a ce temps, et le Game se relit assez souvent pour une fenetre de ~51 s */
+import { blocsPour, secondesPour, dureeTexte, texteBlocs, intervalleSondageMs, pasAttenteBlocMs } from './temps-de-bloc.js';
 /* 2026-10-18 : TicketPot LIVE — alimenter le pot du jour (planFund : approve EXACT + fund), le jour UTC du contrat depuis l id du jour */
 import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
@@ -4755,8 +4758,14 @@ async function peindreDernierBlock() {
  *   (Settled -> score, gain). « Day pass · 10 USDC » = approve EXACT + buyPass. Le guess = les 5 traits de TON ticket du jour. Chaque montant
  *   vient des prix servis (la fiche), jamais tape ici. Le wallet signe tout ; rien ne part d ici. */
 let rollsCfg = null;
+/* le temps de bloc MESURE (s), servi par /api/tirage ; null = non mesure (les textes ne disent alors que les blocs) */
+let sParBlocApp = null;
+/* attendre un bloc : une lecture de la tete par temps de bloc (250 ms - 2 s), pendant ~180 s au plus — comme avant Denim (90 x 2 s) */
+const pasAttente = () => pasAttenteBlocMs(sParBlocApp);
+const toursAttente = () => Math.ceil(180000 / pasAttente());
 function poserBoutonsRolls(t, c) {
   const bp = $('#jourRollPaye'), bd = $('#jourPass'), e = $('#rollsEtat');
+  if (t && t.ok === true) { const s = t.tempsDeBloc ? Number(t.tempsDeBloc.sParBloc) : NaN; sParBlocApp = Number.isFinite(s) && s > 0 ? s : null; }
   rollsCfg = t && t.rolls && t.rolls.contrat ? t.rolls : null;
   if (!bp || !bd) return;
   const on = !!(rollsCfg && c);
@@ -4851,14 +4860,14 @@ async function rollPaye() {
     dit('Rolled #' + rolled.rollId + ' — block ' + cible.toLocaleString('en-US') + ' decides. Waiting for it…');
     rollEnCours = true; $('#dernierNom').textContent = 'Rolling… block ' + cible.toLocaleString('en-US') + ' decides';
     let tete = 0;
-    for (let k = 0; k < 90 && tete <= cible; k++) { await new Promise((o) => setTimeout(o, 2000)); try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
+    for (let k = 0, nT = toursAttente(); k < nT && tete <= cible; k++) { await new Promise((o) => setTimeout(o, pasAttente())); try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
     const er = etatReglement(cible, tete);
-    if (er.etat !== 'REGLABLE') { dit('Roll #' + rolled.rollId + ': ' + (er.etat === 'PERDU' ? 'the 256-block window passed before it was settled — it is lost (no refund).' : 'the block is not there yet — “Settle pending rolls” appears here once it is (' + er.blocsAvant + ' block(s) to go).')); return; }
+    if (er.etat !== 'REGLABLE') { dit('Roll #' + rolled.rollId + ': ' + (er.etat === 'PERDU' ? 'the ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' window passed before it was settled — it is lost (no refund).' : 'the block is not there yet — “Settle pending rolls” appears here once it is (' + er.blocsAvant + ' block(s) to go).')); return; }
     const ps = planSettle({ contrat, rollId: rolled.rollId, targetBlock: cible, blocActuel: tete });
     if (ps.etat !== 'PRET') { dit('Not settled: ' + ps.pourquoi); return; }
     dit('Block ' + cible.toLocaleString('en-US') + ' is in — sign the settle to reveal (anyone may, the prize is always yours)…');
     const rs = await envoyerAppels(ps.appels, c);
-    if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” below settles it within ' + er.blocsRestants + ' blocks.'); return; }
+    if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” below settles it within ' + texteBlocs(er.blocsRestants, sParBlocApp) + '.'); return; }
     const recuS = await recuDe(rs.hash), st = recuS ? lireSettled(recuS.logs, contrat) : null;
     if (!st) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return; }
     /* la FACE tiree par le bloc cible, a cote de ton ticket (le contrat l a calculee du meme hash : st.blockHash) */
@@ -5060,14 +5069,14 @@ async function autoRollLot(c) {
   rollEnCours = true; $('#dernierNom').textContent = 'Rolling… block ' + cible.toLocaleString('en-US') + ' decides';
   dit(rolled.length + ' roll' + (rolled.length > 1 ? 's' : '') + ' in' + (lus.manque ? ' (' + lus.manque + ' receipt(s) not read yet — the settler below picks them up)' : '') + ' — block ' + cible.toLocaleString('en-US') + ' decides. Waiting…');
   let tete = 0;
-  for (let k = 0; k < 90 && tete <= cible; k++) { await new Promise((o) => setTimeout(o, 2000)); try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
+  for (let k = 0, nT = toursAttente(); k < nT && tete <= cible; k++) { await new Promise((o) => setTimeout(o, pasAttente())); try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
   const er = etatReglement(cible, tete);
-  if (er.etat !== 'REGLABLE') { dit(er.etat === 'PERDU' ? 'The 256-block window passed before settling — these rolls are lost (no refund).' : 'The block is not there yet — “Settle pending rolls” appears here once it is (' + er.blocsAvant + ' block(s) to go).'); return; }
+  if (er.etat !== 'REGLABLE') { dit(er.etat === 'PERDU' ? 'The ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' window passed before settling — these rolls are lost (no refund).' : 'The block is not there yet — “Settle pending rolls” appears here once it is (' + er.blocsAvant + ' block(s) to go).'); return; }
   const ps = planSettleMany({ contrat, rollIds: rolled.map((x) => x.rollId) });
   if (ps.etat !== 'PRET') { dit('Not settled: ' + ps.pourquoi); return; }
   dit('Block ' + cible.toLocaleString('en-US') + ' is in — sign the settle for all ' + rolled.length + ' rolls (anyone may, the prize is always yours)…');
   const rs = await envoyerAppels(ps.appels, c);
-  if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” below settles them within ' + er.blocsRestants + ' blocks.'); return; }
+  if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” below settles them within ' + texteBlocs(er.blocsRestants, sParBlocApp) + '.'); return; }
   const lusS = await recusLogs(rs), st = lireSettledTous(lusS.logs, contrat);
   if (!st.length) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return; }
   montrerSettled(st, new Map(rolled.map((x) => [String(x.rollId), Number(x.targetBlock)])));
@@ -5163,14 +5172,14 @@ async function verifierRollsEnAttente() {
       bt.hidden = n === 0;
       bt.textContent = 'Settle ' + n + ' pending roll' + (n === 1 ? '' : 's');
       const l = [];
-      if (n) l.push(n + ' paid roll' + (n === 1 ? '' : 's') + ' ready to settle — the first one closes in ' + Math.min(...r.reglables.map((x) => x.blocsRestants)) + ' blocks; after that it is lost. One signature settles them all (anyone may settle, the prize is always yours).');
+      if (n) l.push(n + ' paid roll' + (n === 1 ? '' : 's') + ' ready to settle — the first one closes in ' + texteBlocs(Math.min(...r.reglables.map((x) => x.blocsRestants)), sParBlocApp) + '; after that it is lost. One signature settles them all (anyone may settle, the prize is always yours).');
       if (nT) l.push(nT + ' roll' + (nT === 1 ? '' : 's') + ' waiting for their block.');
-      if (nP) l.push(nP + ' roll' + (nP === 1 ? ' was' : 's were') + ' lost: the 256-block window passed before anyone settled ' + (nP === 1 ? 'it' : 'them') + ' — no refund.');
+      if (nP) l.push(nP + ' roll' + (nP === 1 ? ' was' : 's were') + ' lost: the ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' window passed before anyone settled ' + (nP === 1 ? 'it' : 'them') + ' — no refund.');
       if (partiel) l.push('Still reading older blocks — checked up to ' + attenteRolls.jusqua.toLocaleString('en-US') + '.');
       p.hidden = !l.length; p.textContent = l.join(' ');
       return r;
     } catch (_) {
-      p.hidden = false; p.textContent = 'Your pending rolls could not be read just now — checked again in 20 s.';
+      p.hidden = false; p.textContent = 'Your pending rolls could not be read just now — checked again in ' + Math.round(intervalleJeuMs() / 1000) + ' s.';
       return null;
     }
   })();
@@ -5205,13 +5214,13 @@ async function suivreRollsEnAttente(m) {
     const r = await verifierRollsEnAttente();
     if (r && r.reglables.length) {
       bcEtape(m, r.reglables.length + ' roll' + (r.reglables.length === 1 ? '' : 's') + ' ready: press “Settle ' + r.reglables.length + ' pending roll' + (r.reglables.length === 1 ? '' : 's') + '” in the Game tab within '
-        + Math.min(...r.reglables.map((x) => x.blocsRestants)) + ' blocks — one signature, the prize is always yours.', 'oui');
+        + texteBlocs(Math.min(...r.reglables.map((x) => x.blocsRestants)), sParBlocApp) + ' — one signature, the prize is always yours.', 'oui');
       bcBoutons(m, [['Open the Game tab', () => allerA('missions')]]);
       return;
     }
     if (r && !r.tropTot.length && k >= 3) { bcEtape(m, 'No roll of yours is waiting to be settled' + (r.perdus.length ? ' (' + r.perdus.length + ' lost: window passed, no refund)' : '') + '.'); return; }
   }
-  bcEtape(m, 'Your rolls could not be read back yet — the Game tab checks every 20 s and shows “Settle pending rolls” when they are ready.');
+  bcEtape(m, 'Your rolls could not be read back yet — the Game tab checks every ' + Math.round(intervalleJeuMs() / 1000) + ' s and shows “Settle pending rolls” when they are ready.');
 }
 async function rafraichirRollsCfg() {
   try {
@@ -5240,7 +5249,7 @@ async function peindreTirageJourPass() {
     const pot = dayPot ? usdcTexte(dayPot.pot) + ' USDC' : '';
     if (d.action === 'FERMER') peint('Yesterday\'s pass pot: ' + pot + ' among ' + buyers + ' pass buyer' + (Number(buyers) === 1 ? '' : 's') + ', not drawn yet' + (d.rearmer ? ' (its last draw window passed: close it again)' : '') + '. Anyone may close the day and draw it — the whole pot goes to the buyer a Base block hash picks, never to whoever clicks.');
     else if (d.action === 'ATTENDRE') peint('Yesterday\'s pass pot (' + pot + ') is armed: block ' + d.targetBlock.toLocaleString('en-US') + ' decides, ' + d.blocsAvant + ' block(s) to go.');
-    else if (d.action === 'TIRER') peint('Yesterday\'s pass pot (' + pot + ') is armed — draw it within ' + d.blocsRestants + ' blocks.');
+    else if (d.action === 'TIRER') peint('Yesterday\'s pass pot (' + pot + ') is armed — draw it within ' + texteBlocs(d.blocsRestants, sParBlocApp) + '.');
     else if (p.dataset.peint === '1') p.hidden = true;
     return d;
   } catch (_) { bt.hidden = true; return { action: 'NON_LU' }; }
@@ -5263,7 +5272,7 @@ async function tirerJourPass() {
       if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'Not closed')); return; }
       d = await peindreTirageJourPass();
     }
-    for (let k = 0; k < 30 && d && d.action === 'ATTENDRE'; k++) { dit('Waiting for block ' + d.targetBlock.toLocaleString('en-US') + ' (' + d.blocsAvant + ' to go)…'); await new Promise((o) => setTimeout(o, 2000)); d = await peindreTirageJourPass(); }
+    for (let k = 0, nT = Math.ceil(60000 / pasAttente()); k < nT && d && d.action === 'ATTENDRE'; k++) { dit('Waiting for block ' + d.targetBlock.toLocaleString('en-US') + ' (' + d.blocsAvant + ' to go)…'); await new Promise((o) => setTimeout(o, pasAttente())); d = await peindreTirageJourPass(); }
     if (!d || d.action !== 'TIRER') { dit(d && d.action === 'AUCUN' ? 'Nothing to draw: ' + d.pourquoi + '.' : 'The draw block is not in yet — press again in a few seconds.'); return; }
     const pd = planDrawDay({ contrat, day: d.day, targetBlock: d.targetBlock, blocActuel: d.tete });
     if (pd.etat !== 'PRET') { dit('Not drawn: ' + pd.pourquoi); return; }
@@ -5277,8 +5286,17 @@ async function tirerJourPass() {
   } finally { bt.disabled = false; void peindreTirageJourPass(); }
 }
 $('#jourTirerJour').addEventListener('click', () => { void tirerJourPass(); });
-/* toutes les 20 s, onglet Game visible : les rolls en attente et le pot du jour des pass */
-setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) { void verifierRollsEnAttente(); void peindreTirageJourPass(); } }, 20000);
+/* onglet Game visible : les rolls en attente et le pot du jour des pass.
+ * ⛔ DENIM (2026-10-23) : la relecture etait FIXE a 20 s. La fenetre de reglement fait 256 blocs = ~512 s a 2 s/bloc, mais ~51 s a 200 ms :
+ *   a 20 s, le bouton « Settle » pouvait apparaitre avec ~10 s pour signer. Le rythme est desormais ~8 lectures par fenetre AU TEMPS MESURE
+ *   (intervalleSondageMs : 20 s avant Denim, ~6,4 s apres, 5 s tant que le temps n est pas mesure), recalcule a chaque tour. */
+const intervalleJeuMs = () => intervalleSondageMs(secondesPour(FENETRE_ROLLS, sParBlocApp));
+function relireJeu() {
+  const v = document.getElementById('v-missions');
+  if (!document.hidden && v && v.classList.contains('on')) { void verifierRollsEnAttente(); void peindreTirageJourPass(); }
+  setTimeout(relireJeu, intervalleJeuMs());
+}
+setTimeout(relireJeu, intervalleJeuMs()); /* le premier tour apres un intervalle, comme l ancien setInterval */
 $('#jourAuto').addEventListener('click', () => { void autoRoll(); });
 /* ══ ROLL (Phil 19:55 : « le winner gagne face au random en live ») — practice : aucun paiement ; le bloc N+2 (N = tete au clic) decide ;
  *   sa face est lue sur la chaine, comparee a ton ticket, score affiche. Le roll paye (0,50 USDC, BlockRolls) se branchera ICI, meme
@@ -5605,7 +5623,7 @@ async function ligneDuel(d, moi, tete, maintenant) {
   if (e.etat === 'OUVERT') t2.textContent = (d.creator === moi ? 'Your challenge — waiting for an opponent, ' + min(e.resteS) + ' left. Cancel returns your stake in full.' : 'Open — ' + min(e.resteS) + ' left. Accept with the same stake: the winner gets ' + auG + ' (90%).');
   else if (e.etat === 'EXPIRE') t2.textContent = 'Not accepted in time — Refund returns the stake to its creator in full (anyone may send it).';
   else if (e.etat === 'ATTENTE') t2.textContent = 'Accepted — block ' + Number(d.targetBlock).toLocaleString('en-US') + ' decides, ' + e.blocsAvant + ' block(s) to go.';
-  else if (e.etat === 'REGLABLE') t2.textContent = 'Block ' + Number(d.targetBlock).toLocaleString('en-US') + ' is in — settle within ' + e.blocsRestants + ' blocks (anyone may; the contract pays the winner). After that, both are refunded in full.';
+  else if (e.etat === 'REGLABLE') t2.textContent = 'Block ' + Number(d.targetBlock).toLocaleString('en-US') + ' is in — settle within ' + texteBlocs(e.blocsRestants, sParBlocApp) + ' (anyone may; the contract pays the winner). After that, both are refunded in full.';
   else if (e.etat === 'REMBOURSABLE') t2.textContent = 'Not settled within 256 blocks — Refund returns both stakes in full, no fee.';
   else if (e.etat === 'REGLE') {
     const s = d.settled, r = Duels.resultatDuel(d, s.blockHash);
@@ -5740,8 +5758,8 @@ async function actionDuel(id, action, li) {
     else {
       dit('Accepted — block ' + jn.targetBlock.toLocaleString('en-US') + ' decides. Waiting for it…');
       let t2 = 0;
-      for (let k = 0; k < 90 && t2 <= jn.targetBlock; k++) { await new Promise((o) => setTimeout(o, 2000)); try { t2 = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
-      dit(t2 > jn.targetBlock ? 'Block ' + jn.targetBlock.toLocaleString('en-US') + ' is in — press Settle within 256 blocks (anyone may; after that both are refunded).' : 'The block is not in yet — Settle appears here once it is.');
+      for (let k = 0, nT = toursAttente(); k < nT && t2 <= jn.targetBlock; k++) { await new Promise((o) => setTimeout(o, pasAttente())); try { t2 = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
+      dit(t2 > jn.targetBlock ? 'Block ' + jn.targetBlock.toLocaleString('en-US') + ' is in — press Settle within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' (anyone may; after that both are refunded).' : 'The block is not in yet — Settle appears here once it is.');
     }
   } else if (action === 'SETTLE') {
     const st = evs.find((x) => x.type === 'SETTLED');
@@ -5899,7 +5917,7 @@ function bjAllumer() {
 function bjEteindre(pourquoi) {
   bj.on = false; bjSauver();
   const z = $('#skinBrain'); if (z) z.hidden = true;
-  bjPeindre(pourquoi || 'Off — its brain stopped. Nothing more will be proposed.' + (bj.pending.length ? ' ' + bj.pending.length + ' roll(s) still to settle: turn it back on, or use “Settle pending rolls” in the Game tab within 256 blocks.' : ''));
+  bjPeindre(pourquoi || 'Off — its brain stopped. Nothing more will be proposed.' + (bj.pending.length ? ' ' + bj.pending.length + ' roll(s) still to settle: turn it back on, or use “Settle pending rolls” in the Game tab within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' of each roll\'s block.' : ''));
 }
 /* les missions dont ce wallet a COLLE la transaction dans le tableau : l attestation du verifier est demandee une fois par visite */
 async function bjAttestations(ouvertes, moi) {
@@ -5956,6 +5974,7 @@ async function bjTour() {
       try { bjVol.tirage = await fetch('/api/tirage', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json()); bjVol.tirageLu = Date.now(); } catch (_) { /* relu au tour suivant */ }
     }
     const t = bjVol.tirage, rc = t && t.rolls && /^0x[0-9a-fA-F]{40}$/.test(String(t.rolls.contrat)) ? t.rolls : null;
+    if (t && t.ok === true && t.tempsDeBloc) { const s = Number(t.tempsDeBloc.sParBloc); if (Number.isFinite(s) && s > 0) sParBlocApp = s; }
     let rolls = null;
     if (rc && bj.rolls) {
       const contrat = String(rc.contrat).toLowerCase();
@@ -6062,7 +6081,7 @@ function bjMontrer(p, rolls, walletCarte) {
       const recu = await recuDe(r.hash), lus = recu ? lireRolledTous(recu.logs, rolls.contract) : [];
       for (const x of lus) bj.pending.push({ contrat: rolls.contract, rollId: String(x.rollId), targetBlock: String(x.targetBlock) });
       bj.pending = bj.pending.slice(-50); bjSauver();
-      bcEtape(m, lus.length ? 'Rolled #' + lus.map((x) => x.rollId).join(', #') + ' — block ' + lus.map((x) => Number(x.targetBlock).toLocaleString('en-US')).join(', ') + ' decides; its brain proposes the settle once it is in.' : 'Rolled, but the roll was not read back yet — “Settle pending rolls” in the Game tab picks it up within 256 blocks.', lus.length ? 'oui' : 'non');
+      bcEtape(m, lus.length ? 'Rolled #' + lus.map((x) => x.rollId).join(', #') + ' — block ' + lus.map((x) => Number(x.targetBlock).toLocaleString('en-US')).join(', ') + ' decides; its brain proposes the settle once it is in.' : 'Rolled, but the roll was not read back yet — “Settle pending rolls” in the Game tab picks it up within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + '.', lus.length ? 'oui' : 'non');
       setTimeout(() => { void bjTour(); }, 12000);
     } else if (p.kind === 'SETTLE' && rolls && /^SETTLE:/.test(p.cle)) {
       const ids = p.cle.slice(7).split(',');
@@ -6093,7 +6112,13 @@ $('#bjDuels').checked = bj.duels; $('#bjMaxDuel').value = usdcTexte(bj.maxDuel);
 bjPeindre();
 $('#bjJouer').addEventListener('click', () => bjAllumer());
 $('#bjOff').addEventListener('click', () => bjEteindre());
-setInterval(() => { if (bj.on && !document.hidden) void bjTour(); }, 30000);
+/* ⛔ DENIM (2026-10-23) : un tour toutes les 30 s laissait UNE chance de proposer le settle dans une fenetre de ~51 s (256 blocs a 200 ms).
+ *   Avec un roll en attente, le tour suit le rythme du Game (intervalleJeuMs, au temps mesure) ; sans, 30 s comme avant (moins de lectures). */
+function bjRelire() {
+  if (bj.on && !document.hidden) void bjTour();
+  setTimeout(bjRelire, bj.pending && bj.pending.length ? Math.min(30000, intervalleJeuMs()) : 30000);
+}
+setTimeout(bjRelire, 30000);
 
 /* ══ EARN (Phil 19:40) — ce que ce wallet a gagne : part de createur DUE (registre public, jamais payee par le serveur), tirage d hier,
  *   missions reclamees (contrat). Chaque ligne nomme sa source ; rien n est invente. */
@@ -7258,7 +7283,7 @@ function signauxEntreBlocks(e) {
       const cle = String(w || '').toLowerCase();
       if (!/^0x[0-9a-f]{40}$/.test(cle)) continue;
       const avant = walletBlock.get(cle);
-      if (avant && avant.jeton !== j && Math.abs((e.bloc ?? 0) - (avant.bloc ?? 0)) <= 1800) impulsion(avant.jeton, j, '#f472b6', 'wallet');
+      if (avant && avant.jeton !== j && Math.abs((e.bloc ?? 0) - (avant.bloc ?? 0)) <= (blocsPour(3600, sParBlocApp) ?? 1800) /* ~1 h au temps mesure (Denim) */) impulsion(avant.jeton, j, '#f472b6', 'wallet');
       walletBlock.set(cle, { jeton: j, bloc: e.bloc ?? 0 });
       if (walletBlock.size > 3000) walletBlock.delete(walletBlock.keys().next().value);
     }
@@ -25056,7 +25081,7 @@ async function bcAccepterDuel(m, id) {
   for (const a of plan.appels) bcEtape(m, a.quoi);
   bcBoutons(m, [['Sign in your wallet', async () => {
     const s = await bcSigner(m, plan.appels.map((a) => ({ ...a, nom: a.quoi })), null);
-    if (s.ok) bcEtape(m, 'Accepted — settle it in the Duels card of the Game tab once the block is in (within 256 blocks; after that both are refunded).', 'oui');
+    if (s.ok) bcEtape(m, 'Accepted — settle it in the Duels card of the Game tab once the block is in (within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + '; after that both are refunded).', 'oui');
     void lireDuelsServis(true).then(() => { void peindreDuels(); });
   }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
 }
@@ -25326,7 +25351,7 @@ async function bcCommandeRoll(n) {
   bcEtape(m, 'Guess = a new random face per roll (' + guesses.map((x) => x.join(', ')).join(' · ') + '). ' + (avecPass ? n + ' roll' + (n > 1 ? 's' : '') + ' on your pass (' + pass.rollsLeft + ' left) — no payment.'
     : n + ' roll' + (n > 1 ? 's' : '') + ' × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then the roll' + (n > 1 ? 's' : '') + '. Half to the pot, half to TokenizedBlock.') + phrasePot(pot));
   for (const a of plan.appels) bcEtape(m, a.quoi);
-  bcEtape(m, 'Each step is one signature here. Once the block is in, the Game tab shows “Settle pending rolls” — one signature settles them all, within 256 blocks (the prize is always yours).');
+  bcEtape(m, 'Each step is one signature here. Once the block is in, the Game tab shows “Settle pending rolls” — one signature settles them all, within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' (the prize is always yours).');
   bcBoutons(m, [['Sign in your wallet', async () => {
     const s = await bcSigner(m, plan.appels.map((a) => ({ ...a, nom: a.quoi })), null);
     if (s.ok) bcEtape(m, 'Rolled — the block after each roll decides. Watching for them to be ready to settle…', 'oui');
@@ -25596,19 +25621,21 @@ async function bcLireActivite(a, sym, mk) {
     const pools = new Set([mk && /^0x[0-9a-fA-F]{40}$/.test(String(mk.poolAdr || '')) ? String(mk.poolAdr).toLowerCase() : null, V4 && V4.poolm ? String(V4.poolm).toLowerCase() : null,
       ...(Array.isArray(d.pools) ? d.pools.filter((p) => /^0x[0-9a-f]{40}$/.test(String(p))) : [])].filter(Boolean));
     ul.textContent = ''; ul.dataset.de = a;
-    const minutes = Math.max(1, Math.round(Number(d.fenetreBlocs) * 2 / 60));
-    if (!d.transactions.length) ul.append(bcEl('li', { cls: 'note', text: 'Nothing moved in the last ' + minutes + ' min.' }));
+    /* ⛔ DENIM (2026-10-23) : la duree vient du temps de bloc MESURE par le serveur (d.sParBloc), plus de « blocs * 2 s » ; non mesure -> en blocs */
+    const sB = Number(d.sParBloc) > 0 ? Number(d.sParBloc) : null;
+    const fenetreTxt = sB ? dureeTexte(secondesPour(Number(d.fenetreBlocs), sB)) : Number(d.fenetreBlocs).toLocaleString('en-US') + ' blocks';
+    const ageTxt = (bloc) => { const n = Math.max(0, Number(d.tete) - Number(bloc)); if (!sB) return n + ' blocks ago'; const s = secondesPour(n, sB); return s < 30 ? 'now' : dureeTexte(s).replace('~', '') + ' ago'; };
+    if (!d.transactions.length) ul.append(bcEl('li', { cls: 'note', text: 'Nothing moved in the last ' + fenetreTxt + '.' }));
     for (const t of d.transactions) {
       const sortie = t.mouvements.find((m) => pools.has(m.de)), entree = t.mouvements.find((m) => pools.has(m.vers));
       const frappe = t.mouvements.find((m) => m.de === zero), brule = t.mouvements.find((m) => m.vers === zero);
       const [verbe, leg, cls] = sortie ? ['bought', sortie, 'oui'] : entree ? ['sold', entree, 'non'] : frappe ? ['minted', frappe, ''] : brule ? ['burned', brule, ''] : ['moved', t.mouvements[0], ''];
       const combien = leg && leg.montant !== null && dec !== null ? bcUnites(leg.montant, dec) + ' ' + (sym || '') : '';
-      const age = Math.max(0, Math.round((Number(d.tete) - Number(t.bloc)) * 2 / 60));
       const qui = bcEl('a', { cls: 'bcQui', href: RESEAUX[CHAINE].explorateur + '/tx/' + t.tx, target: '_blank', rel: 'noopener', text: t.signataire ? court(t.signataire) : 'unknown signer' });
-      ul.append(bcEl('li', {}, [bcEl('span', {}, [qui, bcEl('span', { text: ' ' + verbe + (combien ? ' ' + combien : '') }), bcEl('span', { cls: 'note', text: ' · ' + (age < 1 ? 'now' : age + ' min') })]),
+      ul.append(bcEl('li', {}, [bcEl('span', {}, [qui, bcEl('span', { text: ' ' + verbe + (combien ? ' ' + combien : '') }), bcEl('span', { cls: 'note', text: ' · ' + ageTxt(t.bloc) })]),
         bcEl('span', { cls: 'bcEtat ' + cls, text: verbe === 'bought' ? 'buy' : verbe === 'sold' ? 'sell' : verbe })]));
     }
-    note.textContent = d.transactions.length ? 'Last ' + d.transactions.length + ' transactions · ' + minutes + ' min window' : '';
+    note.textContent = d.transactions.length ? 'Last ' + d.transactions.length + ' transactions · ' + fenetreTxt + ' window' + (sB ? ' at the measured block time' : '') : '';
   } catch (_) { /* reseau : on reessaie au prochain tour */ } finally { bc.activiteEnVol = false; }
 }
 /* ── LES GESTES DE LA FICHE, DANS LE PANNEAU (vue Market) : Buy, la page du block, et les quatre saluts ──────────────────────────

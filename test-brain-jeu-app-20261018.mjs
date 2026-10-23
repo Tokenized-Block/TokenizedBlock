@@ -17,7 +17,8 @@ vu(/<details class="bjLimites"[^>]*>\s*<summary class="note" id="bjResume"/.test
 vu(/import \{ prochaineProposition as bjProposition \} from '\.\/brain-jeu\.js';/.test(app), 'app.html importe brain-jeu.js');
 vu(/'brain-jeu\.js',/.test(serveur.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/)[1]), 'brain-jeu.js est dans SERVIS');
 
-const debut = app.indexOf('/* ══ LET THE BRAIN PLAY'), fin = app.indexOf("setInterval(() => { if (bj.on && !document.hidden) void bjTour(); }, 30000);");
+/* 2026-10-23 DENIM : la boucle se replanifie (bjRelire : 30 s, ou le rythme du Game quand un roll attend) — elle finit a sa definition */
+const debut = app.indexOf('/* ══ LET THE BRAIN PLAY'), fin = app.indexOf('function bjRelire() {');
 vu(debut > 0 && fin > debut, 'le bloc de la boucle est trouve (' + (fin - debut) + ' caracteres)');
 const bloc = app.slice(debut, fin);
 vu(bloc.length > 4000, 'le bloc n est pas une capture vide');

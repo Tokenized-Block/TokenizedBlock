@@ -136,7 +136,8 @@ ok(/if \(String\(brainAdr \|\| ''\)\.toLowerCase\(\) !== a\) return;/.test(act),
 ok(/text: t\.signataire \? court\(t\.signataire\) : 'unknown signer'/.test(act), 'C2 activite : le signataire affiche est celui LU sur la transaction ; non lu = « unknown signer », jamais devine');
 ok(/const sortie = t\.mouvements\.find\(\(m\) => pools\.has\(m\.de\)\), entree = t\.mouvements\.find\(\(m\) => pools\.has\(m\.vers\)\);/.test(act) && /: \['moved', t\.mouvements\[0\], ''\]/.test(act),
   'C2 activite : « bought » / « sold » se disent par rapport a une pool CONNUE ; sinon « moved »');
-ok(/'Nothing moved in the last ' \+ minutes \+ ' min\.'/.test(act) && /minutes \+ ' min window'/.test(act), 'C2 activite : la fenetre balayee est dite (une liste vide n est pas « jamais »)');
+/* 2026-10-23 DENIM : la duree vient du temps de bloc MESURE (d.sParBloc) ; non mesure -> en blocs (plus de blocs * 2 s) */
+ok(/'Nothing moved in the last ' \+ fenetreTxt \+ '\.'/.test(act) && /fenetreTxt \+ ' window'/.test(act) && /const sB = Number\(d\.sParBloc\) > 0/.test(act) && !/\* 2 \/ 60/.test(act), 'C2 activite : la fenetre balayee est dite (une liste vide n est pas « jamais »), au temps de bloc mesure');
 ok(/if \(\$\('#bcPop'\)\.open && \$\('#bc-market'\)\.classList\.contains\('on'\) && \(bc\.activiteDe !== a \|\| Date\.now\(\) - bc\.activiteLue > 20000\)\) void bcLireActivite\(a, sym, mk\);/.test(bcSrc),
   'C2 activite : relue toutes les 20 s, seulement quand la vue Market du pop-up est ouverte');
 /* l index, le repeint sans battement */

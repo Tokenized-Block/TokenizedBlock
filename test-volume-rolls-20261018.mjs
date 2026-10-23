@@ -33,5 +33,5 @@ const f = srv.slice(f0, f1);
 vu(/BLOCKROLLS_DEPLOIEMENT\.adresse/.test(f) && /depensesJeu\(logs, contrat\)/.test(f) && /!internes\.has\(d\.joueur\)/.test(f) && /usd: Number\(d\.brut\) \/ 1e6/.test(f), 'logs du contrat de la fiche, internes exclus, USD = brut / 1e6');
 /* 2026-10-18 (revue adverse) : le JOUR DU BLOC (horodatage lu), plus le jour du scan — execute par test-volume-rolls-jour-bloc */
 vu(/revenu\.jours = crediter\(revenu\.jours \|\| \{\}, \{ saison: jourDuBloc\.get\(d\.bloc\), payeur: d\.joueur, hash: d\.tx, usd/.test(f) && !/jourDe\(Date\.now\(\)\)/.test(f), 'credite le jour UTC du BLOC dans revenu.jours (deduplique par hash), jamais le jour du scan');
-vu(/Math\.min\(sur, de \+ 1999\)/.test(f) && /const sur = tete - ROLLS_MARGE_BLOCS;/.test(f) && /revenu\.rollsScan = /.test(f), 'scan incremental par fenetres de 2 000 blocs, curseur persiste, jamais au-dela de tete - 3');
+vu(/Math\.min\(sur, de \+ 1999\)/.test(f) && /const sur = tete - margeBlocsRolls\(\);/.test(f) && /revenu\.rollsScan = /.test(f), 'scan incremental par fenetres de 2 000 blocs, curseur persiste, jamais au-dela de tete - 3');
 console.log('ok volume-rolls - ' + n + ' assertions ; NE PROUVE PAS un roll reel');

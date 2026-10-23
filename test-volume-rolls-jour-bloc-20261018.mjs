@@ -12,12 +12,14 @@ import { strict as assert } from 'node:assert';
 import { depensesJeu, passesAchetes, TOPIC_ROLLED, TOPIC_PASS } from './volume-rolls.js';
 import { crediterPassSemaine } from './tirage-saison.js';
 import { crediter, jourDe } from './tirage-saison.js';
+import { blocsPour, sParBlocMesure, enteteVersMesure, RECUL_MESURE_BLOCS } from './temps-de-bloc.js';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 /* la tranche commence a la marge ; a defaut (code d avant le correctif) au drapeau du scan — pour que ce test EXECUTE aussi l ancien code
  *   et rougisse sur son comportement (jour du scan, curseur a la tete), pas seulement sur un nom absent */
-const i0 = srv.indexOf('const ROLLS_MARGE_BLOCS') > 0 ? srv.indexOf('const ROLLS_MARGE_BLOCS') : srv.indexOf('let rollsScanEnVol'), i1 = srv.indexOf('setInterval(() => { void crediterVolumeRolls(); }');
+/* 2026-10-23 (Denim) : la marge est ROLLS_MARGE_S (secondes) convertie au temps de bloc mesure (margeBlocsRolls) ; non mesure -> 3 blocs */
+const i0 = [srv.indexOf('const ROLLS_MARGE_S'), srv.indexOf('const ROLLS_MARGE_BLOCS'), srv.indexOf('let rollsScanEnVol')].find((x) => x > 0), i1 = srv.indexOf('setInterval(() => { void crediterVolumeRolls(); }');
 vu(i0 > 0 && i1 > i0, 'la tranche crediterVolumeRolls (marge, horodatages, scan) est trouvee');
 const src = srv.slice(i0, i1);
 const C = '0x0c5b490196f06db40ab8af68ecb2313029460fe9', J = '0x' + 'ab'.repeat(20), K = '0x' + 'cd'.repeat(20);
@@ -40,9 +42,11 @@ function monter({ tete, tsIllisible = null }) {
   const f = new Function('BLOCKROLLS_DEPLOIEMENT', 'rpcServeur', 'revenu', 'revenuSale', 'walletsInternes', 'COMPTE_SONDE', 'process', 'crediter', 'jourDe', 'depensesJeu', 'TOPIC_ROLLED_SRV', 'TOPIC_PASS_SRV', 'lireUintRolls', 'rpcRails', 'appelPotRolls',
     /* 2026-10-18 : le Week pass est credite dans la MEME boucle (passesAchetes -> crediterPassSemaine) */
     'passesAchetes', 'crediterPassSemaine',
+    /* 2026-10-23 : le temps de bloc mesure (temps-de-bloc.js) — TB_SONDES=0 : pas de minuteur de mesure dans ce test */
+    'blocsPour', 'sParBlocMesure', 'enteteVersMesure', 'RECUL_MESURE_BLOCS',
     src + '\nreturn crediterVolumeRolls;');
-  const crediterVolumeRolls = f({ adresse: C, bloc: 100 }, rpcServeur, revenu, false, () => new Set(), '0x' + '00'.repeat(20), { env: {} }, crediter, jourDe, depensesJeu, TOPIC_ROLLED, TOPIC_PASS, () => null, async () => null, () => '0x',
-    passesAchetes, crediterPassSemaine);
+  const crediterVolumeRolls = f({ adresse: C, bloc: 100 }, rpcServeur, revenu, false, () => new Set(), '0x' + '00'.repeat(20), { env: { TB_SONDES: '0' } }, crediter, jourDe, depensesJeu, TOPIC_ROLLED, TOPIC_PASS, () => null, async () => null, () => '0x',
+    passesAchetes, crediterPassSemaine, blocsPour, sParBlocMesure, enteteVersMesure, RECUL_MESURE_BLOCS);
   return { crediterVolumeRolls, revenu, lus };
 }
 /* (1) (2) */

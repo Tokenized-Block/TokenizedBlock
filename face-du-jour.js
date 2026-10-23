@@ -9,15 +9,33 @@
 import { apparenceDepuisAdresse } from './apparence.js';
 
 export const DELAI_REVELATION_S = 120;
-/** le bloc E : le PREMIER bloc dont l horodatage est >= cibleTs (s). rpc injecte. Estimation a 2 s/bloc (Base) depuis la tete, puis
- *  recherche exacte (descente/montee bornees + dichotomie). Rend { bloc, ts, hash } ; la cible pas encore atteinte -> null (rien d invente). */
-export async function premierBlocApres(rpc, cibleTs) {
+/** le bloc E : le PREMIER bloc dont l horodatage est >= cibleTs (s). rpc injecte. Estimation au temps de bloc `sParBloc` (MESURE par
+ *  l appelant ; 2 s sinon) depuis la tete, puis recherche exacte : descente par pas DOUBLES jusqu a un bloc AVANT la cible (verifie), puis
+ *  (estimation juste) remontee par pas doubles pour resserrer, puis dichotomie. Rend { bloc, ts, hash } ; la cible pas encore atteinte ->
+ *  null (rien d invente) ; le bloc 0 deja >= cible -> le bloc 0.
+ *  ⛔ DENIM (2026-10-23) : la descente par pas croissants de 50 (~41 000 blocs au plus) ne rejoignait pas une cible estimee a 2 s/bloc quand
+ *  les blocs font 200 ms (20 h = 360 000 blocs) ; la dichotomie partait d un `lo` APRES la cible et rendait un bloc E FAUX
+ *  (test-face-du-jour-denim-20261023.mjs). Le pas double atteint tout recul en ~40 lectures, et `lo` est VERIFIE avant la dichotomie. */
+export async function premierBlocApres(rpc, cibleTs, { sParBloc = 2 } = {}) {
   const lire = async (b) => { const r = await rpc('eth_getBlockByNumber', ['0x' + b.toString(16), false]); return { bloc: b, ts: parseInt(r.timestamp, 16), hash: String(r.hash).toLowerCase() }; };
   const tete = parseInt(await rpc('eth_blockNumber', []), 16);
   const t = await lire(tete);
   if (t.ts < cibleTs) return null;
-  let lo = Math.max(0, tete - Math.ceil((t.ts - cibleTs) / 2) - 2), hi = tete; /* lo : ts < cible (a verifier), hi : ts >= cible */
-  for (let k = 0; k < 40; k++) { const x = await lire(lo); if (x.ts < cibleTs) break; hi = lo; lo = Math.max(0, lo - (k + 1) * 50); if (lo === 0) break; }
+  const s = Number.isFinite(sParBloc) && sParBloc > 0 ? sParBloc : 2;
+  let hi = tete, lo = Math.max(0, tete - Math.ceil((t.ts - cibleTs) / s) - 2); /* lo : ts < cible (VERIFIE ci-dessous), hi : ts >= cible */
+  /* descente : 64, 128, 256… blocs — atteint le bloc 0 en ~40 pas, quel que soit l ecart d estimation ; si le bloc 0 est deja >= cible, hi = 0 */
+  let descendu = false;
+  for (let pas = 64; ; pas *= 2) {
+    const x = await lire(lo);
+    if (x.ts < cibleTs) break;
+    hi = lo; descendu = true;
+    if (lo === 0) return lire(0);
+    lo = Math.max(0, lo - pas);
+  }
+  /* estimation juste (lo avant la cible du premier coup) : on remonte par pas doubles pour resserrer hi, au lieu de couper [lo, tete] */
+  if (!descendu) {
+    for (let pas = 64; lo + pas < hi; pas *= 2) { const x = await lire(lo + pas); if (x.ts >= cibleTs) { hi = lo + pas; break; } lo += pas; }
+  }
   for (let k = 0; k < 64 && hi - lo > 1; k++) { const mi = Math.floor((lo + hi) / 2); if ((await lire(mi)).ts >= cibleTs) hi = mi; else lo = mi; }
   return lire(hi);
 }

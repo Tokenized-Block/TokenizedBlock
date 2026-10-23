@@ -83,7 +83,7 @@ const srvChecks = {
   pasOuvertSansFiche: (t) => { const h = entre(t, "if (chemin === '/api/duels') {", '/* ══ BLOCK MISSIONS (2026-10-17)'); const i = h.indexOf("if (!contrat) { rendreD({ ok: false, etat: 'PAS_OUVERT'"), j = h.indexOf('void lireDuelsSrv()'); return i > 0 && j > i && !/eth_send|sendTransaction|sendRawTransaction/.test(h); },
   getSeulement: (t) => /if \(req\.method !== 'GET' && req\.method !== 'HEAD'\) \{ res\.writeHead\(405[^\n]*GET only/.test(entre(t, "if (chemin === '/api/duels') {", '/* ══ BLOCK MISSIONS (2026-10-17)')),
   fenetresBornees: (t) => { const s = entre(t, 'async function lireDuelsSrv()', 'setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000)');
-    return /const DUELS_FENETRES_PAR_TOUR = 20;/.test(t) && /for \(let k = 0; k < DUELS_FENETRES_PAR_TOUR && x <= tete; k\+\+\)/.test(s) && /const y = Math\.min\(tete, x \+ TAILLE_LOGS_DUELS - 1\);/.test(s) && /duelsSrv\.de = Math\.max\(deploie, tete - DUELS_RECUL_BLOCS\)/.test(s); },
+    return /const DUELS_FENETRES_PAR_TOUR = 20;/.test(t) && /for \(let k = 0; k < DUELS_FENETRES_PAR_TOUR && x <= tete; k\+\+\)/.test(s) && /const y = Math\.min\(tete, x \+ TAILLE_LOGS_DUELS - 1\);/.test(s) && /const recul = duelsReculBlocs\(await sParBlocSrv\(\)\);/.test(s) && /duelsSrv\.de = Math\.max\(deploie, tete - recul\)/.test(s); },
   servi: (t) => /'duels-plan-app\.js',/.test((t.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/) || [])[1] || ''),
   nonLuPasVide: (t) => /if \(duelsSrv\.contrat !== contrat \|\| duelsSrv\.tete === null\) \{ rendreD\(\{ ok: false, etat: 'NON_LU'/.test(t),
 };

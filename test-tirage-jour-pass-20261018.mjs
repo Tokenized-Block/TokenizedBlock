@@ -48,7 +48,7 @@ vu(/never to whoever clicks/.test(P), 'dit que le pot va a l acheteur tire, jama
 const D = tranche('async function tirerJourPass()', "$('#jourTirerJour').addEventListener");
 vu(/planCloseDay\(\{ contrat, day: d\.day \}\)/.test(D) && /planDrawDay\(\{ contrat, day: d\.day, targetBlock: d\.targetBlock, blocActuel: d\.tete \}\)/.test(D) && D.indexOf('planCloseDay') < D.indexOf('planDrawDay'), 'closeDay puis drawDay, fenetre de 256 blocs respectee (cible + tete)');
 vu(/lireDayDrawn\(lus\.logs, contrat\)/.test(D) && /envoyerAppels\(pc\.appels, c\)/.test(D) && /envoyerAppels\(pd\.appels, c\)/.test(D), 'deux signatures du wallet, DayDrawn lu');
-vu(/\$\('#jourTirerJour'\)\.addEventListener\('click', \(\) => \{ void tirerJourPass\(\); \}\);/.test(app) && /if \(nom === 'missions'\) \{[^\n]*peindreTirageJourPass\(\)/.test(app) && /void peindreTirageJourPass\(\); \} \}, 20000\);/.test(app), 'cable : clic, ouverture du Game, toutes les 20 s');
+vu(/\$\('#jourTirerJour'\)\.addEventListener\('click', \(\) => \{ void tirerJourPass\(\); \}\);/.test(app) && /if \(nom === 'missions'\) \{[^\n]*peindreTirageJourPass\(\)/.test(app) && /function relireJeu\(\) \{\n[^\n]*\n[^\n]*void peindreTirageJourPass\(\); \}\n  setTimeout\(relireJeu, intervalleJeuMs\(\)\);/.test(app.replace(/\r\n/g, '\n')), 'cable : clic, ouverture du Game, relu au rythme calcule (20 s avant Denim ; 2026-10-23)');
 const pp = tranche('async function passPaye()', "$('#jourRollPaye').addEventListener");
 vu(!/drawn by a Base block hash after midnight UTC\.'/.test(pp) && /Close and draw yesterday/.test(pp), 'le texte du pass dit QUI tire et avec quel bouton');
 console.log('ok tirage-jour-pass - ' + n + ' assertions ; NE PROUVE PAS un tirage reel');

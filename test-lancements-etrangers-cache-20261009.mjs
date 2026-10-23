@@ -36,7 +36,9 @@ const dort = (ms) => new Promise((ok) => setTimeout(ok, ms));
 const TETE = 52400000;
 const scanOk = (o, ratees = 0) => ({ lancements: [{ jeton: '0xab', bloc: o.aBloc }], fenetres: 77, ratees, nonAffines: 0, parLaunchpad: { x: 1 } });
 
-function monter(scanner) {
+/* 2026-10-23 DENIM : `heures` passe en blocs au temps de bloc MESURE (sParBlocSrv) ; 2 s ici sauf A8 (200 ms) et A9 (non mesure) */
+import { blocsPour } from './temps-de-bloc.js';
+function monter(scanner, sParBloc = 2) {
   const horloge = { t: 1.8e12 };
   class D extends Date { static now() { return horloge.t; } }
   const appels = { tete: 0, scans: [] };
@@ -45,8 +47,8 @@ function monter(scanner) {
     throw new Error('lecture inattendue : ' + m);
   };
   const scannerLancements = async (o) => { appels.scans.push(o); return scanner(o); };
-  const { lancementsEtrangers, etrangersCache } = new Function('rpcServeur', 'scannerLancements', 'Date',
-    fonction + '\n; return { lancementsEtrangers, etrangersCache };')(rpcServeur, scannerLancements, D);
+  const { lancementsEtrangers, etrangersCache } = new Function('rpcServeur', 'scannerLancements', 'Date', 'blocsPour', 'sParBlocSrv',
+    fonction + '\n; return { lancementsEtrangers, etrangersCache };')(rpcServeur, scannerLancements, D, blocsPour, async () => sParBloc);
   const jouerRoute = new Function('chemin', 'req', 'res', 'lancementsEtrangers', route);
   const appeler = (h) => new Promise((ok) => {
     const r = { code: null, corps: null };
@@ -166,6 +168,22 @@ await cas('A7 1 000 valeurs de h tirees au hasard (graine fixe) : cles dans {1..
   assert.ok(m.appels.scans.length <= 6, '1 000 requetes ont lance ' + m.appels.scans.length + ' scans');
 });
 
-assert.equal(n, 7, 'le banc ne s est pas compte : ' + n + ' cas');
+await cas('A8 DENIM : a 200 ms/bloc mesure, h heures = h * 18 000 blocs (pas h * 1 800 = h/10 heures)', async () => {
+  const m = monter((o) => scanOk(o), 0.2);
+  const r = await m.appeler('3');
+  assert.equal(r.corps.ok, true);
+  assert.equal(r.corps.deBloc, TETE - 3 * 18000, 'deBloc a 200 ms : tete - ' + (TETE - r.corps.deBloc));
+});
+
+await cas('A9 temps de bloc non mesure : echec DIT, aucun scan, rien en cache (jamais des heures fausses)', async () => {
+  const m = monter((o) => scanOk(o), null);
+  const r = await m.appeler('2');
+  assert.equal(r.corps.ok, false);
+  assert.match(String(r.corps.pourquoi), /block time not measured/);
+  assert.equal(m.appels.scans.length, 0);
+  assert.equal(m.etrangersCache.size, 0);
+});
+
+assert.equal(n, 9, 'le banc ne s est pas compte : ' + n + ' cas');
 if (ko) { console.error('⛔ ' + ko + '/' + n + ' cas ROUGES'); process.exit(1); }
 console.log('✓ ' + n + ' cas — h arrondi a 1..6 (6 cles au plus), un seul scan en vol par cle, un echec dit et jamais mis en cache');

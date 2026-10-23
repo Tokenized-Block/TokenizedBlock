@@ -99,6 +99,8 @@ import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
 import { BLOCKSKINS as BLOCKSKINS_SRV, BLOCKSKINS_ACTIF as BLOCKSKINS_ACTIF_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv, DEVISES_SKIN as DEVISES_SKIN_SRV } from './blockskins.js';
 import { lireEvenementsJeu, evenementsPractice, fusionnerJournal, avecBlocks, TOPICS_ROLLS as TOPICS_ROLLS_JOURNAL, TOPICS_SKINS as TOPICS_SKINS_JOURNAL, JOURNAL_MAX, SOURCE_DUELS } from './journal-jeu.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
+/* 2026-10-23 DENIM : le temps de bloc MESURE (deux en-tetes), et les reculs exprimes en secondes convertis avec lui (temps-de-bloc.js) */
+import { sParBlocMesure, enteteVersMesure, blocsPour, RECUL_MESURE_BLOCS } from './temps-de-bloc.js';
 import { actionsDesLogs, crediterActions, joursTicketParWallet, niveauWallet, bonusNiveauxSemaine, TOPICS_XP, XP_PAR_ACTION, NIVEAUX_XP } from './niveaux-jeu.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
@@ -1411,7 +1413,10 @@ async function lancementsEtrangers(h) {
   if (etrangersEnVol.has(cle)) return etrangersEnVol.get(cle);
   const enVol = (async () => {
     const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
-    const deBloc = tete - Math.round(heures * 1800);
+    /* ⛔ DENIM (2026-10-23) : `heures` en blocs au temps MESURE (etait heures * 1800, soit 2 s/bloc) ; non mesure -> echec dit, pas d heures fausses */
+    const recul = blocsPour(heures * 3600, await sParBlocSrv());
+    if (recul === null) throw new Error('block time not measured');
+    const deBloc = tete - recul;
     const scan = await scannerLancements({ rpc: rpcServeur, deBloc, aBloc: tete, maxAffinage: 250 });
     const r = {
       ok: true, lu: new Date().toISOString(), heures, deBloc, aBloc: tete,
@@ -1461,7 +1466,10 @@ async function fraisRecents(heures) {
   const dansLeCache = recentsCache.get(cle);
   if (dansLeCache && Date.now() - dansLeCache.t < 300000) return dansLeCache.r;
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
-  const scan = await scanFrais({ rpc: rpcServeur, deBloc: tete - Math.round(heures * 1800), aBloc: tete });
+  /* ⛔ DENIM (2026-10-23) : `heures` en blocs au temps MESURE (etait heures * 1800, soit 2 s/bloc) */
+  const reculFrais = blocsPour(Number(heures) * 3600, await sParBlocSrv());
+  if (reculFrais === null) throw new Error('block time not measured');
+  const scan = await scanFrais({ rpc: rpcServeur, deBloc: tete - reculFrais, aBloc: tete });
   /* ⛔ ON NE VERIFIE PAS 400 SOLDES A CHAQUE APPEL : seuls les 25 derniers, et on DIT combien
    *    n ont pas ete verifies. Un plafond silencieux se lirait comme « tout est verifie ». */
   const aVerifier = scan.evenements.slice(-25);
@@ -2538,7 +2546,8 @@ async function lireActiviteServeur(token) {
       /* les pools de ce jeton que NOUS connaissons : le PoolManager v4, et sa pool Aerodrome mesuree s il en a une. Le client dit
        *   « bought » / « sold » par rapport a elles ; un mouvement qui ne touche aucune d elles reste « moved ». */
       const aero = POOLS_ACTIONS_AERODROME.get(token);
-      const r = { ok: true, block: token, tete, fenetreBlocs: balaye, pools: [PM_V4.toLowerCase(), ...(aero ? [String(aero.pool).toLowerCase()] : [])],
+      /* 2026-10-23 DENIM : sParBloc = temps de bloc MESURE (null si non mesure) — l app en tire « N min », jamais blocs * 2 */
+      const r = { ok: true, block: token, tete, fenetreBlocs: balaye, sParBloc: tempsDeBlocSrv.sParBloc, pools: [PM_V4.toLowerCase(), ...(aero ? [String(aero.pool).toLowerCase()] : [])],
         transactions: txs, lu: new Date().toISOString() };
       if (activitesServeur.size >= 200) activitesServeur.delete(activitesServeur.keys().next().value);
       activitesServeur.set(token, { t: Date.now(), r });
@@ -4038,8 +4047,41 @@ setInterval(() => { void crediterDetenteursSkins(); }, 600000).unref?.();
 /* ⛔ 2026-10-18 (revue adverse) : (1) le credit allait au jour du SCAN (Date.now) — un roll de 23:59 lu a 00:01 comptait pour le lendemain ;
  *   il va desormais au jour UTC du BLOC du log (horodatage lu, garde en cache). Un horodatage illisible -> la fenetre n est PAS creditee et
  *   le curseur ne bouge pas (relue au tour suivant). (2) Le curseur s arretait sur la tete EXACTE : un noeud en retard rendait une fenetre
- *   sans ses derniers logs, perdus pour toujours ; il s arrete a tete - ROLLS_MARGE_BLOCS. */
-const ROLLS_MARGE_BLOCS = 3;
+ *   sans ses derniers logs, perdus pour toujours ; il s arrete a tete - margeBlocsRolls() (ROLLS_MARGE_S au temps mesure, >= 3 blocs). */
+/* ⛔ DENIM (2026-10-23) : la marge est une duree (un noeud en retard de quelques SECONDES), pas un nombre de blocs. 3 blocs = 6 s a 2 s/bloc,
+ *   0,6 s a 200 ms. Elle vaut donc ROLLS_MARGE_S au temps de bloc mesure, jamais moins de 3 blocs (inchangee avant Denim). */
+const ROLLS_MARGE_S = 6;
+const margeBlocsRolls = () => Math.max(3, blocsPour(ROLLS_MARGE_S, tempsDeBlocSrv.sParBloc) ?? 3);
+/* ══ LE TEMPS DE BLOC MESURE (2026-10-23, Denim : Base passe de 2 s a 200 ms/bloc, mainnet vise novembre 2026 — docs.base.org/upgrades/denim).
+ *   Deux en-tetes (la tete et RECUL_MESURE_BLOCS plus bas, servis par les noeuds publics a cette profondeur), relus au plus toutes les
+ *   10 min ; timestampMs si les deux en ont (champ optionnel de Denim), sinon les secondes. Non mesure -> null : les reculs exprimes en temps
+ *   NE PARTENT PAS (la lecture attend le tour suivant), rien n est calcule a 2 s par defaut. Expose par /api/tirage (tempsDeBloc). */
+const tempsDeBlocSrv = { sParBloc: null, de: null, a: null, source: null, lu: 0, enVol: null, erreur: null };
+async function sParBlocSrv() {
+  if (tempsDeBlocSrv.sParBloc !== null && Date.now() - tempsDeBlocSrv.lu < 600000) return tempsDeBlocSrv.sParBloc;
+  if (tempsDeBlocSrv.enVol) return tempsDeBlocSrv.enVol;
+  tempsDeBlocSrv.enVol = (async () => {
+    try {
+      const haut = enteteVersMesure(await rpcServeur('eth_getBlockByNumber', ['latest', false]));
+      if (!haut || haut.bloc <= RECUL_MESURE_BLOCS) throw new Error('head header unreadable');
+      const bas = enteteVersMesure(await rpcServeur('eth_getBlockByNumber', ['0x' + (haut.bloc - RECUL_MESURE_BLOCS).toString(16), false]));
+      const s = sParBlocMesure({ haut, bas });
+      if (s === null) throw new Error('block time not measurable from these headers');
+      Object.assign(tempsDeBlocSrv, { sParBloc: s, de: bas.bloc, a: haut.bloc, source: haut.tsMs !== null && bas.tsMs !== null ? 'timestampMs' : 'timestamp', lu: Date.now(), erreur: null });
+      return s;
+    } catch (e) {
+      /* la derniere mesure reste servie (avec son `lu`) ; jamais une valeur inventee */
+      tempsDeBlocSrv.erreur = String((e && e.message) || e).slice(0, 120);
+      return tempsDeBlocSrv.sParBloc;
+    } finally { tempsDeBlocSrv.enVol = null; }
+  })();
+  return tempsDeBlocSrv.enVol;
+}
+function tempsDeBlocJson() {
+  return { sParBloc: tempsDeBlocSrv.sParBloc, mesureEntre: tempsDeBlocSrv.de === null ? null : [tempsDeBlocSrv.de, tempsDeBlocSrv.a], source: tempsDeBlocSrv.source,
+    lu: tempsDeBlocSrv.lu ? new Date(tempsDeBlocSrv.lu).toISOString() : null, erreur: tempsDeBlocSrv.erreur };
+}
+if (process.env.TB_SONDES !== '0') { setTimeout(() => { void sParBlocSrv(); setInterval(() => { void sParBlocSrv(); }, 600000).unref?.(); }, 3000).unref?.(); }
 const horodatagesBlocsRolls = new Map();
 async function horodatageBloc(n) {
   if (horodatagesBlocsRolls.has(n)) return horodatagesBlocsRolls.get(n);
@@ -4058,7 +4100,7 @@ async function crediterVolumeRolls() {
   try {
     const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     if (!Number.isSafeInteger(tete)) return;
-    const sur = tete - ROLLS_MARGE_BLOCS;
+    const sur = tete - margeBlocsRolls();
     let de = Number.isSafeInteger(revenu.rollsScan) ? revenu.rollsScan + 1 : BLOCKROLLS_DEPLOIEMENT.bloc;
     const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
     for (let tour = 0; tour < 10 && de <= sur; tour++) {
@@ -4133,12 +4175,15 @@ function ticketpotJson() {
 }
 /* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18) — LECTURE SEULE. Les logs de BlockDuels (Created / Joined / Settled / Cancelled / Refunded),
  *   relus par fenetres de 2 000 blocs, au plus DUELS_FENETRES_PAR_TOUR par tour, avec 300 blocs de recouvrement (doublons comptes une fois).
- *   ⛔ JAMAIS depuis le bloc de deploiement d un coup : on part de max(deploiement, tete - DUELS_RECUL_BLOCS) — un duel non pris expire en
+ *   ⛔ JAMAIS depuis le bloc de deploiement d un coup : on part de max(deploiement, tete - duelsReculBlocs(temps mesure)) — un duel non pris expire en
  *   7 jours au plus, et un duel pris se regle ou se rembourse dans les 256 blocs : plus vieux, il n a plus d action possible.
- *   ⛔ DENIM (Base, 200 ms/bloc vise novembre 2026) : DUELS_RECUL_BLOCS est calcule a 2 s/bloc ; a 200 ms il couvre ~17 h, pas 7 jours —
- *   un duel ouvert plus vieux ne serait plus liste ici (ses fonds restent sur le contrat, refundExpired reste appelable par n importe qui).
- *   En memoire seulement (un redemarrage relit la fenetre : ~150 fenetres, ~4 min a 20 fenetres / 30 s). */
-const DUELS_RECUL_BLOCS = Math.ceil((7 * 86400) / 2) + 2 * 256 + 600;
+ *   ⛔ DENIM (Base, 200 ms/bloc vise novembre 2026) : le recul etait calcule a 2 s/bloc (302 400 blocs) ; a 200 ms il ne couvrait que ~17 h,
+ *   pas 7 jours. 2026-10-23 : il est calcule au temps de bloc MESURE (sParBlocSrv) : 7 jours en blocs + 2 fenetres de 256 + 600. Identique
+ *   avant Denim ; apres, ~3 M blocs = ~1 500 fenetres au demarrage (~38 min a 20 fenetres / 30 s, en lectures d archive) — cout NON mesure.
+ *   Temps de bloc non mesure -> le tour echoue (relu au suivant), jamais un recul invente.
+ *   En memoire seulement (un redemarrage relit la fenetre : ~150 fenetres, ~4 min a 20 fenetres / 30 s, aujourd hui). */
+const DUELS_RECUL_S = 7 * 86400;
+const duelsReculBlocs = (sParBloc) => { const b = blocsPour(DUELS_RECUL_S, sParBloc); return b === null ? null : b + 2 * 256 + 600; };
 const DUELS_FENETRES_PAR_TOUR = 20;
 const duelsSrv = { contrat: null, de: null, jusqua: null, logs: new Map(), tete: null, lu: 0, enVol: false, erreur: null };
 function contratDuels() {
@@ -4154,7 +4199,11 @@ async function lireDuelsSrv() {
     const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('head unreadable');
     const deploie = Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) && DUELS_DEPLOIEMENT.bloc > 0 ? DUELS_DEPLOIEMENT.bloc : Math.max(0, tete - 5000);
-    if (duelsSrv.de === null) duelsSrv.de = Math.max(deploie, tete - DUELS_RECUL_BLOCS);
+    if (duelsSrv.de === null) {
+      const recul = duelsReculBlocs(await sParBlocSrv());
+      if (recul === null) throw new Error('block time not measured');
+      duelsSrv.de = Math.max(deploie, tete - recul);
+    }
     let x = duelsSrv.jusqua === null ? duelsSrv.de : Math.max(duelsSrv.de, duelsSrv.jusqua - 300);
     for (let k = 0; k < DUELS_FENETRES_PAR_TOUR && x <= tete; k++) {
       const y = Math.min(tete, x + TAILLE_LOGS_DUELS - 1);
@@ -4199,11 +4248,12 @@ async function lireJournalJeu() {
     const j = jourDe(Date.now());
     const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     if (!Number.isSafeInteger(tete) || tete <= 1000) return;
-    const sur = tete - ROLLS_MARGE_BLOCS;
+    const sur = tete - margeBlocsRolls();
     if (journalEtat.curseur === null) {
-      const tsT = await horodatageBloc(tete), tsA = await horodatageBloc(tete - 1000);
-      if (tsT === null || tsA === null) return;
-      const sParBloc = tsT > tsA ? (tsT - tsA) / 1000 : 2;
+      /* ⛔ DENIM (2026-10-23) : le temps de bloc vient de la mesure partagee (sParBlocSrv) — plus de repli « 2 s » si la mesure rate :
+       *   le journal attend le tour suivant au lieu de partir d un minuit faux de 10x */
+      const tsT = await horodatageBloc(tete), sParBloc = await sParBlocSrv();
+      if (tsT === null || sParBloc === null) return;
       const depuisMinuit = tete - Math.ceil(Math.max(0, tsT - j.debut / 1000) / sParBloc) - 30;
       const de = Math.max(depuisMinuit, tete - JOURNAL_PROFONDEUR_MAX, 1);
       journalEtat.curseur = de - 1; journalEtat.couvertureDepuis = de; journalEtat.couvreLaJournee = de <= depuisMinuit; journalEtat.jour = j.id;
@@ -4261,7 +4311,7 @@ async function crediterXp() {
   try {
     const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     if (!Number.isSafeInteger(tete)) return;
-    const sur = tete - ROLLS_MARGE_BLOCS;
+    const sur = tete - margeBlocsRolls();
     revenu.xpScan = revenu.xpScan || {}; revenu.xpTrous = revenu.xpTrous || [];
     const srcs = sourcesXp(), adresses = Object.fromEntries(srcs.map((s) => [s.cle, s.contrat]));
     for (const s of srcs) {
@@ -4462,6 +4512,8 @@ const SERVIS = [
   'missions-rail.js',
   /* 2026-10-17 soir : Face of the Day (l app score ton ticket contre la face revelee par le bloc E) */
   'face-du-jour.js',
+  /* 2026-10-23 DENIM : le temps de bloc mesure (pur), importe par app.html : absent d ici = 404 = page morte */
+  'temps-de-bloc.js',
   /* 2026-10-17 soir : le tableau des missions construit le claim (planReclamer) dans le navigateur */
   'missions-plan.js',
   /* 2026-10-18 : BlockRolls — la page qui propose AU WALLET CONNECTE le deploiement (noindex, aucun lien), sa fiche figee, l encodeur pur de la
@@ -6260,7 +6312,8 @@ function traiterRequete(req, res) {
     const rev = revenu.revelations[veilleJ.id];
     if (!rev && now >= veilleJ.fin + DELAI_REVELATION_S * 1000 && !revelationEnCours) {
       revelationEnCours = true;
-      premierBlocApres(rpcServeur, Math.floor(veilleJ.fin / 1000) + DELAI_REVELATION_S)
+      /* 2026-10-23 DENIM : le temps de bloc MESURE raccourcit la recherche (le resultat est exact sans lui : test-face-du-jour-denim) */
+      premierBlocApres(rpcServeur, Math.floor(veilleJ.fin / 1000) + DELAI_REVELATION_S, { sParBloc: tempsDeBlocSrv.sParBloc ?? undefined })
         .then((e) => { if (e) { revenu.revelations[veilleJ.id] = { bloc: e.bloc, ts: e.ts, hash: e.hash }; revenuSale = true; } })
         .catch(() => { /* relu au prochain appel */ }).finally(() => { revelationEnCours = false; });
     }
@@ -6285,7 +6338,9 @@ function traiterRequete(req, res) {
       prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: [rc.prize5, rc.prize4, rc.prize3, rc.prize2].map(String), minScore: rc.minScore,
       bloc: contratRolls && Number.isSafeInteger(BLOCKROLLS_DEPLOIEMENT.bloc) ? BLOCKROLLS_DEPLOIEMENT.bloc : null,
       pot: contratRolls && potRollsSrv.brut !== null ? potRollsSrv.brut : null, potLu: contratRolls && potRollsSrv.lu ? new Date(potRollsSrv.lu).toISOString() : null };
-    return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls, ticketpot: ticketpotJson(),
+    /* 2026-10-23 DENIM : le temps de bloc MESURE (null tant qu il ne l est pas) — l app en tire les durees des fenetres et son rythme de relecture */
+    void sParBlocSrv();
+    return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls, ticketpot: ticketpotJson(), tempsDeBloc: tempsDeBlocJson(),
       apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: tJ.includes(adresse) })),

@@ -43,7 +43,7 @@ const iV = app.indexOf('async function verifierRollsEnAttente('), iR = app.index
 vu(iV > 0 && iR > iV && app.split('async function verifierRollsEnAttente(').length === 2, 'verifierRollsEnAttente defini une fois');
 const V = app.slice(iV, iR), R = app.slice(iR, app.indexOf('async function suivreRollsEnAttente('));
 vu(/rollsCfg\.bloc/.test(V) && /fenetresLogs\(de, tete\)/.test(V) && /filtreLogsJoueur\(\{ contrat, joueur: moi/.test(V) && /rpc\('eth_getLogs'/.test(V) && /rollsEnAttente\(\{ logs:/.test(V), 'verifier : logs depuis le bloc servi, fenetres de 2 000, filtre joueur, module pur');
-vu(/bt\.hidden = n === 0;/.test(V) && /'Settle ' \+ n \+ ' pending roll'/.test(V) && /lost: the 256-block window passed/.test(V), 'bouton « Settle N pending rolls » seulement s il y a des reglables ; les perdus sont DITS');
+vu(/bt\.hidden = n === 0;/.test(V) && /'Settle ' \+ n \+ ' pending roll'/.test(V) && /lost: the ' \+ texteBlocs\(FENETRE_ROLLS, sParBlocApp\) \+ ' window passed/.test(V) /* 2026-10-23 Denim : la fenetre dit sa duree au temps mesure */, 'bouton « Settle N pending rolls » seulement s il y a des reglables ; les perdus sont DITS');
 vu(/planSettleMany\(\{ contrat: rollsCfg\.contrat, rollIds: r\.reglables\.map\(\(x\) => x\.rollId\) \}\)/.test(R) && /envoyerAppels\(ps\.appels, c\)/.test(R) && /lireSettledTous\(lus\.logs/.test(R) && /montrerSettled\(/.test(R), 'regler : UN settleMany pour tous les reglables, Settled lus, faces et scores montres');
 vu(/\$\('#rollsRegler'\)\.addEventListener\('click', \(\) => \{ void reglerRollsEnAttente\(\); \}\);/.test(app), 'le bouton est cable');
 /* (3) */
@@ -52,7 +52,8 @@ vu(/\} finally \{[^}]*void verifierRollsEnAttente\(\); \}/.test(rp), 'rollPaye :
 const ar = app.slice(app.indexOf('async function autoRoll()'), app.indexOf('async function autoRollLot('));
 vu(/\} finally \{[^}]*void verifierRollsEnAttente\(\); \}/.test(ar), 'autoRoll : idem');
 vu(/if \(nom === 'missions'\) \{[^\n]*verifierRollsEnAttente\(\)/.test(app), 'ouverture du Game : relu');
-vu(/setInterval\(\(\) => \{ const v = document\.getElementById\('v-missions'\); if \(!document\.hidden && v && v\.classList\.contains\('on'\)\) \{ void verifierRollsEnAttente\(\);[^\n]*\}, 20000\);/.test(app), 'toutes les 20 s, onglet Game visible');
+/* 2026-10-23 DENIM : plus 20 s fixes — ~8 relectures par fenetre de 256 blocs au temps mesure (20 s a 2 s/bloc, ~6,4 s a 200 ms) */
+vu(/function relireJeu\(\) \{\n  const v = document\.getElementById\('v-missions'\);\n  if \(!document\.hidden && v && v\.classList\.contains\('on'\)\) \{ void verifierRollsEnAttente\(\);[^\n]*\n  setTimeout\(relireJeu, intervalleJeuMs\(\)\);/.test(app.replace(/\r\n/g, '\n')), 'relu au rythme calcule (20 s avant Denim), onglet Game visible');
 /* (4) */
 const ch = app.slice(app.indexOf('async function bcCommandeRoll('), app.indexOf('function bcCommandePostTask('));
 vu(/void suivreRollsEnAttente\(m\);/.test(ch), 'la commande roll du chat finit par le regleur');
