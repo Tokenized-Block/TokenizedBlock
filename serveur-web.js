@@ -112,7 +112,7 @@ import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
 /* 2026-10-18 : TicketPot LIVE (0xf986…1df1, bloc 52 776 705) — la fiche notee, et la lecture PURE du jour (lireJour : aucune cle requise) */
 import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { lireJour as lireJourTicketPot } from './ticketpot-attestation.js';
-import { dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
+import { dayDeJourId as dayDeJourIdPot, jourSemaineReclamable, jourIdDeDay as jourIdDeDayPot, claimableUntil as reclamablePotSrv } from './ticketpot-plan.js';
 import { partsDuJour as partsTicketPot, verifierSignaturePart } from './ticketpot-parts.js';
 import { depensesJeu, passesAchetes, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PASS as TOPIC_PASS_SRV } from './volume-rolls.js';
 /* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
@@ -4161,6 +4161,20 @@ async function lireTicketPotSrv() {
         aujourdhui: jourDe(Date.now()).id === finJ.id, lu: new Date().toISOString() };
       ticketpotSrv.erreurSemaine = null;
     } catch (e) { ticketpotSrv.erreurSemaine = String((e && e.message) || e).slice(0, 120); }
+    /* 2026-10-23 (revue adverse) : le pot de la semaine se FERME et se RECLAME apres sa semaine, pendant toute sa grace (claimableUntil,
+     *   7 jours) — pas seulement le lendemain (veille). Le dernier jour de semaine deja termine et encore dans sa grace, lu sur CE minuteur ;
+     *   le lundi c est la veille : sa lecture est reutilisee. Lecture ratee : l etat d avant reste (ticketpotJson ne le sert que si c est
+     *   encore ce jour-la), l erreur est dite. */
+    const dRec = jourSemaineReclamable(Math.floor(Date.now() / 1000), (ms) => saisonDe(ms).fin);
+    if (dRec === null) { ticketpotSrv.semaineReclamable = null; ticketpotSrv.erreurSemaineReclamable = null; }
+    else {
+      try {
+        const jr = dRec === day ? j : await lireJourTicketPot({ rpc: rpcServeur, contrat }, dRec);
+        ticketpotSrv.semaineReclamable = { jourId: jourIdDeDayPot(dRec), day: dRec, ferme: jr.ferme, enPause: jr.enPause, potAtClose: jr.potAtClose.toString(), reste: jr.reste.toString(),
+          verifier: jr.verifier, owner, reclamableJusqua: new Date(reclamablePotSrv(dRec) * 1000).toISOString(), lu: new Date().toISOString() };
+        ticketpotSrv.erreurSemaineReclamable = null;
+      } catch (e) { ticketpotSrv.erreurSemaineReclamable = String((e && e.message) || e).slice(0, 120); }
+    }
   } catch (e) { ticketpotSrv.erreur = String((e && e.message) || e).slice(0, 120); }
   finally { ticketpotSrv.enVol = false; }
 }
@@ -4170,8 +4184,10 @@ function ticketpotJson() {
   if (!contrat) return null;
   /* la semaine servie seulement si c est encore LA semaine en cours (un etat d une semaine passee n est jamais montre comme celui-ci) */
   const semSrv = ticketpotSrv.semaine && ticketpotSrv.semaine.id === saisonDe(Date.now()).id ? ticketpotSrv.semaine : null;
+  /* le pot de semaine reclamable : servi seulement s il est ENCORE le jour reclamable (calcul pur, aucune lecture de chaine ici) */
+  const srSrv = ticketpotSrv.semaineReclamable && ticketpotSrv.semaineReclamable.day === jourSemaineReclamable(Math.floor(Date.now() / 1000), (ms) => saisonDe(ms).fin) ? ticketpotSrv.semaineReclamable : null;
   return { contrat, bloc: TICKETPOT_DEPLOIEMENT.bloc, veille: ticketpotSrv.etat ? { jourId: ticketpotSrv.jourId, day: ticketpotSrv.day, ...ticketpotSrv.etat } : null,
-    semaine: semSrv, lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur, erreurSemaine: ticketpotSrv.erreurSemaine || null };
+    semaine: semSrv, semaineReclamable: srSrv, erreurSemaineReclamable: ticketpotSrv.erreurSemaineReclamable || null, lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur, erreurSemaine: ticketpotSrv.erreurSemaine || null };
 }
 /* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18) — LECTURE SEULE. Les logs de BlockDuels (Created / Joined / Settled / Cancelled / Refunded),
  *   relus par fenetres de 2 000 blocs, au plus DUELS_FENETRES_PAR_TOUR par tour, avec 300 blocs de recouvrement (doublons comptes une fois).

@@ -62,6 +62,22 @@ export const jourDe = (ts) => Math.floor(Number(ts) / DAY_S);
 export const dayEnd = (day) => (Number(day) + 1) * DAY_S;
 export const claimableUntil = (day) => dayEnd(day) + GRACE_S;
 export const closableByAnyoneAt = (day) => dayEnd(day) + FUNDING_DELAY_S;
+/** 2026-10-23 (revue adverse) : le pot de la SEMAINE vit sur son DERNIER jour UTC ; il se ferme (owner, ou n importe qui 12 h apres) et
+ *  ses parts se reclament pendant toute la grace (claimableUntil, 7 jours) — pas seulement le lendemain. Rend le jour du contrat du dernier
+ *  jour de semaine DEJA TERMINE a `maintenant` (s) et encore dans sa grace (maintenant <= claimableUntil) ; null sinon.
+ *  `finDeSemaine(ms)` = la fin (ms, exclue) de la semaine qui contient ms (tirage-saison.js saisonDe(ms).fin) — passee, jamais supposee. */
+export function jourSemaineReclamable(maintenant, finDeSemaine) {
+  const t = Number(maintenant);
+  if (!Number.isFinite(t) || typeof finDeSemaine !== 'function') return null;
+  /* la semaine en cours puis la precedente : le dernier jour de la semaine en cours n est jamais termine, celui d avant l est */
+  for (const ms of [t * 1000, t * 1000 - 7 * DAY_S * 1000]) {
+    const fin = Number(finDeSemaine(ms));
+    if (!Number.isFinite(fin)) return null;
+    const d = Math.floor((fin - 1) / (DAY_S * 1000));
+    if (t >= dayEnd(d) && t <= claimableUntil(d)) return d;
+  }
+  return null;
+}
 /** l id de jour de l app ('J2026-10-18', tirage-saison.js jourDe(ms).id) <-> le jour du contrat */
 export function dayDeJourId(id) {
   const m = /^J(\d{4})-(\d{2})-(\d{2})$/.exec(String(id || ''));

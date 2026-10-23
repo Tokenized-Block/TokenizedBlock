@@ -56,7 +56,8 @@ vu(/eth_signTypedData_v4/.test(page) && /JSON\.stringify\(p\.donnees\)/.test(pag
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 vu(/import \{ planFund as planFundPot, planClaim as planClaimPot, [^}]*dayDeJourId as dayDeJourIdPot \} from '\.\/ticketpot-plan\.js';/.test(app), 'app : planClaim importe');
 const pr = app.slice(app.indexOf('async function peindreReclamerPot('), app.indexOf("$('#jourReclamerPot').addEventListener"));
-vu(/maPartPot = null; b\.hidden = true;/.test(pr) && /if \(!v \|\| !v\.ferme \|\| !c\) return;/.test(pr) && /\(x\) => x\.wallet === moi && x\.signature\)/.test(pr), 'bouton seulement : jour ferme, wallet connecte, part SIGNEE de CE wallet');
+/* 2026-10-23 : + la part de la SEMAINE reclamable (test-semaine-reclamable-20261023.mjs l execute) — toujours : wallet, jour FERME */
+vu(/maPartPot = null; b\.hidden = true;/.test(pr) && /if \(!c\) return;/.test(pr) && /if \(v && v\.ferme\) essais\.push\(\[v, false\], \[v, true\]\);/.test(pr) && /if \(s && s\.ferme && /.test(pr) &&/\(x\) => x\.wallet === moi && x\.signature\)/.test(pr), 'bouton seulement : jour ferme, wallet connecte, part SIGNEE de CE wallet');
 vu(/String\(c\)\.toLowerCase\(\) !== maPartPot\.wallet\) return;/.test(pr) && /planClaimPot\(\{ contrat: maPartPot\.contrat, day: maPartPot\.day, wallet: maPartPot\.wallet, ticket: maPartPot\.ticket, amount: maPartPot\.amount, deadline: maPartPot\.deadline, signature: maPartPot\.signature, ferme: true \}\)/.test(pr) && /await envoyerAppels\(plan\.appels, c\)/.test(pr), 'reclamerPot : le wallet de la part, planClaim avec la signature, envoi par envoyerAppels');
 vu(/void peindreReclamerPot\(tp, c\);/.test(app), 'cable : peint avec le pot');
 /* la FERMETURE : l owner LU (serveur owner()) tout de suite, n importe qui apres closableByAnyoneAt ; jamais un non-owner avant (gas perdu) */
@@ -64,5 +65,6 @@ vu(/owner = \/\^0x\[0-9a-f\]\{64\}\$\/i\.test\(String\(o\)\) \? '0x' \+ String\(
 /* game22 en prod : owner null — selecteur() rend DEJA « 0x… », le '0x' + ajoute doublait le prefixe (eth_call refuse) */
 vu(/data: selecteurSrv\('owner\(\)'\) \}, 'latest'\]\)/.test(srv) && !/'0x' \+ selecteurSrv\('owner\(\)'\)/.test(srv), 'owner() : le selecteur porte deja 0x (pas de double prefixe)');
 const pf = app.slice(app.indexOf('function peindreFermerPot('), app.indexOf("$('#jourFermerPot').addEventListener"));
-vu(/b\.hidden = !\(v && !v\.ferme && moi && \(owner \|\| parTous\)\);/.test(pf) && /parTous = v && maintenant >= fermablePot\(v\.day\)/.test(pf) && /planClosePot\(\{ contrat: potCfg\.contrat, day: v\.day, owner, ferme: v\.ferme \}\)/.test(pf) && /await envoyerAppels\(plan\.appels, c\)/.test(pf), 'fermeture : owner lu ou 12 h passees ; planClose ; envoi par envoyerAppels');
+/* 2026-10-23 : le pot a fermer = la semaine reclamable d abord, sinon la veille (test-semaine-reclamable-20261023.mjs l execute) */
+vu(/if \(!x \|\| x\.ferme \|\| !moi \|\| !Number\.isInteger\(x\.day\)\) continue;/.test(pf) && /if \(!\(o \|\| maintenant >= fermablePot\(x\.day\)\)\) continue;/.test(pf) && /b\.hidden = !potAFermer;/.test(pf) && /const v = potAFermer, owner = /.test(pf) &&/planClosePot\(\{ contrat: potCfg\.contrat, day: v\.day, owner, ferme: v\.ferme \}\)/.test(pf) && /await envoyerAppels\(plan\.appels, c\)/.test(pf), 'fermeture : owner lu ou 12 h passees ; planClose ; envoi par envoyerAppels');
 console.log('ok ticketpot-parts - ' + n + ' assertions ; NE PROUVE PAS une signature ni un claim reels');

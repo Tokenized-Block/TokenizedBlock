@@ -4118,7 +4118,7 @@ import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, 
  *   jamais suppose — les fenetres de 256 blocs disent leur duree a ce temps, et le Game se relit assez souvent pour une fenetre de ~51 s */
 import { blocsPour, secondesPour, dureeTexte, texteBlocs, intervalleSondageMs, pasAttenteBlocMs } from './temps-de-bloc.js';
 /* 2026-10-18 : TicketPot LIVE — alimenter le pot du jour (planFund : approve EXACT + fund), le jour UTC du contrat depuis l id du jour */
-import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
+import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, claimableUntil as reclamablePot, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
@@ -4933,7 +4933,11 @@ function peindrePotJour(t, c) {
       + ' — it lives on ' + sem.jourId.slice(1) + ' (the week\'s last UTC day)' + (sem.aujourdhui ? ', today: it can be funded until midnight UTC' : ', and can be funded on that day') + '.';
   /* la veille : seulement s il y reste quelque chose a reclamer (une part deja signee) — jamais un « gagnant du jour » */
   const ligneVeille = v && v.ferme && String(v.reste) !== '0' ? ' Pot of ' + v.jourId.slice(1) + ': ' + usdcTexte(v.reste) + ' USDC left to claim.' : '';
-  p.textContent = ligneSem + ligneVeille + (sem && sem.enPause ? ' · claims paused' : '') + ' Shares are signed by the verifier wallet; your claim opens here once yours is signed.';
+  /* 2026-10-23 : le pot de la semaine passee, tant que sa grace court (servi : semaineReclamable) — lu, jamais estime */
+  const sr = semaineReclamableDe(tp);
+  const ligneSemPassee = !sr || (v && v.jourId === sr.jourId && ligneVeille) ? ''
+    : ' Last week\'s pot (' + sr.jourId.slice(1) + '): ' + (sr.ferme ? usdcTexte(sr.reste) + ' USDC left to claim until ' + new Date(reclamablePot(sr.day) * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC.' : usdcTexte(sr.reste) + ' USDC, not closed yet.');
+  p.textContent = ligneSem + ligneVeille + ligneSemPassee +(sem && sem.enPause ? ' · claims paused' : '') + ' Shares are signed by the verifier wallet; your claim opens here once yours is signed.';
 }
 async function fondPot() {
   const e = $('#rollsEtat'), b = $('#jourFondPot');
@@ -4961,22 +4965,33 @@ $('#jourFondPot').addEventListener('click', () => { void fondPot(); });
 /* LA RECLAMATION (2026-10-18) : la part de CE wallet pour la veille, signee par le verifier (attester-ticketpot.html) et servie par
  *   /api/ticketpot/parts ; sans signature, pas de bouton. planClaim : le holder appelle claim() lui-meme ; le contrat paie le holder nomme. */
 let maPartPot = null;
+/* 2026-10-23 (revue adverse) : le pot de la SEMAINE vit sur son dernier jour UTC (dimanche) et se ferme / se reclame pendant TOUTE sa grace
+ *   (claimableUntil, 7 jours) — le serveur sert ce jour dans tp.semaineReclamable (lu au minuteur de 60 s). Avant, seule tp.veille etait
+ *   regardee : les boutons de la semaine n existaient que le lundi. Hors grace (horloge de l app) : ignore, jamais un bouton que le contrat refuse. */
+function semaineReclamableDe(tp) {
+  const s = tp && tp.semaineReclamable, maintenant = Math.floor(Date.now() / 1000);
+  return s && /^J\d{4}-\d{2}-\d{2}$/.test(String(s.jourId)) && Number.isInteger(s.day) && maintenant <= reclamablePot(s.day) ? s : null;
+}
 async function peindreReclamerPot(tp, c) {
   const b = $('#jourReclamerPot'); if (!b) return;
   maPartPot = null; b.hidden = true;
-  const v = tp && tp.veille;
-  if (!v || !v.ferme || !c) return;
-  /* la part du JOUR, et celle de la SEMAINE si la veille est le dernier jour d une semaine (le serveur refuse sinon : ignore) — la premiere
-   *   SIGNEE pour ce wallet ; le contrat n accepte qu un claim par wallet et par jour */
+  const v = tp && tp.veille, s = semaineReclamableDe(tp);
+  if (!c) return;
+  /* la part du JOUR de la veille, et celle de la SEMAINE si la veille est le dernier jour d une semaine (le serveur refuse sinon : ignore),
+   *   puis la part de la SEMAINE reclamable (si ce n est pas deja la veille) — la premiere SIGNEE pour ce wallet ; seulement un jour FERME
+   *   (rien n est signe avant close) ; le contrat n accepte qu un claim par wallet et par jour */
+  const essais = [];
+  if (v && v.ferme) essais.push([v, false], [v, true]);
+  if (s && s.ferme && !(v && v.jourId === s.jourId)) essais.push([s, true]);
   const moi = String(c).toLowerCase();
-  for (const sem of [false, true]) {
+  for (const [jr, sem] of essais) {
     let r = null;
-    try { r = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(v.jourId) + (sem ? '&week=1' : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
+    try { r = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(jr.jourId) + (sem ? '&week=1' : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
     if (!r || !r.ok) continue;
     const p = (r.parts || []).find((x) => x.wallet === moi && x.signature);
     if (!p) continue;
     maPartPot = { ...p, contrat: r.contrat };
-    b.textContent = 'Claim my ' + (sem ? 'weekly' : '') + ' share · ' + usdcTexte(p.amount) + ' USDC (' + v.jourId + ')'; b.hidden = false;
+    b.textContent = 'Claim my ' + (sem ? 'weekly ' : '') + 'share · ' + usdcTexte(p.amount) + ' USDC (' + jr.jourId + ')'; b.hidden = false;
     return;
   }
 }
@@ -4999,21 +5014,30 @@ async function reclamerPot() {
 $('#jourReclamerPot').addEventListener('click', () => { void reclamerPot(); });
 /* LA FERMETURE (close(day)) : l owner LU (tp.veille.owner) tout de suite, n importe qui 12 h apres la fin du jour (closableByAnyoneAt) ;
  *   avant, un non-owner ne voit pas le bouton (le contrat refuserait, gas perdu). Fermer fige le pot : les parts deviennent signables. */
+/* 2026-10-23 : le pot a fermer = celui de la SEMAINE reclamable d abord (servi, encore dans sa grace), sinon la veille ; un seul bouton. */
+let potAFermer = null;
 function peindreFermerPot(tp, c) {
   const b = $('#jourFermerPot'); if (!b) return;
-  const v = tp && tp.veille, moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000);
-  const owner = v && v.owner && moi === String(v.owner).toLowerCase(), parTous = v && maintenant >= fermablePot(v.day);
-  b.hidden = !(v && !v.ferme && moi && (owner || parTous));
-  if (!b.hidden) b.textContent = 'Close the pot of ' + v.jourId + (owner ? ' (owner)' : '');
+  potAFermer = null;
+  const moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000);
+  let owner = false, sem = false;
+  for (const [x, s] of [[semaineReclamableDe(tp), true], [tp && tp.veille, false]]) {
+    if (!x || x.ferme || !moi || !Number.isInteger(x.day)) continue;
+    const o = !!(x.owner && moi === String(x.owner).toLowerCase());
+    if (!(o || maintenant >= fermablePot(x.day))) continue;
+    potAFermer = x; owner = o; sem = s; break;
+  }
+  b.hidden = !potAFermer;
+  if (potAFermer) b.textContent = 'Close ' + (sem ? 'the week\'s pot of ' : 'the pot of ') + potAFermer.jourId + (owner ? ' (owner)' : '');
 }
 async function fermerPot() {
   const e = $('#rollsEtat'), b = $('#jourFermerPot');
   let c = null; try { c = compte; } catch (_) { c = null; }
-  if (!potCfg || !potCfg.veille || !c || !b || b.disabled) return;
+  if (!potCfg || !potAFermer || !c || !b || b.disabled) return;
   const dit = (txt) => { e.hidden = false; e.textContent = txt; };
   b.disabled = true;
   try {
-    const v = potCfg.veille, owner = !!(v.owner && String(c).toLowerCase() === String(v.owner).toLowerCase());
+    const v = potAFermer, owner = !!(v.owner && String(c).toLowerCase() === String(v.owner).toLowerCase());
     const plan = planClosePot({ contrat: potCfg.contrat, day: v.day, owner, ferme: v.ferme });
     if (plan.etat !== 'PRET') { dit('Not closed: ' + plan.pourquoi); return; }
     dit('Close the pot of ' + v.jourId + ' (' + usdcTexte(v.reste) + ' USDC): it freezes, no more funding, and the verifier can sign the shares. Sign in your wallet…');
