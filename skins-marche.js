@@ -77,6 +77,39 @@ export function montantOffre(s, saisi) {
   if (x < min) throw new Error('a bid must be at least the minimum shown (+5% over the highest bid)');
   return x;
 }
+/** LA SKIN RELUE AVANT DE DEMANDER UNE SIGNATURE (bcActionMarche). Pur. Rend { ok: true, montant } ou { ok: false, code, raison, ... }.
+ *  `montre` : la skin telle qu elle etait a l ecran (ou dans la proposition du brain) ; `frais` : relue sur la chaine a l instant ;
+ *  `saisi` : le montant TAPE par la personne (ou propose ET compte par le brain), null sinon ; `plafond` / `devise` : les bornes du
+ *  brain (S.I) — le montant qu il a propose et COMPTE dans son budget, et la devise de S.I.
+ *  ⛔ 2026-10-23 (revue adverse, defaut 1) : le brain proposait une offre DANS ses bornes, puis la relecture prenait le nouveau minimum
+ *    (plus haut) sans revoir les bornes — la carte demandait plus que « Max skin bid ». Desormais : rien au-dessus du `plafond`, jamais.
+ *  ⛔ 2026-10-23 (defaut 2) : un prix ou une offre qui a CHANGE n est plus « dit puis demande » : sans montant tape, rien n est demande
+ *    (la personne relance au nouveau montant, qu elle voit). Un montant TAPE reste le sien : demande s il couvre le nouveau minimum. */
+export function relectureAvantSigner({ genre, montre, frais, moi, t, saisi = null, plafond = null, devise = null }) {
+  const geste = { ACHETER: 'ACHETER', ENCHERIR: 'ENCHERIR', REGLER: 'REGLER', RETIRER: 'RETIRER', VENDRE: 'METTRE_EN_VENTE', ENCHERE: 'OUVRIR_ENCHERE' }[genre];
+  if (!geste || !montre) return { ok: false, code: 'GESTE', raison: 'This could not be prepared. Nothing was asked.' };
+  if (!frais || String(frais.tokenId) !== String(montre.tokenId)) return { ok: false, code: 'NON_LU', raison: 'This skin could not be read again on chain — nothing was asked.' };
+  if (!actionsSkin(frais, moi, t).includes(geste)) return { ok: false, code: 'CHANGE', raison: 'This skin changed since it was shown — ' + SKM_STATUTS[statutSkin(frais, t)] + ' now. Nothing was asked.' };
+  if (genre !== 'ACHETER' && genre !== 'ENCHERIR') return { ok: true, montant: 0n };
+  if (bas(frais.devise) !== bas(montre.devise)) return { ok: false, code: 'DEVISE', raison: 'The currency of this listing changed since it was shown. Nothing was asked.' };
+  if (devise != null && bas(frais.devise) !== bas(devise)) return { ok: false, code: 'BORNE', raison: 'This listing is not in the currency your brain pays with. Nothing was asked.' };
+  let montant;
+  if (genre === 'ACHETER') {
+    if (BigInt(frais.prix) !== BigInt(montre.prix)) return { ok: false, code: 'PRIX', nouveau: BigInt(frais.prix), raison: 'The price changed since it was shown. Nothing was asked.' };
+    montant = BigInt(frais.prix);
+  } else {
+    const min = offreMinimale(frais);
+    if (saisi === null || saisi === undefined || saisi === '') {
+      if (BigInt(frais.offre || 0) !== BigInt(montre.offre || 0)) return { ok: false, code: 'OFFRE', nouveau: min, raison: 'The highest bid changed since it was shown. Nothing was asked.' };
+      montant = min;
+    } else {
+      montant = BigInt(saisi);
+      if (montant < min) return { ok: false, code: 'SOUS_MIN', nouveau: min, raison: 'Someone bid since it was shown: this bid is now under the minimum. Nothing was asked.' };
+    }
+  }
+  if (plafond != null && montant > BigInt(plafond)) return { ok: false, code: 'BORNE', nouveau: montant, raison: 'This now costs more than your brain was allowed to propose. Nothing was asked.' };
+  return { ok: true, montant };
+}
 /** Une cle qui change quand la LIGNE doit etre repeinte (statut, prix, offre, encherisseur, fin, detenteur, ce compte, ses gestes).
  *  Le temps restant n y est pas : il se met a jour sans repeindre la ligne (un prix tape ne s efface pas a chaque relecture). */
 export function cleLigneSkin(s, moi, t) {

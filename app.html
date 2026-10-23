@@ -4416,8 +4416,8 @@ import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES, COMMAND
 import { entreesCommandes, entreesOnglets, entreesJeu, filtrerPalette, noterUsage, lireUsages, ecrireUsages, deplacer } from './palette.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
-  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin, decoderPage, appelPage } from './blockskins.js';
-import { SKM_RAFRAICHIR_MS, SKM_POULS_MS, SKM_FILTRES, SKM_STATUTS, filtrerSkins, ordonnerSkins, compterSkins, gestesSkin, montantOffre, cleLigneSkin, offresChangees, tempsRestant, apercuSkinFormes, detenteurCourt, statutSkin, brutVersTexte as brutVersTexteSkin } from './skins-marche.js';
+  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin, deviseAdmise, decoderPage, appelPage } from './blockskins.js';
+import { SKM_RAFRAICHIR_MS, SKM_POULS_MS, SKM_FILTRES, SKM_STATUTS, filtrerSkins, ordonnerSkins, compterSkins, gestesSkin, montantOffre, relectureAvantSigner, cleLigneSkin, offresChangees, tempsRestant, apercuSkinFormes, detenteurCourt, statutSkin, brutVersTexte as brutVersTexteSkin } from './skins-marche.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -26308,6 +26308,21 @@ const BC_DUREES_ENCHERE = [['1 hour', 3600n], ['1 day', 86400n], ['3 days', 2592
 /* les devises du marche : ETH et USDC toujours, plus chaque action que le contrat dit ADMISE (currencyAllowed lu a vrai, choix de Phil :
  *   les 9 plus profondes, admises par sa signature setCurrency). Relues toutes les 10 min ; une lecture ratee n ajoute rien. */
 const bcDevisesSkin = () => bc.devisesSkin || DEVISES_SKIN;
+/* 2026-10-23 (Phil : « skins can be paid in tokenized stocks » ; « never offer a currency the contract does not admit ») : ce que l app
+ *   PROPOSE pour une nouvelle annonce (Sell / Start an auction) = SEULEMENT les devises dont currencyAllowed a ete LU a vrai (ETH et USDC
+ *   compris) ; rien de lu = rien de propose (jamais DEVISES_SKIN par defaut ici). bcDevisesSkin, lui, sert a AFFICHER un montant. */
+const bcDevisesOffertes = () => bc.devisesSkinAdmises || {};
+/** Relit les devises du marche (10 min ; 1 min si une lecture a rate, pour ne pas laisser une devise admise hors du formulaire). */
+async function bcLireDevisesSkin() {
+  const age = Date.now() - (bc.devisesSkinLu || 0), delai = bc.devisesSkinNonLues && bc.devisesSkinNonLues.length ? 60000 : 600000;
+  if (bc.devisesSkinLu && age <= delai) return;
+  try { const d = await lireDevisesSkin({ rpc }); bc.devisesSkin = d.devises; bc.devisesSkinAdmises = d.admises; bc.devisesSkinNonLues = d.nonLues; bc.devisesSkinLu = Date.now(); } catch (_) { /* rien de plus n est propose */ }
+}
+/** Le texte « payable in » : les devises LUES admises, dans l ordre du contrat (ETH, USDC, puis les actions). */
+function bcTexteDevisesOffertes() {
+  const l = Object.values(bcDevisesOffertes()).map((d) => d.sym);
+  return l.length ? 'New listings can be priced in ' + l.join(', ') + ' (read on chain).' : 'The currencies this market accepts could not be read — selling waits for the next read.';
+}
 function bcMontantSkin(brut, devise) {
   const d = bcDevisesSkin()[String(devise).toLowerCase()];
   return d ? bcUnites(brut, d.dec) + ' ' + d.sym : String(brut) + ' units of ' + court(devise);
@@ -26340,14 +26355,12 @@ async function bcPeindreMarche() {
       z.append(b);
       return;
     }
-    if (!bc.devisesSkinLu || Date.now() - bc.devisesSkinLu > 600000) {
-      try { const d = await lireDevisesSkin({ rpc }); bc.devisesSkin = d.devises; bc.devisesSkinNonLues = d.nonLues; bc.devisesSkinLu = Date.now(); } catch (_) { /* ETH et USDC restent */ }
-      if (!z.isConnected) return;
-    }
+    await bcLireDevisesSkin();
+    if (!z.isConnected) return;
     const moi = compte ? String(compte).toLowerCase() : null, t = Math.floor(Date.now() / 1000);
     const enVente = r.skins.filter((s) => s.enVente), miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
     etat.textContent = (enVente.length ? enVente.length + ' for sale' : 'Nothing for sale yet') + ' · ' + r.total + ' minted. Each sale pays 10 % to TokenizedBlock.'
-      + (moi ? '' : ' Connect your wallet to buy, bid or sell.');
+      + (moi ? '' : ' Connect your wallet to buy, bid or sell.') + ' ' + bcTexteDevisesOffertes();
     for (const s of enVente) z.append(bcLigneSkin(s, moi, t));
     if (miennes.length) { z.append(bcEl('p', { cls: 'bcSousTitre', text: 'Your skins' })); for (const s of miennes) z.append(bcLigneSkin(s, moi, t)); }
     /* ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir) : on le lit ; une lecture ratee est DITE */
@@ -26390,10 +26403,13 @@ function bcLigneSkin(s, moi, t) {
 function bcFormVendreSkin(s, texteVente) {
   const prix = bcEl('input', { type: 'text', inputmode: 'decimal', placeholder: 'price', 'aria-label': 'Price' });
   const dev = bcEl('select', { 'aria-label': 'Currency' }), duree = bcEl('select', { 'aria-label': 'Auction length' });
-  for (const [adr, d] of Object.entries(bcDevisesSkin())) dev.append(bcEl('option', { value: adr, text: d.sym }));
+  /* SEULEMENT les devises LUES admises (bcDevisesOffertes) : une action tokenisee y entre quand currencyAllowed la dit vraie, jamais avant */
+  const offertes = bcDevisesOffertes();
+  if (!Object.keys(offertes).length) return bcEl('p', { cls: 'note', text: bcTexteDevisesOffertes() });
+  for (const [adr, d] of Object.entries(offertes)) dev.append(bcEl('option', { value: adr, text: d.sym + (DEVISES_SKIN[adr] ? '' : ' (stock)') }));
   for (const [lib, sec] of BC_DUREES_ENCHERE) duree.append(bcEl('option', { value: String(sec), text: lib }));
   duree.value = '86400';
-  const lire = () => { const d = bcDevisesSkin()[dev.value]; return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
+  const lire = () => { const d = offertes[dev.value]; if (!d) throw new Error('choose a currency this market accepts'); return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
   const vendre = (genre) => { let x; try { x = lire(); } catch (e) { prix.setCustomValidity(String(e.message)); prix.reportValidity(); return; } prix.setCustomValidity(''); void bcActionMarche(genre, s, x); };
   /* Phil 2026-10-18 : « Sell at a price » / « Start an auction » */
   const bv = bcEl('button', { type: 'button', cls: 'bouton sec', text: texteVente }), be = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Start an auction' });
@@ -26440,9 +26456,7 @@ async function peindreSkinsMarche(force = false) {
       return;
     }
     /* les devises admises (ETH, USDC, + les actions que le contrat dit admises) : relues toutes les 10 min, partagees avec le panneau */
-    if (!bc.devisesSkinLu || Date.now() - bc.devisesSkinLu > 600000) {
-      try { const d = await lireDevisesSkin({ rpc }); bc.devisesSkin = d.devises; bc.devisesSkinNonLues = d.nonLues; bc.devisesSkinLu = Date.now(); } catch (_) { /* ETH et USDC restent */ }
-    }
+    await bcLireDevisesSkin();
     const { changees, apres } = offresChangees(skm.offres, r.skins);
     skm.offres = apres;
     for (const id of changees) skm.pouls.set(id, Date.now() + SKM_POULS_MS);
@@ -26458,11 +26472,13 @@ function skmPeindreListe() {
   note.textContent = (c.total
     ? c.total + ' minted · ' + c.fixe + ' at a fixed price · ' + c.enchere + ' in auction' + (c.finie ? ' · ' + c.finie + ' ended, to settle' : '') + ' · ' + c.libre + ' not listed.'
     : 'No skin minted yet — the first one is minted from the Game tab (Skin market).')
-    + (skm.tronque ? ' Showing the first ' + skm.liste.length + ' of ' + skm.total + '.' : '') + lu + (moi ? '' : ' Connect a wallet to buy, bid or sell.');
+    + (skm.tronque ? ' Showing the first ' + skm.liste.length + ' of ' + skm.total + '.' : '') + lu + (moi ? '' : ' Connect a wallet to buy, bid or sell.') + ' ' + bcTexteDevisesOffertes();
+  /* les devises proposees a la vente entrent dans la cle : une devise lue admise apres coup repeint le formulaire Sell */
+  const offertesCle = Object.keys(bcDevisesOffertes()).join(',');
   const vues = ordonnerSkins(filtrerSkins(skm.liste, skm.filtre, moi, t), t).slice(0, 60);
   const lignes = new Map(), enfants = [];
   for (const s of vues) {
-    const id = String(s.tokenId), cle = cleLigneSkin(s, moi, t), ancien = skm.lignes.get(id);
+    const id = String(s.tokenId), cle = cleLigneSkin(s, moi, t) + '|' + offertesCle, ancien = skm.lignes.get(id);
     /* une ligne ou l on tape (focus, ou un prix / une offre ecrits) n est pas repeinte : sa cle reste l ancienne, elle le sera ensuite */
     const occupe = !!ancien && (ancien.el.contains(document.activeElement) || [...ancien.el.querySelectorAll('input')].some((i) => i.value && i.value !== i.defaultValue));
     const garder = !!ancien && (ancien.cle === cle || occupe);
@@ -26562,20 +26578,39 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
     let appels = [];
     /* 2026-10-23 : la ligne affichee peut dater de 25 s. La skin est RELUE sur la chaine (skinsPage(id, 1)) avant de construire l appel :
      *   lecture ratee = rien n est demande ; geste devenu impossible (vendue, offre retiree, enchere finie) = on le dit, rien n est demande ;
-     *   offre plus haute entre-temps = le minimum suit la chaine (un montant tape sous ce minimum est refuse par montantOffre). */
+     *   offre ou prix CHANGES entre-temps = DIT, et rien n est demande (relectureAvantSigner) : la personne relance au nouveau montant, qu
+     *   elle voit ; un montant TAPE (ou propose par le brain) sous le nouveau minimum = refuse ; une proposition du brain n est JAMAIS
+     *   preparee au-dessus du montant qu il a propose et compte dans son budget (x.plafond), ni dans une autre devise que la sienne.
+     *   ⛔ 2026-10-23 (revue adverse) : remplacer la skin montree par la relue puis en recalculer le minimum faisait signer le NOUVEAU
+     *   minimum — au-dessus de « Max skin bid » pour le brain, et sans le redemander a la personne. `s` reste la skin MONTREE ; `v` est
+     *   la skin relue ; le montant est celui de relectureAvantSigner. */
+    let v = s, montant = 0n;
     if (s && genre !== 'CREDIT') {
       let frais = null;
       try { frais = decoderPage(await rpc('eth_call', [{ to: BLOCKSKINS, data: appelPage(s.tokenId, 1) }, 'latest']))[0] || null; } catch (_) { frais = null; }
-      if (!frais || String(frais.tokenId) !== String(s.tokenId)) { bcEtape(m, 'This skin could not be read again on chain — nothing was asked.', 'non'); bcBoutons(m, [['Try again', go, true], ['Dismiss', refuser, true]]); return; }
-      const geste = { ACHETER: 'ACHETER', ENCHERIR: 'ENCHERIR', REGLER: 'REGLER', RETIRER: 'RETIRER', VENDRE: 'METTRE_EN_VENTE', ENCHERE: 'OUVRIR_ENCHERE' }[genre];
-      if (!actionsSkin(frais, compte, Math.floor(Date.now() / 1000)).includes(geste)) { bcEtape(m, 'This skin changed since it was shown — ' + SKM_STATUTS[statutSkin(frais, Math.floor(Date.now() / 1000))] + ' now. Nothing was asked.', 'non'); void peindreSkinsMarche(true); return; }
-      if (genre === 'ENCHERIR' && BigInt(frais.offre) !== BigInt(s.offre)) bcEtape(m, 'The highest bid changed since it was shown: the minimum is now ' + bcMontantSkin(offreMinimale(frais), frais.devise) + '.');
-      if (genre === 'ACHETER' && (BigInt(frais.prix) !== BigInt(s.prix) || frais.devise !== s.devise)) bcEtape(m, 'The price changed since it was shown: it is now ' + bcMontantSkin(frais.prix, frais.devise) + '.');
-      s = frais;
+      const rl = relectureAvantSigner({ genre, montre: s, frais, moi: compte, t: Math.floor(Date.now() / 1000),
+        saisi: x && x.montant != null ? x.montant : null, plafond: x && x.plafond != null ? x.plafond : null, devise: x && x.bornerDevise ? x.bornerDevise : null });
+      if (!rl.ok) {
+        const neuf = rl.nouveau != null && frais ? ' It is now ' + bcMontantSkin(rl.nouveau, frais.devise) + '.' : '';
+        bcEtape(m, rl.raison + neuf, 'non');
+        if (rl.code === 'NON_LU') bcBoutons(m, [['Try again', go, true], ['Dismiss', refuser, true]]);
+        /* la personne (jamais le brain) peut relancer AU NOUVEAU montant, ecrit sur le bouton : un nouveau geste, une nouvelle relecture */
+        else if ((rl.code === 'OFFRE' || rl.code === 'PRIX') && qui === 'Skins') bcBoutons(m, [[(genre === 'ACHETER' ? 'Buy for ' : 'Bid ') + bcMontantSkin(rl.nouveau, frais.devise), () => void bcActionMarche(genre, frais, {}, qui), true], ['Dismiss', refuser, true]]);
+        if (rl.code !== 'NON_LU') void peindreSkinsMarche(true);
+        return;
+      }
+      v = frais; montant = rl.montant;
+    }
+    /* une NOUVELLE annonce : la devise est relue admise (currencyAllowed) a l instant — la liste du formulaire peut dater de 10 min */
+    if ((genre === 'VENDRE' || genre === 'ENCHERE') && (await deviseAdmise({ rpc, devise: x.devise })) !== true) {
+      const dsym = (bcDevisesSkin()[String(x.devise).toLowerCase()] || {}).sym || court(x.devise);
+      bcEtape(m, 'This market does not accept ' + dsym + ' for a new listing right now, or it could not be read on chain. Nothing was asked.', 'non');
+      bc.devisesSkinLu = 0; void bcLireDevisesSkin().then(() => void peindreSkinsMarche(true));
+      return;
     }
     try {
       if (genre === 'ACHETER' || genre === 'ENCHERIR') {
-        const montant = genre === 'ACHETER' ? s.prix : montantOffre(s, x && x.montant != null ? x.montant : null);
+        const s = v;
         if (s.devise !== ETH_SKIN) {
           /* en jeton : solde ET autorisation relus avant de signer ; approbation EXACTE du montant, seulement si besoin */
           let solde = null, autorise = null;
@@ -26592,7 +26627,7 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
           : 'Your bid: ' + bcMontantSkin(montant, s.devise) + ', held by the contract until the end. If someone outbids you, it is credited back to you to withdraw. 10 % of the winning bid goes to TokenizedBlock.');
       } else if (genre === 'REGLER') {
         appels = [appelRegler(s.tokenId)];
-        bcEtape(m, s.offre > 0n ? 'The winner receives the skin, the seller 90 %, TokenizedBlock 10 %. Anyone can settle an ended auction.' : 'No bid: the skin goes back to its seller.');
+        bcEtape(m, BigInt(v.offre || 0) > 0n ? 'The winner receives the skin, the seller 90 %, TokenizedBlock 10 %. Anyone can settle an ended auction.' : 'No bid: the skin goes back to its seller.');
       } else if (genre === 'RETIRER') {
         appels = [appelRetirer(s.tokenId)];
         bcEtape(m, 'The skin leaves the market and comes back to your wallet.');
@@ -26818,7 +26853,9 @@ async function bcAifiProposerSkin() {
     bcAifiSkins.proposes.add(String(p.skin.tokenId)); bcAifiSkins.derniere = Date.now();
     if (p.montant > 0n) { s.propose = (BigInt(s.propose) + p.montant).toString(); bcAifiSauver(); bcAifiPeindre(); }
     bcOuvrirPop();
-    void bcActionMarche(p.genre, p.skin, {}, 'Its brain · S.I');
+    /* ⛔ 2026-10-23 (revue adverse) : la carte est bornee au montant PROPOSE et COMPTE (plafond), dans la devise de S.I — la relecture
+     *   avant signature refuse tout ce qui irait au-dessus (une surenchere entre-temps), au lieu de demander le nouveau minimum */
+    void bcActionMarche(p.genre, p.skin, { montant: p.genre === 'ENCHERIR' ? p.montant : null, plafond: p.montant, bornerDevise: p.genre === 'REGLER' ? null : dv.adr }, 'Its brain · S.I');
   } catch (_) { /* relu au tour suivant */ } finally { bcAifiSkins.enVol = false; }
 }
 setInterval(() => { if (bc.aifi && !document.hidden) void bcAifiProposerSkin(); }, 30000);

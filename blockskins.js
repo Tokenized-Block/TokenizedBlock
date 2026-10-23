@@ -152,19 +152,41 @@ export function appelAdmettre(devise, oui = true) {
 }
 /** Les devises que le contrat admet MAINTENANT, lues sur la chaine (currencyAllowed, et decimals() pour une action). ETH et USDC (ceux du
  *  constructeur, DEVISES_SKIN) restent toujours : une lecture ratee ne les efface pas, et une action dont la lecture rate n est PAS ajoutee
- *  (on ne propose jamais une devise que le contrat refuserait). Rend { devises, nonLues: [sym…] }. */
+ *  (on ne propose jamais une devise que le contrat refuserait). Rend { devises, admises, nonLues: [sym…] }.
+ *  2026-10-23 (Phil : « les skins peuvent etre payes en actions tokenisees » ; « never offer a currency the contract does not admit ») :
+ *   - `devises` = ce que l app sait AFFICHER (ETH, USDC, + les actions lues admises) — une annonce deja ouverte dans une devise depuis
+ *     retiree reste achetable (le contrat : « disallowing never blocks an existing listing, bid, settlement or withdrawal ») ;
+ *   - `admises` = ce que l app PROPOSE pour une NOUVELLE annonce (Sell / Start an auction) : SEULEMENT les devises dont currencyAllowed
+ *     a ete LU a vrai a l instant, ETH et USDC compris (l owner peut les retirer par setCurrency) ; une lecture ratee = non proposee.
+ *   Mesure 2026-10-23, bloc 52 993 407, contrat v2 0xc0d1…8e2f : 11 admises = ETH, USDC + les 9 candidates (AAPLc AMZNc GOOGLc METAc
+ *   MSFTc MSTRc NVDAc SPCXc TSLAc) ; 62 autres actions de paires.js lues NON admises ; 11 evenements CurrencySet depuis le deploiement
+ *   (52 470 279), tous « allowed », aucun hors de cette liste. */
+export async function deviseAdmise({ rpc, devise }) {
+  try {
+    const brut = String(await rpc('eth_call', [{ to: BLOCKSKINS, data: '0x' + selecteur('currencyAllowed(address)') + adrMot(devise) }, 'latest']));
+    if (!/^0x[0-9a-f]{64}$/i.test(brut)) return null;
+    const v = BigInt(brut);
+    return v === 1n ? true : v === 0n ? false : null;
+  } catch (_) { return null; }
+}
 export async function lireDevisesSkin({ rpc, candidats = SKIN_ACTIONS_CANDIDATES }) {
-  const devises = { ...DEVISES_SKIN }, nonLues = [];
+  const devises = { ...DEVISES_SKIN }, admises = {}, nonLues = [];
+  for (const [adr, d] of Object.entries(DEVISES_SKIN)) {
+    const oui = await deviseAdmise({ rpc, devise: adr });
+    if (oui === true) admises[adr] = d; else if (oui === null) nonLues.push(d.sym);
+  }
   for (const c of candidats) {
     try {
-      const oui = BigInt(await rpc('eth_call', [{ to: BLOCKSKINS, data: '0x' + selecteur('currencyAllowed(address)') + adrMot(c.adr) }, 'latest'])) === 1n;
-      if (!oui) continue;
+      const oui = await deviseAdmise({ rpc, devise: c.adr });
+      if (oui === false) continue;
+      if (oui !== true) { nonLues.push(c.sym); continue; }
       const dec = Number(BigInt(await rpc('eth_call', [{ to: c.adr, data: '0x' + selecteur('decimals()') }, 'latest'])));
       if (!Number.isInteger(dec) || dec < 0 || dec > 36) { nonLues.push(c.sym); continue; }
       devises[c.adr] = Object.freeze({ sym: c.sym, dec });
+      admises[c.adr] = devises[c.adr];
     } catch (_) { nonLues.push(c.sym); }
   }
-  return { devises, nonLues };
+  return { devises, admises, nonLues };
 }
 /** Un montant TAPE (« 2 », « 0.015 ») -> unites brutes. Strict : jamais de flottant, plus de decimales que la devise = refus (pas d arrondi). */
 export function montantVersBrut(texte, dec) {

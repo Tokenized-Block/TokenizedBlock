@@ -105,9 +105,12 @@ const iPop = action.indexOf('bcOuvrirPop({ vue: \'chat\''), iMsg = action.indexO
 vu(iPop > 0 && iPop < iMsg, 'B13 bcActionMarche ouvre le panneau avant d y ecrire sa carte');
 const iRelu = action.indexOf('appelPage(s.tokenId, 1)'), iAppel = action.indexOf('appels.push(genre === \'ACHETER\''), iSigne = action.indexOf("await bcSigner(m, appels, 'skin_vente')");
 vu(iRelu > 0 && iAppel > iRelu && iSigne > iAppel, 'B14 la skin est RELUE sur la chaine avant de construire l appel');
-vu(/if \(!frais \|\| String\(frais\.tokenId\) !== String\(s\.tokenId\)\) \{ bcEtape\(m, 'This skin could not be read again on chain — nothing was asked\.'/.test(action), 'B15 relecture ratee : rien n est demande');
-vu(/if \(!actionsSkin\(frais, compte, Math\.floor\(Date\.now\(\) \/ 1000\)\)\.includes\(geste\)\) \{ bcEtape\(m, 'This skin changed since it was shown/.test(action), 'B16 geste devenu impossible : dit, rien n est demande');
-vu(/montantOffre\(s, x && x\.montant != null \? x\.montant : null\)/.test(action), 'B17 le montant de l offre passe par montantOffre (minimum du contrat)');
+/* 2026-10-23 (revue adverse) : la decision apres relecture est PURE (relectureAvantSigner, skins-marche.js) ; son comportement — relecture
+ *   ratee, geste devenu impossible, prix / offre changes, bornes du brain — est prouve en EXECUTANT bcActionMarche dans
+ *   test-skins-relecture-bornes-20261023.mjs. Ici : le cablage. */
+vu(/const rl = relectureAvantSigner\(\{ genre, montre: s, frais, moi: compte,/.test(action) && /if \(!rl\.ok\) \{[\s\S]{0,900}?\n        return;\n      \}\n      v = frais; montant = rl\.montant;/.test(action), 'B15 la skin relue passe par relectureAvantSigner ; refus = rien n est demande');
+vu(/if \(rl\.code === 'NON_LU'\) bcBoutons\(m, \[\['Try again', go, true\]/.test(action), 'B16 relecture ratee : « Try again »');
+vu(!/s = frais;/.test(action) && !/montantOffre\(/.test(action), 'B17 le montant n est plus recalcule apres la relecture (ni « s = frais », ni montantOffre sur la skin relue)');
 const carte = html.slice(html.indexOf('<div class="carte" id="skinCarte">'), html.indexOf('<!-- HOW IT WORKS'));
 vu(/<button type="button" class="bouton sec" id="skinOuvrirMarche">Open the skin market<\/button>/.test(carte)
   && /\$\('#skinOuvrirMarche'\)\.addEventListener\('click', \(\) => \{ allerA\('trade'\);[^\n]*getElementById\('skinsMarche'\)/.test(html), 'B18 le Game (Skin market) mene a la section Skins de l onglet Market');
@@ -144,7 +147,8 @@ if (!process.env.TB_SKM_SANS_MUTANTS) {
     ['app', 'relecture meme onglet ferme', "  if (document.hidden || !v || !v.classList.contains('on')) return;\n  if (Date.now() - skm.lu", '  if (document.hidden) return;\n  if (Date.now() - skm.lu'],
     ['app', 'onglet Market ne lit plus les skins', "  if (nom === 'trade') void peindreSkinsMarche();", ''],
     ['app', 'pas de relecture avant de signer', "try { frais = decoderPage(await rpc('eth_call', [{ to: BLOCKSKINS, data: appelPage(s.tokenId, 1) }, 'latest']))[0] || null; } catch (_) { frais = null; }", 'frais = s;'],
-    ['app', 'offre sans borne', 'montantOffre(s, x && x.montant != null ? x.montant : null)', '(x && x.montant != null ? x.montant : offreMinimale(s))'],
+    ['app', 'refus de la relecture ignore', '      if (!rl.ok) {', '      if (false) {'],
+    ['app', 'montant recalcule apres relecture', 'v = frais; montant = rl.montant;', 'v = frais; montant = offreMinimale(frais);'],
     ['app', 'le panneau ne s ouvre plus', "  try { bcOuvrirPop({ vue: 'chat', sansBasculer: true, deplier: true }); } catch (_) { /* la carte est quand meme dans le fil */ }\n", ''],
     ['app', 'le Game ne mene plus au marche', '        <button type="button" class="bouton sec" id="skinOuvrirMarche">Open the skin market</button>\n', ''],
     ['app', 'une ligne repeinte pendant qu on tape', 'const garder = !!ancien && (ancien.cle === cle || occupe);', 'const garder = !!ancien && ancien.cle === cle;'],
