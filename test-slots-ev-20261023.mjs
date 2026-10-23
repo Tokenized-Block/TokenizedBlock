@@ -56,22 +56,24 @@ const TSOL = readFileSync(new URL('./contracts/test/BlockSlots.t.sol', import.me
 vu(ev.num === 2851431899393758353960392096738004388806656000000n && ev.brut === 127862n && ev.probGainBps === 2106, 'esperance EXACTE de la table : 2851431899393758353960392096738004388806656000000 / 2^144 = 127 862 brut (0,127862 USDC), 21,06 % des spins paient quelque chose');
 vu(/assertEq\(bs\.expectedPayout\(\), 127_862\);/.test(TSOL), 'forge lit la meme esperance sur le contrat compile (test_EsperanceDeLaTable)');
 vu(D.esperanceBrut === '127862' && D.probGainBps === 2106 && JSON.stringify(D.constructeur.prizes) === JSON.stringify(P.prizes), 'la fiche porte la table des parametres et la meme esperance');
-const { toPot, refund } = S.partsDuSpin(P.spinPrice, P.potShareBps);
-vu(toPot === 250000n && refund === 250000n, 'un spin de 0,50 : 0,25 au pot, 0,25 tenus (rendus si la fenetre passe)');
+const { toPot, toDev } = S.partsDuSpin(P.spinPrice, P.potShareBps);
+vu(toPot === 250000n && toDev === 250000n, 'un spin de 0,50 : 0,25 au pot, 0,25 dus au dev DES le spin (v4 : rien n est rendu)');
 vu(ev.num < toPot * den, 'esperance STRICTEMENT sous ce qui entre au pot (0,25 USDC) : le pot grossit en moyenne');
 vu(ev.num < BigInt(P.spinPrice) * den, 'esperance STRICTEMENT sous le prix du spin');
 vu(S.refusTable({ table: P.prizes, spinPrice: P.spinPrice, potShareBps: P.potShareBps }).length === 0, 'la table des parametres est admise');
 
-/* (3b) v3 — la regle de Phil « fenetre manquee = remboursement » ET « esperance strictement sous le prix » : le joueur voit ses faces avant
- *      de choisir ; sa MEILLEURE strategie (regler si le prix depasse le remboursement, sinon laisser expirer) rend somme P(k) max(prix_k, r). */
-vu(ev.refund === 250000n && ev.meilleureNum === 7252695144110113090426044529286962642681856000000n && ev.meilleureBrut === 325222n, 'meilleure strategie EXACTE : 7252695144110113090426044529286962642681856000000 / 2^144 = 325 222 brut (0,325222 USDC)');
-vu(ev.meilleureNum < BigInt(P.spinPrice) * den, 'meilleure strategie STRICTEMENT sous le prix (0,50)');
-vu(/assertEq\(best, 7252695144110113090426044529286962642681856000000\);/.test(TSOL) && /assertEq\(best \/ bs\.DIST_DENOM\(\), 325_222\);/.test(TSOL), 'forge lit la meme meilleure strategie sur le contrat compile (bestPlayNumerator)');
+/* (3b) v4 (option 3 de Phil) — AUCUN remboursement : le joueur voit ses faces avant de choisir, mais laisser expirer ne rend RIEN ; sa
+ *      MEILLEURE strategie est de tout regler et rend somme P(k) max(prix_k, 0) = l esperance, EXACTEMENT. */
+vu(ev.toDev === 250000n && ev.toPot === 250000n && ev.meilleureNum === ev.num && ev.meilleureNum === 2851431899393758353960392096738004388806656000000n && ev.meilleureBrut === 127862n, 'meilleure strategie EXACTE = l esperance : 2851431899393758353960392096738004388806656000000 / 2^144 = 127 862 brut (0,127862 USDC)');
+vu(ev.meilleureNum < toPot * den && ev.meilleureNum < BigInt(P.spinPrice) * den, 'meilleure strategie STRICTEMENT sous la part du pot (0,25), donc sous le prix (0,50)');
+vu(/assertEq\(best, 2851431899393758353960392096738004388806656000000\);/.test(TSOL) && /assertEq\(best \/ bs\.DIST_DENOM\(\), 127_862\);/.test(TSOL) && /assertEq\(best, ev, "meilleur jeu = esperance/.test(TSOL), 'forge lit la meme meilleure strategie sur le contrat compile (bestPlayNumerator = expectedNumerator)');
 {
-  /* le temoin : rembourser le prix ENTIER ; la meilleure strategie atteint alors AU MOINS le prix (ici 0,556549) — la regle serait violee */
-  const plein = num.reduce((s, v, k) => { const x = BigInt(P.prizes[k]), m = BigInt(P.spinPrice); return s + v * (x > m ? x : m); }, 0n);
+  /* les temoins (ce que la v4 retire) : rembourser le prix ENTIER rendrait 0,556549 (>= le prix) ; rembourser la part du dev (v3) 0,325222 */
+  const avecR = (r) => num.reduce((s, v, k) => { const x = BigInt(P.prizes[k]); return s + v * (x > r ? x : r); }, 0n);
+  const plein = avecR(BigInt(P.spinPrice)), demi = avecR(250000n);
   vu(plein >= BigInt(P.spinPrice) * den && plein / den === 556549n, 'temoin : un remboursement du prix entier rendrait 556 549 brut par spin de 500 000 (>= le prix)');
-  /* pour des tables admises au hasard (croissantes, <= 5 USDC, parts 1..10000) : meilleure < prix, toujours */
+  vu(demi / den === 325222n && demi > ev.num, 'temoin : le remboursement v3 (la part du dev) rendait 325 222 brut, plus que l esperance');
+  /* pour des tables admises au hasard (croissantes, <= 5 USDC, parts 1..10000) : meilleure = esperance < part du pot <= prix, toujours */
   let vues = 0;
   for (let i = 0; i < 400; i++) {
     const b = randomBytes(24), prix = BigInt(1 + (b.readUInt32BE(0) % 2000000)), part = 1 + (b.readUInt16BE(4) % 10000);
@@ -79,7 +81,7 @@ vu(/assertEq\(best, 7252695144110113090426044529286962642681856000000\);/.test(T
     if (S.refusTable({ table: tb, spinPrice: prix, potShareBps: part }).length) continue;
     vues += 1;
     const e = S.esperance(tb, prix, part);
-    if (!(e.meilleureNum < prix * den)) { vu(false, 'table admise ou la meilleure strategie atteint le prix : ' + tb.join(',') + ' prix ' + prix + ' part ' + part); }
+    if (!(e.meilleureNum === e.num && e.meilleureNum < e.toPot * den && e.meilleureNum < prix * den)) { vu(false, 'table admise ou la meilleure strategie atteint la part du pot : ' + tb.join(',') + ' prix ' + prix + ' part ' + part); }
   }
   vu(vues > 20, 'tables admises tirees au hasard : ' + vues + ', meilleure strategie < prix pour toutes');
 }
@@ -124,11 +126,12 @@ const muter = async (nom, de, vers) => {
   writeFileSync(url, src.replace(de, () => vers));
   try { const M = await import(url.href); vu(bordArrondi(M) === false, 'MUTANT garde sans arrondi : le bord arrondi ROUGIT'); }
   finally { try { unlinkSync(url); } catch (_) {} }
-  const de2 = 'const b = num.reduce((s, v, k) => s + v * (t[k] > refund ? t[k] : refund), 0n);', vers2 = 'const b = num.reduce((s, v, k) => s + v * t[k], 0n);';
+  /* v4 : la meilleure strategie calculee AVEC l ancien remboursement (la part du dev, v3) : l epingle = l esperance ROUGIT */
+  const de2 = 'const b = num.reduce((s, v, k) => s + v * (t[k] > 0n ? t[k] : 0n), 0n);', vers2 = 'const b = num.reduce((s, v, k) => s + v * (t[k] > toDev ? t[k] : toDev), 0n);';
   vu(src.split(de2).length === 2, 'mutant meilleure strategie : ancre unique');
   const url2 = new URL('./slots-plan.mutant-' + process.pid + '-m.js', import.meta.url);
   writeFileSync(url2, src.replace(de2, () => vers2));
-  try { const M = await import(url2.href); vu(M.esperance(P.prizes, P.spinPrice, P.potShareBps).meilleureBrut !== 325222n, 'MUTANT meilleure strategie sans le remboursement : l epingle ROUGIT'); }
+  try { const M = await import(url2.href); const e = M.esperance(P.prizes, P.spinPrice, P.potShareBps); vu(!(e.meilleureNum === e.num && e.meilleureBrut === 127862n), 'MUTANT meilleure strategie avec le remboursement v3 : l epingle ROUGIT'); }
   finally { try { unlinkSync(url2); } catch (_) {} }
 }
 await muter('paire comptee 2', 'suite[i + 1] += v * paire;', 'suite[i + 2] += v * paire;');

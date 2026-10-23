@@ -114,6 +114,9 @@ import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
 /* 2026-10-23 (Phil) : BlockSlots — la machine a sous a trois faces de bloc. La fiche GENEREE (preparer-deploiement-slots.mjs) ; `adresse`
  *   reste null tant que le proprietaire n a pas signe : /api/slots rend alors PAS_OUVERT et l app ne montre AUCUN bouton Slots. */
 import { SLOTS_DEPLOIEMENT } from './slots-deploiement.js';
+/* 2026-10-23 (Phil, option 3) : le REGLEUR des slots — sans SLOTS_KEEPER_KEY il ne fait rien et le dit (/sante) ; avec, il envoie settleMany
+ *   (et rien d autre) au contrat de la fiche, du wallet du regleur (gas seulement ; le contrat paie les joueurs). slots-regleur.js. */
+import { creerRegleur } from './slots-regleur.js';
 /* 2026-10-18 : TicketPot LIVE (0xf986…1df1, bloc 52 776 705) — la fiche notee, et la lecture PURE du jour (lireJour : aucune cle requise) */
 import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { lireJour as lireJourTicketPot } from './ticketpot-attestation.js';
@@ -4259,6 +4262,19 @@ async function lireDuelsSrv() {
 }
 setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000).unref?.();
 
+/* ══ LE REGLEUR DES SLOTS (2026-10-23, option 3 de Phil) — un spin non regle dans sa fenetre (256 blocs) est PERDU : le serveur regle donc
+ *   les spins lui-meme quand le proprietaire a pose SLOTS_KEEPER_KEY (un wallet qu il cree et approvisionne en ETH pour le gas). La cle
+ *   n est lue QU ICI, passee au module et jamais rendue ; /sante publie l etat (OFF / ON / ARRETE), l ADRESSE du regleur, le dernier
+ *   reglement et les erreurs. Bornes et garde : slots-regleur.js (BORNES_DEFAUT, verifierEnvoi). Sans contrat ecrit dans la fiche, ou en
+ *   mode essai : OFF, et pourquoi. */
+const contratSlotsFiche = /^0x[0-9a-f]{40}$/i.test(String(SLOTS_DEPLOIEMENT.adresse || '')) && Number.isSafeInteger(SLOTS_DEPLOIEMENT.bloc) ? String(SLOTS_DEPLOIEMENT.adresse).toLowerCase() : null;
+const regleurSlots = ESSAI_SRV.actif
+  ? creerRegleur({ desactive: 'trial mode (ESSAI): the keeper never runs against a trial node' })
+  : creerRegleur({ cle: process.env.SLOTS_KEEPER_KEY || null, contrat: contratSlotsFiche, chainId: SLOTS_DEPLOIEMENT.chaine, table: SLOTS_DEPLOIEMENT.constructeur.prizes,
+    blocDeploiement: SLOTS_DEPLOIEMENT.bloc || 0, rpc: rpcServeur, journal: (t) => console.log(t) });
+if (regleurSlots.demarrer()) console.log('[slots-keeper] on, keeper ' + regleurSlots.etat().adresse);
+else console.log('[slots-keeper] off: ' + regleurSlots.etat().pourquoi);
+
 /* ══ LE JOURNAL DU JOUR DU JEU (Phil 2026-10-18 : « les brains sont les occupants de la Map ») — journal-jeu.js, GET /api/jeu/journal.
  * ⛔ LU SUR UN MINUTEUR, JAMAIS PAR REQUETE : un tour toutes les JOURNAL_TOUR_MS, au plus JOURNAL_FENETRES_PAR_TOUR fenetres de
  *   JOURNAL_PAS_BLOCS, depuis un CURSEUR (le dernier bloc lu). La requete ne lit que la memoire : elle sert l etat, meme perime, avec `lu`.
@@ -6643,7 +6659,9 @@ function traiterRequete(req, res) {
     if (!contratSlots) { rendreS({ ok: false, etat: 'PAS_OUVERT' }); return; }
     const sc = SLOTS_DEPLOIEMENT.constructeur;
     rendreS({ ok: true, etat: 'OUVERT', contrat: contratSlots, bloc: SLOTS_DEPLOIEMENT.bloc, usdc: String(sc.usdc).toLowerCase(), prixSpin: String(sc.spinPrice), potShareBps: Number(sc.potShareBps),
-      prizes: sc.prizes.map(String), esperanceBrut: String(SLOTS_DEPLOIEMENT.esperanceBrut), probGainBps: Number(SLOTS_DEPLOIEMENT.probGainBps), fenetre: 256, delai: 2 });
+      prizes: sc.prizes.map(String), esperanceBrut: String(SLOTS_DEPLOIEMENT.esperanceBrut), probGainBps: Number(SLOTS_DEPLOIEMENT.probGainBps), fenetre: 256, delai: 2,
+      /* v4 : l app dit si le serveur regle les spins tout seul (son regleur) ; le temps de bloc MESURE par le regleur s il tourne */
+      regleur: (() => { const e = regleurSlots.etat(); return { etat: e.etat, adresse: e.adresse || null, msParBlocMesure: e.msParBlocMesure ?? null, dernierRegle: e.dernierRegle ? e.dernierRegle.a : null }; })() });
     return;
   }
 
@@ -6762,6 +6780,8 @@ function traiterRequete(req, res) {
       sondes: { naissance: naissanceSonde.etat, marche: autresSondes.marche, echange: autresSondes.echange, cerveau: autresSondes.cerveau, block: BLOCK_SONDE },
       /* l etat des devises de paire, en compteurs (born / not_born / not_read, passes, lectures) : lu en MEMOIRE, aucune lecture de chaine */
       paires: etatPaires.resume(),
+      /* 2026-10-23 : le regleur des slots — OFF (et pourquoi) / ON / ARRETE, son ADRESSE, le dernier reglement, les erreurs ; jamais la cle */
+      slotsRegleur: regleurSlots.etat(),
       mcpWidget: widgetHtml !== null, trousCreations: trousCreations.slice(-10), trousRelus: trousRelus.slice(-10), noeuds: etatNoeuds, ...(ok ? {} : { modulesManquants }),
       /* 2026-10-16 : le revenu VERIFIE par recu, par ligne et par devise (unites brutes), externe et interne separes — jamais les hashes.
        *   ⛔ BORNES dites : seules les transactions que le client poste sont vues ; l ETH natif (sans log) n est pas compte. */

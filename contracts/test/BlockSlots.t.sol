@@ -4,7 +4,7 @@ pragma solidity ^0.8.24;
 import "forge-std/Test.sol";
 import "../src/BlockSlots.sol";
 
-/// @dev USDC de test : 6 decimales, transferFrom standard, et un mode « rend false » pour la garde SafeERC20.
+/// @dev USDC de test : 6 decimales, transferFrom standard, et un mode Â« rend false Â» pour la garde SafeERC20.
 contract UsdcS {
     uint8 public constant decimals = 6;
     mapping(address => uint256) public balanceOf;
@@ -34,7 +34,7 @@ contract UsdcS {
     }
 }
 
-/// @dev jeton HOSTILE : pendant un paiement du contrat (gain, remboursement, part du dev), il tente de re-entrer avec `donnee`
+/// @dev jeton HOSTILE : pendant un paiement du contrat (gain, part du dev), il tente de re-entrer avec `donnee`
 ///      (settle, settleMany, expire, payDev d un autre spin).
 contract UsdcHostileS is UsdcS {
     BlockSlots public cible;
@@ -84,12 +84,12 @@ contract BlockSlotsTest is Test {
     uint64[16] TABLE = [uint64(0), 0, 0, 250_000, 750_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000];
 
     event Spun(uint256 indexed spinId, address indexed player, uint256 targetBlock, uint256 toPot, uint256 toDev);
-    /// @dev v3 : l expiration REMBOURSE la part du dev (tenue par le contrat) au joueur
-    event Expired(uint256 indexed spinId, address indexed player, uint256 refund);
+    /// @dev v4 (option 3 de Phil, 2026-10-23) : l expiration MARQUE le spin perdu, sans aucun montant (rien n est rendu)
+    event Expired(uint256 indexed spinId, address indexed player);
 
-    /* ⛔ v3 (verdict adverse 2026-10-23 + regles de Phil) : les fonctions NOUVELLES (acceptCapped, payDev, escrow, devOwed, REFUND,
-     *    bestPlayNumerator) sont appelees ICI par des appels BAS NIVEAU : ce fichier compile donc contre l ANCIEN contrat (e14bd89), et
-     *    chaque test v3 peut y etre lance pour ROUGIR (et non « ne compile pas », defaut 2 du verdict). */
+    /* â›” v3/v4 (verdicts adverses 2026-10-23 + regles de Phil) : les fonctions NOUVELLES (acceptCapped, payDev, devOwed, DEV_SHARE,
+     *    bestPlayNumerator) sont appelees ICI par des appels BAS NIVEAU : ce fichier compile donc contre les ANCIENS contrats (e14bd89,
+     *    300d9e2), et chaque test v4 peut y etre lance pour ROUGIR (et non Â« ne compile pas Â»). */
     function _lireU(string memory sig) internal view returns (uint256) {
         (bool ok, bytes memory r) = address(bs).staticcall(abi.encodeWithSignature(sig));
         require(ok && r.length == 32, string.concat("lecture impossible : ", sig));
@@ -110,9 +110,9 @@ contract BlockSlotsTest is Test {
         if (r.length >= 4) e = bytes4(r);
     }
 
-    /// @dev l invariant de caisse : le solde USDC du contrat = pot + parts du dev en attente (escrow) + parts du dev dues (devOwed)
+    /// @dev l invariant de caisse (v4) : le solde USDC du contrat = pot + parts du dev dues (devOwed) -- rien n est tenu en attente
     function _caisse() internal view {
-        assertEq(usdc.balanceOf(address(bs)), bs.pot() + _lireU("escrow()") + _lireU("devOwed()"), "solde = pot + escrow + devOwed");
+        assertEq(usdc.balanceOf(address(bs)), bs.pot() + _lireU("devOwed()"), "solde = pot + devOwed");
     }
 
     function setUp() public {
@@ -176,7 +176,11 @@ contract BlockSlotsTest is Test {
         assertEq(bs.TARGET_DELAY(), 2);
         assertEq(bs.MAX_POINTS(), 15);
         assertEq(_lireU("TO_POT()"), 250_000, "part du pot d un spin");
-        assertEq(_lireU("REFUND()"), 250_000, "remboursement d une fenetre manquee = la part du dev");
+        assertEq(_lireU("DEV_SHARE()"), 250_000, "v4 : la part du dev, due des le spin");
+        (bool ok,) = address(bs).staticcall(abi.encodeWithSignature("REFUND()"));
+        assertFalse(ok, "v4 : plus de REFUND");
+        (ok,) = address(bs).staticcall(abi.encodeWithSignature("escrow()"));
+        assertFalse(ok, "v4 : plus d escrow");
     }
 
     function test_ConfigRefusee() public {
@@ -206,7 +210,7 @@ contract BlockSlotsTest is Test {
         _refuse(c);
     }
 
-    /// @dev ⛔ l avantage de la maison : une table dont l esperance atteint la part du pot est REFUSEE par le constructeur
+    /// @dev â›” l avantage de la maison : une table dont l esperance atteint la part du pot est REFUSEE par le constructeur
     function test_EsperanceTropHauteRefusee() public {
         BlockSlots.Config memory c = _cfg(address(usdc));
         c.prizes[3] = 1_200_000; c.prizes[4] = 1_200_000; c.prizes[5] = 2_000_000; /* 3 points : 0,136 x 1,2 = 0,163 deja, total ~0,28 > 0,25 */
@@ -216,7 +220,7 @@ contract BlockSlotsTest is Test {
         new BlockSlots(c);
     }
 
-    /// @dev le bord EXACT : une table « x pour 3 points et plus » ; le plus grand x admis est lim, lim + 1 est refuse
+    /// @dev le bord EXACT : une table Â« x pour 3 points et plus Â» ; le plus grand x admis est lim, lim + 1 est refuse
     function test_EsperanceAuBordExact() public {
         uint256[16] memory d = bs.distribution();
         uint256 s3;
@@ -261,9 +265,9 @@ contract BlockSlotsTest is Test {
         vm.stopPrank();
         assertEq(id, 1);
         assertEq(j0 - usdc.balanceOf(JOUEUR), SPIN, "le joueur paie le prix exact");
-        assertEq(usdc.balanceOf(DEV), 0, "v3 : la part du dev est TENUE jusqu au settle (rendue si la fenetre passe)");
+        assertEq(usdc.balanceOf(DEV), 0, "la part du dev part par payDev()");
         assertEq(bs.pot(), 250_000, "50 % au pot");
-        assertEq(_lireU("escrow()"), 250_000, "50 % tenus pour le dev");
+        assertEq(_lireU("devOwed()"), 250_000, "v4 : 50 % DUS au dev des le spin");
         assertEq(usdc.balanceOf(address(bs)), 500_000);
         _caisse();
         (address p, uint40 t, BlockSlots.Status s) = bs.spins(1);
@@ -310,13 +314,14 @@ contract BlockSlotsTest is Test {
         uint256 b0 = usdc.balanceOf(address(bs));
         uint256 j0 = usdc.balanceOf(JOUEUR);
         vm.expectEmit(true, true, false, true);
-        emit Expired(id, JOUEUR, 250_000);
+        emit Expired(id, JOUEUR);
         bs.expire(id);
         (,, BlockSlots.Status s) = bs.spins(id);
         assertEq(uint256(s), uint256(BlockSlots.Status.Expired));
         assertEq(bs.pot(), pot0, "le pot garde sa part");
-        assertEq(usdc.balanceOf(JOUEUR) - j0, 250_000, "v3 : la part du dev revient au joueur");
-        assertEq(b0 - usdc.balanceOf(address(bs)), 250_000);
+        assertEq(usdc.balanceOf(JOUEUR), j0, "v4 : rien ne revient au joueur");
+        assertEq(usdc.balanceOf(address(bs)), b0, "v4 : expire ne deplace rien");
+        assertEq(_lireU("devOwed()"), 250_000, "v4 : la part du dev reste due");
         _caisse();
         vm.expectRevert(BlockSlots.NotPending.selector);
         bs.expire(id);
@@ -329,23 +334,51 @@ contract BlockSlotsTest is Test {
         bs.expire(id);
     }
 
-    /// @dev v3 (regle de Phil : fenetre manquee = remboursement) : la PART DU DEV revient au joueur, pas la part du pot. Un remboursement
-    ///      du prix ENTIER est impossible avec « esperance strictement sous le prix » : test_V3_MeilleureStrategieSousLePrix le chiffre.
-    ///      expire() par N IMPORTE QUI : le remboursement va TOUJOURS au joueur, jamais a l appelant ; pas de refund() a part.
-    function test_RemboursementDeLaPartDuDevSeulement() public {
+    /// @dev v4 (option 3 de Phil) : un spin non regle dans sa fenetre est PERDU. expire() par N IMPORTE QUI ne paie personne : ni le
+    ///      joueur, ni l appelant ; la part du pot reste au pot, la part du dev reste due (et payDev l envoie). Pas de refund() a part.
+    function test_V4_ExpireNeRendRien() public {
         uint256 id = _spin(JOUEUR);
         uint256 j0 = usdc.balanceOf(JOUEUR);
         uint256 a0 = usdc.balanceOf(AUTRE);
+        uint256 b0 = usdc.balanceOf(address(bs));
         vm.roll(1002 + 300);
         vm.prank(AUTRE);
         bs.expire(id);
         (bool ok,) = address(bs).call(abi.encodeWithSignature("refund(uint256)", id));
         assertFalse(ok, "pas de refund() a part");
-        assertEq(usdc.balanceOf(JOUEUR) - j0, 250_000, "le joueur recupere la part du dev, pas plus");
+        assertEq(usdc.balanceOf(JOUEUR), j0, "le joueur ne recupere rien");
         assertEq(usdc.balanceOf(AUTRE), a0, "l appelant ne touche rien");
+        assertEq(usdc.balanceOf(address(bs)), b0, "rien ne sort du contrat");
         assertEq(bs.pot(), 250_000, "la part du pot reste au pot");
-        assertEq(_lireU("devOwed()"), 0, "le dev ne touche rien d un spin rembourse");
+        assertEq(_lireU("devOwed()"), 250_000, "le dev est du de sa part, spin perdu compris");
         _caisse();
+        (bool okDev,) = _payDev(AUTRE);
+        assertTrue(okDev);
+        assertEq(usdc.balanceOf(DEV), 250_000, "la part du spin perdu arrive au DEV_WALLET");
+        assertEq(usdc.balanceOf(address(bs)), bs.pot(), "rien de coince : solde = pot");
+        /* un spin perdu ne se regle plus (ni settle, ni le lot, ni acceptCapped) */
+        vm.expectRevert(BlockSlots.NotPending.selector);
+        bs.settle(id);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        assertEq(bs.settleMany(ids), 0);
+        (bool okA, bytes memory rA) = _accepter(JOUEUR, id, 0);
+        assertTrue(!okA && _erreur(rA) == BlockSlots.NotPending.selector, "acceptCapped : un spin perdu est clos");
+    }
+
+    /// @dev v4 : SANS expire(), un spin hors fenetre est deja perdu (TooLate, le lot le saute) et sa part du dev est deja due
+    function test_V4_PerduSansExpire() public {
+        uint256 id = _spin(JOUEUR);
+        vm.roll(1002 + 257);
+        vm.expectRevert(BlockSlots.TooLate.selector);
+        bs.settle(id);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        assertEq(bs.settleMany(ids), 0, "le lot saute un spin hors fenetre");
+        (bool ok,) = _payDev(AUTRE);
+        assertTrue(ok);
+        assertEq(usdc.balanceOf(DEV), 250_000, "le dev touche sa part sans que personne n expire le spin");
+        assertEq(usdc.balanceOf(address(bs)), bs.pot());
     }
 
     function test_SettleDeuxFoisEtInexistant() public {
@@ -395,7 +428,7 @@ contract BlockSlotsTest is Test {
         assertEq(bs.pointsFor(_f([1, 2, 3, 4, 5], [1, 2, 3, 0, 0], [1, 2, 3, 0, 0])), 11, "3 brelans + 2 paires : 11");
     }
 
-    /// @dev les graines « v2slotsN » (trois hashes _trois(graine), spin #1) donnent 0..10 points : trouvees et recalculees par
+    /// @dev les graines Â« v2slotsN Â» (trois hashes _trois(graine), spin #1) donnent 0..10 points : trouvees et recalculees par
     ///      test-slots-parite en node. Pot suffisant : settle() ; pot court : seul acceptCapped(id, min) du JOUEUR paie (v3).
     function _paiePourGraine(string memory graine, uint8 pointsAttendus, uint256 don) internal returns (uint256 gain, uint256 potAvant) {
         if (don != 0) _fund(don);
@@ -555,7 +588,7 @@ contract BlockSlotsTest is Test {
     /* ------------------------------------------------------------ fuzz */
 
     /// @dev quel que soit le hash et le pot : settle() paie le prix ENTIER ou refuse (PotShort) ; acceptCapped du joueur paie min(prix, pot) ;
-    ///      jamais plus de 5 USDC ; la caisse tient (solde = pot + escrow + devOwed)
+    ///      jamais plus de 5 USDC ; la caisse tient (solde = pot + devOwed)
     function testFuzz_PayoutPlafonneEtCaisse(bytes32 h, uint96 dons) public {
         uint256 d = uint256(dons) % 5_000_000_000;
         if (d != 0) _fund(d);
@@ -589,44 +622,44 @@ contract BlockSlotsTest is Test {
         _caisse();
     }
 
-    /// @dev N spins sur des hashes au hasard, chacun REGLE (settle, ou acceptCapped si le pot est court) OU laisse EXPIRER (rembourse) :
-    ///      gains <= dons + parts du pot ; caisse tenue a chaque pas ; le dev touche la part des spins regles SEULEMENT (apres payDev) ;
-    ///      le joueur : gains + remboursements - prix
-    function testFuzz_SommeDesGains(bytes32 graine, uint8 n, uint64 don, uint16 masqueExpire) public {
+    /// @dev N spins sur des hashes au hasard, chacun REGLE (settle, ou acceptCapped si le pot est court) OU laisse EXPIRER (v4 : perdu,
+    ///      rien de rendu ; expire() appele ou non) : gains <= dons + parts du pot ; caisse tenue a chaque pas ; le dev touche la part de
+    ///      TOUS les spins (apres payDev) ; le joueur : gains - prix ; apres payDev, solde = pot (rien de coince)
+    function testFuzz_SommeDesGains(bytes32 graine, uint8 n, uint64 don, uint16 masqueExpire, uint16 masqueAppel) public {
         uint256 k = uint256(n) % 12 + 1;
         uint256 d = uint256(don) % 200_000_000;
         if (d != 0) _fund(d);
         uint256 j0 = usdc.balanceOf(JOUEUR);
         uint256 gains;
-        uint256 regles;
-        uint256 rembourses;
+        uint256 perdus;
         for (uint256 i = 0; i < k; i++) {
             uint256 id = _spin(JOUEUR);
             bytes32 h = keccak256(abi.encode(graine, i));
             if ((masqueExpire >> i) & 1 == 1) {
                 (, uint40 t,) = bs.spins(id);
                 vm.roll(uint256(t) + 257);
-                bs.expire(id);
-                rembourses++;
+                if ((masqueAppel >> i) & 1 == 1) bs.expire(id);
+                perdus++;
             } else {
                 _revele(id, h);
                 (bool ok, bytes memory r) = _accepter(JOUEUR, id, 0);
                 assertTrue(ok, "acceptCapped du joueur");
                 (, uint256 pay) = abi.decode(r, (uint8, uint256));
                 gains += pay;
-                regles++;
             }
             _caisse();
         }
         assertLe(gains, d + k * 250_000, "on ne paie que ce qui est entre");
         assertEq(bs.pot(), d + k * 250_000 - gains, "pot = entrees - gains");
         assertEq(usdc.balanceOf(DEV), 0, "rien au dev avant payDev");
+        assertEq(_lireU("devOwed()"), k * 250_000, "v4 : la part du dev de CHAQUE spin, perdus compris");
         (bool okDev,) = _payDev(AUTRE);
         assertTrue(okDev, "payDev par n importe qui");
-        assertEq(usdc.balanceOf(DEV), regles * 250_000, "dev : la part des spins REGLES seulement");
-        assertEq(usdc.balanceOf(address(bs)), bs.pot(), "apres payDev : solde = pot");
-        assertEq(j0 + gains + rembourses * 250_000 - k * SPIN, usdc.balanceOf(JOUEUR), "joueur : gains + remboursements - prix");
+        assertEq(usdc.balanceOf(DEV), k * 250_000, "dev : la part de TOUS les spins");
+        assertEq(usdc.balanceOf(address(bs)), bs.pot(), "apres payDev : solde = pot, rien de coince");
+        assertEq(j0 + gains - k * SPIN, usdc.balanceOf(JOUEUR), "joueur : gains - prix (un spin perdu ne rend rien)");
         assertEq(bs.wonOf(JOUEUR), gains);
+        assertLe(perdus, k);
     }
 
     /// @dev la fenetre : pour tout decalage, settle passe ssi cible + 2 < bloc <= cible + 256 (les trois hashes, la fenetre du premier)
@@ -704,7 +737,7 @@ contract BlockSlotsTest is Test {
         _parite(0x0000000000000000000000000000000000000000000000000000000000000000, 1, 2, 7, 6, 0);
     }
 
-    /* ⛔ Ces trois faces par (hash, id) sont RECALCULEES par test-slots-parite-20261023.mjs avec les modules de l app (keccak.js +
+    /* â›” Ces trois faces par (hash, id) sont RECALCULEES par test-slots-parite-20261023.mjs avec les modules de l app (keccak.js +
      *    traitsDepuisHash) : si l un des deux cotes derive, l un des deux tests rougit. Ne pas editer a la main. */
     /// @dev les trois hashes sont ceux de _trois(graine) (keccak256(abi.encodePacked(graine, uint8(r)))) ; le test node les recalcule
     function _pariteSpin(string memory graine, uint256 id, uint8[15] memory v, uint8 pts) internal view {
@@ -724,9 +757,9 @@ contract BlockSlotsTest is Test {
     }
 
     /* ------------------------------------------------------------ V2 (verdict adverse + decisions de Phil, 2026-10-23) */
-    /* ⛔ ecrits AVANT le changement du contrat, avec les seules fonctions de l ancien (seedOf, faceOf, pointsFor) : ils doivent y rougir. */
+    /* â›” ecrits AVANT le changement du contrat, avec les seules fonctions de l ancien (seedOf, faceOf, pointsFor) : ils doivent y rougir. */
 
-    /// @dev les trois hashes d une graine : h_r = keccak256(abi.encodePacked(g, uint8(r))) — recalcules par test-slots-parite en node
+    /// @dev les trois hashes d une graine : h_r = keccak256(abi.encodePacked(g, uint8(r))) â€” recalcules par test-slots-parite en node
     function _trois(string memory g) internal pure returns (bytes32[3] memory h) {
         for (uint256 r = 0; r < 3; r++) h[r] = keccak256(abi.encodePacked(g, uint8(r)));
     }
@@ -832,7 +865,7 @@ contract BlockSlotsTest is Test {
     }
 
     /* ------------------------------------------------------------ V3 (verdict adverse 2026-10-23, regles de Phil) */
-    /* ⛔ ecrits AVANT le changement du contrat ; ils compilent contre l ancien (appels bas niveau) et doivent y ROUGIR. */
+    /* â›” ecrits AVANT le changement du contrat ; ils compilent contre l ancien (appels bas niveau) et doivent y ROUGIR. */
 
     /// @dev les deux spins du verdict : le MEME joueur, deux spins a 8 points (5 USDC chacun), un pot de 5 USDC. Defaut 1 : son
     ///      settleMany([1,2]) reglait #2 a 0 sans le dire. v3 : le lot SAUTE #2 (pot court), meme pour le joueur ; #2 reste a lui.
@@ -886,17 +919,17 @@ contract BlockSlotsTest is Test {
         assertTrue(!ok && _erreur(r) == BlockSlots.NotPending.selector, "deja regle");
     }
 
-    /// @dev la part du dev est TENUE jusqu au settle, puis due (devOwed) ; payDev() par n importe qui l envoie au DEV_WALLET seul
-    function test_V3_PartDuDevPayeeAuReglement() public {
+    /// @dev v4 : la part du dev est DUE des le spin (devOwed), le settle n y touche pas ; payDev() par n importe qui l envoie au DEV_WALLET seul
+    function test_V4_PartDuDevDueAuSpin() public {
         uint256 id = _spin(JOUEUR);
-        assertEq(usdc.balanceOf(DEV), 0, "rien au dev au spin");
+        assertEq(usdc.balanceOf(DEV), 0, "rien au dev au spin (payDev l envoie)");
+        assertEq(_lireU("devOwed()"), 250_000, "due des le spin");
         _reveleTrois(id, _trois("v3slots0")); /* 0 point pour l id 1 */
         vm.prank(AUTRE);
         (uint8 p, uint256 pay) = bs.settle(id);
         assertEq(p, 0);
         assertEq(pay, 0);
-        assertEq(_lireU("escrow()"), 0);
-        assertEq(_lireU("devOwed()"), 250_000);
+        assertEq(_lireU("devOwed()"), 250_000, "le settle ne change pas la part du dev");
         _caisse();
         uint256 a0 = usdc.balanceOf(AUTRE);
         (bool ok,) = _payDev(AUTRE);
@@ -911,25 +944,34 @@ contract BlockSlotsTest is Test {
         _caisse();
     }
 
-    /// @dev « esperance strictement sous le prix » AVEC le remboursement : la meilleure strategie (regler si le prix depasse le
-    ///      remboursement, sinon laisser expirer) rend en moyenne 7252695144110113090426044529286962642681856000000 / 2^144 = 325 222 brut
-    ///      (0,325222 USDC) par spin de 0,50. Le remboursement du prix ENTIER rendrait >= 0,50 : impossible avec la regle (556 549 ici).
-    function test_V3_MeilleureStrategieSousLePrix() public view {
+    /// @dev v4 : SANS remboursement, laisser expirer ne rend rien ; la meilleure strategie est de tout regler et rend EXACTEMENT
+    ///      l esperance : 2851431899393758353960392096738004388806656000000 / 2^144 = 127 862 brut (0,127862 USDC) par spin de 0,50,
+    ///      sous la part du pot (0,25) donc sous le prix. Pour memoire, ce que rendait le meilleur jeu AVEC remboursement r : r = la part du
+    ///      dev (v3) 325 222 ; r = le prix entier 556 549 (au-dessus du prix) -- recalcules ici, pas recopies.
+    function test_V4_MeilleureStrategieEgaleEsperance() public view {
         uint256 best = _lireU("bestPlayNumerator()");
-        assertEq(best, 7252695144110113090426044529286962642681856000000);
-        assertEq(best / bs.DIST_DENOM(), 325_222);
-        assertLt(best, SPIN * bs.DIST_DENOM(), "meilleure strategie strictement sous le prix");
+        uint256 ev = bs.expectedNumerator(TABLE);
+        assertEq(best, ev, "meilleur jeu = esperance (aucune option de remboursement)");
+        assertEq(best, 2851431899393758353960392096738004388806656000000);
+        assertEq(best / bs.DIST_DENOM(), 127_862);
+        assertEq(best / bs.DIST_DENOM(), bs.expectedPayout());
+        assertLt(best, 250_000 * bs.DIST_DENOM(), "strictement sous la part du pot");
+        assertLt(best, SPIN * bs.DIST_DENOM(), "strictement sous le prix");
         uint256[16] memory d = bs.distribution();
+        uint256 demi;
         uint256 plein;
-        for (uint256 k = 0; k < 16; k++) plein += d[k] * (TABLE[k] > SPIN ? TABLE[k] : SPIN);
-        assertGe(plein, SPIN * bs.DIST_DENOM(), "rembourser le prix ENTIER : la meilleure strategie atteint le prix");
-        assertEq(plein / bs.DIST_DENOM(), 556_549);
+        for (uint256 k = 0; k < 16; k++) {
+            demi += d[k] * (TABLE[k] > 250_000 ? TABLE[k] : 250_000);
+            plein += d[k] * (TABLE[k] > SPIN ? TABLE[k] : SPIN);
+        }
+        assertEq(demi / bs.DIST_DENOM(), 325_222, "v3 (part du dev rendue) : 0,325222");
+        assertEq(plein / bs.DIST_DENOM(), 556_549, "prix entier rendu : 0,556549 > 0,50");
+        assertGt(demi, best, "le remboursement donnait au joueur plus que l esperance");
     }
 
-    /// @dev la garde est EXACTE sur ce qui ENTRE au pot (arrondi bas) : spin 500 001, part 50 % -> 250 000 au pot, 250 001 rendables.
-    ///      Une table « x pour 3 points et plus » d esperance entre 250 000 et 250 000,5 passait l ancienne garde (prix x part / BPS, sans
-    ///      l arrondi) : la preuve « meilleure strategie <= esperance + rendable < part du pot + rendable = prix » n y tient plus (a moins
-    ///      d une unite brute pres). Refusee ; x - 1 admis.
+    /// @dev la garde est EXACTE sur ce qui ENTRE au pot (arrondi bas) : spin 500 001, part 50 % -> 250 000 au pot, 250 001 au dev.
+    ///      Une table Â« x pour 3 points et plus Â» d esperance entre 250 000 et 250 000,5 passait une garde sans l arrondi (prix x part / BPS) :
+    ///      le pot paierait en moyenne plus qu il ne recoit. Refusee ; x - 1 admis.
     function test_V3_GardeSurLaPartQuiEntreAuPot() public {
         uint256[16] memory d = bs.distribution();
         uint256 s3;
@@ -944,8 +986,9 @@ contract BlockSlotsTest is Test {
         new BlockSlots(c);
     }
 
-    /// @dev pour TOUTE table admise par le constructeur : meilleure strategie < prix (E[max(X, r)] <= E[X] + r < part du pot + r = prix)
-    function testFuzz_V3_TableAdmiseSousLePrix(uint64[8] memory pas, uint32 prix, uint16 part) public {
+    /// @dev pour TOUTE table admise par le constructeur (v4) : meilleure strategie = esperance < part du pot <= prix ; part du dev + part
+    ///      du pot = prix ; et une table refusee a bien une esperance >= la part du pot
+    function testFuzz_V4_TableAdmiseSousLePrix(uint64[8] memory pas, uint32 prix, uint16 part) public {
         BlockSlots.Config memory c = _cfg(address(usdc));
         c.spinPrice = uint256(prix) % 2_000_000 + 1;
         c.potShareBps = uint16(uint256(part) % 10_000 + 1);
@@ -955,18 +998,26 @@ contract BlockSlotsTest is Test {
             if (v > 5_000_000) v = 5_000_000;
             c.prizes[k] = v;
         }
+        uint256 toPot = (c.spinPrice * c.potShareBps) / 10_000;
+        uint256 ev = bs.expectedNumerator(c.prizes);
         try new BlockSlots(c) returns (BlockSlots b2) {
             (bool ok, bytes memory r) = address(b2).staticcall(abi.encodeWithSignature("bestPlayNumerator()"));
             assertTrue(ok && r.length == 32, "bestPlayNumerator");
-            assertLt(abi.decode(r, (uint256)), c.spinPrice * b2.DIST_DENOM(), "table admise : meilleure strategie < prix");
-            (ok, r) = address(b2).staticcall(abi.encodeWithSignature("REFUND()"));
+            uint256 best = abi.decode(r, (uint256));
+            assertEq(best, ev, "v4 : meilleure strategie = esperance");
+            assertLt(best, toPot * b2.DIST_DENOM(), "table admise : esperance < part du pot");
+            assertLt(best, c.spinPrice * b2.DIST_DENOM(), "table admise : meilleure strategie < prix");
+            (ok, r) = address(b2).staticcall(abi.encodeWithSignature("DEV_SHARE()"));
             assertTrue(ok);
-            assertEq(abi.decode(r, (uint256)) + (c.spinPrice * c.potShareBps) / 10_000, c.spinPrice, "rendable + part du pot = prix");
-        } catch {}
+            assertEq(abi.decode(r, (uint256)) + toPot, c.spinPrice, "part du dev + part du pot = prix");
+        } catch {
+            assertGe(ev, toPot * bs.DIST_DENOM(), "une table croissante <= 5 USDC n est refusee que pour son esperance");
+        }
     }
 
-    /// @dev les paiements de expire (remboursement) et de payDev passent sous le verrou : un jeton hostile qui re-entre est refuse
-    function test_V3_ReentreeExpireEtPayDev() public {
+    /// @dev v4 : expire() ne transfere RIEN (le jeton n est pas appele) ; payDev passe sous le verrou : un jeton hostile qui re-entre
+    ///      pendant le paiement du dev est refuse, et le dev n est paye qu une fois
+    function test_V4_ReentreeExpireEtPayDev() public {
         UsdcHostileS hu = new UsdcHostileS();
         BlockSlots b2 = new BlockSlots(_cfg(address(hu)));
         hu.mint(JOUEUR, 1_000_000_000);
@@ -978,12 +1029,40 @@ contract BlockSlotsTest is Test {
         vm.roll(1002 + 257);
         hu.armerDonnee(b2, abi.encodeWithSignature("payDev()"));
         b2.expire(a);
-        assertTrue(hu.tente(), "le remboursement passe par transfer");
-        assertFalse(hu.reentreeReussie(), "pas de re-entree pendant expire");
+        assertFalse(hu.tente(), "v4 : expire n appelle pas le jeton");
+        assertEq(hu.balanceOf(JOUEUR), 1_000_000_000 - 2 * SPIN, "rien n est rendu");
+        b2.payDev();
+        assertTrue(hu.tente(), "payDev passe par transfer");
+        assertFalse(hu.reentreeReussie(), "pas de re-entree pendant payDev");
         assertEq(hu.erreurVue(), BlockSlots.Reentrancy.selector);
-        assertEq(hu.balanceOf(JOUEUR), 1_000_000_000 - 2 * SPIN + 250_000, "le joueur est rembourse une fois");
+        assertEq(hu.balanceOf(DEV), 2 * 250_000, "le dev est paye une fois, de ses deux parts");
+        assertEq(hu.balanceOf(address(b2)), b2.pot(), "solde = pot");
         (,, BlockSlots.Status sb) = b2.spins(b);
         assertEq(uint256(sb), uint256(BlockSlots.Status.Pending));
+    }
+
+    /// @dev v4 : un REGLEUR (le serveur, ou n importe qui) regle en lot ; chaque gain va au joueur de SON spin, rien a l appelant, et
+    ///      l appelant ne paie que son gas (aucun USDC ne lui est tire)
+    function test_V4_RegleurPaieLesJoueurs() public {
+        _fund(100_000_000);
+        uint256 a = _spin(JOUEUR); /* id 1 */
+        uint256 b = _spin(AUTRE); /* id 2, meme cible */
+        vm.roll(1005);
+        _poserTrois(1002, _trois("v2slots24"));
+        uint256 attA = TABLE[bs.pointsFor(bs.facesOf(_trois("v2slots24"), a))];
+        uint256 attB = TABLE[bs.pointsFor(bs.facesOf(_trois("v2slots24"), b))];
+        uint256 j0 = usdc.balanceOf(JOUEUR);
+        uint256 a0 = usdc.balanceOf(AUTRE);
+        uint256 d0 = usdc.balanceOf(DONATEUR);
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = a; ids[1] = b;
+        vm.prank(DONATEUR);
+        assertEq(bs.settleMany(ids), 2);
+        assertEq(usdc.balanceOf(JOUEUR) - j0, attA, "le joueur du spin 1 touche son gain");
+        assertEq(usdc.balanceOf(AUTRE) - a0, attB, "le joueur du spin 2 touche le sien");
+        assertEq(usdc.balanceOf(DONATEUR), d0, "le regleur ne touche rien et ne paie rien");
+        assertEq(attA, 2_000_000, "v2slots24 : 5 points pour l id 1");
+        _caisse();
     }
 
     /* ------------------------------------------------------------ aucun retrait */

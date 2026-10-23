@@ -6,7 +6,10 @@
  *   (approve EXACT), Settle = planSettleMany des seuls spins payes en entier (v3 : le plan refait a la tete relue) ; tout passe par
  *   envoyerAppels ; (5) les trois faces sont dessinees par logoSvg depuis
  *   les graines du contrat (Slots.graine) ; (6) le serveur sert les 4 fichiers, importe la fiche, rend PAS_OUVERT sans adresse, et ne tape
- *   aucun prix ; (7) etatSpins : un statut non lu donne NON_LU, jamais « reglable ». Chaque verification est rejouee sur une copie MUTEE en
+ *   aucun prix ; (7) etatSpins : un statut non lu donne NON_LU, jamais « reglable » ; (8) v4 (option 3 de Phil) : aucun remboursement
+ *   dans la carte (ni bouton, ni plan, ni phrase), « A spin not settled in time is lost », l etat du regleur du serveur dit, la fenetre
+ *   au temps de bloc MESURE ; le serveur lit SLOTS_KEEPER_KEY une fois, publie regleurSlots.etat() (/sante, /api/slots), OFF en essai.
+ *   Chaque verification est rejouee sur une copie MUTEE en
  *   memoire et doit alors rendre faux. NE PROUVE PAS : le rendu (verifie au navigateur), un spin reel. */
 import { readFileSync } from 'node:fs';
 import * as S from './slots-plan.js';
@@ -26,7 +29,12 @@ const checks = {
   aucunBoutonMort: (t) => { const c = carteHtml(t); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c) && /<button type="button" class="bouton" id="slotsSpin" hidden>/.test(c) && /id="slotsRegler" hidden>/.test(c); },
   spinCacheSansWallet: (t) => /bS\.hidden = !moi;/.test(bloc(t)),
   /* v3 : Settle n apparait qu avec un spin payable EN ENTIER (le plan), et jamais quand les spins n ont pas ete lus */
-  settleSeulementReglable: (t) => /bR\.hidden = lot\.length === 0;/.test(bloc(t)) && /if \(lu === null\) \{ bR\.hidden = true; bA\.hidden = true; bB\.hidden = true;/.test(bloc(t)),
+  settleSeulementReglable: (t) => /bR\.hidden = lot\.length === 0;/.test(bloc(t)) && /if \(lu === null\) \{ bR\.hidden = true; bA\.hidden = true; slotsCfg\.vue = null;/.test(bloc(t)),
+  /* v4 (option 3 de Phil) : AUCUN remboursement — ni bouton, ni plan expire, ni phrase de remboursement dans la carte ; la regle dite */
+  sansRemboursement: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''), c = carteHtml(t).replace(/<!--[\s\S]*?-->/g, ''); return !/slotsRembourser|planExpire|lireExpiredTous|refund/i.test(b) && !/refund|slotsRembourser/i.test(c) && c.length > 500; },
+  perduDit: (t) => /A spin not settled in time is lost: nothing is returned\./.test(bloc(t)),
+  regleurDit: (t) => { const b = bloc(t); return /The server settles spins automatically when its keeper is on \(it is ' \+ reg \+ ' right now\); anyone can settle, and the prize always goes to the spin\\'s player\./.test(b) && /const reg = j\.regleur && j\.regleur\.etat === 'ON' \? 'on'/.test(b); },
+  fenetreMesuree: (t) => { const b = bloc(t); return /const msB = await msBlocSlots\(j\);/.test(b) && /Slots\.secondesFenetre\(msB\)/.test(b) && /at the block time measured just now/.test(b) && /Slots\.msParBlocMesure\(\{ tsTete:/.test(b); },
   chiffresServis: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return /const prix = BigInt\(j\.prixSpin\), table = j\.prizes\.map/.test(b) && /Slots\.usdcPrecis\(BigInt\(j\.esperanceBrut\)\)/.test(b) && /ev = Slots\.esperance\(table, prix, part\)/.test(b)
     && /Slots\.usdcPrecis\(ev\.meilleureBrut\)/.test(b) && !/\b(500000|250000|0\.50|0\.25|0\.15|1000|325222|127862)\b/.test(b) && /Slots\.secondesFenetre\(2000\)/.test(b) && /Slots\.secondesFenetre\(200\)/.test(b); },
   nonLu: (t) => { const b = bloc(t); return (b.match(/pot === null \? 'not read'/g) || []).length === 2 && /pts === null \? 'not read'/.test(b) && /gagne === null \? 'not read'/.test(b) && /Your pending spins could not be read just now\./.test(b); },
@@ -56,6 +64,10 @@ const mutants = [
   ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus', 'const r = await envoyerDepuisWallet(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus'],
   ['facesDuContrat', 'faceRevelee(Slots.graine(hashes[r], spinId, r))', 'faceRevelee(Slots.graine(hashes[0], spinId, r))'],
   ['bandeauTelephone', '@media (max-width:520px){.jeuBandeau[data-slots="1"]{grid-template-columns:repeat(2,minmax(0,1fr))}}', ''],
+  ['sansRemboursement', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>\n        <button type="button" class="bouton sec" id="slotsRembourser" hidden>Claim refund</button>'],
+  ['perduDit', "'A spin not settled in time is lost: nothing is returned. Settle within '", "'Settle within '"],
+  ['regleurDit', "(it is ' + reg + ' right now)", "(it is on right now)"],
+  ['fenetreMesuree', 'const msB = await msBlocSlots(j);', 'const msB = null;'],
 ];
 /* un motif unique dans la page est mute dans la page ; un motif partage avec les duels (meme phrase) est mute DANS le bloc des slots seulement */
 for (const [k, de, vers] of mutants) {
@@ -73,12 +85,19 @@ const srvChecks = {
   pasOuvertSansAdresse: (t) => { const r = route(t); const i = r.indexOf("if (!contratSlots) { rendreS({ ok: false, etat: 'PAS_OUVERT' }); return; }"), j = r.indexOf("etat: 'OUVERT'"); return i > 0 && j > i && /Number\.isSafeInteger\(SLOTS_DEPLOIEMENT\.bloc\)/.test(r); },
   aucunPrixTape: (t) => { const r = route(t); return /prixSpin: String\(sc\.spinPrice\)/.test(r) && /prizes: sc\.prizes\.map\(String\)/.test(r) && !/\b(500000|5000|250000)\b/.test(r) && !/eth_|rpc/.test(r); },
   getSeulement: (t) => /if \(req\.method !== 'GET' && req\.method !== 'HEAD'\) \{ res\.writeHead\(405[^\n]*GET only/.test(route(t)),
+  /* v4 : le regleur — la cle lue UNE fois, de l environnement seulement, passee au module ; /sante et /api/slots publient son etat() */
+  regleurCable: (t) => /^import \{ creerRegleur \} from '\.\/slots-regleur\.js';$/m.test(t) && (t.match(/SLOTS_KEEPER_KEY/g) || []).length >= 1
+    && (t.match(/process\.env\.SLOTS_KEEPER_KEY/g) || []).length === 1 && /cle: process\.env\.SLOTS_KEEPER_KEY \|\| null, contrat: contratSlotsFiche, chainId: SLOTS_DEPLOIEMENT\.chaine, table: SLOTS_DEPLOIEMENT\.constructeur\.prizes/.test(t)
+    && /slotsRegleur: regleurSlots\.etat\(\),/.test(t) && /regleur: \(\(\) => \{ const e = regleurSlots\.etat\(\);/.test(route(t)) && /regleurSlots\.demarrer\(\)/.test(t),
+  regleurOffEnEssai: (t) => /const regleurSlots = ESSAI_SRV\.actif\n  \? creerRegleur\(\{ desactive:/.test(t),
 };
 for (const [k, f] of Object.entries(srvChecks)) vu(f(SRV) === true, 'serveur : ' + k);
 const srvMutants = [
   ['servi', "'deployer-slots.html', 'slots-deploiement.js', 'slots-config.js', 'slots-plan.js',", "'deployer-slots.html', 'slots-deploiement.js', 'slots-config.js',"],
   ['pasOuvertSansAdresse', "if (!contratSlots) { rendreS({ ok: false, etat: 'PAS_OUVERT' }); return; }", ''],
   ['aucunPrixTape', 'prixSpin: String(sc.spinPrice)', "prixSpin: '500000'"],
+  ['regleurCable', 'slotsRegleur: regleurSlots.etat(),', ''],
+  ['regleurOffEnEssai', 'const regleurSlots = ESSAI_SRV.actif\n  ? creerRegleur({ desactive:', 'const regleurSlots = false\n  ? creerRegleur({ desactive:'],
 ];
 for (const [k, de, vers] of srvMutants) {
   vu(SRV.split(de).length === 2, 'mutant serveur ' + k + ' : le motif existe une fois');

@@ -9,20 +9,22 @@ pragma solidity ^0.8.24;
 ///         (bloc > targetBlock + 2) et reste dans la fenetre de 256 blocs du PREMIER. Pour chacun des 5 traits : les 3 faces egales = 3 points,
 ///         2 egales = 1 point, sinon 0. Le CONTRAT juge le resultat au settle et paie lui-meme un PRIX FIXE par nombre de points (table de 16
 ///         cases, 0..15 points), entre 0 et 5 USDC AU PLUS par spin (MAX_PRIZE) : en ENTIER si le pot le couvre, sinon le spin attend --
-///         seul son joueur peut accepter moins (acceptCapped), jamais en silence. Une fenetre manquee est REMBOURSEE de la part tenue (REFUND).
+///         seul son joueur peut accepter moins (acceptCapped), jamais en silence. Un spin non regle dans sa fenetre est PERDU (v4, option 3
+///         de Phil 2026-10-23) : aucun gain, RIEN n est rendu, rien ne reste coince (chaque unite est deja au pot ou due au dev).
 ///         Les points s ADDITIONNENT par wallet, sur la chaine (pointsOf) : un COMPTEUR affiche, pas un gain -- le gain est PAR SPIN.
 /// @dev ⛔ CE QUI EST GRAVE ICI, ET POURQUOI :
 ///   - AUCUN proprietaire, AUCUN retrait, AUCUNE regle modifiable : la table des prix est fixee a la construction. L USDC ne sort du pot que
 ///     par un settle gagnant, au joueur du spin.
-///   - SPIN (v3) : le prix ENTIER entre au contrat. TO_POT au pot ; REFUND (le reste, la part du dev) est TENU (escrow) : au settle il
-///     devient du au DEV_WALLET (devOwed, envoye par payDev(), par n importe qui, au DEV_WALLET seul) ; si la fenetre passe, expire()
-///     le REND au joueur (regle de Phil : fenetre manquee = remboursement).
-///   - ⛔ POURQUOI LE REMBOURSEMENT EST LA PART DU DEV ET PAS LE PRIX ENTIER : le hash des blocs est PUBLIC des qu il existe ; le joueur sait
-///     donc s il a gagne AVANT de choisir entre regler et laisser expirer. Avec un remboursement r, la meilleure strategie rend en moyenne
-///     E[max(prix du spin, r)] >= r. Si r = le prix entier, elle rend AU MOINS le prix (0,556549 USDC par spin de 0,50 avec cette table) :
-///     « esperance strictement sous le prix » serait impossible. Avec r = REFUND = prix - TO_POT : E[max(X, r)] <= E[X] + r < TO_POT + r
-///     = prix (la garde du constructeur est EXACTE sur TO_POT, arrondi compris). bestPlayNumerator() le chiffre ; le pot n est jamais
-///     touche par un remboursement (sa part y reste), et la garde lui garde l avantage (E[X] < TO_POT).
+///   - SPIN (v4) : le prix ENTIER entre au contrat et il est PARTAGE AU SPIN, quoi qu il arrive ensuite : TO_POT au pot, DEV_SHARE (le
+///     reste) du au DEV_WALLET (devOwed, envoye par payDev(), par n importe qui, au DEV_WALLET seul). Aucune part n est tenue en attente.
+///   - ⛔ POURQUOI AUCUN REMBOURSEMENT (v4) : le hash des blocs est PUBLIC des qu il existe ; le joueur sait donc s il a gagne AVANT de
+///     choisir entre regler et laisser expirer. Avec un remboursement r, la meilleure strategie rend E[max(prix du spin, r)] : le prix
+///     entier rendu (r = 0,50) donnait 0,556549 USDC par spin de 0,50 (> le prix) ; la part du dev rendue (v3, r = 0,25) donnait 0,325222
+///     et le dev n etait paye presque que sur les spins GAGNANTS. Sans remboursement, laisser expirer ne rend RIEN : la meilleure strategie
+///     est de tout regler, et rend exactement l esperance E[X] (bestPlayNumerator() = expectedNumerator(table)), strictement sous TO_POT
+///     <= le prix (la garde du constructeur, EXACTE, arrondi compris). Un plafond par le pot ne fait que baisser ce que rend un settle.
+///   - settle / settleMany restent PERMISSIONLESS et paient TOUJOURS le joueur du spin (jamais l appelant) : un regleur (le serveur, ou
+///     n importe qui) peut regler a la place du joueur, il ne paie que son gas.
 ///   - L AVANTAGE DE LA MAISON EST VERIFIE PAR LE CONTRAT : la distribution EXACTE des points (DIST, sur 2^144, derivee des tailles de
 ///     listes et des octets lus : teinte = 2 octets % 361 puis 6 bandes, orbite o6 % 10, facette o7 % 19, matiere o8 % 9, ornement o9 % 8)
 ///     est une constante ; le constructeur REFUSE une table dont l esperance par spin n est pas STRICTEMENT sous ce qui ENTRE au pot
@@ -64,8 +66,8 @@ contract BlockSlots {
     uint16 public immutable POT_SHARE_BPS;
     /// @notice ce qu un spin met au pot : SPIN_PRICE * POT_SHARE_BPS / BPS, arrondi bas
     uint256 public immutable TO_POT;
-    /// @notice le reste du prix (la part du dev), tenu jusqu au settle ; RENDU au joueur si la fenetre passe (expire)
-    uint256 public immutable REFUND;
+    /// @notice le reste du prix (la part du dev) : du au DEV_WALLET DES le spin (devOwed), quoi qu il arrive au spin ensuite
+    uint256 public immutable DEV_SHARE;
 
     /* ---------------------------------------------------------------- etat */
     enum Status { None, Pending, Settled, Expired }
@@ -80,11 +82,10 @@ contract BlockSlots {
     /* la table, fixee a la construction, jamais modifiable (aucune fonction ne l ecrit apres) */
     uint64[16] internal _prizes;
     /* le pot, tenu en compte (pas balanceOf) : un transfert direct n y entre pas.
-     * Invariant de caisse : pot + escrow + devOwed <= USDC.balanceOf(this) (egal sans transfert direct). */
+     * Invariant de caisse : pot + devOwed <= USDC.balanceOf(this) (egal sans transfert direct). */
     uint256 public pot;
-    /// @notice la part du dev des spins EN ATTENTE (REFUND chacun) : due au dev au settle, rendue au joueur a l expiration
-    uint256 public escrow;
-    /// @notice la part du dev des spins REGLES, pas encore envoyee : payDev() l envoie au DEV_WALLET, et nulle part ailleurs
+    /// @notice la part du dev de TOUS les spins (DEV_SHARE chacun, comptee au spin), pas encore envoyee : payDev() l envoie au DEV_WALLET,
+    ///         et nulle part ailleurs
     uint256 public devOwed;
     uint256 public spinCount;
     mapping(uint256 => Spin) public spins;
@@ -99,8 +100,8 @@ contract BlockSlots {
     event Spun(uint256 indexed spinId, address indexed player, uint256 targetBlock, uint256 toPot, uint256 toDev);
     /// @dev blockHashes[r] = blockhash(targetBlock + r) ; faces[r] = [colorBand, orbit, facet, material, ornament] de la face r
     event Settled(uint256 indexed spinId, address indexed player, bytes32[3] blockHashes, uint8[5][3] faces, uint8 points, uint256 payout, uint256 potAfter, uint256 playerPoints);
-    /// @dev v3 : refund = REFUND, rendu au joueur
-    event Expired(uint256 indexed spinId, address indexed player, uint256 refund);
+    /// @dev v4 : un spin dont la fenetre est passee, MARQUE perdu ; rien n est paye ni rendu
+    event Expired(uint256 indexed spinId, address indexed player);
     event DevPaid(uint256 amount);
 
     /* ---------------------------------------------------------------- erreurs */
@@ -143,15 +144,15 @@ contract BlockSlots {
         if (c.prizes[MAX_POINTS] > MAX_PRIZE) revert BadConfig();
         for (uint256 k = 1; k <= MAX_POINTS; k++) if (c.prizes[k] < c.prizes[k - 1]) revert BadConfig();
         uint256 toPot = (c.spinPrice * c.potShareBps) / BPS;
-        /* ⛔ l avantage de la maison : esperance(table) < ce qui ENTRE au pot (arrondi bas), en EXACT (DIST sur 2^144). Avec REFUND = prix -
-         *    toPot, la meilleure strategie (regler ou laisser expirer) rend E[max(X, REFUND)] <= E[X] + REFUND < toPot + REFUND = prix. */
+        /* ⛔ l avantage de la maison : esperance(table) < ce qui ENTRE au pot (arrondi bas), en EXACT (DIST sur 2^144). Sans remboursement
+         *    (v4), la meilleure strategie = tout regler = E[X] < toPot <= prix : le pot grossit en moyenne, et aucun jeu ne rend le prix. */
         if (expectedNumerator(c.prizes) >= toPot * DIST_DENOM) revert BadConfig();
         USDC = c.usdc;
         DEV_WALLET = c.devWallet;
         SPIN_PRICE = c.spinPrice;
         POT_SHARE_BPS = c.potShareBps;
         TO_POT = toPot;
-        REFUND = c.spinPrice - toPot;
+        DEV_SHARE = c.spinPrice - toPot;
         _prizes = c.prizes;
     }
 
@@ -191,13 +192,12 @@ contract BlockSlots {
         return expectedNumerator(_prizes) / DIST_DENOM;
     }
 
-    /// @notice la MEILLEURE strategie d un joueur qui voit ses faces avant de choisir : regler si le prix depasse REFUND, sinon laisser la
-    ///         fenetre passer et etre rembourse. somme_k P(k) * max(prize[k], REFUND) * 2^144 ; strictement sous SPIN_PRICE * 2^144 pour
-    ///         toute table admise (la garde du constructeur). Un plafond par le pot ne fait que baisser ce que rend un settle.
-    function bestPlayNumerator() external view returns (uint256 s) {
-        uint256[16] memory d = distribution();
-        uint256 r = REFUND;
-        for (uint256 k = 0; k <= MAX_POINTS; k++) s += d[k] * (_prizes[k] > r ? _prizes[k] : r);
+    /// @notice la MEILLEURE strategie d un joueur qui voit ses faces avant de choisir (v4) : laisser expirer ne rend RIEN, regler rend
+    ///         prize[k] >= 0 ; tout regler est donc optimal et rend somme_k P(k) * max(prize[k], 0) * 2^144 = expectedNumerator(table),
+    ///         strictement sous TO_POT * 2^144 <= SPIN_PRICE * 2^144 pour toute table admise (la garde du constructeur). Un plafond par le
+    ///         pot ne fait que baisser ce que rend un settle.
+    function bestPlayNumerator() external view returns (uint256) {
+        return expectedNumerator(_prizes);
     }
 
     function prizes() external view returns (uint64[16] memory) {
@@ -224,17 +224,17 @@ contract BlockSlots {
 
     /* ================================================================ spin */
 
-    /// @notice un spin paye : SPIN_PRICE entre au contrat (approve EXACT cote app) ; TO_POT au pot, REFUND tenu (escrow) jusqu au settle
-    ///         (puis du au dev) ou a l expiration (puis rendu au joueur). Le hasard : les hashes des blocs block.number + 2, + 3 et + 4, qui
-    ///         n existent pas encore (une face chacun).
+    /// @notice un spin paye : SPIN_PRICE entre au contrat (approve EXACT cote app) et il est PARTAGE ICI, une fois pour toutes : TO_POT
+    ///         au pot, DEV_SHARE du au dev (devOwed). Le hasard : les hashes des blocs block.number + 2, + 3 et + 4, qui n existent pas
+    ///         encore (une face chacun). Un spin non regle dans sa fenetre est perdu : rien n est rendu.
     function spin() external nonReentrant returns (uint256 spinId) {
         spinId = ++spinCount;
         uint40 t = uint40(block.number + TARGET_DELAY);
         spins[spinId] = Spin({ player: msg.sender, targetBlock: t, status: Status.Pending });
         pot += TO_POT;
-        escrow += REFUND;
+        devOwed += DEV_SHARE;
         _pull(msg.sender, address(this), SPIN_PRICE);
-        emit Spun(spinId, msg.sender, t, TO_POT, REFUND);
+        emit Spun(spinId, msg.sender, t, TO_POT, DEV_SHARE);
     }
 
     /* ================================================================ settle / acceptCapped / expire / payDev */
@@ -307,13 +307,11 @@ contract BlockSlots {
         prize = _prizes[points];
     }
 
-    /// @dev clot le spin et paie `payout` (<= pot, verifie par l appelant) au joueur ; la part tenue du dev devient due
+    /// @dev clot le spin et paie `payout` (<= pot, verifie par l appelant) au joueur ; la part du dev est deja due depuis le spin
     function _payer(uint256 spinId, Spin storage s, bytes32[3] memory h, uint8[5][3] memory f, uint8 points, uint256 payout) internal {
         address player = s.player;
         s.status = Status.Settled;
         pot -= payout;
-        escrow -= REFUND;
-        devOwed += REFUND;
         uint256 total = pointsOf[player] + points;
         pointsOf[player] = total;
         wonOf[player] += payout;
@@ -321,21 +319,19 @@ contract BlockSlots {
         emit Settled(spinId, player, h, f, points, payout, pot, total);
     }
 
-    /// @notice un spin que plus personne ne peut regler (fenetre passee) : par N IMPORTE QUI, il est clos et sa part tenue (REFUND) est
-    ///         RENDUE au joueur du spin, jamais a l appelant. La part du pot reste au pot.
-    function expire(uint256 spinId) external nonReentrant {
+    /// @notice v4 : MARQUE perdu un spin que plus personne ne peut regler (fenetre passee), par n importe qui. Aucun transfert : rien
+    ///         n est paye ni rendu (la part du pot est au pot, celle du dev est due depuis le spin). Facultatif : un spin hors fenetre est
+    ///         deja perdu sans cet appel ; expire() ne fait que passer son statut de Pending a Expired.
+    function expire(uint256 spinId) external {
         Spin storage s = spins[spinId];
         if (s.status != Status.Pending) revert NotPending();
         if (block.number <= uint256(s.targetBlock) + SETTLE_WINDOW) revert StillSettleable();
         s.status = Status.Expired;
-        escrow -= REFUND;
-        address player = s.player;
-        if (REFUND != 0) _push(player, REFUND);
-        emit Expired(spinId, player, REFUND);
+        emit Expired(spinId, s.player);
     }
 
-    /// @notice envoie au DEV_WALLET (immuable, et nulle part ailleurs) la part du dev des spins REGLES ; par n importe qui. Ne touche ni le
-    ///         pot ni les parts encore tenues. Rend le montant envoye (0 si rien n est du).
+    /// @notice envoie au DEV_WALLET (immuable, et nulle part ailleurs) la part du dev de tous les spins ; par n importe qui. Ne touche pas
+    ///         le pot. Rend le montant envoye (0 si rien n est du).
     function payDev() external nonReentrant returns (uint256 amount) {
         amount = devOwed;
         if (amount == 0) return 0;

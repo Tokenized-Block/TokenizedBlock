@@ -74,8 +74,8 @@ const APP = lire('app.html'), DEP = lire('deployer-slots.html');
 const entre = (t, a, b) => { const i = t.indexOf(a), j = t.indexOf(b, i + 1); return i >= 0 && j > i ? t.slice(i, j) : ''; };
 const bloc = (t) => entre(t, '/* ══ LES SLOTS (Phil 2026-10-23', '/* ══ EARN (Phil 19:40)');
 const sansCom = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '');
-/* v3 : le chemin Settle / Accept / Refund ; son COMPORTEMENT (une seule lecture avant le wallet, le recu relu) est execute par test-slots-v3 */
-const regler = (t) => entre(bloc(t), "/* SETTLE / ACCEPT / REFUND (R2", "const r = await envoyerAppels(plan.appels, c);");
+/* v3/v4 : le chemin Settle / Accept (v4 : plus de Refund) ; son COMPORTEMENT (une seule lecture avant le wallet, le recu relu) est execute par test-slots-v3 */
+const regler = (t) => entre(bloc(t), "/* SETTLE / ACCEPT (R2", "const r = await envoyerAppels(plan.appels, c);");
 const PLAN = lire('slots-plan.js');
 const checks = {
   /* D1 */
@@ -89,7 +89,7 @@ const checks = {
   troisBlocs: (t) => /the blocks 2, 3 and 4 blocks later give one face each/.test(bloc(t)) && /Slots\.blocsDesFaces\(t\)/.test(bloc(t)),
   /* R2 */
   settleLeger: (t) => { const r = sansCom(regler(t)); return r.length > 50 && !/peindreSlots\(/.test(r) && !/eth_getLogs|eth_getBlockByNumber|eth_call/.test(r) && /rpc\('eth_blockNumber', \[\]\)/.test(r) && /Slots\.planReglement\(\{ \.\.\.vue, tete \}\)/.test(r); },
-  recuSansSettled: (t) => /window closed before your settle was included/.test(PLAN) && /Slots\.phraseApres\(b, vue\.refund\)/.test(bloc(t)),
+  recuSansSettled: (t) => /window closed before your settle was included/.test(PLAN) && /bilan\.map\(\(b\) => Slots\.phraseApres\(b\)\)/.test(bloc(t)),
 };
 for (const [k, c] of Object.entries(checks)) vu(c(APP) === true, 'app.html : ' + k);
 const mutants = [
@@ -100,7 +100,7 @@ const mutants = [
   ['pointsCompteur', 'prizes are paid per spin', 'points pay a bonus'],
   ['troisBlocs', 'the blocks 2, 3 and 4 blocks later give one face each', 'the block 2 blocks later gives three faces'],
   ['settleLeger', "const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement", "await peindreSlots(true); const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement"],
-  ['recuSansSettled', 'Slots.phraseApres(b, vue.refund)', "'Sent.'"],
+  ['recuSansSettled', 'bilan.map((b) => Slots.phraseApres(b))', "bilan.map((b) => 'Sent.')"],
 ];
 for (const [k, de, vers] of mutants) {
   const b = bloc(APP);

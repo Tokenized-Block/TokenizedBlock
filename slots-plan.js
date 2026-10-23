@@ -2,10 +2,13 @@
  * Idee de Phil (2026-10-23) : « une machine a sous a 3 faces random, independantes, tirees au moment de la tx ; on compare ; des points
  * quand des faces sont les memes ; un bon reward de la pool, comme un casino ». Pur : aucun reseau, aucune cle. Le wallet signe.
  *   - le spin : approve EXACT du prix + spin() ; en lot : UN approve EXACT de N x prix + N spin() (N <= 10) ;
- *   - settle / settleMany / acceptCapped / expire (le remboursement) / payDev / fund ;
+ *   - settle / settleMany / acceptCapped / payDev / fund ;
  *   - v3 (2e verdict adverse 2026-10-23) : planReglement / phraseAvant / bilanReglement / phraseApres — ce qu un Settle paie et ce qui
  *     manque, SPIN PAR SPIN, avant la signature et apres le recu (le calcul du contrat : le pot baisse spin apres spin, un spin que le
- *     pot ne couvre pas est SAUTE) ; partsDuSpin (la part du pot, le remboursement) ; la meilleure strategie dans esperance() ;
+ *     pot ne couvre pas est SAUTE) ; partsDuSpin (la part du pot, la part du dev) ; la meilleure strategie dans esperance() ;
+ *   - v4 (option 3 de Phil, 2026-10-23) : AUCUN remboursement. Le prix est partage AU SPIN (pot + du au dev) ; un spin non regle dans sa
+ *     fenetre est PERDU (rien n est rendu) ; la meilleure strategie = tout regler = l esperance. Le serveur regle les spins tout seul quand
+ *     son regleur est allume (slots-regleur.js) ; n importe qui peut regler, le gain va toujours au joueur ;
  *   - les TROIS faces d un spin, calculees comme le contrat : graine_r = keccak256(abi.encode(hash_r, spinId, r)) ou hash_r est le hash du
  *     bloc cible + r (Phil 2026-10-23 : trois blocs differents, une face chacun), face_r = traitsDepuisHash(graine_r) (la face d un hash
  *     de l app, celle de BlockRolls) ; les points (brelan 3, paire 1, par trait) ; reglable de cible + 3 a cible + 256 ;
@@ -21,6 +24,7 @@ export const SIG_SETTLE = 'settle(uint256)';
 export const SIG_SETTLE_MANY = 'settleMany(uint256[])';
 /* v3 (verdict adverse 2026-10-23, defaut 1) : le SEUL chemin d un gain plafonne par le pot, signe par le joueur, avec le minimum vu */
 export const SIG_ACCEPT_CAPPED = 'acceptCapped(uint256,uint256)';
+/* v4 : expire(id) ne fait que MARQUER perdu un spin hors fenetre (aucun transfert) ; ni l app ni le regleur ne l envoient */
 export const SIG_EXPIRE = 'expire(uint256)';
 export const SIG_PAY_DEV = 'payDev()';
 export const SIG_FUND = 'fund(uint256)';
@@ -33,7 +37,7 @@ export const SIG_SETTLEABLE_UNTIL = 'settleableUntil(uint256)';
 const SIG_APPROVE = 'approve(address,uint256)';
 export const EV_SPUN = 'Spun(uint256,address,uint256,uint256,uint256)';
 export const EV_SETTLED = 'Settled(uint256,address,bytes32[3],uint8[5][3],uint8,uint256,uint256,uint256)';
-export const EV_EXPIRED = 'Expired(uint256,address,uint256)';
+export const EV_EXPIRED = 'Expired(uint256,address)';
 export const EV_DEV_PAID = 'DevPaid(uint256)';
 export const DELAI_CIBLE = 2;
 export const FENETRE = 256;
@@ -64,14 +68,25 @@ export function paieMaintenant(prix, pot) {
 }
 /* ⛔ DENIM : 256 blocs = 512 s a 2 s/bloc (~8,5 min), 51,2 s a 200 ms/bloc. Les secondes viennent des BLOCS, jamais l inverse. */
 export const secondesFenetre = (msParBloc) => (FENETRE * Number(msParBloc)) / 1000;
+/**
+ * le temps de bloc MESURE : (horodatage de la tete - celui du bloc n blocs plus tot) / n, en ms. Les horodatages de Base sont en
+ * SECONDES : sur n = 1000 blocs l erreur est < 1 ms par bloc. null si les lectures sont absentes ou incoherentes (rien n est devine).
+ */
+export const BLOCS_MESURE = 1000;
+export function msParBlocMesure({ tsTete, tsAvant, n }) {
+  const a = Number(tsTete), b = Number(tsAvant), k = Number(n);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || !Number.isSafeInteger(k) || k < 10 || a < b) return null;
+  const ms = ((a - b) * 1000) / k;
+  return ms > 0 && ms <= 60000 ? ms : null;
+}
 
 /**
- * v3 (regle de Phil : fenetre manquee = remboursement) : ce qu un spin met au pot (toPot = prix x part / 10000, arrondi bas, TO_POT du
- * contrat) et ce qui est RENDU au joueur si sa fenetre passe (refund = prix - toPot, REFUND du contrat : la part du dev, tenue jusqu au settle).
+ * v4 (option 3 de Phil, 2026-10-23) : le prix d un spin est PARTAGE AU SPIN, quoi qu il arrive ensuite : toPot = prix x part / 10000
+ * (arrondi bas, TO_POT du contrat) au pot ; toDev = prix - toPot (DEV_SHARE du contrat) du au dev. Rien n est rendu si la fenetre passe.
  */
 export function partsDuSpin(spinPrice, potShareBps) {
   const p = BigInt(spinPrice), toPot = (p * BigInt(potShareBps)) / 10000n;
-  return { toPot, refund: p - toPot };
+  return { toPot, toDev: p - toPot };
 }
 /** USDC brut -> texte EXACT (jusqu a 6 decimales, au moins 2) : 127862 -> « 0.127862 », 5000000 -> « 5.00 ». Aucun arrondi. */
 export function usdcPrecis(brut) {
@@ -172,13 +187,13 @@ export function esperance(table, spinPrice = null, potShareBps = null) {
     const m = BigInt(spinPrice);
     const pMise = num.reduce((s, v, k) => s + (t[k] > 0n && t[k] >= m ? v : 0n), 0n);
     out.probMiseBps = bpsArrondi(pMise, den);
-    /* v3 : la MEILLEURE strategie d un joueur qui voit ses faces avant de choisir (regler si le prix depasse le remboursement, sinon
-     *   laisser la fenetre passer) : somme P(k) x max(prix_k, refund) — bestPlayNumerator du contrat. Strictement sous le prix pour toute
-     *   table que refusTable admet (E[max(X, r)] <= E[X] + r < toPot + r = prix). */
+    /* v4 : la MEILLEURE strategie d un joueur qui voit ses faces avant de choisir : laisser expirer ne rend RIEN, regler rend
+     *   prix_k >= 0 ; tout regler est optimal : somme P(k) x max(prix_k, 0) = l esperance — bestPlayNumerator du contrat. Strictement
+     *   sous la part du pot (donc sous le prix) pour toute table que refusTable admet. */
     if (potShareBps !== null && potShareBps !== undefined) {
-      const { refund } = partsDuSpin(m, potShareBps);
-      const b = num.reduce((s, v, k) => s + v * (t[k] > refund ? t[k] : refund), 0n);
-      out.refund = refund; out.meilleureNum = b; out.meilleureBrut = b / den;
+      const { toPot, toDev } = partsDuSpin(m, potShareBps);
+      const b = num.reduce((s, v, k) => s + v * (t[k] > 0n ? t[k] : 0n), 0n);
+      out.toPot = toPot; out.toDev = toDev; out.meilleureNum = b; out.meilleureBrut = b / den;
     }
   }
   return out;
@@ -249,19 +264,9 @@ export function planAccepter({ contrat, spinId, minimum }) {
   } catch (e) { return refuse(String(e.message || e)); }
 }
 
-/** expire(id) : la fenetre est passee ; le contrat REND la part tenue (refund) au joueur du spin, a qui que ce soit qui signe */
-export function planExpire({ contrat, spinId }) {
-  return { etat: 'PRET', appels: [{ to: bas(contrat), data: '0x' + sel(SIG_EXPIRE) + u(spinId), quoi: 'close spin #' + spinId + ' and refund its held share to its player' }] };
-}
-/** plusieurs expire(id) dans UN wallet_sendCalls (<= SPINS_MAX) */
-export function planExpireMany({ contrat, spinIds }) {
-  if (!Array.isArray(spinIds) || spinIds.length === 0) return refuse('at least one spin');
-  if (spinIds.length > SPINS_MAX) return refuse('at most ' + SPINS_MAX + ' refunds in one batch');
-  try { return { etat: 'PRET', appels: spinIds.map((id) => planExpire({ contrat, spinId: BigInt(id) }).appels[0]) }; }
-  catch (e) { return refuse(String(e.message || e)); }
-}
-/** payDev() : n importe qui ; envoie au DEV_WALLET (immuable) la part due des spins regles, et rien d autre */
-export const planPayDev = ({ contrat }) => ({ etat: 'PRET', appels: [{ to: bas(contrat), data: '0x' + sel(SIG_PAY_DEV), quoi: 'send the settled spins\' dev share to the fixed dev wallet' }] });
+/* v4 : plus de planExpire / planExpireMany — expire() ne rend rien (il marque un spin perdu) : aucun bouton ne le propose. */
+/** payDev() : n importe qui ; envoie au DEV_WALLET (immuable) la part du dev de tous les spins, et rien d autre */
+export const planPayDev = ({ contrat }) => ({ etat: 'PRET', appels: [{ to: bas(contrat), data: '0x' + sel(SIG_PAY_DEV), quoi: 'send the spins\' dev share to the fixed dev wallet' }] });
 
 /* ------------------------------------------------------------------ le Settle, spin par spin (defaut 1 du verdict adverse 2026-10-23) */
 
@@ -271,30 +276,30 @@ export const planPayDev = ({ contrat }) => ({ etat: 'PRET', appels: [{ to: bas(c
  * pour CHAQUE spin, ce qu il touche et ce qui manque — jamais seulement le dernier spin, ni un prix compte contre le pot entier alors qu un
  * spin precedent du meme lot le vide.
  *   spins : [{ id, t, faces }] (statut 1 relu ; faces = facesDuSpin(...) ou null si les blocs n ont pas ete lus) ; pot : BigInt | null ;
- *   table : 16 prix ; tete : bloc ; refund : la part rendue si la fenetre passe (partsDuSpin).
- * Decision par spin :
- *   LOT           prix >= refund et > 0, et le pot (apres les spins du lot AVANT lui) le couvre : part dans settleMany, paye en entier ;
- *   COURT         prix >= refund et > 0, mais le pot ne le couvre pas : HORS du lot (settleMany le sauterait de toute facon) ; `paie` =
- *                 ce que le pot tient APRES le lot (un plancher : acceptCapped(id, paie) du joueur), `manque` = prix - paie ;
- *   MIEUX_REMBOURSE  prix < refund (0 compris) : le regler paie moins que le remboursement ; hors du lot ; rembourse apres `rembourseApres` ;
- *   ATTENDRE      ses trois blocs ne sont pas encore la ; REMBOURSABLE  sa fenetre est passee (expire) ;
+ *   table : 16 prix ; tete : bloc.
+ * Decision par spin (v4 : aucun remboursement — un spin hors fenetre est perdu) :
+ *   LOT           le pot (apres les spins du lot AVANT lui) couvre son prix ENTIER (0 compris : un spin sans prix se regle pour ses points) :
+ *                 part dans settleMany, paye en entier ;
+ *   COURT         le pot ne couvre pas son prix : HORS du lot (settleMany le sauterait de toute facon) ; `paie` = ce que le pot tient APRES
+ *                 le lot (un plancher : acceptCapped(id, paie) du joueur), `manque` = prix - paie ;
+ *   ATTENDRE      ses trois blocs ne sont pas encore la ; PERDU  sa fenetre est passee sans settle : rien ne se paie ni ne se rend ;
  *   NON_LU        faces ou pot non lus : RIEN n est envoye pour lui (on ne devine pas un prix).
- * Rend { lignes, lot: [ids LOT, dans l ordre], courts: [lignes COURT], remboursables: [ids], potApres }.
+ * `dernierBloc` = le dernier bloc ou le spin se regle encore (cible + 256). Rend { lignes, lot: [ids LOT, dans l ordre],
+ * courts: [lignes COURT], perdus: [ids PERDU], potApres }. Le meme calcul sert au bouton Settle de l app ET au regleur du serveur.
  */
-export function planReglement({ spins, pot, table, tete, refund = 0n }) {
-  const tb = (table || []).map((x) => BigInt(x)), r = BigInt(refund);
+export function planReglement({ spins, pot, table, tete }) {
+  const tb = (table || []).map((x) => BigInt(x));
   const lus = pot !== null && pot !== undefined;
   let reste = lus ? BigInt(pot) : null;
   const lignes = [...(spins || [])].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : BigInt(a.id) > BigInt(b.id) ? 1 : 0)).map((s) => {
-    const id = String(s.id), base = { id, t: Number(s.t), ...etatReglement(s.t, tete), rembourseApres: Number(s.t) + FENETRE };
+    const id = String(s.id), base = { id, t: Number(s.t), ...etatReglement(s.t, tete), dernierBloc: Number(s.t) + FENETRE };
     if (base.etat === 'TROP_TOT') return { ...base, decision: 'ATTENDRE' };
-    if (base.etat === 'PERDU') return { ...base, decision: 'REMBOURSABLE', paie: r };
+    if (base.etat === 'PERDU') return { ...base, decision: 'PERDU', paie: 0n };
     if (!Array.isArray(s.faces)) return { ...base, decision: 'NON_LU' };
     const points = Number.isInteger(s.points) ? s.points : points_(s.faces);
     const prix = tb[points];
     if (prix === undefined) return { ...base, decision: 'NON_LU' };
     const l = { ...base, points, prix };
-    if (prix < r || prix === 0n) return { ...l, decision: 'MIEUX_REMBOURSE', paie: prix, manque: 0n };
     if (!lus) return { ...l, decision: 'NON_LU' };
     if (prix <= reste) { const potAvant = reste; reste -= prix; return { ...l, decision: 'LOT', paie: prix, manque: 0n, potAvant }; }
     return { ...l, decision: 'COURT' };
@@ -306,25 +311,23 @@ export function planReglement({ spins, pot, table, tete, refund = 0n }) {
     lignes,
     lot: lignes.filter((l) => l.decision === 'LOT').map((l) => l.id),
     courts: lignes.filter((l) => l.decision === 'COURT'),
-    remboursables: lignes.filter((l) => l.decision === 'REMBOURSABLE').map((l) => l.id),
+    perdus: lignes.filter((l) => l.decision === 'PERDU').map((l) => l.id),
     potApres: reste,
   };
 }
 const points_ = (faces) => points(faces);
 
 /** la phrase d UNE ligne de planReglement, AVANT la signature ; `fmt` = USDC brut -> texte (usdcPrecis par defaut : exact) */
-export function phraseAvant(l, refund = 0n, fmt = usdcPrecis) {
+export function phraseAvant(l, fmt = usdcPrecis) {
   const pts = (p) => p + ' point' + (p === 1 ? '' : 's');
-  const rb = BigInt(refund) > 0n ? ', or let its window pass: after block ' + l.rembourseApres + ' its ' + fmt(refund) + ' USDC refund can be claimed' : '';
+  const fin = ' Settle by block ' + l.dernierBloc + ': after that the spin is lost and nothing is returned.';
   switch (l.decision) {
-    case 'LOT': return 'Spin #' + l.id + ': ' + pts(l.points) + ' → ' + fmt(l.paie) + ' USDC, paid in full by Settle.';
+    case 'LOT': return 'Spin #' + l.id + ': ' + pts(l.points) + (l.paie > 0n ? ' → ' + fmt(l.paie) + ' USDC, paid in full by Settle.' : ', no prize — Settle records its points.');
     case 'COURT': return 'Spin #' + l.id + ': ' + pts(l.points) + ' → prize ' + fmt(l.prix) + ' USDC, but the pot holds ' + fmt(l.potApresLot) + ' USDC'
       + ' after the spins above: ' + fmt(l.manque) + ' USDC short. Settle leaves it out. '
-      + (l.paie > 0n ? (l.apresLot ? 'Once Settle has paid the spins above, you can accept ' : 'You can accept ') + fmt(l.paie) + ' USDC for it (' + fmt(l.manque) + ' short), wait for the pot to grow' : 'Wait for the pot to grow') + rb + '.';
-    case 'MIEUX_REMBOURSE': return 'Spin #' + l.id + ': ' + pts(l.points) + (l.prix > 0n ? ' → ' + fmt(l.prix) + ' USDC' : ', no prize') + '. Settle leaves it out'
-      + (BigInt(refund) > 0n ? ': after block ' + l.rembourseApres + ' its ' + fmt(refund) + ' USDC refund can be claimed instead.' : '.');
+      + (l.paie > 0n ? (l.apresLot ? 'Once Settle has paid the spins above, you can accept ' : 'You can accept ') + fmt(l.paie) + ' USDC for it (' + fmt(l.manque) + ' short), or wait for the pot to grow.' : 'Wait for the pot to grow.') + fin;
     case 'ATTENDRE': return 'Spin #' + l.id + ': its three blocks are in after ' + l.blocsAvant + ' more block(s).';
-    case 'REMBOURSABLE': return 'Spin #' + l.id + ': its window closed; claim its ' + fmt(refund) + ' USDC refund.';
+    case 'PERDU': return 'Spin #' + l.id + ': its ' + FENETRE + '-block window closed before it was settled — it is lost, nothing is returned.';
     default: return 'Spin #' + l.id + ': its blocks or the pot were not read just now; nothing is sent for it.';
   }
 }
@@ -335,7 +338,8 @@ export function phraseAvant(l, refund = 0n, fmt = usdcPrecis) {
  *   tete : bloc relu apres (null = non lu) ; table : 16 prix.
  * Rend [{ id, issue, points?, prix?, paie?, manque? }] : PAYE (manque = 0), PLAFONNE (manque > 0 : accepte par le joueur), SAUTE (encore en
  * attente, fenetre ouverte : le pot ne couvrait plus le prix entier a l inclusion — rien n est pris), FENETRE (encore en attente, fenetre
- * passee : remboursable), REGLE_AILLEURS (regle par une autre transaction), REMBOURSE (expire), NON_LU.
+ * passee : v4, PERDU, rien n est rendu), REGLE_AILLEURS (regle par une autre transaction, le regleur du serveur par exemple), PERDU (marque
+ * Expired), NON_LU.
  */
 export function bilanReglement({ envoyes, settled, statuts, tete, table }) {
   const tb = (table || []).map((x) => BigInt(x));
@@ -346,22 +350,22 @@ export function bilanReglement({ envoyes, settled, statuts, tete, table }) {
     const st = statuts ? statuts.get(id) : null;
     if (st === null || st === undefined) return { id, issue: 'NON_LU' };
     if (st === 2) return { id, issue: 'REGLE_AILLEURS' };
-    if (st === 3) return { id, issue: 'REMBOURSE' };
-    if (st === 1) return { id, issue: tete !== null && tete !== undefined && etatReglement(x.t, tete).etat === 'PERDU' ? 'FENETRE' : 'SAUTE', prix: x.prix, rembourseApres: Number(x.t) + FENETRE };
+    if (st === 3) return { id, issue: 'PERDU' };
+    if (st === 1) return { id, issue: tete !== null && tete !== undefined && etatReglement(x.t, tete).etat === 'PERDU' ? 'FENETRE' : 'SAUTE', prix: x.prix, dernierBloc: Number(x.t) + FENETRE };
     return { id, issue: 'NON_LU' };
   });
 }
 
 /** la phrase d UNE ligne de bilanReglement */
-export function phraseApres(b, refund = 0n, fmt = usdcPrecis) {
+export function phraseApres(b, fmt = usdcPrecis) {
   const pts = (p) => p + ' point' + (p === 1 ? '' : 's');
   switch (b.issue) {
     case 'PAYE': return 'Spin #' + b.id + ': ' + pts(b.points) + (b.paie > 0n ? ', ' + fmt(b.paie) + ' USDC paid to your wallet by the contract, in full.' : ', no prize.');
     case 'PLAFONNE': return 'Spin #' + b.id + ': ' + pts(b.points) + ', prize ' + fmt(b.prix) + ' USDC; the pot paid ' + fmt(b.paie) + ' USDC — ' + fmt(b.manque) + ' USDC short.';
-    case 'SAUTE': return 'Spin #' + b.id + ': not settled — when your settle was included the pot could not pay its full ' + (b.prix !== undefined ? fmt(b.prix) + ' USDC ' : '') + 'prize, so nothing was taken. It is still yours to settle until block ' + b.rembourseApres + '.';
-    case 'FENETRE': return 'Spin #' + b.id + ': the ' + FENETRE + '-block window closed before your settle was included — not settled' + (BigInt(refund) > 0n ? '; claim its ' + fmt(refund) + ' USDC refund.' : '.');
-    case 'REGLE_AILLEURS': return 'Spin #' + b.id + ': settled by another transaction; its result is in that transaction.';
-    case 'REMBOURSE': return 'Spin #' + b.id + ': closed and refunded.';
+    case 'SAUTE': return 'Spin #' + b.id + ': not settled — when your settle was included the pot could not pay its full ' + (b.prix !== undefined ? fmt(b.prix) + ' USDC ' : '') + 'prize, so nothing was taken. It is still yours to settle until block ' + b.dernierBloc + '; after that it is lost.';
+    case 'FENETRE': return 'Spin #' + b.id + ': the ' + FENETRE + '-block window closed before your settle was included — the spin is lost, nothing is returned.';
+    case 'REGLE_AILLEURS': return 'Spin #' + b.id + ': settled by another transaction (the server\'s keeper, or anyone); the prize went to its player — see that transaction.';
+    case 'PERDU': return 'Spin #' + b.id + ': its window had closed — the spin is lost, nothing is returned.';
     default: return 'Spin #' + b.id + ': its result was not read just now.';
   }
 }
@@ -409,7 +413,7 @@ export const debutFenetreSpins = (tete, blocDeploiement = 0, marge = 40) => Math
 export function trancheSpun({ scanne = null, tete, blocDeploiement = 0, recouvre = 8 }) {
   const t = Math.floor(Number(tete));
   if (!Number.isSafeInteger(t)) return null;
-  /* v3 : la premiere lecture couvre PLAGE_LOGS blocs (et pas ~300) : un spin dont la fenetre est passee reste visible, donc remboursable */
+  /* v3 : la premiere lecture couvre PLAGE_LOGS blocs (et pas ~300) : un spin dont la fenetre est passee reste visible, dit PERDU (v4) */
   const plancher = Math.max(Number(blocDeploiement) || 0, t - PLAGE_LOGS + 1);
   if (scanne === null || scanne === undefined) return { de: plancher, jusqua: t };
   const s = Math.floor(Number(scanne));
@@ -444,12 +448,12 @@ export function lireSpunTous(logs, contrat) {
   }).filter(Boolean);
 }
 
-/** tous les Expired d un recu (v3) : [{ spinId, player, refund }] */
+/** tous les Expired d un recu (v4 : aucun montant, le spin est seulement marque perdu) : [{ spinId, player }] */
 export function lireExpiredTous(logs, contrat) {
   return deContrat(logs, contrat, EV_EXPIRED).map((l) => {
     const m = motsDe(l.data);
-    if (m.length !== 1 || !l.topics[2]) return null;
-    return { spinId: BigInt(l.topics[1]), player: '0x' + bas(l.topics[2]).slice(-40), refund: m[0] };
+    if (m.length !== 0 || !l.topics[2]) return null;
+    return { spinId: BigInt(l.topics[1]), player: '0x' + bas(l.topics[2]).slice(-40) };
   }).filter(Boolean);
 }
 

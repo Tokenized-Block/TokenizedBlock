@@ -5,8 +5,10 @@
  *   TROP_TOT, cible+3..cible+256 -> REGLABLE, cible+257 -> PERDU ; settle refuse hors fenetre ; settleMany encode un uint256[] ; (4) decodage :
  *   Spun et Settled d un recu (les 3 hashes, les 3 faces, les points, le gain, le cumul du wallet), spins(id), prizes() ; (5) Denim : 256 blocs = 512 s
  *   a 2 s, 51,2 s a 200 ms ; (6) MUTANT : l approve d UN seul spin pour un lot -> l assertion de l approve exact ROUGIT ; (7) v3 :
- *   acceptCapped / expire en lot / payDev / Expired, et planReglement + bilanReglement sur les deux spins du verdict (pot 5 et pot 7),
- *   avec deux mutants du plan (le pot qui ne baisse pas, un spin court dans le lot) qui rougissent. */
+ *   acceptCapped / payDev / Expired, et planReglement + bilanReglement sur les deux spins du verdict (pot 5 et pot 7),
+ *   avec deux mutants du plan (le pot qui ne baisse pas, un spin court dans le lot) qui rougissent ; (8) v4 (option 3 de Phil) : AUCUN
+ *   remboursement — plus de planExpire / planExpireMany, Expired sans montant, un spin hors fenetre est PERDU (dit), un spin sans prix
+ *   part dans le lot (ses points), partsDuSpin rend la part du dev, msParBlocMesure. */
 import { strict as assert } from 'node:assert';
 import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import * as S from './slots-plan.js';
@@ -25,7 +27,8 @@ if (existsSync(ART)) {
   for (const s of [S.SIG_SPIN, S.SIG_SETTLE, S.SIG_SETTLE_MANY, S.SIG_ACCEPT_CAPPED, S.SIG_EXPIRE, S.SIG_PAY_DEV, S.SIG_FUND, S.SIG_POT, S.SIG_POINTS_OF, S.SIG_WON_OF, S.SIG_PRIZES, S.SIG_SPINS, S.SIG_SETTLEABLE_UNTIL]) vu(ids[s] === selecteur(s).slice(2), 'selecteur ' + s + ' = ABI compilee');
   const typ = (i) => (i.type === 'tuple' ? '(' + i.components.map(typ).join(',') + ')' : i.type);
   const sigEv = (nom) => { const e = art.abi.find((x) => x.type === 'event' && x.name === nom); return nom + '(' + e.inputs.map(typ).join(',') + ')'; };
-  vu(sigEv('Spun') === S.EV_SPUN && sigEv('Settled') === S.EV_SETTLED && sigEv('Expired') === S.EV_EXPIRED && sigEv('DevPaid') === S.EV_DEV_PAID, 'signatures Spun / Settled / Expired (v3 : + refund) / DevPaid = ABI compilee');
+  vu(sigEv('Spun') === S.EV_SPUN && sigEv('Settled') === S.EV_SETTLED && sigEv('Expired') === S.EV_EXPIRED && sigEv('DevPaid') === S.EV_DEV_PAID, 'signatures Spun / Settled / Expired (v4 : sans montant) / DevPaid = ABI compilee');
+  vu(!ids['REFUND()'] && !ids['escrow()'] && ids['DEV_SHARE()'] === selecteur('DEV_SHARE()').slice(2) && ids['devOwed()'] === selecteur('devOwed()').slice(2), 'v4 : plus de REFUND ni d escrow dans l ABI ; DEV_SHARE et devOwed y sont');
 } else console.log('  (artefact forge absent : parite selecteurs NON verifiee ici)');
 
 /* (2) */
@@ -44,7 +47,7 @@ vu(S.etatReglement(1002, 1002).etat === 'TROP_TOT' && S.etatReglement(1002, 1004
 vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1004 }).etat === 'REFUSE' && S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1259 }).etat === 'REFUSE', 'settle hors fenetre refuse (cible + 2, cible + 257)');
 vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1005 }).appels[0].data === selecteur(S.SIG_SETTLE) + mot(3), 'settle(3) encode');
 vu(S.planSettleMany({ contrat: C, spinIds: [4, 9] }).appels[0].data === selecteur(S.SIG_SETTLE_MANY) + mot(32) + mot(2) + mot(4) + mot(9) && S.planSettleMany({ contrat: C, spinIds: [] }).etat === 'REFUSE', 'settleMany([4, 9]) encode ; vide refuse');
-vu(S.planExpire({ contrat: C, spinId: 7 }).appels[0].data === selecteur(S.SIG_EXPIRE) + mot(7), 'expire(7)');
+vu(S.planExpire === undefined && S.planExpireMany === undefined, 'v4 : aucun plan expire (il ne rend rien, aucun bouton ne le propose)');
 vu(S.planFund({ contrat: C, usdc: USDC, montant: 0 }).etat === 'REFUSE' && S.planFund({ contrat: C, usdc: USDC, montant: 9 }).appels[0].data === '0x095ea7b3' + mot(C) + mot(9) && S.planFund({ contrat: C, usdc: USDC, montant: 9 }).appels[1].data === selecteur(S.SIG_FUND) + mot(9), 'fund : 0 refuse ; approve EXACT + fund');
 vu(S.appelPointsDe(A('a1')) === selecteur(S.SIG_POINTS_OF) + mot(A('a1')) && S.appelSpin(5) === selecteur(S.SIG_SPINS) + mot(5), 'lectures pointsOf / spins encodees');
 
@@ -67,36 +70,42 @@ vu(pz && pz.length === 16 && pz[15] === 150n && S.lirePrizes('0x' + mot(1)) === 
 /* (5) */
 vu(S.secondesFenetre(2000) === 512 && S.secondesFenetre(200) === 51.2, 'Denim : 256 blocs = 512 s a 2 s/bloc, 51,2 s a 200 ms/bloc');
 
-/* (7) v3 (2e verdict adverse 2026-10-23) : acceptCapped, expire en lot, Expired, et le plan du Settle spin par spin */
+/* (7) v3 (2e verdict adverse 2026-10-23) : acceptCapped, Expired, et le plan du Settle spin par spin */
 vu(S.planAccepter({ contrat: C, spinId: 2, minimum: 2000000n }).appels[0].data === selecteur(S.SIG_ACCEPT_CAPPED) + mot(2) + mot(2000000), 'acceptCapped(2, 2 USDC) encode, le minimum vu en 2e argument');
-const em = S.planExpireMany({ contrat: C, spinIds: [3, 5] });
-vu(em.etat === 'PRET' && em.appels.length === 2 && em.appels[1].data === selecteur(S.SIG_EXPIRE) + mot(5) && S.planExpireMany({ contrat: C, spinIds: Array.from({ length: 11 }, (_, i) => i + 1) }).etat === 'REFUSE', 'expire en lot : un appel par spin, 10 au plus');
 vu(S.planPayDev({ contrat: C }).appels[0].data === selecteur(S.SIG_PAY_DEV), 'payDev() encode');
-const logE = { address: C, topics: [topic(S.EV_EXPIRED), '0x' + mot(3), '0x' + mot(A('a1'))], data: '0x' + mot(250000) };
-const ex = S.lireExpiredTous([logE, { ...logE, address: A('dd') }], C);
-vu(ex.length === 1 && ex[0].spinId === 3n && ex[0].player === A('a1') && ex[0].refund === 250000n, 'Expired decode (le remboursement), un autre contrat ignore');
+const logE = { address: C, topics: [topic(S.EV_EXPIRED), '0x' + mot(3), '0x' + mot(A('a1'))], data: '0x' };
+const ex = S.lireExpiredTous([logE, { ...logE, address: A('dd') }, { ...logE, data: '0x' + mot(250000) }], C);
+vu(S.EV_EXPIRED === 'Expired(uint256,address)' && ex.length === 1 && ex[0].spinId === 3n && ex[0].player === A('a1') && ex[0].refund === undefined, 'v4 : Expired decode SANS montant ; un autre contrat, un log a montant (v3) ignores');
 vu(S.usdcPrecis(127862n) === '0.127862' && S.usdcPrecis(5000000n) === '5.00' && S.usdcPrecis(250000n) === '0.25' && S.usdcPrecis(0n) === '0.00' && S.usdcPrecis(4876544n) === '4.876544', 'usdcPrecis : exact, sans arrondi');
 vu(S.bpsArrondi(210562n, 1000000n) === 2106 && S.bpsArrondi(74689n, 1000000n) === 747 && S.bpsArrondi(5n, 100000n) === 1 && S.bpsArrondi(4n, 100000n) === 0, 'bpsArrondi : au plus proche, demi vers le haut');
 const pr = S.partsDuSpin(500001, 5000);
-vu(pr.toPot === 250000n && pr.refund === 250001n, 'partsDuSpin : toPot arrondi bas, le reste rendable');
+vu(pr.toPot === 250000n && pr.toDev === 250001n && pr.refund === undefined, 'partsDuSpin : toPot arrondi bas, le reste au dev (v4 : plus de « refund »)');
+vu(S.msParBlocMesure({ tsTete: 1200, tsAvant: 1000, n: 1000 }) === 200 && S.msParBlocMesure({ tsTete: 3000, tsAvant: 1000, n: 1000 }) === 2000 && S.msParBlocMesure({ tsTete: 1000, tsAvant: 1200, n: 1000 }) === null
+  && S.msParBlocMesure({ tsTete: NaN, tsAvant: 1, n: 1000 }) === null && S.msParBlocMesure({ tsTete: 2, tsAvant: 1, n: 5 }) === null && S.msParBlocMesure({ tsTete: 1000, tsAvant: 1000, n: 1000 }) === null, 'msParBlocMesure : 200 ms, 2 s ; incoherent / non lu / trop court -> null');
 vu(JSON.stringify(S.trancheSpun({ scanne: null, tete: 5000, blocDeploiement: 100 })) === JSON.stringify({ de: 4002, jusqua: 5000 }) && S.trancheSpun({ scanne: 5000, tete: 5000 }) === null
   && JSON.stringify(S.trancheSpun({ scanne: 5000, tete: 5003 })) === JSON.stringify({ de: 4993, jusqua: 5003 }) && JSON.stringify(S.trancheSpun({ scanne: 1000, tete: 5000 })) === JSON.stringify({ de: 4002, jusqua: 5000 }), 'trancheSpun : 999 blocs au plus, puis les blocs nouveaux + 8 de recouvrement');
 {
   /* le verdict : le MEME joueur, deux spins a 8 points (5 USDC chacun), un pot de 5 USDC */
   const T = ['0', '0', '0', '250000', '750000', '2000000', '3000000', '4000000', ...Array(8).fill('5000000')];
   const f8 = (p) => ({ points: p, faces: [[0, 0, 0, 0, 0], [0, 0, 0, 0, 0], [0, 0, 0, 0, 0]] });
-  const pl = S.planReglement({ spins: [{ id: '2', t: 1012, ...f8(8) }, { id: '1', t: 1002, ...f8(8) }], pot: 5000000n, table: T, tete: 1015, refund: 250000n });
+  const pl = S.planReglement({ spins: [{ id: '2', t: 1012, ...f8(8) }, { id: '1', t: 1002, ...f8(8) }], pot: 5000000n, table: T, tete: 1015 });
   vu(JSON.stringify(pl.lot) === '["1"]' && pl.lignes[0].decision === 'LOT' && pl.lignes[0].paie === 5000000n && pl.lignes[1].decision === 'COURT' && pl.lignes[1].paie === 0n && pl.lignes[1].manque === 5000000n && pl.potApres === 0n,
     'plan : dans l ordre du contrat, #1 paye en entier, #2 COURT (0 paye, 5 manquent) — le pot baisse spin apres spin');
-  vu(S.phraseAvant(pl.lignes[1], 250000n) === 'Spin #2: 8 points → prize 5.00 USDC, but the pot holds 0.00 USDC after the spins above: 5.00 USDC short. Settle leaves it out. Wait for the pot to grow, or let its window pass: after block 1268 its 0.25 USDC refund can be claimed.', 'phrase avant : le manque de #2, en toutes lettres');
-  const pl7 = S.planReglement({ spins: [{ id: '1', t: 1002, ...f8(8) }, { id: '2', t: 1012, ...f8(8) }], pot: 7000000n, table: T, tete: 1015, refund: 250000n });
+  vu(S.phraseAvant(pl.lignes[1]) === 'Spin #2: 8 points → prize 5.00 USDC, but the pot holds 0.00 USDC after the spins above: 5.00 USDC short. Settle leaves it out. Wait for the pot to grow. Settle by block 1268: after that the spin is lost and nothing is returned.', 'phrase avant : le manque de #2, et (v4) qu il sera perdu apres le bloc 1268');
+  const pl7 = S.planReglement({ spins: [{ id: '1', t: 1002, ...f8(8) }, { id: '2', t: 1012, ...f8(8) }], pot: 7000000n, table: T, tete: 1015 });
   vu(pl7.lignes[1].decision === 'COURT' && pl7.lignes[1].paie === 2000000n && pl7.lignes[1].manque === 3000000n && pl7.lignes[1].apresLot === true, 'pot 7 : #2 touchera au moins 2 (3 manquent), apres le lot');
-  const p0 = S.planReglement({ spins: [{ id: '4', t: 1002, ...f8(0) }, { id: '5', t: 1014, faces: null }, { id: '6', t: 1010, ...f8(8) }, { id: '7', t: 700, faces: null }], pot: 9000000n, table: T, tete: 1015, refund: 250000n });
-  vu(p0.lignes.map((l) => l.decision).join() === 'MIEUX_REMBOURSE,ATTENDRE,LOT,REMBOURSABLE' && JSON.stringify(p0.remboursables) === '["7"]', 'plan : perdant hors du lot, trop tot, paye, fenetre passee');
-  vu(S.planReglement({ spins: [{ id: '1', t: 1002, ...f8(8) }], pot: null, table: T, tete: 1015, refund: 250000n }).lignes[0].decision === 'NON_LU', 'pot non lu : rien n est envoye pour un spin payant');
-  const bl = S.bilanReglement({ envoyes: [{ id: '1', t: 1002, prix: 5000000n }, { id: '2', t: 1012, prix: 5000000n }, { id: '3', t: 1002, prix: 5000000n }], settled: [{ spinId: 1n, points: 8, payout: 3000000n }], statuts: new Map([['2', 1], ['3', 1]]), tete: 1260, table: T });
-  vu(bl[0].issue === 'PLAFONNE' && bl[0].manque === 2000000n && bl[1].issue === 'SAUTE' && bl[2].issue === 'FENETRE', 'bilan : plafonne (2 manquent), saute (fenetre ouverte), fenetre passee');
-  vu(S.phraseApres(bl[0], 250000n) === 'Spin #1: 8 points, prize 5.00 USDC; the pot paid 3.00 USDC — 2.00 USDC short.' && /window closed before your settle was included — not settled; claim its 0\.25 USDC refund\./.test(S.phraseApres(bl[2], 250000n)), 'phrase apres : le manque, et la fenetre passee');
+  /* v4 : un spin SANS prix part dans le lot (ses points ; il ne coute rien au pot) ; un spin hors fenetre est PERDU */
+  const p0 = S.planReglement({ spins: [{ id: '4', t: 1002, ...f8(0) }, { id: '5', t: 1014, faces: null }, { id: '6', t: 1010, ...f8(8) }, { id: '7', t: 700, faces: null }], pot: 9000000n, table: T, tete: 1015 });
+  vu(p0.lignes.map((l) => l.decision).join() === 'LOT,ATTENDRE,LOT,PERDU' && JSON.stringify(p0.lot) === '["4","6"]' && JSON.stringify(p0.perdus) === '["7"]' && p0.remboursables === undefined, 'plan v4 : sans prix dans le lot, trop tot, paye, PERDU (plus de « remboursable »)');
+  vu(S.phraseAvant(p0.lignes[0]) === 'Spin #4: 0 points, no prize — Settle records its points.' && S.phraseAvant(p0.lignes[3]) === 'Spin #7: its 256-block window closed before it was settled — it is lost, nothing is returned.', 'phrases v4 : sans prix, et perdu');
+  vu(S.planReglement({ spins: [{ id: '1', t: 1002, ...f8(8) }], pot: null, table: T, tete: 1015 }).lignes[0].decision === 'NON_LU', 'pot non lu : rien n est envoye pour un spin payant');
+  const bl = S.bilanReglement({ envoyes: [{ id: '1', t: 1002, prix: 5000000n }, { id: '2', t: 1012, prix: 5000000n }, { id: '3', t: 1002, prix: 5000000n }, { id: '4', t: 1002, prix: 0n }], settled: [{ spinId: 1n, points: 8, payout: 3000000n }], statuts: new Map([['2', 1], ['3', 1], ['4', 3]]), tete: 1260, table: T });
+  vu(bl[0].issue === 'PLAFONNE' && bl[0].manque === 2000000n && bl[1].issue === 'SAUTE' && bl[2].issue === 'FENETRE' && bl[3].issue === 'PERDU', 'bilan : plafonne (2 manquent), saute (fenetre ouverte), fenetre passee, marque perdu');
+  vu(S.phraseApres(bl[0]) === 'Spin #1: 8 points, prize 5.00 USDC; the pot paid 3.00 USDC — 2.00 USDC short.' && S.phraseApres(bl[2]) === 'Spin #3: the 256-block window closed before your settle was included — the spin is lost, nothing is returned.', 'phrase apres : le manque, et la fenetre passee (perdu)');
+  vu(/still yours to settle until block 1268; after that it is lost\./.test(S.phraseApres(bl[1])) && /lost, nothing is returned/.test(S.phraseApres(bl[3])), 'phrase apres : saute = encore a regler jusqu au bloc 1268 ; marque perdu');
+  /* aucune phrase ne promet un remboursement */
+  const toutes = [...pl.lignes, ...pl7.lignes, ...p0.lignes].map((l) => S.phraseAvant(l)).concat(bl.map((b) => S.phraseApres(b))).join(' ');
+  vu(!/refund/i.test(toutes), 'v4 : aucune phrase ne parle de remboursement');
 }
 
 /* (6) MUTANT : l approve ne couvre qu UN spin */
@@ -121,7 +130,7 @@ vu(JSON.stringify(S.trancheSpun({ scanne: null, tete: 5000, blocDeploiement: 100
     writeFileSync(u2, src.replace(de2, () => vers2));
     try {
       const M = await import(u2.href);
-      const pl = M.planReglement({ spins: [{ id: '1', t: 1002, ...f8 }, { id: '2', t: 1012, ...f8 }], pot: 5000000n, table: T, tete: 1015, refund: 250000n });
+      const pl = M.planReglement({ spins: [{ id: '1', t: 1002, ...f8 }, { id: '2', t: 1012, ...f8 }], pot: 5000000n, table: T, tete: 1015 });
       vu(JSON.stringify(pl.lot) !== '["1"]', 'MUTANT plan « ' + nom + ' » : le lot du verdict ROUGIT');
     } finally { try { unlinkSync(u2); } catch (_) {} }
   }
