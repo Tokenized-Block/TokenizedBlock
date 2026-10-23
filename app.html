@@ -4122,7 +4122,7 @@ import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, 
  *   jamais suppose — les fenetres de 256 blocs disent leur duree a ce temps, et le Game se relit assez souvent pour une fenetre de ~51 s */
 import { blocsPour, secondesPour, dureeTexte, texteBlocs, intervalleSondageMs, pasAttenteBlocMs } from './temps-de-bloc.js';
 /* 2026-10-18 : TicketPot LIVE — alimenter le pot du jour (planFund : approve EXACT + fund), le jour UTC du contrat depuis l id du jour */
-import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, claimableUntil as reclamablePot, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
+import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, claimableUntil as reclamablePot, appelDayPot as appelDayPotTP, lireUintMot as lireUintMotTP, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernierJour } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
@@ -4923,7 +4923,11 @@ function peindrePotJour(t, c) {
   potCfg = tp;
   /* « Manage the reward pot » : pour l owner LU seulement (jamais suppose) — un autre wallet ne voit ni la case ni le budget */
   const proprio = !!(tp && tp.veille && c && /^0x[0-9a-f]{40}$/.test(String(tp.veille.owner)) && String(tp.veille.owner) === String(c).toLowerCase());
-  for (const id of ['#bjPotLab', '#bjPotBudgetLab']) { const x = $(id); if (x) x.hidden = !proprio; }
+  /* 2026-10-23 (revue adverse, LIVE : owner != verifier) : le wallet VERIFIER lu voit aussi la case — il y signe les parts ; le budget
+   *   journalier (fund) reste a l owner seul */
+  const verifPot = !!(tp && tp.veille && c && /^0x[0-9a-f]{40}$/.test(String(tp.veille.verifier)) && String(tp.veille.verifier) === String(c).toLowerCase());
+  if ($('#bjPotLab')) $('#bjPotLab').hidden = !(proprio || verifPot);
+  if ($('#bjPotBudgetLab')) $('#bjPotBudgetLab').hidden = !proprio;
   if (!p || !b) return;
   /* ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll ») : la ligne montre le pot de la SEMAINE (dayPot du dernier jour UTC de la
    *   semaine, lu par le serveur toutes les 60 s). Alimenter : SEULEMENT ce dernier jour (le contrat refuse un jour futur : FutureDay) —
@@ -5902,14 +5906,22 @@ function bjRefusAuSigne(id, p, walletCarte, lu = {}) {
   /* LE POT (2026-10-18) : son budget a lui (journalier), l owner RELU (lu.owner), le solde RELU (lu.solde) juste avant le Sign */
   if (/^POT_/.test(p.kind)) {
     if (!bj.pot) return 'managing the reward pot is not ticked any more — nothing was sent.';
+    /* POT_SIGN : le wallet de la carte = le verifier de la proposition = le verifier RELU (lu.verifier) ; owner ou pas (LIVE : ce sont deux
+     *   wallets differents) */
+    if (p.kind === 'POT_SIGN') {
+      if (!p.sign || String(p.sign.verifier).toLowerCase() !== walletCarte || !lu.verifier || String(lu.verifier).toLowerCase() !== walletCarte) return 'this wallet is not the verifier (or the verifier was not read) — nothing was signed.';
+      return null;
+    }
     if (!lu.owner || String(lu.owner).toLowerCase() !== walletCarte) return 'this wallet is not the ticket pot owner (or the owner was not read) — nothing was sent.';
-    if (p.kind === 'POT_SIGN' && (!p.sign || String(p.sign.verifier).toLowerCase() !== walletCarte)) return 'this wallet is not the verifier — nothing was signed.';
     if (p.kind === 'POT_FUND') {
       const jour = Math.floor(Date.now() / 86400000);
       if (Number(p.day) !== jour) return 'the day changed since this was proposed — nothing was sent.';
       let verse = 0n;
       for (const h of bj.history) if (h && h.kind === 'POT_FUND' && Number(h.day) === jour) { try { verse += BigInt(h.usdc); } catch (_) { return 'an earlier funding could not be read — nothing was sent.'; } }
-      if (verse + BigInt(p.costUsdc) > BigInt(bj.potBudget)) return 'it would go over your daily reward budget (' + usdcTexte(bj.potBudget) + ' USDC) — nothing was sent.';
+      /* dayPot(aujourd hui) RELU sur la chaine au Sign : un fund fait ailleurs (autre onglet, autre appareil) compte */
+      let dejaLu = null; try { dejaLu = lu.dayPot === null || lu.dayPot === undefined ? null : BigInt(lu.dayPot); } catch (_) { dejaLu = null; }
+      if (dejaLu === null) return 'today\'s pot could not be read on chain just now — nothing was sent.';
+      if (dejaLu + BigInt(p.costUsdc) > BigInt(bj.potBudget) || verse + BigInt(p.costUsdc) > BigInt(bj.potBudget)) return 'it would go over your daily reward budget (' + usdcTexte(bj.potBudget) + ' USDC) — nothing was sent.';
       if (lu.solde === null || lu.solde === undefined) return 'your USDC balance could not be read just now — nothing was sent.';
       if (BigInt(lu.solde) < BigInt(p.costUsdc)) return 'this wallet holds ' + usdcTexte(lu.solde) + ' USDC, less than ' + usdcTexte(p.costUsdc) + ' — nothing was sent.';
     }
@@ -5965,8 +5977,10 @@ function bjAllumer() {
   if (!Number.isInteger(maxH) || maxH < 0 || maxH > 60) return dire('Max rolls per hour: a whole number from 0 to 60.');
   if (duels && (maxDuel === null || maxDuel < Duels.MISE_MIN)) return dire('Max duel stake: an amount in USDC of at least ' + usdcTexte(Duels.MISE_MIN) + ' (the contract minimum).');
   /* le pot ne se coche que si sa case est MONTREE (ce wallet est l owner lu) */
-  const pot = $('#bjPot').checked && !$('#bjPotLab').hidden, potBudget = bjUsdc($('#bjPotBudget').value);
-  if (pot && (potBudget === null || potBudget <= 0n)) return dire('Daily reward budget: an amount in USDC above zero, like 1 or 2.5.');
+  const pot = $('#bjPot').checked && !$('#bjPotLab').hidden, potBudgetVu = !$('#bjPotBudgetLab').hidden;
+  /* le verifier (pas l owner) n a pas de budget : il signe des parts, il ne verse rien (0 = aucun fund) */
+  const potBudget = potBudgetVu ? bjUsdc($('#bjPotBudget').value) : 0n;
+  if (pot && potBudgetVu && (potBudget === null || potBudget <= 0n)) return dire('Daily reward budget: an amount in USDC above zero, like 1 or 2.5.');
   if (!rolls && !missions && !post && !skins && !duels && !pot) return dire('Tick at least one game.');
   Object.assign(bj, { on: true, budget: budget.toString(), depense: '0', maxSkin: maxSkin.toString(), maxH, rolls, missions, post, skins, duels, maxDuel: (maxDuel === null ? 0n : maxDuel).toString(),
     pot, potBudget: (potBudget === null ? 0n : potBudget).toString(), block: brainAdr ? String(brainAdr).toLowerCase() : UNIT_APP });
@@ -6095,7 +6109,11 @@ async function bjTour() {
           sharesDay = await lireParts(false);
           if (bjDernierJour(v.day)) sharesWeek = await lireParts(true);
         }
-        pot = { contract: String(tp.contrat).toLowerCase(), usdc: USDC_BASE, owner: v ? v.owner : null, veille: v, sharesDay, sharesWeek };
+        /* ce que le pot d AUJOURD HUI tient deja, LU sur la chaine (dayPot) : un fund fait d un autre onglet ou appareil compte */
+        const jourAuj = Math.floor(Date.now() / 86400000);
+        const dayPotAuj = await bjDayPot(String(tp.contrat).toLowerCase(), jourAuj);
+        pot = { contract: String(tp.contrat).toLowerCase(), usdc: USDC_BASE, owner: v ? v.owner : null, veille: v, sharesDay, sharesWeek,
+          today: { day: jourAuj, dayPot: dayPotAuj === null ? null : dayPotAuj.toString() } };
       }
     }
     if (!bj.on || bjVol.ouverte) return; /* eteint (ou une proposition ouverte) pendant la lecture */
@@ -6111,6 +6129,10 @@ async function bjTour() {
     }
     bjMontrer(p, rolls, moi);
   } finally { bjVol.enVol = false; }
+}
+/* dayPot(day) de TicketPot LU sur la chaine (eth_call, aucune transaction) ; illisible -> null (le module ne propose aucun fund, le Sign refuse) */
+async function bjDayPot(contrat, day) {
+  try { const a = appelDayPotTP(contrat, day); return lireUintMotTP(await rpc('eth_call', [{ to: a.to, data: a.data }, 'latest'])); } catch (_) { return null; }
 }
 /* /api/tirage relu MAINTENANT (au Sign d un coup de pot : l owner servi le plus frais) ; illisible -> null (le Sign refuse) */
 async function bjTirageFrais() {
@@ -6148,15 +6170,17 @@ function bjMontrer(p, rolls, walletCarte) {
   bcVue('chat');
   bcEtape(m, p.why);
   p.calls.forEach((a, i) => bcEtape(m, (i + 1) + '/' + p.calls.length + ' · ' + a.nom));
-  /* POT_SIGN et le wallet connecte n est PAS le verifier (lu par le serveur sur la chaine) : la carte le dit et ouvre la page verifier —
-   *   pas de « Sign » qui ne pourrait que se faire refuser. La cle entre dans `seen` : la meme demande ne revient pas tous les 30 s. */
+  /* POT_SIGN et le wallet connecte n est PAS le verifier (lu par le serveur sur la chaine) : une INFORMATION — la carte le dit et ouvre la
+   *   page verifier, pas de « Sign » qui ne pourrait que se faire refuser. ⛔ 2026-10-23 (revue adverse, LIVE owner != verifier) : la cle
+   *   entre dans `seen` ET brain-jeu.js l honore (avant : la carte revenait a chaque tour et bloquait le fund) ; la carte ne BLOQUE pas :
+   *   elle se libere tout de suite et le tour suivant continue (POT_FUND). Le lien reste utilisable. */
   if (p.kind === 'POT_SIGN' && !p.sign.signerIsVerifier) {
     bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver();
-    bcEtape(m, 'Switch to the verifier wallet ' + p.sign.verifier.slice(0, 6) + '… to sign the shares — or open the verifier page with that wallet.');
-    const finV = (txt) => { if (id !== bjVol.carte) return; bjVol.ouverte = 0; bjVol.signe = false; bjPeindre(txt); };
-    bcBoutons(m, [['Open the verifier page', () => { try { window.open('attester-ticketpot.html?day=' + encodeURIComponent(p.sign.jourId) + (p.sign.week ? '&week=1' : ''), '_blank', 'noopener'); } catch (_) {} finV('On — the shares of ' + p.sign.jourId + ' wait for the verifier wallet.'); }],
-      ['Dismiss', () => { bcEtape(m, 'Dismissed — nothing was signed.'); finV('On — dismissed.'); }, true]]);
+    bcEtape(m, 'Switch to the verifier wallet ' + p.sign.verifier.slice(0, 6) + '… to sign the shares — or open the verifier page with that wallet. Shown once; its brain goes on with the next move.');
+    bcBoutons(m, [['Open the verifier page', () => { try { window.open('attester-ticketpot.html?day=' + encodeURIComponent(p.sign.jourId) + (p.sign.week ? '&week=1' : ''), '_blank', 'noopener'); } catch (_) {} }]]);
+    bjVol.ouverte = 0; bjVol.signe = false;
     bjPeindre('On — the shares of ' + p.sign.jourId + ' wait for the verifier wallet (see its brain\'s panel).');
+    setTimeout(() => { void bjTour(); }, 1500);
     return;
   }
   const skin = p.kind === 'BID_SKIN' || p.kind === 'BUY_SKIN';
@@ -6174,7 +6198,9 @@ function bjMontrer(p, rolls, walletCarte) {
     /* un coup de pot : l owner (servi, lu sur la chaine) et le solde USDC RELUS maintenant, puis le re-controle */
     let lu = {};
     if (/^POT_/.test(p.kind)) { const tf = await bjTirageFrais(); lu = { owner: tf && tf.ticketpot && tf.ticketpot.veille ? tf.ticketpot.veille.owner : null,
-      solde: p.kind === 'POT_FUND' ? await bcSolde(USDC_BASE, walletCarte).then((x) => (x === null || x === undefined ? null : x.toString())).catch(() => null) : null }; }
+      verifier: tf && tf.ticketpot && tf.ticketpot.veille ? tf.ticketpot.veille.verifier : null,
+      solde: p.kind === 'POT_FUND' ? await bcSolde(USDC_BASE, walletCarte).then((x) => (x === null || x === undefined ? null : x.toString())).catch(() => null) : null,
+      dayPot: p.kind === 'POT_FUND' ? await bjDayPot(String((tf && tf.ticketpot && tf.ticketpot.contrat) || '').toLowerCase(), Number(p.day)).then((x) => (x === null ? null : x.toString())) : null }; }
     const refus = bjRefusAuSigne(id, p, walletCarte, lu);
     if (refus) { bcEtape(m, 'Not sent: ' + refus, 'non'); return; }
     bjVol.signe = true;

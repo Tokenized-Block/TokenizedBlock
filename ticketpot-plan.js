@@ -118,6 +118,20 @@ export function digestClaim(d) {
   return k256(hexVersOctets('1901' + domaineSeparateur(d.domain.chainId, d.domain.verifyingContract).slice(2) + st.slice(2)));
 }
 
+/* ------------------------------------------------------------------ les lectures (eth_call, aucune transaction) */
+/** l eth_call de dayPot(day) : { to, data } */
+export function appelDayPot(contrat, day) {
+  const d = Number(day);
+  if (!jourOk(d)) throw new Error('day is a UTC day number');
+  return { to: bas(contrat), data: '0x' + sel(SIG_DAY_POT) + u(d, 32) };
+}
+/** un mot de 32 octets (reponse d eth_call) -> BigInt ; autre chose -> null (jamais 0 par defaut) */
+export function lireUintMot(hex) {
+  const s = String(hex === null || hex === undefined ? '' : hex);
+  if (!/^0x[0-9a-fA-F]{64}$/.test(s)) return null;
+  return BigInt(s);
+}
+
 /* ------------------------------------------------------------------ les appels */
 const approuver = (usdc, contrat, montant, quoi) => ({ to: bas(usdc), data: '0x' + sel(SIG_APPROVE) + a(contrat) + u(montant), quoi });
 

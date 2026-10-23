@@ -253,11 +253,11 @@ const potEtat = (t, x = {}, regl = {}, y = {}) => {
   const hier = jourC(t) - 1;
   return { authorized: true, wallet: W, now: t, budgetUsdc: '0', spentUsdc: '0', balanceUsdc: '50000000',
     rules: { rolls: false, settle: false, pot: true, potDailyUsdc: '2000000', ...regl }, history: [], seen: [], rolls: null, missions: null, skins: null,
-    pot: { contract: TPC, usdc: USDC, owner: W, veille: { day: hier, jourId: jourIdDeDay(hier), ferme: true, reste: '0', potAtClose: '4000000' }, sharesDay: null, sharesWeek: null, ...x }, ...y };
+    pot: { contract: TPC, usdc: USDC, owner: W, veille: { day: hier, jourId: jourIdDeDay(hier), ferme: true, reste: '0', potAtClose: '4000000' }, today: { day: jourC(t), dayPot: '0' }, sharesDay: null, sharesWeek: null, ...x }, ...y };
 };
 const part = (w, sig = null, amount = '1000000') => ({ wallet: w, amount, signature: sig, donnees: { primaryType: 'Claim', message: { wallet: w, amount } } });
 const SIG = '0x' + 'ab'.repeat(65);
-const lesParts = (t, liste, mode = 'JOUR', x = {}) => ({ ok: true, jourId: jourIdDeDay(jourC(t) - 1), day: jourC(t) - 1, mode, contrat: TPC, verifier: VER, ferme: true, parts: liste, ...x });
+const lesParts = (t, liste, mode = 'JOUR', x = {}) => ({ ok: true, jourId: jourIdDeDay(jourC(t) - 1), day: jourC(t) - 1, mode, contrat: TPC, verifier: VER, ferme: true, parts: liste, couverture: { complete: true }, ...x });
 const ouvert = (t) => ({ day: jourC(t) - 1, jourId: jourIdDeDay(jourC(t) - 1), ferme: false, reste: '3000000', potAtClose: '0' });
 vu(J.KINDS.includes('POT_CLOSE') && J.KINDS.includes('POT_SIGN') && J.KINDS.includes('POT_FUND'), 'KINDS : POT_CLOSE, POT_SIGN, POT_FUND');
 vu(J.dernierJourDeSemaine(jourC(DIM)) === true && J.dernierJourDeSemaine(jourC(LUN)) === false && J.dernierJourDeSemaine(jourC(MER)) === false, 'dernier jour de semaine (saisonDe) : dim. 18/10 oui, lun. 19 et mer. 21 non');
@@ -334,7 +334,7 @@ vu(JSON.stringify(J.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN,
 await mutant('budget du pot contourne', 'const resteP = budgetPot > verse ? budgetPot - verse : 0n;', 'const resteP = budgetPot;', (M) => M.prochaineProposition(potEtat(MER, {}, {}, { history: hp('2000000') })).kind === 'POT_FUND');
 await mutant('non-owner recoit un coup de pot', 'const proprio = ADR.test(bas(P.owner)) && bas(P.owner) === moi;', 'const proprio = true;', (M) => M.prochaineProposition(potEtat(MER, { owner: AUTRE })).kind === 'POT_FUND');
 await mutant('fund au-dessus du solde', 'else if (resteP > solde)', 'else if (false)', (M) => M.prochaineProposition(potEtat(MER, {}, {}, { balanceUsdc: '1999999' })).kind === 'POT_FUND');
-await mutant('mauvais ordre (fund avant close)', 'for (const etape of [potClose, potSign, potFund])', 'for (const etape of [potFund, potClose, potSign])', (M) => M.prochaineProposition(potEtat(MER, tous)).kind === 'POT_FUND');
+await mutant('mauvais ordre (fund avant close)', 'const etapes = proprio ? [potClose, potSign, potFund] : [potSign];', 'const etapes = proprio ? [potFund, potClose, potSign] : [potSign];', (M) => M.prochaineProposition(potEtat(MER, tous)).kind === 'POT_FUND');
 await mutant('jour ET semaine signes', 'if (jourEntame) {', 'if (false) {', (M) => { const p = M.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN, [part(AUTRE), part(VER, SIG)]), sharesWeek: sem([part(AUTRE)]) })); return p.kind === 'POT_SIGN' && p.sign.week === true; });
 await mutant('versement illisible compte 0', 'if (v === null) return null;', 'if (v === null) return a;', (M) => M.prochaineProposition(potEtat(MER, {}, {}, { history: hp('abc') })).kind === 'POT_FUND');
 console.log('ok brain-jeu - ' + n + ' assertions');

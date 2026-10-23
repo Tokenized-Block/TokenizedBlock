@@ -102,7 +102,8 @@ const usdcTxt = (v) => { const e = v / 1000000n, f = (v % 1000000n).toString().p
  *   missions: { contract, usdc, claimable: [{ id, txHash, held, signature }], post: { cle, params, hold, poolManager } | null, mineOpen } | null,
  *   skins:    { list (decoderPage), block (le block du brain), usdc } | null,
  *   duels:    { contract, usdc, guess (une face NEUVE tiree par l app), expiresIn (s), block (bloc actuel), list: [duel (duels-plan-app.js)] } | null,
- *   pot:      { contract, usdc, owner (LU), veille: /api/tirage.ticketpot.veille, sharesDay / sharesWeek: /api/ticketpot/parts (jour / &week=1) } | null }
+ *   pot:      { contract, usdc, owner (LU), veille: /api/tirage.ticketpot.veille (porte verifier), today: { day, dayPot } (dayPot(aujourd hui) LU
+ *               sur la chaine, null = non lu), sharesDay / sharesWeek: /api/ticketpot/parts (jour / &week=1, avec couverture.complete) } | null }
  *   rules.pot + rules.potDailyUsdc ; history porte { t, kind: 'POT_FUND', day, usdc } pour chaque fund SIGNE.
  *   POT_SIGN n a AUCUN appel : { sign: { jourId, day, week, verifier, signerIsVerifier, shares: [{ wallet, amount, donnees }] } } — l app fait signer.
  */
@@ -163,7 +164,11 @@ export function prochaineProposition(etat = {}) {
   if (regles.pot && !P) pourquoiPas.push('reward pot: the ticket pot was not read');
   if (P) {
     const proprio = ADR.test(bas(P.owner)) && bas(P.owner) === moi;
-    if (!proprio) pourquoiPas.push('reward pot: only the ticket pot owner manages it' + (ADR.test(bas(P.owner)) ? '' : ' (its owner was not read)'));
+    /* ⛔ 2026-10-23 (revue adverse, LIVE : owner 0x31e0… != verifier 0x37eb…) : le VERIFIER (lu sur la chaine, servi avec les parts ou la
+     *   veille) qui n est pas l owner recoit POT_SIGN — et SEULEMENT lui (jamais close ni fund : ce sont les coups de l owner). */
+    const verifServi = bas((P.sharesDay && P.sharesDay.verifier) || (P.veille && P.veille.verifier));
+    const verificateur = ADR.test(verifServi) && verifServi === moi;
+    if (!proprio && !verificateur) pourquoiPas.push('reward pot: only the ticket pot owner manages it (its verifier signs the shares)' + (ADR.test(bas(P.owner)) ? '' : ' (its owner was not read)'));
     else {
       const aujourdhui = jourContrat(t), hier = aujourdhui - 1, jidHier = jourIdDeDay(hier);
       const potClose = () => {
@@ -194,36 +199,53 @@ export function prochaineProposition(etat = {}) {
         if (!src) return null;
         const verifier = bas(src.verifier);
         if (!ADR.test(verifier)) { pourquoiPas.push('reward pot: the verifier was not read'); return null; }
+        /* ⛔ COUVERTURE (2026-10-23) : des parts FINALES ne se signent que si le serveur dit que son index de tickets couvre ce jour (ou
+         *   cette semaine) — absent, faux ou inconnu -> rien (un index qui a manque des blocs signerait des parts fausses, pour toujours). */
+        if (!src.couverture || src.couverture.complete !== true) { pourquoiPas.push('reward pot: the server\'s ticket index does not cover ' + jidHier + (week ? ' (its week)' : '') + ' yet — its final shares are not proposed for signing'); return null; }
+        const signe = moi === verifier;
+        if (!signe && !proprio) return null;
+        const cle = 'POT_SIGN:' + jidHier + (week ? '#S' : '');
+        /* l owner qui n est PAS le verifier : une INFORMATION (le lien de la page verifier), montree UNE fois — la cle vue est honoree et
+         *   l ordre continue (POT_FUND). Le verifier, lui, recoit la carte tant qu il reste des parts (au-dela de 50, la suivante revient). */
+        if (!signe && vus.has(cle)) { pourquoiPas.push('reward pot: the shares of ' + jidHier + ' wait for the verifier wallet ' + verifier.slice(0, 6) + '…'); return null; }
         const aSigner = src.parts.filter((p) => p && !p.signature && ADR.test(bas(p.wallet)) && (brut(p.amount) || 0n) > 0n && p.donnees && typeof p.donnees === 'object')
           .map((p) => ({ wallet: bas(p.wallet), amount: String(brut(p.amount)), donnees: p.donnees }))
           .sort((a, b) => (a.wallet < b.wallet ? -1 : a.wallet > b.wallet ? 1 : 0)).slice(0, POT_SIGN_MAX);
         if (!aSigner.length) return null;
         const total = aSigner.reduce((a, p) => a + BigInt(p.amount), 0n);
-        return { kind: 'POT_SIGN', calls: [], costUsdc: '0', cle: 'POT_SIGN:' + jidHier + (week ? '#S' : ''),
-          why: 'Sign ' + aSigner.length + ' ' + (week ? 'weekly ' : '') + 'share' + (aSigner.length > 1 ? 's' : '') + ' of ' + jidHier + (week ? ' (it closes the week: the weekly pot, shared by entries)' : '') + ' — ' + usdcTxt(total)
-            + ' for the holders to claim. Each share is a typed message signed by the verifier wallet: no transaction, no gas, nothing moves.',
-          sign: { jourId: jidHier, day: hier, week, verifier, signerIsVerifier: moi === verifier, shares: aSigner } };
+        return { kind: 'POT_SIGN', calls: [], costUsdc: '0', cle,
+          why: (signe ? 'Sign ' : 'For your information — the verifier wallet has to sign ') + aSigner.length + ' ' + (week ? 'weekly ' : '') + 'share' + (aSigner.length > 1 ? 's' : '') + ' of ' + jidHier + (week ? ' (it closes the week: the weekly pot, shared by entries)' : '') + ' — ' + usdcTxt(total)
+            + ' for the holders to claim. Each share is a typed message signed by the verifier wallet: no transaction, no gas, nothing moves.'
+            + (signe ? '' : ' This wallet is not the verifier: shown once, its brain goes on with the next move.'),
+          sign: { jourId: jidHier, day: hier, week, verifier, signerIsVerifier: signe, shares: aSigner } };
       };
       const potFund = () => {
         const budgetPot = regles.potDailyUsdc;
         if (budgetPot <= 0n) return null;
         if (!ADR.test(bas(P.usdc))) { pourquoiPas.push('reward pot: the USDC address is not known'); return null; }
-        const verse = potVerseLeJour(e.history, aujourdhui);
-        if (verse === null) { pourquoiPas.push('reward pot: an earlier funding could not be read — no new funding proposed'); return null; }
+        /* ⛔ 2026-10-23 (revue adverse) : « deja verse aujourd hui » ne vit plus SEULEMENT dans ce navigateur — dayPot(aujourd hui) LU sur la
+         *   chaine (un MAJORANT de ce que l owner a verse : il compte aussi absorb / rollover) ; on garde le plus grand des deux. Non lu -> rien. */
+        const auj = P.today && Number(P.today.day) === aujourdhui ? P.today : null;
+        const dejaLu = auj ? brut(auj.dayPot) : null;
+        if (dejaLu === null) { pourquoiPas.push('reward pot: today\'s pot was not read on chain — no funding proposed'); return null; }
+        const verseHist = potVerseLeJour(e.history, aujourdhui);
+        if (verseHist === null) { pourquoiPas.push('reward pot: an earlier funding could not be read — no new funding proposed'); return null; }
+        const verse = verseHist > dejaLu ? verseHist : dejaLu;
         const resteP = budgetPot > verse ? budgetPot - verse : 0n;
-        if (resteP === 0n) pourquoiPas.push('reward pot: today\'s reward budget (' + usdcTxt(budgetPot) + ') is already in the pot');
+        if (resteP === 0n) pourquoiPas.push('reward pot: today\'s pot already holds ' + usdcTxt(verse) + ', your daily reward budget is ' + usdcTxt(budgetPot));
         else if (solde === null) pourquoiPas.push('reward pot: your USDC balance was not read');
         else if (resteP > solde) pourquoiPas.push('reward pot: this wallet holds ' + usdcTxt(solde) + ', today\'s reward budget left is ' + usdcTxt(resteP));
         else {
           const plan = planFundPot({ contrat: P.contract, usdc: P.usdc, day: aujourdhui, montant: resteP, ferme: false, maintenant: t });
           if (plan.etat !== 'PRET') { pourquoiPas.push('reward pot: ' + plan.pourquoi); return null; }
           const fin = dernierJourDeSemaine(aujourdhui);
-          return { ...proposition('POT_FUND', plan.appels, 'Fund today\'s pot (' + jourIdDeDay(aujourdhui) + ') with ' + usdcTxt(resteP) + ' — your daily reward budget' + (verse > 0n ? ' (' + usdcTxt(verse) + ' already in today)' : '')
+          return { ...proposition('POT_FUND', plan.appels, 'Fund today\'s pot (' + jourIdDeDay(aujourdhui) + ') with ' + usdcTxt(resteP) + ' — your daily reward budget' + (verse > 0n ? ' (the pot already holds ' + usdcTxt(verse) + ', read on chain)' : '')
             + (fin ? '. Today closes the week: this is the weekly pot, shared by the week\'s entries.' : ', shared by today\'s ticket holders.') + ' It never comes back to the wallet.', resteP, 'POT_FUND:' + aujourdhui), day: aujourdhui };
         }
         return null;
       };
-      for (const etape of [potClose, potSign, potFund]) { const p = etape(); if (p) return p; }
+      const etapes = proprio ? [potClose, potSign, potFund] : [potSign];
+      for (const etape of etapes) { const p = etape(); if (p) return p; }
     }
   }
   /* la skin : UNE lecture de propositionSkin, au plafond le plus bas (regle, budget, solde) */

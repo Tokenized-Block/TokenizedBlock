@@ -82,10 +82,10 @@ for (const id of ['bjPot', 'bjPotLab', 'bjPotBudget', 'bjPotBudgetLab']) vu(app.
 vu(/<label id="bjPotLab" hidden><input type="checkbox" id="bjPot"> Manage the reward pot<\/label>/.test(app) && /<label class="champ" id="bjPotBudgetLab" hidden>Daily reward budget \(USDC\)<input id="bjPotBudget"/.test(app), 'la case « Manage the reward pot » et le budget journalier existent, CACHES par defaut');
 const pj = app.slice(app.indexOf('function peindrePotJour('), app.indexOf('async function fondPot()'));
 vu(/const proprio = !!\(tp && tp\.veille && c && \/\^0x\[0-9a-f\]\{40\}\$\/\.test\(String\(tp\.veille\.owner\)\) && String\(tp\.veille\.owner\) === String\(c\)\.toLowerCase\(\)\);/.test(pj)
-  && /for \(const id of \['#bjPotLab', '#bjPotBudgetLab'\]\) \{ const x = \$\(id\); if \(x\) x\.hidden = !proprio; \}/.test(pj), 'montres SEULEMENT si le wallet connecte est l owner servi (/api/tirage.ticketpot.veille.owner)');
+  && /if \(\$\('#bjPotBudgetLab'\)\) \$\('#bjPotBudgetLab'\)\.hidden = !proprio;/.test(pj) && /if \(\$\('#bjPotLab'\)\) \$\('#bjPotLab'\)\.hidden = !\(proprio \|\| verifPot\);/.test(pj), 'budget montre SEULEMENT a l owner servi ; la case a l owner ou au verifier servis (/api/tirage.ticketpot.veille)');
 vu(/const pot = \$\('#bjPot'\)\.checked && !\$\('#bjPotLab'\)\.hidden/.test(bloc), 'une case pot cachee (cochee par un vieux reglage) ne compte pas');
 vu(/rules: \{[^}]*pot: bj\.pot, potDailyUsdc: bj\.potBudget \}/.test(bloc) && /history: bj\.history, seen: bj\.seen, rolls, missions, skins, duels, pot \}\);/.test(bloc), 'le module recoit la regle pot, le budget journalier et le pot lu');
-vu(/pot = \{ contract: String\(tp\.contrat\)\.toLowerCase\(\), usdc: USDC_BASE, owner: v \? v\.owner : null, veille: v, sharesDay, sharesWeek \};/.test(bloc)
+vu(/pot = \{ contract: String\(tp\.contrat\)\.toLowerCase\(\), usdc: USDC_BASE, owner: v \? v\.owner : null, veille: v, sharesDay, sharesWeek,\s+today: \{ day: jourAuj,/.test(bloc)
   && /if \(bjDernierJour\(v\.day\)\) sharesWeek = await lireParts\(true\);/.test(bloc), 'le pot lu : owner et veille servis, parts du jour, et de la semaine le dernier jour');
 vu(/import \{ prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernierJour \} from '\.\/brain-jeu\.js';/.test(app), 'app.html importe dernierJourDeSemaine');
 /* POT_SIGN : signature de MESSAGE par le wallet connecte = verifier, deposee comme attester-ticketpot.html ; sinon le lien, pas un bouton mort */
@@ -102,7 +102,7 @@ const att = readFileSync(new URL('./attester-ticketpot.html', import.meta.url), 
 vu(/\$\('#semaine'\)\.checked = new URLSearchParams\(location\.search\)\.get\('week'\) === '1';/.test(att), 'la page verifier ouvre le mode semaine avec ?week=1');
 /* au Sign : pot toujours coche, owner toujours le wallet, budget journalier, solde relu */
 const jour = Math.floor(Date.now() / 86400000);
-const refusPot = (code, p, x = {}, lu = {}) => fabrique(code)(etatBj({ pot: true, potBudget: '2000000', ...x }), { carte: 3 }, W, (v) => String(v))(3, p, W, { owner: W, solde: '9000000', ...lu });
+const refusPot = (code, p, x = {}, lu = {}) => fabrique(code)(etatBj({ pot: true, potBudget: '2000000', ...x }), { carte: 3 }, W, (v) => String(v))(3, p, W, { owner: W, verifier: W, solde: '9000000', dayPot: '0', ...lu });
 const fund = (c = '2000000', d = jour) => ({ kind: 'POT_FUND', costUsdc: c, day: d });
 vu(refusPot(srcRefus, fund()) === null, 'au Sign : un fund au budget du jour, owner, solde suffisant -> passe');
 vu(refusPot(srcRefus, fund(), { depense: '10000000' }) === null, 'au Sign : le fund du pot ne compte PAS sur le budget de jeu (son budget a lui)');
@@ -117,7 +117,7 @@ vu(/not the verifier/.test(String(refusPot(srcRefus, { kind: 'POT_SIGN', costUsd
 vu(refusDe(srcRefus, { kind: 'DUEL_JOIN', costUsdc: '1000000' }) === null, 'les duels passent toujours (le 4e argument est optionnel)');
 const sansLignePot = (motif) => { vu(srcRefus.split(motif).length === 2, 'mutant pot au Sign : le motif existe une fois'); return srcRefus.replace(motif, 'if (false)'); };
 vu(refusPot(sansLignePot("if (!lu.owner || String(lu.owner).toLowerCase() !== walletCarte)"), fund(), {}, { owner: '0x' + '2'.repeat(40) }) === null, 'MUTANT owner au Sign retire : un non-owner PASSERAIT — l assertion ROUGIT');
-vu(refusPot(sansLignePot('if (verse + BigInt(p.costUsdc) > BigInt(bj.potBudget))'), fund('2000001')) === null, 'MUTANT budget du pot au Sign retire : le fund trop gros PASSERAIT — l assertion ROUGIT');
+vu(refusPot(sansLignePot('if (dejaLu + BigInt(p.costUsdc) > BigInt(bj.potBudget) || verse + BigInt(p.costUsdc) > BigInt(bj.potBudget))'), fund('2000001')) === null, 'MUTANT budget du pot au Sign retire : le fund trop gros PASSERAIT — l assertion ROUGIT');
 vu(refusPot(sansLignePot('if (BigInt(lu.solde) < BigInt(p.costUsdc))'), fund(), {}, { solde: '1999999' }) === null, 'MUTANT solde au Sign retire : le fund au-dessus du solde PASSERAIT — l assertion ROUGIT');
 vu(/if \(\/\^POT_\/\.test\(p\.kind\)\) \{ const tf = await bjTirageFrais\(\); lu = \{ owner:/.test(bloc) && /solde: p\.kind === 'POT_FUND' \? await bcSolde\(USDC_BASE, walletCarte\)/.test(bloc), 'au Sign d un coup de pot : owner et solde RELUS juste avant');
 vu(/bj\.history = bjCouper\(bj\.history\)/.test(bloc) && /function bjCouper\(h\)/.test(bloc), 'l historique garde les funds du pot meme apres 100 rolls (sinon le budget du jour se rouvrirait)');

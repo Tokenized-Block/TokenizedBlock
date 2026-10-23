@@ -114,6 +114,7 @@ import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { lireJour as lireJourTicketPot } from './ticketpot-attestation.js';
 import { dayDeJourId as dayDeJourIdPot, jourSemaineReclamable, jourIdDeDay as jourIdDeDayPot, claimableUntil as reclamablePotSrv } from './ticketpot-plan.js';
 import { partsDuJour as partsTicketPot, verifierSignaturePart } from './ticketpot-parts.js';
+import { cacheTemporise, couvertureParts } from './ticketpot-parts-serveur.js';
 import { depensesJeu, passesAchetes, TOPIC_ROLLED as TOPIC_ROLLED_SRV, TOPIC_PASS as TOPIC_PASS_SRV } from './volume-rolls.js';
 /* 2026-10-18 (Phil 09:00) : le Game pour le MCP du brain — etat du jeu, roll classique (<= 10 par lot), settle, mission (jeu-agent.js, serveur seul) */
 import { etatJeuAgent, planRollAgent, planSettleAgent, planTaskAgent, lireGuess as lireGuessAgent } from './jeu-agent.js';
@@ -4036,6 +4037,13 @@ async function crediterDetenteursSkins() {
     revenu.passes = revenu.passes || {};
     const detenteurs = new Set(r.skins.map((s) => String(s.detenteur || '').toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a) && a !== contrat && !/^0x0{40}$/.test(a) && !internes.has(a)));
     for (const a of detenteurs) { const ids = revenu.passes[a] || []; if (!ids.includes(jour)) { revenu.passes[a] = [...ids, jour].sort(); revenuSale = true; } }
+    /* 2026-10-23 : le JOUR de chaque lecture reussie est note (couverture de /api/ticketpot/parts : un jour sans lecture des skins n est
+     *   pas couvert) ; 60 jours gardes au plus */
+    revenu.skinsLus = revenu.skinsLus || {};
+    if (!revenu.skinsLus[jour]) {
+      revenu.skinsLus[jour] = new Date().toISOString(); revenuSale = true;
+      const jl = Object.keys(revenu.skinsLus).sort(); for (const k of jl.slice(0, Math.max(0, jl.length - 60))) delete revenu.skinsLus[k];
+    }
     skinsDetenus.n = detenteurs.size; skinsDetenus.lu = Date.now();
   } catch (_) { /* relu au prochain appel */ } finally { skinsDetenus.enVol = false; }
 }
@@ -4139,6 +4147,10 @@ setInterval(() => { void crediterVolumeRolls(); }, 120000).unref?.();
  *   dans /api/tirage.ticketpot. ⛔ AUCUNE cle ici : Phil signe les parts lui-meme avec le wallet verifier (0x37eb…) — le serveur ne signe rien
  *   et ne bouge rien. Sans fiche notee (adresse null) : null, et aucune lecture de chaine. En memoire ; une lecture ratee garde l etat d avant. */
 const ticketpotSrv = { lu: 0, jourId: null, day: null, etat: null, erreur: null, enVol: false };
+/* 2026-10-23 (revue adverse) : /api/ticketpot/parts en CACHE — la reponse 60 s par jour+mode (invalidee par un POST de signature), la
+ *   lecture de chaine (lireJour, 6 appels) 60 s par jour, partagee par le GET et le POST. Un echec est garde 15 s. */
+const partsCacheTP = cacheTemporise({ ttlMs: 60000, ttlEchecMs: 15000, max: 128 });
+const jourChaineTP = cacheTemporise({ ttlMs: 60000, ttlEchecMs: 15000, max: 64 });
 async function lireTicketPotSrv() {
   const contrat = TICKETPOT_DEPLOIEMENT.adresse;
   if (!contrat || ticketpotSrv.enVol) return;
@@ -6403,17 +6415,26 @@ function traiterRequete(req, res) {
         for (const e of entreesPeriode(jours, ids, SEUIL_VOLUME_JOUR_USD, passes, (revenu.bonusSemaine || {})[s.id] || {}, bonusNiv)) poids[e.adresse] = (poids[e.adresse] || 0) + 1;
         semaineId = s.id;
       }
-      let j; try { j = await lireJourTicketPot({ rpc: rpcServeur, contrat: contratTP }, day); } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }; }
+      let j; try { j = await jourChaineTP.obtenir(day, () => lireJourTicketPot({ rpc: rpcServeur, contrat: contratTP }, day), (x) => !!x); } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }; }
       const tickets = semaine ? Object.keys(poids) : ticketsJour(revenu.jours || {}, jourId, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD);
       const sigs = ((revenu.ticketpotSig || {})[jourId + (semaine ? '#S' : '')]) || {};
       const parts = j.ferme ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j.potAtClose, signatures: sigs, poids }) : [];
-      return { ok: true, day, jourId, mode: semaine ? 'SEMAINE' : 'JOUR', semaine: semaineId, poids, contrat: contratTP, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), nTickets: tickets.length, parts };
+      /* LA COUVERTURE des index qui font les tickets (ticketpot-parts-serveur.js) : inconnu -> complete false ; le brain ne propose alors
+       *   pas de signer ces parts finales */
+      const perTP = semaine ? saisonDe(day * JOUR_MS) : jourDe(day * JOUR_MS);
+      let curseurTs = null;
+      if (BLOCKROLLS_DEPLOIEMENT.adresse && Number.isSafeInteger(revenu.rollsScan)) { try { curseurTs = await horodatageBloc(revenu.rollsScan); } catch (_) { curseurTs = null; } }
+      const couverture = couvertureParts({ debutMs: perTP.debut, finMs: perTP.fin, joursIds: joursEntre(perTP.debut, perTP.fin), registreDepuis: revenu.depuis,
+        rolls: BLOCKROLLS_DEPLOIEMENT.adresse ? { curseurTs } : null, skins: BLOCKSKINS_SRV ? { joursLus: revenu.skinsLus || {} } : null });
+      return { ok: true, day, jourId, mode: semaine ? 'SEMAINE' : 'JOUR', semaine: semaineId, poids, contrat: contratTP, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), nTickets: tickets.length, parts,
+        couverture };
     };
     if (chemin === '/api/ticketpot/parts') {
       if (req.method !== 'GET' && req.method !== 'HEAD') { rendreTP(405, { ok: false, pourquoi: 'GET only' }); return; }
       const qTP = new URL(req.url, 'http://x').searchParams;
       const jourId = String(qTP.get('day') || jourDe(Date.now() - JOUR_MS).id);
-      partsDe(jourId, qTP.get('week') === '1').then((r) => rendreTP(r.ok ? 200 : r.etat === 'NON_LU' ? 202 : 400, r)).catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }));
+      const semaineQ = qTP.get('week') === '1';
+      partsCacheTP.obtenir(jourId + (semaineQ ? '#S' : ''), () => partsDe(jourId, semaineQ)).then((r) => rendreTP(r.ok ? 200 : r.etat === 'NON_LU' ? 202 : 400, r)).catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }));
       return;
     }
     if (req.method !== 'POST') { rendreTP(405, { ok: false, pourquoi: 'POST only' }); return; }
@@ -6434,6 +6455,7 @@ function traiterRequete(req, res) {
       revenu.ticketpotSig = revenu.ticketpotSig || {}; revenu.ticketpotSig[cleSig] = revenu.ticketpotSig[cleSig] || {};
       revenu.ticketpotSig[cleSig][wallet] = { digest: p.digest, signature, amount: p.amount, deadline: p.deadline, ticket: p.ticket, recue: new Date().toISOString() };
       revenuSale = true;
+      partsCacheTP.invalider(cleSig); /* le GET suivant rend cette signature (la lecture de chaine, elle, reste en cache) */
       rendreTP(200, { ok: true, jourId, mode: r.mode, wallet, amount: p.amount, deadline: p.deadline });
     })().catch(() => rendreTP(202, { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' })); });
     return;
