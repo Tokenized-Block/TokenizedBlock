@@ -247,7 +247,9 @@ export function lireEvenementsJeu(logs, contrats, ctx) {
       const w = adresseDuTopic(l.topics[2]), sk = idTopic(l.topics[1]);
       if (!w || sk === null || m.length !== 2) { illisibles++; continue; }
       const d = devisesL.has(sk) ? devises[devisesL.get(sk)] : null;
-      e = { kind: 'skin_bid', wallet: w, skin: sk, text: court(w) + ' bid on skin #' + sk + (d ? ' · ' + montantTexte(m[0], d.dec) + ' ' + d.sym : '') };
+      /* `montant` brut garde : un Listed lu PLUS TARD (le rattrapage remonte le temps) complete le texte (completerJournal) */
+      e = { kind: 'skin_bid', wallet: w, skin: sk, montant: m[0].toString(), devise: d ? devisesL.get(sk) : null,
+        text: court(w) + ' bid on skin #' + sk + (d ? ' · ' + montantTexte(m[0], d.dec) + ' ' + d.sym : '') };
     } else if (t0 === T_SOLD) {
       const vendeur = adresseDuTopic(l.topics[2]), w = adresseDuTopic(l.topics[3]), sk = idTopic(l.topics[1]);
       if (!w || !vendeur || sk === null || m.length !== 3) { illisibles++; continue; }
@@ -283,6 +285,35 @@ export function fusionnerJournal(existants, nouveaux, { depuisMs = 0, max = JOUR
   for (const e of [...(existants || []), ...(nouveaux || [])]) if (valide(e) && e.t >= depuisMs && !parId.has(e.id)) parId.set(e.id, e);
   const k = (x) => (Number.isSafeInteger(x) ? x : -1);
   return [...parId.values()].sort((a, b) => b.t - a.t || k(b.baseBlock) - k(a.baseBlock) || k(b.logIndex) - k(a.logIndex)).slice(0, Math.max(0, max));
+}
+
+/** fusionnerJournal + ce qui a ete COUPE : `coupes` = les evenements valides du jour (>= depuisMs) lus mais pas gardes (au-dela de `max`).
+ *  ⛔ 2026-10-23 (verdict) : couvreLaJournee pouvait etre vrai alors que la garde de 400 avait jete les plus anciens du jour. Un
+ *  journal coupe ne couvre pas la journee : le serveur ajoute `coupes` a son compte du jour et le sert. */
+export function garderJournal(existants, nouveaux, { depuisMs = 0, max = JOURNAL_MAX } = {}) {
+  const tous = fusionnerJournal(existants, nouveaux, { depuisMs, max: Infinity });
+  const m = Math.max(0, max);
+  return { evenements: tous.slice(0, m), coupes: Math.max(0, tous.length - m) };
+}
+
+/** Complete les textes qu un ordre de lecture A REBOURS laissait courts (verdict 2026-10-23, defaut 5) : un Settled lu avant son Rolled
+ *  (cible inconnue -> sans « on block N ») et un Bid lu avant son Listed (devise inconnue -> sans montant). Des que l association est
+ *  connue, le texte est RECONSTRUIT avec les memes mots que lireEvenementsJeu ; sinon l evenement reste tel quel. Rien n est mute. */
+export function completerJournal(evenements, { cibles, devisesListees, devises } = {}) {
+  const c = cibles instanceof Map ? cibles : new Map(), dl = devisesListees instanceof Map ? devisesListees : new Map(), dv = devises || {};
+  return (evenements || []).map((e) => {
+    if (e && e.kind === 'settled' && e.cible === null && typeof e.rollId === 'string' && Number.isSafeInteger(c.get(e.rollId)) && ADR.test(bas(e.wallet))) {
+      const cible = c.get(e.rollId);
+      let gain = null; try { gain = BigInt(e.payout); } catch (_) { return e; }
+      return { ...e, cible, text: court(e.wallet) + ' rolled ' + e.score + '/5 on block ' + numeroBloc(cible) + (gain > 0n ? ' · +' + montantTexte(gain, 6) + ' USDC' : ' · no prize') };
+    }
+    if (e && e.kind === 'skin_bid' && e.devise === null && typeof e.skin === 'string' && dl.has(e.skin) && dv[dl.get(e.skin)] && ADR.test(bas(e.wallet))) {
+      const dev = dl.get(e.skin), d = dv[dev];
+      let brut = null; try { brut = BigInt(e.montant); } catch (_) { return e; }
+      return { ...e, devise: dev, text: court(e.wallet) + ' bid on skin #' + e.skin + ' · ' + montantTexte(brut, d.dec) + ' ' + d.sym };
+    }
+    return e;
+  });
 }
 
 /** pose `block` (le block cree par ce wallet, lu dans l index des createurs) ; un wallet sans block -> null. Rien n est mute. */

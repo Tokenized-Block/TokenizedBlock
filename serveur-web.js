@@ -99,7 +99,7 @@ import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
 import { BLOCKSKINS as BLOCKSKINS_SRV, BLOCKSKINS_ACTIF as BLOCKSKINS_ACTIF_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv, DEVISES_SKIN as DEVISES_SKIN_SRV } from './blockskins.js';
 import { lireEvenementsJeu, evenementsPractice, fusionnerJournal, avecBlocks, TOPICS_ROLLS as TOPICS_ROLLS_JOURNAL, TOPICS_SKINS as TOPICS_SKINS_JOURNAL,
   TOPICS_DUELS as TOPICS_DUELS_JOURNAL, TOPICS_MISSIONS as TOPICS_MISSIONS_JOURNAL, JOURNAL_MAX, tempsDeBloc as tempsDeBlocJournal,
-  profondeurJournee, premierBlocDuJour, journeeCouverte } from './journal-jeu.js';
+  profondeurJournee, premierBlocDuJour, journeeCouverte, garderJournal, completerJournal } from './journal-jeu.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
 /* 2026-10-23 DENIM : le temps de bloc MESURE (deux en-tetes), et les reculs exprimes en secondes convertis avec lui (temps-de-bloc.js) */
 import { sParBlocMesure, enteteVersMesure, blocsPour, RECUL_MESURE_BLOCS } from './temps-de-bloc.js';
@@ -4270,17 +4270,32 @@ setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000).unref?.()
  *   servie (`rattrapage`), et c est retente au tour suivant ; couvreLaJournee reste false tant que le premier bloc du jour n est pas LU.
  *   Memoire seule : perdu au redemarrage, relu a la borne.
  * ⛔ Un bloc dont l horodatage n est pas lu -> la fenetre n est PAS consommee (curseur immobile, relue au tour suivant). */
-const JOURNAL_PAS_BLOCS = 2000, JOURNAL_RECENT_BLOCS = 9000, JOURNAL_FENETRES_PAR_TOUR = 5, JOURNAL_TOUR_MS = 90000, JOURNAL_GARDE = 400, JOURNAL_ASSOC_MAX = 5000;
+/* ⛔ 2026-10-23 (verdict adverse, defauts 3 et 4) :
+ *   - `coupes` : les evenements du jour LUS mais jetes par la garde (JOURNAL_GARDE). Un journal coupe ne couvre pas la journee :
+ *     couvreLaJournee est faux des que coupes > 0 (il etait vrai alors que les plus anciens du jour manquaient).
+ *   - un rattrapage REFUSE n est plus retente a chaque tour : il attend tour x 2^(refus-1), plafonne a 32 tours (48 min en prod), remis a
+ *     zero par une fenetre lue ou par un nouveau jour. `rattrapage` dit `refus` et `prochainEssai`. `fenetresRattrapage` COMPTE les fenetres
+ *     lues par le rattrapage depuis le demarrage (le cout d un redemarrage, jusqu ici non mesure). */
+const JOURNAL_PAS_BLOCS = 2000, JOURNAL_RECENT_BLOCS = 9000, JOURNAL_FENETRES_PAR_TOUR = 5, JOURNAL_TOUR_MS = 90000, JOURNAL_GARDE_DEFAUT = 400, JOURNAL_ASSOC_MAX = 5000;
+/* TB_JOURNAL_GARDE : pour les bancs a faux noeud seulement (au moins 5) ; en prod, 400 */
+const JOURNAL_GARDE = Number.isSafeInteger(Number(process.env.TB_JOURNAL_GARDE)) && Number(process.env.TB_JOURNAL_GARDE) >= 5 ? Number(process.env.TB_JOURNAL_GARDE) : JOURNAL_GARDE_DEFAUT;
+/* TB_JOURNAL_TOUR_MS : pour les bancs a faux noeud seulement (au moins 1 s) ; en prod, JOURNAL_TOUR_MS */
+const JOURNAL_TOUR_EFFECTIF_MS = Number(process.env.TB_JOURNAL_TOUR_MS) >= 1000 ? Number(process.env.TB_JOURNAL_TOUR_MS) : JOURNAL_TOUR_MS;
+const JOURNAL_ATTENTE_MAX_TOURS = 32;
 const journalEtat = { curseur: null, bas: null, premierBloc: null, sParBloc: null, profondeur: null, rattrapage: null, jour: null, lu: null,
+  coupes: 0, refusRattrapage: 0, rattrapageApres: 0, fenetresRattrapage: 0,
   evenements: [], cibles: new Map(), devisesListees: new Map(), jetons: new Map(), enVol: false };
+/** l attente avant de retenter un rattrapage refuse `refus` fois de suite : tour x 2^(refus-1), au plus JOURNAL_ATTENTE_MAX_TOURS tours */
+const attenteRattrapageJournal = (refus) => JOURNAL_TOUR_EFFECTIF_MS * Math.min(JOURNAL_ATTENTE_MAX_TOURS, 2 ** Math.max(0, refus - 1));
 const contratsJournal = () => {
   const ok = (x) => { const v = String(x || '').toLowerCase(); return /^0x[0-9a-f]{40}$/.test(v) ? v : null; };
   return { rolls: ok(BLOCKROLLS_DEPLOIEMENT.adresse), skins: ok(BLOCKSKINS_SRV), duels: contratDuels(), missions: ok(MISSIONS_DEPLOIEMENT && MISSIONS_DEPLOIEMENT.adresse) };
 };
 /** ce que l endpoint dit de la couverture du jour : mesure, jamais supposee */
 function couvertureJournal() {
-  return { couvertureDepuis: journalEtat.bas, couvreLaJournee: journeeCouverte({ premierBloc: journalEtat.premierBloc, basCouvert: journalEtat.bas, hautCouvert: journalEtat.curseur }),
-    premierBlocDuJour: journalEtat.premierBloc, secondesParBloc: journalEtat.sParBloc, profondeurMax: journalEtat.profondeur, rattrapage: journalEtat.rattrapage };
+  return { couvertureDepuis: journalEtat.bas, couvreLaJournee: journalEtat.coupes === 0 && journeeCouverte({ premierBloc: journalEtat.premierBloc, basCouvert: journalEtat.bas, hautCouvert: journalEtat.curseur }),
+    premierBlocDuJour: journalEtat.premierBloc, secondesParBloc: journalEtat.sParBloc, profondeurMax: journalEtat.profondeur, rattrapage: journalEtat.rattrapage,
+    coupes: journalEtat.coupes, fenetresRattrapage: journalEtat.fenetresRattrapage };
 }
 /** le premier bloc du jour UTC `j`, au temps de bloc MESURE (tete vs tete - 1 000) ; pose sParBloc / profondeur ; null si illisible */
 async function premierBlocJournal(tete, j) {
@@ -4311,7 +4326,9 @@ async function lireFenetreJournal(de, a, c) {
   for (const [k, v] of r.devisesListees) journalEtat.devisesListees.set(k, v);
   for (const [k, v] of r.jetons) journalEtat.jetons.set(k, v);
   for (const m of [journalEtat.cibles, journalEtat.devisesListees, journalEtat.jetons]) while (m.size > JOURNAL_ASSOC_MAX) m.delete(m.keys().next().value);
-  journalEtat.evenements = fusionnerJournal(journalEtat.evenements, r.evenements, { depuisMs: jourDe(Date.now()).debut, max: JOURNAL_GARDE });
+  const g = garderJournal(journalEtat.evenements, r.evenements, { depuisMs: jourDe(Date.now()).debut, max: JOURNAL_GARDE });
+  journalEtat.coupes += g.coupes;
+  journalEtat.evenements = completerJournal(g.evenements, { cibles: journalEtat.cibles, devisesListees: journalEtat.devisesListees, devises: DEVISES_SKIN_SRV });
   return true;
 }
 async function lireJournalJeu() {
@@ -4328,12 +4345,12 @@ async function lireJournalJeu() {
       const premier = await premierBlocJournal(tete, j);
       if (premier === null) return; /* rien n est pose : retente au tour suivant */
       const depart = Math.max(premier, sur - JOURNAL_RECENT_BLOCS + 1, 1);
-      Object.assign(journalEtat, { curseur: depart - 1, bas: depart, premierBloc: premier, jour: j.id, rattrapage: null });
+      Object.assign(journalEtat, { curseur: depart - 1, bas: depart, premierBloc: premier, jour: j.id, rattrapage: null, coupes: 0, refusRattrapage: 0, rattrapageApres: 0 });
     } else if (journalEtat.jour !== j.id || journalEtat.premierBloc === null) {
       /* un nouveau jour UTC (ou un premier bloc pas encore trouve), curseur continu : la plage lue est [bas, curseur], contigue. Pour le
        *  nouveau jour elle commence a max(bas, min(curseur + 1, premier)) : au premier bloc du jour s il est deja lu, sinon au prochain bloc a
        *  lire. Elle couvre la journee quand le premier bloc du jour est LU (journeeCouverte). */
-      if (journalEtat.jour !== j.id) Object.assign(journalEtat, { jour: j.id, premierBloc: null, rattrapage: null });
+      if (journalEtat.jour !== j.id) Object.assign(journalEtat, { jour: j.id, premierBloc: null, rattrapage: null, coupes: 0, refusRattrapage: 0, rattrapageApres: 0 });
       const premier = await premierBlocJournal(tete, j);
       if (premier !== null) { journalEtat.premierBloc = premier; journalEtat.bas = Math.max(journalEtat.bas, Math.min(journalEtat.curseur + 1, premier)); }
     }
@@ -4347,18 +4364,26 @@ async function lireJournalJeu() {
     if (de > sur) journalEtat.lu = Date.now();
     /* 2. le rattrapage : vers le premier bloc du jour, du plus recent au plus ancien, avec ce qui reste du budget (au moins une fenetre) */
     const p = journalEtat.premierBloc;
-    for (let k = 0; k < Math.max(1, JOURNAL_FENETRES_PAR_TOUR - fenetres) && Number.isSafeInteger(p) && journalEtat.bas > p; k++) {
+    /* un refus recent : on ATTEND (tour x 2^(refus-1)) au lieu de redemander la meme fenetre a chaque tour ; `bas` ne bouge pas, rien n est saute */
+    const attendRattrapage = Date.now() < journalEtat.rattrapageApres;
+    for (let k = 0; !attendRattrapage && k < Math.max(1, JOURNAL_FENETRES_PAR_TOUR - fenetres) && Number.isSafeInteger(p) && journalEtat.bas > p; k++) {
       const a = journalEtat.bas - 1, d = Math.max(p, a - JOURNAL_PAS_BLOCS + 1);
       let fait = false, pourquoi = 'logs not read';
       try { fait = await lireFenetreJournal(d, a, c); } catch (e) { pourquoi = String((e && e.message) || e).slice(0, 120); }
-      if (!fait) { journalEtat.rattrapage = { de: d, a, pourquoi: masquerCle(pourquoi), lu: new Date().toISOString() }; break; }
-      journalEtat.bas = d; journalEtat.rattrapage = null;
+      if (!fait) {
+        journalEtat.refusRattrapage++;
+        journalEtat.rattrapageApres = Date.now() + attenteRattrapageJournal(journalEtat.refusRattrapage);
+        journalEtat.rattrapage = { de: d, a, pourquoi: masquerCle(pourquoi), lu: new Date().toISOString(), refus: journalEtat.refusRattrapage,
+          prochainEssai: new Date(journalEtat.rattrapageApres).toISOString() };
+        break;
+      }
+      journalEtat.bas = d; journalEtat.rattrapage = null; journalEtat.refusRattrapage = 0; journalEtat.rattrapageApres = 0; journalEtat.fenetresRattrapage++;
     }
   } catch (_) { /* relu au prochain tour, depuis le meme curseur */ } finally { journalEtat.enVol = false; }
 }
 if (process.env.TB_JOURNAL !== '0') {
-  /* TB_JOURNAL_TOUR_MS : pour les bancs a faux noeud seulement (au moins 1 s) ; en prod, JOURNAL_TOUR_MS */
-  const tourJl = Number(process.env.TB_JOURNAL_TOUR_MS) >= 1000 ? Number(process.env.TB_JOURNAL_TOUR_MS) : JOURNAL_TOUR_MS;
+  /* TB_JOURNAL_TOUR_MS : voir JOURNAL_TOUR_EFFECTIF_MS (bancs seulement) */
+  const tourJl = JOURNAL_TOUR_EFFECTIF_MS;
   setTimeout(() => { void lireJournalJeu(); setInterval(() => { void lireJournalJeu(); }, tourJl).unref?.(); },
     Math.max(500, Number(process.env.TB_JOURNAL_PREMIER_MS) || 20000)).unref?.();
 }
@@ -6585,7 +6610,7 @@ function traiterRequete(req, res) {
     rendreJl(200, { ok: true, jour: jJl.id, lu: journalEtat.lu ? new Date(journalEtat.lu).toISOString() : null, maintenant: Date.now(),
       couvertureDepuis: memeJourJl ? cvJl.couvertureDepuis : null, couvreLaJournee: memeJourJl && cvJl.couvreLaJournee === true,
       premierBlocDuJour: memeJourJl ? cvJl.premierBlocDuJour : null, secondesParBloc: cvJl.secondesParBloc, profondeurMax: cvJl.profondeurMax,
-      rattrapage: memeJourJl ? cvJl.rattrapage : null,
+      rattrapage: memeJourJl ? cvJl.rattrapage : null, coupes: memeJourJl ? cvJl.coupes : 0, fenetresRattrapage: cvJl.fenetresRattrapage,
       scanJusqua: journalEtat.curseur, sources: { rolls: cJl.rolls, skins: cJl.skins, practice: true, duels: cJl.duels, missions: cJl.missions },
       evenements: avecBlocks(tousJl, (w) => blocDeJl.get(w) || null) });
     return;

@@ -154,7 +154,9 @@ async function serieA(M, nom) {
 }
 
 console.log('— A. module pur');
-await serieA(await import(pathToFileURL(path.join(ICI, 'journal-jeu.js')).href + '?v=c'), 'A');
+/* ⛔ verdict 2026-10-23 (defaut 2) : sur 53010ed ce banc PLANTAIT (« M.tempsDeBloc is not a function ») sans rien compter ; une
+ *   exception de la serie A est desormais un KO compte, pour qu un rouge sur la base se lise en chiffres. */
+try { await serieA(await import(pathToFileURL(path.join(ICI, 'journal-jeu.js')).href + '?v=c'), 'A'); } catch (e) { ok(false, 'A : la serie a leve ' + String((e && e.message) || e).slice(0, 160)); }
 
 console.log('— D. mutants du module (copies)');
 const srcJ = fs.readFileSync(path.join(ICI, 'journal-jeu.js'), 'utf8');

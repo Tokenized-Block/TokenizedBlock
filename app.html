@@ -8970,8 +8970,8 @@ setTimeout(() => { if (mapVisible()) void peindreRollsMap(); }, 2500);
  *       jouee deux fois, ~3 s) avec UN mot + le pulse de la tuile. Rien d ecrit en permanence : le bouton « Today » n apparait que s il y
  *       a des evenements, et la liste est fermee par defaut. Les rolls practice restent dessines par peindreRollsMap (pas de double onde).
  *   (2) la carte « Today » du Game (les 10 derniers), cachee tant qu il n y a rien ; (3) la commande « log » du Brain.
- * ⛔ « NOUVEAU » comme peindreRollsMap : au premier passage, seuls les evenements plus jeunes que la page (horloge du serveur) ; ensuite,
- *   tout id absent du passage precedent. ⛔ Rien ne passe par liveEvts ni le fil Live : un evenement du jeu n y est pas une transaction. */
+ * ⛔ « NOUVEAU » = journalAPulser : au premier passage, seuls les evenements plus jeunes que la page (horloge du serveur) ; ensuite,
+ *   un id absent du passage precedent ET au-dessus du scan deja vu (jamais un evenement ancien ajoute par le rattrapage). ⛔ Rien ne passe par liveEvts ni le fil Live : un evenement du jeu n y est pas une transaction. */
 const JOURNAL_MAP_MS = 25000;
 let journal = [], journalVus = null, journalEnCours = false, journalLuA = 0;
 const heureJournal = (t) => { try { return new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); } catch (_) { return '—'; } };
@@ -9014,18 +9014,39 @@ async function lireJournal() {
   peindreListeJournal();
   return j;
 }
+/* ⛔ QUI PULSE (verdict adverse 2026-10-23) : le serveur a DEUX curseurs ; le rattrapage remonte le jour et AJOUTE, des heures apres le
+ *   chargement, des evenements du matin. « Un id jamais vu » ne veut donc plus dire « vient d arriver » : un roll de 06:10 rattrape a 18:00
+ *   pulsait comme s il venait d avoir lieu. Regle : au premier passage, seuls les evenements plus jeunes que la page (horloge du serveur) ;
+ *   ensuite, un evenement de chaine pulse SEULEMENT si son bloc est AU-DESSUS du plus haut `scanJusqua` deja vu (le direct n ajoute que
+ *   ca ; le rattrapage n ajoute que sous `bas`, donc sous ce scan) ; sans bloc ou sans scan connu, seulement s il est au moins aussi
+ *   recent que le plafond (la page, puis le plus recent evenement de chaine vu). PUR : evts, etat precedent (null au premier passage),
+ *   la reponse, ms depuis le chargement, horloge locale (repli si le serveur ne dit pas `maintenant`). */
+function journalAPulser(evts, avant, j, ecoule, horloge) {
+  const liste = Array.isArray(evts) ? evts : [];
+  const scanRecu = Number.isSafeInteger(j && j.scanJusqua) ? j.scanJusqua : null;
+  const plusHautT = (l, de) => l.reduce((m, e) => (Number.isSafeInteger(e.baseBlock) && Number.isFinite(e.t) && e.t > m ? e.t : m), de);
+  let neufs, plafond, scan;
+  if (avant === null || !avant || !(avant.vus instanceof Set)) {
+    const maintenant = Number(j && j.maintenant) || 0, page = (maintenant || Number(horloge) || 0) - (Number(ecoule) || 0);
+    neufs = maintenant ? liste.filter((e) => maintenant - e.t <= ecoule) : [];
+    plafond = plusHautT(liste, page);
+    scan = scanRecu;
+  } else {
+    neufs = liste.filter((e) => !avant.vus.has(e.id) && (Number.isSafeInteger(e.baseBlock) && avant.scan !== null ? e.baseBlock > avant.scan : e.t >= avant.plafond));
+    plafond = plusHautT(liste, avant.plafond);
+    scan = avant.scan === null ? scanRecu : (scanRecu === null ? avant.scan : Math.max(avant.scan, scanRecu));
+  }
+  return { neufs, etat: { vus: new Set(liste.map((e) => e.id)), plafond, scan } };
+}
 async function peindreJournalMap() {
   if (!mapVisible() || journalEnCours) return;
   journalEnCours = true;
   try {
     const j = await lireJournal();
     if (!j) return;
-    let neufs;
-    if (journalVus === null) {
-      const ecoule = performance.now(), maintenant = Number(j.maintenant) || 0;
-      neufs = maintenant ? journal.filter((e) => maintenant - e.t <= ecoule) : [];
-    } else neufs = journal.filter((e) => !journalVus.has(e.id));
-    journalVus = new Set(journal.map((e) => e.id));
+    const r = journalAPulser(journal, journalVus, j, performance.now(), Date.now());
+    const neufs = r.neufs;
+    journalVus = r.etat;
     /* au plus 3 par passage (les plus recents), espaces */
     for (const e of neufs.slice(0, 3)) {
       if (e.kind === 'practice') continue;
