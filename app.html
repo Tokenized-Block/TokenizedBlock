@@ -8981,6 +8981,7 @@ function motJournal(e) {
   if (e.kind === 'pass') return 'pass';
   if (e.kind === 'skin_bid') return 'bid';
   if (e.kind === 'skin_sold' || e.kind === 'skin_minted') return 'skin';
+  if (e.kind === 'mission') return 'mission';
   return e.kind === 'duel' ? 'duel' : '';
 }
 function lignesJournal(ol, evts) {

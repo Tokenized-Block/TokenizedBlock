@@ -30,6 +30,9 @@ const { topic } = await import(pathToFileURL(path.join(ICI, 'keccak.js')).href);
 const { BLOCKROLLS_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'blockrolls-deploiement.js')).href);
 const { BLOCKSKINS } = await import(pathToFileURL(path.join(ICI, 'blockskins-actif.js')).href);
 
+const { DUELS_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'duels-deploiement.js')).href);
+const { MISSIONS_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'missions-deploiement.js')).href);
+const DUELS_ADR = String(DUELS_DEPLOIEMENT.adresse).toLowerCase(), MISSIONS_ADR = String(MISSIONS_DEPLOIEMENT.adresse).toLowerCase();
 const ROLLS = String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase(), SKINS = String(BLOCKSKINS).toLowerCase();
 const AUTRE = '0x' + 'de'.repeat(20), USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const W1 = '0x' + '12'.repeat(19) + 'ab', W2 = '0x' + '34'.repeat(20), W3 = '0x' + '56'.repeat(20);
@@ -105,7 +108,8 @@ async function serieA(M, nom) {
   /* practice */
   const p = M.evenementsPractice([{ t: 5, bloc: 52771493, score: 3 }, { t: 6, bloc: 0, score: 3 }, { t: 7, bloc: 1, score: 9 }]);
   ok(p.length === 1 && p[0].kind === 'practice' && p[0].wallet === null && p[0].text === 'Practice roll · 3/5 on block 52,771,493', nom + ' : practice (forme fausse ignoree)');
-  ok(M.GENRES.includes('duel') && M.SOURCE_DUELS === null, nom + ' : crochet des duels type, sans source (aucune donnee inventee)');
+  /* 2026-10-23 : BlockDuels et BlockMissionsV3 sont LIVE — leurs genres sont lus (test-journal-couverture-20261023.mjs les decode) */
+  ok(M.GENRES.includes('duel') && M.GENRES.includes('mission') && !('SOURCE_DUELS' in M), nom + ' : genres duel + mission, plus de crochet vide');
 }
 
 console.log('— A. module pur');
@@ -229,11 +233,12 @@ if (demarre) {
   let j = null;
   for (let i = 0; i < 40; i++) {
     try { j = await (await fetch(srv + '/api/jeu/journal', { signal: AbortSignal.timeout(5000) })).json(); } catch (_) { j = null; }
-    if (j && j.ok && Array.isArray(j.evenements) && j.evenements.some((e) => e.kind !== 'practice')) break;
+    /* 2026-10-23 : attendre que le curseur ait LU les blocs des faux logs (le Settled rendu a CHAQUE fenetre arrive des la premiere) */
+    if (j && j.ok && Array.isArray(j.evenements) && j.evenements.some((e) => e.kind !== 'practice') && Number(j.scanJusqua) >= BASE + 8) break;
     await new Promise((o) => setTimeout(o, 500));
   }
   const forme = j && j.ok === true && /^J\d{4}-\d{2}-\d{2}$/.test(j.jour) && typeof j.lu === 'string' && Number.isFinite(j.maintenant) && 'couvertureDepuis' in j && typeof j.couvreLaJournee === 'boolean'
-    && Number.isSafeInteger(j.scanJusqua) && j.sources && j.sources.rolls === ROLLS && j.sources.duels === null && Array.isArray(j.evenements);
+    && Number.isSafeInteger(j.scanJusqua) && j.sources && j.sources.rolls === ROLLS && j.sources.duels === DUELS_ADR && j.sources.missions === MISSIONS_ADR && Array.isArray(j.evenements);
   ok(forme, 'GET /api/jeu/journal : la forme (ok, jour, lu, maintenant, couvertureDepuis, couvreLaJournee, scanJusqua, sources, evenements) — lu : ' + JSON.stringify(j && Object.keys(j)));
   if (forme) {
     const ev = j.evenements, kinds = ev.map((e) => e.kind).join(',');
