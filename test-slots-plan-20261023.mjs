@@ -1,9 +1,9 @@
 /* test-slots-plan-20261023.mjs — LES APPELS NON SIGNES DE BlockSlots SONT CEUX QUE LE CONTRAT COMPILE ATTEND.
  * AFFIRME : (1) selecteurs spin/settle/settleMany/expire/fund/pot/pointsOf/wonOf/prizes/spins/settleableUntil = methodIdentifiers de
  *   l artefact forge (si present), et les signatures Spun / Settled / Expired = l ABI compilee ; (2) planSpins : UN approve EXACT de
- *   N x prix (jamais infini) au jeton USDC pour le contrat + N spin(), N <= 10, prix 0 refuse ; (3) fenetre : cible -> TROP_TOT,
- *   cible+1..cible+256 -> REGLABLE, cible+257 -> PERDU ; settle refuse hors fenetre ; settleMany encode un uint256[] ; (4) decodage :
- *   Spun et Settled d un recu (les 3 faces, les points, le gain, le cumul du wallet), spins(id), prizes() ; (5) Denim : 256 blocs = 512 s
+ *   N x prix (jamais infini) au jeton USDC pour le contrat + N spin(), N <= 10, prix 0 refuse ; (3) fenetre v2 : cible..cible+2 ->
+ *   TROP_TOT, cible+3..cible+256 -> REGLABLE, cible+257 -> PERDU ; settle refuse hors fenetre ; settleMany encode un uint256[] ; (4) decodage :
+ *   Spun et Settled d un recu (les 3 hashes, les 3 faces, les points, le gain, le cumul du wallet), spins(id), prizes() ; (5) Denim : 256 blocs = 512 s
  *   a 2 s, 51,2 s a 200 ms ; (6) MUTANT : l approve d UN seul spin pour un lot -> l assertion de l approve exact ROUGIT. */
 import { strict as assert } from 'node:assert';
 import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
@@ -38,9 +38,9 @@ vu(S.planSpins({ contrat: 'pas une adresse', usdc: USDC, n: 1, spinPrice: 1 }).e
 vu(!/f{64}/.test(lot.appels[0].data), 'jamais d approbation infinie');
 
 /* (3) */
-vu(S.etatReglement(1002, 1002).etat === 'TROP_TOT' && S.etatReglement(1002, 1003).etat === 'REGLABLE' && S.etatReglement(1002, 1258).etat === 'REGLABLE' && S.etatReglement(1002, 1259).etat === 'PERDU', 'fenetre : cible, cible+1, cible+256, cible+257');
-vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1002 }).etat === 'REFUSE' && S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1259 }).etat === 'REFUSE', 'settle hors fenetre refuse');
-vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1003 }).appels[0].data === selecteur(S.SIG_SETTLE) + mot(3), 'settle(3) encode');
+vu(S.etatReglement(1002, 1002).etat === 'TROP_TOT' && S.etatReglement(1002, 1004).etat === 'TROP_TOT' && S.etatReglement(1002, 1005).etat === 'REGLABLE' && S.etatReglement(1002, 1258).etat === 'REGLABLE' && S.etatReglement(1002, 1259).etat === 'PERDU', 'fenetre v2 : cible..cible+2 trop tot, cible+3..cible+256 reglable, cible+257 perdu');
+vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1004 }).etat === 'REFUSE' && S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1259 }).etat === 'REFUSE', 'settle hors fenetre refuse (cible + 2, cible + 257)');
+vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1005 }).appels[0].data === selecteur(S.SIG_SETTLE) + mot(3), 'settle(3) encode');
 vu(S.planSettleMany({ contrat: C, spinIds: [4, 9] }).appels[0].data === selecteur(S.SIG_SETTLE_MANY) + mot(32) + mot(2) + mot(4) + mot(9) && S.planSettleMany({ contrat: C, spinIds: [] }).etat === 'REFUSE', 'settleMany([4, 9]) encode ; vide refuse');
 vu(S.planExpire({ contrat: C, spinId: 7 }).appels[0].data === selecteur(S.SIG_EXPIRE) + mot(7), 'expire(7)');
 vu(S.planFund({ contrat: C, usdc: USDC, montant: 0 }).etat === 'REFUSE' && S.planFund({ contrat: C, usdc: USDC, montant: 9 }).appels[0].data === '0x095ea7b3' + mot(C) + mot(9) && S.planFund({ contrat: C, usdc: USDC, montant: 9 }).appels[1].data === selecteur(S.SIG_FUND) + mot(9), 'fund : 0 refuse ; approve EXACT + fund');
@@ -51,10 +51,10 @@ const logS = { address: C, topics: [topic(S.EV_SPUN), '0x' + mot(12), '0x' + mot
 const sp = S.lireSpunTous([logS, { ...logS, address: A('dd') }], C);
 vu(sp.length === 1 && sp[0].spinId === 12n && sp[0].player === A('a1') && sp[0].targetBlock === 1002 && sp[0].toPot === 250000n, 'Spun decode (et le meme log d un AUTRE contrat est ignore)');
 const faces = [[1, 2, 3, 4, 5], [1, 2, 0, 4, 6], [1, 9, 3, 0, 7]];
-const H = '0x' + 'ab'.repeat(32);
-const logT = { address: C, topics: [topic(S.EV_SETTLED), '0x' + mot(12), '0x' + mot(A('a1'))], data: '0x' + mot(H) + faces.flat().map(mot).join('') + [6, 5000000, 1234, 40].map(mot).join('') };
+const H3 = ['ab', 'cd', 'ef'].map((x) => '0x' + x.repeat(32));
+const logT = { address: C, topics: [topic(S.EV_SETTLED), '0x' + mot(12), '0x' + mot(A('a1'))], data: '0x' + H3.map(mot).join('') + faces.flat().map(mot).join('') + [6, 5000000, 1234, 40].map(mot).join('') };
 const st = S.lireSettledTous([logT], C);
-vu(st.length === 1 && st[0].blockHash === H && JSON.stringify(st[0].faces) === JSON.stringify(faces) && st[0].points === 6 && st[0].payout === 5000000n && st[0].potAfter === 1234n && st[0].playerPoints === 40n, 'Settled decode : hash, 3 faces, points, gain, pot apres, cumul du wallet');
+vu(st.length === 1 && JSON.stringify(st[0].blockHashes) === JSON.stringify(H3) && JSON.stringify(st[0].faces) === JSON.stringify(faces) && st[0].points === 6 && st[0].payout === 5000000n && st[0].potAfter === 1234n && st[0].playerPoints === 40n, 'Settled decode : les 3 hashes (un par bloc), 3 faces, points, gain, pot apres, cumul du wallet');
 vu(S.points(faces) === 6, 'les points recalcules sur les faces du log = ceux du log (brelan + brelan... ici 3 + 1 + 1 + 1 = 6)');
 vu(S.lireSettledTous([{ ...logT, data: logT.data.slice(0, -64) }], C).length === 0, 'Settled tronque : ignore');
 const spin = S.lireSpin('0x' + mot(A('a1')) + mot(1002) + mot(1));

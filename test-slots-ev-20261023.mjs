@@ -3,7 +3,8 @@
  *   les 65 536 valeurs de 2 octets, % 10 / 19 / 9 / 8 sur un octet) = la constante de contracts/src/BlockSlots.sol distribution(), case par
  *   case ; elle somme a 2^144 ; 14 points a une probabilite nulle ; (2) une ENUMERATION directe, sans la formule (les 6^3 x 10^3 x ... par
  *   trait, comptees triplet par triplet), rend la meme loi par trait ; (3) l esperance de la table de contracts/slots-parametres.json =
- *   151 707 brut (0,151707 USDC) = celle que forge lit sur le contrat (test_EsperanceDeLaTable) = esperanceBrut de la fiche ; elle est
+ *   127 862 brut (0,127862 USDC ; v2 2026-10-23, table plafonnee a 5 USDC) = celle que forge lit sur le contrat (test_EsperanceDeLaTable)
+ *   = esperanceBrut de la fiche ; la loi par face ne change pas avec trois blocs (chaque face reste lue dans une graine keccak distincte) ; elle est
  *   STRICTEMENT sous la part du pot (0,25) ; (4) refusTable a le MEME bord que le constructeur (lim admis, lim + 1 refuse) ; (5) un
  *   ECHANTILLON de 6 000 spins (faces calculees comme le contrat, hashes au hasard) tombe dans 5 ecarts-types de la loi exacte pour 0..4
  *   points ; (6) MUTANTS (copies a cote de la source, effacees) : une paire comptee 2, une facette modulo 18 -> l egalite au contrat ROUGIT.
@@ -50,9 +51,9 @@ vu(conv.slice(0, 16).every((v, k) => v === num[k]), 'enumeration triplet par tri
 
 /* (3) */
 const ev = S.esperance(P.prizes);
-vu(ev.brut === 151707n && ev.probGainBps === 2105, 'esperance de la table : 151 707 brut (0,151707 USDC), 21,05 % des spins gagnent');
-vu(/assertEq\(bs\.expectedPayout\(\), 151_707\);/.test(readFileSync(new URL('./contracts/test/BlockSlots.t.sol', import.meta.url), 'utf8')), 'forge lit la meme esperance sur le contrat compile (test_EsperanceDeLaTable)');
-vu(D.esperanceBrut === '151707' && D.probGainBps === 2105 && JSON.stringify(D.constructeur.prizes) === JSON.stringify(P.prizes), 'la fiche porte la table des parametres et la meme esperance');
+vu(ev.brut === 127862n && ev.probGainBps === 2105, 'esperance de la table : 127 862 brut (0,127862 USDC), 21,05 % des spins paient quelque chose');
+vu(/assertEq\(bs\.expectedPayout\(\), 127_862\);/.test(readFileSync(new URL('./contracts/test/BlockSlots.t.sol', import.meta.url), 'utf8')), 'forge lit la meme esperance sur le contrat compile (test_EsperanceDeLaTable)');
+vu(D.esperanceBrut === '127862' && D.probGainBps === 2105 && JSON.stringify(D.constructeur.prizes) === JSON.stringify(P.prizes), 'la fiche porte la table des parametres et la meme esperance');
 vu(ev.num * 10000n < BigInt(P.spinPrice) * BigInt(P.potShareBps) * den, 'esperance STRICTEMENT sous la part du pot (0,25 USDC) : le pot grossit en moyenne');
 vu(S.refusTable({ table: P.prizes, spinPrice: P.spinPrice, potShareBps: P.potShareBps }).length === 0, 'la table des parametres est admise');
 
@@ -68,7 +69,7 @@ vu(S.refusTable({ table: P.prizes, spinPrice: 0, potShareBps: P.potShareBps }).l
 
 /* (5) echantillon : 6 000 spins, hashes au hasard, faces calculees comme le contrat */
 const N = 6000, compte = new Array(16).fill(0);
-for (let i = 0; i < N; i++) { const h = '0x' + randomBytes(32).toString('hex'); compte[S.points(S.facesDuSpin(h, i + 1))] += 1; }
+for (let i = 0; i < N; i++) { const hs = [0, 1, 2].map(() => '0x' + randomBytes(32).toString('hex')); compte[S.points(S.facesDuSpin(hs, i + 1))] += 1; }
 for (let k = 0; k <= 4; k++) {
   const p = Number((num[k] * 1000000n) / den) / 1e6, sigma = Math.sqrt(N * p * (1 - p));
   vu(Math.abs(compte[k] - N * p) < 5 * sigma, k + ' point(s) : ' + compte[k] + ' observes, ' + (N * p).toFixed(0) + ' attendus (5 sigma = ' + (5 * sigma).toFixed(0) + ')');

@@ -203,7 +203,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
  *   sinon [data-slots] (0,2,0) battrait .jeuBandeau (0,1,0) a 375 px) */
 .jeuBandeau[data-slots="1"]{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media (max-width:520px){.jeuBandeau[data-slots="1"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
-/* LES SLOTS (2026-10-23) : trois faces cote a cote (aucun texte sur les faces) ; les accords par trait en dessous */
+/* LES SLOTS (2026-10-23) : trois faces cote a cote (seul le numero 1, 2, 3 de la face est dessine dessus) ; les accords par trait en dessous */
 .slotsFaces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0;max-width:340px}
 .slotsFaces .jourFace{width:100%;height:auto;aspect-ratio:1/1;flex:none;border-radius:14px}
 .slotsAccords{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0 0;font-size:12.5px;color:var(--doux)}
@@ -3855,8 +3855,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="duelForme" style="margin:6px 0 0" hidden></p>
     </div>
     <!-- SLOTS (Phil 2026-10-23 : « 3 faces random independantes, tirees au moment de la tx ; des points quand des faces sont les memes ; un
-         bon reward de la pool, comme une machine a sous ») — BlockSlots. Le hash du bloc spin + 2 donne TROIS faces (une graine chacune) ;
-         par trait, 3 egales = 3 points, 2 egales = 1 ; un prix FIXE par points, plafonne par le pot ; les points s additionnent par wallet.
+         bon reward de la pool, comme une machine a sous ») — BlockSlots. Les blocs spin + 2, + 3, + 4 donnent UNE face chacun (v2, Phil
+         2026-10-23) ; par trait, 3 egales = 3 points, 2 egales = 1 ; le contrat paie un prix FIXE par points, 0..5 USDC par spin, plafonne
+         par le pot ; les points s additionnent par wallet (un compteur on-chain, pas un gain).
          ⛔ CACHEE tant que /api/slots ne sert pas de contrat : rien de payant ne se montre avant. Chaque chiffre est lu (fiche, chaine) ou
          CALCULE (loi exacte, slots-plan.js) ; une lecture ratee dit « not read ». -->
     <div class="carte" id="slotsCarte" hidden>
@@ -3877,7 +3878,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <details style="margin:8px 0 0">
         <summary class="note" style="cursor:pointer">Odds and prizes</summary>
-        <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th></tr></thead><tbody></tbody></table>
+        <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th><th>Pays now</th></tr></thead><tbody></tbody></table>
+        <p class="note" id="slotsTableNote" style="margin:4px 0 0"></p>
       </details>
     </div>
     <!-- EARN (Phil 19:40 : « ajoute la partie earn ») : ce que ce wallet a GAGNE, lu — part de createur due (registre), tirages gagnes (hier),
@@ -6354,12 +6356,14 @@ setTimeout(bjRelire, 30000);
  *   les memes ; apres des points, un bon reward de la pool, comme une machine a sous »). Contrat BlockSlots (contracts/src/BlockSlots.sol).
  *   LECTURE : /api/slots (la fiche : contrat, prix, part du pot, table) ; le pot, les points et les gains du wallet par eth_call ; les spins
  *   EN ATTENTE de ce wallet relus sur la chaine (Spun du joueur sur une fenetre BORNEE de ~300 blocs, puis spins(id)) — rien n est garde
- *   dans le navigateur. Un spin reglable montre ses trois faces AVANT le settle (le hash du bloc cible est public), calculees comme le
- *   contrat (slots-plan.js facesDuSpin). ACTIONS : Spin (approve EXACT + spin), Settle (settleMany des spins reglables). Le wallet signe.
+ *   dans le navigateur. Un spin reglable montre ses trois faces AVANT le settle (les hashes des blocs cible, + 1, + 2 sont publics), calculees
+ *   comme le contrat (slots-plan.js facesDuSpin). ACTIONS : Spin (approve EXACT + spin), Settle (settleMany des spins reglables). Le wallet signe.
+ *   v2 (verdict adverse + Phil 2026-10-23) : D1 tuile et table plafonnees par le pot lu ; D2 « paient quelque chose » ET « rendent la mise » ;
+ *   R2 Settle sans repeint avant la signature, et un recu sans Settled dit « window closed » ; les points = un compteur, le gain = par spin.
  *   ⛔ Sans contrat servi : carte et tuile CACHEES (aucun bouton mort). ⛔ Rien n est promis : chaque chiffre est lu, ou calcule (loi exacte).
  *   Place APRES « Let the brain play » : les bancs des duels et du brain lisent des tranches bornees par leurs titres.
  *   NON MESURE : un spin reel sur Base (contrat non deploye a l ecriture de ce code). */
-const slotsCfg = { j: null, lu: 0, enVol: null, enCours: false, dernier: null, table: false, minuteur: null };
+const slotsCfg = { j: null, lu: 0, enVol: null, enCours: false, dernier: null, table: false, minuteur: null, attente: null, peint: null };
 const SLOTS_TRAITS = ['colour', 'orbit', 'facet', 'material', 'ornament'];
 const slotsContrat = (j) => (j && j.ok && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
 async function lireSlotsServis(force = false) {
@@ -6372,13 +6376,13 @@ async function lireSlotsServis(force = false) {
   })();
   try { return await slotsCfg.enVol; } finally { slotsCfg.enVol = null; }
 }
-/* les trois faces (graines du hash du bloc cible et de l id) dans les trois cases ; null = cases vides en pointille */
-function peindreFacesSlots(hash, spinId) {
+/* les trois faces (v2 : la face r sur le hash du bloc cible + r, et l id) dans les trois cases ; null = cases vides en pointille */
+function peindreFacesSlots(hashes, spinId) {
   const cases = [...document.querySelectorAll('#slotsFaces .jourFace')], acc = $('#slotsAccords');
-  const faces = hash ? Slots.facesDuSpin(hash, spinId) : null;
+  const faces = hashes ? Slots.facesDuSpin(hashes, spinId) : null;
   cases.forEach((el, r) => {
     let svg = '';
-    if (faces) { try { const f = faceRevelee(Slots.graine(hash, spinId, r)); svg = f ? logoSvg(paramsLogoDepuisApparence(f, String(r + 1))) : ''; } catch (_) { svg = ''; } }
+    if (faces) { try { const f = faceRevelee(Slots.graine(hashes[r], spinId, r)); svg = f ? logoSvg(paramsLogoDepuisApparence(f, String(r + 1))) : ''; } catch (_) { svg = ''; } }
     el.innerHTML = svg; el.dataset.gagne = svg ? '1' : '0';
   });
   if (acc) {
@@ -6387,16 +6391,32 @@ function peindreFacesSlots(hash, spinId) {
   }
   return faces;
 }
-function remplirTableSlots(j) {
-  const corps = $('#slotsTable tbody');
-  if (!corps || slotsCfg.table) return;
+/* D1 (verdict 2026-10-23) : la table dit le prix de la table ET ce qu il paie MAINTENANT (min(prix, pot)) ; repeinte quand le pot change */
+function remplirTableSlots(j, pot) {
+  const corps = $('#slotsTable tbody'), note = $('#slotsTableNote');
+  if (!corps) return;
+  const cle = String(pot);
+  if (slotsCfg.table === cle) return;
   const { num, den } = Slots.distributionExacte();
   const chance = (v) => { if (v === 0n) return 'impossible'; const x = Number((v * 10n ** 12n) / den) / 1e12; return x >= 0.001 ? (x * 100).toFixed(2) + '%' : '1 in ' + Math.round(1 / x).toLocaleString('en-US'); };
-  num.forEach((v, k) => { const tr = document.createElement('tr'); for (const t of [String(k), chance(v), usdcTexte(BigInt(j.prizes[k]))]) { const td = document.createElement('td'); td.textContent = t; tr.append(td); } corps.append(tr); });
-  slotsCfg.table = true;
+  corps.textContent = '';
+  num.forEach((v, k) => {
+    const maint = Slots.paieMaintenant(BigInt(j.prizes[k]), pot);
+    const tr = document.createElement('tr');
+    for (const t of [String(k), chance(v), usdcTexte(BigInt(j.prizes[k])), maint === null ? 'not read' : usdcTexte(maint)]) { const td = document.createElement('td'); td.textContent = t; tr.append(td); }
+    corps.append(tr);
+  });
+  if (note) note.textContent = 'Prizes are capped by the pot: "Pays now" is what each prize pays if a spin is settled now' + (pot === null ? ' (the pot was not read).' : ', with ' + usdcTexte(pot) + ' USDC in the pot.');
+  slotsCfg.table = cle;
 }
 const lireUintSlots = async (to, data) => { try { return Slots.lireUint(await rpc('eth_call', [{ to, data }, 'latest'])); } catch (_) { return null; } };
-async function peindreSlots(force = false) {
+/* un seul repeint a la fois (le minuteur de 3 s, l intervalle de 20 s et l onglet peuvent se croiser) : un appel pendant un repeint attend celui-ci */
+function peindreSlots(force = false) {
+  if (slotsCfg.peint) return slotsCfg.peint;
+  slotsCfg.peint = peindreSlotsUneFois(force).finally(() => { slotsCfg.peint = null; });
+  return slotsCfg.peint;
+}
+async function peindreSlotsUneFois(force = false) {
   const carte = $('#slotsCarte'), tuile = $('#jbSlotsTuile');
   if (!carte) return null;
   const j = await lireSlotsServis(force);
@@ -6406,20 +6426,26 @@ async function peindreSlots(force = false) {
   const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.slots = on ? '1' : '0';
   if (!on) return null;
   const prix = BigInt(j.prixSpin), table = j.prizes.map((x) => BigInt(x)), part = Number(j.potShareBps);
-  jb('jbSlots', usdcTexte(prix) + ' USDC'); jb('jbSlotsTxt', 'three faces · up to ' + usdcTexte(table[15]));
+  /* le plus haut prix de la table (5 USDC au plus, le contrat le borne) ; D2 : les chances et la moyenne sont CALCULEES (loi exacte) */
+  const haut = table[table.length - 1], ev = Slots.esperance(table, prix);
+  const pot = await lireUintSlots(contrat, Slots.appelPot());
+  /* D1 : la tuile dit ce que le pot PEUT payer (min(plus haut prix, pot)), pas le prix brut de la table */
+  jb('jbSlots', usdcTexte(prix) + ' USDC');
+  if (pot === null) jb('jbSlotsTxt', 'three faces · up to ' + usdcTexte(haut) + ', capped by the pot');
+  else jb('jbSlotsTxt', 'three faces · up to ' + usdcTexte(Slots.paieMaintenant(haut, pot)) + ' now');
   const rg = $('#slotsRegle');
-  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% to the slots pot, ' + ((10000 - part) / 100) + '% to TokenizedBlock. The block 2 blocks later gives three faces. For each trait, all three the same scores 3, two the same scores 1. Points pay a fixed prize, never more than the pot holds; on average a spin pays back '
-    + usdcTexte(BigInt(j.esperanceBrut)) + ' USDC and ' + (Number(j.probGainBps) / 100).toFixed(2) + '% of spins win something. Settle within ' + Slots.FENETRE + ' blocks — about ' + (Slots.secondesFenetre(2000) / 60).toFixed(1) + ' min at 2-second blocks, about ' + Math.round(Slots.secondesFenetre(200)) + ' s at 200 ms blocks — or the spin is lost, no refund.';
-  remplirTableSlots(j);
+  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% to the slots pot, ' + ((10000 - part) / 100) + '% to TokenizedBlock. The three faces come from three different blocks: the blocks 2, 3 and 4 blocks later give one face each. For each trait, all three the same scores 3, two the same scores 1. The contract judges the spin when it is settled and pays its prize itself: a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '
+    + (ev.probGainBps / 100).toFixed(2) + '% of spins pay something, but only ' + (ev.probMiseBps / 100).toFixed(2) + '% pay back at least the ' + usdcTexte(prix) + ' USDC stake. On average a spin pays back ' + usdcTexte(BigInt(j.esperanceBrut)) + ' USDC — less while the pot holds less than ' + usdcTexte(haut) + ' USDC. '
+    + 'Your points are a running total kept on chain; prizes are paid per spin, points pay nothing on their own. Settle within ' + Slots.FENETRE + ' blocks of the first face block — about ' + (Slots.secondesFenetre(2000) / 60).toFixed(1) + ' min at 2-second blocks, about ' + Math.round(Slots.secondesFenetre(200)) + ' s at 200 ms blocks — or the spin is lost, no refund.';
+  remplirTableSlots(j, pot);
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null;
   const bS = $('#slotsSpin'), bR = $('#slotsRegler'), etat = $('#slotsEtat'), mien = $('#slotsMoi');
   bS.textContent = 'Spin · ' + usdcTexte(prix) + ' USDC';
   bS.hidden = !moi; bS.disabled = slotsCfg.enCours;
-  const pot = await lireUintSlots(contrat, Slots.appelPot());
   if (!moi) { bR.hidden = true; etat.textContent = 'Pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect a wallet to spin.'; mien.textContent = ''; return null; }
   const [pts, gagne] = await Promise.all([lireUintSlots(contrat, Slots.appelPointsDe(moi)), lireUintSlots(contrat, Slots.appelGagneDe(moi))]);
-  mien.textContent = 'Your points: ' + (pts === null ? 'not read' : pts.toString()) + ' · won ' + (gagne === null ? 'not read' : usdcTexte(gagne) + ' USDC') + ' · pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC');
+  mien.textContent = 'Your points (a running total, no prize of its own): ' + (pts === null ? 'not read' : pts.toString()) + ' · won ' + (gagne === null ? 'not read' : usdcTexte(gagne) + ' USDC') + ' · pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC');
   /* les spins en attente : les Spun de ce wallet sur ~300 blocs, puis leur statut relu */
   let enAttente = null, tete = null;
   try {
@@ -6430,20 +6456,27 @@ async function peindreSlots(force = false) {
     for (const s of spuns) { let st = null; try { const v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(s.spinId) }, 'latest'])); st = v ? v.status : null; } catch (_) { st = null; } statuts.set(String(s.spinId), st); }
     enAttente = Slots.etatSpins({ spuns, statuts, tete });
   } catch (_) { enAttente = null; }
-  if (enAttente === null) { bR.hidden = true; etat.textContent = 'Your pending spins could not be read just now.'; return null; }
+  if (enAttente === null) { bR.hidden = true; slotsCfg.attente = null; etat.textContent = 'Your pending spins could not be read just now.'; return null; }
+  /* R2 : le chemin Settle part de CETTE lecture (spins relus en attente), sans repeindre avant la signature */
+  slotsCfg.attente = enAttente.filter((x) => x.etat !== 'NON_LU');
   const reglables = enAttente.filter((x) => x.etat === 'REGLABLE'), tot = enAttente.filter((x) => x.etat === 'TROP_TOT'), nonLus = enAttente.filter((x) => x.etat === 'NON_LU');
   bR.hidden = reglables.length === 0;
   if (reglables.length) {
     const r0 = reglables[reglables.length - 1];
     bR.textContent = 'Settle ' + (reglables.length === 1 ? 'spin #' + r0.id : reglables.length + ' spins');
-    let hash = null; try { const b = await rpc('eth_getBlockByNumber', ['0x' + Number(r0.t).toString(16), false]); hash = b && b.hash ? String(b.hash) : null; } catch (_) { hash = null; }
-    const faces = hash ? peindreFacesSlots(hash, r0.id) : null;
+    /* v2 : les TROIS blocs du spin (cible, + 1, + 2), un hash chacun ; un seul illisible = pas de faces montrees */
+    let hashes = null;
+    try {
+      const bs = await Promise.all(Slots.blocsDesFaces(r0.t).map((n) => rpc('eth_getBlockByNumber', ['0x' + n.toString(16), false])));
+      hashes = bs.every((b) => b && b.hash) ? bs.map((b) => String(b.hash)) : null;
+    } catch (_) { hashes = null; }
+    const faces = hashes ? peindreFacesSlots(hashes, r0.id) : null;
     const p = faces ? Slots.points(faces) : null;
-    const gain = p === null ? null : (pot === null ? null : (table[p] < pot ? table[p] : pot));
-    etat.textContent = (faces ? 'Spin #' + r0.id + ': ' + p + ' point' + (p === 1 ? '' : 's') + (gain === null ? ' — the pot was not read, the prize is at most ' + usdcTexte(table[p]) + ' USDC.' : gain > 0n ? ' → ' + usdcTexte(gain) + ' USDC.' : ', no prize.') : 'Spin #' + r0.id + ' is ready; its block was not read just now.')
+    const gain = p === null ? null : Slots.paieMaintenant(table[p], pot);
+    etat.textContent = (faces ? 'Spin #' + r0.id + ': ' + p + ' point' + (p === 1 ? '' : 's') + (gain === null ? ' — the pot was not read, the prize is at most ' + usdcTexte(table[p]) + ' USDC.' : gain > 0n ? ' → ' + usdcTexte(gain) + ' USDC' + (gain < table[p] ? ' (the pot caps the ' + usdcTexte(table[p]) + ' USDC prize; only you can accept that).' : '.') : ', no prize.') : 'Spin #' + r0.id + ' is ready; its blocks were not read just now.')
       + ' Settle within ' + Math.min(...reglables.map((x) => x.blocsRestants)) + ' block(s), or it is lost.';
   } else if (tot.length) {
-    etat.textContent = 'Spin #' + tot[tot.length - 1].id + ': its block comes in ' + tot[tot.length - 1].blocsAvant + ' block(s).';
+    etat.textContent = 'Spin #' + tot[tot.length - 1].id + ': its three blocks are in after ' + tot[tot.length - 1].blocsAvant + ' more block(s).';
     peindreFacesSlots(null, 0);
   } else if (nonLus.length) etat.textContent = nonLus.length + ' recent spin(s) could not be read just now.';
   else if (slotsCfg.dernier) etat.textContent = slotsCfg.dernier;
@@ -6461,28 +6494,43 @@ async function slotsAgir(quoi) {
   slotsCfg.enCours = true; $('#slotsSpin').disabled = true; $('#slotsRegler').disabled = true;
   try {
     let plan;
+    let aRegler = [];
     if (quoi === 'spin') plan = Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: BigInt(j.prixSpin) });
     else {
-      /* relu JUSTE avant de construire l appel : seuls les spins reglables MAINTENANT */
-      const p = await peindreSlots(true);
-      const ids = p && p.enAttente ? p.enAttente.filter((x) => x.etat === 'REGLABLE').map((x) => x.id) : [];
-      if (!ids.length) { dit('Nothing to settle right now — nothing was asked.'); return; }
-      plan = Slots.planSettleMany({ contrat, spinIds: ids });
+      /* SETTLE (R2, verdict 2026-10-23) : la fenetre peut ne durer que ~51 s (Denim). AUCUN repeint ici (getLogs, blocs, statuts) avant la
+       *   signature : les spins en attente viennent de la derniere lecture de la carte (repeinte toutes les 3 s tant qu un spin attend),
+       *   la tete est relue UNE fois, et seuls les spins reglables a cette tete partent. Un spin deja regle entre-temps est saute par le
+       *   contrat (settleMany), sans revert. */
+      const tete = parseInt(await rpc('eth_blockNumber', []), 16);
+      aRegler = (slotsCfg.attente || []).map((x) => ({ ...x, ...Slots.etatReglement(x.t, tete) })).filter((x) => x.etat === 'REGLABLE');
+      if (!aRegler.length) { dit('Nothing to settle right now — nothing was asked.'); return; }
+      plan = Slots.planSettleMany({ contrat, spinIds: aRegler.map((x) => x.id) });
+      if (plan.etat === 'PRET') { const reste = Math.min(...aRegler.map((x) => x.blocsRestants)); dit('Confirm in your wallet now: ' + reste + ' block(s) left — about ' + Math.round((Slots.secondesFenetre(200) * reste) / Slots.FENETRE) + ' s at 200 ms blocks.'); }
     }
     if (plan.etat !== 'PRET') { dit((quoi === 'spin' ? 'Not spun: ' : 'Not settled: ') + plan.pourquoi); return; }
-    dit('Confirm in your wallet…');
+    if (quoi === 'spin') dit('Confirm in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, quoi === 'spin' ? 'Not spun' : 'Not settled')); return; }
     const { logs } = await recusLogs(r);
     if (quoi === 'spin') {
       const sp = Slots.lireSpunTous(logs, contrat).filter((s) => s.player === moi);
       slotsCfg.dernier = null;
-      dit(sp.length ? 'Spin #' + sp[0].spinId + ' is in: block ' + sp[0].targetBlock + ' draws your three faces.' : 'Sent; the spin was not read in the receipt — it shows up here once read.');
+      dit(sp.length ? 'Spin #' + sp[0].spinId + ' is in: blocks ' + Slots.blocsDesFaces(sp[0].targetBlock).join(', ') + ' draw your three faces, one each.' : 'Sent; the spin was not read in the receipt — it shows up here once read.');
     } else {
       const st = Slots.lireSettledTous(logs, contrat);
       const d = st[st.length - 1];
-      if (d) { peindreFacesSlots(d.blockHash, d.spinId); slotsCfg.dernier = 'Spin #' + d.spinId + ': ' + d.points + ' point' + (d.points === 1 ? '' : 's') + (d.payout > 0n ? ', ' + usdcTexte(d.payout) + ' USDC paid to your wallet.' : ', no prize.') + (st.length > 1 ? ' (' + st.length + ' spins settled.)' : ''); dit(slotsCfg.dernier); }
-      else dit('Sent; no settled spin was read in the receipt.');
+      if (d) { peindreFacesSlots(d.blockHashes, d.spinId); slotsCfg.dernier = 'Spin #' + d.spinId + ': ' + d.points + ' point' + (d.points === 1 ? '' : 's') + (d.payout > 0n ? ', ' + usdcTexte(d.payout) + ' USDC paid to your wallet by the contract.' : ', no prize.') + (st.length > 1 ? ' (' + st.length + ' spins settled.)' : ''); dit(slotsCfg.dernier); }
+      else {
+        /* R2 : un recu sans Settled — relire chaque spin envoye : encore en attente apres sa fenetre = PERDU, et le dire tel quel */
+        let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+        const perdus = [];
+        for (const x of aRegler) {
+          let v = null; try { v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(x.id) }, 'latest'])); } catch (_) { v = null; }
+          if (v && v.status === 1 && tete !== null && Slots.etatReglement(x.t, tete).etat === 'PERDU') perdus.push(x.id);
+        }
+        slotsCfg.dernier = perdus.length ? 'Spin #' + perdus.join(', #') + ': the ' + Slots.FENETRE + '-block window closed before your settle was included — lost, no refund.' : null;
+        dit(slotsCfg.dernier || 'Sent; no settled spin was read in the receipt.');
+      }
     }
   } finally {
     slotsCfg.enCours = false; $('#slotsSpin').disabled = false; $('#slotsRegler').disabled = false;

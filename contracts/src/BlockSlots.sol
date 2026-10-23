@@ -2,12 +2,14 @@
 pragma solidity ^0.8.24;
 
 /// @title BlockSlots -- une machine a sous a TROIS faces de bloc (idee de Phil, 2026-10-23).
-/// @notice Le joueur paie un spin (USDC, prix fixe). Le hasard est le hash d un bloc FUTUR (targetBlock = bloc du spin + 2) : ni le joueur
-///         ni nous ne le choisissons. Au settle, TROIS faces INDEPENDANTES en sortent : face_r = faceOf(keccak256(abi.encode(hash, spinId, r)))
-///         pour r = 0, 1, 2 -- la meme derivation a 5 traits que BlockRolls (face-du-jour.js faceRevelee + apparence.js), appliquee a trois
-///         graines distinctes. Pour chacun des 5 traits : les 3 faces egales = 3 points, 2 egales = 1 point, sinon 0. Le gain est un PRIX
-///         FIXE par nombre de points du spin (table de 16 cases, 0..15 points), PLAFONNE par le pot au settle. Les points s ADDITIONNENT par
-///         wallet, sur la chaine (pointsOf).
+/// @notice Le joueur paie un spin (USDC, prix fixe). Le hasard vient de TROIS blocs FUTURS (targetBlock = bloc du spin + 2, puis + 1, + 2) :
+///         ni le joueur ni nous ne les choisissons. Au settle, chaque face sort de SON bloc (Phil 2026-10-23 : « 3 blocs differents, chaque
+///         face de son propre blockhash ») : face_r = faceOf(keccak256(abi.encode(blockhash(targetBlock + r), spinId, r))) pour r = 0, 1, 2
+///         -- la meme derivation a 5 traits que BlockRolls (face-du-jour.js faceRevelee + apparence.js). Le settle attend les TROIS hashes
+///         (bloc > targetBlock + 2) et reste dans la fenetre de 256 blocs du PREMIER. Pour chacun des 5 traits : les 3 faces egales = 3 points,
+///         2 egales = 1 point, sinon 0. Le CONTRAT juge le resultat au settle et paie lui-meme un PRIX FIXE par nombre de points (table de 16
+///         cases, 0..15 points), entre 0 et 5 USDC AU PLUS par spin (MAX_PRIZE), PLAFONNE aussi par le pot. Les points s ADDITIONNENT par wallet,
+///         sur la chaine (pointsOf) : un COMPTEUR affiche, pas un gain -- le gain est PAR SPIN.
 /// @dev ⛔ CE QUI EST GRAVE ICI, ET POURQUOI :
 ///   - AUCUN proprietaire, AUCUN retrait, AUCUNE regle modifiable : la table des prix est fixee a la construction. L USDC ne sort du pot que
 ///     par un settle gagnant, au joueur du spin.
@@ -21,7 +23,11 @@ pragma solidity ^0.8.24;
 ///     un remboursement laisserait le joueur regler ses gagnants et se faire rembourser ses perdants -- l avantage de la maison deviendrait
 ///     celui du joueur. Un spin perdu ne bloque aucun fonds : sa part est DEJA au pot et au dev depuis le spin ; expire() le marque.
 ///     Le brief de l orchestrateur demandait un remboursement ; il est refuse ici pour cette raison, et c est dit dans le rapport.
-///   - le hash du bloc cible est produit par le SEQUENCEUR de Base : meme confiance que BlockRolls, dite, pas cachee.
+///   - ⛔ R1 (verdict adverse 2026-10-23) : un gain PLAFONNE par le pot ne peut etre accepte que par le JOUEUR. Un tiers qui regle un spin
+///     dont le prix depasse le pot recoit PotShort (settle) ou voit le spin saute (settleMany) : il ne peut plus vider le pot puis clore le
+///     gain d un autre au rabais. Avec un pot suffisant, n importe qui regle, et le gain va toujours au joueur.
+///   - les hashes des trois blocs sont produits par le SEQUENCEUR de Base : meme confiance que BlockRolls, dite, pas cachee. Trois blocs
+///     differents ne retirent pas cette confiance (le meme sequenceur les produit) ; ils rendent les trois faces independantes entre elles.
 contract BlockSlots {
     /* ---------------------------------------------------------------- constantes de la face (celles de BlockRolls) */
     uint8 public constant BANDS = 6;
@@ -34,10 +40,13 @@ contract BlockSlots {
     /* 5 traits x 3 points (les trois faces egales) */
     uint8 public constant MAX_POINTS = 15;
     uint16 internal constant BPS = 10_000;
-    uint64 public constant MAX_PRIZE = 1000_000000;
+    /* (Phil 2026-10-23) le gain d UN spin : 0..5 USDC, jamais plus, quelle que soit la table */
+    uint64 public constant MAX_PRIZE = 5_000000;
+    uint256 public constant MAX_SPIN_PRICE = 1000_000000;
     uint256 public constant TARGET_DELAY = 2;
-    /* ⛔ DENIM : blockhash() ne lit que les 256 derniers blocs. 256 blocs = ~8,5 min a 2 s/bloc, ~51 s a 200 ms/bloc (Denim). settleMany(ids)
-     *    par n importe qui ; settleableUntil(id) dit jusqu a quel bloc. */
+    /* ⛔ DENIM : blockhash() ne lit que les 256 derniers blocs. 256 blocs = ~8,5 min a 2 s/bloc, ~51 s a 200 ms/bloc (Denim). Les faces lisent
+     *    targetBlock, +1, +2 : le settle passe de targetBlock + 3 a targetBlock + 256 (la fenetre du PREMIER hash). settleMany(ids) par
+     *    n importe qui ; settleableUntil(id) dit jusqu a quel bloc. */
     uint256 public constant SETTLE_WINDOW = 256;
     /* la distribution exacte est sur 2^144 = (65536 x 256^4)^3 : 2 octets pour la teinte, 1 octet par autre trait, trois faces */
     uint256 public constant DIST_DENOM = 1 << 144;
@@ -73,8 +82,8 @@ contract BlockSlots {
     /* ---------------------------------------------------------------- evenements */
     event Funded(address indexed from, uint256 amount, uint256 potAfter);
     event Spun(uint256 indexed spinId, address indexed player, uint256 targetBlock, uint256 toPot, uint256 toDev);
-    /// @dev faces[r] = [colorBand, orbit, facet, material, ornament] de la face r
-    event Settled(uint256 indexed spinId, address indexed player, bytes32 blockHash, uint8[5][3] faces, uint8 points, uint256 payout, uint256 potAfter, uint256 playerPoints);
+    /// @dev blockHashes[r] = blockhash(targetBlock + r) ; faces[r] = [colorBand, orbit, facet, material, ornament] de la face r
+    event Settled(uint256 indexed spinId, address indexed player, bytes32[3] blockHashes, uint8[5][3] faces, uint8 points, uint256 payout, uint256 potAfter, uint256 playerPoints);
     event Expired(uint256 indexed spinId, address indexed player);
 
     /* ---------------------------------------------------------------- erreurs */
@@ -85,6 +94,8 @@ contract BlockSlots {
     error TooLate();
     error StillSettleable();
     error HashUnavailable();
+    /// @dev R1 : le pot ne couvre pas le prix ; seul le JOUEUR peut accepter un gain plafonne (un tiers ne le force pas)
+    error PotShort();
     error TransferFailed();
     error Reentrancy();
 
@@ -106,7 +117,7 @@ contract BlockSlots {
 
     constructor(Config memory c) {
         if (c.usdc == address(0) || c.usdc.code.length == 0 || c.devWallet == address(0)) revert BadConfig();
-        if (c.spinPrice == 0 || c.spinPrice > MAX_PRIZE || c.potShareBps == 0 || c.potShareBps > BPS) revert BadConfig();
+        if (c.spinPrice == 0 || c.spinPrice > MAX_SPIN_PRICE || c.potShareBps == 0 || c.potShareBps > BPS) revert BadConfig();
         /* un palier plus haut ne paie jamais moins (sinon viser moins de points rapporterait plus) ; le plus haut est borne, donc tous */
         if (c.prizes[MAX_POINTS] > MAX_PRIZE) revert BadConfig();
         for (uint256 k = 1; k <= MAX_POINTS; k++) if (c.prizes[k] < c.prizes[k - 1]) revert BadConfig();
@@ -179,7 +190,7 @@ contract BlockSlots {
     /* ================================================================ spin */
 
     /// @notice un spin paye : SPIN_PRICE (approve EXACT cote app), POT_SHARE_BPS au pot, le reste au DEV_WALLET tout de suite.
-    ///         Le hasard : le hash du bloc block.number + 2, qui n existe pas encore.
+    ///         Le hasard : les hashes des blocs block.number + 2, + 3 et + 4, qui n existent pas encore (une face chacun).
     function spin() external nonReentrant returns (uint256 spinId) {
         spinId = ++spinCount;
         uint40 t = uint40(block.number + TARGET_DELAY);
@@ -194,39 +205,56 @@ contract BlockSlots {
 
     /* ================================================================ settle / expire */
 
-    /// @notice APPELABLE PAR TOUS : le gain va TOUJOURS au joueur du spin, jamais a l appelant.
+    /// @notice APPELABLE PAR TOUS : le gain va TOUJOURS au joueur du spin, jamais a l appelant. Le contrat juge (faces, points) et paie.
+    ///         ⛔ R1 : si le pot ne couvre pas le prix, seul le JOUEUR peut regler (il accepte alors le pot) ; un tiers recoit PotShort.
     function settle(uint256 spinId) external nonReentrant returns (uint8 points, uint256 payout) {
         Spin storage s = spins[spinId];
         if (s.status != Status.Pending) revert NotPending();
         uint256 t = s.targetBlock;
-        if (block.number <= t) revert TooEarly();
+        if (block.number <= t + (REELS - 1)) revert TooEarly();
         if (block.number > t + SETTLE_WINDOW) revert TooLate();
-        bytes32 h = blockhash(t);
-        if (h == bytes32(0)) revert HashUnavailable();
-        return _settle(spinId, s, h);
+        (bool lu, bytes32[3] memory h) = _hashes(t);
+        if (!lu) revert HashUnavailable();
+        bool fait;
+        (fait, points, payout) = _settle(spinId, s, h);
+        if (!fait) revert PotShort();
     }
 
     /// @notice plusieurs spins en une transaction, par n importe qui. Un spin non reglable (pas en attente, trop tot, hors fenetre, hash
-    ///         illisible) est SAUTE, jamais la raison d un revert du lot. Rend le nombre regles.
+    ///         illisible, ou pot court quand l appelant n est pas le joueur) est SAUTE, jamais la raison d un revert du lot. Rend le nombre regles.
     function settleMany(uint256[] calldata ids) external nonReentrant returns (uint256 done) {
         for (uint256 i = 0; i < ids.length; i++) {
             Spin storage s = spins[ids[i]];
             if (s.status != Status.Pending) continue;
             uint256 t = s.targetBlock;
-            if (block.number <= t || block.number > t + SETTLE_WINDOW) continue;
-            bytes32 h = blockhash(t);
-            if (h == bytes32(0)) continue;
-            _settle(ids[i], s, h);
-            done++;
+            if (block.number <= t + (REELS - 1) || block.number > t + SETTLE_WINDOW) continue;
+            (bool lu, bytes32[3] memory h) = _hashes(t);
+            if (!lu) continue;
+            (bool fait,,) = _settle(ids[i], s, h);
+            if (fait) done++;
         }
     }
 
-    function _settle(uint256 spinId, Spin storage s, bytes32 h) internal returns (uint8 points, uint256 payout) {
+    /// @dev les trois hashes : blockhash(t), blockhash(t + 1), blockhash(t + 2) ; faux si l un est illisible (0)
+    function _hashes(uint256 t) internal view returns (bool lu, bytes32[3] memory h) {
+        for (uint256 r = 0; r < REELS; r++) {
+            h[r] = blockhash(t + r);
+            if (h[r] == bytes32(0)) return (false, h);
+        }
+        lu = true;
+    }
+
+    /// @dev rend fait = false SANS rien ecrire quand le pot est court et que l appelant n est pas le joueur (R1)
+    function _settle(uint256 spinId, Spin storage s, bytes32[3] memory h) internal returns (bool fait, uint8 points, uint256 payout) {
         uint8[5][3] memory f = facesOf(h, spinId);
         points = pointsFor(f);
         payout = _prizes[points];
-        if (payout > pot) payout = pot;
         address player = s.player;
+        if (payout > pot) {
+            if (msg.sender != player) return (false, points, 0);
+            payout = pot;
+        }
+        fait = true;
         s.status = Status.Settled;
         pot -= payout;
         uint256 total = pointsOf[player] + points;
@@ -254,15 +282,15 @@ contract BlockSlots {
 
     /* ================================================================ lectures pures (pour l app et la parite) */
 
-    /// @notice la graine de la face `reel` d un spin : keccak256(abi.encode(blockHash, spinId, reel)). L id rend deux spins du meme bloc
-    ///         independants (sinon tous les joueurs d un bloc auraient les memes trois faces).
+    /// @notice la graine de la face `reel` d un spin : keccak256(abi.encode(blockHash, spinId, reel)), blockHash = celui du bloc
+    ///         targetBlock + reel. L id rend deux spins des memes blocs independants (sinon tous les joueurs d un bloc auraient les memes faces).
     function seedOf(bytes32 blockHash, uint256 spinId, uint256 reel) public pure returns (bytes32) {
         return keccak256(abi.encode(blockHash, spinId, reel));
     }
 
-    /// @notice les trois faces d un spin
-    function facesOf(bytes32 blockHash, uint256 spinId) public pure returns (uint8[5][3] memory f) {
-        for (uint256 r = 0; r < REELS; r++) f[r] = faceOf(seedOf(blockHash, spinId, r));
+    /// @notice les trois faces d un spin : la face r sur le hash de SON bloc (blockHashes[r] = blockhash(targetBlock + r))
+    function facesOf(bytes32[3] memory blockHashes, uint256 spinId) public pure returns (uint8[5][3] memory f) {
+        for (uint256 r = 0; r < REELS; r++) f[r] = faceOf(seedOf(blockHashes[r], spinId, r));
     }
 
     /// @notice par trait : 3 faces egales = 3 points, 2 egales = 1 point

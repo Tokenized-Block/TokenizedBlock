@@ -44,13 +44,13 @@ b[data-k]{color:var(--or)}
 <main>
   <span class="kicker">TokenizedBlock · Block Slots</span>
   <h1>Three block faces. One spin.</h1>
-  <p class="note">A spin draws three block faces from the hash of a Base block two blocks ahead. Faces that match, trait by trait, score points; points pay a fixed prize from the slots pot. One signature from your wallet opens the game on Base. This page sends nothing by itself. This is a paid game of chance: the decision to run it, and its compliance, is the owner's.</p>
+  <p class="note">A spin draws three block faces from three different Base blocks — two, three and four blocks ahead, one face each. Faces that match, trait by trait, score points; the contract judges the spin when it is settled and pays a fixed prize from the slots pot itself. One signature from your wallet opens the game on Base. This page sends nothing by itself. This is a paid game of chance: the decision to run it, and its compliance, is the owner's.</p>
 
   <h2>How it works</h2>
   <div class="grille">
-    <div class="tuile" style="--c:var(--cyan)"><div class="num">01 · THE SPIN</div><h3><b data-k="spin">…</b> USDC a spin</h3><p><b data-k="potShare">…</b>% goes to the slots pot, <b data-k="devShare">…</b>% to TokenizedBlock at once. The block two ahead gives three faces, each from its own seed.</p></div>
-    <div class="tuile" style="--c:var(--or)"><div class="num">02 · THE POINTS</div><h3>Trait by trait</h3><p>For each of the five traits: all three faces the same scores 3, two the same scores 1. Up to 15 points a spin. Your points add up on chain.</p></div>
-    <div class="tuile" style="--c:var(--rose)"><div class="num">03 · THE PRIZE</div><h3>Up to <b data-k="top">…</b> USDC</h3><p>A fixed prize per points of the spin, never more than the pot holds. On average a spin pays back <b data-k="ev">…</b> USDC; <b data-k="pWin">…</b>% of spins win something.</p></div>
+    <div class="tuile" style="--c:var(--cyan)"><div class="num">01 · THE SPIN</div><h3><b data-k="spin">…</b> USDC a spin</h3><p><b data-k="potShare">…</b>% goes to the slots pot, <b data-k="devShare">…</b>% to TokenizedBlock at once. The three faces come from three different blocks, each face from its own block hash.</p></div>
+    <div class="tuile" style="--c:var(--or)"><div class="num">02 · THE POINTS</div><h3>Trait by trait</h3><p>For each of the five traits: all three faces the same scores 3, two the same scores 1. Up to 15 points a spin. Your points add up on chain as a running total; they pay nothing on their own — prizes are paid per spin.</p></div>
+    <div class="tuile" style="--c:var(--rose)"><div class="num">03 · THE PRIZE</div><h3>Up to <b data-k="top">…</b> USDC a spin, capped by the pot</h3><p>A fixed prize per points of the spin, from 0 to <b data-k="top">…</b> USDC, never more than the pot holds. <b data-k="pWin">…</b>% of spins pay something, but only <b data-k="pMise">…</b>% pay back at least the <b data-k="spin">…</b> USDC stake. On average a spin pays back <b data-k="ev">…</b> USDC, less while the pot holds less than <b data-k="top">…</b> USDC.</p></div>
   </div>
 
   <h2>The prize table</h2>
@@ -64,8 +64,9 @@ b[data-k]{color:var(--or)}
     <ul>
       <li>No owner. Nobody can take the pot: it pays out only through settled spins, to the player of the spin. The prize table cannot be changed after deployment.</li>
       <li>The contract refuses to deploy a table whose average payout is not strictly below the share that enters the pot: on average a spin grows the pot.</li>
-      <li>No refund. A spin not settled within <b data-k="window">…</b> blocks after its target block is lost — about <b data-k="minutesNow">…</b> minutes at 2-second blocks, about <b data-k="secondsDenim">…</b> seconds once Base moves to 200 ms blocks (Denim). A refund would let a player settle winners and take back losers, since the block hash is public. Anyone can settle any spin, in batches.</li>
-      <li>The faces come from the hash of a Base block. No player, no server and no owner chooses it; the Base sequencer, which builds the blocks, is the one party that could.</li>
+      <li>At most 5 USDC a spin: the contract refuses a prize table above that. When the pot cannot cover a prize, only the spin's player can settle it and accept what the pot holds; anyone else is refused, so nobody can close another player's win at a discount.</li>
+      <li>No refund. A spin is settled once its three blocks exist, and not later than <b data-k="window">…</b> blocks after its first block, or it is lost — about <b data-k="minutesNow">…</b> minutes at 2-second blocks, about <b data-k="secondsDenim">…</b> seconds once Base moves to 200 ms blocks (Denim). A refund would let a player settle winners and take back losers, since the block hash is public. Anyone can settle any spin, in batches.</li>
+      <li>The faces come from the hashes of three Base blocks, one face each. No player, no server and no owner chooses them; the Base sequencer, which builds the blocks, is the one party that could.</li>
       <li>Each face is computed on chain exactly like the app draws a block face: the same keccak, six colour bands, ten orbits, nineteen facets, nine materials and eight ornaments.</li>
     </ul>
   </div>
@@ -121,9 +122,9 @@ const C = D.constructeur;
 const NOMS = { usdc: 'USDC', devWallet: 'TokenizedBlock wallet (dev share)', spinPrice: 'Spin price (raw USDC)', potShareBps: 'Share to the pot (bps)', prizes: 'Prizes for 0..15 points (raw USDC)' };
 let compte = null, intacte = false, envoi = false, adresse = D.adresse || null;
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
-const ev = esperance(C.prizes);
+const ev = esperance(C.prizes, C.spinPrice);
 const MOTS = { spin: usdc6(C.spinPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - Number(C.potShareBps)), top: usdc6(C.prizes[15]),
-  ev: usdc6(ev.brut), pWin: (ev.probGainBps / 100).toFixed(2), window: String(FENETRE),
+  ev: usdc6(ev.brut), pWin: (ev.probGainBps / 100).toFixed(2), pMise: (ev.probMiseBps / 100).toFixed(2), window: String(FENETRE),
   minutesNow: (secondesFenetre(2000) / 60).toFixed(1), secondsDenim: String(Math.round(secondesFenetre(200))) };
 for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
 {

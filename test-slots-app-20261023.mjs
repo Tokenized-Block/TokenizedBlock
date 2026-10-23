@@ -25,14 +25,15 @@ const checks = {
   aucunBoutonMort: (t) => { const c = carteHtml(t); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c) && /<button type="button" class="bouton" id="slotsSpin" hidden>/.test(c) && /id="slotsRegler" hidden>/.test(c); },
   spinCacheSansWallet: (t) => /bS\.hidden = !moi;/.test(bloc(t)),
   settleSeulementReglable: (t) => /bR\.hidden = reglables\.length === 0;/.test(bloc(t)) && /if \(enAttente === null\) \{ bR\.hidden = true;/.test(bloc(t)),
-  chiffresServis: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return /const prix = BigInt\(j\.prixSpin\), table = j\.prizes\.map/.test(b) && /usdcTexte\(BigInt\(j\.esperanceBrut\)\)/.test(b) && /Number\(j\.probGainBps\)/.test(b)
+  chiffresServis: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return /const prix = BigInt\(j\.prixSpin\), table = j\.prizes\.map/.test(b) && /usdcTexte\(BigInt\(j\.esperanceBrut\)\)/.test(b) && /ev = Slots\.esperance\(table, prix\)/.test(b)
     && !/\b(500000|250000|0\.50|0\.15|1000)\b/.test(b) && /Slots\.secondesFenetre\(2000\)/.test(b) && /Slots\.secondesFenetre\(200\)/.test(b); },
   nonLu: (t) => { const b = bloc(t); return (b.match(/pot === null \? 'not read'/g) || []).length === 2 && /pts === null \? 'not read'/.test(b) && /gagne === null \? 'not read'/.test(b) && /Your pending spins could not be read just now\./.test(b); },
   fenetreBornee: (t) => /de: Slots\.debutFenetreSpins\(tete, j\.bloc\), jusqua: tete/.test(bloc(t)) && !/localStorage|sessionStorage|indexedDB/.test(bloc(t)),
   spinExact: (t) => /plan = Slots\.planSpin\(\{ contrat, usdc: USDC_BASE, spinPrice: BigInt\(j\.prixSpin\) \}\)/.test(bloc(t)),
-  settleRelu: (t) => { const b = bloc(t); const i = b.indexOf('const p = await peindreSlots(true);'), k = b.indexOf("filter((x) => x.etat === 'REGLABLE').map((x) => x.id)"), m = b.indexOf('plan = Slots.planSettleMany({ contrat, spinIds: ids });'); return i > 0 && k > i && m > k; },
+  /* v2 (R2) : la tete est relue juste avant, seuls les spins reglables A CETTE TETE partent (sans repeindre la carte, test-slots-v2) */
+  settleRelu: (t) => { const b = bloc(t); const i = b.indexOf("const tete = parseInt(await rpc('eth_blockNumber', []), 16);"), k = b.indexOf("Slots.etatReglement(x.t, tete) })).filter((x) => x.etat === 'REGLABLE')"), m = b.indexOf('plan = Slots.planSettleMany({ contrat, spinIds: aRegler.map((x) => x.id) });'); return i > 0 && k > i && m > k; },
   envoiUnique: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return (b.match(/envoyerAppels\(/g) || []).length === 1 && !/eth_sendTransaction|envoyerDepuisWallet|wallet_sendCalls/.test(b); },
-  facesDuContrat: (t) => /faceRevelee\(Slots\.graine\(hash, spinId, r\)\)/.test(bloc(t)) && /logoSvg\(paramsLogoDepuisApparence\(f, String\(r \+ 1\)\)\)/.test(bloc(t)) && /Slots\.facesDuSpin\(hash, spinId\)/.test(bloc(t)),
+  facesDuContrat: (t) => /faceRevelee\(Slots\.graine\(hashes\[r\], spinId, r\)\)/.test(bloc(t)) && /logoSvg\(paramsLogoDepuisApparence\(f, String\(r \+ 1\)\)\)/.test(bloc(t)) && /Slots\.facesDuSpin\(hashes, spinId\)/.test(bloc(t)),
   importServi: (t) => /^import \* as Slots from '\.\/slots-plan\.js';$/m.test(t),
   bandeauTelephone: (t) => /@media \(max-width:520px\)\{\.jeuBandeau\[data-slots="1"\]\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}\}/.test(t),
 };
@@ -43,13 +44,13 @@ const mutants = [
   ['aucunBoutonMort', '<button type="button" class="bouton" id="slotsSpin" hidden>', '<button type="button" class="bouton" id="slotsSpin" disabled>'],
   ['spinCacheSansWallet', 'bS.hidden = !moi;', 'bS.hidden = false;'],
   ['settleSeulementReglable', 'bR.hidden = reglables.length === 0;', 'bR.hidden = false;'],
-  ['chiffresServis', "usdcTexte(BigInt(j.esperanceBrut)) + ' USDC and '", "'0.15 USDC and '"],
+  ['chiffresServis', "usdcTexte(BigInt(j.esperanceBrut)) + ' USDC — less", "'0.15 USDC — less"],
   ['nonLu', "pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect", "usdcTexte(pot || 0n) + ' USDC') + '. Connect"],
   ['fenetreBornee', 'de: Slots.debutFenetreSpins(tete, j.bloc), jusqua: tete', 'de: j.bloc, jusqua: tete'],
   ['spinExact', 'plan = Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: BigInt(j.prixSpin) });', 'plan = Slots.planSpins({ contrat, usdc: USDC_BASE, n: 1, spinPrice: 2n ** 255n });'],
-  ['settleRelu', 'const p = await peindreSlots(true);', 'const p = slotsCfg.dernierEtat;'],
+  ['settleRelu', "Slots.etatReglement(x.t, tete) })).filter((x) => x.etat === 'REGLABLE')", "{ etat: 'REGLABLE' } }))"],
   ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, quoi', 'const r = await envoyerDepuisWallet(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, quoi'],
-  ['facesDuContrat', 'faceRevelee(Slots.graine(hash, spinId, r))', 'faceRevelee(hash)'],
+  ['facesDuContrat', 'faceRevelee(Slots.graine(hashes[r], spinId, r))', 'faceRevelee(Slots.graine(hashes[0], spinId, r))'],
   ['bandeauTelephone', '@media (max-width:520px){.jeuBandeau[data-slots="1"]{grid-template-columns:repeat(2,minmax(0,1fr))}}', ''],
 ];
 /* un motif unique dans la page est mute dans la page ; un motif partage avec les duels (meme phrase) est mute DANS le bloc des slots seulement */
@@ -85,7 +86,7 @@ vu(D.adresse === null && D.bloc === null, 'fiche : adresse et bloc nuls (pas dep
 /* (7) etatSpins, pur */
 const spuns = [{ spinId: 1n, targetBlock: 100 }, { spinId: 2n, targetBlock: 100 }, { spinId: 3n, targetBlock: 100 }, { spinId: 4n, targetBlock: 300 }];
 const e = S.etatSpins({ spuns, statuts: new Map([['1', 1], ['2', 2], ['3', null], ['4', 1]]), tete: 200 });
-vu(e.length === 3 && e[0].id === '1' && e[0].etat === 'REGLABLE' && e[0].blocsRestants === 156 && e[1].id === '3' && e[1].etat === 'NON_LU' && e[2].etat === 'TROP_TOT' && e[2].blocsAvant === 101, 'etatSpins : regle saute, non lu = NON_LU, a venir = TROP_TOT');
+vu(e.length === 3 && e[0].id === '1' && e[0].etat === 'REGLABLE' && e[0].blocsRestants === 156 && e[1].id === '3' && e[1].etat === 'NON_LU' && e[2].etat === 'TROP_TOT' && e[2].blocsAvant === 103, 'etatSpins : regle saute, non lu = NON_LU, a venir = TROP_TOT (v2 : jusqu au 3e bloc, cible + 3 - tete)');
 vu(S.etatSpins({ spuns: [{ spinId: 1n, targetBlock: 100 }], statuts: new Map([['1', 1]]), tete: 357 })[0].etat === 'PERDU', 'etatSpins : cible + 257 = PERDU');
 vu(S.debutFenetreSpins(10000, 0) === 10000 - 256 - 2 - 40 && S.debutFenetreSpins(10000, 9900) === 9900, 'fenetre : tete - 298, jamais avant le deploiement');
 const f = S.filtreSpunDe({ contrat: '0x' + 'cc'.repeat(20), joueur: '0x' + 'a1'.repeat(20), de: 9702, jusqua: 10000 });

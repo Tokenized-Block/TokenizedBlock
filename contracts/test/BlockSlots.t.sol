@@ -75,7 +75,7 @@ contract BlockSlotsTest is Test {
 
     uint256 constant SPIN = 500_000;
     /* la table de contracts/slots-parametres.json (0..15 points), en USDC brut */
-    uint64[16] TABLE = [uint64(0), 0, 0, 250_000, 750_000, 2_000_000, 5_000_000, 10_000_000, 25_000_000, 50_000_000, 100_000_000, 250_000_000, 500_000_000, 1000_000_000, 1000_000_000, 1000_000_000];
+    uint64[16] TABLE = [uint64(0), 0, 0, 250_000, 750_000, 2_000_000, 3_000_000, 4_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000, 5_000_000];
 
     event Spun(uint256 indexed spinId, address indexed player, uint256 targetBlock, uint256 toPot, uint256 toDev);
     event Expired(uint256 indexed spinId, address indexed player);
@@ -112,10 +112,20 @@ contract BlockSlotsTest is Test {
         vm.stopPrank();
     }
 
+    /// @dev trois hashes distincts tires d un seul (pour les tests qui n epinglent pas les faces)
+    function _deriver(bytes32 h) internal pure returns (bytes32[3] memory d) {
+        d[0] = h;
+        d[1] = keccak256(abi.encode(h, uint256(1)));
+        d[2] = keccak256(abi.encode(h, uint256(2)));
+    }
+
+    /// @dev pose les hashes des blocs cible, +1, +2 et avance au premier bloc ou le spin se regle (cible + 3)
     function _revele(uint256 id, bytes32 h) internal {
-        (, uint40 t,) = bs.spins(id);
-        vm.roll(uint256(t) + 1);
-        vm.setBlockhash(t, h);
+        _reveleTrois(id, _deriver(h));
+    }
+
+    function _poserTrois(uint256 t, bytes32[3] memory h) internal {
+        for (uint256 r = 0; r < 3; r++) vm.setBlockhash(t + r, h[r]);
     }
 
     /* ------------------------------------------------------------ configuration */
@@ -162,7 +172,7 @@ contract BlockSlotsTest is Test {
     /// @dev ⛔ l avantage de la maison : une table dont l esperance atteint la part du pot est REFUSEE par le constructeur
     function test_EsperanceTropHauteRefusee() public {
         BlockSlots.Config memory c = _cfg(address(usdc));
-        c.prizes[3] = 1_000_000; c.prizes[4] = 1_000_000; c.prizes[5] = 2_000_000; /* 3 points : 0,136 x 1 = 0,136 deja, total > 0,25 */
+        c.prizes[3] = 1_200_000; c.prizes[4] = 1_200_000; c.prizes[5] = 2_000_000; /* 3 points : 0,136 x 1,2 = 0,163 deja, total ~0,28 > 0,25 */
         _refuse(c);
         /* la meme table passe si toute la mise va au pot (esperance < 0,50) */
         c.potShareBps = 10_000;
@@ -196,8 +206,9 @@ contract BlockSlotsTest is Test {
     }
 
     function test_EsperanceDeLaTable() public view {
-        /* 0,151707 USDC par spin (151 707 brut, arrondi vers le bas), recalcule par test-slots-ev en node */
-        assertEq(bs.expectedPayout(), 151_707);
+        /* 0,127862 USDC par spin (127 862 brut, arrondi vers le bas), recalcule par test-slots-ev et test-slots-v2 en node */
+        assertEq(bs.expectedPayout(), 127_862);
+        assertLt(bs.expectedPayout(), SPIN, "esperance strictement sous le prix");
         assertLt(bs.expectedPayout() * 10_000, SPIN * 5000, "esperance < part du pot (0,25)");
     }
 
@@ -245,7 +256,7 @@ contract BlockSlotsTest is Test {
     function test_SettleDernierBlocDeLaFenetre() public {
         uint256 id = _spin(JOUEUR);
         vm.roll(1002 + 256);
-        vm.setBlockhash(1002, keccak256("dernier"));
+        _poserTrois(1002, _deriver(keccak256("dernier")));
         assertEq(bs.settleableUntil(id), 1258);
         bs.settle(id);
         assertEq(bs.settleableUntil(id), 0);
@@ -301,8 +312,17 @@ contract BlockSlotsTest is Test {
 
     function test_SettleHashNulRefuse() public {
         uint256 id = _spin(JOUEUR);
-        vm.roll(1003);
-        vm.setBlockhash(1002, bytes32(0));
+        vm.roll(1005);
+        vm.setBlockhash(1002, keccak256("h0"));
+        vm.setBlockhash(1003, keccak256("h1"));
+        vm.setBlockhash(1004, bytes32(0)); /* le TROISIEME hash illisible suffit a refuser */
+        vm.expectRevert(BlockSlots.HashUnavailable.selector);
+        bs.settle(id);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        assertEq(bs.settleMany(ids), 0, "le lot saute un spin a hash illisible");
+        vm.setBlockhash(1004, keccak256("h2"));
+        vm.setBlockhash(1002, bytes32(0)); /* le PREMIER aussi */
         vm.expectRevert(BlockSlots.HashUnavailable.selector);
         bs.settle(id);
     }
@@ -325,15 +345,16 @@ contract BlockSlotsTest is Test {
         assertEq(bs.pointsFor(_f([1, 2, 3, 4, 5], [1, 2, 3, 0, 0], [1, 2, 3, 0, 0])), 11, "3 brelans + 2 paires : 11");
     }
 
-    /// @dev les graines « slotsN » (keccak256 de la chaine, spin #1) donnent 0..9 points : trouvees par test-slots-parite en node
+    /// @dev les graines « v2slotsN » (trois hashes _trois(graine), spin #1) donnent 0..10 points : trouvees et recalculees par
+    ///      test-slots-parite en node. Le JOUEUR regle (il peut accepter un gain plafonne par le pot, R1).
     function _paiePourGraine(string memory graine, uint8 pointsAttendus, uint256 don) internal returns (uint256 gain, uint256 potAvant) {
         if (don != 0) _fund(don);
         uint256 id = _spin(JOUEUR);
         assertEq(id, 1);
         potAvant = bs.pot();
-        bytes32 h = keccak256(bytes(graine));
-        _revele(id, h);
+        _reveleTrois(id, _trois(graine));
         uint256 j0 = usdc.balanceOf(JOUEUR);
+        vm.prank(JOUEUR);
         (uint8 p, uint256 pay) = bs.settle(id);
         assertEq(p, pointsAttendus, "points");
         gain = usdc.balanceOf(JOUEUR) - j0;
@@ -345,19 +366,21 @@ contract BlockSlotsTest is Test {
         assertEq(bs.wonOf(JOUEUR), gain);
     }
 
-    function test_Points0Rien() public { (uint256 g,) = _paiePourGraine("slots1", 0, 100_000_000); assertEq(g, 0); }
-    function test_Points2Rien() public { (uint256 g,) = _paiePourGraine("slots8", 2, 100_000_000); assertEq(g, 0); }
-    function test_Points3() public { (uint256 g,) = _paiePourGraine("slots13", 3, 100_000_000); assertEq(g, 250_000); }
-    function test_Points4() public { (uint256 g,) = _paiePourGraine("slots10", 4, 100_000_000); assertEq(g, 750_000); }
-    function test_Points5() public { (uint256 g,) = _paiePourGraine("slots82", 5, 100_000_000); assertEq(g, 2_000_000); }
-    function test_Points6() public { (uint256 g,) = _paiePourGraine("slots33", 6, 100_000_000); assertEq(g, 5_000_000); }
-    function test_Points7() public { (uint256 g,) = _paiePourGraine("slots1368", 7, 100_000_000); assertEq(g, 10_000_000); }
-    function test_Points8() public { (uint256 g,) = _paiePourGraine("slots637", 8, 100_000_000); assertEq(g, 25_000_000); }
-    function test_Points9() public { (uint256 g,) = _paiePourGraine("slots18837", 9, 100_000_000); assertEq(g, 50_000_000); }
+    function test_Points0Rien() public { (uint256 g,) = _paiePourGraine("v2slots4", 0, 100_000_000); assertEq(g, 0); }
+    function test_Points1Rien() public { (uint256 g,) = _paiePourGraine("v2slots1", 1, 100_000_000); assertEq(g, 0); }
+    function test_Points2Rien() public { (uint256 g,) = _paiePourGraine("v2slots3", 2, 100_000_000); assertEq(g, 0); }
+    function test_Points3() public { (uint256 g,) = _paiePourGraine("v2slots16", 3, 100_000_000); assertEq(g, 250_000); }
+    function test_Points4() public { (uint256 g,) = _paiePourGraine("v2slots0", 4, 100_000_000); assertEq(g, 750_000); }
+    function test_Points5() public { (uint256 g,) = _paiePourGraine("v2slots24", 5, 100_000_000); assertEq(g, 2_000_000); }
+    function test_Points6() public { (uint256 g,) = _paiePourGraine("v2slots314", 6, 100_000_000); assertEq(g, 3_000_000); }
+    function test_Points7() public { (uint256 g,) = _paiePourGraine("v2slots6", 7, 100_000_000); assertEq(g, 4_000_000); }
+    function test_Points8() public { (uint256 g,) = _paiePourGraine("v2slots12083", 8, 100_000_000); assertEq(g, 5_000_000); }
+    function test_Points9() public { (uint256 g,) = _paiePourGraine("v2slots3465", 9, 100_000_000); assertEq(g, 5_000_000); }
+    function test_Points10() public { (uint256 g,) = _paiePourGraine("v2slots292116", 10, 100_000_000); assertEq(g, 5_000_000, "10 points : 5 USDC, le plafond"); }
 
     function test_GainPlafonneParLePot() public {
-        /* pot = 0,25 (le spin seul) : 9 points (50 USDC) ne touchent que 0,25 */
-        (uint256 g, uint256 p0) = _paiePourGraine("slots18837", 9, 0);
+        /* pot = 0,25 (le spin seul) : 9 points (5 USDC) ne touchent que 0,25 -- le joueur regle et accepte */
+        (uint256 g, uint256 p0) = _paiePourGraine("v2slots3465", 9, 0);
         assertEq(p0, 250_000);
         assertEq(g, 250_000, "payout = min(prix, pot)");
         assertEq(bs.pot(), 0);
@@ -373,7 +396,7 @@ contract BlockSlotsTest is Test {
             _revele(id, h);
             (uint8 p,) = bs.settle(id);
             total += p;
-            assertEq(p, bs.pointsFor(bs.facesOf(h, id)), "points = pointsFor(facesOf(hash, id))");
+            assertEq(p, bs.pointsFor(bs.facesOf(_deriver(h), id)), "points = pointsFor(facesOf(trois hashes, id))");
             assertEq(bs.pointsOf(JOUEUR), total, "cumul");
         }
         assertEq(bs.pointsOf(AUTRE), 0, "un autre wallet n a rien");
@@ -382,7 +405,7 @@ contract BlockSlotsTest is Test {
     function test_GainVaAuJoueurPasALAppelant() public {
         _fund(100_000_000);
         uint256 id = _spin(JOUEUR);
-        _revele(id, keccak256(bytes("slots82")));
+        _reveleTrois(id, _trois("v2slots24"));
         uint256 a0 = usdc.balanceOf(AUTRE);
         uint256 j0 = usdc.balanceOf(JOUEUR);
         vm.prank(AUTRE);
@@ -399,8 +422,8 @@ contract BlockSlotsTest is Test {
         (, uint40 tb,) = bs.spins(b);
         assertEq(ta, tb, "meme bloc cible");
         bytes32 h = keccak256("meme bloc");
-        uint8[5][3] memory fa = bs.facesOf(h, a);
-        uint8[5][3] memory fb = bs.facesOf(h, b);
+        uint8[5][3] memory fa = bs.facesOf(_deriver(h), a);
+        uint8[5][3] memory fb = bs.facesOf(_deriver(h), b);
         assertTrue(keccak256(abi.encode(fa)) != keccak256(abi.encode(fb)), "faces differentes");
         assertTrue(bs.seedOf(h, a, 0) != bs.seedOf(h, a, 1) && bs.seedOf(h, a, 1) != bs.seedOf(h, a, 2), "trois graines distinctes");
     }
@@ -411,9 +434,9 @@ contract BlockSlotsTest is Test {
         _fund(100_000_000);
         uint256 a = _spin(JOUEUR);
         uint256 b = _spin(AUTRE);
-        vm.roll(1003);
-        vm.setBlockhash(1002, keccak256("lot"));
-        uint256 c = _spin(JOUEUR); /* cible 1005 : trop tot */
+        vm.roll(1005);
+        _poserTrois(1002, _deriver(keccak256("lot")));
+        uint256 c = _spin(JOUEUR); /* cible 1007 : trop tot */
         uint256[] memory ids = new uint256[](5);
         ids[0] = a; ids[1] = b; ids[2] = c; ids[3] = 999; ids[4] = a;
         uint256 n = bs.settleMany(ids);
@@ -425,7 +448,7 @@ contract BlockSlotsTest is Test {
     function test_SettleManyMemeResultatQueSettle() public {
         _fund(100_000_000);
         uint256 a = _spin(JOUEUR);
-        bytes32 h = keccak256(bytes("slots82"));
+        bytes32 h = keccak256(bytes("meme resultat"));
         uint256 snap = vm.snapshotState();
         _revele(a, h);
         bs.settle(a);
@@ -452,7 +475,7 @@ contract BlockSlotsTest is Test {
         uint256[] memory ids = new uint256[](1);
         ids[0] = a;
         vm.roll(1002 + 256);
-        vm.setBlockhash(1002, keccak256("dernier du lot"));
+        _poserTrois(1002, _deriver(keccak256("dernier du lot")));
         assertEq(bs.settleMany(ids), 1, "cible + 256 : encore regle par le lot");
     }
 
@@ -462,9 +485,9 @@ contract BlockSlotsTest is Test {
         ids[0] = a;
         vm.roll(1002);
         assertEq(bs.settleMany(ids), 0, "a la cible : trop tot, saute");
-        vm.roll(1003);
-        vm.setBlockhash(1002, keccak256("premier du lot"));
-        assertEq(bs.settleMany(ids), 1, "cible + 1 : regle");
+        vm.roll(1005);
+        _poserTrois(1002, _deriver(keccak256("premier du lot")));
+        assertEq(bs.settleMany(ids), 1, "cible + 3 (le 3e hash existe) : regle");
     }
 
     /* ------------------------------------------------------------ fuzz */
@@ -478,10 +501,12 @@ contract BlockSlotsTest is Test {
         uint256 p0 = bs.pot();
         _revele(id, h);
         uint256 j0 = usdc.balanceOf(JOUEUR);
+        vm.prank(JOUEUR);
         (uint8 p, uint256 pay) = bs.settle(id);
         assertLe(p, 15);
         assertTrue(p != 14, "14 points impossible");
-        assertEq(p, bs.pointsFor(bs.facesOf(h, id)));
+        assertEq(p, bs.pointsFor(bs.facesOf(_deriver(h), id)));
+        assertLe(pay, 5_000_000, "jamais plus de 5 USDC par spin");
         uint256 attendu = TABLE[p] < p0 ? TABLE[p] : p0;
         assertEq(pay, attendu);
         assertEq(usdc.balanceOf(JOUEUR) - j0, pay);
@@ -500,6 +525,7 @@ contract BlockSlotsTest is Test {
             uint256 id = _spin(JOUEUR);
             bytes32 h = keccak256(abi.encode(graine, i));
             _revele(id, h);
+            vm.prank(JOUEUR);
             (, uint256 pay) = bs.settle(id);
             gains += pay;
         }
@@ -511,15 +537,16 @@ contract BlockSlotsTest is Test {
         assertEq(bs.wonOf(JOUEUR), gains);
     }
 
-    /// @dev la fenetre : pour tout decalage, settle passe ssi cible < bloc <= cible + 256
+    /// @dev la fenetre : pour tout decalage, settle passe ssi cible + 2 < bloc <= cible + 256 (les trois hashes, la fenetre du premier)
     function testFuzz_Fenetre(uint16 delta) public {
         uint256 id = _spin(JOUEUR);
         uint256 b = 1002 + uint256(delta) % 600;
         vm.roll(b);
-        vm.setBlockhash(1002, keccak256("fenetre"));
-        if (b <= 1002) { vm.expectRevert(BlockSlots.TooEarly.selector); bs.settle(id); }
+        bytes32[3] memory h = _deriver(keccak256("fenetre"));
+        for (uint256 r = 0; r < 3; r++) if (1002 + r <= b) vm.setBlockhash(1002 + r, h[r]);
+        if (b <= 1004) { vm.expectRevert(BlockSlots.TooEarly.selector); bs.settle(id); }
         else if (b > 1002 + 256) { vm.expectRevert(BlockSlots.TooLate.selector); bs.settle(id); }
-        else bs.settle(id);
+        else { vm.prank(JOUEUR); bs.settle(id); }
     }
 
     /* ------------------------------------------------------------ jetons hostiles */
@@ -527,7 +554,7 @@ contract BlockSlotsTest is Test {
     function test_JetonQuiRendFauxRefuse() public {
         _fund(100_000_000);
         uint256 id = _spin(JOUEUR);
-        _revele(id, keccak256(bytes("slots82")));
+        _reveleTrois(id, _trois("v2slots24"));
         usdc.setFaux(true);
         vm.expectRevert(BlockSlots.TransferFailed.selector);
         bs.settle(id);
@@ -549,9 +576,9 @@ contract BlockSlotsTest is Test {
         uint256 b = b2.spin();
         vm.stopPrank();
         hu.armer(b2, b, lot);
-        vm.roll(1003);
-        /* une graine qui paie au spin a (id 1) : slots82 donne 5 points pour l id 1 */
-        vm.setBlockhash(1002, keccak256(bytes("slots82")));
+        vm.roll(1005);
+        /* une graine qui paie au spin a (id 1) : v2slots24 donne 5 points pour l id 1 */
+        _poserTrois(1002, _trois("v2slots24"));
         b2.settle(a);
         assertFalse(hu.reentreeReussie(), "la reentree ne passe pas");
         assertEq(hu.erreurVue(), BlockSlots.Reentrancy.selector);
@@ -578,18 +605,125 @@ contract BlockSlotsTest is Test {
 
     /* ⛔ Ces trois faces par (hash, id) sont RECALCULEES par test-slots-parite-20261023.mjs avec les modules de l app (keccak.js +
      *    traitsDepuisHash) : si l un des deux cotes derive, l un des deux tests rougit. Ne pas editer a la main. */
-    function _pariteSpin(bytes32 h, uint256 id, uint8[15] memory v, uint8 pts) internal view {
-        uint8[5][3] memory f = bs.facesOf(h, id);
+    /// @dev les trois hashes sont ceux de _trois(graine) (keccak256(abi.encodePacked(graine, uint8(r)))) ; le test node les recalcule
+    function _pariteSpin(string memory graine, uint256 id, uint8[15] memory v, uint8 pts) internal view {
+        uint8[5][3] memory f = bs.facesOf(_trois(graine), id);
         for (uint256 r = 0; r < 3; r++) for (uint256 i = 0; i < 5; i++) assertEq(f[r][i], v[r * 5 + i], "trait");
         assertEq(bs.pointsFor(f), pts, "points");
     }
 
     function test_PariteTroisFaces() public view {
-        _pariteSpin(0x33670809921ee57e8248123f30ff8dbb27acac3454bcd1f5a4336580d0d68521, 1, [uint8(5), 3, 2, 5, 2, 5, 8, 6, 8, 4, 4, 6, 15, 6, 3], 1);
-        _pariteSpin(0x33670809921ee57e8248123f30ff8dbb27acac3454bcd1f5a4336580d0d68521, 2, [uint8(4), 4, 17, 4, 1, 2, 2, 6, 2, 1, 5, 4, 6, 6, 3], 3);
-        _pariteSpin(0x0000000000000000000000000000000000000000000000000000000000000000, 1, [uint8(2), 6, 3, 4, 7, 3, 8, 9, 1, 0, 2, 9, 9, 5, 4], 2);
-        _pariteSpin(0x0000000000000000000000000000000000000000000000000000000000000000, 77, [uint8(0), 9, 0, 7, 1, 5, 2, 3, 0, 0, 2, 5, 15, 3, 6], 0);
-        _pariteSpin(0x4649bfb672e1ba6238f8f691562ccc7b1c8af762f644dba5add955e9c74962cb, 77, [uint8(2), 7, 1, 8, 3, 0, 0, 16, 2, 7, 4, 7, 2, 0, 6], 1);
+        _pariteSpin("pin-a", 1, [uint8(2), 6, 9, 4, 1, 3, 9, 8, 6, 7, 5, 7, 12, 2, 3], 0);
+        _pariteSpin("pin-b", 2, [uint8(3), 9, 0, 4, 2, 4, 5, 12, 5, 0, 4, 0, 2, 4, 5], 2);
+        _pariteSpin("pin-c", 77, [uint8(1), 2, 10, 2, 5, 5, 0, 17, 6, 7, 1, 2, 9, 1, 4], 2);
+        _pariteSpin("pin-d", 9, [uint8(4), 5, 4, 0, 5, 2, 2, 16, 8, 5, 0, 4, 5, 2, 3], 1);
+        _pariteSpin("pin-e", 123456, [uint8(0), 2, 13, 4, 0, 5, 4, 7, 8, 1, 3, 0, 16, 4, 2], 1);
+        /* pin-a : le hash du bloc cible + 1 vient bien de _trois (temoin d ancrage pour le test node) */
+        assertEq(_trois("pin-a")[1], 0x086ab6dbdf5fa1c77ebe9c75bbf3bab40ab706ed8e2ed2138c6f20f1ac947b50);
+    }
+
+    /* ------------------------------------------------------------ V2 (verdict adverse + decisions de Phil, 2026-10-23) */
+    /* ⛔ ecrits AVANT le changement du contrat, avec les seules fonctions de l ancien (seedOf, faceOf, pointsFor) : ils doivent y rougir. */
+
+    /// @dev les trois hashes d une graine : h_r = keccak256(abi.encodePacked(g, uint8(r))) — recalcules par test-slots-parite en node
+    function _trois(string memory g) internal pure returns (bytes32[3] memory h) {
+        for (uint256 r = 0; r < 3; r++) h[r] = keccak256(abi.encodePacked(g, uint8(r)));
+    }
+
+    function _reveleTrois(uint256 id, bytes32[3] memory h) internal {
+        (, uint40 t,) = bs.spins(id);
+        vm.roll(uint256(t) + 3);
+        for (uint256 r = 0; r < 3; r++) vm.setBlockhash(uint256(t) + r, h[r]);
+    }
+
+    function _pointsDeTroisBlocs(bytes32[3] memory h, uint256 id) internal view returns (uint8) {
+        uint8[5][3] memory f;
+        for (uint256 r = 0; r < 3; r++) f[r] = bs.faceOf(bs.seedOf(h[r], id, r));
+        return bs.pointsFor(f);
+    }
+
+    /// @dev (a) chaque face vient de SON bloc : cible, cible + 1, cible + 2 (v2slots6 : 7 points ainsi, 2 sur le seul hash de la cible)
+    function test_V2_UneFaceParBloc() public {
+        _fund(100_000_000);
+        uint256 id = _spin(JOUEUR);
+        bytes32[3] memory h = _trois("v2slots6");
+        _reveleTrois(id, h);
+        (uint8 p,) = bs.settle(id);
+        assertEq(p, _pointsDeTroisBlocs(h, id), "points = faces des trois blocs");
+        assertEq(p, 7);
+    }
+
+    /// @dev (a) le reglement attend le TROISIEME hash : cible + 1 et cible + 2 sont trop tot, cible + 3 regle
+    function test_V2_TropTotAvantLeTroisiemeBloc() public {
+        uint256 id = _spin(JOUEUR);
+        vm.roll(1003);
+        vm.setBlockhash(1002, keccak256(abi.encode("tot", 0)));
+        vm.expectRevert(BlockSlots.TooEarly.selector);
+        bs.settle(id);
+        vm.roll(1004);
+        vm.setBlockhash(1003, keccak256(abi.encode("tot", 1)));
+        vm.expectRevert(BlockSlots.TooEarly.selector);
+        bs.settle(id);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        assertEq(bs.settleMany(ids), 0, "cible + 2 : le lot saute");
+        vm.roll(1005);
+        vm.setBlockhash(1004, keccak256(abi.encode("tot", 2)));
+        bs.settle(id);
+    }
+
+    /// @dev (b) 5 USDC au plus par spin : une table a 5,000001 est refusee, 5 admis
+    function test_V2_PlafondCinqUsdc() public {
+        assertEq(uint256(bs.MAX_PRIZE()), 5_000_000);
+        BlockSlots.Config memory c = _cfg(address(usdc));
+        c.prizes[15] = 5_000_001;
+        _refuse(c);
+        c.prizes[15] = 5_000_000;
+        new BlockSlots(c);
+    }
+
+    /// @dev (b) le contrat juge et paie lui-meme au settle : 9 points -> 5 USDC (le plafond), au joueur
+    function test_V2_NeufPointsPaientCinq() public {
+        _fund(100_000_000);
+        uint256 id = _spin(JOUEUR);
+        _reveleTrois(id, _trois("v2slots3465"));
+        uint256 j0 = usdc.balanceOf(JOUEUR);
+        (uint8 p, uint256 pay) = bs.settle(id);
+        assertEq(p, 9);
+        assertEq(pay, 5_000_000);
+        assertEq(usdc.balanceOf(JOUEUR) - j0, 5_000_000);
+    }
+
+    /// @dev R1 : un TIERS ne peut pas faire accepter un gain plafonne par le pot ; le joueur, lui, le peut
+    function test_V2_TiersNeRegleSurPotCourt() public {
+        uint256 id = _spin(JOUEUR); /* pot 0,25 */
+        _reveleTrois(id, _trois("v2slots24")); /* 5 points : 2 USDC > pot */
+        vm.prank(AUTRE);
+        vm.expectRevert(bytes4(keccak256("PotShort()")));
+        bs.settle(id);
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = id;
+        vm.prank(AUTRE);
+        assertEq(bs.settleMany(ids), 0, "le lot d un tiers saute le spin a pot court");
+        (,, BlockSlots.Status s) = bs.spins(id);
+        assertEq(uint256(s), uint256(BlockSlots.Status.Pending), "le spin reste au joueur");
+        uint256 j0 = usdc.balanceOf(JOUEUR);
+        vm.prank(JOUEUR);
+        (, uint256 pay) = bs.settle(id);
+        assertEq(pay, 250_000, "le joueur choisit d accepter le pot");
+        assertEq(usdc.balanceOf(JOUEUR) - j0, 250_000);
+    }
+
+    /// @dev R1 : avec un pot suffisant, un tiers regle toujours, et le gain va au joueur
+    function test_V2_TiersRegleSiLePotSuffit() public {
+        _fund(100_000_000);
+        uint256 id = _spin(JOUEUR);
+        _reveleTrois(id, _trois("v2slots24"));
+        uint256 j0 = usdc.balanceOf(JOUEUR);
+        vm.prank(AUTRE);
+        (, uint256 pay) = bs.settle(id);
+        assertEq(pay, 2_000_000);
+        assertEq(usdc.balanceOf(JOUEUR) - j0, 2_000_000);
     }
 
     /* ------------------------------------------------------------ aucun retrait */

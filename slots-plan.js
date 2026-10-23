@@ -3,15 +3,16 @@
  * quand des faces sont les memes ; un bon reward de la pool, comme un casino ». Pur : aucun reseau, aucune cle. Le wallet signe.
  *   - le spin : approve EXACT du prix + spin() ; en lot : UN approve EXACT de N x prix + N spin() (N <= 10) ;
  *   - settle / settleMany / expire / fund ;
- *   - les TROIS faces d un spin, calculees comme le contrat : graine_r = keccak256(abi.encode(hash, spinId, r)), face_r = traitsDepuisHash
- *     (graine_r) (la face d un hash de l app, celle de BlockRolls) ; les points (brelan 3, paire 1, par trait) ;
+ *   - les TROIS faces d un spin, calculees comme le contrat : graine_r = keccak256(abi.encode(hash_r, spinId, r)) ou hash_r est le hash du
+ *     bloc cible + r (Phil 2026-10-23 : trois blocs differents, une face chacun), face_r = traitsDepuisHash(graine_r) (la face d un hash
+ *     de l app, celle de BlockRolls) ; les points (brelan 3, paire 1, par trait) ; reglable de cible + 3 a cible + 256 ;
  *   - la distribution EXACTE des points et l esperance d une table (meme calcul que la constante du contrat ; test-slots-ev compare).
  * ⛔ PAS DEPLOYE. ⛔ C est un jeu d argent PAYANT : la decision de le lancer, et sa conformite, sont celles du proprietaire. */
 import { selecteur, topic, keccak256Hex } from './keccak.js';
-import { traitsDepuisHash, etatReglement, TRAITS, TAILLES } from './blockrolls-plan.js';
+import { traitsDepuisHash, TRAITS, TAILLES } from './blockrolls-plan.js';
 import { bandeTeinte, BANDES } from './face-du-jour.js';
 
-export { etatReglement, TRAITS, TAILLES };
+export { TRAITS, TAILLES };
 export const SIG_SPIN = 'spin()';
 export const SIG_SETTLE = 'settle(uint256)';
 export const SIG_SETTLE_MANY = 'settleMany(uint256[])';
@@ -25,13 +26,35 @@ export const SIG_SPINS = 'spins(uint256)';
 export const SIG_SETTLEABLE_UNTIL = 'settleableUntil(uint256)';
 const SIG_APPROVE = 'approve(address,uint256)';
 export const EV_SPUN = 'Spun(uint256,address,uint256,uint256,uint256)';
-export const EV_SETTLED = 'Settled(uint256,address,bytes32,uint8[5][3],uint8,uint256,uint256,uint256)';
+export const EV_SETTLED = 'Settled(uint256,address,bytes32[3],uint8[5][3],uint8,uint256,uint256,uint256)';
 export const EV_EXPIRED = 'Expired(uint256,address)';
 export const DELAI_CIBLE = 2;
 export const FENETRE = 256;
 export const REELS = 3;
 export const MAX_POINTS = 15;
 export const SPINS_MAX = 10;
+/* (Phil 2026-10-23) le gain d UN spin : 0..5 USDC brut au plus (MAX_PRIZE du contrat) ; le prix d un spin reste borne a 1000 USDC */
+export const PRIX_MAX = 5000000n;
+export const PRIX_SPIN_MAX = 1000000000n;
+
+/** les blocs des trois faces : cible, cible + 1, cible + 2 */
+export const blocsDesFaces = (t) => [0, 1, 2].map((r) => Number(t) + r);
+/**
+ * la fenetre de reglement du contrat : TROP_TOT tant que tete <= cible + 2 (le 3e hash n est lisible que depuis le bloc suivant),
+ * REGLABLE de cible + 3 a cible + 256 (la fenetre du PREMIER hash), puis PERDU.
+ */
+export function etatReglement(targetBlock, blocActuel) {
+  const t = BigInt(targetBlock), b = BigInt(blocActuel), dernier = t + BigInt(REELS - 1);
+  if (b <= dernier) return { etat: 'TROP_TOT', blocsAvant: Number(dernier - b + 1n) };
+  if (b <= t + BigInt(FENETRE)) return { etat: 'REGLABLE', blocsRestants: Number(t + BigInt(FENETRE) - b) };
+  return { etat: 'PERDU', blocsRestants: 0 };
+}
+/** ce qu un prix paie VRAIMENT si le spin est regle maintenant : min(prix, pot) ; null si le pot n est pas lu (D1) */
+export function paieMaintenant(prix, pot) {
+  if (pot === null || pot === undefined) return null;
+  const p = BigInt(prix), q = BigInt(pot);
+  return p < q ? p : q;
+}
 /* ⛔ DENIM : 256 blocs = 512 s a 2 s/bloc (~8,5 min), 51,2 s a 200 ms/bloc. Les secondes viennent des BLOCS, jamais l inverse. */
 export const secondesFenetre = (msParBloc) => (FENETRE * Number(msParBloc)) / 1000;
 
@@ -52,9 +75,13 @@ export function graine(hash, spinId, reel) {
   return keccak256Hex(hexOctets(h.slice(2) + u(spinId) + u(reel)));
 }
 
-/** les trois faces d un spin, dans l ordre du contrat (facesOf) : [[colorBand, orbit, facet, material, ornament] x 3] ; null si le hash est illisible */
-export function facesDuSpin(hash, spinId) {
-  const g = [0, 1, 2].map((r) => graine(hash, spinId, r));
+/**
+ * les trois faces d un spin, dans l ordre du contrat (facesOf) : [[colorBand, orbit, facet, material, ornament] x 3]. `hashes` = les
+ * TROIS hashes des blocs cible, cible + 1, cible + 2 (une face chacun) ; null si ce n est pas un tableau de trois hashes lisibles.
+ */
+export function facesDuSpin(hashes, spinId) {
+  if (!Array.isArray(hashes) || hashes.length !== REELS) return null;
+  const g = hashes.map((h, r) => graine(h, spinId, r));
   if (g.some((x) => !x)) return null;
   const f = g.map((x) => traitsDepuisHash(x));
   return f.some((x) => !x || x.some((v) => v < 0)) ? null : f;
@@ -100,26 +127,37 @@ export function distributionExacte() {
   return { num: d, den };
 }
 
-/** l esperance d une table (16 prix bruts, 0..15 points) AVANT le plafond du pot : { num, den, brut (arrondi bas), probGainBps, parSpin } */
-export function esperance(table) {
+/**
+ * l esperance d une table (16 prix bruts, 0..15 points) AVANT le plafond du pot : { num, den, brut (arrondi bas), probGainBps,
+ * probMiseBps }. probGainBps = la part des spins qui paient QUELQUE CHOSE (un prix > 0, meme sous la mise) ; probMiseBps (si spinPrice est
+ * donne) = la part des spins dont le prix rend AU MOINS la mise (D2 : un spin a 0,25 sur une mise de 0,50 perd de l argent, ce n est pas
+ * un « gain »). Les deux sont des chances AVANT le plafond du pot.
+ */
+export function esperance(table, spinPrice = null) {
   if (!Array.isArray(table) || table.length !== MAX_POINTS + 1) throw new Error('the table has 16 prizes (0..15 points)');
   const { num, den } = distributionExacte();
   const t = table.map((x) => BigInt(x));
   const e = num.reduce((s, v, k) => s + v * t[k], 0n);
   const pGain = num.reduce((s, v, k) => s + (t[k] > 0n ? v : 0n), 0n);
-  return { num: e, den, brut: e / den, probGainBps: Number((pGain * 10000n) / den) };
+  const out = { num: e, den, brut: e / den, probGainBps: Number((pGain * 10000n) / den) };
+  if (spinPrice !== null && spinPrice !== undefined) {
+    const m = BigInt(spinPrice);
+    const pMise = num.reduce((s, v, k) => s + (t[k] > 0n && t[k] >= m ? v : 0n), 0n);
+    out.probMiseBps = Number((pMise * 10000n) / den);
+  }
+  return out;
 }
 
-/** la regle du constructeur : esperance * 10000 < prix * part du pot * 2^144 (STRICT) ; table croissante ; chaque prix <= 1000 USDC */
+/** la regle du constructeur : esperance * 10000 < prix * part du pot * 2^144 (STRICT) ; table croissante ; chaque prix <= 5 USDC ; spin <= 1000 USDC */
 export function refusTable({ table, spinPrice, potShareBps }) {
   const r = [];
   let t;
   try { t = table.map((x) => BigInt(x)); } catch (_) { return ['prizes are raw USDC integers']; }
   if (t.length !== MAX_POINTS + 1) return ['the table has 16 prizes (0..15 points)'];
-  if (t.some((x) => x < 0n || x > 1000000000n)) r.push('each prize is 0..1000 USDC');
+  if (t.some((x) => x < 0n || x > PRIX_MAX)) r.push('each prize is 0..5 USDC (at most 5 USDC a spin)');
   for (let k = 1; k <= MAX_POINTS; k++) if (t[k] < t[k - 1]) { r.push('a higher score never pays less (points ' + k + ')'); break; }
   const p = BigInt(spinPrice), s = BigInt(potShareBps);
-  if (p <= 0n || p > 1000000000n) r.push('the spin price is 0..1000 USDC, not 0');
+  if (p <= 0n || p > PRIX_SPIN_MAX) r.push('the spin price is 0..1000 USDC, not 0');
   if (s <= 0n || s > 10000n) r.push('the pot share is 1..10000 bps');
   if (!r.length) { const e = esperance(t); if (e.num * 10000n >= p * s * e.den) r.push('the expected payout must stay strictly under the share that enters the pot'); }
   return r;
@@ -138,7 +176,7 @@ export function planSpins({ contrat, usdc, n = 1, spinPrice }) {
     if (BigInt(spinPrice) <= 0n) return refuse('the spin price must be > 0');
     const total = BigInt(spinPrice) * BigInt(k);
     const appels = [approuver(usdc, contrat, total, 'approve exactly ' + k + ' spin(s) (' + total + ' raw USDC)')];
-    for (let i = 0; i < k; i++) appels.push({ to: bas(contrat), data: '0x' + sel(SIG_SPIN), quoi: 'spin ' + (i + 1) + '/' + k + ': three faces from the block 2 blocks from now' });
+    for (let i = 0; i < k; i++) appels.push({ to: bas(contrat), data: '0x' + sel(SIG_SPIN), quoi: 'spin ' + (i + 1) + '/' + k + ': three faces from blocks 2, 3 and 4 blocks from now' });
     return { etat: 'PRET', n: k, prix: total.toString(), prixUnitaire: BigInt(spinPrice).toString(), appels };
   } catch (e) { return refuse(String(e.message || e)); }
 }
@@ -229,13 +267,13 @@ export function lireSpunTous(logs, contrat) {
   }).filter(Boolean);
 }
 
-/** tous les Settled d un recu : [{ spinId, player, blockHash, faces, points, payout, potAfter, playerPoints }] */
+/** tous les Settled d un recu : [{ spinId, player, blockHashes (3), faces, points, payout, potAfter, playerPoints }] — 3 + 15 + 4 = 22 mots */
 export function lireSettledTous(logs, contrat) {
   return deContrat(logs, contrat, EV_SETTLED).map((l) => {
     const m = motsDe(l.data);
-    if (m.length !== 20 || !l.topics[2]) return null;
-    const f = m.slice(1, 16).map(Number);
-    return { spinId: BigInt(l.topics[1]), player: '0x' + bas(l.topics[2]).slice(-40), blockHash: '0x' + m[0].toString(16).padStart(64, '0'),
-      faces: [f.slice(0, 5), f.slice(5, 10), f.slice(10, 15)], points: Number(m[16]), payout: m[17], potAfter: m[18], playerPoints: m[19] };
+    if (m.length !== 22 || !l.topics[2]) return null;
+    const f = m.slice(3, 18).map(Number);
+    return { spinId: BigInt(l.topics[1]), player: '0x' + bas(l.topics[2]).slice(-40), blockHashes: m.slice(0, 3).map((x) => '0x' + x.toString(16).padStart(64, '0')),
+      faces: [f.slice(0, 5), f.slice(5, 10), f.slice(10, 15)], points: Number(m[18]), payout: m[19], potAfter: m[20], playerPoints: m[21] };
   }).filter(Boolean);
 }

@@ -21,7 +21,15 @@ const lancer = () => {
 };
 const M = [
   /* l argent */
-  ['gain non plafonne par le pot', '        if (payout > pot) payout = pot;\n', ''],
+  ['gain non plafonne par le pot', '            payout = pot;\n', ''],
+  /* v2 (Phil 2026-10-23 + verdict adverse) : 5 USDC au plus, R1 (seul le joueur accepte un pot court), trois blocs */
+  ['plafond 1000 au lieu de 5 USDC', 'uint64 public constant MAX_PRIZE = 5_000000;', 'uint64 public constant MAX_PRIZE = 1000_000000;'],
+  ['R1 : un tiers accepte un pot court', '            if (msg.sender != player) return (false, points, 0);\n', ''],
+  ['R1 : settle ne refuse pas le pot court', '        if (!fait) revert PotShort();\n', ''],
+  ['R1 : settleMany compte un spin saute', '            if (fait) done++;', '            done++;'],
+  ['trois faces sur le seul bloc cible (hashes)', 'h[r] = blockhash(t + r);', 'h[r] = blockhash(t);'],
+  ['trois faces sur le premier hash (facesOf)', 'f[r] = faceOf(seedOf(blockHashes[r], spinId, r));', 'f[r] = faceOf(seedOf(blockHashes[0], spinId, r));'],
+  ['settle des cible + 1 (sans attendre le 3e hash)', 'if (block.number <= t + (REELS - 1)) revert TooEarly();', 'if (block.number <= t) revert TooEarly();'],
   ['part du pot : tout au pot', 'uint256 toPot = (SPIN_PRICE * POT_SHARE_BPS) / BPS;', 'uint256 toPot = SPIN_PRICE;'],
   ['part du dev non envoyee', '        if (toDev != 0) _pull(msg.sender, DEV_WALLET, toDev);\n', ''],
   ['fund : pot non credite', '        pot += amount;\n        _pull(msg.sender, address(this), amount);', '        _pull(msg.sender, address(this), amount);'],
@@ -40,20 +48,22 @@ const M = [
   ['points non cumules', '        pointsOf[player] = total;\n', ''],
   /* les faces */
   ['graine sans l id', 'return keccak256(abi.encode(blockHash, spinId, reel));', 'return keccak256(abi.encode(blockHash, reel));'],
-  ['deux faces sur la meme graine', 'for (uint256 r = 0; r < REELS; r++) f[r] = faceOf(seedOf(blockHash, spinId, r));', 'for (uint256 r = 0; r < REELS; r++) f[r] = faceOf(seedOf(blockHash, spinId, r == 2 ? 1 : r));'],
+  ['deux faces sur la meme graine', 'f[r] = faceOf(seedOf(blockHashes[r], spinId, r));', 'f[r] = faceOf(seedOf(blockHashes[r], spinId, r == 2 ? 1 : r));'],
   ['facette modulo 18', 'face[2] = uint8(k[7]) % FACETS;', 'face[2] = uint8(k[7]) % 18;'],
   ['bande sans le decalage de 30', 'face[0] = uint8(((teinte + 30) % 360) / 60);', 'face[0] = uint8((teinte % 360) / 60);'],
   /* la fenetre */
-  ['settle avant la cible', '        if (block.number <= t) revert TooEarly();\n', ''],
+  ['settle avant la cible', '        if (block.number <= t + (REELS - 1)) revert TooEarly();\n', ''],
   ['settle apres la fenetre', '        if (block.number > t + SETTLE_WINDOW) revert TooLate();\n', ''],
   ['fenetre 255', 'uint256 public constant SETTLE_WINDOW = 256;', 'uint256 public constant SETTLE_WINDOW = 255;'],
   ['cible + 1', 'uint256 public constant TARGET_DELAY = 2;', 'uint256 public constant TARGET_DELAY = 1;'],
   ['expire avant la fin', '        if (block.number <= uint256(s.targetBlock) + SETTLE_WINDOW) revert StillSettleable();\n', ''],
-  ['hash nul admis', '        if (h == bytes32(0)) revert HashUnavailable();\n        return _settle(spinId, s, h);', '        return _settle(spinId, s, h);'],
+  ['hash nul admis', '            if (h[r] == bytes32(0)) return (false, h);\n', ''],
   /* ⚠️ « borne haute ouverte » (> t + 257) est un mutant EQUIVALENT sous l EVM, mesure 2026-10-23 (il a survecu) : hors des 256 blocs
-   *    blockhash() rend 0 et la garde du hash saute le spin. On mute donc les BORNES qui comptent : cible + 256 regle, cible + 1 regle. */
-  ['settleMany : dernier bloc de la fenetre saute', 'if (block.number <= t || block.number > t + SETTLE_WINDOW) continue;', 'if (block.number <= t || block.number >= t + SETTLE_WINDOW) continue;'],
-  ['settleMany : premier bloc apres la cible saute', 'if (block.number <= t || block.number > t + SETTLE_WINDOW) continue;', 'if (block.number <= t + 1 || block.number > t + SETTLE_WINDOW) continue;'],
+   *    blockhash() rend 0 et la garde du hash saute le spin. On mute donc les BORNES qui comptent : cible + 256 regle, cible + 3 regle.
+   *    ⚠️ v2 : « settleMany des cible + 1 » (<= t au lieu de <= t + 2) est AUSSI equivalent sous l EVM : blockhash(bloc courant ou futur)
+   *    rend 0, la garde du hash saute le spin. La borne basse est tenue dans settle() par TooEarly (mutant « settle des cible + 1 »). */
+  ['settleMany : dernier bloc de la fenetre saute', 'if (block.number <= t + (REELS - 1) || block.number > t + SETTLE_WINDOW) continue;', 'if (block.number <= t + (REELS - 1) || block.number >= t + SETTLE_WINDOW) continue;'],
+  ['settleMany : premier bloc reglable (cible + 3) saute', 'if (block.number <= t + (REELS - 1) || block.number > t + SETTLE_WINDOW) continue;', 'if (block.number <= t + REELS || block.number > t + SETTLE_WINDOW) continue;'],
   ['settleMany : deja regle non saute', '            if (s.status != Status.Pending) continue;\n', ''],
   ['settle deux fois', '        if (s.status != Status.Pending) revert NotPending();\n        uint256 t = s.targetBlock;', '        uint256 t = s.targetBlock;'],
   /* reentree, jetons */
@@ -64,7 +74,7 @@ const M = [
   /* ⚠️ « prix nul admis » est un mutant EQUIVALENT, mesure 2026-10-23 (il a survecu, meme avec une table nulle) : la garde d esperance
    *    est STRICTE (esperance * BPS >= prix * part * 2^144 -> refus) et avec un prix nul le membre de droite vaut 0 : 0 >= 0 refuse deja.
    *    La garde spinPrice == 0 reste dans le code pour etre lisible ; c est la garde d esperance qui la tient (ses 3 mutants sont tues). */
-  ['prix au-dela du max admis', 'if (c.spinPrice == 0 || c.spinPrice > MAX_PRIZE ||', 'if (c.spinPrice == 0 ||'],
+  ['prix au-dela du max admis', 'if (c.spinPrice == 0 || c.spinPrice > MAX_SPIN_PRICE ||', 'if (c.spinPrice == 0 ||'],
   ['part > 100 % admise', '|| c.potShareBps > BPS) revert BadConfig();', ') revert BadConfig();'],
 ];
 let survivants = 0, introuvables = 0;

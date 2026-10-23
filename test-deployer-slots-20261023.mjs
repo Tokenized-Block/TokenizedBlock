@@ -48,7 +48,7 @@ if (fs.existsSync(path.join(ICI, 'contracts/out/BlockSlots.sol/BlockSlots.json')
     ok(fs.readFileSync(tmp, 'utf8').replace(/\r\n/g, '\n') === lire('slots-deploiement.js'), 'A le preparateur relance regenere la fiche a l IDENTIQUE (deterministe)');
     /* une table trop genereuse (3 points -> 1 USDC) : le preparateur refuse, et n ecrit rien */
     const trop = path.join(dir, 'p.json'), sortie2 = path.join(dir, 'x.js');
-    fs.writeFileSync(trop, JSON.stringify({ ...P, prizes: P.prizes.map((x, k) => (k === 3 || k === 4 ? '1000000' : x)) }));
+    fs.writeFileSync(trop, JSON.stringify({ ...P, prizes: P.prizes.map((x, k) => (k === 3 || k === 4 ? '1200000' : x)) })); /* v2 : 1,2 USDC a 3 et 4 points -> ~0,28 > 0,25 */
     let refuse = false;
     try { execFileSync(process.execPath, ['preparer-deploiement-slots.mjs'], { cwd: path.join(ICI, 'contracts'), env: { ...process.env, SORTIE: sortie2, PARAMETRES: trop }, stdio: ['ignore', 'pipe', 'pipe'] }); }
     catch (e) { refuse = /expected payout must stay strictly under/.test(String(e.stderr)); }
@@ -82,9 +82,9 @@ ok(/crypto\.subtle\.digest\('SHA-256', octets\)/.test(script) && /const v = veri
 ok(/String\(chaine\)\.toLowerCase\(\) === CHAINE_HEX/.test(script) && /wallet_switchEthereumChain/.test(script), 'C la page exige Base');
 ok(['USDC()', 'DEV_WALLET()', 'SPIN_PRICE()', 'POT_SHARE_BPS()', 'prizes()'].every((s) => script.includes("'" + s + "'")) && /table\.join\(\) === C\.prizes\.map\(String\)\.join\(\)/.test(script), 'C apres confirmation, elle RELIT les 4 immuables et la table, et compare');
 ok(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page), 'C aucune cle, aucune signature de message, aucun champ a saisir');
-const ev = S.esperance(C.prizes);
-const mots = { spin: usdc6(C.spinPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - C.potShareBps), top: usdc6(C.prizes[15]), ev: usdc6(ev.brut), pWin: (ev.probGainBps / 100).toFixed(2), window: '256', minutesNow: '8.5', secondsDenim: '51' };
-ok(mots.spin === '0.50' && mots.potShare === '50' && mots.top === '1000' && mots.ev === '0.151707' && mots.pWin === '21.05', 'C les mots derives : spin 0.50, 50 %, jusqu a 1000, esperance 0.151707, 21.05 % gagnants');
+const ev = S.esperance(C.prizes, C.spinPrice);
+const mots = { spin: usdc6(C.spinPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - C.potShareBps), top: usdc6(C.prizes[15]), ev: usdc6(ev.brut), pWin: (ev.probGainBps / 100).toFixed(2), pMise: (ev.probMiseBps / 100).toFixed(2), window: '256', minutesNow: '8.5', secondsDenim: '51' };
+ok(mots.spin === '0.50' && mots.potShare === '50' && mots.top === '5' && mots.ev === '0.127862' && mots.pWin === '21.05' && mots.pMise === '7.46', 'C les mots derives (v2) : spin 0.50, 50 %, jusqu a 5, esperance 0.127862, 21.05 % paient quelque chose, 7.46 % rendent la mise');
 const cles = [...page.matchAll(/data-k="(\w+)"/g)].map((m) => m[1]);
 ok(Object.keys(mots).every((k) => cles.includes(k)) && cles.every((k) => k in mots) && /for \(const e of document\.querySelectorAll\('b\[data-k\]'\)\) e\.textContent = MOTS\[e\.dataset\.k\]/.test(script), 'C chaque chiffre est un data-k rempli depuis la fiche (' + cles.length + ' emplacements)');
 ok(/minutesNow: \(secondesFenetre\(2000\) \/ 60\)\.toFixed\(1\)/.test(script) && /secondsDenim: String\(Math\.round\(secondesFenetre\(200\)\)\)/.test(script), 'C les durees de la fenetre sont CALCULEES depuis les blocs (2 s et 200 ms)');
