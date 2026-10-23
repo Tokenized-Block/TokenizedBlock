@@ -4525,6 +4525,8 @@ const SERVIS = [
    *   2026-10-18 : blockskins-actif.js = le contrat ACTIF et son prix de mint, lus dans la fiche (importe par blockskins.js et skins.js :
    *   absent d ici = 404 = app morte). */
   'blockskins.js', 'blockskins-actif.js', 'blockskins-deploiement.js',
+  /* 2026-10-23 : la section Skins de l onglet Market (logique pure : statut, filtres, apercu, « new bid ») — importee par app.html */
+  'skins-marche.js',
   /* 2026-10-04 : l etat des devises de paire (born / not_born / not_read) et LA regle de l ecran qui grise (importe par app.html :
    *   absent d ici = 404 = app morte). Sa seule dependance, keccak.js, est deja servie plus haut. */
   'etat-paires.js',

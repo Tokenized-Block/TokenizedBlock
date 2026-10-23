@@ -48,7 +48,9 @@ vu(/const f = passLu \? tirerFaceDeRoll\(\) : null; guess = f \? f\.guess : null
 const sk = app.slice(app.indexOf('async function peindreSkinsJeu()'), app.indexOf('/* ⛔ 2026-10-18 (Phil : « tous les skins a 10 dollars ») : le prix d une skin'));
 vu(/Auctions in progress — current bid and time left:/.test(sk), 'Skin market : les encheres en cours, a part');
 vu(/Your skins — sell at a price, or start an auction/.test(sk) && /bcLigneSkin\(s, moi, t\)/.test(sk), 'Skin market : les skins du wallet, par bcLigneSkin');
-vu(/text: 'Sell at a price' \}\), be = bcEl\('button', \{ type: 'button', cls: 'bouton sec', text: 'Start an auction' \}\)/.test(app), 'bcLigneSkin : « Sell at a price » et « Start an auction »');
+/* 2026-10-23 : le formulaire de vente est partage (bcFormVendreSkin) entre bcLigneSkin et la section Skins de l onglet Market */
+vu(/if \(acts\.includes\('METTRE_EN_VENTE'\)\) li\.append\(bcFormVendreSkin\(s, 'Sell at a price'\)\);/.test(app)
+  && /text: texteVente \}\), be = bcEl\('button', \{ type: 'button', cls: 'bouton sec', text: 'Start an auction' \}\)/.test(app), 'bcLigneSkin : « Sell at a price » et « Start an auction »');
 vu(/highest bid ' \+ bcMontantSkin\(s\.offre, s\.devise\)/.test(app) && /ends in ' \+ bcDureeSkin\(s\.fin - t\)/.test(app), 'une enchere en cours dit son offre et son temps restant');
 vu(/const zs = \$\('#skinBrain'\);/.test(bloc), 'la proposition du brain (bid / buy) s affiche dans la carte Skin market');
 /* ── DUELS dans « Let the brain play » (2026-10-18) ── */

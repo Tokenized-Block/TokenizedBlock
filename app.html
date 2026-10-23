@@ -841,6 +841,23 @@ canvas.bcCube{max-width:360px;margin:0 auto 6px;border-radius:16px}
 .bcLigneSkin .bouton{padding:6px 10px;font-size:12px}
 .bcPastille{flex:0 0 22px;width:22px;height:22px;border-radius:50%;box-shadow:inset 0 0 0 4px rgb(var(--fondRgb))}
 .bcVendre{display:flex;flex-wrap:wrap;gap:6px;width:100%}
+/* 2026-10-23 (Phil : « build the market for skins and the auctions ») : la section Skins de l onglet Market — une ligne par skin du
+ *   contrat (apercu de sa face, detenteur, block, statut), ses gestes dessous ; un « new bid » bref quand l offre d une enchere change */
+.skmFiltres{margin-top:6px}
+.skmLigne{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 0;border-bottom:1px solid var(--ligne);font-size:12.5px;min-width:0}
+.skmLigne .skmFace{flex:0 0 44px;width:44px;height:44px;line-height:0}
+.skmLigne .skmInfo{flex:1 1 180px;min-width:0;overflow-wrap:anywhere}
+.skmLigne .skmInfo b{font-size:13px}
+.skmLigne .skmStatut{display:block;margin-top:2px}
+.skmLigne .skmGestes{display:flex;flex-wrap:wrap;gap:6px;width:100%;min-width:0}
+.skmLigne .skmGestes:empty{display:none}
+.skmLigne .bouton{padding:6px 10px;font-size:12px}
+.skmLigne .skmOffre{min-width:0;flex:1 1 90px;max-width:160px;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-size:12px;padding:6px 8px}
+.skmPouls{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:99px;font-size:11px;font-weight:700;background:var(--accent);color:hsl(var(--h) 60% 10%);animation:skmPouls 1.2s ease-in-out 3}
+.skmLigne.skmNeuf{animation:skmFond 2s ease-out 1}
+@keyframes skmPouls{50%{transform:scale(1.12)}}
+@keyframes skmFond{from{background:rgb(var(--accentRgb) / .18)}to{background:transparent}}
+@media (prefers-reduced-motion:reduce){.skmPouls,.skmLigne.skmNeuf{animation:none}}
 .bcVendre input,.bcVendre select{min-width:0;flex:1 1 70px;background:rgb(var(--fondRgb) / .75);border:1px solid var(--ligne);border-radius:10px;color:var(--texte);font:inherit;font-size:12px;padding:6px 8px}
 .bcTuile{appearance:none;display:block;min-width:0;padding:8px;border:1px solid var(--ligne);border-radius:14px;background:var(--creux);color:var(--texte);font:inherit;text-align:center;cursor:pointer}
 .bcTuile[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px rgb(var(--accentRgb) / .25)}
@@ -2937,6 +2954,20 @@ details[open] > summary::before{transform:rotate(90deg)}
           lances ailleurs. On ne capte le 0,5 % que si le trade passe PAR NOTRE Buy/Sell : cet onglet range les blocks
           qui bougent et mene a l achat en un geste. Chiffres DexScreener, dits comme tels. Le wallet signe, toujours. -->
   <section class="volet" id="v-trade" aria-label="Trade blocks">
+    <!-- SKINS (Phil 2026-10-23 : « build the market for skins and the auctions » — « je ne vois pas de market »). CHAQUE skin du contrat
+         BlockSkins actif, lue sur la chaine (lireSkins, pages de 100), visible par TOUS : apercu de sa face, detenteur, block habille, statut.
+         Les gestes (Buy, Bid, Sell, Start an auction, Cancel listing, Settle ended auction) viennent de actionsSkin — ce que le contrat
+         accepterait pour CE wallet — et passent par bcActionMarche : le panneau dit le partage, le wallet signe chaque etape, approbation
+         EXACTE. Relue toutes les 25 s tant que l onglet est ouvert. Une lecture ratee est DITE, jamais une liste vide a sa place.
+         ⛔ EN TETE de l onglet : sous les Trending (des dizaines de lignes), personne ne la voyait (mesure au navigateur, 375 px). -->
+    <div class="carte" id="skinsMarche">
+      <p class="titre">Skins</p>
+      <p class="note" id="skmNote" style="margin:2px 0 0">Reading the skins on chain…</p>
+      <p class="sous">Every skin minted so far, with its face, its holder and the block it dresses. Buy at a fixed price, bid in an auction (+5% minimum), or sell yours. 10% of each sale goes to TokenizedBlock.</p>
+      <div class="stadeLigne skmFiltres" id="skmFiltres" role="group" aria-label="Skins filter"></div>
+      <div id="skmListe" aria-live="polite"></div>
+    </div>
+
     <div class="carte">
       <p class="titre">Trending blocks</p>
       <!-- ⛔ LE RESUME CHIFFRE MONTE SOUS LE TITRE (Phil, 2026-09-23). Il vivait tout en BAS de la
@@ -3844,6 +3875,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div id="skinListe" style="margin-top:6px"></div>
       <div class="jourEtapes">
         <button type="button" class="bouton" id="skinMint">Mint a skin · <span class="skinPrix"></span></button>
+        <!-- 2026-10-23 (Phil : « je ne vois pas de market ») : le marche entier vit dans l onglet Market, section Skins -->
+        <button type="button" class="bouton sec" id="skinOuvrirMarche">Open the skin market</button>
       </div>
     </div>
     <!-- HOW IT WORKS : plie, en bas (le texte long vit ici et dans « ? »). -->
@@ -4383,7 +4416,8 @@ import { analyserCommande, enUnitesBrutes, PRECOMMANDES, AIDE_COMMANDES, COMMAND
 import { entreesCommandes, entreesOnglets, entreesJeu, filtrerPalette, noterUsage, lireUsages, ecrireUsages, deplacer } from './palette.js';
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
-  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin } from './blockskins.js';
+  offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin, decoderPage, appelPage } from './blockskins.js';
+import { SKM_RAFRAICHIR_MS, SKM_POULS_MS, SKM_FILTRES, SKM_STATUTS, filtrerSkins, ordonnerSkins, compterSkins, gestesSkin, montantOffre, cleLigneSkin, offresChangees, tempsRestant, apercuSkinFormes, detenteurCourt, statutSkin, brutVersTexte as brutVersTexteSkin } from './skins-marche.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -5567,6 +5601,8 @@ async function peindreSkinsJeu() {
  *   actif, « 10 USDC » des que l adresse de v3 est notee dans l enregistrement. Avant tout achat, bcAcheterSkin relit MINT_PRICE() sur la chaine. */
 for (const e of document.querySelectorAll('.skinPrix')) e.textContent = SKIN_MINT_TEXTE;
 $('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
+/* 2026-10-23 : « Open the skin market » mene a l onglet Market, section Skins (toutes les skins, encheres en direct) */
+$('#skinOuvrirMarche').addEventListener('click', () => { allerA('trade'); setTimeout(() => { const s = document.getElementById('skinsMarche'); if (s) s.scrollIntoView({ block: 'start' }); }, 60); });
 
 /* ══ LES DUELS (Phil 2026-10-18 : « les brains peuvent se faire des duels — gagnant 90 %, 7 % pool de reward commun, 3 % dev »).
  *   LECTURE : /api/duels (le serveur relit les logs de BlockDuels par fenetres bornees ; l app ne balaie JAMAIS la chaine depuis le deploiement).
@@ -6364,6 +6400,8 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
    * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
   if (nom === 'trade') void lireTrending();
+  /* 2026-10-23 (Phil : « build the market for skins ») : la section Skins se lit a l ouverture de l onglet Market (garde 23 s) */
+  if (nom === 'trade') void peindreSkinsMarche();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
@@ -26344,26 +26382,177 @@ function bcLigneSkin(s, moi, t) {
   if (acts.includes('ENCHERIR')) bouton('Bid ' + bcMontantSkin(offreMinimale(s), s.devise), 'ENCHERIR');
   if (acts.includes('REGLER')) bouton('Settle', 'REGLER');
   if (acts.includes('RETIRER')) bouton('Take it back', 'RETIRER');
-  if (acts.includes('METTRE_EN_VENTE')) {
-    /* vendre SA skin : un prix tape, une devise admise, et pour une enchere une duree (7 jours au plus) */
-    const prix = bcEl('input', { type: 'text', inputmode: 'decimal', placeholder: 'price', 'aria-label': 'Price' });
-    const dev = bcEl('select', { 'aria-label': 'Currency' }), duree = bcEl('select', { 'aria-label': 'Auction length' });
-    for (const [adr, d] of Object.entries(bcDevisesSkin())) dev.append(bcEl('option', { value: adr, text: d.sym }));
-    for (const [lib, sec] of BC_DUREES_ENCHERE) duree.append(bcEl('option', { value: String(sec), text: lib }));
-    duree.value = '86400';
-    const lire = () => { const d = bcDevisesSkin()[dev.value]; return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
-    const vendre = (genre) => { let x; try { x = lire(); } catch (e) { prix.setCustomValidity(String(e.message)); prix.reportValidity(); return; } prix.setCustomValidity(''); void bcActionMarche(genre, s, x); };
-    /* Phil 2026-10-18 : « Sell at a price » / « Start an auction » (le prix tape sert aux deux : prix fixe, ou offre d ouverture) */
-    const bv = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Sell at a price' }), be = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Start an auction' });
-    bv.addEventListener('click', () => vendre('VENDRE')); be.addEventListener('click', () => vendre('ENCHERE'));
-    li.append(bcEl('div', { cls: 'bcVendre' }, [prix, dev, duree, bv, be]));
-  }
+  if (acts.includes('METTRE_EN_VENTE')) li.append(bcFormVendreSkin(s, 'Sell at a price'));
   return li;
 }
+/** Vendre SA skin : un prix tape, une devise admise, et pour une enchere une duree (7 jours au plus). Le prix tape sert aux deux : prix
+ *  fixe, ou offre d ouverture. Partage par la ligne du panneau / du Game (bcLigneSkin) et la section Skins de l onglet Market. */
+function bcFormVendreSkin(s, texteVente) {
+  const prix = bcEl('input', { type: 'text', inputmode: 'decimal', placeholder: 'price', 'aria-label': 'Price' });
+  const dev = bcEl('select', { 'aria-label': 'Currency' }), duree = bcEl('select', { 'aria-label': 'Auction length' });
+  for (const [adr, d] of Object.entries(bcDevisesSkin())) dev.append(bcEl('option', { value: adr, text: d.sym }));
+  for (const [lib, sec] of BC_DUREES_ENCHERE) duree.append(bcEl('option', { value: String(sec), text: lib }));
+  duree.value = '86400';
+  const lire = () => { const d = bcDevisesSkin()[dev.value]; return { devise: dev.value, brut: montantVersBrut(prix.value, d.dec), duree: BigInt(duree.value) }; };
+  const vendre = (genre) => { let x; try { x = lire(); } catch (e) { prix.setCustomValidity(String(e.message)); prix.reportValidity(); return; } prix.setCustomValidity(''); void bcActionMarche(genre, s, x); };
+  /* Phil 2026-10-18 : « Sell at a price » / « Start an auction » */
+  const bv = bcEl('button', { type: 'button', cls: 'bouton sec', text: texteVente }), be = bcEl('button', { type: 'button', cls: 'bouton sec', text: 'Start an auction' });
+  bv.addEventListener('click', () => vendre('VENDRE')); be.addEventListener('click', () => vendre('ENCHERE'));
+  return bcEl('div', { cls: 'bcVendre' }, [prix, dev, duree, bv, be]);
+}
+/* ══ LA SECTION SKINS DE L ONGLET MARKET (Phil 2026-10-23 : « build the market for skins and the auctions » ; « je ne vois pas de
+ *   market »). CHAQUE skin du contrat, lue par lireSkins (totalSupply + pages de 100 : 1 + ceil(n/100) eth_call par lecture, jamais un
+ *   appel par ligne), visible sans wallet. Relue toutes les SKM_RAFRAICHIR_MS (25 s) seulement onglet Market ouvert et page visible.
+ *   Une ligne n est repeinte que si sa cle change (cleLigneSkin) et jamais pendant qu on y tape un prix ou une offre. « new bid » : l offre
+ *   d une enchere a change entre deux lectures (offresChangees ; la premiere lecture n allume rien).
+ *   Gestes : gestesSkin = actionsSkin (le contrat) ; chacun passe par bcActionMarche, qui RELIT la skin avant de construire l appel.
+ *   ⛔ Lecture ratee : DITE ; la liste precedente reste, datee, jamais une liste vide a la place. */
+const skm = { filtre: 'all', enVol: false, lu: 0, liste: null, total: 0, tronque: false, offres: null, pouls: new Map(), lignes: new Map(), rate: 0 };
+const skmMaintenant = () => Math.floor(Date.now() / 1000);
+const skmHeure = (ms) => new Date(ms).toISOString().slice(11, 16) + ' UTC';
+function skmPeindreFiltres() {
+  const z = $('#skmFiltres');
+  if (!z || z.childElementCount) return;
+  for (const [cle, lib] of SKM_FILTRES) {
+    const b = bcEl('button', { type: 'button', cls: 'puce' + (cle === skm.filtre ? ' on' : ''), text: lib, 'aria-pressed': String(cle === skm.filtre) });
+    b.dataset.skf = cle;
+    b.addEventListener('click', () => {
+      skm.filtre = cle;
+      for (const x of z.querySelectorAll('.puce')) { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', String(x === b)); }
+      skmPeindreListe();
+    });
+    z.append(b);
+  }
+}
+async function peindreSkinsMarche(force = false) {
+  const note = $('#skmNote'), z = $('#skmListe');
+  if (!note || !z || skm.enVol) return;
+  skmPeindreFiltres();
+  if (!force && skm.liste && Date.now() - skm.lu < SKM_RAFRAICHIR_MS - 2000) { skmPeindreListe(); return; }
+  skm.enVol = true;
+  try {
+    let r;
+    try { r = await lireSkins({ rpc }); } catch (_) { r = { etat: 'NON_LU' }; }
+    if (!r || r.etat !== 'LU') {
+      skm.rate = Date.now();
+      if (!skm.liste) { z.textContent = ''; note.textContent = 'The skins could not be read right now — nothing is listed rather than a wrong list. Read again in a moment.'; }
+      else skmPeindreListe();
+      return;
+    }
+    /* les devises admises (ETH, USDC, + les actions que le contrat dit admises) : relues toutes les 10 min, partagees avec le panneau */
+    if (!bc.devisesSkinLu || Date.now() - bc.devisesSkinLu > 600000) {
+      try { const d = await lireDevisesSkin({ rpc }); bc.devisesSkin = d.devises; bc.devisesSkinNonLues = d.nonLues; bc.devisesSkinLu = Date.now(); } catch (_) { /* ETH et USDC restent */ }
+    }
+    const { changees, apres } = offresChangees(skm.offres, r.skins);
+    skm.offres = apres;
+    for (const id of changees) skm.pouls.set(id, Date.now() + SKM_POULS_MS);
+    skm.liste = r.skins; skm.total = r.total; skm.tronque = !!r.tronque; skm.lu = Date.now(); skm.rate = 0;
+    skmPeindreListe();
+  } finally { skm.enVol = false; }
+}
+function skmPeindreListe() {
+  const note = $('#skmNote'), z = $('#skmListe');
+  if (!note || !z || !skm.liste) return;
+  const moi = compte ? String(compte).toLowerCase() : null, t = skmMaintenant(), c = compterSkins(skm.liste, t);
+  const lu = ' Read on chain at ' + skmHeure(skm.lu) + (skm.rate ? ' — not read again at ' + skmHeure(skm.rate) + ', this is the last list read' : '') + '.';
+  note.textContent = (c.total
+    ? c.total + ' minted · ' + c.fixe + ' at a fixed price · ' + c.enchere + ' in auction' + (c.finie ? ' · ' + c.finie + ' ended, to settle' : '') + ' · ' + c.libre + ' not listed.'
+    : 'No skin minted yet — the first one is minted from the Game tab (Skin market).')
+    + (skm.tronque ? ' Showing the first ' + skm.liste.length + ' of ' + skm.total + '.' : '') + lu + (moi ? '' : ' Connect a wallet to buy, bid or sell.');
+  const vues = ordonnerSkins(filtrerSkins(skm.liste, skm.filtre, moi, t), t).slice(0, 60);
+  const lignes = new Map(), enfants = [];
+  for (const s of vues) {
+    const id = String(s.tokenId), cle = cleLigneSkin(s, moi, t), ancien = skm.lignes.get(id);
+    /* une ligne ou l on tape (focus, ou un prix / une offre ecrits) n est pas repeinte : sa cle reste l ancienne, elle le sera ensuite */
+    const occupe = !!ancien && (ancien.el.contains(document.activeElement) || [...ancien.el.querySelectorAll('input')].some((i) => i.value && i.value !== i.defaultValue));
+    const garder = !!ancien && (ancien.cle === cle || occupe);
+    const el = garder ? ancien.el : skmLigne(s, moi, t);
+    lignes.set(id, { cle: garder ? ancien.cle : cle, el });
+    for (const e of el.querySelectorAll('.skmTemps')) e.textContent = tempsRestant(e.dataset.fin, t);
+    skmPouls(el, id);
+    enfants.push(el);
+  }
+  skm.lignes = lignes;
+  if (!enfants.length) {
+    const vide = skm.filtre === 'mine' && !moi ? 'Connect a wallet to see your skins.' : skm.total ? 'No skin in this filter right now.' : 'No skin minted yet.';
+    z.replaceChildren(bcEl('p', { cls: 'note', text: vide }));
+    return;
+  }
+  /* l ordre ne bouge que s il a change : deplacer un noeud ferait perdre le focus a qui tape une offre */
+  if (z.children.length !== enfants.length || enfants.some((e, i) => z.children[i] !== e)) z.replaceChildren(...enfants);
+}
+function skmPouls(el, id) {
+  const jusqua = skm.pouls.get(id) || 0, b = el.querySelector('.skmPouls');
+  if (jusqua > Date.now()) {
+    if (!b) {
+      const p = bcEl('span', { cls: 'skmPouls', text: 'new bid' });
+      const titre = el.querySelector('.skmInfo b'); if (titre) titre.after(p);
+      el.classList.remove('skmNeuf'); void el.offsetWidth; el.classList.add('skmNeuf');
+      setTimeout(() => { skmPouls(el, id); }, jusqua - Date.now() + 50);
+    }
+  } else { if (b) b.remove(); el.classList.remove('skmNeuf'); skm.pouls.delete(id); }
+}
+function skmLigne(s, moi, t) {
+  const id = String(s.tokenId), li = bcEl('div', { cls: 'skmLigne' });
+  li.dataset.skin = id;
+  const face = bcEl('span', { cls: 'skmFace', title: 'Skin #' + id });
+  /* la face : des noeuds SVG construits un par un (apercuSkinFormes : seulement des entiers 0..359 de la recette lue sur la chaine) —
+   *   jamais d innerHTML dans le panneau (garde de test-commandes-panel) */
+  const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+  for (const [k, v] of [['viewBox', '0 0 48 48'], ['width', '44'], ['height', '44'], ['aria-hidden', 'true'], ['focusable', 'false']]) svg.setAttribute(k, v);
+  for (const [tag, at] of apercuSkinFormes(s.recette)) { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(at)) e.setAttribute(k, v); svg.append(e); }
+  face.append(svg);
+  /* UNIT est LE block de l app : nomme sans attendre l index du Market (mesure 2026-10-23 : la skin #1 affichait « 0xb200…4f27 ») */
+  const sym = String(s.block) === UNIT_APP.toLowerCase() ? 'UNIT' : (bcResoudre(s.block).sym || court(s.block)), st = statutSkin(s, t), qui = detenteurCourt(s, moi);
+  const statut = bcEl('span', { cls: 'skmStatut note' });
+  if (st === 'FIXE') statut.textContent = 'For sale · ' + bcMontantSkin(s.prix, s.devise) + ' · seller ' + qui;
+  else if (st === 'ENCHERE') {
+    statut.append(document.createTextNode('Auction · ' + (BigInt(s.offre) > 0n ? 'highest bid ' + bcMontantSkin(s.offre, s.devise) : 'no bid yet, opens at ' + bcMontantSkin(s.prix, s.devise)) + ' · ends in '));
+    const tr = bcEl('span', { cls: 'skmTemps', text: tempsRestant(s.fin, t) }); tr.dataset.fin = String(s.fin);
+    statut.append(tr, document.createTextNode(' · seller ' + qui));
+  } else if (st === 'ENCHERE_FINIE') statut.textContent = 'Auction ended · ' + (BigInt(s.offre) > 0n ? 'winning bid ' + bcMontantSkin(s.offre, s.devise) : 'no bid — it goes back to its seller') + ' · anyone can settle it';
+  else statut.textContent = 'Not listed · held by ' + qui;
+  li.append(face, bcEl('span', { cls: 'skmInfo' }, [bcEl('b', { text: 'Skin #' + id }), document.createTextNode(' dresses ' + sym), statut]));
+  const gestes = bcEl('div', { cls: 'skmGestes' });
+  const bouton = (texte, genre, x) => { const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: texte }); b.addEventListener('click', () => void bcActionMarche(genre, s, x)); gestes.append(b); return b; };
+  for (const g of gestesSkin(s, moi, t)) {
+    if (g.genre === 'ACHETER') bouton(g.libelle + ' · ' + bcMontantSkin(s.prix, s.devise), 'ACHETER');
+    else if (g.genre === 'ENCHERIR') {
+      const d = bcDevisesSkin()[String(s.devise).toLowerCase()], min = offreMinimale(s);
+      if (!d) { bouton(g.libelle + ' · ' + bcMontantSkin(min, s.devise), 'ENCHERIR'); continue; }
+      /* l offre : le minimum du contrat (+5 %) pre-rempli, EXACT ; plus haut si on veut, jamais en dessous (montantOffre le refuse) */
+      const champ = bcEl('input', { type: 'text', inputmode: 'decimal', cls: 'skmOffre', 'aria-label': 'Your bid in ' + d.sym });
+      champ.value = brutVersTexteSkin(min, d.dec); champ.defaultValue = champ.value;
+      const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: g.libelle + ' (min ' + bcMontantSkin(min, s.devise) + ')' });
+      b.addEventListener('click', () => {
+        let brut;
+        try { brut = montantOffre(s, montantVersBrut(champ.value, d.dec)); } catch (e) { champ.setCustomValidity(String(e.message)); champ.reportValidity(); return; }
+        champ.setCustomValidity('');
+        void bcActionMarche('ENCHERIR', s, { montant: brut });
+      });
+      gestes.append(champ, bcEl('span', { cls: 'note', text: d.sym }), b);
+    } else if (g.genre === 'REGLER') bouton(g.libelle, 'REGLER');
+    else if (g.genre === 'RETIRER') bouton(g.libelle, 'RETIRER');
+    else if (g.genre === 'METTRE_EN_VENTE') gestes.append(bcFormVendreSkin(s, g.libelle));
+    /* OUVRIR_ENCHERE : son bouton « Start an auction » est dans le meme formulaire que Sell (meme prix tape, + une duree) */
+  }
+  li.append(gestes);
+  return li;
+}
+/* onglet Market ouvert et page visible (personne ne regarde = rien n est lu) : toutes les 5 s la liste se REPEINT sans rien lire (temps
+ *   restant, un wallet qui vient de se connecter, la fin d un « new bid ») ; la chaine n est RELUE que toutes les SKM_RAFRAICHIR_MS (25 s) */
+setInterval(() => {
+  const v = document.getElementById('v-trade');
+  if (document.hidden || !v || !v.classList.contains('on')) return;
+  if (Date.now() - skm.lu >= SKM_RAFRAICHIR_MS && Date.now() - skm.rate >= SKM_RAFRAICHIR_MS) void peindreSkinsMarche(true); else skmPeindreListe();
+}, 5000);
 async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
   const id = s ? s.tokenId : null;
   const titre = { ACHETER: 'Buy skin #' + id, ENCHERIR: 'Bid on skin #' + id, REGLER: 'Settle skin #' + id, RETIRER: 'Take back skin #' + id,
     VENDRE: 'Sell skin #' + id, ENCHERE: 'Auction skin #' + id, CREDIT: 'Withdraw from the skins market' }[genre];
+  /* 2026-10-23 : un geste venu de l onglet Market ou du Game ouvre le panneau (sa carte a signer y vit) — sans lui, la carte s ecrivait
+   *   dans un panneau ferme et le bouton semblait mort */
+  try { bcOuvrirPop({ vue: 'chat', sansBasculer: true, deplier: true }); } catch (_) { /* la carte est quand meme dans le fil */ }
   const m = bcMessage(qui, '', (qui === 'Skins' ? '' : 'Its brain proposes: ') + titre);
   bcVue('chat');
   if (CHAINE !== 8453) { bcEtape(m, 'The skins market is on Base mainnet only.', 'non'); return; }
@@ -26371,9 +26560,22 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
   const go = async () => {
     if (!(await bcAvecWallet(m, go))) return;
     let appels = [];
+    /* 2026-10-23 : la ligne affichee peut dater de 25 s. La skin est RELUE sur la chaine (skinsPage(id, 1)) avant de construire l appel :
+     *   lecture ratee = rien n est demande ; geste devenu impossible (vendue, offre retiree, enchere finie) = on le dit, rien n est demande ;
+     *   offre plus haute entre-temps = le minimum suit la chaine (un montant tape sous ce minimum est refuse par montantOffre). */
+    if (s && genre !== 'CREDIT') {
+      let frais = null;
+      try { frais = decoderPage(await rpc('eth_call', [{ to: BLOCKSKINS, data: appelPage(s.tokenId, 1) }, 'latest']))[0] || null; } catch (_) { frais = null; }
+      if (!frais || String(frais.tokenId) !== String(s.tokenId)) { bcEtape(m, 'This skin could not be read again on chain — nothing was asked.', 'non'); bcBoutons(m, [['Try again', go, true], ['Dismiss', refuser, true]]); return; }
+      const geste = { ACHETER: 'ACHETER', ENCHERIR: 'ENCHERIR', REGLER: 'REGLER', RETIRER: 'RETIRER', VENDRE: 'METTRE_EN_VENTE', ENCHERE: 'OUVRIR_ENCHERE' }[genre];
+      if (!actionsSkin(frais, compte, Math.floor(Date.now() / 1000)).includes(geste)) { bcEtape(m, 'This skin changed since it was shown — ' + SKM_STATUTS[statutSkin(frais, Math.floor(Date.now() / 1000))] + ' now. Nothing was asked.', 'non'); void peindreSkinsMarche(true); return; }
+      if (genre === 'ENCHERIR' && BigInt(frais.offre) !== BigInt(s.offre)) bcEtape(m, 'The highest bid changed since it was shown: the minimum is now ' + bcMontantSkin(offreMinimale(frais), frais.devise) + '.');
+      if (genre === 'ACHETER' && (BigInt(frais.prix) !== BigInt(s.prix) || frais.devise !== s.devise)) bcEtape(m, 'The price changed since it was shown: it is now ' + bcMontantSkin(frais.prix, frais.devise) + '.');
+      s = frais;
+    }
     try {
       if (genre === 'ACHETER' || genre === 'ENCHERIR') {
-        const montant = genre === 'ACHETER' ? s.prix : offreMinimale(s);
+        const montant = genre === 'ACHETER' ? s.prix : montantOffre(s, x && x.montant != null ? x.montant : null);
         if (s.devise !== ETH_SKIN) {
           /* en jeton : solde ET autorisation relus avant de signer ; approbation EXACTE du montant, seulement si besoin */
           let solde = null, autorise = null;
@@ -26418,7 +26620,7 @@ async function bcActionMarche(genre, s, x = {}, qui = 'Skins') {
       m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + r.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
       mesSkins.lu = 0; bc.skinsLues = 0;
       await lireMesSkins(); poserMesSkins(); bcPeindreSkinEtat();
-      void bcPeindreMarche();
+      void bcPeindreMarche(); void peindreSkinsMarche(true);
       bcEtape(m, 'Done — the market was read again on chain.', 'oui');
     }], ['Dismiss', refuser, true]]);
   };
