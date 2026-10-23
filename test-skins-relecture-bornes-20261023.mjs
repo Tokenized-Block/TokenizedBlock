@@ -95,7 +95,8 @@ vu(JSON.stringify(dv.nonLues) === '["AMZNc","AAPLc"]', 'A20 non lues dites : ' +
 
 /* ── B. LE VRAI CODE DE L APP ── */
 const html = fs.readFileSync(APP, 'utf8').replace(/\r\n/g, '\n');
-const fonction = (sig) => { const i = html.indexOf(sig); if (i < 0) return ''; const j = html.indexOf('\n}\n', i); return j > 0 ? html.slice(i, j + 2) : ''; };
+/* portable : la fin de fonction cherchee par regex (CRLF comme LF), pas par une ancre de position litterale */
+const fonction = (sig) => { const i = html.indexOf(sig); if (i < 0) return ''; const k = html.slice(i).search(/\r?\n\}\r?\n/); return k > 0 ? html.slice(i, i + k + 2) : ''; };
 const srcAction = fonction('async function bcActionMarche('), srcAifi = fonction('async function bcAifiProposerSkin(');
 vu(srcAction.length > 2000 && srcAifi.length > 300, 'B0 bcActionMarche et bcAifiProposerSkin extraits');
 const motA = (a) => String(a).toLowerCase().slice(2).padStart(64, '0');
