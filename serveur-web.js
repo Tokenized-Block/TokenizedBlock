@@ -111,6 +111,9 @@ import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 /* 2026-10-18 : BlockRolls (roll paye 0,50 USDC, day pass 10 USDC) — la fiche GENEREE (preparer-deploiement-blockrolls.mjs) ; `adresse` reste
  *   null tant que Phil n a pas signe : l app ne montre alors AUCUN bouton payant (practice). Aucune variable d environnement ne la remplace. */
 import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
+/* 2026-10-23 (Phil) : BlockSlots — la machine a sous a trois faces de bloc. La fiche GENEREE (preparer-deploiement-slots.mjs) ; `adresse`
+ *   reste null tant que le proprietaire n a pas signe : /api/slots rend alors PAS_OUVERT et l app ne montre AUCUN bouton Slots. */
+import { SLOTS_DEPLOIEMENT } from './slots-deploiement.js';
 /* 2026-10-18 : TicketPot LIVE (0xf986…1df1, bloc 52 776 705) — la fiche notee, et la lecture PURE du jour (lireJour : aucune cle requise) */
 import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { lireJour as lireJourTicketPot } from './ticketpot-attestation.js';
@@ -4640,6 +4643,9 @@ const SERVIS = [
   /* 2026-10-18 : BlockDuels (duels entre deux wallets, 90 / 7 / 3) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non
    *   signes (duels-plan.js importe blockrolls-plan.js, deja servi). ⛔ absent d ici = 404 = page morte. */
   'deployer-duels.html', 'duels-deploiement.js', 'duels-config.js', 'duels-plan.js',
+  /* 2026-10-23 (Phil) : BlockSlots (3 faces de bloc, points, prix fixes) — page de deploiement (noindex, aucun lien), fiche, encodeur,
+   *   appels non signes ; slots-plan.js est importe par app.html. ⛔ absent d ici = 404 = page morte. */
+  'deployer-slots.html', 'slots-deploiement.js', 'slots-config.js', 'slots-plan.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
    *   aucun lien depuis l app, elle relit owner() et currencyAllowed et ne signe rien. */
   'admettre-devises-skins.html',
@@ -6624,6 +6630,20 @@ function traiterRequete(req, res) {
       fenetresRattrapage: cvJl.fenetresRattrapage,
       scanJusqua: journalEtat.curseur, sources: { rolls: cJl.rolls, skins: cJl.skins, practice: true, duels: cJl.duels, missions: cJl.missions },
       evenements: avecBlocks(tousJl, (w) => blocDeJl.get(w) || null) });
+    return;
+  }
+
+  /* ══ LES SLOTS (2026-10-23) — GET /api/slots : la fiche de BlockSlots, LECTURE SEULE, aucune lecture de chaine ici (l app lit le pot et
+   *   ses points elle-meme, par eth_call). Sans adresse ecrite (noter-deploiement-slots.mjs) : PAS_OUVERT, et la carte reste cachee.
+   *   Le prix, la part du pot et la table viennent de la FICHE (constructeur), jamais tapes ici. */
+  if (chemin === '/api/slots') {
+    const rendreS = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
+    const contratSlots = /^0x[0-9a-f]{40}$/i.test(String(SLOTS_DEPLOIEMENT.adresse || '')) && Number.isSafeInteger(SLOTS_DEPLOIEMENT.bloc) ? String(SLOTS_DEPLOIEMENT.adresse).toLowerCase() : null;
+    if (!contratSlots) { rendreS({ ok: false, etat: 'PAS_OUVERT' }); return; }
+    const sc = SLOTS_DEPLOIEMENT.constructeur;
+    rendreS({ ok: true, etat: 'OUVERT', contrat: contratSlots, bloc: SLOTS_DEPLOIEMENT.bloc, usdc: String(sc.usdc).toLowerCase(), prixSpin: String(sc.spinPrice), potShareBps: Number(sc.potShareBps),
+      prizes: sc.prizes.map(String), esperanceBrut: String(SLOTS_DEPLOIEMENT.esperanceBrut), probGainBps: Number(SLOTS_DEPLOIEMENT.probGainBps), fenetre: 256, delai: 2 });
     return;
   }
 
