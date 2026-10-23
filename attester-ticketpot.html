@@ -47,6 +47,8 @@
   let compte = null, parts = null, verifier = null;
   const veille = () => 'J' + new Date(Date.now() - 86400000).toISOString().slice(0, 10);
   $('#jour').value = new URLSearchParams(location.search).get('day') || veille();
+  /* ?week=1 (la carte « Sign the pot shares » de l app, le dernier jour d une semaine) : le mode semaine coche d emblee */
+  $('#semaine').checked = new URLSearchParams(location.search).get('week') === '1';
   const eth = () => { if (!window.ethereum) throw new Error('No wallet found in this browser.'); return window.ethereum; };
   async function lire() {
     const jour = $('#jour').value.trim();

@@ -24,12 +24,43 @@ import { planPoster, planReclamer, budgetMission } from './missions-plan.js';
 import { propositionSkin, appelApprouver, appelAcheter, appelEncherir, appelRegler } from './blockskins.js';
 import { planCreate, planJoin, planSettle as planSettleDuel, planRefund as planRefundDuel, etatDuel, partage as partageDuel, MISE_MIN as MISE_MIN_DUEL,
   MARGE_JOIN_S, EXPIRATION_MIN_S, EXPIRATION_MAX_S } from './duels-plan-app.js';
+/* LE POT DES RECOMPENSES (Phil 2026-10-18 : « gere la pool pour les rewards, le brain qui s en occupe ») — pour le wallet OWNER de TicketPot
+ *   SEULEMENT (owner LU sur la chaine, donne dans l etat) ; le brain PROPOSE, le wallet de l owner SIGNE chaque pas ; rien ne bouge seul.
+ *   Ordre fixe, juste apres les settles : POT_CLOSE (le pot d HIER pas ferme et non vide : planClose owner), puis POT_SIGN (un jour ferme dont
+ *   des parts n ont pas de signature : le module NE SIGNE PAS — l app ouvre la signature EIP-712 du wallet verifier), puis POT_FUND (le pot
+ *   d AUJOURD HUI, le budget journalier regle moins ce qui a deja ete verse aujourd hui, jamais au-dessus du solde USDC LU : planFund,
+ *   approve EXACT + fund). Le dernier jour d une semaine (tirage-saison.js saisonDe), le pot de ce jour EST le pot de la semaine : POT_SIGN
+ *   signe alors les parts de la SEMAINE (&week=1) — jamais les parts du jour ET de la semaine pour ce jour. */
+import { planFund as planFundPot, planClose as planClosePot, jourDe as jourContrat, jourIdDeDay } from './ticketpot-plan.js';
+import { saisonDe } from './tirage-saison.js';
 
-export const KINDS = Object.freeze(['ROLL', 'SETTLE', 'TAKE_MISSION', 'POST_MISSION', 'BID_SKIN', 'BUY_SKIN', 'DUEL_CREATE', 'DUEL_JOIN', 'DUEL_SETTLE', 'NONE']);
+export const KINDS = Object.freeze(['ROLL', 'SETTLE', 'TAKE_MISSION', 'POST_MISSION', 'BID_SKIN', 'BUY_SKIN', 'DUEL_CREATE', 'DUEL_JOIN', 'DUEL_SETTLE', 'POT_CLOSE', 'POT_SIGN', 'POT_FUND', 'NONE']);
 export const MAX_ROLLS_HEURE = 60;
 export const DUEL_CREATE_INTERVALLE_S = 3600;
 export const DUEL_EXPIRATION_DEFAUT_S = 3600;
-export const REGLES_DEFAUT = Object.freeze({ rolls: true, maxRollsPerHour: 6, settle: true, missions: false, postMissions: false, skins: false, maxSkinBidUsdc: '0', duels: false, maxDuelStakeUsdc: '0' });
+/** au plus autant de parts dans UNE carte POT_SIGN (une signature de message par part) */
+export const POT_SIGN_MAX = 50;
+export const REGLES_DEFAUT = Object.freeze({ rolls: true, maxRollsPerHour: 6, settle: true, missions: false, postMissions: false, skins: false, maxSkinBidUsdc: '0', duels: false, maxDuelStakeUsdc: '0', pot: false, potDailyUsdc: '0' });
+const JOUR_S = 86400;
+/** le jour du contrat (floor(ts / 86400)) est-il le DERNIER d une semaine de saison (tirage-saison.js saisonDe) ? son pot est alors celui de la semaine */
+export function dernierJourDeSemaine(day) {
+  const d = Number(day);
+  if (!Number.isInteger(d)) return false;
+  const s = saisonDe(d * JOUR_S * 1000);
+  return Math.floor(s.fin / (JOUR_S * 1000)) - 1 === d;
+}
+/** ce que le brain a deja verse au pot du jour `day` : l historique SIGNE ({ kind: 'POT_FUND', day, usdc }). Un montant illisible -> null
+ *  (le module ne propose alors aucun fund : jamais « compte 0 »). */
+export function potVerseLeJour(historique, day) {
+  let a = 0n;
+  for (const h of Array.isArray(historique) ? historique : []) {
+    if (!h || h.kind !== 'POT_FUND' || Number(h.day) !== Number(day)) continue;
+    const v = (() => { try { const x = BigInt(h.usdc); return x >= 0n ? x : null; } catch (_) { return null; } })();
+    if (v === null) return null;
+    a += v;
+  }
+  return a;
+}
 
 const ADR = /^0x[0-9a-f]{40}$/;
 const bas = (x) => String(x || '').toLowerCase();
@@ -40,10 +71,11 @@ const min = (...xs) => xs.reduce((a, x) => (x < a ? x : a));
 export function normaliserRegles(r = {}) {
   const x = r && typeof r === 'object' ? r : {};
   const h = Number(x.maxRollsPerHour);
-  const plafond = brut(x.maxSkinBidUsdc), plafondDuel = brut(x.maxDuelStakeUsdc);
+  const plafond = brut(x.maxSkinBidUsdc), plafondDuel = brut(x.maxDuelStakeUsdc), budgetPot = brut(x.potDailyUsdc);
   return {
     rolls: x.rolls === true, settle: x.settle === true, missions: x.missions === true, postMissions: x.postMissions === true, skins: x.skins === true,
-    duels: x.duels === true,
+    duels: x.duels === true, pot: x.pot === true,
+    potDailyUsdc: budgetPot === null ? 0n : budgetPot,
     maxRollsPerHour: Number.isInteger(h) && h >= 0 ? Math.min(h, MAX_ROLLS_HEURE) : 0,
     maxSkinBidUsdc: plafond === null ? 0n : plafond,
     maxDuelStakeUsdc: plafondDuel === null ? 0n : plafondDuel,
@@ -69,7 +101,10 @@ const usdcTxt = (v) => { const e = v / 1000000n, f = (v % 1000000n).toString().p
  *   rolls:    { contract, usdc, rollPrice, guess, pass: { rollsLeft, expiresAt } | null, pot, block (bloc actuel), pending: [{ rollId, targetBlock }] } | null,
  *   missions: { contract, usdc, claimable: [{ id, txHash, held, signature }], post: { cle, params, hold, poolManager } | null, mineOpen } | null,
  *   skins:    { list (decoderPage), block (le block du brain), usdc } | null,
- *   duels:    { contract, usdc, guess (une face NEUVE tiree par l app), expiresIn (s), block (bloc actuel), list: [duel (duels-plan-app.js)] } | null }
+ *   duels:    { contract, usdc, guess (une face NEUVE tiree par l app), expiresIn (s), block (bloc actuel), list: [duel (duels-plan-app.js)] } | null,
+ *   pot:      { contract, usdc, owner (LU), veille: /api/tirage.ticketpot.veille, sharesDay / sharesWeek: /api/ticketpot/parts (jour / &week=1) } | null }
+ *   rules.pot + rules.potDailyUsdc ; history porte { t, kind: 'POT_FUND', day, usdc } pour chaque fund SIGNE.
+ *   POT_SIGN n a AUCUN appel : { sign: { jourId, day, week, verifier, signerIsVerifier, shares: [{ wallet, amount, donnees }] } } — l app fait signer.
  */
 export function prochaineProposition(etat = {}) {
   const e = etat && typeof etat === 'object' ? etat : {};
@@ -120,6 +155,75 @@ export function prochaineProposition(etat = {}) {
         ? 'Reveal duel #' + d.id + ' — ' + x.blocsRestants + ' block(s) left to settle it (after that both stakes are refunded). Settling costs no USDC; the winner is paid by the contract.'
         : 'Duel #' + d.id + (x.etat === 'EXPIRE' ? ' was never accepted and has expired' : ' passed its 256-block window') + ' — refund ' + (x.etat === 'EXPIRE' ? 'the stake' : 'both stakes') + ' in full, no fee. Costs no USDC.',
       0n, 'DUEL_SETTLE:' + d.id);
+    }
+  }
+  /* 1c / 1d / 1e. LE POT DES RECOMPENSES — l owner de TicketPot seul ; close -> sign -> fund (cet ordre : un pot ferme rend ses parts
+   *   signables ; des parts signees ouvrent les claims ; le fund nourrit le jour suivant) */
+  const P = regles.pot && e.pot && ADR.test(bas(e.pot.contract)) ? e.pot : null;
+  if (regles.pot && !P) pourquoiPas.push('reward pot: the ticket pot was not read');
+  if (P) {
+    const proprio = ADR.test(bas(P.owner)) && bas(P.owner) === moi;
+    if (!proprio) pourquoiPas.push('reward pot: only the ticket pot owner manages it' + (ADR.test(bas(P.owner)) ? '' : ' (its owner was not read)'));
+    else {
+      const aujourdhui = jourContrat(t), hier = aujourdhui - 1, jidHier = jourIdDeDay(hier);
+      const potClose = () => {
+        const v = P.veille;
+        if (!v || Number(v.day) !== hier || v.ferme !== false || vus.has('POT_CLOSE:' + hier)) return null;
+        const reste = brut(v.reste);
+        if (reste === null) { pourquoiPas.push('reward pot: yesterday\'s pot was not read'); return null; }
+        if (reste === 0n) return null; /* un pot vide : fermer ne paierait personne (gas pour rien) */
+        const plan = planClosePot({ contrat: P.contract, day: hier, owner: true, ferme: false, maintenant: t });
+        if (plan.etat !== 'PRET') { pourquoiPas.push('reward pot: ' + plan.pourquoi); return null; }
+        return proposition('POT_CLOSE', plan.appels, 'Close yesterday\'s pot (' + jidHier + ', ' + usdcTxt(reste) + '): it freezes the pot, its shares become final and can be signed for the holders to claim. No USDC.', 0n, 'POT_CLOSE:' + hier);
+      };
+      const potSign = () => {
+        const lu = (x, mode) => x && x.ok === true && x.ferme === true && x.jourId === jidHier && bas(x.contrat) === bas(P.contract) && Array.isArray(x.parts) && (x.mode || 'JOUR') === mode;
+        const entame = (x) => x.parts.some((p) => p && p.signature);
+        const semaine = dernierJourDeSemaine(hier), J0 = lu(P.sharesDay, 'JOUR') ? P.sharesDay : null, S0 = lu(P.sharesWeek, 'SEMAINE') ? P.sharesWeek : null;
+        let src = null, week = false;
+        if (!semaine) src = J0;
+        else if (!J0) { pourquoiPas.push('reward pot: ' + jidHier + ' closes a week — its day shares were not read, so the weekly shares are not proposed'); return null; }
+        else {
+          const jourEntame = entame(J0);
+          if (jourEntame) {
+            if (S0 && entame(S0)) { pourquoiPas.push('reward pot: ' + jidHier + ' has day AND weekly signatures — nothing more is proposed'); return null; }
+            src = J0;
+          } else if (!S0) { pourquoiPas.push('reward pot: ' + jidHier + ' closes a week — its weekly shares were not read'); return null; }
+          else { src = S0; week = true; }
+        }
+        if (!src) return null;
+        const verifier = bas(src.verifier);
+        if (!ADR.test(verifier)) { pourquoiPas.push('reward pot: the verifier was not read'); return null; }
+        const aSigner = src.parts.filter((p) => p && !p.signature && ADR.test(bas(p.wallet)) && (brut(p.amount) || 0n) > 0n && p.donnees && typeof p.donnees === 'object')
+          .map((p) => ({ wallet: bas(p.wallet), amount: String(brut(p.amount)), donnees: p.donnees }))
+          .sort((a, b) => (a.wallet < b.wallet ? -1 : a.wallet > b.wallet ? 1 : 0)).slice(0, POT_SIGN_MAX);
+        if (!aSigner.length) return null;
+        const total = aSigner.reduce((a, p) => a + BigInt(p.amount), 0n);
+        return { kind: 'POT_SIGN', calls: [], costUsdc: '0', cle: 'POT_SIGN:' + jidHier + (week ? '#S' : ''),
+          why: 'Sign ' + aSigner.length + ' ' + (week ? 'weekly ' : '') + 'share' + (aSigner.length > 1 ? 's' : '') + ' of ' + jidHier + (week ? ' (it closes the week: the weekly pot, shared by entries)' : '') + ' — ' + usdcTxt(total)
+            + ' for the holders to claim. Each share is a typed message signed by the verifier wallet: no transaction, no gas, nothing moves.',
+          sign: { jourId: jidHier, day: hier, week, verifier, signerIsVerifier: moi === verifier, shares: aSigner } };
+      };
+      const potFund = () => {
+        const budgetPot = regles.potDailyUsdc;
+        if (budgetPot <= 0n) return null;
+        if (!ADR.test(bas(P.usdc))) { pourquoiPas.push('reward pot: the USDC address is not known'); return null; }
+        const verse = potVerseLeJour(e.history, aujourdhui);
+        if (verse === null) { pourquoiPas.push('reward pot: an earlier funding could not be read — no new funding proposed'); return null; }
+        const resteP = budgetPot > verse ? budgetPot - verse : 0n;
+        if (resteP === 0n) pourquoiPas.push('reward pot: today\'s reward budget (' + usdcTxt(budgetPot) + ') is already in the pot');
+        else if (solde === null) pourquoiPas.push('reward pot: your USDC balance was not read');
+        else if (resteP > solde) pourquoiPas.push('reward pot: this wallet holds ' + usdcTxt(solde) + ', today\'s reward budget left is ' + usdcTxt(resteP));
+        else {
+          const plan = planFundPot({ contrat: P.contract, usdc: P.usdc, day: aujourdhui, montant: resteP, ferme: false, maintenant: t });
+          if (plan.etat !== 'PRET') { pourquoiPas.push('reward pot: ' + plan.pourquoi); return null; }
+          const fin = dernierJourDeSemaine(aujourdhui);
+          return { ...proposition('POT_FUND', plan.appels, 'Fund today\'s pot (' + jourIdDeDay(aujourdhui) + ') with ' + usdcTxt(resteP) + ' — your daily reward budget' + (verse > 0n ? ' (' + usdcTxt(verse) + ' already in today)' : '')
+            + (fin ? '. Today closes the week: this is the weekly pot, shared by the week\'s entries.' : ', shared by today\'s ticket holders.') + ' It never comes back to the wallet.', resteP, 'POT_FUND:' + aujourdhui), day: aujourdhui };
+        }
+        return null;
+      };
+      for (const etape of [potClose, potSign, potFund]) { const p = etape(); if (p) return p; }
     }
   }
   /* la skin : UNE lecture de propositionSkin, au plafond le plus bas (regle, budget, solde) */
