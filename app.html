@@ -211,6 +211,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .slotsTable{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;margin:6px 0 0}
 .slotsTable th,.slotsTable td{text-align:right;padding:3px 6px;border-bottom:1px solid var(--ligne)}
 .slotsTable th:first-child,.slotsTable td:first-child{text-align:left}
+.slotsListe{margin:4px 0 0;padding-left:18px;font-size:12.5px;color:var(--doux);overflow-wrap:anywhere}
+.slotsListe li{margin:2px 0}
+.slotsListe li[data-court="1"]{color:var(--accent2)}
 /* LES DUELS (2026-10-18) : une ligne par duel — deux faces (createur, adversaire) contre la face du bloc, la mise, l action possible */
 .duelLigne{border:1px solid var(--ligne);border-radius:12px;padding:8px 10px;margin:8px 0 0;background:rgb(var(--accentRgb) / .04);min-width:0}
 .duelLigne[data-moi="1"]{border-color:rgb(var(--accentRgb) / .55)}
@@ -3858,6 +3861,9 @@ details[open] > summary::before{transform:rotate(90deg)}
          bon reward de la pool, comme une machine a sous ») — BlockSlots. Les blocs spin + 2, + 3, + 4 donnent UNE face chacun (v2, Phil
          2026-10-23) ; par trait, 3 egales = 3 points, 2 egales = 1 ; le contrat paie un prix FIXE par points, 0..5 USDC par spin, plafonne
          par le pot ; les points s additionnent par wallet (un compteur on-chain, pas un gain).
+         v3 (verdict adverse 2026-10-23, defaut 1) : la liste #slotsListe dit, POUR CHAQUE spin, ce que Settle paie et ce qui manque, avant
+         la signature puis apres le recu ; Settle n envoie QUE les spins payes en entier ; un gain plafonne passe par « Accept » (un spin, le
+         minimum vu) ; une fenetre manquee se rembourse par « Claim refund ».
          ⛔ CACHEE tant que /api/slots ne sert pas de contrat : rien de payant ne se montre avant. Chaque chiffre est lu (fiche, chaine) ou
          CALCULE (loi exacte, slots-plan.js) ; une lecture ratee dit « not read ». -->
     <div class="carte" id="slotsCarte" hidden>
@@ -3871,10 +3877,13 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
       <div class="slotsAccords" id="slotsAccords"></div>
       <p class="note" id="slotsEtat" style="margin:6px 0 0">Reading the slots on chain…</p>
+      <ul class="slotsListe" id="slotsListe"></ul>
       <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>
       <div class="jourEtapes">
         <button type="button" class="bouton" id="slotsSpin" hidden>Spin</button>
         <button type="button" class="bouton sec" id="slotsRegler" hidden>Settle</button>
+        <button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>
+        <button type="button" class="bouton sec" id="slotsRembourser" hidden>Claim refund</button>
       </div>
       <details style="margin:8px 0 0">
         <summary class="note" style="cursor:pointer">Odds and prizes</summary>
@@ -6360,10 +6369,18 @@ setTimeout(bjRelire, 30000);
  *   comme le contrat (slots-plan.js facesDuSpin). ACTIONS : Spin (approve EXACT + spin), Settle (settleMany des spins reglables). Le wallet signe.
  *   v2 (verdict adverse + Phil 2026-10-23) : D1 tuile et table plafonnees par le pot lu ; D2 « paient quelque chose » ET « rendent la mise » ;
  *   R2 Settle sans repeint avant la signature, et un recu sans Settled dit « window closed » ; les points = un compteur, le gain = par spin.
+ *   v3 (2e verdict adverse 2026-10-23, defaut 1 : un Settle de PLUSIEURS spins faisait perdre des gains sans le dire) : la carte calcule,
+ *   POUR CHAQUE spin, ce que Settle paie, dans l ordre ou le contrat les regle (slots-plan.js planReglement : le pot baisse spin apres spin) ;
+ *   Settle n envoie QUE les spins payes en entier (le contrat saute les autres de toute facon) ; un spin que le pot ne couvre pas est
+ *   LISTE avec son manque, avant et apres l envoi, et ne se prend au rabais que par « Accept » (acceptCapped : un spin, le joueur, le
+ *   minimum vu) ; une fenetre manquee se rembourse (« Claim refund », la part tenue du dev). Lectures (verdict : ~8 toutes les 3 s) : les
+ *   Spun par tranches nouvelles, les hashes de bloc lus une fois, les points relus seulement quand un spin se clot ; le minuteur de 3 s ne
+ *   lit que la tete tant qu aucun spin ne change d etat. Un repeint FORCE demande pendant un repeint repart juste apres (il etait perdu).
  *   ⛔ Sans contrat servi : carte et tuile CACHEES (aucun bouton mort). ⛔ Rien n est promis : chaque chiffre est lu, ou calcule (loi exacte).
  *   Place APRES « Let the brain play » : les bancs des duels et du brain lisent des tranches bornees par leurs titres.
  *   NON MESURE : un spin reel sur Base (contrat non deploye a l ecriture de ce code). */
-const slotsCfg = { j: null, lu: 0, enVol: null, enCours: false, dernier: null, table: false, minuteur: null, attente: null, peint: null };
+const slotsCfg = { j: null, lu: 0, enVol: null, enCours: false, dernier: null, dernierFaces: null, table: false, minuteur: null, peint: null, suite: null,
+  cle: null, spins: new Map(), clos: new Set(), scanne: null, hashes: new Map(), moi: null, vue: null, peintA: 0 };
 const SLOTS_TRAITS = ['colour', 'orbit', 'facet', 'material', 'ornament'];
 const slotsContrat = (j) => (j && j.ok && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
 async function lireSlotsServis(force = false) {
@@ -6406,15 +6423,82 @@ function remplirTableSlots(j, pot) {
     for (const t of [String(k), chance(v), usdcTexte(BigInt(j.prizes[k])), maint === null ? 'not read' : usdcTexte(maint)]) { const td = document.createElement('td'); td.textContent = t; tr.append(td); }
     corps.append(tr);
   });
-  if (note) note.textContent = 'Prizes are capped by the pot: "Pays now" is what each prize pays if a spin is settled now' + (pot === null ? ' (the pot was not read).' : ', with ' + usdcTexte(pot) + ' USDC in the pot.');
+  if (note) note.textContent = 'Prizes are capped by the pot: "Pays now" is the most the pot can pay for each prize right now' + (pot === null ? ' (the pot was not read).' : ', with ' + Slots.usdcPrecis(pot) + ' USDC in the pot.')
+    + ' Settle pays a prize only in full; a smaller amount is paid only if you accept it for that spin.';
   slotsCfg.table = cle;
 }
 const lireUintSlots = async (to, data) => { try { return Slots.lireUint(await rpc('eth_call', [{ to, data }, 'latest'])); } catch (_) { return null; } };
-/* un seul repeint a la fois (le minuteur de 3 s, l intervalle de 20 s et l onglet peuvent se croiser) : un appel pendant un repeint attend celui-ci */
+/* un seul repeint a la fois (le minuteur de 3 s, l intervalle de 20 s et l onglet peuvent se croiser) : un appel pendant un repeint attend
+ * celui-ci. v3 (verdict : `force` etait PERDU quand un repeint tournait) : un appel FORCE pendant un repeint en relance un, force, juste apres. */
 function peindreSlots(force = false) {
-  if (slotsCfg.peint) return slotsCfg.peint;
+  if (slotsCfg.peint) {
+    if (!force) return slotsCfg.peint;
+    if (!slotsCfg.suite) slotsCfg.suite = slotsCfg.peint.catch(() => null).then(() => { slotsCfg.suite = null; return peindreSlots(true); });
+    return slotsCfg.suite;
+  }
   slotsCfg.peint = peindreSlotsUneFois(force).finally(() => { slotsCfg.peint = null; });
   return slotsCfg.peint;
+}
+/* les hashes des trois blocs d un spin : lus UNE fois (le hash d un bloc passe ne change plus), gardes en memoire ; null si l un manque */
+async function hashesSlots(t) {
+  const ns = Slots.blocsDesFaces(t), manquent = ns.filter((n) => !slotsCfg.hashes.has(n));
+  if (manquent.length) {
+    const bs = await Promise.all(manquent.map((n) => rpc('eth_getBlockByNumber', ['0x' + n.toString(16), false]).catch(() => null)));
+    bs.forEach((b, i) => { if (b && /^0x[0-9a-f]{64}$/i.test(String(b.hash))) slotsCfg.hashes.set(manquent[i], String(b.hash).toLowerCase()); });
+    while (slotsCfg.hashes.size > 600) slotsCfg.hashes.delete(slotsCfg.hashes.keys().next().value);
+  }
+  const h = ns.map((n) => slotsCfg.hashes.get(n));
+  return h.every(Boolean) ? h : null;
+}
+/* les spins de ce wallet encore EN ATTENTE : les Spun lus par TRANCHES (la premiere bornee, puis les seuls blocs nouveaux), le statut relu
+ * des seuls spins non clos ; un spin clos (regle ou rembourse) sort de la liste pour de bon. Une lecture ratee jette : rien n est devine. */
+async function spinsEnAttenteSlots(contrat, moi, j, tete) {
+  const tr = Slots.trancheSpun({ scanne: slotsCfg.scanne, tete, blocDeploiement: j.bloc });
+  if (tr) {
+    const logs = await rpc('eth_getLogs', [Slots.filtreSpunDe({ contrat, joueur: moi, de: tr.de, jusqua: tr.jusqua })]);
+    for (const s of Slots.lireSpunTous(logs, contrat)) { const id = String(s.spinId); if (s.player === moi && !slotsCfg.clos.has(id) && !slotsCfg.spins.has(id)) slotsCfg.spins.set(id, { id, t: s.targetBlock }); }
+    slotsCfg.scanne = tr.jusqua;
+  }
+  const statuts = new Map(); let change = false;
+  for (const id of [...slotsCfg.spins.keys()]) {
+    let st = null; try { const v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(id) }, 'latest'])); st = v ? v.status : null; } catch (_) { st = null; }
+    statuts.set(id, st);
+    if (st !== null && st !== 1) { slotsCfg.spins.delete(id); slotsCfg.clos.add(id); change = true; }
+  }
+  return { spuns: [...slotsCfg.spins.values()].map((s) => ({ spinId: BigInt(s.id), targetBlock: s.t })), statuts, change };
+}
+/* la liste de la carte : une ligne par spin (texte de slots-plan.js phraseAvant) ; un spin que le pot ne couvre pas est marque */
+function slotsListe(lignes) {
+  const ul = $('#slotsListe'); if (!ul) return;
+  ul.textContent = '';
+  for (const l of lignes) { const li = document.createElement('li'); li.textContent = l.texte; if (l.court) li.dataset.court = '1'; ul.append(li); }
+}
+const slotsLignes = (plan, refund) => plan.lignes.map((l) => ({ texte: Slots.phraseAvant(l, refund), court: l.decision === 'COURT' }));
+/* la phrase d etat : le bilan du dernier envoi tant qu il n est pas remplace, sinon un resume du plan */
+function slotsResume(plan) {
+  if (!plan.lignes.length) return 'No spin waiting.';
+  const p = [];
+  if (plan.lot.length) {
+    const somme = plan.lignes.filter((l) => l.decision === 'LOT').reduce((s, l) => s + l.paie, 0n);
+    p.push('Settle pays ' + plan.lot.length + ' spin' + (plan.lot.length === 1 ? '' : 's') + ' in full: ' + Slots.usdcPrecis(somme) + ' USDC. Settle within ' + Math.min(...plan.lignes.filter((l) => l.decision === 'LOT').map((l) => l.blocsRestants)) + ' block(s).');
+  }
+  if (plan.courts.length) p.push('The pot is short for ' + plan.courts.length + ' spin' + (plan.courts.length === 1 ? '' : 's') + ': the amount missing is listed for each.');
+  if (plan.remboursables.length) p.push(plan.remboursables.length + ' refund' + (plan.remboursables.length === 1 ? '' : 's') + ' to claim.');
+  return p.length ? p.join(' ') : 'Your spins are listed below.';
+}
+/* le minuteur de 3 s (verdict : ~8 lectures a chaque fois) : UNE lecture de la tete ; un repeint complet seulement quand un spin change
+ * d etat (ses trois blocs arrivent, ou sa fenetre se ferme) ou toutes les 15 s ; sinon les blocs restants sont recomptes sans autre lecture */
+async function slotsTic() {
+  const v = document.getElementById('v-missions');
+  if (document.hidden || !v || !v.classList.contains('on')) return;
+  const vue = slotsCfg.vue;
+  let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+  if (!vue || !Number.isSafeInteger(tete) || Date.now() - slotsCfg.peintA > 15000) { void peindreSlots(); return; }
+  const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b).etat).join();
+  if (etats(tete) !== etats(vue.tete)) { void peindreSlots(); return; }
+  if (!slotsCfg.enCours) slotsListe(slotsLignes(Slots.planReglement({ ...vue, tete }), vue.refund));
+  clearTimeout(slotsCfg.minuteur);
+  slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000);
 }
 async function peindreSlotsUneFois(force = false) {
   const carte = $('#slotsCarte'), tuile = $('#jbSlotsTuile');
@@ -6427,118 +6511,159 @@ async function peindreSlotsUneFois(force = false) {
   if (!on) return null;
   const prix = BigInt(j.prixSpin), table = j.prizes.map((x) => BigInt(x)), part = Number(j.potShareBps);
   /* le plus haut prix de la table (5 USDC au plus, le contrat le borne) ; D2 : les chances et la moyenne sont CALCULEES (loi exacte) */
-  const haut = table[table.length - 1], ev = Slots.esperance(table, prix);
+  /* v3 : refund = la part tenue, rendue si la fenetre passe ; ev.meilleureBrut = ce que rend en moyenne la MEILLEURE strategie (regler ou
+   *   laisser rembourser), strictement sous le prix (bestPlayNumerator du contrat) — calcules, jamais tapes */
+  const haut = table[table.length - 1], ev = Slots.esperance(table, prix, part), refund = ev.refund;
   const pot = await lireUintSlots(contrat, Slots.appelPot());
   /* D1 : la tuile dit ce que le pot PEUT payer (min(plus haut prix, pot)), pas le prix brut de la table */
   jb('jbSlots', usdcTexte(prix) + ' USDC');
   if (pot === null) jb('jbSlotsTxt', 'three faces · up to ' + usdcTexte(haut) + ', capped by the pot');
   else jb('jbSlotsTxt', 'three faces · up to ' + usdcTexte(Slots.paieMaintenant(haut, pot)) + ' now');
   const rg = $('#slotsRegle');
-  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% to the slots pot, ' + ((10000 - part) / 100) + '% to TokenizedBlock. The three faces come from three different blocks: the blocks 2, 3 and 4 blocks later give one face each. For each trait, all three the same scores 3, two the same scores 1. The contract judges the spin when it is settled and pays its prize itself: a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '
-    + (ev.probGainBps / 100).toFixed(2) + '% of spins pay something, but only ' + (ev.probMiseBps / 100).toFixed(2) + '% pay back at least the ' + usdcTexte(prix) + ' USDC stake. On average a spin pays back ' + usdcTexte(BigInt(j.esperanceBrut)) + ' USDC — less while the pot holds less than ' + usdcTexte(haut) + ' USDC. '
-    + 'Your points are a running total kept on chain; prizes are paid per spin, points pay nothing on their own. Settle within ' + Slots.FENETRE + ' blocks of the first face block — about ' + (Slots.secondesFenetre(2000) / 60).toFixed(1) + ' min at 2-second blocks, about ' + Math.round(Slots.secondesFenetre(200)) + ' s at 200 ms blocks — or the spin is lost, no refund.';
+  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% goes to the slots pot; the other ' + ((10000 - part) / 100) + '% (' + Slots.usdcPrecis(refund) + ' USDC) is held by the contract — it goes to TokenizedBlock when the spin is settled, and back to you if the spin is not settled within its window. The three faces come from three different blocks: the blocks 2, 3 and 4 blocks later give one face each. For each trait, all three the same scores 3, two the same scores 1. The contract judges the spin when it is settled and pays its prize itself: a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '
+    + 'When the pot holds less than a spin\'s prize, Settle leaves that spin out and this card says how much is missing; you can accept what the pot holds for that spin, wait for the pot to grow, or let the window pass for the refund. '
+    + Slots.pourcentTexte(ev.probGainBps) + '% of spins pay something, but only ' + Slots.pourcentTexte(ev.probMiseBps) + '% pay back at least the ' + usdcTexte(prix) + ' USDC stake. On average a settled spin pays back ' + Slots.usdcPrecis(BigInt(j.esperanceBrut)) + ' USDC — less while the pot holds less than ' + usdcTexte(haut) + ' USDC. Settling only the spins that pay more than the refund, and taking the refund for the others, returns at most ' + Slots.usdcPrecis(ev.meilleureBrut) + ' USDC a spin on average, below the ' + usdcTexte(prix) + ' USDC price. '
+    + 'Your points are a running total kept on chain; prizes are paid per spin, points pay nothing on their own. Settle within ' + Slots.FENETRE + ' blocks of the first face block — about ' + (Slots.secondesFenetre(2000) / 60).toFixed(1) + ' min at 2-second blocks, about ' + Math.round(Slots.secondesFenetre(200)) + ' s at 200 ms blocks; after that, the refund can be claimed. This card finds your spins from the last ' + Slots.PLAGE_LOGS + ' blocks and those made while it is open.';
   remplirTableSlots(j, pot);
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null;
-  const bS = $('#slotsSpin'), bR = $('#slotsRegler'), etat = $('#slotsEtat'), mien = $('#slotsMoi');
+  const bS = $('#slotsSpin'), bR = $('#slotsRegler'), bA = $('#slotsAccepter'), bB = $('#slotsRembourser'), etat = $('#slotsEtat'), mien = $('#slotsMoi');
   bS.textContent = 'Spin · ' + usdcTexte(prix) + ' USDC';
   bS.hidden = !moi; bS.disabled = slotsCfg.enCours;
-  if (!moi) { bR.hidden = true; etat.textContent = 'Pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect a wallet to spin.'; mien.textContent = ''; return null; }
-  const [pts, gagne] = await Promise.all([lireUintSlots(contrat, Slots.appelPointsDe(moi)), lireUintSlots(contrat, Slots.appelGagneDe(moi))]);
+  if (!moi) { bR.hidden = true; bA.hidden = true; bB.hidden = true; slotsCfg.vue = null; slotsListe([]); etat.textContent = 'Pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect a wallet to spin.'; mien.textContent = ''; return null; }
+  /* un autre wallet ou un autre contrat : rien de l ancien n est garde */
+  const cle = contrat + ':' + moi;
+  if (slotsCfg.cle !== cle) { slotsCfg.cle = cle; slotsCfg.spins = new Map(); slotsCfg.clos = new Set(); slotsCfg.scanne = null; slotsCfg.moi = null; slotsCfg.vue = null; slotsCfg.dernier = null; slotsCfg.dernierFaces = null; }
+  let lu = null, tete = null;
+  try { tete = parseInt(await rpc('eth_blockNumber', []), 16); lu = Number.isSafeInteger(tete) ? await spinsEnAttenteSlots(contrat, moi, j, tete) : null; } catch (_) { lu = null; }
+  /* les points et les gains ne bougent que quand un spin de ce wallet se clot : relus alors (ou sur demande), pas a chaque repeint */
+  if (force || !slotsCfg.moi || slotsCfg.moi.pts === null || slotsCfg.moi.gagne === null || (lu && lu.change)) {
+    const [pts, gagne] = await Promise.all([lireUintSlots(contrat, Slots.appelPointsDe(moi)), lireUintSlots(contrat, Slots.appelGagneDe(moi))]);
+    slotsCfg.moi = { pts, gagne };
+  }
+  const { pts, gagne } = slotsCfg.moi;
   mien.textContent = 'Your points (a running total, no prize of its own): ' + (pts === null ? 'not read' : pts.toString()) + ' · won ' + (gagne === null ? 'not read' : usdcTexte(gagne) + ' USDC') + ' · pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC');
-  /* les spins en attente : les Spun de ce wallet sur ~300 blocs, puis leur statut relu */
-  let enAttente = null, tete = null;
-  try {
-    tete = parseInt(await rpc('eth_blockNumber', []), 16);
-    const logs = await rpc('eth_getLogs', [Slots.filtreSpunDe({ contrat, joueur: moi, de: Slots.debutFenetreSpins(tete, j.bloc), jusqua: tete })]);
-    const spuns = Slots.lireSpunTous(logs, contrat).filter((s) => s.player === moi);
-    const statuts = new Map();
-    for (const s of spuns) { let st = null; try { const v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(s.spinId) }, 'latest'])); st = v ? v.status : null; } catch (_) { st = null; } statuts.set(String(s.spinId), st); }
-    enAttente = Slots.etatSpins({ spuns, statuts, tete });
-  } catch (_) { enAttente = null; }
-  if (enAttente === null) { bR.hidden = true; slotsCfg.attente = null; etat.textContent = 'Your pending spins could not be read just now.'; return null; }
-  /* R2 : le chemin Settle part de CETTE lecture (spins relus en attente), sans repeindre avant la signature */
-  slotsCfg.attente = enAttente.filter((x) => x.etat !== 'NON_LU');
-  const reglables = enAttente.filter((x) => x.etat === 'REGLABLE'), tot = enAttente.filter((x) => x.etat === 'TROP_TOT'), nonLus = enAttente.filter((x) => x.etat === 'NON_LU');
-  bR.hidden = reglables.length === 0;
-  if (reglables.length) {
-    const r0 = reglables[reglables.length - 1];
-    bR.textContent = 'Settle ' + (reglables.length === 1 ? 'spin #' + r0.id : reglables.length + ' spins');
-    /* v2 : les TROIS blocs du spin (cible, + 1, + 2), un hash chacun ; un seul illisible = pas de faces montrees */
-    let hashes = null;
-    try {
-      const bs = await Promise.all(Slots.blocsDesFaces(r0.t).map((n) => rpc('eth_getBlockByNumber', ['0x' + n.toString(16), false])));
-      hashes = bs.every((b) => b && b.hash) ? bs.map((b) => String(b.hash)) : null;
-    } catch (_) { hashes = null; }
-    const faces = hashes ? peindreFacesSlots(hashes, r0.id) : null;
-    const p = faces ? Slots.points(faces) : null;
-    const gain = p === null ? null : Slots.paieMaintenant(table[p], pot);
-    etat.textContent = (faces ? 'Spin #' + r0.id + ': ' + p + ' point' + (p === 1 ? '' : 's') + (gain === null ? ' — the pot was not read, the prize is at most ' + usdcTexte(table[p]) + ' USDC.' : gain > 0n ? ' → ' + usdcTexte(gain) + ' USDC' + (gain < table[p] ? ' (the pot caps the ' + usdcTexte(table[p]) + ' USDC prize; only you can accept that).' : '.') : ', no prize.') : 'Spin #' + r0.id + ' is ready; its blocks were not read just now.')
-      + ' Settle within ' + Math.min(...reglables.map((x) => x.blocsRestants)) + ' block(s), or it is lost.';
-  } else if (tot.length) {
-    etat.textContent = 'Spin #' + tot[tot.length - 1].id + ': its three blocks are in after ' + tot[tot.length - 1].blocsAvant + ' more block(s).';
-    peindreFacesSlots(null, 0);
-  } else if (nonLus.length) etat.textContent = nonLus.length + ' recent spin(s) could not be read just now.';
-  else if (slotsCfg.dernier) etat.textContent = slotsCfg.dernier;
-  else { etat.textContent = 'No spin waiting.'; peindreFacesSlots(null, 0); }
-  /* un spin dont le bloc arrive : repeindre toutes les 3 s jusqu a ce qu il soit reglable (la fenetre peut ne durer que ~51 s) */
+  if (lu === null) { bR.hidden = true; bA.hidden = true; bB.hidden = true; slotsCfg.vue = null; slotsListe([]); etat.textContent = 'Your pending spins could not be read just now.'; return null; }
+  const enAttente = Slots.etatSpins({ spuns: lu.spuns, statuts: lu.statuts, tete });
+  /* les faces des spins reglables : leurs trois blocs (lus une fois), calculees comme le contrat ; un bloc illisible = faces null = NON_LU */
+  const spins = [];
+  for (const x of enAttente) {
+    if (x.etat === 'NON_LU') continue;
+    const h = x.etat === 'REGLABLE' ? await hashesSlots(x.t) : null;
+    spins.push({ id: x.id, t: x.t, hashes: h, faces: h ? Slots.facesDuSpin(h, x.id) : null });
+  }
+  const nonLus = enAttente.length - spins.length;
+  /* v3 (defaut 1) : CHAQUE spin, dans l ordre du contrat, le pot baissant spin apres spin ; R2 : le chemin Settle part de CETTE vue */
+  const plan = Slots.planReglement({ spins, pot, table, tete, refund });
+  slotsCfg.vue = { spins, pot, table, tete, refund };
+  const lot = plan.lignes.filter((l) => l.decision === 'LOT');
+  bR.hidden = lot.length === 0;
+  if (lot.length) bR.textContent = 'Settle ' + (lot.length === 1 ? 'spin #' + lot[0].id : lot.length + ' spins') + ' · ' + Slots.usdcPrecis(lot.reduce((s, l) => s + l.paie, 0n)) + ' USDC';
+  /* Accept : seulement quand aucun spin n est payable en entier (sinon le montant dependrait de l ordre des deux envois) ; le montant affiche
+   *   est alors EXACTEMENT min(prix, pot lu), et c est le minimum signe */
+  const court = plan.lot.length ? null : plan.courts.find((l) => l.paie > 0n) || null;
+  bA.hidden = !court;
+  if (court) bA.textContent = 'Accept ' + Slots.usdcPrecis(court.paie) + ' USDC for spin #' + court.id + ' (' + Slots.usdcPrecis(court.manque) + ' short)';
+  const remb = plan.remboursables.slice(0, Slots.SPINS_MAX);
+  bB.hidden = remb.length === 0;
+  if (remb.length) bB.textContent = 'Claim refund · ' + Slots.usdcPrecis(refund * BigInt(remb.length)) + ' USDC (' + remb.length + ' spin' + (remb.length === 1 ? '' : 's') + ')';
+  /* les faces montrees : le dernier spin reglable dont les blocs sont lus, sinon celles du dernier spin regle ici */
+  const montre = [...spins].reverse().find((s) => s.faces);
+  if (montre) peindreFacesSlots(montre.hashes, montre.id);
+  else if (slotsCfg.dernierFaces) peindreFacesSlots(slotsCfg.dernierFaces.hashes, slotsCfg.dernierFaces.id);
+  else peindreFacesSlots(null, 0);
+  const lignes = slotsLignes(plan, refund);
+  if (nonLus) lignes.push({ texte: nonLus + ' recent spin(s) could not be read just now.', court: false });
+  slotsListe(lignes);
+  etat.textContent = slotsCfg.dernier || slotsResume(plan);
+  slotsCfg.peintA = Date.now();
+  /* un spin qui attend ses blocs ou sa fenetre : le minuteur leger (slotsTic) ; la fenetre peut ne durer que ~51 s (Denim) */
   clearTimeout(slotsCfg.minuteur);
-  if (tot.length || reglables.length) slotsCfg.minuteur = setTimeout(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreSlots(true); }, 3000);
-  return { contrat, enAttente };
+  if (plan.lignes.some((l) => l.decision !== 'REMBOURSABLE')) slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000);
+  return { contrat, plan };
 }
 async function slotsAgir(quoi) {
   const j = slotsCfg.j, contrat = slotsContrat(j), etat = $('#slotsEtat');
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!contrat || !c || slotsCfg.enCours) return;
   const moi = String(c).toLowerCase(), dit = (t) => { etat.textContent = t; };
-  slotsCfg.enCours = true; $('#slotsSpin').disabled = true; $('#slotsRegler').disabled = true;
+  const BOUTONS = ['#slotsSpin', '#slotsRegler', '#slotsAccepter', '#slotsRembourser'];
+  slotsCfg.enCours = true; BOUTONS.forEach((s) => { const b = $(s); if (b) b.disabled = true; });
   try {
     let plan;
-    let aRegler = [];
+    let envoyes = [], laisses = [];
+    const vue = slotsCfg.vue;
     if (quoi === 'spin') plan = Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: BigInt(j.prixSpin) });
     else {
-      /* SETTLE (R2, verdict 2026-10-23) : la fenetre peut ne durer que ~51 s (Denim). AUCUN repeint ici (getLogs, blocs, statuts) avant la
-       *   signature : les spins en attente viennent de la derniere lecture de la carte (repeinte toutes les 3 s tant qu un spin attend),
-       *   la tete est relue UNE fois, et seuls les spins reglables a cette tete partent. Un spin deja regle entre-temps est saute par le
-       *   contrat (settleMany), sans revert. */
+      /* SETTLE / ACCEPT / REFUND (R2, verdict 2026-10-23) : la fenetre peut ne durer que ~51 s (Denim). AUCUN repeint ici (getLogs, blocs,
+       *   statuts, pot) avant la signature : les spins, leurs faces et le pot viennent de la derniere lecture de la carte (slotsCfg.vue) ;
+       *   la tete est relue UNE fois et le plan est REFAIT a cette tete (slots-plan.js planReglement, le calcul du contrat spin par spin).
+       *   v3 (defaut 1) : Settle n envoie QUE les spins payes en entier ; un spin que le pot ne couvre pas reste hors du lot, DIT avec son
+       *   manque ; Accept = acceptCapped d UN spin avec le minimum affiche ; Claim refund = expire des spins dont la fenetre est passee. */
+      if (!vue) { dit('Your spins were not read just now — nothing was asked.'); return; }
       const tete = parseInt(await rpc('eth_blockNumber', []), 16);
-      aRegler = (slotsCfg.attente || []).map((x) => ({ ...x, ...Slots.etatReglement(x.t, tete) })).filter((x) => x.etat === 'REGLABLE');
-      if (!aRegler.length) { dit('Nothing to settle right now — nothing was asked.'); return; }
-      plan = Slots.planSettleMany({ contrat, spinIds: aRegler.map((x) => x.id) });
-      if (plan.etat === 'PRET') { const reste = Math.min(...aRegler.map((x) => x.blocsRestants)); dit('Confirm in your wallet now: ' + reste + ' block(s) left — about ' + Math.round((Slots.secondesFenetre(200) * reste) / Slots.FENETRE) + ' s at 200 ms blocks.'); }
+      const p = Slots.planReglement({ ...vue, tete });
+      if (quoi === 'settle') {
+        envoyes = p.lignes.filter((l) => l.decision === 'LOT');
+        laisses = p.lignes.filter((l) => l.decision === 'COURT');
+        if (!envoyes.length) { dit('Nothing pays in full right now — nothing was asked.'); return; }
+        plan = Slots.planSettleMany({ contrat, spinIds: envoyes.map((l) => l.id) });
+      } else if (quoi === 'accepter') {
+        const l = p.lot.length ? null : p.courts.find((x) => x.paie > 0n);
+        if (!l) { dit(p.lot.length ? 'Settle the spins that pay in full first — nothing was asked.' : 'No capped prize to accept right now — nothing was asked.'); return; }
+        envoyes = [l];
+        plan = Slots.planAccepter({ contrat, spinId: l.id, minimum: l.paie });
+      } else {
+        envoyes = p.lignes.filter((l) => l.decision === 'REMBOURSABLE').slice(0, Slots.SPINS_MAX);
+        if (!envoyes.length) { dit('No refund to claim right now — nothing was asked.'); return; }
+        plan = Slots.planExpireMany({ contrat, spinIds: envoyes.map((l) => l.id) });
+      }
+      if (plan.etat === 'PRET') {
+        /* AVANT la signature : chaque spin envoye ET chaque spin laisse hors du lot, avec ce qu il paie et ce qui manque */
+        slotsListe([...envoyes, ...laisses].map((l) => ({ texte: Slots.phraseAvant(l, vue.refund), court: l.decision === 'COURT' })));
+        if (quoi === 'rembourser') dit('Confirm in your wallet…');
+        else { const reste = Math.min(...envoyes.map((x) => x.blocsRestants)); dit('Confirm in your wallet now: ' + reste + ' block(s) left — about ' + Math.round((Slots.secondesFenetre(200) * reste) / Slots.FENETRE) + ' s at 200 ms blocks.'); }
+      }
     }
-    if (plan.etat !== 'PRET') { dit((quoi === 'spin' ? 'Not spun: ' : 'Not settled: ') + plan.pourquoi); return; }
+    const refus = quoi === 'spin' ? 'Not spun' : quoi === 'rembourser' ? 'Not refunded' : 'Not settled';
+    if (plan.etat !== 'PRET') { dit(refus + ': ' + plan.pourquoi); return; }
     if (quoi === 'spin') dit('Confirm in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
-    if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, quoi === 'spin' ? 'Not spun' : 'Not settled')); return; }
+    if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, refus)); return; }
     const { logs } = await recusLogs(r);
     if (quoi === 'spin') {
       const sp = Slots.lireSpunTous(logs, contrat).filter((s) => s.player === moi);
+      for (const s of sp) if (!slotsCfg.spins.has(String(s.spinId))) slotsCfg.spins.set(String(s.spinId), { id: String(s.spinId), t: s.targetBlock });
       slotsCfg.dernier = null;
       dit(sp.length ? 'Spin #' + sp[0].spinId + ' is in: blocks ' + Slots.blocsDesFaces(sp[0].targetBlock).join(', ') + ' draw your three faces, one each.' : 'Sent; the spin was not read in the receipt — it shows up here once read.');
+    } else if (quoi === 'rembourser') {
+      const ex = Slots.lireExpiredTous(logs, contrat);
+      slotsCfg.dernier = ex.length ? ex.map((e) => 'Spin #' + e.spinId + ': ' + Slots.usdcPrecis(e.refund) + ' USDC refunded to its player.').join(' ') : 'Sent; no refund was read in the receipt.';
+      dit(slotsCfg.dernier);
     } else {
+      /* APRES le recu : spin par spin, paye en entier, plafonne (et de combien), saute par le pot, ou fenetre passee — jamais en silence */
       const st = Slots.lireSettledTous(logs, contrat);
-      const d = st[st.length - 1];
-      if (d) { peindreFacesSlots(d.blockHashes, d.spinId); slotsCfg.dernier = 'Spin #' + d.spinId + ': ' + d.points + ' point' + (d.points === 1 ? '' : 's') + (d.payout > 0n ? ', ' + usdcTexte(d.payout) + ' USDC paid to your wallet by the contract.' : ', no prize.') + (st.length > 1 ? ' (' + st.length + ' spins settled.)' : ''); dit(slotsCfg.dernier); }
-      else {
-        /* R2 : un recu sans Settled — relire chaque spin envoye : encore en attente apres sa fenetre = PERDU, et le dire tel quel */
-        let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
-        const perdus = [];
-        for (const x of aRegler) {
-          let v = null; try { v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(x.id) }, 'latest'])); } catch (_) { v = null; }
-          if (v && v.status === 1 && tete !== null && Slots.etatReglement(x.t, tete).etat === 'PERDU') perdus.push(x.id);
-        }
-        slotsCfg.dernier = perdus.length ? 'Spin #' + perdus.join(', #') + ': the ' + Slots.FENETRE + '-block window closed before your settle was included — lost, no refund.' : null;
-        dit(slotsCfg.dernier || 'Sent; no settled spin was read in the receipt.');
+      const sansRecu = envoyes.filter((x) => !st.some((d) => String(d.spinId) === x.id));
+      const statuts = new Map(); let tete = null;
+      if (sansRecu.length) {
+        try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+        for (const x of sansRecu) { let v = null; try { v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(x.id) }, 'latest'])); } catch (_) { v = null; } statuts.set(x.id, v ? v.status : null); }
       }
+      const bilan = Slots.bilanReglement({ envoyes, settled: st, statuts, tete, table: vue.table });
+      const d = st[st.length - 1];
+      if (d) { peindreFacesSlots(d.blockHashes, d.spinId); slotsCfg.dernierFaces = { hashes: d.blockHashes, id: d.spinId }; }
+      slotsCfg.dernier = [...bilan.map((b) => Slots.phraseApres(b, vue.refund)), ...laisses.map((l) => Slots.phraseAvant(l, vue.refund))].join(' ');
+      dit(slotsCfg.dernier);
     }
   } finally {
-    slotsCfg.enCours = false; $('#slotsSpin').disabled = false; $('#slotsRegler').disabled = false;
+    slotsCfg.enCours = false; BOUTONS.forEach((s) => { const b = $(s); if (b) b.disabled = false; });
     setTimeout(() => { void peindreSlots(true); }, 1500);
   }
 }
 $('#slotsSpin').addEventListener('click', () => { void slotsAgir('spin'); });
 $('#slotsRegler').addEventListener('click', () => { void slotsAgir('settle'); });
+$('#slotsAccepter').addEventListener('click', () => { void slotsAgir('accepter'); });
+$('#slotsRembourser').addEventListener('click', () => { void slotsAgir('rembourser'); });
 setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreSlots(); }, 20000);
 setTimeout(() => { void peindreSlots(); }, 1700);
 

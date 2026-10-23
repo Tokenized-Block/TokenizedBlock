@@ -50,12 +50,39 @@ for (const [r, p, t] of [loiParTrait(bandes), ...S.TAILLES.slice(1).map((m) => l
 vu(conv.slice(0, 16).every((v, k) => v === num[k]), 'enumeration triplet par triplet = la formule, pour les 16 cases');
 
 /* (3) */
-const ev = S.esperance(P.prizes);
-vu(ev.brut === 127862n && ev.probGainBps === 2105, 'esperance de la table : 127 862 brut (0,127862 USDC), 21,05 % des spins paient quelque chose');
-vu(/assertEq\(bs\.expectedPayout\(\), 127_862\);/.test(readFileSync(new URL('./contracts/test/BlockSlots.t.sol', import.meta.url), 'utf8')), 'forge lit la meme esperance sur le contrat compile (test_EsperanceDeLaTable)');
-vu(D.esperanceBrut === '127862' && D.probGainBps === 2105 && JSON.stringify(D.constructeur.prizes) === JSON.stringify(P.prizes), 'la fiche porte la table des parametres et la meme esperance');
-vu(ev.num * 10000n < BigInt(P.spinPrice) * BigInt(P.potShareBps) * den, 'esperance STRICTEMENT sous la part du pot (0,25 USDC) : le pot grossit en moyenne');
+const ev = S.esperance(P.prizes, P.spinPrice, P.potShareBps);
+const TSOL = readFileSync(new URL('./contracts/test/BlockSlots.t.sol', import.meta.url), 'utf8');
+/* v3 : la chance est ARRONDIE au plus proche (21,0562 % -> 21,06 ; le 2e verdict : 21,05 tronquait) */
+vu(ev.num === 2851431899393758353960392096738004388806656000000n && ev.brut === 127862n && ev.probGainBps === 2106, 'esperance EXACTE de la table : 2851431899393758353960392096738004388806656000000 / 2^144 = 127 862 brut (0,127862 USDC), 21,06 % des spins paient quelque chose');
+vu(/assertEq\(bs\.expectedPayout\(\), 127_862\);/.test(TSOL), 'forge lit la meme esperance sur le contrat compile (test_EsperanceDeLaTable)');
+vu(D.esperanceBrut === '127862' && D.probGainBps === 2106 && JSON.stringify(D.constructeur.prizes) === JSON.stringify(P.prizes), 'la fiche porte la table des parametres et la meme esperance');
+const { toPot, refund } = S.partsDuSpin(P.spinPrice, P.potShareBps);
+vu(toPot === 250000n && refund === 250000n, 'un spin de 0,50 : 0,25 au pot, 0,25 tenus (rendus si la fenetre passe)');
+vu(ev.num < toPot * den, 'esperance STRICTEMENT sous ce qui entre au pot (0,25 USDC) : le pot grossit en moyenne');
+vu(ev.num < BigInt(P.spinPrice) * den, 'esperance STRICTEMENT sous le prix du spin');
 vu(S.refusTable({ table: P.prizes, spinPrice: P.spinPrice, potShareBps: P.potShareBps }).length === 0, 'la table des parametres est admise');
+
+/* (3b) v3 — la regle de Phil « fenetre manquee = remboursement » ET « esperance strictement sous le prix » : le joueur voit ses faces avant
+ *      de choisir ; sa MEILLEURE strategie (regler si le prix depasse le remboursement, sinon laisser expirer) rend somme P(k) max(prix_k, r). */
+vu(ev.refund === 250000n && ev.meilleureNum === 7252695144110113090426044529286962642681856000000n && ev.meilleureBrut === 325222n, 'meilleure strategie EXACTE : 7252695144110113090426044529286962642681856000000 / 2^144 = 325 222 brut (0,325222 USDC)');
+vu(ev.meilleureNum < BigInt(P.spinPrice) * den, 'meilleure strategie STRICTEMENT sous le prix (0,50)');
+vu(/assertEq\(best, 7252695144110113090426044529286962642681856000000\);/.test(TSOL) && /assertEq\(best \/ bs\.DIST_DENOM\(\), 325_222\);/.test(TSOL), 'forge lit la meme meilleure strategie sur le contrat compile (bestPlayNumerator)');
+{
+  /* le temoin : rembourser le prix ENTIER ; la meilleure strategie atteint alors AU MOINS le prix (ici 0,556549) — la regle serait violee */
+  const plein = num.reduce((s, v, k) => { const x = BigInt(P.prizes[k]), m = BigInt(P.spinPrice); return s + v * (x > m ? x : m); }, 0n);
+  vu(plein >= BigInt(P.spinPrice) * den && plein / den === 556549n, 'temoin : un remboursement du prix entier rendrait 556 549 brut par spin de 500 000 (>= le prix)');
+  /* pour des tables admises au hasard (croissantes, <= 5 USDC, parts 1..10000) : meilleure < prix, toujours */
+  let vues = 0;
+  for (let i = 0; i < 400; i++) {
+    const b = randomBytes(24), prix = BigInt(1 + (b.readUInt32BE(0) % 2000000)), part = 1 + (b.readUInt16BE(4) % 10000);
+    let v = 0n; const tb = Array.from({ length: 16 }, (_, k) => { if (k >= 3 && k < 11) v += BigInt(b[6 + k] % 200) * 3500n; if (v > 5000000n) v = 5000000n; return v; });
+    if (S.refusTable({ table: tb, spinPrice: prix, potShareBps: part }).length) continue;
+    vues += 1;
+    const e = S.esperance(tb, prix, part);
+    if (!(e.meilleureNum < prix * den)) { vu(false, 'table admise ou la meilleure strategie atteint le prix : ' + tb.join(',') + ' prix ' + prix + ' part ' + part); }
+  }
+  vu(vues > 20, 'tables admises tirees au hasard : ' + vues + ', meilleure strategie < prix pour toutes');
+}
 
 /* (4) le bord exact : table « x pour >= 3 points » */
 const s3 = num.slice(3).reduce((s, v) => s + v, 0n);
@@ -64,6 +91,10 @@ const lim = (r - 1n) / (s3 * 10000n);
 const t = (x) => Array.from({ length: 16 }, (_, k) => (k >= 3 ? x : 0n));
 vu(S.refusTable({ table: t(lim), spinPrice: P.spinPrice, potShareBps: P.potShareBps }).length === 0, 'bord : lim (' + lim + ') admis');
 vu(S.refusTable({ table: t(lim + 1n), spinPrice: P.spinPrice, potShareBps: P.potShareBps }).length === 1, 'bord : lim + 1 refuse (meme bord que le constructeur, test_EsperanceAuBordExact)');
+/* v3 : la garde porte sur ce qui ENTRE au pot, ARRONDI BAS (test_V3_GardeSurLaPartQuiEntreAuPot) : spin 500 001 a 50 % -> 250 000 au pot */
+const xBord = (250000n * den + s3 - 1n) / s3;
+const bordArrondi = (R) => R.refusTable({ table: t(xBord), spinPrice: 500001, potShareBps: 5000 }).length === 1 && R.refusTable({ table: t(xBord - 1n), spinPrice: 500001, potShareBps: 5000 }).length === 0;
+vu(xBord * s3 * 10000n < 500001n * 5000n * den && bordArrondi(S), 'bord arrondi : x refuse (l ancienne regle prix x part l admettait), x - 1 admis');
 vu(S.refusTable({ table: P.prizes.map((x, k) => (k === 4 ? '200000' : x)), spinPrice: P.spinPrice, potShareBps: P.potShareBps }).length > 0, 'table non croissante refusee');
 vu(S.refusTable({ table: P.prizes, spinPrice: 0, potShareBps: P.potShareBps }).length > 0 && S.refusTable({ table: P.prizes, spinPrice: P.spinPrice, potShareBps: 10001 }).length > 0, 'prix nul / part > 100 % refuses');
 
@@ -85,6 +116,21 @@ const muter = async (nom, de, vers) => {
   try { const M = await import(url.href); const d = M.distributionExacte().num; vu(!d.every((v, k) => v === duContrat[k]), 'MUTANT ' + nom + ' : « distribution app = contrat » ROUGIT'); }
   finally { try { unlinkSync(url); } catch (_) {} }
 };
+{
+  /* v3 : la garde sans l arrondi de toPot (prix x part / 10000 en reel) : le bord arrondi ROUGIT */
+  const de = 'if (e.num >= partsDuSpin(p, s).toPot * e.den)', vers = 'if (e.num * 10000n >= p * s * e.den)';
+  vu(src.split(de).length === 2, 'mutant garde sans arrondi : ancre unique');
+  const url = new URL('./slots-plan.mutant-' + process.pid + '-g.js', import.meta.url);
+  writeFileSync(url, src.replace(de, () => vers));
+  try { const M = await import(url.href); vu(bordArrondi(M) === false, 'MUTANT garde sans arrondi : le bord arrondi ROUGIT'); }
+  finally { try { unlinkSync(url); } catch (_) {} }
+  const de2 = 'const b = num.reduce((s, v, k) => s + v * (t[k] > refund ? t[k] : refund), 0n);', vers2 = 'const b = num.reduce((s, v, k) => s + v * t[k], 0n);';
+  vu(src.split(de2).length === 2, 'mutant meilleure strategie : ancre unique');
+  const url2 = new URL('./slots-plan.mutant-' + process.pid + '-m.js', import.meta.url);
+  writeFileSync(url2, src.replace(de2, () => vers2));
+  try { const M = await import(url2.href); vu(M.esperance(P.prizes, P.spinPrice, P.potShareBps).meilleureBrut !== 325222n, 'MUTANT meilleure strategie sans le remboursement : l epingle ROUGIT'); }
+  finally { try { unlinkSync(url2); } catch (_) {} }
+}
 await muter('paire comptee 2', 'suite[i + 1] += v * paire;', 'suite[i + 2] += v * paire;');
 await muter('facette modulo 18', "const traits = [[bandes, 65536n], ...TAILLES.slice(1).map((m) => [parOctet(m), 256n])];", "const traits = [[bandes, 65536n], ...TAILLES.slice(1).map((m) => [parOctet(m === 19 ? 18 : m), 256n])];");
 console.log('ok slots-ev - ' + n + ' assertions ; hypothese : octets de keccak uniformes ; NE PROUVE PAS Base');

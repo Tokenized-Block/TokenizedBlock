@@ -21,23 +21,38 @@ const lancer = () => {
 };
 const M = [
   /* l argent */
-  ['gain non plafonne par le pot', '            payout = pot;\n', ''],
-  /* v2 (Phil 2026-10-23 + verdict adverse) : 5 USDC au plus, R1 (seul le joueur accepte un pot court), trois blocs */
+  ['acceptCapped : gain non plafonne par le pot', '        if (payout > pot) payout = pot;\n', ''],
+  /* v2 (Phil 2026-10-23 + verdict adverse) : 5 USDC au plus, trois blocs */
   ['plafond 1000 au lieu de 5 USDC', 'uint64 public constant MAX_PRIZE = 5_000000;', 'uint64 public constant MAX_PRIZE = 1000_000000;'],
-  ['R1 : un tiers accepte un pot court', '            if (msg.sender != player) return (false, points, 0);\n', ''],
-  ['R1 : settle ne refuse pas le pot court', '        if (!fait) revert PotShort();\n', ''],
-  ['R1 : settleMany compte un spin saute', '            if (fait) done++;', '            done++;'],
   ['trois faces sur le seul bloc cible (hashes)', 'h[r] = blockhash(t + r);', 'h[r] = blockhash(t);'],
   ['trois faces sur le premier hash (facesOf)', 'f[r] = faceOf(seedOf(blockHashes[r], spinId, r));', 'f[r] = faceOf(seedOf(blockHashes[0], spinId, r));'],
   ['settle des cible + 1 (sans attendre le 3e hash)', 'if (block.number <= t + (REELS - 1)) revert TooEarly();', 'if (block.number <= t) revert TooEarly();'],
-  ['part du pot : tout au pot', 'uint256 toPot = (SPIN_PRICE * POT_SHARE_BPS) / BPS;', 'uint256 toPot = SPIN_PRICE;'],
-  ['part du dev non envoyee', '        if (toDev != 0) _pull(msg.sender, DEV_WALLET, toDev);\n', ''],
+  /* v3 (verdict adverse 2026-10-23, defaut 1 : un lot du joueur prenait des gains plafonnes sans le dire) */
+  ['settle prend un gain plafonne (joueur ou tiers)', '        if (payout > pot) revert PotShort();\n', '        if (payout > pot) payout = pot;\n'],
+  ['settleMany prend un gain plafonne (le defaut 1)', '            if (payout > pot) continue;\n', '            if (payout > pot) payout = pot;\n'],
+  ['settleMany ne compte pas les regles', '            done++;\n', ''],
+  ['acceptCapped par un tiers', '        if (msg.sender != s.player) revert NotPlayer();\n', ''],
+  ['acceptCapped sans minimum', '        if (payout < minPayout) revert BelowMinimum();\n', ''],
+  ['acceptCapped : minimum strict', 'if (payout < minPayout) revert BelowMinimum();', 'if (payout <= minPayout) revert BelowMinimum();'],
+  /* v3 : la part du dev TENUE, due au settle, RENDUE a l expiration (regle de Phil : fenetre manquee = remboursement) */
+  ['spin : seule la part du pot est tiree', '_pull(msg.sender, address(this), SPIN_PRICE);', '_pull(msg.sender, address(this), TO_POT);'],
+  ['spin : part du dev non tenue', '        escrow += REFUND;\n', ''],
+  ['settle : part du dev non due', '        devOwed += REFUND;\n', ''],
+  ['expire : rien n est rendu', '        if (REFUND != 0) _push(player, REFUND);\n', ''],
+  ['expire : rendu a l appelant', 'if (REFUND != 0) _push(player, REFUND);', 'if (REFUND != 0) _push(msg.sender, REFUND);'],
+  ['expire sans verrou', 'function expire(uint256 spinId) external nonReentrant {', 'function expire(uint256 spinId) external {'],
+  ['payDev ne remet pas a zero', '        devOwed = 0;\n', ''],
+  ['payDev a l appelant', '_push(DEV_WALLET, amount);', '_push(msg.sender, amount);'],
+  ['payDev sans verrou', 'function payDev() external nonReentrant returns', 'function payDev() external returns'],
+  ['remboursement = la part du pot', 'REFUND = c.spinPrice - toPot;', 'REFUND = toPot;'],
+  ['meilleure strategie sans le remboursement', 's += d[k] * (_prizes[k] > r ? _prizes[k] : r);', 's += d[k] * _prizes[k];'],
+  ['part du pot : tout au pot', 'uint256 toPot = (c.spinPrice * c.potShareBps) / BPS;', 'uint256 toPot = c.spinPrice;'],
   ['fund : pot non credite', '        pot += amount;\n        _pull(msg.sender, address(this), amount);', '        _pull(msg.sender, address(this), amount);'],
   ['le gain va a l appelant', 'if (payout != 0) _push(player, payout);', 'if (payout != 0) _push(msg.sender, payout);'],
   /* l avantage de la maison et la table */
-  ['esperance non verifiee', '        if (expectedNumerator(c.prizes) * BPS >= c.spinPrice * c.potShareBps * DIST_DENOM) revert BadConfig();\n', ''],
-  ['esperance : > au lieu de >=', 'expectedNumerator(c.prizes) * BPS >= c.spinPrice', 'expectedNumerator(c.prizes) * BPS > c.spinPrice * 2'],
-  ['esperance contre le prix, pas la part du pot', 'c.spinPrice * c.potShareBps * DIST_DENOM', 'c.spinPrice * BPS * DIST_DENOM'],
+  ['esperance non verifiee', '        if (expectedNumerator(c.prizes) >= toPot * DIST_DENOM) revert BadConfig();\n', ''],
+  ['garde sur prix x part / BPS (sans l arrondi de TO_POT)', 'if (expectedNumerator(c.prizes) >= toPot * DIST_DENOM)', 'if (expectedNumerator(c.prizes) * BPS >= c.spinPrice * c.potShareBps * DIST_DENOM)'],
+  ['esperance contre le prix, pas la part du pot', 'expectedNumerator(c.prizes) >= toPot * DIST_DENOM', 'expectedNumerator(c.prizes) >= c.spinPrice * DIST_DENOM'],
   ['table non ordonnee admise', '        for (uint256 k = 1; k <= MAX_POINTS; k++) if (c.prizes[k] < c.prizes[k - 1]) revert BadConfig();\n', ''],
   ['table au-dela du max admise', '        if (c.prizes[MAX_POINTS] > MAX_PRIZE) revert BadConfig();\n', ''],
   ['distribution : une case faussee', '            7648590723549578990455994844309854827315200,', '            7648590723549578990455994844309854827315201,'],
@@ -69,6 +84,8 @@ const M = [
   /* reentree, jetons */
   ['settle sans verrou', 'function settle(uint256 spinId) external nonReentrant returns', 'function settle(uint256 spinId) external returns'],
   ['settleMany sans verrou', 'function settleMany(uint256[] calldata ids) external nonReentrant returns', 'function settleMany(uint256[] calldata ids) external returns'],
+  /* ⚠️ « acceptCapped sans verrou » n est PAS mute : une re-entree vient du JETON (msg.sender = le jeton), que NotPlayer refuse avant tout
+   *    effet ; le verrou y reste pour etre lisible. Ce n est pas une garde que la suite tient : c est dit ici, pas compte comme tue. */
   ['retour false accepte', "        (bool ok, bytes memory ret) = USDC.call(abi.encodeWithSelector(0xa9059cbb, to, amount));\n        if (!ok || (ret.length != 0 && !abi.decode(ret, (bool)))) revert TransferFailed();", "        (bool ok, ) = USDC.call(abi.encodeWithSelector(0xa9059cbb, to, amount));\n        if (!ok) revert TransferFailed();"],
   /* la config */
   /* ⚠️ « prix nul admis » est un mutant EQUIVALENT, mesure 2026-10-23 (il a survecu, meme avec une table nulle) : la garde d esperance

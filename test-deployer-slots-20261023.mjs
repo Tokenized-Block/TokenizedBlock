@@ -82,16 +82,19 @@ ok(/crypto\.subtle\.digest\('SHA-256', octets\)/.test(script) && /const v = veri
 ok(/String\(chaine\)\.toLowerCase\(\) === CHAINE_HEX/.test(script) && /wallet_switchEthereumChain/.test(script), 'C la page exige Base');
 ok(['USDC()', 'DEV_WALLET()', 'SPIN_PRICE()', 'POT_SHARE_BPS()', 'prizes()'].every((s) => script.includes("'" + s + "'")) && /table\.join\(\) === C\.prizes\.map\(String\)\.join\(\)/.test(script), 'C apres confirmation, elle RELIT les 4 immuables et la table, et compare');
 ok(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page), 'C aucune cle, aucune signature de message, aucun champ a saisir');
-const ev = S.esperance(C.prizes, C.spinPrice);
-const mots = { spin: usdc6(C.spinPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - C.potShareBps), top: usdc6(C.prizes[15]), ev: usdc6(ev.brut), pWin: (ev.probGainBps / 100).toFixed(2), pMise: (ev.probMiseBps / 100).toFixed(2), window: '256', minutesNow: '8.5', secondsDenim: '51' };
-ok(mots.spin === '0.50' && mots.potShare === '50' && mots.top === '5' && mots.ev === '0.127862' && mots.pWin === '21.05' && mots.pMise === '7.46', 'C les mots derives (v2) : spin 0.50, 50 %, jusqu a 5, esperance 0.127862, 21.05 % paient quelque chose, 7.46 % rendent la mise');
+const ev = S.esperance(C.prizes, C.spinPrice, C.potShareBps);
+const mots = { spin: usdc6(C.spinPrice), potShare: pct(C.potShareBps), devShare: pct(10000 - C.potShareBps), top: usdc6(C.prizes[15]), ev: usdc6(ev.brut), pWin: (ev.probGainBps / 100).toFixed(2), pMise: (ev.probMiseBps / 100).toFixed(2), window: '256', minutesNow: '8.5', secondsDenim: '51', refund: usdc6(ev.refund), best: usdc6(ev.meilleureBrut) };
+ok(mots.spin === '0.50' && mots.potShare === '50' && mots.top === '5' && mots.ev === '0.127862' && mots.pWin === '21.06' && mots.pMise === '7.47' && mots.refund === '0.25' && mots.best === '0.325222', 'C les mots derives (v3) : spin 0.50, 50 %, jusqu a 5, esperance 0.127862, 21.06 % paient quelque chose, 7.47 % rendent la mise (arrondis), remboursement 0.25, meilleure strategie 0.325222');
+ok(/esperance\(C\.prizes, C\.spinPrice, C\.potShareBps\)/.test(script) && /refund: usdc6\(ev\.refund\), best: usdc6\(ev\.meilleureBrut\)/.test(script), 'C le remboursement et la meilleure strategie viennent de slots-plan.js (calcules)');
 const cles = [...page.matchAll(/data-k="(\w+)"/g)].map((m) => m[1]);
 ok(Object.keys(mots).every((k) => cles.includes(k)) && cles.every((k) => k in mots) && /for \(const e of document\.querySelectorAll\('b\[data-k\]'\)\) e\.textContent = MOTS\[e\.dataset\.k\]/.test(script), 'C chaque chiffre est un data-k rempli depuis la fiche (' + cles.length + ' emplacements)');
 ok(/minutesNow: \(secondesFenetre\(2000\) \/ 60\)\.toFixed\(1\)/.test(script) && /secondsDenim: String\(Math\.round\(secondesFenetre\(200\)\)\)/.test(script), 'C les durees de la fenetre sont CALCULEES depuis les blocs (2 s et 200 ms)');
 const html = page.replace(/<script[\s\S]*<\/script>/, '');
 ok(!/0\.50 USDC|1000 USDC|0\.15/.test(html), 'C aucun prix ni esperance ecrit en dur dans le HTML');
-ok(/No owner\. Nobody can take the pot/.test(page) && /No refund\./.test(page) && /A refund would let a player settle winners and take back losers/.test(page) && /once Base moves to 200 ms blocks \(Denim\)/.test(page)
-  && /the Base sequencer, which builds the blocks, is the one party that could/.test(page) && /refuses to deploy a table whose average payout is not strictly below the share that enters the pot/.test(page), 'C le texte dit : pas d owner, pas de remboursement et pourquoi, Denim, le sequenceur, la garde d esperance');
+/* v3 (regle de Phil : fenetre manquee = remboursement ; 2e verdict : jamais un gain plafonne en silence) */
+ok(/No owner\. Nobody can take the pot/.test(page) && /A missed window is refunded\./.test(page) && !/No refund\./.test(page) && /The refund is not the full price: the block hashes are public/.test(page) && /once Base moves to 200 ms blocks \(Denim\)/.test(page)
+  && /the Base sequencer, which builds the blocks, is the one party that could/.test(page) && /refuses to deploy a table whose average payout is not strictly below the share that enters the pot/.test(page), 'C le texte dit : pas d owner, fenetre manquee remboursee (la part tenue) et pourquoi pas le prix entier, Denim, le sequenceur, la garde d esperance');
+ok(/A prize is paid in full or not at all/.test(page) && /for everyone, the player included/.test(page) && /refuses if the pot has dropped below the amount they saw/.test(page), 'C le texte dit : un prix en entier ou rien ; seul le joueur accepte moins, au minimum vu');
 ok(/<meta name="robots" content="noindex">/.test(page) && /paid game of chance/.test(page), 'C noindex ; la page dit que c est un jeu d argent');
 console.log('\n' + (n - ko) + ' ok / ' + ko + ' KO (' + n + ' assertions)');
 process.exit(ko ? 1 : 0);

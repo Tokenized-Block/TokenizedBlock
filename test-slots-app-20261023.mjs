@@ -2,8 +2,9 @@
  * AFFIRME : (1) sans contrat servi rien ne se montre (carte et tuile cachees dans le HTML ET par peindreSlots) ; aucun bouton desactive en dur ;
  *   Spin cache sans wallet, Settle cache sans spin reglable ; (2) chaque chiffre de la carte vient de /api/slots (la fiche) ou d un calcul
  *   (loi exacte, fenetre en blocs) — aucun prix tape ; une lecture ratee dit « not read » ; (3) les spins en attente sont relus sur la chaine
- *   par une fenetre BORNEE (debutFenetreSpins) et rien n est garde dans le navigateur ; (4) Spin = planSpin (approve EXACT), Settle =
- *   planSettleMany des spins reglables RELUS juste avant ; tout passe par envoyerAppels ; (5) les trois faces sont dessinees par logoSvg depuis
+ *   par TRANCHES bornees (v3 : trancheSpun, 999 blocs puis les blocs nouveaux) et rien n est garde dans le navigateur ; (4) Spin = planSpin
+ *   (approve EXACT), Settle = planSettleMany des seuls spins payes en entier (v3 : le plan refait a la tete relue) ; tout passe par
+ *   envoyerAppels ; (5) les trois faces sont dessinees par logoSvg depuis
  *   les graines du contrat (Slots.graine) ; (6) le serveur sert les 4 fichiers, importe la fiche, rend PAS_OUVERT sans adresse, et ne tape
  *   aucun prix ; (7) etatSpins : un statut non lu donne NON_LU, jamais « reglable ». Chaque verification est rejouee sur une copie MUTEE en
  *   memoire et doit alors rendre faux. NE PROUVE PAS : le rendu (verifie au navigateur), un spin reel. */
@@ -24,14 +25,17 @@ const checks = {
   cacheeSansContrat: (t) => /carte\.hidden = !on; if \(tuile\) tuile\.hidden = !on;/.test(bloc(t)) && /if \(!on\) return null;/.test(bloc(t)),
   aucunBoutonMort: (t) => { const c = carteHtml(t); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c) && /<button type="button" class="bouton" id="slotsSpin" hidden>/.test(c) && /id="slotsRegler" hidden>/.test(c); },
   spinCacheSansWallet: (t) => /bS\.hidden = !moi;/.test(bloc(t)),
-  settleSeulementReglable: (t) => /bR\.hidden = reglables\.length === 0;/.test(bloc(t)) && /if \(enAttente === null\) \{ bR\.hidden = true;/.test(bloc(t)),
-  chiffresServis: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return /const prix = BigInt\(j\.prixSpin\), table = j\.prizes\.map/.test(b) && /usdcTexte\(BigInt\(j\.esperanceBrut\)\)/.test(b) && /ev = Slots\.esperance\(table, prix\)/.test(b)
-    && !/\b(500000|250000|0\.50|0\.15|1000)\b/.test(b) && /Slots\.secondesFenetre\(2000\)/.test(b) && /Slots\.secondesFenetre\(200\)/.test(b); },
+  /* v3 : Settle n apparait qu avec un spin payable EN ENTIER (le plan), et jamais quand les spins n ont pas ete lus */
+  settleSeulementReglable: (t) => /bR\.hidden = lot\.length === 0;/.test(bloc(t)) && /if \(lu === null\) \{ bR\.hidden = true; bA\.hidden = true; bB\.hidden = true;/.test(bloc(t)),
+  chiffresServis: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return /const prix = BigInt\(j\.prixSpin\), table = j\.prizes\.map/.test(b) && /Slots\.usdcPrecis\(BigInt\(j\.esperanceBrut\)\)/.test(b) && /ev = Slots\.esperance\(table, prix, part\)/.test(b)
+    && /Slots\.usdcPrecis\(ev\.meilleureBrut\)/.test(b) && !/\b(500000|250000|0\.50|0\.25|0\.15|1000|325222|127862)\b/.test(b) && /Slots\.secondesFenetre\(2000\)/.test(b) && /Slots\.secondesFenetre\(200\)/.test(b); },
   nonLu: (t) => { const b = bloc(t); return (b.match(/pot === null \? 'not read'/g) || []).length === 2 && /pts === null \? 'not read'/.test(b) && /gagne === null \? 'not read'/.test(b) && /Your pending spins could not be read just now\./.test(b); },
-  fenetreBornee: (t) => /de: Slots\.debutFenetreSpins\(tete, j\.bloc\), jusqua: tete/.test(bloc(t)) && !/localStorage|sessionStorage|indexedDB/.test(bloc(t)),
+  /* v3 : les Spun par tranches (la premiere bornee a 999 blocs, puis les blocs nouveaux) ; rien dans le navigateur */
+  fenetreBornee: (t) => /Slots\.trancheSpun\(\{ scanne: slotsCfg\.scanne, tete, blocDeploiement: j\.bloc \}\)/.test(bloc(t)) && /de: tr\.de, jusqua: tr\.jusqua/.test(bloc(t)) && !/localStorage|sessionStorage|indexedDB/.test(bloc(t)),
   spinExact: (t) => /plan = Slots\.planSpin\(\{ contrat, usdc: USDC_BASE, spinPrice: BigInt\(j\.prixSpin\) \}\)/.test(bloc(t)),
-  /* v2 (R2) : la tete est relue juste avant, seuls les spins reglables A CETTE TETE partent (sans repeindre la carte, test-slots-v2) */
-  settleRelu: (t) => { const b = bloc(t); const i = b.indexOf("const tete = parseInt(await rpc('eth_blockNumber', []), 16);"), k = b.indexOf("Slots.etatReglement(x.t, tete) })).filter((x) => x.etat === 'REGLABLE')"), m = b.indexOf('plan = Slots.planSettleMany({ contrat, spinIds: aRegler.map((x) => x.id) });'); return i > 0 && k > i && m > k; },
+  /* v2 (R2) + v3 : la tete est relue juste avant, le plan REFAIT a cette tete, seuls les spins LOT (payes en entier) partent (le
+   *   comportement est execute par test-slots-v3) */
+  settleRelu: (t) => { const b = bloc(t); const i = b.indexOf("const tete = parseInt(await rpc('eth_blockNumber', []), 16);"), j = b.indexOf('const p = Slots.planReglement({ ...vue, tete });'), k = b.indexOf("envoyes = p.lignes.filter((l) => l.decision === 'LOT');"), m = b.indexOf('plan = Slots.planSettleMany({ contrat, spinIds: envoyes.map((l) => l.id) });'); return i > 0 && j > i && k > j && m > k; },
   envoiUnique: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return (b.match(/envoyerAppels\(/g) || []).length === 1 && !/eth_sendTransaction|envoyerDepuisWallet|wallet_sendCalls/.test(b); },
   facesDuContrat: (t) => /faceRevelee\(Slots\.graine\(hashes\[r\], spinId, r\)\)/.test(bloc(t)) && /logoSvg\(paramsLogoDepuisApparence\(f, String\(r \+ 1\)\)\)/.test(bloc(t)) && /Slots\.facesDuSpin\(hashes, spinId\)/.test(bloc(t)),
   importServi: (t) => /^import \* as Slots from '\.\/slots-plan\.js';$/m.test(t),
@@ -43,13 +47,13 @@ const mutants = [
   ['cacheeSansContrat', 'carte.hidden = !on; if (tuile) tuile.hidden = !on;', 'carte.hidden = false; if (tuile) tuile.hidden = false;'],
   ['aucunBoutonMort', '<button type="button" class="bouton" id="slotsSpin" hidden>', '<button type="button" class="bouton" id="slotsSpin" disabled>'],
   ['spinCacheSansWallet', 'bS.hidden = !moi;', 'bS.hidden = false;'],
-  ['settleSeulementReglable', 'bR.hidden = reglables.length === 0;', 'bR.hidden = false;'],
-  ['chiffresServis', "usdcTexte(BigInt(j.esperanceBrut)) + ' USDC — less", "'0.15 USDC — less"],
+  ['settleSeulementReglable', 'bR.hidden = lot.length === 0;', 'bR.hidden = false;'],
+  ['chiffresServis', "Slots.usdcPrecis(BigInt(j.esperanceBrut)) + ' USDC — less", "'0.15 USDC — less"],
   ['nonLu', "pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect", "usdcTexte(pot || 0n) + ' USDC') + '. Connect"],
-  ['fenetreBornee', 'de: Slots.debutFenetreSpins(tete, j.bloc), jusqua: tete', 'de: j.bloc, jusqua: tete'],
+  ['fenetreBornee', 'scanne: slotsCfg.scanne, tete, blocDeploiement: j.bloc', 'scanne: null, tete, blocDeploiement: 0'],
   ['spinExact', 'plan = Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: BigInt(j.prixSpin) });', 'plan = Slots.planSpins({ contrat, usdc: USDC_BASE, n: 1, spinPrice: 2n ** 255n });'],
-  ['settleRelu', "Slots.etatReglement(x.t, tete) })).filter((x) => x.etat === 'REGLABLE')", "{ etat: 'REGLABLE' } }))"],
-  ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, quoi', 'const r = await envoyerDepuisWallet(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, quoi'],
+  ['settleRelu', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = vue.spins;"],
+  ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus', 'const r = await envoyerDepuisWallet(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus'],
   ['facesDuContrat', 'faceRevelee(Slots.graine(hashes[r], spinId, r))', 'faceRevelee(Slots.graine(hashes[0], spinId, r))'],
   ['bandeauTelephone', '@media (max-width:520px){.jeuBandeau[data-slots="1"]{grid-template-columns:repeat(2,minmax(0,1fr))}}', ''],
 ];

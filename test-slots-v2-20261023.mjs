@@ -63,8 +63,9 @@ vu(S.paieMaintenant(5000000n, 1200000n) === 1200000n && S.paieMaintenant(250000n
 const ev = S.esperance(P.prizes, P.spinPrice);
 vu(ev.num === 2851431899393758353960392096738004388806656000000n && ev.den === 1n << 144n && ev.brut === 127862n, 'esperance EXACTE : 2851431899393758353960392096738004388806656000000 / 2^144 = 127 862 brut (0,127862 USDC)');
 vu(ev.num < BigInt(P.spinPrice) * ev.den, 'esperance STRICTEMENT sous le prix du spin');
-vu(ev.num * 10000n < BigInt(P.spinPrice) * BigInt(P.potShareBps) * ev.den, 'et strictement sous la part du pot (regle du constructeur)');
-vu(ev.probGainBps === 2105 && ev.probMiseBps === 746, '21,05 % des spins paient quelque chose, 7,46 % rendent au moins la mise');
+vu(ev.num < S.partsDuSpin(P.spinPrice, P.potShareBps).toPot * ev.den, 'et strictement sous ce qui entre au pot (regle du constructeur v3)');
+/* v3 (2e verdict) : ARRONDIS au plus proche — 21,0562 % et 7,4689 % (la v2 tronquait en 21,05 / 7,46) */
+vu(ev.probGainBps === 2106 && ev.probMiseBps === 747, '21,06 % des spins paient quelque chose, 7,47 % rendent au moins la mise');
 vu(D.esperanceBrut === '127862' && JSON.stringify(D.constructeur.prizes) === JSON.stringify(P.prizes), 'la fiche porte la nouvelle table et la meme esperance');
 vu(/assertEq\(bs\.expectedPayout\(\), 127_862\);/.test(lire('contracts/test/BlockSlots.t.sol')), 'forge epingle la meme esperance sur le contrat compile');
 
@@ -73,20 +74,22 @@ const APP = lire('app.html'), DEP = lire('deployer-slots.html');
 const entre = (t, a, b) => { const i = t.indexOf(a), j = t.indexOf(b, i + 1); return i >= 0 && j > i ? t.slice(i, j) : ''; };
 const bloc = (t) => entre(t, '/* ══ LES SLOTS (Phil 2026-10-23', '/* ══ EARN (Phil 19:40)');
 const sansCom = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '');
-const regler = (t) => entre(bloc(t), "/* SETTLE (R2", "const r = await envoyerAppels(plan.appels, c);");
+/* v3 : le chemin Settle / Accept / Refund ; son COMPORTEMENT (une seule lecture avant le wallet, le recu relu) est execute par test-slots-v3 */
+const regler = (t) => entre(bloc(t), "/* SETTLE / ACCEPT / REFUND (R2", "const r = await envoyerAppels(plan.appels, c);");
+const PLAN = lire('slots-plan.js');
 const checks = {
   /* D1 */
   tuilePlafonnee: (t) => { const b = sansCom(bloc(t)); return !/'three faces · up to ' \+ usdcTexte\(table\[15\]\)/.test(b) && /jb\('jbSlotsTxt', 'three faces · up to ' \+ usdcTexte\(Slots\.paieMaintenant\(haut, pot\)\)/.test(b); },
   tablePaieMaintenant: (t) => /<th>Pays now<\/th>/.test(t) && /Slots\.paieMaintenant\(BigInt\(j\.prizes\[k\]\), pot\)/.test(sansCom(bloc(t))),
   /* D2 */
-  pasDeGainFaux: (t) => !/win something/.test(sansCom(bloc(t))) && /pay back at least the/.test(bloc(t)) && /ev\.probMiseBps/.test(sansCom(bloc(t))),
+  pasDeGainFaux: (t) => !/win something/.test(sansCom(bloc(t))) && /pay back at least the/.test(bloc(t)) && /Slots\.pourcentTexte\(ev\.probMiseBps\)/.test(sansCom(bloc(t))),
   moyenneAvantPlafond: (t) => /while the pot holds less than/.test(bloc(t)),
   /* (d) */
   pointsCompteur: (t) => /a running total kept on chain/.test(bloc(t)) && /prizes are paid per spin/.test(bloc(t)),
-  troisBlocs: (t) => /the blocks 2, 3 and 4 blocks later give one face each/.test(bloc(t)) && /Slots\.blocsDesFaces\(r0\.t\)/.test(bloc(t)),
+  troisBlocs: (t) => /the blocks 2, 3 and 4 blocks later give one face each/.test(bloc(t)) && /Slots\.blocsDesFaces\(t\)/.test(bloc(t)),
   /* R2 */
-  settleLeger: (t) => { const r = sansCom(regler(t)); return r.length > 50 && !/peindreSlots\(/.test(r) && !/eth_getLogs|eth_getBlockByNumber/.test(r) && /rpc\('eth_blockNumber', \[\]\)/.test(r) && /Slots\.etatReglement\(/.test(r); },
-  recuSansSettled: (t) => /window closed before your settle was included/.test(bloc(t)),
+  settleLeger: (t) => { const r = sansCom(regler(t)); return r.length > 50 && !/peindreSlots\(/.test(r) && !/eth_getLogs|eth_getBlockByNumber|eth_call/.test(r) && /rpc\('eth_blockNumber', \[\]\)/.test(r) && /Slots\.planReglement\(\{ \.\.\.vue, tete \}\)/.test(r); },
+  recuSansSettled: (t) => /window closed before your settle was included/.test(PLAN) && /Slots\.phraseApres\(b, vue\.refund\)/.test(bloc(t)),
 };
 for (const [k, c] of Object.entries(checks)) vu(c(APP) === true, 'app.html : ' + k);
 const mutants = [
@@ -96,8 +99,8 @@ const mutants = [
   ['moyenneAvantPlafond', 'while the pot holds less than', 'whatever the pot holds'],
   ['pointsCompteur', 'prizes are paid per spin', 'points pay a bonus'],
   ['troisBlocs', 'the blocks 2, 3 and 4 blocks later give one face each', 'the block 2 blocks later gives three faces'],
-  ['settleLeger', "const tete = parseInt(await rpc('eth_blockNumber', []), 16);", "await peindreSlots(true); const tete = parseInt(await rpc('eth_blockNumber', []), 16);"],
-  ['recuSansSettled', 'window closed before your settle was included', 'no settled spin was read'],
+  ['settleLeger', "const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement", "await peindreSlots(true); const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement"],
+  ['recuSansSettled', 'Slots.phraseApres(b, vue.refund)', "'Sent.'"],
 ];
 for (const [k, de, vers] of mutants) {
   const b = bloc(APP);
@@ -124,7 +127,7 @@ vu(!depOk(DEP.replace('data-k="pMise"', 'data-k="pWin"')), 'MUTANT deployer-slot
     (M) => JSON.stringify(M.facesDuSpin([h0, h1, h2b], 7)[2]) === JSON.stringify(M.facesDuSpin([h0, h1, h2], 7)[2]));
   await muter('plafond 1000 USDC', 'export const PRIX_MAX = 5000000n;', 'export const PRIX_MAX = 1000000000n;',
     (M) => M.refusTable({ table: P.prizes.map((x, k) => (k === 15 ? '5000001' : x)), spinPrice: P.spinPrice, potShareBps: P.potShareBps }).length === 0);
-  await muter('D2 : rendre la mise = payer quelque chose', '(t[k] > 0n && t[k] >= m ? v : 0n)', '(t[k] > 0n ? v : 0n)', (M) => M.esperance(P.prizes, P.spinPrice).probMiseBps !== 746);
+  await muter('D2 : rendre la mise = payer quelque chose', '(t[k] > 0n && t[k] >= m ? v : 0n)', '(t[k] > 0n ? v : 0n)', (M) => M.esperance(P.prizes, P.spinPrice).probMiseBps !== 747);
   await muter('D1 : paieMaintenant sans le pot', 'return p < q ? p : q;', 'return p;', (M) => M.paieMaintenant(5000000n, 1200000n) !== 1200000n);
 }
 console.log('ok slots-v2 - ' + n + ' assertions ; NE PROUVE PAS le rendu ni Base');
