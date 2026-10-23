@@ -10,7 +10,7 @@ import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const imp = (f) => import(pathToFileURL(path.join(ICI, f)).href);
-const { verdictRoutage } = await imp('routage.js');
+const { verdictRoutage, raisonSansBuy } = await imp('routage.js');
 const { avecPoolAction } = await imp('pools-actions-aerodrome.js');
 const { ACTIONS_COINBASE } = await imp('paires.js');
 const { TBLOCK } = await imp('tokenomics.js');
@@ -29,9 +29,9 @@ const ACTIONS_PAR_ADR = new Set(ACTIONS_COINBASE.map((a) => String(a.adr).toLowe
 const enTexte = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 let pools = new Map();
 const poolDecouvertPour = (adr) => pools.get(String(adr).toLowerCase()) || null;
-const rendre = new Function('l', 'poolDecouvertPour', 'avecPoolAction', 'verdictRoutage', 'ACTIONS_PAR_ADR', 'LIQ_MIN_BUY_USD', 'enTexte', 'TBLOCK',
+const rendre = new Function('l', 'poolDecouvertPour', 'avecPoolAction', 'verdictRoutage', 'ACTIONS_PAR_ADR', 'LIQ_MIN_BUY_USD', 'enTexte', 'TBLOCK', 'raisonSansBuy',
   'return ' + src + ';');
-const boutons = (l) => rendre(l, poolDecouvertPour, avecPoolAction, verdictRoutage, ACTIONS_PAR_ADR, 500, enTexte, TBLOCK);
+const boutons = (l) => rendre(l, poolDecouvertPour, avecPoolAction, verdictRoutage, ACTIONS_PAR_ADR, 500, enTexte, TBLOCK, raisonSansBuy);
 const a = (sym) => ACTIONS_COINBASE.find((x) => x.symbole === sym).adr;
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 /* lignes reelles (prod /api/trending, 2026-10-17) - pools Aerodrome mesurees */
@@ -55,7 +55,15 @@ pools.set(blocV4.adr.toLowerCase(), { confiance: 'NOTRE', isTbFeeHook: true });
 { const h = boutons(blocV4); ok(/data-acheter="/.test(h) && h.includes('data-pairer="' + blocV4.adr + '"'), 'block achetable sur notre hook : Buy ET Pair'); }
 /* un block sans marche achetable : Pair seul, comme avant */
 const blocMince = { sym: 'rdstr', adr: '0xb2000000000000000000002222222222222222bb', dex: 'uniswap', liquiditeUsd: 600 };
-{ const h = boutons(blocMince); ok(!/>Buy</.test(h) && h.includes('data-pairer="' + blocMince.adr + '"'), 'block sans Buy : « Pair a block with it » seul (inchange)'); }
+{ const h = boutons(blocMince); ok(!/>Buy</.test(h) && h.includes('data-pairer="' + blocMince.adr + '"') && /cannot be quoted/.test(h), 'block sans Buy : « Pair a block with it » + la raison d avant (NON_COTEE), jamais une note vide'); }
+/* ⛔ 2026-10-23 — ligne REELLE de prod (/api/trending 18:2xZ) : ORCLc, dex « aero », pool 0x62b5…8eb5 dont factory() = 0x9cb2…7a76
+ *   (pas celle de notre routeur). Pas de Buy, et la raison DITE est la vraie : pas « empty / third-party hook ». */
+{ const orcl = { sym: 'ORCLc', adr: a('ORCLc'), dex: 'aero', poolAdr: '0x62b5452e80e50b047dcf6dd3fb6a1d266c678eb5', liquiditeUsd: 206136, quoteAdr: USDC };
+  const h = boutons(orcl);
+  ok(!/>Buy</.test(h) && /newer pool factory \(&quot;aero&quot;\), which the router this app uses cannot address/.test(h) && !/empty, or a third-party hook/.test(h) && h.includes('data-pairer="' + orcl.adr + '"'),
+    'ORCLc sur « aero » : pas de Buy, raison « newer pool factory (aero) » echappee (pas « empty / hook »), Pair garde'); }
+{ const h = boutons({ sym: 'thin', adr: '0xb2000000000000000000003333333333333333cc', dex: 'aerodrome', poolAdr: '0x518639e37e01849f8b9710e7444b199c1175d16d', liquiditeUsd: 120 });
+  ok(!/>Buy</.test(h) && /less than \$500 of liquidity/.test(h), 'pool Aerodrome achetable mais sous 500 $ : la raison est le seuil'); }
 /* TBLOCK : jamais propose a l appairage (bloque dans l app), meme achetable */
 pools.set(TBLOCK.toLowerCase(), { confiance: 'NOTRE', isTbFeeHook: true });
 { const h = boutons({ sym: 'TBLOCK', adr: TBLOCK, dex: 'uniswap', liquiditeUsd: 50000 }); ok(!/data-pairer/.test(h), 'TBLOCK : pas de « Pair »'); }

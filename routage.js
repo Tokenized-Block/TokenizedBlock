@@ -98,6 +98,36 @@ export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
   return { verdict: 'IN_APP', dex: d, famille, achetableIci: true, achetableEnUsdc: false, achetableEnEth: false };
 }
 
+/** ⛔⛔ LA RAISON D UNE LIGNE DU MARKET SANS BUY, TIREE DU MEME VERDICT QUE LE BUY — jamais une phrase fixe.
+ *  MESURE 2026-10-23 (prod, DOM de l onglet Market) : ORCLc AVGOc NFLXc DJTc MRNAc n avaient pas de Buy et disaient « its pool cannot
+ *  be quoted (empty, or a third-party hook that taxes resale) ». FAUX : leur pool la plus liquide (dexId DexScreener `aero`) a 103 518 $
+ *  d USDC (ORCLc), aucun hook — c est une pool CL dont `factory()` rend 0x9cb220581b91b0c83223012fe69688b92ad07a76, et non la factory
+ *  0xf8f2…61ef que declare notre routeur Aerodrome (14/14 pools `aero` servies lues au bloc 52 995 302 ; le bytecode du routeur
+ *  0x698c…a92f embarque l ancienne factory, pas la nouvelle). Le routeur ne PEUT PAS adresser ces pools : c est la raison, dite.
+ *  ⚠️ BORNE : `aero` est le dexId de l agregateur ; la factory est verifiee par le banc test-market-buy-actions-20261003 sur chaque
+ *   ligne servie, pas par ce module (il n appelle aucun reseau). Hors `aero`, on nomme le dex et rien de plus : sa profondeur n est
+ *   pas mesuree ici, donc la phrase ne dit pas « not empty ».
+ *  ⛔ `achetableIci` N ANNULE PAS LA RAISON : sur le Market il n ouvre un Buy que pour une action du registre ; un block v4 sans cle
+ *   cotee par le serveur reste NON_COTEE (la phrase d avant, mesuree sur les pools de hooks tiers le 2026-10-18).
+ *  @param {object} [o] `liqOk: false` quand la liquidite affichee est sous le seuil du Buy (`liqMin`, en $).
+ *  @returns {?{code:'DEX_HORS_ROUTEUR'|'LIQUIDITE_SOUS_SEUIL'|'NON_COTEE', phrase:string}} null seulement si le verdict ouvre un achat
+ *   en ETH/USDC et que la liquidite passe : il n y a alors rien a dire, un Buy est rendu. */
+export function raisonSansBuy(v, o = {}) {
+  if (o.liqOk === false) {
+    const seuil = Number.isFinite(Number(o.liqMin)) ? Math.round(Number(o.liqMin)) : 500;
+    return { code: 'LIQUIDITE_SOUS_SEUIL', phrase: 'No buy: less than $' + seuil + ' of liquidity on its market (DexScreener figure).' };
+  }
+  if (v && (v.achetableEnEth || v.achetableEnUsdc)) return null;
+  if (v && v.verdict === 'FRANCHISSEMENT') {
+    const d = String(v.dex || '').replace(/[^a-z0-9 .-]/gi, '').slice(0, 18);
+    /* ⚠️ « newer pool factory » et pas « Aerodrome » : `aero` est l etiquette de DexScreener ; que 0x9cb2… soit la factory officielle
+     *   d Aerodrome N EST PAS prouve ici — seule l est sa difference avec celle de notre routeur. */
+    const ou = /^aero$/i.test(d) ? 'a newer pool factory ("aero")' : (d || 'a market');
+    return { code: 'DEX_HORS_ROUTEUR', phrase: 'No buy here: its deepest pool is on ' + ou + ', which the router this app uses cannot address.' };
+  }
+  return { code: 'NON_COTEE', phrase: 'No buy: its pool cannot be quoted (empty, or a third-party hook that taxes resale).' };
+}
+
 /** Une phrase pour l ecran, en anglais comme le reste de l app.
  * ⛔ ELLE NOMME LA CAUSE, PAS L ECHEC. « cannot route through yet » ne distingue pas un manque chez
  *   nous d une frontiere technique — et le premier est bon marche a lever, donc le dire compte.

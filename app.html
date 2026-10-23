@@ -4330,7 +4330,7 @@ import { lirePoolCL } from './pool-cl.js';
 /* ⛔ LE VERDICT DE ROUTAGE VIT DANS SON PROPRE MODULE, pur et testable hors ligne (12 cas,
  * 6/6 mutations attrapees). Recopie ici, il serait invisible a la suite et derivrait de la
  * repartition mesuree qui le justifie. */
-import { verdictRoutage, phraseRoutage } from './routage.js';
+import { verdictRoutage, phraseRoutage, raisonSansBuy } from './routage.js';
 /* ⛔⛔ LE LIBELLE D ORIGINE EST IMPORTE, PAS RECOPIE. Le serveur s en sert pour marquer les lignes,
  * la page pour les afficher : une seconde copie de cette phrase divergerait, et ce serait l ECRAN
  * qui affirmerait autre chose que ce que le serveur a mesure. */
@@ -20688,7 +20688,11 @@ function peindreTrending() {
         /* ⛔ 2026-10-18 13:20 (agent, MESURE fork + chaine) : ces pools de hooks tiers sont VIDES (15/15, NotEnoughLiquidity) et leurs hooks
          *   portent taxBps() = 9999 — un wallet hors liste blanche revend a 0,0099 % (XSHOP, aller-retour sur fork). Le lien externe envoyait
          *   vers ce piege : retire. On dit la raison mesuree, sans Buy ; rien n est dit de l intention de quiconque. */
-        const raison = '<span class="note" style="margin:0">No buy: its pool cannot be quoted (empty, or a third-party hook that taxes resale).</span>';
+        /* ⛔⛔ 2026-10-23 (MESURE prod, DOM Market) : cette phrase etait FIXE, ecrite pour les pools v4 de hooks tiers — et servie aussi a
+         *   ORCLc AVGOc NFLXc DJTc MRNAc, dont la pool (dex « aero », 100 k$ d USDC sur ORCLc, sans hook) est sur une factory Aerodrome plus
+         *   recente (0x9cb2…7a76) que notre routeur n adresse pas. La raison vient maintenant du MEME verdict que le Buy (routage.js). */
+        const raisonSb = raisonSansBuy(vR, { liqOk, liqMin: LIQ_MIN_BUY_USD }) || raisonSansBuy(null);
+        const raison = '<span class="note" style="margin:0">' + enTexte(raisonSb.phrase) + '</span>';
         return pairable ? '<span class="trBoutons">' + raison + pairer + '</span>' : raison;
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
