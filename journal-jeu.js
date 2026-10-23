@@ -126,14 +126,53 @@ export function montantTexte(brut, dec, max = dec <= 6 ? 2 : 6) {
   return ent.toString() + (f ? '.' + f : '');
 }
 
+/* ══ LE LISTING EN VIGUEUR AU BLOC DU BID (2e verdict adverse 2026-10-23, defauts 1 et 2) — BlockSkins.sol : un skin se RELISTE apres
+ *   Unlisted / Sold / settle (delete listingOf), en ETH ou en USDC ; _open exige que le vendeur detienne le NFT (il passe au contrat), donc
+ *   deux listings ne se chevauchent jamais, et bid() exige un listing actif. La devise d un Bid est donc celle du DERNIER Listed qui le
+ *   PRECEDE (bloc, puis logIndex) — jamais « la devise actuelle du skin ».
+ *   ⛔ Avant : une seule devise par skin, la derniere LUE. Le rattrapage lisant a rebours, un Listed plus VIEUX ecrasait la devise d un
+ *   relisting plus recent (repro : listing #1 USDC @100, Bid 2,5 USDC @900, relisting ETH @950 -> « 0.00 ETH »).
+ *   Desormais un HISTORIQUE par skin : [{ bloc, logIndex, devise }] trie, de-doublonne, borne aux LISTINGS_PAR_SKIN_MAX plus recents.
+ *   Ce qui est lu est contigu ([bas, curseur], une fenetre n est retenue qu ENTIERE) : si le Listed en vigueur est sorti de l historique,
+ *   aucun Listed plus recent ne precede le Bid, et la reponse est null (pas de montant), jamais la devise d un autre listing. */
+export const LISTINGS_PAR_SKIN_MAX = 32;
+const avantDe = (x, bloc, logIndex) => x.bloc < bloc || (x.bloc === bloc && x.logIndex < logIndex);
+const listingOk = (x) => x && Number.isSafeInteger(x.bloc) && Number.isSafeInteger(x.logIndex) && typeof x.devise === 'string' && ADR.test(x.devise);
+/** la devise du listing EN VIGUEUR pour un Bid lu a (bloc, logIndex) : le dernier Listed STRICTEMENT avant ; null s il n est pas connu
+ *  (et toujours null pour une valeur qui n est pas un historique — une devise seule ne dit pas son bloc) */
+export function deviseEnVigueur(listings, sk, bloc, logIndex) {
+  const h = listings instanceof Map ? listings.get(sk) : null;
+  if (!Array.isArray(h) || !Number.isSafeInteger(bloc) || !Number.isSafeInteger(logIndex)) return null;
+  let r = null;
+  for (const x of h) {
+    if (!listingOk(x)) continue;
+    if (!avantDe(x, bloc, logIndex)) continue;
+    if (r === null || avantDe(r, x.bloc, x.logIndex)) r = x;
+  }
+  return r ? r.devise : null;
+}
+/** ajoute un Listed { bloc, logIndex, devise } a l historique du skin `sk` dans `listings` (Map) : insere a sa place (jamais ne remplace un
+ *  listing plus recent), de-doublonne par (bloc, logIndex), garde les `max` plus recents. Le tableau est REMPLACE, jamais mute (les copies
+ *  de la Map faites par lireEvenementsJeu partagent les tableaux). Rend la Map. */
+export function ajouterListing(listings, sk, x, max = LISTINGS_PAR_SKIN_MAX) {
+  if (!(listings instanceof Map) || typeof sk !== 'string' || !listingOk(x)) return listings;
+  const ancien = Array.isArray(listings.get(sk)) ? listings.get(sk).filter(listingOk) : [];
+  const h = ancien.filter((y) => !(y.bloc === x.bloc && y.logIndex === x.logIndex)).concat([x])
+    .sort((a, b) => a.bloc - b.bloc || a.logIndex - b.logIndex);
+  listings.set(sk, h.slice(Math.max(0, h.length - Math.max(1, max))));
+  return listings;
+}
+
 /**
  * @param {Array} logs  logs bruts d eth_getLogs
  * @param {{ rolls?: string|null, skins?: string|null }} contrats  NOS adresses ; un genre dont l adresse manque n est pas lu
- * @param {{ horodatage: (bloc:number)=>number|null, cibles?: Map<string,number>, devisesListees?: Map<string,string>,
+ * @param {{ horodatage: (bloc:number)=>number|null, cibles?: Map<string,number>, devisesListees?: Map<string,Array<{bloc:number,logIndex:number,devise:string}>>,
  *           devises?: Object<string,{sym:string,dec:number}> }} ctx
- *   horodatage : secondes du bloc (null = inconnu) ; cibles : rollId -> targetBlock deja vus ; devisesListees : tokenId -> devise deja vue
- * @returns {{ evenements: Array, cibles: Array<[string,number]>, devisesListees: Array<[string,string]>, illisibles: number, sansHeure: number }}
- *   cibles / devisesListees : les associations NOUVELLES lues ici (le serveur les garde) ; rien n est mute.
+ *   horodatage : secondes du bloc (null = inconnu) ; cibles : rollId -> targetBlock deja vus ; devisesListees : tokenId -> HISTORIQUE des
+ *   Listed deja vus (ajouterListing) ; la devise d un Bid est celle du listing en vigueur a SON bloc (deviseEnVigueur)
+ * @returns {{ evenements: Array, cibles: Array<[string,number]>, devisesListees: Array<[string,{bloc:number,logIndex:number,devise:string}]>, illisibles: number, sansHeure: number }}
+ *   cibles / devisesListees : les associations NOUVELLES lues ici (le serveur les garde : cibles par set, listings par ajouterListing) ;
+ *   rien n est mute.
  */
 export function lireEvenementsJeu(logs, contrats, ctx) {
   const adrOk = (k) => (ADR.test(bas(contrats && contrats[k])) ? bas(contrats[k]) : null);
@@ -240,15 +279,16 @@ export function lireEvenementsJeu(logs, contrats, ctx) {
       /* un Listed n est pas montre : il dit la DEVISE d une enchere, que Bid ne porte pas */
       const sk = idTopic(l.topics[1]);
       if (sk === null || m.length !== 3) { illisibles++; continue; }
-      const dev = motVersAdresse(m[0]);
-      devisesL.set(sk, dev); nouvellesDevises.push([sk, dev]);
+      const x = { bloc: b, logIndex: i, devise: motVersAdresse(m[0]) };
+      ajouterListing(devisesL, sk, x); nouvellesDevises.push([sk, x]);
       continue;
     } else if (t0 === T_BID) {
       const w = adresseDuTopic(l.topics[2]), sk = idTopic(l.topics[1]);
       if (!w || sk === null || m.length !== 2) { illisibles++; continue; }
-      const d = devisesL.has(sk) ? devises[devisesL.get(sk)] : null;
+      /* la devise du listing EN VIGUEUR au bloc du Bid, jamais la derniere lue (un relisting posterieur, ou un Listed plus vieux du rattrapage) */
+      const dev = deviseEnVigueur(devisesL, sk, b, i), d = dev ? devises[dev] : null;
       /* `montant` brut garde : un Listed lu PLUS TARD (le rattrapage remonte le temps) complete le texte (completerJournal) */
-      e = { kind: 'skin_bid', wallet: w, skin: sk, montant: m[0].toString(), devise: d ? devisesL.get(sk) : null,
+      e = { kind: 'skin_bid', wallet: w, skin: sk, montant: m[0].toString(), devise: d ? dev : null,
         text: court(w) + ' bid on skin #' + sk + (d ? ' · ' + montantTexte(m[0], d.dec) + ' ' + d.sym : '') };
     } else if (t0 === T_SOLD) {
       const vendeur = adresseDuTopic(l.topics[2]), w = adresseDuTopic(l.topics[3]), sk = idTopic(l.topics[1]);
@@ -298,7 +338,8 @@ export function garderJournal(existants, nouveaux, { depuisMs = 0, max = JOURNAL
 
 /** Complete les textes qu un ordre de lecture A REBOURS laissait courts (verdict 2026-10-23, defaut 5) : un Settled lu avant son Rolled
  *  (cible inconnue -> sans « on block N ») et un Bid lu avant son Listed (devise inconnue -> sans montant). Des que l association est
- *  connue, le texte est RECONSTRUIT avec les memes mots que lireEvenementsJeu ; sinon l evenement reste tel quel. Rien n est mute. */
+ *  connue, le texte est RECONSTRUIT avec les memes mots que lireEvenementsJeu ; sinon l evenement reste tel quel. Rien n est mute.
+ *  `devisesListees` : tokenId -> historique des Listed (ajouterListing) ; un Bid prend la devise du listing en vigueur a SON bloc. */
 export function completerJournal(evenements, { cibles, devisesListees, devises } = {}) {
   const c = cibles instanceof Map ? cibles : new Map(), dl = devisesListees instanceof Map ? devisesListees : new Map(), dv = devises || {};
   return (evenements || []).map((e) => {
@@ -307,8 +348,10 @@ export function completerJournal(evenements, { cibles, devisesListees, devises }
       let gain = null; try { gain = BigInt(e.payout); } catch (_) { return e; }
       return { ...e, cible, text: court(e.wallet) + ' rolled ' + e.score + '/5 on block ' + numeroBloc(cible) + (gain > 0n ? ' · +' + montantTexte(gain, 6) + ' USDC' : ' · no prize') };
     }
-    if (e && e.kind === 'skin_bid' && e.devise === null && typeof e.skin === 'string' && dl.has(e.skin) && dv[dl.get(e.skin)] && ADR.test(bas(e.wallet))) {
-      const dev = dl.get(e.skin), d = dv[dev];
+    /* ⛔ 2e verdict 2026-10-23 : la devise du listing EN VIGUEUR au bloc du Bid (deviseEnVigueur), pas la devise actuelle du skin */
+    const devB = e && e.kind === 'skin_bid' && e.devise === null && typeof e.skin === 'string' ? deviseEnVigueur(dl, e.skin, e.baseBlock, e.logIndex) : null;
+    if (devB !== null && dv[devB] && ADR.test(bas(e.wallet))) {
+      const dev = devB, d = dv[dev];
       let brut = null; try { brut = BigInt(e.montant); } catch (_) { return e; }
       return { ...e, devise: dev, text: court(e.wallet) + ' bid on skin #' + e.skin + ' · ' + montantTexte(brut, d.dec) + ' ' + d.sym };
     }

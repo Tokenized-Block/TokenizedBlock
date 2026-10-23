@@ -143,11 +143,13 @@ async function serieS(M, nom) {
   const bSeul = M.lireEvenementsJeu([lBid(12, W2, 2500000, 900, 4)], C, { horodatage: horo, devises: DEV }).evenements;
   const bEns = M.lireEvenementsJeu([lListed(12, 100, 3), lBid(12, W2, 2500000, 900, 4)], C, { horodatage: horo, devises: DEV }).evenements;
   v(bSeul.length === 1 && bSeul[0].text === W2.slice(0, 6) + '…' + W2.slice(-4) + ' bid on skin #12', 'Bid seul : sans montant (lu : ' + (bSeul[0] && bSeul[0].text) + ')');
-  const cB = M.completerJournal(bSeul, { cibles: new Map(), devisesListees: new Map([['12', USDC]]), devises: DEV });
+  /* 2e verdict 2026-10-23 : devisesListees = l HISTORIQUE des Listed par skin (bloc, logIndex, devise) ; le Bid @900 suit le Listed @100 */
+  const H12 = (dev) => new Map([['12', [{ bloc: 100, logIndex: 0, devise: dev }]]]);
+  const cB = M.completerJournal(bSeul, { cibles: new Map(), devisesListees: H12(USDC), devises: DEV });
   v(cB[0] && bEns[0] && cB[0].text === bEns[0].text && /2\.50 USDC/.test(cB[0].text), 'Bid complete = la lecture dans l ordre (' + (cB[0] && cB[0].text) + ' vs ' + (bEns[0] && bEns[0].text) + ')');
-  const cB0 = M.completerJournal(bSeul, { cibles: new Map(), devisesListees: new Map([['12', '0x' + '99'.repeat(20)]]), devises: DEV });
+  const cB0 = M.completerJournal(bSeul, { cibles: new Map(), devisesListees: H12('0x' + '99'.repeat(20)), devises: DEV });
   v(cB0[0] && cB0[0].text === bSeul[0].text, 'Bid dont la devise listee est inconnue : inchange (aucun montant invente)');
-  const deja = M.completerJournal(bEns, { cibles: new Map(), devisesListees: new Map([['12', USDC]]), devises: DEV });
+  const deja = M.completerJournal(bEns, { cibles: new Map(), devisesListees: H12(USDC), devises: DEV });
   v(deja[0] === bEns[0], 'un Bid deja complet n est pas reecrit');
   return r;
 }
@@ -162,9 +164,9 @@ const versOriginaux = (s) => s.replace(/from '\.\/([^']+)'/g, (_, f) => "from '"
 const MUTANTS_S = [
   ['coupes jamais comptees', 'coupes: Math.max(0, tous.length - m) };', 'coupes: 0 };'],
   ['Settled jamais complete', "if (e && e.kind === 'settled' && e.cible === null", "if (false && e.kind === 'settled' && e.cible === null"],
-  ['Bid jamais complete', "if (e && e.kind === 'skin_bid' && e.devise === null", "if (false && e.kind === 'skin_bid' && e.devise === null"],
+  ['Bid jamais complete', "const devB = e && e.kind === 'skin_bid' && e.devise === null", "const devB = null && e.kind === 'skin_bid' && e.devise === null"],
   ['Settled complete sans cible connue', '&& Number.isSafeInteger(c.get(e.rollId)) &&', '&&'],
-  ['Bid complete sans devise connue', '&& dl.has(e.skin) && dv[dl.get(e.skin)] &&', '&& dl.has(e.skin) &&'],
+  ['Bid complete sans devise connue', 'if (devB !== null && dv[devB] && ADR.test(bas(e.wallet))) {', 'if (devB !== null && ADR.test(bas(e.wallet))) {'],
 ];
 let k = 0;
 for (const [nom, de, a] of MUTANTS_S) {

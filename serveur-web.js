@@ -99,7 +99,7 @@ import { volumeVerifie, poolIdDe, passSkinVerifie } from './volume-tirage.js';
 import { BLOCKSKINS as BLOCKSKINS_SRV, BLOCKSKINS_ACTIF as BLOCKSKINS_ACTIF_SRV, SKIN_MINT_USDC as SKIN_MINT_USDC_SRV, lireSkins as lireSkinsSrv, DEVISES_SKIN as DEVISES_SKIN_SRV } from './blockskins.js';
 import { lireEvenementsJeu, evenementsPractice, fusionnerJournal, avecBlocks, TOPICS_ROLLS as TOPICS_ROLLS_JOURNAL, TOPICS_SKINS as TOPICS_SKINS_JOURNAL,
   TOPICS_DUELS as TOPICS_DUELS_JOURNAL, TOPICS_MISSIONS as TOPICS_MISSIONS_JOURNAL, JOURNAL_MAX, tempsDeBloc as tempsDeBlocJournal,
-  profondeurJournee, premierBlocDuJour, journeeCouverte, garderJournal, completerJournal } from './journal-jeu.js';
+  profondeurJournee, premierBlocDuJour, journeeCouverte, garderJournal, completerJournal, ajouterListing } from './journal-jeu.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
 /* 2026-10-23 DENIM : le temps de bloc MESURE (deux en-tetes), et les reculs exprimes en secondes convertis avec lui (temps-de-bloc.js) */
 import { sParBlocMesure, enteteVersMesure, blocsPour, RECUL_MESURE_BLOCS } from './temps-de-bloc.js';
@@ -4323,7 +4323,9 @@ async function lireFenetreJournal(de, a, c) {
   const r = lireEvenementsJeu(logs, c, { horodatage: (b) => (heures.has(b) ? heures.get(b) : null), cibles: journalEtat.cibles, devisesListees: journalEtat.devisesListees, jetons, devises: DEVISES_SKIN_SRV });
   if (r.sansHeure) return false;
   for (const [k, v] of r.cibles) journalEtat.cibles.set(k, v);
-  for (const [k, v] of r.devisesListees) journalEtat.devisesListees.set(k, v);
+  /* ⛔ 2e verdict 2026-10-23 (defaut 2) : `set(k, v)` laissait un Listed PLUS VIEUX (le rattrapage lit a rebours) ecraser la devise d un
+   *  relisting plus recent. Un historique par skin, insere a sa place (journal-jeu.js, ajouterListing) : rien n ecrase un listing plus recent. */
+  for (const [k, v] of r.devisesListees) ajouterListing(journalEtat.devisesListees, k, v);
   for (const [k, v] of r.jetons) journalEtat.jetons.set(k, v);
   for (const m of [journalEtat.cibles, journalEtat.devisesListees, journalEtat.jetons]) while (m.size > JOURNAL_ASSOC_MAX) m.delete(m.keys().next().value);
   const g = garderJournal(journalEtat.evenements, r.evenements, { depuisMs: jourDe(Date.now()).debut, max: JOURNAL_GARDE });
@@ -6602,15 +6604,21 @@ function traiterRequete(req, res) {
     const rendreJl = (code, o) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(req.method === 'HEAD' ? undefined : JSON.stringify(o)); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { rendreJl(405, { ok: false, pourquoi: 'GET only' }); return; }
     const jJl = jourDe(Date.now());
-    const tousJl = fusionnerJournal(journalEtat.jour === jJl.id ? journalEtat.evenements : [], evenementsPractice(jeuRolls.slice(-JEU_ROLLS_MAX)), { depuisMs: jJl.debut, max: JOURNAL_MAX });
+    /* ⛔ 2e verdict 2026-10-23 (defaut 3) : la reponse sert au plus JOURNAL_MAX (100) evenements, la memoire en garde JOURNAL_GARDE (400).
+     *  Avec 101..400 evenements du jour, coupes valait 0 et couvreLaJournee true alors que les plus anciens n etaient PAS servis. Le drapeau
+     *  dit ce qui est SERVI : coupes = coupes de la memoire + evenements du jour non servis ; couvreLaJournee faux des qu un seul manque. */
+    const gJl = garderJournal(journalEtat.jour === jJl.id ? journalEtat.evenements : [], evenementsPractice(jeuRolls.slice(-JEU_ROLLS_MAX)), { depuisMs: jJl.debut, max: JOURNAL_MAX });
+    const tousJl = gJl.evenements;
     const walletsJl = new Set(tousJl.map((e) => e.wallet).filter(Boolean)), blocDeJl = new Map();
     if (walletsJl.size) for (const [jeton, createur] of createurParBlock) if (walletsJl.has(createur) && !blocDeJl.has(createur)) blocDeJl.set(createur, jeton);
     const cJl = contratsJournal();
     const memeJourJl = journalEtat.jour === jJl.id, cvJl = couvertureJournal();
+    const coupesMemoireJl = memeJourJl ? cvJl.coupes : 0;
     rendreJl(200, { ok: true, jour: jJl.id, lu: journalEtat.lu ? new Date(journalEtat.lu).toISOString() : null, maintenant: Date.now(),
-      couvertureDepuis: memeJourJl ? cvJl.couvertureDepuis : null, couvreLaJournee: memeJourJl && cvJl.couvreLaJournee === true,
+      couvertureDepuis: memeJourJl ? cvJl.couvertureDepuis : null, couvreLaJournee: memeJourJl && cvJl.couvreLaJournee === true && gJl.coupes === 0,
       premierBlocDuJour: memeJourJl ? cvJl.premierBlocDuJour : null, secondesParBloc: cvJl.secondesParBloc, profondeurMax: cvJl.profondeurMax,
-      rattrapage: memeJourJl ? cvJl.rattrapage : null, coupes: memeJourJl ? cvJl.coupes : 0, fenetresRattrapage: cvJl.fenetresRattrapage,
+      rattrapage: memeJourJl ? cvJl.rattrapage : null, coupes: coupesMemoireJl + gJl.coupes, coupesMemoire: coupesMemoireJl, coupesEnvoi: gJl.coupes,
+      fenetresRattrapage: cvJl.fenetresRattrapage,
       scanJusqua: journalEtat.curseur, sources: { rolls: cJl.rolls, skins: cJl.skins, practice: true, duels: cJl.duels, missions: cJl.missions },
       evenements: avecBlocks(tousJl, (w) => blocDeJl.get(w) || null) });
     return;
