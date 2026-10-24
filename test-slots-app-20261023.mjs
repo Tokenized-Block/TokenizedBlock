@@ -29,8 +29,11 @@ const checks = {
   carteCachee: (t) => /<div class="slotsZone" id="slotsZone" hidden>/.test(t) && /id="jbSlotsTuile"[^>]*\bhidden>/.test(t) && t.split('id="slotsZone"').length === 2
     && !/id="slotsCarte"/.test(t) && entre(t, '<div class="carte" id="tirCarte"', '<div class="carte" id="brainJeuCarte"').includes('id="slotsZone"'),
   cacheeSansContrat: (t) => /carte\.hidden = !on; if \(tuile\) tuile\.hidden = !on;/.test(bloc(t)) && /if \(!on\) return null;/.test(bloc(t)),
-  aucunBoutonMort: (t) => { const c = carteHtml(t); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c) && /<button type="button" class="bouton" id="slotsSpin" hidden>/.test(c) && /id="slotsRegler" hidden>/.test(c); },
-  spinCacheSansWallet: (t) => /bS\.hidden = !moi;/.test(bloc(t)),
+  aucunBoutonMort: (t) => { const c = carteHtml(t); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c) && /<button type="button" class="bouton spinBouton" id="slotsSpin" hidden>/.test(c) && /id="slotsRegler" hidden>/.test(c); },
+  /* 2026-10-24 (Phil : « un clic ») : sans wallet le bouton n est plus cache — il dit « Connect a wallet to spin » et connecte (ce banc
+   *   affirmait « Spin cache sans wallet ») ; avec un contrat servi, LE bouton est toujours la, jamais desactive en dur */
+  spinCacheSansWallet: (t) => /bS\.textContent = moi \? 'Spin · ' \+ usdcTexte\(prix\) \+ ' USDC' : 'Connect a wallet to spin';/.test(bloc(t)) && /bS\.hidden = false;/.test(bloc(t))
+    && /if \(contrat && !c && quoi === 'spin'\) \{ await connecterPourSpin\(\); return; \}/.test(bloc(t)),
   /* v3 : Settle n apparait qu avec un spin payable EN ENTIER (le plan), et jamais quand les spins n ont pas ete lus */
   settleSeulementReglable: (t) => /bR\.hidden = lot\.length === 0;/.test(bloc(t)) && /if \(lu === null\) \{ bR\.hidden = true; bA\.hidden = true; slotsCfg\.vue = null;/.test(bloc(t)),
   /* v4 (option 3 de Phil) : AUCUN remboursement — ni bouton, ni plan expire, ni phrase de remboursement dans la carte ; la regle dite */
@@ -59,11 +62,11 @@ for (const [k, f] of Object.entries(checks)) vu(f(APP) === true, 'app.html : ' +
 const mutants = [
   ['carteCachee', '<div class="slotsZone" id="slotsZone" hidden>', '<div class="slotsZone" id="slotsZone">'],
   ['cacheeSansContrat', 'carte.hidden = !on; if (tuile) tuile.hidden = !on;', 'carte.hidden = false; if (tuile) tuile.hidden = false;'],
-  ['aucunBoutonMort', '<button type="button" class="bouton" id="slotsSpin" hidden>', '<button type="button" class="bouton" id="slotsSpin" disabled>'],
-  ['spinCacheSansWallet', 'bS.hidden = !moi;', 'bS.hidden = false;'],
+  ['aucunBoutonMort', '<button type="button" class="bouton spinBouton" id="slotsSpin" hidden>', '<button type="button" class="bouton spinBouton" id="slotsSpin" disabled>'],
+  ['spinCacheSansWallet', "bS.textContent = moi ? 'Spin · ' + usdcTexte(prix) + ' USDC' : 'Connect a wallet to spin';", "bS.textContent = 'Spin · ' + usdcTexte(prix) + ' USDC';"],
   ['settleSeulementReglable', 'bR.hidden = lot.length === 0;', 'bR.hidden = false;'],
   ['chiffresServis', "Slots.usdcPrecis(BigInt(j.esperanceBrut)) + ' USDC — less", "'0.15 USDC — less"],
-  ['nonLu', "pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect", "usdcTexte(pot || 0n) + ' USDC') + '. Connect"],
+  ['nonLu', "pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. A spin costs", "usdcTexte(pot || 0n) + ' USDC') + '. A spin costs"],
   ['fenetreBornee', 'scanne: slotsCfg.scanne, tete, blocDeploiement: j.bloc', 'scanne: null, tete, blocDeploiement: 0'],
   ['spinExact', 'plan = Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: BigInt(j.prixSpin) });', 'plan = Slots.planSpins({ contrat, usdc: USDC_BASE, n: 1, spinPrice: 2n ** 255n });'],
   ['settleRelu', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = vue.spins;"],
@@ -71,7 +74,8 @@ const mutants = [
   ['envoiUnique', 'r = await envoyerAppels(plan.appels, c);\n    }\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus', 'r = await envoyerDepuisWallet(plan.appels, c);\n    }\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus'],
   ['facesDuContrat', 'faceRevelee(Slots.graine(hashes[r], spinId, r))', 'faceRevelee(Slots.graine(hashes[0], spinId, r))'],
   ['bandeauTelephone', '.jeuBandeau,.jeuBandeau[data-n="7"],.jeuBandeau[data-slots="1"]{display:flex;', '.jeuBandeau,.jeuBandeau[data-n="7"]{display:flex;'],
-  ['sansRemboursement', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>\n        <button type="button" class="bouton sec" id="slotsRembourser" hidden>Claim refund</button>'],
+  /* 2026-10-24 : Settle / Accept sont dans le panneau de reponse (bouton plein : l action suivante) — l ancre suit le bouton */
+  ['sansRemboursement', '<button type="button" class="bouton" id="slotsAccepter" hidden>Accept</button>', '<button type="button" class="bouton" id="slotsAccepter" hidden>Accept</button>\n        <button type="button" class="bouton sec" id="slotsRembourser" hidden>Claim refund</button>'],
   ['perduDit', "'A spin not settled in time is lost: nothing is returned. Settle within '", "'Settle within '"],
   ['regleurDit', "(it is ' + reg + ' right now)", "(it is on right now)"],
   ['fenetreMesuree', 'const msB = await msBlocSlots(j);', 'const msB = null;'],

@@ -29,7 +29,9 @@ vu(/etape\('wallet_connect_ok'\); \} catch \(_\) \{\}\s*\r?\n\s*try \{ peindreTi
 /* 2026-10-18 : apres la face, le regleur des rolls en attente et le pot du jour des pass (revue adverse) */
 vu(/if \(nom === 'missions'\) \{ void peindreTirage\(\); void peindreDernierBlock\(\)\.catch\(\(\) => \{\}\)\.then\(\(\) => \{ void verifierRollsEnAttente\(\); void peindreTirageJourPass\(\); \}\); void peindreMissions\(\); void peindreEarn\(\); void peindreSkinsJeu\(\); void peindreUnitPools\(\); \}/.test(app), 'repeinte a l ouverture de l onglet Game (tirage + face + missions + earn + skins + UNIT pools)');
 const carte = app.slice(c, app.indexOf('</section>', c));
-vu(/<p class="titre jeuTitre"[^>]*>Your trades are your ticket\./.test(carte) && !/\u{1F39F}/u.test(carte), 'titre « jeu », sans emoji');
+/* 2026-10-24 (Phil, capture de game35 : « un seul jeu, au CENTRE ») : le titre dit LE jeu du centre (les rouleaux) ; ce banc affirmait
+ *   « Your trades are your ticket. » — le ticket reste plus bas dans la carte, sa phrase dans #jourTicketTxt */
+vu(/<p class="titre jeuTitre jeuCentreTitre"[^>]*>Three Base blocks draw three faces\. Matching traits win\./.test(carte) && !/\u{1F39F}/u.test(carte), 'titre « jeu », sans emoji');
 /* Phil 2026-10-18 09:00 : « change pour vraiment ecrire » — les tuiles disent le jeu construit : ticket, pot du jour, rolls, missions, skins */
 /* Phil 2026-10-18 09:50 : seulement ce qui marche aujourd hui — aucune promesse de contrat a venir dans les tuiles */
 /* 2026-10-18 (revue adverse) : BlockRolls est EN LIGNE (0x0c5b…0fe9, bloc 52 770 558) — « day pass » n est plus une promesse : la tuile

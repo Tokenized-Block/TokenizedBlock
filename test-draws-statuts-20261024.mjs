@@ -58,10 +58,15 @@ function arbre(html) {
   return { racine, parId };
 }
 const carteDe = (t) => entre(t, '<div class="carte" id="tirCarte">', '<div class="carte" id="brainJeuCarte">');
-/* la suite d etat d une rangee : les <p class="note"> qui la suivent immediatement */
+/* la suite d etat d une rangee : les <p class="note"> qui la suivent immediatement.
+ * 2026-10-24 (Phil, capture de game35 : « un seul jeu, au CENTRE : un clic, une reponse ») : sous la rangee du Spin, LE PANNEAU DE REPONSE
+ *   (div.reponseSpin, #slotsReponse) — sa suite d etat = ses <p class="note"> directs (#slotsEtat) ; dans le panneau, la rangee de
+ *   l action suivante (Settle / Accept) est suivie de #slotsEtat. */
 function suiteDetat(rangee) {
   const s = [];
-  for (let x = rangee.nextElementSibling; x && x.tag === 'p' && x.classe('note'); x = x.nextElementSibling) s.push(x.id);
+  const x0 = rangee.nextElementSibling;
+  if (x0 && x0.tag === 'div' && x0.classe('reponseSpin')) return x0.kids.filter((k) => k.tag === 'p' && k.classe('note')).map((k) => k.id);
+  for (let x = x0; x && x.tag === 'p' && x.classe('note'); x = x.nextElementSibling) s.push(x.id);
   return s;
 }
 
@@ -129,7 +134,7 @@ S.RANGEES = async (t) => {
     rangees.set(id, b.parentNode); suites.set(b.parentNode, suiteDetat(b.parentNode));
   }
   /* toutes les lignes d etat d une AUTRE rangee que celle du bouton */
-  const autres = (id) => new Set([...suites.entries()].filter(([r]) => r !== rangees.get(id)).flatMap(([, s]) => s));
+  const autres = (id) => new Set([...suites.entries()].filter(([r]) => r !== rangees.get(id)).flatMap(([, s]) => s).filter((x) => !suites.get(rangees.get(id)).includes(x)));
   const res = {};
   for (const id of PAYANTS) {
     const fl = fluxDe(t, id);
@@ -187,7 +192,7 @@ S.JETON = async (t) => {
     let texte = null;
     const r = await executer(t, (api) => (fl.arg ? api[fl.nom](JSON.parse(fl.arg.replace(/'/g, '"'))) : api[fl.nom]()), extra);
     const rangee = parId.get(id).parentNode, suite = suites.get(rangee);
-    const autres = new Set([...suites.entries()].filter(([x]) => x !== rangee).flatMap(([, s]) => s));
+    const autres = new Set([...suites.entries()].filter(([x]) => x !== rangee).flatMap(([, s]) => s).filter((x) => !suite.includes(x)));
     const ecrits = [...r.ecrits];
     /* le refus du chemin JETON (« stub refusal. ») est ecrit dans la suite d etat de la rangee : le chemin jeton a bien ete pris */
     texte = r.textes.find((x) => suite.includes(x.id) && x.v.includes('stub refusal.')) || null;
@@ -196,6 +201,20 @@ S.JETON = async (t) => {
   return { ok: Object.values(res).every((x) => x.ok), ko: Object.fromEntries(Object.entries(res).filter(([, v]) => !v.ok)) };
 };
 
+/* PANNEAU (2026-10-24) : la rangee du Spin porte le Spin ET « Pay with » ; juste dessous le panneau de reponse : les etapes, la rangee de
+ *   l action suivante (sa phrase, Settle, Accept), puis #slotsEtat ; le Roll classique est dans son pli, avec SA ligne d etat dedans. */
+S.PANNEAU = async (t) => {
+  const { parId } = arbre(carteDe(t));
+  const sp = parId.get('slotsSpin'), rangee = sp && sp.parentNode, pan = parId.get('slotsReponse'), suite = parId.get('slotsSuite');
+  if (!rangee || !pan || !suite) return { ok: false, pourquoi: 'elements absents' };
+  const dansRangee = rangee.classe('jourEtapes') && rangee.kids.map((k) => k.id).join() === 'slotsSpin,payerAvec';
+  const dessous = rangee.nextElementSibling === pan && pan.classe('reponseSpin') && pan.kids.map((k) => k.id).join() === 'slotsEtapes,slotsSuite,slotsEtat';
+  const action = suite.classe('jourEtapes') && suite.kids.map((k) => k.id).join() === 'slotsSuiteTxt,slotsRegler,slotsAccepter' && suite.nextElementSibling === parId.get('slotsEtat');
+  const pli = parId.get('rollPli'), roll = parId.get('jourRoll').parentNode;
+  const rollPli = !!pli && pli.tag === 'details' && roll.parentNode === pli && ['rollsEtat', 'rollsAttente', 'dernierMoi', 'dernierQuand'].every((id) => parId.get(id).parentNode === pli)
+    && pli.kids[0].tag === 'summary' && parId.get('slotsZone').parentNode === parId.get('jeuCentre');
+  return { ok: dansRangee && dessous && action && rollPli, dansRangee, dessous, action, rollPli };
+};
 for (const k of Object.keys(S)) { const r = await S[k](APP); vu(r.ok === true, 'scenario ' + k + (r.ok ? '' : ' ' + JSON.stringify(r).slice(0, 1200))); }
 
 /* ---------------------------------------------------------------- les mutants (copies en memoire) */
@@ -209,11 +228,16 @@ const MUT = [
   ['RANGEES', 'Settle pending rolls ecrit dans la ligne du pot', "  const bt = $('#rollsRegler'), e = $('#rollsEtat');", "  const bt = $('#rollsRegler'), e = $('#potEtat');"],
   ['RANGEES', 'le tirage du pot des pass ecrit dans la ligne du Roll', "  const bt = $('#jourTirerJour'), p = $('#jourPassEtat');\n  let c = null; try { c = compte; } catch (_) { c = null; }\n  if (!rollsCfg || !c || !bt || bt.disabled) return;", "  const bt = $('#jourTirerJour'), p = $('#rollsEtat');\n  let c = null; try { c = compte; } catch (_) { c = null; }\n  if (!rollsCfg || !c || !bt || bt.disabled) return;"],
   ['RANGEES', 'les Slots ecrivent sous la liste (#slotsMoi)', "  const j = slotsCfg.j, contrat = slotsContrat(j), etat = $('#slotsEtat');", "  const j = slotsCfg.j, contrat = slotsContrat(j), etat = $('#slotsMoi');"],
-  ['RANGEES', 'la ligne du pot remontee sous le Roll', null, deplacer('      <p class="note" id="potEtat" style="margin:6px 0 0" hidden></p>\n', '      <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>\n')],
-  ['RANGEES', 'la ligne du Roll redescendue sous les Slots', null, deplacer('      <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>\n', '      <div class="jourTicket">\n')],
-  ['RANGEES', 'la ligne des Slots sous la liste des spins', null, deplacer('        <p class="note" id="slotsEtat" style="margin:6px 0 0">Reading the slots on chain…</p>\n', '        <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>\n')],
-  ['ROLL', '« Your roll matched » redescendu sous les Slots', null, deplacer('      <p class="note" id="dernierMoi" style="margin:4px 0 0"></p>\n', '      <div class="tirBarre" aria-hidden="true">')],
-  ['ROLL', '« Last rolls » redescendu sous les Slots', null, deplacer('      <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>\n', '      <div class="tirBarre" aria-hidden="true">')],
+  /* 2026-10-24 (un seul jeu au centre) : les ancres de ces deplacements suivent l indentation de la nouvelle carte (le pli du Roll, le panneau) */
+  ['RANGEES', 'la ligne du pot remontee sous le Roll', null, deplacer('      <p class="note" id="potEtat" style="margin:6px 0 0" hidden></p>\n', '        <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>\n')],
+  ['RANGEES', 'la ligne du Roll redescendue sous les Slots', null, deplacer('        <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>\n', '      <div class="jourTicket">\n')],
+  ['RANGEES', 'la ligne des Slots sous la liste des spins', null, deplacer('            <p class="note" id="slotsEtat" style="margin:6px 0 0">Reading the slots on chain…</p>\n', '          <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>\n')],
+  ['ROLL', '« Your roll matched » redescendu sous les Slots', null, deplacer('        <p class="note" id="dernierMoi" style="margin:4px 0 0"></p>\n', '      <div class="tirBarre" aria-hidden="true">')],
+  ['ROLL', '« Last rolls » redescendu sous les Slots', null, deplacer('        <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>\n', '      <div class="tirBarre" aria-hidden="true">')],
+  ['PANNEAU', 'le panneau de reponse sous la liste des spins', null, (t) => { const i = t.indexOf('          <div class="reponseSpin" id="slotsReponse"'), j = t.indexOf('          <ul class="slotsListe" id="slotsListe"></ul>'), k = t.indexOf('          <p class="note" id="slotsMoi"'); return t.slice(0, i) + t.slice(j, k) + t.slice(i, j) + t.slice(k); }],
+  ['PANNEAU', 'Settle sorti du panneau, dans la rangee du Spin', null, deplacer('              <button type="button" class="bouton" id="slotsRegler" hidden>Settle</button>\n', '            <div class="payerAvec" id="payerAvec" hidden>\n')],
+  ['PANNEAU', '« Pay with » remonte au-dessus des rouleaux', null, (t) => { const i = t.indexOf('            <div class="payerAvec" id="payerAvec" hidden>'), j = t.indexOf('</div>', t.indexOf('id="payerNote"', i)) + '</div>'.length; const bloc = t.slice(i, j); const u = t.slice(0, i) + t.slice(j); const k = u.indexOf('        <div class="slotsFaces" id="slotsFaces">'); return u.slice(0, k) + bloc + u.slice(k); }],
+  ['PANNEAU', 'le Roll classique sorti de son pli', null, (t) => t.replace('      <details class="rollPli" id="rollPli">\n        <summary class="note">Other ways to play: classic roll</summary>\n', '      <div class="rollPli" id="rollPli">\n').replace('        <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>\n      </details>\n', '        <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>\n      </div>\n')],
   ['REGLE', 'avec un wallet la regle sous #slotsMoi (sous Spin)', '    if (moi) { if (rangee.previousElementSibling !== rg) rangee.parentNode.insertBefore(rg, rangee); }',
     "    if (moi) { const mien = $('#slotsMoi'); if (mien.nextElementSibling !== rg) mien.parentNode.insertBefore(rg, mien.nextElementSibling); }"],
   ['JETON', 'le roll paye en jeton ecrit dans la ligne du pot', "      if (!pj.ok) { dit('Not rolled: ' + pj.pourquoi + ' Nothing was sent.'); return; }\n      r = await envoyerPaiementJeton(pj, c, dit, av.phrase);",

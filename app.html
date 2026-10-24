@@ -242,6 +242,28 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* 2026-10-24 (revue adverse D2) : les boutons d un paiement en jeton arrete (Reset the approval, Finish with USDC), dans la ligne d etat */
 .arretBouton{display:inline-block;margin:6px 6px 0 0;padding:6px 10px;font-size:12px}
 #payerNote{flex-basis:100%}
+/* 2026-10-24 (Phil, capture de game35 : « un seul jeu, au CENTRE ; un clic, une reponse ») : les trois rouleaux et leur bouton au centre de
+ *   la carte (marges gauche/droite egales), plus grands sur ordinateur, toujours UNE rangee de 3 a 375 px ; le panneau de reponse dessous ;
+ *   le Roll classique replie (#rollPli). Les textes longs (liste, regle, table) restent alignes a gauche dans la colonne centree. */
+.jeuCentreTitre{text-align:center}
+.jeuCentre{max-width:460px;margin:0 auto;min-width:0}
+.jeuCentre .slotsFaces{margin:8px auto 0;max-width:340px}
+@media (min-width:768px){.jeuCentre .slotsFaces{max-width:420px;gap:12px}}
+.jeuCentre #rouleauxLegende,.jeuCentre .slotsAccords{text-align:center;justify-content:center}
+.spinRangee{justify-content:center;align-items:center;margin-top:10px}
+.jourEtapes .spinBouton{flex:1 1 220px;max-width:340px;font-size:16px;padding:12px 16px}
+.spinRangee .payerAvec{flex:1 1 100%;justify-content:center;margin:0}
+.reponseSpin{margin:10px 0 0;padding:10px 12px;border:1px solid var(--ligne);border-radius:12px;background:rgb(var(--accentRgb) / .04);min-width:0;overflow-wrap:anywhere}
+.reponseEtapes{list-style:none;margin:0;padding:0;display:grid;gap:3px;font-size:12.5px;line-height:1.4}
+.reponseEtapes:empty{display:none}
+.reponseEtapes li[data-etat="attente"]{color:var(--doux)}
+.reponseEtapes li[data-etat="encours"]{color:var(--accent2)}
+.reponseEtapes li b{display:inline-block;min-width:1.4em;font-variant-numeric:tabular-nums}
+.reponseSuite{align-items:center;margin-top:8px}
+.reponseSuite .note{flex:1 1 200px;margin:0;font-weight:600;color:inherit}
+.reponseSuite .bouton{flex:0 1 auto}
+.rollPli{margin:14px 0 0;border-top:1px solid var(--ligne);padding-top:8px}
+.rollPli>summary{cursor:pointer;margin:0}
 .slotsAccords{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0 0;font-size:12.5px;color:var(--doux)}
 .slotsAccords b{color:var(--accent2);font-weight:700}
 .slotsTable{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;margin:6px 0 0}
@@ -3719,91 +3741,103 @@ details[open] > summary::before{transform:rotate(90deg)}
          il n y a plus de carte #slotsCarte ; leurs ids sont inchanges (les bancs des slots et leurs textes les gardent). -->
     <div class="carte" id="tirCarte">
       <span class="jeuKick">Game · Draws</span>
-      <p class="titre jeuTitre" style="font-size:16px">Your trades are your ticket. The next Base block draws the face.</p>
-      <!-- LES ROULEAUX (rouleaux.js) : LIVE, les faces des blocs Base N-2, N-1, N (le hash de chaque bloc, etiquete) ; avec un spin en attente,
-           les trois faces de CE spin (blocs t, t+1, t+2 et l id du spin, la graine du contrat), posees une a une, puis les points par trait.
-           Les cases gardent le selecteur #slotsFaces .jourFace des slots. Rien n y est tire au hasard. -->
-      <div class="slotsFaces" id="slotsFaces">
-        <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 1" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc1"></span></div>
-        <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 2" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc2"></span></div>
-        <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 3" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc3"></span></div>
-      </div>
-      <p class="note" id="rouleauxLegende">Reading the latest Base blocks…</p>
-      <div class="slotsAccords" id="slotsAccords"></div>
-      <!-- LE ROLL (BlockRolls) : Phil 2026-10-18 : CHAQUE roll tire une NOUVELLE face au hasard (nouvelleFaceRoll) : elle se montre ici, contre
-           la face du bloc qui decide ; le ticket du jour (la face du TIRAGE du jour) est petit, plus bas (#ticketFace). -->
-      <div class="rollLigne">
-        <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your roll"></div>
-        <p class="note" id="jourRollTxt">Your roll — a new random face each roll.</p>
-        <div class="jeuVs" aria-hidden="true">vs</div>
-        <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
-        <p class="note" id="dernierNom">Reading the chain…</p>
-      </div>
-      <!-- 2026-10-24 (Phil : « payer les jeux en USDC ou en tout jeton de l app qui a une liquidite profonde ; l app swappe en USDC pour
-           payer ») : UN selecteur pour le Roll (et l Auto-roll), le Spin et le Week pass. USDC par defaut. Options : les jetons de
-           /api/misables que CE wallet detient (balanceOf), par valeur tenue ; un jeton qui ne paie pas la taille montree est grise avec sa
-           raison ; les autres ne sont jamais listes (#payerNote les compte). Sans wallet, ou sans jeton tenu : « Pay with: USDC » seul (pas
-           de controle mort). Les messages d un paiement en jeton vont a la ligne d etat de SA rangee (#rollsEtat, #slotsEtat, #potEtat).
-           Cache tant qu aucun jeu payant n est servi. -->
-      <div class="payerAvec" id="payerAvec" hidden>
-        <label class="note" id="payerLab" for="payerJeton" hidden>Pay with</label>
-        <select id="payerJeton" hidden></select>
-        <span class="note" id="payerSeul">Pay with: USDC</span>
-        <p class="note" id="payerNote" hidden></p>
-      </div>
-      <div class="jourEtapes">
-        <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
-        <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
-        <!-- BLOCKROLLS (Phil 20:30 : roll 0,50 USDC, gain fixe ; day pass 10 USDC = 5 pot du jour + 5 dev) : ce bouton et le Week pass n apparaissent
-             QUE quand /api/tirage sert rolls.contrat (fiche signee) ; leurs textes viennent des prix servis. Sans contrat : rien (pas de bouton mort). -->
-        <button type="button" class="bouton" id="jourRollPaye" hidden>Roll for real</button>
-        <!-- Phil (19:40) : « une loop de games » — 5 rolls d affilee, score cumule ; montre seulement avec un wallet (sinon pas de score) -->
-        <button type="button" class="bouton sec" id="jourAuto" hidden>Auto-roll ×5</button>
-        <!-- 2026-10-18 (revue adverse) : un roll PAYE dont le flux s est arrete avant le settle (signature refusee, recu en retard, onglet
-             ferme, commande « roll » du chat) se regle ICI — relu sur les logs du contrat (rolls-en-attente.js). Ouvert seulement s il y en a. -->
-        <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
-      </div>
-      <!-- 2026-10-24 (revue adverse) : la ligne d etat de CHAQUE rangee de boutons payants est juste sous SA rangee. Ici : les messages du
-           Roll (#rollsEtat), le regleur des rolls (#rollsAttente), le score du dernier roll (#dernierMoi) et les derniers rolls (#dernierQuand) ;
-           ils etaient sous la zone des Slots, ~1 000 px loin du bouton touche (mesure 375 x 812 avec wallet). -->
-      <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
-      <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
-      <p class="note" id="dernierMoi" style="margin:4px 0 0"></p>
-      <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
-      <!-- SLOTS (Phil 2026-10-23 : « 3 faces random independantes, tirees au moment de la tx ; des points quand des faces sont les memes ; un
-           bon reward de la pool, comme une machine a sous ») — BlockSlots. Les blocs spin + 2, + 3, + 4 donnent UNE face chacun (v2, Phil
-           2026-10-23) ; par trait, 3 egales = 3 points, 2 egales = 1 ; le contrat paie un prix FIXE par points, 0..5 USDC par spin, plafonne
-           par le pot ; les points s additionnent par wallet (un compteur on-chain, pas un gain).
-           v3 (verdict adverse 2026-10-23, defaut 1) : la liste #slotsListe dit, POUR CHAQUE spin, ce que Settle paie et ce qui manque, avant
-           la signature puis apres le recu ; Settle n envoie QUE les spins payes en entier ; un gain plafonne passe par « Accept » (un spin, le
-           minimum vu).
-           v4 (option 3 de Phil, 2026-10-23) : AUCUN remboursement — un spin non regle dans sa fenetre est PERDU ; le serveur regle les spins
-           tout seul quand son regleur est allume (/api/slots regleur.etat) ; n importe qui peut regler, le gain va toujours au joueur.
-           2026-10-24 : la carte #slotsCarte est devenue cette zone de la carte Draws (memes elements, memes ids, memes textes ; les trois
-           faces sont les rouleaux du haut).
-           ⛔ CACHEE tant que /api/slots ne sert pas de contrat : rien de payant ne se montre avant. Chaque chiffre est lu (fiche, chaine) ou
-           CALCULE (loi exacte, slots-plan.js) ; une lecture ratee dit « not read ». -->
-      <div class="slotsZone" id="slotsZone" hidden>
-        <p class="note" style="margin:10px 0 0"><b>Slots</b> — Three block faces, one spin. Matching traits score points.</p>
-        <div class="jourEtapes">
-          <button type="button" class="bouton" id="slotsSpin" hidden>Spin</button>
-          <button type="button" class="bouton sec" id="slotsRegler" hidden>Settle</button>
-          <button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>
+      <!-- 2026-10-24 (Phil, capture de game35 : « il ne faut pas 2 jeux mais un seul, mets-le au CENTRE : un clic, un contrat lance, une
+           reponse avec les actions a faire pour les utilisateurs ») — LE jeu est les trois rouleaux vivants (BlockSlots), au centre (#jeuCentre :
+           un bloc centre, rouleaux plus grands sur ordinateur, une rangee de 3 a 375 px) ; dessous UN bouton (Spin, ou « Connect a wallet to
+           spin »), le selecteur « Pay with » a cote ; dessous UN panneau de reponse (#slotsReponse : envoye, les blocs, le resultat, L ACTION
+           SUIVANTE avec son bouton — reponse-spin.js). Le Roll classique (BlockRolls, vivant, avec son pot) part dans le pli « Other ways to
+           play: classic roll » (#rollPli), avec sa ligne d etat dedans. Le ticket, le Week pass et le pot restent dessous (#potEtat). -->
+      <p class="titre jeuTitre jeuCentreTitre" style="font-size:16px">Three Base blocks draw three faces. Matching traits win.</p>
+      <div class="jeuCentre" id="jeuCentre">
+        <!-- LES ROULEAUX (rouleaux.js) : LIVE, les faces des blocs Base N-2, N-1, N (le hash de chaque bloc, etiquete) ; avec un spin en attente,
+             les trois faces de CE spin (blocs t, t+1, t+2 et l id du spin, la graine du contrat), posees une a une, puis les points par trait.
+             Les cases gardent le selecteur #slotsFaces .jourFace des slots. Rien n y est tire au hasard. -->
+        <div class="slotsFaces" id="slotsFaces">
+          <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 1" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc1"></span></div>
+          <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 2" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc2"></span></div>
+          <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 3" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc3"></span></div>
         </div>
-        <p class="note" id="slotsEtat" style="margin:6px 0 0">Reading the slots on chain…</p>
-        <ul class="slotsListe" id="slotsListe"></ul>
-        <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>
-        <!-- 2026-10-24 : le pli porte l explication (points, pot court / Accept, chances, moyenne, plage lue : #slotsComment, peinte par
-             peindreSlotsUneFois, phrases DEPLACEES de #slotsRegle, pas reecrites) et la table des prix. #slotsRegle (la regle : prix,
-             perdu hors fenetre, regleur) est en tete du pli SANS wallet, et AU-DESSUS de la rangee Spin avec un wallet (placerRegleSlots) -->
-        <details style="margin:8px 0 0">
-          <summary class="note" style="cursor:pointer">How the slots work</summary>
-          <p class="note" id="slotsRegle" style="margin:6px 0 0"></p>
-          <p class="note" id="slotsComment" style="margin:6px 0 0"></p>
-          <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th><th>Pays now</th></tr></thead><tbody></tbody></table>
-          <p class="note" id="slotsTableNote" style="margin:4px 0 0"></p>
-        </details>
+        <p class="note" id="rouleauxLegende">Reading the latest Base blocks…</p>
+        <div class="slotsAccords" id="slotsAccords"></div>
+        <!-- SLOTS (Phil 2026-10-23 : « 3 faces random independantes, tirees au moment de la tx ; des points quand des faces sont les memes ; un
+             bon reward de la pool, comme une machine a sous ») — BlockSlots. Les blocs spin + 2, + 3, + 4 donnent UNE face chacun (v2) ; par
+             trait, 3 egales = 3 points, 2 egales = 1 ; le contrat paie un prix FIXE par points, 0..5 USDC par spin, plafonne par le pot.
+             v3 (verdict adverse 2026-10-23, defaut 1) : la liste #slotsListe dit, POUR CHAQUE spin, ce que Settle paie et ce qui manque ; Settle
+             n envoie QUE les spins payes en entier ; un gain plafonne passe par « Accept » (un spin, le minimum vu).
+             v4 (option 3 de Phil) : AUCUN remboursement — un spin non regle dans sa fenetre est PERDU ; le serveur regle les spins tout seul
+             quand son regleur est allume ; n importe qui peut regler, le gain va toujours au joueur.
+             ⛔ CACHEE tant que /api/slots ne sert pas de contrat : rien de payant ne se montre avant (le pli du Roll s ouvre alors). -->
+        <div class="slotsZone" id="slotsZone" hidden>
+          <!-- la rangee du Spin : LE bouton (sans wallet « Connect a wallet to spin » : il connecte) et « Pay with » a cote (sans wallet :
+               « Pay with: USDC » en petit, jamais au-dessus d un geste gratuit). 2026-10-24 (Phil : « payer les jeux en USDC ou en tout jeton
+               de l app qui a une liquidite profonde ») : UN selecteur pour le Spin, le Roll (et l Auto-roll) et le Week pass, USDC par defaut ;
+               options = les jetons de /api/misables que CE wallet detient, par valeur tenue ; un jeton qui ne paie pas la taille montree est
+               grise avec sa raison ; les autres ne sont jamais listes (#payerNote les compte). Cache tant qu aucun jeu payant n est servi. -->
+          <div class="jourEtapes spinRangee">
+            <button type="button" class="bouton spinBouton" id="slotsSpin" hidden>Spin</button>
+            <div class="payerAvec" id="payerAvec" hidden>
+              <label class="note" id="payerLab" for="payerJeton" hidden>Pay with</label>
+              <select id="payerJeton" hidden></select>
+              <span class="note" id="payerSeul">Pay with: USDC</span>
+              <p class="note" id="payerNote" hidden></p>
+            </div>
+          </div>
+          <!-- LE PANNEAU DE REPONSE (reponse-spin.js) : ce qui s est passe pour LE spin que suivent les rouleaux (1 envoye, 2 les blocs en
+               direct, 3 le resultat), puis L ACTION SUIVANTE en une phrase avec son bouton (Settle / Accept, les memes boutons et les memes
+               plans qu avant), puis la ligne d etat des Slots (#slotsEtat : signature, refus, recu — l ancienne ligne, dans le panneau). -->
+          <div class="reponseSpin" id="slotsReponse" aria-live="polite">
+            <ol class="reponseEtapes" id="slotsEtapes"></ol>
+            <div class="jourEtapes reponseSuite" id="slotsSuite" hidden>
+              <p class="note" id="slotsSuiteTxt"></p>
+              <button type="button" class="bouton" id="slotsRegler" hidden>Settle</button>
+              <button type="button" class="bouton" id="slotsAccepter" hidden>Accept</button>
+            </div>
+            <p class="note" id="slotsEtat" style="margin:6px 0 0">Reading the slots on chain…</p>
+          </div>
+          <ul class="slotsListe" id="slotsListe"></ul>
+          <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>
+          <!-- 2026-10-24 : le pli porte l explication (#slotsComment) et la table des prix. #slotsRegle (la regle : prix, perdu hors fenetre,
+               regleur) est en tete du pli SANS wallet, et AU-DESSUS de la rangee Spin avec un wallet (placerRegleSlots) -->
+          <details style="margin:8px 0 0">
+            <summary class="note" style="cursor:pointer">How the slots work</summary>
+            <p class="note" id="slotsRegle" style="margin:6px 0 0"></p>
+            <p class="note" id="slotsComment" style="margin:6px 0 0"></p>
+            <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th><th>Pays now</th></tr></thead><tbody></tbody></table>
+            <p class="note" id="slotsTableNote" style="margin:4px 0 0"></p>
+          </details>
+        </div>
       </div>
+      <!-- LE ROLL CLASSIQUE (BlockRolls, vivant, avec son pot) : replie sous le jeu (Phil 2026-10-24 : « un seul jeu »). Tout y marche comme
+           avant : le roll d entrainement gratuit, le Roll paye, l Auto-roll, « Settle pending rolls », et SA ligne d etat juste sous SA rangee.
+           La tuile Roll et #game/roll ouvrent ce pli (montrerJeu). Phil 2026-10-18 : CHAQUE roll tire une NOUVELLE face au hasard
+           (nouvelleFaceRoll), montree contre la face du bloc qui decide. -->
+      <details class="rollPli" id="rollPli">
+        <summary class="note">Other ways to play: classic roll</summary>
+        <div class="rollLigne">
+          <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your roll"></div>
+          <p class="note" id="jourRollTxt">Your roll — a new random face each roll.</p>
+          <div class="jeuVs" aria-hidden="true">vs</div>
+          <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
+          <p class="note" id="dernierNom">Reading the chain…</p>
+        </div>
+        <div class="jourEtapes">
+          <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
+          <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
+          <!-- BLOCKROLLS (Phil 20:30 : roll 0,50 USDC, gain fixe) : ce bouton et le Week pass n apparaissent QUE quand /api/tirage sert
+               rolls.contrat ; leurs textes viennent des prix servis. Sans contrat : rien (pas de bouton mort). -->
+          <button type="button" class="bouton" id="jourRollPaye" hidden>Roll for real</button>
+          <!-- Phil (19:40) : « une loop de games » — 5 rolls d affilee, score cumule ; montre seulement avec un wallet -->
+          <button type="button" class="bouton sec" id="jourAuto" hidden>Auto-roll ×5</button>
+          <!-- 2026-10-18 (revue adverse) : un roll PAYE dont le flux s est arrete avant le settle se regle ICI (rolls-en-attente.js) -->
+          <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
+        </div>
+        <!-- 2026-10-24 (revue adverse) : la ligne d etat de CHAQUE rangee de boutons payants est juste sous SA rangee : les messages du Roll
+             (#rollsEtat), le regleur des rolls (#rollsAttente), le score du dernier roll (#dernierMoi) et les derniers rolls (#dernierQuand). -->
+        <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
+        <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
+        <p class="note" id="dernierMoi" style="margin:4px 0 0"></p>
+        <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
+      </details>
       <div class="jourTicket">
         <div class="jourFace mini" id="ticketFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
         <p class="note" id="jourTicketTxt" style="margin:0">Your ticket — connect a wallet: today's ticket face shows here.</p>
@@ -4288,6 +4322,8 @@ import { CANDIDATS_CL as MISABLES_CANDIDATS, coterMisable, planPayerEnJeton, usd
 import { phraseArret, bilanArret, paresAVerifier, etapesDuPaiement, phraseOuvertes, appelAllowance, appelRemiseAZero } from './payer-arret.js';
 /* 2026-10-24 : les trois rouleaux de la carte Draws (LIVE : les faces des derniers blocs Base ; SPIN : les faces d un spin) — pur, servi */
 import { creerRouleaux } from './rouleaux.js';
+/* 2026-10-24 (Phil : « un seul jeu au centre, une reponse ») : le panneau de reponse du Spin — pur, servi */
+import { reponseSpin, etapesHtml } from './reponse-spin.js';
 /* 2026-10-18 : le Brain OS — nos propres LECTURES (safety, explain, wallet, gas), sans cle tierce ; pur, le `rpc` de l app lui est passe */
 import * as BrainOs from './brain-os.js';
 import { SKIN_ACTIONS_CANDIDATES as DUEL_ACTIONS_CANDIDATES } from './blockskins.js';
@@ -5988,6 +6024,8 @@ const JEU_DEFAUT = 'tirCarte', JEU_CLE = 'tbJeuChoisi';
 /* #game/<nom> (ou #missions/<nom>) : la carte et, s il y en a un, le bouton qui recoit le focus */
 const JEU_LIENS = { roll: ['tirCarte', 'jourRoll'], ticket: ['tirCarte', null], pass: ['tirCarte', 'jourPass'], brain: ['brainJeuCarte', 'bjJouer'],
   skins: ['skinCarte', null], missions: ['missionsCarte', null], duels: ['duelsCarte', null], slots: ['tirCarte', 'slotsSpin'] };
+/* le bouton de remplacement d un focus cache (le Roll paye remplace le roll d entrainement quand un wallet et le contrat sont la) */
+const JEU_FOCUS_SINON = { jourRoll: 'jourRollPaye' };
 let jeuVoulu = null, jeuMontre = null;
 function jeuLireChoix() { try { const v = localStorage.getItem(JEU_CLE); return JEU_CARTES.includes(v) ? v : null; } catch (_) { return null; } }
 function jeuNoterChoix(id) { try { localStorage.setItem(JEU_CLE, id); } catch (_) { /* stockage refuse : le choix vaut pour cette visite */ } }
@@ -6021,7 +6059,11 @@ function montrerJeu(id, focusId, opts) {
   if (o.noter !== false) jeuNoterChoix(id);
   const vu = peindreChoixJeu();
   const carte = document.getElementById(vu);
-  const el = focusId && vu === id ? document.getElementById(focusId) : null;
+  let el = focusId && vu === id ? document.getElementById(focusId) : null;
+  /* 2026-10-24 (un seul jeu au centre) : le Roll classique vit dans un pli (#rollPli) — le bouton visible de la rangee (le roll
+   *   d entrainement, ou le Roll paye qui le remplace avec un wallet) et son pli ouvert AVANT le focus */
+  if (el && el.hidden && JEU_FOCUS_SINON[el.id]) { const alt = document.getElementById(JEU_FOCUS_SINON[el.id]); if (alt && !alt.hidden) el = alt; }
+  if (el && !el.hidden) { const pli = typeof el.closest === 'function' ? el.closest('details') : null; if (pli && !pli.open) pli.open = true; }
   const visible = !!el && !el.hidden && el.offsetParent !== null;
   try {
     if (visible) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
@@ -6974,7 +7016,7 @@ const rouleauxJeu = creerRouleaux({
   lireBloc: rouleauxLireBloc, hashes: rouleauxHashes,
   svgLive: (h) => { const f = faceRevelee(h); return f ? logoSvg(paramsLogoDepuisApparence(f, '★')) : ''; },
   svgSpin: (h, id, r) => { const hs = [null, null, null]; hs[r] = h; return svgFaceSlot(hs, id, r); },
-  surPose: ({ id, hashes }) => { peindreAccordsSlots(Slots.facesDuSpin(hashes, id)); },
+  surPose: ({ id, hashes }) => { peindreAccordsSlots(Slots.facesDuSpin(hashes, id)); try { peindreReponseSlots(); } catch (_) { /* le panneau se repeint au tour suivant */ } },
   horloge: { maintenant: () => Date.now(), planifier: (f, ms) => setTimeout(f, ms), annuler: (x) => clearTimeout(x) },
   reduit: () => rouleauxReduit(), cache: rouleauxCache, fmt: (n) => Number(n).toLocaleString('en-US'),
 });
@@ -7021,7 +7063,9 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) roul
  *   Place APRES « Let the brain play » : les bancs des duels et du brain lisent des tranches bornees par leurs titres.
  *   NON MESURE : un spin reel sur Base (contrat non deploye a l ecriture de ce code). */
 const slotsCfg = { j: null, lu: 0, enVol: null, enCours: false, dernier: null, dernierFaces: null, table: false, minuteur: null, peint: null, suite: null,
-  cle: null, spins: new Map(), clos: new Set(), scanne: null, hashes: new Map(), moi: null, vue: null, peintA: 0, msBloc: null, msBlocA: 0 };
+  cle: null, spins: new Map(), clos: new Set(), scanne: null, hashes: new Map(), moi: null, vue: null, peintA: 0, msBloc: null, msBlocA: 0,
+  /* 2026-10-24 : le panneau de reponse — le spin suivi { id, t }, le bilan du dernier envoi, la derniere reponse peinte */
+  suivi: null, dernierBilan: null, reponse: null };
 const SLOTS_TRAITS = ['colour', 'orbit', 'facet', 'material', 'ornament'];
 const slotsContrat = (j) => (j && j.ok && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
 async function lireSlotsServis(force = false) {
@@ -7165,6 +7209,39 @@ function slotsResume(plan) {
   if (clos.length) p.push(clos.length + ' spin' + (clos.length === 1 ? ' was' : 's were') + ' not settled in time and ' + (clos.length === 1 ? 'is' : 'are') + ' lost — nothing is returned.');
   return p.length ? p.join(' ') : 'Your spins are listed below.';
 }
+/* ══ LE PANNEAU DE REPONSE DU SPIN (Phil 2026-10-24 : « un clic, un contrat lance, une reponse avec les actions a faire ») — reponse-spin.js
+ *   (pur) dit, pour LE spin que suivent les rouleaux (slotsCfg.suivi, pose par peindreSlotsUneFois), envoye / les blocs t, t+1, t+2 (compte
+ *   a la tete lue : le minuteur de 3 s, aucune lecture de plus) / les rouleaux qui se posent / le resultat (points, prix de la table), puis
+ *   L ACTION SUIVANTE en une phrase, a cote de SON bouton (Settle, Accept : les memes boutons, les memes plans). Le regleur du serveur ON est
+ *   dit. Un paiement en jeton arrete (payer-arret.js) renvoie a la ligne d etat, ou sont ses boutons. Rien n est lu ni signe ici. */
+function peindreReponseSlots(tete = null) {
+  const ol = $('#slotsEtapes'), suite = $('#slotsSuite'), txt = $('#slotsSuiteTxt');
+  if (!ol || !suite || !txt) return null;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  const vue = slotsCfg.vue, s = slotsCfg.suivi || null, j = slotsCfg.j;
+  const t = Number.isSafeInteger(tete) ? Math.max(tete, vue ? vue.tete : 0) : vue ? vue.tete : null;
+  const plan = vue && Number.isSafeInteger(t) ? Slots.planReglement({ ...vue, tete: t }) : null;
+  let posees = false;
+  try { posees = !!(s && rouleauxJeu.pose(String(s.id))); } catch (_) { posees = !!s; /* sans rouleaux (banc) : les faces sont peintes tout de suite */ }
+  let arret = false;
+  try { const a = payerArrets.get('slotsEtat'); arret = !!(a && slotsCfg.dernier === a.texte); } catch (_) { arret = false; }
+  const bilan = s && Array.isArray(slotsCfg.dernierBilan) ? slotsCfg.dernierBilan.find((b) => String(b.id) === String(s.id)) || null : null;
+  const ms = j && j.regleur && Number(j.regleur.msParBlocMesure) > 0 ? Number(j.regleur.msParBlocMesure) : slotsCfg.msBloc;
+  const r = reponseSpin({ moi: !!c && !!vue, suivi: s, plan, tete: t, posees, regleurOn: !!(j && j.regleur && j.regleur.etat === 'ON'), msParBloc: ms, bilan, arret });
+  ol.innerHTML = etapesHtml(r.etapes);
+  suite.hidden = !r.action;
+  txt.textContent = r.action ? r.action.texte : '';
+  slotsCfg.reponse = r;
+  return r;
+}
+/* sans wallet, LE bouton du jeu dit « Connect a wallet to spin » : il connecte (le meme connecter() que la puce du header) ; sans
+ *   connexion, l onglet Wallet dit pourquoi (un bouton qui ne mene nulle part se fait taper encore et encore) */
+async function connecterPourSpin() {
+  try { if (typeof connecter === 'function') await connecter(); } catch (_) { /* la raison est dite par connecter() */ }
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c) { try { allerA('wallet'); } catch (_) { /* onglet Wallet absent */ } return; }
+  void peindreSlots(true);
+}
 /* le minuteur de 3 s (verdict : ~8 lectures a chaque fois) : UNE lecture de la tete ; un repeint complet seulement quand un spin change
  * d etat (ses trois blocs arrivent, ou sa fenetre se ferme) ou toutes les 15 s ; sinon les blocs restants sont recomptes sans autre lecture */
 async function slotsTic() {
@@ -7178,6 +7255,8 @@ async function slotsTic() {
   const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b, vue.marge).etat).join();
   if (etats(tete) !== etats(vue.tete)) { void peindreSlots(); return; }
   if (!slotsCfg.enCours) slotsListe(slotsLignes(Slots.planReglement({ ...vue, tete })));
+  /* 2026-10-24 : le panneau de reponse recompte les blocs et les secondes a cette tete (aucune lecture de plus) */
+  try { peindreReponseSlots(tete); } catch (_) { /* hors de la page (banc) */ }
   clearTimeout(slotsCfg.minuteur);
   slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000);
 }
@@ -7209,6 +7288,9 @@ async function peindreSlotsUneFois(force = false) {
   try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }
   /* sans contrat (ou sans wallet, plus bas) : aucun spin a suivre — les rouleaux restent (ou reviennent) en LIVE */
   if (!on) { try { rouleauxSuivre(null, 0, null); } catch (_) { /* hors de la page (banc) */ } }
+  /* 2026-10-24 (un seul jeu au centre) : sans contrat des Slots servi, le jeu jouable est le Roll classique : son pli s ouvre (une fois) */
+  /*   ⛔ MESURE au navigateur (375 px) : ouvert aussi quand /api/slots n avait PAS ENCORE repondu (j null) — seulement une fiche LUE sans contrat */
+  if (!on && j && typeof j === 'object' && j.ok !== undefined) { const pli = $('#rollPli'); if (pli && !pli.dataset.ouvertSeul) { pli.open = true; pli.dataset.ouvertSeul = '1'; } }
   if (!on) return null;
   const prix = BigInt(j.prixSpin), table = j.prizes.map((x) => BigInt(x)), part = Number(j.potShareBps);
   /* le plus haut prix de la table (5 USDC au plus, le contrat le borne) ; D2 : les chances et la moyenne sont CALCULEES (loi exacte) */
@@ -7243,13 +7325,14 @@ async function peindreSlotsUneFois(force = false) {
   if (!moi) { try { rouleauxSuivre(null, 0, null); } catch (_) { /* hors de la page (banc) */ } }
   placerRegleSlots(!!moi);
   const bS = $('#slotsSpin'), bR = $('#slotsRegler'), bA = $('#slotsAccepter'), etat = $('#slotsEtat'), mien = $('#slotsMoi');
-  bS.textContent = 'Spin · ' + usdcTexte(prix) + ' USDC';
-  bS.hidden = !moi; bS.disabled = slotsCfg.enCours;
+  /* 2026-10-24 (Phil : « un clic ») : LE bouton du jeu, toujours la avec un contrat servi — sans wallet il connecte (connecterPourSpin) */
+  bS.textContent = moi ? 'Spin · ' + usdcTexte(prix) + ' USDC' : 'Connect a wallet to spin';
+  bS.hidden = false; bS.disabled = slotsCfg.enCours;
   try { void peindrePayerAvec().catch(() => {}); } catch (_) { /* hors de la page (banc) */ }
-  if (!moi) { bR.hidden = true; bA.hidden = true; slotsCfg.vue = null; slotsListe([]); etat.textContent = 'Pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect a wallet to spin.'; mien.textContent = ''; return null; }
+  if (!moi) { bR.hidden = true; bA.hidden = true; slotsCfg.vue = null; slotsCfg.suivi = null; slotsListe([]); etat.textContent = 'Pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. A spin costs ' + usdcTexte(prix) + ' USDC.'; mien.textContent = ''; try { peindreReponseSlots(); } catch (_) { /* hors de la page (banc) */ } return null; }
   /* un autre wallet ou un autre contrat : rien de l ancien n est garde */
   const cle = contrat + ':' + moi;
-  if (slotsCfg.cle !== cle) { slotsCfg.cle = cle; slotsCfg.spins = new Map(); slotsCfg.clos = new Set(); slotsCfg.scanne = null; slotsCfg.moi = null; slotsCfg.vue = null; slotsCfg.dernier = null; slotsCfg.dernierFaces = null; }
+  if (slotsCfg.cle !== cle) { slotsCfg.cle = cle; slotsCfg.spins = new Map(); slotsCfg.clos = new Set(); slotsCfg.scanne = null; slotsCfg.moi = null; slotsCfg.vue = null; slotsCfg.dernier = null; slotsCfg.dernierFaces = null; slotsCfg.suivi = null; slotsCfg.dernierBilan = null; }
   let lu = null, tete = null;
   try { tete = parseInt(await rpc('eth_blockNumber', []), 16); lu = Number.isSafeInteger(tete) ? await spinsEnAttenteSlots(contrat, moi, j, tete) : null; } catch (_) { lu = null; }
   /* les points et les gains ne bougent que quand un spin de ce wallet se clot : relus alors (ou sur demande), pas a chaque repeint */
@@ -7296,10 +7379,14 @@ async function peindreSlotsUneFois(force = false) {
   if (montre) peindreFacesSlots(montre.faces ? montre.hashes : null, montre.id, montre.t);
   else if (slotsCfg.dernierFaces) peindreFacesSlots(slotsCfg.dernierFaces.hashes, slotsCfg.dernierFaces.id);
   else peindreFacesSlots(null, 0);
+  /* 2026-10-24 (Phil : « une reponse ») : le panneau suit LE spin des rouleaux (jamais un autre) : en attente / reglable, sinon le dernier regle ici */
+  slotsCfg.suivi = montre ? { id: String(montre.id), t: montre.t } : slotsCfg.dernierFaces ? { id: String(slotsCfg.dernierFaces.id), t: null } : null;
   const lignes = slotsLignes(plan);
   if (nonLus) lignes.push({ texte: nonLus + ' recent spin(s) could not be read just now.', court: false });
   slotsListe(lignes);
-  etat.textContent = slotsCfg.dernier || slotsResume(plan);
+  /* le resume du plan est desormais L ACTION SUIVANTE du panneau (reponse-spin.js) ; la ligne d etat garde le message du dernier envoi */
+  etat.textContent = slotsCfg.dernier || '';
+  try { peindreReponseSlots(tete); } catch (_) { /* hors de la page (banc des slots seul) : la ligne d etat dit le resume, comme avant */ etat.textContent = slotsCfg.dernier || slotsResume(plan); }
   /* 2026-10-24 : un paiement en jeton arrete (payer-arret.js) : ses boutons Reset / Finish reviennent avec son texte */
   try { reposerArret(etat); } catch (_) { /* hors de la page (banc des slots seul) */ }
   slotsCfg.peintA = Date.now();
@@ -7311,6 +7398,8 @@ async function peindreSlotsUneFois(force = false) {
 async function slotsAgir(quoi) {
   const j = slotsCfg.j, contrat = slotsContrat(j), etat = $('#slotsEtat');
   let c = null; try { c = compte; } catch (_) { c = null; }
+  /* 2026-10-24 : sans wallet, le bouton Spin dit « Connect a wallet to spin » — il connecte, rien n est demande d autre */
+  if (contrat && !c && quoi === 'spin') { await connecterPourSpin(); return; }
   if (!contrat || !c || slotsCfg.enCours) return;
   const moi = String(c).toLowerCase(), dit = (t) => { etat.textContent = t; };
   const BOUTONS = ['#slotsSpin', '#slotsRegler', '#slotsAccepter'];
@@ -7370,7 +7459,10 @@ async function slotsAgir(quoi) {
       const sp = Slots.lireSpunTous(logs, contrat).filter((s) => s.player === moi);
       for (const s of sp) if (!slotsCfg.spins.has(String(s.spinId))) slotsCfg.spins.set(String(s.spinId), { id: String(s.spinId), t: s.targetBlock });
       slotsCfg.dernier = null;
+      /* 2026-10-24 : le panneau suit le spin qui vient de partir (1 envoye, 2 ses blocs) jusqu au repeint qui le relit sur la chaine */
+      if (sp.length) { slotsCfg.suivi = { id: String(sp[0].spinId), t: sp[0].targetBlock }; slotsCfg.dernierBilan = null; }
       dit(sp.length ? 'Spin #' + sp[0].spinId + ' is in: blocks ' + Slots.blocsDesFaces(sp[0].targetBlock).join(', ') + ' draw your three faces, one each.' : 'Sent; the spin was not read in the receipt — it shows up here once read.');
+      try { peindreReponseSlots(); } catch (_) { /* hors de la page (banc) */ }
     } else {
       /* APRES le recu : spin par spin, paye en entier, plafonne (et de combien), saute par le pot, ou fenetre passee — jamais en silence */
       const st = Slots.lireSettledTous(logs, contrat);
@@ -7390,6 +7482,10 @@ async function slotsAgir(quoi) {
       if (d) { peindreFacesSlots(d.blockHashes, d.spinId); slotsCfg.dernierFaces = { hashes: d.blockHashes, id: d.spinId }; }
       slotsCfg.dernier = [...bilan.map((b) => Slots.phraseApres(b)), ...laisses.map((l) => Slots.phraseAvant(l))].join(' ');
       dit(slotsCfg.dernier);
+      /* 2026-10-24 : le bilan donne au panneau son resultat et son action (PAYE, PLAFONNE, FENETRE…) pour le spin montre */
+      slotsCfg.dernierBilan = bilan;
+      if (d) slotsCfg.suivi = { id: String(d.spinId), t: null };
+      try { peindreReponseSlots(); } catch (_) { /* hors de la page (banc) */ }
     }
   } finally {
     slotsCfg.enCours = false; BOUTONS.forEach((s) => { const b = $(s); if (b) b.disabled = false; });

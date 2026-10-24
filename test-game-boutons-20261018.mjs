@@ -22,7 +22,9 @@ const ids = [...carte.matchAll(/<button[^>]*\bid="([^"]+)"/g)].map((m) => m[1]);
  *   ordre (une seule rangee) ; il affirme la nouvelle : les gestes du Roll (Roll, Roll paye, Auto-roll, Settle pending rolls), puis les trois
  *   boutons des Slots (venus de #slotsCarte, caches sans contrat ni wallet), puis Trade UNIT / stocks / Skin, le Week pass et le pot.
  *   Les 4 boutons VISIBLES sans contrat restent jourRoll, jourUnit, jourActions, jourSkin (les autres sont `hidden`, verifie dessous). */
-vu(JSON.stringify(ids) === JSON.stringify(['jourRoll', 'jourRollPaye', 'jourAuto', 'rollsRegler', 'slotsSpin', 'slotsRegler', 'slotsAccepter', 'jourUnit', 'jourActions', 'jourSkin', 'jourPass', 'jourTirerJour', 'jourFondPot', 'jourReclamerPot', 'jourFermerPot']), 'exactement 4 boutons visibles + Auto-roll + 4 boutons BlockRolls caches + les 3 des Slots caches + le pot, la part, la fermeture (lus : ' + ids.join(', ') + ')');
+/* 2026-10-24 (Phil, capture de game35 : « un seul jeu, au CENTRE ») : le Spin (et Settle / Accept, dans son panneau de reponse) vient
+ *   d abord ; les gestes du Roll classique suivent, dans leur pli « Other ways to play: classic roll ». Memes boutons, autre ordre. */
+vu(JSON.stringify(ids) === JSON.stringify(['slotsSpin', 'slotsRegler', 'slotsAccepter', 'jourRoll', 'jourRollPaye', 'jourAuto', 'rollsRegler', 'jourUnit', 'jourActions', 'jourSkin', 'jourPass', 'jourTirerJour', 'jourFondPot', 'jourReclamerPot', 'jourFermerPot']), 'exactement 4 boutons visibles + Auto-roll + 4 boutons BlockRolls caches + les 3 des Slots caches + le pot, la part, la fermeture (lus : ' + ids.join(', ') + ')');
 vu(['slotsSpin', 'slotsRegler', 'slotsAccepter'].every((id) => new RegExp('<button[^>]*\\bid="' + id + '"[^>]*\\bhidden\\b').test(carte)), 'Spin / Settle / Accept des Slots : caches dans le HTML');
 vu(ids.filter((id) => !new RegExp('<button[^>]*\\bid="' + id + '"[^>]*\\bhidden\\b').test(carte)).join() === 'jourRoll,jourUnit,jourActions,jourSkin', 'sans contrat ni wallet, 4 boutons visibles : Roll, Trade UNIT, Trade stocks, Skin');
 vu(/<button[^>]*\bid="jourFermerPot"[^>]*\bhidden\b/.test(carte), 'Close the pot : cache dans le HTML');

@@ -59,9 +59,12 @@ function faireDom(t) {
       scrollIntoView() { etat.defile.push({ id: this.id, vu: this.offsetParent !== null }); },
       getBoundingClientRect() { return { top: this.haut }; },
       querySelector(s) { return this.enfantsTexte[s] ? { textContent: this.enfantsTexte[s] } : null; },
+      closest(s) { return s === 'details' && this.dansPli ? els.get(this.dansPli) : null; },
       get offsetParent() {
         const v = els.get('v-missions');
         if (!v.classList.contains('on')) return null;
+        /* 2026-10-24 (un seul jeu au centre) : un pli <details> FERME cache ce qu il contient (le Roll classique, #rollPli) */
+        if (this.dansPli && !els.get(this.dansPli).open) return null;
         for (let x = this; x && x !== v; x = x.parent) {
           if (x.hidden || x.getAttribute('data-hors') === '1') return null;
           /* la regle CSS initiale : avant le premier choix, seules les cartes non listees se montrent */
@@ -90,7 +93,14 @@ function faireDom(t) {
   cartes.forEach((c, k) => {
     const carte = noeud(c.id, v, 'div', c.ouvrant);
     const html = sec.slice(c.i + c.ouvrant.length, k + 1 < cartes.length ? cartes[k + 1].i : sec.length);
-    for (const m of html.matchAll(/<([a-z]+)([^>]*\sid="([^"]+)"[^>]*)>/g)) if (!els.has(m[3])) noeud(m[3], carte, m[1], '<' + m[1] + m[2] + '>');
+    /* les plis <details id="…"> de la carte : leur etendue dans le HTML (de l ouverture a leur </details>) ; un id dedans y appartient */
+    const plis = [...html.matchAll(/<details[^>]*\sid="([^"]+)"[^>]*>/g)].map((m) => ({ id: m[1], de: m.index, a: html.indexOf('</details>', m.index) }));
+    for (const m of html.matchAll(/<([a-z]+)([^>]*\sid="([^"]+)"[^>]*)>/g)) if (!els.has(m[3])) {
+      const e = noeud(m[3], carte, m[1], '<' + m[1] + m[2] + '>');
+      const p = plis.find((x) => x.id !== m[3] && m.index > x.de && m.index < x.a);
+      if (p) e.dansPli = p.id;
+      if (m[1] === 'details') e.open = /\sopen(?=[\s>=])/.test(m[2]);
+    }
   });
   /* les cartes cachees par la regle CSS initiale, LUES dans le CSS de la page (pas recopiees ici) */
   const regle = /#v-missions:not\(\[data-jeu\]\) :is\(([^)]*)\)/.exec(t);
@@ -277,6 +287,26 @@ S.LIEN = async (t) => {
 };
 /* 2026-10-24 (Draws + Slots) : la tuile Slots et #game/slots montrent tirCarte (plus de carte a part) ; sans contrat la tuile est cachee et
  *   jamais proposee ; avec contrat + wallet, le focus va a Spin, VISIBLE ; un ancien choix garde « slotsCarte » retombe sur tirCarte */
+/* PLI (2026-10-24, Phil : « un seul jeu au centre ») : le Roll classique est replie (#rollPli). La tuile Roll et #game/roll OUVRENT le pli
+ *   puis donnent le focus au roll VISIBLE (le roll d entrainement sans wallet ; le Roll paye quand il le remplace) ; #game/slots et la tuile
+ *   Slots donnent le focus au Spin sans ouvrir le pli. */
+S.PLI = async (t) => {
+  const app = monter(t); ouvrir(app);
+  const pli0 = app.dom.el('rollPli');
+  if (!pli0 || pli0.tag !== 'details' || app.dom.el('jourRoll').dansPli !== 'rollPli' || app.dom.el('jourRollPaye').dansPli !== 'rollPli' || app.dom.el('rollsEtat').dansPli !== 'rollPli') return { ok: false, pourquoi: 'pli du Roll absent' };
+  const ferme0 = pli0.open === false && app.dom.el('jourRoll').offsetParent === null;
+  tuileDe(app, 'tirCarte', 'jourRoll').click();
+  const a = pli0.open === true && app.dom.etat.focus === 'jourRoll' && app.dom.etat.focusVu.every((x) => x.vu);
+  /* un wallet et le contrat : le roll d entrainement est cache, le Roll paye le remplace — le lien l ouvre et le focus */
+  const app2 = monter(t, { avant: (dom) => { dom.el('jourRoll').hidden = true; dom.el('jourRollPaye').hidden = false; } });
+  const r2 = app2.ouvrirJeuDuLien('game/roll');
+  const b = r2 === true && app2.dom.el('rollPli').open === true && app2.dom.etat.focus === 'jourRollPaye' && app2.dom.etat.focusVu.every((x) => x.vu);
+  /* #game/slots : le Spin (hors du pli) ; le pli reste ferme */
+  const app3 = monter(t, { avant: (dom) => { dom.el('jbSlotsTuile').hidden = false; dom.el('slotsZone').hidden = false; dom.el('slotsSpin').hidden = false; } });
+  app3.ouvrirJeuDuLien('game/slots');
+  const c = app3.dom.etat.focus === 'slotsSpin' && app3.dom.el('rollPli').open === false && app3.dom.el('slotsSpin').dansPli === undefined;
+  return { ok: ferme0 && a && b && c, ferme0, a, b, c, f2: app2.dom.etat.focus };
+};
 S.SLOTS = async (t) => {
   const avecSlots = (dom) => { dom.el('jbSlotsTuile').hidden = false; dom.el('slotsZone').hidden = false; dom.el('slotsSpin').hidden = false; };
   const app = monter(t, { garde: 'skinCarte', avant: avecSlots }); ouvrir(app);
@@ -344,8 +374,14 @@ const MUTANTS = [
   ['REPLI', 'un retour tardif remplace la carte que le visiteur utilise', 'const fige = () => { if (jeuMontre && jeuMontre !== jeuVoulu) jeuVoulu = jeuMontre; };', 'const fige = () => {};'],
   ['STOCKAGE', 'localStorage lu sans try/catch', 'function jeuLireChoix() { try { const v = localStorage.getItem(JEU_CLE); return JEU_CARTES.includes(v) ? v : null; } catch (_) { return null; } }', 'function jeuLireChoix() { const v = localStorage.getItem(JEU_CLE); return JEU_CARTES.includes(v) ? v : null; }'],
   ['STOCKAGE', 'localStorage ecrit sans try/catch', 'function jeuNoterChoix(id) { try { localStorage.setItem(JEU_CLE, id); } catch (_) { /* stockage refuse : le choix vaut pour cette visite */ } }', 'function jeuNoterChoix(id) { localStorage.setItem(JEU_CLE, id); }'],
-  ['FOCUS', 'le focus calcule AVANT de montrer la carte', '  const vu = peindreChoixJeu();\n  const carte = document.getElementById(vu);\n  const el = focusId && vu === id ? document.getElementById(focusId) : null;\n  const visible = !!el && !el.hidden && el.offsetParent !== null;',
-    '  const el = focusId ? document.getElementById(focusId) : null;\n  const visible = !!el && !el.hidden && el.offsetParent !== null;\n  const vu = peindreChoixJeu();\n  const carte = document.getElementById(vu);'],
+  /* 2026-10-24 : l ancre suit montrerJeu (le focus de remplacement et l ouverture du pli du Roll se placent entre la carte et la visibilite) */
+  ['FOCUS', 'le focus calcule AVANT de montrer la carte', '  const vu = peindreChoixJeu();\n  const carte = document.getElementById(vu);\n  let el = focusId && vu === id ? document.getElementById(focusId) : null;',
+    (t) => { const n = String.fromCharCode(10), i = t.indexOf('  const vu = peindreChoixJeu();'), fin = '  const visible = !!el && !el.hidden && el.offsetParent !== null;', j = t.indexOf(fin, i) + fin.length;
+      return t.slice(0, i) + '  let el = focusId ? document.getElementById(focusId) : null;' + n + '  const visible = !!el && !el.hidden && el.offsetParent !== null;' + n + '  const vu = peindreChoixJeu();' + n + '  const carte = document.getElementById(vu);' + t.slice(j); }],
+  ['PLI', 'le pli du Roll n est plus ouvert avant le focus', "  if (el && !el.hidden) { const pli = typeof el.closest === 'function' ? el.closest('details') : null; if (pli && !pli.open) pli.open = true; }", ''],
+  ['PLI', 'aucun remplacement du roll d entrainement cache', '  if (el && el.hidden && JEU_FOCUS_SINON[el.id]) {', '  if (false) {'],
+  ['PLI', 'le pli ouvert pour un focus sur le Spin (hors du pli)', "  if (el && !el.hidden) { const pli = typeof el.closest === 'function' ? el.closest('details') : null; if (pli && !pli.open) pli.open = true; }",
+    "  { const pli = document.getElementById('rollPli'); if (pli) pli.open = true; }"],
   ['FOCUS', 'focus sans garde de visibilite', '  if (visible) { try { el.focus({ preventScroll: true }); } catch (_) {} }', '  if (el) { try { el.focus({ preventScroll: true }); } catch (_) {} }'],
   ['HIDDEN_INTACT', 'le choix ecrit `hidden` au lieu de data-hors', "if (c === id) el.removeAttribute('data-hors'); else el.setAttribute('data-hors', '1');", 'el.hidden = c !== id;'],
   ['PALETTE', 'la palette propose les tuiles cachees', "querySelectorAll('.jeuBandeau [data-jeu]')].filter((b) => !b.hidden).map((b) => {", "querySelectorAll('.jeuBandeau [data-jeu]')].map((b) => {"],

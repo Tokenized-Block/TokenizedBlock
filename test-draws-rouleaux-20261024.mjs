@@ -515,8 +515,11 @@ S.SOURCE = async (R, texte = APP, srv = SRV) => {
   const sansMinuteur = !/setInterval\(|setTimeout\(relire|requestAnimationFrame/.test(b) && (b.match(/setTimeout\(/g) || []).length === 2 && /setTimeout\(\(\) => rouleauxJeu\.reprendre\(\), 0\)/.test(b);
   const carte = fn('<div class="carte" id="tirCarte">', '<div class="carte" id="brainJeuCarte">');
   const pos = (s) => carte.indexOf(s);
-  const ordre = pos('id="slotsFaces"') > 0 && pos('id="slotsFaces"') < pos('id="rouleauxLegende"') && pos('id="rouleauxLegende"') < pos('id="jourFace"') && pos('id="jourFace"') < pos('id="jourRoll"')
-    && pos('id="jourRoll"') < pos('id="slotsZone"') && pos('id="slotsZone"') < pos('id="slotsSpin"') && pos('id="slotsSpin"') < pos('id="jourTicket') && pos('id="ticketFace"') < pos('id="potJour"')
+  /* 2026-10-24 (Phil, capture de game35 : « un seul jeu, au CENTRE ») : l ordre devient rouleaux -> Spin -> panneau de reponse -> le pli du
+   *   Roll classique (sa face contre le bloc, ses boutons) -> ticket / pot. Ce banc affirmait rouleaux -> roll -> Spin. */
+  const ordre = pos('id="slotsFaces"') > 0 && pos('id="slotsFaces"') < pos('id="rouleauxLegende"') && pos('id="rouleauxLegende"') < pos('id="slotsZone"') && pos('id="slotsZone"') < pos('id="slotsSpin"')
+    && pos('id="slotsSpin"') < pos('id="slotsReponse"') && pos('id="slotsReponse"') < pos('id="rollPli"') && pos('id="rollPli"') < pos('id="jourFace"') && pos('id="jourFace"') < pos('id="jourRoll"')
+    && pos('id="jourRoll"') < pos('id="jourTicket') && pos('id="ticketFace"') < pos('id="potJour"')
     && !/id="slotsCarte"/.test(texte) && />Reading the latest Base blocks…</.test(carte);
   return { ok: servi && importe && relire && apercu && tic && sansMinuteur && ordre, servi, importe, relire, apercu, tic, sansMinuteur, ordre };
 };
@@ -567,7 +570,8 @@ const MUT_A = [
   ['SOURCE', 'relireJeu ne nourrit plus les rouleaux', 'void verifierRollsEnAttente(); void rouleauxLire(); void peindreTirageJourPass(); }', 'void verifierRollsEnAttente(); void peindreTirageJourPass(); }'],
   ['SOURCE', 'l apercu du serveur ne nourrit plus les rouleaux', '  try { rouleauxTete(Number(t.apercu.bloc)); } catch (_) { /* rouleaux pas encore crees */ }\n', ''],
   ['SOURCE', 'le minuteur des slots ne nourrit plus les rouleaux', '  try { rouleauxTete(tete); } catch (_) { /* hors de la page (banc) */ }\n', ''],
-  ['SOURCE', 'la carte revient a deux faces « roll vs bloc » en tete', '      <div class="slotsFaces" id="slotsFaces">', (t) => { const i = t.indexOf('      <div class="slotsFaces" id="slotsFaces">'), j = t.indexOf('      <div class="rollLigne">'), k = t.indexOf('      <div class="slotsZone" id="slotsZone" hidden>'); const bloc = t.slice(i, j); return t.slice(0, i) + t.slice(j, k) + bloc + t.slice(k); }],
+  /* 2026-10-24 (un seul jeu au centre) : le meme mutant sur la nouvelle carte — le pli du Roll classique remonte AVANT les rouleaux */
+  ['SOURCE', 'la carte revient a deux faces « roll vs bloc » en tete', '      <div class="jeuCentre" id="jeuCentre">', (t) => { const i = t.indexOf('      <div class="jeuCentre" id="jeuCentre">'), j = t.indexOf('      <details class="rollPli" id="rollPli">'), k = t.indexOf('      <div class="jourTicket">'); return t.slice(0, i) + t.slice(j, k) + t.slice(i, j) + t.slice(k); }],
 ];
 let tues = 0;
 for (const [s, nom, de, vers, plus] of MUT_R) {
