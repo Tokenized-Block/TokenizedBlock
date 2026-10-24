@@ -58,7 +58,9 @@ export function ecran() {
   const el = (id) => {
     if (!els.has(id)) {
       const e = { id, hidden: id === 'payerAvec' || id === 'payerLab' || id === 'payerJeton' || id === 'payerNote', disabled: false, _v: '', innerHTML: '', dataset: {}, options: [], ecouteurs: {},
-        setAttribute() {}, addEventListener(k, f) { this.ecouteurs[k] = f; }, replaceChildren(...o) { this.options = o; } };
+        setAttribute() {}, addEventListener(k, f) { this.ecouteurs[k] = f; }, replaceChildren(...o) { this.options = o; },
+        /* integration 2026-10-25 : passPaye pose un lien Fees & risks apres son texte */
+        append(...xs) { this._t = (this._t || '') + xs.map((x) => (typeof x === 'string' ? x : x.textContent || '')).join(''); } };
       /* 2026-10-24 : comme le DOM, ecrire textContent efface les enfants (les boutons d un arret, poses par insertAdjacentHTML) */
       Object.defineProperty(e, 'textContent', { get() { return this._t || ''; }, set(v) { this._t = String(v); this.innerHTML = ''; ecrits.push({ id, texte: String(v) }); } });
       e.insertAdjacentHTML = function (_ou, html) { this.innerHTML = String(this.innerHTML || '') + html; };
@@ -67,7 +69,7 @@ export function ecran() {
     }
     return els.get(id);
   };
-  const document = { createElement: () => ({ value: '', textContent: '', disabled: false }), getElementById: (id) => el(id), querySelector: () => null, hidden: false };
+  const document = { createElement: () => ({ value: '', textContent: '', disabled: false, className: '', href: '' }), getElementById: (id) => el(id), querySelector: () => null, hidden: false };
   return { $: (s) => (String(s).startsWith('#') ? el(String(s).slice(1)) : null), el, els, ecrits, document };
 }
 

@@ -88,7 +88,7 @@ async function executer(t, appel, extra = {}) {
   const els = new Map();
   const el = (id) => {
     if (!els.has(id)) {
-      const e = { id, hidden: true, disabled: false, value: 'x', innerHTML: '', dataset: {}, setAttribute() {} };
+      const e = { id, hidden: true, disabled: false, value: 'x', innerHTML: '', dataset: {}, setAttribute() {}, append() { ecrits.add(id); } };
       Object.defineProperty(e, 'textContent', { get() { return this._t || ''; }, set(v) { this._t = String(v); ecrits.add(id); textes.push({ id, v: String(v) }); } });
       els.set(id, e);
     }
@@ -109,6 +109,8 @@ async function executer(t, appel, extra = {}) {
     rpc: async (m) => (m === 'eth_blockNumber' ? '0x10' : null), setTimeout: (f) => { f(); return 0; }, clearTimeout: () => {},
     /* 2026-10-24 « Pay with » : USDC par defaut (aucun jeton choisi) — le scenario JETON en choisit un */
     jetonChoisi: () => null, preparerPaiementJeton: async () => ({ ok: false, pourquoi: 'stub.' }), envoyerPaiementJeton: async () => null,
+    /* integration 2026-10-25 : passPaye dit la fenetre du tirage (texteBlocs) et pose un lien Fees & risks (document, append) */
+    texteBlocs: (n) => n + ' blocks', FENETRE_ROLLS: 256, sParBlocApp: null, document: { createElement: () => ({ className: '', href: '', textContent: '' }) },
   };
   Object.assign(ctx, extra);
   const noms = Object.keys(ctx);

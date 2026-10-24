@@ -161,11 +161,12 @@ const avantSigne = async (sParBlocApp) => {
   const doc = { createElement: (t) => new El(t) };
   let vu = null;
   const envoyerAppels = async () => { vu = { texte: e.textContent, liens: e.enfants.filter((x) => x instanceof El && x.tag === 'a') }; return { etat: 'REFUSE' }; };
-  const f = new Function('$', 'compte', 'rollsCfg', 'lirePassSur', 'planPass', 'USDC_BASE', 'lirePotRolls', 'usdcTexte', 'envoyerAppels', 'phraseNonConfirme', 'peindreTirageJourPass', 'FENETRE_ROLLS', 'sParBlocApp', 'texteBlocs', 'document',
+  const f = new Function('$', 'compte', 'rollsCfg', 'lirePassSur', 'planPass', 'USDC_BASE', 'lirePotRolls', 'usdcTexte', 'envoyerAppels', 'phraseNonConfirme', 'peindreTirageJourPass', 'FENETRE_ROLLS', 'sParBlocApp', 'texteBlocs', 'document', 'jetonChoisi',
     pp + '\nreturn passPaye;');
+  /* integration 2026-10-25 : passPaye lit le « Pay with » (jetonChoisi) ; ici USDC (null) */
   /* integration 2026-10-24 : la carte Draws (d57e5e6) ecrit le statut du pass dans #potEtat (sa propre ligne), plus #rollsEtat */
   const passPaye = f((s) => (s === '#potEtat' || s === '#rollsEtat' ? e : s === '#jourPass' ? b : null), W, { contrat: RC, prixPass: '10000000', passRolls: 20 }, async () => ({ ok: true, pass: null }),
-    () => ({ etat: 'PRET', appels: [{}, {}] }), USDC, async () => 3000000n, (v) => (Number(v) / 1e6).toFixed(2), envoyerAppels, () => 'No pass bought.', () => {}, FENETRE_ROLLS, sParBlocApp, texteBlocs, doc);
+    () => ({ etat: 'PRET', appels: [{}, {}] }), USDC, async () => 3000000n, (v) => (Number(v) / 1e6).toFixed(2), envoyerAppels, () => 'No pass bought.', () => {}, FENETRE_ROLLS, sParBlocApp, texteBlocs, doc, () => null);
   await passPaye();
   return vu;
 };
