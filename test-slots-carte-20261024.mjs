@@ -82,6 +82,8 @@ function monter(bloc, chaine, { avantEnvoi = null, msParBloc = 2000, minuteurs =
     phraseNonConfirme: (r, pre) => pre + ': ' + (r && r.pourquoi ? r.pourquoi : 'not confirmed'),
     envoyerAppels: async (appels) => { auWallet.push(dom.el('slotsEtat').textContent); chaine.appels.push(appels.map((a) => a.data)); if (avantEnvoi) avantEnvoi(chaine); try { dernier = appels.flatMap((a) => chaine.executer(a.data)); return { etat: 'CONFIRME', hash: '0x' + '11'.repeat(32) }; } catch (e) { dernier = []; return { etat: 'ECHEC_ENVOI', pourquoi: String(e.message) }; } },
     recusLogs: async () => ({ logs: dernier || [], manque: 0, n: 1 }), setInterval: () => 0,
+    /* 2026-10-24 (« Pay with ») : USDC, le defaut — aucun jeton choisi (le chemin jeton est execute par test-payer-avec-20261024) */
+    jetonChoisi: () => null,
     /* les minuteurs du bloc : gardes (minuteurs fourni) et declenches a la main par le scenario, sinon jamais */
     setTimeout: (f) => { if (minuteurs) minuteurs.push(f); return minuteurs ? minuteurs.length : 0; }, clearTimeout: () => {} };
   const noms = Object.keys(ctx);

@@ -67,7 +67,8 @@ const mutants = [
   ['fenetreBornee', 'scanne: slotsCfg.scanne, tete, blocDeploiement: j.bloc', 'scanne: null, tete, blocDeploiement: 0'],
   ['spinExact', 'plan = Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: BigInt(j.prixSpin) });', 'plan = Slots.planSpins({ contrat, usdc: USDC_BASE, n: 1, spinPrice: 2n ** 255n });'],
   ['settleRelu', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = vue.spins;"],
-  ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus', 'const r = await envoyerDepuisWallet(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus'],
+  /* 2026-10-24 (« Pay with ») : l envoi USDC est dans la branche `else` (r partage avec le paiement en jeton) */
+  ['envoiUnique', 'r = await envoyerAppels(plan.appels, c);\n    }\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus', 'r = await envoyerDepuisWallet(plan.appels, c);\n    }\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus'],
   ['facesDuContrat', 'faceRevelee(Slots.graine(hashes[r], spinId, r))', 'faceRevelee(Slots.graine(hashes[0], spinId, r))'],
   ['bandeauTelephone', '.jeuBandeau,.jeuBandeau[data-n="7"],.jeuBandeau[data-slots="1"]{display:flex;', '.jeuBandeau,.jeuBandeau[data-n="7"]{display:flex;'],
   ['sansRemboursement', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>\n        <button type="button" class="bouton sec" id="slotsRembourser" hidden>Claim refund</button>'],

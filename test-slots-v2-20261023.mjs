@@ -76,7 +76,9 @@ const entre = (t, a, b) => { const i = t.indexOf(a), j = t.indexOf(b, i + 1); re
 const bloc = (t) => entre(t, '/* ══ LES SLOTS (Phil 2026-10-23', '/* ══ EARN (Phil 19:40)');
 const sansCom = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '');
 /* v3/v4 : le chemin Settle / Accept (v4 : plus de Refund) ; son COMPORTEMENT (une seule lecture avant le wallet, le recu relu) est execute par test-slots-v3 */
-const regler = (t) => entre(bloc(t), "/* SETTLE / ACCEPT (R2", "const r = await envoyerAppels(plan.appels, c);");
+/* 2026-10-24 : la fin du chemin Settle / Accept est l entree du « Pay with » du Spin (le `const r = await envoyerAppels` est devenu un
+ *   `let r` partage par les deux chemins d envoi) */
+const regler = (t) => entre(bloc(t), "/* SETTLE / ACCEPT (R2", "const jt = quoi === 'spin' ? jetonChoisi() : null;");
 const PLAN = lire('slots-plan.js');
 const checks = {
   /* D1 */

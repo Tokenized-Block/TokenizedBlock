@@ -76,7 +76,13 @@ ok(/could not be read just now/.test(pNon) && !/\d/.test(pNon), 'avant signature
 console.log('— E. app.html (texte, chaque garde mutee doit rougir)');
 const APP = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g, '\n');
 const entre = (s, a, b) => { const i = s.indexOf(a), j = s.indexOf(b, i + 1); return i >= 0 && j > i ? s.slice(i, j) : ''; };
-const avantEnvoi = (s, a, b) => { const x = entre(s, a, b); const i = x.indexOf('await lireAvantRoll(contrat)'), p = x.indexOf('av.phrase'), e = Math.max(x.indexOf('envoyerAppels(plan.appels'), x.indexOf('bcBoutons(')); return i > 0 && p > i && e > p; };
+/* 2026-10-24 (« Pay with ») : le chemin JETON passe aussi av.phrase (a envoyerPaiementJeton), AVANT le chemin USDC dans le texte — la phrase
+ *   du chemin USDC est donc la DERNIERE avant son envoi (lastIndexOf), et le chemin jeton, s il existe, la transmet lui aussi */
+const avantEnvoi = (s, a, b) => { const x = entre(s, a, b); const i = x.indexOf('await lireAvantRoll(contrat)'), e = Math.max(x.indexOf('envoyerAppels(plan.appels'), x.indexOf('bcBoutons('));
+  if (!x.includes('envoyerPaiementJeton(')) { const p = x.indexOf('av.phrase'); return i > 0 && p > i && e > p; }
+  /* avec le chemin jeton : la phrase est dans le DERNIER dit( avant l envoi USDC, et le chemin jeton la transmet */
+  const d = x.lastIndexOf('dit(', e), p = x.lastIndexOf('av.phrase', e);
+  return i > 0 && d > i && p > d && e > p && /envoyerPaiementJeton\(pj, c, dit, av\.phrase\)/.test(x); };
 const checks = {
   importe: (s) => /import \* as Rg from '\.\/rolls-regles\.js';/.test(s),
   tuile: (s) => /const pz = Rg\.gainMax\(rollsCfg\);/.test(s) && /\(pz !== null \? ' · win up to ' \+ usdcTexte\(pz\) : ''\)/.test(s),

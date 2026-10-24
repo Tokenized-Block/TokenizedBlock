@@ -235,6 +235,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .rollLigne{display:grid;grid-template-columns:52px minmax(0,1fr) auto 52px minmax(0,1fr);gap:8px;align-items:center;margin:10px 0 0}
 .rollLigne .jourFace{width:52px;height:52px;flex:none;border-radius:11px}
 .rollLigne .note{margin:0;font-size:12px;line-height:1.35}
+/* 2026-10-24 : « Pay with » (USDC ou un jeton profond, misables.js) — une ligne compacte au-dessus des boutons payants de la carte Draws */
+.payerAvec{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:8px 0 0}
+.payerAvec .note{margin:0}
+.payerAvec select{flex:1 1 180px;min-width:0;max-width:100%;font-size:13px;padding:6px 8px;background:var(--fond2);color:inherit;border:1px solid var(--ligne);border-radius:8px}
+#payerNote{flex-basis:100%}
 .slotsAccords{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0 0;font-size:12.5px;color:var(--doux)}
 .slotsAccords b{color:var(--accent2);font-weight:700}
 .slotsTable{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;margin:6px 0 0}
@@ -3732,6 +3737,18 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
         <p class="note" id="dernierNom">Reading the chain…</p>
       </div>
+      <!-- 2026-10-24 (Phil : « payer les jeux en USDC ou en tout jeton de l app qui a une liquidite profonde ; l app swappe en USDC pour
+           payer ») : UN selecteur pour le Roll (et l Auto-roll), le Spin et le Week pass. USDC par defaut. Options : les jetons de
+           /api/misables que CE wallet detient (balanceOf), par valeur tenue ; un jeton qui ne paie pas la taille montree est grise avec sa
+           raison ; les autres ne sont jamais listes (#payerNote les compte). Sans wallet, ou sans jeton tenu : « Pay with: USDC » seul (pas
+           de controle mort). Les messages d un paiement en jeton vont a la ligne d etat de SA rangee (#rollsEtat, #slotsEtat, #potEtat).
+           Cache tant qu aucun jeu payant n est servi. -->
+      <div class="payerAvec" id="payerAvec" hidden>
+        <label class="note" id="payerLab" for="payerJeton" hidden>Pay with</label>
+        <select id="payerJeton" hidden></select>
+        <span class="note" id="payerSeul">Pay with: USDC</span>
+        <p class="note" id="payerNote" hidden></p>
+      </div>
       <div class="jourEtapes">
         <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
         <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
@@ -4263,6 +4280,8 @@ import { prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernie
 import * as Duels from './duels-plan-app.js';
 /* 2026-10-23 : les slots (BlockSlots) — encodeurs purs, faces, points, loi exacte ; le contrat vient de /api/slots, sinon rien ne se montre */
 import * as Slots from './slots-plan.js';
+/* 2026-10-24 : « Pay with » — payer un jeu avec un jeton profond (swap exact-output en USDC, puis les appels du jeu inchanges) */
+import { CANDIDATS_CL as MISABLES_CANDIDATS, coterMisable, planPayerEnJeton, usdcAViser, besoinDuJeu, tailleCouvrante as tailleMisable } from './misables.js';
 /* 2026-10-24 : les trois rouleaux de la carte Draws (LIVE : les faces des derniers blocs Base ; SPIN : les faces d un spin) — pur, servi */
 import { creerRouleaux } from './rouleaux.js';
 /* 2026-10-18 : le Brain OS — nos propres LECTURES (safety, explain, wallet, gas), sans cle tierce ; pur, le `rpc` de l app lui est passe */
@@ -4938,6 +4957,8 @@ function poserBoutonsRolls(t, c) {
   /* la ligne du Week pass / du pot : sans wallet, aucun de ses boutons n existe — son dernier message s efface aussi */
   { const ep = $('#potEtat'); if (ep && !c) ep.hidden = true; }
   if (!on) { const r = $('#rollsRegler'); if (r) r.hidden = true; const j = $('#jourTirerJour'); if (j) j.hidden = true; }
+  /* 2026-10-24 : le selecteur « Pay with » suit les gestes payants montres (ses lectures sont bornees a une par minute) */
+  try { void peindrePayerAvec().catch(() => {}); } catch (_) { /* hors de la page (banc) */ }
 }
 async function envoyerAppels(appels, c) {
   /* un lot atomique si le wallet groupe (wallet_sendCalls 2.0), sinon chaque appel signe a la suite ; un echec arrete tout et est DIT */
@@ -4945,6 +4966,10 @@ async function envoyerAppels(appels, c) {
   try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, calls: appels, sansRepliV1: true }); } catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
   if (r && r.etat === 'CONFIRME') return r;
   if (!(r && r.sendCallsUnsupported)) return r;
+  return envoyerUnParUn(appels, c);
+}
+/* chaque appel signe a la suite (2026-10-24 : sortie d envoyerAppels, telle quelle, pour le paiement en jeton sans lot) */
+async function envoyerUnParUn(appels, c) {
   /* ⛔ 2026-10-18 (revue adverse) : la suite rendait le DERNIER envoi seul — 5 rolls signes un par un = 1 seul Rolled lu, 4 rolls payes
    *   jamais regles. Chaque hash CONFIRME est garde (hashes), y compris ceux d avant un echec (ils sont sur la chaine). */
   let dernier = null; const hashes = [];
@@ -4964,6 +4989,179 @@ async function recusLogs(r) {
   for (const h of hs) { const recu = await recuDe(h); if (recu && Array.isArray(recu.logs)) logs.push(...recu.logs); else manque++; }
   return { logs, manque, n: hs.length };
 }
+/* ══ PAY WITH (2026-10-24, Phil : « miser en USDC ou en tout jeton de l app qui a une liquidite profonde ; l app swappe en USDC pour
+ *   payer ») — les contrats de jeu restent USDC seul et immuables ; le wallet du joueur signe tout, rien n est tenu ni signe ici.
+ *   Payer en jeton = misables.js planPayerEnJeton : approve EXACT du max-in (devis + 0,5 %), swap exact-output (l USDC au joueur, 0,1 %
+ *   a l app), approve(routeur, 0), puis les appels du jeu TELS QUE LES BATIT SON module — compares octet par octet au plan USDC de l app
+ *   (planRoll / planRolls / planPass / Slots.planSpin) : un ecart refuse tout. USDC (le defaut) : le chemin d avant, inchange.
+ *   ⛔ RPC : /api/misables au plus UNE fois par minute par page (succes ou echec) ; balanceOf SEULEMENT pour les jetons listes (misables a
+ *   au moins une taille), relus avec la liste ; decimals() une fois par jeton tenu ; les devis SEULEMENT au clic, jamais au repeint. */
+const PAYER_TTL_MS = 60000;
+const payer = { lignes: null, essai: 0, enVol: null, compte: null, soldes: new Map(), dec: new Map(), soldesA: 0, choix: 'usdc', sig: '' };
+const RAISONS_PAYER = { ECART: 'price gap over 1%', PEU_PROFONDE: 'pool under 10,000 USDC', SOUS_LE_MARCHE: 'priced under its market',
+  SANS_DEVIS: 'no quote at this size', PROFONDEUR_NON_LUE: 'pool not read', NON_MESURE: 'not read', TAILLE_NON_MESUREE: 'over 10 USDC is not offered' };
+const symbolePayer = (l) => String((l && l.symbole) || '').replace(/[^A-Za-z0-9.$-]/g, '').slice(0, 16) || 'token';
+const pctPayer = (bps) => (Number.isFinite(Number(bps)) ? (Number(bps) / 100).toFixed(2) + ' %' : '');
+/* une quantite brute en texte : `chiffres` chiffres significatifs ; `haut` arrondit vers le haut (un « at most » ne sous-dit jamais) */
+function qteJeton(brut, dec, chiffres = 3, haut = false) {
+  let v; try { v = BigInt(brut); } catch (_) { return '?'; }
+  const d = Number(dec);
+  if (!(v > 0n) || !Number.isInteger(d) || d < 0) return v === 0n ? '0' : '?';
+  const ent = v / 10n ** BigInt(d);
+  const lead = ent > 0n ? 0 : d - v.toString().length;
+  const k = Math.min(d, ent > 0n ? Math.max(0, chiffres - ent.toString().length) : lead + chiffres);
+  const pas = 10n ** BigInt(d - k);
+  let q = v / pas; if (haut && v % pas !== 0n) q += 1n;
+  const s = q.toString().padStart(k + 1, '0');
+  const e = s.slice(0, s.length - k), f = k ? s.slice(s.length - k).replace(/0+$/, '') : '';
+  return e + (f ? '.' + f : '');
+}
+/* une ligne servie a la taille qui couvre `usdc` : misable ? et l estimation (le devis LISTE, au prorata ; « about ») */
+function payerTaille(l, usdc) {
+  const taille = tailleMisable(usdc);
+  if (taille === null) return { ok: false, raison: RAISONS_PAYER.TAILLE_NON_MESUREE };
+  const t = ((l && l.tailles) || []).find((x) => { try { return BigInt(x.usdc) === taille; } catch (_) { return false; } });
+  if (!t || t.misable !== true) return { ok: false, raison: (t && RAISONS_PAYER[t.code]) || 'not deep enough at this size' };
+  let est = null; try { est = (BigInt(t.montantIn) * BigInt(usdc) + taille - 1n) / taille; } catch (_) { est = null; }
+  return est !== null && est > 0n ? { ok: true, est, ecartBps: Number(t.ecartBps) } : { ok: false, raison: RAISONS_PAYER.SANS_DEVIS };
+}
+const payerListees = () => (payer.lignes || []).filter((l) => l && /^0x[0-9a-f]{40}$/.test(String(l.jeton)) && (l.tailles || []).some((t) => t.misable === true));
+async function lireMisablesPage() {
+  if (payer.enVol) return payer.enVol;
+  if (Date.now() - payer.essai < PAYER_TTL_MS) return payer.lignes;
+  payer.essai = Date.now();
+  payer.enVol = fetch('/api/misables', { cache: 'no-store' }).then((r) => r.json())
+    .then((j) => { if (j && j.ok === true && Array.isArray(j.lignes)) payer.lignes = j.lignes; return payer.lignes; }, () => payer.lignes)
+    .finally(() => { payer.enVol = null; });
+  return payer.enVol;
+}
+async function soldePayer(l, moi) {
+  try {
+    const v = l.natif ? await rpc('eth_getBalance', [moi, 'latest']) : await rpc('eth_call', [{ to: l.jeton, data: '0x70a08231' + String(moi).toLowerCase().slice(2).padStart(64, '0') }, 'latest']);
+    return BigInt(v);
+  } catch (_) { return null; }
+}
+async function decimalesPayer(l) {
+  if (payer.dec.has(l.jeton)) return payer.dec.get(l.jeton);
+  let d = l.natif ? 18 : null;
+  if (d === null) { try { const x = Number(BigInt(await rpc('eth_call', [{ to: l.jeton, data: '0x313ce567' }, 'latest']))); if (Number.isInteger(x) && x >= 0 && x <= 36) d = x; } catch (_) { d = null; } }
+  if (d !== null) payer.dec.set(l.jeton, d);
+  return d;
+}
+async function lireSoldesPayer(moi) {
+  payer.soldesA = Date.now();
+  const m = new Map(), file = payerListees().slice();
+  const ouvrier = async () => { for (let l = file.shift(); l; l = file.shift()) { const s = await soldePayer(l, moi); m.set(l.jeton, s); if (s !== null && s > 0n) await decimalesPayer(l); } };
+  await Promise.all([ouvrier(), ouvrier(), ouvrier()]);
+  if (payer.compte === moi) payer.soldes = m;
+}
+/* les gestes payants montres, et leur total (le Roll et le Spin a l unite : la taille des options ; les autres dans #payerNote) */
+function payerActions(c) {
+  const a = [];
+  if (rollsCfg && c) a.push({ nom: 'Roll', usdc: BigInt(rollsCfg.prixRoll) }, { nom: 'Auto-roll ×5', usdc: BigInt(rollsCfg.prixRoll) * 5n }, { nom: 'Week pass', usdc: BigInt(rollsCfg.prixPass) });
+  try { if (c && slotsCfg.j && slotsContrat(slotsCfg.j)) a.push({ nom: 'Spin', usdc: BigInt(slotsCfg.j.prixSpin) }); } catch (_) { /* slots non lus */ }
+  return a;
+}
+/* le jeton choisi (sa ligne servie), ou null = USDC */
+function jetonChoisi() {
+  if (!payer.choix || payer.choix === 'usdc') return null;
+  const s = $('#payerJeton'); if (!s || s.hidden) return null;
+  return payerListees().find((l) => l.jeton === payer.choix) || null;
+}
+function rendrePayerAvec(moi, actions) {
+  const lab = $('#payerLab'), sel = $('#payerJeton'), seul = $('#payerSeul'), note = $('#payerNote');
+  if (!lab || !sel || !seul || !note) return;
+  const base = actions.find((a) => a.nom === 'Roll') || actions.find((a) => a.nom === 'Spin') || null;
+  const taille = base ? base.usdc : null;
+  const tenues = moi && taille ? payerListees().filter((l) => { const s = payer.soldes.get(l.jeton); return s != null && s > 0n && payer.dec.has(l.jeton); }) : [];
+  const valeur = (l) => { const t = (l.tailles || []).find((x) => { try { return BigInt(x.montantIn) > 0n; } catch (_) { return false; } }); return t ? (payer.soldes.get(l.jeton) * BigInt(t.usdc)) / BigInt(t.montantIn) : 0n; };
+  tenues.sort((a, b) => { const va = valeur(a), vb = valeur(b); return va > vb ? -1 : va < vb ? 1 : 0; });
+  const opts = [{ v: 'usdc', t: 'USDC', off: false }];
+  for (const l of tenues) {
+    const e = payerTaille(l, taille), dec = payer.dec.get(l.jeton), sym = symbolePayer(l);
+    const assez = e.ok && payer.soldes.get(l.jeton) >= e.est;
+    opts.push({ v: l.jeton, off: !assez, t: !e.ok ? sym + ' — not for ' + usdcTexte(taille) + ' USDC: ' + e.raison
+      : sym + ' — about ' + qteJeton(e.est, dec) + ' for ' + usdcTexte(taille) + ' USDC · ' + pctPayer(e.ecartBps) + (assez ? '' : ' (you hold less)') });
+  }
+  const avecSelect = opts.length > 1;
+  lab.hidden = !avecSelect; sel.hidden = !avecSelect; seul.hidden = avecSelect;
+  if (!opts.some((o) => o.v === payer.choix && !o.off)) payer.choix = 'usdc';
+  const sig = JSON.stringify(opts);
+  if (avecSelect && sig !== payer.sig) {
+    sel.replaceChildren(...opts.map((o) => { const x = document.createElement('option'); x.value = o.v; x.textContent = o.t; x.disabled = o.off; return x; }));
+    payer.sig = sig;
+  }
+  if (!avecSelect) payer.sig = '';
+  sel.value = payer.choix;
+  /* la ligne muette : les autres totaux du jeton choisi, puis le COMPTE des jetons qui ne paient rien (jamais leur liste) */
+  const jt = jetonChoisi(), parts = [];
+  if (jt) for (const a of actions) if (a.usdc !== taille) { const e = payerTaille(jt, a.usdc); parts.push(a.nom + ' (' + usdcTexte(a.usdc) + ' USDC) ' + (e.ok ? 'about ' + qteJeton(e.est, payer.dec.get(jt.jeton)) : 'USDC only: ' + e.raison)); }
+  const n = payer.lignes ? payer.lignes.length - payerListees().length : 0;
+  note.textContent = [parts.length ? 'With ' + symbolePayer(jt) + ': ' + parts.join(' · ') + '.' : '', n > 0 ? n + ' other token' + (n === 1 ? ' is' : 's are') + ' not deep enough to bet.' : ''].filter(Boolean).join(' ');
+  note.hidden = !note.textContent;
+}
+async function peindrePayerAvec() {
+  const z = $('#payerAvec'); if (!z) return;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  let slotsOn = false; try { slotsOn = !!(slotsCfg.j && slotsContrat(slotsCfg.j)); } catch (_) { slotsOn = false; }
+  z.hidden = !(rollsCfg || slotsOn);
+  if (z.hidden) return;
+  await lireMisablesPage();
+  const moi = c ? String(c).toLowerCase() : null;
+  if (moi !== payer.compte) { payer.compte = moi; payer.soldes = new Map(); payer.soldesA = 0; payer.choix = 'usdc'; }
+  if (moi && payer.lignes && Date.now() - payer.soldesA >= PAYER_TTL_MS) await lireSoldesPayer(moi);
+  rendrePayerAvec(moi, payerActions(c));
+}
+/* deux listes d appels identiques, octet par octet (to, data, value) */
+const memesAppels = (a, b) => a.length === b.length && a.every((x, i) => String(x.to).toLowerCase() === String(b[i].to).toLowerCase()
+  && String(x.data).toLowerCase() === String(b[i].data).toLowerCase() && BigInt(x.value || '0x0') === BigInt(b[i].value || '0x0'));
+/* AU CLIC : le besoin du jeu (SON plan), la taille servie, le devis VIVANT (bloc courant), le plan, le solde. Rien n est envoye ici ;
+ *   un refus rend sa raison. */
+async function preparerPaiementJeton({ ligne, c, planUsdc, jeu }) {
+  const sym = symbolePayer(ligne), non = (pourquoi) => ({ ok: false, pourquoi });
+  const besoin = besoinDuJeu(planUsdc, jeu.contrat);
+  if (besoin === null) return non('the game plan does not start with an exact USDC approval.');
+  const e = payerTaille(ligne, besoin);
+  if (!e.ok) return non(sym + ' cannot pay ' + usdcTexte(besoin) + ' USDC (' + e.raison + ').');
+  const candidat = MISABLES_CANDIDATS.find((x) => x.jeton === ligne.jeton && x.pool === ligne.pool);
+  if (!candidat) return non(sym + ' has no pool this app swaps on.');
+  const vise = usdcAViser({ besoin });
+  let devis;
+  try { devis = await coterMisable({ rpc, candidat, usdcSortie: vise, reference: ligne.referencePool ? { pool: ligne.referencePool } : null }); }
+  catch (err) { devis = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+  if (!devis || devis.etat !== 'PRET') return non('the live ' + sym + ' quote could not be read (' + String((devis && devis.pourquoi) || 'no answer').slice(0, 100) + ').');
+  let tete = NaN, ts = NaN;
+  try { const b = await rpc('eth_getBlockByNumber', ['latest', false]); tete = parseInt(b.number, 16); ts = parseInt(b.timestamp, 16); } catch (_) { tete = NaN; }
+  if (!Number.isSafeInteger(tete) || !Number.isSafeInteger(ts)) return non('the latest block could not be read.');
+  /* la tete vue apres le devis (un noeud en retard peut la dire plus basse que le bloc du devis : la vraie tete est au moins le plus grand) */
+  const plan = planPayerEnJeton({ devis, compte: c, jeu, blocActuel: Math.max(tete, Number(devis.bloc)), maintenant: ts });
+  if (plan.etat !== 'PRET') return non(String(plan.pourquoi || plan.code) + '.');
+  if (!memesAppels(plan.appels.slice(-planUsdc.appels.length), planUsdc.appels)) return non('the game calls would differ from the game plan.');
+  const dec = await decimalesPayer(ligne), solde = await soldePayer(ligne, c), r = plan.resume;
+  if (dec === null || solde === null) return non('your ' + sym + ' balance could not be read.');
+  if (solde < r.maxEntree) return non('you hold ' + qteJeton(solde, dec, 6) + ' ' + sym + '; the swap may take up to ' + qteJeton(r.maxEntree, dec, 6, true) + '.');
+  const phrase = 'Pay with ' + sym + ': at most ' + qteJeton(r.maxEntree, dec, 6, true) + ' ' + sym + ' in, exactly ' + Slots.usdcPrecis(r.usdcSortie) + ' USDC out ('
+    + (Number(r.fraisBps) / 100).toFixed(2) + '% of the swap kept by the app); the game takes ' + Slots.usdcPrecis(r.besoinUsdc) + ' USDC. Prizes are paid in USDC.';
+  return { ok: true, plan, phrase, sym };
+}
+/* L ENVOI : un lot atomique (wallet_sendCalls 2.0, atomicRequired) si le wallet le declare (wallet_getCapabilities « supported »),
+ *   sinon chaque appel a la suite — et c est DIT avant : l USDC arrive d abord dans le wallet du joueur. */
+async function envoyerPaiementJeton(pj, c, dit, suite = '') {
+  const appels = pj.plan.appels;
+  let cap = null;
+  try { cap = await capaciteDeGroupement({ eth: window.ethereum, compte: c, chaineHex: '0x' + Number(CHAINE).toString(16) }); } catch (_) { cap = null; }
+  let r = null;
+  if (cap && cap.capacite === 'OUI') {
+    dit(pj.phrase + ' One signature for all ' + appels.length + ' steps, all or nothing…' + suite);
+    try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, calls: appels, sansRepliV1: true }); } catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
+    if (!(r && r.sendCallsUnsupported)) { payer.soldesA = 0; return r; }
+  }
+  dit(pj.phrase + ' Your wallet asks for ' + appels.length + ' signatures in order: the USDC lands in your wallet first, then the game takes it.' + suite);
+  r = await envoyerUnParUn(appels, c);
+  payer.soldesA = 0;
+  return r;
+}
+$('#payerJeton').addEventListener('change', () => { const s = $('#payerJeton'); payer.choix = s ? s.value : 'usdc'; let c = null; try { c = compte; } catch (_) { c = null; } rendrePayerAvec(payer.compte, payerActions(c)); });
 /* ══ LA FACE DU ROLL (Phil 2026-10-18) : chaque roll — practice, paye, auto-roll, Chat — tire une NOUVELLE face au hasard
  *   (rolls-jeu.js tirerFaceDeRoll : crypto.getRandomValues 20 octets -> apparenceDepuisAdresse -> guessDepuisApparence), la montre a
  *   GAUCHE (#jourFace, « Your roll ») contre la face du bloc a droite, et c est ELLE qui est scoree (le roll paye la passe en guess au
@@ -4999,8 +5197,17 @@ async function rollPaye() {
     const plan = avecPass ? planRollAvecPass({ contrat, guess, pass }) : planRoll({ contrat, usdc: USDC_BASE, guess, rollPrice: BigInt(rollsCfg.prixRoll) });
     if (plan.etat !== 'PRET') { dit('Not rolled: ' + plan.pourquoi); return; }
     const av = await lireAvantRoll(contrat);
-    dit((avecPass ? 'Rolling with your pass (' + pass.rollsLeft + ' left) — sign in your wallet…' : 'Roll ' + usdcTexte(rollsCfg.prixRoll) + ' USDC: half to the pot, half to TokenizedBlock. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…') + av.phrase);
-    const r = await envoyerAppels(plan.appels, c);
+    /* 2026-10-24 : « Pay with » un jeton (jamais pour un roll de pass, qui ne paie rien) : le swap, puis CE plan, au meme endroit */
+    const jt = avecPass ? null : jetonChoisi();
+    let r;
+    if (jt) {
+      const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'rolls', contrat, guesses: [guess], rollPrice: BigInt(rollsCfg.prixRoll) } });
+      if (!pj.ok) { dit('Not rolled: ' + pj.pourquoi + ' Nothing was sent.'); return; }
+      r = await envoyerPaiementJeton(pj, c, dit, av.phrase);
+    } else {
+      dit((avecPass ? 'Rolling with your pass (' + pass.rollsLeft + ' left) — sign in your wallet…' : 'Roll ' + usdcTexte(rollsCfg.prixRoll) + ' USDC: half to the pot, half to TokenizedBlock. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…') + av.phrase);
+      r = await envoyerAppels(plan.appels, c);
+    }
     if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not rolled')); return; }
     const lus = await recusLogs(r);
     const rolled = lireRolledTous(lus.logs, contrat)[0] || null;
@@ -5049,6 +5256,16 @@ async function passPaye() {
      *   PassBought et ajoute les 7 jours de ticket + 3 entrees bonus de la semaine (crediterVolumeRolls). Le texte ne promet que ca.
      * ⛔ 2026-10-18 (revue adverse) : les gains des rolls de PASS sortent du pot des ROLLS (pas du pot du jour) — il peut etre vide : dit AVANT */
     const pot = await lirePotRolls(contrat);
+    /* 2026-10-24 : « Pay with » un jeton : le swap, puis CE plan (approve exact + buyPass), messages sur la meme ligne (#potEtat) */
+    const jt = jetonChoisi();
+    if (jt) {
+      const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'pass', contrat, passPrice: BigInt(rollsCfg.prixPass), pass: lp.pass } });
+      if (!pj.ok) { dit('No pass bought: ' + pj.pourquoi + ' Nothing was sent.'); return; }
+      const rj = await envoyerPaiementJeton(pj, c, dit, ' A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now.'));
+      if (!rj || rj.etat !== 'CONFIRME') { dit(phraseNonConfirme(rj, 'No pass bought')); return; }
+      dit('Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes).');
+      return;
+    }
     dit('Week pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: your daily ticket for 7 UTC days from today (one a day, each = 1 entry in that week\'s reward pot) and 3 bonus entries in this week\'s pot, credited once the server reads your purchase on Base. '
       + 'On top, from the contract: ' + rollsCfg.passRolls + ' rolls for 24 h and an entry in today\'s pass draw; half to that pass-draw pot, half to TokenizedBlock. '
       + 'A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now — a pass-roll win pays at most that.')
@@ -5274,9 +5491,18 @@ async function autoRollLot(c) {
   const plan = avecPass ? planRollsAvecPass({ contrat, guesses, pass, passRolls: rollsCfg.passRolls }) : planRolls({ contrat, usdc: USDC_BASE, guesses, rollPrice: BigInt(rollsCfg.prixRoll) });
   if (plan.etat !== 'PRET') { dit('Not rolled: ' + plan.pourquoi); return; }
   const av = await lireAvantRoll(contrat);
-  dit((avecPass ? 'Rolling ' + n + ' times with your pass (' + pass.rollsLeft + ' left) — one signature if your wallet groups them…'
-    : n + ' paid rolls × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then ' + n + ' rolls (half to the pot, half to TokenizedBlock) — one signature if your wallet groups them, else ' + plan.appels.length + '…') + av.phrase);
-  const r = await envoyerAppels(plan.appels, c);
+  /* 2026-10-24 : « Pay with » un jeton (lot PAYE seulement) : un swap pour le total du lot, puis CE plan (planRolls), meme ligne */
+  const jt = avecPass ? null : jetonChoisi();
+  let r;
+  if (jt) {
+    const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'rolls', contrat, guesses, rollPrice: BigInt(rollsCfg.prixRoll) } });
+    if (!pj.ok) { dit('Not rolled: ' + pj.pourquoi + ' Nothing was sent.'); return; }
+    r = await envoyerPaiementJeton(pj, c, dit, av.phrase);
+  } else {
+    dit((avecPass ? 'Rolling ' + n + ' times with your pass (' + pass.rollsLeft + ' left) — one signature if your wallet groups them…'
+      : n + ' paid rolls × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then ' + n + ' rolls (half to the pot, half to TokenizedBlock) — one signature if your wallet groups them, else ' + plan.appels.length + '…') + av.phrase);
+    r = await envoyerAppels(plan.appels, c);
+  }
   if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not rolled')); return; }
   const lus = await recusLogs(r), rolled = lireRolledTous(lus.logs, contrat);
   if (!rolled.length) { dit('Sent (' + r.hash.slice(0, 10) + '…) but no roll could be read back yet — once they are, “Settle pending rolls” appears here.'); return; }
@@ -6915,6 +7141,7 @@ async function peindreSlotsUneFois(force = false) {
   const bS = $('#slotsSpin'), bR = $('#slotsRegler'), bA = $('#slotsAccepter'), etat = $('#slotsEtat'), mien = $('#slotsMoi');
   bS.textContent = 'Spin · ' + usdcTexte(prix) + ' USDC';
   bS.hidden = !moi; bS.disabled = slotsCfg.enCours;
+  try { void peindrePayerAvec().catch(() => {}); } catch (_) { /* hors de la page (banc) */ }
   if (!moi) { bR.hidden = true; bA.hidden = true; slotsCfg.vue = null; slotsListe([]); etat.textContent = 'Pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. Connect a wallet to spin.'; mien.textContent = ''; return null; }
   /* un autre wallet ou un autre contrat : rien de l ancien n est garde */
   const cle = contrat + ':' + moi;
@@ -7018,8 +7245,17 @@ async function slotsAgir(quoi) {
     }
     const refus = quoi === 'spin' ? 'Not spun' : 'Not settled';
     if (plan.etat !== 'PRET') { dit(refus + ': ' + plan.pourquoi); return; }
-    if (quoi === 'spin') dit('Confirm in your wallet…');
-    const r = await envoyerAppels(plan.appels, c);
+    /* 2026-10-24 : « Pay with » un jeton (le Spin seulement) : le swap, puis CE plan (Slots.planSpin), messages sur #slotsEtat */
+    const jt = quoi === 'spin' ? jetonChoisi() : null;
+    let r;
+    if (jt) {
+      const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'spins', contrat, n: 1, spinPrice: BigInt(j.prixSpin) } });
+      if (!pj.ok) { dit(refus + ': ' + pj.pourquoi + ' Nothing was sent.'); return; }
+      r = await envoyerPaiementJeton(pj, c, dit);
+    } else {
+      if (quoi === 'spin') dit('Confirm in your wallet…');
+      r = await envoyerAppels(plan.appels, c);
+    }
     if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, refus)); return; }
     const { logs } = await recusLogs(r);
     if (quoi === 'spin') {

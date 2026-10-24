@@ -12,6 +12,8 @@
  *   ROLL     #dernierMoi (« Your roll matched N/5 ») et #dernierQuand (« Last rolls ») sont dans la suite d etat de la rangee du Roll ;
  *   REGLE    placerRegleSlots EXECUTE sur l arbre : avec un wallet, #slotsRegle est juste AU-DESSUS de la rangee Spin | Settle | Accept (meme
  *            zone, hors du pli) ; sans wallet, en tete du pli « How the slots work » (avant #slotsComment).
+ *   JETON    (2026-10-24, « Pay with ») un jeton choisi : Roll, Auto-roll, Week pass et Spin executes jusqu au refus de la preparation du
+ *            paiement en jeton — le message est dans la suite d etat de SA rangee (la meme que le chemin USDC), jamais dans une autre.
  * Chaque affirmation est rejouee sur une COPIE MUTEE de app.html (en memoire) et doit alors rougir.
  * ⛔ NE PROUVE PAS : les pixels (mesures au navigateur, a part), un wallet reel, les chemins de succes de chaque flux (seul le premier
  *   message est execute ; les autres ecrivent par la MEME variable `e`/`p`/`etat`, verifie ici par le premier). */
@@ -75,14 +77,14 @@ function fonction(t, debut) {
 }
 const NOMS_FLUX = ['rollPaye', 'passPaye', 'fondPot', 'reclamerPot', 'fermerPot', 'autoRoll', 'autoRollLot', 'reglerRollsEnAttente', 'tirerJourPass', 'slotsAgir', 'roll', 'montrerSettled', 'phraseSettle'];
 const CONTRAT = '0x' + 'cc'.repeat(20), MOI = '0x' + 'a1'.repeat(20);
-async function executer(t, appel) {
+async function executer(t, appel, extra = {}) {
   const src = NOMS_FLUX.map((k) => fonction(t, 'async function ' + k + '(') || fonction(t, 'function ' + k + '(')).join('\n');
-  const ecrits = new Set();
+  const ecrits = new Set(), textes = [];
   const els = new Map();
   const el = (id) => {
     if (!els.has(id)) {
       const e = { id, hidden: true, disabled: false, value: 'x', innerHTML: '', dataset: {}, setAttribute() {} };
-      Object.defineProperty(e, 'textContent', { get() { return this._t || ''; }, set(v) { this._t = String(v); ecrits.add(id); } });
+      Object.defineProperty(e, 'textContent', { get() { return this._t || ''; }, set(v) { this._t = String(v); ecrits.add(id); textes.push({ id, v: String(v) }); } });
       els.set(id, e);
     }
     return els.get(id);
@@ -100,12 +102,15 @@ async function executer(t, appel) {
     peindreTirage: () => {}, peindreSlots: () => {}, usdcTexte: (x) => String(x), jb: () => {}, signalerRoll: async () => true,
     logoSvg: () => '', paramsLogoDepuisApparence: () => ({}), faceRevelee: () => null, rollDerniers: [],
     rpc: async (m) => (m === 'eth_blockNumber' ? '0x10' : null), setTimeout: (f) => { f(); return 0; }, clearTimeout: () => {},
+    /* 2026-10-24 « Pay with » : USDC par defaut (aucun jeton choisi) — le scenario JETON en choisit un */
+    jetonChoisi: () => null, preparerPaiementJeton: async () => ({ ok: false, pourquoi: 'stub.' }), envoyerPaiementJeton: async () => null,
   };
+  Object.assign(ctx, extra);
   const noms = Object.keys(ctx);
   const f = new Function(...noms, 'let rollEnCours = false;\n' + src + '\nreturn { ' + NOMS_FLUX.join(', ') + ' };');
   const api = f(...noms.map((k) => ctx[k]));
-  try { await appel(api); } catch (e) { return { ecrits, jete: String(e && e.message) }; }
-  return { ecrits };
+  try { await appel(api); } catch (e) { return { ecrits, textes, jete: String(e && e.message) }; }
+  return { ecrits, textes };
 }
 /* le flux de chaque bouton : lu dans son ecouteur de clic (jamais suppose) */
 function fluxDe(t, id) {
@@ -162,6 +167,35 @@ S.REGLE = async (t) => {
   return { ok: avec && sans && retour, avec, sans, retour };
 };
 
+/* JETON (2026-10-24, « Pay with ») : un jeton choisi, les quatre gestes payables en jeton (Roll, Auto-roll, Week pass, Spin) executes
+ *   jusqu au refus de la preparation (stub) : le message va a la ligne d etat de SA rangee — la meme que le chemin USDC — jamais ailleurs */
+const JETONS = { jourRollPaye: 'rollPaye', jourAuto: 'autoRoll', jourPass: 'passPaye', slotsSpin: 'slotsAgir' };
+S.JETON = async (t) => {
+  const { parId } = arbre(carteDe(t));
+  const suites = new Map(PAYANTS.map((id) => [parId.get(id).parentNode, suiteDetat(parId.get(id).parentNode)]));
+  const PRET = (k = 2) => ({ etat: 'PRET', prix: '500000', appels: Array.from({ length: k }, () => ({ to: CONTRAT, data: '0x00' })) });
+  const extra = {
+    jetonChoisi: () => ({ jeton: '0x' + 'b2'.repeat(20), symbole: 'NVDAc', tailles: [] }), preparerPaiementJeton: async () => ({ ok: false, pourquoi: 'stub refusal.' }),
+    nouvelleFaceRoll: () => ({ guess: [0, 0, 0, 0, 0] }), tirerFaceDeRoll: () => ({ guess: [0, 0, 0, 0, 0] }), peindreFaceRoll: () => {},
+    lirePassSur: async () => ({ ok: true, pass: null }), passActif: () => false, lireAvantRoll: async () => ({ pot: 0n, phrase: '' }), lirePotRolls: async () => 0n,
+    planRoll: () => PRET(), planRolls: () => PRET(6), planPass: () => PRET(), Slots: { planSpin: () => PRET() },
+  };
+  const res = {};
+  for (const [id, nom] of Object.entries(JETONS)) {
+    const fl = fluxDe(t, id);
+    if (!fl || fl.nom !== nom) return { ok: false, pourquoi: 'ecouteur', id, fl };
+    let texte = null;
+    const r = await executer(t, (api) => (fl.arg ? api[fl.nom](JSON.parse(fl.arg.replace(/'/g, '"'))) : api[fl.nom]()), extra);
+    const rangee = parId.get(id).parentNode, suite = suites.get(rangee);
+    const autres = new Set([...suites.entries()].filter(([x]) => x !== rangee).flatMap(([, s]) => s));
+    const ecrits = [...r.ecrits];
+    /* le refus du chemin JETON (« stub refusal. ») est ecrit dans la suite d etat de la rangee : le chemin jeton a bien ete pris */
+    texte = r.textes.find((x) => suite.includes(x.id) && x.v.includes('stub refusal.')) || null;
+    res[id] = { ecrits, suite, ok: !r.jete && !!texte && ecrits.every((x) => !autres.has(x)), jete: r.jete };
+  }
+  return { ok: Object.values(res).every((x) => x.ok), ko: Object.fromEntries(Object.entries(res).filter(([, v]) => !v.ok)) };
+};
+
 for (const k of Object.keys(S)) { const r = await S[k](APP); vu(r.ok === true, 'scenario ' + k + (r.ok ? '' : ' ' + JSON.stringify(r).slice(0, 1200))); }
 
 /* ---------------------------------------------------------------- les mutants (copies en memoire) */
@@ -182,6 +216,13 @@ const MUT = [
   ['ROLL', '« Last rolls » redescendu sous les Slots', null, deplacer('      <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>\n', '      <div class="tirBarre" aria-hidden="true">')],
   ['REGLE', 'avec un wallet la regle sous #slotsMoi (sous Spin)', '    if (moi) { if (rangee.previousElementSibling !== rg) rangee.parentNode.insertBefore(rg, rangee); }',
     "    if (moi) { const mien = $('#slotsMoi'); if (mien.nextElementSibling !== rg) mien.parentNode.insertBefore(rg, mien.nextElementSibling); }"],
+  ['JETON', 'le roll paye en jeton ecrit dans la ligne du pot', "      if (!pj.ok) { dit('Not rolled: ' + pj.pourquoi + ' Nothing was sent.'); return; }\n      r = await envoyerPaiementJeton(pj, c, dit, av.phrase);",
+    "      if (!pj.ok) { $('#potEtat').textContent = 'Not rolled: ' + pj.pourquoi + ' Nothing was sent.'; return; }\n      r = await envoyerPaiementJeton(pj, c, dit, av.phrase);"],
+  ['JETON', 'l auto-roll en jeton ecrit dans la ligne des Slots', "    if (!pj.ok) { dit('Not rolled: ' + pj.pourquoi + ' Nothing was sent.'); return; }\n    r = await envoyerPaiementJeton(pj, c, dit, av.phrase);",
+    "    if (!pj.ok) { $('#slotsEtat').textContent = 'Not rolled: ' + pj.pourquoi + ' Nothing was sent.'; return; }\n    r = await envoyerPaiementJeton(pj, c, dit, av.phrase);"],
+  ['JETON', 'le Week pass en jeton ecrit dans la ligne du Roll', "      if (!pj.ok) { dit('No pass bought: ' + pj.pourquoi + ' Nothing was sent.'); return; }", "      if (!pj.ok) { $('#rollsEtat').textContent = 'No pass bought: ' + pj.pourquoi + ' Nothing was sent.'; return; }"],
+  ['JETON', 'le Spin en jeton ecrit dans la ligne du Roll', "      if (!pj.ok) { dit(refus + ': ' + pj.pourquoi + ' Nothing was sent.'); return; }", "      if (!pj.ok) { $('#rollsEtat').textContent = refus + ': ' + pj.pourquoi + ' Nothing was sent.'; return; }"],
+  ['JETON', 'le Spin ignore le jeton choisi', "    const jt = quoi === 'spin' ? jetonChoisi() : null;", '    const jt = null;'],
   ['REGLE', 'la regle reste dans le pli avec un wallet', '    if (moi) { if (rangee.previousElementSibling !== rg) rangee.parentNode.insertBefore(rg, rangee); }', '    if (moi) { /* rien */ }'],
 ];
 let tues = 0;
