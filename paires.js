@@ -322,6 +322,22 @@ export const ACTIONS_COINBASE = [
   { symbole: 'VALEc', nom: 'Vale', adr: '0xb20000000000000000000063376b142c0764b489' },
   /* 2026-10-10 : adresse copiee de la reponse de l emetteur (api.coinbase.com/v1/tokenized-stocks, total_supply 1240) */
   { symbole: 'SONYc', nom: 'Sony Group', adr: '0xb200000000000000000000a26326a922ffa87f6c' },
+  /* ── 2026-10-25 — LES ACTIONS PROUVEES SUR LA CHAINE QUI MANQUAIENT, ENTREES PAR BANC FORK ───────────────────────────────────────
+   * ⛔⛔ SOURCE : le recensement du 2026-10-24 (bloc 53 040 674) — l API de l emetteur est PAGINEE (100 + 100 + 2 = 202), toutes
+   *     prouvees (code 0xef, log B20Created de la factory 0xb20f…, tx.from = le createur de l emetteur, status 0x1 ; actions-chaine.js).
+   *     65 ont des unites ; 11 manquaient ici. Six ont une pool USDC profonde sur la factory de NOTRE routeur Aerodrome ; CINQ entrent.
+   * ⛔⛔ ENTREE = UN ACHAT DE 10 USDC EXECUTE SUR FORK par le planificateur de la fiche (banc-actions-chaine-fork-20261025.mjs, fork
+   *     frais bloc 53 044 084 : SANc SEc ULc NOKc LIc, status 0x1, recu >= minimum) : sans etre ici, le planificateur les refuse
+   *     (« fee would be taken in the output token » : estDeviseConnue lit CE registre). SEc, dehors depuis le 09/10, s execute.
+   * ⛔ BUDc RESTE DEHORS : 25 397 USDC, mais 10 USDC y achetent 5,84 % sous le prix moyen (bloc 53 044 017) et le planificateur
+   *     refuse le plan sur fork. RIVNc CBRSc RKLBc APPc UNHc : aucune pool de la factory de notre routeur — dehors aussi.
+   *     Adresses et noms COPIES du recensement (reponse JSON de l emetteur), jamais de tete. Hors liste figee du 7030 : achat et
+   *     vente, pas de naissance contre elles (meme regle que le lot du 2026-10-09). */
+  { symbole: 'SANc', nom: 'Banco Santander', adr: '0xb20000000000000000000017bb66e9301e913a99' },
+  { symbole: 'SEc', nom: 'Sea Limited', adr: '0xb2000000000000000000003088798f6d0722aaac' },
+  { symbole: 'ULc', nom: 'Unilever', adr: '0xb200000000000000000000349ef3aa93a0897476' },
+  { symbole: 'NOKc', nom: 'Nokia', adr: '0xb2000000000000000000005ac674f707e357409c' },
+  { symbole: 'LIc', nom: 'Li Auto', adr: '0xb200000000000000000000d61efd9f54a23ef9eb' },
   /* ⛔⛔ 2026-10-03 (fondateur, « Oui, les 21 en Soon ») : LES 21 AUTRES ACTIONS DE L EMETTEUR entrent au registre pour
    *   l AFFICHAGE — la regle du 2026-09-27 (« supply nulle = dehors ») est levee pour l affichage SEULEMENT, jamais pour un
    *   achat : sans marche lu, pas de Buy ; sans contrat qui les admet, Create les montre « opens with our next contract ».

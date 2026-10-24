@@ -18,7 +18,8 @@ const html = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g
 
 /* A. cablage */
 /* 2026-10-03 (soir) : + `achetableIci` — les 20 actions a pool v4 USDC (cles-v4-actions.js) rendent IN_APP ; la fiche sait les acheter. */
-ok(/const vR = verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr \}\);\n(\s+\/\*[^]*?\*\/\n)?\s+const actionRegistre = ACTIONS_PAR_ADR\.has\(String\(l\.adr \|\| ''\)\.toLowerCase\(\)\);\n\s+if \(liqOk && \(vR\.achetableEnEth \|\| vR\.achetableEnUsdc \|\| \(vR\.achetableIci && actionRegistre\)\)\) \{\n\s+return (avecPair\()?'<button type="button" class="bouton trAcheter" data-acheter-fiche="/.test(html),
+/* 2026-10-25 : + `routeAction` (la route servie des actions prouvees sur la chaine, actions-chaine.js) */
+ok(/const vR = verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr, routeAction: lA\.routeAction \}\);\n(\s+\/\*[^]*?\*\/\n)?\s+const actionRegistre = ACTIONS_PAR_ADR\.has\(String\(l\.adr \|\| ''\)\.toLowerCase\(\)\);\n\s+if \(liqOk && \(vR\.achetableEnEth \|\| vR\.achetableEnUsdc \|\| \(vR\.achetableIci && actionRegistre\)\)\) \{\n\s+return (avecPair\()?'<button type="button" class="bouton trAcheter" data-acheter-fiche="/.test(html),
   'ligne du Market : Buy si le MEME verdict que la fiche dit achetable (ETH, USDC, ou v4 lisible ici — actions du registre seulement), liquidite au seuil');
 /* ⛔⛔ mesure prod 2026-10-03 (build cles-mesurees-fusionnees) : LLYc, AMDc, PYPLc rendaient encore « Pair a block with it » — la garde
  *   testait `typeof STOCKS_BASE_BY_ADR`, un nom d index.html, TOUJOURS indefini dans app.html. Idem pour le Buy a trois sauts (ligne

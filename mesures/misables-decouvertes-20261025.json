@@ -1,0 +1,604 @@
+{
+ "bloc": 53042881,
+ "rpcRequetes": 422,
+ "candidatsAvant": 27,
+ "candidatsDecouverts": 39,
+ "jetonsDecouverts": [
+  "AMDc",
+  "BEc",
+  "SANc",
+  "PFEc",
+  "HTZc",
+  "SEc",
+  "ORCLc",
+  "ULc",
+  "HIMSc",
+  "PYPLc",
+  "NFLXc",
+  "NOKc",
+  "RBLXc",
+  "RDDTc",
+  "GMEc",
+  "PMc",
+  "DUOLc",
+  "ASTSc",
+  "BUDc",
+  "QUBTc",
+  "LIc",
+  "MRVLc",
+  "LLYc",
+  "CAKEc",
+  "TTWOc",
+  "AVGOc"
+ ],
+ "misablesAvant": [
+  20,
+  19,
+  17
+ ],
+ "misablesApres": [
+  25,
+  23,
+  20
+ ],
+ "tailles": [
+  "500000",
+  "5000000",
+  "10000000"
+ ],
+ "nouveaux": [
+  "BUDc",
+  "NOKc",
+  "SANc",
+  "SEc",
+  "ULc"
+ ],
+ "decouvertsDetail": [
+  {
+   "sym": "BUDc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ]
+   ]
+  },
+  {
+   "sym": "NOKc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     6,
+     "MISABLE"
+    ],
+    [
+     true,
+     59,
+     "MISABLE"
+    ],
+    [
+     false,
+     118,
+     "ECART"
+    ]
+   ]
+  },
+  {
+   "sym": "SANc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ]
+   ]
+  },
+  {
+   "sym": "SEc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     false,
+     152,
+     "ECART"
+    ],
+    [
+     false,
+     716,
+     "ECART"
+    ]
+   ]
+  },
+  {
+   "sym": "ULc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ]
+   ]
+  },
+  {
+   "sym": "AMDc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     16,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     120,
+     "ECART"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "ASTSc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "AVGOc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "BEc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "CAKEc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     28921,
+     "ECART"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "DUOLc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "GMEc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     4361,
+     "ECART"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "HIMSc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     25,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "HTZc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "LIc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     11,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     72,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     140,
+     "ECART"
+    ]
+   ]
+  },
+  {
+   "sym": "LLYc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     5,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     8,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     12,
+     "PEU_PROFONDE"
+    ]
+   ]
+  },
+  {
+   "sym": "MRVLc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "NFLXc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     5,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     7,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     9,
+     "PEU_PROFONDE"
+    ]
+   ]
+  },
+  {
+   "sym": "ORCLc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "PFEc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "PMc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     8,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "PYPLc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     721,
+     "ECART"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "QUBTc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     5,
+     "PEU_PROFONDE"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "RBLXc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     1704,
+     "ECART"
+    ],
+    [
+     false,
+     1898,
+     "ECART"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "RDDTc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ],
+    [
+     false,
+     null,
+     "SANS_DEVIS"
+    ]
+   ]
+  },
+  {
+   "sym": "TTWOc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     14800,
+     "ECART"
+    ],
+    [
+     false,
+     25202,
+     "ECART"
+    ],
+    [
+     false,
+     25896,
+     "ECART"
+    ]
+   ]
+  }
+ ]
+}

@@ -29,12 +29,18 @@ ok(T.avecPoolAction(lnv) === lnv, 'deja sur la bonne pool : meme objet, rien de 
 /* 2026-10-09 : 12 -> 24 — le lot @base du jour (pools tickSpacing 1 a ~25 000 USDC ; onze mesurees vides a 20:45 UTC,
  *   approvisionnees a 21:08 UTC). SEc et SONYc DEHORS : achat PRET qui reverte sur fork (« Too little received »). */
 /* 2026-10-10 : 24 -> 25 — SONYc entre (pool remesuree : achat, revente et paiement d un block executes sur fork, bloc 52 432 772) ; SEc reste dehors. */
-ok(T.POOLS_ACTIONS_AERODROME.size === 25 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
-  '25 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
+/* 2026-10-25 : 25 -> 30 — SANc SEc ULc NOKc LIc (prouvees sur la chaine ; achat de 10 USDC execute sur fork frais, bloc 53 044 084). BUDc dehors. */
+ok(T.POOLS_ACTIONS_AERODROME.size === 30 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
+  '30 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
 const TS1 = [...T.POOLS_ACTIONS_AERODROME.values()].filter((x) => x.tickSpacing === 1).map((x) => x.symbole).sort().join(' ');
-ok(TS1 === 'ARMc BIDUc BILIc HSAIc INFYc NIOc NVOc PDDc SAPc SKHYc SONYc VALEc WRDc', 'les douze du 2026-10-09 et SONYc (2026-10-10) portent tickSpacing 1 (jamais 10 suppose) : ' + TS1);
-ok(![...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'SEc')
-  && !ACTIONS_COINBASE.some((a) => a.symbole === 'SEc'), 'SEc absente (table ET registre) : son achat reverte sur fork (le 09 et encore le 10, bloc 52 432 772)');
+ok(TS1 === 'ARMc BIDUc BILIc HSAIc INFYc LIc NIOc NOKc NVOc PDDc SANc SAPc SEc SKHYc SONYc ULc VALEc WRDc', 'les douze du 2026-10-09, SONYc (2026-10-10) et les cinq du 2026-10-25 portent tickSpacing 1 (jamais 10 suppose) : ' + TS1);
+/* chaque entree de la table est une action du registre (sinon la fiche refuserait le frais : estDeviseConnue) */
+ok([...T.POOLS_ACTIONS_AERODROME.keys()].every((a) => ACTIONS_COINBASE.some((x) => x.adr.toLowerCase() === a)), 'toute entree de la table est au registre (paires.js)');
+/* 2026-10-25 : SEc ENTRE — l achat de 10 USDC s execute sur fork frais (bloc 53 044 084, planificateur qui simule). BUDc reste dehors. */
+ok([...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'SEc') && ACTIONS_COINBASE.some((a) => a.symbole === 'SEc'),
+  'SEc presente (table ET registre) : son achat s execute sur fork le 2026-10-25 (revertait le 09 et le 10)');
+ok(![...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'BUDc') && !ACTIONS_COINBASE.some((a) => a.symbole === 'BUDc'),
+  'BUDc absente (table ET registre) : 10 USDC 5,84 % sous le prix moyen, plan refuse sur fork (2026-10-25)');
 ok([...T.POOLS_ACTIONS_AERODROME.values()].some((x) => x.symbole === 'SONYc') && ACTIONS_COINBASE.some((a) => a.symbole === 'SONYc'),
   'SONYc presente (table ET registre) : achat, revente et paiement d un block executes sur fork le 2026-10-10');
 ok([...T.POOLS_ACTIONS_AERODROME.keys()].every((a) => ACTIONS_COINBASE.some((x) => bas(x.adr) === a)), 'chaque cle est une action du registre');
@@ -59,7 +65,8 @@ ok(confirmees === T.POOLS_ACTIONS_AERODROME.size, 'factory Aerodrome : getPool r
 /* C */
 const html = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g, '\n');
 ok(/marcheParAdr\.set\(String\(l\.adr\)\.toLowerCase\(\), avecPoolAction\(l\)\);/.test(html), 'fiche / carte : marcheParAdr recoit la pool de l action');
-ok(/const lA = avecPoolAction\(l\);[^\n]*\n\s+const vR = verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr \}\);/.test(html), 'Market : le verdict du Buy lit la pool de l action');
+/* 2026-10-25 : le verdict lit AUSSI la route servie (actions-chaine.js) des actions prouvees hors table */
+ok(/const lA = avecPoolAction\(l\);[^\n]*\n\s+const vR = verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr, routeAction: lA\.routeAction \}\);/.test(html), 'Market : le verdict du Buy lit la pool de l action et la route servie');
 
 /* D */
 try {

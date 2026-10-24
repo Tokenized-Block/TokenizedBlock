@@ -181,7 +181,9 @@ cas('⛔ LE SERVEUR SERT LE MODULE, SINON LA PAGE EST MORTE', () => {
   /* ⛔ Un import 404 arrete TOUT le module : la page se charge et ne fait plus rien. */
   const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
   assert.match(srv, /'actions-emetteur\.js'/, 'le module n est pas dans la liste des fichiers servis');
-  assert.match(srv, /actionsEmetteur: em\.adresses/, 'la liste lue n est jamais passee a `resumerTrending`');
+  /* 2026-10-25 : la marque = la liste de l emetteur (toutes ses pages) UNIE aux actions prouvees sur la chaine (actions-chaine.js) */
+  assert.match(srv, /const marquees = \[\.\.\.new Set\(\[\.\.\.em\.adresses, \.\.\.ac\.prouvees\]\)\];/, 'la liste lue n est pas unie aux actions prouvees');
+  assert.match(srv, /actionsEmetteur: marquees/, 'la liste lue n est jamais passee a `resumerTrending`');
   assert.match(srv, /emetteurEtat: em\.etat/,
     'l etat de la lecture ne voyage pas : le client ne saura pas que la marque est partielle');
 });
@@ -195,7 +197,7 @@ cas('⛔⛔⛔ UN CORPS DE CACHE PERSISTE D UNE FORME PERIMEE EST REFUSE', () =>
    *    ⛔ ET LA VERSION SEULE NE SUFFIT PAS : elle dependait de ma memoire, et j avais oublie de
    *      l incrementer. Une liste blanche sans garde de derive tient jusqu au jour de l oubli. */
   const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
-  assert.match(srv, /champsAttendus = \['emetteurEtat'\]/,
+  assert.match(srv, /champsAttendus = \['emetteurEtat', 'actionsChaine'\]/,
     'le chargement du cache disque ne verifie PAS la forme de la CHARGE : un payload perime sera '
     + 'servi apres deploiement, bien forme et faux');
   /* ⛔⛔ ET LA GARDE DOIT PORTER SUR LA LIGNE AUSSI. Verifier seulement l enveloppe laisserait

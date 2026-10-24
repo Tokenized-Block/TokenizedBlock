@@ -1,0 +1,2187 @@
+{
+ "tete": 53042335,
+ "emetteur": {
+  "etat": "OK",
+  "n": 202,
+  "pages": 3
+ },
+ "prouvees": 202,
+ "refusees": [],
+ "nonMesurees": [],
+ "avecUnites": 65,
+ "avecUnitesHorsRegistre": [
+  "RIVNc",
+  "CBRSc",
+  "RKLBc",
+  "BUDc",
+  "SEc",
+  "LIc",
+  "ULc",
+  "NOKc",
+  "SANc",
+  "APPc",
+  "UNHc"
+ ],
+ "avecUnitesTable": 25,
+ "routesLues": 40,
+ "codes": {
+  "LIQUIDITE_SOUS_SEUIL": 19,
+  "ACHETABLE": 6,
+  "POOL_VIDE": 7,
+  "SANS_POOL_ROUTEUR": 7,
+  "ECART": 1
+ },
+ "achetablesHorsTable": [
+  "NFLXc",
+  "SEc",
+  "LIc",
+  "ULc",
+  "NOKc",
+  "SANc"
+ ],
+ "requetes": 1315,
+ "parHote": {
+  "https://mainnet.base.org": 607,
+  "https://base-rpc.publicnode.com": 708
+ },
+ "rows": [
+  {
+   "adr": "0xb2000000000000000000008bc8786b856e61707c",
+   "sym": "META",
+   "symEm": "METAc",
+   "unites": "655120529979",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000397293cb8cda9a10c5",
+   "sym": "SNDK",
+   "symEm": "SNDKc",
+   "unites": "93537801634",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000004884b426556b92883d",
+   "sym": "MSTR",
+   "symEm": "MSTRc",
+   "unites": "1326102900487",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000002d0ba3164cc74f58b7",
+   "sym": "GOOGL",
+   "symEm": "GOOGLc",
+   "unites": "2229671686648",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000c2e324d24d7eecd1fb",
+   "sym": "AAPL",
+   "symEm": "AAPLc",
+   "unites": "711979614432",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000004aff16039ba04bdfbc",
+   "sym": "INTC",
+   "symEm": "INTCc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000007b9fcbd005511acbd5",
+   "sym": "SPCX",
+   "symEm": "SPCXc",
+   "unites": "1390554116653",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001e800a7f5189430cd0",
+   "sym": "TSLA",
+   "symEm": "TSLAc",
+   "unites": "533964871218",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000ab99cfa739e253872b",
+   "sym": "MSFT",
+   "symEm": "MSFTc",
+   "unites": "299448425948",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000078ee7ce2fe4908108c",
+   "sym": "NVDA",
+   "symEm": "NVDAc",
+   "unites": "3241692977173",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000019f6e7c675b73c2e4d",
+   "sym": "CRCL",
+   "symEm": "CRCLc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000d9192b6b456483c2e8",
+   "sym": "AMZN",
+   "symEm": "AMZNc",
+   "unites": "1199000453600",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000002601c5c94f435da168",
+   "sym": "HTZc",
+   "symEm": "HTZc",
+   "unites": "22571941499",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $0 of USDC (under $500).",
+    "pool": "0x4dffb33a4e4059de45c7bc82212a6d25f62c6f30",
+    "usdcPool": "811913",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:36:54.579Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000058b8c947e44011dfe6",
+   "sym": "NFLXc",
+   "symEm": "NFLXc",
+   "unites": "246016111162",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": true,
+    "pool": "0x40e8d293ca4e0cce3221eb13a78bff1d0d2b70a7",
+    "tickSpacing": 10,
+    "usdcPool": "1099984018",
+    "ecartBps": 9,
+    "factory": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+    "lu": "2026-10-24T20:36:55.608Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000fd2f87532b90095211",
+   "sym": "MUc",
+   "symEm": "MUc",
+   "unites": "127533038106",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000066242d4067724cb7a1",
+   "sym": "RDDTc",
+   "symEm": "RDDTc",
+   "unites": "40183294614",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $36 of USDC (under $500).",
+    "pool": "0x40fbdd107d0582763fe42d4371d059b5eb48be87",
+    "usdcPool": "36806353",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:36:56.352Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000007790ed6e48e06ed935",
+   "sym": "GMEc",
+   "symEm": "GMEc",
+   "unites": "199000732968",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $6 of USDC (under $500).",
+    "pool": "0x3e36246fd9f897b108be0eca0ce88df817367e79",
+    "usdcPool": "6577370",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:36:57.221Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000fc737aea6196ab5a4c",
+   "sym": "AVGOc",
+   "symEm": "AVGOc",
+   "unites": "61462750556",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $0 of USDC (under $500).",
+    "pool": "0x1f4a5e3112ae53ca2864c89d5c0aef85282b4c62",
+    "usdcPool": "60379",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:36:58.276Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000428e3a3eebbb20692b",
+   "sym": "DJTc",
+   "symEm": "DJTc",
+   "unites": "534629119109",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "POOL_VIDE",
+    "phrase": "No buy: its pools on the factory this app's router uses have no active liquidity.",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:36:59.529Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f1a0f91e34892e4718",
+   "sym": "LLYc",
+   "symEm": "LLYc",
+   "unites": "16229028251",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $224 of USDC (under $500).",
+    "pool": "0x41bd4e64e15ac4df8ca7634b1705a7f044d9c639",
+    "usdcPool": "224113201",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:00.363Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000007d16372840df4dabbe",
+   "sym": "PLTRc",
+   "symEm": "PLTRc",
+   "unites": "173848163758",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000535fe96f18204bfd96",
+   "sym": "BIRDc",
+   "symEm": "BIRDc",
+   "unites": "100000000",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "POOL_VIDE",
+    "phrase": "No buy: its pools on the factory this app's router uses have no active liquidity.",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:01.180Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000b1a29cf17a1819288a",
+   "sym": "ASTSc",
+   "symEm": "ASTSc",
+   "unites": "4217148914",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $1 of USDC (under $500).",
+    "pool": "0x32e1a7f7721be09440526e28a0bb825bcd0415c4",
+    "usdcPool": "1890402",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:02.026Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f720c26062bc3067da",
+   "sym": "TTWOc",
+   "symEm": "TTWOc",
+   "unites": "1477109430",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $105 of USDC (under $500).",
+    "pool": "0xb61a76509fa69fac5b6269c34cffc1bbd2e71e91",
+    "usdcPool": "105034617",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:02.848Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e215e9b76ecba02468",
+   "sym": "MRNAc",
+   "symEm": "MRNAc",
+   "unites": "3810500306",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "POOL_VIDE",
+    "phrase": "No buy: its pools on the factory this app's router uses have no active liquidity.",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:03.611Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000043a599976181bcf336",
+   "sym": "HIMSc",
+   "symEm": "HIMSc",
+   "unites": "504935662675",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $29 of USDC (under $500).",
+    "pool": "0x11ff0240142d7f9daad70c1da578cf0e3fb85182",
+    "usdcPool": "29764859",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:04.416Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000005bd7ae89b9e6189bb5",
+   "sym": "RBLXc",
+   "symEm": "RBLXc",
+   "unites": "113700000000",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $30 of USDC (under $500).",
+    "pool": "0x54dc3fdaed298ca9a945771ae994f558a8f61e83",
+    "usdcPool": "30616250",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:05.404Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000016f9dfe862feba122b",
+   "sym": "BEc",
+   "symEm": "BEc",
+   "unites": "3302875620",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $5 of USDC (under $500).",
+    "pool": "0x7bfcf7e58eac7199ed84e483a1fa048d25cc1b54",
+    "usdcPool": "5021591",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:06.329Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000347afba223d7b6b63c",
+   "sym": "ORCLc",
+   "symEm": "ORCLc",
+   "unites": "93202462339",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $3 of USDC (under $500).",
+    "pool": "0xeacb32ca34df9c7df14dfcb689a0d08a7f2706b6",
+    "usdcPool": "3428296",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:07.317Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ec3c4c7395cc609813",
+   "sym": "MRVLc",
+   "symEm": "MRVLc",
+   "unites": "49498059393",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $2 of USDC (under $500).",
+    "pool": "0xcc9078dad779656ce0174ac5b8ba466be80b598a",
+    "usdcPool": "2881890",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:08.229Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000000d8ce462e99ee7a47b",
+   "sym": "AMDc",
+   "symEm": "AMDc",
+   "unites": "23848439841",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $18 of USDC (under $500).",
+    "pool": "0x0f9392c6c3fde1066f2e1c32b5536fb63897b64d",
+    "usdcPool": "18713351",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:09.205Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ca425ab42e07c35bc3",
+   "sym": "QUBTc",
+   "symEm": "QUBTc",
+   "unites": "28721009592",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $5 of USDC (under $500).",
+    "pool": "0x688096fea5031bcb0367160872c0243b554cd861",
+    "usdcPool": "5230962",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:10.239Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000008fc2a8c23cf5937b66",
+   "sym": "PMc",
+   "symEm": "PMc",
+   "unites": "25139250",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $3 of USDC (under $500).",
+    "pool": "0x904800b9bebab0b2934640f68b9a3113fe29e938",
+    "usdcPool": "3514930",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:11.253Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000044e3cd7a0e1028e57a",
+   "sym": "WENc",
+   "symEm": "WENc",
+   "unites": "24176558697",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "POOL_VIDE",
+    "phrase": "No buy: its pools on the factory this app's router uses have no active liquidity.",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:12.196Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c597c476fcf9aed3a8",
+   "sym": "NVAXc",
+   "symEm": "NVAXc",
+   "unites": "226930751",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "POOL_VIDE",
+    "phrase": "No buy: its pools on the factory this app's router uses have no active liquidity.",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:13.123Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000009272a491812842aa84",
+   "sym": "PTONc",
+   "symEm": "PTONc",
+   "unites": "1783166189",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "POOL_VIDE",
+    "phrase": "No buy: its pools on the factory this app's router uses have no active liquidity.",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:14.010Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000a613d12deafbbb1db7",
+   "sym": "DUOLc",
+   "symEm": "DUOLc",
+   "unites": "1120114400",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $1 of USDC (under $500).",
+    "pool": "0xcd6caba6dbc490f2a4ccdb33836030e1600f46c0",
+    "usdcPool": "1956213",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:14.883Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f215e4c890cfb7176b",
+   "sym": "CAKEc",
+   "symEm": "CAKEc",
+   "unites": "212483479",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $1 of USDC (under $500).",
+    "pool": "0xbc2894c5cdcd3709ec1f2d9dbcfdc3c92ba875d0",
+    "usdcPool": "1432359",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:15.807Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000450ad3abe5d4846c6e",
+   "sym": "PYPLc",
+   "symEm": "PYPLc",
+   "unites": "16106828490",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $23 of USDC (under $500).",
+    "pool": "0x0a63679f5f15aee25eaee62ca299d6802ff163c0",
+    "usdcPool": "23444437",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:16.912Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000018fe7ec7d6dfeeb528",
+   "sym": "PFEc",
+   "symEm": "PFEc",
+   "unites": "986627835",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "LIQUIDITE_SOUS_SEUIL",
+    "phrase": "No buy: its pool this app's router can reach holds $1 of USDC (under $500).",
+    "pool": "0xfb010d54338fa37b16247bc9ca2e591e19e6af06",
+    "usdcPool": "1051640",
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:17.930Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000002137743d4a01fe4e88",
+   "sym": "SOUNc",
+   "symEm": "SOUNc",
+   "unites": "393243255",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "POOL_VIDE",
+    "phrase": "No buy: its pools on the factory this app's router uses have no active liquidity.",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:18.856Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000105a1f43ff3605c5de",
+   "sym": "KSSc",
+   "symEm": "KSSc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000fec679b39992f67627",
+   "sym": "VVVc",
+   "symEm": "VVVc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000432a1d2bd864acec82",
+   "sym": "WULFc",
+   "symEm": "WULFc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000bd0c7627b663c581a6",
+   "sym": "RIOTc",
+   "symEm": "RIOTc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000690275843b6e246286",
+   "sym": "CIFRc",
+   "symEm": "CIFRc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000fa63cfff5c794dbb95",
+   "sym": "CLSKc",
+   "symEm": "CLSKc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000006064f8ec027f042294",
+   "sym": "AEOc",
+   "symEm": "AEOc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000cd7e6b8042cb7c2bb5",
+   "sym": "AMCc",
+   "symEm": "AMCc",
+   "unites": "33613445378",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "SANS_POOL_ROUTEUR",
+    "phrase": "No buy here: no USDC pool of the pool factory this app's router uses (only other factories or Uniswap v4).",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:19.508Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000089221e238277d52515",
+   "sym": "WWc",
+   "symEm": "WWc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000006ee1c139a723872e09",
+   "sym": "HUTc",
+   "symEm": "HUTc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000ea2df44a307cab279c",
+   "sym": "BMNRc",
+   "symEm": "BMNRc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000f111184a74720787e6",
+   "sym": "CRWVc",
+   "symEm": "CRWVc",
+   "unites": "9095344692",
+   "registre": true,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "SANS_POOL_ROUTEUR",
+    "phrase": "No buy here: no USDC pool of the pool factory this app's router uses (only other factories or Uniswap v4).",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:20.225Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000081050ac3d4395df527",
+   "sym": "LCIDc",
+   "symEm": "LCIDc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000009426b660396ebcf343",
+   "sym": "USDEc",
+   "symEm": "USDEc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000067c8c151f24e1c9924",
+   "sym": "XYZc",
+   "symEm": "XYZc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000259694b27bf052e7d7",
+   "sym": "OPENc",
+   "symEm": "OPENc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000801830b13b8e493423",
+   "sym": "BYNDc",
+   "symEm": "BYNDc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a310e034e09186fb2d",
+   "sym": "MARAc",
+   "symEm": "MARAc",
+   "unites": "0",
+   "registre": true,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000f0e13d9c1cdfd211c8",
+   "sym": "GPROc",
+   "symEm": "GPROc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001347ccd9e83d5bf3e0",
+   "sym": "LYVc",
+   "symEm": "LYVc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000009188edfd2fcc8cc81e",
+   "sym": "OKLOc",
+   "symEm": "OKLOc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000058f143099d5f79b0ec",
+   "sym": "IONQc",
+   "symEm": "IONQc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000082f7fea8f2ee8f438",
+   "sym": "BJc",
+   "symEm": "BJc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000978546fe604b8dcbc6",
+   "sym": "SMRc",
+   "symEm": "SMRc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000003e4249c65bd6c037d9",
+   "sym": "RIVNc",
+   "symEm": "RIVNc",
+   "unites": "8501232678",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "SANS_POOL_ROUTEUR",
+    "phrase": "No buy here: no USDC pool of the pool factory this app's router uses (only other factories or Uniswap v4).",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:20.977Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c22fff2785bb27b39a",
+   "sym": "RGTIc",
+   "symEm": "RGTIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000b8f841940325db6b2c",
+   "sym": "TKOc",
+   "symEm": "TKOc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000808e9cca9ed8e4da61",
+   "sym": "EATc",
+   "symEm": "EATc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000979ef4dd6a001b58b1",
+   "sym": "VKTXc",
+   "symEm": "VKTXc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000431a5c1e48e3b1d130",
+   "sym": "CROXc",
+   "symEm": "CROXc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000000d3176ee4af1102d",
+   "sym": "RKTc",
+   "symEm": "RKTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000d5c0393796e92fcab0",
+   "sym": "LUVc",
+   "symEm": "LUVc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000006b7f6966ee0453e251",
+   "sym": "ELFc",
+   "symEm": "ELFc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000004cc3e96ceb78541d33",
+   "sym": "AXONc",
+   "symEm": "AXONc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000009a3602cf5d020afa98",
+   "sym": "HPQc",
+   "symEm": "HPQc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000281c973bf2555dd94b",
+   "sym": "WINGc",
+   "symEm": "WINGc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000004161b4168d03841511",
+   "sym": "CELHc",
+   "symEm": "CELHc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000cf36d05963a3e2205c",
+   "sym": "AAOIc",
+   "symEm": "AAOIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000004aa2b559ca0a0bbf5d",
+   "sym": "ROOTc",
+   "symEm": "ROOTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000000c1f8acd3c4496a762",
+   "sym": "SEZLc",
+   "symEm": "SEZLc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000006de7888c3fffd803ac",
+   "sym": "GLXYc",
+   "symEm": "GLXYc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a640ec8c1de0efb484",
+   "sym": "AXTIc",
+   "symEm": "AXTIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000011b20aebe0bd567f1c",
+   "sym": "PLNTc",
+   "symEm": "PLNTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a63e35e673e3776b88",
+   "sym": "KODKc",
+   "symEm": "KODKc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000eda6c2c6f11e0f838f",
+   "sym": "LITEc",
+   "symEm": "LITEc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000055e63c4c1cdc6b7a36",
+   "sym": "CLOVc",
+   "symEm": "CLOVc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001aaa9010cd65f82c5e",
+   "sym": "CORZc",
+   "symEm": "CORZc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000005a41bef59807119850",
+   "sym": "FIGRc",
+   "symEm": "FIGRc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000024170488e788cbbcb4",
+   "sym": "BRK.Bc",
+   "symEm": "BRK.Bc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000115bf2283265fb04db",
+   "sym": "XXIc",
+   "symEm": "XXIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000008fde21a1f5c69fec0b",
+   "sym": "WDCc",
+   "symEm": "WDCc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000559ec0bedaacf436ea",
+   "sym": "SBETc",
+   "symEm": "SBETc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000902f48cba1f39149f7",
+   "sym": "Uc",
+   "symEm": "Uc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001e838d4beb66cf8fb7",
+   "sym": "FWDIc",
+   "symEm": "FWDIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000065ca0f772a5502e976",
+   "sym": "PURRc",
+   "symEm": "PURRc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000003ef37a7c863dc1482a",
+   "sym": "SOFIc",
+   "symEm": "SOFIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000ffb10718f880a48274",
+   "sym": "CVNAc",
+   "symEm": "CVNAc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000082cd2c7801305808df",
+   "sym": "NOWc",
+   "symEm": "NOWc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000008a7508619c717a7106",
+   "sym": "WMTc",
+   "symEm": "WMTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000005bcde0a6926919fef9",
+   "sym": "MNSTc",
+   "symEm": "MNSTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000720133eedf525f93e2",
+   "sym": "CBRSc",
+   "symEm": "CBRSc",
+   "unites": "4408942091",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "SANS_POOL_ROUTEUR",
+    "phrase": "No buy here: no USDC pool of the pool factory this app's router uses (only other factories or Uniswap v4).",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:21.583Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000009c52748e1d1cbd5fd6",
+   "sym": "GEMIc",
+   "symEm": "GEMIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000cd7dfaef0423f1f103",
+   "sym": "RDWc",
+   "symEm": "RDWc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000005550e8506124236271",
+   "sym": "GAMEc",
+   "symEm": "GAMEc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000e8e50cbbb9a3861a3c",
+   "sym": "RKLBc",
+   "symEm": "RKLBc",
+   "unites": "9519152040",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "SANS_POOL_ROUTEUR",
+    "phrase": "No buy here: no USDC pool of the pool factory this app's router uses (only other factories or Uniswap v4).",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:22.155Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000b57f99acec3a7490d0",
+   "sym": "SGc",
+   "symEm": "SGc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000008d5328e9208773dc58",
+   "sym": "NVOc",
+   "symEm": "NVOc",
+   "unites": "107100000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000d2b7d9aee52f6c6bef",
+   "sym": "BIDUc",
+   "symEm": "BIDUc",
+   "unites": "43800000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000187f7071d6e321a7d2",
+   "sym": "SKHYc",
+   "symEm": "SKHYc",
+   "unites": "122552421688",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000c36ce081dd09e86ca2",
+   "sym": "BUDc",
+   "symEm": "BUDc",
+   "unites": "52700000000",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "ECART",
+    "phrase": "No buy: on the pool this app's router can reach, 10 USDC buys 5.84% less than at its mid price (over the 1% this app accepts).",
+    "pool": "0x5ee52963d3d33196a47fad722abb897e0fa395d9",
+    "usdcPool": "25397445119",
+    "ecartBps": 584,
+    "lu": "2026-10-24T20:37:23.127Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c8a7223510467d8563",
+   "sym": "PDDc",
+   "symEm": "PDDc",
+   "unites": "59400000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000003088798f6d0722aaac",
+   "sym": "SEc",
+   "symEm": "SEc",
+   "unites": "52200000000",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": true,
+    "pool": "0x0274e5078033cb3fe788cf76bb97150fd9bc4547",
+    "tickSpacing": 1,
+    "usdcPool": "25401915775",
+    "ecartBps": 1,
+    "factory": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+    "lu": "2026-10-24T20:37:24.144Z"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000002d2b5dc53c61f1ba06",
+   "sym": "NIOc",
+   "symEm": "NIOc",
+   "unites": "1875200000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000da6f64c306234127e0",
+   "sym": "SAPc",
+   "symEm": "SAPc",
+   "unites": "16000000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a26326a922ffa87f6c",
+   "sym": "SONYc",
+   "symEm": "SONYc",
+   "unites": "158100000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000063376b142c0764b489",
+   "sym": "VALEc",
+   "symEm": "VALEc",
+   "unites": "401200000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000d61efd9f54a23ef9eb",
+   "sym": "LIc",
+   "symEm": "LIc",
+   "unites": "304800000000",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": true,
+    "pool": "0xd71b2d9cb3532477df77ae26e780963cce784a0c",
+    "tickSpacing": 1,
+    "usdcPool": "25397479794",
+    "ecartBps": 1,
+    "factory": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+    "lu": "2026-10-24T20:37:25.456Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ca7c6d1438e7245eb6",
+   "sym": "BILIc",
+   "symEm": "BILIc",
+   "unites": "377900000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000f6b0417af5f52341fc",
+   "sym": "INFYc",
+   "symEm": "INFYc",
+   "unites": "343000000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000f32d61ba597eddfbfd",
+   "sym": "CANc",
+   "symEm": "CANc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000349ef3aa93a0897476",
+   "sym": "ULc",
+   "symEm": "ULc",
+   "unites": "58900000000",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": true,
+    "pool": "0x013fcb940735d17c81d3b91557acc62da723d9d5",
+    "tickSpacing": 1,
+    "usdcPool": "31791328747",
+    "ecartBps": 1,
+    "factory": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+    "lu": "2026-10-24T20:37:26.417Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f3049f4aa834b23b64",
+   "sym": "HSAIc",
+   "symEm": "HSAIc",
+   "unites": "306900000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000005ac674f707e357409c",
+   "sym": "NOKc",
+   "symEm": "NOKc",
+   "unites": "508900021020",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": true,
+    "pool": "0xc541eac49f32d46c1e2f88952f22215ef0f2db71",
+    "tickSpacing": 1,
+    "usdcPool": "25490208631",
+    "ecartBps": 39,
+    "factory": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+    "lu": "2026-10-24T20:37:27.453Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000017bb66e9301e913a99",
+   "sym": "SANc",
+   "symEm": "SANc",
+   "unites": "332700000000",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": true,
+    "pool": "0xe531069df73530bf59c954f3718945d5faa2e7df",
+    "tickSpacing": 1,
+    "usdcPool": "26548531346",
+    "ecartBps": 1,
+    "factory": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+    "lu": "2026-10-24T20:37:28.384Z"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000026215d755356e5043f",
+   "sym": "ARMc",
+   "symEm": "ARMc",
+   "unites": "26064179329",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000e88efe88d8ade3f0da",
+   "sym": "WRDc",
+   "symEm": "WRDc",
+   "unites": "1068500000000",
+   "registre": true,
+   "table": true,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000501ef81f911eb57656",
+   "sym": "RXRXc",
+   "symEm": "RXRXc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000005c8324136de0f4134a",
+   "sym": "YUMc",
+   "symEm": "YUMc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000cf62d7125cc77d2f96",
+   "sym": "AURc",
+   "symEm": "AURc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a5e12a1842dfcdb118",
+   "sym": "CHWYc",
+   "symEm": "CHWYc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000fab55ad3773f2c8ef1",
+   "sym": "LEUc",
+   "symEm": "LEUc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001b6e407239eb31edcf",
+   "sym": "CAVAc",
+   "symEm": "CAVAc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000f327a373aa86ac86a8",
+   "sym": "HSYc",
+   "symEm": "HSYc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001ac12227a8ae0ef3ac",
+   "sym": "STZc",
+   "symEm": "STZc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000006f910a0e7bbd3c168",
+   "sym": "APPc",
+   "symEm": "APPc",
+   "unites": "381348256",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "SANS_POOL_ROUTEUR",
+    "phrase": "No buy here: no USDC pool of the pool factory this app's router uses (only other factories or Uniswap v4).",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:29.113Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e7137ca231c5e35f25",
+   "sym": "ONDSc",
+   "symEm": "ONDSc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000cb6b2f4e33f0471556",
+   "sym": "PLc",
+   "symEm": "PLc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000c367d37d07150182a2",
+   "sym": "UNHc",
+   "symEm": "UNHc",
+   "unites": "237191088",
+   "registre": false,
+   "table": false,
+   "route": {
+    "achetable": false,
+    "code": "SANS_POOL_ROUTEUR",
+    "phrase": "No buy here: no USDC pool of the pool factory this app's router uses (only other factories or Uniswap v4).",
+    "pool": null,
+    "usdcPool": null,
+    "ecartBps": null,
+    "lu": "2026-10-24T20:37:30.039Z"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000b1b9200405fb52a8cf",
+   "sym": "RUNc",
+   "symEm": "RUNc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000d2f4cf2f7debb244bb",
+   "sym": "MCDc",
+   "symEm": "MCDc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000cae20cb1446462e24c",
+   "sym": "UBERc",
+   "symEm": "UBERc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000000d9947c759429e7fe5",
+   "sym": "SHAZc",
+   "symEm": "SHAZc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000089bc72c3e637a02adb",
+   "sym": "Wc",
+   "symEm": "Wc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000068987dacde1db79cd4",
+   "sym": "PZZAc",
+   "symEm": "PZZAc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001ca01a48688ec7d3cc",
+   "sym": "CHPTc",
+   "symEm": "CHPTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000004ec7c19212979672f9",
+   "sym": "BLNKc",
+   "symEm": "BLNKc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000bf391678bf2e38cedb",
+   "sym": "DASHc",
+   "symEm": "DASHc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000008df9bc22db1d7da2a5",
+   "sym": "WOLFc",
+   "symEm": "WOLFc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000045beafafbe0dc7664",
+   "sym": "ABNBc",
+   "symEm": "ABNBc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000613c15f118df2b189b",
+   "sym": "YETIc",
+   "symEm": "YETIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000003e5e2892158e25dd7b",
+   "sym": "BOOTc",
+   "symEm": "BOOTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000747bffa52fe2c2510b",
+   "sym": "BALLc",
+   "symEm": "BALLc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000cc17eea8c9495e1499",
+   "sym": "DNAc",
+   "symEm": "DNAc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000087d144f2c70cd1a5f6",
+   "sym": "PLAYc",
+   "symEm": "PLAYc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000b44f193b3ffdf17037",
+   "sym": "JACKc",
+   "symEm": "JACKc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001409f816682b7772b7",
+   "sym": "SMPLc",
+   "symEm": "SMPLc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000007a90b2d9ed101035a8",
+   "sym": "ENPHc",
+   "symEm": "ENPHc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000077d13d6c79b6c11c5a",
+   "sym": "IBRXc",
+   "symEm": "IBRXc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000879a74c76c73a27d71",
+   "sym": "UAAc",
+   "symEm": "UAAc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000bc4d895df1eeed1d06",
+   "sym": "BKSYc",
+   "symEm": "BKSYc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000e0b9460c97f38f412f",
+   "sym": "TAPc",
+   "symEm": "TAPc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000db15c02e133a9dab99",
+   "sym": "LFMDc",
+   "symEm": "LFMDc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000008baf7bb82e4c37743f",
+   "sym": "TTDc",
+   "symEm": "TTDc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000003fe90a64263b7f9e74",
+   "sym": "SWBIc",
+   "symEm": "SWBIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000898ed394469db1845c",
+   "sym": "BBAIc",
+   "symEm": "BBAIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000674e1325dbdf06b309",
+   "sym": "LUNRc",
+   "symEm": "LUNRc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000df3eb2af7316b29122",
+   "sym": "SLDPc",
+   "symEm": "SLDPc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000dfa6c77aea5329d187",
+   "sym": "WKHSc",
+   "symEm": "WKHSc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000002b9ac07a0544688079",
+   "sym": "SIDUc",
+   "symEm": "SIDUc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000c3e498043bb44e8cbf",
+   "sym": "LOVEc",
+   "symEm": "LOVEc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000b096f2f6021ac39617",
+   "sym": "FSLRc",
+   "symEm": "FSLRc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000e410ae30abdda3aee0",
+   "sym": "SAMc",
+   "symEm": "SAMc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000ee6fd7de967ea1a0dc",
+   "sym": "FIZZc",
+   "symEm": "FIZZc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000001ecfaccd9047d3b544",
+   "sym": "BROSc",
+   "symEm": "BROSc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000008a494d531d88cf55d6",
+   "sym": "ACHRc",
+   "symEm": "ACHRc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a8c925f62e6d194715",
+   "sym": "COHRc",
+   "symEm": "COHRc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000000f28146eb28ea2835b",
+   "sym": "RUMc",
+   "symEm": "RUMc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000007cbdf8fa3861e51721",
+   "sym": "APLDc",
+   "symEm": "APLDc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000004fc7a0c25178a0d633",
+   "sym": "FLYc",
+   "symEm": "FLYc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000069d694d397b9388dac",
+   "sym": "NNEc",
+   "symEm": "NNEc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000bd938fa95e3e20c5a1",
+   "sym": "QSc",
+   "symEm": "QSc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000072b5c2b2d18ee8a2a5",
+   "sym": "AIc",
+   "symEm": "AIc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000003086b1355bd43e25da",
+   "sym": "OPADc",
+   "symEm": "OPADc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000c6dbae193c95c4e056",
+   "sym": "PLUGc",
+   "symEm": "PLUGc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000006d1bc7faa266eb099d",
+   "sym": "PEPc",
+   "symEm": "PEPc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000000bd75bf439a38bf7df",
+   "sym": "DISc",
+   "symEm": "DISc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000b2e8dba585b1ffb158",
+   "sym": "VRTc",
+   "symEm": "VRTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000ce4f8fc7ba5ca0359b",
+   "sym": "Fc",
+   "symEm": "Fc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000c715439d0cc5a8c67d",
+   "sym": "TGTc",
+   "symEm": "TGTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000003bd46dbde905508b16",
+   "sym": "CMCSAc",
+   "symEm": "CMCSAc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000d65c9253b025af8c56",
+   "sym": "SPCEc",
+   "symEm": "SPCEc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb20000000000000000000019641b253b3e2c8a24",
+   "sym": "ANFc",
+   "symEm": "ANFc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a21b5ae62fea392b73",
+   "sym": "SKYDc",
+   "symEm": "SKYDc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000a82a0c88dd258ed141",
+   "sym": "GSc",
+   "symEm": "GSc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000000199ae48796c61909e",
+   "sym": "FUNc",
+   "symEm": "FUNc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000009bba9a926f19cff8e7",
+   "sym": "DAVEc",
+   "symEm": "DAVEc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000b5e07d13b2d68d60dd",
+   "sym": "WOOFc",
+   "symEm": "WOOFc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000ffada41c4ed20b8d0f",
+   "sym": "FUBOc",
+   "symEm": "FUBOc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000005c41b0018612629072",
+   "sym": "DNUTc",
+   "symEm": "DNUTc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb2000000000000000000002a0ec8f8861ce98983",
+   "sym": "NVTSc",
+   "symEm": "NVTSc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  },
+  {
+   "adr": "0xb200000000000000000000bba79a25edfd4b66c0",
+   "sym": "GAPc",
+   "symEm": "GAPc",
+   "unites": "0",
+   "registre": false,
+   "table": false,
+   "route": null
+  }
+ ]
+}

@@ -11,49 +11,85 @@
  * ⛔ BORNES, DITES : un instantane. La fiche d achat re-lit la pool et passe la porte de glissement (porteDAchat) avant
  *   tout frais ; une pool videe depuis la mesure est refusee la, pas promise ici. test-pools-actions-aerodrome.mjs
  *   re-interroge la factory (temoin : chaque adresse ci-dessous doit etre celle que rend getPool). */
+import { FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
+
+/* ⛔⛔ 2026-10-25 — REMESURE DE TOUTE LA TABLE (mesure-pools-actions-20261025.mjs, bloc 53 044 017, publicnode, lecture seule ;
+ *   mesures/pools-actions-20261025.json). `usdcMesure` = USDC TENUS PAR LA POOL ce bloc-la. Les chiffres du 2026-10-03 etaient PERIMES
+ *   d un ordre de grandeur : AMZNc 1 186 600 -> 17 196, NVDAc 1 426 200 -> 215 584, AAPLc 1 126 706 -> 133 443. 25/25 pools = celle
+ *   que choisit routeAction (temoin). ⛔ ET QUATRE NE PASSENT PLUS LA REGLE DU BUY (10 USDC <= 1 % sous le prix moyen) : WRDc 561 bps,
+ *   BILIc 461, NIOc 808, NVOc 407. Elles restent dans la table (sa pool reste la bonne), mais le serveur relit leur route comme celle
+ *   des autres et le Market retire le Buy avec la raison mesuree tant qu elle refuse (serveur-web.js, routesActions). */
 export const POOLS_ACTIONS_AERODROME = new Map([
-  ['0xb200000000000000000000c2e324d24d7eecd1fb', { symbole: 'AAPLc', pool: '0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0', tickSpacing: 10, usdcMesure: 1126706 }],
-  ['0xb200000000000000000000d9192b6b456483c2e8', { symbole: 'AMZNc', pool: '0xd03bc8c7f2faedce2aac81bf0444aea08ea06e9b', tickSpacing: 10, usdcMesure: 1186600 }],
-  ['0xb2000000000000000000002d0ba3164cc74f58b7', { symbole: 'GOOGLc', pool: '0xb1987cad1682841b4b641d50e520777ec5ab5542', tickSpacing: 10, usdcMesure: 958785 }],
-  ['0xb2000000000000000000008bc8786b856e61707c', { symbole: 'METAc', pool: '0xeaf57753bc382e0324a1d43f72e7027705a2273e', tickSpacing: 10, usdcMesure: 1056463 }],
-  ['0xb200000000000000000000ab99cfa739e253872b', { symbole: 'MSFTc', pool: '0x7103eb3c9590d1281f7dc03b2a9ee27c39df5d54', tickSpacing: 10, usdcMesure: 718350 }],
-  ['0xb2000000000000000000004884b426556b92883d', { symbole: 'MSTRc', pool: '0x8b27f626ab668197000bc722a1012022caed10e2', tickSpacing: 10, usdcMesure: 845308 }],
-  ['0xb200000000000000000000fd2f87532b90095211', { symbole: 'MUc', pool: '0x17e1beb2cd65493da73ed4bbbc7becaaa0f91c73', tickSpacing: 10, usdcMesure: 360256 }],
-  ['0xb20000000000000000000078ee7ce2fe4908108c', { symbole: 'NVDAc', pool: '0x853f5f1b92b16714fe6cda67caad0856b83c7ab9', tickSpacing: 10, usdcMesure: 1426200 }],
-  ['0xb2000000000000000000007d16372840df4dabbe', { symbole: 'PLTRc', pool: '0x650cc267aa248191978013d5ae421e5dc2a6e242', tickSpacing: 10, usdcMesure: 587879 }],
-  ['0xb200000000000000000000397293cb8cda9a10c5', { symbole: 'SNDKc', pool: '0x5a8236f575471e7bfca2c8462a200c28f737246e', tickSpacing: 10, usdcMesure: 580616 }],
-  ['0xb2000000000000000000007b9fcbd005511acbd5', { symbole: 'SPCXc', pool: '0x0bf58fe0fac935ac69595c19b12ba0d75e3f8c0e', tickSpacing: 10, usdcMesure: 742878 }],
-  ['0xb2000000000000000000001e800a7f5189430cd0', { symbole: 'TSLAc', pool: '0x469337fdcc5e8f38e2e4b670b04f57865d13a7bb', tickSpacing: 10, usdcMesure: 653067 }],
+  ['0xb200000000000000000000c2e324d24d7eecd1fb', { symbole: 'AAPLc', pool: '0xa3b1e3f9747065e2073722ff4c9027d3ea4994f0', tickSpacing: 10, usdcMesure: 133443 }],
+  ['0xb200000000000000000000d9192b6b456483c2e8', { symbole: 'AMZNc', pool: '0xd03bc8c7f2faedce2aac81bf0444aea08ea06e9b', tickSpacing: 10, usdcMesure: 17196 }],
+  ['0xb2000000000000000000002d0ba3164cc74f58b7', { symbole: 'GOOGLc', pool: '0xb1987cad1682841b4b641d50e520777ec5ab5542', tickSpacing: 10, usdcMesure: 20919 }],
+  ['0xb2000000000000000000008bc8786b856e61707c', { symbole: 'METAc', pool: '0xeaf57753bc382e0324a1d43f72e7027705a2273e', tickSpacing: 10, usdcMesure: 21827 }],
+  ['0xb200000000000000000000ab99cfa739e253872b', { symbole: 'MSFTc', pool: '0x7103eb3c9590d1281f7dc03b2a9ee27c39df5d54', tickSpacing: 10, usdcMesure: 24221 }],
+  ['0xb2000000000000000000004884b426556b92883d', { symbole: 'MSTRc', pool: '0x8b27f626ab668197000bc722a1012022caed10e2', tickSpacing: 10, usdcMesure: 36140 }],
+  ['0xb200000000000000000000fd2f87532b90095211', { symbole: 'MUc', pool: '0x17e1beb2cd65493da73ed4bbbc7becaaa0f91c73', tickSpacing: 10, usdcMesure: 40628 }],
+  ['0xb20000000000000000000078ee7ce2fe4908108c', { symbole: 'NVDAc', pool: '0x853f5f1b92b16714fe6cda67caad0856b83c7ab9', tickSpacing: 10, usdcMesure: 215584 }],
+  ['0xb2000000000000000000007d16372840df4dabbe', { symbole: 'PLTRc', pool: '0x650cc267aa248191978013d5ae421e5dc2a6e242', tickSpacing: 10, usdcMesure: 21581 }],
+  ['0xb200000000000000000000397293cb8cda9a10c5', { symbole: 'SNDKc', pool: '0x5a8236f575471e7bfca2c8462a200c28f737246e', tickSpacing: 10, usdcMesure: 32129 }],
+  ['0xb2000000000000000000007b9fcbd005511acbd5', { symbole: 'SPCXc', pool: '0x0bf58fe0fac935ac69595c19b12ba0d75e3f8c0e', tickSpacing: 10, usdcMesure: 21203 }],
+  ['0xb2000000000000000000001e800a7f5189430cd0', { symbole: 'TSLAc', pool: '0x469337fdcc5e8f38e2e4b670b04f57865d13a7bb', tickSpacing: 10, usdcMesure: 38136 }],
   /* 2026-10-09 (bloc 52 394 888, base-rpc.publicnode.com, lecture seule) : 3 nouvelles actions de l emetteur, pool rendue par
    *   getPool(USDC, action, 1) sur la factory Aerodrome CL. ⛔ tickSpacing 1 (pas 10 comme les douze du dessus). Onze autres
    *   pools de nouvelles actions ont ete ECARTEES : 0,01 USDC lu, malgre « ~50 k$ » chez DexScreener. */
-  ['0xb20000000000000000000026215d755356e5043f', { symbole: 'ARMc', pool: '0x9a0f4fd0766ccdb792ba58fe631aa7720097623c', tickSpacing: 1, usdcMesure: 24981 }],
-  ['0xb200000000000000000000187f7071d6e321a7d2', { symbole: 'SKHYc', pool: '0x6678992e0a166f4e78bf6cad5dd7e61ca041711c', tickSpacing: 1, usdcMesure: 24971 }],
-  ['0xb200000000000000000000e88efe88d8ade3f0da', { symbole: 'WRDc', pool: '0xbc440aff9a79cced69d5b21c7b71e60bd0278efb', tickSpacing: 1, usdcMesure: 24701 }],
+  ['0xb20000000000000000000026215d755356e5043f', { symbole: 'ARMc', pool: '0x9a0f4fd0766ccdb792ba58fe631aa7720097623c', tickSpacing: 1, usdcMesure: 25398 }],
+  ['0xb200000000000000000000187f7071d6e321a7d2', { symbole: 'SKHYc', pool: '0x6678992e0a166f4e78bf6cad5dd7e61ca041711c', tickSpacing: 1, usdcMesure: 36529 }],
+  ['0xb200000000000000000000e88efe88d8ade3f0da', { symbole: 'WRDc', pool: '0xbc440aff9a79cced69d5b21c7b71e60bd0278efb', tickSpacing: 1, usdcMesure: 25397 }],
   /* 2026-10-09 21:08 UTC (bloc ~52 395 400) : les onze « ecartees » ci-dessus avaient ete mesurees 1 h 40 apres leur creation, a
    *   0,01 USDC. 25 min plus tard : 24 987 USDC chacune. Un instantane n est pas un etat — elles entrent avec la meme regle. */
-  ['0xb200000000000000000000d2b7d9aee52f6c6bef', { symbole: 'BIDUc', pool: '0xd47b8f13ffc3198148b138d3f07cc89c92042950', tickSpacing: 1, usdcMesure: 24987 }],
-  ['0xb200000000000000000000ca7c6d1438e7245eb6', { symbole: 'BILIc', pool: '0x32a3ce6c3a8d6c24c4a51a5cf2869410cbf4d637', tickSpacing: 1, usdcMesure: 24987 }],
-  ['0xb200000000000000000000f3049f4aa834b23b64', { symbole: 'HSAIc', pool: '0xdc8d2c31de17bf4df00c05e4e132bcea22f24c3b', tickSpacing: 1, usdcMesure: 24987 }],
-  ['0xb200000000000000000000f6b0417af5f52341fc', { symbole: 'INFYc', pool: '0x356cc16fe38a6ad0eb25e655759dd963f8d674bf', tickSpacing: 1, usdcMesure: 24987 }],
-  ['0xb2000000000000000000002d2b5dc53c61f1ba06', { symbole: 'NIOc', pool: '0x484cc2ca594ced3fe38362fe950c60ce66f53f6d', tickSpacing: 1, usdcMesure: 24987 }],
-  ['0xb2000000000000000000008d5328e9208773dc58', { symbole: 'NVOc', pool: '0xc1ba39d668f14eee2462ca5877402e4a7c4d1f34', tickSpacing: 1, usdcMesure: 24987 }],
-  ['0xb200000000000000000000c8a7223510467d8563', { symbole: 'PDDc', pool: '0x84608be6d655ee05032303fe7f0d6f3a51c2cf51', tickSpacing: 1, usdcMesure: 24987 }],
-  ['0xb200000000000000000000da6f64c306234127e0', { symbole: 'SAPc', pool: '0x21313a06b7f8ed38d8bc1fb8be2fbd847634a6ec', tickSpacing: 1, usdcMesure: 24987 }],
-  /* ⛔ SEc (0x0274…4547) N EST PAS dans cette table : 25 397 USDC, mais l achat reverte sur fork (« Too little received » des
-   *   10 USDC le 09, et encore le 10 au bloc 52 432 772) — profondeur affichee n est pas profondeur pres du prix. Voir paires.js. */
-  ['0xb20000000000000000000063376b142c0764b489', { symbole: 'VALEc', pool: '0x0f48336b76ee52fa6bb19edf5af358529df57574', tickSpacing: 1, usdcMesure: 24987 }],
+  ['0xb200000000000000000000d2b7d9aee52f6c6bef', { symbole: 'BIDUc', pool: '0xd47b8f13ffc3198148b138d3f07cc89c92042950', tickSpacing: 1, usdcMesure: 26149 }],
+  ['0xb200000000000000000000ca7c6d1438e7245eb6', { symbole: 'BILIc', pool: '0x32a3ce6c3a8d6c24c4a51a5cf2869410cbf4d637', tickSpacing: 1, usdcMesure: 25397 }],
+  ['0xb200000000000000000000f3049f4aa834b23b64', { symbole: 'HSAIc', pool: '0xdc8d2c31de17bf4df00c05e4e132bcea22f24c3b', tickSpacing: 1, usdcMesure: 25405 }],
+  ['0xb200000000000000000000f6b0417af5f52341fc', { symbole: 'INFYc', pool: '0x356cc16fe38a6ad0eb25e655759dd963f8d674bf', tickSpacing: 1, usdcMesure: 25458 }],
+  ['0xb2000000000000000000002d2b5dc53c61f1ba06', { symbole: 'NIOc', pool: '0x484cc2ca594ced3fe38362fe950c60ce66f53f6d', tickSpacing: 1, usdcMesure: 25397 }],
+  ['0xb2000000000000000000008d5328e9208773dc58', { symbole: 'NVOc', pool: '0xc1ba39d668f14eee2462ca5877402e4a7c4d1f34', tickSpacing: 1, usdcMesure: 25397 }],
+  ['0xb200000000000000000000c8a7223510467d8563', { symbole: 'PDDc', pool: '0x84608be6d655ee05032303fe7f0d6f3a51c2cf51', tickSpacing: 1, usdcMesure: 25397 }],
+  ['0xb200000000000000000000da6f64c306234127e0', { symbole: 'SAPc', pool: '0x21313a06b7f8ed38d8bc1fb8be2fbd847634a6ec', tickSpacing: 1, usdcMesure: 26716 }],
+  ['0xb20000000000000000000063376b142c0764b489', { symbole: 'VALEc', pool: '0x0f48336b76ee52fa6bb19edf5af358529df57574', tickSpacing: 1, usdcMesure: 25402 }],
   /* 2026-10-10 (bloc 52 432 862, base-rpc.publicnode.com, getPool(USDC, SONYc, 1) ; puis fork bloc 52 432 772) : SONYc ENTRE —
    *   liquidity() 280 047 788 329 814 ; achat, revente et paiement d un block EXECUTES sur fork. Voir paires.js. */
-  ['0xb200000000000000000000a26326a922ffa87f6c', { symbole: 'SONYc', pool: '0x26dd2ac81ea9a212afc84848893edc21c5a76fdc', tickSpacing: 1, usdcMesure: 25423 }],
+  ['0xb200000000000000000000a26326a922ffa87f6c', { symbole: 'SONYc', pool: '0x26dd2ac81ea9a212afc84848893edc21c5a76fdc', tickSpacing: 1, usdcMesure: 31750 }],
+  /* 2026-10-25 — CINQ ACTIONS PROUVEES SUR LA CHAINE (actions-chaine.js), HORS de nos 71 jusque-la : pool rendue par getPool(USDC, action, 1)
+   *   sur la factory de notre routeur (routeAction, bloc 53 044 017 : 1 a 39 bps sous le prix moyen a 10 USDC), PUIS un achat de 10 USDC
+   *   EXECUTE sur fork par le planificateur de la fiche (banc-actions-chaine-fork-20261025.mjs, fork frais bloc 53 044 084, status 0x1,
+   *   recu >= minimum ; mesures/banc-actions-chaine-fork-20261025.txt). SEc, ecartee les 09 et 10/10 (revert), s execute maintenant.
+   *   ⛔ BUDc RESTE DEHORS : sa pool cote 10 USDC 5,84 % sous son prix moyen (mainnet ET fork) et le planificateur refuse le plan. */
+  ['0xb20000000000000000000017bb66e9301e913a99', { symbole: 'SANc', pool: '0xe531069df73530bf59c954f3718945d5faa2e7df', tickSpacing: 1, usdcMesure: 26549 }],
+  ['0xb2000000000000000000003088798f6d0722aaac', { symbole: 'SEc', pool: '0x0274e5078033cb3fe788cf76bb97150fd9bc4547', tickSpacing: 1, usdcMesure: 25402 }],
+  ['0xb200000000000000000000349ef3aa93a0897476', { symbole: 'ULc', pool: '0x013fcb940735d17c81d3b91557acc62da723d9d5', tickSpacing: 1, usdcMesure: 31791 }],
+  ['0xb2000000000000000000005ac674f707e357409c', { symbole: 'NOKc', pool: '0xc541eac49f32d46c1e2f88952f22215ef0f2db71', tickSpacing: 1, usdcMesure: 25490 }],
+  ['0xb200000000000000000000d61efd9f54a23ef9eb', { symbole: 'LIc', pool: '0xd71b2d9cb3532477df77ae26e780963cce784a0c', tickSpacing: 1, usdcMesure: 25397 }],
 ]);
 
 /** Une ligne de marche (DexScreener) avec la pool d achat de l action si la table la connait et que la ligne pointe
  *  ailleurs. Rend la MEME ligne sinon. Ne touche ni prix, ni volume, ni liquidite. */
+/* ⛔⛔ 2026-10-25 — HORS TABLE, LA POOL VIENT DU SERVEUR, ET SEULEMENT S IL L A PROUVEE ATTEIGNABLE. `l.routeAction` est pose par
+ *   /api/trending sur une action PROUVEE sur la chaine (actions-chaine.js : code 0xef, log de la factory B20, tx.from de l emetteur) :
+ *   sa pool USDC sur la factory de NOTRE routeur (0xf8f2…), cotee a 10 USDC a moins de 1 % de son prix moyen. Accepte : la ligne
+ *   prend cette pool (meme forme que la table). Refuse : la ligne reste telle quelle et le verdict (routage.js) dit la raison mesuree.
+ *   ⛔ La forme est verifiee ici (adresse entiere, factory exacte, tickSpacing entier) : une ligne mal formee ne recoit RIEN.
+ *   ⛔ LA TABLE GAGNE : une action mesuree a la main garde sa pool, le verdict serveur ne la remplace pas. */
+const FACTORY_ROUTEUR = FACTORY_AERODROME_CL.toLowerCase();
+function poolServie(r) {
+  if (!r || r.achetable !== true) return null;
+  const pool = String(r.pool || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(pool) || /^0x0{40}$/.test(pool)) return null;
+  if (String(r.factory || '').toLowerCase() !== FACTORY_ROUTEUR) return null;
+  if (!Number.isInteger(r.tickSpacing) || r.tickSpacing <= 0) return null;
+  return { pool, tickSpacing: r.tickSpacing };
+}
 export function avecPoolAction(l) {
   if (!l || !l.adr) return l;
   const t = POOLS_ACTIONS_AERODROME.get(String(l.adr).toLowerCase());
-  if (!t) return l;
+  if (!t) {
+    const s = poolServie(l.routeAction);
+    if (!s) return l;
+    if (/^aerodrome$/i.test(String(l.dex || '')) && String(l.poolAdr || '').toLowerCase() === s.pool) return l;
+    return { ...l, dex: 'aerodrome', poolAdr: s.pool, poolSource: 'aerodrome-chaine', poolAffichee: l.poolAdr || null, dexAffiche: l.dex || null };
+  }
   if (/^aerodrome$/i.test(String(l.dex || '')) && String(l.poolAdr || '').toLowerCase() === t.pool) return l;
   return { ...l, dex: 'aerodrome', poolAdr: t.pool, poolSource: 'aerodrome-mesure', poolAffichee: l.poolAdr || null, dexAffiche: l.dex || null };
 }

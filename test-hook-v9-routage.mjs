@@ -52,7 +52,8 @@ const NOUVELLES_20261003 = ['AMCc', 'AEOc', 'BMNRc', 'BIRDc', 'BYNDc', 'CIFRc', 
 /* 2026-10-09 : 12 actions du lot @base du jour entrent au registre (achat/vente), hors de toute liste de hook — hors V9 aussi. */
 const NOUVELLES_20261009 = ['ARMc', 'SKHYc', 'WRDc', 'BIDUc', 'BILIc', 'HSAIc', 'INFYc', 'NIOc', 'NVOc', 'PDDc', 'SAPc', 'VALEc'];
 /* 2026-10-10 (3b3f39e) : SONYc entre au registre (achat/vente), hors de toute liste de hook — hors V9 aussi. */
-const NOUVELLES_20261010 = ['SONYc'];
+/* 2026-10-25 : + SANc SEc ULc NOKc LIc (prouvees sur la chaine, achat execute sur fork) — hors V9 aussi. */
+const NOUVELLES_20261010 = ['SONYc', 'SANc', 'SEc', 'ULc', 'NOKc', 'LIc'];
 ok('V9 list = every quote Create offers on Base except the 22 added 2026-10-02, the 21 added 2026-10-03, the 12 added 2026-10-09 and SONYc (2026-10-10) (19, = V9Devises.sol)', DEVISES_ADMISES_V9.length === 19
   && new Set(DEVISES_ADMISES_V9).size === 19
   && JSON.stringify(offertesSansEth.filter((a) => !DEVISES_ADMISES_V9.includes(a)).map((a) => symDe.get(a)).sort()) === JSON.stringify([...NOUVELLES_20261002, ...NOUVELLES_20261003, ...NOUVELLES_20261009, ...NOUVELLES_20261010].sort()));

@@ -52,8 +52,16 @@ const DEX_DU_ROUTER = /^uniswap$/i;
  *        discriminant pour les deux usages, sinon ils derivent.
  * @returns {{verdict:string, dex:?string, famille:?string, achetableIci:boolean}}
  */
-export function verdictRoutage({ aMarche, dex = null, poolAdr = null } = {}) {
+/* ⛔⛔ 2026-10-25 — `routeAction` : LE VERDICT DU SERVEUR pour une action PROUVEE hors de la table mesuree (actions-chaine.js : sa pool
+ *   sur la factory de notre routeur, cotee a 10 USDC). Quand il REFUSE, il l emporte sur le dexId de l agregateur : une ligne « aerodrome »
+ *   dont la pool atteignable cote 4 % sous son prix moyen n a PAS de Buy, et sa raison est celle mesuree (`raisonServie`). Quand il
+ *   accepte, `avecPoolAction` a deja pose sa pool : le verdict ci-dessous la classe comme les autres. Absent : rien ne change. */
+export function verdictRoutage({ aMarche, dex = null, poolAdr = null, routeAction = null } = {}) {
   if (!aMarche) return { verdict: 'SANS_MARCHE', dex: null, famille: null, achetableIci: false, achetableEnUsdc: false, achetableEnEth: false };
+  if (routeAction && routeAction.achetable === false && typeof routeAction.phrase === 'string' && routeAction.phrase) {
+    return { verdict: 'FRANCHISSEMENT', dex: String(dex || '').trim() || null, famille: null, achetableIci: false, achetableEnUsdc: false, achetableEnEth: false,
+      raisonServie: { code: String(routeAction.code || 'ROUTE_REFUSEE').replace(/[^A-Z_]/g, '').slice(0, 32) || 'ROUTE_REFUSEE', phrase: routeAction.phrase.slice(0, 220) } };
+  }
   const d = String(dex || '').trim() || null;
   /* ⛔ UNE ADRESSE VIDE OU MAL FORMEE NE COMPTE PAS COMME UNE POOL v3. `Boolean('')` serait faux
    *   par accident ; on exige la forme, sinon un champ vide basculerait le verdict en silence. */
@@ -118,6 +126,7 @@ export function raisonSansBuy(v, o = {}) {
     return { code: 'LIQUIDITE_SOUS_SEUIL', phrase: 'No buy: less than $' + seuil + ' of liquidity on its market (DexScreener figure).' };
   }
   if (v && (v.achetableEnEth || v.achetableEnUsdc)) return null;
+  if (v && v.raisonServie && v.raisonServie.phrase) return { code: v.raisonServie.code, phrase: v.raisonServie.phrase };
   if (v && v.verdict === 'FRANCHISSEMENT') {
     const d = String(v.dex || '').replace(/[^a-z0-9 .-]/gi, '').slice(0, 18);
     /* ⚠️ « newer pool factory » et pas « Aerodrome » : `aero` est l etiquette de DexScreener ; que 0x9cb2… soit la factory officielle

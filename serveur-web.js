@@ -46,6 +46,9 @@ import { resumerLancementsOL, OL_LISTE_BASE } from './openlaunch.js';
 import { lireEspacements, phraseEspacements, ESPACEMENTS_RETOMBEE } from './espacements-cl.js';
 /* ⛔ L ORIGINE DES ACTIONS TOKENISEES, D APRES L EMETTEUR — 40 adresses, pas nos 15. */
 import { lireActionsEmetteur, phraseActionsEmetteur } from './actions-emetteur.js';
+/* 2026-10-25 — LES ACTIONS DE L EMETTEUR, PROUVEES SUR LA CHAINE (code 0xef + log de la factory B20 + tx.from), et leur route d achat */
+import { candidatsActions, decouvrirActions, lireUnites, routeAction, routeServie, resumeActions, CREATEUR_EMETTEUR,
+  ROUTES_PAR_TOUR, ROUTE_TTL_MS, UNITES_TTL_MS } from './actions-chaine.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
 import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
@@ -806,6 +809,97 @@ async function actionsEmetteurServies() {
   const phrase = phraseActionsEmetteur(r);
   console.log('[emetteur] ' + (phrase || r.adresses.length + ' actions tokenisees, lues chez l emetteur'));
   return r;
+}
+
+/* ══ 2026-10-25 — LES ACTIONS DE L EMETTEUR, DECOUVERTES ET PROUVEES SUR LA CHAINE (actions-chaine.js) ═══════════════════════════════
+ * ⛔⛔ MESURE DU 2026-10-24 : 202 actions emises, 71 connues de l app, 100 marquees par le serveur (page 1 seulement), 32 au Market dont 16
+ *   marquees. Ici, a chaque tour du trending : les candidats (liste de l emetteur, graine du recensement, creations vues dont tx.from est
+ *   le createur de l emetteur) passent la preuve (code 0xef + log de la factory B20 dans une tx reussie + tx.from) ; seules les PROUVEES
+ *   entrent dans la liste lue chez DexScreener, recoivent la marque d origine et un verdict de route (pool de NOTRE factory, cotee).
+ * ⛔ BORNE DES LECTURES : PREUVES_PAR_TOUR preuves neuves (5 lectures), 60 relectures d unites, ROUTES_PAR_TOUR routes par tour ; une
+ *   preuve ou un refus est definitif et PERSISTE (actions-chaine.json, a cote du cache trending) : un redeploiement ne repaie pas 1 000
+ *   lectures. Les unites et les routes, elles, bougent : relues apres UNITES_TTL_MS / ROUTE_TTL_MS. */
+const preuvesActions = new Map();
+const unitesActions = new Map();   /* adr -> { v: BigInt|null, t } */
+const routesActions = new Map();   /* adr -> { r, t } */
+const creationsEmetteurVues = new Map(); /* jeton -> { jeton, tx, createur, symbole } — creations vues par le scan, createur = l emetteur */
+const CREATIONS_EMETTEUR_MAX = 2000;
+let tourActions = null;
+function fichierActions() {
+  const dir = process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null);
+  return dir ? join(dir, 'actions-chaine.json') : null;
+}
+function chargerActionsDisque() {
+  try {
+    const f = fichierActions();
+    if (!f || !existsSync(f)) return;
+    const x = JSON.parse(readFileSync(f, 'utf8'));
+    /* ⛔ seules les PREUVES et REFUS bien formes reviennent ; un NON_MESURE n a jamais ete ecrit */
+    for (const p of Array.isArray(x && x.preuves) ? x.preuves : []) {
+      if (p && /^0x[0-9a-f]{40}$/.test(p.adr) && (p.etat === 'PROUVE' || p.etat === 'REFUSE') && typeof (p.code || p.tx) === 'string') preuvesActions.set(p.adr, p);
+    }
+    for (const c of Array.isArray(x && x.creations) ? x.creations : []) {
+      if (c && /^0x[0-9a-f]{40}$/.test(c.jeton) && /^0x[0-9a-f]{64}$/.test(c.tx) && c.createur === CREATEUR_EMETTEUR) creationsEmetteurVues.set(c.jeton, c);
+    }
+    console.log('[actions] disk: ' + preuvesActions.size + ' verdict(s), ' + creationsEmetteurVues.size + ' issuer creation(s) seen');
+  } catch (e) { console.log('[actions] disk unread: ' + e.message); }
+}
+function sauverActionsDisque() {
+  const f = fichierActions();
+  if (!f) return;
+  try {
+    writeFileSync(f + '.tmp', JSON.stringify({ v: 1, a: Date.now(), preuves: [...preuvesActions.values()], creations: [...creationsEmetteurVues.values()] }));
+    renameSync(f + '.tmp', f);
+  } catch (e) { console.log('[actions] disk write failed: ' + e.message); }
+}
+chargerActionsDisque();
+/** retient les creations du scan dont le createur RESOLU (tx.from, createurParBlock) est celui de l emetteur */
+function retenirCreationsEmetteur(creations, createurDuJeton) {
+  for (const c of creations || []) {
+    const j = String((c && c.jeton) || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(j) || !/^0x[0-9a-fA-F]{64}$/.test(String(c.tx || ''))) continue;
+    if (createurDuJeton(j) !== CREATEUR_EMETTEUR || creationsEmetteurVues.has(j)) continue;
+    creationsEmetteurVues.set(j, { jeton: j, tx: String(c.tx).toLowerCase(), createur: CREATEUR_EMETTEUR, symbole: c.symbole ? String(c.symbole).slice(0, 24) : null });
+    if (creationsEmetteurVues.size > CREATIONS_EMETTEUR_MAX) creationsEmetteurVues.delete(creationsEmetteurVues.keys().next().value);
+  }
+}
+/** un tour : preuves, unites, routes. Ne leve jamais : une panne garde le tour precedent et le DIT (etat). */
+async function actionsChaineTour(em) {
+  try {
+    const candidats = candidatsActions({ emetteur: em && em.etat === 'OK' ? em.adresses : [], symbolesEmetteur: (em && em.symboles) || {},
+      creationsVues: [...creationsEmetteurVues.values()] });
+    const avant = preuvesActions.size;
+    const tour = await decouvrirActions({ rpc: rpcServeur, candidats, cache: preuvesActions, pause: 120 });
+    if (preuvesActions.size !== avant) sauverActionsDisque();
+    let unitesLues = 0;
+    for (const p of tour.prouvees) {
+      const u = unitesActions.get(p.adr);
+      if (u && u.v !== null && Date.now() - u.t < UNITES_TTL_MS) continue;
+      if (unitesLues >= 60) break;
+      unitesLues += 1;
+      unitesActions.set(p.adr, { v: await lireUnites({ rpc: rpcRails, adr: p.adr }), t: Date.now() });
+    }
+    let routesLues = 0;
+    /* ⛔ 2026-10-25 : LES ENTREES DE LA TABLE AUSSI. Remesure du jour : 4 des 25 (WRDc BILIc NIOc NVOc) cotaient 10 USDC 4 a 8 % sous leur
+     *   prix moyen et gardaient leur Buy, parce que la table « garde la main ». Elle garde sa POOL (avecPoolAction) ; son Buy suit la regle
+     *   commune. Ordre : hors table d abord (leur Buy en depend), puis la table. */
+    const ordre = [...tour.prouvees].sort((x, y) => Number(POOLS_ACTIONS_AERODROME.has(x.adr)) - Number(POOLS_ACTIONS_AERODROME.has(y.adr)));
+    for (const p of ordre) {
+      const u = unitesActions.get(p.adr);
+      if (!u || !(u.v > 0n)) continue; /* sans unites en circulation, rien a acheter */
+      const r = routesActions.get(p.adr);
+      if (r && Date.now() - r.t < ROUTE_TTL_MS) continue;
+      if (routesLues >= ROUTES_PAR_TOUR) break;
+      routesLues += 1;
+      const v = await routeAction({ appel: callLarge, adr: p.adr });
+      if (v.etat === 'OK') routesActions.set(p.adr, { r: routeServie(v), t: Date.now() });
+    }
+    tourActions = tour;
+    console.log('[actions] ' + tour.etat + ' · ' + tour.prouvees.length + ' proven, ' + tour.refusees.length + ' refused, ' + tour.nonMesurees.length
+      + ' not measured · ' + tour.neuves + ' new proof(s), ' + unitesLues + ' supply read(s), ' + routesLues + ' route(s) read');
+  } catch (e) { console.log('[actions] pass interrupted: ' + e.message); }
+  const prouvees = new Set(((tourActions && tourActions.prouvees) || []).map((p) => p.adr));
+  return { prouvees, tour: tourActions };
 }
 
 async function alternativeAerodrome(jeton, famille) {
@@ -3330,7 +3424,9 @@ function chargerTrendingDisque() {
      *     que l ecran decide (`quoteAdr` choisit entre une route a deux sauts et une a trois). Une
      *     garde qui ne regarde que l enveloppe est vraie et couvre la mauvaise moitie.
      *   ⛔ TOUT AJOUT DE CHAMP DOIT ETRE AJOUTE ICI, et la version bumpee. Les deux, pas l une. */
-    const champsAttendus = ['emetteurEtat'];
+    /* 2026-10-25 : `actionsChaine` (actions-chaine.js). Le champ de ligne `routeAction` n est pas ajoute a champsLigne : tout corps qui
+     *   porte `actionsChaine` a ete ecrit par le code qui pose `routeAction` sur CHAQUE ligne (null compris) — l enveloppe le garantit. */
+    const champsAttendus = ['emetteurEtat', 'actionsChaine'];
     /* 2026-10-17 : `achat` (verdict serveur du Buy de Market) — champ de ligne ajoute SANS bumper TRENDING_CACHE_VER (meme choix que
      *   `trousRattrapage` : la bumper jetterait l index des createurs) ; un corps d avant est refuse par cette garde, le progres garde. */
     const champsLigne = ['emetteur', 'quoteAdr', 'achat'];
@@ -3451,6 +3547,8 @@ async function lireTrending() {
           + aResoudre.length + ' resolu(s) ce scan)');
       }
     } catch (e) { console.log('[createurs] resolution partielle : ' + e.message); }
+    /* 2026-10-25 : une creation dont tx.from (resolu ci-dessus) est le createur de l emetteur devient CANDIDATE (actions-chaine.js la prouve) */
+    try { retenirCreationsEmetteur(cr.creations, (j) => createurParBlock.get(j) || null); } catch (e) { console.log('[actions] issuer creations not kept this scan: ' + e.message); }
     /* ⛔⛔ ET LE PASSE, SANS QUOI LE CORRECTIF NE REPARE RIEN. L index ci-dessus ne se remplit que
      *     vers L AVANT : il resout les createurs des creations qu il VOIT PASSER. Mesure juste
      *     apres la mise en ligne : `blocksIndexes: 1` pour `blocksSuivis: 1967`. Les blocks deja
@@ -3566,6 +3664,12 @@ async function lireTrending() {
     for (const p of pairesProposees(8453)) {
       if (p && p.adr && /^0xb2[0-9a-fA-F]{38}$/i.test(String(p.adr))) blocksConnus.add(String(p.adr).toLowerCase());
     }
+    /* ⛔⛔ 2026-10-25 — ET LES ACTIONS DE L EMETTEUR PROUVEES SUR LA CHAINE (actions-chaine.js), pas seulement nos 71 : 202 emises au
+     *   24/10. Seule une action PROUVEE entre ici — un prefixe 0xb2 ou un evenement ne suffisent pas. Lue AVANT DexScreener, sinon une
+     *   action hors de notre fenetre de scan n y serait jamais demandee (meme cause que la mesure du 2026-09-27 ci-dessus). */
+    const em = await actionsEmetteurServies();
+    const ac = await actionsChaineTour(em);
+    for (const a of ac.prouvees) blocksConnus.add(a);
     const adrs = [...blocksConnus], paires = [];
     /* ⛔⛔ BUG EN PROD (2026-09-19, capture de Phil) : « 0 blocks with a live market · $0 traded » et « Nothing is
      *    moving right now » — alors que 1 095 blocks etaient suivis. DexScreener n avait rien rendu, et `if (r.ok)`
@@ -3597,12 +3701,31 @@ async function lireTrending() {
      *   ⛔ Notre registre en porte 15, l emetteur en declare 40 : marquer seulement les 15
      *     laisserait GMEc, DJTc, NFLXc, AMDc, RDDTc, HTZc, PFEc… non marquees, et une ligne non
      *     marquee se lit « block lance ici ». La retombee le SIGNALE au lieu de le taire. */
-    const em = await actionsEmetteurServies();
-    const resume = resumerTrending(paires, adrs, { max: 400, actionsEmetteur: em.adresses }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
+    /* la marque d origine : la liste de l emetteur (toutes ses pages) PLUS les actions prouvees sur la chaine — une API muette ne
+     *   ramene plus la marque a nos 15 quand la chaine en a prouve 202 */
+    const marquees = [...new Set([...em.adresses, ...ac.prouvees])];
+    const resume = resumerTrending(paires, adrs, { max: 400, actionsEmetteur: marquees }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
+    /* la route de chaque action prouvee hors table : `routeAction` sur la ligne (null partout ailleurs, pour que la forme ne varie pas) */
+    let listees = 0;
+    for (const l of resume.lignes || []) {
+      const a = String(l.adr || '').toLowerCase();
+      if (ac.prouvees.has(a)) listees += 1;
+      const r = ac.prouvees.has(a) ? routesActions.get(a) : null;
+      /* ⛔ une entree de table ne recoit qu un verdict PORTANT SUR SA pool : un refus mesure sur une autre pool ne lui retire pas le Buy */
+      const t = POOLS_ACTIONS_AERODROME.get(a);
+      l.routeAction = r && (!t || r.r.pool === t.pool) ? r.r : null;
+    }
+    const actionsChaine = resumeActions({ tour: ac.tour, unites: new Map([...unitesActions].map(([k, v]) => [k, v.v])),
+      routes: new Map([...routesActions].map(([k, v]) => [k, v.r])), table: new Set(POOLS_ACTIONS_AERODROME.keys()), listees, emetteurEtat: em.etat, emetteurCompte: em.adresses.length });
+    actionsChaine.liste = ((ac.tour && ac.tour.prouvees) || []).map((p) => {
+      const u = unitesActions.get(p.adr), r = routesActions.get(p.adr);
+      return { adr: p.adr, sym: p.symbole || p.symboleEmetteur || null, unites: u && u.v !== null ? String(u.v) : null,
+        table: POOLS_ACTIONS_AERODROME.has(p.adr), route: r ? (r.r.achetable ? 'ACHETABLE' : r.r.code) : null };
+    });
     const achatMarche = await achatsMarche(resume.lignes);
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
       fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
-      emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche,
+      emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche, actionsChaine,
       ...resume });
   } catch (e) {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });

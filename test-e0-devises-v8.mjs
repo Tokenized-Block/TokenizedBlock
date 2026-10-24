@@ -50,7 +50,8 @@ const NOUVELLES_20261003 = ['AMCc', 'AEOc', 'BMNRc', 'BIRDc', 'BYNDc', 'CIFRc', 
 const NOUVELLES_20261009 = ['ARMc', 'SKHYc', 'WRDc', 'BIDUc', 'BILIc', 'HSAIc', 'INFYc', 'NIOc', 'NVOc', 'PDDc', 'SAPc', 'VALEc'];
 /* 2026-10-10 (3b3f39e) : SONYc entre au registre (pool remesuree, achat/vente/paiement d un block prouves sur fork) — memes regles
  *   que les 12 du 09 : hors 7030 et hors V8, refusee pour un block NEUF. */
-const NOUVELLES_20261010 = ['SONYc'];
+/* 2026-10-25 : + SANc SEc ULc NOKc LIc (prouvees sur la chaine, achat execute sur fork) — memes regles : hors 7030, hors V8. */
+const NOUVELLES_20261010 = ['SONYc', 'SANc', 'SEc', 'ULc', 'NOKc', 'LIc'];
 
 console.log('one source, pinned to the census (devises-admises.mjs, measured 2026-10-01)');
 ok('12 admitted, by symbol', DEVISES_ADMISES_V8.length === 12 && ADMISES.every((s) => DEVISES_ADMISES_V8.includes(parSym[s])));

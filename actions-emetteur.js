@@ -19,7 +19,8 @@
  *   motif n°1 de ce depot : un retour neutre qui avale une panne.
  *
  * ⚠️ BORNE : ce module dit ce que l EMETTEUR publie. Il ne prouve pas qu une adresse soit un B20
- *    (`eth_getCode == 0xef`), ni qu elle circule. `mesure-registre-emetteur.mjs` fait ca.
+ *    (`eth_getCode == 0xef`), ni qu elle circule. `mesure-registre-emetteur.mjs` fait ca, et depuis le
+ *    2026-10-25 `actions-chaine.js` le prouve sur la chaine pour chaque action listee au Market.
  */
 
 export const URL_EMETTEUR = 'https://api.coinbase.com/v1/tokenized-stocks';
@@ -91,17 +92,43 @@ export function decodeActionsEmetteur(donnee) {
   return { etat: 'OK', adresses, symboles };
 }
 
+/* ⛔⛔⛔ 2026-10-25 — L API EST PAGINEE, ET ON N EN LISAIT QUE LA PREMIERE PAGE EN DISANT `OK`. Mesure du 2026-10-24 (HTTP 200,
+ *      sondee page a page) : 100 + 100 + 2 = 202 entrees, la suite donnee par `next_page_token`, demandee par `?page_token=`. Ce module
+ *      rendait les 100 premieres avec l etat `OK` — exactement la marque PARTIELLE que son en-tete dit pire qu aucune : MSFTc etait au
+ *      Market SANS sa marque (prod, 24/10, 16 marquees sur 32 actions listees).
+ *   ⛔ UNE PAGE NON LUE FAIT RETOMBER TOUTE LA LECTURE : rendre 100 sur 202 avec `OK` est le bug, pas une degradation acceptable.
+ *   ⛔ BORNE : PAGES_MAX pages ; un jeton de page qui revient, ou une suite au-dela de la borne, = non mesure (une boucle infinie
+ *     d une API qui deraille ne doit ni geler le serveur ni passer pour une liste complete). */
+export const PAGES_MAX = 20;
+
 /**
- * Lit la liste chez l emetteur, et retombe sur nos quinze si la lecture echoue.
+ * Lit la liste chez l emetteur, TOUTES SES PAGES, et retombe sur nos quinze si une seule page manque.
  * @param {(url:string)=>Promise<string|object|null>} chercher
  */
 export async function lireActionsEmetteur(chercher) {
-  let brut = null;
-  try { brut = await chercher(URL_EMETTEUR); } catch (_) { brut = null; }
-  const d = decodeActionsEmetteur(brut);
-  if (d.etat === 'OK') return d;
-  return { etat: 'RETOMBEE', adresses: [...EMETTEUR_RETOMBEE], symboles: {},
-    pourquoi: 'issuer list unread (' + (d.pourquoi || 'no reason') + '); marking only the 15 we '
+  const adresses = [], symboles = {}, vus = new Set();
+  let jeton = null, pages = 0, echec = null;
+  for (;;) {
+    if (pages >= PAGES_MAX) { echec = 'more than ' + PAGES_MAX + ' pages'; break; }
+    const url = jeton ? URL_EMETTEUR + '?page_token=' + encodeURIComponent(jeton) : URL_EMETTEUR;
+    let brut = null;
+    try { brut = await chercher(url); } catch (_) { brut = null; }
+    let obj = brut;
+    if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch (_) { obj = null; } }
+    pages += 1;
+    /* une DERNIERE page vide apres des pages pleines est une fin de liste, pas « zero actions » */
+    if (adresses.length && obj && Array.isArray(obj.tokens) && !obj.tokens.length && !obj.next_page_token) break;
+    const d = decodeActionsEmetteur(obj);
+    if (d.etat !== 'OK') { echec = 'page ' + pages + ': ' + (d.pourquoi || 'no reason'); break; }
+    for (const a of d.adresses) { if (!adresses.includes(a)) adresses.push(a); if (d.symboles[a]) symboles[a] = d.symboles[a]; }
+    const suite = obj && typeof obj === 'object' ? obj.next_page_token : null;
+    if (suite === null || suite === undefined || suite === '') break;
+    if (typeof suite !== 'string' || vus.has(suite)) { echec = 'page ' + pages + ' points back to a page already read'; break; }
+    vus.add(suite); jeton = suite;
+  }
+  if (!echec) return { etat: 'OK', adresses, symboles, pages };
+  return { etat: 'RETOMBEE', adresses: [...EMETTEUR_RETOMBEE], symboles: {}, pages,
+    pourquoi: 'issuer list unread (' + echec + '); marking only the 15 we '
       + 'verified on chain, so some issuer stocks will go UNMARKED' };
 }
 

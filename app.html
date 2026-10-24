@@ -22002,7 +22002,7 @@ function peindreTrending() {
          *   (sweepTokenWithFee, porte de glissement). MEME verdict que la fiche (verdictRoutage), MEME achat : ce bouton
          *   ouvre la fiche, il ne reecrit rien. */
         const lA = avecPoolAction(l); /* la vraie pool de l action (table mesuree), pas celle d un meme coté en elle */
-        const vR = verdictRoutage({ aMarche: true, dex: lA.dex, poolAdr: lA.poolAdr });
+        const vR = verdictRoutage({ aMarche: true, dex: lA.dex, poolAdr: lA.poolAdr, routeAction: lA.routeAction });
         /* ⛔ 2026-10-03 : `achetableIci` aussi, POUR LES ACTIONS DU REGISTRE SEULEMENT — les 20 a pool v4 USDC (dex uniswap, sans
          *   adresse) rendaient IN_APP et ce bouton les envoyait quand meme a « Pair a block with it ». Leur cle est LUE
          *   (cles-v4-actions.js) : la fiche sait acheter. Mesure avant de borner : sans la borne, 211 lignes sur 223 gagnaient un
@@ -22090,6 +22090,11 @@ function peindreTrending() {
     + usdCourt(d.volume24hUsd) + ' traded across these markets in 24h · figures from DexScreener'
     + (koLots ? ' · ⚠️ ' + koLots + ' of ' + totalLots + ' market reads refused, so this list and '
       + 'these totals are a FLOOR — up to ' + (koLots * 30) + ' live blocks may be missing' : '')
+    /* 2026-10-25 : les actions de l emetteur PROUVEES sur la chaine (serveur, actions-chaine.js). Celles sans unite en circulation n ont
+     *   pas de marche : elles ne sont pas listees, et le compte le DIT (une ligne sans rien a acheter serait du bruit). */
+    + (d.actionsChaine && d.actionsChaine.prouvees > 0 ? ' · ' + d.actionsChaine.prouvees + ' issuer stocks proven on chain'
+      + (d.actionsChaine.sansUnites > 0 ? ', ' + d.actionsChaine.sansUnites + ' with no units in circulation yet (not listed)' : '')
+      + (d.actionsChaine.etat === 'PARTIEL' ? ' (still checking ' + d.actionsChaine.nonMesurees + ')' : '') : '')
     + ' · updated ' + new Date(d.lu).toLocaleTimeString();
 }
 let trAffiches = 50;
