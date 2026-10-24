@@ -1,0 +1,215 @@
+/* test-misables-20261024.mjs — LA REGLE « MISABLE » ET LE PLAN « PAYER UN JEU AVEC UN AUTRE JETON » (misables.js), SUR DES DEVIS REELS.
+ * Les donnees : mesures/misables-20261024.json (231 jetons, bloc 53 031 600, lecture seule) et deux devis RELEVES sur le fork du banc
+ * banc-misables-fork-20261024 (bloc 53 032 139 : 0,5005 USDC <- 237 059 NVDAc bruts ; <- 213 553 955 192 571 wei).
+ * AFFIRME : (1) les selecteurs du routeur sont ceux lus dans son bytecode, les adresses celles des modules qui les ont mesurees ;
+ *   (2) la regle rejoue la mesure : 21 / 20 / 19 misables a 0,50 / 5 / 10 USDC, et chaque cas type a SON code (ECART, PEU_PROFONDE,
+ *   SOUS_LE_MARCHE, ROUTE_NON_CONSTRUITE, ROUTE_INJOIGNABLE, SANS_ROUTE, TAILLE_NON_MESUREE) ; rouge/vert sur le seuil (HSAIc 95 bps) ;
+ *   (3) les ecarts du JSON se recalculent depuis sqrtPriceX96 + montantIn ; (4) le plan : approve EXACT du max-in (jamais illimite), swap
+ *   exact-output dont l USDC va AU JOUEUR (directement, ou balaye vers lui avec le frais), allowance remise a 0, puis les appels du jeu
+ *   IDENTIQUES a ceux de son module ; l ETH natif en value, refundETH ; (5) les refus : devis perime (30 ok / 31 refuse), futur, non
+ *   eligible, route injoignable, destinataire = routeur, montant du devis different, tolerance hors bornes, mise > 10 USDC.
+ * MISABLES_MODULE : le chemin d une COPIE mutee (muter-misables-20261024.mjs). ⛔ PORTABLE : process.exitCode. */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+const ICI = path.dirname(fileURLToPath(import.meta.url));
+const M = await import(pathToFileURL(process.env.MISABLES_MODULE || path.join(ICI, 'misables.js')).href);
+const { selecteur } = await import(pathToFileURL(path.join(ICI, 'keccak.js')).href);
+const CA = await import(pathToFileURL(path.join(ICI, 'calldata-aerodrome.js')).href);
+const { QUOTEUR_AERODROME_CL } = await import(pathToFileURL(path.join(ICI, 'rolls-en-action.js')).href);
+const { USDC_BASE, FEE_WALLET } = await import(pathToFileURL(path.join(ICI, 'frais-creation.js')).href);
+const { ACTIONS_COINBASE } = await import(pathToFileURL(path.join(ICI, 'paires.js')).href);
+const BR = await import(pathToFileURL(path.join(ICI, 'blockrolls-plan.js')).href);
+const SL = await import(pathToFileURL(path.join(ICI, 'slots-plan.js')).href);
+const TP = await import(pathToFileURL(path.join(ICI, 'ticketpot-plan.js')).href);
+const DU = await import(pathToFileURL(path.join(ICI, 'duels-plan-app.js')).href);
+const { BLOCKROLLS_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'blockrolls-deploiement.js')).href);
+const { SLOTS_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'slots-deploiement.js')).href);
+const { TICKETPOT_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'ticketpot-deploiement.js')).href);
+const { DUELS_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'duels-deploiement.js')).href);
+
+let n = 0, ko = 0;
+const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
+const bas = (x) => String(x || '').toLowerCase();
+const J = JSON.parse(readFileSync(path.join(ICI, 'mesures', 'misables-20261024.json'), 'utf8'));
+const ROUTEUR = CA.ROUTEUR_AERODROME_CL, VIEILLE = CA.FACTORY_AERODROME_CL;
+const JOUEUR = '0x5a1e0329309d77777777777777777777777777a1';
+const ROLLS = bas(BLOCKROLLS_DEPLOIEMENT.adresse), SLOTS = bas(SLOTS_DEPLOIEMENT.adresse);
+const MAX = (1n << 256n) - 1n;
+
+/* ── (1) selecteurs et adresses ─────────────────────────────────────────────────────────────────────────── */
+ok(selecteur(M.SIG.exactOutputSingle) === '0xc714e838', 'exactOutputSingle = 0xc714e838 (present dans le bytecode du routeur, sonde du jour)');
+ok(selecteur(M.SIG.sweepTokenWithFee) === CA.SELECTEURS.sweepTokenWithFee && selecteur(M.SIG.multicall) === CA.SELECTEURS.multicall && selecteur(M.SIG.refundETH) === CA.SELECTEURS.refundETH && selecteur(M.SIG.approve) === CA.SELECTEURS.approve,
+  'sweepTokenWithFee / multicall / refundETH / approve = les selecteurs LUS de calldata-aerodrome');
+ok(M.QUOTEUR_CL === bas(QUOTEUR_AERODROME_CL) && M.USDC === bas(USDC_BASE), 'quoter CL et USDC = ceux des modules qui les ont mesures');
+ok(readFileSync(path.join(ICI, 'routage.js'), 'utf8').includes(M.FACTORY_NOUVELLE_INJOIGNABLE) && M.FACTORY_NOUVELLE_INJOIGNABLE !== VIEILLE, 'la factory injoignable est celle que routage.js nomme, et pas celle du routeur');
+ok(J.temoins.factoryDuQuoteurCl === VIEILLE && J.temoins.factoryDuRouteur === VIEILLE && J.temoins.codeFactoryNouvelleOctets > 0, 'la mesure a relu factory() du quoter et du routeur (= ' + VIEILLE + ') et le code de la nouvelle factory');
+const registre = new Set(ACTIONS_COINBASE.map((a) => bas(a.adr)));
+const actions = M.CANDIDATS_CL.filter((c) => c.famille === 'action');
+ok(actions.length >= 20 && actions.every((c) => registre.has(c.jeton)), actions.length + ' candidats actions, TOUS dans le registre de l emetteur (paires.js)');
+const poolsWethMesurees = J.table.find((t) => t.jeton === M.ETH).routes.filter((r) => r.route === 'aerodrome-cl');
+ok(M.POOLS_WETH_USDC.length === 2 && M.POOLS_WETH_USDC.every((p) => poolsWethMesurees.some((r) => r.pool === p.pool && r.tickSpacing === p.tickSpacing && BigInt(r.usdcPool) >= M.PROFONDEUR_MIN_USDC)),
+  'les pools WETH/USDC candidates sont celles rendues par getPool dans la mesure, au-dessus de la profondeur minimum');
+ok(!M.CANDIDATS_CL.some((c) => c.symbole === 'ULc'), 'ULc (au Market, hors registre) n est pas candidat');
+
+/* ── (2) la regle rejoue la mesure ──────────────────────────────────────────────────────────────────────── */
+const elig = (t, r, usdc, o = {}) => M.eligibilite({ jeton: t.jeton, route: r.route, factory: r.factory || null, usdcPool: r.usdcPool, ecartReferenceBps: r.ecartReferenceBps, devis: r.devis }, { usdc, ...o });
+const misablesA = (usdc) => J.table.filter((t) => t.routes.some((r) => elig(t, r, usdc).ok)).length;
+const comptes = M.TAILLES_USDC.map(misablesA);
+ok(comptes.join('/') === M.MESURE_REFERENCE.misables.join('/') && comptes.join('/') === '21/20/19', 'misables au bloc ' + J.bloc + ' : ' + comptes.join(' / ') + ' a 0,50 / 5 / 10 USDC (MESURE_REFERENCE)');
+ok(J.bloc === M.MESURE_REFERENCE.bloc && J.table.length === M.MESURE_REFERENCE.jetons, 'la mesure lue est celle que cite le module (bloc, ' + J.table.length + ' jetons)');
+const route = (sym, pred = () => true) => { const t = J.table.find((x) => x.symbole === sym); return { t, r: t && t.routes.find(pred) }; };
+const cas = (sym, pred, usdc, code, msg) => { const { t, r } = route(sym, pred); const e = t && r ? elig(t, r, usdc) : null; ok(e && (code === 'MISABLE' ? e.ok === true : e.code === code), sym + ' ' + msg + ' -> ' + (e && (e.ok ? 'MISABLE' : e.code))); };
+const cl = (ts) => (r) => r.route === 'aerodrome-cl' && r.tickSpacing === ts;
+cas('NVDAc', cl(10), 10000000n, 'MISABLE', 'pool ts 10 (ecart 5 bps, 205 k USDC) a 10 USDC');
+cas('BILIc', cl(1), 500000n, 'ECART', 'pool ts 1 de 25 397 USDC dont la liquidite n est pas au prix (14,01 %)');
+cas('NFLXc', cl(10), 500000n, 'PEU_PROFONDE', 'ecart 5 bps mais 1 212 USDC dans la pool');
+cas('INFYc', cl(10), 500000n, 'SOUS_LE_MARCHE', 'ecart 56 bps mais la pool est 2,47 % sous la reference');
+cas('INFYc', cl(1), 10000000n, 'ECART', 'ts 1 a 10 USDC (170 bps)');
+cas('MSTRc', (r) => r.route === 'v4', 500000n, 'ROUTE_NON_CONSTRUITE', 'pool v4 USDC (frais 3 %)');
+cas('UNIT', (r) => r.route === 'v4', 500000n, 'ROUTE_NON_CONSTRUITE', 'pool v4 ETH/UNIT (hook 7030), devis 10 bps a 0,50');
+cas('HSAIc', cl(1), 500000n, 'MISABLE', 'a 0,50 USDC (95 bps)');
+cas('HSAIc', cl(1), 5000000n, 'ECART', 'a 5 USDC (1 018 bps)');
+cas('NVDAc', cl(10), 20000000n, 'TAILLE_NON_MESUREE', 'a 20 USDC (rien n est mesure au-dela de 10)');
+const hs = route('HSAIc', cl(1));
+ok(elig(hs.t, hs.r, 500000n, { seuilBps: 100 }).ok && !elig(hs.t, hs.r, 500000n, { seuilBps: 90 }).ok, 'rouge/vert : HSAIc a 95 bps passe a 1 %, pas a 0,90 %');
+const nouvelle = J.table.filter((t) => t.marche && t.marche.injoignable);
+ok(nouvelle.length === 21 && nouvelle.every((t) => M.eligibilite({ jeton: t.jeton, route: 'aero-nouvelle', factory: t.marche.factory, usdcPool: t.marche.usdcPool, devis: [{ usdc: '500000', ok: true, montantIn: '1', ecartBps: 0 }] }).code === 'ROUTE_INJOIGNABLE'),
+  nouvelle.length + ' pools du Market sur la nouvelle factory : toutes ROUTE_INJOIGNABLE, meme avec un devis parfait');
+ok(M.eligibilite({ jeton: '0x' + '1'.repeat(40), route: 'aerodrome-cl', factory: '0x33128a8fc17869897dce68ed026d694621f6fdfd', usdcPool: '99999999999', devis: [{ usdc: '500000', ok: true, montantIn: '1', ecartBps: 0 }] }).code === 'ROUTE_INJOIGNABLE',
+  'une pool CL d une AUTRE factory (Uniswap v3, lue dans la mesure) est injoignable, meme profonde et au prix');
+ok(M.eligibilite({ jeton: '0x' + '1'.repeat(40), route: 'aucune' }).code === 'SANS_ROUTE' && M.eligibilite({ jeton: M.USDC }).ok, 'sans route : SANS_ROUTE ; USDC : paye directement');
+const v4 = J.table.flatMap((t) => t.routes.filter((r) => r.route === 'v4' && r.feePpm >= 30000 && r.devis.some((d) => d.ok)));
+ok(v4.length >= 5 && v4.every((r) => r.devis.filter((d) => d.ok).every((d) => d.ecartBps > M.SEUIL_ECART_BPS)), v4.length + ' pools v4 USDC/action cotees (frais 3..8 %) : toutes au-dessus de 1 % (min ' + Math.min(...v4.flatMap((r) => r.devis.filter((d) => d.ok).map((d) => d.ecartBps))) + ' bps)');
+
+/* ── (3) les ecarts du JSON se recalculent ────────────────────────────────────────────────────────────────── */
+let recalc = 0, faux = 0;
+for (const t of J.table) for (const r of t.routes) if (r.route === 'aerodrome-cl' && r.devis) for (const d of r.devis) if (d.ok) {
+  recalc += 1; if (M.ecartAuMoyen({ tokenIn: r.jetonIn, tokenOut: M.USDC, sortie: d.usdc, montantIn: d.montantIn, sqrtPriceX96: r.sqrtPriceX96 }) !== d.ecartBps) faux += 1;
+}
+ok(recalc > 100 && faux === 0, recalc + ' ecarts CL du JSON recalcules depuis sqrtPriceX96 + montantIn : ' + faux + ' different');
+let refs = 0, refsFaux = 0;
+for (const t of J.table) for (const r of t.routes) if (r.route === 'aerodrome-cl' && r.ecartReferenceBps !== null && r.pool !== t.marche.poolAdr) {
+  refs += 1; if (M.ecartAReference({ jeton: r.jetonIn, sqrtNous: r.sqrtPriceX96, sqrtRef: t.marche.sqrtPriceX96 }) !== r.ecartReferenceBps) refsFaux += 1;
+}
+ok(refs > 20 && refsFaux === 0, refs + ' ecarts a la reference recalcules : ' + refsFaux + ' different');
+ok(M.coutVsReference({ ecartBps: 56, ecartReferenceBps: -247 }) === 311 && M.coutVsReference({ ecartBps: 5, ecartReferenceBps: null }) === null, 'cout contre la reference : (1+e)/(1+r)-1 (INFYc ts 10 : 10 056 / 9 753 -> 3,11 %) ; reference absente = non jugee');
+
+/* ── (4) le plan ─────────────────────────────────────────────────────────────────────────────────────────── */
+ok(M.usdcAViser({ besoin: 500000n }) === 500500n && M.usdcAViser({ besoin: 500000n, fraisBps: 0 }) === 500000n, 'sortie visee : 0,5005 USDC pour 0,50 au joueur apres 0,1 % (le fork a recu EXACTEMENT 500 000) ; 0,50 sans frais');
+let rondOk = true;
+for (const b of [1n, 7n, 999n, 500000n, 5000000n, 10000000n, 123456789n]) for (const f of [1n, 10n, 30n, 100n]) {
+  const x = M.usdcAViser({ besoin: b, fraisBps: f });
+  if (!(x - (x * f) / 10000n >= b) || ((x - 1n) - ((x - 1n) * f) / 10000n >= b)) rondOk = false;
+}
+ok(rondOk, 'usdcAViser rend le PLUS PETIT X avec X - floor(X x bps / 10000) >= besoin (28 cas)');
+ok(M.maxEntree(237059n, 50n) === 238245n && M.maxEntree(1n, 301n) === null && M.maxEntree(0n) === null, 'max-in = ceil(devis x 1,005) : 238 245 pour 237 059 (le fork) ; tolerance > 3 % ou devis nul refuses');
+
+/* les devis RELEVES sur le fork (bloc 53 032 139) */
+const NV = M.CANDIDATS_CL.find((c) => c.symbole === 'NVDAc'), W50 = M.CANDIDATS_CL.find((c) => c.natif && c.tickSpacing === 50);
+const BQ = 53032139;
+const devisNv = { etat: 'PRET', jeton: NV.jeton, jetonIn: NV.jetonIn, natif: false, symbole: 'NVDAc', famille: 'action', route: 'aerodrome-cl', factory: VIEILLE, pool: NV.pool, tickSpacing: 10,
+  usdcSortie: 500500n, montantIn: 237059n, usdcPool: 205691362506n, ecartBps: 5, ecartReferenceBps: null, bloc: BQ };
+const devisEth = { ...devisNv, jeton: M.ETH, jetonIn: M.WETH, natif: true, symbole: 'ETH', famille: 'eth', pool: W50.pool, tickSpacing: 50, montantIn: 213553955192571n, usdcPool: 750678797655n, ecartBps: 3 };
+const TS = 1792852000;
+const jeuRoll = { genre: 'rolls', contrat: ROLLS, guesses: [[1, 2, 3, 1, 2]], rollPrice: 500000n };
+const p = M.planPayerEnJeton({ devis: devisNv, compte: JOUEUR, jeu: jeuRoll, blocActuel: BQ + 2, maintenant: TS });
+ok(p.etat === 'PRET' && p.appels.length === 5, 'NVDAc -> 1 roll : PRET, 5 appels (' + p.etat + ' ' + (p.pourquoi || '') + ')');
+const mots = (data, debut) => { const h = String(data).slice(debut); const r = []; for (let i = 0; i + 64 <= h.length; i += 64) r.push(h.slice(i, i + 64)); return r; };
+const adr = (w) => '0x' + w.slice(24);
+const big = (w) => BigInt('0x' + w);
+if (p.etat === 'PRET') {
+  const [a0, a1, a2, ...jeu] = p.appels;
+  const w0 = mots(a0.data, 10);
+  ok(bas(a0.to) === NV.jeton && a0.data.startsWith(CA.SELECTEURS.approve) && adr(w0[0]) === ROUTEUR && big(w0[1]) === 238245n && big(w0[1]) !== MAX,
+    'appel 1 : approve(NVDAc -> routeur, 238 245) EXACT = max-in, jamais illimite');
+  ok(bas(a1.to) === ROUTEUR && a1.data.startsWith(CA.SELECTEURS.multicall) && a1.value === '0x0', 'appel 2 : multicall du routeur, sans valeur');
+  /* le multicall : [exactOutputSingle, sweepTokenWithFee] */
+  const w1 = mots(a1.data, 10);
+  const nEl = Number(big(w1[1]));
+  const el = (k) => { const off = Number(big(w1[2 + k])) / 32; const len = Number(big(w1[2 + off])); return '0x' + w1.slice(3 + off).join('').slice(0, len * 2); };
+  const eo = el(0), sw = el(1);
+  const we = mots(eo, 10), ws = mots(sw, 10);
+  ok(nEl === 2 && eo.startsWith('0xc714e838') && sw.startsWith(CA.SELECTEURS.sweepTokenWithFee), 'le multicall porte 2 appels : exactOutputSingle puis sweepTokenWithFee');
+  ok(adr(we[0]) === NV.jeton && adr(we[1]) === M.USDC && big(we[2]) === 10n && adr(we[3]) === ROUTEUR && big(we[4]) === BigInt(TS + M.DELAI_S) && big(we[5]) === 500500n && big(we[6]) === 238245n && big(we[7]) === 0n,
+    'exactOutputSingle(NVDAc, USDC, ts 10, routeur, deadline +' + M.DELAI_S + ' s, sortie EXACTE 500 500, max-in 238 245, 0)');
+  ok(adr(ws[0]) === M.USDC && big(ws[1]) === 500000n && adr(ws[2]) === JOUEUR && big(ws[3]) === 10n && adr(ws[4]) === bas(FEE_WALLET), 'sweepTokenWithFee(USDC, au moins 500 000, LE JOUEUR, 10 bps, wallet des frais)');
+  const w2 = mots(a2.data, 10);
+  ok(bas(a2.to) === NV.jeton && a2.data.startsWith(CA.SELECTEURS.approve) && adr(w2[0]) === ROUTEUR && big(w2[1]) === 0n, 'appel 3 : approve(NVDAc -> routeur, 0) — l allocation restante remise a zero');
+  const pr = BR.planRolls({ contrat: ROLLS, usdc: M.USDC, guesses: jeuRoll.guesses, rollPrice: 500000n });
+  ok(jeu.length === pr.appels.length && jeu.every((a, i) => a.to === pr.appels[i].to && a.data === pr.appels[i].data), 'appels 4-5 : IDENTIQUES a planRolls (blockrolls-plan.js), approve USDC exact + roll');
+  ok(p.resume.maxEntree === 238245n && p.resume.usdcSortie === 500500n && p.resume.usdcRecuAuMoins === 500000n && p.resume.destinataireUsdc === JOUEUR && /at most 238245 raw NVDAc/.test(p.resume.phrase),
+    'le resume dit avant la signature : max-in, sortie USDC, recu au moins, destinataire');
+  ok(p.exigeAtomique === false && p.atomiquePrefere === true, 'pas d atomicite exigee (l USDC arrive au joueur), un lot atomique prefere');
+}
+/* frais 0 : l USDC va DIRECTEMENT au joueur */
+const p0 = M.planPayerEnJeton({ devis: { ...devisNv, usdcSortie: 500000n }, compte: JOUEUR, jeu: jeuRoll, blocActuel: BQ, maintenant: TS, fraisBps: 0 });
+const we0 = p0.etat === 'PRET' ? mots(p0.appels[1].data, 10) : [];
+ok(p0.etat === 'PRET' && p0.appels[1].data.startsWith('0xc714e838') && adr(we0[3]) === JOUEUR && big(we0[5]) === 500000n, 'frais 0 : exactOutputSingle seul, destinataire = LE JOUEUR, sortie 500 000');
+/* l ETH natif */
+const jeuSpin = { genre: 'spins', contrat: SLOTS, n: 1, spinPrice: 500000n };
+const pe = M.planPayerEnJeton({ devis: devisEth, compte: JOUEUR, jeu: jeuSpin, blocActuel: BQ, maintenant: TS });
+ok(pe.etat === 'PRET' && pe.appels.length === 3 && BigInt(pe.appels[0].value) === M.maxEntree(213553955192571n) && pe.appels[0].data.startsWith(CA.SELECTEURS.multicall),
+  'ETH -> 1 spin : 3 appels, aucun approve, value = max-in (' + (pe.appels[0] && BigInt(pe.appels[0].value)) + ')');
+if (pe.etat === 'PRET') {
+  ok(pe.appels[0].data.endsWith(CA.SELECTEURS.refundETH.slice(2) + '0'.repeat(56)) && pe.appels[0].data.includes(M.WETH.slice(2)), 'le multicall natif finit par refundETH et paie en WETH');
+  const ps = SL.planSpins({ contrat: SLOTS, usdc: M.USDC, n: 1, spinPrice: 500000n });
+  ok(pe.appels.slice(1).every((a, i) => a.to === ps.appels[i].to && a.data === ps.appels[i].data), 'appels 2-3 : IDENTIQUES a Slots.planSpins');
+}
+/* les autres jeux, par LEURS builders */
+const day = TP.jourDe(TS);
+const jeux = [
+  ['pass', { genre: 'pass', contrat: ROLLS, passPrice: 10000000n, maintenant: TS }, BR.planPass({ contrat: ROLLS, usdc: M.USDC, passPrice: 10000000n, maintenant: TS })],
+  ['ticketpot', { genre: 'ticketpot', contrat: bas(TICKETPOT_DEPLOIEMENT.adresse), day, montant: 5000000n, maintenant: TS }, TP.planFund({ contrat: bas(TICKETPOT_DEPLOIEMENT.adresse), usdc: M.USDC, day, montant: 5000000n, maintenant: TS })],
+  ['duel-create', { genre: 'duel-create', contrat: bas(DUELS_DEPLOIEMENT.adresse), stake: 5000000n, guess: [1, 1, 1, 1, 1], expiresIn: 3600 }, DU.planCreate({ contrat: bas(DUELS_DEPLOIEMENT.adresse), token: M.USDC, stake: 5000000n, guess: [1, 1, 1, 1, 1], expiresIn: 3600 })],
+];
+for (const [nom, jeu, attendu] of jeux) {
+  const besoin = M.besoinDuJeu(attendu, jeu.contrat);
+  const d = { ...devisNv, usdcSortie: M.usdcAViser({ besoin }), montantIn: 4741180n };
+  const pj = M.planPayerEnJeton({ devis: d, compte: JOUEUR, jeu, blocActuel: BQ, maintenant: TS });
+  ok(pj.etat === 'PRET' && pj.appels.slice(3).every((a, i) => a.data === attendu.appels[i].data && a.to === attendu.appels[i].to), nom + ' : besoin ' + besoin + ', les appels du jeu sont ceux de SON module (' + pj.etat + ' ' + (pj.pourquoi || '') + ')');
+}
+const duelJeton = { genre: 'duel-join', contrat: bas(DUELS_DEPLOIEMENT.adresse), duel: { token: NV.jeton, stake: '5000000' }, guess: [1, 1, 1, 1, 1], moi: JOUEUR, maintenant: TS };
+ok(M.planPayerEnJeton({ devis: devisNv, compte: JOUEUR, jeu: duelJeton, blocActuel: BQ, maintenant: TS }).code === 'JEU', 'rejoindre un duel mise dans un autre jeton que l USDC : refuse');
+const usdcDirect = M.planPayerEnJeton({ devis: { jeton: M.USDC }, compte: JOUEUR, jeu: jeuRoll, blocActuel: BQ, maintenant: TS });
+ok(usdcDirect.etat === 'PRET' && usdcDirect.appels.length === 2 && usdcDirect.resume.swap === null, 'payer en USDC : le plan du jeu tel quel, aucun swap');
+
+/* ── (5) les refus ──────────────────────────────────────────────────────────────────────────────────────── */
+const plan = (o) => M.planPayerEnJeton({ devis: devisNv, compte: JOUEUR, jeu: jeuRoll, blocActuel: BQ, maintenant: TS, ...o });
+ok(plan({ blocActuel: BQ + M.DEVIS_BLOCS_MAX }).etat === 'PRET' && plan({ blocActuel: BQ + M.DEVIS_BLOCS_MAX + 1 }).code === 'DEVIS_PERIME', 'devis de ' + M.DEVIS_BLOCS_MAX + ' blocs : PRET ; de ' + (M.DEVIS_BLOCS_MAX + 1) + ' : DEVIS_PERIME');
+ok(plan({ blocActuel: BQ - 1 }).code === 'DEVIS_PERIME' && plan({ blocActuel: null }).code === 'DEVIS_PERIME', 'devis d un bloc futur, ou tete inconnue : refuse');
+const bili = route('BILIc', cl(1));
+ok(plan({ devis: { ...devisNv, jeton: bili.t.jeton, jetonIn: bili.t.jeton, symbole: 'BILIc', pool: bili.r.pool, tickSpacing: 1, usdcPool: BigInt(bili.r.usdcPool), ecartBps: 1401 } }).code === 'ECART', 'BILIc (ecart reel 1 401 bps) : ECART');
+ok(plan({ devis: { ...devisNv, usdcPool: 1212440964n } }).code === 'PEU_PROFONDE', 'pool de 1 212 USDC (NFLXc mesuree) : PEU_PROFONDE');
+ok(plan({ devis: { ...devisNv, factory: M.FACTORY_NOUVELLE_INJOIGNABLE } }).code === 'ROUTE_INJOIGNABLE', 'devis dont la pool est sur la nouvelle factory : ROUTE_INJOIGNABLE');
+ok(plan({ devis: { ...devisNv, route: 'v4' } }).code === 'ROUTE_NON_CONSTRUITE' && plan({ devis: { ...devisNv, route: 'aero-nouvelle' } }).code === 'ROUTE_INJOIGNABLE', 'route v4 ou aero-nouvelle : refusee');
+ok(plan({ devis: { ...devisNv, ecartReferenceBps: -247 } }).code === 'SOUS_LE_MARCHE', 'pool 2,47 % sous la reference : SOUS_LE_MARCHE');
+ok(plan({ compte: ROUTEUR }).code === 'DESTINATAIRE' && plan({ compte: '0x' + '0'.repeat(40) }).code === 'COMPTE', 'le routeur ou l adresse nulle comme joueur : refuse');
+ok(plan({ devis: { ...devisNv, usdcSortie: 500000n } }).code === 'DEVIS_MONTANT', 'devis de 500 000 quand le jeu + frais demandent 500 500 : DEVIS_MONTANT');
+ok(plan({ toleranceBps: 0n }).code === 'TOLERANCE' && plan({ toleranceBps: 301n }).code === 'TOLERANCE', 'tolerance 0 ou > 3 % : refusee');
+ok(plan({ fraisBps: 101n }).code === 'FRAIS', 'frais > 1 % : refuse (borne de calldata-aerodrome)');
+ok(plan({ devis: { ...devisNv, natif: true } }).code === 'DEVIS', 'un devis natif qui n est pas l ETH : refuse');
+ok(plan({ maintenant: null }).code === 'HORLOGE', 'sans heure, pas de deadline : refuse');
+const gros = M.planPayerEnJeton({ devis: { ...devisNv, usdcSortie: M.usdcAViser({ besoin: 20000000n }) }, compte: JOUEUR, jeu: { genre: 'ticketpot', contrat: bas(TICKETPOT_DEPLOIEMENT.adresse), day, montant: 20000000n, maintenant: TS }, blocActuel: BQ, maintenant: TS });
+ok(gros.code === 'TAILLE_NON_MESUREE', 'une mise de 20 USDC (au-dela de la plus grande taille mesuree) : refusee');
+ok(plan({ devis: null }).code === 'SANS_DEVIS', 'sans devis : rien n est bati');
+let jete = false; try { M.calldataExactOutputSingleCL({ tokenIn: NV.jeton, tokenOut: M.USDC, tickSpacing: 10, recipient: JOUEUR, deadline: 1, amountOut: 1, amountInMaximum: MAX }); } catch (_) { jete = true; }
+ok(jete, 'exactOutputSingle avec un max-in illimite : refuse a l encodage');
+ok(M.besoinDuJeu({ appels: [{ to: M.USDC, data: CA.calldataApprove({ token: M.USDC, montant: 5n, beneficiaire: SLOTS }).data }] }, ROLLS) === null, 'un approve USDC vers un AUTRE contrat que le jeu : besoin illisible');
+
+/* listeMisables : une ligne par jeton, la meilleure pool */
+const cotDe = (c) => { const t = J.table.find((x) => x.jeton === c.jeton); const r = t.routes.find((x) => x.pool === c.pool);
+  return { etat: 'PRET', factory: VIEILLE, usdcPool: BigInt(r.usdcPool), ecartReferenceBps: r.ecartReferenceBps, referencePool: null, bloc: J.bloc,
+    devis: r.devis.map((d) => ({ usdc: d.usdc, usdcSortie: BigInt(d.usdc), ok: d.ok, montantIn: d.ok ? BigInt(d.montantIn) : null, ecartBps: d.ok ? d.ecartBps : null })) }; };
+const lignes = M.CANDIDATS_CL.map((c) => M.ligneMisable(c, cotDe(c)));
+const liste = M.listeMisables(lignes);
+const servis = liste.filter((l) => l.misable).length;
+ok(servis === 20 && liste.find((l) => l.jeton === M.ETH).tickSpacing === 1 && new Set(liste.map((l) => l.jeton)).size === liste.length,
+  'liste servie sur la mesure : ' + servis + ' jetons misables a 0,50 (21 moins ULc), une ligne par jeton, ETH sur sa pool ts 1 (0 bps)');
+ok(liste.filter((l) => l.tailles[1].misable).length === 19 && liste.filter((l) => l.tailles[2].misable).length === 18, 'a 5 / 10 USDC : 19 / 18');
+const lNouvelle = M.ligneMisable(NV, { ...cotDe(NV), factory: M.FACTORY_NOUVELLE_INJOIGNABLE });
+ok(!lNouvelle.misable && lNouvelle.tailles.every((t) => t.code === 'ROUTE_INJOIGNABLE'), 'une ligne dont la pool LUE repond la nouvelle factory : ROUTE_INJOIGNABLE aux 3 tailles');
+ok(M.listeMisables([M.ligneMisable(NV, { ...cotDe(NV), usdcPool: 1n }), M.ligneMisable(NV, cotDe(NV))])[0].misable === true, 'deux pools pour un jeton : la liste garde celle qui est misable');
+
+console.log(n + ' assertions, ' + ko + ' KO');
+process.exitCode = ko ? 1 : 0;

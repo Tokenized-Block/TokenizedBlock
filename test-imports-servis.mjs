@@ -63,6 +63,11 @@ for (const page of PAGES) {
   for (const i of imports) suivre(i, page);
 }
 
+/* 2026-10-24 : les modules SERVIS qu aucune page n importe encore (la carte qui les branchera est en chantier ailleurs) — leur chaine
+ *   d imports est suivie quand meme : le jour ou une page les importe, rien ne doit manquer. */
+const MODULES_SANS_PAGE = ['misables.js'];
+for (const m of MODULES_SANS_PAGE) { ok(servis.has(m), m + ' est servi'); suivre('./' + m, 'module servi sans page'); }
+
 /* ⛔ LE TEMOIN NEGATIF, SANS LUI CE FICHIER NE PROUVE RIEN : un module invente doit etre signale. */
 const avant = manquants.length;
 suivre('./ce-module-n-existe-pas.js', 'temoin');

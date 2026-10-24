@@ -114,6 +114,11 @@ import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
 /* 2026-10-23 (Phil) : BlockSlots — la machine a sous a trois faces de bloc. La fiche GENEREE (preparer-deploiement-slots.mjs) ; `adresse`
  *   reste null tant que le proprietaire n a pas signe : /api/slots rend alors PAS_OUVERT et l app ne montre AUCUN bouton Slots. */
 import { SLOTS_DEPLOIEMENT } from './slots-deploiement.js';
+/* 2026-10-24 (Phil : « miser en USDC ou en tout B20 / action de l app, seul ce qui a une liquidite profonde ») : la regle et les devis
+ *   exact-output des jetons misables (misables.js) ; /api/misables sert la liste, LECTURE SEULE, en cache 60 s. */
+import { CANDIDATS_CL as CANDIDATS_MISABLES, coterMisableTailles, ligneMisable, listeMisables, SEUIL_ECART_BPS as SEUIL_MISABLE_BPS,
+  PROFONDEUR_MIN_USDC as PROFONDEUR_MISABLE, DEVIS_BLOCS_MAX as DEVIS_MISABLE_BLOCS, TAILLES_USDC as TAILLES_MISABLES, MESURE_REFERENCE as MESURE_MISABLES,
+  USDC as USDC_MISABLES } from './misables.js';
 /* 2026-10-23 (Phil, option 3) : le REGLEUR des slots — sans SLOTS_KEEPER_KEY il ne fait rien et le dit (/sante) ; avec, il envoie settleMany
  *   (et rien d autre) au contrat de la fiche, du wallet du regleur (gas seulement ; le contrat paie les joueurs). slots-regleur.js. */
 import { creerRegleur } from './slots-regleur.js';
@@ -4943,6 +4948,7 @@ const SERVIS = [
    *   page locale etait MORTE (import 404 : aucun bouton, carte vide) - vu au navigateur, et la garde test-imports-servis l a crie. */
   'approbations-exactes.js',
   'rolls-en-action.js', /* 2026-10-18 : un roll paye en action tokenisee (vente Aerodrome + approve EXACT + roll, un lot) et le gain converti en action */
+  'misables.js', /* 2026-10-24 : payer un jeu avec un autre jeton (swap exact-output USDC + les appels du jeu inchanges) et la regle « misable » */
   /* 2026-10-04 : le mode essai. `mode-essai.js` est importe par app.html (absent d ici = 404 = app morte) : il ne fait que
    *   DECIDER, et il decide non hors de localhost. `wallet-simule.js` n est charge par la page (`import()`) qu en mode essai :
    *   il est nomme ici pour que la garde des imports le suive, mais il n entre dans le cache — donc il n est SERVI — que si CE
@@ -4961,6 +4967,64 @@ const RACINE = 'app.html';
 const cache = new Map();
 /* ⛔ Le wallet simule n existe pas pour un serveur hors mode essai : ni servi, ni compte dans `servis`. */
 const SERVIS_EN_ESSAI_SEULEMENT = ['wallet-simule.js'];
+
+/* ══ LES JETONS MISABLES (2026-10-24) — /api/misables ══════════════════════════════════════════════════════════════════════════════
+ * Chaque candidat de misables.js (les pools CL d actions du registre + les pools WETH/USDC de la factory de notre routeur) cote en
+ * EXACT-OUTPUT 0,50 / 5 / 10 USDC, toute la liste AU MEME BLOC ; la regle (ecart <= 1 % frais compris, profondeur >= 10 000 USDC, route
+ * executable par nous, cout contre la pool de reference du Market) decide ligne par ligne. LECTURE SEULE (eth_call par rpcRails).
+ * ⛔ BORNE : au plus MISABLES_APPELS_MAX appels de chaine par rafraichissement, 3 candidats en vol, un rafraichissement a la fois, 60 s de
+ *   cache ; une liste plus vieille que 10 min n est plus servie (ok:false, etat PERIME) — la mise elle-meme re-cote toujours. */
+const MISABLES_TTL_MS = 60_000, MISABLES_PERIME_MS = 600_000, MISABLES_EN_VOL = 3;
+const MISABLES_APPELS_MAX = 1 + CANDIDATS_MISABLES.length * (TAILLES_MISABLES.length + 4);
+const misablesCache = { corps: null, a: 0, enVol: null };
+/** la pool de reference de chaque jeton : celle que le Market (trending) montre pour lui, si elle est cotee en USDC (pas de lecture ici) */
+function referencesMisables() {
+  const refs = new Map();
+  try {
+    const t = trCache.corps ? JSON.parse(trCache.corps) : null;
+    for (const l of (t && Array.isArray(t.lignes) ? t.lignes : [])) {
+      const adr = String(l.adr || '').toLowerCase(), pool = String(l.poolAdr || '').toLowerCase();
+      if (/^0x[0-9a-f]{40}$/.test(adr) && /^0x[0-9a-f]{40}$/.test(pool) && String(l.quoteAdr || '').toLowerCase() === USDC_MISABLES) refs.set(adr, { pool });
+    }
+  } catch (_) { /* pas de Market lu : pas de reference, et chaque ligne le dit (ecartReferenceBps null) */ }
+  return refs;
+}
+async function lireMisablesSrv() {
+  let appels = 0;
+  const rpc = (m, p) => { appels += 1; if (appels > MISABLES_APPELS_MAX) return Promise.reject(new Error('call budget of this refresh spent')); return rpcRails(m, p); };
+  const bloc = parseInt(await rpc('eth_blockNumber', []), 16);
+  if (!Number.isSafeInteger(bloc)) throw new Error('head block unread');
+  const refs = referencesMisables();
+  const lignes = new Array(CANDIDATS_MISABLES.length);
+  let i = 0;
+  const ouvrier = async () => {
+    while (i < CANDIDATS_MISABLES.length) {
+      const k = i++; const c = CANDIDATS_MISABLES[k];
+      const cot = await coterMisableTailles({ rpc, candidat: c, sorties: TAILLES_MISABLES, reference: refs.get(c.jeton) || null, bloc }).catch((e) => ({ etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 100) }));
+      lignes[k] = ligneMisable(c, cot);
+    }
+  };
+  await Promise.all(Array.from({ length: MISABLES_EN_VOL }, ouvrier));
+  const liste = listeMisables(lignes);
+  const j = (o) => JSON.stringify(o, (_, v) => (typeof v === 'bigint' ? v.toString() : v));
+  return j({ ok: true, etat: 'LU', lu: new Date().toISOString(), bloc, appelsRpc: appels, appelsMax: MISABLES_APPELS_MAX,
+    regle: { seuilEcartBps: SEUIL_MISABLE_BPS, profondeurMinUsdc: String(PROFONDEUR_MISABLE), devisBlocsMax: DEVIS_MISABLE_BLOCS, taillesUsdc: TAILLES_MISABLES.map(String),
+      route: 'aerodrome-cl (factory of our Aerodrome router)', mesure: MESURE_MISABLES.fichier, mesureBloc: MESURE_MISABLES.bloc,
+      borne: 'A listed price is a snapshot: every bet re-quotes at the block it is built and refuses a quote older than ' + DEVIS_MISABLE_BLOCS + ' blocks.' },
+    misables: liste.filter((l) => l.misable).map((l) => l.jeton), lignes: liste });
+}
+function misables() {
+  const age = Date.now() - misablesCache.a;
+  if (misablesCache.corps && age < MISABLES_TTL_MS) return Promise.resolve(misablesCache.corps);
+  if (!misablesCache.enVol) {
+    misablesCache.enVol = lireMisablesSrv().then((c) => { misablesCache.corps = c; misablesCache.a = Date.now(); return c; })
+      .catch((e) => ({ erreur: String((e && e.message) || e).slice(0, 120) }))
+      .finally(() => { misablesCache.enVol = null; });
+  }
+  /* un cache encore frais (< 10 min) sert pendant le rafraichissement ; sinon on attend la lecture */
+  if (misablesCache.corps && age < MISABLES_PERIME_MS) return Promise.resolve(misablesCache.corps);
+  return misablesCache.enVol.then((r) => (typeof r === 'string' ? r : JSON.stringify({ ok: false, etat: misablesCache.corps ? 'PERIME' : 'NON_LU', pourquoi: r.erreur, misables: [], lignes: [] })));
+}
 for (const nom of SERVIS) {
   if (SERVIS_EN_ESSAI_SEULEMENT.includes(nom) && !ESSAI_SRV.actif) continue;
   const chemin = join(ici, nom);
@@ -6968,6 +7032,15 @@ function traiterRequete(req, res) {
   /* ══ LES SLOTS (2026-10-23) — GET /api/slots : la fiche de BlockSlots, LECTURE SEULE, aucune lecture de chaine ici (l app lit le pot et
    *   ses points elle-meme, par eth_call). Sans adresse ecrite (noter-deploiement-slots.mjs) : PAS_OUVERT, et la carte reste cachee.
    *   Le prix, la part du pot et la table viennent de la FICHE (constructeur), jamais tapes ici. */
+  /* ══ LES JETONS MISABLES (2026-10-24) — GET /api/misables : la liste des jetons qui peuvent payer un jeu (swap exact-output en USDC),
+   *   leurs ecarts mesures a 0,50 / 5 / 10 USDC et la regle ; LECTURE SEULE, cache 60 s (misables()). */
+  if (chemin === '/api/misables') {
+    const rendreMi = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(o); };
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
+    void misables().then(rendreMi, (e) => rendreMi(JSON.stringify({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120), misables: [], lignes: [] })));
+    return;
+  }
+
   if (chemin === '/api/slots') {
     const rendreS = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
