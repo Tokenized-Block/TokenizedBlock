@@ -43,7 +43,9 @@ vu(S.planSpins({ contrat: 'pas une adresse', usdc: USDC, n: 1, spinPrice: 1 }).e
 vu(!/f{64}/.test(lot.appels[0].data), 'jamais d approbation infinie');
 
 /* (3) */
-vu(S.etatReglement(1002, 1002).etat === 'TROP_TOT' && S.etatReglement(1002, 1004).etat === 'TROP_TOT' && S.etatReglement(1002, 1005).etat === 'REGLABLE' && S.etatReglement(1002, 1258).etat === 'REGLABLE' && S.etatReglement(1002, 1259).etat === 'PERDU', 'fenetre v2 : cible..cible+2 trop tot, cible+3..cible+256 reglable, cible+257 perdu');
+/* 2026-10-24 (audit slots-app) : une tx signee a la tete H tombe au mieux en H + 1 — l offre s arrete a la tete cible + 255 (a cible + 256
+ *   la tx tomberait a cible + 257, ou settleMany saute le spin) */
+vu(S.etatReglement(1002, 1002).etat === 'TROP_TOT' && S.etatReglement(1002, 1004).etat === 'TROP_TOT' && S.etatReglement(1002, 1005).etat === 'REGLABLE' && S.etatReglement(1002, 1257).etat === 'REGLABLE' && S.etatReglement(1002, 1258).etat === 'PERDU' && S.etatReglement(1002, 1259).etat === 'PERDU', 'fenetre v2 : cible..cible+2 trop tot, tete cible+3..cible+255 reglable (la tx tombe au plus tard a cible+256), tete cible+256 perdu');
 vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1004 }).etat === 'REFUSE' && S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1259 }).etat === 'REFUSE', 'settle hors fenetre refuse (cible + 2, cible + 257)');
 vu(S.planSettle({ contrat: C, spinId: 3, targetBlock: 1002, blocActuel: 1005 }).appels[0].data === selecteur(S.SIG_SETTLE) + mot(3), 'settle(3) encode');
 vu(S.planSettleMany({ contrat: C, spinIds: [4, 9] }).appels[0].data === selecteur(S.SIG_SETTLE_MANY) + mot(32) + mot(2) + mot(4) + mot(9) && S.planSettleMany({ contrat: C, spinIds: [] }).etat === 'REFUSE', 'settleMany([4, 9]) encode ; vide refuse');

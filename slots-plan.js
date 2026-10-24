@@ -51,15 +51,25 @@ export const PRIX_SPIN_MAX = 1000000000n;
 /** les blocs des trois faces : cible, cible + 1, cible + 2 */
 export const blocsDesFaces = (t) => [0, 1, 2].map((r) => Number(t) + r);
 /**
- * la fenetre de reglement du contrat : TROP_TOT tant que tete <= cible + 2 (le 3e hash n est lisible que depuis le bloc suivant),
- * REGLABLE de cible + 3 a cible + 256 (la fenetre du PREMIER hash), puis PERDU.
+ * la fenetre de reglement, vue d une tx A SIGNER MAINTENANT : TROP_TOT tant que tete <= cible + 2 (le 3e hash n est lisible que depuis le
+ * bloc suivant) ; REGLABLE tant que la tx peut encore etre MINEE dans la fenetre du contrat (bloc <= cible + 256, celle du PREMIER hash) ;
+ * puis PERDU.
+ * ⛔ 2026-10-24 (audit slots-app) : une tx signee a la tete H est minee au mieux en H + 1 — a H = cible + 256 elle tombe a cible + 257, ou
+ *   settleMany SAUTE le spin (gas paye, rien regle). `marge` = l ecart entre la tete LUE et le premier bloc ou la tx peut tomber (1 au
+ *   moins ; l app y ajoute les blocs d une tete en cache, CACHE_TETE_MS) : REGLABLE tant que tete + marge <= cible + 256 ; `blocsRestants`
+ *   = les blocs ou elle peut encore tomber (1 au moins, jamais 0). PERDU avant la fin de la fenetre du contrat (marge > 1) : `fermeDans`.
  */
-export function etatReglement(targetBlock, blocActuel) {
+export function etatReglement(targetBlock, blocActuel, marge = 1) {
   const t = BigInt(targetBlock), b = BigInt(blocActuel), dernier = t + BigInt(REELS - 1);
+  const m = BigInt(Math.max(1, Math.floor(Number(marge)) || 1)), fin = t + BigInt(FENETRE);
   if (b <= dernier) return { etat: 'TROP_TOT', blocsAvant: Number(dernier - b + 1n) };
-  if (b <= t + BigInt(FENETRE)) return { etat: 'REGLABLE', blocsRestants: Number(t + BigInt(FENETRE) - b) };
-  return { etat: 'PERDU', blocsRestants: 0 };
+  if (b + m <= fin) return { etat: 'REGLABLE', blocsRestants: Number(fin - b - m + 1n) };
+  return b < fin ? { etat: 'PERDU', blocsRestants: 0, fermeDans: Number(fin - b) } : { etat: 'PERDU', blocsRestants: 0 };
 }
+/* l app lit la tete par un cache de 4 s au plus (app.html rpc : eth_blockNumber) : la tete vue peut avoir ce retard */
+export const CACHE_TETE_MS = 4000;
+/** la marge d une tx signee depuis l app : 1 bloc + les blocs d une tete en cache au temps de bloc mesure (200 ms suppose s il ne l est pas) */
+export const margeEnvoi = (msParBloc, cacheMs = CACHE_TETE_MS) => 1 + Math.ceil(cacheMs / (Number(msParBloc) > 0 ? Number(msParBloc) : 200));
 /** ce qu un prix paie VRAIMENT si le spin est regle maintenant : min(prix, pot) ; null si le pot n est pas lu (D1) */
 export function paieMaintenant(prix, pot) {
   if (pot === null || pot === undefined) return null;
@@ -287,12 +297,12 @@ export const planPayDev = ({ contrat }) => ({ etat: 'PRET', appels: [{ to: bas(c
  * `dernierBloc` = le dernier bloc ou le spin se regle encore (cible + 256). Rend { lignes, lot: [ids LOT, dans l ordre],
  * courts: [lignes COURT], perdus: [ids PERDU], potApres }. Le meme calcul sert au bouton Settle de l app ET au regleur du serveur.
  */
-export function planReglement({ spins, pot, table, tete }) {
+export function planReglement({ spins, pot, table, tete, marge = 1 }) {
   const tb = (table || []).map((x) => BigInt(x));
   const lus = pot !== null && pot !== undefined;
   let reste = lus ? BigInt(pot) : null;
   const lignes = [...(spins || [])].sort((a, b) => (BigInt(a.id) < BigInt(b.id) ? -1 : BigInt(a.id) > BigInt(b.id) ? 1 : 0)).map((s) => {
-    const id = String(s.id), base = { id, t: Number(s.t), ...etatReglement(s.t, tete), dernierBloc: Number(s.t) + FENETRE };
+    const id = String(s.id), base = { id, t: Number(s.t), ...etatReglement(s.t, tete, marge), dernierBloc: Number(s.t) + FENETRE };
     if (base.etat === 'TROP_TOT') return { ...base, decision: 'ATTENDRE' };
     if (base.etat === 'PERDU') return { ...base, decision: 'PERDU', paie: 0n };
     if (!Array.isArray(s.faces)) return { ...base, decision: 'NON_LU' };
@@ -327,7 +337,9 @@ export function phraseAvant(l, fmt = usdcPrecis) {
       + ' after the spins above: ' + fmt(l.manque) + ' USDC short. Settle leaves it out. '
       + (l.paie > 0n ? (l.apresLot ? 'Once Settle has paid the spins above, you can accept ' : 'You can accept ') + fmt(l.paie) + ' USDC for it (' + fmt(l.manque) + ' short), or wait for the pot to grow.' : 'Wait for the pot to grow.') + fin;
     case 'ATTENDRE': return 'Spin #' + l.id + ': its three blocks are in after ' + l.blocsAvant + ' more block(s).';
-    case 'PERDU': return 'Spin #' + l.id + ': its ' + FENETRE + '-block window closed before it was settled — it is lost, nothing is returned.';
+    case 'PERDU': return l.fermeDans > 0
+      ? 'Spin #' + l.id + ': its ' + FENETRE + '-block window closes within ' + l.fermeDans + ' block(s), too soon for a new settle to land. Unless a settle already sent lands, it is lost and nothing is returned.'
+      : 'Spin #' + l.id + ': its ' + FENETRE + '-block window closed before it was settled — it is lost, nothing is returned.';
     default: return 'Spin #' + l.id + ': its blocks or the pot were not read just now; nothing is sent for it.';
   }
 }
@@ -426,12 +438,13 @@ export const PLAGE_LOGS = 999;
  * Les spins EN ATTENTE (status 1 relu sur la chaine) classes : TROP_TOT (blocsAvant), REGLABLE (blocsRestants), PERDU ; un statut NON lu
  * donne NON_LU (jamais « regle » ni « perdu » par defaut). `statuts` : Map spinId (string) -> status lu, ou null si la lecture a echoue.
  */
-export function etatSpins({ spuns, statuts, tete }) {
+export function etatSpins({ spuns, statuts, tete, marge = 1 }) {
   return (spuns || []).map((s) => {
     const id = String(s.spinId), st = statuts.get(id);
-    if (st === null || st === undefined) return { id, t: s.targetBlock, etat: 'NON_LU' };
+    /* ⛔ 2026-10-24 (audit slots-app) : statut 0 (None) pour un spin VU dans un Spun = un noeud en retard, pas un spin clos : NON_LU */
+    if (st === null || st === undefined || st === 0) return { id, t: s.targetBlock, etat: 'NON_LU' };
     if (st !== 1) return null;
-    return { id, t: s.targetBlock, ...etatReglement(s.targetBlock, tete) };
+    return { id, t: s.targetBlock, ...etatReglement(s.targetBlock, tete, marge) };
   }).filter(Boolean);
 }
 

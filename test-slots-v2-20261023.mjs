@@ -40,7 +40,8 @@ vu(S.facesDuSpin(h0, 7) === null && S.facesDuSpin([h0, h1], 7) === null && S.fac
 vu(JSON.stringify(S.blocsDesFaces(1002)) === JSON.stringify([1002, 1003, 1004]), 'les blocs des faces : cible, cible + 1, cible + 2');
 vu(S.etatReglement(1002, 1004).etat === 'TROP_TOT' && S.etatReglement(1002, 1004).blocsAvant === 1 && S.etatReglement(1002, 1002).blocsAvant === 3, 'cible + 2 : trop tot (le hash du 3e bloc n existe pas encore dans un bloc suivant)');
 vu(S.etatReglement(1002, 1005).etat === 'REGLABLE' && S.etatReglement(1002, 1005).blocsRestants === 253, 'cible + 3 : reglable, 253 blocs restants');
-vu(S.etatReglement(1002, 1258).etat === 'REGLABLE' && S.etatReglement(1002, 1259).etat === 'PERDU', 'fenetre du PREMIER bloc : cible + 256 reglable, cible + 257 perdu');
+/* 2026-10-24 (audit slots-app) : la tete cible + 256 n est plus reglable — une tx signee la tombe a cible + 257, hors fenetre */
+vu(S.etatReglement(1002, 1257).etat === 'REGLABLE' && S.etatReglement(1002, 1257).blocsRestants === 1 && S.etatReglement(1002, 1258).etat === 'PERDU', 'fenetre du PREMIER bloc : tete cible + 255 reglable (1 bloc ou tomber), tete cible + 256 perdu');
 vu(/three faces from blocks 2, 3 and 4 blocks from now/.test(S.planSpin({ contrat: '0x' + 'cc'.repeat(20), usdc: '0x' + '83'.repeat(20), spinPrice: 500000n }).appels[1].quoi), 'le plan de spin dit les trois blocs');
 {
   const { num, den } = S.distributionExacte();

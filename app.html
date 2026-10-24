@@ -6579,6 +6579,8 @@ async function spinsEnAttenteSlots(contrat, moi, j, tete) {
   const statuts = new Map(); let change = false;
   for (const id of [...slotsCfg.spins.keys()]) {
     let st = null; try { const v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(id) }, 'latest'])); st = v ? v.status : null; } catch (_) { st = null; }
+    /* ⛔ 2026-10-24 (audit) : statut 0 (None) pour un spin VU = un noeud en retard d un bloc : NON lu, relu au repeint suivant, jamais clos */
+    if (st === 0) st = null;
     statuts.set(id, st);
     if (st !== null && st !== 1) { slotsCfg.spins.delete(id); slotsCfg.clos.add(id); change = true; }
   }
@@ -6610,8 +6612,8 @@ async function slotsTic() {
   if (document.hidden || !v || !v.classList.contains('on')) return;
   const vue = slotsCfg.vue;
   let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
-  if (!vue || !Number.isSafeInteger(tete) || Date.now() - slotsCfg.peintA > 15000) { void peindreSlots(); return; }
-  const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b).etat).join();
+  if (!vue || !Number.isSafeInteger(tete) || vue.nonLus || Date.now() - slotsCfg.peintA > 15000) { void peindreSlots(); return; }
+  const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b, vue.marge).etat).join();
   if (etats(tete) !== etats(vue.tete)) { void peindreSlots(); return; }
   if (!slotsCfg.enCours) slotsListe(slotsLignes(Slots.planReglement({ ...vue, tete })));
   clearTimeout(slotsCfg.minuteur);
@@ -6674,7 +6676,9 @@ async function peindreSlotsUneFois(force = false) {
   const { pts, gagne } = slotsCfg.moi;
   mien.textContent = 'Your points (a running total, no prize of its own): ' + (pts === null ? 'not read' : pts.toString()) + ' · won ' + (gagne === null ? 'not read' : usdcTexte(gagne) + ' USDC') + ' · pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC');
   if (lu === null) { bR.hidden = true; bA.hidden = true; slotsCfg.vue = null; slotsListe([]); etat.textContent = 'Your pending spins could not be read just now.'; return null; }
-  const enAttente = Slots.etatSpins({ spuns: lu.spuns, statuts: lu.statuts, tete });
+  /* ⛔ 2026-10-24 (audit) : une tx signee a la tete H tombe au mieux en H + 1, et la tete lue ici peut dater de 4 s (cache) : la marge */
+  const marge = Slots.margeEnvoi(msB);
+  const enAttente = Slots.etatSpins({ spuns: lu.spuns, statuts: lu.statuts, tete, marge });
   /* les faces des spins reglables : leurs trois blocs (lus une fois), calculees comme le contrat ; un bloc illisible = faces null = NON_LU */
   const spins = [];
   for (const x of enAttente) {
@@ -6684,8 +6688,8 @@ async function peindreSlotsUneFois(force = false) {
   }
   const nonLus = enAttente.length - spins.length;
   /* v3 (defaut 1) : CHAQUE spin, dans l ordre du contrat, le pot baissant spin apres spin ; R2 : le chemin Settle part de CETTE vue */
-  const plan = Slots.planReglement({ spins, pot, table, tete });
-  slotsCfg.vue = { spins, pot, table, tete };
+  const plan = Slots.planReglement({ spins, pot, table, tete, marge });
+  slotsCfg.vue = { spins, pot, table, tete, marge, nonLus };
   const lot = plan.lignes.filter((l) => l.decision === 'LOT');
   bR.hidden = lot.length === 0;
   if (lot.length) bR.textContent = 'Settle ' + (lot.length === 1 ? 'spin #' + lot[0].id : lot.length + ' spins') + ' · ' + Slots.usdcPrecis(lot.reduce((s, l) => s + l.paie, 0n)) + ' USDC';
@@ -6706,7 +6710,7 @@ async function peindreSlotsUneFois(force = false) {
   slotsCfg.peintA = Date.now();
   /* un spin qui attend ses blocs ou sa fenetre : le minuteur leger (slotsTic) ; la fenetre peut ne durer que ~51 s (Denim) */
   clearTimeout(slotsCfg.minuteur);
-  if (plan.lignes.some((l) => l.decision !== 'PERDU')) slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000);
+  if (nonLus || plan.lignes.some((l) => l.decision !== 'PERDU')) slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000);
   return { contrat, plan };
 }
 async function slotsAgir(quoi) {
@@ -6746,7 +6750,8 @@ async function slotsAgir(quoi) {
         slotsListe([...envoyes, ...laisses].map((l) => ({ texte: Slots.phraseAvant(l), court: l.decision === 'COURT' })));
         const reste = Math.min(...envoyes.map((x) => x.blocsRestants));
         const msB = slotsCfg.msBloc || (j.regleur && Number(j.regleur.msParBlocMesure) > 0 ? Number(j.regleur.msParBlocMesure) : null);
-        dit('Confirm in your wallet now: ' + reste + ' block(s) left — about ' + Math.round((Slots.secondesFenetre(msB || 200) * reste) / Slots.FENETRE) + ' s ' + (msB ? 'at the measured block time' : 'at 200 ms blocks') + '; after that the spin is lost.');
+        const sec = (Slots.secondesFenetre(msB || 200) * reste) / Slots.FENETRE;
+        dit('Confirm in your wallet now: ' + reste + ' block(s) left — ' + (sec < 1 ? 'under a second' : 'about ' + Math.round(sec) + ' s') + ' ' + (msB ? 'at the measured block time' : 'at 200 ms blocks') + '; after that the spin is lost.');
       }
     }
     const refus = quoi === 'spin' ? 'Not spun' : 'Not settled';
