@@ -78,13 +78,16 @@ ok(!verifierEnregistrementV2(V1, sha(Buffer.from(V1.creation.slice(2), 'hex')), 
 console.log('— C. la page');
 const page = lire('deployer-duels-v2.html');
 const script = (page.match(/<script type="module">([\s\S]*?)<\/script>/) || ['', ''])[1];
-const envois = script.match(/eth_sendTransaction[^\n]*/g) || [];
-ok(envois.length === 1 && /params: \[\{ from: compte, data: D\.creation \}\]/.test(envois[0]) && !/\bto:/.test(envois[0]) && !/value/.test(envois[0]), 'C UN seul envoi : la donnee figee, sans `to` ni valeur');
-ok(/if \(!compte \|\| !intacte \|\| envoi \|\| adresse\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi \|\| !!adresse;/.test(script), 'C rien ne part sans wallet, verification verte, ni si deja deploye');
+/* 2026-10-24 (revue, LOW n°3) : l envoi vit dans envoi-creation.js (UNE fois, hash garde, chainId relu) — execute par test-deployer-envoi-unique */
+const ENVOI = lire('envoi-creation.js');
+const envois = [...script.match(/eth_sendTransaction[^\n]*/g) || [], ...ENVOI.match(/eth_sendTransaction[^\n]*/g) || []];
+ok(envois.length === 1 && /^eth_sendTransaction', \[\{ from, data: creation \}\]\)/.test(envois[0]) && !/\bto:/.test(envois[0]) && !/value/.test(envois[0])
+  && /creerEnvoiCreation\(\{ eth, chaineHex: CHAINE_HEX, creation: D\.creation,/.test(script), 'C UN seul envoi (envoi-creation.js) : la donnee figee, sans `to` ni valeur');
+ok(/if \(!compte \|\| !intacte \|\| envoi \|\| adresse \|\| !E\.peutEnvoyer\(\)\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi \|\| !!adresse \|\| !E\.peutEnvoyer\(\);/.test(script), 'C rien ne part sans wallet, verification verte, ni si deja deploye, ni apres un premier envoi');
 ok(/crypto\.subtle\.digest\('SHA-256', octets\)/.test(script) && /const v = verifierEnregistrementV2\(D, h, V1\);\s*intacte = v\.intacte;/.test(script) && /import \{ verifierEnregistrementV2 \} from '\.\/duels-v2-config\.js'/.test(script),
   'C empreinte RECALCULEE dans le navigateur ; la verification est celle testee ci-dessus, contre la fiche v1');
-ok(/String\(chaine\)\.toLowerCase\(\) === CHAINE_HEX/.test(script) && /wallet_switchEthereumChain/.test(script), 'C la page exige Base avant d envoyer');
-ok(/recu\.status !== '0x1' \|\| !recu\.contractAddress/.test(script) && ["'USDC()'", "'DEV_WALLET()'", "'REWARD_POOL()'", "'GUARDIAN()'", "'tokenOk(address)'", "'nextId()'", "'WINNER_BPS()'", "'POOL_BPS()'", "'SETTLE_WINDOW()'", "'settleDefault(uint256)'", "'eth_getCode'"].every((s) => script.includes(s))
+ok(/if \(!\(await surBase\(\)\)\) return \{ etat: 'PAS_BASE' \};/.test(ENVOI) && /wallet_switchEthereumChain/.test(ENVOI) && /try \{ return \(await chaine\(\)\) === bas\(chaineHex\); \}/.test(ENVOI), 'C la page exige Base avant d envoyer (eth_chainId RELU apres le changement)');
+ok(/if \(r\.status === '0x1' && r\.contractAddress\) return \{ etat: 'CONFIRME'/.test(ENVOI) && /if \(r\.etat !== 'CONFIRME'\) return;/.test(script) &&["'USDC()'", "'DEV_WALLET()'", "'REWARD_POOL()'", "'GUARDIAN()'", "'tokenOk(address)'", "'nextId()'", "'WINNER_BPS()'", "'POOL_BPS()'", "'SETTLE_WINDOW()'", "'settleDefault(uint256)'", "'eth_getCode'"].every((s) => script.includes(s))
   && /prochain === 1n/.test(script) && /parts\.fenetre === BigInt\(FENETRE\) && regleV2/.test(script), 'C apres confirmation : 4 adresses, tokenOk(USDC), nextId 1, 9000 / 700 bps, fenetre 256, settleDefault dans le code — relus');
 ok(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page), 'C aucune cle, aucune signature de message, aucun champ a saisir');
 ok(/won by default by the creator/.test(page) && /\+454\.4 USDC/.test(page) && /568 USDC/.test(page) && /test_V_DuelEV/.test(page) && /A tie <b>not<\/b> settled in the window goes to the creator by default/.test(page),

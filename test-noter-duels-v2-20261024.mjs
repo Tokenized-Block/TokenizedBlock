@@ -13,8 +13,9 @@ let n = 0, ko = 0;
 const vu = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
 const texte = fs.readFileSync(path.join(ICI, 'duels-v2-deploiement.js'), 'utf8').replace(/\r\n/g, '\n');
 const art = JSON.parse(fs.readFileSync(path.join(ICI, 'contracts/out/BlockDuelsV2.sol/BlockDuelsV2.json'), 'utf8'));
-const C = F.constructeur, A = '0x' + 'ab'.repeat(20), DE = '0x' + 'cd'.repeat(20), H = '0x' + '77'.repeat(32);
-const bon = () => ({ fiche: F, texte, tx: { hash: H, from: DE, to: null, input: F.creation, chainId: '0x2105' }, recu: { status: '0x1', contractAddress: A, blockNumber: '0x3253f4b' },
+const C = F.constructeur, A = '0x' + 'ab'.repeat(20), DE = '0x' + 'cd'.repeat(20), H = '0x' + '77'.repeat(32), HB = '0x' + '5b'.repeat(32);
+const bon = () => ({ fiche: F, texte, tx: { hash: H, from: DE, to: null, input: F.creation, chainId: '0x2105' }, recu: { status: '0x1', contractAddress: A, blockNumber: '0x3253f4b', blockHash: HB },
+  chaineNoeud: '0x2105', hashBlocNoeud: HB,
   relectures: { 'USDC()': C.usdc, 'DEV_WALLET()': C.devWallet, 'REWARD_POOL()': C.rewardPool, 'GUARDIAN()': C.guardian }, usdcAdmis: true, nextId: '1',
   constantes: { 'WINNER_BPS()': '9000', 'POOL_BPS()': '700', 'SETTLE_WINDOW()': '256' }, code: art.deployedBytecode.object });
 vu(F.pret === true && F.adresse === null && F.bloc === null, 'la fiche du depot est prete, sans adresse');
@@ -41,6 +42,30 @@ refuse((x) => { x.constantes['SETTLE_WINDOW()'] = '255'; }, 'fenetre relue 255')
 refuse((x) => { x.constantes['WINNER_BPS()'] = '9700'; }, 'part du gagnant relue 9700');
 refuse((x) => { x.code = '0x6080'; }, 'code sans settleDefault (un v1 deploye par erreur)');
 refuse((x) => { x.code = null; }, 'code non lu');
+/* revue 2026-10-24 (LOW) : le NOEUD lu doit etre Base (eth_chainId du noeud, pas celui que la tx declare) et son bloc du recu doit avoir le
+ *   MEME hash que le recu (un recu d une autre chaine, ou d une branche abandonnee, est refuse) */
+refuse((x) => { x.chaineNoeud = '0x7a69'; }, 'le noeud lu n est pas Base (eth_chainId 0x7a69), la tx dit 0x2105');
+refuse((x) => { x.chaineNoeud = null; }, 'eth_chainId du noeud non lu');
+refuse((x) => { x.chaineNoeud = '0x2105 '; }, 'eth_chainId du noeud mal forme');
+refuse((x) => { x.hashBlocNoeud = '0x' + '5c'.repeat(32); }, 'le bloc du recu a un autre hash sur le noeud');
+refuse((x) => { x.hashBlocNoeud = null; }, 'le bloc du recu non lu sur le noeud');
+refuse((x) => { delete x.recu.blockHash; x.hashBlocNoeud = undefined; }, 'recu sans blockHash');
+vu(noter({ ...bon(), hashBlocNoeud: '0x' + '5B'.repeat(32) }).ok === true, 'hash du bloc compare sans la casse (meme hash en majuscules : inscrit)');
+{
+  /* lireChaine lit eth_chainId DU NOEUD et l en-tete du bloc du recu (la MEME fonction que la CLI et le banc anvil) */
+  const { lireChaine } = await import(pathToFileURL(process.env.NOTER_V2 || path.join(ICI, 'contracts/noter-deploiement-duelsv2.mjs')).href);
+  const vus = [];
+  const rpc = async (m, p) => { vus.push(m + (p && p[0] !== undefined ? ':' + String(p[0]) : ''));
+    if (m === 'eth_chainId') return '0x7a69';
+    if (m === 'eth_getTransactionByHash') return bon().tx;
+    if (m === 'eth_getTransactionReceipt') return bon().recu;
+    if (m === 'eth_getBlockByNumber') return p[0] === '0x3253f4b' ? { number: p[0], hash: '0x' + '5c'.repeat(32) } : null;
+    if (m === 'eth_getCode') return bon().code;
+    return '0x' + '0'.repeat(64); };
+  let lu = null; try { lu = await lireChaine(rpc, H, F); } catch (e) { lu = { erreur: String(e.message) }; }
+  vu(lu.chaineNoeud === '0x7a69' && lu.hashBlocNoeud === '0x' + '5c'.repeat(32) && vus.includes('eth_chainId') && vus.includes('eth_getBlockByNumber:0x3253f4b'), 'lireChaine lit eth_chainId du noeud et le hash du bloc du recu (' + lu.chaineNoeud + ', ' + String(lu.hashBlocNoeud).slice(0, 10) + ')');
+  vu(noter({ ...bon(), chaineNoeud: lu.chaineNoeud }).ok === false && noter({ ...bon(), hashBlocNoeud: lu.hashBlocNoeud }).ok === false, 'ce que lireChaine lit d un noeud local / d un autre bloc : noter REFUSE');
+}
 vu(JSON.stringify(RELECTURES.map((r) => r.sig)) === JSON.stringify(['USDC()', 'DEV_WALLET()', 'REWARD_POOL()', 'GUARDIAN()']) && JSON.stringify(CONSTANTES.map((c) => c.sig + '=' + c.attendu)) === '["WINNER_BPS()=9000","POOL_BPS()=700","SETTLE_WINDOW()=256"]', 'les 4 relectures d adresses et les 3 constantes');
 console.log('\n' + (n - ko) + ' ok / ' + ko + ' KO (' + n + ' assertions) ; NE PROUVE PAS un deploiement reel');
 if (ko) process.exitCode = 1;

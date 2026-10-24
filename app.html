@@ -6237,7 +6237,9 @@ $('#skinOuvrirMarche').addEventListener('click', () => { allerA('trade'); setTim
  *   expire), Cancel (le createur, avant qu on le prenne). Le wallet signe chaque appel (envoyerAppels, comme les rolls payes).
  *   ⛔ Sans contrat servi : la carte, sa tuile et les reglages Duels du brain restent CACHES (aucun bouton payant) ; « How it works » le dit.
  *   NON MESURE : un duel complet avec deux vrais wallets sur Base (le contrat n est pas deploye a l ecriture de ce code). */
-const duelsCfg = { j: null, lu: 0, enVol: null, focus: null, getter: undefined, admis: new Map(), jetons: null };
+const duelsCfg = { j: null, lu: 0, enVol: null, focus: null, getter: undefined, admis: new Map(), jetons: null,
+  /* revue 2026-10-24 n°1 : ce que les RECUS disent des duels (id -> duel), la tete lue par le suivi, les duels suivis, le contrat de ces recus */
+  locaux: new Map(), teteLocale: null, suivis: new Set(), contratLocaux: null };
 const DUEL_EPEES = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5l7 7M2 2l1.6.4.4 1.6M9.5 11.5l2-2M10.5 10.5l3 3M13.5 2.5l-7 7M14 2l-1.6.4-.4 1.6M6.5 11.5l-2-2M5.5 10.5l-3 3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
 const duelContrat = (j) => (j && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
 /* 2026-10-24 : le module du contrat SERVI — version 2 (BlockDuelsV2) ou v1 ; une reponse illisible garde v1 (creer / rejoindre fermes) */
@@ -6251,12 +6253,62 @@ async function lireDuelsServis(force = false) {
     try { const j = await fetch('/api/duels', { cache: 'no-store', signal: AbortSignal.timeout(12000) }).then((r) => r.json()); Duels = moduleDuels(j);
       /* v2 sert aussi le temps de bloc MESURE par le serveur (la fenetre se dit en secondes avant un join) ; jamais une valeur supposee */
       { const s = j && j.tempsDeBloc ? Number(j.tempsDeBloc.sParBloc) : NaN; if (Number.isFinite(s) && s > 0) sParBlocApp = s; }
+      /* les recus gardes valent pour LEUR contrat : un autre contrat servi les oublie */
+      { const cj = duelContrat(j); if (cj && cj !== duelsCfg.contratLocaux) { duelsCfg.locaux = new Map(); duelsCfg.contratLocaux = cj; } }
       duelsCfg.j = j; duelsCfg.lu = Date.now(); return j; }
     catch (_) { return duelsCfg.j; }
   })();
   try { return await duelsCfg.enVol; } finally { duelsCfg.enVol = null; }
 }
-const duelsDe = (j, cle = 'duels') => (j && j.ok && Array.isArray(j[cle]) ? j[cle].map((x) => Duels.duelDepuisJson(x)).filter(Boolean) : []);
+const duelsDe = (j, cle = 'duels') => { const lus = (k) => (j && j.ok && Array.isArray(j[k]) ? j[k].map((x) => Duels.duelDepuisJson(x)).filter(Boolean) : []); if (!Duels.fusionnerLocaux || !duelsCfg.locaux || !duelsCfg.locaux.size || !j || !j.ok) return lus(cle); const f = Duels.fusionnerLocaux([...lus('duels'), ...lus('recents')], duelsCfg.locaux); duelsCfg.locaux = f.locaux; return f.duels.filter((d) => Duels.estFini(d) === (cle === 'recents')); };
+/* ══ LE SUIVI D UN DUEL REJOINT (revue BlockDuelsV2 2026-10-24, MOYEN n°1) — /api/duels sert son cache (relu au plus toutes les 15 s) et la carte
+ *   se repeignait toutes les 20 s : apres un join, le joueur voyait encore Accept, et Settle n apparaissait que ~26 s apres, pour une fenetre de
+ *   ~51 s a 200 ms/bloc. Desormais : le RECU est garde (noterRecuDuel -> duelsCfg.locaux, que duelsDe applique a la liste servie), et le duel
+ *   est SUIVI (suivreDuelApp : la tete du noeud et le duel, au temps de bloc mesure — Duels.suivreDuel) ; Settle se montre des que la tete passe
+ *   le bloc resultat, le compte a rebours se dit en secondes. ⛔ Rien ne se signe seul : Settle reste un appui et une signature. */
+/** la tete lue SUR LE NOEUD (pas le cache de 4 s de rpc) ; le cache de rpc est rafraichi avec ; null si illisible */
+async function teteFraiche() {
+  try {
+    const h = await rpcReseau('eth_blockNumber', []), nb = parseInt(h, 16);
+    if (!Number.isSafeInteger(nb) || nb <= 0) return null;
+    rpcTete = { n: Math.max(nb, rpcTete.n), t: Date.now(), v: h };
+    return nb;
+  } catch (_) { return null; }
+}
+/** ce que les evenements d un recu disent des duels : garde dans duelsCfg.locaux (la liste servie le reprend des que le serveur rattrape) */
+function noterRecuDuel(evs) {
+  if (!Duels.duelDepuisRecu || !Array.isArray(evs) || !evs.length) return;
+  if (!(duelsCfg.locaux instanceof Map)) duelsCfg.locaux = new Map();
+  const servis = [...duelsDe(duelsCfg.j), ...duelsDe(duelsCfg.j, 'recents')];
+  for (const id of new Set(evs.map((x) => String(x.id)))) {
+    const base = duelsCfg.locaux.get(id) || servis.find((x) => x.id === id);
+    const nd = base ? Duels.duelDepuisRecu(base, evs) : null;
+    if (nd) duelsCfg.locaux.set(id, nd);
+  }
+}
+/** le compte a rebours d un duel dans la carte (sans repeindre) */
+function majCompteDuel(id, texte) {
+  const l = $('#duelsListe'), p = l && l.querySelector('[data-compte="' + id + '"]');
+  if (p && texte) p.textContent = texte;
+}
+/** suivre UN duel rejoint (un seul suivi par duel) : tete + duel au temps de bloc mesure, repeint a chaque changement d etat */
+async function suivreDuelApp(id) {
+  if (!(duelsCfg.suivis instanceof Set)) duelsCfg.suivis = new Set();
+  const k = String(id), d = duelsCfg.locaux && duelsCfg.locaux.get(k), contrat = duelContrat(duelsCfg.j);
+  if (!Duels.suivreDuel || !d || !contrat || duelsCfg.suivis.has(k)) return null;
+  duelsCfg.suivis.add(k);
+  try {
+    return await Duels.suivreDuel({ duel: d, sParBloc: () => sParBlocApp, horloge: () => Date.now(), attendre: (ms) => new Promise((o) => setTimeout(o, ms)), maxMs: 15 * 60000,
+      lireTete: teteFraiche,
+      lireStatut: async (i) => { try { return Duels.statutDepuisRetour(await rpc('eth_call', [{ to: contrat, data: Duels.appelDuelEtat(i) }, 'latest'])); } catch (_) { return null; } },
+      surEtat: (x) => {
+        if (Number.isSafeInteger(x.tete)) duelsCfg.teteLocale = Math.max(Number(duelsCfg.teteLocale) || 0, x.tete);
+        if (x.duel && x.duel.finChaine && !duelsCfg.locaux.get(k)?.finChaine) duelsCfg.locaux.set(k, x.duel);
+        if (x.change) void peindreDuels(); else majCompteDuel(k, x.texte);
+      } });
+  } finally { duelsCfg.suivis.delete(k); }
+}
+/* fin du suivi d un duel rejoint */
 /* 2026-10-24 (prod game33 : NON_LU « logs unreadable » a chaque lecture, la carte promettait « back in a few seconds » pour toujours) :
  *   aucune promesse de delai. Premiere lecture pas finie (echec false) : « being read » ; une lecture qui a ECHOUE (echec true, ou pas de
  *   reponse) : « could not be read just now », et pourquoi (le texte du serveur, court, pose en textContent). */
@@ -6348,8 +6400,15 @@ async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
       + (r && !accord ? ' ⚠ The app reads ' + r.scoreA + '/5 vs ' + r.scoreB + '/5 from the same block — the contract\'s scores differ.' : '');
   } else if (e.etat === 'ANNULE') t2.textContent = 'Cancelled — the stake went back to its creator.';
   else if (e.etat === 'REMBOURSE') t2.textContent = 'Refunded in full.';
+  /* revue 2026-10-24 n°1 : la chaine dit ce duel fini, le serveur ne l a pas encore relu */
+  else if (e.etat === 'FINI_CHAINE') t2.textContent = (e.statut === 'Defaulted' ? 'Won by default by the creator' : e.statut === 'Settled' ? 'Settled' : 'Closed') + ' on chain — the result shows here once it is read.';
   else t2.textContent = 'Its state could not be read just now.';
   li.append(faces, t1, t2);
+  /* revue 2026-10-24 n°1 : le compte a rebours en SECONDES (temps de bloc mesure) ; le suivi d un duel rejoint le tient a jour sans repeindre */
+  if (e.etat === 'ATTENTE' || e.etat === 'REGLABLE') {
+    const tc = Duels.texteCompte ? Duels.texteCompte(e, sParBlocApp) : null;
+    if (tc) { const pc = document.createElement('p'); pc.className = 'note'; pc.dataset.compte = d.id; pc.textContent = tc; li.append(pc); }
+  }
   /* v2 : pas de Accept tant que la fenetre ne se dit pas au temps mesure (jamais un bouton qui refuserait apres l appui) */
   ouverts = ouverts && !(Duels.phraseAvantJoin && Duels.phraseAvantJoin(sParBlocApp) === null);
   const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts);
@@ -6391,7 +6450,9 @@ async function peindreDuels() {
   const ouv = Duels.duelsOuverts(j);
   { const fo = $('#duelForm'); if (fo) fo.hidden = !ouv; }
   let c = null; try { c = compte; } catch (_) { c = null; }
-  const moi = c ? String(c).toLowerCase() : null, tete = Number(j.tete), maintenant = Math.floor(Date.now() / 1000);
+  /* revue 2026-10-24 n°1 : la tete servie peut retarder de 15 s ; celle lue par le suivi d un duel (teteFraiche) est prise si plus haute */
+  const moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000);
+  const tete = Math.max(Number(j.tete), Number(duelsCfg.teteLocale) || 0);
   const duels = duelsDe(j), recents = duelsDe(j, 'recents');
   const etat2 = (d) => Duels.etatDuel(d, tete, maintenant).etat;
   const ouverts = duels.filter((d) => etat2(d) === 'OUVERT');
@@ -6454,6 +6515,8 @@ async function actionDuel(id, action, li) {
   if (!contrat || !d) { dit('This duel could not be read again just now — nothing was asked.'); return; }
   let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
   if (!Number.isSafeInteger(tete)) { dit('The chain head could not be read — nothing was asked.'); return; }
+  /* revue 2026-10-24 n°1 : la tete de rpc peut dater de 4 s ; celle du suivi (teteFraiche) est prise si plus haute */
+  tete = Math.max(tete, Number(duelsCfg.teteLocale) || 0);
   const maintenant = Math.floor(Date.now() / 1000);
   if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action)) { dit(action === 'JOIN' && !Duels.duelsOuverts(j) ? Duels.PHRASE_DUELS_FERMES + ' Nothing was asked.' : 'Not possible any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ') — nothing was asked.'); void peindreDuels(); return; }
   let plan = null, face = null;
@@ -6466,6 +6529,11 @@ async function actionDuel(id, action, li) {
     /* revue adverse 2026-10-18 : un jeton RETIRE par le gardien fait revert join() APRES l approve — relu avant tout plan */
     const adm = await admisDuel(contrat, d.token);
     if (adm !== true) { dit(adm === false ? symDuel(d.token) + ' is no longer admitted by the duels contract — joining would fail; nothing was asked.' : 'Whether ' + symDuel(d.token) + ' is still admitted could not be read — nothing was asked.'); return; }
+    /* revue 2026-10-24 n°1 : /api/duels peut servir OUVERT un duel deja pris (son cache) — v2 relit le duel SUR LA CHAINE avant tout plan */
+    if (Duels.statutDepuisRetour) {
+      let st = null; try { st = Duels.statutDepuisRetour(await rpc('eth_call', [{ to: contrat, data: Duels.appelDuelEtat(d.id) }, 'latest'])); } catch (_) { st = null; }
+      if (st !== 'Open') { dit(st ? 'Already accepted or closed (read on chain just now: ' + st.toLowerCase() + ') — nothing was asked.' : 'This duel could not be read on chain just now — nothing was asked.'); void peindreDuels(); return; }
+    }
     plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant, sParBloc: sParBlocApp });
     const fb = li && li.querySelectorAll('.duelFaces .jourFace')[1];
     if (fb) { try { fb.innerHTML = logoSvg(paramsLogoDepuisApparence(face.apparence, 'B')); } catch (_) {} }
@@ -6484,10 +6552,16 @@ async function actionDuel(id, action, li) {
   const r = await envoyerAppels(plan.appels, c);
   if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not sent')); return; }
   const lus = await recusLogs(r), evs = Duels.lireEvenementsDuel(lus.logs, contrat);
+  /* revue 2026-10-24 n°1 : ce que le recu dit fait foi pour la carte, jusqu a ce que le serveur rattrape (duelsDe) */
+  noterRecuDuel(evs);
   if (action === 'JOIN') {
     const jn = evs.find((x) => x.type === 'JOINED');
     if (!jn) { dit('Sent (' + r.hash.slice(0, 10) + '…) but not read back yet — the card shows it once the server reads it.'); }
-    else {
+    else if (Duels.suivreDuel) {
+      /* v2 : le duel est SUIVI (tete + duel au temps de bloc mesure) ; Settle se montre des que le bloc resultat est passe */
+      dit('Accepted — block ' + jn.targetBlock.toLocaleString('en-US') + ' decides. Settle shows here as soon as it is in (anyone may). ' + (Duels.APRES_FENETRE || ''));
+      duelsCfg.focus = String(jn.id); void suivreDuelApp(String(jn.id));
+    } else {
       dit('Accepted — block ' + jn.targetBlock.toLocaleString('en-US') + ' decides. Waiting for it…');
       let t2 = 0;
       for (let k = 0, nT = toursAttente(); k < nT && t2 <= jn.targetBlock; k++) { await new Promise((o) => setTimeout(o, pasAttente())); try { t2 = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
@@ -7007,6 +7081,8 @@ function bjMontrer(p, rolls, walletCarte) {
       if (p.kind === 'DUEL_SETTLE') { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
       if (p.kind === 'DUEL_SETTLE_DEFAULT') { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
       const jd = duelContrat(duelsCfg.j), recu = await recuDe(r.hash), evs = recu && jd ? Duels.lireEvenementsDuel(recu.logs, jd) : [];
+      /* revue 2026-10-24 n°1 : le recu fait foi pour la carte ; un join signe par le brain est SUIVI (Settle des que le bloc est la) */
+      noterRecuDuel(evs); { const jn = evs.find((x) => x.type === 'JOINED'); if (jn) void suivreDuelApp(jn.id); }
       const ev = evs[evs.length - 1];
       bcEtape(m, !ev ? 'Sent — the Duels card shows it once the server reads it.'
         : ev.type === 'CREATED' ? 'Duel #' + ev.id + ' is open — on the map next to your block; anyone may accept it.'
@@ -26705,6 +26781,9 @@ async function bcAccepterDuel(m, id) {
   bcBoutons(m, [['Sign in your wallet', async () => {
     const s = await bcSigner(m, plan.appels.map((a) => ({ ...a, nom: a.quoi })), null);
     if (s.ok) bcEtape(m, 'Accepted — settle it in the Duels card of the Game tab once the block is in (within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + (Duels.APRES_FENETRE ? '). ' + Duels.APRES_FENETRE : '; after that both are refunded).'), 'oui');
+    /* revue 2026-10-24 n°1 : le recu du join fait foi pour la carte, et le duel est SUIVI (Settle des que le bloc resultat est passe) */
+    if (s.ok && s.hash) void (async () => { const rc = await recuDe(s.hash), cj = duelContrat(duelsCfg.j); const evs = rc && cj ? Duels.lireEvenementsDuel(rc.logs, cj) : [];
+      noterRecuDuel(evs); const jn = evs.find((x) => x.type === 'JOINED'); if (jn) void suivreDuelApp(jn.id); })();
     void lireDuelsServis(true).then(() => { void peindreDuels(); });
   }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
 }

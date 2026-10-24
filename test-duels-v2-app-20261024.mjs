@@ -120,8 +120,9 @@ const DUELS = new Map([
 ]);
 const nd = noeud(DUELS);
 const lecteur = S.creerLecteurDuelsV2({ rpc: nd.rpc, contrat: C, intervalleMs: 0 });
-const route = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv',
-  'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(() => lecteur, async () => 2, new Map([['0x' + 'b0'.repeat(20), A]]), S.reponseDuelsV2, FICHE, { sParBloc: 2 });
+/* 2026-10-24 (revue n°2) : la route dit le temps de bloc PRUDENT (sParBlocServi : longue + courte) ; ici les deux valent 2 s */
+const route = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv', 'mesureCourteSrv', 'sParBlocServi',
+  'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(() => lecteur, async () => 2, new Map([['0x' + 'b0'.repeat(20), A]]), S.reponseDuelsV2, FICHE, { sParBloc: 2 }, { lire: async () => 2, etat: () => ({ sParBloc: 2 }) }, () => 2);
 const get = async () => { await lecteur.lire(true); const res = { corps: null, writeHead() {}, end(s) { this.corps = s; } }; await route({ method: 'GET' }, res, '/api/duels'); return JSON.parse(res.corps); };
 const realNow = Date.now; Date.now = () => T * 1000;
 let J2;
@@ -194,15 +195,20 @@ const document = { createElement: el };
 const monterCarte = ({ sParBlocApp = 2, j, tete = TETE, envois, logs = [] }) => {
   const env = { document, Duels: V2, sParBlocApp, FENETRE_ROLLS: FENETRE, texteBlocs, duelsCfg: { focus: null, j }, compte: B,
     montantDuel: async (b) => String(b) + ' raw', faceDuelHtml: () => '', faceBlocHtml: () => '', courtAdr: (a) => String(a).slice(0, 6), logoSvg: () => '', paramsLogoDepuisApparence: () => ({}),
-    lireDuelsServis: async () => j, duelContrat: (x) => (x && x.contrat) || null, rpc: async (m) => { if (m === 'eth_blockNumber') { env._t += 1; return hx(env._t); } throw new Error(m); }, _t: tete,
+    lireDuelsServis: async () => j, duelContrat: (x) => (x && x.contrat) || null, _t: tete,
+    /* 2026-10-24 (revue n°1) : le join relit duels(id) sur la chaine avant le plan (le duel #1 y est Open) */
+    rpc: async (m, p) => { if (m === 'eth_blockNumber') { env._t += 1; return hx(env._t); } if (m === 'eth_call' && String(p[0].data).startsWith(selecteur('duels(uint256)'))) return retourDuel(DUELS.get(Number(BigInt('0x' + p[0].data.slice(10)))) || {}); throw new Error(m); },
+    /* le bloc de suivi (revue n°1) : sa boucle attend sur un setTimeout du banc qui ne rappelle jamais (elle est executee par test-duels-v2-suivi) */
+    rpcReseau: async (m) => { if (m === 'eth_blockNumber') return hx(env._t); throw new Error(m); }, rpcTete: { n: 0, t: 0, v: null }, $: () => null, setTimeout: () => 0,
     peindreDuels: async () => null, peindreDuelsMap: async () => null, tirerFaceDeRoll: () => ({ guess: g(14), apparence: {} }), bcSolde: async () => 10_000_000n, symDuel: () => 'USDC',
     admisDuel: async () => true, phraseNonConfirme: (r, t) => t, toursAttente: () => 400, pasAttente: () => 0,
     envoyerAppels: async (appels, c) => { envois.push({ appels, c }); return { etat: 'CONFIRME', hash: '0x' + 'ab'.repeat(32) }; },
     recusLogs: async () => ({ logs }) };
   const noms = Object.keys(env).filter((k) => !k.startsWith('_'));
-  const f = new Function(...noms, '__env', srcDuelsDe + srcBoutons + srcLigne + '\n' + srcAction + '\nreturn { ligneDuel, actionDuel, duelsDe };');
+  const f = new Function(...noms, '__env', srcDuelsDe + srcBoutons + srcSuivi + srcLigne + '\n' + srcAction + '\nreturn { ligneDuel, actionDuel, duelsDe };');
   return { env, ...f(...noms.map((k) => env[k]), env) };
 };
+const srcSuivi = tranche(APP, '/* ══ LE SUIVI D UN DUEL REJOINT', '/* fin du suivi d un duel rejoint */');
 const textes = (li) => li.tous().filter((c) => c.tag === 'p').map((c) => c.textContent).join(' | ');
 const boutons = (li) => li.tous().filter((c) => c.tag === 'button').map((c) => c.dataset.action).join();
 {
@@ -231,7 +237,8 @@ const boutons = (li) => li.tous().filter((c) => c.tag === 'button').map((c) => c
   const li = el('div'); const note = el('p'); note.dataset.detat = '1'; li.append(note);
   await K.actionDuel('1', 'JOIN', li);
   ok(envois.length === 1 && envois[0].appels.length === 2 && envois[0].appels[1].data.startsWith(selecteur('join(uint256,uint8[5])')), 'Accept : UN seul envoi (approve EXACT + join)');
-  ok(/press Settle within 256 blocks/.test(note.textContent) && /After that, the creator wins by default\./.test(note.textContent) && K.env.duelsCfg.focus === '1', 'apres le join : le bloc attendu, « press Settle … After that, the creator wins by default. », la carte reste sur CE duel');
+  /* 2026-10-24 (revue n°1) : plus d attente aveugle dans actionDuel — le duel est SUIVI (test-duels-v2-suivi) ; la note le dit */
+  ok(/Settle shows here as soon as it is in/.test(note.textContent) && /After that, the creator wins by default\./.test(note.textContent) && K.env.duelsCfg.focus === '1', 'apres le join : « Settle shows here as soon as it is in … After that, the creator wins by default. », la carte reste sur CE duel');
 }
 {
   /* la ligne AVANT la signature : la note porte la ligne au moment de l envoi */
@@ -239,7 +246,7 @@ const boutons = (li) => li.tous().filter((c) => c.tag === 'button').map((c) => c
   const K = monterCarte({ j: J2, envois, logs: [] });
   const li = el('div'); const note = el('p'); note.dataset.detat = '1'; li.append(note);
   let noteAuMoment = null;
-  const f = new Function(...Object.keys(K.env).filter((k) => !k.startsWith('_')), srcDuelsDe + srcBoutons + srcLigne + '\n' + srcAction + '\nreturn actionDuel;');
+  const f = new Function(...Object.keys(K.env).filter((k) => !k.startsWith('_')), srcDuelsDe + srcBoutons + srcSuivi + srcLigne + '\n' + srcAction + '\nreturn actionDuel;');
   const envT = { ...K.env, envoyerAppels: async (appels) => { noteAuMoment = note.textContent; envois.push(appels); return { etat: 'CONFIRME', hash: '0x' + 'cd'.repeat(32) }; } };
   const actionDuel2 = f(...Object.keys(K.env).filter((k) => !k.startsWith('_')).map((k) => envT[k]));
   await actionDuel2('1', 'JOIN', li);
@@ -265,7 +272,7 @@ const boutons = (li) => li.tous().filter((c) => c.tag === 'button').map((c) => c
   const srcAcc = tranche(APP, 'async function bcAccepterDuel(', '/* ══ LE BRAIN OS');
   const monterChat = (sParBlocApp) => {
     const env = { etapes: [], boutons: [], signes: [] };
-    const deps = { bcAvecWallet: async () => true, compte: B, lireDuelsServis: async () => J2, duelContrat: (x) => (x && x.contrat) || null, Duels: V2, sParBlocApp, FENETRE_ROLLS: FENETRE, texteBlocs,
+    const deps = { bcAvecWallet: async () => true, compte: B, lireDuelsServis: async () => J2, duelContrat: (x) => (x && x.contrat) || null, Duels: V2, sParBlocApp, FENETRE_ROLLS: FENETRE, texteBlocs, duelsCfg: { j: J2 } /* duelsDe lit les recus gardes (revue n°1) */,
       rpc: async () => hx(TETE + 1), tirerFaceDeRoll: () => ({ guess: g(14) }), bcSolde: async () => 10_000_000n, symDuel: () => 'USDC', montantDuel: async (b) => String(b) + ' raw', admisDuel: async () => true,
       bcEtape: (m, t) => { env.etapes.push(t); }, bcBoutons: (m, b) => { env.boutons.push({ apres: env.etapes.length, b }); },
       bcSigner: async (m, appels) => { env.signes.push(appels); return { ok: true }; }, peindreDuels: async () => null };

@@ -105,7 +105,8 @@ import { lireEvenementsJeu, evenementsPractice, fusionnerJournal, avecBlocks, TO
   profondeurJournee, premierBlocDuJour, journeeCouverte, garderJournal, completerJournal, ajouterListing } from './journal-jeu.js';
 import { premierBlocApres, DELAI_REVELATION_S } from './face-du-jour.js';
 /* 2026-10-23 DENIM : le temps de bloc MESURE (deux en-tetes), et les reculs exprimes en secondes convertis avec lui (temps-de-bloc.js) */
-import { sParBlocMesure, enteteVersMesure, blocsPour, RECUL_MESURE_BLOCS } from './temps-de-bloc.js';
+import { sParBlocMesure, enteteVersMesure, blocsPour, RECUL_MESURE_BLOCS, sParBlocPrudent } from './temps-de-bloc.js';
+import { creerMesureCourte } from './temps-de-bloc-court.js';
 import { actionsDesLogs, crediterActions, joursTicketParWallet, niveauWallet, bonusNiveauxSemaine, TOPICS_XP, XP_PAR_ACTION, NIVEAUX_XP } from './niveaux-jeu.js';
 import { WETH_BASE } from './plan-eth-block.js';
 import { attester, mesurerFenetre } from './missions-attestation.js';
@@ -4461,6 +4462,21 @@ async function lirePotRollsSrv(contrat) {
   catch (_) { /* relu au prochain appel */ } finally { potRollsSrv.enVol = false; }
 }
 setInterval(() => { void crediterVolumeRolls(); }, 120000).unref?.();
+/* ══ LE TEMPS DE BLOC SERVI (revue BlockDuelsV2 2026-10-24, n°2) — la mesure LONGUE (sParBlocSrv : 1 000 blocs, relue toutes les 10 min) met
+ *   ~10 a 13 min a suivre un passage de 2 s a 200 ms : « Settle within about 512 s » aurait ete dit pour une fenetre de ~51 s. Ce qui est DIT
+ *   aux clients (/api/tirage, /api/duels) est sParBlocPrudent(longue, courte) : la mesure COURTE (100 blocs, borne basse, relue au plus toutes
+ *   les 15 s, a la demande et toutes les 30 s quand un contrat v2 des duels est servi) l emporte des que les blocs accelerent. Les reculs du
+ *   serveur (logs, marges) gardent la mesure longue (tempsDeBlocSrv.sParBloc).
+ *   ⛔ APRES le setInterval de crediterVolumeRolls : test-volume-rolls-jour-bloc execute la tranche de source qui le precede. */
+const mesureCourteSrv = creerMesureCourte({ rpc: (m, p) => rpcServeur(m, p) });
+function sParBlocServi() { return sParBlocPrudent(tempsDeBlocSrv.sParBloc, mesureCourteSrv.etat().sParBloc); }
+function tempsDeBlocServiJson() {
+  void mesureCourteSrv.lire();
+  const c = mesureCourteSrv.etat();
+  return { ...tempsDeBlocJson(), sParBloc: sParBlocServi(), sParBlocLong: tempsDeBlocSrv.sParBloc,
+    court: { sParBloc: c.sParBloc, mesureEntre: c.de === null ? null : [c.de, c.a], lu: c.mesureLe !== null ? new Date(c.mesureLe).toISOString() : null, erreur: c.erreur } };
+}
+/* fin du temps de bloc servi */
 /* 2026-10-24 (audit rolls-duels) : les REGLES vivantes (currentRules + rulesVersion + unitCreator + MAX_PRIZE), lues au plus toutes les 30 s
  *   (10 s apres un echec), servies si la derniere lecture reussie a moins de 2 min — sinon null (l app dit « could not be read »), JAMAIS la
  *   fiche de deploiement. Lecture au demarrage et toutes les 60 s, en plus de chaque /api/tirage.
@@ -4646,6 +4662,8 @@ function duelsV2() {
   return lecteurDuelsV2;
 }
 setInterval(() => { const l = duelsV2(); if (l) void l.lire(); }, 30000).unref?.();
+/* revue 2026-10-24 n°2 : tant qu un contrat v2 est servi, la mesure courte du temps de bloc est tenue fraiche (2 en-tetes / 30 s) */
+if (process.env.TB_SONDES !== '0') setInterval(() => { if (duelsV2()) void mesureCourteSrv.lire(); }, 30000).unref?.();
 
 /* ══ LE REGLEUR DES SLOTS (2026-10-23, option 3 de Phil) — un spin non regle dans sa fenetre (256 blocs) est PERDU : le serveur regle donc
  *   les spins lui-meme quand le proprietaire a pose SLOTS_KEEPER_KEY (un wallet qu il cree et approvisionne en ETH pour le gas). La cle
@@ -5068,6 +5086,8 @@ const SERVIS = [
   /* 2026-10-24 : BlockDuelsV2 — page de deploiement (noindex, aucun lien), fiche, verification, et le module de plan v2 importe par app.html
    *   et brain-jeu.js (il importe temps-de-bloc.js, deja servi). ⛔ absent d ici = 404 = page morte. */
   'deployer-duels-v2.html', 'duels-v2-deploiement.js', 'duels-v2-config.js', 'duels-v2-plan.js',
+  /* 2026-10-24 (revue v2, LOW n°3) : UNE creation au plus, importe par les trois pages de deploiement (duels v1, duels v2, slots) */
+  'envoi-creation.js',
   /* 2026-10-23 (Phil) : BlockSlots (3 faces de bloc, points, prix fixes) — page de deploiement (noindex, aucun lien), fiche, encodeur,
    *   appels non signes ; slots-plan.js est importe par app.html. ⛔ absent d ici = 404 = page morte. */
   'deployer-slots.html', 'slots-deploiement.js', 'slots-config.js', 'slots-plan.js',
@@ -6970,7 +6990,7 @@ function traiterRequete(req, res) {
       pot: contratRolls && potRollsSrv.brut !== null ? potRollsSrv.brut : null, potLu: contratRolls && potRollsSrv.lu ? new Date(potRollsSrv.lu).toISOString() : null };
     /* 2026-10-23 DENIM : le temps de bloc MESURE (null tant qu il ne l est pas) — l app en tire les durees des fenetres et son rythme de relecture */
     void sParBlocSrv();
-    return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls, ticketpot: ticketpotJson(), tempsDeBloc: tempsDeBlocJson(),
+    return ({ ok: true, mode: 'SHADOW', pot: 0, seuilVolumeUsd: SEUIL_VOLUME_JOUR_USD, veille, rolls, ticketpot: ticketpotJson(), tempsDeBloc: tempsDeBlocServiJson(),
       apercu: apercuFace.hash ? { bloc: apercuFace.bloc, hash: apercuFace.hash, lu: new Date(apercuFace.lu).toISOString() } : null,
       jour: { id: j.id, debut: iso(j.debut), fin: iso(j.fin), tickets: tJ, racine: racine(tJ),
         wallets: Object.entries(etatJ).map(([adresse, w]) => ({ adresse, volumeUsd: w.usd, hashes: w.hashes, ticket: tJ.includes(adresse) })),
@@ -7254,7 +7274,9 @@ function traiterRequete(req, res) {
       void lv2.lire();
       void sParBlocSrv();
       const blocsDuCreateur = (cr) => { const l = []; for (const [jeton, createur] of createurParBlock) if (createur === cr && l.length < 5) l.push(String(jeton).toLowerCase()); return l; };
-      rendreD(reponseDuelsV2({ lecteur: lv2, fiche: DUELS_V2_DEPLOIEMENT, maintenant: Math.floor(Date.now() / 1000), sParBloc: tempsDeBlocSrv.sParBloc, blocksDe: blocsDuCreateur }));
+      /* revue 2026-10-24 n°2 : la fenetre dite avant un join suit un changement de temps de bloc (mesure courte, sParBlocServi) */
+      void mesureCourteSrv.lire();
+      rendreD(reponseDuelsV2({ lecteur: lv2, fiche: DUELS_V2_DEPLOIEMENT, maintenant: Math.floor(Date.now() / 1000), sParBloc: sParBlocServi(), blocksDe: blocsDuCreateur }));
       return;
     }
     const regles = { miseMin: MISE_MIN_DUEL.toString(), expirationMinS: EXP_MIN_DUEL, expirationMaxS: EXP_MAX_DUEL, partageBps: { gagnant: 9000, pool: 700, dev: 300 } };

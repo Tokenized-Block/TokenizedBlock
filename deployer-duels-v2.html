@@ -73,6 +73,7 @@ b[data-k]{color:var(--or)}
     <p>
       <button type="button" id="bConnecter" class="sec">Connect wallet</button>
       <button type="button" id="bDeployer" disabled>Deploy Block Duels v2</button>
+      <button type="button" id="bRevoir" class="sec" hidden>Check again</button>
     </p>
     <p id="dEtat" class="note"></p>
     <dl id="dResultat" hidden>
@@ -95,12 +96,16 @@ import { DUELS_DEPLOIEMENT as V1 } from './duels-deploiement.js';
 import { verifierEnregistrementV2 } from './duels-v2-config.js';
 import { WINNER_BPS, POOL_BPS, BPS, FENETRE } from './duels-plan.js';
 import { selecteur } from './keccak.js';
+/* revue 2026-10-24 (LOW n°3) : UNE creation au plus — le hash est garde, Deploy ne se rallume jamais apres un envoi (« Check again »), et
+ *   eth_chainId est relu apres un changement de reseau (envoi-creation.js, la MEME regle pour les trois pages de deploiement) */
+import { creerEnvoiCreation } from './envoi-creation.js';
 const $ = (s) => document.querySelector(s);
 const eth = () => window.ethereum;
 const CHAINE_HEX = '0x' + D.chaine.toString(16);
 const C = D.constructeur;
 const NOMS = { usdc: 'USDC (admitted for good)', devWallet: 'TokenizedBlock wallet (3% dev share)', rewardPool: 'Community reward pool (7%)', guardian: 'Guardian (admits or removes tokens, nothing else)' };
 let compte = null, intacte = false, envoi = false, adresse = D.adresse || null;
+const E = creerEnvoiCreation({ eth, chaineHex: CHAINE_HEX, creation: D.creation, cle: 'tb.deploy.' + D.contrat + '.' + D.sha256Creation, stockage: (() => { try { return window.localStorage; } catch (_) { return null; } })() });
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
 const MOTS = { winner: String(Number(WINNER_BPS) / 100), pool: String(Number(POOL_BPS) / 100), dev: String(Number(BPS - WINNER_BPS - POOL_BPS) / 100), window: String(FENETRE) };
 for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
@@ -125,7 +130,10 @@ $('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manqu
 function peindre() {
   $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet pays the deployment gas; it gets no power over the duels.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
-  $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;
+  const tx = E.etat().tx;
+  $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse || !E.peutEnvoyer();
+  $('#bRevoir').hidden = !tx || !!adresse; $('#bRevoir').disabled = envoi;
+  if (tx) { $('#dResultat').hidden = false; $('#rTx').textContent = tx; }
   if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second duel contract.', 'note ok');
 }
 $('#bConnecter').addEventListener('click', async () => {
@@ -134,28 +142,20 @@ $('#bConnecter').addEventListener('click', async () => {
   catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
   peindre();
 });
-const attendre = async (tx) => { let recu = null; for (let i = 0; i < 90 && !recu; i += 1) { await new Promise((r) => setTimeout(r, 2000)); try { recu = await eth().request({ method: 'eth_getTransactionReceipt', params: [tx] }); } catch (_) { recu = null; } } return recu; };
-const surBase = async () => {
-  const chaine = await eth().request({ method: 'eth_chainId' });
-  if (String(chaine).toLowerCase() === CHAINE_HEX) return true;
-  try { await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAINE_HEX }] }); return true; } catch (_) { return false; }
-};
 const appel = async (to, sig, args = '') => String(await eth().request({ method: 'eth_call', params: [{ to, data: selecteur(sig) + args }, 'latest'] }));
 const lireAdr = async (to, sig) => ('0x' + (await appel(to, sig)).slice(-40)).toLowerCase();
 const lireU = async (to, sig, args = '') => BigInt(await appel(to, sig, args));
 const SEL_DEFAUT = selecteur('settleDefault(uint256)').slice(2).toLowerCase();
-$('#bDeployer').addEventListener('click', async () => {
-  if (!compte || !intacte || envoi || adresse) return;
-  envoi = true; peindre();
-  try {
-    if (!(await surBase())) { dire('Switch your wallet to Base, then try again.', 'note ko'); return; }
-    dire('Confirm in your wallet…');
-    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: compte, data: D.creation }] });
-    $('#dResultat').hidden = false; $('#rTx').textContent = String(tx);
-    dire('Sent. Waiting for Base to confirm…');
-    const recu = await attendre(tx);
-    if (!recu) { dire('Not confirmed yet after 3 minutes. Keep the transaction hash above and check it on a block explorer.', 'note ko'); return; }
-    if (recu.status !== '0x1' || !recu.contractAddress) { dire('The transaction was confirmed but failed: no contract was created.', 'note ko'); return; }
+/* la suite d un envoi ou d un « Check again » : ce que dit le recu, puis le contrat RELU */
+async function suite(r) {
+  if (r.etat === 'PAS_BASE') { dire('Your wallet is not on Base. Switch it to Base, then try again. Nothing was sent.', 'note ko'); return; }
+  if (r.etat === 'DECLINE') { dire('You declined in your wallet. Nothing was sent.', 'note ko'); return; }
+  if (r.etat === 'INCERTAIN') { dire('The wallet returned an error, so this page cannot tell whether it sent the transaction' + (r.message ? ' (' + r.message + ')' : '') + '. Deploy stays off: check your wallet activity first. If nothing was sent, reload this page.', 'note ko'); return; }
+  if (r.etat === 'NON_CONFIRME') { dire('Not confirmed yet. Deploy stays off so nothing is sent twice: press Check again, or look up the transaction hash above on a block explorer.', 'note ko'); return; }
+  if (r.etat === 'ECHOUE') { dire('The transaction was confirmed but failed: no contract was created. You can deploy again.', 'note ko'); return; }
+  if (r.etat !== 'CONFIRME') return;
+  {
+    const recu = r.recu;
     const a = String(recu.contractAddress).toLowerCase();
     $('#rAdr').textContent = a + ' (block ' + parseInt(recu.blockNumber, 16) + ')';
     const relu = { usdc: await lireAdr(a, 'USDC()'), devWallet: await lireAdr(a, 'DEV_WALLET()'), rewardPool: await lireAdr(a, 'REWARD_POOL()'), guardian: await lireAdr(a, 'GUARDIAN()') };
@@ -169,9 +169,23 @@ $('#bDeployer').addEventListener('click', async () => {
     if (bon) adresse = a;
     dire(bon ? 'Deployed: the contract reads back exactly what was signed. Send the transaction hash to the team: the app opens v2 duels once the record is written from it.'
       : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
+  }
+}
+$('#bDeployer').addEventListener('click', async () => {
+  if (!compte || !intacte || envoi || adresse || !E.peutEnvoyer()) return;
+  envoi = true; peindre();
+  try {
+    await suite(await E.envoyer(compte, { avant: () => dire('Confirm in your wallet…'), envoye: (tx) => { $('#dResultat').hidden = false; $('#rTx').textContent = tx; dire('Sent. Waiting for Base to confirm…'); } }));
   } catch (e) {
-    dire(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
+    dire('Sent, but the contract could not be read back: ' + String((e && e.message) || e).slice(0, 160) + '. Press Check again.', 'note ko');
   } finally { envoi = false; peindre(); }
+});
+$('#bRevoir').addEventListener('click', async () => {
+  if (envoi || adresse || !E.etat().tx) return;
+  envoi = true; peindre();
+  try { dire('Checking the transaction again…'); await suite(await E.verifier()); }
+  catch (e) { dire('The contract could not be read back: ' + String((e && e.message) || e).slice(0, 160) + '. Press Check again.', 'note ko'); }
+  finally { envoi = false; peindre(); }
 });
 try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; peindre(); }); } catch (_) {}
 peindre();

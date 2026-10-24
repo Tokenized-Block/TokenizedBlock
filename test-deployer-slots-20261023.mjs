@@ -80,12 +80,17 @@ ok(jete, 'B une table de 15 prix ne s encode pas');
 console.log('— C. la page');
 const page = lire('deployer-slots.html');
 const script = (page.match(/<script type="module">([\s\S]*?)<\/script>/) || ['', ''])[1];
+/* 2026-10-24 (revue BlockDuelsV2, LOW n°3) : la creation part par envoi-creation.js (UNE fois, hash garde, chainId relu) — execute par
+ *   test-deployer-envoi-unique-20261024.mjs ; le fund facultatif reste dans la page (2 envois) */
+const ENVOI = lire('envoi-creation.js');
 const envois = script.match(/eth_sendTransaction[^\n]*/g) || [];
-ok(envois.length === 3 && /params: \[\{ from: compte, data: D\.creation \}\]/.test(envois[0]) && !/\bto:/.test(envois[0]) && !/value/.test(envois[0]), 'C UN envoi de creation : la donnee figee, sans `to` ni valeur (+ le fund facultatif : approve EXACT + fund)');
-ok(/approve\(address,uint256\)'\) \+ adresse\.slice\(2\)\.padStart\(64, '0'\) \+ mot\(FONDS\)/.test(envois[1]) && /fund\(uint256\)'\) \+ mot\(FONDS\)/.test(envois[2]), 'C le fund : approve EXACT du montant puis fund du meme montant');
-ok(/if \(!compte \|\| !intacte \|\| envoi \|\| adresse\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi \|\| !!adresse;/.test(script), 'C rien ne part sans wallet, ni si la verification est rouge, ni si deja deploye');
+const envoiCreation = ENVOI.match(/eth_sendTransaction[^\n]*/g) || [];
+ok(envois.length === 2 && envoiCreation.length === 1 && /^eth_sendTransaction', \[\{ from, data: creation \}\]\)/.test(envoiCreation[0]) && !/\bto:/.test(envoiCreation[0]) && !/value/.test(envoiCreation[0])
+  && /creerEnvoiCreation\(\{ eth, chaineHex: CHAINE_HEX, creation: D\.creation,/.test(script), 'C UN envoi de creation (envoi-creation.js) : la donnee figee, sans `to` ni valeur (+ le fund facultatif : approve EXACT + fund)');
+ok(/approve\(address,uint256\)'\) \+ adresse\.slice\(2\)\.padStart\(64, '0'\) \+ mot\(FONDS\)/.test(envois[0]) && /fund\(uint256\)'\) \+ mot\(FONDS\)/.test(envois[1]), 'C le fund : approve EXACT du montant puis fund du meme montant');
+ok(/if \(!compte \|\| !intacte \|\| envoi \|\| adresse \|\| !E\.peutEnvoyer\(\)\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi \|\| !!adresse \|\| !E\.peutEnvoyer\(\);/.test(script), 'C rien ne part sans wallet, ni si la verification est rouge, ni si deja deploye, ni apres un premier envoi');
 ok(/crypto\.subtle\.digest\('SHA-256', octets\)/.test(script) && /const v = verifierEnregistrement\(D, h\);\s*intacte = v\.intacte;/.test(script) && /from '\.\/slots-config\.js'/.test(script), 'C l empreinte est RECALCULEE dans le navigateur, verification = slots-config.js');
-ok(/String\(chaine\)\.toLowerCase\(\) === CHAINE_HEX/.test(script) && /wallet_switchEthereumChain/.test(script), 'C la page exige Base');
+ok(/if \(!\(await surBase\(\)\)\) return \{ etat: 'PAS_BASE' \};/.test(ENVOI) && /try \{ return \(await chaine\(\)\) === bas\(chaineHex\); \}/.test(ENVOI) && /const surBase = \(\) => E\.surBase\(\);/.test(script), 'C la page exige Base (creation ET fund : eth_chainId RELU apres le changement)');
 ok(['USDC()', 'DEV_WALLET()', 'SPIN_PRICE()', 'POT_SHARE_BPS()', 'prizes()'].every((s) => script.includes("'" + s + "'")) && /table\.join\(\) === C\.prizes\.map\(String\)\.join\(\)/.test(script), 'C apres confirmation, elle RELIT les 4 immuables et la table, et compare');
 ok(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page), 'C aucune cle, aucune signature de message, aucun champ a saisir');
 const ev = S.esperance(C.prizes, C.spinPrice, C.potShareBps);

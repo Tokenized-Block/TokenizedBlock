@@ -5,7 +5,10 @@
  *   pas sur Base (chainId 0x2105, s il est donne) ou a un `to` ; le recu n est pas status 0x1 ou n a pas de contractAddress ; l `input` n est
  *   pas OCTET POUR OCTET la `creation` de la fiche ; une relecture (USDC, DEV_WALLET, REWARD_POOL, GUARDIAN) differe de la fiche ; tokenOk(USDC)
  *   n est pas vrai ; nextId() n est pas 1 ; WINNER_BPS / POOL_BPS / SETTLE_WINDOW ne sont pas 9000 / 700 / 256 ; le code deploye n a pas le
- *   selecteur de settleDefault(uint256) (un v1 deploye par erreur).
+ *   selecteur de settleDefault(uint256) (un v1 deploye par erreur) ; le NOEUD lu ne repond pas eth_chainId 0x2105 ; le hash de son bloc du
+ *   recu n est pas le blockHash du recu.
+ * ⛔ BORNE : un anvil lance avec --chain-id 8453 repond 0x2105 et des hashes coherents avec lui-meme : ces deux gardes ne le distinguent PAS de
+ *   Base. Le rpcUrl par defaut est mainnet.base.org ; en passer un autre, c est le croire.
  * `noter()` est pur (fiche + texte + tx + recu + relectures -> nouveau texte ou refus) : teste avec des stubs ; la CLI branche le RPC. */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -33,7 +36,7 @@ export const CONSTANTES = Object.freeze([
 export const SELECTEUR_DEFAUT = selecteur('settleDefault(uint256)').replace(/^0x/, '').toLowerCase();
 
 /** pur : rend { ok:false, pourquoi } ou { ok:true, texte, adresse, bloc } */
-export function noter({ fiche, texte, tx, recu, relectures, usdcAdmis, nextId, constantes = {}, code = null }) {
+export function noter({ fiche, texte, tx, recu, relectures, usdcAdmis, nextId, constantes = {}, code = null, chaineNoeud = null, hashBlocNoeud = null }) {
   const refus = (p) => ({ ok: false, pourquoi: p });
   if (!fiche || fiche.contrat !== 'BlockDuelsV2' || fiche.chaine !== 8453) return refus('the record is not the BlockDuelsV2 record for Base');
   if (fiche.pret !== true || !fiche.creation) return refus('the record is not ready (no creation data): nothing to match');
@@ -46,6 +49,12 @@ export function noter({ fiche, texte, tx, recu, relectures, usdcAdmis, nextId, c
   if (!ADR.test(adresse)) return refus('the receipt has no contractAddress');
   const bloc = parseInt(recu.blockNumber, 16);
   if (!Number.isSafeInteger(bloc) || bloc <= 0) return refus('the receipt has no block number');
+  /* revue 2026-10-24 (LOW) : le chainId que la tx DECLARE ne dit rien du noeud qui l a servie. Le NOEUD lu doit etre Base (eth_chainId), et
+   *   son bloc du recu doit porter le MEME hash que le recu (un recu d une branche abandonnee, ou d un autre noeud, est refuse). */
+  if (chaineNoeud !== '0x2105') return refus('the node read is not Base: eth_chainId ' + chaineNoeud + ', expected 0x2105');
+  const hb = bas(recu.blockHash);
+  if (!/^0x[0-9a-f]{64}$/.test(hb)) return refus('the receipt has no blockHash');
+  if (bas(hashBlocNoeud) !== hb) return refus('block ' + bloc + ' on the node has hash ' + hashBlocNoeud + ', the receipt says ' + hb);
   for (const r of RELECTURES) {
     const attendu = bas(fiche.constructeur[r.champ]), lu = relectures && relectures[r.sig];
     if (lu === undefined || lu === null) return refus(r.sig + ' could not be read on chain');
@@ -67,7 +76,12 @@ export function noter({ fiche, texte, tx, recu, relectures, usdcAdmis, nextId, c
 
 /** les lectures on-chain de noter(), par un `rpc(method, params)` donne (CLI et banc anvil : la MEME fonction) */
 export async function lireChaine(rpc, txHash, fiche) {
+  let chaineNoeud = null; try { chaineNoeud = bas(await rpc('eth_chainId', [])); } catch (_) { chaineNoeud = null; }
   const tx = await rpc('eth_getTransactionByHash', [txHash]), recu = await rpc('eth_getTransactionReceipt', [txHash]);
+  let hashBlocNoeud = null;
+  if (recu && /^0x[0-9a-f]+$/i.test(String(recu.blockNumber || ''))) {
+    try { const b = await rpc('eth_getBlockByNumber', [recu.blockNumber, false]); hashBlocNoeud = b && b.hash ? bas(b.hash) : null; } catch (_) { hashBlocNoeud = null; }
+  }
   const adresse = recu && recu.contractAddress ? bas(recu.contractAddress) : null;
   const relectures = {}, constantes = {};
   let usdcAdmis = null, nextId = null, code = null;
@@ -80,7 +94,7 @@ export async function lireChaine(rpc, txHash, fiche) {
     for (const c of CONSTANTES) { const v = await lire(c.sig); constantes[c.sig] = v ? BigInt(v).toString() : null; }
     try { code = await rpc('eth_getCode', [adresse, 'latest']); } catch (_) { code = null; }
   }
-  return { tx, recu, relectures, usdcAdmis, nextId, constantes, code };
+  return { tx, recu, relectures, usdcAdmis, nextId, constantes, code, chaineNoeud, hashBlocNoeud };
 }
 
 /* ---------------------------------------------------------------- CLI */

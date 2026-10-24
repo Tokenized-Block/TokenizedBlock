@@ -107,15 +107,19 @@ if (D2) {
 console.log('— C. la page');
 const page = lire('deployer-duels.html');
 const script = (page.match(/<script type="module">([\s\S]*?)<\/script>/) || ['', ''])[1];
-const envois = script.match(/eth_sendTransaction[^\n]*/g) || [];
-ok(envois.length === 1 && /params: \[\{ from: compte, data: D\.creation \}\]/.test(envois[0]) && !/\bto:/.test(envois[0]) && !/value/.test(envois[0]), 'C UN seul envoi : la donnee figee, sans `to` ni valeur');
-ok(/if \(!compte \|\| !intacte \|\| envoi \|\| adresse\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi \|\| !!adresse;/.test(script),
-  'C rien ne part sans wallet connecte, ni si la verification est rouge, ni si un contrat est deja deploye');
+/* 2026-10-24 (revue BlockDuelsV2, LOW n°3) : l envoi de la creation vit dans envoi-creation.js (UNE fois, hash garde, chainId relu) —
+ *   execute par test-deployer-envoi-unique-20261024.mjs ; ici, la forme de l envoi et le branchement de la page */
+const ENVOI = lire('envoi-creation.js');
+const envois = [...script.match(/eth_sendTransaction[^\n]*/g) || [], ...ENVOI.match(/eth_sendTransaction[^\n]*/g) || []];
+ok(envois.length === 1 && /^eth_sendTransaction', \[\{ from, data: creation \}\]\)/.test(envois[0]) && !/\bto:/.test(envois[0]) && !/value/.test(envois[0])
+  && /creerEnvoiCreation\(\{ eth, chaineHex: CHAINE_HEX, creation: D\.creation,/.test(script), 'C UN seul envoi (envoi-creation.js) : la donnee figee, sans `to` ni valeur');
+ok(/if \(!compte \|\| !intacte \|\| envoi \|\| adresse \|\| !E\.peutEnvoyer\(\)\) return;/.test(script) && /\$\('#bDeployer'\)\.disabled = !compte \|\| !intacte \|\| envoi \|\| !!adresse \|\| !E\.peutEnvoyer\(\);/.test(script),
+  'C rien ne part sans wallet connecte, ni si la verification est rouge, ni si un contrat est deja deploye, ni apres un premier envoi');
 ok(/if \(!D\.pret \|\| !D\.creation\) throw new Error\('not ready'\);/.test(script) && /Not ready: /.test(script), 'C un enregistrement pas pret n allume rien et dit ce qui manque');
 ok(/crypto\.subtle\.digest\('SHA-256', octets\)/.test(script) && /const v = verifierEnregistrement\(D, h\);\s*intacte = v\.intacte;/.test(script) && /import \{ verifierEnregistrement \} from '\.\/duels-config\.js'/.test(script),
   'C l empreinte est RECALCULEE dans le navigateur et la verification est CELLE testee ci-dessus (duels-config.js)');
-ok(/String\(chaine\)\.toLowerCase\(\) === CHAINE_HEX/.test(script) && /wallet_switchEthereumChain/.test(script), 'C la page exige Base avant d envoyer');
-ok(/recu\.status !== '0x1' \|\| !recu\.contractAddress/.test(script) && ["'USDC()'", "'DEV_WALLET()'", "'REWARD_POOL()'", "'GUARDIAN()'", "'tokenOk(address)'", "'nextId()'", "'WINNER_BPS()'", "'POOL_BPS()'"].every((s) => script.includes(s))
+ok(/if \(!\(await surBase\(\)\)\) return \{ etat: 'PAS_BASE' \};/.test(ENVOI) && /wallet_switchEthereumChain/.test(ENVOI) && /try \{ return \(await chaine\(\)\) === bas\(chaineHex\); \}/.test(ENVOI), 'C la page exige Base avant d envoyer (eth_chainId RELU apres le changement)');
+ok(/if \(r\.status === '0x1' && r\.contractAddress\) return \{ etat: 'CONFIRME'/.test(ENVOI) && /if \(r\.etat !== 'CONFIRME'\) return;/.test(script) &&["'USDC()'", "'DEV_WALLET()'", "'REWARD_POOL()'", "'GUARDIAN()'", "'tokenOk(address)'", "'nextId()'", "'WINNER_BPS()'", "'POOL_BPS()'"].every((s) => script.includes(s))
   && /prochain === 1n/.test(script) && /parts\.winner === WINNER_BPS && parts\.pool === POOL_BPS/.test(script), 'C apres confirmation, elle RELIT les 4 adresses, tokenOk(USDC), nextId = 1 et le partage 9000 / 700 bps');
 ok(!/private|mnemonic|seed|signTypedData|personal_sign|eth_sign\b/i.test(script) && !/<input/i.test(page), 'C aucune cle, aucune signature de message, aucun champ a saisir');
 const cles = [...page.matchAll(/data-k="(\w+)"/g)].map((m) => m[1]);

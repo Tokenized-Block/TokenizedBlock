@@ -12,6 +12,7 @@ import { selecteur, topic } from './keccak.js';
 import * as V1 from './duels-plan-app.js';
 import { etatReglement } from './blockrolls-plan.js';
 import { secondesPour } from './temps-de-bloc.js';
+import { lireDuel, SIG_DUELS } from './duels-plan.js';
 export * from './duels-plan-app.js';
 
 export const VERSION = 2;
@@ -24,6 +25,8 @@ export const STATUTS_V2 = Object.freeze(['None', 'Open', 'Joined', 'Settled', 'C
 /* les etats de l ecran : ceux de v1, sauf REMBOURSABLE (n existe plus) -> DEFAULT_CREATOR (reclamable par tous) ; GAGNE_DEFAUT = fini */
 export const DEFAULT_CREATOR = 'DEFAULT_CREATOR';
 export const GAGNE_DEFAUT = 'GAGNE_DEFAUT';
+/* cote app seulement : la chaine dit le duel fini (Settled, Defaulted…) et le serveur ne l a pas encore relu */
+export const FINI_CHAINE = 'FINI_CHAINE';
 export const FINIS = Object.freeze([...V1.FINIS, GAGNE_DEFAUT]);
 
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -54,6 +57,8 @@ export const duelsOuverts = (j) => !!(j && j.version === VERSION && j.ok === tru
  * gagne par defaut) ; DEFAULT_CREATOR (rejoint, fenetre passee : settleDefault, par n importe qui). Jamais REMBOURSABLE.
  */
 export function etatDuel(d, tete, maintenant) {
+  /* revue 2026-10-24 n°1 : un duel que la CHAINE dit fini (lu par le suivi de l app) avant que le serveur ne l ait relu — aucune action */
+  if (d && d.finChaine) return { etat: FINI_CHAINE, statut: d.finChaine };
   if (d && d.defaulted) return { etat: GAGNE_DEFAUT };
   const e = V1.etatDuel(d, tete, maintenant);
   return e.etat === 'REMBOURSABLE' ? { etat: DEFAULT_CREATOR } : e;
@@ -133,5 +138,109 @@ export function duelDepuisJson(o) {
 /** l inverse, pour le serveur (BigInt -> texte) */
 export function duelEnJson(d) {
   return { ...V1.duelEnJson(d), defaulted: d.defaulted ? { winner: d.defaulted.winner, payout: d.defaulted.payout.toString() } : null };
+}
+
+/* ══ APRES UN JOIN (revue BlockDuelsV2 2026-10-24, MOYEN n°1) — /api/duels sert son cache (relu au plus toutes les 15 s) : juste apres un join,
+ *   il dit encore le duel OUVERT. A 200 ms/bloc la fenetre ne dure que ~51 s : Settle doit etre propose DES que le bloc resultat existe. L app
+ *   garde donc ce que le RECU dit (duelDepuisRecu), corrige la liste servie avec (fusionnerLocaux, oublie des que le serveur a rattrape), et
+ *   suit le duel elle-meme (suivreDuel : la tete et le duel au temps de bloc MESURE, jusqu au settle ou a la fin de la fenetre).
+ *   ⛔ Rien ne se signe ici : le suivi ne fait que LIRE et dire ; Settle reste un appui et une signature du wallet. */
+const rang = (d) => (d && (d.settled || d.cancelled || d.refunded || d.defaulted || d.finChaine) ? 2 : d && d.joiner ? 1 : 0);
+/** vrai si le duel est fini (regle, annule, rembourse, gagne par defaut, ou dit fini par la chaine) */
+export const estFini = (d) => rang(d) === 2;
+/** le duel `d` tel que les evenements d un RECU le disent (JOINED, SETTLED, DEFAULT_WON, CANCELLED, REFUNDED de CE duel) ; null si aucun, ou incoherent */
+export function duelDepuisRecu(d, evs) {
+  if (!d || !Array.isArray(evs)) return null;
+  const id = String(d.id);
+  let x = null;
+  for (const ev of evs) {
+    if (!ev || String(ev.id) !== id) continue;
+    const b = x || d;
+    if (ev.type === 'JOINED') {
+      const tb = Number(ev.targetBlock);
+      if (!ADR.test(bas(ev.joiner)) || !Array.isArray(ev.guessB) || ev.guessB.length !== 5 || !Number.isSafeInteger(tb) || tb <= 0) return null;
+      x = { ...b, joiner: bas(ev.joiner), guessB: ev.guessB.map(Number), targetBlock: tb };
+    } else if (ev.type === 'SETTLED') {
+      if (!b.joiner) return null;
+      x = { ...b, settled: { blockHash: bas(ev.blockHash), scoreA: ev.scoreA, scoreB: ev.scoreB, winner: bas(ev.winner), payout: BigInt(ev.payout) } };
+    } else if (ev.type === 'DEFAULT_WON') {
+      /* le defaut va TOUJOURS au createur : un recu qui dirait un autre gagnant n est pas cru */
+      if (!b.joiner || bas(ev.winner) !== bas(b.creator)) return null;
+      x = { ...b, defaulted: { winner: bas(ev.winner), payout: BigInt(ev.payout) } };
+    } else if (ev.type === 'CANCELLED') x = { ...b, cancelled: true };
+    else if (ev.type === 'REFUNDED') x = { ...b, refunded: true };
+  }
+  return x ? { ...x, local: true } : null;
+}
+/**
+ * la liste SERVIE corrigee par les duels connus localement (Map id -> duel) : un servi MOINS avance que le local (ouvert < rejoint < fini) est
+ * remplace par le local ; un servi au moins aussi avance l emporte et le local est OUBLIE ; un local absent de la liste est ajoute.
+ * Rend { duels, locaux } (locaux = ceux qui servent encore).
+ */
+export function fusionnerLocaux(servis, locaux) {
+  const reste = new Map(locaux || []), vus = new Set();
+  const duels = (servis || []).map((d) => {
+    const k = String(d.id); vus.add(k);
+    const l = reste.get(k);
+    if (!l) return d;
+    if (rang(d) >= rang(l)) { reste.delete(k); return d; }
+    return l;
+  });
+  for (const [k, l] of reste) if (!vus.has(k)) duels.push(l);
+  return { duels, locaux: reste };
+}
+/** les secondes qui restent (au temps de bloc mesure) : avant le bloc resultat (ATTENTE), ou pour regler (REGLABLE) ; null sinon / non mesure */
+export function compteARebours(e, sParBloc) {
+  if (!e) return null;
+  if (e.etat === 'ATTENTE') return secondesPour(e.blocsAvant, sParBloc);
+  if (e.etat === 'REGLABLE') return secondesPour(e.blocsRestants, sParBloc);
+  return null;
+}
+/** la ligne du compte a rebours (anglais, courte) ; sans mesure : les blocs seulement ; null hors ATTENTE / REGLABLE */
+export function texteCompte(e, sParBloc) {
+  const s = compteARebours(e, sParBloc);
+  if (e && e.etat === 'ATTENTE') return s === null ? 'Result block in ' + e.blocsAvant + ' block' + (e.blocsAvant === 1 ? '' : 's') + '.' : 'Result block in about ' + Math.max(1, Math.round(s)) + ' s.';
+  if (e && e.etat === 'REGLABLE') return s === null ? e.blocsRestants + ' blocks left to settle.' : 'About ' + Math.round(s) + ' s left to settle (' + e.blocsRestants + ' blocks).';
+  return null;
+}
+/** la pause entre deux lectures du suivi : un DEMI temps de bloc avant le bloc resultat ou tant que la tete n est pas lue (borne 100 ms - 1 s ;
+ *  500 ms sans mesure), 1 s ensuite */
+export function pasSuiviMs(etat, sParBloc) {
+  if (etat !== 'ATTENTE' && etat !== 'NON_LU') return 1000;
+  const s = Number(sParBloc);
+  if (!Number.isFinite(s) || s <= 0) return 500;
+  return Math.min(1000, Math.max(100, Math.round((s * 1000) / 2)));
+}
+/** duels(id) a lire sur la chaine */
+export const appelDuelEtat = (id) => selecteur(SIG_DUELS) + u(id);
+/** le statut ('Open', 'Joined', 'Settled', 'Cancelled', 'Refunded', 'Defaulted') d un retour de duels(id) ; null s il est illisible */
+export function statutDepuisRetour(retour) {
+  const r = lireDuel(retour);
+  return r ? STATUTS_V2[r.status] || null : null;
+}
+/**
+ * LE SUIVI d un duel rejoint : lit la tete (`lireTete`) au pas de pasSuiviMs, et le statut du duel sur la chaine (`lireStatut`, au plus toutes
+ * les `statutMs` une fois le bloc resultat passe) ; appelle surEtat({ duel, tete, etat, change, resteS, texte }) a chaque pas ; s arrete des
+ * que le duel n est plus ATTENTE / REGLABLE (regle, fini sur la chaine, ou fenetre passee : DEFAULT_CREATOR), ou apres `maxMs`.
+ * Les lectures ratees ne sont pas des etats : la tete garde la plus haute deja lue. Rend { etat, duel, tete }.
+ */
+export async function suivreDuel({ duel, lireTete, lireStatut = null, sParBloc = () => null, attendre, horloge = () => Date.now(), surEtat = () => {}, maxMs = 600000, statutMs = 2000 }) {
+  const t0 = horloge(), sp = () => (typeof sParBloc === 'function' ? sParBloc() : sParBloc);
+  let d = duel, avant = null, tete = null, dernierStatut = -Infinity;
+  for (;;) {
+    let t = null; try { t = await lireTete(); } catch (_) { t = null; }
+    if (Number.isSafeInteger(t) && t > 0) tete = Math.max(tete || 0, t);
+    const now = horloge();
+    if (lireStatut && tete !== null && Number.isSafeInteger(d.targetBlock) && tete > d.targetBlock && now - dernierStatut >= statutMs) {
+      dernierStatut = now;
+      let s = null; try { s = await lireStatut(d.id); } catch (_) { s = null; }
+      if (s && s !== 'Open' && s !== 'Joined' && s !== 'None') d = { ...d, finChaine: s };
+    }
+    const e = tete === null ? { etat: 'NON_LU' } : etatDuel(d, tete, Math.floor(now / 1000));
+    const change = e.etat !== avant; avant = e.etat;
+    surEtat({ duel: d, tete, etat: e.etat, change, resteS: compteARebours(e, sp()), texte: texteCompte(e, sp()) });
+    if (!['ATTENTE', 'REGLABLE', 'NON_LU'].includes(e.etat) || now - t0 >= maxMs) return { etat: e.etat, duel: d, tete };
+    await attendre(pasSuiviMs(e.etat, sp()));
+  }
 }
 

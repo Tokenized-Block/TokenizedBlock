@@ -40,8 +40,9 @@ const M = [
   [AP, 'carte : join sans le temps de bloc', '\n    plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant, sParBloc: sParBlocApp });', '\n    plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });'],
   [AP, 'chat : join sans le temps de bloc', 'const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant, sParBloc: sParBlocApp });', 'const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });'],
   [AP, 'carte : Settle by default non branche', "  else if (action === 'SETTLE_DEFAULT' && Duels.planSettleDefault) plan = Duels.planSettleDefault({ contrat, id: d.id, targetBlock: d.targetBlock, blocActuel: tete });\n", ''],
-  [AP, 'carte : apres le join, la carte quitte le duel', '      duelsCfg.focus = String(jn.id);\n', ''],
-  [AP, 'carte : apres le join, le texte de v1', "(Duels.APRES_FENETRE ? ' (anyone may). ' + Duels.APRES_FENETRE : ' (anyone may; after that both are refunded).')", "' (anyone may; after that both are refunded).'"],
+  [AP, 'carte : apres le join, la carte quitte le duel', '      duelsCfg.focus = String(jn.id); void suivreDuelApp', '      void suivreDuelApp'],
+  /* 2026-10-24 (revue n°1) : le join v2 ne fait plus d attente aveugle (le duel est suivi) — ancres de la branche v2 */
+  [AP, 'carte : apres le join, le texte de v1', "Settle shows here as soon as it is in (anyone may). ' + (Duels.APRES_FENETRE || '')", "Settle shows here as soon as it is in (anyone may; after that both are refunded).'"],
   [AP, 'How it works : la phrase v1 reste', "if (rf) rf.textContent = 'Not accepted in time: the stake goes back to its creator. ' + fen + ', even on a tie.';", ''],
   [SW, 'route : v2 jamais essaye', 'const lv2 = duelsV2();', 'const lv2 = null;'],
   [CF, 'page : arguments differents de v1 acceptes', "if (v1) for (const k of ORDRE_ARGS) if (bas(v1.constructeur && v1.constructeur[k]) !== bas(D.constructeur && D.constructeur[k])) pourquoi.push(k + ' differs from the v1 duels contract');", ''],

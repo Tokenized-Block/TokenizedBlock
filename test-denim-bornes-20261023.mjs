@@ -108,7 +108,9 @@ vu((SRV.match(/blocsPour\((?:Number\()?heures\)? \* 3600, await sParBlocSrv\(\)\
 /* integration 2026-10-23 : le journal ne PREDIT plus le premier bloc du jour au temps de bloc, il le TROUVE par horodatages (premierBlocJournal) */
 vu(!/sParBloc = tsT > tsA \? \(tsT - tsA\) \/ 1000 : 2/.test(SRV) && /const premier = await premierBlocJournal\(tete, j\);/.test(SRV), 'journal : plus de repli a 2 s — premier bloc du jour trouve par horodatages');
 vu(!/ROLLS_MARGE_BLOCS/.test(SRV_CODE) && (SRV.match(/const sur = tete - margeBlocsRolls\(\);/g) || []).length === 3, 'les 3 scans (volume, journal, XP) : marge au temps mesure');
-vu(/tempsDeBloc: tempsDeBlocJson\(\)/.test(tranche(SRV, 'function corpsTirage()', "/* ══ LE NIVEAU D UN WALLET")), '/api/tirage sert tempsDeBloc');
+/* 2026-10-24 (revue v2 n°2) : /api/tirage sert le temps de bloc PRUDENT (longue + courte, tempsDeBlocServiJson = tempsDeBlocJson + sParBloc
+ *   prudent) ; execute par test-temps-de-bloc-bascule-20261024.mjs */
+vu(/tempsDeBloc: tempsDeBlocServiJson\(\)/.test(tranche(SRV, 'function corpsTirage()', "/* ══ LE NIVEAU D UN WALLET")) && /return \{ \.\.\.tempsDeBlocJson\(\), sParBloc: sParBlocServi\(\),/.test(SRV), '/api/tirage sert tempsDeBloc (prudent)');
 vu(/fenetreBlocs: balaye, sParBloc: tempsDeBlocSrv\.sParBloc/.test(SRV), '/api/activite sert sParBloc');
 vu(/premierBlocApres\(rpcServeur, [^\n]*\{ sParBloc: tempsDeBlocSrv\.sParBloc \?\? undefined \}\)/.test(SRV), 'bloc E : le temps mesure passe a la recherche');
 

@@ -89,3 +89,37 @@ export function pasAttenteBlocMs(sParBloc) {
   if (s === null) return 1000;
   return Math.min(2000, Math.max(250, Math.round(s * 1000)));
 }
+
+/* ══ LA MESURE COURTE (revue BlockDuelsV2 2026-10-24, n°2) : la mesure longue (RECUL_MESURE_BLOCS, relue toutes les 10 min) met ~13 min a
+ *   suivre un passage de 2 s a 200 ms ; pendant ce temps « Settle within about 512 s » serait dit pour une fenetre de ~51 s. La mesure COURTE
+ *   (RECUL_COURT_BLOCS blocs, relue souvent) suit le changement en ~RECUL_COURT_BLOCS blocs. C est une borne BASSE : avec des horodatages en
+ *   secondes entieres, l ecart vrai peut etre plus court d 1 s, donc (ecart - 1) / n ; exacte avec timestampMs. */
+export const RECUL_COURT_BLOCS = 100;
+/** ecart minimal (s) pour une mesure courte en secondes entieres : 100 blocs = 20 s a 200 ms, 200 s a 2 s */
+export const ECART_COURT_MIN_S = 10;
+/** secondes par bloc, borne BASSE, entre deux en-tetes { bloc, ts, tsMs? } ; null si non mesurable */
+export function sParBlocBorneBasse({ haut, bas } = {}) {
+  if (!haut || !bas || !Number.isSafeInteger(haut.bloc) || !Number.isSafeInteger(bas.bloc)) return null;
+  const n = haut.bloc - bas.bloc;
+  if (n <= 0) return null;
+  if (fini(haut.tsMs) && fini(bas.tsMs)) {
+    const d = haut.tsMs - bas.tsMs;
+    return d > 0 ? plausible(d / 1000 / n) : null;
+  }
+  if (!fini(haut.ts) || !fini(bas.ts)) return null;
+  const d = haut.ts - bas.ts;
+  if (d < ECART_COURT_MIN_S) return null;
+  return plausible((d - 1) / n);
+}
+/** ecart relatif au-dela duquel la mesure courte l emporte (en dessous, c est l arrondi des secondes, pas un changement) */
+export const ECART_PRUDENT = 0.1;
+/**
+ * le temps de bloc a DIRE (une fenetre en secondes ne doit jamais etre plus longue que la vraie) : la mesure longue, sauf si la mesure COURTE
+ * est plus rapide de plus de ECART_PRUDENT (les blocs viennent d accelerer) ; une seule des deux -> elle ; aucune -> null.
+ */
+export function sParBlocPrudent(long, court) {
+  const l = plausible(long), c = plausible(court);
+  if (l === null) return c;
+  if (c === null) return l;
+  return c < l * (1 - ECART_PRUDENT) ? c : l;
+}
