@@ -12775,15 +12775,20 @@ function noteTicketPaye() {
 function direTicketPaye(tk, hash) {
   if (!tk || typeof tk !== 'object') return;
   const ou = hash ? lieuxTicketPaye.get(String(hash).toLowerCase()) || null : null;
-  const span = ou && typeof ou === 'object' && ou.isConnected !== false && typeof ou.querySelector === 'function' ? ou.querySelector('.ticketPayeNote') : null;
+  /* ⛔ 2026-10-24 (revue adverse, 4e tour, D4) : un lieu persistant (#peEtat, #fNote) reste « connecte » une fois cache ou reutilise par un
+   *   AUTRE trade : la note y tombait invisible, ou effacait celle d un autre hash. Le lieu ne sert que s il est VISIBLE, et la note porte
+   *   son hash ; sinon elle va sous la face du ticket (« Last trade »). */
+  const h = String(hash || '').toLowerCase();
+  const lieuVisible = ou && typeof ou === 'object' && ou.isConnected !== false && ou.offsetParent !== null && typeof ou.querySelector === 'function';
+  const span = lieuVisible ? [...ou.querySelectorAll('.ticketPayeNote')].find((x) => x.dataset && x.dataset.hash === h) || null : null;
   if (tk.ok === true || tk.etat === 'CREDITE') { ticketPayeNote = null; if (span) span.remove(); return; }
   const p = String(tk.pourquoi || 'it was not read').replace(/:? ?send it again in a moment\.?$/i, '').slice(0, 220);
   /* NON_LU : le hash attend sur le serveur, qui le reessaie seul jusqu a 48 h apres le trade (balayerTicketsEnAttente) — c est ce que dit la note */
   const coeur = (tk.etat === 'NON_LU' ? 'not counted for a day ticket yet (the server tries again for up to 48 h)' : 'no day ticket') + ' — ' + p + '.';
   if (typeof ou === 'function') { try { ou('Day ticket of this trade: ' + coeur); return; } catch (_) { /* le fil n est plus la : sous le ticket */ } }
-  else if (ou && typeof ou === 'object' && ou.isConnected !== false && typeof ou.append === 'function') {
+  else if (lieuVisible && typeof ou.append === 'function') {
     const s = span || document.createElement('span');
-    s.className = 'ticketPayeNote'; s.textContent = ' Day ticket of this trade: ' + coeur;
+    s.className = 'ticketPayeNote'; s.dataset.hash = h; s.textContent = ' Day ticket of this trade: ' + coeur;
     if (!span) ou.append(s);
     return;
   }

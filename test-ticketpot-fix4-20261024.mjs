@@ -322,14 +322,17 @@ function monterPaye(app, reponses) {
   const $ = (q) => el[q] || null;
   const minuteurs = [], appels = [];
   const fetch = async (url) => { appels.push(url); const r = reponses.shift() || { status: 200, corps: { ok: true, deja: true } }; if (r === 'reseau') throw new TypeError('Failed to fetch'); return { status: r.status, json: async () => r.corps }; };
-  const document = { createElement: () => ({ className: '', textContent: '', retire: false, remove() { this.retire = true; } }) };
+  const document = { createElement: () => ({ className: '', textContent: '', dataset: {}, retire: false, remove() { this.retire = true; } }) };
   const deps = { $, fetch, setTimeout: (f, ms) => { minuteurs.push({ f, ms }); return 0; }, vitrineActive: () => null, INTERNE: false, document };
   const noms = Object.keys(deps);
   const api = new Function(...noms, app.slice(s0, s1) + '\nreturn { signalerPaye, lieu: typeof lieuTicketPaye === "function" ? lieuTicketPaye : null, note: noteTicketPaye };')(...noms.map((k) => deps[k]));
   const jouer = async () => { await ticks(); while (minuteurs.length && minuteurs.length < 20) { const m = minuteurs[minuteurs.length - 1]; if (m.joue) break; m.joue = true; m.f(); await ticks(); } };
   return { api, el, minuteurs, appels, jouer };
 }
-const elem = (connecte = true) => ({ isConnected: connecte, enfants: [], querySelector(q) { return this.enfants.find((x) => x.className === q.slice(1) && !x.retire) || null; }, append(x) { this.enfants.push(x); } });
+/* 4e tour (D4) : un lieu cache (offsetParent null) ne recoit plus la note ; querySelectorAll pour retrouver la note de CE hash */
+const elem = (connecte = true, visible = true) => ({ isConnected: connecte, offsetParent: visible ? {} : null, enfants: [],
+  querySelector(q) { return this.enfants.find((x) => x.className === q.slice(1) && !x.retire) || null; },
+  querySelectorAll(q) { return this.enfants.filter((x) => x.className === q.slice(1) && !x.retire); }, append(x) { this.enfants.push(x); } });
 const NL = (deja = false) => ({ status: 202, corps: { ok: true, ...(deja ? { deja: true } : { externe: true }), ticket: { ok: false, etat: 'NON_LU', pourquoi: 'the time of block 500 was not read: send it again in a moment' } } });
 const BUSY = { status: 429, corps: { ok: false, pourquoi: 'busy, send it again in a moment' } };
 const H1 = '0x' + '5'.repeat(64), H2 = '0x' + '6'.repeat(64);
@@ -379,13 +382,28 @@ async function scenariosD3(S) {
     m.api.lieu(H1, (t) => vu.push(t)); m.api.signalerPaye(H1, 'swap_action'); await m.jouer();
     return vu.length === 1 && /^Day ticket of this trade: no day ticket/.test(vu[0]) && derniereNote(m) === 'Your ticket — this face is yours.';
   });
-  await essai('L4-credite-efface-la-note-du-trade', async () => {
-    const m = monterPaye(S.APP, [TV, { status: 200, corps: { ok: true, externe: true, ticket: { ok: true, etat: 'CREDITE', jourId: 'J2026-10-24' } } }]); const e = elem();
+  /* 4e tour (D4, revue adverse scenario 2) : le credit d un AUTRE trade (H2) n efface plus la note de H1 ; le credit de H1 lui-meme, si */
+  const CR = { status: 200, corps: { ok: true, externe: true, ticket: { ok: true, etat: 'CREDITE', jourId: 'J2026-10-24' } } };
+  await essai('L4-credite-autre-hash-garde-la-note', async () => {
+    const m = monterPaye(S.APP, [TV, CR]); const e = elem();
     m.api.lieu(H1, e); m.api.lieu(H2, e);
     m.api.signalerPaye(H1, 'hook_block'); await m.jouer();
     const avant = !!e.querySelector('.ticketPayeNote');
     m.api.signalerPaye(H2, 'hook_block'); await m.jouer();
+    return avant && e.querySelectorAll('.ticketPayeNote').length === 1 && e.querySelector('.ticketPayeNote').dataset.hash === H1;
+  });
+  await essai('L4b-credite-meme-hash-efface', async () => {
+    const m = monterPaye(S.APP, [TV, CR]); const e = elem();
+    m.api.lieu(H1, e);
+    m.api.signalerPaye(H1, 'hook_block'); await m.jouer();
+    const avant = !!e.querySelector('.ticketPayeNote');
+    m.api.signalerPaye(H1, 'hook_block'); await m.jouer();
     return avant && !e.querySelector('.ticketPayeNote');
+  });
+  await essai('L6-lieu-cache-sous-le-ticket', async () => {
+    const m = monterPaye(S.APP, [TV]); const e = elem(true, false);
+    m.api.lieu(H1, e); m.api.signalerPaye(H1, 'hook_block'); await m.jouer();
+    return e.enfants.length === 0 && /Last trade: no day ticket — this transaction is more than 48 h old/.test(derniereNote(m));
   });
   await essai('L5-cablage-des-appelants', async () => {
     const L = S.APP.split('\n');
@@ -507,7 +525,9 @@ await mutant('app : fin compte un muet comme refus', 'APP', "const nRefus = (s.r
 await mutant('app : 429 coupe la chaine', 'APP', "chaine = nonLuVu || (!!tk && tk.etat === 'NON_LU')", "chaine = (!!tk && tk.etat === 'NON_LU')", 'D3-429-au-4e-envoi-continue');
 await mutant('app : fin de chaine muette', 'APP', 'else if (chaine && encore) direTicketPaye(', 'else if (false) direTicketPaye(', 'D3-que-des-429-apres-non-lu-note');
 await mutant('app : panne reseau coupe la chaine', 'APP', '.catch(() => {\n        if (!nonLuVu) return;', '.catch(() => {\n        return;', 'D3-reseau-dans-la-chaine');
-await mutant('app : note jamais au trade', 'APP', "else if (ou && typeof ou === 'object' && ou.isConnected !== false && typeof ou.append === 'function') {", 'else if (false) {', 'L1-note-au-resultat-du-trade');
+await mutant('app : note jamais au trade', 'APP', "else if (lieuVisible && typeof ou.append === 'function') {", 'else if (false) {', 'L1-note-au-resultat-du-trade');
+await mutant('app : lieu cache accepte', 'APP', "ou.isConnected !== false && ou.offsetParent !== null &&", 'ou.isConnected !== false &&', 'L6-lieu-cache-sous-le-ticket');
+await mutant('app : note sans son hash', 'APP', "x.dataset && x.dataset.hash === h) || null", "true) || null", 'L4-credite-autre-hash-garde-la-note');
 await mutant('app : achat USDC sans lieu', 'APP', 'lieuTicketPaye(lot.hash, note);', '', 'L5-cablage-des-appelants');
 await mutant('attester : reseau continue', 'ATT', "(code ? 'answer ' + code : 'no answer'))); break;", "(code ? 'answer ' + code : 'no answer')));", 'D4-attester-reseau-arrete');
 await mutant('serveur : pas de 412', 'SRV', "if (servie && String(servie.digest || '').toLowerCase() !== String(p.digest).toLowerCase() && verifierSignaturePart(", 'if (false && verifierSignaturePart(', 'D1a-perime-412-arret-rien-note-tout-repropose');
