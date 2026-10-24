@@ -4322,14 +4322,15 @@ const contratSlotsFiche = /^0x[0-9a-f]{40}$/i.test(String(SLOTS_DEPLOIEMENT.adre
  *   une option gratuite : regler s il gagne, laisser rembourser s il perd) et tire le pot du pass de chaque jour fini (closeDay / drawDay,
  *   sinon un acheteur re-arme jusqu a etre choisi). Les adresses viennent des fiches (duels : import dynamique, relu a chaque tour), sur la
  *   chaine des slots seulement. */
-const contratRollsFiche = /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) && BLOCKROLLS_DEPLOIEMENT.chaine === SLOTS_DEPLOIEMENT.chaine ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null;
+/* integration 2026-10-24 : nom distinct de contratRollsFiche (lecture des regles, plus haut) -- les deux branches l avaient declare */
+const contratRollsKeeper = /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) && BLOCKROLLS_DEPLOIEMENT.chaine === SLOTS_DEPLOIEMENT.chaine ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null;
 const contratDuelsKeeper = () => (DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT.chaine === SLOTS_DEPLOIEMENT.chaine ? contratDuels() : null);
 const regleurSlots = ESSAI_SRV.actif
   ? creerRegleur({ desactive: 'trial mode (ESSAI): the keeper never runs against a trial node' })
   : creerRegleur({ cle: process.env.SLOTS_KEEPER_KEY || null, contrat: contratSlotsFiche, chainId: SLOTS_DEPLOIEMENT.chaine, table: SLOTS_DEPLOIEMENT.constructeur.prizes,
     blocDeploiement: SLOTS_DEPLOIEMENT.bloc || 0, rpc: rpcServeur, journal: (t) => console.log(t),
     duels: { contrat: contratDuelsKeeper, bloc: () => (DUELS_DEPLOIEMENT && Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) ? DUELS_DEPLOIEMENT.bloc : 0) },
-    rolls: { contrat: contratRollsFiche } });
+    rolls: { contrat: contratRollsKeeper } });
 if (regleurSlots.demarrer()) console.log('[slots-keeper] on, keeper ' + regleurSlots.etat().adresse);
 else console.log('[slots-keeper] off: ' + regleurSlots.etat().pourquoi);
 

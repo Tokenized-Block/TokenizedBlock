@@ -556,7 +556,7 @@ await cas('13e la garde duels / rolls', async () => {
 await cas('13f cablage du serveur (lecture du source, pas une execution)', async () => {
   const S = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   const i = S.indexOf('const regleurSlots = ESSAI_SRV.actif'), appel = S.slice(i, S.indexOf('if (regleurSlots.demarrer())', i));
-  vu(i > 0 && /duels: \{ contrat: contratDuelsKeeper, bloc: /.test(appel) && /rolls: \{ contrat: contratRollsFiche \}/.test(appel), 'serveur : le regleur recoit les duels (fiche relue a chaque tour) et les rolls');
+  vu(i > 0 && /duels: \{ contrat: contratDuelsKeeper, bloc: /.test(appel) && /rolls: \{ contrat: contratRollsKeeper \}/.test(appel), 'serveur : le regleur recoit les duels (fiche relue a chaque tour) et les rolls');
   vu(/const contratDuelsKeeper = \(\) => \(DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT\.chaine === SLOTS_DEPLOIEMENT\.chaine \? contratDuels\(\) : null\);/.test(S)
     && /BLOCKROLLS_DEPLOIEMENT\.chaine === SLOTS_DEPLOIEMENT\.chaine \? String\(BLOCKROLLS_DEPLOIEMENT\.adresse\)\.toLowerCase\(\) : null;/.test(S), 'serveur : duels et rolls seulement sur la chaine des slots');
   vu((S.match(/process\.env\.SLOTS_KEEPER_KEY/g) || []).length === 1 && /slotsRegleur: regleurSlots\.etat\(\),/.test(S), 'serveur : la cle lue UNE fois ; /sante publie etat() (activite par contrat, jamais la cle)');
