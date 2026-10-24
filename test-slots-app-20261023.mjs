@@ -21,10 +21,13 @@ const lire = (f) => readFileSync(new URL('./' + f, import.meta.url), 'utf8').rep
 const APP = lire('app.html'), SRV = lire('serveur-web.js');
 const entre = (t, a, b) => { const i = t.indexOf(a), j = t.indexOf(b, i + 1); return i >= 0 && j > i ? t.slice(i, j) : ''; };
 const bloc = (t) => entre(t, '/* ══ LES SLOTS (Phil 2026-10-23', '/* ══ EARN (Phil 19:40)');
-const carteHtml = (t) => entre(t, '<div class="carte" id="slotsCarte"', '<!-- EARN');
+/* 2026-10-24 (Phil : « fusionne le draw et le spin ») : la carte #slotsCarte est devenue la zone #slotsZone DE la carte Draws (memes
+ *   elements, memes ids) — ce banc affirmait l ancienne carte ; il affirme la zone, cachee, dans #tirCarte, et qu aucune #slotsCarte ne reste */
+const carteHtml = (t) => entre(t, '<div class="slotsZone" id="slotsZone"', '<div class="jourTicket">');
 
 const checks = {
-  carteCachee: (t) => /<div class="carte" id="slotsCarte" hidden>/.test(t) && /id="jbSlotsTuile"[^>]*\bhidden>/.test(t) && t.split('id="slotsCarte"').length === 2,
+  carteCachee: (t) => /<div class="slotsZone" id="slotsZone" hidden>/.test(t) && /id="jbSlotsTuile"[^>]*\bhidden>/.test(t) && t.split('id="slotsZone"').length === 2
+    && !/id="slotsCarte"/.test(t) && entre(t, '<div class="carte" id="tirCarte"', '<div class="carte" id="brainJeuCarte"').includes('id="slotsZone"'),
   cacheeSansContrat: (t) => /carte\.hidden = !on; if \(tuile\) tuile\.hidden = !on;/.test(bloc(t)) && /if \(!on\) return null;/.test(bloc(t)),
   aucunBoutonMort: (t) => { const c = carteHtml(t); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c) && /<button type="button" class="bouton" id="slotsSpin" hidden>/.test(c) && /id="slotsRegler" hidden>/.test(c); },
   spinCacheSansWallet: (t) => /bS\.hidden = !moi;/.test(bloc(t)),
@@ -54,7 +57,7 @@ const checks = {
 };
 for (const [k, f] of Object.entries(checks)) vu(f(APP) === true, 'app.html : ' + k);
 const mutants = [
-  ['carteCachee', '<div class="carte" id="slotsCarte" hidden>', '<div class="carte" id="slotsCarte">'],
+  ['carteCachee', '<div class="slotsZone" id="slotsZone" hidden>', '<div class="slotsZone" id="slotsZone">'],
   ['cacheeSansContrat', 'carte.hidden = !on; if (tuile) tuile.hidden = !on;', 'carte.hidden = false; if (tuile) tuile.hidden = false;'],
   ['aucunBoutonMort', '<button type="button" class="bouton" id="slotsSpin" hidden>', '<button type="button" class="bouton" id="slotsSpin" disabled>'],
   ['spinCacheSansWallet', 'bS.hidden = !moi;', 'bS.hidden = false;'],

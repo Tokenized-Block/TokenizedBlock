@@ -22,7 +22,10 @@ let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const lire = (f) => readFileSync(new URL('./' + f, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const APP = lire('app.html');
-const JEUX = ['tirCarte', 'brainJeuCarte', 'skinCarte', 'missionsCarte', 'duelsCarte', 'slotsCarte'];
+/* 2026-10-24 (Phil : « fusionne le draw et le spin ») : #slotsCarte n existe plus — les Slots vivent dans la carte Draws (#slotsZone) ; la
+ *   tuile Slots et #game/slots menent a tirCarte (scenario SLOTS). Ce banc listait six cartes de jeu ; il en liste cinq, et REPLI joue
+ *   le repli d une tuile cachee sur les Duels (toujours une carte a part, cachee sans contrat) au lieu des Slots. */
+const JEUX = ['tirCarte', 'brainJeuCarte', 'skinCarte', 'missionsCarte', 'duelsCarte'];
 const PAS_JEUX = ['earnCarte', 'unitCarte', 'regleCarte'];
 
 /* ---------------------------------------------------------------- extraction (du texte de app.html, eventuellement mute) */
@@ -159,7 +162,9 @@ S.UNE = (t) => {
 S.DEFAUT = (t) => {
   const app = monter(t); ouvrir(app);
   const m = montrees(app);
-  return { ok: m.length === 1 && m[0] === 'tirCarte' && presses(app).every((x) => x === 'tirCarte') && presses(app).length === 3 && app.dom.el('v-missions').getAttribute('data-jeu') === 'tirCarte', m };
+  /* 2026-10-24 : la tuile Slots (cachee sans contrat) mene aussi a tirCarte — on compte les tuiles pressees VISIBLES (Roll, Ticket, Week pass) */
+  const pv = app.dom.tuiles.filter((t) => !t.hidden && t.getAttribute('aria-pressed') === 'true').map((t) => t.getAttribute('data-jeu'));
+  return { ok: m.length === 1 && m[0] === 'tirCarte' && presses(app).every((x) => x === 'tirCarte') && pv.length === 3 && app.dom.el('v-missions').getAttribute('data-jeu') === 'tirCarte', m };
 };
 S.GARDE = (t) => {
   const app = monter(t, { garde: 'skinCarte' }); ouvrir(app);
@@ -167,21 +172,21 @@ S.GARDE = (t) => {
   return { ok: montrees(app).join() === 'skinCarte' && montrees(app2).join() === 'tirCarte', a: montrees(app), b: montrees(app2) };
 };
 S.REPLI = (t) => {
-  /* les Slots gardes, mais la tuile est cachee (pas de contrat servi) : tirCarte ; la tuile apparait (le peintre) : les Slots reviennent */
-  const app = monter(t, { garde: 'slotsCarte' }); ouvrir(app);
+  /* les Duels gardes, mais la tuile est cachee (pas de contrat servi) : tirCarte ; la tuile apparait (le peintre) : les Duels reviennent */
+  const app = monter(t, { garde: 'duelsCarte' }); ouvrir(app);
   const a = montrees(app).join() === 'tirCarte';
-  app.dom.el('slotsCarte').hidden = false; app.dom.el('jbSlotsTuile').hidden = false; app.peindreChoixJeu();
-  const b = montrees(app).join() === 'slotsCarte';
+  app.dom.el('duelsCarte').hidden = false; app.dom.el('jbDuelsTuile').hidden = false; app.peindreChoixJeu();
+  const b = montrees(app).join() === 'duelsCarte';
   /* la tuile repart (contrat retire) : retour a tirCarte, sans carte vide montree */
-  app.dom.el('slotsCarte').hidden = true; app.dom.el('jbSlotsTuile').hidden = true; app.peindreChoixJeu();
+  app.dom.el('duelsCarte').hidden = true; app.dom.el('jbDuelsTuile').hidden = true; app.peindreChoixJeu();
   const c = montrees(app).join() === 'tirCarte';
   /* un clic sur une tuile CACHEE (l ancienne palette le faisait) ne montre pas une carte vide */
   tuileDe(app, 'duelsCarte').click();
   const d = montrees(app).join() === 'tirCarte';
   /* le visiteur a touche l onglet pendant le repli : la tuile qui arrive ensuite ne change plus la carte sous sa main */
-  const app2 = monter(t, { garde: 'slotsCarte' }); ouvrir(app2);
+  const app2 = monter(t, { garde: 'duelsCarte' }); ouvrir(app2);
   app2.dom.el('v-missions').ecoute.pointerdown();
-  app2.dom.el('slotsCarte').hidden = false; app2.dom.el('jbSlotsTuile').hidden = false; app2.peindreChoixJeu();
+  app2.dom.el('duelsCarte').hidden = false; app2.dom.el('jbDuelsTuile').hidden = false; app2.peindreChoixJeu();
   const e = montrees(app2).join() === 'tirCarte';
   /* sans geste, le choix garde revient bien (b) ; et un geste quand rien n est en repli ne change rien */
   return { ok: a && b && c && d && e, a, b, c, d, e };
@@ -270,6 +275,31 @@ S.LIEN = async (t) => {
   const d = montrees(app2).join() === 'skinCarte';
   return { ok: a && b && c && d, a, b, c, d };
 };
+/* 2026-10-24 (Draws + Slots) : la tuile Slots et #game/slots montrent tirCarte (plus de carte a part) ; sans contrat la tuile est cachee et
+ *   jamais proposee ; avec contrat + wallet, le focus va a Spin, VISIBLE ; un ancien choix garde « slotsCarte » retombe sur tirCarte */
+S.SLOTS = async (t) => {
+  const avecSlots = (dom) => { dom.el('jbSlotsTuile').hidden = false; dom.el('slotsZone').hidden = false; dom.el('slotsSpin').hidden = false; };
+  const app = monter(t, { garde: 'skinCarte', avant: avecSlots }); ouvrir(app);
+  const tu = tuileDe(app, 'tirCarte', 'slotsSpin');
+  if (!tu) return { ok: false, pourquoi: 'pas de tuile Slots vers tirCarte' };
+  tu.click();
+  const a = montrees(app).join() === 'tirCarte' && app.dom.etat.focus === 'slotsSpin' && app.dom.etat.focusVu.every((x) => x.vu) && tu.getAttribute('aria-pressed') === 'true';
+  /* le lien */
+  const app2 = monter(t, { garde: 'skinCarte', avant: avecSlots });
+  const r = app2.ouvrirJeuDuLien('game/slots');
+  const b = r === true && montrees(app2).join() === 'tirCarte' && app2.dom.etat.focus === 'slotsSpin';
+  /* sans contrat (tuile et Spin caches) : le lien montre la carte Draws, aucun focus sur un bouton invisible */
+  const app3 = monter(t, { garde: 'skinCarte' });
+  const r3 = app3.ouvrirJeuDuLien('game/slots');
+  const c = r3 === true && montrees(app3).join() === 'tirCarte' && app3.dom.etat.focus === null;
+  /* l ancien choix garde (avant la fusion) : la carte Draws, celle ou sont les Slots */
+  const app4 = monter(t, { garde: 'slotsCarte', avant: avecSlots }); ouvrir(app4);
+  const d = montrees(app4).join() === 'tirCarte';
+  /* plus aucune carte #slotsCarte dans la page ; la zone des Slots est DANS tirCarte */
+  const sec = entre(t, '<div class="carte" id="tirCarte"', '<div class="carte" id="brainJeuCarte"');
+  const e = !/id="slotsCarte"/.test(t) && /<div class="slotsZone" id="slotsZone" hidden>/.test(sec) && /id="slotsSpin"/.test(sec);
+  return { ok: a && b && c && d && e, a, b, c, d, e };
+};
 /* la source des peintres : chacun rappelle peindreChoixJeu juste apres avoir pose sa tuile (sinon un choix garde ne revient jamais) */
 S.PEINTRES = (t) => {
   const d = fonction(t, 'async function peindreDuels('), s = fonction(t, 'async function peindreSlotsUneFois(');
@@ -278,7 +308,8 @@ S.PEINTRES = (t) => {
   return { ok: apres(s, 'if (!on) return null;') && apres(d, 'if (!on) { liste.textContent') };
 };
 S.CSS = (t) => {
-  const a = /#v-missions:not\(\[data-jeu\]\) :is\(#brainJeuCarte,#skinCarte,#missionsCarte,#duelsCarte,#slotsCarte\),#v-missions \.carte\[data-hors="1"\]\{display:none\}/.test(t);
+  /* 2026-10-24 : #slotsCarte retiree de la regle initiale (la carte n existe plus) */
+  const a = /#v-missions:not\(\[data-jeu\]\) :is\(#brainJeuCarte,#skinCarte,#missionsCarte,#duelsCarte\),#v-missions \.carte\[data-hors="1"\]\{display:none\}/.test(t);
   const b = /@media \(max-width:600px\)\{\n  \.jeuBandeau,\.jeuBandeau\[data-n="7"\],\.jeuBandeau\[data-slots="1"\]\{display:flex;overflow-x:auto;[^}]*scroll-snap-type:x [a-z]+;[^}]*\}\n  \.jeuBandeau>\.jeuJeu\{flex:0 0 1[34]\dpx;scroll-snap-align:start;[^}]*\}\n\}/.test(t);
   const c = /\.jeuJeu\[aria-pressed="true"\]\{border-color:var\(--accent\);/.test(t);
   /* aucune autre regle n affiche une carte de jeu par-dessus data-hors (pas de !important sur ces ids) */
@@ -328,6 +359,9 @@ const MUTANTS = [
     "  const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.slots = on ? '1' : '0';\n"],
   ['PEINTRES', 'le peintre des Duels ne repose plus le choix', "  const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.n = on ? '7' : '6';\n  /* UN JEU A LA FOIS : la tuile vient d apparaitre ou de partir — le choix est repose (retombe sur tirCarte sans elle) */\n  try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }\n",
     "  const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.n = on ? '7' : '6';\n"],
+  ['SLOTS', 'le lien #game/slots vise la carte retiree', "slots: ['tirCarte', 'slotsSpin'] };", "slots: ['slotsCarte', null] };"],
+  ['SLOTS', 'la tuile Slots vise la carte retiree', 'data-jeu="tirCarte" data-focus="slotsSpin" id="jbSlotsTuile"', 'data-jeu="slotsCarte" id="jbSlotsTuile"'],
+  ['SLOTS', 'la tuile Slots sans focus sur Spin', 'data-jeu="tirCarte" data-focus="slotsSpin" id="jbSlotsTuile"', 'data-jeu="tirCarte" id="jbSlotsTuile"'],
   ['CSS', 'data-hors sans effet (regle CSS retiree)', ',#v-missions .carte[data-hors="1"]{display:none}', '{display:none}'],
   ['CSS', 'la rangee du telephone redevient une grille', '{display:flex;overflow-x:auto;overflow-y:hidden;', '{display:grid;overflow-y:hidden;'],
   /* la carte Skins remise a son ancienne place (apres Swap UNIT) */

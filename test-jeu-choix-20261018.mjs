@@ -16,7 +16,9 @@ const tuiles = [...band.matchAll(/<button[^>]*data-jeu="([^"]+)"[^>]*><b>([^<]+)
 vu(JSON.stringify(tuiles.map((t) => t[1])) === JSON.stringify(['Roll', 'Ticket', 'Week pass', 'Its brain', 'Skins', 'Missions', 'Duels', 'Slots']), 'huit choix dans l ordre (lus : ' + tuiles.map((t) => t[1]).join(', ') + ')');
 /* 2026-10-24 (UN JEU A LA FOIS) : « 2 colonnes sur telephone » est remplace par UNE rangee qui defile de cote (<= 600 px) — ce banc
  *   affirmait l ancienne grille ; il affirme la rangee (le selecteur [data-slots="1"] repete dans le media, sinon 4 colonnes a 375 px) */
-vu(/<button[^>]*data-jeu="slotsCarte"[^>]*\bhidden\b/.test(band) && /if \(bd\) bd\.dataset\.slots = on \? '1' : '0';/.test(app) && /\.jeuBandeau\[data-slots="1"\]\{grid-template-columns:repeat\(4,/.test(app)
+/* 2026-10-24 (Phil : « fusionne le draw et le spin ») : la tuile Slots mene a la carte Draws (data-jeu="tirCarte", focus Spin) — ce banc
+ *   affirmait data-jeu="slotsCarte", une carte qui n existe plus */
+vu(/<button[^>]*data-jeu="tirCarte" data-focus="slotsSpin" id="jbSlotsTuile"[^>]*\bhidden\b/.test(band) && /if \(bd\) bd\.dataset\.slots = on \? '1' : '0';/.test(app) && /\.jeuBandeau\[data-slots="1"\]\{grid-template-columns:repeat\(4,/.test(app)
   && /@media \(max-width:600px\)\{\n  \.jeuBandeau,\.jeuBandeau\[data-n="7"\],\.jeuBandeau\[data-slots="1"\]\{display:flex;overflow-x:auto;/.test(app), 'Slots : tuile cachee sans contrat ; avec elle 4 colonnes, une rangee qui defile sur telephone');
 vu(/<button[^>]*data-jeu="duelsCarte"[^>]*\bhidden\b/.test(band) && /bd\.dataset\.n = on \? '7' : '6';/.test(app) && /\.jeuBandeau\[data-n="7"\]\{grid-template-columns:repeat\(4,/.test(app), 'Duels : tuile cachee sans contrat ; 7 tuiles -> 4 colonnes');
 for (const [carte, nom] of tuiles) vu(app.split('id="' + carte + '"').length === 2, nom + ' mene a #' + carte + ' qui existe une fois');

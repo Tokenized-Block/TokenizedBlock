@@ -212,10 +212,29 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* UNE carte de jeu a la fois : celle que la tuile choisie montre ; les autres portent data-hors="1" (jamais `hidden`, que les peintres des
  *   Duels et des Slots gerent pour dire « pas de contrat »). Avant le premier choix (le module s execute apres le premier rendu) : la carte
  *   par defaut seule, pas un eclair de neuf cartes. Les cartes cachees se repeignent quand meme (leurs minuteurs ne lisent que l onglet). */
-#v-missions:not([data-jeu]) :is(#brainJeuCarte,#skinCarte,#missionsCarte,#duelsCarte,#slotsCarte),#v-missions .carte[data-hors="1"]{display:none}
-/* LES SLOTS (2026-10-23) : trois faces cote a cote (seul le numero 1, 2, 3 de la face est dessine dessus) ; les accords par trait en dessous */
+/* 2026-10-24 (Draws + Slots) : les Slots vivent DANS la carte Draws (#slotsZone) — #slotsCarte n existe plus */
+#v-missions:not([data-jeu]) :is(#brainJeuCarte,#skinCarte,#missionsCarte,#duelsCarte),#v-missions .carte[data-hors="1"]{display:none}
+/* LES ROULEAUX (2026-10-24, Phil : « l aleatoire en image colle au hash, les 3 faces qui tournent en boucle ») : trois faces cote a cote, en
+ *   tete de la carte Draws — LIVE les faces des trois derniers blocs Base (etiquetes), SPIN les trois faces d un spin (numero 1, 2, 3 dessine
+ *   dessus). 375 px : trois cases de ~96 px sur UNE rangee (la carte fait ~305 px de large). La bande qui tourne n est qu un decor
+ *   (rouleaux.js : des faces deja posees) ; au repos chaque case montre la face du hash du bloc de son etiquette. */
 .slotsFaces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0;max-width:340px}
-.slotsFaces .jourFace{width:100%;height:auto;aspect-ratio:1/1;flex:none;border-radius:14px}
+.rouleau{display:flex;flex-direction:column;align-items:center;min-width:0}
+.slotsFaces .jourFace{width:100%;height:auto;aspect-ratio:1/1;flex:none;border-radius:14px;place-items:start center}
+.slotsFaces .jourFace>svg{align-self:center}
+.rouleauBloc{font-size:11px;line-height:1.3;color:var(--doux);margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.rouleauBande{display:flex;flex-direction:column;width:100%}
+.slotsFaces .rouleauBande svg{display:block;width:100%;height:auto;aspect-ratio:1/1;flex:none}
+.jourFace.roule .rouleauBande{animation:rouleauTourne .5s linear infinite;filter:blur(1.2px)}
+.jourFace.pose>svg{animation:rouleauPose .3s ease-out}
+@keyframes rouleauTourne{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+@keyframes rouleauPose{0%{transform:translateY(-16%)}65%{transform:translateY(4%)}100%{transform:none}}
+@media (prefers-reduced-motion:reduce){.jourFace.roule .rouleauBande,.jourFace.pose>svg{animation:none;filter:none}}
+#rouleauxLegende{margin:4px 0 0}
+/* le roll (BlockRolls) sous les rouleaux : ta face contre celle du bloc qui decide, sur UNE ligne compacte */
+.rollLigne{display:grid;grid-template-columns:52px minmax(0,1fr) auto 52px minmax(0,1fr);gap:8px;align-items:center;margin:10px 0 0}
+.rollLigne .jourFace{width:52px;height:52px;flex:none;border-radius:11px}
+.rollLigne .note{margin:0;font-size:12px;line-height:1.35}
 .slotsAccords{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0 0;font-size:12.5px;color:var(--doux)}
 .slotsAccords b{color:var(--accent2);font-weight:700}
 .slotsTable{width:100%;border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;margin:6px 0 0}
@@ -260,9 +279,6 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jourFace[data-gagne="0"]{border-style:dashed}
 .jourFace.mini{width:40px;height:40px;flex:0 0 40px;border-radius:9px}
 .jourEtapes{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.jeuDuel{display:flex;align-items:flex-start;gap:10px;margin-top:6px}
-.jeuCote{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center}
-.jeuCote .jourFace{width:96px;height:96px;flex-basis:96px}
 .jeuVs{align-self:center;font-weight:800;color:var(--accent2);font-size:13px;letter-spacing:.1em}
 .jourEtapes .bouton{flex:1 1 140px}
 .jourPaires{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
@@ -3681,8 +3697,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       <button type="button" class="jeuJeu" data-jeu="missionsCarte" data-mots="tasks board earn"><b>Missions</b><i id="jbMissions">—</i><span id="jbMissionsTxt">tasks on the board</span></button>
       <!-- DUELS (Phil 2026-10-18) : cachee tant que /api/duels ne sert pas de contrat (pas de tuile vers une carte vide) -->
       <button type="button" class="jeuJeu" data-jeu="duelsCarte" id="jbDuelsTuile" data-mots="duel challenge stake" hidden><b>Duels</b><i id="jbDuels">—</i><span id="jbDuelsTxt">open challenges</span></button>
-      <!-- SLOTS (Phil 2026-10-23) : cachee tant que /api/slots ne sert pas de contrat (pas de tuile vers une carte vide) -->
-      <button type="button" class="jeuJeu" data-jeu="slotsCarte" id="jbSlotsTuile" data-mots="slots slot machine spin three faces casino" hidden><b>Slots</b><i id="jbSlots">—</i><span id="jbSlotsTxt">three faces</span></button>
+      <!-- SLOTS (Phil 2026-10-23) : cachee tant que /api/slots ne sert pas de contrat (pas de tuile vers une carte vide).
+           2026-10-24 (Phil : « fusionne le draw et le spin ») : elle mene a la carte Draws (les rouleaux + #slotsZone), focus sur Spin -->
+      <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="slotsSpin" id="jbSlotsTuile" data-mots="slots slot machine spin three faces casino" hidden><b>Slots</b><i id="jbSlots">—</i><span id="jbSlotsTxt">three faces</span></button>
     </div>
     <!-- Phil 2026-10-18 : le journal du jour, les 10 derniers (/api/jeu/journal, peindreJournalJeu) ; cachee tant qu il n y a rien -->
     <div class="carte" id="journalCarte" hidden>
@@ -3690,21 +3707,78 @@ details[open] > summary::before{transform:rotate(90deg)}
       <ol class="journalListe" id="journalJeuListe" style="margin-top:8px"></ol>
     </div>
     <!-- Phil 19:50 : « Your day, c est le Game · Draws » -> UNE carte : ton ticket vs le prochain bloc, progression, compteurs, actions. -->
+    <!-- 2026-10-24 (Phil : « change le draw et fusionne pour le spin ; l aleatoire en image colle au hash ; les 3 faces qui tournent en
+         boucle ») : la carte se lit rouleaux (en direct) -> Roll | Spin -> ticket / pot. Les Slots (BlockSlots) vivent ICI (#slotsZone),
+         il n y a plus de carte #slotsCarte ; leurs ids sont inchanges (les bancs des slots et leurs textes les gardent). -->
     <div class="carte" id="tirCarte">
       <span class="jeuKick">Game · Draws</span>
       <p class="titre jeuTitre" style="font-size:16px">Your trades are your ticket. The next Base block draws the face.</p>
-      <div class="jeuDuel">
-        <div class="jeuCote">
-          <!-- Phil 2026-10-18 : CHAQUE roll tire une NOUVELLE face au hasard (nouvelleFaceRoll) : elle se montre ici, contre la face du bloc ;
-               le ticket du jour (la face du TIRAGE du jour) est petit, juste dessous (#ticketFace). -->
-          <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your roll"></div>
-          <p class="note" id="jourRollTxt" style="margin:4px 0 0">Your roll — a new random face each roll.</p>
-        </div>
+      <!-- LES ROULEAUX (rouleaux.js) : LIVE, les faces des blocs Base N-2, N-1, N (le hash de chaque bloc, etiquete) ; avec un spin en attente,
+           les trois faces de CE spin (blocs t, t+1, t+2 et l id du spin, la graine du contrat), posees une a une, puis les points par trait.
+           Les cases gardent le selecteur #slotsFaces .jourFace des slots. Rien n y est tire au hasard. -->
+      <div class="slotsFaces" id="slotsFaces">
+        <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 1" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc1"></span></div>
+        <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 2" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc2"></span></div>
+        <div class="rouleau"><div class="jourFace" role="img" aria-label="Face 3" data-gagne="0"></div><span class="rouleauBloc" id="rouleauBloc3"></span></div>
+      </div>
+      <p class="note" id="rouleauxLegende">Reading the latest Base blocks…</p>
+      <div class="slotsAccords" id="slotsAccords"></div>
+      <!-- LE ROLL (BlockRolls) : Phil 2026-10-18 : CHAQUE roll tire une NOUVELLE face au hasard (nouvelleFaceRoll) : elle se montre ici, contre
+           la face du bloc qui decide ; le ticket du jour (la face du TIRAGE du jour) est petit, plus bas (#ticketFace). -->
+      <div class="rollLigne">
+        <div class="jourFace" id="jourFace" data-gagne="0" role="img" aria-label="Your roll"></div>
+        <p class="note" id="jourRollTxt">Your roll — a new random face each roll.</p>
         <div class="jeuVs" aria-hidden="true">vs</div>
-        <div class="jeuCote" id="dernierCarte">
-          <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
-          <p class="note" id="dernierNom" style="margin:4px 0 0">Reading the chain…</p>
+        <div class="jourFace" id="dernierFace" role="img" aria-label="The face the latest Base block would draw"></div>
+        <p class="note" id="dernierNom">Reading the chain…</p>
+      </div>
+      <div class="jourEtapes">
+        <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
+        <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
+        <!-- BLOCKROLLS (Phil 20:30 : roll 0,50 USDC, gain fixe ; day pass 10 USDC = 5 pot du jour + 5 dev) : ce bouton et le Week pass n apparaissent
+             QUE quand /api/tirage sert rolls.contrat (fiche signee) ; leurs textes viennent des prix servis. Sans contrat : rien (pas de bouton mort). -->
+        <button type="button" class="bouton" id="jourRollPaye" hidden>Roll for real</button>
+        <!-- Phil (19:40) : « une loop de games » — 5 rolls d affilee, score cumule ; montre seulement avec un wallet (sinon pas de score) -->
+        <button type="button" class="bouton sec" id="jourAuto" hidden>Auto-roll ×5</button>
+        <!-- 2026-10-18 (revue adverse) : un roll PAYE dont le flux s est arrete avant le settle (signature refusee, recu en retard, onglet
+             ferme, commande « roll » du chat) se regle ICI — relu sur les logs du contrat (rolls-en-attente.js). Ouvert seulement s il y en a. -->
+        <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
+      </div>
+      <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
+      <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
+      <!-- SLOTS (Phil 2026-10-23 : « 3 faces random independantes, tirees au moment de la tx ; des points quand des faces sont les memes ; un
+           bon reward de la pool, comme une machine a sous ») — BlockSlots. Les blocs spin + 2, + 3, + 4 donnent UNE face chacun (v2, Phil
+           2026-10-23) ; par trait, 3 egales = 3 points, 2 egales = 1 ; le contrat paie un prix FIXE par points, 0..5 USDC par spin, plafonne
+           par le pot ; les points s additionnent par wallet (un compteur on-chain, pas un gain).
+           v3 (verdict adverse 2026-10-23, defaut 1) : la liste #slotsListe dit, POUR CHAQUE spin, ce que Settle paie et ce qui manque, avant
+           la signature puis apres le recu ; Settle n envoie QUE les spins payes en entier ; un gain plafonne passe par « Accept » (un spin, le
+           minimum vu).
+           v4 (option 3 de Phil, 2026-10-23) : AUCUN remboursement — un spin non regle dans sa fenetre est PERDU ; le serveur regle les spins
+           tout seul quand son regleur est allume (/api/slots regleur.etat) ; n importe qui peut regler, le gain va toujours au joueur.
+           2026-10-24 : la carte #slotsCarte est devenue cette zone de la carte Draws (memes elements, memes ids, memes textes ; les trois
+           faces sont les rouleaux du haut).
+           ⛔ CACHEE tant que /api/slots ne sert pas de contrat : rien de payant ne se montre avant. Chaque chiffre est lu (fiche, chaine) ou
+           CALCULE (loi exacte, slots-plan.js) ; une lecture ratee dit « not read ». -->
+      <div class="slotsZone" id="slotsZone" hidden>
+        <p class="note" style="margin:10px 0 0"><b>Slots</b> — Three block faces, one spin. Matching traits score points.</p>
+        <div class="jourEtapes">
+          <button type="button" class="bouton" id="slotsSpin" hidden>Spin</button>
+          <button type="button" class="bouton sec" id="slotsRegler" hidden>Settle</button>
+          <button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>
         </div>
+        <p class="note" id="slotsEtat" style="margin:6px 0 0">Reading the slots on chain…</p>
+        <ul class="slotsListe" id="slotsListe"></ul>
+        <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>
+        <!-- 2026-10-24 : le pli porte l explication (points, pot court / Accept, chances, moyenne, plage lue : #slotsComment, peinte par
+             peindreSlotsUneFois, phrases DEPLACEES de #slotsRegle, pas reecrites) et la table des prix. #slotsRegle (la regle : prix,
+             perdu hors fenetre, regleur) est en tete du pli SANS wallet, et sous #slotsMoi avec un wallet (placerRegleSlots) -->
+        <details style="margin:8px 0 0">
+          <summary class="note" style="cursor:pointer">How the slots work</summary>
+          <p class="note" id="slotsRegle" style="margin:6px 0 0"></p>
+          <p class="note" id="slotsComment" style="margin:6px 0 0"></p>
+          <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th><th>Pays now</th></tr></thead><tbody></tbody></table>
+          <p class="note" id="slotsTableNote" style="margin:4px 0 0"></p>
+        </details>
       </div>
       <div class="jourTicket">
         <div class="jourFace mini" id="ticketFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
@@ -3724,8 +3798,6 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="potJour" style="margin:2px 0 0" hidden></p>
       <label class="champ" id="potFondLab" hidden>Add to this week's pot (USDC)<input id="potMontant" inputmode="decimal" value="1"></label>
       <div class="jourEtapes">
-        <!-- ROLL : le bloc N+2 decide, en direct (practice tant que BlockRolls n existe pas : 0 USDC) -->
-        <button type="button" class="bouton" id="jourRoll">Roll · next block decides</button>
         <button type="button" class="bouton sec" id="jourUnit">Trade UNIT</button>
         <button type="button" class="bouton sec" id="jourActions">Trade stocks</button>
         <!-- Phil 2026-10-18 00:05 (dernier message) : « garde les boutons qui ont du sens avec ce qu on a fait aujourd hui ». Un skin MINTE
@@ -3734,15 +3806,8 @@ details[open] > summary::before{transform:rotate(90deg)}
              2026-10-18 (Phil : « tous les skins a 10 dollars ») : le prix n est JAMAIS tape ici — chaque <span class="skinPrix"> est rempli
              depuis SKIN_MINT_TEXTE (blockskins-actif.js : le prix du contrat deploye, 1 USDC sur v2, 10 USDC des que v3 est note). -->
         <button type="button" class="bouton sec" id="jourSkin">Skin · <span class="skinPrix"></span> = today's ticket</button>
-        <!-- Phil (19:40) : « une loop de games » — 5 rolls d affilee, score cumule ; montre seulement avec un wallet (sinon pas de score) -->
-        <button type="button" class="bouton sec" id="jourAuto" hidden>Auto-roll ×5</button>
-        <!-- BLOCKROLLS (Phil 20:30 : roll 0,50 USDC, gain fixe ; day pass 10 USDC = 5 pot du jour + 5 dev) : ces deux boutons n apparaissent QUE
-             quand /api/tirage sert rolls.contrat (fiche signee) ; leurs textes viennent des prix servis. Sans contrat : rien (pas de bouton mort). -->
-        <button type="button" class="bouton" id="jourRollPaye" hidden>Roll for real</button>
+        <!-- le Week pass (BlockRolls, cache sans contrat servi ni wallet) : 7 jours de tickets, il reste avec le ticket -->
         <button type="button" class="bouton sec" id="jourPass" hidden>Week pass</button>
-        <!-- 2026-10-18 (revue adverse) : un roll PAYE dont le flux s est arrete avant le settle (signature refusee, recu en retard, onglet
-             ferme, commande « roll » du chat) se regle ICI — relu sur les logs du contrat (rolls-en-attente.js). Ouvert seulement s il y en a. -->
-        <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
         <!-- le pot du jour des pass : n importe qui ferme le jour (closeDay) puis le tire (drawDay) ; le pot va TOUJOURS a l acheteur tire -->
         <button type="button" class="bouton sec" id="jourTirerJour" hidden>Close and draw yesterday's pass pot</button>
         <!-- 2026-10-18 : le pot de la SEMAINE vit sur son dernier jour UTC ; TicketPot refuse fund() d un jour futur (FutureDay) : bouton
@@ -3753,8 +3818,6 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- close(day) : l owner tout de suite, n importe qui 12 h apres la fin du jour ; fige le pot (les parts deviennent finales) -->
         <button type="button" class="bouton sec" id="jourFermerPot" hidden>Close yesterday's pot</button>
       </div>
-      <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
-      <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
       <p class="note" id="jourPassEtat" style="margin:4px 0 0" hidden></p>
       <!-- ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll deja en place ») : la « Face of the Day » d hier et son gagnant du jour
            (paye rien) sont RETIRES de l ecran. Le ticket du jour = 1 entree au pot de la semaine (#potJour). -->
@@ -3867,44 +3930,6 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="duelsLire">Refresh duels</button>
       </div>
       <p class="note" id="duelForme" style="margin:6px 0 0" hidden></p>
-    </div>
-    <!-- SLOTS (Phil 2026-10-23 : « 3 faces random independantes, tirees au moment de la tx ; des points quand des faces sont les memes ; un
-         bon reward de la pool, comme une machine a sous ») — BlockSlots. Les blocs spin + 2, + 3, + 4 donnent UNE face chacun (v2, Phil
-         2026-10-23) ; par trait, 3 egales = 3 points, 2 egales = 1 ; le contrat paie un prix FIXE par points, 0..5 USDC par spin, plafonne
-         par le pot ; les points s additionnent par wallet (un compteur on-chain, pas un gain).
-         v3 (verdict adverse 2026-10-23, defaut 1) : la liste #slotsListe dit, POUR CHAQUE spin, ce que Settle paie et ce qui manque, avant
-         la signature puis apres le recu ; Settle n envoie QUE les spins payes en entier ; un gain plafonne passe par « Accept » (un spin, le
-         minimum vu).
-         v4 (option 3 de Phil, 2026-10-23) : AUCUN remboursement — un spin non regle dans sa fenetre est PERDU ; le serveur regle les spins
-         tout seul quand son regleur est allume (/api/slots regleur.etat) ; n importe qui peut regler, le gain va toujours au joueur.
-         ⛔ CACHEE tant que /api/slots ne sert pas de contrat : rien de payant ne se montre avant. Chaque chiffre est lu (fiche, chaine) ou
-         CALCULE (loi exacte, slots-plan.js) ; une lecture ratee dit « not read ». -->
-    <div class="carte" id="slotsCarte" hidden>
-      <span class="jeuKick">Game · Slots</span>
-      <p class="titre jeuTitre" style="font-size:16px">Three block faces, one spin. Matching traits score points.</p>
-      <p class="note" id="slotsRegle" style="margin:4px 0 0"></p>
-      <div class="slotsFaces" id="slotsFaces">
-        <div class="jourFace" role="img" aria-label="Face 1" data-gagne="0"></div>
-        <div class="jourFace" role="img" aria-label="Face 2" data-gagne="0"></div>
-        <div class="jourFace" role="img" aria-label="Face 3" data-gagne="0"></div>
-      </div>
-      <div class="slotsAccords" id="slotsAccords"></div>
-      <p class="note" id="slotsEtat" style="margin:6px 0 0">Reading the slots on chain…</p>
-      <ul class="slotsListe" id="slotsListe"></ul>
-      <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>
-      <div class="jourEtapes">
-        <button type="button" class="bouton" id="slotsSpin" hidden>Spin</button>
-        <button type="button" class="bouton sec" id="slotsRegler" hidden>Settle</button>
-        <button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>
-      </div>
-      <!-- 2026-10-24 : le pli porte l explication (points, pot court / Accept, chances, moyenne, plage lue : #slotsComment, peinte par
-           peindreSlotsUneFois, phrases DEPLACEES de #slotsRegle, pas reecrites) et la table des prix -->
-      <details style="margin:8px 0 0">
-        <summary class="note" style="cursor:pointer">How the slots work</summary>
-        <p class="note" id="slotsComment" style="margin:6px 0 0"></p>
-        <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th><th>Pays now</th></tr></thead><tbody></tbody></table>
-        <p class="note" id="slotsTableNote" style="margin:4px 0 0"></p>
-      </details>
     </div>
     <!-- SKIN MARKET (Phil 2026-10-17 23:45 : « t as oublie le market skin … encheres pour la revente a n importe quel token ») — le marche
          EXISTE dans le panneau (bc-market, bcPeindreMarche) ; ici, ses lignes telles quelles (bcLigneSkin -> bcActionMarche signe au wallet).
@@ -4232,6 +4257,8 @@ import { prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernie
 import * as Duels from './duels-plan-app.js';
 /* 2026-10-23 : les slots (BlockSlots) — encodeurs purs, faces, points, loi exacte ; le contrat vient de /api/slots, sinon rien ne se montre */
 import * as Slots from './slots-plan.js';
+/* 2026-10-24 : les trois rouleaux de la carte Draws (LIVE : les faces des derniers blocs Base ; SPIN : les faces d un spin) — pur, servi */
+import { creerRouleaux } from './rouleaux.js';
 /* 2026-10-18 : le Brain OS — nos propres LECTURES (safety, explain, wallet, gas), sans cle tierce ; pur, le `rpc` de l app lui est passe */
 import * as BrainOs from './brain-os.js';
 import { SKIN_ACTIONS_CANDIDATES as DUEL_ACTIONS_CANDIDATES } from './blockskins.js';
@@ -4851,6 +4878,8 @@ async function peindreDernierBlock() {
    *   n apparaissaient jamais alors que le contrat etait servi */
   if (t && t.ok === true) { poserBoutonsRolls(t, c); const ba = $('#jourAuto'); if (ba) ba.hidden = !c; }
   if (!t || !t.apercu || !t.jour) { nom.textContent = 'The latest Base block could not be read just now.'; return; }
+  /* 2026-10-24 : le NUMERO du dernier bloc fait avancer les rouleaux (leurs faces : des hashes lus sur la chaine, pas celui-ci) */
+  try { rouleauxTete(Number(t.apercu.bloc)); } catch (_) { /* rouleaux pas encore crees */ }
   if (rollEnCours) return; /* un roll affiche son bloc cible : la face live ne l ecrase pas */
   const fr = faceRevelee(t.apercu.hash);
   try { face.innerHTML = logoSvg(paramsLogoDepuisApparence(fr, '★')); } catch (_) { face.innerHTML = ''; }
@@ -5462,9 +5491,10 @@ $('#jourTirerJour').addEventListener('click', () => { void tirerJourPass(); });
  *   a 20 s, le bouton « Settle » pouvait apparaitre avec ~10 s pour signer. Le rythme est desormais ~8 lectures par fenetre AU TEMPS MESURE
  *   (intervalleSondageMs : 20 s avant Denim, ~6,4 s apres, 5 s tant que le temps n est pas mesure), recalcule a chaque tour. */
 const intervalleJeuMs = () => intervalleSondageMs(secondesPour(FENETRE_ROLLS, sParBlocApp));
+/* 2026-10-24 : + les rouleaux de la carte Draws (rouleauxLire : la tete par le cache de rpc, aucune boucle de plus) */
 function relireJeu() {
   const v = document.getElementById('v-missions');
-  if (!document.hidden && v && v.classList.contains('on')) { void verifierRollsEnAttente(); void peindreTirageJourPass(); }
+  if (!document.hidden && v && v.classList.contains('on')) { void verifierRollsEnAttente(); void rouleauxLire(); void peindreTirageJourPass(); }
   setTimeout(relireJeu, intervalleJeuMs());
 }
 setTimeout(relireJeu, intervalleJeuMs()); /* le premier tour apres un intervalle, comme l ancien setInterval */
@@ -5593,11 +5623,14 @@ $('#missionsIdees').addEventListener('click', (e) => {
  * ⛔ `hidden` reste aux peintres (Duels, Slots : « pas de contrat ») ; ce choix n y touche jamais. Une tuile cachee n est pas choisissable :
  *   le choix retombe sur tirCarte, et revient tout seul quand la tuile apparait (les peintres rappellent peindreChoixJeu).
  * Le dernier choix est garde dans CE navigateur (localStorage, try/catch : navigation privee = le choix vaut pour la visite). */
-const JEU_CARTES = ['tirCarte', 'brainJeuCarte', 'skinCarte', 'missionsCarte', 'duelsCarte', 'slotsCarte'];
+/* 2026-10-24 (Phil : « fusionne le draw et le spin ») : les Slots vivent dans la carte Draws (#slotsZone) — plus de #slotsCarte ; la
+ *   tuile Slots et #game/slots menent a tirCarte, focus sur Spin (seulement s il est visible : wallet + contrat). Un ancien choix garde
+ *   « slotsCarte » n est plus un jeu : il retombe sur tirCarte, la carte ou sont les Slots. */
+const JEU_CARTES = ['tirCarte', 'brainJeuCarte', 'skinCarte', 'missionsCarte', 'duelsCarte'];
 const JEU_DEFAUT = 'tirCarte', JEU_CLE = 'tbJeuChoisi';
 /* #game/<nom> (ou #missions/<nom>) : la carte et, s il y en a un, le bouton qui recoit le focus */
 const JEU_LIENS = { roll: ['tirCarte', 'jourRoll'], ticket: ['tirCarte', null], pass: ['tirCarte', 'jourPass'], brain: ['brainJeuCarte', 'bjJouer'],
-  skins: ['skinCarte', null], missions: ['missionsCarte', null], duels: ['duelsCarte', null], slots: ['slotsCarte', null] };
+  skins: ['skinCarte', null], missions: ['missionsCarte', null], duels: ['duelsCarte', null], slots: ['tirCarte', 'slotsSpin'] };
 let jeuVoulu = null, jeuMontre = null;
 function jeuLireChoix() { try { const v = localStorage.getItem(JEU_CLE); return JEU_CARTES.includes(v) ? v : null; } catch (_) { return null; } }
 function jeuNoterChoix(id) { try { localStorage.setItem(JEU_CLE, id); } catch (_) { /* stockage refuse : le choix vaut pour cette visite */ } }
@@ -6486,6 +6519,68 @@ function bjRelire() {
 }
 setTimeout(bjRelire, 30000);
 
+/* ══ LES ROULEAUX DE LA CARTE DRAWS (2026-10-24, Phil : « change le draw et fusionne pour le spin ; l aleatoire en image colle au hash ; voir
+ *   en direct les 3 faces tourner en boucle ») — rouleaux.js (pur) pose les cases #slotsFaces .jourFace, en tete de la carte Draws :
+ *   LIVE   les faces des blocs Base N-2, N-1, N — faceRevelee(hash) dessinee par logoSvg, la face de « Base block N » (meme appel que
+ *          peindreDernierBlock), chaque case etiquetee de son bloc ; SPIN / RESULTAT : svgFaceSlot (le bloc des slots, la graine du contrat).
+ *   LECTURES : AUCUNE boucle de plus. La tete vient de ce qui la lit deja : la boucle du Game (relireJeu, a intervalleJeuMs ; eth_blockNumber
+ *   passe par le cache de 4 s de rpc), l apercu du serveur (/api/tirage, deja relu toutes les 8 s : son NUMERO de bloc seulement — le hash
+ *   d une face vient de la chaine) et le minuteur des slots (3 s, seulement avec un spin en attente). Les hashes : eth_getBlockByNumber des
+ *   SEULS blocs montres, une fois chacun (le parentHash donne celui du bloc d avant), partages avec les slots (slotsCfg.hashes) ; au plus
+ *   une lecture LIVE toutes les 5 s (rouleaux.js LECTURE_MIN_MS). Rien ne lit ni ne tourne onglet cache, Game ferme ou autre jeu choisi. */
+function rouleauxCache() {
+  if (document.hidden) return true;
+  const v = document.getElementById('v-missions'), c = document.getElementById('tirCarte');
+  return !v || !v.classList.contains('on') || !c || c.hidden || c.getAttribute('data-hors') === '1';
+}
+let rouleauxReduit = () => false;
+try { const mq = window.matchMedia('(prefers-reduced-motion: reduce)'); rouleauxReduit = () => !!mq.matches; } catch (_) { /* sans matchMedia : mouvement permis */ }
+/* le magasin des hashes : celui des slots (le hash d un bloc passe ne change plus) — lu a l usage, slotsCfg est declare plus bas */
+const rouleauxHashes = {
+  get: (n) => { try { return slotsCfg.hashes.get(n); } catch (_) { return undefined; } },
+  has: (n) => { try { return slotsCfg.hashes.has(n); } catch (_) { return false; } },
+  set: (n, x) => { try { slotsCfg.hashes.set(n, x); } catch (_) { /* pas encore la */ } },
+  delete: (n) => { try { slotsCfg.hashes.delete(n); } catch (_) { /* pas encore la */ } },
+  keys: () => { try { return slotsCfg.hashes.keys(); } catch (_) { return [].values(); } },
+  get size() { try { return slotsCfg.hashes.size; } catch (_) { return 0; } },
+};
+async function rouleauxLireBloc(n) {
+  const b = await rpc('eth_getBlockByNumber', ['0x' + Number(n).toString(16), false]);
+  return b ? { hash: b.hash, parentHash: b.parentHash } : null;
+}
+const rouleauxJeu = creerRouleaux({
+  cases: [...document.querySelectorAll('#slotsFaces .jourFace')],
+  etiquettes: [1, 2, 3].map((k) => document.getElementById('rouleauBloc' + k)),
+  legende: document.getElementById('rouleauxLegende'),
+  lireBloc: rouleauxLireBloc, hashes: rouleauxHashes,
+  svgLive: (h) => { const f = faceRevelee(h); return f ? logoSvg(paramsLogoDepuisApparence(f, '★')) : ''; },
+  svgSpin: (h, id, r) => { const hs = [null, null, null]; hs[r] = h; return svgFaceSlot(hs, id, r); },
+  surPose: ({ id, hashes }) => { peindreAccordsSlots(Slots.facesDuSpin(hashes, id)); },
+  horloge: { maintenant: () => Date.now(), planifier: (f, ms) => setTimeout(f, ms), annuler: (x) => clearTimeout(x) },
+  reduit: () => rouleauxReduit(), cache: rouleauxCache, fmt: (n) => Number(n).toLocaleString('en-US'),
+});
+/* une tete deja lue ailleurs ; n non entier = rien */
+function rouleauxTete(n) { if (Number.isSafeInteger(n) && n > 0) rouleauxJeu.tete(n); }
+/* le tour de la boucle du Game (relireJeu) : la tete par le cache de rpc (4 s), partagee avec les rolls en attente du meme tour */
+async function rouleauxLire() {
+  if (rouleauxCache()) return;
+  let n = null; try { n = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { n = null; }
+  rouleauxTete(n);
+}
+/* le spin que les slots montrent (peindreFacesSlots) : en attente (t connu), regle ici (t null, hashes du recu), ou aucun (LIVE) ;
+ *   rend { pose } : vrai quand les trois faces de CE spin sont posees (les points par trait se montrent alors) */
+function rouleauxSuivre(hashes, spinId, t) {
+  const id = String(spinId);
+  if (!hashes && (t === null || t === undefined)) { rouleauxJeu.suivre(null); return { pose: false }; }
+  if (t === null || t === undefined) rouleauxJeu.resultat({ id, hashes });
+  else rouleauxJeu.suivre({ id, t: Number(t), hashes: hashes || null });
+  return { pose: rouleauxJeu.pose(id) };
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) rouleauxJeu.reprendre(); });
+/* une tuile vient de (re)montrer la carte Draws : les rouleaux reprennent tout de suite (sans attendre la prochaine tete) */
+{ const bd = document.querySelector('.jeuBandeau'); if (bd) bd.addEventListener('click', () => { setTimeout(() => rouleauxJeu.reprendre(), 0); }); }
+/* ══ FIN DES ROULEAUX */
+
 /* ══ LES SLOTS (Phil 2026-10-23 : « 3 faces random independantes, tirees au moment de la tx ; on compare ; des points quand des faces sont
  *   les memes ; apres des points, un bon reward de la pool, comme une machine a sous »). Contrat BlockSlots (contracts/src/BlockSlots.sol).
  *   LECTURE : /api/slots (la fiche : contrat, prix, part du pot, table) ; le pot, les points et les gains du wallet par eth_call ; les spins
@@ -6520,19 +6615,30 @@ async function lireSlotsServis(force = false) {
   })();
   try { return await slotsCfg.enVol; } finally { slotsCfg.enVol = null; }
 }
-/* les trois faces (v2 : la face r sur le hash du bloc cible + r, et l id) dans les trois cases ; null = cases vides en pointille */
-function peindreFacesSlots(hashes, spinId) {
-  const cases = [...document.querySelectorAll('#slotsFaces .jourFace')], acc = $('#slotsAccords');
+/* la face r d un spin en image (v2 : la face r sur le hash du bloc cible + r, et l id) — LA formule de la page, celle du contrat (seedOf) ;
+ *   les rouleaux de la carte Draws la dessinent aussi (rouleaux.js svgSpin), jamais une 2e implementation ; '' si illisible */
+function svgFaceSlot(hashes, spinId, r) {
+  let svg = '';
+  try { const f = faceRevelee(Slots.graine(hashes[r], spinId, r)); svg = f ? logoSvg(paramsLogoDepuisApparence(f, String(r + 1))) : ''; } catch (_) { svg = ''; }
+  return svg;
+}
+/* les points par trait (brelan 3, paire 1) sous les rouleaux ; null = rien */
+function peindreAccordsSlots(faces) {
+  const acc = $('#slotsAccords');
+  if (!acc) return;
+  acc.textContent = '';
+  if (faces) Slots.accordsParTrait(faces).forEach((k, i) => { const s = document.createElement('span'); s.textContent = SLOTS_TRAITS[i] + ' '; const b = document.createElement('b'); b.textContent = k === 'three' ? 'three · 3' : k === 'pair' ? 'pair · 1' : '—'; s.append(b); acc.append(s); });
+}
+/* les trois faces d un spin. 2026-10-24 (Draws + Slots) : les cases #slotsFaces .jourFace sont les ROULEAUX de la carte Draws ; c est
+ *   rouleauxSuivre (hors de ce bloc) qui les pose, une a une, sur svgFaceSlot ; `t` = le bloc cible d un spin EN ATTENTE (null : un spin
+ *   regle ici, ses hashes viennent du recu). Les points par trait se montrent quand les trois faces sont posees (surPose des rouleaux).
+ *   Sans rouleaux (les bancs des slots executent ce bloc seul) : les cases sont peintes ici, les points tout de suite. */
+function peindreFacesSlots(hashes, spinId, t = null) {
   const faces = hashes ? Slots.facesDuSpin(hashes, spinId) : null;
-  cases.forEach((el, r) => {
-    let svg = '';
-    if (faces) { try { const f = faceRevelee(Slots.graine(hashes[r], spinId, r)); svg = f ? logoSvg(paramsLogoDepuisApparence(f, String(r + 1))) : ''; } catch (_) { svg = ''; } }
-    el.innerHTML = svg; el.dataset.gagne = svg ? '1' : '0';
-  });
-  if (acc) {
-    acc.textContent = '';
-    if (faces) Slots.accordsParTrait(faces).forEach((k, i) => { const s = document.createElement('span'); s.textContent = SLOTS_TRAITS[i] + ' '; const b = document.createElement('b'); b.textContent = k === 'three' ? 'three · 3' : k === 'pair' ? 'pair · 1' : '—'; s.append(b); acc.append(s); });
-  }
+  let suivi = null;
+  try { suivi = rouleauxSuivre(faces ? hashes : null, spinId, t); } catch (_) { suivi = null; /* hors de la page (banc) */ }
+  if (!suivi) [...document.querySelectorAll('#slotsFaces .jourFace')].forEach((el, r) => { const svg = faces ? svgFaceSlot(hashes, spinId, r) : ''; el.innerHTML = svg; el.dataset.gagne = svg ? '1' : '0'; });
+  peindreAccordsSlots(faces && (!suivi || suivi.pose) ? faces : null);
   return faces;
 }
 /* D1 (verdict 2026-10-23) : la table dit le prix de la table ET ce qu il paie MAINTENANT (min(prix, pot)) ; repeinte quand le pot change */
@@ -6638,6 +6744,8 @@ async function slotsTic() {
   if (document.hidden || !v || !v.classList.contains('on')) return;
   const vue = slotsCfg.vue;
   let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+  /* 2026-10-24 : la tete deja lue fait avancer les rouleaux (aucune lecture de plus) */
+  try { rouleauxTete(tete); } catch (_) { /* hors de la page (banc) */ }
   if (!vue || !Number.isSafeInteger(tete) || vue.nonLus || Date.now() - slotsCfg.peintA > 15000) { void peindreSlots(); return; }
   const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b, vue.marge).etat).join();
   if (etats(tete) !== etats(vue.tete)) { void peindreSlots(); return; }
@@ -6645,8 +6753,21 @@ async function slotsTic() {
   clearTimeout(slotsCfg.minuteur);
   slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000);
 }
+/* 2026-10-24 (carte Draws, MESURE au navigateur, serveur local, 375 px, sans wallet : la carte faisait 1 211 px dont 233 px de #slotsRegle) :
+ *   sans wallet il n y a pas de bouton Spin — la regle (MEMES phrases, meme element) vit alors en tete du pli « How the slots work » ;
+ *   avec un wallet elle revient a l ecran, sous l etat des spins, AVANT toute signature (le prix, « a spin not settled in time is lost »,
+ *   la fenetre, le regleur). Deplacee, jamais reecrite ; hors de la page (banc) : rien. */
+function placerRegleSlots(moi) {
+  try {
+    const rg = $('#slotsRegle'), pli = $('#slotsComment'), mien = $('#slotsMoi');
+    if (!rg || !pli || !mien || !rg.parentNode || !pli.parentNode || !mien.parentNode) return;
+    if (moi) { if (mien.nextElementSibling !== rg) mien.parentNode.insertBefore(rg, mien.nextElementSibling); }
+    else if (pli.previousElementSibling !== rg) pli.parentNode.insertBefore(rg, pli);
+  } catch (_) { /* hors de la page (banc) */ }
+}
 async function peindreSlotsUneFois(force = false) {
-  const carte = $('#slotsCarte'), tuile = $('#jbSlotsTuile');
+  /* 2026-10-24 : « carte » = la zone des Slots dans la carte Draws (#slotsZone) — plus de carte a part ; cachee sans contrat servi */
+  const carte = $('#slotsZone'), tuile = $('#jbSlotsTuile');
   if (!carte) return null;
   const j = await lireSlotsServis(force);
   const contrat = slotsContrat(j), on = !!contrat;
@@ -6655,6 +6776,8 @@ async function peindreSlotsUneFois(force = false) {
   const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.slots = on ? '1' : '0';
   /* UN JEU A LA FOIS : la tuile vient d apparaitre ou de partir — le choix est repose (retombe sur tirCarte sans elle) */
   try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }
+  /* sans contrat (ou sans wallet, plus bas) : aucun spin a suivre — les rouleaux restent (ou reviennent) en LIVE */
+  if (!on) { try { rouleauxSuivre(null, 0, null); } catch (_) { /* hors de la page (banc) */ } }
   if (!on) return null;
   const prix = BigInt(j.prixSpin), table = j.prizes.map((x) => BigInt(x)), part = Number(j.potShareBps);
   /* le plus haut prix de la table (5 USDC au plus, le contrat le borne) ; D2 : les chances et la moyenne sont CALCULEES (loi exacte) */
@@ -6685,6 +6808,8 @@ async function peindreSlotsUneFois(force = false) {
   remplirTableSlots(j, pot);
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null;
+  if (!moi) { try { rouleauxSuivre(null, 0, null); } catch (_) { /* hors de la page (banc) */ } }
+  placerRegleSlots(!!moi);
   const bS = $('#slotsSpin'), bR = $('#slotsRegler'), bA = $('#slotsAccepter'), etat = $('#slotsEtat'), mien = $('#slotsMoi');
   bS.textContent = 'Spin · ' + usdcTexte(prix) + ' USDC';
   bS.hidden = !moi; bS.disabled = slotsCfg.enCours;
@@ -6724,9 +6849,12 @@ async function peindreSlotsUneFois(force = false) {
   const court = plan.lot.length ? null : plan.courts.find((l) => l.paie > 0n) || null;
   bA.hidden = !court;
   if (court) bA.textContent = 'Accept ' + Slots.usdcPrecis(court.paie) + ' USDC for spin #' + court.id + ' (' + Slots.usdcPrecis(court.manque) + ' short)';
-  /* les faces montrees : le dernier spin reglable dont les blocs sont lus, sinon celles du dernier spin regle ici */
-  const montre = [...spins].reverse().find((s) => s.faces);
-  if (montre) peindreFacesSlots(montre.hashes, montre.id);
+  /* les faces montrees : le dernier spin reglable dont les blocs sont lus, sinon celles du dernier spin regle ici.
+   * 2026-10-24 (rouleaux) : un spin dont les blocs ne sont pas encore la (TROP_TOT) est suivi aussi — les rouleaux tournent jusqu a ses
+   *   blocs t, t+1, t+2 puis se posent un a un ; le plus RECENT des deux est suivi */
+  const etatDe = new Map(enAttente.map((x) => [String(x.id), x.etat]));
+  const montre = [...spins].reverse().find((s) => s.faces || etatDe.get(String(s.id)) === 'TROP_TOT');
+  if (montre) peindreFacesSlots(montre.faces ? montre.hashes : null, montre.id, montre.t);
   else if (slotsCfg.dernierFaces) peindreFacesSlots(slotsCfg.dernierFaces.hashes, slotsCfg.dernierFaces.id);
   else peindreFacesSlots(null, 0);
   const lignes = slotsLignes(plan);
