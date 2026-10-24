@@ -134,7 +134,8 @@ vu(J.prochaineProposition(pm({ postMissions: false })).kind === 'NONE', 'regle p
 vu(J.prochaineProposition({ ...pm(), seen: [p1.cle] }).kind === 'NONE', 'mission deja proposee : pas deux fois');
 vu(J.prochaineProposition(pm({}, { post: { ...post, params: { ...post.params, expiry: T - 1 } } })).kind === 'NONE', 'mission refusee par planPoster (expiree) : NONE');
 vu(J.prochaineProposition(base({ rules: regles({ rolls: false, skins: false, missions: false, postMissions: false }) })).kind === 'NONE', 'aucune regle : NONE');
-vu(J.KINDS.join() === 'ROLL,SETTLE,TAKE_MISSION,POST_MISSION,BID_SKIN,BUY_SKIN,DUEL_CREATE,DUEL_JOIN,DUEL_SETTLE,POT_CLOSE,POT_SIGN,POT_FUND,NONE', 'les treize genres (les trois des duels et les trois du pot compris)');
+/* 2026-10-24 : BlockDuelsV2 ajoute DUEL_SETTLE_DEFAULT (un duel rejoint non regle dans sa fenetre : le createur gagne par defaut) */
+vu(J.KINDS.join() === 'ROLL,SETTLE,TAKE_MISSION,POST_MISSION,BID_SKIN,BUY_SKIN,DUEL_CREATE,DUEL_JOIN,DUEL_SETTLE,DUEL_SETTLE_DEFAULT,POT_CLOSE,POT_SIGN,POT_FUND,NONE', 'les quatorze genres (les quatre des duels et les trois du pot compris)');
 
 /* ── DUELS (2026-10-18) : USDC seulement, jamais au-dessus de maxDuelStakeUsdc / du reste du budget / du solde lu ; settle d abord ── */
 const DC = '0x' + 'e'.repeat(40), NVDA = '0x' + '7'.repeat(40), FACE = [0, 1, 2, 3, 4];

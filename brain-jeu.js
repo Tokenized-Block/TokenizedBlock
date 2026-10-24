@@ -24,6 +24,11 @@ import { planPoster, planReclamer, budgetMission } from './missions-plan.js';
 import { propositionSkin, appelApprouver, appelAcheter, appelEncherir, appelRegler } from './blockskins.js';
 import { planCreate, planJoin, planSettle as planSettleDuel, planRefund as planRefundDuel, etatDuel, partage as partageDuel, MISE_MIN as MISE_MIN_DUEL,
   MARGE_JOIN_S, EXPIRATION_MIN_S, EXPIRATION_MAX_S, duelsFermesParContrat } from './duels-plan-app.js';
+/* 2026-10-24 (Phil) : BlockDuelsV2 — quand /api/duels sert v2 (duels.version === 2) : un duel rejoint non regle dans sa fenetre est GAGNE PAR
+ *   DEFAUT par le createur. 1b propose alors DUEL_SETTLE (dans la fenetre, a ses deux joueurs) ou DUEL_SETTLE_DEFAULT (apres, au createur ET a
+ *   n importe qui : il ne coute rien et paie le createur) ; 3b DUEL_JOIN seulement si la fenetre se dit au temps de bloc MESURE (duels.sParBloc),
+ *   avec la phrase « Settle within about N s… or the creator wins by default » ; plus jamais de remboursement d un duel rejoint. */
+import * as DuelsV2 from './duels-v2-plan.js';
 /* LE POT DES RECOMPENSES (Phil 2026-10-18 : « gere la pool pour les rewards, le brain qui s en occupe ») — pour le wallet OWNER de TicketPot
  *   SEULEMENT (owner LU sur la chaine, donne dans l etat) ; le brain PROPOSE, le wallet de l owner SIGNE chaque pas ; rien ne bouge seul.
  *   Ordre fixe, juste apres les settles : POT_CLOSE (le pot d HIER pas ferme et non vide : planClose owner), puis POT_SIGN (un jour ferme dont
@@ -34,7 +39,7 @@ import { planCreate, planJoin, planSettle as planSettleDuel, planRefund as planR
 import { planFund as planFundPot, planClose as planClosePot, jourDe as jourContrat, jourIdDeDay } from './ticketpot-plan.js';
 import { saisonDe } from './tirage-saison.js';
 
-export const KINDS = Object.freeze(['ROLL', 'SETTLE', 'TAKE_MISSION', 'POST_MISSION', 'BID_SKIN', 'BUY_SKIN', 'DUEL_CREATE', 'DUEL_JOIN', 'DUEL_SETTLE', 'POT_CLOSE', 'POT_SIGN', 'POT_FUND', 'NONE']);
+export const KINDS = Object.freeze(['ROLL', 'SETTLE', 'TAKE_MISSION', 'POST_MISSION', 'BID_SKIN', 'BUY_SKIN', 'DUEL_CREATE', 'DUEL_JOIN', 'DUEL_SETTLE', 'DUEL_SETTLE_DEFAULT', 'POT_CLOSE', 'POT_SIGN', 'POT_FUND', 'NONE']);
 export const MAX_ROLLS_HEURE = 60;
 export const DUEL_CREATE_INTERVALLE_S = 3600;
 export const DUEL_EXPIRATION_DEFAUT_S = 3600;
@@ -147,8 +152,34 @@ export function prochaineProposition(etat = {}) {
   /* 1b. DUEL_SETTLE — un duel de CE wallet a regler (dans ses 256 blocs) ou a rembourser (fenetre passee, ou jamais pris et expire) : 0 USDC.
    *   Un reglement deja SIGNE (cle dans `seen`, posee par l app apres confirmation) ne revient pas : la liste servie peut retarder. */
   const D = e.duels && ADR.test(bas(e.duels.contract)) && Array.isArray(e.duels.list) ? e.duels : null;
-  const etatsDuels = D ? D.list.filter((d) => d && d.id !== undefined).map((d) => ({ d, x: etatDuel(d, D.block, t) })) : [];
-  if (regles.duels && D) {
+  const v2 = !!(D && D.version === DuelsV2.VERSION);
+  const etatsDuels = D ? D.list.filter((d) => d && d.id !== undefined).map((d) => ({ d, x: (v2 ? DuelsV2.etatDuel : etatDuel)(d, D.block, t) })) : [];
+  if (regles.duels && D && v2) {
+    /* v2 : ses duels reglables (le vrai resultat, dans la fenetre) d abord, puis TOUT duel gagne par defaut (paie le createur, 0 USDC pour
+     *   l appelant ; propose a tous : un createur hors ligne est paye quand meme), puis ses defis jamais pris et expires (refundExpired) */
+    const a = etatsDuels.filter(({ d, x }) => !vus.has('DUEL_SETTLE:' + d.id) && (
+      (x.etat === 'REGLABLE' && (bas(d.creator) === moi || bas(d.joiner) === moi)) || x.etat === DuelsV2.DEFAULT_CREATOR || (x.etat === 'EXPIRE' && bas(d.creator) === moi)))
+      .sort((p, q) => ['REGLABLE', DuelsV2.DEFAULT_CREATOR, 'EXPIRE'].indexOf(p.x.etat) - ['REGLABLE', DuelsV2.DEFAULT_CREATOR, 'EXPIRE'].indexOf(q.x.etat)
+        /* parmi les defauts : ceux dont CE wallet est le createur d abord (son gain), puis ceux des autres */
+        || (bas(p.d.creator) === moi ? 0 : 1) - (bas(q.d.creator) === moi ? 0 : 1)
+        || (p.x.blocsRestants ?? 0) - (q.x.blocsRestants ?? 0) || (BigInt(p.d.id) < BigInt(q.d.id) ? -1 : 1));
+    if (a.length) {
+      const { d, x } = a[0];
+      if (x.etat === 'REGLABLE') {
+        const plan = DuelsV2.planSettle({ contrat: D.contract, id: d.id, targetBlock: d.targetBlock, blocActuel: D.block });
+        if (plan.etat === 'PRET') return proposition('DUEL_SETTLE', plan.appels, 'Reveal duel #' + d.id + ' — ' + x.blocsRestants + ' block(s) left to settle it for the real result. '
+          + DuelsV2.APRES_FENETRE + ' Settling costs no USDC; the winner is paid by the contract.', 0n, 'DUEL_SETTLE:' + d.id);
+      } else if (x.etat === DuelsV2.DEFAULT_CREATOR) {
+        const plan = DuelsV2.planSettleDefault({ contrat: D.contract, id: d.id, targetBlock: d.targetBlock, blocActuel: D.block });
+        if (plan.etat === 'PRET') return proposition('DUEL_SETTLE_DEFAULT', plan.appels, 'Duel #' + d.id + ' was not settled in its ' + DuelsV2.FENETRE + '-block window: its creator '
+          + (bas(d.creator) === moi ? '(you) ' : '') + 'wins by default' + (bas(d.token) === bas(D.usdc) ? ' (' + usdcTxt(partageDuel(d.stake).gagnant) + ', 90 %)' : ' (90 % of the pot)')
+          + '. Anyone may send it; it costs no USDC.', 0n, 'DUEL_SETTLE:' + d.id);
+      } else {
+        const plan = DuelsV2.planRefund({ contrat: D.contract, id: d.id, duel: d, maintenant: t });
+        if (plan.etat === 'PRET') return proposition('DUEL_SETTLE', plan.appels, 'Duel #' + d.id + ' was never accepted and has expired — refund your stake in full, no fee. Costs no USDC.', 0n, 'DUEL_SETTLE:' + d.id);
+      }
+    }
+  } else if (regles.duels && D) {
     const miens = etatsDuels.filter(({ d, x }) => (bas(d.creator) === moi || bas(d.joiner) === moi) && ['REGLABLE', 'REMBOURSABLE', 'EXPIRE'].includes(x.etat)
       && !vus.has('DUEL_SETTLE:' + d.id))
       .sort((p, q) => (p.x.etat === 'REGLABLE' ? 0 : 1) - (q.x.etat === 'REGLABLE' ? 0 : 1) || (p.x.blocsRestants ?? 0) - (q.x.blocsRestants ?? 0) || (BigInt(p.d.id) < BigInt(q.d.id) ? -1 : 1));
@@ -352,11 +383,11 @@ export function prochaineProposition(etat = {}) {
         if (m > plafondDuel) { refusJoin = refusJoin || 'duels: the cheapest open duel (' + usdcTxt(m) + ') is above your max stake (' + usdcTxt(plafondDuel) + ')'; continue; }
         if (m > reste) { refusJoin = refusJoin || 'duels: ' + usdcTxt(m) + ' is above what is left of the budget (' + usdcTxt(reste) + ')'; continue; }
         if (m > solde) { refusJoin = refusJoin || 'duels: this wallet holds ' + usdcTxt(solde) + ', the duel stake is ' + usdcTxt(m); continue; }
-        const plan = planJoin({ contrat: D.contract, duel: d, guess: D.guess, moi, maintenant: t });
+        const plan = (v2 ? DuelsV2.planJoin : planJoin)({ contrat: D.contract, duel: d, guess: D.guess, moi, maintenant: t, sParBloc: D.sParBloc });
         if (plan.etat !== 'PRET') { refusJoin = refusJoin || 'duels: ' + plan.pourquoi; continue; }
         const p = partageDuel(m);
-        return proposition('DUEL_JOIN', plan.appels, 'Accept duel #' + d.id + ' for ' + usdcTxt(m) + ' with a new random face: the block 2 blocks after your join draws its face; the most traits in common wins '
-          + usdcTxt(p.gagnant) + ' (90 % of the ' + usdcTxt(p.pot) + ' pot; 7 % to the community reward pool, 3 % to TokenizedBlock). A tie refunds both, no fee.', m, 'DUEL_JOIN:' + d.id);
+        return proposition('DUEL_JOIN', plan.appels, (v2 ? plan.avertissement + ' ' : '') + 'Accept duel #' + d.id + ' for ' + usdcTxt(m) + ' with a new random face: the block 2 blocks after your join draws its face; the most traits in common wins '
+          + usdcTxt(p.gagnant) + ' (90 % of the ' + usdcTxt(p.pot) + ' pot; 7 % to the community reward pool, 3 % to TokenizedBlock). ' + (v2 ? DuelsV2.PHRASE_EGALITE : 'A tie refunds both, no fee.'), m, 'DUEL_JOIN:' + d.id);
       }
       if (refusJoin) pourquoiPas.push(refusJoin);
       /* 3c. DUEL_CREATE — au plus un par heure glissante, et jamais tant qu un des siens attend un adversaire */
@@ -373,7 +404,8 @@ export function prochaineProposition(etat = {}) {
         if (plan.etat === 'PRET') {
           const p = partageDuel(plafondDuel);
           return proposition('DUEL_CREATE', plan.appels, 'Open a duel for ' + usdcTxt(plafondDuel) + ' with a new random face, open ' + Math.round(expiresIn / 60) + ' min: whoever accepts stakes the same; the block 2 blocks after the join decides — the winner takes '
-            + usdcTxt(p.gagnant) + ' (90 %), 7 % to the community reward pool, 3 % to TokenizedBlock. Not accepted in time: your stake comes back in full.', plafondDuel, 'DUEL_CREATE:' + t);
+            + usdcTxt(p.gagnant) + ' (90 %), 7 % to the community reward pool, 3 % to TokenizedBlock. Not accepted in time: your stake comes back in full.'
+            + (v2 ? ' Accepted but not settled within ' + DuelsV2.FENETRE + ' blocks of its result block: you win by default.' : ''), plafondDuel, 'DUEL_CREATE:' + t);
         }
         pourquoiPas.push('duels: ' + plan.pourquoi);
       }

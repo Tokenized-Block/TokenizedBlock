@@ -149,6 +149,13 @@ import { lireReglesRolls, creerCacheRegles } from './rolls-regles.js';
 let DUELS_DEPLOIEMENT = null;
 import('./duels-deploiement.js').then((m) => { DUELS_DEPLOIEMENT = (m && (m.DUELS_DEPLOIEMENT || m.default)) || null; })
   .catch((e) => { if (!/Cannot find module|ERR_MODULE_NOT_FOUND/.test(String((e && e.code) || '') + String((e && e.message) || ''))) console.log('[duels] fiche illisible :', String((e && e.message) || e).slice(0, 160)); });
+/* 2026-10-24 (Phil) : BLOCKDUELS V2 — un duel rejoint non regle dans sa fenetre est gagne par defaut par le createur (plus d option gratuite,
+ *   plus de regleur necessaire). Fiche duels-v2-deploiement.js (import DYNAMIQUE, comme v1) ; tant qu elle n a pas adresse ET bloc, /api/duels
+ *   sert v1 exactement comme avant (creer / rejoindre fermes, la phrase dit pourquoi). Lecture par l ETAT : duels-v2-serveur.js. */
+import { creerLecteurDuelsV2, reponseDuelsV2, contratDeFicheV2 } from './duels-v2-serveur.js';
+let DUELS_V2_DEPLOIEMENT = null;
+import('./duels-v2-deploiement.js').then((m) => { DUELS_V2_DEPLOIEMENT = (m && (m.DUELS_V2_DEPLOIEMENT || m.default)) || null; })
+  .catch((e) => { if (!/Cannot find module|ERR_MODULE_NOT_FOUND/.test(String((e && e.code) || '') + String((e && e.message) || ''))) console.log('[duels v2] fiche illisible :', String((e && e.message) || e).slice(0, 160)); });
 /* ⛔ LE DECODEUR D `Initialize` EST CELUI DU DEPOT, et il REFUSE une cle dont le poolId ne se
  *   recalcule pas. En reecrire une copie ici ferait un lecteur plus faible que le canonique — la
  *   faute que j ai deja faite deux fois aujourd hui. */
@@ -4630,6 +4637,15 @@ function duelConnuKeeper(c, id) {
   return e ? { final: !!e.final, guessA: e.duel.guessA, guessB: e.duel.guessB, stake: e.duel.stake } : null;
 }
 setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000).unref?.();
+/* 2026-10-24 : le lecteur v2 (cree au premier contrat v2 lu dans la fiche ; un autre contrat = un lecteur neuf, jamais un cache melange) */
+let lecteurDuelsV2 = null;
+function duelsV2() {
+  const c = contratDeFicheV2(DUELS_V2_DEPLOIEMENT);
+  if (!c) return null;
+  if (!lecteurDuelsV2 || lecteurDuelsV2.etat().contrat !== c) lecteurDuelsV2 = creerLecteurDuelsV2({ rpc: rpcServeur, contrat: c });
+  return lecteurDuelsV2;
+}
+setInterval(() => { const l = duelsV2(); if (l) void l.lire(); }, 30000).unref?.();
 
 /* ══ LE REGLEUR DES SLOTS (2026-10-23, option 3 de Phil) — un spin non regle dans sa fenetre (256 blocs) est PERDU : le serveur regle donc
  *   les spins lui-meme quand le proprietaire a pose SLOTS_KEEPER_KEY (un wallet qu il cree et approvisionne en ETH pour le gas). La cle
@@ -5049,6 +5065,9 @@ const SERVIS = [
   /* 2026-10-18 : BlockDuels (duels entre deux wallets, 90 / 7 / 3) — page de deploiement (noindex, aucun lien), fiche, encodeur, appels non
    *   signes (duels-plan.js importe blockrolls-plan.js, deja servi). ⛔ absent d ici = 404 = page morte. */
   'deployer-duels.html', 'duels-deploiement.js', 'duels-config.js', 'duels-plan.js',
+  /* 2026-10-24 : BlockDuelsV2 — page de deploiement (noindex, aucun lien), fiche, verification, et le module de plan v2 importe par app.html
+   *   et brain-jeu.js (il importe temps-de-bloc.js, deja servi). ⛔ absent d ici = 404 = page morte. */
+  'deployer-duels-v2.html', 'duels-v2-deploiement.js', 'duels-v2-config.js', 'duels-v2-plan.js',
   /* 2026-10-23 (Phil) : BlockSlots (3 faces de bloc, points, prix fixes) — page de deploiement (noindex, aucun lien), fiche, encodeur,
    *   appels non signes ; slots-plan.js est importe par app.html. ⛔ absent d ici = 404 = page morte. */
   'deployer-slots.html', 'slots-deploiement.js', 'slots-config.js', 'slots-plan.js',
@@ -7229,6 +7248,15 @@ function traiterRequete(req, res) {
   if (chemin === '/api/duels') {
     const rendreD = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
+    /* 2026-10-24 : BlockDuelsV2 servi (fiche avec adresse ET bloc) -> /api/duels lit v2 (version: 2) ; sinon v1, inchange */
+    const lv2 = duelsV2();
+    if (lv2) {
+      void lv2.lire();
+      void sParBlocSrv();
+      const blocsDuCreateur = (cr) => { const l = []; for (const [jeton, createur] of createurParBlock) if (createur === cr && l.length < 5) l.push(String(jeton).toLowerCase()); return l; };
+      rendreD(reponseDuelsV2({ lecteur: lv2, fiche: DUELS_V2_DEPLOIEMENT, maintenant: Math.floor(Date.now() / 1000), sParBloc: tempsDeBlocSrv.sParBloc, blocksDe: blocsDuCreateur }));
+      return;
+    }
     const regles = { miseMin: MISE_MIN_DUEL.toString(), expirationMinS: EXP_MIN_DUEL, expirationMaxS: EXP_MAX_DUEL, partageBps: { gagnant: 9000, pool: 700, dev: 300 } };
     const contrat = contratDuels();
     if (!contrat) { rendreD({ ok: false, etat: 'PAS_OUVERT', regles }); return; }

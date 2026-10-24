@@ -25,6 +25,11 @@ import { BLOCKSKINS_DEPLOIEMENT } from './blockskins-deploiement.js';
 import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { DUELS_DEPLOIEMENT } from './duels-deploiement.js';
+/* 2026-10-24 : BlockDuelsV2 (le createur gagne par defaut apres la fenetre) — fiche duels-v2-deploiement.js (adresse null tant que Phil n a pas
+ *   signe) ; le partage et la fenetre viennent de duels-plan.js (constantes verifiees contre la source compilee par test-duels-plan) */
+import { DUELS_V2_DEPLOIEMENT } from './duels-v2-deploiement.js';
+import { WINNER_BPS as DUEL_WINNER_BPS, POOL_BPS as DUEL_POOL_BPS, BPS as DUEL_BPS } from './duels-plan.js';
+import { secondesPour } from './temps-de-bloc.js';
 import { SEUIL_VOLUME_JOUR_USD, JOURS_PASS_SEMAINE, BONUS_PASS_SEMAINE, JOURS_PASS_SKIN } from './tirage-saison.js';
 import { FRAIS_CONTRATS } from './frais-contrats.js';
 import { reglesValides } from './rolls-regles.js';
@@ -57,7 +62,9 @@ export const CHIFFRES = Object.freeze({
     reserveBps: missionsTb * BigInt(MI.RESERVE_SHARE_BPS) / 10000n, devBps: missionsTb * (10000n - BigInt(MI.RESERVE_SHARE_BPS)) / 10000n,
     createurBps: BigInt(MI.FEE_BPS) - missionsTb },
   ticketpot: { deploye: deploye(TICKETPOT_DEPLOIEMENT.adresse) },
-  duels: { deploye: deploye(DUELS_DEPLOIEMENT.adresse) }, /* 2026-10-18 18:20 UTC : LIVE 0x6b76…602c (bloc 52 778 966), lu dans la fiche */
+  duels: { deploye: deploye(DUELS_DEPLOIEMENT.adresse), /* 2026-10-18 18:20 UTC : LIVE 0x6b76…602c (bloc 52 778 966), lu dans la fiche */
+    v2: { deploye: deploye(DUELS_V2_DEPLOIEMENT.adresse), adresse: DUELS_V2_DEPLOIEMENT.adresse },
+    gagnantBps: DUEL_WINNER_BPS, poolBps: DUEL_POOL_BPS, devBps: DUEL_BPS - DUEL_WINNER_BPS - DUEL_POOL_BPS, fenetreBlocs: FENETRE },
   tirage: { seuilUsd: SEUIL_VOLUME_JOUR_USD, joursPassSemaine: JOURS_PASS_SEMAINE, bonusPassSemaine: BONUS_PASS_SEMAINE, joursPassSkin: JOURS_PASS_SKIN },
 });
 
@@ -118,6 +125,21 @@ const carte = (kick, titre, corps) => '<section class="carte"><span class="kick"
 const table = (lignes) => '<table class="frais"><tbody>' + lignes.join('') + '</tbody></table>';
 const pasDeploye = (quoi) => '<p class="note"><b class="etat">Not deployed yet.</b> ' + quoi + '</p>';
 
+/** le risque des duels, dit par la regle du contrat SERVI : v2 signe -> le defaut au createur, la fenetre au temps de bloc MESURE (live
+ *  .tempsDeBloc.sParBloc, sinon « not measured ») ; v2 pas encore signe -> la structure de v1, et pourquoi l app n ouvre pas de nouveau duel. */
+export function duelsRisque(du, live) {
+  const s = live && live.tempsDeBloc ? Number(live.tempsDeBloc.sParBloc) : NaN;
+  const sec = secondesPour(du.fenetreBlocs, Number.isFinite(s) ? s : null);
+  const duree = sec === null ? 'the block time was not measured just now' : 'about ' + Math.round(sec) + ' s at the measured block time';
+  if (du.v2 && du.v2.deploye) return '<li><b>Duels: settle in time, or the creator wins.</b> A joined duel must be settled in the ' + du.fenetreBlocs
+    + ' blocks after its result block (' + duree + '). After that, the creator wins by default: anyone can send it, and it pays like a creator win ('
+    + pctBps(du.gagnantBps) + ' to the creator). That includes a tie not settled in time. So the player who joins and wins, or ties, must settle in time. A duel nobody joined goes back to its creator once it expires. Contract: '
+    + lienBase(du.v2.adresse) + '.</li>';
+  return '<li><b>Duels: new duels are closed.</b> On the duels contract live on Base today, a joined duel not settled in the ' + du.fenetreBlocs
+    + ' blocks after its result block is refunded to both players. The player who joins sees the result first, so they could settle only their wins; the app therefore opens no new duel on it. '
+    + 'A second version, where the creator wins by default once that window has passed, is prepared and not signed on Base yet.</li>';
+}
+
 /**
  * Le contenu HTML de la page. `C` = CHIFFRES (ou une copie modifiee par le test) ; `live` = /api/tirage ou null.
  */
@@ -169,6 +191,9 @@ export function rendre(C, live) {
     ligne('Mission reward', pctBps(mi.feeBps),
       'Doer ' + pctBps(mi.faiseurBps) + ' · earn pool ' + pctBps(mi.reserveBps) + ' · TokenizedBlock ' + pctBps(mi.devBps)
       + (mi.createurBps > 0n ? ' · creator ' + pctBps(mi.createurBps) : '') + ' of each reward.'),
+    ligne('Duel', pctBps(C.duels.poolBps + C.duels.devBps) + ' of the pot',
+      'Both players stake the same. A decided duel pays ' + pctBps(C.duels.gagnantBps) + ' of the pot to the winner, ' + pctBps(C.duels.poolBps) + ' to the community reward pool and '
+      + pctBps(C.duels.devBps) + ' to TokenizedBlock (plus rounding dust). A tie settled in its window refunds both, no fee.'),
     ligne('Daily ticket', 'free', 'Reach $' + ti.seuilUsd + ' of verified volume in a UTC day and that day\'s ticket is yours — nothing extra to pay.'),
   ]) + (mi.deploye ? '' : pasDeploye('Missions: the contract is written and tested, not signed on Base. Nothing can be posted or paid yet.')));
 
@@ -206,6 +231,8 @@ export function rendre(C, live) {
     /* 2026-10-24 (audit rolls-duels, BlockRolls.sol:261-288 + PoC test_V_DayPotGrind) */
     + '<li><b>The day-pass draw can be re-armed.</b> After a UTC day ends, anyone can close it, which picks a draw block; the draw must then be made within ' + ro.fenetreBlocs
       + ' blocks after that block. If nobody draws in time, the day can be closed again on a new block. A buyer who sees that the hash does not pick them can wait and close again until it does, unless someone else draws in time. Anyone can draw from the Game tab.</li>'
+    /* 2026-10-24 (audit rolls-duels, BlockDuels.sol settle / refundExpired + PoC test_V_DuelEV ; v2 : BlockDuelsV2.settleDefault) */
+    + duelsRisque(C.duels, live)
     + '<li><b>Where the luck comes from.</b> Faces come from the hash of a Base block, which the Base sequencer produces. That is the same trust as every block on Base, said rather than hidden.</li>'
     + '<li><b>Launchpad tokens that tax resale.</b> Some third-party launchpad pools on Base use a hook that charges sellers. We measured hooks reporting taxBps() = ' + MESURE_LAUNCHPAD.taxBps
       + ': a wallet off the hook\'s list got back ' + MESURE_LAUNCHPAD.retourHorsListe + ' of its sale in a test on a copy of the chain, and ' + MESURE_LAUNCHPAD.poolsVides + ' of ' + MESURE_LAUNCHPAD.poolsLues

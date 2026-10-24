@@ -4045,7 +4045,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward. A ticket holder who holds the block does it — a person or an AI agent — and the chain proves it. Doer 90%, community earn pool 7%, TokenizedBlock 3%.</p></div>
           <div class="jeuTuile"><b>05 · SKINS</b><p>Mint a skin for your block, wear it, resell it at a fixed price or in an auction (bids +5%, 7 days max). A minted skin is also that day's ticket.</p></div>
           <!-- DUELS : la regle, et « opens with its contract » tant que le contrat n est pas servi (peindreDuels remplace la derniere phrase) -->
-          <div class="jeuTuile"><b>06 · DUELS</b><p>Two wallets — a person, or a block's brain proposing to its owner — stake the same in USDC or an admitted tokenized stock. Each plays a new random block face; the block 2 blocks after the join draws its face; the most traits in common out of 5 wins 90% of the pot, 7% goes to the community reward pool, 3% to TokenizedBlock. A tie refunds both, no fee. Not accepted in time, or not settled within 256 blocks: refunded in full. <span id="regleDuelsEtat">Opens with its contract.</span></p></div>
+          <div class="jeuTuile"><b>06 · DUELS</b><p>Two wallets — a person, or a block's brain proposing to its owner — stake the same in USDC or an admitted tokenized stock. Each plays a new random block face; the block 2 blocks after the join draws its face; the most traits in common out of 5 wins 90% of the pot, 7% goes to the community reward pool, 3% to TokenizedBlock. A tie refunds both, no fee. <span id="regleDuelsFenetre">Not accepted in time, or not settled within 256 blocks: refunded in full.</span> <span id="regleDuelsEtat">Opens with its contract.</span></p></div>
         </div>
         <p class="note" style="margin:10px 0 0">What each game costs, what it pays back on average, and which pieces still wait for their contract: <a class="lienLearn" href="frais-et-risques.html">Fees &amp; risks →</a></p>
       </details>
@@ -4313,7 +4313,12 @@ import { planFund as planFundPot, planClaim as planClaimPot, planClose as planCl
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernierJour } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
-import * as Duels from './duels-plan-app.js';
+import * as DuelsV1 from './duels-plan-app.js';
+/* 2026-10-24 (Phil) : BlockDuelsV2 — MEMES noms que duels-plan-app.js ; seul change ce que la regle v2 change (un duel rejoint non regle dans
+ *   sa fenetre : gagne par defaut par le createur). `Duels` = le module du contrat que /api/duels SERT (version 2 -> v2, sinon v1) : il est
+ *   choisi a chaque lecture de /api/duels (lireDuelsServis), avant tout rendu ou plan. */
+import * as DuelsV2 from './duels-v2-plan.js';
+let Duels = DuelsV1;
 /* 2026-10-23 : les slots (BlockSlots) — encodeurs purs, faces, points, loi exacte ; le contrat vient de /api/slots, sinon rien ne se montre */
 import * as Slots from './slots-plan.js';
 /* 2026-10-24 : « Pay with » — payer un jeu avec un jeton profond (swap exact-output en USDC, puis les appels du jeu inchanges) */
@@ -6235,13 +6240,18 @@ $('#skinOuvrirMarche').addEventListener('click', () => { allerA('trade'); setTim
 const duelsCfg = { j: null, lu: 0, enVol: null, focus: null, getter: undefined, admis: new Map(), jetons: null };
 const DUEL_EPEES = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.5l7 7M2 2l1.6.4.4 1.6M9.5 11.5l2-2M10.5 10.5l3 3M13.5 2.5l-7 7M14 2l-1.6.4-.4 1.6M6.5 11.5l-2-2M5.5 10.5l-3 3" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>';
 const duelContrat = (j) => (j && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
+/* 2026-10-24 : le module du contrat SERVI — version 2 (BlockDuelsV2) ou v1 ; une reponse illisible garde v1 (creer / rejoindre fermes) */
+const moduleDuels = (j) => (j && j.version === DuelsV2.VERSION ? DuelsV2 : DuelsV1);
 /** /api/duels, garde 10 s (2 min tant que le contrat n est pas servi) ; force = relire */
 async function lireDuelsServis(force = false) {
   const ttl = duelsCfg.j && !duelContrat(duelsCfg.j) ? 120000 : 10000;
   if (!force && duelsCfg.j && Date.now() - duelsCfg.lu < ttl) return duelsCfg.j;
   if (duelsCfg.enVol) return duelsCfg.enVol;
   duelsCfg.enVol = (async () => {
-    try { const j = await fetch('/api/duels', { cache: 'no-store', signal: AbortSignal.timeout(12000) }).then((r) => r.json()); duelsCfg.j = j; duelsCfg.lu = Date.now(); return j; }
+    try { const j = await fetch('/api/duels', { cache: 'no-store', signal: AbortSignal.timeout(12000) }).then((r) => r.json()); Duels = moduleDuels(j);
+      /* v2 sert aussi le temps de bloc MESURE par le serveur (la fenetre se dit en secondes avant un join) ; jamais une valeur supposee */
+      { const s = j && j.tempsDeBloc ? Number(j.tempsDeBloc.sParBloc) : NaN; if (Number.isFinite(s) && s > 0) sParBlocApp = s; }
+      duelsCfg.j = j; duelsCfg.lu = Date.now(); return j; }
     catch (_) { return duelsCfg.j; }
   })();
   try { return await duelsCfg.enVol; } finally { duelsCfg.enVol = null; }
@@ -6296,7 +6306,7 @@ async function remplirJetonsDuel(contrat) {
 }
 const faceDuelHtml = (g, lettre) => { try { const a = Duels.apparenceDepuisGuess(g); return a ? logoSvg(paramsLogoDepuisApparence(a, lettre)) : ''; } catch (_) { return ''; } };
 const faceBlocHtml = (hash) => { try { const f = faceRevelee(hash); return f ? logoSvg(paramsLogoDepuisApparence(f, '★')) : ''; } catch (_) { return ''; } };
-const BOUTON_DUEL = { JOIN: 'Accept · a new random face', CANCEL: 'Cancel · full refund', SETTLE: 'Settle', REFUND: 'Refund in full' };
+const BOUTON_DUEL = { JOIN: 'Accept · a new random face', CANCEL: 'Cancel · full refund', SETTLE: 'Settle', REFUND: 'Refund in full', SETTLE_DEFAULT: 'Settle · creator wins by default' };
 /** une ligne de duel : deux faces (et celle du bloc une fois regle), la mise, l etat, l action possible MAINTENANT (jamais un bouton mort) */
 async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
   const li = document.createElement('div');
@@ -6320,11 +6330,16 @@ async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
   t1.textContent = 'Duel #' + d.id + ' · ' + mise + ' each · ' + (d.creator === moi ? 'you' : courtAdr(d.creator)) + (d.joiner ? ' vs ' + (d.joiner === moi ? 'you' : courtAdr(d.joiner)) : '');
   const t2 = document.createElement('p'); t2.className = 'note';
   const min = (s) => (s >= 3600 ? Math.floor(s / 3600) + ' h ' : '') + Math.max(0, Math.floor((s % 3600) / 60)) + ' min';
-  if (e.etat === 'OUVERT') t2.textContent = (d.creator === moi ? 'Your challenge — waiting for an opponent, ' + min(e.resteS) + ' left. Cancel returns your stake in full.' : 'Open — ' + min(e.resteS) + ' left. Accept with the same stake: the winner gets ' + auG + ' (90%).');
+  if (e.etat === 'OUVERT') t2.textContent = (d.creator === moi ? 'Your challenge — waiting for an opponent, ' + min(e.resteS) + ' left. Cancel returns your stake in full.' : 'Open — ' + min(e.resteS) + ' left. Accept with the same stake: the winner gets ' + auG + ' (90%).'
+    /* v2 : la ligne de la fenetre, AVANT qu un join soit signe (au temps de bloc mesure ; non mesure : pas de Accept, la phrase le dit) */
+    + (Duels.phraseAvantJoin && d.creator !== moi ? ' ' + (Duels.phraseAvantJoin(sParBlocApp) || Duels.PHRASE_SANS_MESURE) : ''));
   else if (e.etat === 'EXPIRE') t2.textContent = 'Not accepted in time — Refund returns the stake to its creator in full (anyone may send it).';
   else if (e.etat === 'ATTENTE') t2.textContent = 'Accepted — block ' + Number(d.targetBlock).toLocaleString('en-US') + ' decides, ' + e.blocsAvant + ' block(s) to go.';
-  else if (e.etat === 'REGLABLE') t2.textContent = 'Block ' + Number(d.targetBlock).toLocaleString('en-US') + ' is in — settle within ' + texteBlocs(e.blocsRestants, sParBlocApp) + ' (anyone may; the contract pays the winner). After that, both are refunded in full.';
+  else if (e.etat === 'REGLABLE') t2.textContent = 'Block ' + Number(d.targetBlock).toLocaleString('en-US') + ' is in — settle within ' + texteBlocs(e.blocsRestants, sParBlocApp) + ' (anyone may; the contract pays the winner). ' + (Duels.APRES_FENETRE || 'After that, both are refunded in full.');
   else if (e.etat === 'REMBOURSABLE') t2.textContent = 'Not settled within 256 blocks — Refund returns both stakes in full, no fee.';
+  /* v2 : rejoint, fenetre passee -> le createur gagne par defaut (n importe qui l envoie) ; puis : gagne par defaut (fini) */
+  else if (e.etat === 'DEFAULT_CREATOR') t2.textContent = 'Not settled within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' of block ' + Number(d.targetBlock).toLocaleString('en-US') + ' — the creator wins by default: ' + auG + ' (90%). Anyone may send it.';
+  else if (e.etat === 'GAGNE_DEFAUT') t2.textContent = 'Not settled in its window — ' + (d.creator === moi ? 'you' : courtAdr(d.creator)) + ' (the creator) won ' + (await montantDuel(d.defaulted.payout, d.token)) + ' by default (90%); ' + (await montantDuel(p.pool, d.token)) + ' to the community reward pool, ' + (await montantDuel(p.dev, d.token)) + ' to TokenizedBlock.';
   else if (e.etat === 'REGLE') {
     const s = d.settled, r = Duels.resultatDuel(d, s.blockHash);
     const accord = r && r.scoreA === s.scoreA && r.scoreB === s.scoreB;
@@ -6335,6 +6350,8 @@ async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
   else if (e.etat === 'REMBOURSE') t2.textContent = 'Refunded in full.';
   else t2.textContent = 'Its state could not be read just now.';
   li.append(faces, t1, t2);
+  /* v2 : pas de Accept tant que la fenetre ne se dit pas au temps mesure (jamais un bouton qui refuserait apres l appui) */
+  ouverts = ouverts && !(Duels.phraseAvantJoin && Duels.phraseAvantJoin(sParBlocApp) === null);
   const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts);
   if (acts.length) {
     const z = document.createElement('div'); z.className = 'jourEtapes';
@@ -6357,6 +6374,12 @@ async function peindreDuels() {
   try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }
   for (const id of ['#bjDuelsLab', '#bjMaxDuelLab']) { const x = $(id); if (x) x.hidden = !on; }
   if (regle) regle.textContent = on ? (Duels.duelsOuverts(j) ? 'Open on Base.' : 'On Base; new duels are closed.') : 'Opens with its contract.';
+  /* v2 : la regle de la fenetre DITE la ou elle est lue (How it works, la carte) : un duel rejoint non regle a temps va au createur */
+  if (on && Duels.PHRASE_EGALITE) {
+    const fen = 'Accepted but not settled within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' of its result block: the creator wins by default';
+    const rf = $('#regleDuelsFenetre'); if (rf) rf.textContent = 'Not accepted in time: the stake goes back to its creator. ' + fen + ', even on a tie.';
+    const rg = $('#duelsRegle'); if (rg) rg.textContent = 'Both stake the same. The block 2 blocks after the join draws its face. Winner 90%, community reward pool 7%, TokenizedBlock 3%. ' + Duels.PHRASE_EGALITE + ' ' + fen + '.';
+  }
   if (!on) { liste.textContent = ''; return null; }
   void remplirJetonsDuel(contrat);
   /* revue adverse 2026-10-18 (MOYEN) : liste NON LUE -> pas de « Challenge » ni de formulaire (un duel cree sans liste lisible n aurait
@@ -6380,7 +6403,7 @@ async function peindreDuels() {
   const lignes = [];
   for (const d of [...vivants, ...miensFinis, ...autresFinis]) lignes.push(await ligneDuel(d, moi, tete, maintenant, ouv));
   liste.textContent = ''; liste.append(...lignes);
-  const aRegler = duels.filter((d) => ['REGLABLE', 'REMBOURSABLE', 'EXPIRE'].includes(etat2(d)));
+  const aRegler = duels.filter((d) => ['REGLABLE', 'REMBOURSABLE', 'EXPIRE', 'DEFAULT_CREATOR'].includes(etat2(d)));
   etat.textContent = (!ouv ? Duels.PHRASE_DUELS_FERMES : ouverts.length ? ouverts.length + ' open challenge' + (ouverts.length === 1 ? '' : 's') + '.' : 'No open challenge right now — open one below.')
     + (aRegler.length ? ' ' + aRegler.length + ' duel' + (aRegler.length === 1 ? '' : 's') + ' to settle or refund — anyone may.' : '')
     + (j.partiel ? ' Still reading older duels (' + Number(j.aLire).toLocaleString('en-US') + ' left).' : '') + (c ? '' : ' Connect a wallet to play.');
@@ -6443,16 +6466,19 @@ async function actionDuel(id, action, li) {
     /* revue adverse 2026-10-18 : un jeton RETIRE par le gardien fait revert join() APRES l approve — relu avant tout plan */
     const adm = await admisDuel(contrat, d.token);
     if (adm !== true) { dit(adm === false ? symDuel(d.token) + ' is no longer admitted by the duels contract — joining would fail; nothing was asked.' : 'Whether ' + symDuel(d.token) + ' is still admitted could not be read — nothing was asked.'); return; }
-    plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });
+    plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant, sParBloc: sParBlocApp });
     const fb = li && li.querySelectorAll('.duelFaces .jourFace')[1];
     if (fb) { try { fb.innerHTML = logoSvg(paramsLogoDepuisApparence(face.apparence, 'B')); } catch (_) {} }
   } else if (action === 'CANCEL') plan = Duels.planCancel({ contrat, id: d.id });
   else if (action === 'SETTLE') plan = Duels.planSettle({ contrat, id: d.id, targetBlock: d.targetBlock, blocActuel: tete });
-  else if (action === 'REFUND') plan = Duels.planRefund({ contrat, id: d.id });
+  else if (action === 'REFUND') plan = Duels.planRefund({ contrat, id: d.id, duel: d, maintenant });
+  /* v2 : la fenetre est passee -> le createur gagne par defaut (settleDefault, n importe qui) */
+  else if (action === 'SETTLE_DEFAULT' && Duels.planSettleDefault) plan = Duels.planSettleDefault({ contrat, id: d.id, targetBlock: d.targetBlock, blocActuel: tete });
   if (!plan || plan.etat !== 'PRET') { dit('Not asked: ' + ((plan && plan.pourquoi) || 'unknown action')); return; }
   const p = Duels.partage(d.stake);
-  dit(action === 'JOIN' ? 'Accept duel #' + d.id + ': approve exactly ' + (await montantDuel(d.stake, d.token)) + ', then join with this new random face — the block 2 blocks after your join decides; the winner gets ' + (await montantDuel(p.gagnant, d.token)) + '. Sign in your wallet…'
+  dit(action === 'JOIN' ? (plan.avertissement ? plan.avertissement + ' ' : '') + 'Accept duel #' + d.id + ': approve exactly ' + (await montantDuel(d.stake, d.token)) + ', then join with this new random face — the block 2 blocks after your join decides; the winner gets ' + (await montantDuel(p.gagnant, d.token)) + '. Sign in your wallet…'
     : action === 'SETTLE' ? 'Settle duel #' + d.id + ' — anyone may; the contract pays the winner. Sign in your wallet…'
+    : action === 'SETTLE_DEFAULT' ? 'Duel #' + d.id + ' was not settled in its window: the creator wins ' + (await montantDuel(p.gagnant, d.token)) + ' by default. Anyone may send it. Sign in your wallet…'
     : action === 'CANCEL' ? 'Cancel your challenge #' + d.id + ' — your stake comes back in full. Sign in your wallet…'
     : 'Refund duel #' + d.id + ' in full, no fee. Sign in your wallet…');
   const r = await envoyerAppels(plan.appels, c);
@@ -6465,8 +6491,13 @@ async function actionDuel(id, action, li) {
       dit('Accepted — block ' + jn.targetBlock.toLocaleString('en-US') + ' decides. Waiting for it…');
       let t2 = 0;
       for (let k = 0, nT = toursAttente(); k < nT && t2 <= jn.targetBlock; k++) { await new Promise((o) => setTimeout(o, pasAttente())); try { t2 = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) {} }
-      dit(t2 > jn.targetBlock ? 'Block ' + jn.targetBlock.toLocaleString('en-US') + ' is in — press Settle within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' (anyone may; after that both are refunded).' : 'The block is not in yet — Settle appears here once it is.');
+      dit(t2 > jn.targetBlock ? 'Block ' + jn.targetBlock.toLocaleString('en-US') + ' is in — press Settle within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + (Duels.APRES_FENETRE ? ' (anyone may). ' + Duels.APRES_FENETRE : ' (anyone may; after that both are refunded).') : 'The block is not in yet — Settle appears here once it is.');
+      /* la carte reste sur CE duel : son Settle s y montre des que le bloc est la (jamais signe tout seul) */
+      duelsCfg.focus = String(jn.id);
     }
+  } else if (action === 'SETTLE_DEFAULT') {
+    const dw = evs.find((x) => x.type === 'DEFAULT_WON');
+    dit(dw ? 'Done — ' + (dw.winner === moi ? 'you' : courtAdr(dw.winner)) + ' (the creator) won ' + (await montantDuel(dw.payout, d.token)) + ' by default.' : 'Sent (' + r.hash.slice(0, 10) + '…) but not read back yet.');
   } else if (action === 'SETTLE') {
     const st = evs.find((x) => x.type === 'SETTLED');
     dit(st ? 'Settled: ' + st.scoreA + '/5 vs ' + st.scoreB + '/5 — ' + (st.scoreA === st.scoreB ? 'a tie, both refunded.' : (st.winner === moi ? 'you won ' : courtAdr(st.winner) + ' won ') + (await montantDuel(st.payout, d.token)) + '.') : 'Settled (' + r.hash.slice(0, 10) + '…) but not read back yet.');
@@ -6771,6 +6802,8 @@ async function bjTour() {
         try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
         try { const f = tirerFaceDeRoll(); guessD = f ? f.guess : null; } catch (_) { guessD = null; }
         if (Number.isSafeInteger(tete)) duels = { contract: cd, usdc: USDC_BASE, guess: guessD, expiresIn: 3600, block: tete, list: duelsDe(jd), open: Duels.duelsOuverts(jd) };
+        /* 2026-10-24 : v2 (le createur gagne par defaut apres la fenetre) et le temps de bloc MESURE (la fenetre dite avant un join) */
+        if (duels) Object.assign(duels, { version: jd.version === DuelsV2.VERSION ? DuelsV2.VERSION : 1, sParBloc: sParBlocApp });
       }
     }
     /* LE POT DES RECOMPENSES (2026-10-18) : l owner et la veille SERVIS (/api/tirage.ticketpot, lus sur la chaine par le serveur) ; un jour
@@ -6878,7 +6911,7 @@ async function bjSignerParts(m, p, walletCarte) {
   return { ok: true, faites, refusees };
 }
 const BJ_TITRES = { ROLL: 'Roll', SETTLE: 'Settle', TAKE_MISSION: 'Claim a mission', POST_MISSION: 'Post a mission', BID_SKIN: 'Bid on a skin', BUY_SKIN: 'Buy a skin',
-  DUEL_CREATE: 'Open a duel', DUEL_JOIN: 'Accept a duel', DUEL_SETTLE: 'Settle a duel', POT_CLOSE: 'Close yesterday\'s pot', POT_SIGN: 'Sign the pot shares', POT_FUND: 'Fund today\'s pot' };
+  DUEL_CREATE: 'Open a duel', DUEL_JOIN: 'Accept a duel', DUEL_SETTLE: 'Settle a duel', DUEL_SETTLE_DEFAULT: 'Settle a duel by default', POT_CLOSE: 'Close yesterday\'s pot', POT_SIGN: 'Sign the pot shares', POT_FUND: 'Fund today\'s pot' };
 /** la proposition dans le chat du panneau : ce qu elle fait, ses appels, UN « Sign » (bcSigner : le wallet confirme chaque appel), « Dismiss » */
 function bjMontrer(p, rolls, walletCarte) {
   bjVol.carte += 1; const id = bjVol.carte;
@@ -6972,12 +7005,14 @@ function bjMontrer(p, rolls, walletCarte) {
     } else if (/^DUEL_/.test(p.kind)) {
       /* un duel signe : son evenement relu sur le recu ; un settle CONFIRME entre dans `seen` (la liste servie peut retarder de 30 s) */
       if (p.kind === 'DUEL_SETTLE') { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
+      if (p.kind === 'DUEL_SETTLE_DEFAULT') { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
       const jd = duelContrat(duelsCfg.j), recu = await recuDe(r.hash), evs = recu && jd ? Duels.lireEvenementsDuel(recu.logs, jd) : [];
       const ev = evs[evs.length - 1];
       bcEtape(m, !ev ? 'Sent — the Duels card shows it once the server reads it.'
         : ev.type === 'CREATED' ? 'Duel #' + ev.id + ' is open — on the map next to your block; anyone may accept it.'
         : ev.type === 'JOINED' ? 'Accepted duel #' + ev.id + ' — block ' + ev.targetBlock.toLocaleString('en-US') + ' decides; its brain proposes the settle once it is in.'
         : ev.type === 'SETTLED' ? 'Duel #' + ev.id + ': ' + ev.scoreA + '/5 vs ' + ev.scoreB + '/5 — ' + (ev.scoreA === ev.scoreB ? 'a tie, both refunded.' : (ev.winner === walletCarte ? 'you won ' : courtAdr(ev.winner) + ' won ') + usdcTexte(ev.payout) + ' USDC.')
+        : ev.type === 'DEFAULT_WON' ? 'Duel #' + ev.id + ': not settled in its window — ' + (ev.winner === walletCarte ? 'you' : courtAdr(ev.winner)) + ' (the creator) won by default.'
         : 'Duel #' + ev.id + ' refunded in full.', ev ? 'oui' : '');
       void lireDuelsServis(true).then(() => { void peindreDuels(); });
       if (p.kind === 'DUEL_JOIN') setTimeout(() => { void bjTour(); }, 12000);
@@ -26632,7 +26667,9 @@ async function bcCommandeDuel() {
     if (miens.length) bcEtape(m, 'Yours in play: #' + miens.map((d) => d.id + ' (' + Duels.etatDuel(d, j.tete, maintenant).etat.toLowerCase() + ')').join(', #') + ' — settle, refund or cancel in the Duels card of the Game tab.');
     return;
   }
-  const prenables = duels.filter((d) => { const e = Duels.etatDuel(d, j.tete, maintenant); return e.etat === 'OUVERT' && e.resteS >= Duels.MARGE_JOIN_S && d.creator !== moi; }).slice(0, 5);
+  const prenables = duels.filter((d) => { const e = Duels.etatDuel(d, j.tete, maintenant); return e.etat === 'OUVERT' && e.resteS >= Duels.MARGE_JOIN_S && d.creator !== moi
+    /* v2 : aucun Accept tant que la fenetre ne se dit pas au temps de bloc mesure */
+    && !(Duels.phraseAvantJoin && Duels.phraseAvantJoin(sParBlocApp) === null); }).slice(0, 5);
   bcEtape(m, prenables.length ? prenables.length + ' open challenge' + (prenables.length === 1 ? '' : 's') + ' you can accept — winner 90%, community reward pool 7%, TokenizedBlock 3%; a tie refunds both:' : 'No open challenge to accept right now.');
   for (const d of prenables) {
     const p = Duels.partage(d.stake), reste = Number(d.expiresAt) - maintenant;
@@ -26659,13 +26696,15 @@ async function bcAccepterDuel(m, id) {
   /* revue adverse 2026-10-18 : jeton retire par le gardien -> join() revert apres l approve ; relu avant de proposer */
   const adm = await admisDuel(contrat, d.token);
   if (adm !== true) { bcEtape(m, adm === false ? symDuel(d.token) + ' is no longer admitted by the duels contract — nothing is proposed.' : 'Whether ' + symDuel(d.token) + ' is still admitted could not be read — nothing is proposed.', 'non'); return; }
-  const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });
+  const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant, sParBloc: sParBlocApp });
   if (plan.etat !== 'PRET') { bcEtape(m, 'Not planned: ' + plan.pourquoi, 'non'); return; }
   bcEtape(m, 'Your face for duel #' + d.id + ' (new, random — colour, orbit, facet, material, ornament): ' + face.guess.join(', ') + '. Theirs: ' + d.guessA.join(', ') + '. The block 2 blocks after your join draws its face.');
+  /* v2 : la fenetre, dite AVANT la signature (au temps de bloc mesure) */
+  if (plan.avertissement) bcEtape(m, plan.avertissement);
   for (const a of plan.appels) bcEtape(m, a.quoi);
   bcBoutons(m, [['Sign in your wallet', async () => {
     const s = await bcSigner(m, plan.appels.map((a) => ({ ...a, nom: a.quoi })), null);
-    if (s.ok) bcEtape(m, 'Accepted — settle it in the Duels card of the Game tab once the block is in (within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + '; after that both are refunded).', 'oui');
+    if (s.ok) bcEtape(m, 'Accepted — settle it in the Duels card of the Game tab once the block is in (within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + (Duels.APRES_FENETRE ? '). ' + Duels.APRES_FENETRE : '; after that both are refunded).'), 'oui');
     void lireDuelsServis(true).then(() => { void peindreDuels(); });
   }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
 }

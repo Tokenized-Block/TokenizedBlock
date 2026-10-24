@@ -91,10 +91,12 @@ const rpcSansLogs = async (m, p) => { if (m === 'eth_getLogs') { getLogsDemandes
 const f = new Function('DUELS_DEPLOIEMENT', 'rpcServeur', 'blocsPour', 'sParBlocSrv', 'TAILLE_LOGS_DUELS', 'filtreLogsDuels', 'lireDuels', 'duelEnJson', 'partageDuel', 'MISE_MIN_DUEL',
   'EXP_MIN_DUEL', 'EXP_MAX_DUEL', 'FINIS_DUEL', 'etatDuelSrv', 'regleurCouvre', 'regleurSlots', 'createurParBlock',
   'appelNextIdEtat', 'appelDuelEtat', 'lireNextIdDuels', 'duelDepuisEtat', 'reglerDepuisHash', 'idsDuelsATour',
+  /* 2026-10-24 : la route essaie d abord BlockDuelsV2 (duelsV2() : null tant que sa fiche n a pas d adresse) — ici v1, comme en prod */
+  'duelsV2',
   srcLecteur + '\nasync function route(req, res, chemin) {\n' + srcRoute + '\n}\nreturn { lireDuelsSrv, duelsSrv, route };');
 const x = f({ adresse: C, bloc: 1, chaine, constructeur: { usdc: JETON, devWallet: DEV, rewardPool: POOL } }, rpcSansLogs, blocsPour, async () => 2, APPD.TAILLE_FENETRE_LOGS, APPD.filtreLogsDuels,
   APPD.lireDuels, APPD.duelEnJson, APPD.partage, APPD.MISE_MIN, APPD.EXPIRATION_MIN_S, APPD.EXPIRATION_MAX_S, APPD.FINIS, APPD.etatDuel, APPD.regleurCouvre,
-  { etat: () => ({ etat: 'OFF', adresse: null, contrats: [] }) }, new Map(), E.appelNextIdEtat, E.appelDuelEtat, E.lireNextId, E.duelDepuisEtat, E.reglerDepuisHash, E.idsDuelsATour);
+  { etat: () => ({ etat: 'OFF', adresse: null, contrats: [] }) }, new Map(), E.appelNextIdEtat, E.appelDuelEtat, E.lireNextId, E.duelDepuisEtat, E.reglerDepuisHash, E.idsDuelsATour, () => null);
 await x.lireDuelsSrv();
 const res = { corps: null, writeHead() {}, end(s) { this.corps = s; } };
 await x.route({ method: 'GET' }, res, '/api/duels');

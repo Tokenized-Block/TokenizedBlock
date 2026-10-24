@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Block Duels v2 — TokenizedBlock</title>
+<style>
+:root{color-scheme:dark;--fond:#060f14;--carte:#0c1c24;--bord:#1d3a44;--texte:#e8f4f6;--doux:#9db4ba;--cyan:#2fd0c8;--or:#f6c76e;--rose:#ff7eb6;--vert:#6fe3a5}
+body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#123a44 0%,transparent 60%),radial-gradient(900px 500px at 110% 10%,#3a1838 0%,transparent 55%),var(--fond);color:var(--texte);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+main{max-width:760px;margin:0 auto;padding:28px 16px 72px}
+.kicker{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--or);border:1px solid #5a4a26;border-radius:999px;padding:3px 10px}
+h1{font-size:34px;line-height:1.1;margin:12px 0 6px;background:linear-gradient(90deg,#7ff3ea,#f6c76e 55%,#ff7eb6);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:15px;margin:30px 0 10px;color:#9fd6dd;letter-spacing:.02em}
+p{margin:8px 0}
+.note{color:var(--doux);font-size:14px}
+.carte{border:1px solid var(--bord);border-radius:16px;padding:16px;margin:12px 0;background:var(--carte)}
+.sur li{margin:6px 0}
+details summary{cursor:pointer;color:#9fd6dd;font-weight:700}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:12px 0 0;font-size:13px}
+dt{color:var(--doux)}
+dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace}
+button{appearance:none;border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:800;cursor:pointer;background:linear-gradient(90deg,#2fd0c8,#7ff3ea);color:#04262a;box-shadow:0 6px 24px rgba(47,208,200,.25)}
+button.sec{background:transparent;color:var(--texte);border:1px solid #2a4a55;box-shadow:none}
+button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.ok{color:var(--vert)}.ko{color:#ff8f8f}
+ul{padding-left:20px;margin:8px 0}
+b[data-k]{color:var(--or)}
+[hidden]{display:none!important}
+@media (max-width:420px){h1{font-size:28px}dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <span class="kicker">TokenizedBlock · Block Duels v2</span>
+  <h1>Duels where staying silent no longer pays.</h1>
+  <p class="note">Block Duels v2 is Block Duels with one rule changed. One signature from your wallet creates the v2 contract on Base, with the same parameters as v1. This page sends nothing by itself. This is a game of chance played for money: the decision to run it, and its compliance, is the owner's.</p>
+
+  <h2>What changed from v1, and why</h2>
+  <div class="carte sur">
+    <ul>
+      <li><b>v1:</b> a joined duel not settled within <b data-k="window">…</b> blocks after its result block was refunded in full to both sides. The player who joins is online and sees the result first: they settled when they won, stayed silent when they lost, and got their stake back. Over 2,000 simulated duels that strategy gave the joiner +454.4 USDC and cost the creator 568 USDC (forge test test_V_DuelEV).</li>
+      <li><b>v2:</b> a joined duel not settled within that window is <b>won by default by the creator</b>. Anyone can call it (settleDefault) once the window has passed; it pays exactly like a creator win: <b data-k="winner">…</b>% to the creator, <b data-k="pool">…</b>% to the community reward pool, <b data-k="dev">…</b>% to TokenizedBlock (plus rounding dust). On the same 2,000 duels, staying silent when losing gives the joiner exactly what settling every duel gives.</li>
+      <li>A tie settled inside the window still refunds both stakes with no fee. A tie <b>not</b> settled in the window goes to the creator by default. So the player who joins must settle a win or a tie in time.</li>
+      <li>The window is <b data-k="window">…</b> blocks: about 8.5 minutes at 2-second blocks, about 51 seconds at 200 ms blocks (Denim). The app measures the current block time and says it before a join is signed.</li>
+      <li>A duel nobody joined is still refunded to its creator once it expires; the creator can still cancel an open duel. Nothing else changed: create, join, settle inside the window, the face, the split, the admitted tokens.</li>
+    </ul>
+  </div>
+
+  <h2>What is fixed, and what is not</h2>
+  <div class="carte sur">
+    <ul>
+      <li>No owner, no withdrawal, no pause, no upgrade, no fee change. Stakes leave only through a settled duel, a duel won by default, a cancelled open duel (its creator), or the refund of an expired open duel.</li>
+      <li>The guardian can only admit or remove a token for new duels. It cannot touch any stake. USDC is admitted for good.</li>
+      <li>If a token refuses a payment to one address, the others are still paid; the refused amount stays owed to that address, which can claim it to another address.</li>
+      <li>The face comes from the hash of a Base block, computed on chain exactly like v1 and Block Rolls. A missing block hash is never used to decide a duel. The Base sequencer, which builds the blocks, is the one party that could choose a hash.</li>
+    </ul>
+  </div>
+
+  <h2>What you sign</h2>
+  <div class="carte">
+    <details>
+      <summary>The values built into the contract</summary>
+      <dl id="dParams"></dl>
+    </details>
+    <p class="note" id="dManque"></p>
+    <p class="note" id="dVerif">Checking the fingerprint…</p>
+  </div>
+
+  <h2>Create Block Duels v2</h2>
+  <div class="carte">
+    <p id="dCompte" class="note">No wallet connected.</p>
+    <p>
+      <button type="button" id="bConnecter" class="sec">Connect wallet</button>
+      <button type="button" id="bDeployer" disabled>Deploy Block Duels v2</button>
+    </p>
+    <p id="dEtat" class="note"></p>
+    <dl id="dResultat" hidden>
+      <dt>Transaction</dt><dd id="rTx">—</dd>
+      <dt>Block Duels v2</dt><dd id="rAdr">—</dd>
+      <dt>Reads back</dt><dd id="rLu">—</dd>
+    </dl>
+  </div>
+</main>
+<script type="module">
+/* deployer-duels-v2.html — propose AU WALLET CONNECTE la transaction de deploiement de BlockDuelsV2, FIGEE dans duels-v2-deploiement.js
+ * (generee par contracts/preparer-deploiement-duelsv2.mjs). Meme regle que deployer-duels.html :
+ * ⛔ rien n est envoye sans un appui ET la signature du wallet ; aucune cle ; aucun argument saisi a la main.
+ * ⛔ les arguments sont RE-ENCODES ici (duels-v2-config.js -> duels-config.js encoderArgs) et compares a la FIN de la donnee figee ET a la
+ *   fiche v1 deployee (memes parametres) ; l empreinte sha256 est recalculee dans ce navigateur. Un ecart -> bouton eteint.
+ *   Apres deploiement : USDC(), DEV_WALLET(), REWARD_POOL(), GUARDIAN(), tokenOk(USDC), nextId(), WINNER_BPS(), POOL_BPS(), SETTLE_WINDOW()
+ *   et le selecteur de settleDefault dans le code deploye sont RELUS. */
+import { DUELS_V2_DEPLOIEMENT as D } from './duels-v2-deploiement.js';
+import { DUELS_DEPLOIEMENT as V1 } from './duels-deploiement.js';
+import { verifierEnregistrementV2 } from './duels-v2-config.js';
+import { WINNER_BPS, POOL_BPS, BPS, FENETRE } from './duels-plan.js';
+import { selecteur } from './keccak.js';
+const $ = (s) => document.querySelector(s);
+const eth = () => window.ethereum;
+const CHAINE_HEX = '0x' + D.chaine.toString(16);
+const C = D.constructeur;
+const NOMS = { usdc: 'USDC (admitted for good)', devWallet: 'TokenizedBlock wallet (3% dev share)', rewardPool: 'Community reward pool (7%)', guardian: 'Guardian (admits or removes tokens, nothing else)' };
+let compte = null, intacte = false, envoi = false, adresse = D.adresse || null;
+const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
+const MOTS = { winner: String(Number(WINNER_BPS) / 100), pool: String(Number(POOL_BPS) / 100), dev: String(Number(BPS - WINNER_BPS - POOL_BPS) / 100), window: String(FENETRE) };
+for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (C[k] || '— not set —') + '</dd>').join('')
+  + '<dt>Same parameters as</dt><dd>Block Duels v1 ' + (V1.adresse || '—') + '</dd>'
+  + '<dt>Owner</dt><dd>none</dd>'
+  + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
+  + '<dt>Fingerprint</dt><dd>' + (D.sha256Creation ? 'sha256 ' + D.sha256Creation + ' · ' + D.octetsCreation + ' bytes' : '—') + '</dd>';
+$('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manquants.map((m) => NOMS[m] + ' is missing'), ...D.refus].join(' · ') + '. Run the preparer again.</span>' : '';
+(async () => {
+  try {
+    if (!D.pret || !D.creation) throw new Error('not ready');
+    const octets = new Uint8Array(D.creation.slice(2).match(/../g).map((x) => parseInt(x, 16)));
+    const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const v = verifierEnregistrementV2(D, h, V1);
+    intacte = v.intacte;
+    $('#dVerif').className = intacte ? 'note ok' : 'note ko';
+    $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser; the values above re-encoded, found at the end of the data, and equal to Block Duels v1: they match.' : 'Nothing can be deployed from this page: ' + v.pourquoi.join('; ') + '.';
+  } catch (_) { intacte = false; $('#dVerif').className = 'note ko'; $('#dVerif').textContent = D.pret ? 'The fingerprint could not be computed here. Nothing can be deployed from this page.' : 'Nothing can be deployed until every value is set.'; }
+  peindre();
+})();
+function peindre() {
+  $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet pays the deployment gas; it gets no power over the duels.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#bConnecter').hidden = !!compte;
+  $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;
+  if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second duel contract.', 'note ok');
+}
+$('#bConnecter').addEventListener('click', async () => {
+  if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); }
+  catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
+  peindre();
+});
+const attendre = async (tx) => { let recu = null; for (let i = 0; i < 90 && !recu; i += 1) { await new Promise((r) => setTimeout(r, 2000)); try { recu = await eth().request({ method: 'eth_getTransactionReceipt', params: [tx] }); } catch (_) { recu = null; } } return recu; };
+const surBase = async () => {
+  const chaine = await eth().request({ method: 'eth_chainId' });
+  if (String(chaine).toLowerCase() === CHAINE_HEX) return true;
+  try { await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAINE_HEX }] }); return true; } catch (_) { return false; }
+};
+const appel = async (to, sig, args = '') => String(await eth().request({ method: 'eth_call', params: [{ to, data: selecteur(sig) + args }, 'latest'] }));
+const lireAdr = async (to, sig) => ('0x' + (await appel(to, sig)).slice(-40)).toLowerCase();
+const lireU = async (to, sig, args = '') => BigInt(await appel(to, sig, args));
+const SEL_DEFAUT = selecteur('settleDefault(uint256)').slice(2).toLowerCase();
+$('#bDeployer').addEventListener('click', async () => {
+  if (!compte || !intacte || envoi || adresse) return;
+  envoi = true; peindre();
+  try {
+    if (!(await surBase())) { dire('Switch your wallet to Base, then try again.', 'note ko'); return; }
+    dire('Confirm in your wallet…');
+    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: compte, data: D.creation }] });
+    $('#dResultat').hidden = false; $('#rTx').textContent = String(tx);
+    dire('Sent. Waiting for Base to confirm…');
+    const recu = await attendre(tx);
+    if (!recu) { dire('Not confirmed yet after 3 minutes. Keep the transaction hash above and check it on a block explorer.', 'note ko'); return; }
+    if (recu.status !== '0x1' || !recu.contractAddress) { dire('The transaction was confirmed but failed: no contract was created.', 'note ko'); return; }
+    const a = String(recu.contractAddress).toLowerCase();
+    $('#rAdr').textContent = a + ' (block ' + parseInt(recu.blockNumber, 16) + ')';
+    const relu = { usdc: await lireAdr(a, 'USDC()'), devWallet: await lireAdr(a, 'DEV_WALLET()'), rewardPool: await lireAdr(a, 'REWARD_POOL()'), guardian: await lireAdr(a, 'GUARDIAN()') };
+    const usdcAdmis = (await lireU(a, 'tokenOk(address)', C.usdc.slice(2).padStart(64, '0'))) === 1n;
+    const prochain = await lireU(a, 'nextId()');
+    const parts = { winner: await lireU(a, 'WINNER_BPS()'), pool: await lireU(a, 'POOL_BPS()'), fenetre: await lireU(a, 'SETTLE_WINDOW()') };
+    const code = String(await eth().request({ method: 'eth_getCode', params: [a, 'latest'] })).toLowerCase();
+    const regleV2 = code.includes('63' + SEL_DEFAUT);
+    const bon = D.ordre.every((k) => relu[k] === String(C[k]).toLowerCase()) && usdcAdmis && prochain === 1n && parts.winner === WINNER_BPS && parts.pool === POOL_BPS && parts.fenetre === BigInt(FENETRE) && regleV2;
+    $('#rLu').textContent = Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · USDC admitted ' + usdcAdmis + ' · next duel #' + prochain + ' · split ' + parts.winner + '/' + parts.pool + ' bps · window ' + parts.fenetre + ' blocks · settleDefault ' + (regleV2 ? 'present' : 'MISSING');
+    if (bon) adresse = a;
+    dire(bon ? 'Deployed: the contract reads back exactly what was signed. Send the transaction hash to the team: the app opens v2 duels once the record is written from it.'
+      : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
+  } catch (e) {
+    dire(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
+  } finally { envoi = false; peindre(); }
+});
+try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; peindre(); }); } catch (_) {}
+peindre();
+</script>
+</body>
+</html>
