@@ -5194,7 +5194,16 @@ function peindreFermerPot(tp, c) {
   potAFermer = null;
   const moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000);
   let owner = false, sem = false;
-  for (const [x, s] of [[semaineReclamableDe(tp), true], [tp && tp.veille, false]]) {
+  /* ⛔ 2026-10-24 (revue adverse du correctif ticketpot, defaut 3) : puis chaque pot des 7 derniers jours (servi : tp.jours, lu au minuteur,
+   *   du plus ancien au plus recent) encore OUVERT, avec un pot (> 0) et dans sa grace — avant, un pot de jour non ferme a J+1 n avait plus
+   *   jamais de bouton. Un jour deja vu (la semaine reclamable, la veille) n est pas repris. */
+  const candidats = [[semaineReclamableDe(tp), true], [tp && tp.veille, false]];
+  for (const x of (tp && Array.isArray(tp.jours) ? tp.jours : [])) {
+    if (!x || !Number.isInteger(x.day) || x.ferme !== false || maintenant > reclamablePot(x.day) || candidats.some(([c]) => c && c.day === x.day)) continue;
+    let reste = 0n; try { reste = BigInt(x.reste); } catch (_) { reste = 0n; }
+    if (reste > 0n) candidats.push([x, x.dernierJourSemaine === true]);
+  }
+  for (const [x, s] of candidats) {
     if (!x || x.ferme || !moi || !Number.isInteger(x.day)) continue;
     const o = !!(x.owner && moi === String(x.owner).toLowerCase());
     if (!(o || maintenant >= fermablePot(x.day))) continue;

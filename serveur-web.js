@@ -4071,7 +4071,11 @@ async function crediterDetenteursSkins() {
     /* ⛔⛔ 2026-10-24 (revue adverse, audit-ticketpot 2, HIGH) : UN ticket par JETON et par jour. Avant, chaque detenteur vu a une lecture
      *   gagnait le jour : un seul skin (ERC-721 transferable) passe de wallet en wallet entre deux lectures donnait jusqu a 144 tickets par
      *   jour. revenu.skinsJour[jour][tokenId] = le PREMIER detenteur externe vu ce jour-la : il garde le ticket ; le jeton passe a un autre
-     *   wallet le meme jour ne donne rien de plus. Un interne ou le contrat (skin en vente) ne consomme pas le ticket du jeton. */
+     *   wallet le meme jour ne donne rien de plus. Un interne ou le contrat (skin en vente) ne consomme pas le ticket du jeton.
+     * ⚠️ LIMITE CONNUE, LAISSEE (revue adverse du correctif, 2026-10-24, defaut 3, low) : le PASS de mint (/api/paye skin_mint : 7 jours de
+     *   tickets au minteur, revenu.passes) est un registre A PART de ce ticket par jeton. Si le jeton passe du minteur A a un wallet B avant
+     *   la premiere lecture du jour, B prend le ticket du jeton ET A garde son pass : un skin a 1 USDC donne 2 tickets par jour pendant les
+     *   7 jours du pass (2, pas 144 ; ensuite 1). Non corrige : dit ici et a Phil. */
     revenu.skinsJour = revenu.skinsJour || {};
     const parJeton = revenu.skinsJour[jour] = revenu.skinsJour[jour] || {};
     for (const s of r.skins) {
@@ -4242,6 +4246,27 @@ async function lireTicketPotSrv() {
         ticketpotSrv.erreurSemaineReclamable = null;
       } catch (e) { ticketpotSrv.erreurSemaineReclamable = String((e && e.message) || e).slice(0, 120); }
     }
+    /* ⛔ 2026-10-24 (revue adverse du correctif ticketpot, defaut 3) : un pot de JOUR non ferme a J+1 n etait plus jamais propose (bouton
+     *   et brain ne regardaient que la veille et la semaine reclamable). Chaque jour des 7 derniers (J-1..J-7, encore dans sa grace :
+     *   claimableUntil) est lu ici : la veille reutilise sa lecture, un jour FERME n est plus relu (close est definitif ; son reste servi
+     *   peut retarder sur les claims, `lu` le dit), un jour ouvert est relu toutes les 5 min au plus (un jour passe ouvert peut encore etre
+     *   alimente). Cout : 6 eth_call par jour relu (lireJour), soit au plus ~6 jours x 6 / 5 min. Lecture ratee : l etat d avant reste. */
+    {
+      const tsJ = Math.floor(Date.now() / 1000), auj = dayDeJourIdPot(jourDe(Date.now()).id);
+      ticketpotSrv.jours = ticketpotSrv.jours || {};
+      for (const k of Object.keys(ticketpotSrv.jours)) { const d = Number(k); if (!(d < auj && d >= auj - 7 && tsJ <= reclamablePotSrv(d))) delete ticketpotSrv.jours[k]; }
+      for (let d = auj - 1; d >= auj - 7; d--) {
+        if (tsJ > reclamablePotSrv(d)) continue;
+        const deja = ticketpotSrv.jours[d];
+        if (d !== day && deja && (deja.ferme || Date.now() - deja.luMs < 300000)) continue;
+        try {
+          const jd = d === day ? j : await lireJourTicketPot({ rpc: rpcServeur, contrat }, d);
+          const jid = jourIdDeDayPot(d);
+          ticketpotSrv.jours[d] = { jourId: jid, day: d, ferme: jd.ferme, enPause: jd.enPause, potAtClose: jd.potAtClose.toString(), reste: jd.reste.toString(),
+            dernierJourSemaine: jourDe(saisonDe(d * JOUR_MS).fin - JOUR_MS).id === jid, reclamableJusqua: new Date(reclamablePotSrv(d) * 1000).toISOString(), luMs: Date.now(), lu: new Date().toISOString() };
+        } catch (_) { /* l etat d avant reste ; relu au prochain tour */ }
+      }
+    }
   } catch (e) { ticketpotSrv.erreur = String((e && e.message) || e).slice(0, 120); }
   finally { ticketpotSrv.enVol = false; }
 }
@@ -4261,8 +4286,14 @@ function ticketpotJson() {
     .map(([k]) => { const semaine = k.endsWith('#S'), jourId = semaine ? k.slice(0, -2) : k; return { jourId, day: dayDeJourIdPot(jourId), semaine }; })
     .filter((x) => x.day !== null && tS <= reclamablePotSrv(x.day))
     .sort((x, y) => y.day - x.day || Number(y.semaine) - Number(x.semaine)).slice(0, 16);
+  /* 2026-10-24 (defaut 3) : les pots des 7 derniers jours LUS par le minuteur (J-1..J-7, encore dans leur grace), du plus ancien au plus
+   *   recent — l app et le brain y trouvent un pot ouvert a fermer, ou ferme a signer, au-dela de la veille. Calcul pur, aucune lecture ici. */
+  const aujTP = Math.floor(Date.now() / 86400000); /* le jour du contrat (floor(ts / 86400)) */
+  const ownerTP = ticketpotSrv.etat ? ticketpotSrv.etat.owner || null : null, verifTP = ticketpotSrv.etat ? ticketpotSrv.etat.verifier || null : null;
+  const jours = Object.values(ticketpotSrv.jours || {}).filter((x) => x && Number.isInteger(x.day) && x.day < aujTP && x.day >= aujTP - 7 && tS <= reclamablePotSrv(x.day))
+    .sort((x, y) => x.day - y.day).map(({ luMs, ...x }) => ({ ...x, owner: ownerTP, verifier: verifTP }));
   return { contrat, bloc: TICKETPOT_DEPLOIEMENT.bloc, veille: ticketpotSrv.etat ? { jourId: ticketpotSrv.jourId, day: ticketpotSrv.day, ...ticketpotSrv.etat } : null,
-    semaine: semSrv, semaineReclamable: srSrv, signes, erreurSemaineReclamable: ticketpotSrv.erreurSemaineReclamable || null, lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur, erreurSemaine: ticketpotSrv.erreurSemaine || null };
+    semaine: semSrv, semaineReclamable: srSrv, signes, jours, erreurSemaineReclamable: ticketpotSrv.erreurSemaineReclamable || null, lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur, erreurSemaine: ticketpotSrv.erreurSemaine || null };
 }
 /* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18 ; PAR L ETAT depuis 2026-10-24) — LECTURE SEULE, AUCUN eth_getLogs.
  *   MESURE prod game33 2026-10-24 13:48 UTC : /api/duels rendait NON_LU « logs unreadable » a CHAQUE lecture, pour toujours. Le lecteur
@@ -6397,7 +6428,12 @@ function traiterRequete(req, res) {
     const h = String(q.get('h') || '').toLowerCase(), ligne = String(q.get('l') || '');
     const repondre = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(corps)); };
     if (!/^0x[0-9a-f]{64}$/.test(h) || !LIGNES_FRAIS.includes(ligne)) { repondre(400, { ok: false, pourquoi: 'a transaction hash and a known fee line are needed' }); return; }
-    if (revenu.vus[h]) { repondre(200, { ok: true, deja: true }); return; }
+    /* ⛔ 2026-10-24 (revue adverse du correctif ticketpot, defaut 2) : un frais VERIFIE marque le hash vu (revenu.vus) meme quand le jour
+     *   du bloc n a pas ete lu (crediterVolumeJour -> NON_LU, « send it again in a moment ») : le renvoi recevait {deja:true} et le ticket du
+     *   jour etait perdu pour toujours — la reponse mentait. Le hash attend alors dans revenu.ticketsEnAttente ; son renvoi ne recompte PAS
+     *   le frais (compterRevenu, une fois), il ne refait que le ticket (crediterVolumeJour, idempotent par revenu.volVus). */
+    const enAttenteTicket = (revenu.ticketsEnAttente || {})[h];
+    if (revenu.vus[h] && !enAttenteTicket) { repondre(200, { ok: true, deja: true }); return; }
     if (payesEnCours.has(h) || payesEnCours.size >= 3) { repondre(429, { ok: false, pourquoi: 'busy, send it again in a moment' }); return; }
     payesEnCours.add(h);
     (async () => { try {
@@ -6405,13 +6441,24 @@ function traiterRequete(req, res) {
       /* nos wallets de TEST connus (0x31e0… = le wallet de test de Phil, cite dans les rapports du canal) + ceux declares par l env */
       const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
       const v = verifierFrais({ tx, recu, internes, devises: devisesComptees([...POOLS_ACTIONS_AERODROME.keys()]) });
+      /* le hash deja compte dont le ticket attend : seulement le ticket (la ligne gardee, pas celle du renvoi), jamais le frais une 2e fois */
+      if (revenu.vus[h] && enAttenteTicket) {
+        let tk = null;
+        try { tk = (await crediterVolumeJour({ h, ligne: enAttenteTicket.ligne, tx, recu, v, internes })) || null; } catch (_) { tk = { ok: false, etat: 'NON_LU', pourquoi: 'the day ticket of this transaction was not read: send it again in a moment' }; }
+        if (!tk || tk.etat !== 'NON_LU') { delete revenu.ticketsEnAttente[h]; revenuSale = true; }
+        repondre(tk && tk.etat === 'NON_LU' ? 202 : 200, tk ? { ok: true, deja: true, ticket: tk } : { ok: true, deja: true });
+        return;
+      }
       /* 2026-10-17 soir — SEASON DRAW QUOTIDIEN : le VOLUME verifie du jour (volume-tirage.js). UNIT : un Swap du PoolManager sur NOTRE pool
        *   UNIT (le frais du hook est pris DANS ce swap, en ETH natif : verifierFrais ne le voit pas, d ou ce chemin avant son refus).
        *   Actions : seulement si NOTRE frais est arrive (v.ok). Externes seulement ; un hash ne compte qu UNE fois, tous jours confondus. */
       /* 2026-10-24 : ce que le ticket du jour a fait de ce hash (jour du BLOC credite, ou pourquoi rien : plus de 48 h, bloc illisible) —
        *   rendu dans la reponse (ticket), jamais devine */
       let ticketTP = null;
-      try { ticketTP = (await crediterVolumeJour({ h, ligne, tx, recu, v, internes })) || null; } catch (_) { /* le volume se relira au prochain envoi du hash */ }
+      try { ticketTP = (await crediterVolumeJour({ h, ligne, tx, recu, v, internes })) || null; } catch (_) {
+        /* le volume se relira au prochain envoi du hash (ticketsEnAttente si le frais, lui, est compte ci-dessous) */
+        if (ligne === 'hook_block' || ligne === 'swap_action') ticketTP = { ok: false, etat: 'NON_LU', pourquoi: 'the day ticket of this transaction was not read: send it again in a moment' };
+      }
       /* PASS SKIN (Phil 2026-10-17 soir) : un achat de skin VERIFIE dans le recu (mint au payeur + le prix arrive au wallet de frais) = 7 jours
        *   de tickets garantis. Externes seulement ; un hash ne compte qu une fois. Avant la sortie sur frais : verifierFrais exige un swap.
        *   2026-10-24 : les jours du pass partent du jour du BLOC du mint (jourDuRecu), plus de la reception ; au-dela de 48 h, rien. */
@@ -6440,6 +6487,13 @@ function traiterRequete(req, res) {
       revenu.externe = etat.externe; revenu.interne = etat.interne;
       revenu.parJour[jour] = compterRevenu(revenu.parJour[jour] || {}, { ligne, verif });
       revenu.vus[h] = { jour, ligne, externe: verif.externe };
+      /* le ticket du jour non lu (bloc illisible) : le hash attend son renvoi (la reponse dit « send it again » : c est vrai). Borne : au-dela
+       *   de 49 h un renvoi rendrait TROP_VIEUX de toute facon (48 h), l entree sort. */
+      if (ticketTP && ticketTP.etat === 'NON_LU') {
+        revenu.ticketsEnAttente = revenu.ticketsEnAttente || {};
+        revenu.ticketsEnAttente[h] = { ligne, at: Date.now() };
+        for (const [k, x] of Object.entries(revenu.ticketsEnAttente)) if (!x || !(Date.now() - Number(x.at) <= 49 * 3600 * 1000)) delete revenu.ticketsEnAttente[k];
+      }
       /* 2026-10-17 — ETAPE 2, la vitrine : r=<block> (le client ne l envoie que si la page etait ce block, ref-vitrine.js). Une ligne au
        *   registre PUBLIC, seulement pour un frais EXTERNE verifie ; le createur est LU sur la chaine, jamais pris dans la requete. */
       /* ⛔⛔ chasse 2026-10-17 (HIGH, PoC) : `r` (le block de la vitrine) venait du CLIENT, et le premier post d un hash gagnait : un tiers
@@ -6675,7 +6729,14 @@ function traiterRequete(req, res) {
       const cleSig = jourId + (semaine ? '#S' : '');
       /* ⛔⛔ GARDE DURE (2026-10-24, audit-ticketpot 1) : les montants deja gardes pour ce JOUR (cle du jour ET cle jour#S : un seul dayPot
        *   sur la chaine) + cette part ne depassent JAMAIS potAtClose, quelle qu en soit la cause ; la part re-deposee de ce wallet dans cette
-       *   cle n est pas comptee deux fois (elle est remplacee). Un montant garde illisible -> refuse (jamais compte 0). */
+       *   cle n est pas comptee deux fois (elle est remplacee). Un montant garde illisible -> refuse (jamais compte 0).
+       * ⛔⛔ 2026-10-24 (revue adverse du correctif, defaut 1) : « remplacee » ne vaut QUE pour le MEME digest. La signature deja gardee a ete
+       *   servie publiquement (GET /api/ticketpot/parts) et reste valide sur la chaine jusqu a sa deadline (claimableUntil) : la remplacer par
+       *   une part d un AUTRE digest (table derivee, cle signee avant le gel) laissait l ancienne reclamable ET comptait la nouvelle -> le pot
+       *   sur-alloue (A ancien 50 + B nouveau 57,1 > 100 : le dernier a reclamer revertait AmountOverPot). Un autre digest pour ce wallet et
+       *   cette cle -> REFUSE ; le meme digest -> idempotent (rien ne change). */
+      const dejaSig = (((revenu.ticketpotSig || {})[cleSig]) || {})[wallet];
+      if (dejaSig && String(dejaSig.digest || '').toLowerCase() !== String(p.digest).toLowerCase()) { rendreTP(409, { ok: false, etat: 'REFUSE', pourquoi: 'a different share of ' + wallet + ' for ' + jourId + (semaine ? ' (week)' : '') + ' is already signed and served (' + String(dejaSig.amount) + ' raw USDC, valid on chain until its deadline): it is never replaced by another amount' }); return; }
       let dejaGarde = 0n, illisible = false;
       for (const k of [jourId, jourId + '#S']) {
         for (const [w, x] of Object.entries((revenu.ticketpotSig || {})[k] || {})) {

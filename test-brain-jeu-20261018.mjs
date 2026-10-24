@@ -295,7 +295,10 @@ const sem = (liste) => lesParts(LUN, liste, 'SEMAINE');
 const pw = J.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN, [part(AUTRE)]), sharesWeek: sem([part(AUTRE, null, '1500000'), part(VER, null, '2500000')]) }));
 vu(pw.kind === 'POT_SIGN' && pw.sign.week === true && pw.cle === 'POT_SIGN:' + jourIdDeDay(jourC(LUN) - 1) + '#S' && pw.sign.shares.length === 2 && /week/i.test(pw.why), 'dernier jour de la semaine, rien de signe : les parts de la SEMAINE (week=1)');
 const pd = J.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN, [part(AUTRE), part(VER, SIG)]), sharesWeek: sem([part(AUTRE)]) }));
-vu(pd.kind === 'POT_SIGN' && pd.sign.week === false && pd.sign.shares.length === 1, 'dernier jour, parts du JOUR deja entamees : on finit le JOUR — jamais la semaine en plus');
+/* 2026-10-24 (revue adverse du correctif ticketpot, defaut 3) : le serveur REFUSE les parts du jour le dernier jour d une semaine (son
+ *   dayPot est le pot de la semaine) — avant, on « finissait le JOUR » ici : une carte que le POST refusait. Ni jour ni semaine, c est dit. */
+const pdn = J.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN, [part(AUTRE), part(VER, SIG)]), sharesWeek: sem([part(AUTRE)]) }, { potDailyUsdc: '0' }));
+vu(pd.kind !== 'POT_SIGN' && pdn.kind === 'NONE' && /day-mode signatures/.test(pdn.why), 'dernier jour, parts du JOUR deja entamees : AUCUNE part proposee (ni jour, refuse par le serveur, ni semaine en plus), dit — kind ' + pd.kind);
 const pn = J.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN, [part(AUTRE)]), sharesWeek: null }, { potDailyUsdc: '0' }));
 vu(pn.kind === 'NONE' && /week/i.test(pn.why), 'dernier jour, parts de la semaine NON lues : rien (jamais un repli sur le jour)');
 vu(J.prochaineProposition(potEtat(LUN, { sharesDay: null, sharesWeek: sem([part(AUTRE)]) }, { potDailyUsdc: '0' })).kind === 'NONE', 'dernier jour, parts du jour non lues : on ne sait pas si le jour est entame -> rien');
@@ -339,6 +342,6 @@ await mutant('budget du pot contourne', 'const resteP = budgetPot > verse ? budg
 await mutant('non-owner recoit un coup de pot', 'const proprio = ADR.test(bas(P.owner)) && bas(P.owner) === moi;', 'const proprio = true;', (M) => M.prochaineProposition(potEtat(MER, { owner: AUTRE })).kind === 'POT_FUND');
 await mutant('fund au-dessus du solde', 'else if (resteP > solde)', 'else if (false)', (M) => M.prochaineProposition(potEtat(MER, {}, {}, { balanceUsdc: '1999999' })).kind === 'POT_FUND');
 await mutant('mauvais ordre (fund avant close)', 'const etapes = proprio ? [potClose, potSign, potFund] : [potSign];', 'const etapes = proprio ? [potFund, potClose, potSign] : [potSign];', (M) => M.prochaineProposition(potEtat(MER, tous)).kind === 'POT_FUND');
-await mutant('jour ET semaine signes', 'if (jourEntame) {', 'if (false) {', (M) => { const p = M.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN, [part(AUTRE), part(VER, SIG)]), sharesWeek: sem([part(AUTRE)]) })); return p.kind === 'POT_SIGN' && p.sign.week === true; });
+await mutant('jour ET semaine signes', 'if (entame(J0)) {', 'if (false) {', (M) => { const p = M.prochaineProposition(potEtat(LUN, { sharesDay: lesParts(LUN, [part(AUTRE), part(VER, SIG)]), sharesWeek: sem([part(AUTRE)]) })); return p.kind === 'POT_SIGN' && p.sign.week === true; });
 await mutant('versement illisible compte 0', 'if (v === null) return null;', 'if (v === null) return a;', (M) => M.prochaineProposition(potEtat(MER, {}, {}, { history: hp('abc') })).kind === 'POT_FUND');
 console.log('ok brain-jeu - ' + n + ' assertions');

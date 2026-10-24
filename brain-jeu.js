@@ -104,7 +104,9 @@ const usdcTxt = (v) => { const e = v / 1000000n, f = (v % 1000000n).toString().p
  *   duels:    { contract, usdc, guess (une face NEUVE tiree par l app), expiresIn (s), block (bloc actuel), list: [duel (duels-plan-app.js)],
  *               open (duelsOuverts : true SEULEMENT si le regleur du serveur regle les duels ; sinon ni JOIN ni CREATE) } | null,
  *   pot:      { contract, usdc, owner (LU), veille: /api/tirage.ticketpot.veille (porte verifier), today: { day, dayPot } (dayPot(aujourd hui) LU
- *               sur la chaine, null = non lu), sharesDay / sharesWeek: /api/ticketpot/parts (jour / &week=1, avec couverture.complete) } | null }
+ *               sur la chaine, null = non lu), sharesDay / sharesWeek: /api/ticketpot/parts (jour / &week=1, avec couverture.complete),
+ *               jours: [{ day, jourId, ferme, reste, sharesDay?, sharesWeek? }] (2026-10-24 : les 7 derniers jours, /api/tirage.ticketpot.jours ;
+ *               optionnel — absent, seule la veille est regardee) } | null }
  *   rules.pot + rules.potDailyUsdc ; history porte { t, kind: 'POT_FUND', day, usdc } pour chaque fund SIGNE.
  *   POT_SIGN n a AUCUN appel : { sign: { jourId, day, week, verifier, signerIsVerifier, shares: [{ wallet, amount, donnees }] } } — l app fait signer.
  */
@@ -171,31 +173,51 @@ export function prochaineProposition(etat = {}) {
     const verificateur = ADR.test(verifServi) && verifServi === moi;
     if (!proprio && !verificateur) pourquoiPas.push('reward pot: only the ticket pot owner manages it (its verifier signs the shares)' + (ADR.test(bas(P.owner)) ? '' : ' (its owner was not read)'));
     else {
-      const aujourdhui = jourContrat(t), hier = aujourdhui - 1, jidHier = jourIdDeDay(hier);
-      const potClose = () => {
-        const v = P.veille;
-        if (!v || Number(v.day) !== hier || v.ferme !== false || vus.has('POT_CLOSE:' + hier)) return null;
+      const aujourdhui = jourContrat(t), hier = aujourdhui - 1;
+      /* ⛔ 2026-10-24 (revue adverse du correctif ticketpot, defaut 3) : la veille SEULE etait regardee (jidHier) — un pot de jour pas ferme
+       *   ou pas signe a J+1 n etait plus jamais propose. Les jours = la veille (P.veille + P.sharesDay / P.sharesWeek, comme avant), puis
+       *   chaque jour des 7 derniers servi dans P.jours ({ day, jourId, ferme, reste, sharesDay?, sharesWeek? } : /api/tirage.ticketpot.jours +
+       *   les parts lues par l app), du plus ANCIEN au plus recent (le plus proche de la fin de sa grace d abord), encore dans sa grace
+       *   (t <= claimableUntil = fin du jour + 7 jours) ; jamais aujourd hui ni un jour futur ; un jour une seule fois. */
+      const GRACE_POT_S = 7 * JOUR_S;
+      const dansGrace = (d) => Number.isInteger(d) && d < aujourdhui && t <= (d + 1) * JOUR_S + GRACE_POT_S;
+      /* la veille d abord, exactement comme avant (P.veille si c est bien hier, P.sharesDay / P.sharesWeek) ; un champ qu elle n a pas
+       *   (veille non servie) est pris dans P.jours pour le meme jour ; jamais ecrase */
+      const joursPot = [{ ...(P.veille && Number(P.veille.day) === hier ? P.veille : {}), day: hier, jourId: jourIdDeDay(hier), sharesDay: P.sharesDay, sharesWeek: P.sharesWeek, veille: true }];
+      for (const x of (Array.isArray(P.jours) ? P.jours : []).filter((y) => y && dansGrace(Number(y.day))).sort((a, b) => Number(a.day) - Number(b.day))) {
+        const d = Number(x.day), deja = joursPot.find((y) => y.day === d);
+        if (deja) { for (const k of ['ferme', 'reste', 'sharesDay', 'sharesWeek']) if (deja[k] === undefined || deja[k] === null) deja[k] = x[k]; continue; }
+        joursPot.push({ ...x, day: d, jourId: jourIdDeDay(d), veille: false });
+      }
+      const potCloseDe = (v) => {
+        const d = v.day, jid = v.jourId;
+        if (v.ferme !== false || vus.has('POT_CLOSE:' + d)) return null;
         const reste = brut(v.reste);
-        if (reste === null) { pourquoiPas.push('reward pot: yesterday\'s pot was not read'); return null; }
+        if (reste === null) { pourquoiPas.push('reward pot: the pot of ' + jid + ' was not read'); return null; }
         if (reste === 0n) return null; /* un pot vide : fermer ne paierait personne (gas pour rien) */
-        const plan = planClosePot({ contrat: P.contract, day: hier, owner: true, ferme: false, maintenant: t });
+        const plan = planClosePot({ contrat: P.contract, day: d, owner: true, ferme: false, maintenant: t });
         if (plan.etat !== 'PRET') { pourquoiPas.push('reward pot: ' + plan.pourquoi); return null; }
-        return proposition('POT_CLOSE', plan.appels, 'Close yesterday\'s pot (' + jidHier + ', ' + usdcTxt(reste) + '): it freezes the pot, its shares become final and can be signed for the holders to claim. No USDC.', 0n, 'POT_CLOSE:' + hier);
+        const fin = new Date(((d + 1) * JOUR_S + GRACE_POT_S) * 1000).toISOString().slice(0, 16).replace('T', ' ');
+        return proposition('POT_CLOSE', plan.appels, (v.veille ? 'Close yesterday\'s pot (' + jid + ', ' : 'Close the pot of ' + jid + ' (' + (aujourdhui - d) + ' days ago, ') + usdcTxt(reste) + ')'
+          + (dernierJourDeSemaine(d) ? ' — it closes a week: the weekly pot' : '') + ': it freezes the pot, its shares become final and can be signed for the holders to claim'
+          + (v.veille ? '' : ' until ' + fin + ' UTC') + '. No USDC.', 0n, 'POT_CLOSE:' + d);
       };
-      const potSign = () => {
+      const potClose = () => { for (const v of joursPot) { const p = potCloseDe(v); if (p) return p; } return null; };
+      const potSignDe = (jour) => {
+        const jidHier = jour.jourId, hier = jour.day; /* les noms d avant : le jour examine (la veille, ou un des 7 derniers) */
         const lu = (x, mode) => x && x.ok === true && x.ferme === true && x.jourId === jidHier && bas(x.contrat) === bas(P.contract) && Array.isArray(x.parts) && (x.mode || 'JOUR') === mode;
         const entame = (x) => x.parts.some((p) => p && p.signature);
-        const semaine = dernierJourDeSemaine(hier), J0 = lu(P.sharesDay, 'JOUR') ? P.sharesDay : null, S0 = lu(P.sharesWeek, 'SEMAINE') ? P.sharesWeek : null;
+        const semaine = dernierJourDeSemaine(hier), J0 = lu(jour.sharesDay, 'JOUR') ? jour.sharesDay : null, S0 = lu(jour.sharesWeek, 'SEMAINE') ? jour.sharesWeek : null;
         let src = null, week = false;
         if (!semaine) src = J0;
         else if (!J0) { pourquoiPas.push('reward pot: ' + jidHier + ' closes a week — its day shares were not read, so the weekly shares are not proposed'); return null; }
         else {
-          const jourEntame = entame(J0);
-          if (jourEntame) {
-            if (S0 && entame(S0)) { pourquoiPas.push('reward pot: ' + jidHier + ' has day AND weekly signatures — nothing more is proposed'); return null; }
-            src = J0;
-          } else if (!S0) { pourquoiPas.push('reward pot: ' + jidHier + ' closes a week — its weekly shares were not read'); return null; }
-          else { src = S0; week = true; }
+          /* ⛔ 2026-10-24 (defaut 3) : JAMAIS de parts du JOUR proposees pour le dernier jour d une semaine — son dayPot EST le pot de la
+           *   semaine, et le serveur refuse ces signatures (POST mode jour -> REFUSE). Avant : des parts du jour deja entamees faisaient
+           *   proposer la suite en mode jour. Des signatures du jour deja gardees (avant ce refus) -> rien n est propose, c est dit. */
+          if (entame(J0)) { pourquoiPas.push('reward pot: ' + jidHier + ' closes a week but already has day-mode signatures — its pot is the weekly pot: nothing more is proposed for it'); return null; }
+          if (!S0) { pourquoiPas.push('reward pot: ' + jidHier + ' closes a week — its weekly shares were not read'); return null; }
+          src = S0; week = true;
         }
         if (!src) return null;
         const verifier = bas(src.verifier);
@@ -220,6 +242,7 @@ export function prochaineProposition(etat = {}) {
             + (signe ? '' : ' This wallet is not the verifier: shown once, its brain goes on with the next move.'),
           sign: { jourId: jidHier, day: hier, week, verifier, signerIsVerifier: signe, shares: aSigner } };
       };
+      const potSign = () => { for (const j of joursPot) { const p = potSignDe(j); if (p) return p; } return null; };
       const potFund = () => {
         const budgetPot = regles.potDailyUsdc;
         if (budgetPot <= 0n) return null;
