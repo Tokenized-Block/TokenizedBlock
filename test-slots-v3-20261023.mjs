@@ -207,7 +207,8 @@ async function scenarioPerdu(code) {
   const okVu = app.dom.el('slotsRegler').hidden === true && app.dom.el('slotsAccepter').hidden === true
     && app.dom.liste().some((t) => t === 'Spin #3: its 256-block window closed before it was settled — it is lost, nothing is returned.')
     && etat === '1 spin was not settled in time and is lost — nothing is returned.';
-  const regle = app.dom.el('slotsRegle').textContent;
+  /* 2026-10-24 : la regle vit en deux elements (a l ecran + le pli) : les deux sont lus */
+  const regle = app.dom.el('slotsRegle').textContent + ' ' + app.dom.el('slotsComment').textContent;
   const sansRemb = !/refund/i.test(regle + ' ' + etat + ' ' + app.dom.liste().join(' '));
   await clic(app, 'settle');
   const rien = ch.appels.length === 0 && ch.spins.get('3').statut === 1;
@@ -230,10 +231,16 @@ async function scenarioRegleur(code) {
   const ch = faireChaine({ pot: 9000000n, tete: 1015, spins: [{ id: 1, t: 1002, hashes: H1 }] }); ch.msBloc = 200;
   const app = monter(code, ch); app.chaine = ch;
   await app.peindreSlots(true);
-  const r1 = app.dom.el('slotsRegle').textContent;
+  /* 2026-10-24 (carte de 821 px mesuree en prod game31) : la regle est coupee, phrases inchangees — « lost » + fenetre + regleur restent
+   *   A L ECRAN (#slotsRegle), la moyenne et la meilleure strategie passent dans le pli « How the slots work » (#slotsComment). Ce banc
+   *   affirmait la meilleure strategie dans #slotsRegle : il l affirme maintenant dans le pli, ET plus a l ecran (la position est le sujet). */
+  const r1 = app.dom.el('slotsRegle').textContent, p1 = app.dom.el('slotsComment').textContent;
   const a = /A spin not settled in time is lost: nothing is returned\. Settle within 256 blocks of the first face block — about 51 s at the block time measured just now \(200 ms a block\)\./.test(r1)
     && /The server settles spins automatically when its keeper is on \(it is off right now\); anyone can settle, and the prize always goes to the spin's player\./.test(r1)
-    && /settling every spin is the best play: 0\.127862 USDC a spin on average/.test(r1) && !/refund|held by the contract|back to you/i.test(r1);
+    && /settling every spin is the best play: 0\.127862 USDC a spin on average/.test(p1) && !/best play/.test(r1)
+    && /^A spin costs 0\.50 USDC: /.test(r1) && /from 0 to 5\.00 USDC a spin, never more than the pot holds\./.test(r1)
+    && /^The three faces come from three different blocks/.test(p1) && !/three different blocks|PotShort|accept what the pot holds/.test(r1)
+    && !/refund|held by the contract|back to you/i.test(r1 + ' ' + p1);
   /* la mesure vaut 10 min : un 2e repeint ne relit aucun bloc pour elle */
   ch.lectures = []; await app.peindreSlots(true);
   const pasDeRelecture = !ch.lectures.includes('eth_getBlockByNumber');
@@ -294,6 +301,8 @@ const MUTANTS = [
   ['PERDANT', 'un spin sans prix laisse hors du lot', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = p.lignes.filter((l) => l.decision === 'LOT' && l.paie > 0n);"],
   ['REGLEUR', 'l etat du regleur tape « on »', "const reg = j.regleur && j.regleur.etat === 'ON' ? 'on'", "const reg = true ? 'on'"],
   ['REGLEUR', 'la regle ne dit plus qu un spin non regle est perdu', "'A spin not settled in time is lost: nothing is returned. Settle within '", "'Settle within '"],
+  ['REGLEUR', '2026-10-24 : l explication recollee a la regle a l ecran (le pli vide)', "if (rgPli) rgPli.textContent = 'The three faces", "if (rg) rg.textContent += ' ' + 'The three faces"],
+  ['REGLEUR', '2026-10-24 : la regle a l ecran perd le prix maximum', "a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '", "a fixed prize per points. '"],
   ['REGLEUR', 'le temps de bloc du regleur ignore', '  if (srv) return srv;\n', ''],
   ['REGLEUR', 'la mesure relue a chaque repeint', '  if (slotsCfg.msBlocA && Date.now() - slotsCfg.msBlocA < 600000) return slotsCfg.msBloc;\n', ''],
   ['REGLEUR', 'la fenetre au temps de bloc suppose (200 ms) au lieu du mesure', "const fenetreTxt = msB ? 'about ' + Math.round(Slots.secondesFenetre(msB))", "const fenetreTxt = msB ? 'about ' + Math.round(Slots.secondesFenetre(200))"],

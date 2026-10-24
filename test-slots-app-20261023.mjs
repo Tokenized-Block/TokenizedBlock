@@ -47,7 +47,10 @@ const checks = {
   envoiUnique: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return (b.match(/envoyerAppels\(/g) || []).length === 1 && !/eth_sendTransaction|envoyerDepuisWallet|wallet_sendCalls/.test(b); },
   facesDuContrat: (t) => /faceRevelee\(Slots\.graine\(hashes\[r\], spinId, r\)\)/.test(bloc(t)) && /logoSvg\(paramsLogoDepuisApparence\(f, String\(r \+ 1\)\)\)/.test(bloc(t)) && /Slots\.facesDuSpin\(hashes, spinId\)/.test(bloc(t)),
   importServi: (t) => /^import \* as Slots from '\.\/slots-plan\.js';$/m.test(t),
-  bandeauTelephone: (t) => /@media \(max-width:520px\)\{\.jeuBandeau\[data-slots="1"\]\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)\}\}/.test(t),
+  /* 2026-10-24 (UN JEU A LA FOIS) : ce banc affirmait la grille de 2 colonnes sur telephone (341 px mesures a 375 px) ; le bandeau y est
+   *   devenu UNE rangee qui defile de cote. Ce qui reste a garder pour les Slots : le selecteur [data-slots="1"] (0,2,0) est REPETE dans le
+   *   media, sinon la grille de 4 colonnes battrait la rangee a 375 px. */
+  bandeauTelephone: (t) => /@media \(max-width:600px\)\{\n  \.jeuBandeau,\.jeuBandeau\[data-n="7"\],\.jeuBandeau\[data-slots="1"\]\{display:flex;overflow-x:auto;/.test(t),
 };
 for (const [k, f] of Object.entries(checks)) vu(f(APP) === true, 'app.html : ' + k);
 const mutants = [
@@ -63,7 +66,7 @@ const mutants = [
   ['settleRelu', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = vue.spins;"],
   ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus', 'const r = await envoyerDepuisWallet(plan.appels, c);\n    if (!r || r.etat !== \'CONFIRME\') { dit(phraseNonConfirme(r, refus'],
   ['facesDuContrat', 'faceRevelee(Slots.graine(hashes[r], spinId, r))', 'faceRevelee(Slots.graine(hashes[0], spinId, r))'],
-  ['bandeauTelephone', '@media (max-width:520px){.jeuBandeau[data-slots="1"]{grid-template-columns:repeat(2,minmax(0,1fr))}}', ''],
+  ['bandeauTelephone', '.jeuBandeau,.jeuBandeau[data-n="7"],.jeuBandeau[data-slots="1"]{display:flex;', '.jeuBandeau,.jeuBandeau[data-n="7"]{display:flex;'],
   ['sansRemboursement', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>', '<button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>\n        <button type="button" class="bouton sec" id="slotsRembourser" hidden>Claim refund</button>'],
   ['perduDit', "'A spin not settled in time is lost: nothing is returned. Settle within '", "'Settle within '"],
   ['regleurDit', "(it is ' + reg + ' right now)", "(it is on right now)"],

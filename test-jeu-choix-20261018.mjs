@@ -14,8 +14,10 @@ const tuiles = [...band.matchAll(/<button[^>]*data-jeu="([^"]+)"[^>]*><b>([^<]+)
 /* 2026-10-18 : + Duels, 7e tuile, CACHEE tant que /api/duels ne sert pas de contrat */
 /* 2026-10-23 : + Slots, 8e tuile, CACHEE tant que /api/slots ne sert pas de contrat (data-slots="1" -> 4 colonnes, 2 sur telephone) */
 vu(JSON.stringify(tuiles.map((t) => t[1])) === JSON.stringify(['Roll', 'Ticket', 'Week pass', 'Its brain', 'Skins', 'Missions', 'Duels', 'Slots']), 'huit choix dans l ordre (lus : ' + tuiles.map((t) => t[1]).join(', ') + ')');
+/* 2026-10-24 (UN JEU A LA FOIS) : « 2 colonnes sur telephone » est remplace par UNE rangee qui defile de cote (<= 600 px) — ce banc
+ *   affirmait l ancienne grille ; il affirme la rangee (le selecteur [data-slots="1"] repete dans le media, sinon 4 colonnes a 375 px) */
 vu(/<button[^>]*data-jeu="slotsCarte"[^>]*\bhidden\b/.test(band) && /if \(bd\) bd\.dataset\.slots = on \? '1' : '0';/.test(app) && /\.jeuBandeau\[data-slots="1"\]\{grid-template-columns:repeat\(4,/.test(app)
-  && /@media \(max-width:520px\)\{\.jeuBandeau\[data-slots="1"\]\{grid-template-columns:repeat\(2,/.test(app), 'Slots : tuile cachee sans contrat ; avec elle 4 colonnes, 2 sur telephone');
+  && /@media \(max-width:600px\)\{\n  \.jeuBandeau,\.jeuBandeau\[data-n="7"\],\.jeuBandeau\[data-slots="1"\]\{display:flex;overflow-x:auto;/.test(app), 'Slots : tuile cachee sans contrat ; avec elle 4 colonnes, une rangee qui defile sur telephone');
 vu(/<button[^>]*data-jeu="duelsCarte"[^>]*\bhidden\b/.test(band) && /bd\.dataset\.n = on \? '7' : '6';/.test(app) && /\.jeuBandeau\[data-n="7"\]\{grid-template-columns:repeat\(4,/.test(app), 'Duels : tuile cachee sans contrat ; 7 tuiles -> 4 colonnes');
 for (const [carte, nom] of tuiles) vu(app.split('id="' + carte + '"').length === 2, nom + ' mene a #' + carte + ' qui existe une fois');
 for (const f of [...band.matchAll(/data-focus="([^"]+)"/g)].map((m) => m[1])) vu(app.split('id="' + f + '"').length >= 2, 'focus vers #' + f + ' qui existe');
@@ -24,8 +26,11 @@ const pb = app.slice(app.indexOf('function poserBoutonsRolls('), app.indexOf('as
 vu(/jb\('jbPass', usdcTexte\(rollsCfg\.prixPass\) \+ ' USDC'\)/.test(pb) && /rollsCfg\.passRolls \+ ' rolls'/.test(pb), 'tuile Week pass : prix et rolls de la fiche servie');
 vu(/if \(\$\('#jbRoll'\) && \$\('#jbRoll'\)\.textContent === '⚄'\) jb\('jbRollTxt', usdcTexte\(rollsCfg\.prixRoll\)/.test(pb), 'tuile Roll : prix servi, sans ecraser un score deja peint');
 vu(/jb\('jbBrain', on \? 'On' : 'Off'\)/.test(app.slice(app.indexOf('function bjPeindre('), app.indexOf('function bjAllumer('))), 'tuile du brain : On/Off peint par bjPeindre');
-const clic = app.slice(app.indexOf("for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]'))"), app.indexOf("for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]'))") + 700);
-vu(/scrollIntoView/.test(clic) && /if \(el && !el\.hidden && el\.offsetParent !== null\)/.test(clic), 'clic : amene a la carte ; focus seulement sur un bouton visible');
+/* 2026-10-24 (UN JEU A LA FOIS) : le clic ne fait plus que DEFILER — il passe par montrerJeu (la carte choisie d abord) ; la garde
+ *   « focus seulement sur un bouton visible » vit dans montrerJeu. Le comportement est EXECUTE par test-jeu-focus-20261024. */
+const choix = app.slice(app.indexOf('function montrerJeu('), app.indexOf('/* ══ FIN DU CHOIX DU JEU */'));
+vu(/for \(const b of jeuTuiles\(\)\) b\.addEventListener\('click', \(\) => \{ montrerJeu\(b\.getAttribute\('data-jeu'\), b\.getAttribute\('data-focus'\)/.test(choix)
+  && /scrollIntoView/.test(choix) && /const visible = !!el && !el\.hidden && el\.offsetParent !== null;/.test(choix), 'clic : montrerJeu (la carte choisie, puis amenee) ; focus seulement sur un bouton visible');
 /* 2026-10-18 : /app.html#game (ou #missions) ouvrait la Map */
 vu(/if \(\['game', 'missions'\]\.includes\(\(location\.hash \|\| ''\)\.replace\(\/\^#\/, ''\)\.split\('\?'\)\[0\]\)\) \{\n  setTimeout\(\(\) => allerA\('missions'\), 0\);/.test(app) && /if \(h === 'game' \|\| h === 'missions'\) allerA\('missions'\);/.test(app), 'lien #game / #missions : ouvre l onglet Game (au chargement et au changement)');
 /* revue adverse 2026-10-18 (MOYEN) : suite arretee apres des envois confirmes */

@@ -198,11 +198,21 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .jeuBandeau{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 0 10px}
 /* 2026-10-18 : la 7e tuile (Duels) n apparait qu avec son contrat ; le bandeau passe alors a 4 colonnes (2 sur telephone) */
 .jeuBandeau[data-n="7"]{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media (max-width:520px){.jeuBandeau,.jeuBandeau[data-n="7"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
-/* 2026-10-23 : la tuile Slots n apparait qu avec son contrat (data-slots="1") ; 4 colonnes, 2 sur telephone (regle repetee DANS le media :
- *   sinon [data-slots] (0,2,0) battrait .jeuBandeau (0,1,0) a 375 px) */
+/* 2026-10-23 : la tuile Slots n apparait qu avec son contrat (data-slots="1") ; 4 colonnes sur ordinateur */
 .jeuBandeau[data-slots="1"]{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media (max-width:520px){.jeuBandeau[data-slots="1"]{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 2026-10-24 (UN JEU A LA FOIS) : sur telephone, les tuiles ne sont plus une grille de 2 colonnes (341 px mesures a 375 px en prod
+ *   game30, 4 rangees) mais UNE rangee qui defile de cote (scroll-snap) — la page, elle, ne defile jamais de cote : le debordement reste
+ *   DANS le bandeau (overflow-x:auto). Les trois selecteurs sont repetes ici : sinon [data-n] / [data-slots] (0,2,0) battraient le media. */
+@media (max-width:600px){
+  .jeuBandeau,.jeuBandeau[data-n="7"],.jeuBandeau[data-slots="1"]{display:flex;overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;scroll-snap-type:x proximity;scrollbar-width:thin;padding:0 0 4px;max-width:100%}
+  .jeuBandeau>.jeuJeu{flex:0 0 140px;scroll-snap-align:start;padding:8px 10px}
+}
+/* la tuile du jeu montre (aria-pressed, pose par peindreChoixJeu) : visible sans compter sur la couleur seule (bordure + fond + trait) */
+.jeuJeu[aria-pressed="true"]{border-color:var(--accent);background:rgb(var(--accentRgb) / .18);box-shadow:inset 0 -3px 0 var(--accent)}
+/* UNE carte de jeu a la fois : celle que la tuile choisie montre ; les autres portent data-hors="1" (jamais `hidden`, que les peintres des
+ *   Duels et des Slots gerent pour dire « pas de contrat »). Avant le premier choix (le module s execute apres le premier rendu) : la carte
+ *   par defaut seule, pas un eclair de neuf cartes. Les cartes cachees se repeignent quand meme (leurs minuteurs ne lisent que l onglet). */
+#v-missions:not([data-jeu]) :is(#brainJeuCarte,#skinCarte,#missionsCarte,#duelsCarte,#slotsCarte),#v-missions .carte[data-hors="1"]{display:none}
 /* LES SLOTS (2026-10-23) : trois faces cote a cote (seul le numero 1, 2, 3 de la face est dessine dessus) ; les accords par trait en dessous */
 .slotsFaces{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:8px 0 0;max-width:340px}
 .slotsFaces .jourFace{width:100%;height:auto;aspect-ratio:1/1;flex:none;border-radius:14px}
@@ -3659,7 +3669,8 @@ details[open] > summary::before{transform:rotate(90deg)}
          FACE A la face gagnante EN DIRECT (celle que tirerait le dernier bloc Base ; seul le bloc E, minuit UTC + 120 s, compte). -->
     <!-- BANDEAU DES JEUX (Phil 2026-10-18 09:00 : « lisible pour jouer a differents jeux ») : 4 tuiles-boutons, chacune mene a sa carte ;
          les etats sont peints par peindreJour / roll / peindreMissions / peindreSkinsJeu. Rien d invente : un etat non lu reste « — ». -->
-    <div class="jeuBandeau" role="navigation" aria-label="Games">
+    <!-- 2026-10-24 : un CHOIX (une carte a la fois) — chaque tuile est un bouton bascule (aria-pressed, pose par peindreChoixJeu), groupe -->
+    <div class="jeuBandeau" role="group" aria-label="Games">
       <!-- UX 2026-10-18 (Phil : « facilite de choix ») : SIX choix, chacun dit son geste et son prix (lus sur la fiche servie, jamais tapes) -->
       <button type="button" class="jeuJeu" data-jeu="tirCarte" data-focus="jourRoll"><b>Roll</b><i id="jbRoll">⚄</i><span id="jbRollTxt">the next block decides</span></button>
       <button type="button" class="jeuJeu" data-jeu="tirCarte"><b>Ticket</b><i id="jbTicket">—</i><span id="jbTicketTxt">1 entry, week's pot</span></button>
@@ -3886,11 +3897,32 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="slotsRegler" hidden>Settle</button>
         <button type="button" class="bouton sec" id="slotsAccepter" hidden>Accept</button>
       </div>
+      <!-- 2026-10-24 : le pli porte l explication (points, pot court / Accept, chances, moyenne, plage lue : #slotsComment, peinte par
+           peindreSlotsUneFois, phrases DEPLACEES de #slotsRegle, pas reecrites) et la table des prix -->
       <details style="margin:8px 0 0">
-        <summary class="note" style="cursor:pointer">Odds and prizes</summary>
+        <summary class="note" style="cursor:pointer">How the slots work</summary>
+        <p class="note" id="slotsComment" style="margin:6px 0 0"></p>
         <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th><th>Pays now</th></tr></thead><tbody></tbody></table>
         <p class="note" id="slotsTableNote" style="margin:4px 0 0"></p>
       </details>
+    </div>
+    <!-- SKIN MARKET (Phil 2026-10-17 23:45 : « t as oublie le market skin … encheres pour la revente a n importe quel token ») — le marche
+         EXISTE dans le panneau (bc-market, bcPeindreMarche) ; ici, ses lignes telles quelles (bcLigneSkin -> bcActionMarche signe au wallet).
+         Devises : ETH, USDC, + les actions admises par setCurrency (owner). 10 % de chaque vente -> TokenizedBlock (SALE_FEE_BPS du contrat v2).
+         2026-10-24 (UN JEU A LA FOIS) : deplacee AVANT Earn — c est une carte de JEU (tuile Skins) ; mesure a 375 px, elle s affichait sous
+         Earn et Swap UNIT, le visiteur qui touchait « Skins » voyait d abord deux cartes qui ne sont pas la sienne. -->
+    <div class="carte" id="skinCarte">
+      <span class="jeuKick">Game · Skin market</span>
+      <p class="titre jeuTitre" style="font-size:16px">Mint a skin for <span class="skinPrix"></span>, dress your block, resell it — fixed price or auction.</p>
+      <p class="note" id="skinEtat" style="margin:4px 0 0">Reading the market on chain…</p>
+      <!-- la derniere proposition du brain sur le marche (Let the brain play) : la carte a signer est dans le panneau -->
+      <div id="skinBrain" class="bcLigneSkin" hidden></div>
+      <div id="skinListe" style="margin-top:6px"></div>
+      <div class="jourEtapes">
+        <button type="button" class="bouton" id="skinMint">Mint a skin · <span class="skinPrix"></span></button>
+        <!-- 2026-10-23 (Phil : « je ne vois pas de market ») : le marche entier vit dans l onglet Market, section Skins -->
+        <button type="button" class="bouton sec" id="skinOuvrirMarche">Open the skin market</button>
+      </div>
     </div>
     <!-- EARN (Phil 19:40 : « ajoute la partie earn ») : ce que ce wallet a GAGNE, lu — part de createur due (registre), tirages gagnes (hier),
          missions reclamees (le contrat, quand il existe). Rien d invente : chaque ligne dit sa source. -->
@@ -3914,22 +3946,6 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="unitAcheter">Buy UNIT with it</button>
       </div>
       <p class="note" id="unitEtat" style="margin:4px 0 0" hidden></p>
-    </div>
-    <!-- SKIN MARKET (Phil 2026-10-17 23:45 : « t as oublie le market skin … encheres pour la revente a n importe quel token ») — le marche
-         EXISTE dans le panneau (bc-market, bcPeindreMarche) ; ici, ses lignes telles quelles (bcLigneSkin -> bcActionMarche signe au wallet).
-         Devises : ETH, USDC, + les actions admises par setCurrency (owner). 10 % de chaque vente -> TokenizedBlock (SALE_FEE_BPS du contrat v2). -->
-    <div class="carte" id="skinCarte">
-      <span class="jeuKick">Game · Skin market</span>
-      <p class="titre jeuTitre" style="font-size:16px">Mint a skin for <span class="skinPrix"></span>, dress your block, resell it — fixed price or auction.</p>
-      <p class="note" id="skinEtat" style="margin:4px 0 0">Reading the market on chain…</p>
-      <!-- la derniere proposition du brain sur le marche (Let the brain play) : la carte a signer est dans le panneau -->
-      <div id="skinBrain" class="bcLigneSkin" hidden></div>
-      <div id="skinListe" style="margin-top:6px"></div>
-      <div class="jourEtapes">
-        <button type="button" class="bouton" id="skinMint">Mint a skin · <span class="skinPrix"></span></button>
-        <!-- 2026-10-23 (Phil : « je ne vois pas de market ») : le marche entier vit dans l onglet Market, section Skins -->
-        <button type="button" class="bouton sec" id="skinOuvrirMarche">Open the skin market</button>
-      </div>
     </div>
     <!-- HOW IT WORKS : plie, en bas (le texte long vit ici et dans « ? »). -->
     <div class="carte" id="regleCarte">
@@ -5338,7 +5354,8 @@ async function suivreRollsEnAttente(m) {
     if (r && r.reglables.length) {
       bcEtape(m, r.reglables.length + ' roll' + (r.reglables.length === 1 ? '' : 's') + ' ready: press “Settle ' + r.reglables.length + ' pending roll' + (r.reglables.length === 1 ? '' : 's') + '” in the Game tab within '
         + texteBlocs(Math.min(...r.reglables.map((x) => x.blocsRestants)), sParBlocApp) + ' — one signature, the prize is always yours.', 'oui');
-      bcBoutons(m, [['Open the Game tab', () => allerA('missions')]]);
+      /* UN JEU A LA FOIS : « Settle pending rolls » vit dans la carte des tirages — elle est choisie, et le bouton recoit le focus */
+      bcBoutons(m, [['Open the Game tab', () => { allerA('missions'); montrerJeu('tirCarte', 'rollsRegler'); }]]);
       return;
     }
     if (r && !r.tropTot.length && k >= 3) { bcEtape(m, 'No roll of yours is waiting to be settled' + (r.perdus.length ? ' (' + r.perdus.length + ' lost: window passed, no refund)' : '') + '.'); return; }
@@ -5535,14 +5552,73 @@ $('#missionsIdees').addEventListener('click', (e) => {
   const f = $('#missionForm'); if (f.hidden) { f.hidden = false; void mesBlocksPourMission(); }
   try { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {}
 });
-/* le bandeau des jeux : chaque tuile mene a sa carte */
-/* une tuile = un choix : elle amene a sa carte et, si son bouton est VISIBLE, lui donne le focus (un tap de plus = le geste) */
-for (const b of document.querySelectorAll('.jeuBandeau [data-jeu]')) b.addEventListener('click', () => {
-  const c = document.getElementById(b.getAttribute('data-jeu'));
-  if (c) { try { c.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) { c.scrollIntoView(); } }
-  const f = b.getAttribute('data-focus'), el = f ? document.getElementById(f) : null;
-  if (el && !el.hidden && el.offsetParent !== null) { try { el.focus({ preventScroll: true }); } catch (_) {} }
-});
+/* ══ UN JEU A LA FOIS (2026-10-24) — MESURE prod game30, 375 x 812 : l onglet Game faisait 3 294 px (4 ecrans), toutes les cartes de jeu
+ *   empilees ; une tuile ne faisait que DEFILER jusqu a sa carte, il fallait passer trois jeux pour atteindre le quatrieme.
+ *   Les tuiles sont desormais un CHOIX : une seule carte de jeu montree (JEU_CARTES), les autres portent data-hors="1" (CSS display:none).
+ *   Earn, Swap UNIT, Today et How it works ne sont pas des jeux : toujours la, sous la carte choisie.
+ * ⛔ montrerJeu est le SEUL chemin vers une carte de jeu : la tuile, la palette Ctrl+K (elle clique LA tuile), les commandes du panneau
+ *   (post task, Open a challenge, Open the Game tab), la marque d un duel sur la Map et le lien #game/<jeu>. Sans lui, un geste
+ *   donnait le focus a un bouton d une carte CACHEE (offsetParent null) : rien de visible — le motif « message dans un volet masque ».
+ * ⛔ `hidden` reste aux peintres (Duels, Slots : « pas de contrat ») ; ce choix n y touche jamais. Une tuile cachee n est pas choisissable :
+ *   le choix retombe sur tirCarte, et revient tout seul quand la tuile apparait (les peintres rappellent peindreChoixJeu).
+ * Le dernier choix est garde dans CE navigateur (localStorage, try/catch : navigation privee = le choix vaut pour la visite). */
+const JEU_CARTES = ['tirCarte', 'brainJeuCarte', 'skinCarte', 'missionsCarte', 'duelsCarte', 'slotsCarte'];
+const JEU_DEFAUT = 'tirCarte', JEU_CLE = 'tbJeuChoisi';
+/* #game/<nom> (ou #missions/<nom>) : la carte et, s il y en a un, le bouton qui recoit le focus */
+const JEU_LIENS = { roll: ['tirCarte', 'jourRoll'], ticket: ['tirCarte', null], pass: ['tirCarte', 'jourPass'], brain: ['brainJeuCarte', 'bjJouer'],
+  skins: ['skinCarte', null], missions: ['missionsCarte', null], duels: ['duelsCarte', null], slots: ['slotsCarte', null] };
+let jeuVoulu = null, jeuMontre = null;
+function jeuLireChoix() { try { const v = localStorage.getItem(JEU_CLE); return JEU_CARTES.includes(v) ? v : null; } catch (_) { return null; } }
+function jeuNoterChoix(id) { try { localStorage.setItem(JEU_CLE, id); } catch (_) { /* stockage refuse : le choix vaut pour cette visite */ } }
+function jeuTuiles() { return [...document.querySelectorAll('.jeuBandeau [data-jeu]')]; }
+/* un jeu est choisissable si UNE de ses tuiles est visible (Duels et Slots : cachees sans contrat) */
+function jeuOuvert(id) { return JEU_CARTES.includes(id) && jeuTuiles().some((t) => t.getAttribute('data-jeu') === id && !t.hidden); }
+function jeuLien(h) { const m = /^(?:game|missions)\/([a-z]+)$/.exec(String(h || '')); return m && Object.prototype.hasOwnProperty.call(JEU_LIENS, m[1]) ? JEU_LIENS[m[1]] : null; }
+/* sur telephone le bandeau defile de cote : la tuile choisie est ramenee dans la rangee (seulement quand le jeu montre CHANGE) */
+function jeuTuileEnVue() {
+  const bd = document.querySelector('.jeuBandeau'), t = jeuTuiles().find((x) => x.getAttribute('aria-pressed') === 'true' && !x.hidden);
+  if (!bd || !t || !(bd.scrollWidth > bd.clientWidth)) return;
+  try { const g = t.offsetLeft - bd.offsetLeft; if (g < bd.scrollLeft || g + t.offsetWidth > bd.scrollLeft + bd.clientWidth) bd.scrollLeft = Math.max(0, g - 8); } catch (_) { /* mesure indisponible */ }
+}
+/* pose l etat : UNE carte sans data-hors, les tuiles de cette carte aria-pressed="true" ; rend l id montre */
+function peindreChoixJeu() {
+  const id = jeuOuvert(jeuVoulu) ? jeuVoulu : JEU_DEFAUT;
+  for (const c of JEU_CARTES) { const el = document.getElementById(c); if (!el) continue; if (c === id) el.removeAttribute('data-hors'); else el.setAttribute('data-hors', '1'); }
+  for (const t of jeuTuiles()) t.setAttribute('aria-pressed', t.getAttribute('data-jeu') === id ? 'true' : 'false');
+  const v = document.getElementById('v-missions'); if (v) v.setAttribute('data-jeu', id);
+  if (id !== jeuMontre) { jeuMontre = id; jeuTuileEnVue(); }
+  return id;
+}
+const jeuHorsVue = (x) => { try { const r = x.getBoundingClientRect(); return r.top < 0 || r.top > (window.innerHeight || 0) - 120; } catch (_) { return true; } };
+/** LE chemin vers une carte de jeu. La carte d abord (montree), PUIS le defilement et le focus — jamais l inverse.
+ *  opts.noter (defaut true) : garder le choix ; opts.defiler : true (defaut) amene la carte, 'siCache' seulement si son haut est hors de
+ *  l ecran (la tuile est juste au-dessus : ne pas la faire sortir), false jamais (l appelant defile lui-meme vers un element de la carte). */
+function montrerJeu(id, focusId, opts) {
+  const o = opts || {};
+  if (!JEU_CARTES.includes(id)) return null;
+  jeuVoulu = id;
+  if (o.noter !== false) jeuNoterChoix(id);
+  const vu = peindreChoixJeu();
+  const carte = document.getElementById(vu);
+  const el = focusId && vu === id ? document.getElementById(focusId) : null;
+  const visible = !!el && !el.hidden && el.offsetParent !== null;
+  try {
+    if (visible) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    else if (carte && (o.defiler === 'siCache' ? jeuHorsVue(carte) : o.defiler !== false)) carte.scrollIntoView({ block: 'start', behavior: 'smooth' });
+  } catch (_) { /* sans defilement doux */ }
+  if (visible) { try { el.focus({ preventScroll: true }); } catch (_) {} }
+  return vu;
+}
+/* une tuile = un choix : elle MONTRE sa carte et, si son bouton est VISIBLE, lui donne le focus (un tap de plus = le geste) */
+for (const b of jeuTuiles()) b.addEventListener('click', () => { montrerJeu(b.getAttribute('data-jeu'), b.getAttribute('data-focus'), { defiler: 'siCache' }); });
+jeuVoulu = jeuLireChoix() || JEU_DEFAUT;
+peindreChoixJeu();
+/* MESURE (serveur local, 375 px) : un choix garde sur les Slots montrait tirCarte au chargement, et la tuile Slots n est apparue qu apres
+ *   ~37 s (lecture de la chaine) — la carte aurait change SOUS la main du visiteur. Des qu il touche l onglet Game (doigt, souris, clavier),
+ *   la carte qu il voit devient son choix : un retour tardif ne remplace plus ce qu il est en train d utiliser. */
+{ const v = document.getElementById('v-missions'); const fige = () => { if (jeuMontre && jeuMontre !== jeuVoulu) jeuVoulu = jeuMontre; };
+  if (v) { v.addEventListener('pointerdown', fige, true); v.addEventListener('keydown', fige, true); } }
+/* ══ FIN DU CHOIX DU JEU */
 const jb = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
 $('#missionForm').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -5778,6 +5854,8 @@ async function peindreDuels() {
   carte.hidden = !on; if (tuile) tuile.hidden = !on;
   /* six choix sans contrat, sept avec (le CSS passe a 4 colonnes sur data-n="7") */
   const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.n = on ? '7' : '6';
+  /* UN JEU A LA FOIS : la tuile vient d apparaitre ou de partir — le choix est repose (retombe sur tirCarte sans elle) */
+  try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }
   for (const id of ['#bjDuelsLab', '#bjMaxDuelLab']) { const x = $(id); if (x) x.hidden = !on; }
   if (regle) regle.textContent = on ? 'Open on Base.' : 'Opens with its contract.';
   if (!on) { liste.textContent = ''; return null; }
@@ -5938,6 +6016,9 @@ $('#duelsLire').addEventListener('click', async () => { await lireDuelsServis(tr
 function ouvrirDuel(id) {
   duelsCfg.focus = id ? String(id) : null;
   allerA('missions');
+  /* UN JEU A LA FOIS : la carte Duels choisie AVANT le repeint (qui defile vers le duel vise) ; sans tuile servie, le choix retombe sur
+   *   tirCarte et peindreDuels le repose des que la tuile apparait */
+  montrerJeu('duelsCarte', null, { defiler: false });
   void peindreDuels().then(() => { const c = $('#duelsCarte'); if (!id && c && !c.hidden) { try { c.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (_) {} } });
 }
 /* LE DEFI SUR LA MAP (Phil : « les brains sont les occupants de la map ») — un duel OUVERT est une marque SANS TEXTE (deux epees) posee sur le
@@ -6527,6 +6608,8 @@ async function peindreSlotsUneFois(force = false) {
   carte.hidden = !on; if (tuile) tuile.hidden = !on;
   /* une tuile de plus avec son contrat : le CSS passe a 4 colonnes sur data-slots="1" (2 sur telephone) */
   const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.slots = on ? '1' : '0';
+  /* UN JEU A LA FOIS : la tuile vient d apparaitre ou de partir — le choix est repose (retombe sur tirCarte sans elle) */
+  try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }
   if (!on) return null;
   const prix = BigInt(j.prixSpin), table = j.prizes.map((x) => BigInt(x)), part = Number(j.potShareBps);
   /* le plus haut prix de la table (5 USDC au plus, le contrat le borne) ; D2 : les chances et la moyenne sont CALCULEES (loi exacte) */
@@ -6542,10 +6625,15 @@ async function peindreSlotsUneFois(force = false) {
   jb('jbSlots', usdcTexte(prix) + ' USDC');
   if (pot === null) jb('jbSlotsTxt', 'three faces · up to ' + usdcTexte(haut) + ', capped by the pot');
   else jb('jbSlotsTxt', 'three faces · up to ' + usdcTexte(Slots.paieMaintenant(haut, pot)) + ' now');
-  const rg = $('#slotsRegle');
-  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% goes to the slots pot and ' + ((10000 - part) / 100) + '% (' + Slots.usdcPrecis(ev.toDev) + ' USDC) to TokenizedBlock, when you spin, whatever happens next. The three faces come from three different blocks: the blocks 2, 3 and 4 blocks later give one face each. For each trait, all three the same scores 3, two the same scores 1. The contract judges the spin when it is settled and pays its prize itself, to you: a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '
+  /* 2026-10-24 (mesure prod game31, 375 px : la carte faisait 821 px, presque tout de la regle) : la regle est COUPEE en deux, phrases
+   *   inchangees, deplacees : a l ecran (#slotsRegle) le prix et son partage, le prix maximum, « a spin not settled in time is lost » avec la
+   *   fenetre mesuree, et l etat du regleur ; dans le pli « How the slots work » (#slotsComment) le calcul des points, le pot court et Accept,
+   *   les chances et la moyenne, les points et la plage lue. Le pot actuel est dit par #slotsEtat / #slotsMoi. */
+  const rg = $('#slotsRegle'), rgPli = $('#slotsComment');
+  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% goes to the slots pot and ' + ((10000 - part) / 100) + '% (' + Slots.usdcPrecis(ev.toDev) + ' USDC) to TokenizedBlock, when you spin, whatever happens next. The contract judges the spin when it is settled and pays its prize itself, to you: a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '
     + 'A spin not settled in time is lost: nothing is returned. Settle within ' + Slots.FENETRE + ' blocks of the first face block — ' + fenetreTxt + '. '
-    + 'The server settles spins automatically when its keeper is on (it is ' + reg + ' right now); anyone can settle, and the prize always goes to the spin\'s player. '
+    + 'The server settles spins automatically when its keeper is on (it is ' + reg + ' right now); anyone can settle, and the prize always goes to the spin\'s player.';
+  if (rgPli) rgPli.textContent = 'The three faces come from three different blocks: the blocks 2, 3 and 4 blocks later give one face each. For each trait, all three the same scores 3, two the same scores 1. '
     + 'When the pot holds less than a spin\'s prize, Settle leaves that spin out and this card says how much is missing; you can accept what the pot holds for that spin, or wait for the pot to grow — until its window closes. '
     + Slots.pourcentTexte(ev.probGainBps) + '% of spins pay something, but only ' + Slots.pourcentTexte(ev.probMiseBps) + '% pay back at least the ' + usdcTexte(prix) + ' USDC stake. On average a settled spin pays back ' + Slots.usdcPrecis(BigInt(j.esperanceBrut)) + ' USDC — less while the pot holds less than ' + usdcTexte(haut) + ' USDC. A spin left unsettled pays nothing, so settling every spin is the best play: ' + Slots.usdcPrecis(ev.meilleureBrut) + ' USDC a spin on average, below the ' + usdcTexte(prix) + ' USDC price. '
     + 'Your points are a running total kept on chain; prizes are paid per spin, points pay nothing on their own. This card finds your spins from the last ' + Slots.PLAGE_LOGS + ' blocks and those made while it is open.';
@@ -24273,11 +24361,16 @@ if ((location.hash || '').replace(/^#/, '').split('?')[0] === 'bridge') {
 if (['game', 'missions'].includes((location.hash || '').replace(/^#/, '').split('?')[0])) {
   setTimeout(() => allerA('missions'), 0);
 }
+/* 2026-10-24 (UN JEU A LA FOIS) : /app.html#game/<roll|ticket|pass|brain|skins|missions|duels|slots> ouvre le Game SUR ce jeu (montrerJeu :
+ *   la carte d abord, puis le focus) ; un jeu sans contrat servi retombe sur tirCarte */
+function ouvrirJeuDuLien(h) { const l = jeuLien(h); if (!l) return false; allerA('missions'); montrerJeu(l[0], l[1]); return true; }
+{ const h0 = (location.hash || '').replace(/^#/, '').split('?')[0]; if (jeuLien(h0)) setTimeout(() => { ouvrirJeuDuLien(h0); }, 0); }
 window.addEventListener('hashchange', () => {
   const h = (location.hash || '').replace(/^#/, '').split('?')[0];
   if (h === 'creer') allerA('creer');
   if (h === 'bridge') allerA('bridge');
   if (h === 'game' || h === 'missions') allerA('missions');
+  ouvrirJeuDuLien(h);
 });
 
 /* ── Bridge (tip 20260922-prepaye-inscrire-dust) ───────────────────────────────────────────────────────── */
@@ -25960,6 +26053,8 @@ function bcCommandePostTask(c) {
   bcEtape(m, 'The form is filled in on the Game tab: pick your block there, then “Post it — escrow the rewards” — your wallet signs. Nothing is posted by this command.');
   try { $('#bcPop').close(); } catch (_) {}
   allerA('missions');
+  /* UN JEU A LA FOIS : le formulaire vit dans la carte Missions — choisie d abord, sinon le defilement ci-dessous visait une carte cachee */
+  montrerJeu('missionsCarte', null, { defiler: false });
   f.hidden = false;
   try { void mesBlocksPourMission(); } catch (_) {}
   setTimeout(() => { try { f.scrollIntoView({ block: 'center' }); } catch (_) {} }, 60);
@@ -27458,7 +27553,8 @@ function palConstruire() {
     nom: [...b.childNodes].filter((x) => x.nodeType === 3).map((x) => x.textContent).join('').trim(),
   }));
   palTuiles.clear();
-  const jeux = [...document.querySelectorAll('.jeuBandeau [data-jeu]')].map((b) => {
+  /* 2026-10-24 : une tuile CACHEE (Duels / Slots sans contrat) n est pas proposee — son choix retomberait sur tirCarte (pas d entree morte) */
+  const jeux = [...document.querySelectorAll('.jeuBandeau [data-jeu]')].filter((b) => !b.hidden).map((b) => {
     const o = { jeu: b.getAttribute('data-jeu'), focus: b.getAttribute('data-focus') || '',
       nom: b.getAttribute('data-palette') || (b.querySelector('b') ? b.querySelector('b').textContent.trim() : ''),
       mots: (b.getAttribute('data-mots') || '') + ' ' + (b.querySelector('span') ? b.querySelector('span').textContent : '') };
@@ -27528,6 +27624,7 @@ function palChoisir(e) {
   if (e.faire === 'onglet') { allerA(e.volet); return; }
   if (e.faire === 'jeu') {
     allerA('missions');
+    /* LA tuile : son clic passe par montrerJeu (la carte choisie d abord, puis le focus) — un seul chemin, celui du doigt */
     const tuile = palTuiles.get(e.id);
     if (tuile) setTimeout(() => { try { tuile.click(); } catch (_) {} }, 60);
     return;
