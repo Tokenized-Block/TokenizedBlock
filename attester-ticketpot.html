@@ -79,19 +79,23 @@
   async function signer() {
     if (!parts || !compte || jourRefuse) return;
     const b = $('#signer'); b.disabled = true;
-    let faites = 0, refus = 0;
+    /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 4) : un refus du SERVEUR (409 : une autre part de ce wallet deja signee et
+     *   servie) arretait la boucle — a chaque clic, la meme part refusee bloquait toutes les suivantes. Le refus est note et la boucle
+     *   CONTINUE ; la fin dit chaque part refusee et pourquoi. Un refus du WALLET (l utilisateur decline) arrete, comme avant. */
+    let faites = 0, decline = null; const refusees = [];
     try {
       for (const p of parts.filter((x) => !x.signature)) {
         dire('Sign the share of ' + p.wallet + ' (' + usdc(p.amount) + ' USDC) in your wallet…');
         let sig = null;
-        try { sig = await eth().request({ method: 'eth_signTypedData_v4', params: [compte, JSON.stringify(p.donnees)] }); } catch (e) { dire('Declined: ' + String((e && e.message) || e), 'non'); refus++; break; }
+        try { sig = await eth().request({ method: 'eth_signTypedData_v4', params: [compte, JSON.stringify(p.donnees)] }); } catch (e) { decline = String((e && e.message) || e); break; }
         let r = null;
         try { r = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.jourId, wallet: p.wallet, signature: sig, week: $('#semaine').checked }) }).then((x) => x.json()); } catch (_) { r = null; }
-        if (r && r.ok) faites++; else { refus++; dire('Refused by the server: ' + ((r && r.pourquoi) || 'no answer'), 'non'); break; }
+        if (r && r.ok) faites++; else refusees.push(p.wallet + ': ' + ((r && r.pourquoi) || 'no answer'));
       }
     } finally { b.disabled = false; }
     await lire();
-    if (faites) dire(faites + ' share(s) signed and stored. Holders can now claim from the Game tab.' + (refus ? ' ' + refus + ' refused.' : ''), refus ? 'non' : 'ok');
+    if (faites || refusees.length || decline) dire((faites ? faites + ' share(s) signed and stored. Holders can now claim from the Game tab.' : 'No share stored.')
+      + (refusees.length ? ' ' + refusees.length + ' refused by the server — ' + refusees.join('; ') + '.' : '') + (decline ? ' Declined in your wallet: ' + decline : ''), refusees.length || decline ? 'non' : 'ok');
   }
   $('#lire').addEventListener('click', () => { void lire(); });
   $('#semaine').addEventListener('change', () => { choixManuel = true; void lire(); });

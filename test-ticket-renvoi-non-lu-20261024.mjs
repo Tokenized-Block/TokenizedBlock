@@ -9,7 +9,8 @@
  *   verifierFrais (frais arrive), volumeVerifie (le recu est juge valide), le prix (20 $ le trade), compterRevenu (compte ses appels),
  *   l horloge.
  * AFFIRME :
- *  N1 swap_action, frais verifie, bloc ILLISIBLE au 1er envoi -> 200, ticket NON_LU « send it again », rien de credite ; le renvoi (bloc
+ *  N1 swap_action, frais verifie, bloc ILLISIBLE au 1er envoi -> 202 (2e tour, defaut 2 : avec 200 l app ne renvoyait jamais), ticket
+ *     NON_LU « send it again », rien de credite ; le renvoi (bloc
  *     lisible) -> ticket CREDITE au jour du BLOC, 20 $ une fois ; le frais compte UNE fois (compterRevenu 2 appels, pas 4) ; un 3e envoi
  *     -> {deja:true} sans rien de plus ; l attente est videe ;
  *  N2 hook_block, meme chose ; le renvoi garde la ligne du 1er envoi (l=skin_mint au renvoi ne change rien) ;
@@ -18,7 +19,7 @@
  *  N5 un renvoi apres plus de 48 h -> TROP_VIEUX (dit), rien de credite, l attente est videe.
  *  MUTANTS (copies en memoire) : attente jamais posee -> N1 ROUGIT ; renvoi par le chemin complet (frais recompte) -> N1 ROUGIT ;
  *  attente jamais videe -> N1 ROUGIT ; exception muette -> N3 ROUGIT.
- * NE PROUVE PAS : un recu reel de Base, ni ce que l app fait de la reponse 202 / ticket (elle n affiche pas encore ticket.pourquoi). */
+ * NE PROUVE PAS : un recu reel de Base, ni ce que l app fait de la reponse 202 / ticket (voir test-ticketpot-fix3-app-20261024.mjs). */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,7 +90,7 @@ async function scenarios(src) {
     const { etat, reps, compte, h } = await sequence(src, {});
     const [r1, r2, r3] = reps;
     R['N1:detail'] = reps.map((r) => r.code + ' ' + JSON.stringify(r.corps.ticket || null) + ' deja=' + !!r.corps.deja + ' usd=' + r.usd).join(' | ') + ' | compterRevenu ' + compte.n;
-    return r1.code === 200 && r1.corps.ok === true && r1.corps.ticket && r1.corps.ticket.etat === 'NON_LU' && /send it again/.test(r1.corps.ticket.pourquoi) && r1.usd === 0
+    return r1.code === 202 && r1.corps.ok === true && r1.corps.ticket && r1.corps.ticket.etat === 'NON_LU' && /send it again/.test(r1.corps.ticket.pourquoi) && r1.usd === 0
       && r2.corps.ticket && r2.corps.ticket.etat === 'CREDITE' && r2.corps.ticket.jourId === JB && r2.usd === 20
       && r3.code === 200 && r3.corps.deja === true && !r3.corps.ticket && r3.usd === 20
       && compte.n === 2 && !!etat.vus[h] && !((etat.ticketsEnAttente || {})[h]);

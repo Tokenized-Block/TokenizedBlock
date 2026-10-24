@@ -20,8 +20,8 @@
  *  B3 J-8, aujourd hui : ignores ; B4 dernier jour de semaine : JAMAIS de parts du JOUR (veille ou P.jours) — la semaine, ou rien ;
  *  B5 la veille passe d abord ; B6 un close deja vu -> le jour suivant.
  *  MUTANTS (copies) : chaque garde retiree -> son scenario ROUGIT.
- * NE PROUVE PAS : une lecture reelle sur Base ni un close / une signature reels ; le CABLAGE de P.jours dans l app (la fonction qui batit
- *   l etat du brain, app.html bjTour, est hors du perimetre de ce correctif : sans lui le brain ne voit que la veille, comme avant). */
+ * NE PROUVE PAS : une lecture reelle sur Base ni un close / une signature reels. Le CABLAGE de P.jours dans l app (bjTour) est execute
+ *   depuis le 2e tour par test-ticketpot-fix3-app-20261024.mjs (C1..C6). */
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -218,7 +218,8 @@ await mutantTexte('serveur : jours non servis', SRV, /signes, jours, erreurSemai
 await mutantTexte('serveur : jour ferme relu a chaque tour', SRV, /\(deja\.ferme \|\| Date\.now\(\) - deja\.luMs < 300000\)/, '(Date.now() - deja.luMs < 60000)', scenariosSrv, 'S2-relectures-bornees');
 await mutantTexte('serveur : fenetre de 7 jours non bornee au service', SRV, /x\.day < aujTP && x\.day >= aujTP - 7 && tS <= reclamablePotSrv\(x\.day\)/, 'x.day < aujTP', scenariosSrv, 'S3-fenetre-glissante');
 await mutantTexte('app : tp.jours ignores', APP, /for \(const x of \(tp && Array\.isArray\(tp\.jours\) \? tp\.jours : \[\]\)\) \{/, 'for (const x of []) {', scenariosApp, 'A1-close-jour-passe');
-await mutantTexte('app : pot vide propose', APP, /if \(reste > 0n\) candidats\.push/, 'candidats.push', scenariosApp, 'A2-pot-vide-pas-de-bouton');
+/* 2026-10-24 (2e tour, defaut 1) : la garde du reste vaut pour CHAQUE candidat (veille, semaine, tp.jours), dans la boucle finale */
+await mutantTexte('app : pot vide propose', APP, /\n    if \(!\(resteDe\(x\) > 0n\)\) continue;/, '', scenariosApp, 'A2-pot-vide-pas-de-bouton');
 await mutantTexte('app : grace ignoree', APP, /maintenant > reclamablePot\(x\.day\) \|\| /, '', scenariosApp, 'A3-hors-grace');
 /* le brain : copies a cote de la source (ses imports relatifs), effacees */
 async function mutantBrain(nom, de, vers, rougit) {

@@ -89,8 +89,8 @@ vu(/const proprio = !!\(tp && tp\.veille && c && \/\^0x\[0-9a-f\]\{40\}\$\/\.tes
   && /if \(\$\('#bjPotBudgetLab'\)\) \$\('#bjPotBudgetLab'\)\.hidden = !proprio;/.test(pj) && /if \(\$\('#bjPotLab'\)\) \$\('#bjPotLab'\)\.hidden = !\(proprio \|\| verifPot\);/.test(pj), 'budget montre SEULEMENT a l owner servi ; la case a l owner ou au verifier servis (/api/tirage.ticketpot.veille)');
 vu(/const pot = \$\('#bjPot'\)\.checked && !\$\('#bjPotLab'\)\.hidden/.test(bloc), 'une case pot cachee (cochee par un vieux reglage) ne compte pas');
 vu(/rules: \{[^}]*pot: bj\.pot, potDailyUsdc: bj\.potBudget \}/.test(bloc) && /history: bj\.history, seen: bj\.seen, rolls, missions, skins, duels, pot \}\);/.test(bloc), 'le module recoit la regle pot, le budget journalier et le pot lu');
-vu(/pot = \{ contract: String\(tp\.contrat\)\.toLowerCase\(\), usdc: USDC_BASE, owner: v \? v\.owner : null, veille: v, sharesDay, sharesWeek,\s+today: \{ day: jourAuj,/.test(bloc)
-  && /if \(bjDernierJour\(v\.day\)\) sharesWeek = await lireParts\(true\);/.test(bloc), 'le pot lu : owner et veille servis, parts du jour, et de la semaine le dernier jour');
+vu(/pot = \{ contract: String\(tp\.contrat\)\.toLowerCase\(\), usdc: USDC_BASE, owner: v \? v\.owner : null, veille: v, sharesDay, sharesWeek, jours,\s+today: \{ day: jourAuj,/.test(bloc)
+  && /if \(bjDernierJour\(v\.day\)\) sharesWeek = await lirePartsDe\(v\.jourId, true\);/.test(bloc), 'le pot lu : owner et veille servis, parts du jour, et de la semaine le dernier jour, + les jours J-2..J-7 (2026-10-24, execute par test-ticketpot-fix3-app)');
 vu(/import \{ prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernierJour \} from '\.\/brain-jeu\.js';/.test(app), 'app.html importe dernierJourDeSemaine');
 /* POT_SIGN : signature de MESSAGE par le wallet connecte = verifier, deposee comme attester-ticketpot.html ; sinon le lien, pas un bouton mort */
 const sp = app.slice(app.indexOf('async function bjSignerParts('), app.indexOf('const BJ_TITRES'));

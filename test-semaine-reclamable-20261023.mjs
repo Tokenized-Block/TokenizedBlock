@@ -110,8 +110,9 @@ const tpMer = (sem) => ({ contrat: CT, veille: veilleMer, semaineReclamable: { j
 /* E. dimanche pas ferme : pas de demande de part (rien a signer avant close) ; la veille ferme reste demandee */
 { const m = monter(mer, {}); if (m.api) { await m.api.peindreReclamerPot(tpMer({ ferme: false }), MOI);
   ok(!m.appels.some((u) => u.includes(DIM)) && m.appels.some((u) => u.includes(veilleMer.jourId)) && m.el('#jourReclamerPot').hidden === true, 'dimanche pas ferme : aucune part demandee pour lui ; la veille fermee, si'); } else ok(false, 'E monte'); }
-/* F. sans semaineReclamable servi : la veille seule, comme avant (non-regression) */
-{ const m = monter(lun6 + 7 * H, {}); if (m.api) { m.api.peindreFermerPot({ contrat: CT, veille: { jourId: DIM, day: dim, ferme: false, owner: OWN }, semaineReclamable: null }, MOI);
+/* F. sans semaineReclamable servi : la veille seule, comme avant (non-regression). 2026-10-24 (2e tour ticketpot, defaut 1) : la veille
+ *   porte son reste (le serveur le sert toujours) — un pot ouvert vide ou au reste illisible n est plus jamais propose. */
+{ const m = monter(lun6 + 7 * H, {}); if (m.api) { m.api.peindreFermerPot({ contrat: CT, veille: { jourId: DIM, day: dim, ferme: false, reste: '5000000', owner: OWN }, semaineReclamable: null }, MOI);
   ok(m.el('#jourFermerPot').hidden === false && m.el('#jourFermerPot').textContent.includes(DIM), 'sans semaineReclamable : Close de la veille (12 h passees), comme avant'); } else ok(false, 'F monte'); }
 
 console.log(n + ' assertions, ' + ko + ' KO — NE PROUVE PAS une lecture reelle sur Base, ni un close ou un claim reel, ni le rendu');

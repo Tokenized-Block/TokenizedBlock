@@ -3988,7 +3988,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="jeuGrille">
           <div class="jeuTuile"><b>01 · THE TICKET</b><p>Reach $10 in a day (UTC) — trades of UNIT or tokenized stocks, paid rolls and the Week pass all count — or mint a skin, and that day's ticket is yours.</p></div>
           <div class="jeuTuile"><b>02 · THE WEEK'S POT</b><p>Today's ticket = 1 entry in this week's reward pot; the pot is shared by entries after the week closes (UTC). A Week pass adds 3 entries, a brain at level 3 or 6 adds 1 or 2. Each share is signed by the verifier wallet, and you claim yours from your wallet.</p></div>
-          <div class="jeuTuile"><b>03 · ROLLS</b><p id="regleRolls">Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll is paid in USDC and a winning score pays a fixed prize from the roll pot — never more than the pot holds, and the pot can be empty. Without a wallet the roll is practice: no prize.</p></div>
+          <div class="jeuTuile"><b>03 · ROLLS</b><p id="regleRolls">Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll is paid in USDC and a winning score pays from the roll pot the prize set by the current rules (read live); the UNIT creator can change them for later rolls — never more than the pot holds, and the pot can be empty. Without a wallet the roll is practice: no prize.</p></div>
           <div class="jeuTuile"><b>04 · MISSIONS</b><p>Anyone posts a task and locks its reward. A ticket holder who holds the block does it — a person or an AI agent — and the chain proves it. Doer 90%, community earn pool 7%, TokenizedBlock 3%.</p></div>
           <div class="jeuTuile"><b>05 · SKINS</b><p>Mint a skin for your block, wear it, resell it at a fixed price or in an auction (bids +5%, 7 days max). A minted skin is also that day's ticket.</p></div>
           <!-- DUELS : la regle, et « opens with its contract » tant que le contrat n est pas servi (peindreDuels remplace la derniere phrase) -->
@@ -4853,7 +4853,8 @@ async function peindreJour(t, moiBas, w, fait, seuil) {
   face.setAttribute('data-gagne', gagne ? '1' : '0');
   txt.textContent = pass ? 'Your ticket — your pass holds it (until ' + String(pass.jusqua).slice(1) + ' UTC): today = 1 entry in this week\'s pot.'
     : gagne ? 'Your ticket — held: today = 1 entry in this week\'s reward pot.'
-    : 'Your ticket — this face is yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go): 1 entry in this week\'s pot.';
+    : 'Your ticket — this face is yours at $' + seuil.toFixed(0) + ' of verified volume today ($' + Math.max(0, seuil - fait).toFixed(2) + ' to go): 1 entry in this week\'s pot.'
+      + noteTicketPaye(); /* 2026-10-24 (defaut 2) : un trade dont le ticket n est pas credite, dit (signalerPaye) */
   /* ⛔ 2026-10-18 (Phil : « fini ca ») : la Face of the Day d hier et le gagnant du jour (paye rien) ne sont plus peints (t.veille reste servi) */
 }
 
@@ -4929,7 +4930,7 @@ function poserBoutonsRolls(t, c) {
   if (ba) ba.textContent = on ? 'Auto-roll ×5 · pass or ' + usdcTexte(BigInt(rollsCfg.prixRoll) * 5n) + ' USDC' : 'Auto-roll ×5';
   const rg = $('#regleRolls');
   if (rg && rollsCfg) rg.textContent = 'Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll costs '
-    + usdcTexte(rollsCfg.prixRoll) + ' USDC (or one of the ' + rollsCfg.passRolls + ' rolls of a ' + usdcTexte(rollsCfg.prixPass) + ' USDC Week pass) and a winning score pays a fixed prize from the roll pot ('
+    + usdcTexte(rollsCfg.prixRoll) + ' USDC (or one of the ' + rollsCfg.passRolls + ' rolls of a ' + usdcTexte(rollsCfg.prixPass) + ' USDC Week pass) and a winning score pays from the roll pot the prize set by the current rules, read live ('
     + (Rg.texteGains(rollsCfg, usdcTexte) || Rg.PHRASE_GAINS_NON_LUS.toLowerCase()) + ') — never more than the pot holds'
     + (rollsCfg.pot != null ? ' (' + usdcTexte(rollsCfg.pot) + ' USDC at the last read)' : '') + '. The UNIT creator wallet can change the prizes (up to '
     + (rollsCfg.regles && rollsCfg.regles.maxPrize ? usdcTexte(rollsCfg.regles.maxPrize) + ' USDC' : 'a cap set in the contract') + ' each); a change applies to rolls made after it. Without a wallet the roll is practice: no prize.';
@@ -5203,11 +5204,16 @@ function peindreFermerPot(tp, c) {
   const candidats = [[semaineReclamableDe(tp), true], [tp && tp.veille, false]];
   for (const x of (tp && Array.isArray(tp.jours) ? tp.jours : [])) {
     if (!x || !Number.isInteger(x.day) || x.ferme !== false || maintenant > reclamablePot(x.day) || candidats.some(([c]) => c && c.day === x.day)) continue;
-    let reste = 0n; try { reste = BigInt(x.reste); } catch (_) { reste = 0n; }
-    if (reste > 0n) candidats.push([x, x.dernierJourSemaine === true]);
+    candidats.push([x, x.dernierJourSemaine === true]);
   }
+  /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 1) : le reste n etait verifie QUE pour tp.jours — une veille ou une semaine
+   *   reclamable OUVERTE mais VIDE passait d abord et cachait le pot finance de J-2 (« Close the pot of <veille> (owner) », etat live : tous
+   *   les jours ouverts, pot 0). Chaque candidat : ouvert ET reste > 0 (illisible = 0, jamais propose) ; l owner tout de suite, un autre
+   *   wallet apres closableByAnyoneAt (12:00 UTC le lendemain). Le brain saute aussi les pots vides (brain-jeu.js potCloseDe). */
+  const resteDe = (x) => { try { return BigInt(x.reste); } catch (_) { return 0n; } };
   for (const [x, s] of candidats) {
     if (!x || x.ferme || !moi || !Number.isInteger(x.day)) continue;
+    if (!(resteDe(x) > 0n)) continue;
     const o = !!(x.owner && moi === String(x.owner).toLowerCase());
     if (!(o || maintenant >= fermablePot(x.day))) continue;
     potAFermer = x; owner = o; sem = s; break;
@@ -6375,16 +6381,34 @@ async function bjTour() {
       potServi = !!tp;
       if (tp) {
         const v = tp.veille || null;
+        const lirePartsDe = async (jourId, sem) => { try { const r = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(jourId) + (sem ? '&week=1' : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); return r && r.ok ? r : null; } catch (_) { return null; } };
         let sharesDay = null, sharesWeek = null;
         if (v && v.ferme === true && /^J\d{4}-\d{2}-\d{2}$/.test(String(v.jourId))) {
-          const lireParts = async (sem) => { try { const r = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(v.jourId) + (sem ? '&week=1' : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); return r && r.ok ? r : null; } catch (_) { return null; } };
-          sharesDay = await lireParts(false);
-          if (bjDernierJour(v.day)) sharesWeek = await lireParts(true);
+          sharesDay = await lirePartsDe(v.jourId, false);
+          if (bjDernierJour(v.day)) sharesWeek = await lirePartsDe(v.jourId, true);
+        }
+        /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, point 3 cote brain) : le brain ne recevait que la veille — potClose / potSign ne
+         *   voyaient jamais J-2..J-7. Les jours SERVIS (tp.jours : ferme, reste, lus au minuteur du serveur) + ceux qui ont des signatures
+         *   gardees (tp.signes), J-1..J-7, jamais aujourd hui ; la veille a sa lecture ci-dessus (pas relue). Les parts ne sont lues que
+         *   pour un jour FERME dont le reste n est pas 0 (un pot vide ou tout reclame n a rien a signer) : jour + semaine si c est le dernier
+         *   jour d une semaine (le brain n y propose JAMAIS le mode jour). Au plus ~12 lectures servies (cache serveur) par tour. */
+        const jours = [], aujJ = Math.floor(Date.now() / 86400000), jidOk = (x) => /^J\d{4}-\d{2}-\d{2}$/.test(String(x));
+        const servis = (Array.isArray(tp.jours) ? tp.jours : []).filter((x) => x && Number.isInteger(x.day) && jidOk(x.jourId)).map((x) => ({ ...x }));
+        for (const x of (Array.isArray(tp.signes) ? tp.signes : [])) if (x && Number.isInteger(x.day) && jidOk(x.jourId) && !servis.some((y) => y.day === x.day)) servis.push({ jourId: x.jourId, day: x.day, ferme: true });
+        for (const x of servis.sort((a, b) => a.day - b.day)) {
+          if (x.day >= aujJ || x.day < aujJ - 7 || (v && Number(v.day) === x.day) || jours.some((y) => y.day === x.day)) continue;
+          const j = { day: x.day, jourId: x.jourId, ferme: typeof x.ferme === 'boolean' ? x.ferme : null, reste: x.reste === undefined ? null : x.reste, sharesDay: null, sharesWeek: null };
+          let reste = null; try { reste = j.reste === null ? null : BigInt(j.reste); } catch (_) { reste = null; }
+          if (j.ferme === true && reste !== 0n) {
+            j.sharesDay = await lirePartsDe(x.jourId, false);
+            if (bjDernierJour(x.day)) j.sharesWeek = await lirePartsDe(x.jourId, true);
+          }
+          jours.push(j);
         }
         /* ce que le pot d AUJOURD HUI tient deja, LU sur la chaine (dayPot) : un fund fait d un autre onglet ou appareil compte */
         const jourAuj = Math.floor(Date.now() / 86400000);
         const dayPotAuj = await bjDayPot(String(tp.contrat).toLowerCase(), jourAuj);
-        pot = { contract: String(tp.contrat).toLowerCase(), usdc: USDC_BASE, owner: v ? v.owner : null, veille: v, sharesDay, sharesWeek,
+        pot = { contract: String(tp.contrat).toLowerCase(), usdc: USDC_BASE, owner: v ? v.owner : null, veille: v, sharesDay, sharesWeek, jours,
           today: { day: jourAuj, dayPot: dayPotAuj === null ? null : dayPotAuj.toString() } };
       }
     }
@@ -6419,21 +6443,29 @@ async function bjTirageFrais() {
 }
 /* POT_SIGN (2026-10-18) : chaque part non signee -> eth_signTypedData_v4 du wallet CONNECTE (une signature de MESSAGE : pas de transaction,
  *   pas de gas, rien ne bouge), deposee sur /api/ticketpot/signature exactement comme attester-ticketpot.html (le serveur relit le signataire
- *   et n accepte que le verifier du contrat). Un refus du wallet ou du serveur arrete la serie. */
+ *   et n accepte que le verifier du contrat). Un refus du WALLET arrete la serie.
+ * ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 4) : un refus du SERVEUR (409 : une autre part de ce wallet deja signee et servie)
+ *   arretait la serie a chaque clic — les parts suivantes n etaient jamais signees. Il est note et la serie CONTINUE ; la fin dit chaque
+ *   refus. Un REFUSE du serveur est rendu (refusees) : la cle POT_SIGN_REFUS:<jour>[#S]:<wallet> est vue, le brain ne repropose plus
+ *   cette part ; une absence de reponse n est pas un refus (reproposee). */
 async function bjSignerParts(m, p, walletCarte) {
-  let faites = 0;
+  let faites = 0; const refusees = [];
   for (const s of p.sign.shares) {
     bcEtape(m, 'Sign the share of ' + courtAdr(s.wallet) + ' (' + usdcTexte(s.amount) + ' USDC) in your wallet…');
     let sig = null;
     try { sig = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [walletCarte, JSON.stringify(s.donnees)] }); }
-    catch (e) { bcEtape(m, 'Declined in your wallet — ' + faites + ' share(s) signed before, nothing more.', 'non'); return { ok: false, faites }; }
+    catch (e) { bcEtape(m, 'Declined in your wallet — ' + faites + ' share(s) signed before, nothing more.', 'non'); return { ok: false, faites, refusees, decline: true }; }
     let r = null;
     try { r = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.sign.jourId, wallet: s.wallet, signature: sig, week: p.sign.week }) }).then((x) => x.json()); } catch (_) { r = null; }
-    if (!r || !r.ok) { bcEtape(m, 'Refused by the server: ' + ((r && r.pourquoi) || 'no answer') + ' — ' + faites + ' share(s) stored before.', 'non'); return { ok: false, faites }; }
+    if (!r || !r.ok) { refusees.push({ wallet: String(s.wallet).toLowerCase(), refuse: !!r && r.etat === 'REFUSE', pourquoi: String((r && r.pourquoi) || 'no answer').slice(0, 140) }); continue; }
     faites += 1;
   }
+  if (refusees.length) {
+    bcEtape(m, faites + ' share(s) of ' + p.sign.jourId + ' stored; ' + refusees.length + ' not stored — ' + refusees.map((x) => courtAdr(x.wallet) + ': ' + x.pourquoi).join('; ') + '.', 'non');
+    return { ok: false, faites, refusees };
+  }
   bcEtape(m, faites + ' ' + (p.sign.week ? 'weekly ' : '') + 'share(s) of ' + p.sign.jourId + ' signed and stored — holders can claim them from the Game tab.', 'oui');
-  return { ok: true, faites };
+  return { ok: true, faites, refusees };
 }
 const BJ_TITRES = { ROLL: 'Roll', SETTLE: 'Settle', TAKE_MISSION: 'Claim a mission', POST_MISSION: 'Post a mission', BID_SKIN: 'Bid on a skin', BUY_SKIN: 'Buy a skin',
   DUEL_CREATE: 'Open a duel', DUEL_JOIN: 'Accept a duel', DUEL_SETTLE: 'Settle a duel', POT_CLOSE: 'Close yesterday\'s pot', POT_SIGN: 'Sign the pot shares', POT_FUND: 'Fund today\'s pot' };
@@ -6488,7 +6520,10 @@ function bjMontrer(p, rolls, walletCarte) {
     if (p.kind === 'POT_SIGN') {
       const s = await bjSignerParts(m, p, walletCarte);
       if (s.ok) { bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver(); }
-      fini(s.ok ? 'On — ' + s.faites + ' share(s) of ' + p.sign.jourId + ' signed.' : 'On — signing the shares stopped; ' + s.faites + ' stored, nothing more was signed.');
+      /* defaut 4 : une part REFUSEE par le serveur n est plus reproposee (la cle vue, lue par brain-jeu.js potSignDe) */
+      const refusVus = (s.refusees || []).filter((x) => x.refuse).map((x) => 'POT_SIGN_REFUS:' + p.sign.jourId + (p.sign.week ? '#S' : '') + ':' + x.wallet);
+      if (refusVus.length) { bj.seen.push(...refusVus); bj.seen = bj.seen.slice(-200); bjSauver(); }
+      fini(s.ok ? 'On — ' + s.faites + ' share(s) of ' + p.sign.jourId + ' signed.' : s.decline ? 'On — signing the shares stopped in your wallet; ' + s.faites + ' stored.' : 'On — ' + s.faites + ' share(s) stored, ' + (s.refusees || []).length + ' refused by the server' + (refusVus.length ? ' (not proposed again)' : '') + '.');
       return;
     }
     let r;
@@ -12705,12 +12740,34 @@ try {
     if (b !== a) localStorage.setItem(CLE_VITRINE, JSON.stringify(b));
   }
 } catch (_) { /* navigation privee : pas de vitrine retenue */ }
+/* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 2) : /api/paye dit ce que le TICKET DU JOUR a fait d un trade (ticket : CREDITE, ou
+ *   NON_LU / TROP_VIEUX + pourquoi) ; l app ne le lisait pas — un ticket non credite l etait en silence. Ce qui n est pas credite est dit,
+ *   court, sous la face du ticket (#jourTicketTxt), 3 h au plus ; un ticket credite efface la note. */
+let ticketPayeNote = null;
+function noteTicketPaye() {
+  try { return ticketPayeNote && Date.now() - ticketPayeNote.at < 3 * 3600000 ? ticketPayeNote.texte : ''; } catch (_) { return ''; }
+}
+function direTicketPaye(tk) {
+  if (!tk || typeof tk !== 'object') return;
+  if (tk.ok === true || tk.etat === 'CREDITE') { ticketPayeNote = null; return; }
+  const p = String(tk.pourquoi || 'it was not read').replace(/:? ?send it again in a moment\.?$/i, '').slice(0, 160);
+  ticketPayeNote = { at: Date.now(), texte: ' Last trade: ' + (tk.etat === 'NON_LU' ? 'not counted for a day ticket yet' : 'no day ticket') + ' — ' + p + '.' };
+  const e = $('#jourTicketTxt');
+  if (e && !String(e.textContent).includes(ticketPayeNote.texte)) e.textContent += ticketPayeNote.texte;
+}
+/* 2026-10-24 (defaut 2) : un ticket NON_LU (202) est renvoye jusqu a 5 fois, de plus en plus loin (8 s, 16 s… ~2 min en tout) : le
+ *   serveur garde le hash en attente et le renvoi le credite ; apres, la note le dit. Un autre 202 / 429 : 3 fois, 8 s, comme avant. */
 function signalerPaye(hash, ligne, essai = 0) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash || ''))) return;
   try {
     const r = vitrineActive();
     fetch('/api/paye?h=' + encodeURIComponent(hash) + '&l=' + encodeURIComponent(ligne || 'autre') + (INTERNE ? '&i=1' : '') + (r ? '&r=' + r : ''), { method: 'POST', keepalive: true })
-      .then((r) => { if ((r.status === 202 || r.status === 429) && essai < 3) setTimeout(() => signalerPaye(hash, ligne, essai + 1), 8000); })
+      .then(async (r) => {
+        let j = null; try { j = await r.json(); } catch (_) { j = null; }
+        const tk = j && j.ticket && typeof j.ticket === 'object' ? j.ticket : null, nonLu = !!tk && tk.etat === 'NON_LU';
+        if ((r.status === 202 || r.status === 429) && essai < (nonLu ? 5 : 3)) { setTimeout(() => signalerPaye(hash, ligne, essai + 1), nonLu ? 8000 * (essai + 1) : 8000); return; }
+        if (tk) direTicketPaye(tk);
+      })
       .catch(() => {});
   } catch (_) {}
 }

@@ -3991,6 +3991,9 @@ async function jourDuRecu(recu, maintenant = Date.now()) {
   if (maintenant - ms > AGE_MAX_TICKET_MS) return { ok: false, etat: 'TROP_VIEUX', pourquoi: 'this transaction is more than 48 h old (block ' + nb + ', ' + new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC): it no longer earns a day ticket' };
   return { ok: true, ms, jourId: jourDe(ms).id, bloc: nb };
 }
+/* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 3) : prixUsdPourPlan ne leve jamais, il rend null ; `|| 0` en faisait 0 $ : le
+ *   hash etait marque vu (revenu.vus), rien credite, aucun message — le ticket perdu en silence. Un prix (ETH ou d une action) NON LU ->
+ *   NON_LU dit (« price ») : /api/paye repond 202, le hash attend dans ticketsEnAttente et le renvoi le credite. Jamais 0 $ devine. */
 async function crediterVolumeJour({ h, ligne, tx, recu, v, internes }) {
   if (ligne !== 'hook_block' && ligne !== 'swap_action') return;
   revenu.volVus = revenu.volVus || {};
@@ -4000,15 +4003,19 @@ async function crediterVolumeJour({ h, ligne, tx, recu, v, internes }) {
   const bloc = await jourDuRecu(recu);
   if (!bloc.ok) return bloc;
   let usd = 0;
-  if (BigInt(vol.unitWei) > 0n) usd += Number(BigInt(vol.unitWei)) / 1e18 * (await prixUsdPourPlan(null) || 0);
-  if (vol.actions.length) usd += await valeurFraisUsd(vol.actions.map((x) => ({ devise: x.jeton, montant: x.montant })));
+  const pEth = BigInt(vol.unitWei) > 0n ? await prixUsdPourPlan(null) : 1, manques = [];
+  if (!(pEth > 0)) return { ok: false, etat: 'NON_LU', pourquoi: 'the ETH price was not read: send it again in a moment' };
+  if (BigInt(vol.unitWei) > 0n) usd += Number(BigInt(vol.unitWei)) / 1e18 * pEth;
+  if (vol.actions.length) usd += await valeurFraisUsd(vol.actions.map((x) => ({ devise: x.jeton, montant: x.montant })), manques);
+  if (manques.length) return { ok: false, etat: 'NON_LU', pourquoi: 'the price of a token of this trade was not read: send it again in a moment' };
   if (!(usd > 0)) return;
   revenu.volVus[h] = 1;
   revenu.jours = crediter(revenu.jours || {}, { saison: bloc.jourId, payeur: vol.payeur, hash: h, usd });
   revenuSale = true;
   return { ok: true, etat: 'CREDITE', jourId: bloc.jourId };
 }
-async function valeurFraisUsd(recus) {
+/* manques (optionnel, 2026-10-24 defaut 3) : recoit chaque devise dont le prix ou les decimales n ont pas ete lus (valeurUsd la compte 0) */
+async function valeurFraisUsd(recus, manques = null) {
   const prix = {}, decimales = {};
   for (const r of recus || []) {
     const d = String(r.devise).toLowerCase();
@@ -4018,6 +4025,7 @@ async function valeurFraisUsd(recus) {
     }
     if (decimalesCache.has(d)) decimales[d] = decimalesCache.get(d);
     prix[d] = d === WETH_SRV ? await prixUsdPourPlan(null) : await prixUsdPourPlan(d);
+    if (Array.isArray(manques) && (!(Number.isFinite(prix[d]) && prix[d] > 0) || !Number.isInteger(decimales[d]))) manques.push(d);
   }
   return valeurUsd(recus, { prix, decimales });
 }
@@ -6461,10 +6469,28 @@ function traiterRequete(req, res) {
       /* nos wallets de TEST connus (0x31e0… = le wallet de test de Phil, cite dans les rapports du canal) + ceux declares par l env */
       const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
       const v = verifierFrais({ tx, recu, internes, devises: devisesComptees([...POOLS_ACTIONS_AERODROME.keys()]) });
+      /* PASS SKIN (Phil 2026-10-17 soir) : un achat de skin VERIFIE dans le recu (mint au payeur + le prix arrive au wallet de frais) = des jours
+       *   de tickets garantis (JOURS_PASS_SKIN). Externes seulement ; un hash ne compte qu une fois. 2026-10-24 : les jours du pass partent du
+       *   jour du BLOC du mint (jourDuRecu) ; au-dela de 48 h, rien ; bloc illisible -> NON_LU (rien de marque).
+       * ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 5) : une fonction, pour que le RENVOI d un skin_mint en attente (frais de swap
+       *   verifie dans la meme tx, bloc illisible au 1er envoi) credite le pass — avant, le renvoi passait par crediterVolumeJour, qui ne fait
+       *   rien pour skin_mint : l attente etait effacee et le pass jamais credite. */
+      const crediterPass = async ({ tx, recu, internes }) => {
+        if ((revenu.passVus || {})[h]) return null;
+        const ps = passSkinVerifie({ tx, recu, skins: BLOCKSKINS_SRV, usdc: USDC_BASE, wallet: FEE_WALLET, prix: SKIN_MINT_USDC_SRV });
+        if (!(ps.ok && !internes.has(ps.payeur))) return null;
+        const blocPass = await jourDuRecu(recu);
+        if (!blocPass.ok) return blocPass;
+        revenu.passVus = { ...(revenu.passVus || {}), [h]: 1 };
+        revenu.passes = revenu.passes || {};
+        revenu.passes[ps.payeur] = [...new Set([...(revenu.passes[ps.payeur] || []), ...joursPass(blocPass.ms)])].sort();
+        revenuSale = true;
+        return { ok: true, etat: 'CREDITE', jourId: blocPass.jourId };
+      };
       /* le hash deja compte dont le ticket attend : seulement le ticket (la ligne gardee, pas celle du renvoi), jamais le frais une 2e fois */
       if (revenu.vus[h] && enAttenteTicket) {
         let tk = null;
-        try { tk = (await crediterVolumeJour({ h, ligne: enAttenteTicket.ligne, tx, recu, v, internes })) || null; } catch (_) { tk = { ok: false, etat: 'NON_LU', pourquoi: 'the day ticket of this transaction was not read: send it again in a moment' }; }
+        try { tk = (enAttenteTicket.ligne === 'skin_mint' ? await crediterPass({ tx, recu, internes }) : await crediterVolumeJour({ h, ligne: enAttenteTicket.ligne, tx, recu, v, internes })) || null; } catch (_) { tk = { ok: false, etat: 'NON_LU', pourquoi: 'the day ticket of this transaction was not read: send it again in a moment' }; }
         if (!tk || tk.etat !== 'NON_LU') { delete revenu.ticketsEnAttente[h]; revenuSale = true; }
         repondre(tk && tk.etat === 'NON_LU' ? 202 : 200, tk ? { ok: true, deja: true, ticket: tk } : { ok: true, deja: true });
         return;
@@ -6479,26 +6505,16 @@ function traiterRequete(req, res) {
         /* le volume se relira au prochain envoi du hash (ticketsEnAttente si le frais, lui, est compte ci-dessous) */
         if (ligne === 'hook_block' || ligne === 'swap_action') ticketTP = { ok: false, etat: 'NON_LU', pourquoi: 'the day ticket of this transaction was not read: send it again in a moment' };
       }
-      /* PASS SKIN (Phil 2026-10-17 soir) : un achat de skin VERIFIE dans le recu (mint au payeur + le prix arrive au wallet de frais) = 7 jours
-       *   de tickets garantis. Externes seulement ; un hash ne compte qu une fois. Avant la sortie sur frais : verifierFrais exige un swap.
-       *   2026-10-24 : les jours du pass partent du jour du BLOC du mint (jourDuRecu), plus de la reception ; au-dela de 48 h, rien. */
+      /* le PASS SKIN (crediterPass ci-dessus), avant la sortie sur frais : verifierFrais exige un swap */
       if (ligne === 'skin_mint' && !(revenu.passVus || {})[h]) {
-        const ps = passSkinVerifie({ tx, recu, skins: BLOCKSKINS_SRV, usdc: USDC_BASE, wallet: FEE_WALLET, prix: SKIN_MINT_USDC_SRV });
-        if (ps.ok && !internes.has(ps.payeur)) {
-          const blocPass = await jourDuRecu(recu);
-          if (!blocPass.ok) ticketTP = blocPass;
-          else {
-            revenu.passVus = { ...(revenu.passVus || {}), [h]: 1 };
-            revenu.passes = revenu.passes || {};
-            revenu.passes[ps.payeur] = [...new Set([...(revenu.passes[ps.payeur] || []), ...joursPass(blocPass.ms)])].sort();
-            revenuSale = true;
-            ticketTP = { ok: true, etat: 'CREDITE', jourId: blocPass.jourId };
-          }
-        }
+        const tkPass = await crediterPass({ tx, recu, internes });
+        if (tkPass) ticketTP = tkPass;
       }
       const avecTicket = (o) => (ticketTP ? { ...o, ticket: ticketTP } : o);
       revenu.tentatives[v.ok ? 'ok' : v.etat] = (revenu.tentatives[v.ok ? 'ok' : v.etat] || 0) + 1;
-      if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' ? 202 : 200, avecTicket({ ok: false, etat: v.etat, pourquoi: v.pourquoi })); return; }
+      /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 2) : un ticket du jour NON_LU (bloc ou prix illisible) repond 202, plus 200 —
+       *   l app (signalerPaye) ne renvoie que sur 202 / 429 : avec 200, le renvoi qui credite n arrivait jamais. */
+      if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' || (ticketTP && ticketTP.etat === 'NON_LU') ? 202 : 200, avecTicket({ ok: false, etat: v.etat, pourquoi: v.pourquoi })); return; }
       /* ⛔ chasse 2026-10-17 (HIGH, PoC) : `i=1` venait du CLIENT — n importe qui postait le hash d un autre avec i=1 (le premier post gagne)
        *   et lui retirait son ticket / sa ligne externe. Interne / externe se decide SEULEMENT par le wallet payeur (walletsInternes). */
       const verif = v;
@@ -6532,7 +6548,7 @@ function traiterRequete(req, res) {
       }
       revenuSale = true;
       console.log('[revenu]', jour, ligne, verif.externe ? 'EXTERNE' : 'interne', JSON.stringify(v.recus));
-      repondre(200, avecTicket({ ok: true, externe: verif.externe }));
+      repondre(ticketTP && ticketTP.etat === 'NON_LU' ? 202 : 200, avecTicket({ ok: true, externe: verif.externe }));
     } catch (e) {
       repondre(202, { ok: false, etat: 'NON_LU', pourquoi: 'the chain could not be read just now' });
     } finally { payesEnCours.delete(h); } })();

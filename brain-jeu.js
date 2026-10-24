@@ -231,7 +231,11 @@ export function prochaineProposition(etat = {}) {
         /* l owner qui n est PAS le verifier : une INFORMATION (le lien de la page verifier), montree UNE fois — la cle vue est honoree et
          *   l ordre continue (POT_FUND). Le verifier, lui, recoit la carte tant qu il reste des parts (au-dela de 50, la suivante revient). */
         if (!signe && vus.has(cle)) { pourquoiPas.push('reward pot: the shares of ' + jidHier + ' wait for the verifier wallet ' + verifier.slice(0, 6) + '…'); return null; }
-        const aSigner = src.parts.filter((p) => p && !p.signature && ADR.test(bas(p.wallet)) && (brut(p.amount) || 0n) > 0n && p.donnees && typeof p.donnees === 'object')
+        /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 4) : une part que le serveur a REFUSEE (409 : une autre part de ce wallet
+         *   deja signee et servie) est vue par l app (POT_SIGN_REFUS:<jour>[#S]:<wallet>) — jamais reproposee, sinon la meme carte revenait
+         *   a chaque tour pour une signature que le serveur refusera toujours. */
+        const aSigner = src.parts.filter((p) => p && !p.signature && ADR.test(bas(p.wallet)) && (brut(p.amount) || 0n) > 0n && p.donnees && typeof p.donnees === 'object'
+          && !vus.has('POT_SIGN_REFUS:' + jidHier + (week ? '#S' : '') + ':' + bas(p.wallet)))
           .map((p) => ({ wallet: bas(p.wallet), amount: String(brut(p.amount)), donnees: p.donnees }))
           .sort((a, b) => (a.wallet < b.wallet ? -1 : a.wallet > b.wallet ? 1 : 0)).slice(0, POT_SIGN_MAX);
         if (!aSigner.length) return null;
