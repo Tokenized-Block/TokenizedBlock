@@ -140,7 +140,10 @@ vu(J.KINDS.join() === 'ROLL,SETTLE,TAKE_MISSION,POST_MISSION,BID_SKIN,BUY_SKIN,D
 const DC = '0x' + 'e'.repeat(40), NVDA = '0x' + '7'.repeat(40), FACE = [0, 1, 2, 3, 4];
 const duel = (x = {}) => ({ id: '5', creator: AUTRE, token: USDC, stake: 1000000n, guessA: [1, 1, 1, 1, 1], expiresAt: T + 1800, blocCree: 900, joiner: null, guessB: null, targetBlock: null, settled: null, cancelled: false, refunded: false, ...x });
 const du = (list, rx = {}, x = {}) => base({ rules: regles({ rolls: false, skins: false, missions: false, postMissions: false, duels: true, maxDuelStakeUsdc: '2000000', ...rx }),
-  duels: { contract: DC, usdc: USDC, guess: FACE, expiresIn: 3600, block: 1000, list }, ...x });
+  duels: { contract: DC, usdc: USDC, guess: FACE, expiresIn: 3600, block: 1000, list, open: true }, ...x });
+/* 2026-10-24 (audit rolls-duels) : open = le regleur du serveur regle les duels ; absent ou faux -> ni JOIN ni CREATE, le refus le dit */
+vu(['DUEL_JOIN', 'DUEL_CREATE'].every((k) => [undefined, false, 'true'].every((o) => J.prochaineProposition({ ...du([duel()]), duels: { ...du([duel()]).duels, open: o } }).kind !== k))
+  && /automatic settler/.test(J.prochaineProposition({ ...du([duel()]), duels: { ...du([duel()]).duels, open: false } }).why), 'open absent / false / « true » en texte : ni DUEL_JOIN ni DUEL_CREATE, le pourquoi nomme le regleur');
 const dj = J.prochaineProposition(du([duel()]));
 vu(dj.kind === 'DUEL_JOIN' && dj.costUsdc === '1000000' && dj.cle === 'DUEL_JOIN:5' && memes(dj.calls, planJoin({ contrat: DC, duel: duel(), guess: FACE, moi: W, maintenant: T }).appels), 'duel ouvert a 1 USDC, plafond 2 : DUEL_JOIN = planJoin (approve EXACT + join), cout 1 USDC');
 vu(/1\.8 USDC/.test(dj.why) && /90 %/.test(dj.why) && /7 %/.test(dj.why) && /3 %/.test(dj.why) && /tie refunds both/i.test(dj.why), 'le pourquoi dit le gain (1.8 = 90 % de 2), 7 % / 3 % et l egalite : ' + dj.why.slice(0, 80));
@@ -175,6 +178,7 @@ vu(dr.kind === 'DUEL_SETTLE' && memes(dr.calls, planRefundDuel({ contrat: DC, id
 const de = J.prochaineProposition(du([duel({ creator: W, expiresAt: T - 1 })]));
 vu(de.kind === 'DUEL_SETTLE' && memes(de.calls, planRefundDuel({ contrat: DC, id: '5' }).appels), 'son duel jamais pris et expire : refundExpired (sa mise revient)');
 vu(J.prochaineProposition(du([pris({ targetBlock: 1000 })])).kind !== 'DUEL_SETTLE', 'cible pas encore passee : pas de settle (trop tot)');
+vu(J.prochaineProposition({ ...du([pris()]), duels: { ...du([pris()]).duels, open: false } }).kind === 'DUEL_SETTLE', 'duels FERMES (regleur absent) : son duel reglable reste propose (DUEL_SETTLE)');
 vu(J.prochaineProposition(du([pris({ creator: AUTRE, joiner: '0x' + '3'.repeat(40) })], { maxDuelStakeUsdc: '0' })).kind === 'NONE', 'le duel reglable de deux AUTRES wallets : le brain ne le propose pas');
 vu(J.prochaineProposition({ ...du([pris()], { maxDuelStakeUsdc: '0' }), seen: ['DUEL_SETTLE:5'] }).kind === 'NONE', 'un settle deja signe (cle vue) : pas re-propose (la liste servie retarde)');
 vu(J.prochaineProposition(du([pris({ id: '6', targetBlock: 760 }), pris({ id: '7', targetBlock: 995 })])).cle === 'DUEL_SETTLE:6', 'deux reglables : le plus pres de sa fin d abord (#6)');

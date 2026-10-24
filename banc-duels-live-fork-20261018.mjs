@@ -164,7 +164,7 @@ while (!gagne && essais < 8) {
   const s0 = await duelsServeur();
   const d0 = s0.duels.get(cr.id.toString()), t0 = await ts();
   /* un duel ouvert est prenable par N IMPORTE QUEL autre wallet (B ou un tiers) ; le createur, lui, ne peut que l annuler */
-  if (essais === 1) ok(d0 && APP.etatDuel(d0, s0.tete, t0).etat === 'OUVERT' && APP.actionsDuel(d0, B, s0.tete, t0).join() === 'JOIN' && APP.actionsDuel(d0, A, s0.tete, t0).join() === 'CANCEL' && APP.actionsDuel(d0, TIERS, s0.tete, t0).join() === 'JOIN' && APP.actionsDuel(d0, null, s0.tete, t0).join() === '',
+  if (essais === 1) ok(d0 && APP.etatDuel(d0, s0.tete, t0).etat === 'OUVERT' && APP.actionsDuel(d0, B, s0.tete, t0, true).join() === 'JOIN' && APP.actionsDuel(d0, A, s0.tete, t0).join() === 'CANCEL' && APP.actionsDuel(d0, TIERS, s0.tete, t0, true).join() === 'JOIN' && APP.actionsDuel(d0, TIERS, s0.tete, t0).join() === '' && APP.actionsDuel(d0, null, s0.tete, t0, true).join() === '',
     'duel #' + cr.id + ' relu comme le serveur : OUVERT ; B -> JOIN, un tiers -> JOIN, A (createur) -> CANCEL, sans wallet -> rien');
   const jo = await rejoindre(B, cr.id, gB);
   const d1 = await lireDuelChaine(cr.id);

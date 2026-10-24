@@ -133,7 +133,9 @@ import { appelPot as appelPotRolls, lireUint as lireUintRolls } from './rolls-je
  *   serveur (un import statique d un fichier absent = serveur MORT au demarrage). Export attendu : DUELS_DEPLOIEMENT { adresse, bloc,
  *   constructeur: { usdc, devWallet, rewardPool, guardian } } (ou `default`). */
 import { lireDuels, duelEnJson, filtreLogsDuels, TAILLE_FENETRE_LOGS as TAILLE_LOGS_DUELS, partage as partageDuel, MISE_MIN as MISE_MIN_DUEL,
-  EXPIRATION_MIN_S as EXP_MIN_DUEL, EXPIRATION_MAX_S as EXP_MAX_DUEL, FINIS as FINIS_DUEL, etatDuel as etatDuelSrv } from './duels-plan-app.js';
+  EXPIRATION_MIN_S as EXP_MIN_DUEL, EXPIRATION_MAX_S as EXP_MAX_DUEL, FINIS as FINIS_DUEL, etatDuel as etatDuelSrv, regleurCouvre } from './duels-plan-app.js';
+/* 2026-10-24 (audit rolls-duels) : les regles VIVANTES de BlockRolls (currentRules, rulesVersion, unitCreator, MAX_PRIZE) lues sur la chaine */
+import { lireReglesRolls, creerCacheRegles } from './rolls-regles.js';
 let DUELS_DEPLOIEMENT = null;
 import('./duels-deploiement.js').then((m) => { DUELS_DEPLOIEMENT = (m && (m.DUELS_DEPLOIEMENT || m.default)) || null; })
   .catch((e) => { if (!/Cannot find module|ERR_MODULE_NOT_FOUND/.test(String((e && e.code) || '') + String((e && e.message) || ''))) console.log('[duels] fiche illisible :', String((e && e.message) || e).slice(0, 160)); });
@@ -4184,6 +4186,13 @@ async function lirePotRollsSrv(contrat) {
   catch (_) { /* relu au prochain appel */ } finally { potRollsSrv.enVol = false; }
 }
 setInterval(() => { void crediterVolumeRolls(); }, 120000).unref?.();
+/* 2026-10-24 (audit rolls-duels) : les REGLES vivantes (currentRules + rulesVersion + unitCreator + MAX_PRIZE), lues au plus toutes les 30 s
+ *   (10 s apres un echec), servies si la derniere lecture reussie a moins de 2 min — sinon null (l app dit « could not be read »), JAMAIS la
+ *   fiche de deploiement. Lecture au demarrage et toutes les 60 s, en plus de chaque /api/tirage.
+ *   ⛔ APRES le setInterval de crediterVolumeRolls : test-volume-rolls-jour-bloc execute la tranche de source qui le precede. */
+const contratRollsFiche = /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null;
+const reglesRollsSrv = creerCacheRegles({ lire: () => lireReglesRolls({ rpc: rpcRails, contrat: contratRollsFiche }) });
+if (contratRollsFiche) { setTimeout(() => { void reglesRollsSrv.rafraichir(); }, 0).unref?.(); setInterval(() => { void reglesRollsSrv.rafraichir(); }, 60000).unref?.(); }
 /* ══ TICKETPOT (2026-10-18, LIVE) — le pot de la VEILLE lu sur la chaine toutes les 60 s (lireJour : ferme, potAtClose, reste, pause), servi
  *   dans /api/tirage.ticketpot. ⛔ AUCUNE cle ici : Phil signe les parts lui-meme avec le wallet verifier (0x37eb…) — le serveur ne signe rien
  *   et ne bouge rien. Sans fiche notee (adresse null) : null, et aucune lecture de chaine. En memoire ; une lecture ratee garde l etat d avant. */
@@ -4695,6 +4704,8 @@ const SERVIS = [
    *   config (la page recalcule et refuse une fiche alteree), les appels non signes (roll / pass / settle) et le pont app <-> contrat.
    *   ⛔ absent d ici = 404 = page morte (lecon integrer-sans-serie-complete, 11/10). */
   'deployer-blockrolls.html', 'blockrolls-deploiement.js', 'blockrolls-config.js', 'blockrolls-plan.js', 'rolls-jeu.js', 'rolls-en-attente.js',
+  /* 2026-10-24 : les regles VIVANTES de BlockRolls (lues avant chaque signature par app.html, et par frais-risques.js) */
+  'rolls-regles.js',
   /* 2026-10-18 : « Let the brain play » — la proposition suivante (pure), importee par app.html : absent d ici = page morte */
   'brain-jeu.js',
   /* 2026-10-18 : le Brain OS — nos lectures (safety, explain, wallet, gas), pur, importe par app.html : absent d ici = 404 = page morte */
@@ -6521,9 +6532,13 @@ function traiterRequete(req, res) {
     /* 2026-10-18 (revue adverse) : les 4 paliers (2/5 compris, lus dans la fiche), le pot LU sur le contrat (cache 30 s, null si pas lu —
      *   jamais un 0 ecrit) et le bloc de deploiement (l app relit les rolls en attente depuis lui) */
     const contratRolls = /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null;
-    if (contratRolls) void lirePotRollsSrv(contratRolls);
+    if (contratRolls) { void lirePotRollsSrv(contratRolls); void reglesRollsSrv.rafraichir(); }
+    /* 2026-10-24 (audit rolls-duels) : prizes / minScore = currentRules() LU (rolls-regles.js), avec sa version, le createur de UNIT (qui peut
+     *   les changer) et MAX_PRIZE ; non lus -> null (jamais les valeurs du constructeur : setRules les change) */
+    const rgR = contratRolls ? reglesRollsSrv.servi() : null;
     const rolls = { contrat: contratRolls,
-      prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: [rc.prize5, rc.prize4, rc.prize3, rc.prize2].map(String), minScore: rc.minScore,
+      prixRoll: String(rc.rollPrice || ''), prixPass: String(rc.passPrice || ''), passRolls: rc.passRolls, prizes: rgR ? rgR.prizes : null, minScore: rgR ? rgR.minScore : null,
+      regles: rgR ? { version: rgR.version, createur: rgR.createur, maxPrize: rgR.maxPrize, lu: rgR.lu } : null,
       bloc: contratRolls && Number.isSafeInteger(BLOCKROLLS_DEPLOIEMENT.bloc) ? BLOCKROLLS_DEPLOIEMENT.bloc : null,
       pot: contratRolls && potRollsSrv.brut !== null ? potRollsSrv.brut : null, potLu: contratRolls && potRollsSrv.lu ? new Date(potRollsSrv.lu).toISOString() : null };
     /* 2026-10-23 DENIM : le temps de bloc MESURE (null tant qu il ne l est pas) — l app en tire les durees des fenetres et son rythme de relecture */
@@ -6783,7 +6798,11 @@ function traiterRequete(req, res) {
     void lireDuelsSrv();
     const k = (DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT.constructeur) || {};
     const adrOk = (x) => (/^0x[0-9a-f]{40}$/i.test(String(x || '')) ? String(x).toLowerCase() : null);
-    const fiche = { contrat, bloc: Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) ? DUELS_DEPLOIEMENT.bloc : null, usdc: adrOk(k.usdc), devWallet: adrOk(k.devWallet), rewardPool: adrOk(k.rewardPool), regles };
+    /* 2026-10-24 (audit rolls-duels, option gratuite de celui qui rejoint) : l app ne propose de creer / rejoindre un duel QUE si le regleur du
+     *   serveur regle CE contrat (duels-plan-app.js regleurCouvre : ON et le contrat nomme dans etat().contrats) ; sinon regleDuels false */
+    const eReg = regleurSlots.etat();
+    const regleur = { etat: eReg.etat, adresse: eReg.adresse || null, regleDuels: regleurCouvre(eReg, contrat) };
+    const fiche = { contrat, bloc: Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) ? DUELS_DEPLOIEMENT.bloc : null, usdc: adrOk(k.usdc), devWallet: adrOk(k.devWallet), rewardPool: adrOk(k.rewardPool), regles, regleur };
     if (duelsSrv.contrat !== contrat || duelsSrv.tete === null) { rendreD({ ok: false, etat: 'NON_LU', ...fiche, pourquoi: duelsSrv.erreur || 'first read in progress' }); return; }
     const { duels, orphelins } = lireDuels({ logs: [...duelsSrv.logs.values()], contrat });
     const maintenant = Math.floor(Date.now() / 1000);

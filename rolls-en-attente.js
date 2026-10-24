@@ -106,3 +106,12 @@ export function tirageJourDu({ day, aujourdhui, buyers, dayPot, tete }) {
   if (e.etat === 'REGLABLE') return { action: 'TIRER', blocsRestants: e.blocsRestants, targetBlock: dayPot.targetBlock };
   return { action: 'FERMER', rearmer: true };
 }
+/* 2026-10-24 (audit rolls-duels, BlockRolls.sol:261-288) : drawDay ne marche que dans les 256 blocs apres le bloc cible ; passe ce delai,
+ *   closeDay re-arme sur un NOUVEAU bloc. Un acheteur qui voit que le hash ne le designe pas peut se taire et re-armer jusqu a etre tire
+ *   (banc forge de l auditeur : 4 acheteurs, tire au 5e essai, tout le pot de 20 USDC). La seule parade est qu un autre tire a temps : la
+ *   carte le dit en une ligne, a cote du bouton (qui marche pour n importe quel wallet). */
+/** la ligne de la carte du pass pour un tirage a faire (FERMER / ATTENDRE / TIRER) ; '' sinon. `fenetre` = « 256 blocks (…) », deja ecrit. */
+export function phraseFenetreTirage(action, fenetre) {
+  if (!['FERMER', 'ATTENDRE', 'TIRER'].includes(action) || !fenetre) return '';
+  return ' It must be drawn within ' + fenetre + ' after its draw block, or it re-arms on a new block; anyone can draw it with the draw button.';
+}

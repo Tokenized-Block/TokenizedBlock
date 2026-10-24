@@ -100,8 +100,10 @@ vu(D.etatDuel(prisD, 1000, T).etat === 'ATTENTE' && D.etatDuel(prisD, 1001, T).e
   && D.etatDuel(prisD, 1256, T).etat === 'REGLABLE' && D.etatDuel(prisD, 1257, T).etat === 'REMBOURSABLE', 'pris : ATTENTE a la cible, REGLABLE cible+1..cible+256, REMBOURSABLE a cible+257');
 vu(D.etatDuel({ ...prisD, settled: {} }, 1001, T).etat === 'REGLE' && D.etatDuel({ ...base, cancelled: true }, 1, T).etat === 'ANNULE' && D.etatDuel({ ...base, refunded: true }, 1, T).etat === 'REMBOURSE', 'regle / annule / rembourse : fini');
 vu(D.etatDuel(prisD, null, T).etat === 'NON_LU', 'pris, tete inconnue : NON_LU (jamais un etat devine)');
-vu(D.actionsDuel(base, A, 900, T).join() === 'CANCEL' && D.actionsDuel(base, B, 900, T).join() === 'JOIN' && D.actionsDuel(base, null, 900, T).length === 0, 'ouvert : le createur annule, un autre accepte, sans wallet rien');
-vu(D.actionsDuel(base, B, 900, T + 541).length === 0, 'ouvert a moins d une minute de la fin : pas de JOIN propose');
+vu(D.actionsDuel(base, A, 900, T, true).join() === 'CANCEL' && D.actionsDuel(base, B, 900, T, true).join() === 'JOIN' && D.actionsDuel(base, null, 900, T, true).length === 0, 'ouvert (duels ouverts) : le createur annule, un autre accepte, sans wallet rien');
+/* 2026-10-24 (audit rolls-duels) : sans regleur qui regle les duels (defaut), JOIN n est jamais propose ; CANCEL reste */
+vu(D.actionsDuel(base, B, 900, T).length === 0 && D.actionsDuel(base, B, 900, T, 'true').length === 0 && D.actionsDuel(base, A, 900, T).join() === 'CANCEL', 'duels fermes (defaut, ou « true » en texte) : pas de JOIN ; le createur annule toujours');
+vu(D.actionsDuel(base, B, 900, T + 541, true).length === 0, 'ouvert a moins d une minute de la fin : pas de JOIN propose');
 vu(D.actionsDuel(base, B, 900, T + 600).join() === 'REFUND' && D.actionsDuel(prisD, null, 1001, T).join() === 'SETTLE' && D.actionsDuel(prisD, null, 1257, T).join() === 'REFUND', 'expire : REFUND ; reglable : SETTLE (n importe qui) ; fenetre passee : REFUND');
 /* TOUJOURS UN CHEMIN DE RETOUR : a chaque tete de cible-3 a cible+400, un duel pris est soit en ATTENTE (temporaire), soit SETTLE, soit REFUND ;
  *   un duel non pris a toujours CANCEL (createur) ou REFUND (expire) */

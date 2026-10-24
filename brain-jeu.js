@@ -101,7 +101,8 @@ const usdcTxt = (v) => { const e = v / 1000000n, f = (v % 1000000n).toString().p
  *   rolls:    { contract, usdc, rollPrice, guess, pass: { rollsLeft, expiresAt } | null, pot, block (bloc actuel), pending: [{ rollId, targetBlock }] } | null,
  *   missions: { contract, usdc, claimable: [{ id, txHash, held, signature }], post: { cle, params, hold, poolManager } | null, mineOpen } | null,
  *   skins:    { list (decoderPage), block (le block du brain), usdc } | null,
- *   duels:    { contract, usdc, guess (une face NEUVE tiree par l app), expiresIn (s), block (bloc actuel), list: [duel (duels-plan-app.js)] } | null,
+ *   duels:    { contract, usdc, guess (une face NEUVE tiree par l app), expiresIn (s), block (bloc actuel), list: [duel (duels-plan-app.js)],
+ *               open (duelsOuverts : true SEULEMENT si le regleur du serveur regle les duels ; sinon ni JOIN ni CREATE) } | null,
  *   pot:      { contract, usdc, owner (LU), veille: /api/tirage.ticketpot.veille (porte verifier), today: { day, dayPot } (dayPot(aujourd hui) LU
  *               sur la chaine, null = non lu), sharesDay / sharesWeek: /api/ticketpot/parts (jour / &week=1, avec couverture.complete) } | null }
  *   rules.pot + rules.potDailyUsdc ; history porte { t, kind: 'POT_FUND', day, usdc } pour chaque fund SIGNE.
@@ -306,7 +307,10 @@ export function prochaineProposition(etat = {}) {
   if (regles.duels && D) {
     const plafondDuel = regles.maxDuelStakeUsdc;
     const usdcD = bas(D.usdc);
-    if (!ADR.test(usdcD)) pourquoiPas.push('duels: the USDC address is not known');
+    /* audit 2026-10-24 (duels-plan-app.js PHRASE_DUELS_FERMES) : ni JOIN ni CREATE tant que le serveur ne dit pas que son regleur regle les
+     *   duels (D.open = duelsOuverts(/api/duels), absent = ferme) ; DUEL_SETTLE (1b) reste propose */
+    if (D.open !== true) pourquoiPas.push('duels: new duels open once the automatic settler runs');
+    else if (!ADR.test(usdcD)) pourquoiPas.push('duels: the USDC address is not known');
     else if (refusGuess(D.guess).length) pourquoiPas.push('duels: no valid face to play with');
     else if (plafondDuel < MISE_MIN_DUEL) pourquoiPas.push('duels: the max stake is below the contract minimum (' + usdcTxt(MISE_MIN_DUEL) + ')');
     else if (solde === null) pourquoiPas.push('duels: your USDC balance was not read');

@@ -27,6 +27,7 @@ import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { DUELS_DEPLOIEMENT } from './duels-deploiement.js';
 import { SEUIL_VOLUME_JOUR_USD, JOURS_PASS_SEMAINE, BONUS_PASS_SEMAINE, JOURS_PASS_SKIN } from './tirage-saison.js';
 import { FRAIS_CONTRATS } from './frais-contrats.js';
+import { reglesValides } from './rolls-regles.js';
 
 const ADR = /^0x[0-9a-fA-F]{40}$/;
 const deploye = (a) => ADR.test(String(a || ''));
@@ -121,7 +122,15 @@ const pasDeploye = (quoi) => '<p class="note"><b class="etat">Not deployed yet.<
  * Le contenu HTML de la page. `C` = CHIFFRES (ou une copie modifiee par le test) ; `live` = /api/tirage ou null.
  */
 export function rendre(C, live) {
-  const h = C.hook, nb = C.naissance, ro = C.rolls, sk = C.skins, mi = C.missions, ti = C.tirage;
+  const h = C.hook, nb = C.naissance, sk = C.skins, mi = C.missions, ti = C.tirage;
+  /* 2026-10-24 (audit rolls-duels) : les gains et le score minimum sont ceux LUS sur le contrat (currentRules, servis par /api/tirage) quand
+   *   ils le sont — setRules les change ; sinon ceux de la fiche, DITS comme ceux du deploiement. Qui peut les changer : unitCreator() LU. */
+  const lr = live && live.rolls ? live.rolls : null;
+  const rgLu = lr && reglesValides({ prizes: lr.prizes, minScore: lr.minScore }) ? lr : null;
+  const ro = rgLu ? { ...C.rolls, prize5: BigInt(rgLu.prizes[0]), prize4: BigInt(rgLu.prizes[1]), prize3: BigInt(rgLu.prizes[2]), prize2: BigInt(rgLu.prizes[3]), minScore: rgLu.minScore } : C.rolls;
+  const rgMeta = rgLu && rgLu.regles ? rgLu.regles : null;
+  const createurLu = lr && lr.regles && /^0x[0-9a-fA-F]{40}$/.test(String(lr.regles.createur || '')) ? String(lr.regles.createur).toLowerCase() : null;
+  const maxLu = lr && lr.regles && /^\d+$/.test(String(lr.regles.maxPrize || '')) ? BigInt(lr.regles.maxPrize) : null;
   const E = esperanceRoll(ro);
   const evU = usdc4(E.uniforme), evM = usdc4(E.meilleur);
   const partPot = BigInt(ro.potShareBps), partDev = 10000n - partPot;
@@ -164,9 +173,11 @@ export function rendre(C, live) {
   ]) + (mi.deploye ? '' : pasDeploye('Missions: the contract is written and tested, not signed on Base. Nothing can be posted or paid yet.')));
 
   const jeux = carte('Game', 'Prizes, and what is real today', table([
-    ligne('Roll prizes', usdc(ro.prize2) + ' – ' + usdc(ro.prize5),
-      'Traits in common with the block\'s face, out of 5: 2 → ' + usdc(ro.prize2) + ', 3 → ' + usdc(ro.prize3) + ', 4 → ' + usdc(ro.prize4)
-      + ', 5 → ' + usdc(ro.prize5) + '; fewer than ' + ro.minScore + ' → nothing. Never more than the pot holds when the roll is settled.'),
+    ligne('Roll prizes', usdc([0n, 0n, ro.prize2, ro.prize3, ro.prize4][ro.minScore] ?? ro.prize5) + ' – ' + usdc(ro.prize5),
+      'Traits in common with the block\'s face, out of 5: ' + [[2, ro.prize2], [3, ro.prize3], [4, ro.prize4], [5, ro.prize5]].filter(([k]) => k >= ro.minScore).map(([k, p]) => k + ' → ' + usdc(p)).join(', ')
+      + '; fewer than ' + ro.minScore + ' → nothing. Never more than the pot holds when the roll is settled. '
+      + (rgLu ? 'Read from the contract by our server' + (rgMeta && rgMeta.version ? ' (rules version ' + esc(rgMeta.version) + ')' : '') + '.'
+        : 'These are the rules set at deployment: the contract\'s current rules were not read just now.')),
     ligne('Roll pot right now', potLu ? usdc(BigInt(live.rolls.pot)) : '—',
       potLu ? 'Read from the contract by our server' + (live.rolls.potLu ? ' at ' + esc(String(live.rolls.potLu).replace('T', ' ').slice(0, 16)) + ' UTC' : '') + '. It can be empty.'
         : 'The pot was not read just now. It can be empty.'),
@@ -176,7 +187,7 @@ export function rendre(C, live) {
       + (potSemLu ? 'Read from the TicketPot contract by our server (pot of ' + esc(String(ps.jourId).slice(1)) + ', the week\'s last day).' : 'The week\'s pot was not read just now.')),
     ligne('Week pass', jours(ti.joursPassSemaine * 86400), 'A ticket every day for ' + jours(ti.joursPassSemaine * 86400) + ' and ' + ti.bonusPassSemaine + ' bonus entries in that week\'s pot.'),
     ligne('Skin as a ticket', jours(ti.joursPassSkin * 86400), 'Minting a skin gives the ticket of the day it is minted.'),
-  ]) + '<p class="note">BlockRolls contract: ' + (deploye(ro.adresse) ? lienBase(ro.adresse) + ' (no owner, no withdrawal: USDC leaves only through a winning settle or a day draw).' : 'not deployed.') + '</p>'
+  ]) + '<p class="note">BlockRolls contract: ' + (deploye(ro.adresse) ? lienBase(ro.adresse) + ' (it has no withdraw function: USDC leaves only through a winning settle or a day draw; who can change the prizes is under Risks).' : 'not deployed.') + '</p>'
     + (C.ticketpot.deploye ? '' : pasDeploye('TicketPot (the week\'s reward pot, shared by entries): no contract on Base.'))
     + (C.duels.deploye ? '' : pasDeploye('Duels: no contract exists for them in this app.')));
 
@@ -187,6 +198,14 @@ export function rendre(C, live) {
     + '<li><b>' + (passPerd ? 'A pass loses on average too.' : 'A pass, on average:') + '</b> Its ' + ro.passRolls + ' rolls pay back at most ' + usdc4(passRollsEv) + ' USDC on average; your share of the pass pot is that day\'s pot divided by its buyers — '
       + usdc(passPot) + ' per pass when each buyer bought one. Together that ' + (passPerd ? 'stays below' : 'is not below') + ' its price of ' + usdc(ro.passPrice) + '.</li>'
     + '<li><b>Settle in time.</b> A roll must be settled within ' + ro.fenetreBlocs + ' blocks of its target block, or it is lost — no refund (a refund would let players reveal only their wins). Anyone can settle it for you; the prize always goes to the player.</li>'
+    /* 2026-10-24 (audit rolls-duels, BlockRolls.sol:193-200 + PoC test_V_SetRulesDrain) : la STRUCTURE, jamais une intention */
+    + '<li><b>Who can change the roll prizes.</b> One wallet can: the UNIT creator, as the contract reads it from the TokenizedBlock hook ('
+      + (createurLu ? lienBase(createurLu) + ', read by our server' : 'not read just now') + '). It can set each prize up to '
+      + (maxLu !== null ? usdc(maxLu) : 'a cap fixed in the contract (not read just now)') + ' and the minimum score from 2 to 5; a change applies only to rolls made after it. '
+      + 'Nothing in the contract stops that wallet from raising the prizes and then rolling itself, so the roll pot is not out of its reach.</li>'
+    /* 2026-10-24 (audit rolls-duels, BlockRolls.sol:261-288 + PoC test_V_DayPotGrind) */
+    + '<li><b>The day-pass draw can be re-armed.</b> After a UTC day ends, anyone can close it, which picks a draw block; the draw must then be made within ' + ro.fenetreBlocs
+      + ' blocks after that block. If nobody draws in time, the day can be closed again on a new block. A buyer who sees that the hash does not pick them can wait and close again until it does, unless someone else draws in time. Anyone can draw from the Game tab.</li>'
     + '<li><b>Where the luck comes from.</b> Faces come from the hash of a Base block, which the Base sequencer produces. That is the same trust as every block on Base, said rather than hidden.</li>'
     + '<li><b>Launchpad tokens that tax resale.</b> Some third-party launchpad pools on Base use a hook that charges sellers. We measured hooks reporting taxBps() = ' + MESURE_LAUNCHPAD.taxBps
       + ': a wallet off the hook\'s list got back ' + MESURE_LAUNCHPAD.retourHorsListe + ' of its sale in a test on a copy of the chain, and ' + MESURE_LAUNCHPAD.poolsVides + ' of ' + MESURE_LAUNCHPAD.poolsLues

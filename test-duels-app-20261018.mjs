@@ -25,7 +25,7 @@ const checks = {
     /* trois envois : une action de duel, un Challenge, un Claim — tous par envoyerAppels (le chemin des rolls payes) */
     return (b.match(/envoyerAppels\(/g) || []).length === 3 &&!/envoyerDepuisWallet|envoyerLotAtomique|eth_sendTransaction|wallet_sendCalls|bcSigner\(/.test(b); },
   relitAvantEnvoi: (t) => { const a = entre(t, 'async function actionDuel(', 'async function defierDuel(');
-    const i1 = a.indexOf('await lireDuelsServis(true)'), i2 = a.indexOf("rpc('eth_blockNumber'"), i3 = a.indexOf('Duels.actionsDuel(d, moi, tete, maintenant).includes(action)'), i4 = a.indexOf('envoyerAppels(plan.appels, c)');
+    const i1 = a.indexOf('await lireDuelsServis(true)'), i2 = a.indexOf("rpc('eth_blockNumber'"), i3 = a.indexOf('Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action)'), i4 = a.indexOf('envoyerAppels(plan.appels, c)');
     return i1 > 0 && i2 > i1 && i3 > i2 && i4 > i3; },
   defiVerifie: (t) => { const a = entre(t, 'async function defierDuel(', "$('#duelsListe').addEventListener");
     const iA = a.indexOf('await admisDuel(contrat, token)'), iS = a.indexOf('bcSolde(token, c)'), iE = a.indexOf('envoyerAppels(plan.appels, c)');
@@ -60,7 +60,7 @@ const mutants = [
   ['aucunBoutonMort', '<button type="button" class="bouton" id="duelDefier">', '<button type="button" class="bouton" id="duelDefier" disabled>'],
   ['pasDeBalayage', "try { const j = await fetch('/api/duels'", "try { await rpc('eth_getLogs', []); const j = await fetch('/api/duels'"],
   ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n  if (!r || r.etat !== \'CONFIRME\' || !r.hash) { dit(phraseNonConfirme(r, \'Not sent\'));', 'const r = await envoyerDepuisWallet(plan.appels, c);\n  if (!r || r.etat !== \'CONFIRME\' || !r.hash) { dit(phraseNonConfirme(r, \'Not sent\'));'],
-  ['relitAvantEnvoi', 'if (!Duels.actionsDuel(d, moi, tete, maintenant).includes(action))', 'if (false)'],
+  ['relitAvantEnvoi', 'if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action))', 'if (false)'],
   ['defiVerifie', 'if (solde < mise)', 'if (false)'],
   ['marqueSansTexte', 'm.innerHTML = DUEL_EPEES;', "m.innerHTML = DUEL_EPEES; m.textContent = '#' + d.id;"],
   ['clicVersLaCarte', 'e.preventDefault(); e.stopPropagation();\n  ouvrirDuel(m.dataset.duel);', 'ouvrirDuel(m.dataset.duel);'],

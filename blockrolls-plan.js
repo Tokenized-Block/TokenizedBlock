@@ -34,7 +34,8 @@ export const EV_DAY_DRAWN = 'DayDrawn(uint32,address,bytes32,uint256,uint256)';
 /* le jour UTC d un horodatage, comme today() du contrat */
 export const jourDe = (ts) => Math.floor(Number(ts) / 86400);
 
-/* les defauts du constructeur (a relire sur le contrat deploye : ce sont des immuables, pas des promesses de ce module).
+/* les defauts du constructeur (a relire sur le contrat deploye ; pas des promesses de ce module). Les prix du roll et du pass sont des
+ * immuables ; les GAINS et le score minimum NE le sont PAS : setRules (createur de UNIT) les change — rolls-regles.js lit les regles vivantes.
  * HOOK = le hook 7030 (tokenomics.js, jamais tape) ; UNIT_POOL_ID = poolIdDe(ETH/UNIT, fee 0, tick 200, hook) -- recalcule par
  * test-blockrolls-plan, PAS une valeur de confiance. Le createur de UNIT (celui qui fixe les paliers) est LU au hook, jamais ecrit ici. */
 export const HOOK = HOOK_7030.toLowerCase();

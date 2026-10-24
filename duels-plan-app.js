@@ -255,13 +255,33 @@ export function etatDuel(d, tete, maintenant) {
 }
 export const FINIS = Object.freeze(['REGLE', 'ANNULE', 'REMBOURSE']);
 
-/** ce que `moi` peut faire sur ce duel MAINTENANT (seulement ce que le contrat accepterait) : JOIN, CANCEL, SETTLE, REFUND — ou rien */
-export function actionsDuel(d, moi, tete, maintenant) {
+/* ══ L OPTION GRATUITE DU JOUEUR QUI REJOINT (audit 2026-10-24, contracts/src/BlockDuels.sol:191-240) : settle() ne marche que dans les 256
+ *   blocs apres la cible, refundExpired() rend les DEUX mises en entier ensuite. Celui qui rejoint est en ligne par definition et voit le hash
+ *   2 blocs apres : il regle s il gagne, se tait s il perd, et se fait rembourser. Banc forge de l auditeur : 2000 duels, joueur qui rejoint
+ *   +454,4 USDC, createur -568 USDC (= gains x mise). Le contrat est deploye et immuable : la seule parade est un regleur du SERVEUR qui regle
+ *   chaque duel dans sa fenetre. Tant qu il ne regle pas CE contrat, l app ne propose NI d ouvrir NI de rejoindre un duel (pas de bouton mort :
+ *   caches, une phrase le dit). Les duels deja en jeu gardent Settle / Refund / Cancel.
+ * ⛔ FAIL-CLOSED : « le regleur regle ce contrat » = son etat est ON ET il nomme ce contrat dans etat().contrats (une adresse, ou un objet
+ *   { contrat, etat } dont l etat est ON s il est donne). Un regleur ON qui ne nomme pas le contrat (le regleur des slots d aujourd hui) ne
+ *   compte pas. */
+export const PHRASE_DUELS_FERMES = 'New duels open once the automatic settler runs: without it, a player who joins and loses could let the duel expire and get a refund.';
+/** le regleur du serveur (son etat(), tel que /sante le publie) regle-t-il ce contrat ? */
+export function regleurCouvre(e, contrat) {
+  const c = bas(contrat);
+  if (!e || e.etat !== 'ON' || !ADR.test(c) || !Array.isArray(e.contrats)) return false;
+  return e.contrats.some((x) => (typeof x === 'string' ? bas(x) === c : !!x && bas(x.contrat) === c && (x.etat === undefined || x.etat === 'ON')));
+}
+/** /api/duels -> creer et rejoindre un duel sont-ils proposes ? seulement si le serveur dit que son regleur regle ce contrat */
+export const duelsOuverts = (j) => !!(j && j.regleur && j.regleur.regleDuels === true);
+
+/** ce que `moi` peut faire sur ce duel MAINTENANT (seulement ce que le contrat accepterait) : JOIN, CANCEL, SETTLE, REFUND — ou rien.
+ *  `ouverts` (duelsOuverts) : JOIN n est propose QUE s il vaut true (defaut : ferme) ; CANCEL / SETTLE / REFUND ne dependent pas de lui. */
+export function actionsDuel(d, moi, tete, maintenant, ouverts = false) {
   const e = etatDuel(d, tete, maintenant), m = bas(moi), cre = bas(d && d.creator);
   if (e.etat === 'OUVERT') {
     if (!ADR.test(m)) return [];
     if (m === cre) return ['CANCEL'];
-    return e.resteS >= MARGE_JOIN_S ? ['JOIN'] : [];
+    return ouverts === true && e.resteS >= MARGE_JOIN_S ? ['JOIN'] : [];
   }
   if (e.etat === 'REGLABLE') return ['SETTLE'];
   if (e.etat === 'EXPIRE' || e.etat === 'REMBOURSABLE') return ['REFUND'];

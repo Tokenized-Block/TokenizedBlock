@@ -4218,7 +4218,9 @@ import { planReclamer, planPoster } from './missions-plan.js';
 import { planRoll, planRolls, planPass, planRollAvecPass, planRollsAvecPass, planSettle, planSettleMany, lireRolled, lireRolledTous, lireSettled, lireSettledTous, etatReglement, planCloseDay, planDrawDay, lireDayDrawn, jourDe as jourContrat, FENETRE as FENETRE_ROLLS } from './blockrolls-plan.js';
 import { guessDepuisApparence, tirerFaceDeRoll, appelPass, lirePass, passActif, appelPot, lireUint, usdc as usdcTexte } from './rolls-jeu.js';
 /* 2026-10-18 (revue adverse) : les rolls PAYES en attente de settle, relus sur la chaine — le chemin de retour qui manquait */
-import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu } from './rolls-en-attente.js';
+import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, appelBuyerCount, appelDayPot, lireDayPot, tirageJourDu, phraseFenetreTirage } from './rolls-en-attente.js';
+/* 2026-10-24 (audit rolls-duels) : les gains et le score minimum VIVANTS (currentRules), relus avant chaque signature ; non lus -> dit, aucun montant */
+import * as Rg from './rolls-regles.js';
 /* 2026-10-23 DENIM (Base : 2 s -> 200 ms/bloc, mainnet vise novembre 2026) : le temps de bloc MESURE par le serveur (/api/tirage tempsDeBloc),
  *   jamais suppose — les fenetres de 256 blocs disent leur duree a ce temps, et le Game se relit assez souvent pour une fenetre de ~51 s */
 import { blocsPour, secondesPour, dureeTexte, texteBlocs, intervalleSondageMs, pasAttenteBlocMs } from './temps-de-bloc.js';
@@ -4882,8 +4884,8 @@ function poserBoutonsRolls(t, c) {
   const bpr = $('#jourRoll'); if (bpr) bpr.hidden = on;
   /* les tuiles de choix disent le PRIX servi (jamais tape) ; un score deja peint sur la tuile Roll n est pas ecrase */
   if (rollsCfg) {
-    const pz = Array.isArray(rollsCfg.prizes) && rollsCfg.prizes.length ? rollsCfg.prizes[0] : null;
-    if ($('#jbRoll') && $('#jbRoll').textContent === '⚄') jb('jbRollTxt', usdcTexte(rollsCfg.prixRoll) + ' USDC' + (pz ? ' · win up to ' + usdcTexte(pz) : ''));
+    const pz = Rg.gainMax(rollsCfg);
+    if ($('#jbRoll') && $('#jbRoll').textContent === '⚄') jb('jbRollTxt', usdcTexte(rollsCfg.prixRoll) + ' USDC' + (pz !== null ? ' · win up to ' + usdcTexte(pz) : ''));
     jb('jbPass', usdcTexte(rollsCfg.prixPass) + ' USDC'); jb('jbPassTxt', '7 days of tickets + ' + rollsCfg.passRolls + ' rolls');
   }
   if (on) { bp.textContent = 'Roll · ' + usdcTexte(rollsCfg.prixRoll) + ' USDC'; bd.textContent = 'Week pass · ' + usdcTexte(rollsCfg.prixPass) + ' USDC'; }
@@ -4893,8 +4895,9 @@ function poserBoutonsRolls(t, c) {
   const rg = $('#regleRolls');
   if (rg && rollsCfg) rg.textContent = 'Roll: each roll draws a new random face for you; the block after next draws its face; traits in common, out of 5. With a wallet, a roll costs '
     + usdcTexte(rollsCfg.prixRoll) + ' USDC (or one of the ' + rollsCfg.passRolls + ' rolls of a ' + usdcTexte(rollsCfg.prixPass) + ' USDC Week pass) and a winning score pays a fixed prize from the roll pot ('
-    + (rollsCfg.prizes || []).map((p, i) => (5 - i) + '/5 → ' + usdcTexte(p)).join(', ') + ' USDC) — never more than the pot holds'
-    + (rollsCfg.pot != null ? ' (' + usdcTexte(rollsCfg.pot) + ' USDC at the last read)' : '') + '. Without a wallet the roll is practice: no prize.';
+    + (Rg.texteGains(rollsCfg, usdcTexte) || Rg.PHRASE_GAINS_NON_LUS.toLowerCase()) + ') — never more than the pot holds'
+    + (rollsCfg.pot != null ? ' (' + usdcTexte(rollsCfg.pot) + ' USDC at the last read)' : '') + '. The UNIT creator wallet can change the prizes (up to '
+    + (rollsCfg.regles && rollsCfg.regles.maxPrize ? usdcTexte(rollsCfg.regles.maxPrize) + ' USDC' : 'a cap set in the contract') + ' each); a change applies to rolls made after it. Without a wallet the roll is practice: no prize.';
   if (e && !on) e.hidden = true;
   if (!on) { const r = $('#rollsRegler'); if (r) r.hidden = true; const j = $('#jourTirerJour'); if (j) j.hidden = true; }
 }
@@ -4957,8 +4960,8 @@ async function rollPaye() {
     const avecPass = passActif(pass);
     const plan = avecPass ? planRollAvecPass({ contrat, guess, pass }) : planRoll({ contrat, usdc: USDC_BASE, guess, rollPrice: BigInt(rollsCfg.prixRoll) });
     if (plan.etat !== 'PRET') { dit('Not rolled: ' + plan.pourquoi); return; }
-    const pot = await lirePotRolls(contrat);
-    dit((avecPass ? 'Rolling with your pass (' + pass.rollsLeft + ' left) — sign in your wallet…' : 'Roll ' + usdcTexte(rollsCfg.prixRoll) + ' USDC: half to the pot, half to TokenizedBlock. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…') + phrasePot(pot));
+    const av = await lireAvantRoll(contrat);
+    dit((avecPass ? 'Rolling with your pass (' + pass.rollsLeft + ' left) — sign in your wallet…' : 'Roll ' + usdcTexte(rollsCfg.prixRoll) + ' USDC: half to the pot, half to TokenizedBlock. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…') + av.phrase);
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not rolled')); return; }
     const lus = await recusLogs(r);
@@ -5214,9 +5217,9 @@ async function autoRollLot(c) {
   const guesses = faces.map((x) => x.guess);
   const plan = avecPass ? planRollsAvecPass({ contrat, guesses, pass, passRolls: rollsCfg.passRolls }) : planRolls({ contrat, usdc: USDC_BASE, guesses, rollPrice: BigInt(rollsCfg.prixRoll) });
   if (plan.etat !== 'PRET') { dit('Not rolled: ' + plan.pourquoi); return; }
-  const pot = await lirePotRolls(contrat);
+  const av = await lireAvantRoll(contrat);
   dit((avecPass ? 'Rolling ' + n + ' times with your pass (' + pass.rollsLeft + ' left) — one signature if your wallet groups them…'
-    : n + ' paid rolls × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then ' + n + ' rolls (half to the pot, half to TokenizedBlock) — one signature if your wallet groups them, else ' + plan.appels.length + '…') + phrasePot(pot));
+    : n + ' paid rolls × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then ' + n + ' rolls (half to the pot, half to TokenizedBlock) — one signature if your wallet groups them, else ' + plan.appels.length + '…') + av.phrase);
   const r = await envoyerAppels(plan.appels, c);
   if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not rolled')); return; }
   const lus = await recusLogs(r), rolled = lireRolledTous(lus.logs, contrat);
@@ -5254,19 +5257,29 @@ async function lirePassSur(contrat, c) {
 async function lirePotRolls(contrat) {
   try { return lireUint(await rpc('eth_call', [{ to: contrat, data: appelPot() }, 'latest'])); } catch (_) { return null; }
 }
-/* ce que le pot permet, dit AVANT la signature : rien s il couvre le plus gros prix, sinon « a win pays at most X » */
+/* 2026-10-24 (audit rolls-duels) : AVANT chaque signature d un roll, le pot ET les regles sont relus sur le contrat (currentRules) ; la phrase
+ *   dit les gains LUS, ou qu ils n ont pas pu l etre (rollsCfg.prizes / minScore passent a null : aucun montant perime n est montre ensuite) */
+async function lireAvantRoll(contrat) {
+  const [pot, rg] = await Promise.all([lirePotRolls(contrat), Rg.lireReglesRolls({ rpc, contrat }).catch(() => null)]);
+  if (rollsCfg) { rollsCfg.prizes = rg ? rg.prizes : null; rollsCfg.minScore = rg ? rg.minScore : null; if (rg) rollsCfg.regles = { version: rg.version, createur: rg.createur, maxPrize: rg.maxPrize, lu: new Date().toISOString() }; }
+  return { pot, phrase: Rg.phraseGainsAvantSignature(rg, usdcTexte) + phrasePot(pot) };
+}
+/* ce que le pot permet, dit AVANT la signature : rien s il couvre le plus gros prix, sinon « a win pays at most X » (gains non lus : le pot seul) */
 function phrasePot(pot) {
-  const p = plafondPot(pot, (rollsCfg && rollsCfg.prizes && rollsCfg.prizes[0]) || 0);
+  const max = Rg.gainMax(rollsCfg);
+  const p = plafondPot(pot, max === null ? 0 : max);
   if (p.etat === 'NON_LU') return ' The roll pot could not be read just now: a win pays at most what the pot holds when it is settled.';
-  if (p.etat === 'PLAFONNE') return ' The pot holds ' + usdcTexte(p.pot) + ' USDC: a win pays at most ' + usdcTexte(p.pot) + ' USDC.';
+  if (p.etat === 'PLAFONNE' || max === null) return ' The pot holds ' + usdcTexte(p.pot) + ' USDC: a win pays at most ' + usdcTexte(p.pot) + ' USDC.';
   return '';
 }
-/* le mot juste d un settle : gagne / score gagnant mais pot vide / sous le minimum */
+/* le mot juste d un settle : gagne / score gagnant mais pot vide / sous le minimum (minimum non lu : « nothing paid », sans deviner pourquoi) */
 function phraseSettle(st) {
-  const k = motSettle({ score: st.score, payout: st.payout, minScore: rollsCfg ? rollsCfg.minScore : 2 });
-  return k === 'GAGNE' ? 'you won ' + usdcTexte(st.payout) + ' USDC, paid to your wallet'
-    : k === 'POT_VIDE' ? 'a winning score, but the pot was empty: nothing paid'
-    : 'no prize this time (min ' + (rollsCfg ? rollsCfg.minScore : 2) + '/5)';
+  const ms = rollsCfg && Number.isInteger(rollsCfg.minScore) ? rollsCfg.minScore : null;
+  if (st.payout > 0n) return 'you won ' + usdcTexte(st.payout) + ' USDC, paid to your wallet';
+  if (ms === null) return 'nothing paid';
+  const k = motSettle({ score: st.score, payout: st.payout, minScore: ms });
+  return k === 'POT_VIDE' ? 'a winning score, but the pot was empty: nothing paid'
+    : 'no prize this time (min ' + ms + '/5)';
 }
 /* un envoi non confirme : EN_ATTENTE (avec ou sans hash) n est PAS « pas envoye » ; PARTIEL renvoie au wallet */
 function phraseNonConfirme(r, prefixe) {
@@ -5402,7 +5415,8 @@ async function peindreTirageJourPass() {
     const d = { ...tirageJourDu({ day, aujourdhui, buyers: buyers === null ? null : Number(buyers), dayPot, tete }), day, buyers, dayPot, tete };
     bt.hidden = !(d.action === 'FERMER' || d.action === 'TIRER');
     bt.textContent = d.action === 'TIRER' ? 'Draw yesterday\'s pass pot' : 'Close and draw yesterday\'s pass pot';
-    const peint = (t) => { p.hidden = false; p.textContent = t; p.dataset.peint = '1'; };
+    /* 2026-10-24 (audit rolls-duels) : la fenetre du tirage et « n importe qui peut tirer », dites a chaque etat a tirer */
+    const peint = (t) => { p.hidden = false; p.textContent = t + phraseFenetreTirage(d.action, texteBlocs(FENETRE_ROLLS, sParBlocApp)); p.dataset.peint = '1'; };
     const pot = dayPot ? usdcTexte(dayPot.pot) + ' USDC' : '';
     if (d.action === 'FERMER') peint('Yesterday\'s pass pot: ' + pot + ' among ' + buyers + ' pass buyer' + (Number(buyers) === 1 ? '' : 's') + ', not drawn yet' + (d.rearmer ? ' (its last draw window passed: close it again)' : '') + '. Anyone may close the day and draw it — the whole pot goes to the buyer a Base block hash picks, never to whoever clicks.');
     else if (d.action === 'ATTENDRE') peint('Yesterday\'s pass pot (' + pot + ') is armed: block ' + d.targetBlock.toLocaleString('en-US') + ' decides, ' + d.blocsAvant + ' block(s) to go.');
@@ -5816,7 +5830,7 @@ const faceDuelHtml = (g, lettre) => { try { const a = Duels.apparenceDepuisGuess
 const faceBlocHtml = (hash) => { try { const f = faceRevelee(hash); return f ? logoSvg(paramsLogoDepuisApparence(f, '★')) : ''; } catch (_) { return ''; } };
 const BOUTON_DUEL = { JOIN: 'Accept · a new random face', CANCEL: 'Cancel · full refund', SETTLE: 'Settle', REFUND: 'Refund in full' };
 /** une ligne de duel : deux faces (et celle du bloc une fois regle), la mise, l etat, l action possible MAINTENANT (jamais un bouton mort) */
-async function ligneDuel(d, moi, tete, maintenant) {
+async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
   const li = document.createElement('div');
   li.className = 'duelLigne'; li.dataset.duel = d.id;
   const implique = moi && (d.creator === moi || d.joiner === moi);
@@ -5853,7 +5867,7 @@ async function ligneDuel(d, moi, tete, maintenant) {
   else if (e.etat === 'REMBOURSE') t2.textContent = 'Refunded in full.';
   else t2.textContent = 'Its state could not be read just now.';
   li.append(faces, t1, t2);
-  const acts = Duels.actionsDuel(d, moi, tete, maintenant);
+  const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts);
   if (acts.length) {
     const z = document.createElement('div'); z.className = 'jourEtapes';
     for (const a of acts) { const b = document.createElement('button'); b.type = 'button'; b.className = 'bouton' + (a === 'CANCEL' ? ' sec' : ''); b.dataset.action = a; b.dataset.duel = d.id; b.textContent = BOUTON_DUEL[a]; z.append(b); }
@@ -5874,13 +5888,16 @@ async function peindreDuels() {
   /* UN JEU A LA FOIS : la tuile vient d apparaitre ou de partir — le choix est repose (retombe sur tirCarte sans elle) */
   try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }
   for (const id of ['#bjDuelsLab', '#bjMaxDuelLab']) { const x = $(id); if (x) x.hidden = !on; }
-  if (regle) regle.textContent = on ? 'Open on Base.' : 'Opens with its contract.';
+  if (regle) regle.textContent = on ? (Duels.duelsOuverts(j) ? 'Open on Base.' : 'On Base; new duels open once the automatic settler runs.') : 'Opens with its contract.';
   if (!on) { liste.textContent = ''; return null; }
   void remplirJetonsDuel(contrat);
   /* revue adverse 2026-10-18 (MOYEN) : liste NON LUE -> pas de « Challenge » ni de formulaire (un duel cree sans liste lisible n aurait
    *   aucun Cancel/Settle/Refund a l ecran) ; ils reviennent avec la lecture */
   if (!j.ok) { liste.textContent = ''; jb('jbDuels', '—'); jb('jbDuelsTxt', 'not read'); etat.textContent = j.etat === 'NON_LU' ? 'The duels are being read on chain — back in a few seconds.' : 'The duels could not be read just now.'; $('#duelDefier').hidden = true; const fo = $('#duelForm'); if (fo) fo.hidden = true; return null; }
-  { const fo = $('#duelForm'); if (fo) fo.hidden = false; }
+  /* audit 2026-10-24 : creer / rejoindre SEULEMENT si le regleur du serveur regle les duels (Duels.duelsOuverts) ; sinon formulaire, Challenge
+   *   et Accept caches, une phrase le dit ; Settle / Refund / Cancel des duels en jeu restent */
+  const ouv = Duels.duelsOuverts(j);
+  { const fo = $('#duelForm'); if (fo) fo.hidden = !ouv; }
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null, tete = Number(j.tete), maintenant = Math.floor(Date.now() / 1000);
   const duels = duelsDe(j), recents = duelsDe(j, 'recents');
@@ -5892,13 +5909,13 @@ async function peindreDuels() {
   const miensFinis = recents.filter((d) => moi && (d.creator === moi || d.joiner === moi)).slice(0, 3);
   const autresFinis = recents.filter((d) => !miensFinis.includes(d)).slice(0, 3);
   const lignes = [];
-  for (const d of [...vivants, ...miensFinis, ...autresFinis]) lignes.push(await ligneDuel(d, moi, tete, maintenant));
+  for (const d of [...vivants, ...miensFinis, ...autresFinis]) lignes.push(await ligneDuel(d, moi, tete, maintenant, ouv));
   liste.textContent = ''; liste.append(...lignes);
   const aRegler = duels.filter((d) => ['REGLABLE', 'REMBOURSABLE', 'EXPIRE'].includes(etat2(d)));
-  etat.textContent = (ouverts.length ? ouverts.length + ' open challenge' + (ouverts.length === 1 ? '' : 's') + '.' : 'No open challenge right now — open one below.')
+  etat.textContent = (!ouv ? Duels.PHRASE_DUELS_FERMES : ouverts.length ? ouverts.length + ' open challenge' + (ouverts.length === 1 ? '' : 's') + '.' : 'No open challenge right now — open one below.')
     + (aRegler.length ? ' ' + aRegler.length + ' duel' + (aRegler.length === 1 ? '' : 's') + ' to settle or refund — anyone may.' : '')
     + (j.partiel ? ' Still reading older blocks (checked up to ' + Number(j.jusqua).toLocaleString('en-US') + ').' : '') + (c ? '' : ' Connect a wallet to play.');
-  $('#duelDefier').hidden = !c;
+  $('#duelDefier').hidden = !c || !ouv;
   void peindreDusDuels(contrat, moi);
   if (duelsCfg.focus) { const f = liste.querySelector('[data-duel="' + duelsCfg.focus + '"]'); if (f) { try { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} } duelsCfg.focus = null; }
   return { contrat, duels, recents, tete };
@@ -5946,7 +5963,7 @@ async function actionDuel(id, action, li) {
   let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
   if (!Number.isSafeInteger(tete)) { dit('The chain head could not be read — nothing was asked.'); return; }
   const maintenant = Math.floor(Date.now() / 1000);
-  if (!Duels.actionsDuel(d, moi, tete, maintenant).includes(action)) { dit('Not possible any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ') — nothing was asked.'); void peindreDuels(); return; }
+  if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action)) { dit(action === 'JOIN' && !Duels.duelsOuverts(j) ? Duels.PHRASE_DUELS_FERMES + ' Nothing was asked.' : 'Not possible any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ') — nothing was asked.'); void peindreDuels(); return; }
   let plan = null, face = null;
   if (action === 'JOIN') {
     try { face = tirerFaceDeRoll(); } catch (_) { face = null; }
@@ -6000,6 +6017,7 @@ async function defierDuel() {
     if (!contrat) { dit('Duels open with their contract.'); return; }
     /* revue adverse 2026-10-18 : sans liste LUE, rien n est demande — le duel cree ne serait pas visible, ni annulable, ici */
     if (!j.ok) { dit('The duel list could not be read just now — nothing was asked (your duel would have no Cancel here until it is read).'); return; }
+    if (!Duels.duelsOuverts(j)) { dit(Duels.PHRASE_DUELS_FERMES + ' Nothing was asked.'); void peindreDuels(); return; }
     const token = String($('#duelJeton').value || USDC_BASE).toLowerCase();
     const ok = await admisDuel(contrat, token);
     if (ok !== true) { dit(ok === false ? symDuel(token) + ' is not admitted by the duels contract — nothing was asked.' : 'Whether ' + symDuel(token) + ' is admitted could not be read — nothing was asked.'); return; }
@@ -6280,7 +6298,7 @@ async function bjTour() {
         let tete = null, guessD = null;
         try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
         try { const f = tirerFaceDeRoll(); guessD = f ? f.guess : null; } catch (_) { guessD = null; }
-        if (Number.isSafeInteger(tete)) duels = { contract: cd, usdc: USDC_BASE, guess: guessD, expiresIn: 3600, block: tete, list: duelsDe(jd) };
+        if (Number.isSafeInteger(tete)) duels = { contract: cd, usdc: USDC_BASE, guess: guessD, expiresIn: 3600, block: tete, list: duelsDe(jd), open: Duels.duelsOuverts(jd) };
       }
     }
     /* LE POT DES RECOMPENSES (2026-10-18) : l owner et la veille SERVIS (/api/tirage.ticketpot, lus sur la chaine par le serveur) ; un jour
@@ -25754,8 +25772,14 @@ async function bcCommandeDuel() {
   if (!j.ok) { bcEtape(m, j.etat === 'NON_LU' ? 'The duels are being read on chain — try again in a few seconds.' : 'The duels could not be read just now.', 'non'); return; }
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000), duels = duelsDe(j);
-  const prenables = duels.filter((d) => { const e = Duels.etatDuel(d, j.tete, maintenant); return e.etat === 'OUVERT' && e.resteS >= Duels.MARGE_JOIN_S && d.creator !== moi; }).slice(0, 5);
   const miens = moi ? duels.filter((d) => (d.creator === moi || d.joiner === moi) && Duels.etatDuel(d, j.tete, maintenant).etat !== 'OUVERT') : [];
+  /* audit 2026-10-24 : ni Accept ni Challenge tant que le regleur du serveur ne regle pas les duels ; les siens restent dits */
+  if (!Duels.duelsOuverts(j)) {
+    bcEtape(m, Duels.PHRASE_DUELS_FERMES);
+    if (miens.length) bcEtape(m, 'Yours in play: #' + miens.map((d) => d.id + ' (' + Duels.etatDuel(d, j.tete, maintenant).etat.toLowerCase() + ')').join(', #') + ' — settle, refund or cancel in the Duels card of the Game tab.');
+    return;
+  }
+  const prenables = duels.filter((d) => { const e = Duels.etatDuel(d, j.tete, maintenant); return e.etat === 'OUVERT' && e.resteS >= Duels.MARGE_JOIN_S && d.creator !== moi; }).slice(0, 5);
   bcEtape(m, prenables.length ? prenables.length + ' open challenge' + (prenables.length === 1 ? '' : 's') + ' you can accept — winner 90%, community reward pool 7%, TokenizedBlock 3%; a tie refunds both:' : 'No open challenge to accept right now.');
   for (const d of prenables) {
     const p = Duels.partage(d.stake), reste = Number(d.expiresAt) - maintenant;
@@ -25773,7 +25797,8 @@ async function bcAccepterDuel(m, id) {
   if (!contrat || !d) { bcEtape(m, 'Duel #' + id + ' could not be read again — nothing is proposed.', 'non'); return; }
   let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
   const maintenant = Math.floor(Date.now() / 1000);
-  if (!Number.isSafeInteger(tete) || !Duels.actionsDuel(d, moi, tete, maintenant).includes('JOIN')) { bcEtape(m, 'Duel #' + id + ' cannot be accepted any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ').', 'non'); return; }
+  if (!Duels.duelsOuverts(j)) { bcEtape(m, Duels.PHRASE_DUELS_FERMES + ' Nothing is proposed.', 'non'); return; }
+  if (!Number.isSafeInteger(tete) || !Duels.actionsDuel(d, moi, tete, maintenant, true).includes('JOIN')) { bcEtape(m, 'Duel #' + id + ' cannot be accepted any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ').', 'non'); return; }
   let face = null; try { face = tirerFaceDeRoll(); } catch (_) { face = null; }
   if (!face) { bcEtape(m, 'Your face could not be drawn — nothing is proposed.', 'non'); return; }
   let solde = null; try { solde = await bcSolde(d.token, compte); } catch (_) { solde = null; }
@@ -26008,8 +26033,9 @@ async function bcCommandeGame() {
   if (rc) {
     let pot = null; try { pot = lireUint(await rpc('eth_call', [{ to: rc.contrat, data: appelPot() }, 'latest'])); } catch (_) { pot = null; }
     /* Phil 2026-10-18 15:45 : « le brain donne mauvaise info » — dire en une ligne COMMENT on gagne et COMBIEN, lu sur la fiche + le pot lu */
-    const pz = Array.isArray(rc.prizes) ? rc.prizes.map((x) => usdcTexte(x)) : [];
-    bcEtape(m, 'Rolls: ' + usdcTexte(rc.prixRoll) + ' USDC each, up to 10 in one go. Traits in common with the block: ' + (pz.length >= 4 ? '5 → ' + pz[0] + ', 4 → ' + pz[1] + ', 3 → ' + pz[2] + ', 2 → ' + pz[3] + ' USDC' : 'see the Game tab') + '. The roll pot holds ' + (pot === null ? '(not read)' : usdcTexte(pot) + ' USDC') + ' — a win pays at most what it holds.');
+    /* 2026-10-24 : les gains LUS sur le contrat (currentRules, servis par /api/tirage), ou « could not be read » — jamais la fiche */
+    const gz = Rg.texteGains(rc, usdcTexte);
+    bcEtape(m, 'Rolls: ' + usdcTexte(rc.prixRoll) + ' USDC each, up to 10 in one go. Traits in common with the block: ' + (gz || Rg.PHRASE_GAINS_NON_LUS.toLowerCase()) + '. The roll pot holds ' + (pot === null ? '(not read)' : usdcTexte(pot) + ' USDC') + ' — a win pays at most what it holds.');
     bcEtape(m, 'Week pass ' + usdcTexte(rc.prixPass) + ' USDC: your daily ticket for 7 days, 3 bonus entries in the week\'s pot, and ' + rc.passRolls + ' rolls for 24 h.');
   } else bcEtape(m, 'Pot: none yet — practice rolls are free; paid rolls (0.50 USDC) open with their contract.');
   const rolls = r && r.ok && Array.isArray(r.rolls) ? r.rolls.slice(-5) : null;
@@ -26053,9 +26079,9 @@ async function bcCommandeRoll(n) {
   const avecPass = passActif(pass), guesses = faces.map((x) => x.guess);
   const plan = avecPass ? planRollsAvecPass({ contrat, guesses, pass, passRolls: rollsCfg.passRolls }) : planRolls({ contrat, usdc: USDC_BASE, guesses, rollPrice: BigInt(rollsCfg.prixRoll) });
   if (plan.etat !== 'PRET') { bcEtape(m, 'Not planned: ' + plan.pourquoi, 'non'); return; }
-  const pot = await lirePotRolls(contrat);
+  const av = await lireAvantRoll(contrat);
   bcEtape(m, 'Guess = a new random face per roll (' + guesses.map((x) => x.join(', ')).join(' · ') + '). ' + (avecPass ? n + ' roll' + (n > 1 ? 's' : '') + ' on your pass (' + pass.rollsLeft + ' left) — no payment.'
-    : n + ' roll' + (n > 1 ? 's' : '') + ' × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then the roll' + (n > 1 ? 's' : '') + '. Half to the pot, half to TokenizedBlock.') + phrasePot(pot));
+    : n + ' roll' + (n > 1 ? 's' : '') + ' × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then the roll' + (n > 1 ? 's' : '') + '. Half to the pot, half to TokenizedBlock.') + av.phrase);
   for (const a of plan.appels) bcEtape(m, a.quoi);
   bcEtape(m, 'Each step is one signature here. Once the block is in, the Game tab shows “Settle pending rolls” — one signature settles them all, within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' (the prize is always yours).');
   bcBoutons(m, [['Sign in your wallet', async () => {

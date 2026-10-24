@@ -102,9 +102,12 @@ const cles = [...page.matchAll(/data-k="(\w+)"/g)].map((m) => m[1]);
 ok(Object.keys(mots).every((k) => cles.includes(k)) && cles.every((k) => k in mots) && /for \(const e of document\.querySelectorAll\('b\[data-k\]'\)\) e\.textContent = MOTS\[e\.dataset\.k\]/.test(script),
   'C chaque chiffre de la page est un data-k rempli depuis MOTS (derive de D.constructeur) : ' + cles.length + ' emplacements, aucun chiffre tape');
 ok(!/0\.50 USDC|5 USDC for 5|10 USDC a pass/.test(page.replace(/<script[\s\S]*<\/script>/, '')), 'C aucun prix n est ecrit en dur dans le HTML (ils viennent de l enregistrement)');
-ok(/No owner\. Nobody can take the pots/.test(page) && /No refund\./.test(page) && /about 8\.5 minutes today, about 51 seconds once Base moves to 200 ms blocks \(Denim\)/.test(page)
+/* 2026-10-24 (audit rolls-duels) : « Nobody can take the pots » / « The creator cannot touch the pots » etaient FAUX (setRules puis roll) :
+ *   la page dit la structure — pas de fonction de retrait, et le createur de UNIT peut monter les gains puis jouer */
+ok(/No owner and no withdraw function/.test(page) && !/Nobody can take the pots|cannot touch the pots|no way back out of the pot/i.test(page)
+  && /nothing stops that wallet from raising the prizes and then rolling itself, so the roll pot is not out of its reach/.test(page) && /No refund\./.test(page) && /about 8\.5 minutes today, about 51 seconds once Base moves to 200 ms blocks \(Denim\)/.test(page)
   && /the Base sequencer, which builds the blocks, is the one party that could/.test(page) && /only by the creator of UNIT as the TokenizedBlock hook names it/.test(page) && /at most 1000 USDC a prize, a higher tier never pays less than a lower one, minimum score 2 to 5/.test(page),
-  'C le texte dit : pas d owner, pas de remboursement, 256 blocs (8,5 min / 51 s Denim), le sequenceur, le createur de UNIT et ses bornes');
+  'C le texte dit : pas d owner ni de retrait, ce que peut le createur de UNIT (monter les gains puis jouer), pas de remboursement, 256 blocs (8,5 min / 51 s Denim), le sequenceur, ses bornes');
 const sol = lire('contracts/src/BlockRolls.sol');
 ok(/SETTLE_WINDOW = 256;/.test(sol) && /MAX_PRIZE = 1000_000000;/.test(sol) && /MIN_SCORE_FLOOR = 2;/.test(sol) && /p2 <= p3 && p3 <= p4 && p4 <= p5/.test(sol) && /BANDS = 6;/.test(sol) && /ORBITS = 10;/.test(sol) && /FACETS = 19;/.test(sol) && /MATERIALS = 9;/.test(sol) && /ORNAMENTS = 8;/.test(sol),
   'C chaque borne annoncee (256 blocs, 1000 USDC, paliers ordonnes, score 2..5, 6/10/19/9/8) est une constante du contrat');

@@ -52,9 +52,9 @@ b[data-k]{color:var(--or)}
   <h2>What is fixed, and what is not</h2>
   <div class="carte sur">
     <ul>
-      <li>No owner. Nobody can take the pots: the roll pot leaves only through winning rolls, the day pot only through the day's draw.</li>
+      <li>No owner and no withdraw function: the roll pot leaves only through winning rolls, the day pot only through the day's draw.</li>
       <li>No refund. A roll not settled within <b data-k="window">…</b> blocks after its target block is lost — about 8.5 minutes today, about 51 seconds once Base moves to 200 ms blocks (Denim). Anyone can settle any roll, in batches.</li>
-      <li>The prizes and the minimum winning score can be changed, but only by the creator of UNIT as the TokenizedBlock hook names it, within hard bounds (at most 1000 USDC a prize, a higher tier never pays less than a lower one, minimum score 2 to 5), and only for rolls made after the change. The creator cannot touch the pots.</li>
+      <li>The prizes and the minimum winning score can be changed, but only by the creator of UNIT as the TokenizedBlock hook names it, within hard bounds (at most 1000 USDC a prize, a higher tier never pays less than a lower one, minimum score 2 to 5), and only for rolls made after the change. The creator has no withdraw call, but nothing stops that wallet from raising the prizes and then rolling itself, so the roll pot is not out of its reach.</li>
       <li>The face comes from the hash of a Base block. No player, no server and no creator chooses it; the Base sequencer, which builds the blocks, is the one party that could. The same trust as today's draw.</li>
       <li>The face is computed on chain exactly like the app computes it: the same keccak, the same six colour bands, ten orbits, nineteen facets, nine materials and eight ornaments.</li>
     </ul>
@@ -86,7 +86,7 @@ b[data-k]{color:var(--or)}
 
   <h2>Fund the pot (optional)</h2>
   <div class="carte">
-    <p class="note">The first winners can only be paid what the pot holds. You can seed the roll pot with USDC from the connected wallet: an exact approval, then the deposit. There is no way back out of the pot.</p>
+    <p class="note">The first winners can only be paid what the pot holds. You can seed the roll pot with USDC from the connected wallet: an exact approval, then the deposit. A deposit cannot be withdrawn: it leaves the pot only through winning rolls.</p>
     <p>
       <button type="button" id="bFonds" class="sec" disabled>Fund the pot with <span id="dFondsMontant">50</span> USDC</button>
     </p>
