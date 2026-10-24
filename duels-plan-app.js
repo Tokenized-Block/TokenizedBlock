@@ -261,15 +261,17 @@ export const FINIS = Object.freeze(['REGLE', 'ANNULE', 'REMBOURSE']);
  *   +454,4 USDC, createur -568 USDC (= gains x mise). Le contrat est deploye et immuable : la seule parade est un regleur du SERVEUR qui regle
  *   chaque duel dans sa fenetre. Tant qu il ne regle pas CE contrat, l app ne propose NI d ouvrir NI de rejoindre un duel (pas de bouton mort :
  *   caches, une phrase le dit). Les duels deja en jeu gardent Settle / Refund / Cancel.
- * ⛔ FAIL-CLOSED : « le regleur regle ce contrat » = son etat est ON ET il nomme ce contrat dans etat().contrats (une adresse, ou un objet
- *   { contrat, etat } dont l etat est ON s il est donne). Un regleur ON qui ne nomme pas le contrat (le regleur des slots d aujourd hui) ne
- *   compte pas. */
+ * ⛔ FAIL-CLOSED : « le regleur regle ce contrat » = son etat global est ON (ni OFF, ni ARRETE) ET etat().contrats.duels — la forme
+ *   PUBLIEE par slots-regleur.js etat() : contrats = { slots, duels: { contrat, configure, ... }, rolls } — est configure (=== true) et son
+ *   contrat (resolu, en minuscules) est CE contrat. Revue rolls-duels-ui 2026-10-24 : la 1re version attendait un TABLEAU que le regleur ne
+ *   publie pas -> les duels ne s ouvraient jamais. Toute autre forme (tableau, adresse seule, contrat null) ne compte pas. */
 export const PHRASE_DUELS_FERMES = 'New duels open once the automatic settler runs: without it, a player who joins and loses could let the duel expire and get a refund.';
 /** le regleur du serveur (son etat(), tel que /sante le publie) regle-t-il ce contrat ? */
 export function regleurCouvre(e, contrat) {
   const c = bas(contrat);
-  if (!e || e.etat !== 'ON' || !ADR.test(c) || !Array.isArray(e.contrats)) return false;
-  return e.contrats.some((x) => (typeof x === 'string' ? bas(x) === c : !!x && bas(x.contrat) === c && (x.etat === undefined || x.etat === 'ON')));
+  if (!e || e.etat !== 'ON' || !ADR.test(c) || !e.contrats || typeof e.contrats !== 'object') return false;
+  const d = e.contrats.duels;
+  return !!d && typeof d === 'object' && d.configure === true && bas(d.contrat) === c;
 }
 /** /api/duels -> creer et rejoindre un duel sont-ils proposes ? seulement si le serveur dit que son regleur regle ce contrat */
 export const duelsOuverts = (j) => !!(j && j.regleur && j.regleur.regleDuels === true);

@@ -32,9 +32,16 @@ const A = '0x' + 'a1'.repeat(20), B = '0x' + 'b1'.repeat(20);
 const couvre = (e, c = DC) => essai(() => D.regleurCouvre(e, c));
 ok(typeof D.regleurCouvre === 'function' && couvre({ etat: 'OFF', pourquoi: 'SLOTS_KEEPER_KEY is not set', adresse: null }) === false, 'regleur OFF (la forme de /sante aujourd hui) : ne couvre pas les duels');
 ok(couvre({ etat: 'ON', adresse: B, contrat: AUTRE_C }) === false && couvre({ etat: 'ON', contrats: [] }) === false, 'regleur ON des slots seulement (aucun contrats[] qui nomme les duels) : ne couvre pas');
-ok(couvre({ etat: 'ON', contrats: [DC.toUpperCase().replace('0X', '0x')] }) === true && couvre({ etat: 'ON', contrats: [{ contrat: DC, etat: 'ON' }] }) === true && couvre({ etat: 'ON', contrats: [{ contrat: DC }] }) === true,
-  'regleur ON qui nomme le contrat des duels (adresse, ou { contrat, etat ON }) : couvre');
-ok(couvre({ etat: 'ON', contrats: [{ contrat: DC, etat: 'ARRETE' }] }) === false && couvre({ etat: 'ARRETE', contrats: [DC] }) === false && couvre({ etat: 'ON', contrats: [AUTRE_C] }) === false && couvre({ etat: 'ON', contrats: [DC] }, '0x12') === false && couvre(null) === false,
+/* 2026-10-24 (revue rolls-duels-ui, 2e tour) : la forme est celle que slots-regleur.js etat() PUBLIE — contrats = { slots, duels: { contrat,
+ *   configure, ... }, rolls } ; le tableau de la 1re version n est publie par aucun regleur et ne compte plus. Le VRAI etat() est execute dans
+ *   test-duels-gate-fix2-20261024.mjs (creerRegleur sur un faux noeud). */
+const reel = (duels, etat = 'ON') => ({ etat, contrats: { slots: { contrat: AUTRE_C }, duels, rolls: { contrat: null, configure: false } } });
+ok(couvre(reel({ contrat: DC, configure: true, suivis: 0 })) === true && couvre(reel({ contrat: DC.toUpperCase().replace('0X', '0x'), configure: true })) === true,
+  'regleur ON dont contrats.duels nomme CE contrat, configure : couvre');
+ok(couvre({ etat: 'ON', contrats: [DC] }) === false && couvre({ etat: 'ON', contrats: [{ contrat: DC, etat: 'ON' }] }) === false && couvre(reel({ contrat: DC, configure: false })) === false
+  && couvre(reel({ contrat: DC, configure: 'true' })) === false && couvre(reel(null)) === false && couvre(reel({ contrat: null, configure: true })) === false,
+  'tableau (forme jamais publiee), duels non configures, configure en texte, contrat null : ne couvre pas');
+ok(couvre(reel({ contrat: DC, configure: true }, 'ARRETE')) === false && couvre(reel({ contrat: DC, configure: true }, 'OFF')) === false && couvre(reel({ contrat: AUTRE_C, configure: true })) === false && couvre(reel({ contrat: DC, configure: true }), '0x12') === false && couvre(null) === false,
   'arrete (globalement ou pour ce contrat), autre contrat, contrat mal forme, pas d etat : ne couvre pas');
 const ouv = (j) => essai(() => D.duelsOuverts(j));
 ok(typeof D.duelsOuverts === 'function' && ouv({ regleur: { regleDuels: true } }) === true && ouv({ regleur: { regleDuels: false } }) === false && ouv({ regleur: { regleDuels: 'true' } }) === false && ouv({}) === false && ouv(null) === false,

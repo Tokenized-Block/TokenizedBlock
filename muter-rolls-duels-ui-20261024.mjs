@@ -15,8 +15,9 @@ const vert = (banc, env = {}) => { try { execFileSync(process.execPath, [path.jo
 /* [module, variable, banc, nom, de, vers] */
 const M = [
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'regleur OFF couvre', "if (!e || e.etat !== 'ON' || !ADR.test(c)", 'if (!e || !ADR.test(c)'],
-  ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'sans contrats[] : couvre', '!Array.isArray(e.contrats)) return false;', '!Array.isArray(e.contrats)) return true;'],
-  ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'contrat ARRETE couvre', "(x.etat === undefined || x.etat === 'ON')", 'true'],
+  /* 2e tour (revue rolls-duels-ui) : regleurCouvre lit contrats.duels (la forme publiee par slots-regleur.js) ; ancres suivies */
+  ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'sans contrats : couvre', "typeof e.contrats !== 'object') return false;", "typeof e.contrats !== 'object') return true;"],
+  ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'duels non configures couvrent', 'd.configure === true && ', ''],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'regleDuels « true » en texte ouvre', 'j.regleur.regleDuels === true', '!!j.regleur.regleDuels'],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'actionsDuel ouvert par defaut', 'export function actionsDuel(d, moi, tete, maintenant, ouverts = false)', 'export function actionsDuel(d, moi, tete, maintenant, ouverts = true)'],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'JOIN sans garde', 'return ouverts === true && e.resteS >= MARGE_JOIN_S', 'return e.resteS >= MARGE_JOIN_S'],

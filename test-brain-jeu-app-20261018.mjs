@@ -67,7 +67,9 @@ const srcRefus = rs.replace(/\/\*[\s\S]*?\*\//g, '');
 const fabrique = (code) => new Function('bj', 'bjVol', 'compte', 'usdcTexte', code + '\nreturn bjRefusAuSigne;');
 const W = '0x' + '1'.repeat(40), maintenantS = Math.floor(Date.now() / 1000);
 const etatBj = (x = {}) => ({ on: true, budget: '10000000', depense: '0', maxH: 6, maxDuel: '1000000', duels: true, history: [], ...x });
-const refusDe = (code, p, x = {}) => fabrique(code)(etatBj(x), { carte: 3 }, W, (v) => String(v))(3, p, W);
+/* 2026-10-24 (revue rolls-duels-ui) : le Sign passe lu.duelsOuverts (bjDuelsRelus) ; ces lignes testent la MISE et l heure, duels ouverts.
+ *   La garde d ouverture elle-meme : test-duels-gate-fix2-20261024.mjs */
+const refusDe = (code, p, x = {}) => fabrique(code)(etatBj(x), { carte: 3 }, W, (v) => String(v))(3, p, W, { duelsOuverts: true });
 vu(refusDe(srcRefus, { kind: 'DUEL_JOIN', costUsdc: '1000000' }) === null, 'au Sign : un join a la mise max passe (null)');
 vu(/max duel stake/.test(String(refusDe(srcRefus, { kind: 'DUEL_JOIN', costUsdc: '1000001' }))), 'au Sign : un join au-dessus de la mise max est REFUSE');
 vu(/max duel stake/.test(String(refusDe(srcRefus, { kind: 'DUEL_CREATE', costUsdc: '2000000' }))), 'au Sign : un create au-dessus de la mise max est REFUSE');

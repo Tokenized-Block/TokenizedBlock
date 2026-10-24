@@ -5051,7 +5051,10 @@ async function passPaye() {
     dit('Week pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: your daily ticket for 7 UTC days from today (one a day, each = 1 entry in that week\'s reward pot) and 3 bonus entries in this week\'s pot, credited once the server reads your purchase on Base. '
       + 'On top, from the contract: ' + rollsCfg.passRolls + ' rolls for 24 h and an entry in today\'s pass draw; half to that pass-draw pot, half to TokenizedBlock. '
       + 'A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now — a pass-roll win pays at most that.')
-      + ' Sign ' + plan.appels.length + ' steps in your wallet…');
+      /* revue rolls-duels-ui 2026-10-24 : le risque du re-armement (BlockRolls closeDay / drawDay, PoC test_V_DayPotGrind) dit AVANT l achat */
+      + ' Anyone can draw the pass pot, but only within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' of its draw block; a missed draw can be re-armed, which lets a buyer retry until the hash picks them. ');
+    const lien = document.createElement('a'); lien.className = 'lienLearn'; lien.href = 'frais-et-risques.html'; lien.textContent = 'Fees & risks →';
+    e.append(lien, ' Sign ' + plan.appels.length + ' steps in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'No pass bought')); return; }
     dit('Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes). Today\'s pass pot goes whole to one buyer: after midnight UTC anyone (you too) closes the day and draws it here with “Close and draw yesterday\'s pass pot” — a Base block hash picks the buyer.');
@@ -6196,6 +6199,9 @@ function bjRefusAuSigne(id, p, walletCarte, lu = {}) {
   if (p.kind === 'ROLL') { const h = Math.floor(Date.now() / 1000) - 3600; if (bj.history.filter((x) => x.kind === 'ROLL' && Number(x.t) > h).length >= bj.maxH) return 'it would go over ' + bj.maxH + ' rolls this hour — nothing was sent.'; }
   /* DUELS (2026-10-18) : la mise relue contre le plafond de la regle, les duels toujours permis, un CREATE par heure glissante */
   if (/^DUEL_/.test(p.kind) && !bj.duels) return 'duels are not ticked any more — nothing was sent.';
+  /* revue rolls-duels-ui 2026-10-24 : creer / rejoindre SEULEMENT si les duels sont RELUS ouverts au Sign (lu.duelsOuverts, bjDuelsRelus) :
+   *   un regleur passe OFF ou ARRETE entre la proposition et le Sign ferme la carte ; DUEL_SETTLE n en depend pas */
+  if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && lu.duelsOuverts !== true) return 'new duels are not open just now (the automatic settler is not running for them, or the server could not be read) — nothing was sent.';
   if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && BigInt(p.costUsdc) > BigInt(bj.maxDuel)) return 'the stake is above your max duel stake (' + usdcTexte(bj.maxDuel) + ' USDC) — nothing was sent.';
   if (p.kind === 'DUEL_CREATE') { const h = Math.floor(Date.now() / 1000) - 3600; if (bj.history.some((x) => x.kind === 'DUEL_CREATE' && Number(x.t) > h)) return 'its brain already opened a duel this hour — nothing was sent.'; }
   return null;
@@ -6395,6 +6401,13 @@ async function bjTour() {
     bjMontrer(p, rolls, moi);
   } finally { bjVol.enVol = false; }
 }
+/* revue rolls-duels-ui 2026-10-24 : au Sign d un DUEL_JOIN / DUEL_CREATE, /api/duels est RELU (force). Une relecture ratee (lireDuelsServis
+ *   rend alors l ANCIENNE reponse et duelsCfg.lu ne bouge pas) compte comme FERME : jamais une ancienne ouverture */
+async function bjDuelsRelus() {
+  const t0 = Date.now();
+  const j = await lireDuelsServis(true);
+  return !!j && duelsCfg.j === j && duelsCfg.lu >= t0 && Duels.duelsOuverts(j) === true;
+}
 /* dayPot(day) de TicketPot LU sur la chaine (eth_call, aucune transaction) ; illisible -> null (le module ne propose aucun fund, le Sign refuse) */
 async function bjDayPot(contrat, day) {
   try { const a = appelDayPotTP(contrat, day); return lireUintMotTP(await rpc('eth_call', [{ to: a.to, data: a.data }, 'latest'])); } catch (_) { return null; }
@@ -6466,6 +6479,8 @@ function bjMontrer(p, rolls, walletCarte) {
       verifier: tf && tf.ticketpot && tf.ticketpot.veille ? tf.ticketpot.veille.verifier : null,
       solde: p.kind === 'POT_FUND' ? await bcSolde(USDC_BASE, walletCarte).then((x) => (x === null || x === undefined ? null : x.toString())).catch(() => null) : null,
       dayPot: p.kind === 'POT_FUND' ? await bjDayPot(String((tf && tf.ticketpot && tf.ticketpot.contrat) || '').toLowerCase(), Number(p.day)).then((x) => (x === null ? null : x.toString())) : null }; }
+    /* creer / rejoindre un duel : l ouverture RELUE maintenant (le regleur a pu s arreter depuis la proposition) */
+    if (p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') lu = { duelsOuverts: await bjDuelsRelus() };
     const refus = bjRefusAuSigne(id, p, walletCarte, lu);
     if (refus) { bcEtape(m, 'Not sent: ' + refus, 'non'); return; }
     bjVol.signe = true;

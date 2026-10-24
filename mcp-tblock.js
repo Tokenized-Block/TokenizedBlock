@@ -121,7 +121,8 @@ export const OUTILS = Object.freeze([
   { name: 'tblock_plan_roll', title: 'Plan the classic roll: 0.50 USDC a roll, up to 10 in one batch',
     description: 'Returns the unsigned calls for `rolls` (1 to 10, default 1) BlockRolls rolls on one guess, for ONE wallet_sendCalls batch signed by `wallet`: '
       + 'one approve of EXACTLY rolls x 0.50 USDC, then one roll(guess) per roll — or, when that wallet holds an active day pass on the contract, rollWithPass x rolls with no payment. '
-      + 'The block 2 blocks after the roll decides; the roll is scored against the guess (traits in common out of 5), a fixed prize from 3/5. `guess` defaults to the face of the wallet\'s '
+      + 'The block 2 blocks after the roll decides; the roll is scored against the guess (traits in common out of 5). The prizes and the minimum winning score are read live from the BlockRolls contract '
+      + '(tblock_game_state rolls.prizes / rolls.minScore, null when not read) and can be changed by the UNIT creator, for rolls made after the change; a prize never pays more than the roll pot holds. `guess` defaults to the face of the wallet\'s '
       + 'ticket of the day (SHA-256(wallet|day), the same face the Game tab shows). REFUSED with the state when no contract is served (practice mode, 0 USDC): then nothing is to be signed.',
     inputSchema: { type: 'object', required: ['wallet'], additionalProperties: false, properties: {
       wallet: { ...ADRESSE, description: 'The wallet that will sign and play.' },
