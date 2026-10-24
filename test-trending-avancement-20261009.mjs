@@ -70,7 +70,8 @@ function monde(contenu) {
 }
 /* 2026-10-17 : une ligne saine porte aussi `achat` (verdict serveur du Buy de Market, garde de forme champsLigne) */
 /* 2026-10-25 : et `actionsChaine` (les actions de l emetteur prouvees sur la chaine) en tete, avec `routeAction` par ligne */
-const corpsSain = JSON.stringify({ ok: true, lu: 'x', blocksSuivis: 3, fenetresRatees: 0, emetteurEtat: 'LU', actionsChaine: { etat: 'COMPLET' }, lignes: [{ adr: J(1), emetteur: null, quoteAdr: null, achat: null, routeAction: null }] });
+/* 2026-10-25 (revue, fail-closed) : et `routesFermees` — un corps ecrit avant le fail-closed n est plus servi au demarrage */
+const corpsSain = JSON.stringify({ ok: true, lu: 'x', blocksSuivis: 3, fenetresRatees: 0, emetteurEtat: 'LU', actionsChaine: { etat: 'COMPLET' }, routesFermees: true, lignes: [{ adr: J(1), emetteur: null, quoteAdr: null, achat: null, routeAction: null }] });
 const avancement = {
   adrs: [J(1), J(2), J(3)], createurs: [[J(1), C(1)], [J(2), C(2)]],
   createursNonResolus: [{ jeton: J(3), tx: TX(3) }], createursNonResolusJetes: 0,
@@ -95,6 +96,8 @@ const REJETS = [
   ['corps ok:false', { corps: JSON.stringify({ ok: false, pourquoi: 'Trending not read: DexScreener refused all 3 reads' }) }],
   ['corps vide + fenetres ratees', { corps: JSON.stringify({ ok: true, lignes: [], fenetresRatees: 3, blocksSuivis: 0 }) }],
   ['forme perimee (pas d emetteurEtat)', { corps: JSON.stringify({ ok: true, blocksSuivis: 3, lignes: [{ adr: J(1), emetteur: null, quoteAdr: null }] }) }],
+  /* 2026-10-25 : un corps d avant le fail-closed (actions a routeAction null = Buy DexScreener) n est pas servi au demarrage */
+  ['forme d avant le fail-closed (pas de routesFermees)', { corps: JSON.stringify({ ok: true, lu: 'x', blocksSuivis: 3, fenetresRatees: 0, emetteurEtat: 'LU', actionsChaine: { etat: 'COMPLET' }, lignes: [{ adr: J(1), emetteur: null, quoteAdr: null, achat: null, routeAction: null }] }) }],
   ['corps absent', { corps: null }],
 ];
 

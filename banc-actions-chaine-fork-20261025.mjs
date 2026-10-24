@@ -8,6 +8,8 @@
  * ⛔ UN VERDICT ACHETABLE QUI NE S EXECUTE PAS EST UN KO. Un refus qui s execute est DIT (le refus est trop prudent), pas un KO.
  * Usage : FOUNDRY_BASE=true ~/.foundry/versions/base-v1.1.1/anvil --base (le build Base, lance par `base-anvil`) --fork-url https://mainnet.base.org --port 9611 ; PORT_FORK=9611 node banc-actions-chaine-fork-20261025.mjs
  *   ⛔ `--base` est obligatoire : un anvil ordinaire n execute pas les B20 (code 0xef -> « OpcodeNotFound »), et le banc serait vide.
+ * 2026-10-25 (revue) : + la SORTIE d un porteur (vente, a l etat du bloc, de ce que 10 USDC achetent : ce que routeAction juge) et
+ *   l aller-retour IMMEDIAT (revente de ce que l achat a rendu), tous deux executes par le planificateur de la fiche.
  * ⚠️ NE PROUVE PAS : une autre taille que 10 USDC, ni l etat de la chaine apres le bloc du fork. Rien n est envoye hors du fork. */
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
 import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
@@ -15,6 +17,7 @@ import { selecteur } from './keccak.js';
 import { routeAction, lireUnites, CREATIONS_GRAINE, POOLS_REFUSEES_EXECUTION, DEVIS_USDC } from './actions-chaine.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { chargerIndexRouteur, chargerNosBlocksTb, sourcesTbLues } from './index-routeur.js';
+import { QUOTEUR_AERODROME_CL as QUOTEUR, SIG_QUOTE_IN } from './rolls-en-action.js';
 
 const URL = 'http://127.0.0.1:' + (process.env.PORT_FORK || '9611');
 const USDC = USDC_BASE.toLowerCase();
@@ -65,6 +68,21 @@ try {
 } catch (e) { console.log('  ..  sources TB non lues (' + String(e.message).slice(0, 80) + ')'); }
 ok('2b. les sources TB sont lues (sinon tout B20 hors registre est refuse, fail-closed)', sourcesTbLues());
 const appelFork = (to, data) => appel('eth_call', [{ to, data }, 'latest']);
+/** vend `montant` unites de `adr` contre USDC par le planificateur de la fiche, signe sur le fork ; rend { ok, usdc, cause } */
+async function vendre(adr, montant) {
+  const planV = await planAerodromeSegment({ rpc, chemin: [{ de: adr, vers: USDC, famille: 'aerodrome' }], devise: adr, block: USDC,
+    montant, compte: ACHETEUR, beneficiaireFrais: FEE_WALLET, toleranceBps: 3000n });
+  if (planV.etat !== 'PRET') return { ok: false, cause: 'plan ' + planV.etat + ' ' + String(planV.pourquoi || '').slice(0, 120) };
+  const avU = await solde(USDC, ACHETEUR), avA = await solde(adr, ACHETEUR);
+  for (const a of planV.appels) {
+    let h; try { h = await appel('eth_sendTransaction', [{ from: ACHETEUR, to: a.to, data: a.data, value: a.value || '0x0' }]); }
+    catch (e) { return { ok: false, cause: String(e.message).slice(0, 140) }; }
+    const r = await recu(h); if (!r || r.status !== '0x1') return { ok: false, cause: 'status ' + (r ? r.status : 'non lu') };
+  }
+  const apU = await solde(USDC, ACHETEUR), apA = await solde(adr, ACHETEUR);
+  if (avA - apA !== BigInt(montant) || !(apU > avU)) return { ok: false, cause: 'balances: sold ' + (avA - apA) + '/' + montant + ', usdc +' + (apU - avU) };
+  return { ok: true, usdc: apU - avU };
+}
 const bilan = [];
 /* ⛔ LES ENTREES DU 2026-10-25 A LA TABLE RESTENT AU BANC : sans elles, les ajouter a la table les ferait sortir du banc qui les a
  *   fait entrer (un banc qui perd son sujet au moment ou il le valide est vert et vide). Symboles relus dans la table elle-meme. */
@@ -75,11 +93,37 @@ for (const [adr, g] of CREATIONS_GRAINE) {
   const u = await lireUnites({ rpc, adr });
   if (!(u > 0n)) continue;
   const v = await routeAction({ appel: appelFork, adr });
-  /* une entree de table doit aussi avoir le verdict ACHETABLE, sur la MEME pool que la table */
-  if (t) ok(g.symbole + ' : entree de table ' + t.pool.slice(0, 10) + '… = la pool que choisit routeAction', v.etat === 'OK' && v.achetable === true && v.pool === t.pool && v.tickSpacing === t.tickSpacing, JSON.stringify({ a: v.achetable, code: v.code, pool: v.pool }));
+  /* une entree de table : routeAction choisit la MEME pool que la table ; depuis la revue du 2026-10-25 son verdict peut etre un refus
+   *   ALLER_RETOUR (le cote vente), qui est alors confirme ci-dessous par la SORTIE EXECUTEE d un porteur (meme etat que le devis) */
+  if (t) ok(g.symbole + ' : entree de table ' + t.pool.slice(0, 10) + '… = la pool que choisit routeAction', v.etat === 'OK' && (v.achetable === true || v.code === 'ALLER_RETOUR') && v.pool === t.pool && v.tickSpacing === t.tickSpacing, JSON.stringify({ a: v.achetable, code: v.code, pool: v.pool }));
   /* ECART : le refus est-il celui de la chaine ? On construit le plan et on l envoie (attendu : pas PRET, ou un swap qui echoue) */
-  const aExecuter = v.etat === 'OK' && (v.achetable || v.code === 'EXECUTION_ECHOUEE' || v.code === 'HORS_REGISTRE' || v.code === 'ECART');
+  const aExecuter = v.etat === 'OK' && (v.achetable || v.code === 'EXECUTION_ECHOUEE' || v.code === 'HORS_REGISTRE' || v.code === 'ECART' || v.code === 'ALLER_RETOUR');
   if (!aExecuter) { bilan.push({ sym: g.symbole, verdict: v.etat === 'OK' ? v.code : v.etat }); continue; }
+  /* ⛔⛔ 2026-10-25 (revue) — LA SORTIE D UN PORTEUR, EXECUTEE, A L ETAT DU BLOC MESURE. routeAction cote les deux jambes AU MEME ETAT :
+   *   la vente de ce que 10 USDC achetent, AVANT tout achat — c est ce que touche une personne qui DETIENT deja ces unites et sort.
+   *   Sur fork : instantane, la pool elle-meme (impersonnee) cede ce nombre d unites a l acheteur, il les VEND par le planificateur de la
+   *   fiche, on lit l USDC recu, puis on revient a l instantane (l achat ci-dessous part du meme etat). */
+  let sortiePorteurBps = null;
+  if (v.pool && (v.achetable || v.code === 'ALLER_RETOUR')) {
+    const snap = await appel('evm_snapshot');
+    try {
+      const unitesCotees = BigInt('0x' + (await appelFork(QUOTEUR, selecteur(SIG_QUOTE_IN) + pad(USDC) + pad(adr) + DEVIS_USDC.toString(16).padStart(64, '0') + BigInt(v.tickSpacing).toString(16).padStart(64, '0') + '0'.repeat(64))).slice(2, 66));
+      await appel('anvil_impersonateAccount', [v.pool]); await appel('anvil_setBalance', [v.pool, '0x' + (10n ** 18n).toString(16)]);
+      const hT = await appel('eth_sendTransaction', [{ from: v.pool, to: adr, data: selecteur('transfer(address,uint256)') + pad(ACHETEUR) + unitesCotees.toString(16).padStart(64, '0') }]);
+      const rT = await recu(hT);
+      await appel('anvil_stopImpersonatingAccount', [v.pool]);
+      if (!rT || rT.status !== '0x1') ok(g.symbole + ' : sortie d un porteur — les unites lui sont cedees', false, rT ? rT.status : 'non lu');
+      else {
+        const s = await vendre(adr, unitesCotees);
+        if (!s.ok) ok(g.symbole + ' : sortie d un porteur — la vente de ' + unitesCotees + ' unites S EXECUTE', false, s.cause);
+        else {
+          sortiePorteurBps = Number(((DEVIS_USDC - s.usdc) * 10000n) / DEVIS_USDC);
+          if (v.code === 'ALLER_RETOUR') ok(g.symbole + ' : refus ALLER_RETOUR confirme — un porteur qui vend ce que 10 USDC achetent recoit ' + (Number(s.usdc) / 1e6).toFixed(2) + ' USDC (perte ' + (sortiePorteurBps / 100).toFixed(2) + ' % > 2 %)', sortiePorteurBps > 200, sortiePorteurBps);
+          else ok(g.symbole + ' : ACHETABLE — un porteur qui vend ce que 10 USDC achetent recoit ' + (Number(s.usdc) / 1e6).toFixed(2) + ' USDC (cote ' + ((v.perteBps || 0) / 100).toFixed(2) + ' %, frais 0,1 % en plus)', sortiePorteurBps <= (v.perteBps || 0) + 20, sortiePorteurBps);
+        }
+      }
+    } finally { await appel('evm_revert', [snap]); }
+  }
   const plan = await planAerodromeSegment({ rpc, chemin: [{ de: USDC, vers: adr, famille: 'aerodrome' }], devise: USDC, block: adr,
     montant: DEVIS_USDC, compte: ACHETEUR, beneficiaireFrais: FEE_WALLET, toleranceBps: 100n });
   if (plan.etat !== 'PRET') {
@@ -100,9 +144,19 @@ for (const [adr, g] of CREATIONS_GRAINE) {
   if (v.achetable) ok(g.symbole + ' : verdict ACHETABLE et l achat de 10 USDC S EXECUTE (pool ' + v.pool.slice(0, 10) + '…, ts ' + v.tickSpacing + ', ecart ' + v.ecartBps + ' bps)', execute,
     cause || ('USDC ' + (avU - apU) + ', recu ' + (apA - avA) + ' >= ' + plan.resume.recoitAuMoins));
   else if (v.code === 'HORS_REGISTRE') ok(g.symbole + ' : HORS_REGISTRE mais le plan est PRET — le refus est faux', false, 'execute=' + execute);
-  else console.log('  ..  ' + g.symbole + ' : refuse (' + v.code + ') — a l execution : ' + (execute ? 'S EXECUTE (le refus est plus prudent que la chaine)' : 'echoue encore (' + cause + ')'));
+  else if (v.code !== 'ALLER_RETOUR') console.log('  ..  ' + g.symbole + ' : refuse (' + v.code + ') — a l execution : ' + (execute ? 'S EXECUTE (le refus est plus prudent que la chaine)' : 'echoue encore (' + cause + ')'));
+  /* ⛔⛔ 2026-10-25 — L ALLER-RETOUR IMMEDIAT, EXECUTE : ce que l achat a rendu est revendu aussitot. MESURE DU JOUR (fork 53 046 841) :
+   *   il perd ~0,21 % (frais 2 x 0,1 %) MEME sur LIc et SEc — l achat deplace le prix dans la zone liquide et la revente refait le meme
+   *   chemin. Ce n est PAS ce que juge routeAction (la sortie d un porteur a l etat mesure, ci-dessus) : c est dit, pas assert comme un refus. */
+  let venduUsdc = null, perteExecBps = null;
+  if (execute) {
+    const s = await vendre(adr, apA - avA);
+    ok(g.symbole + ' : la REVENTE immediate de ce que 10 USDC ont achete S EXECUTE', s.ok, s.cause);
+    if (s.ok) { venduUsdc = s.usdc; perteExecBps = Number(((DEVIS_USDC - venduUsdc) * 10000n) / DEVIS_USDC); console.log('  ..  ' + g.symbole + ' : aller-retour immediat execute : ' + (Number(venduUsdc) / 1e6).toFixed(6) + ' USDC rendus (' + (perteExecBps / 100).toFixed(2) + ' %)'); }
+  }
   bilan.push({ sym: g.symbole, verdict: v.achetable ? 'ACHETABLE' : v.code, execution: execute ? 'OK' : 'ECHEC ' + cause,
-    pool: v.pool, tickSpacing: v.tickSpacing, usdcPool: v.usdcPool, ecartBps: v.ecartBps ?? null, recu: String(apA - avA), minimum: plan.resume.recoitAuMoins });
+    pool: v.pool, tickSpacing: v.tickSpacing, usdcPool: v.usdcPool, ecartBps: v.ecartBps ?? null, perteCoteeBps: v.perteBps ?? null,
+    recu: String(apA - avA), minimum: plan.resume.recoitAuMoins, sortiePorteurBps, revenduUsdc: venduUsdc === null ? null : String(venduUsdc), perteExecBps });
 }
 console.log('');
 console.log(JSON.stringify(bilan, (_, x) => (typeof x === 'bigint' ? String(x) : x)));

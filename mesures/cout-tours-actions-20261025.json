@@ -1,0 +1,180 @@
+[
+ {
+  "tour": "froid-1",
+  "etat": "PARTIEL",
+  "prouvees": 40,
+  "refusees": 0,
+  "nonMesurees": 162,
+  "nonMesureesCodes": {
+   "BUDGET": 162
+  },
+  "neuves": 40,
+  "unitesLues": 40,
+  "routesLues": 20,
+  "appels": {
+   "preuves": 120,
+   "unites": 40,
+   "routes": 291,
+   "bloc": 1,
+   "total": 452
+  },
+  "requetesHttp": 576,
+  "secondes": 90,
+  "bloc": 53046607
+ },
+ {
+  "tour": "froid-2",
+  "etat": "PARTIEL",
+  "prouvees": 80,
+  "refusees": 0,
+  "nonMesurees": 122,
+  "nonMesureesCodes": {
+   "BUDGET": 122
+  },
+  "neuves": 40,
+  "unitesLues": 40,
+  "routesLues": 20,
+  "appels": {
+   "preuves": 120,
+   "unites": 40,
+   "routes": 256,
+   "bloc": 1,
+   "total": 417
+  },
+  "requetesHttp": 593,
+  "secondes": 102,
+  "bloc": 53046657
+ },
+ {
+  "tour": "froid-3",
+  "etat": "PARTIEL",
+  "prouvees": 120,
+  "refusees": 0,
+  "nonMesurees": 82,
+  "nonMesureesCodes": {
+   "BUDGET": 82
+  },
+  "neuves": 40,
+  "unitesLues": 40,
+  "routesLues": 17,
+  "appels": {
+   "preuves": 120,
+   "unites": 40,
+   "routes": 240,
+   "bloc": 1,
+   "total": 401
+  },
+  "requetesHttp": 528,
+  "secondes": 86,
+  "bloc": 53046704
+ },
+ {
+  "tour": "froid-4",
+  "etat": "PARTIEL",
+  "prouvees": 160,
+  "refusees": 0,
+  "nonMesurees": 42,
+  "nonMesureesCodes": {
+   "BUDGET": 42
+  },
+  "neuves": 40,
+  "unitesLues": 40,
+  "routesLues": 8,
+  "appels": {
+   "preuves": 120,
+   "unites": 40,
+   "routes": 113,
+   "bloc": 1,
+   "total": 274
+  },
+  "requetesHttp": 351,
+  "secondes": 58,
+  "bloc": 53046747
+ },
+ {
+  "tour": "froid-5",
+  "etat": "PARTIEL",
+  "prouvees": 200,
+  "refusees": 0,
+  "nonMesurees": 2,
+  "nonMesureesCodes": {
+   "BUDGET": 2
+  },
+  "neuves": 40,
+  "unitesLues": 40,
+  "routesLues": 0,
+  "appels": {
+   "preuves": 120,
+   "unites": 40,
+   "routes": 0,
+   "bloc": 1,
+   "total": 161
+  },
+  "requetesHttp": 161,
+  "secondes": 26,
+  "bloc": 53046777
+ },
+ {
+  "tour": "froid-6",
+  "etat": "COMPLET",
+  "prouvees": 202,
+  "refusees": 0,
+  "nonMesurees": 0,
+  "nonMesureesCodes": {},
+  "neuves": 2,
+  "unitesLues": 2,
+  "routesLues": 0,
+  "appels": {
+   "preuves": 6,
+   "unites": 2,
+   "routes": 0,
+   "bloc": 1,
+   "total": 9
+  },
+  "requetesHttp": 9,
+  "secondes": 2,
+  "bloc": 53046778
+ },
+ {
+  "tour": "aussitot",
+  "etat": "COMPLET",
+  "prouvees": 202,
+  "refusees": 0,
+  "nonMesurees": 0,
+  "nonMesureesCodes": {},
+  "neuves": 0,
+  "unitesLues": 0,
+  "routesLues": 0,
+  "appels": {
+   "preuves": 0,
+   "unites": 0,
+   "routes": 0,
+   "bloc": 1,
+   "total": 1
+  },
+  "requetesHttp": 1,
+  "secondes": 0,
+  "bloc": 53046778
+ },
+ {
+  "tour": "apres-TTL",
+  "etat": "COMPLET",
+  "prouvees": 202,
+  "refusees": 0,
+  "nonMesurees": 0,
+  "nonMesureesCodes": {},
+  "neuves": 0,
+  "unitesLues": 0,
+  "routesLues": 20,
+  "appels": {
+   "preuves": 0,
+   "unites": 0,
+   "routes": 130,
+   "bloc": 1,
+   "total": 131
+  },
+  "requetesHttp": 187,
+  "secondes": 36,
+  "bloc": 53046778
+ }
+]

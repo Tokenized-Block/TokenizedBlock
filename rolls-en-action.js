@@ -23,7 +23,7 @@
  *   (eth_simulateV1 depuis le compte) qui reverte.
  *
  * Pur : `rpc` injecte, rien n est signe ni envoye. Le wallet de l utilisateur signe le lot. */
-import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
+import { POOLS_ACTIONS_AERODROME, phraseAllerRetour } from './pools-actions-aerodrome.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
 import { calldataApprove, FACTORY_AERODROME_CL, FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 import { planRoll, refusGuess, DEFAUTS } from './blockrolls-plan.js';
@@ -166,6 +166,8 @@ export async function planRollEnAction({ rpc, chaine, compte, contrat, usdc = US
   if (bas(action) === bas(usdc)) return refuse('paying in USDC is the plain roll (planRoll), not a stock roll');
   const t = actionMesuree(action);
   if (!t) return refuse('this stock has no measured Aerodrome pool: it cannot pay a roll here');
+  /* ⛔ 2026-10-25 (revue) : une pool qui perd > 2 % sur un aller-retour n est pas un moyen de jouer (pools-actions-aerodrome.js) */
+  if (phraseAllerRetour(action)) return refuse('this stock cannot pay a roll here: ' + phraseAllerRetour(action));
   const n = Number(rolls);
   if (!Number.isInteger(n) || n < 1 || n > ROLLS_MAX) return refuse('rolls must be 1..' + ROLLS_MAX);
   const liste = Array.isArray(guesses) ? guesses : Array.from({ length: n }, () => guess);
@@ -247,6 +249,7 @@ export async function planGainEnAction({ rpc, chaine, compte, usdc = USDC_BASE, 
   if (![compte, usdc, action, beneficiaireFrais].every((a) => ADR.test(String(a || '')))) return refuse('whole addresses are required (account, usdc, stock, fee wallet)');
   const t = actionMesuree(action);
   if (!t) return refuse('this stock has no measured Aerodrome pool: the prize cannot be converted to it here');
+  if (phraseAllerRetour(action)) return refuse('the prize cannot be converted to this stock here: ' + phraseAllerRetour(action));
   const m = entier(montantUsdc);
   if (m === null || m <= 0n) return refuse('the USDC amount must be above zero');
   const tol = entier(toleranceBps);

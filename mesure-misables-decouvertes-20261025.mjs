@@ -7,6 +7,7 @@
  * Usage : node mesure-misables-decouvertes-20261025.mjs <sortie.json> */
 import { writeFileSync } from 'node:fs';
 import { CANDIDATS_CL, coterMisableTailles, ligneMisable, listeMisables, TAILLES_USDC, USDC } from './misables.js';
+import { ALLER_RETOUR_REFUSES } from './pools-actions-aerodrome.js';
 
 const AJOUTS_20261025 = new Set(['SANc', 'SEc', 'ULc', 'NOKc', 'LIc']);
 const RPC = 'https://base-rpc.publicnode.com';
@@ -42,8 +43,13 @@ for (const c of CANDIDATS_CL) {
 const compte = (ls) => TAILLES_USDC.map((t, i) => ls.filter((l) => l.tailles && l.tailles[i] && l.tailles[i].misable).length);
 const avant = listeMisables(lignes.filter((l) => !l.ajout));
 const apres = listeMisables(lignes);
+/* 2026-10-25 (revue) : + la regle de l aller-retour (pools-actions-aerodrome.js ALLER_RETOUR_REFUSES), que misables.js doit appliquer a
+ *   la fusion — mesuree ici sur les memes lignes */
+const sansAllerRetour = listeMisables(lignes.filter((l) => !ALLER_RETOUR_REFUSES.has(String(l.jeton || '').toLowerCase())));
 const res = { bloc, rpc: RPC, rpcRequetes: n, candidatsAvant: lignes.filter((l) => !l.ajout).length, candidatsApres: lignes.length,
   tailles: TAILLES_USDC.map(String), misablesAvant: compte(avant), misablesApres: compte(apres),
+  candidatsAllerRetour: lignes.filter((l) => !ALLER_RETOUR_REFUSES.has(String(l.jeton || '').toLowerCase())).length, misablesAllerRetour: compte(sansAllerRetour),
+  misablesRefusesParAllerRetour: lignes.filter((l) => ALLER_RETOUR_REFUSES.has(String(l.jeton || '').toLowerCase()) && l.tailles && l.tailles.some((t) => t && t.misable)).map((l) => l.symbole),
   nonMesures: lignes.filter((l) => !l.tailles).map((l) => l.symbole),
   ajouts: lignes.filter((l) => l.ajout).map((l) => ({ sym: l.symbole, misable: l.misable, tailles: (l.tailles || []).map((t) => [t.misable, t.ecartBps ?? null, t.code || t.raison || null]) })) };
 writeFileSync(process.argv[2] || 'misables-20261025.json', JSON.stringify(res, (_, v) => (typeof v === 'bigint' ? v.toString() : v), 1));

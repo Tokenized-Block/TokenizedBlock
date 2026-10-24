@@ -1,0 +1,140 @@
+{
+ "bloc": 53047195,
+ "rpc": "https://base-rpc.publicnode.com",
+ "rpcRequetes": 208,
+ "candidatsAvant": 27,
+ "candidatsApres": 32,
+ "tailles": [
+  "500000",
+  "5000000",
+  "10000000"
+ ],
+ "misablesAvant": [
+  20,
+  19,
+  17
+ ],
+ "misablesApres": [
+  23,
+  22,
+  19
+ ],
+ "candidatsAllerRetour": 22,
+ "misablesAllerRetour": [
+  21,
+  21,
+  19
+ ],
+ "misablesRefusesParAllerRetour": [
+  "HSAIc",
+  "VALEc"
+ ],
+ "nonMesures": [],
+ "ajouts": [
+  {
+   "sym": "SANc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ]
+   ]
+  },
+  {
+   "sym": "SEc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     1147,
+     "ECART"
+    ],
+    [
+     false,
+     1268,
+     "ECART"
+    ],
+    [
+     false,
+     1274,
+     "ECART"
+    ]
+   ]
+  },
+  {
+   "sym": "ULc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ],
+    [
+     true,
+     1,
+     "MISABLE"
+    ]
+   ]
+  },
+  {
+   "sym": "NOKc",
+   "misable": true,
+   "tailles": [
+    [
+     true,
+     6,
+     "MISABLE"
+    ],
+    [
+     true,
+     59,
+     "MISABLE"
+    ],
+    [
+     false,
+     118,
+     "ECART"
+    ]
+   ]
+  },
+  {
+   "sym": "LIc",
+   "misable": false,
+   "tailles": [
+    [
+     false,
+     1959,
+     "ECART"
+    ],
+    [
+     false,
+     1980,
+     "ECART"
+    ],
+    [
+     false,
+     1981,
+     "ECART"
+    ]
+   ]
+  }
+ ]
+}

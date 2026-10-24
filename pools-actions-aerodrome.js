@@ -64,6 +64,35 @@ export const POOLS_ACTIONS_AERODROME = new Map([
   ['0xb200000000000000000000d61efd9f54a23ef9eb', { symbole: 'LIc', pool: '0xd71b2d9cb3532477df77ae26e780963cce784a0c', tickSpacing: 1, usdcMesure: 25397 }],
 ]);
 
+/* ⛔⛔ 2026-10-25 (revue) — LE COTE VENTE. Un aller-retour de 10 USDC (achat, puis revente de ce qu il rend, les deux devis au MEME bloc,
+ *   quoter Aerodrome CL, base-rpc.publicnode.com, lecture seule ; mesure-aller-retour-actions-20261025.mjs bloc 53 046 326 -> mesures/aller-retour-actions-20261025.json ; les 4 refusees par ECART avant la vente, devis directs
+ *   bloc 53 046 384) PERD PLUS DE 2 % sur DIX pools de cette table. Elles RESTENT dans la table (c est leur vraie pool : une personne qui
+ *   en detient doit pouvoir les vendre par la bonne pool) mais elles n ont NI Buy (le serveur relit l aller-retour en direct, actions-chaine.js
+ *   routeAction, code ALLER_RETOUR) NI place dans le jeu (rolls payes en action, gain converti en action : rolls-en-action.js ; et
+ *   misables.js, branche claude/misables-20261024, doit exclure cette liste a la fusion — CANDIDATS_CL derive de la table).
+ *   ⛔ Statique : une pool remesuree <= 2 % en sort par un nouveau commit, avec la mesure — pas en silence.
+ *   ⚠️ CE QUE C EST (banc fork du 2026-10-25, bloc 53 047 060) : l ecart entre ACHETER et VENDRE a l etat mesure — un porteur qui vend ce
+ *   que 10 USDC achetent recoit 8,34 USDC (LIc), 8,86 (SEc), executes. Un achat suivi de sa revente IMMEDIATE perd ~0,21 % seulement. */
+export const ALLER_RETOUR_MAX_BPS = 200;
+export const ALLER_RETOUR_REFUSES = new Map([
+  ['0xb200000000000000000000d61efd9f54a23ef9eb', { symbole: 'LIc', perteBps: 1654, bloc: 53046326 }],
+  ['0xb2000000000000000000003088798f6d0722aaac', { symbole: 'SEc', perteBps: 1130, bloc: 53046326 }],
+  ['0xb200000000000000000000c8a7223510467d8563', { symbole: 'PDDc', perteBps: 773, bloc: 53046326 }],
+  ['0xb20000000000000000000063376b142c0764b489', { symbole: 'VALEc', perteBps: 318, bloc: 53046326 }],
+  ['0xb200000000000000000000f3049f4aa834b23b64', { symbole: 'HSAIc', perteBps: 1283, bloc: 53046326 }],
+  ['0xb20000000000000000000026215d755356e5043f', { symbole: 'ARMc', perteBps: 1136, bloc: 53046326 }],
+  ['0xb2000000000000000000008d5328e9208773dc58', { symbole: 'NVOc', perteBps: 773, bloc: 53046384 }],
+  ['0xb2000000000000000000002d2b5dc53c61f1ba06', { symbole: 'NIOc', perteBps: 1655, bloc: 53046384 }],
+  ['0xb200000000000000000000ca7c6d1438e7245eb6', { symbole: 'BILIc', perteBps: 1654, bloc: 53046384 }],
+  ['0xb200000000000000000000e88efe88d8ade3f0da', { symbole: 'WRDc', perteBps: 1655, bloc: 53046384 }],
+]);
+/** la phrase d un refus de jeu sur une de ces pools (une seule ecriture) */
+export function phraseAllerRetour(adr) {
+  const r = ALLER_RETOUR_REFUSES.get(String(adr || '').toLowerCase());
+  return r ? 'on its pool, what 10 USDC buys sells for ' + (r.perteBps / 100).toFixed(1) + '% less (the gap between buying and selling, measured at block '
+    + r.bloc + '), over the ' + (ALLER_RETOUR_MAX_BPS / 100) + '% this app accepts' : null;
+}
+
 /** Une ligne de marche (DexScreener) avec la pool d achat de l action si la table la connait et que la ligne pointe
  *  ailleurs. Rend la MEME ligne sinon. Ne touche ni prix, ni volume, ni liquidite. */
 /* ⛔⛔ 2026-10-25 — HORS TABLE, LA POOL VIENT DU SERVEUR, ET SEULEMENT S IL L A PROUVEE ATTEIGNABLE. `l.routeAction` est pose par

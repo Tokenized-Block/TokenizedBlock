@@ -9193,7 +9193,11 @@ $('#map').addEventListener('click', (e) => {
    *     Ici c est le code qui s adapte a la sonde, parce que la sonde protege une lecon payee. */
   const dexLu = mk && mk.dex;
   const poolAdrLu = mkPublic && mkPublic.poolAdr;
-  const entreeRoutage = { aMarche, dex: dexLu, poolAdr: poolAdrLu };
+  /* ⛔⛔ 2026-10-25 (revue) : LE MEME VERDICT DE ROUTE QUE LE MARKET. La fiche appelait verdictRoutage sans `routeAction` : WRDc, BILIc,
+   *   NIOc, NVOc gardaient leur Buy ici alors que le Market le retirait. Exception, la meme qu au Market : une action dont le serveur a lu
+   *   la cle v4 (`achat.cle`) s achete par ce chemin-la, que la route Aerodrome ne juge pas. */
+  const routeActionLue = mkPublic && !(mkPublic.achat && mkPublic.achat.cle) ? (mkPublic.routeAction || null) : null;
+  const entreeRoutage = { aMarche, dex: dexLu, poolAdr: poolAdrLu, routeAction: routeActionLue };
   const vRoutage = verdictRoutage(entreeRoutage);
   if (aBuy) aBuy.hidden = !vRoutage.achetableIci;
   /* ⛔⛔ L AFFORDANCE USDC EST PILOTEE PAR UN DRAPEAU DISTINCT, et les deux ne sont jamais vrais

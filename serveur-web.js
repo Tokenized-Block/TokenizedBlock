@@ -48,7 +48,7 @@ import { lireEspacements, phraseEspacements, ESPACEMENTS_RETOMBEE } from './espa
 import { lireActionsEmetteur, phraseActionsEmetteur } from './actions-emetteur.js';
 /* 2026-10-25 — LES ACTIONS DE L EMETTEUR, PROUVEES SUR LA CHAINE (code 0xef + log de la factory B20 + tx.from), et leur route d achat */
 import { candidatsActions, decouvrirActions, lireUnites, routeAction, routeServie, resumeActions, CREATEUR_EMETTEUR,
-  ROUTES_PAR_TOUR, ROUTE_TTL_MS, UNITES_TTL_MS } from './actions-chaine.js';
+  ROUTES_PAR_TOUR, ROUTE_TTL_MS, UNITES_TTL_MS, routePourLigne, lecteurPreuves, verdictGravable, CREATIONS_GRAINE } from './actions-chaine.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
 import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
@@ -801,7 +801,8 @@ async function actionsEmetteurServies() {
   const frais = emCache.r && (Date.now() - emCache.a) < (emCache.r.etat === 'OK' ? 86_400_000 : 300_000);
   if (frais) return emCache.r;
   const r = await lireActionsEmetteur(async (url) => {
-    const rep = await fetch(url, { headers: { 'x-ms-monitor': '1' } });
+    /* 2026-10-25 (revue) : 3 pages en sequence — chacune bornee, une API qui pend ne gele pas le tour du trending */
+    const rep = await fetch(url, { headers: { 'x-ms-monitor': '1' }, signal: AbortSignal.timeout(10000) });
     if (!rep.ok) return null;
     return await rep.json();
   });
@@ -821,7 +822,10 @@ async function actionsEmetteurServies() {
  *   lectures. Les unites et les routes, elles, bougent : relues apres UNITES_TTL_MS / ROUTE_TTL_MS. */
 const preuvesActions = new Map();
 const unitesActions = new Map();   /* adr -> { v: BigInt|null, t } */
-const routesActions = new Map();   /* adr -> { r, t } */
+const routesActions = new Map();   /* adr -> { r, t } — r porte son bloc ; persiste (actions-chaine.json) */
+const poolsActionsCache = new Map(); /* 'factory|jeton|ts' -> { pool|null, t } — une pool trouvee ne se relit jamais ; persiste */
+/* 2026-10-25 (revue) : le COUT d un tour, compte et servi (actionsChaine.appels) — par tour et sur l heure glissante */
+const appelsActions = { dernierTour: null, heure: [] };
 const creationsEmetteurVues = new Map(); /* jeton -> { jeton, tx, createur, symbole } — creations vues par le scan, createur = l emetteur */
 const CREATIONS_EMETTEUR_MAX = 2000;
 let tourActions = null;
@@ -835,20 +839,33 @@ function chargerActionsDisque() {
     if (!f || !existsSync(f)) return;
     const x = JSON.parse(readFileSync(f, 'utf8'));
     /* ⛔ seules les PREUVES et REFUS bien formes reviennent ; un NON_MESURE n a jamais ete ecrit */
+    /* ⛔⛔ 2026-10-25 (revue) : seuls les verdicts GRAVABLES reviennent (verdictGravable) — un refus ecrit par le code d avant sur un
+     *   `0x` (MARQUEUR sans codeLu) ou une reponse decalee (RECU_AUTRE, TX_AUTRE) est jete ici et rejuge au prochain tour */
+    let jetes = 0;
     for (const p of Array.isArray(x && x.preuves) ? x.preuves : []) {
-      if (p && /^0x[0-9a-f]{40}$/.test(p.adr) && (p.etat === 'PROUVE' || p.etat === 'REFUSE') && typeof (p.code || p.tx) === 'string') preuvesActions.set(p.adr, p);
+      if (p && /^0x[0-9a-f]{40}$/.test(p.adr) && verdictGravable(p)) preuvesActions.set(p.adr, p); else jetes += 1;
     }
     for (const c of Array.isArray(x && x.creations) ? x.creations : []) {
       if (c && /^0x[0-9a-f]{40}$/.test(c.jeton) && /^0x[0-9a-f]{64}$/.test(c.tx) && c.createur === CREATEUR_EMETTEUR) creationsEmetteurVues.set(c.jeton, c);
     }
-    console.log('[actions] disk: ' + preuvesActions.size + ' verdict(s), ' + creationsEmetteurVues.size + ' issuer creation(s) seen');
+    /* les verdicts de route (avec leur bloc et leur heure) : servis des le demarrage, relus selon ROUTE_TTL_MS, ignores au-dela de
+     *   ROUTE_SERVIE_MAX_MS (routePourLigne) */
+    for (const v of Array.isArray(x && x.routes) ? x.routes : []) {
+      if (v && /^0x[0-9a-f]{40}$/.test(v.adr) && v.r && typeof v.r === 'object' && typeof v.r.achetable === 'boolean' && Number.isFinite(v.t)) routesActions.set(v.adr, { r: v.r, t: v.t });
+    }
+    for (const [k, v] of Array.isArray(x && x.pools) ? x.pools : []) {
+      if (typeof k === 'string' && v && (v.pool === null || /^0x[0-9a-f]{40}$/.test(v.pool)) && Number.isFinite(v.t)) poolsActionsCache.set(k, v);
+    }
+    console.log('[actions] disk: ' + preuvesActions.size + ' verdict(s) (' + jetes + ' not definitive, dropped), ' + creationsEmetteurVues.size
+      + ' issuer creation(s) seen, ' + routesActions.size + ' route(s), ' + poolsActionsCache.size + ' pool lookup(s)');
   } catch (e) { console.log('[actions] disk unread: ' + e.message); }
 }
 function sauverActionsDisque() {
   const f = fichierActions();
   if (!f) return;
   try {
-    writeFileSync(f + '.tmp', JSON.stringify({ v: 1, a: Date.now(), preuves: [...preuvesActions.values()], creations: [...creationsEmetteurVues.values()] }));
+    writeFileSync(f + '.tmp', JSON.stringify({ v: 2, a: Date.now(), preuves: [...preuvesActions.values()], creations: [...creationsEmetteurVues.values()],
+      routes: [...routesActions].map(([adr, v]) => ({ adr, r: v.r, t: v.t })), pools: [...poolsActionsCache] }));
     renameSync(f + '.tmp', f);
   } catch (e) { console.log('[actions] disk write failed: ' + e.message); }
 }
@@ -864,39 +881,59 @@ function retenirCreationsEmetteur(creations, createurDuJeton) {
   }
 }
 /** un tour : preuves, unites, routes. Ne leve jamais : une panne garde le tour precedent et le DIT (etat). */
+/** un lecteur compte : chaque appel (pas chaque requete HTTP : les relances internes de rpcServeur/rpcRails ne sont pas vues ici) */
+const compteur = (f, c, k) => async (...a) => { c[k] = (c[k] || 0) + 1; return f(...a); };
 async function actionsChaineTour(em) {
+  const c = { preuves: 0, unites: 0, routes: 0, bloc: 0 };
   try {
     const candidats = candidatsActions({ emetteur: em && em.etat === 'OK' ? em.adresses : [], symbolesEmetteur: (em && em.symboles) || {},
       creationsVues: [...creationsEmetteurVues.values()] });
-    const avant = preuvesActions.size;
-    const tour = await decouvrirActions({ rpc: rpcServeur, candidats, cache: preuvesActions, pause: 120 });
-    if (preuvesActions.size !== avant) sauverActionsDisque();
+    /* ⛔ 2026-10-25 : les preuves lisent par une LISTE de lecteurs capables des vieux recus (lecteurPreuves) : rpcServeur (base.org puis
+     *   publicnode), puis base.drpc.org (12/12 des creations a ~49,1 M servies, mesure du jour ; publicnode 0/12) */
+    const replisPreuves = ESSAI_SRV.actif || process.env.TB_REPLIS === '0' ? [] : [lecteurUrl('https://base.drpc.org')];
+    const rpcPreuves = compteur(lecteurPreuves([rpcServeur, ...replisPreuves]), c, 'preuves');
+    const tour = await decouvrirActions({ rpc: rpcPreuves, candidats, cache: preuvesActions, pause: 120 });
+    let aSauver = tour.neuves > 0; /* une preuve tentee peut avoir grave, rejuge ou efface un verdict */
     let unitesLues = 0;
     for (const p of tour.prouvees) {
       const u = unitesActions.get(p.adr);
       if (u && u.v !== null && Date.now() - u.t < UNITES_TTL_MS) continue;
       if (unitesLues >= 60) break;
       unitesLues += 1;
-      unitesActions.set(p.adr, { v: await lireUnites({ rpc: rpcRails, adr: p.adr }), t: Date.now() });
+      unitesActions.set(p.adr, { v: await lireUnites({ rpc: compteur(rpcRails, c, 'unites'), adr: p.adr }), t: Date.now() });
     }
     let routesLues = 0;
     /* ⛔ 2026-10-25 : LES ENTREES DE LA TABLE AUSSI. Remesure du jour : 4 des 25 (WRDc BILIc NIOc NVOc) cotaient 10 USDC 4 a 8 % sous leur
      *   prix moyen et gardaient leur Buy, parce que la table « garde la main ». Elle garde sa POOL (avecPoolAction) ; son Buy suit la regle
-     *   commune. Ordre : hors table d abord (leur Buy en depend), puis la table. */
-    const ordre = [...tour.prouvees].sort((x, y) => Number(POOLS_ACTIONS_AERODROME.has(x.adr)) - Number(POOLS_ACTIONS_AERODROME.has(y.adr)));
-    for (const p of ordre) {
+     *   commune.
+     * ⛔⛔ ORDRE (revue 2026-10-25, fail-closed) : la TABLE D ABORD — sans verdict une action n a plus de Buy, et ce sont les Buy d hier ;
+     *   puis, a statut egal, le verdict le plus VIEUX (ou absent) d abord. */
+    const age = (a) => { const r = routesActions.get(a); return r ? r.t : 0; };
+    const ordre = [...tour.prouvees].sort((x, y) => (Number(POOLS_ACTIONS_AERODROME.has(y.adr)) - Number(POOLS_ACTIONS_AERODROME.has(x.adr))) || (age(x.adr) - age(y.adr)));
+    /* ⛔ les DEUX jambes d une route et ses lectures de pool sont epinglees au MEME bloc (10 blocs sous la tete lue : 2 s a 200 ms/bloc,
+     *   pour qu un noeud un peu en retard l ait). Une tete non lue : aucune route ce tour (rien n est affirme). */
+    let bloc = null;
+    try { bloc = parseInt(await compteur(rpcRails, c, 'bloc')('eth_blockNumber', []), 16) - 10; } catch (_) { bloc = null; }
+    const appelEpingle = Number.isSafeInteger(bloc) && bloc > 0
+      ? compteur((to, data) => rpcRails('eth_call', [{ to, data }, '0x' + bloc.toString(16)]), c, 'routes') : null;
+    for (const p of appelEpingle ? ordre : []) {
       const u = unitesActions.get(p.adr);
       if (!u || !(u.v > 0n)) continue; /* sans unites en circulation, rien a acheter */
       const r = routesActions.get(p.adr);
       if (r && Date.now() - r.t < ROUTE_TTL_MS) continue;
       if (routesLues >= ROUTES_PAR_TOUR) break;
       routesLues += 1;
-      const v = await routeAction({ appel: callLarge, adr: p.adr });
-      if (v.etat === 'OK') routesActions.set(p.adr, { r: routeServie(v), t: Date.now() });
+      const v = await routeAction({ appel: appelEpingle, adr: p.adr, cachePools: poolsActionsCache, bloc });
+      if (v.etat === 'OK') { routesActions.set(p.adr, { r: routeServie(v), t: Date.now() }); aSauver = true; }
     }
+    if (aSauver) sauverActionsDisque();
     tourActions = tour;
+    const total = c.preuves + c.unites + c.routes + c.bloc;
+    appelsActions.dernierTour = { ...c, total, routesLues, preuvesNeuves: tour.neuves, a: Date.now() };
+    appelsActions.heure.push({ t: Date.now(), n: total });
+    appelsActions.heure = appelsActions.heure.filter((x) => Date.now() - x.t < 3_600_000);
     console.log('[actions] ' + tour.etat + ' · ' + tour.prouvees.length + ' proven, ' + tour.refusees.length + ' refused, ' + tour.nonMesurees.length
-      + ' not measured · ' + tour.neuves + ' new proof(s), ' + unitesLues + ' supply read(s), ' + routesLues + ' route(s) read');
+      + ' not measured · ' + tour.neuves + ' new proof(s), ' + unitesLues + ' supply read(s), ' + routesLues + ' route(s) read · ' + total + ' rpc call(s)');
   } catch (e) { console.log('[actions] pass interrupted: ' + e.message); }
   const prouvees = new Set(((tourActions && tourActions.prouvees) || []).map((p) => p.adr));
   return { prouvees, tour: tourActions };
@@ -3426,7 +3463,9 @@ function chargerTrendingDisque() {
      *   ⛔ TOUT AJOUT DE CHAMP DOIT ETRE AJOUTE ICI, et la version bumpee. Les deux, pas l une. */
     /* 2026-10-25 : `actionsChaine` (actions-chaine.js). Le champ de ligne `routeAction` n est pas ajoute a champsLigne : tout corps qui
      *   porte `actionsChaine` a ete ecrit par le code qui pose `routeAction` sur CHAQUE ligne (null compris) — l enveloppe le garantit. */
-    const champsAttendus = ['emetteurEtat', 'actionsChaine'];
+    /* 2026-10-25 (revue, fail-closed) : `routesFermees` — un corps ecrit AVANT le fail-closed porte des lignes d action a routeAction null
+     *   (Buy DexScreener) : servi au demarrage, il rendrait le Buy que la regle retire. Il est refuse ici. */
+    const champsAttendus = ['emetteurEtat', 'actionsChaine', 'routesFermees'];
     /* 2026-10-17 : `achat` (verdict serveur du Buy de Market) — champ de ligne ajoute SANS bumper TRENDING_CACHE_VER (meme choix que
      *   `trousRattrapage` : la bumper jetterait l index des createurs) ; un corps d avant est refuse par cette garde, le progres garde. */
     const champsLigne = ['emetteur', 'quoteAdr', 'achat'];
@@ -3704,28 +3743,33 @@ async function lireTrending() {
     /* la marque d origine : la liste de l emetteur (toutes ses pages) PLUS les actions prouvees sur la chaine — une API muette ne
      *   ramene plus la marque a nos 15 quand la chaine en a prouve 202 */
     const marquees = [...new Set([...em.adresses, ...ac.prouvees])];
+    const marqueesSet = new Set(marquees);
     const resume = resumerTrending(paires, adrs, { max: 400, actionsEmetteur: marquees }); /* tip 0038 : tous les blocks vivants pour la map (Trade en montre 40) */
     /* la route de chaque action prouvee hors table : `routeAction` sur la ligne (null partout ailleurs, pour que la forme ne varie pas) */
     let listees = 0;
+    /* ⛔⛔ 2026-10-25 (revue) — FAIL-CLOSED. Toute ligne d ACTION (liste de l emetteur, prouvee, graine du recensement, table mesuree)
+     *   porte un verdict : celui de sa route (memoire ou disque, avec son bloc), ou ROUTE_EN_COURS (pas de Buy, « checking »). Elle ne
+     *   retombe plus sur le verdict DexScreener le temps que sa route soit lue, ni apres un redemarrage. Les autres lignes : null. */
+    const estAction = (a) => ac.prouvees.has(a) || marqueesSet.has(a) || CREATIONS_GRAINE.has(a) || POOLS_ACTIONS_AERODROME.has(a);
     for (const l of resume.lignes || []) {
       const a = String(l.adr || '').toLowerCase();
       if (ac.prouvees.has(a)) listees += 1;
-      const r = ac.prouvees.has(a) ? routesActions.get(a) : null;
-      /* ⛔ une entree de table ne recoit qu un verdict PORTANT SUR SA pool : un refus mesure sur une autre pool ne lui retire pas le Buy */
-      const t = POOLS_ACTIONS_AERODROME.get(a);
-      l.routeAction = r && (!t || r.r.pool === t.pool) ? r.r : null;
+      l.routeAction = estAction(a) ? routePourLigne({ v: ac.prouvees.has(a) ? routesActions.get(a) : null, table: POOLS_ACTIONS_AERODROME.get(a) || null }) : null;
     }
     const actionsChaine = resumeActions({ tour: ac.tour, unites: new Map([...unitesActions].map(([k, v]) => [k, v.v])),
       routes: new Map([...routesActions].map(([k, v]) => [k, v.r])), table: new Set(POOLS_ACTIONS_AERODROME.keys()), listees, emetteurEtat: em.etat, emetteurCompte: em.adresses.length });
     actionsChaine.liste = ((ac.tour && ac.tour.prouvees) || []).map((p) => {
       const u = unitesActions.get(p.adr), r = routesActions.get(p.adr);
       return { adr: p.adr, sym: p.symbole || p.symboleEmetteur || null, unites: u && u.v !== null ? String(u.v) : null,
-        table: POOLS_ACTIONS_AERODROME.has(p.adr), route: r ? (r.r.achetable ? 'ACHETABLE' : r.r.code) : null };
+        table: POOLS_ACTIONS_AERODROME.has(p.adr), route: r ? (r.r.achetable ? 'ACHETABLE' : r.r.code) : null,
+        perteBps: r && r.r.perteBps !== undefined ? r.r.perteBps : null, bloc: r && r.r.bloc ? r.r.bloc : null };
     });
+    /* le cout, servi : appels du dernier tour (par usage) et somme sur l heure glissante */
+    actionsChaine.appels = { dernierTour: appelsActions.dernierTour, heure: appelsActions.heure.reduce((s, x) => s + x.n, 0), toursHeure: appelsActions.heure.length };
     const achatMarche = await achatsMarche(resume.lignes);
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
       fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
-      emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche, actionsChaine,
+      emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche, actionsChaine, routesFermees: true,
       ...resume });
   } catch (e) {
     corps = trCache.corps || JSON.stringify({ ok: false, pourquoi: 'Trending not read: ' + String(e && e.message || e).slice(0, 80) });

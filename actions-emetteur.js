@@ -116,11 +116,14 @@ export async function lireActionsEmetteur(chercher) {
     let obj = brut;
     if (typeof obj === 'string') { try { obj = JSON.parse(obj); } catch (_) { obj = null; } }
     pages += 1;
-    /* une DERNIERE page vide apres des pages pleines est une fin de liste, pas « zero actions » */
-    if (adresses.length && obj && Array.isArray(obj.tokens) && !obj.tokens.length && !obj.next_page_token) break;
+    /* ⛔⛔ 2026-10-25 (revue) : une page VIDE apres un jeton n est PAS une fin de liste — l API reelle termine par une page PLEINE sans
+     *   `next_page_token` (sonde : 100 + 100 + 2). Une page vide annoncee par un jeton est une page non lue : RETOMBEE (decode -> NON_MESURE). */
     const d = decodeActionsEmetteur(obj);
     if (d.etat !== 'OK') { echec = 'page ' + pages + ': ' + (d.pourquoi || 'no reason'); break; }
-    for (const a of d.adresses) { if (!adresses.includes(a)) adresses.push(a); if (d.symboles[a]) symboles[a] = d.symboles[a]; }
+    /* ⛔ une page qui REPETE des adresses d une page precedente (curseur ignore, cache intermediaire) n est pas la suite : RETOMBEE */
+    const repetees = d.adresses.filter((a) => adresses.includes(a)).length;
+    if (repetees) { echec = 'page ' + pages + ' repeats ' + repetees + ' address(es) of an earlier page'; break; }
+    for (const a of d.adresses) { adresses.push(a); if (d.symboles[a]) symboles[a] = d.symboles[a]; }
     const suite = obj && typeof obj === 'object' ? obj.next_page_token : null;
     if (suite === null || suite === undefined || suite === '') break;
     if (typeof suite !== 'string' || vus.has(suite)) { echec = 'page ' + pages + ' points back to a page already read'; break; }

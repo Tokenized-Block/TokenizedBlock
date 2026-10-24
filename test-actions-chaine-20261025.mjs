@@ -9,9 +9,10 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { FACTORY, TOPIC_CREATED } from './index-blocks.js';
 import { prouverAction, decouvrirActions, candidatsActions, routeAction, routeServie, resumeActions, sortieMoyenne, lireUnites,
-  CREATEUR_EMETTEUR, APPELE_EMETTEUR, CREATIONS_GRAINE, ECART_MAX_BPS, USDC_MIN_POOL, POOLS_REFUSEES_EXECUTION } from './actions-chaine.js';
+  CREATEUR_EMETTEUR, APPELE_EMETTEUR, CREATIONS_GRAINE, ECART_MAX_BPS, USDC_MIN_POOL, POOLS_REFUSEES_EXECUTION,
+  verdictGravable, lecteurPreuves, routePourLigne, ROUTE_EN_COURS, ROUTE_SERVIE_MAX_MS, PERTE_ALLER_RETOUR_MAX_BPS, POOL_ABSENTE_TTL_MS } from './actions-chaine.js';
 import { lireActionsEmetteur, URL_EMETTEUR, EMETTEUR_RETOMBEE, PAGES_MAX } from './actions-emetteur.js';
-import { avecPoolAction, POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
+import { avecPoolAction, POOLS_ACTIONS_AERODROME, ALLER_RETOUR_REFUSES, phraseAllerRetour } from './pools-actions-aerodrome.js';
 import { verdictRoutage, raisonSansBuy } from './routage.js';
 import { FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
 import { USDC_BASE } from './frais-creation.js';
@@ -105,6 +106,94 @@ await cas('⛔ UNE LECTURE RATEE EST NON_MESURE, JAMAIS UN REFUS (et rien n est 
   assert.equal(t.etat, 'PARTIEL'); assert.equal(cache.size, 0, 'un NON_MESURE a ete grave dans le cache definitif');
 });
 
+await cas('⛔⛔⛔ REVUE 2026-10-25 : UN `0x`, UNE REPONSE DECALEE, UN LOG MAL FORME = NON_MESURE, JAMAIS UN REFUS GRAVE', async () => {
+  /* le scenario de la revue : un noeud rend `0x` (en retard), le tour suivant un noeud sain — l action doit etre PROUVEE */
+  const c = chaine();
+  c.code.set(VRAIE, '0x');
+  const cache = new Map();
+  const cand = [{ adr: VRAIE, tx: TX_VRAIE, txs: [TX_VRAIE], sources: ['emetteur'] }];
+  const t1 = await decouvrirActions({ rpc: c.rpc, candidats: cand, cache });
+  assert.equal(t1.nonMesurees.length, 1, JSON.stringify(t1)); assert.equal(t1.nonMesurees[0].code, 'CODE_VIDE');
+  assert.equal(cache.size, 0, 'un `0x` a ete grave comme refus');
+  c.code.set(VRAIE, '0xef');
+  const t2 = await decouvrirActions({ rpc: c.rpc, candidats: cand, cache });
+  assert.deepEqual(t2.prouvees.map((p) => p.adr), [VRAIE], 'la vraie action reste de-listee apres un seul `0x`');
+  /* reponse vide sous une autre forme */
+  c.code.set(SPAM, '');
+  assert.equal((await prouverAction({ rpc: c.rpc, adr: SPAM, tx: TX_SPAM })).etat, 'NON_MESURE');
+  c.code.set(SPAM, '0x6080604052');
+  /* du code PRESENT et different : refus, avec ce qui a ete lu */
+  const s = await prouverAction({ rpc: c.rpc, adr: SPAM, tx: TX_SPAM });
+  assert.equal(s.code, 'MARQUEUR'); assert.equal(s.codeLu, '0x6080604052'); assert.equal(verdictGravable(s), true);
+  /* recu / tx d une AUTRE transaction : un noeud qui deraille, pas la chaine */
+  const r0 = c.recus.get(TX_VRAIE);
+  c.recus.set(TX_VRAIE, { ...r0, transactionHash: TX_IMP });
+  const ra = await prouverAction({ rpc: c.rpc, adr: VRAIE, tx: TX_VRAIE });
+  assert.equal(ra.etat, 'NON_MESURE'); assert.equal(ra.code, 'RECU_AUTRE');
+  c.recus.set(TX_VRAIE, r0);
+  const x0 = c.txs.get(TX_VRAIE);
+  c.txs.set(TX_VRAIE, { ...x0, hash: TX_IMP });
+  const ta = await prouverAction({ rpc: c.rpc, adr: VRAIE, tx: TX_VRAIE });
+  assert.equal(ta.etat, 'NON_MESURE'); assert.equal(ta.code, 'TX_AUTRE');
+  c.txs.set(TX_VRAIE, x0);
+  /* un log de la factory mal forme (topics[2] absent : decoderCreation leve) ne fait pas tomber le tour */
+  const MAL = '0xb2000000000000000000000000000000000000cc', TX_MAL = hex64(0xccn);
+  c.code.set(MAL, '0xef');
+  c.recus.set(TX_MAL, { transactionHash: TX_MAL, status: '0x1', blockNumber: '0x23', logs: [{ address: FACTORY, topics: [TOPIC_CREATED, pad(MAL)], data: null }] });
+  c.txs.set(TX_MAL, { hash: TX_MAL, from: CREATEUR_EMETTEUR, to: APPELE_EMETTEUR });
+  const tm = await decouvrirActions({ rpc: c.rpc, candidats: [{ adr: MAL, tx: TX_MAL, sources: ['chaine'] }, ...cand], cache: new Map() });
+  assert.equal(tm.nonMesurees[0].code, 'LOG_ILLISIBLE', JSON.stringify(tm.nonMesurees)); assert.deepEqual(tm.prouvees.map((p) => p.adr), [VRAIE], 'un log mal forme a fait tomber le tour');
+  /* et une exception quelconque d une preuve non plus */
+  c.recus.set(TX_MAL, { transactionHash: TX_MAL, status: '0x1', get logs() { throw new TypeError('boom'); } });
+  const te = await decouvrirActions({ rpc: c.rpc, candidats: [{ adr: MAL, tx: TX_MAL }, ...cand], cache: new Map() });
+  assert.equal(te.nonMesurees[0].code, 'EXCEPTION', JSON.stringify(te.nonMesurees)); assert.equal(te.prouvees.length, 1, 'une exception d une preuve a fait tomber le tour');
+  /* les refus graves par le code d AVANT (sur `0x`, ou une reponse decalee) ne reviennent pas du disque */
+  assert.equal(verdictGravable({ etat: 'REFUSE', adr: VRAIE, code: 'MARQUEUR', pourquoi: 'x' }), false, 'un MARQUEUR sans le code lu (ancien `0x`) est relu du disque');
+  assert.equal(verdictGravable({ etat: 'REFUSE', adr: VRAIE, code: 'RECU_AUTRE' }), false);
+  assert.equal(verdictGravable({ etat: 'REFUSE', adr: VRAIE, code: 'TX_AUTRE' }), false);
+  assert.equal(verdictGravable({ etat: 'REFUSE', adr: VRAIE, code: 'CREATEUR', tx: TX_IMP }), true);
+  assert.equal(verdictGravable({ etat: 'NON_MESURE', adr: VRAIE, code: 'CODE_VIDE' }), false);
+  assert.equal(verdictGravable({ etat: 'PROUVE', adr: VRAIE, tx: TX_VRAIE }), true);
+});
+
+await cas('⛔⛔ UN REFUS EST REJUGE QUAND UNE AUTRE TX DE CREATION EST ANNONCEE', async () => {
+  const c = chaine();
+  const cache = new Map();
+  /* VRAIE annoncee d abord avec la tx d un autre (refus SANS_LOG_FACTORY), puis le scan annonce la vraie tx */
+  const t1 = await decouvrirActions({ rpc: c.rpc, candidats: [{ adr: VRAIE, tx: TX_IMP, txs: [TX_IMP], sources: ['chaine'] }], cache });
+  assert.equal(t1.refusees[0].code, 'SANS_LOG_FACTORY'); assert.equal(cache.get(VRAIE).etat, 'REFUSE');
+  const lus = c.appels.length;
+  const t2 = await decouvrirActions({ rpc: c.rpc, candidats: [{ adr: VRAIE, tx: TX_IMP, txs: [TX_IMP], sources: ['chaine'] }], cache });
+  assert.equal(t2.neuves, 0); assert.equal(c.appels.length, lus, 'un refus definitif a ete relu sans tx nouvelle');
+  const cand = candidatsActions({ creationsVues: [{ jeton: VRAIE, tx: TX_IMP, createur: CREATEUR_EMETTEUR }], graine: new Map([[VRAIE, { tx: TX_VRAIE, symbole: 'SANc' }]]) });
+  assert.deepEqual(cand[0].txs.sort(), [TX_VRAIE, TX_IMP].sort(), 'les deux tx annoncees ne sont pas gardees');
+  const t3 = await decouvrirActions({ rpc: c.rpc, candidats: cand, cache });
+  assert.deepEqual(t3.prouvees.map((p) => p.adr), [VRAIE], 'le refus n a pas ete rejuge sur la nouvelle tx : ' + JSON.stringify(t3.refusees));
+  assert.equal(cache.get(VRAIE).etat, 'PROUVE');
+  /* un refus rejuge qui refuse encore garde les DEUX tx jugees : il ne se relit plus */
+  const c2 = chaine(); const cache2 = new Map();
+  await decouvrirActions({ rpc: c2.rpc, candidats: [{ adr: IMPOSTEUR, tx: TX_IMP, txs: [TX_IMP] }], cache: cache2 });
+  await decouvrirActions({ rpc: c2.rpc, candidats: [{ adr: IMPOSTEUR, tx: TX_IMP, txs: [TX_IMP, TX_FORGE] }], cache: cache2 });
+  assert.deepEqual(cache2.get(IMPOSTEUR).jugees.sort(), [TX_IMP, TX_FORGE].sort());
+  const n2 = c2.appels.length;
+  await decouvrirActions({ rpc: c2.rpc, candidats: [{ adr: IMPOSTEUR, tx: TX_IMP, txs: [TX_IMP, TX_FORGE] }], cache: cache2 });
+  assert.equal(c2.appels.length, n2);
+});
+
+await cas('⛔⛔ LES 12 PLUS ANCIENNES : le lecteur des preuves essaie le suivant (publicnode refuse l archive, base.org/drpc servent)', async () => {
+  const c = chaine();
+  const archive = async () => { throw new Error('Archive requests require a personal token'); };
+  const muet = async () => null;
+  const rpc = lecteurPreuves([archive, muet, c.rpc]);
+  assert.equal((await prouverAction({ rpc, adr: VRAIE, tx: TX_VRAIE })).etat, 'PROUVE');
+  /* tous muets : null rendu (NON_MESURE), jamais un refus */
+  assert.equal((await prouverAction({ rpc: lecteurPreuves([archive, muet]), adr: VRAIE, tx: TX_VRAIE })).etat, 'NON_MESURE');
+  /* `0x` de l un, 0xef de l autre : 0xef */
+  const vide = async (m) => (m === 'eth_getCode' ? '0x' : null);
+  assert.equal((await prouverAction({ rpc: lecteurPreuves([vide, c.rpc]), adr: VRAIE, tx: TX_VRAIE })).etat, 'PROUVE');
+  await assert.rejects(lecteurPreuves([archive])('eth_getCode', [VRAIE, 'latest']), /Archive/);
+});
+
 await cas('⛔ LA DECOUVERTE : candidats unis, preuves bornees par tour, verdicts definitifs caches', async () => {
   const c = chaine();
   const cand = candidatsActions({ emetteur: [VRAIE, SPAM], symbolesEmetteur: { [SPAM]: 'SANc' },
@@ -153,8 +242,19 @@ await cas('⛔⛔⛔ TOUTES LES PAGES SONT LUES ; UNE PAGE MANQUANTE NE REND JAM
   assert.equal(tours, 2, 'la boucle n est arretee que par la borne de pages (' + tours + ' lectures), pas par le jeton qui revient');
   let k = 0; const sansFin = await lireActionsEmetteur(async () => page([A(++k)], 't' + k));
   assert.equal(sansFin.etat, 'RETOMBEE'); assert.equal(k, PAGES_MAX, 'la borne de pages n a pas arrete la lecture');
+  /* ⛔⛔ revue 2026-10-25 : une page VIDE annoncee par un jeton est une page non lue — l API reelle finit par une page pleine sans jeton */
   const vide = await lireActionsEmetteur(async (u) => (u === URL_EMETTEUR ? page([A(1)], 'z') : { tokens: [], next_page_token: null }));
-  assert.equal(vide.etat, 'OK', 'une derniere page vide apres une pleine est une fin de liste'); assert.equal(vide.adresses.length, 1);
+  assert.equal(vide.etat, 'RETOMBEE', 'une page vide apres un jeton a rendu ' + vide.etat);
+  const videObj = await lireActionsEmetteur(async (u) => (u === URL_EMETTEUR ? page([A(1)], 'z') : {}));
+  assert.equal(videObj.etat, 'RETOMBEE');
+  /* une page 2 qui REPETE la page 1 (curseur ignore) : RETOMBEE, pas 100 adresses « OK » */
+  const rep = await lireActionsEmetteur(async (u) => (u === URL_EMETTEUR ? page([A(1), A(2)], 'q') : page([A(1), A(2)], null)));
+  assert.equal(rep.etat, 'RETOMBEE', 'une page qui repete la precedente a rendu ' + rep.etat);
+  const partiel = await lireActionsEmetteur(async (u) => (u === URL_EMETTEUR ? page([A(1), A(2)], 'q') : page([A(2), A(3)], null)));
+  assert.equal(partiel.etat, 'RETOMBEE', 'une page qui recouvre la precedente a rendu ' + partiel.etat);
+  /* et le cablage serveur borne chaque page dans le temps */
+  const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
+  assert.match(srv, /fetch\(url, \{ headers: \{ 'x-ms-monitor': '1' \}, signal: AbortSignal\.timeout\(10000\) \}\)/, 'la liste de l emetteur est lue sans delai borne');
 });
 
 /* ── la route ── */
@@ -164,14 +264,23 @@ const S = { getPool: selecteur('getPool(address,address,int24)'), bal: selecteur
   q: selecteur('quoteExactInputSingle((address,address,uint256,int24,uint160))') };
 const ADM = () => true; /* admission forcee : on juge la ROUTE seule ; l admission a son propre cas */
 const SQRT = 2n ** 96n * 3n; /* 9 unites brutes de jeton par unite brute d USDC */
-function pools({ ts = 1, usdc = 30_000_000_000n, liq = 10n ** 15n, garde = 9990n, revert = false, pool = POOL, panne = false } = {}) {
+/* `retourGarde` : la part rendue a la REVENTE (10000 = au prix moyen) ; la vente cote amountIn / 9 x retourGarde / 10000 */
+function pools({ ts = 1, usdc = 30_000_000_000n, liq = 10n ** 15n, garde = 9990n, revert = false, pool = POOL, panne = false, retourGarde = 9990n, revertVente = false, panneVente = false, compte = null } = {}) {
   return async (to, data) => {
+    if (compte) compte.n += 1;
     if (panne) throw new Error('refused by all 2 endpoints (429)');
-    if (bas(to) === bas(FACTORY_AERODROME_CL) && data.startsWith(S.getPool)) return BigInt('0x' + data.slice(-64)) === BigInt(ts) ? pad(pool) : hex64(0n);
+    if (bas(to) === bas(FACTORY_AERODROME_CL) && data.startsWith(S.getPool)) { if (compte) compte.getPool += 1; return BigInt('0x' + data.slice(-64)) === BigInt(ts) ? pad(pool) : hex64(0n); }
     if (bas(to) === USDC && data.startsWith(S.bal)) return hex64(usdc);
     if (data === S.liq) return hex64(liq);
     if (data === S.s0) return hex64(SQRT) + '0'.repeat(64 * 6);
-    if (data.startsWith(S.q)) { if (revert) throw new Error('execution reverted'); return hex64(10_000_000n * 9n * garde / 10000n) + '0'.repeat(64 * 3); }
+    if (data.startsWith(S.q)) {
+      const tokenIn = '0x' + data.slice(10 + 24, 10 + 64);
+      const amountIn = BigInt('0x' + data.slice(10 + 128, 10 + 192));
+      if (tokenIn === USDC) { if (revert) throw new Error('execution reverted'); return hex64(amountIn * 9n * garde / 10000n) + '0'.repeat(64 * 3); }
+      if (panneVente) throw new Error('refused by all 2 endpoints (429)');
+      if (revertVente) throw new Error('execution reverted');
+      return hex64(amountIn * retourGarde / 9n / 10000n) + '0'.repeat(64 * 3);
+    }
     throw new Error('appel inattendu ' + to + ' ' + data.slice(0, 10));
   };
 }
@@ -203,6 +312,107 @@ await cas('⛔⛔ LE VERDICT DE ROUTE : achetable seulement sur NOTRE factory, c
   assert.match(hors.phrase, /not in this app's stock list/);
   const nflx = await routeAction({ appel: pools(), adr: '0xb2000000000000000000000000000000000000ce', admise: (a) => a === '0xb2000000000000000000000000000000000000ce' });
   assert.equal(nflx.achetable, true);
+});
+
+await cas('⛔⛔⛔ REVUE 2026-10-25 : LE COTE VENTE — un aller-retour de 10 USDC qui perd > 2 % n a PAS de Buy (LIc -16,6 %, SEc -6,5 %)', async () => {
+  const bon = await routeAction({ appel: pools(), adr: VRAIE, admise: ADM });
+  assert.equal(bon.achetable, true); assert.equal(bon.perteBps, 19, JSON.stringify(bon));
+  /* LIc : achat a 1 bps du moyen, mais la revente rend 8,34 sur 10 */
+  const lic = await routeAction({ appel: pools({ garde: 9999n, retourGarde: 8341n }), adr: VRAIE, admise: ADM });
+  assert.equal(lic.achetable, false, 'un aller-retour a -16,6 % garde son Buy'); assert.equal(lic.code, 'ALLER_RETOUR');
+  assert.ok(lic.perteBps > 1600 && lic.perteBps < 1700, String(lic.perteBps)); assert.match(lic.phrase, /sells for 8\.34 USDC at its current state, a 16\.\d% gap between buying and selling/);
+  /* NOKc : -1,6 % passe ; la borne est 2 % exactement (200 bps passe, 201 non) */
+  assert.equal((await routeAction({ appel: pools({ garde: 9999n, retourGarde: 9841n }), adr: VRAIE, admise: ADM })).achetable, true, 'NOKc (-1,6 %) refuse');
+  assert.equal(PERTE_ALLER_RETOUR_MAX_BPS, 200);
+  const juste = await routeAction({ appel: pools({ garde: 10000n, retourGarde: 9800n }), adr: VRAIE, admise: ADM });
+  assert.equal(juste.perteBps, 200); assert.equal(juste.achetable, true);
+  const audela = await routeAction({ appel: pools({ garde: 10000n, retourGarde: 9799n }), adr: VRAIE, admise: ADM });
+  assert.equal(audela.perteBps, 201); assert.equal(audela.code, 'ALLER_RETOUR');
+  /* la vente qui reverte est une reponse (refus nomme) ; une vente non lue n est pas un verdict */
+  const vnc = await routeAction({ appel: pools({ revertVente: true }), adr: VRAIE, admise: ADM });
+  assert.equal(vnc.code, 'VENTE_NON_COTEE'); assert.equal(vnc.achetable, false, 'une vente qui reverte garde son Buy');
+  assert.equal((await routeAction({ appel: pools({ panneVente: true }), adr: VRAIE, admise: ADM })).etat, 'NON_MESURE');
+  /* les DEUX jambes au meme bloc : le bloc epingle par l appelant est servi avec le verdict */
+  const b = await routeAction({ appel: pools(), adr: VRAIE, admise: ADM, bloc: 53046326 });
+  assert.equal(b.bloc, 53046326); assert.equal(routeServie(b).bloc, 53046326); assert.equal(routeServie(lic).perteBps, lic.perteBps);
+});
+
+await cas('⛔⛔ REVUE 2026-10-25 : getPool EN CACHE — une pool trouvee ne se relit jamais, une absence apres POOL_ABSENTE_TTL_MS', async () => {
+  const cache = new Map(), k1 = { n: 0, getPool: 0 };
+  await routeAction({ appel: pools({ compte: k1 }), adr: VRAIE, admise: ADM, cachePools: cache, maintenant: 1000 });
+  const nEsp = k1.getPool; assert.ok(nEsp >= 5, 'espacements sondes : ' + nEsp);
+  const k2 = { n: 0, getPool: 0 };
+  const v2 = await routeAction({ appel: pools({ compte: k2 }), adr: VRAIE, admise: ADM, cachePools: cache, maintenant: 2000 });
+  assert.equal(k2.getPool, 0, 'getPool relu avec un cache chaud'); assert.equal(v2.achetable, true); assert.equal(k2.n, k1.n - nEsp);
+  /* au-dela du TTL, seules les ABSENCES sont relues ; la pool trouvee, jamais */
+  const k3 = { n: 0, getPool: 0 };
+  await routeAction({ appel: pools({ compte: k3 }), adr: VRAIE, admise: ADM, cachePools: cache, maintenant: 2000 + POOL_ABSENTE_TTL_MS + 1 });
+  assert.equal(k3.getPool, nEsp - 1, 'au-dela du TTL : ' + k3.getPool + ' getPool');
+  /* une lecture refusee n entre pas au cache */
+  const c2 = new Map();
+  await routeAction({ appel: pools({ panne: true }), adr: VRAIE, admise: ADM, cachePools: c2 });
+  assert.equal(c2.size, 0, 'une lecture refusee a ete mise en cache');
+});
+
+await cas('⛔⛔⛔ REVUE 2026-10-25 : FAIL-CLOSED — une action SANS verdict de route n a PAS de Buy ; la fiche suit le Market', async () => {
+  const now = 10 * ROUTE_SERVIE_MAX_MS;
+  const ok = routeServie(await routeAction({ appel: pools(), adr: VRAIE, admise: ADM }));
+  assert.equal(routePourLigne({ v: null, maintenant: now }), ROUTE_EN_COURS);
+  assert.equal(routePourLigne({ v: { r: ok, t: now - ROUTE_SERVIE_MAX_MS - 1 }, maintenant: now }), ROUTE_EN_COURS, 'un verdict perime donne encore un Buy');
+  assert.equal(routePourLigne({ v: { r: ok, t: now - 1000 }, maintenant: now }), ok);
+  /* table : un verdict sur une AUTRE pool n est pas le sien */
+  assert.equal(routePourLigne({ v: { r: ok, t: now }, table: { pool: '0x' + 'cd'.repeat(20) }, maintenant: now }), ROUTE_EN_COURS);
+  assert.equal(routePourLigne({ v: { r: ok, t: now }, table: { pool: POOL }, maintenant: now }), ok);
+  const sansPool = { achetable: false, code: 'POOL_VIDE', phrase: 'No buy: x', pool: null };
+  assert.equal(routePourLigne({ v: { r: sansPool, t: now }, table: { pool: POOL }, maintenant: now }), sansPool);
+  /* ROUTE_EN_COURS retire le Buy (Market ET fiche, meme verdictRoutage) et dit qu on verifie */
+  const v = verdictRoutage({ aMarche: true, dex: 'aerodrome', poolAdr: POOL, routeAction: ROUTE_EN_COURS });
+  assert.equal(v.achetableIci || v.achetableEnEth || v.achetableEnUsdc, false, 'une action sans verdict a un Buy');
+  assert.match(raisonSansBuy(v, { liqOk: true }).phrase, /checking its route/);
+  assert.equal(raisonSansBuy(v, { liqOk: true }).code, 'ROUTE_EN_COURS');
+  /* le cablage serveur : toute ligne d action porte un verdict (routePourLigne), la table d abord, routes persistees avec leur bloc */
+  const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  assert.match(srv, /l\.routeAction = estAction\(a\) \? routePourLigne\(\{ v: ac\.prouvees\.has\(a\) \? routesActions\.get\(a\) : null, table: POOLS_ACTIONS_AERODROME\.get\(a\) \|\| null \}\) : null;/);
+  assert.match(srv, /const estAction = \(a\) => ac\.prouvees\.has\(a\) \|\| marqueesSet\.has\(a\) \|\| CREATIONS_GRAINE\.has\(a\) \|\| POOLS_ACTIONS_AERODROME\.has\(a\);/);
+  assert.match(srv, /\(Number\(POOLS_ACTIONS_AERODROME\.has\(y\.adr\)\) - Number\(POOLS_ACTIONS_AERODROME\.has\(x\.adr\)\)\)/, 'la table n est pas lue d abord');
+  assert.match(srv, /routes: \[\.\.\.routesActions\]\.map\(\(\[adr, v\]\) => \(\{ adr, r: v\.r, t: v\.t \}\)\), pools: \[\.\.\.poolsActionsCache\]/, 'les routes ne sont pas persistees');
+  assert.match(srv, /for \(const v of Array\.isArray\(x && x\.routes\) \? x\.routes : \[\]\)/, 'les routes ne sont pas relues du disque');
+  assert.match(srv, /routeAction\(\{ appel: appelEpingle, adr: p\.adr, cachePools: poolsActionsCache, bloc \}\)/);
+  assert.match(srv, /rpcRails\('eth_call', \[\{ to, data \}, '0x' \+ bloc\.toString\(16\)\]\)/, 'les jambes ne sont pas epinglees au meme bloc');
+  assert.match(srv, /if \(p && \/\^0x\[0-9a-f\]\{40\}\$\/\.test\(p\.adr\) && verdictGravable\(p\)\) preuvesActions\.set/, 'le disque rend des refus non definitifs');
+  assert.match(srv, /lecteurPreuves\(\[rpcServeur, \.\.\.replisPreuves\]\)/);
+  /* un corps de trending ecrit AVANT le fail-closed (routeAction null sur les actions) n est pas servi au demarrage */
+  assert.match(srv, /const champsAttendus = \['emetteurEtat', 'actionsChaine', 'routesFermees'\];/);
+  assert.match(srv, /achatMarche, actionsChaine, routesFermees: true,/);
+  assert.match(srv, /lecteurUrl\('https:\/\/base\.drpc\.org'\)/);
+  /* la fiche (carte) : le meme verdict que le Market */
+  const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  assert.match(html, /const routeActionLue = mkPublic && !\(mkPublic\.achat && mkPublic\.achat\.cle\) \? \(mkPublic\.routeAction \|\| null\) : null;/);
+  assert.match(html, /const entreeRoutage = \{ aMarche, dex: dexLu, poolAdr: poolAdrLu, routeAction: routeActionLue \};/, 'la fiche de la carte juge sans la route du serveur');
+});
+
+await cas('⛔⛔ LES POOLS A ALLER-RETOUR > 2 % : dans la table (vraie pool), hors du jeu', async () => {
+  assert.ok(ALLER_RETOUR_REFUSES.size >= 2);
+  for (const [a, r] of ALLER_RETOUR_REFUSES) {
+    const t = POOLS_ACTIONS_AERODROME.get(a);
+    assert.ok(t, r.symbole + ' : adresse absente de la table (recopie fausse ?)'); assert.equal(t.symbole, r.symbole);
+    assert.ok(r.perteBps > 200 && Number.isSafeInteger(r.bloc));
+  }
+  assert.ok(ALLER_RETOUR_REFUSES.has('0xb200000000000000000000d61efd9f54a23ef9eb') && ALLER_RETOUR_REFUSES.has('0xb2000000000000000000003088798f6d0722aaac'), 'LIc et SEc');
+  assert.ok(!ALLER_RETOUR_REFUSES.has('0xb2000000000000000000005ac674f707e357409c'), 'NOKc (-1,6 %) est refuse');
+  assert.match(phraseAllerRetour('0xb200000000000000000000d61efd9f54a23ef9eb'), /what 10 USDC buys sells for 16\.5% less/);
+  assert.equal(phraseAllerRetour('0xb2000000000000000000005ac674f707e357409c'), null);
+  const { planRollEnAction, planGainEnAction } = await import('./rolls-en-action.js');
+  const LIC = '0xb200000000000000000000d61efd9f54a23ef9eb', NOK = '0xb2000000000000000000005ac674f707e357409c';
+  const W = '0x' + '11'.repeat(20);
+  const muet = async () => { throw new Error('aucune lecture attendue avant le refus'); };
+  const r1 = await planRollEnAction({ rpc: muet, chaine: 8453, compte: W, contrat: W, action: LIC, rolls: 1, guess: 5 });
+  assert.equal(r1.etat, 'REFUSE'); assert.match(r1.pourquoi, /cannot pay a roll here: on its pool, what 10 USDC buys sells for 16\.5% less/, 'un roll se paie encore dans une action a -16 % : ' + r1.pourquoi);
+  const r2 = await planGainEnAction({ rpc: muet, chaine: 8453, compte: W, action: LIC, montantUsdc: 5_000_000n });
+  assert.equal(r2.etat, 'REFUSE'); assert.match(r2.pourquoi, /prize cannot be converted to this stock here: on its pool/);
+  /* NOKc passe la garde (le refus suivant, s il y en a, n est pas celui-la) */
+  const r3 = await planRollEnAction({ rpc: muet, chaine: 8453, compte: W, contrat: W, action: NOK, rolls: 1, guess: 5 }).catch((e) => ({ etat: 'LEVE', pourquoi: e.message }));
+  assert.doesNotMatch(String(r3.pourquoi || ''), /between buying and selling/);
 });
 
 await cas('⛔⛔ LE MARKET : la route servie donne le Buy OU la raison mesuree ; la table garde la main', async () => {
@@ -256,15 +466,15 @@ await cas('⛔⛔ LE CABLAGE SERVEUR : prouvees lues chez DexScreener, marquees,
   const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   assert.match(srv, /const ac = await actionsChaineTour\(em\);\n\s+for \(const a of ac\.prouvees\) blocksConnus\.add\(a\);\n\s+const adrs = \[\.\.\.blocksConnus\]/, 'les prouvees ne sont pas demandees a DexScreener');
   assert.match(srv, /actionsEmetteur: marquees/);
-  assert.match(srv, /l\.routeAction = r && \(!t \|\| r\.r\.pool === t\.pool\) \? r\.r : null;/, 'la route n est pas posee sur chaque ligne (ou une entree de table recoit un refus portant sur une autre pool)');
+  assert.match(srv, /l\.routeAction = estAction\(a\) \? routePourLigne\(/, 'la route n est pas posee sur chaque ligne d action');
   /* 2026-10-25 : les entrees de la table sont relues aussi (4 sur 25 ne passaient plus la regle) — la boucle ne les saute plus */
   assert.doesNotMatch(srv, /if \(POOLS_ACTIONS_AERODROME\.has\(p\.adr\)\) continue;/, 'la table echappe encore a la regle du Buy');
-  assert.match(srv, /for \(const p of ordre\) \{/);
+  assert.match(srv, /for \(const p of appelEpingle \? ordre : \[\]\) \{/);
   const html0 = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
   assert.match(html0, /d\.actionsChaine\.sansUnites > 0 \? ', ' \+ d\.actionsChaine\.sansUnites \+ ' with no units in circulation yet \(not listed\)'/, 'le Market ne dit pas combien d actions prouvees n ont aucune unite');
   assert.match(srv, /achatMarche, actionsChaine,/, 'le compte n est pas servi sur \/api\/trending');
   assert.match(srv, /retenirCreationsEmetteur\(cr\.creations,/, 'les creations du scan ne deviennent pas candidates');
-  assert.match(srv, /decouvrirActions\(\{ rpc: rpcServeur,/, 'les preuves ne lisent pas le recu par le lecteur qui sert les tx (mainnet.base.org)');
+  assert.match(srv, /decouvrirActions\(\{ rpc: rpcPreuves,/, 'les preuves ne lisent pas le recu par la liste de lecteurs qui sert les vieux recus');
   const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
   assert.match(html, /verdictRoutage\(\{ aMarche: true, dex: lA\.dex, poolAdr: lA\.poolAdr, routeAction: lA\.routeAction \}\)/);
 });

@@ -83,8 +83,9 @@ cas('⛔⛔ Buy ne s affiche que si le chemin in-app peut aboutir', () => {
    *   avant l appel expres : ecrit en ligne, il se terminait par `});` et faisait rapetisser la
    *   borne de `blocDeLaGarde()` (mesure : 249 caracteres au lieu de 487). Le code s adapte a la
    *   sonde ici, parce que la sonde protege une lecon payee en production. */
-  assert.ok(/const entreeRoutage = \{ aMarche, dex: dexLu, poolAdr: poolAdrLu \};/.test(nu),
-    'le verdict n est plus calcule a partir du marche lu (dex + poolAdr)');
+  /* 2026-10-25 (revue) : + `routeAction` — le verdict de route du serveur, le MEME que celui du Market (test-actions-chaine-20261025) */
+  assert.ok(/const entreeRoutage = \{ aMarche, dex: dexLu, poolAdr: poolAdrLu, routeAction: routeActionLue \};/.test(nu),
+    'le verdict n est plus calcule a partir du marche lu (dex + poolAdr + route du serveur)');
   assert.ok(/verdictRoutage\(entreeRoutage\)/.test(nu),
     'le verdict n est plus appele avec cette entree');
   assert.equal(verdictRoutage({ aMarche: false }).achetableIci, false,
