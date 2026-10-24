@@ -28,7 +28,7 @@ const M = [
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'D1 : fraicheur ignoree', 'age > -iv && age < 3 * iv;', 'age > -iv;'],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'D1 : jamais lu accepte', 'return Number.isFinite(age) && age > -iv && age < 3 * iv;', 'return !Number.isFinite(age) || (age > -iv && age < 3 * iv);'],
   ['app.html', 'APP_HTML_FILE', 'gate', 'Sign : garde d ouverture retiree',
-    "if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && lu.duelsOuverts !== true) return 'new duels are not open just now", "if (false) return 'new duels are not open just now"],
+    "if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && lu.duelsOuverts !== true) return 'new duels are closed", "if (false) return 'new duels are closed"],
   ['app.html', 'APP_HTML_FILE', 'gate', 'Sign : non relu = ouvert', '&& lu.duelsOuverts !== true) return', '&& lu.duelsOuverts === false) return'],
   ['app.html', 'APP_HTML_FILE', 'gate', 'bjDuelsRelus : ancienne reponse acceptee', ' && duelsCfg.lu >= t0', ''],
   ['app.html', 'APP_HTML_FILE', 'gate', 'bjDuelsRelus : ouverture non lue', ' && Duels.duelsOuverts(j) === true;', ';'],

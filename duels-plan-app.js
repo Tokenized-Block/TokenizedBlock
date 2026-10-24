@@ -258,9 +258,9 @@ export const FINIS = Object.freeze(['REGLE', 'ANNULE', 'REMBOURSE']);
 /* ══ L OPTION GRATUITE DU JOUEUR QUI REJOINT (audit 2026-10-24, contracts/src/BlockDuels.sol:191-240) : settle() ne marche que dans les 256
  *   blocs apres la cible, refundExpired() rend les DEUX mises en entier ensuite. Celui qui rejoint est en ligne par definition et voit le hash
  *   2 blocs apres : il regle s il gagne, se tait s il perd, et se fait rembourser. Banc forge de l auditeur : 2000 duels, joueur qui rejoint
- *   +454,4 USDC, createur -568 USDC (= gains x mise). Le contrat est deploye et immuable : la seule parade est un regleur du SERVEUR qui regle
- *   chaque duel dans sa fenetre. Tant qu il ne regle pas CE contrat, l app ne propose NI d ouvrir NI de rejoindre un duel (pas de bouton mort :
- *   caches, une phrase le dit). Les duels deja en jeu gardent Settle / Refund / Cancel.
+ *   +454,4 USDC, createur -568 USDC (= gains x mise). Le contrat est deploye et immuable. 2026-10-24 round 4 : un regleur du SERVEUR ne
+ *   suffit pas a fermer l option (DUELS_REGLEUR_SUFFIT ci-dessous) — l app ne propose NI d ouvrir NI de rejoindre un duel sur ce contrat (pas
+ *   de bouton mort : caches, une phrase le dit). Les duels deja en jeu gardent Settle / Refund / Cancel.
  * ⛔ FAIL-CLOSED : « le regleur regle ce contrat » = son etat global est ON (ni OFF, ni ARRETE) ET etat().contrats.duels — la forme
  *   PUBLIEE par slots-regleur.js etat() : contrats = { slots, duels: { contrat, configure, ... }, rolls } — est configure (=== true) et son
  *   contrat (resolu, en minuscules) est CE contrat. Revue rolls-duels-ui 2026-10-24 : la 1re version attendait un TABLEAU que le regleur ne
@@ -269,10 +269,36 @@ export const FINIS = Object.freeze(['REGLE', 'ANNULE', 'REMBOURSE']);
  *   liste de l etat perimee) ne regle rien — l option gratuite revient. contrats.duels.lu (la derniere lecture REUSSIE, ISO) doit dater de
  *   moins de 3 intervalles du regleur (e.intervalleMs ; 10 s s il manque) et contrats.duels.erreurLecture doit valoir null (la derniere
  *   lecture n a pas echoue). Un regleur plus ancien, qui ne publie ni l un ni l autre : ne couvre pas. */
-export const PHRASE_DUELS_FERMES = 'New duels open once the automatic settler runs: without it, a player who joins and loses could let the duel expire and get a refund.';
-/** le regleur du serveur (son etat(), tel que /sante le publie) regle-t-il ce contrat, et a-t-il lu les duels recemment (`maintenant`, ms) ?
- *  `maintenant` est OBLIGATOIRE (ce module n a pas d horloge : test-duels-plan-app) ; absent -> NaN -> ne couvre pas */
+/* ══ DECISION 2026-10-24 (round 4, le lead, delegue par Phil) : SUR CE CONTRAT, UN REGLEUR NE SUFFIT PAS. La revue keeper round 3
+ *   (scratchpad reviews-r3.md) a trouve 4 attaques de plus qui laissent la porte ouverte sans qu aucun settle ne parte :
+ *     1. famine du CLASSEMENT par des egalites (300+ duels a guesses identiques, a cible plus ancienne, inconnus du cache : 60 duels(id) par
+ *        tour, la victime n est jamais classee — cout : le gas, les mises sont rendues) ;
+ *     2. porte ouverte quand les lectures de STATUT echouent (duels(id) refuses, en-tetes servis : lu reste frais, erreurLecture null) ;
+ *     3. porte ouverte quand le regleur LIT mais ne peut pas ENVOYER : gas au-dessus du plafond (1 gwei), plafond horaire des duels plein
+ *        (~0,60 USDC / heure pour un attaquant), tete GELEE (son noeud ne avance plus).
+ *   La parade appartient a un CONTRAT v2 (decision du proprietaire) : settle / refund qui ne laissent pas l option a celui qui rejoint. Donc :
+ *   creer / rejoindre restent FERMES sur ce contrat, quel que soit le regleur ; le regleur continue de REGLER les duels deja rejoints (il ne
+ *   fait qu aider) et n ouvre jamais rien. regleurLitLesDuels (les gardes de sante) est garde pour un v2.
+ * DUELS_REGLEUR_SUFFIT : PAR CONTRAT (adresse en minuscules), true SEULEMENT pour un contrat dont le regleur suffit a fermer l option. Un
+ *   contrat absent = false (fail-closed). L adresse ci-dessous est COPIEE de duels-deploiement.js (`adresse`, bloc 52 778 966), jamais recrite. */
+export const DUELS_REGLEUR_SUFFIT = Object.freeze({
+  '0x6b7647b326a635c0902eaed41ab0b41746b9602c': false, /* BlockDuels v1 LIVE : l option gratuite du joueur qui rejoint (voir ci-dessus) */
+});
+const declare = (c) => Object.prototype.hasOwnProperty.call(DUELS_REGLEUR_SUFFIT, bas(c));
+/** la porte (le serveur, regleurCouvre) : true SEULEMENT si le contrat est declare true */
+export const regleurSuffit = (contrat) => declare(contrat) && DUELS_REGLEUR_SUFFIT[bas(contrat)] === true;
+/** la defense de l app et du brain : un contrat DECLARE non suffisant n ouvre jamais de duel, meme si une reponse dit le contraire */
+export const duelsFermesParContrat = (contrat) => declare(contrat) && DUELS_REGLEUR_SUFFIT[bas(contrat)] !== true;
+export const PHRASE_DUELS_FERMES = 'New duels are closed: in this contract, a player who joins and loses can let the duel expire and take a full refund. Existing duels keep Settle and Refund.';
+/** le regleur du serveur regle-t-il les duels de CE contrat sans laisser l option gratuite ? Sur un contrat ou un regleur ne suffit pas
+ *  (DUELS_REGLEUR_SUFFIT, BlockDuels v1 LIVE) : JAMAIS — /api/duels regleDuels false. Sinon (un v2 declare) : regleurLitLesDuels. */
 export function regleurCouvre(e, contrat, maintenant) {
+  return regleurSuffit(contrat) && regleurLitLesDuels(e, contrat, maintenant);
+}
+/** les gardes de SANTE (gardees pour un v2) : le regleur du serveur (son etat(), tel que /sante le publie) regle-t-il ce contrat, et a-t-il
+ *  lu les duels recemment (`maintenant`, ms) ? `maintenant` est OBLIGATOIRE (ce module n a pas d horloge : test-duels-plan-app) ; absent ->
+ *  NaN -> non. ⛔ Elles ne SUFFISENT PAS a ouvrir les duels (attaques 1 a 3 ci-dessus) : jamais appelees seules pour la porte. */
+export function regleurLitLesDuels(e, contrat, maintenant) {
   const c = bas(contrat);
   if (!e || e.etat !== 'ON' || !ADR.test(c) || !e.contrats || typeof e.contrats !== 'object') return false;
   const d = e.contrats.duels;
@@ -283,8 +309,9 @@ export function regleurCouvre(e, contrat, maintenant) {
   const age = Number(maintenant) - lu;
   return Number.isFinite(age) && age > -iv && age < 3 * iv;
 }
-/** /api/duels -> creer et rejoindre un duel sont-ils proposes ? seulement si le serveur dit que son regleur regle ce contrat */
-export const duelsOuverts = (j) => !!(j && j.regleur && j.regleur.regleDuels === true);
+/** /api/duels -> creer et rejoindre un duel sont-ils proposes ? seulement si le serveur dit que son regleur regle ce contrat — et JAMAIS
+ *  sur un contrat declare non suffisant (DUELS_REGLEUR_SUFFIT : BlockDuels v1), quoi que dise la reponse */
+export const duelsOuverts = (j) => !!(j && j.regleur && j.regleur.regleDuels === true && !duelsFermesParContrat(j.contrat));
 
 /** ce que `moi` peut faire sur ce duel MAINTENANT (seulement ce que le contrat accepterait) : JOIN, CANCEL, SETTLE, REFUND — ou rien.
  *  `ouverts` (duelsOuverts) : JOIN n est propose QUE s il vaut true (defaut : ferme) ; CANCEL / SETTLE / REFUND ne dependent pas de lui. */

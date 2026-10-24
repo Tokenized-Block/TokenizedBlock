@@ -22,8 +22,9 @@ const M = [
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'regleDuels « true » en texte ouvre', 'j.regleur.regleDuels === true', '!!j.regleur.regleDuels'],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'actionsDuel ouvert par defaut', 'export function actionsDuel(d, moi, tete, maintenant, ouverts = false)', 'export function actionsDuel(d, moi, tete, maintenant, ouverts = true)'],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'JOIN sans garde', 'return ouverts === true && e.resteS >= MARGE_JOIN_S', 'return e.resteS >= MARGE_JOIN_S'],
-  ['brain-jeu.js', 'BRAIN_JEU_MODULE', 'duels', 'brain : garde retiree', "if (D.open !== true) pourquoiPas.push('duels: new duels open once the automatic settler runs');\n    else if", 'if'],
-  ['brain-jeu.js', 'BRAIN_JEU_MODULE', 'duels', 'brain : open absent = ouvert', 'if (D.open !== true) pourquoiPas.push(', 'if (D.open === false) pourquoiPas.push('],
+  /* round 4 : ancres suivies (la garde du brain ferme aussi le contrat DECLARE non suffisant : BlockDuels v1) */
+  ['brain-jeu.js', 'BRAIN_JEU_MODULE', 'duels', 'brain : garde retiree', "if (D.open !== true || duelsFermesParContrat(D.contract)) pourquoiPas.push('duels: new duels are closed (in this contract a player who joins and loses can let the duel expire and take a full refund)');\n    else if", 'if'],
+  ['brain-jeu.js', 'BRAIN_JEU_MODULE', 'duels', 'brain : open absent = ouvert', 'if (D.open !== true || duelsFermesParContrat(D.contract)) pourquoiPas.push(', 'if (D.open === false || duelsFermesParContrat(D.contract)) pourquoiPas.push('],
   ['rolls-regles.js', 'ROLLS_REGLES_MODULE', 'regles', 'version non relue', 'if (v1 === null || r === null || v1 !== v2)', 'if (v1 === null || r === null)'],
   ['rolls-regles.js', 'ROLLS_REGLES_MODULE', 'regles', 'bornes de _rulesOk ignorees', 'return reglesValides(r) ? r : null;', 'return r;'],
   ['rolls-regles.js', 'ROLLS_REGLES_MODULE', 'regles', 'lecture jamais perimee', 'if (!st.val || maintenant() - st.luOk > perimeMs) return null;', 'if (!st.val) return null;'],

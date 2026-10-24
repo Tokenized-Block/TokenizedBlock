@@ -5950,14 +5950,15 @@ async function peindreDuels() {
   /* UN JEU A LA FOIS : la tuile vient d apparaitre ou de partir — le choix est repose (retombe sur tirCarte sans elle) */
   try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }
   for (const id of ['#bjDuelsLab', '#bjMaxDuelLab']) { const x = $(id); if (x) x.hidden = !on; }
-  if (regle) regle.textContent = on ? (Duels.duelsOuverts(j) ? 'Open on Base.' : 'On Base; new duels open once the automatic settler runs.') : 'Opens with its contract.';
+  if (regle) regle.textContent = on ? (Duels.duelsOuverts(j) ? 'Open on Base.' : 'On Base; new duels are closed.') : 'Opens with its contract.';
   if (!on) { liste.textContent = ''; return null; }
   void remplirJetonsDuel(contrat);
   /* revue adverse 2026-10-18 (MOYEN) : liste NON LUE -> pas de « Challenge » ni de formulaire (un duel cree sans liste lisible n aurait
    *   aucun Cancel/Settle/Refund a l ecran) ; ils reviennent avec la lecture */
   if (!j.ok) { liste.textContent = ''; jb('jbDuels', '—'); jb('jbDuelsTxt', 'not read'); etat.textContent = phraseDuelsNonLus(j); $('#duelDefier').hidden = true; const fo = $('#duelForm'); if (fo) fo.hidden = true; return null; }
   /* audit 2026-10-24 : creer / rejoindre SEULEMENT si le regleur du serveur regle les duels (Duels.duelsOuverts) ; sinon formulaire, Challenge
-   *   et Accept caches, une phrase le dit ; Settle / Refund / Cancel des duels en jeu restent */
+   *   et Accept caches, une phrase le dit ; Settle / Refund / Cancel des duels en jeu restent. Round 4 : sur BlockDuels v1 c est TOUJOURS
+   *   ferme (duels-plan-app.js DUELS_REGLEUR_SUFFIT : un regleur ne ferme pas l option gratuite de celui qui rejoint) */
   const ouv = Duels.duelsOuverts(j);
   { const fo = $('#duelForm'); if (fo) fo.hidden = !ouv; }
   let c = null; try { c = compte; } catch (_) { c = null; }
@@ -6201,7 +6202,7 @@ function bjRefusAuSigne(id, p, walletCarte, lu = {}) {
   if (/^DUEL_/.test(p.kind) && !bj.duels) return 'duels are not ticked any more — nothing was sent.';
   /* revue rolls-duels-ui 2026-10-24 : creer / rejoindre SEULEMENT si les duels sont RELUS ouverts au Sign (lu.duelsOuverts, bjDuelsRelus) :
    *   un regleur passe OFF ou ARRETE entre la proposition et le Sign ferme la carte ; DUEL_SETTLE n en depend pas */
-  if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && lu.duelsOuverts !== true) return 'new duels are not open just now (the automatic settler is not running for them, or the server could not be read) — nothing was sent.';
+  if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && lu.duelsOuverts !== true) return 'new duels are closed (or the server could not be read) — nothing was sent.';
   if ((p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') && BigInt(p.costUsdc) > BigInt(bj.maxDuel)) return 'the stake is above your max duel stake (' + usdcTexte(bj.maxDuel) + ' USDC) — nothing was sent.';
   if (p.kind === 'DUEL_CREATE') { const h = Math.floor(Date.now() / 1000) - 3600; if (bj.history.some((x) => x.kind === 'DUEL_CREATE' && Number(x.t) > h)) return 'its brain already opened a duel this hour — nothing was sent.'; }
   return null;
@@ -6836,7 +6837,8 @@ async function peindreSlotsUneFois(force = false) {
    *   (tout regler : laisser expirer ne rend rien) = l esperance, strictement sous le prix (bestPlayNumerator du contrat) — calcules */
   const haut = table[table.length - 1], ev = Slots.esperance(table, prix, part);
   const pot = await lireUintSlots(contrat, Slots.appelPot());
-  const reg = j.regleur && j.regleur.etat === 'ON' ? 'on' : j.regleur && j.regleur.etat === 'ARRETE' ? 'stopped' : 'off';
+  /* round 4 : DEGRADE = ON mais sa tete ne bouge plus (slots-regleur.js teteGeleeBlocs) : il n envoie rien — jamais dit « on » */
+  const reg = j.regleur && j.regleur.etat === 'ON' ? 'on' : j.regleur && j.regleur.etat === 'DEGRADE' ? 'degraded, sending nothing' : j.regleur && j.regleur.etat === 'ARRETE' ? 'stopped' : 'off';
   const msB = await msBlocSlots(j);
   const fenetreTxt = msB ? 'about ' + Math.round(Slots.secondesFenetre(msB)) + ' s at the block time measured just now (' + Math.round(msB) + ' ms a block)'
     : 'about ' + (Slots.secondesFenetre(2000) / 60).toFixed(1) + ' min at 2-second blocks, about ' + Math.round(Slots.secondesFenetre(200)) + ' s at 200 ms blocks (the block time was not measured just now)';

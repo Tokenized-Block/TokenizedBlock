@@ -143,7 +143,10 @@ const du = (list, rx = {}, x = {}) => base({ rules: regles({ rolls: false, skins
   duels: { contract: DC, usdc: USDC, guess: FACE, expiresIn: 3600, block: 1000, list, open: true }, ...x });
 /* 2026-10-24 (audit rolls-duels) : open = le regleur du serveur regle les duels ; absent ou faux -> ni JOIN ni CREATE, le refus le dit */
 vu(['DUEL_JOIN', 'DUEL_CREATE'].every((k) => [undefined, false, 'true'].every((o) => J.prochaineProposition({ ...du([duel()]), duels: { ...du([duel()]).duels, open: o } }).kind !== k))
-  && /automatic settler/.test(J.prochaineProposition({ ...du([duel()]), duels: { ...du([duel()]).duels, open: false } }).why), 'open absent / false / « true » en texte : ni DUEL_JOIN ni DUEL_CREATE, le pourquoi nomme le regleur');
+  && /new duels are closed/.test(J.prochaineProposition({ ...du([duel()]), duels: { ...du([duel()]).duels, open: false } }).why), 'open absent / false / « true » en texte : ni DUEL_JOIN ni DUEL_CREATE, le pourquoi dit que les duels sont fermes (round 4)');
+/* round 4 : BlockDuels v1 LIVE (DUELS_REGLEUR_SUFFIT false) : meme open true, ni JOIN ni CREATE ; l adresse est COPIEE de duels-deploiement.js */
+{ const V1 = '0x6b7647b326a635c0902eaed41ab0b41746b9602c'; const p = J.prochaineProposition({ ...du([duel()]), duels: { ...du([duel()]).duels, contract: V1, open: true } });
+  vu(!['DUEL_JOIN', 'DUEL_CREATE'].includes(p.kind) && /joins and loses/.test(p.why), 'BlockDuels v1 avec open true : ni DUEL_JOIN ni DUEL_CREATE (' + p.kind + ')'); }
 const dj = J.prochaineProposition(du([duel()]));
 vu(dj.kind === 'DUEL_JOIN' && dj.costUsdc === '1000000' && dj.cle === 'DUEL_JOIN:5' && memes(dj.calls, planJoin({ contrat: DC, duel: duel(), guess: FACE, moi: W, maintenant: T }).appels), 'duel ouvert a 1 USDC, plafond 2 : DUEL_JOIN = planJoin (approve EXACT + join), cout 1 USDC');
 vu(/1\.8 USDC/.test(dj.why) && /90 %/.test(dj.why) && /7 %/.test(dj.why) && /3 %/.test(dj.why) && /tie refunds both/i.test(dj.why), 'le pourquoi dit le gain (1.8 = 90 % de 2), 7 % / 3 % et l egalite : ' + dj.why.slice(0, 80));

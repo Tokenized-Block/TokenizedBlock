@@ -65,6 +65,9 @@
  *     regleur ON qui ne lit pas les duels ne les ouvre pas. Un tour qui attend sa tx en vol ne lit rien : la porte se ferme apres 3 tours.
  * NE PROUVE PAS (dit) : un reglement reel sur Base ; le banc anvil execute les vrais contrats sur une chaine LOCALE (la course perdue y est
  *   rejouee par un minage manuel, pas par un vrai sequenceur ; le temps de bloc y est INJECTE, 200 ms : anvil mine en ~20 ms).
+ * ⛔ ROUND 4 (decision du lead) : ce regleur ne SUFFIT PAS a fermer l option gratuite de BlockDuels v1 (famine du classement par
+ *   egalites, statuts refuses, gas / plafond horaire / tete gelee : il lit sans pouvoir envoyer) -> duels-plan-app.js DUELS_REGLEUR_SUFFIT
+ *   ferme creer / rejoindre sur ce contrat, quel que soit cet etat. Il continue de REGLER les duels deja rejoints ; il n ouvre rien.
  * RESTE (dit, 2026-10-24 round 3 ; chiffres de la revue, NON mesures sur Base) :
  *   - le PLAFOND des duels (30 tx / heure) et le tour a UNE tx : un attaquant les use avec des duels a lui ou SON createur gagne (deux
  *     wallets), a mise >= celle de la victime. Chaque settle que le regleur envoie pour lui lui coute 10 % du pot de 2 x mise : 0,02 USDC a
@@ -120,6 +123,9 @@ export const BORNES_DEFAUT = Object.freeze({
   simulationsParTour: 12, /* la coupe en deux d un lot de 10 avec un spin fautif : 1 + 2 x 4 au plus */
   joursRecul: 7, /* les pots du pass des 7 derniers jours UTC */
   inclusionMaxMs: 120000,
+  /* round 4 (tete GELEE, revue keeper round 3) : une tete qui ne depasse pas la plus haute deja lue pendant plus de teteGeleeBlocs temps de
+   *   bloc (mesure ou injecte ; 200 ms sans mesure, le pire cas de Base) -> etat DEGRADE, rien n est envoye sur cette tete */
+  teteGeleeBlocs: 30,
   mesureToutesMs: 600000,
   blocsMesure: Slots.BLOCS_MESURE,
 });
@@ -257,9 +263,11 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     etat: 'ON', adresse, depuis: new Date(maintenant()).toISOString(), msParBloc: fixe, mesureA: 0, intervalleMs: intervalleDepuisBloc(fixe, bornes),
     scanne: null, enVol: null, envoisHeure: { slots: [], duels: [], rolls: [] }, echecsSuite: 0, dernierEchec: null, dernierTour: null, dernierEnvoi: null, dernierRegle: null, erreurs: [],
     compteurs: { tours: 0, envois: 0, spinsEnvoyes: 0, spinsRegles: 0, reverts: 0, revertsExpliques: 0, simulationsRefusees: 0, simulationsNonLues: 0, envoisRefuses: 0, envoisRetrouves: 0,
-      nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0, duelsEgalites: 0, duelsEvinces: 0 },
+      nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0, duelsEgalites: 0, duelsEvinces: 0, toursTeteGelee: 0 },
     parContrat: { slots: activite(), duels: activite(), rolls: activite() },
     arret: null, chaineVue: false,
+    /* round 4 : la plus haute tete lue et l instant ou elle l a ete pour la premiere fois ; gelee = { ... } tant qu elle ne bouge plus */
+    teteMax: null, teteMaxA: 0, gelee: null,
   };
   const suivis = new Map(); /* slots : id -> { t, player } */
   const ecartes = new Map(); /* slots : id -> t — settle seul qui ne se simule pas (paiement refuse) : ecarte jusqu a la fin de sa fenetre */
@@ -664,6 +672,26 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       if (st.enVol) { const fini = await suivreInclusion(); if (!fini || st.etat !== 'ON') return { fait: false, pourquoi: st.enVol ? 'waiting for the transaction in flight' : st.etat }; }
       const tete = entier(await rpc('eth_blockNumber', []));
       if (tete === null) { erreur('head not read'); return { fait: false, pourquoi: 'head not read' }; }
+      /* ⛔ round 4 (revue keeper round 3, attaque « tete gelee ») : un noeud qui ne avance plus fait croire au regleur que rien n est a
+       *   faire (ou qu un duel n est pas encore pret) pendant que la vraie chaine ferme les fenetres. La tete doit DEPASSER la plus haute deja
+       *   lue au moins tous les teteGeleeBlocs temps de bloc ; sinon etat DEGRADE (dit sur /sante, avec pourquoi) et RIEN n est lu ni
+       *   envoye sur cette tete. Elle repart des que la tete bouge. */
+      {
+        const t1 = maintenant();
+        if (st.teteMax === null || tete > st.teteMax) { st.teteMax = tete; st.teteMaxA = t1; st.gelee = null; }
+        else {
+          const seuilMs = bornes.teteGeleeBlocs * (Number(st.msParBloc) > 0 ? Number(st.msParBloc) : 200);
+          const ms = t1 - st.teteMaxA;
+          if (ms > seuilMs) {
+            const neuf = st.gelee === null;
+            st.gelee = { tete: st.teteMax, lue: tete, depuis: new Date(st.teteMaxA).toISOString(), ms, seuilMs,
+              pourquoi: 'the node head has not moved past block ' + st.teteMax + ' for ' + Math.round(ms / 1000) + ' s (more than ' + bornes.teteGeleeBlocs + ' block times, ' + seuilMs + ' ms): nothing is sent on this head' };
+            st.compteurs.toursTeteGelee += 1;
+            if (neuf) erreur(st.gelee.pourquoi);
+            return { fait: false, pourquoi: st.gelee.pourquoi };
+          }
+        }
+      }
       await mesurerBloc(tete);
       const cD = duelsCfg ? resoudre(duelsCfg.contrat) : null, cR = rollsCfg ? resoudre(rollsCfg.contrat) : null;
       const info = { sain: true, courts: 0 };
@@ -762,13 +790,16 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     etat: () => {
       const cD = duelsCfg ? resoudre(duelsCfg.contrat) : null, cR = rollsCfg ? resoudre(rollsCfg.contrat) : null;
       return {
-        etat: st.etat, adresse: st.adresse, contrat: c, chaine: chainId, chaineVerifiee: st.chaineVue, depuis: st.depuis, msParBlocMesure: st.msParBloc, intervalleMs: st.intervalleMs,
+        /* round 4 : DEGRADE = ON, mais sa tete est gelee (il ne lit ni n envoie rien sur elle) ; la porte des duels exige 'ON' */
+        etat: st.etat === 'ON' && st.gelee ? 'DEGRADE' : st.etat, adresse: st.adresse, contrat: c, chaine: chainId, chaineVerifiee: st.chaineVue, depuis: st.depuis, msParBlocMesure: st.msParBloc, intervalleMs: st.intervalleMs,
         /* revue fix2 defaut 2 : 'injecte' (msParBloc passe a creerRegleur), 'mesure', ou null (pas encore mesure : 200 ms supposes pour la marge) */
         tempsDeBloc: fixe !== null ? 'injecte' : st.msParBloc !== null ? 'mesure' : null,
         fenetreSecondes: st.msParBloc ? Slots.secondesFenetre(st.msParBloc) : null, suivis: suivis.size, enVol: st.enVol ? { hash: st.enVol.hash, cible: st.enVol.cible, quoi: st.enVol.quoi, ids: st.enVol.ids } : null,
         dernierTour: st.dernierTour, dernierEnvoi: st.dernierEnvoi, dernierRegle: st.dernierRegle, erreurs: st.erreurs.slice(), echecsSuite: st.echecsSuite, arret: st.arret,
         /* revue keeper 3 : l etat DEGRADE (ON, mais des echecs en cours : recu illisible, revert, envoi refuse, non incluse) — dit, jamais tu */
-        degrade: st.etat === 'ON' && st.echecsSuite > 0 ? { echecsSuite: st.echecsSuite, arretA: bornes.echecsMax, dernier: st.dernierEchec } : null,
+        degrade: st.etat === 'ON' && (st.echecsSuite > 0 || st.gelee) ? { echecsSuite: st.echecsSuite, arretA: bornes.echecsMax, dernier: st.dernierEchec,
+          /* round 4 : la tete gelee et POURQUOI (null si la tete bouge) */
+          teteGelee: st.gelee ? { ...st.gelee } : null, pourquoi: st.gelee ? st.gelee.pourquoi : st.echecsSuite + ' failure(s) in a row (stop at ' + bornes.echecsMax + ')' } : null,
         envoisDerniereHeure: CONTRATS.reduce((s, x) => s + heure(x), 0), compteurs: { ...st.compteurs },
         /* 2026-10-24 : l activite PAR CONTRAT (/sante) ; revue keeper 2 : son plafond horaire et ses envois de l heure */
         contrats: {

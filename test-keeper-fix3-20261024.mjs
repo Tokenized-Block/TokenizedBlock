@@ -387,8 +387,9 @@ const TABLE = ['0', '0', '0', '250000', '750000', '2000000', '3000000', '4000000
 /* un faux noeud minimal (la forme du PoC de la revue poc-duels-read-fail.mjs) : refus de getLogs / de duels(id) au choix */
 const noeudPorte = (o = {}) => async (m, p) => {
   if (m === 'eth_chainId') return '0x2105';
-  if (m === 'eth_blockNumber') return '0x186a0';
-  if (m === 'eth_getBlockByNumber') { const b = p[0] === 'latest' ? 100000 : parseInt(p[0], 16); return { number: hx(b), hash: '0x' + u(BigInt(b) * 7919n + 1n), timestamp: hx(1_700_000_000 + Math.floor(b / 5)), baseFeePerGas: '0xf4240' }; }
+  /* round 4 : o.tete (defaut 100000) — un cas qui fait passer le temps fait AVANCER la tete (figee, ce serait une tete GELEE : DEGRADE) */
+  if (m === 'eth_blockNumber') return hx(o.tete || 100000);
+  if (m === 'eth_getBlockByNumber') { const b = p[0] === 'latest' ? (o.tete || 100000) : parseInt(p[0], 16); return { number: hx(b), hash: '0x' + u(BigInt(b) * 7919n + 1n), timestamp: hx(1_700_000_000 + Math.floor(b / 5)), baseFeePerGas: '0xf4240' }; }
   if (m === 'eth_getLogs') { if (o.refusLogs) throw new Error('429 Too Many Requests'); return []; }
   if (m === 'eth_call') { if (o.refusAppels) throw new Error('429 Too Many Requests'); return '0x' + [0, 0, 2, 0, 0, 99990, 1, 0, 1_000_000].map(u).join(''); }
   if (m === 'eth_estimateGas') return '0x30d40';
@@ -399,17 +400,20 @@ const noeudPorte = (o = {}) => async (m, p) => {
   throw new Error('nope ' + m);
 };
 const regPorte = (rpc, duels = {}, t = { v: 1_000_000 }) => M.creerRegleur({ cle: CLE, contrat: null, chainId: 8453, table: TABLE, rpc, maintenant: () => t.v, journal: () => {}, duels: { contrat: () => DC, bloc: () => 99000, ...duels } });
-const couvre = (e, a) => { try { return DA.regleurCouvre(e, DC, a); } catch (x) { return 'EXC ' + x.message; } };
-await cas('I. porte D1 : regleurCouvre exige une lecture des duels FRAICHE et sans erreur (vrai etat())', async () => {
+/* round 4 (decision du lead) : la PORTE (regleurCouvre) est FERMEE sur BlockDuels v1 ; les gardes de SANTE jugees ici sont celles de
+ *   regleurLitLesDuels (gardees pour un v2) — « couvre » dans ce cas = « lit les duels » */
+const couvre = (e, a) => { try { return DA.regleurLitLesDuels(e, DC, a); } catch (x) { return 'EXC ' + x.message; } };
+await cas('I. porte D1 : regleurLitLesDuels exige une lecture des duels FRAICHE et sans erreur (vrai etat()) ; regleurCouvre fermee (round 4)', async () => {
   const t = { v: 1_000_000 };
   const sain = regPorte(noeudPorte(), {}, t);
   await sain.tour();
   const es = sain.etat();
-  vu(es.contrats.duels.lu === new Date(t.v).toISOString() && es.contrats.duels.erreurLecture === null && couvre(es, t.v) === true, 'noeud sain, un tour : contrats.duels.lu = ' + es.contrats.duels.lu + ', erreurLecture ' + es.contrats.duels.erreurLecture + ', couvre ' + couvre(es, t.v));
+  vu(es.contrats.duels.lu === new Date(t.v).toISOString() && es.contrats.duels.erreurLecture === null && couvre(es, t.v) === true, 'noeud sain, un tour : contrats.duels.lu = ' + es.contrats.duels.lu + ', erreurLecture ' + es.contrats.duels.erreurLecture + ', lit ' + couvre(es, t.v));
+  vu(DA.regleurCouvre(es, DC, t.v) === false, 'round 4 : ce regleur sain ne couvre PAS BlockDuels v1 (regleurCouvre false)');
   vu(couvre(regPorte(noeudPorte(), {}, { v: t.v }).etat(), t.v) === false, 'aucun tour encore (jamais lu) : ne couvre pas');
   /* duels-plan-app.js n a pas d horloge (test-duels-plan-app) : l heure est passee ; absente -> ne couvre pas (fail-closed) */
   const esMaintenant = { ...es, contrats: { ...es.contrats, duels: { ...es.contrats.duels, lu: new Date().toISOString() } } };
-  vu(DA.regleurCouvre(esMaintenant, DC, Date.now()) === true && DA.regleurCouvre(esMaintenant, DC) === false, 'lu a l instant : couvre avec l heure passee ; sans heure passee : ne couvre pas');
+  vu(DA.regleurLitLesDuels(esMaintenant, DC, Date.now()) === true && DA.regleurLitLesDuels(esMaintenant, DC) === false && DA.regleurCouvre(esMaintenant, DC, Date.now()) === false, 'lu a l instant : lit avec l heure passee ; sans heure passee : non ; la porte reste fermee');
   /* le PoC de la revue : getLogs refuse, 50 tours */
   const poc = regPorte(noeudPorte({ refusLogs: true }), {}, t);
   for (let k = 0; k < 50; k++) await poc.tour();
@@ -429,8 +433,8 @@ await cas('I. porte D1 : regleurCouvre exige une lecture des duels FRAICHE et sa
   /* sain, puis une lecture ratee : ferme TOUT DE SUITE ; puis revient */
   const bas = { refusLogs: false }; const vas = regPorte(async (m, p) => noeudPorte(bas)(m, p), {}, t);
   await vas.tour(); const c1 = couvre(vas.etat(), t.v);
-  bas.refusLogs = true; t.v += 10000; await vas.tour(); const c2 = couvre(vas.etat(), t.v);
-  bas.refusLogs = false; t.v += 10000; await vas.tour(); const c3 = couvre(vas.etat(), t.v);
+  bas.refusLogs = true; t.v += 10000; bas.tete = 100050; await vas.tour(); const c2 = couvre(vas.etat(), t.v);
+  bas.refusLogs = false; t.v += 10000; bas.tete = 100100; await vas.tour(); const c3 = couvre(vas.etat(), t.v);
   vu(c1 === true && c2 === false && c3 === true, 'sain -> lecture ratee -> sain : ' + c1 + ', ' + c2 + ', ' + c3 + ' (attendu true, false, true)');
   /* fraicheur : 3 intervalles (30 s a 200 ms/bloc) sans lecture -> ferme */
   const iv = vas.etat().intervalleMs;
@@ -471,10 +475,12 @@ await cas('I2. serveur-web.js (tranche executee) : lecture des duels ratee -> /a
   nd.refus = true; x.duelsSrv.lu = 0; await x.lireDuelsSrv(); await regleur.tour();
   const j1 = await get();
   vu(j1.regleur && j1.regleur.etat === 'ON' && j1.regleur.regleDuels === false, 'noeud qui refuse : regleur ON mais /api/duels regleDuels ' + (j1.regleur && j1.regleur.regleDuels) + ' (attendu false)');
-  /* le noeud repond (getLogs toujours refuse, nextId 1) : la liste par l etat est fraiche -> le regleur lit -> regleDuels true */
+  /* le noeud repond (getLogs toujours refuse, nextId 1) : la liste par l etat est fraiche -> le regleur LIT ; round 4 : regleDuels reste false
+   *   (un regleur ne ferme pas l option ; la fermeture vient du contrat, pas de la sante : regleurLitLesDuels dit true) */
   nd.refus = false; x.duelsSrv.lu = 0; await x.lireDuelsSrv(); await regleur.tour();
   const j2 = await get();
-  vu(j2.ok === true && j2.regleur.regleDuels === true, 'noeud qui repond (getLogs refuse, liste par l etat fraiche) : regleDuels ' + j2.regleur.regleDuels + ' (attendu true)');
+  const lit2 = DA.regleurLitLesDuels(regleur.etat(), C, Date.now());
+  vu(j2.ok === true && j2.regleur.regleDuels === false && lit2 === true, 'noeud qui repond (getLogs refuse, liste par l etat fraiche) : le regleur lit (' + lit2 + ') mais regleDuels ' + j2.regleur.regleDuels + ' (attendu false, round 4)');
   const fn = typeof x.joints === 'function' && typeof x.connu === 'function';
   /* liste FRAICHE : ce contrat est servi, un autre contrat jette (la fraicheur ne masque pas ce controle-ci) */
   let ceContrat = false; try { ceContrat = Array.isArray(x.joints(C)); } catch (_) { ceContrat = false; }

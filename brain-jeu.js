@@ -23,7 +23,7 @@ import { planRoll, planRollAvecPass, planSettle, planSettleMany, etatReglement, 
 import { planPoster, planReclamer, budgetMission } from './missions-plan.js';
 import { propositionSkin, appelApprouver, appelAcheter, appelEncherir, appelRegler } from './blockskins.js';
 import { planCreate, planJoin, planSettle as planSettleDuel, planRefund as planRefundDuel, etatDuel, partage as partageDuel, MISE_MIN as MISE_MIN_DUEL,
-  MARGE_JOIN_S, EXPIRATION_MIN_S, EXPIRATION_MAX_S } from './duels-plan-app.js';
+  MARGE_JOIN_S, EXPIRATION_MIN_S, EXPIRATION_MAX_S, duelsFermesParContrat } from './duels-plan-app.js';
 /* LE POT DES RECOMPENSES (Phil 2026-10-18 : « gere la pool pour les rewards, le brain qui s en occupe ») — pour le wallet OWNER de TicketPot
  *   SEULEMENT (owner LU sur la chaine, donne dans l etat) ; le brain PROPOSE, le wallet de l owner SIGNE chaque pas ; rien ne bouge seul.
  *   Ordre fixe, juste apres les settles : POT_CLOSE (le pot d HIER pas ferme et non vide : planClose owner), puis POT_SIGN (un jour ferme dont
@@ -331,8 +331,9 @@ export function prochaineProposition(etat = {}) {
     const plafondDuel = regles.maxDuelStakeUsdc;
     const usdcD = bas(D.usdc);
     /* audit 2026-10-24 (duels-plan-app.js PHRASE_DUELS_FERMES) : ni JOIN ni CREATE tant que le serveur ne dit pas que son regleur regle les
-     *   duels (D.open = duelsOuverts(/api/duels), absent = ferme) ; DUEL_SETTLE (1b) reste propose */
-    if (D.open !== true) pourquoiPas.push('duels: new duels open once the automatic settler runs');
+     *   duels (D.open = duelsOuverts(/api/duels), absent = ferme) ; DUEL_SETTLE (1b) reste propose. Round 4 : sur un contrat ou un regleur
+     *   ne suffit pas (duels-plan-app.js DUELS_REGLEUR_SUFFIT : BlockDuels v1 LIVE), JAMAIS — meme si D.open dit true */
+    if (D.open !== true || duelsFermesParContrat(D.contract)) pourquoiPas.push('duels: new duels are closed (in this contract a player who joins and loses can let the duel expire and take a full refund)');
     else if (!ADR.test(usdcD)) pourquoiPas.push('duels: the USDC address is not known');
     else if (refusGuess(D.guess).length) pourquoiPas.push('duels: no valid face to play with');
     else if (plafondDuel < MISE_MIN_DUEL) pourquoiPas.push('duels: the max stake is below the contract minimum (' + usdcTxt(MISE_MIN_DUEL) + ')');

@@ -285,7 +285,7 @@ const H5 = trois('v2slots24'); /* 5 points pour l id 1 : 2 USDC */
   await r.tour(); /* lit le 2e recu */
   const t3 = await r.tour();
   vu(ch.envoyes.length === 2 && t3.fait === false && /hourly cap/.test(t3.pourquoi) && r.etat().compteurs.sautsHeure >= 1, '2 tx par heure : la 3e attend');
-  avancer(3600 * 1000);
+  avancer(3600 * 1000); ch.tete += 1; /* round 4 : en une heure la tete a bouge (une tete figee une heure = tete GELEE, rien ne part) */
   const t4 = await r.tour();
   vu(t4.fait === true && ch.envoyes.length === 3, 'une heure plus tard : elle part');
 }
@@ -467,7 +467,8 @@ await cas('10 audit V3 recu illisible', async () => {
   const chB = chaine(); const vraiB = chB.rpc; let pB = true;
   chB.rpc = async (m, p) => { if (pB && m === 'eth_getTransactionReceipt') throw new Error('over rate limit'); return vraiB(m, p); };
   const oB = regleur(chB); chB.spin(1, chB.tete - 10, H5);
-  const tB = await oB.r.tour(); oB.avancer(60000); await oB.r.tour(); pB = false; chB.inclure(tB.hash, tB.ids); await oB.r.tour();
+  /* round 4 : la tete bouge pendant les 60 s (comme le cas du dessus) — figee, ce serait une tete GELEE (degrade, a raison) */
+  const tB = await oB.r.tour(); oB.avancer(60000); chB.tete += 5; await oB.r.tour(); pB = false; chB.inclure(tB.hash, tB.ids); await oB.r.tour();
   vu(oB.r.etat().echecsSuite === 0 && oB.r.etat().degrade === null && oB.r.etat().compteurs.spinsRegles === 1, 'recu illisible 60 s puis lu (0x1) : 0 echec, pas degrade');
 });
 

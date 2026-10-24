@@ -5,7 +5,8 @@
  *      vraie cle) sur un FAUX noeud (fonction rpc locale) ; aucune signature, aucun envoi. Duels ouverts SEULEMENT si etat ON, contrats.duels
  *      configure et son contrat = celui de la fiche des duels ; OFF, desactive, sans duels, autre contrat, contrat non resolu (chaine
  *      differente), ARRETE (le faux noeud sert une autre chaine) : ferme. Puis la chaine servie : regleDuels -> duelsOuverts -> actionsDuel
- *      (JOIN) -> brain-jeu (DUEL_JOIN).
+ *      (JOIN) -> brain-jeu (DUEL_JOIN). ROUND 4 : ces gardes de sante sont jugees par regleurLitLesDuels ; la porte (regleurCouvre) reste
+ *      FERMEE sur BlockDuels v1 meme avec un regleur sain, et la chaine servie ne propose ni JOIN ni DUEL_JOIN.
  *   B. [low] app.html bjRefusAuSigne (extrait, EXECUTE) refuse un DUEL_JOIN / DUEL_CREATE si les duels ne sont pas RELUS ouverts au Sign ;
  *      bjDuelsRelus (extrait, EXECUTE avec un faux lireDuelsServis) : relu ouvert -> true ; relu ferme, relecture ratee (ancienne reponse
  *      rendue) -> false ; le Sign construit `lu` avec lui pour JOIN / CREATE AVANT bjRefusAuSigne.
@@ -52,6 +53,9 @@ const noeud = (chaine = 8453) => async (methode, params) => {
 const regleur = (x = {}) => creerRegleur({ cle: CLE_TEST, contrat: SLOTS, chainId: 8453, table: TABLE, blocDeploiement: 99000, rpc: noeud(), journal: () => {},
   duels: { contrat: () => DC, bloc: () => 99000 }, rolls: { contrat: RC }, ...x });
 /* revue fix2 porte D1 : l heure est PASSEE (duels-plan-app.js n a pas d horloge) ; le regleur de ce banc a l horloge reelle */ const couvre = (e, c = DC) => essai(() => D.regleurCouvre(e, c, Date.now()));
+/* round 4 (decision du lead) : la PORTE est fermee sur BlockDuels v1 ; les gardes de SANTE (regleurLitLesDuels, gardees pour un v2) sont
+ *   jugees a part, sur le meme vrai etat() */
+const lit = (e, c = DC) => essai(() => D.regleurLitLesDuels(e, c, Date.now()));
 /* revue fix2 porte D1 (2026-10-24) : couvrir exige aussi une lecture des duels REUSSIE et fraiche — le regleur ON fait donc UN tour sur le
  *   faux noeud (getLogs -> [], rien a regler) avant d etre juge ; un regleur qui n a jamais lu les duels ne couvre pas */
 const rOn = regleur();
@@ -61,10 +65,11 @@ const eOn = rOn.etat();
 ok(couvre(eAvantLecture) === false && eAvantLecture.contrats.duels.lu === null, 'regleur ON qui n a encore lu aucun duel (lu null) : ne couvre pas');
 ok(eOn.etat === 'ON' && eOn.contrats && !Array.isArray(eOn.contrats) && eOn.contrats.duels && eOn.contrats.duels.contrat === DC && eOn.contrats.duels.configure === true,
   'temoin : le vrai etat() publie contrats comme un OBJET, contrats.duels = { contrat: ' + (eOn.contrats && eOn.contrats.duels && eOn.contrats.duels.contrat) + ', configure: ' + (eOn.contrats && eOn.contrats.duels && eOn.contrats.duels.configure) + ' }');
-ok(couvre(eOn) === true, 'regleur ON qui regle CE contrat de duels (forme reelle) : couvre (' + couvre(eOn) + ')');
-ok(couvre(eOn, DC.toUpperCase().replace('0X', '0x')) === true, 'adresse de la fiche en casse mixte : couvre');
-ok(couvre(eOn, AUTRE) === false, 'regleur ON, autre contrat de duels que celui qu il regle : ne couvre pas');
-ok(couvre(eOn, '0x12') === false && couvre(eOn, null) === false, 'contrat de la fiche mal forme ou absent : ne couvre pas');
+ok(lit(eOn) === true, 'sante : regleur ON qui regle CE contrat de duels (forme reelle) : lit les duels (' + lit(eOn) + ')');
+ok(couvre(eOn) === false, 'round 4 : ce MEME regleur sain ne couvre PAS BlockDuels v1 (un regleur ne ferme pas l option) : porte fermee (' + couvre(eOn) + ')');
+ok(lit(eOn, DC.toUpperCase().replace('0X', '0x')) === true && couvre(eOn, DC.toUpperCase().replace('0X', '0x')) === false, 'adresse de la fiche en casse mixte : lit, porte fermee');
+ok(lit(eOn, AUTRE) === false && couvre(eOn, AUTRE) === false, 'regleur ON, autre contrat de duels que celui qu il regle : ne lit pas, ne couvre pas');
+ok(lit(eOn, '0x12') === false && lit(eOn, null) === false && couvre(eOn, '0x12') === false, 'contrat de la fiche mal forme ou absent : ne couvre pas');
 const eSansDuels = regleur({ duels: null }).etat();
 ok(eSansDuels.etat === 'ON' && eSansDuels.contrats.duels.configure === false && couvre(eSansDuels) === false, 'regleur ON des slots et rolls, duels NON configures : ne couvre pas');
 const eNonResolu = regleur({ duels: { contrat: () => null } }).etat();
@@ -82,28 +87,28 @@ await rArr.tour();
 const eArr = rArr.etat();
 /* le stimulus : ARRETE seul doit fermer — meme avec une lecture des duels fraiche et sans erreur greffee (celle du regleur sain) */
 const eArrLu = { ...eArr, contrats: { ...eArr.contrats, duels: { ...eArr.contrats.duels, lu: eOn.contrats.duels.lu, erreurLecture: null } } };
-const avant = couvre({ ...eArrLu, etat: 'ON' });
-ok(appels.includes('eth_chainId') && avant === true && eArr.etat === 'ARRETE' && couvre(eArr) === false && couvre(eArrLu) === false,
+const avant = lit({ ...eArrLu, etat: 'ON' });
+ok(appels.includes('eth_chainId') && avant === true && eArr.etat === 'ARRETE' && lit(eArr) === false && lit(eArrLu) === false && couvre(eArr) === false,
   'stimulus prouve (eth_chainId lu : ' + appels.join(',') + ') : la meme forme ON + lecture fraiche couvre ' + avant + ' ; noeud d une autre chaine -> ' + eArr.etat + ', ne couvre plus (meme lecture fraiche greffee)');
 /* un tour sur la BONNE chaine (faux noeud, rien a regler) : le regleur reste ON et couvre toujours */
 const rOk = regleur();
 appels.length = 0;
 const tr = await rOk.tour();
-ok(appels.includes('eth_chainId') && appels.includes('eth_blockNumber') && rOk.etat().etat === 'ON' && couvre(rOk.etat()) === true,
-  'un tour sur la bonne chaine (' + (tr && tr.pourquoi) + ') : toujours ON et couvre');
+ok(appels.includes('eth_chainId') && appels.includes('eth_blockNumber') && rOk.etat().etat === 'ON' && lit(rOk.etat()) === true && couvre(rOk.etat()) === false,
+  'un tour sur la bonne chaine (' + (tr && tr.pourquoi) + ') : toujours ON, lit les duels ; porte fermee (round 4)');
 /* la chaine servie : /api/duels compose { etat, adresse, regleDuels: regleurCouvre(eReg, contrat, Date.now()) } (serveur-web.js) */
 const servi = (e) => ({ ok: true, contrat: DC, regleur: { etat: e.etat, adresse: e.adresse || null, regleDuels: D.regleurCouvre(e, DC, Date.now()) } });
 const T = 1761300000, A = '0x' + 'a1'.repeat(20), B = '0x' + 'b1'.repeat(20);
 const ouvert = { id: '1', creator: A, token: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', stake: 1000000n, guessA: [1, 1, 1, 1, 1], expiresAt: T + 3600, joiner: null, guessB: null, targetBlock: null, settled: null, cancelled: false, refunded: false };
 const offre = (e) => essai(() => D.actionsDuel(ouvert, B, 1000, T, D.duelsOuverts(servi(e))).join());
-ok(offre(eOn) === 'JOIN' && offre(eOff) === '' && offre(eArr) === '', 'servi -> duelsOuverts -> actionsDuel : JOIN avec le regleur ON des duels, rien OFF ou ARRETE');
+ok(offre(eOn) === '' && offre(eOff) === '' && offre(eArr) === '', 'round 4 : servi -> duelsOuverts -> actionsDuel : AUCUN JOIN, regleur ON des duels, OFF ou ARRETE');
 const W = '0x' + '1'.repeat(40), USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';
 const brain = (e) => essai(() => J.prochaineProposition({ authorized: true, wallet: W, now: T, budgetUsdc: '10000000', spentUsdc: '0', balanceUsdc: '50000000', history: [], seen: [],
   rules: { rolls: false, settle: false, missions: false, postMissions: false, skins: false, maxSkinBidUsdc: '0', duels: true, maxDuelStakeUsdc: '2000000', pot: false, potDailyUsdc: '0' },
   rolls: null, missions: null, skins: null, pot: null,
   duels: { contract: DC, usdc: USDC, guess: [0, 1, 2, 3, 4], expiresIn: 3600, block: 1000, list: [{ ...ouvert, creator: '0x' + '2'.repeat(40) }], open: D.duelsOuverts(servi(e)) } }));
 const bOn = brain(eOn), bOff = brain(eOff);
-ok(bOn && bOn.kind === 'DUEL_JOIN' && bOff && !['DUEL_JOIN', 'DUEL_CREATE'].includes(bOff.kind), 'brain-jeu : DUEL_JOIN avec le regleur ON des duels (' + (bOn && bOn.kind) + '), jamais OFF (' + (bOff && bOff.kind) + ')');
+ok(bOn && !['DUEL_JOIN', 'DUEL_CREATE'].includes(bOn.kind) && bOff && !['DUEL_JOIN', 'DUEL_CREATE'].includes(bOff.kind), 'round 4 : brain-jeu : ni DUEL_JOIN ni DUEL_CREATE, regleur ON des duels (' + (bOn && bOn.kind) + ') ou OFF (' + (bOff && bOff.kind) + ')');
 
 console.log('— B. app.html : le Sign du brain relit duelsOuverts (bjRefusAuSigne + bjDuelsRelus, EXECUTES)');
 const sansCom = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '');
@@ -115,7 +120,7 @@ const join = { kind: 'DUEL_JOIN', costUsdc: '1000000' }, cree = { kind: 'DUEL_CR
 ok(refus(join, { duelsOuverts: true }) === null && refus(cree, { duelsOuverts: true }) === null, 'au Sign : JOIN / CREATE avec les duels RELUS ouverts : passe (null)');
 for (const [nom, lu] of [['relus fermes', { duelsOuverts: false }], ['non relus (lu vide)', {}], ['sans lu', undefined], ['« true » en texte', { duelsOuverts: 'true' }]]) {
   const rj = refus(join, lu), rc = refus(cree, lu);
-  ok(typeof rj === 'string' && /not open/.test(rj) && /nothing was sent/.test(rj) && typeof rc === 'string' && /not open/.test(rc), 'au Sign : JOIN / CREATE, duels ' + nom + ' -> REFUSE : « ' + String(rj).slice(0, 110) + ' »');
+  ok(typeof rj === 'string' && /new duels are closed/.test(rj) && /nothing was sent/.test(rj) && typeof rc === 'string' && /new duels are closed/.test(rc),'au Sign : JOIN / CREATE, duels ' + nom + ' -> REFUSE : « ' + String(rj).slice(0, 110) + ' »');
 }
 ok(refus(regle, {}) === null, 'au Sign : DUEL_SETTLE ne depend pas de l ouverture (un duel en jeu se regle toujours)');
 const iRel = APP.indexOf('async function bjDuelsRelus('), finRel = APP.indexOf('async function bjDayPot(', iRel);

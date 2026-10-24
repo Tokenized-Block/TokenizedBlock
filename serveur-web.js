@@ -6893,7 +6893,9 @@ function traiterRequete(req, res) {
     const adrOk = (x) => (/^0x[0-9a-f]{40}$/i.test(String(x || '')) ? String(x).toLowerCase() : null);
     /* 2026-10-24 (audit rolls-duels, option gratuite de celui qui rejoint) : l app ne propose de creer / rejoindre un duel QUE si le regleur du
      *   serveur regle CE contrat (duels-plan-app.js regleurCouvre : ON et le contrat nomme dans etat().contrats) ; sinon regleDuels false.
-     *   Revue fix2 (porte D1) : ET il a LU les duels il y a moins de 3 de ses tours, sans erreur depuis (contrats.duels.lu / erreurLecture) */
+     *   Revue fix2 (porte D1) : ET il a LU les duels il y a moins de 3 de ses tours, sans erreur depuis (contrats.duels.lu / erreurLecture).
+     *   Round 4 (decision du lead) : sur BlockDuels v1 LIVE un regleur ne suffit pas (duels-plan-app.js DUELS_REGLEUR_SUFFIT) -> regleDuels
+     *   est TOUJOURS false ici ; le regleur continue de regler les duels deja rejoints */
     const eReg = regleurSlots.etat();
     const regleur = { etat: eReg.etat, adresse: eReg.adresse || null, regleDuels: regleurCouvre(eReg, contrat, Date.now()) };
     const fiche = { contrat, bloc: Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) ? DUELS_DEPLOIEMENT.bloc : null, usdc: adrOk(k.usdc), devWallet: adrOk(k.devWallet), rewardPool: adrOk(k.rewardPool), regles, regleur };
