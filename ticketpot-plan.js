@@ -131,6 +131,18 @@ export function lireUintMot(hex) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(s)) return null;
   return BigInt(s);
 }
+/** 2026-10-24 (revue adverse, audit-ticketpot 5) : l eth_call de claimed(day, wallet) (TicketPot.sol : ticketOf[day][wallet] != 0) */
+export function appelClaimed(contrat, day, wallet) {
+  const d = Number(day);
+  if (!jourOk(d)) throw new Error('day is a UTC day number');
+  if (!ADR.test(bas(wallet))) throw new Error('the wallet is an address');
+  return { to: bas(contrat), data: '0x' + sel(SIG_CLAIMED) + u(d, 32) + a(wallet) };
+}
+/** un bool ABI (mot de 32 octets valant 0 ou 1) -> true / false ; autre chose -> null (jamais false par defaut) */
+export function lireBoolMot(hex) {
+  const v = lireUintMot(hex);
+  return v === 0n ? false : v === 1n ? true : null;
+}
 
 /* ------------------------------------------------------------------ les appels */
 const approuver = (usdc, contrat, montant, quoi) => ({ to: bas(usdc), data: '0x' + sel(SIG_APPROVE) + a(contrat) + u(montant), quoi });

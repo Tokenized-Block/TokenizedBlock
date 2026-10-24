@@ -80,7 +80,9 @@ function monter(tNow, partsPar) {
   const src = app.slice(a0, a1) + '\n' + app.slice(b0, b1)
     + '\nreturn { peindreReclamerPot, peindreFermerPot, part: () => maPartPot, choisi: () => (typeof potAFermer === "undefined" ? undefined : potAFermer) };';
   let api = null;
-  try { api = new Function('$', 'fetch', 'Date', 'usdcTexte', 'fermablePot', 'reclamablePot', 'AbortSignal', src)($, fetch, D, usdcTexte, P.closableByAnyoneAt, P.claimableUntil, { timeout: () => undefined }); }
+  /* 2026-10-24 : la peinture relit claimed(day, wallet) sur la chaine (test-ticketpot-reclamer-20261024.mjs) — ici : jamais reclamee */
+  const rpc = async (m) => { if (m !== 'eth_call') throw new Error('rpc'); return '0x' + '0'.repeat(64); };
+  try { api = new Function('$', 'fetch', 'Date', 'usdcTexte', 'fermablePot', 'reclamablePot', 'AbortSignal', 'rpc', 'appelClaimedTP', 'lireBoolTP', src)($, fetch, D, usdcTexte, P.closableByAnyoneAt, P.claimableUntil, { timeout: () => undefined }, rpc, P.appelClaimed, P.lireBoolMot); }
   catch (e) { console.log('    (montage : ' + e.message + ')'); }
   return { api, el: (s) => $(s), appels };
 }

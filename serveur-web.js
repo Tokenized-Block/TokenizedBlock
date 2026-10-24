@@ -3971,19 +3971,38 @@ const WETH_SRV = WETH_BASE.toLowerCase();
 const UNIT_BLOCK = '0xb2000000000000000000007afa7ed748b0874f27';
 const POOLS_UNIT_TB = new Set([poolIdDe({ currency0: '0x' + '0'.repeat(40), currency1: UNIT_BLOCK, fee: 0, tickSpacing: 200, hooks: HOOK_7030 })]);
 const JETONS_ACTIONS = new Set([...DESCRIPTEUR_7030.devises.filter((d) => /c$/.test(d.sym)).map((d) => d.adresse.toLowerCase()), ...[...POOLS_ACTIONS_AERODROME.keys()].map((x) => String(x).toLowerCase())]);
+/* ══ LE JOUR DU BLOC (2026-10-24, revue adverse, audit-ticketpot 4) : le volume et le pass skin creditaient le jour ou le hash etait POSTE
+ *   (Date.now) : un wallet gardait ses swaps et en postait un par jour (un ticket chaque jour sans trader), un vieux swap se postait
+ *   aujourd hui, et un trade de 23:59:58 poste apres minuit tombait le lendemain. Le jour credite = celui de l horodatage du BLOC du recu
+ *   (eth_getBlockByNumber, horodatageBloc) ; un bloc de plus de 48 h ne credite plus rien (dit dans la reponse) ; illisible -> NON_LU, rien
+ *   n est marque vu (le hash se renvoie). */
+const AGE_MAX_TICKET_MS = 48 * 3600 * 1000;
+async function jourDuRecu(recu, maintenant = Date.now()) {
+  const nb = recu && typeof recu.blockNumber === 'string' ? parseInt(recu.blockNumber, 16) : NaN;
+  if (!Number.isSafeInteger(nb) || nb <= 0) return { ok: false, etat: 'NON_LU', pourquoi: 'the block of this transaction was not read: send it again in a moment' };
+  let ts = null;
+  try { ts = await horodatageBloc(nb); } catch (_) { ts = null; }
+  if (!Number.isSafeInteger(ts) || ts <= 0) return { ok: false, etat: 'NON_LU', pourquoi: 'the time of block ' + nb + ' was not read: send it again in a moment' };
+  const ms = ts * 1000;
+  if (maintenant - ms > AGE_MAX_TICKET_MS) return { ok: false, etat: 'TROP_VIEUX', pourquoi: 'this transaction is more than 48 h old (block ' + nb + ', ' + new Date(ms).toISOString().slice(0, 16).replace('T', ' ') + ' UTC): it no longer earns a day ticket' };
+  return { ok: true, ms, jourId: jourDe(ms).id, bloc: nb };
+}
 async function crediterVolumeJour({ h, ligne, tx, recu, v, internes }) {
   if (ligne !== 'hook_block' && ligne !== 'swap_action') return;
   revenu.volVus = revenu.volVus || {};
   if (revenu.volVus[h]) return;
   const vol = volumeVerifie({ tx, recu, poolManager: V4_ADRESSES[8453].poolm, poolsUnit: POOLS_UNIT_TB, jetonsActions: v.ok ? JETONS_ACTIONS : new Set() });
   if (!vol.ok || internes.has(vol.payeur)) return;
+  const bloc = await jourDuRecu(recu);
+  if (!bloc.ok) return bloc;
   let usd = 0;
   if (BigInt(vol.unitWei) > 0n) usd += Number(BigInt(vol.unitWei)) / 1e18 * (await prixUsdPourPlan(null) || 0);
   if (vol.actions.length) usd += await valeurFraisUsd(vol.actions.map((x) => ({ devise: x.jeton, montant: x.montant })));
   if (!(usd > 0)) return;
   revenu.volVus[h] = 1;
-  revenu.jours = crediter(revenu.jours || {}, { saison: jourDe(Date.now()).id, payeur: vol.payeur, hash: h, usd });
+  revenu.jours = crediter(revenu.jours || {}, { saison: bloc.jourId, payeur: vol.payeur, hash: h, usd });
   revenuSale = true;
+  return { ok: true, etat: 'CREDITE', jourId: bloc.jourId };
 }
 async function valeurFraisUsd(recus) {
   const prix = {}, decimales = {};
@@ -4043,8 +4062,22 @@ async function crediterDetenteursSkins() {
     const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
     const jour = jourDe(Date.now()).id, contrat = String(BLOCKSKINS_SRV).toLowerCase();
     revenu.passes = revenu.passes || {};
-    const detenteurs = new Set(r.skins.map((s) => String(s.detenteur || '').toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a) && a !== contrat && !/^0x0{40}$/.test(a) && !internes.has(a)));
-    for (const a of detenteurs) { const ids = revenu.passes[a] || []; if (!ids.includes(jour)) { revenu.passes[a] = [...ids, jour].sort(); revenuSale = true; } }
+    const externe = (a) => /^0x[0-9a-f]{40}$/.test(a) && a !== contrat && !/^0x0{40}$/.test(a) && !internes.has(a);
+    const detenteurs = new Set(r.skins.map((s) => String(s.detenteur || '').toLowerCase()).filter(externe));
+    /* ⛔⛔ 2026-10-24 (revue adverse, audit-ticketpot 2, HIGH) : UN ticket par JETON et par jour. Avant, chaque detenteur vu a une lecture
+     *   gagnait le jour : un seul skin (ERC-721 transferable) passe de wallet en wallet entre deux lectures donnait jusqu a 144 tickets par
+     *   jour. revenu.skinsJour[jour][tokenId] = le PREMIER detenteur externe vu ce jour-la : il garde le ticket ; le jeton passe a un autre
+     *   wallet le meme jour ne donne rien de plus. Un interne ou le contrat (skin en vente) ne consomme pas le ticket du jeton. */
+    revenu.skinsJour = revenu.skinsJour || {};
+    const parJeton = revenu.skinsJour[jour] = revenu.skinsJour[jour] || {};
+    for (const s of r.skins) {
+      const id = String(s.tokenId), a = String(s.detenteur || '').toLowerCase();
+      if (!externe(a)) continue;
+      if (parJeton[id]) continue;
+      parJeton[id] = a; revenuSale = true;
+      const ids = revenu.passes[a] || []; if (!ids.includes(jour)) { revenu.passes[a] = [...ids, jour].sort(); revenuSale = true; }
+    }
+    { const js = Object.keys(revenu.skinsJour).sort(); for (const k of js.slice(0, Math.max(0, js.length - 3))) delete revenu.skinsJour[k]; }
     /* 2026-10-23 : le JOUR de chaque lecture reussie est note (couverture de /api/ticketpot/parts : un jour sans lecture des skins n est
      *   pas couvert) ; 60 jours gardes au plus */
     revenu.skinsLus = revenu.skinsLus || {};
@@ -4209,8 +4242,16 @@ function ticketpotJson() {
   const semSrv = ticketpotSrv.semaine && ticketpotSrv.semaine.id === saisonDe(Date.now()).id ? ticketpotSrv.semaine : null;
   /* le pot de semaine reclamable : servi seulement s il est ENCORE le jour reclamable (calcul pur, aucune lecture de chaine ici) */
   const srSrv = ticketpotSrv.semaineReclamable && ticketpotSrv.semaineReclamable.day === jourSemaineReclamable(Math.floor(Date.now() / 1000), (ms) => saisonDe(ms).fin) ? ticketpotSrv.semaineReclamable : null;
+  /* 2026-10-24 (revue adverse, audit-ticketpot 5) : TOUS les pots (jour ou semaine) qui ont au moins une part SIGNEE et sont encore dans
+   *   leur grace (claimableUntil, 7 jours) — avant, l app ne regardait que la veille et la semaine : une part signee d il y a 3 jours n avait
+   *   plus de bouton. Calcul pur sur revenu.ticketpotSig (aucune lecture de chaine) ; l app y cherche la part de SON wallet et relit claimed(). */
+  const tS = Math.floor(Date.now() / 1000);
+  const signes = Object.entries(revenu.ticketpotSig || {}).filter(([, m]) => m && typeof m === 'object' && Object.keys(m).length > 0)
+    .map(([k]) => { const semaine = k.endsWith('#S'), jourId = semaine ? k.slice(0, -2) : k; return { jourId, day: dayDeJourIdPot(jourId), semaine }; })
+    .filter((x) => x.day !== null && tS <= reclamablePotSrv(x.day))
+    .sort((x, y) => y.day - x.day || Number(y.semaine) - Number(x.semaine)).slice(0, 16);
   return { contrat, bloc: TICKETPOT_DEPLOIEMENT.bloc, veille: ticketpotSrv.etat ? { jourId: ticketpotSrv.jourId, day: ticketpotSrv.day, ...ticketpotSrv.etat } : null,
-    semaine: semSrv, semaineReclamable: srSrv, erreurSemaineReclamable: ticketpotSrv.erreurSemaineReclamable || null, lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur, erreurSemaine: ticketpotSrv.erreurSemaine || null };
+    semaine: semSrv, semaineReclamable: srSrv, signes, erreurSemaineReclamable: ticketpotSrv.erreurSemaineReclamable || null, lu: ticketpotSrv.lu ? new Date(ticketpotSrv.lu).toISOString() : null, erreur: ticketpotSrv.erreur, erreurSemaine: ticketpotSrv.erreurSemaine || null };
 }
 /* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18) — LECTURE SEULE. Les logs de BlockDuels (Created / Joined / Settled / Cancelled / Refunded),
  *   relus par fenetres de 2 000 blocs, au plus DUELS_FENETRES_PAR_TOUR par tour, avec 300 blocs de recouvrement (doublons comptes une fois).
@@ -6336,20 +6377,30 @@ function traiterRequete(req, res) {
       /* 2026-10-17 soir — SEASON DRAW QUOTIDIEN : le VOLUME verifie du jour (volume-tirage.js). UNIT : un Swap du PoolManager sur NOTRE pool
        *   UNIT (le frais du hook est pris DANS ce swap, en ETH natif : verifierFrais ne le voit pas, d ou ce chemin avant son refus).
        *   Actions : seulement si NOTRE frais est arrive (v.ok). Externes seulement ; un hash ne compte qu UNE fois, tous jours confondus. */
-      try { await crediterVolumeJour({ h, ligne, tx, recu, v, internes }); } catch (_) { /* le volume se relira au prochain envoi du hash */ }
+      /* 2026-10-24 : ce que le ticket du jour a fait de ce hash (jour du BLOC credite, ou pourquoi rien : plus de 48 h, bloc illisible) —
+       *   rendu dans la reponse (ticket), jamais devine */
+      let ticketTP = null;
+      try { ticketTP = (await crediterVolumeJour({ h, ligne, tx, recu, v, internes })) || null; } catch (_) { /* le volume se relira au prochain envoi du hash */ }
       /* PASS SKIN (Phil 2026-10-17 soir) : un achat de skin VERIFIE dans le recu (mint au payeur + le prix arrive au wallet de frais) = 7 jours
-       *   de tickets garantis. Externes seulement ; un hash ne compte qu une fois. Avant la sortie sur frais : verifierFrais exige un swap. */
+       *   de tickets garantis. Externes seulement ; un hash ne compte qu une fois. Avant la sortie sur frais : verifierFrais exige un swap.
+       *   2026-10-24 : les jours du pass partent du jour du BLOC du mint (jourDuRecu), plus de la reception ; au-dela de 48 h, rien. */
       if (ligne === 'skin_mint' && !(revenu.passVus || {})[h]) {
         const ps = passSkinVerifie({ tx, recu, skins: BLOCKSKINS_SRV, usdc: USDC_BASE, wallet: FEE_WALLET, prix: SKIN_MINT_USDC_SRV });
         if (ps.ok && !internes.has(ps.payeur)) {
-          revenu.passVus = { ...(revenu.passVus || {}), [h]: 1 };
-          revenu.passes = revenu.passes || {};
-          revenu.passes[ps.payeur] = [...new Set([...(revenu.passes[ps.payeur] || []), ...joursPass(Date.now())])].sort();
-          revenuSale = true;
+          const blocPass = await jourDuRecu(recu);
+          if (!blocPass.ok) ticketTP = blocPass;
+          else {
+            revenu.passVus = { ...(revenu.passVus || {}), [h]: 1 };
+            revenu.passes = revenu.passes || {};
+            revenu.passes[ps.payeur] = [...new Set([...(revenu.passes[ps.payeur] || []), ...joursPass(blocPass.ms)])].sort();
+            revenuSale = true;
+            ticketTP = { ok: true, etat: 'CREDITE', jourId: blocPass.jourId };
+          }
         }
       }
+      const avecTicket = (o) => (ticketTP ? { ...o, ticket: ticketTP } : o);
       revenu.tentatives[v.ok ? 'ok' : v.etat] = (revenu.tentatives[v.ok ? 'ok' : v.etat] || 0) + 1;
-      if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' ? 202 : 200, { ok: false, etat: v.etat, pourquoi: v.pourquoi }); return; }
+      if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' ? 202 : 200, avecTicket({ ok: false, etat: v.etat, pourquoi: v.pourquoi })); return; }
       /* ⛔ chasse 2026-10-17 (HIGH, PoC) : `i=1` venait du CLIENT — n importe qui postait le hash d un autre avec i=1 (le premier post gagne)
        *   et lui retirait son ticket / sa ligne externe. Interne / externe se decide SEULEMENT par le wallet payeur (walletsInternes). */
       const verif = v;
@@ -6376,7 +6427,7 @@ function traiterRequete(req, res) {
       }
       revenuSale = true;
       console.log('[revenu]', jour, ligne, verif.externe ? 'EXTERNE' : 'interne', JSON.stringify(v.recus));
-      repondre(200, { ok: true, externe: verif.externe });
+      repondre(200, avecTicket({ ok: true, externe: verif.externe }));
     } catch (e) {
       repondre(202, { ok: false, etat: 'NON_LU', pourquoi: 'the chain could not be read just now' });
     } finally { payesEnCours.delete(h); } })();
@@ -6503,23 +6554,54 @@ function traiterRequete(req, res) {
     /* mode SEMAINE (Phil 2026-10-18 : « chaque week on redistribue au nombre de tickets ») : le pot de la semaine vit sur son DERNIER jour ;
      *   poids = entrees de la semaine (jours avec ticket + Week pass +3 + niveau +1/+2, memes plafonds que /api/tirage). Signatures gardees
      *   sous la cle « jour#S » : une signature d un mode n est jamais rendue dans l autre (le digest differe de toute facon). */
+    /* 2026-10-24 (revue adverse, audit-ticketpot) : le jour qui FERME une semaine porte le pot de la semaine (son dayPot) */
+    const dernierDeSemaine = (jourId) => { const d = dayDeJourIdPot(jourId); return d !== null && jourDe(saisonDe(d * JOUR_MS).fin - JOUR_MS).id === jourId; };
+    /* ⛔⛔ LE GEL (2026-10-24, audit-ticketpot 1, HIGH) : les parts etaient RECALCULEES a chaque lecture (niveau du jour, tickets credites en
+     *   retard) ; une fois une part signee et servie, un recalcul changeait tous les montants -> signatures caduques, et une re-signature
+     *   sur-allouait le pot (A ancien + B nouveau > potAtClose : le dernier a reclamer etait refuse AmountOverPot). A la PREMIERE signature
+     *   gardee pour une cle (jour ou jour#S), la table exacte est gelee : { mode, poids | tickets, potAtClose, at } ; partsDe la relit pour
+     *   toujours -> montants et digests ne changent plus. */
+    const gelTP = (cle) => ((revenu.ticketpotGel || {})[cle]) || null;
+    const gelerTP = (cle, { mode, poids, parts, potAtClose }) => {
+      revenu.ticketpotGel = revenu.ticketpotGel || {};
+      /* mode JOUR : les tickets = les wallets des parts (partsDuJour rend une part par ticket des que le pot couvre 1 unite chacun ; sinon
+       *   aucune part, donc rien a signer ni a geler) */
+      revenu.ticketpotGel[cle] = { mode, poids: mode === 'SEMAINE' ? { ...poids } : null, tickets: mode === 'SEMAINE' ? null : parts.map((p) => p.wallet), potAtClose: String(potAtClose), at: new Date().toISOString() };
+      revenuSale = true;
+      return revenu.ticketpotGel[cle];
+    };
     const partsDe = async (jourId, semaine = false) => {
       const day = dayDeJourIdPot(jourId);
       if (day === null) return { ok: false, etat: 'REFUSE', pourquoi: 'day is JYYYY-MM-DD' };
+      const cleTP = jourId + (semaine ? '#S' : '');
+      let gel = gelTP(cleTP);
       let poids = null, semaineId = null;
       if (semaine) {
         const s = saisonDe(day * JOUR_MS);
         if (jourDe(s.fin - JOUR_MS).id !== jourId) return { ok: false, etat: 'REFUSE', pourquoi: 'the week pot lives on the LAST day of its week: ' + jourDe(s.fin - JOUR_MS).id };
         const jours = revenu.jours || {}, passes = revenu.passes || {}, ids = joursEntre(s.debut, s.fin);
-        const bonusNiv = bonusNiveauxSemaine(entreesPeriode(jours, ids, SEUIL_VOLUME_JOUR_USD, passes), (a) => niveauSrv(a).level);
+        /* le bonus de niveau A LA DATE du dernier jour de la semaine (jourId) : les jours avec ticket comptes jusqu a ce jour inclus.
+         *   ⛔ Les compteurs XP (revenu.xpEtat : rolls, settles, skins, missions…) sont CUMULES sans historique par jour : cette part-la est
+         *   l XP COURANTE. Un niveau franchi apres la semaine par ces compteurs change encore une semaine NON signee ; le gel fige le reste. */
+        const jtFin = joursTicketParWallet(jours, passes, jourId, SEUIL_VOLUME_JOUR_USD);
+        const niveauFin = (a) => niveauWallet({ compteurs: ((revenu.xpEtat || {}).xp || {})[a] || {}, joursTicket: jtFin[a] || 0 }).level;
+        const bonusNiv = bonusNiveauxSemaine(entreesPeriode(jours, ids, SEUIL_VOLUME_JOUR_USD, passes), niveauFin);
         poids = {};
         for (const e of entreesPeriode(jours, ids, SEUIL_VOLUME_JOUR_USD, passes, (revenu.bonusSemaine || {})[s.id] || {}, bonusNiv)) poids[e.adresse] = (poids[e.adresse] || 0) + 1;
         semaineId = s.id;
       }
       let j; try { j = await jourChaineTP.obtenir(day, () => lireJourTicketPot({ rpc: rpcServeur, contrat: contratTP }, day), (x) => !!x); } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }; }
-      const tickets = semaine ? Object.keys(poids) : ticketsJour(revenu.jours || {}, jourId, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD);
+      const ticketsCourants = () => (semaine ? Object.keys(poids) : ticketsJour(revenu.jours || {}, jourId, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD));
       const sigs = ((revenu.ticketpotSig || {})[jourId + (semaine ? '#S' : '')]) || {};
-      const parts = j.ferme ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j.potAtClose, signatures: sigs, poids }) : [];
+      /* une cle signee AVANT le gel (aucune table gardee) : gelee a sa premiere lecture SI toutes ses signatures tiennent encore sur le calcul
+       *   courant ; une cle deja derivee (une signature caduque) n est pas gelee sur une table qui n est pas celle qui a ete signee */
+      const partsBrutes = j.ferme && !gel && Object.keys(sigs).length ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets: ticketsCourants(), potAtClose: j.potAtClose, signatures: sigs, poids }) : [];
+      const sigsTenues = () => Object.keys(sigs).length > 0 && Object.keys(sigs).every((w) => partsBrutes.some((p) => p.wallet === w && p.signature));
+      if (!gel && j.ferme && sigsTenues()) gel = gelerTP(cleTP, { mode: semaine ? 'SEMAINE' : 'JOUR', poids, parts: partsBrutes, potAtClose: j.potAtClose });
+      if (gel && semaine && gel.poids && typeof gel.poids === 'object') poids = { ...gel.poids };
+      const tickets = gel && !semaine && Array.isArray(gel.tickets) ? [...gel.tickets] : ticketsCourants();
+      const potTP = gel ? BigInt(gel.potAtClose) : j.potAtClose;
+      const parts = j.ferme ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: potTP, signatures: sigs, poids }) : [];
       /* LA COUVERTURE des index qui font les tickets (ticketpot-parts-serveur.js) : inconnu -> complete false ; le brain ne propose alors
        *   pas de signer ces parts finales */
       const perTP = semaine ? saisonDe(day * JOUR_MS) : jourDe(day * JOUR_MS);
@@ -6527,7 +6609,8 @@ function traiterRequete(req, res) {
       if (BLOCKROLLS_DEPLOIEMENT.adresse && Number.isSafeInteger(revenu.rollsScan)) { try { curseurTs = await horodatageBloc(revenu.rollsScan); } catch (_) { curseurTs = null; } }
       const couverture = couvertureParts({ debutMs: perTP.debut, finMs: perTP.fin, joursIds: joursEntre(perTP.debut, perTP.fin), registreDepuis: revenu.depuis,
         rolls: BLOCKROLLS_DEPLOIEMENT.adresse ? { curseurTs } : null, skins: BLOCKSKINS_SRV ? { joursLus: revenu.skinsLus || {} } : null });
-      return { ok: true, day, jourId, mode: semaine ? 'SEMAINE' : 'JOUR', semaine: semaineId, poids, contrat: contratTP, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(), nTickets: tickets.length, parts,
+      return { ok: true, day, jourId, mode: semaine ? 'SEMAINE' : 'JOUR', semaine: semaineId, poids, contrat: contratTP, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(),
+        dernierJourSemaine: dernierDeSemaine(jourId), gele: gel ? gel.at : null, nTickets: tickets.length, parts,
         couverture };
     };
     if (chemin === '/api/ticketpot/parts') {
@@ -6546,6 +6629,8 @@ function traiterRequete(req, res) {
       const jourId = String((b && b.day) || ''), wallet = String((b && b.wallet) || '').toLowerCase(), signature = String((b && b.signature) || '');
       if (!/^J\d{4}-\d{2}-\d{2}$/.test(jourId) || !/^0x[0-9a-f]{40}$/.test(wallet) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day (JYYYY-MM-DD), wallet and a 65-byte signature are needed' }); return; }
       const semaine = !!(b && b.week === true);
+      /* 2026-10-24 (audit-ticketpot 3) : le dernier jour d une semaine, son dayPot EST le pot de la semaine — ses parts du JOUR ne se signent pas */
+      if (!semaine && dernierDeSemaine(jourId)) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: jourId + ' is the last day of its week: its pot is the weekly pot, sign its weekly shares (week: true)' }); return; }
       const r = await partsDe(jourId, semaine);
       if (!r.ok) { rendreTP(r.etat === 'NON_LU' ? 202 : 400, r); return; }
       if (!r.ferme) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day ' + jourId + ' is not closed on chain: nothing is signed before close(day)' }); return; }
@@ -6553,6 +6638,19 @@ function traiterRequete(req, res) {
       if (!p) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: wallet + ' held no ticket of ' + jourId }); return; }
       if (!verifierSignaturePart({ digest: p.digest, signature, verifier: r.verifier })) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'this signature does not recover to the verifier ' + r.verifier + ' on the share of ' + wallet }); return; }
       const cleSig = jourId + (semaine ? '#S' : '');
+      /* ⛔⛔ GARDE DURE (2026-10-24, audit-ticketpot 1) : les montants deja gardes pour ce JOUR (cle du jour ET cle jour#S : un seul dayPot
+       *   sur la chaine) + cette part ne depassent JAMAIS potAtClose, quelle qu en soit la cause ; la part re-deposee de ce wallet dans cette
+       *   cle n est pas comptee deux fois (elle est remplacee). Un montant garde illisible -> refuse (jamais compte 0). */
+      let dejaGarde = 0n, illisible = false;
+      for (const k of [jourId, jourId + '#S']) {
+        for (const [w, x] of Object.entries((revenu.ticketpotSig || {})[k] || {})) {
+          if (k === cleSig && w === wallet) continue;
+          try { dejaGarde += BigInt(x && x.amount); } catch (_) { illisible = true; }
+        }
+      }
+      if (illisible) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'a stored share of ' + jourId + ' has an unreadable amount: nothing more is stored for this day' }); return; }
+      if (dejaGarde + BigInt(p.amount) > BigInt(r.potAtClose)) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'shares already stored for ' + jourId + ' (' + dejaGarde + ' raw USDC) plus this one (' + p.amount + ') would exceed its pot at close (' + r.potAtClose + ')' }); return; }
+      if (!gelTP(cleSig)) gelerTP(cleSig, r);
       revenu.ticketpotSig = revenu.ticketpotSig || {}; revenu.ticketpotSig[cleSig] = revenu.ticketpotSig[cleSig] || {};
       revenu.ticketpotSig[cleSig][wallet] = { digest: p.digest, signature, amount: p.amount, deadline: p.deadline, ticket: p.ticket, recue: new Date().toISOString() };
       revenuSale = true;

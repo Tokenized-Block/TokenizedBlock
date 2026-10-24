@@ -35,8 +35,10 @@ vu(verifierSignaturePart({ digest: parts[0].digest, signature: '0x12', verifier:
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const bloc = srv.slice(srv.indexOf("if (chemin === '/api/ticketpot/parts' || chemin === '/api/ticketpot/signature') {"), srv.indexOf("if (chemin === '/api/jeu/niveau') {"));
 vu(bloc.length > 500 && /import \{ partsDuJour as partsTicketPot, verifierSignaturePart \} from '\.\/ticketpot-parts\.js';/.test(srv), 'serveur : le bloc et l import');
-vu(/const parts = j\.ferme \? partsTicketPot\(\{ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: j\.potAtClose, signatures: sigs, poids \}\) : \[\];/.test(bloc)
-  && /const tickets = semaine \? Object\.keys\(poids\) : ticketsJour\(revenu\.jours \|\| \{\}, jourId, revenu\.passes \|\| \{\}, SEUIL_VOLUME_JOUR_USD\);/.test(bloc), 'parts seulement pour un jour FERME, depuis ticketsJour (jour) ou les entrees de la semaine');
+/* 2026-10-24 : la table GELEE a la premiere signature (pot et tickets / poids) remplace le calcul courant — test-ticketpot-gel-20261024.mjs l execute */
+vu(/const parts = j\.ferme \? partsTicketPot\(\{ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: potTP, signatures: sigs, poids \}\) : \[\];/.test(bloc)
+  && /const potTP = gel \? BigInt\(gel\.potAtClose\) : j\.potAtClose;/.test(bloc)
+  && /const ticketsCourants = \(\) => \(semaine \? Object\.keys\(poids\) : ticketsJour\(revenu\.jours \|\| \{\}, jourId, revenu\.passes \|\| \{\}, SEUIL_VOLUME_JOUR_USD\)\);/.test(bloc), 'parts seulement pour un jour FERME, depuis ticketsJour (jour) ou les entrees de la semaine (ou la table gelee)');
 /* MODE SEMAINE (Phil 2026-10-18 : « chaque week on redistribue au nombre de tickets ») */
 vu(/if \(jourDe\(s\.fin - JOUR_MS\)\.id !== jourId\) return \{ ok: false, etat: 'REFUSE'/.test(bloc), 'semaine : seulement sur le DERNIER jour de la semaine');
 vu(/entreesPeriode\(jours, ids, SEUIL_VOLUME_JOUR_USD, passes, \(revenu\.bonusSemaine \|\| \{\}\)\[s\.id\] \|\| \{\}, bonusNiv\)/.test(bloc), 'semaine : poids = entrees avec les MEMES bonus plafonnes que /api/tirage');
@@ -58,7 +60,7 @@ vu(/import \{ planFund as planFundPot, planClaim as planClaimPot, [^}]*dayDeJour
 const pr = app.slice(app.indexOf('async function peindreReclamerPot('), app.indexOf("$('#jourReclamerPot').addEventListener"));
 /* 2026-10-23 : + la part de la SEMAINE reclamable (test-semaine-reclamable-20261023.mjs l execute) — toujours : wallet, jour FERME */
 vu(/maPartPot = null; b\.hidden = true;/.test(pr) && /if \(!c\) return;/.test(pr) && /if \(v && v\.ferme\) essais\.push\(\[v, false\], \[v, true\]\);/.test(pr) && /if \(s && s\.ferme && /.test(pr) &&/\(x\) => x\.wallet === moi && x\.signature\)/.test(pr), 'bouton seulement : jour ferme, wallet connecte, part SIGNEE de CE wallet');
-vu(/String\(c\)\.toLowerCase\(\) !== maPartPot\.wallet\) return;/.test(pr) && /planClaimPot\(\{ contrat: maPartPot\.contrat, day: maPartPot\.day, wallet: maPartPot\.wallet, ticket: maPartPot\.ticket, amount: maPartPot\.amount, deadline: maPartPot\.deadline, signature: maPartPot\.signature, ferme: true \}\)/.test(pr) && /await envoyerAppels\(plan\.appels, c\)/.test(pr), 'reclamerPot : le wallet de la part, planClaim avec la signature, envoi par envoyerAppels');
+vu(/String\(c\)\.toLowerCase\(\) !== maPartPot\.wallet\) return;/.test(pr) && /planClaimPot\(\{ contrat: maPartPot\.contrat, day: maPartPot\.day, wallet: maPartPot\.wallet, ticket: maPartPot\.ticket, amount: maPartPot\.amount, deadline: maPartPot\.deadline, signature: maPartPot\.signature, ferme: true, dejaPaye: deja === true \}\)/.test(pr) && /await envoyerAppels\(plan\.appels, c\)/.test(pr), 'reclamerPot : le wallet de la part, planClaim avec la signature, envoi par envoyerAppels');
 vu(/void peindreReclamerPot\(tp, c\);/.test(app), 'cable : peint avec le pot');
 /* la FERMETURE : l owner LU (serveur owner()) tout de suite, n importe qui apres closableByAnyoneAt ; jamais un non-owner avant (gas perdu) */
 vu(/owner = \/\^0x\[0-9a-f\]\{64\}\$\/i\.test\(String\(o\)\) \? '0x' \+ String\(o\)\.slice\(-40\)\.toLowerCase\(\) : null;/.test(srv) && /verifier: j\.verifier, owner \};/.test(srv), 'serveur : owner() lu, servi avec le pot ; illisible -> null');

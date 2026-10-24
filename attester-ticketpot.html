@@ -50,6 +50,10 @@
   /* ?week=1 (la carte « Sign the pot shares » de l app, le dernier jour d une semaine) : le mode semaine coche d emblee */
   $('#semaine').checked = new URLSearchParams(location.search).get('week') === '1';
   const eth = () => { if (!window.ethereum) throw new Error('No wallet found in this browser.'); return window.ethereum; };
+  /* 2026-10-24 (revue adverse, audit-ticketpot 3) : le dernier jour d une semaine, son pot EST le pot de la semaine (le serveur refuse ses
+   *   parts du jour) — lu dans la reponse (dernierJourSemaine), la page passe d elle-meme en mode semaine et le dit ; decocher a la main reste
+   *   possible pour LIRE les parts du jour, jamais pour les signer. */
+  let choixManuel = new URLSearchParams(location.search).get('week') === '1', basculeSur = null, jourRefuse = false;
   async function lire() {
     const jour = $('#jour').value.trim();
     dire('Reading the shares of ' + jour + '…');
@@ -57,19 +61,23 @@
     try { j = await fetch('/api/ticketpot/parts?day=' + encodeURIComponent(jour) + ($('#semaine').checked ? '&week=1' : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
     const ul = $('#liste'); ul.textContent = '';
     if (!j || !j.ok) { parts = null; dire((j && j.pourquoi) || 'The shares could not be read just now.', 'non'); $('#signer').hidden = true; return; }
+    if (!$('#semaine').checked && j.dernierJourSemaine === true && !choixManuel) { $('#semaine').checked = true; basculeSur = jour; return lire(); }
+    jourRefuse = !$('#semaine').checked && j.dernierJourSemaine === true;
+    const pourquoi = $('#semaine').checked && basculeSur === jour ? jour + ' is the last day of its week: its pot is the weekly pot, so weekly mode is selected. '
+      : jourRefuse ? jour + ' is the last day of its week: the server refuses its day shares — tick Weekly pot to sign. ' : '';
     parts = j.parts; verifier = String(j.verifier || '').toLowerCase();
     for (const p of parts) { const li = document.createElement('li'); li.textContent = p.wallet + ' — ' + usdc(p.amount) + ' USDC — ' + (p.signature ? 'signed' : 'to sign'); li.className = p.signature ? 'ok' : ''; ul.append(li); }
     const restantes = parts.filter((p) => !p.signature).length;
-    dire(j.ferme ? parts.length + ' share(s) of ' + jour + ' (pot ' + usdc(j.potAtClose) + ' USDC) — ' + restantes + ' to sign. Verifier: ' + verifier : 'Day ' + jour + ' is not closed on chain yet: its pot is not final, nothing can be signed before close(day).', j.ferme ? '' : 'non');
-    $('#signer').hidden = !(j.ferme && restantes && compte);
+    dire(pourquoi + (j.ferme ? parts.length + ' share(s) of ' + jour + ' (pot ' + usdc(j.potAtClose) + ' USDC) — ' + restantes + ' to sign. Verifier: ' + verifier : 'Day ' + jour + ' is not closed on chain yet: its pot is not final, nothing can be signed before close(day).'), j.ferme && !jourRefuse ? '' : 'non');
+    $('#signer').hidden = !(j.ferme && restantes && compte && !jourRefuse);
   }
   async function connecter() {
     try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]).toLowerCase() : null; } catch (e) { dire(String((e && e.message) || e), 'non'); return; }
     dire('Connected: ' + compte + (verifier && compte !== verifier ? ' — this is NOT the verifier (' + verifier + '): the server will refuse its signatures.' : ''), verifier && compte !== verifier ? 'non' : '');
-    $('#signer').hidden = !(parts && parts.some((p) => !p.signature) && compte);
+    $('#signer').hidden = !(parts && parts.some((p) => !p.signature) && compte && !jourRefuse);
   }
   async function signer() {
-    if (!parts || !compte) return;
+    if (!parts || !compte || jourRefuse) return;
     const b = $('#signer'); b.disabled = true;
     let faites = 0, refus = 0;
     try {
@@ -86,7 +94,7 @@
     if (faites) dire(faites + ' share(s) signed and stored. Holders can now claim from the Game tab.' + (refus ? ' ' + refus + ' refused.' : ''), refus ? 'non' : 'ok');
   }
   $('#lire').addEventListener('click', () => { void lire(); });
-  $('#semaine').addEventListener('change', () => { void lire(); });
+  $('#semaine').addEventListener('change', () => { choixManuel = true; void lire(); });
   $('#connecter').addEventListener('click', () => { void connecter(); });
   $('#signer').addEventListener('click', () => { void signer(); });
   void lire();

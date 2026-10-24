@@ -4223,7 +4223,7 @@ import { rollsEnAttente, fenetresLogs, filtreLogsJoueur, motSettle, plafondPot, 
  *   jamais suppose — les fenetres de 256 blocs disent leur duree a ce temps, et le Game se relit assez souvent pour une fenetre de ~51 s */
 import { blocsPour, secondesPour, dureeTexte, texteBlocs, intervalleSondageMs, pasAttenteBlocMs } from './temps-de-bloc.js';
 /* 2026-10-18 : TicketPot LIVE — alimenter le pot du jour (planFund : approve EXACT + fund), le jour UTC du contrat depuis l id du jour */
-import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, claimableUntil as reclamablePot, appelDayPot as appelDayPotTP, lireUintMot as lireUintMotTP, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
+import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, claimableUntil as reclamablePot, appelDayPot as appelDayPotTP, lireUintMot as lireUintMotTP, appelClaimed as appelClaimedTP, lireBoolMot as lireBoolTP, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernierJour } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
@@ -5080,6 +5080,11 @@ $('#jourFondPot').addEventListener('click', () => { void fondPot(); });
 /* LA RECLAMATION (2026-10-18) : la part de CE wallet pour la veille, signee par le verifier (attester-ticketpot.html) et servie par
  *   /api/ticketpot/parts ; sans signature, pas de bouton. planClaim : le holder appelle claim() lui-meme ; le contrat paie le holder nomme. */
 let maPartPot = null;
+/* 2026-10-24 (revue adverse, audit-ticketpot 5) : claimed(day, wallet) LU sur la chaine (eth_call) — true / false, ou null si illisible.
+ *   Une part deja reclamee gardait sa signature servie : le bouton revenait avec un montant deja paye, et le claim revertait AlreadyClaimed. */
+async function dejaReclamePot(contrat, day, wallet) {
+  try { const a = appelClaimedTP(contrat, day, wallet); return lireBoolTP(await rpc('eth_call', [{ to: a.to, data: a.data }, 'latest'])); } catch (_) { return null; }
+}
 /* 2026-10-23 (revue adverse) : le pot de la SEMAINE vit sur son dernier jour UTC (dimanche) et se ferme / se reclame pendant TOUTE sa grace
  *   (claimableUntil, 7 jours) — le serveur sert ce jour dans tp.semaineReclamable (lu au minuteur de 60 s). Avant, seule tp.veille etait
  *   regardee : les boutons de la semaine n existaient que le lundi. Hors grace (horloge de l app) : ignore, jamais un bouton que le contrat refuse. */
@@ -5098,6 +5103,13 @@ async function peindreReclamerPot(tp, c) {
   const essais = [];
   if (v && v.ferme) essais.push([v, false], [v, true]);
   if (s && s.ferme && !(v && v.jourId === s.jourId)) essais.push([s, true]);
+  /* 2026-10-24 (audit-ticketpot 5) : puis chaque pot des 7 derniers jours qui a une part SIGNEE (servi : tp.signes), encore dans sa grace */
+  const maintenantP = Math.floor(Date.now() / 1000);
+  for (const x of (tp && Array.isArray(tp.signes) ? tp.signes : [])) {
+    if (!x || !/^J\d{4}-\d{2}-\d{2}$/.test(String(x.jourId)) || !Number.isInteger(x.day) || maintenantP > reclamablePot(x.day)) continue;
+    if (essais.some(([j, m]) => j.jourId === x.jourId && m === !!x.semaine)) continue;
+    essais.push([{ jourId: x.jourId, day: x.day, ferme: true }, !!x.semaine]);
+  }
   const moi = String(c).toLowerCase();
   for (const [jr, sem] of essais) {
     let r = null;
@@ -5105,6 +5117,8 @@ async function peindreReclamerPot(tp, c) {
     if (!r || !r.ok) continue;
     const p = (r.parts || []).find((x) => x.wallet === moi && x.signature);
     if (!p) continue;
+    /* deja reclamee sur la chaine -> pas de bouton ; illisible -> pas de bouton non plus (jamais un montant deja paye), relu au prochain rafraichissement */
+    if ((await dejaReclamePot(r.contrat, p.day, moi)) !== false) continue;
     maPartPot = { ...p, contrat: r.contrat };
     b.textContent = 'Claim my ' + (sem ? 'weekly ' : '') + 'share · ' + usdcTexte(p.amount) + ' USDC (' + jr.jourId + ')'; b.hidden = false;
     return;
@@ -5117,7 +5131,10 @@ async function reclamerPot() {
   const dit = (txt) => { e.hidden = false; e.textContent = txt; };
   b.disabled = true;
   try {
-    const plan = planClaimPot({ contrat: maPartPot.contrat, day: maPartPot.day, wallet: maPartPot.wallet, ticket: maPartPot.ticket, amount: maPartPot.amount, deadline: maPartPot.deadline, signature: maPartPot.signature, ferme: true });
+    /* relu au clic (un claim d un autre onglet ou d un tiers peut etre passe depuis la peinture) ; illisible -> le contrat tranche */
+    const deja = await dejaReclamePot(maPartPot.contrat, maPartPot.day, maPartPot.wallet);
+    const plan = planClaimPot({ contrat: maPartPot.contrat, day: maPartPot.day, wallet: maPartPot.wallet, ticket: maPartPot.ticket, amount: maPartPot.amount, deadline: maPartPot.deadline, signature: maPartPot.signature, ferme: true, dejaPaye: deja === true });
+    if (plan.etat !== 'PRET' && deja === true) b.hidden = true;
     if (plan.etat !== 'PRET') { dit('Not claimed: ' + plan.pourquoi); return; }
     dit('Claim your share of ' + maPartPot.jourId + ' (' + usdcTexte(maPartPot.amount) + ' USDC, paid to your wallet by the contract). Sign in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
