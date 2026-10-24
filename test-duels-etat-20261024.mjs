@@ -258,7 +258,7 @@ await cas('2g. premiere lecture : nextId lu, mais AUCUN duels(id) lisible -> NON
 await cas('3. regleur : getLogs refuse + duels.joints -> settle(id) part vers les duels', async () => {
   const M = await import(MOD_REGLEUR);
   const CLE = '0x' + '0'.repeat(63) + '1'; /* la cle de TEST publique n 1 */
-  const D = adr('d0');
+  const D = adr('d0'), CIBLE3 = 99980;
   const fausse = (statuts) => {
     const ch = { envoyes: [], appels: [] };
     ch.rpc = async (m, p) => {
@@ -268,7 +268,9 @@ await cas('3. regleur : getLogs refuse + duels.joints -> settle(id) part vers le
         case 'eth_blockNumber': return hx(100000);
         case 'eth_getBlockByNumber': { const b = p[0] === 'latest' ? 100000 : parseInt(p[0], 16); return { number: hx(b), hash: hashDe(b), timestamp: hx(1_700_000_000 + Math.floor(b / 5)), baseFeePerGas: hx(1_000_000) }; }
         case 'eth_getLogs': throw new Error('request limit reached');
-        case 'eth_call': { const d = p[0].data; if (p[0].to === D && d.startsWith(S_DUELS)) return '0x' + [0, 0, statuts.get(String(BigInt('0x' + d.slice(10)))) ?? 0, 0, 0, 0, 0, 0, 0].map(u).join(''); throw new Error('unexpected eth_call'); }
+        /* 2026-10-24 (integration 84c848c) : guess A = la face du hash de la cible (P.traitsDepuisHash, independant du regleur), guess B nul :
+         *   le CREATEUR gagne (une egalite ne serait jamais reglee) ; mise 1 USDC */
+        case 'eth_call': { const d = p[0].data; if (p[0].to === D && d.startsWith(S_DUELS)) return '0x' + [0, 0, statuts.get(String(BigInt('0x' + d.slice(10)))) ?? 0, emballer(P.traitsDepuisHash(hashDe(CIBLE3))), 0, CIBLE3, 0, 0, 1_000_000].map(u).join(''); throw new Error('unexpected eth_call'); }
         case 'eth_maxPriorityFeePerGas': return hx(1000);
         case 'eth_estimateGas': return hx(90000);
         case 'eth_getTransactionCount': return hx(3);
@@ -279,9 +281,9 @@ await cas('3. regleur : getLogs refuse + duels.joints -> settle(id) part vers le
     };
     return ch;
   };
-  /* avec la liste par l etat : le duel #7 rejoint (cible 99 990, statut relu Joined) part */
+  /* avec la liste par l etat : le duel #7 rejoint (cible 99 980 = tete - 20 >= delaiDuelBlocs, le createur gagne, statut relu Joined) part */
   const ch = fausse(new Map([['7', 2]]));
-  const r = M.creerRegleur({ cle: CLE, contrat: null, chainId: 8453, rpc: ch.rpc, maintenant: () => 1_000_000, duels: { contrat: D, bloc: 0, joints: () => [{ id: '7', targetBlock: 99990 }] } });
+  const r = M.creerRegleur({ cle: CLE, contrat: null, chainId: 8453, rpc: ch.rpc, maintenant: () => 1_000_000, duels: { contrat: D, bloc: 0, joints: () => [{ id: '7', targetBlock: CIBLE3 }] } });
   const t = await r.tour();
   vu(t.fait === true && ch.envoyes.length === 1 && t.cible === 'duels' && t.quoi === 'settle' && String(t.ids && t.ids[0]) === '7', 'logs refuses, liste par l etat : UNE tx settle(#7) vers les duels (lu : ' + JSON.stringify({ fait: t.fait, pourquoi: t.pourquoi }) + ')');
   vu(ch.appels.includes('eth_getLogs'), 'les logs recents ont bien ete demandes (et refuses)');
@@ -289,7 +291,7 @@ await cas('3. regleur : getLogs refuse + duels.joints -> settle(id) part vers le
   vu(e.contrats && e.contrats.duels && e.contrats.duels.envois === 1 && (e.erreurs || []).some((x) => /duels logs not read \(state list used\)/.test(x.quoi)), 'etat() : 1 envoi aux duels, et le refus des logs est DIT');
   /* une liste par l etat perimee (#8 deja regle sur la chaine) : le statut relu l ecarte, rien ne part */
   const ch2 = fausse(new Map([['8', 3]]));
-  const r2 = M.creerRegleur({ cle: CLE, contrat: null, chainId: 8453, rpc: ch2.rpc, maintenant: () => 1_000_000, duels: { contrat: D, bloc: 0, joints: () => [{ id: '8', targetBlock: 99990 }] } });
+  const r2 = M.creerRegleur({ cle: CLE, contrat: null, chainId: 8453, rpc: ch2.rpc, maintenant: () => 1_000_000, duels: { contrat: D, bloc: 0, joints: () => [{ id: '8', targetBlock: CIBLE3 }] } });
   await r2.tour();
   vu(ch2.envoyes.length === 0, 'liste perimee (#8 deja Settled) : statut relu, AUCUN envoi');
   /* sans liste par l etat : le refus des logs jette (comme avant), aucun envoi */

@@ -6773,7 +6773,16 @@ function slotsResume(plan) {
     p.push('Settle pays ' + plan.lot.length + ' spin' + (plan.lot.length === 1 ? '' : 's') + ' in full: ' + Slots.usdcPrecis(somme) + ' USDC. Settle within ' + Math.min(...plan.lignes.filter((l) => l.decision === 'LOT').map((l) => l.blocsRestants)) + ' block(s).');
   }
   if (plan.courts.length) p.push('The pot is short for ' + plan.courts.length + ' spin' + (plan.courts.length === 1 ? '' : 's') + ': the amount missing is listed for each.');
-  if (plan.perdus.length) p.push(plan.perdus.length + ' spin' + (plan.perdus.length === 1 ? ' was' : 's were') + ' not settled in time and ' + (plan.perdus.length === 1 ? 'is' : 'are') + ' lost — nothing is returned.');
+  /* 2026-10-24 (revue keeper 5) : un spin dont la fenetre du CONTRAT est encore ouverte (fermeDans > 0 : trop tard pour un settle envoye
+   *   d ici, avec la marge de l app) n est PAS dit perdu — un settle deja envoye, ou le regleur du serveur (marge d un bloc), peut encore
+   *   tomber ; seuls ceux dont la fenetre est FERMEE sont dits perdus */
+  const fermant = plan.lignes.filter((l) => l.decision === 'PERDU' && l.fermeDans > 0), clos = plan.lignes.filter((l) => l.decision === 'PERDU' && !(l.fermeDans > 0));
+  if (fermant.length) {
+    const reg = slotsCfg.j && slotsCfg.j.regleur && slotsCfg.j.regleur.etat === 'ON';
+    p.push(fermant.length + ' spin' + (fermant.length === 1 ? '\'s window closes' : 's\' windows close') + ' within ' + Math.min(...fermant.map((l) => l.fermeDans)) + ' block(s): too soon for a new settle from here. '
+      + (reg ? 'The server\'s keeper (it settles the spins the pot pays in full), or a settle already sent, can still land in time; if none does, it is lost.' : 'A settle already sent can still land in time; if none does, it is lost.'));
+  }
+  if (clos.length) p.push(clos.length + ' spin' + (clos.length === 1 ? ' was' : 's were') + ' not settled in time and ' + (clos.length === 1 ? 'is' : 'are') + ' lost — nothing is returned.');
   return p.length ? p.join(' ') : 'Your spins are listed below.';
 }
 /* le minuteur de 3 s (verdict : ~8 lectures a chaque fois) : UNE lecture de la tete ; un repeint complet seulement quand un spin change
@@ -6971,12 +6980,17 @@ async function slotsAgir(quoi) {
       /* APRES le recu : spin par spin, paye en entier, plafonne (et de combien), saute par le pot, ou fenetre passee — jamais en silence */
       const st = Slots.lireSettledTous(logs, contrat);
       const sansRecu = envoyes.filter((x) => !st.some((d) => String(d.spinId) === x.id));
-      const statuts = new Map(); let tete = null;
+      const statuts = new Map(); let tete = null, blocRecu = null;
       if (sansRecu.length) {
         try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
         for (const x of sansRecu) { let v = null; try { v = Slots.lireSpin(await rpc('eth_call', [{ to: contrat, data: Slots.appelSpin(x.id) }, 'latest'])); } catch (_) { v = null; } statuts.set(x.id, v ? v.status : null); }
+        /* 2026-10-24 (revue keeper 5) : le bloc ou le settle a ete INCLUS — « fenetre passee » seulement s il est apres la fenetre ; inclus a
+         *   temps et saute pour un pot court, c est dit tel quel, meme si la fenetre s est fermee depuis (slots-plan.js bilanReglement) */
+        for (const h of [...new Set([...(Array.isArray(r.hashes) ? r.hashes : []), ...(r.hash ? [r.hash] : [])])]) {
+          try { const rc = await rpc('eth_getTransactionReceipt', [h]); const b = rc ? parseInt(rc.blockNumber, 16) : NaN; if (Number.isSafeInteger(b)) blocRecu = Math.max(blocRecu ?? 0, b); } catch (_) { /* non lu : la cause n est pas dite */ }
+        }
       }
-      const bilan = Slots.bilanReglement({ envoyes, settled: st, statuts, tete, table: vue.table });
+      const bilan = Slots.bilanReglement({ envoyes, settled: st, statuts, tete, table: vue.table, blocRecu });
       const d = st[st.length - 1];
       if (d) { peindreFacesSlots(d.blockHashes, d.spinId); slotsCfg.dernierFaces = { hashes: d.blockHashes, id: d.spinId }; }
       slotsCfg.dernier = [...bilan.map((b) => Slots.phraseApres(b)), ...laisses.map((l) => Slots.phraseAvant(l))].join(' ');

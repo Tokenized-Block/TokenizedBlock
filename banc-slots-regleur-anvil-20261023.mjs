@@ -1,7 +1,11 @@
 /* banc-slots-regleur-anvil-20261023.mjs — LE REGLEUR DES SLOTS DE BOUT EN BOUT sur un anvil LOCAL (aucun reseau), avec BlockSlots COMPILE.
  * Usage : (dans contracts/) forge build ; anvil --port P --chain-id 8453 ; node banc-slots-regleur-anvil-20261023.mjs P
- * Cles : les comptes anvil par defaut (deverrouilles par anvil) pour le decor ; la cle de TEST publique 0x…01 pour le regleur (son
- *   adresse recoit de l ETH local par anvil_setBalance). Rien ne touche Base. --chain-id 8453 : la garde de chaine du regleur passe.
+ * Cles (2026-10-24, revue keeper 7) : SEULES des cles de TEST PUBLIQUES, les entiers 1 a 11 :
+ *   0x…01 = le regleur (il SIGNE ses tx brutes) ; 0x…02 deployeur, 0x…03 joueur (createur des duels), 0x…04 autre joueur, 0x…05 dev,
+ *   0x…06 a 0x…09 = B1 a B4 (rejoignent, achetent des pass), 0x…0a = le pot commun des duels. Les adresses 0x…02 a 0x…0a sont DERIVEES
+ *   de ces cles (adresseDe), approvisionnees par anvil_setBalance et IMPERSONNEES par anvil (anvil_impersonateAccount) : aucune cle n est
+ *   lue pour elles, et les comptes deverrouilles par defaut d anvil (eth_accounts) ne sont plus utilises. Le banc REFUSE de tourner si le
+ *   noeud n est pas anvil (web3_clientVersion) ou pas sur --chain-id 8453 (la garde de chaine du regleur). Rien ne touche Base.
  * DEROULE (vraies transactions, vrai contrat v4, vraies lectures du regleur — creerRegleur + le vrai lecteur JSON-RPC) :
  *   1. USDC de test (UsdcS du banc forge) + BlockSlots (la table de slots-parametres.json) ; le pot finance ; le joueur fait 4 spins ;
  *   2. un 5e spin, d un autre joueur, laisse PERDRE (260 blocs) : le regleur ne l envoie jamais ;
@@ -10,13 +14,19 @@
  *      le regleur ne touche aucun USDC et ne paie que du gas ; un 2e tour lit le recu (dernierRegle) ;
  *   4. payDev : le dev touche la part de TOUS les spins (le perdu compris) ; solde du contrat = pot (rien de coince).
  *   2026-10-24 (audit rolls-duels) — LE MEME regleur, la MEME cle, avec BlockDuels et BlockRolls COMPILES :
- *   5. un duel USDC cree puis rejoint ; le joueur qui a rejoint se TAIT : le regleur envoie settle(id) dans la fenetre ; le gagnant (ou
- *      les deux, egalite) est paye selon le contrat (90 % / 7 % / reste, ou les mises rendues) ; le regleur ne touche rien ;
+ *   5. (revue keeper 2026-10-24) 18 duels USDC crees puis rejoints ; personne ne regle : le vainqueur predit par le regleur (faceDuHash)
+ *      = celui du CONTRAT (faceOf) ; egalite -> jamais envoye (refundExpired rend les mises apres la fenetre) ; createur gagnant -> settle
+ *      des cible + delaiDuelBlocs ; rejoignant gagnant -> settle seulement dans la marge de fin ; chacun paye 90 / 7 / reste ;
+ *   5b. la course perdue : le settle du createur EN ATTENTE, le regleur envoie le sien, un seul bloc les inclut (le sien revert, mine) :
+ *      le regleur relit le duel, Settled -> revert EXPLIQUE, pas un echec ;
  *   6. le pot du pass : jour D arme par un acheteur qui se tait -> le regleur tire (drawDay) ; jour D+1 jamais ferme -> closeDay puis
  *      drawDay ; jour D+2 arme puis fenetre passee -> closeDay (re-arme) puis drawDay ; chaque pot va a buyers[hash % n] (recalcule).
  * NE PROUVE PAS : Base (sequenceur, prix du gas reel, noeuds publics) ; les contrats deployes sur Base ne sont pas touches. */
 import { readFileSync } from 'node:fs';
-import { creerRegleur } from './slots-regleur.js';
+import * as Regleur from './slots-regleur.js';
+const { creerRegleur } = Regleur;
+/* faceDuHash (2026-10-24) : absente d un module plus ancien — le banc tourne quand meme et le dit KO (mesure ROUGE sur 518653b) */
+const faceDuHash = typeof Regleur.faceDuHash === 'function' ? Regleur.faceDuHash : () => null;
 import * as Slots from './slots-plan.js';
 import { encoderConfig } from './slots-config.js';
 import { adresseDe } from './signeur-secp256k1.js';
@@ -48,8 +58,13 @@ const tete = async () => parseInt(await rpc('eth_blockNumber'), 16);
 
 const chaineId = parseInt(await rpc('eth_chainId'), 16);
 if (chaineId !== 8453) { console.log('anvil doit tourner avec --chain-id 8453 (lu : ' + chaineId + ')'); process.exit(2); }
-const [DEP, JOUEUR, AUTRE, DEV] = (await rpc('eth_accounts')).map((x) => x.toLowerCase());
-const CLE = '0x' + '0'.repeat(63) + '1';
+const client = String(await rpc('web3_clientVersion'));
+if (!/anvil/i.test(client)) { console.log('ce banc ne tourne que contre anvil (lu : ' + client + ')'); process.exit(2); }
+/* les cles de TEST publiques 1 a 11 (voir l en-tete) ; 2 a 10 : adresses derivees, impersonnees, approvisionnees en ETH local */
+const cleTest = (k) => '0x' + k.toString(16).padStart(64, '0');
+const [DEP, JOUEUR, AUTRE, DEV, B1, B2, B3, B4, POOL] = [2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => adresseDe(cleTest(k)).toLowerCase());
+for (const a of [DEP, JOUEUR, AUTRE, DEV, B1, B2, B3, B4, POOL]) { await rpc('anvil_impersonateAccount', [a]); await rpc('anvil_setBalance', [a, '0x' + (10n ** 20n).toString(16)]); }
+const CLE = cleTest(1);
 const REG = adresseDe(CLE).toLowerCase();
 await rpc('anvil_setBalance', [REG, '0x' + (10n ** 18n).toString(16)]);
 console.log('anvil ' + URL_RPC + ' chaine ' + chaineId + ' ; regleur (cle de test 0x…01) ' + REG);
@@ -132,8 +147,6 @@ vu((await solde(usdc, DEV)) === BigInt(spins.length + 1) * 250000n, 'payDev : le
 vu((await solde(usdc, contrat)) === (await lireU(contrat, Slots.appelPot())), 'solde du contrat = pot : rien de coince');
 
 /* ================================================================ 5. et 6. : duels et pot du pass, le MEME regleur (2026-10-24) */
-const comptes = (await rpc('eth_accounts')).map((x) => x.toLowerCase());
-const [B1, B2, B3, B4, POOL] = comptes.slice(4, 9);
 for (const j of [B1, B2, B3, B4]) await envoyer(DEP, usdc, '0x' + sel('mint(address,uint256)') + adr(j) + mot(1000_000000n));
 const BD = art('BlockDuels.sol', 'BlockDuels'), BRo = art('BlockRolls.sol', 'BlockRolls');
 const rD = await envoyer(DEP, null, BD.bytecode.object + adr(usdc) + adr(DEV) + adr(POOL) + adr(DEP));
@@ -156,35 +169,112 @@ async function tours(k) {
   return faits;
 }
 const pasDeTx = (faits) => faits.every((f) => f.rc && f.rc.status === '0x1');
-/* 5. des duels : JOUEUR cree, B1 rejoint (et se tait) ; jusqu a 8 duels, tant qu aucun n a de gagnant (une egalite est frequente) */
+/* 5. des duels (2026-10-24, revue keeper 1 et 2) : JOUEUR cree, B1 rejoint (et se tait). Le VAINQUEUR attendu de chaque duel est calcule par
+ *   le CONTRAT COMPILE (faceOf(blockhash(cible)) puis les deux scores) ; le regleur le predit en JS (faceDuHash) : parite verifiee. Puis
+ *   les tours (4 blocs entre deux) jusqu a la fin de la fenetre :
+ *     egalite    -> JAMAIS envoye ; apres la fenetre, refundExpired (par n importe qui) rend les deux mises : rien n est coince ;
+ *     createur   -> settle des cible + delaiDuelBlocs (le premier tour ou il est pret), paye 90 / 7 / reste ;
+ *     rejoignant -> settle seulement quand tete + 1 >= cible + 256 - marge, inclus DANS la fenetre, paye.
+ *   18 duels rejoints coup sur coup (un sur trois a les memes guesses : egalite certaine), puis une seule passe jusqu a la fin. */
 const STAKE = 2_000000n;
 const T_DS = topic('Settled(uint256,bytes32,uint8,uint8,address,uint256)');
 const pot2 = 2n * STAKE, w9 = (pot2 * 9000n) / 10000n, p7 = (pot2 * 700n) / 10000n, dv = pot2 - w9 - p7;
-const issues = [];
-for (let id = 1n; id <= 8n && !issues.some((x) => x.decisif); id++) {
-  const gA = [0, 1, 2, 3, 4].map(mot).join(''), gB = [Number(id) % 6, (Number(id) * 3) % 10, (Number(id) * 7) % 19, (Number(id) * 5) % 9, (Number(id) * 3) % 8].map(mot).join('');
+const faceContrat = async (h) => (await rpc('eth_call', [{ to: duels, data: '0x' + sel('faceOf(bytes32)') + h.slice(2) }, 'latest'])).slice(2).match(/.{64}/g).map((x) => Number(BigInt('0x' + x)));
+const score = (g, f) => g.reduce((s, x, i) => s + (x === f[i] ? 1 : 0), 0);
+const statutDuel = async (id) => Number(BigInt('0x' + (await rpc('eth_call', [{ to: duels, data: '0x' + sel('duels(uint256)') + mot(id) }, 'latest'])).slice(2 + 64 * 2, 2 + 64 * 3)));
+const soldes = async () => ({ a: await solde(usdc, JOUEUR), b: await solde(usdc, B1), p: await solde(usdc, POOL), d: await solde(usdc, DEV), k: await solde(usdc, REG) });
+let idDuel = 0n;
+/* un duel cree (JOUEUR) puis rejoint (B1) ; un sur trois avec les MEMES guesses (egalite certaine) ; rend sa cible et ses guesses */
+async function nouveauDuel(k) {
+  const gAn = [k % 6, (k * 7 + 1) % 10, (k * 5 + 2) % 19, (k * 3) % 9, (k + 1) % 8];
+  const gBn = k % 3 === 2 ? gAn : [(k + 3) % 6, (k * 3 + 4) % 10, (k * 11 + 3) % 19, (k * 5 + 1) % 9, (k * 3 + 2) % 8];
   await envoyer(JOUEUR, usdc, '0x' + sel('approve(address,uint256)') + adr(duels) + mot(STAKE));
-  await envoyer(JOUEUR, duels, '0x' + sel('create(address,uint256,uint8[5],uint64)') + adr(usdc) + mot(STAKE) + gA + mot(3600n));
+  await envoyer(JOUEUR, duels, '0x' + sel('create(address,uint256,uint8[5],uint64)') + adr(usdc) + mot(STAKE) + gAn.map(mot).join('') + mot(3600n));
+  idDuel += 1n;
   await envoyer(B1, usdc, '0x' + sel('approve(address,uint256)') + adr(duels) + mot(STAKE));
-  const rJ = await envoyer(B1, duels, '0x' + sel('join(uint256,uint8[5])') + mot(id) + gB);
-  const cible = parseInt(rJ.blockNumber, 16) + 2;
-  const av = { a: await solde(usdc, JOUEUR), b: await solde(usdc, B1), p: await solde(usdc, POOL), d: await solde(usdc, DEV), k: await solde(usdc, REG) };
-  await rpc('anvil_mine', ['0x3']);
-  const f = (await tours(2)).filter((x) => x.cible === 'duels');
-  const tx = f[0] ? await rpc('eth_getTransactionByHash', [f[0].hash]) : null;
-  const ev = f[0] && f[0].rc ? f[0].rc.logs.find((l) => l.address.toLowerCase() === duels && l.topics[0] === T_DS) : null;
-  const m = ev ? ev.data.slice(2).match(/.{64}/g).map((x) => BigInt('0x' + x)) : [];
-  const [sA, sB, gagnant] = [Number(m[1]), Number(m[2]), '0x' + (m[3] || 0n).toString(16).padStart(40, '0')];
-  const ap = { a: await solde(usdc, JOUEUR), b: await solde(usdc, B1), p: await solde(usdc, POOL), d: await solde(usdc, DEV), k: await solde(usdc, REG) };
-  const paye = sA === sB ? ap.a - av.a === STAKE && ap.b - av.b === STAKE && ap.p === av.p && ap.d === av.d
-    : (gagnant === JOUEUR ? ap.a - av.a === w9 && ap.b === av.b : ap.b - av.b === w9 && ap.a === av.a) && ap.p - av.p === p7 && ap.d - av.d === dv;
-  const st = BigInt('0x' + (await rpc('eth_call', [{ to: duels, data: '0x' + sel('duels(uint256)') + mot(id) }, 'latest'])).slice(2 + 64 * 2, 2 + 64 * 3));
-  issues.push({ id, decisif: !!ev && sA !== sB, ok: f.length === 1 && pasDeTx(f) && JSON.stringify(f[0].ids) === JSON.stringify([String(id)]) && tx.from.toLowerCase() === REG && tx.to.toLowerCase() === duels
-    && tx.input === '0x' + sel('settle(uint256)') + mot(id) && BigInt(tx.value) === 0n && BigInt(tx.chainId) === 8453n && !!ev && paye && ap.k === av.k && st === 3n && parseInt(f[0].rc.blockNumber, 16) <= cible + 256,
-    texte: 'duel #' + id + ' ' + sA + '/' + sB + (sA === sB ? ' egalite' : ' -> ' + (gagnant === JOUEUR ? 'createur' : 'rejoint')) });
+  const rJ = await envoyer(B1, duels, '0x' + sel('join(uint256,uint8[5])') + mot(idDuel) + gBn.map(mot).join(''));
+  return { id: idDuel, cible: parseInt(rJ.blockNumber, 16) + 2, gAn, gBn };
 }
-vu(issues.length >= 1 && issues.every((x) => x.ok), issues.length + ' duel(s), chacun : settle(id) par le regleur (from = le regleur, to = BlockDuels, value 0, chaine 8453), inclus DANS sa fenetre, Settled ; paye selon le contrat (90 % / 7 % / reste, ou mises rendues) ; le regleur ne touche aucun USDC : ' + issues.map((x) => x.texte).join(', '));
-vu(issues.some((x) => x.decisif), 'au moins un duel a un gagnant : ' + Slots.usdcPrecis(w9) + ' au gagnant, ' + Slots.usdcPrecis(p7) + ' au pot commun, ' + Slots.usdcPrecis(dv) + ' au dev');
+/* le vainqueur selon le CONTRAT (faceOf du hash de la cible, puis les scores) ; la prediction du regleur (faceDuHash) a cote */
+async function classer(d) {
+  const h = (await rpc('eth_getBlockByNumber', ['0x' + d.cible.toString(16), false])).hash;
+  const fC = await faceContrat(h), sA = score(d.gAn, fC), sB = score(d.gBn, fC);
+  return Object.assign(d, { h, fC, fJ: faceDuHash(h), sA, sB, attendu: sA === sB ? 'egalite' : sA > sB ? 'createur' : 'rejoignant' });
+}
+const attendreRecu = async (h) => { let rc = null; for (let z = 0; z < 50 && !rc; z++) { rc = await rpc('eth_getTransactionReceipt', [h]); if (!rc) await new Promise((ok) => setTimeout(ok, 100)); } return rc; };
+/* 18 duels rejoints coup sur coup, puis UNE passe de tours (4 blocs entre deux) jusqu a la fin de la derniere fenetre */
+const lot = [];
+for (let k = 0; k < 18; k++) lot.push(await nouveauDuel(k));
+await rpc('anvil_mine', ['0x3']);
+for (const d of lot) await classer(d);
+const av = await soldes();
+const envoisD = new Map(), autres = [];
+const finLot = Math.max(...lot.map((d) => d.cible)) + 256;
+for (let tete0 = await tete(); tete0 + 1 <= finLot; tete0 = await tete()) {
+  const t = await r2.tour();
+  if (t.fait && t.cible === 'duels') envoisD.set(t.ids[0], { ...t, tete: tete0, rc: await attendreRecu(t.hash) });
+  else if (t.fait) autres.push(t.cible + ':' + t.quoi + ':' + t.ids[0]);
+  await rpc('anvil_mine', ['0x4']);
+}
+await r2.tour();
+const { delaiDuelBlocs: delai, margeFinDuelBlocs: marge } = r2.etat().bornes;
+const ap = await soldes();
+const vus = { createur: 0, rejoignant: 0, egalite: 0 }, issues = [];
+for (const d of lot) {
+  const e = envoisD.get(String(d.id));
+  let ok = JSON.stringify(d.fJ) === JSON.stringify(d.fC), texte = '#' + d.id + ' ' + d.sA + '/' + d.sB + ' ' + d.attendu;
+  if (d.attendu === 'egalite') { ok = ok && !e; texte += ' jamais envoye'; } else {
+    const ev = e && e.rc ? e.rc.logs.find((l) => l.address.toLowerCase() === duels && l.topics[0] === T_DS) : null;
+    const gagnant = ev ? '0x' + BigInt('0x' + ev.data.slice(2 + 64 * 3, 2 + 64 * 4)).toString(16).padStart(40, '0') : null;
+    const tx = e ? await rpc('eth_getTransactionByHash', [e.hash]) : null;
+    const txOk = !!tx && tx.from.toLowerCase() === REG && tx.to.toLowerCase() === duels && tx.input === '0x' + sel('settle(uint256)') + mot(d.id) && BigInt(tx.value) === 0n && BigInt(tx.chainId) === 8453n;
+    const bloc = e && e.rc ? parseInt(e.rc.blockNumber, 16) : null;
+    const quand = !!e && (d.attendu === 'createur' ? e.tete >= d.cible + delai && e.tete + 1 < d.cible + 256 - marge : e.tete + 1 >= d.cible + 256 - marge);
+    ok = ok && !!e && e.rc && e.rc.status === '0x1' && txOk && gagnant === (d.attendu === 'createur' ? JOUEUR : B1) && quand && bloc <= d.cible + 256 && (await statutDuel(d.id)) === 3;
+    texte += ' envoye a +' + (e ? e.tete - d.cible : '?') + ', inclus a +' + (bloc !== null ? bloc - d.cible : '?');
+  }
+  vus[d.attendu] += 1;
+  issues.push({ ok, texte });
+}
+/* les soldes : chaque duel regle paie 90 % au gagnant, 7 % au pot commun, le reste au dev ; le regleur ne touche rien */
+const nC = lot.filter((d) => d.attendu === 'createur').length, nR = lot.filter((d) => d.attendu === 'rejoignant').length;
+vu(vus.createur >= 1 && vus.rejoignant >= 1 && vus.egalite >= 1, 'les trois cas vus : ' + JSON.stringify(vus) + ' (marge de fin ' + marge + ' blocs, delai ' + delai + ')');
+vu(issues.every((x) => x.ok) && autres.length === 0, lot.length + ' duels — vainqueur JS (faceDuHash) = contrat (faceOf) ; egalite jamais envoyee ; createur des cible + ' + delai + ', avant la marge de fin ; rejoignant seulement dans les ' + marge + ' derniers blocs ; settle(id) du regleur (value 0, chaine 8453), inclus dans la fenetre, Settled au bon gagnant : ' + issues.map((x) => (x.ok ? '' : 'KO ') + x.texte).join(' ; ') + (autres.length ? ' ; AUTRES ' + autres.join(',') : ''));
+vu(ap.a - av.a === BigInt(nC) * w9 && ap.b - av.b === BigInt(nR) * w9 && ap.p - av.p === BigInt(nC + nR) * p7 && ap.d - av.d === BigInt(nC + nR) * dv && ap.k === av.k, 'soldes : createur +' + nC + ' x ' + Slots.usdcPrecis(w9) + ', rejoignant +' + nR + ' x ' + Slots.usdcPrecis(w9) + ', pot commun et dev leur part ; le regleur 0 USDC');
+/* les egalites, jamais reglees par le regleur : apres la fenetre, refundExpired (par n importe qui) rend les deux mises — rien n est coince */
+await rpc('anvil_mine', ['0x2']);
+const avR = await soldes();
+for (const d of lot.filter((x) => x.attendu === 'egalite')) await envoyer(B2, duels, '0x' + sel('refundExpired(uint256)') + mot(d.id));
+const apR = await soldes(), nE = BigInt(vus.egalite);
+const rendus = await Promise.all(lot.filter((x) => x.attendu === 'egalite').map((d) => statutDuel(d.id)));
+vu(apR.a - avR.a === nE * STAKE && apR.b - avR.b === nE * STAKE && rendus.every((s) => s === 5), vus.egalite + ' egalite(s) : refundExpired rend les deux mises (Refunded) ; rien n est coince');
+
+/* 5b. la course PERDUE, sur les vrais contrats (revue keeper 1) : un duel ou le createur gagne ; le regleur envoie son settle ; le createur
+ *   envoie le sien avec un pourboire plus haut ; anvil (minage manuel, ordre par frais) met les deux dans le MEME bloc, le sien d abord :
+ *   le settle du regleur est MINE et revert (NotJoined). Le regleur relit le duel (Settled) : explique, pas un echec, toujours ON. */
+await rpc('anvil_mine', ['0x' + (300).toString(16)]); /* les duels de 5. sortent de leur fenetre */
+let course = null;
+for (let k = 20; k < 50 && !course; k++) { const d = await nouveauDuel(k); await rpc('anvil_mine', ['0x3']); await classer(d); if (d.attendu === 'createur') course = d; }
+vu(!!course, 'un duel ou le createur gagne, pour la course (#' + (course && course.id) + ')');
+const avantCourse = r2.etat();
+await rpc('anvil_mine', ['0x' + (r2.etat().bornes.delaiDuelBlocs).toString(16)]);
+/* minage manuel : le regleur envoie son settle (simule sur le dernier bloc : il passe) ; le createur envoie le sien juste apres avec un
+ *   pourboire de 2 gwei (le regleur : 0,1 gwei au plus) ; un seul bloc les inclut, ordonnes par frais (anvil --order fees, le defaut ;
+ *   mesure : la plus haute pointe d abord) — celui du createur d abord */
+await rpc('evm_setAutomine', [false]);
+let tK = null, hC = null;
+try {
+  tK = await r2.tour();
+  hC = await rpc('eth_sendTransaction', [{ from: JOUEUR, to: duels, data: '0x' + sel('settle(uint256)') + mot(course.id), gas: '0x' + (400000).toString(16), maxPriorityFeePerGas: '0x' + (2n * 10n ** 9n).toString(16), maxFeePerGas: '0x' + (10n ** 10n).toString(16) }]);
+  await rpc('anvil_mine', ['0x1']);
+} finally { await rpc('evm_setAutomine', [true]); }
+const rcK = tK && tK.fait ? await attendreRecu(tK.hash) : null, rcC = await attendreRecu(hC);
+vu(tK.fait && tK.cible === 'duels' && tK.ids[0] === String(course.id) && rcK && rcC && rcK.status === '0x0' && rcC.status === '0x1' && rcK.blockNumber === rcC.blockNumber && parseInt(rcC.transactionIndex, 16) < parseInt(rcK.transactionIndex, 16),
+  'course : le settle du createur (pourboire 2 gwei) passe d abord, celui du regleur est MINE dans le meme bloc et revert (regleur ' + JSON.stringify(tK && (tK.fait ? tK.cible + ' #' + tK.ids[0] + ' (course #' + course.id + ')' : tK.pourquoi)) + ', status ' + (rcK && rcK.status + ' idx ' + rcK.transactionIndex + ' bloc ' + rcK.blockNumber) + ' / ' + (rcC && rcC.status + ' idx ' + rcC.transactionIndex + ' bloc ' + rcC.blockNumber) + ')');
+await r2.tour();
+const apresCourse = r2.etat();
+vu(apresCourse.etat === 'ON' && apresCourse.echecsSuite === 0 && apresCourse.compteurs.reverts === avantCourse.compteurs.reverts && apresCourse.compteurs.revertsExpliques === avantCourse.compteurs.revertsExpliques + 1 && apresCourse.contrats.duels.revertsExpliques >= 1,
+  'le regleur relit le duel (Settled) : revert EXPLIQUE (' + apresCourse.compteurs.revertsExpliques + '), 0 echec, toujours ON');
 
 /* 6. le pot du pass */
 const today = async () => Number(BigInt(await rpc('eth_call', [{ to: rolls, data: '0x' + sel('today()') }, 'latest'])));

@@ -75,6 +75,7 @@ function faireChaine({ pot, tete, spins }) {
   c.executer = (data) => {
     const d = data.toLowerCase(), sel = d.slice(0, 10), mots = (d.slice(10).match(/.{64}/g) || []).map((x) => BigInt('0x' + x));
     const logs = [];
+    c.blocInclus = c.tete; /* 2026-10-24 (revue keeper 5) : le bloc d inclusion, rendu par le recu (l app le lit pour dire POURQUOI un spin est saute) */
     if (sel === Slots.planSettleMany({ contrat: CONTRAT, spinIds: [1] }).appels[0].data.slice(0, 10)) {
       for (const id of mots.slice(2)) { const s = c.spins.get(String(id)); if (!reglable(s)) continue; const j = juger(s); if (j.prix > c.pot) continue; logs.push(c.payer(s, j, j.prix)); }
     } else if (sel === Slots.planAccepter({ contrat: CONTRAT, spinId: 1, minimum: 0 }).appels[0].data.slice(0, 10)) {
@@ -86,6 +87,7 @@ function faireChaine({ pot, tete, spins }) {
   c.rpc = async (m, p) => {
     c.lectures.push(m === 'eth_call' ? 'eth_call:' + p[0].data.slice(0, 10) : m);
     if (m === 'eth_blockNumber') return '0x' + c.tete.toString(16);
+    if (m === 'eth_getTransactionReceipt') return c.blocInclus !== undefined ? { status: '0x1', blockNumber: '0x' + c.blocInclus.toString(16), logs: [] } : null;
     if (m === 'eth_getBlockByNumber') {
       const b = parseInt(p[0], 16), h = c.hashes.get(b);
       /* v4 : un horodatage (secondes) pour la mesure du temps de bloc, quand la chaine en donne (c.msBloc) ; le hash seulement s il est connu */
@@ -296,7 +298,8 @@ const MUTANTS = [
   ['D1b', 'le bilan ignore les Settled du recu', 'const bilan = Slots.bilanReglement({ envoyes, settled: st,', 'const bilan = Slots.bilanReglement({ envoyes, settled: [],'],
   ['R2', 'repeint avant la signature', "const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement({ ...vue, tete });", "await peindreSlots(true); const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement({ ...vue, tete });"],
   ['R2', 'le recu sans Settled n est pas relu', 'if (sansRecu.length) {', 'if (false) {'],
-  ['PERDU', 'les spins perdus ne sont pas dits', "if (plan.perdus.length) p.push(", "if (false) p.push("],
+  /* 2026-10-24 (revue keeper 5) : slotsResume separe la fenetre qui FERME (fermant) de celle FERMEE (clos) ; l ancre suit */
+  ['PERDU', 'les spins perdus ne sont pas dits', "if (clos.length) p.push(", "if (false) p.push("],
   ['PERDU', 'un spin perdu part dans Settle', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = p.lignes.filter((l) => l.decision === 'LOT' || l.decision === 'PERDU');"],
   ['PERDANT', 'un spin sans prix laisse hors du lot', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = p.lignes.filter((l) => l.decision === 'LOT' && l.paie > 0n);"],
   ['REGLEUR', 'l etat du regleur tape « on »', "const reg = j.regleur && j.regleur.etat === 'ON' ? 'on'", "const reg = true ? 'on'"],

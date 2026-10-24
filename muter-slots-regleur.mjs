@@ -2,7 +2,12 @@
  * COPIE (.mutant-slots-regleur-<pid>.js, a cote du module pour que ses imports relatifs marchent, effacee a la fin) ; test-slots-regleur doit
  * rougir. Le module du depot n est jamais ecrit. Usage : node muter-slots-regleur.mjs
  * 2026-10-24 : les ancres suivent le module v5 ; les correctifs des audits (panne RPC, tour sain, nonce too low, recu illisible, coupe du
- * lot, statut 0, duels, rolls, garde a trois contrats, ordre par echeance) ont chacun leurs mutants. */
+ * lot, statut 0, duels, rolls, garde a trois contrats, ordre par echeance) ont chacun leurs mutants.
+ * 2026-10-24 (revue keeper, defaut 6) : ⛔ les ancres sont PORTABLES. Une ancre qui contient un saut de ligne est cherchee avec \r?\n
+ *   (motif()), jamais un saut de ligne nu : sur un checkout core.autocrlf=true (CRLF), 8 ancres etaient « introuvables » et le script
+ *   sortait 1. La COPIE garde les fins de ligne du module (rien n est normalise : seule l ancre est remplacee). Les correctifs de la revue
+ *   (revert explique, plafond par contrat, egalites / rejoignant / mise, recu illisible compte, buyerCount 0, contrat nomme) ont chacun
+ *   leurs mutants (marques « revue »). */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +19,8 @@ const lancer = () => {
   try { execFileSync(process.execPath, [path.join(ICI, 'test-slots-regleur-20261023.mjs')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, REGLEUR_MODULE: COPIE, TOUT_COMPTER: '' } }); return true; }
   catch (_) { return false; }
 };
+/* une ancre texte -> une regexp : le texte echappe, chaque saut de ligne accepte \r?\n (LF comme CRLF) */
+const motif = (de) => new RegExp(de.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\n/g, '\\r?\\n'), 'g');
 const M = [
   ['sans cle : le regleur tourne quand meme', "  if (!cle) return off(", "  if (false) return off("],
   ['10 spins par tx : plus de borne', "const lignes = plan.lignes.filter((l) => l.decision === 'LOT').slice(0, bornes.spinsParTx);", "const lignes = plan.lignes.filter((l) => l.decision === 'LOT');"],
@@ -22,12 +29,12 @@ const M = [
   ['maxFee non borne au plafond', 'const maxFee = 2n * base + prio > bornes.maxFeeWei ? bornes.maxFeeWei : 2n * base + prio;', 'const maxFee = 2n * base + prio;'],
   ['pourboire non borne', 'if (prio > bornes.prioWeiMax) prio = bornes.prioWeiMax;', ''],
   ['plafond de gas par tx retire', 'if (gas > bornes.gasMaxParTx) {', 'if (false) {'],
-  ['tx par heure : plus de borne', 'if (st.envoisHeure.length >= bornes.txParHeure) {', 'if (false) {'],
+  ['tx par heure : plus de borne', 'if (listes[x].length && st.envoisHeure[x].length >= plafondHeure(bornes, x)) {', 'if (false) {'],
   ['pas d arret apres des echecs', 'if (st.echecsSuite >= bornes.echecsMax) {', 'if (false) {'],
   ['un succes ne remet pas les echecs a zero', '    st.echecsSuite = 0;\n', ''],
   ['chaine du noeud non verifiee', 'if (BigInt(id) !== BigInt(chainId)) {', 'if (false) {'],
   ['plusieurs tx en vol', "      if (st.enVol) { const fini = await suivreInclusion();", "      if (false) { const fini = await suivreInclusion();"],
-  ['tx non incluse jamais relachee', 'if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; echec(', 'if (false) { st.enVol = null; echec('],
+  ['tx non incluse jamais relachee', "if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; echec(nomTx(v) + ': tx ' + v.hash + ' not included", "if (false) { st.enVol = null; echec(nomTx(v) + ': tx ' + v.hash + ' not included"],
   ['nonce latest au lieu de pending', "rpc('eth_getTransactionCount', [adresse, 'pending'])", "rpc('eth_getTransactionCount', [adresse, 'latest'])"],
   ['« already known » compte comme un echec', "if (!/already known|known transaction/i.test(m)) {", 'if (true) {'],
   ['logs : plus de recul borne', 'const plancher = Math.max(Number(blocDeploiement) || 0, tete - bornes.reculLogs + 1);', 'const plancher = Math.max(Number(blocDeploiement) || 0, 0);'],
@@ -60,34 +67,53 @@ const M = [
   ['V2 : « nonce too low » jamais verifie (0f9d8ec)', '/nonce too low|nonce has already been used|replacement transaction underpriced|replacement fee too low/i.test(m)', 'false'],
   ['V2 : le nonce latest n est pas lu', "              else if (BigInt(await rpc('eth_getTransactionCount', [adresse, 'latest'])) > nonce) retrouvee = true;\n", ''],
   ['V2 : la tx connue du noeud ignoree', "              else if (await rpc('eth_getTransactionByHash', [signe.hash])) retrouvee = true;\n", ''],
-  ['V3 : un recu qui jette ne relache jamais (0f9d8ec)', 'if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; st.compteurs.recusIlisibles', 'if (false) { st.enVol = null; st.compteurs.recusIlisibles'],
+  ['V3 : un recu qui jette ne relache jamais (0f9d8ec)', "if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; echec(nomTx(v) + ': receipt", "if (false) { st.enVol = null; echec(nomTx(v) + ': receipt"],
   ['lot : plus de coupe en deux', 'return (await essai(ids.slice(0, m))) || (await essai(ids.slice(m)));', 'return null;'],
   ['lot : le spin fautif n est pas ecarte', 'ecartes.set(ids[0], s ? s.t : tete); st.compteurs.spinsEcartes += 1;', ''],
   ['statut 0 : le spin est abandonne (0f9d8ec)', '      if (v.status === 0) { info.sain = false; continue; }\n', ''],
-  ['duels : rejoint a la tete = cible (simulation TooEarly)', '.filter(([, t]) => tete > t)', '.filter(([, t]) => tete >= t)'],
-  ['duels : envoye a la tete cible + 256 (tomberait a + 257)', 'if (tete + 1 > t + FENETRE) duelsSuivis.delete(id);', 'if (tete > t + FENETRE) duelsSuivis.delete(id);'],
+  ['duels : envoye a la tete cible + 256 (tomberait a + 257)', 'if (tete + 1 > d.t + FENETRE) duelsSuivis.delete(id);', 'if (tete > d.t + FENETRE) duelsSuivis.delete(id);'],
   ['duels : statut non relu (deja regle envoye)', '      if (s !== DUEL_JOINED) { duelsSuivis.delete(id); continue; }\n', ''],
   ['duels : statut 0 abandonne', '      if (s === 0) { info.sain = false; continue; }', ''],
-  ['duels : les Joined jamais lus', 'if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, t);', ''],
-  ['rolls : un jour Open jamais ferme', "if (etat === 0) { out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay' }); continue; }", ''],
+  ['duels : les Joined jamais lus', 'if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, { t, vainqueur: null, mise: 0n });', ''],
+  ['rolls : un jour Open jamais ferme', "if (etat === 0) { out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay', avant }); continue; }", ''],
   ['rolls : drawDay a la tete cible + 256', 'if (tete + 1 <= t + FENETRE) out.push(', 'if (tete <= t + FENETRE) out.push('],
-  ['rolls : jamais re-arme', "      else out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay' });", ''],
+  ['rolls : jamais re-arme', "      else out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay', avant });", ''],
   ['rolls : drawDay avant la cible', '      if (tete <= t) continue;\n', ''],
   ['rolls : aujourd hui ferme', 'for (let d = a - 1; d >= Math.max(0, a - bornes.joursRecul); d--) {', 'for (let d = a; d >= Math.max(0, a - bornes.joursRecul); d--) {'],
   ['rolls : un jour sans acheteur ferme', "if (jours.acheteurs.get(k) === 0n) { jours.finis.add(k); continue; }", ''],
-  ['ordre : plus par echeance', 'candidats.sort((a, b) => (a.fin - b.fin) || (rang[a.cible] - rang[b.cible]));', 'candidats.sort((a, b) => rang[a.cible] - rang[b.cible]);'],
-  ['etat() sans activite par contrat', "duels: { contrat: cD, configure: !!duelsCfg, suivis: duelsSuivis.size, ...st.parContrat.duels },", "duels: { contrat: cD, configure: !!duelsCfg, suivis: duelsSuivis.size },"],
+  ['ordre : plus par echeance (slots, duels, rolls)', 'if (k && (!pris || k.fin < listes[pris][q[pris]].fin)) pris = x;', 'if (k && !pris) pris = x;'],
+  ['etat() sans activite par contrat', "plafondHeure: plafondHeure(bornes, 'duels'), ...st.parContrat.duels },", "plafondHeure: plafondHeure(bornes, 'duels') },"],
+  /* ---- 2026-10-24 : la revue keeper (verdict FAIL), defauts 1 a 7 */
+  ['revue 1 : un revert mine n est jamais explique (518653b)', 'try { pourquoi = await expliquer(v, entier(r.blockNumber)); }', 'try { pourquoi = null; }'],
+  ['revue 1 : tout revert de duel est explique', 'return Number(m[2]) === DUEL_SETTLED ?', 'return true ?'],
+  ['revue 1 : jour tire par un autre non explique', "if (etat === 2) return 'day ' + v.ids[0] + ' already drawn by another transaction';", ''],
+  ['revue 1 : jour arme APRES notre bloc explique', ' && t - ROLLS_DELAI_CIBLE <= blocRecu', ''],
+  ['revue 1 : cible illisible apres le revert comptee tout de suite', 'if (maintenant() - v.revertA <= bornes.inclusionMaxMs) {', 'if (false) {'],
+  ['revue 1 : cible illisible apres le revert jamais comptee', 'if (maintenant() - v.revertA <= bornes.inclusionMaxMs) {', 'if (true) {'],
+  ['revue 1 : plus de delai (settle a cible + 1, la course)', '.filter(([, d]) => tete > d.t && tete >= d.t + bornes.delaiDuelBlocs)', '.filter(([, d]) => tete > d.t)'],
+  ['revue 2 : egalite envoyee', "if (v === 'egalite') { duelsSuivis.delete(id); st.compteurs.duelsEgalites += 1; continue; }", ''],
+  ['revue 2 : rejoignant gagnant envoye sans attendre la fin', "      if (d.vainqueur !== 'createur' && !presse(d)) continue;\n", ''],
+  ['revue 2 : vainqueur inverse', "a > b ? 'createur' : 'rejoignant'", "a > b ? 'rejoignant' : 'createur'"],
+  ['revue 2 : face du hash entier (pas les 40 premiers chiffres)', "keccak256(new TextEncoder().encode('0x' + s.slice(2, 42)))", 'keccak256(new TextEncoder().encode(s))'],
+  ['revue 2 : marge de fin sans les tours mesures', 'Math.max(bornes.margeFinDuelBlocs, tours)', 'bornes.margeFinDuelBlocs'],
+  ['revue 2 : duels par echeance seulement (pas par mise)', 'out.sort((a, b) => (Number(b.presse) - Number(a.presse)) || (a.presse ? a.fin - b.fin : (b.mise > a.mise ? 1 : b.mise < a.mise ? -1 : a.fin - b.fin)));', 'out.sort((a, b) => a.fin - b.fin);'],
+  ['revue 2 : un duel presse ne passe plus devant', 'out.sort((a, b) => (Number(b.presse) - Number(a.presse)) || ', 'out.sort((a, b) => '],
+  ['revue 2 : un seul plafond pour les trois contrats (518653b)', 'st.envoisHeure[x].length >= plafondHeure(bornes, x)', 'CONTRATS.reduce((s, y) => s + st.envoisHeure[y].length, 0) >= plafondHeure(bornes, x)'],
+  ['revue 3 : la relache d un recu illisible n est pas comptee (518653b)', "echec(nomTx(v) + ': receipt of tx ' + v.hash + ' unreadable for ' + Math.round(bornes.inclusionMaxMs / 1000) + ' s, released (outcome unknown, counted as a failure)', 'recusIlisibles', v.cible);", 'st.compteurs.recusIlisibles += 1;'],
+  ['revue 3 : etat().degrade jamais dit', "degrade: st.etat === 'ON' && st.echecsSuite > 0 ?", 'degrade: false ?'],
+  ['revue 4 : buyerCount 0 garde pour toujours (518653b)', '        if (n === 0n && a <= d + 1) continue;\n', ''],
+  ['revue 7 : le message d arret ne nomme plus le contrat', "' failures in a row (last, ' + (contrat || 'keeper') + ': '", "' failures in a row (last: '"],
 ];
 let survivants = 0, introuvables = 0, temoin = true;
 try {
   fs.writeFileSync(COPIE, original);
   temoin = lancer();
-  console.log((temoin ? 'ok  ' : 'KO  ') + 'temoin : la copie non mutee est verte');
+  console.log((temoin ? 'ok  ' : 'KO  ') + 'temoin : la copie non mutee est verte (fins de ligne du module : ' + (/\r\n/.test(original) ? 'CRLF' : 'LF') + ')');
   /* ⛔ pas de process.exit ici : il sauterait le finally et laisserait la copie mutee dans le depot (vu le 2026-10-23) */
   if (temoin) for (const [nom, de, vers] of M) {
-    const k = original.split(de).length - 1;
+    const re = motif(de), k = (original.match(re) || []).length;
     if (k !== 1) { introuvables += 1; console.log('??  ' + nom + ' — ancre trouvee ' + k + ' fois (attendu 1)'); continue; }
-    fs.writeFileSync(COPIE, original.replace(de, () => vers));
+    fs.writeFileSync(COPIE, original.replace(new RegExp(re.source), () => vers));
     if (lancer()) { survivants += 1; console.log('SURVIT  ' + nom); } else console.log('tue ' + nom);
   }
 } finally {

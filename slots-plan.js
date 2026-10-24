@@ -347,13 +347,17 @@ export function phraseAvant(l, fmt = usdcPrecis) {
 /**
  * APRES le recu d un Settle (ou d un Accept) : spin par spin, ce qui a ete paye, ce qui manque, ce qui a ete saute et pourquoi.
  *   envoyes : [lignes de planReglement envoyees] ; settled : lireSettledTous(recu) ; statuts : Map id -> statut relu apres (null = non lu) ;
- *   tete : bloc relu apres (null = non lu) ; table : 16 prix.
+ *   tete : bloc relu apres (null = non lu) ; table : 16 prix ; blocRecu : le bloc ou la tx a ete INCLUSE (recu.blockNumber ; null = non lu).
  * Rend [{ id, issue, points?, prix?, paie?, manque? }] : PAYE (manque = 0), PLAFONNE (manque > 0 : accepte par le joueur), SAUTE (encore en
- * attente, fenetre ouverte : le pot ne couvrait plus le prix entier a l inclusion — rien n est pris), FENETRE (encore en attente, fenetre
- * passee : v4, PERDU, rien n est rendu), REGLE_AILLEURS (regle par une autre transaction, le regleur du serveur par exemple), PERDU (marque
- * Expired), NON_LU.
+ * attente, fenetre ouverte : le pot ne couvrait plus le prix entier a l inclusion — rien n est pris), FENETRE (incluse APRES la fenetre :
+ * cible + 256 < blocRecu — v4, PERDU, rien n est rendu), REGLE_AILLEURS (regle par une autre transaction, le regleur du serveur par
+ * exemple), PERDU (marque Expired), NON_LU.
+ * ⛔ 2026-10-24 (revue keeper 5) : une tx incluse A TEMPS mais sautee pour un pot court, relue quand la fenetre est passee, n est PAS
+ *   « FENETRE » (c etait dit « la fenetre s est fermee avant l inclusion » : faux). Le bloc du recu tranche : SAUTE_PERDU (incluse a temps,
+ *   sautee pour le pot, fenetre fermee depuis), TROP_TOT (incluse avant cible + 3 : settleMany saute), FENETRE (incluse trop tard) ; sans
+ *   bloc du recu et fenetre fermee : FERME (perdu, la cause — pot ou fenetre — n est pas dite, elle n est pas connue).
  */
-export function bilanReglement({ envoyes, settled, statuts, tete, table }) {
+export function bilanReglement({ envoyes, settled, statuts, tete, table, blocRecu = null }) {
   const tb = (table || []).map((x) => BigInt(x));
   const parId = new Map((settled || []).map((d) => [String(d.spinId), d]));
   return (envoyes || []).map((x) => {
@@ -363,7 +367,14 @@ export function bilanReglement({ envoyes, settled, statuts, tete, table }) {
     if (st === null || st === undefined) return { id, issue: 'NON_LU' };
     if (st === 2) return { id, issue: 'REGLE_AILLEURS' };
     if (st === 3) return { id, issue: 'PERDU' };
-    if (st === 1) return { id, issue: tete !== null && tete !== undefined && etatReglement(x.t, tete).etat === 'PERDU' ? 'FENETRE' : 'SAUTE', prix: x.prix, dernierBloc: Number(x.t) + FENETRE };
+    if (st === 1) {
+      const fin = Number(x.t) + FENETRE, ferme = tete !== null && tete !== undefined && etatReglement(x.t, tete).etat === 'PERDU';
+      const b = blocRecu !== null && blocRecu !== undefined && Number.isSafeInteger(Number(blocRecu)) ? Number(blocRecu) : null;
+      if (b !== null && b > fin) return { id, issue: 'FENETRE', prix: x.prix, dernierBloc: fin, blocRecu: b };
+      if (b !== null && b <= Number(x.t) + REELS - 1) return { id, issue: 'TROP_TOT', prix: x.prix, dernierBloc: fin, blocRecu: b, ferme };
+      if (b !== null) return { id, issue: ferme ? 'SAUTE_PERDU' : 'SAUTE', prix: x.prix, dernierBloc: fin, blocRecu: b };
+      return { id, issue: ferme ? 'FERME' : 'SAUTE', prix: x.prix, dernierBloc: fin };
+    }
     return { id, issue: 'NON_LU' };
   });
 }
@@ -376,6 +387,9 @@ export function phraseApres(b, fmt = usdcPrecis) {
     case 'PLAFONNE': return 'Spin #' + b.id + ': ' + pts(b.points) + ', prize ' + fmt(b.prix) + ' USDC; the pot paid ' + fmt(b.paie) + ' USDC — ' + fmt(b.manque) + ' USDC short.';
     case 'SAUTE': return 'Spin #' + b.id + ': not settled — when your settle was included the pot could not pay its full ' + (b.prix !== undefined ? fmt(b.prix) + ' USDC ' : '') + 'prize, so nothing was taken. It is still yours to settle until block ' + b.dernierBloc + '; after that it is lost.';
     case 'FENETRE': return 'Spin #' + b.id + ': the ' + FENETRE + '-block window closed before your settle was included — the spin is lost, nothing is returned.';
+    case 'SAUTE_PERDU': return 'Spin #' + b.id + ': not settled — your settle was included in time (block ' + b.blocRecu + '), but the pot could not pay its full ' + (b.prix !== undefined ? fmt(b.prix) + ' USDC ' : '') + 'prize, so it was skipped and nothing was taken. Its window has closed since (block ' + b.dernierBloc + '): the spin is lost, nothing is returned.';
+    case 'TROP_TOT': return 'Spin #' + b.id + ': not settled — your settle was included at block ' + b.blocRecu + ', before its three blocks were in, so it was skipped and nothing was taken. ' + (b.ferme ? 'Its window has closed since (block ' + b.dernierBloc + '): the spin is lost, nothing is returned.' : 'It is still yours to settle until block ' + b.dernierBloc + '; after that it is lost.');
+    case 'FERME': return 'Spin #' + b.id + ': not settled by your transaction, and its window has closed (block ' + b.dernierBloc + ') — the spin is lost, nothing is returned. The receipt block was not read, so whether the pot was short or the window had closed is not known.';
     case 'REGLE_AILLEURS': return 'Spin #' + b.id + ': settled by another transaction (the server\'s keeper, or anyone); the prize went to its player — see that transaction.';
     case 'PERDU': return 'Spin #' + b.id + ': its window had closed — the spin is lost, nothing is returned.';
     default: return 'Spin #' + b.id + ': its result was not read just now.';

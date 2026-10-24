@@ -10,18 +10,39 @@
  *   - AVEC : toutes les `intervalleMs` (derive du temps de bloc MESURE : un cinquieme de la fenetre, borne a [2 s, 10 s]), il lit :
  *       slots  — les Spun d une fenetre BORNEE (<= 300 blocs, puis les seuls blocs nouveaux + 8), les statuts, les hashes, le pot ;
  *                refait le calcul du contrat (slots-plan.js planReglement) -> settleMany(ids) des spins que le pot paie en ENTIER ;
- *       duels  — les Joined d une fenetre BORNEE (meme regle), le statut relu (duels(id)) -> settle(id) de CHAQUE duel rejoint dans sa
- *                fenetre (cible < bloc <= cible + 256) ;
+ *       duels  — les Joined d une fenetre BORNEE (meme regle), le duel relu (duels(id) : statut, les deux guesses, la mise) et le hash
+ *                de sa cible -> le VAINQUEUR calcule comme le contrat (faceDuHash = BlockDuels.faceOf, puis les deux scores) :
+ *                  egalite      -> JAMAIS regle (les deux mises sont rendues, par settle comme par refundExpired : rien a proteger) ;
+ *                  createur     -> settle(id) des cible + delaiDuelBlocs (l OPTION GRATUITE : le perdant qui a rejoint se tait) ;
+ *                  rejoignant   -> settle(id) seulement PRES DE LA FIN (tete + 1 >= cible + 256 - marge) : le gagnant qui a rejoint,
+ *                  (ou hash       en ligne, a toutes les raisons de regler lui-meme ; le regleur ne passe que s il ne l a pas fait.
+ *                   illisible)
+ *                Pourquoi un delai et pas cible + 1 (2026-10-24, revue keeper 1) : le risque du createur n existe qu A LA FIN de la
+ *                fenetre (le rejoignant perdant laisse filer jusqu au remboursement) ; envoyer a cible + 1 fait COURIR le regleur contre
+ *                le gagnant (ou un attaquant) qui regle au meme bloc — sa tx minee revert (NotJoined) pour rien. Le delai laisse le
+ *                gagnant regler d abord ; la marge de fin (>= margeFinDuelBlocs, et >= 3 tours au temps de bloc MESURE, 200 ms sans
+ *                mesure) laisse plusieurs tours pour que le settle du regleur tombe dans la fenetre. Parmi les duels prets : les
+ *                PRESSES d abord (par echeance), puis ceux ou le createur gagne, par MISE decroissante ;
  *       rolls  — today() et les `joursRecul` jours passes : un jour fini avec des acheteurs, Open -> closeDay(jour) ; Armed dans sa
- *                fenetre -> drawDay(jour) ; Armed hors fenetre -> closeDay(jour) (re-arme, puis tire au tour suivant).
- *     Au plus UNE tx par tour, la plus PRESSEE d abord (le dernier bloc ou elle passe encore ; un closeDay n a pas d echeance).
+ *                fenetre -> drawDay(jour) ; Armed hors fenetre -> closeDay(jour) (re-arme, puis tire au tour suivant). ⛔ buyerCount = 0
+ *                n est retenu (jour sans acheteur, plus jamais relu) que lu PLUS D UN JOUR apres la fin du jour (today() > jour + 1) :
+ *                juste apres minuit un noeud en retard peut rendre 0 pour un jour dont les acheteurs ont achete dans ses dernieres
+ *                secondes (revue keeper 4) — relu a chaque tour jusque-la. Un compte > 0 ne sert qu a « il y a des acheteurs ».
+ *     Au plus UNE tx par tour, la plus PRESSEE d abord (le dernier bloc ou elle passe encore ; un closeDay n a pas d echeance) ; chaque
+ *     contrat garde son propre ordre (duels : presses, puis createur gagnant par mise) et la tete de chaque liste est comparee.
  *   - ⛔ FENETRE : une tx signee a la tete H est minee au mieux en H + 1 : rien n est envoye si H + 1 depasse la fenetre du contrat.
  *   - BORNES (BORNES_DEFAUT, chacune verifiee par test-slots-regleur) : au plus `spinsParTx` spins par tx ; jamais au-dessus de
- *     `maxFeeWei` par unite de gas ; au plus `txParHeure` tx par heure glissante ; au plus `gasMaxParTx` de gas ; une seule tx en vol ;
+ *     `maxFeeWei` par unite de gas ; au plus `txParHeure[contrat]` tx par heure glissante POUR CHAQUE contrat (slots, duels, rolls : un
+ *     contrat inonde n affame pas les deux autres — revue keeper 2) ; au plus `gasMaxParTx` de gas ; une seule tx en vol ;
  *     au plus `simulationsParTour` simulations par tour ; ARRET apres `echecsMax` echecs de suite — jusqu au redemarrage.
- *   - ⛔ CE QUI EST UN ECHEC (compte vers l arret) : un revert MINE, un envoi REFUSE d une tx bien formee (apres verification : un « nonce
- *     too low » / « replacement underpriced » dont la tx est vue sur la chaine n en est pas un), une tx jamais incluse (120 s). Une erreur
- *     RPC (eth_estimateGas, recu illisible) est PASSAGERE : jamais comptee. Un tour SAIN (tout lu, rien a faire) remet le compte a zero.
+ *   - ⛔ CE QUI EST UN ECHEC (compte vers l arret) : un revert MINE que le regleur ne s EXPLIQUE pas, un envoi REFUSE d une tx bien formee
+ *     (apres verification : un « nonce too low » / « replacement underpriced » dont la tx est vue sur la chaine n en est pas un), une tx
+ *     jamais incluse (120 s), un recu illisible pendant 120 s (l issue de la tx est INCONNUE : comptee comme non incluse — revue keeper 3).
+ *     Un revert EXPLIQUE (revue keeper 1) : la cible relue apres le revert montre qu un AUTRE l a deja fait — duel Settled ; jour tire
+ *     (Drawn) ou arme / re-arme par un autre au bloc du recu ou avant — compte a part (revertsExpliques), jamais vers l arret. Un revert
+ *     des slots ne s explique jamais ainsi (settleMany SAUTE un spin deja regle, il ne revert pas pour lui). Cible illisible apres le
+ *     revert : relue aux tours suivants, comptee au bout de 120 s. Une erreur RPC (eth_estimateGas) est PASSAGERE : jamais comptee. Un
+ *     tour SAIN (tout lu, rien a faire) remet le compte a zero. etat().degrade le dit tant que des echecs sont en cours (/sante).
  *   - ⛔ settleMany qui ne se simule pas (un paiement refuse, liste noire USDC) : le lot est COUPE en deux jusqu a isoler le spin fautif,
  *     ecarte jusqu a la fin de sa fenetre ; les autres spins couverts partent.
  *   - ⛔ JAMAIS autre chose que : settleMany(uint256[]) / settle(uint256) vers le contrat des SLOTS ; settle(uint256) vers le contrat des
@@ -29,9 +50,12 @@
  *     verifierEnvoi() le controle juste avant CHAQUE signature et jette sinon (rien n est signe).
  *   - ⛔ La cle n est lue que du parametre `cle` (le serveur le prend dans process.env, et nulle part ailleurs) ; elle reste dans la
  *     fermeture ; etat() ne la rend jamais, aucune erreur ne la cite, rien ne la journalise. L ADRESSE du regleur est publique (/sante).
- * NE PROUVE PAS (dit) : un reglement reel sur Base ; le banc anvil execute les vrais contrats sur une chaine LOCALE. */
+ * NE PROUVE PAS (dit) : un reglement reel sur Base ; le banc anvil execute les vrais contrats sur une chaine LOCALE (la course perdue y est
+ *   rejouee par un minage manuel, pas par un vrai sequenceur). RESTE (dit, 2026-10-24) : un attaquant peut encore user le plafond des DUELS
+ *   avec des duels a lui ou SON createur gagne (deux wallets) — chacun lui coute 10 % de la mise (MIN_STAKE 0,10 USDC : 0,01 USDC) plus
+ *   le gas ; les slots et les rolls gardent leur plafond, et parmi les duels la plus grosse mise passe d abord. */
 import * as Slots from './slots-plan.js';
-import { selecteur, topic } from './keccak.js';
+import { selecteur, topic, keccak256 } from './keccak.js';
 import { adresseDe } from './signeur-secp256k1.js';
 import { signerEip1559 } from './tx-eip1559.js';
 
@@ -49,14 +73,19 @@ export const TOPIC_DUEL_SETTLED = topic('Settled(uint256,bytes32,uint8,uint8,add
 export const TOPIC_DAY_CLOSED = topic('DayClosed(uint32,uint256,uint256,uint256,address)');
 export const TOPIC_DAY_DRAWN = topic('DayDrawn(uint32,address,bytes32,uint256,uint256)');
 /* BlockDuels.Status : None 0, Open 1, Joined 2, Settled 3, Cancelled 4, Refunded 5 ; BlockRolls.DayState : Open 0, Armed 1, Drawn 2 */
-const DUEL_JOINED = 2;
+const DUEL_JOINED = 2, DUEL_SETTLED = 3;
 const FENETRE = 256;
+const ROLLS_DELAI_CIBLE = 2; /* BlockRolls.TARGET_DELAY : closeDay arme a bloc + 2 */
+export const CONTRATS = Object.freeze(['slots', 'duels', 'rolls']);
 
 export const BORNES_DEFAUT = Object.freeze({
   spinsParTx: 10,
   maxFeeWei: 1_000_000_000n, /* 1 gwei : Base tourne d ordinaire bien en dessous ; au-dessus, le regleur attend */
   prioWeiMax: 100_000_000n, /* 0,1 gwei de pourboire au plus */
-  txParHeure: 60,
+  /* PAR CONTRAT (un nombre seul = le meme plafond pour chacun) : slots 60, duels 30, rolls 12 tx par heure glissante */
+  txParHeure: Object.freeze({ slots: 60, duels: 30, rolls: 12 }),
+  delaiDuelBlocs: 16, /* un duel ou le createur gagne : regle a partir de cible + 16 (le gagnant en ligne regle d abord) */
+  margeFinDuelBlocs: 64, /* un duel ou le rejoignant gagne : regle a partir de cible + 256 - marge (marge >= 3 tours mesures) */
   gasMaxParTx: 3_000_000n,
   echecsMax: 3,
   intervalleMinMs: 2000,
@@ -91,6 +120,36 @@ const donnees1 = (sel, x) => sel + u(x);
 
 /** une erreur de simulation = un REVERT de l execution (le contrat refuse), pas une panne de transport (rate limit, delai, noeud muet) */
 export const estRevert = (e) => /revert/i.test(String((e && e.message) || e)) || (e && typeof e.data === 'string' && /^0x[0-9a-f]{8,}/i.test(e.data));
+
+/** la face d un hash de bloc, comme BlockDuels.faceOf (= BlockRolls.faceOf) : keccak256 de "0x" + les 40 premiers chiffres hex
+ *  MINUSCULES du hash ; teinte = (k0*256+k1) % 361 ; [((teinte+30) % 360) / 60, k6 % 10, k7 % 19, k8 % 9, k9 % 8]. null si illisible.
+ *  (le banc anvil compare au contrat COMPILE : le vainqueur predit = celui de l evenement Settled) */
+export function faceDuHash(h) {
+  const s = bas(h);
+  if (!/^0x[0-9a-f]{64}$/.test(s)) return null;
+  const k = keccak256(new TextEncoder().encode('0x' + s.slice(2, 42)));
+  const teinte = (k[0] * 256 + k[1]) % 361;
+  return [Math.floor(((teinte + 30) % 360) / 60), k[6] % 10, k[7] % 19, k[8] % 9, k[9] % 8];
+}
+/** un guess EMBALLE (uint24 de BlockDuels._pack) -> [bande, orbite, facette, matiere, ornement] (BlockDuels._unpack) */
+export const deballerGuess = (p) => { const x = Number(p); return [(x >> 16) & 0x0f, (x >> 12) & 0x0f, (x >> 7) & 0x1f, (x >> 3) & 0x0f, x & 0x07]; };
+/** le vainqueur d un duel comme BlockDuels._settle : 'createur' | 'rejoignant' | 'egalite' ; null si le hash est illisible */
+export function vainqueurDuel(hash, guessA, guessB) {
+  const f = faceDuHash(hash);
+  if (!f) return null;
+  const score = (g) => deballerGuess(g).reduce((s, x, i) => s + (x === f[i] ? 1 : 0), 0);
+  const a = score(guessA), b = score(guessB);
+  return a === b ? 'egalite' : a > b ? 'createur' : 'rejoignant';
+}
+/** le plafond horaire d UN contrat : `txParHeure` nombre (le meme pour tous) ou { slots, duels, rolls } */
+export const plafondHeure = (bornes, cible) => { const p = bornes.txParHeure; const v = typeof p === 'object' && p !== null ? p[cible] : p; return Number.isFinite(Number(v)) ? Number(v) : 0; };
+/** la marge de fin d un duel ou le rejoignant gagne (blocs avant cible + 256) : >= margeFinDuelBlocs et >= 3 tours au temps de bloc
+ *  mesure (200 ms sans mesure, le pire cas de Base) ; jamais au point de preceder cible + delaiDuelBlocs */
+export function margeFinDuel(bornes, msParBloc, intervalleMs) {
+  const ms = Number(msParBloc) > 0 ? Number(msParBloc) : 200;
+  const tours = Math.ceil((3 * Number(intervalleMs || bornes.intervalleMaxMs)) / ms);
+  return Math.min(FENETRE - bornes.delaiDuelBlocs - 1, Math.max(bornes.margeFinDuelBlocs, tours));
+}
 
 /**
  * ⛔ LA GARDE AVANT CHAQUE SIGNATURE : jette sauf si la tx est sans valeur, sur la bonne chaine, et ne porte QUE :
@@ -155,19 +214,19 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
   const tb = c ? table.map((x) => BigInt(x)) : null;
   const blocDuels = () => { try { const b = typeof duelsCfg.bloc === 'function' ? duelsCfg.bloc() : duelsCfg.bloc; return Number(b) || 0; } catch (_) { return 0; } };
 
-  const activite = () => ({ envois: 0, inclus: 0, reverts: 0, regles: 0, dernierEnvoi: null, dernierInclus: null });
+  const activite = () => ({ envois: 0, inclus: 0, reverts: 0, revertsExpliques: 0, regles: 0, sautsHeure: 0, dernierEnvoi: null, dernierInclus: null });
   const st = {
     etat: 'ON', adresse, depuis: new Date(maintenant()).toISOString(), msParBloc: null, mesureA: 0, intervalleMs: intervalleDepuisBloc(null, bornes),
-    scanne: null, enVol: null, envoisHeure: [], echecsSuite: 0, dernierTour: null, dernierEnvoi: null, dernierRegle: null, erreurs: [],
-    compteurs: { tours: 0, envois: 0, spinsEnvoyes: 0, spinsRegles: 0, reverts: 0, simulationsRefusees: 0, simulationsNonLues: 0, envoisRefuses: 0, envoisRetrouves: 0,
-      nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0 },
+    scanne: null, enVol: null, envoisHeure: { slots: [], duels: [], rolls: [] }, echecsSuite: 0, dernierEchec: null, dernierTour: null, dernierEnvoi: null, dernierRegle: null, erreurs: [],
+    compteurs: { tours: 0, envois: 0, spinsEnvoyes: 0, spinsRegles: 0, reverts: 0, revertsExpliques: 0, simulationsRefusees: 0, simulationsNonLues: 0, envoisRefuses: 0, envoisRetrouves: 0,
+      nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0, duelsEgalites: 0 },
     parContrat: { slots: activite(), duels: activite(), rolls: activite() },
     arret: null, chaineVue: false,
   };
   const suivis = new Map(); /* slots : id -> { t, player } */
   const ecartes = new Map(); /* slots : id -> t — settle seul qui ne se simule pas (paiement refuse) : ecarte jusqu a la fin de sa fenetre */
   const hashes = new Map(); /* bloc -> hash */
-  const duelsSuivis = new Map(); /* id -> t */
+  const duelsSuivis = new Map(); /* id -> { t, vainqueur (null tant que non lu), mise } */
   const scanDuels = { contrat: null, scanne: null };
   const jours = { contrat: null, finis: new Set(), acheteurs: new Map(), aujourdhui: null };
   let enCours = false, minuteur = null, echecsCeTour = 0;
@@ -177,31 +236,73 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     st.erreurs.push(e); while (st.erreurs.length > 10) st.erreurs.shift();
     journal('[keeper] ' + e.quoi);
   };
-  const echec = (quoi, compteur) => {
+  /* un echec : `contrat` (slots / duels / rolls, ou null) est NOMME dans le message d arret (revue keeper 7 : il etait coupe) */
+  const echec = (quoi, compteur, contrat = null) => {
     st.compteurs[compteur] += 1; st.echecsSuite += 1; echecsCeTour += 1; erreur(quoi);
-    if (st.echecsSuite >= bornes.echecsMax) { st.etat = 'ARRETE'; st.arret = { a: new Date(maintenant()).toISOString(), pourquoi: st.echecsSuite + ' failures in a row (last: ' + String(quoi).slice(0, 80) + ') — stopped until restart' }; journal('[keeper] STOPPED: ' + st.arret.pourquoi); }
+    st.dernierEchec = { a: new Date(maintenant()).toISOString(), contrat, quoi: String(quoi).slice(0, 160) };
+    if (st.echecsSuite >= bornes.echecsMax) { st.etat = 'ARRETE'; st.arret = { a: new Date(maintenant()).toISOString(), contrat, pourquoi: st.echecsSuite + ' failures in a row (last, ' + (contrat || 'keeper') + ': ' + String(quoi).slice(0, 140) + ') — stopped until restart' }; journal('[keeper] STOPPED: ' + st.arret.pourquoi); }
   };
   const msg = (e) => String((e && e.message) || e).slice(0, 120);
   const entier = (h) => { const v = parseInt(String(h), 16); return Number.isSafeInteger(v) ? v : null; };
   const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+
+  const nomTx = (v) => v.cible + ' ' + v.quoi + ' #' + v.ids[0] + (v.ids.length > 1 ? '..' + v.ids[v.ids.length - 1] : '');
+  /* ⛔ revue keeper 1 : un revert MINE est-il explique par un AUTRE qui a deja fait le travail ? la cible est RELUE (latest).
+   *   duels : statut Settled (3) — seul un settle reussi y mene ; le notre a revert, donc un autre l a regle (NotJoined).
+   *   rolls : jour Drawn ; ou Armed avec une AUTRE cible que celle vue a l envoi, armee au bloc du recu ou avant (cible - 2 <= bloc) —
+   *           un autre a ferme / re-arme le jour (StillSettleable, DayNotArmed, TooEarly). Une cible armee APRES notre bloc ne l explique pas.
+   *   slots : jamais (settleMany saute un spin deja regle sans revert). Rend la raison, ou null ; jette si la cible n est pas lue. */
+  async function expliquer(v, blocRecu) {
+    if (v.cible === 'duels') {
+      const m = motsDe(await appel(v.to, donnees1(SEL_DUELS, v.ids[0])));
+      if (m.length !== 9) throw new Error('duel not read');
+      return Number(m[2]) === DUEL_SETTLED ? 'duel #' + v.ids[0] + ' already settled by another transaction' : null;
+    }
+    if (v.cible === 'rolls') {
+      const m = motsDe(await appel(v.to, donnees1(SEL_DAY_POTS, v.ids[0])));
+      if (m.length !== 3) throw new Error('dayPots not read');
+      const etat = Number(m[2]), t = Number(m[1]);
+      if (etat === 2) return 'day ' + v.ids[0] + ' already drawn by another transaction';
+      const avant = v.avant || {};
+      if (etat === 1 && t !== Number(avant.t) && blocRecu !== null && t - ROLLS_DELAI_CIBLE <= blocRecu) return 'day ' + v.ids[0] + ' armed by another transaction (target ' + t + ')';
+      return null;
+    }
+    return null;
+  }
 
   async function suivreInclusion() {
     const v = st.enVol;
     let r = null;
     try { r = await rpc('eth_getTransactionReceipt', [v.hash]); } catch (e) {
       erreur('receipt not read: ' + msg(e));
-      /* ⛔ un recu qui jette sans fin ne retient pas le regleur pour toujours : au bout de inclusionMaxMs la tx est relachee (sans compter
-       *    d echec : le noeud n a rien dit de la tx) ; la suivante part au nonce 'pending' */
-      if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; st.compteurs.recusIlisibles += 1; erreur('tx ' + v.hash + ': receipt unreadable for ' + Math.round(bornes.inclusionMaxMs / 1000) + ' s, released (not counted as a failure)'); return true; }
+      /* ⛔ un recu qui jette sans fin ne retient pas le regleur pour toujours : au bout de inclusionMaxMs la tx est relachee ; la suivante
+       *    part au nonce 'pending'. revue keeper 3 : son issue est INCONNUE (un revert mine serait invisible) — comptee comme une tx non
+       *    incluse, vers l arret ; etat().degrade le dit */
+      if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; echec(nomTx(v) + ': receipt of tx ' + v.hash + ' unreadable for ' + Math.round(bornes.inclusionMaxMs / 1000) + ' s, released (outcome unknown, counted as a failure)', 'recusIlisibles', v.cible); return true; }
       return false;
     }
     if (!r) {
-      if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; echec('tx ' + v.hash + ' not included after ' + Math.round(bornes.inclusionMaxMs / 1000) + ' s', 'nonInclus'); }
+      if (maintenant() - v.a > bornes.inclusionMaxMs) { st.enVol = null; echec(nomTx(v) + ': tx ' + v.hash + ' not included after ' + Math.round(bornes.inclusionMaxMs / 1000) + ' s', 'nonInclus', v.cible); }
       return false;
     }
-    st.enVol = null;
     const act = st.parContrat[v.cible];
-    if (String(r.status) !== '0x1') { act.reverts += 1; echec('tx ' + v.hash + ' reverted (' + v.cible + ')', 'reverts'); return true; }
+    if (String(r.status) !== '0x1') {
+      let pourquoi = null;
+      try { pourquoi = await expliquer(v, entier(r.blockNumber)); } catch (e) {
+        /* la cible n est pas lue : la tx reste « en vol » (rien d autre ne part), relue au tour suivant ; comptee au bout de inclusionMaxMs */
+        if (v.revertA === undefined) v.revertA = maintenant();
+        if (maintenant() - v.revertA <= bornes.inclusionMaxMs) { erreur(nomTx(v) + ': tx ' + v.hash + ' reverted; its target was not re-read (' + msg(e) + '), re-read next round'); return false; }
+      }
+      st.enVol = null;
+      if (pourquoi) {
+        act.revertsExpliques += 1; st.compteurs.revertsExpliques += 1;
+        erreur(nomTx(v) + ': tx ' + v.hash + ' reverted — ' + pourquoi + ' (not counted as a failure)');
+        if (v.cible === 'duels') duelsSuivis.delete(String(v.ids[0]));
+        return true;
+      }
+      act.reverts += 1; echec(nomTx(v) + ': tx ' + v.hash + ' reverted', 'reverts', v.cible); return true;
+    }
+    st.enVol = null;
     st.echecsSuite = 0;
     const a = new Date(maintenant()).toISOString(), bloc = entier(r.blockNumber);
     act.inclus += 1;
@@ -303,33 +404,60 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
           const m = motsDe(l.data);
           if (m.length !== 6) continue;
           const id = String(BigInt(l.topics[1])), t = Number(m[5]);
-          if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, t);
+          if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, { t, vainqueur: null, mise: 0n });
         }
         scanDuels.scanne = tete;
       } catch (e) { refusLogs = e; }
     }
     if (typeof duelsCfg.joints === 'function') {
       try {
-        for (const j of duelsCfg.joints() || []) { const id = String(j && j.id), t = Number(j && j.targetBlock); if (/^\d+$/.test(id) && Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, t); }
+        for (const j of duelsCfg.joints() || []) { const id = String(j && j.id), t = Number(j && j.targetBlock); if (/^\d+$/.test(id) && Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, { t, vainqueur: null, mise: 0n }); }
         parEtat = true;
       } catch (_) { parEtat = false; }
     }
     if (refusLogs && !parEtat) throw refusLogs;
     if (refusLogs) { info.sain = false; erreur('duels logs not read (state list used): ' + msg(refusLogs)); }
     /* settle passe si cible < bloc <= cible + 256 ; mine au mieux a tete + 1 : tete + 1 <= cible + 256. Simule a la tete : tete > cible. */
-    for (const [id, t] of duelsSuivis) if (tete + 1 > t + FENETRE) duelsSuivis.delete(id);
+    for (const [id, d] of duelsSuivis) if (tete + 1 > d.t + FENETRE) duelsSuivis.delete(id);
     while (duelsSuivis.size > bornes.suivisMax) duelsSuivis.delete(duelsSuivis.keys().next().value);
-    const prets = [...duelsSuivis.entries()].filter(([, t]) => tete > t).sort((a, b) => a[1] - b[1]).slice(0, bornes.statutsParTour);
+    /* ⛔ revue keeper 1 et 2 : jamais avant cible + delaiDuelBlocs ; le vainqueur lu UNE fois (guesses et hash ne changent plus) ;
+     *   egalite -> plus suivi ; rejoignant (ou hash illisible) -> attend la marge de fin ; le statut relu juste avant chaque envoi */
+    const marge = margeFinDuel(bornes, st.msParBloc, st.intervalleMs);
+    const presse = (d) => tete + 1 >= d.t + FENETRE - marge;
+    const prets = [...duelsSuivis.entries()].filter(([, d]) => tete > d.t && tete >= d.t + bornes.delaiDuelBlocs).sort((a, b) => a[1].t - b[1].t);
     const out = [];
-    for (const [id, t] of prets) {
+    let lectures = bornes.statutsParTour;
+    for (const [id, d] of prets) {
+      /* un duel deja lu, ou le rejoignant gagne, et pas encore presse : rien a lire ce tour-ci */
+      if (d.vainqueur !== null && d.vainqueur !== 'createur' && !presse(d)) continue;
+      if (lectures <= 0) break;
+      lectures -= 1;
       const m = motsDe(await appel(cD, donnees1(SEL_DUELS, id)));
       if (m.length !== 9) { info.sain = false; continue; }
       const s = Number(m[2]);
       if (s === 0) { info.sain = false; continue; } /* noeud en retard : relu au tour suivant */
       if (s !== DUEL_JOINED) { duelsSuivis.delete(id); continue; }
-      out.push({ cible: 'duels', to: cD, ids: [id], fin: t + FENETRE, quoi: 'settle' });
+      if (d.vainqueur === null) {
+        d.mise = m[8];
+        const h = await hashDe(d.t);
+        const v = h ? vainqueurDuel(h, m[3], m[6]) : null;
+        if (v === 'egalite') { duelsSuivis.delete(id); st.compteurs.duelsEgalites += 1; continue; } /* les deux mises rendues quoi qu il arrive */
+        if (v) d.vainqueur = v; /* hash illisible : relu au tour suivant ; traite d ici la comme un rejoignant gagnant (attend la fin) */
+      }
+      if (d.vainqueur !== 'createur' && !presse(d)) continue;
+      out.push({ cible: 'duels', to: cD, ids: [id], fin: d.t + FENETRE, quoi: 'settle', presse: presse(d), mise: d.mise, vainqueur: d.vainqueur || 'inconnu', avant: { t: d.t } });
     }
+    /* l ordre des duels : les PRESSES d abord (par echeance), puis ceux ou le createur gagne, par mise DECROISSANTE (puis echeance) */
+    out.sort((a, b) => (Number(b.presse) - Number(a.presse)) || (a.presse ? a.fin - b.fin : (b.mise > a.mise ? 1 : b.mise < a.mise ? -1 : a.fin - b.fin)));
     return out;
+  }
+  /* le hash d UN bloc (la cible d un duel), par le meme cache que les slots */
+  async function hashDe(b) {
+    if (!hashes.has(b)) {
+      const blk = await rpc('eth_getBlockByNumber', ['0x' + b.toString(16), false]);
+      if (blk && /^0x[0-9a-f]{64}$/i.test(String(blk.hash))) hashes.set(b, bas(blk.hash));
+    }
+    return hashes.get(b) || null;
   }
 
   /* ---------------------------------------------------------------- rolls : le pot du pass de chaque jour fini (closeDay / drawDay) */
@@ -344,21 +472,28 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     for (let d = a - 1; d >= Math.max(0, a - bornes.joursRecul); d--) {
       const k = String(d);
       if (jours.finis.has(k)) continue;
-      /* un jour PASSE ne gagne plus d acheteur (buyPass inscrit au jour en cours) : le compte lu est definitif */
-      if (!jours.acheteurs.has(k)) { const n = Slots.lireUint(await appel(cR, donnees1(SEL_BUYER_COUNT, d))); if (n === null) throw new Error('buyerCount not read'); jours.acheteurs.set(k, n); }
+      /* un jour PASSE ne gagne plus d acheteur (buyPass inscrit au jour en cours) : un compte > 0 est garde (il ne sert qu a « il y a des
+       *   acheteurs ») ; ⛔ revue keeper 4 : un 0 n est definitif que lu plus d un jour apres la fin du jour (a > d + 1) — avant, un noeud
+       *   en retard peut le rendre juste apres minuit : il n est PAS garde, relu au tour suivant */
+      if (!jours.acheteurs.has(k)) {
+        const n = Slots.lireUint(await appel(cR, donnees1(SEL_BUYER_COUNT, d)));
+        if (n === null) throw new Error('buyerCount not read');
+        if (n === 0n && a <= d + 1) continue;
+        jours.acheteurs.set(k, n);
+      }
       if (jours.acheteurs.get(k) === 0n) { jours.finis.add(k); continue; }
       const m = motsDe(await appel(cR, donnees1(SEL_DAY_POTS, d)));
       if (m.length !== 3) throw new Error('dayPots not read');
-      const etat = Number(m[2]), t = Number(m[1]);
+      const etat = Number(m[2]), t = Number(m[1]), avant = { etat, t };
       if (etat === 2) { jours.finis.add(k); continue; }
-      if (etat === 0) { out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay' }); continue; }
+      if (etat === 0) { out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay', avant }); continue; }
       if (etat !== 1) continue;
       /* Armed : drawDay passe si cible < bloc <= cible + 256 ; mine au mieux a tete + 1 ; simule a la tete : tete > cible */
       if (tete <= t) continue;
-      if (tete + 1 <= t + FENETRE) out.push({ cible: 'rolls', to: cR, ids: [k], fin: t + FENETRE, quoi: 'drawDay' });
-      else out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay' }); /* fenetre passee sans tirage : re-armer */
+      if (tete + 1 <= t + FENETRE) out.push({ cible: 'rolls', to: cR, ids: [k], fin: t + FENETRE, quoi: 'drawDay', avant });
+      else out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay', avant }); /* fenetre passee sans tirage : re-armer */
     }
-    return out;
+    return out.sort((x, y) => (x.fin === y.fin ? 0 : x.fin < y.fin ? -1 : 1));
   }
 
   const donneesDe = (k) => (k.cible === 'slots' ? donneesSettleMany(k.ids) : k.cible === 'duels' ? donnees1(SEL_SETTLE, k.ids[0]) : donnees1(k.quoi === 'drawDay' ? SEL_DRAW_DAY : SEL_CLOSE_DAY, k.ids[0]));
@@ -407,23 +542,34 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       await mesurerBloc(tete);
       const cD = duelsCfg ? resoudre(duelsCfg.contrat) : null, cR = rollsCfg ? resoudre(rollsCfg.contrat) : null;
       const info = { sain: true, courts: 0 };
-      const candidats = [];
-      const lire = async (nom, f) => { try { candidats.push(...await f()); } catch (e) { info.sain = false; erreur(nom + ' not read: ' + msg(e)); } };
+      const listes = { slots: [], duels: [], rolls: [] };
+      const lire = async (nom, f) => { try { listes[nom] = await f(); } catch (e) { info.sain = false; erreur(nom + ' not read: ' + msg(e)); } };
       if (c) await lire('slots', () => candidatsSlots(tete, info));
       if (cD) await lire('duels', () => candidatsDuels(cD, tete, info));
       if (cR) await lire('rolls', () => candidatsRolls(cR, tete));
-      /* la plus PRESSEE d abord (le dernier bloc ou elle passe) ; a echeance egale, l ordre slots, duels, rolls */
-      const rang = { slots: 0, duels: 1, rolls: 2 };
-      candidats.sort((a, b) => (a.fin - b.fin) || (rang[a.cible] - rang[b.cible]));
-      if (!candidats.length) {
+      if (!CONTRATS.some((x) => listes[x].length)) {
         /* ⛔ un tour SAIN (tout lu, aucun echec, rien a faire) remet le compte des echecs a zero */
         if (info.sain && echecsCeTour === 0) { st.echecsSuite = 0; st.compteurs.toursSains += 1; }
         return { fait: false, pourquoi: info.courts ? 'the pot cannot pay any pending spin in full' : 'nothing to settle', courts: info.courts };
       }
-      /* la borne horaire */
+      /* ⛔ la borne horaire PAR CONTRAT (revue keeper 2) : un contrat a son plafond ne passe plus, les autres si */
       const t0 = maintenant();
-      st.envoisHeure = st.envoisHeure.filter((x) => t0 - x < 3600000);
-      if (st.envoisHeure.length >= bornes.txParHeure) { st.compteurs.sautsHeure += 1; return { fait: false, pourquoi: 'hourly cap reached (' + bornes.txParHeure + ' tx)' }; }
+      const pleins = [];
+      for (const x of CONTRATS) {
+        st.envoisHeure[x] = st.envoisHeure[x].filter((y) => t0 - y < 3600000);
+        if (listes[x].length && st.envoisHeure[x].length >= plafondHeure(bornes, x)) { pleins.push(x); st.parContrat[x].sautsHeure += 1; listes[x] = []; }
+      }
+      if (pleins.length) st.compteurs.sautsHeure += 1;
+      /* la plus PRESSEE d abord (le dernier bloc ou elle passe) : chaque contrat garde SON ordre (duels : presses, puis mise), la tete de
+       *   chaque liste est comparee ; a echeance egale, l ordre slots, duels, rolls */
+      const candidats = [];
+      for (const q = { slots: 0, duels: 0, rolls: 0 }; ;) {
+        let pris = null;
+        for (const x of CONTRATS) { const k = listes[x][q[x]]; if (k && (!pris || k.fin < listes[pris][q[pris]].fin)) pris = x; }
+        if (!pris) break;
+        candidats.push(listes[pris][q[pris]]); q[pris] += 1;
+      }
+      if (!candidats.length) return { fait: false, pourquoi: 'hourly cap reached (' + pleins.map((x) => x + ' ' + plafondHeure(bornes, x) + ' tx').join(', ') + ')' };
       /* le prix du gas : base du dernier bloc + pourboire borne ; au-dessus du plafond, on attend */
       const dernier = await rpc('eth_getBlockByNumber', ['latest', false]);
       const base = dernier && dernier.baseFeePerGas ? BigInt(dernier.baseFeePerGas) : null;
@@ -468,12 +614,12 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
               else if (BigInt(await rpc('eth_getTransactionCount', [adresse, 'latest'])) > nonce) retrouvee = true;
             } catch (e2) { retrouvee = true; erreur('send answered "' + m.slice(0, 60) + '" and the check could not read the node (' + msg(e2) + '): tracked until the inclusion timeout'); }
           }
-          if (!retrouvee) { echec('send refused: ' + m, 'envoisRefuses'); return { fait: false, pourquoi: 'send refused' }; }
+          if (!retrouvee) { echec(nomTx(k) + ': send refused: ' + m, 'envoisRefuses', k.cible); return { fait: false, pourquoi: 'send refused' }; }
           st.compteurs.envoisRetrouves += 1; erreur('send answered "' + m.slice(0, 60) + '"; the signed tx (or its nonce) is on chain: tracked, not a failure');
         }
       }
-      st.enVol = { hash: signe.hash, cible: k.cible, to: k.to, quoi: k.quoi, ids: k.ids, a: maintenant(), nonce: nonce.toString() };
-      st.envoisHeure.push(t0);
+      st.enVol = { hash: signe.hash, cible: k.cible, to: k.to, quoi: k.quoi, ids: k.ids, a: maintenant(), nonce: nonce.toString(), avant: k.avant || null };
+      st.envoisHeure[k.cible].push(t0);
       st.compteurs.envois += 1; if (k.cible === 'slots') st.compteurs.spinsEnvoyes += k.ids.length;
       const de = { a: new Date(t0).toISOString(), hash: signe.hash, ids: k.ids, quoi: k.quoi, maxFeeWei: maxFee.toString(), gas: gas.toString() };
       st.parContrat[k.cible].envois += 1; st.parContrat[k.cible].dernierEnvoi = de;
@@ -485,6 +631,7 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     } finally { enCours = false; }
   }
 
+  const heure = (x) => st.envoisHeure[x].filter((y) => maintenant() - y < 3600000).length;
   return {
     /** l etat PUBLIABLE (/sante) : jamais la cle */
     etat: () => {
@@ -493,14 +640,17 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
         etat: st.etat, adresse: st.adresse, contrat: c, chaine: chainId, chaineVerifiee: st.chaineVue, depuis: st.depuis, msParBlocMesure: st.msParBloc, intervalleMs: st.intervalleMs,
         fenetreSecondes: st.msParBloc ? Slots.secondesFenetre(st.msParBloc) : null, suivis: suivis.size, enVol: st.enVol ? { hash: st.enVol.hash, cible: st.enVol.cible, quoi: st.enVol.quoi, ids: st.enVol.ids } : null,
         dernierTour: st.dernierTour, dernierEnvoi: st.dernierEnvoi, dernierRegle: st.dernierRegle, erreurs: st.erreurs.slice(), echecsSuite: st.echecsSuite, arret: st.arret,
-        envoisDerniereHeure: st.envoisHeure.filter((x) => maintenant() - x < 3600000).length, compteurs: { ...st.compteurs },
-        /* 2026-10-24 : l activite PAR CONTRAT (/sante) */
+        /* revue keeper 3 : l etat DEGRADE (ON, mais des echecs en cours : recu illisible, revert, envoi refuse, non incluse) — dit, jamais tu */
+        degrade: st.etat === 'ON' && st.echecsSuite > 0 ? { echecsSuite: st.echecsSuite, arretA: bornes.echecsMax, dernier: st.dernierEchec } : null,
+        envoisDerniereHeure: CONTRATS.reduce((s, x) => s + heure(x), 0), compteurs: { ...st.compteurs },
+        /* 2026-10-24 : l activite PAR CONTRAT (/sante) ; revue keeper 2 : son plafond horaire et ses envois de l heure */
         contrats: {
-          slots: { contrat: c, suivis: suivis.size, ecartes: [...ecartes.keys()], ...st.parContrat.slots },
-          duels: { contrat: cD, configure: !!duelsCfg, suivis: duelsSuivis.size, ...st.parContrat.duels },
-          rolls: { contrat: cR, configure: !!rollsCfg, aujourdhui: jours.aujourdhui, joursClos: [...jours.finis], ...st.parContrat.rolls },
+          slots: { contrat: c, suivis: suivis.size, ecartes: [...ecartes.keys()], envoisDerniereHeure: heure('slots'), plafondHeure: plafondHeure(bornes, 'slots'), ...st.parContrat.slots },
+          duels: { contrat: cD, configure: !!duelsCfg, suivis: duelsSuivis.size, envoisDerniereHeure: heure('duels'), plafondHeure: plafondHeure(bornes, 'duels'), ...st.parContrat.duels },
+          rolls: { contrat: cR, configure: !!rollsCfg, aujourdhui: jours.aujourdhui, joursClos: [...jours.finis], envoisDerniereHeure: heure('rolls'), plafondHeure: plafondHeure(bornes, 'rolls'), ...st.parContrat.rolls },
         },
-        bornes: { spinsParTx: bornes.spinsParTx, maxFeeWei: String(bornes.maxFeeWei), txParHeure: bornes.txParHeure, gasMaxParTx: String(bornes.gasMaxParTx), echecsMax: bornes.echecsMax, simulationsParTour: bornes.simulationsParTour, joursRecul: bornes.joursRecul },
+        bornes: { spinsParTx: bornes.spinsParTx, maxFeeWei: String(bornes.maxFeeWei), txParHeure: Object.fromEntries(CONTRATS.map((x) => [x, plafondHeure(bornes, x)])), gasMaxParTx: String(bornes.gasMaxParTx), echecsMax: bornes.echecsMax, simulationsParTour: bornes.simulationsParTour, joursRecul: bornes.joursRecul,
+          delaiDuelBlocs: bornes.delaiDuelBlocs, margeFinDuelBlocs: margeFinDuel(bornes, st.msParBloc, st.intervalleMs) },
       };
     },
     tour,
