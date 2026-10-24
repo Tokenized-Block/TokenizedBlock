@@ -257,8 +257,9 @@ const MUT = [
   ['JETON', 'remise a zero de l allocation retiree', '  const appels = pj.plan.appels;\n', "  const appels = pj.plan.appels.filter((a) => !(a.data.startsWith('0x095ea7b3') && /0{64}$/.test(a.data)));\n"],
   ['JETON', 'suite sans dire que l USDC arrive d abord', ': the USDC lands in your wallet first, then the game takes it.', '.'],
   ['JETON', 'lot jamais demande au wallet qui groupe', "  if (cap && cap.capacite === 'OUI') {", '  if (false) {'],
-  ['JETON', 'le Week pass ecrit dans la ligne du Roll', "      if (!pj.ok) { dit('No pass bought: ' + pj.pourquoi + ' Nothing was sent.'); return; }\n      const rj = await envoyerPaiementJeton(pj, c, dit,",
-    "      if (!pj.ok) { dit('No pass bought: ' + pj.pourquoi + ' Nothing was sent.'); return; }\n      const rj = await envoyerPaiementJeton(pj, c, (x) => { $('#rollsEtat').textContent = x; },"],
+  /* 2026-10-24 (revue adverse N2) : l envoi du pass en jeton porte la description du pass (descPass) ; l ancre suit la ligne, meme mutant */
+  ['JETON', 'le Week pass ecrit dans la ligne du Roll', "      const rj = await envoyerPaiementJeton(pj, c, dit, ' ' + descPass);",
+    "      const rj = await envoyerPaiementJeton(pj, c, (x) => { $('#rollsEtat').textContent = x; }, ' ' + descPass);"],
   ['PERIME', 'controle de peremption retire (la tete n est pas relue)', 'blocActuel: Math.max(tete, Number(devis.bloc))', 'blocActuel: Number(devis.bloc)'],
   ['NON_MISABLE', 'taille non misable permise au clic', "  if (!e.ok) return non(sym + ' cannot pay '", "  if (false) return non(sym + ' cannot pay '"],
   ['NON_MISABLE', 'solde non verifie au clic', '  if (solde < r.maxEntree) return non(', '  if (false) return non('],

@@ -239,6 +239,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .payerAvec{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:8px 0 0}
 .payerAvec .note{margin:0}
 .payerAvec select{flex:1 1 180px;min-width:0;max-width:100%;font-size:13px;padding:6px 8px;background:var(--fond2);color:inherit;border:1px solid var(--ligne);border-radius:8px}
+/* 2026-10-24 (revue adverse D2) : les boutons d un paiement en jeton arrete (Reset the approval, Finish with USDC), dans la ligne d etat */
+.arretBouton{display:inline-block;margin:6px 6px 0 0;padding:6px 10px;font-size:12px}
 #payerNote{flex-basis:100%}
 .slotsAccords{display:flex;flex-wrap:wrap;gap:4px 10px;margin:6px 0 0;font-size:12.5px;color:var(--doux)}
 .slotsAccords b{color:var(--accent2);font-weight:700}
@@ -4282,6 +4284,8 @@ import * as Duels from './duels-plan-app.js';
 import * as Slots from './slots-plan.js';
 /* 2026-10-24 : « Pay with » — payer un jeu avec un jeton profond (swap exact-output en USDC, puis les appels du jeu inchanges) */
 import { CANDIDATS_CL as MISABLES_CANDIDATS, coterMisable, planPayerEnJeton, usdcAViser, besoinDuJeu, tailleCouvrante as tailleMisable } from './misables.js';
+/* 2026-10-24 (revue adverse D1/D2) : un paiement en jeton arrete en route (envoi a la suite) — la phrase par etape, les approbations LUES */
+import { phraseArret, bilanArret, paresAVerifier, etapesDuPaiement, phraseOuvertes, appelAllowance, appelRemiseAZero } from './payer-arret.js';
 /* 2026-10-24 : les trois rouleaux de la carte Draws (LIVE : les faces des derniers blocs Base ; SPIN : les faces d un spin) — pur, servi */
 import { creerRouleaux } from './rouleaux.js';
 /* 2026-10-18 : le Brain OS — nos propres LECTURES (safety, explain, wallet, gas), sans cle tierce ; pur, le `rpc` de l app lui est passe */
@@ -5136,13 +5140,20 @@ async function preparerPaiementJeton({ ligne, c, planUsdc, jeu }) {
   /* la tete vue apres le devis (un noeud en retard peut la dire plus basse que le bloc du devis : la vraie tete est au moins le plus grand) */
   const plan = planPayerEnJeton({ devis, compte: c, jeu, blocActuel: Math.max(tete, Number(devis.bloc)), maintenant: ts });
   if (plan.etat !== 'PRET') return non(String(plan.pourquoi || plan.code) + '.');
+  /* 2026-10-24 (revue adverse N1) : APRES le plan (l ecart a la mi-pool est dit d abord), le devis vivant est aussi compare a l estimation
+   *   LISTEE (« about X », la mesure du serveur, < 1 min) : plus de 1 % plus cher, rapporte au meme USDC, = refuse. Protege les jetons sans
+   *   pool de reference (10 des 20 misables), dont la pool poussee hors prix avant le devis passerait le seul controle « ecart a la mi-pool ». */
+  try {
+    const vivant = BigInt(devis.montantIn) * besoin * 10000n, liste = e.est * vise;
+    if (vivant > liste * 10100n) return non('the live ' + sym + ' price is ' + ((Number((vivant * 100n) / liste) - 1000000) / 10000).toFixed(2) + '% above the listed estimate (more than 1%). The list is read again within a minute; try then.');
+  } catch (_) { return non('the live ' + sym + ' quote could not be compared to the listed estimate.'); }
   if (!memesAppels(plan.appels.slice(-planUsdc.appels.length), planUsdc.appels)) return non('the game calls would differ from the game plan.');
   const dec = await decimalesPayer(ligne), solde = await soldePayer(ligne, c), r = plan.resume;
   if (dec === null || solde === null) return non('your ' + sym + ' balance could not be read.');
   if (solde < r.maxEntree) return non('you hold ' + qteJeton(solde, dec, 6) + ' ' + sym + '; the swap may take up to ' + qteJeton(r.maxEntree, dec, 6, true) + '.');
   const phrase = 'Pay with ' + sym + ': at most ' + qteJeton(r.maxEntree, dec, 6, true) + ' ' + sym + ' in, exactly ' + Slots.usdcPrecis(r.usdcSortie) + ' USDC out ('
     + (Number(r.fraisBps) / 100).toFixed(2) + '% of the swap kept by the app); the game takes ' + Slots.usdcPrecis(r.besoinUsdc) + ' USDC. Prizes are paid in USDC.';
-  return { ok: true, plan, phrase, sym };
+  return { ok: true, plan, phrase, sym, dec };
 }
 /* L ENVOI : un lot atomique (wallet_sendCalls 2.0, atomicRequired) si le wallet le declare (wallet_getCapabilities « supported »),
  *   sinon chaque appel a la suite — et c est DIT avant : l USDC arrive d abord dans le wallet du joueur. */
@@ -5159,7 +5170,93 @@ async function envoyerPaiementJeton(pj, c, dit, suite = '') {
   dit(pj.phrase + ' Your wallet asks for ' + appels.length + ' signatures in order: the USDC lands in your wallet first, then the game takes it.' + suite);
   r = await envoyerUnParUn(appels, c);
   payer.soldesA = 0;
+  /* 2026-10-24 (revue adverse D1) : un envoi A LA SUITE arrete en route se dit par etape (direArretJeton), pas par la phrase des rolls USDC */
+  if (r && typeof r === 'object') r.aLaSuite = true;
   return r;
+}
+/* ══ UN PAIEMENT EN JETON ARRETE EN ROUTE (revue adverse 2026-10-24, D1 HAUT + D2 MOYEN). Envoi a la suite seulement (un lot atomique
+ *   est tout ou rien). La phrase vient de payer-arret.js, PAR ETAPE ATTEINTE ; puis les approbations du plan sont LUES (allowance(joueur,
+ *   routeur) sur le jeton, allowance(joueur, jeu) sur l USDC) et chaque approbation encore ouverte est dite, avec UN bouton « Reset the
+ *   approval » (un appel approve(spender, 0)). Si le swap est passe et que le jeu n a rien pris : « Finish with USDC » (l USDC est dans le
+ *   wallet ; le meme geste, paye en USDC). Les boutons vivent DANS la ligne d etat de la rangee : tout message suivant (textContent) les efface. */
+async function lireOuvertesJeton(plan, c) {
+  const lues = [];
+  for (const p of paresAVerifier(plan.appels)) {
+    let m = null;
+    try { const a = appelAllowance(p.jeton, c, p.spender); m = BigInt(await rpc('eth_call', [{ to: a.to, data: a.data }, 'latest'])); } catch (_) { m = null; }
+    lues.push({ jeton: p.jeton, spender: p.spender, montant: m });
+  }
+  return lues;
+}
+function texteOuvertes(arret, lues) {
+  return phraseOuvertes({ lues, usdc: USDC_BASE, sym: arret.sym, fmtJeton: (x) => qteJeton(x, arret.dec, 6, true), fmtUsdc: (x) => Slots.usdcPrecis(BigInt(x)), routeur: arret.routeur, jeu: arret.jeu });
+}
+function poserBoutonsArret(e, arret) {
+  const bs = [...arret.ouvertes.map((o, k) => ({ k: 'r' + k, t: o.libelle })), ...(arret.finir ? [{ k: 'f', t: 'Finish with USDC' }] : [])];
+  if (!bs.length) return;
+  const html = bs.map((b) => '<button type="button" class="bouton sec arretBouton" data-arret="' + b.k + '">' + b.t + '</button>').join(' ');
+  try { e.insertAdjacentHTML('beforeend', ' ' + html); } catch (_) { e.innerHTML = String(e.innerHTML || '') + ' ' + html; }
+}
+const payerArrets = new Map();
+/* `jeu` : cle de payer-arret.js JEUX (roll, auto, spin, pass) ; `refaire` : le meme geste (le bouton « Finish with USDC ») */
+async function direArretJeton({ pj, r, c, e, jeu, refaire }) {
+  const plan = pj.plan, b = bilanArret({ plan, r, jeu });
+  const base = phraseArret({ plan, r, jeu, sym: pj.sym, fmtUsdc: (x) => Slots.usdcPrecis(BigInt(x)) });
+  e.hidden = false; e.textContent = base + ' Reading your approvals…';
+  const roles = etapesDuPaiement(plan);
+  const arret = { sym: pj.sym, dec: pj.dec, routeur: String(plan.appels[roles.indexOf('swap')].to).toLowerCase(), jeu: String(plan.resume.contrat).toLowerCase(),
+    compte: String(c).toLowerCase(), base, pares: paresAVerifier(plan.appels), finir: b.finirEnUsdc ? refaire : null, ouvertes: [], enCours: false };
+  const o = texteOuvertes(arret, await lireOuvertesJeton(plan, c));
+  arret.ouvertes = o.ouvertes;
+  arret.texte = base + ' ' + o.texte + (arret.finir ? ' Or finish with USDC: the same ' + (jeu === 'pass' ? 'pass' : jeu === 'spin' ? 'spin' : 'roll' + (jeu === 'auto' ? 's' : '')) + ', paid from that USDC.' : '');
+  payerArrets.set(e.id, arret);
+  e.textContent = arret.texte;
+  poserBoutonsArret(e, arret);
+  return arret.texte;
+}
+/* un bouton d arret touche : remettre UNE approbation a 0 (un appel), ou finir le geste en USDC */
+async function agirArret(id, cle) {
+  const a = payerArrets.get(id), e = $('#' + id);
+  if (!a || !e || a.enCours) return;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!c || String(c).toLowerCase() !== a.compte) { payerArrets.delete(id); e.textContent = 'Another wallet is connected now — nothing was asked.'; return; }
+  a.enCours = true;
+  try {
+    if (cle === 'f') {
+      if (!a.finir) return;
+      payerArrets.delete(id);
+      payer.choix = 'usdc'; const s = $('#payerJeton'); if (s) s.value = 'usdc';
+      try { rendrePayerAvec(payer.compte, payerActions(c)); } catch (_) { /* hors de la page (banc) */ }
+      await a.finir();
+      return;
+    }
+    const o = a.ouvertes[Number(String(cle).slice(1))];
+    if (!o) return;
+    e.textContent = 'Reset: one call, approve(' + (o.spender === a.routeur ? 'the swap router' : 'the game') + ', 0) on ' + o.symbole + ' — sign it in your wallet…';
+    const ap = appelRemiseAZero(o.jeton, o.spender);
+    const r = await envoyerAppels([ap], c);
+    const lues = [];
+    for (const p of a.pares) { let m = null; try { const x = appelAllowance(p.jeton, c, p.spender); m = BigInt(await rpc('eth_call', [{ to: x.to, data: x.data }, 'latest'])); } catch (_) { m = null; } lues.push({ jeton: p.jeton, spender: p.spender, montant: m }); }
+    const t = texteOuvertes(a, lues);
+    a.ouvertes = t.ouvertes;
+    const tete = r && r.etat === 'CONFIRME' ? 'Your ' + o.symbole + ' approval was reset.' : phraseNonConfirme(r, 'Not reset');
+    a.texte = tete + ' ' + t.texte + (a.finir ? ' You can still finish with USDC.' : '');
+    e.textContent = a.texte;
+    if (id === 'slotsEtat') { try { slotsCfg.dernier = a.texte; } catch (_) { /* hors de la page (banc) */ } }
+    poserBoutonsArret(e, a);
+  } finally { a.enCours = false; }
+}
+/* un repeint (les slots, toutes les 1,5 a 20 s) a reecrit la ligne avec le MEME texte d arret : ses boutons reviennent ; un autre texte : rien */
+function reposerArret(e) {
+  const a = e ? payerArrets.get(e.id) : null;
+  if (a && e.textContent === a.texte) poserBoutonsArret(e, a);
+}
+for (const id of ['rollsEtat', 'potEtat', 'slotsEtat']) {
+  const x = $('#' + id);
+  if (x && typeof x.addEventListener === 'function') x.addEventListener('click', (ev) => {
+    const b = ev && ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('[data-arret]') : null;
+    if (b) void agirArret(id, b.dataset.arret);
+  });
 }
 $('#payerJeton').addEventListener('change', () => { const s = $('#payerJeton'); payer.choix = s ? s.value : 'usdc'; let c = null; try { c = compte; } catch (_) { c = null; } rendrePayerAvec(payer.compte, payerActions(c)); });
 /* ══ LA FACE DU ROLL (Phil 2026-10-18) : chaque roll — practice, paye, auto-roll, Chat — tire une NOUVELLE face au hasard
@@ -5204,6 +5301,7 @@ async function rollPaye() {
       const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'rolls', contrat, guesses: [guess], rollPrice: BigInt(rollsCfg.prixRoll) } });
       if (!pj.ok) { dit('Not rolled: ' + pj.pourquoi + ' Nothing was sent.'); return; }
       r = await envoyerPaiementJeton(pj, c, dit, av.phrase);
+      if (r && r.aLaSuite && r.etat !== 'CONFIRME') { await direArretJeton({ pj, r, c, e, jeu: 'roll', refaire: () => rollPaye() }); return; }
     } else {
       dit((avecPass ? 'Rolling with your pass (' + pass.rollsLeft + ' left) — sign in your wallet…' : 'Roll ' + usdcTexte(rollsCfg.prixRoll) + ' USDC: half to the pot, half to TokenizedBlock. Sign ' + plan.appels.length + ' step' + (plan.appels.length > 1 ? 's' : '') + ' in your wallet…') + av.phrase);
       r = await envoyerAppels(plan.appels, c);
@@ -5256,26 +5354,31 @@ async function passPaye() {
      *   PassBought et ajoute les 7 jours de ticket + 3 entrees bonus de la semaine (crediterVolumeRolls). Le texte ne promet que ca.
      * ⛔ 2026-10-18 (revue adverse) : les gains des rolls de PASS sortent du pot des ROLLS (pas du pot du jour) — il peut etre vide : dit AVANT */
     const pot = await lirePotRolls(contrat);
+    const descPass = 'Week pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: your daily ticket for 7 UTC days from today (one a day, each = 1 entry in that week\'s reward pot) and 3 bonus entries in this week\'s pot, credited once the server reads your purchase on Base. '
+      + 'On top, from the contract: ' + rollsCfg.passRolls + ' rolls for 24 h and an entry in today\'s pass draw; half to that pass-draw pot, half to TokenizedBlock. '
+      + 'A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now — a pass-roll win pays at most that.')
+      /* revue rolls-duels-ui 2026-10-24 : le risque du re-armement (BlockRolls closeDay / drawDay, PoC test_V_DayPotGrind) dit AVANT l achat,
+       *   sur les DEUX chemins (USDC et « Pay with ») — integration 2026-10-25 */
+      + ' Anyone can draw the pass pot, but only within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' of its draw block; a missed draw can be re-armed, which lets a buyer retry until the hash picks them.';
+    const passAchete = 'Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes). Today\'s pass pot goes whole to one buyer: after midnight UTC anyone (you too) closes the day and draws it here with “Close and draw yesterday\'s pass pot” — a Base block hash picks the buyer.';
     /* 2026-10-24 : « Pay with » un jeton : le swap, puis CE plan (approve exact + buyPass), messages sur la meme ligne (#potEtat) */
     const jt = jetonChoisi();
     if (jt) {
       const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'pass', contrat, passPrice: BigInt(rollsCfg.prixPass), pass: lp.pass } });
       if (!pj.ok) { dit('No pass bought: ' + pj.pourquoi + ' Nothing was sent.'); return; }
-      const rj = await envoyerPaiementJeton(pj, c, dit, ' A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now.'));
+      /* revue adverse N2 : la description du pass AVANT la signature et la phrase du pot du jour, comme le chemin USDC (memes textes) */
+      const rj = await envoyerPaiementJeton(pj, c, dit, ' ' + descPass);
+      if (rj && rj.aLaSuite && rj.etat !== 'CONFIRME') { await direArretJeton({ pj, r: rj, c, e, jeu: 'pass', refaire: () => passPaye() }); return; }
       if (!rj || rj.etat !== 'CONFIRME') { dit(phraseNonConfirme(rj, 'No pass bought')); return; }
-      dit('Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes).');
+      dit(passAchete);
       return;
     }
-    dit('Week pass ' + usdcTexte(rollsCfg.prixPass) + ' USDC: your daily ticket for 7 UTC days from today (one a day, each = 1 entry in that week\'s reward pot) and 3 bonus entries in this week\'s pot, credited once the server reads your purchase on Base. '
-      + 'On top, from the contract: ' + rollsCfg.passRolls + ' rolls for 24 h and an entry in today\'s pass draw; half to that pass-draw pot, half to TokenizedBlock. '
-      + 'A pass-roll win is paid from the roll pot: ' + (pot === null ? 'it could not be read just now.' : 'it holds ' + usdcTexte(pot) + ' USDC now — a pass-roll win pays at most that.')
-      /* revue rolls-duels-ui 2026-10-24 : le risque du re-armement (BlockRolls closeDay / drawDay, PoC test_V_DayPotGrind) dit AVANT l achat */
-      + ' Anyone can draw the pass pot, but only within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' of its draw block; a missed draw can be re-armed, which lets a buyer retry until the hash picks them. ');
+    dit(descPass + ' ');
     const lien = document.createElement('a'); lien.className = 'lienLearn'; lien.href = 'frais-et-risques.html'; lien.textContent = 'Fees & risks →';
     e.append(lien, ' Sign ' + plan.appels.length + ' steps in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'No pass bought')); return; }
-    dit('Week pass bought — your rolls use it for 24 h. Your 7 days of tickets and 3 bonus entries appear after the server\'s next read of the contract (every 2 minutes). Today\'s pass pot goes whole to one buyer: after midnight UTC anyone (you too) closes the day and draws it here with “Close and draw yesterday\'s pass pot” — a Base block hash picks the buyer.');
+    dit(passAchete);
   } finally { b.disabled = false; void peindreTirageJourPass(); }
 }
 $('#jourRollPaye').addEventListener('click', () => { void rollPaye(); });
@@ -5498,6 +5601,7 @@ async function autoRollLot(c) {
     const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'rolls', contrat, guesses, rollPrice: BigInt(rollsCfg.prixRoll) } });
     if (!pj.ok) { dit('Not rolled: ' + pj.pourquoi + ' Nothing was sent.'); return; }
     r = await envoyerPaiementJeton(pj, c, dit, av.phrase);
+    if (r && r.aLaSuite && r.etat !== 'CONFIRME') { await direArretJeton({ pj, r, c, e, jeu: 'auto', refaire: () => (typeof autoRoll === 'function' ? autoRoll() : autoRollLot(c)) }); return; }
   } else {
     dit((avecPass ? 'Rolling ' + n + ' times with your pass (' + pass.rollsLeft + ' left) — one signature if your wallet groups them…'
       : n + ' paid rolls × ' + usdcTexte(rollsCfg.prixRoll) + ' USDC = ' + usdcTexte(plan.prix) + ' USDC: one approve of exactly that, then ' + n + ' rolls (half to the pot, half to TokenizedBlock) — one signature if your wallet groups them, else ' + plan.appels.length + '…') + av.phrase);
@@ -7196,6 +7300,8 @@ async function peindreSlotsUneFois(force = false) {
   if (nonLus) lignes.push({ texte: nonLus + ' recent spin(s) could not be read just now.', court: false });
   slotsListe(lignes);
   etat.textContent = slotsCfg.dernier || slotsResume(plan);
+  /* 2026-10-24 : un paiement en jeton arrete (payer-arret.js) : ses boutons Reset / Finish reviennent avec son texte */
+  try { reposerArret(etat); } catch (_) { /* hors de la page (banc des slots seul) */ }
   slotsCfg.peintA = Date.now();
   /* un spin qui attend ses blocs ou sa fenetre : le minuteur leger (slotsTic) ; la fenetre peut ne durer que ~51 s (Denim) */
   clearTimeout(slotsCfg.minuteur);
@@ -7252,6 +7358,8 @@ async function slotsAgir(quoi) {
       const pj = await preparerPaiementJeton({ ligne: jt, c, planUsdc: plan, jeu: { genre: 'spins', contrat, n: 1, spinPrice: BigInt(j.prixSpin) } });
       if (!pj.ok) { dit(refus + ': ' + pj.pourquoi + ' Nothing was sent.'); return; }
       r = await envoyerPaiementJeton(pj, c, dit);
+      /* la ligne des slots est repeinte 1,5 s apres (slotsCfg.dernier) : l arret y reste, ses boutons sont reposes (reposerArret) */
+      if (r && r.aLaSuite && r.etat !== 'CONFIRME') { slotsCfg.dernier = await direArretJeton({ pj, r, c, e: etat, jeu: 'spin', refaire: () => slotsAgir('spin') }); return; }
     } else {
       if (quoi === 'spin') dit('Confirm in your wallet…');
       r = await envoyerAppels(plan.appels, c);

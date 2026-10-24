@@ -5,12 +5,16 @@
  *   - le wallet = un wallet FACTICE dont chaque envoi devient une vraie transaction du joueur sur le fork (compte impersonne par anvil,
  *     AUCUNE cle) ; « lot » : toutes les tx du lot dans UN bloc (automine coupe, evm_mine) ; « suite » : une tx par signature ;
  *   - la liste /api/misables = la VRAIE regle du serveur (coterMisableTailles -> ligneMisable) lue SUR LE FORK pour NVDAc et l ETH.
- * Usage : "C:\Users\VolKov\.foundry\versions\base-v1.1.1\anvil.exe" --fork-url https://base-rpc.publicnode.com --port 9794
+ * Usage : "C:\Users\VolKov\.foundry\versions\base-v1.1.1\anvil.exe" --base --fork-url https://base-rpc.publicnode.com --port 9794
+ *         (revue adverse N2 : SANS --base, anvil fait echouer le transfert de NVDAc — OpcodeNotFound — et le banc rougit 15/24)
  *         puis node banc-payer-avec-fork-20261024.mjs [http://127.0.0.1:9794]
  * DEROULE : NVDAc -> 1 Roll (lot) ; NVDAc -> Auto-roll x5 (lot) ; ETH -> 1 Spin (suite) ; NVDAc -> 1 Spin (lot) ; NVDAc -> Week pass (lot) ;
  *   puis refus SUR LE FORK : la tete avance de 31 blocs apres le devis (rien n est envoye).
  *   Pour chacun : chaque recu status 0x1 ; l evenement du jeu pour CE joueur ; la pool rend EXACTEMENT la sortie visee ; le jeton depense
  *   <= l approve exact (= le max-in du resume) ; allowance jeton -> routeur = 0 et USDC -> jeu = 0 apres ; le resume affiche = le lot envoye.
+ * + 2026-10-24 (revue adverse D1/D2) : NVDAc -> 1 Spin A LA SUITE, le wallet REFUSE l etape 3 (le reset), puis l etape 5 (le spin) :
+ *   la ligne des slots dit l etape atteinte, l USDC dans le wallet, et les approbations LUES SUR LE FORK (jeton -> routeur ; USDC -> jeu) ;
+ *   « Reset the approval » envoie approve(spender, 0) sur le fork : l allocation relue est 0.
  * NE PROUVE PAS : un vrai wallet (wallet_sendCalls d un vrai wallet, son atomicite), les pixels, le reglement des rolls/spins. */
 import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
 import { SLOTS_DEPLOIEMENT } from './slots-deploiement.js';
@@ -95,9 +99,9 @@ async function envoyer(genre, calls) {
   return hs;
 }
 const APP = lireApp();
-async function jouer(titre, { flux, mode, ligne, contrat, ev, rpcJeu = rpc }) {
+async function jouer(titre, { flux, mode, ligne, contrat, ev, rpcJeu = rpc, envoyerJeu = envoyer }) {
   console.log('--- ' + titre);
-  const w = walletFactice({ mode, joueur, envoyer });
+  const w = walletFactice({ mode, joueur, envoyer: envoyerJeu });
   const ch = charger(APP, { compte: joueur, rpc: rpcJeu, eth: w.eth, lignes: LIGNES,
     rollsCfg: { contrat: ROLLS, prixRoll: String(rollPrice), prixPass: String(passPrice), passRolls, bloc: 1 }, slotsJ: { ok: true, contrat: SLOTS, prixSpin: String(spinPrice) } });
   await ch.api.peindrePayerAvec();
@@ -161,6 +165,34 @@ const nHash = hashes.length;
 const rX = await jouer('NVDAc -> 1 Roll, tete +31 apres le devis', { flux: 'roll', mode: 'lot', ligne: NV, rpcJeu: rpcPerime });
 ok(!!rX && hashes.length === nHash && rX.env.length === 0 && rX.w.requetes.every((q) => !/sendCalls|sendTransaction|getCapabilities/.test(q.method)), 'aucune transaction, aucune demande au wallet');
 ok(!!rX && /blocks old \(more than 30\)/.test(rX.textes[rX.textes.length - 1] || '') && /Nothing was sent\.$/.test(rX.textes[rX.textes.length - 1] || ''), 'le refus est dit sur la ligne du Roll');
+
+/* D1/D2 SUR LE FORK : un Spin paye en NVDAc, a la suite, refuse a l etape k+1 (approve, swap, reset, approve du jeu, spin) */
+async function arret(k, attendu) {
+  let i = 0;
+  const envoyerRefus = async (genre, calls) => { const hs = []; for (const c of calls) { if (i++ === k) { const e = new Error('User rejected the request.'); e.code = 4001; throw e; } hs.push(...(await envoyer('tx', [c]))); } return hs; };
+  const usdc0 = await solde(MIS.USDC, joueur);
+  const r = await jouer('NVDAc -> 1 Spin a la suite, refus a l etape ' + (k + 1) + ' de 5', { flux: 'spin', mode: 'suite', ligne: NV, envoyerJeu: envoyerRefus });
+  if (!r) return;
+  const el = r.ch.ecran.el('slotsEtat'), f = el.textContent;
+  const aR = await allowance(NV.jeton, joueur, ROUTEUR_AERODROME_CL), aJ = await allowance(MIS.USDC, joueur, SLOTS), dU = (await solde(MIS.USDC, joueur)) - usdc0;
+  console.log('    allowance NVDAc->routeur ' + aR + ' · USDC->BlockSlots ' + aJ + ' · USDC du joueur +' + dU);
+  ok(f.startsWith('Stopped at step ' + (k + 1) + ' of 5, ' + attendu.etape + ': you declined it in your wallet.'), 'la ligne des slots dit l etape ' + (k + 1) + ' (' + attendu.etape + ') et le refus');
+  ok(!/Settle pending rolls|nothing was sent/i.test(f), 'ni « Settle pending rolls » ni « nothing was sent » apres des etapes passees');
+  const vise = MIS.usdcAViser({ besoin: spinPrice });
+  ok(dU === vise - (vise * 10n) / 10000n && f.includes('The swap went through: ' + Slots.usdcPrecis(dU) + ' USDC is now in your wallet. Nothing was paid to the game.'), 'l USDC arrive dans le wallet (+' + dU + ' sur le fork) et la ligne dit ce montant');
+  ok((aR > 0n) === f.includes('your NVDAc approval to the swap router (up to ') && (aJ > 0n) === f.includes('your USDC approval to the game (up to ') && (aR > 0n || aJ > 0n) === attendu.ouverte, 'les approbations dites = celles du fork (routeur ' + aR + ', jeu ' + aJ + ')');
+  if (aJ > 0n) ok(f.includes('(up to ' + Slots.usdcPrecis(aJ) + ' USDC)'), 'le montant ouvert du jeu = celui du fork (' + aJ + ')');
+  ok(/data-arret="r0">Reset the approval</.test(String(el.innerHTML)) && /data-arret="f">Finish with USDC</.test(String(el.innerHTML)), 'un bouton « Reset the approval » et « Finish with USDC »');
+  const h0 = hashes.length;
+  el.ecouteurs.click({ target: { closest: () => ({ dataset: { arret: 'r0' } }) } });
+  for (let t = 0; t < 600 && (el.textContent.startsWith('Reset: ') || el.textContent === f); t += 1) await new Promise((o) => setTimeout(o, 100));
+  const recu = hashes.length === h0 + 1 ? await rpc('eth_getTransactionReceipt', [hashes[h0]]) : null;
+  const aR2 = await allowance(NV.jeton, joueur, ROUTEUR_AERODROME_CL), aJ2 = await allowance(MIS.USDC, joueur, SLOTS);
+  console.log('    [slotsEtat] ' + el.textContent);
+  ok(!!recu && recu.status === '0x1' && aR2 === 0n && aJ2 === 0n && el.textContent.includes('approval was reset. No approval is left open.'), 'Reset : une tx approve(spender, 0) passe sur le fork, les deux allocations relues = 0, la ligne le dit');
+}
+await arret(2, { etape: 'the reset of the NVDAc approval to 0', ouverte: true });
+await arret(4, { etape: 'the spin', ouverte: true });
 
 remettre();
 console.log((ko ? 'KO ' : 'OK ') + (n - ko) + '/' + n + ' sur le fork au bloc ' + tete0 + ' — les appels batis par le selecteur de app.html');

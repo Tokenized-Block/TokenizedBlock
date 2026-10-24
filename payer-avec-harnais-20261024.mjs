@@ -16,6 +16,8 @@ import { USDC_BASE } from './frais-creation.js';
 import { capaciteDeGroupement } from './groupe-wallet.js';
 import { envoyerLotAtomique, envoyerDepuisWallet } from './envoi.js';
 import { selecteur } from './keccak.js';
+/* 2026-10-24 (revue adverse D1/D2) : la phrase d un paiement en jeton arrete en route et ses approbations (opts.arret : une copie mutee) */
+import * as PA_REEL from './payer-arret.js';
 
 export const lireApp = (f = 'app.html') => readFileSync(new URL('./' + f, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 /* l app.html d un commit (git show) — pour comparer le chemin USDC a celui d AVANT ; null si git ne repond pas */
@@ -57,7 +59,9 @@ export function ecran() {
     if (!els.has(id)) {
       const e = { id, hidden: id === 'payerAvec' || id === 'payerLab' || id === 'payerJeton' || id === 'payerNote', disabled: false, _v: '', innerHTML: '', dataset: {}, options: [], ecouteurs: {},
         setAttribute() {}, addEventListener(k, f) { this.ecouteurs[k] = f; }, replaceChildren(...o) { this.options = o; } };
-      Object.defineProperty(e, 'textContent', { get() { return this._t || ''; }, set(v) { this._t = String(v); ecrits.push({ id, texte: String(v) }); } });
+      /* 2026-10-24 : comme le DOM, ecrire textContent efface les enfants (les boutons d un arret, poses par insertAdjacentHTML) */
+      Object.defineProperty(e, 'textContent', { get() { return this._t || ''; }, set(v) { this._t = String(v); this.innerHTML = ''; ecrits.push({ id, texte: String(v) }); } });
+      e.insertAdjacentHTML = function (_ou, html) { this.innerHTML = String(this.innerHTML || '') + html; };
       Object.defineProperty(e, 'value', { get() { return this._v; }, set(v) { this._v = String(v); } });
       els.set(id, e);
     }
@@ -230,11 +234,15 @@ export function charger(t, opts = {}) {
     montrerSettled: () => {}, motSettle: () => 'BAS', texteBlocs: (n) => n + ' blocks', sParBlocApp: null, toursAttente: () => 1, pasAttente: () => 0,
     faceRevelee: () => null, logoSvg: () => '', paramsLogoDepuisApparence: () => ({}), rollDerniers: [], jb: () => {}, signalerRoll: async () => true,
     setTimeout: (f) => { setImmediate(f); return 0; }, clearTimeout: () => {},
+    phraseArret: (opts.arret || PA_REEL).phraseArret, bilanArret: (opts.arret || PA_REEL).bilanArret, paresAVerifier: (opts.arret || PA_REEL).paresAVerifier,
+    etapesDuPaiement: (opts.arret || PA_REEL).etapesDuPaiement, phraseOuvertes: (opts.arret || PA_REEL).phraseOuvertes, appelAllowance: (opts.arret || PA_REEL).appelAllowance,
+    appelRemiseAZero: (opts.arret || PA_REEL).appelRemiseAZero,
   };
   Object.assign(ctx, opts.ctx || {});
   const noms = Object.keys(ctx);
   const exporte = ['rollPaye', 'passPaye', 'autoRollLot', 'slotsAgir', 'envoyerAppels'];
-  const option = ['peindrePayerAvec', 'rendrePayerAvec', 'jetonChoisi', 'preparerPaiementJeton', 'payer', 'payerListees', 'qteJeton'];
+  const option = ['peindrePayerAvec', 'rendrePayerAvec', 'jetonChoisi', 'preparerPaiementJeton', 'payer', 'payerListees', 'qteJeton',
+    'direArretJeton', 'agirArret', 'reposerArret', 'payerArrets'];
   const f = new Function(...noms, 'let rollEnCours = false;\n' + src + '\nreturn { ' + exporte.join(', ') + ', '
     + option.map((k) => k + ': typeof ' + k + ' === "undefined" ? null : ' + k).join(', ') + ' };');
   const api = f(...noms.map((k) => ctx[k]));

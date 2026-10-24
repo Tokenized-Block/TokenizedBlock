@@ -4949,6 +4949,7 @@ const SERVIS = [
   'approbations-exactes.js',
   'rolls-en-action.js', /* 2026-10-18 : un roll paye en action tokenisee (vente Aerodrome + approve EXACT + roll, un lot) et le gain converti en action */
   'misables.js', /* 2026-10-24 : payer un jeu avec un autre jeton (swap exact-output USDC + les appels du jeu inchanges) et la regle « misable » */
+  'payer-arret.js', /* 2026-10-24 (revue adverse D1/D2) : un paiement en jeton arrete en route — la phrase par etape et les approbations a remettre a 0 */
   /* 2026-10-04 : le mode essai. `mode-essai.js` est importe par app.html (absent d ici = 404 = app morte) : il ne fait que
    *   DECIDER, et il decide non hors de localhost. `wallet-simule.js` n est charge par la page (`import()`) qu en mode essai :
    *   il est nomme ici pour que la garde des imports le suive, mais il n entre dans le cache — donc il n est SERVI — que si CE
