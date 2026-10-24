@@ -103,8 +103,8 @@ for (const [k, de, vers] of srvMutants) {
   vu(SRV.split(de).length === 2, 'mutant serveur ' + k + ' : le motif existe une fois');
   vu(srvChecks[k](SRV.replace(de, () => vers)) === false, 'MUTANT serveur ' + k + ' : la verification ROUGIT');
 }
-/* la fiche d aujourd hui : rien de deploye -> /api/slots rend PAS_OUVERT -> carte cachee */
-vu(D.adresse === null && D.bloc === null, 'fiche : adresse et bloc nuls (pas deploye) -> PAS_OUVERT, aucun bouton Slots');
+/* la fiche : nulle -> /api/slots rend PAS_OUVERT -> carte cachee ; 2026-10-24 deploye -> adresse ET bloc ecrits ensemble (noter-deploiement-slots) */
+vu((D.adresse === null && D.bloc === null) || (/^0x[0-9a-f]{40}$/.test(String(D.adresse)) && Number.isSafeInteger(D.bloc) && D.bloc > 0), 'fiche : adresse et bloc tous deux nuls (PAS_OUVERT, aucun bouton Slots) ou tous deux ecrits');
 
 /* (7) etatSpins, pur */
 const spuns = [{ spinId: 1n, targetBlock: 100 }, { spinId: 2n, targetBlock: 100 }, { spinId: 3n, targetBlock: 100 }, { spinId: 4n, targetBlock: 300 }];

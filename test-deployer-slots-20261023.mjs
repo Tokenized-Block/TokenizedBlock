@@ -22,6 +22,11 @@ const lire = (f) => fs.readFileSync(path.join(ICI, f), 'utf8').replace(/\r\n/g, 
 const sha = (b) => crypto.createHash('sha256').update(b).digest('hex');
 
 const { SLOTS_DEPLOIEMENT: D } = await imp('slots-deploiement.js');
+/* 2026-10-24 : deploye par le proprietaire, adresse et bloc ecrits ENSEMBLE par noter-deploiement-slots (recu 0x1, input octet pour octet,
+ * relectures egales). Les refus B partent de la MEME fiche ramenee a l etat d avant (D0) : sinon chaque falsification serait refusee pour
+ * l adresse deja ecrite, et B passerait a vide. */
+const D0 = Object.freeze({ ...D, adresse: null, bloc: null });
+const avantDeploiement = (t) => t.replace(/^(\s*)adresse: '0x[0-9a-f]{40}',$/m, '$1adresse: null,').replace(/^(\s*)bloc: \d+, \/\*[^\n]*\*\/$/m, '$1bloc: null,');
 const { encoderConfig, verifierEnregistrement, ORDRE_CONFIG, usdc6, pct } = await imp('slots-config.js');
 const { USDC_BASE, FEE_WALLET } = await imp('frais-creation.js');
 const { BLOCKROLLS_DEPLOIEMENT: BR } = await imp('blockrolls-deploiement.js');
@@ -38,14 +43,14 @@ const C = D.constructeur;
 ok(C.usdc === USDC_BASE.toLowerCase() && C.devWallet === FEE_WALLET.toLowerCase() && C.usdc === BR.constructeur.usdc && C.devWallet === BR.constructeur.devWallet, 'A usdc = USDC_BASE, devWallet = FEE_WALLET (frais-creation.js), les memes que BlockRolls deploye');
 ok(C.spinPrice === String(P.spinPrice) && C.potShareBps === P.potShareBps && JSON.stringify(C.prizes) === JSON.stringify(P.prizes), 'A prix, part et table = contracts/slots-parametres.json');
 ok(sha(lire('contracts/src/BlockSlots.sol')) === D.sha256Sources['src/BlockSlots.sol'], 'A generee depuis la source ACTUELLE du contrat');
-ok(D.adresse === null && D.bloc === null, 'A pas deploye : adresse et bloc nuls ensemble');
+ok((D.adresse === null && D.bloc === null) || (/^0x[0-9a-f]{40}$/.test(String(D.adresse)) && Number.isSafeInteger(D.bloc) && D.bloc > 0), 'A adresse et bloc : tous deux nuls, ou tous deux ecrits (jamais l un sans l autre)');
 ok(octets.length - D.octetsArgs <= 49152 && octets.length > 5000, 'A le code de creation tient sous EIP-3860 (49 152 octets)');
 if (fs.existsSync(path.join(ICI, 'contracts/out/BlockSlots.sol/BlockSlots.json'))) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'slots-dep-'));
   const tmp = path.join(dir, 'slots-deploiement.js');
   try {
     execFileSync(process.execPath, ['preparer-deploiement-slots.mjs'], { cwd: path.join(ICI, 'contracts'), env: { ...process.env, SORTIE: tmp }, stdio: ['ignore', 'pipe', 'pipe'] });
-    ok(fs.readFileSync(tmp, 'utf8').replace(/\r\n/g, '\n') === lire('slots-deploiement.js'), 'A le preparateur relance regenere la fiche a l IDENTIQUE (deterministe)');
+    ok(fs.readFileSync(tmp, 'utf8').replace(/\r\n/g, '\n') === avantDeploiement(lire('slots-deploiement.js')),'A le preparateur relance regenere la fiche a l IDENTIQUE (deterministe)');
     /* une table trop genereuse (3 points -> 1 USDC) : le preparateur refuse, et n ecrit rien */
     const trop = path.join(dir, 'p.json'), sortie2 = path.join(dir, 'x.js');
     fs.writeFileSync(trop, JSON.stringify({ ...P, prizes: P.prizes.map((x, k) => (k === 3 || k === 4 ? '1200000' : x)) })); /* v2 : 1,2 USDC a 3 et 4 points -> ~0,28 > 0,25 */
@@ -58,11 +63,12 @@ if (fs.existsSync(path.join(ICI, 'contracts/out/BlockSlots.sol/BlockSlots.json')
 } else console.log('  (artefact forge absent : regeneration NON verifiee ici)');
 
 console.log('— B. le refus de la page');
-ok(verifierEnregistrement(D, sha(octets)).intacte, 'B la fiche vraie est acceptee');
-const falsifie = (patch) => { const d = { ...D, constructeur: { ...D.constructeur }, ...patch }; return verifierEnregistrement(d, sha(Buffer.from(d.creation.slice(2), 'hex'))); };
+ok(verifierEnregistrement(D0, sha(octets)).intacte, 'B la fiche vraie (avant deploiement) est acceptee');
+ok(D.adresse === null || !verifierEnregistrement(D, sha(octets)).intacte, 'B la fiche deployee n est plus proposee au deploiement (pas de 2e contrat)');
+const falsifie = (patch) => { const d = { ...D0, constructeur: { ...D0.constructeur }, ...patch }; return verifierEnregistrement(d, sha(Buffer.from(d.creation.slice(2), 'hex'))); };
 const dernier = D.creation.slice(-2) === '01' ? '02' : '01';
 ok(!falsifie({ creation: D.creation.slice(0, -2) + dernier }).intacte, 'B un octet change dans la donnee (le dernier prix) : refuse, meme avec une empreinte recalculee');
-ok(!verifierEnregistrement(D, sha(octets).replace(/^./, (c) => (c === 'a' ? 'b' : 'a'))).intacte, 'B une empreinte qui ne correspond pas : refuse');
+ok(!verifierEnregistrement(D0, sha(octets).replace(/^./, (c) => (c === 'a' ? 'b' : 'a'))).intacte, 'B une empreinte qui ne correspond pas : refuse');
 ok(!falsifie({ constructeur: { ...D.constructeur, prizes: D.constructeur.prizes.map((x, k) => (k === 15 ? '999000000' : x)) } }).intacte, 'B un prix AFFICHE different de l encode : refuse');
 ok(!falsifie({ constructeur: { ...D.constructeur, devWallet: '0x' + 'ab'.repeat(20) } }).intacte, 'B un wallet dev affiche different : refuse');
 ok(!falsifie({ creation: D.creation + '00' }).intacte && !falsifie({ octetsArgs: 608 }).intacte, 'B une longueur qui ne correspond pas : refuse');

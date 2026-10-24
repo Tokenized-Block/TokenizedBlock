@@ -6,10 +6,15 @@
 import { strict as assert } from 'node:assert';
 import { readFileSync } from 'node:fs';
 import { noter, RELECTURES } from './contracts/noter-deploiement-slots.mjs';
-import { SLOTS_DEPLOIEMENT as F } from './slots-deploiement.js';
+import { SLOTS_DEPLOIEMENT as REELLE } from './slots-deploiement.js';
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
-const texte = readFileSync(new URL('./slots-deploiement.js', import.meta.url), 'utf8');
+/* depuis le 2026-10-24 la fiche reelle porte l adresse signee : le banc rejoue noter() sur la MEME fiche ramenee a l etat d avant
+ * (memes octets de creation, adresse et bloc remis a null) -- il teste toujours la vraie donnee signee */
+const F = { ...REELLE, adresse: null, bloc: null };
+const texte = readFileSync(new URL('./slots-deploiement.js', import.meta.url), 'utf8')
+  .replace(/^(\s*)adresse: '0x[0-9a-f]{40}',(\r?)$/m, '$1adresse: null,$2').replace(/^(\s*)bloc: \d+, \/\*[^\n]*\*\/(\r?)$/m, '$1bloc: null,$2');
+vu(/^\s*adresse: null,\s*$/m.test(texte) && /^\s*bloc: null,\s*$/m.test(texte), 'texte ramene a l etat d avant le deploiement');
 const C = F.constructeur, A = '0x' + 'ab'.repeat(20), DE = '0x' + 'cd'.repeat(20), H = '0x' + '77'.repeat(32);
 const bon = () => ({ fiche: F, texte, tx: { hash: H, from: DE, to: null, input: F.creation }, recu: { status: '0x1', contractAddress: A, blockNumber: '0x3253f4b' },
   relectures: { 'USDC()': C.usdc, 'DEV_WALLET()': C.devWallet, 'SPIN_PRICE()': String(C.spinPrice), 'POT_SHARE_BPS()': String(C.potShareBps), 'prizes()': C.prizes.join(',') } });
