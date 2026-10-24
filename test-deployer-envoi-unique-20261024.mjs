@@ -194,7 +194,7 @@ try {
     {
       const page = lire(process.env[P.env] || P.nom);
       const script = (page.match(/<script type="module">([\s\S]*?)<\/script>/) || ['', ''])[1];
-      ok(/import \{ creerEnvoiCreation \} from '\.\/envoi-creation\.js';/.test(script) && !/data: D\.creation/.test(script.replace(/creation: D\.creation/, '')), P.nom + ' : la creation part par envoi-creation.js (aucun autre eth_sendTransaction de D.creation dans la page)');
+      ok(/import \{ creerEnvoiCreation(, phraseEnvoi)? \} from '\.\/envoi-creation\.js';/.test(script) && !/data: D\.creation/.test(script.replace(/creation: D\.creation/, '')), P.nom + ' : la creation part par envoi-creation.js (aucun autre eth_sendTransaction de D.creation dans la page)');
     }
   }
 

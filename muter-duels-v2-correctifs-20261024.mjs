@@ -8,11 +8,12 @@ import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 const ICI = path.dirname(fileURLToPath(import.meta.url));
-const SUIVI = 'test-duels-v2-suivi-20261024.mjs', BASC = 'test-temps-de-bloc-bascule-20261024.mjs', ENV_T = 'test-deployer-envoi-unique-20261024.mjs', NOT_T = 'test-noter-duels-v2-20261024.mjs';
+const SUIVI = 'test-duels-v2-suivi-20261024.mjs', BASC = 'test-temps-de-bloc-bascule-20261024.mjs', ENV_T = 'test-deployer-envoi-unique-20261024.mjs', NOT_T = 'test-noter-duels-v2-20261024.mjs', ONG_T = 'test-deployer-envoi-onglets-20261025.mjs';
 const P = ['duels-v2-plan.js', 'DUELS_V2_MODULE', SUIVI], AP = ['app.html', 'APP_HTML', SUIVI];
 const TB = ['temps-de-bloc.js', 'TEMPS_DE_BLOC', BASC], TC = ['temps-de-bloc-court.js', 'TEMPS_COURT', BASC], SW = ['serveur-web.js', 'SERVEUR_WEB', BASC];
 const E = ['envoi-creation.js', 'ENVOI_CREATION', ENV_T], PG2 = ['deployer-duels-v2.html', 'PAGE_DUELS_V2', ENV_T], PG1 = ['deployer-duels.html', 'PAGE_DUELS', ENV_T], PGS = ['deployer-slots.html', 'PAGE_SLOTS', ENV_T];
 const NO = ['contracts/noter-deploiement-duelsv2.mjs', 'NOTER_V2', NOT_T];
+const EO = ['envoi-creation.js', 'ENVOI_CREATION', ONG_T], PO2 = ['deployer-duels-v2.html', 'PAGE_DUELS_V2', ONG_T], PO1 = ['deployer-duels.html', 'PAGE_DUELS', ONG_T], POS = ['deployer-slots.html', 'PAGE_SLOTS', ONG_T];
 const DISABLED = "$('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse || !E.peutEnvoyer();";
 const M = [
   /* n°1 — le module de plan */
@@ -49,20 +50,46 @@ const M = [
   /* n°3 — une seule creation */
   [E, 'surBase : le changement cru sur parole', 'try { return (await chaine()) === bas(chaineHex); } catch (_) { return false; }', 'return true;'],
   [E, 'le hash n est pas garde', '      garder(tx);\n', ''],
-  [E, 'peutEnvoyer ignore le hash', 'peutEnvoyer: () => !s.tx && !s.enVol && !s.incertain', 'peutEnvoyer: () => !s.enVol && !s.incertain'],
+  [E, 'peutEnvoyer ignore le hash', 'peutEnvoyer: () => { relire(); return !bloque(); }', "peutEnvoyer: () => { relire(); const b = bloque(); return !b || b.etat === 'DEJA_ENVOYE'; }"],
   [E, 'envoyer ignore le hash garde', "    if (s.tx) return { etat: 'DEJA_ENVOYE', tx: s.tx };\n", ''],
-  [E, 'erreur sans hash : on renvoie', "        s.incertain = true;\n        return { etat: 'INCERTAIN', message: String", "        return { etat: 'INCERTAIN', message: String"],
-  [E, 'recu 0x0 : le hash reste (Deploy jamais rallume)', 'const tx = s.tx; oublier();', 'const tx = s.tx;'],
-  [E, 'le stockage n est pas relu au chargement', '{ const t = bas(lireStock()); if (HASH.test(t)) s.tx = t; }', ''],
-  [E, 'pas de verrou en vol', "    if (s.enVol) return { etat: 'EN_COURS' };\n    s.enVol = true;\n    try {\n      if (!(await surBase()))", '    s.enVol = true;\n    try {\n      if (!(await surBase()))'],
-  [E, 'refus 4001 pris pour une erreur', "        if (e && e.code === 4001) return { etat: 'DECLINE' };\n", ''],
+  [EO, 'erreur sans hash : on renvoie', "        marquerIncertain();\n        return { etat: 'INCERTAIN', message: String", "        return { etat: 'INCERTAIN', message: String"],
+  [E, 'recu 0x0 : le hash reste (Deploy jamais rallume)', '    oublier(tx);\n', ''],
+  /* « le stockage n est pas relu au chargement » retire (2026-10-25) : EQUIVALENT, chaque question (etat, peutEnvoyer, envoyer, verifier) relit */
+  [E, 'pas de verrou en vol', "    if (s.enVol) return { etat: 'EN_COURS' };\n    if (s.vu === 'ATTENTE')", "    if (s.vu === 'ATTENTE')"],
+  [E, 'refus 4001 pris pour une erreur', "        if (e && e.code === 4001) { if (bas(lireStock()) === MA_MARQUE) ecrireStock(null); return { etat: 'DECLINE' }; }\n", ''],
   [PG2, 'page v2 : Deploy rallume apres un envoi', DISABLED, "$('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;"],
-  [PG2, 'page v2 : pas de Check again', "$('#bRevoir').hidden = !tx || !!adresse;", "$('#bRevoir').hidden = true;"],
+  [PG2, 'page v2 : pas de Check again', "$('#bRevoir').hidden = !(tx || bloque) || !!adresse;", "$('#bRevoir').hidden = true;"],
   [PG1, 'page v1 : Deploy rallume apres un envoi', DISABLED, "$('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;"],
-  [PG1, 'page v1 : pas de Check again', "$('#bRevoir').hidden = !tx || !!adresse;", "$('#bRevoir').hidden = true;"],
+  [PG1, 'page v1 : pas de Check again', "$('#bRevoir').hidden = !(tx || bloque) || !!adresse;", "$('#bRevoir').hidden = true;"],
   [PGS, 'page slots : Deploy rallume apres un envoi', DISABLED, "$('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;"],
-  [PGS, 'page slots : pas de Check again', "$('#bRevoir').hidden = !tx || !!adresse;", "$('#bRevoir').hidden = true;"],
-  /* n°4 — noter */
+  [PGS, 'page slots : pas de Check again', "$('#bRevoir').hidden = !(tx || bloque) || !!adresse;", "$('#bRevoir').hidden = true;"],
+  /* dv2Review 2026-10-25 — deux onglets, page rechargee pendant la demande, « Check again » hors de Base */
+  [EO, 'envoyer : le hash d un autre onglet pas relu avant de demander au wallet', "  async function envoyer(from, { avant = null, envoye = null } = {}) {\n    relire();\n", '  async function envoyer(from, { avant = null, envoye = null } = {}) {\n'],
+  [EO, 'envoyer : pas relu apres le changement de reseau (course)', "      relire();\n      { const b = bloque(); if (b && b.etat !== 'EN_COURS') return b; }\n", ''],
+  [EO, 'peutEnvoyer ne relit pas le stockage', 'peutEnvoyer: () => { relire(); return !bloque(); }', 'peutEnvoyer: () => !bloque()'],
+  [EO, 'etat ne relit pas le stockage', 'etat: () => { relire(); return {', 'etat: () => { return {'],
+  [EO, 'pas de marque avant eth_sendTransaction', '      ecrireStock(MA_MARQUE);\n', ''],
+  [EO, 'refus 4001 : la marque reste', "{ if (bas(lireStock()) === MA_MARQUE) ecrireStock(null); return { etat: 'DECLINE' }; }", "{ return { etat: 'DECLINE' }; }"],
+  [EO, 'INCERTAIN pas garde dans le stockage', 'if (!v || v === MA_MARQUE) ecrireStock(INCERTAIN);', ''],
+  [EO, 'la marque d une autre page ignoree', "if (v.startsWith(ATTENTE)) { s.vu = v === MA_MARQUE && s.enVol ? null : 'ATTENTE'; return; }", 'if (v.startsWith(ATTENTE)) { s.vu = null; return; }'],
+  [EO, 'INCERTAIN du stockage ignore', "s.vu = v === INCERTAIN ? 'INCERTAIN' : null;", 's.vu = null;'],
+  [EO, 'un hash adopte n est pas garde (stockage seul)', 'if (HASH.test(v)) { if (!s.tx) s.tx = v; s.vu = null; return; }', 'if (HASH.test(v)) { s.vu = null; return; }'],
+  [EO, 'verifier : eth_chainId pas relu', "if (c !== bas(chaineHex)) return { etat: 'HORS_BASE'", "if (false) return { etat: 'HORS_BASE'"],
+  [EO, 'verifier : demande un changement de reseau', "let c = null; try { c = await chaine(); } catch (_) { c = null; }", "let c = null; try { await surBase(); c = await chaine(); } catch (_) { c = null; }"],
+  [EO, 'verifier : sans hash, rien (ATTENTE perdu)', "      return s.vu === 'ATTENTE' ? { etat: 'ATTENTE' } : { etat: 'RIEN' };", "      return { etat: 'RIEN' };"],
+  [EO, 'un 0x0 efface n importe quel hash', 'if (bas(lireStock()) === tx) ecrireStock(null);', 'ecrireStock(null);'],
+  [EO, 'liberer efface un hash garde', 'if (s.tx || s.enVol) return false;', 'if (s.enVol) return false; s.tx = null; ecrireStock(null);'],
+  [EO, 'liberer n efface pas le stockage', 'if (v === INCERTAIN || v.startsWith(ATTENTE)) ecrireStock(null);', ''],
+  [EO, 'phrase ATTENTE sans l historique du wallet', "look up this wallet\u2019s history on a block explorer. If a deployment was sent, do not deploy again: send its transaction hash to the team. If nothing was sent, press \u201cNothing was sent\u201d.';\n  if (e === 'INCERTAIN')", "press Check again.';\n  if (e === 'INCERTAIN')"],
+  ...[[PO2, 'v2'], [PO1, 'v1'], [POS, 'slots']].flatMap(([PG, nm]) => [
+    [PG, 'page ' + nm + ' : pas de « Nothing was sent »', "$('#bLiberer').hidden = !bloque || !!adresse;", "$('#bLiberer').hidden = true;"],
+    [PG, 'page ' + nm + ' : « Check again » exige un hash', '  { const st = E.etat(); if (!st.tx && !st.attente && !st.incertain) return; }', '  if (!E.etat().tx) return;'],
+    [PG, 'page ' + nm + ' : rien dit au chargement', '\nannoncer();\n</script>', '\n</script>'],
+    [PG, 'page ' + nm + ' : pas de repeint sur `storage`', "try { window.addEventListener('storage', () => { if (!envoi) { peindre(); annoncer(); } }); } catch (_) {}", ''],
+    [PG, 'page ' + nm + ' : Deploy bloque sans rien dire', '  if (compte && intacte && !envoi && !adresse && !E.peutEnvoyer()) { peindre(); annoncer(); return; }\n', ''],
+    [PG, 'page ' + nm + ' : la phrase du wallet hors de Base perdue', "  if (['INCERTAIN', 'ATTENTE', 'HORS_BASE', 'DEJA_ENVOYE'].includes(r.etat))", "  if (['INCERTAIN', 'ATTENTE', 'DEJA_ENVOYE'].includes(r.etat))"],
+  ]),
+  [AP, 'suivi : la copie finChaine ecrase le resultat d un Settle', '!loc?.finChaine && !loc?.settled && ', '!loc?.finChaine && '],  /* n°4 — noter */
   [NO, 'noter : noeud d une autre chaine accepte', "if (chaineNoeud !== '0x2105') return refus(", 'if (false) return refus('],
   [NO, 'noter : hash du bloc non compare', 'if (bas(hashBlocNoeud) !== hb) return refus(', 'if (false) return refus('],
   [NO, 'noter : eth_chainId du noeud jamais lu', "let chaineNoeud = null; try { chaineNoeud = bas(await rpc('eth_chainId', [])); } catch (_) { chaineNoeud = null; }", "let chaineNoeud = '0x2105';"],

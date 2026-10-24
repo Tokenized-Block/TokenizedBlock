@@ -6303,7 +6303,9 @@ async function suivreDuelApp(id) {
       lireStatut: async (i) => { try { return Duels.statutDepuisRetour(await rpc('eth_call', [{ to: contrat, data: Duels.appelDuelEtat(i) }, 'latest'])); } catch (_) { return null; } },
       surEtat: (x) => {
         if (Number.isSafeInteger(x.tete)) duelsCfg.teteLocale = Math.max(Number(duelsCfg.teteLocale) || 0, x.tete);
-        if (x.duel && x.duel.finChaine && !duelsCfg.locaux.get(k)?.finChaine) duelsCfg.locaux.set(k, x.duel);
+        /* revue 2026-10-25 (nit) : un duel local qui porte deja le resultat d un recu (settled, defaulted…) le garde ; la copie suivie
+         *   (finChaine, sans resultat) ne remplace qu un duel local qui n en a pas */
+        { const loc = duelsCfg.locaux.get(k); if (x.duel && x.duel.finChaine && !loc?.finChaine && !loc?.settled && !loc?.defaulted && !loc?.cancelled && !loc?.refunded) duelsCfg.locaux.set(k, x.duel); }
         if (x.change) void peindreDuels(); else majCompteDuel(k, x.texte);
       } });
   } finally { duelsCfg.suivis.delete(k); }

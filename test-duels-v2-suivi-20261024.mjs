@@ -194,6 +194,22 @@ if (srcSuivi) {
   const fin6 = await suivre6('1');
   ok(fin6 && fin6.etat === 'DEFAULT_CREATOR' && K6.env._repeints >= 2 && K6.env.duelsCfg.teteLocale >= 1003 + 257 && !K6.env.duelsCfg.suivis.has('1'),
     'suivreDuelApp : jusqu a la fin de la fenetre, ' + K6.env._repeints + ' repeints (a chaque changement d etat), tete locale tenue (' + K6.env.duelsCfg.teteLocale + '), suivi libere');
+  /* revue 2026-10-25 (nit) : un Settle CONFIRME pendant le suivi garde le RESULTAT du recu ; le suivi, qui lit ensuite « Settled » sur la
+   *   chaine, ne le remplace pas par sa copie sans resultat (finChaine) — la carte dirait sinon « the result shows here once it is read » */
+  {
+    const K7 = monter({ tete: 1001, statut: 'Settled' });
+    K7.env.duelsCfg.locaux.set('1', loc); K7.env._tR = 1003; K7.env._pas = 1;
+    const regle = V2.duelDepuisRecu(loc, [{ type: 'SETTLED', id: '1', blockHash: '0x' + '42'.repeat(32), scoreA: 2, scoreB: 3, winner: B, payout: 1_800_000n }]);
+    const noms7 = Object.keys(K7.env).filter((x) => !x.startsWith('_') && x !== 'liste');
+    const env7 = { ...K7.env, setTimeout: (f) => { setImmediate(f); return 0; } };
+    const suivre7 = new Function(...noms7, srcDuelsDe + srcSuivi + '\nreturn suivreDuelApp;')(...noms7.map((x) => env7[x]));
+    const p7 = suivre7('1');
+    K7.env.duelsCfg.locaux.set('1', regle); /* le recu du Settle arrive (noterRecuDuel) pendant que le suivi tourne */
+    const fin7 = await p7;
+    const apres7 = K7.env.duelsCfg.locaux.get('1');
+    ok(fin7 && fin7.etat === 'FINI_CHAINE' && apres7 && apres7.settled && apres7.settled.scoreB === 3 && apres7.settled.winner === B,
+      'suivreDuelApp : Settle confirme puis « Settled » lu sur la chaine : le duel local GARDE le resultat du recu (score 2-3, gagnant), pas la copie finChaine');
+  }
   ok(/const tete = Math\.max\(Number\(j\.tete\), Number\(duelsCfg\.teteLocale\) \|\| 0\)/.test(APP), 'peindreDuels : la tete = la plus haute du serveur et de la lecture locale');
   ok(/if \(e\.etat === 'ATTENTE' \|\| e\.etat === 'REGLABLE'\)/.test(srcLigne) && /data-compte|dataset\.compte/.test(srcLigne), 'ligneDuel : un compte a rebours (data-compte) sur ATTENTE et REGLABLE');
 }

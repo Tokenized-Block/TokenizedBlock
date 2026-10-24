@@ -88,6 +88,7 @@ b[data-k]{color:var(--or)}
       <button type="button" id="bConnecter" class="sec">Connect wallet</button>
       <button type="button" id="bDeployer" disabled>Deploy Block Slots</button>
       <button type="button" id="bRevoir" class="sec" hidden>Check again</button>
+      <button type="button" id="bLiberer" class="sec" hidden>Nothing was sent</button>
     </p>
     <p id="dEtat" class="note"></p>
     <dl id="dResultat" hidden>
@@ -119,7 +120,7 @@ import { distributionExacte, esperance, secondesFenetre, FENETRE } from './slots
 import { selecteur } from './keccak.js';
 /* revue 2026-10-24 (LOW n°3) : UNE creation au plus (hash garde, « Check again », eth_chainId relu apres un changement) : envoi-creation.js ;
  *   le depot du pot passe aussi par sa verification de reseau (eth_chainId relu) */
-import { creerEnvoiCreation } from './envoi-creation.js';
+import { creerEnvoiCreation, phraseEnvoi } from './envoi-creation.js';
 const $ = (s) => document.querySelector(s);
 const eth = () => window.ethereum;
 const CHAINE_HEX = '0x' + D.chaine.toString(16);
@@ -158,16 +159,17 @@ $('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((
 function peindre() {
   $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet pays the deployment gas; it gets no power over the game.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
-  const tx = E.etat().tx;
+  const st = E.etat(), tx = st.tx, bloque = !tx && (st.attente || st.incertain);
   $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse || !E.peutEnvoyer();
-  $('#bRevoir').hidden = !tx || !!adresse; $('#bRevoir').disabled = envoi;
+  $('#bRevoir').hidden = !(tx || bloque) || !!adresse; $('#bRevoir').disabled = envoi;
+  $('#bLiberer').hidden = !bloque || !!adresse; $('#bLiberer').disabled = envoi;
   if (tx) { $('#dResultat').hidden = false; $('#rTx').textContent = tx; }
   $('#bFonds').disabled = !compte || !adresse || envoi;
   if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second game.', 'note ok');
 }
 $('#bConnecter').addEventListener('click', async () => {
   if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
-  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); annoncer(); }
   catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
   peindre();
 });
@@ -180,7 +182,7 @@ const lireU = async (to, sig) => BigInt(await appel(to, sig));
 async function suite(r) {
   if (r.etat === 'PAS_BASE') { dire('Your wallet is not on Base. Switch it to Base, then try again. Nothing was sent.', 'note ko'); return; }
   if (r.etat === 'DECLINE') { dire('You declined in your wallet. Nothing was sent.', 'note ko'); return; }
-  if (r.etat === 'INCERTAIN') { dire('The wallet returned an error, so this page cannot tell whether it sent the transaction' + (r.message ? ' (' + r.message + ')' : '') + '. Deploy stays off: check your wallet activity first. If nothing was sent, reload this page.', 'note ko'); return; }
+  if (['INCERTAIN', 'ATTENTE', 'HORS_BASE', 'DEJA_ENVOYE'].includes(r.etat)) { dire(phraseEnvoi(r), 'note ko'); return; }
   if (r.etat === 'NON_CONFIRME') { dire('Not confirmed yet. Deploy stays off so nothing is sent twice: press Check again, or look up the transaction hash above on a block explorer.', 'note ko'); return; }
   if (r.etat === 'ECHOUE') { dire('The transaction was confirmed but failed: no contract was created. You can deploy again.', 'note ko'); return; }
   if (r.etat !== 'CONFIRME') return;
@@ -198,6 +200,7 @@ async function suite(r) {
   }
 }
 $('#bDeployer').addEventListener('click', async () => {
+  if (compte && intacte && !envoi && !adresse && !E.peutEnvoyer()) { peindre(); annoncer(); return; }
   if (!compte || !intacte || envoi || adresse || !E.peutEnvoyer()) return;
   envoi = true; peindre();
   try {
@@ -207,7 +210,8 @@ $('#bDeployer').addEventListener('click', async () => {
   } finally { envoi = false; peindre(); }
 });
 $('#bRevoir').addEventListener('click', async () => {
-  if (envoi || adresse || !E.etat().tx) return;
+  if (envoi || adresse) return;
+  { const st = E.etat(); if (!st.tx && !st.attente && !st.incertain) return; }
   envoi = true; peindre();
   try { dire('Checking the transaction again…'); await suite(await E.verifier()); }
   catch (e) { dire('The contract could not be read back: ' + String((e && e.message) || e).slice(0, 160) + '. Press Check again.', 'note ko'); }
@@ -236,8 +240,18 @@ $('#bFonds').addEventListener('click', async () => {
     direF(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
   } finally { envoi = false; peindre(); }
 });
+/* revue 2026-10-25 (dv2Review) : « Nothing was sent » — la personne a regarde l historique de son wallet : efface la marque ATTENTE /
+ *   INCERTAIN (jamais un hash garde). Un autre onglet qui ecrit le stockage fait repeindre celui-ci. */
+$('#bLiberer').addEventListener('click', () => {
+  if (envoi || adresse) return;
+  if (E.liberer()) dire('Deploy is on again. Press it only if your wallet history shows that no deployment was sent from this page.');
+  peindre();
+});
+try { window.addEventListener('storage', () => { if (!envoi) { peindre(); annoncer(); } }); } catch (_) {}
+function annoncer() { if (adresse || D.adresse) return; const st = E.etat(); const etat = st.tx ? 'DEJA_ENVOYE' : st.incertain ? 'INCERTAIN' : st.attente ? 'ATTENTE' : null; if (etat) dire(phraseEnvoi({ etat }), 'note ko'); }
 try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; peindre(); }); } catch (_) {}
 peindre();
+annoncer();
 </script>
 </body>
 </html>
