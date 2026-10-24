@@ -4984,6 +4984,8 @@ function poserBoutonsRolls(t, c) {
     jb('jbPass', usdcTexte(rollsCfg.prixPass) + ' USDC'); jb('jbPassTxt', '7 days of tickets + ' + rollsCfg.passRolls + ' rolls');
   }
   if (on) { bp.textContent = 'Roll · ' + usdcTexte(rollsCfg.prixRoll) + ' USDC'; bd.textContent = 'Week pass · ' + usdcTexte(rollsCfg.prixPass) + ' USDC'; }
+  /* 2026-10-24 (revue 3) : un lien froid #game/roll tape avant /api/tirage : le focus attendu arrive sur le roll visible (paye ou d entrainement) */
+  try { jeuReprendreFocus(); } catch (_) { /* hors de la page (banc) */ }
   /* Auto-roll : avec le contrat, 5 rolls REELS (sur le pass s il est actif, sinon payes) — son texte le dit avant le clic */
   const ba = $('#jourAuto');
   if (ba) ba.textContent = on ? 'Auto-roll ×5 · pass or ' + usdcTexte(BigInt(rollsCfg.prixRoll) * 5n) + ' USDC' : 'Auto-roll ×5';
@@ -6070,7 +6072,31 @@ function montrerJeu(id, focusId, opts) {
     else if (carte && (o.defiler === 'siCache' ? jeuHorsVue(carte) : o.defiler !== false)) carte.scrollIntoView({ block: 'start', behavior: 'smooth' });
   } catch (_) { /* sans defilement doux */ }
   if (visible) { try { el.focus({ preventScroll: true }); } catch (_) {} }
+  /* 2026-10-24 (revue 3, defaut 4) : un bouton pas encore visible (lien froid #game/slots : la zone des Slots n apparait qu apres /api/slots,
+   *   ~32 s mesurees a 375 px) : le focus ATTEND, et jeuReprendreFocus le donne quand le peintre montre le bouton */
+  /*   un bouton visible mais REMPLACABLE (le roll d entrainement, que le Roll paye remplace quand /api/tirage et le wallet arrivent) attend aussi */
+  jeuFocusAttente = focusId && (!visible || !!(el && JEU_FOCUS_SINON[el.id])) ? { id, focusId, jusqua: Date.now() + 120000 } : null;
   return vu;
+}
+let jeuFocusAttente = null;
+/** les peintres (Slots apres /api/slots, Rolls apres /api/tirage) : un focus en attente est donne si son bouton est maintenant VISIBLE, sur
+ *  la carte encore montree, sans geste du visiteur depuis (un toucher ou une touche l annule), dans les 2 min ; rend vrai s il l a donne */
+function jeuReprendreFocus() {
+  const a = jeuFocusAttente;
+  if (!a) return false;
+  if (Date.now() > a.jusqua) { jeuFocusAttente = null; return false; }
+  if (jeuMontre !== a.id) return false;
+  let cible = document.getElementById(a.focusId);
+  const autre = cible && cible.hidden && JEU_FOCUS_SINON[cible.id] ? document.getElementById(JEU_FOCUS_SINON[cible.id]) : null;
+  if (autre && !autre.hidden) cible = autre;
+  const repli = cible && !cible.hidden && typeof cible.closest === 'function' ? cible.closest('details') : null;
+  if (repli && !repli.open) repli.open = true;
+  if (!cible || cible.hidden || cible.offsetParent === null) return false;
+  jeuFocusAttente = null;
+  if (document.activeElement === cible) return true;
+  try { cible.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) { /* sans defilement doux */ }
+  try { cible.focus({ preventScroll: true }); } catch (_) { /* focus refuse */ }
+  return true;
 }
 /* une tuile = un choix : elle MONTRE sa carte et, si son bouton est VISIBLE, lui donne le focus (un tap de plus = le geste) */
 for (const b of jeuTuiles()) b.addEventListener('click', () => { montrerJeu(b.getAttribute('data-jeu'), b.getAttribute('data-focus'), { defiler: 'siCache' }); });
@@ -6080,7 +6106,9 @@ peindreChoixJeu();
  *   ~37 s (lecture de la chaine) — la carte aurait change SOUS la main du visiteur. Des qu il touche l onglet Game (doigt, souris, clavier),
  *   la carte qu il voit devient son choix : un retour tardif ne remplace plus ce qu il est en train d utiliser. */
 { const v = document.getElementById('v-missions'); const fige = () => { if (jeuMontre && jeuMontre !== jeuVoulu) jeuVoulu = jeuMontre; };
-  if (v) { v.addEventListener('pointerdown', fige, true); v.addEventListener('keydown', fige, true); } }
+  /* 2026-10-24 (revue 3) : le meme geste annule un focus en attente (jeuReprendreFocus ne prend pas la main au visiteur) */
+  const lache = () => { fige(); jeuFocusAttente = null; };
+  if (v) { v.addEventListener('pointerdown', lache, true); v.addEventListener('keydown', lache, true); } }
 /* ══ FIN DU CHOIX DU JEU */
 const jb = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
 $('#missionForm').addEventListener('submit', async (e) => {
@@ -7065,7 +7093,10 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) roul
 const slotsCfg = { j: null, lu: 0, enVol: null, enCours: false, dernier: null, dernierFaces: null, table: false, minuteur: null, peint: null, suite: null,
   cle: null, spins: new Map(), clos: new Set(), scanne: null, hashes: new Map(), moi: null, vue: null, peintA: 0, msBloc: null, msBlocA: 0,
   /* 2026-10-24 : le panneau de reponse — le spin suivi { id, t }, le bilan du dernier envoi, la derniere reponse peinte */
-  suivi: null, dernierBilan: null, reponse: null };
+  suivi: null, dernierBilan: null, reponse: null,
+  /* 2026-10-24 (revue 3) : les spins clos vus ici (id -> { t, st }), le resultat d un spin suivi regle AILLEURS, le spin dont les trois
+   *   faces se sont posees une fois (les rouleaux repartent en LIVE apres RESULTAT_MS : le panneau garde le resultat) */
+  fermes: new Map(), ailleurs: null, poseVu: null };
 const SLOTS_TRAITS = ['colour', 'orbit', 'facet', 'material', 'ornament'];
 const slotsContrat = (j) => (j && j.ok && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
 async function lireSlotsServis(force = false) {
@@ -7162,6 +7193,30 @@ async function hashesSlots(t) {
   const h = ns.map((n) => slotsCfg.hashes.get(n));
   return h.every(Boolean) ? h : null;
 }
+/* 2026-10-24 (revue 3, defaut 2) : le spin suivi a ete regle par une AUTRE transaction (statut 2 lu : le regleur du serveur, ou n importe
+ *   qui) — son resultat est DIT. D abord son evenement Settled (emis par CE contrat, pour CE spin et CE joueur, entre son bloc et la fin de sa
+ *   fenetre : 259 blocs au plus) ; sinon il est RECALCULE de ses trois blocs et de la table : settle et settleMany ne paient que le prix
+ *   ENTIER, donc le prix est dit paye s il tenait dans le pot lu avant ce tour, sinon le montant est dit non lu. La source est dite. Lecture
+ *   seule ; l evenement est relu (3 essais) tant qu il ne l a pas ete. */
+async function lireRegleAilleurs({ contrat, moi, id, t, tete, table, potAvant, avant = null }) {
+  const r = { id: String(id), lu: false, essais: (avant && avant.essais ? avant.essais : 0) + 1, hashes: avant ? avant.hashes : null, bilan: avant ? avant.bilan : { id: String(id), issue: 'REGLE_AILLEURS' } };
+  const tt = Number(t);
+  if (!Number.isSafeInteger(tt) || !Number.isSafeInteger(tete)) return r;
+  try {
+    const mot = (x) => '0x' + BigInt(x).toString(16).padStart(64, '0');
+    const jusqua = Math.min(tete, tt + Slots.FENETRE + Slots.DELAI_CIBLE + 1);
+    const logs = await rpc('eth_getLogs', [{ address: contrat, topics: [topicDe(Slots.EV_SETTLED), mot(id), mot(moi)], fromBlock: '0x' + tt.toString(16), toBlock: '0x' + Math.max(tt, jusqua).toString(16) }]);
+    const d = Slots.lireSettledTous(logs, contrat).find((x) => String(x.spinId) === String(id) && x.player === moi);
+    if (d) return { ...r, lu: true, hashes: d.blockHashes, bilan: { id: String(id), issue: 'REGLE_AILLEURS', points: d.points, prix: table[d.points], paie: d.payout, source: 'evenement' } };
+  } catch (_) { /* recalcule ci-dessous */ }
+  if (r.bilan && r.bilan.source === 'calcul') return r;
+  const h = await hashesSlots(tt);
+  if (!h) return r;
+  /* ⛔ 2026-10-25 (revue adverse, defaut confirme) : acceptCapped (le joueur seul, BlockSlots.sol:254) regle aussi en statut 2 avec MOINS
+   *   que le prix : un montant recalcule n est JAMAIS dit paye. Points et prix de la table, oui ; « the amount paid was not read ». */
+  const points = Slots.points(Slots.facesDuSpin(h, id)), prix = table[points];
+  return { ...r, hashes: h, bilan: { id: String(id), issue: 'REGLE_AILLEURS', points, prix, source: 'calcul' } };
+}
 /* les spins de ce wallet encore EN ATTENTE : les Spun lus par TRANCHES (la premiere bornee, puis les seuls blocs nouveaux), le statut relu
  * des seuls spins non clos ; un spin clos (regle, ou marque perdu) sort de la liste pour de bon. Une lecture ratee jette : rien n est devine. */
 async function spinsEnAttenteSlots(contrat, moi, j, tete) {
@@ -7177,7 +7232,7 @@ async function spinsEnAttenteSlots(contrat, moi, j, tete) {
     /* ⛔ 2026-10-24 (audit) : statut 0 (None) pour un spin VU = un noeud en retard d un bloc : NON lu, relu au repeint suivant, jamais clos */
     if (st === 0) st = null;
     statuts.set(id, st);
-    if (st !== null && st !== 1) { slotsCfg.spins.delete(id); slotsCfg.clos.add(id); change = true; }
+    if (st !== null && st !== 1) { slotsCfg.fermes.set(id, { t: slotsCfg.spins.get(id).t, st }); while (slotsCfg.fermes.size > 50) slotsCfg.fermes.delete(slotsCfg.fermes.keys().next().value); slotsCfg.spins.delete(id); slotsCfg.clos.add(id); change = true; }
   }
   return { spuns: [...slotsCfg.spins.values()].map((s) => ({ spinId: BigInt(s.id), targetBlock: s.t })), statuts, change };
 }
@@ -7223,9 +7278,17 @@ function peindreReponseSlots(tete = null) {
   const plan = vue && Number.isSafeInteger(t) ? Slots.planReglement({ ...vue, tete: t }) : null;
   let posees = false;
   try { posees = !!(s && rouleauxJeu.pose(String(s.id))); } catch (_) { posees = !!s; /* sans rouleaux (banc) : les faces sont peintes tout de suite */ }
+  /* 2026-10-24 (revue 3) : posees UNE fois = posees (les rouleaux repartent en LIVE apres le resultat ; le panneau le garde) */
+  if (s && posees) slotsCfg.poseVu = String(s.id);
+  else if (s && slotsCfg.poseVu === String(s.id)) posees = true;
   let arret = false;
   try { const a = payerArrets.get('slotsEtat'); arret = !!(a && slotsCfg.dernier === a.texte); } catch (_) { arret = false; }
-  const bilan = s && Array.isArray(slotsCfg.dernierBilan) ? slotsCfg.dernierBilan.find((b) => String(b.id) === String(s.id)) || null : null;
+  /* le bilan du spin suivi : celui d un envoi d ici ; sinon (statut lu sur la chaine) regle AILLEURS avec son resultat, ou perdu (Expired) */
+  const sid = s ? String(s.id) : null;
+  const ici = sid && Array.isArray(slotsCfg.dernierBilan) ? slotsCfg.dernierBilan.find((b) => String(b.id) === sid) || null : null;
+  const ailleurs = sid && slotsCfg.ailleurs && slotsCfg.ailleurs.id === sid ? slotsCfg.ailleurs.bilan : null;
+  const ferme = sid ? slotsCfg.fermes.get(sid) || null : null;
+  const bilan = ici && ici.issue !== 'REGLE_AILLEURS' && ici.issue !== 'NON_LU' ? ici : ailleurs || ici || (ferme && ferme.st === 3 ? { id: sid, issue: 'PERDU' } : null);
   const ms = j && j.regleur && Number(j.regleur.msParBlocMesure) > 0 ? Number(j.regleur.msParBlocMesure) : slotsCfg.msBloc;
   const r = reponseSpin({ moi: !!c && !!vue, suivi: s, plan, tete: t, posees, regleurOn: !!(j && j.regleur && j.regleur.etat === 'ON'), msParBloc: ms, bilan, arret });
   ol.innerHTML = etapesHtml(r.etapes);
@@ -7328,11 +7391,13 @@ async function peindreSlotsUneFois(force = false) {
   /* 2026-10-24 (Phil : « un clic ») : LE bouton du jeu, toujours la avec un contrat servi — sans wallet il connecte (connecterPourSpin) */
   bS.textContent = moi ? 'Spin · ' + usdcTexte(prix) + ' USDC' : 'Connect a wallet to spin';
   bS.hidden = false; bS.disabled = slotsCfg.enCours;
+  /* 2026-10-24 (revue 3) : un lien froid #game/slots (ou la tuile) tape avant /api/slots : le focus attendu arrive maintenant sur Spin */
+  try { jeuReprendreFocus(); } catch (_) { /* hors de la page (banc) */ }
   try { void peindrePayerAvec().catch(() => {}); } catch (_) { /* hors de la page (banc) */ }
   if (!moi) { bR.hidden = true; bA.hidden = true; slotsCfg.vue = null; slotsCfg.suivi = null; slotsListe([]); etat.textContent = 'Pot ' + (pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. A spin costs ' + usdcTexte(prix) + ' USDC.'; mien.textContent = ''; try { peindreReponseSlots(); } catch (_) { /* hors de la page (banc) */ } return null; }
   /* un autre wallet ou un autre contrat : rien de l ancien n est garde */
   const cle = contrat + ':' + moi;
-  if (slotsCfg.cle !== cle) { slotsCfg.cle = cle; slotsCfg.spins = new Map(); slotsCfg.clos = new Set(); slotsCfg.scanne = null; slotsCfg.moi = null; slotsCfg.vue = null; slotsCfg.dernier = null; slotsCfg.dernierFaces = null; slotsCfg.suivi = null; slotsCfg.dernierBilan = null; }
+  if (slotsCfg.cle !== cle) { slotsCfg.cle = cle; slotsCfg.spins = new Map(); slotsCfg.clos = new Set(); slotsCfg.scanne = null; slotsCfg.moi = null; slotsCfg.vue = null; slotsCfg.dernier = null; slotsCfg.dernierFaces = null; slotsCfg.suivi = null; slotsCfg.dernierBilan = null; slotsCfg.fermes = new Map(); slotsCfg.ailleurs = null; slotsCfg.poseVu = null; }
   let lu = null, tete = null;
   try { tete = parseInt(await rpc('eth_blockNumber', []), 16); lu = Number.isSafeInteger(tete) ? await spinsEnAttenteSlots(contrat, moi, j, tete) : null; } catch (_) { lu = null; }
   /* les points et les gains ne bougent que quand un spin de ce wallet se clot : relus alors (ou sur demande), pas a chaque repeint */
@@ -7356,6 +7421,8 @@ async function peindreSlotsUneFois(force = false) {
   const nonLus = enAttente.length - spins.length;
   /* v3 (defaut 1) : CHAQUE spin, dans l ordre du contrat, le pot baissant spin apres spin ; R2 : le chemin Settle part de CETTE vue */
   const plan = Slots.planReglement({ spins, pot, table, tete, marge });
+  /* 2026-10-24 (revue 3) : le pot lu AVANT ce tour (un spin regle ailleurs entre les deux : son prix recalcule se compare a lui) */
+  const potAvant = slotsCfg.vue ? slotsCfg.vue.pot : null;
   slotsCfg.vue = { spins, pot, table, tete, marge, nonLus };
   const lot = plan.lignes.filter((l) => l.decision === 'LOT');
   bR.hidden = lot.length === 0;
@@ -7376,11 +7443,30 @@ async function peindreSlotsUneFois(force = false) {
   const duBouton = [...plan.lot].reverse().map((id) => parId.get(String(id))).find((s) => s && s.faces)
     || (court ? [parId.get(String(court.id))].find((s) => s && s.faces) : null);
   const montre = duBouton || [...spins].reverse().find((s) => s.faces || etatDe.get(String(s.id)) === 'TROP_TOT');
-  if (montre) peindreFacesSlots(montre.faces ? montre.hashes : null, montre.id, montre.t);
-  else if (slotsCfg.dernierFaces) peindreFacesSlots(slotsCfg.dernierFaces.hashes, slotsCfg.dernierFaces.id);
-  else peindreFacesSlots(null, 0);
-  /* 2026-10-24 (Phil : « une reponse ») : le panneau suit LE spin des rouleaux (jamais un autre) : en attente / reglable, sinon le dernier regle ici */
-  slotsCfg.suivi = montre ? { id: String(montre.id), t: montre.t } : slotsCfg.dernierFaces ? { id: String(slotsCfg.dernierFaces.id), t: null } : null;
+  /* ⛔ 2026-10-24 (revue 3, defauts 2 et 3) : le panneau suivait le spin du bouton A CHAQUE repeint — un spin envoye ici disparaissait derriere
+   *   un ancien reglable, et un spin regle par le regleur disparaissait sans son resultat. Desormais le panneau (et les rouleaux avec lui)
+   *   suit UN spin du debut a la fin : celui envoye ici (pose a l envoi), sinon le premier montre ; il ne change qu au prochain envoi (ou
+   *   quand ce spin n est plus connu du tout). Ses lignes nomment son spin quand un autre vit a cote (reponse-spin.js). */
+  const sid = slotsCfg.suivi ? String(slotsCfg.suivi.id) : null;
+  const lui = sid ? spins.find((s) => String(s.id) === sid) || null : null;
+  const ferme = sid && !lui ? slotsCfg.fermes.get(sid) || null : null;
+  if (lui) { peindreFacesSlots(lui.faces ? lui.hashes : null, lui.id, lui.t); slotsCfg.suivi = { id: sid, t: lui.t }; }
+  else if (sid && slotsCfg.spins.has(sid)) { /* en attente, statut non lu a ce tour : le meme spin, les memes rouleaux */ }
+  else if (sid && slotsCfg.dernierFaces && String(slotsCfg.dernierFaces.id) === sid) { peindreFacesSlots(slotsCfg.dernierFaces.hashes, sid); slotsCfg.suivi = { id: sid, t: null }; }
+  else if (ferme) {
+    /* regle AILLEURS (statut 2 lu : le regleur du serveur, ou une autre transaction) : son resultat, lu une fois (lireRegleAilleurs) */
+    const a0 = slotsCfg.ailleurs && slotsCfg.ailleurs.id === sid ? slotsCfg.ailleurs : null;
+    if (ferme.st === 2 && (!a0 || (!a0.lu && a0.essais < 3))) { try { slotsCfg.ailleurs = await lireRegleAilleurs({ contrat, moi, id: sid, t: ferme.t, tete, table, potAvant, avant: a0 }); } catch (_) { /* relu au repeint suivant */ } }
+    const a = slotsCfg.ailleurs && slotsCfg.ailleurs.id === sid ? slotsCfg.ailleurs : null;
+    if (a && a.hashes) peindreFacesSlots(a.hashes, sid); else peindreFacesSlots(null, 0);
+    slotsCfg.suivi = { id: sid, t: null };
+  } else {
+    if (montre) peindreFacesSlots(montre.faces ? montre.hashes : null, montre.id, montre.t);
+    else if (slotsCfg.dernierFaces) peindreFacesSlots(slotsCfg.dernierFaces.hashes, slotsCfg.dernierFaces.id);
+    else peindreFacesSlots(null, 0);
+    /* 2026-10-24 (Phil : « une reponse ») : le panneau suit LE spin des rouleaux (jamais un autre) : en attente / reglable, sinon le dernier regle ici */
+    slotsCfg.suivi = montre ? { id: String(montre.id), t: montre.t } : slotsCfg.dernierFaces ? { id: String(slotsCfg.dernierFaces.id), t: null } : null;
+  }
   const lignes = slotsLignes(plan);
   if (nonLus) lignes.push({ texte: nonLus + ' recent spin(s) could not be read just now.', court: false });
   slotsListe(lignes);
@@ -7460,7 +7546,12 @@ async function slotsAgir(quoi) {
       for (const s of sp) if (!slotsCfg.spins.has(String(s.spinId))) slotsCfg.spins.set(String(s.spinId), { id: String(s.spinId), t: s.targetBlock });
       slotsCfg.dernier = null;
       /* 2026-10-24 : le panneau suit le spin qui vient de partir (1 envoye, 2 ses blocs) jusqu au repeint qui le relit sur la chaine */
-      if (sp.length) { slotsCfg.suivi = { id: String(sp[0].spinId), t: sp[0].targetBlock }; slotsCfg.dernierBilan = null; }
+      /* ⛔ 2026-10-24 (revue 3, defaut 3) : un nouvel envoi remet a zero TOUT l etat du panneau du spin d avant (ses faces, son bilan, son
+       *   resultat regle ailleurs) : le panneau ne revient jamais sur l ancien spin */
+      slotsCfg.dernierBilan = null; slotsCfg.dernierFaces = null; slotsCfg.ailleurs = null; slotsCfg.poseVu = null;
+      slotsCfg.suivi = sp.length ? { id: String(sp[0].spinId), t: sp[0].targetBlock } : null;
+      /* les rouleaux suivent ce spin TOUT DE SUITE (pas au repeint 1,5 s plus tard) : panneau et rouleaux parlent du meme spin */
+      if (sp.length) { try { peindreFacesSlots(null, sp[0].spinId, sp[0].targetBlock); } catch (_) { /* hors de la page (banc) */ } }
       dit(sp.length ? 'Spin #' + sp[0].spinId + ' is in: blocks ' + Slots.blocsDesFaces(sp[0].targetBlock).join(', ') + ' draw your three faces, one each.' : 'Sent; the spin was not read in the receipt — it shows up here once read.');
       try { peindreReponseSlots(); } catch (_) { /* hors de la page (banc) */ }
     } else {
@@ -7478,7 +7569,10 @@ async function slotsAgir(quoi) {
         }
       }
       const bilan = Slots.bilanReglement({ envoyes, settled: st, statuts, tete, table: vue.table, blocRecu });
-      const d = st[st.length - 1];
+      /* 2026-10-24 (revue 3) : les faces montrees sont celles du spin SUIVI s il est dans le recu (un autre spin regle ici ne prend pas sa
+       *   place : son bilan est sur la ligne d etat) ; aucun spin suivi : le dernier regle */
+      const sid0 = slotsCfg.suivi ? String(slotsCfg.suivi.id) : null;
+      const d = sid0 !== null ? st.find((x) => String(x.spinId) === sid0) || null : st[st.length - 1];
       if (d) { peindreFacesSlots(d.blockHashes, d.spinId); slotsCfg.dernierFaces = { hashes: d.blockHashes, id: d.spinId }; }
       slotsCfg.dernier = [...bilan.map((b) => Slots.phraseApres(b)), ...laisses.map((l) => Slots.phraseAvant(l))].join(' ');
       dit(slotsCfg.dernier);

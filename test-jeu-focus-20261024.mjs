@@ -37,7 +37,9 @@ function code(t) {
   const choix = entre(t, '/* ══ UN JEU A LA FOIS (2026-10-24)', '/* ══ FIN DU CHOIX DU JEU */');
   const lien = entre(t, 'function ouvrirJeuDuLien(', '\n/* ── Bridge (tip');
   const morceaux = { choix, lien, palConstruire: fonction(t, 'function palConstruire('), palChoisir: fonction(t, 'function palChoisir('),
-    postTask: fonction(t, 'function bcCommandePostTask('), suivre: fonction(t, 'async function suivreRollsEnAttente('), duel: fonction(t, 'function ouvrirDuel(') };
+    postTask: fonction(t, 'function bcCommandePostTask('), suivre: fonction(t, 'async function suivreRollsEnAttente('), duel: fonction(t, 'function ouvrirDuel('),
+    /* revue 3 : le peintre des boutons Roll (apres /api/tirage) redonne le focus attendu d un lien froid #game/roll */
+    rolls: fonction(t, 'function poserBoutonsRolls(') };
   return { morceaux, tout: Object.values(morceaux).join('\n') };
 }
 
@@ -139,9 +141,12 @@ function monter(texte, { stock = 'ok', garde = null, hash = '', avant = null } =
     bcMessage: () => ({}), bcEtape: () => {}, bcBoutons: (m, l) => { boutons.push(...l); }, mesBlocksPourMission: () => {},
     verifierRollsEnAttente: async () => ({ reglables: [{ blocsRestants: 12 }], tropTot: [], perdus: [] }), texteBlocs: () => '12 blocks', sParBlocApp: 2, intervalleJeuMs: () => 5000,
     duelsCfg: {}, peindreDuels: null,
+    /* poserBoutonsRolls */
+    rollsCfg: null, Rg: { gainMax: () => null, texteGains: () => '', PHRASE_GAINS_NON_LUS: 'Prizes not read' }, usdcTexte: (x) => (Number(x) / 1e6).toFixed(2), jb: () => {},
+    peindrePayerAvec: async () => {},
   };
   Object.defineProperty(ctx, 'localStorage', { get() { if (stock === 'absent') throw new Error('SecurityError: localStorage'); return st; } });
-  const noms = ['montrerJeu', 'peindreChoixJeu', 'palConstruire', 'palChoisir', 'bcCommandePostTask', 'suivreRollsEnAttente', 'ouvrirDuel', 'ouvrirJeuDuLien'];
+  const noms = ['montrerJeu', 'peindreChoixJeu', 'palConstruire', 'palChoisir', 'bcCommandePostTask', 'suivreRollsEnAttente', 'ouvrirDuel', 'ouvrirJeuDuLien', 'jeuReprendreFocus', 'poserBoutonsRolls'];
   /* sloppy : `with` donne au code les memes noms libres que la page (localStorage peut JETER a la lecture, comme en navigation privee) */
   const f = new Function('ctx', 'with (ctx) { return (function () {\n' + tout + '\n;return {' + noms.map((k) => k + ': typeof ' + k + " === 'function' ? " + k + ' : null').join(', ') + '}; })(); }');
   const api = f(ctx);
@@ -355,6 +360,37 @@ S.ORDRE = (t) => {
   const dernierJeu = Math.max(...JEUX.map(pos)), premierAutre = Math.min(...PAS_JEUX.map(pos));
   return { ok: JEUX.every((id) => pos(id) > 0) && dernierJeu < premierAutre, dernierJeu, premierAutre };
 };
+/* FROID (revue 3, defaut 4 — mesure au navigateur a 375 px : la zone des Slots restait cachee ~32 s pendant /api/slots, et le focus du
+ *   lien #game/slots n etait jamais redonne). Le lien est ouvert AVANT que le bouton soit visible ; le peintre le montre ensuite et appelle
+ *   jeuReprendreFocus : Spin recoit le focus, visible. Un geste du visiteur entre les deux l annule. #game/roll : le lien donne le focus au
+ *   roll d entrainement, puis le VRAI poserBoutonsRolls (contrat + wallet) le remplace par le Roll paye — le focus suit, pli ouvert. */
+S.FROID = async (t) => {
+  const cache = (dom) => { dom.el('jbSlotsTuile').hidden = true; dom.el('slotsZone').hidden = true; dom.el('slotsSpin').hidden = true; };
+  const montrer = (app) => { app.dom.el('jbSlotsTuile').hidden = false; app.dom.el('slotsZone').hidden = false; app.dom.el('slotsSpin').hidden = false; app.peindreChoixJeu(); };
+  const app = monter(t, { avant: cache });
+  if (typeof app.jeuReprendreFocus !== 'function') return { ok: false, pourquoi: 'jeuReprendreFocus absent' };
+  app.ouvrirJeuDuLien('game/slots');
+  /* un repeint avant que Spin soit visible : rien (jamais un focus sur un bouton cache) */
+  const a0 = app.dom.etat.focus === null && app.jeuReprendreFocus() === false && app.dom.etat.focus === null;
+  montrer(app);
+  const ra = app.jeuReprendreFocus();
+  const a = a0 && ra === true && app.dom.etat.focus === 'slotsSpin' && app.dom.etat.focusVu.every((x) => x.vu);
+  /* un deuxieme appel (le repeint suivant) ne reprend plus rien */
+  const a2 = app.jeuReprendreFocus() === false;
+  /* le visiteur touche l onglet avant la reponse : aucun focus ne lui est pris */
+  const app2 = monter(t, { avant: cache });
+  app2.ouvrirJeuDuLien('game/slots');
+  app2.dom.el('v-missions').ecoute.pointerdown();
+  montrer(app2);
+  const b = app2.jeuReprendreFocus() === false && app2.dom.etat.focus === null;
+  /* #game/roll froid : le roll d entrainement d abord, puis le Roll paye (le vrai poserBoutonsRolls) */
+  const app3 = monter(t);
+  app3.ouvrirJeuDuLien('game/roll');
+  const c0 = app3.dom.etat.focus === 'jourRoll';
+  app3.poserBoutonsRolls({ ok: true, rolls: { contrat: '0x' + 'ab'.repeat(20), prixRoll: '500000', prixPass: '5000000', passRolls: 30 } }, '0x' + 'a1'.repeat(20));
+  const c = c0 && app3.dom.el('jourRoll').hidden === true && app3.dom.etat.focus === 'jourRollPaye' && app3.dom.el('rollPli').open === true && app3.dom.etat.focusVu.every((x) => x.vu);
+  return { ok: a && a2 && b && c, a0, ra, a, a2, b, c0, c, f3: app3.dom.etat.focus };
+};
 
 const NOMS = Object.keys(S);
 for (const k of NOMS) { const r = await S[k](APP); vu(r.ok === true, 'page executee : ' + k + (r.ok ? '' : ' ' + JSON.stringify(r))); }
@@ -395,6 +431,12 @@ const MUTANTS = [
     "  const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.slots = on ? '1' : '0';\n"],
   ['PEINTRES', 'le peintre des Duels ne repose plus le choix', "  const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.n = on ? '7' : '6';\n  /* UN JEU A LA FOIS : la tuile vient d apparaitre ou de partir — le choix est repose (retombe sur tirCarte sans elle) */\n  try { peindreChoixJeu(); } catch (_) { /* hors de la page (banc) */ }\n",
     "  const bd = document.querySelector('.jeuBandeau'); if (bd) bd.dataset.n = on ? '7' : '6';\n"],
+  /* revue 3, defaut 4 : le lien froid */
+  ['FROID', 'le focus attendu n est jamais garde', '  jeuFocusAttente = focusId && (!visible || !!(el && JEU_FOCUS_SINON[el.id])) ? { id, focusId, jusqua: Date.now() + 120000 } : null;', '  jeuFocusAttente = null;'],
+  ['FROID', 'le roll d entrainement remplacable n attend pas le Roll paye', '(!visible || !!(el && JEU_FOCUS_SINON[el.id]))', '(!visible)'],
+  ['FROID', 'un geste du visiteur n annule pas le focus attendu', '  const lache = () => { fige(); jeuFocusAttente = null; };', '  const lache = () => { fige(); };'],
+  ['FROID', 'focus repris sur un bouton encore cache', '  if (!cible || cible.hidden || cible.offsetParent === null) return false;', '  if (!cible) return false;'],
+  ['FROID', 'le peintre des Rolls ne redonne pas le focus attendu', '  /* 2026-10-24 (revue 3) : un lien froid #game/roll tape avant /api/tirage : le focus attendu arrive sur le roll visible (paye ou d entrainement) */\n  try { jeuReprendreFocus(); } catch (_) { /* hors de la page (banc) */ }\n', ''],
   ['SLOTS', 'le lien #game/slots vise la carte retiree', "slots: ['tirCarte', 'slotsSpin'] };", "slots: ['slotsCarte', null] };"],
   ['SLOTS', 'la tuile Slots vise la carte retiree', 'data-jeu="tirCarte" data-focus="slotsSpin" id="jbSlotsTuile"', 'data-jeu="slotsCarte" id="jbSlotsTuile"'],
   ['SLOTS', 'la tuile Slots sans focus sur Spin', 'data-jeu="tirCarte" data-focus="slotsSpin" id="jbSlotsTuile"', 'data-jeu="tirCarte" id="jbSlotsTuile"'],
