@@ -4311,7 +4311,7 @@ function ticketpotJson() {
  *   En memoire seulement (un redemarrage relit : 50 ids / 30 s). */
 const DUELS_IDS_PAR_TOUR = 50;
 const DUELS_GARDE_IDS = 2000;
-const duelsSrv = { contrat: null, cache: new Map(), nextId: null, restants: 0, tete: null, lu: 0, enVol: false, erreur: null };
+const duelsSrv = { contrat: null, cache: new Map(), nextId: null, restants: 0, tete: null, lu: 0, luOk: 0, enVol: false, erreur: null };
 function contratDuels() {
   const c = String((DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT.adresse) || '').toLowerCase();
   return /^0x[0-9a-f]{40}$/.test(c) ? c : null;
@@ -4345,8 +4345,27 @@ async function lireDuelsSrv() {
     if (ids.length && rates === ids.length) throw new Error(derniere || 'no duel could be read');
     duelsSrv.nextId = nextId; duelsSrv.restants = restants + ids.filter((id) => !duelsSrv.cache.has(String(id))).length;
     duelsSrv.tete = tete; duelsSrv.erreur = rates ? rates + ' of ' + ids.length + ' duel reads failed (' + String(derniere).slice(0, 60) + ')' : null;
+    duelsSrv.luOk = Date.now();
   } catch (e) { duelsSrv.erreur = String((e && e.message) || e).slice(0, 120); }
   finally { duelsSrv.lu = Date.now(); duelsSrv.enVol = false; }
+}
+/* LA LISTE PAR L ETAT DONNEE AU REGLEUR (slots-regleur.js duels.joints / duels.connu ; revue fix2 2026-10-24, defaut 1 et porte D1) :
+ *   joints(c) = les duels REJOINTS non finaux du cache, avec leurs deux guesses et leur mise (le regleur les classe sans aucun duels(id)) ;
+ *   ⛔ elle JETTE si le cache n est pas celui de ce contrat ou si sa derniere lecture REUSSIE a plus de DUELS_ETAT_FRAIS_MS (3 tours du
+ *   minuteur de 30 s) : le regleur ne prend jamais une liste perimee pour « aucun duel rejoint » (sans logs, sa lecture des duels echoue
+ *   alors, et la porte des duels se ferme). connu(c, id) = ce que le cache sait d UN duel (guesses, mise : immuables une fois ecrits ;
+ *   final : definitif) — sans fraicheur exigee, null s il ne le connait pas. */
+const DUELS_ETAT_FRAIS_MS = 90000;
+function duelsJointsKeeper(c) {
+  if (!c || duelsSrv.contrat !== c) throw new Error('duels state list not read for this contract');
+  if (!duelsSrv.luOk || Date.now() - duelsSrv.luOk > DUELS_ETAT_FRAIS_MS) throw new Error('duels state list stale (last good read ' + (duelsSrv.luOk ? Math.round((Date.now() - duelsSrv.luOk) / 1000) + ' s ago' : 'never') + ')');
+  return [...duelsSrv.cache.values()].filter((e) => !e.final && e.duel.joiner && Number.isSafeInteger(e.duel.targetBlock))
+    .map((e) => ({ id: e.duel.id, targetBlock: e.duel.targetBlock, guessA: e.duel.guessA, guessB: e.duel.guessB, stake: e.duel.stake }));
+}
+function duelConnuKeeper(c, id) {
+  if (!c || duelsSrv.contrat !== c) return null;
+  const e = duelsSrv.cache.get(String(id));
+  return e ? { final: !!e.final, guessA: e.duel.guessA, guessB: e.duel.guessB, stake: e.duel.stake } : null;
 }
 setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000).unref?.();
 
@@ -4368,8 +4387,9 @@ const regleurSlots = ESSAI_SRV.actif
   : creerRegleur({ cle: process.env.SLOTS_KEEPER_KEY || null, contrat: contratSlotsFiche, chainId: SLOTS_DEPLOIEMENT.chaine, table: SLOTS_DEPLOIEMENT.constructeur.prizes,
     blocDeploiement: SLOTS_DEPLOIEMENT.bloc || 0, rpc: rpcServeur, journal: (t) => console.log(t),
     duels: { contrat: contratDuelsKeeper, bloc: () => (DUELS_DEPLOIEMENT && Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) ? DUELS_DEPLOIEMENT.bloc : 0),
-      /* 2026-10-24 : les duels REJOINTS lus par l ETAT (le cache de lireDuelsSrv) — un Joined dont le log n a pas ete lu n est plus perdu */
-      joints: () => (duelsSrv.contrat === contratDuelsKeeper() ? [...duelsSrv.cache.values()].filter((e) => !e.final && e.duel.joiner && Number.isSafeInteger(e.duel.targetBlock)).map((e) => ({ id: e.duel.id, targetBlock: e.duel.targetBlock })) : []) },
+      /* 2026-10-24 : les duels REJOINTS lus par l ETAT (le cache de lireDuelsSrv) — un Joined dont le log n a pas ete lu n est plus perdu ;
+       *   revue fix2 : avec guesses et mise (classes sans lecture), et la liste JETTE si le cache n est pas frais (duelsJointsKeeper) */
+      joints: () => duelsJointsKeeper(contratDuelsKeeper()), connu: (id) => duelConnuKeeper(contratDuelsKeeper(), id) },
     rolls: { contrat: contratRollsKeeper } });
 if (regleurSlots.demarrer()) console.log('[slots-keeper] on, keeper ' + regleurSlots.etat().adresse);
 else console.log('[slots-keeper] off: ' + regleurSlots.etat().pourquoi);
@@ -6872,9 +6892,10 @@ function traiterRequete(req, res) {
     const k = (DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT.constructeur) || {};
     const adrOk = (x) => (/^0x[0-9a-f]{40}$/i.test(String(x || '')) ? String(x).toLowerCase() : null);
     /* 2026-10-24 (audit rolls-duels, option gratuite de celui qui rejoint) : l app ne propose de creer / rejoindre un duel QUE si le regleur du
-     *   serveur regle CE contrat (duels-plan-app.js regleurCouvre : ON et le contrat nomme dans etat().contrats) ; sinon regleDuels false */
+     *   serveur regle CE contrat (duels-plan-app.js regleurCouvre : ON et le contrat nomme dans etat().contrats) ; sinon regleDuels false.
+     *   Revue fix2 (porte D1) : ET il a LU les duels il y a moins de 3 de ses tours, sans erreur depuis (contrats.duels.lu / erreurLecture) */
     const eReg = regleurSlots.etat();
-    const regleur = { etat: eReg.etat, adresse: eReg.adresse || null, regleDuels: regleurCouvre(eReg, contrat) };
+    const regleur = { etat: eReg.etat, adresse: eReg.adresse || null, regleDuels: regleurCouvre(eReg, contrat, Date.now()) };
     const fiche = { contrat, bloc: Number.isSafeInteger(DUELS_DEPLOIEMENT.bloc) ? DUELS_DEPLOIEMENT.bloc : null, usdc: adrOk(k.usdc), devWallet: adrOk(k.devWallet), rewardPool: adrOk(k.rewardPool), regles, regleur };
     /* 2026-10-24 : `echec` = le dernier tour a ECHOUE (pourquoi = son erreur) ; false = la premiere lecture n est pas encore finie. L app ne
      *   promet plus « back in a few seconds » quand les lectures echouent : elle dit que la liste n a pas pu etre lue, et pourquoi. */

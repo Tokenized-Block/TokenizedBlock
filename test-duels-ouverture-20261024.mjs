@@ -29,15 +29,20 @@ const APP = lire('app.html'), SRV = lire('serveur-web.js');
 console.log('— A. duels-plan-app.js (execute)');
 const DC = '0x6b7647b326a635c0902eaed41ab0b41746b9602c', AUTRE_C = '0x' + '5'.repeat(40);
 const A = '0x' + 'a1'.repeat(20), B = '0x' + 'b1'.repeat(20);
-const couvre = (e, c = DC) => essai(() => D.regleurCouvre(e, c));
+/* revue fix2 porte D1 : l heure est PASSEE (duels-plan-app.js n a pas d horloge) ; ici l horloge du banc */ const couvre = (e, c = DC) => essai(() => D.regleurCouvre(e, c, Date.now()));
 ok(typeof D.regleurCouvre === 'function' && couvre({ etat: 'OFF', pourquoi: 'SLOTS_KEEPER_KEY is not set', adresse: null }) === false, 'regleur OFF (la forme de /sante aujourd hui) : ne couvre pas les duels');
 ok(couvre({ etat: 'ON', adresse: B, contrat: AUTRE_C }) === false && couvre({ etat: 'ON', contrats: [] }) === false, 'regleur ON des slots seulement (aucun contrats[] qui nomme les duels) : ne couvre pas');
 /* 2026-10-24 (revue rolls-duels-ui, 2e tour) : la forme est celle que slots-regleur.js etat() PUBLIE — contrats = { slots, duels: { contrat,
  *   configure, ... }, rolls } ; le tableau de la 1re version n est publie par aucun regleur et ne compte plus. Le VRAI etat() est execute dans
  *   test-duels-gate-fix2-20261024.mjs (creerRegleur sur un faux noeud). */
-const reel = (duels, etat = 'ON') => ({ etat, contrats: { slots: { contrat: AUTRE_C }, duels, rolls: { contrat: null, configure: false } } });
+/* revue fix2 porte D1 (2026-10-24) : contrats.duels porte aussi la sante de la lecture des duels — lu (ISO, la derniere REUSSIE) et
+ *   erreurLecture (null) ; par defaut ici une lecture fraiche (maintenant), intervalle du regleur 10 s */
+const reel = (duels, etat = 'ON') => ({ etat, intervalleMs: 10000, contrats: { slots: { contrat: AUTRE_C }, duels: duels && typeof duels === 'object' ? { lu: new Date().toISOString(), erreurLecture: null, ...duels } : duels, rolls: { contrat: null, configure: false } } });
 ok(couvre(reel({ contrat: DC, configure: true, suivis: 0 })) === true && couvre(reel({ contrat: DC.toUpperCase().replace('0X', '0x'), configure: true })) === true,
-  'regleur ON dont contrats.duels nomme CE contrat, configure : couvre');
+  'regleur ON dont contrats.duels nomme CE contrat, configure, lu il y a moins de 3 tours : couvre');
+ok(couvre(reel({ contrat: DC, configure: true, lu: null })) === false && couvre(reel({ contrat: DC, configure: true, lu: new Date(Date.now() - 30000).toISOString() })) === false
+  && couvre(reel({ contrat: DC, configure: true, erreurLecture: '429 Too Many Requests' })) === false && couvre(reel({ contrat: DC, configure: true, erreurLecture: undefined })) === false,
+  'jamais lu, lu il y a 3 tours (30 s), derniere lecture en erreur, erreurLecture absente (un regleur plus ancien) : ne couvre pas');
 ok(couvre({ etat: 'ON', contrats: [DC] }) === false && couvre({ etat: 'ON', contrats: [{ contrat: DC, etat: 'ON' }] }) === false && couvre(reel({ contrat: DC, configure: false })) === false
   && couvre(reel({ contrat: DC, configure: 'true' })) === false && couvre(reel(null)) === false && couvre(reel({ contrat: null, configure: true })) === false,
   'tableau (forme jamais publiee), duels non configures, configure en texte, contrat null : ne couvre pas');
@@ -88,7 +93,7 @@ const checksApp = {
   chatAccepte: (t) => { const a = entre(t, 'async function bcAccepterDuel(', '/* ══ LE BRAIN OS'); const i = a.indexOf("if (!Duels.duelsOuverts(j)) { bcEtape(m, Duels.PHRASE_DUELS_FERMES"), k = a.indexOf('Duels.planJoin('); return i > 0 && k > i; },
 };
 const checksSrv = {
-  routeServie: (t) => { const a = entre(t, "if (chemin === '/api/duels')", '/* ══ BLOCK MISSIONS'); return /const regleur = \{ etat: eReg\.etat, adresse: eReg\.adresse \|\| null, regleDuels: regleurCouvre\(eReg, contrat\) \};/.test(a) && /rewardPool: adrOk\(k\.rewardPool\), regles, regleur \};/.test(a); },
+  routeServie: (t) => { const a = entre(t, "if (chemin === '/api/duels')", '/* ══ BLOCK MISSIONS'); return /const regleur = \{ etat: eReg\.etat, adresse: eReg\.adresse \|\| null, regleDuels: regleurCouvre\(eReg, contrat, Date\.now\(\)\) \};/.test(a) && /rewardPool: adrOk\(k\.rewardPool\), regles, regleur \};/.test(a); },
 };
 const mutants = [
   ['ligneRecoitOuverts', APP, 'const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts);', 'const acts = Duels.actionsDuel(d, moi, tete, maintenant, true);'],
@@ -99,7 +104,7 @@ const mutants = [
   ['brainOuvert', APP, 'list: duelsDe(jd), open: Duels.duelsOuverts(jd) }', 'list: duelsDe(jd), open: true }'],
   ['chatListe', APP, 'if (!Duels.duelsOuverts(j)) {\n    bcEtape(m, Duels.PHRASE_DUELS_FERMES);', 'if (false) {\n    bcEtape(m, Duels.PHRASE_DUELS_FERMES);'],
   ['chatAccepte', APP, "if (!Duels.duelsOuverts(j)) { bcEtape(m, Duels.PHRASE_DUELS_FERMES + ' Nothing is proposed.', 'non'); return; }", ''],
-  ['routeServie', SRV, 'regleDuels: regleurCouvre(eReg, contrat) };', 'regleDuels: eReg.etat === \'ON\' };'],
+  ['routeServie', SRV, 'regleDuels: regleurCouvre(eReg, contrat, Date.now()) };', 'regleDuels: eReg.etat === \'ON\' };'],
 ];
 for (const [k, f] of Object.entries(checksApp)) ok(f(APP), 'app.html : ' + k);
 for (const [k, f] of Object.entries(checksSrv)) ok(f(SRV), 'serveur-web.js : ' + k);

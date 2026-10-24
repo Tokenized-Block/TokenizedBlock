@@ -17,7 +17,8 @@ const M = [
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'regleur OFF couvre', "if (!e || e.etat !== 'ON' || !ADR.test(c)", 'if (!e || !ADR.test(c)'],
   /* 2e tour (revue rolls-duels-ui) : regleurCouvre lit contrats.duels (la forme publiee par slots-regleur.js) ; ancres suivies */
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'sans contrats : couvre', "typeof e.contrats !== 'object') return false;", "typeof e.contrats !== 'object') return true;"],
-  ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'duels non configures couvrent', 'd.configure === true && ', ''],
+  /* revue fix2 (2026-10-24) : ancre suivie apres la reecriture de regleurCouvre (porte D1) */
+  ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'duels non configures couvrent', '|| d.configure !== true ', ''],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'regleDuels « true » en texte ouvre', 'j.regleur.regleDuels === true', '!!j.regleur.regleDuels'],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'actionsDuel ouvert par defaut', 'export function actionsDuel(d, moi, tete, maintenant, ouverts = false)', 'export function actionsDuel(d, moi, tete, maintenant, ouverts = true)'],
   ['duels-plan-app.js', 'DUELS_APP_MODULE', 'duels', 'JOIN sans garde', 'return ouverts === true && e.resteS >= MARGE_JOIN_S', 'return e.resteS >= MARGE_JOIN_S'],
@@ -43,7 +44,7 @@ const M = [
   ['serveur-web.js', 'SERVEUR_MODULE', 'serveur', 'serveur : gains non lus -> fiche', 'prizes: rgR ? rgR.prizes : null,', 'prizes: rgR ? rgR.prizes : [rc.prize5, rc.prize4, rc.prize3, rc.prize2].map(String),'],
   ['serveur-web.js', 'SERVEUR_MODULE', 'serveur', 'serveur : minScore non lu -> fiche', 'minScore: rgR ? rgR.minScore : null,', 'minScore: rgR ? rgR.minScore : rc.minScore,'],
   ['serveur-web.js', 'SERVEUR_MODULE', 'serveur', 'serveur : toujours la fiche', 'const rgR = contratRolls ? reglesRollsSrv.servi() : null;', 'const rgR = contratRolls ? { prizes: [rc.prize5, rc.prize4, rc.prize3, rc.prize2].map(String), minScore: rc.minScore, version: 1 } : null;'],
-  ['serveur-web.js', 'SERVEUR_MODULE', 'serveur', 'serveur : duels ouverts sans regleur', 'regleDuels: regleurCouvre(eReg, contrat) };', 'regleDuels: true };'],
+  ['serveur-web.js', 'SERVEUR_MODULE', 'serveur', 'serveur : duels ouverts sans regleur', 'regleDuels: regleurCouvre(eReg, contrat, Date.now()) };', 'regleDuels: true };'],
   ['serveur-web.js', 'SERVEUR_MODULE', 'serveur', 'serveur : rolls-regles.js non servi', "  'rolls-regles.js',\n", ''],
 ];
 let temoin = true;

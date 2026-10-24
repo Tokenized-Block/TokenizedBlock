@@ -10,8 +10,12 @@
  *   - AVEC : toutes les `intervalleMs` (derive du temps de bloc MESURE : un cinquieme de la fenetre, borne a [2 s, 10 s]), il lit :
  *       slots  — les Spun d une fenetre BORNEE (<= 300 blocs, puis les seuls blocs nouveaux + 8), les statuts, les hashes, le pot ;
  *                refait le calcul du contrat (slots-plan.js planReglement) -> settleMany(ids) des spins que le pot paie en ENTIER ;
- *       duels  — les Joined d une fenetre BORNEE (meme regle), le duel relu (duels(id) : statut, les deux guesses, la mise) et le hash
- *                de sa cible -> le VAINQUEUR calcule comme le contrat (faceDuHash = BlockDuels.faceOf, puis les deux scores) :
+ *       duels  — DECOUVERTS par la liste de l ETAT (duels.joints / duels.connu : le cache de /api/duels, nextId + duels(id), sans
+ *                eth_getLogs) ET par les Joined d une fenetre BORNEE (meme regle ; un refus de getLogs ne coute rien si la liste de l etat
+ *                est lue). CLASSES UNE FOIS des que le hash de leur cible existe (tete >= cible) : les guesses et la mise viennent de la
+ *                liste de l etat (aucune lecture) ou d UN duels(id) (au plus classementsParTour par tour, l echeance la plus proche
+ *                d abord), le hash d un en-tete de bloc (cache par bloc, au plus max(entetesParTour, 2 tours de blocs) par tour) ->
+ *                le VAINQUEUR calcule comme le contrat (faceDuHash = BlockDuels.faceOf, puis les deux scores) :
  *                  egalite      -> JAMAIS regle (les deux mises sont rendues, par settle comme par refundExpired : rien a proteger) ;
  *                  createur     -> settle(id) des cible + delaiDuelBlocs (l OPTION GRATUITE : le perdant qui a rejoint se tait) ;
  *                  rejoignant   -> settle(id) seulement PRES DE LA FIN (tete + 1 >= cible + 256 - marge) : le gagnant qui a rejoint,
@@ -23,6 +27,11 @@
  *                gagnant regler d abord ; la marge de fin (>= margeFinDuelBlocs, et >= 3 tours au temps de bloc MESURE, 200 ms sans
  *                mesure) laisse plusieurs tours pour que le settle du regleur tombe dans la fenetre. Parmi les duels prets : les
  *                PRESSES d abord (par echeance), puis ceux ou le createur gagne, par MISE decroissante ;
+ *                ⛔ revue fix2 defaut 1 (2026-10-24, famine par egalites, chemins A et B) : une EGALITE et un duel FINAL ne sont plus
+ *                jamais suivis ni relus (duelsClos, jusqu a la fin de leur fenetre), meme si une liste perimee les cite encore ; les
+ *                lectures de STATUT (statutsParTour) ne vont qu aux candidats, dans l ORDRE D ENVOI (presses par echeance, puis createur
+ *                gagnant par mise), au plus simulationsParTour ; au-dela de suivisMax, sortent d abord les rejoignants gagnants (le plus
+ *                de temps d abord), JAMAIS un duel ou le createur gagne dans sa fenetre ; un non classe ne sort qu au-dela de suivisDurMax ;
  *       rolls  — today() et les `joursRecul` jours passes : un jour fini avec des acheteurs, Open -> closeDay(jour) ; Armed dans sa
  *                fenetre -> drawDay(jour) ; Armed hors fenetre -> closeDay(jour) (re-arme, puis tire au tour suivant). ⛔ buyerCount = 0
  *                n est retenu (jour sans acheteur, plus jamais relu) que lu PLUS D UN JOUR apres la fin du jour (today() > jour + 1) :
@@ -50,10 +59,21 @@
  *     verifierEnvoi() le controle juste avant CHAQUE signature et jette sinon (rien n est signe).
  *   - ⛔ La cle n est lue que du parametre `cle` (le serveur le prend dans process.env, et nulle part ailleurs) ; elle reste dans la
  *     fermeture ; etat() ne la rend jamais, aucune erreur ne la cite, rien ne la journalise. L ADRESSE du regleur est publique (/sante).
+ *   - ⛔ LA SANTE DE LA LECTURE DES DUELS (revue duels-gate D1) : etat().contrats.duels.lu = l heure de la derniere lecture REUSSIE
+ *     (decouverte lue : logs ou liste de l etat ; et pas TOUTES les lectures du tour en echec), erreurLecture = l erreur de la derniere
+ *     lecture ratee (null apres un succes). duels-plan-app.js regleurCouvre exige lu de moins de 3 intervalles et erreurLecture null : un
+ *     regleur ON qui ne lit pas les duels ne les ouvre pas. Un tour qui attend sa tx en vol ne lit rien : la porte se ferme apres 3 tours.
  * NE PROUVE PAS (dit) : un reglement reel sur Base ; le banc anvil execute les vrais contrats sur une chaine LOCALE (la course perdue y est
- *   rejouee par un minage manuel, pas par un vrai sequenceur). RESTE (dit, 2026-10-24) : un attaquant peut encore user le plafond des DUELS
- *   avec des duels a lui ou SON createur gagne (deux wallets) — chacun lui coute 10 % de la mise (MIN_STAKE 0,10 USDC : 0,01 USDC) plus
- *   le gas ; les slots et les rolls gardent leur plafond, et parmi les duels la plus grosse mise passe d abord. */
+ *   rejouee par un minage manuel, pas par un vrai sequenceur ; le temps de bloc y est INJECTE, 200 ms : anvil mine en ~20 ms).
+ * RESTE (dit, 2026-10-24 round 3 ; chiffres de la revue, NON mesures sur Base) :
+ *   - le PLAFOND des duels (30 tx / heure) et le tour a UNE tx : un attaquant les use avec des duels a lui ou SON createur gagne (deux
+ *     wallets), a mise >= celle de la victime. Chaque settle que le regleur envoie pour lui lui coute 10 % du pot de 2 x mise : 0,02 USDC a
+ *     la mise minimale de 0,10 USDC, plus le gas (le plafond : 30 x 0,02 = 0,60 USDC par heure ; les ~5 tours d une fenetre a 10 s et
+ *     200 ms/bloc : 5 settles, 0,10 USDC). Les slots et les rolls gardent leur plafond ; parmi les duels la plus grosse mise passe d abord.
+ *   - les egalites ne coutent que le gas (mises rendues), mais elles ne prennent plus de lecture de statut ni de place : connues du cache
+ *     de /api/duels, elles se classent sans aucun duels(id) ; INCONNUES de ce cache (creees et rejointes pendant son retard : 50 ids par
+ *     tour de 30 s), une lecture chacune, au plus classementsParTour (60) par tour. Affamer une victime ELLE AUSSI inconnue du cache demande
+ *     plus de 60 egalites nouvelles a cible plus ancienne a CHAQUE tour de sa fenetre : ~300 duels (~900 tx de gas : create, join, refund). */
 import * as Slots from './slots-plan.js';
 import { selecteur, topic, keccak256 } from './keccak.js';
 import { adresseDe } from './signeur-secp256k1.js';
@@ -91,8 +111,12 @@ export const BORNES_DEFAUT = Object.freeze({
   intervalleMinMs: 2000,
   intervalleMaxMs: 10000,
   reculLogs: 300, /* > 256 + 2 : un spin / un duel plus vieux ne se regle plus */
-  suivisMax: 200,
+  suivisMax: 200, /* duels : au-dela, les rejoignants gagnants sortent (jamais un createur gagnant dans sa fenetre) */
+  suivisDurMax: 5000, /* duels : au-dela, les NON classes sortent aussi (le plus de temps d abord) — une borne memoire, pas une politique */
+  closMax: 20000, /* duels : egalites et finals retenus (jamais relus) jusqu a la fin de leur fenetre, au plus */
   statutsParTour: 30,
+  classementsParTour: 60, /* duels : duels(id) lus pour CLASSER un duel dont la liste de l etat ne donne pas les guesses */
+  entetesParTour: 64, /* duels : en-tetes de cible lus par tour, au moins (et au moins 2 tours de blocs au temps de bloc) */
   simulationsParTour: 12, /* la coupe en deux d un lot de 10 avec un spin fautif : 1 + 2 x 4 au plus */
   joursRecul: 7, /* les pots du pass des 7 derniers jours UTC */
   inclusionMaxMs: 120000,
@@ -133,6 +157,16 @@ export function faceDuHash(h) {
 }
 /** un guess EMBALLE (uint24 de BlockDuels._pack) -> [bande, orbite, facette, matiere, ornement] (BlockDuels._unpack) */
 export const deballerGuess = (p) => { const x = Number(p); return [(x >> 16) & 0x0f, (x >> 12) & 0x0f, (x >> 7) & 0x1f, (x >> 3) & 0x0f, x & 0x07]; };
+/** l inverse : un guess DEBALLE (la forme de duels-plan.js lireDuel, celle du cache de /api/duels) ou deja emballe -> l uint24 ; null sinon */
+export function emballerGuess(g) {
+  if (Array.isArray(g)) {
+    const max = [16, 16, 32, 16, 8];
+    if (g.length !== 5 || !g.every((x, i) => Number.isInteger(x) && x >= 0 && x < max[i])) return null;
+    return (g[0] << 16) | (g[1] << 12) | (g[2] << 7) | (g[3] << 3) | g[4];
+  }
+  if (typeof g === 'number' || typeof g === 'bigint') { const v = Number(g); return Number.isSafeInteger(v) && v >= 0 && v < 2 ** 24 ? v : null; }
+  return null;
+}
 /** le vainqueur d un duel comme BlockDuels._settle : 'createur' | 'rejoignant' | 'egalite' ; null si le hash est illisible */
 export function vainqueurDuel(hash, guessA, guessB) {
   const f = faceDuHash(hash);
@@ -189,11 +223,14 @@ class Passagere extends Error {}
 /**
  * le regleur. `rpc(methode, params)` -> resultat JSON-RPC (jette sur une erreur) ; `rpcEnvoi` (defaut rpc) sert au SEUL
  * eth_sendRawTransaction. `contrat` + `table` + `blocDeploiement` : les slots ; `duels` = { contrat, bloc } et `rolls` = { contrat }
- * (une adresse, ou une fonction relue a chaque tour : la fiche des duels arrive par un import dynamique). `maintenant` (ms) et `bornes`
- * sont injectables pour les tests.
+ * (une adresse, ou une fonction relue a chaque tour : la fiche des duels arrive par un import dynamique). `duels.joints()` (les rejoints non
+ * finaux { id, targetBlock, guessA, guessB, stake } du cache de /api/duels ; jette si ce cache n est pas frais) et `duels.connu(id)` (ce que ce
+ * cache sait d un duel : { final, guessA, guessB, stake } ou null) sont optionnels. `maintenant` (ms) et `bornes` sont injectables pour
+ * les tests ; `msParBloc` (revue fix2 defaut 2) FIXE le temps de bloc au lieu de le mesurer (un banc sur anvil, qui mine en ~20 ms :
+ * la mesure y depend de la vitesse de la machine) — le serveur ne le passe pas.
  */
 export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table = null, blocDeploiement = 0, rpc = null, rpcEnvoi = null,
-  maintenant = () => Date.now(), bornes: bornesIn = {}, journal = () => {}, desactive = null, duels = null, rolls = null } = {}) {
+  maintenant = () => Date.now(), bornes: bornesIn = {}, journal = () => {}, desactive = null, duels = null, rolls = null, msParBloc: msParBlocFixe = null } = {}) {
   const bornes = { ...BORNES_DEFAUT, ...bornesIn };
   const c = adresseOk(contrat);
   const off = (pourquoi) => ({
@@ -215,19 +252,32 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
   const blocDuels = () => { try { const b = typeof duelsCfg.bloc === 'function' ? duelsCfg.bloc() : duelsCfg.bloc; return Number(b) || 0; } catch (_) { return 0; } };
 
   const activite = () => ({ envois: 0, inclus: 0, reverts: 0, revertsExpliques: 0, regles: 0, sautsHeure: 0, dernierEnvoi: null, dernierInclus: null });
+  const fixe = Number(msParBlocFixe) > 0 ? Number(msParBlocFixe) : null;
   const st = {
-    etat: 'ON', adresse, depuis: new Date(maintenant()).toISOString(), msParBloc: null, mesureA: 0, intervalleMs: intervalleDepuisBloc(null, bornes),
+    etat: 'ON', adresse, depuis: new Date(maintenant()).toISOString(), msParBloc: fixe, mesureA: 0, intervalleMs: intervalleDepuisBloc(fixe, bornes),
     scanne: null, enVol: null, envoisHeure: { slots: [], duels: [], rolls: [] }, echecsSuite: 0, dernierEchec: null, dernierTour: null, dernierEnvoi: null, dernierRegle: null, erreurs: [],
     compteurs: { tours: 0, envois: 0, spinsEnvoyes: 0, spinsRegles: 0, reverts: 0, revertsExpliques: 0, simulationsRefusees: 0, simulationsNonLues: 0, envoisRefuses: 0, envoisRetrouves: 0,
-      nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0, duelsEgalites: 0 },
+      nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0, duelsEgalites: 0, duelsEvinces: 0 },
     parContrat: { slots: activite(), duels: activite(), rolls: activite() },
     arret: null, chaineVue: false,
   };
   const suivis = new Map(); /* slots : id -> { t, player } */
   const ecartes = new Map(); /* slots : id -> t — settle seul qui ne se simule pas (paiement refuse) : ecarte jusqu a la fin de sa fenetre */
   const hashes = new Map(); /* bloc -> hash */
-  const duelsSuivis = new Map(); /* id -> { t, vainqueur (null tant que non lu), mise } */
+  /* id -> { t, vainqueur (null tant que non classe ; 'createur' | 'rejoignant'), mise, gA, gB (emballes), sansHash, luTour } —
+   *   jamais une egalite ni un final : ceux-la vont dans duelsClos (id -> t), jamais relus, jusqu a la fin de leur fenetre */
+  const duelsSuivis = new Map();
+  const duelsClos = new Map();
   const scanDuels = { contrat: null, scanne: null };
+  /* revue duels-gate D1 : la sante de la lecture des duels, publiee dans etat().contrats.duels (lu, erreurLecture) */
+  const lectureDuels = { lu: null, erreur: null, ratees: 0 };
+  /* une egalite, un final, un duel regle : plus jamais suivi ni relu (sa cible est gardee pour le sortir a la fin de sa fenetre) */
+  const closDuel = (id, t = null) => {
+    const d = duelsSuivis.get(id);
+    duelsSuivis.delete(id);
+    duelsClos.set(id, t !== null ? t : d ? d.t : Number.MAX_SAFE_INTEGER - FENETRE);
+    while (duelsClos.size > bornes.closMax) duelsClos.delete(duelsClos.keys().next().value);
+  };
   const jours = { contrat: null, finis: new Set(), acheteurs: new Map(), aujourdhui: null };
   let enCours = false, minuteur = null, echecsCeTour = 0;
 
@@ -244,22 +294,25 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
   };
   const msg = (e) => String((e && e.message) || e).slice(0, 120);
   const entier = (h) => { const v = parseInt(String(h), 16); return Number.isSafeInteger(v) ? v : null; };
-  const appel = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+  const appel = (to, data, bloc = 'latest') => rpc('eth_call', [{ to, data }, bloc]);
 
   const nomTx = (v) => v.cible + ' ' + v.quoi + ' #' + v.ids[0] + (v.ids.length > 1 ? '..' + v.ids[v.ids.length - 1] : '');
-  /* ⛔ revue keeper 1 : un revert MINE est-il explique par un AUTRE qui a deja fait le travail ? la cible est RELUE (latest).
+  /* ⛔ revue keeper 1 : un revert MINE est-il explique par un AUTRE qui a deja fait le travail ? la cible est RELUE AU BLOC DU RECU
+   *   (revue fix2 defaut 3 : a 'latest', un noeud en retard sur ce bloc rend encore le duel Joined -> une course perdue comptee comme un
+   *   echec ; au bloc du recu, ce noeud repond « bloc inconnu » : la cible est relue au tour suivant). Sans numero de bloc : 'latest'.
    *   duels : statut Settled (3) — seul un settle reussi y mene ; le notre a revert, donc un autre l a regle (NotJoined).
    *   rolls : jour Drawn ; ou Armed avec une AUTRE cible que celle vue a l envoi, armee au bloc du recu ou avant (cible - 2 <= bloc) —
    *           un autre a ferme / re-arme le jour (StillSettleable, DayNotArmed, TooEarly). Une cible armee APRES notre bloc ne l explique pas.
    *   slots : jamais (settleMany saute un spin deja regle sans revert). Rend la raison, ou null ; jette si la cible n est pas lue. */
   async function expliquer(v, blocRecu) {
+    const tag = blocRecu !== null && blocRecu > 0 ? '0x' + blocRecu.toString(16) : 'latest';
     if (v.cible === 'duels') {
-      const m = motsDe(await appel(v.to, donnees1(SEL_DUELS, v.ids[0])));
+      const m = motsDe(await appel(v.to, donnees1(SEL_DUELS, v.ids[0]), tag));
       if (m.length !== 9) throw new Error('duel not read');
       return Number(m[2]) === DUEL_SETTLED ? 'duel #' + v.ids[0] + ' already settled by another transaction' : null;
     }
     if (v.cible === 'rolls') {
-      const m = motsDe(await appel(v.to, donnees1(SEL_DAY_POTS, v.ids[0])));
+      const m = motsDe(await appel(v.to, donnees1(SEL_DAY_POTS, v.ids[0]), tag));
       if (m.length !== 3) throw new Error('dayPots not read');
       const etat = Number(m[2]), t = Number(m[1]);
       if (etat === 2) return 'day ' + v.ids[0] + ' already drawn by another transaction';
@@ -297,7 +350,7 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       if (pourquoi) {
         act.revertsExpliques += 1; st.compteurs.revertsExpliques += 1;
         erreur(nomTx(v) + ': tx ' + v.hash + ' reverted — ' + pourquoi + ' (not counted as a failure)');
-        if (v.cible === 'duels') duelsSuivis.delete(String(v.ids[0]));
+        if (v.cible === 'duels') closDuel(String(v.ids[0]), v.avant && Number.isSafeInteger(v.avant.t) ? v.avant.t : null);
         return true;
       }
       act.reverts += 1; echec(nomTx(v) + ': tx ' + v.hash + ' reverted', 'reverts', v.cible); return true;
@@ -315,7 +368,7 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     } else if (v.cible === 'duels') {
       const n = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_DUEL_SETTLED).length;
       act.regles += n; act.dernierInclus = { a, hash: v.hash, duel: v.ids[0], regles: n, bloc };
-      duelsSuivis.delete(String(v.ids[0]));
+      closDuel(String(v.ids[0]), v.avant && Number.isSafeInteger(v.avant.t) ? v.avant.t : null);
     } else {
       const tir = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_DAY_DRAWN).length;
       const fer = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_DAY_CLOSED).length;
@@ -326,6 +379,7 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
   }
 
   async function mesurerBloc(tete) {
+    if (fixe !== null) return; /* temps de bloc INJECTE (revue fix2 defaut 2) : jamais mesure */
     if (maintenant() - st.mesureA < bornes.mesureToutesMs && st.msParBloc !== null) return;
     st.mesureA = maintenant();
     try {
@@ -387,14 +441,42 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
   }
 
   /* ---------------------------------------------------------------- duels : settle(id) de chaque duel rejoint dans sa fenetre */
+  /* la mise d une source externe (BigInt, entier, texte decimal) ; null sinon */
+  const miseDe = (x) => { try { if (typeof x === 'bigint') return x >= 0n ? x : null; if ((typeof x === 'number' && Number.isSafeInteger(x)) || (typeof x === 'string' && /^\d+$/.test(x))) return BigInt(x); } catch (_) { /* illisible */ } return null; };
+  /* un duel DECOUVERT (log Joined, liste de l etat) : jamais une egalite / un final deja clos, jamais hors fenetre ; complete ce qui manque */
+  function decouvrir(id, t, tete, x = {}) {
+    if (!/^\d+$/.test(id) || !Number.isSafeInteger(t) || t <= 0 || tete + 1 > t + FENETRE || duelsClos.has(id)) return;
+    let d = duelsSuivis.get(id);
+    if (!d) { d = { t, vainqueur: null, mise: null, gA: null, gB: null, sansHash: false, luTour: -1 }; duelsSuivis.set(id, d); }
+    const gA = emballerGuess(x.guessA), gB = emballerGuess(x.guessB), mise = miseDe(x.stake);
+    if (d.gA === null && gA !== null) d.gA = gA;
+    if (d.gB === null && gB !== null) d.gB = gB;
+    if (d.mise === null && mise !== null) d.mise = mise;
+  }
+  /* duels(id) -> { s (statut), gA, gB, mise } ; null si illisible */
+  async function lireDuelEtat(cD, id) {
+    const m = motsDe(await appel(cD, donnees1(SEL_DUELS, id)));
+    return m.length === 9 ? { s: Number(m[2]), gA: Number(m[3]), gB: Number(m[6]), mise: m[8] } : null;
+  }
+  /* revue duels-gate D1 : la lecture des duels du tour, REUSSIE (lu) ou ratee (erreurLecture) — publiee par etat() */
   async function candidatsDuels(cD, tete, info) {
-    if (scanDuels.contrat !== cD) { scanDuels.contrat = cD; scanDuels.scanne = null; duelsSuivis.clear(); }
+    if (scanDuels.contrat !== cD) { scanDuels.contrat = cD; scanDuels.scanne = null; duelsSuivis.clear(); duelsClos.clear(); Object.assign(lectureDuels, { lu: null, erreur: null, ratees: 0 }); }
+    try {
+      const r = await lireDuelsTour(cD, tete, info);
+      Object.assign(lectureDuels, { lu: new Date(maintenant()).toISOString(), erreur: null, ratees: r.ratees });
+      return r.out;
+    } catch (e) { lectureDuels.erreur = msg(e); throw e; }
+  }
+  async function lireDuelsTour(cD, tete, info) {
     const plancher = Math.max(blocDuels(), tete - bornes.reculLogs + 1);
     const de = scanDuels.scanne === null ? plancher : Math.max(plancher, scanDuels.scanne + 1 - 8);
     /* 2026-10-24 : les rejoints lus par l ETAT (duelsCfg.joints : le cache de lireDuelsSrv, nextId + duels(id)) s ajoutent aux Joined des
      *   logs RECENTS : un log refuse ne perd plus un duel. Les logs refuses ET aucun etat fourni : le tour jette, comme avant. Le statut est
      *   RELU ci-dessous (duels(id) == Joined) avant tout envoi : une liste perimee ne fait rien partir. */
     let refusLogs = null, parEtat = false;
+    /* settle passe si cible < bloc <= cible + 256 ; mine au mieux a tete + 1 : tete + 1 <= cible + 256. Simule a la tete : tete > cible. */
+    for (const [id, d] of duelsSuivis) if (tete + 1 > d.t + FENETRE) duelsSuivis.delete(id);
+    for (const [id, t] of duelsClos) if (tete + 1 > t + FENETRE) duelsClos.delete(id);
     if (de <= tete) {
       try {
         const logs = await rpc('eth_getLogs', [{ address: cD, topics: [TOPIC_JOINED], fromBlock: '0x' + de.toString(16), toBlock: '0x' + tete.toString(16) }]);
@@ -403,53 +485,96 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
           if (bas(l.address) !== cD || bas(l.topics && l.topics[0]) !== TOPIC_JOINED || !l.topics[1]) continue;
           const m = motsDe(l.data);
           if (m.length !== 6) continue;
-          const id = String(BigInt(l.topics[1])), t = Number(m[5]);
-          if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, { t, vainqueur: null, mise: 0n });
+          /* le Joined porte le guess du rejoignant (5 octets) et la cible ; le guess du createur vient de l etat ou d un duels(id) */
+          decouvrir(String(BigInt(l.topics[1])), Number(m[5]), tete, { guessB: m.slice(0, 5).map(Number) });
         }
         scanDuels.scanne = tete;
       } catch (e) { refusLogs = e; }
     }
     if (typeof duelsCfg.joints === 'function') {
       try {
-        for (const j of duelsCfg.joints() || []) { const id = String(j && j.id), t = Number(j && j.targetBlock); if (/^\d+$/.test(id) && Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, { t, vainqueur: null, mise: 0n }); }
+        for (const j of duelsCfg.joints() || []) decouvrir(String(j && j.id), Number(j && j.targetBlock), tete, j || {});
         parEtat = true;
-      } catch (_) { parEtat = false; }
+      } catch (e) { parEtat = false; if (refusLogs) refusLogs = new Error(msg(refusLogs) + '; state list: ' + msg(e)); }
     }
     if (refusLogs && !parEtat) throw refusLogs;
     if (refusLogs) { info.sain = false; erreur('duels logs not read (state list used): ' + msg(refusLogs)); }
-    /* settle passe si cible < bloc <= cible + 256 ; mine au mieux a tete + 1 : tete + 1 <= cible + 256. Simule a la tete : tete > cible. */
-    for (const [id, d] of duelsSuivis) if (tete + 1 > d.t + FENETRE) duelsSuivis.delete(id);
-    while (duelsSuivis.size > bornes.suivisMax) duelsSuivis.delete(duelsSuivis.keys().next().value);
-    /* ⛔ revue keeper 1 et 2 : jamais avant cible + delaiDuelBlocs ; le vainqueur lu UNE fois (guesses et hash ne changent plus) ;
-     *   egalite -> plus suivi ; rejoignant (ou hash illisible) -> attend la marge de fin ; le statut relu juste avant chaque envoi */
+    const tourN = st.compteurs.tours;
+    let tentees = 0, ratees = 0, derniere = null;
+    /* une lecture de duels(id) : comptee (tentee / ratee) pour la sante de la lecture */
+    const lire1 = async (id) => {
+      tentees += 1;
+      try { const v = await lireDuelEtat(cD, id); if (!v) { ratees += 1; derniere = 'duel #' + id + ' unreadable'; } return v; } catch (e) { ratees += 1; derniere = msg(e); return null; }
+    };
+    /* ⛔ revue fix2 defaut 1 : CLASSER chaque duel UNE fois, des que le hash de sa cible existe (tete >= cible), l echeance la plus proche
+     *   d abord. Les guesses / la mise : la liste de l etat (connu, aucune lecture) ou UN duels(id) (budget classementsParTour) ; le hash :
+     *   un en-tete (cache par bloc ; budget >= 2 tours de blocs : la production de blocs ne le depasse jamais). Egalite ou final -> clos. */
+    const connu = typeof duelsCfg.connu === 'function' ? (id) => { try { return duelsCfg.connu(id) || null; } catch (_) { return null; } } : () => null;
+    let budgetClasse = bornes.classementsParTour;
+    let budgetEntetes = Math.min(FENETRE, Math.max(bornes.entetesParTour, Math.ceil((2 * st.intervalleMs) / (st.msParBloc || 200))));
+    const aClasser = [...duelsSuivis.entries()].filter(([, d]) => d.vainqueur === null && tete >= d.t).sort((a, b) => a[1].t - b[1].t);
+    for (const [id, d] of aClasser) {
+      const k = connu(id);
+      if (k && k.final === true) { closDuel(id); continue; } /* final selon le cache : jamais relu */
+      if (k) decouvrir(id, d.t, tete, k);
+      if (d.gA === null || d.gB === null || d.mise === null) {
+        if (budgetClasse <= 0) continue;
+        budgetClasse -= 1;
+        const v = await lire1(id);
+        if (!v || v.s === 0) { info.sain = false; continue; } /* illisible / noeud en retard : relu au tour suivant */
+        if (v.s !== DUEL_JOINED) { closDuel(id); continue; }
+        Object.assign(d, { gA: v.gA, gB: v.gB, mise: v.mise, luTour: tourN });
+      }
+      if (!hashes.has(d.t)) {
+        if (budgetEntetes <= 0) continue;
+        budgetEntetes -= 1; tentees += 1;
+        try { await hashDe(d.t); } catch (e) { derniere = msg(e); }
+        if (!hashes.has(d.t)) { ratees += 1; derniere = derniere || 'block ' + d.t + ' unreadable'; d.sansHash = true; info.sain = false; continue; }
+      }
+      const v = vainqueurDuel(hashes.get(d.t), d.gA, d.gB);
+      if (v === 'egalite') { closDuel(id); st.compteurs.duelsEgalites += 1; continue; } /* les deux mises rendues quoi qu il arrive */
+      d.vainqueur = v; d.sansHash = false;
+    }
+    /* ⛔ EVICTION au-dela de suivisMax : les rejoignants gagnants (pas presses d abord), le plus de temps d abord ; JAMAIS un createur
+     *   gagnant dans sa fenetre ; un NON classe seulement au-dela de suivisDurMax (une borne memoire : il serait relu par la liste de l etat) */
     const marge = margeFinDuel(bornes, st.msParBloc, st.intervalleMs);
     const presse = (d) => tete + 1 >= d.t + FENETRE - marge;
-    const prets = [...duelsSuivis.entries()].filter(([, d]) => tete > d.t && tete >= d.t + bornes.delaiDuelBlocs).sort((a, b) => a[1].t - b[1].t);
-    const out = [];
-    let lectures = bornes.statutsParTour;
-    for (const [id, d] of prets) {
-      /* un duel deja lu, ou le rejoignant gagne, et pas encore presse : rien a lire ce tour-ci */
-      if (d.vainqueur !== null && d.vainqueur !== 'createur' && !presse(d)) continue;
-      if (lectures <= 0) break;
-      lectures -= 1;
-      const m = motsDe(await appel(cD, donnees1(SEL_DUELS, id)));
-      if (m.length !== 9) { info.sain = false; continue; }
-      const s = Number(m[2]);
-      if (s === 0) { info.sain = false; continue; } /* noeud en retard : relu au tour suivant */
-      if (s !== DUEL_JOINED) { duelsSuivis.delete(id); continue; }
-      if (d.vainqueur === null) {
-        d.mise = m[8];
-        const h = await hashDe(d.t);
-        const v = h ? vainqueurDuel(h, m[3], m[6]) : null;
-        if (v === 'egalite') { duelsSuivis.delete(id); st.compteurs.duelsEgalites += 1; continue; } /* les deux mises rendues quoi qu il arrive */
-        if (v) d.vainqueur = v; /* hash illisible : relu au tour suivant ; traite d ici la comme un rejoignant gagnant (attend la fin) */
+    const evincer = (filtre, limite, clore) => {
+      for (const [id] of [...duelsSuivis.entries()].filter(filtre).sort((a, b) => b[1].t - a[1].t)) {
+        if (duelsSuivis.size <= limite) break;
+        if (clore) closDuel(id); else duelsSuivis.delete(id);
+        st.compteurs.duelsEvinces += 1;
       }
-      if (d.vainqueur !== 'createur' && !presse(d)) continue;
-      out.push({ cible: 'duels', to: cD, ids: [id], fin: d.t + FENETRE, quoi: 'settle', presse: presse(d), mise: d.mise, vainqueur: d.vainqueur || 'inconnu', avant: { t: d.t } });
+    };
+    if (duelsSuivis.size > bornes.suivisMax) evincer(([, d]) => d.vainqueur === 'rejoignant' && !presse(d), bornes.suivisMax, true);
+    if (duelsSuivis.size > bornes.suivisMax) evincer(([, d]) => d.vainqueur === 'rejoignant', bornes.suivisMax, true);
+    if (duelsSuivis.size > bornes.suivisDurMax) evincer(([, d]) => d.vainqueur === null, bornes.suivisDurMax, false);
+    /* ⛔ revue keeper 1 et 2 : jamais avant cible + delaiDuelBlocs ; rejoignant (ou hash illisible) -> seulement dans la marge de fin.
+     *   L ORDRE D ENVOI : les PRESSES d abord (par echeance), puis ceux ou le createur gagne, par mise DECROISSANTE (puis echeance) ; les
+     *   lectures de statut (statutsParTour) suivent CET ordre, au plus simulationsParTour candidats (revue fix2 defaut 1, chemin B) */
+    const prets = [...duelsSuivis.entries()].filter(([, d]) => tete > d.t
+      && ((d.vainqueur === 'createur' && tete >= d.t + bornes.delaiDuelBlocs) || ((d.vainqueur === 'rejoignant' || (d.vainqueur === null && d.sansHash)) && presse(d))))
+      .map(([id, d]) => ({ id, d, presse: presse(d), fin: d.t + FENETRE, mise: d.mise === null ? 0n : d.mise }));
+    prets.sort((a, b) => (Number(b.presse) - Number(a.presse)) || (a.presse ? a.fin - b.fin : (b.mise > a.mise ? 1 : b.mise < a.mise ? -1 : a.fin - b.fin)));
+    const out = [];
+    let budgetStatuts = bornes.statutsParTour;
+    for (const p of prets) {
+      if (out.length >= bornes.simulationsParTour) break;
+      const { id, d } = p;
+      if (d.luTour !== tourN) {
+        if (budgetStatuts <= 0) break;
+        budgetStatuts -= 1;
+        const v = await lire1(id);
+        if (!v || v.s === 0) { info.sain = false; continue; }
+        if (v.s !== DUEL_JOINED) { closDuel(id); continue; }
+        d.luTour = tourN;
+        if (d.mise === null) d.mise = v.mise;
+      }
+      out.push({ cible: 'duels', to: cD, ids: [id], fin: p.fin, quoi: 'settle', presse: p.presse, mise: d.mise === null ? 0n : d.mise, vainqueur: d.vainqueur || 'inconnu', avant: { t: d.t } });
     }
-    /* l ordre des duels : les PRESSES d abord (par echeance), puis ceux ou le createur gagne, par mise DECROISSANTE (puis echeance) */
-    out.sort((a, b) => (Number(b.presse) - Number(a.presse)) || (a.presse ? a.fin - b.fin : (b.mise > a.mise ? 1 : b.mise < a.mise ? -1 : a.fin - b.fin)));
-    return out;
+    /* toutes les lectures du tour ratees : la lecture des duels a ECHOUE (la porte des duels se ferme) */
+    if (tentees > 0 && ratees === tentees) throw new Error('no duel read succeeded this round (' + ratees + ' tried; last: ' + String(derniere).slice(0, 80) + ')');
+    return { out, ratees };
   }
   /* le hash d UN bloc (la cible d un duel), par le meme cache que les slots */
   async function hashDe(b) {
@@ -638,6 +763,8 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       const cD = duelsCfg ? resoudre(duelsCfg.contrat) : null, cR = rollsCfg ? resoudre(rollsCfg.contrat) : null;
       return {
         etat: st.etat, adresse: st.adresse, contrat: c, chaine: chainId, chaineVerifiee: st.chaineVue, depuis: st.depuis, msParBlocMesure: st.msParBloc, intervalleMs: st.intervalleMs,
+        /* revue fix2 defaut 2 : 'injecte' (msParBloc passe a creerRegleur), 'mesure', ou null (pas encore mesure : 200 ms supposes pour la marge) */
+        tempsDeBloc: fixe !== null ? 'injecte' : st.msParBloc !== null ? 'mesure' : null,
         fenetreSecondes: st.msParBloc ? Slots.secondesFenetre(st.msParBloc) : null, suivis: suivis.size, enVol: st.enVol ? { hash: st.enVol.hash, cible: st.enVol.cible, quoi: st.enVol.quoi, ids: st.enVol.ids } : null,
         dernierTour: st.dernierTour, dernierEnvoi: st.dernierEnvoi, dernierRegle: st.dernierRegle, erreurs: st.erreurs.slice(), echecsSuite: st.echecsSuite, arret: st.arret,
         /* revue keeper 3 : l etat DEGRADE (ON, mais des echecs en cours : recu illisible, revert, envoi refuse, non incluse) — dit, jamais tu */
@@ -646,7 +773,10 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
         /* 2026-10-24 : l activite PAR CONTRAT (/sante) ; revue keeper 2 : son plafond horaire et ses envois de l heure */
         contrats: {
           slots: { contrat: c, suivis: suivis.size, ecartes: [...ecartes.keys()], envoisDerniereHeure: heure('slots'), plafondHeure: plafondHeure(bornes, 'slots'), ...st.parContrat.slots },
-          duels: { contrat: cD, configure: !!duelsCfg, suivis: duelsSuivis.size, envoisDerniereHeure: heure('duels'), plafondHeure: plafondHeure(bornes, 'duels'), ...st.parContrat.duels },
+          /* revue duels-gate D1 : lu (derniere lecture REUSSIE des duels, ISO) et erreurLecture (la derniere ratee ; null apres un succes) —
+           *   duels-plan-app.js regleurCouvre les exige frais et sans erreur ; clos = egalites / finals jamais relus */
+          duels: { contrat: cD, configure: !!duelsCfg, suivis: duelsSuivis.size, clos: duelsClos.size, lu: lectureDuels.lu, erreurLecture: lectureDuels.erreur, lecturesRatees: lectureDuels.ratees,
+            envoisDerniereHeure: heure('duels'), plafondHeure: plafondHeure(bornes, 'duels'), ...st.parContrat.duels },
           rolls: { contrat: cR, configure: !!rollsCfg, aujourdhui: jours.aujourdhui, joursClos: [...jours.finis], envoisDerniereHeure: heure('rolls'), plafondHeure: plafondHeure(bornes, 'rolls'), ...st.parContrat.rolls },
         },
         bornes: { spinsParTx: bornes.spinsParTx, maxFeeWei: String(bornes.maxFeeWei), txParHeure: Object.fromEntries(CONTRATS.map((x) => [x, plafondHeure(bornes, x)])), gasMaxParTx: String(bornes.gasMaxParTx), echecsMax: bornes.echecsMax, simulationsParTour: bornes.simulationsParTour, joursRecul: bornes.joursRecul,

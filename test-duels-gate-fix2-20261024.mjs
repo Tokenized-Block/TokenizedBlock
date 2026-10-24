@@ -51,8 +51,14 @@ const noeud = (chaine = 8453) => async (methode, params) => {
 /* la configuration du serveur (serveur-web.js : duels.contrat est une FONCTION, rolls.contrat une adresse) */
 const regleur = (x = {}) => creerRegleur({ cle: CLE_TEST, contrat: SLOTS, chainId: 8453, table: TABLE, blocDeploiement: 99000, rpc: noeud(), journal: () => {},
   duels: { contrat: () => DC, bloc: () => 99000 }, rolls: { contrat: RC }, ...x });
-const couvre = (e, c = DC) => essai(() => D.regleurCouvre(e, c));
-const eOn = regleur().etat();
+/* revue fix2 porte D1 : l heure est PASSEE (duels-plan-app.js n a pas d horloge) ; le regleur de ce banc a l horloge reelle */ const couvre = (e, c = DC) => essai(() => D.regleurCouvre(e, c, Date.now()));
+/* revue fix2 porte D1 (2026-10-24) : couvrir exige aussi une lecture des duels REUSSIE et fraiche — le regleur ON fait donc UN tour sur le
+ *   faux noeud (getLogs -> [], rien a regler) avant d etre juge ; un regleur qui n a jamais lu les duels ne couvre pas */
+const rOn = regleur();
+const eAvantLecture = rOn.etat();
+await rOn.tour();
+const eOn = rOn.etat();
+ok(couvre(eAvantLecture) === false && eAvantLecture.contrats.duels.lu === null, 'regleur ON qui n a encore lu aucun duel (lu null) : ne couvre pas');
 ok(eOn.etat === 'ON' && eOn.contrats && !Array.isArray(eOn.contrats) && eOn.contrats.duels && eOn.contrats.duels.contrat === DC && eOn.contrats.duels.configure === true,
   'temoin : le vrai etat() publie contrats comme un OBJET, contrats.duels = { contrat: ' + (eOn.contrats && eOn.contrats.duels && eOn.contrats.duels.contrat) + ', configure: ' + (eOn.contrats && eOn.contrats.duels && eOn.contrats.duels.configure) + ' }');
 ok(couvre(eOn) === true, 'regleur ON qui regle CE contrat de duels (forme reelle) : couvre (' + couvre(eOn) + ')');
@@ -71,20 +77,22 @@ ok(eOff.etat === 'OFF' && couvre(eOff) === false, 'sans SLOTS_KEEPER_KEY (la for
 ok(couvre(regleur({ desactive: 'trial mode (ESSAI)' }).etat()) === false, 'regleur desactive (mode essai) : ne couvre pas');
 /* ARRETE : le faux noeud sert la chaine 1 ; le premier tour arrete le regleur (rien n est signe) */
 const rArr = regleur({ rpc: noeud(1) });
-const avant = couvre(rArr.etat());
 appels.length = 0;
 await rArr.tour();
 const eArr = rArr.etat();
-ok(appels.includes('eth_chainId') && avant === true && eArr.etat === 'ARRETE' && couvre(eArr) === false,
-  'stimulus prouve (eth_chainId lu : ' + appels.join(',') + ') : avant le tour couvre ' + avant + ' ; noeud d une autre chaine -> ' + eArr.etat + ', ne couvre plus');
+/* le stimulus : ARRETE seul doit fermer — meme avec une lecture des duels fraiche et sans erreur greffee (celle du regleur sain) */
+const eArrLu = { ...eArr, contrats: { ...eArr.contrats, duels: { ...eArr.contrats.duels, lu: eOn.contrats.duels.lu, erreurLecture: null } } };
+const avant = couvre({ ...eArrLu, etat: 'ON' });
+ok(appels.includes('eth_chainId') && avant === true && eArr.etat === 'ARRETE' && couvre(eArr) === false && couvre(eArrLu) === false,
+  'stimulus prouve (eth_chainId lu : ' + appels.join(',') + ') : la meme forme ON + lecture fraiche couvre ' + avant + ' ; noeud d une autre chaine -> ' + eArr.etat + ', ne couvre plus (meme lecture fraiche greffee)');
 /* un tour sur la BONNE chaine (faux noeud, rien a regler) : le regleur reste ON et couvre toujours */
 const rOk = regleur();
 appels.length = 0;
 const tr = await rOk.tour();
 ok(appels.includes('eth_chainId') && appels.includes('eth_blockNumber') && rOk.etat().etat === 'ON' && couvre(rOk.etat()) === true,
   'un tour sur la bonne chaine (' + (tr && tr.pourquoi) + ') : toujours ON et couvre');
-/* la chaine servie : /api/duels compose { etat, adresse, regleDuels: regleurCouvre(eReg, contrat) } (serveur-web.js) */
-const servi = (e) => ({ ok: true, contrat: DC, regleur: { etat: e.etat, adresse: e.adresse || null, regleDuels: D.regleurCouvre(e, DC) } });
+/* la chaine servie : /api/duels compose { etat, adresse, regleDuels: regleurCouvre(eReg, contrat, Date.now()) } (serveur-web.js) */
+const servi = (e) => ({ ok: true, contrat: DC, regleur: { etat: e.etat, adresse: e.adresse || null, regleDuels: D.regleurCouvre(e, DC, Date.now()) } });
 const T = 1761300000, A = '0x' + 'a1'.repeat(20), B = '0x' + 'b1'.repeat(20);
 const ouvert = { id: '1', creator: A, token: '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', stake: 1000000n, guessA: [1, 1, 1, 1, 1], expiresAt: T + 3600, joiner: null, guessB: null, targetBlock: null, settled: null, cancelled: false, refunded: false };
 const offre = (e) => essai(() => D.actionsDuel(ouvert, B, 1000, T, D.duelsOuverts(servi(e))).join());

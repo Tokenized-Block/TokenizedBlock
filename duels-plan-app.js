@@ -264,14 +264,24 @@ export const FINIS = Object.freeze(['REGLE', 'ANNULE', 'REMBOURSE']);
  * ⛔ FAIL-CLOSED : « le regleur regle ce contrat » = son etat global est ON (ni OFF, ni ARRETE) ET etat().contrats.duels — la forme
  *   PUBLIEE par slots-regleur.js etat() : contrats = { slots, duels: { contrat, configure, ... }, rolls } — est configure (=== true) et son
  *   contrat (resolu, en minuscules) est CE contrat. Revue rolls-duels-ui 2026-10-24 : la 1re version attendait un TABLEAU que le regleur ne
- *   publie pas -> les duels ne s ouvraient jamais. Toute autre forme (tableau, adresse seule, contrat null) ne compte pas. */
+ *   publie pas -> les duels ne s ouvraient jamais. Toute autre forme (tableau, adresse seule, contrat null) ne compte pas.
+ * ⛔ ET IL LIT LES DUELS (revue duels-gate D1, 2026-10-24) : un regleur ON qui ne lit pas les duels (getLogs refuse, duels(id) refuses,
+ *   liste de l etat perimee) ne regle rien — l option gratuite revient. contrats.duels.lu (la derniere lecture REUSSIE, ISO) doit dater de
+ *   moins de 3 intervalles du regleur (e.intervalleMs ; 10 s s il manque) et contrats.duels.erreurLecture doit valoir null (la derniere
+ *   lecture n a pas echoue). Un regleur plus ancien, qui ne publie ni l un ni l autre : ne couvre pas. */
 export const PHRASE_DUELS_FERMES = 'New duels open once the automatic settler runs: without it, a player who joins and loses could let the duel expire and get a refund.';
-/** le regleur du serveur (son etat(), tel que /sante le publie) regle-t-il ce contrat ? */
-export function regleurCouvre(e, contrat) {
+/** le regleur du serveur (son etat(), tel que /sante le publie) regle-t-il ce contrat, et a-t-il lu les duels recemment (`maintenant`, ms) ?
+ *  `maintenant` est OBLIGATOIRE (ce module n a pas d horloge : test-duels-plan-app) ; absent -> NaN -> ne couvre pas */
+export function regleurCouvre(e, contrat, maintenant) {
   const c = bas(contrat);
   if (!e || e.etat !== 'ON' || !ADR.test(c) || !e.contrats || typeof e.contrats !== 'object') return false;
   const d = e.contrats.duels;
-  return !!d && typeof d === 'object' && d.configure === true && bas(d.contrat) === c;
+  if (!d || typeof d !== 'object' || d.configure !== true || bas(d.contrat) !== c) return false;
+  if (d.erreurLecture !== null) return false;
+  const lu = typeof d.lu === 'string' ? Date.parse(d.lu) : NaN;
+  const iv = Number(e.intervalleMs) > 0 ? Number(e.intervalleMs) : 10000;
+  const age = Number(maintenant) - lu;
+  return Number.isFinite(age) && age > -iv && age < 3 * iv;
 }
 /** /api/duels -> creer et rejoindre un duel sont-ils proposes ? seulement si le serveur dit que son regleur regle ce contrat */
 export const duelsOuverts = (j) => !!(j && j.regleur && j.regleur.regleDuels === true);

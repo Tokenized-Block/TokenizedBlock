@@ -1,6 +1,6 @@
 /* banc-slots-regleur-anvil-20261023.mjs — LE REGLEUR DES SLOTS DE BOUT EN BOUT sur un anvil LOCAL (aucun reseau), avec BlockSlots COMPILE.
  * Usage : (dans contracts/) forge build ; anvil --port P --chain-id 8453 ; node banc-slots-regleur-anvil-20261023.mjs P
- * Cles (2026-10-24, revue keeper 7) : SEULES des cles de TEST PUBLIQUES, les entiers 1 a 11 :
+ * Cles (2026-10-24, revue keeper 7 ; revue fix2 defaut 4 : 1 a 10, pas 11) : SEULES des cles de TEST PUBLIQUES, les entiers 1 a 10 :
  *   0x…01 = le regleur (il SIGNE ses tx brutes) ; 0x…02 deployeur, 0x…03 joueur (createur des duels), 0x…04 autre joueur, 0x…05 dev,
  *   0x…06 a 0x…09 = B1 a B4 (rejoignent, achetent des pass), 0x…0a = le pot commun des duels. Les adresses 0x…02 a 0x…0a sont DERIVEES
  *   de ces cles (adresseDe), approvisionnees par anvil_setBalance et IMPERSONNEES par anvil (anvil_impersonateAccount) : aucune cle n est
@@ -60,7 +60,7 @@ const chaineId = parseInt(await rpc('eth_chainId'), 16);
 if (chaineId !== 8453) { console.log('anvil doit tourner avec --chain-id 8453 (lu : ' + chaineId + ')'); process.exit(2); }
 const client = String(await rpc('web3_clientVersion'));
 if (!/anvil/i.test(client)) { console.log('ce banc ne tourne que contre anvil (lu : ' + client + ')'); process.exit(2); }
-/* les cles de TEST publiques 1 a 11 (voir l en-tete) ; 2 a 10 : adresses derivees, impersonnees, approvisionnees en ETH local */
+/* les cles de TEST publiques 1 a 10 (voir l en-tete) ; 2 a 10 : adresses derivees, impersonnees, approvisionnees en ETH local */
 const cleTest = (k) => '0x' + k.toString(16).padStart(64, '0');
 const [DEP, JOUEUR, AUTRE, DEV, B1, B2, B3, B4, POOL] = [2, 3, 4, 5, 6, 7, 8, 9, 10].map((k) => adresseDe(cleTest(k)).toLowerCase());
 for (const a of [DEP, JOUEUR, AUTRE, DEV, B1, B2, B3, B4, POOL]) { await rpc('anvil_impersonateAccount', [a]); await rpc('anvil_setBalance', [a, '0x' + (10n ** 20n).toString(16)]); }
@@ -156,7 +156,9 @@ const cfgR = [adr(usdc), adr(DEV), adr(usdc), mot(1n), mot(500000n), mot(10_0000
 const rR = await envoyer(DEP, null, BRo.bytecode.object + cfgR);
 const rolls = rR.contractAddress.toLowerCase();
 vu(BigInt(await rpc('eth_getCode', [duels, 'latest']).then((c) => c.length)) > 2n && BigInt(await rpc('eth_getCode', [rolls, 'latest']).then((c) => c.length)) > 2n, 'BlockDuels et BlockRolls deployes en local');
-const r2 = creerRegleur({ cle: CLE, contrat, chainId: 8453, table: P.prizes, blocDeploiement: blocDep, rpc, journal: (x) => journal.push(x), duels: { contrat: duels, bloc: blocDuels }, rolls: { contrat: rolls } });
+/* revue fix2 defaut 2 : anvil mine en ~20 ms (minage instantane) ; MESURE, le temps de bloc saturait la marge de fin a 239 blocs selon la
+ *   vitesse de la machine (le verdict de ce banc en dependait). Il est INJECTE : 200 ms (Base apres Denim) -> tours de 10 s, marge 150. */
+const r2 = creerRegleur({ cle: CLE, contrat, chainId: 8453, table: P.prizes, blocDeploiement: blocDep, rpc, journal: (x) => journal.push(x), duels: { contrat: duels, bloc: blocDuels }, rolls: { contrat: rolls }, msParBloc: 200 });
 /* les tours, comme la boucle du serveur ; rend les tx incluses du tour (recu lu) */
 async function tours(k) {
   const faits = [];
@@ -218,6 +220,7 @@ for (let tete0 = await tete(); tete0 + 1 <= finLot; tete0 = await tete()) {
 }
 await r2.tour();
 const { delaiDuelBlocs: delai, margeFinDuelBlocs: marge } = r2.etat().bornes;
+vu(marge === 150 && r2.etat().tempsDeBloc === 'injecte' && r2.etat().intervalleMs === 10000, 'temps de bloc INJECTE (200 ms), pas mesure : marge de fin ' + marge + ' blocs, tours de ' + r2.etat().intervalleMs + ' ms (attendu 150, 10000 : le verdict ne depend plus de la vitesse de la machine)');
 const ap = await soldes();
 const vus = { createur: 0, rejoignant: 0, egalite: 0 }, issues = [];
 for (const d of lot) {

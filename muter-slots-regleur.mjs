@@ -15,8 +15,11 @@ import { execFileSync } from 'node:child_process';
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const original = fs.readFileSync(path.join(ICI, 'slots-regleur.js'), 'utf8');
 const COPIE = path.join(ICI, '.mutant-slots-regleur-' + process.pid + '.js');
+/* revue fix2 (2026-10-24, round 3) : la copie passe aussi par test-keeper-fix3-20261024.mjs (eviction, budgets, fenetre d un duel deja
+ *   SUIVI : le mutant « cible + 256 » n est plus tue par test-slots-regleur seul, la decouverte refusant deja un duel hors fenetre) */
+const BANCS = ['test-slots-regleur-20261023.mjs', 'test-keeper-fix3-20261024.mjs'];
 const lancer = () => {
-  try { execFileSync(process.execPath, [path.join(ICI, 'test-slots-regleur-20261023.mjs')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, REGLEUR_MODULE: COPIE, TOUT_COMPTER: '' } }); return true; }
+  try { for (const b of BANCS) execFileSync(process.execPath, [path.join(ICI, b)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, REGLEUR_MODULE: COPIE, TOUT_COMPTER: '' } }); return true; }
   catch (_) { return false; }
 };
 /* une ancre texte -> une regexp : le texte echappe, chaque saut de ligne accepte \r?\n (LF comme CRLF) */
@@ -72,9 +75,12 @@ const M = [
   ['lot : le spin fautif n est pas ecarte', 'ecartes.set(ids[0], s ? s.t : tete); st.compteurs.spinsEcartes += 1;', ''],
   ['statut 0 : le spin est abandonne (0f9d8ec)', '      if (v.status === 0) { info.sain = false; continue; }\n', ''],
   ['duels : envoye a la tete cible + 256 (tomberait a + 257)', 'if (tete + 1 > d.t + FENETRE) duelsSuivis.delete(id);', 'if (tete > d.t + FENETRE) duelsSuivis.delete(id);'],
-  ['duels : statut non relu (deja regle envoye)', '      if (s !== DUEL_JOINED) { duelsSuivis.delete(id); continue; }\n', ''],
-  ['duels : statut 0 abandonne', '      if (s === 0) { info.sain = false; continue; }', ''],
-  ['duels : les Joined jamais lus', 'if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, { t, vainqueur: null, mise: 0n });', ''],
+  /* revue fix2 round 3 : ancres suivies (classement une fois, puis statut relu des seuls candidats) */
+  ['duels : statut non relu avant envoi (deja regle envoye)', '        if (v.s !== DUEL_JOINED) { closDuel(id); continue; }\n        d.luTour = tourN;', '        d.luTour = tourN;'],
+  ['duels : statut non relu au classement (deja regle classe)', '        if (v.s !== DUEL_JOINED) { closDuel(id); continue; }\n        Object.assign(d,', '        Object.assign(d,'],
+  ['duels : statut 0 abandonne (classement)', 'if (!v || v.s === 0) { info.sain = false; continue; } /* illisible', 'if (!v) { info.sain = false; continue; } /* illisible'],
+  ['duels : statut 0 abandonne (avant envoi)', '        if (!v || v.s === 0) { info.sain = false; continue; }\n        if (v.s !== DUEL_JOINED) { closDuel(id); continue; }\n        d.luTour', '        if (!v) { info.sain = false; continue; }\n        if (v.s !== DUEL_JOINED) { closDuel(id); continue; }\n        d.luTour'],
+  ['duels : les Joined jamais lus', 'decouvrir(String(BigInt(l.topics[1])), Number(m[5]), tete, { guessB: m.slice(0, 5).map(Number) });', ''],
   ['rolls : un jour Open jamais ferme', "if (etat === 0) { out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay', avant }); continue; }", ''],
   ['rolls : drawDay a la tete cible + 256', 'if (tete + 1 <= t + FENETRE) out.push(', 'if (tete <= t + FENETRE) out.push('],
   ['rolls : jamais re-arme', "      else out.push({ cible: 'rolls', to: cR, ids: [k], fin: Infinity, quoi: 'closeDay', avant });", ''],
@@ -90,14 +96,14 @@ const M = [
   ['revue 1 : jour arme APRES notre bloc explique', ' && t - ROLLS_DELAI_CIBLE <= blocRecu', ''],
   ['revue 1 : cible illisible apres le revert comptee tout de suite', 'if (maintenant() - v.revertA <= bornes.inclusionMaxMs) {', 'if (false) {'],
   ['revue 1 : cible illisible apres le revert jamais comptee', 'if (maintenant() - v.revertA <= bornes.inclusionMaxMs) {', 'if (true) {'],
-  ['revue 1 : plus de delai (settle a cible + 1, la course)', '.filter(([, d]) => tete > d.t && tete >= d.t + bornes.delaiDuelBlocs)', '.filter(([, d]) => tete > d.t)'],
-  ['revue 2 : egalite envoyee', "if (v === 'egalite') { duelsSuivis.delete(id); st.compteurs.duelsEgalites += 1; continue; }", ''],
-  ['revue 2 : rejoignant gagnant envoye sans attendre la fin', "      if (d.vainqueur !== 'createur' && !presse(d)) continue;\n", ''],
+  ['revue 1 : plus de delai (settle a cible + 1, la course)', "(d.vainqueur === 'createur' && tete >= d.t + bornes.delaiDuelBlocs)", "(d.vainqueur === 'createur')"],
+  ['revue 2 : egalite envoyee (traitee en createur gagnant)', "if (v === 'egalite') { closDuel(id); st.compteurs.duelsEgalites += 1; continue; }", "if (v === 'egalite') { d.vainqueur = 'createur'; continue; }"],
+  ['revue 2 : rejoignant gagnant envoye sans attendre la fin', "((d.vainqueur === 'rejoignant' || (d.vainqueur === null && d.sansHash)) && presse(d))", "(d.vainqueur === 'rejoignant' || (d.vainqueur === null && d.sansHash && presse(d)))"],
   ['revue 2 : vainqueur inverse', "a > b ? 'createur' : 'rejoignant'", "a > b ? 'rejoignant' : 'createur'"],
   ['revue 2 : face du hash entier (pas les 40 premiers chiffres)', "keccak256(new TextEncoder().encode('0x' + s.slice(2, 42)))", 'keccak256(new TextEncoder().encode(s))'],
   ['revue 2 : marge de fin sans les tours mesures', 'Math.max(bornes.margeFinDuelBlocs, tours)', 'bornes.margeFinDuelBlocs'],
-  ['revue 2 : duels par echeance seulement (pas par mise)', 'out.sort((a, b) => (Number(b.presse) - Number(a.presse)) || (a.presse ? a.fin - b.fin : (b.mise > a.mise ? 1 : b.mise < a.mise ? -1 : a.fin - b.fin)));', 'out.sort((a, b) => a.fin - b.fin);'],
-  ['revue 2 : un duel presse ne passe plus devant', 'out.sort((a, b) => (Number(b.presse) - Number(a.presse)) || ', 'out.sort((a, b) => '],
+  ['revue 2 : duels par echeance seulement (pas par mise)', 'prets.sort((a, b) => (Number(b.presse) - Number(a.presse)) || (a.presse ? a.fin - b.fin : (b.mise > a.mise ? 1 : b.mise < a.mise ? -1 : a.fin - b.fin)));', 'prets.sort((a, b) => a.fin - b.fin);'],
+  ['revue 2 : un duel presse ne passe plus devant', 'prets.sort((a, b) => (Number(b.presse) - Number(a.presse)) || ', 'prets.sort((a, b) => '],
   ['revue 2 : un seul plafond pour les trois contrats (518653b)', 'st.envoisHeure[x].length >= plafondHeure(bornes, x)', 'CONTRATS.reduce((s, y) => s + st.envoisHeure[y].length, 0) >= plafondHeure(bornes, x)'],
   ['revue 3 : la relache d un recu illisible n est pas comptee (518653b)', "echec(nomTx(v) + ': receipt of tx ' + v.hash + ' unreadable for ' + Math.round(bornes.inclusionMaxMs / 1000) + ' s, released (outcome unknown, counted as a failure)', 'recusIlisibles', v.cible);", 'st.compteurs.recusIlisibles += 1;'],
   ['revue 3 : etat().degrade jamais dit', "degrade: st.etat === 'ON' && st.echecsSuite > 0 ?", 'degrade: false ?'],
