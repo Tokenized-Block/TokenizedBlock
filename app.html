@@ -3744,8 +3744,13 @@ details[open] > summary::before{transform:rotate(90deg)}
              ferme, commande « roll » du chat) se regle ICI — relu sur les logs du contrat (rolls-en-attente.js). Ouvert seulement s il y en a. -->
         <button type="button" class="bouton" id="rollsRegler" hidden>Settle pending rolls</button>
       </div>
+      <!-- 2026-10-24 (revue adverse) : la ligne d etat de CHAQUE rangee de boutons payants est juste sous SA rangee. Ici : les messages du
+           Roll (#rollsEtat), le regleur des rolls (#rollsAttente), le score du dernier roll (#dernierMoi) et les derniers rolls (#dernierQuand) ;
+           ils etaient sous la zone des Slots, ~1 000 px loin du bouton touche (mesure 375 x 812 avec wallet). -->
       <p class="note" id="rollsEtat" style="margin:6px 0 0" hidden></p>
       <p class="note" id="rollsAttente" style="margin:4px 0 0" hidden></p>
+      <p class="note" id="dernierMoi" style="margin:4px 0 0"></p>
+      <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
       <!-- SLOTS (Phil 2026-10-23 : « 3 faces random independantes, tirees au moment de la tx ; des points quand des faces sont les memes ; un
            bon reward de la pool, comme une machine a sous ») — BlockSlots. Les blocs spin + 2, + 3, + 4 donnent UNE face chacun (v2, Phil
            2026-10-23) ; par trait, 3 egales = 3 points, 2 egales = 1 ; le contrat paie un prix FIXE par points, 0..5 USDC par spin, plafonne
@@ -3771,7 +3776,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>
         <!-- 2026-10-24 : le pli porte l explication (points, pot court / Accept, chances, moyenne, plage lue : #slotsComment, peinte par
              peindreSlotsUneFois, phrases DEPLACEES de #slotsRegle, pas reecrites) et la table des prix. #slotsRegle (la regle : prix,
-             perdu hors fenetre, regleur) est en tete du pli SANS wallet, et sous #slotsMoi avec un wallet (placerRegleSlots) -->
+             perdu hors fenetre, regleur) est en tete du pli SANS wallet, et AU-DESSUS de la rangee Spin avec un wallet (placerRegleSlots) -->
         <details style="margin:8px 0 0">
           <summary class="note" style="cursor:pointer">How the slots work</summary>
           <p class="note" id="slotsRegle" style="margin:6px 0 0"></p>
@@ -3784,8 +3789,6 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="jourFace mini" id="ticketFace" data-gagne="0" role="img" aria-label="Your ticket for today"></div>
         <p class="note" id="jourTicketTxt" style="margin:0">Your ticket — connect a wallet: today's ticket face shows here.</p>
       </div>
-      <p class="note" id="dernierMoi" style="margin:6px 0 0"></p>
-      <p class="note" id="dernierQuand" style="margin:2px 0 0"></p>
       <div class="tirBarre" aria-hidden="true"><span id="tirRemplir" style="width:0%"></span></div>
       <p class="note" id="tirMoi" style="margin:4px 0 0">Connect a wallet to see your progress.</p>
       <p class="note" id="jourCompte" style="margin:2px 0 0">Your ticket today — · your entries this week —</p>
@@ -3818,6 +3821,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- close(day) : l owner tout de suite, n importe qui 12 h apres la fin du jour ; fige le pot (les parts deviennent finales) -->
         <button type="button" class="bouton sec" id="jourFermerPot" hidden>Close yesterday's pot</button>
       </div>
+      <!-- 2026-10-24 (revue adverse) : la ligne d etat de CETTE rangee — Week pass, Add to this week's pot, Claim my share, Close the pot
+           (avant : #rollsEtat, sous la rangee du Roll, ~1 000 px plus haut) ; puis celle du pot des pass (#jourPassEtat, son bouton est ici) -->
+      <p class="note" id="potEtat" style="margin:6px 0 0" hidden></p>
       <p class="note" id="jourPassEtat" style="margin:4px 0 0" hidden></p>
       <!-- ⛔ 2026-10-18 (Phil : « fini ca, on a tirage weekend et roll deja en place ») : la « Face of the Day » d hier et son gagnant du jour
            (paye rien) sont RETIRES de l ecran. Le ticket du jour = 1 entree au pot de la semaine (#potJour). -->
@@ -4928,6 +4934,8 @@ function poserBoutonsRolls(t, c) {
     + (rollsCfg.pot != null ? ' (' + usdcTexte(rollsCfg.pot) + ' USDC at the last read)' : '') + '. The UNIT creator wallet can change the prizes (up to '
     + (rollsCfg.regles && rollsCfg.regles.maxPrize ? usdcTexte(rollsCfg.regles.maxPrize) + ' USDC' : 'a cap set in the contract') + ' each); a change applies to rolls made after it. Without a wallet the roll is practice: no prize.';
   if (e && !on) e.hidden = true;
+  /* la ligne du Week pass / du pot : sans wallet, aucun de ses boutons n existe — son dernier message s efface aussi */
+  { const ep = $('#potEtat'); if (ep && !c) ep.hidden = true; }
   if (!on) { const r = $('#rollsRegler'); if (r) r.hidden = true; const j = $('#jourTirerJour'); if (j) j.hidden = true; }
 }
 async function envoyerAppels(appels, c) {
@@ -5007,7 +5015,7 @@ async function rollPaye() {
     if (ps.etat !== 'PRET') { dit('Not settled: ' + ps.pourquoi); return; }
     dit('Block ' + cible.toLocaleString('en-US') + ' is in — sign the settle to reveal (anyone may, the prize is always yours)…');
     const rs = await envoyerAppels(ps.appels, c);
-    if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” below settles it within ' + texteBlocs(er.blocsRestants, sParBlocApp) + '.'); return; }
+    if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” above settles it within ' + texteBlocs(er.blocsRestants, sParBlocApp) + '.'); return; }
     const recuS = await recuDe(rs.hash), st = recuS ? lireSettled(recuS.logs, contrat) : null;
     if (!st) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return; }
     /* la FACE tiree par le bloc cible, a cote de ton ticket (le contrat l a calculee du meme hash : st.blockHash) */
@@ -5024,7 +5032,8 @@ async function rollPaye() {
   } finally { b.disabled = false; rollEnCours = false; void verifierRollsEnAttente(); }
 }
 async function passPaye() {
-  const e = $('#rollsEtat'), b = $('#jourPass');
+  /* 2026-10-24 : la ligne d etat sous la rangee du Week pass (#potEtat), pas celle du Roll */
+  const e = $('#potEtat'), b = $('#jourPass');
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!rollsCfg || !c || b.disabled) return;
   const dit = (txt) => { e.hidden = false; e.textContent = txt; };
@@ -5087,7 +5096,7 @@ function peindrePotJour(t, c) {
   p.textContent = ligneSem + ligneVeille + ligneSemPassee +(sem && sem.enPause ? ' · claims paused' : '') + ' Shares are signed by the verifier wallet; your claim opens here once yours is signed.';
 }
 async function fondPot() {
-  const e = $('#rollsEtat'), b = $('#jourFondPot');
+  const e = $('#potEtat'), b = $('#jourFondPot');
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!potCfg || !c || !b || b.disabled) return;
   const dit = (txt) => { e.hidden = false; e.textContent = txt; };
@@ -5157,7 +5166,7 @@ async function peindreReclamerPot(tp, c) {
   }
 }
 async function reclamerPot() {
-  const e = $('#rollsEtat'), b = $('#jourReclamerPot');
+  const e = $('#potEtat'), b = $('#jourReclamerPot');
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!maPartPot || !c || !b || b.disabled || String(c).toLowerCase() !== maPartPot.wallet) return;
   const dit = (txt) => { e.hidden = false; e.textContent = txt; };
@@ -5195,7 +5204,7 @@ function peindreFermerPot(tp, c) {
   if (potAFermer) b.textContent = 'Close ' + (sem ? 'the week\'s pot of ' : 'the pot of ') + potAFermer.jourId + (owner ? ' (owner)' : '');
 }
 async function fermerPot() {
-  const e = $('#rollsEtat'), b = $('#jourFermerPot');
+  const e = $('#potEtat'), b = $('#jourFermerPot');
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!potCfg || !potAFermer || !c || !b || b.disabled) return;
   const dit = (txt) => { e.hidden = false; e.textContent = txt; };
@@ -5264,7 +5273,7 @@ async function autoRollLot(c) {
   if (ps.etat !== 'PRET') { dit('Not settled: ' + ps.pourquoi); return; }
   dit('Block ' + cible.toLocaleString('en-US') + ' is in — sign the settle for all ' + rolled.length + ' rolls (anyone may, the prize is always yours)…');
   const rs = await envoyerAppels(ps.appels, c);
-  if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” below settles them within ' + texteBlocs(er.blocsRestants, sParBlocApp) + '.'); return; }
+  if (!rs || rs.etat !== 'CONFIRME' || !rs.hash) { dit(phraseNonConfirme(rs, 'Not settled yet') + ' “Settle pending rolls” above settles them within ' + texteBlocs(er.blocsRestants, sParBlocApp) + '.'); return; }
   const lusS = await recusLogs(rs), st = lireSettledTous(lusS.logs, contrat);
   if (!st.length) { dit('Settled (' + rs.hash.slice(0, 10) + '…) but not read back yet.'); return; }
   montrerSettled(st, new Map(rolled.map((x) => [String(x.rollId), Number(x.targetBlock)])));
@@ -6526,7 +6535,8 @@ setTimeout(bjRelire, 30000);
  *   LECTURES : AUCUNE boucle de plus. La tete vient de ce qui la lit deja : la boucle du Game (relireJeu, a intervalleJeuMs ; eth_blockNumber
  *   passe par le cache de 4 s de rpc), l apercu du serveur (/api/tirage, deja relu toutes les 8 s : son NUMERO de bloc seulement — le hash
  *   d une face vient de la chaine) et le minuteur des slots (3 s, seulement avec un spin en attente). Les hashes : eth_getBlockByNumber des
- *   SEULS blocs montres, une fois chacun (le parentHash donne celui du bloc d avant), partages avec les slots (slotsCfg.hashes) ; au plus
+ *   SEULS blocs montres, une fois chacun (le parentHash donne celui du bloc d avant), gardes a part (rouleauxPropres ; ceux des slots sont lus,
+ *   jamais ecrits) ; au plus
  *   une lecture LIVE toutes les 5 s (rouleaux.js LECTURE_MIN_MS). Rien ne lit ni ne tourne onglet cache, Game ferme ou autre jeu choisi. */
 function rouleauxCache() {
   if (document.hidden) return true;
@@ -6535,14 +6545,19 @@ function rouleauxCache() {
 }
 let rouleauxReduit = () => false;
 try { const mq = window.matchMedia('(prefers-reduced-motion: reduce)'); rouleauxReduit = () => !!mq.matches; } catch (_) { /* sans matchMedia : mouvement permis */ }
-/* le magasin des hashes : celui des slots (le hash d un bloc passe ne change plus) — lu a l usage, slotsCfg est declare plus bas */
+/* le magasin des hashes des rouleaux. 2026-10-24 (revue adverse, reorg) : les rouleaux lisent la TETE (blocs N et N-1 par le parentHash,
+ *   parfois a 0 bloc de profondeur) : ils ECRIVENT dans leur magasin a eux (rouleauxPropres, borne par rouleaux.js HASHES_MAX), JAMAIS dans
+ *   slotsCfg.hashes (celui des faces d un spin et du calcul de son reglement) ; ils LISENT celui des slots (un hash qu un spin a deja lu
+ *   n est pas relu). slotsCfg est declare plus bas : lu a l usage. */
+const rouleauxPropres = new Map();
+const rouleauxPartage = (f, d) => { try { return f(slotsCfg.hashes); } catch (_) { return d; } };
 const rouleauxHashes = {
-  get: (n) => { try { return slotsCfg.hashes.get(n); } catch (_) { return undefined; } },
-  has: (n) => { try { return slotsCfg.hashes.has(n); } catch (_) { return false; } },
-  set: (n, x) => { try { slotsCfg.hashes.set(n, x); } catch (_) { /* pas encore la */ } },
-  delete: (n) => { try { slotsCfg.hashes.delete(n); } catch (_) { /* pas encore la */ } },
-  keys: () => { try { return slotsCfg.hashes.keys(); } catch (_) { return [].values(); } },
-  get size() { try { return slotsCfg.hashes.size; } catch (_) { return 0; } },
+  get: (n) => (rouleauxPropres.has(n) ? rouleauxPropres.get(n) : rouleauxPartage((m) => m.get(n), undefined)),
+  has: (n) => rouleauxPropres.has(n) || rouleauxPartage((m) => m.has(n), false),
+  set: (n, x) => { rouleauxPropres.set(n, x); },
+  delete: (n) => { rouleauxPropres.delete(n); },
+  keys: () => rouleauxPropres.keys(),
+  get size() { return rouleauxPropres.size; },
 };
 async function rouleauxLireBloc(n) {
   const b = await rpc('eth_getBlockByNumber', ['0x' + Number(n).toString(16), false]);
@@ -6755,13 +6770,16 @@ async function slotsTic() {
 }
 /* 2026-10-24 (carte Draws, MESURE au navigateur, serveur local, 375 px, sans wallet : la carte faisait 1 211 px dont 233 px de #slotsRegle) :
  *   sans wallet il n y a pas de bouton Spin — la regle (MEMES phrases, meme element) vit alors en tete du pli « How the slots work » ;
- *   avec un wallet elle revient a l ecran, sous l etat des spins, AVANT toute signature (le prix, « a spin not settled in time is lost »,
+ *   avec un wallet elle revient a l ecran, au-dessus du bouton Spin, AVANT toute signature (le prix, « a spin not settled in time is lost »,
  *   la fenetre, le regleur). Deplacee, jamais reecrite ; hors de la page (banc) : rien. */
+/* 2026-10-24 (revue adverse, decision du lead) : avec un wallet la regle est AU-DESSUS de la rangee Spin | Settle | Accept (elle etait sous
+ *   #slotsMoi, donc sous le bouton Spin : lue apres la signature, pas avant) ; sans wallet (aucun bouton Spin) : en tete du pli. */
 function placerRegleSlots(moi) {
   try {
-    const rg = $('#slotsRegle'), pli = $('#slotsComment'), mien = $('#slotsMoi');
-    if (!rg || !pli || !mien || !rg.parentNode || !pli.parentNode || !mien.parentNode) return;
-    if (moi) { if (mien.nextElementSibling !== rg) mien.parentNode.insertBefore(rg, mien.nextElementSibling); }
+    const rg = $('#slotsRegle'), pli = $('#slotsComment'), bS = $('#slotsSpin');
+    const rangee = bS ? bS.parentNode : null;
+    if (!rg || !pli || !rangee || !rg.parentNode || !pli.parentNode || !rangee.parentNode) return;
+    if (moi) { if (rangee.previousElementSibling !== rg) rangee.parentNode.insertBefore(rg, rangee); }
     else if (pli.previousElementSibling !== rg) pli.parentNode.insertBefore(rg, pli);
   } catch (_) { /* hors de la page (banc) */ }
 }
@@ -6852,8 +6870,14 @@ async function peindreSlotsUneFois(force = false) {
   /* les faces montrees : le dernier spin reglable dont les blocs sont lus, sinon celles du dernier spin regle ici.
    * 2026-10-24 (rouleaux) : un spin dont les blocs ne sont pas encore la (TROP_TOT) est suivi aussi — les rouleaux tournent jusqu a ses
    *   blocs t, t+1, t+2 puis se posent un a un ; le plus RECENT des deux est suivi */
+  /* 2026-10-24 (revue adverse) : un spin plus RECENT en attente et un plus ancien reglable — les rouleaux montraient le recent pendant que
+   *   Settle (ou Accept) parlait de l ancien. Ils suivent d abord le spin du bouton : le dernier du lot de Settle, sinon celui d Accept ;
+   *   sinon (aucun bouton) le plus recent, reglable ou en attente ; la legende nomme le spin montre (« Spin #id »). */
   const etatDe = new Map(enAttente.map((x) => [String(x.id), x.etat]));
-  const montre = [...spins].reverse().find((s) => s.faces || etatDe.get(String(s.id)) === 'TROP_TOT');
+  const parId = new Map(spins.map((s) => [String(s.id), s]));
+  const duBouton = [...plan.lot].reverse().map((id) => parId.get(String(id))).find((s) => s && s.faces)
+    || (court ? [parId.get(String(court.id))].find((s) => s && s.faces) : null);
+  const montre = duBouton || [...spins].reverse().find((s) => s.faces || etatDe.get(String(s.id)) === 'TROP_TOT');
   if (montre) peindreFacesSlots(montre.faces ? montre.hashes : null, montre.id, montre.t);
   else if (slotsCfg.dernierFaces) peindreFacesSlots(slotsCfg.dernierFaces.hashes, slotsCfg.dernierFaces.id);
   else peindreFacesSlots(null, 0);

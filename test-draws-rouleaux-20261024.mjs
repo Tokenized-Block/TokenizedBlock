@@ -13,7 +13,11 @@
  *   REDUIT    mouvement reduit : jamais de rotation ; une case qui attend son bloc est VIDE (pas une face d un autre bloc) ;
  *   CACHE     page cachee : aucune lecture, aucune rotation ; visible : une lecture, puis les poses ;
  *   ILLISIBLE un bloc illisible : la case garde sa face et son etiquette (exactes), relu au plus toutes les ECHEC_MS ;
- *   BOUCLE    la boucle decorative ne fait defiler que des faces deja posees et se repose sur les memes faces, memes etiquettes.
+ *   BOUCLE    la boucle decorative ne fait defiler que des faces deja posees et se repose sur les memes faces, memes etiquettes ;
+ *   RETARD    (revue adverse 2026-10-24) noeud en retard, tete figee : la plus recente fenetre de trois blocs LUS (N-4..N-2, N-3..N-1),
+ *             jamais la tete brute avec une case vide ; aucune fenetre lue : rien de pose, « Reading… ».
+ *   + APP_SUIT : un spin recent en attente et un ancien reglable — les rouleaux suivent celui de Settle ; APP_LIVE : les hashes de la tete
+ *     lus par les rouleaux n entrent pas dans slotsCfg.hashes.
  * PARTIE B — le bloc des rouleaux de app.html (« LES ROULEAUX DE LA CARTE DRAWS » .. « FIN DES ROULEAUX ») ET le bloc des slots
  *   (« LES SLOTS » .. « EARN ») EXECUTES ensemble (faux DOM, fausse chaine avec un spin, vraies faces) :
  *   APP_LIVE  les faces au repos == logoSvg(paramsLogoDepuisApparence(faceRevelee(hash), '★')) — la face de « Base block N » ;
@@ -289,6 +293,30 @@ S.BOUCLE = async (R) => {
   const blocs = m.cases.map((c) => c.dataset.bloc).join(), T = ch.tete();
   return { ok: tourne && !etranger && !ko && m.api.etat().poses === 3 && ch.lectures <= 2 && !!blocs, tourne, etranger, ko, poses: m.api.etat().poses, lectures: ch.lectures, T };
 };
+/* ---------------------------------------------------------------- A : RETARD (revue adverse 2026-10-24) — un noeud en retard, tete FIGEE
+ *   (aucune tete nouvelle ne relance un tour : UNE lecture doit suffire). Avant : la tete brute N servait de base, la 3e case restait VIDE
+ *   sous l etiquette N. Attendu : la plus recente fenetre de trois blocs LUS, etiquetee et dite par la legende ; sans fenetre lue, rien. */
+S.RETARD = async (R) => {
+  const T = 5000;
+  const cas = async (echoue) => {
+    const h = faireHorloge(), ch = faireChaineA(h, { msBloc: 1e12, depart: T, echoue }), m = monterA(R, h, ch);
+    let ko = null;
+    m.api.tete(T);
+    await h.avancer(15000, () => { const x = auReposExact(m); if (!x.ok && !ko) ko = x; });
+    return { m, ch, ko, blocs: m.cases.map((c) => Number(c.dataset.bloc)), etiq: m.etiquettes.map((e) => e.textContent), leg: m.legende.textContent, vides: m.cases.every((c) => c.innerHTML === '') };
+  };
+  /* (a) N et N-1 pas encore servis : N-4, N-3, N-2 */
+  const a = await cas((b) => b >= T - 1);
+  const okA = !a.ko && a.blocs.join() === [T - 4, T - 3, T - 2].join() && a.etiq.join() === [T - 4, T - 3, T - 2].map(fmt).join() && a.m.cases.every((c) => c.innerHTML !== '')
+    && a.leg === legendeAttendue([T - 4, T - 3, T - 2]) && a.ch.lectures <= 4;
+  /* (b) N seul pas servi : N-3, N-2, N-1 */
+  const b = await cas((x) => x === T);
+  const okB = !b.ko && b.blocs.join() === [T - 3, T - 2, T - 1].join() && b.m.cases.every((c) => c.innerHTML !== '') && b.leg === legendeAttendue([T - 3, T - 2, T - 1]) && b.ch.lectures <= 3;
+  /* (c) seul N est servi (N-1 par son parentHash) : aucune fenetre de trois — RIEN n est pose, la legende dit qu elle lit */
+  const c = await cas((x) => x !== T);
+  const okC = !c.ko && c.vides && c.etiq.every((e) => e === '') && c.leg === 'Reading the latest Base blocks…';
+  return { ok: okA && okB && okC, okA, okB, okC, a: { blocs: a.blocs, leg: a.leg, l: a.ch.lectures, ko: a.ko }, b: { blocs: b.blocs, leg: b.leg, l: b.ch.lectures }, c: { etiq: c.etiq, leg: c.leg, vides: c.vides } };
+};
 
 /* ================================================================ PARTIE B : le vrai code de app.html */
 const CONTRAT = '0x' + 'cc'.repeat(20), MOI = '0x' + 'a1'.repeat(20);
@@ -391,7 +419,26 @@ S.APP_LIVE = async (R, texte = APP) => {
   const blocs = app.dom.cases.map((c) => Number(c.dataset.bloc));
   const consecutifs = blocs[1] === blocs[0] + 1 && blocs[2] === blocs[1] + 1;
   const leg = app.dom.el('rouleauxLegende').textContent === legendeAttendue(blocs);
-  return { ok: !ko && controles > 20 && consecutifs && leg && app.rouleauxJeu.etat().poses >= 9, ko, controles, blocs, leg: app.dom.el('rouleauxLegende').textContent };
+  /* 2026-10-24 (revue adverse, reorg) : les hashes de la TETE lus par les rouleaux n entrent jamais dans le magasin des slots (sans wallet,
+   *   les slots n en lisent aucun : le leur reste vide) */
+  const partageVide = app.slotsCfg.hashes.size === 0 && app.rouleauxJeu.etat().lectures > 5;
+  return { ok: !ko && controles > 20 && consecutifs && leg && app.rouleauxJeu.etat().poses >= 9 && partageVide, ko, controles, blocs, partageVide, leg: app.dom.el('rouleauxLegende').textContent };
+};
+/* 2026-10-24 (revue adverse) : un spin RECENT en attente (TROP_TOT) et un plus ANCIEN reglable — Settle parle de l ancien : les rouleaux le
+ *   montrent (et sa legende le nomme), pas le recent */
+S.APP_SUIT = async (R, texte = APP) => {
+  const h = faireHorloge();
+  const ch = faireChaineB(h, { depart: 1000, spins: [{ id: '5', t: 995 }, { id: '6', t: 1002 }] });
+  const app = await monterB(texte, ch, h, { R });
+  app.rouleauxTete(ch.tete());
+  await app.peindreSlots(true);
+  await h.avancer(5000);
+  const bouton = app.dom.el('slotsRegler').hidden === false && /^Settle spin #5 /.test(app.dom.el('slotsRegler').textContent);
+  const j = app.rouleauxJeu.etat().journal;
+  const suitLAncien = j.some((x) => x.cle.startsWith('S:5:')) && !j.some((x) => x.cle.startsWith('S:6:'));
+  const leg = app.dom.el('rouleauxLegende').textContent === 'Spin #5: its faces, from blocks ' + [995, 996, 997].map(fmt).join(', ') + '.';
+  const faces = app.dom.cases.every((c, r) => c.innerHTML === svgSpinVrai(H(995 + r), '5', r));
+  return { ok: bouton && suitLAncien && leg && faces, bouton, suitLAncien, leg, faces, legende: app.dom.el('rouleauxLegende').textContent, settle: app.dom.el('slotsRegler').textContent };
 };
 S.APP_SPIN = async (R, texte = APP) => {
   const h = faireHorloge();
@@ -489,7 +536,11 @@ const MUT_R = [
   ['LIVE', 'parentHash range sous le mauvais bloc', 'if (HASH.test(hp)) stocker(b - 1, hp);', 'if (HASH.test(hp)) stocker(b - 2, hp);'],
   ['LIVE', 'une case deja posee ne suit plus la tete (hash du nouveau bloc saute)', '        if (x.cle === c.cle) return;\n        if (!c.hash)', '        if (x.cle) return;\n        if (!c.hash)'],
   ['LIVE', 'l etiquette ne change qu a la pose (le defaut mesure au navigateur)', '        if (rouler(r) || x.roule) etiqueter(r, c.bloc);', '        if (!x.roule) rouler(r);'],
-  ['LIVE', 'les cases suivent la tete meme si ses blocs ne sont pas tous lus', 'const n = st.base !== null ? st.base : st.tete;', 'const n = st.tete;'],
+  ['LIVE', 'les cases suivent la tete meme si ses blocs ne sont pas tous lus', '    const n = st.base;\n', '    const n = st.tete;\n'],
+  /* 2026-10-24 (revue adverse) : le repli sur la tete brute quand aucune fenetre n est lue (la 3e case vide sous l etiquette N) */
+  ['RETARD', 'repli sur la tete brute sans fenetre lue', '    const n = st.base;\n', '    const n = st.base !== null ? st.base : st.tete;\n'],
+  ['RETARD', 'pas de fenetre du plus haut bloc lu (noeud en retard)', "      if (st.mode === 'LIVE' && !choisirBase()) { const k = plusHautLu(); if (k !== null) { await assurer(blocsLive(k)); choisirBase(); } }", "      if (st.mode === 'LIVE') choisirBase();"],
+  ['RETARD', 'le retard n est suivi que d un bloc', 'export const RETARD_MAX = 4;', 'export const RETARD_MAX = 2;'],
   ['SPIN', 'spin decale d un bloc', 'export const blocsSpin = (t) => [t, t + 1, t + 2];', 'export const blocsSpin = (t) => [t + 1, t + 2, t + 3];'],
   ['SPIN', 'les trois se posent ensemble (pas une a une)', 'TOUR_MS + r * DECALAGE_MS', 'TOUR_MS'],
   ['CADENCE', 'pas de cadence de lecture', 'export const LECTURE_MIN_MS = 5000;', 'export const LECTURE_MIN_MS = 50;'],
@@ -505,7 +556,10 @@ const MUT_R = [
 const MUT_A = [
   ['APP_LIVE', 'les rouleaux live sans le hash de leur bloc', 'svgLive: (h) => { const f = faceRevelee(h); return', 'svgLive: (h) => { const f = faceRevelee(rouleauxHashes.get(Math.max(...rouleauxHashes.keys()))); return'],
   ['APP_SPIN', 'le spin pose la face live au lieu de la face du spin', 'svgSpin: (h, id, r) => { const hs = [null, null, null]; hs[r] = h; return svgFaceSlot(hs, id, r); },', "svgSpin: (h) => { const f = faceRevelee(h); return f ? logoSvg(paramsLogoDepuisApparence(f, '★')) : ''; },"],
-  ['APP_SPIN', 'un spin a venir n est pas suivi', "const montre = [...spins].reverse().find((s) => s.faces || etatDe.get(String(s.id)) === 'TROP_TOT');", 'const montre = [...spins].reverse().find((s) => s.faces);'],
+  ['APP_SPIN', 'un spin a venir n est pas suivi', "[...spins].reverse().find((s) => s.faces || etatDe.get(String(s.id)) === 'TROP_TOT');", '[...spins].reverse().find((s) => s.faces);'],
+  /* 2026-10-24 (revue adverse) : le spin montre n est pas celui du bouton Settle */
+  ['APP_SUIT', 'les rouleaux suivent le spin le plus recent, pas celui de Settle', 'const montre = duBouton || [...spins]', 'const montre = [...spins]'],
+  ['APP_LIVE', 'les hashes de la tete ecrits dans le magasin des slots', 'set: (n, x) => { rouleauxPropres.set(n, x); },', 'set: (n, x) => { rouleauxPropres.set(n, x); rouleauxPartage((m) => m.set(n, x)); },'],
   ['APP_SPIN', 'les points avant la pose des trois faces', 'peindreAccordsSlots(faces && (!suivi || suivi.pose) ? faces : null);', 'peindreAccordsSlots(faces);'],
   ['APP_RPC', 'une boucle de lecture de plus', "document.addEventListener('visibilitychange', () => { if (!document.hidden) rouleauxJeu.reprendre(); });", "document.addEventListener('visibilitychange', () => { if (!document.hidden) rouleauxJeu.reprendre(); });\nsetInterval(() => { void rouleauxLire(); }, 2000);"],
   ['APP_CACHE', 'autre jeu choisi : on lit quand meme', "  return !v || !v.classList.contains('on') || !c || c.hidden || c.getAttribute('data-hors') === '1';", "  return !v || !v.classList.contains('on');"],

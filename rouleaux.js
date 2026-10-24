@@ -30,6 +30,8 @@ export const RESULTAT_MS = 15000;
 export const ECHEC_MS = 5000;
 export const HASHES_MAX = 600;
 export const REELS = 3;
+/** un noeud en retard de RETARD_MAX - 1 blocs au plus est suivi (la fenetre la plus recente LUE) ; au-dela, la base ne bouge pas */
+export const RETARD_MAX = 4;
 const HASH = /^0x[0-9a-f]{64}$/;
 const bas = (x) => String(x || '').toLowerCase();
 /** les blocs montres en LIVE : N-2, N-1, N */
@@ -66,15 +68,24 @@ export function creerRouleaux(o) {
       return [0, 1, 2].map((r) => ({ cle: 'R:' + r0.id + ':' + r, r, bloc: r0.t !== null ? r0.t + r : null, hash: r0.hashes[r], id: r0.id, spin: true }));
     }
     if (st.mode === 'SPIN' && st.spin) { const s = st.spin; return blocsSpin(s.t).map((b, r) => ({ cle: 'S:' + s.id + ':' + r, r, bloc: b, hash: lu(b), id: s.id, spin: true })); }
-    const n = st.base !== null ? st.base : st.tete;
+    /* 2026-10-24 (revue adverse) : JAMAIS la tete brute — sur un noeud en retard elle laissait la 3e case vide sous l etiquette N ; tant
+     *   qu aucune fenetre de trois blocs n est lue, rien n est pose (la legende dit « Reading… ») */
+    const n = st.base;
     if (n === null) return [null, null, null];
     return blocsLive(n).map((b, r) => ({ cle: 'L:' + b, r, bloc: b, hash: lu(b), spin: false }));
   }
   /* LIVE : la tete la plus haute dont les TROIS blocs N-2, N-1, N sont lus (un noeud en retard peut ne pas encore servir le dernier) — les
    *   trois cases avancent ENSEMBLE, jamais « 702, 699, 700 » (mesure au navigateur, 2026-10-24) ; aucune : la base ne bouge pas */
   function choisirBase() {
-    if (st.tete === null) return;
-    for (let k = st.tete; k > st.tete - 4 && k > 2; k -= 1) if (blocsLive(k).every((b) => lu(b))) { if (st.base === null || k > st.base) st.base = k; return; }
+    if (st.tete === null) return false;
+    for (let k = st.tete; k > st.tete - RETARD_MAX && k > 2; k -= 1) if (blocsLive(k).every((b) => lu(b))) { if (st.base === null || k > st.base) st.base = k; return true; }
+    return false;
+  }
+  /* le plus haut bloc LU parmi les RETARD_MAX derniers (sa fenetre k-2..k est la plus recente qu un noeud en retard puisse donner) */
+  function plusHautLu() {
+    if (st.tete === null) return null;
+    for (let k = st.tete; k > st.tete - RETARD_MAX && k > 2; k -= 1) if (lu(k)) return k;
+    return null;
   }
   const posesSur = (id) => st.rs.every((x, r) => x.cle === 'S:' + id + ':' + r || x.cle === 'R:' + id + ':' + r);
   const auRepos = () => st.rs.every((x) => !x.roule && !x.timer);
@@ -214,7 +225,9 @@ export function creerRouleaux(o) {
     try {
       let cs = st.mode === 'LIVE' && st.tete !== null ? blocsLive(st.tete).map((b) => ({ bloc: b, hash: lu(b) })) : cibles();
       await assurer(cs.filter((c) => c && !c.hash && c.bloc !== null).map((c) => c.bloc));
-      if (st.mode === 'LIVE') choisirBase();
+      /* un noeud en retard (N, voire N-1, pas encore servis) : la fenetre du plus haut bloc lu (k-2..k, le bloc manquant lu une fois) ;
+       *   aucune lecture de plus quand la tete est servie */
+      if (st.mode === 'LIVE' && !choisirBase()) { const k = plusHautLu(); if (k !== null) { await assurer(blocsLive(k)); choisirBase(); } }
       cs = cibles();
       const t0 = maintenant();
       cs.forEach((c, r) => {

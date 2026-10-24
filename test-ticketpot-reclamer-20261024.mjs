@@ -91,7 +91,8 @@ async function scenarios(app) {
     const montre = m.el('#jourReclamerPot').hidden === false;
     paye = true; /* reclamee ailleurs entre la peinture et le clic */
     await m.api.reclamerPot();
-    return montre && m.envois.length === 0 && /already received/.test(m.el('#rollsEtat').textContent);
+    /* 2026-10-24 (revue adverse) : le message de « Claim my share » est sur la ligne de SA rangee (#potEtat), plus sur celle du Roll */
+    return montre && m.envois.length === 0 && /already received/.test(m.el('#potEtat').textContent);
   });
   await essai('R8-clic-temoin-envoie', async () => {
     const m = monter(app, { parts: { [P.jourIdDeDay(d1)]: [partDe(d1)] }, reclame: {} });
