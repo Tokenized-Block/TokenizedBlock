@@ -82,15 +82,19 @@ const srvChecks = {
   ficheDynamique: (t) => /import\('\.\/duels-deploiement\.js'\)\.then\(/.test(t) && !/^import [^\n]*from '\.\/duels-deploiement\.js'/m.test(t),
   pasOuvertSansFiche: (t) => { const h = entre(t, "if (chemin === '/api/duels') {", '/* ══ BLOCK MISSIONS (2026-10-17)'); const i = h.indexOf("if (!contrat) { rendreD({ ok: false, etat: 'PAS_OUVERT'"), j = h.indexOf('void lireDuelsSrv()'); return i > 0 && j > i && !/eth_send|sendTransaction|sendRawTransaction/.test(h); },
   getSeulement: (t) => /if \(req\.method !== 'GET' && req\.method !== 'HEAD'\) \{ res\.writeHead\(405[^\n]*GET only/.test(entre(t, "if (chemin === '/api/duels') {", '/* ══ BLOCK MISSIONS (2026-10-17)')),
+  /* 2026-10-24 : plus de fenetres de logs (une fenetre d archive refusee laissait /api/duels NON_LU pour toujours, mesure prod game33) — la
+   *   lecture se fait par l ETAT, BORNEE : au plus DUELS_IDS_PAR_TOUR ids par tour, et AUCUN eth_getLogs (execute : test-duels-etat-20261024) */
   fenetresBornees: (t) => { const s = entre(t, 'async function lireDuelsSrv()', 'setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000)');
-    return /const DUELS_FENETRES_PAR_TOUR = 20;/.test(t) && /for \(let k = 0; k < DUELS_FENETRES_PAR_TOUR && x <= tete; k\+\+\)/.test(s) && /const y = Math\.min\(tete, x \+ TAILLE_LOGS_DUELS - 1\);/.test(s) && /const recul = duelsReculBlocs\(await sParBlocSrv\(\)\);/.test(s) && /duelsSrv\.de = Math\.max\(deploie, tete - recul\)/.test(s); },
+    return /const DUELS_IDS_PAR_TOUR = 50;/.test(t) && /idsDuelsATour\(\{ nextId, cache: duelsSrv\.cache, budget: DUELS_IDS_PAR_TOUR, garde: DUELS_GARDE_IDS \}\)/.test(s) && s.length > 500 && !/eth_getLogs/.test(s); },
   servi: (t) => /'duels-plan-app\.js',/.test((t.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/) || [])[1] || ''),
   nonLuPasVide: (t) => /if \(duelsSrv\.contrat !== contrat \|\| duelsSrv\.tete === null\) \{ rendreD\(\{ ok: false, etat: 'NON_LU'/.test(t),
 };
 for (const [k, f] of Object.entries(srvChecks)) vu(f(SRV) === true, 'serveur : ' + k);
 const srvMutants = [
   ['pasOuvertSansFiche', "if (!contrat) { rendreD({ ok: false, etat: 'PAS_OUVERT', regles }); return; }\n    void lireDuelsSrv();", "void lireDuelsSrv();\n    if (!contrat) { rendreD({ ok: false, etat: 'PAS_OUVERT', regles }); return; }"],
-  ['fenetresBornees', 'for (let k = 0; k < DUELS_FENETRES_PAR_TOUR && x <= tete; k++)', 'for (let k = 0; x <= tete; k++)'],
+  ['fenetresBornees', 'budget: DUELS_IDS_PAR_TOUR, garde: DUELS_GARDE_IDS', 'budget: Infinity, garde: DUELS_GARDE_IDS'],
+  ['fenetresBornees', "const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);\n    if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('head unreadable');\n    const nextId",
+    "const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);\n    await rpcServeur('eth_getLogs', []);\n    if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('head unreadable');\n    const nextId"],
   ['nonLuPasVide', "if (duelsSrv.contrat !== contrat || duelsSrv.tete === null) { rendreD({ ok: false, etat: 'NON_LU'", "if (false) { rendreD({ ok: false, etat: 'NON_LU'"],
 ];
 for (const [k, de, vers] of srvMutants) {

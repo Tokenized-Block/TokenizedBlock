@@ -290,18 +290,32 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     if (scanDuels.contrat !== cD) { scanDuels.contrat = cD; scanDuels.scanne = null; duelsSuivis.clear(); }
     const plancher = Math.max(blocDuels(), tete - bornes.reculLogs + 1);
     const de = scanDuels.scanne === null ? plancher : Math.max(plancher, scanDuels.scanne + 1 - 8);
+    /* 2026-10-24 : les rejoints lus par l ETAT (duelsCfg.joints : le cache de lireDuelsSrv, nextId + duels(id)) s ajoutent aux Joined des
+     *   logs RECENTS : un log refuse ne perd plus un duel. Les logs refuses ET aucun etat fourni : le tour jette, comme avant. Le statut est
+     *   RELU ci-dessous (duels(id) == Joined) avant tout envoi : une liste perimee ne fait rien partir. */
+    let refusLogs = null, parEtat = false;
     if (de <= tete) {
-      const logs = await rpc('eth_getLogs', [{ address: cD, topics: [TOPIC_JOINED], fromBlock: '0x' + de.toString(16), toBlock: '0x' + tete.toString(16) }]);
-      if (!Array.isArray(logs)) throw new Error('getLogs did not return a list');
-      for (const l of logs) {
-        if (bas(l.address) !== cD || bas(l.topics && l.topics[0]) !== TOPIC_JOINED || !l.topics[1]) continue;
-        const m = motsDe(l.data);
-        if (m.length !== 6) continue;
-        const id = String(BigInt(l.topics[1])), t = Number(m[5]);
-        if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, t);
-      }
-      scanDuels.scanne = tete;
+      try {
+        const logs = await rpc('eth_getLogs', [{ address: cD, topics: [TOPIC_JOINED], fromBlock: '0x' + de.toString(16), toBlock: '0x' + tete.toString(16) }]);
+        if (!Array.isArray(logs)) throw new Error('getLogs did not return a list');
+        for (const l of logs) {
+          if (bas(l.address) !== cD || bas(l.topics && l.topics[0]) !== TOPIC_JOINED || !l.topics[1]) continue;
+          const m = motsDe(l.data);
+          if (m.length !== 6) continue;
+          const id = String(BigInt(l.topics[1])), t = Number(m[5]);
+          if (Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, t);
+        }
+        scanDuels.scanne = tete;
+      } catch (e) { refusLogs = e; }
     }
+    if (typeof duelsCfg.joints === 'function') {
+      try {
+        for (const j of duelsCfg.joints() || []) { const id = String(j && j.id), t = Number(j && j.targetBlock); if (/^\d+$/.test(id) && Number.isSafeInteger(t) && !duelsSuivis.has(id)) duelsSuivis.set(id, t); }
+        parEtat = true;
+      } catch (_) { parEtat = false; }
+    }
+    if (refusLogs && !parEtat) throw refusLogs;
+    if (refusLogs) { info.sain = false; erreur('duels logs not read (state list used): ' + msg(refusLogs)); }
     /* settle passe si cible < bloc <= cible + 256 ; mine au mieux a tete + 1 : tete + 1 <= cible + 256. Simule a la tete : tete > cible. */
     for (const [id, t] of duelsSuivis) if (tete + 1 > t + FENETRE) duelsSuivis.delete(id);
     while (duelsSuivis.size > bornes.suivisMax) duelsSuivis.delete(duelsSuivis.keys().next().value);

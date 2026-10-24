@@ -1,10 +1,13 @@
 // test-denim-bornes-20261023.mjs — LES BORNES CONVERTIES AU TEMPS DE BLOC MESURE (Denim : 2 s -> 200 ms/bloc).
-// EXECUTE des tranches de serveur-web.js (mesure sParBlocSrv, marge des scans, recul des duels) sur un noeud simule a 2 s et a 200 ms,
+// EXECUTE des tranches de serveur-web.js (mesure sParBlocSrv, marge des scans, lecture des duels — par l ETAT depuis 2026-10-24, sans
+// recul en blocs) sur un noeud simule a 2 s et a 200 ms,
 // et verifie dans le source que les reculs exprimes en temps ne sont plus des blocs a 2 s (journal, lancements, frais, app).
 // ⛔ NE PROUVE PAS : le comportement reel de mainnet apres Denim (non active), ni le cout RPC des reculs 10x plus longs en blocs.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { blocsPour, sParBlocMesure, enteteVersMesure, RECUL_MESURE_BLOCS, secondesPour, intervalleSondageMs } from './temps-de-bloc.js';
+import { selecteur } from './keccak.js';
+import * as E from './duels-etat.js';
 
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n++; };
@@ -59,31 +62,43 @@ const monterMesure = (rpcServeur) => new Function('rpcServeur', 'process', 'bloc
   vu(m.margeBlocsRolls() === 3, 'non mesure : marge 3 blocs');
 }
 
-/* 2. le recul des duels (tranche executee : lireDuelsSrv avec ses vraies bornes) */
-const srcDuels = tranche(SRV, 'const DUELS_RECUL_S', "setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }");
+/* 2. les duels (tranche executee : lireDuelsSrv tel qu il est servi).
+ *   2026-10-24 — POURQUOI CETTE SECTION A CHANGE : elle verifiait le RECUL des logs (7 jours en blocs au temps mesure : 303 512 a 2 s,
+ *   3 025 112 a 200 ms). Mesure prod game33 2026-10-24 : ce recul est une fenetre d ARCHIVE ; un noeud qui refuse eth_getLogs la-bas
+ *   (mainnet.base.org 429) laissait /api/duels NON_LU pour toujours. lireDuelsSrv lit maintenant l ETAT (nextId + duels(id) par eth_call,
+ *   duels-etat.js) : il n a PLUS de recul en blocs du tout. L intention Denim reste : AUCUNE hypothese de 2 s/bloc — ici, plus fort, la
+ *   lecture ne depend plus du temps de bloc : meme resultat a 2 s et a 200 ms, sParBlocSrv jamais appele, aucun eth_getLogs, et un temps
+ *   de bloc NON mesure ne bloque plus la lecture (avant : « block time not measured », aucune fenetre lue).
+ *   Le detail (budget par tour, finals jamais relus, refus des logs) : test-duels-etat-20261024.mjs. */
+const srcDuels = tranche(SRV, '/* ══ LES DUELS LUS SUR LA CHAINE (2026-10-18', "setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }");
 async function lireDuels({ pas, tete = 70000000, mesure = true }) {
   const nd = noeud({ tete, pas });
-  const C = '0x' + 'ab'.repeat(20);
+  const C = '0x' + 'ab'.repeat(20), A = 'a1'.repeat(20), USDC = '83'.repeat(20);
+  const w = (x) => BigInt(x).toString(16).padStart(64, '0');
+  const S_NEXT = selecteur('nextId()'), S_DUELS = selecteur('duels(uint256)');
+  let sondesTemps = 0;
+  /* 3 duels OUVERTS (nextId 4) ; le reste du noeud simule (tete, en-tetes, getLogs) inchange */
+  const rpc = async (m, p) => {
+    if (m === 'eth_call' && p[0].data === S_NEXT) { nd.appels.push([m, p]); return '0x' + w(4); }
+    if (m === 'eth_call' && p[0].data.startsWith(S_DUELS)) { nd.appels.push([m, p]); return '0x' + [A, 1900000000, 1, (1 << 16) | (2 << 12) | (3 << 7) | (4 << 3) | 5, 0, 0, 0, USDC, 200000].map((x) => (typeof x === 'string' ? x.padStart(64, '0') : w(x))).join(''); }
+    return nd.rpcServeur(m, p);
+  };
   const f = new Function('DUELS_DEPLOIEMENT', 'rpcServeur', 'blocsPour', 'sParBlocSrv', 'TAILLE_LOGS_DUELS', 'filtreLogsDuels',
-    srcDuels + '\nreturn { lireDuelsSrv, duelsSrv, duelsReculBlocs };');
-  const x = f({ adresse: C, bloc: 1 }, nd.rpcServeur, blocsPour, async () => (mesure ? pas : null), 2000, ({ contrat, de, a }) => ({ address: contrat, fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16) }));
+    'appelNextIdEtat', 'appelDuelEtat', 'lireNextIdDuels', 'duelDepuisEtat', 'reglerDepuisHash', 'idsDuelsATour',
+    srcDuels + '\nreturn { lireDuelsSrv, duelsSrv };');
+  const x = f({ adresse: C, bloc: 1 }, rpc, blocsPour, async () => { sondesTemps += 1; return mesure ? pas : null; }, 2000, ({ contrat, de, a }) => ({ address: contrat, fromBlock: '0x' + de.toString(16), toBlock: '0x' + a.toString(16) }),
+    E.appelNextIdEtat, E.appelDuelEtat, E.lireNextId, E.duelDepuisEtat, E.reglerDepuisHash, E.idsDuelsATour);
   await x.lireDuelsSrv();
-  const premier = nd.appels.find(([m]) => m === 'eth_getLogs');
-  return { ...x, premierDe: premier ? parseInt(premier[1][0].fromBlock, 16) : null, tete };
+  return { ...x, ids: [...x.duelsSrv.cache.keys()].join(), getLogs: nd.appels.filter(([m]) => m === 'eth_getLogs').length, sondesTemps, tete };
 }
 {
-  const r = await lireDuels({ pas: 2 });
-  vu(r.duelsReculBlocs(2) === Math.ceil((7 * 86400) / 2) + 2 * 256 + 600, '2 s : le recul vaut EXACTEMENT l ancienne constante (303 512)');
-  vu(r.premierDe === r.tete - 303512, '2 s : la premiere fenetre part de tete - 303 512 (lu : tete - ' + (r.tete - r.premierDe) + ')');
-}
-{
-  const r = await lireDuels({ pas: 0.2 });
-  vu(r.premierDe === r.tete - (3024000 + 512 + 600), 'Denim : 7 jours = tete - 3 025 112 blocs (lu : tete - ' + (r.tete - r.premierDe) + ')');
-  vu(secondesPour(r.tete - r.premierDe, 0.2) >= 7 * 86400, 'Denim : le recul couvre au moins 7 jours au temps mesure');
-}
-{
-  const r = await lireDuels({ pas: 0.2, mesure: false });
-  vu(r.premierDe === null && r.duelsSrv.de === null && /block time not measured/.test(r.duelsSrv.erreur || ''), 'non mesure : aucune fenetre lue, erreur dite, le recul n est pas fige');
+  const a2 = await lireDuels({ pas: 2 }), a02 = await lireDuels({ pas: 0.2 }), nm = await lireDuels({ pas: 0.2, mesure: false });
+  vu(a2.ids === '3,2,1' && a2.duelsSrv.erreur === null && a2.duelsSrv.tete === a2.tete, '2 s : les 3 duels lus par l etat, du plus recent au plus ancien (lu : ' + a2.ids + ')');
+  vu(a02.ids === a2.ids && a02.duelsSrv.erreur === null, 'Denim 200 ms : le MEME resultat qu a 2 s (lu : ' + a02.ids + ')');
+  vu(a2.getLogs === 0 && a02.getLogs === 0 && nm.getLogs === 0, 'aucun eth_getLogs, a 2 s comme a 200 ms (aucune fenetre en blocs a convertir)');
+  vu(a2.sondesTemps === 0 && a02.sondesTemps === 0, 'le temps de bloc n est jamais demande (aucun 2 s suppose, aucun recul)');
+  vu(nm.ids === '3,2,1' && !/block time not measured/.test(nm.duelsSrv.erreur || ''), 'temps de bloc NON mesure : la lecture se fait quand meme (avant : rien de lu)');
+  vu(!/duelsReculBlocs|DUELS_RECUL_S/.test(SRV.replace(/\/\*[\s\S]*?\*\//g, '')), 'plus de recul des duels en blocs dans le code du serveur');
 }
 
 /* 3. le source : plus de « blocs a 2 s » pour une duree */

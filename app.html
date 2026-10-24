@@ -5766,7 +5766,7 @@ $('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); }
 $('#skinOuvrirMarche').addEventListener('click', () => { allerA('trade'); setTimeout(() => { const s = document.getElementById('skinsMarche'); if (s) s.scrollIntoView({ block: 'start' }); }, 60); });
 
 /* ══ LES DUELS (Phil 2026-10-18 : « les brains peuvent se faire des duels — gagnant 90 %, 7 % pool de reward commun, 3 % dev »).
- *   LECTURE : /api/duels (le serveur relit les logs de BlockDuels par fenetres bornees ; l app ne balaie JAMAIS la chaine depuis le deploiement).
+ *   LECTURE : /api/duels (le serveur lit l ETAT de BlockDuels, nextId + duels(id), 2026-10-24 ; l app ne balaie JAMAIS la chaine).
  *   ACTIONS (chacune relit la tete et l etat AVANT de construire l appel, duels-plan-app.js actionsDuel) : Challenge (approve EXACT + create,
  *   face neuve au hasard), Accept (approve EXACT + join, face neuve), Settle (dans les 256 blocs), Refund (fenetre passee / jamais pris et
  *   expire), Cancel (le createur, avant qu on le prenne). Le wallet signe chaque appel (envoyerAppels, comme les rolls payes).
@@ -5787,6 +5787,14 @@ async function lireDuelsServis(force = false) {
   try { return await duelsCfg.enVol; } finally { duelsCfg.enVol = null; }
 }
 const duelsDe = (j, cle = 'duels') => (j && j.ok && Array.isArray(j[cle]) ? j[cle].map((x) => Duels.duelDepuisJson(x)).filter(Boolean) : []);
+/* 2026-10-24 (prod game33 : NON_LU « logs unreadable » a chaque lecture, la carte promettait « back in a few seconds » pour toujours) :
+ *   aucune promesse de delai. Premiere lecture pas finie (echec false) : « being read » ; une lecture qui a ECHOUE (echec true, ou pas de
+ *   reponse) : « could not be read just now », et pourquoi (le texte du serveur, court, pose en textContent). */
+function phraseDuelsNonLus(j) {
+  if (j && j.etat === 'NON_LU' && j.echec === false) return 'The duels are being read on chain (first read).';
+  const pq = j && typeof j.pourquoi === 'string' ? j.pourquoi.replace(/\s+/g, ' ').trim().slice(0, 100) : '';
+  return 'The duels could not be read just now' + (pq ? ': ' + pq : '') + '.';
+}
 function symDuel(token) {
   const t = String(token || '').toLowerCase();
   if (t === String(USDC_BASE).toLowerCase()) return 'USDC';
@@ -5893,7 +5901,7 @@ async function peindreDuels() {
   void remplirJetonsDuel(contrat);
   /* revue adverse 2026-10-18 (MOYEN) : liste NON LUE -> pas de « Challenge » ni de formulaire (un duel cree sans liste lisible n aurait
    *   aucun Cancel/Settle/Refund a l ecran) ; ils reviennent avec la lecture */
-  if (!j.ok) { liste.textContent = ''; jb('jbDuels', '—'); jb('jbDuelsTxt', 'not read'); etat.textContent = j.etat === 'NON_LU' ? 'The duels are being read on chain — back in a few seconds.' : 'The duels could not be read just now.'; $('#duelDefier').hidden = true; const fo = $('#duelForm'); if (fo) fo.hidden = true; return null; }
+  if (!j.ok) { liste.textContent = ''; jb('jbDuels', '—'); jb('jbDuelsTxt', 'not read'); etat.textContent = phraseDuelsNonLus(j); $('#duelDefier').hidden = true; const fo = $('#duelForm'); if (fo) fo.hidden = true; return null; }
   /* audit 2026-10-24 : creer / rejoindre SEULEMENT si le regleur du serveur regle les duels (Duels.duelsOuverts) ; sinon formulaire, Challenge
    *   et Accept caches, une phrase le dit ; Settle / Refund / Cancel des duels en jeu restent */
   const ouv = Duels.duelsOuverts(j);
@@ -5914,7 +5922,7 @@ async function peindreDuels() {
   const aRegler = duels.filter((d) => ['REGLABLE', 'REMBOURSABLE', 'EXPIRE'].includes(etat2(d)));
   etat.textContent = (!ouv ? Duels.PHRASE_DUELS_FERMES : ouverts.length ? ouverts.length + ' open challenge' + (ouverts.length === 1 ? '' : 's') + '.' : 'No open challenge right now — open one below.')
     + (aRegler.length ? ' ' + aRegler.length + ' duel' + (aRegler.length === 1 ? '' : 's') + ' to settle or refund — anyone may.' : '')
-    + (j.partiel ? ' Still reading older blocks (checked up to ' + Number(j.jusqua).toLocaleString('en-US') + ').' : '') + (c ? '' : ' Connect a wallet to play.');
+    + (j.partiel ? ' Still reading older duels (' + Number(j.aLire).toLocaleString('en-US') + ' left).' : '') + (c ? '' : ' Connect a wallet to play.');
   $('#duelDefier').hidden = !c || !ouv;
   void peindreDusDuels(contrat, moi);
   if (duelsCfg.focus) { const f = liste.querySelector('[data-duel="' + duelsCfg.focus + '"]'); if (f) { try { f.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) {} } duelsCfg.focus = null; }
@@ -25769,7 +25777,7 @@ async function bcCommandeDuel() {
   const j = await lireDuelsServis(true), contrat = duelContrat(j);
   lecture.remove();
   if (!contrat) { bcEtape(m, 'Duels open with their contract: two wallets stake the same, each plays a new random face, the block 2 blocks after the join decides — winner 90%, community reward pool 7%, TokenizedBlock 3%; a tie refunds both.'); return; }
-  if (!j.ok) { bcEtape(m, j.etat === 'NON_LU' ? 'The duels are being read on chain — try again in a few seconds.' : 'The duels could not be read just now.', 'non'); return; }
+  if (!j.ok) { bcEtape(m, phraseDuelsNonLus(j), 'non'); return; }
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000), duels = duelsDe(j);
   const miens = moi ? duels.filter((d) => (d.creator === moi || d.joiner === moi) && Duels.etatDuel(d, j.tete, maintenant).etat !== 'OUVERT') : [];
