@@ -12,8 +12,11 @@ let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const paye = srv.slice(srv.indexOf("if (chemin === '/api/paye'"), srv.indexOf("if (chemin === '/api/registre-createurs')"));
-const iCredit = paye.indexOf('await crediterVolumeJour('), iVerif = paye.indexOf('verifierFrais('), iSortie = paye.indexOf('if (!v.ok) {');
-vu(iVerif > 0 && iCredit > iVerif && iCredit < iSortie, 'credit APRES verifierFrais et AVANT la sortie sur frais non verifiable');
+/* 2026-10-24 (3e tour ticketpot) : la lecture tx + recu + verifierFrais vit dans lireTxPaye (partagee avec le balayage des tickets en
+ *   attente) ; la route l appelle AVANT de crediter */
+const lirePaye = srv.slice(srv.indexOf('async function lireTxPaye('), srv.indexOf('async function lireTxPaye(') + 600);
+const iCredit = paye.indexOf('await crediterVolumeJour('), iVerif = paye.indexOf('await lireTxPaye(h)'), iSortie = paye.indexOf('if (!v.ok) {');
+vu(/v: verifierFrais\(\{ tx, recu, internes, devises:/.test(lirePaye) && iVerif > 0 && iCredit > iVerif && iCredit < iSortie, 'credit APRES verifierFrais et AVANT la sortie sur frais non verifiable');
 const fn = srv.slice(srv.indexOf('async function crediterVolumeJour('), srv.indexOf('async function crediterVolumeJour(') + 1400);
 vu(/if \(ligne !== 'hook_block' && ligne !== 'swap_action'\) return;/.test(fn), 'seules hook_block et swap_action creditent');
 vu(/jetonsActions: v\.ok \? JETONS_ACTIONS : new Set\(\)/.test(fn), 'les actions ne comptent que si notre frais est arrive');

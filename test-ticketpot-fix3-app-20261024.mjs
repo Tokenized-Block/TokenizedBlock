@@ -14,7 +14,7 @@
  * AFFIRME :
  *  F1 owner, veille OUVERTE reste 0, J-2 ouvert 3 USDC -> « Close the pot of J2026-10-26 (owner) » ; F2 non-owner a 12:00 UTC, pareil ;
  *  F3 semaine reclamable ouverte VIDE -> J-2 ; F4 que des pots vides -> pas de bouton ; F5 reste illisible -> jamais propose ;
- *  R1 202 + NON_LU : 5 renvois (8, 16, 24, 32, 40 s) puis la note « not counted for a day ticket yet — <pourquoi> » ; R2 200 + TROP_VIEUX
+ *  R1 202 + NON_LU : 5 renvois (8, 16, 24, 32, 40 s) puis la note « not counted for a day ticket yet (the server tries again for up to 48 h) — <pourquoi> » ; R2 200 + TROP_VIEUX
  *     -> pas de renvoi, la note dit pourquoi ; R3 NON_LU puis CREDITE -> pas de note ; R4 202 sans ticket -> 3 renvois a 8 s (comme avant) ;
  *  C1 pot.jours = J-7..J-2 servis (jamais la veille ni aujourd hui), parts lues SEULEMENT pour un jour ferme au reste non nul (jour + semaine
  *     le dimanche) ; C2 le brain propose POT_CLOSE de J-2 ; C3 puis POT_SIGN de la SEMAINE du dimanche (jamais le mode jour) ; C4 un jour
@@ -24,7 +24,7 @@
  *  T1 plus de « fixed prize from the roll pot » ; les deux regles disent les regles du moment, lues en direct, changeables par le createur.
  *  MUTANTS (copies en memoire ; brain : copie a cote, effacee) : chaque garde retiree -> son scenario ROUGIT.
  * NE PROUVE PAS : un vrai navigateur ni un vrai wallet, une vraie lecture de Base, ni que le serveur sert tp.jours en prod (servi depuis
- *   c432667) ; un ticket encore NON_LU apres ~2 min de renvois attend un envoi que plus rien ne fait (aucun balayage serveur). */
+ *   c432667) ; le balayage serveur des tickets en attente (3e tour) et le classement 409 / 412 / muet : test-ticketpot-fix4-20261024. */
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -108,7 +108,7 @@ async function scenariosR(app) {
     const txt = m.el['#jourTicketTxt'].textContent;
     R['R1:detail'] = m.appels.length + ' envois, delais ' + m.minuteurs.map((x) => x.ms).join(',') + ' | ' + txt;
     return m.appels.length === 6 && m.minuteurs.map((x) => x.ms).join() === '8000,16000,24000,32000,40000'
-      && /Last trade: not counted for a day ticket yet — the time of block 500 was not read\.$/.test(txt) && !/send it again/.test(txt) && m.api.note() === txt.slice(txt.indexOf(' Last trade'));
+      && /Last trade: not counted for a day ticket yet \(the server tries again for up to 48 h\) — the time of block 500 was not read\.$/.test(txt) && !/send it again/.test(txt) && m.api.note() === txt.slice(txt.indexOf(' Last trade'));
   });
   await essai('R2-trop-vieux-dit', async () => {
     const m = monterPaye(app, [{ status: 200, corps: { ok: true, externe: true, ticket: { ok: false, etat: 'TROP_VIEUX', pourquoi: 'this transaction is more than 48 h old (block 9, 2026-10-20 10:00 UTC): it no longer earns a day ticket' } } }]);
@@ -213,8 +213,9 @@ function monterAttester(html, refuseW, declineW = null) {
   const fetch = async (url, o) => {
     if (String(url).startsWith('/api/ticketpot/signature')) {
       const b = JSON.parse(o.body); depots.push(b.wallet);
-      if (b.wallet === refuseW) return { json: async () => ({ ok: false, etat: 'REFUSE', pourquoi: 'a different share of ' + b.wallet + ' is already signed and served' }) };
-      signes.add(b.wallet); return { json: async () => ({ ok: true }) };
+      /* 3e tour : le statut HTTP reel du serveur (409 = une autre part deja gardee), lu par la page */
+      if (b.wallet === refuseW) return { status: 409, json: async () => ({ ok: false, etat: 'REFUSE', pourquoi: 'a different share of ' + b.wallet + ' is already signed and served' }) };
+      signes.add(b.wallet); return { status: 200, json: async () => ({ ok: true }) };
     }
     return { json: async () => ({ ok: true, ferme: true, jourId: 'J2026-10-24', potAtClose: '3000000', verifier: VER, dernierJourSemaine: false,
       parts: [A, B, C].map((w) => ({ wallet: w, jourId: 'J2026-10-24', amount: '1000000', signature: signes.has(w) ? '0xs' : null, donnees: { message: { wallet: w } } })) }) };
@@ -227,7 +228,7 @@ function monterSigner(app, refuseW, declineW = null) {
   if (a < 0 || b < a) throw new Error('decoupe bjSignerParts introuvable');
   const etapes = [], depots = [];
   const window = { ethereum: { request: async ({ params }) => { const w = JSON.parse(params[1]).message.wallet; if (w === declineW) throw new Error('User rejected'); return '0xsig'; } } };
-  const fetch = async (url, o) => { const x = JSON.parse(o.body); depots.push(x.wallet); return { json: async () => (x.wallet === refuseW ? { ok: false, etat: 'REFUSE', pourquoi: 'already signed' } : { ok: true }) }; };
+  const fetch = async (url, o) => { const x = JSON.parse(o.body); depots.push(x.wallet); return x.wallet === refuseW ? { status: 409, json: async () => ({ ok: false, etat: 'REFUSE', pourquoi: 'already signed' }) } : { status: 200, json: async () => ({ ok: true }) }; };
   const f = new Function('bcEtape', 'courtAdr', 'usdcTexte', 'window', 'fetch', app.slice(a, b) + '\nreturn bjSignerParts;')((m, t, c) => etapes.push([t, c]), (w) => w.slice(0, 6), (x) => String(Number(x) / 1e6), window, fetch);
   const p = { sign: { jourId: 'J2026-10-24', week: false, shares: [A, B, C].map((w) => ({ wallet: w, amount: '1000000', donnees: { message: { wallet: w } } })) } };
   return { lancer: () => f({}, p, VER), etapes, depots };
@@ -287,16 +288,16 @@ async function mutant(nom, src, de, vers, scen, rougit) {
 }
 await mutant('app : pot vide propose (veille)', APP, '    if (!(resteDe(x) > 0n)) continue;\n', '', scenariosF, 'F1-owner-veille-vide-ouverte');
 await mutant('app : reste illisible compte', APP, 'try { return BigInt(x.reste); } catch (_) { return 0n; }', 'try { return BigInt(x.reste); } catch (_) { return 1n; }', scenariosF, 'F5-reste-illisible');
-await mutant('app : ticket jamais dit', APP, '        if (tk) direTicketPaye(tk);\n', '', scenariosR, 'R2-trop-vieux-dit');
-await mutant('app : NON_LU renvoye 3 fois', APP, 'essai < (nonLu ? 5 : 3)', 'essai < 3', scenariosR, 'R1-non-lu-5-renvois-puis-note');
-await mutant('app : credite n efface pas la note', APP, "if (tk.ok === true || tk.etat === 'CREDITE') { ticketPayeNote = null; return; }", '', scenariosR, 'R3-credite-pas-de-note');
+await mutant('app : ticket jamais dit', APP, '        if (tk) direTicketPaye(tk, hash);\n', '', scenariosR, 'R2-trop-vieux-dit');
+await mutant('app : NON_LU renvoye 3 fois', APP, 'essai < (chaine ? 5 : 3)', 'essai < 3', scenariosR, 'R1-non-lu-5-renvois-puis-note');
+await mutant('app : credite n efface pas la note', APP, "if (tk.ok === true || tk.etat === 'CREDITE') { ticketPayeNote = null; if (span) span.remove(); return; }", '', scenariosR, 'R3-credite-pas-de-note');
 await mutant('app : P.jours non passe', APP, 'sharesDay, sharesWeek, jours,', 'sharesDay, sharesWeek,', (s) => scenariosC(s), 'C2-brain-close-J-2');
 await mutant('app : parts des jours fermes non lues', APP, 'if (j.ferme === true && reste !== 0n) {', 'if (false) {', (s) => scenariosC(s), 'C3-brain-sign-semaine-du-dimanche');
 await mutant('app : parts lues pour un pot vide', APP, 'if (j.ferme === true && reste !== 0n) {', 'if (j.ferme === true) {', (s) => scenariosC(s), 'C1-jours-et-parts-lus');
 await mutant('app : tp.signes ignores', APP, "for (const x of (Array.isArray(tp.signes) ? tp.signes : []))", 'for (const x of [])', (s) => scenariosC(s), 'C6-jour-seulement-dans-signes');
 await mutant('app : semaine jamais lue', APP, 'if (bjDernierJour(x.day)) j.sharesWeek = await lirePartsDe(x.jourId, true);', '', (s) => scenariosC(s), 'C3-brain-sign-semaine-du-dimanche');
-await mutant('attester : 409 arrete la boucle', ATT, "else refusees.push(p.wallet + ': ' + ((r && r.pourquoi) || 'no answer'));", "else { refusees.push(p.wallet + ': ' + ((r && r.pourquoi) || 'no answer')); break; }", (s) => scenariosD(APP, s), 'D1-attester-continue-apres-409');
-await mutant('app : 409 arrete bjSignerParts', APP, "pourquoi: String((r && r.pourquoi) || 'no answer').slice(0, 140) }); continue; }", "pourquoi: String((r && r.pourquoi) || 'no answer').slice(0, 140) }); return { ok: false, faites, refusees }; }", (s) => scenariosD(s, ATT), 'D2-bjSignerParts-continue-apres-409');
+await mutant('attester : 409 arrete la boucle', ATT, "refusees.push(p.wallet + ': ' + (r.pourquoi || 'refused')); continue; }", "refusees.push(p.wallet + ': ' + (r.pourquoi || 'refused')); break; }", (s) => scenariosD(APP, s), 'D1-attester-continue-apres-409');
+await mutant('app : 409 arrete bjSignerParts', APP, "if (issue === 'PERIMEE' || issue === 'SANS_REPONSE') { arret = issue; break; }", '{ arret = issue; break; }', (s) => scenariosD(s, ATT), 'D2-bjSignerParts-continue-apres-409');
 /* le brain : copie a cote de la source (ses imports relatifs), effacee */
 {
   total += 1;

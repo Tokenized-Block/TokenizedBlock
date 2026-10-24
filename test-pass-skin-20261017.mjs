@@ -40,6 +40,9 @@ vu(entreesPeriode(e, ['J2026-10-17', 'J2026-10-18'], 10, passes).length === 3, '
 /* (4) */
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const paye = srv.slice(srv.indexOf("if (chemin === '/api/paye'"), srv.indexOf("if (chemin === '/api/registre-createurs')"));
-vu(paye.indexOf("ligne === 'skin_mint'") > 0 && paye.indexOf("ligne === 'skin_mint'") < paye.indexOf('if (!v.ok) {') && /!internes\.has\(ps\.payeur\)/.test(paye) && /revenu\.passVus/.test(paye),
+/* 2026-10-24 (3e tour ticketpot) : le credit du pass vit dans crediterPassSkin (partage avec le balayage des tickets en attente) */
+const fnPass = srv.slice(srv.indexOf('async function crediterPassSkin('), srv.indexOf('async function crediterPassSkin(') + 900);
+vu(paye.indexOf("ligne === 'skin_mint'") > 0 && paye.indexOf("ligne === 'skin_mint'") < paye.indexOf('if (!v.ok) {') && /crediterPassSkin\(\{ h, \.\.\.o \}\)/.test(paye)
+  && /!internes\.has\(ps\.payeur\)/.test(fnPass) && /revenu\.passVus/.test(fnPass) && /revenu\.passVus/.test(paye),
   'cablage : avant la sortie sur frais, externes seulement, un hash une fois');
 console.log('ok pass-skin - ' + n + ' assertions');

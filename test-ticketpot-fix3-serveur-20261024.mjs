@@ -21,7 +21,7 @@
  *  K2 skin_mint sans frais de swap (v pas ok), bloc illisible -> 202 ; le renvoi credite le pass.
  *  MUTANTS (copies en memoire de la source) : chaque garde retiree -> son scenario ROUGIT.
  * NE PROUVE PAS : un recu reel de Base, un vrai prix illisible sur la chaine, ni qu un utilisateur reste sur la page pendant les renvois
- *   (l app renvoie 5 fois au plus, ~2 min ; ensuite le hash attend un envoi que plus rien ne fait — aucun balayage serveur ici). */
+ *   (l app renvoie 5 fois au plus, ~2 min ; ensuite le hash attend : 3e tour, le serveur le reessaie, prouve par test-ticketpot-fix4-20261024). */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -56,7 +56,7 @@ function monter(src, etat, horloge, chaine, compte, cfg) {
       : { ok: true, payeur: PAYEUR, unitWei: (10n ** 16n).toString(), actions: [] }),
     V4_ADRESSES: { 8453: { poolm: '0x' + '0'.repeat(40) } }, POOLS_UNIT_TB: new Set(), JETONS_ACTIONS: new Set([JETON]),
     prixUsdPourPlan: async (adr) => { if (chaine.prixNull > 0) { chaine.prixNull -= 1; return null; } return adr === null ? 2000 : 1; },
-    decimalesCache: new Map(), WETH_SRV: '0x' + '42'.repeat(20), valeurUsd, crediter, jourDe, joursPass, saisonDe,
+    decimalesCache: new Map(), WETH_SRV: '0x' + '42'.repeat(20), valeurUsd, crediter, jourDe, joursPass, saisonDe, SEUIL_VOLUME_JOUR_USD: 10,
     passSkinVerifie: () => ({ ok: true, payeur: PAYEUR }), BLOCKSKINS_SRV: '0x' + 'c0'.repeat(20), USDC_BASE: '0x' + 'aa'.repeat(20), FEE_WALLET: '0x' + 'fe'.repeat(20), SKIN_MINT_USDC_SRV: 1000000n,
     compterRevenu: (x) => { compte.n += 1; return x; }, createurDuBlock: async () => null, ligneRegistre: () => ({}), horodatagesBlocsRolls: new Map(), console: { log() {} },
   };
@@ -147,9 +147,10 @@ for (const k of ['D1', 'D2', 'P1', 'P2', 'K1', 'K2']) console.log('    ' + k + '
 const MUTANTS = [
   { nom: 'ticket NON_LU du frais compte -> 200', de: /repondre\(ticketTP && ticketTP\.etat === 'NON_LU' \? 202 : 200, avecTicket\(\{ ok: true, externe: verif\.externe \}\)\)/, vers: "repondre(200, avecTicket({ ok: true, externe: verif.externe }))", rougit: 'D1-non-lu-repond-202' },
   { nom: 'ticket NON_LU sans frais -> 200', de: /repondre\(v\.etat === 'NON_LU' \|\| \(ticketTP && ticketTP\.etat === 'NON_LU'\) \? 202 : 200/, vers: "repondre(v.etat === 'NON_LU' ? 202 : 200", rougit: 'D2-frais-non-verifie-non-lu-202' },
-  { nom: 'prix ETH null -> 0 $', de: /if \(!\(pEth > 0\)\) return \{ ok: false, etat: 'NON_LU'/, vers: "if (false) return { ok: false, etat: 'NON_LU'", rougit: 'P1-prix-eth-null-attend' },
-  { nom: 'prix d action null ignore', de: /if \(manques\.length\) return \{ ok: false, etat: 'NON_LU'/, vers: "if (false) return { ok: false, etat: 'NON_LU'", rougit: 'P2-prix-action-null-attend' },
-  { nom: 'renvoi skin_mint par crediterVolumeJour seul', de: /enAttenteTicket\.ligne === 'skin_mint' \? await crediterPass\(\{ tx, recu, internes \}\)/, vers: "false ? null", rougit: 'K1-pass-skin-renvoi-credite' },
+  /* 3e tour (D2) : le prix nul est une jambe SANS PRIX (manques) ; NON_LU seulement sous le seuil — les gardes ont change de forme */
+  { nom: 'prix ETH null -> 0 $', de: /else manques\.push\('ETH'\); \}/, vers: '}', rougit: 'P1-prix-eth-null-attend' },
+  { nom: 'prix d action null ignore', de: /if \(manques\.length\) \{ const nl = jambeSansPrix\(/, vers: 'if (false) { const nl = jambeSansPrix(', rougit: 'P2-prix-action-null-attend' },
+  { nom: 'renvoi skin_mint par crediterVolumeJour seul', de: /ligne === 'skin_mint' \? await crediterPassSkin\(\{ h, tx, recu, internes \}\)/, vers: 'false ? null', rougit: 'K1-pass-skin-renvoi-credite' },
 ];
 let tues = 0;
 for (const m of MUTANTS) {
@@ -159,5 +160,5 @@ for (const m of MUTANTS) {
   ok(t, 'MUTANT ' + m.nom + ' -> ' + m.rougit + ' ROUGIT');
 }
 console.log('mutants tues ' + tues + '/' + MUTANTS.length);
-console.log(n + ' assertions, ' + ko + ' KO - NE PROUVE PAS un recu reel de Base, un vrai prix illisible, ni un balayage serveur des tickets en attente (il n y en a pas)');
+console.log(n + ' assertions, ' + ko + ' KO - NE PROUVE PAS un recu reel de Base, un vrai prix illisible, ni le balayage serveur des tickets en attente (banc : test-ticketpot-fix4-20261024)');
 if (ko) process.exitCode = 1;

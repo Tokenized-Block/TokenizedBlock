@@ -82,20 +82,29 @@
     /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 4) : un refus du SERVEUR (409 : une autre part de ce wallet deja signee et
      *   servie) arretait la boucle — a chaque clic, la meme part refusee bloquait toutes les suivantes. Le refus est note et la boucle
      *   CONTINUE ; la fin dit chaque part refusee et pourquoi. Un refus du WALLET (l utilisateur decline) arrete, comme avant. */
-    let faites = 0, decline = null; const refusees = [];
+    /* ⛔ 2026-10-24 (revue adverse, 3e tour, D4) : la boucle continuait apres TOUT echec — serveur en panne, le verifier signait encore
+     *   chaque part pour rien. Elle continue apres un refus du serveur sur CETTE part (409, autre 4xx REFUSE) ; elle s ARRETE sur 412 PERIME
+     *   (les parts ont change depuis la lecture : relues ci-dessous, a resigner) et sur une absence de reponse (reseau, 5xx, 202). */
+    let faites = 0, decline = null, arret = null; const refusees = [], muettes = [];
     try {
       for (const p of parts.filter((x) => !x.signature)) {
         dire('Sign the share of ' + p.wallet + ' (' + usdc(p.amount) + ' USDC) in your wallet…');
         let sig = null;
         try { sig = await eth().request({ method: 'eth_signTypedData_v4', params: [compte, JSON.stringify(p.donnees)] }); } catch (e) { decline = String((e && e.message) || e); break; }
-        let r = null;
-        try { r = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.jourId, wallet: p.wallet, signature: sig, week: $('#semaine').checked }) }).then((x) => x.json()); } catch (_) { r = null; }
-        if (r && r.ok) faites++; else refusees.push(p.wallet + ': ' + ((r && r.pourquoi) || 'no answer'));
+        let r = null, code = 0;
+        try { const x = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.jourId, wallet: p.wallet, signature: sig, week: $('#semaine').checked }) }); code = Number(x.status) || 0; r = await x.json(); } catch (_) { r = null; }
+        if (r && r.ok) { faites++; continue; }
+        if (code === 412) { arret = 'PERIMEE'; muettes.push(p.wallet + ': ' + ((r && r.pourquoi) || 'the shares changed')); break; }
+        if (code >= 400 && code < 500 && r && r.etat === 'REFUSE') { refusees.push(p.wallet + ': ' + (r.pourquoi || 'refused')); continue; }
+        arret = 'SANS_REPONSE'; muettes.push(p.wallet + ': ' + ((r && r.pourquoi) || (code ? 'answer ' + code : 'no answer'))); break;
       }
     } finally { b.disabled = false; }
     await lire();
-    if (faites || refusees.length || decline) dire((faites ? faites + ' share(s) signed and stored. Holders can now claim from the Game tab.' : 'No share stored.')
-      + (refusees.length ? ' ' + refusees.length + ' refused by the server — ' + refusees.join('; ') + '.' : '') + (decline ? ' Declined in your wallet: ' + decline : ''), refusees.length || decline ? 'non' : 'ok');
+    if (faites || refusees.length || muettes.length || decline) dire((faites ? faites + ' share(s) signed and stored. Holders can now claim from the Game tab.' : 'No share stored.')
+      + (refusees.length ? ' ' + refusees.length + ' refused by the server — ' + refusees.join('; ') + '.' : '')
+      + (arret === 'PERIMEE' ? ' Stopped: the shares changed since they were read (a ticket was credited late) — they were read again above; sign again. ' + muettes.join('; ') + '.' : '')
+      + (arret === 'SANS_REPONSE' ? ' Stopped: the server did not answer (' + muettes.join('; ') + ') — nothing more was asked of your wallet; try again in a moment.' : '')
+      + (decline ? ' Declined in your wallet: ' + decline : ''), refusees.length || muettes.length || decline ? 'non' : 'ok');
   }
   $('#lire').addEventListener('click', () => { void lire(); });
   $('#semaine').addEventListener('change', () => { choixManuel = true; void lire(); });

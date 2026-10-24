@@ -4004,15 +4004,97 @@ async function crediterVolumeJour({ h, ligne, tx, recu, v, internes }) {
   if (!bloc.ok) return bloc;
   let usd = 0;
   const pEth = BigInt(vol.unitWei) > 0n ? await prixUsdPourPlan(null) : 1, manques = [];
-  if (!(pEth > 0)) return { ok: false, etat: 'NON_LU', pourquoi: 'the ETH price was not read: send it again in a moment' };
-  if (BigInt(vol.unitWei) > 0n) usd += Number(BigInt(vol.unitWei)) / 1e18 * pEth;
+  if (BigInt(vol.unitWei) > 0n) { if (pEth > 0) usd += Number(BigInt(vol.unitWei)) / 1e18 * pEth; else manques.push('ETH'); }
   if (vol.actions.length) usd += await valeurFraisUsd(vol.actions.map((x) => ({ devise: x.jeton, montant: x.montant })), manques);
-  if (manques.length) return { ok: false, etat: 'NON_LU', pourquoi: 'the price of a token of this trade was not read: send it again in a moment' };
+  if (manques.length) { const nl = jambeSansPrix({ jourId: bloc.jourId, payeur: vol.payeur, usd, eth: manques.includes('ETH') }); if (nl) return nl; }
   if (!(usd > 0)) return;
   revenu.volVus[h] = 1;
   revenu.jours = crediter(revenu.jours || {}, { saison: bloc.jourId, payeur: vol.payeur, hash: h, usd });
   revenuSale = true;
+  invaliderPartsTPJours([bloc.jourId]);
   return { ok: true, etat: 'CREDITE', jourId: bloc.jourId };
+}
+/* ⛔ 2026-10-24 (revue adverse, 3e tour ticketpot, D2) : une jambe SANS PRIX bloquait tout le trade (NON_LU a chaque envoi, 0 $ credite,
+ *   le hash en attente jusqu a 49 h) meme quand l autre jambe valait deja 20 $ — la base creditait ces 20 $. Le cote PRICE est credite des
+ *   qu il suffit au ticket du jour (avec les trades deja credites ce jour-la : au-dela du seuil, un dollar de plus ne change rien) ; NON_LU
+ *   seulement quand le cote price reste SOUS le seuil ET qu une jambe n a pas de prix — et le pourquoi dit les deux. */
+function jambeSansPrix({ jourId, payeur, usd, eth }) {
+  const deja = Number(((((revenu.jours || {})[jourId] || {})[String(payeur || '').toLowerCase()]) || {}).usd) || 0;
+  if (deja + usd >= SEUIL_VOLUME_JOUR_USD) return null;
+  return { ok: false, etat: 'NON_LU', sansPrix: true, pourquoi: (eth ? 'the ETH price' : 'the price of a token of this trade') + ' was not read, and its priced side ($' + usd.toFixed(2)
+    + (deja > 0 ? ', $' + (deja + usd).toFixed(2) + ' with your other trades of the day' : '') + ') is below the $' + SEUIL_VOLUME_JOUR_USD + ' of a day ticket: send it again in a moment' };
+}
+/* ⛔ 2026-10-24 (revue adverse, 3e tour ticketpot, D1) : /api/ticketpot/parts est en cache 60 s ; un ticket credite EN RETARD pour un jour
+ *   deja ferme (renvoi de ticketsEnAttente, trade de 23:59 poste apres minuit) changeait tous ses digests pendant que le GET servait encore
+ *   les anciens : chaque POST du verifier etait refuse. Un credit invalide les parts de son jour ET de sa semaine (le pot de la semaine vit
+ *   sur son dernier jour). partsCacheTP est une constante du module (plus bas) : absente seulement d une tranche montee par un banc. */
+function invaliderPartsTPJours(ids) {
+  if (typeof partsCacheTP === 'undefined') return;
+  for (const id of ids || []) {
+    const ms = Date.parse(String(id).slice(1) + 'T00:00:00Z');
+    if (!Number.isFinite(ms)) continue;
+    partsCacheTP.invalider(id);
+    partsCacheTP.invalider(jourDe(saisonDe(ms).fin - 86400000).id + '#S');
+  }
+}
+/* le PASS SKIN d un hash (2026-10-24, sorti de la route pour que le renvoi ET le balayage serveur le creditent) : un achat de skin VERIFIE
+ *   (mint au payeur + le prix arrive au wallet de frais) = des jours de tickets garantis, a partir du jour du BLOC ; > 48 h -> rien ;
+ *   bloc illisible -> NON_LU (rien de marque). null = pas un pass. */
+async function crediterPassSkin({ h, tx, recu, internes }) {
+  if ((revenu.passVus || {})[h]) return null;
+  const ps = passSkinVerifie({ tx, recu, skins: BLOCKSKINS_SRV, usdc: USDC_BASE, wallet: FEE_WALLET, prix: SKIN_MINT_USDC_SRV });
+  if (!(ps.ok && !internes.has(ps.payeur))) return null;
+  const blocPass = await jourDuRecu(recu);
+  if (!blocPass.ok) return blocPass;
+  revenu.passVus = { ...(revenu.passVus || {}), [h]: 1 };
+  revenu.passes = revenu.passes || {};
+  const jp = joursPass(blocPass.ms);
+  revenu.passes[ps.payeur] = [...new Set([...(revenu.passes[ps.payeur] || []), ...jp])].sort();
+  revenuSale = true;
+  invaliderPartsTPJours(jp);
+  return { ok: true, etat: 'CREDITE', jourId: blocPass.jourId };
+}
+/* tx + recu + nos wallets internes + le frais verifie : la meme lecture pour /api/paye et pour le balayage des tickets en attente */
+function internesRevenu() { return walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]); }
+async function lireTxPaye(h) {
+  const [tx, recu] = await Promise.all([rpcActivite('eth_getTransactionByHash', [h]), rpcActivite('eth_getTransactionReceipt', [h])]);
+  const internes = internesRevenu();
+  return { tx, recu, internes, v: verifierFrais({ tx, recu, internes, devises: devisesComptees([...POOLS_ACTIONS_AERODROME.keys()]) }) };
+}
+/* le ticket d un hash en attente, refait (jamais le frais) : la ligne GARDEE. Tx ou recu pas lus -> NON_LU (l entree reste : avant, un recu
+ *   null rendait « rien » et l attente etait effacee sur un simple hoquet du noeud). */
+async function retenterTicket({ h, ligne, tx, recu, v, internes }) {
+  if (!tx || !recu) return { ok: false, etat: 'NON_LU', pourquoi: 'this transaction was not read: send it again in a moment' };
+  try { return (ligne === 'skin_mint' ? await crediterPassSkin({ h, tx, recu, internes }) : await crediterVolumeJour({ h, ligne, tx, recu, v, internes })) || null; }
+  catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the day ticket of this transaction was not read: send it again in a moment' }; }
+}
+/* ══ LES TICKETS EN ATTENTE, REESSAYES PAR LE SERVEUR (2026-10-24, revue adverse 3e tour) : l app renvoie 5 fois (~2 min) puis plus rien —
+ *   un onglet ferme, et le ticket attendait un envoi qui ne venait jamais. Le serveur reessaie chaque entree de revenu.ticketsEnAttente
+ *   jusqu a son credit (ou TROP_VIEUX) ou ses 49 h : 1er essai 3 min apres l entree, puis 5, 10, 20, 40, 80, 120 min (plafond) — ~25 essais
+ *   au plus par hash ; 6 hash au plus par balayage ; jamais un hash en cours dans /api/paye (payesEnCours). Ne compte JAMAIS le frais. */
+const TICKET_ATTENTE_MS = 49 * 3600 * 1000, BALAYAGE_TICKETS_MAX = 6;
+function garderTicketEnAttente(h, ligne) {
+  revenu.ticketsEnAttente = revenu.ticketsEnAttente || {};
+  if (!revenu.ticketsEnAttente[h]) revenu.ticketsEnAttente[h] = { ligne, at: Date.now() };
+  for (const [k, x] of Object.entries(revenu.ticketsEnAttente)) if (!x || !(Date.now() - Number(x.at) <= TICKET_ATTENTE_MS)) delete revenu.ticketsEnAttente[k];
+  revenuSale = true;
+}
+async function balayerTicketsEnAttente(maintenant = Date.now()) {
+  const t = revenu.ticketsEnAttente || {};
+  let essayes = 0;
+  for (const [h, x] of Object.entries(t)) {
+    if (!x || !(maintenant - Number(x.at) <= TICKET_ATTENTE_MS)) { delete t[h]; revenuSale = true; continue; }
+    const quand = Number.isFinite(Number(x.prochain)) ? Number(x.prochain) : Number(x.at) + 3 * 60000;
+    if (essayes >= BALAYAGE_TICKETS_MAX || quand > maintenant || payesEnCours.has(h) || payesEnCours.size >= 3) continue;
+    essayes += 1;
+    payesEnCours.add(h);
+    let tk = null;
+    try { tk = await retenterTicket({ h, ligne: x.ligne, ...(await lireTxPaye(h)) }); } catch (_) { tk = { ok: false, etat: 'NON_LU' }; } finally { payesEnCours.delete(h); }
+    if (!tk || tk.etat !== 'NON_LU') delete t[h];
+    else { x.essais = (Number(x.essais) || 0) + 1; x.prochain = maintenant + Math.min(120, 5 * 2 ** Math.min(x.essais - 1, 5)) * 60000; }
+    revenuSale = true;
+  }
+  return essayes;
 }
 /* manques (optionnel, 2026-10-24 defaut 3) : recoit chaque devise dont le prix ou les decimales n ont pas ete lus (valeurUsd la compte 0) */
 async function valeurFraisUsd(recus, manques = null) {
@@ -4605,6 +4687,13 @@ setInterval(() => {
   try { writeFileSync(FICHIER_REVENU + '.tmp', JSON.stringify(revenu)); renameSync(FICHIER_REVENU + '.tmp', FICHIER_REVENU); revenuSale = false; }
   catch (e) { console.log('[revenu] ecriture ratee :', e.message); }
 }, 30000).unref();
+/* les tickets en attente reessayes par le serveur (balayerTicketsEnAttente, plus haut) : toutes les 3 min, un balayage a la fois */
+let balayageTicketsEnVol = false;
+setInterval(() => {
+  if (balayageTicketsEnVol || !Object.keys(revenu.ticketsEnAttente || {}).length) return;
+  balayageTicketsEnVol = true;
+  void balayerTicketsEnAttente().catch(() => 0).finally(() => { balayageTicketsEnVol = false; });
+}, 3 * 60000).unref();
 
 const SERVIS = [
   /* ⛔⛔ LE MANIFESTE FARCASTER ETAIT ABSENT DE CETTE LISTE (releve par Zero 1 depuis un terminal,
@@ -6465,32 +6554,14 @@ function traiterRequete(req, res) {
     if (payesEnCours.has(h) || payesEnCours.size >= 3) { repondre(429, { ok: false, pourquoi: 'busy, send it again in a moment' }); return; }
     payesEnCours.add(h);
     (async () => { try {
-      const [tx, recu] = await Promise.all([rpcActivite('eth_getTransactionByHash', [h]), rpcActivite('eth_getTransactionReceipt', [h])]);
-      /* nos wallets de TEST connus (0x31e0… = le wallet de test de Phil, cite dans les rapports du canal) + ceux declares par l env */
-      const internes = walletsInternes([COMPTE_SONDE, '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ...String(process.env.REVENU_INTERNES || '').split(',')]);
-      const v = verifierFrais({ tx, recu, internes, devises: devisesComptees([...POOLS_ACTIONS_AERODROME.keys()]) });
-      /* PASS SKIN (Phil 2026-10-17 soir) : un achat de skin VERIFIE dans le recu (mint au payeur + le prix arrive au wallet de frais) = des jours
-       *   de tickets garantis (JOURS_PASS_SKIN). Externes seulement ; un hash ne compte qu une fois. 2026-10-24 : les jours du pass partent du
-       *   jour du BLOC du mint (jourDuRecu) ; au-dela de 48 h, rien ; bloc illisible -> NON_LU (rien de marque).
-       * ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 5) : une fonction, pour que le RENVOI d un skin_mint en attente (frais de swap
-       *   verifie dans la meme tx, bloc illisible au 1er envoi) credite le pass — avant, le renvoi passait par crediterVolumeJour, qui ne fait
-       *   rien pour skin_mint : l attente etait effacee et le pass jamais credite. */
-      const crediterPass = async ({ tx, recu, internes }) => {
-        if ((revenu.passVus || {})[h]) return null;
-        const ps = passSkinVerifie({ tx, recu, skins: BLOCKSKINS_SRV, usdc: USDC_BASE, wallet: FEE_WALLET, prix: SKIN_MINT_USDC_SRV });
-        if (!(ps.ok && !internes.has(ps.payeur))) return null;
-        const blocPass = await jourDuRecu(recu);
-        if (!blocPass.ok) return blocPass;
-        revenu.passVus = { ...(revenu.passVus || {}), [h]: 1 };
-        revenu.passes = revenu.passes || {};
-        revenu.passes[ps.payeur] = [...new Set([...(revenu.passes[ps.payeur] || []), ...joursPass(blocPass.ms)])].sort();
-        revenuSale = true;
-        return { ok: true, etat: 'CREDITE', jourId: blocPass.jourId };
-      };
+      /* nos wallets de TEST connus (0x31e0… = le wallet de test de Phil, cite dans les rapports du canal) + ceux declares par l env : internesRevenu */
+      const { tx, recu, internes, v } = await lireTxPaye(h);
+      /* PASS SKIN (Phil 2026-10-17 soir) : crediterPassSkin (module). ⛔ 2026-10-24 (defaut 5) : une fonction, pour que le RENVOI d un
+       *   skin_mint en attente credite le pass ; 3e tour : au module, pour que le balayage serveur le credite aussi. */
+      const crediterPass = (o) => crediterPassSkin({ h, ...o });
       /* le hash deja compte dont le ticket attend : seulement le ticket (la ligne gardee, pas celle du renvoi), jamais le frais une 2e fois */
       if (revenu.vus[h] && enAttenteTicket) {
-        let tk = null;
-        try { tk = (enAttenteTicket.ligne === 'skin_mint' ? await crediterPass({ tx, recu, internes }) : await crediterVolumeJour({ h, ligne: enAttenteTicket.ligne, tx, recu, v, internes })) || null; } catch (_) { tk = { ok: false, etat: 'NON_LU', pourquoi: 'the day ticket of this transaction was not read: send it again in a moment' }; }
+        const tk = await retenterTicket({ h, ligne: enAttenteTicket.ligne, tx, recu, v, internes });
         if (!tk || tk.etat !== 'NON_LU') { delete revenu.ticketsEnAttente[h]; revenuSale = true; }
         repondre(tk && tk.etat === 'NON_LU' ? 202 : 200, tk ? { ok: true, deja: true, ticket: tk } : { ok: true, deja: true });
         return;
@@ -6511,9 +6582,13 @@ function traiterRequete(req, res) {
         if (tkPass) ticketTP = tkPass;
       }
       const avecTicket = (o) => (ticketTP ? { ...o, ticket: ticketTP } : o);
+      /* 3e tour : un hash en attente SANS frais verifie (swap UNIT : jamais marque vu) repasse ici ; credite -> l attente sort */
+      if (enAttenteTicket && ticketTP && ticketTP.etat !== 'NON_LU') { delete revenu.ticketsEnAttente[h]; revenuSale = true; }
       revenu.tentatives[v.ok ? 'ok' : v.etat] = (revenu.tentatives[v.ok ? 'ok' : v.etat] || 0) + 1;
       /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 2) : un ticket du jour NON_LU (bloc ou prix illisible) repond 202, plus 200 —
-       *   l app (signalerPaye) ne renvoie que sur 202 / 429 : avec 200, le renvoi qui credite n arrivait jamais. */
+       *   l app (signalerPaye) ne renvoie que sur 202 / 429 : avec 200, le renvoi qui credite n arrivait jamais.
+       * 3e tour : ce ticket-la attend aussi dans ticketsEnAttente (le balayage serveur le reessaie, l app peut etre fermee) */
+      if (!v.ok && ticketTP && ticketTP.etat === 'NON_LU') garderTicketEnAttente(h, ligne);
       if (!v.ok) { revenuSale = true; repondre(v.etat === 'NON_LU' || (ticketTP && ticketTP.etat === 'NON_LU') ? 202 : 200, avecTicket({ ok: false, etat: v.etat, pourquoi: v.pourquoi })); return; }
       /* ⛔ chasse 2026-10-17 (HIGH, PoC) : `i=1` venait du CLIENT — n importe qui postait le hash d un autre avec i=1 (le premier post gagne)
        *   et lui retirait son ticket / sa ligne externe. Interne / externe se decide SEULEMENT par le wallet payeur (walletsInternes). */
@@ -6526,9 +6601,7 @@ function traiterRequete(req, res) {
       /* le ticket du jour non lu (bloc illisible) : le hash attend son renvoi (la reponse dit « send it again » : c est vrai). Borne : au-dela
        *   de 49 h un renvoi rendrait TROP_VIEUX de toute facon (48 h), l entree sort. */
       if (ticketTP && ticketTP.etat === 'NON_LU') {
-        revenu.ticketsEnAttente = revenu.ticketsEnAttente || {};
-        revenu.ticketsEnAttente[h] = { ligne, at: Date.now() };
-        for (const [k, x] of Object.entries(revenu.ticketsEnAttente)) if (!x || !(Date.now() - Number(x.at) <= 49 * 3600 * 1000)) delete revenu.ticketsEnAttente[k];
+        garderTicketEnAttente(h, ligne);
       }
       /* 2026-10-17 — ETAPE 2, la vitrine : r=<block> (le client ne l envoie que si la page etait ce block, ref-vitrine.js). Une ligne au
        *   registre PUBLIC, seulement pour un frais EXTERNE verifie ; le createur est LU sur la chaine, jamais pris dans la requete. */
@@ -6761,8 +6834,21 @@ function traiterRequete(req, res) {
       if (!r.ferme) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day ' + jourId + ' is not closed on chain: nothing is signed before close(day)' }); return; }
       const p = r.parts.find((x) => x.wallet === wallet);
       if (!p) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: wallet + ' held no ticket of ' + jourId }); return; }
-      if (!verifierSignaturePart({ digest: p.digest, signature, verifier: r.verifier })) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'this signature does not recover to the verifier ' + r.verifier + ' on the share of ' + wallet }); return; }
       const cleSig = jourId + (semaine ? '#S' : '');
+      if (!verifierSignaturePart({ digest: p.digest, signature, verifier: r.verifier })) {
+        /* ⛔ 2026-10-24 (revue adverse, 3e tour ticketpot, D1) : le GET sert les parts en cache (60 s), ce POST les recalcule. Une
+         *   signature qui recouvre au verifier sur la part SERVIE (en cache) mais pas sur la part fraiche = les parts ont change depuis la
+         *   lecture (un ticket credite en retard) : 412 PERIME, le cache est invalide, la part se relit et se resigne — jamais un refus
+         *   definitif (seul le 409 ci-dessous l est). */
+        let servie = null;
+        try { const c = await partsCacheTP.obtenir(cleSig, async () => r); servie = ((c && c.ok && Array.isArray(c.parts)) ? c.parts : []).find((x) => x.wallet === wallet) || null; } catch (_) { servie = null; }
+        if (servie && String(servie.digest || '').toLowerCase() !== String(p.digest).toLowerCase() && verifierSignaturePart({ digest: servie.digest, signature, verifier: r.verifier })) {
+          partsCacheTP.invalider(cleSig);
+          rendreTP(412, { ok: false, etat: 'PERIME', pourquoi: 'the shares of ' + jourId + (semaine ? ' (week)' : '') + ' changed since they were read (a ticket was credited late): read them again and sign the new share of ' + wallet });
+          return;
+        }
+        rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'this signature does not recover to the verifier ' + r.verifier + ' on the share of ' + wallet }); return;
+      }
       /* ⛔⛔ GARDE DURE (2026-10-24, audit-ticketpot 1) : les montants deja gardes pour ce JOUR (cle du jour ET cle jour#S : un seul dayPot
        *   sur la chaine) + cette part ne depassent JAMAIS potAtClose, quelle qu en soit la cause ; la part re-deposee de ce wallet dans cette
        *   cle n est pas comptee deux fois (elle est remplacee). Un montant garde illisible -> refuse (jamais compte 0).

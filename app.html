@@ -6446,23 +6446,33 @@ async function bjTirageFrais() {
  *   et n accepte que le verifier du contrat). Un refus du WALLET arrete la serie.
  * ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 4) : un refus du SERVEUR (409 : une autre part de ce wallet deja signee et servie)
  *   arretait la serie a chaque clic — les parts suivantes n etaient jamais signees. Il est note et la serie CONTINUE ; la fin dit chaque
- *   refus. Un REFUSE du serveur est rendu (refusees) : la cle POT_SIGN_REFUS:<jour>[#S]:<wallet> est vue, le brain ne repropose plus
- *   cette part ; une absence de reponse n est pas un refus (reproposee). */
+ *   refus. Un 409 du serveur est rendu (refusees, refuse: true) : la cle POT_SIGN_REFUS:<jour>[#S]:<wallet> est vue, le brain ne repropose
+ *   plus cette part ; tout autre echec n est pas definitif (reproposee) — voir le 3e tour ci-dessous. */
+/* ⛔ 2026-10-24 (revue adverse, 3e tour ticketpot, D1 + D4) : TOUT refus etait note POT_SIGN_REFUS (definitif) — un 400 « does not recover »
+ *   venu de parts en cache 60 s (un ticket credite en retard pour ce jour) cachait des parts signables au brain pour toute la grace. Seul le
+ *   409 (une AUTRE part de ce wallet deja gardee et servie) est definitif (refuse: true). 412 PERIME (les parts ont change depuis la lecture)
+ *   et une absence de reponse (reseau, 5xx, 202) ARRETENT la serie : chaque signature suivante serait perdue (digests changes, serveur
+ *   muet) — rien n est note, la part revient au tour suivant. Un autre 4xx REFUSE (pot depasse, pas de ticket) : note, la serie continue. */
 async function bjSignerParts(m, p, walletCarte) {
-  let faites = 0; const refusees = [];
+  const issueDe = (code, r) => (code === 409 ? 'GARDEE' : code === 412 ? 'PERIMEE' : code >= 400 && code < 500 && r && r.etat === 'REFUSE' ? 'REFUSEE' : 'SANS_REPONSE');
+  let faites = 0, arret = null; const refusees = [];
   for (const s of p.sign.shares) {
     bcEtape(m, 'Sign the share of ' + courtAdr(s.wallet) + ' (' + usdcTexte(s.amount) + ' USDC) in your wallet…');
     let sig = null;
     try { sig = await window.ethereum.request({ method: 'eth_signTypedData_v4', params: [walletCarte, JSON.stringify(s.donnees)] }); }
     catch (e) { bcEtape(m, 'Declined in your wallet — ' + faites + ' share(s) signed before, nothing more.', 'non'); return { ok: false, faites, refusees, decline: true }; }
-    let r = null;
-    try { r = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.sign.jourId, wallet: s.wallet, signature: sig, week: p.sign.week }) }).then((x) => x.json()); } catch (_) { r = null; }
-    if (!r || !r.ok) { refusees.push({ wallet: String(s.wallet).toLowerCase(), refuse: !!r && r.etat === 'REFUSE', pourquoi: String((r && r.pourquoi) || 'no answer').slice(0, 140) }); continue; }
-    faites += 1;
+    let r = null, code = 0;
+    try { const x = await fetch('/api/ticketpot/signature', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day: p.sign.jourId, wallet: s.wallet, signature: sig, week: p.sign.week }) }); code = Number(x.status) || 0; r = await x.json(); } catch (_) { r = null; }
+    if (r && r.ok) { faites += 1; continue; }
+    const issue = issueDe(code, r);
+    refusees.push({ wallet: String(s.wallet).toLowerCase(), refuse: issue === 'GARDEE', issue, pourquoi: String((r && r.pourquoi) || (code ? 'answer ' + code : 'no answer')).slice(0, 140) });
+    if (issue === 'PERIMEE' || issue === 'SANS_REPONSE') { arret = issue; break; }
   }
   if (refusees.length) {
-    bcEtape(m, faites + ' share(s) of ' + p.sign.jourId + ' stored; ' + refusees.length + ' not stored — ' + refusees.map((x) => courtAdr(x.wallet) + ': ' + x.pourquoi).join('; ') + '.', 'non');
-    return { ok: false, faites, refusees };
+    bcEtape(m, faites + ' share(s) of ' + p.sign.jourId + ' stored; ' + refusees.length + ' not stored — ' + refusees.map((x) => courtAdr(x.wallet) + ': ' + x.pourquoi).join('; ') + '.'
+      + (arret === 'PERIMEE' ? ' Stopped: the shares changed since they were read (a ticket was credited late) — its brain reads them again and proposes the new amounts.'
+        : arret === 'SANS_REPONSE' ? ' Stopped: the server did not answer — nothing more is asked of your wallet; these shares come back on a later turn.' : ''), 'non');
+    return { ok: false, faites, refusees, arret };
   }
   bcEtape(m, faites + ' ' + (p.sign.week ? 'weekly ' : '') + 'share(s) of ' + p.sign.jourId + ' signed and stored — holders can claim them from the Game tab.', 'oui');
   return { ok: true, faites, refusees };
@@ -6523,7 +6533,11 @@ function bjMontrer(p, rolls, walletCarte) {
       /* defaut 4 : une part REFUSEE par le serveur n est plus reproposee (la cle vue, lue par brain-jeu.js potSignDe) */
       const refusVus = (s.refusees || []).filter((x) => x.refuse).map((x) => 'POT_SIGN_REFUS:' + p.sign.jourId + (p.sign.week ? '#S' : '') + ':' + x.wallet);
       if (refusVus.length) { bj.seen.push(...refusVus); bj.seen = bj.seen.slice(-200); bjSauver(); }
-      fini(s.ok ? 'On — ' + s.faites + ' share(s) of ' + p.sign.jourId + ' signed.' : s.decline ? 'On — signing the shares stopped in your wallet; ' + s.faites + ' stored.' : 'On — ' + s.faites + ' share(s) stored, ' + (s.refusees || []).length + ' refused by the server' + (refusVus.length ? ' (not proposed again)' : '') + '.');
+      /* D4 : refuse (definitif ou non) et SANS REPONSE ne se confondent pas */
+      const nRefus = (s.refusees || []).filter((x) => x.issue === 'GARDEE' || x.issue === 'REFUSEE').length, nMuet = (s.refusees || []).filter((x) => x.issue === 'SANS_REPONSE').length, nPerime = (s.refusees || []).filter((x) => x.issue === 'PERIMEE').length;
+      fini(s.ok ? 'On — ' + s.faites + ' share(s) of ' + p.sign.jourId + ' signed.' : s.decline ? 'On — signing the shares stopped in your wallet; ' + s.faites + ' stored.'
+        : 'On — ' + s.faites + ' share(s) stored' + (nRefus ? ', ' + nRefus + ' refused by the server' + (refusVus.length ? ' (' + refusVus.length + ' not proposed again)' : '') : '')
+          + (nPerime ? ', stopped: the shares changed since they were read (proposed again)' : '') + (nMuet ? ', stopped: no answer from the server (proposed again)' : '') + '.');
       return;
     }
     let r;
@@ -8859,6 +8873,7 @@ async function acheterAvecUsdc(apresApprobation = false) {
         try { etape('achat'); } catch (_) {}
         try { etape('achat_ok'); } catch (_) {}
         signalerPaye(lot.hash, 'hook_block');
+        lieuTicketPaye(lot.hash, note); /* D4 : la note du ticket du jour va sous CE resultat */
         note.textContent = 'Bought in one signature. At least '
           + (Number(BigInt(r.plan.minSortie)) / 1e8).toFixed(6) + ' of this block is in your wallet.';
         return;
@@ -8904,7 +8919,7 @@ async function acheterAvecUsdc(apresApprobation = false) {
   try { etape('achat_sign_propos'); } catch (_) {}
   const env = await envoyerDepuisWallet({ eth, rpc, chaineAttendue: CHAINE, compte,
     to: r.tx.to, data: r.tx.data, value: r.tx.value });
-  if (env.etat === 'CONFIRME') { try { etape('achat'); } catch (_) {} try { etape('achat_ok'); } catch (_) {} signalerPaye(env.hash, 'hook_block'); }
+  if (env.etat === 'CONFIRME') { try { etape('achat'); } catch (_) {} try { etape('achat_ok'); } catch (_) {} signalerPaye(env.hash, 'hook_block'); lieuTicketPaye(env.hash, note); }
   else if (env.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
   /* ⛔⛔ CE SITE AVAIT LE MEME DEFAUT QUE CELUI DU CHEMIN ETH, ET IL EST ANTERIEUR : tout ce qui
    *     n est pas `CONFIRME` etait annonce « Not sent ». Or `envoyerDepuisWallet` rend aussi
@@ -9051,6 +9066,7 @@ $('#fAcheterEth').addEventListener('click', async () => {
       try { etape('achat'); } catch (_) {}
       try { etape('achat_ok'); } catch (_) {}
       signalerPaye(env.hash, 'hook_block');
+      lieuTicketPaye(env.hash, note);
     } else if (env.etat === 'REFUSE_PAR_UTILISATEUR') { try { etape('achat_sign_refus'); } catch (_) {} }
     /* ⛔⛔⛔ UN ACHAT SIGNE QUI ECHOUE SUR LA CHAINE N ETAIT COMPTE NULLE PART. `achat_sign_propos`
      *      partait, puis plus rien — indiscernable d un onglet ferme. Un client perdu ET un frais
@@ -12744,31 +12760,60 @@ try {
  *   NON_LU / TROP_VIEUX + pourquoi) ; l app ne le lisait pas — un ticket non credite l etait en silence. Ce qui n est pas credite est dit,
  *   court, sous la face du ticket (#jourTicketTxt), 3 h au plus ; un ticket credite efface la note. */
 let ticketPayeNote = null;
+/* ⛔ 2026-10-24 (revue adverse, 3e tour ticketpot, D4) : la note etait ecrite sous la face du ticket (onglet Game), loin du bouton qui avait
+ *   fait le trade. lieuTicketPaye(hash, ou) : l endroit du RESULTAT du trade (un element, ou une fonction : le fil du panneau) ; la note y
+ *   va (« Day ticket of this trade: … ») ; sans lieu (ou detache de la page), elle reste sous la face du ticket (« Last trade: … »). */
+const lieuxTicketPaye = new Map();
+function lieuTicketPaye(hash, ou) {
+  if (!hash || !ou) return;
+  lieuxTicketPaye.set(String(hash).toLowerCase(), ou);
+  while (lieuxTicketPaye.size > 20) lieuxTicketPaye.delete(lieuxTicketPaye.keys().next().value);
+}
 function noteTicketPaye() {
   try { return ticketPayeNote && Date.now() - ticketPayeNote.at < 3 * 3600000 ? ticketPayeNote.texte : ''; } catch (_) { return ''; }
 }
-function direTicketPaye(tk) {
+function direTicketPaye(tk, hash) {
   if (!tk || typeof tk !== 'object') return;
-  if (tk.ok === true || tk.etat === 'CREDITE') { ticketPayeNote = null; return; }
-  const p = String(tk.pourquoi || 'it was not read').replace(/:? ?send it again in a moment\.?$/i, '').slice(0, 160);
-  ticketPayeNote = { at: Date.now(), texte: ' Last trade: ' + (tk.etat === 'NON_LU' ? 'not counted for a day ticket yet' : 'no day ticket') + ' — ' + p + '.' };
+  const ou = hash ? lieuxTicketPaye.get(String(hash).toLowerCase()) || null : null;
+  const span = ou && typeof ou === 'object' && ou.isConnected !== false && typeof ou.querySelector === 'function' ? ou.querySelector('.ticketPayeNote') : null;
+  if (tk.ok === true || tk.etat === 'CREDITE') { ticketPayeNote = null; if (span) span.remove(); return; }
+  const p = String(tk.pourquoi || 'it was not read').replace(/:? ?send it again in a moment\.?$/i, '').slice(0, 220);
+  /* NON_LU : le hash attend sur le serveur, qui le reessaie seul jusqu a 48 h apres le trade (balayerTicketsEnAttente) — c est ce que dit la note */
+  const coeur = (tk.etat === 'NON_LU' ? 'not counted for a day ticket yet (the server tries again for up to 48 h)' : 'no day ticket') + ' — ' + p + '.';
+  if (typeof ou === 'function') { try { ou('Day ticket of this trade: ' + coeur); return; } catch (_) { /* le fil n est plus la : sous le ticket */ } }
+  else if (ou && typeof ou === 'object' && ou.isConnected !== false && typeof ou.append === 'function') {
+    const s = span || document.createElement('span');
+    s.className = 'ticketPayeNote'; s.textContent = ' Day ticket of this trade: ' + coeur;
+    if (!span) ou.append(s);
+    return;
+  }
+  ticketPayeNote = { at: Date.now(), texte: ' Last trade: ' + coeur };
   const e = $('#jourTicketTxt');
   if (e && !String(e.textContent).includes(ticketPayeNote.texte)) e.textContent += ticketPayeNote.texte;
 }
 /* 2026-10-24 (defaut 2) : un ticket NON_LU (202) est renvoye jusqu a 5 fois, de plus en plus loin (8 s, 16 s… ~2 min en tout) : le
- *   serveur garde le hash en attente et le renvoi le credite ; apres, la note le dit. Un autre 202 / 429 : 3 fois, 8 s, comme avant. */
-function signalerPaye(hash, ligne, essai = 0) {
+ *   serveur garde le hash en attente et le renvoi le credite ; apres, la note le dit. Un autre 202 / 429 : 3 fois, 8 s, comme avant.
+ * ⛔ 2026-10-24 (3e tour, D3) : un 429 (« busy ») au 4e ou 5e envoi coupait la chaine NON_LU EN SILENCE (son corps n a pas de ticket : la
+ *   borne retombait a 3). `chaine` = un NON_LU a deja ete vu pour ce hash : 429, 202 sans ticket et panne reseau restent dans le MEME
+ *   budget de 5 renvois ; quand il s acheve sans credit, la note le dit. */
+function signalerPaye(hash, ligne, essai = 0, nonLuVu = false) {
   if (!/^0x[0-9a-fA-F]{64}$/.test(String(hash || ''))) return;
   try {
     const r = vitrineActive();
     fetch('/api/paye?h=' + encodeURIComponent(hash) + '&l=' + encodeURIComponent(ligne || 'autre') + (INTERNE ? '&i=1' : '') + (r ? '&r=' + r : ''), { method: 'POST', keepalive: true })
       .then(async (r) => {
         let j = null; try { j = await r.json(); } catch (_) { j = null; }
-        const tk = j && j.ticket && typeof j.ticket === 'object' ? j.ticket : null, nonLu = !!tk && tk.etat === 'NON_LU';
-        if ((r.status === 202 || r.status === 429) && essai < (nonLu ? 5 : 3)) { setTimeout(() => signalerPaye(hash, ligne, essai + 1), nonLu ? 8000 * (essai + 1) : 8000); return; }
-        if (tk) direTicketPaye(tk);
+        const tk = j && j.ticket && typeof j.ticket === 'object' ? j.ticket : null, chaine = nonLuVu || (!!tk && tk.etat === 'NON_LU');
+        const encore = r.status === 202 || r.status === 429;
+        if (encore && essai < (chaine ? 5 : 3)) { setTimeout(() => signalerPaye(hash, ligne, essai + 1, chaine), chaine ? 8000 * (essai + 1) : 8000); return; }
+        if (tk) direTicketPaye(tk, hash);
+        else if (chaine && encore) direTicketPaye({ ok: false, etat: 'NON_LU', pourquoi: r.status === 429 ? 'the server was busy at the last re-send from this page' : 'the last re-send from this page was not read' }, hash);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!nonLuVu) return;
+        if (essai < 5) setTimeout(() => signalerPaye(hash, ligne, essai + 1, true), 8000 * (essai + 1));
+        else direTicketPaye({ ok: false, etat: 'NON_LU', pourquoi: 'the last re-send from this page got no answer' }, hash);
+      });
   } catch (_) {}
 }
 function allerA(nom) {
@@ -16749,6 +16794,7 @@ async function signerEchange(tx, sens, estApprobation) {
   e.className = 'note wOk'; e.innerHTML = (sens === 'ACHAT' ? 'Bought.' : 'Sold.') + lien;
   if (sens === 'ACHAT') { etape('achat'); try { etape('achat_ok'); } catch (_) {} }
   if (!estApprobation) signalerPaye(r.hash, 'hook_block'); /* la vente paie le frais du hook aussi */
+  if (!estApprobation) lieuTicketPaye(r.hash, e);
   /* ⛔⛔ BUG MESURE LE 2026-09-18 EN TEST REEL (fork local) : apres « Bought. », le bouton « Sign the buy »
    *    RESTAIT affiche avec la meme transaction — le harnais l a reclique et a achete QUATRE fois. Un
    *    utilisateur qui clique deux fois paierait deux fois. Une transaction confirmee quitte l ecran ;
@@ -25563,6 +25609,7 @@ async function bcSigner(m, appels, ligne = 'autre') {
     }
     hash = r.hash; if (!c.frais) hashOperation = r.hash; bcEtape(m, 'Confirmed.', 'oui');
     if (ligne) signalerPaye(r.hash, ligne); /* null = un envoi sans frais : rien a relire */
+    if (ligne) lieuTicketPaye(r.hash, (t) => bcEtape(m, t, 'non')); /* D4 : la note du ticket du jour dans CE fil */
   }
   return { ok: true, hash, hashOperation: hashOperation || hash, faits: appels.length };
 }
@@ -25800,6 +25847,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
         if (r.etat === 'CONFIRME' && r.tousConfirmes !== false) {
           bcOpMaj(op, 'done', r.hash);
           signalerPaye(r.hash, 'swap_action');
+          lieuTicketPaye(r.hash, (t) => bcEtape(m, t, 'non'));
           bcEtape(m, 'Done — ' + court(r.hash) + '.', 'oui');
           m.append(bcEl('a', { href: RESEAUX[CHAINE].explorateur + '/tx/' + r.hash, target: '_blank', rel: 'noopener', text: 'See it on the explorer' }));
           bcNoter({ type: 'signed', ...refs, tx: r.hash, account: String(compte).toLowerCase() });

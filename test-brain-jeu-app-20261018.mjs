@@ -96,7 +96,8 @@ vu(/import \{ prochaineProposition as bjProposition, dernierJourDeSemaine as bjD
 const sp = app.slice(app.indexOf('async function bjSignerParts('), app.indexOf('const BJ_TITRES'));
 vu(sp.length > 400 && /method: 'eth_signTypedData_v4', params: \[walletCarte, JSON\.stringify\(s\.donnees\)\]/.test(sp), 'POT_SIGN : eth_signTypedData_v4 des donnees servies, par le wallet de la carte');
 vu(/fetch\('\/api\/ticketpot\/signature', \{ method: 'POST', headers: \{ 'content-type': 'application\/json' \}, body: JSON\.stringify\(\{ day: p\.sign\.jourId, wallet: s\.wallet, signature: sig, week: p\.sign\.week \}\) \}\)/.test(sp), 'POT_SIGN : chaque signature POSTee sur /api/ticketpot/signature (day, wallet, signature, week) comme la page verifier');
-vu(/if \(!r \|\| !r\.ok\) \{/.test(sp) && /catch \(e\) \{ bcEtape\(m, 'Declined in your wallet/.test(sp), 'un refus du wallet ou du serveur ARRETE la serie (rien de plus)');
+/* 2026-10-24 (3e tour ticketpot, D4 ; execute par test-ticketpot-fix4) : le refus du wallet arrete ; un serveur muet ou un 412 PERIME aussi */
+vu(/if \(issue === 'PERIMEE' \|\| issue === 'SANS_REPONSE'\) \{ arret = issue; break; \}/.test(sp) && /catch \(e\) \{ bcEtape\(m, 'Declined in your wallet/.test(sp), 'un refus du wallet, un serveur muet ou des parts perimees ARRETENT la serie (rien de plus)');
 vu(!/eth_sendTransaction|wallet_sendCalls|bcSigner\(/.test(sp), 'signer les parts n envoie AUCUNE transaction');
 vu(/if \(p\.kind === 'POT_SIGN' && !p\.sign\.signerIsVerifier\) \{/.test(bloc) && /'Switch to the verifier wallet ' \+ p\.sign\.verifier\.slice\(0, 6\) \+ '… to sign the shares/.test(bloc)
   && /attester-ticketpot\.html\?day=' \+ encodeURIComponent\(p\.sign\.jourId\) \+ \(p\.sign\.week \? '&week=1' : ''\)/.test(bloc), 'pas le verifier : la carte le dit (verifier LU, jamais tape) et ouvre la page verifier — aucun Sign mort');
