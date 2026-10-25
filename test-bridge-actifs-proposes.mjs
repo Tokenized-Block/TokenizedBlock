@@ -83,7 +83,8 @@ v('⛔ l offre actif-vers-actif ne revient pas sans ses protections', () => {
   const vu = src.replace(/<!--[\s\S]*?-->/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
   /* ⛔ TEMOIN DU DEPOUILLEMENT : sans effet il ne protege rien, trop gourmand il rend toute absence
    *   vraie. Trois instruments se sont fait prendre la-dessus aujourd hui, dont deux a moi. */
-  assert.ok(vu.length < src.length && vu.length > 200000 && vu.includes('id="brConfirm"'),
+  /* 2026-10-25 : le temoin vise `#brFundWallet` (toujours dans le Bridge) au lieu de `#brConfirm`, parti avec la carte de vente. */
+  assert.ok(vu.length < src.length && vu.length > 200000 && vu.includes('id="brFundWallet"'),
     'depouillement casse : ce cas ne garde plus rien (' + vu.length + '/' + src.length + ')');
   assert.doesNotMatch(vu, /id="brFrom"/,
     'le selecteur « From » est revenu. Il ne commande RIEN dans la transaction — `planEchange` ne '
@@ -95,12 +96,14 @@ v('⛔ l offre actif-vers-actif ne revient pas sans ses protections', () => {
     'le peintre des selecteurs est revenu sans les selecteurs, ou avec : dans les deux cas ce '
     + 'fichier doit etre reecrit avant, pas apres');
   /* ⛔ ET LE GESTE VIVANT SURVIT. `fail-closed sur une affordance efface le produit` a coute 13
-   *   puces reduites a 2 EN PROD : retirer une offre fantome ne doit pas emporter l offre reelle. */
-  assert.match(vu, /id="brConfirm"[^>]*>Sell these blocks through their market</,
-    'le bouton de vente reelle a disparu avec les selecteurs morts : on a emporte l affordance qui '
-    + 'MARCHE en retirant celle qui mentait');
-  assert.match(vu, /id="brAmount"/, 'le champ du montant a disparu : la vente devient inatteignable');
-  assert.match(vu, /id="brBlock"/, 'le choix du block a disparu : c est LUI qui determine le marche');
+   *   puces reduites a 2 EN PROD : retirer une offre fantome ne doit pas emporter l offre reelle.
+   * ⛔⛔ 2026-10-25 (Phil : « remove that ») : la carte de vente du Bridge (`#brConfirm`, `#brAmount`) est RETIREE sur
+   *    decision du proprietaire, et la vente d un block par son propre marche est passee au Swap du Wallet. Ce cas exigeait
+   *    `#brConfirm` ; il exige maintenant que la vente reste ATTEIGNABLE la ou elle est allee — sinon on aurait emporte
+   *    l affordance qui marche. La preuve complete (commande ecrite, meme chemin que le Chat) vit dans test-wallet-swap-20261025. */
+  assert.match(vu, /id="bWalletSwap"[^>]*>[\s\S]{0,30}Swap</, 'le Swap du Wallet a disparu : vendre un block devient inatteignable hors de sa fiche');
+  assert.match(vu, /'sell ' \+ n \+ ' ' \+ de/, 'le Swap du Wallet n ecrit plus `sell <n> <block>` : la vente par son propre marche est perdue');
+  assert.match(vu, /id="brBlock"/, 'le choix du block hub du Bridge a disparu');
 });
 
 assert.equal(n, 4, 'compte de cas inattendu : ' + n);

@@ -154,10 +154,17 @@ for (const [id, pourquoi] of EXEMPTIONS) console.log('         #' + id + ' — '
  *    que la reserve existe ENCORE, et qu elle est branchee sur le drapeau. */
 ok('2. le drapeau existe et vaut false aujourd hui',
   /export const HUB_SWAP_LIVE = false;/.test(readFileSync(new URL('./bridge.js', import.meta.url), 'utf8')));
-const brPeint = /resv\.textContent =/.test(app) && /\$\('#brSwapReserve'\)/.test(app);
-ok('3. ⭐ la reserve du swap est PEINTE, donc repeignable', brPeint);
-ok('4. …et son texte depend du drapeau',
-  /const resv = \$\('#brSwapReserve'\);[\s\S]{0,1400}?HUB_SWAP_LIVE/.test(app));
+/* ⛔⛔⛔ 2026-10-25 : LA RESERVE DU SWAP DU BRIDGE EST PARTIE AVEC SA CARTE, ET CE N EST PAS UNE SUPPRESSION PURE.
+ *      Phil a fait retirer la carte « Swap via Bridge » (« remove that ») : plus de devis, plus de net, plus de bouton dans le
+ *      Bridge. La reserve n avait de sens qu a cote de ce devis. Les cas 3 et 4 exigeaient qu elle soit peinte et derivee ;
+ *      ils exigent maintenant qu il n y ait PLUS de devis du Bridge du tout — si un devis revient, il revient sans reserve et
+ *      ces cas rougissent, ce qui oblige a rebrancher les deux ensemble. Le devis vivant (Swap du Wallet -> bcProposerSwap)
+ *      montre le plan reel : c est test-devis-meme-source-que-la-tx qui le garde. */
+const htmlSansComm = app.replace(/<!--[\s\S]*?-->/g, ' ');
+ok('3. ⭐ le Bridge ne porte plus de devis (ni reserve, ni net, ni frais du devis) — retire le 2026-10-25',
+  !/id="brSwapReserve"/.test(htmlSansComm) && !/id="brQuoteNet"/.test(htmlSansComm) && !/id="brQuoteFee"/.test(htmlSansComm));
+ok('4. …et le texte qui reste sur ce parcours (renvoi du Create) depend toujours du drapeau',
+  /br\.textContent = HUB_SWAP_LIVE/.test(app));
 /* ⛔ LA RESERVE SURVIT A L ENDROIT DU DEVIS. C est la seule place ou elle informe : un chiffre
  *   apparait, et le lecteur doit savoir qu il ne sera pas regle. */
 /* ⛔⛔⛔ CETTE ASSERTION EST LA MIENNE, ECRITE CE MATIN, ET JE LA REECRIS LE MEME JOUR — donc je dois
@@ -175,15 +182,22 @@ ok('4. …et son texte depend du drapeau',
  *   ⚠️ CE BANC NE GARDE DONC PLUS DE RESERVE SOUS LE DEVIS. C est `test-devis-meme-source-que-la-tx`
  *     qui tient l invariant (28 assertions, 7 mutants tues), et c est lui qu il faut lire avant de
  *     rebrancher une estimation ici. */
-ok('5. ⛔ le devis vient de la MEME source que la transaction, au lieu d etre desavoue',
-  /plan = await planEchange\(\{ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE'/.test(app)
+/* 2026-10-25 : re-ancre — le devis du Bridge n existe plus ; celui qui reste (bcProposerSwap) lit le plan qu il fait signer. */
+ok('5. ⛔ le devis qui reste vient de la MEME source que la transaction, et le stub ne revient pas par l import',
+  /const rs = p\.resume \|\| \{\};/.test(app) && /bcSigner\(m, p\.aSigner, 'swap_action'\)/.test(app)
   && !/import \{[^}]*\bquoteBridge\b[^}]*\} from '\.\/bridge\.js'/.test(app));
-/* ⛔ LE JOUR DE LA BASCULE : plus aucune phrase a changer a la main. On compte les emplacements
- *   derives — s il en reste moins de quatre, quelqu un a recable une phrase en dur. */
-const derives = (app.match(/HUB_SWAP_LIVE\s*(\?|===|!==|&&|\|\|)/g) || []).length
-  + (app.match(/HUB_SWAP_LIVE$/gm) || []).length;
-ok('6. ⭐ au moins quatre emplacements derivent du drapeau (devis, frais, net, reserve, jambes)',
-  derives >= 4, derives + ' emplacement(s)');
+/* ⛔ LE JOUR DE LA BASCULE : plus aucune phrase a changer a la main.
+ * ⛔⛔ 2026-10-25 : LE SEUIL « >= 4 » DEVIENT UNE LISTE NOMMEE, ET C EST LE MEME MOTIF QUE test-bridge-tarif-unique. Trois des
+ *    emplacements comptes (devis, net, reserve) sont partis avec la carte de vente du Bridge ; ils n ont pas ete recables en
+ *    dur, ils n existent plus. Ce qui reste derive : le renvoi du Create (app.html) et la phrase des jambes (bridge.js). Un
+ *    compte baisse se satisfait de n importe quoi ; on exige donc QUI. */
+/* ⚠️ l ancien compte ajoutait `HUB_SWAP_LIVE$` (m) : il recomptait le MEME site que le premier motif (le `\s*` traverse deja la fin
+ *   de ligne, CRLF ou LF) — mesure : 1 site vu 2 fois. On compte les SITES, une fois chacun. */
+const derives = (app.match(/HUB_SWAP_LIVE\s*(\?|===|!==|&&|\|\|)/g) || []).length;
+const bridgeJs = readFileSync(new URL('./bridge.js', import.meta.url), 'utf8');
+ok('6. ⭐ les emplacements derives sont ceux attendus : le renvoi du Create (app.html) et la phrase des jambes (bridge.js)',
+  derives === 1 && /br\.textContent = HUB_SWAP_LIVE/.test(app)
+  && /export function phraseBridgeLegs\(\) \{\s*return HUB_SWAP_LIVE/.test(bridgeJs), derives + ' emplacement(s) dans app.html');
 /* ⛔ ET LE PRIX NE PART JAMAIS SANS LA CAPACITE. Un tarif cite dans la branche « pas encore » est
  *   le motif exact qui a transforme une divulgation honnete en appat le 2026-09-25. */
 /* ⛔⛔⛔ CETTE EXTRACTION EST BORNEE PAR LE CODE, PAS PAR UN COMPTE D OCTETS — ET C EST UNE MUTATION

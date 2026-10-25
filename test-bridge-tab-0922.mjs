@@ -148,11 +148,15 @@ assert.doesNotMatch(ecranBridge, /0xa6cf|Fees for Dev|≈\s*\$1|≈\$1/i);
  *     ce temps « tout vert » s affichait au-dessus d un ecran d argent qui mentait.
  *   ⇒ Ce qu on veut garder n a jamais ete « le panneau dit 0.01% » mais « le panneau annonce un
  *     tarif, et c est celui qui sera preleve ». Le chiffre vient donc de la constante. */
-assert.match(ecranBridge, /[Ff]ee/, 'le panneau Bridge ne parle plus de frais du tout');
-assert.ok(
-  ecranBridge.includes(BRIDGE_FEE_LABEL) || /data-frais-bridge/.test(ecranBridge),
-  'le panneau Bridge n annonce ni le tarif reel (' + BRIDGE_FEE_LABEL + ') ni un emplacement peint '
-  + 'depuis la constante : il ne peut donc plus dire ce qui sera preleve');
+/* ⛔⛔ 2026-10-25 : L INTENTION TIENT, LE SENS S INVERSE. Phil a fait retirer la vente du Bridge (« remove that ») : l onglet ne
+ *    preleve plus rien lui-meme (Fund passe par Coinbase, qui montre son total ; la vente est au Swap du Wallet, dont le frais
+ *    est celui du plan). « Le panneau annonce le tarif qui sera preleve » devient donc « le panneau n annonce AUCUN tarif du
+ *    Bridge » — un prix sans geste qui le preleve est le defaut le plus paye de ce depot. Les notes « Hub set … fee 0.5% on
+ *    Bridge volume » (peintes en JS, hors de ce HTML) sont retirees le meme jour pour la meme raison. */
+assert.ok(!ecranBridge.includes(BRIDGE_FEE_LABEL) && !/<(b|span)\s+data-frais-bridge/.test(ecranBridge),
+  'le panneau Bridge annonce de nouveau un tarif (' + BRIDGE_FEE_LABEL + ') alors qu aucun de ses gestes ne le preleve');
+assert.doesNotMatch(readFileSync(new URL('./app.html', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ' '),
+  /' — fee ' \+ BRIDGE_FEE_LABEL \+ ' on Bridge volume/, 'la note « Hub set » tarife de nouveau un volume que rien ne preleve');
 /* ⛔⛔⛔ L INTENTION D ORIGINE TIENT, SON POINT DE LECTURE A CHANGE — ET CE N EST PAS UN
  *      ASSOUPLISSEMENT, C EST LE CONTRAIRE.
  *      Ce qu on protege n a jamais ete « le mot "not live" figure dans le HTML » : c est « on ne
@@ -186,13 +190,16 @@ assert.ok(
  *     obligatoire. Les deux ne sont pas interchangeables : l ordre est « supprimer l offre fantome,
  *     puis la phrase », jamais l inverse. */
 const appEntiere = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-assert.match(appEntiere, /plan = await planEchange\(\{ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE'/,
-  'le devis du Bridge ne lit plus la chaine par `planEchange` : s il repart d une estimation, le '
-  + 'chiffre affiche peut diverger de la transaction, et il faut alors RETABLIR la reserve');
+/* ⛔ 2026-10-25 : le devis du Bridge est RETIRE avec sa carte ; le devis vivant (Swap du Wallet -> bcProposerSwap) est garde ici
+ *   sur la meme exigence : le resume montre est celui du plan dont les appels sont signes, et un plan illisible n est pas un zero. */
+assert.match(appEntiere, /const rs = p\.resume \|\| \{\};/,
+  'le devis du Chat ne lit plus le resume du plan signe : il peut diverger de la transaction');
 assert.match(appEntiere, /You receive at least /,
   'le net n est plus annonce comme un MINIMUM lu sur la chaine');
-assert.match(appEntiere, /You receive: not read — /,
-  'une panne de lecture ne se distingue plus d un montant : « non lu » annonce comme un chiffre');
+assert.match(appEntiere, /pourquoi: 'the plan could not be fetched'/,
+  'un plan illisible ne se distingue plus d un montant');
+assert.doesNotMatch(appEntiere.replace(/<!--[\s\S]*?-->/g, ' '), /id="brConfirm"|id="brQuoteNet"/,
+  'la vente du Bridge est revenue : reecrire ces cas avec elle (devis de la meme source, reserve)');
 /* ⛔ ET LE STUB NE PEUT PLUS REVENIR PAR L IMPORT : c est la garde structurelle. Tant qu il est
  *   importable, il reste une seconde formule pour « combien on prend ». */
 assert.doesNotMatch(appEntiere, /import \{[^}]*\bquoteBridge\b[^}]*\} from '\.\/bridge\.js'/,

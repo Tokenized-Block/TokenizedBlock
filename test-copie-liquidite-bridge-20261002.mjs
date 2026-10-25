@@ -37,23 +37,16 @@ await essai('(2)', async () => {
  *      Raksha — ils ne gardaient rien la ou l app est reellement relue avant deploiement.
  *    ⛔ Meme famille que le cliquet CRLF : un banc ne doit dependre NI de la fin de ligne NI du
  *      systeme de fichiers de l hote. `pathToFileURL(...).href` est la seule forme qui vaut partout. */
+  /* ⛔ 2026-10-25 (Phil : « remove that ») : la ligne de devis et le statut de la vente du Bridge sont RETIRES avec leur carte
+   *   (`texteBridgePoussiere` n avait plus d appelant). Les cinq cas qui les executaient deviennent : (a) la phrase de poussiere
+   *   du module reste une phrase sans double point, (b) les deux sites retires ne reviennent pas sans ce banc. */
   const E = await import(pathToFileURL(path.join(ICI, 'echange.js')).href);
-  const dust = { etat: 'REFUSE', pourquoi: E.MESSAGE_TROP_PETIT, refusPoussiere: true };
-  const autre = { etat: 'NON_MESURE', pourquoi: 'its market could not be read' };
-  const aide = html.match(/function texteBridgePoussiere\(plan\) \{[^\n]*\}/);
-  const m = html.match(/ {4}netEl\.textContent = plan\.refusPoussiere \? texteBridgePoussiere\(plan\)\n[^\n]*\n[^\n]*'\. Nothing was sent\.';\n/);
-  ok(!!aide && !!m, '(2) Bridge quote line found (dust -> texteBridgePoussiere)');
-  const f = new Function('plan', aide[0] + '; const netEl = {}; ' + m[0] + ' return netEl.textContent;');
-  const t = f(dust);
-  ok(t === 'You receive: not read. Amount too small to trade here. Nothing was sent.', '(2) dust: exact sentence (' + t + ')');
-  ok(!/\.\./.test(t) && !INTERNE.test(t), '(2) dust: no doubled period, no internal text');
-  const g = f(autre);
-  ok(g === 'You receive: not read — its market could not be read. Nothing was sent.', '(2) NEG: other reasons keep the old wording (' + g + ')');
-  const s = html.match(/ {6}setEtat\(sortie\.refusPoussiere \?[^\n]*' — nothing was sent\.'\);\n/);
-  ok(!!s, '(2) Bridge swap status found');
-  const h = new Function('sortie', 'let out; const setEtat = (x) => { out = x; }; ' + s[0] + ' return out;');
-  ok(h(dust) === 'Amount too small to trade here. Nothing was sent.', '(2) swap status on dust: no doubled period (' + h(dust) + ')');
-  ok(h(autre) === 'its market could not be read — nothing was sent.', '(2) NEG: swap status for other reasons unchanged');
+  const t = String(E.MESSAGE_TROP_PETIT || '');
+  ok(t === 'Amount too small to trade here.', '(2) dust sentence of echange.js unchanged (' + t + ')');
+  ok(!/\.\./.test(t + ' Nothing was sent.') && !INTERNE.test(t), '(2) dust: no doubled period, no internal text');
+  ok(!/function texteBridgePoussiere\(/.test(html), '(2) the Bridge dust helper is gone with its card');
+  ok(!/netEl\.textContent = plan\.refusPoussiere/.test(html) && !/setEtat\(sortie\.refusPoussiere/.test(html),
+    '(2) the Bridge quote line and swap status are gone (rewrite this case if they come back)');
 });
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exit(ko ? 1 : 0);

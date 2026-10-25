@@ -46,28 +46,28 @@ const ok = (nom, cond, vu) => {
 /* ⛔⛔ UN BANC QUI NE RETROUVE PAS SA CIBLE NE GARDE RIEN, et son vert est pire qu un rouge. On
  *    borne par la GRAMMAIRE, jamais par un compte d octets : deux fois aujourd hui une fenetre
  *    `slice(i, i + N)` a cesse silencieusement de couvrir parce qu un commentaire l avait decalee. */
-const mFn = /async function majBridgeQuote\(\)\s*\{([\s\S]*?)\n\}/.exec(app);
-ok('0. le peintre du devis est trouve, borne par sa grammaire', !!mFn);
+/* ⛔⛔⛔ 2026-10-25 — LA CIBLE CHANGE, PAS L INVARIANT. Phil a fait retirer la carte de vente du Bridge (« remove that ») :
+ *      `majBridgeQuote` et le gestionnaire `#brConfirm`, que ce banc lisait, n existent plus. Le geste qui les remplace est
+ *      le Swap du Wallet, qui ecrit une commande du Chat ; c est donc `bcProposerSwap` qui montre le devis ET fait signer.
+ *      L invariant est le meme, et plus simple a tenir : devis et appels signes viennent du MEME objet `p` (un seul plan,
+ *      /api/rails/plan), dans la MEME fonction. Les cas ci-dessous gardent leur numero, re-ancres sur ce chemin. */
+const mFn = /async function bcProposerSwap\(qui, classe, \{ de, vers, montant \}, ref, suivi = null\) \{([\s\S]*?)\n\}/.exec(app);
+ok('0. le chemin du devis et de la signature (bcProposerSwap) est trouve, borne par sa grammaire', !!mFn);
 const devis = mFn ? mFn[1] : '';
 ok('0b. TEMOIN — son corps est substantiel (une extraction ratee rendrait tout vrai par absence)',
-  devis.length > 900, devis.length + ' octets');
-/* ⛔ ET LE PEINTRE EST ASYNCHRONE : s il ne l etait pas, il ne pourrait pas attendre la chaine, donc
- *   il reviendrait forcement a un calcul local. Le mot-cle est une condition de l invariant. */
-ok('0c. TEMOIN — il est `async`, donc capable d attendre la chaine',
-  /async function majBridgeQuote/.test(app));
+  devis.length > 3000, devis.length + ' octets');
+ok('0c. TEMOIN — il est `async`, donc capable d attendre le plan',
+  /async function bcProposerSwap/.test(app));
 
 /* ── 1. UNE SEULE SOURCE ─────────────────────────────────────────────────────────────────────── */
-ok('1. ⭐ le devis appelle `planEchange` — la fonction qui construit la transaction',
-  /planEchange\(\{\s*rpc,\s*chaine: CHAINE,\s*jeton: hub,\s*compte,\s*sens: 'VENTE'/.test(devis));
-/* ⛔⛔ ET LE GESTIONNAIRE APPELLE LA MEME, AVEC LES MEMES ARGUMENTS. Sans cette moitie, le devis
- *    pourrait lire une chose et la transaction en envoyer une autre — exactement le defaut qu on
- *    remplace, deplace d un cran. */
-const mConf = /conf\.addEventListener\('click', async \(\) => \{([\s\S]*?)\n  \}\);/.exec(app);
-ok('2. TEMOIN — le gestionnaire du bouton est trouve', !!mConf);
-const handler = mConf ? mConf[1] : '';
-ok('3. ⭐ …et il appelle `planEchange` avec les MEMES arguments que le devis',
-  /planEchange\(\{\s*rpc,\s*chaine: CHAINE,\s*jeton: hub,\s*compte,\s*sens: 'VENTE'/.test(handler),
-  handler.length + ' octets de handler');
+ok('1. ⭐ le net annonce vient du resume du plan `p`',
+  /const rs = p\.resume \|\| \{\};/.test(devis) && /'You receive at least ' \+ [^;]*rs\.recoitAuMoins/.test(devis));
+const mSigner = /const signer = async \(\) => \{([\s\S]*?)\n    \};/.exec(devis);
+ok('2. TEMOIN — la fonction de signature est trouvee', !!mSigner);
+const handler = mSigner ? mSigner[1] : '';
+ok('3. ⭐ …et elle signe les appels de CE MEME plan `p` (lot et un-par-un)',
+  /calls: p\.aSigner\.map/.test(handler) && /bcSigner\(m, p\.aSigner, 'swap_action'\)/.test(handler),
+  handler.length + ' octets de signature');
 /* ⛔⛔⛔ LE STUB N EST PLUS IMPORTABLE DEPUIS L ECRAN. Tant qu il reste dans la liste d import, il
  *      reste une seconde formule pour « combien on prend » — et c est la seule chose qui a produit
  *      le facteur cinquante. L interdire a l import est structurel ; l interdire par relecture ne
@@ -97,7 +97,7 @@ ok('7. ⛔ et il existe TOUJOURS dans bridge.js : decable, pas supprime',
  *    gourmand il rend toutes les absences vraies. */
 const html = app.replace(/<!--[\s\S]*?-->/g, ' ').replace(/\/\*[\s\S]*?\*\//g, ' ');
 ok('7b. TEMOIN — le depouillement a un effet ET garde le code vivant',
-  html.length < app.length && html.length > 200000 && html.includes('id="brConfirm"'),
+  html.length < app.length && html.length > 200000 && html.includes('id="brFundWallet"'),
   html.length + ' / ' + app.length + ' octets');
 ok('8. ⭐ aucun selecteur « From » / « To » ne propose plus un echange actif-vers-actif',
   !/id="brFrom"/.test(html) && !/id="brTo"/.test(html));
@@ -106,44 +106,40 @@ ok('9. …et le peintre qui les remplissait a disparu, pas seulement son corps',
 /* ⛔ LE GESTE VIVANT SURVIT — c est la moitie qu on oublie. `fail-closed sur une affordance efface
  *   le produit` a deja coute 13 puces reduites a 2 EN PROD : retirer une offre fantome ne doit pas
  *   emporter l offre reelle. */
-ok('10. ⛔ le bouton de vente reelle survit, et il dit ce qu il fait',
-  /id="brConfirm"[^>]*>Sell these blocks through their market</.test(html));
-ok('11. ⛔ le champ du montant survit, et il nomme ce qu on compte',
-  /id="brAmount"/.test(html) && /How many blocks to sell/.test(html));
-ok('12. ⛔ le choix du block survit : c est LUI qui determine le marche',
+/* ⛔ 2026-10-25 : la vente du Bridge est RETIREE (decision de Phil) ; la vente vivante est au Swap du Wallet. On exige
+ *   qu elle y soit, et que le Bridge ne la porte plus sans ce banc. */
+ok('10. ⛔ le Bridge ne porte plus de bouton de vente (retire le 2026-10-25)',
+  !/id="brConfirm"/.test(html) && !/id="brAmount"/.test(html));
+ok('11. ⛔ la vente vivante est au Swap du Wallet : bouton, et commande `sell <n> <block>` ecrite pour le Chat',
+  /id="bWalletSwap"/.test(html) && /'sell ' \+ n \+ ' ' \+ de/.test(html) && /bcExecuterTexte\(wsCommande\(de, vers, n\), etat\)/.test(html));
+ok('12. ⛔ le choix du block hub du Bridge survit',
   /id="brBlock"/.test(html));
 
 /* ── 3. CE QUE LE DEVIS DIT DE LUI-MEME ──────────────────────────────────────────────────────── */
 /* ⛔⛔ « NON LU » N EST PAS « ZERO ». Une panne de lecture annoncee comme un montant nul ferait
  *    croire qu un block n a pas de marche. Ce depot a produit trois verdicts faux sur cette
  *    confusion exacte. */
-ok('13. ⭐ une lecture ratee se dit « not read », jamais zero',
-  /You receive: not read — /.test(devis));
+/* 2026-10-25 : re-ancre sur bcProposerSwap — un plan qui n a pas pu etre lu est NON_MESURE et s arrete, jamais un zero. */
+ok('13. ⭐ un plan illisible se dit NON_MESURE, jamais zero',
+  /p = \{ etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched', aSigner: \[\] \}/.test(devis)
+  && /if \(p\.etat !== 'PRET' && p\.etat !== 'APPROBATIONS'\) \{/.test(devis));
 ok('14. …et le net annonce est un MINIMUM, pas une promesse',
   /You receive at least /.test(devis) && /recoitAuMoins/.test(devis));
-/* ⛔⛔⛔ LE BOUTON NE DEPEND PAS DU RESULTAT DE LA LECTURE. Le refuser parce qu un noeud a rate
- *      serait punir l utilisateur d une panne qui n est pas la sienne. Il s ouvre sur ce que
- *      l utilisateur a fourni ; c est le gestionnaire qui relit et refuse avant de signer. */
-const iBtn = devis.indexOf('btn.disabled');
-const iAwait = devis.indexOf('await planEchange');
-ok('15. TEMOIN — les deux reperes du bouton et de la lecture sont trouves', iBtn > -1 && iAwait > -1,
-  'btn.disabled@' + iBtn + ' await@' + iAwait);
-ok('16. ⭐ le bouton est decide AVANT la lecture de la chaine, jamais sur son echec',
-  iBtn < iAwait, 'btn.disabled@' + iBtn + ' doit preceder await@' + iAwait);
-ok('17. …et il ne depend que du block et du montant',
-  /btn\.disabled = !\(unites > 0n && \/\^0x\[0-9a-fA-F\]\{40\}\$\/\.test\(String\(hub \|\| ''\)\)\)/.test(devis));
-/* ⛔⛔ JETON DE COURSE. Chaque frappe relance une lecture et elles ne reviennent pas dans l ordre :
- *    une reponse lente pour « 10 » ecraserait la reponse rapide pour « 100 », et l ecran afficherait
- *    le net du MAUVAIS montant juste avant une signature. Motif « peinture accrochee au premier
- *    settle », deja paye ici. */
-ok('18. ⭐ une reponse en retard ne peut pas peindre le net d un autre montant',
-  /const monJeton = \+\+jetonDevisBridge;/.test(devis) && /if \(monJeton !== jetonDevisBridge\) return;/.test(devis));
-/* ⛔ ET LA LECTURE EST DEBOUNCEE : j ai moi-meme cree ce risque en remplacant un calcul local par un
- *   appel reseau. Un `eth_call` par caractere, et le noeud public plafonne — 12 refus d affilee
- *   mesures ici sur une rafale. Une correction qui deplace le cout sans le nommer n en est pas une. */
-ok('19. ⛔ …et la frappe ne declenche pas un eth_call par caractere',
-  /setTimeout\(\(\) => \{ void majBridgeQuote\(\); \}, 600\)/.test(app)
-  && /el\.addEventListener\('input', devisDebounce\)/.test(app));
+/* ⛔⛔ LE BOUTON DU WALLET NE DEPEND PAS D UNE LECTURE : il ne lit rien lui-meme, il ecrit une commande. Les trois cas qui
+ *    gardaient le bouton du Bridge (decide avant la lecture, sur le block et le montant seuls) gardent ici la meme chose. */
+const mWs = /\$\('#wsGo'\)\.addEventListener\('click', async \(\) => \{([\s\S]*?)\n\}\);/.exec(app);
+const ws = mWs ? mWs[1] : '';
+ok('15. TEMOIN — le gestionnaire du Swap du Wallet est trouve', ws.length > 300, ws.length + ' octets');
+ok('16. ⭐ il ne lit pas la chaine avant d ecrire la commande (aucune lecture a rater, aucun bouton desactive sur un echec)',
+  !/fetch\(|rpc\(|planEchange|\.disabled/.test(ws));
+ok('17. …et il ne depend que de ce que la personne a choisi (de, vers, montant)',
+  /bcExecuterTexte\(wsCommande\(de, vers, n\), etat\)/.test(ws));
+/* ⛔ PLUS DE JETON DE COURSE NECESSAIRE : chaque demande ouvre SA carte dans le Chat, qui porte son propre plan — aucune
+ *   reponse tardive ne peut repeindre le net d un autre montant dans une ligne partagee. On exige qu il n y ait pas de telle ligne. */
+ok('18. ⭐ le Wallet ne peint aucun net lui-meme (pas de ligne partagee qu une reponse tardive ecraserait)',
+  !/You receive/.test(ws));
+ok('19. ⛔ …et la frappe ne declenche aucune lecture (pas d ecouteur `input` sur le montant)',
+  !/\$\('#wsMontant'\)\.addEventListener\('input'/.test(app));
 
 /* ── 4. LA PHRASE SUIT L OFFRE, ELLE NE LA PRECEDE PAS ───────────────────────────────────────── */
 ok('20. ⭐ la phrase des jambes nomme le geste vivant',

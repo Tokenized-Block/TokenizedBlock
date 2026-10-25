@@ -86,15 +86,17 @@ if (!HUB_SWAP_LIVE) {
    *     la source unique, qui est strictement plus forte — c est le seul motif acceptable pour
    *     retirer une reserve de ce depot, et il doit etre verifiable, pas plaide.
    *   ⚠️ SI LE DEVIS REDEVIENT UNE ESTIMATION, ceci rougit et la reserve redevient obligatoire. */
+  /* ⛔ 2026-10-25 : le devis du Bridge est RETIRE avec sa carte (Phil : « remove that ») ; le devis vivant est celui du Chat
+   *   (bcProposerSwap), ou passe le Swap du Wallet. Meme exigence, re-ancree : le resume montre est celui du plan signe. */
   t('⛔ le devis vient de la MEME source que la transaction, pas d une estimation',
-    /plan = await planEchange\(\{ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE'/.test(sansCommentaires));
+    /const rs = p\.resume \|\| \{\};/.test(sansCommentaires) && /bcSigner\(m, p\.aSigner, 'swap_action'\)/.test(sansCommentaires));
   t('⛔ …et le stub ne peut plus revenir par l import : une seule formule pour « combien on prend »',
     !/import \{[^}]*\bquoteBridge\b[^}]*\} from '\.\/bridge\.js'/.test(sansCommentaires));
   /* ⛔ ET CE QUE LE DEVIS DIT DE SES PROPRES LIMITES SURVIT : un echec de lecture n est pas un zero,
    *   et le net est un MINIMUM. Sans ces deux-la, une source unique afficherait quand meme un
    *   chiffre faux sur une panne de noeud. */
   t('⛔ « non lu » reste distinct de zero, et le net reste un MINIMUM',
-    /You receive: not read — /.test(sansCommentaires)
+    /p = \{ etat: 'NON_MESURE', pourquoi: 'the plan could not be fetched', aSigner: \[\] \}/.test(sansCommentaires)
     && /You receive at least /.test(sansCommentaires));
   /* ⛔ ET IL POINTE VERS CE QUI MARCHE : un renvoi honnete vaut mieux qu un silence. Supprimer la
    *   phrase aurait ete l autre moitie du defaut — le visiteur qui cherche cette fonction merite de
@@ -141,8 +143,13 @@ t('⛔ l emplacement du texte est VIDE dans le HTML, pas pre-rempli',
 /* ⛔ SANS CETTE MOITIE, on pourrait faire passer ce fichier en retirant TOUS les tarifs. Le tarif
  *   du Bridge est juste et doit le rester : c est la capacite qui manquait, pas le chiffre. */
 t('le label suit les bps, au centieme', BRIDGE_FEE_LABEL === (Number(BRIDGE_FEE_BPS) / 100) + '%');
-t('et il est toujours affiche la ou le service EXISTE',
-  (html.match(/data-frais-bridge/g) || []).length >= 4);
+/* ⛔⛔ 2026-10-25 : CETTE MOITIE S INVERSE, ET C EST LA MEME REGLE. Le service tarife par `BRIDGE_FEE_LABEL` dans le Bridge (vendre
+ *    un block par son propre marche, depuis l onglet) a ete RETIRE de l onglet par Phil. Un tarif laisse a cote d un geste qui
+ *    n est plus la serait « un prix sans service ». On exige donc ZERO emplacement, et le peintre encore branche pour le jour ou un
+ *    service tarife revient (test-bridge-tarif-unique tient la liste nommee — vide). */
+t('et il n est plus affiche la ou le service n EXISTE plus (zero emplacement), le peintre restant branche',
+  [...html.matchAll(/<(b|span)\s+data-frais-bridge\s*>/g)].length === 0
+  && /querySelectorAll\('\[data-frais-bridge\]'\)\)\s*el\.textContent = BRIDGE_FEE_LABEL/.test(sansCommentaires));
 
 console.log((ko.length ? 'KO ' + ko.length : 'OK') + ' — ' + ok + ' assertions'
   + '   (HUB_SWAP_LIVE = ' + HUB_SWAP_LIVE + ')');

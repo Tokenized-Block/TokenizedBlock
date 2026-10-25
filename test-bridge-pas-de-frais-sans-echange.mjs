@@ -8,19 +8,22 @@
  *
  * ⛔⛔ CETTE GARDE A CHANGE DE MECANISME LE MEME JOUR, ET C EST LA LE POINT INTERESSANT.
  *     Ma premiere version verifiait qu un refus (`if (!HUB_SWAP_LIVE)`) precedait la construction
- *     du frais. C etait la bonne intention avec le mauvais levier : elle supposait qu il faudrait
- *     un jour CONSTRUIRE un hub d echange.
- *     Phil, le meme jour : « tu charges avec les relais existants d echange de pool ; on prend le
- *     frais sur le fait que tu uses les blocks en dehors de l app ». Il avait raison : `planEchange`
- *     vend DEJA un block par sa propre pool v4 et preleve le frais d interface vers le wallet de
- *     frais DANS LA MEME TRANSACTION. Il n y avait rien a construire — seulement a s en servir.
- *   ⇒ La garde ne bloque donc plus : elle verifie que le frais n a plus AUCUN chemin ou partir
- *     seul. C est structurel, et c est plus fort qu un drapeau. Un drapeau se remet a `true` par
- *     distraction ; une transaction unique qui contient les deux, non.
+ *     du frais. Phil, le meme jour : « tu charges avec les relais existants d echange de pool ». Le
+ *     Bridge s est donc mis a VENDRE le block par sa propre pool (`planEchange`), frais dedans.
+ *
+ * ⛔⛔⛔ 2026-10-25 — TROISIEME FORME, ET IL FAUT DIRE CE QUI A CHANGE. Phil a fait RETIRER la carte de vente
+ *      du Bridge (« remove that ») et ajouter un Swap au Wallet. Le gestionnaire `#brConfirm` que ce banc
+ *      lisait N EXISTE PLUS. Le supprimer avec lui laisserait le defaut revenir sans un cri ; ce banc garde
+ *      donc la MEME propriete sur le chemin qui reste :
+ *        · plus aucun gestionnaire de vente dans le Bridge (s il revient, il doit revenir avec ses gardes) ;
+ *        · `buildBridgeFeeCall` n est appele NULLE PART dans l ecran — plus fort qu avant (on ne lisait que le
+ *          gestionnaire) : aucun transfert de frais autonome ne peut etre construit ou que ce soit ;
+ *        · le Swap du Wallet ne construit AUCUNE transaction : il ecrit une commande du Chat ;
+ *        · le chemin du Chat (`bcProposerSwap`) n envoie rien si le plan n est ni PRET ni APPROBATIONS, et le net
+ *          qu il annonce vient du MEME plan que les appels qu il fait signer.
  *
  * ⛔ CE QUE CE TEST NE PROUVE PAS : que la transaction reussit on-chain, ni que le frais arrive
- *    vraiment a destination. Il lit du code. La preuve du versement se lit sur la chaine, et elle
- *    demande une signature que je ne donne pas.
+ *    vraiment a destination. Il lit du code.
  */
 import { readFileSync } from 'node:fs';
 import { strict as assert } from 'node:assert';
@@ -29,107 +32,69 @@ const html = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 let n = 0;
 const v = (nom, fn) => { fn(); n++; };
 
-/* ⛔ commentaires retires du cote LU : ce depot documente ses defauts corriges en toutes lettres,
- *   et ce fichier-ci cite le defaut. Un motif naif les prendrait pour le defaut lui-meme. */
-const src = html.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:'"\w])\/\/[^\n]*/g, '$1 ');
+/* ⛔ commentaires retires du cote LU : ce depot documente ses defauts corriges en toutes lettres. */
+const src = html.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ').replace(/(^|[^:'"\w])\/\/[^\n]*/g, '$1 ');
+/** Le corps d une fonction, borne par ses accolades (pas par un compte d octets). */
+const corps = (sig) => {
+  const i = src.indexOf(sig);
+  if (i < 0) return '';
+  /* l accolade du CORPS (apres `) {` ou `=> {`), pas celle d un parametre destructure */
+  const m = /\)\s*\{|=>\s*\{/.exec(src.slice(i));
+  if (!m) return '';
+  const j = i + m.index + m[0].length - 1;
+  for (let k = j, p = 0; k < src.length; k += 1) {
+    if (src[k] === '{') p += 1; else if (src[k] === '}') { p -= 1; if (p === 0) return src.slice(i, k + 1); }
+  }
+  return '';
+};
 
-/* le gestionnaire de confirmation du Bridge, borne — pas la page entiere */
-const debut = src.indexOf("$('#brConfirm')");
-assert.ok(debut > 0, 'le bouton de confirmation du Bridge est introuvable : ce test ne garde plus rien');
-/* ⛔ FENETRE BORNEE MAIS SUFFISANTE. A 5 200 caracteres, le texte d avant-signature tombait DEHORS
- *   et le test accusait son absence — une garde qui rate sa cible par cadrage, pas par defaut du
- *   code. On borne a la fin du gestionnaire (`peindreBridgeActifs`, juste apres) plutot que de
- *   deviner une longueur : un nombre choisi a la main se perime au premier ajout. */
-const fin = src.indexOf('peindreBridgeActifs();', debut);
-const handler = src.slice(debut, fin > debut ? fin : debut + 12000);
-
-v('le gestionnaire est bien celui qu on croit', () => {
-  /* ⛔ `garde-sur-element-absent-toujours-fausse` : si l extraction rate, `handler` serait vide et
-   *    tous les `doesNotMatch` ci-dessous passeraient au VERT en n ayant rien lu. */
-  assert.ok(handler.length > 2000, 'extraction du gestionnaire suspecte (' + handler.length + ' car.)');
-  assert.match(handler, /addEventListener\('click'/, 'ce n est pas un gestionnaire de clic');
+v('TEMOIN — le depouillement garde le code vivant', () => {
+  assert.ok(src.length < html.length && src.length > 200000 && src.includes("$('#brFundWallet')"),
+    'depouillement casse : ce banc ne lirait plus rien (' + src.length + '/' + html.length + ')');
 });
 
-v('⛔ LE CAS CENTRAL : aucun transfert de frais autonome ne peut etre construit ici', () => {
-  /* ⛔⛔ C EST LA GARANTIE STRUCTURELLE. `buildBridgeFeeCall` fabriquait un transfert de frais tout
-   *     seul — exactement l objet qui permettait de prendre de l argent sans rien livrer. Tant
-   *     qu il n est pas appele dans ce chemin, le frais ne PEUT PAS partir sans echange : il n y a
-   *     plus de transaction ou il soit seul. */
-  assert.doesNotMatch(handler, /buildBridgeFeeCall\s*\(/,
-    'le Bridge reconstruit un transfert de frais autonome : il peut de nouveau encaisser sans '
-    + 'rien echanger, ce qui est exactement le defaut du 2026-09-24');
+v('⛔ le Bridge ne porte plus de gestionnaire de vente (retire le 2026-10-25)', () => {
+  assert.doesNotMatch(src, /\$\('#brConfirm'\)/, 'un gestionnaire `#brConfirm` est revenu : reecrire ce banc AVANT, avec ses gardes');
+  assert.doesNotMatch(src, /id="brConfirm"/, 'le bouton de vente du Bridge est revenu');
 });
 
-v('⛔ l echange passe par la pool existante du block', () => {
-  assert.match(handler, /planEchange\s*\(/,
-    "le Bridge n appelle plus planEchange : il n echange donc plus rien par la pool du block");
-  assert.match(handler, /sens:\s*'VENTE'/,
-    "le sens de l echange n est pas une VENTE : sortir un block, c est le vendre par son marche");
+v('⛔ LE CAS CENTRAL : aucun transfert de frais autonome ne peut etre construit dans l ecran', () => {
+  /* ⛔⛔ `buildBridgeFeeCall` fabriquait un transfert de frais tout seul. Il reste IMPORTE (bancs du module), jamais APPELE. */
+  assert.doesNotMatch(src, /buildBridgeFeeCall\s*\(/,
+    'l ecran reconstruit un transfert de frais autonome : il peut de nouveau encaisser sans rien echanger (defaut du 2026-09-24)');
 });
 
-v('⛔ rien n est envoye si le plan n est pas PRET', () => {
-  /* ⛔ `neutral-return-swallows-failure` : sans ce refus, un plan NON_MESURE ou REFUSE continuerait
-   *    jusqu a l envoi avec un `tx` absent — et l erreur arriverait dans le wallet de l utilisateur
-   *    plutot qu a l ecran. */
-  assert.match(handler, /etat\s*!==\s*'PRET'/,
-    "le plan n est pas verifie avant l envoi : une lecture ratee irait jusqu au wallet");
-  const i = handler.search(/etat\s*!==\s*'PRET'/);
-  /* la fenetre est BORNEE : un `return` trouve 800 caracteres plus loin appartiendrait au bloc
-   * suivant — ce piege m a deja donne une garde verte pour rien. */
-  assert.match(handler.slice(i, i + 260), /return\s*;/,
-    'le refus sur un plan non pret ne sort pas de la fonction');
+const ws = corps("$('#wsGo').addEventListener('click', async () =>");
+v('TEMOIN — le gestionnaire du Swap du Wallet est trouve', () => {
+  assert.ok(ws.length > 400 && /bcExecuterTexte\(/.test(ws), 'gestionnaire #wsGo introuvable ou vide (' + ws.length + ' car.)');
 });
 
-v('les approbations manquantes sont dites AVANT la signature', () => {
-  /* ⛔ Signer sans les approbations echoue SUR LA CHAINE : le gas est brule et l utilisateur ne
-   *   comprend pas pourquoi. On le dit avant, et on renvoie vers l ecran qui sait les enchainer
-   *   plutot que d en refaire ici une version plus faible (`canonical-helper-weaker-copy`). */
-  assert.match(handler, /etapes\s*\)\s*&&\s*\w+\.etapes\.length|etapes\.length/,
-    'les approbations du plan ne sont pas regardees : la signature echouerait on-chain');
+v('⛔ le Swap du Wallet ne construit AUCUNE transaction : il ecrit une commande du Chat', () => {
+  assert.doesNotMatch(ws, /envoyer\w*\(|eth_sendTransaction|wallet_sendCalls|planEchange\(|\/api\/rails\/plan|buildBridgeFeeCall|aSigner/,
+    'le Swap du Wallet appelle une primitive d argent lui-meme : il doit passer par bcExecuterTexte, le chemin du Chat');
 });
 
-v('⛔ l ecran ne promet pas un net issu de l estimation', () => {
-  /* La promesse etait affichee juste au-dessus du bouton : l endroit exact ou quelqu un decide de
-   * payer. Elle doit venir du plan REEL, ou ne pas etre un chiffre du tout. */
-  /* ⛔⛔⛔ CE CAS VERIFIAIT UN PROXY ALORS QUE SON PROPRE COMMENTAIRE, DEUX LIGNES PLUS HAUT, NOMMAIT
-   *      LA BONNE PROPRIETE : « elle doit venir du plan REEL, ou ne pas etre un chiffre du tout ».
-   *      Il exigeait `HUB_SWAP_LIVE` a cote du net, parce que c etait la seule facon de garantir
-   *      qu un net STUB ne s affiche pas comme une promesse. Depuis le 2026-10-02 le net vient du
-   *      plan reel, donc on peut exiger la chose elle-meme au lieu de son substitut.
-   *   ⇒ CE N EST PAS UN ASSOUPLISSEMENT. Un drapeau a cote d un chiffre dit « mefie-toi de lui » ;
-   *     une source unique rend la mefiance inutile. `majBridgeQuote` appelle desormais `planEchange`,
-   *     LA MEME fonction que le gestionnaire qui construit la transaction envoyee. Deux formules
-   *     pour une question, c etait une de trop — et l ancienne valait 0,01 % quand le reel est 0,5 %.
-   *   ⛔ ET LES TROIS MOITIES SONT EXIGEES ENSEMBLE. Garder la premiere sans les deux autres
-   *     laisserait un chiffre d apparence juste s afficher sur une PANNE DE LECTURE. */
-  const positions = [...src.matchAll(/netEl\.textContent\s*=/g)].map((m) => m.index);
-  assert.ok(positions.length > 0, 'la ligne du net recu est introuvable');
-  const duPlanReel = positions.some((k) => /plan\.resume\.recoitAuMoins/.test(src.slice(k, k + 340)));
-  assert.ok(duPlanReel,
-    '« You receive » ne vient plus du plan REEL (`plan.resume.recoitAuMoins`, rendu par planEchange '
-    + '— la fonction qui construit la transaction). S il revient d une estimation, l ecran promet de '
-    + 'nouveau un chiffre que la transaction ne tiendra pas, juste au-dessus du bouton.');
-  assert.match(src, /You receive: not read — /,
-    'une lecture ratee ne se distingue plus d un montant : « non lu » annonce comme zero ferait '
-    + 'croire qu un block n a pas de marche');
-  assert.match(src, /You receive at least /,
-    'le net n est plus annonce comme un MINIMUM : le prix bouge entre la lecture et l inclusion, '
-    + 'donc un montant exact serait une promesse qu on ne peut pas tenir');
+const swap = corps('async function bcProposerSwap(');
+v('⛔ le chemin du Chat n envoie rien si le plan n est ni PRET ni APPROBATIONS', () => {
+  assert.ok(swap.length > 3000, 'bcProposerSwap introuvable (' + swap.length + ')');
+  const i = swap.indexOf("if (p.etat !== 'PRET' && p.etat !== 'APPROBATIONS') {");
+  assert.ok(i > 0, 'le refus d un plan non pret a disparu de bcProposerSwap');
+  assert.match(swap.slice(i, i + 400), /return;/, 'le refus sur un plan non pret ne sort pas de la fonction');
+  assert.ok(i < swap.indexOf('const signer = async'), 'le refus vient APRES la definition de la signature');
 });
 
-v('le texte lu juste avant la signature decrit l echange, pas un frais seul', () => {
-  /* ⛔ C est le dernier texte que quelqu un lit avant d engager son argent. Il disait « sign the
-   *   0.01% fee only » pour un geste qui n echangeait rien : exact, et vide. */
-  const i = handler.indexOf("Open your wallet");
-  assert.ok(i > 0, 'le texte d avant-signature est introuvable');
-  const phrase = handler.slice(i, i + 420);
-  assert.doesNotMatch(phrase, /fee only/i,
-    "le texte d avant-signature annonce encore « fee only » : il decrirait un frais sans echange");
-  assert.doesNotMatch(phrase, /\bPhil\b|BridgeRouter|\bbps\b/i,
-    'jargon interne ou prenom de l equipe juste avant une signature');
+v('⛔ le net annonce vient du MEME plan que les appels signes', () => {
+  assert.match(swap, /const rs = p\.resume \|\| \{\};/, 'le resume lu n est plus celui du plan p');
+  assert.match(swap, /'You receive at least ' \+ [^;]*rs\.recoitAuMoins/, '« You receive at least » ne vient plus de rs.recoitAuMoins');
+  assert.match(swap, /bcSigner\(m, p\.aSigner, 'swap_action'\)/, 'les appels signes ne sont plus p.aSigner');
 });
 
-assert.equal(n, 7, 'compte de cas inattendu : ' + n);
-console.log('ok bridge-pas-de-frais-sans-echange — ' + n + ' cas : le frais vit DANS l echange, et');
-console.log('   aucun transfert de frais autonome ne peut etre construit dans ce chemin.');
+v('le texte lu avant la signature ne decrit pas un frais seul, ni un prenom', () => {
+  assert.doesNotMatch(swap, /fee only/i, 'le chemin du Chat annonce « fee only »');
+  assert.doesNotMatch(ws, /\bPhil\b|BridgeRouter|\bbps\b/i, 'jargon interne dans le Swap du Wallet');
+});
+
+assert.equal(n, 8,'compte de cas inattendu : ' + n);
+console.log('ok bridge-pas-de-frais-sans-echange — ' + n + ' cas : aucun transfert de frais autonome dans l ecran,');
+console.log('   le Swap du Wallet ecrit une commande, et le chemin du Chat ne signe que le plan qu il a montre.');
 console.log('⚠️ NE PROUVE PAS que la transaction aboutit ni que le frais arrive : ceci lit du code.');

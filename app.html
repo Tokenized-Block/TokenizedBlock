@@ -1431,6 +1431,9 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 .wActions{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 0}
 .wAct{display:flex;flex-direction:column;align-items:center;gap:3px;padding:10px 6px}
 .wAct b{font-size:17px;line-height:1}
+.wActions4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.wActions4 .wAct{min-width:0;overflow-wrap:anywhere;text-align:center}
+@media (max-width:360px){.wActions4{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .bouton[disabled]{opacity:.45;cursor:not-allowed}
 .wListe{list-style:none;margin:6px 0 0;padding:0}
 .wLigne{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--ligne)}
@@ -2932,10 +2935,24 @@ details[open] > summary::before{transform:rotate(90deg)}
           <button class="puce" id="bCopier" type="button" style="cursor:pointer">Copy</button></div>
         <p class="wSolde" id="wSoldeEth">…</p>
         <p class="note mono" id="wReseau" style="margin:0"></p>
-        <div class="wActions">
+        <!-- 2026-10-25 (Phil) : « add a Swap button in Wallet next to Send and Paired ». Quatre gestes, meme style, meme taille ;
+             la rangee passe a 2 colonnes sous 360 px (jamais de defilement horizontal). ⛔ `bSwap` reste l id du bouton
+             « Paired with » (historique, 2026-09-19) : le nouveau Swap est `bWalletSwap`, et il n ecrit AUCUN echange a lui —
+             il ecrit la commande du Chat du panneau (bcExecuterTexte -> bcProposerSwap), le meme chemin que le ticket Trade. -->
+        <div class="wActions wActions4">
           <button class="bouton sec wAct" id="bSend" type="button"><b>↑</b>Send</button>
           <button class="bouton sec wAct" id="bReceive" type="button"><b>↓</b>Receive</button>
-          <button class="bouton sec wAct" id="bSwap" type="button"><b>⇄</b>Paired with</button>
+          <button class="bouton sec wAct" id="bWalletSwap" type="button" aria-controls="wSwapCarte"><b>⇄</b>Swap</button>
+          <button class="bouton sec wAct" id="bSwap" type="button"><b>⊕</b>Paired with</button>
+        </div>
+        <div class="carte" id="wSwapCarte" hidden style="margin-top:12px">
+          <p class="titre" style="font-size:1em">Swap</p>
+          <label class="champ">You pay<select id="wsDe"></select></label>
+          <label class="champ">Amount<input id="wsMontant" inputmode="decimal" placeholder="0.0" autocomplete="off" spellcheck="false"></label>
+          <label class="champ">You get<select id="wsVers"></select></label>
+          <p class="note" id="wsFrais" style="margin:8px 0 0">Fee: shown in the quote, taken inside the same transaction.</p>
+          <button class="bouton" id="wsGo" type="button" style="margin-top:10px">Review the swap</button>
+          <p class="note" id="wsEtat" style="margin-top:8px"></p>
         </div>
         <!-- ⛔ PHIL (2026-09-19) : « dans le wallet, le bouton Paired with au lieu du swap ». Un createur ouvre un marche de plus
              pour SON block contre une action tokenisee, USDC ou cbBTC — meme mise en vie (≈ 1 $, 3 % par swap), autre devise. -->
@@ -4122,8 +4139,10 @@ details[open] > summary::before{transform:rotate(90deg)}
                 ⇒ UNE SEULE SOURCE DESORMAIS, et elle est derivee : `phraseBridgeLegs()` sur
                   `#brLegsNote`. Supprimer une phrase fausse et laisser sa jumelle serait la moitie
                   du travail ; c est la raison pour laquelle on retire la copie, pas la reserve. -->
-        Fund lands in <b>your</b> wallet, and a block sells through its own market with the fee
-        taken inside the same transaction.
+        <!-- 2026-10-25 (Phil : « remove that ») : la vente d un block par le Bridge est RETIREE de cet onglet. Vendre un block
+             par son propre marche reste atteignable : Swap du Wallet (commande du Chat, `sell <n> <block>`), et Sell sur
+             la fiche du block. -->
+        Fund lands in <b>your</b> wallet. To trade what you hold, use <b>Swap</b> in your Wallet.
         <!-- ⛔ « not a broker » ET « no leveraged legs » RESTENT SUR UNE SEULE LIGNE CHACUN. Ma
              premiere redaction coupait « we are not a / broker » sur deux lignes, et
              `test-bridge-x402-brain-0923.mjs` est devenu rouge : son motif `/not a broker/i` ne
@@ -4131,7 +4150,7 @@ details[open] > summary::before{transform:rotate(90deg)}
              j ai rewrappe la phrase, je n ai PAS elargi le motif. Elargir un motif pour accepter sa
              propre mise en page, c est affaiblir une garde pour une raison qui n a rien a voir avec
              ce qu elle protege. -->
-        Fee amount only — no leveraged legs, and we are not a broker.</p>
+        No leveraged legs, and we are not a broker.</p>
       <!-- ⛔ « Phil-blocked », « until BridgeRouter », « hub quote (Phil) » RETIRES DE L ECRAN :
            un prenom et le nom d un contrat interne. Le lecteur n a aucun moyen de savoir qui est
            Phil ni ce qu est un BridgeRouter — ca ne l informe pas, ca lui fait croire qu il lui
@@ -4153,94 +4172,19 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="brBlockNote">A Bridge block is any TB block you choose as hub. Create opens Instant Birth — unchanged.</p>
     </div>
 
-    <div class="carte" role="tablist" aria-label="Bridge flow" style="display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" class="creaMode on" role="tab" aria-selected="true" data-brmode="fund" id="brModeFund">
-        <span class="creaModeIc">💳</span><b>Fund</b>
-        <span>Fiat → ETH / USDC on Base (Coinbase). Then bridge from your wallet.</span>
-      </button>
-      <button type="button" class="creaMode" role="tab" aria-selected="false" data-brmode="swap" id="brModeSwap">
-        <span class="creaModeIc">⇄</span><b>Swap</b>
-        <span>Sell a block through its own market — <b data-frais-bridge>—</b> fee, taken inside the same transaction.</span>
-      </button>
-    </div>
-
+    <!-- 2026-10-25 (Phil, capture de l onglet : « remove that ») : les onglets Fund / Swap et la carte « Swap via Bridge »
+         (vendre un block par son propre marche : `planEchange` VENTE + `envoyerDepuisWallet`) sont RETIRES d ici, avec leur code.
+         ⛔ La capacite n est PAS perdue : Swap du Wallet (#bWalletSwap) ecrit la commande du Chat du panneau
+           (`sell <n> <block>` ou `swap <n> <de> to <vers>`) -> bcProposerSwap -> /api/rails/plan -> wallet ; et Sell sur la
+           fiche du block reste le chemin `planEchange` qui enchaine aussi les approbations (la carte du Bridge y renvoyait deja :
+           « Open the block and use Sell there »).
+         Fund reste, en une ligne : c est un chemin qui marche (session Onramp visant ce wallet, repli sur le lien public). -->
     <div class="carte" id="brFundCarte">
       <p class="titre">Fund wallet</p>
-      <p class="sous">Buy ETH or USDC through Coinbase — it lands in <b>your</b> wallet.
-        Tokenized Block never holds your money. Coinbase shows their total before you confirm.
-        Outside the U.S., paying by card needs a Coinbase account (Coinbase asks you to sign in).</p>
+      <p class="sous">Buy ETH or USDC through Coinbase — it lands in <b>your</b> wallet. Outside the U.S., paying by card needs a Coinbase account.</p>
       <a class="bouton" id="brFundWallet" href="https://www.coinbase.com/onramp" target="_blank" rel="noopener noreferrer">Fund wallet — Get ETH / USDC on Base</a>
-      <p class="note" id="brFundHint" style="margin-top:10px">After funding, use <b>Swap</b> to sell a block through its own market (<b data-frais-bridge>—</b> fee).</p>
     </div>
 
-    <div class="carte" id="brSwapCarte" hidden>
-      <p class="titre">Swap via Bridge</p>
-      <!-- ⛔⛔ CE PARAGRAPHE DECRIVAIT UN GESTE QUI N EXISTE PLUS. Il annonçait un « skim » — un
-           frais preleve TOUT SEUL — alors que le bouton ci-dessous vend reellement des blocks par
-           leur propre pool, frais pris DANS la meme transaction. Le commentaire du gestionnaire le
-           dit noir sur blanc : « ce chemin ne couvre pas le From/To generique ; seule la SORTIE
-           d un block par son propre marche est cablee ici ». L ecran, lui, vendait autre chose.
-           ⛔ Et il portait le tarif d avant (0,01 % au lieu de 0,5 %), sur le dernier ecran lu
-             avant une signature. -->
-      <!-- ⛔ « until Phil BridgeRouter (1 bps) » RETIRE : un prenom et un nom de contrat interne,
-           plus un prix (1 bps) pour une route qui n existe pas encore. Annoncer le tarif d un
-           service non livre est une promesse, pas une information. La reserve reste ENTIERE.
-
-           ⛔⛔⛔ CE PARAGRAPHE N AVAIT PAS D `id` ET IL RECITAIT UNE ABSENCE EN DUR : « Atomic
-                token↔token net via hub is not live ». Rien ne pouvait le repeindre. Le hub est en
-                construction ; le jour ou `HUB_SWAP_LIVE` passe a `true`, tout le reste de l ecran
-                s allume (le devis, le frais, le net, la phrase des jambes, la phrase du Create) et
-                CELUI-CI aurait continue d annoncer que rien ne marche, sur le dernier ecran lu
-                avant une signature.
-              ⇒ Il porte desormais `id="brSwapReserve"` et son texte est DERIVE de `HUB_SWAP_LIVE`,
-                comme les cinq autres emplacements. Plus aucune phrase de l onglet n est a modifier
-                a la main le jour de la bascule : c est le seul remede contre « on oublie le front ».
-              ⛔ LA RESERVE N EST PAS SUPPRIMEE, ELLE EST DEPLACEE D UN CRAN. Le panneau From/To
-                produit un VRAI devis et le bouton reste cliquable : retirer la reserve sans retirer
-                l offre afficherait un prix a cote d une capacite absente — le defaut que ce depot a
-                paye le plus souvent. Elle est donc dite UNE fois, a l endroit du devis, derivee.
-              ⛔ Et le contenu statique ci-dessous doit rester VRAI : il s affiche pendant le premier
-                instant, et c est ce qu on lit en relisant le fichier. -->
-      <p class="note" id="brSwapReserve">Selling a block through its own market is live: the fee is
-        taken inside the same transaction, never as a separate charge (fail-closed if it rounds
-        to 0). Fee settles as ETH or USDC — amount only. Micropayments elsewhere in the app never
-        replace this fee.</p>
-      <!-- ⛔⛔⛔ LES SELECTEURS « From » ET « To » SONT RETIRES LE 2026-10-02, ET CE N EST PAS UN
-                CHANGEMENT DE REDACTION : C ETAIENT DES ENTREES MORTES.
-                Le gestionnaire du bouton appelle `planEchange({ jeton: hub, sens: 'VENTE',
-                montant: unites })`. Mesure : `fromSym` et `toSym` apparaissent ZERO fois dans le
-                corps du gestionnaire apres leur lecture, et le devis calcule a partir d eux
-                (`const q = quoteBridge(...)`) n est utilise NULLE PART — une valeur lue puis jetee,
-                le motif de defaut n°1 de ce depot. Le commentaire du code le disait deja : « la
-                devise From ne commande plus rien ».
-              ⛔ ET C EST CE QUI OBLIGEAIT LA RESERVE A EXISTER. Deux selecteurs proposant vingt
-                actifs laissaient croire a un echange actif-vers-actif ; il fallait donc ecrire
-                quelque part qu il ne se reglerait pas. Raksha (2026-10-02) refusait la phrase ; la
-                retirer en gardant l offre aurait affiche un prix a cote d une capacite absente.
-                ⇒ On retire L OFFRE, pas la phrase honnete. Alors il n y a plus rien a desavouer.
-              ⛔ LE STUB FACTURAIT 0,01 % QUAND LE FRAIS REEL EST 0,5 % (`BRIDGE_FEE_BPS = 50n`) —
-                facteur CINQUANTE, exactement le defaut deja paye ici le 2026-09-25. Le devis vient
-                desormais de `planEchange`, LA MEME SOURCE que la transaction : les deux ne peuvent
-                plus diverger, parce qu il n y en a plus qu une.
-              ⚠️ CE QUI N ETAIT PAS CASSE, ET JE NE LE SURCLAME PAS : la vente restait atteignable.
-                La condition `fromSym !== toSym` gardait le chemin vivant sur des entrees qui ne
-                l influencent pas, mais le repli `find(v => v !== from.value)` evitait la collision.
-                Dependance morte, pas panne. -->
-      <label class="champ">How many blocks to sell
-        <input id="brAmount" inputmode="decimal" placeholder="0.0" autocomplete="off">
-      </label>
-      <div class="carte" id="brQuote" style="margin-top:10px;background:transparent">
-        <p class="note" id="brQuoteNet">You receive: —</p>
-        <p class="note" id="brQuoteFee">Fee (<span data-frais-bridge>—</span>): taken inside the same transaction.</p>
-      </div>
-      <!-- ⛔⛔ L ETIQUETTE DISAIT « Confirm Bridge fee » ET LE GESTE VEND LES BLOCKS. Quelqu un qui
-           confirme « un frais » ne s attend pas a se separer de ce qu il detient : c est un
-           probleme de CONSENTEMENT, pas de formulation. Le gestionnaire appelle `planEchange` en
-           VENTE sur le block choisi et envoie la transaction de sortie par sa propre pool.
-           ⛔ Un bouton porte le nom de ce qu il FAIT. Si le geste change, c est le nom qui suit. -->
-      <button class="bouton" id="brConfirm" type="button" style="margin-top:10px" disabled>Sell these blocks through their market</button>
-      <p class="note" id="brEtat" style="margin-top:8px"></p>
-    </div>
   </section>
 
 </div>
@@ -7977,7 +7921,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
   /* tip 20260922-prepaye-inscrire-dust */
-  if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); void majBridgeQuote(); }
+  if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); }
   if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock().catch(() => {}).then(() => { void verifierRollsEnAttente(); void peindreTirageJourPass(); }); void peindreMissions(); void peindreEarn(); void peindreSkinsJeu(); void peindreUnitPools(); }
   /* 2026-10-18 : les duels (carte Game ; marques sur la Map) — une ligne a part, la ligne au-dessus est epinglee par test-tirage-carte */
   if (nom === 'missions') void peindreDuels();
@@ -12143,6 +12087,8 @@ async function envoyerCadeauEtFrais(p) {
 function basculer(sel) {
   const autre = sel === '#wSendCarte' ? '#wReceive' : '#wSendCarte';
   $(autre).hidden = true;
+  /* une seule carte d action ouverte a la fois : Send / Receive referment aussi celle du Swap */
+  { const ws = $('#wSwapCarte'); if (ws) ws.hidden = true; }
   $(sel).hidden = !$(sel).hidden;
 }
 async function copier(ev) {
@@ -13486,8 +13432,7 @@ function peindreJeu(mcDevise, devise, etat, prixDeviseUsd = null) {
   peindreCompanion();
 }
 
-/** Bridge, poussiere : ⛔ 2026-10-02 (Zero 1) — phrase complete, sans double point. */
-function texteBridgePoussiere(plan) { return 'You receive: not read. ' + String(plan.pourquoi) + ' Nothing was sent.'; }
+/* 2026-10-25 : `texteBridgePoussiere` RETIREE avec la carte de vente du Bridge, son seul appelant. */
 /* ⛔⛔ 2026-10-02 (Zero 1, R4 item 3) : UN SEUL texte de refus d echange — « <Raison>. Nothing was sent. ». Avant : « Not possible: … »,
  *   « Not prepared — … », « Not possible as set: … », et MESSAGE_SANS_POOL qui disait deux fois « nothing was sent ». Le fragment
  *   deja present dans la raison est retire, puis ajoute UNE fois. L etape interne (« (at forme) ») n est plus affichee. */
@@ -19233,6 +19178,7 @@ document.addEventListener('click', () => { const m = $('#teinteMenu'); if (m && 
 $('#bSwap') && $('#bSwap').addEventListener('click', async () => {
   const w = $('#wPaire');
   w.hidden = !w.hidden;
+  { const ws = $('#wSwapCarte'); if (ws && !w.hidden) ws.hidden = true; } /* une seule carte d action ouverte a la fois */
   if (w.hidden) return;
   /* les devises : celles du V3 (ouvertes seulement s il est deploye) */
   const liste = pairesProposees(CHAINE).filter((x) => x.type === 'STABLE' || x.type === 'MAJEUR' || x.type === 'ACTION');
@@ -25643,107 +25589,19 @@ async function peindreBridgeBlocks() {
   else if (saved && [...sel.options].some((o) => o.value === saved)) sel.value = saved;
   if (sel.value) ecrireBridgeBlock(sel.value);
   if (note) note.textContent = sel.value
-    ? ('Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee ' + BRIDGE_FEE_LABEL + ' on Bridge volume.')
+    /* 2026-10-25 : la mention du tarif sur le volume du Bridge est RETIREE (et dans le jumeau plus bas) : aucun geste de l onglet ne preleve plus
+     *   ce tarif depuis le retrait de la vente du Bridge — un prix a cote d une capacite absente. */
+    ? ('Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + '.')
     : 'Pick any of your TB blocks as the Bridge hub.';
 }
 
-/* ⛔⛔⛔ LE DEVIS VIENT DE `planEchange`, LA MEME SOURCE QUE LA TRANSACTION — ET C EST TOUT LE POINT
- *      DE LA REECRITURE DU 2026-10-02.
- *      Avant, il venait de `quoteBridge()`, un STUB documente comme « fee = amount * 0.0001 », soit
- *      0,01 %, alors que `BRIDGE_FEE_BPS` vaut 50n — 0,5 %. Facteur CINQUANTE entre le chiffre
- *      affiche et le chiffre preleve, sur l ecran ou quelqu un decide de vendre. Ce depot a DEJA
- *      paye ce defaut exact le 2026-09-25 ; il etait revenu par une autre porte.
- *   ⛔ DEUX FORMULES POUR UNE SEULE QUESTION, C EST UNE DE TROP. Il n y en a plus qu une : celle qui
- *     construit la transaction. Elles ne peuvent plus diverger parce qu elles ne sont plus deux.
- *   ⛔ ET C EST LA NORME « MONTRER LE NET AVANT DE SIGNER » : le chiffre annonce est celui que la
- *     chaine vient de rendre (`recoitAuMoins`), pas une estimation. Un minimum garanti est la seule
- *     forme honnete — le prix bouge entre la lecture et l inclusion.
- *
- * ⚠️ CE QUE CETTE FONCTION NE PEUT PAS FAIRE, ET ELLE LE DIT A L ECRAN : lire la chaine prend du
- *   temps et peut echouer. Une panne de lecture n est PAS « ce block n a pas de marche » — on
- *   n annonce donc jamais zero sur un echec, on dit qu on n a pas su lire. Confondre les deux a
- *   deja produit ici trois verdicts faux.
- * ⛔ ET ELLE NE DECIDE PAS DU BOUTON SUR SON PROPRE RESULTAT : le bouton s ouvre des qu il y a un
- *   block et un montant. Le refuser parce qu une LECTURE a rate serait punir l utilisateur d une
- *   panne de noeud — « fail-closed sur une affordance efface le produit », paye ici en prod.
- *   Le gestionnaire relit le plan de toute facon avant de signer : c est lui qui refuse, pas le
- *   devis. */
-let jetonDevisBridge = 0;
-async function majBridgeQuote() {
-  const amountEl = $('#brAmount'), feeEl = $('#brQuoteFee'), netEl = $('#brQuoteNet');
-  const btn = $('#brConfirm'), etat = $('#brEtat');
-  if (!amountEl || !feeEl || !netEl) return;
-  const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
-  let unites = 0n;
-  try { unites = unitsFromHuman(amountEl.value, 18); } catch (_) { unites = 0n; }
-  feeEl.textContent = 'Fee (' + BRIDGE_FEE_LABEL + '): taken inside the same transaction.';
-  /* ⛔ LE BOUTON D ABORD, ET SANS ATTENDRE LA CHAINE : il ne depend que de ce que l utilisateur a
-   *   fourni. Un `await` avant cette ligne laisserait le bouton dans son etat precedent pendant
-   *   toute la lecture — donc desactive alors que tout est rempli. */
-  if (btn) btn.disabled = !(unites > 0n && /^0x[0-9a-fA-F]{40}$/.test(String(hub || '')));
-  if (etat && !etat.dataset.locked) etat.textContent = '';
-  if (!(unites > 0n)) { netEl.textContent = 'You receive: —'; return; }
-  if (!/^0x[0-9a-fA-F]{40}$/.test(String(hub || ''))) {
-    netEl.textContent = 'You receive: — · pick one of your blocks above first.';
-    return;
-  }
-  /* ⛔⛔ JETON DE COURSE : chaque frappe relance une lecture, et elles ne reviennent pas dans
-   *    l ordre. Sans ce jeton, une reponse LENTE pour « 10 » ecraserait la reponse RAPIDE pour
-   *    « 100 » et l ecran afficherait le net du mauvais montant, juste avant une signature.
-   *    Ce depot connait le motif : « la peinture accrochee au premier settle ». */
-  const monJeton = ++jetonDevisBridge;
-  netEl.textContent = 'You receive: reading its market on chain…';
-  let plan, marcheB = null;
-  try {
-    marcheB = await marcheDuHubBridge(hub);
-    plan = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites, marcheLu: marcheB });
-  } catch (err) {
-    plan = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 120) };
-  }
-  if (monJeton !== jetonDevisBridge) return;
-  if (plan.etat !== 'PRET' || !plan.resume) {
-    /* ⛔ « NON LU » N EST PAS « ZERO ». On nomme l etat, on n invente pas un montant. */
-    netEl.textContent = plan.refusPoussiere ? texteBridgePoussiere(plan)
-      : 'You receive: not read — ' + (plan.pourquoi || 'its market could not be read')
-      + '. Nothing was sent.';
-    return;
-  }
-  netEl.textContent = recuBridge(plan.resume.recoitAuMoins, plan.resume.recoitDevise, marcheB)
-    ? 'You receive at least ' + recuBridge(plan.resume.recoitAuMoins, plan.resume.recoitDevise, marcheB)
-      + ' for ' + formaterUnites(plan.resume.paye || 0n, 18) + ' blocks.'
-    : 'You receive: not read — the paired asset of its market could not be read. Nothing was sent.';
-}
-/* ⛔⛔ 2026-10-03 (audit rails R9) : le Bridge appelait planEchange SANS marche lu ; planEchange relisait alors par
- *    vieDuBlock sans `clesExactes`, aveugle aux pools V8 contre une devise ERC-20. e7e9 (pool V8 SPCXc/e7e9, prix lu
- *    sur la chaine) recevait « this block has no market to trade on yet » — faux. Meme lecture que le profil. */
-async function marcheDuHubBridge(hub) {
-  try { return await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: hub, clesExactes: await clesReellesDe(hub) }); }
-  catch (_) { return null; }
-}
-/** Le montant recu, dans SES decimales. ⛔ Le Bridge formatait tout en 18 : un minimum en SPCXc (8 dec) se serait
- *  affiche 1e10 fois trop petit, juste avant une signature. Devise sans decimales lues -> null (on ne devine pas). */
-function recuBridge(recoitAuMoins, recoitDevise, marche) {
-  if (recoitAuMoins === undefined || recoitAuMoins === null) return null;
-  if (recoitDevise !== 'pair') return formaterUnites(recoitAuMoins, 18) + ' ' + (recoitDevise || 'ETH');
-  const dec = marche && marche.paire === 'DEVISE' ? Number(marche.decDevise) : NaN;
-  if (!Number.isInteger(dec) || dec < 0 || dec > 36) return null;
-  return formaterUnites(recoitAuMoins, dec) + ' ' + (marche.devise || 'of the paired asset');
-}
-
-function basculerBridgeMode(mode) {
-  const fund = $('#brFundCarte'), swap = $('#brSwapCarte');
-  const bf = $('#brModeFund'), bs = $('#brModeSwap');
-  const isFund = mode !== 'swap';
-  if (fund) fund.hidden = !isFund;
-  if (swap) swap.hidden = isFund;
-  if (bf) { bf.classList.toggle('on', isFund); bf.setAttribute('aria-selected', isFund ? 'true' : 'false'); }
-  if (bs) { bs.classList.toggle('on', !isFund); bs.setAttribute('aria-selected', !isFund ? 'true' : 'false'); }
-}
-
+/* ⛔⛔ 2026-10-25 (Phil : « remove that ») : `majBridgeQuote`, `marcheDuHubBridge`, `recuBridge`, `basculerBridgeMode` et le
+ *    gestionnaire de `#brConfirm` sont RETIRES avec la carte « Swap via Bridge », leurs seuls lecteurs. Ils vendaient un block
+ *    par son propre marche (`planEchange` VENTE ; devis et transaction de la MEME source ; frais dans la meme transaction).
+ *  ⛔ OU EST PASSEE LA VENTE : Swap du Wallet (`#bWalletSwap`) ecrit la commande du Chat du panneau (`sell <n> <block>`), et Sell
+ *    sur la fiche du block garde `planEchange`, approbations comprises (la carte du Bridge y renvoyait deja des qu il en manquait
+ *    une). Aucun nouvel appel d argent n est ne de ce retrait : le Swap du Wallet ne fait qu ecrire un texte de commande. */
 (function filBridge() {
-  const bf = $('#brModeFund'), bs = $('#brModeSwap');
-  if (bf) bf.addEventListener('click', () => basculerBridgeMode('fund'));
-  if (bs) bs.addEventListener('click', () => basculerBridgeMode('swap'));
   const sel = $('#brBlock');
   if (sel) sel.addEventListener('change', () => {
     ecrireBridgeBlock(sel.value);
@@ -25751,8 +25609,7 @@ function basculerBridgeMode(mode) {
     /* ⛔ LE JUMEAU de la ligne ci-dessus : meme phrase, deux endroits. Le tarif y avait survecu au
      *   changement de 0,01 % vers 0,5 % — c est toujours la copie qu on ne relit pas qui reste
      *   fausse (`single-and-batch-twins-diverge`). Les deux lisent maintenant la meme constante. */
-    if (note && sel.value) note.textContent = 'Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + ' — fee ' + BRIDGE_FEE_LABEL + ' on Bridge volume.';
-    majBridgeQuote();
+    if (note && sel.value) note.textContent = 'Hub set · ' + sel.value.slice(0, 6) + '…' + sel.value.slice(-4) + '.';
   });
   const r = $('#brRefreshBlocks');
   if (r) r.addEventListener('click', () => { void peindreBridgeBlocks(); });
@@ -25760,161 +25617,6 @@ function basculerBridgeMode(mode) {
   if (c) c.addEventListener('click', () => {
     etape('bridge_create');
     try { allerA('creer'); } catch (_) { location.hash = '#creer'; }
-  });
-  /* ⛔⛔⛔ LE DEVIS LIT LA CHAINE, DONC L ECOUTEUR EST DEBOUNCE — ET C EST MOI QUI AI CREE CE RISQUE
-   *      EN REMPLACANT LE STUB. Avant, `majBridgeQuote` etait une multiplication locale : la brancher
-   *      sur `input` ne coutait rien. Maintenant elle appelle `planEchange`, donc un `eth_call` par
-   *      FRAPPE. Taper « 1000 » aurait declenche quatre lectures, et le noeud public plafonne — ce
-   *      depot a deja mesure 12 refus d affilee sur une rafale d `eth_call`.
-   *   ⛔ UNE CORRECTION QUI DEPLACE LE COUT SANS LE NOMMER N EST PAS UNE CORRECTION. Le stub etait
-   *     faux mais gratuit ; le vrai devis est juste mais payant. On paie une fois par pause de
-   *     frappe, pas une fois par caractere.
-   *   ⛔ ET `change` RESTE IMMEDIAT : il ne tire qu au blur ou a la selection, donc une seule fois,
-   *     et c est le moment ou l utilisateur attend un chiffre. */
-  let tDevis = 0;
-  const devisDebounce = () => {
-    clearTimeout(tDevis);
-    tDevis = setTimeout(() => { void majBridgeQuote(); }, 600);
-  };
-  {
-    const el = $('#brAmount');
-    if (el) {
-      el.addEventListener('input', devisDebounce);
-      el.addEventListener('change', () => { clearTimeout(tDevis); void majBridgeQuote(); });
-    }
-  }
-  const conf = $('#brConfirm');
-  if (conf) conf.addEventListener('click', async () => {
-    const amount = ($('#brAmount') && $('#brAmount').value) || 0;
-    /* le block a sortir : c est LUI qu on vend par sa propre pool, pas une devise generique */
-    const hub = ($('#brBlock') && $('#brBlock').value) || lireBridgeBlock();
-    /* ⛔ `const q = quoteBridge({ amount, fromSym, toSym })` RETIRE : il etait calcule ici et
-     *   utilise NULLE PART dans ce gestionnaire — mesure du 2026-10-02, `fromSym` et `toSym`
-     *   apparaissaient zero fois apres leur lecture. Une valeur lue puis jetee est un defaut, et
-     *   celle-ci portait en plus un tarif de 0,01 % quand le reel est 0,5 %. */
-    const etat = $('#brEtat');
-    const setEtat = (t) => { if (etat) { etat.dataset.locked = '1'; etat.textContent = t; } };
-    /* ⛔⛔ L ANCIEN GARDE-FOU EST RETIRE, ET IL FAUT DIRE POURQUOI PLUTOT QUE DE LE LAISSER TRAINER.
-     *     `planBridgeFeeSkim({ fromSym })` decidait si le FRAIS pouvait partir selon la devise
-     *     « From » — une question qui n avait de sens que tant que ce bouton envoyait un frais tout
-     *     seul. Desormais il vend un BLOCK par sa propre pool : la devise « From » ne commande plus
-     *     rien, et ce garde-fou aurait refuse toute sortie des qu un utilisateur laissait autre
-     *     chose que ETH/USDC dans un selecteur qui ne sert plus a ca. Une garde survivante du
-     *     chemin qu elle protegeait devient un refus arbitraire. */
-    if (!compte) {
-      etape('bridge_fee_need_wallet');
-      setEtat('Connect your wallet to move a block out.');
-      try { await connecter(); } catch (_) {}
-      if (!compte) return;
-    }
-    if (CHAINE !== 8453) {
-      etape('bridge_fee_wrong_chain');
-      setEtat('Moving a block out runs on Base mainnet — switch network in your wallet.');
-      return;
-    }
-    /* ⛔⛔ L ECHANGE PASSE PAR LA POOL QUI EXISTE DEJA — Phil, 2026-09-24 : « tu charges avec les
-     *     relais existants d echange de pool ; nous on prend le frais sur le fait que tu uses les
-     *     blocks en dehors de l app ».
-     *     Il n y avait donc RIEN a construire. `planEchange` vend deja un block par sa propre pool
-     *     Uniswap v4 et preleve le frais d interface vers le wallet de frais DANS LA MEME
-     *     TRANSACTION. Le defaut n etait pas qu il manquait un hub : c est que ce bouton ne s en
-     *     servait pas. Il fabriquait un transfert de frais tout seul, et rien d autre.
-     *
-     *   ⛔ LE FRAIS NE PEUT PLUS PARTIR SEUL, par construction : il n existe plus de chemin ou il
-     *     parte seul. Il est DANS le swap, ou il n est pas. C est ce qui remplace la garde
-     *     precedente — une garde qui bloquait tout valait mieux que facturer dans le vide, mais
-     *     faire l echange vaut mieux que bloquer.
-     *
-     *   ⚠️ CE QUE CE CHEMIN NE COUVRE PAS : le From/To generique entre deux devises. Seule la
-     *     SORTIE d un block par son propre marche est cablee ici, parce que c est celle-la que
-     *     Phil decrit et la seule dont le code existe et soit prouve. */
-    if (!/^0x[0-9a-fA-F]{40}$/.test(String(hub || ''))) {
-      etape('bridge_swap_sans_block');
-      setEtat('Pick one of your blocks above first — the Bridge moves a block out through its own '
-        + 'market. Nothing was sent.');
-      return;
-    }
-    let unites = 0n;
-    try { unites = unitsFromHuman(amount, 18); } catch (_) { unites = 0n; }
-    if (unites <= 0n) {
-      etape('bridge_swap_montant');
-      setEtat('Enter how many blocks you want to move out. Nothing was sent.');
-      return;
-    }
-    setEtat('Reading its market and asking the chain for a real price…');
-    let sortie, marcheS = null;
-    try {
-      marcheS = await marcheDuHubBridge(hub);
-      sortie = await planEchange({ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites, marcheLu: marcheS });
-    } catch (err) {
-      /* ⛔ une panne de lecture n est pas « ce block n a pas de marche » : on ne conclut pas a sa place */
-      sortie = { etat: 'NON_MESURE', pourquoi: 'its market could not be read: ' + String((err && err.message) || err).slice(0, 120) };
-    }
-    if (sortie.etat !== 'PRET' || !sortie.tx) {
-      etape('bridge_swap_ko');
-      setEtat(sortie.refusPoussiere ? sortie.pourquoi + ' Nothing was sent.' : (sortie.pourquoi || 'its market could not be read') + ' — nothing was sent.');
-      return;
-    }
-    /* ⛔ Les approbations manquantes ne sont pas un detail : signer sans elles echouerait SUR LA
-     *   CHAINE, apres avoir demande un geste et brule du gas. On le dit AVANT, et on renvoie vers
-     *   l ecran qui sait les enchainer plutot que d en refaire une version plus faible ici. */
-    if (Array.isArray(sortie.etapes) && sortie.etapes.length) {
-      etape('bridge_swap_approbations');
-      setEtat('This exit needs ' + sortie.etapes.length + ' approval step(s) first. Open the block '
-        + 'and use Sell there — it walks through them. Nothing was sent.');
-      return;
-    }
-    const sortieResume = sortie.resume || {};
-    const recuS = recuBridge(sortieResume.recoitAuMoins, sortieResume.recoitDevise, marcheS);
-    if (!recuS) {
-      etape('bridge_swap_ko');
-      setEtat('The paired asset of its market could not be read, so the minimum you receive cannot be shown — nothing was sent.');
-      return;
-    }
-    const call = { ok: true, to: sortie.tx.to, data: sortie.tx.data, value: sortie.tx.value };
-    etape('bridge_fee_sign');
-    /* ⛔ « still needs Phil » RETIRE : ce texte s affiche au moment ou l utilisateur ouvre son
-     *    wallet pour signer. Lui repondre par le prenom de quelqu un qu il ne connait pas, juste
-     *    avant une signature, est le pire endroit possible pour du jargon interne. */
-    /* ⛔⛔ CE TEXTE EST LE DERNIER QUE QUELQU UN LIT AVANT DE SIGNER. Il disait « sign the 0.01%
-     *     fee only » pour une transaction qui n echangeait rien — la phrase etait exacte et le
-     *     geste etait vide. Maintenant elle decrit l echange REEL, avec les chiffres que la chaine
-     *     vient de rendre, pas ceux d une estimation. */
-    setEtat('Open your wallet — this sells ' + formaterUnites(sortieResume.paye || 0n, 18)
-      + ' blocks through its own market. You receive at least ' + recuS
-      + '. The fee is taken inside the same transaction.');
-    conf.disabled = true;
-    try {
-      const eth = window.ethereum;
-      if (!eth) { setEtat('No wallet provider — install or unlock a wallet.'); return; }
-      const r = await envoyerDepuisWallet({
-        eth, rpc, chaineAttendue: 8453, compte,
-        to: call.to, data: call.data, value: call.value, attendre: true,
-      });
-      if (r.etat === 'CONFIRME' || r.etat === 'ENVOYE' || r.etat === 'EN_ATTENTE') {
-        etape('bridge_fee_ok');
-        setEtat('Sent — your blocks left through their own market'
-          + (r.hash ? (' · ' + String(r.hash).slice(0, 10) + '…') : '')
-          /* ⛔ « still Phil-blocked (1 bps router GO) » RETIRE : ce texte s affiche JUSTE APRES que
-           *    l utilisateur a paye son frais. Lui repondre par un prenom, un nom de contrat
-           *    interne et un tarif pour une route qui n existe pas, c est le laisser croire qu il
-           *    lui manque un savoir au moment exact ou il attend une confirmation.
-           *    ⛔ ET LA RESERVE N A PLUS LIEU D ETRE : l echange a vraiment eu lieu, par la pool du
-           *       block. On ne colle plus « not live yet » sous une transaction qui a abouti. */
-          + '.');
-      } else if (r.etat === 'REFUSE_PAR_UTILISATEUR') {
-        etape('bridge_fee_refuse');
-        setEtat(r.pourquoi || 'You declined — nothing sent');
-      } else {
-        etape('bridge_fee_fail');
-        setEtat((r.pourquoi || 'Send failed') + ' — nothing assumed paid');
-      }
-    } catch (e) {
-      etape('bridge_fee_err');
-      setEtat('Fee send error — ' + String((e && e.message) || e));
-    } finally {
-      majBridgeQuote();
-    }
   });
   const cFund = $('#cFundWallet');
   if (cFund) cFund.addEventListener('click', (e) => { try { etape('create_fund_bridge'); } catch (_) {} ouvrirRailFiat(e, cFund, 'ETH'); });
@@ -25929,7 +25631,7 @@ function basculerBridgeMode(mode) {
   /* ⛔ `peindreBridgeActifs()` RETIRE ICI AUSSI : c etait le second des deux appelants. Laisser un
    *   seul appel d une fonction supprimee aurait leve a l EVALUATION de ce bloc IIFE — donc casse
    *   tout le module, pas seulement le Bridge. */
-  basculerBridgeMode('fund');
+  /* 2026-10-25 : `basculerBridgeMode('fund')` RETIRE avec les onglets Fund / Swap — meme raison que ci-dessus. */
 })();
 
 
@@ -26014,28 +25716,7 @@ async function ouvrirRailFiat(evt, lien, actif) {
     if (phrase) phrase.textContent = phraseOptionA();
     const legs = $('#brLegsNote');
     if (legs && typeof phraseBridgeLegs === 'function') legs.textContent = phraseBridgeLegs();
-    /* ⛔⛔⛔ LA RESERVE DU SWAP EST PEINTE ICI, DERIVEE DU FLAG — elle etait en HTML STATIQUE sans
-     *      `id`, donc impossible a repeindre. Le hub est en construction : le jour ou `HUB_SWAP_LIVE`
-     *      passe a `true`, le devis, le frais, le net, la phrase des jambes et celle du Create
-     *      s allument tous SEULS, et cette phrase-la aurait continue d annoncer que rien ne marche —
-     *      sur le dernier ecran lu avant une signature.
-     *   ⛔ ON DIT CE QUI MARCHE D ABORD, dans les deux branches. Une capacite en chantier ne se
-     *     raconte pas a l utilisateur : il n a aucun moyen d en faire quelque chose, et une reserve
-     *     repetee trois fois finit par couvrir le service qui fonctionne.
-     *   ⛔ MAIS LA RESERVE SURVIT UNE FOIS, et a l endroit du devis (voir `majBridgeDevis`), parce
-     *     que le panneau From/To produit un VRAI chiffre. Un prix a cote d une capacite absente est
-     *     le defaut le plus souvent paye dans ce depot ; ce n est pas celui qu on repare ici. */
-    const resv = $('#brSwapReserve');
-    if (resv) {
-      resv.textContent = 'Selling a block through its own market is live: the fee is taken inside '
-        + 'the same transaction, never as a separate charge (fail-closed if it rounds to 0). '
-        + (HUB_SWAP_LIVE
-          ? 'Token↔token through your hub settles in that same transaction, ' + BRIDGE_FEE_LABEL
-            + ' fee. '
-          : '')
-        + 'Fee settles as ETH or USDC — amount only. Micropayments elsewhere in the app never '
-        + 'replace this fee.';
-    }
+    /* 2026-10-25 : le peintre de `#brSwapReserve` est RETIRE avec la carte « Swap via Bridge » qu il ecrivait. */
     /* ⛔⛔ LE TARIF DU BRIDGE N EXISTE QU A UN SEUL ENDROIT, et c est `BRIDGE_FEE_LABEL`. Mesure du
      *     2026-09-25 : « 0.01% » etait ecrit en dur a DIX-HUIT endroits alors que le prelevement
      *     vaut 50 centiemes de point de base, soit 0,5 %. Un facteur CINQUANTE, sur des ecrans ou
@@ -26076,8 +25757,8 @@ async function ouvrirRailFiat(evt, lien, actif) {
        *      l endroit ou elle sert — sous le devis, la ou un chiffre apparait. */
       br.textContent = HUB_SWAP_LIVE
         ? 'Tokenized↔tokenized after funding? ' + BRIDGE_FEE_LABEL + ' via your Bridge block.'
-        : 'Fund your wallet, then sell a block through its own market — the fee is taken inside '
-          + 'the same transaction.';
+        /* 2026-10-25 : la vente a quitte l onglet Bridge pour le Swap du Wallet — la phrase dit ou elle est maintenant. */
+        : 'Fund your wallet, then use Swap in your Wallet to sell a block through its own market.';
     }
   } catch (_) {}
   let lastProposeId = '';
@@ -28880,6 +28561,70 @@ $('#bcTicket').addEventListener('submit', async (e) => {
   /* meme grammaire, meme chemin que la barre du Chat ; le refus s ecrit ICI (la vue Chat est masquee a ce moment) */
   if (await bcExecuterTexte(bc.cote === 'buy' ? 'buy this with ' + n + ' ' + d : 'sell ' + n + ' this for ' + d, note)) {
     $('#bcMontant').value = ''; note.className = 'note'; note.textContent = '';
+  }
+});
+/* ── LE SWAP DU WALLET (2026-10-25, Phil : « add a Swap button in Wallet next to Send and Paired ») ──────────────────────────
+ * ⛔⛔ AUCUN ECHANGE N EST ECRIT ICI. Ce bloc choisit « ce que tu paies » (ce que le wallet DETIENT, soldes lus) et « ce que tu
+ *   recois », puis ecrit LA commande que la barre du Chat accepte deja (`swap <n> <de> to <vers>`, ou `sell <n> <block>` pour
+ *   vendre un block par son propre marche) et la passe a `bcExecuterTexte` — exactement comme le ticket Trade. Le plan
+ *   (/api/rails/plan), la porte du cerveau, le devis (« You receive at least », frais du marche et frais d app), puis le wallet :
+ *   tout est le code existant de `bcProposerSwap`, inchange. Les appels d argent sont donc ceux du Chat, octet pour octet.
+ * ⛔ C est AUSSI la nouvelle place de « vendre un block par son propre marche », retiree de l onglet Bridge le meme jour :
+ *   l option « Its own market » ecrit `sell <n> <block>`, dont la contrepartie est la cotation LUE du block (bcCotation). */
+const WS_SON_MARCHE = 'son-marche';
+/** La commande ecrite pour le Chat. `de` / `vers` : 'ETH', un symbole du registre, ou une adresse entiere. */
+function wsCommande(de, vers, n) {
+  return vers === WS_SON_MARCHE ? 'sell ' + n + ' ' + de : 'swap ' + n + ' ' + de + ' to ' + vers;
+}
+/** Un block = ni ETH, ni une devise du registre, ni une action Coinbase : lui seul a « son propre marche » a proposer. */
+function wsEstBlock(id) {
+  const a = String(id || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(a)) return false;
+  return !DEVISES_BASE.some((d) => String(d.adr).toLowerCase() === a) && !ACTIONS_PAR_ADR.has(a);
+}
+/** « You pay » : SEULS les soldes LUS et non nuls (l ETH reste, meme a zero) — la meme regle que la liste de Send. */
+function wsPeindreDe() {
+  const s = $('#wsDe'), avant = s.value;
+  const lus = actifs.filter((a) => a.etat === 'LU' && (a.id === 'ETH' || (typeof a.solde === 'bigint' && a.solde > 0n)));
+  /* options construites par le DOM (new Option = texte), jamais innerHTML : regle du panneau (test-commandes-panel) */
+  s.replaceChildren(...lus.map((a) => new Option(a.nom + ' — ' + abrege(formaterUnites(a.solde, a.decimales)), a.adr ? String(a.adr).toLowerCase() : 'ETH')));
+  if ([...s.options].some((o) => o.value === avant)) s.value = avant;
+  wsPeindreVers();
+}
+/** « You get » : les choix du ticket (ETH, USDC, actions a pool) moins ce qu on paie ; pour un block, son propre marche d abord. */
+function wsPeindreVers() {
+  const de = String($('#wsDe').value || ''), s = $('#wsVers'), avant = s.value;
+  const deAdr = de === 'ETH' ? ETH_ADR.toLowerCase() : de.toLowerCase();
+  const choix = bcChoixPaiement(null, null).filter(([v]) => {
+    if (v === 'ETH') return de !== 'ETH';
+    const r = bcResoudre(v);
+    return !(r.ok && r.adr === deAdr);
+  });
+  if (wsEstBlock(de)) choix.unshift([WS_SON_MARCHE, 'Its own market (sell the block)']);
+  s.replaceChildren(...choix.map(([v, l]) => new Option(l, v)));
+  if ([...s.options].some((o) => o.value === avant)) s.value = avant;
+}
+$('#bWalletSwap').addEventListener('click', () => {
+  const w = $('#wSwapCarte'), ouvrir = w.hidden;
+  /* une seule carte d action ouverte a la fois */
+  for (const id of ['#wSendCarte', '#wReceive', '#wPaire']) { const e = $(id); if (e) e.hidden = true; }
+  w.hidden = !ouvrir;
+  if (ouvrir) wsPeindreDe();
+});
+$('#wsDe').addEventListener('change', wsPeindreVers);
+$('#wsGo').addEventListener('click', async () => {
+  const etat = $('#wsEtat'), de = $('#wsDe').value, vers = $('#wsVers').value, n = $('#wsMontant').value.trim();
+  const dire = (t) => { etat.className = 'note wKo'; etat.textContent = t; };
+  if (!compte) return dire('Connect your wallet first.');
+  if (!de) return dire('Your balances are still being read — try again in a moment.');
+  if (!/^\d+([.,]\d+)?$/.test(n) || !(Number(n.replace(',', '.')) > 0)) return dire('That is not an amount — write a number above zero, like 0.002.');
+  if (!vers) return dire('Pick what you get.');
+  /* le panneau s ouvre la ou l on est (non modal) : c est dans son Chat que le devis s ecrit, avant que le wallet ne s ouvre */
+  bcOuvrirPop({ sansBasculer: true, deplier: true, vue: 'chat' });
+  if (await bcExecuterTexte(wsCommande(de, vers, n), etat)) {
+    $('#wsMontant').value = '';
+    etat.className = 'note';
+    etat.textContent = 'Quote in the Brain panel — your wallet opens only once the plan is ready.';
   }
 });
 $('#bcAdr').addEventListener('click', async () => {

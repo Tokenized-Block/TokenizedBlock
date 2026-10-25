@@ -31,36 +31,28 @@ const extraire = (nom) => {
   }
   return null;
 };
-const srcMarche = extraire('marcheDuHubBridge'), srcRecu = extraire('recuBridge');
-ok(!!srcMarche && !!srcRecu, 'marcheDuHubBridge et recuBridge extraites d app.html');
-const fabriquerRecu = (src) => new Function('formaterUnites', src + '\nreturn recuBridge;')(formaterUnites);
-const recuBridge = fabriquerRecu(srcRecu);
-
-/* ── les DEUX appels du Bridge passent le marche lu, et le texte avant signature passe par recuBridge ── */
-const appels = html.match(/planEchange\(\{ rpc, chaine: CHAINE, jeton: hub, compte, sens: 'VENTE', montant: unites[^}]*\}\)/g) || [];
-ok(appels.length === 2 && appels.every((a) => /marcheLu: marche[BS]\b/.test(a)), 'Bridge : les 2 appels planEchange passent marcheLu (' + appels.length + ')');
-ok(/You receive at least ' \+ recuS\b/.test(html) && !/formaterUnites\(sortieResume\.recoitAuMoins \|\| 0n, 18\)/.test(html),
-  'Bridge : le texte avant signature utilise recuBridge, plus de 18 decimales en dur');
-ok(/if \(!recuS\) \{/.test(html), 'Bridge : devise illisible -> arret avant la signature');
-
-/* ── A. recuBridge, hors reseau ── */
+/* ⛔⛔ 2026-10-25 (Phil : « remove that ») : la vente du Bridge est RETIREE avec `marcheDuHubBridge` et `recuBridge`. Les cas
+ *    qui les executaient (12 assertions, 1 mutant) gardaient deux regles ; elles sont re-ancrees sur ce qui reste :
+ *    (1) tout appel `planEchange` de l ecran passe un marche lu (le site restant : Buy/Sell de la fiche) ;
+ *    (2) le minimum recu dit avant signature est formate dans les decimales LUES de ce qu on recoit, jamais 18 en dur —
+ *        dans le chemin du Chat (bcProposerSwap), ou passe desormais le Swap du Wallet. */
+const code = html.replace(/\/\*[\s\S]*?\*\//g, ' ');
+ok(!extraire('marcheDuHubBridge') && !extraire('recuBridge'), 'les lecteurs de la vente du Bridge sont partis avec elle');
+const appels = code.match(/planEchange\(\{[^}]*\}\)/g) || [];
+ok(appels.length >= 1 && appels.every((a) => /marcheLu: /.test(a)), 'tout appel planEchange de l ecran passe marcheLu (' + appels.length + ')');
+/* (`extraire` s arrete a la premiere accolade : ici celle du parametre destructure — on borne donc par la signature entiere) */
+const swap = (/async function bcProposerSwap\(qui, classe, \{ de, vers, montant \}, ref, suivi = null\) \{([\s\S]*?)\n\}/.exec(html) || ['', ''])[1];
+ok(swap.length > 3000, 'bcProposerSwap extraite (' + swap.length + ')');
+const ligneMin = (swap.match(/bcEtape\(m, 'You receive at least '[^\n]*/) || [''])[0];
+ok(/bcUnites\(rs\.recoitAuMoins, decVers\)/.test(ligneMin) && !/, 18\)/.test(ligneMin),
+  'Chat : le minimum recu est formate dans les decimales LUES de vers (decVers), pas 18 en dur');
+ok(/decVers === null \? rs\.recoitAuMoins \+ ' raw units of '/.test(ligneMin), 'Chat : decimales illisibles -> unites brutes nommees, jamais un chiffre devine');
+/* MUTANT (sur une COPIE du texte) : 18 decimales en dur a la place de decVers — la regle ci-dessus doit le voir */
+const mutantLigne = ligneMin.replace('bcUnites(rs.recoitAuMoins, decVers)', 'bcUnites(rs.recoitAuMoins, 18)');
+ok(mutantLigne !== ligneMin && !(/bcUnites\(rs\.recoitAuMoins, decVers\)/.test(mutantLigne) && !/, 18\)/.test(mutantLigne)),
+  'MUTANT 18 decimales en dur : la regle le refuse');
 const spcx = { paire: 'DEVISE', devise: 'SPCXc', decDevise: 8 };
-ok(recuBridge(150000000n, 'pair', spcx) === formaterUnites(150000000n, 8) + ' SPCXc',
-  'paire SPCXc 8 dec : 1,5e8 unites -> ' + recuBridge(150000000n, 'pair', spcx));
-ok(recuBridge(10n ** 15n, 'ETH', null) === formaterUnites(10n ** 15n, 18) + ' ETH', 'TEMOIN vente en ETH : 18 decimales, inchange');
-ok(recuBridge(1n, 'pair', null) === null, 'paire sans marche lu -> null (on ne devine pas)');
-ok(recuBridge(1n, 'pair', { paire: 'DEVISE', devise: 'X' }) === null, 'paire sans decimales lues -> null');
-ok(recuBridge(undefined, 'ETH', null) === null, 'pas de minimum dans le plan -> null (jamais « 0 »)');
-/* MUTANT : l ancien formatage (18 en dur) — le banc doit voir la difference */
-const CIBLE = 'formaterUnites(recoitAuMoins, dec)';
-ok(srcRecu.includes(CIBLE), 'cible du mutant presente dans recuBridge');
-const mutant = fabriquerRecu(srcRecu.replace(CIBLE, 'formaterUnites(recoitAuMoins, 18)'));
-ok(mutant(150000000n, 'pair', spcx) !== recuBridge(150000000n, 'pair', spcx),
-  'MUTANT 18 decimales en dur : le montant affiche change, le banc le voit');
-/* le texte du net vient du plan REEL (meme exigence que test-bridge-pas-de-frais-sans-echange) */
-ok(/recuBridge\(plan\.resume\.recoitAuMoins, plan\.resume\.recoitDevise, marcheB\)/.test(html)
-  && /recuBridge\(sortieResume\.recoitAuMoins, sortieResume\.recoitDevise, marcheS\)/.test(html),
-  'les deux sites passent recoitAuMoins du plan reel a recuBridge');
+ok(formaterUnites(150000000n, 8) !== formaterUnites(150000000n, 18), 'TEMOIN : 8 et 18 decimales donnent bien deux textes differents');
 
 /* ── B. sur la chaine : e7e9 (marche V8 contre SPCXc), IB022 (marche V8 contre ETH) ── */
 const URLS = ['https://mainnet.base.org', 'https://base-rpc.publicnode.com'];
@@ -85,10 +77,13 @@ const clesReellesDe = async (adr) => {
   const d = await fetch('https://tokenizedblock.space/api/cle/' + String(adr).toLowerCase(), { headers: { 'x-ms-monitor': '1' } }).then((r) => r.json());
   return d && d.ok === true && Array.isArray(d.cles) ? d.cles : [];
 };
-/* `extraire` commence a « function » : le mot « async » qui la precede dans app.html est remis ici */
-ok(html.includes('async ' + srcMarche), 'marcheDuHubBridge est async dans app.html');
-const marcheDuHubBridge = new Function('vieDuBlock', 'rpc', 'RESEAUX', 'CHAINE', 'clesReellesDe', 'async ' + srcMarche + '\nreturn marcheDuHubBridge;')(
-  vieDuBlock, rpc, { 8453: { stateView: V4_ADRESSES[8453].stateView } }, 8453, clesReellesDe);
+/* 2026-10-25 : `marcheDuHubBridge` n existe plus dans app.html ; la LECTURE qu elle faisait (vieDuBlock avec les cles exactes
+ *   servies par /api/cle) est rejouee ici directement sur les modules — c est elle que la partie B garde. */
+const marcheDuHubBridge = async (hub) => {
+  try { return await vieDuBlock({ rpc, stateView: V4_ADRESSES[8453].stateView, jeton: hub, clesExactes: await clesReellesDe(hub) }); }
+  catch (_) { return null; }
+};
+void spcx;
 
 /* adresses LUES dans le depot (index-routeur.js, pool-sans-hook.js), jamais tapees */
 const ir = fs.readFileSync(path.join(ICI, 'index-routeur.js'), 'utf8');
@@ -98,7 +93,7 @@ ok(!!E7 && /^0x[0-9a-f]{40}$/i.test(E7), 'e7e9 lu dans index-routeur.js : ' + E7
 try {
   const m = await marcheDuHubBridge(E7);
   ok(m && m.etat === 'LUE' && m.paire === 'DEVISE' && m.devise === 'SPCXc' && Number(m.decDevise) === 8,
-    'e7e9 : marche LU par le Bridge, paire DEVISE SPCXc, 8 dec (' + (m && [m.etat, m.paire, m.devise, m.decDevise].join(' ')) + ')');
+    'e7e9 : marche LU (vieDuBlock + cles exactes), paire DEVISE SPCXc, 8 dec (' + (m && [m.etat, m.paire, m.devise, m.decDevise].join(' ')) + ')');
   const avec = await E.planEchange({ rpc, chaine: 8453, jeton: E7, compte: COMPTE, sens: 'VENTE', montant: 10n ** 16n, marcheLu: m });
   /* ⛔ pas « absence du mot » seulement (passait A VIDE sur une adresse illisible) : le plan doit avoir atteint le quote */
   ok(!/no market to trade on yet|its market could not be read/.test(String(avec.pourquoi || '')),

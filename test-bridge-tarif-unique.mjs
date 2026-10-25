@@ -117,11 +117,25 @@ v('les emplacements du tarif existent et valent « — » au repos', () => {
     const ids = [...amont.matchAll(/\sid="([\w-]+)"/g)];
     return ids.length ? ids[ids.length - 1][1] : null;
   };
-  const ATTENDUS = ['brModeSwap', 'brFundHint', 'brQuoteFee'];
+  /* ⛔⛔⛔ 2026-10-25 : LA LISTE NOMMEE PASSE A VIDE, ET C EST LA MEME REGLE QUI L EXIGE. Les trois emplacements
+   *      survivants (`brModeSwap`, `brFundHint`, `brQuoteFee`) tarifaient la vente d un block PAR LE BRIDGE — retiree ce
+   *      jour sur decision de Phil (« remove that »). La vente vit au Swap du Wallet, dont le frais est celui du PLAN
+   *      (frais du marche, frais d app), dit par `bcProposerSwap` : pas de `BRIDGE_FEE_LABEL` a cote d elle.
+   *    ⛔ Un tarif du Bridge a cote d un geste que le Bridge ne rend plus serait exactement « un prix a cote d une capacite
+   *      absente ». La liste est donc VIDE, nommee : en ajouter un fait ROUGIR, et il faudra dire quel service il tarife. */
+  const ATTENDUS = [];
   const vus = emplacements.map((m) => porteurTarif(m.index));
   /* ⛔ TEMOIN D ABORD : si `porteurTarif` rendait toujours `null`, la liste serait [null,null,null]
-   *   et la comparaison echouerait pour la mauvaise raison. On le dit explicitement. */
-  assert.ok(vus.length > 0 && vus.every((v) => typeof v === 'string' && v.length > 0),
+   *   et la comparaison echouerait pour la mauvaise raison. On le dit explicitement.
+   *   2026-10-25 : temoin du porteur sur un HTML FABRIQUE (la vraie page n a plus d emplacement). */
+  {
+    const html = '<p class="note" id="tTemoin">Fee (<span data-frais-bridge>—</span>)</p>';
+    const m = /<(b|span)\s+data-frais-bridge\s*>/.exec(html);
+    const amont = html.slice(0, m.index);
+    const ids = [...amont.matchAll(/\sid="([\w-]+)"/g)];
+    assert.equal(ids.length ? ids[ids.length - 1][1] : null, 'tTemoin', 'temoin du porteur casse : ce cas ne garde plus rien');
+  }
+  assert.ok(vus.every((v) => typeof v === 'string' && v.length > 0),
     'un emplacement de tarif n a pas d element porteur identifiable : le temoin de ce test est '
     + 'casse, il ne garde plus rien.  vus: ' + JSON.stringify(vus));
   assert.deepEqual(vus, ATTENDUS,
@@ -157,18 +171,22 @@ v('⛔⛔ le bouton porte le nom de ce qu il FAIT', () => {
   /* ⛔⛔ Il s appelait « Confirm Bridge fee » et il VEND les blocks par leur pool. Confirmer « un
    *     frais » n est pas consentir a se separer de ce qu on detient : c est un probleme de
    *     consentement, pas de formulation. */
-  const i = html.indexOf('id="brConfirm"');
-  assert.ok(i > 0, 'le bouton de confirmation du Bridge est introuvable');
+  /* ⛔ 2026-10-25 : `#brConfirm` est RETIRE avec la carte de vente du Bridge (decision de Phil). La regle reste, sur le geste
+   *   qui la remplace : le bouton du Swap du Wallet dit « swap », et « Confirm Bridge fee » ne revient nulle part. */
+  const visible = sansCommentaires(html);
+  assert.doesNotMatch(visible, /id="brConfirm"/, 'le bouton de vente du Bridge est revenu : reecrire ce cas avec lui');
+  const i = html.indexOf('id="wsGo"');
+  assert.ok(i > 0, 'le bouton du Swap du Wallet est introuvable');
   const balise = html.slice(html.lastIndexOf('<', i), html.indexOf('</button>', i));
-  assert.match(balise, /Sell/i,
-    'le bouton ne dit plus qu il vend : ' + balise.slice(balise.indexOf('>') + 1));
-  assert.doesNotMatch(balise, /Confirm Bridge fee/i,
-    'le bouton est redevenu « Confirm Bridge fee » pour un geste qui vend des blocks');
+  assert.match(balise, /swap/i,
+    'le bouton du Swap du Wallet ne dit plus qu il echange : ' + balise.slice(balise.indexOf('>') + 1));
+  assert.doesNotMatch(visible, /Confirm Bridge fee/i,
+    '« Confirm Bridge fee » est revenu a l ecran');
 });
 
 assert.equal(n, 6, 'compte de cas inattendu : ' + n);
 console.log('ok bridge-tarif-unique — ' + n + ' cas · tarif servi par BRIDGE_FEE_LABEL ('
   + BRIDGE_FEE_LABEL + '), emplacements fail-closed,');
-console.log('   plus aucun « live » sur une jambe morte, et le bouton dit qu il vend.');
+console.log('   plus aucun « live » sur une jambe morte, aucun emplacement de tarif hors service, et le bouton dit ce qu il fait.');
 console.log('⚠️ NE PROUVE PAS que 0,5 % soit le bon prix — c est une decision produit. Il prouve');
 console.log('   que le prix AFFICHE est celui qui est PRELEVE.');
