@@ -114,8 +114,12 @@ export async function prouverAction({ rpc, adr, tx, createur = CREATEUR_EMETTEUR
   if (!recu || typeof recu !== 'object') return nonMesure(a, 'RECU_NON_LU', 'the node has no receipt for that transaction (not measured, not absent)');
   /* une reponse pour une AUTRE tx est un noeud qui deraille, pas une contradiction de la chaine : non mesure */
   if (bas(recu.transactionHash) !== t0) return nonMesure(a, 'RECU_AUTRE', 'the receipt answered is for another transaction (node glitch, re-read)');
-  if (bas(recu.status) !== '0x1') return refusTx('TX_ECHOUEE', 'the creation transaction failed (status ' + String(recu.status) + ')');
-  const logs = Array.isArray(recu.logs) ? recu.logs : [];
+  /* ⛔ 2026-10-25 (revue adverse, defaut A) : un champ ABSENT n est pas une contradiction — seul status 0x0 est un echec ; logs absent ou
+   *   non tableau, status absent ou autre : NON_MESURE (relu), jamais un refus grave */
+  if (bas(recu.status) === '0x0') return refusTx('TX_ECHOUEE', 'the creation transaction failed (status 0x0)');
+  if (bas(recu.status) !== '0x1') return nonMesure(a, 'RECU_INCOMPLET', 'the receipt has no readable status (not measured)');
+  if (!Array.isArray(recu.logs)) return nonMesure(a, 'RECU_INCOMPLET', 'the receipt has no logs list (not measured)');
+  const logs = recu.logs;
   const sujet = '0x' + motA(a);
   const memeEvenement = logs.filter((l) => l && Array.isArray(l.topics) && bas(l.topics[0]) === TOPIC_CREATED && bas(l.topics[1]) === sujet);
   const log = memeEvenement.find((l) => bas(l.address) === FACTORY);
@@ -132,6 +136,7 @@ export async function prouverAction({ rpc, adr, tx, createur = CREATEUR_EMETTEUR
   try { t = await rpc('eth_getTransactionByHash', [t0]); } catch (e) { return nonMesure(a, 'TX_NON_LUE', 'creation transaction not read: ' + court(e)); }
   if (!t || typeof t !== 'object') return nonMesure(a, 'TX_NON_LUE', 'the node has no such transaction (not measured, not absent)');
   if (bas(t.hash) !== t0) return nonMesure(a, 'TX_AUTRE', 'the transaction answered is another one (node glitch, re-read)');
+  if (!ADR.test(bas(t.from)) || !ADR.test(bas(t.to))) return nonMesure(a, 'TX_INCOMPLETE', 'the transaction has no whole from / to (not measured)');
   if (bas(t.from) !== bas(createur)) return refusTx('CREATEUR', 'created by ' + bas(t.from) + ', not by the wallet that created the issuer\'s stocks');
   if (bas(t.to) !== bas(appele)) return refusTx('APPELE', 'its creation called ' + bas(t.to) + ', not the contract the issuer\'s creations call');
   return { etat: 'PROUVE', adr: a, symbole: c.symbole || null, nom: c.nom || null, decimales: Number.isInteger(c.decimales) ? c.decimales : null,

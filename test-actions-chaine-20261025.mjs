@@ -106,6 +106,23 @@ await cas('⛔ UNE LECTURE RATEE EST NON_MESURE, JAMAIS UN REFUS (et rien n est 
   assert.equal(t.etat, 'PARTIEL'); assert.equal(cache.size, 0, 'un NON_MESURE a ete grave dans le cache definitif');
 });
 
+await cas('⛔⛔ REVUE 2026-10-25 (defaut A) : UN CHAMP ABSENT DU RECU OU DE LA TX = NON_MESURE, JAMAIS UN REFUS GRAVE', async () => {
+  const essais = [
+    ['recu sans logs', (c) => { delete c.recus.get(TX_VRAIE).logs; }, 'RECU_INCOMPLET'],
+    ['recu logs null', (c) => { c.recus.get(TX_VRAIE).logs = null; }, 'RECU_INCOMPLET'],
+    ['recu sans status', (c) => { delete c.recus.get(TX_VRAIE).status; }, 'RECU_INCOMPLET'],
+    ['recu status null', (c) => { c.recus.get(TX_VRAIE).status = null; }, 'RECU_INCOMPLET'],
+    ['tx sans from', (c) => { delete c.txs.get(TX_VRAIE).from; }, 'TX_INCOMPLETE'],
+    ['tx to null', (c) => { c.txs.get(TX_VRAIE).to = null; }, 'TX_INCOMPLETE'],
+  ];
+  for (const [nom, casse, code] of essais) {
+    const c = chaine(); casse(c);
+    const v = await prouverAction({ rpc: c.rpc, adr: VRAIE, tx: TX_VRAIE });
+    assert.equal(v.etat, 'NON_MESURE', nom + ' : ' + JSON.stringify(v)); assert.equal(v.code, code, nom);
+    assert.equal(verdictGravable(v), false, nom + ' : grave sur disque');
+  }
+});
+
 await cas('⛔⛔⛔ REVUE 2026-10-25 : UN `0x`, UNE REPONSE DECALEE, UN LOG MAL FORME = NON_MESURE, JAMAIS UN REFUS GRAVE', async () => {
   /* le scenario de la revue : un noeud rend `0x` (en retard), le tour suivant un noeud sain — l action doit etre PROUVEE */
   const c = chaine();
