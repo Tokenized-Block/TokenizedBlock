@@ -238,7 +238,7 @@ import { V4_ADRESSES } from './lancer-pool.js';
 import { creerEtatPaires } from './etat-paires.js';
 import { randomBytes } from 'node:crypto';
 /* 2026-10-04 : le mode essai (fork local + wallet simule) — la regle qui decide, pure, la meme que celle de la page */
-import { essaiServeur } from './mode-essai.js';
+import { essaiServeur, urlLocale } from './mode-essai.js';
 /* tip 20260923-map-trending: rotate public Base RPCs — mainnet.base.org alone 413/rate-limits eth_getLogs (Map soleils die). */
 /* tip 20260923-map-trending: only mainnet.base.org still serves free eth_getLogs (≤1k blocs). Others 413/HTML/plan. */
 /* ⛔⛔ DEUX ENDPOINTS OFFICIELS PAR DEFAUT, ET PAS PLUS. Mesure du 2026-09-29 :
@@ -1084,6 +1084,10 @@ const REPLIS_LOGS_SERVEUR = ESSAI_SRV.actif || REPLIS_PUBLICS_COUPES ? [] : ['ht
  *   ⚠️ NON MESURE tant que la cle n est pas posee : que CDP serve l archive. La sonde de /sante (capacite « archive », fenetre de
  *     999 blocs a -20 000) le mesurera ; outils/poser-rpc-archive.mjs le mesure AVANT de poser. */
 const RPC_ARCHIVE = (() => {
+  /* 2026-10-26 (revue adverse de 8bcd051) : la relecture des trous par l archive n etait executee par AUCUN banc du vrai serveur.
+   *   TB_ARCHIVE_BANC = un noeud d archive FICTIF de cette machine (http://127.0.0.1:port, rien d autre — urlLocale), accepte
+   *   SEULEMENT avec TB_REPLIS=0 (aucun noeud reel) et hors mode essai. En production ni l un ni l autre n est pose. */
+  if (!ESSAI_SRV.actif && process.env.TB_REPLIS === '0' && process.env.TB_ARCHIVE_BANC) return urlLocale(process.env.TB_ARCHIVE_BANC);
   if (ESSAI_SRV.actif || process.env.TB_REPLIS === '0') return null; /* banc a faux noeud : aucun noeud reel, archive comprise */
   const u = String(process.env.BASE_RPC_ARCHIVE || '').trim();
   try { const x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password ? x.href : null; } catch { return null; }
@@ -3554,7 +3558,7 @@ async function relireUnTrouRattrapage() {
   const haut = Math.min(t.a, t.de + 100000);
   const r = await listerCreations({ rpc: rpcHistoire, blocs: haut - t.de, fin: haut });
   if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length, budget: refusDeBudget(r.fenetresRatees) };
-  if (typeof noterFaits === 'function') noterFaits(r.creations, blocsLusJusqua);
+  if (typeof noterFaits === 'function') noterFaits(r.creations, blocsLusJusqua); /* trou du rattrapage relu : ses faits AVANT qu il recule */
   const aFaire = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') && !createurParBlock.has(c.jeton.toLowerCase()));
   for (let i = 0; i < aFaire.length; i += 8) {
     const lot = aFaire.slice(i, i + 8);
@@ -3731,7 +3735,15 @@ function sauverTrendingDisque() {
       ...(typeof faitsPourDisque === 'function' ? faitsPourDisque() : {}), /* typeof : voir chargerFaits */
     });
     writeFileSync(FICHIER_TRENDING + '.tmp', payload);
-    renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
+    /* 2026-10-26 : sous Windows, un lecteur qui tient le fichier fait echouer le renommage (EPERM/EBUSY/EACCES, vu 1 fois sur 4 dans
+     *   test-creations-index-serveur) ; la sauvegarde etait perdue jusqu a la passe suivante. Trois essais, 50 ms d ecart, puis
+     *   l erreur part au journal comme avant. Linux (prod) ne verrouille pas : le premier essai passe. */
+    for (let essai = 0; ; essai++) {
+      try { renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING); break; } catch (e) {
+        if (essai >= 2 || !/^(EPERM|EBUSY|EACCES)$/.test(String(e && e.code))) throw e;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50);
+      }
+    }
   } catch (e) { console.log('[trending] disk cache write failed:', e.message); }
 }
 chargerTrendingDisque();
@@ -5792,10 +5804,12 @@ function traiterRequete(req, res) {
    *   /api/blocks-de : le navigateur ne lit que ce qu elles ne couvrent pas (creations-index.js, creationsDeLaCarte). Au-dela de
    *   CREATIONS_SERVIES_MAX, `tronque: true` et le navigateur relit tout. Lecture seule, aucune donnee personnelle. */
   if (chemin === '/api/creations-recentes') {
-    const d = Number(new URL(req.url, 'http://x').searchParams.get('depuis'));
-    const depuis = Number.isSafeInteger(d) && d >= 0 ? d : null;
-    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
-    if (depuis === null) { repondre({ ok: false, pourquoi: 'depuis=<block number> is required' }); return; }
+    /* ⛔ 2026-10-26 (revue adverse de 8bcd051) : `depuis` absent faisait Number(null) = 0 et servait TOUT. Absent, vide ou pas un
+     *   entier decimal = 400, jamais une valeur par defaut. */
+    const brutD = new URL(req.url, 'http://x').searchParams.get('depuis');
+    const depuis = brutD !== null && /^\d{1,15}$/.test(brutD.trim()) ? Number(brutD.trim()) : null;
+    const repondre = (o, code = 200) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (depuis === null) { repondre({ ok: false, pourquoi: 'depuis=<block number> is required' }, 400); return; }
     const toutes = [];
     for (const [jeton, f] of faitsCreation) if (f.bloc >= depuis) toutes.push({ jeton, bloc: f.bloc, symbole: f.symbole, decimales: f.decimales, nom: f.nom });
     const triees = plusRecentesDabord(toutes);

@@ -16,7 +16,7 @@
  *   vers l avant qui ne note plus les faits. Chacun DOIT rougir ; la copie NON mutee doit verdir (temoin du banc lui-meme).
  * ⚠️ NE PROUVE PAS : le comportement contre de vrais noeuds (quotas, archive), ni la relecture des trous par le noeud d archive
  *   (TB_REPLIS=0 : aucun noeud reel, archive comprise).
- * serie-delai-s: 400
+ * serie-delai-s: 900 — ~250 s SEUL (2026-10-26, 14 serveurs, 6 a la fois) : sous la charge d une serie a 3, davantage.
  */
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -40,6 +40,7 @@ const C = {
   TROU: { jeton: J('a3'), bloc: T - 12000, sym: 'TRU', tx: TX('a3') }, /* dans un trou du scan vers l avant : JAMAIS lu */
   BAS: { jeton: J('a4'), bloc: T - 30000, sym: 'BAS', tx: TX('a4') }, /* sous faitsDepuis du laboratoire : createur connu, faits non */
   NR: { jeton: J('a5'), bloc: T - 15000, sym: 'NRS', tx: TX('a5') },  /* createur non resolu (sa tx ne se lit pas) */
+  VIEUX: { jeton: J('a6'), bloc: T - 95000, sym: 'VIX', tx: TX('a6') }, /* dans le trou du RATTRAPAGE : lu seulement par sa relecture */
 };
 const TROU_AVANT = { de: T - 12500, a: T - 11500 }, TROU_RATTRAPAGE = { de: T - 100000, a: T - 90000 };
 const FAITS_DEPUIS = T - 20000;
@@ -103,18 +104,20 @@ async function copie(edits) {
 }
 
 /* le vrai serveur de `dir`, volume de laboratoire, RPC fictif ; rend ce qu il publie une fois son scan vers l avant fait */
-async function lancer(dir) {
+/* `archive` : le meme RPC fictif sert aussi de noeud d archive (TB_ARCHIVE_BANC) — le serveur RELIT alors ses deux trous
+ *   (relireUnTrou : scan vers l avant ; relireUnTrouRattrapage : rattrapage). Sans lui (TB_REPLIS=0 seul), il ne les relit jamais. */
+async function lancer(dir, { archive = false } = {}) {
   const rpc = rpcFictif(); const portRpc = await libre(); await new Promise((ok) => rpc.serveur.listen(portRpc, '127.0.0.1', ok));
   const port = await libre(); const vol = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-bornes-vol-')); tmp.push(vol);
   fs.writeFileSync(path.join(vol, 'trending-cache.json'), JSON.stringify(GRAINE));
   const u = 'http://127.0.0.1:' + portRpc;
   const enfant = spawn(process.execPath, [path.join(dir, 'serveur-web.js')], { cwd: dir, stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '',
-      TB_SONDES: '0', TB_REPLIS: '0' } });
+      TB_SONDES: '0', TB_REPLIS: '0', TB_ARCHIVE_BANC: archive ? u : '' } });
   let journal = '', mort = false; enfant.stdout.on('data', (d) => { journal += d; }); enfant.stderr.on('data', (d) => { journal += d; });
   enfant.on('exit', () => { mort = true; });
   const lire = (c) => fetch('http://127.0.0.1:' + port + c, { signal: AbortSignal.timeout(5000) }).then((r) => r.json());
-  const t0 = Date.now(); let bd = null, cr = null, disque = null;
+  const t0 = Date.now(); let bd = null, cr = null, cr2 = null, disque = null; const refus = [];
   try {
     while (Date.now() - t0 < 150000 && !mort) {
       try { bd = await lire('/api/blocks-de?adr=' + CRE); } catch { bd = null; }
@@ -124,8 +127,16 @@ async function lancer(dir) {
         await new Promise((ok) => setTimeout(ok, 1500));
         bd = await lire('/api/blocks-de?adr=' + CRE);
         cr = await lire('/api/creations-recentes?depuis=' + (T - 43200));
-        /* la sauvegarde part a la FIN de la passe (apres les lectures de marche) : on attend que le fichier porte NEW, 60 s au plus */
-        for (const t1 = Date.now(); Date.now() - t1 < 60000 && !mort; await new Promise((ok) => setTimeout(ok, 500))) {
+        cr2 = await lire('/api/creations-recentes?depuis=' + (T - 129000)); /* le trou du rattrapage est a T - 100 000 .. T - 90 000 */
+        /* `depuis` absent, vide ou pas un nombre : 400, jamais « tout » */
+        for (const q of ['', '?depuis=', '?depuis=abc', '?depuis=-5']) {
+          try { const r = await fetch('http://127.0.0.1:' + port + '/api/creations-recentes' + q, { signal: AbortSignal.timeout(5000) });
+            const j = await r.json().catch(() => null); refus.push({ q, statut: r.status, ok: j && j.ok, n: j && Array.isArray(j.creations) ? j.creations.length : null });
+          } catch (e) { refus.push({ q, statut: 0, erreur: String(e.message) }); }
+        }
+        /* la sauvegarde part a la FIN de la passe (apres les lectures de marche) : on attend que le fichier porte NEW, 60 s au plus.
+         *   Lecture toutes les secondes : un lecteur qui tient le fichier fait echouer le renommage de la sauvegarde sous Windows. */
+        for (const t1 = Date.now(); Date.now() - t1 < 60000 && !mort; await new Promise((ok) => setTimeout(ok, 1000))) {
           try { disque = JSON.parse(fs.readFileSync(path.join(vol, 'trending-cache.json'), 'utf8')); } catch { disque = null; }
           if (disque && Array.isArray(disque.faitsCreations) && disque.faitsCreations.some((e) => e[0] === C.NEW.jeton)) break;
         }
@@ -137,11 +148,11 @@ async function lancer(dir) {
     enfant.kill('SIGKILL'); await new Promise((ok) => rpc.serveur.close(ok));
     if (!mort) await new Promise((ok) => { enfant.once('exit', ok); setTimeout(ok, 10000).unref?.(); });
   }
-  return { bd, cr, disque, servies: rpc.servies, journal };
+  return { bd, cr, cr2, disque, refus, servies: rpc.servies, journal };
 }
 
 /* les verifications ; rend la liste des ROUGES (identifiants) */
-function verifier({ bd, cr, disque, servies }) {
+function verifier({ bd, cr, cr2, disque, refus, servies }, archive = false) {
   const rouges = []; const v = (id, ok) => { if (!ok) rouges.push(id); };
   v('V0 le serveur a publie ses bornes et ses creations', !!(bd && bd.ok && cr && cr.ok));
   if (!(bd && bd.ok && cr && cr.ok)) return rouges;
@@ -154,7 +165,20 @@ function verifier({ bd, cr, disque, servies }) {
   const nonLus = [...points].filter((b) => Number.isSafeInteger(b) && b >= debut && b <= bd.luJusqua && !dansTrou(b) && !lu(b));
   v('A1 tout bloc dit couvert a ete LU (premier non lu : ' + (nonLus.sort((x, y) => x - y)[0] ?? '-') + ')', nonLus.length === 0);
   v('A2 la position publiee du scan ne depasse pas la tete du RPC', bd.luJusqua <= T);
-  v('A3 les deux trous (scan vers l avant, rattrapage) sont publies', [TROU_AVANT, TROU_RATTRAPAGE].every((t) => dansTrou(t.de) && dansTrou(t.a)));
+  if (!archive) v('A3 les deux trous (scan vers l avant, rattrapage) sont publies', [TROU_AVANT, TROU_RATTRAPAGE].every((t) => dansTrou(t.de) && dansTrou(t.a)));
+  else {
+    /* (R) relecture par l archive : un trou ne quitte les trous publies QUE quand ses creations portent leurs faits */
+    const relu = (t) => { for (let b = t.de; b <= t.a; b += 250) if (!servies.some(([de, a]) => b >= de && b <= a)) return false; return servies.some(([de, a]) => t.a >= de && t.a <= a); };
+    v('R0 les deux trous ont ete relus (requetes servies sur leurs plages)', relu(TROU_AVANT) && relu(TROU_RATTRAPAGE));
+    v('R1 les trous relus ont quitte les trous publies', ![TROU_AVANT, TROU_RATTRAPAGE].some((t) => dansTrou(t.de) || dansTrou(t.a)));
+    const servie = (liste, c) => (liste || []).some((x) => x.jeton === c.jeton && x.bloc === c.bloc && x.symbole === c.sym);
+    v('R2 la creation du trou VERS L AVANT relu porte ses faits (Map)', servie(cr && cr.creations, C.TROU));
+    v('R3 la creation du trou du RATTRAPAGE relu porte ses faits (Map)', servie(cr2 && cr2.creations, C.VIEUX));
+    v('R4 blocks-de : les deux blocks relus sont au createur, avec bloc et symbole', ['TROU', 'VIEUX'].every((k) => bd.blocks.includes(C[k].jeton)
+      && bd.faits && bd.faits[C[k].jeton] && bd.faits[C[k].jeton].bloc === C[k].bloc && bd.faits[C[k].jeton].symbole === C[k].sym));
+  }
+  v('Q1 /api/creations-recentes sans `depuis` valide : 400, ok false, aucune creation (' + JSON.stringify(refus) + ')',
+    Array.isArray(refus) && refus.length === 4 && refus.every((x) => x.statut === 400 && x.ok === false && x.n === null));
   v('A4 bornes non tronquees et faitsDepuis publie', bd.trousTronques === false && bd.nonResolusTronques === false && Number.isSafeInteger(bd.faitsDepuis));
   v('A5 faitsDepuis et les faits du fichier sont RELUS au demarrage (pas remis a la tete)', bd.faitsDepuis === FAITS_DEPUIS
     && (cr.creations || []).some((x) => x.jeton === C.MID.jeton && x.symbole === C.MID.sym));
@@ -197,16 +221,31 @@ const MUTANTS = [
   { nom: 'm6 la sauvegarde n ecrit plus les faits (aide renommee)',
     edits: [['serveur-web.js', "...(typeof faitsPourDisque === 'function' ? faitsPourDisque() : {}),", "...(typeof faitsPourDisqueX === 'function' ? faitsPourDisque() : {}),"]],
     casse: [/^S1 /] },
+  /* 2026-10-26 (revue adverse de 8bcd051) : les deux relectures de trous, executees contre le noeud d archive FICTIF */
+  { nom: 'm7 relireUnTrou (scan vers l avant) ne note plus les faits', archive: true,
+    edits: [['serveur-web.js', "if (typeof noterFaits === 'function') noterFaits(r.creations, blocsLusJusqua); /* le trou recule", "if (false) noterFaits(r.creations, blocsLusJusqua); /* le trou recule"]],
+    casse: [/^R2 /, /^R4 /] },
+  { nom: 'm8 relireUnTrouRattrapage ne note plus les faits', archive: true,
+    edits: [['serveur-web.js', "if (typeof noterFaits === 'function') noterFaits(r.creations, blocsLusJusqua); /* trou du rattrapage", "if (false) noterFaits(r.creations, blocsLusJusqua); /* trou du rattrapage"]],
+    casse: [/^R3 /, /^R4 /] },
+  { nom: 'm9 `depuis` invalide repond 200', edits: [['serveur-web.js', "repondre({ ok: false, pourquoi: 'depuis=<block number> is required' }, 400);", "repondre({ ok: false, pourquoi: 'depuis=<block number> is required' });"]],
+    casse: [/^Q1 /] },
+  { nom: 'm10 `depuis` vide accepte (Number(\'\') = 0 : tout servi)', edits: [['serveur-web.js', "brutD !== null && /^\\d{1,15}$/.test(brutD.trim())", "brutD !== null && /^\\d{0,15}$/.test(brutD.trim())"]],
+    casse: [/^Q1 /] },
 ];
 
 let echecs = 0;
 const dire = (ok, m) => { console.log((ok ? 'ok   ' : 'ROUGE ') + m); if (!ok) echecs++; };
 try {
-  const voies = [{ nom: 'depot', dir: ICI, mutant: null }, { nom: 'copie non mutee', dir: await copie([]), mutant: null },
-    ...await Promise.all(MUTANTS.map(async (m) => ({ nom: m.nom, dir: await copie(m.edits), mutant: m })))];
-  const res = await Promise.all(voies.map(async (x) => ({ ...x, r: await lancer(x.dir) })));
+  const copieSaine = await copie([]);
+  const voies = [{ nom: 'depot', dir: ICI, mutant: null }, { nom: 'depot + archive (trous relus)', dir: ICI, mutant: null, archive: true },
+    { nom: 'copie non mutee', dir: copieSaine, mutant: null }, { nom: 'copie non mutee + archive', dir: copieSaine, mutant: null, archive: true },
+    ...await Promise.all(MUTANTS.map(async (m) => ({ nom: m.nom, dir: await copie(m.edits), mutant: m, archive: !!m.archive })))];
+  /* 6 serveurs a la fois au plus : la machine reste sous le delai de la serie */
+  const res = new Array(voies.length); let suivant = 0;
+  await Promise.all([0, 1, 2, 3, 4, 5].map(async () => { while (suivant < voies.length) { const i = suivant++; res[i] = { ...voies[i], r: await lancer(voies[i].dir, { archive: voies[i].archive }) }; } }));
   for (const x of res) {
-    const rouges = verifier(x.r);
+    const rouges = verifier(x.r, x.archive);
     if (!x.mutant) {
       dire(rouges.length === 0, x.nom + ' : ' + (rouges.length ? 'ROUGES ' + rouges.join(' | ') : 'tout vert'));
       if (rouges.length) console.log('   fin du journal : ' + x.r.journal.slice(-600).replace(/\s+/g, ' '));
