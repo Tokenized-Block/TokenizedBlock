@@ -3900,7 +3900,9 @@ async function lireTrending() {
       const u = unitesActions.get(p.adr), r = routesActions.get(p.adr);
       return { adr: p.adr, sym: p.symbole || p.symboleEmetteur || null, unites: u && u.v !== null ? String(u.v) : null,
         table: POOLS_ACTIONS_AERODROME.has(p.adr), route: r ? (r.r.achetable ? 'ACHETABLE' : r.r.code) : null,
-        perteBps: r && r.r.perteBps !== undefined ? r.r.perteBps : null, bloc: r && r.r.bloc ? r.r.bloc : null };
+        perteBps: r && r.r.perteBps !== undefined ? r.r.perteBps : null, bloc: r && r.r.bloc ? r.r.bloc : null,
+        /* 2026-10-25 : la raison MESUREE d un refus — le Market la dit sous le nom d une action a unites que DexScreener ne rend pas */
+        phrase: r && r.r && r.r.achetable === false && typeof r.r.phrase === 'string' ? r.r.phrase.slice(0, 220) : null };
     });
     /* le cout, servi : appels du dernier tour (par usage) et somme sur l heure glissante */
     actionsChaine.appels = { dernierTour: appelsActions.dernierTour, heure: appelsActions.heure.reduce((s, x) => s + x.n, 0), toursHeure: appelsActions.heure.length };

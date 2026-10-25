@@ -1681,6 +1681,14 @@ details[open] > summary::before{transform:rotate(90deg)}
 .trLigne{flex-wrap:wrap}
 .trLigne .trInfo{min-width:64px}
 .trLigne .trRaison{flex:1 0 100%;order:1;box-sizing:border-box;margin:0;padding-left:74px;min-width:0;overflow-wrap:anywhere}
+/* 2026-10-25 (testeur live, 375 px : BUDc / NIOc / MPLX / AMDc, texte ecrase ~50 px ; mesure locale avant : .trInfo 81 px sur 69 lignes) :
+   en largeur etroite, les boutons Buy / Pair passent SOUS le nom et les chiffres (rangee pleine largeur, meme retrait que la raison) ;
+   .trInfo prend toute la premiere ligne ; la raison reste la derniere (order 1 et apres les boutons dans le DOM). */
+@media (max-width:560px){
+  .trLigne .trInfo{flex:1 1 calc(100% - 74px)}
+  .trLigne > .trBoutons,.trLigne > .trAcheter{order:1;margin-left:74px}
+  .trLigne > .trBoutons{flex-direction:row;flex-wrap:wrap}
+}
 .navB{font-size:10.5px}
 /* 2026-10-10 re-QA 375 px (mesure headless 375x812 : 9 onglets = 373 px pour 355 ; 'Tokenized' 324-383, coupe de 8 px) : sans gouttiere ni marge laterale
    ils tiennent (~337 px) ; plus etroit encore, la barre DEFILE au lieu de couper un onglet. */
@@ -22352,13 +22360,31 @@ function peindreTrending() {
     if (trTri === 'gain' && a.change1h == null) return (b.change24h ?? -1e9) - (a.change24h ?? -1e9);
     return cle(b) - cle(a);
   });
-  const lignes = toutes.slice(0, trAffiches);
+  /* ⛔⛔ 2026-10-25 (testeur live : « TSLAc absent de la liste Market, trouvable seulement via la recherche Map ») — MESURE sur /api/trending
+   *   de prod (18:43Z) : TSLAc ETAIT servi, route achetable sur sa pool Aerodrome (38 207 USDC), mais DexScreener rend sa paire v4 mince
+   *   (liq 1 095 $, 10 $ / 24 h) : rang 180 sur 194, sous la coupe des 50. 19 des 42 lignes d action etaient cachees ainsi. Une ligne
+   *   d ACTION (le serveur pose `routeAction` sur chacune, null ailleurs) n est plus jamais coupee : les 50 premieres restent les memes,
+   *   les actions plus bas suivent, a leur RANG VRAI. « Show more » compte ce qui reste cache. */
+  const rang = new Map(toutes.map((l, k) => [l, k]));
+  const lignes = toutes.filter((l, k) => k < trAffiches || l.routeAction);
+  const cachees = toutes.length - lignes.length;
   const actifs = toutes.filter(bouge).length;
+  /* et les actions de l emetteur A UNITES EN CIRCULATION que DexScreener ne rend pas (aucune ligne) : leur nom et la raison lue sur la
+   *   chaine (route du serveur), apres la liste — elles n etaient comptees nulle part a l ecran (23 sur 65 le 2026-10-25). Jamais de Buy :
+   *   sans ligne de marche, rien n est cote ici. */
+  const servies = new Set(d.lignes.map((l) => String(l.adr || '').toLowerCase()));
+  const sansLigne = (d.actionsChaine && Array.isArray(d.actionsChaine.liste))
+    ? d.actionsChaine.liste.filter((x) => x && /^0x[0-9a-f]{40}$/.test(String(x.adr || '')) && /^\d+$/.test(String(x.unites || '')) && x.unites !== '0' && !servies.has(x.adr)) : [];
+  const avecUnites = (d.actionsChaine && Array.isArray(d.actionsChaine.liste)) ? d.actionsChaine.liste.filter((x) => x && /^\d+$/.test(String(x.unites || '')) && x.unites !== '0').length : 0;
+  const raisonSansLigne = (x) => (typeof x.phrase === 'string' && x.phrase ? x.phrase
+    : x.route === 'ACHETABLE' ? 'Its pool quotes on chain, but DexScreener sends no market figures for it, so nothing is quoted here.'
+    : x.route ? 'No buy: its route read on chain does not pass this app’s checks (pool, a 10 USDC buy and the sale back).'
+    : 'Its route on chain is not read yet.');
   const pct = (v) => v === null || v === undefined ? '' : (!Number.isFinite(Number(v)) || Math.abs(Number(v)) > 1e5) /* QA 2026-10-10 : '+1.28e+29 %' - non fini ou absurde (> 100 000 %) = non lu */ ? '<span>—</span>' : '<span class="' + (v >= 0 ? 'trUp' : 'trDown') + '">' + (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%</span>';
-  ul.innerHTML = lignes.map((l, i) => (trTri === 'h1' && i === actifs && i > 0
+  ul.innerHTML = lignes.map((l, i) => (trTri === 'h1' && rang.get(l) === actifs && rang.get(l) > 0
       ? '<li class="filL"><p class="note" style="margin:6px 0">Quiet in the last hour — sorted by 24h volume</p></li>' : '')
     + '<li class="filL trLigne" data-block="' + enTexte(l.adr) + '" data-sym="' + enTexte(l.sym) + '">'
-    + '<span class="trRang">' + (i + 1) + '</span>'
+    + '<span class="trRang">' + (rang.get(l) + 1) + '</span>'
     + '<div class="filArt">' + dessin(l.adr, l.sym) + '</div>'
     + '<div class="trInfo"><p class="filT"><b>' + enTexte(l.sym) + '</b> ' + pct(l.change1h) + '</p>'
     + '<p class="filS">' + usdCourt(l.prixUsd) + ' · 24h ' + pct(l.change24h) + ' · ' + (bouge(l) ? 'vol 1h ' + usdCourt(l.volume1hUsd) : 'no trade in the last hour') + ' · 24h ' + usdCourt(l.volume24hUsd)
@@ -22445,7 +22471,12 @@ function peindreTrending() {
         const raison = '<p class="note trRaison">' + enTexte(raisonSb.phrase) + '</p>';
         return pairable ? '<span class="trBoutons">' + pairer + '</span>' + raison : raison;
       })() + '</li>').join('')
-    + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
+    + (cachees > 0 ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + cachees + ')</button></li>' : '')
+    + (sansLigne.length ? '<li class="filL"><p class="note" style="margin:6px 0">Tokenized stocks with units in circulation but no market row (DexScreener sends no figures for them) — each with the reason read on chain</p></li>'
+      + sansLigne.map((x) => '<li class="filL trLigne trSansLigne" data-block="' + enTexte(x.adr) + '" data-sym="' + enTexte(x.sym || '') + '">'
+        + '<span class="trRang">·</span><div class="filArt">' + dessin(x.adr, x.sym || '') + '</div>'
+        + '<div class="trInfo"><p class="filT"><b>' + enTexte(x.sym || x.adr) + '</b></p><p class="filS">Tokenized stock · no market figures</p></div>'
+        + '<p class="note trRaison">' + enTexte(raisonSansLigne(x)) + '</p></li>').join('') : '')
     /* ⛔⛔ CE `||` NE COUVRE QUE LA LISTE VIDE, et c est correct — mais c etait LE SEUL endroit ou
      *   l avertissement de refus partiel apparaissait. Comme `+` lie plus fort que `||`, l ensemble
      *   vaut `(liste) || (repli)` : des qu UNE ligne s affiche, ce repli est injoignable. La phrase
@@ -22499,6 +22530,8 @@ function peindreTrending() {
      *   pas de marche : elles ne sont pas listees, et le compte le DIT (une ligne sans rien a acheter serait du bruit). */
     + (d.actionsChaine && d.actionsChaine.prouvees > 0 ? ' · ' + d.actionsChaine.prouvees + ' issuer stocks proven on chain'
       + (d.actionsChaine.sansUnites > 0 ? ', ' + d.actionsChaine.sansUnites + ' with no units in circulation yet (not listed)' : '')
+      /* 2026-10-25 : celles A UNITES, toutes montrees — avec une ligne de marche, ou sans (nom et raison, en fin de liste) */
+      + (avecUnites > 0 ? ', ' + avecUnites + ' with units in circulation, all shown: ' + (avecUnites - sansLigne.length) + ' with a market row, ' + sansLigne.length + ' without a market row (at the end, with their reason)' : '')
       + (d.actionsChaine.etat === 'PARTIEL' ? ' (still checking ' + d.actionsChaine.nonMesurees + ')' : '') : '')
     + ' · updated ' + new Date(d.lu).toLocaleTimeString();
 }
@@ -26878,7 +26911,15 @@ const bcLignesOs = (m, lignes) => { for (const l of lignes || []) bcEtape(m, l.t
 /** La surete MESUREE d un jeton (brain-os.js lireSurete, cles de pool lues par /api/cle comme le planificateur), bornee dans le temps. */
 async function bcSureteDe(adr, ms = 45000) {
   let cles = []; try { cles = await bcAvecDelai(clesReellesDe(adr), 8000); } catch (_) { cles = []; }
-  return bcAvecDelai(BrainOs.lireSurete({ rpc, jeton: adr, chaine: CHAINE, clesExactes: Array.isArray(cles) ? cles : [] }), ms);
+  /* 2026-10-25 (testeur live : SNDKc « no pool found » apres un achat passe par le routeur) : la surete lit la pool ou passe l echange — la
+   *   table epinglee (brain-os, actionMesuree) ou, hors table, la route servie par le Market (verdict serveur achetable, sa pool et son pas). */
+  let poolAerodrome = null;
+  try {
+    const lg = dernierTrending && Array.isArray(dernierTrending.lignes) ? dernierTrending.lignes.find((x) => String(x.adr || '').toLowerCase() === String(adr).toLowerCase()) : null;
+    const ra = lg && lg.routeAction;
+    if (ra && ra.achetable === true && ra.pool && ra.tickSpacing) poolAerodrome = { pool: ra.pool, tickSpacing: ra.tickSpacing };
+  } catch (_) { poolAerodrome = null; }
+  return bcAvecDelai(BrainOs.lireSurete({ rpc, jeton: adr, chaine: CHAINE, clesExactes: Array.isArray(cles) ? cles : [], poolAerodrome }), ms);
 }
 async function bcCommandeSafety(ref) {
   const m = bcMessage('Brain OS · safety', '', 'Safety');

@@ -30,7 +30,7 @@ function gabarit(app) {
   if (a < 0 || b < 0 || q0 < 0 || q0 > a) throw new Error('gabarit de ligne introuvable');
   const expr = app.slice(a + 'ul.innerHTML = '.length, b + "})() + '</li>').join('')".length);
   const f = new Function('lignes', 'enTexte', 'dessin', 'usdCourt', 'poolDecouvertPour', 'avecPoolAction', 'verdictRoutage', 'ACTIONS_PAR_ADR', 'LIQ_MIN_BUY_USD', 'TBLOCK', 'raisonSansBuy',
-    "const trTri = 'h24', actifs = 0, bouge = (l) => (l.volume1hUsd || 0) > 0;\n" + app.slice(q0, q1) + '\nreturn ' + expr + ';');
+    "const trTri = 'h24', actifs = 0, bouge = (l) => (l.volume1hUsd || 0) > 0, rang = new Map(lignes.map((l, k) => [l, k]));\n" + app.slice(q0, q1) + '\nreturn ' + expr + ';');
   return (lignes) => f(lignes, enTexte, () => '<svg></svg>', (v) => '$' + Number(v || 0).toFixed(0), () => null, avecPoolAction, verdictRoutage, ACTIONS_PAR_ADR, 500, TBLOCK, raisonSansBuy);
 }
 const lis = (html) => html.split('<li class="filL trLigne"').slice(1).map((x) => '<li class="filL trLigne"' + x);

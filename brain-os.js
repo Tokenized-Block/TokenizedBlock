@@ -29,6 +29,9 @@ import { MISSIONS_DEPLOIEMENT } from './missions-deploiement.js';
 import { TICKETPOT_DEPLOIEMENT } from './ticketpot-deploiement.js';
 import { EV_FUNDED, EV_CLOSED, EV_CLAIMED, EV_ROLLED_OVER } from './ticketpot-plan.js';
 import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
+import { actionMesuree, calldataDevis } from './rolls-en-action.js';
+import { ALLER_RETOUR_MAX_BPS } from './pools-actions-aerodrome.js';
+import { USDC_BASE } from './frais-creation.js';
 
 const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-fA-F]{40}$/, HASH = /^0x[0-9a-fA-F]{64}$/;
@@ -115,16 +118,48 @@ export async function allerRetour({ rpc, quoteur, cle, jeton, entree }) {
   return { etat: 'LU', entree, recu: achat.sortie, retour: vente.sortie, gardeBps: Number((vente.sortie * 10000n) / entree) };
 }
 
+/* ⛔⛔ 2026-10-25 (testeur live, game44) : SNDKc « Measured: B20 · mint open · no pool found » juste apres un achat passe par le routeur
+ *   Aerodrome ; TSLAc « not read ». Reproduit sur la chaine (lecture seule) : lireSurete ne cherchait qu une pool Uniswap v4, et une action
+ *   de la table se trade sur SA pool Aerodrome. La surete lit maintenant LA MEME pool que l echange : la table epinglee
+ *   (POOLS_ACTIONS_AERODROME via actionMesuree, celle du planificateur et des rolls en action), ou la route servie que l app passe
+ *   (`poolAerodrome`, verdict serveur sur la factory du routeur). Lectures : token0/token1 (la pool apparie-t-elle l action a l USDC ?),
+ *   l USDC qu elle tient, puis 10 USDC achetes et revendus sur le quoter Aerodrome au meme etat. Un refus du noeud est dit « not read ». */
+const routeValide = (r) => (r && ADR.test(String(r.pool || '')) && Number.isInteger(Number(r.tickSpacing)) && Number(r.tickSpacing) > 0
+  ? { pool: bas(r.pool), tickSpacing: Number(r.tickSpacing) } : null);
+const premierMot = (hex) => BigInt('0x' + String(hex).replace(/^0x/, '').slice(0, 64));
+async function lireAerodrome({ rpc, jeton, pool, tickSpacing }) {
+  const u = bas(USDC_BASE), call = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
+  let t0, t1, usdc;
+  try {
+    [t0, t1, usdc] = await Promise.all([call(pool, selecteur('token0()')), call(pool, selecteur('token1()')),
+      call(u, selecteur('balanceOf(address)') + pool.slice(2).padStart(64, '0'))]);
+  } catch (_) { return { etat: 'NON_LU' }; }
+  const paire = [motAdr(String(t0).slice(0, 66)), motAdr(String(t1).slice(0, 66))].sort().join() === [bas(jeton), u].sort().join();
+  if (!paire) return { etat: 'LU', paire: false };
+  const r = { etat: 'LU', paire: true, usdc: premierMot(usdc), entree: 10_000_000n };
+  try { r.recu = premierMot(await rpc('eth_call', [calldataDevis({ tokenIn: u, tokenOut: jeton, tickSpacing, montant: r.entree }), 'latest'])); }
+  catch (e) { r.allerRetour = estRevertDeChaine(e) ? 'ACHAT_REFUSE' : 'NON_LU'; return r; }
+  if (!(r.recu > 0n)) { r.allerRetour = 'ACHAT_REFUSE'; return r; }
+  try { r.retour = premierMot(await rpc('eth_call', [calldataDevis({ tokenIn: jeton, tokenOut: u, tickSpacing, montant: r.recu }), 'latest'])); }
+  catch (e) { r.allerRetour = estRevertDeChaine(e) ? 'VENTE_REFUSEE' : 'NON_LU'; return r; }
+  r.allerRetour = 'LU';
+  r.perteBps = Number(((r.entree - r.retour) * 10000n) / r.entree);
+  return r;
+}
+
 /**
  * Ce qui se MESURE de la surete d un jeton, sans cle tierce.
  * @returns {Promise<{ jeton, faits, marche, allers:object[], lignes:{texte,classe}[], resume:string }>}
  */
-export async function lireSurete({ rpc, jeton, chaine = 8453, clesExactes = [], deviseDAbord = false }) {
+export async function lireSurete({ rpc, jeton, chaine = 8453, clesExactes = [], deviseDAbord = false, poolAerodrome = null }) {
   const lignes = [];
   const a = bas(jeton);
   if (!ADR.test(a) || a === ETH) return { jeton: a, lignes: [ligne('Safety not read — give a token contract address.', 'non')], resume: 'Safety not read — no token contract.' };
   const V = V4_ADRESSES[Number(chaine)] || {}, quoteur = QUOTEUR[Number(chaine)];
   const morceaux = [];
+  /* la pool ou passe l echange d une action (Base seulement : la table et le quoter sont ceux de Base), lue en parallele du reste */
+  const aero = Number(chaine) === 8453 ? routeValide(poolAerodrome) || actionMesuree(a) : null;
+  const aeroP = aero ? lireAerodrome({ rpc, jeton: a, pool: aero.pool, tickSpacing: aero.tickSpacing }) : null;
   /* 1. le code et la frappe (faits.js : B20 = code EXACTEMENT 0xef) */
   let faits = null;
   try { faits = await faitsDuBlock({ rpc, jeton: a }); } catch (_) { faits = null; }
@@ -157,9 +192,13 @@ export async function lireSurete({ rpc, jeton, chaine = 8453, clesExactes = [], 
   let marche = null;
   try { marche = await vieDuBlock({ rpc, stateView: V.stateView, jeton: a, clesExactes, deviseDAbord }); } catch (_) { marche = null; }
   const allers = [];
-  if (!marche || marche.etat === 'NON_LUE' || marche.etat === 'REFUSEE') { lignes.push(ligne('Its pool: not read.', 'non')); morceaux.push('pool not read'); }
-  else if (marche.etat === 'NON_TROUVEE') { lignes.push(ligne('No pool found among the keys we read — not a claim that it has none.')); morceaux.push('no pool found'); }
-  else if (!marche.cle) { lignes.push(ligne('Its pool: not read.', 'non')); morceaux.push('pool not read'); }
+  /* ⛔ avec une pool Aerodrome connue, l absence ne porte que sur Uniswap v4 — elle est dite ainsi, jamais « no pool found » */
+  if (!marche || marche.etat === 'NON_LUE' || marche.etat === 'REFUSEE') { lignes.push(ligne(aero ? 'Its pool on Uniswap: not read.' : 'Its pool: not read.', 'non')); morceaux.push(aero ? 'pool on Uniswap not read' : 'pool not read'); }
+  else if (marche.etat === 'NON_TROUVEE') {
+    lignes.push(ligne(aero ? 'No pool found on Uniswap among the keys we read — this app trades it on its Aerodrome pool, read below.' : 'No pool found among the keys we read — not a claim that it has none.'));
+    morceaux.push(aero ? 'no pool on Uniswap' : 'no pool found');
+  }
+  else if (!marche.cle) { lignes.push(ligne(aero ? 'Its pool on Uniswap: not read.' : 'Its pool: not read.', 'non')); morceaux.push(aero ? 'pool on Uniswap not read' : 'pool not read'); }
   else {
     const cle = marche.cle, hook = bas(cle.hooks);
     const devise = bas(cle.currency0) === a ? bas(cle.currency1) : bas(cle.currency0);
@@ -198,7 +237,41 @@ export async function lireSurete({ rpc, jeton, chaine = 8453, clesExactes = [], 
       }
     }
   }
-  return { jeton: a, symbole: sym, faits, marche, allers, lignes, resume: 'Measured: ' + morceaux.join(' · ') + '.' };
+  /* 2b. la pool Aerodrome ou passe l echange (table epinglee ou route servie) */
+  let aerodrome = null;
+  if (aeroP) {
+    const ra = await aeroP;
+    aerodrome = { ...aero, ...ra };
+    const nom = 'Aerodrome pool ' + aero.pool + ' (tick spacing ' + aero.tickSpacing + ')';
+    const morceauxAero = [];
+    if (ra.etat !== 'LU') {
+      lignes.push(ligne('The ' + nom + ' this app trades ' + sym + ' on: not read.', 'non'));
+      morceauxAero.push('its Aerodrome pool not read');
+    } else if (!ra.paire) {
+      lignes.push(ligne('The ' + nom + ' does not pair ' + sym + ' with USDC — nothing is measured on it.', 'non'));
+      morceauxAero.push('its Aerodrome pool does not pair it with USDC');
+    } else {
+      lignes.push(ligne('Pool this app trades ' + sym + ' on: the ' + nom + ', paired with USDC, holding ' + unites(ra.usdc, 6, 2) + ' USDC.'));
+      const dec = faits && Number.isInteger(faits.decimales) ? faits.decimales : null;
+      if (ra.allerRetour === 'LU') {
+        const perte = Math.max(0, ra.perteBps);
+        lignes.push(ligne('Round trip 10 USDC → ' + (dec === null ? ra.recu + ' raw units' : unites(ra.recu, dec) + ' ' + sym) + ' → ' + unites(ra.retour, 6) + ' USDC back on that pool: '
+          + pctBps(perte) + ' lost (pool fees and price impact; this app’s fee is not in the quote).', perte > ALLER_RETOUR_MAX_BPS ? 'non' : ''));
+        morceauxAero.push('Aerodrome pool, 10 USDC round trip ' + pctBps(perte) + ' lost');
+      } else if (ra.allerRetour === 'ACHAT_REFUSE') {
+        lignes.push(ligne('Buying 10 USDC of ' + sym + ' does not quote on that pool.', 'non'));
+        morceauxAero.push('Aerodrome pool, a 10 USDC buy does not quote');
+      } else if (ra.allerRetour === 'VENTE_REFUSEE') {
+        lignes.push(ligne('Buying 10 USDC of ' + sym + ' quotes on that pool, but selling it back does not.', 'non'));
+        morceauxAero.push('Aerodrome pool, selling back does not quote');
+      } else {
+        lignes.push(ligne('Round trip 10 USDC on that pool: not read.', 'non'));
+        morceauxAero.push('Aerodrome pool, round trip not read');
+      }
+    }
+    morceaux.push(...morceauxAero);
+  }
+  return { jeton: a, symbole: sym, faits, marche, allers, aerodrome, lignes, resume: 'Measured: ' + morceaux.join(' · ') + '.' };
 }
 
 /* ════════════════════════════════════ EXPLAIN A TX ════════════════════════════════════ */
