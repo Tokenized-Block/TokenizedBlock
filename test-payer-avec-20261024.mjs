@@ -19,7 +19,16 @@
  *   PERIME        la tete avance de 31 blocs apres le devis : refuse, RIEN n est envoye (aucune requete d envoi au wallet) ;
  *   NON_MISABLE   INFYc pour le Week pass (10 USDC) : refuse au clic, sans meme coter ; HSAIc pour l Auto-roll (2,50 -> taille 5) idem ;
  *                 un ecart VIVANT de 3 % sur NVDAc : refuse apres le devis, rien d envoye ;
- *   RPC           cinq repeints : /api/misables lu une fois, les soldes une fois, zero devis ; un clic USDC : zero devis ; un clic NVDAc : un.
+ *   RPC           cinq repeints : /api/misables lu une fois, les soldes une fois, zero devis ; un clic USDC : zero devis ; un clic NVDAc : un ;
+ *                 decimals() des seuls jetons tenus (4) ;
+ *   TOUS          (2026-10-25, Phil : « on ne peut payer qu en USDC et NVDAc ») la liste #payerTous : menu ouvert + liste grisee = TOUS les
+ *                 misables ; raisons (you hold too little / you hold none / pas a cette taille) ; cout derive du devis enregistre apres
+ *                 ouverture ; decimals() des non tenus a l ouverture seulement, une fois ; lien Buy = la ligne du MARKET (oracle : son IIFE)
+ *                 sur la photo trending enregistree, et absent sur une ligne du Market sans route ; « Buy » : allerA('trade'), rien au
+ *                 wallet ni a la chaine ; un choix FORGE d un jeton non tenu (payer.choix pose, ou valeur hors options + 'change') paie
+ *                 EXACTEMENT le plan USDC, zero devis ; SANS_WALLET / SANS_JETON : la liste entiere, lecture seule / « you hold none » ;
+ *   PARITE_MARCHE achatMarcheDe (la copie de la liste) = la ligne du Market (IIFE de peindreTrending executee) sur les 195 lignes
+ *                 enregistrees x 4 variations (telles, pool NOTRE, achat.cle serveur, sous le seuil).
  * Chaque scenario est rejoue sur des COPIES MUTEES de app.html (en memoire) et doit rougir.
  * NE PROUVE PAS : un vrai wallet, un vrai noeud (le banc fork le fait), les pixels (mesure au navigateur a part). */
 import { strict as assert } from 'node:assert';
@@ -29,7 +38,7 @@ import * as Slots from './slots-plan.js';
 import { USDC_BASE } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL } from './calldata-aerodrome.js';
 import { selecteur } from './keccak.js';
-import { lireApp, appDuCommit, chaineFactice as chaineFacticeDe, lignesServies, walletFactice, appelsEnvoyes, charger, choisir, tempsRapide, ROLLS, SLOTS, MESURE_20261025 } from './payer-avec-harnais-20261024.mjs';
+import { lireApp, appDuCommit, chaineFactice as chaineFacticeDe, lignesServies, walletFactice, appelsEnvoyes, charger, choisir, tempsRapide, ROLLS, SLOTS, MESURE_20261025, decisionMarche, lireMesure } from './payer-avec-harnais-20261024.mjs';
 import { FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
 /* 2026-10-25 : RE-BASE sur l enregistrement du 25/10 (mesures/misables-live-20261025.json). Celui du 24/10 ne cote pas SANc / SEc / NOKc /
  *   LIc (entres au registre le 25/10) et compte ULc hors candidats : ses chiffres 26 / 20/19/18 ne decrivent plus la liste servie. */
@@ -87,6 +96,28 @@ const NV = L('NVDAc'), ETHL = L('ETH'), INFY = L('INFYc'), HSAI = L('HSAIc'), AA
 vu(!!(NV && ETHL && INFY && HSAI && AAPL), 'NVDAc, ETH, INFYc, HSAIc, AAPLc dans la liste');
 vu(INFY.tailles[0].misable && !INFY.tailles[2].misable && HSAI.tailles[0].misable && !HSAI.tailles[1].misable, 'INFYc misable a 0,50 pas a 10 ; HSAIc misable a 0,50 pas a 5');
 const JOUEUR = '0x' + 'a1'.repeat(20);
+/* 2026-10-25 (#payerTous, Phil : « on ne peut payer qu en USDC et NVDAc ; le reste possible n est pas montre ») : la liste misable ENTIERE.
+ *   La photo /api/trending ENREGISTREE (mesures/trending-instantane-20261024T1411Z.json) nourrit le lien « Buy » ; l ORACLE du Buy est la
+ *   ligne du MARKET elle-meme (l IIFE de peindreTrending, extraite de app.html et executee par decisionMarche) — jamais le code teste. */
+const TRENDING = lireMesure('trending-instantane-20261024T1411Z.json');
+const MARCHE = decisionMarche(APP, {});
+vu(typeof MARCHE === 'function' && Array.isArray(TRENDING.lignes) && TRENDING.lignes.length > 100, 'la ligne du Market (peindreTrending) extraite de app.html ; photo trending de ' + TRENDING.lignes.length + ' lignes');
+const LISTEES = LIGNES.filter((l) => l.tailles.some((x) => x.misable));
+vu(LISTEES.length === ORACLE.listes, 'misables a au moins une taille = oracle : ' + LISTEES.length);
+const buyAttendu = (l, tr = TRENDING) => { if (l.natif) return false; const r = tr.lignes.find((x) => bas(x.adr) === l.jeton); return !!(r && MARCHE(r)); };
+const TENUS_OUVERTS = () => new Set([HSAI.jeton, MIS.ETH, INFY.jeton, NV.jeton]); /* SOLDES() : AAPLc tenu a 1 brut = trop peu */
+const SEL_DEC = '0x313ce567';
+const decsDans = (appels) => appels.filter((a) => a.methode === 'eth_call' && bas(a.params[0].data) === SEL_DEC).length;
+/* la liste rendue (#payerListe), lue dans son HTML : jeton, symbole, texte, lien Buy ; `reste` = ce qui n a pas ete reconnu */
+function lireListe(ch) {
+  const h = String(ch.ecran.el('payerListe').innerHTML || '');
+  const re = /<li data-token="(0x[0-9a-f]{40})" aria-disabled="true"><b>([^<]*)<\/b><span class="pRaison">([^<]*)<\/span>(?:<button type="button" class="payerAchat" data-payer-achat="(0x[0-9a-f]{40})">Buy<\/button>)?<\/li>/g;
+  const out = []; let m; while ((m = re.exec(h))) out.push({ jeton: m[1], sym: m[2], texte: m[3], buy: !!m[4], buyAdr: m[4] || null });
+  return { lignes: out, reste: h.replace(re, '') };
+}
+async function ouvrirListe(ch) { const z = ch.ecran.el('payerTous'); z.open = true; if (z.ecouteurs.toggle) z.ecouteurs.toggle(); const p = ch.api.lireDecimalesTous(); if (p) await p; }
+/* le cout attendu a 0,50 USDC (derive du devis ENREGISTRE), ou la raison servie a cette taille */
+const coutAttendu = (l) => (l.tailles[0].misable ? 'about ' + aboutDe(l, 500000n) + ' for 0.50 USDC · ' + pctDe(l) : null);
 const SOLDES = () => new Map([[NV.jeton, 6000000n], [MIS.ETH, 10n ** 16n], [AAPL.jeton, 1n], [INFY.jeton, 10n ** 8n], [HSAI.jeton, 10n ** 9n]]);
 const ETAT = { roll: 'rollsEtat', auto: 'rollsEtat', pass: 'potEtat', spin: 'slotsEtat' };
 const LIGNES_ETAT = new Set(['rollsEtat', 'potEtat', 'slotsEtat', 'jourPassEtat', 'rollsAttente']);
@@ -129,10 +160,10 @@ const jeuDe = {
   spin: { genre: 'spins', contrat: SLOTS, n: 1, spinPrice: 500000n },
 };
 const lancer = (api, flux) => (flux === 'roll' ? api.rollPaye() : flux === 'auto' ? api.autoRollLot(JOUEUR) : flux === 'pass' ? api.passPaye() : api.slotsAgir('spin'));
-async function jouer(t, { flux, mode = 'lot', choix = null, chaine = {}, rollsCfg, compte = JOUEUR, soldes = SOLDES() }) {
+async function jouer(t, { flux, mode = 'lot', choix = null, chaine = {}, rollsCfg, compte = JOUEUR, soldes = SOLDES(), trending = TRENDING, allerA = null }) {
   const ch0 = chaineFactice({ joueur: JOUEUR, soldes, ...chaine });
   const w = walletFactice({ mode, joueur: JOUEUR });
-  const ch = charger(t, { compte, rpc: ch0.rpc, eth: w.eth, lignes: LIGNES, rollsCfg });
+  const ch = charger(t, { compte, rpc: ch0.rpc, eth: w.eth, lignes: LIGNES, rollsCfg, trending, allerA });
   if (ch.api.peindrePayerAvec) await ch.api.peindrePayerAvec();
   const choisi = choix ? choisir(ch, choix) : true;
   const e0 = ch.ecran.ecrits.length, a0 = ch0.st.appels.length;
@@ -161,7 +192,20 @@ S.SANS_WALLET = async (t) => {
     && e('payerJeton').hidden === true && e('payerLab').hidden === true && e('payerNote').hidden === false
     && e('payerNote').textContent === AUTRES && soldes.length === 0 && r.ch.fetchs.length === 1;
   const html = /<span class="note" id="payerSeul">Pay with: USDC<\/span>/.test(t);
-  return { ok: ok && html, html, note: e('payerNote').textContent, seul: e('payerSeul').hidden, sel: e('payerJeton').hidden, soldes: soldes.length, fetchs: r.ch.fetchs.length };
+  /* 2026-10-25 : sans wallet, la liste ENTIERE en lecture seule, « Connect a wallet to pay with a token », aucun solde lu (meme ouverte) */
+  const av = lireListe(r.ch);
+  const tousAvant = e('payerTous').hidden === false && e('payerTousTitre').textContent === 'All ' + LISTEES.length + ' bettable tokens'
+    && e('payerTousNote').hidden === false && e('payerTousNote').textContent === 'Connect a wallet to pay with a token.'
+    && av.reste === '' && av.lignes.map((x) => x.jeton).join() === LISTEES.map((l) => l.jeton).join()
+    /* replie, rien n est lu : un misable a 0,50 n a pas encore de cout (decimals non lues), un non misable a 0,50 dit pourquoi */
+    && av.lignes.every((x) => (L(x.sym).tailles[0].misable ? x.texte === '' : x.texte.startsWith('not for 0.50 USDC: ')));
+  await ouvrirListe(r.ch);
+  const ap = lireListe(r.ch);
+  const soldesApres = r.chain.st.appels.filter((a) => a.methode === 'eth_getBalance' || (a.methode === 'eth_call' && a.params[0].data.startsWith('0x70a08231') && a.params[0].data.endsWith(JOUEUR.slice(2)))).length;
+  const tousApres = ap.lignes.length === LISTEES.length && ap.lignes.every((x) => x.texte === (coutAttendu(L(x.sym)) || av.lignes.find((y) => y.jeton === x.jeton).texte))
+    && ap.lignes.every((x) => x.buy === buyAttendu(L(x.sym))) && soldesApres === 0 && decsDans(r.chain.st.appels) === LISTEES.filter((l) => !l.natif).length;
+  const tous = tousAvant && tousApres && LISTEES.every((l) => choisir(r.ch, l.jeton) === false);
+  return { ok: ok && html && tous, html, tousAvant, tousApres, titre: e('payerTousTitre').textContent, av: av.lignes.slice(0, 3), ap: ap.lignes.slice(0, 3), reste: av.reste.slice(0, 200), note: e('payerNote').textContent, seul: e('payerSeul').hidden, sel: e('payerJeton').hidden, soldes: soldes.length, soldesApres, fetchs: r.ch.fetchs.length };
 };
 S.SANS_JETON = async (t) => {
   const r = await jouer(t, { soldes: new Map() });
@@ -172,7 +216,100 @@ S.SANS_JETON = async (t) => {
   const ethB = r.chain.st.appels.filter((a) => a.methode === 'eth_getBalance').length;
   const ok = e('payerSeul').hidden === false && e('payerJeton').hidden === true && e('payerLab').hidden === true
     && bal.length === listees.size && [...cibles].every((x) => listees.has(x)) && cibles.size === listees.size && ethB === 1 && devisDans(r.chain.st.appels) === 0;
-  return { ok, bal: bal.length, listees: listees.size, ethB, horsListe: [...cibles].filter((x) => !listees.has(x)) };
+  /* 2026-10-25 : un wallet qui ne tient rien voit TOUTE la liste, chaque jeton « you hold none », aucun choisissable */
+  const li = lireListe(r.ch);
+  const tous = e('payerTous').hidden === false && e('payerTousTitre').textContent === 'All ' + LISTEES.length + ' bettable tokens · you hold none of them'
+    && li.reste === '' && li.lignes.length === LISTEES.length && li.lignes.every((x) => x.texte === 'you hold none' || x.texte.startsWith('you hold none · '))
+    && LISTEES.every((l) => choisir(r.ch, l.jeton) === false) && r.ch.api.jetonChoisi() === null;
+  return { ok: ok && tous, tous, titre: e('payerTousTitre').textContent, l0: li.lignes[0], bal: bal.length, listees: listees.size, ethB, horsListe: [...cibles].filter((x) => !listees.has(x)) };
+};
+/* 2026-10-25 : TOUS — le wallet du banc tient NVDAc, ETH, INFYc, HSAIc (ouverts au selecteur) et 1 brut d AAPLc (trop peu) */
+S.TOUS = async (t) => {
+  const aller = [];
+  const r = await jouer(t, { allerA: (x) => aller.push(x) });
+  const e = r.ch.ecran.el, s = e('payerJeton');
+  const ouverts = new Set(s.options.filter((o) => !o.disabled && o.value !== 'usdc').map((o) => o.value));
+  const attendusOuverts = TENUS_OUVERTS();
+  const tenusOk = ouverts.size === attendusOuverts.size && [...attendusOuverts].every((x) => ouverts.has(x));
+  const av = lireListe(r.ch), listeIds = av.lignes.map((x) => x.jeton);
+  const attendusListe = LISTEES.filter((l) => !attendusOuverts.has(l.jeton));
+  /* la liste ENTIERE : menu ouvert + liste grisee = tous les misables, sans recouvrement ; AAPLc (tenu, trop peu) en tete */
+  const couverture = av.reste === '' && listeIds.length === attendusListe.length && attendusListe.every((l) => listeIds.includes(l.jeton))
+    && listeIds.every((x) => !ouverts.has(x)) && listeIds[0] === AAPL.jeton
+    && e('payerTousTitre').textContent === 'All ' + LISTEES.length + ' bettable tokens · ' + attendusOuverts.size + ' in the menu, ' + attendusListe.length + ' not payable yet';
+  const raisons = av.lignes.every((x) => (x.jeton === AAPL.jeton ? x.texte === 'you hold too little · ' + coutAttendu(AAPL)
+    : x.texte === 'you hold none' || (!L(x.sym).tailles[0].misable && x.texte.startsWith('you hold none · not for 0.50 USDC: '))));
+  const buys = av.lignes.every((x) => x.buy === buyAttendu(L(x.sym)) && (!x.buy || x.buyAdr === x.jeton));
+  const nBuy = av.lignes.filter((x) => x.buy).length;
+  /* aucun n est choisissable : ce n est pas une option (AAPLc : une option GRISEE) */
+  const nonChoisis = av.lignes.every((x) => choisir(r.ch, x.jeton) === false);
+  /* ouverte : decimals() des NON tenus, une fois ; le cout mesure apparait ; une 2e ouverture ne relit rien */
+  const decAvant = decsDans(r.chain.st.appels);
+  await ouvrirListe(r.ch);
+  const decApres = decsDans(r.chain.st.appels);
+  await ouvrirListe(r.ch);
+  const decEncore = decsDans(r.chain.st.appels);
+  const ap = lireListe(r.ch);
+  const couts = ap.lignes.every((x) => { const l = L(x.sym); const c = coutAttendu(l); return x.jeton === AAPL.jeton ? x.texte === 'you hold too little · ' + c : c ? x.texte === 'you hold none · ' + c : x.texte === av.lignes.find((y) => y.jeton === x.jeton).texte; });
+  const nonTenusNonNatifs = attendusListe.filter((l) => !l.natif && l.jeton !== AAPL.jeton).length;
+  const rpcOk = decAvant === 4 && decApres === decAvant + nonTenusNonNatifs && decEncore === decApres && devisDans(r.chain.st.appels) === 0;
+  /* « Buy » : l onglet Market, rien au wallet, rien a la chaine */
+  const a0 = r.chain.st.appels.length, w0 = r.w.requetes.length;
+  const lienBuy = av.lignes.find((x) => x.buy);
+  if (lienBuy) e('payerListe').ecouteurs.click({ target: { closest: (q) => (q === '[data-payer-achat]' ? { getAttribute: () => lienBuy.jeton } : null) } });
+  await new Promise((o) => setImmediate(o));
+  const clic = !!lienBuy && aller.join() === 'trade' && r.chain.st.appels.length === a0 && r.w.requetes.length === w0;
+  /* un choix FORGE (valeur posee hors du selecteur) d un jeton non tenu : remis a USDC ; le Roll paie EXACTEMENT le plan USDC, zero devis */
+  const forge = attendusListe.find((l) => l.tailles[0].misable && !l.natif && l.jeton !== AAPL.jeton);
+  const f1 = await jouer(t, {});
+  f1.ch.api.payer.choix = forge.jeton; /* sans repeint : la garde de jetonChoisi */
+  const a1 = f1.chain.st.appels.length;
+  await f1.ch.api.rollPaye();
+  const env1 = appelsEnvoyes(f1.w.requetes);
+  const forgeDirect = memes(env1, planJeu.roll().appels) && devisDans(f1.chain.st.appels.slice(a1)) === 0;
+  const f2 = await jouer(t, {});
+  const s2 = f2.ch.ecran.el('payerJeton'); s2.value = forge.jeton; s2.ecouteurs.change(); /* par l ecouteur 'change' */
+  const a2 = f2.chain.st.appels.length;
+  await f2.ch.api.rollPaye();
+  const env2 = appelsEnvoyes(f2.w.requetes);
+  const forgeChange = f2.ch.api.payer.choix === 'usdc' && memes(env2, planJeu.roll().appels) && devisDans(f2.chain.st.appels.slice(a2)) === 0;
+  /* anti-creux : des lignes AVEC et SANS Buy (sinon « Buy sans route » ne se verrait pas) */
+  const antiCreux = nBuy > 0 && nBuy < av.lignes.length;
+  /* une ligne du Market PRESENTE mais sans route (liquidite sous le seuil du Market) : pas de lien. Dans la photo enregistree, les lignes sans
+   *   Buy de la liste n ont PAS de ligne au Market ; ce cas-ci donne a des misables avec Buy une ligne que le Market refuse. */
+  const sansRoute = av.lignes.filter((x) => x.buy).slice(0, 3).map((x) => x.jeton);
+  const tr2 = { ...TRENDING, lignes: TRENDING.lignes.map((l) => (sansRoute.includes(bas(l.adr)) ? { ...l, liquiditeUsd: 10 } : l)) };
+  const r2 = await jouer(t, { trending: tr2 });
+  const l2 = lireListe(r2.ch).lignes;
+  const routeAbsente = sansRoute.length === 3 && sansRoute.every((j) => buyAttendu(L(l2.find((x) => x.jeton === j).sym), tr2) === false && l2.find((x) => x.jeton === j).buy === false)
+    && l2.every((x) => x.buy === buyAttendu(L(x.sym), tr2));
+  const ok = tenusOk && couverture && raisons && buys && nonChoisis && couts && rpcOk && clic && forgeDirect && forgeChange && antiCreux && routeAbsente;
+  return { ok, tenusOk, couverture, raisons, buys, nBuy, n: av.lignes.length, nonChoisis, couts, rpcOk, decAvant, decApres, decEncore, nonTenusNonNatifs, clic, aller, forgeDirect, forgeChange, antiCreux, routeAbsente,
+    titre: e('payerTousTitre').textContent, l: av.lignes.slice(0, 4), ap: ap.lignes.slice(0, 4), reste: av.reste.slice(0, 200) };
+};
+/* 2026-10-25 : PARITE — le lien Buy de la liste = le Buy de la ligne du Market (son IIFE, executee), sur TOUTES les lignes enregistrees,
+ *   sous quatre variations : telles quelles ; pool decouverte sur NOTRE hook ; verdict serveur `achat.cle` ; liquidite sous le seuil */
+S.PARITE_MARCHE = async (t) => {
+  const marche = decisionMarche(t, {});
+  if (!marche) return { ok: false, pourquoi: 'ligne du Market non extraite' };
+  const notre = () => ({ confiance: 'NOTRE', cle: {} });
+  const variantes = [
+    { nom: 'telles', lignes: TRENDING.lignes, dec: null },
+    { nom: 'notreHook', lignes: TRENDING.lignes, dec: notre },
+    { nom: 'achatServeur', lignes: TRENDING.lignes.map((l) => ({ ...l, achat: { cle: { k: 1 } } })), dec: null },
+    { nom: 'sousSeuil', lignes: TRENDING.lignes.map((l) => ({ ...l, liquiditeUsd: 499 })), dec: notre },
+  ];
+  const ecarts = [], comptes = { acheter: 0, fiche: 0, aucun: 0 };
+  for (const v of variantes) {
+    const ch = charger(t, { lignes: LIGNES, decouverte: v.dec || undefined });
+    const m = decisionMarche(t, { poolDecouvertPour: v.dec || (() => null) });
+    for (const l of v.lignes) {
+      const a = ch.api.achatMarcheDe(l), b = m(l);
+      comptes[b || 'aucun'] += 1;
+      if (a !== b) ecarts.push(v.nom + ':' + l.sym + ' liste=' + a + ' market=' + b);
+    }
+  }
+  return { ok: ecarts.length === 0 && comptes.acheter > 0 && comptes.fiche > 0 && comptes.aucun > 0, ecarts: ecarts.slice(0, 8), n: ecarts.length, comptes };
 };
 S.SELECTEUR = async (t) => {
   const r = await jouer(t, {});
@@ -288,15 +425,19 @@ S.RPC = async (t) => {
   const r = await jouer(t, {});
   for (let i = 0; i < 4; i += 1) await r.ch.api.peindrePayerAvec();
   const bal = r.chain.st.appels.filter((a) => a.methode === 'eth_getBalance' || (a.methode === 'eth_call' && a.params[0].data.startsWith('0x70a08231') && a.params[0].data.endsWith(JOUEUR.slice(2)))).length;
-  const repeints = { fetchs: r.ch.fetchs.length, bal, devis: devisDans(r.chain.st.appels) };
+  /* 2026-10-25 : + decimals() au repeint = les 4 jetons tenus non natifs seulement (la liste #payerTous n en lit qu a son ouverture) */
+  const repeints = { fetchs: r.ch.fetchs.length, bal, devis: devisDans(r.chain.st.appels), dec: decsDans(r.chain.st.appels) };
   const u = await jouer(t, { flux: 'roll' });
   const j = await jouer(t, { flux: 'roll', choix: NV.jeton });
   /* 2026-10-25 : un solde lu par jeton LISTE (misable a au moins une taille) — derive de l oracle (24/10 : 20) */
-  const ok = repeints.fetchs === 1 && repeints.bal === ORACLE.listes && repeints.devis === 0 && devisDans(u.appelsClic) === 0 && devisDans(j.appelsClic) === 1;
+  const ok = repeints.fetchs === 1 && repeints.bal === ORACLE.listes && repeints.devis === 0 && repeints.dec === 4 && devisDans(u.appelsClic) === 0 && devisDans(j.appelsClic) === 1;
   return { ok, repeints, usdc: devisDans(u.appelsClic), jeton: devisDans(j.appelsClic) };
 };
 
-for (const k of Object.keys(S)) { const r = await S[k](APP); vu(r.ok === true, 'scenario ' + k + (r.ok ? '' : ' ' + JSON.stringify(r, (_, v) => (typeof v === 'bigint' ? v.toString() : v)).slice(0, 2500))); }
+for (const k of Object.keys(S)) { const r = await S[k](APP);
+  if (k === 'TOUS') console.log('    TOUS : ' + LISTEES.length + ' misables, ' + TENUS_OUVERTS().size + ' au menu, ' + r.n + ' grises dont ' + r.nBuy + ' avec Buy ; decimals() repliee ' + r.decAvant + ', ouverte +' + (r.decApres - r.decAvant) + ', 2e ouverture +' + (r.decEncore - r.decApres) + ' — ' + r.titre);
+  if (k === 'PARITE_MARCHE') console.log('    PARITE_MARCHE : ' + JSON.stringify(r.comptes) + ', ' + r.n + ' ecart(s)');
+  vu(r.ok === true, 'scenario ' + k + (r.ok ? '' : ' ' + JSON.stringify(r, (_, v) => (typeof v === 'bigint' ? v.toString() : v)).slice(0, 2500))); }
 
 /* ---------------------------------------------------------------- les mutants (copies en memoire) */
 const MUT = [
@@ -322,11 +463,26 @@ const MUT = [
   ['SANS_JETON', 'balanceOf des jetons NON listes', '  const m = new Map(), file = payerListees().slice();', '  const m = new Map(), file = (payer.lignes || []).slice();'],
   ['RPC', 'devis a chaque repeint', '  rendrePayerAvec(moi, payerActions(c));\n}', "  for (const l of payerListees()) { const cc = MISABLES_CANDIDATS.find((x) => x.jeton === l.jeton); if (cc) await coterMisable({ rpc, candidat: cc, usdcSortie: 500000n }).catch(() => null); }\n  rendrePayerAvec(moi, payerActions(c));\n}"],
   ['RPC', '/api/misables a chaque repeint', '  if (Date.now() - payer.essai < PAYER_TTL_MS) return payer.lignes;\n', ''],
+  /* 2026-10-25 (#payerTous) — `de` peut etre une liste de paires [de, vers] (toutes appliquees a la meme copie) */
+  ['TOUS', 'jeton non tenu payable (garde de jetonChoisi retiree)', '  if (!payer.ouvertes.has(payer.choix)) return null;\n', ''],
+  ['TOUS', 'jeton non tenu choisissable (garde ET remise a USDC retirees)', [['  if (!payer.ouvertes.has(payer.choix)) return null;\n', ''],
+    ["  if (!opts.some((o) => o.v === payer.choix && !o.off)) payer.choix = 'usdc';\n", '']]],
+  ['TOUS', 'Buy sans route (lien sur toute ligne du Market)', "registre))) return 'fiche';\n  return null;\n}", "registre))) return 'fiche';\n  return 'fiche';\n}"],
+  ['TOUS', 'Buy sans la ligne du Market (lien sur tout misable non natif)', '    try { buy = l.natif ? null : achatMarcheDe(ligneMarchePour(l.jeton)); } catch (_) { buy = null; }', "    buy = l.natif ? null : 'fiche';"],
+  ['TOUS', 'jeton tenu absent du selecteur', '  for (const l of tenues) {\n    const e = payerTaille(l, taille)', '  for (const l of tenues.slice(1)) {\n    const e = payerTaille(l, taille)'],
+  ['TOUS', 'liste sans les jetons non tenus', '  const autres = toutes.filter((l) => !payer.ouvertes.has(l.jeton))', '  const autres = toutes.filter((l) => !payer.ouvertes.has(l.jeton) && payer.soldes.get(l.jeton) > 0n)'],
+  ['TOUS', 'trop peu dit « none »', "e.ok && s < e.est ? 'you hold too little'", "e.ok && s < e.est ? 'you hold none'"],
+  ['TOUS', 'decimals relues a chaque ouverture', '  const file = payerListees().filter((l) => !payer.dec.has(l.jeton) && !payer.decRatees.has(l.jeton));', '  const file = payerListees().filter((l) => !l.natif); payer.dec.clear();'],
+  ['SANS_WALLET', 'sans wallet, pas de liste', '  if (!taille && !moi) {', '  if (false) {'],
+  ['RPC', 'decimals de tous les misables au repeint', '  rendrePayerAvec(moi, payerActions(c));\n}', '  await lireDecimalesTous();\n  rendrePayerAvec(moi, payerActions(c));\n}'],
+  ['PARITE_MARCHE', 'le Market change son seuil (la copie ne suit plus)', '        const liqOk = (l.liquiditeUsd || 0) >= LIQ_MIN_BUY_USD;', '        const liqOk = (l.liquiditeUsd || 0) >= 0;'],
+  ['PARITE_MARCHE', 'la copie oublie le verdict serveur', '  if (assezLiquide && l.achat && l.achat.cle) return \'acheter\';\n', ''],
 ];
 let tues = 0;
-for (const [s, nom, de, vers] of MUT) {
-  vu(APP.split(de).length === 2, 'mutant « ' + nom + ' » : ancre unique');
-  const copie = APP.replace(de, () => vers);
+for (const [s, nom, de0, vers0] of MUT) {
+  const paires = Array.isArray(de0) ? de0 : [[de0, vers0]];
+  vu(paires.every(([de]) => APP.split(de).length === 2), 'mutant « ' + nom + ' » : ancre unique');
+  const copie = paires.reduce((c, [de, vers]) => c.replace(de, () => vers), APP);
   vu(copie !== APP, 'mutant « ' + nom + ' » : la copie differe');
   let r; try { r = await S[s](copie); } catch (e) { r = { ok: false, jete: String(e && e.message), syntaxe: e instanceof SyntaxError }; }
   vu(r.syntaxe !== true, 'mutant « ' + nom + ' » : code valide');

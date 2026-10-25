@@ -18,6 +18,25 @@ import { envoyerLotAtomique, envoyerDepuisWallet } from './envoi.js';
 import { selecteur } from './keccak.js';
 /* 2026-10-24 (revue adverse D1/D2) : la phrase d un paiement en jeton arrete en route et ses approbations (opts.arret : une copie mutee) */
 import * as PA_REEL from './payer-arret.js';
+/* 2026-10-25 (#payerTous) : le verdict Buy du Market, avec les modules que app.html importe pour lui */
+import { verdictRoutage, raisonSansBuy } from './routage.js';
+import { avecPoolAction } from './pools-actions-aerodrome.js';
+import { ACTIONS_COINBASE } from './paires.js';
+const ACTIONS_PAR_ADR = new Set(ACTIONS_COINBASE.map((a) => String(a.adr).toLowerCase()));
+/* le seuil de liquidite du Buy du Market, LU dans le texte (pas tape ici) ; NaN si la ligne a change : tout Buy tombe, le banc rougit */
+export const liqMinBuy = (t) => { const m = /\nconst LIQ_MIN_BUY_USD = (\d+);/.exec(t); return m ? Number(m[1]) : NaN; };
+/* la ligne du Market telle que peindreTrending la rend (l IIFE de son bouton), extraite du texte et executee : 'acheter' / 'fiche' / null */
+export function decisionMarche(t, deps) {
+  const i = t.indexOf('function peindreTrending() {');
+  const a = i < 0 ? -1 : t.indexOf('    + (function () {', i), b = a < 0 ? -1 : t.indexOf("      })() + '</li>'", a);
+  if (a < 0 || b < 0) return null;
+  const corps = t.slice(a + '    + '.length, b + '      })()'.length);
+  const f = new Function('l', 'poolDecouvertPour', 'LIQ_MIN_BUY_USD', 'avecPoolAction', 'verdictRoutage', 'ACTIONS_PAR_ADR', 'TBLOCK', 'enTexte', 'raisonSansBuy', 'return ' + corps + ';');
+  return (l) => {
+    const html = f(l, deps.poolDecouvertPour || (() => null), liqMinBuy(t), avecPoolAction, verdictRoutage, ACTIONS_PAR_ADR, '0x' + '0'.repeat(40), (x) => String(x), deps.raisonSansBuy || raisonSansBuy);
+    return /data-acheter-fiche="/.test(html) ? 'fiche' : /data-acheter="/.test(html) ? 'acheter' : null;
+  };
+}
 
 export const lireApp = (f = 'app.html') => readFileSync(new URL('./' + f, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 /* l app.html d un commit (git show) — pour comparer le chemin USDC a celui d AVANT ; null si git ne repond pas */
@@ -57,7 +76,8 @@ export function ecran() {
   const els = new Map(), ecrits = [];
   const el = (id) => {
     if (!els.has(id)) {
-      const e = { id, hidden: id === 'payerAvec' || id === 'payerLab' || id === 'payerJeton' || id === 'payerNote', disabled: false, _v: '', innerHTML: '', dataset: {}, options: [], ecouteurs: {},
+      /* 2026-10-25 : + payerTous / payerTousNote (hidden dans le HTML), et `open` du <details> */
+      const e = { id, hidden: ['payerAvec', 'payerLab', 'payerJeton', 'payerNote', 'payerTous', 'payerTousNote'].includes(id), open: false, disabled: false, _v: '', innerHTML: '', dataset: {}, options: [], ecouteurs: {},
         setAttribute() {}, addEventListener(k, f) { this.ecouteurs[k] = f; }, replaceChildren(...o) { this.options = o; },
         /* integration 2026-10-25 : passPaye pose un lien Fees & risks apres son texte */
         append(...xs) { this._t = (this._t || '') + xs.map((x) => (typeof x === 'string' ? x : x.textContent || '')).join(''); } };
@@ -246,12 +266,18 @@ export function charger(t, opts = {}) {
     phraseArret: (opts.arret || PA_REEL).phraseArret, bilanArret: (opts.arret || PA_REEL).bilanArret, paresAVerifier: (opts.arret || PA_REEL).paresAVerifier,
     etapesDuPaiement: (opts.arret || PA_REEL).etapesDuPaiement, phraseOuvertes: (opts.arret || PA_REEL).phraseOuvertes, appelAllowance: (opts.arret || PA_REEL).appelAllowance,
     appelRemiseAZero: (opts.arret || PA_REEL).appelRemiseAZero,
+    /* 2026-10-25 (#payerTous) : le verdict Buy du Market avec SES vrais modules (routage.js, pools-actions-aerodrome.js, paires.js) et SON
+     *   seuil lu dans le texte ; la photo /api/trending = opts.trending (null : rien de lu) ; la decouverte client des pools = opts.decouverte
+     *   (defaut : aucune pool decouverte). allerA est enregistre (opts.allerA). */
+    dernierTrending: opts.trending || null, trDonnees: null, trAffiches: 50, peindreTrending: () => {},
+    verdictRoutage, avecPoolAction, ACTIONS_PAR_ADR, LIQ_MIN_BUY_USD: liqMinBuy(t),
+    poolDecouvertPour: opts.decouverte || (() => null), allerA: opts.allerA || (() => {}),
   };
   Object.assign(ctx, opts.ctx || {});
   const noms = Object.keys(ctx);
   const exporte = ['rollPaye', 'passPaye', 'autoRollLot', 'slotsAgir', 'envoyerAppels'];
   const option = ['peindrePayerAvec', 'rendrePayerAvec', 'jetonChoisi', 'preparerPaiementJeton', 'payer', 'payerListees', 'qteJeton',
-    'direArretJeton', 'agirArret', 'reposerArret', 'payerArrets'];
+    'direArretJeton', 'agirArret', 'reposerArret', 'payerArrets', 'achatMarcheDe', 'lireDecimalesTous', 'allerLigneMarche'];
   const f = new Function(...noms, 'let rollEnCours = false;\n' + src + '\nreturn { ' + exporte.join(', ') + ', '
     + option.map((k) => k + ': typeof ' + k + ' === "undefined" ? null : ' + k).join(', ') + ' };');
   const api = f(...noms.map((k) => ctx[k]));

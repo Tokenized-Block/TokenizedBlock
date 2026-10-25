@@ -239,12 +239,23 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .rollLigne .jourFace{width:52px;height:52px;flex:none;border-radius:11px}
 .rollLigne .note{margin:0;font-size:12px;line-height:1.35}
 /* 2026-10-24 : « Pay with » (USDC ou un jeton profond, misables.js) — une ligne compacte au-dessus des boutons payants de la carte Draws */
-.payerAvec{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:8px 0 0}
+.payerAvec{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:8px 0 0;min-width:0;max-width:100%}
+/* 2026-10-25 (mesure 375 px) : sans min-width:0, l option la plus longue du selecteur elargissait .payerAvec a 495 px (debord des deux cotes) */
 .payerAvec .note{margin:0}
 .payerAvec select{flex:1 1 180px;min-width:0;max-width:100%;font-size:13px;padding:6px 8px;background:var(--fond2);color:inherit;border:1px solid var(--ligne);border-radius:8px}
 /* 2026-10-24 (revue adverse D2) : les boutons d un paiement en jeton arrete (Reset the approval, Finish with USDC), dans la ligne d etat */
 .arretBouton{display:inline-block;margin:6px 6px 0 0;padding:6px 10px;font-size:12px}
 #payerNote{flex-basis:100%}
+/* 2026-10-25 : la liste repliee de TOUS les misables (grises, non choisissables) : pleine largeur, defile dans sa boite a 375 px */
+.payerTous{flex:1 1 100%;min-width:0;max-width:100%;font-size:12px;line-height:1.35}
+.payerTous summary{cursor:pointer;color:var(--doux);padding:2px 0;overflow-wrap:anywhere}
+.payerTous .note{margin:4px 0 0;font-size:12px}
+.payerListe{list-style:none;margin:4px 0 0;padding:0;max-height:min(240px,40vh);overflow-y:auto;overflow-x:hidden;border-top:1px solid var(--ligne)}
+.payerListe li{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px;padding:5px 2px;border-bottom:1px solid var(--ligne);min-width:0;color:var(--doux)}
+.payerListe li b{font-weight:600;opacity:.75}
+.payerListe .pRaison{flex:1 1 150px;min-width:0;overflow-wrap:anywhere}
+.payerListe .payerAchat{flex:none;margin-left:auto;padding:2px 10px;font-size:12px;border-radius:999px;border:1px solid var(--accent);background:none;color:var(--accent);cursor:pointer}
+.trLigne.trVise{outline:2px solid var(--accent);outline-offset:2px;border-radius:10px}
 /* 2026-10-24 (Phil, capture de game35 : « un seul jeu, au CENTRE ; un clic, une reponse ») : les trois rouleaux et leur bouton au centre de
  *   la carte (marges gauche/droite egales), plus grands sur ordinateur, toujours UNE rangee de 3 a 375 px ; le panneau de reponse dessous ;
  *   le Roll classique replie (#rollPli). Les textes longs (liste, regle, table) restent alignes a gauche dans la colonne centree. */
@@ -3775,7 +3786,8 @@ details[open] > summary::before{transform:rotate(90deg)}
                « Pay with: USDC » en petit, jamais au-dessus d un geste gratuit). 2026-10-24 (Phil : « payer les jeux en USDC ou en tout jeton
                de l app qui a une liquidite profonde ») : UN selecteur pour le Spin, le Roll (et l Auto-roll) et le Week pass, USDC par defaut ;
                options = les jetons de /api/misables que CE wallet detient, par valeur tenue ; un jeton qui ne paie pas la taille montree est
-               grise avec sa raison ; les autres ne sont jamais listes (#payerNote les compte). Cache tant qu aucun jeu payant n est servi. -->
+               grise avec sa raison ; les non misables ne sont jamais listes (#payerNote les compte) ; 2026-10-25 : les misables NON tenus
+               sont dans #payerTous (grises, hors du selecteur). Cache tant qu aucun jeu payant n est servi. -->
           <div class="jourEtapes spinRangee">
             <button type="button" class="bouton spinBouton" id="slotsSpin" hidden>Spin</button>
             <div class="payerAvec" id="payerAvec" hidden>
@@ -3783,6 +3795,15 @@ details[open] > summary::before{transform:rotate(90deg)}
               <select id="payerJeton" hidden></select>
               <span class="note" id="payerSeul">Pay with: USDC</span>
               <p class="note" id="payerNote" hidden></p>
+              <!-- 2026-10-25 (Phil : « on ne peut payer qu en USDC et NVDAc ; le reste possible n est pas montre ») : TOUTE la liste
+                   misable, repliee. Chaque jeton qui n est PAS une option ouverte du selecteur y est grise, jamais choisissable (ce n est
+                   pas une option), avec sa raison, son cout mesure pour le geste montre, et « Buy » vers SA ligne du Market quand le
+                   Market y rend un Buy. -->
+              <details class="payerTous" id="payerTous" hidden>
+                <summary id="payerTousTitre"></summary>
+                <p class="note" id="payerTousNote" hidden></p>
+                <ul class="payerListe" id="payerListe"></ul>
+              </details>
             </div>
           </div>
           <!-- LE PANNEAU DE REPONSE (reponse-spin.js) : ce qui s est passe pour LE spin que suivent les rouleaux (1 envoye, 2 les blocs en
@@ -5051,7 +5072,9 @@ async function recusLogs(r) {
  *   ⛔ RPC : /api/misables au plus UNE fois par minute par page (succes ou echec) ; balanceOf SEULEMENT pour les jetons listes (misables a
  *   au moins une taille), relus avec la liste ; decimals() une fois par jeton tenu ; les devis SEULEMENT au clic, jamais au repeint. */
 const PAYER_TTL_MS = 60000;
-const payer = { lignes: null, essai: 0, enVol: null, compte: null, soldes: new Map(), dec: new Map(), soldesA: 0, choix: 'usdc', sig: '' };
+const payer = { lignes: null, essai: 0, enVol: null, compte: null, soldes: new Map(), dec: new Map(), soldesA: 0, choix: 'usdc', sig: '',
+  /* 2026-10-25 : les jetons des options OUVERTES du dernier rendu (seuls choisissables), la liste #payerTous, les decimals ratees (pas relues) */
+  ouvertes: new Set(), sigTous: '', decRatees: new Set(), decEnVol: null };
 const RAISONS_PAYER = { ECART: 'price gap over 1%', PEU_PROFONDE: 'pool under 10,000 USDC', SOUS_LE_MARCHE: 'priced under its market',
   SANS_DEVIS: 'no quote at this size', PROFONDEUR_NON_LUE: 'pool not read', NON_MESURE: 'not read', TAILLE_NON_MESUREE: 'over 10 USDC is not offered' };
 const symbolePayer = (l) => String((l && l.symbole) || '').replace(/[^A-Za-z0-9.$-]/g, '').slice(0, 16) || 'token';
@@ -5120,6 +5143,8 @@ function payerActions(c) {
 function jetonChoisi() {
   if (!payer.choix || payer.choix === 'usdc') return null;
   const s = $('#payerJeton'); if (!s || s.hidden) return null;
+  /* 2026-10-25 : un jeton n est paye que s il est une option OUVERTE du dernier rendu (un jeton non tenu, liste dans #payerTous, jamais) */
+  if (!payer.ouvertes.has(payer.choix)) return null;
   return payerListees().find((l) => l.jeton === payer.choix) || null;
 }
 function rendrePayerAvec(moi, actions) {
@@ -5140,6 +5165,7 @@ function rendrePayerAvec(moi, actions) {
   const avecSelect = opts.length > 1;
   lab.hidden = !avecSelect; sel.hidden = !avecSelect; seul.hidden = avecSelect;
   if (!opts.some((o) => o.v === payer.choix && !o.off)) payer.choix = 'usdc';
+  payer.ouvertes = new Set(avecSelect ? opts.filter((o) => !o.off && o.v !== 'usdc').map((o) => o.v) : []);
   const sig = JSON.stringify(opts);
   if (avecSelect && sig !== payer.sig) {
     sel.replaceChildren(...opts.map((o) => { const x = document.createElement('option'); x.value = o.v; x.textContent = o.t; x.disabled = o.off; return x; }));
@@ -5153,6 +5179,109 @@ function rendrePayerAvec(moi, actions) {
   const n = payer.lignes ? payer.lignes.length - payerListees().length : 0;
   note.textContent = [parts.length ? 'With ' + symbolePayer(jt) + ': ' + parts.join(' · ') + '.' : '', n > 0 ? n + ' other token' + (n === 1 ? ' is' : 's are') + ' not deep enough to bet.' : ''].filter(Boolean).join(' ');
   note.hidden = !note.textContent;
+  rendrePayerTous(moi, taille);
+}
+/* ══ TOUS LES MISABLES (2026-10-25, Phil : « dans la carte Draws on ne peut payer qu en USDC et NVDAc ; le reste possible n est pas
+ *   montre »). Le selecteur ne change pas (USDC + les jetons TENUS, par valeur tenue). #payerTous (un <details> replie) liste CHAQUE jeton
+ *   misable (payerListees) qui n est PAS une option ouverte du selecteur : grise, jamais choisissable — ce n est pas une <option>, et
+ *   jetonChoisi exige payer.ouvertes. Sa raison : you hold none / you hold too little (solde sous l estimation listee) / balance not read ;
+ *   sans wallet, « Connect a wallet to pay with a token » une fois. Son cout pour le geste montre (« about Q for 0.50 USDC · E % », la
+ *   meme estimation que le selecteur), ou pourquoi pas a cette taille. « Buy » mene a SA ligne du Market quand le verdict du Market
+ *   (achatMarcheDe, gardee a parite avec la ligne du Market par test-payer-avec) y rend un Buy, sur la photo /api/trending deja lue ;
+ *   sinon aucun lien. ⛔ RPC : rien de plus au repeint (les soldes de TOUS les misables etaient deja lus) ; decimals() d un jeton non
+ *   tenu SEULEMENT a l ouverture de la liste, une fois par jeton et par page (payer.dec ; un echec n est pas relu). */
+function achatMarcheDe(l) {
+  /* la decision de la ligne du Market (peindreTrending), branche par branche : 'acheter' (data-acheter), 'fiche' (data-acheter-fiche), null */
+  if (!l || !/^0x[0-9a-fA-F]{40}$/.test(String(l.adr || ''))) return null;
+  const decouverte = poolDecouvertPour(l.adr), assezLiquide = (l.liquiditeUsd || 0) >= LIQ_MIN_BUY_USD;
+  if (assezLiquide && decouverte && (decouverte.isTbFeeHook || decouverte.confiance === 'NOTRE')) return 'acheter';
+  if (assezLiquide && l.achat && l.achat.cle) return 'acheter';
+  const p = avecPoolAction(l);
+  const v = verdictRoutage({ aMarche: true, dex: p.dex, poolAdr: p.poolAdr, routeAction: p.routeAction });
+  const registre = ACTIONS_PAR_ADR.has(String(l.adr || '').toLowerCase());
+  if (assezLiquide && (v.achetableEnEth || v.achetableEnUsdc || (v.achetableIci && registre))) return 'fiche';
+  return null;
+}
+/* la ligne du Market d un jeton, sur la photo /api/trending deja lue (la Map ou l onglet Market) ; null si rien n est lu */
+function ligneMarchePour(jeton) {
+  let d = null;
+  try { d = dernierTrending || trDonnees; } catch (_) { d = null; }
+  const ls = d && Array.isArray(d.lignes) ? d.lignes : [];
+  return ls.find((x) => String((x && x.adr) || '').toLowerCase() === jeton) || null;
+}
+function rendrePayerTous(moi, taille) {
+  const z = $('#payerTous'), titre = $('#payerTousTitre'), ul = $('#payerListe'), tn = $('#payerTousNote');
+  if (!z || !titre || !ul || !tn) return;
+  /* sans wallet, payerActions ne rend aucun geste : la taille montree est alors le prix du Roll, sinon celui du Spin (lecture seule) */
+  if (!taille && !moi) {
+    try { if (rollsCfg) taille = BigInt(rollsCfg.prixRoll); } catch (_) { taille = null; }
+    try { if (!taille && slotsCfg.j && slotsContrat(slotsCfg.j)) taille = BigInt(slotsCfg.j.prixSpin); } catch (_) { taille = null; }
+  }
+  const toutes = taille ? payerListees() : [];
+  const rang = (l) => { const s = moi ? payer.soldes.get(l.jeton) : null; return s != null && s > 0n ? 0 : 1; };
+  const autres = toutes.filter((l) => !payer.ouvertes.has(l.jeton)).map((l, i) => ({ l, i })).sort((a, b) => rang(a.l) - rang(b.l) || a.i - b.i).map((x) => x.l);
+  z.hidden = autres.length === 0;
+  if (z.hidden) { payer.sigTous = ''; ul.innerHTML = ''; return; }
+  const k = toutes.length - autres.length;
+  const lignes = autres.map((l) => {
+    const e = payerTaille(l, taille), dec = payer.dec.get(l.jeton), s = moi ? payer.soldes.get(l.jeton) : null;
+    const pourquoi = !moi ? '' : s == null ? 'balance not read' : s === 0n ? 'you hold none' : e.ok && s < e.est ? 'you hold too little' : e.ok ? 'balance not read' : '';
+    const cout = !e.ok ? 'not for ' + usdcTexte(taille) + ' USDC: ' + e.raison
+      : dec == null ? (payer.decRatees.has(l.jeton) ? 'cost not read' : '') : 'about ' + qteJeton(e.est, dec) + ' for ' + usdcTexte(taille) + ' USDC · ' + pctPayer(e.ecartBps);
+    let buy = null;
+    try { buy = l.natif ? null : achatMarcheDe(ligneMarchePour(l.jeton)); } catch (_) { buy = null; }
+    return { jeton: l.jeton, sym: symbolePayer(l), texte: [pourquoi, cout].filter(Boolean).join(' · '), buy: !!buy };
+  });
+  const titreTxt = 'All ' + toutes.length + ' bettable tokens' + (moi ? (k ? ' · ' + k + ' in the menu, ' + autres.length + ' not payable yet' : ' · you hold none of them') : '');
+  const noteTxt = moi ? 'Greyed tokens cannot be picked until your wallet holds enough.' + (lignes.some((x) => x.buy) ? ' Buy opens the stock in the Market.' : '')
+    : 'Connect a wallet to pay with a token.';
+  const sig = JSON.stringify([titreTxt, noteTxt, lignes]);
+  if (sig === payer.sigTous) return;
+  payer.sigTous = sig;
+  titre.textContent = titreTxt;
+  tn.textContent = noteTxt; tn.hidden = false;
+  /* le symbole est filtre (symbolePayer : [A-Za-z0-9.$-]), l adresse validee (payerListees : 0x + 40 hex), le reste vient de nos nombres */
+  ul.innerHTML = lignes.map((x) => '<li data-token="' + x.jeton + '" aria-disabled="true"><b>' + x.sym + '</b><span class="pRaison">' + x.texte + '</span>'
+    + (x.buy ? '<button type="button" class="payerAchat" data-payer-achat="' + x.jeton + '">Buy</button>' : '') + '</li>').join('');
+}
+/* a l ouverture de #payerTous : decimals() des misables qui n en ont pas (jamais au repeint), puis un rendu */
+async function lireDecimalesTous() {
+  if (payer.decEnVol) return payer.decEnVol;
+  const file = payerListees().filter((l) => !payer.dec.has(l.jeton) && !payer.decRatees.has(l.jeton));
+  if (!file.length) return null;
+  payer.decEnVol = (async () => {
+    const ouvrier = async () => { for (let l = file.shift(); l; l = file.shift()) { if ((await decimalesPayer(l)) === null) payer.decRatees.add(l.jeton); } };
+    await Promise.all([ouvrier(), ouvrier(), ouvrier()]);
+    let c = null; try { c = compte; } catch (_) { c = null; }
+    rendrePayerAvec(payer.compte, payerActions(c));
+  })().finally(() => { payer.decEnVol = null; });
+  return payer.decEnVol;
+}
+/* « Buy » : l onglet Market, puis SA ligne (au-dela des 50 premieres, la liste est depliee une fois, le geste de « Show more ») */
+function allerLigneMarche(adr) {
+  if (!/^0x[0-9a-f]{40}$/.test(adr)) return;
+  try { allerA('trade'); } catch (_) { return; }
+  let k = 0;
+  const viser = () => {
+    let li = null;
+    try { li = [...document.querySelectorAll('#trListe .trLigne')].find((x) => String(x.getAttribute('data-block') || '').toLowerCase() === adr) || null; } catch (_) { li = null; }
+    if (li) {
+      try { li.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (_) { /* rien */ }
+      li.classList.add('trVise'); setTimeout(() => li.classList.remove('trVise'), 2600);
+      return;
+    }
+    try { if (k === 0 && trDonnees && trDonnees.lignes.length > trAffiches) { trAffiches = trDonnees.lignes.length; peindreTrending(); } } catch (_) { /* rien */ }
+    if (++k < 24) setTimeout(viser, 250);
+  };
+  setTimeout(viser, 60);
+}
+{
+  const z = $('#payerTous'), ul = $('#payerListe');
+  if (z && typeof z.addEventListener === 'function') z.addEventListener('toggle', () => { if (z.open) void lireDecimalesTous().catch(() => {}); });
+  if (ul && typeof ul.addEventListener === 'function') ul.addEventListener('click', (ev) => {
+    const b = ev && ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('[data-payer-achat]') : null;
+    if (b) allerLigneMarche(String(b.getAttribute('data-payer-achat') || '').toLowerCase());
+  });
 }
 async function peindrePayerAvec() {
   const z = $('#payerAvec'); if (!z) return;
