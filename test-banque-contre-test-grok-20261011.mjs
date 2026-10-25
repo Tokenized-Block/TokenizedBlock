@@ -18,7 +18,9 @@ vu(/setTimeout\(\(\) => \{ void relire\(\); \}, 35000\);/.test(apres) && /setTim
 for (const ent of ['async function bcBanqueProposer({', 'async function bcBanqueProposerPanier(lignes) {']) vu(/bcApresOperation\(\);/.test(fonction(ent)), '(1) ' + ent.slice(15, 40) + ' n appelle pas bcApresOperation');
 /* (2) */
 const charger = fonction('async function bcBanqueCharger(force = false) {');
-vu(/nParAction\.set\(mk\.garantie\.symbole, \(nParAction\.get\(mk\.garantie\.symbole\) \|\| 0\) \+ 1\)/.test(charger) && /\(nParAction\.get\(mk\.garantie\.symbole\) \|\| 0\) > 1 \? \[bcEl\('span', \{ cls: 'bcPuce', text: 'up to ' \+ pctLtv\(c\.maxPct\)/.test(charger),
+/* 2026-10-25 : la puce « up to X % » (deux cartes GOOGLc) est remplacee par UNE carte par action et des options nommees ; le
+ *   comportement est execute par test-banque-un-par-action-20261025, ici seulement le cablage */
+vu(/const groupes = bcBanqueGrouper\(listes\);/.test(charger) && /for \(const o of g\.options\)/.test(charger) && /bcEl\('b', \{ text: o\.nom \}\)/.test(charger),
   '(2) deux marches de la meme action ne se distinguent pas');
 /* (3) */
 vu(/const li = bcEl\('li', \{ cls: classe, text: texte \}\);\s*ul\.append\(li\);[\s\S]{0,80}return li;/.test(fonction('function bcEtape(m, texte, classe = \'\') {')), '(3) bcEtape ne rend pas sa ligne');

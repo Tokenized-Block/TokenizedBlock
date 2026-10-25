@@ -791,6 +791,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcMarcheTete .bcPuce + .bcPuce{margin-left:0}
 .bcListe li.bcMarche.ici{border-color:rgb(var(--accentRgb) / .55);box-shadow:0 0 0 1px rgb(var(--accentRgb) / .25)}
 .bcPuce.ici{color:var(--accent);border-color:rgb(var(--accentRgb) / .45);background:rgb(var(--accentRgb) / .10)}
+/* 2026-10-25 : une action a plusieurs marches Morpho = UNE carte et des options nommees (bcBanqueGrouper) ; `.bcListe button` (fond
+ *   transparent, texte accent) est surcharge ici, la carte choisie se voit (bord accent + puce « Selected ») */
+.bcOptions{display:grid;gap:6px;margin:6px 0 4px}
+.bcListe .bcOption{display:block;width:100%;box-sizing:border-box;border:1px solid var(--ligne);border-radius:12px;padding:8px 10px;background:rgb(var(--fondRgb) / .5);color:var(--texte);text-align:left}
+.bcListe .bcOption.choisi{border-color:rgb(var(--accentRgb) / .7);box-shadow:0 0 0 1px rgb(var(--accentRgb) / .3);background:rgb(var(--accentRgb) / .08)}
+.bcOptionNom{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.bcOptionNom b{font-size:14px}
+.bcOption .bcMarcheChiffres{margin:6px 0 2px}
+.bcOption .bcMarcheChiffres>span{display:block;min-width:0}
+.bcOption .bcMarcheChiffres .dispo{grid-column:span 2}
+.bcOption .bcMarcheChiffres b{font-size:14px}
+.bcOption>.bcMarcheBas{display:block}
+.bcProfond{font-weight:700;color:var(--texte)}
 .bcJauge{margin:8px 0 0}
 .bcPanier{border:1px solid var(--ligne);border-radius:16px;padding:10px 12px;margin:0 0 10px;background:var(--creux)}
 .bcPanier>summary{cursor:pointer;font-weight:700;color:var(--accent)}
@@ -28918,6 +28931,61 @@ function bcBanqueGainDit(mk) {
   if (Number(u) < 0.01) return 'Earns almost nothing for now: only ' + bcPct(Number(u)) + ' of the lent ' + ((mk.pret && mk.pret.symbole) || 'money') + ' is borrowed.';
   return '';
 }
+/** 2026-10-25 (Phil, sur la liste Borrow/Lend : GOOGLc deux fois, « 43.8 % / 62.5 % / 0.59 % / < 0.01 % » et « 53.9 % / 77 % / 5.51 % /
+ *  4.89 % » - « which one to believe? ») : les DEUX sont vrais, deux marches Morpho Blue distincts pour la meme garantie (mesure du jour :
+ *  0x0cc78b1f… LLTV 62,5 %, utilisation ~0 ; 0xa3913d89… LLTV 77 %, utilisation 88,91 %). Decision : UNE carte par action. Plusieurs
+ *  marches = des OPTIONS nommees depuis la LLTV LUE, jamais tapees par action, rangees du seuil de liquidation le plus bas au plus haut :
+ *  la plus basse « Safer », la plus haute « Riskier », entre les deux « Middle » ; deux LLTV egales gardent le meme nom et un numero.
+ *  Par defaut : la plus PROFONDE (disponibleUsd lu) - donc une ouverte des qu il en existe une ; rien de lu : la premiere (LLTV basse).
+ *  Une action a un seul marche : une option sans nom (la carte d avant). L ordre des groupes = celui de `listes` (premiere apparition). */
+function bcBanqueGrouper(listes) {
+  const parAdr = new Map();
+  for (const mk of listes || []) {
+    const k = String((mk && mk.garantie && mk.garantie.adr) || '').toLowerCase();
+    if (!parAdr.has(k)) parAdr.set(k, []);
+    parAdr.get(k).push(mk);
+  }
+  const lltvDe = (mk) => (/^\d+$/.test(String(mk.lltv)) ? BigInt(mk.lltv) : -1n);
+  const profondeur = (mk) => { const d = mk.disponibleUsd; return d === null || d === undefined || String(d).trim() === '' || !Number.isFinite(Number(d)) ? -1 : Number(d); };
+  const plusProfondDe = (l) => [...l].sort((a, b) => profondeur(b) - profondeur(a))[0];
+  const groupes = [];
+  for (const [adr, marches] of parAdr) {
+    const tries = [...marches].sort((a, b) => { const x = lltvDe(a), y = lltvDe(b); return x < y ? -1 : x > y ? 1 : 0; });
+    const niveaux = [...new Set(tries.map((mk) => String(mk.lltv)))];
+    const options = tries.map((mk) => {
+      if (tries.length < 2) return { mk, nom: '' };
+      const rang = niveaux.indexOf(String(mk.lltv));
+      const mot = niveaux.length < 2 ? '' : rang === 0 ? 'Safer' : rang === niveaux.length - 1 ? 'Riskier' : 'Middle';
+      const seuil = lltvDe(mk) >= 0n ? 'liquidation at ' + String(Number(bcBanqueChiffres(mk).liqPct.toFixed(1))) + ' %' : 'liquidation not read';
+      return { mk, nom: mot ? mot + ' — ' + seuil : seuil.charAt(0).toUpperCase() + seuil.slice(1) };
+    });
+    const parNom = new Map();
+    for (const o of options) parNom.set(o.nom, (parNom.get(o.nom) || 0) + 1);
+    const vus = new Map();
+    for (const o of options) if (o.nom && parNom.get(o.nom) > 1) { const k = (vus.get(o.nom) || 0) + 1; vus.set(o.nom, k); o.nom += ' (' + k + ')'; }
+    /* defaut = la plus profonde. « Ouverte » (bcBanqueChiffres : ok >= 10 $, bas >= 1 $) se lit sur le MEME disponibleUsd : s il existe
+     *   une option ouverte, la plus profonde l est - un filtre « ouverts » ne changeait rien (mutant equivalent, mesure le 2026-10-25) */
+    const plusProfond = plusProfondDe(tries);
+    groupes.push({ adr, symbole: tries[0].garantie.symbole, options, plusProfond, profondLu: profondeur(plusProfond) >= 0, defaut: plusProfond });
+  }
+  return groupes;
+}
+/** Ce que le marche peut preter MAINTENANT, en unites du jeton prete : disponibleBrut = liquidityAssets de l API Morpho, qui EST
+ *  supplyAssets - borrowAssets (verifie sur la reponse enregistree du 2026-10-25, test-banque-un-par-action). Arrondi BAS a 2 decimales
+ *  (bcBas2) : on ne promet jamais plus. Non lu = « not read », jamais 0. */
+function bcBanqueDispoDit(mk) {
+  const b = String((mk && mk.disponibleBrut) ?? '');
+  if (!/^\d+$/.test(b) || !mk.pret || !Number.isInteger(Number(mk.pret.decimales))) return 'not read';
+  return bcBas2(BigInt(b), Number(mk.pret.decimales)) + ' ' + mk.pret.symbole;
+}
+/** La ligne qui dit OU est la liquidite, pour une action a plusieurs marches (rien pour un seul). */
+function bcBanqueProfondDit(g) {
+  if (!g || g.options.length < 2) return '';
+  if (!g.profondLu) return 'What each of these markets can lend right now was not read.';
+  const mk = g.plusProfond, o = g.options.find((x) => x.mk === mk);
+  if (Number(mk.disponibleUsd) < 1) return 'None of these ' + g.options.length + ' markets can lend right now — you can lend here.';
+  return 'Most ' + mk.pret.symbole + ' to borrow: ' + o.nom + ' — ' + bcBanqueDispoDit(mk) + ' available right now.';
+}
 /** Les trois tuiles : le taux d emprunt le plus BAS parmi les marches ou l on peut VRAIMENT emprunter (etat ok - un taux sur un marche
  *  vide serait une offre qu on ne peut pas prendre), le meilleur taux de pret, le nombre de marches. Rien lu = « not read » (bcPct), jamais 0.
  *  ⛔ 2026-10-11 (Phil : « les $ available c est pas bon, car peur de liquidite ») : la tuile « To borrow $1,074 » est retiree. */
@@ -29140,7 +29208,13 @@ async function bcBanqueCharger(force = false) {
   if (!listes.length) ul.append(bcEl('li', { cls: 'note', text: 'No listed lending market accepts a stock of our list right now.' }));
   const pctLtv = (bps) => String(Number(bps.toFixed(1))) + ' %';
   const positionsLues = p && p.pos && p.pos.ok ? p.pos.positions : null;
-  const infos = listes.map((mk) => ({ mk, r: p ? bcPourToiDe(mk, p) : null, aPosition: !!(positionsLues && positionsLues.some((x) => x.id === mk.id)) }));
+  /* 2026-10-25 (Phil : « GOOGLc deux fois - which one to believe? ») : UNE carte par action (bcBanqueGrouper) ; ses marches sont des
+   *   options nommees, la choisie (par la personne, gardee par action ; sinon la plus profonde ouverte) porte les boutons et « pour toi » */
+  const groupes = bcBanqueGrouper(listes);
+  bcBanque.optionDe = bcBanque.optionDe || {};
+  const choisiDe = (g) => { const o = g.options.find((x) => x.mk.id === bcBanque.optionDe[g.adr]); return o ? o.mk : g.defaut; };
+  const aPositionSur = (id) => !!(positionsLues && positionsLues.some((x) => x.id === id));
+  const infos = groupes.map((g) => { const mk = choisiDe(g); return { mk, g, r: p ? bcPourToiDe(mk, p) : null, aPosition: g.options.some((o) => aPositionSur(o.mk.id)) }; });
   /* l intention : choisie par la personne (onglet du haut, ou la carte du Wallet) ; sinon, un wallet sans aucune action acceptee mais
    *   avec de l USDC commence sur « preter » - neuf cartes « Hold X first » ne sont pas un choix */
   if (!bcBanque.intentionChoisie && p) {
@@ -29150,17 +29224,20 @@ async function bcBanqueCharger(force = false) {
   }
   const intention = bcBanque.intention === 'preter' ? 'preter' : 'emprunter';
   for (const b of document.querySelectorAll('#bcBanqueIntention [data-intention]')) b.setAttribute('aria-selected', String(b.getAttribute('data-intention') === intention));
-  /* 2026-10-11 (contre-test de Grok : « GOOGLc liste 2 fois sans distinction claire ») : une action a PLUSIEURS marches -> chaque carte dit
-   *   ce qui les distingue pour la personne, la limite d emprunt (53.9 % / 43.8 %) ; une action a un seul marche n a pas cette puce */
-  const nParAction = new Map();
-  for (const mk of listes) nParAction.set(mk.garantie.symbole, (nParAction.get(mk.garantie.symbole) || 0) + 1);
-  const carte = ({ mk, r }) => {
-    const c = bcBanqueChiffres(mk), estIci = !!ici && String(mk.garantie.adr).toLowerCase() === ici;
-    const li = bcEl('li', { cls: 'bcMarche' + (c.etat === 'vide' ? ' vide' : '') + (estIci ? ' ici' : '') });
+  /* 2026-10-25 (remplace la puce « up to 53.9 % » du 2026-10-11, qui laissait DEUX cartes GOOGLc) : une carte par action ; plusieurs
+   *   marches -> une liste d options nommees (bcBanqueGrouper), chacune avec ses chiffres et ce qu elle peut preter maintenant ; la ligne
+   *   du dessous dit la plus profonde. Choisir une option repeint la carte : jauge, phrase, « pour toi » et boutons suivent CE marche. */
+  const carte = ({ mk: mk0, g, r: r0 }) => {
+    const li = bcEl('li', { cls: 'bcMarche' });
+    const peindre = (mk) => {
+    const r = mk === mk0 ? r0 : p ? bcPourToiDe(mk, p) : null;
+    const c = bcBanqueChiffres(mk), estIci = !!ici && String(mk.garantie.adr).toLowerCase() === ici, plusieurs = g.options.length > 1;
+    li.className = 'bcMarche' + (c.etat === 'vide' ? ' vide' : '') + (estIci ? ' ici' : '');
+    li.textContent = ''; li.dataset.garantie = g.adr; li.dataset.marche = mk.id;
     li.append(bcEl('div', { cls: 'bcMarcheTete' }, [bcVisage(mk.garantie.adr, mk.garantie.symbole), bcEl('b', { text: mk.garantie.symbole }), bcEl('span', { cls: 'bcFleche', text: '→' }), bcEl('b', { text: mk.pret.symbole }),
       ...(estIci ? [bcEl('span', { cls: 'bcPuce ici', text: 'This block' })] : []),
-      ...((nParAction.get(mk.garantie.symbole) || 0) > 1 ? [bcEl('span', { cls: 'bcPuce', text: 'up to ' + pctLtv(c.maxPct), title: 'One of ' + nParAction.get(mk.garantie.symbole) + ' ' + mk.garantie.symbole + ' markets: this one lends up to ' + pctLtv(c.maxPct) + ' of the value and liquidates at ' + pctLtv(c.liqPct) + '.' })] : []),
       bcEl('span', { cls: 'bcPuce ' + c.classe, text: c.puce })]));
+    if (!plusieurs) {
     /* 2026-10-11 (« je comprends pas ») : des titres qui disent ce que le chiffre est - un cout par an, un gain par an, une part de la valeur */
     li.append(bcEl('div', { cls: 'bcMarcheChiffres' }, [
       bcEl('div', {}, [bcEl('small', { text: 'Costs a year' }), bcEl('b', { text: bcPct(mk.apyEmprunt) })]),
@@ -29168,6 +29245,28 @@ async function bcBanqueCharger(force = false) {
       bcEl('div', {}, [bcEl('small', { text: 'Borrow up to' }), bcEl('b', { text: pctLtv(c.maxPct) })])]));
     const gainDit = bcBanqueGainDit(mk); /* 2026-10-25 : un « 0.00 % » / « < 0.01 % » dit pourquoi (test-banque-taux-lus) */
     if (gainDit) li.append(bcEl('p', { cls: 'bcMarcheBas', text: gainDit }));
+    } else {
+      const choix = bcEl('div', { cls: 'bcOptions', role: 'radiogroup', 'aria-label': g.options.length + ' ' + g.symbole + ' markets' });
+      for (const o of g.options) {
+        const co = bcBanqueChiffres(o.mk), pris = o.mk === mk, gainO = bcBanqueGainDit(o.mk);
+        const b = bcEl('button', { type: 'button', role: 'radio', 'aria-checked': String(pris), cls: 'bcOption' + (pris ? ' choisi' : ''), 'data-option': o.mk.id }, [
+          bcEl('span', { cls: 'bcOptionNom' }, [bcEl('b', { text: o.nom }),
+            ...(aPositionSur(o.mk.id) ? [bcEl('span', { cls: 'bcPuce', text: 'Your position' })] : []),
+            ...(pris ? [bcEl('span', { cls: 'bcPuce ici', text: 'Selected' })] : [])]),
+          bcEl('span', { cls: 'bcMarcheChiffres bcOptionChiffres' }, [
+            bcEl('span', {}, [bcEl('small', { text: 'Borrow up to' }), bcEl('b', { text: pctLtv(co.maxPct) })]),
+            bcEl('span', {}, [bcEl('small', { text: 'Liquidation' }), bcEl('b', { text: pctLtv(co.liqPct) })]),
+            bcEl('span', {}, [bcEl('small', { text: 'Costs a year' }), bcEl('b', { text: bcPct(o.mk.apyEmprunt) })]),
+            bcEl('span', {}, [bcEl('small', { text: 'Earns a year' }), bcEl('b', { text: bcPct(o.mk.apyPret) })]),
+            bcEl('span', { cls: 'dispo' }, [bcEl('small', { text: 'Available to borrow' }), bcEl('b', { text: bcBanqueDispoDit(o.mk) })])]),
+          ...(gainO ? [bcEl('span', { cls: 'bcMarcheBas', text: gainO })] : [])]);
+        b.addEventListener('click', () => { if (o.mk === mk) return; bcBanque.optionDe[g.adr] = o.mk.id; peindre(o.mk); void bcBanquePourToi(); });
+        choix.append(b);
+      }
+      li.append(bcEl('p', { cls: 'bcMarcheBas', text: g.options.length + ' Morpho markets accept ' + g.symbole + ', each with its own rates and liquidation threshold — pick one:' }), choix);
+      const profond = bcBanqueProfondDit(g);
+      if (profond) li.append(bcEl('p', { cls: 'bcMarcheBas bcProfond', text: profond }));
+    }
     li.append(bcEl('div', { cls: 'bcLtv', 'aria-hidden': 'true' }, [bcEl('i', { style: 'width:' + Math.min(100, c.maxPct).toFixed(1) + '%' }),
       bcEl('em', { style: 'left:' + Math.min(100, c.liqPct).toFixed(1) + '%' })]));
     li.append(bcEl('p', { cls: 'bcMarcheBas', text: 'You can borrow up to ' + pctLtv(c.maxPct) + ' of your ' + mk.garantie.symbole + "'s value. If the loan reaches "
@@ -29189,6 +29288,8 @@ async function bcBanqueCharger(force = false) {
       boutons.append(b);
     }
     li.append(boutons);
+    };
+    peindre(mk0);
     return li;
   };
   const ordre = bcOrdreChoix(infos, intention);
@@ -29199,7 +29300,7 @@ async function bcBanqueCharger(force = false) {
   }
   for (const x of ordre.tete) ul.append(carte(x));
   if (ordre.autres.length) {
-    const plis = bcEl('details', { cls: 'bcAutres' }, [bcEl('summary', { text: ordre.autres.length + ' more market' + (ordre.autres.length > 1 ? 's' : '') + ' — stocks you do not hold, or nothing to borrow right now' })]);
+    const plis = bcEl('details', { cls: 'bcAutres' }, [bcEl('summary', { text: ordre.autres.length + ' more stock' + (ordre.autres.length > 1 ? 's' : '') + ' — you do not hold them, or nothing to borrow right now' })]);
     const sous = bcEl('ul', { cls: 'bcListe' });
     for (const x of ordre.autres) sous.append(carte(x));
     plis.append(sous);
