@@ -1675,6 +1675,12 @@ details[open] > summary::before{transform:rotate(90deg)}
 .trDown{color:var(--dur);font-weight:700;font-size:12.5px}
 .trAcheter{width:auto;min-height:38px;padding:8px 18px;flex:0 0 auto}
 .trBoutons{display:flex;flex-direction:column;gap:6px;flex:0 0 auto}
+/* 2026-10-25 (captures de Phil, BUDc / NIOc une lettre par ligne) : une ligne sans Buy porte sa raison sur SA ligne, pleine largeur, sous
+   la rangee — elle ne prend jamais la largeur du nom et des chiffres. La rangee passe a la ligne (flex-wrap) ; .trInfo garde 64 px au moins
+   (un bouton trop large passe dessous plutot que d ecraser le nom). Retrait = rang 22 + art 32 + deux ecarts de 10. */
+.trLigne{flex-wrap:wrap}
+.trLigne .trInfo{min-width:64px}
+.trLigne .trRaison{flex:1 0 100%;order:1;box-sizing:border-box;margin:0;padding-left:74px;min-width:0;overflow-wrap:anywhere}
 .navB{font-size:10.5px}
 /* 2026-10-10 re-QA 375 px (mesure headless 375x812 : 9 onglets = 373 px pour 355 ; 'Tokenized' 324-383, coupe de 8 px) : sans gouttiere ni marge laterale
    ils tiennent (~337 px) ; plus etroit encore, la barre DEFILE au lieu de couper un onglet. */
@@ -22309,9 +22315,13 @@ function peindreTrending() {
         /* ⛔⛔ 2026-10-23 (MESURE prod, DOM Market) : cette phrase etait FIXE, ecrite pour les pools v4 de hooks tiers — et servie aussi a
          *   ORCLc AVGOc NFLXc DJTc MRNAc, dont la pool (dex « aero », 100 k$ d USDC sur ORCLc, sans hook) est sur une factory Aerodrome plus
          *   recente (0x9cb2…7a76) que notre routeur n adresse pas. La raison vient maintenant du MEME verdict que le Buy (routage.js). */
+        /* ⛔⛔ 2026-10-25 (captures de Phil : BUDc, NIOc rendus UNE LETTRE PAR LIGNE) : la raison etait DANS .trBoutons (flex:0 0 auto) —
+         *   sa largeur max-content (« No buy: on the pool this app's router can reach, what 10 USDC buys sells for 9.41 USDC… ») prenait la
+         *   rangee et ecrasait .trInfo a 0. Elle vit maintenant sur SA ligne, pleine largeur, SOUS la rangee (.trRaison, flex-basis 100 %) ;
+         *   seul le bouton Pair reste a droite. Banc : test-ligne-raison-20261025.mjs (mesure 375 / 1280 px). */
         const raisonSb = raisonSansBuy(vR, { liqOk, liqMin: LIQ_MIN_BUY_USD }) || raisonSansBuy(null);
-        const raison = '<span class="note" style="margin:0">' + enTexte(raisonSb.phrase) + '</span>';
-        return pairable ? '<span class="trBoutons">' + raison + pairer + '</span>' : raison;
+        const raison = '<p class="note trRaison">' + enTexte(raisonSb.phrase) + '</p>';
+        return pairable ? '<span class="trBoutons">' + pairer + '</span>' + raison : raison;
       })() + '</li>').join('')
     + (toutes.length > trAffiches ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + (toutes.length - trAffiches) + ')</button></li>' : '')
     /* ⛔⛔ CE `||` NE COUVRE QUE LA LISTE VIDE, et c est correct — mais c etait LE SEUL endroit ou
@@ -28486,7 +28496,7 @@ function bcEtatPanneau() {
   try { const dj = duelsCfg.j; if (dj && typeof dj === 'object') { const k = !!duelContrat(dj); duels = !k ? { contrat: false, ouverts: false } : dj.ok === true ? { contrat: true, ouverts: !!Duels.duelsOuverts(dj) } : null; } } catch (_) { duels = null; }
   let rc = false; try { rc = !!rollsCfg; } catch (_) { rc = false; }
   return { compte: !!c, bloc: !!bloc, rollsContrat: rc, duels,
-    slots: { lu: !!j && typeof j === 'object' && j.ok !== undefined, contrat: !!slotsContrat(j), enCours: !!slotsCfg.enCours, action: c && r && r.action ? r.action : null } };
+    slots: { lu: !!j && typeof j === 'object' && j.ok !== undefined, rate: !!bc.slotsRate, contrat: !!slotsContrat(j), enCours: !!slotsCfg.enCours, action: c && r && r.action ? r.action : null } };
 }
 /** Badge, description, grise + raison, cache (« Settle my spin » seulement) : pour UN bouton, dans l etat lu. */
 function bcPoserBadge(b, cle, ctx) {
@@ -28534,7 +28544,9 @@ function bcLecturesPanneau(ctx) {
   bc.lecturesPanneauA = Date.now();
   void (async () => {
     try {
-      await lireSlotsServis();
+      /* 2026-10-25 (revue) : une lecture ratee le DIT (« could not be read »), au lieu de « Reading… » pour toujours */
+      const js = await lireSlotsServis();
+      bc.slotsRate = !(js && typeof js === 'object' && js.ok !== undefined);
       if (ctx.compte && slotsContrat(slotsCfg.j) && Date.now() - (slotsCfg.peintA || 0) > 20000) await peindreSlots();
       if (Date.now() - (duelsCfg.lu || 0) > 60000) await lireDuelsServis();
     } catch (_) { /* une lecture ratee : la raison reste celle d avant */ }
@@ -28546,7 +28558,12 @@ function bcLecturesPanneau(ctx) {
 function bcCtxSuite(n = null) {
   const e = bcEtatPanneau(), a = e.slots.action;
   const id = bcArretOuvert(), ar = id ? payerArrets.get(id) : null;
-  return { compte: e.compte, slotsContrat: e.slots.contrat, rollsContrat: e.rollsContrat, n,
+  /* 2026-10-25 (revue) : l humeur du block montre (Trade for me : une carte preparee ou non) et ses voisins lus (Its circle) — les memes
+   *   lectures que leurs reponses (bcPhaseDe, conseilDe ; habitants, puis l index du Market) */
+  let phase = null, conseil = null, voisins = null;
+  try { phase = brainAdr ? bcPhaseDe(brainAdr) : null; conseil = phase ? conseilDe(phase).geste : null; } catch (_) { phase = null; conseil = null; }
+  try { voisins = habitants.length || marcheParAdr.size; } catch (_) { voisins = null; }
+  return { compte: e.compte, slotsContrat: e.slots.contrat, rollsContrat: e.rollsContrat, n, phase, conseil, voisins,
     reglable: a && (a.bouton === 'regler' || a.bouton === 'accepter') ? a.bouton : null,
     arret: ar ? { reset: ar.ouvertes.length > 0, finir: !!ar.finir } : null };
 }

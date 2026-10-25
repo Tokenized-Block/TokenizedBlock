@@ -62,9 +62,9 @@ if (typeof R.raisonSansBuy === 'function') {
   ok(R.raisonSansBuy(verdictRoutage(lignePool('aerodrome'))) === null, 'temoin negatif : une pool Aerodrome achetable n a PAS de raison sans Buy (null)');
   ok(R.raisonSansBuy(null) && R.raisonSansBuy(null).code === 'NON_COTEE', 'verdict absent : la raison generique, jamais un plantage');
 }
-ok(/const raisonSb = raisonSansBuy\(vR, \{ liqOk, liqMin: LIQ_MIN_BUY_USD \}\) \|\| raisonSansBuy\(null\);\n\s+const raison = '<span class="note" style="margin:0">' \+ enTexte\(raisonSb\.phrase\) \+ '<\/span>';/.test(html)
+ok(/const raisonSb = raisonSansBuy\(vR, \{ liqOk, liqMin: LIQ_MIN_BUY_USD \}\) \|\| raisonSansBuy\(null\);\n\s+const raison = '<p class="note trRaison">' \+ enTexte\(raisonSb\.phrase\) \+ '<\/p>';/.test(html)
   && /import \{ verdictRoutage, phraseRoutage, raisonSansBuy \} from '\.\/routage\.js';/.test(html)
-  && !/No buy: its pool cannot be quoted \(empty, or a third-party hook that taxes resale\)\.<\/span>';/.test(html),
+  && !/No buy: its pool cannot be quoted \(empty, or a third-party hook that taxes resale\)\.<\/(?:span|p)>';/.test(html),
   'app.html : la note sans Buy du Market vient de raisonSansBuy(vR) — plus de phrase fixe ecrite pour toutes les lignes');
 
 /* B. les vraies lignes */

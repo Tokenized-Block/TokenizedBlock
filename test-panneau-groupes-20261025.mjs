@@ -11,7 +11,9 @@
  *      reponse = les memes appels que le Settle de la carte ; la reponse suivie montre les lignes de la carte (blocs k sur 3, resultat) ;
  *   N  chaque reponse se termine par EXACTEMENT une action suivante (.bcSuite, au plus un bouton, ou ses propres boutons) ;
  *   R  un bouton grise porte sa raison (title + une ligne sous son groupe) — sans wallet, sans contrat, duels fermes, rien a regler ;
- *   P  la palette liste toujours chaque commande de COMMANDES, spin et settle spin compris.
+ *   P  la palette liste toujours chaque commande de COMMANDES, spin et settle spin compris ;
+ *   T  (revue 2026-10-25) l action suivante et la raison disent VRAI : Trade for me sans carte preparee, Its circle sans voisin lu, Spin dont
+ *      la lecture des slots a echoue.
  * Mutants sur COPIES (dossier temporaire) : chacun doit rougir. NE PROUVE PAS : le rendu au navigateur (mesure a part), un wallet reel, un
  *   spin reel sur Base, les cartes d echange / d envoi (bcProposerSwap / bcProposerEnvoi : leurs boutons Sign ne sont pas executes ici). */
 import { strict as assert } from 'node:assert';
@@ -253,7 +255,7 @@ let keccakTopic = null;
 const FICHE = { ok: true, contrat: CONTRAT, prixSpin: P.spinPrice, potShareBps: P.potShareBps, prizes: P.prizes, esperanceBrut: '127862', bloc: 900, regleur: { etat: 'OFF', adresse: null, msParBlocMesure: 2000 } };
 const LIGNE_JETON = { jeton: '0x' + 'dd'.repeat(20), pool: '0x' + 'ee'.repeat(20), symbole: 'NVDAc' };
 
-function monterPanneau({ PC, app = APP, chaine = null, avecCompte = true, jeton = null, slotsFiche = FICHE, duelsJ = null, rolls = null, brain = '0x' + 'b1'.repeat(20), section = null, arret = null } = {}) {
+function monterPanneau({ PC, app = APP, chaine = null, avecCompte = true, jeton = null, slotsFiche = FICHE, duelsJ = null, rolls = null, brain = '0x' + 'b1'.repeat(20), section = null, arret = null, extra = {} } = {}) {
   const d = faireDocument();
   monterBalisage(d);
   const ch = chaine || faireChaine();
@@ -276,6 +278,8 @@ function monterPanneau({ PC, app = APP, chaine = null, avecCompte = true, jeton 
     PanneauCmd: PC, PRECOMMANDES: C.PRECOMMANDES, bc: {}, bcExecuterTexte: async (t) => { trace.texte = (trace.texte || []).concat(t); return true; },
     /* les commandes du Chat que la section enveloppe (leurs corps sont executes par N, a part) */
     ...Object.fromEntries(['bcCommandeGame', 'bcCommandeLog', 'bcCommandeLevel', 'bcCommandeRoll', 'bcCommandePostTask', 'bcCommandeDuel', 'bcCommandeSafety', 'bcCommandeExplain', 'bcCommandeWallet', 'bcCommandeGas'].map((k) => [k, async () => {}])),
+    /* 2026-10-25 (revue) : ce qu un scenario remplace ou ajoute (l humeur du block, ses voisins, une lecture des slots qui echoue) */
+    ...extra,
   };
   const morceaux = [
     entre(app, 'const bcEl = (tag, props = {}, enfants = []) => {', '\n};\n') + '\n};\n',
@@ -445,6 +449,42 @@ function verifierPalette() {
   return ko;
 }
 
+/* ═══ T. (revue 2026-10-25) l action suivante et la raison disent VRAI dans l etat lu ═══
+ *   Trade for me : « check the trade card » seulement quand une carte est preparee (humeur buy / sell) — pas sur un marche non lu ni un
+ *   block mort ; Its circle sans voisin lu : le geste de sa reponse (ouvrir la Map), pas « Nothing to do » ; Spin dont la lecture des
+ *   slots a echoue : « could not be read », pas « Reading… » pour toujours. Le code REEL de la section (bcTerminer, bcCtxSuite,
+ *   bcLecturesPanneau) sur le faux DOM. */
+async function verifierVerite(PC, { app = APP, section = null } = {}) {
+  const ko = [];
+  const suiteApres = (cle, extra) => {
+    const p = monterPanneau({ PC, app, section, extra });
+    const m = p.document.createElement('div'); m.className = 'bcMsg'; p.document.querySelector('#bcFil').append(m);
+    p.bcTerminer(cle, m);
+    const z = m.querySelector(':scope > .bcSuite');
+    return z ? z.textContent : '';
+  };
+  const humeur = (phase, geste) => ({ bcPhaseDe: () => phase, conseilDe: () => ({ geste }), habitants: [], marcheParAdr: new Map([['0x' + '01'.repeat(20), {}]]) });
+  for (const [phase, geste] of [['NON_LU', 'rien'], ['MORT', 'rien']]) {
+    const t = suiteApres('trade_for_me', humeur(phase, geste));
+    if (!t || /trade card/i.test(t)) ko.push('Trade for me ' + phase + ' (aucune carte) : « ' + t + ' »');
+  }
+  for (const [phase, geste] of [['EXCITE', 'buy'], ['INQUIET', 'sell_quarter']]) {
+    const t = suiteApres('trade_for_me', humeur(phase, geste));
+    if (!/check the trade card/.test(t)) ko.push('Trade for me ' + phase + ' (carte preparee) : « ' + t + ' »');
+  }
+  { const t = suiteApres('circle', { habitants: [], marcheParAdr: new Map() }); if (!/open the Map/.test(t)) ko.push('Its circle sans voisin : « ' + t + ' »'); }
+  { const t = suiteApres('circle', { habitants: [{ adr: '0x' + '02'.repeat(20) }], marcheParAdr: new Map() }); if (/open the Map/.test(t)) ko.push('Its circle avec voisins : « ' + t + ' »'); }
+  { const p = monterPanneau({ PC, app, section, extra: { fetch: async () => { throw new Error('down'); } } });
+    p.bcPeindreCommandes(); await vider();
+    const b = p.document.querySelector('[data-cmd="spin"]');
+    if (!b || !b.disabled || !/could not be read/.test(b.title)) ko.push('Spin, lecture des slots ratee : ' + (b ? b.disabled + ' « ' + b.title + ' »' : 'absent')); }
+  { const p = monterPanneau({ PC, app, section, extra: { fetch: async () => new Promise(() => {}) } });
+    p.bcPeindreCommandes();
+    const b = p.document.querySelector('[data-cmd="spin"]');
+    if (!b || !/Reading the slots/.test(b.title)) ko.push('Spin, lecture en cours : ' + (b ? '« ' + b.title + ' »' : 'absent')); }
+  return ko;
+}
+
 /* ═══ execution : le vrai code, puis les mutants ═══ */
 const PC = await import('./panneau-commandes.js');
 const dire = (ko, m) => { if (ko.length) console.log('KO ' + m + '\n  ' + ko.join('\n  ')); vu(ko.length === 0, m); };
@@ -454,6 +494,7 @@ dire(await verifierSpin(PC), 'S Spin du panneau = Spin de la carte (USDC et jeto
 dire(await verifierSuites(PC), 'N chaque reponse se termine par UNE action suivante');
 dire(await verifierRaisons(PC), 'R un bouton grise porte sa raison ; Settle my spin cache / grise / actif ; badges et descriptions peints');
 dire(verifierPalette(), 'P la palette liste chaque commande ; les puces existantes gardent leur geste');
+dire(await verifierVerite(PC), 'T l action suivante et la raison disent vrai : Trade for me sans carte, Its circle sans voisin, slots non lus');
 
 const SECTION = entre(APP, '/* ══ LE PANNEAU EN QUATRE GROUPES', '/* ══ FIN DES GROUPES DU PANNEAU */');
 const MUTANTS = [
@@ -476,6 +517,12 @@ const MUTANTS = [
   ['R', 'Spin actif sans wallet', 'module', "    if (!ctx.compte) return non('Connect a wallet to spin.');\n", "\n"],
   ['R', 'duels fermes non dits', 'module', "    if (!ctx.duels.ouverts) return non(", "    if (false) return non("],
   ['R', 'Settle my spin cache quand il est reglable', 'module', "if (!s.contrat || !ctx.compte || (!reglable && !enAttente)) return", "if (true) return"],
+  /* 2026-10-25 (revue) : les trois phrases fausses trouvees, remises une a une */
+  ['T', 'Trade for me : « check the trade card » sans carte (la phrase d avant)', 'module', "      if (ctx.conseil === 'buy' || ctx.conseil === 'sell_quarter') return rien(", "      if (true) return rien("],
+  ['T', 'Its circle : « Nothing to do » sans voisin (la phrase d avant)', 'module', "case 'circle': return ctx.voisins === 0 ?", "case 'circle': return false ?"],
+  ['T', 'Spin : « Reading… » pour toujours apres un echec', 'module', "return non(s.rate ? 'The slots could not be read just now.' : 'Reading the slots contract…');", "return non('Reading the slots contract…');"],
+  ['T', 'la section ne note plus l echec de lecture', 'section', "      bc.slotsRate = !(js && typeof js === 'object' && js.ok !== undefined);\n", "\n"],
+  ['T', 'la section ne lit plus l humeur du block', 'section', "conseil = phase ? conseilDe(phase).geste : null;", "conseil = 'buy';"],
 ];
 let tues = 0;
 for (const [lot, nom, ou, de, a] of MUTANTS) {
@@ -490,6 +537,7 @@ for (const [lot, nom, ou, de, a] of MUTANTS) {
     if (lot === 'S') ko = await verifierSpin(PCm, { section: sec });
     if (lot === 'N') ko = await verifierSuites(PCm, { section: sec });
     if (lot === 'R') ko = await verifierRaisons(PCm, { section: sec });
+    if (lot === 'T') ko = await verifierVerite(PCm, { section: sec });
   } catch (e) { ko = ['exception : ' + e.message]; }
   if (process.env.VERBEUX) console.log('  [' + lot + '] ' + nom + ' -> ' + String(ko[0]).slice(0, 150));
   vu(ko.length > 0, 'mutant ' + lot + ' « ' + nom + ' » : ROUGE');

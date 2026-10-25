@@ -93,14 +93,14 @@ export function descriptionDe(cle, ctx = {}) {
 /**
  * Peut-elle tourner maintenant ? { actif, raison, cache }. `raison` (une ligne) quand elle ne peut pas — jamais cachee en silence ;
  *   `cache` seulement pour « Settle my spin » sans spin a toi (decision du lead : montre quand un spin est reglable).
- * ctx : { compte, bloc, slots: { lu, contrat, enCours, action: { cle, bouton, texte } | null }, duels: { contrat, ouverts } | null }
+ * ctx : { compte, bloc, slots: { lu, rate (la derniere lecture du panneau a echoue), contrat, enCours, action: { cle, bouton, texte } | null }, duels: { contrat, ouverts } | null }
  */
 export function etatCommande(cle, ctx = {}) {
   const oui = { actif: true, raison: '', cache: false };
   const non = (raison) => ({ actif: false, raison, cache: false });
   const s = ctx.slots || {};
   if (cle === 'spin') {
-    if (!s.lu) return non('Reading the slots contract…');
+    if (!s.lu) return non(s.rate ? 'The slots could not be read just now.' : 'Reading the slots contract…');
     if (!s.contrat) return non('Spins open with their contract.');
     if (!ctx.compte) return non('Connect a wallet to spin.');
     if (s.enCours) return non('Waiting for your wallet.');
@@ -130,7 +130,8 @@ export function etatCommande(cle, ctx = {}) {
  * L ACTION SUIVANTE qui termine une reponse : { texte, bouton: { libelle, faire } | null }. `faire` : 'texte:<commande>' (envoyee au Chat),
  *   'parler:<cle>' (le bouton de conversation), 'connecter' (le connecter() de l en-tete), 'regler' | 'accepter' (les boutons de la carte Draws), 'reset' | 'finir' (un paiement en
  *   jeton arrete : les boutons de sa ligne). ⛔ Jamais un bouton sans geste derriere : sans geste, « Nothing to do… ».
- * ctx : { compte, slotsContrat, rollsContrat, reglable: 'regler' | 'accepter' | null, arret: { reset, finir } | null, n (rolls demandes) }
+ * ctx : { compte, slotsContrat, rollsContrat, reglable: 'regler' | 'accepter' | null, arret: { reset, finir } | null, n (rolls demandes),
+ *   phase / conseil (le block montre : bcPhaseDe, conseilDe(...).geste), voisins (les blocks lus pour son cercle) }
  */
 export function suiteDe(cle, ctx = {}) {
   const rien = (t = 'Nothing to do.') => ({ texte: t, bouton: null });
@@ -143,8 +144,14 @@ export function suiteDe(cle, ctx = {}) {
   switch (cle) {
     case 'how': return avec('Next: ask what it would do.', 'What would you do?', 'parler:would');
     case 'would': return rien('Nothing to do now: its mood does not call for a move.');
-    case 'trade_for_me': return rien('Next: check the trade card, then your wallet signs — or leave it.');
-    case 'circle': return rien();
+    /* 2026-10-25 (revue) : la phrase disait « check the trade card » meme quand AUCUNE carte n etait preparee (marche non lu, block mort) */
+    case 'trade_for_me':
+      if (ctx.conseil === 'buy' || ctx.conseil === 'sell_quarter') return rien('Next: check the trade card, then your wallet signs — or leave it.');
+      if (ctx.phase === 'NON_LU') return avec('Next: ask again once its market is read.', 'Trade for me', 'parler:trade_for_me');
+      if (ctx.phase === 'MORT') return rien('Nothing to do: this block is dead.');
+      return rien('Next: pick a side above, or leave it.');
+    /* 2026-10-25 (revue) : sans voisin lu, « Nothing to do » contredisait sa reponse (« open the Map once, then ask again ») */
+    case 'circle': return ctx.voisins === 0 ? rien('Next: open the Map once, then ask again.') : rien();
     case 'game': return ctx.reglable ? regler() : jouer('Next: play.');
     case 'log': return avec('Next: see your ticket and the pot.', 'Game', 'texte:game');
     case 'level': return ctx.reglable ? regler() : jouer('Next: verified play earns XP.');

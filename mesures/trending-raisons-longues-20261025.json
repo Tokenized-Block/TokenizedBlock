@@ -1,0 +1,113 @@
+{
+ "source": "https://tokenizedblock.space/api/trending (x-ms-monitor:1), lu le 2026-10-25",
+ "lignes": [
+  {
+   "sym": "NVDAc",
+   "adr": "0xb20000000000000000000078ee7ce2fe4908108c",
+   "dex": "aero",
+   "poolAdr": "0xf668e21993f0acd7ab00bb1cfbaed0df28a3c8ec",
+   "quoteAdr": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+   "prixUsd": 212.31,
+   "change1h": 0.13,
+   "change24h": 0.43,
+   "volume1hUsd": 144093,
+   "volume24hUsd": 4665030,
+   "liquiditeUsd": 788071,
+   "fdvUsd": 6882558,
+   "trades24h": 2245,
+   "achat": null,
+   "routeAction": {
+    "achetable": true,
+    "pool": "0x853f5f1b92b16714fe6cda67caad0856b83c7ab9",
+    "tickSpacing": 10,
+    "usdcPool": "222055383495",
+    "ecartBps": 5,
+    "perteBps": 10,
+    "factory": "0xf8f2eb4940cfe7d13603dddd87f123820fc061ef",
+    "lu": "2026-10-25T13:37:45.179Z",
+    "bloc": 53073048
+   }
+  },
+  {
+   "sym": "NIOc",
+   "adr": "0xb2000000000000000000002d2b5dc53c61f1ba06",
+   "dex": "aero",
+   "poolAdr": "0x806c856ef7d5559a02554e32463e5fc485908c57",
+   "quoteAdr": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+   "prixUsd": 3.38,
+   "change1h": null,
+   "change24h": -0.6,
+   "volume1hUsd": 0,
+   "volume24hUsd": 7758,
+   "liquiditeUsd": 31061,
+   "fdvUsd": 63411,
+   "trades24h": 60,
+   "achat": null,
+   "routeAction": {
+    "achetable": false,
+    "code": "ECART",
+    "phrase": "No buy: on the pool this app's router can reach, 10 USDC buys 8.08% less than at its mid price (over the 1% this app accepts).",
+    "pool": "0x484cc2ca594ced3fe38362fe950c60ce66f53f6d",
+    "usdcPool": "25397462016",
+    "ecartBps": 808,
+    "perteBps": null,
+    "lu": "2026-10-25T13:45:08.918Z",
+    "bloc": 53073267
+   }
+  },
+  {
+   "sym": "BUDc",
+   "adr": "0xb200000000000000000000c36ce081dd09e86ca2",
+   "dex": "aero",
+   "poolAdr": "0xd9ca199152ccbe421b56414e30becc80baf5269e",
+   "quoteAdr": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+   "prixUsd": 86.73,
+   "change1h": null,
+   "change24h": 0.04,
+   "volume1hUsd": 0,
+   "volume24hUsd": 5826,
+   "liquiditeUsd": 23850,
+   "fdvUsd": 45707,
+   "trades24h": 10,
+   "achat": null,
+   "routeAction": {
+    "achetable": false,
+    "code": "ALLER_RETOUR",
+    "phrase": "No buy: on the pool this app's router can reach, what 10 USDC buys sells for 9.41 USDC at its current state, a 5.9% gap between buying and selling (over the 2% this app accepts).",
+    "pool": "0x5ee52963d3d33196a47fad722abb897e0fa395d9",
+    "usdcPool": "25397471156",
+    "ecartBps": 1,
+    "perteBps": 587,
+    "lu": "2026-10-25T13:37:46.391Z",
+    "bloc": 53073048
+   }
+  },
+  {
+   "sym": "LIc",
+   "adr": "0xb200000000000000000000d61efd9f54a23ef9eb",
+   "dex": "aerodrome",
+   "poolAdr": "0xd71b2d9cb3532477df77ae26e780963cce784a0c",
+   "quoteAdr": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+   "prixUsd": 12.41,
+   "change1h": null,
+   "change24h": null,
+   "volume1hUsd": 0,
+   "volume24hUsd": 603,
+   "liquiditeUsd": 53088,
+   "fdvUsd": 37847,
+   "trades24h": 2,
+   "achat": null,
+   "routeAction": {
+    "achetable": false,
+    "code": "ALLER_RETOUR",
+    "phrase": "No buy: on the pool this app's router can reach, what 10 USDC buys sells for 8.38 USDC at its current state, a 16.2% gap between buying and selling (over the 2% this app accepts).",
+    "pool": "0xd71b2d9cb3532477df77ae26e780963cce784a0c",
+    "usdcPool": "25397727408",
+    "ecartBps": 1,
+    "perteBps": 1618,
+    "lu": "2026-10-25T13:45:11.881Z",
+    "bloc": 53073267
+   }
+  }
+ ]
+}
