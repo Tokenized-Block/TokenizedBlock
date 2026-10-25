@@ -17,11 +17,14 @@
  *   BLOCK > BLOCK                                            sautsBlocVersBloc + planEchangeMultiSauts
  *   BLOCK > ACTION (pool Aerodrome mesuree)                  cheminBlocVersAction + planFranchissement (lot atomique)
  *   ETH > ACTION, USDC > ACTION (pool Aerodrome mesuree)     planAchatEthAction, planAerodromeSegment
- *   ETH|USDC > ACTION, ACTION > USDC (pool v4 USDC LUE)       planEchange / sautsDepuisChemin + planEchangeMultiSauts (2026-10-03) */
+ *   ETH|USDC > ACTION, ACTION > USDC (pool v4 USDC LUE)       planEchange / sautsDepuisChemin + planEchangeMultiSauts (2026-10-03)
+ *   ETH > BLOCK cote en USDC                                  sautsDepuisChemin + planEchangeMultiSauts (ETH -> USDC -> block, 2026-10-26)
+ *   WETH|cbBTC|EURC > BLOCK cote en ETH ou USDC               lotPivotUsdcVersBloc : Aerodrome X -> USDC puis v4 (lot de la 4 ter, 2026-10-26)
+ *   WETH|cbBTC|EURC > USDC                                    planAerodromeSegment, pool epinglee, minimum du devis (2026-10-26) */
 import { planEchange, planEchangeMultiSauts, meilleureClePourMontant, meilleureClePourBloc } from './echange.js';
 import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
-import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME } from './plan-franchissement.js';
+import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME, POOLS_PIVOTS_AERODROME } from './plan-franchissement.js';
 import { devisSaut } from './multipool.js';
 import { FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 import { planAchatEthAction } from './echange-eth.js';
@@ -130,6 +133,41 @@ const quoteDe = (cle, jeton) => {
   const c0 = bas(cle.currency0), c1 = bas(cle.currency1), j = bas(jeton);
   return c0 === j ? c1 : (c1 === j ? c0 : null);
 };
+
+/* ── PAYER UN BLOCK AVEC CE QUE LA PERSONNE DETIENT (GAPS 4 et 7, 2026-10-26) ─────────────────────────────────────────────
+ * Le nom d un jeton dans une phrase. ⛔ 2026-10-26 : le refus disait « this block trades against 0x0000…0000 » — l adresse nulle
+ *   EST l ETH natif ; une adresse brute ne sert que pour un jeton hors des registres. */
+/* le symbole d une devise pivot, lu dans la table epinglee (« USDC/EURC » -> EURC), jamais recopie */
+const SYMBOLES_PIVOTS = new Map([...POOLS_PIVOTS_AERODROME].map(([k, v]) => [k.split('|').find((t) => t !== USDC), String((v && v.symbole) || '').split('/')[1] || null])
+  .filter(([a, s]) => ADR.test(String(a)) && s));
+export function nomJeton(a) {
+  const x = bas(a);
+  if (x === ETH) return 'ETH';
+  return DEVISES.get(x) || ACTIONS.get(x) || SYMBOLES_PIVOTS.get(x) || x;
+}
+/** Comment une entree `de` paie un block cote en `quote` (route 1). Pur : aucune lecture.
+ *  - DIRECT : `de` est la cotation (planEchange) ;
+ *  - V4 : USDC ou OUSD vers un block cote en ETH ou USDC, ETH vers un block cote en USDC — un seul appel au routeur Uniswap ;
+ *  - PIVOT_AERODROME : une devise de POOLS_PIVOTS_AERODROME (WETH, cbBTC, EURC) vers un block cote en ETH ou USDC — le lot de la 4 ter :
+ *    X -> USDC sur sa pool Aerodrome epinglee, puis USDC -> (ETH ->) block ;
+ *  - REFUS : le reste (la phrase dit avec quoi payer). */
+export function entreeVersBloc({ de, quote }) {
+  const d = bas(de), q = bas(quote);
+  if (d === q) return 'DIRECT';
+  const coteeEthOuUsdc = q === ETH || q === USDC;
+  if ((d === USDC || d === OUSD) && coteeEthOuUsdc) return 'V4';
+  if (d === ETH && q === USDC) return 'V4';
+  if (DEVISES_VIA_USDC_AERODROME.has(d) && coteeEthOuUsdc) return 'PIVOT_AERODROME';
+  return 'REFUS';
+}
+/** La phrase du refus de la route 1 : ce qui paie CE block ici, dit en noms (jamais l adresse nulle). */
+export function phraseRefusEntreeBloc(quote) {
+  const q = bas(quote);
+  const pivots = [...DEVISES_VIA_USDC_AERODROME].map(nomJeton);
+  const autres = q === ETH ? ['USDC', 'OUSD', ...pivots] : q === USDC ? ['ETH', 'OUSD', ...pivots] : [];
+  if (!autres.length) return 'this block trades against ' + nomJeton(q) + ': pay with that token';
+  return 'this block trades against ' + nomJeton(q) + ': pay with ' + nomJeton(q) + ', ' + autres.slice(0, -1).join(', ') + ' or ' + autres[autres.length - 1];
+}
 
 /* ── LA REFERENCE CHAINLINK DANS LE RESUME D UNE ROUTE D ACTION (2026-10-09) ─────────────────────────────────────────────────
  * ⛔⛔ AJOUT D INFORMATION, JAMAIS DE DECISION : la reference est lue A COTE du plan (en parallele), puis posee dans
@@ -405,6 +443,63 @@ async function planRailBrut(q, deps) {
     const meme = bas(r.cle.hooks) === bas(marche.cle.hooks) && Number(r.cle.fee) === Number(marche.cle.fee) && Number(r.cle.tickSpacing) === Number(marche.cle.tickSpacing);
     return { marche: meme ? marche : { ...marche, cle: r.cle }, choix: r.pourquoiPools || null };
   };
+  /* ── LE LOT « JAMBE AERODROME VERS USDC, PUIS USDC -> (ETH ->) BLOCK » ───────────────────────────────────────────────────
+   *   Ecrit pour la 4 ter (action de la table -> block, P4 2026-10-10) ; depuis 2026-10-26 (GAPS 4 et 7) le meme lot sert aux devises
+   *   de POOLS_PIVOTS_AERODROME (WETH, cbBTC, EURC). UN SEUL lot, UNE SEULE regle de frais : `jambe1(fraisAero)` construit la jambe
+   *   Aerodrome (planAerodromeSegment, approbation EXACTE, minimum), la jambe 2 (planEchangeMultiSauts) part de SON minimum garanti.
+   *   ⛔ UN FRAIS PAR LOT, JAMAIS EN BLOCK : si le hook du block paie (jambe 2), Aerodrome prend 0 ; sinon Aerodrome prend son frais
+   *     d interface EN USDC et le routeur v4 rien (`fraisRouteurAilleurs`).
+   *   ⛔ Atomique (`exigeAtomique`) ; le resume porte `pivot` + `pivotAuMoins` : sans lot, le panneau coupe en deux trades ordinaires
+   *     (bcDeuxTrades), chacun avec son minimum. `extraResume` n ajoute que des chiffres (la 4 ter n en passe aucun : sortie inchangee). */
+  const lotPivotUsdcVersBloc = async ({ de, vers, marcheB, quoteB, jambe1, via, extraResume = null }) => {
+    const chemin2 = (quoteB === ETH ? [{ de: USDC, vers: ETH, famille: 'uniswap-v4' }] : []).concat([{ de: quoteB, vers, famille: 'uniswap-v4' }]);
+    const jambes = async (fraisAero) => {
+      const pa = await jambe1(fraisAero);
+      if (!pa || pa.etat !== 'PRET') return { fin: pa || { etat: 'NON_MESURE', pourquoi: 'the Aerodrome leg could not be built' } };
+      const minU = BigInt(pa.resume.recoitAuMoins);
+      const b = await sautsDepuisChemin({ chemin: chemin2, montant: minU, resoudre: resolveurAvec(marcheB.cle) });
+      if (b.etat !== 'OK') return { fin: { etat: b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: b.pourquoi } };
+      const pb = await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: USDC, sortie: vers, montant: minU, decimalesEntree: 6,
+        prixUsdEntree: null, fraisDevisesOk, maintenant, fraisRouteurAilleurs: true, simulationDifferee: true });
+      return { pa, pb, minU };
+    };
+    let j = await jambes(false);
+    if (j.fin) return normaliser(route, j.fin, { via });
+    /* ⛔ 2026-10-10 (revue adverse, point 1) : une 1re jambe v4 non PRET (429...) ne dit PAS « le hook ne paie pas » - rendue telle quelle. */
+    if (j.pb.etat !== 'PRET') return normaliser(route, j.pb, { via });
+    const hookPaie = !!(j.pb.resume && j.pb.resume.fraisParHook === true);
+    if (!hookPaie) {
+      j = await jambes(true); if (j.fin) return normaliser(route, j.fin, { via });
+      /* ⛔ deux frais (Aerodrome 10 bps + hook) : jamais */
+      if (j.pb.resume && j.pb.resume.fraisParHook === true) return normaliser(route, { etat: 'NON_MESURE', pourquoi: 'the block hook fee changed between two reads: refusing two fees in one batch' }, { via });
+    }
+    if (j.pb.etat !== 'PRET') return normaliser(route, j.pb, { via });
+    const rb = j.pb.resume || {};
+    /* ⛔ 2026-10-10 (diagnostic Grok 21:58) : `fraisBps` = le frais d APP du lot, celui que la carte du panneau dit. Sans lui, un hook
+     *   qui ne paie pas = 0,1 % pris en USDC sur la jambe Aerodrome SANS une ligne a l ecran. Le routeur v4 ne prend rien
+     *   (`fraisRouteurAilleurs`) : le frais d app du lot EST celui de la jambe 1 (0 quand le hook paie). */
+    return normaliser(route, { etat: 'PRET', exigeAtomique: true, pourquoi: null,
+      appels: [...j.pa.appels, ...j.pb.etapes, { ...j.pb.tx, role: 'swap on Uniswap v4: USDC to this block' }],
+      resume: { paye: m, payeDevise: de, recoitAuMoins: rb.recoitAuMoins, recoitDevise: vers, pivot: USDC, pivotAuMoins: j.minU,
+        fraisBps: j.pa.resume.fraisBps, fraisBpsJambe1: j.pa.resume.fraisBps, fraisBpsJambe2: rb.fraisBps, fraisParHook: hookPaie, fraisMarcheBps: rb.fraisMarcheBps,
+        jambePayante: hookPaie ? 2 : 1, jambe2NonSimulee: true, minimumParPrixSpot: j.pa.resume.minimumParPrixSpot === true,
+        resteAuCompteAuPlus: 'the USDC above the Aerodrome minimum (at most the tolerance) stays in the wallet',
+        ...(extraResume ? extraResume({ pa: j.pa, rb }) : {}) } },
+    { via, chemin: [{ de, vers: USDC, famille: 'aerodrome' }, ...chemin2], cotation: quoteB });
+  };
+  /* le devis du quoteur Aerodrome CL pour X -> USDC sur la pool EPINGLEE de X (POOLS_PIVOTS_AERODROME) ; null si non lu.
+   *   Le meme quoteur que meilleureAlternativeAerodrome (devisSaut, factory 3) ; planAerodromeSegment re-verifie ensuite que la factory
+   *   rend bien la pool epinglee a cet espacement, et en fait le minimum (sortieCotee) au lieu du prix spot. */
+  const coteVersUsdc = async (x, montant) => {
+    const k = [bas(x), USDC].sort().join('|');
+    const t = POOLS_PIVOTS_AERODROME.get(k);
+    if (!t || !Number.isInteger(t.tickSpacing)) return null;
+    try {
+      const d = devisSaut({ de: bas(x), vers: USDC, e: { venue: 'aerodrome-cl', factory: 3, tickSpacing: t.tickSpacing } }, BigInt(montant));
+      const s = BigInt(String(await rpc('eth_call', [{ to: d.to, data: d.data }, 'latest'])).slice(0, 66));
+      return s > 0n ? s : null;
+    } catch (_) { return null; }
+  };
   try {
     /* ── 4 quater. UNE ACTION DE LA TABLE AERODROME CONTRE WETH / cbBTC / EURC (Phil, 2026-10-10, DIG-actions-hors-USDC) ──
      *   X -> USDC -> action et action -> USDC -> X, deux sauts Aerodrome dans UN exactInput (meme batisseur que la 4 bis) ;
@@ -421,19 +516,33 @@ async function planRailBrut(q, deps) {
       return normaliser(route, await planAerodromeSegment({ rpc, chemin, devise: de, block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }),
         { via: 'planAerodromeSegment', chemin, cotation: USDC, pool: 'aerodrome' });
     }
+    /* ── 4 quinquies. WETH / cbBTC / EURC -> USDC, UN segment Aerodrome sur la pool EPINGLEE (2026-10-26) ─────────────────────
+     *   Le trade 1 du repli SANS LOT de « X paie un block » (bcDeuxTrades : X -> USDC, puis USDC -> block pour `pivotAuMoins`). Meme
+     *   batisseur et meme retenue que action -> USDC (route 4) : approbation exacte, 10 bps EN USDC (sweepTokenWithFee), minimum tire
+     *   du DEVIS du quoteur, sequence SIMULEE (eth_simulateV1) avant PRET. Pas de frais neuf : c est le frais Aerodrome existant. */
+    if (DEVISES_VIA_USDC_AERODROME.has(de) && vers === USDC) {
+      const cote = await coteVersUsdc(de, m);
+      if (cote === null) return normaliser(route, { etat: 'NON_MESURE', pourquoi: 'the Aerodrome quote for ' + nomJeton(de) + ' to USDC could not be read just now: try again' }, { via: 'planAerodromeSegment' });
+      return normaliser(route, await planAerodromeSegment({ rpc, chemin: [{ de, vers: USDC, famille: 'aerodrome' }], devise: de, block: USDC, montant: m,
+        compte, beneficiaireFrais: FEE_WALLET, maintenant, sortieCotee: cote }), { via: 'planAerodromeSegment', cotation: USDC, pool: 'aerodrome', devis: cote });
+    }
     /* ── 1. ACHETER UN BLOCK ─────────────────────────────────────────────────────────────────────────────── */
     if (nv === 'BLOCK' && nd !== 'BLOCK' && nd !== 'ACTION') { /* une action qui paie un block : route 5 */
       const marcheB = await marcheDe(vers);
       if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));
       const quote = quoteDe(marcheB.cle, vers);
-      if (de === quote) {
+      const comment = entreeVersBloc({ de, quote });
+      if (comment === 'DIRECT') {
         const au = await marcheAuMontant(marcheB, vers, de, vers);
         return normaliser(route, await planEchange({ rpc, chaine, jeton: vers, compte, sens: 'ACHAT', montant: m,
           marcheLu: au.marche, fraisDevisesOk, maintenant }), { via: 'planEchange', cotation: quote, ...(au.choix ? { pools: au.choix } : {}) });
       }
-      if ((nd === 'USDC' || nd === 'OUSD') && (quote === ETH || quote === USDC)) {
+      /* ⛔ 2026-10-26 (GAP 7) : ETH paie un block cote en USDC par ETH -> USDC -> block, UN appel au routeur Uniswap — le chemin de
+       *   ETH -> action v4 (route 3) et l envers de USDC -> ETH -> block ; meme juge (planEchangeMultiSauts), memes regles de frais. */
+      if (comment === 'V4') {
         const chemin = [];
         if (nd === 'OUSD') chemin.push({ de: OUSD, vers: USDC, famille: 'uniswap-v4' });
+        if (nd === 'ETH') chemin.push({ de: ETH, vers: USDC, famille: 'uniswap-v4' });
         if (quote === ETH) chemin.push({ de: USDC, vers: ETH, famille: 'uniswap-v4' });
         chemin.push({ de: quote, vers, famille: 'uniswap-v4' });
         const b = await sautsDepuisChemin({ chemin, montant: m, resoudre: resolveurAvec(marcheB.cle) });
@@ -442,8 +551,21 @@ async function planRailBrut(q, deps) {
           decimalesEntree: await decimalesDe(de), prixUsdEntree: null, fraisDevisesOk, maintenant }),
         { via: 'planEchangeMultiSauts', chemin, cotation: quote });
       }
-      return normaliser(route, { etat: 'REFUSE', pourquoi: 'this block trades against ' + quote + ': pay with that token'
-        + (quote === ETH ? ', USDC or OUSD' : quote === USDC ? ' or OUSD' : '') }, { cotation: quote });
+      /* ⛔ 2026-10-26 (GAP 4) : WETH, cbBTC, EURC paient un block cote en ETH ou USDC par LE LOT de la 4 ter : X -> USDC sur la pool
+       *   Aerodrome EPINGLEE de X (approbation exacte, minimum tire du DEVIS du quoteur, pas du prix spot), puis USDC -> (ETH ->) block.
+       *   Meme frais que la 4 ter (lotPivotUsdcVersBloc) : aucun frais neuf. Devis non lu = NON_MESURE, jamais un minimum devine.
+       *   ⛔ WETH -> block cote en ETH passe AUSSI par USDC (deux pools de plus qu un unwrap) : c est le chemin mesure et prouve ici ;
+       *   un deballage direct serait une route neuve, pas faite. */
+      if (comment === 'PIVOT_AERODROME') {
+        const cote = await coteVersUsdc(de, m);
+        if (cote === null) return normaliser(route, { etat: 'NON_MESURE', pourquoi: 'the Aerodrome quote for ' + nomJeton(de) + ' to USDC could not be read just now: try again' }, { via: 'deviseAerodromeVersBloc', cotation: quote });
+        return lotPivotUsdcVersBloc({ de, vers, marcheB, quoteB: quote, via: 'deviseAerodromeVersBloc',
+          jambe1: (fraisAero) => planAerodromeSegment({ rpc, chemin: [{ de, vers: USDC, famille: 'aerodrome' }], devise: de, block: USDC, montant: m,
+            compte, beneficiaireFrais: FEE_WALLET, maintenant, sortieCotee: cote, ...(fraisAero ? {} : { fraisBps: 0n }) }),
+          extraResume: ({ pa, rb }) => ({ pivotCote: cote, impactBpsJambe1: pa.resume.impactBps === undefined ? null : pa.resume.impactBps,
+            quoteJambe2: rb.quote === undefined ? null : rb.quote }) });
+      }
+      return normaliser(route, { etat: 'REFUSE', pourquoi: phraseRefusEntreeBloc(quote) }, { cotation: quote });
     }
     /* ── 2. VENDRE UN BLOCK : contre sa cotation, contre un autre block, contre une action ───────────────────── */
     if (nd === 'BLOCK') {
@@ -615,41 +737,11 @@ async function planRailBrut(q, deps) {
       const marcheB = await marcheDe(vers);
       if (!marcheB || marcheB.etat !== 'LUE' || !marcheB.cle) return normaliser(route, illisible(marcheB));
       const quoteB = quoteDe(marcheB.cle, vers);
-      if (quoteB !== USDC && quoteB !== ETH) return normaliser(route, { etat: 'REFUSE', pourquoi: 'this block trades against ' + quoteB + ': no measured path from USDC to it' }, { cotation: quoteB });
-      const chemin2 = (quoteB === ETH ? [{ de: USDC, vers: ETH, famille: 'uniswap-v4' }] : []).concat([{ de: quoteB, vers, famille: 'uniswap-v4' }]);
-      const jambes = async (fraisAero) => {
-        const pa = await planAerodromeSegment({ rpc, chemin: [{ de, vers: USDC, famille: 'aerodrome' }], devise: de, block: USDC, montant: m,
-          compte, beneficiaireFrais: FEE_WALLET, maintenant, ...(fraisAero ? {} : { fraisBps: 0n }) });
-        if (!pa || pa.etat !== 'PRET') return { fin: pa || { etat: 'NON_MESURE', pourquoi: 'the Aerodrome leg could not be built' } };
-        const minU = BigInt(pa.resume.recoitAuMoins);
-        const b = await sautsDepuisChemin({ chemin: chemin2, montant: minU, resoudre: resolveurAvec(marcheB.cle) });
-        if (b.etat !== 'OK') return { fin: { etat: b.etat === 'NON_MESURE' ? 'NON_MESURE' : 'REFUSE', pourquoi: b.pourquoi } };
-        const pb = await planEchangeMultiSauts({ rpc, chaine, compte, sauts: b.sauts, entree: USDC, sortie: vers, montant: minU, decimalesEntree: 6,
-          prixUsdEntree: null, fraisDevisesOk, maintenant, fraisRouteurAilleurs: true, simulationDifferee: true });
-        return { pa, pb, minU };
-      };
-      let j = await jambes(false);
-      if (j.fin) return normaliser(route, j.fin, { via: 'actionAerodromeVersBloc' });
-      /* ⛔ 2026-10-10 (revue adverse, point 1) : une 1re jambe v4 non PRET (429...) ne dit PAS « le hook ne paie pas » - rendue telle quelle. */
-      if (j.pb.etat !== 'PRET') return normaliser(route, j.pb, { via: 'actionAerodromeVersBloc' });
-      const hookPaie = !!(j.pb.resume && j.pb.resume.fraisParHook === true);
-      if (!hookPaie) {
-        j = await jambes(true); if (j.fin) return normaliser(route, j.fin, { via: 'actionAerodromeVersBloc' });
-        /* ⛔ deux frais (Aerodrome 10 bps + hook) : jamais */
-        if (j.pb.resume && j.pb.resume.fraisParHook === true) return normaliser(route, { etat: 'NON_MESURE', pourquoi: 'the block hook fee changed between two reads: refusing two fees in one batch' }, { via: 'actionAerodromeVersBloc' });
-      }
-      if (j.pb.etat !== 'PRET') return normaliser(route, j.pb, { via: 'actionAerodromeVersBloc' });
-      const rb = j.pb.resume || {};
-      /* ⛔ 2026-10-10 (diagnostic Grok 21:58) : `fraisBps` = le frais d APP du lot, celui que la carte du panneau dit. Sans lui, un hook
-       *   qui ne paie pas = 0,1 % pris en USDC sur la jambe Aerodrome SANS une ligne a l ecran. Le routeur v4 ne prend rien
-       *   (`fraisRouteurAilleurs`) : le frais d app du lot EST celui de la jambe 1 (0 quand le hook paie). */
-      return normaliser(route, { etat: 'PRET', exigeAtomique: true, pourquoi: null,
-        appels: [...j.pa.appels, ...j.pb.etapes, { ...j.pb.tx, role: 'swap on Uniswap v4: USDC to this block' }],
-        resume: { paye: m, payeDevise: de, recoitAuMoins: rb.recoitAuMoins, recoitDevise: vers, pivot: USDC, pivotAuMoins: j.minU,
-          fraisBps: j.pa.resume.fraisBps, fraisBpsJambe1: j.pa.resume.fraisBps, fraisBpsJambe2: rb.fraisBps, fraisParHook: hookPaie, fraisMarcheBps: rb.fraisMarcheBps,
-          jambePayante: hookPaie ? 2 : 1, jambe2NonSimulee: true, minimumParPrixSpot: true,
-          resteAuCompteAuPlus: 'the USDC above the Aerodrome minimum (at most the tolerance) stays in the wallet' } },
-      { via: 'actionAerodromeVersBloc', chemin: [{ de, vers: USDC, famille: 'aerodrome' }, ...chemin2], cotation: quoteB });
+      if (quoteB !== USDC && quoteB !== ETH) return normaliser(route, { etat: 'REFUSE', pourquoi: 'this block trades against ' + nomJeton(quoteB) + ': no measured path from USDC to it' }, { cotation: quoteB });
+      /* le lot (lotPivotUsdcVersBloc, plus haut) : la jambe Aerodrome de l action au prix spot, comme avant */
+      return lotPivotUsdcVersBloc({ de, vers, marcheB, quoteB, via: 'actionAerodromeVersBloc',
+        jambe1: (fraisAero) => planAerodromeSegment({ rpc, chemin: [{ de, vers: USDC, famille: 'aerodrome' }], devise: de, block: USDC, montant: m,
+          compte, beneficiaireFrais: FEE_WALLET, maintenant, ...(fraisAero ? {} : { fraisBps: 0n }) }) });
     }
     /* ── 5. UNE ACTION A POOL v4 PAIE AUTRE CHOSE QUE DE L USDC : de l ETH, un block, une autre action a pool v4 ─────────
      * Phil, 2026-10-04 : « payer un block avec n importe quelle TStock : pas route — fais-le ». Tout le chemin est en
