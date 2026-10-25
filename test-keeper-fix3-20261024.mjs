@@ -461,12 +461,14 @@ await cas('I2. serveur-web.js (tranche executee) : lecture des duels ratee -> /a
   };
   const corps = srcLecteur + '\nasync function route(req, res, chemin) {\n' + srcRoute + '\n}\nreturn { lireDuelsSrv, duelsSrv, route, joints: typeof duelsJointsKeeper === "function" ? duelsJointsKeeper : null, connu: typeof duelConnuKeeper === "function" ? duelConnuKeeper : null };';
   const noms = ['DUELS_DEPLOIEMENT', 'rpcServeur', 'MISE_MIN_DUEL', 'EXP_MIN_DUEL', 'EXP_MAX_DUEL', 'FINIS_DUEL', 'etatDuelSrv', 'regleurCouvre', 'regleurSlots', 'createurParBlock', 'duelEnJson', 'partageDuel',
-    'appelNextIdEtat', 'appelDuelEtat', 'lireNextIdDuels', 'duelDepuisEtat', 'reglerDepuisHash', 'idsDuelsATour'];
+    'appelNextIdEtat', 'appelDuelEtat', 'lireNextIdDuels', 'duelDepuisEtat', 'reglerDepuisHash', 'idsDuelsATour',
+    /* integration 2026-10-25 : la route sert la v2 si sa fiche a une adresse (duelsV2()) ; ici v1, comme la prod tant que v2 n est pas signee */
+    'duelsV2'];
   const fiche = { adresse: C, bloc: 52_778_966, chaine: 8453, constructeur: { usdc: USDC, devWallet: '0x' + 'dd'.repeat(20), rewardPool: '0x' + 'ee'.repeat(20) } };
   let regleur = null;
   const proxy = { etat: () => regleur.etat() };
   const x = new Function(...noms, corps)(fiche, rpcServeur, APPD.MISE_MIN, APPD.EXPIRATION_MIN_S, APPD.EXPIRATION_MAX_S, APPD.FINIS, APPD.etatDuel, DA.regleurCouvre, proxy, new Map(), APPD.duelEnJson, APPD.partage,
-    E.appelNextIdEtat, E.appelDuelEtat, E.lireNextId, E.duelDepuisEtat, E.reglerDepuisHash, E.idsDuelsATour);
+    E.appelNextIdEtat, E.appelDuelEtat, E.lireNextId, E.duelDepuisEtat, E.reglerDepuisHash, E.idsDuelsATour, () => null);
   vu(typeof x.joints === 'function' && typeof x.connu === 'function', 'la tranche du lecteur definit duelsJointsKeeper et duelConnuKeeper (la liste par l etat du regleur)');
   /* le regleur du serveur, cable comme serveur-web.js le cable (joints / connu de la tranche), horloge reelle (la route appelle regleurCouvre a Date.now()) */
   regleur = M.creerRegleur({ cle: CLE, contrat: null, chainId: 8453, rpc: rpcServeur, journal: () => {}, duels: { contrat: () => C, bloc: () => 0, joints: () => x.joints(C), connu: (id) => x.connu(C, id) } });
