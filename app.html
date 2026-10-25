@@ -1687,8 +1687,11 @@ details[open] > summary::before{transform:rotate(90deg)}
 @media (max-width:560px){
   .trLigne .trInfo{flex:1 1 calc(100% - 74px)}
   .trLigne > .trBoutons,.trLigne > .trAcheter{order:1;margin-left:74px}
-  .trLigne > .trBoutons{flex-direction:row;flex-wrap:wrap}
+  .trLigne > .trBoutons{flex-direction:row;flex-wrap:wrap;flex:1 1 calc(100% - 74px);min-width:0}
 }
+/* ⛔ 2026-10-25 (revue adverse, 320 px) : avec `flex:0 0 auto` (regle de base de .trBoutons), la rangee de boutons gardait sa largeur
+   de contenu (Buy 58 + ecart 6 + Pair 144 = 208 px) dans 180 px : son flex-wrap n agissait JAMAIS, 22/69 lignes debordaient de 28 px.
+   Elle prend la ligne moins le retrait (min-width 0), et « Pair a block with it » passe sous « Buy » quand ils ne tiennent pas cote a cote. */
 .navB{font-size:10.5px}
 /* 2026-10-10 re-QA 375 px (mesure headless 375x812 : 9 onglets = 373 px pour 355 ; 'Tokenized' 324-383, coupe de 8 px) : sans gouttiere ni marge laterale
    ils tiennent (~337 px) ; plus etroit encore, la barre DEFILE au lieu de couper un onglet. */
@@ -22373,10 +22376,21 @@ function peindreTrending() {
    *   chaine (route du serveur), apres la liste — elles n etaient comptees nulle part a l ecran (23 sur 65 le 2026-10-25). Jamais de Buy :
    *   sans ligne de marche, rien n est cote ici. */
   const servies = new Set(d.lignes.map((l) => String(l.adr || '').toLowerCase()));
-  const sansLigne = (d.actionsChaine && Array.isArray(d.actionsChaine.liste))
-    ? d.actionsChaine.liste.filter((x) => x && /^0x[0-9a-f]{40}$/.test(String(x.adr || '')) && /^\d+$/.test(String(x.unites || '')) && x.unites !== '0' && !servies.has(x.adr)) : [];
-  const avecUnites = (d.actionsChaine && Array.isArray(d.actionsChaine.liste)) ? d.actionsChaine.liste.filter((x) => x && /^\d+$/.test(String(x.unites || '')) && x.unites !== '0').length : 0;
-  const raisonSansLigne = (x) => (typeof x.phrase === 'string' && x.phrase ? x.phrase
+  /* ⛔⛔ 2026-10-25 (revue adverse, prod 19:21Z juste apres un redemarrage) : 142 actions a l offre NON LUE (unites null) ; ce filtre ne
+   *   gardait que les offres connues, et RIVNc / CBRSc / RKLBc / APPc / UNHc / HSAIc — routes LUES sur la chaine, sans ligne DexScreener —
+   *   disparaissaient sans raison, sous une note « all shown ». Une offre non lue avec une route lue est listee, son etat vrai en tete de
+   *   sa raison (« Supply not read yet ») ; une offre non lue SANS route lue n a rien de lu a montrer : elle est seulement COMPTEE. */
+  const listeAc = d.actionsChaine && Array.isArray(d.actionsChaine.liste) ? d.actionsChaine.liste.filter((x) => x && /^0x[0-9a-f]{40}$/.test(String(x.adr || ''))) : [];
+  const aUnites = (x) => /^\d+$/.test(String(x.unites || '')) && x.unites !== '0';
+  const offreNonLue = (x) => x.unites === null || x.unites === undefined;
+  const sansLigne = listeAc.filter((x) => !servies.has(x.adr) && (aUnites(x) || (offreNonLue(x) && x.route)));
+  const avecUnites = listeAc.filter(aUnites).length;
+  const sansLigneUnites = sansLigne.filter(aUnites).length;
+  const nonLues = listeAc.filter(offreNonLue);
+  const rendues = new Set(lignes.map((l) => String(l.adr || '').toLowerCase()).concat(sansLigne.map((x) => x.adr)));
+  const nonLuesListees = nonLues.filter((x) => rendues.has(x.adr)).length;
+  const toutesMontrees = nonLues.length === 0 && listeAc.filter(aUnites).every((x) => rendues.has(x.adr));
+  const raisonSansLigne = (x) => (offreNonLue(x) ? 'Supply not read yet. ' : '') + (typeof x.phrase === 'string' && x.phrase ? x.phrase
     : x.route === 'ACHETABLE' ? 'Its pool quotes on chain, but DexScreener sends no market figures for it, so nothing is quoted here.'
     : x.route ? 'No buy: its route read on chain does not pass this app’s checks (pool, a 10 USDC buy and the sale back).'
     : 'Its route on chain is not read yet.');
@@ -22472,7 +22486,7 @@ function peindreTrending() {
         return pairable ? '<span class="trBoutons">' + pairer + '</span>' + raison : raison;
       })() + '</li>').join('')
     + (cachees > 0 ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + cachees + ')</button></li>' : '')
-    + (sansLigne.length ? '<li class="filL"><p class="note" style="margin:6px 0">Tokenized stocks with units in circulation but no market row (DexScreener sends no figures for them) — each with the reason read on chain</p></li>'
+    + (sansLigne.length ? '<li class="filL"><p class="note" style="margin:6px 0">Tokenized stocks with no market row (DexScreener sends no figures for them) — with units in circulation, or with their supply not read yet but a route read on chain — each with its reason</p></li>'
       + sansLigne.map((x) => '<li class="filL trLigne trSansLigne" data-block="' + enTexte(x.adr) + '" data-sym="' + enTexte(x.sym || '') + '">'
         + '<span class="trRang">·</span><div class="filArt">' + dessin(x.adr, x.sym || '') + '</div>'
         + '<div class="trInfo"><p class="filT"><b>' + enTexte(x.sym || x.adr) + '</b></p><p class="filS">Tokenized stock · no market figures</p></div>'
@@ -22531,7 +22545,11 @@ function peindreTrending() {
     + (d.actionsChaine && d.actionsChaine.prouvees > 0 ? ' · ' + d.actionsChaine.prouvees + ' issuer stocks proven on chain'
       + (d.actionsChaine.sansUnites > 0 ? ', ' + d.actionsChaine.sansUnites + ' with no units in circulation yet (not listed)' : '')
       /* 2026-10-25 : celles A UNITES, toutes montrees — avec une ligne de marche, ou sans (nom et raison, en fin de liste) */
-      + (avecUnites > 0 ? ', ' + avecUnites + ' with units in circulation, all shown: ' + (avecUnites - sansLigne.length) + ' with a market row, ' + sansLigne.length + ' without a market row (at the end, with their reason)' : '')
+      /* ⛔ « all shown » SEULEMENT si aucune offre n est non lue (et chaque action a unites rendue) ; sinon le compte des non lues est dit */
+      + (toutesMontrees
+        ? (avecUnites > 0 ? ', ' + avecUnites + ' with units in circulation, all shown: ' + (avecUnites - sansLigneUnites) + ' with a market row, ' + sansLigneUnites + ' without a market row (at the end, with their reason)' : '')
+        : (avecUnites > 0 ? ', ' + avecUnites + ' with units in circulation (' + (avecUnites - sansLigneUnites) + ' with a market row, ' + sansLigneUnites + ' without, at the end with their reason)' : '')
+          + (nonLues.length > 0 ? ', ' + nonLues.length + ' with their supply not read yet (' + nonLuesListees + ' listed with what is read, ' + (nonLues.length - nonLuesListees) + ' not listed until it is read)' : ''))
       + (d.actionsChaine.etat === 'PARTIEL' ? ' (still checking ' + d.actionsChaine.nonMesurees + ')' : '') : '')
     + ' · updated ' + new Date(d.lu).toLocaleTimeString();
 }
@@ -22560,7 +22578,10 @@ setInterval(() => {
         () => { try { peindreLive(); peindreParoles(); } catch (_) {} });
     }
     if ($('#v-trade') && $('#v-trade').classList.contains('on') && trDonnees) {
-      completerFaces(trDonnees.lignes.slice(0, trAffiches).map((l) => l.adr), () => { try { peindreTrending(); } catch (_) {} });
+      /* ⛔ 2026-10-25 (revue adverse) : `trDonnees.lignes.slice(0, trAffiches)` — l ordre BRUT du serveur, coupe a 50 — oubliait les
+       *   lignes d action rendues sous le rang 50 et les actions sans ligne (42 sur 92 sur la photo de prod) : jamais leur face gravee.
+       *   Ce qui est demande = ce qui est RENDU (12 par tour, chaque adresse une seule fois). */
+      completerFaces([...document.querySelectorAll('#trListe li.trLigne[data-block]')].map((li) => li.getAttribute('data-block')), () => { try { peindreTrending(); } catch (_) {} });
     }
   } catch (_) { /* une liste pas encore prete : le tour suivant reessaie */ }
 }, 3000);
@@ -26297,7 +26318,17 @@ function bcLigneEtatPlan(p) {
   const raison = String((p && p.pourquoi) || '').slice(0, 220);
   if (p && (p.etat === 'PRET' || p.etat === 'APPROBATIONS')) return 'Ready \u2014 the plan is built. Check it, then sign in your wallet.';
   if (p && p.etat === 'REFUSE') return 'Refused \u2014 ' + (raison.replace(/\s*(?:[\u2014,;.-]\s*)?nothing was sent\.?\s*$/i, '').replace(/[.\s]+$/, '') || 'no reason given') + '. Nothing was sent.';
+  if (bcDevisRefuse(p)) return 'No route for this amount right now: the pool refused the quote (the chain answered \u2014 this is not a failed read). A smaller amount may pass. Nothing was sent.';
   return 'Not measured \u2014 we couldn\u2019t read this market yet. Retry.' + (raison ? ' (' + raison + ')' : '');
+}
+/* \u26d4 2026-10-25 (testeur live game46, Wallet -> Swap RBLXc -> USDC) : \u00ab Not measured \u2014 we couldn\u2019t read this market yet. Retry. (the price
+ *   could not be quoted: execution reverted) \u00bb, \u00ab Try again \u00bb pour seul geste. Un devis qui REVERTE est une reponse de la chaine (pas de
+ *   route / la pool ne remplit pas ce montant), pas une lecture ratee. Meme frontiere qu echange.js estRevertDeChaine : \u00ab revert \u00bb sans
+ *   debit, limite, delai ni indisponibilite. \u26d4 L etat serveur reste NON_MESURE : rails-api.js ne tente son secours (cle mesuree, pool
+ *   Aerodrome) que sur un NON_MESURE \u2014 seul ce que l app DIT et PROPOSE change. */
+function bcDevisRefuse(p) {
+  const m = String((p && p.pourquoi) || '').replace(/^[\s\S]*?could not be quoted:\s*/i, '');
+  return !!(p && p.etat === 'NON_MESURE' && /could not be quoted:/i.test(String(p.pourquoi || '')) && /revert/i.test(m) && !/rate|limit|\b429\b|too many|timeout|timed out|capacity|unavailable|busy/i.test(m));
 }
 function bcResoudre(ref) {
   const r = String(ref || '').trim();
@@ -26559,7 +26590,8 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
       bcEtape(m, bcLigneEtatPlan(p), 'non');
       /* le refus REFERME l operation (elle restait a « waiting for you » alors que rien n attendait la personne) */
       bcOpMaj(op, 'notOffered');
-      bcBoutons(m, [['Try again', planifier, true]]);
+      /* un devis refuse par la chaine n offre pas « Try again » seul : « Dismiss » d abord (2026-10-25, game46) */
+      bcBoutons(m, bcDevisRefuse(p) ? [['Dismiss', refuser, true], ['Try again', planifier, true]] : [['Try again', planifier, true]]);
       return;
     }
     if (accordCerveau) bcEtape(m, accordCerveau, 'oui');

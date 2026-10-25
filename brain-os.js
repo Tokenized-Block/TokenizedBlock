@@ -126,7 +126,10 @@ export async function allerRetour({ rpc, quoteur, cle, jeton, entree }) {
  *   l USDC qu elle tient, puis 10 USDC achetes et revendus sur le quoter Aerodrome au meme etat. Un refus du noeud est dit « not read ». */
 const routeValide = (r) => (r && ADR.test(String(r.pool || '')) && Number.isInteger(Number(r.tickSpacing)) && Number(r.tickSpacing) > 0
   ? { pool: bas(r.pool), tickSpacing: Number(r.tickSpacing) } : null);
-const premierMot = (hex) => BigInt('0x' + String(hex).replace(/^0x/, '').slice(0, 64));
+/* ⛔ 2026-10-25 (revue adverse) : un noeud qui rend `null` ou `0x` (reponse VIDE, pas un revert) faisait jeter lireSurete (« Cannot convert
+ *   0xnull to a BigInt », conversion hors de tout try) ; et un token0 vide concluait « does not pair it with USDC ». Un mot de 32 octets
+ *   complet ou rien : sinon la pool est « not read », jamais une conclusion. */
+const premierMot = (hex) => (/^0x[0-9a-fA-F]{64}/.test(String(hex)) ? BigInt(String(hex).slice(0, 66)) : null);
 async function lireAerodrome({ rpc, jeton, pool, tickSpacing }) {
   const u = bas(USDC_BASE), call = (to, data) => rpc('eth_call', [{ to, data }, 'latest']);
   let t0, t1, usdc;
@@ -134,14 +137,17 @@ async function lireAerodrome({ rpc, jeton, pool, tickSpacing }) {
     [t0, t1, usdc] = await Promise.all([call(pool, selecteur('token0()')), call(pool, selecteur('token1()')),
       call(u, selecteur('balanceOf(address)') + pool.slice(2).padStart(64, '0'))]);
   } catch (_) { return { etat: 'NON_LU' }; }
+  if (premierMot(t0) === null || premierMot(t1) === null || premierMot(usdc) === null) return { etat: 'NON_LU' };
   const paire = [motAdr(String(t0).slice(0, 66)), motAdr(String(t1).slice(0, 66))].sort().join() === [bas(jeton), u].sort().join();
   if (!paire) return { etat: 'LU', paire: false };
   const r = { etat: 'LU', paire: true, usdc: premierMot(usdc), entree: 10_000_000n };
   try { r.recu = premierMot(await rpc('eth_call', [calldataDevis({ tokenIn: u, tokenOut: jeton, tickSpacing, montant: r.entree }), 'latest'])); }
   catch (e) { r.allerRetour = estRevertDeChaine(e) ? 'ACHAT_REFUSE' : 'NON_LU'; return r; }
+  if (r.recu === null) { r.allerRetour = 'NON_LU'; return r; }
   if (!(r.recu > 0n)) { r.allerRetour = 'ACHAT_REFUSE'; return r; }
   try { r.retour = premierMot(await rpc('eth_call', [calldataDevis({ tokenIn: jeton, tokenOut: u, tickSpacing, montant: r.recu }), 'latest'])); }
   catch (e) { r.allerRetour = estRevertDeChaine(e) ? 'VENTE_REFUSEE' : 'NON_LU'; return r; }
+  if (r.retour === null) { r.allerRetour = 'NON_LU'; return r; }
   r.allerRetour = 'LU';
   r.perteBps = Number(((r.entree - r.retour) * 10000n) / r.entree);
   return r;

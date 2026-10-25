@@ -16,6 +16,8 @@
  *      bcProposerSwap est epingle sur integ11 (2026-10-25, chantier liquidite relu PASS) : diff relu = AVANT la signature, la ligne
  *      du meilleur lieu de vente (p.vente.texte) ; une vente loin sous la reference (p.vente.loin) n ouvre plus le wallet toute
  *      seule ; le libelle du bouton passe par bcLibelleSigner (« Sell anyway » jamais sur une approbation). signer() inchange ;
+ *      puis sur integ13 (2026-10-26, correctif Market) : diff relu contre integ12 = 1 commentaire + la rangee de boutons d un devis
+ *      refuse par la chaine (Dismiss + Try again quand bcDevisRefuse(p), sinon inchangee) ; aucun appel d argent touche ;
  *      bcSigner est epingle sur claude/grok-wallet (2026-10-25) : diff relu = la ligne « Confirmed. » dit le hash de l etape
  *      (affichage seul) + son commentaire ;
  *   E. chaque regle ci-dessus tue son mutant (copies EN MEMOIRE du texte, jamais le fichier).
@@ -37,8 +39,9 @@ const brut = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g
 const EMPREINTES_PROD_D07AFC5 = {
   /* integ9 2026-10-25 (d07afc5 : 9df99397…d300) : + show -> bcTerminer, + spin / settle_spin, voir l en-tete D */
   'async function bcExecuterTexte(': '13b33a98e03a9419a6bf59bbb77e84159cf04b82c819c25f84a0814c2656a027',
-  /* integ11 2026-10-25 (d07afc5 : cd36ee9d…84db) : + ligne de vente avant signature, venteLoin, bcLibelleSigner — voir l en-tete D */
-  'async function bcProposerSwap(': 'ef52c7fae386f0dd1b019f951ad44f820c4ace9c329bfe373c8d9fd25e40b5a3',
+  /* integ11 2026-10-25 (d07afc5 : cd36ee9d…84db) : + ligne de vente avant signature, venteLoin, bcLibelleSigner ; integ13 2026-10-26
+   *   (integ12 : ef52c7fa…b5a3) : + rangee Dismiss + Try again d un devis refuse par la chaine — voir l en-tete D */
+  'async function bcProposerSwap(': 'bab2159035f3850999644065062f37ffaafe8aceda51f18d8656c97d1894d573',
   'function bcModeEnvoi(': 'b2cbcf62fe2fb7ca3ff4ad4087c0fabf9bd6641502f8e30a5e2e4e7936ce7420',
   'function bcDeuxTrades(': '4680c774049c0119139b1a3ed7a1c7a03d3c196478424df2e4e3fc7d7a8198e9',
   /* claude/grok-wallet 2026-10-25 (rapport Grok §0.9 ; d07afc5 : 989eaf4d…e29e) : diff relu = la ligne « Confirmed. » dit le hash de

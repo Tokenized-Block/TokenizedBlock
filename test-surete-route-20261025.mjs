@@ -29,7 +29,7 @@ const motA = (a) => '0x' + bas(a).slice(2).padStart(64, '0');
 const S = { t0: selecteur('token0()'), t1: selecteur('token1()'), bal: selecteur('balanceOf(address)'), q: selecteur('quoteExactInputSingle((address,address,uint256,int24,uint160))') };
 
 /* le noeud simule : code B20, tout le reste a zero (aucune pool v4 : getSlot0 rend 0), la pool Aerodrome repond si `aero` */
-function rpcDe({ aero = 'ok', paire = true, pool = P } = {}) {
+function rpcDe({ aero = 'ok', paire = true, pool = P, bal, t0 } = {}) {
   const appels = [];
   const f = async (m, p) => {
     appels.push(m + ' ' + JSON.stringify(p).slice(0, 140));
@@ -39,6 +39,8 @@ function rpcDe({ aero = 'ok', paire = true, pool = P } = {}) {
     const t = bas(to), d = bas(data);
     const aeroAppel = t === bas(pool) || t === Q || (t === U && d.startsWith(S.bal) && d.endsWith(bas(pool).slice(2)));
     if (aeroAppel && aero === 'refus') throw new Error('429 Too Many Requests');
+    if (t === bas(pool) && d === S.t0 && t0 !== undefined) return t0;
+    if (t === U && d.startsWith(S.bal) && d.endsWith(bas(pool).slice(2)) && bal !== undefined) return bal;
     if (t === bas(pool) && d === S.t0) return motA(paire ? (BigInt(U) < BigInt(J) ? U : J) : '0x' + '11'.repeat(20));
     if (t === bas(pool) && d === S.t1) return motA(paire ? (BigInt(U) < BigInt(J) ? J : U) : '0x' + '22'.repeat(20));
     if (t === U && d.startsWith(S.bal) && d.endsWith(bas(pool).slice(2))) return mot(38207695200n);
@@ -82,6 +84,14 @@ async function verifier(mod) {
   const e = await mod.lireSurete({ rpc: rpcDe({ pool: P2 }), jeton: J, chaine: 8453, clesExactes: [], poolAerodrome: { pool: P2, tickSpacing: 10, source: 'route' } });
   const te = e.lignes.map((l) => l.texte).join(' | ');
   if (!te.includes(P2) || /no pool found/.test(e.resume)) ko.push('E : la route servie passee par l app n est pas lue (' + e.resume + ')');
+  /* (G) revue adverse 2026-10-25 : le noeud rend `null` ou `0x` (reponse vide, pas un revert) a une lecture de la pool — lireSurete ne
+   *   jette pas (avant : « Cannot convert 0xnull to a BigInt »), dit « Aerodrome pool not read », et ne conclut ni paire ni USDC */
+  for (const [nom, o] of [['balanceOf -> null', { bal: null }], ['balanceOf -> 0x', { bal: '0x' }], ['token0 -> 0x', { t0: '0x' }], ['token0 -> null', { t0: null }]]) {
+    let g;
+    try { g = await mod.lireSurete({ rpc: rpcDe(o), jeton: J, chaine: 8453, clesExactes: [] }); } catch (err) { ko.push('G ' + nom + ' : lireSurete JETTE (' + err.message + ')'); continue; }
+    if (!/Aerodrome pool not read/.test(g.resume)) ko.push('G ' + nom + ' : le resume ne dit pas « Aerodrome pool not read » (' + g.resume + ')');
+    if (/does not pair|USDC round trip/.test(g.resume + g.lignes.map((l) => l.texte).join(' '))) ko.push('G ' + nom + ' : une conclusion tiree d une reponse vide (' + g.resume + ')');
+  }
   return ko;
 }
 
@@ -103,6 +113,10 @@ const MUTANTS = [
   ['la paire n est plus verifiee', 'if (!ra.paire) {', 'if (false) {'],
   ['un refus de lecture se tait', "morceauxAero.push('its Aerodrome pool not read');", "morceauxAero.push('');"],
   ['la route servie est ignoree', 'routeValide(poolAerodrome) || actionMesuree(a)', 'actionMesuree(a)'],
+  /* revue adverse : reponse vide du noeud */
+  ['une reponse vide passe la garde', "if (premierMot(t0) === null || premierMot(t1) === null || premierMot(usdc) === null) return { etat: 'NON_LU' };", ''],
+  ['le solde USDC vide n est plus garde', 'premierMot(t1) === null || premierMot(usdc) === null', 'premierMot(t1) === null'],
+  ['la conversion redevient sans garde (2f201c5)', "(/^0x[0-9a-fA-F]{64}/.test(String(hex)) ? BigInt(String(hex).slice(0, 66)) : null)", "BigInt('0x' + String(hex).replace(/^0x/, '').slice(0, 64))"],
 ];
 let tues = 0;
 for (const [nom, de, vers] of MUTANTS) {

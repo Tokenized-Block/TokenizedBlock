@@ -12,7 +12,11 @@ const lignes = html.split(/\r?\n/);
 const ligne = (motif) => { const l = lignes.find((x) => x.includes(motif)); assert.ok(l, 'introuvable : ' + motif); return l; };
 const i = lignes.findIndex((x) => x.startsWith('function bcLigneEtatPlan('));
 assert.ok(i > 0, 'bcLigneEtatPlan absente : le plan ne dit pas son etat');
-const src = ligne('function bcMarcheLue(') + '\n' + ligne('function bcCerveauAttend(') + '\n' + lignes.slice(i, i + 6).join('\n');
+/* 2026-10-25 : bcLigneEtatPlan grandit (devis refuse par la chaine, bcDevisRefuse) : extraite jusqu a sa '}' de colonne 0, plus son aide */
+const fin = (k) => { const f = lignes.findIndex((x, j) => j > k && x === '}'); assert.ok(f > k, 'fin introuvable'); return f; };
+const iD = lignes.findIndex((x) => x.startsWith('function bcDevisRefuse('));
+assert.ok(iD > 0, 'bcDevisRefuse absente');
+const src = ligne('function bcMarcheLue(') + '\n' + ligne('function bcCerveauAttend(') + '\n' + lignes.slice(i, fin(i) + 1).join('\n') + '\n' + lignes.slice(iD, fin(iD) + 1).join('\n');
 const { bcMarcheLue, bcCerveauAttend, bcLigneEtatPlan } = new Function(src + '; return { bcMarcheLue, bcCerveauAttend, bcLigneEtatPlan };')();
 assert.match(bcLigneEtatPlan({ etat: 'PRET' }), /^Ready \u2014 /);
 assert.match(bcLigneEtatPlan({ etat: 'APPROBATIONS' }), /^Ready \u2014 /);

@@ -20,6 +20,11 @@ const { ACTIONS_COINBASE } = await imp('paires.js');
 const { TBLOCK } = await imp('tokenomics.js');
 const APP = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g, '\n');
 const PROD = JSON.parse(fs.readFileSync(path.join(ICI, 'mesures', 'trending-prod-20261025-tslac.json'), 'utf8'));
+/* ⛔⛔ REVUE ADVERSE (2026-10-25) : photo de prod lue a 19:21:48Z (x-ms-monitor: 1), juste apres un redemarrage — 142 actions a
+ *   l offre NON LUE (unites null, unitesNonLues 142). Le filtre de 2f201c5 ne listait que les offres connues : RIVNc, CBRSc, RKLBc, APPc,
+ *   UNHc (SANS_POOL_ROUTEUR) et HSAIc (ECART), routes lues sur la chaine, sans ligne DexScreener, DISPARAISSAIENT sans raison ; et la note
+ *   disait « 41 with units in circulation, all shown », sans un mot des 142 non lues. */
+const NONLUES = JSON.parse(fs.readFileSync(path.join(ICI, 'mesures', 'trending-prod-20261025-nonlues.json'), 'utf8'));
 const enTexte = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const ACTIONS_PAR_ADR = new Set(ACTIONS_COINBASE.map((a) => String(a.adr).toLowerCase()));
 const TSLA = '0xb2000000000000000000001e800a7f5189430cd0';
@@ -82,6 +87,54 @@ function verifier(app) {
     const r = lis(peindre(app, d2).html).find((li) => adrDe(li) === x.adr) || '';
     if (!r.includes(enTexte(x.phrase))) ko.push('la raison mesuree servie n est pas dite sous ' + x.sym);
   }
+  /* photo 18:43Z : aucune offre non lue -> « all shown » est vrai et dit */
+  if (PROD.actionsChaine.liste.some((y) => y.unites === null)) ko.push('photo 18:43Z : une offre non lue (le banc suppose 0)');
+  else if (!/all shown/.test(m.note)) ko.push('photo 18:43Z (0 offre non lue) : la note ne dit plus « all shown »');
+  /* photo 19:21Z (apres redemarrage) : les actions a offre non lue mais a route lue, sans ligne de marche, sont listees avec leur etat vrai */
+  let n2;
+  try { n2 = peindre(app, NONLUES); } catch (e) { ko.push('photo 19:21Z : ' + e.message); return ko; }
+  const rangs2 = lis(n2.html);
+  const lignes2 = new Set(NONLUES.lignes.map((l) => l.adr.toLowerCase()));
+  const nonLues = NONLUES.actionsChaine.liste.filter((y) => y.unites === null);
+  const attendues = nonLues.filter((y) => y.route && !lignes2.has(y.adr));
+  if (attendues.length !== 6) ko.push('photo 19:21Z : ' + attendues.length + ' actions a offre non lue et route lue sans ligne (6 attendues)');
+  for (const y of attendues) {
+    const li = rangs2.find((r) => adrDe(r) === y.adr);
+    if (!li) { ko.push('19:21Z : ' + y.sym + ' (offre non lue, route ' + y.route + ') absente de la liste'); continue; }
+    if (!/<p class="note trRaison">[^<]*[Ss]upply not read yet[^<]*<\/p><\/li>$/.test(li)) ko.push('19:21Z : ' + y.sym + ' sans « supply not read yet » en derniere ligne');
+    if (/>Buy</.test(li)) ko.push('19:21Z : ' + y.sym + ' : un Buy sans ligne de marche');
+  }
+  /* jamais « all shown » tant qu une offre n est pas lue ; le compte des non lues est dit */
+  if (/all shown/.test(n2.note)) ko.push('19:21Z : la note dit « all shown » avec ' + nonLues.length + ' offres non lues (' + n2.note.slice(0, 260) + ')');
+  if (!new RegExp(nonLues.length + ' [^·]*supply not read yet').test(n2.note)) ko.push('19:21Z : la note ne dit pas les ' + nonLues.length + ' offres non lues');
+  /* une action a offre non lue SANS route lue n est pas inventee en liste (rien de lu sur elle) */
+  const muette = nonLues.find((y) => !y.route && !lignes2.has(y.adr));
+  if (muette && rangs2.some((r) => adrDe(r) === muette.adr)) ko.push('19:21Z : ' + muette.sym + ' listee sans offre ni route lues');
+  /* revue adverse : les faces gravees ne sont demandees (completerFaces) que pour trDonnees.lignes.slice(0, trAffiches) — les lignes
+   *   d action sous le rang 50 (et les actions sans ligne) n ont jamais leur face. Le tour des faces doit demander CHAQUE ligne rendue. */
+  for (const k of faces(app, m.html)) ko.push(k);
+  return ko;
+}
+
+/* EXECUTE le morceau « Market » du tour des faces (setInterval de app.html) sur la liste rendue, completerFaces espionne */
+function faces(app, html) {
+  const ko = [];
+  const tete = "if ($('#v-trade') && $('#v-trade').classList.contains('on') && trDonnees) {";
+  const a = app.indexOf(tete);
+  if (a < 0 || app.indexOf(tete, a + 1) >= 0) return ['tour des faces du Market : bloc introuvable ou multiple'];
+  let p = 0, b = a + tete.length - 1;
+  for (; b < app.length; b++) { if (app[b] === '{') p += 1; else if (app[b] === '}') { p -= 1; if (p === 0) break; } }
+  const corps = app.slice(a + tete.length, b);
+  const rendues = lis(html).filter((li) => /class="filL trLigne/.test(li)).map(adrDe).filter(Boolean).map((x) => x.toLowerCase());
+  const demandees = new Set();
+  const document = { querySelectorAll: (sel) => (/^#trListe (li\.trLigne|li|)\[data-block\]$/.test(sel) || sel === '#trListe li.trLigne'
+    ? rendues.map((adr) => ({ getAttribute: (n) => (n === 'data-block' ? adr : null), dataset: { block: adr } })) : []) };
+  try {
+    new Function('$', 'trDonnees', 'trAffiches', 'completerFaces', 'document', 'peindreTrending', corps)(
+      () => null, PROD, 50, (adrs) => { for (const x of adrs) demandees.add(String(x).toLowerCase()); }, document, () => {});
+  } catch (e) { return ['tour des faces du Market : ' + e.message]; }
+  const oubliees = rendues.filter((x) => !demandees.has(x));
+  if (oubliees.length) ko.push('tour des faces : ' + oubliees.length + ' lignes rendues sur ' + rendues.length + ' jamais demandees (dont TSLAc : ' + oubliees.includes(TSLA) + ')');
   return ko;
 }
 
@@ -96,9 +149,16 @@ vu(ko.length === 0, 'chaque action a unites est visible par defaut (ligne ou rai
 const MUTANTS = [
   ['les actions sont de nouveau coupees a 50', 'toutes.filter((l, k) => k < trAffiches || l.routeAction)', 'toutes.slice(0, trAffiches)'],
   ['le rang redevient la position a l ecran', "'<span class=\"trRang\">' + (rang.get(l) + 1) + '</span>'", "'<span class=\"trRang\">' + (i + 1) + '</span>'"],
-  ['les actions sans ligne ne sont plus rendues', 'const sansLigne = (d.actionsChaine && Array.isArray(d.actionsChaine.liste))', 'const sansLigne = (false)'],
+  ['les actions sans ligne ne sont plus rendues', 'const sansLigne = listeAc.filter(', 'const sansLigne = [].filter('],
   ['la raison servie est ignoree', "(typeof x.phrase === 'string' && x.phrase ? x.phrase", "(false ? x.phrase"],
   ['« Show more » recompte sur la coupe', 'const cachees = toutes.length - lignes.length;', 'const cachees = toutes.length - trAffiches;'],
+  /* revue adverse : offre non lue */
+  ['les offres non lues a route lue disparaissent (2f201c5)', '(aUnites(x) || (offreNonLue(x) && x.route))', 'aUnites(x)'],
+  ['les offres non lues sans route sont listees aussi', '(aUnites(x) || (offreNonLue(x) && x.route))', '(aUnites(x) || offreNonLue(x))'],
+  ['l etat « Supply not read yet » n est plus dit', "(offreNonLue(x) ? 'Supply not read yet. ' : '')", "''"],
+  ['« all shown » dit malgre les non lues', 'const toutesMontrees = nonLues.length === 0 && ', 'const toutesMontrees = '],
+  ['les faces redemandees sur la coupe brute (2f201c5)', "completerFaces([...document.querySelectorAll('#trListe li.trLigne[data-block]')].map((li) => li.getAttribute('data-block'))", 'completerFaces(trDonnees.lignes.slice(0, trAffiches).map((l) => l.adr)'],
+  ['le compte des non lues n est plus dit',"(nonLues.length > 0 ? ', ' + nonLues.length + ' with their supply not read yet", "(false ? ', ' + nonLues.length + ' with their supply not read yet"],
 ];
 let tues = 0;
 for (const [nom, de, a] of MUTANTS) {
