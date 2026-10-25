@@ -9,13 +9,15 @@
  *   C. le Swap du Wallet n ecrit AUCUN echange : il ecrit une commande que la barre du Chat accepte, et l analyseur du Chat
  *      (commandes-panel.js) la lit EXACTEMENT comme la meme commande tapee a la main — donc tout ce qui suit (porte du cerveau,
  *      /api/rails/plan, devis, wallet) est le meme code avec la meme entree ;
- *   D. ce code-la (bcSigner, bcModeEnvoi, bcDeuxTrades) est OCTET POUR OCTET celui de la prod d07afc5 (empreintes
+ *   D. ce code-la (bcModeEnvoi, bcDeuxTrades) est OCTET POUR OCTET celui de la prod d07afc5 (empreintes
  *      sha256, fins de ligne normalisees) ; bcExecuterTexte est epingle sur integ9 (2026-10-25) : diff relu = 3 lignes AJOUTEES,
  *      l action suivante apres « show » et les commandes spin / settle_spin (bcCommandeSpin / bcCommandeSettleSpin -> slotsAgir,
  *      les fonctions de la carte Draws) ; la branche swap est inchangee et D2 la garde ;
  *      bcProposerSwap est epingle sur integ11 (2026-10-25, chantier liquidite relu PASS) : diff relu = AVANT la signature, la ligne
  *      du meilleur lieu de vente (p.vente.texte) ; une vente loin sous la reference (p.vente.loin) n ouvre plus le wallet toute
  *      seule ; le libelle du bouton passe par bcLibelleSigner (« Sell anyway » jamais sur une approbation). signer() inchange ;
+ *      bcSigner est epingle sur claude/grok-wallet (2026-10-25) : diff relu = la ligne « Confirmed. » dit le hash de l etape
+ *      (affichage seul) + son commentaire ;
  *   E. chaque regle ci-dessus tue son mutant (copies EN MEMOIRE du texte, jamais le fichier).
  *
  * ⚠️ CE QU IL NE PROUVE PAS : qu un echange aboutisse sur la chaine (rien n est signe ici), ni le rendu reel a 375 px (la
@@ -39,7 +41,9 @@ const EMPREINTES_PROD_D07AFC5 = {
   'async function bcProposerSwap(': 'ef52c7fae386f0dd1b019f951ad44f820c4ace9c329bfe373c8d9fd25e40b5a3',
   'function bcModeEnvoi(': 'b2cbcf62fe2fb7ca3ff4ad4087c0fabf9bd6641502f8e30a5e2e4e7936ce7420',
   'function bcDeuxTrades(': '4680c774049c0119139b1a3ed7a1c7a03d3c196478424df2e4e3fc7d7a8198e9',
-  'async function bcSigner(': '989eaf4d831e9d373872191c72b93a0fe7070896f3c59ca0ecc2281a18e0e29e',
+  /* claude/grok-wallet 2026-10-25 (rapport Grok §0.9 ; d07afc5 : 989eaf4d…e29e) : diff relu = la ligne « Confirmed. » dit le hash de
+   *   l etape (AFFICHAGE seul) + 1 commentaire ; envoi, ordre, retours et frais inchanges (test-banque-revue-adverse les execute) */
+  'async function bcSigner(': '4ebbfda5d4f40b4c6909acaa227f5d0ef45e1d0eeb9d1977861f081a4667d31a',
 };
 const BLOCK = '0x' + 'b2'.padEnd(40, '0').slice(0, 38) + 'e7';
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';

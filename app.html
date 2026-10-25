@@ -11838,7 +11838,21 @@ async function lireJeton(jeton, qui) {
  *    sur la foi d un solde fige, c est le « vrai transfer bug » de Phil. Le Wallet se relit a l ouverture de l onglet
  *    et apres chaque transaction confirmee. */
 let walletLuA = 0;
-async function majWallet() {
+/** Le nom d un jeton dans la liste du Wallet : son symbole CONNU (creations lues, genese, registre, index du Market), sinon LU sur la chaine
+ *  (symbol(), decode UTF-8 et nettoye par texteAbi), sinon son adresse abregee.
+ *  ⛔ 2026-10-25 (rapport Grok, Bank/Wallet a 375 px : un actif « ? » a cote de IB022) : c etait UNIT (0xb200…4f27), le block CREE par le
+ *    wallet test, venu de l index serveur (/api/blocks-de) SANS symbole — la ligne des creations ecrivait « ? » au lieu de le lire. */
+async function nomJetonWallet(adr, connu = '') {
+  const a = String(adr || '').toLowerCase();
+  const lu = creationsLues.find((c) => String(c.jeton).toLowerCase() === a);
+  let nom = String(connu || (lu && lu.symbole) || SYMBOLES_GENESE[a] || '');
+  if (!nom) { try { const r = bcResoudre(a); if (r && r.ok && r.sym && r.sym !== court(a)) nom = String(r.sym); } catch (_) { nom = ''; } }
+  if (!nom) { try { nom = texteAbi(String(await rpc('eth_call', [{ to: a, data: '0x95d89b41' }, 'latest']))); } catch (_) { nom = ''; } }
+  return (nom || court(a)).slice(0, 12);
+}
+/* `recus` (2026-10-25) : les jetons qu un recu confirme vient de faire entrer dans ce compte (bcApresConfirme). Ils sont relus EN DIRECT
+ *   ici, juste apres ETH et USDC — /api/avoirs (cache serveur 30 s) peut encore rendre la liste d avant l achat. */
+async function majWallet({ recus = [] } = {}) {
   walletLuA = Date.now();
   const moi = ++jetonLecture;
   const perime = () => moi !== jetonLecture;
@@ -11872,6 +11886,17 @@ async function majWallet() {
     await dormir(260);
     const a = { id: j.adr, nom: j.nom, sous: court(j.adr), adr: j.adr, ic: j.ic };
     try { Object.assign(a, await lireJeton(j.adr, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
+    if (perime()) return;
+    actifs.push(a);
+    peindreActifs();
+  }
+  for (const adrR of recus.slice(0, 8)) {
+    const aR = String(adrR || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(aR) || actifs.some((x) => String(x.adr || '').toLowerCase() === aR)) continue;
+    await dormir(260);
+    const action = ACTIONS_PAR_ADR.has(aR), devise = DEVISES_BASE.some((d) => String(d.adr).toLowerCase() === aR);
+    const a = { id: aR, nom: await nomJetonWallet(aR), sous: (action ? 'tokenized stock · ' : devise ? '' : 'block you received or bought · ') + court(aR), adr: aR, bloc: !action && !devise };
+    try { Object.assign(a, await lireJeton(aR, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
     if (perime()) return;
     actifs.push(a);
     peindreActifs();
@@ -11911,8 +11936,9 @@ async function majWallet() {
     const ratees = (r.fenetresRatees || []).length;
     if (ratees) note += '⚠️ ' + ratees + ' chain window(s) refused by the node — not read, not empty. ';
     for (const c of gardees.slice(0, 12)) {
+      if (actifs.some((y) => String(y.adr || '').toLowerCase() === String(c.jeton).toLowerCase())) continue; /* deja lu (recu juste avant) */
       await dormir(260);
-      const a = { id: c.jeton, nom: String(c.symbole || '?').slice(0, 12),
+      const a = { id: c.jeton, nom: await nomJetonWallet(c.jeton, c.symbole),
         sous: 'block you created · ' + court(c.jeton), adr: c.jeton, bloc: true };
       try { Object.assign(a, await lireJeton(c.jeton, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
       if (perime()) return;
@@ -11931,16 +11957,8 @@ async function majWallet() {
       await dormir(260);
       const a = { id: b.jeton, nom: '?', sous: 'block you received or bought · ' + court(b.jeton), adr: b.jeton, bloc: true };
       try { Object.assign(a, await lireJeton(b.jeton, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
-      const connu = creationsLues.find((c) => String(c.jeton).toLowerCase() === b.jeton);
-      a.nom = String((connu && connu.symbole) || SYMBOLES_GENESE[b.jeton] || '').slice(0, 12);
-      if (!a.nom) {
-        try {
-          const h = String(await rpc('eth_call', [{ to: b.jeton, data: '0x95d89b41' }, 'latest'])).slice(2);
-          const n = parseInt(h.slice(64, 128), 16);
-          a.nom = new TextDecoder().decode(new Uint8Array((h.slice(128, 128 + n * 2).match(/../g) || []).map((x) => parseInt(x, 16)))).slice(0, 12);
-        } catch (_) { /* symbole illisible */ }
-        if (!a.nom) a.nom = court(b.jeton);
-      }
+      /* meme chemin que les creations : connu, sinon lu (UTF-8 nettoye — l ancien decodage brut laissait passer les caracteres caches), sinon l adresse */
+      a.nom = await nomJetonWallet(b.jeton);
       if (perime()) return;
       actifs.push(a);
       peindreActifs();
@@ -12013,6 +12031,8 @@ function peindreActifs() {
        * quelqu un qu il a perdu ses fonds — a cause de notre noeud. */
       : '<span class="wIllisible">unreadable</span>') + '</div></li>').join('');
   remplirChoixActif();
+  /* 2026-10-25 (rapport Grok : SNDKc achete absent de « You pay ») : la carte Swap ouverte suit la relecture, sans attendre d etre rouverte */
+  try { const w = $('#wSwapCarte'); if (w && !w.hidden) wsPeindreDe(); } catch (_) { /* carte pas encore construite */ }
   /* tip 2140: Speak-as / Prepare gate tracks wallet balances */
   try { if (typeof peindreChoixParler === 'function') peindreChoixParler(); } catch (_) {}
 }
@@ -26063,7 +26083,34 @@ function bcOp(texte, qui, carte = null) {
   bcSauverOps();
   return op;
 }
-function bcOpMaj(op, etat, tx) { if (!op || !BC_ETATS[etat]) return; op.etat = etat; if (tx) op.tx = tx; if (etat === 'done') bc.soldesLus = 0; /* une transaction confirmee = soldes a relire */ bcSauverOps(); }
+function bcOpMaj(op, etat, tx) {
+  if (!op || !BC_ETATS[etat]) return;
+  op.etat = etat; if (tx) op.tx = tx;
+  /* une transaction confirmee = soldes a relire : ceux du Trade (« You hold », actions detenues comprises) ET le Wallet (bcApresConfirme) */
+  if (etat === 'done') { bc.soldesLus = 0; if (bc.actionsDetenues) bc.actionsDetenues.t = 0; void bcApresConfirme(tx); }
+  bcSauverOps();
+}
+/* ── 2026-10-25 (rapport Grok, prod game44 : SNDKc achete 0x5ed69934…e86f, ABSENT du Wallet et de « You pay » jusqu au rechargement) ──
+ *   Rien ne relisait le Wallet apres un echange du panneau ; et meme relu, /api/avoirs (cache serveur 30 s) rendait les soldes d AVANT.
+ *   Apres un recu confirme : le recu est lu, et les jetons qu il a fait ENTRER dans ce compte sont relus EN DIRECT par le Wallet.
+ *   ⛔ UN EVENEMENT N EST PAS UN SOLDE : un Transfer vers ce compte (ERC-20 : 3 sujets) dit seulement QUEL jeton relire ; son solde est
+ *     lu par balanceOf (lireJeton), jamais pris dans l evenement. Ce recu est celui de la transaction que CE wallet vient de signer. */
+function jetonsRecusDuRecu(rc, moi) {
+  const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef', pour = '0x' + String(moi).toLowerCase().slice(2).padStart(64, '0');
+  const logs = rc && Array.isArray(rc.logs) ? rc.logs : [];
+  return [...new Set(logs.filter((l) => l && Array.isArray(l.topics) && String(l.topics[0]).toLowerCase() === TRANSFER
+    && l.topics.length === 3 && String(l.topics[2]).toLowerCase() === pour && /^0x[0-9a-fA-F]{40}$/.test(String(l.address)))
+    .map((l) => String(l.address).toLowerCase()))].slice(0, 8);
+}
+async function bcApresConfirme(hash) {
+  if (!compte) return;
+  const moi = String(compte).toLowerCase();
+  let recus = [];
+  /* recu illisible : le Wallet est relu quand meme (sans jeton en plus) — jamais une erreur qui l empeche */
+  try { if (/^0x[0-9a-fA-F]{64}$/.test(String(hash || ''))) recus = jetonsRecusDuRecu(await rpc('eth_getTransactionReceipt', [hash]), moi); } catch (_) { recus = []; }
+  if (!compte || String(compte).toLowerCase() !== moi) return;
+  try { await majWallet({ recus }); } catch (_) { /* relu a l ouverture de l onglet */ }
+}
 /* 2026-10-11 (QA Grok 17:47 : UNALYN montrait « Swap 0.002 ETH -> IB022 . LEFT UNFINISHED ») : l historique d un block ne montre
  *   que SES operations ; sans block ouvert, tout. Une ancienne operation sans block n est montree que sans block ouvert. */
 function bcOpsDuBlock(ops, adr) {
@@ -26265,7 +26312,8 @@ async function bcSigner(m, appels, ligne = 'autre') {
         : 'It did not go through: ' + String(r.pourquoi || r.etat).slice(0, 160), 'non');
       return { ok: false, refuse, diffusee: aEteDiffusee(r.etat), hash: r.hash || hash, hashOperation, faits: i };
     }
-    hash = r.hash; if (!c.frais) hashOperation = r.hash; bcEtape(m, 'Confirmed.', 'oui');
+    /* 2026-10-25 (rapport Grok : seul le hash final « Done — 0x… » etait dit) : chaque etape confirmee dit SON hash, approbations comprises */
+    hash = r.hash; if (!c.frais) hashOperation = r.hash; bcEtape(m, r.hash ? 'Confirmed — ' + String(r.hash).slice(0, 10) + '…' + String(r.hash).slice(-4) + '.' : 'Confirmed.', 'oui');
     if (ligne) signalerPaye(r.hash, ligne); /* null = un envoi sans frais : rien a relire */
     if (ligne) lieuTicketPaye(r.hash, (t) => bcEtape(m, t, 'non')); /* D4 : la note du ticket du jour dans CE fil */
   }
@@ -29019,7 +29067,8 @@ function wsEstBlock(id) {
 }
 /** « You pay » : SEULS les soldes LUS et non nuls (l ETH reste, meme a zero) — la meme regle que la liste de Send. */
 function wsPeindreDe() {
-  const s = $('#wsDe'), avant = s.value;
+  /* le choix de la personne survit a une relecture (la liste se reconstruit jeton par jeton) */
+  const s = $('#wsDe'), avant = s.dataset.voulu || s.value;
   const lus = actifs.filter((a) => a.etat === 'LU' && (a.id === 'ETH' || (typeof a.solde === 'bigint' && a.solde > 0n)));
   /* options construites par le DOM (new Option = texte), jamais innerHTML : regle du panneau (test-commandes-panel) */
   s.replaceChildren(...lus.map((a) => new Option(a.nom + ' — ' + abrege(formaterUnites(a.solde, a.decimales)), a.adr ? String(a.adr).toLowerCase() : 'ETH')));
@@ -29046,7 +29095,7 @@ $('#bWalletSwap').addEventListener('click', () => {
   w.hidden = !ouvrir;
   if (ouvrir) wsPeindreDe();
 });
-$('#wsDe').addEventListener('change', wsPeindreVers);
+$('#wsDe').addEventListener('change', () => { $('#wsDe').dataset.voulu = $('#wsDe').value; wsPeindreVers(); });
 $('#wsGo').addEventListener('click', async () => {
   const etat = $('#wsEtat'), de = $('#wsDe').value, vers = $('#wsVers').value, n = $('#wsMontant').value.trim();
   const dire = (t) => { etat.className = 'note wKo'; etat.textContent = t; };
@@ -29318,6 +29367,7 @@ function bcPeindrePourToi(el, mk, r) {
  *    t+35 s - une dette « fantome » 4-5 min, corrigee seulement en changeant d onglet. Je relisais la Bank, jamais la carte du Wallet. */
 function bcApresOperation() {
   const relire = async () => {
+    try { await bcBanqueRelireSurChaine(); } catch (_) { /* l API seule, comme avant */ }
     try { await bcBanqueDonneesPourToi(true); } catch (_) { /* chaque peinture dira « not read » */ }
     bcBanque.positionsDe = null; void bcBanquePositions(true);
     void bcBanquePourToi(); void tbBanquePeindre();
@@ -29804,7 +29854,23 @@ async function bcBanqueOusd(mk, sens) {
 /* ouvrirRailFiat compte deja l etape (onramp_session_ok / _repli) : un nom de plus, hors liste blanche de /api/etape, serait jete en silence */
 $('#bcBanqueCarte').addEventListener('click', (e) => ouvrirRailFiat(e, $('#bcBanqueCarte'), 'USDC'));
 /* la carte TokenizedBank de l onglet Wallet mene a la banque qui existe : le panneau, sur son onglet Bank */
-$('#tbOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
+$('#tbOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); bcMontrerSousLaFeuille($('#wBankCarte'), $('#bc-bank')); });
+/* 2026-10-25 (rapport Grok, Bank a 375 px : « le panneau recouvre la carte Wallet ») — MESURE (375x812, serveur local) : sous 761 px le
+ *   panneau est une feuille fixe de 503 px (y 253 -> 746) ; apres « Open the Bank », 196 px de la carte Bank du Wallet (#wBankCarte, son
+ *   bouton et ses positions) etaient DESSOUS, et la vue Bank commencait 453 px sous le haut du panneau (on voyait la fiche du block).
+ *   Ici : la vue est amenee en haut du panneau, et la page defile pour que la carte FINISSE au-dessus de la feuille. Au-dessus de 760 px
+ *   le panneau est de cote (padding-right) : rien ne bouge. */
+function bcMontrerSousLaFeuille(carte, vue) {
+  if (!window.matchMedia || !window.matchMedia('(max-width:760px)').matches) return;
+  /* apres l ouverture (animation de 0,18 s) : les rectangles mesures sont ceux qu on voit */
+  setTimeout(() => {
+    const pop = $('#bcPop'); if (!pop || !pop.open) return;
+    /* la boite qui defile est #bcPanneau (dialog.bcPop > .carte) — le premier enfant est la poignee (mesure : 16 px, ne defile pas) */
+    const boite = $('#bcPanneau'), haut = pop.getBoundingClientRect().top;
+    if (vue && boite) boite.scrollTop += vue.getBoundingClientRect().top - boite.getBoundingClientRect().top;
+    if (carte) { const d = carte.getBoundingClientRect().bottom - haut + 8; if (d > 0) window.scrollBy(0, d); }
+  }, 250);
+}
 $('#tkOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
 /* 2026-10-11 (Phil : « optimise l ux pour les choix ») : l INTENTION - choisie en haut de la Bank, ou par l une des deux cartes du Wallet
  *   (qui ouvre la Bank deja reglee). Un choix explicite n est plus jamais remplace par le choix automatique. */
@@ -30111,7 +30177,54 @@ async function bcBanqueLirePositions(c) {
   let r = null;
   try { r = await (await fetch('/api/banque/positions?compte=' + c, { cache: 'no-store', signal: AbortSignal.timeout(20000) })).json(); } catch (_) { r = null; }
   if (!r || r.ok !== true || !Array.isArray(r.positions)) return { ok: false, pourquoi: (r && r.pourquoi) || 'try again later' };
-  return { ok: true, positions: r.positions };
+  return { ok: true, positions: bcBanqueAvecChaine(c, r.positions) };
+}
+/* ── 2026-10-25 (rapport Grok, prod game44 : Withdraw complet 0xe599f033…b9e5, le Wallet disait encore « you lent 0.099999 USDC » jusqu au
+ *   rechargement) : les positions viennent de l API Morpho, qui SUIT la chaine avec retard — relire 3 fois (0, 35 s, 3 min) relisait la
+ *   meme API en retard. Apres une operation de banque, la position des marches montres est relue SUR LA CHAINE (Morpho Blue
+ *   position(id, compte) + market(id), eth_call 'latest') et passe devant l API pendant 5 min : soldee = retiree de la liste ; sinon
+ *   ses montants bruts lus (pret arrondi BAS, dette arrondie HAUT, comme banque-morpho.js). Les montants USD et la sante, qui ne sont
+ *   pas relus, ne s affichent plus pour ce marche (jamais un chiffre d avant l operation). Lecture ratee = l API seule, comme avant. */
+const BC_MORPHO_BLUE = '0xbbbbbbbbbb9cc5e90e3b3af64bdaf62c37eeffcb'; /* copie de MORPHO_BLUE (banque-morpho.js) ; le banc les compare */
+const BC_CHAINE_VAUT_MS = 300000;
+async function bcBanqueRelireSurChaine() {
+  if (!compte) return;
+  const c = String(compte).toLowerCase(), p = bcBanque.pourToi, sur = bcBanque.surChaine || (bcBanque.surChaine = new Map());
+  const ids = new Set([...sur.keys()]);
+  if (p && p.de === c && p.pos && p.pos.ok) for (const x of p.pos.positions) ids.add(String(x.id).toLowerCase());
+  if (bcBanque.choisi && /^0x[0-9a-fA-F]{64}$/.test(String(bcBanque.choisi.id || ''))) ids.add(String(bcBanque.choisi.id).toLowerCase());
+  const mots = (h) => String(h || '').replace(/^0x/, '').match(/.{64}/g) || [];
+  for (const id of [...ids].slice(0, 12)) {
+    if (!/^0x[0-9a-f]{64}$/.test(id)) continue;
+    try {
+      const t = mots(await rpc('eth_call', [{ to: BC_MORPHO_BLUE, data: '0x' + selecteur('market(bytes32)') + id.slice(2) }, 'latest']));
+      const w = mots(await rpc('eth_call', [{ to: BC_MORPHO_BLUE, data: '0x' + selecteur('position(bytes32,address)') + id.slice(2) + c.slice(2).padStart(64, '0') }, 'latest']));
+      if (t.length < 4 || w.length < 3) continue;
+      const [sA, sS, bA, bS] = t.slice(0, 4).map((x) => BigInt('0x' + x)), [ps, pb, g] = w.slice(0, 3).map((x) => BigInt('0x' + x));
+      const pr = ps === 0n || sS === 0n ? 0n : (ps * sA) / sS, d = pb === 0n || bS === 0n ? 0n : (pb * bA + bS - 1n) / bS;
+      sur.set(id, { de: c, t: Date.now(), g, d, pr });
+    } catch (_) { /* non lue : cette position garde l API */ }
+  }
+}
+/** Les positions de l API, corrigees par les lectures de chaine encore fraiches de CE compte. */
+function bcBanqueAvecChaine(c, positions) {
+  const liste = [...positions], sur = bcBanque.surChaine;
+  if (!sur) return liste;
+  for (const [id, v] of sur) {
+    if (v.de !== c) continue;
+    if (Date.now() - v.t > BC_CHAINE_VAUT_MS) { sur.delete(id); continue; }
+    const i = liste.findIndex((x) => String(x.id).toLowerCase() === id);
+    if (v.g === 0n && v.d === 0n && v.pr === 0n) { if (i >= 0) liste.splice(i, 1); continue; }
+    const mk = (bcBanque.marches || []).find((x) => String(x.id).toLowerCase() === id);
+    const base = i >= 0 ? liste[i] : mk ? { id, garantie: mk.garantie, pret: mk.pret } : null;
+    if (!base) continue; /* marche inconnu de la liste : rien a nommer, l API le montrera */
+    const n = { ...base, garantieBrute: v.g.toString(), detteBrute: v.d.toString(), preteBrut: v.pr.toString() };
+    if (i < 0 || base.garantieBrute !== n.garantieBrute || base.detteBrute !== n.detteBrute || base.preteBrut !== n.preteBrut) {
+      Object.assign(n, { garantieUsd: null, preteUsd: null, detteUsd: null, sante: null, versLiquidation: null });
+    }
+    if (i >= 0) liste[i] = n; else liste.push(n);
+  }
+  return liste;
 }
 /** La puce de sante d une position (facteur Morpho, 1 = liquidation) : rouge < 1,1, ambre < 1,5. Sante non lue = pas de puce, jamais un
  *  chiffre invente. PARTAGEE par l onglet Bank et la carte du Wallet - un seul seuil. */
