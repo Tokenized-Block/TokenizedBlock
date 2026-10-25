@@ -4300,7 +4300,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 <script type="module">
 /* ⛔ LES MEMES MODULES QUE L AUTRE ECRAN. Aucune reimplementation. */
 import { listerCreations, creationsDe, FACTORY, listerTransfers, createurDuJeton } from './index-blocks.js';
-import { planCreations } from './creations-index.js';
+import { planCreations, creationsDeLaCarte } from './creations-index.js';
 /* ⛔ L ENCODEUR DE CREATION EST CELUI DE L AUTRE ECRAN, teste et deja utilise en vrai sur mainnet.
  * En reecrire un ici donnerait deux encodages pour un seul geste — et celui qu on maintient le moins
  * finirait par graver autre chose que ce qui est affiche. */
@@ -8518,7 +8518,9 @@ async function rpcReseau(methode, params) {
       if (liberer) liberer();
       const refusDebit = limite || (j && j.error && /rate limit|too many requests|usage limit|upgrade/i.test(String(j.error.message)));
       if (refusDebit) {
-        if (rpcRegul) rpcRegul.noter(url, 'debit', { methode, quota: !!(j && j.error && (/request limit reached/i.test(String(j.error.message)) || limite)), retryApresMs: retryApres(r) }); /* 2026-10-10 : un HTTP 429 a corps JSON lisible (drpc) compte aussi ; illisible = comme avant */
+        if (rpcRegul) rpcRegul.noter(url, 'debit', { methode, quota: !!(j && j.error && (/request limit reached/i.test(String(j.error.message)) || limite)), retryApresMs: retryApres(r),
+          /* 2026-10-25 : un corps qui NOMME le quota du point d acces (drpc, code 15) met l hote entier en pause des le premier refus */
+          quotaPoste: !!(j && j.error && /public endpoint rate limit/i.test(String(j.error.message))) }); /* 2026-10-10 : un HTTP 429 a corps JSON lisible (drpc) compte aussi ; illisible = comme avant */
         derniere = new Error(limite ? ('HTTP 429 on ' + url) : String(j.error.message));
         if (rpcRegul && rpcRegul.enPauseLogs && rpcRegul.enPauseLogs(url, methode)) break; /* pause armee : plus d essai ici */
         if (essai < ESSAIS_429 && noeuds.length === 1) {
@@ -10419,7 +10421,11 @@ async function charger() {
     try { await poserNosBlocks(Number.isSafeInteger(tete) ? tete : null); } catch (_) { /* la Map continue sans eux */ }
   })();
   try {
-    const r = await listerCreations({ rpc, blocs: 43200 }) /* tip map-prebridge: denser Map cubes */;
+    /* ⛔⛔ 2026-10-25 (mesure, 375 px, 60 s) : ce balayage de 43 200 blocs depuis le navigateur etait la premiere charge restante
+     *   sur mainnet.base.org (fenetres a plus de ~10 000 blocs : lui seul les sert, et il rend 429). Les creations que l index du
+     *   serveur couvre viennent de lui ; seul le reste est lu ici. Index qui ne qualifie pas : la fenetre entiere, comme avant ;
+     *   une fenetre refusee reste dans `fenetresRatees` (creations-index.js, test-creations-index-20261025). */
+    const r = await creationsDeLaCarte({ rpc, fetch: (u, o) => fetch(u, o), listerCreations, blocs: 43200 }) /* tip map-prebridge: denser Map cubes */;
     const vues = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || ''));
     const ratees = (r.fenetresRatees || []).length;
     /* ⛔⛔ UNE RELECTURE RATEE N EFFACE PAS L INDEX. Signale par Raksha (2026-10-01) : juste apres avoir
@@ -11503,7 +11509,15 @@ function mesCreations() {
         r.fenetresRatees.push(...(x.fenetresRatees || []));
       }
     }
-    const candidats = (r.creations || []).concat(plan.aResoudre.filter((c) => !(r.creations || []).some((x) => String(x.jeton).toLowerCase() === c.jeton)));
+    /* ⛔⛔ 2026-10-25 (revue adverse de 2855ce8, sonde : un block cree il y a 5 000 blocs, couvert par l index) : une entree de
+     *   l index ne portait que { jeton, createur } — la Wallet affichait « ? » et le block d aujourd hui passait apres un ancien.
+     *   Le serveur sert maintenant le SYMBOLE et le BLOC de creation qu il a lus (`faits`, depuis `faitsDepuis` ; sous ce bloc, la
+     *   fenetre est relue ici par `planCreations`), et la liste repart du plus recent au plus ancien, comme avant. */
+    const faitsIdx = indexJ && indexJ.faits && typeof indexJ.faits === 'object' ? indexJ.faits : {};
+    const faitDe = (jeton) => { const f = faitsIdx[String(jeton || '').toLowerCase()];
+      return f && typeof f === 'object' ? { bloc: Number.isSafeInteger(f.bloc) ? f.bloc : null, symbole: typeof f.symbole === 'string' && f.symbole ? f.symbole : null } : null; };
+    const candidats = (r.creations || []).concat(plan.aResoudre.filter((c) => !(r.creations || []).some((x) => String(x.jeton).toLowerCase() === c.jeton))
+      .map((c) => ({ ...(faitDe(c.jeton) || {}), ...c })));
     const { gardees, nonResolues } = await creationsDe({ rpc, creations: candidats, adresse: compte });
     /* ⛔⛔ LA FENETRE DE 43 200 BLOCS FAIT EXACTEMENT 24 HEURES a ~2 s le bloc sur Base. Un block
      *     cree la veille disparaissait donc de « mes blocks » — sur TOUTES les machines, pas
@@ -11529,8 +11543,13 @@ function mesCreations() {
       vus.add(bas);
       /* ⛔ `createur` EST RENSEIGNE : l index ne rend QUE les blocks de cette adresse, et le
        *   prochain lecteur doit pouvoir le savoir sans deviner d ou vient l entree. */
-      gardees.push({ jeton: bas, createur: String(compte).toLowerCase(), depuisIndex: true });
+      gardees.push({ jeton: bas, createur: String(compte).toLowerCase(), depuisIndex: true, ...(faitDe(bas) || {}) });
     }
+    /* le plus recent d abord (bloc decroissant) ; une entree sans bloc connu (plus ancienne que `faitsDepuis`) a la fin, dans son
+     *   ordre — l ordre d avant : la fenetre lue, du plus recent au plus ancien, puis l index. */
+    const rang = (c) => (Number.isSafeInteger(c && c.bloc) ? c.bloc : -1);
+    const tries = gardees.map((c, i) => [c, i]).sort((x, y) => rang(y[0]) - rang(x[0]) || x[1] - y[1]).map((x) => x[0]);
+    gardees.splice(0, gardees.length, ...tries);
     return { r, gardees, nonResolues };
   })();
   lectureCreations = { cle, promesse };

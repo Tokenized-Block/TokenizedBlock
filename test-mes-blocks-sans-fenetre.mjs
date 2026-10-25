@@ -33,9 +33,10 @@ const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 v('⛔⛔ la fenetre locale fait bien 24 h — le chiffre est CALCULE, pas suppose', () => {
   /* ⛔ ON REJOUE L ARITHMETIQUE plutot que d affirmer. Si Base changeait de rythme, ce cas le
    *   dirait au lieu de repeter une phrase devenue fausse. */
-  const m = app.match(/listerCreations\(\{ rpc, blocs: (\d+) \}\)/);
+  /* 2026-10-25 : la Map passe par creationsDeLaCarte (creations-index.js), qui lit la MEME fenetre (index serveur + reste) */
+  const m = app.match(/creationsDeLaCarte\(\{[^}]*blocs: (\d+) \}\)|listerCreations\(\{ rpc, blocs: (\d+) \}\)/);
   assert.ok(m, 'la fenetre de creations a disparu de app.html');
-  const blocs = Number(m[1]);
+  const blocs = Number(m[1] || m[2]);
   const heures = (blocs * 2) / 3600;
   assert.ok(Math.abs(heures - 24) < 0.5,
     'la fenetre locale couvre ' + heures.toFixed(1) + ' h — si ce n est plus 24 h, relire ce test '

@@ -25,7 +25,7 @@ const entier = (x) => Number.isSafeInteger(x) && x >= 0;
  * `blocsLusJusqua` = tete du scan vers l avant ; `rattrapageDepuis` = curseur du rattrapage vers le passe ;
  * entre les deux, tout a ete lu SAUF les trous nommes (`trous`). `couvertureComplete` = le rattrapage a touche `plancher`.
  */
-export function bornesIndex({ blocsLusJusqua, rattrapageDepuis, couvertureComplete, plancher, trous = [], nonResolus = [] }) {
+export function bornesIndex({ blocsLusJusqua, rattrapageDepuis, couvertureComplete, plancher, trous = [], nonResolus = [], faitsDepuis = null }) {
   const lu = entier(blocsLusJusqua) ? blocsLusJusqua : null;
   const depuis = couvertureComplete && entier(plancher) ? plancher : (entier(rattrapageDepuis) ? rattrapageDepuis : null);
   const sains = (Array.isArray(trous) ? trous : []).filter((t) => t && entier(t.de) && entier(t.a) && t.a >= t.de)
@@ -41,7 +41,41 @@ export function bornesIndex({ blocsLusJusqua, rattrapageDepuis, couvertureComple
     trousTronques: recents.length > INDEX_TROUS_MAX,
     nonResolus: nr.slice(0, INDEX_NON_RESOLUS_MAX),
     nonResolusTronques: nr.length > INDEX_NON_RESOLUS_MAX,
+    /* ⛔⛔ 2026-10-25 (revue adverse de 2855ce8) : a partir de ce bloc, le serveur garde le SYMBOLE et le BLOC de creation de chaque
+     *   creation qu il a lue (`faitsCreation`). En dessous, il ne les a pas : le navigateur relit cette partie de sa fenetre lui-meme,
+     *   sinon un block cree aujourd hui s affichait « ? » et perdait sa place (le plus recent d abord). Absent = tout relire. */
+    faitsDepuis: entier(faitsDepuis) ? faitsDepuis : null,
   };
+}
+
+/** Au-dela, la liste des creations servies est tronquee : la Map relit sa fenetre entiere. */
+export const CREATIONS_SERVIES_MAX = 8000;
+
+/**
+ * Cote SERVEUR : les faits gardes d une creation lue par un scan de la factory (bloc + symbole), pour /api/blocks-de et
+ * /api/creations-recentes. `faits` = Map jeton -> { bloc, symbole }. Rend le nombre de creations notees.
+ */
+export function noterFaitsCreations(faits, creations) {
+  let n = 0;
+  for (const c of creations || []) {
+    const j = String((c && c.jeton) || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(j) || !entier(c.bloc)) continue;
+    /* `decimales` et `nom` aussi : la Map les passe a `creationsLues`, ou le fil Live lit les decimales d un montant (sans elles :
+     *   « amount not read ») et la recherche lit le nom — le log de creation les porte, comme quand le navigateur le lisait. */
+    faits.set(j, { bloc: c.bloc, symbole: typeof c.symbole === 'string' && c.symbole ? c.symbole.slice(0, 32) : null,
+      decimales: Number.isInteger(c.decimales) && c.decimales >= 0 && c.decimales <= 255 ? c.decimales : null,
+      nom: typeof c.nom === 'string' && c.nom ? c.nom.slice(0, 48) : null });
+    n++;
+  }
+  return n;
+}
+
+/** Tri « le plus recent d abord » : bloc decroissant, les entrees sans bloc a la fin, dans leur ordre (stable). */
+export function plusRecentesDabord(liste) {
+  return (liste || []).map((c, i) => ({ c, i })).sort((x, y) => {
+    const a = entier(x.c && x.c.bloc) ? x.c.bloc : -1, b = entier(y.c && y.c.bloc) ? y.c.bloc : -1;
+    return b - a || x.i - y.i;
+  }).map((x) => x.c);
 }
 
 /**
@@ -59,8 +93,12 @@ export function planCreations({ index, tete, blocs }) {
   if (depuis > debut) return chaine('server index does not reach back to block ' + debut);
   if (index.trousTronques !== false || index.nonResolusTronques !== false
     || !Array.isArray(index.trousPlages) || !Array.isArray(index.nonResolus)) return chaine('server index gaps not fully listed');
+  const faitsDepuis = index.faitsDepuis;
+  if (!entier(faitsDepuis)) return chaine('server index does not serve creation details');
   const brutes = [];
   if (lu < tete) brutes.push({ de: Math.max(debut, lu + 1), a: tete });
+  /* sous `faitsDepuis` le serveur n a ni symbole ni bloc de creation : cette partie de la fenetre est relue ici */
+  if (faitsDepuis > debut) brutes.push({ de: debut, a: Math.min(tete, faitsDepuis - 1) });
   for (const t of index.trousPlages) {
     if (!t || !entier(t.de) || !entier(t.a)) return chaine('server index gap malformed');
     const de = Math.max(t.de, debut), a = Math.min(t.a, tete);
@@ -79,4 +117,61 @@ export function planCreations({ index, tete, blocs }) {
   /* un non resolu SANS tx ne peut pas etre attribue ici non plus : on relit la fenetre entiere, comme avant */
   if (aResoudre.length !== index.nonResolus.length) return chaine('an unresolved creation carries no transaction');
   return { mode: 'INDEX', plages, aResoudre, blocsIci };
+}
+
+/**
+ * Cote NAVIGATEUR : lit les plages d un plan (`planCreations`) avec le vrai `listerCreations`. Rend la forme de `listerCreations`
+ * ({ creations, fenetre, fenetresRatees }) sur la fenetre ENTIERE annoncee, plus `parIndex`. Une plage refusee reste dans
+ * `fenetresRatees` : non lue, jamais vide.
+ */
+export async function lirePlages({ rpc, listerCreations, plan, tete, blocs }) {
+  const r = { creations: [], fenetre: { de: Math.max(0, tete - blocs), a: tete }, fenetresRatees: [],
+    parIndex: { plages: plan.plages.length, blocsIci: plan.blocsIci } };
+  for (const p of plan.plages) {
+    const x = await listerCreations({ rpc, blocs: p.a - p.de, fin: p.a });
+    r.creations.push(...(x.creations || []));
+    r.fenetresRatees.push(...(x.fenetresRatees || []));
+  }
+  return r;
+}
+
+/**
+ * ⛔⛔ LA MAP (2026-10-25, mesure : son propre balayage de 43 200 blocs de la factory, 22 getLogs depuis le navigateur, etait la
+ *   premiere charge restante sur mainnet.base.org — le seul noeud public qui sert les fenetres a plus de ~10 000 blocs).
+ *   Les creations que le serveur a deja lues (`/api/creations-recentes`, memes bornes que /api/blocks-de) viennent de lui ; le
+ *   navigateur ne lit que ce que ces bornes ne couvrent pas. Index absent, ancien, tronque, troue sans liste : la fenetre entiere,
+ *   EXACTEMENT comme avant. Rend la forme de `listerCreations`, du plus recent au plus ancien.
+ * ⚠️ NE PROUVE PAS que l index soit juste : il est cru sur ses bornes publiees (test-creations-index-serveur-20261025 les
+ *   verifie contre ce que le vrai serveur a reellement lu).
+ */
+export async function creationsDeLaCarte({ rpc, fetch, listerCreations, blocs = 43200 }) {
+  const tete = parseInt(await rpc('eth_blockNumber', []), 16);
+  if (!entier(tete)) return listerCreations({ rpc, blocs });
+  const debut = Math.max(0, tete - blocs);
+  let index = null;
+  try {
+    const rep = await fetch('/api/creations-recentes?depuis=' + debut, { cache: 'no-store' });
+    index = rep && rep.ok ? await rep.json() : null;
+  } catch (_) { index = null; }
+  const plan = planCreations({ index, tete, blocs });
+  const servies = plan.mode === 'INDEX' && index && index.tronque === false && Array.isArray(index.creations) ? index.creations : null;
+  if (!servies) {
+    const r = await listerCreations({ rpc, blocs, fin: tete });
+    return { ...r, parIndex: null, pourquoi: plan.mode === 'INDEX' ? 'server creations not served' : plan.pourquoi };
+  }
+  const r = await lirePlages({ rpc, listerCreations, plan, tete, blocs });
+  const relue = (b) => plan.plages.some((p) => b >= p.de && b <= p.a);
+  const vus = new Set(r.creations.map((c) => String(c.jeton || '').toLowerCase()));
+  let duServeur = 0;
+  for (const c of servies) {
+    const j = String((c && c.jeton) || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(j) || !entier(c.bloc) || c.bloc < debut || c.bloc > tete || relue(c.bloc) || vus.has(j)) continue;
+    vus.add(j);
+    r.creations.push({ jeton: j, symbole: typeof c.symbole === 'string' ? c.symbole : null, nom: typeof c.nom === 'string' ? c.nom : null,
+      decimales: Number.isInteger(c.decimales) ? c.decimales : null, bloc: c.bloc, depuisIndex: true });
+    duServeur++;
+  }
+  r.creations = plusRecentesDabord(r.creations);
+  r.parIndex.duServeur = duServeur;
+  return r;
 }

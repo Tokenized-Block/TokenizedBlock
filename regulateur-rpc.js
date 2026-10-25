@@ -76,7 +76,15 @@ export function creerRegulateur({ maintenant = () => Date.now(),
   const pauseDe = (h, m) => { const k = h + '|' + m; let p = pauses.get(k); if (!p) { p = { quota: 0, jusqua: 0, sautes: 0, sondes: 0 }; pauses.set(k, p); } return p; };
   const miroir = (h, m) => { if (m !== 'eth_getLogs') return; const p = pauseDe(h, m), e = etat(h);
     e.quotaLogs = p.quota; e.pauseLogsJusqua = p.jusqua; e.sautesLogs = p.sautes; e.sondesLogs = p.sondes; };
-  const enPause = (url, m) => { const p = pauses.get(hoteDe(url) + '|' + m); return !!p && p.jusqua > maintenant(); };
+  /* ⛔ 2026-10-25 (mesure, page + Wallet + Blocks, 60 s, 375 px) : base.drpc.org rendait HTTP 429 des le PREMIER eth_call de la page
+   *   (991 ms), corps « You reached Public endpoint rate limit, please upgrade to paid plan » (code 15) ; trois curl espaces de 2 s
+   *   depuis la meme machine : 3 x 429, meme corps. Ce n est pas une rafale, c est le QUOTA DU POINT D ACCES, toutes methodes. Le compte
+   *   par methode (K = 3 avant la pause) en laissait passer 3 de plus par methode. Un corps qui NOMME ce quota (`quotaPoste`) met
+   *   l HOTE entier en pause, des le premier, pour la meme duree T ; la premiere lecture apres T est la sonde. Meme regle de repli :
+   *   jamais le dernier noeud libre (sauf getLogs, qui a ses lots de 9). */
+  const pausesPoste = new Map();
+  const enPausePoste = (h) => { const p = pausesPoste.get(h); return !!p && p.jusqua > maintenant(); };
+  const enPause = (url, m) => { const h = hoteDe(url); if (enPausePoste(h)) return true; const p = pauses.get(h + '|' + m); return !!p && p.jusqua > maintenant(); };
   const auRepos = (url) => etat(hoteDe(url)).reposJusqua > maintenant();
   return {
     /** Filtre les refus permanents (jamais jusqu a vide), puis met les noeuds ralentis DERRIERE. */
@@ -119,6 +127,12 @@ export function creerRegulateur({ maintenant = () => Date.now(),
     passer(url, methode, autres) {
       if (!methode) return null;
       const h = hoteDe(url), p = pauses.get(h + '|' + methode);
+      if (enPausePoste(h)) {
+        const seulLibre = Array.isArray(autres) && !autres.some((u) => hoteDe(u) !== h && !enPause(u, methode));
+        if (seulLibre && methode !== 'eth_getLogs') return null;
+        const pp = pausesPoste.get(h); pp.sautes++;
+        return methode + ' paused on ' + h + ' after its endpoint quota refusal (next probe in ' + Math.ceil((pp.jusqua - maintenant()) / 1000) + ' s)';
+      }
       if (!p || !p.jusqua) return null;
       const t = maintenant();
       if (t >= p.jusqua) { p.sondes++; p.jusqua = t + pauseLogsMs; miroir(h, methode); return null; }
@@ -133,6 +147,11 @@ export function creerRegulateur({ maintenant = () => Date.now(),
       const e = etat(hoteDe(url));
       const m = opts && opts.methode, h = hoteDe(url);
       if (m && issue === 'ok' && pauses.has(h + '|' + m)) { const p = pauseDe(h, m); p.quota = 0; p.jusqua = 0; miroir(h, m); }
+      if (issue === 'ok') pausesPoste.delete(h);
+      if (issue === 'debit' && opts && opts.quotaPoste) {
+        const pp = pausesPoste.get(h) || { jusqua: 0, sautes: 0, refus: 0 };
+        pp.jusqua = maintenant() + pauseLogsMs; pp.refus++; pausesPoste.set(h, pp);
+      }
       if (m && issue === 'debit' && opts.quota) {
         const p = pauseDe(h, m); p.quota++;
         if (p.quota >= pauseLogsApres) p.jusqua = maintenant() + pauseLogsMs;
@@ -152,5 +171,6 @@ export function creerRegulateur({ maintenant = () => Date.now(),
     auRepos,
     instantane() { return Object.fromEntries([...etats].map(([h, e]) => [h, { ...e }])); },
     pausesInstantane() { return Object.fromEntries([...pauses].map(([k, p]) => [k, { ...p }])); },
+    pausesPosteInstantane() { return Object.fromEntries([...pausesPoste].map(([h, p]) => [h, { ...p }])); },
   };
 }

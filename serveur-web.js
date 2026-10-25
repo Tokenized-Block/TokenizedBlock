@@ -60,7 +60,7 @@ import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHE
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
 import { lirePostPublie } from './post-grave.js';
 /* 2026-10-25 : les bornes de l index des createurs, servies a /api/blocks-de (le navigateur ne relit que le reste) */
-import { bornesIndex } from './creations-index.js';
+import { bornesIndex, noterFaitsCreations, plusRecentesDabord, CREATIONS_SERVIES_MAX } from './creations-index.js';
 const postsLus = new Map();
 import { signerJwtCdp } from './cdp-jwt.js';
 
@@ -3437,6 +3437,59 @@ async function relireNonResolus() {
   return { essayes: essai.length, resolus, restent: createursNonResolus.length };
 }
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
+/* ⛔⛔ 2026-10-25 (revue adverse de 2855ce8 : les blocks servis par /api/blocks-de n avaient ni symbole ni bloc -> « ? » a la Wallet,
+ *   ordre change) — LES FAITS DE CHAQUE CREATION LUE PAR UN SCAN DE LA FACTORY : jeton -> { bloc, symbole } (le log de creation les
+ *   porte). Gardes sur FAITS_PROFONDEUR blocs sous la tete (la fenetre du navigateur en fait 43 200), persistes avec le trending.
+ *   `faitsDepuis` = le premier bloc a partir duquel CHAQUE creation lue est notee (pose au premier scan vers l avant qui avance) :
+ *   en dessous, le navigateur relit lui-meme (creations-index.js). Sert aussi la Map (/api/creations-recentes). */
+const faitsCreation = new Map();
+let faitsDepuis = null;
+const FAITS_PROFONDEUR = 3 * 43200;
+function noterFaits(creations, tete) {
+  noterFaitsCreations(faitsCreation, creations);
+  if (!Number.isSafeInteger(tete)) return;
+  const coupe = tete - FAITS_PROFONDEUR;
+  for (const [j, f] of faitsCreation) if (f.bloc < coupe) faitsCreation.delete(j);
+  if (faitsDepuis !== null && faitsDepuis < coupe) faitsDepuis = coupe;
+}
+/** Le premier scan vers l avant qui AVANCE fixe `faitsDepuis` a son debut : chaque creation lue depuis porte ses faits. */
+function faitsScanAvance(debut) { if (faitsDepuis === null && Number.isSafeInteger(debut)) faitsDepuis = debut; }
+/** Relecture du disque. `faitsDepuis` n est repris QUE si le scan vers l avant l est aussi (sinon il repart de null). */
+function chargerFaits(x) {
+  for (const e of (Array.isArray(x.faitsCreations) ? x.faitsCreations : [])) {
+    if (Array.isArray(e)) noterFaitsCreations(faitsCreation, [{ jeton: e[0], bloc: e[1], symbole: e[2], decimales: e[3], nom: e[4] }]);
+  }
+  if (Number.isSafeInteger(x.faitsDepuis) && x.faitsDepuis >= 0 && Number.isSafeInteger(blocsLusJusqua) && x.faitsDepuis <= blocsLusJusqua + 1) faitsDepuis = x.faitsDepuis;
+}
+/** Ce que la sauvegarde ecrit des faits. */
+function faitsPourDisque() { return { faitsCreations: [...faitsCreation].map(([j, f]) => [j, f.bloc, f.symbole, f.decimales, f.nom]), faitsDepuis }; }
+/** Les bornes de l index publiees a /api/blocks-de ET /api/creations-recentes (une seule source : test-creations-index-serveur). */
+function bornesPubliees() {
+  /* ⛔⛔ Mesure du 2026-10-25 : la Wallet relisait 43 200 blocs de la factory depuis le navigateur (« 17 chain window(s) refused by
+   *   the node ») alors que cet index etait complet. Sans ces bornes, ou au moindre trou non liste, le navigateur relit tout. Les
+   *   trous des DEUX scans (vers l avant, rattrapage) et les createurs non resolus partent avec — le navigateur les relit. */
+  return bornesIndex({ blocsLusJusqua, rattrapageDepuis,
+    couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB && trousRattrapage.length === 0,
+    plancher: PREMIER_BLOCK_TB, trous: [...trousCreations, ...trousRattrapage], nonResolus: createursNonResolus, faitsDepuis });
+}
+/** jeton -> { bloc, symbole } pour ces jetons : faits lus par un scan, symbole a defaut depuis l index des noms. */
+function faitsServis(jetons) {
+  const o = {};
+  let noms = null;
+  for (const brut of jetons || []) {
+    const j = String(brut || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(j) || o[j]) continue;
+    const f = faitsCreation.get(j);
+    let symbole = f ? f.symbole : null;
+    if (!symbole) {
+      if (!noms) noms = new Map(indexNoms.entrees().map((e) => [e.adr, e]));
+      const e = noms.get(j);
+      symbole = e && e.sym ? String(e.sym).slice(0, 32) : null;
+    }
+    if (f || symbole) o[j] = { bloc: f ? f.bloc : null, symbole };
+  }
+  return o;
+}
 /** Les plages de creations SAUTEES (fenetres refusees au moment ou le scan a avance) — voir lireTrending.
  *  ⛔ 2026-10-09 (noeud d archive pose) : PERSISTEES avec le trending et RELUES par `relireUnTrou` ; elles ne vivaient qu en memoire et
  *  le trou mesure ce matin avait disparu au premier redeploiement. `trousRelus` garde ce qui a ete relu, et combien de creations. */
@@ -3475,6 +3528,7 @@ async function relireUnTrou() {
   /* un trou est de l histoire : directement au noeud d archive (rpcHistoire), pas derriere base.org et publicnode */
   const r = await listerCreations({ rpc: rpcHistoire, blocs: haut - t.de, fin: haut });
   if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length, budget: refusDeBudget(r.fenetresRatees) };
+  if (typeof noterFaits === 'function') noterFaits(r.creations, blocsLusJusqua); /* le trou recule ci-dessous : ses creations doivent avoir leurs faits AVANT (typeof : voir chargerFaits) */
   const nouvelles = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') && !blocksConnus.has(c.jeton.toLowerCase()));
   for (const c of r.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
   for (let i = 0; i < nouvelles.length; i += 8) {
@@ -3500,6 +3554,7 @@ async function relireUnTrouRattrapage() {
   const haut = Math.min(t.a, t.de + 100000);
   const r = await listerCreations({ rpc: rpcHistoire, blocs: haut - t.de, fin: haut });
   if ((r.fenetresRatees || []).length) return { trou: t, haut, ratees: r.fenetresRatees.length, budget: refusDeBudget(r.fenetresRatees) };
+  if (typeof noterFaits === 'function') noterFaits(r.creations, blocsLusJusqua);
   const aFaire = (r.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '') && !createurParBlock.has(c.jeton.toLowerCase()));
   for (let i = 0; i < aFaire.length; i += 8) {
     const lot = aFaire.slice(i, i + 8);
@@ -3551,6 +3606,9 @@ function chargerTrendingDisque() {
     for (const c of (Array.isArray(x.createursNonResolus) ? x.createursNonResolus : [])) garderNonResolu(c);
     if (typeof x.blocsLusJusqua === "number") blocsLusJusqua = x.blocsLusJusqua;
     if (typeof x.rattrapageDepuis === "number") rattrapageDepuis = x.rattrapageDepuis;
+    /* 2026-10-25 : faits des creations (chargerFaits, pres de faitsCreation). ⚠️ `typeof` : plusieurs bancs EXTRAIENT cette fonction
+     *   et la font tourner avec SES seules dependances declarees ; l aide absente y est sautee, le vrai serveur l a toujours. */
+    if (typeof chargerFaits === 'function') chargerFaits(x);
     /* ⛔ UNE RELECTURE, UNE SEULE : un fichier ecrit sous l ancien plafond (5 000 createurs, sans le drapeau) a perdu des entrees que
      *   le rattrapage « complet » ne relirait jamais. On repart de la tete une fois ; le drapeau persiste empeche toute autre fois. */
     if (x.createursRelecture20261009 === true) createursRelecture20261009 = true;
@@ -3668,6 +3726,9 @@ function sauverTrendingDisque() {
        *   SANS changer TRENDING_CACHE_VER : la changer jetterait tout le cache, index des createurs compris ; un ancien fichier
        *   sans ce champ se relit comme « aucun trou », et c est la relecture unique ci-dessus qui couvre ce cas. */
       trousRattrapage: trousRattrapage.slice(-200), trousRattrapageRelus: trousRattrapageRelus.slice(-50), createursRelecture20261010,
+      /* 2026-10-25 : les faits des creations recentes (bornes par FAITS_PROFONDEUR) et le bloc depuis lequel ils sont complets.
+       *   Sans eux, chaque deploiement remettrait `faitsDepuis` a la tete : la Wallet et la Map reliraient 24 h depuis le navigateur. */
+      ...(typeof faitsPourDisque === 'function' ? faitsPourDisque() : {}), /* typeof : voir chargerFaits */
     });
     writeFileSync(FICHIER_TRENDING + '.tmp', payload);
     renameSync(FICHIER_TRENDING + '.tmp', FICHIER_TRENDING);
@@ -3701,6 +3762,7 @@ async function lireTrending() {
      *     restait a `fenetresRatees: 40` et aucun block ne depuis le 2026-10-07 n entrait dans l index. Voir repli-logs.js. */
     const cr = await listerCreations({ rpc: rpcScanCreations, blocs, fin });
     for (const c of cr.creations || []) if (/^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')) blocksConnus.add(c.jeton.toLowerCase());
+    if (typeof noterFaits === 'function') noterFaits(cr.creations, fin); /* AVANT que blocsLusJusqua n avance (plus bas) : le navigateur croit le serveur jusqu a lui */
     /* ⛔⛔ ON RETIENT LE CREATEUR DE CHAQUE NOUVELLE CREATION. C est ce qui permet a n importe qui de
      *     retrouver SES blocks, d une machine ou d une autre, sans fenetre de 24 h.
      *   ⛔ SEULEMENT LES NOUVELLES : re-resoudre tout l index a chaque scan ferait des milliers
@@ -3758,6 +3820,7 @@ async function lireTrending() {
          *   complete en ~16 passes au lieu de ~150. Sans lui, la regle d avant (10 000, chaine de repli) reste. */
         const bas = Math.max(PREMIER_BLOCK_TB, haut - (RPC_ARCHIVE ? 100000 : 10000));
         const vieux = await listerCreations({ rpc: RPC_ARCHIVE ? rpcHistoire : rpcServeur, blocs: haut - bas, fin: haut });
+        if (typeof noterFaits === 'function') noterFaits(vieux.creations, fin);
         const aFaire = (vieux.creations || []).filter((c) => /^0x[0-9a-fA-F]{40}$/.test(c.jeton || '')
           && !createurParBlock.has(c.jeton.toLowerCase()));
         for (let i = 0; i < aFaire.length; i += 8) {
@@ -3824,6 +3887,8 @@ async function lireTrending() {
         bornerTrousCreations('forward scan'); /* ⛔ avant : plafond 50, `splice(0, …)` jetait [0] (le trou en relecture) sans un mot */
         console.log('[trending] ⛔ ' + cr.fenetresRatees.length + ' fenetre(s) refusee(s) sautee(s) — notees dans /sante.trousCreations');
       }
+      /* ⛔ 2026-10-25 : le premier scan qui AVANCE fixe `faitsDepuis` a son debut — chaque creation lue depuis porte ses faits */
+      if (typeof faitsScanAvance === 'function') faitsScanAvance(fin - blocs); /* typeof : voir chargerFaits */
       blocsLusJusqua = fin;
     }
     /* ── ⛔⛔ LES ACTIFS QU ON PROPOSE SOI-MEME EN PAIRE DOIVENT ETRE VUS ─────────────────────
@@ -5722,6 +5787,25 @@ function traiterRequete(req, res) {
    *     encore indexe ». Les deux se ressemblent a l ecran et n ont rien a voir.
    *   ⛔ AUCUNE DONNEE PERSONNELLE : on rend des adresses de contrats, jamais un lien vers une
    *     identite. L adresse demandee n est ni journalisee ni conservee. */
+  /* ⛔⛔ 2026-10-25 — LA MAP NE RELIT PLUS 43 200 BLOCS DE LA FACTORY DEPUIS LE NAVIGATEUR (mesure, 375 px, 60 s : premiere charge
+   *   restante sur mainnet.base.org). Les creations que les scans du serveur ont lues depuis `depuis`, avec les MEMES bornes que
+   *   /api/blocks-de : le navigateur ne lit que ce qu elles ne couvrent pas (creations-index.js, creationsDeLaCarte). Au-dela de
+   *   CREATIONS_SERVIES_MAX, `tronque: true` et le navigateur relit tout. Lecture seule, aucune donnee personnelle. */
+  if (chemin === '/api/creations-recentes') {
+    const d = Number(new URL(req.url, 'http://x').searchParams.get('depuis'));
+    const depuis = Number.isSafeInteger(d) && d >= 0 ? d : null;
+    const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
+    if (depuis === null) { repondre({ ok: false, pourquoi: 'depuis=<block number> is required' }); return; }
+    const toutes = [];
+    for (const [jeton, f] of faitsCreation) if (f.bloc >= depuis) toutes.push({ jeton, bloc: f.bloc, symbole: f.symbole, decimales: f.decimales, nom: f.nom });
+    const triees = plusRecentesDabord(toutes);
+    repondre({ ok: true, lu: new Date().toISOString(), depuis, ...bornesPubliees(),
+      creations: triees.slice(0, CREATIONS_SERVIES_MAX), tronque: triees.length > CREATIONS_SERVIES_MAX, total: triees.length,
+      borne: 'Creations read by this server\'s factory scans from block `faitsDepuis` on. Outside `luJusqua`/`couvertDepuis` and inside '
+        + '`trousPlages` nothing is claimed: read those ranges yourself.' });
+    return;
+  }
+
   if (chemin === '/api/blocks-de') {
     const adr = String(new URL(req.url, 'http://x').searchParams.get('adr') || '').toLowerCase();
     const repondre = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end(JSON.stringify(o)); };
@@ -5766,9 +5850,10 @@ function traiterRequete(req, res) {
       /* ⛔⛔ 2026-10-25 (creations-index.js) : les BORNES de l index, pour que le navigateur ne relise que ce qu il ne couvre pas.
        *   Mesure : la Wallet relisait 43 200 blocs de la factory depuis le navigateur (« 17 chain window(s) refused by the node »)
        *   alors que cet index etait complet. Sans ces bornes, ou au moindre trou non liste, le navigateur relit tout, comme avant. */
-      ...bornesIndex({ blocsLusJusqua, rattrapageDepuis,
-        couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB && trousRattrapage.length === 0,
-        plancher: PREMIER_BLOCK_TB, trous: [...trousCreations, ...trousRattrapage], nonResolus: createursNonResolus }),
+      ...bornesPubliees(),
+      /* 2026-10-25 : bloc de creation et symbole de ces blocks (et des non resolus) quand le serveur les a lus ; symbole sinon pris
+       *   a l index des noms. Absent = non lu, jamais « sans nom ». */
+      faits: faitsServis([...blocks, ...createursNonResolus.map((c) => c.jeton)]),
       borne: 'Blocks whose creation transaction was read since this server started indexing. '
         + 'An empty list means "not indexed yet", never "you created nothing".',
     });

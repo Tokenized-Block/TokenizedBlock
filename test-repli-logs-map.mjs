@@ -144,7 +144,8 @@ await cas('B1 charger() pose nos blocks AVANT le balayage de la factory', async 
   const corps = app.slice(i, i + fin.index);
   const sansCom = corps.replace(/\/\*[\s\S]*?\*\//g, ' ');
   const iPose = sansCom.indexOf('await poserNosBlocks(');
-  const iScan = sansCom.indexOf('await listerCreations(');
+  /* 2026-10-25 : le balayage de la Map passe par creationsDeLaCarte (index serveur + reste, creations-index.js) */
+  const iScan = Math.max(sansCom.indexOf('await listerCreations('), sansCom.indexOf('await creationsDeLaCarte('));
   assert.ok(iPose > 0, 'charger() ne pose plus nos blocks independamment de la lecture de la factory');
   assert.ok(iScan > 0 && iPose < iScan, 'nos blocks sont poses APRES le balayage : une lecture ratee les efface encore');
   /* et pas dans le meme `try` que le balayage : il doit etre dans sa propre tache, non attendue */
