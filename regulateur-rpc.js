@@ -24,7 +24,9 @@
 /** Refus permanents mesures, par hote. `plageMax` = blocs inclus (to - from + 1). */
 export const CAPACITES_LOGS = Object.freeze({
   'base.drpc.org': Object.freeze({ plageMax: 100 }),
-  'base-rpc.publicnode.com': Object.freeze({ adressesMax: 9, profondeurMax: 10000 }),
+  /* `adresseRequise` (2026-10-25, mesure navigateur, page + Wallet, 60 s) : 10 getLogs SANS adresse (blocks recus, frappesVers),
+   *   10 refus « -32701 Please specify an address in your request » — permanent. */
+  'base-rpc.publicnode.com': Object.freeze({ adressesMax: 9, profondeurMax: 10000, adresseRequise: true }),
 });
 
 export function hoteDe(url) {
@@ -41,6 +43,7 @@ export function noeudPeutServir(url, methode, params, tete = 0) {
   const de = hex(f.fromBlock), a = hex(f.toBlock);
   if (cap.plageMax && de !== null && a !== null && a - de + 1 > cap.plageMax) return false;
   if (cap.adressesMax && Array.isArray(f.address) && f.address.length > cap.adressesMax) return false;
+  if (cap.adresseRequise && (f.address === undefined || f.address === null || (Array.isArray(f.address) && !f.address.length))) return false;
   if (cap.profondeurMax && de !== null && Number.isInteger(tete) && tete > 0 && tete - de > cap.profondeurMax) return false;
   return true;
 }
@@ -140,6 +143,10 @@ export function creerRegulateur({ maintenant = () => Date.now(),
       e.refus++;
       e.ecart = Math.min(ecartMaxMs, Math.max(Math.round(e.ecart * 1.5), 300));
       e.reposJusqua = maintenant() + e.ecart;
+      /* 2026-10-25 : Retry-After (en ms, lu par l appelant) allonge le repos, borne a 60 s — jamais un gel. ⚠️ Mesure : 0 des 7
+       *   reponses 429 de la session n exposait l en-tete au script (CORS) ; quand il est lisible, il est respecte. */
+      const ra = Number(opts && opts.retryApresMs);
+      if (Number.isFinite(ra) && ra > 0) e.reposJusqua = Math.max(e.reposJusqua, maintenant() + Math.min(ra, 60000));
       e.prochain = Math.max(e.prochain, e.reposJusqua);
     },
     auRepos,

@@ -59,6 +59,8 @@ import { estDeviseConnue } from './pool-sans-hook.js';
 import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
 import { lirePostPublie } from './post-grave.js';
+/* 2026-10-25 : les bornes de l index des createurs, servies a /api/blocks-de (le navigateur ne relit que le reste) */
+import { bornesIndex } from './creations-index.js';
 const postsLus = new Map();
 import { signerJwtCdp } from './cdp-jwt.js';
 
@@ -5080,6 +5082,8 @@ const SERVIS = [
    *   importe par `app.html` et absent de cette liste rend la page MORTE en production, sans que
    *   rien d autre ne le dise. La garde a crie avant le deploiement. */
   'heures-marche.js',
+  /* 2026-10-25 : ce que l index des createurs du serveur couvre deja (importe par app.html, mesCreations) */
+  'creations-index.js',
   /* ⛔ 2026-10-02 : debit et refus permanents des noeuds RPC publics, importe par `app.html`. */
   'regulateur-rpc.js',
   /* ⛔ 2026-10-04 : les lectures independantes d un plan, lancees ensemble et bornees. Importe par `echange.js`, `marche.js` et
@@ -5759,6 +5763,12 @@ function traiterRequete(req, res) {
       /* ce qui a ete RELU depuis (noeud d archive) ; et si le rattrapage attend le budget du jour, c est dit — pas un silence */
       plagesRelues: trousRattrapageRelus.slice(-5),
       attendBudgetArchive: rattrapageDepuis !== null && rattrapageDepuis > PREMIER_BLOCK_TB && archiveEpuisee(),
+      /* ⛔⛔ 2026-10-25 (creations-index.js) : les BORNES de l index, pour que le navigateur ne relise que ce qu il ne couvre pas.
+       *   Mesure : la Wallet relisait 43 200 blocs de la factory depuis le navigateur (« 17 chain window(s) refused by the node »)
+       *   alors que cet index etait complet. Sans ces bornes, ou au moindre trou non liste, le navigateur relit tout, comme avant. */
+      ...bornesIndex({ blocsLusJusqua, rattrapageDepuis,
+        couvertureComplete: rattrapageDepuis !== null && rattrapageDepuis <= PREMIER_BLOCK_TB && trousRattrapage.length === 0,
+        plancher: PREMIER_BLOCK_TB, trous: [...trousCreations, ...trousRattrapage], nonResolus: createursNonResolus }),
       borne: 'Blocks whose creation transaction was read since this server started indexing. '
         + 'An empty list means "not indexed yet", never "you created nothing".',
     });

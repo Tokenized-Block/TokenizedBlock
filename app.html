@@ -4300,6 +4300,7 @@ details[open] > summary::before{transform:rotate(90deg)}
 <script type="module">
 /* ⛔ LES MEMES MODULES QUE L AUTRE ECRAN. Aucune reimplementation. */
 import { listerCreations, creationsDe, FACTORY, listerTransfers, createurDuJeton } from './index-blocks.js';
+import { planCreations } from './creations-index.js';
 /* ⛔ L ENCODEUR DE CREATION EST CELUI DE L AUTRE ECRAN, teste et deja utilise en vrai sur mainnet.
  * En reecrire un ici donnerait deux encodages pour un seul geste — et celui qu on maintient le moins
  * finirait par graver autre chose que ce qui est affiche. */
@@ -8298,6 +8299,17 @@ async function rpc(methode, params) {
   return pr;
 }
 async function rpcReseau(methode, params) {
+  /* 2026-10-25 : Retry-After d un refus de debit, en ms (secondes ou date HTTP) ; illisible ou absent = null. ⚠️ Mesure : un noeud
+   *   public cross-origin ne l expose pas toujours au script (0 sur 7 429 de la session mesuree) — quand il est lisible, il compte.
+   *   Declaree ICI (et non a cote) : les bancs qui extraient `rpcReseau` de cette page l emportent avec elle. */
+  const retryApres = (r) => {
+    let h = null;
+    try { h = r && r.headers && r.headers.get ? r.headers.get('retry-after') : null; } catch (_) { h = null; }
+    if (!h) return null;
+    if (/^\d+$/.test(String(h).trim())) return Number(String(h).trim()) * 1000;
+    const t = Date.parse(h);
+    return Number.isFinite(t) ? Math.max(0, t - Date.now()) : null;
+  };
   /* ⛔ ONLY the B20 factory/precompile pins to official RPC (secours sometimes returned 0x code).
    * ⛔⛔ BUG 2026-09-14: `to.startsWith('0xb20')` also matched EVERY block token (CREATE2 0xb200…)
    * including TBLOCK — decimals/supply/market reads stuck on rate-limited mainnet.base.org → permanent
@@ -8506,7 +8518,7 @@ async function rpcReseau(methode, params) {
       if (liberer) liberer();
       const refusDebit = limite || (j && j.error && /rate limit|too many requests|usage limit|upgrade/i.test(String(j.error.message)));
       if (refusDebit) {
-        if (rpcRegul) rpcRegul.noter(url, 'debit', { methode, quota: !!(j && j.error && (/request limit reached/i.test(String(j.error.message)) || limite)) }); /* 2026-10-10 : un HTTP 429 a corps JSON lisible (drpc) compte aussi ; illisible = comme avant */
+        if (rpcRegul) rpcRegul.noter(url, 'debit', { methode, quota: !!(j && j.error && (/request limit reached/i.test(String(j.error.message)) || limite)), retryApresMs: retryApres(r) }); /* 2026-10-10 : un HTTP 429 a corps JSON lisible (drpc) compte aussi ; illisible = comme avant */
         derniere = new Error(limite ? ('HTTP 429 on ' + url) : String(j.error.message));
         if (rpcRegul && rpcRegul.enPauseLogs && rpcRegul.enPauseLogs(url, methode)) break; /* pause armee : plus d essai ici */
         if (essai < ESSAIS_429 && noeuds.length === 1) {
@@ -11466,8 +11478,33 @@ function mesCreations() {
   const cle = CHAINE + ':' + String(compte).toLowerCase();
   if (lectureCreations && lectureCreations.cle === cle) return lectureCreations.promesse;
   const promesse = (async () => {
-    const r = await listerCreations({ rpc, blocs: 43200 }) /* tip map-prebridge: denser Map cubes */;
-    const { gardees, nonResolues } = await creationsDe({ rpc, creations: r.creations || [], adresse: compte });
+    /* ⛔⛔ 2026-10-25 (mesure, 375 px, page + Wallet + Bank, 60 s : « ⚠️ 17 chain window(s) refused by the node », 22 fenetres
+     *   de la factory + 56 tx relues ICI) : l index du serveur (/api/blocks-de) couvre deja ces creations. On lit d abord ses
+     *   BORNES ; le navigateur ne relit que ce qu il ne couvre pas (la queue au-dela de son scan, ses trous nommes, ses createurs
+     *   non resolus). Index absent, ancien, troue sans liste ou trop court : la fenetre entiere, EXACTEMENT comme avant
+     *   (creations-index.js, test-creations-index-20261025). Une plage refusee ici reste dans `fenetresRatees` : dite, jamais vide. */
+    const BLOCS_CREATIONS = 43200;
+    const tete = parseInt(await rpc('eth_blockNumber', []), 16);
+    let indexJ = null;
+    try {
+      const rep = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(compte).toLowerCase()),
+        { cache: 'no-store' });
+      indexJ = rep.ok ? await rep.json() : null;
+    } catch (_) { /* index indisponible : on garde le scan local seul, comme avant */ }
+    const plan = planCreations({ index: indexJ, tete, blocs: BLOCS_CREATIONS });
+    let r;
+    if (plan.mode !== 'INDEX') r = await listerCreations({ rpc, blocs: BLOCS_CREATIONS, fin: tete }) /* tip map-prebridge: denser Map cubes */;
+    else {
+      r = { creations: [], fenetre: { de: Math.max(0, tete - BLOCS_CREATIONS), a: tete }, fenetresRatees: [],
+        parIndex: { luJusqua: indexJ.luJusqua, plages: plan.plages.length, blocsIci: plan.blocsIci } };
+      for (const p of plan.plages) {
+        const x = await listerCreations({ rpc, blocs: p.a - p.de, fin: p.a });
+        r.creations.push(...(x.creations || []));
+        r.fenetresRatees.push(...(x.fenetresRatees || []));
+      }
+    }
+    const candidats = (r.creations || []).concat(plan.aResoudre.filter((c) => !(r.creations || []).some((x) => String(x.jeton).toLowerCase() === c.jeton)));
+    const { gardees, nonResolues } = await creationsDe({ rpc, creations: candidats, adresse: compte });
     /* ⛔⛔ LA FENETRE DE 43 200 BLOCS FAIT EXACTEMENT 24 HEURES a ~2 s le bloc sur Base. Un block
      *     cree la veille disparaissait donc de « mes blocks » — sur TOUTES les machines, pas
      *     seulement celle ou on ne l avait pas cree. Phil : « je vais sur My blocks et je vois pas
@@ -11483,12 +11520,8 @@ function mesCreations() {
      *     comportement d avant. Une amelioration qui peut faire pire que l etat anterieur n en est
      *     pas une. */
     let deLIndex = [];
-    try {
-      const rep = await fetch('/api/blocks-de?adr=' + encodeURIComponent(String(compte).toLowerCase()),
-        { cache: 'no-store' });
-      const j = rep.ok ? await rep.json() : null;
-      if (j && j.ok && Array.isArray(j.blocks)) deLIndex = j.blocks;
-    } catch (_) { /* index indisponible : on garde le scan local seul, comme avant */ }
+    const j = indexJ;
+    if (j && j.ok && Array.isArray(j.blocks)) deLIndex = j.blocks;
     const vus = new Set(gardees.map((c) => String(c.jeton).toLowerCase()));
     for (const adr of deLIndex) {
       const bas = String(adr || '').toLowerCase();
@@ -11627,8 +11660,9 @@ async function listerMesBlocks() {
     }
     if (!gardees.length) {
       boite.innerHTML = '<p class="note">No block of yours in the window we read ('
-        + ((r.creations || []).length) + ' creations over '
-        + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks)'
+        + (r.parIndex ? 'the server index, plus ' + ((r.creations || []).length) + ' creations read here over the latest '
+          + Number(r.parIndex.blocsIci).toLocaleString('en-US') + ' chain blocks'
+          : ((r.creations || []).length) + ' creations over ' + (r.fenetre.a - r.fenetre.de).toLocaleString('en-US') + ' chain blocks') + ')'
         + ((r.fenetresRatees || []).length ? ' · ⚠️ ' + r.fenetresRatees.length + ' window(s) refused by '
           + 'the node — not read, not empty' : '')
         + (nonResolues.length ? ' · ⚠️ ' + nonResolues.length + ' creation(s) we could not attribute '
@@ -11978,6 +12012,10 @@ async function majWallet({ recus = [] } = {}) {
     try { frappes = await mesFrappes(false, true); } catch { note += '⚠️ blocks you received could not be read further back. '; }
     if (perime()) return;
     for (const x of frappes.blocks) walletRecus.delete(String(x.jeton).toLowerCase()); /* liste par les frappes : plus besoin de le garder */
+    /* ⛔ 2026-10-25 (mesure : ces fenetres partaient chez publicnode, qui les refusait toutes — « -32701 specify an address ») : une
+     *   fenetre des blocks RECUS refusee etait tue ici, et la Wallet lisait « rien recu ». Elle se dit, comme celles des creations. */
+    const rateesRecus = (frappes && Array.isArray(frappes.fenetresRatees) ? frappes.fenetresRatees : []).length;
+    if (rateesRecus) note += '⚠️ ' + rateesRecus + ' window(s) of the blocks you received refused by the node — not read, not empty. ';
     /* 2026-10-10 : une action deja lue par /api/avoirs (meme prefixe 0xb2) ne revient pas en double comme « block received » */
     for (const b of frappes.blocks.filter((x) => !gardees.some((c) => String(c.jeton).toLowerCase() === x.jeton)
       && !actifs.some((y) => String(y.adr || '').toLowerCase() === x.jeton)).slice(0, 12)) {

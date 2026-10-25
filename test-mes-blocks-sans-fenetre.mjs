@@ -63,10 +63,13 @@ v('⛔⛔ ON FUSIONNE, ON NE REMPLACE PAS', () => {
     'l index ne complete plus la liste locale : soit il la remplace, soit il est ignore');
   /* ⛔ ET L ORDRE COMPTE : le scan local doit etre fait AVANT, sinon on ne peut pas dedoublonner
    *   contre lui. */
-  const iLocal = app.indexOf('creationsDe({ rpc, creations: r.creations');
-  const iIndex = app.indexOf("/api/blocks-de?adr=");
-  assert.ok(iLocal !== -1 && iIndex !== -1 && iLocal < iIndex,
-    'l index est interroge avant le scan local : la deduplication ne peut plus se faire contre lui');
+  /* 2026-10-25 : l index est desormais LU avant le scan local (ses bornes decident des plages a relire, creations-index.js) ;
+   *   ce qui doit venir APRES le scan local, c est la FUSION — c est elle qui dedoublonne. Le comportement complet est execute
+   *   par test-creations-index-20261025 (mesCreations extraite et lancee). */
+  const iLocal = app.indexOf('creationsDe({ rpc, creations: candidats');
+  const iFusion = app.indexOf('const vus = new Set(gardees.map');
+  assert.ok(iLocal !== -1 && iFusion !== -1 && iLocal < iFusion,
+    'la fusion avec l index precede le scan local : la deduplication ne peut plus se faire contre lui');
 });
 
 v('⛔⛔ le serveur retient le CREATEUR, et il le lit dans la TRANSACTION', () => {
