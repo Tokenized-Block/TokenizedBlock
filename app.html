@@ -10339,10 +10339,11 @@ async function charger() {
     if (!vues.length) {
       /* ⛔ « JE N AI PAS PU LIRE » N EST PAS « IL N Y A RIEN ». Les confondre a deja fait
        * disparaitre une section entiere de l autre ecran, sans un mot d explication. */
-      etat.textContent = ratees
-        ? 'Could not read the chain from this browser right now — ' + ratees + ' window(s) refused. '
-          + 'Empty because we could not look, not because nobody is making blocks.'
-        : 'No block created in the window we read.';
+      /* ⛔ 2026-10-25 (Phil : « retire ça, n écris pas ce genre de choses ») : le diagnostic des fenetres refusees n a rien a faire
+       *   sur la carte du joueur (il couvrait meme le bouton X). La carte a deja ses blocks (servis par le serveur) : rien n est dit
+       *   (le diagnostic part en console). Carte vraiment vide : une ligne courte. Jamais « il n y a rien » sur une lecture ratee. */
+      if (ratees) console.info('[map] chain read from this browser: ' + ratees + ' window(s) refused by the node');
+      etat.textContent = habitants.length ? '' : (ratees ? 'Reading the blocks…' : 'No block created in the window we read.');
       return;
     }
     /* ⚠️ `vie: null` pour l instant : la capitalisation demande jusqu a quatre lectures de pool par
