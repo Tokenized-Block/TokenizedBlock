@@ -362,15 +362,17 @@ async function routeActionNue({ appel, adr, espacements = ESPACEMENTS_RETOMBEE, 
     return { etat: 'OK', achetable: false, code: 'HORS_REGISTRE', pool: p.pool, tickSpacing: p.tickSpacing, usdcPool: String(p.usdcPool), ecartBps, perteBps,
       phrase: 'No buy here yet: its pool quotes well (' + usd(p.usdcPool) + ' of USDC), but this stock is not in this app\'s stock list, so the app cannot take its fee on it.' };
   }
-  return { etat: 'OK', achetable: true, pool: p.pool, tickSpacing: p.tickSpacing, usdcPool: String(p.usdcPool), ecartBps, perteBps, factory: bas(factory) };
+  /* 2026-10-25 (liquidite-actions.js) : `achat`, la sortie cotee de 10 USDC, servie pour comparer ce lieu aux autres a la meme taille */
+  return { etat: 'OK', achetable: true, pool: p.pool, tickSpacing: p.tickSpacing, usdcPool: String(p.usdcPool), ecartBps, perteBps, factory: bas(factory), achat: String(sortie) };
 }
 
 /** la forme servie par ligne du Market (aucun BigInt : JSON). `bloc` : le bloc des lectures, quand l appelant l a epingle */
 export function routeServie(r, lu = new Date().toISOString()) {
   if (!r || r.etat !== 'OK') return null;
   const b = Number.isSafeInteger(r.bloc) ? r.bloc : null;
-  if (r.achetable) return { achetable: true, pool: r.pool, tickSpacing: r.tickSpacing, usdcPool: r.usdcPool, ecartBps: r.ecartBps, perteBps: r.perteBps ?? null, factory: r.factory, lu, bloc: b };
-  return { achetable: false, code: r.code, phrase: r.phrase, pool: r.pool || null, usdcPool: r.usdcPool || null, ecartBps: r.ecartBps ?? null, perteBps: r.perteBps ?? null, lu, bloc: b };
+  if (r.achetable) return { achetable: true, pool: r.pool, tickSpacing: r.tickSpacing, usdcPool: r.usdcPool, ecartBps: r.ecartBps, perteBps: r.perteBps ?? null, factory: r.factory, achat: r.achat ?? null, lu, bloc: b };
+  /* 2026-10-25 : `tickSpacing` servi aussi sur un refus — la vente comparee par lieu (liquidite-actions.js) re-cote CETTE pool */
+  return { achetable: false, code: r.code, phrase: r.phrase, pool: r.pool || null, tickSpacing: r.tickSpacing ?? null, usdcPool: r.usdcPool || null, ecartBps: r.ecartBps ?? null, perteBps: r.perteBps ?? null, lu, bloc: b };
 }
 
 /** ⛔⛔ FAIL-CLOSED (revue 2026-10-25) : une action SANS verdict de route (jamais lu, perime, ou portant sur une autre pool que celle de

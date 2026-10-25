@@ -1,0 +1,63 @@
+{
+ "blocFork": 53074538,
+ "lu": "2026-10-25T14:30:28.762Z",
+ "res": [
+  {
+   "sym": "CRWVc",
+   "etapes": [
+    "APPROBATIONS",
+    "PRET",
+    "APPROBATIONS",
+    "PRET"
+   ],
+   "achat": {
+    "recu": "12900413",
+    "auMoins": "12771407",
+    "frais": "12913"
+   },
+   "vente": {
+    "recuUsdc": "9970031",
+    "auMoins": "9870329",
+    "frais": "9980"
+   }
+  },
+  {
+   "sym": "NFLXc",
+   "etapes": [
+    "APPROBATIONS",
+    "PRET",
+    "APPROBATIONS",
+    "PRET"
+   ],
+   "achat": {
+    "recu": "14627129",
+    "auMoins": "14480856",
+    "frais": "14641"
+   },
+   "vente": {
+    "recuUsdc": "9970032",
+    "auMoins": "9870330",
+    "frais": "9980"
+   }
+  },
+  {
+   "sym": "AVGOc",
+   "etapes": [
+    "APPROBATIONS",
+    "PRET",
+    "APPROBATIONS",
+    "PRET"
+   ],
+   "achat": {
+    "recu": "3096222",
+    "auMoins": "3065258",
+    "frais": "3099"
+   },
+   "vente": {
+    "recuUsdc": "9970029",
+    "auMoins": "9870327",
+    "frais": "9980"
+   }
+  }
+ ]
+}

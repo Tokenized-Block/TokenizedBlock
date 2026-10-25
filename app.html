@@ -5191,6 +5191,7 @@ function achatMarcheDe(l) {
   const decouverte = poolDecouvertPour(l.adr), assezLiquide = (l.liquiditeUsd || 0) >= LIQ_MIN_BUY_USD;
   if (assezLiquide && decouverte && (decouverte.isTbFeeHook || decouverte.confiance === 'NOTRE')) return 'acheter';
   if (assezLiquide && l.achat && l.achat.cle) return 'acheter';
+  if (assezLiquide && l.routeAction && l.routeAction.achetable === false && l.routeAction.meilleure === 'aero-new') return 'rail';
   const p = avecPoolAction(l);
   const v = verdictRoutage({ aMarche: true, dex: p.dex, poolAdr: p.poolAdr, routeAction: p.routeAction });
   const registre = ACTIONS_PAR_ADR.has(String(l.adr || '').toLowerCase());
@@ -22356,6 +22357,12 @@ function peindreTrending() {
          *   fiche sur la carte sait les acheter (ETH en une tx, ou USDC), avec notre frais de 0,1 % pris sur la sortie
          *   (sweepTokenWithFee, porte de glissement). MEME verdict que la fiche (verdictRoutage), MEME achat : ce bouton
          *   ouvre la fiche, il ne reecrit rien. */
+        /* 2026-10-25 (liquidite-actions.js) : notre routeur refuse, mais le serveur a juge MEILLEUR le lieu 'aero-new' (factory 0x9cb2…,
+         *   routeur 0x9ee3… prouve sur fork, memes regles 1 % / 2 % / 10 000 USDC) : Buy ouvre l echange du panneau (/api/rails/plan), qui
+         *   emprunte ce lieu et dit son devis avant la signature. La fiche, elle, n achete que par notre routeur : elle n est pas ouverte. */
+        if (liqOk && l.routeAction && l.routeAction.achetable === false && l.routeAction.meilleure === 'aero-new') {
+          return avecPair('<button type="button" class="bouton trAcheter" data-acheter-rail="' + enTexte(l.adr) + '">Buy</button>');
+        }
         const lA = avecPoolAction(l); /* la vraie pool de l action (table mesuree), pas celle d un meme coté en elle */
         const vR = verdictRoutage({ aMarche: true, dex: lA.dex, poolAdr: lA.poolAdr, routeAction: lA.routeAction });
         /* ⛔ 2026-10-03 : `achetableIci` aussi, POUR LES ACTIONS DU REGISTRE SEULEMENT — les 20 a pool v4 USDC (dex uniswap, sans
@@ -22520,6 +22527,19 @@ $('#trListe').addEventListener('click', (e) => {
   }
   /* ⛔ 2026-10-03 : Buy d une action sur Aerodrome -> la fiche de la carte, qui porte deja l achat (ETH ou USDC) et
    *   notre frais de 0,1 %. Meme compteur d intention que l autre Buy. Pas sur la carte : le profil, comme avant. */
+  /* 2026-10-25 : Buy d une action dont le meilleur lieu est 'aero-new' -> l echange du panneau, 10 USDC (le planificateur emprunte ce
+   *   lieu, dit le devis, le frais et le minimum ; la personne signe). */
+  const railBtn = e.target.closest('[data-acheter-rail]');
+  if (railBtn) {
+    try { etape('achat_clic'); } catch (_) {}
+    const cibleR = String(railBtn.getAttribute('data-acheter-rail') || '').toLowerCase();
+    const usdcR = bcResoudre('USDC');
+    if (/^0x[0-9a-f]{40}$/.test(cibleR) && usdcR && usdcR.ok) {
+      try { bcOuvrirPop({ sansBasculer: true, vue: 'chat', deplier: true }); } catch (_) {}
+      void bcProposerSwap('You', '', { de: usdcR, vers: { ok: true, adr: cibleR, sym: sym || court(cibleR) }, montant: '10000000' }, null);
+    }
+    return;
+  }
   const ficheBtn = e.target.closest('[data-acheter-fiche]');
   if (ficheBtn) {
     try { etape('achat_clic'); } catch (_) {}
@@ -26452,6 +26472,11 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
      *   est DIT avant la signature ; au-dela du seuil, en rouge. Absent (route sans mesure) ou non lu : rien n est affiche comme 0. */
     /* le choix de pool est DIT (regle du proprietaire : jamais un choix de pool silencieux) */
     if (typeof p.choix === 'string' && p.choix) bcEtape(m, p.choix + '.');
+    /* 2026-10-25 (liquidite-actions.js, venteParVenues) : une VENTE d action dit, AVANT la signature, le meilleur lieu de vente et son
+     *   prix, cotes a ce montant sur chaque lieu ; quand meme le meilleur paie loin sous la reference, en rouge — et le wallet ne s ouvre
+     *   plus tout seul (voir `venteLoin` plus bas). */
+    const venteLoin = !!(p.vente && p.vente.loin === true);
+    if (p.vente && typeof p.vente.texte === 'string' && p.vente.texte) bcEtape(m, p.vente.texte.slice(0, 260), venteLoin ? 'non' : '');
     const impact = rs.impactBps !== undefined && rs.impactBps !== null && /^\d+$/.test(String(rs.impactBps)) ? Number(rs.impactBps) : null;
     if (impact !== null) {
       const fort = impact >= BC_IMPACT_AVERTIR_BPS;
@@ -26524,9 +26549,9 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     /* DIRECT pour la personne (voir plus bas) : le plan pret, le wallet s ouvre — c est LUI la confirmation. Une proposition d agent
      *   ou d AiFi garde son clic. */
     /* un franchissement n ouvre JAMAIS le wallet tout seul : la personne lit d abord la ligne ci-dessus, puis dit que son wallet groupe */
-    if (direct && !franchissement) return signer();
+    if (direct && !franchissement && !venteLoin) return signer();
     bcBoutons(m, [[franchissement ? 'My wallet can batch — ' + (approbations ? 'sign the ' + p.aSigner.length + ' approval(s)' : 'sign the ' + p.aSigner.length + ' calls together')
-      : approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', signer], ['Dismiss', refuser, true]]);
+      : venteLoin ? 'Sell anyway' : approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', signer], ['Dismiss', refuser, true]]);
   };
   /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok, Buy et Sell IB022 passes avec Rabby) : « Buy / Sell DIRECTS ». Une commande que la
    *   personne a ecrite ou validee elle-meme (ticket, barre du Chat) ne demande plus « Prepare the plan » puis « Sign » : son Review

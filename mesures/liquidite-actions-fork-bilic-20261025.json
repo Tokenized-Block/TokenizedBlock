@@ -1,0 +1,45 @@
+{
+ "blocFork": 53074520,
+ "blocMesure": 53073983,
+ "lu": "2026-10-25T14:29:31.295Z",
+ "routeur": "0x9ee35bf1bd69a03c6f0393582030fce8bb93d418",
+ "resultats": [
+  {
+   "sym": "BILIc",
+   "adr": "0xb200000000000000000000ca7c6d1438e7245eb6",
+   "pool": "0xcef2299c18fb988b88ec9346c5422ce0a027fd71",
+   "tickSpacing": 10,
+   "verdictMesure": {
+    "passe": false,
+    "code": "LIQUIDITE_SOUS_SEUIL"
+   },
+   "usdcPool": "3107501720",
+   "devisAchat": "69611163",
+   "ecartBps": 5,
+   "perteMemeEtatBps": 10,
+   "reglesAuFork": {
+    "passe": false,
+    "code": "LIQUIDITE_SOUS_SEUIL"
+   },
+   "achatStatus": "0x1",
+   "achatGaz": 389757,
+   "octetsAchatIdentiques": true,
+   "paye": "10000000",
+   "sortiePool": "69611163",
+   "recu": "69541552",
+   "fraisRecu": "69611",
+   "devisEgalExecution": true,
+   "venteStatus": "0x1",
+   "venteGaz": 303181,
+   "octetsVenteIdentiques": true,
+   "devisVente": "9980012",
+   "sortiePoolVente": "9980012",
+   "devisVenteEgalExecution": true,
+   "renduUsdc": "9970032",
+   "fraisVenteUsdc": "9980",
+   "venduTout": true,
+   "perteAllerRetourBps": 29,
+   "resultat": "FAILS_RULES:LIQUIDITE_SOUS_SEUIL"
+  }
+ ]
+}

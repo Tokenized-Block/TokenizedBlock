@@ -34,7 +34,7 @@ export function decisionMarche(t, deps) {
   const f = new Function('l', 'poolDecouvertPour', 'LIQ_MIN_BUY_USD', 'avecPoolAction', 'verdictRoutage', 'ACTIONS_PAR_ADR', 'TBLOCK', 'enTexte', 'raisonSansBuy', 'return ' + corps + ';');
   return (l) => {
     const html = f(l, deps.poolDecouvertPour || (() => null), liqMinBuy(t), avecPoolAction, verdictRoutage, ACTIONS_PAR_ADR, '0x' + '0'.repeat(40), (x) => String(x), deps.raisonSansBuy || raisonSansBuy);
-    return /data-acheter-fiche="/.test(html) ? 'fiche' : /data-acheter="/.test(html) ? 'acheter' : null;
+    return /data-acheter-rail="/.test(html) ? 'rail' : /data-acheter-fiche="/.test(html) ? 'fiche' : /data-acheter="/.test(html) ? 'acheter' : null;
   };
 }
 

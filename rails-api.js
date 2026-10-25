@@ -38,6 +38,9 @@ import { V4_ADRESSES } from './lancer-pool.js';
 import { RE_B20 } from './pool-sans-hook.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { decoderInitialize } from './pools-du-jeton.js';
+/* 2026-10-25 — LE LIEU 'aero-new' (factory 0x9cb2…7a76, routeur 0x9ee3…d418, prouve sur fork) quand le serveur le sert comme MEILLEUR
+ *   lieu d une action (`deps.venueAction(action).meilleure === 'aero-new'`) ; sinon les routes ci-dessous, inchangees octet pour octet */
+import { planVenueNeuve, venteParVenues } from './liquidite-actions.js';
 
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -256,8 +259,32 @@ export async function planRail(q, deps) {
     const d = Number(BigInt(String(r).slice(0, 66)));
     if (Number.isInteger(d) && d >= 0 && d <= 36) decimalesAction = d;
   } catch (_) { /* decimales non lues : pas d ecart, la reference reste */ }
-  return ajouterReference(plan, { de, vers, nd, nv, decimalesAction, ref });
+  const avecRef = ajouterReference(plan, { de, vers, nd, nv, decimalesAction, ref });
+  /* ⛔ 2026-10-25 — LA VENTE COMPAREE PAR LIEU, AVANT LA SIGNATURE (consigne du proprietaire : montrer le meilleur lieu de vente et son
+   *   devis, et avertir quand TOUS les lieux paient loin sous la reference). AJOUT D INFORMATION : ni la route, ni un montant, ni l etat
+   *   du plan ne changent. Borne a ATTENTE_VENTE_MS ; rien de lu = pas de champ. Seulement si le serveur sert ses verdicts (`venueAction`). */
+  if (nd === 'ACTION' && nv === 'USDC' && deps && typeof deps.venueAction === 'function' && avecRef && (avecRef.etat === 'PRET' || avecRef.etat === 'APPROBATIONS')) {
+    let m = null; try { m = BigInt(String(q && q.montant)); } catch (_) { m = null; }
+    const route = (() => { try { return deps.venueAction(action) || null; } catch (_) { return null; } })();
+    const refUsd = ref && ref.reference && ref.reference.etat === 'LU' ? ref.reference.prixUsd : null;
+    const v = m && m > 0n ? await Promise.race([venteParVenues({ rpc: deps.rpc, action, montant: m, route, cleV4: cleV4MesureeDe(action), refUsd }).catch(() => null),
+      new Promise((ok) => setTimeout(() => ok(null), ATTENTE_VENTE_MS))]) : null;
+    if (v && v.etat === 'OK' && v.texte) {
+      const ici = avecRef.venue || (avecRef.pool === 'aerodrome' ? 'aero-old' : avecRef.pool === 'uniswap-v4' ? 'uniswap-v4' : null);
+      avecRef.vente = { texte: v.texte, loin: !!v.loin, ecartBps: v.ecartBps, meilleure: v.meilleure, ici, reference: v.reference, ventes: v.ventes };
+    }
+  }
+  return avecRef;
 }
+const ATTENTE_VENTE_MS = 4000;
+/** le verdict 'aero-new' servi, SEULEMENT quand le serveur le dit meilleur lieu (et qu il passe) ; sinon null et la route d avant */
+function venueNeuveDe(deps, action) {
+  if (!deps || typeof deps.venueAction !== 'function') return null;
+  let r = null; try { r = deps.venueAction(action); } catch (_) { r = null; }
+  const v = r && r.meilleure === 'aero-new' && r.venues ? r.venues['aero-new'] : null;
+  return v && v.passe === true && ADR.test(String(v.pool || '')) ? v : null;
+}
+const CHOIX_NEUVE = 'Routed through Aerodrome’s newer pool factory (router 0x9ee3…d418): its pool quotes this stock better than this app’s usual route';
 
 async function planRailBrut(q, deps) {
   const rpcRecu = deps && deps.rpc;
@@ -449,6 +476,12 @@ async function planRailBrut(q, deps) {
      *   APPROBATIONS 19/19 (0,5 % en USDC, le frais d interface : aucun hook ne paie), VENTE 18/19 (ASTSc : devis reverte). Le chemin
      *   v4 est celui des blocks cotes en USDC : ETH passe par USDC (deux sauts, une tx). */
     if (nv === 'ACTION' && nd !== 'ACTION') { /* une action contre une autre action : route 5 */
+      /* 2026-10-25 : USDC -> action sur le lieu 'aero-new' quand le serveur l a juge MEILLEUR (liquidite-actions.js) ; sinon la suite, inchangee */
+      const vNeuve = nd === 'USDC' ? venueNeuveDe(deps, vers) : null;
+      if (vNeuve) {
+        return normaliser(route, await planVenueNeuve({ rpc, sens: 'ACHAT', action: vers, montant: m, compte, verdict: vNeuve, beneficiaireFrais: FEE_WALLET, maintenant }),
+          { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: CHOIX_NEUVE });
+      }
       const t = POOLS_ACTIONS_AERODROME.get(vers);
       if (!t && (nd === 'ETH' || nd === 'USDC')) {
         const marcheV = await marcheDe(vers);
@@ -503,6 +536,12 @@ async function planRailBrut(q, deps) {
     }
     /* ── 4. VENDRE UNE ACTION TOKENISEE CONTRE USDC sur sa pool v4 LUE (les 20 ; les 12 Aerodrome n ont pas ce chemin ici) ── */
     if (nd === 'ACTION' && nv === 'USDC') {
+      /* 2026-10-25 : action -> USDC sur le lieu 'aero-new' quand le serveur l a juge MEILLEUR (memes regles, deux jambes cotees au meme etat) */
+      const vNeuveV = venueNeuveDe(deps, de);
+      if (vNeuveV) {
+        return normaliser(route, await planVenueNeuve({ rpc, sens: 'VENTE', action: de, montant: m, compte, verdict: vNeuveV, beneficiaireFrais: FEE_WALLET, maintenant }),
+          { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: CHOIX_NEUVE });
+      }
       /* ⛔⛔ 2026-10-04 — LES DEUX MARCHES SONT ACCEPTES A LA VENTE (Phil : « pool Aerodrome et Uniswap acceptees, oublie pas »).
        *   Mesure du jour sur ce planificateur : vendre NVDAc rendait REFUSE « no initialized pool among the 16 keys read » — l achat
        *   de la meme action passait par sa pool Aerodrome, la vente ne cherchait qu une pool v4 qui n existe pas. 12 actions (la

@@ -48,7 +48,13 @@ import { lireEspacements, phraseEspacements, ESPACEMENTS_RETOMBEE } from './espa
 import { lireActionsEmetteur, phraseActionsEmetteur } from './actions-emetteur.js';
 /* 2026-10-25 — LES ACTIONS DE L EMETTEUR, PROUVEES SUR LA CHAINE (code 0xef + log de la factory B20 + tx.from), et leur route d achat */
 import { candidatsActions, decouvrirActions, lireUnites, routeAction, routeServie, resumeActions, CREATEUR_EMETTEUR,
-  ROUTES_PAR_TOUR, ROUTE_TTL_MS, UNITES_TTL_MS, routePourLigne, lecteurPreuves, verdictGravable, CREATIONS_GRAINE, prouverAction } from './actions-chaine.js';
+  ROUTES_PAR_TOUR, ROUTE_TTL_MS, UNITES_TTL_MS, routePourLigne, lecteurPreuves, verdictGravable, CREATIONS_GRAINE, prouverAction,
+  ROUTE_SERVIE_MAX_MS } from './actions-chaine.js';
+/* 2026-10-25 — CHAQUE LIEU D ECHANGE D UNE ACTION (notre factory, la factory « aero » 0x9cb2… et son routeur 0x9ee3… prouves sur fork,
+ *   Uniswap v4), cote par les memes regles ; le meilleur qui passe est servi (`routeAction.meilleure`) et le planificateur l emprunte */
+import { coterVenueCL, verdictVenue, verdictServi, choisirVenue, lireCodeQuoteurNouvelle, overrideQuoteur } from './liquidite-actions.js';
+import { QUOTEUR_AERODROME_CL as QUOTEUR_AERODROME_CL_LIQ } from './rolls-en-action.js';
+import { estDeviseConnue } from './pool-sans-hook.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
 import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
@@ -924,6 +930,8 @@ async function actionsChaineTour(em) {
     try { bloc = parseInt(await compteur(rpcRails, c, 'bloc')('eth_blockNumber', []), 16) - 10; } catch (_) { bloc = null; }
     const appelEpingle = Number.isSafeInteger(bloc) && bloc > 0
       ? compteur((to, data) => rpcRails('eth_call', [{ to, data }, '0x' + bloc.toString(16)]), c, 'routes') : null;
+    const appelOverrideEpingle = Number.isSafeInteger(bloc) && bloc > 0
+      ? compteur((to, data, ov) => rpcRails('eth_call', [{ to, data }, '0x' + bloc.toString(16), ov]), c, 'routes') : null;
     for (const p of appelEpingle ? ordre : []) {
       const u = unitesActions.get(p.adr);
       if (!u || !(u.v > 0n)) continue; /* sans unites en circulation, rien a acheter */
@@ -932,7 +940,27 @@ async function actionsChaineTour(em) {
       if (routesLues >= ROUTES_PAR_TOUR) break;
       routesLues += 1;
       const v = await routeAction({ appel: appelEpingle, adr: p.adr, cachePools: poolsActionsCache, bloc });
-      if (v.etat === 'OK') { routesActions.set(p.adr, { r: routeServie(v), t: Date.now() }); aSauver = true; }
+      if (v.etat === 'OK') {
+        const servi = routeServie(v);
+        /* 2026-10-25 (liquidite-actions.js) : le lieu 'aero-new' (factory 0x9cb2…7a76, routeur 0x9ee3…d418, prouve sur fork) est cote AU MEME
+         *   BLOC par les regles du proprietaire (1 % / 2 % / 10 000 USDC) ; `meilleure` dit le lieu retenu (choisirVenue). Notre verdict
+         *   `achetable` est INCHANGE : la fiche n achete que par notre routeur. Une lecture ratee : pas de champ, rien d affirme. */
+        try {
+          if (codeQuoteurLiq === null) codeQuoteurLiq = await lireCodeQuoteurNouvelle(compteur(rpcServeur, c, 'routes'));
+          if (codeQuoteurLiq && appelOverrideEpingle) {
+            const appelDevisNeuve = (to, data) => (String(to).toLowerCase() === QUOTEUR_AERODROME_CL_LIQ ? appelOverrideEpingle(to, data, overrideQuoteur(codeQuoteurLiq)) : appelEpingle(to, data));
+            const cN = await coterVenueCL({ appel: appelEpingle, appelDevis: appelDevisNeuve, venue: 'aero-new', adr: p.adr, cachePools: poolsActionsCache });
+            if (cN.etat === 'OK') {
+              const vN = verdictVenue(cN);
+              /* ⛔ meme ADMISSION que notre route : le frais se prend dans le jeton qui sort (l action, a l achat) */
+              if (vN.passe && !estDeviseConnue(p.adr)) { vN.passe = false; vN.code = 'HORS_REGISTRE'; }
+              servi.venues = { 'aero-new': verdictServi(vN) };
+              servi.meilleure = choisirVenue({ route: servi, neuve: servi.venues['aero-new'] });
+            }
+          }
+        } catch (_) { /* rien d affirme */ }
+        routesActions.set(p.adr, { r: servi, t: Date.now() }); aSauver = true;
+      }
     }
     if (aSauver) sauverActionsDisque();
     tourActions = tour;
@@ -946,6 +974,15 @@ async function actionsChaineTour(em) {
   const prouvees = new Set(((tourActions && tourActions.prouvees) || []).map((p) => p.adr));
   return { prouvees, tour: tourActions };
 }
+
+/** 2026-10-25 : le verdict de route SERVI d une action (lieux compris), tant qu il n est pas perime — le planificateur emprunte 'aero-new'
+ *  seulement quand ce verdict le dit meilleur (rails-api.js venueNeuveDe) */
+function venueActionServie(a) {
+  const v = routesActions.get(String(a || '').toLowerCase());
+  return v && v.r && Number.isFinite(v.t) && Date.now() - v.t <= ROUTE_SERVIE_MAX_MS ? v.r : null;
+}
+/** le code du quoter 0x514c… patche pour la factory 'aero-new' (immuable : lu une fois ; null = pas encore lu, false jamais garde) */
+let codeQuoteurLiq = null;
 
 async function alternativeAerodrome(jeton, famille) {
   const cle = String(jeton || '').toLowerCase();
@@ -2927,7 +2964,7 @@ async function faireRail(demande) {
    *   eth_call a sa liste large et passe le reste a rpcServeur (RPC_LIST : base.org, +1 231 refus de debit en 23 min mesures, et
    *   developer-access, DNS mort) ; rpcNaissance envoie eth_simulateV1 a RPC_SIMULATION (base.org, publicnode, drpc : les trois
    *   l executent, mesure depuis une page le 2026-10-10) et TOUT LE RESTE a rpcRails, comme avant. */
-  const r = await planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur });
+  const r = await planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie });
   if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
   return r;
 }
@@ -6652,7 +6689,7 @@ function traiterRequete(req, res) {
      *   PROPRES corps, exactement comme le client les jugerait (meme chargeur, meme fraicheur) : index incomplet ou tete
      *   figee = sources non lues = tout B20 inconnu reste un block (fail-closed), et la reponse le DIT. */
     try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
-    planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur }).then((r) => { /* rpcNaissance : voir faireRail */
+    planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie }).then((r) => { /* rpcNaissance : voir faireRail */
       if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
       if (!sonde) {
         if (r.etat === 'PRET') railsCompteurs.prets += 1;

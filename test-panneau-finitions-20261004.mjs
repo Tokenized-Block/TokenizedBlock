@@ -356,7 +356,7 @@ const avecDelai = srcDelai ? new Function('return ' + srcDelai)() : null;
 ok(/signal: AbortSignal\.timeout\(methode === 'eth_getLogs' \? 20000 : 8000\) \}\);/.test(html), 'C3 le fetch RPC du navigateur a un delai maximal (8 s, 20 s pour des logs) — il n en avait AUCUN');
 ok(/\[decDe, decVers\] = await Promise\.all\(\[de\.adr, vers\.adr\]\.map\(\(x\) => bcAvecDelai\(bcDecimales\(x\), 6000\)\.catch\(\(\) => null\)\)\);/.test(bcSrc),
   'C3 echange : les decimales sont lues en parallele, bornees a 6 s ; illisibles = unites brutes, la carte s affiche quand meme');
-ok(/const direct = qui === 'You';\n\s+if \(direct\) \{ void planifier\(\); return; \}/.test(bcSrc) && /if \(direct && !franchissement\) return signer\(\);/.test(bcSrc) && /bcBoutons\(m, \[\['Prepare the plan', planifier\], \['Dismiss', refuser, true\]\]\);/.test(bcSrc),
+ok(/const direct = qui === 'You';\n\s+if \(direct\) \{ void planifier\(\); return; \}/.test(bcSrc) && /if \(direct && !franchissement && !venteLoin\) return signer\(\);/.test(bcSrc) && /bcBoutons\(m, \[\['Prepare the plan', planifier\], \['Dismiss', refuser, true\]\]\);/.test(bcSrc),
   'C3 Buy / Sell DIRECTS pour la personne (son Review construit le plan et ouvre le wallet) ; une proposition d agent ou d AiFi garde ses deux clics');
 ok((bcSrc.match(/bcOpMaj\(op, 'notOffered'\);/g) || []).length === 2 && /notOffered: \['refused — nothing was sent', 'non'\]/.test(bcSrc) && /bcOpMaj\(op, 'proposed'\); \/\* un nouvel essai rouvre l operation \*\//.test(bcSrc),
   'C3 un plan REFUSE (ou un solde insuffisant) REFERME l operation — elle restait a « waiting for you » ; un nouvel essai la rouvre');
