@@ -29,13 +29,22 @@ const { USDC_BASE, FEE_WALLET } = await imp('frais-creation.js');
 const P = await imp('duels-plan.js');
 const ARTEFACT = path.join(ICI, 'contracts/out/BlockDuelsV2.sol/BlockDuelsV2.json');
 const PARAMS = JSON.parse(lire('contracts/duels-parametres.json'));
+/* 2026-10-25 : deploye par le proprietaire (tx 0x6013ff97…4721c, bloc 53 064 205), adresse et bloc ecrits ENSEMBLE par
+ * contracts/noter-deploiement-duelsv2.mjs (recu 0x1, input octet pour octet, relectures egales). Les refus B partent de la MEME fiche
+ * ramenee a l etat d avant (D0 : memes octets, adresse et bloc remis a null) : sinon chaque falsification serait refusee pour l adresse
+ * deja ecrite, et B passerait a vide. La regeneration compare le preparateur a la fiche du depot dont les deux lignes sont remises a null
+ * (le preparateur n ecrit jamais d adresse : c est le travail du noteur). */
+const D0 = Object.freeze({ ...D, adresse: null, bloc: null });
+const avantDeploiement = (t) => t.replace(/^(\s*)adresse: '0x[0-9a-f]{40}',$/m, '$1adresse: null,').replace(/^(\s*)bloc: \d+, \/\*[^\n]*\*\/$/m, '$1bloc: null,');
+const deployee = /^0x[0-9a-f]{40}$/.test(String(D.adresse)) && Number.isSafeInteger(D.bloc) && D.bloc > 0;
 
 console.log('— A. la fiche du depot');
 ok(D.chaine === 8453 && D.contrat === 'BlockDuelsV2' && Object.isFrozen(D) && Object.isFrozen(D.constructeur) && JSON.stringify(D.ordre) === JSON.stringify(ORDRE_ARGS), 'A chaine 8453, contrat BlockDuelsV2, ordre de duels-config.js, objets figes');
 ok(ORDRE_ARGS.every((k) => D.constructeur[k] === String(V1.constructeur[k]).toLowerCase()) && D.memesParametresQue === String(V1.adresse).toLowerCase(), 'A les 4 arguments = ceux de la fiche v1 DEPLOYEE (' + V1.adresse + ')');
 ok(D.constructeur.usdc === USDC_BASE.toLowerCase() && D.constructeur.devWallet === FEE_WALLET.toLowerCase() && D.constructeur.rewardPool === PARAMS.rewardPool.toLowerCase() && D.constructeur.guardian === PARAMS.guardian.toLowerCase(),
   'A et = frais-creation.js (usdc, devWallet) et duels-parametres.json (rewardPool, guardian) — jamais tapes');
-ok(D.pret === true && D.manquants.length === 0 && D.refus.length === 0 && D.adresse === null && D.bloc === null, 'A prete, rien ne manque, adresse ET bloc nuls (Phil n a pas signe)');
+ok(D.pret === true && D.manquants.length === 0 && D.refus.length === 0 && ((D.adresse === null && D.bloc === null) || deployee), 'A prete, rien ne manque ; adresse et bloc tous deux nuls (pas signe) ou tous deux ecrits (jamais l un sans l autre)');
+ok(avantDeploiement(lire('duels-v2-deploiement.js')) !== lire('duels-v2-deploiement.js') || !deployee, 'A fiche deployee : ses deux lignes adresse / bloc sont celles qu ecrit le noteur (ramenables a null), sinon la regeneration comparerait a vide');
 ok(sha(lire('contracts/src/BlockDuelsV2.sol')) === D.sha256Sources['src/BlockDuelsV2.sol'], 'A generee depuis la source ACTUELLE de BlockDuelsV2 (source modifiee sans regenerer = rouge)');
 const art = JSON.parse(fs.readFileSync(ARTEFACT, 'utf8'));
 const octets = Buffer.from(D.creation.slice(2), 'hex');
@@ -48,7 +57,7 @@ const preparer = (sortie, env = {}) => execFileSync(process.execPath, ['preparer
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'duelsv2-dep-'));
 try {
   preparer(path.join(tmp, 'meme.js'));
-  ok(fs.readFileSync(path.join(tmp, 'meme.js'), 'utf8').replace(/\r\n/g, '\n') === lire('duels-v2-deploiement.js'), 'A le preparateur relance regenere la fiche du depot a l IDENTIQUE (deterministe)');
+  ok(fs.readFileSync(path.join(tmp, 'meme.js'), 'utf8').replace(/\r\n/g, '\n') === avantDeploiement(lire('duels-v2-deploiement.js')), 'A le preparateur relance regenere la fiche du depot a l IDENTIQUE (deterministe ; adresse / bloc remis a null)');
   console.log('— A2. des parametres qui different de v1 : refus');
   fs.writeFileSync(path.join(tmp, 'p.json'), JSON.stringify({ rewardPool: '0x' + '70'.repeat(20), guardian: PARAMS.guardian }));
   let refuse = null; try { preparer(path.join(tmp, 'x.js'), { PARAMETRES: path.join(tmp, 'p.json') }); } catch (e) { refuse = String(e.stderr || e.message); }
@@ -64,10 +73,11 @@ try {
 
 console.log('— B. le refus de la page (duels-v2-config.js)');
 const s0 = sha(octets);
-ok(verifierEnregistrementV2(D, s0, V1).intacte === true, 'B la fiche du depot, intacte, egale a v1 : acceptee');
-const falsifie = (patch, v1 = V1) => { const d = { ...D, constructeur: { ...D.constructeur }, ...patch }; return verifierEnregistrementV2(d, sha(Buffer.from(String(d.creation).slice(2), 'hex')), v1); };
+ok(verifierEnregistrementV2(D0, s0, V1).intacte === true, 'B la fiche du depot (ramenee a avant le deploiement), intacte, egale a v1 : acceptee');
+ok(!deployee || verifierEnregistrementV2(D, s0, V1).intacte === false, 'B la fiche du depot DEPLOYEE n allume plus la page (deja deploye : refuse)');
+const falsifie = (patch, v1 = V1) => { const d = { ...D0, constructeur: { ...D0.constructeur }, ...patch }; return verifierEnregistrementV2(d, sha(Buffer.from(String(d.creation).slice(2), 'hex')), v1); };
 ok(!falsifie({ creation: D.creation.slice(0, -2) + (D.creation.endsWith('d4') ? 'd5' : 'd4') }).intacte, 'B un octet change (le gardien) : refuse, meme avec une empreinte recalculee dessus');
-ok(!verifierEnregistrementV2(D, s0.replace(/^./, (c) => (c === 'a' ? 'b' : 'a')), V1).intacte, 'B une empreinte qui ne correspond pas : refuse');
+ok(!verifierEnregistrementV2(D0, s0.replace(/^./, (c) => (c === 'a' ? 'b' : 'a')), V1).intacte, 'B une empreinte qui ne correspond pas : refuse');
 ok(!falsifie({ constructeur: { ...D.constructeur, rewardPool: '0x' + 'ab'.repeat(20) } }).intacte, 'B un rewardPool AFFICHE different de l encode : refuse');
 ok(!falsifie({}, { ...V1, constructeur: { ...V1.constructeur, devWallet: '0x' + 'ab'.repeat(20) } }).intacte && /devWallet differs from the v1/.test(falsifie({}, { ...V1, constructeur: { ...V1.constructeur, devWallet: '0x' + 'ab'.repeat(20) } }).pourquoi.join()),
   'B des arguments differents de la fiche v1 : refuse (« differs from the v1 duels contract »)');

@@ -13,7 +13,9 @@
  *   D. la carte (code REEL d app.html) : textes et boutons par etat ; Accept absent sans mesure ; le join dit la ligne AVANT l unique envoi,
  *      puis attend le bloc et propose Settle (aucun second envoi : rien ne se signe seul) ; Settle by default paie le createur (DefaultWon lu).
  * Modules remplacables (muter-duels-v2-app.mjs) : DUELS_V2_MODULE, DUELS_V2_SERVEUR, BRAIN_JEU_MODULE, APP_HTML, SERVEUR_WEB.
- * ⛔ PORTABLE : process.exitCode. NE PROUVE PAS : le rendu dans un navigateur, un vrai wallet, le contrat sur Base (pas deploye). */
+ *   F. (2026-10-25, v2 deploye) l etat LIVE avec la fiche REELLE du depot : /api/duels sert version 2 sur son contrat, creer / rejoindre ouverts
+ *      sans regleur ; v1 reste ferme. E. Fees & risks suit la fiche (le texte « pas signe » reste prouve sur une copie).
+ * ⛔ PORTABLE : process.exitCode. NE PROUVE PAS : le rendu dans un navigateur, un vrai wallet, le contrat sur Base (lu ici par un faux noeud). */
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -88,7 +90,7 @@ ok(evd.length === 1 && evd[0].type === 'DEFAULT_WON' && evd[0].id === '2' && evd
 
 /* ═════════════════════════════════════ B. le serveur : la route REELLE, par l etat */
 console.log('— B. /api/duels (tranche reelle de serveur-web.js) + duels-v2-serveur.js');
-function noeud(duels) {
+function noeud(duels, contrat = C) { /* 2026-10-25 : `contrat` = le seul contrat lisible (F : celui de la fiche REELLE) ; tout autre eth_call jette */
   const nd = { appels: [] };
   nd.rpc = async (m, p) => {
     nd.appels.push(m);
@@ -96,7 +98,7 @@ function noeud(duels) {
     if (m === 'eth_getLogs') throw new Error('getLogs must not be used');
     if (m === 'eth_getBlockByNumber') { const b = parseInt(p[0], 16); return { number: hx(b), hash: hashDe(b), timestamp: hx(T + b * 2) }; }
     if (m === 'eth_call') {
-      if (String(p[0].to).toLowerCase() !== C) throw new Error('unexpected eth_call target');
+      if (String(p[0].to).toLowerCase() !== contrat) throw new Error('unexpected eth_call target');
       if (p[0].data === selecteur('nextId()')) return '0x' + u(duels.size + 1);
       if (p[0].data.startsWith(selecteur('duels(uint256)'))) return retourDuel(duels.get(Number(BigInt('0x' + p[0].data.slice(10)))) || {});
     }
@@ -297,12 +299,68 @@ ok(/const rf = \$\('#regleDuelsFenetre'\); if \(rf\) rf\.textContent = 'Not acce
   'How it works : en v2, « … the creator wins by default, even on a tie. » remplace la phrase v1 du remboursement');
 ok(/Duels = moduleDuels\(j\);/.test(APP) && /const moduleDuels = \(j\) => \(j && j\.version === DuelsV2\.VERSION \? DuelsV2 : DuelsV1\);/.test(APP), 'app : le module de duel = celui de la version SERVIE (v2 seulement si /api/duels dit version 2)');
 ok(/if \(duels\) Object\.assign\(duels, \{ version: jd\.version === DuelsV2\.VERSION \? DuelsV2\.VERSION : 1, sParBloc: sParBlocApp \}\);/.test(APP), 'brain de l app : version et temps de bloc mesure passes au brain');
+/* ═════════════════════════════════════ F. L ETAT LIVE (2026-10-25) : la fiche REELLE du depot porte l adresse de BlockDuelsV2
+ *   (noter-deploiement-duelsv2, bloc 53 064 205). Execute avec CETTE fiche (jamais une fiche fabriquee) : le VRAI duelsV2() de serveur-web.js
+ *   cree le lecteur sur SON contrat, la route /api/duels sert version 2, et creer / rejoindre sont ouverts SANS regleur (la reponse v2 n a pas
+ *   de champ regleur, duelsOuverts v2 ne le lit pas) ; v1 reste ferme (DUELS_REGLEUR_SUFFIT), meme si une reponse dit le contraire. */
+console.log('— F. etat live : la fiche REELLE du depot (duels-v2-deploiement.js)');
+const { DUELS_V2_DEPLOIEMENT: DV2 } = await imp('duels-v2-deploiement.js');
+const { DUELS_DEPLOIEMENT: DV1 } = await imp('duels-deploiement.js');
+const P1 = await imp('duels-plan-app.js');
+const CV2 = S.contratDeFicheV2(DV2);
+ok(CV2 !== null && CV2 === DV2.adresse && Number.isSafeInteger(DV2.bloc) && DV2.bloc > 0 && CV2 !== String(DV1.adresse).toLowerCase(), 'la fiche du depot porte adresse ET bloc : contratDeFicheV2 = ' + CV2 + ' (bloc ' + DV2.bloc + '), pas le contrat v1');
+const srcDuelsV2 = tranche(SRV, 'let lecteurDuelsV2 = null;', 'setInterval(() => { const l = duelsV2();');
+ok(/function duelsV2\(\) \{\n  const c = contratDeFicheV2\(DUELS_V2_DEPLOIEMENT\);\n  if \(!c\) return null;/.test(srcDuelsV2), 'tranche REELLE de serveur-web.js : duelsV2() lit le contrat de la fiche (contratDeFicheV2)');
+const creesSur = [];
+const ndL = noeud(new Map([[1, { creator: A, expiresAt: T + 3600, statut: 'Open', guessA: g(1), token: USDC, stake: 1_000_000n }]]), CV2);
+const monterDuelsV2 = (fiche) => new Function('contratDeFicheV2', 'DUELS_V2_DEPLOIEMENT', 'creerLecteurDuelsV2', 'rpcServeur', srcDuelsV2 + '\nreturn duelsV2;')(
+  S.contratDeFicheV2, fiche, (o) => { creesSur.push(o.contrat); return S.creerLecteurDuelsV2({ ...o, intervalleMs: 0 }); }, ndL.rpc);
+ok(monterDuelsV2(Object.freeze({ ...DV2, adresse: null, bloc: null }))() === null && creesSur.length === 0, 'temoin : la MEME fiche ramenee a avant le deploiement -> duelsV2() null (la route resterait sur v1, fermee)');
+const duelsV2Live = monterDuelsV2(DV2);
+const routeL = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv', 'mesureCourteSrv', 'sParBlocServi',
+  'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(duelsV2Live, async () => 2, new Map(), S.reponseDuelsV2, DV2, { sParBloc: 2 }, { lire: async () => 2, etat: () => ({ sParBloc: 2 }) }, () => 2);
+let JL;
+{
+  const dn = Date.now; Date.now = () => T * 1000;
+  try { await duelsV2Live().lire(true); const res = { corps: null, writeHead() {}, end(s) { this.corps = s; } }; await routeL({ method: 'GET' }, res, '/api/duels'); JL = JSON.parse(res.corps); } finally { Date.now = dn; }
+  while (duelsV2Live().etat().enVol) await new Promise((r) => setTimeout(r, 1));
+}
+ok(JL.ok === true && JL.etat === 'LU' && JL.version === 2 && JL.contrat === DV2.adresse && JL.bloc === DV2.bloc && JL.usdc === DV2.constructeur.usdc && creesSur.length >= 1 && creesSur.every((c) => c === DV2.adresse),
+  '/api/duels avec la fiche REELLE : version 2, LU, contrat ' + JL.contrat + ', bloc ' + JL.bloc + ' (le lecteur cree sur ce contrat seulement)');
+ok(!ndL.appels.includes('eth_getLogs') && ndL.appels.includes('eth_call'), 'lu par l etat (eth_call sur le contrat de la fiche, tout autre cible jette), AUCUN eth_getLogs');
+ok(!('regleur' in JL) && V2.duelsOuverts(JL) === true, 'creer / rejoindre OUVERTS sans regleur : la reponse v2 n a aucun champ regleur, duelsOuverts v2 = true');
+const srcModule = (APP.match(/const moduleDuels = \(j\) => [^\n]*\n/) || [''])[0];
+const moduleDuels = new Function('DuelsV2', 'DuelsV1', srcModule + 'return moduleDuels;')(V2, P1);
+ok(srcModule && moduleDuels(JL) === V2 && moduleDuels({ ok: true, contrat: DV1.adresse }) === P1, 'app (tranche reelle moduleDuels) : la reponse live -> le module v2 ; une reponse v1 -> le module v1');
+const duelLive = V2.duelDepuisJson(JL.duels.find((d) => d.id === '1'));
+ok(duelLive && V2.actionsDuel(duelLive, B, TETE, T, V2.duelsOuverts(JL)).join() === 'JOIN' && /const ouv = Duels\.duelsOuverts\(j\);\n  \{ const fo = \$\('#duelForm'\); if \(fo\) fo\.hidden = !ouv; \}/.test(APP),
+  'la carte : Accept propose sur le duel ouvert live ; le formulaire de creation n est cache que si duelsOuverts est faux');
+const pLiveJ = J.prochaineProposition(base([{ ...autreOuvert }], {}, { contract: CV2, open: V2.duelsOuverts(JL) }));
+const pLiveC = J.prochaineProposition(base([], {}, { contract: CV2, open: V2.duelsOuverts(JL) }));
+ok(pLiveJ.kind === 'DUEL_JOIN' && pLiveC.kind === 'DUEL_CREATE' && pLiveC.calls.every((c) => [CV2, USDC].includes(String(c.to).toLowerCase())), 'brain, contrat live : DUEL_JOIN sur un duel ouvert, DUEL_CREATE sans duel (appels vers le contrat de la fiche et USDC)');
+/* v1 reste FERME : meme une reponse qui dirait regleDuels true, meme un brain a qui on dirait open true */
+const repV1 = { ok: true, etat: 'LU', contrat: DV1.adresse, regleur: { etat: 'ON', regleDuels: true } };
+ok(P1.duelsOuverts(repV1) === false && P1.duelsFermesParContrat(DV1.adresse) === true && P1.regleurSuffit(DV1.adresse) === false && P1.duelsFermesParContrat(CV2) === false,
+  'v1 (' + DV1.adresse + ') reste ferme : duelsOuverts v1 faux meme si la reponse dit regleDuels true ; le contrat v2 n est pas declare ferme');
+const pV1 = [J.prochaineProposition(base([{ ...autreOuvert }], {}, { contract: DV1.adresse, open: true, version: 1 })), J.prochaineProposition(base([], {}, { contract: DV1.adresse, open: true, version: 1 })),
+  /* et SEULE l adresse changee par rapport au cas live ouvert ci-dessus (version 2, open true) : c est le contrat qui ferme */
+  J.prochaineProposition(base([{ ...autreOuvert }], {}, { contract: DV1.adresse, open: true })), J.prochaineProposition(base([], {}, { contract: DV1.adresse, open: true }))];
+ok(pV1.every((p) => !['DUEL_JOIN', 'DUEL_CREATE'].includes(p.kind)), 'brain, contrat v1 avec open true : ni DUEL_JOIN ni DUEL_CREATE (' + pV1.map((p) => p.kind).join(', ') + ')');
+
 /* ═════════════════════════════════════ E. « Fees & risks » (frais-risques.js, execute) */
 console.log('— E. Fees & risks : la section des duels');
 const FR = await imp('frais-risques.js');
 const vraiFR = FR.rendre(FR.CHIFFRES, null);
-ok(FR.CHIFFRES.duels.v2.deploye === false && /Duels: new duels are closed\./.test(vraiFR) && /prepared and not signed on Base yet/.test(vraiFR) && /they could settle only their wins/.test(vraiFR),
-  'v2 pas signe (aujourd hui) : la page dit que les nouveaux duels sont fermes, pourquoi (v1), et que v2 attend sa signature');
+/* 2026-10-25 : v2 deploye -> la page suit la fiche (deploye = contratDeFicheV2 non nul) ; le texte d avant (nouveaux duels fermes, pourquoi,
+ *   v2 pas signe) reste PROUVE sur une copie des chiffres ou v2 n est pas signe (C0), jamais retire */
+const v2Signe = CV2 !== null;
+ok(FR.CHIFFRES.duels.v2.deploye === v2Signe && FR.CHIFFRES.duels.v2.adresse === DV2.adresse, 'Fees & risks lit la fiche v2 : deploye = ' + v2Signe + ', adresse = celle de la fiche');
+const C0 = structuredClone(FR.CHIFFRES); C0.duels.v2 = { deploye: false, adresse: null };
+const r0 = FR.rendre(C0, null);
+ok(/Duels: new duels are closed\./.test(r0) && /prepared and not signed on Base yet/.test(r0) && /they could settle only their wins/.test(r0),
+  'v2 pas signe : la page dit que les nouveaux duels sont fermes, pourquoi (v1), et que v2 attend sa signature');
+ok(v2Signe ? /Duels: settle in time, or the creator wins\./.test(vraiFR) && !/new duels are closed/.test(vraiFR) && vraiFR.includes('https://basescan.org/address/' + DV2.adresse) : /Duels: new duels are closed\./.test(vraiFR),
+  'la page servie aujourd hui suit la fiche : ' + (v2Signe ? 'v2 signe -> « settle in time, or the creator wins », lien vers ' + DV2.adresse : 'v2 pas signe -> nouveaux duels fermes'));
 ok(/>Duel<\/th><td class="n">10% of the pot<\/td>/.test(vraiFR) && /90% of the pot to the winner, 7% to the community reward pool and 3% to TokenizedBlock/.test(vraiFR), 'la ligne de frais d un duel : 10 % du pot (90 / 7 / 3), depuis duels-plan.js');
 const C2 = structuredClone(FR.CHIFFRES); C2.duels.v2 = { deploye: true, adresse: C };
 const r2 = FR.rendre(C2, { tempsDeBloc: { sParBloc: 2 } }), r3 = FR.rendre(C2, null), r4 = FR.rendre(C2, { tempsDeBloc: { sParBloc: 0.2 } });

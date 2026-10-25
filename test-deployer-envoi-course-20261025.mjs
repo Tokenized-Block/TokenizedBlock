@@ -3,7 +3,7 @@
  * EXECUTE (pas lu) : le script REEL de chaque page (deployer-duels-v2.html, deployer-duels.html, deployer-slots.html) tourne dans un faux DOM,
  *   avec un faux wallet qui compte les eth_sendTransaction ; deux pages peuvent etre montees EN MEME TEMPS (deux onglets : chaque copie du
  *   script a son propre `document` / `window`, le stockage est partage). La copie ne change que : la fiche (adresse et bloc remis a null pour
- *   v1 et slots, deja deployes), l attente (pas de 2 s), et les deux constantes `document` / `window` en tete du module.
+ *   v1, slots et v2, deja deployes), l attente (pas de 2 s), et les deux constantes `document` / `window` en tete du module.
  * AFFIRME, pour chaque page :
  *   O1 l onglet A envoie (recu en retard) ; l onglet B, ouvert AVANT, appuie sur Deploy : rien n est envoye, B montre le hash de A, le hash de
  *      A reste dans le stockage, B propose « Check again » ;
@@ -87,7 +87,9 @@ const relDuels = (D) => ({ [sel('USDC()')]: '0x' + aw(D.constructeur.usdc), [sel
 const relSlots = { [sel('USDC()')]: '0x' + aw(DS.constructeur.usdc), [sel('DEV_WALLET()')]: '0x' + aw(DS.constructeur.devWallet), [sel('SPIN_PRICE()')]: '0x' + u(DS.constructeur.spinPrice),
   [sel('POT_SHARE_BPS()')]: '0x' + u(DS.constructeur.potShareBps), [sel('prizes()')]: '0x' + DS.constructeur.prizes.map(u).join(''), [sel('pot()')]: '0x' + u(0) };
 const PAGES = [
-  { nom: 'deployer-duels-v2.html', env: 'PAGE_DUELS_V2', fiche: null, rel: relDuels(DV2), code: art.deployedBytecode.object },
+  /* 2026-10-25 : BlockDuelsV2 deploye (adresse + bloc ecrits par noter-deploiement-duelsv2) -> comme v1 et slots, la page tourne sur SA fiche
+   *   ramenee a l etat d avant (memes octets, adresse et bloc null) : sinon elle dirait « Already deployed » et la course passerait a vide */
+  { nom: 'deployer-duels-v2.html', env: 'PAGE_DUELS_V2', fiche: ['./duels-v2-deploiement.js', 'DUELS_V2_DEPLOIEMENT'], rel: relDuels(DV2), code: art.deployedBytecode.object },
   { nom: 'deployer-duels.html', env: 'PAGE_DUELS', fiche: ['./duels-deploiement.js', 'DUELS_DEPLOIEMENT'], rel: relDuels(DV1), code: '0x' },
   { nom: 'deployer-slots.html', env: 'PAGE_SLOTS', fiche: ['./slots-deploiement.js', 'SLOTS_DEPLOIEMENT'], rel: relSlots, code: '0x' },
 ];

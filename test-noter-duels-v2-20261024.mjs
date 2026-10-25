@@ -8,17 +8,35 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const { noter, RELECTURES, CONSTANTES, SELECTEUR_DEFAUT } = await import(pathToFileURL(process.env.NOTER_V2 || path.join(ICI, 'contracts/noter-deploiement-duelsv2.mjs')).href);
-const { DUELS_V2_DEPLOIEMENT: F } = await import('./duels-v2-deploiement.js');
+const { DUELS_V2_DEPLOIEMENT: REELLE } = await import('./duels-v2-deploiement.js');
+/* 2026-10-25 : BlockDuelsV2 deploye (bloc 53 064 205), la fiche du depot porte adresse + bloc. Le banc tourne sur la MEME fiche ramenee a
+ * l etat d avant (memes octets de creation, adresse et bloc remis a null ; texte : les deux lignes remises a null) -- il teste toujours la
+ * vraie donnee signee, et ne peut pas passer a vide parce que l adresse est deja ecrite. */
+const F = Object.freeze({ ...REELLE, adresse: null, bloc: null });
 let n = 0, ko = 0;
 const vu = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
-const texte = fs.readFileSync(path.join(ICI, 'duels-v2-deploiement.js'), 'utf8').replace(/\r\n/g, '\n');
+const texteDepot = fs.readFileSync(path.join(ICI, 'duels-v2-deploiement.js'), 'utf8').replace(/\r\n/g, '\n');
+const texte = texteDepot.replace(/^(\s*)adresse: '0x[0-9a-f]{40}',$/m, '$1adresse: null,').replace(/^(\s*)bloc: \d+, \/\*[^\n]*\*\/$/m, '$1bloc: null,');
 const art = JSON.parse(fs.readFileSync(path.join(ICI, 'contracts/out/BlockDuelsV2.sol/BlockDuelsV2.json'), 'utf8'));
 const C = F.constructeur, A = '0x' + 'ab'.repeat(20), DE = '0x' + 'cd'.repeat(20), H = '0x' + '77'.repeat(32), HB = '0x' + '5b'.repeat(32);
 const bon = () => ({ fiche: F, texte, tx: { hash: H, from: DE, to: null, input: F.creation, chainId: '0x2105' }, recu: { status: '0x1', contractAddress: A, blockNumber: '0x3253f4b', blockHash: HB },
   chaineNoeud: '0x2105', hashBlocNoeud: HB,
   relectures: { 'USDC()': C.usdc, 'DEV_WALLET()': C.devWallet, 'REWARD_POOL()': C.rewardPool, 'GUARDIAN()': C.guardian }, usdcAdmis: true, nextId: '1',
   constantes: { 'WINNER_BPS()': '9000', 'POOL_BPS()': '700', 'SETTLE_WINDOW()': '256' }, code: art.deployedBytecode.object });
-vu(F.pret === true && F.adresse === null && F.bloc === null, 'la fiche du depot est prete, sans adresse');
+vu(F.pret === true && F.adresse === null && F.bloc === null && /^\s*adresse: null,$/m.test(texte) && /^\s*bloc: null,$/m.test(texte), 'la fiche (ramenee a avant le deploiement) est prete, sans adresse, texte compris');
+vu((REELLE.adresse === null && REELLE.bloc === null && texteDepot === texte) || (/^0x[0-9a-f]{40}$/.test(String(REELLE.adresse)) && Number.isSafeInteger(REELLE.bloc) && REELLE.bloc > 0 && texteDepot !== texte),
+  'la fiche du depot : adresse et bloc tous deux nuls, ou tous deux ecrits (et alors ramenes a null ci-dessus)');
+{
+  /* la fiche deployee est EXACTEMENT ce que noter() ecrit : rejouee depuis ses propres lignes (tx, signataire, adresse, bloc lus dans le
+   *   fichier, jamais tapes) sur la fiche ramenee a avant, le texte rendu est octet pour octet celui du depot */
+  const m = texteDepot.match(/^\s*bloc: (\d+), \/\* tx (0x[0-9a-f]{64}) signed by (0x[0-9a-f]{40}) \*\/$/m);
+  if (REELLE.adresse !== null) {
+    const x = bon();
+    x.tx.hash = m && m[2]; x.tx.from = m && m[3]; x.recu.contractAddress = REELLE.adresse; x.recu.blockNumber = '0x' + Number(REELLE.bloc).toString(16);
+    const r = noter(x);
+    vu(!!m && Number(m[1]) === REELLE.bloc && r.ok === true && r.adresse === REELLE.adresse && r.bloc === REELLE.bloc && r.texte === texteDepot, 'la fiche deployee = la sortie de noter() rejouee sur ses propres tx / signataire / adresse / bloc (' + REELLE.adresse + ', bloc ' + REELLE.bloc + ')');
+  } else console.log('  (fiche pas deployee : rejeu de la sortie du noteur sans objet)');
+}
 vu(art.methodIdentifiers['settleDefault(uint256)'] === SELECTEUR_DEFAUT && art.deployedBytecode.object.includes('63' + SELECTEUR_DEFAUT), 'le selecteur cherche (' + SELECTEUR_DEFAUT + ') est celui de l ABI compilee, PUSH4 present dans le runtime');
 const v = noter(bon());
 vu(v.ok === true && v.adresse === A && v.bloc === 52772683, 'inscrit : adresse + bloc');

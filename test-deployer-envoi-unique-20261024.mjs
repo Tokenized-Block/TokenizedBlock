@@ -1,7 +1,7 @@
 /* test-deployer-envoi-unique-20261024.mjs — LES PAGES DE DEPLOIEMENT N ENVOIENT JAMAIS DEUX CREATIONS (revue BlockDuelsV2 2026-10-24, LOW n°3).
  * EXECUTE (pas lu) : le script REEL de chaque page (deployer-duels-v2.html, deployer-duels.html, deployer-slots.html) tourne dans un faux DOM,
  *   avec un faux wallet (window.ethereum) qui compte les eth_sendTransaction. Une COPIE du script est ecrite a cote de la page (imports
- *   relatifs) ; la copie ne change que : la fiche (adresse et bloc remis a null pour v1 et slots, deja deployes), et l attente (pas de 2 s).
+ *   relatifs) ; la copie ne change que : la fiche (adresse et bloc remis a null pour v1, slots et v2, deja deployes), et l attente (pas de 2 s).
  * AFFIRME, pour chaque page :
  *   S1 un wallet qui ACCEPTE le changement de reseau mais reste ailleurs (eth_chainId relu != 0x2105) : AUCUN envoi, la page le dit ;
  *   S2 un recu qui n arrive pas pendant l attente : UN envoi, le hash garde et montre, Deploy RESTE eteint, « Check again » propose ; un 2e
@@ -83,7 +83,9 @@ const relDuels = (D) => ({ [sel('USDC()')]: '0x' + aw(D.constructeur.usdc), [sel
 const relSlots = { [sel('USDC()')]: '0x' + aw(DS.constructeur.usdc), [sel('DEV_WALLET()')]: '0x' + aw(DS.constructeur.devWallet), [sel('SPIN_PRICE()')]: '0x' + u(DS.constructeur.spinPrice),
   [sel('POT_SHARE_BPS()')]: '0x' + u(DS.constructeur.potShareBps), [sel('prizes()')]: '0x' + DS.constructeur.prizes.map(u).join(''), [sel('pot()')]: '0x' + u(0) };
 const PAGES = [
-  { nom: 'deployer-duels-v2.html', env: 'PAGE_DUELS_V2', fiche: null, rel: relDuels(DV2), code: art.deployedBytecode.object, mauvais: sel('GUARDIAN()') },
+  /* 2026-10-25 : BlockDuelsV2 deploye (adresse + bloc ecrits par noter-deploiement-duelsv2) -> comme v1 et slots, la page tourne sur SA fiche
+   *   ramenee a l etat d avant (memes octets, adresse et bloc null) : sinon elle dirait « Already deployed » et chaque S passerait a vide */
+  { nom: 'deployer-duels-v2.html', env: 'PAGE_DUELS_V2', fiche: ['./duels-v2-deploiement.js', 'DUELS_V2_DEPLOIEMENT'], rel: relDuels(DV2), code: art.deployedBytecode.object, mauvais: sel('GUARDIAN()') },
   { nom: 'deployer-duels.html', env: 'PAGE_DUELS', fiche: ['./duels-deploiement.js', 'DUELS_DEPLOIEMENT'], rel: relDuels(DV1), code: '0x', mauvais: sel('GUARDIAN()') },
   { nom: 'deployer-slots.html', env: 'PAGE_SLOTS', fiche: ['./slots-deploiement.js', 'SLOTS_DEPLOIEMENT'], rel: relSlots, code: '0x', mauvais: sel('SPIN_PRICE()') },
 ];
@@ -134,7 +136,7 @@ try {
       const w = wallet({ recuApres: 1e9, code: P.code }); w.relectures = P.rel;
       const D = await monter(P, w, store); await connecter(D);
       await q(D, '#bDeployer').clic();
-      ok(w.envois.length === 1 && w.envois[0].data === (P.fiche ? (P.nom.includes('slots') ? DS : DV1) : DV2).creation && !w.envois[0].to, 'S2 recu en retard : UN envoi (la creation figee, sans `to`)');
+      ok(w.envois.length === 1 && w.envois[0].data === (P.nom.includes('slots') ? DS : P.nom.includes('duels-v2') ? DV2 : DV1).creation && !w.envois[0].to, 'S2 recu en retard : UN envoi (la creation figee, sans `to`)');
       const tx = '0x' + '01'.repeat(32);
       ok(q(D, '#bDeployer').disabled === true && q(D, '#rTx').textContent === tx && q(D, '#dResultat').hidden === false, 'S2 le hash est garde et montre ; Deploy reste ETEINT');
       const rev = q(D, '#bRevoir');

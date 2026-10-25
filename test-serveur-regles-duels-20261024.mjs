@@ -6,7 +6,8 @@
  * AFFIRME : (1) /api/tirage sur A sert les regles LUES (prizes, minScore, regles.version / createur / maxPrize / lu) — jamais la fiche ;
  *   (2) sur B : prizes / minScore / regles = null (l app dit « could not be read ») — jamais la fiche ; (3) /api/duels porte regleur
  *   { etat, adresse, regleDuels } et, le regleur etant OFF (pas de SLOTS_KEEPER_KEY), regleDuels = false : l app ne propose ni de creer ni de
- *   rejoindre ; (4) rolls-regles.js est servi (200), sinon l app ne charge pas (page morte).
+ *   rejoindre (2026-10-25 : sur une copie du serveur dont la fiche v2 est ramenee a avant son deploiement) ; (3L) le serveur reel, fiche v2
+ *   deployee, sert version 2 sur le contrat de la fiche, sans champ regleur ; (4) rolls-regles.js est servi (200), sinon l app ne charge pas (page morte).
  * SERVEUR_MODULE : le chemin d une COPIE mutee de serveur-web.js (muter-rolls-duels-ui-20261024.mjs). ⛔ PORTABLE : process.exitCode.
  * NE PROUVE PAS : le bytecode reel (banc-rolls-regles-anvil-20261024.mjs) ; un regleur des duels (autre chantier).
  * serie-delai-s: 240 */
@@ -54,7 +55,20 @@ function noeud(refuseRegles) {
   });
 }
 const SRV = process.env.SERVEUR_MODULE || path.join(ICI, 'serveur-web.js');
-async function lancer(refuse) {
+/* 2026-10-25 : BlockDuelsV2 deploye (duels-v2-deploiement.js porte adresse + bloc) -> le vrai serveur sert v2 a /api/duels (version 2, aucun
+ *   regleur : creer / rejoindre ne dependent plus de lui). Le (3) du chemin v1 (regleur OFF -> regleDuels false) tourne donc sur une COPIE du
+ *   MEME serveur (SERVEUR_MODULE compris, pour que ses mutants rougissent toujours) dont la seule difference est la fiche v2 ramenee a l etat
+ *   d avant (memes octets, adresse et bloc null) : sinon il lirait v2 et le (3) v1 passerait a vide ou rougirait pour rien. Le serveur reel
+ *   (A) prouve l etat LIVE : version 2 sur le contrat de la fiche, sans champ regleur. */
+const { DUELS_V2_DEPLOIEMENT: DV2 } = await import(pathToFileURL(path.join(ICI, 'duels-v2-deploiement.js')).href);
+const V2_DEPLOYE = /^0x[0-9a-f]{40}$/.test(String(DV2.adresse)) && Number.isSafeInteger(DV2.bloc) && DV2.bloc > 0;
+const ANCRE_V2 = "import('./duels-v2-deploiement.js')";
+const ficheAvant = path.join(ICI, '.tmp-regles-duels-' + process.pid + '-fiche.mjs'), srvAvant = path.join(ICI, '.tmp-regles-duels-' + process.pid + '-srv.js');
+const srcSrv = fs.readFileSync(SRV, 'utf8');
+fs.writeFileSync(ficheAvant, "import { DUELS_V2_DEPLOIEMENT as X } from './duels-v2-deploiement.js';\nexport const DUELS_V2_DEPLOIEMENT = Object.freeze({ ...X, adresse: null, bloc: null });\n");
+fs.writeFileSync(srvAvant, srcSrv.replace(ANCRE_V2, () => "import('./" + path.basename(ficheAvant) + "')"));
+const nettoyer = () => { for (const f of [ficheAvant, srvAvant]) try { fs.unlinkSync(f); } catch (_) {} };
+async function lancer(refuse, module = SRV) {
   const nd = noeud(refuse); await new Promise((o) => nd.listen(0, '127.0.0.1', o));
   const u = 'http://127.0.0.1:' + nd.address().port;
   const vol = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-regles-duels-'));
@@ -62,7 +76,7 @@ async function lancer(refuse) {
   const port = 30000 + Math.floor(Math.random() * 15000);
   const env = { ...process.env, NODE_OPTIONS: '', PORT: String(port), BASE_RPC: u, BASE_RPC_LECTURE: u, RAILWAY_VOLUME_MOUNT_PATH: vol, TB_NOS_CREATEURS: '', TB_REPLIS: '0' };
   delete env.SLOTS_KEEPER_KEY; delete env.TB_RPC_TEST; delete env.BASE_RPC_ARCHIVE;
-  const enfant = spawn(process.execPath, [SRV], { cwd: ICI, stdio: ['ignore', 'pipe', 'pipe'], env });
+  const enfant = spawn(process.execPath, [module], { cwd: ICI, stdio: ['ignore', 'pipe', 'pipe'], env });
   let stderr = ''; enfant.stdout.on('data', () => {}); enfant.stderr.on('data', (c) => { stderr += c; });
   const srv = 'http://127.0.0.1:' + port;
   let up = false;
@@ -74,9 +88,12 @@ const json = async (u) => { try { return await (await fetch(u, { signal: AbortSi
 async function tirageApres(srv, attendu) { let t = null; for (let i = 0; i < 30; i++) { t = await json(srv + '/api/tirage'); if (t && t.rolls && attendu(t.rolls)) return t; await new Promise((o) => setTimeout(o, 1000)); } return t; }
 
 ok(/^0x[0-9a-f]{40}$/.test(ROLLS), 'la fiche BlockRolls porte une adresse (' + ROLLS + ')');
-const [A, B] = await Promise.all([lancer(false), lancer(true)]);
-ok(A.up && B.up, 'deux serveurs demarres' + (A.up && B.up ? '' : ' — ' + (A.stderr() + B.stderr()).slice(0, 300)));
-if (A.up && B.up) {
+ok(srcSrv.split(ANCRE_V2).length === 2, 'la fiche v2 est importee UNE fois par le serveur (l ancre de la copie d avant le deploiement existe)');
+let A, B, A0;
+try {
+[A, B, A0] = await Promise.all([lancer(false), lancer(true), lancer(false, srvAvant)]);
+ok(A.up && B.up && A0.up, 'trois serveurs demarres (A, B, A0 = A avec la fiche v2 d avant)' + (A.up && B.up && A0.up ? '' : ' — ' + (A.stderr() + B.stderr() + A0.stderr()).slice(0, 300)));
+if (A.up && B.up && A0.up) {
   const tA = await tirageApres(A.srv, (r) => Array.isArray(r.prizes));
   const rA = tA && tA.rolls;
   ok(rA && Array.isArray(rA.prizes) && rA.prizes.join() === '7000000,4000000,2000000,1000000' && rA.minScore === 3, '(1) /api/tirage : les gains LUS sur le contrat (7/4/2/1, min 3), pas la fiche (' + (rA && JSON.stringify(rA.prizes)) + ', min ' + (rA && rA.minScore) + ')');
@@ -86,13 +103,16 @@ if (A.up && B.up) {
   const tB = await json(B.srv + '/api/tirage');
   const rB = tB && tB.rolls;
   ok(rB && rB.contrat === ROLLS && rB.prizes === null && rB.minScore === null && rB.regles === null, '(2) regles refusees par le noeud : prizes / minScore / regles = null — jamais la fiche (' + (rB && JSON.stringify(rB.prizes)) + ')');
+  const d0 = await json(A0.srv + '/api/duels');
+  ok(d0 && d0.version === undefined && d0.regleur && d0.regleur.etat === 'OFF' && d0.regleur.regleDuels === false && d0.regleur.adresse === null, '(3) /api/duels sur v1 (fiche v2 d avant) : regleur OFF, regleDuels false (' + (d0 && JSON.stringify(d0.regleur)) + ')');
   const dA = await json(A.srv + '/api/duels');
-  ok(dA && dA.regleur && dA.regleur.etat === 'OFF' && dA.regleur.regleDuels === false && dA.regleur.adresse === null, '(3) /api/duels : regleur OFF, regleDuels false (' + (dA && JSON.stringify(dA.regleur)) + ')');
+  ok(V2_DEPLOYE ? dA && dA.version === 2 && dA.contrat === DV2.adresse && !('regleur' in dA) : dA && dA.regleur && dA.regleur.regleDuels === false,
+    '(3L) /api/duels du serveur REEL : ' + (V2_DEPLOYE ? 'v2 live (version 2, contrat ' + DV2.adresse + '), aucun champ regleur' : 'v2 pas deploye -> v1, regleDuels false') + ' (lu : version ' + (dA && dA.version) + ', contrat ' + (dA && dA.contrat) + ', etat ' + (dA && dA.etat) + ')');
   const st = await json(A.srv + '/sante');
   ok(st && st.slotsRegleur && st.slotsRegleur.etat === 'OFF', '(3) /sante dit le meme regleur OFF');
   let code = 0; try { code = (await fetch(A.srv + '/rolls-regles.js', { signal: AbortSignal.timeout(10000) })).status; } catch (_) { code = 0; }
   ok(code === 200, '(4) /rolls-regles.js servi (' + code + ')');
 }
-A.fin(); B.fin();
+} finally { for (const s of [A, B, A0]) if (s) s.fin(); nettoyer(); }
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exitCode = ko ? 1 : 0;
