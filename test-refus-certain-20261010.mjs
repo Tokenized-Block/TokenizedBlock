@@ -187,7 +187,9 @@ const PARAMS = ['fetch', 'process', 'ESSAI_SRV', 'existsSync', 'join', 'readFile
   'LOGS_INITIALIZE_MESURES', 'decoderInitialize', 'PM_V4', 'TOPIC_INITIALIZE', 'clesPool', 'cleV4Connue', 'clesCache',
   'scannerNesDuRouteur', 'GRAINE_ROUTEUR', 'GRAINE_JUSQUA', 'PLANCHER_ROUTEUR', 'RETARD_MAX_INDEX', 'neDuRouteur', 'ROUTEURS_ANCIENS',
   'FEE_WALLET', 'CREATE_ROUTER', 'graineNosBlocksAdmise', 'verifierGraineNos', 'NOS_BLOCKS_GENESE', 'GRAINE_NOS_BLOCKS', 'prochaineFenetre', 'frappesVers',
-  'holdersCache', 'HOLDERS_MAX', 'lireNaissance', 'naissanceDuJeton', 'passeIncrementale', 'ecrireHolders', 'pauseNosBlocks', 'routeurEnchaine'];
+  'holdersCache', 'HOLDERS_MAX', 'lireNaissance', 'naissanceDuJeton', 'passeIncrementale', 'ecrireHolders', 'pauseNosBlocks', 'routeurEnchaine',
+  /* 2026-10-25 : apprendreCreationAction (tranche du routeur) lit preuvesActions ; ici aucune action prouvee */
+  'preuvesActions', 'prouverAction'];
 const FICHIER_COMPTE_TMP = '/data/archive-compte.json.tmp';
 
 /** Un « processus » neuf : le code livre, son faux reseau, son faux disque, son horloge et ses minuteurs. */
@@ -214,7 +216,8 @@ function monter(corpsSrc, { c, max = 3000, disque = new Map(), quand = '2026-10-
     FDate, muet, LOGS_INITIALIZE_MESURES, decoderInitialize, PM_V4, TOPIC_INITIALIZE, new Map(), cleV4Connue, new Map(),
     IR.scannerNesDuRouteur, IR.GRAINE_ROUTEUR, IR.GRAINE_JUSQUA, IR.PLANCHER_ROUTEUR, IR.RETARD_MAX_INDEX, IR.neDuRouteur, IR.ROUTEURS_ANCIENS,
     FEE_WALLET, CREATE_ROUTER, O.graineNosBlocksAdmise, O.verifierGraineNos, O.NOS_BLOCKS_GENESE, O.GRAINE_NOS_BLOCKS, prochaineFenetre, frappesVers,
-    new Map(), 200, SJ.lireNaissance, SJ.naissanceDuJeton, SJ.passeIncrementale, () => {}, RF.pauseNosBlocks, RF.routeurEnchaine);
+    new Map(), 200, SJ.lireNaissance, SJ.naissanceDuJeton, SJ.passeIncrementale, () => {}, RF.pauseNosBlocks, RF.routeurEnchaine,
+    new Map(), async () => { throw new Error('prouverAction ne doit pas etre appelee sans action prouvee'); });
   const jour = () => new FDate().toISOString().slice(0, 10);
   /* budget du jour EPUISE, comme la prod l ecrit (le jour courant, appels >= plafond) */
   const epuiser = () => Object.assign(M.archiveCompte, { jour: jour(), appels: max });
@@ -762,7 +765,7 @@ const MUTANTS = [
   ['m12 /api/cle sans lecteurLogs', "const logs = await rpc('eth_getLogs', [{ fromBlock: enHex(d), toBlock: enHex(f), address: PM_V4, topics }]);", "const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(d), toBlock: enHex(f), address: PM_V4, topics }]);", [/^A4 /, /^A6 /]],
   ['m13 cleV4 : la raison tait le budget', "+ (attente ? ' (' + attente + ' of them wait for the archive node daily budget", "+ (false ? ' (' + attente + ' of them wait for the archive node daily budget", [/^A3 /]],
   /* 2026-10-25 : ancre suivie (depuis = debutRechercheNaissance, test-naissance-creation-20261025) ; la mutation reste rpcServeur -> lecteurLogs */
-  ['m14 R4 : holders par lecteurLogs (sans porte)', 'const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis: debutRechercheNaissance(jeton), jusqua: fin });', 'const r = await lireNaissance({ rpc: lecteurLogs(fin).rpc, jeton, depuis: debutRechercheNaissance(jeton), jusqua: fin });', [/^H1 /]],
+  ['m14 R4 : holders par lecteurLogs (sans porte)', 'const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis, jusqua: fin });', 'const r = await lireNaissance({ rpc: lecteurLogs(fin).rpc, jeton, depuis, jusqua: fin });', [/^H1 /]],
   ['m15 rpcServeur : envois non comptes', /compte = true; compterEnvoi\(url, classeEnvoi\(r\.status, j\)\);(\r?\n\s*if \(!j\.error\) return j\.result;)/, '$1', [/^F1 /]],
   ['m16 lecteurUrl : envois non comptes', 'return lecteurUrlNu(url, { ...options, surEnvoi: (c) => compterEnvoi(url, c) });', 'return lecteurUrlNu(url, options);', [/^F1 /, /^F2 /]],
   ['m17 le chemin publie (URL au lieu de l hote)', 'let h = libelleNoeud(url);', 'let h = String(url);', [/^F2 /]],

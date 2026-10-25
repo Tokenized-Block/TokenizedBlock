@@ -140,12 +140,15 @@ function monter(rpc) {
    *  2026-10-25 : debutRechercheNaissance (bloc de creation lu par le serveur) -- ici aucun jeton n a de creation lue : PREMIER,
    *  comme le serveur pour un jeton inconnu. Le cas « creation connue » vit dans test-naissance-creation-20261025.mjs. */
   const reconstruire = new Function('holdersCache', 'HOLDERS_MAX', 'rpcServeur', 'naissanceDuJeton', 'lireNaissance',
-    'PREMIER_BLOCK_TB', 'passeIncrementale', 'ecrireHolders', 'debutRechercheNaissance', corpsReconstruire + '\n; return reconstruireHolders;')(
-    cache, 200, rpc, S.naissanceDuJeton, S.lireNaissance, PREMIER, S.passeIncrementale, () => { m.ecritures++; ecrireVrai(); }, () => PREMIER);
+    'PREMIER_BLOCK_TB', 'passeIncrementale', 'ecrireHolders', 'debutRechercheNaissance', 'apprendreCreationAction', 'naissanceDouteuse', 'oublierNaissance',
+    corpsReconstruire + '\n; return reconstruireHolders;')(
+    cache, 200, rpc, S.naissanceDuJeton, S.lireNaissance, PREMIER, S.passeIncrementale, () => { m.ecritures++; ecrireVrai(); }, () => PREMIER, async () => {},
+    () => false, () => {});
   const suivi = (j) => { const p = reconstruire(j); passes.push(p); return p; };
+  /* 2026-10-25 : naissanceDouteuse -- aucun jeton de ce banc n a de creation connue : jamais douteuse (test-naissance-creation-20261025) */
   const corps = new Function('holdersCache', 'reconstruireHolders', 'rpcServeur', 'verifierSomme', 'soldesNegatifs',
-    'partsHolders', 'POT_FICTIF', corpsHolders + '\n; return holdersCorps;')(
-    cache, suivi, rpc, S.verifierSomme, S.soldesNegatifs, partsHolders, 10n ** 18n);
+    'partsHolders', 'POT_FICTIF', 'naissanceDouteuse', 'oublierNaissance', corpsHolders + '\n; return holdersCorps;')(
+    cache, suivi, rpc, S.verifierSomme, S.soldesNegatifs, partsHolders, 10n ** 18n, () => false, () => {});
   m.passe = async (j = JETON) => { await suivi(j); await Promise.all(passes.splice(0)); return cache.get(j); };
   /* la route relance une passe en fond : on l attend, pour que le cas suivant parte d un etat stable */
   m.route = async (j = JETON) => { const t = await corps(j); await Promise.all(passes.splice(0)); return JSON.parse(t); };

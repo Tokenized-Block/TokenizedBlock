@@ -48,7 +48,7 @@ import { lireEspacements, phraseEspacements, ESPACEMENTS_RETOMBEE } from './espa
 import { lireActionsEmetteur, phraseActionsEmetteur } from './actions-emetteur.js';
 /* 2026-10-25 — LES ACTIONS DE L EMETTEUR, PROUVEES SUR LA CHAINE (code 0xef + log de la factory B20 + tx.from), et leur route d achat */
 import { candidatsActions, decouvrirActions, lireUnites, routeAction, routeServie, resumeActions, CREATEUR_EMETTEUR,
-  ROUTES_PAR_TOUR, ROUTE_TTL_MS, UNITES_TTL_MS, routePourLigne, lecteurPreuves, verdictGravable, CREATIONS_GRAINE } from './actions-chaine.js';
+  ROUTES_PAR_TOUR, ROUTE_TTL_MS, UNITES_TTL_MS, routePourLigne, lecteurPreuves, verdictGravable, CREATIONS_GRAINE, prouverAction } from './actions-chaine.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
 import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
@@ -1930,8 +1930,11 @@ let routeurEnCours = null;
  *     transaction redonne le jeton (formule CREATE2).
  *   JAMAIS d une requete client, JAMAIS de la reprise du volume (progres-index.json : bloc non re-verifie sur la chaine), jamais
  *   d un commentaire ni d une liste statique. Jeton absent de cette table : PREMIER_BLOCK_TB, exactement comme avant.
- * ⛔ Un bloc incoherent (pas un entier, ou sous PREMIER_BLOCK_TB) : PREMIER_BLOCK_TB — jamais un debut plus TARD que ce qui est lu.
- *   Deux blocs pour un meme jeton : le plus BAS. */
+ * ⛔ Un bloc incoherent (pas un entier > 0) : PREMIER_BLOCK_TB. Deux blocs pour un meme jeton : le plus BAS.
+ * ⛔⛔ 2026-10-25 (actions tokenisees) : un bloc lu SOUS PREMIER_BLOCK_TB est GARDE. 9cc77f2 le remplacait par PREMIER_BLOCK_TB, c est-a-
+ *   dire un debut plus TARD que la creation lue — contraire a la regle ci-dessus. Sans effet pour un block TB (aucun n est ne avant le
+ *   plancher) ; faux pour les 12 actions de l emetteur creees a ~49,1 M (NVDAc 49145311, recu relu ce jour) : partir du plancher ne
+ *   peut trouver qu un mint POSTERIEUR, jamais la vraie naissance. */
 const creationsLuesIci = new Map(GRAINE_ROUTEUR.map((g) => [String(g.jeton).toLowerCase(), g.bloc]));
 function noterCreationsLues(blocks) {
   for (const b of blocks || []) {
@@ -1944,7 +1947,53 @@ function noterCreationsLues(blocks) {
 /** Premier bloc ou chercher la naissance de `jeton` : son bloc de creation lu par ce serveur, sinon PREMIER_BLOCK_TB. */
 function debutRechercheNaissance(jeton) {
   const b = creationsLuesIci.get(String(jeton).toLowerCase());
-  return Number.isSafeInteger(b) && b >= PREMIER_BLOCK_TB ? b : PREMIER_BLOCK_TB;
+  return Number.isSafeInteger(b) && b > 0 ? b : PREMIER_BLOCK_TB;
+}
+/* ══ 2026-10-25 — LES ACTIONS TOKENISEES : LEUR BLOC DE CREATION, PROUVE PAR CE PROCESSUS AVANT DE SERVIR ══════════════════════════
+ * ⛔ MESURE PROD (2026-10-25 ~17:05 UTC, /api/holders, x-ms-monitor) : AMZNc NON_LU (fenetre 50867088-50869087 refusee), NFLXc NON_LU
+ *   (50863088-50865087 refusee) ; NVDAc, GOOGLc, TSLAc « a replay is running ». Les actions ne sont dans aucune source de 9cc77f2.
+ * ⛔ LA SOURCE : prouverAction (actions-chaine.js, l aide canonique) relit le RECU de la tx de creation : statut 0x1, log B20Created
+ *   emis par la FACTORY pour ce jeton, tx.from = le createur de l emetteur ; `bloc` = blockNumber de ce recu. Elle est REJOUEE ICI,
+ *   dans ce processus, sur la tx d une preuve PROUVE de preuvesActions — jamais le bloc d une preuve relue du volume
+ *   (actions-chaine.json) ni de la graine statique (CREATIONS_GRAINE : « ce n est pas une preuve ») tel quel.
+ * ⛔ Pas une action prouvee, ou preuve rejouee non PROUVE (noeud muet, recu illisible) : rien n est note, PREMIER_BLOCK_TB comme avant,
+ *   et la preuve est retentee a la passe suivante. Cout : au plus 3 lectures par passe, une seule fois par action une fois notee.
+ * ⚠️ Mesure du meme jour (sonde-actions, mainnet.base.org) : la tx de creation d une action ne frappe RIEN (0 mint) — la creation
+ *   borne la naissance par en dessous, elle ne l est pas. */
+async function apprendreCreationAction(jeton) {
+  const j = String(jeton).toLowerCase();
+  if (creationsLuesIci.has(j)) return;
+  const p = preuvesActions.get(j);
+  if (!p || p.etat !== 'PROUVE' || !/^0x[0-9a-f]{64}$/.test(String(p.tx || ''))) return;
+  const r = await prouverAction({ rpc: rpcServeur, adr: j, tx: p.tx });
+  if (r && r.etat === 'PROUVE' && r.adr === j && Number.isSafeInteger(r.bloc)) noterCreationsLues([{ jeton: j, bloc: r.bloc }]);
+}
+/* ══ 2026-10-25 — UNE NAISSANCE CHERCHEE PLUS HAUT QUE LA CREATION CONNUE N EST NI SERVIE, NI REJOUEE, NI ECRITE ══════════════════════
+ * ⛔ MESURE PROD (17:2x UTC) : NVDAc, GOOGLc, TSLAc « a replay is running but 807/858/843 window(s) were refused » — leur naissance est
+ *   POSEE en memoire, d une recherche partie du plancher, donc un mint POSTERIEUR (elles sont creees a ~49,1 M). jusqua null : pas encore
+ *   ecrite, mais la premiere passe complete l ecrirait dans holders-cache.json, et elle ne serait plus jamais cherchee.
+ * ⛔ LA REGLE : chaque entree garde `naissanceDepuis` (le bloc d ou sa recherche est partie, ecrit avec elle). Pour un jeton dont la
+ *   creation est connue (creationsLuesIci) ou qui est une action PROUVEE, une entree SANS naissanceDepuis, ou cherchee depuis un bloc
+ *   PLUS HAUT que cette creation, est oubliee (soldes, naissance, curseur) et recherchee : a la relecture du volume, avant de servir,
+ *   et en debut de passe (apres apprendreCreationAction, qui peut apprendre une creation plus basse).
+ *   - le bloc d une preuve relue du volume (p.bloc) sert ICI a DOUTER, jamais a partir : douter rebatit (fail-closed), partir de lui
+ *     pourrait sauter la naissance ;
+ *   - action prouvee sans bloc lisible : seule l absence de naissanceDepuis fait douter.
+ * ⛔ TEMOIN : un jeton sans creation connue et pas une action (un block TB hors routeur) garde son entree exactement comme avant.
+ * ⚠️ COUT : une action dont le recu ne se relit pas repart du plancher (comme avant), et sa naissance ainsi trouvee est oubliee a la
+ *   passe suivante (p.bloc sous le plancher) — elle ne se publie jamais, et ce rejeu se repaie a chaque passe. */
+function naissanceDouteuse(jeton, e) {
+  if (!e || e.naissance === null || e.naissance === undefined) return false;
+  const j = String(jeton).toLowerCase();
+  const sans = !Number.isSafeInteger(e.naissanceDepuis);
+  const c = creationsLuesIci.get(j);
+  if (Number.isSafeInteger(c) && c > 0) return sans || e.naissanceDepuis > c;
+  const p = preuvesActions.get(j);
+  if (!p || p.etat !== 'PROUVE') return false;
+  return sans || (Number.isSafeInteger(p.bloc) && p.bloc > 0 && e.naissanceDepuis > p.bloc);
+}
+function oublierNaissance(e) {
+  e.soldes = new Map(); e.naissance = null; e.naissanceDepuis = null; e.jusqua = null; e.ratees = 0; e.rechercheNaissance = null;
 }
 async function etendreBlocksRouteur() {
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
@@ -3048,7 +3097,8 @@ function ecrireHolders() {
     for (const [jeton, e] of holdersCache) {
       if (e.jusqua === null || e.ratees !== 0) continue; /* jamais une passe partielle */
       entrees.push([jeton, { soldes: [...e.soldes].map(([a, v]) => [a, String(v)]),
-        naissance: e.naissance, jusqua: e.jusqua, ratees: 0, lu: e.lu }]);
+        naissance: e.naissance, naissanceDepuis: Number.isSafeInteger(e.naissanceDepuis) ? e.naissanceDepuis : null,
+        jusqua: e.jusqua, ratees: 0, lu: e.lu }]);
     }
     const payload = JSON.stringify(entrees);
     if (payload.length > HOLDERS_FICHIER_MAX_OCTETS) return; /* ⛔ plutot rien qu un volume plein */
@@ -3071,8 +3121,11 @@ function ecrireHolders() {
       for (const [a, v] of Array.isArray(e.soldes) ? e.soldes : []) {
         try { soldes.set(String(a), BigInt(v)); } catch (_) { /* une entree illisible est ignoree */ }
       }
-      holdersCache.set(String(jeton), { soldes, naissance: e.naissance, jusqua: e.jusqua,
-        ratees: 0, lu: e.lu, enCours: false });
+      const relue = { soldes, naissance: e.naissance, naissanceDepuis: Number.isSafeInteger(e.naissanceDepuis) ? e.naissanceDepuis : null,
+        jusqua: e.jusqua, ratees: 0, lu: e.lu, enCours: false };
+      /* ⛔ 2026-10-25 : une naissance cherchee APRES la creation connue (ou sans dire d ou) n est pas relue — rebatie (naissanceDouteuse) */
+      if (naissanceDouteuse(String(jeton), relue)) continue;
+      holdersCache.set(String(jeton), relue);
     }
   } catch (err) { /* fichier absent ou abime : on repart de la memoire, comme avant */ }
 })();
@@ -3090,6 +3143,10 @@ async function reconstruireHolders(jeton) {
   if (e.enCours) return e;
   e.enCours = true;
   try {
+    /* ⛔ 2026-10-25 : la creation d une action prouvee est apprise AVANT tout (meme naissance deja posee) ; une naissance cherchee
+     *   plus haut que la creation connue est oubliee et recherchee (naissanceDouteuse) — jamais rejouee ni ecrite. */
+    await apprendreCreationAction(jeton);
+    if (naissanceDouteuse(jeton, e)) oublierNaissance(e);
     const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
     if (e.naissance === null) {
       /* ⛔⛔ AUDIT DU 2026-10-09 : une fenetre refusee ARRETE la recherche (lireNaissance). Avant, elle etait
@@ -3102,10 +3159,12 @@ async function reconstruireHolders(jeton) {
        *    voir creationsLuesIci), sinon PREMIER_BLOCK_TB comme avant. Un mint ne precede pas la creation : rien n est
        *    saute. La regle du refus ne change pas : une fenetre refusee arrete la recherche.
        *  ⛔ Rien n est ecrit ici : jusqua reste null, et ecrireHolders saute toute entree sans curseur. */
-      const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis: debutRechercheNaissance(jeton), jusqua: fin });
+      const depuis = debutRechercheNaissance(jeton);
+      const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis, jusqua: fin });
       /* ⛔ Naissance non lue ou introuvable : on ne devine pas un point de depart, on laisse l etat vide. */
       if (r.etat !== 'LUE') { e.rechercheNaissance = r; e.enCours = false; return e; }
       e.naissance = r.bloc;
+      e.naissanceDepuis = depuis; /* 2026-10-25 : d ou la recherche est partie, ecrit avec l entree (naissanceDouteuse) */
       e.rechercheNaissance = null;
     }
     /* ⛔ LA PASSE VIT DANS soldes-jeton.js POUR ETRE TESTABLE. Une copie ici serait testee par un
@@ -3131,6 +3190,8 @@ async function holdersCorps(jeton) {
     return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: null,
       pourquoi: 'reading every transfer of this block from its birth — ask again in a moment' });
   }
+  /* ⛔ 2026-10-25 : jamais servir une naissance cherchee plus haut que la creation connue (naissanceDouteuse) : oubliee ici, avant la passe */
+  if (!dejaLa.enCours && naissanceDouteuse(jeton, dejaLa)) oublierNaissance(dejaLa);
   void reconstruireHolders(jeton).catch(() => {}); /* rafraichit en tache de fond */
   const e = dejaLa;
   /* ⛔⛔ 2026-10-09 : LA RECHERCHE DE NAISSANCE A SES PROPRES ETATS, ET ILS PASSENT AVANT « un rejeu tourne ».
