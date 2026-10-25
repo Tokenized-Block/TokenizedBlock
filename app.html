@@ -3799,7 +3799,10 @@ details[open] > summary::before{transform:rotate(90deg)}
           </div>
           <ul class="slotsListe" id="slotsListe"></ul>
           <p class="note" id="slotsMoi" style="margin:4px 0 0"></p>
-          <!-- 2026-10-24 : le pli porte l explication (#slotsComment) et la table des prix. #slotsRegle (la regle : prix, perdu hors fenetre,
+          <!-- 2026-10-25 (Phil : « court et ordonne ») : la regle (#slotsRegle) dit 1) le prix et ou va l argent, 4) regler a temps ; le pli dit
+               2) les faces et les points (#slotsComment), 3) ce qu on gagne (#slotsComment, la table, #slotsTableNote : pot court, Accept,
+               le panneau de reponse), 5) payer avec un jeton (#slotsPayer). Chaque fait UNE fois.
+               2026-10-24 : le pli porte l explication (#slotsComment) et la table des prix. #slotsRegle (la regle : prix, perdu hors fenetre,
                regleur) est en tete du pli SANS wallet, et AU-DESSUS de la rangee Spin avec un wallet (placerRegleSlots) -->
           <details style="margin:8px 0 0">
             <summary class="note" style="cursor:pointer">How the slots work</summary>
@@ -3807,6 +3810,7 @@ details[open] > summary::before{transform:rotate(90deg)}
             <p class="note" id="slotsComment" style="margin:6px 0 0"></p>
             <table class="slotsTable" id="slotsTable"><thead><tr><th>Points</th><th>Chance</th><th>Prize (USDC)</th><th>Pays now</th></tr></thead><tbody></tbody></table>
             <p class="note" id="slotsTableNote" style="margin:4px 0 0"></p>
+            <p class="note" id="slotsPayer" style="margin:6px 0 0"></p>
           </details>
         </div>
       </div>
@@ -7266,8 +7270,10 @@ function remplirTableSlots(j, pot) {
     for (const t of [String(k), chance(v), usdcTexte(BigInt(j.prizes[k])), maint === null ? 'not read' : usdcTexte(maint)]) { const td = document.createElement('td'); td.textContent = t; tr.append(td); }
     corps.append(tr);
   });
+  /* 2026-10-25 (Phil : « court et ordonne ») : la note porte AUSSI le pot court et Accept (venus du pli : dits une fois) et le panneau de reponse */
   if (note) note.textContent = 'Prizes are capped by the pot: "Pays now" is the most the pot can pay for each prize right now' + (pot === null ? ' (the pot was not read).' : ', with ' + Slots.usdcPrecis(pot) + ' USDC in the pot.')
-    + ' Settle pays a prize only in full; a smaller amount is paid only if you accept it for that spin.';
+    + ' Settle pays a prize only in full: when the pot holds less than a spin\'s prize, Settle leaves that spin out and says how much is missing. Only you can accept less — what the pot holds, for that one spin — or you can wait for the pot to grow until its window closes.'
+    + ' After you spin, the panel under Spin follows that spin to its result and shows the next step with its button.';
   slotsCfg.table = cle;
 }
 const lireUintSlots = async (to, data) => { try { return Slots.lireUint(await rpc('eth_call', [{ to, data }, 'latest'])); } catch (_) { return null; } };
@@ -7491,13 +7497,22 @@ async function peindreSlotsUneFois(force = false) {
    *   fenetre mesuree, et l etat du regleur ; dans le pli « How the slots work » (#slotsComment) le calcul des points, le pot court et Accept,
    *   les chances et la moyenne, les points et la plage lue. Le pot actuel est dit par #slotsEtat / #slotsMoi. */
   const rg = $('#slotsRegle'), rgPli = $('#slotsComment');
-  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% goes to the slots pot and ' + ((10000 - part) / 100) + '% (' + Slots.usdcPrecis(ev.toDev) + ' USDC) to TokenizedBlock, when you spin, whatever happens next. The contract judges the spin when it is settled and pays its prize itself, to you: a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '
+  if (rg) rg.textContent = 'A spin costs ' + usdcTexte(prix) + ' USDC: ' + (part / 100) + '% goes to the slots pot and ' + ((10000 - part) / 100) + '% (' + Slots.usdcPrecis(ev.toDev) + ' USDC) to TokenizedBlock, when you spin, whatever happens next. The contract pays the prize from the pot, to you: a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '
     + 'A spin not settled in time is lost: nothing is returned. Settle within ' + Slots.FENETRE + ' blocks of the first face block — ' + fenetreTxt + '. '
     + 'The server settles spins automatically when its keeper is on (it is ' + reg + ' right now); anyone can settle, and the prize always goes to the spin\'s player.';
-  if (rgPli) rgPli.textContent = 'The three faces come from three different blocks: the blocks 2, 3 and 4 blocks later give one face each. For each trait, all three the same scores 3, two the same scores 1. '
-    + 'When the pot holds less than a spin\'s prize, Settle leaves that spin out and this card says how much is missing; you can accept what the pot holds for that spin, or wait for the pot to grow — until its window closes. '
-    + Slots.pourcentTexte(ev.probGainBps) + '% of spins pay something, but only ' + Slots.pourcentTexte(ev.probMiseBps) + '% pay back at least the ' + usdcTexte(prix) + ' USDC stake. On average a settled spin pays back ' + Slots.usdcPrecis(BigInt(j.esperanceBrut)) + ' USDC — less while the pot holds less than ' + usdcTexte(haut) + ' USDC. A spin left unsettled pays nothing, so settling every spin is the best play: ' + Slots.usdcPrecis(ev.meilleureBrut) + ' USDC a spin on average, below the ' + usdcTexte(prix) + ' USDC price. '
-    + 'Your points are a running total kept on chain; prizes are paid per spin, points pay nothing on their own. This card finds your spins from the last ' + Slots.PLAGE_LOGS + ' blocks and those made while it is open.';
+  /* 2026-10-25 (Phil : « court et ordonne, chaque fait une fois ») : le pli dit 2) les faces (les blocs des faces DERIVES de DELAI_CIBLE
+   *   et REELS, comme le contrat : TARGET_DELAY, REELS), 3) ce qu on gagne — UNE moyenne (celle de la meilleure strategie, calculee : elle
+   *   EST la moyenne d un spin regle), plus la phrase « This card finds your spins from the last 999 blocks » (une note technique). Le pot
+   *   court et Accept passent sous la table (#slotsTableNote) ; payer avec un jeton dans #slotsPayer. */
+  const blocsFaces = Array.from({ length: Slots.REELS }, (_, r) => Slots.DELAI_CIBLE + r);
+  if (rgPli) rgPli.textContent = 'Each spin draws three faces from three different blocks: the blocks ' + blocsFaces.slice(0, -1).join(', ') + ' and ' + blocsFaces[blocsFaces.length - 1] + ' blocks after the spin, one face each. For each trait, all three the same scores 3, two the same scores 1. '
+    + 'The points of a spin pick its prize in the table below. '
+    + Slots.pourcentTexte(ev.probGainBps) + '% of spins pay something, but only ' + Slots.pourcentTexte(ev.probMiseBps) + '% pay back at least the ' + usdcTexte(prix) + ' USDC stake. A spin left unsettled pays nothing, so settling every spin is the best play: ' + Slots.usdcPrecis(ev.meilleureBrut) + ' USDC a spin on average — less while the pot holds less than ' + usdcTexte(haut) + ' USDC — below the ' + usdcTexte(prix) + ' USDC price. '
+    + 'Points also add up as a running total kept on chain; prizes are paid per spin, points pay nothing on their own.';
+  /* 5) payer avec un jeton (peindrePayerAvec, preparerPaiementJeton) : le jeton est echange d abord contre l USDC du spin, le jeu prend de l USDC */
+  const rgPayer = $('#slotsPayer');
+  if (rgPayer) rgPayer.textContent = 'Paying with a token: "Pay with" next to Spin offers USDC and the tokens from the app\'s list that you hold (only tokens with deep liquidity on a pool this app swaps on). With a token, your wallet first swaps it for the ' + usdcTexte(prix) + ' USDC the spin takes, then pays the spin in USDC; the swap amounts and the app\'s swap fee are shown before you sign. Prizes are always paid in USDC. '
+    + 'The same choice pays the classic roll (its own fold, "Other ways to play: classic roll") and the Week pass.';
   remplirTableSlots(j, pot);
   let c = null; try { c = compte; } catch (_) { c = null; }
   const moi = c ? String(c).toLowerCase() : null;

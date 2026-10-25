@@ -89,7 +89,10 @@ const checks = {
   moyenneAvantPlafond: (t) => /while the pot holds less than/.test(bloc(t)),
   /* (d) */
   pointsCompteur: (t) => /a running total kept on chain/.test(bloc(t)) && /prizes are paid per spin/.test(bloc(t)),
-  troisBlocs: (t) => /the blocks 2, 3 and 4 blocks later give one face each/.test(bloc(t)) && /Slots\.blocsDesFaces\(t\)/.test(bloc(t)),
+  /* 2026-10-25 (regles reecrites) : la phrase disait « the blocks 2, 3 and 4 blocks later », TAPES ; ses blocs sont maintenant DERIVES
+   *   (DELAI_CIBLE + r pour r < REELS, comme le contrat TARGET_DELAY / REELS) — le banc exige la derivation et la phrase, plus le litteral
+   *   (test-slots-v3 REGLEUR affirme le rendu « the blocks 2, 3 and 4 blocks after the spin, one face each ») */
+  troisBlocs: (t) => /const blocsFaces = Array\.from\(\{ length: Slots\.REELS \}, \(_, r\) => Slots\.DELAI_CIBLE \+ r\);/.test(bloc(t)) && /' blocks after the spin, one face each\. /.test(bloc(t)) && /Slots\.blocsDesFaces\(t\)/.test(bloc(t)),
   /* R2 */
   settleLeger: (t) => { const r = sansCom(regler(t)); return r.length > 50 && !/peindreSlots\(/.test(r) && !/eth_getLogs|eth_getBlockByNumber|eth_call/.test(r) && /rpc\('eth_blockNumber', \[\]\)/.test(r) && /Slots\.planReglement\(\{ \.\.\.vue, tete \}\)/.test(r); },
   recuSansSettled: (t) => /window closed before your settle was included/.test(PLAN) && /bilan\.map\(\(b\) => Slots\.phraseApres\(b\)\)/.test(bloc(t)),
@@ -101,7 +104,8 @@ const mutants = [
   ['pasDeGainFaux', "pay back at least the", "win something; at least the"],
   ['moyenneAvantPlafond', 'while the pot holds less than', 'whatever the pot holds'],
   ['pointsCompteur', 'prizes are paid per spin', 'points pay a bonus'],
-  ['troisBlocs', 'the blocks 2, 3 and 4 blocks later give one face each', 'the block 2 blocks later gives three faces'],
+  ['troisBlocs', 'const blocsFaces = Array.from({ length: Slots.REELS }, (_, r) => Slots.DELAI_CIBLE + r);', 'const blocsFaces = [2, 2, 2];'],
+  ['troisBlocs', "' blocks after the spin, one face each. ", "' blocks after the spin. "],
   ['settleLeger', "const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement", "await peindreSlots(true); const tete = parseInt(await rpc('eth_blockNumber', []), 16);\n      const p = Slots.planReglement"],
   ['recuSansSettled', 'bilan.map((b) => Slots.phraseApres(b))', "bilan.map((b) => 'Sent.')"],
 ];

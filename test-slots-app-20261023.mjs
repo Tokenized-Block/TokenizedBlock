@@ -41,8 +41,22 @@ const checks = {
   perduDit: (t) => /A spin not settled in time is lost: nothing is returned\./.test(bloc(t)),
   regleurDit: (t) => { const b = bloc(t); return /The server settles spins automatically when its keeper is on \(it is ' \+ reg \+ ' right now\); anyone can settle, and the prize always goes to the spin\\'s player\./.test(b) && /const reg = j\.regleur && j\.regleur\.etat === 'ON' \? 'on'/.test(b); },
   fenetreMesuree: (t) => { const b = bloc(t); return /const msB = await msBlocSlots\(j\);/.test(b) && /Slots\.secondesFenetre\(msB\)/.test(b) && /at the block time measured just now/.test(b) && /Slots\.msParBlocMesure\(\{ tsTete:/.test(b); },
-  chiffresServis: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return /const prix = BigInt\(j\.prixSpin\), table = j\.prizes\.map/.test(b) && /Slots\.usdcPrecis\(BigInt\(j\.esperanceBrut\)\)/.test(b) && /ev = Slots\.esperance\(table, prix, part\)/.test(b)
-    && /Slots\.usdcPrecis\(ev\.meilleureBrut\)/.test(b) && !/\b(500000|250000|0\.50|0\.25|0\.15|1000|325222|127862)\b/.test(b) && /Slots\.secondesFenetre\(2000\)/.test(b) && /Slots\.secondesFenetre\(200\)/.test(b); },
+  /* 2026-10-25 (Phil : « court, chaque fait une fois ») : le pli disait DEUX moyennes egales (j.esperanceBrut servie, ev.meilleureBrut
+   *   calculee : 0.127862 deux fois). Il n en dit plus qu UNE, la meilleure strategie CALCULEE par Slots.esperance sur la table servie ; ce
+   *   banc exigeait j.esperanceBrut dans le texte : il exige maintenant ev.meilleureBrut UNE fois, et toujours aucun chiffre tape (la liste
+   *   des litteraux interdits garde 127862, 0.50, 0.25…). Ajoutes : les blocs des faces DERIVES (DELAI_CIBLE, REELS — le contrat :
+   *   TARGET_DELAY, REELS), jamais « 2, 3 and 4 » tape ; le prix de « Pay with » = usdcTexte(prix). */
+  chiffresServis: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''); return /const prix = BigInt\(j\.prixSpin\), table = j\.prizes\.map/.test(b) && /ev = Slots\.esperance\(table, prix, part\)/.test(b)
+    && (b.match(/Slots\.usdcPrecis\(ev\.meilleureBrut\) \+ ' USDC a spin on average/g) || []).length === 1 && !/on average a settled spin/i.test(b)
+    && /const blocsFaces = Array\.from\(\{ length: Slots\.REELS \}, \(_, r\) => Slots\.DELAI_CIBLE \+ r\);/.test(b) && !/2, 3 and 4/.test(b)
+    && /swaps it for the ' \+ usdcTexte\(prix\) \+ ' USDC the spin takes/.test(b)
+    && !/\b(500000|250000|0\.50|0\.25|0\.15|1000|325222|127862)\b/.test(b) && /Slots\.secondesFenetre\(2000\)/.test(b) && /Slots\.secondesFenetre\(200\)/.test(b); },
+  /* 2026-10-25 : « Pay with » dit dans le pli (#slotsPayer, apres la table) : le swap D ABORD, le spin paye en USDC, les prix TOUJOURS en
+   *   USDC ; et la note technique « This card finds your spins from the last 999 blocks » n est plus a l ecran */
+  payerDit: (t) => { const b = bloc(t).replace(/\/\*[\s\S]*?\*\//g, ''), h = entre(t, '<summary class="note" style="cursor:pointer">How the slots work</summary>', '</details>');
+    return /<p class="note" id="slotsTableNote"[^>]*><\/p>\s*<p class="note" id="slotsPayer"[^>]*><\/p>\s*$/.test(h) && /const rgPayer = \$\('#slotsPayer'\);/.test(b)
+      && /your wallet first swaps it for the ' \+ usdcTexte\(prix\) \+ ' USDC the spin takes, then pays the spin in USDC;/.test(b) && /Prizes are always paid in USDC\./.test(b)
+      && !/This card finds your spins|Slots\.PLAGE_LOGS \+ ' blocks/.test(b); },
   nonLu: (t) => { const b = bloc(t); return (b.match(/pot === null \? 'not read'/g) || []).length === 2 && /pts === null \? 'not read'/.test(b) && /gagne === null \? 'not read'/.test(b) && /Your pending spins could not be read just now\./.test(b); },
   /* v3 : les Spun par tranches (la premiere bornee a 999 blocs, puis les blocs nouveaux) ; rien dans le navigateur */
   fenetreBornee: (t) => /Slots\.trancheSpun\(\{ scanne: slotsCfg\.scanne, tete, blocDeploiement: j\.bloc \}\)/.test(bloc(t)) && /de: tr\.de, jusqua: tr\.jusqua/.test(bloc(t)) && !/localStorage|sessionStorage|indexedDB/.test(bloc(t)),
@@ -65,7 +79,15 @@ const mutants = [
   ['aucunBoutonMort', '<button type="button" class="bouton spinBouton" id="slotsSpin" hidden>', '<button type="button" class="bouton spinBouton" id="slotsSpin" disabled>'],
   ['spinCacheSansWallet', "bS.textContent = moi ? 'Spin · ' + usdcTexte(prix) + ' USDC' : 'Connect a wallet to spin';", "bS.textContent = 'Spin · ' + usdcTexte(prix) + ' USDC';"],
   ['settleSeulementReglable', 'bR.hidden = lot.length === 0;', 'bR.hidden = false;'],
-  ['chiffresServis', "Slots.usdcPrecis(BigInt(j.esperanceBrut)) + ' USDC — less", "'0.15 USDC — less"],
+  /* 2026-10-25 : la moyenne unique (meilleure strategie) tapee a la main ; les blocs des faces tapes ; le prix de « Pay with » tape ; la
+   *   moyenne servie redite a cote (le doublon d avant) ; « Pay with » sans « Prizes are always paid in USDC » ; la note des 999 blocs revenue */
+  ['chiffresServis', "Slots.usdcPrecis(ev.meilleureBrut) + ' USDC a spin on average", "'0.127862 USDC a spin on average"],
+  ['chiffresServis', "blocsFaces.slice(0, -1).join(', ') + ' and ' + blocsFaces[blocsFaces.length - 1]", "'2, 3 and 4'"],
+  ['chiffresServis', "swaps it for the ' + usdcTexte(prix) + ' USDC the spin takes", "swaps it for the 0.50 USDC the spin takes"],
+  ['chiffresServis', "'The points of a spin pick its prize in the table below. '", "'The points of a spin pick its prize in the table below. On average a settled spin pays back ' + Slots.usdcPrecis(BigInt(j.esperanceBrut)) + ' USDC. '"],
+  ['payerDit', ' Prizes are always paid in USDC. ', ' '],
+  ['payerDit', "+ 'Points also add up as a running total kept on chain; prizes are paid per spin, points pay nothing on their own.';", "+ 'Points also add up as a running total kept on chain; prizes are paid per spin, points pay nothing on their own. This card finds your spins from the last ' + Slots.PLAGE_LOGS + ' blocks.';"],
+  ['payerDit', '            <p class="note" id="slotsPayer" style="margin:6px 0 0"></p>\n', ''],
   ['nonLu', "pot === null ? 'not read' : usdcTexte(pot) + ' USDC') + '. A spin costs", "usdcTexte(pot || 0n) + ' USDC') + '. A spin costs"],
   ['fenetreBornee', 'scanne: slotsCfg.scanne, tete, blocDeploiement: j.bloc', 'scanne: null, tete, blocDeploiement: 0'],
   ['spinExact', 'plan = Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: BigInt(j.prixSpin) });', 'plan = Slots.planSpins({ contrat, usdc: USDC_BASE, n: 1, spinPrice: 2n ** 255n });'],

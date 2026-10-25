@@ -241,7 +241,10 @@ async function scenarioRegleur(code) {
     && /The server settles spins automatically when its keeper is on \(it is off right now\); anyone can settle, and the prize always goes to the spin's player\./.test(r1)
     && /settling every spin is the best play: 0\.127862 USDC a spin on average/.test(p1) && !/best play/.test(r1)
     && /^A spin costs 0\.50 USDC: /.test(r1) && /from 0 to 5\.00 USDC a spin, never more than the pot holds\./.test(r1)
-    && /^The three faces come from three different blocks/.test(p1) && !/three different blocks|PotShort|accept what the pot holds/.test(r1)
+    /* 2026-10-25 (Phil : regles courtes et ordonnees) : le pli commence par les faces, leurs blocs dits (2, 3 et 4 blocs apres le spin :
+     *   DELAI_CIBLE + r, r < REELS — ce banc affirmait « The three faces come from three different blocks ») ; le pot court / Accept
+     *   restent HORS de la regle a l ecran (ils sont sous la table) */
+    && /^Each spin draws three faces from three different blocks: the blocks 2, 3 and 4 blocks after the spin, one face each\./.test(p1) && !/three different blocks|PotShort|accept what the pot holds|accept less/.test(r1)
     && !/refund|held by the contract|back to you/i.test(r1 + ' ' + p1);
   /* la mesure vaut 10 min : un 2e repeint ne relit aucun bloc pour elle */
   ch.lectures = []; await app.peindreSlots(true);
@@ -284,7 +287,33 @@ async function scenarioRpc(code) {
   /* premiere tranche : jusqu au deploiement (bloc 900) ou 999 blocs ; puis seulement le bloc nouveau + 8 de recouvrement */
   return { ok: premiere === 1015 - 900 + 1 && plage <= 9 && complet.length <= 4 && !complet.includes('eth_getBlockByNumber') && tic.length === 1 && tic[0] === 'eth_blockNumber', premiere, plage, complet, tic };
 }
-const SCENARIOS = { D1: scenarioD1, D1b: scenarioD1b, R2: scenarioR2, PERDU: scenarioPerdu, PERDANT: scenarioPerdant, REGLEUR: scenarioRegleur, FORCE: scenarioForce, RPC: scenarioRpc };
+/* 2026-10-25 (Phil : regles reecrites, « aucun chiffre tape a la main que le code calcule ») : la carte montee avec une AUTRE fiche (prix
+ *   1,00, 60 % au pot, table divisee par deux) — chaque chiffre des regles (#slotsRegle, #slotsComment, #slotsTableNote, #slotsPayer) doit
+ *   suivre cette fiche, calcule ici par slots-plan.js sur la meme fiche ; un chiffre tape (0.50, 50 %, 0.25, 5.00, 0.127862) y rougit, et
+ *   les phrases-cles (prix toujours en USDC, seul le joueur accepte moins, les points ne paient rien) sont exigees mot pour mot. */
+async function scenarioRegleFiche(code) {
+  const prizes2 = P.prizes.map((x) => String(BigInt(x) / 2n)), prix2 = 1000000n, part2 = 6000;
+  const ev2 = Slots.esperance(prizes2.map(BigInt), prix2, part2), haut2 = BigInt(prizes2[prizes2.length - 1]);
+  const ev1 = Slots.esperance(TABLE, PRIX, P.potShareBps);
+  const fiche = { ...FICHE, prixSpin: String(prix2), potShareBps: part2, prizes: prizes2, esperanceBrut: String(ev2.brut) };
+  const ch = faireChaine({ pot: 9000000n, tete: 1015, spins: [{ id: 1, t: 1002, hashes: H1 }] }); ch.msBloc = 200;
+  const app = monter(code, ch, { fiche }); app.chaine = ch;
+  await app.peindreSlots(true);
+  const r = app.dom.el('slotsRegle').textContent, p = app.dom.el('slotsComment').textContent, nt = app.dom.el('slotsTableNote').textContent, py = app.dom.el('slotsPayer').textContent;
+  const u = usdcTexte, x = (s) => s.replace(/[.()]/g, (c) => '\\' + c);
+  /* la fiche differe vraiment de la vraie (sinon un chiffre tape passerait) */
+  const differe = u(prix2) !== u(PRIX) && Slots.usdcPrecis(ev2.meilleureBrut) !== Slots.usdcPrecis(ev1.meilleureBrut) && u(haut2) !== u(TABLE[TABLE.length - 1]) && Slots.usdcPrecis(ev2.toDev) !== Slots.usdcPrecis(ev1.toDev);
+  const rOk = r.startsWith('A spin costs ' + u(prix2) + ' USDC: 60% goes to the slots pot and 40% (' + Slots.usdcPrecis(ev2.toDev) + ' USDC) to TokenizedBlock, when you spin, whatever happens next. ')
+    && r.includes('a fixed prize per points, from 0 to ' + u(haut2) + ' USDC a spin, never more than the pot holds.');
+  const pOk = new RegExp(x(Slots.pourcentTexte(ev2.probGainBps)) + '% of spins pay something, but only ' + x(Slots.pourcentTexte(ev2.probMiseBps)) + '% pay back at least the ' + x(u(prix2)) + ' USDC stake\\.').test(p)
+    && p.includes('settling every spin is the best play: ' + Slots.usdcPrecis(ev2.meilleureBrut) + ' USDC a spin on average — less while the pot holds less than ' + u(haut2) + ' USDC — below the ' + u(prix2) + ' USDC price.')
+    && (p.match(/on average/g) || []).length === 1 && p.endsWith('Points also add up as a running total kept on chain; prizes are paid per spin, points pay nothing on their own.')
+    && !/last \d+ blocks/.test(p + r + nt + py);
+  const nOk = nt.includes(', with ' + Slots.usdcPrecis(9000000n) + ' USDC in the pot.') && nt.includes('Settle pays a prize only in full') && nt.includes('Only you can accept less — what the pot holds, for that one spin — or you can wait for the pot to grow until its window closes.');
+  const yOk = py.includes('your wallet first swaps it for the ' + u(prix2) + ' USDC the spin takes, then pays the spin in USDC;') && py.includes(' Prizes are always paid in USDC. ');
+  return { ok: differe && rOk && pOk && nOk && yOk, differe, rOk, pOk, nOk, yOk, r, p, nt, py };
+}
+const SCENARIOS = { D1: scenarioD1, D1b: scenarioD1b, R2: scenarioR2, PERDU: scenarioPerdu, PERDANT: scenarioPerdant, REGLEUR: scenarioRegleur, REGLE_FICHE: scenarioRegleFiche, FORCE: scenarioForce, RPC: scenarioRpc };
 for (const [k, s] of Object.entries(SCENARIOS)) { const r = await s(BLOC); vu(r.ok === true, 'carte executee : ' + k + (r.ok ? '' : ' ' + JSON.stringify(r, (_, v) => (typeof v === 'bigint' ? String(v) : v)))); }
 
 /* ---------------------------------------------------------------- les mutants du bloc (en memoire) */
@@ -304,7 +333,16 @@ const MUTANTS = [
   ['PERDANT', 'un spin sans prix laisse hors du lot', "envoyes = p.lignes.filter((l) => l.decision === 'LOT');", "envoyes = p.lignes.filter((l) => l.decision === 'LOT' && l.paie > 0n);"],
   ['REGLEUR', 'l etat du regleur tape « on »', "const reg = j.regleur && j.regleur.etat === 'ON' ? 'on'", "const reg = true ? 'on'"],
   ['REGLEUR', 'la regle ne dit plus qu un spin non regle est perdu', "'A spin not settled in time is lost: nothing is returned. Settle within '", "'Settle within '"],
-  ['REGLEUR', '2026-10-24 : l explication recollee a la regle a l ecran (le pli vide)', "if (rgPli) rgPli.textContent = 'The three faces", "if (rg) rg.textContent += ' ' + 'The three faces"],
+  ['REGLEUR', '2026-10-24 : l explication recollee a la regle a l ecran (le pli vide)', "if (rgPli) rgPli.textContent = 'Each spin draws", "if (rg) rg.textContent += ' ' + 'Each spin draws"],
+  /* 2026-10-25 : chaque chiffre de la regle suit une AUTRE fiche (REGLE_FICHE) — un chiffre tape a la main, ou une phrase tombee, rougit */
+  ['REGLE_FICHE', 'le prix du spin tape dans « Pay with »', "swaps it for the ' + usdcTexte(prix) + ' USDC the spin takes", "swaps it for the 0.50 USDC the spin takes"],
+  ['REGLE_FICHE', 'la part du pot tapee', "' + (part / 100) + '% goes to the slots pot", "50% goes to the slots pot"],
+  ['REGLE_FICHE', 'la meilleure strategie tapee', "Slots.usdcPrecis(ev.meilleureBrut) + ' USDC a spin on average", "'0.127862 USDC a spin on average"],
+  ['REGLE_FICHE', 'le prix maximum tape dans le pli', "less while the pot holds less than ' + usdcTexte(haut) + ' USDC — below", "less while the pot holds less than 5.00 USDC — below"],
+  ['REGLE_FICHE', '« Prizes are always paid in USDC » tombe', ' Prizes are always paid in USDC. ', ' '],
+  ['REGLE_FICHE', '« seul le joueur accepte moins » tombe', " Only you can accept less — what the pot holds, for that one spin — or you can wait for the pot to grow until its window closes.'", "'"],
+  ['REGLE_FICHE', '« points pay nothing on their own » tombe', "; prizes are paid per spin, points pay nothing on their own.';", ".';"],
+  ['REGLE_FICHE', 'la part du dev tapee', "' + Slots.usdcPrecis(ev.toDev) + ' USDC) to TokenizedBlock", "0.25 USDC) to TokenizedBlock"],
   ['REGLEUR', '2026-10-24 : la regle a l ecran perd le prix maximum', "a fixed prize per points, from 0 to ' + usdcTexte(haut) + ' USDC a spin, never more than the pot holds. '", "a fixed prize per points. '"],
   ['REGLEUR', 'le temps de bloc du regleur ignore', '  if (srv) return srv;\n', ''],
   ['REGLEUR', 'la mesure relue a chaque repeint', '  if (slotsCfg.msBlocA && Date.now() - slotsCfg.msBlocA < 600000) return slotsCfg.msBloc;\n', ''],
