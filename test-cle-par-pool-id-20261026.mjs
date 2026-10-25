@@ -140,7 +140,8 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
   ok(route.indexOf('clesParIndices(') > 0 && route.indexOf('resoudreClePool(') > route.indexOf('clesParIndices('), 'E2 /api/cle lit les indices poolId AVANT resoudreClePool');
   const tr = corps('lireTrending');
   const a1 = tr.indexOf('retenirIndicesPoolId('), a2 = tr.indexOf('resoudreClesParIndices('), a3 = tr.indexOf('achatsMarche(');
-  ok(a1 > 0 && a2 > a1 && a3 > a2, 'E3 le tour de trending retient les indices, cherche les cles, PUIS juge le Buy');
+  ok(a1 > 0 && a3 > a1 && a2 > a3 && /void resoudreClesParIndices\(/.test(tr) && /if \(!clesParIdEnCours\)/.test(tr),
+    'E3 le tour de trending retient les indices, juge le Buy, PUIS lance la recherche EN FOND (non attendue, une a la fois)');
   ok(/clesCache\.set\(t, \{ ok: true, cles \}\)/.test(corps('garderCleLue') || src.slice(src.indexOf('function garderCleLue('), src.indexOf('function garderCleLue(') + 600)), 'E4 une cle LUE rejoint clesCache (vue par /api/cle, les rails, le Buy)');
   const v = src.slice(src.indexOf('async function cleParUnIndice('), src.indexOf('async function clesParIndices('));
   ok(/r\.etat === 'ABSENTE_PRES_DE_LA_DATE' \|\| r\.etat === 'HORS_JETON'/.test(v) && !/NON_LUE[^\n]*clesParIdVerdicts\.set/.test(v), 'E5 seules une absence lue et HORS_JETON sont retenues ; une NON_LUE jamais');

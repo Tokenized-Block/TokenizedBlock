@@ -2709,6 +2709,7 @@ async function clesParIndices(jeton) {
 }
 /** Le tour de /api/trending : les lignes SANS cle connue qui ont un indice, lues une a une (au plus CLES_PAR_ID_PAR_TOUR jetons). */
 const CLES_PAR_ID_PAR_TOUR = 40;
+let clesParIdDernier = null, clesParIdEnCours = false;
 async function resoudreClesParIndices(lignes) {
   const compte = { essayees: 0, lues: 0, absentes: 0, horsJeton: 0, nonLues: 0, sansIndice: 0, reportees: 0 };
   for (const l of Array.isArray(lignes) ? lignes : []) {
@@ -4081,11 +4082,19 @@ async function lireTrending() {
     });
     /* le cout, servi : appels du dernier tour (par usage) et somme sur l heure glissante */
     actionsChaine.appels = { dernierTour: appelsActions.dernierTour, heure: appelsActions.heure.reduce((s, x) => s + x.n, 0), toursHeure: appelsActions.heure.length };
-    /* 2026-10-26 : AVANT le Buy de Market, les lignes sans cle connue sont cherchees par leur poolId (borne par tour, compte servi) */
-    let clesParPoolId = null;
-    try { clesParPoolId = await resoudreClesParIndices(resume.lignes); } catch (e) { clesParPoolId = { erreur: String((e && e.message) || e).slice(0, 100) }; }
     const achatMarche = await achatsMarche(resume.lignes);
-    achatMarche.clesParPoolId = clesParPoolId;
+    /* 2026-10-26 : les lignes sans cle connue sont cherchees par leur poolId EN FOND, apres le Buy de ce tour (borne par tour, une
+     *   seule recherche a la fois) : une cle lue entre dans clesCache et le Buy du tour SUIVANT la juge. Le tour de trending ne
+     *   l attend pas (meme duree qu avant, y compris sur un noeud qui refuse). Le compte servi est celui de la derniere recherche finie. */
+    achatMarche.clesParPoolId = clesParIdDernier;
+    if (!clesParIdEnCours) {
+      clesParIdEnCours = true;
+      const aChercher = (resume.lignes || []).map((l) => ({ adr: l && l.adr }));
+      void resoudreClesParIndices(aChercher)
+        .then((c) => { clesParIdDernier = { ...c, fini: new Date().toISOString() }; })
+        .catch((e) => { clesParIdDernier = { erreur: String((e && e.message) || e).slice(0, 100), fini: new Date().toISOString() }; })
+        .finally(() => { clesParIdEnCours = false; });
+    }
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
       fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
       emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche, actionsChaine, routesFermees: true,
