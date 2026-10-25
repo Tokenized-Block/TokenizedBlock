@@ -9,10 +9,13 @@
  *   C. le Swap du Wallet n ecrit AUCUN echange : il ecrit une commande que la barre du Chat accepte, et l analyseur du Chat
  *      (commandes-panel.js) la lit EXACTEMENT comme la meme commande tapee a la main — donc tout ce qui suit (porte du cerveau,
  *      /api/rails/plan, devis, wallet) est le meme code avec la meme entree ;
- *   D. ce code-la (bcProposerSwap, bcSigner, bcModeEnvoi, bcDeuxTrades) est OCTET POUR OCTET celui de la prod d07afc5 (empreintes
+ *   D. ce code-la (bcSigner, bcModeEnvoi, bcDeuxTrades) est OCTET POUR OCTET celui de la prod d07afc5 (empreintes
  *      sha256, fins de ligne normalisees) ; bcExecuterTexte est epingle sur integ9 (2026-10-25) : diff relu = 3 lignes AJOUTEES,
  *      l action suivante apres « show » et les commandes spin / settle_spin (bcCommandeSpin / bcCommandeSettleSpin -> slotsAgir,
  *      les fonctions de la carte Draws) ; la branche swap est inchangee et D2 la garde ;
+ *      bcProposerSwap est epingle sur integ11 (2026-10-25, chantier liquidite relu PASS) : diff relu = AVANT la signature, la ligne
+ *      du meilleur lieu de vente (p.vente.texte) ; une vente loin sous la reference (p.vente.loin) n ouvre plus le wallet toute
+ *      seule ; le libelle du bouton passe par bcLibelleSigner (« Sell anyway » jamais sur une approbation). signer() inchange ;
  *   E. chaque regle ci-dessus tue son mutant (copies EN MEMOIRE du texte, jamais le fichier).
  *
  * ⚠️ CE QU IL NE PROUVE PAS : qu un echange aboutisse sur la chaine (rien n est signe ici), ni le rendu reel a 375 px (la
@@ -32,7 +35,8 @@ const brut = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g
 const EMPREINTES_PROD_D07AFC5 = {
   /* integ9 2026-10-25 (d07afc5 : 9df99397…d300) : + show -> bcTerminer, + spin / settle_spin, voir l en-tete D */
   'async function bcExecuterTexte(': '13b33a98e03a9419a6bf59bbb77e84159cf04b82c819c25f84a0814c2656a027',
-  'async function bcProposerSwap(': 'cd36ee9d3ca3b527db7282704f64141444f7ef0547c6c6332a4845347b5f84db',
+  /* integ11 2026-10-25 (d07afc5 : cd36ee9d…84db) : + ligne de vente avant signature, venteLoin, bcLibelleSigner — voir l en-tete D */
+  'async function bcProposerSwap(': 'ef52c7fae386f0dd1b019f951ad44f820c4ace9c329bfe373c8d9fd25e40b5a3',
   'function bcModeEnvoi(': 'b2cbcf62fe2fb7ca3ff4ad4087c0fabf9bd6641502f8e30a5e2e4e7936ce7420',
   'function bcDeuxTrades(': '4680c774049c0119139b1a3ed7a1c7a03d3c196478424df2e4e3fc7d7a8198e9',
   'async function bcSigner(': '989eaf4d831e9d373872191c72b93a0fe7070896f3c59ca0ecc2281a18e0e29e',
