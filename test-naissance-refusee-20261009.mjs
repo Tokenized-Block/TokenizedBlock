@@ -136,10 +136,12 @@ function monter(rpc) {
     'let holdersEcritureEnCours = false;\n' + corpsEcrire + '\n; return ecrireHolders;')(
     cache, 'holders-cache.json', 4 * 1024 * 1024,
     (p, payload) => { tmp.set(p, payload); }, (de) => { m.fichier = JSON.parse(tmp.get(de)); });
-  /* ⛔ les DEUX noms sont fournis : le code d avant appelle naissanceDuJeton, le code corrige lireNaissance. */
+  /* ⛔ les DEUX noms sont fournis : le code d avant appelle naissanceDuJeton, le code corrige lireNaissance.
+   *  2026-10-25 : debutRechercheNaissance (bloc de creation lu par le serveur) -- ici aucun jeton n a de creation lue : PREMIER,
+   *  comme le serveur pour un jeton inconnu. Le cas « creation connue » vit dans test-naissance-creation-20261025.mjs. */
   const reconstruire = new Function('holdersCache', 'HOLDERS_MAX', 'rpcServeur', 'naissanceDuJeton', 'lireNaissance',
-    'PREMIER_BLOCK_TB', 'passeIncrementale', 'ecrireHolders', corpsReconstruire + '\n; return reconstruireHolders;')(
-    cache, 200, rpc, S.naissanceDuJeton, S.lireNaissance, PREMIER, S.passeIncrementale, () => { m.ecritures++; ecrireVrai(); });
+    'PREMIER_BLOCK_TB', 'passeIncrementale', 'ecrireHolders', 'debutRechercheNaissance', corpsReconstruire + '\n; return reconstruireHolders;')(
+    cache, 200, rpc, S.naissanceDuJeton, S.lireNaissance, PREMIER, S.passeIncrementale, () => { m.ecritures++; ecrireVrai(); }, () => PREMIER);
   const suivi = (j) => { const p = reconstruire(j); passes.push(p); return p; };
   const corps = new Function('holdersCache', 'reconstruireHolders', 'rpcServeur', 'verifierSomme', 'soldesNegatifs',
     'partsHolders', 'POT_FICTIF', corpsHolders + '\n; return holdersCorps;')(

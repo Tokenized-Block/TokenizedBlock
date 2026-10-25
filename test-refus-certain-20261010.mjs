@@ -761,7 +761,8 @@ const MUTANTS = [
   ['m11 cleV4 sans lecteurLogs', "logs = await lire.rpc('eth_getLogs', [{ address: PM_V4,", "logs = await rpcServeur('eth_getLogs', [{ address: PM_V4,", [/^A3 /]],
   ['m12 /api/cle sans lecteurLogs', "const logs = await rpc('eth_getLogs', [{ fromBlock: enHex(d), toBlock: enHex(f), address: PM_V4, topics }]);", "const logs = await rpcServeur('eth_getLogs', [{ fromBlock: enHex(d), toBlock: enHex(f), address: PM_V4, topics }]);", [/^A4 /, /^A6 /]],
   ['m13 cleV4 : la raison tait le budget', "+ (attente ? ' (' + attente + ' of them wait for the archive node daily budget", "+ (false ? ' (' + attente + ' of them wait for the archive node daily budget", [/^A3 /]],
-  ['m14 R4 : holders par lecteurLogs (sans porte)', 'const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis: PREMIER_BLOCK_TB, jusqua: fin });', 'const r = await lireNaissance({ rpc: lecteurLogs(fin).rpc, jeton, depuis: PREMIER_BLOCK_TB, jusqua: fin });', [/^H1 /]],
+  /* 2026-10-25 : ancre suivie (depuis = debutRechercheNaissance, test-naissance-creation-20261025) ; la mutation reste rpcServeur -> lecteurLogs */
+  ['m14 R4 : holders par lecteurLogs (sans porte)', 'const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis: debutRechercheNaissance(jeton), jusqua: fin });', 'const r = await lireNaissance({ rpc: lecteurLogs(fin).rpc, jeton, depuis: debutRechercheNaissance(jeton), jusqua: fin });', [/^H1 /]],
   ['m15 rpcServeur : envois non comptes', /compte = true; compterEnvoi\(url, classeEnvoi\(r\.status, j\)\);(\r?\n\s*if \(!j\.error\) return j\.result;)/, '$1', [/^F1 /]],
   ['m16 lecteurUrl : envois non comptes', 'return lecteurUrlNu(url, { ...options, surEnvoi: (c) => compterEnvoi(url, c) });', 'return lecteurUrlNu(url, options);', [/^F1 /, /^F2 /]],
   ['m17 le chemin publie (URL au lieu de l hote)', 'let h = libelleNoeud(url);', 'let h = String(url);', [/^F2 /]],

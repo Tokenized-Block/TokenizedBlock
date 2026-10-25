@@ -1917,6 +1917,35 @@ const libelleAttenteBudget = (n) => 'archive node daily budget reached: ' + n + 
 const routeurEtat = { blocks: new Map(GRAINE_ROUTEUR.map((g) => [g.jeton, { ...g }])), depuis: PLANCHER_ROUTEUR, jusqua: GRAINE_JUSQUA,
   tete: null, teteLueA: null, ratees: 0, lu: null, reprise: null, repriseAVerifier: false, attenteBudget: 0 };
 let routeurEnCours = null;
+/* ══ 2026-10-25 — LE BLOC DE CREATION D UN BLOCK, QUAND CE SERVEUR L A LU LUI-MEME (debut de la recherche de naissance, /api/holders) ══
+ * ⛔ MESURE PROD (2026-10-25 16:30 UTC, /api/holders/0xb2…579e) : NON_LU en boucle. reconstruireHolders cherchait le premier mint
+ *   depuis PREMIER_BLOCK_TB jusqu a la tete : ~1 100 fenetres eth_getLogs de 2 000 blocs par passe, et la recherche repart de zero
+ *   a la premiere fenetre refusee (regle du 2026-10-09, inchangee). Sur des noeuds en limite de debit, elle ne finit presque jamais.
+ * ⛔ UN MINT NE PEUT PAS PRECEDER LA CREATION DU JETON : avant son B20Created, l adresse n emet rien. Commencer au bloc de creation
+ *   ne saute donc aucune fenetre qui pourrait porter la naissance.
+ * ⛔⛔ D OU VIENT CE BLOC — ET SEULEMENT DE LA :
+ *   - GRAINE_ROUTEUR (index-routeur.js) : figee dans le code, lue on-chain (tx + recu), sel prouve par neDuRouteur ;
+ *   - scannerNesDuRouteur DANS CE PROCESSUS (etendreBlocksRouteur) : `bloc` = blockNumber du log B20Created emis par la FACTORY
+ *     (filtre address == FACTORY_B20 et topic B20Created), lu par ce serveur sur son noeud, entree gardee seulement si le sel de la
+ *     transaction redonne le jeton (formule CREATE2).
+ *   JAMAIS d une requete client, JAMAIS de la reprise du volume (progres-index.json : bloc non re-verifie sur la chaine), jamais
+ *   d un commentaire ni d une liste statique. Jeton absent de cette table : PREMIER_BLOCK_TB, exactement comme avant.
+ * ⛔ Un bloc incoherent (pas un entier, ou sous PREMIER_BLOCK_TB) : PREMIER_BLOCK_TB — jamais un debut plus TARD que ce qui est lu.
+ *   Deux blocs pour un meme jeton : le plus BAS. */
+const creationsLuesIci = new Map(GRAINE_ROUTEUR.map((g) => [String(g.jeton).toLowerCase(), g.bloc]));
+function noterCreationsLues(blocks) {
+  for (const b of blocks || []) {
+    const j = String((b && b.jeton) || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(j) || !Number.isSafeInteger(b.bloc)) continue;
+    const deja = creationsLuesIci.get(j);
+    creationsLuesIci.set(j, Number.isSafeInteger(deja) ? Math.min(deja, b.bloc) : b.bloc);
+  }
+}
+/** Premier bloc ou chercher la naissance de `jeton` : son bloc de creation lu par ce serveur, sinon PREMIER_BLOCK_TB. */
+function debutRechercheNaissance(jeton) {
+  const b = creationsLuesIci.get(String(jeton).toLowerCase());
+  return Number.isSafeInteger(b) && b >= PREMIER_BLOCK_TB ? b : PREMIER_BLOCK_TB;
+}
 async function etendreBlocksRouteur() {
   const tete = parseInt(await rpcServeur('eth_blockNumber', []), 16);
   if (!Number.isSafeInteger(tete)) return;
@@ -1940,6 +1969,7 @@ async function etendreBlocksRouteur() {
   let avant = 0; /* refus sans envoi AVANT la lecture courante : la difference = ceux de la lecture courante */
   let r = await scannerNesDuRouteur({ rpc: lire.rpc, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
   for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
+  noterCreationsLues(r.blocks); /* 2026-10-25 : bloc du log B20Created lu ICI (voir creationsLuesIci) */
   for (const ms of REPRISES_LECTURE_MS) {
     if (!r.fenetresRatees) break;
     /* toutes les ratees de cette lecture sont NON ENVOYEES : la relire ne changerait rien avant 00:00 UTC. Une seule ratee ENVOYEE
@@ -1949,6 +1979,7 @@ async function etendreBlocksRouteur() {
     avant = lire.suivi.essais;
     r = await scannerNesDuRouteur({ rpc: lire.rpc, deBloc: routeurEtat.jusqua + 1, aBloc, pas: 1000 });
     for (const b of r.blocks) routeurEtat.blocks.set(b.jeton, b);
+    noterCreationsLues(r.blocks);
   }
   routeurEtat.ratees = r.fenetresRatees;
   routeurEtat.attenteBudget = r.fenetresRatees > 0 && archiveEpuisee() ? lire.suivi.essais - avant : 0; /* fin de tour seulement */
@@ -3063,10 +3094,13 @@ async function reconstruireHolders(jeton) {
        *    sautee : un mint posterieur devenait la naissance, le rejeu partait de la, l entree etait ecrite sur le
        *    volume, et cette ligne ne cherchait plus jamais (elle ne cherche que tant que naissance vaut null).
        *  ⛔ On garde l etat (NON_LUE ou ABSENTE) pour que holdersCorps le NOMME. Pas de point de reprise : la
-       *    passe suivante relit depuis PREMIER_BLOCK_TB, comme avant -- un prefixe « lu vide » pres de la tete,
+       *    passe suivante relit depuis le MEME debut, comme avant -- un prefixe « lu vide » pres de la tete,
        *    servi par un noeud en retard, sauterait la naissance d un block tout juste cree (raisonne, pas mesure).
+       *  ⛔ 2026-10-25 : ce debut est le bloc de creation du jeton QUAND CE SERVEUR L A LU (debutRechercheNaissance,
+       *    voir creationsLuesIci), sinon PREMIER_BLOCK_TB comme avant. Un mint ne precede pas la creation : rien n est
+       *    saute. La regle du refus ne change pas : une fenetre refusee arrete la recherche.
        *  ⛔ Rien n est ecrit ici : jusqua reste null, et ecrireHolders saute toute entree sans curseur. */
-      const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis: PREMIER_BLOCK_TB, jusqua: fin });
+      const r = await lireNaissance({ rpc: rpcServeur, jeton, depuis: debutRechercheNaissance(jeton), jusqua: fin });
       /* ⛔ Naissance non lue ou introuvable : on ne devine pas un point de depart, on laisse l etat vide. */
       if (r.etat !== 'LUE') { e.rechercheNaissance = r; e.enCours = false; return e; }
       e.naissance = r.bloc;
@@ -3102,7 +3136,7 @@ async function holdersCorps(jeton) {
    *    ci-dessus vient de poser enCours), et la branche « no mint found » plus bas n etait donc jamais atteinte :
    *    une recherche arretee par une fenetre refusee sortait en « a replay is running », ratees 0 -- le refus
    *    etait INVISIBLE. Non lue n est pas absente, et ni l une ni l autre n est « un rejeu tourne ».
-   *  ⛔ C est l etat de la DERNIERE recherche terminee : une nouvelle peut tourner, elle repart de PREMIER_BLOCK_TB. */
+   *  ⛔ C est l etat de la DERNIERE recherche terminee : une nouvelle peut tourner, elle repart du meme debut (debutRechercheNaissance). */
   const rn = e.naissance === null ? e.rechercheNaissance : null;
   if (rn && rn.etat === 'NON_LUE') {
     return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, ratees: Number(e.ratees || 0), naissance: null,
