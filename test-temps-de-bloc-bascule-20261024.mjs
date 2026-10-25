@@ -57,7 +57,7 @@ const SV = srcServi && creerMC
     srcServi + '\nreturn { mesureCourteSrv, sParBlocServi, tempsDeBlocServiJson };')(rpcServeur, creerMC, TB.sParBlocPrudent, M.tempsDeBlocSrv, M.tempsDeBlocJson, DateF)
   : { mesureCourteSrv: { lire: async () => null, etat: () => ({ sParBloc: null }) }, sParBlocServi: () => M.tempsDeBlocSrv.sParBloc, tempsDeBlocServiJson: null };
 const C = '0x' + 'c2'.repeat(20);
-const lecteur = { lire: async () => {}, etat: () => ({ contrat: C, cache: new Map(), nextId: 1, restants: 0, tete: blocA(clock / 1000), lu: clock, enVol: false, erreur: null }) };
+const lecteur = { lire: async () => {}, etat: () => ({ contrat: C, cache: new Map(), nextId: 1, restants: 0, tete: blocA(clock / 1000), lu: clock, luTete: clock, enVol: false, erreur: null }) }; /* luTete : l heure de la tete servie (revue 2026-10-25) */
 const FICHE = { contrat: 'BlockDuelsV2', chaine: 8453, adresse: C, bloc: 1, constructeur: {} };
 const route = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv', 'mesureCourteSrv', 'sParBlocServi', 'Date',
   'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(() => lecteur, M.sParBlocSrv, new Map(), S2.reponseDuelsV2, FICHE, M.tempsDeBlocSrv, SV.mesureCourteSrv, SV.sParBlocServi, DateF);

@@ -30,9 +30,24 @@ const M = [
   [AP, 'R1 noterRecuDuel : base exigee (avant)', 'const nd = Duels.duelDepuisRecu(base || null, evs.filter((x) => String(x.id) === id));', 'const nd = base ? Duels.duelDepuisRecu(base, evs) : null;'],
   [AP, 'R1 defierDuel : le recu n est pas garde', '    noterRecuDuel(evsCree);\n', ''],
   /* R2 — la lecture avant la reponse, plusieurs noeuds */
-  [SV, 'R2 lireAvantReponse n attend pas', 'try { return await Promise.race([p.then(() => true, () => false), delai]); }', 'try { return false; }'],
-  [SV, 'R2 force soumis aux 15 s', '!force ? depuis < intervalleMs : s.lu > 0 && depuis < Math.min(forceMinMs, intervalleMs)', 'depuis < intervalleMs'],
-  [SV, 'R2 force sans borne', '!force ? depuis < intervalleMs : s.lu > 0 && depuis < Math.min(forceMinMs, intervalleMs)', '!force ? depuis < intervalleMs : false'],
+  [SV, 'R2 lireAvantReponse n attend pas', 'try { return await Promise.race([p.then((v) => v === true, () => false), delai]); }', 'try { return false; }'],
+  [SV, 'R2 force soumis aux 15 s', '    if (force) {\n      if (s.file) return s.file;', '    if (false) {\n      if (s.file) return s.file;'],
+  [SV, 'R2 force sans borne', 'const borne = Math.min(forceMinMs, intervalleMs);', 'const borne = 0;'],
+  /* revue 2026-10-25, defaut 2 : un tour force demarre APRES la requete */
+  [SV, 'd2 force rend le tour EN VOL (l ancien comportement)', '    if (force) {\n      if (s.file) return s.file;', '    if (force) {\n      if (s.enVol && s.promesse) return s.promesse;\n      if (s.file) return s.file;'],
+  [SV, 'd2 force sous la borne : un tour fini pris pour frais (l ancien angle mort)', 'if (!s.enVol && !(s.debut > 0 && horloge() - s.debut < borne)) return demarrer();',
+    'if (!s.enVol && s.debut > 0 && horloge() - s.debut < borne) return Promise.resolve(false);\n      if (!s.enVol) return demarrer();'],
+  [SV, 'd2 la file pas partagee (un tour par requete)', '      if (s.file) return s.file;\n', ''],
+  [SV, 'd2 la pause de la borne sautee', 'if (s.debut > 0 && reste > 0) await attendre(reste);', ''],
+  [SV, 'd2 un tour rate dit frais', 'p.then((v) => v === true, () => false)', 'p.then(() => true, () => false)'],
+  /* revue 2026-10-25, defaut 3 : l heure servie est celle de la tete */
+  [SV, 'd3 lu servi = fin du dernier tour (meme rate)', 'lu: new Date(s.luTete).toISOString()', 'lu: new Date(s.lu).toISOString()'],
+  [SV, 'd3 luTete = fin du tour reussi', 's.tete = tete; s.luTete = luTete;', 's.tete = tete; s.luTete = horloge();'],
+  /* revue 2026-10-25, defaut 4 : rpc() ne rajeunit pas une tete plus ancienne */
+  [AP, 'd4 rpc() rajeunit une tete plus ancienne (avant)', 'if (Number.isSafeInteger(n) && n >= rpcTete.n) rpcTete = { n, t: Date.now(), v: res };', 'if (Number.isSafeInteger(n)) rpcTete = { n: Math.max(n, rpcTete.n), t: Date.now(), v: res };'],
+  /* revue 2026-10-25 : le Sign refuse un duel absent */
+  [AP, 'Sign : duel absent passe en silence (avant)', "if (!dd) { bcEtape(m, 'Not sent: duel #' + (idD || '?') + ' is not in the duels list just read. Open the Duels card to check it.', 'non'); return; }\n      if (dd.joiner) {", 'if (dd && dd.joiner) {'],
+  [AP, 'Sign : bloc cible null pris pour 0 (Number(null) = 0, entier)', 'Number.isSafeInteger(Number(dd.targetBlock)) && Number(dd.targetBlock) > 0 ? await teteFraiche()', 'Number.isSafeInteger(Number(dd.targetBlock)) ? await teteFraiche()'],
   [SV, 'R2 tour en vol pas partage', 'if (s.enVol && s.promesse) return s.promesse;', 'if (s.enVol) return Promise.resolve();'],
   [SV, 'R2 frais : forme lache', "/[?&]frais=1(?:&|$)/", '/frais=1/'],
   [SW, 'R2 lecteur sur rpcServeur (base.org seul)', 'creerLecteurDuelsV2({ rpc: rpcDuelsV2, contrat: c })', 'creerLecteurDuelsV2({ rpc: rpcServeur, contrat: c })'],

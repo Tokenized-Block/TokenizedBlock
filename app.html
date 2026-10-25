@@ -7229,11 +7229,16 @@ function bjMontrer(p, rolls, walletCarte) {
     const refus = bjRefusAuSigne(id, p, walletCarte, lu);
     if (refus) { bcEtape(m, 'Not sent: ' + refus, 'non'); return; }
     /* R5 (test live Grok game39) : un Settle de duel REJOINT propose par le brain est re-verifie au Sign (tete relue sur le noeud, marge) — un
-     *   settle qui serait mine apres la fenetre n est pas envoye ; tete illisible : rien n est envoye */
+     *   settle qui serait mine apres la fenetre n est pas envoye ; tete illisible : rien n est envoye.
+     *   Revue 2026-10-25 : un duel ABSENT de la liste lue n est plus passe en silence : refuse (rien ne prouve qu il est encore dans sa
+     *   fenetre). Un duel lu SANS joueur est le refundExpired du brain (meme kind DUEL_SETTLE, aucune fenetre) : il passe ; un duel pris sans
+     *   bloc cible lisible : refuse. */
     if (p.kind === 'DUEL_SETTLE' && Duels.blocsMargeSettle) {
       const idD = String(p.cle || '').split(':')[1] || '', dd = [...duelsDe(duelsCfg.j), ...duelsDe(duelsCfg.j, 'recents')].find((x) => x.id === idD);
-      if (dd && dd.joiner && Number.isSafeInteger(Number(dd.targetBlock))) {
-        const th = await teteFraiche();
+      if (!dd) { bcEtape(m, 'Not sent: duel #' + (idD || '?') + ' is not in the duels list just read. Open the Duels card to check it.', 'non'); return; }
+      if (dd.joiner) {
+        /* Number(null) = 0 : un bloc cible absent n est PAS un bloc lisible (planSettle le laisserait passer) — d ou le > 0 */
+        const th = Number.isSafeInteger(Number(dd.targetBlock)) && Number(dd.targetBlock) > 0 ? await teteFraiche() : null;
         const pl = Number.isSafeInteger(th) ? Duels.planSettle({ contrat: duelContrat(duelsCfg.j), id: idD, targetBlock: dd.targetBlock, blocActuel: th, margeBlocs: margeDuelApp(duelsCfg.j, th) }) : null;
         if (!pl || pl.etat !== 'PRET') { bcEtape(m, 'Not sent: ' + (pl ? pl.pourquoi : 'the chain head could not be read just now.'), 'non'); return; }
       }
@@ -8268,7 +8273,9 @@ async function rpc(methode, params) {
   if (rpcEnVol.has(cv)) { rpcCompte.fusion++; return rpcEnVol.get(cv); }
   rpcCompte.reseau++;
   const pr = rpcReseau(methode, params).then((res) => {
-    if (methode === 'eth_blockNumber') { const n = parseInt(res, 16); if (Number.isSafeInteger(n)) rpcTete = { n: Math.max(n, rpcTete.n), t: Date.now(), v: res }; }
+    /* revue 2026-10-25 (defaut 4) : meme regle que teteFraiche — l heure n est rafraichie qu avec une tete au moins aussi haute (un noeud en
+     *   retard ne rajeunit pas une tete plus ancienne ; n, t et v viennent de la MEME lecture) */
+    if (methode === 'eth_blockNumber') { const n = parseInt(res, 16); if (Number.isSafeInteger(n) && n >= rpcTete.n) rpcTete = { n, t: Date.now(), v: res }; }
     if (ci && rpcGardable(methode, res)) { rpcImmuable.set(ci, res); if (rpcImmuable.size > 6000) rpcImmuable.delete(rpcImmuable.keys().next().value); rpcStocker(); }
     /* petites plages finies (vides le plus souvent) : gardees d une visite a l autre ; les grosses, en memoire seulement */
     if (cl && Array.isArray(res) && res.length <= 20) { rpcImmuable.set('l:' + cl, res); if (rpcImmuable.size > 6000) rpcImmuable.delete(rpcImmuable.keys().next().value); rpcStocker(); }
