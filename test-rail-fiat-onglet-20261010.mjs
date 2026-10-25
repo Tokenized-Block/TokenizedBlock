@@ -31,13 +31,17 @@ async function cas({ reponse, bloque = false }) {
     },
   };
   const etapes = [];
-  const fn = new Function('window', 'compte', '$', 'fetch', 'etape', 'AbortController', 'setTimeout', 'clearTimeout', src + '\nreturn ouvrirRailFiat;')(
+  /* 2026-10-25 : ouvrirRailFiat note le solde d avant (repere du retour fiat) APRES avoir ouvert l onglet. La dependance est
+   *   injectee ici comme les autres ; on enregistre QUAND elle est appelee (combien d onglets deja ouverts a ce moment). */
+  const reperes = [];
+  const noterSoldeAvantFiat = async (adr, actif) => { reperes.push({ adr, actif, ongletsDejaOuverts: ouverts.length }); };
+  const fn = new Function('window', 'compte', '$', 'fetch', 'etape', 'AbortController', 'setTimeout', 'clearTimeout', 'noterSoldeAvantFiat', src + '\nreturn ouvrirRailFiat;')(
     window, '0x' + '31'.repeat(20), () => null,
     async () => (reponse === 'panne' ? Promise.reject(new Error('reseau')) : { json: async () => reponse }),
-    (e) => etapes.push(e), AbortController, setTimeout, clearTimeout);
+    (e) => etapes.push(e), AbortController, setTimeout, clearTimeout, noterSoldeAvantFiat);
   let empeche = false;
   await fn({ preventDefault() { empeche = true; } }, { href: PUBLIC }, 'USDC');
-  return { app: app.href, ouverts, etapes, empeche };
+  return { app: app.href, ouverts, etapes, empeche, reperes };
 }
 let n = 0;
 const vu = (c, m) => { assert.ok(c, m); n += 1; };
@@ -48,6 +52,10 @@ const vu = (c, m) => { assert.ok(c, m); n += 1; };
   vu(r.ouverts.length === 1 && String(r.ouverts[0].location) === URL_OK, 'session OK -> le nouvel onglet ne va pas sur pay.coinbase.com (vu ' + JSON.stringify(r.ouverts) + ')');
   vu(r.ouverts[0].opener === null, 'le nouvel onglet garde un lien vers l app (opener non coupe)');
   vu(r.etapes.includes('onramp_session_ok'), 'l etape onramp_session_ok n est plus comptee');
+  /* 2026-10-25 : le repere du retour fiat est pris UNE fois, pour CE wallet et CET actif, et APRES l ouverture de l onglet
+   *   (une lecture attendue avant `window.open` ferait bloquer l onglet comme popup). */
+  vu(r.reperes.length === 1 && r.reperes[0].actif === 'USDC' && r.reperes[0].adr === '0x' + '31'.repeat(20) && r.reperes[0].ongletsDejaOuverts === 1,
+    'le solde d avant n est pas note une fois, pour ce wallet et cet actif, apres l ouverture de l onglet : ' + JSON.stringify(r.reperes));
 }
 {
   const r = await cas({ reponse: { ok: false } });

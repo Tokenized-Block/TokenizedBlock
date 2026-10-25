@@ -262,7 +262,31 @@ export async function lireOptionsAchat({ env = {}, pays = 'US', subdivision = nu
     /* ⛔ `null` ET PAS `[]` QUAND LA LISTE MANQUE : un tableau vide dirait « aucune devise », un
      *   `null` dit « Coinbase ne l a pas rendue ». Deux faits opposes, et le second est notre
      *   ignorance — les confondre ferait publier « 0 devise » sur une panne de lecture. */
-    return { etat: 'OK', actifs, fiatsDeclares, pays: p };
+    /* ⛔⛔ ET LES MOYENS DE PAIEMENT ETAIENT JETES DE LA MEME FACON (2026-10-25). Chaque entree de
+     *     `payment_currencies` porte `limits: [{ id, min, max }]`, et cet `id` EST le moyen de paiement
+     *     (CARD, ACH_BANK_ACCOUNT, APPLE_PAY… — enum de la doc « Get buy options », lue le jour meme).
+     *     On rendait la devise et on jetait la seule chose qui dit COMMENT payer dans ce pays.
+     *   ⛔ MEME REGLE QUE CI-DESSUS : une devise sans `limits` lisible vaut `null` (non lu), pas `[]`.
+     *     Et l union `moyens` vaut `null` tant qu AUCUNE devise n a rendu de moyen lisible : un pays
+     *     ou rien n a ete lu ne doit jamais s afficher « aucun moyen ».
+     *   ⛔ L id part a l ecran : il est borne a l alphabet de l enum (majuscules et _), et UNSPECIFIED
+     *     n est pas un moyen. */
+    const moyensParFiat = Array.isArray(brutFiat) ? {} : null;
+    if (moyensParFiat) {
+      for (const c of brutFiat) {
+        const id = String((c && (c.id || c.symbol)) || '').toUpperCase().slice(0, 8);
+        if (!/^[A-Z]{3}$/.test(id)) continue;
+        const lim = c && (c.limits || c.payment_method_limits);
+        if (!Array.isArray(lim)) continue;
+        moyensParFiat[id] = [...new Set(lim.map((l) => String((l && l.id) || ''))
+          .filter((s) => /^[A-Z_]{2,40}$/.test(s) && s !== 'UNSPECIFIED'))];
+      }
+    }
+    const listes = moyensParFiat ? Object.values(moyensParFiat) : [];
+    const moyens = Array.isArray(brutFiat)
+      ? (brutFiat.length === 0 ? [] : (listes.length ? [...new Set(listes.flat())] : null))
+      : null;
+    return { etat: 'OK', actifs, fiatsDeclares, moyensParFiat, moyens, pays: p };
   } catch (e) {
     return { etat: 'NON_MESURE', pourquoi: 'options call failed: ' + String((e && e.message) || e).slice(0, 120) };
   }

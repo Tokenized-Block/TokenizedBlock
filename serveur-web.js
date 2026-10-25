@@ -5300,6 +5300,8 @@ const SERVIS = [
   'heures-marche.js',
   /* 2026-10-25 : ce que l index des createurs du serveur couvre deja (importe par app.html, mesCreations) */
   'creations-index.js',
+  /* ⛔ 2026-10-25 : le parcours carte -> block (actif finance, retour lu sur le solde, moyens par pays), importe par `app.html`. */
+  'retour-fiat.js',
   /* ⛔ 2026-10-02 : debit et refus permanents des noeuds RPC publics, importe par `app.html`. */
   'regulateur-rpc.js',
   /* ⛔ 2026-10-04 : les lectures independantes d un plan, lancees ensemble et bornees. Importe par `echange.js`, `marche.js` et
@@ -7004,8 +7006,13 @@ function traiterRequete(req, res) {
       pays: q.get('pays') || 'US', subdivision: q.get('sub') })
       .then((r) => {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        /* ⛔ 2026-10-25 : `court=1` (le panneau Buy) ne veut que les moyens de paiement du pays — pas 400 actifs
+         *   (~25 Ko par pays mesures) a chaque ouverture de fiche. Le compte `n` reste, la liste part seulement. */
+        const court = q.get('court') === '1';
         res.end(JSON.stringify(r.etat === 'OK'
-          ? { ok: true, pret: true, n: r.actifs.length, actifs: r.actifs,
+          ? { ok: true, pret: true, n: r.actifs.length, ...(court ? {} : { actifs: r.actifs }),
+              /* les moyens de paiement par devise, LUS chez Coinbase ; null = non lu, jamais « aucun » */
+              moyens: r.moyens, moyensParFiat: r.moyensParFiat,
               /* ⛔ LES DEUX LISTES VOYAGENT, ET LE COMPTE DES FIATS VAUT null QUAND ON N A PAS PU
                *   LIRE : un 0 dirait « aucune devise » la ou il faut lire « Coinbase ne l a pas
                *   rendue ». Deux faits opposes, et le second est notre ignorance.
@@ -7065,8 +7072,10 @@ function traiterRequete(req, res) {
          *   ⇒ Sans ce parametre, quelqu un qui finance depuis l ecran d un block revenait sur la
          *     page d accueil et devait le retrouver a la main : le rail fiat marchait, et le
          *     parcours fiat -> BLOCK s arretait la. */
+        /* ⛔ 2026-10-25 : l ACTIF voyage avec le block, pour que le retour sache QUOI relire dans le wallet (au lieu
+         *   de poser 0,01 ETH fixe). `demande.actif` sort de `validerDemande` : ETH ou USDC, rien d autre. */
         const retour = 'https://tokenizedblock.space/'
-          + (demande.retourBlock ? '?block=' + demande.retourBlock : '');
+          + (demande.retourBlock ? '?block=' + demande.retourBlock + '&actif=' + demande.actif : '');
         const u = urlOnramp({ sessionToken: s.sessionToken, actif: demande.actif,
           montantFiat: demande.montantFiat, retour });
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });

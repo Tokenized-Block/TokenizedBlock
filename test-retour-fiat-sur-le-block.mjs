@@ -60,9 +60,16 @@ cas('⛔⛔ le DOMAINE de retour est decide par le serveur, jamais par l appelan
   assert.ok(/const retour = 'https:\/\/tokenizedblock\.space\/'/.test(srv),
     'le domaine de retour n est plus une constante du serveur : s il vient de la requete, c est '
     + 'un open-redirect');
-  assert.ok(/\+ \(demande\.retourBlock \? '\?block=' \+ demande\.retourBlock : ''\)/.test(srv),
-    'le block de retour n est plus le SEUL ajout a l url : tout autre morceau venant du client '
+  /* ⛔ 2026-10-25 : l epingle bouge, et la regle reste. L ACTIF rejoint le block dans l url de retour, pour que le retour
+   *   sache QUOI relire dans le wallet au lieu de poser 0,01 ETH fixe. Il sort de `validerDemande` (ETH ou USDC, liste
+   *   fermee) : ce n est pas un morceau libre venant du client. Tout AUTRE ajout reste interdit. */
+  assert.ok(/\+ \(demande\.retourBlock \? '\?block=' \+ demande\.retourBlock \+ '&actif=' \+ demande\.actif : ''\)/.test(srv),
+    'le block (et son actif valide) ne sont plus les SEULS ajouts a l url : tout autre morceau venant du client '
     + 'ouvrirait la porte qu on vient de fermer');
+  for (const mauvais of ['EUR', '', 'eth&x=1', 'https://evil.example/']) {
+    assert.equal(validerDemande({ adresse: '0x' + 'a'.repeat(40), actif: mauvais }).etat, 'REFUSE',
+      'un actif hors liste passerait dans l url de retour : ' + JSON.stringify(mauvais));
+  }
 });
 
 cas('⛔ le client emporte le block ouvert, et seulement s il y en a un', () => {
@@ -75,7 +82,8 @@ cas('⛔ le client emporte le block ouvert, et seulement s il y en a un', () => 
 cas('⛔⛔ au retour, la fiche se rouvre — et l URL est NETTOYEE', () => {
   assert.ok(/const blockRetour = String\(paramsLien\.get\('block'\) \|\| ''\)/.test(nu),
     'le parametre de retour n est plus lu au chargement : le voyage se perd a l arrivee');
-  assert.ok(/ouvrirProfil\(blockRetour\.toLowerCase\(\)/.test(nu),
+  /* 2026-10-25 : la fiche du retour est ouverte par `reprendreRetourFiat`, avec le block REVALIDE par `lireRetourFiat`. */
+  assert.ok(/void reprendreRetourFiat\(retourFiat\.block, retourFiat\.actif\)/.test(nu) && /await ouvrirProfil\(block, null\)/.test(nu),
     'le block de retour n ouvre plus son profil');
   /* ⛔ SANS LE NETTOYAGE, un rechargement ou un lien partage rouvriraient la fiche indefiniment —
    *   et le parametre survivrait a un partage, ce qui n a aucun sens pour un retour de paiement. */
@@ -87,20 +95,23 @@ cas('⛔⛔ au retour, la fiche se rouvre — et l URL est NETTOYEE', () => {
     + 'entrerait telle quelle');
 });
 
-cas('⛔⛔ le retour REARME l achat — il ne se contente pas d ouvrir la fiche', () => {
-  /* ⛔⛔ SANS CA LE PARCOURS REPART DE ZERO. Quelqu un qui revient de l onramp vient d acheter de
-   *     l ETH et voulait un BLOCK : ouvrir la bonne fiche ne suffit pas, il devrait rouvrir
-   *     l echange et resaisir un montant — refaire ce qu il avait deja fait avant de partir payer.
-   *   ⛔ ET ON REUTILISE `poserIntent`, la mecanique qui existe : une seconde copie divergerait au
-   *     premier changement, motif deja paye plusieurs fois dans ce depot. */
-  assert.ok(/poserIntent\(\{ kind: 'buy', adr: blockRetour\.toLowerCase\(\), sens: 'ACHAT'/.test(nu),
-    'le retour n arme plus l intention d achat : le visiteur devra tout recommencer');
-  /* ⛔ ET ON NE PRETEND PAS QUE LES FONDS SONT ARRIVES : Coinbase ne nous le dit pas. Aucune phrase
-   *   affirmant une reception ne doit exister sur ce chemin. */
-  const i = nu.indexOf('const blockRetour');
-  const bloc = nu.slice(i, i + 900);
-  assert.ok(!/funds (have )?arrived|fonds sont (la|arrives)/i.test(bloc),
-    'le retour affirme une arrivee de fonds qu on n a PAS lue : Coinbase ne nous la communique pas');
+cas('⛔⛔ le retour REARME l achat — sur ce qui est ARRIVE, pas sur 0,01 ETH fixe', () => {
+  /* ⛔⛔ SANS CA LE PARCOURS REPART DE ZERO. Quelqu un qui revient de l onramp voulait un BLOCK : ouvrir la bonne fiche ne
+   *     suffit pas, il devrait resaisir un montant.
+   *   ⛔⛔ 2026-10-25 — L EPINGLE BOUGE, ET VOICI POURQUOI. Elle exigeait `poserIntent({ … amount: '0.01' })` : un montant
+   *     que personne n avait choisi, en ETH meme apres un achat d USDC, et `reprendreIntentApresConnect` cliquait ensuite
+   *     « Prepare buy » sans qu un wei soit lu. Le rearmement est maintenant fait par `reprendreRetourFiat`, qui preremplit
+   *     le champ Buy avec ce qui est ARRIVE (deux soldes LUS, `verdictArrivee`) et ne clique rien. */
+  assert.ok(!/poserIntent\(\{ kind: 'buy', adr: blockRetour/.test(nu), 'le retour pose encore une intention FIXE');
+  const i = nu.indexOf('async function reprendreRetourFiat(');
+  assert.ok(i > 0, 'le retour ne rearme plus rien : le visiteur devra tout recommencer');
+  const m = /\r?\n\}\r?\n/.exec(nu.slice(i));
+  const corps = m ? nu.slice(i, i + m.index) : '';
+  assert.ok(/\$\('#peAchat'\)\.value = montantLisibleFiat\(v\.montant/.test(corps), 'le retour ne preremplit plus le montant LU');
+  /* ⛔ ET ON NE PRETEND PAS QUE LES FONDS SONT ARRIVES SANS LES AVOIR LUS : la seule phrase d arrivee est derriere un
+   *   verdict calcule sur des soldes lus — `verdictArrivee` — et le cas « pas de repere » le DIT. */
+  assert.ok(/verdictArrivee\(\{ avant, maintenant, actif/.test(corps), 'une arrivee serait affirmee sans comparer deux soldes lus');
+  assert.ok(/cannot tell whether this purchase has landed yet/.test(corps), 'sans repere d avant, l ecran affirmerait une arrivee qu il ne peut pas savoir');
 });
 
 cas('⛔⛔ L INTENTION EST CONSOMMEE AU RETOUR, PAS SEULEMENT ECRITE', () => {
@@ -115,12 +126,14 @@ cas('⛔⛔ L INTENTION EST CONSOMMEE AU RETOUR, PAS SEULEMENT ECRITE', () => {
    *     panneau Buy ouvert — et n a besoin d AUCUN wallet : elle n etait gardee derriere la
    *     connexion que par son POINT D APPEL.
    * ⚠️ ASSERTION SUR LE TEXTE : elle attrape la SUPPRESSION de la reprise, pas une erreur dedans. */
+  /* 2026-10-25 : la reprise est `reprendreRetourFiat` (plus d intention a consommer) ; les gardes d attente la suivent. */
   const i = nu.indexOf("etape('onramp_retour_block')");
   assert.notEqual(i, -1, 'le compteur du retour a disparu');
-  const bloc = nu.slice(i, i + 700);
-  assert.ok(/reprendreIntentApresConnect\s*\(/.test(bloc),
+  assert.ok(/reprendreRetourFiat\s*\(/.test(nu.slice(i, i + 700)),
     'le retour du rail fiat n ouvre plus le panneau d achat : le visiteur qui vient de payer devra '
-    + 'de nouveau recliquer Buy et resaisir son montant, et l intention ecrite restera dormante');
+    + 'de nouveau recliquer Buy et resaisir son montant');
+  const j = nu.indexOf('async function reprendreRetourFiat(');
+  const bloc = nu.slice(j, j + 900);
   /* ⛔⛔ ET ON ATTEND QUE LE PANNEAU EXISTE AVANT DE CONSOMMER. Ma premiere version consommait a
    *     +1 200 ms : mesure en production (build `retour-fiat-reprend`), `intent_restant` = {} donc
    *     l intention etait bien PRISE, mais `panneau_echange_visible` = false et le montant vide —
@@ -135,8 +148,8 @@ cas('⛔⛔ L INTENTION EST CONSOMMEE AU RETOUR, PAS SEULEMENT ECRITE', () => {
     'l attente n est plus BORNEE : un marche illisible laisserait le visiteur devant une attente '
     + 'muette, sans geste et sans cause nommee');
   /* ⛔ ET LA FICHE NUE RESTE EN SECOURS : mieux vaut la fiche que rien si la reprise jette. */
-  assert.ok(/ouvrirProfil\(blockRetour\.toLowerCase\(\)/.test(bloc),
-    'le secours a disparu : si la reprise jette, le visiteur n atterrirait plus nulle part');
+  assert.ok(/ouvrirProfil\(block, null\)/.test(bloc) && /peindreMarcheUnreadRetry\(block, null\)/.test(bloc),
+    'le secours a disparu : si le marche reste illisible, le visiteur n aurait ni fiche ni geste');
 });
 
 assert.equal(n, 8, 'compte de cas inattendu : ' + n);
