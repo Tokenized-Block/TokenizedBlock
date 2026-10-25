@@ -11,7 +11,9 @@ const APP_T = 'test-duels-v2-app-20261024.mjs', DEP_T = 'test-deployer-duels-v2-
 const P = ['duels-v2-plan.js', 'DUELS_V2_MODULE', APP_T], SV = ['duels-v2-serveur.js', 'DUELS_V2_SERVEUR', APP_T], BR = ['brain-jeu.js', 'BRAIN_JEU_MODULE', APP_T];
 const AP = ['app.html', 'APP_HTML', APP_T], SW = ['serveur-web.js', 'SERVEUR_WEB', APP_T], CF = ['duels-v2-config.js', 'DUELS_V2_CONFIG', DEP_T], NO = ['contracts/noter-deploiement-duelsv2.mjs', 'NOTER_V2', NOT_T];
 const M = [
-  [P, 'etat : REMBOURSABLE garde (plus de defaut)', "return e.etat === 'REMBOURSABLE' ? { etat: DEFAULT_CREATOR } : e;", 'return e;'],
+  /* 2026-10-25 (retours Grok R3 / R5) : trois ancres suivies — etatDuel v2 en deux lignes (defaut, puis marge du Settle), le brain v2 avec la
+   *   marge, la ligne de la fenetre dite a tous (hors du ternaire) */
+  [P, 'etat : REMBOURSABLE garde (plus de defaut)', "if (e.etat === 'REMBOURSABLE') return { etat: DEFAULT_CREATOR };", ''],
   [P, 'actions : le defaut devient un REFUND', "if (e.etat === DEFAULT_CREATOR) return ['SETTLE_DEFAULT'];", "if (e.etat === DEFAULT_CREATOR) return ['REFUND'];"],
   [P, 'planSettleDefault DANS la fenetre', "if (e.etat === 'REGLABLE') return refuse('still inside the window", "if (false) return refuse('still inside the window"],
   [P, 'la ligne dit 256 s (les blocs pour des secondes)', "'Settle within about ' + n + ' s", "'Settle within about ' + V1.FENETRE + ' s"],
@@ -31,11 +33,11 @@ const M = [
   [BR, 'brain : join v2 sans la ligne', "(v2 ? plan.avertissement + ' ' : '')", "''"],
   [BR, 'brain : join v2 par le plan v1 (sans mesure)', '(v2 ? DuelsV2.planJoin : planJoin)', 'planJoin'],
   [BR, 'brain : le defaut propose au createur seulement', '|| x.etat === DuelsV2.DEFAULT_CREATOR ||', '|| (x.etat === DuelsV2.DEFAULT_CREATOR && bas(d.creator) === moi) ||'],
-  [BR, 'brain : etats v1 en v2', '(v2 ? DuelsV2.etatDuel : etatDuel)', 'etatDuel'],
+  [BR, 'brain : etats v1 en v2', 'v2 ? DuelsV2.etatDuel(d, D.block, t, margeDuel) : etatDuel(d, D.block, t)', 'etatDuel(d, D.block, t)'],
   [BR, 'brain : les defauts des autres avant les siens', '|| (bas(p.d.creator) === moi ? 0 : 1) - (bas(q.d.creator) === moi ? 0 : 1)', '|| 0'],
   [AP, 'brain de l app : version non passee', 'if (duels) Object.assign(duels, { version: jd.version === DuelsV2.VERSION ? DuelsV2.VERSION : 1, sParBloc: sParBlocApp });', ''],
   [AP, 'app : module toujours v1', 'const moduleDuels = (j) => (j && j.version === DuelsV2.VERSION ? DuelsV2 : DuelsV1);', 'const moduleDuels = (j) => DuelsV1;'],
-  [AP, 'carte : pas de ligne avant le join', "+ (Duels.phraseAvantJoin && d.creator !== moi ? ' ' + (Duels.phraseAvantJoin(sParBlocApp) || Duels.PHRASE_SANS_MESURE) : ''));", ');'],
+  [AP, 'carte : pas de ligne avant le join', "+ (Duels.phraseAvantJoin ? ' ' + (Duels.phraseAvantJoin(sParBlocApp) || Duels.PHRASE_SANS_MESURE) : '');", ';'],
   [AP, 'carte : Accept sans mesure', '  ouverts = ouverts && !(Duels.phraseAvantJoin && Duels.phraseAvantJoin(sParBlocApp) === null);\n', ''],
   [AP, 'carte : join sans le temps de bloc', '\n    plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant, sParBloc: sParBlocApp });', '\n    plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });'],
   [AP, 'chat : join sans le temps de bloc', 'const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant, sParBloc: sParBlocApp });', 'const plan = Duels.planJoin({ contrat, duel: d, guess: face.guess, moi, maintenant });'],

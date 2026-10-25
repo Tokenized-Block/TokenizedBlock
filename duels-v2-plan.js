@@ -10,7 +10,7 @@
  *   a la MEME face et le MEME partage que v1 : testFuzz_FaceIdentiqueABlockRollsEtV1). */
 import { selecteur, topic } from './keccak.js';
 import * as V1 from './duels-plan-app.js';
-import { etatReglement } from './blockrolls-plan.js';
+import { etatReglement, refusGuess } from './blockrolls-plan.js';
 import { secondesPour } from './temps-de-bloc.js';
 import { lireDuel, SIG_DUELS } from './duels-plan.js';
 export * from './duels-plan-app.js';
@@ -52,22 +52,51 @@ export const PHRASE_DUELS_FERMES = 'New duels are closed.';
 /** /api/duels -> creer et rejoindre sont-ils proposes ? v2 : oui des que le serveur sert un contrat v2 LU */
 export const duelsOuverts = (j) => !!(j && j.version === VERSION && j.ok === true && ADR.test(bas(j.contrat)));
 
+/* ══ R5 (test live Grok game39, 2026-10-25, le plus grave) : Settle etait encore propose a tete = cible + 256 ; eth_call / estimateGas passent
+ *   a `latest`, mais la tx est minee au bloc SUIVANT (cible + 257) et revert TooLate — puis le createur gagne par defaut, meme quand celui
+ *   qui a rejoint avait gagne (prouve sur fork). Settle n est donc propose que si tete + marge <= cible + 256, la marge etant la latence en
+ *   blocs : l AGE de la tete lue (une tete en cache retarde) + l inclusion attendue (au moins 1 bloc : jamais le bloc de tete lui-meme).
+ *   Sans temps de bloc mesure, la marge est comptee au temps de bloc le plus COURT qu on attend (0,2 s, Base Denim) : plus de blocs, plus tot. */
+/** secondes laissees a l envoi et a l inclusion d un settle (signature dans le wallet comprise : un appui puis un clic) */
+export const MARGE_INCLUSION_S = 5;
+/** le temps de bloc pris quand il n est pas mesure, pour la marge seulement (le plus court : la marge en blocs la plus grande) */
+export const S_PAR_BLOC_PRUDENT = 0.2;
+/** la marge en BLOCS d un settle : ceil(age de la tete / temps de bloc) + max(1, ceil(MARGE_INCLUSION_S / temps de bloc)) */
+export function blocsMargeSettle({ sParBloc = null, ageTeteMs = 0 } = {}) {
+  const sp = Number(sParBloc), s = Number.isFinite(sp) && sp > 0 ? sp : S_PAR_BLOC_PRUDENT;
+  const ag = Number(ageTeteMs), age = Number.isFinite(ag) && ag > 0 ? ag : 0;
+  return Math.ceil(age / 1000 / s) + Math.max(1, Math.ceil(MARGE_INCLUSION_S / s));
+}
+/** la marge prise quand l appelant n en donne pas (temps de bloc non mesure, tete fraiche) */
+export const MARGE_DEFAUT = blocsMargeSettle();
+const marge = (m) => (Number.isSafeInteger(m) && m >= 1 ? m : MARGE_DEFAUT);
+/** rejoint, dans la fenetre du contrat, mais un settle envoye maintenant tomberait apres : aucune action, le defaut vient */
+export const TROP_TARD = 'TROP_TARD';
+export const phraseTropTard = (n) => 'Too late to settle safely: it would land after the window. The creator wins by default in ' + n + ' block' + (n === 1 ? '' : 's') + '.';
+
 /**
  * Ou en est un duel v2 : comme v1 (REGLE, ANNULE, REMBOURSE, OUVERT, EXPIRE, ATTENTE, REGLABLE, NON_LU) ; GAGNE_DEFAUT (fini : le createur a
  * gagne par defaut) ; DEFAULT_CREATOR (rejoint, fenetre passee : settleDefault, par n importe qui). Jamais REMBOURSABLE.
  */
-export function etatDuel(d, tete, maintenant) {
+export function etatDuel(d, tete, maintenant, margeBlocs = MARGE_DEFAUT) {
   /* revue 2026-10-24 n°1 : un duel que la CHAINE dit fini (lu par le suivi de l app) avant que le serveur ne l ait relu — aucune action */
   if (d && d.finChaine) return { etat: FINI_CHAINE, statut: d.finChaine };
   if (d && d.defaulted) return { etat: GAGNE_DEFAUT };
   const e = V1.etatDuel(d, tete, maintenant);
-  return e.etat === 'REMBOURSABLE' ? { etat: DEFAULT_CREATOR } : e;
+  if (e.etat === 'REMBOURSABLE') return { etat: DEFAULT_CREATOR };
+  /* R5 (test live Grok game39) : REGLABLE seulement tant qu un settle envoye MAINTENANT tombe dans la fenetre (tete + marge <= cible + 256) ;
+   *   blocsRestants = les blocs qui restent pour l ENVOYER (0 au dernier appui sur), blocsFenetre = ceux de la fenetre du contrat */
+  if (e.etat === 'REGLABLE') {
+    const m = marge(margeBlocs), sur = e.blocsRestants - m;
+    return sur >= 0 ? { etat: 'REGLABLE', blocsRestants: sur, blocsFenetre: e.blocsRestants, marge: m } : { etat: TROP_TARD, blocsAvantDefaut: e.blocsRestants + 1, marge: m };
+  }
+  return e;
 }
 
 /** ce que `moi` peut faire MAINTENANT (seulement ce que le contrat accepterait) : JOIN, CANCEL, SETTLE, SETTLE_DEFAULT, REFUND — ou rien.
  *  `ouverts` est garde pour l interface commune : en v2, JOIN ne depend que de l etat (et du temps de bloc mesure, verifie par planJoin). */
-export function actionsDuel(d, moi, tete, maintenant, ouverts = true) {
-  const e = etatDuel(d, tete, maintenant), m = bas(moi), cre = bas(d && d.creator);
+export function actionsDuel(d, moi, tete, maintenant, ouverts = true, margeBlocs = MARGE_DEFAUT) {
+  const e = etatDuel(d, tete, maintenant, margeBlocs), m = bas(moi), cre = bas(d && d.creator);
   if (e.etat === 'OUVERT') {
     if (!ADR.test(m)) return [];
     if (m === cre) return ['CANCEL'];
@@ -88,8 +117,13 @@ export function planJoin(args = {}) {
 }
 
 /** settle v2 : dans la fenetre seulement ; apres, le createur gagne par defaut (settleDefault) */
-export function planSettle({ contrat, id, targetBlock = null, blocActuel = null }) {
-  if (targetBlock != null && blocActuel != null && etatReglement(targetBlock, blocActuel).etat === 'PERDU') return refuse('the ' + V1.FENETRE + '-block window passed: the creator wins by default (settle default)');
+export function planSettle({ contrat, id, targetBlock = null, blocActuel = null, margeBlocs = MARGE_DEFAUT }) {
+  if (targetBlock != null && blocActuel != null) {
+    const r = etatReglement(targetBlock, blocActuel);
+    if (r.etat === 'PERDU') return refuse('the ' + V1.FENETRE + '-block window passed: the creator wins by default (settle default)');
+    /* R5 : un settle qui serait mine APRES cible + 256 revert TooLate, puis le createur gagne par defaut — il n est pas construit */
+    if (r.etat === 'REGLABLE' && r.blocsRestants < marge(margeBlocs)) return refuse(phraseTropTard(r.blocsRestants + 1));
+  }
   return V1.planSettle({ contrat, id, targetBlock, blocActuel });
 }
 
@@ -149,13 +183,34 @@ const rang = (d) => (d && (d.settled || d.cancelled || d.refunded || d.defaulted
 /** vrai si le duel est fini (regle, annule, rembourse, gagne par defaut, ou dit fini par la chaine) */
 export const estFini = (d) => rang(d) === 2;
 /** le duel `d` tel que les evenements d un RECU le disent (JOINED, SETTLED, DEFAULT_WON, CANCELLED, REFUNDED de CE duel) ; null si aucun, ou incoherent */
+/* R1 (test live Grok game39) : le createur ne voyait pas son duel tout neuf (« No open challenge » ~2 min) — le recu du create n etait pas
+ *   garde. Sans duel connu (`d` null), un evenement CREATED du recu suffit : le duel OUVERT est construit de lui seul (createur, jeton, mise,
+ *   face, expiration), verifie comme le serveur verifie un duel lu (adresses, mise >= MISE_MIN, guess dans les bornes, expiration > 0). */
+function duelDepuisCree(ev) {
+  let stake; try { stake = BigInt(ev.stake); } catch (_) { return null; }
+  const exp = Number(ev.expiresAt);
+  if (!ADR.test(bas(ev.creator)) || !ADR.test(bas(ev.token)) || bas(ev.creator) === ZERO || bas(ev.token) === ZERO || stake < V1.MISE_MIN) return null;
+  if (!Array.isArray(ev.guessA) || refusGuess(ev.guessA.map(Number)).length || !Number.isSafeInteger(exp) || exp <= 0) return null;
+  let id; try { id = BigInt(ev.id).toString(); } catch (_) { return null; }
+  return { id, creator: bas(ev.creator), token: bas(ev.token), stake, guessA: ev.guessA.map(Number), expiresAt: exp, blocCree: Number.isSafeInteger(Number(ev.blocCree)) ? Number(ev.blocCree) : null,
+    joiner: null, guessB: null, targetBlock: null, settled: null, cancelled: false, refunded: false, defaulted: null };
+}
 export function duelDepuisRecu(d, evs) {
-  if (!d || !Array.isArray(evs)) return null;
-  const id = String(d.id);
+  if (!Array.isArray(evs)) return null;
+  const cree = d ? null : evs.find((ev) => ev && ev.type === 'CREATED');
+  if (!d && !cree) return null;
+  const id = String(d ? d.id : cree.id);
   let x = null;
   for (const ev of evs) {
     if (!ev || String(ev.id) !== id) continue;
     const b = x || d;
+    if (ev.type === 'CREATED') {
+      if (b) continue; /* deja connu : le create ne dit rien de plus */
+      x = duelDepuisCree(ev);
+      if (!x) return null;
+      continue;
+    }
+    if (!b) return null; /* un evenement d un duel inconnu, sans son CREATED avant lui */
     if (ev.type === 'JOINED') {
       const tb = Number(ev.targetBlock);
       if (!ADR.test(bas(ev.joiner)) || !Array.isArray(ev.guessB) || ev.guessB.length !== 5 || !Number.isSafeInteger(tb) || tb <= 0) return null;
@@ -201,15 +256,27 @@ export function texteCompte(e, sParBloc) {
   const s = compteARebours(e, sParBloc);
   if (e && e.etat === 'ATTENTE') return s === null ? 'Result block in ' + e.blocsAvant + ' block' + (e.blocsAvant === 1 ? '' : 's') + '.' : 'Result block in about ' + Math.max(1, Math.round(s)) + ' s.';
   if (e && e.etat === 'REGLABLE') return s === null ? e.blocsRestants + ' blocks left to settle.' : 'About ' + Math.round(s) + ' s left to settle (' + e.blocsRestants + ' blocks).';
+  if (e && e.etat === TROP_TARD) return phraseTropTard(e.blocsAvantDefaut);
   return null;
 }
-/** la pause entre deux lectures du suivi : un DEMI temps de bloc avant le bloc resultat ou tant que la tete n est pas lue (borne 100 ms - 1 s ;
- *  500 ms sans mesure), 1 s ensuite */
+/** la pause entre deux lectures du suivi. R6 (test live Grok game39 : 92 appels au noeud en 60 s de 429) : JAMAIS moins d un temps de bloc
+ *  (une tete relue plus vite ne peut rien dire de neuf) ni moins de PAS_MIN_MS (200 ms) ; avant le bloc resultat ou tant que la tete n est pas lue :
+ *  un temps de bloc (1 s sans mesure) ; ensuite au moins 1 s. */
+export const PAS_MIN_MS = 200;
 export function pasSuiviMs(etat, sParBloc) {
-  if (etat !== 'ATTENTE' && etat !== 'NON_LU') return 1000;
-  const s = Number(sParBloc);
-  if (!Number.isFinite(s) || s <= 0) return 500;
-  return Math.min(1000, Math.max(100, Math.round((s * 1000) / 2)));
+  const s = Number(sParBloc), blocMs = Number.isFinite(s) && s > 0 ? Math.round(s * 1000) : null;
+  if (etat !== 'ATTENTE' && etat !== 'NON_LU') return Math.max(1000, blocMs || 0);
+  return blocMs === null ? 1000 : Math.max(PAS_MIN_MS, blocMs);
+}
+/** R6 : le recul apres des lectures ratees (429, panne) : la pause double a chaque pas rate de suite, plafonnee a RECUL_MAX_MS */
+export const RECUL_MAX_MS = 30000;
+/** la pause apres UN pas du suivi : au moins un temps de bloc PAR APPEL fait dans ce pas (jamais plus d un appel par temps de bloc ; 1 s sans
+ *  mesure), puis x 2^echecs (echecs = pas rates de suite), plafonne a RECUL_MAX_MS */
+export function pauseSuiviMs(etat, sParBloc, { appels = 1, echecs = 0 } = {}) {
+  const s = Number(sParBloc), blocMs = Number.isFinite(s) && s > 0 ? s * 1000 : 1000;
+  const base = Math.max(pasSuiviMs(etat, sParBloc), Math.round(Math.max(1, Number(appels) || 1) * blocMs));
+  const k = Number.isSafeInteger(echecs) && echecs > 0 ? Math.min(echecs, 16) : 0;
+  return k ? Math.min(RECUL_MAX_MS, base * 2 ** k) : base;
 }
 /** duels(id) a lire sur la chaine */
 export const appelDuelEtat = (id) => selecteur(SIG_DUELS) + u(id);
@@ -224,23 +291,30 @@ export function statutDepuisRetour(retour) {
  * que le duel n est plus ATTENTE / REGLABLE (regle, fini sur la chaine, ou fenetre passee : DEFAULT_CREATOR), ou apres `maxMs`.
  * Les lectures ratees ne sont pas des etats : la tete garde la plus haute deja lue. Rend { etat, duel, tete }.
  */
-export async function suivreDuel({ duel, lireTete, lireStatut = null, sParBloc = () => null, attendre, horloge = () => Date.now(), surEtat = () => {}, maxMs = 600000, statutMs = 2000 }) {
+export async function suivreDuel({ duel, lireTete, lireStatut = null, sParBloc = () => null, attendre, horloge = () => Date.now(), surEtat = () => {}, maxMs = 600000, statutMs = 2000, margeBlocs = null }) {
   const t0 = horloge(), sp = () => (typeof sParBloc === 'function' ? sParBloc() : sParBloc);
-  let d = duel, avant = null, tete = null, dernierStatut = -Infinity;
+  /* R5 : la marge donnee, sinon celle du temps de bloc donne (tete du suivi : lue a l instant) */
+  const mg = () => { const m = typeof margeBlocs === 'function' ? margeBlocs() : margeBlocs; return Number.isSafeInteger(m) && m >= 1 ? m : blocsMargeSettle({ sParBloc: sp() }); };
+  let d = duel, avant = null, tete = null, dernierStatut = -Infinity, echecs = 0;
   for (;;) {
+    /* R6 : un pas est RATE si la tete n est pas lue (erreur, 429, null) ou si la lecture du statut faite dans ce pas n a rien rendu */
+    let appels = 1, rate = false;
     let t = null; try { t = await lireTete(); } catch (_) { t = null; }
-    if (Number.isSafeInteger(t) && t > 0) tete = Math.max(tete || 0, t);
+    if (Number.isSafeInteger(t) && t > 0) tete = Math.max(tete || 0, t); else rate = true;
     const now = horloge();
     if (lireStatut && tete !== null && Number.isSafeInteger(d.targetBlock) && tete > d.targetBlock && now - dernierStatut >= statutMs) {
-      dernierStatut = now;
+      dernierStatut = now; appels += 1;
       let s = null; try { s = await lireStatut(d.id); } catch (_) { s = null; }
+      if (!s) rate = true;
       if (s && s !== 'Open' && s !== 'Joined' && s !== 'None') d = { ...d, finChaine: s };
     }
-    const e = tete === null ? { etat: 'NON_LU' } : etatDuel(d, tete, Math.floor(now / 1000));
+    echecs = rate ? echecs + 1 : 0;
+    const e = tete === null ? { etat: 'NON_LU' } : etatDuel(d, tete, Math.floor(now / 1000), mg());
     const change = e.etat !== avant; avant = e.etat;
     surEtat({ duel: d, tete, etat: e.etat, change, resteS: compteARebours(e, sp()), texte: texteCompte(e, sp()) });
-    if (!['ATTENTE', 'REGLABLE', 'NON_LU'].includes(e.etat) || now - t0 >= maxMs) return { etat: e.etat, duel: d, tete };
-    await attendre(pasSuiviMs(e.etat, sp()));
+    /* TROP_TARD : suivi jusqu au defaut (la carte passe a « creator wins by default » a l heure) */
+    if (!['ATTENTE', 'REGLABLE', 'NON_LU', TROP_TARD].includes(e.etat) || now - t0 >= maxMs) return { etat: e.etat, duel: d, tete };
+    await attendre(pauseSuiviMs(e.etat, sp(), { appels, echecs }));
   }
 }
 

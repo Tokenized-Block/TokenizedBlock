@@ -67,11 +67,16 @@ if (['duelDepuisRecu', 'fusionnerLocaux', 'compteARebours', 'texteCompte', 'pasS
   ok(f3.duels[0].settled && f3.locaux.has('1'), 'un settle local (recu) plus avance que le servi (Joined) : le local reste');
   const f4 = V2.fusionnerLocaux([], L);
   ok(f4.duels.length === 1 && V2.estFini(f4.duels[0]) === false && V2.estFini(st) === true && V2.estFini(ouvert) === false, 'un local absent de la liste servie : ajoute ; estFini range un settle local avec les finis (recents)');
-  ok(V2.compteARebours(V2.etatDuel(j, 1002, T), 0.2) === 0.4 && V2.compteARebours(V2.etatDuel(j, 1004, T), 0.2) === 51 && V2.compteARebours(V2.etatDuel(j, 1004, T), null) === null,
-    'compte a rebours au temps mesure : 0,4 s avant le bloc resultat (2 blocs), 51 s de fenetre (255 blocs) ; non mesure : null');
-  ok(/^Result block in about 1 s\.$/.test(V2.texteCompte(V2.etatDuel(j, 1002, T), 0.2)) && /^About 51 s left to settle \(255 blocks\)\.$/.test(V2.texteCompte(V2.etatDuel(j, 1004, T), 0.2)) && /^255 blocks left to settle\.$/.test(V2.texteCompte(V2.etatDuel(j, 1004, T), null)),
-    'texte : « Result block in about 1 s. », « About 51 s left to settle (255 blocks). », sans mesure : les blocs seulement');
-  ok(V2.pasSuiviMs('ATTENTE', 0.2) === 100 && V2.pasSuiviMs('ATTENTE', 2) === 1000 && V2.pasSuiviMs('REGLABLE', 0.2) === 1000 && V2.pasSuiviMs('ATTENTE', null) === 500, 'pas de suivi : un demi-bloc avant le resultat (100 ms a 0,2 s), 1 s dans la fenetre, 500 ms sans mesure');
+  /* R5 (test live Grok game39, 2026-10-25) : le compte a rebours dit les blocs qui restent pour ENVOYER un settle sur (fenetre - marge),
+   *   la marge par defaut etant V2.MARGE_DEFAUT (25 blocs a 0,2 s : 5 s d inclusion) ; a la tete 1004 (cible 1003) : 255 - 25 = 230 blocs */
+  const M = V2.MARGE_DEFAUT, R = 255 - M, sR = Math.round(R * 0.2);
+  ok(V2.compteARebours(V2.etatDuel(j, 1002, T), 0.2) === 0.4 && Math.round(V2.compteARebours(V2.etatDuel(j, 1004, T), 0.2)) === sR && V2.compteARebours(V2.etatDuel(j, 1004, T), null) === null,
+    'compte a rebours au temps mesure : 0,4 s avant le bloc resultat (2 blocs), ' + sR + ' s pour envoyer un settle sur (' + R + ' blocs = 255 - marge ' + M + ') ; non mesure : null');
+  ok(/^Result block in about 1 s\.$/.test(V2.texteCompte(V2.etatDuel(j, 1002, T), 0.2)) && V2.texteCompte(V2.etatDuel(j, 1004, T), 0.2) === 'About ' + sR + ' s left to settle (' + R + ' blocks).' && V2.texteCompte(V2.etatDuel(j, 1004, T), null) === R + ' blocks left to settle.',
+    'texte : « Result block in about 1 s. », « About ' + sR + ' s left to settle (' + R + ' blocks). », sans mesure : les blocs seulement');
+  /* R6 : jamais moins d un temps de bloc entre deux lectures (200 ms au moins), 1 s dans la fenetre, 1 s sans mesure */
+  ok(V2.pasSuiviMs('ATTENTE', 0.2) === 200 && V2.pasSuiviMs('ATTENTE', 2) === 2000 && V2.pasSuiviMs('REGLABLE', 0.2) === 1000 && V2.pasSuiviMs('REGLABLE', 2) === 2000 && V2.pasSuiviMs('ATTENTE', null) === 1000,
+    'pas de suivi : un temps de bloc avant le resultat (200 ms a 0,2 s, 2 s a 2 s), au moins 1 s dans la fenetre, 1 s sans mesure');
   ok(V2.appelDuelEtat(7) === selecteur('duels(uint256)') + u(7) && V2.statutDepuisRetour(retourDuel({ creator: A, expiresAt: T, statut: 'Settled', guessA: g(1), joiner: B, targetBlock: 9, guessB: g(2) })) === 'Settled' && V2.statutDepuisRetour('0x') === null,
     'statutDepuisRetour(duels(id)) : Settled lu ; illisible : null');
 
@@ -87,7 +92,7 @@ if (['duelDepuisRecu', 'fusionnerLocaux', 'compteARebours', 'texteCompte', 'pasS
     const premier = vus.find((x) => x.etat === 'REGLABLE'), tResultat = 0.4;
     ok(premier && premier.t - tResultat <= 0.4 + 1e-9 && premier.change === true, 'Settle propose (REGLABLE) a t=' + (premier && premier.t.toFixed(2)) + ' s : au plus 2 temps de bloc (0,4 s) apres le bloc resultat (t=0,4 s)');
     const enFen = vus.filter((x) => x.etat === 'REGLABLE');
-    ok(enFen.length >= 40 && enFen.every((x) => Number.isFinite(x.resteS)) && enFen[0].resteS >= 50 && enFen[enFen.length - 1].resteS <= 2, 'dans la fenetre : le compte a rebours en secondes, chaque seconde (' + enFen.length + ' pas, de ' + (enFen[0] && enFen[0].resteS) + ' a ' + (enFen.at(-1) && enFen.at(-1).resteS) + ' s)');
+    ok(enFen.length >= 40 && enFen.every((x) => Number.isFinite(x.resteS)) && enFen[0].resteS >= sR - 1 && enFen[enFen.length - 1].resteS <= 2, 'dans la fenetre : le compte a rebours en secondes, chaque seconde (' + enFen.length + ' pas, de ' + (enFen[0] && enFen[0].resteS) + ' a ' + (enFen.at(-1) && enFen.at(-1).resteS) + ' s)');
     ok(fin.etat === 'DEFAULT_CREATOR' && vus.at(-1).etat === 'DEFAULT_CREATOR' && vus.at(-1).change === true, 'fenetre passee sans settle : le suivi s arrete sur DEFAULT_CREATOR (la carte montre Settle by default)');
     ok(c.lus < 120 && c.statuts <= 30, 'cout borne : ' + c.lus + ' lectures de tete et ' + c.statuts + ' lectures du duel sur ~52 s');
   }
@@ -155,7 +160,9 @@ if (srcSuivi) {
   const l1 = await Kt.ligneDuel(ds[0], B, 1002, T, true);
   ok(!/JOIN/.test(boutons(l1)) && /Result block in about/.test(textes(l1)), 'tete 1002 : pas d Accept, « Result block in about … » (' + textes(l1).slice(0, 80) + ')');
   const l2 = await Kt.ligneDuel(ds[0], B, 1004, T, true);
-  ok(boutons(l2) === 'SETTLE' && /About 51 s left to settle/.test(textes(l2)), 'tete 1004 (bloc resultat passe) : Settle, « About 51 s left to settle »');
+  /* R5 : 255 blocs de fenetre - la marge (aucune tete datee dans ce banc : l inclusion seule, 25 blocs a 0,2 s) */
+  const sR2 = Math.round((255 - V2.blocsMargeSettle({ sParBloc: 0.2 })) * 0.2);
+  ok(boutons(l2) === 'SETTLE' && textes(l2).includes('About ' + sR2 + ' s left to settle'), 'tete 1004 (bloc resultat passe) : Settle, « About ' + sR2 + ' s left to settle »');
   /* Settle : le serveur sert TOUJOURS Open ; le duel local permet le settle, puis le recu le marque regle */
   const logSettle = { address: C, topics: [topic('Settled(uint256,bytes32,uint8,uint8,address,uint256)'), '0x' + u(1), '0x' + aw(B)], data: '0x' + u('0x' + '42'.repeat(32)) + u(2) + u(3) + u(1_800_000), blockNumber: hx(1005), logIndex: '0x0', transactionHash: '0x' + '02'.repeat(32) };
   const env2 = [];
@@ -211,7 +218,7 @@ if (srcSuivi) {
       'suivreDuelApp : Settle confirme puis « Settled » lu sur la chaine : le duel local GARDE le resultat du recu (score 2-3, gagnant), pas la copie finChaine');
   }
   ok(/const tete = Math\.max\(Number\(j\.tete\), Number\(duelsCfg\.teteLocale\) \|\| 0\)/.test(APP), 'peindreDuels : la tete = la plus haute du serveur et de la lecture locale');
-  ok(/if \(e\.etat === 'ATTENTE' \|\| e\.etat === 'REGLABLE'\)/.test(srcLigne) && /data-compte|dataset\.compte/.test(srcLigne), 'ligneDuel : un compte a rebours (data-compte) sur ATTENTE et REGLABLE');
+  ok(/if \(e\.etat === 'ATTENTE' \|\| e\.etat === 'REGLABLE' \|\| e\.etat === 'TROP_TARD'\)/.test(srcLigne) && /data-compte|dataset\.compte/.test(srcLigne), 'ligneDuel : un compte a rebours (data-compte) sur ATTENTE, REGLABLE et TROP_TARD (R5)');
 }
 
 /* ═══════════════ C. le scenario de la revue (poc-latence) : serveur reel en retard + client */

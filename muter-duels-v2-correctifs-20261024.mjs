@@ -21,12 +21,13 @@ const M = [
   [P, 'fusion : le local l emporte toujours', 'if (rang(d) >= rang(l)) { reste.delete(k); return d; }', 'if (false) { reste.delete(k); return d; }'],
   [P, 'recu : SETTLED ignore', "} else if (ev.type === 'SETTLED') {", "} else if (ev.type === 'SETTLED_X') {"],
   [P, 'recu : DEFAULT_WON a un autre gagnant accepte', 'if (!b.joiner || bas(ev.winner) !== bas(b.creator)) return null;', 'if (!b.joiner) return null;'],
-  [P, 'suivi : 1 s avant le bloc resultat (plus un demi-bloc)', 'return Math.min(1000, Math.max(100, Math.round((s * 1000) / 2)));', 'return 1000;'],
+  /* 2026-10-25 (R6 Grok) : le pas avant le bloc resultat = un temps de bloc (plus un demi-bloc) — ancre suivie */
+  [P, 'suivi : 1 s avant le bloc resultat (plus un temps de bloc)', 'return blocMs === null ? 1000 : Math.max(PAS_MIN_MS, blocMs);', 'return 1000;'],
   [P, 'suivi : le duel jamais relu sur la chaine', "if (s && s !== 'Open' && s !== 'Joined' && s !== 'None') d = { ...d, finChaine: s };", ''],
-  [P, 'suivi : s arrete au bloc resultat', "if (!['ATTENTE', 'REGLABLE', 'NON_LU'].includes(e.etat)", "if (!['ATTENTE', 'NON_LU'].includes(e.etat)"],
+  [P, 'suivi : s arrete au bloc resultat', "if (!['ATTENTE', 'REGLABLE', 'NON_LU', TROP_TARD].includes(e.etat)", "if (!['ATTENTE', 'NON_LU', TROP_TARD].includes(e.etat)"],
   [P, 'etat : finChaine ignore', 'if (d && d.finChaine) return { etat: FINI_CHAINE, statut: d.finChaine };', ''],
   [P, 'compte a rebours : la fenetre entiere, pas ce qui reste', "if (e.etat === 'REGLABLE') return secondesPour(e.blocsRestants, sParBloc);", "if (e.etat === 'REGLABLE') return secondesPour(V1.FENETRE, sParBloc);"],
-  [P, 'suivi : une tete illisible arrete le suivi', "if (!['ATTENTE', 'REGLABLE', 'NON_LU'].includes(e.etat)", "if (!['ATTENTE', 'REGLABLE'].includes(e.etat)"],
+  [P, 'suivi : une tete illisible arrete le suivi', "if (!['ATTENTE', 'REGLABLE', 'NON_LU', TROP_TARD].includes(e.etat)", "if (!['ATTENTE', 'REGLABLE', TROP_TARD].includes(e.etat)"],
   /* n°1 — la carte */
   [AP, 'duelsDe : la liste servie seule (recus ignores)', "if (!Duels.fusionnerLocaux || !duelsCfg.locaux || !duelsCfg.locaux.size || !j || !j.ok) return lus(cle);", 'return lus(cle);'],
   [AP, 'actionDuel : le recu n est pas garde', '  noterRecuDuel(evs);\n  if (action === \'JOIN\') {', "  if (action === 'JOIN') {"],
@@ -37,7 +38,7 @@ const M = [
   [AP, 'teteFraiche : le cache de 4 s', "const h = await rpcReseau('eth_blockNumber', []), nb", "const h = await rpc('eth_blockNumber', []), nb"],
   [AP, 'carte : pas de compte a rebours', "if (tc) { const pc = document.createElement('p');", "if (false) { const pc = document.createElement('p');"],
   [AP, 'suivi : pas de repeint au changement d etat', 'if (x.change) void peindreDuels(); else majCompteDuel(k, x.texte);', 'majCompteDuel(k, x.texte);'],
-  [AP, 'suivi : la tete locale n est pas tenue', 'if (Number.isSafeInteger(x.tete)) duelsCfg.teteLocale = Math.max(Number(duelsCfg.teteLocale) || 0, x.tete);', ''],
+  [AP, 'suivi : la tete locale n est pas tenue', 'if (Number.isSafeInteger(x.tete) && x.tete > (Number(duelsCfg.teteLocale) || 0)) { duelsCfg.teteLocale = x.tete; duelsCfg.teteLocaleT = Date.now(); }', ''],
   /* n°2 — le temps de bloc */
   [TB, 'prudente : toujours la longue', 'return c < l * (1 - ECART_PRUDENT) ? c : l;', 'return l;'],
   [TB, 'prudente : toujours la courte', 'return c < l * (1 - ECART_PRUDENT) ? c : l;', 'return c;'],
@@ -45,7 +46,7 @@ const M = [
   [TC, 'courte : TTL ignore', 'if (!force && s.lu !== null && horloge() - s.lu < ttlMs) return s.sParBloc;', ''],
   [TC, 'courte : rafale apres un echec', '        s.lu = horloge();\n        return s.sParBloc;', '        return s.sParBloc;'],
   [SW, 'route : la mesure longue (avant le correctif)', 'sParBloc: sParBlocServi(), blocksDe: blocsDuCreateur', 'sParBloc: tempsDeBlocSrv.sParBloc, blocksDe: blocsDuCreateur'],
-  [SW, 'route : la mesure courte jamais relue', '      void mesureCourteSrv.lire();\n      rendreD(reponseDuelsV2(', '      rendreD(reponseDuelsV2('],
+  [SW, 'route : la mesure courte jamais relue', '      void mesureCourteSrv.lire();\n      /* R2 (test live Grok game39)', '      /* R2 (test live Grok game39)'],
   [SW, '/api/tirage : le json d avant', 'tempsDeBloc: tempsDeBlocServiJson(),', 'tempsDeBloc: tempsDeBlocJson(),'],
   /* n°3 — une seule creation */
   [E, 'surBase : le changement cru sur parole', 'try { return (await chaine()) === bas(chaineHex); } catch (_) { return false; }', 'return true;'],

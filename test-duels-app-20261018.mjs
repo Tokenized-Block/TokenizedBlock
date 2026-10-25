@@ -20,12 +20,12 @@ const checks = {
   regleSansContrat: (t) => /<b>06 · DUELS<\/b><p>[^<]*Winner|<b>06 · DUELS<\/b><p>[\s\S]{0,700}90% of the pot, 7% goes to the community reward pool, 3% to TokenizedBlock[\s\S]{0,200}<span id="regleDuelsEtat">Opens with its contract\.<\/span>/.test(t),
   aucunBoutonMort: (t) => { const c = entre(t, 'id="duelsCarte"', '<!-- EARN'); return c.length > 500 && !/<button[^>]*\bdisabled\b/.test(c); },
   horsDraws: (t) => { const c0 = t.indexOf('id="tirCarte"'), c1 = t.indexOf('id="missionsCarte"'), d = t.indexOf('id="duelsCarte"'); return d > c1 && c1 > c0 && d < t.indexOf('id="regleCarte"'); },
-  pasDeBalayage: (t) => { const b = entre(t, '/* ══ LES DUELS (Phil 2026-10-18', '/* ══ LET THE BRAIN PLAY'); return b.length > 8000 && /fetch\('\/api\/duels'/.test(b) && !/eth_getLogs/.test(b); },
+  pasDeBalayage: (t) => { const b = entre(t, '/* ══ LES DUELS (Phil 2026-10-18', '/* ══ LET THE BRAIN PLAY'); return b.length > 8000 && /fetch\((frais \? '\/api\/duels\?frais=1' : )?'\/api\/duels'/.test(b) && !/eth_getLogs/.test(b); },
   envoiUnique: (t) => { const b = entre(t, '/* ══ LES DUELS (Phil 2026-10-18', '/* ══ LET THE BRAIN PLAY').replace(/\/\*[\s\S]*?\*\//g, '');
     /* trois envois : une action de duel, un Challenge, un Claim — tous par envoyerAppels (le chemin des rolls payes) */
     return (b.match(/envoyerAppels\(/g) || []).length === 3 &&!/envoyerDepuisWallet|envoyerLotAtomique|eth_sendTransaction|wallet_sendCalls|bcSigner\(/.test(b); },
   relitAvantEnvoi: (t) => { const a = entre(t, 'async function actionDuel(', 'async function defierDuel(');
-    const i1 = a.indexOf('await lireDuelsServis(true)'), i2 = a.indexOf("rpc('eth_blockNumber'"), i3 = a.indexOf('Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action)'), i4 = a.indexOf('envoyerAppels(plan.appels, c)');
+    const i1 = a.indexOf('await lireDuelsServis(true)'), i2 = a.indexOf("rpc('eth_blockNumber'"), i3 = a.indexOf('Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j), margeD).includes(action)'), i4 = a.indexOf('envoyerAppels(plan.appels, c)');
     return i1 > 0 && i2 > i1 && i3 > i2 && i4 > i3; },
   defiVerifie: (t) => { const a = entre(t, 'async function defierDuel(', "$('#duelsListe').addEventListener");
     const iA = a.indexOf('await admisDuel(contrat, token)'), iS = a.indexOf('bcSolde(token, c)'), iE = a.indexOf('envoyerAppels(plan.appels, c)');
@@ -58,9 +58,11 @@ const mutants = [
   ['carteCachee', '<div class="carte" id="duelsCarte" hidden>', '<div class="carte" id="duelsCarte">'],
   ['regleSansContrat', '<span id="regleDuelsEtat">Opens with its contract.</span>', '<span id="regleDuelsEtat"></span>'],
   ['aucunBoutonMort', '<button type="button" class="bouton" id="duelDefier">', '<button type="button" class="bouton" id="duelDefier" disabled>'],
-  ['pasDeBalayage', "try { const j = await fetch('/api/duels'", "try { await rpc('eth_getLogs', []); const j = await fetch('/api/duels'"],
+  /* 2026-10-25 (R2 Grok) : /api/duels?frais=1 apres un recu — ancre suivie */
+  ['pasDeBalayage', "try { const j = await fetch(frais ? '/api/duels?frais=1' : '/api/duels'", "try { await rpc('eth_getLogs', []); const j = await fetch(frais ? '/api/duels?frais=1' : '/api/duels'"],
   ['envoiUnique', 'const r = await envoyerAppels(plan.appels, c);\n  if (!r || r.etat !== \'CONFIRME\' || !r.hash) { dit(phraseNonConfirme(r, \'Not sent\'));', 'const r = await envoyerDepuisWallet(plan.appels, c);\n  if (!r || r.etat !== \'CONFIRME\' || !r.hash) { dit(phraseNonConfirme(r, \'Not sent\'));'],
-  ['relitAvantEnvoi', 'if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action))', 'if (false)'],
+  /* 2026-10-25 (R5 Grok) : la marge du Settle passee — ancre suivie */
+  ['relitAvantEnvoi', 'if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j), margeD).includes(action))', 'if (false)'],
   ['defiVerifie', 'if (solde < mise)', 'if (false)'],
   ['marqueSansTexte', 'm.innerHTML = DUEL_EPEES;', "m.innerHTML = DUEL_EPEES; m.textContent = '#' + d.id;"],
   ['clicVersLaCarte', 'e.preventDefault(); e.stopPropagation();\n  ouvrirDuel(m.dataset.duel);', 'ouvrirDuel(m.dataset.duel);'],

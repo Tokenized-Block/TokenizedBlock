@@ -153,7 +153,7 @@ import('./duels-deploiement.js').then((m) => { DUELS_DEPLOIEMENT = (m && (m.DUEL
 /* 2026-10-24 (Phil) : BLOCKDUELS V2 — un duel rejoint non regle dans sa fenetre est gagne par defaut par le createur (plus d option gratuite,
  *   plus de regleur necessaire). Fiche duels-v2-deploiement.js (import DYNAMIQUE, comme v1) ; tant qu elle n a pas adresse ET bloc, /api/duels
  *   sert v1 exactement comme avant (creer / rejoindre fermes, la phrase dit pourquoi). Lecture par l ETAT : duels-v2-serveur.js. */
-import { creerLecteurDuelsV2, reponseDuelsV2, contratDeFicheV2 } from './duels-v2-serveur.js';
+import { creerLecteurDuelsV2, reponseDuelsV2, contratDeFicheV2, lireAvantReponse, demandeFraiche } from './duels-v2-serveur.js';
 let DUELS_V2_DEPLOIEMENT = null;
 import('./duels-v2-deploiement.js').then((m) => { DUELS_V2_DEPLOIEMENT = (m && (m.DUELS_V2_DEPLOIEMENT || m.default)) || null; })
   .catch((e) => { if (!/Cannot find module|ERR_MODULE_NOT_FOUND/.test(String((e && e.code) || '') + String((e && e.message) || ''))) console.log('[duels v2] fiche illisible :', String((e && e.message) || e).slice(0, 160)); });
@@ -4750,12 +4750,35 @@ function duelConnuKeeper(c, id) {
   return e ? { final: !!e.final, guessA: e.duel.guessA, guessB: e.duel.guessB, stake: e.duel.stake } : null;
 }
 setInterval(() => { if (contratDuels()) void lireDuelsSrv(); }, 30000).unref?.();
+/* R2 (test live Grok game39) : le lecteur v2 ne lisait QUE mainnet.base.org (RPC_LIST par defaut) — des 429 faisaient rater des tours entiers.
+ *   Il ne fait que eth_blockNumber, eth_call (latest) et eth_getBlockByNumber (en-tete d un bloc recent) : il prend une liste PLUS LARGE,
+ *   publicnode D ABORD (mesure 2026-10-25 : les trois servis sur ce contrat), puis RPC_LIST, puis drpc, et passe au noeud suivant sur un refus.
+ *   Un ORDRE fixe, pas une rotation : tete et duels lus sur le meme noeud tant qu il repond. Mode essai : le fork seul ; TB_REPLIS=0 : RPC_LIST. */
+const RPC_DUELS_V2 = ESSAI_SRV.actif ? [ESSAI_SRV.rpc] : [...new Set([...(REPLIS_PUBLICS_COUPES ? [] : ['https://base-rpc.publicnode.com']), ...RPC_LIST, ...(REPLIS_PUBLICS_COUPES ? [] : ['https://base.drpc.org'])])];
+async function rpcDuelsV2(methode, params) {
+  let dernier = new Error('no endpoint tried');
+  for (const url of RPC_DUELS_V2) {
+    let r = null, compte = false; /* chaque requete envoyee, comptee une fois par hote et par issue (compterEnvoi) */
+    try {
+      r = await fetch(url, { method: 'POST', signal: AbortSignal.timeout(8000), headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }) });
+      const j = await r.json();
+      compte = true; compterEnvoi(url, classeEnvoi(r.status, j));
+      if (j && !j.error && j.result !== undefined && !(methode === 'eth_call' && j.result === '0x')) return j.result;
+      dernier = new Error(String((j && j.error && j.error.message) || (j && j.result === '0x' ? 'empty answer to a read' : 'rpc error')).slice(0, 100));
+    } catch (e) {
+      if (!compte) compterEnvoi(url, classeEnvoi(r ? r.status : 0, null, r === null || /abort|timeout/i.test(String(e && e.name))));
+      dernier = e;
+    }
+  }
+  throw dernier;
+}
 /* 2026-10-24 : le lecteur v2 (cree au premier contrat v2 lu dans la fiche ; un autre contrat = un lecteur neuf, jamais un cache melange) */
 let lecteurDuelsV2 = null;
 function duelsV2() {
   const c = contratDeFicheV2(DUELS_V2_DEPLOIEMENT);
   if (!c) return null;
-  if (!lecteurDuelsV2 || lecteurDuelsV2.etat().contrat !== c) lecteurDuelsV2 = creerLecteurDuelsV2({ rpc: rpcServeur, contrat: c });
+  if (!lecteurDuelsV2 || lecteurDuelsV2.etat().contrat !== c) lecteurDuelsV2 = creerLecteurDuelsV2({ rpc: rpcDuelsV2, contrat: c });
   return lecteurDuelsV2;
 }
 setInterval(() => { const l = duelsV2(); if (l) void l.lire(); }, 30000).unref?.();
@@ -7386,12 +7409,15 @@ function traiterRequete(req, res) {
     /* 2026-10-24 : BlockDuelsV2 servi (fiche avec adresse ET bloc) -> /api/duels lit v2 (version: 2) ; sinon v1, inchange */
     const lv2 = duelsV2();
     if (lv2) {
-      void lv2.lire();
       void sParBlocSrv();
       const blocsDuCreateur = (cr) => { const l = []; for (const [jeton, createur] of createurParBlock) if (createur === cr && l.length < 5) l.push(String(jeton).toLowerCase()); return l; };
       /* revue 2026-10-24 n°2 : la fenetre dite avant un join suit un changement de temps de bloc (mesure courte, sParBlocServi) */
       void mesureCourteSrv.lire();
-      rendreD(reponseDuelsV2({ lecteur: lv2, fiche: DUELS_V2_DEPLOIEMENT, maintenant: Math.floor(Date.now() / 1000), sParBloc: sParBlocServi(), blocksDe: blocsDuCreateur }));
+      /* R2 (test live Grok game39) : apres un recu (?frais=1), le tour est force et ATTENDU (3 s au plus) avant de repondre ; sinon, comme avant */
+      void (async () => {
+        try { await lireAvantReponse(lv2, { frais: demandeFraiche(req.url) }); } catch (_) { /* la reponse dit l etat lu, quel qu il soit */ }
+        rendreD(reponseDuelsV2({ lecteur: lv2, fiche: DUELS_V2_DEPLOIEMENT, maintenant: Math.floor(Date.now() / 1000), sParBloc: sParBlocServi(), blocksDe: blocsDuCreateur }));
+      })();
       return;
     }
     const regles = { miseMin: MISE_MIN_DUEL.toString(), expirationMinS: EXP_MIN_DUEL, expirationMaxS: EXP_MAX_DUEL, partageBps: { gagnant: 9000, pool: 700, dev: 300 } };

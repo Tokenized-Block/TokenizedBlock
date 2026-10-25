@@ -6384,13 +6384,15 @@ const DUEL_EPEES = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 2.
 const duelContrat = (j) => (j && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null);
 /* 2026-10-24 : le module du contrat SERVI — version 2 (BlockDuelsV2) ou v1 ; une reponse illisible garde v1 (creer / rejoindre fermes) */
 const moduleDuels = (j) => (j && j.version === DuelsV2.VERSION ? DuelsV2 : DuelsV1);
-/** /api/duels, garde 10 s (2 min tant que le contrat n est pas servi) ; force = relire */
-async function lireDuelsServis(force = false) {
+/** /api/duels, garde 10 s (2 min tant que le contrat n est pas servi) ; force = relire ; frais = un recu vient d etre lu (create, join, cancel…) :
+ *  R2 (test live Grok game39) — le serveur relit la chaine AVANT de repondre (/api/duels?frais=1, attente bornee cote serveur) */
+async function lireDuelsServis(force = false, frais = false) {
   const ttl = duelsCfg.j && !duelContrat(duelsCfg.j) ? 120000 : 10000;
   if (!force && duelsCfg.j && Date.now() - duelsCfg.lu < ttl) return duelsCfg.j;
-  if (duelsCfg.enVol) return duelsCfg.enVol;
+  if (duelsCfg.enVol && !frais) return duelsCfg.enVol;
+  if (duelsCfg.enVol) { try { await duelsCfg.enVol; } catch (_) { /* relu ci-dessous */ } }
   duelsCfg.enVol = (async () => {
-    try { const j = await fetch('/api/duels', { cache: 'no-store', signal: AbortSignal.timeout(12000) }).then((r) => r.json()); Duels = moduleDuels(j);
+    try { const j = await fetch(frais ? '/api/duels?frais=1' : '/api/duels', { cache: 'no-store', signal: AbortSignal.timeout(12000) }).then((r) => r.json()); Duels = moduleDuels(j);
       /* v2 sert aussi le temps de bloc MESURE par le serveur (la fenetre se dit en secondes avant un join) ; jamais une valeur supposee */
       { const s = j && j.tempsDeBloc ? Number(j.tempsDeBloc.sParBloc) : NaN; if (Number.isFinite(s) && s > 0) sParBlocApp = s; }
       /* les recus gardes valent pour LEUR contrat : un autre contrat servi les oublie */
@@ -6398,7 +6400,8 @@ async function lireDuelsServis(force = false) {
       duelsCfg.j = j; duelsCfg.lu = Date.now(); return j; }
     catch (_) { return duelsCfg.j; }
   })();
-  try { return await duelsCfg.enVol; } finally { duelsCfg.enVol = null; }
+  const p = duelsCfg.enVol;
+  try { return await p; } finally { if (duelsCfg.enVol === p) duelsCfg.enVol = null; }
 }
 const duelsDe = (j, cle = 'duels') => { const lus = (k) => (j && j.ok && Array.isArray(j[k]) ? j[k].map((x) => Duels.duelDepuisJson(x)).filter(Boolean) : []); if (!Duels.fusionnerLocaux || !duelsCfg.locaux || !duelsCfg.locaux.size || !j || !j.ok) return lus(cle); const f = Duels.fusionnerLocaux([...lus('duels'), ...lus('recents')], duelsCfg.locaux); duelsCfg.locaux = f.locaux; return f.duels.filter((d) => Duels.estFini(d) === (cle === 'recents')); };
 /* ══ LE SUIVI D UN DUEL REJOINT (revue BlockDuelsV2 2026-10-24, MOYEN n°1) — /api/duels sert son cache (relu au plus toutes les 15 s) et la carte
@@ -6411,7 +6414,8 @@ async function teteFraiche() {
   try {
     const h = await rpcReseau('eth_blockNumber', []), nb = parseInt(h, 16);
     if (!Number.isSafeInteger(nb) || nb <= 0) return null;
-    rpcTete = { n: Math.max(nb, rpcTete.n), t: Date.now(), v: h };
+    /* R5 : l heure n est rafraichie qu avec une tete au moins aussi haute (un noeud en retard ne rajeunit pas une tete plus ancienne) */
+    if (nb >= rpcTete.n) rpcTete = { n: nb, t: Date.now(), v: h };
     return nb;
   } catch (_) { return null; }
 }
@@ -6422,9 +6426,23 @@ function noterRecuDuel(evs) {
   const servis = [...duelsDe(duelsCfg.j), ...duelsDe(duelsCfg.j, 'recents')];
   for (const id of new Set(evs.map((x) => String(x.id)))) {
     const base = duelsCfg.locaux.get(id) || servis.find((x) => x.id === id);
-    const nd = base ? Duels.duelDepuisRecu(base, evs) : null;
+    /* R1 (test live Grok game39) : un duel que la liste servie ne connait pas encore (il vient d etre CREE) se construit de son evenement
+     *   CREATED — le createur le voit tout de suite, avec Cancel ; le serveur le reprend des qu il l a lu (fusionnerLocaux) */
+    const nd = Duels.duelDepuisRecu(base || null, evs.filter((x) => String(x.id) === id));
     if (nd) duelsCfg.locaux.set(id, nd);
   }
+}
+/* R5 (test live Grok game39) : la marge d un Settle en blocs (Duels.blocsMargeSettle) : l avance que la VRAIE tete peut avoir sur `tete`
+ *   (chaque tete connue — servie, du suivi, du cache de rpc — plus son age au temps de bloc mesure ; la plus grande) + l inclusion attendue.
+ *   undefined en v1 (pas de marge : le module v1 n en prend pas) */
+function margeDuelApp(j, tete) {
+  if (!Duels.blocsMargeSettle) return undefined;
+  const now = Date.now(), sp = Number(sParBlocApp) > 0 ? Number(sParBlocApp) : Duels.S_PAR_BLOC_PRUDENT, sources = [];
+  if (j && Number(j.tete) > 0 && Number.isFinite(Date.parse(j.lu))) sources.push({ n: Number(j.tete), t: Date.parse(j.lu) });
+  if (typeof rpcTete !== 'undefined' && rpcTete && rpcTete.n > 0 && rpcTete.t > 0) sources.push({ n: rpcTete.n, t: rpcTete.t });
+  if (Number(duelsCfg.teteLocale) > 0 && Number(duelsCfg.teteLocaleT) > 0) sources.push({ n: Number(duelsCfg.teteLocale), t: Number(duelsCfg.teteLocaleT) });
+  const avance = Math.max(0, ...sources.map((x) => (x.n - Number(tete)) + Math.max(0, now - x.t) / 1000 / sp));
+  return Duels.blocsMargeSettle({ sParBloc: sParBlocApp, ageTeteMs: avance * sp * 1000 });
 }
 /** le compte a rebours d un duel dans la carte (sans repeindre) */
 function majCompteDuel(id, texte) {
@@ -6439,10 +6457,12 @@ async function suivreDuelApp(id) {
   duelsCfg.suivis.add(k);
   try {
     return await Duels.suivreDuel({ duel: d, sParBloc: () => sParBlocApp, horloge: () => Date.now(), attendre: (ms) => new Promise((o) => setTimeout(o, ms)), maxMs: 15 * 60000,
+      /* R5 : la tete du suivi vient d etre lue (age ~0) : la marge est l inclusion attendue au temps mesure */
+      margeBlocs: () => (Duels.blocsMargeSettle ? Duels.blocsMargeSettle({ sParBloc: sParBlocApp, ageTeteMs: 0 }) : undefined),
       lireTete: teteFraiche,
       lireStatut: async (i) => { try { return Duels.statutDepuisRetour(await rpc('eth_call', [{ to: contrat, data: Duels.appelDuelEtat(i) }, 'latest'])); } catch (_) { return null; } },
       surEtat: (x) => {
-        if (Number.isSafeInteger(x.tete)) duelsCfg.teteLocale = Math.max(Number(duelsCfg.teteLocale) || 0, x.tete);
+        if (Number.isSafeInteger(x.tete) && x.tete > (Number(duelsCfg.teteLocale) || 0)) { duelsCfg.teteLocale = x.tete; duelsCfg.teteLocaleT = Date.now(); }
         /* revue 2026-10-25 (nit) : un duel local qui porte deja le resultat d un recu (settled, defaulted…) le garde ; la copie suivie
          *   (finChaine, sans resultat) ne remplace qu un duel local qui n en a pas */
         { const loc = duelsCfg.locaux.get(k); if (x.duel && x.duel.finChaine && !loc?.finChaine && !loc?.settled && !loc?.defaulted && !loc?.cancelled && !loc?.refunded) duelsCfg.locaux.set(k, x.duel); }
@@ -6502,13 +6522,13 @@ const faceDuelHtml = (g, lettre) => { try { const a = Duels.apparenceDepuisGuess
 const faceBlocHtml = (hash) => { try { const f = faceRevelee(hash); return f ? logoSvg(paramsLogoDepuisApparence(f, '★')) : ''; } catch (_) { return ''; } };
 const BOUTON_DUEL = { JOIN: 'Accept · a new random face', CANCEL: 'Cancel · full refund', SETTLE: 'Settle', REFUND: 'Refund in full', SETTLE_DEFAULT: 'Settle · creator wins by default' };
 /** une ligne de duel : deux faces (et celle du bloc une fois regle), la mise, l etat, l action possible MAINTENANT (jamais un bouton mort) */
-async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
+async function ligneDuel(d, moi, tete, maintenant, ouverts = false, margeBlocs = undefined) {
   const li = document.createElement('div');
   li.className = 'duelLigne'; li.dataset.duel = d.id;
   const implique = moi && (d.creator === moi || d.joiner === moi);
   li.dataset.moi = implique ? '1' : '0';
   if (duelsCfg.focus === d.id) li.dataset.focus = '1';
-  const e = Duels.etatDuel(d, tete, maintenant), p = Duels.partage(d.stake);
+  const e = Duels.etatDuel(d, tete, maintenant, margeBlocs), p = Duels.partage(d.stake);
   const mise = await montantDuel(d.stake, d.token), auG = await montantDuel(p.gagnant, d.token);
   const faces = document.createElement('div'); faces.className = 'duelFaces';
   const fa = document.createElement('div'); fa.className = 'jourFace'; fa.setAttribute('role', 'img'); fa.setAttribute('aria-label', 'Face of ' + courtAdr(d.creator)); fa.innerHTML = faceDuelHtml(d.guessA, 'A');
@@ -6524,12 +6544,15 @@ async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
   t1.textContent = 'Duel #' + d.id + ' · ' + mise + ' each · ' + (d.creator === moi ? 'you' : courtAdr(d.creator)) + (d.joiner ? ' vs ' + (d.joiner === moi ? 'you' : courtAdr(d.joiner)) : '');
   const t2 = document.createElement('p'); t2.className = 'note';
   const min = (s) => (s >= 3600 ? Math.floor(s / 3600) + ' h ' : '') + Math.max(0, Math.floor((s % 3600) / 60)) + ' min';
-  if (e.etat === 'OUVERT') t2.textContent = (d.creator === moi ? 'Your challenge — waiting for an opponent, ' + min(e.resteS) + ' left. Cancel returns your stake in full.' : 'Open — ' + min(e.resteS) + ' left. Accept with the same stake: the winner gets ' + auG + ' (90%).'
-    /* v2 : la ligne de la fenetre, AVANT qu un join soit signe (au temps de bloc mesure ; non mesure : pas de Accept, la phrase le dit) */
-    + (Duels.phraseAvantJoin && d.creator !== moi ? ' ' + (Duels.phraseAvantJoin(sParBlocApp) || Duels.PHRASE_SANS_MESURE) : ''));
+  if (e.etat === 'OUVERT') t2.textContent = (d.creator === moi ? 'Your challenge — waiting for an opponent, ' + min(e.resteS) + ' left. Cancel returns your stake in full.' : 'Open — ' + min(e.resteS) + ' left. Accept with the same stake: the winner gets ' + auG + ' (90%).')
+    /* v2 : la ligne de la fenetre, AVANT qu un join soit signe (au temps de bloc mesure ; non mesure : pas de Accept, la phrase le dit) — a TOUS */
+    + (Duels.phraseAvantJoin ? ' ' + (Duels.phraseAvantJoin(sParBlocApp) || Duels.PHRASE_SANS_MESURE) : '');
+  /* R3 (test live Grok game39) : la ligne de la fenetre est dite au CREATEUR aussi — c est lui qui gagne par defaut, il doit savoir quand */
   else if (e.etat === 'EXPIRE') t2.textContent = 'Not accepted in time — Refund returns the stake to its creator in full (anyone may send it).';
   else if (e.etat === 'ATTENTE') t2.textContent = 'Accepted — block ' + Number(d.targetBlock).toLocaleString('en-US') + ' decides, ' + e.blocsAvant + ' block(s) to go.';
   else if (e.etat === 'REGLABLE') t2.textContent = 'Block ' + Number(d.targetBlock).toLocaleString('en-US') + ' is in — settle within ' + texteBlocs(e.blocsRestants, sParBlocApp) + ' (anyone may; the contract pays the winner). ' + (Duels.APRES_FENETRE || 'After that, both are refunded in full.');
+  /* R5 : dans la fenetre du contrat, mais un settle envoye maintenant serait mine apres elle (TooLate) — aucun bouton, dit clairement */
+  else if (e.etat === 'TROP_TARD') t2.textContent = 'Block ' + Number(d.targetBlock).toLocaleString('en-US') + ' is in, but it was not settled in time.';
   else if (e.etat === 'REMBOURSABLE') t2.textContent = 'Not settled within 256 blocks — Refund returns both stakes in full, no fee.';
   /* v2 : rejoint, fenetre passee -> le createur gagne par defaut (n importe qui l envoie) ; puis : gagne par defaut (fini) */
   else if (e.etat === 'DEFAULT_CREATOR') t2.textContent = 'Not settled within ' + texteBlocs(FENETRE_ROLLS, sParBlocApp) + ' of block ' + Number(d.targetBlock).toLocaleString('en-US') + ' — the creator wins by default: ' + auG + ' (90%). Anyone may send it.';
@@ -6547,16 +6570,19 @@ async function ligneDuel(d, moi, tete, maintenant, ouverts = false) {
   else t2.textContent = 'Its state could not be read just now.';
   li.append(faces, t1, t2);
   /* revue 2026-10-24 n°1 : le compte a rebours en SECONDES (temps de bloc mesure) ; le suivi d un duel rejoint le tient a jour sans repeindre */
-  if (e.etat === 'ATTENTE' || e.etat === 'REGLABLE') {
+  if (e.etat === 'ATTENTE' || e.etat === 'REGLABLE' || e.etat === 'TROP_TARD') {
     const tc = Duels.texteCompte ? Duels.texteCompte(e, sParBlocApp) : null;
     if (tc) { const pc = document.createElement('p'); pc.className = 'note'; pc.dataset.compte = d.id; pc.textContent = tc; li.append(pc); }
   }
   /* v2 : pas de Accept tant que la fenetre ne se dit pas au temps mesure (jamais un bouton qui refuserait apres l appui) */
   ouverts = ouverts && !(Duels.phraseAvantJoin && Duels.phraseAvantJoin(sParBlocApp) === null);
-  const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts);
-  if (acts.length) {
+  const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts, margeBlocs);
+  /* R4 (test live Grok game39) : un duel OUVERT se partage — « Copy link » copie l adresse ?duel=<id>, qui ouvre la carte sur lui */
+  const lien = e.etat === 'OUVERT';
+  if (acts.length || lien) {
     const z = document.createElement('div'); z.className = 'jourEtapes';
     for (const a of acts) { const b = document.createElement('button'); b.type = 'button'; b.className = 'bouton' + (a === 'CANCEL' ? ' sec' : ''); b.dataset.action = a; b.dataset.duel = d.id; b.textContent = BOUTON_DUEL[a]; z.append(b); }
+    if (lien) { const b = document.createElement('button'); b.type = 'button'; b.className = 'bouton sec'; b.dataset.lien = d.id; b.textContent = 'Copy link'; z.append(b); }
     li.append(z);
   }
   const ne = document.createElement('p'); ne.className = 'note'; ne.dataset.detat = '1'; ne.hidden = true; li.append(ne);
@@ -6595,8 +6621,12 @@ async function peindreDuels() {
   /* revue 2026-10-24 n°1 : la tete servie peut retarder de 15 s ; celle lue par le suivi d un duel (teteFraiche) est prise si plus haute */
   const moi = c ? String(c).toLowerCase() : null, maintenant = Math.floor(Date.now() / 1000);
   const tete = Math.max(Number(j.tete), Number(duelsCfg.teteLocale) || 0);
+  /* R5 : la marge d un Settle (age de la tete + inclusion, au temps de bloc mesure) */
+  const margeD = margeDuelApp(j, tete);
   const duels = duelsDe(j), recents = duelsDe(j, 'recents');
-  const etat2 = (d) => Duels.etatDuel(d, tete, maintenant).etat;
+  const etat2 = (d) => Duels.etatDuel(d, tete, maintenant, margeD).etat;
+  /* R7 (test live Grok game39) : « Challenge #N is open » sous le formulaire ne survit pas a ce duel (annule, rembourse, pris, fini) */
+  { const f = $('#duelForme'); if (f && f.dataset && f.dataset.duel) { const dd = [...duels, ...recents].find((x) => x.id === f.dataset.duel); if (dd && etat2(dd) !== 'OUVERT') { f.hidden = true; f.textContent = ''; delete f.dataset.duel; } } }
   const ouverts = duels.filter((d) => etat2(d) === 'OUVERT');
   jb('jbDuels', String(ouverts.length)); jb('jbDuelsTxt', 'open challenge' + (ouverts.length === 1 ? '' : 's'));
   const rang = (d) => (moi && (d.creator === moi || d.joiner === moi) ? 0 : etat2(d) === 'OUVERT' ? 1 : 2);
@@ -6604,7 +6634,7 @@ async function peindreDuels() {
   const miensFinis = recents.filter((d) => moi && (d.creator === moi || d.joiner === moi)).slice(0, 3);
   const autresFinis = recents.filter((d) => !miensFinis.includes(d)).slice(0, 3);
   const lignes = [];
-  for (const d of [...vivants, ...miensFinis, ...autresFinis]) lignes.push(await ligneDuel(d, moi, tete, maintenant, ouv));
+  for (const d of [...vivants, ...miensFinis, ...autresFinis]) lignes.push(await ligneDuel(d, moi, tete, maintenant, ouv, margeD));
   liste.textContent = ''; liste.append(...lignes);
   const aRegler = duels.filter((d) => ['REGLABLE', 'REMBOURSABLE', 'EXPIRE', 'DEFAULT_CREATOR'].includes(etat2(d)));
   etat.textContent = (!ouv ? Duels.PHRASE_DUELS_FERMES : ouverts.length ? ouverts.length + ' open challenge' + (ouverts.length === 1 ? '' : 's') + '.' : 'No open challenge right now — open one below.')
@@ -6660,7 +6690,11 @@ async function actionDuel(id, action, li) {
   /* revue 2026-10-24 n°1 : la tete de rpc peut dater de 4 s ; celle du suivi (teteFraiche) est prise si plus haute */
   tete = Math.max(tete, Number(duelsCfg.teteLocale) || 0);
   const maintenant = Math.floor(Date.now() / 1000);
-  if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action)) { dit(action === 'JOIN' && !Duels.duelsOuverts(j) ? Duels.PHRASE_DUELS_FERMES + ' Nothing was asked.' : 'Not possible any more (' + Duels.etatDuel(d, tete, maintenant).etat.toLowerCase() + ') — nothing was asked.'); void peindreDuels(); return; }
+  /* R5 (test live Grok game39) : la marge du Settle, de la tete relue a l instant (son age compte) */
+  const margeD = margeDuelApp(j, tete);
+  if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j), margeD).includes(action)) {
+    const ed = Duels.etatDuel(d, tete, maintenant, margeD);
+    dit(action === 'JOIN' && !Duels.duelsOuverts(j) ? Duels.PHRASE_DUELS_FERMES + ' Nothing was asked.' : ed.etat === 'TROP_TARD' ? Duels.phraseTropTard(ed.blocsAvantDefaut) + ' Nothing was asked.' : 'Not possible any more (' + ed.etat.toLowerCase() + ') — nothing was asked.'); void peindreDuels(); return; }
   let plan = null, face = null;
   if (action === 'JOIN') {
     try { face = tirerFaceDeRoll(); } catch (_) { face = null; }
@@ -6680,7 +6714,7 @@ async function actionDuel(id, action, li) {
     const fb = li && li.querySelectorAll('.duelFaces .jourFace')[1];
     if (fb) { try { fb.innerHTML = logoSvg(paramsLogoDepuisApparence(face.apparence, 'B')); } catch (_) {} }
   } else if (action === 'CANCEL') plan = Duels.planCancel({ contrat, id: d.id });
-  else if (action === 'SETTLE') plan = Duels.planSettle({ contrat, id: d.id, targetBlock: d.targetBlock, blocActuel: tete });
+  else if (action === 'SETTLE') plan = Duels.planSettle({ contrat, id: d.id, targetBlock: d.targetBlock, blocActuel: tete, margeBlocs: margeD });
   else if (action === 'REFUND') plan = Duels.planRefund({ contrat, id: d.id, duel: d, maintenant });
   /* v2 : la fenetre est passee -> le createur gagne par defaut (settleDefault, n importe qui) */
   else if (action === 'SETTLE_DEFAULT' && Duels.planSettleDefault) plan = Duels.planSettleDefault({ contrat, id: d.id, targetBlock: d.targetBlock, blocActuel: tete });
@@ -6718,12 +6752,15 @@ async function actionDuel(id, action, li) {
     const st = evs.find((x) => x.type === 'SETTLED');
     dit(st ? 'Settled: ' + st.scoreA + '/5 vs ' + st.scoreB + '/5 — ' + (st.scoreA === st.scoreB ? 'a tie, both refunded.' : (st.winner === moi ? 'you won ' : courtAdr(st.winner) + ' won ') + (await montantDuel(st.payout, d.token)) + '.') : 'Settled (' + r.hash.slice(0, 10) + '…) but not read back yet.');
   } else dit(evs.some((x) => x.type === 'CANCELLED' || x.type === 'REFUNDED') ? 'Done — refunded in full.' : 'Sent (' + r.hash.slice(0, 10) + '…) — the card updates once the server reads it.');
-  await lireDuelsServis(true); void peindreDuels(); void peindreDuelsMap();
+  /* R7 (test live Grok game39) : un Cancel / Refund confirme efface « Challenge #N is open » sous le formulaire s il parlait de CE duel */
+  if (action === 'CANCEL' || action === 'REFUND') { const f = $('#duelForme'); if (f && f.dataset && f.dataset.duel === String(d.id)) { f.hidden = true; f.textContent = ''; delete f.dataset.duel; } }
+  /* R2 : un recu vient d etre lu — le serveur relit la chaine avant de repondre */
+  await lireDuelsServis(true, true); void peindreDuels(); void peindreDuelsMap();
 }
 /** Challenge : jeton ADMIS, mise lue au bon nombre de decimales, solde suffisant, face NEUVE ; approve EXACT + create */
 async function defierDuel() {
   const f = $('#duelForme'), b = $('#duelDefier');
-  const dit = (t) => { f.hidden = false; f.textContent = t; };
+  const dit = (t) => { f.hidden = false; f.textContent = t; delete f.dataset.duel; };
   let c = null; try { c = compte; } catch (_) { c = null; }
   if (!c) { dit('Connect a wallet first.'); return; }
   if (b.disabled) return;
@@ -6752,13 +6789,29 @@ async function defierDuel() {
     dit('Challenge: ' + (await montantDuel(mise, token)) + ' with a new random face (colour, orbit, facet, material, ornament: ' + face.guess.join(', ') + '). Whoever accepts stakes the same; the winner gets ' + (await montantDuel(p.gagnant, token)) + '. Not accepted in time: your stake comes back in full. Sign ' + plan.appels.length + ' steps in your wallet…');
     const r = await envoyerAppels(plan.appels, c);
     if (!r || r.etat !== 'CONFIRME' || !r.hash) { dit(phraseNonConfirme(r, 'Not opened')); return; }
-    const lus = await recusLogs(r), cr = Duels.lireEvenementsDuel(lus.logs, contrat).find((x) => x.type === 'CREATED');
+    const lus = await recusLogs(r), evsCree = Duels.lireEvenementsDuel(lus.logs, contrat), cr = evsCree.find((x) => x.type === 'CREATED');
+    /* R1 (test live Grok game39) : le recu du create est GARDE — le nouveau duel est sur la carte tout de suite (avec Cancel et Copy link) */
+    noterRecuDuel(evsCree);
     dit(cr ? 'Challenge #' + cr.id + ' is open — it shows on the map next to your block (if you have one). Cancel returns your stake while nobody has accepted.' : 'Sent (' + r.hash.slice(0, 10) + '…) but not read back yet — the card shows it once the server reads it.');
+    /* R7 : la ligne sait de quel duel elle parle (effacee quand il n est plus ouvert) */
+    if (cr) f.dataset.duel = String(cr.id); else delete f.dataset.duel;
     duelsCfg.focus = cr ? cr.id : null;
-    await lireDuelsServis(true); void peindreDuels(); void peindreDuelsMap();
+    void peindreDuels();
+    /* R2 : le serveur relit la chaine avant de repondre */
+    await lireDuelsServis(true, true); void peindreDuels(); void peindreDuelsMap();
   } finally { b.disabled = false; }
 }
-$('#duelsListe').addEventListener('click', (e) => { const b = e.target.closest('[data-action]'); if (!b || b.disabled) return; b.disabled = true; const li = b.closest('.duelLigne'); void actionDuel(b.dataset.duel, b.dataset.action, li).finally(() => { b.disabled = false; }); });
+/* R4 (test live Grok game39) : le lien d un duel — ?duel=<id> sur cette page ; ouvert, il montre la carte Duels sur ce duel */
+const lienDuel = (id) => location.origin + location.pathname + '?duel=' + encodeURIComponent(String(id));
+async function copierLienDuel(id, li) {
+  const p = li && li.querySelector('[data-detat]'), url = lienDuel(id);
+  let copie = false;
+  try { await navigator.clipboard.writeText(url); copie = true; } catch (_) { copie = false; }
+  if (p) { p.hidden = false; p.textContent = copie ? 'Link copied: ' + url : 'Copy this link: ' + url; }
+}
+$('#duelsListe').addEventListener('click', (e) => {
+  const l = e.target.closest('[data-lien]'); if (l) { void copierLienDuel(l.dataset.lien, l.closest('.duelLigne')); return; }
+  const b = e.target.closest('[data-action]'); if (!b || b.disabled) return; b.disabled = true; const li = b.closest('.duelLigne'); void actionDuel(b.dataset.duel, b.dataset.action, li).finally(() => { b.disabled = false; }); });
 $('#duelDefier').addEventListener('click', () => { void defierDuel(); });
 /* Entree dans le formulaire = le meme geste que le bouton (et jamais un rechargement de page) */
 $('#duelForm').addEventListener('submit', (e) => { e.preventDefault(); void defierDuel(); });
@@ -7175,6 +7228,16 @@ function bjMontrer(p, rolls, walletCarte) {
     if (p.kind === 'DUEL_JOIN' || p.kind === 'DUEL_CREATE') lu = { duelsOuverts: await bjDuelsRelus() };
     const refus = bjRefusAuSigne(id, p, walletCarte, lu);
     if (refus) { bcEtape(m, 'Not sent: ' + refus, 'non'); return; }
+    /* R5 (test live Grok game39) : un Settle de duel REJOINT propose par le brain est re-verifie au Sign (tete relue sur le noeud, marge) — un
+     *   settle qui serait mine apres la fenetre n est pas envoye ; tete illisible : rien n est envoye */
+    if (p.kind === 'DUEL_SETTLE' && Duels.blocsMargeSettle) {
+      const idD = String(p.cle || '').split(':')[1] || '', dd = [...duelsDe(duelsCfg.j), ...duelsDe(duelsCfg.j, 'recents')].find((x) => x.id === idD);
+      if (dd && dd.joiner && Number.isSafeInteger(Number(dd.targetBlock))) {
+        const th = await teteFraiche();
+        const pl = Number.isSafeInteger(th) ? Duels.planSettle({ contrat: duelContrat(duelsCfg.j), id: idD, targetBlock: dd.targetBlock, blocActuel: th, margeBlocs: margeDuelApp(duelsCfg.j, th) }) : null;
+        if (!pl || pl.etat !== 'PRET') { bcEtape(m, 'Not sent: ' + (pl ? pl.pourquoi : 'the chain head could not be read just now.'), 'non'); return; }
+      }
+    }
     bjVol.signe = true;
     if (p.kind === 'POT_SIGN') {
       const s = await bjSignerParts(m, p, walletCarte);
@@ -7232,7 +7295,7 @@ function bjMontrer(p, rolls, walletCarte) {
         : ev.type === 'SETTLED' ? 'Duel #' + ev.id + ': ' + ev.scoreA + '/5 vs ' + ev.scoreB + '/5 — ' + (ev.scoreA === ev.scoreB ? 'a tie, both refunded.' : (ev.winner === walletCarte ? 'you won ' : courtAdr(ev.winner) + ' won ') + usdcTexte(ev.payout) + ' USDC.')
         : ev.type === 'DEFAULT_WON' ? 'Duel #' + ev.id + ': not settled in its window — ' + (ev.winner === walletCarte ? 'you' : courtAdr(ev.winner)) + ' (the creator) won by default.'
         : 'Duel #' + ev.id + ' refunded in full.', ev ? 'oui' : '');
-      void lireDuelsServis(true).then(() => { void peindreDuels(); });
+      void lireDuelsServis(true, true).then(() => { void peindreDuels(); });
       if (p.kind === 'DUEL_JOIN') setTimeout(() => { void bjTour(); }, 12000);
     }
     fini();
@@ -26696,7 +26759,7 @@ async function bcAccepterDuel(m, id) {
     /* revue 2026-10-24 n°1 : le recu du join fait foi pour la carte, et le duel est SUIVI (Settle des que le bloc resultat est passe) */
     if (s.ok && s.hash) void (async () => { const rc = await recuDe(s.hash), cj = duelContrat(duelsCfg.j); const evs = rc && cj ? Duels.lireEvenementsDuel(rc.logs, cj) : [];
       noterRecuDuel(evs); const jn = evs.find((x) => x.type === 'JOINED'); if (jn) void suivreDuelApp(jn.id); })();
-    void lireDuelsServis(true).then(() => { void peindreDuels(); });
+    void lireDuelsServis(true, true).then(() => { void peindreDuels(); });
   }], ['Dismiss', () => bcEtape(m, 'Dismissed — nothing was sent.'), true]]);
 }
 /* ══ LE BRAIN OS (2026-10-18, Phil : « copy how Base Rooms did it and rebuild an OS for our brains ») — quatre LECTURES de brain-os.js, avec le
@@ -30362,6 +30425,12 @@ function bcBasculerTaille(axe) {
     bcOuvrirPop();
     void bcOuvrirSession(s || null);
   }, 600);
+})();
+/* R4 (test live Grok game39) : ?duel=<id> (le lien « Copy link » d un duel ouvert) ouvre la carte Duels sur ce duel ; un id mal forme est ignore */
+(function duelDemarrage() {
+  const id = String(paramsLien.get('duel') || '');
+  if (!/^[1-9][0-9]{0,29}$/.test(id)) return;
+  setTimeout(() => { try { ouvrirDuel(id); } catch (_) { /* la carte se montre a son prochain repeint */ } }, 600);
 })();
 
 /* ── Learn ──────────────────────────────────────────────────────────────────────────────────── */

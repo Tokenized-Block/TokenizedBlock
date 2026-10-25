@@ -98,11 +98,12 @@ ok(pS && pS.kind === 'DUEL_SETTLE', 'duels fermes : son duel reglable reste prop
 console.log('— C. app.html / serveur-web.js (texte, chaque garde mutee doit rougir)');
 const entre = (t, a, b) => { const i = t.indexOf(a), j = t.indexOf(b, i + 1); return i >= 0 && j > i ? t.slice(i, j) : ''; };
 const checksApp = {
-  ligneRecoitOuverts: (t) => /async function ligneDuel\(d, moi, tete, maintenant, ouverts = false\)/.test(t) && /const acts = Duels\.actionsDuel\(d, moi, tete, maintenant, ouverts\);/.test(t),
+  /* 2026-10-25 (R5 Grok) : ligneDuel et actionDuel prennent aussi la marge du Settle (margeBlocs / margeD) — textes suivis */
+  ligneRecoitOuverts: (t) => /async function ligneDuel\(d, moi, tete, maintenant, ouverts = false, margeBlocs = undefined\)/.test(t) && /const acts = Duels\.actionsDuel\(d, moi, tete, maintenant, ouverts, margeBlocs\);/.test(t),
   carteGardee: (t) => { const p = entre(t, 'async function peindreDuels()', 'async function peindreDusDuels(');
     return /const ouv = Duels\.duelsOuverts\(j\);/.test(p) && /if \(fo\) fo\.hidden = !ouv;/.test(p) && /\$\('#duelDefier'\)\.hidden = !c \|\| !ouv;/.test(p)
-      && /lignes\.push\(await ligneDuel\(d, moi, tete, maintenant, ouv\)\)/.test(p) && /etat\.textContent = \(!ouv \? Duels\.PHRASE_DUELS_FERMES/.test(p); },
-  relitAvantEnvoi: (t) => /if \(!Duels\.actionsDuel\(d, moi, tete, maintenant, Duels\.duelsOuverts\(j\)\)\.includes\(action\)\)/.test(entre(t, 'async function actionDuel(', 'async function defierDuel(')),
+      && /lignes\.push\(await ligneDuel\(d, moi, tete, maintenant, ouv, margeD\)\)/.test(p) && /etat\.textContent = \(!ouv \? Duels\.PHRASE_DUELS_FERMES/.test(p); },
+  relitAvantEnvoi: (t) => /if \(!Duels\.actionsDuel\(d, moi, tete, maintenant, Duels\.duelsOuverts\(j\), margeD\)\.includes\(action\)\)/.test(entre(t, 'async function actionDuel(', 'async function defierDuel(')),
   defiRefuse: (t) => { const a = entre(t, 'async function defierDuel(', "$('#duelsListe').addEventListener"); const i = a.indexOf('if (!Duels.duelsOuverts(j)) { dit(Duels.PHRASE_DUELS_FERMES'), k = a.indexOf('Duels.planCreate('); return i > 0 && k > i; },
   brainOuvert: (t) => /list: duelsDe\(jd\), open: Duels\.duelsOuverts\(jd\) \}/.test(t),
   chatListe: (t) => { const a = entre(t, 'async function bcCommandeDuel(', 'async function bcAccepterDuel('); const i = a.indexOf('if (!Duels.duelsOuverts(j)) {'), r = a.indexOf('return;', i), k = a.indexOf("'Open a challenge'"); return i > 0 && r > i && k > r; },
@@ -112,10 +113,10 @@ const checksSrv = {
   routeServie: (t) => { const a = entre(t, "if (chemin === '/api/duels')", '/* ══ BLOCK MISSIONS'); return /const regleur = \{ etat: eReg\.etat, adresse: eReg\.adresse \|\| null, regleDuels: regleurCouvre\(eReg, contrat, Date\.now\(\)\) \};/.test(a) && /rewardPool: adrOk\(k\.rewardPool\), regles, regleur \};/.test(a); },
 };
 const mutants = [
-  ['ligneRecoitOuverts', APP, 'const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts);', 'const acts = Duels.actionsDuel(d, moi, tete, maintenant, true);'],
+  ['ligneRecoitOuverts', APP, 'const acts = Duels.actionsDuel(d, moi, tete, maintenant, ouverts, margeBlocs);', 'const acts = Duels.actionsDuel(d, moi, tete, maintenant, true, margeBlocs);'],
   ['carteGardee', APP, 'if (fo) fo.hidden = !ouv;', 'if (fo) fo.hidden = false;'],
   ['carteGardee', APP, "$('#duelDefier').hidden = !c || !ouv;", "$('#duelDefier').hidden = !c;"],
-  ['relitAvantEnvoi', APP, 'if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j)).includes(action))', 'if (!Duels.actionsDuel(d, moi, tete, maintenant, true).includes(action))'],
+  ['relitAvantEnvoi', APP, 'if (!Duels.actionsDuel(d, moi, tete, maintenant, Duels.duelsOuverts(j), margeD).includes(action))', 'if (!Duels.actionsDuel(d, moi, tete, maintenant, true, margeD).includes(action))'],
   ['defiRefuse', APP, "if (!Duels.duelsOuverts(j)) { dit(Duels.PHRASE_DUELS_FERMES + ' Nothing was asked.'); void peindreDuels(); return; }", ''],
   ['brainOuvert', APP, 'list: duelsDe(jd), open: Duels.duelsOuverts(jd) }', 'list: duelsDe(jd), open: true }'],
   ['chatListe', APP, 'if (!Duels.duelsOuverts(j)) {\n    bcEtape(m, Duels.PHRASE_DUELS_FERMES);', 'if (false) {\n    bcEtape(m, Duels.PHRASE_DUELS_FERMES);'],

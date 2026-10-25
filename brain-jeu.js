@@ -153,7 +153,9 @@ export function prochaineProposition(etat = {}) {
    *   Un reglement deja SIGNE (cle dans `seen`, posee par l app apres confirmation) ne revient pas : la liste servie peut retarder. */
   const D = e.duels && ADR.test(bas(e.duels.contract)) && Array.isArray(e.duels.list) ? e.duels : null;
   const v2 = !!(D && D.version === DuelsV2.VERSION);
-  const etatsDuels = D ? D.list.filter((d) => d && d.id !== undefined).map((d) => ({ d, x: (v2 ? DuelsV2.etatDuel : etatDuel)(d, D.block, t) })) : [];
+  /* R5 (test live Grok game39) : v2 ne propose un settle que s il tombe dans la fenetre (marge au temps de bloc mesure, D.sParBloc) */
+  const margeDuel = DuelsV2.blocsMargeSettle({ sParBloc: D && D.sParBloc });
+  const etatsDuels = D ? D.list.filter((d) => d && d.id !== undefined).map((d) => ({ d, x: v2 ? DuelsV2.etatDuel(d, D.block, t, margeDuel) : etatDuel(d, D.block, t) })) : [];
   if (regles.duels && D && v2) {
     /* v2 : ses duels reglables (le vrai resultat, dans la fenetre) d abord, puis TOUT duel gagne par defaut (paie le createur, 0 USDC pour
      *   l appelant ; propose a tous : un createur hors ligne est paye quand meme), puis ses defis jamais pris et expires (refundExpired) */
@@ -166,7 +168,7 @@ export function prochaineProposition(etat = {}) {
     if (a.length) {
       const { d, x } = a[0];
       if (x.etat === 'REGLABLE') {
-        const plan = DuelsV2.planSettle({ contrat: D.contract, id: d.id, targetBlock: d.targetBlock, blocActuel: D.block });
+        const plan = DuelsV2.planSettle({ contrat: D.contract, id: d.id, targetBlock: d.targetBlock, blocActuel: D.block, margeBlocs: margeDuel });
         if (plan.etat === 'PRET') return proposition('DUEL_SETTLE', plan.appels, 'Reveal duel #' + d.id + ' — ' + x.blocsRestants + ' block(s) left to settle it for the real result. '
           + DuelsV2.APRES_FENETRE + ' Settling costs no USDC; the winner is paid by the contract.', 0n, 'DUEL_SETTLE:' + d.id);
       } else if (x.etat === DuelsV2.DEFAULT_CREATOR) {

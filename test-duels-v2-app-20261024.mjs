@@ -61,8 +61,11 @@ const ouvert = { id: '1', creator: A, token: USDC, stake: 1_000_000n, guessA: g(
 const pris = (t, x = {}) => ({ ...ouvert, id: '2', joiner: B, guessB: g(2), targetBlock: t, ...x });
 const e = (d, tete = TETE, now = T) => V2.etatDuel(d, tete, now).etat;
 ok(e(ouvert) === 'OUVERT' && e(ouvert, TETE, T + 3600) === 'EXPIRE', 'ouvert : OUVERT, puis EXPIRE a expiresAt');
-ok(e(pris(TETE)) === 'ATTENTE' && e(pris(TETE - 1)) === 'REGLABLE' && e(pris(TETE - 256)) === 'REGLABLE' && e(pris(TETE - 257)) === 'DEFAULT_CREATOR',
-  'rejoint : ATTENTE au bloc cible, REGLABLE de cible+1 a cible+256, DEFAULT_CREATOR a cible+257 (jamais REMBOURSABLE)');
+/* R5 (test live Grok game39, 2026-10-25) : REGLABLE tant qu un settle envoye maintenant tombe dans la fenetre (tete + marge <= cible + 256) ;
+ *   la marge par defaut = V2.MARGE_DEFAUT (temps de bloc non mesure, pris au plus court) ; ensuite TROP_TARD (aucune action), puis le defaut */
+const M = V2.MARGE_DEFAUT;
+ok(M >= 1 && e(pris(TETE)) === 'ATTENTE' && e(pris(TETE - 1)) === 'REGLABLE' && e(pris(TETE - 256 + M)) === 'REGLABLE' && e(pris(TETE - 257 + M)) === 'TROP_TARD' && e(pris(TETE - 256)) === 'TROP_TARD' && e(pris(TETE - 257)) === 'DEFAULT_CREATOR',
+  'rejoint : ATTENTE au bloc cible, REGLABLE de cible+1 a cible+256-marge (' + M + '), TROP_TARD jusqu a cible+256, DEFAULT_CREATOR a cible+257 (jamais REMBOURSABLE)');
 ok(e(pris(TETE - 300, { defaulted: { winner: A, payout: 1_800_000n } })) === 'GAGNE_DEFAUT' && V2.FINIS.includes('GAGNE_DEFAUT'), 'gagne par defaut : GAGNE_DEFAUT, un etat FINI');
 const act = (d, moi, ouv = true) => V2.actionsDuel(d, moi, TETE, T, ouv).join();
 ok(act(ouvert, B) === 'JOIN' && act(ouvert, A) === 'CANCEL' && act(ouvert, B, false) === '' && act(ouvert, null) === '', 'ouvert : JOIN (un autre), CANCEL (le createur), rien sans wallet ou ferme');
@@ -73,7 +76,9 @@ ok(pd.etat === 'PRET' && pd.appels.length === 1 && pd.appels[0].to === C && pd.a
 ok(V2.planSettleDefault({ contrat: C, id: '2', targetBlock: TETE - 256, blocActuel: TETE }).etat === 'REFUSE' && V2.planSettleDefault({ contrat: C, id: '2', targetBlock: TETE, blocActuel: TETE }).etat === 'REFUSE'
   && V2.planSettleDefault({ contrat: C, id: '2' }).etat === 'REFUSE', 'planSettleDefault refuse au dernier bloc reglable, au bloc cible, et sans cible / tete');
 ok(V2.planSettle({ contrat: C, id: '2', targetBlock: TETE - 257, blocActuel: TETE }).etat === 'REFUSE' && /creator wins by default/.test(V2.planSettle({ contrat: C, id: '2', targetBlock: TETE - 257, blocActuel: TETE }).pourquoi)
-  && V2.planSettle({ contrat: C, id: '2', targetBlock: TETE - 256, blocActuel: TETE }).etat === 'PRET', 'planSettle : PRET au dernier bloc reglable, refuse apres (le pourquoi dit le defaut)');
+  && V2.planSettle({ contrat: C, id: '2', targetBlock: TETE - 256 + M, blocActuel: TETE }).etat === 'PRET'
+  && V2.planSettle({ contrat: C, id: '2', targetBlock: TETE - 256, blocActuel: TETE }).etat === 'REFUSE' && /Too late to settle safely/.test(V2.planSettle({ contrat: C, id: '2', targetBlock: TETE - 256, blocActuel: TETE }).pourquoi),
+  'planSettle : PRET au dernier bloc SUR (cible + 256 - marge), refuse au dernier bloc de la fenetre (il serait mine apres : TooLate) et apres (le pourquoi dit le defaut)');
 ok(V2.planRefund({ contrat: C, id: '2', duel: pris(TETE - 300) }).etat === 'REFUSE' && V2.planRefund({ contrat: C, id: '1', duel: ouvert, maintenant: T + 3600 }).etat === 'PRET'
   && V2.planRefund({ contrat: C, id: '1', duel: ouvert, maintenant: T }).etat === 'REFUSE', 'planRefund : refuse un rejoint et un ouvert pas expire ; PRET pour un ouvert expire');
 ok(V2.phraseAvantJoin(2) === 'Settle within about 512 s after the result block (256 blocks at the measured block time) or the creator wins by default.' && V2.phraseAvantJoin(0.2) === 'Settle within about 51 s after the result block (256 blocks at the measured block time) or the creator wins by default.'
@@ -123,9 +128,11 @@ const DUELS = new Map([
 const nd = noeud(DUELS);
 const lecteur = S.creerLecteurDuelsV2({ rpc: nd.rpc, contrat: C, intervalleMs: 0 });
 /* 2026-10-24 (revue n°2) : la route dit le temps de bloc PRUDENT (sParBlocServi : longue + courte) ; ici les deux valent 2 s */
-const route = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv', 'mesureCourteSrv', 'sParBlocServi',
-  'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(() => lecteur, async () => 2, new Map([['0x' + 'b0'.repeat(20), A]]), S.reponseDuelsV2, FICHE, { sParBloc: 2 }, { lire: async () => 2, etat: () => ({ sParBloc: 2 }) }, () => 2);
-const get = async () => { await lecteur.lire(true); const res = { corps: null, writeHead() {}, end(s) { this.corps = s; } }; await route({ method: 'GET' }, res, '/api/duels'); return JSON.parse(res.corps); };
+/* R2 (2026-10-25) : la route repond APRES lireAvantReponse (attendue sur ?frais=1) — le banc attend la reponse (res.end) */
+const route = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv', 'mesureCourteSrv', 'sParBlocServi', 'lireAvantReponse', 'demandeFraiche',
+  'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(() => lecteur, async () => 2, new Map([['0x' + 'b0'.repeat(20), A]]), S.reponseDuelsV2, FICHE, { sParBloc: 2 }, { lire: async () => 2, etat: () => ({ sParBloc: 2 }) }, () => 2, S.lireAvantReponse, S.demandeFraiche);
+const attendreCorps = async (res) => { for (let k = 0; k < 2000 && res.corps === null; k++) await new Promise((r) => setTimeout(r, 1)); };
+const get = async () => { await lecteur.lire(true); const res = { corps: null, writeHead() {}, end(s) { this.corps = s; } }; await route({ method: 'GET' }, res, '/api/duels'); await attendreCorps(res); return JSON.parse(res.corps); };
 const realNow = Date.now; Date.now = () => T * 1000;
 let J2;
 try { J2 = await get(); } finally { Date.now = realNow; }
@@ -212,7 +219,8 @@ const monterCarte = ({ sParBlocApp = 2, j, tete = TETE, envois, logs = [] }) => 
 };
 const srcSuivi = tranche(APP, '/* ══ LE SUIVI D UN DUEL REJOINT', '/* fin du suivi d un duel rejoint */');
 const textes = (li) => li.tous().filter((c) => c.tag === 'p').map((c) => c.textContent).join(' | ');
-const boutons = (li) => li.tous().filter((c) => c.tag === 'button').map((c) => c.dataset.action).join();
+/* les boutons d ACTION (data-action) ; « Copy link » (R4, data-lien) n en est pas une */
+const boutons = (li) => li.tous().filter((c) => c.tag === 'button' && c.dataset.action).map((c) => c.dataset.action).join();
 {
   const K = monterCarte({ j: J2, envois: [] });
   const ds = K.duelsDe(J2), dd = (id) => ds.find((x) => x.id === String(id)) || K.duelsDe(J2, 'recents').find((x) => x.id === String(id));
@@ -222,7 +230,8 @@ const boutons = (li) => li.tous().filter((c) => c.tag === 'button').map((c) => c
   const l1n = await L(1, B, null);
   ok(boutons(l1n) === '' && textes(l1n).includes(V2.PHRASE_SANS_MESURE), 'temps de bloc NON mesure : aucun bouton Accept (jamais un bouton qui refuserait), la phrase le dit');
   const l1a = await L(1, A);
-  ok(boutons(l1a) === 'CANCEL' && !textes(l1a).includes('Settle within about'), 'son propre defi : Cancel, pas la ligne du joueur');
+  /* R3 (test live Grok game39) : le createur voit la regle de la fenetre lui aussi (c est lui qui gagne par defaut) */
+  ok(boutons(l1a) === 'CANCEL' && textes(l1a).includes(V2.phraseAvantJoin(2)), 'son propre defi : Cancel, et la ligne de la fenetre (R3 : le createur doit savoir quand le defaut s applique)');
   const l3 = await L(3);
   ok(boutons(l3) === 'SETTLE' && textes(l3).includes('After that, the creator wins by default.') && !/both are refunded/.test(textes(l3)), 'reglable : Settle ; « After that, the creator wins by default. » (plus « both are refunded »)');
   const l4 = await L(4, TIERS);
@@ -313,16 +322,16 @@ const srcDuelsV2 = tranche(SRV, 'let lecteurDuelsV2 = null;', 'setInterval(() =>
 ok(/function duelsV2\(\) \{\n  const c = contratDeFicheV2\(DUELS_V2_DEPLOIEMENT\);\n  if \(!c\) return null;/.test(srcDuelsV2), 'tranche REELLE de serveur-web.js : duelsV2() lit le contrat de la fiche (contratDeFicheV2)');
 const creesSur = [];
 const ndL = noeud(new Map([[1, { creator: A, expiresAt: T + 3600, statut: 'Open', guessA: g(1), token: USDC, stake: 1_000_000n }]]), CV2);
-const monterDuelsV2 = (fiche) => new Function('contratDeFicheV2', 'DUELS_V2_DEPLOIEMENT', 'creerLecteurDuelsV2', 'rpcServeur', srcDuelsV2 + '\nreturn duelsV2;')(
+const monterDuelsV2 = (fiche) => new Function('contratDeFicheV2', 'DUELS_V2_DEPLOIEMENT', 'creerLecteurDuelsV2', 'rpcDuelsV2', srcDuelsV2 + '\nreturn duelsV2;')(
   S.contratDeFicheV2, fiche, (o) => { creesSur.push(o.contrat); return S.creerLecteurDuelsV2({ ...o, intervalleMs: 0 }); }, ndL.rpc);
 ok(monterDuelsV2(Object.freeze({ ...DV2, adresse: null, bloc: null }))() === null && creesSur.length === 0, 'temoin : la MEME fiche ramenee a avant le deploiement -> duelsV2() null (la route resterait sur v1, fermee)');
 const duelsV2Live = monterDuelsV2(DV2);
-const routeL = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv', 'mesureCourteSrv', 'sParBlocServi',
-  'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(duelsV2Live, async () => 2, new Map(), S.reponseDuelsV2, DV2, { sParBloc: 2 }, { lire: async () => 2, etat: () => ({ sParBloc: 2 }) }, () => 2);
+const routeL = new Function('duelsV2', 'sParBlocSrv', 'createurParBlock', 'reponseDuelsV2', 'DUELS_V2_DEPLOIEMENT', 'tempsDeBlocSrv', 'mesureCourteSrv', 'sParBlocServi', 'lireAvantReponse', 'demandeFraiche',
+  'return async function route(req, res, chemin) {\n' + srcRoute + '\n};')(duelsV2Live, async () => 2, new Map(), S.reponseDuelsV2, DV2, { sParBloc: 2 }, { lire: async () => 2, etat: () => ({ sParBloc: 2 }) }, () => 2, S.lireAvantReponse, S.demandeFraiche);
 let JL;
 {
   const dn = Date.now; Date.now = () => T * 1000;
-  try { await duelsV2Live().lire(true); const res = { corps: null, writeHead() {}, end(s) { this.corps = s; } }; await routeL({ method: 'GET' }, res, '/api/duels'); JL = JSON.parse(res.corps); } finally { Date.now = dn; }
+  try { await duelsV2Live().lire(true); const res = { corps: null, writeHead() {}, end(s) { this.corps = s; } }; await routeL({ method: 'GET' }, res, '/api/duels'); await attendreCorps(res); JL = JSON.parse(res.corps); } finally { Date.now = dn; }
   while (duelsV2Live().etat().enVol) await new Promise((r) => setTimeout(r, 1));
 }
 ok(JL.ok === true && JL.etat === 'LU' && JL.version === 2 && JL.contrat === DV2.adresse && JL.bloc === DV2.bloc && JL.usdc === DV2.constructeur.usdc && creesSur.length >= 1 && creesSur.every((c) => c === DV2.adresse),

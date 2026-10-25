@@ -58,11 +58,21 @@ export function duelDepuisEtatV2(id, retour) {
 }
 
 /** le lecteur v2 : lire() fait UN tour (au plus un a la fois, pas plus d un toutes les `intervalleMs`) ; etat() rend ce qui est lu */
-export function creerLecteurDuelsV2({ rpc, contrat, budget = 50, garde = 2000, intervalleMs = 15000, horloge = () => Date.now() }) {
-  const s = { contrat: bas(contrat), cache: new Map(), nextId: null, restants: 0, tete: null, lu: 0, enVol: false, erreur: null };
-  async function lire(force = false) {
-    if (!ADR.test(s.contrat) || s.enVol || (!force && horloge() - s.lu < intervalleMs)) return;
+/* R2 (test live Grok game39) : un tour EN VOL est rendu (sa promesse) a qui l attend, au lieu d un retour immediat ; `force` (une ecriture
+ *   connue : /api/duels?frais=1) passe outre l intervalle mais jamais plus d un tour force toutes les `forceMinMs` (un client ne peut pas
+ *   faire lire la chaine en boucle). */
+export function creerLecteurDuelsV2({ rpc, contrat, budget = 50, garde = 2000, intervalleMs = 15000, forceMinMs = 2000, horloge = () => Date.now() }) {
+  const s = { contrat: bas(contrat), cache: new Map(), nextId: null, restants: 0, tete: null, lu: 0, enVol: false, erreur: null, promesse: null };
+  function lire(force = false) {
+    if (!ADR.test(s.contrat)) return Promise.resolve();
+    if (s.enVol && s.promesse) return s.promesse;
+    const depuis = horloge() - s.lu;
+    if (!force ? depuis < intervalleMs : s.lu > 0 && depuis < Math.min(forceMinMs, intervalleMs)) return Promise.resolve();
     s.enVol = true;
+    s.promesse = tour().finally(() => { s.promesse = null; });
+    return s.promesse;
+  }
+  async function tour() {
     try {
       const tete = parseInt(await rpc('eth_blockNumber', []), 16);
       if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('head unreadable');
@@ -93,6 +103,19 @@ export function creerLecteurDuelsV2({ rpc, contrat, budget = 50, garde = 2000, i
   }
   return { lire, etat: () => s };
 }
+
+/** R2 : ce que /api/duels fait AVANT de repondre. Une requete ordinaire lance un tour (au plus toutes les 15 s) sans l attendre ; une requete
+ *  `frais` (l app vient de lire un recu : create, join, cancel…) force un tour et l ATTEND, au plus `attenteMs`, pour repondre avec lui.
+ *  Rend true si la reponse suit un tour fini pendant l attente. */
+export async function lireAvantReponse(lecteur, { frais = false, attenteMs = 3000 } = {}) {
+  const p = Promise.resolve(lecteur.lire(!!frais));
+  if (!frais) return false;
+  let minuteur = null;
+  const delai = new Promise((ok) => { minuteur = setTimeout(() => ok(false), attenteMs); });
+  try { return await Promise.race([p.then(() => true, () => false), delai]); } finally { clearTimeout(minuteur); }
+}
+/** `?frais=1` dans l URL d une requete (seule cette forme exacte compte) */
+export const demandeFraiche = (url) => /[?&]frais=1(?:&|$)/.test(String(url || ''));
 
 /**
  * La reponse de /api/duels pour v2 (le meme schema que v1, plus version: 2, ouverts, fenetre, tempsDeBloc). `lecteur` = creerLecteurDuelsV2,
