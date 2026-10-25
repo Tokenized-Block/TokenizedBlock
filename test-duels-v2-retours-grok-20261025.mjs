@@ -277,6 +277,24 @@ await section('Revue d2 : un ?frais=1 arrive pendant un tour en vol -> UN tour d
   const c4 = fausseChaine({ now: 200 });
   await c4.lecteur.lire(true); c4.now = 210; c4.panne = true;
   ok(await SV.lireAvantReponse(c4.lecteur, { frais: true }) === false, 'le tour force echoue (429) : lireAvantReponse rend false, pas « frais »');
+  /* la file se vide AVANT que son tour B demarre (sonde de la revue, X3) : R1 attend derriere le tour A ; B demarre (tete 1000) ; la chaine
+   *   passe a 1002 ; un 2e ?frais=1 (R2) arrive pendant que B est en vol -> R2 ne se resout PAS sur B (commence avant lui), il attend un
+   *   tour C qui voit 1002. Si la file restait posee jusqu a la fin de B, R2 la reprendrait et serait servi avec 1000. */
+  const c5 = fausseChaine({ now: 300 });
+  let ouvrirA; c5.porte = new Promise((r) => { ouvrirA = r; });
+  const tA = c5.lecteur.lire(true); await new Promise((r) => setTimeout(r, 20)); /* A a lu la tete 1000 et attend */
+  const R1 = SV.lireAvantReponse(c5.lecteur, { frais: true, attenteMs: 3000 });
+  let ouvrirB; c5.porte = new Promise((r) => { ouvrirB = r; }); /* B sera tenu sur nextId() */
+  ouvrirA(); await tA; await new Promise((r) => setTimeout(r, 20)); /* B demarre apres la pause de 2 s et lit la tete 1000 */
+  const bEnVol = c5.debuts.length === 2 && c5.lecteur.etat().enVol === true;
+  c5.tete = 1002; /* la 2e ecriture est minee pendant B */
+  const R2 = SV.lireAvantReponse(c5.lecteur, { frais: true, attenteMs: 3000 });
+  c5.porte = null; ouvrirB();
+  const dit1 = await R1; const teteB = c5.lecteur.etat().tete;
+  const dit2 = await R2;
+  const r5 = SV.reponseDuelsV2({ lecteur: c5.lecteur, fiche: ficheR, maintenant: T, sParBloc: 2 });
+  ok(bEnVol && dit1 === true && teteB === 1000 && dit2 === true && r5.tete === 1002 && c5.debuts.length === 3 && c5.debuts[2] >= c5.debuts[1] + 2,
+    'un ?frais=1 arrive pendant le tour B de la file : pas servi par B (tete ' + teteB + '), un tour C de plus (debuts ' + c5.debuts.join(', ') + ' s), servi avec la tete ' + r5.tete + ' (attendu 1002)');
 });
 await section('Revue d3 : `lu` servi = l heure de lecture de LA TETE servie, inchangee quand un tour echoue', async () => {
   /* la sonde de la revue : tete lue a 0 s, tour fini a 6 s -> lu = 0 s (pas 6) */

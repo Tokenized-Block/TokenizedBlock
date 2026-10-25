@@ -40,6 +40,8 @@ const M = [
   [SV, 'd2 la file pas partagee (un tour par requete)', '      if (s.file) return s.file;\n', ''],
   [SV, 'd2 la pause de la borne sautee', 'if (s.debut > 0 && reste > 0) await attendre(reste);', ''],
   [SV, 'd2 un tour rate dit frais', 'p.then((v) => v === true, () => false)', 'p.then(() => true, () => false)'],
+  [SV, 'X3 la file videe APRES son tour B (un ?frais=1 arrive pendant B servi par B)', '        s.file = null;\n        return s.enVol && s.promesse ? s.promesse : demarrer();',
+    '        const b = s.enVol && s.promesse ? s.promesse : demarrer();\n        try { return await b; } finally { s.file = null; }'],
   /* revue 2026-10-25, defaut 3 : l heure servie est celle de la tete */
   [SV, 'd3 lu servi = fin du dernier tour (meme rate)', 'lu: new Date(s.luTete).toISOString()', 'lu: new Date(s.lu).toISOString()'],
   [SV, 'd3 luTete = fin du tour reussi', 's.tete = tete; s.luTete = luTete;', 's.tete = tete; s.luTete = horloge();'],

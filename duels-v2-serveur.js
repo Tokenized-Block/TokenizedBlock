@@ -86,8 +86,10 @@ export function creerLecteurDuelsV2({ rpc, contrat, budget = 50, garde = 2000, i
       s.file = avant.then(async () => {
         const reste = s.debut + borne - horloge();
         if (s.debut > 0 && reste > 0) await attendre(reste);
+        /* la file se vide AVANT que son tour demarre : une requete forcee arrivee pendant ce tour en attend un de plus (pas celui-ci).
+         *   Le cas « un tour ordinaire deja en vol ici » est defensif seulement : aucun tour ordinaire ne peut demarrer pendant la pause
+         *   (s.lu >= s.debut et borne <= intervalleMs, donc horloge() - s.lu < intervalleMs jusqu a la fin de la pause) ; aucun mutant ne le couvre. */
         s.file = null;
-        /* un tour ordinaire lance pendant la pause a demarre APRES la requete : il est partage */
         return s.enVol && s.promesse ? s.promesse : demarrer();
       });
       return s.file;
