@@ -350,7 +350,7 @@ const MUTANTS = [
   ['FORCE', 'force perdu pendant un repeint (l ancien code)', '    if (!force) return slotsCfg.peint;\n', '    return slotsCfg.peint;\n'],
   ['RPC', 'les hashes de bloc relus a chaque repeint', 'manquent = ns.filter((n) => !slotsCfg.hashes.has(n));', 'manquent = ns;'],
   ['RPC', 'les Spun relus depuis le debut a chaque repeint', 'scanne: slotsCfg.scanne, tete', 'scanne: null, tete'],
-  ['RPC', 'le minuteur repeint tout a chaque tic', "  if (etats(tete) !== etats(vue.tete)) { void peindreSlots(); return; }", "  { await peindreSlots(); return; }"],
+  ['RPC', 'le minuteur repeint tout a chaque tic', "  if (etats(tete) !== etats(vue.tete)) { await slotsTicRepeindre(); return; }", "  { await peindreSlots(); return; }"],
 ];
 for (const [s, nom, de, vers] of MUTANTS) {
   vu(BLOC.split(de).length === 2, 'mutant « ' + nom + ' » : ancre unique dans le bloc');

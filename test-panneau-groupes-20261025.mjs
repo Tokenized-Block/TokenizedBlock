@@ -13,7 +13,10 @@
  *   R  un bouton grise porte sa raison (title + une ligne sous son groupe) — sans wallet, sans contrat, duels fermes, rien a regler ;
  *   P  la palette liste toujours chaque commande de COMMANDES, spin et settle spin compris ;
  *   T  (revue 2026-10-25) l action suivante et la raison disent VRAI : Trade for me sans carte preparee, Its circle sans voisin lu, Spin dont
- *      la lecture des slots a echoue.
+ *      la lecture des slots a echoue ;
+ *   V  (revue 2, 2026-10-25) AUCUN block choisi + un contrat servi : le repeint (bcRepeindre) peint les groupes et lit les slots — Spin ne
+ *      reste pas sur « Reading the slots contract… » ;
+ *   W  (revue 2) un repeint des slots qui LEVE : slotsTic et bcSpinTic rearment leur minuteur de 3 s.
  * Mutants sur COPIES (dossier temporaire) : chacun doit rougir. NE PROUVE PAS : le rendu au navigateur (mesure a part), un wallet reel, un
  *   spin reel sur Base, les cartes d echange / d envoi (bcProposerSwap / bcProposerEnvoi : leurs boutons Sign ne sont pas executes ici). */
 import { strict as assert } from 'node:assert';
@@ -255,9 +258,11 @@ let keccakTopic = null;
 const FICHE = { ok: true, contrat: CONTRAT, prixSpin: P.spinPrice, potShareBps: P.potShareBps, prizes: P.prizes, esperanceBrut: '127862', bloc: 900, regleur: { etat: 'OFF', adresse: null, msParBlocMesure: 2000 } };
 const LIGNE_JETON = { jeton: '0x' + 'dd'.repeat(20), pool: '0x' + 'ee'.repeat(20), symbole: 'NVDAc' };
 
-function monterPanneau({ PC, app = APP, chaine = null, avecCompte = true, jeton = null, slotsFiche = FICHE, duelsJ = null, rolls = null, brain = '0x' + 'b1'.repeat(20), section = null, arret = null, extra = {} } = {}) {
+function monterPanneau({ PC, app = APP, chaine = null, avecCompte = true, jeton = null, slotsFiche = FICHE, duelsJ = null, rolls = null, brain = '0x' + 'b1'.repeat(20), section = null, arret = null, extra = {}, popOuvert = true } = {}) {
   const d = faireDocument();
   monterBalisage(d);
+  /* 2026-10-25 (revue, 2e) : `popOuvert: false` = le panneau FERME au chargement du module (comme dans la page), ouvert ensuite par le test */
+  if (!popOuvert) d.document.getElementById('bcPop').open = false;
   const ch = chaine || faireChaine();
   const trace = { wallet: [], prepare: [], envoiJeton: [] };
   let dernier = [];
@@ -288,10 +293,13 @@ function monterPanneau({ PC, app = APP, chaine = null, avecCompte = true, jeton 
     fonction(app, 'bcEcrireModele'),
     entre(app, 'for (const p of PRECOMMANDES) {', '\n}\n') + '\n}\n',
     section || entre(app, '/* ══ LE PANNEAU EN QUATRE GROUPES', '/* ══ FIN DES GROUPES DU PANNEAU */'),
+    /* 2026-10-25 (revue, 2e) : LE repeint de 3 s (bcRepeindre, le vrai) ; bcPeindre (le grand peintre du block, hors banc) est reduit a ce
+     *   qu il fait pour les groupes : bcPeindrePre -> bcPeindreCommandes */
+    fonction(app, 'bcRepeindre'), 'function bcPeindre() { try { bcPeindreCommandes(); } catch (_) {} }\n',
   ];
   for (const [k, mo] of morceaux.entries()) if (mo.length < 12) throw new Error('morceau ' + k + ' introuvable dans app.html');
   const noms = Object.keys(ctx);
-  const f = new Function(...noms, morceaux.join('\n') + '\n;return { slotsAgir, peindreSlots, slotsCfg, bcCommandeSpin, bcCommandeSettleSpin, bcPeindreCommandes, bcPeindreSpin, bcTerminer, bcAvecSuite, '
+  const f = new Function(...noms, morceaux.join('\n') + '\n;return { slotsAgir, peindreSlots, slotsTic, slotsCfg, bcCommandeSpin, bcCommandeSettleSpin, bcPeindreCommandes, bcPeindreSpin, bcSpinTic, bcRepeindre, bcTerminer, bcAvecSuite, '
     + 'set compte(v) { compte = v; }, set slotsFiche(v) {}, get bc() { return bc; } };');
   const api = f(...noms.map((k) => ctx[k]));
   return { ...api, document: d.document, d, chaine: ch, trace, ctx };
@@ -485,6 +493,54 @@ async function verifierVerite(PC, { app = APP, section = null } = {}) {
   return ko;
 }
 
+/* ═══ V. (revue 2026-10-25, 2e) AUCUN block choisi + un contrat des slots SERVI ═══
+ *   MESURE au navigateur (375 px, panneau ouvert par #tkOuvrirBank sans block) : Spin restait grise sur « Reading the slots contract… »
+ *   25 s et plus — bcRepeindre s arretait sur `if (!brainAdr) return;`, donc ni bcPeindreCommandes ni bcLecturesPanneau. Ici : le panneau
+ *   FERME au chargement (la lecture du chargement ne part pas, comme dans la page), ouvert, puis UN repeint (le vrai bcRepeindre, celui de
+ *   bcOuvrirPop et de l intervalle de 3 s) : sans wallet Spin dit « Connect a wallet to spin. », avec un wallet il est actif ; la ligne du
+ *   groupe Play ne dit plus « Reading ». */
+async function verifierSansBlock(PC, { app = APP, section = null } = {}) {
+  const ko = [];
+  for (const [nom, avecCompte, bon] of [['sans wallet', false, (b) => b.disabled && b.title === 'Connect a wallet to spin.'], ['avec wallet', true, (b) => !b.disabled && !b.hidden]]) {
+    const p = monterPanneau({ PC, app, section, brain: null, avecCompte, popOuvert: false });
+    p.document.getElementById('bcPop').open = true;
+    p.bcRepeindre(); await vider();
+    const b = p.document.querySelector('[data-cmd="spin"]');
+    if (!b || !bon(b)) ko.push('aucun block, contrat servi, ' + nom + ' : Spin ' + (b ? (b.disabled ? 'grise' : 'actif') + ' « ' + b.title + ' »' : 'absent'));
+    const r = b && b.parentNode && b.parentNode.parentNode ? b.parentNode.parentNode.querySelector('.bcRaisons') : null;
+    if (r && /Reading the slots/.test(r.textContent)) ko.push('aucun block, ' + nom + ' : le groupe Play dit encore « ' + r.textContent + ' »');
+  }
+  return ko;
+}
+
+/* ═══ W. (revue 2026-10-25, 2e) un repeint des slots qui LEVE ne coupe pas le minuteur ═══
+ *   Une fiche servie mal formee (prixSpin illisible : BigInt leve dans peindreSlotsUneFois, AVANT qu il ne rearme slotsTic) : slotsTic
+ *   (onglet Game) et bcSpinTic (spin suivi dans le panneau) rearment leur minuteur de 3 s quand meme — sinon le spin n est plus suivi. Les
+ *   minuteurs sont ENREGISTRES (aucun ne tourne) ; un rejet non tenu pendant le lot est compte comme un defaut. */
+async function verifierReamorce(PC, { app = APP, section = null } = {}) {
+  const ko = [];
+  const CASSEE = { ...FICHE, prixSpin: 'pas un nombre' };
+  const nonTenus = [], tenir = (e) => { nonTenus.push(e); };
+  process.on('unhandledRejection', tenir);
+  try {
+    const armer = () => { const m = []; return { m, extra: { setTimeout: (fn, ms) => { m.push({ fn, ms }); return m.length; }, clearTimeout: () => {} } }; };
+    { const a = armer(), p = monterPanneau({ PC, app, section, slotsFiche: CASSEE, extra: a.extra });
+      let leve = null; try { await p.slotsTic(); } catch (e) { leve = e; } await vider();
+      const id = p.slotsCfg.minuteur, t = Number.isInteger(id) ? a.m[id - 1] : null;
+      if (leve) ko.push('slotsTic a leve : ' + leve.message);
+      if (!t || t.ms !== 3000) ko.push('slotsTic : peindreSlots a leve, minuteur non rearme (' + String(id) + ')'); }
+    { const a = armer(), p = monterPanneau({ PC, app, section, slotsFiche: CASSEE, extra: a.extra });
+      p.bc.spinM = p.document.createElement('div'); p.bc.spinDepuis = Date.now();
+      let leve = null; try { await p.bcSpinTic(); } catch (e) { leve = e; } await vider();
+      const id = p.bc.spinMinuteur, t = Number.isInteger(id) ? a.m[id - 1] : null;
+      if (leve) ko.push('bcSpinTic a leve : ' + leve.message);
+      if (!t || t.ms !== 3000) ko.push('bcSpinTic : peindreSlots a leve, minuteur non rearme (' + String(id) + ')'); }
+    await vider();
+  } finally { process.off('unhandledRejection', tenir); }
+  if (nonTenus.length) ko.push(nonTenus.length + ' rejet(s) non tenu(s) : ' + String(nonTenus[0] && nonTenus[0].message));
+  return ko;
+}
+
 /* ═══ execution : le vrai code, puis les mutants ═══ */
 const PC = await import('./panneau-commandes.js');
 const dire = (ko, m) => { if (ko.length) console.log('KO ' + m + '\n  ' + ko.join('\n  ')); vu(ko.length === 0, m); };
@@ -495,6 +551,8 @@ dire(await verifierSuites(PC), 'N chaque reponse se termine par UNE action suiva
 dire(await verifierRaisons(PC), 'R un bouton grise porte sa raison ; Settle my spin cache / grise / actif ; badges et descriptions peints');
 dire(verifierPalette(), 'P la palette liste chaque commande ; les puces existantes gardent leur geste');
 dire(await verifierVerite(PC), 'T l action suivante et la raison disent vrai : Trade for me sans carte, Its circle sans voisin, slots non lus');
+dire(await verifierSansBlock(PC), 'V aucun block + contrat servi : le repeint lit les slots, Spin dit sa vraie raison (sans wallet) ou est actif (avec)');
+dire(await verifierReamorce(PC), 'W un repeint des slots qui leve : slotsTic et bcSpinTic rearment leur minuteur de 3 s');
 
 const SECTION = entre(APP, '/* ══ LE PANNEAU EN QUATRE GROUPES', '/* ══ FIN DES GROUPES DU PANNEAU */');
 const MUTANTS = [
@@ -523,13 +581,20 @@ const MUTANTS = [
   ['T', 'Spin : « Reading… » pour toujours apres un echec', 'module', "return non(s.rate ? 'The slots could not be read just now.' : 'Reading the slots contract…');", "return non('Reading the slots contract…');"],
   ['T', 'la section ne note plus l echec de lecture', 'section', "      bc.slotsRate = !(js && typeof js === 'object' && js.ok !== undefined);\n", "\n"],
   ['T', 'la section ne lit plus l humeur du block', 'section', "conseil = phase ? conseilDe(phase).geste : null;", "conseil = 'buy';"],
+  /* 2026-10-25 (revue, 2e) : aucun block = aucun repeint des groupes (le defaut mesure au navigateur), et le minuteur coupe par un repeint qui leve */
+  ['V', 'bcRepeindre s arrete sans block (le code d avant)', 'app', "  if (!brainAdr) { try { bcPeindreCommandes(); } catch (_) { /* le panneau n est pas encore construit */ } return; }\n", "  if (!brainAdr) return;\n"],
+  ['V', 'les groupes ne se peignent qu avec un block', 'section', "function bcPeindreCommandes() {\n  const ctx = bcEtatPanneau();", "function bcPeindreCommandes() {\n  if (!brainAdr) return;\n  const ctx = bcEtatPanneau();"],
+  ['V', 'les lectures du panneau attendent un block', 'section', "function bcLecturesPanneau(ctx) {\n  const d = $('#bcPop');", "function bcLecturesPanneau(ctx) {\n  if (!brainAdr) return;\n  const d = $('#bcPop');"],
+  ['W', 'slotsTic : repeint lance sans attendre ni rearmer (le code d avant)', 'app', "Date.now() - slotsCfg.peintA > 15000) { await slotsTicRepeindre(); return; }", "Date.now() - slotsCfg.peintA > 15000) { void peindreSlots(); return; }"],
+  ['W', 'slotsTicRepeindre avale l echec sans rearmer', 'app', "  catch (_) { clearTimeout(slotsCfg.minuteur); slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000); }\n", "  catch (_) { /* rien */ }\n"],
+  ['W', 'bcSpinTic laisse filer l exception (le code d avant)', 'section', "    } catch (_) { /* relu au battement suivant */ }\n", "    } finally { /* rien */ }\n"],
 ];
 let tues = 0;
 for (const [lot, nom, ou, de, a] of MUTANTS) {
-  const src = ou === 'module' ? SRC_MODULE : SECTION;
+  const src = ou === 'module' ? SRC_MODULE : ou === 'app' ? APP : SECTION;
   if (src.split(de).length !== 2) throw new Error('mutant « ' + nom + ' » : ancre absente ou multiple');
   const mute = src.replace(de, a);
-  const PCm = ou === 'module' ? await moduleDe(mute) : PC, sec = ou === 'section' ? mute : null;
+  const PCm = ou === 'module' ? await moduleDe(mute) : PC, sec = ou === 'section' ? mute : null, appM = ou === 'app' ? mute : APP;
   let ko = [];
   try {
     if (lot === 'G') ko = await verifierGroupes(PCm, ou === 'section' ? APP.replace(SECTION, mute) : APP);
@@ -538,6 +603,8 @@ for (const [lot, nom, ou, de, a] of MUTANTS) {
     if (lot === 'N') ko = await verifierSuites(PCm, { section: sec });
     if (lot === 'R') ko = await verifierRaisons(PCm, { section: sec });
     if (lot === 'T') ko = await verifierVerite(PCm, { section: sec });
+    if (lot === 'V') ko = await verifierSansBlock(PCm, { app: appM, section: sec });
+    if (lot === 'W') ko = await verifierReamorce(PCm, { app: appM, section: sec });
   } catch (e) { ko = ['exception : ' + e.message]; }
   if (process.env.VERBEUX) console.log('  [' + lot + '] ' + nom + ' -> ' + String(ko[0]).slice(0, 150));
   vu(ko.length > 0, 'mutant ' + lot + ' « ' + nom + ' » : ROUGE');

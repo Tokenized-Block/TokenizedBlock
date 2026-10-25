@@ -7563,6 +7563,12 @@ async function connecterPourSpin() {
 }
 /* le minuteur de 3 s (verdict : ~8 lectures a chaque fois) : UNE lecture de la tete ; un repeint complet seulement quand un spin change
  * d etat (ses trois blocs arrivent, ou sa fenetre se ferme) ou toutes les 15 s ; sinon les blocs restants sont recomptes sans autre lecture */
+/* 2026-10-25 (revue) : le repeint complet du minuteur. peindreSlotsUneFois rearme slotsTic a SA fin ; s il leve avant (une fiche servie mal
+ *   formee, un element absent), personne ne rearmait — le spin n etait plus suivi. Ici il leve : le minuteur est rearme quand meme. */
+async function slotsTicRepeindre() {
+  try { await peindreSlots(); }
+  catch (_) { clearTimeout(slotsCfg.minuteur); slotsCfg.minuteur = setTimeout(() => { void slotsTic(); }, 3000); }
+}
 async function slotsTic() {
   const v = document.getElementById('v-missions');
   if (document.hidden || !v || !v.classList.contains('on')) return;
@@ -7570,9 +7576,9 @@ async function slotsTic() {
   let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
   /* 2026-10-24 : la tete deja lue fait avancer les rouleaux (aucune lecture de plus) */
   try { rouleauxTete(tete); } catch (_) { /* hors de la page (banc) */ }
-  if (!vue || !Number.isSafeInteger(tete) || vue.nonLus || Date.now() - slotsCfg.peintA > 15000) { void peindreSlots(); return; }
+  if (!vue || !Number.isSafeInteger(tete) || vue.nonLus || Date.now() - slotsCfg.peintA > 15000) { await slotsTicRepeindre(); return; }
   const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b, vue.marge).etat).join();
-  if (etats(tete) !== etats(vue.tete)) { void peindreSlots(); return; }
+  if (etats(tete) !== etats(vue.tete)) { await slotsTicRepeindre(); return; }
   if (!slotsCfg.enCours) slotsListe(slotsLignes(Slots.planReglement({ ...vue, tete })));
   /* 2026-10-24 : le panneau de reponse recompte les blocs et les secondes a cette tete (aucune lecture de plus) */
   try { peindreReponseSlots(tete); } catch (_) { /* hors de la page (banc) */ }
@@ -26539,7 +26545,10 @@ function bcProposerNaissance(qui, classe, c) {
  *    Sans instantane de CE block, on peint ce qu on sait de lui (nom, adresse, visage, marche, ticket) avec une humeur NON LUE :
  *    rien n est invente, et le premier battement remplace le tout. */
 function bcRepeindre() {
-  if (!brainAdr) return;
+  /* ⛔ 2026-10-25 (revue, MESURE au navigateur, 375 px, panneau ouvert sans block, /api/slots servant un contrat) : ce `return` sautait
+   *   AUSSI les groupes — Spin restait grise sur « Reading the slots contract… » 25 s et plus (bcLecturesPanneau ne partait jamais). Sans
+   *   block, les groupes (badges, grises, raisons) et leurs lectures sont repeints quand meme ; seul le portrait du block attend un block. */
+  if (!brainAdr) { try { bcPeindreCommandes(); } catch (_) { /* le panneau n est pas encore construit */ } return; }
   const a = String(brainAdr).toLowerCase(), s = window.__TB_BRAIN_SNAPSHOT__;
   try {
     bcPeindre(s && String(s.address || '').toLowerCase() === a ? s
@@ -28709,13 +28718,16 @@ async function bcSpinTic() {
   if (fini || Date.now() - (bc.spinDepuis || 0) > 900000) { bcPeindreSpin(); return; }
   const d = $('#bcPop');
   if (d && d.open && !document.hidden) {
-    let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
-    try { rouleauxTete(tete); } catch (_) { /* rouleaux absents (banc du panneau) */ }
-    const vue = slotsCfg.vue;
-    const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b, vue.marge).etat).join();
-    if (!vue || !Number.isSafeInteger(tete) || vue.nonLus || Date.now() - (slotsCfg.peintA || 0) > 15000 || etats(tete) !== etats(vue.tete)) await peindreSlots();
-    else { try { peindreReponseSlots(tete); } catch (_) { /* hors de la page (banc) */ } }
-    bcPeindreSpin();
+    /* 2026-10-25 (revue) : un repeint qui leve (peindreSlots, une fiche mal formee) ne coupe plus le suivi — le minuteur est rearme plus bas */
+    try {
+      let tete = null; try { tete = parseInt(await rpc('eth_blockNumber', []), 16); } catch (_) { tete = null; }
+      try { rouleauxTete(tete); } catch (_) { /* rouleaux absents (banc du panneau) */ }
+      const vue = slotsCfg.vue;
+      const etats = (b) => vue.spins.map((s) => Slots.etatReglement(s.t, b, vue.marge).etat).join();
+      if (!vue || !Number.isSafeInteger(tete) || vue.nonLus || Date.now() - (slotsCfg.peintA || 0) > 15000 || etats(tete) !== etats(vue.tete)) await peindreSlots();
+      else { try { peindreReponseSlots(tete); } catch (_) { /* hors de la page (banc) */ } }
+      bcPeindreSpin();
+    } catch (_) { /* relu au battement suivant */ }
     try { bcPeindreCommandes(); } catch (_) { /* le panneau n est pas encore construit */ }
   }
   bc.spinMinuteur = setTimeout(() => { void bcSpinTic(); }, 3000);
