@@ -266,7 +266,7 @@ export function ecartBpsContre(prix, ref) {
  *   (le lieu que le plan EMPRUNTE), la phrase nomme CE lieu et SON prix ; un lieu mieux cote qui n est pas emprunte est dit avec la
  *   raison (il ne passe pas les regles, ou cette vente n y est pas routee) ; l ecart et l alerte portent sur le prix EMPRUNTE.
  *   Sans `ici` (aucun plan) : l ancienne phrase, qui ne pretend rien emprunter. */
-export function phraseVente({ ventes = [], reference = null, seuilBps = SEUIL_VENTE_LOIN_BPS, ici = null, passants = null } = {}) {
+export function phraseVente({ ventes = [], reference = null, seuilBps = SEUIL_VENTE_LOIN_BPS, ici = null, passants = null, sansChemin = null } = {}) {
   const cotees = ventes.filter((v) => v && Number(v.prixUsd) > 0);
   const libDe = (id) => (VENUES[id] && VENUES[id].libelle) || id;
   const usd = (x) => { const v = Number(x); return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: v < 10 ? 4 : 2 }); };
@@ -276,7 +276,9 @@ export function phraseVente({ ventes = [], reference = null, seuilBps = SEUIL_VE
     let texte = u ? 'Selling through ' + libDe(ici) + ', about ' + usd(u.prixUsd) + ' per token.' : 'Selling through ' + libDe(ici) + ' (its quote at this amount was not read).';
     if (m && m.venue !== ici && (!u || Number(m.prixUsd) > Number(u.prixUsd))) {
       const passe = Array.isArray(passants) && passants.includes(m.venue);
-      texte += ' ' + libDe(m.venue) + ' quotes more (' + usd(m.prixUsd) + ') but ' + (passe ? 'this app does not route this sale there.' : 'does not pass this app’s liquidity rules.');
+      const horsChemin = !passe && Array.isArray(sansChemin) && sansChemin.includes(m.venue);
+      texte += ' ' + libDe(m.venue) + ' quotes more (' + usd(m.prixUsd) + ') but ' + (passe ? 'this app does not route this sale there.'
+        : horsChemin ? 'this stock is not in this app’s Aerodrome table, so this app has no sale path there.' : 'does not pass this app’s liquidity rules.');
     }
     const e = u && reference ? ecartBpsContre(u.prixUsd, reference.prixUsd) : null;
     const loin = e !== null && e < -seuilBps;
@@ -383,6 +385,17 @@ export function passantsVente({ route, existante }) {
 }
 
 /**
+ * ⛔⛔ 2026-10-25 (revue de 203fcd7, NFLXc) : un lieu ABSENT de passantsVente l est pour l une de DEUX raisons, et l ecran disait toujours
+ *   la seconde. NFLXc : notre route est achetable (`notreRoute.achetable: true`), mais NFLXc n est pas dans la table Aerodrome — cette app
+ *   n a AUCUN chemin de vente par notre routeur ; l ecran disait « does not pass this app’s liquidity rules ». Rend { passants, sansChemin } :
+ *   - `sansChemin` : les lieux ou CETTE app n a pas de chemin de vente pour l action ('aero-old' hors table), quelles que soient les regles ;
+ *   - les autres lieux absents de `passants` ne passent pas les regles (ou leur verdict n est pas lu).
+ */
+export function lieuxVente({ route, existante }) {
+  return { passants: passantsVente({ route, existante }), sansChemin: existante === 'aero-old' ? [] : ['aero-old'] };
+}
+
+/**
  * ⛔⛔ LE LIEU D UNE VENTE (revue de 3d81e06, defaut 1 : la vente suivait `meilleure`, le verdict d ACHAT a 10 USDC). La vente prend le
  *   MEILLEUR LIEU DE VENTE QUI PASSE, cote a SON montant (`ventes`, venteParVenues) :
  *   - 'aero-new' ne passe pas : la route d avant (`existante`), sans une lecture de plus ;
@@ -479,7 +492,7 @@ export async function planVenueNeuve({ rpc, sens, action, montant, compte, verdi
  * MESUREE (`cleV4`). Reference : `refUsd` (Chainlink lue) sinon le prix d achat le plus bas servi (10 USDC / `achat`, 'best-buy').
  * Rend { etat, ventes:[{venue, usdc, prixUsd}], meilleure, ecartBps, loin, texte } — un lieu non cote n est pas dit « 0 ».
  */
-export async function venteParVenues({ rpc, action, montant, route, cleV4 = null, refUsd = null, usdc = USDC_BASE, tsAncienne = null, ici = null, passants = null }) {
+export async function venteParVenues({ rpc, action, montant, route, cleV4 = null, refUsd = null, usdc = USDC_BASE, tsAncienne = null, ici = null, passants = null, sansChemin = null }) {
   const a = bas(action), m = BigInt(montant);
   let dec;
   try { dec = Number(premierMot(await rpc('eth_call', [{ to: a, data: SEL_DECIMALS }, 'latest']))); } catch (_) { return { etat: 'NON_MESURE', ventes: [], texte: null }; }
@@ -504,7 +517,7 @@ export async function venteParVenues({ rpc, action, montant, route, cleV4 = null
   /* la reference : Chainlink, sinon le prix d achat le plus bas SERVI a 10 USDC (le rachat le moins cher), nomme.
    * ⛔ 2026-10-25 (revue, defaut 4 : HTZc, 3 831 417 $ par action tires d une pool qui REFUSE) : seulement des lieux qui PASSENT. */
   const reference = Number(refUsd) > 0 ? { prixUsd: Number(refUsd), source: 'chainlink' } : referenceRepli({ route, decimales: dec });
-  const pv = phraseVente({ ventes, reference, ici, passants });
+  const pv = phraseVente({ ventes, reference, ici, passants, sansChemin });
   return { etat: 'OK', ventes, decimales: dec, meilleure: pv.meilleure ? pv.meilleure.venue : null, ecartBps: pv.ecartBps, loin: pv.loin, reference, texte: pv.texte };
 }
 

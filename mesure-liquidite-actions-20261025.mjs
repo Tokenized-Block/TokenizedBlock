@@ -17,7 +17,7 @@
  *   BLOC = env BLOC (un bloc epingle, pour remesurer au MEME etat) ; defaut la tete - 10. */
 import fs from 'node:fs';
 import { coterVenueCL, coterVenueV4, verdictVenue, verdictServi, venuesServies, coterVentePool, codeQuoteurNouvelle, overrideQuoteur, phraseVente,
-  choisirVenteVenue, passantsVente, referenceRepli, ecartBpsContre, seuilUtilisable, DEVIS_USDC, REGLES } from './liquidite-actions.js';
+  choisirVenteVenue, lieuxVente, referenceRepli, ecartBpsContre, seuilUtilisable, DEVIS_USDC, REGLES } from './liquidite-actions.js';
 import { routeAction, routeServie } from './actions-chaine.js';
 import { estDeviseConnue } from './pool-sans-hook.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
@@ -94,11 +94,11 @@ for (const s of stocks) {
   let choix = route ? choisirVenteVenue({ route, ventes, existante }) : { venue: existante, raison: 'ROUTE_NON_LUE' };
   /* la vente d avant hors table passe par la pool v4 de l action : sans pool v4, le planificateur REFUSE — aucun lieu emprunte, rien a dire */
   if (choix.venue === 'uniswap-v4' && verdicts[2].code === 'SANS_POOL') choix = { venue: null, raison: 'SANS_ROUTE_DE_VENTE' };
-  const passants = route ? passantsVente({ route, existante }) : [];
+  const { passants, sansChemin } = lieuxVente({ route, existante });
   let refLue = null;
   try { const rr = await lireReferenceAction({ rpc: (m, p) => rpc(m, [p[0], tag]), jeton: a, maintenantSec }); refLue = rr.reference && rr.reference.etat === 'LU' ? rr.reference : null; } catch (_) {}
   const reference = refLue ? { prixUsd: refLue.prixUsd, source: 'chainlink' } : (route ? referenceRepli({ route, decimales: dec }) : null);
-  const pv = choix.venue ? phraseVente({ ventes, reference, ici: choix.venue, passants })
+  const pv = choix.venue ? phraseVente({ ventes, reference, ici: choix.venue, passants, sansChemin })
     : { ici: null, meilleure: null, ecartBps: null, loin: false, texte: null };
   const prixAchat = (v) => (typeof v.achat === 'bigint' && v.achat > 0n ? 10 / (Number(v.achat) / 10 ** dec) : null);
   const ag = prixAgregateur.get(a) || null;
@@ -109,7 +109,7 @@ for (const s of stocks) {
     regles: verdicts.map((v) => ({ ...verdictServi(v), prixAchatUsd: prixAchat(v),
       ecartRefAchatBps: reference && prixAchat(v) ? ecartBpsContre(prixAchat(v), reference.prixUsd) : null })),
     quantiteVente: Q ? String(Q) : null, ventes,
-    vente: { ici: choix.venue, raison: choix.raison, passants, prixIciUsd: pv.ici ? pv.ici.prixUsd : null, mieuxCote: pv.meilleure ? pv.meilleure.venue : null,
+    vente: { ici: choix.venue, raison: choix.raison, passants, sansChemin, prixIciUsd: pv.ici ? pv.ici.prixUsd : null, mieuxCote: pv.meilleure ? pv.meilleure.venue : null,
       prixMieuxCoteUsd: pv.meilleure ? pv.meilleure.prixUsd : null, ecartRefBps: pv.ecartBps, loin: pv.loin, texte: pv.texte },
     reference, referenceChainlink: refLue ? { prixUsd: refLue.prixUsd, majA: refLue.majA, fraicheur: refLue.fraicheur } : null, prixAgregateur: ag,
   };

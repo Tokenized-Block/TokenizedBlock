@@ -40,7 +40,7 @@ import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { decoderInitialize } from './pools-du-jeton.js';
 /* 2026-10-25 — LE LIEU 'aero-new' (factory 0x9cb2…7a76, routeur 0x9ee3…d418, prouve sur fork) quand le serveur le sert comme MEILLEUR
  *   lieu d une action (`deps.venueAction(action).meilleure === 'aero-new'`) ; sinon les routes ci-dessous, inchangees octet pour octet */
-import { planVenueNeuve, venteParVenues, choisirVenteVenue, passantsVente, phraseVente, referenceRepli } from './liquidite-actions.js';
+import { planVenueNeuve, venteParVenues, choisirVenteVenue, lieuxVente, phraseVente, referenceRepli } from './liquidite-actions.js';
 
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -281,14 +281,15 @@ async function preparerVente(q, deps, action) {
   let m = null; try { m = BigInt(String(q && q.montant)); } catch (_) { m = null; }
   const route = (() => { try { return deps.venueAction(action) || null; } catch (_) { return null; } })();
   const existante = venteExistanteDe(action);
-  const passants = passantsVente({ route, existante });
+  /* `sansChemin` : les lieux ou cette app n a AUCUN chemin de vente (hors table Aerodrome) — dit tel quel, pas « ne passe pas les regles » */
+  const { passants, sansChemin } = lieuxVente({ route, existante });
   const t = POOLS_ACTIONS_AERODROME.get(bas(action));
   const coter = () => venteParVenues({ rpc: deps.rpc, action, montant: m, route, cleV4: cleV4MesureeDe(action), tsAncienne: t ? t.tickSpacing : null });
-  if (!(m && m > 0n)) return { route, existante, passants, m: null, cotes: null, choix: null, coter: null };
-  if (!passants.includes('aero-new')) return { route, existante, passants, m, cotes: null, choix: null, coter };
+  if (!(m && m > 0n)) return { route, existante, passants, sansChemin, m: null, cotes: null, choix: null, coter: null };
+  if (!passants.includes('aero-new')) return { route, existante, passants, sansChemin, m, cotes: null, choix: null, coter };
   const cotes = await borneVente(coter());
   const choix = choisirVenteVenue({ route, ventes: cotes && cotes.etat === 'OK' ? cotes.ventes : [], existante });
-  return { route, existante, passants, m, cotes, choix, coter };
+  return { route, existante, passants, sansChemin, m, cotes, choix, coter };
 }
 /** ⛔ AJOUT D INFORMATION : la phrase de vente, posee sur un plan PRET ou APPROBATIONS — elle nomme le lieu EMPRUNTE par CE plan */
 async function attacherVente(plan, vente, { refUsd, lirePlusTard }) {
@@ -298,7 +299,7 @@ async function attacherVente(plan, vente, { refUsd, lirePlusTard }) {
   if (!cotes || cotes.etat !== 'OK') return plan;
   const ici = plan.venue || (plan.pool === 'aerodrome' ? 'aero-old' : plan.pool === 'uniswap-v4' ? 'uniswap-v4' : null);
   const reference = Number(refUsd) > 0 ? { prixUsd: Number(refUsd), source: 'chainlink' } : referenceRepli({ route: vente.route, decimales: cotes.decimales });
-  const pv = phraseVente({ ventes: cotes.ventes, reference, ici, passants: vente.passants });
+  const pv = phraseVente({ ventes: cotes.ventes, reference, ici, passants: vente.passants, sansChemin: vente.sansChemin });
   if (!pv.texte) return plan;
   plan.vente = { texte: pv.texte, loin: !!pv.loin, ecartBps: pv.ecartBps, meilleure: pv.meilleure ? pv.meilleure.venue : null, ici, reference, ventes: cotes.ventes,
     choix: vente.choix ? vente.choix.raison : null };
