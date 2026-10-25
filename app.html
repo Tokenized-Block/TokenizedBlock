@@ -28718,7 +28718,10 @@ document.querySelector('#bcPanneau .bcOnglets').addEventListener('click', (e) =>
  *   (comme le ticket Trade) et le wallet, etape par etape. ⛔ Rien n est signe ici. Une lecture ratee se DIT : jamais « aucun marche »
  *   ni « aucune position » sur un echec. ⛔ Les montants des positions viennent de l API (nombres JSON) : AFFICHES ; le plan relit. */
 const bcBanque = { marches: null, lu: 0, choisi: null, sens: 'emprunter', positionsDe: null, pourToi: null, genPourToi: 0 };
-const bcPct = (x) => (x === null || x === undefined || !Number.isFinite(Number(x)) ? '—' : (Number(x) * 100).toFixed(2) + ' %'); /* insecable : a 375 px « 5.54 » et « % » se separaient */
+/* 2026-10-25 (Phil : « earns 0 % » sur METAc, AMZNc, TSLAc, MSFTc) : un taux LU, positif, sous 0,005 % s ecrivait « 0.00 % », qu on lit
+ *   « rien » ; Number('') = 0 aurait ecrit un chiffre pour un NON LU. Non lu = « not read », jamais un chiffre (test-banque-taux-lus). */
+const bcPct = (x) => (x === null || x === undefined || String(x).trim() === '' || !Number.isFinite(Number(x)) ? 'not read'
+  : Number(x) > 0 && Number(x) < 0.00005 ? '< 0.01 %' : (Number(x) * 100).toFixed(2) + ' %'); /* insecable : a 375 px « 5.54 » et « % » se separaient */
 /* 2026-10-11 (test reel de Grok : une garantie de ~0,046 $ s affichait « ($0) ») : sous 10 $, deux decimales ; sous un cent, « < $0.01 » */
 const bcUsd = (x) => {
   if (x === null || x === undefined || !Number.isFinite(Number(x))) return '—';
@@ -28741,8 +28744,18 @@ function bcBanqueChiffres(mk) {
   const puce = etat === 'nonlu' ? 'availability not read' : etat === 'vide' ? 'Lend only' : etat === 'bas' ? 'Borrow limited' : 'Borrow open';
   return { etat, puce, classe: etat === 'ok' ? 'ok' : etat === 'bas' ? 'bas' : '', liqPct, maxPct };
 }
+/** 2026-10-25 (Phil : « earns 0 % » - bug ?) : mesure du jour, ce n en etait pas un. Chez Morpho, gain du preteur = cout x utilisation
+ *  x (1 - fee) ; METAc etait emprunte a 0,53 %, TSLAc a 0,00003 % -> un gain reel de 0,003 % ou moins. La carte dit POURQUOI, depuis
+ *  l utilisation LUE (API) : 0 = personne n emprunte ; sous 1 % = presque rien. Utilisation non lue = rien (on ne dit pas ce qu on n a pas lu). */
+function bcBanqueGainDit(mk) {
+  const u = mk ? mk.utilisation : null;
+  if (u === null || u === undefined || String(u).trim() === '' || !Number.isFinite(Number(u)) || Number(u) < 0) return '';
+  if (Number(u) === 0) return 'Earns 0.00 % a year — no one borrows on this market yet.';
+  if (Number(u) < 0.01) return 'Earns almost nothing for now: only ' + bcPct(Number(u)) + ' of the lent ' + ((mk.pret && mk.pret.symbole) || 'money') + ' is borrowed.';
+  return '';
+}
 /** Les trois tuiles : le taux d emprunt le plus BAS parmi les marches ou l on peut VRAIMENT emprunter (etat ok - un taux sur un marche
- *  vide serait une offre qu on ne peut pas prendre), le meilleur taux de pret, le nombre de marches. Rien lu = « — », jamais 0.
+ *  vide serait une offre qu on ne peut pas prendre), le meilleur taux de pret, le nombre de marches. Rien lu = « not read » (bcPct), jamais 0.
  *  ⛔ 2026-10-11 (Phil : « les $ available c est pas bon, car peur de liquidite ») : la tuile « To borrow $1,074 » est retiree. */
 function bcBanqueResumer(listes) {
   let meilleurPret = null, moinsCher = null, ouverts = 0;
@@ -28989,6 +29002,8 @@ async function bcBanqueCharger(force = false) {
       bcEl('div', {}, [bcEl('small', { text: 'Costs a year' }), bcEl('b', { text: bcPct(mk.apyEmprunt) })]),
       bcEl('div', {}, [bcEl('small', { text: 'Earns a year' }), bcEl('b', { text: bcPct(mk.apyPret) })]),
       bcEl('div', {}, [bcEl('small', { text: 'Borrow up to' }), bcEl('b', { text: pctLtv(c.maxPct) })])]));
+    const gainDit = bcBanqueGainDit(mk); /* 2026-10-25 : un « 0.00 % » / « < 0.01 % » dit pourquoi (test-banque-taux-lus) */
+    if (gainDit) li.append(bcEl('p', { cls: 'bcMarcheBas', text: gainDit }));
     li.append(bcEl('div', { cls: 'bcLtv', 'aria-hidden': 'true' }, [bcEl('i', { style: 'width:' + Math.min(100, c.maxPct).toFixed(1) + '%' }),
       bcEl('em', { style: 'left:' + Math.min(100, c.liqPct).toFixed(1) + '%' })]));
     li.append(bcEl('p', { cls: 'bcMarcheBas', text: 'You can borrow up to ' + pctLtv(c.maxPct) + ' of your ' + mk.garantie.symbole + "'s value. If the loan reaches "
