@@ -62,7 +62,7 @@ dit('1', ''); vu(jauges.at(-1)[0] === 0 && jauges.at(-1)[3] === null, 'garantie 
 /* 2026-10-11 : le bandeau « Preview » de la maquette est PARTI avec elle (decision de Phil) ; la ligne de ce qui est en ligne reste en tete */
 const iCarte = html.indexOf('id="wBankCarte"'), iVive = html.indexOf('id="tbBanqueVivante"');
 vu(iCarte > 0 && iVive > iCarte && iVive - iCarte < 3000 && html.indexOf('id="tbApercu"') < 0, 'la ligne de ce qui est en ligne n est pas en tete de la carte (ou le bandeau Preview est revenu)');
-vu(/tbOuvrirBank'\)\.addEventListener\('click', \(\) => \{ bcOuvrirPop\([^)]*\); bcVue\('bank'\); void bcBanqueCharger\(\);(?: bcMontrerSousLaFeuille\(\$\('#wBankCarte'\), \$\('#bc-bank'\)\);)? \}\)/.test(html), 'le bouton Open the Bank n ouvre pas l onglet Bank du panneau');
+vu(/tbOuvrirBank'\)\.addEventListener\('click', \(\) => \{ bcOuvrirPop\([^)]*\); bcVue\('bank'\); void bcBanqueCharger\(\);(?: bcMontrerSousLaFeuille\(\$\('#wBankCarte'\), \$\('#bc-bank'\)(?:, \$\('#tbChoix'\))?\);)? \}\)/.test(html), 'le bouton Open the Bank n ouvre pas l onglet Bank du panneau');
 /* 2026-10-25 (claude/grok-wallet) : seul ajout permis apres l ouverture = placer la vue et la carte sous 761 px (test-grok-wallet-20261025, F) */
 /* 4) 2026-10-11 (Phil : « refais bien le frontend de l onglet Wallet pour TokenizedBank, pour rediriger direct ») : le bouton est un vrai
  *   bouton (pleine largeur, pas au milieu d une phrase), AVANT l idee jamais construite, qui est REPLIEE (<details>) et garde son bandeau en tete */

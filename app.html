@@ -11851,9 +11851,20 @@ async function nomJetonWallet(adr, connu = '') {
   return (nom || court(a)).slice(0, 12);
 }
 /* `recus` (2026-10-25) : les jetons qu un recu confirme vient de faire entrer dans ce compte (bcApresConfirme). Ils sont relus EN DIRECT
- *   ici, juste apres ETH et USDC — /api/avoirs (cache serveur 30 s) peut encore rendre la liste d avant l achat. */
+ *   ici, juste apres ETH et USDC — /api/avoirs (cache serveur 30 s) peut encore rendre la liste d avant l achat.
+ * ⛔ 2026-10-25 (revue de cba742b) : le jeton recu ne valait que pour UNE relecture — un majWallet() ordinaire, 15 s plus tard, le
+ *   perdait tant que le cache serveur rendait encore la liste d avant. Il est GARDE (walletRecus, par compte) et relu en direct a chaque
+ *   relecture, jusqu a ce que : la reponse du serveur le contienne (il a rattrape) ; un autre chemin le liste (creations, frappes) ; ou
+ *   un solde LU a zero, plus de WALLET_RECU_ATTENTE_MS apres le recu (vendu ou envoye — une relecture plus recente que le recu). */
+const walletRecus = new Map();
+const WALLET_RECU_ATTENTE_MS = 60000;
 async function majWallet({ recus = [] } = {}) {
   walletLuA = Date.now();
+  if (compte) for (const adrR of recus) {
+    const aR = String(adrR || '').toLowerCase();
+    if (/^0x[0-9a-f]{40}$/.test(aR)) walletRecus.set(aR, { de: String(compte).toLowerCase(), t: Date.now() });
+  }
+  const gardesRecus = () => [...walletRecus].filter(([, v]) => v.de === String(compte || '').toLowerCase()).slice(-8);
   const moi = ++jetonLecture;
   const perime = () => moi !== jetonLecture;
   $('#wDeconnecte').hidden = !!compte;
@@ -11890,14 +11901,15 @@ async function majWallet({ recus = [] } = {}) {
     actifs.push(a);
     peindreActifs();
   }
-  for (const adrR of recus.slice(0, 8)) {
-    const aR = String(adrR || '').toLowerCase();
-    if (!/^0x[0-9a-f]{40}$/.test(aR) || actifs.some((x) => String(x.adr || '').toLowerCase() === aR)) continue;
+  for (const [aR, garde] of gardesRecus()) {
+    if (actifs.some((x) => String(x.adr || '').toLowerCase() === aR)) continue;
     await dormir(260);
     const action = ACTIONS_PAR_ADR.has(aR), devise = DEVISES_BASE.some((d) => String(d.adr).toLowerCase() === aR);
     const a = { id: aR, nom: await nomJetonWallet(aR), sous: (action ? 'tokenized stock · ' : devise ? '' : 'block you received or bought · ') + court(aR), adr: aR, bloc: !action && !devise };
     try { Object.assign(a, await lireJeton(aR, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }
     if (perime()) return;
+    /* un zero LU bien apres le recu = plus detenu (une relecture plus recente que le recu) : plus garde, plus montre */
+    if (a.etat === 'LU' && a.solde === 0n && Date.now() - garde.t > WALLET_RECU_ATTENTE_MS) { walletRecus.delete(aR); continue; }
     actifs.push(a);
     peindreActifs();
   }
@@ -11913,9 +11925,11 @@ async function majWallet({ recus = [] } = {}) {
     if (perime()) return;
     for (const v of (av && Array.isArray(av.avoirs) ? av.avoirs : []).slice(0, 40)) {
       const adrV = String((v && v.adr) || '').toLowerCase();
+      walletRecus.delete(adrV); /* le serveur le montre : il a rattrape le recu, sa liste suffit aux relectures suivantes */
       if (!/^0x[0-9a-f]{40}$/.test(adrV) || actifs.some((x) => String(x.adr || '').toLowerCase() === adrV)) continue;
       await dormir(260);
-      const a = { id: adrV, nom: String(v.symbole || '?').slice(0, 12), sous: (v.action ? 'tokenized stock · ' : '') + court(adrV), adr: adrV };
+      /* 2026-10-25 (revue) : un avoir sans symbole lisait « ? » — son symbole LU, sinon l adresse abregee (nomJetonWallet) */
+      const a = { id: adrV, nom: await nomJetonWallet(adrV, v.symbole), sous: (v.action ? 'tokenized stock · ' : '') + court(adrV), adr: adrV };
       try { Object.assign(a, await lireJeton(adrV, compte)); a.etat = 'LU'; } catch {
         /* la relecture de CE navigateur a echoue : le solde lu par le serveur reste vrai s il porte ses decimales (sinon : illisible) */
         if (Number.isInteger(v.decimales) && /^\d+$/.test(String(v.solde))) Object.assign(a, { decimales: v.decimales, solde: BigInt(v.solde), multiplicateur: null, multiplicateurUi: null, etat: 'LU' });
@@ -11936,6 +11950,7 @@ async function majWallet({ recus = [] } = {}) {
     const ratees = (r.fenetresRatees || []).length;
     if (ratees) note += '⚠️ ' + ratees + ' chain window(s) refused by the node — not read, not empty. ';
     for (const c of gardees.slice(0, 12)) {
+      walletRecus.delete(String(c.jeton).toLowerCase()); /* liste par les creations : plus besoin de le garder */
       if (actifs.some((y) => String(y.adr || '').toLowerCase() === String(c.jeton).toLowerCase())) continue; /* deja lu (recu juste avant) */
       await dormir(260);
       const a = { id: c.jeton, nom: await nomJetonWallet(c.jeton, c.symbole),
@@ -11951,6 +11966,7 @@ async function majWallet({ recus = [] } = {}) {
     let frappes = { blocks: [] };
     try { frappes = await mesFrappes(false, true); } catch { note += '⚠️ blocks you received could not be read further back. '; }
     if (perime()) return;
+    for (const x of frappes.blocks) walletRecus.delete(String(x.jeton).toLowerCase()); /* liste par les frappes : plus besoin de le garder */
     /* 2026-10-10 : une action deja lue par /api/avoirs (meme prefixe 0xb2) ne revient pas en double comme « block received » */
     for (const b of frappes.blocks.filter((x) => !gardees.some((c) => String(c.jeton).toLowerCase() === x.jeton)
       && !actifs.some((y) => String(y.adr || '').toLowerCase() === x.jeton)).slice(0, 12)) {
@@ -17714,6 +17730,9 @@ async function signerEchange(tx, sens, estApprobation) {
   echangeCourant = null;
   void peindreMesAvoirsProfil($('#profil').dataset.block); /* le solde bouge tout de suite apres l echange, comme sur un DEX */
   walletLuA = 0; /* le prochain passage sur Wallet relira, sans attendre les 15 s */
+  /* 2026-10-25 (revue de cba742b) : le meme recu que les achats du panneau — le jeton recu est relu en direct et GARDE par le Wallet,
+   *   le cache serveur de /api/avoirs (30 s) ne le fait plus disparaitre. Lecture seule, apres la confirmation : rien n est signe ici. */
+  void bcApresConfirme(r.hash);
 }
 /* ⛔ LE JOURNAL DES BUYBACKS EST LU SUR LA CHAINE : TBLOCK sorti du PoolManager VERS le wallet de frais. */
 async function peindreJournalBuyback(adr) {
@@ -29854,21 +29873,56 @@ async function bcBanqueOusd(mk, sens) {
 /* ouvrirRailFiat compte deja l etape (onramp_session_ok / _repli) : un nom de plus, hors liste blanche de /api/etape, serait jete en silence */
 $('#bcBanqueCarte').addEventListener('click', (e) => ouvrirRailFiat(e, $('#bcBanqueCarte'), 'USDC'));
 /* la carte TokenizedBank de l onglet Wallet mene a la banque qui existe : le panneau, sur son onglet Bank */
-$('#tbOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); bcMontrerSousLaFeuille($('#wBankCarte'), $('#bc-bank')); });
+$('#tbOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); bcMontrerSousLaFeuille($('#wBankCarte'), $('#bc-bank'), $('#tbChoix')); });
 /* 2026-10-25 (rapport Grok, Bank a 375 px : « le panneau recouvre la carte Wallet ») — MESURE (375x812, serveur local) : sous 761 px le
  *   panneau est une feuille fixe de 503 px (y 253 -> 746) ; apres « Open the Bank », 196 px de la carte Bank du Wallet (#wBankCarte, son
  *   bouton et ses positions) etaient DESSOUS, et la vue Bank commencait 453 px sous le haut du panneau (on voyait la fiche du block).
  *   Ici : la vue est amenee en haut du panneau, et la page defile pour que la carte FINISSE au-dessus de la feuille. Au-dessus de 760 px
  *   le panneau est de cote (padding-right) : rien ne bouge. */
-function bcMontrerSousLaFeuille(carte, vue) {
+/* ⛔ 2026-10-25 (revue de cba742b, 375x812) : un seul placement, 250 ms apres l ouverture, ne tenait pas — la carte (581 px) et ce qui
+ *   est au-dessus d elle grandissent quand les taux et les positions arrivent : 32 px (revue), 71 px (correcteur) revenaient sous la
+ *   feuille. Et la carte ne PEUT PAS tenir au-dessus de la feuille (253 px libres) : la caler par le bas envoyait ses deux choix
+ *   (Borrow / Lend) hors de l ecran, en haut. Maintenant : si la carte tient, elle FINIT au-dessus de la feuille ; sinon son HAUT (ses
+ *   deux choix) est en haut de l ecran. Le placement est REJOUE a chaque changement de taille (ResizeObserver sur la carte, son
+ *   parent et la vue Bank) tant que la feuille est ouverte, au plus BC_PLACER_MS, et s arrete des que la personne fait defiler. */
+const BC_PLACER_MS = 30000, BC_REPLACER_MS = 1000;
+/* MESURE (375x812, ce commit) : la carte fait 580 px, ses deux choix 337 px (Borrow 174 + Lend 155) — eux non plus ne tiennent pas dans
+ *   les 245 px libres. On cale donc le HAUT des choix (`ancre`, #tbChoix) en haut de l ecran plutot que le titre de la carte : Borrow
+ *   entier, le haut de Lend visible, au lieu de perdre 116 px au titre et a la phrase d introduction. */
+function bcMontrerSousLaFeuille(carte, vue, ancre = null) {
   if (!window.matchMedia || !window.matchMedia('(max-width:760px)').matches) return;
-  /* apres l ouverture (animation de 0,18 s) : les rectangles mesures sont ceux qu on voit */
-  setTimeout(() => {
-    const pop = $('#bcPop'); if (!pop || !pop.open) return;
+  const placer = () => {
+    const pop = $('#bcPop'); if (!pop || !pop.open) return false;
     /* la boite qui defile est #bcPanneau (dialog.bcPop > .carte) — le premier enfant est la poignee (mesure : 16 px, ne defile pas) */
     const boite = $('#bcPanneau'), haut = pop.getBoundingClientRect().top;
-    if (vue && boite) boite.scrollTop += vue.getBoundingClientRect().top - boite.getBoundingClientRect().top;
-    if (carte) { const d = carte.getBoundingClientRect().bottom - haut + 8; if (d > 0) window.scrollBy(0, d); }
+    if (vue && boite) { const dv = vue.getBoundingClientRect().top - boite.getBoundingClientRect().top; if (Math.abs(dv) >= 1) boite.scrollTop += dv; }
+    if (carte) {
+      const r = carte.getBoundingClientRect();
+      const d = r.height + 16 <= haut ? r.bottom - haut + 8 : (ancre ? ancre.getBoundingClientRect().top : r.top) - 8;
+      if (Math.abs(d) >= 1) window.scrollBy(0, d);
+    }
+    return true;
+  };
+  /* apres l ouverture (animation de 0,18 s) : les rectangles mesures sont ceux qu on voit */
+  setTimeout(() => {
+    if (!placer()) return;
+    let fini = false;
+    const gestes = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+    const rejouer = () => { if (!fini && !placer()) arreter(); };
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(rejouer) : null;
+    let tic = null;
+    const arreter = () => { if (fini) return; fini = true; if (ro) ro.disconnect(); clearInterval(tic); for (const g of gestes) window.removeEventListener(g, arreter, true); };
+    /* la carte et son parent (hauteur auto : grandit quand ce qui est au-dessus grandit) ; et CHAQUE enfant du panneau — son parent
+     *   (#bcPanneau) a une hauteur fixe, il ne change jamais de taille quand la fiche au-dessus de la vue Bank grandit (mesure) */
+    const boite = $('#bcPanneau');
+    if (ro) for (const el of [carte, carte && carte.parentElement, vue, ...(boite && boite.children ? [...boite.children] : [])]) if (el) ro.observe(el);
+    /* ⛔ MESURE (2026-10-25) : un ResizeObserver ne rappelle qu au rendu d une image — dans un onglet que le navigateur ne peint pas
+     *   (arriere-plan, volet masque), il ne rappelle JAMAIS (0 rappel, 0 requestAnimationFrame mesures). Le placement est donc aussi
+     *   rejoue toutes les BC_REPLACER_MS, le temps que taux et positions arrivent : meme resultat, peint ou non (mesure : la vue Bank a
+     *   grandi entre 15 et 20 s apres l ouverture). */
+    tic = setInterval(rejouer, BC_REPLACER_MS);
+    for (const g of gestes) window.addEventListener(g, arreter, { capture: true, passive: true });
+    setTimeout(arreter, BC_PLACER_MS);
   }, 250);
 }
 $('#tkOuvrirBank').addEventListener('click', () => { bcOuvrirPop({ sansBasculer: true, deplier: true }); bcVue('bank'); void bcBanqueCharger(); });
