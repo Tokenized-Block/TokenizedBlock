@@ -5218,7 +5218,9 @@ const SERVIS_EN_ESSAI_SEULEMENT = ['wallet-simule.js'];
  * ⛔ BORNE : au plus MISABLES_APPELS_MAX appels de chaine par rafraichissement, 3 candidats en vol, un rafraichissement a la fois, 60 s de
  *   cache ; une liste plus vieille que 10 min n est plus servie (ok:false, etat PERIME) — la mise elle-meme re-cote toujours. */
 const MISABLES_TTL_MS = 60_000, MISABLES_PERIME_MS = 600_000, MISABLES_EN_VOL = 3;
-const MISABLES_APPELS_MAX = 1 + CANDIDATS_MISABLES.length * (TAILLES_MISABLES.length + 4);
+/* 2026-10-25 : + MISABLES_RELECTURES candidats relus un a un (un refus de debit n est pas une mesure) ; le plafond les compte */
+const MISABLES_RELECTURES = 8, MISABLES_RELECTURE_PAUSE_MS = 1000;
+const MISABLES_APPELS_MAX = 1 + (CANDIDATS_MISABLES.length + MISABLES_RELECTURES) * (TAILLES_MISABLES.length + 4);
 const misablesCache = { corps: null, a: 0, enVol: null };
 /** la pool de reference de chaque jeton : celle que le Market (trending) montre pour lui, si elle est cotee en USDC (pas de lecture ici) */
 function referencesMisables() {
@@ -5248,9 +5250,24 @@ async function lireMisablesSrv() {
     }
   };
   await Promise.all(Array.from({ length: MISABLES_EN_VOL }, ouvrier));
+  /* 2026-10-25 (prod, bloc 53 065 453) : SANc et SONYc, misables par la regle, servis NON_MESURE « rate limit » de publicnode — absents
+   *   du menu de paiement sous ok:true LU. Un refus de debit n est PAS une mesure : chaque candidat non lu (etat ou reference du Market)
+   *   est RELU, UN a la fois apres une pause, AU MEME BLOC, au plus MISABLES_RELECTURES ; ce qui reste non lu est NOMME (nonMesures). */
+  const aRelire = [];
+  for (let k = 0; k < CANDIDATS_MISABLES.length; k += 1) {
+    const l = lignes[k];
+    if (l && l.tailles.some((t) => t.code === 'NON_MESURE' || t.code === 'REFERENCE_NON_LUE')) aRelire.push(k);
+  }
+  for (const k of aRelire.slice(0, MISABLES_RELECTURES)) {
+    await new Promise((ok) => setTimeout(ok, MISABLES_RELECTURE_PAUSE_MS));
+    const c = CANDIDATS_MISABLES[k];
+    const cot = await coterMisableTailles({ rpc, candidat: c, sorties: TAILLES_MISABLES, reference: refs.get(c.jeton) || null, bloc }).catch((e) => ({ etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 100) }));
+    lignes[k] = ligneMisable(c, cot);
+  }
   const liste = listeMisables(lignes);
+  const nonMesures = liste.filter((l) => l.tailles.some((t) => t.code === 'NON_MESURE' || t.code === 'REFERENCE_NON_LUE')).map((l) => l.symbole);
   const j = (o) => JSON.stringify(o, (_, v) => (typeof v === 'bigint' ? v.toString() : v));
-  return j({ ok: true, etat: 'LU', lu: new Date().toISOString(), bloc, appelsRpc: appels, appelsMax: MISABLES_APPELS_MAX,
+  return j({ ok: true, etat: 'LU', lu: new Date().toISOString(), bloc, appelsRpc: appels, appelsMax: MISABLES_APPELS_MAX, relus: Math.min(aRelire.length, MISABLES_RELECTURES), nonMesures,
     regle: { seuilEcartBps: SEUIL_MISABLE_BPS, profondeurMinUsdc: String(PROFONDEUR_MISABLE), devisBlocsMax: DEVIS_MISABLE_BLOCS, taillesUsdc: TAILLES_MISABLES.map(String),
       route: 'aerodrome-cl (factory of our Aerodrome router)', mesure: MESURE_MISABLES.fichier, mesureBloc: MESURE_MISABLES.bloc,
       borne: 'A listed price is a snapshot: every bet re-quotes at the block it is built and refuses a quote older than ' + DEVIS_MISABLE_BLOCS + ' blocks.' },

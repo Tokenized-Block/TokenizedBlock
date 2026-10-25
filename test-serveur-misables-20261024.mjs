@@ -57,6 +57,8 @@ for (const t of J.table) for (const r of t.routes) if (r.route === 'aerodrome-cl
 const TSLA = M.CANDIDATS_CL.find((c) => c.symbole === 'TSLAc');
 const SEL = { q: selecteur(M.SIG.quoteExactOutputSingle), slot0: selecteur('slot0()'), factory: selecteur('factory()'), bal: selecteur('balanceOf(address)') };
 const compte = { quoter: 0, misables: 0 };
+const LIMITE_DEUX = M.CANDIDATS_CL.find((c) => c.symbole === 'SONYc'), LIMITE_TOUJOURS = M.CANDIDATS_CL.find((c) => c.symbole === 'LIc');
+let refusDeux = 0;
 function noeud() {
   return http.createServer((req, res) => {
     let b = ''; req.on('data', (c) => { b += c; });
@@ -77,6 +79,12 @@ function noeud() {
             const w = (i) => data.slice(10 + i * 64, 10 + (i + 1) * 64);
             const k = '0x' + w(0).slice(24) + '|' + BigInt('0x' + w(3)) + '|' + BigInt('0x' + w(2));
             return DEVIS.has(k) ? r('0x' + mot(DEVIS.get(k)) + mot(0) + mot(0) + mot(0)) : err();
+          }
+          /* (5) 2026-10-25 : le « rate limit » de publicnode vu en prod — SONYc refuse ses DEUX premiers slot0 (les 2 essais de rpcRails
+           *   sur un seul noeud), puis repond ; LIc refuse TOUJOURS */
+          if (s === SEL.slot0 && (to === LIMITE_TOUJOURS.pool || (to === LIMITE_DEUX.pool && refusDeux < 2))) {
+            if (to === LIMITE_DEUX.pool) refusDeux += 1;
+            compte.misables += 1; return { jsonrpc: '2.0', id: q.id, error: { code: -32005, message: 'You reached Public endpoint rate limit, please upgrade to paid plan' } };
           }
           if (POOLS.has(to) && s === SEL.slot0) { compte.misables += 1; return r('0x' + mot(POOLS.get(to).sqrtP) + mot(0).repeat(6)); }
           if (POOLS.has(to) && s === SEL.factory) { compte.misables += 1; return r('0x' + mot(BigInt(to === TSLA.pool ? M.FACTORY_NOUVELLE_INJOIGNABLE : J.factoryAerodromeCl))); }
@@ -126,6 +134,13 @@ try {
     ok(a && NON_MESURES.every((s) => { const l = L(s); return !l || !l.tailles.some((t) => t.misable); }),
       '(2) non mesures dans cet enregistrement : ' + (NON_MESURES.join(' ') || 'aucun') + ' — aucun servi misable');
     ok(a && a.appelsRpc > 0 && a.appelsRpc <= a.appelsMax && compte.misables <= a.appelsMax, '(3) appels de chaine : ' + (a && a.appelsRpc) + ' comptes par le serveur, ' + compte.misables + ' vus par le noeud, plafond ' + (a && a.appelsMax));
+    /* (5) 2026-10-25 : prod, bloc 53 065 453 : SANc et SONYc (misables par la regle, relus a 53 065 528 : 1/1/1 et 1/1/1 bps) servis
+     *   NON_MESURE « rate limit » — absents du menu de paiement pour la minute, sous ok:true LU. Un refus de debit n est pas une mesure. */
+    const so = L('SONYc'), li = L('LIc');
+    ok(refusDeux === 2 && ORACLE.get(LIMITE_DEUX.jeton) && ORACLE.get(LIMITE_DEUX.jeton)[0] === true, '(5) temoin : SONYc a bien refuse 2 slot0, et l oracle le dit misable a 0,50 (' + refusDeux + ')');
+    ok(so && so.misable && so.tailles.every((t, i) => t.misable === ORACLE.get(LIMITE_DEUX.jeton)[i]), '(5) SONYc refuse 2 fois puis lisible : RELU, servi comme l oracle -> ' + (so && so.tailles.map((t) => t.code).join(',')));
+    ok(li && !li.misable && li.tailles.every((t) => t.code === 'NON_MESURE'), '(5) LIc toujours refuse : NON_MESURE, jamais misable -> ' + (li && li.tailles.map((t) => t.code).join(',')));
+    ok(a && Array.isArray(a.nonMesures) && a.nonMesures.length === 1 && a.nonMesures[0] === 'LIc', '(5) le corps NOMME ce qui reste non lu : nonMesures = ' + JSON.stringify(a && a.nonMesures));
     const q1 = compte.quoter;
     const b = await json(srv + '/api/misables');
     /* un rafraichissement lance EN FOND (cache servi pendant la relecture) appellerait le quoter APRES la reponse : on attend 3 s avant de compter */

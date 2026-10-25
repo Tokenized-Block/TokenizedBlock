@@ -5070,7 +5070,7 @@ const PAYER_TTL_MS = 60000;
 const payer = { lignes: null, essai: 0, enVol: null, compte: null, soldes: new Map(), dec: new Map(), soldesA: 0, choix: 'usdc', sig: '',
   /* 2026-10-25 : les jetons des options OUVERTES du dernier rendu (seuls choisissables), la liste #payerTous, les decimals ratees (pas relues) */
   ouvertes: new Set(), sigTous: '', decRatees: new Set(), decEnVol: null };
-const RAISONS_PAYER = { ECART: 'price gap over 1%', PEU_PROFONDE: 'pool under 10,000 USDC', SOUS_LE_MARCHE: 'priced under its market',
+const RAISONS_PAYER = { ECART: 'price gap over 1%', PEU_PROFONDE: 'pool under 10,000 USDC', SOUS_LE_MARCHE: 'priced under its market', REFERENCE_NON_LUE: 'market price not read',
   SANS_DEVIS: 'no quote at this size', PROFONDEUR_NON_LUE: 'pool not read', NON_MESURE: 'not read', TAILLE_NON_MESUREE: 'over 10 USDC is not offered' };
 const symbolePayer = (l) => String((l && l.symbole) || '').replace(/[^A-Za-z0-9.$-]/g, '').slice(0, 16) || 'token';
 const pctPayer = (bps) => (Number.isFinite(Number(bps)) ? (Number(bps) / 100).toFixed(2) + ' %' : '');

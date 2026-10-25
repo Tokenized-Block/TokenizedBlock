@@ -153,6 +153,8 @@ export function eligibilite(m, o = {}) {
   if (e > seuil) return non('ECART', 'paying ' + taille + ' raw USDC costs ' + (e / 100).toFixed(2) + '% over the pool mid price (above ' + (seuil / 100).toFixed(2) + '%)', { ecartBps: e });
   /* la REFERENCE (la pool la plus liquide du jeton, toute factory, lue au meme bloc) : si notre pool paie moins d USDC par jeton, le
    *   joueur vend sous le marche — le cout se compte contre la reference, pas seulement contre notre pool. Absente : non jugee, et dit. */
+  /* 2026-10-25 : la reference a ete DEMANDEE mais pas lue (appel refuse, `0x`) : le cout contre le marche n est pas connu — refuse, jamais « non jugee » */
+  if (m.referenceLue === false) return non('REFERENCE_NON_LUE', 'the price of its deepest pool (the Market reference) could not be read at this block: its cost against the market is unknown', { ecartBps: e });
   const cr = coutVsReference({ ecartBps: e, ecartReferenceBps: m.ecartReferenceBps });
   if (cr !== null && cr > seuil) return non('SOUS_LE_MARCHE', 'its reachable pool prices it ' + (Math.abs(Number(m.ecartReferenceBps)) / 100).toFixed(2) + '% below its deepest pool: paying costs ' + (cr / 100).toFixed(2) + '% vs that market (above ' + (seuil / 100).toFixed(2) + '%)', { ecartBps: e, coutReferenceBps: cr });
   const prof = entier(m.usdcPool);
@@ -393,9 +395,12 @@ export async function coterMisableTailles({ rpc, candidat, sorties = TAILLES_USD
     devis.push({ usdc: String(outs[i]), usdcSortie: outs[i], ok: true, montantIn, ecartBps: ecartAuMoyen({ tokenIn: c.jetonIn, tokenOut: USDC, sortie: outs[i], montantIn, sqrtPriceX96: sqrtP }) });
   }
   const sqrtRef = rr ? lireMot(rr) : null;
+  /* 2026-10-25 : une reference DEMANDEE et NON LUE (appel refuse — publicnode « rate limit » vu en prod — ou `0x`) n est pas une reference
+   *   absente : `referenceLue: false`, et eligibilite refuse (REFERENCE_NON_LUE). Lue sans prix (slot0 = 0) : lue, non jugee. */
+  const referenceLue = refPool ? sqrtRef !== null : null;
   const ecartReferenceBps = refPool ? ecartAReference({ jeton: c.jetonIn, sqrtNous: sqrtP, sqrtRef }) : (reference && bas(reference.pool) === bas(c.pool) ? 0 : null);
   return { etat: 'PRET', jeton: bas(c.jeton), jetonIn: bas(c.jetonIn), natif: c.natif === true, symbole: c.symbole, famille: c.famille, route: ROUTES.CL, factory,
-    pool: bas(c.pool), tickSpacing: Number(c.tickSpacing), sqrtPriceX96: sqrtP, usdcPool, referencePool: refPool, ecartReferenceBps, bloc, devis };
+    pool: bas(c.pool), tickSpacing: Number(c.tickSpacing), sqrtPriceX96: sqrtP, usdcPool, referencePool: refPool, referenceLue, ecartReferenceBps, bloc, devis };
 }
 
 /** LE DEVIS VIVANT pour UNE sortie (celle que le plan exige : usdcAViser) — la forme que planPayerEnJeton lit. */
@@ -411,7 +416,7 @@ export async function coterMisable({ rpc, candidat, usdcSortie, reference = null
 /** UNE LIGNE SERVIE (/api/misables) : un candidat cote aux trois tailles, avec son eligibilite a chaque taille */
 export function ligneMisable(candidat, cot) {
   const ok = cot && cot.etat === 'PRET';
-  const mesure = ok ? { jeton: bas(candidat.jeton), route: ROUTES.CL, factory: cot.factory, usdcPool: cot.usdcPool, ecartReferenceBps: cot.ecartReferenceBps,
+  const mesure = ok ? { jeton: bas(candidat.jeton), route: ROUTES.CL, factory: cot.factory, usdcPool: cot.usdcPool, ecartReferenceBps: cot.ecartReferenceBps, referenceLue: cot.referenceLue,
     devis: cot.devis.map((d) => ({ usdc: d.usdc, ok: d.ok, montantIn: d.ok ? String(d.montantIn) : null, ecartBps: d.ok ? d.ecartBps : null, erreur: d.erreur || null })) } : null;
   const tailles = TAILLES_USDC.map((t, i) => {
     const e = ok ? eligibilite(mesure, { usdc: t }) : { ok: false, code: 'NON_MESURE', raison: (cot && cot.pourquoi) || 'not read', ecartBps: null };

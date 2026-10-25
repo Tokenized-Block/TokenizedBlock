@@ -256,5 +256,44 @@ const lNouvelle = M.ligneMisable(NV, { ...cotDe(NV), factory: M.FACTORY_NOUVELLE
 ok(!lNouvelle.misable && lNouvelle.tailles.every((t) => t.code === 'ROUTE_INJOIGNABLE'), 'une ligne dont la pool LUE repond la nouvelle factory : ROUTE_INJOIGNABLE aux 3 tailles');
 ok(M.listeMisables([M.ligneMisable(NV, { ...cotDe(NV), usdcPool: 1n }), M.ligneMisable(NV, cotDe(NV))])[0].misable === true, 'deux pools pour un jeton : la liste garde celle qui est misable');
 
+/* ── (7) 2026-10-25 : LA REFERENCE NON LUE N EST PAS UNE REFERENCE ABSENTE ─────────────────────────────────────────────────────────
+ *   Prod, /api/misables au bloc 53 064 731 : SONYc NON_MESURE, « You reached Public endpoint rate limit » (publicnode refuse sous la
+ *   charge). La MEME panne sur le SEUL slot0 de la pool de reference du Market etait avalee (catch -> rr = null -> ecartReferenceBps
+ *   null -> « non jugee ») : la ligne sortait MISABLE sans que le cout contre le marche soit connu, et le plan payait de meme.
+ *   Une reference ABSENTE (le Market n en montre pas) ou SANS PRIX (slot0 lu = 0) reste non jugee ; une reference DEMANDEE et NON LUE
+ *   (appel refuse, ou `0x`) rend REFERENCE_NON_LUE, jamais misable. */
+{
+  const t = J25.table.find((x) => x.jeton === NV.jeton), r = t && t.routes.find((x) => x.route === 'aerodrome-cl' && x.pool === NV.pool);
+  const REF = '0x' + '7e'.repeat(20);
+  const S = { q: selecteur(M.SIG.quoteExactOutputSingle), slot0: selecteur('slot0()'), factory: selecteur('factory()'), bal: selecteur('balanceOf(address)') };
+  const motH = (x) => BigInt(x).toString(16).padStart(64, '0');
+  const faux = (refRepond) => async (methode, params) => {
+    if (methode === 'eth_blockNumber') return '0x' + J25.bloc.toString(16);
+    const to = bas(params[0].to), data = String(params[0].data), s = data.slice(0, 10);
+    if (to === REF && s === S.slot0) return refRepond();
+    if (to === NV.pool && s === S.slot0) return '0x' + motH(r.sqrtPriceX96) + motH(0).repeat(6);
+    if (to === NV.pool && s === S.factory) return '0x' + motH(VIEILLE);
+    if (to === M.USDC && s === S.bal) return '0x' + motH(r.usdcPool);
+    if (to === M.QUOTEUR_CL && s === S.q) { const out = BigInt('0x' + data.slice(10 + 2 * 64, 10 + 3 * 64)); const d = r.devis.find((x) => BigInt(x.usdc) === out) || { ok: true, usdc: out, montantIn: (BigInt(r.devis[0].montantIn) * out + BigInt(r.devis[0].usdc) - 1n) / BigInt(r.devis[0].usdc) }; if (d && d.ok) return '0x' + motH(d.montantIn) + motH(0).repeat(3); }
+    throw new Error('execution reverted');
+  };
+  const ligne = async (refRepond) => M.ligneMisable(NV, await M.coterMisableTailles({ rpc: faux(refRepond), candidat: NV, reference: { pool: REF }, bloc: J25.bloc }));
+  const limite = () => Promise.reject(new Error('You reached Public endpoint rate limit, please upgrade to paid plan'));
+  const lA = await ligne(limite), lB = await ligne(() => '0x');
+  const lC = await ligne(() => '0x' + motH(r.sqrtPriceX96) + motH(0).repeat(6)), lD = await ligne(() => '0x' + motH(0).repeat(7));
+  ok(!!r && r.devis.every((d) => d.ok && d.ecartBps <= 100) && BigInt(r.usdcPool) >= M.PROFONDEUR_MIN_USDC, '(7) temoin : la pool NVDAc enregistree le 25/10 passe la regle aux 3 tailles (sinon ce qui suit ne prouve rien)');
+  ok(!lA.misable && lA.tailles.every((x) => !x.misable && x.code === 'REFERENCE_NON_LUE'), '(7) slot0 de la reference REFUSE (rate limit) : REFERENCE_NON_LUE aux 3 tailles, jamais misable -> ' + lA.tailles.map((x) => x.code).join(','));
+  ok(!lB.misable && lB.tailles.every((x) => !x.misable && x.code === 'REFERENCE_NON_LUE'), '(7) slot0 de la reference = `0x` (non lu) : REFERENCE_NON_LUE aux 3 tailles -> ' + lB.tailles.map((x) => x.code).join(','));
+  ok(lC.misable && lC.tailles.every((x) => x.misable && x.coutReferenceBps === x.ecartBps), '(7) reference LUE au meme prix : misable, cout contre le marche = l ecart -> ' + lC.tailles.map((x) => x.code + '/' + x.coutReferenceBps).join(','));
+  ok(lD.misable && lD.tailles.every((x) => x.misable && x.coutReferenceBps === null), '(7) reference lue SANS prix (slot0 = 0) : non jugee, comme avant -> ' + lD.tailles.map((x) => x.code).join(','));
+  /* le PLAN (la mise elle-meme re-cote avec la reference) : meme regle */
+  const dA = await M.coterMisable({ rpc: faux(limite), candidat: NV, usdcSortie: 500500n, reference: { pool: REF } });
+  const pA = dA.etat === 'PRET' ? M.planPayerEnJeton({ devis: dA, compte: JOUEUR, jeu: jeuRoll, blocActuel: J25.bloc + 2, maintenant: TS }) : dA;
+  const dC = await M.coterMisable({ rpc: faux(() => '0x' + motH(r.sqrtPriceX96) + motH(0).repeat(6)), candidat: NV, usdcSortie: 500500n, reference: { pool: REF } });
+  const pC = dC.etat === 'PRET' ? M.planPayerEnJeton({ devis: dC, compte: JOUEUR, jeu: jeuRoll, blocActuel: J25.bloc + 2, maintenant: TS }) : dC;
+  ok(pA.etat === 'REFUSE' && pA.code === 'REFERENCE_NON_LUE' && pA.appels.length === 0, '(7) plan dont la reference est refusee : REFUSE REFERENCE_NON_LUE, 0 appel -> ' + pA.etat + ' ' + pA.code);
+  ok(pC.etat === 'PRET', '(7) le meme plan, reference lue : PRET -> ' + pC.etat + ' ' + (pC.pourquoi || ''));
+  ok(M.eligibilite({ jeton: NV.jeton, route: 'aerodrome-cl', factory: VIEILLE, usdcPool: r.usdcPool, ecartReferenceBps: null, devis: r.devis }).ok === true, '(7) une mesure SANS champ referenceLue (enregistrements, reference absente) : jugee comme avant');
+}
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exitCode = ko ? 1 : 0;
