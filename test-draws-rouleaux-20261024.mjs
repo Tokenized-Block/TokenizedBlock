@@ -433,7 +433,9 @@ S.APP_SUIT = async (R, texte = APP) => {
   app.rouleauxTete(ch.tete());
   await app.peindreSlots(true);
   await h.avancer(5000);
-  const bouton = app.dom.el('slotsRegler').hidden === false && /^Settle spin #5 /.test(app.dom.el('slotsRegler').textContent);
+  /* 2026-10-25 (test live) : #5 n a aucun prix ici — le bouton dit « Record spin #5's points (no prize) » (jamais « · 0.00 USDC ») et
+   *   nomme toujours SON spin */
+  const bouton = app.dom.el('slotsRegler').hidden === false && app.dom.el('slotsRegler').textContent === 'Record spin #5\'s points (no prize)';
   const j = app.rouleauxJeu.etat().journal;
   const suitLAncien = j.some((x) => x.cle.startsWith('S:5:')) && !j.some((x) => x.cle.startsWith('S:6:'));
   const leg = app.dom.el('rouleauxLegende').textContent === 'Spin #5: its faces, from blocks ' + [995, 996, 997].map(fmt).join(', ') + '.';

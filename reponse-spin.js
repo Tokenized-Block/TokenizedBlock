@@ -37,8 +37,12 @@ const pts = (p) => p + ' point' + (p === 1 ? '' : 's');
  * @returns {{ etapes: [{ cle, texte, etat }], action: { cle, texte, bouton } | null, spin: string | null }}
  *   etat d une etape : 'fait' | 'encours' | 'attente' ; bouton : 'regler' | 'accepter' | null
  */
-export function reponseSpin({ moi, suivi = null, plan = null, tete = null, posees = false, regleurOn = false, msParBloc = null, bilan = null, arret = false, fmt = usdcPrecis } = {}) {
+export function reponseSpin({ moi, suivi = null, plan = null, tete = null, posees = false, regleurOn = false, msParBloc = null, bilan = null, arret = false, fmt = usdcPrecis, prixSpin = null } = {}) {
   if (!moi) return { etapes: [], action: null, spin: null };
+  /* ⛔ 2026-10-25 (Phil, test live : « spin gagnant = perte ») : 3 points paient 0,25 pour une mise de 0,50 — vrai, mais lu comme un bug.
+   *   Le resultat dit aussi le cout du spin et le NET, quand un montant est connu et le prix du spin lu (jamais tape ici). */
+  const prix = typeof prixSpin === 'bigint' ? prixSpin : (/^\d+$/.test(String(prixSpin ?? '')) ? BigInt(prixSpin) : null);
+  const net = (recu) => (prix === null || typeof recu !== 'bigint' ? '' : ' — the spin cost ' + fmt(prix) + ' USDC: net ' + (recu >= prix ? '+' + fmt(recu - prix) : '−' + fmt(prix - recu)) + ' USDC');
   const lignes = (plan && plan.lignes) || [];
   const id = suivi ? String(suivi.id) : null;
   const ligne = id ? lignes.find((l) => String(l.id) === id) || null : null;
@@ -66,9 +70,9 @@ export function reponseSpin({ moi, suivi = null, plan = null, tete = null, posee
     } else etapes.push(enVol ? { cle: 'blocs', texte: pre + 'Its three blocks are in — the reels are landing', etat: 'encours' } : { cle: 'blocs', texte: pre + 'Its three blocks drew your faces', etat: 'fait' });
     let res = null;
     if (enVol) res = null;
-    else if (b && (b.issue === 'PAYE' || b.issue === 'PLAFONNE')) res = { texte: pts(b.points) + ' → ' + (b.paie > 0n ? fmt(b.paie) + ' USDC paid to you' + (b.manque > 0n ? ' (' + fmt(b.manque) + ' short of the ' + fmt(b.prix) + ' prize)' : '') : 'no prize'), etat: 'fait' };
-    else if (b && b.issue === 'REGLE_AILLEURS') res = { texte: regleAilleurs(b, fmt), etat: 'fait' };
-    else if (ligne && Number.isInteger(ligne.points) && posees) res = { texte: pts(ligne.points) + ' → ' + (ligne.prix > 0n ? 'prize ' + fmt(ligne.prix) + ' USDC (the contract\'s table)' + (ligne.decision === 'COURT' ? '; the pot pays ' + fmt(ligne.paie) + ' now' : '') : 'no prize'), etat: 'fait' };
+    else if (b && (b.issue === 'PAYE' || b.issue === 'PLAFONNE')) res = { texte: pts(b.points) + ' → ' + (b.paie > 0n ? fmt(b.paie) + ' USDC paid to you' + (b.manque > 0n ? ' (' + fmt(b.manque) + ' short of the ' + fmt(b.prix) + ' prize)' : '') : 'no prize') + net(b.paie), etat: 'fait' };
+    else if (b && b.issue === 'REGLE_AILLEURS') res = { texte: regleAilleurs(b, fmt) + (b.source === 'evenement' ? net(b.paie) : ''), etat: 'fait' };
+    else if (ligne && Number.isInteger(ligne.points) && posees) res = { texte: pts(ligne.points) + ' → ' + (ligne.prix > 0n ? 'prize ' + fmt(ligne.prix) + ' USDC (the contract\'s table)' + (ligne.decision === 'COURT' ? '; the pot pays ' + fmt(ligne.paie) + ' now' : '') : 'no prize') + net(ligne.decision === 'COURT' ? ligne.paie : ligne.prix), etat: 'fait' };
     else if (ligne && ligne.decision === 'PERDU') res = { texte: 'Not settled in time — lost', etat: 'fait' };
     etapes.push(res ? { cle: 'resultat', etat: res.etat, texte: pre + res.texte } : { cle: 'resultat', texte: pre + 'Result: points per trait and the prize', etat: 'attente' });
   }
@@ -92,7 +96,7 @@ export function reponseSpin({ moi, suivi = null, plan = null, tete = null, posee
   if (ligne && ligne.decision === 'ATTENDRE') return regleurOn
     ? action(ACTIONS.ATTENDRE_REGLEUR, 'Nothing to do: the server\'s keeper settles ' + (nomme ? 'spin #' + id : 'it') + ' once its blocks are in.')
     : action(ACTIONS.ATTENDRE, 'Nothing to do yet' + (nomme ? ' for spin #' + id : '') + ': Settle opens once its 3 blocks are in (' + ligne.blocsAvant + ' to go).');
-  if (lot.length) return action(ACTIONS.SANS_PRIX, 'Nothing to do: no prize' + (seul ? '' : ' for ' + leLot) + '. Settle only adds ' + (lot.length > 1 ? 'their' : 'its') + ' points.', 'regler');
+  if (lot.length) return action(ACTIONS.SANS_PRIX, 'Nothing to do: no prize' + (seul ? '' : ' for ' + leLot) + '. The button only records ' + (lot.length > 1 ? 'their' : 'its') + ' points.', 'regler');
   const vide = lignes.find((l) => l.decision === 'COURT');
   if (vide) return action(ACTIONS.POT_VIDE, 'Nothing to do now: the pot is empty — wait for it to grow (' + (String(vide.id) !== id || nomme ? 'spin #' + vide.id + ', ' : '') + secondesTexte(vide.blocsRestants, msParBloc) + ' left).');
   /* un spin perdu : celui suivi, ou (aucun spin suivi : les rouleaux ne montrent pas un spin sans faces) le premier perdu de la liste */

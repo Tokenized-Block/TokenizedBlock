@@ -44,6 +44,8 @@ const importer = async (code) => import('data:text/javascript;base64,' + Buffer.
 const fmt = (x) => Number(x).toLocaleString('en-US');
 const H = (b) => '0x' + createHash('sha256').update('bloc:' + b).digest('hex');
 const u = Slots.usdcPrecis;
+/* 2026-10-25 : le net d un resultat (partie B ; la partie A epingle les textes ecrits a la main) — le prix du spin = la fiche servie */
+const NET = (recu) => { const p = BigInt(JSON.parse(lire('contracts/slots-parametres.json')).spinPrice); return ' — the spin cost ' + u(p) + ' USDC: net ' + (recu >= p ? '+' + u(recu - p) : '−' + u(p - recu)) + ' USDC'; };
 
 /* ================================================================ PARTIE A : reponseSpin, pur */
 const ligne = (o) => ({ id: '7', t: 1000, dernierBloc: 1256, ...o });
@@ -72,7 +74,34 @@ const CAS = [
     (t) => t === 'Settle now — 42 s left: 1.00 USDC.', (e) => e[1].etat === 'fait' && e[2].texte === '6 points → prize 1.00 USDC (the contract\'s table)' && e[2].etat === 'fait'],
   ['reglable, 200 ms, regleur ON, deux spins', { moi: true, suivi: { id: '8', t: 1001 }, tete: 1004, posees: true, regleurOn: true, plan: planDe([ligne({ decision: 'LOT', points: 6, prix: 1000000n, paie: 1000000n, blocsRestants: 3 }), ligne({ id: '8', t: 1001, decision: 'LOT', points: 0, prix: 0n, paie: 0n, blocsRestants: 4 })]) }, 'REGLER', 'regler',
     (t) => t === 'Settle spins #7, #8 now — under 1 s left: 1.00 USDC. The server\'s keeper also settles them on its own.', (e) => e[2].texte === 'Spin #8: 0 points → no prize'],
-  ['reglable, aucun prix', { moi: true, suivi: { id: '7', t: 1000 }, tete: 1003, posees: true, plan: planDe([ligne({ decision: 'LOT', points: 0, prix: 0n, paie: 0n, blocsRestants: 100 })]) }, 'SANS_PRIX', 'regler', (t) => t === 'Nothing to do: no prize. Settle only adds its points.', () => true],
+  ['reglable, aucun prix', { moi: true, suivi: { id: '7', t: 1000 }, tete: 1003, posees: true, plan: planDe([ligne({ decision: 'LOT', points: 0, prix: 0n, paie: 0n, blocsRestants: 100 })]) }, 'SANS_PRIX', 'regler', (t) => t === 'Nothing to do: no prize. The button only records its points.', () => true],
+  /* ⛔ 2026-10-25 (test live : « Settle spin #2 · 0.00 USDC » a cote de « Nothing to do: no prize ») : la phrase dit ce que fait le bouton
+   *   (« Record its points (no prize) », app.html) ; deux spins sans prix : « their » */
+  ['reglables, deux spins sans prix', { moi: true, suivi: { id: '8', t: 1001 }, tete: 1004, posees: true, plan: planDe([ligne({ decision: 'LOT', points: 1, prix: 0n, paie: 0n, blocsRestants: 90 }), ligne({ id: '8', t: 1001, decision: 'LOT', points: 0, prix: 0n, paie: 0n, blocsRestants: 91 })]) }, 'SANS_PRIX', 'regler',
+    (t) => t === 'Nothing to do: no prize for spins #7, #8. The button only records their points.', () => true],
+  /* ⛔ 2026-10-25 (Phil, test live : 3 points ont paye 0,25 pour une mise de 0,50, lu comme un bug) : le resultat dit le cout du spin et le
+   *   NET quand un montant est connu et le prix du spin lu (prixSpin, servi par /api/slots). Textes ECRITS A LA MAIN (pas la formule du code). */
+  ['net : 3 points paient 0.25 (le cas du test live)', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: '500000', bilan: { id: '7', issue: 'PAYE', points: 3, prix: 250000n, paie: 250000n, manque: 0n } }, 'PAYE', null,
+    (t) => t === 'Nothing to do: 0.25 USDC is in your wallet.', (e) => e[2].texte === '3 points → 0.25 USDC paid to you — the spin cost 0.50 USDC: net −0.25 USDC'],
+  ['net : un gain (prix du spin en bigint)', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: 500000n, bilan: { id: '7', issue: 'PAYE', points: 5, prix: 2000000n, paie: 2000000n, manque: 0n } }, 'PAYE', null,
+    () => true, (e) => e[2].texte === '5 points → 2.00 USDC paid to you — the spin cost 0.50 USDC: net +1.50 USDC'],
+  ['net : aucun prix', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: '500000', bilan: { id: '7', issue: 'PAYE', points: 0, prix: 0n, paie: 0n, manque: 0n } }, 'SANS_PRIX', null,
+    (t) => t === 'Nothing to do: no prize.', (e) => e[2].texte === '0 points → no prize — the spin cost 0.50 USDC: net −0.50 USDC'],
+  ['net : plafonne, le net vient de ce que le pot a PAYE (pas de la table)', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: '500000', bilan: { id: '7', issue: 'PLAFONNE', points: 9, prix: 5000000n, paie: 2000000n, manque: 3000000n } }, 'PLAFONNE', null,
+    () => true, (e) => e[2].texte === '9 points → 2.00 USDC paid to you (3.00 short of the 5.00 prize) — the spin cost 0.50 USDC: net +1.50 USDC'],
+  ['net : pot court, le net vient de ce que le pot paie', { moi: true, suivi: { id: '7', t: 1000 }, tete: 1003, posees: true, msParBloc: 2000, prixSpin: '500000', plan: planDe([ligne({ decision: 'COURT', points: 9, prix: 5000000n, paie: 2000000n, manque: 3000000n, blocsRestants: 10 })]) }, 'ACCEPTER', 'accepter',
+    () => true, (e) => e[2].texte === '9 points → prize 5.00 USDC (the contract\'s table); the pot pays 2.00 now — the spin cost 0.50 USDC: net +1.50 USDC'],
+  ['net : reglable, prix de la table', { moi: true, suivi: { id: '7', t: 1000 }, tete: 1003, posees: true, msParBloc: 2000, prixSpin: '500000', plan: planDe([ligne({ decision: 'LOT', points: 6, prix: 1000000n, paie: 1000000n, blocsRestants: 21 })]) }, 'REGLER', 'regler',
+    () => true, (e) => e[2].texte === '6 points → prize 1.00 USDC (the contract\'s table) — the spin cost 0.50 USDC: net +0.50 USDC'],
+  ['net : regle ailleurs, evenement lu', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: '500000', bilan: { id: '7', issue: 'REGLE_AILLEURS', points: 6, prix: 1000000n, paie: 1000000n, source: 'evenement' } }, 'REGLE_AILLEURS', null,
+    () => true, (e) => e[2].texte === 'Settled — 1.00 USDC paid to you (6 points; read from its Settled event) — the spin cost 0.50 USDC: net +0.50 USDC'],
+  /* le montant paye NON LU : aucun net (jamais calcule sur la table) */
+  ['net jamais dit : regle ailleurs, montant non lu', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: '500000', bilan: { id: '7', issue: 'REGLE_AILLEURS', points: 9, prix: 5000000n, source: 'calcul' } }, 'REGLE_AILLEURS', null,
+    () => true, (e) => e[2].texte === 'Settled — 9 points, prize 5.00 USDC; the amount paid was not read'],
+  ['net jamais dit : regle ailleurs, recalcule', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: '500000', bilan: { id: '7', issue: 'REGLE_AILLEURS', points: 1, prix: 0n, paie: 0n, source: 'calcul' } }, 'REGLE_AILLEURS', null,
+    () => true, (e) => e[2].texte === 'Settled — no prize (1 point; computed from its faces and the contract\'s table; its Settled event was not read)'],
+  ['net jamais dit : prix du spin non lu', { moi: true, suivi: { id: '7', t: null }, posees: true, plan: planDe([]), prixSpin: 'not read', bilan: { id: '7', issue: 'PAYE', points: 3, prix: 250000n, paie: 250000n, manque: 0n } }, 'PAYE', null,
+    () => true, (e) => e[2].texte === '3 points → 0.25 USDC paid to you'],
   ['pot court : accepter', { moi: true, suivi: { id: '7', t: 1000 }, tete: 1003, posees: true, msParBloc: 2000, plan: planDe([ligne({ decision: 'COURT', points: 9, prix: 5000000n, paie: 2000000n, manque: 3000000n, blocsRestants: 10 })]) }, 'ACCEPTER', 'accepter',
     (t) => t === 'Accept what the pot holds: 2.00 USDC for spin #7 (3.00 short) — 20 s left.', (e) => e[2].texte === '9 points → prize 5.00 USDC (the contract\'s table); the pot pays 2.00 now'],
   ['pot vide', { moi: true, suivi: { id: '7', t: 1000 }, tete: 1003, posees: true, msParBloc: 2000, plan: planDe([ligne({ decision: 'COURT', points: 9, prix: 5000000n, paie: 0n, manque: 5000000n, blocsRestants: 10 })]) }, 'POT_VIDE', null,
@@ -271,8 +300,8 @@ S.ATTENTE = async (M, texte = APP) => {
   await h.avancer(40000, noter);
   const e = etapesDe(app), a = actionDe(app) || '';
   const prix = TABLE[pts];
-  const resultat = e[2] && e[2].texte === pts + ' point' + (pts === 1 ? '' : 's') + ' → prize ' + u(prix) + ' USDC (the contract\'s table)';
-  const m = /^Settle now — (\d+) s left: ([\d.]+) USDC\.$/.exec(a);
+  const resultat = e[2] && e[2].texte === pts + ' point' + (pts === 1 ? '' : 's') + ' → prize ' + u(prix) + ' USDC (the contract\'s table)' + NET(prix);
+  const m =/^Settle now — (\d+) s left: ([\d.]+) USDC\.$/.exec(a);
   const reste = Slots.etatReglement(t, ch.tete(), app.slotsCfg.vue ? app.slotsCfg.vue.marge : 1).blocsRestants;
   const secondes = !!m && Math.abs(Number(m[1]) - reste * 2) <= 4 && m[2] === u(prix);
   const bouton = app.dom.el('slotsRegler').hidden === false;
@@ -336,7 +365,7 @@ S.REGLE = async (M, texte = APP) => {
   await app.slotsAgir('settle');
   await h.avancer(8000);
   const e = etapesDe(app), a = actionDe(app);
-  const ok = a === 'Nothing to do: ' + u(prix) + ' USDC is in your wallet.' && e[0].texte === 'Sent — spin #7' && e[2].texte === pts + ' points → ' + u(prix) + ' USDC paid to you';
+  const ok = a === 'Nothing to do: ' + u(prix) + ' USDC is in your wallet.' && e[0].texte === 'Sent — spin #7' && e[2].texte === pts + ' points → ' + u(prix) + ' USDC paid to you' + NET(prix);
   return { ok, a, e: e.map((x) => x.texte) };
 };
 /* ---------------------------------------------------------------- revue 3 (defauts 2 et 3) : sur le vrai code, avec la fausse chaine */
@@ -358,7 +387,7 @@ async function regleurRegle(M, texte, evenement) {
   await h.avancer(60000);
   const e2 = etapesDe(app), a2 = actionDe(app);
   /* 2026-10-25 (revue adverse) : sans evenement Settled lu, le montant paye n est JAMAIS affirme (acceptCapped regle aussi avec moins) */
-  const res = evenement ? 'Settled — ' + u(prix) + ' USDC paid to you (' + pts_(pts) + '; read from its Settled event)'
+  const res = evenement ? 'Settled — ' + u(prix) + ' USDC paid to you (' + pts_(pts) + '; read from its Settled event)' + NET(prix)
     : 'Settled — ' + pts_(pts) + ', prize ' + u(prix) + ' USDC; the amount paid was not read';
   const act = evenement ? 'Nothing to do: another transaction settled it (the server\'s keeper, or anyone) — ' + u(prix) + ' USDC went to your wallet.'
     : 'Nothing to do: another transaction settled it (the server\'s keeper, or anyone); any prize went to you.';
@@ -399,7 +428,7 @@ S.UN_SPIN = async (M, texte = APP) => {
   ch.settled.push(logSettled('8', t8, pts8, prix8, ch.pot, ch.tete()));
   await h.avancer(30000, noter);
   const e = etapesDe(app), a = actionDe(app) || '';
-  const res8 = e[2] && e[2].texte === 'Settled — ' + (prix8 > 0n ? u(prix8) + ' USDC paid to you' : 'no prize') + ' (' + pts_(pts8) + '; read from its Settled event)';
+  const res8 = e[2] && e[2].texte === 'Settled — ' + (prix8 > 0n ? u(prix8) + ' USDC paid to you' : 'no prize') + ' (' + pts_(pts8) + '; read from its Settled event)' + NET(prix8);
   const ok = paye7 && autres.length === 0 && res8 && /^Nothing to do: another transaction settled it \(the server's keeper, or anyone\) — /.test(a);
   return { ok, paye7, autres: [...new Set(autres)].slice(0, 4), e: e.map((x) => x.texte), a };
 };
@@ -453,6 +482,25 @@ S.DEUX_SPINS = async (M, texte = APP) => {
   const leg = legendes.length > 0 && legendes.every((x) => /^Spin #8/.test(x));
   return { ok: autres.length === 0 && nomme && leg, autres: [...new Set(autres)].slice(0, 4), actions: [...new Set(actions)].slice(0, 3), legendes: [...new Set(legendes)].slice(0, 3) };
 };
+/* SANS_PRIX (2026-10-25, test live : « Settle spin #2 · 0.00 USDC » a cote de « Nothing to do: no prize ») : un lot qui ne paie rien —
+ *   le bouton dit ce qu il fait (« Record its points (no prize) », jamais « · 0.00 USDC ») et la phrase du panneau dit la meme chose ;
+ *   deux spins sans prix : « Record their points (no prize) » */
+S.SANS_PRIX = async (M, texte = APP) => {
+  const r7 = chercherT(1003, '7', 'rien');
+  const h = faireHorloge(), ch = faireChaine(h, { depart: r7.t + 10, spins: [{ id: '7', t: r7.t }] }), app = await monter(texte, ch, h, { M });
+  app.rouleauxTete(ch.tete());
+  await app.peindreSlots(true); await h.avancer(5000);
+  const a = actionDe(app), b = app.dom.el('slotsRegler');
+  const un = a === 'Nothing to do: no prize. The button only records its points.' && b.hidden === false && b.textContent === 'Record spin #7\'s points (no prize)';
+  const r8 = chercherT(r7.t + 3, '8', 'rien');
+  const h2 = faireHorloge(), ch2 = faireChaine(h2, { depart: Math.max(r7.t, r8.t) + 10, spins: [{ id: '7', t: r7.t }, { id: '8', t: r8.t }] }), app2 = await monter(texte, ch2, h2, { M });
+  app2.rouleauxTete(ch2.tete());
+  await app2.peindreSlots(true); await h2.avancer(5000);
+  const a2 = actionDe(app2) || '', b2 = app2.dom.el('slotsRegler');
+  const deux = /^Nothing to do: no prize for spins #7, #8\. The button only records their points\.$/.test(a2) && b2.hidden === false && b2.textContent === 'Record 2 spins\' points (no prize)';
+  const zero = !/0\.00 USDC/.test(b.textContent + ' ' + b2.textContent);
+  return { ok: un && deux && zero, un, deux, zero, a, b: b.textContent, a2, b2: b2.textContent };
+};
 /* RESUME : « Pay with » NVDAc pour un Spin — le resume affiche avant la signature = le lot envoye au wallet */
 const LIGNES = await lignesServies();
 S.RESUME = async (M, texte = APP) => {
@@ -488,7 +536,15 @@ const MUT_RS = [
   ['A', 'Settle ne nomme pas l autre spin', '  const seul = lot.length === 1 && String(lot[0].id) === id;', '  const seul = lot.length === 1;'],
   ['DEUX_SPINS', 'Settle ne nomme pas l autre spin (vrai code de la page)', '  const seul = lot.length === 1 && String(lot[0].id) === id;', '  const seul = lot.length === 1;'],
   ['A', 'la source du chiffre dite a l envers', "b.source === 'evenement' ? 'read from its Settled event'", "b.source !== 'evenement' ? 'read from its Settled event'"],
-  ['A', 'regle ailleurs sans son resultat', "    else if (b && b.issue === 'REGLE_AILLEURS') res = { texte: regleAilleurs(b, fmt), etat: 'fait' };\n", ''],
+  ['A', 'regle ailleurs sans son resultat', "    else if (b && b.issue === 'REGLE_AILLEURS') res = { texte: regleAilleurs(b, fmt) + (b.source === 'evenement' ? net(b.paie) : ''), etat: 'fait' };\n", ''],
+  /* 2026-10-25 : le net, et la phrase sans prix qui dit ce que fait le bouton */
+  ['A', 'le signe du net inverse', "(recu >= prix ? '+' + fmt(recu - prix) : '−' + fmt(prix - recu))", "(recu >= prix ? '−' + fmt(recu - prix) : '+' + fmt(prix - recu))"],
+  ['A', 'le net dit quand le montant paye n est pas lu', "regleAilleurs(b, fmt) + (b.source === 'evenement' ? net(b.paie) : '')", "regleAilleurs(b, fmt) + net(typeof b.paie === 'bigint' ? b.paie : b.prix)"],
+  ['A', 'le net d un plafonne pris sur la table (le pot a paye moins)', "'no prize') + net(b.paie), etat", "'no prize') + net(b.prix), etat"],
+  ['A', 'le net d un pot court pris sur la table', "net(ligne.decision === 'COURT' ? ligne.paie : ligne.prix)", 'net(ligne.prix)'],
+  ['A', 'le prix du spin tape au lieu de lu', "  const prix = typeof prixSpin === 'bigint' ? prixSpin : (/^\\d+$/.test(String(prixSpin ?? '')) ? BigInt(prixSpin) : null);", '  const prix = 500000n;'],
+  ['A', 'la phrase sans prix parle encore de Settle', "'. The button only records ' + (lot.length > 1 ? 'their' : 'its') + ' points.'", "'. Settle only adds ' + (lot.length > 1 ? 'their' : 'its') + ' points.'"],
+  ['SANS_PRIX', 'la phrase sans prix parle encore de Settle (vrai code de la page)', "'. The button only records ' + (lot.length > 1 ? 'their' : 'its') + ' points.'", "'. Settle only adds ' + (lot.length > 1 ? 'their' : 'its') + ' points.'"],
   ['A', 'perdu dit sans nommer de spin suivi', "  const perdu = ligne && ligne.decision === 'PERDU' ? ligne : !ligne && !b ? lignes.find((l) => l.decision === 'PERDU') || null : null;", "  const perdu = ligne && ligne.decision === 'PERDU' ? ligne : null;"],
 ];
 const MUT_APP = [
@@ -508,6 +564,10 @@ const MUT_APP = [
   ['SANS_RECU', 'un envoi garde les faces du spin d avant', 'slotsCfg.dernierBilan = null; slotsCfg.dernierFaces = null; slotsCfg.ailleurs = null; slotsCfg.poseVu = null;', 'slotsCfg.dernierBilan = null;'],
   ['SANS_WALLET', 'le peintre des Slots ne redonne pas le focus attendu', '  /* 2026-10-24 (revue 3) : un lien froid #game/slots (ou la tuile) tape avant /api/slots : le focus attendu arrive maintenant sur Spin */\n  try { jeuReprendreFocus(); } catch (_) { /* hors de la page (banc) */ }\n', ''],
   ['REGLEUR', 'le panneau ignore le regleur servi', "regleurOn: !!(j && j.regleur && j.regleur.etat === 'ON')", 'regleurOn: false'],
+  /* 2026-10-25 */
+  ['ATTENTE', 'le prix du spin n est pas donne au panneau (aucun net)', "prixSpin: j && /^\\d+$/.test(String(j.prixSpin || '')) ? j.prixSpin : null", 'prixSpin: null'],
+  ['SANS_PRIX', 'le bouton dit « · 0.00 USDC » (le test live)', "  if (lot.length) bR.textContent = sommeLot > 0n ?", '  if (lot.length) bR.textContent = true ?'],
+  ['SANS_PRIX', 'deux spins sans prix : le bouton ne nomme qu un spin', "'Record ' + (lot.length === 1 ? 'spin #' + lot[0].id + '\\'s' : lot.length + ' spins\\'') + ' points (no prize)'", "'Record spin #' + lot[0].id + '\\'s points (no prize)'"],
   ['RESUME', 'le resume Pay with dit le devis, pas le max-in envoye', "  const phrase = 'Pay with ' + sym + ': at most ' + qteJeton(r.maxEntree, dec, 6, true)", "  const phrase = 'Pay with ' + sym + ': at most ' + qteJeton(r.entreeCotee, dec, 6, true)"],
 ];
 let tues = 0;

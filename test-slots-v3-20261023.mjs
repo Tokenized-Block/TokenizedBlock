@@ -222,7 +222,7 @@ async function scenarioPerdant(code) {
   const app = monter(code, ch); app.chaine = ch;
   await app.peindreSlots(true);
   const bR = app.dom.el('slotsRegler');
-  const vu1 = bR.hidden === false && bR.textContent === 'Settle spin #1 · 0.00 USDC' && app.dom.liste().some((t) => t === 'Spin #1: 0 points, no prize — Settle records its points.');
+  const vu1 = bR.hidden === false && bR.textContent === 'Record spin #1\'s points (no prize)' /* 2026-10-25 (test live) : jamais « · 0.00 USDC » */ && app.dom.liste().some((t) => t === 'Spin #1: 0 points, no prize — Settle records its points.');
   await clic(app, 'settle');
   const envoye = ch.appels.length === 1 && ch.appels[0][0] === Slots.planSettleMany({ contrat: CONTRAT, spinIds: ['1'] }).appels[0].data && ch.spins.get('1').statut === 2;
   const dit = app.dom.el('slotsEtat').textContent === 'Spin #1: 0 points, no prize.';

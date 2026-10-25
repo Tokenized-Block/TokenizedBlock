@@ -373,8 +373,13 @@ S.JETON = async (t) => {
       const etat = ETAT[flux], textes = r.ecrits.filter((w) => w.id === etat).map((w) => w.texte), autres = r.ecrits.filter((w) => LIGNES_ETAT.has(w.id) && w.id !== etat);
       const dec = ligne.natif ? 18 : 8, maxEnvoye = ligne.natif ? lu.sw.value : apJeton[0] && apJeton[0].montant;
       const resume = 'Pay with ' + ligne.symbole + ': at most ' + r.ch.api.qteJeton(maxEnvoye, dec, 6, true) + ' ' + ligne.symbole + ' in, exactly ' + Slots.usdcPrecis(lu.eo.amountOut) + ' USDC out (0.10% of the swap kept by the app); the game takes ' + Slots.usdcPrecis(lu.sweep.min) + ' USDC. Prizes are paid in USDC.';
+      /* 2026-10-25 (test live, Rabby) : le wallet montre le ROUTEUR comme receveur de l USDC (le swap l y envoie, le sweep le renvoie au joueur
+       *   dans la meme tx) : la ligne le dit, avec l adresse LUE dans le calldata envoye (recipient du swap) et le minimum du sweep envoye */
+      const rc = String(lu.eo.recipient);
+      const receveur = ' Your wallet may show the router (' + rc.slice(0, 6) + '…' + rc.slice(-4) + ') as the USDC receiver: the same transaction sends at least ' + Slots.usdcPrecis(lu.sweep.min) + ' USDC on to you.';
+      x.receveur = rc === bas(ROUTEUR_AERODROME_CL) && lu.sweep.recipient === JOUEUR;
       const avant = textes.find((s) => s.startsWith('Pay with '));
-      x.resume = !!avant && avant.startsWith(resume) && (mode === 'lot' ? avant.includes(' One signature for all ' + env.length + ' steps, all or nothing…') : avant.includes(' Your wallet asks for ' + env.length + ' signatures in order: the USDC lands in your wallet first, then the game takes it.'));
+      x.resume = !!avant && x.receveur && avant.startsWith(resume + receveur) && (mode === 'lot' ? avant.includes(' One signature for all ' + env.length + ' steps, all or nothing…') : avant.includes(' Your wallet asks for ' + env.length + ' signatures in order: the USDC lands in your wallet first, then the game takes it.'));
       x.ligne = textes.length >= 2 && autres.length === 0;
       x.texte = avant; x.attendu = resume;
       x.ok = x.choisi && !x.jete && x.exact && x.queueJeu && x.via && !x.illimite && x.approveExact && x.remiseAZero && x.joueur && x.resume && x.ligne;
@@ -451,6 +456,10 @@ const MUT = [
   /* 2026-10-24 (revue adverse N2) : l envoi du pass en jeton porte la description du pass (descPass) ; l ancre suit la ligne, meme mutant */
   ['JETON', 'le Week pass ecrit dans la ligne du Roll', "      const rj = await envoyerPaiementJeton(pj, c, dit, ' ' + descPass);",
     "      const rj = await envoyerPaiementJeton(pj, c, (x) => { $('#rollsEtat').textContent = x; }, ' ' + descPass);"],
+  /* 2026-10-25 : la ligne du receveur (le routeur montre par le wallet) */
+  ['JETON', 'la ligne du routeur receveur retiree', "    + (Number(r.fraisBps) > 0 ? ' Your wallet may show the router'", "    + (false ? ' Your wallet may show the router'"],
+  ['JETON', 'le minimum renvoye pris sur la sortie du swap (frais compris)', "USDC receiver: the same transaction sends at least ' + Slots.usdcPrecis(r.usdcRecuAuMoins)", "USDC receiver: the same transaction sends at least ' + Slots.usdcPrecis(r.usdcSortie)"],
+  ['JETON', 'l adresse du routeur prise sur le joueur', "  const s = (plan.appels || []).find((a) => /^swap /.test(String(a.quoi || '')));", "  const s = { to: plan.resume.destinataireUsdc };"],
   ['PERIME', 'controle de peremption retire (la tete n est pas relue)', 'blocActuel: Math.max(tete, Number(devis.bloc))', 'blocActuel: Number(devis.bloc)'],
   ['NON_MISABLE', 'taille non misable permise au clic', "  if (!e.ok) return non(sym + ' cannot pay '", "  if (false) return non(sym + ' cannot pay '"],
   ['NON_MISABLE', 'solde non verifie au clic', '  if (solde < r.maxEntree) return non(', '  if (false) return non('],

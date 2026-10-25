@@ -240,7 +240,9 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .rollLigne .note{margin:0;font-size:12px;line-height:1.35}
 /* 2026-10-24 : « Pay with » (USDC ou un jeton profond, misables.js) — une ligne compacte au-dessus des boutons payants de la carte Draws */
 .payerAvec{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;margin:8px 0 0;min-width:0;max-width:100%}
-/* 2026-10-25 (mesure 375 px) : sans min-width:0, l option la plus longue du selecteur elargissait .payerAvec a 495 px (debord des deux cotes) */
+/* ⛔ 2026-10-25 (test live, 375 px) : sans min-width:0, la rangee « Pay with » prenait la largeur de sa plus longue option (491-495 px mesures
+ *   dans une rangee de 310 px, body.scrollWidth 433) ; le selecteur coupe maintenant son texte (ellipsis) dans la carte */
+.payerAvec select{text-overflow:ellipsis}
 .payerAvec .note{margin:0}
 .payerAvec select{flex:1 1 180px;min-width:0;max-width:100%;font-size:13px;padding:6px 8px;background:var(--fond2);color:inherit;border:1px solid var(--ligne);border-radius:8px}
 /* 2026-10-24 (revue adverse D2) : les boutons d un paiement en jeton arrete (Reset the approval, Finish with USDC), dans la ligne d etat */
@@ -5300,6 +5302,12 @@ const memesAppels = (a, b) => a.length === b.length && a.every((x, i) => String(
   && String(x.data).toLowerCase() === String(b[i].data).toLowerCase() && BigInt(x.value || '0x0') === BigInt(b[i].value || '0x0'));
 /* AU CLIC : le besoin du jeu (SON plan), la taille servie, le devis VIVANT (bloc courant), le plan, le solde. Rien n est envoye ici ;
  *   un refus rend sa raison. */
+/* l adresse du routeur, telle que le wallet l abrege (0x698c…a92f) : lue dans l appel du swap du plan, jamais tapee */
+function routeurCourt(plan) {
+  const s = (plan.appels || []).find((a) => /^swap /.test(String(a.quoi || '')));
+  const a = s ? String(s.to).toLowerCase() : '';
+  return /^0x[0-9a-f]{40}$/.test(a) ? ' (' + a.slice(0, 6) + '…' + a.slice(-4) + ')' : '';
+}
 async function preparerPaiementJeton({ ligne, c, planUsdc, jeu }) {
   const sym = symbolePayer(ligne), non = (pourquoi) => ({ ok: false, pourquoi });
   const besoin = besoinDuJeu(planUsdc, jeu.contrat);
@@ -5331,7 +5339,10 @@ async function preparerPaiementJeton({ ligne, c, planUsdc, jeu }) {
   if (dec === null || solde === null) return non('your ' + sym + ' balance could not be read.');
   if (solde < r.maxEntree) return non('you hold ' + qteJeton(solde, dec, 6) + ' ' + sym + '; the swap may take up to ' + qteJeton(r.maxEntree, dec, 6, true) + '.');
   const phrase = 'Pay with ' + sym + ': at most ' + qteJeton(r.maxEntree, dec, 6, true) + ' ' + sym + ' in, exactly ' + Slots.usdcPrecis(r.usdcSortie) + ' USDC out ('
-    + (Number(r.fraisBps) / 100).toFixed(2) + '% of the swap kept by the app); the game takes ' + Slots.usdcPrecis(r.besoinUsdc) + ' USDC. Prizes are paid in USDC.';
+    + (Number(r.fraisBps) / 100).toFixed(2) + '% of the swap kept by the app); the game takes ' + Slots.usdcPrecis(r.besoinUsdc) + ' USDC. Prizes are paid in USDC.'
+    /* ⛔ 2026-10-25 (test live, Rabby) : avec le frais, exactOutputSingle envoie l USDC AU ROUTEUR et sweepTokenWithFee, dans la MEME tx, le
+     *   renvoie au joueur (lu on-chain : routeur -> joueur 500000, routeur -> frais 500). Le wallet montre le routeur comme receveur : dit ici */
+    + (Number(r.fraisBps) > 0 ? ' Your wallet may show the router' + routeurCourt(plan) + ' as the USDC receiver: the same transaction sends at least ' + Slots.usdcPrecis(r.usdcRecuAuMoins) + ' USDC on to you.' : '');
   return { ok: true, plan, phrase, sym, dec };
 }
 /* L ENVOI : un lot atomique (wallet_sendCalls 2.0, atomicRequired) si le wallet le declare (wallet_getCapabilities « supported »),
@@ -7541,7 +7552,8 @@ function peindreReponseSlots(tete = null) {
   const ferme = sid ? slotsCfg.fermes.get(sid) || null : null;
   const bilan = ici && ici.issue !== 'REGLE_AILLEURS' && ici.issue !== 'NON_LU' ? ici : ailleurs || ici || (ferme && ferme.st === 3 ? { id: sid, issue: 'PERDU' } : null);
   const ms = j && j.regleur && Number(j.regleur.msParBlocMesure) > 0 ? Number(j.regleur.msParBlocMesure) : slotsCfg.msBloc;
-  const r = reponseSpin({ moi: !!c && !!vue, suivi: s, plan, tete: t, posees, regleurOn: !!(j && j.regleur && j.regleur.etat === 'ON'), msParBloc: ms, bilan, arret });
+  /* 2026-10-25 : le prix du spin (lu de /api/slots, servi depuis la fiche du contrat) — le resultat dit le net */
+  const r = reponseSpin({ moi: !!c && !!vue, suivi: s, plan, tete: t, posees, regleurOn: !!(j && j.regleur && j.regleur.etat === 'ON'), msParBloc: ms, bilan, arret, prixSpin: j && /^\d+$/.test(String(j.prixSpin || '')) ? j.prixSpin : null });
   ol.innerHTML = etapesHtml(r.etapes);
   suite.hidden = !r.action;
   txt.textContent = r.action ? r.action.texte : '';
@@ -7686,7 +7698,10 @@ async function peindreSlotsUneFois(force = false) {
   slotsCfg.vue = { spins, pot, table, tete, marge, nonLus };
   const lot = plan.lignes.filter((l) => l.decision === 'LOT');
   bR.hidden = lot.length === 0;
-  if (lot.length) bR.textContent = 'Settle ' + (lot.length === 1 ? 'spin #' + lot[0].id : lot.length + ' spins') + ' · ' + Slots.usdcPrecis(lot.reduce((s, l) => s + l.paie, 0n)) + ' USDC';
+  /* ⛔ 2026-10-25 (test live : « Settle spin #2 · 0.00 USDC » a cote de « Nothing to do: no prize ») : un lot qui ne paie RIEN dit ce que fait
+   *   le bouton (il enregistre les points), jamais « · 0.00 USDC » ; la phrase du panneau (reponse-spin.js, SANS_PRIX) dit la meme chose */
+  const sommeLot = lot.reduce((s, l) => s + l.paie, 0n);
+  if (lot.length) bR.textContent = sommeLot > 0n ? 'Settle ' + (lot.length === 1 ? 'spin #' + lot[0].id : lot.length + ' spins') + ' · ' + Slots.usdcPrecis(sommeLot) + ' USDC' : 'Record ' + (lot.length === 1 ? 'spin #' + lot[0].id + '\'s' : lot.length + ' spins\'') + ' points (no prize)';
   /* Accept : seulement quand aucun spin n est payable en entier (sinon le montant dependrait de l ordre des deux envois) ; le montant affiche
    *   est alors EXACTEMENT min(prix, pot lu), et c est le minimum signe */
   const court = plan.lot.length ? null : plan.courts.find((l) => l.paie > 0n) || null;
@@ -22169,6 +22184,10 @@ async function lireTrending() {
     }
   }
   peindreTrending();
+  /* ⛔ 2026-10-25 (test live : « 21 actions restent sur checking ») : une ligne que le serveur n a PAS encore jugee (ROUTE_EN_COURS, fail-closed
+   *   apres un demarrage) disait « checking » pour toujours — la liste n etait relue qu a la reouverture de l onglet. Tant qu il en reste une,
+   *   la liste est relue toutes les 30 s (onglet Market affiche, page visible) ; une ligne jugee prend son Buy ou sa raison. */
+  if (trDonnees && Array.isArray(trDonnees.lignes) && trDonnees.lignes.some((l) => l && l.routeAction && l.routeAction.code === 'ROUTE_EN_COURS')) relireTrendingPlusTard();
 }
 /* ⛔⛔ LA DECOUVERTE DES POOLS NE TOURNAIT QUE SUR LE FEED, ET TOUTE L OFFRE EN DEPEND (2026-09-23).
  *     MESURE, en production, sur un chargement froid qui va DIRECTEMENT sur Blocks :
