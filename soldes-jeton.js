@@ -19,7 +19,9 @@ export const ADRESSE_ZERO = '0x0000000000000000000000000000000000000000';
 export const PAS_LOGS = 2000;
 
 const hex = (n) => '0x' + Number(n).toString(16);
-const mot = (a) => String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');
+/* ⛔ 2026-10-25 : un topic eth_getLogs est un mot 0x-prefixe. Sans « 0x », publicnode le tolerait et l archive Coinbase
+ *    le refusait (« hex string without 0x prefix », 176 refus sur /api/holders). Banc : test-topic-0x-20261025.mjs. */
+const mot = (a) => '0x' + String(a).replace(/^0x/, '').toLowerCase().padStart(64, '0');
 const adrDeTopic = (t) => '0x' + String(t).slice(26).toLowerCase();
 
 /**
