@@ -5036,6 +5036,7 @@ const SERVIS = [
   'ajouter-paire.js',
   /* 2026-10-04 : la grammaire des commandes ecrites au cerveau + les pre-commandes (importe par app.html) */
   'commandes-panel.js',
+  'panneau-commandes.js', /* 2026-10-25 (Phil : « control panel upgrade ») : les quatre groupes du panneau, badges reads / you sign, actions suivantes (pur) */
   /* 2026-10-18 : la palette Ctrl+K du panneau — filtre et classement purs (importe par app.html : absent d ici = 404 = app morte) */
   'palette.js',
   'skins.js',

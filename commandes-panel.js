@@ -35,6 +35,12 @@ export const PRECOMMANDES = Object.freeze([
   /* 2026-10-18 (Phil 09:00 : « le brain lui-meme, qui par une commande peut avoir acces au game ») : le Game par le texte. `roll` = le roll
    *   classique (practice sans contrat ; 0,50 USDC par roll et 10 au plus par lot avec le contrat — le wallet signe) ; `game` = l etat du jeu ;
    *   `post task` ouvre le formulaire Post-a-task PRE-REMPLI (rien n est poste par la commande : le formulaire, puis le wallet). */
+  /* 2026-10-25 (Phil : « control panel upgrade » ; le lead : Spin en tete du groupe PLAY, c est le jeu principal) : BlockSlots par le texte.
+   *   `direct` : la puce ENVOIE sa commande au clic (rien a ajuster : ni montant, ni block, ni adresse) — la reponse montre le prix et les
+   *   appels AVANT le bouton de signature ; « settle spin » ouvre le wallet tout de suite (la fenetre peut ne durer que ~51 s). Les deux
+   *   reprennent les fonctions de la carte Draws (slotsAgir, Slots.planSpin) : aucune copie. */
+  { cle: 'spin', libelle: 'Spin', modele: 'spin', direct: true },
+  { cle: 'settle_spin', libelle: 'Settle my spin', modele: 'settle spin', direct: true },
   { cle: 'roll', libelle: 'Roll', modele: 'roll' },
   { cle: 'roll_x5', libelle: 'Roll ×5', modele: 'roll x5' },
   { cle: 'post_task', libelle: 'Post a task', modele: 'post task 100 10 10' },
@@ -69,6 +75,8 @@ export const AIDE_COMMANDES = Object.freeze([
   'tasks                                  what this block’s brain accepts right now',
   'game                                   the Game: your ticket, today’s tickets, the pot, the last rolls',
   'log · today                            what happened in the game today (the last 10)',
+  'spin                                   BlockSlots: three Base blocks draw three faces; the answer shows the price and the steps before you sign',
+  'settle spin                            settle your spin that can be settled now (the prize goes to you; your wallet signs)',
   'roll · roll x5 · roll x10              the classic roll (0.50 USDC a roll with the contract, 10 at most; practice without it)',
   'post task <reward> <players> <hold>    e.g. post task 100 10 10 — opens Post-a-task filled in (block units)',
   'duel                                   open duels: accept one or open a challenge (winner 90%, reward pool 7%, TokenizedBlock 3%)',
@@ -142,6 +150,15 @@ export const COMMANDES = Object.freeze([
     { nom: 'Roll ×5', modele: PRE.roll_x5.modele, mots: 'dice play five' },
     { nom: 'Roll ×10', modele: 'roll x10', mots: 'dice play ten' },
   ] },
+  /* 2026-10-25 : BlockSlots — « spin » (un spin, le meme plan que la carte Draws) et « settle spin » (« settle », « settle my spin »). Rien
+   *   d autre ne se lit apres « settle » : une forme inconnue se refuse avec les formes acceptees. */
+  { cle: 'spin', lire: (t) => (/^spin$/i.test(t) ? { ok: true, commande: { type: 'spin' } } : null),
+    palette: [{ nom: 'Spin — three Base blocks draw three faces', modele: PRE.spin.modele, mots: 'slots slot machine spin faces play blockslots' }] },
+  { cle: 'settle_spin', lire: (t) => {
+    if (!/^settle\b/i.test(t)) return null;
+    if (/^settle(?: my)?(?: spins?)?$/i.test(t)) return { ok: true, commande: { type: 'settle_spin' } };
+    return { ok: false, pourquoi: 'settle takes nothing: settle, or settle my spin' };
+  }, palette: [{ nom: 'Settle my spin', modele: PRE.settle_spin.modele, mots: 'settle claim prize slots spin pay' }] },
   { cle: 'post_task', lire: (t) => {
     if (!/^post task\b/i.test(t)) return null;
     if ((m = new RegExp('^post task ' + NOMBRE + ' ([0-9]{1,5}) ' + NOMBRE + '$', 'i').exec(t))) {
@@ -197,6 +214,7 @@ export function creerAnalyseur(table) {
  *   select: { type:'select', jeton }
  *   tab   : { type:'show', tab }      tasks : { type:'tasks' }      help : { type:'help' }
  *   level : { type:'level' }
+ *   spin  : { type:'spin' }           settle_spin : { type:'settle_spin' }  (« settle », « settle spin », « settle my spin »)
  *   game  : { type:'game' }           roll  : { type:'roll', n }  (n = 1..ROLLS_PAR_COMMANDE_MAX ; « roll x11 » est REFUSE, jamais plafonne)
  *   duel  : { type:'duel' }           (« duel » ou « duels »)        log : { type:'log' }  (« log » ou « today » : le journal du jour)
  *   post_task : { type:'post_task', reward, players, hold }  (reward / hold = le texte du nombre, en unites humaines du block ; players = entier)
