@@ -174,6 +174,8 @@ import('./duels-v2-deploiement.js').then((m) => { DUELS_V2_DEPLOIEMENT = (m && (
  *     ecrit en dur ici    0xdd466e674ea557f56295e2d0218a125ea4b4f0f6f3307b95f85e6110838d6438
  *   IDENTIQUES. On garde celui du fichier pour ne pas creer deux sources du meme fait. */
 import { decoderInitialize } from './pools-du-jeton.js';
+/* 2026-10-26 — LA CLE D UN BLOCK PAR LE poolId QUE DEXSCREENER REND DEJA (et sa date) : un getLogs etroit, prouve par decoderInitialize */
+import { clePoolParId, indicesPoolIdDepuisPaires } from './cle-par-pool-id.js';
 import { cleV4Connue } from './cle-v4-connue.js';
 import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { prochaineFenetre } from './fenetre-scan.js';
@@ -2640,11 +2642,103 @@ async function rpcRails(methode, params) {
   }
   throw dernier;
 }
-/** La cle exacte d un block : le cache de /api/cle d abord, sinon une recherche COURTE (10 fenetres, pas 40). */
+/* ══ 2026-10-26 — LA CLE D UN BLOCK PAR SON poolId (cle-par-pool-id.js) ══════════════════════════════════════════════════════
+ * ⛔⛔ MESURE (prod 20261025-game46) : /api/trending 194 lignes, 153 sans cle connue, 0 achetable ; ADOF REFUSE depuis ETH et USDC
+ *   (« no initialized pool among the 15 keys read »). La cle se cherchait par PROFONDEUR depuis la tete (10 fenetres pour un plan,
+ *   40 pour /api/cle) : une pool de plus de ~5 h n etait pas dans la fenetre d un plan. DexScreener rend deja son poolId et sa date.
+ * ⇒ `indicesPoolId` : jeton -> [{ poolId, creeLeMs }], rempli a chaque tour de /api/trending depuis les paires BRUTES (v4 seulement :
+ *   pairAddress de 66 caracteres). `clesParIndices(jeton)` lit, pour chaque indice, le bloc de la date puis UN getLogs Initialize filtre
+ *   par ce poolId (lecteurLogs : budget d archive epuise, la fenetre profonde n est pas envoyee -> NON_LUE). Une cle LUE rejoint
+ *   clesCache (cles-pool.json) : /api/cle, les rails et le Buy de Market la voient.
+ * ⛔ « NON LUE » N EST PAS « ABSENTE » : une NON_LUE n est jamais retenue (relue au prochain appel) ; une absence pres de la date
+ *   (ABSENTE_PRES_DE_LA_DATE) ou un poolId qui n est pas celui du jeton (HORS_JETON) est retenu CLES_PAR_ID_ABSENCE_MS, puis relu —
+ *   et ni l une ni l autre ne dit « ce block n a pas de pool » : la recherche par profondeur d avant reste derriere, inchangee. */
+const indicesPoolId = new Map();
+const INDICES_POOL_ID_MAX = 5000;
+const clesParIdVerdicts = new Map(); /* poolId -> { t, r } : seulement ABSENTE_PRES_DE_LA_DATE / HORS_JETON (une LUE vit dans clesCache) */
+const CLES_PAR_ID_ABSENCE_MS = 6 * 3600 * 1000;
+const clesParIdEnVol = new Map();
+/** retient les indices d un tour de /api/trending (les paires BRUTES de DexScreener) pour les jetons suivis */
+function retenirIndicesPoolId(paires, suivis) {
+  for (const [t, l] of indicesPoolIdDepuisPaires(paires, suivis)) { indicesPoolId.delete(t); indicesPoolId.set(t, l); }
+  while (indicesPoolId.size > INDICES_POOL_ID_MAX) indicesPoolId.delete(indicesPoolId.keys().next().value);
+}
+/** une cle LUE rejoint clesCache du jeton (dedoublonnee par poolId) et le volume */
+function garderCleLue(jeton, cle) {
+  const t = String(jeton).toLowerCase();
+  const cur = clesCache.get(t);
+  const cles = cur && Array.isArray(cur.cles) ? cur.cles.slice() : [];
+  if (cles.some((c) => String(c && c.poolId || '').toLowerCase() === cle.poolId)) return;
+  cles.push(cle);
+  clesCache.set(t, { ok: true, cles });
+  ecrireCles();
+}
+async function cleParUnIndice(jeton, ind) {
+  const id = ind.poolId;
+  const v = clesParIdVerdicts.get(id);
+  if (v && Date.now() - v.t < CLES_PAR_ID_ABSENCE_MS) return { ...v.r, depuisCache: true };
+  if (clesParIdEnVol.has(id)) return clesParIdEnVol.get(id);
+  const p = (async () => {
+    let tete;
+    try { tete = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { tete = NaN; }
+    if (!Number.isSafeInteger(tete) || tete <= 0) return { etat: 'NON_LUE', poolId: id, pourquoi: 'chain head not read' };
+    const r = await clePoolParId({ rpc: rpcServeur, rpcLogs: lecteurLogs(tete).rpc, poolId: id, jeton, creeLeMs: ind.creeLeMs, tete });
+    if (r.etat === 'LUE') garderCleLue(jeton, r.cle);
+    else if (r.etat === 'ABSENTE_PRES_DE_LA_DATE' || r.etat === 'HORS_JETON') {
+      clesParIdVerdicts.delete(id); clesParIdVerdicts.set(id, { t: Date.now(), r });
+      if (clesParIdVerdicts.size > INDICES_POOL_ID_MAX) clesParIdVerdicts.delete(clesParIdVerdicts.keys().next().value);
+    }
+    return r;
+  })().finally(() => clesParIdEnVol.delete(id));
+  clesParIdEnVol.set(id, p);
+  return p;
+}
+/** Les cles d un jeton lues par ses indices poolId : { cles, etats } (etats : un par indice essaye ; [] sans indice). Ne leve pas. */
+async function clesParIndices(jeton) {
+  const t = String(jeton || '').toLowerCase();
+  const cles = [], etats = [];
+  const deja = new Map([clesCache.get(t), clesPool.get(t)].flatMap((s) => (s && Array.isArray(s.cles) ? s.cles : [])).map((c) => [String(c && c.poolId || '').toLowerCase(), c]));
+  for (const ind of indicesPoolId.get(t) || []) {
+    if (deja.has(ind.poolId)) { etats.push({ etat: 'LUE', poolId: ind.poolId, cle: deja.get(ind.poolId), depuisCache: true }); cles.push(deja.get(ind.poolId)); continue; }
+    let r;
+    try { r = await cleParUnIndice(t, ind); } catch (e) { r = { etat: 'NON_LUE', poolId: ind.poolId, pourquoi: String((e && e.message) || e).slice(0, 100) }; }
+    etats.push(r);
+    if (r.etat === 'LUE' && r.cle) cles.push(r.cle);
+  }
+  return { cles, etats };
+}
+/** Le tour de /api/trending : les lignes SANS cle connue qui ont un indice, lues une a une (au plus CLES_PAR_ID_PAR_TOUR jetons). */
+const CLES_PAR_ID_PAR_TOUR = 40;
+async function resoudreClesParIndices(lignes) {
+  const compte = { essayees: 0, lues: 0, absentes: 0, horsJeton: 0, nonLues: 0, sansIndice: 0, reportees: 0 };
+  for (const l of Array.isArray(lignes) ? lignes : []) {
+    const t = String(l && l.adr || '').toLowerCase();
+    if (!/^0x[0-9a-f]{40}$/.test(t)) continue;
+    if (!indicesPoolId.has(t)) { if (!clesConnuesServeur(t).length) compte.sansIndice += 1; continue; }
+    /* un jeton dont TOUS les poolId indiques sont deja connus n est pas relu ; une cle connue AUTRE (ex. une pool non ETH) ne
+     *   dispense pas de lire la pool que le fil de marche voit */
+    const connus = new Set([clesCache.get(t), clesPool.get(t)].flatMap((s) => (s && Array.isArray(s.cles) ? s.cles : [])).map((c) => String(c && c.poolId || '').toLowerCase()));
+    if (indicesPoolId.get(t).every((x) => connus.has(x.poolId))) continue;
+    if (compte.essayees >= CLES_PAR_ID_PAR_TOUR) { compte.reportees += 1; continue; }
+    compte.essayees += 1;
+    const { etats } = await clesParIndices(t);
+    if (etats.some((e) => e.etat === 'LUE')) compte.lues += 1;
+    else if (etats.some((e) => e.etat === 'NON_LUE')) compte.nonLues += 1;
+    else if (etats.some((e) => e.etat === 'HORS_JETON') && !etats.some((e) => e.etat === 'ABSENTE_PRES_DE_LA_DATE')) compte.horsJeton += 1;
+    else compte.absentes += 1;
+  }
+  return compte;
+}
+
+/** La cle exacte d un block : le cache de /api/cle d abord, puis ses indices poolId (2026-10-26), sinon une recherche COURTE (10 fenetres, pas 40). */
 async function clesRails(a) {
   const k = String(a || '').toLowerCase();
   const c = clesCache.get(k);
   if (c && Array.isArray(c.cles) && c.cles.length) return c.cles;
+  try {
+    const p = await clesParIndices(k);
+    if (p.cles.length) return p.cles;
+  } catch (_) { /* indices illisibles : la recherche courte d avant */ }
   try {
     const r = await resoudreClePool(k, 10);
     if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) {
@@ -3952,6 +4046,8 @@ async function lireTrending() {
     if (!lotsOk && lotsKo) {
       throw new Error('DexScreener refused all ' + lotsKo + ' reads (' + JSON.stringify(statuts) + ')');
     }
+    /* 2026-10-26 : les poolId v4 et leur date, vus ici, deviennent les indices de cle des blocks suivis (clesParIndices) */
+    try { retenirIndicesPoolId(paires, blocksConnus); } catch (_) { /* sans indice : la recherche par profondeur d avant */ }
     /* ⛔⛔ LA LISTE DE L EMETTEUR, LUE ICI POUR QUE CHAQUE LIGNE PORTE SON ORIGINE. Decision de Phil
      *     du 2026-09-30 : « Biggest blocks » garde les actions tokenisees, avec l origine DITE.
      *   ⛔ Notre registre en porte 15, l emetteur en declare 40 : marquer seulement les 15
@@ -3985,7 +4081,11 @@ async function lireTrending() {
     });
     /* le cout, servi : appels du dernier tour (par usage) et somme sur l heure glissante */
     actionsChaine.appels = { dernierTour: appelsActions.dernierTour, heure: appelsActions.heure.reduce((s, x) => s + x.n, 0), toursHeure: appelsActions.heure.length };
+    /* 2026-10-26 : AVANT le Buy de Market, les lignes sans cle connue sont cherchees par leur poolId (borne par tour, compte servi) */
+    let clesParPoolId = null;
+    try { clesParPoolId = await resoudreClesParIndices(resume.lignes); } catch (e) { clesParPoolId = { erreur: String((e && e.message) || e).slice(0, 100) }; }
     const achatMarche = await achatsMarche(resume.lignes);
+    achatMarche.clesParPoolId = clesParPoolId;
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
       fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
       emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche, actionsChaine, routesFermees: true,
@@ -6517,6 +6617,14 @@ function traiterRequete(req, res) {
       res.end(JSON.stringify({ ...cleCache, depuisCache: true }));
       return;
     }
+    /* 2026-10-26 : les indices poolId du fil de marche d abord (un getLogs etroit) ; sans cle LUE par eux, la recherche par profondeur d avant */
+    clesParIndices(token).catch(() => ({ cles: [] })).then((p) => {
+      /* une cle LUE par son indice est deja dans clesCache (garderCleLue) : rendue telle quelle */
+      if (p && p.cles.length) {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+        res.end(JSON.stringify({ ok: true, cles: p.cles, viaPoolId: true }));
+        return;
+      }
     resoudreClePool(token).then((r) => {
       try {
         if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) {
@@ -6529,6 +6637,7 @@ function traiterRequete(req, res) {
     }).catch((e) => {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
       res.end(JSON.stringify({ ok: false, etat: 'NON_LU', pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
+    });
     });
     return;
   }

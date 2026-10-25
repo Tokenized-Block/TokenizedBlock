@@ -1,0 +1,5300 @@
+{
+ "lu": "2026-10-25T20:20:15.343Z",
+ "noeud": "https://base-rpc.publicnode.com",
+ "tete": 53084978,
+ "sourcesTbLues": true,
+ "appels": 601,
+ "trendingLu": "2026-10-25T19:21:48.673Z",
+ "prodAchatMarche": {
+  "lignes": 194,
+  "sansCle": 153,
+  "achetables": 0,
+  "refusees": 41,
+  "nonMesures": 0,
+  "devis": 1,
+  "depuisCache": 0,
+  "lu": "2026-10-25T19:21:48.603Z",
+  "sourcesTbLues": true
+ },
+ "compte": {
+  "lignes": 194,
+  "avecIndice": 151,
+  "sansIndice": 43,
+  "cleLue": 151,
+  "absente": 0,
+  "horsJeton": 0,
+  "nonLue": 0,
+  "achetables": 12,
+  "refusees": 139,
+  "nonMesurees": 0,
+  "raisons": {
+   "N ETH pool(s) known, none quoted (did not quote: execution reverted)": 129,
+   "not an ETH pool (quoted in NxN…): not this Buy": 8,
+   "not an ETH pool (quoted in NxbN…): not this Buy": 2
+  }
+ },
+ "lignes": [
+  {
+   "adr": "0xb200000000000000000000fd2f87532b90095211",
+   "sym": "MUc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000397293cb8cda9a10c5",
+   "sym": "SNDKc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000007b9fcbd005511acbd5",
+   "sym": "SPCXc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000008bc8786b856e61707c",
+   "sym": "METAc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb20000000000000000000078ee7ce2fe4908108c",
+   "sym": "NVDAc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000ab99cfa739e253872b",
+   "sym": "MSFTc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000002d0ba3164cc74f58b7",
+   "sym": "GOOGLc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000008d7319e4c7e7928510",
+   "sym": "replicas",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x3265c98c0f66be81eb7455d3cd2cf17eb05325b43ead5a9b9788ab847bee7a14",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x3265c98c0f66be81eb7455d3cd2cf17eb05325b43ead5a9b9788ab847bee7a14",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000008d7319e4c7e7928510",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xdaba36389d4ac80664d56cc9bb675b779c8f00cc",
+     "bloc": 53081789
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006c3efee339283e1d7b",
+   "sym": "TOON",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xfce654ee11dd4988655d4572cf0173e4fa0cb4620fc32a80f44a106fa0588a38",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xfce654ee11dd4988655d4572cf0173e4fa0cb4620fc32a80f44a106fa0588a38",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006c3efee339283e1d7b",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd6b14d0126e956a9e13d8535a59b61360d72c0cc",
+     "bloc": 53081823
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c2e324d24d7eecd1fb",
+   "sym": "AAPLc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000df808b1e70ed780f33",
+   "sym": "BASEDAY",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x91902ba00f541ef2bb6fb8e43b2452dc5acbefdba6b8f78f977b61be1c1df0e4",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x91902ba00f541ef2bb6fb8e43b2452dc5acbefdba6b8f78f977b61be1c1df0e4",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000df808b1e70ed780f33",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xbec5b1d800e53cb1bc77f81e51592bcefa7280cc",
+     "bloc": 53082750
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000992e2ac7d690eff890",
+   "sym": "GRASS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb5b2c580a13c28fa0dad0c6ffa084d8c8c01392656f413489cbb59edebe75602",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb5b2c580a13c28fa0dad0c6ffa084d8c8c01392656f413489cbb59edebe75602",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000992e2ac7d690eff890",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xf9cde5754d7455dc024c35569d5332386d4040cc",
+     "bloc": 53082763
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e8d17de47f48f1850f",
+   "sym": "GRASS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa7ffd47a47eb6b518109224793efbc1245ac2e0cdde00dfd836072d9776ca368",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa7ffd47a47eb6b518109224793efbc1245ac2e0cdde00dfd836072d9776ca368",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e8d17de47f48f1850f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x3d3b130cf0f4e9a9f6ec4762d56e2d608a9ec0cc",
+     "bloc": 53080861
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c8a7223510467d8563",
+   "sym": "PDDc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000163b53d3754ae60f43",
+   "sym": "BaseDay",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x6158a8cd3728a1dc0b1611512ab3315cb69afdca5541c2149279c87afb588094",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x6158a8cd3728a1dc0b1611512ab3315cb69afdca5541c2149279c87afb588094",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000163b53d3754ae60f43",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x3b0186ca9c9a90967c493308b0d4f385821680cc",
+     "bloc": 53080823
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000a26326a922ffa87f6c",
+   "sym": "SONYc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000e47efb88cbb6418de4",
+   "sym": "BaseDay",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xf08693a3647afe1999a373f897cb7106791b3b2efc9820a91ceddf7ca2b823bb",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xf08693a3647afe1999a373f897cb7106791b3b2efc9820a91ceddf7ca2b823bb",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e47efb88cbb6418de4",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xb03e31adaacbc78c739baed8ee60e42f1323a8c4",
+     "bloc": 53081412
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000007790ed6e48e06ed935",
+   "sym": "GMEc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000001a326a97eb463e94cb",
+   "sym": "replicas",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x02ca58312c1b3068a019f7fb9c15cdbcadb4d5eead371545d7b08c19a0b43bd6",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x02ca58312c1b3068a019f7fb9c15cdbcadb4d5eead371545d7b08c19a0b43bd6",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000001a326a97eb463e94cb",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x1d95553a5e1664c47a610cfccc05cde2aa3928c4",
+     "bloc": 53082352
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f720c26062bc3067da",
+   "sym": "TTWOc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000f111184a74720787e6",
+   "sym": "CRWVc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000008d5328e9208773dc58",
+   "sym": "NVOc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb20000000000000000000058b8c947e44011dfe6",
+   "sym": "NFLXc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000003e1cf573b4034ceed1",
+   "sym": "TOON",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x8930e2c89ef8e8fb72a5a04c3e377377c249ce22c505b17aaeedfffd029058b0",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x8930e2c89ef8e8fb72a5a04c3e377377c249ce22c505b17aaeedfffd029058b0",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000003e1cf573b4034ceed1",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x1d928948e16c51f10fa1efffe74982f9b0abe8c4",
+     "bloc": 53083289
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000002feb517dfec7415344",
+   "sym": "OUSD",
+   "dex": "uniswap",
+   "quote": "USDC",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xdf5bde0fc414fcd1f803c9d1b52ebbb4db5982d8dca5316ae06b467e06fc429a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xdf5bde0fc414fcd1f803c9d1b52ebbb4db5982d8dca5316ae06b467e06fc429a",
+     "currency0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+     "currency1": "0xb2000000000000000000002feb517dfec7415344",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x0000000000000000000000000000000000000000",
+     "bloc": 51962957
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x8335…): not this Buy",
+    "classe": null
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000187f7071d6e321a7d2",
+   "sym": "SKHYc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000007d16372840df4dabbe",
+   "sym": "PLTRc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000f6b0417af5f52341fc",
+   "sym": "INFYc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000005ac674f707e357409c",
+   "sym": "NOKc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000347afba223d7b6b63c",
+   "sym": "ORCLc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000000d8ce462e99ee7a47b",
+   "sym": "AMDc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000d83f3b67055baa2938",
+   "sym": "ADOF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xd873e29305e143093112e03c8775dadac330638644212d882644520a1f89a216",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xd873e29305e143093112e03c8775dadac330638644212d882644520a1f89a216",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d83f3b67055baa2938",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xe4af54e1bb9d710a08c45f9bcf5b88e81d2380cc",
+     "bloc": 53056117
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000019bdf0de31f2c3d496",
+   "sym": "CLANKERBOT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x904068d6d8d2172aab9e84a967fbba1635cde47635e136e6f6101311190472e2",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x904068d6d8d2172aab9e84a967fbba1635cde47635e136e6f6101311190472e2",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000019bdf0de31f2c3d496",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x39f520c868d01b5a5dfcbf8daebc1e73d6aec0cc",
+     "bloc": 53077047
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006ff803b7b68881c794",
+   "sym": "BMT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x795904d288839d9336c51ab95066c09a9e7b472d2f81e5e7ed728e1f5b25d95a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x795904d288839d9336c51ab95066c09a9e7b472d2f81e5e7ed728e1f5b25d95a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006ff803b7b68881c794",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x1e44babd141326d11a57c1edb404bc6946b680cc",
+     "bloc": 53055172
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000074d6e1bd2fa81f9277",
+   "sym": "MPLX",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x0fe9d981495d71f909391092c8c56ccd986344b1a46ec468d4b7a1b2326ae8ef",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x0fe9d981495d71f909391092c8c56ccd986344b1a46ec468d4b7a1b2326ae8ef",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000074d6e1bd2fa81f9277",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xb492e51ce4a2bc1dabb9249fb747cecf68eb80cc",
+     "bloc": 53078944
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000749e12afd09ac23089",
+   "sym": "Clankclank",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x511321c2f7429280b6f88e5a891d9a47508a584b2fb834453067eb82ea64e067",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x511321c2f7429280b6f88e5a891d9a47508a584b2fb834453067eb82ea64e067",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000749e12afd09ac23089",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xb58f8c4a11c18b5277057945456bcb388c7880cc",
+     "bloc": 53065618
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000090b77c45d606cf569f",
+   "sym": "MCRIB",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x808dcbb64b8b5cb3800c3c5268eecd9ff21edf753f3ff10a1509feb8125d2f57",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x808dcbb64b8b5cb3800c3c5268eecd9ff21edf753f3ff10a1509feb8125d2f57",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000090b77c45d606cf569f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x3167fcf118f59fb2f465a7ceae306d59bed4c0cc",
+     "bloc": 53046579
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000003487bb07caf7bd5860",
+   "sym": "GrapheneOs",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x829985c2e57cff50a5aecdbb57bb40d9d1dbf7359d4c7bbea01c11bdc8383252",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x829985c2e57cff50a5aecdbb57bb40d9d1dbf7359d4c7bbea01c11bdc8383252",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000003487bb07caf7bd5860",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xc13c97507022d4cd241bb93d05a5b70b9c8f40cc",
+     "bloc": 53047541
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f8b3705c6f45b7ec85",
+   "sym": "CURB",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe44303ef84d9d10c7f4ba0600c450c854fb61a324afa34ff56368fb072dad8db",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe44303ef84d9d10c7f4ba0600c450c854fb61a324afa34ff56368fb072dad8db",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000f8b3705c6f45b7ec85",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x6942177f16ec7bb509e3589682f1ca4367c780cc",
+     "bloc": 53073272
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f3c9f1e92bf7cae7d9",
+   "sym": "Beeper",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xd7d632dc9f796d6b18a95743844099727bae229c16fe02ecd6f62d785f71cb4e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xd7d632dc9f796d6b18a95743844099727bae229c16fe02ecd6f62d785f71cb4e",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000f3c9f1e92bf7cae7d9",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd00b0f9894120ebd059f5254b1b1ac899a3800cc",
+     "bloc": 53056174
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000056ac20e423a00e1e55",
+   "sym": "ELON",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x3e22fee9f37f747cd357e14c7780654ad26ec227be845640c5b354299493933f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x3e22fee9f37f747cd357e14c7780654ad26ec227be845640c5b354299493933f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000056ac20e423a00e1e55",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x942a0d87913b2202b938abb8412d3c8929e100cc",
+     "bloc": 53077998
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ecfc2d0247b8b4f2c8",
+   "sym": "UDFS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xae80cade5c4de7e65a74c0ae9403cbe1659020d4abe0d7ed3c66745c5398e8d7",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xae80cade5c4de7e65a74c0ae9403cbe1659020d4abe0d7ed3c66745c5398e8d7",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000ecfc2d0247b8b4f2c8",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x58db3bf4158562757e28b8f1b3e5bb295dc600cc",
+     "bloc": 53061882
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000126c9f088d52f3cb6e",
+   "sym": "GrapheneOS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x64f5f32b0ed299db183f77e380551317a11ecbb8254772fe1808741a491c2d71",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x64f5f32b0ed299db183f77e380551317a11ecbb8254772fe1808741a491c2d71",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000126c9f088d52f3cb6e",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xcf70f6d4a2b8c63d0ec36c64cd27c3e6e9fc00cc",
+     "bloc": 53062837
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000002904d15036d6e665a6",
+   "sym": "SCOPEWHALE",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x1542a991c84c2c3f41d44d5a7852e9885965618616216681538a1ec82ffa2a7d",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x1542a991c84c2c3f41d44d5a7852e9885965618616216681538a1ec82ffa2a7d",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000002904d15036d6e665a6",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xb0be2ba7a4084addd8bdde307413ade894ba80cc",
+     "bloc": 53052382
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006c9d42a5ba97987859",
+   "sym": "GIGAJESSE",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x1e7bb95c1fc7e7e04e996dec1647003b4f8d68c80881a707130b3da44d23812a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x1e7bb95c1fc7e7e04e996dec1647003b4f8d68c80881a707130b3da44d23812a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006c9d42a5ba97987859",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xc37786f27583fe00fe7d2c7322d604e857adc0cc",
+     "bloc": 53041818
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000072171247a82e397bb7",
+   "sym": "SALD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x9008adf0906b69354cfb1e50fe3b73d45a9bf14f6ad75a8b942e2ad3f71dd3f4",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x9008adf0906b69354cfb1e50fe3b73d45a9bf14f6ad75a8b942e2ad3f71dd3f4",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000072171247a82e397bb7",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x584093a4b7988798c06dc2516edc258b6303c0cc",
+     "bloc": 53078957
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e5c8eb63dd01f30d56",
+   "sym": "GWON",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x35e5b6634146709720db5e87058a8efe62b1893769faea76cc49657ed8acab2a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x35e5b6634146709720db5e87058a8efe62b1893769faea76cc49657ed8acab2a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e5c8eb63dd01f30d56",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x908d5ebfdd1497fcbe03ad285a054b905e6340cc",
+     "bloc": 53050503
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000fa640e7a5e9bdeef2a",
+   "sym": "NVRD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x90e47b13df5cfbd350272a1ceab0fda0488d005163a397b177dc91f39fca6841",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x90e47b13df5cfbd350272a1ceab0fda0488d005163a397b177dc91f39fca6841",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000fa640e7a5e9bdeef2a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x690b2bce1c0b1e702cf86b8a99a5645782e540cc",
+     "bloc": 53063704
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d0be853ac25bcbce39",
+   "sym": "Surplus",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa501fdf8113cf486691606a5402bb0e821d0a0a79f739b25f5c14978d4505187",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa501fdf8113cf486691606a5402bb0e821d0a0a79f739b25f5c14978d4505187",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d0be853ac25bcbce39",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xee62eb7d8c7317e4dae421674d4553c1e266c0cc",
+     "bloc": 53058038
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000003abf909fb071cb48f0",
+   "sym": "Quotient",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xef17ac25bd01beacea9cdb9ca1fea4a777c5a548084c30f8b7aab5a9385abaa3",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xef17ac25bd01beacea9cdb9ca1fea4a777c5a548084c30f8b7aab5a9385abaa3",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000003abf909fb071cb48f0",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xed40982dee59f0ac65791e99d5cf46cb5bbc80cc",
+     "bloc": 53072269
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000967e21f2bde4f94a4a",
+   "sym": "Clankclank",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x833f56041da683d3b7d8ec5380edf6ec3da77daea2dbe36056d59529abd8509e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x833f56041da683d3b7d8ec5380edf6ec3da77daea2dbe36056d59529abd8509e",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000967e21f2bde4f94a4a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x46dd5be03b30347580f7528c94f1ac9a0a2a40cc",
+     "bloc": 53066553
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000972231ff24b023873a",
+   "sym": "Clankclank",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xf2a2516c99e2f0621d05b5ad118b89168ece10179ba83cf927973b202cdbd896",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xf2a2516c99e2f0621d05b5ad118b89168ece10179ba83cf927973b202cdbd896",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000972231ff24b023873a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x9c0107f0d1dff4f08cdf7cdd0152e86a426500cc",
+     "bloc": 53068442
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000543f830be5d1cebddd",
+   "sym": "UDTF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x1ef0ed7ac97c092107730b1376490d05402fdd81ad2c2b6a1b2418e337dfbbcd",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x1ef0ed7ac97c092107730b1376490d05402fdd81ad2c2b6a1b2418e337dfbbcd",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000543f830be5d1cebddd",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xa55b2374df4d2ec35c86946d0a5e428253d0c0cc",
+     "bloc": 53049566
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c77611ecb760d92d97",
+   "sym": "Ckrib",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x41f5c901bc5b44cd0e2e0e4b0d690704473607603cb802e83c073c361a28945d",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x41f5c901bc5b44cd0e2e0e4b0d690704473607603cb802e83c073c361a28945d",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000c77611ecb760d92d97",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x8724b9e02840e497ccce69a70ab86061592340cc",
+     "bloc": 53044814
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e60f448c7b67bbfd10",
+   "sym": "EARN",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb38fd7091b831a70210b2d9521efd4ef4bd2d255f1120a95bad6798e9b723957",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb38fd7091b831a70210b2d9521efd4ef4bd2d255f1120a95bad6798e9b723957",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e60f448c7b67bbfd10",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xa2d4266ab25b44d2a0ff6b0891b96f33c8c4c0cc",
+     "bloc": 53057091
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000005755e414a34207bb03",
+   "sym": "OVER",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xd54e9d76ef387794c82447b8e42636704fd03481b9e4903d3013497ad90992cd",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xd54e9d76ef387794c82447b8e42636704fd03481b9e4903d3013497ad90992cd",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000005755e414a34207bb03",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x682e38a58dcb25e26f8c97d8648f41ac8b8640cc",
+     "bloc": 53050423
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000fb70e08d287571a5d2",
+   "sym": "CURB",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xcfbc164b98d84562c08333a7dbc941f54267c13d95b9acd55bb64ebc44d685e2",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xcfbc164b98d84562c08333a7dbc941f54267c13d95b9acd55bb64ebc44d685e2",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000fb70e08d287571a5d2",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xf51a8dab08beb57a20e15cef97f3ceeb411280cc",
+     "bloc": 53071367
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000011d9053e7382328720",
+   "sym": "Base",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xc4b9975d4a7204c169d6b08f8e5611ac4f4071f385934ee49f0c6427cb8e24ee",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xc4b9975d4a7204c169d6b08f8e5611ac4f4071f385934ee49f0c6427cb8e24ee",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000011d9053e7382328720",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xdb6f68084c5c4e04fb6ae916a454d440950a00cc",
+     "bloc": 53079899
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000028d965898440c1a3e",
+   "sym": "Omarchy",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xfe84fe910680fd8046c6cfe0845cbdd5e41f2b96ababed131cfe2943b8d3fc51",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xfe84fe910680fd8046c6cfe0845cbdd5e41f2b96ababed131cfe2943b8d3fc51",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000028d965898440c1a3e",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xecb8fd2dae466c32c72eaffc55fa9815e4cac0cc",
+     "bloc": 53042922
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000093d42cfd9ff998afb3",
+   "sym": "JCT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xab3149d16b6e95663fbd108fee52f49fb7e28f421d1f601024d076bd619c1377",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xab3149d16b6e95663fbd108fee52f49fb7e28f421d1f601024d076bd619c1377",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000093d42cfd9ff998afb3",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xaf4da26195012db4a08e8137c9f2fff4c30840cc",
+     "bloc": 53070359
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ce04a6f86a82603666",
+   "sym": "DTCC",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x900ab8a6ac8bb829aa29e109e4b0f120d8e45ebd008a043b9e98ef57060a148f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x900ab8a6ac8bb829aa29e109e4b0f120d8e45ebd008a043b9e98ef57060a148f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000ce04a6f86a82603666",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x865e8f3481bb045adf7c59e50e644e92596800cc",
+     "bloc": 53071317
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000096bd1afc40b417c1e6",
+   "sym": "EARN",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xad6977ad6a2fbd87840daddb23ebdfed597f5f81ab6b876e529b517b12872c71",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xad6977ad6a2fbd87840daddb23ebdfed597f5f81ab6b876e529b517b12872c71",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000096bd1afc40b417c1e6",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x3f7616e6ae4e0c55984939e06ea7368cbd5780cc",
+     "bloc": 53060880
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000004bf1b5e6477ef9c818",
+   "sym": "ADOF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb653eb3bdf38f6ad42832d2d6b85d7bd9f118f9c99da8c07f73244868119003e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb653eb3bdf38f6ad42832d2d6b85d7bd9f118f9c99da8c07f73244868119003e",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000004bf1b5e6477ef9c818",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xfec018adea3448d75d710530fd110cf1efd7c0cc",
+     "bloc": 53053264
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000005bad8b54a28f046f05",
+   "sym": "StETH",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x823c68ca3edce0b71139e07aa96211dc4c401e6b12c150966bd9782ed099a1a7",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x823c68ca3edce0b71139e07aa96211dc4c401e6b12c150966bd9782ed099a1a7",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000005bad8b54a28f046f05",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xb30348510767ad1808c1ea059583feb1097340cc",
+     "bloc": 53069467
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006ba6c09c25925e2200",
+   "sym": "GOFI",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x0e0eff1b74c5fb24318debf25616d5ea4db92ed3d19da29323e781b9b949608c",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x0e0eff1b74c5fb24318debf25616d5ea4db92ed3d19da29323e781b9b949608c",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006ba6c09c25925e2200",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xc5908b827103046fdfcda0d668494c77f7d380cc",
+     "bloc": 53064756
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000746cfa83be5503ab70",
+   "sym": "NOFT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xaaf0a1a0f97a2e166bc283d1c731ff4d7431bbb388f1fee156d79b538a4b98a5",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xaaf0a1a0f97a2e166bc283d1c731ff4d7431bbb388f1fee156d79b538a4b98a5",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000746cfa83be5503ab70",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x853b1a2c07a63dff03c507e73aa4d4a54dce80cc",
+     "bloc": 53045756
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000083f33e46225c9659b4",
+   "sym": "CLONK",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe74bb55f69eae611368898959c3d6b24dd7ea865c9297503d70927c72345d18a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe74bb55f69eae611368898959c3d6b24dd7ea865c9297503d70927c72345d18a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000083f33e46225c9659b4",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x790a93f790650aa39888bef9eaff6529e152c0cc",
+     "bloc": 53062768
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000334c82a77de4252ccd",
+   "sym": "ABTC",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x6f10366265bdb136e4e095c6b892e67b25013ca94cedf3f9fa0026616fb5354f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x6f10366265bdb136e4e095c6b892e67b25013ca94cedf3f9fa0026616fb5354f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000334c82a77de4252ccd",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x83800375b3dabb407222944cd382cafdbd98c0cc",
+     "bloc": 53048518
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000005ea0c3a69ac03c000c",
+   "sym": "vano",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa5ac10cc9dee36fb9a56087d353a5adbb258c79144214b8e12ff13b07882db13",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa5ac10cc9dee36fb9a56087d353a5adbb258c79144214b8e12ff13b07882db13",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000005ea0c3a69ac03c000c",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xe0266ad2753c9549e09413635b4c6f2724b4c0cc",
+     "bloc": 53043728
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000760506bcaa334151dc",
+   "sym": "AIPOS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000410f4305e8f69c09cb",
+   "sym": "CLESIS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb43d817cefa8a23713791e7b7d691acadfe3d27b57433b94bd7332c22c015920",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb43d817cefa8a23713791e7b7d691acadfe3d27b57433b94bd7332c22c015920",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000410f4305e8f69c09cb",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xe3fa5b58f2533fe10e24b58d59e7a25f00fb00cc",
+     "bloc": 53066657
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000060b49275237ed35b7a",
+   "sym": "CLANKCLANK",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xd690c56034544d68e8d094a2db3c5fa4f2f9960a1059a5d38cbcfa0e4d64f14f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xd690c56034544d68e8d094a2db3c5fa4f2f9960a1059a5d38cbcfa0e4d64f14f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000060b49275237ed35b7a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xcf3bc20086c9d3f412536a21aaadbc6bb02e40cc",
+     "bloc": 53067500
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f1e9626c6f1a465c80",
+   "sym": "USDT.Z",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x3f7b0cafe231577804ce66895d01f65963bad7d045cf4b2ee41dc69bddc0ad57",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x3f7b0cafe231577804ce66895d01f65963bad7d045cf4b2ee41dc69bddc0ad57",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000f1e9626c6f1a465c80",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x43d78d53e0de53d9c8520fe72a016666269f80cc",
+     "bloc": 53070405
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000155fb4f1aa716a1a09",
+   "sym": "MCRIB",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x7307bf45578a3c6101284b3c2c9daad581de526adef311e2f6d454a3a2d9b76f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x7307bf45578a3c6101284b3c2c9daad581de526adef311e2f6d454a3a2d9b76f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000155fb4f1aa716a1a09",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x5b4023d5b2abf36dd804cccb6a942cdae2fc00cc",
+     "bloc": 53044679
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000008a86b6659e572501cb",
+   "sym": "Beeper",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x819bc9900f9d623a9e66a64fdee9c8619c6f6b233779b81ffe3194869f5e8c1c",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x819bc9900f9d623a9e66a64fdee9c8619c6f6b233779b81ffe3194869f5e8c1c",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000008a86b6659e572501cb",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x6b1c341c099f3a5f253b85122b65fc08f61b80cc",
+     "bloc": 53054219
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000bfe5277819a884e57f",
+   "sym": "Chicken",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000f932aa2058978b6db0",
+   "sym": "GrapheneOs",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x5427765218e563310e5aa667a652da363eb3ad5cba8da3299a8dd2f9f238caa7",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x5427765218e563310e5aa667a652da363eb3ad5cba8da3299a8dd2f9f238caa7",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000f932aa2058978b6db0",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x773a250be3cbc852f41fe2c0688c9d3de25d40cc",
+     "bloc": 53049466
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f83b1cbd5b4cfa06c4",
+   "sym": "NVRD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x7bfdcd69fb9ad3459cc51d46751fa5b79c6438ad34ddb46d7f488d81fadeebc6",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x7bfdcd69fb9ad3459cc51d46751fa5b79c6438ad34ddb46d7f488d81fadeebc6",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000f83b1cbd5b4cfa06c4",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x6e838ad1d75ae5ceda49bf45dea1d679c78e00cc",
+     "bloc": 53063784
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000000460286308936268d3",
+   "sym": "PYTH",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x00726810cc0182f4560d8d96ba639ce7af9004af194f0410280088bc6e0cbacc",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x00726810cc0182f4560d8d96ba639ce7af9004af194f0410280088bc6e0cbacc",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000000460286308936268d3",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x587e7943dcf53b612ffdccfe91a030c32f5b00cc",
+     "bloc": 53059019
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000007ef3a5d457a226d7ee",
+   "sym": "SWORDOPE",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x8146737a9f85493c0f6b7385125f7486198104344969dc5402f63ffa5ee745b7",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x8146737a9f85493c0f6b7385125f7486198104344969dc5402f63ffa5ee745b7",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000007ef3a5d457a226d7ee",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xf6d44310ea56a81a2dca090e018a3a261f1d80cc",
+     "bloc": 53065713
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000673f8a9c243a17ab55",
+   "sym": "BOPP",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x690c0a0e5bda67a5a22948f006b11b8f24bf4a2ea04ccbbaab57a0b77c84c319",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x690c0a0e5bda67a5a22948f006b11b8f24bf4a2ea04ccbbaab57a0b77c84c319",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000673f8a9c243a17ab55",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xc97ff7538e2cb9f600ab7c704e8e4982b14100cc",
+     "bloc": 53046710
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e9ae0773284bf5d48a",
+   "sym": "DOPE",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xecdfafa8513adc54161ba074f657b620ce926b5db34cbe1d012c6c272251d0f5",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xecdfafa8513adc54161ba074f657b620ce926b5db34cbe1d012c6c272251d0f5",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e9ae0773284bf5d48a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xc1934f583fe514db88b7c089c05b5fe3405400cc",
+     "bloc": 53058087
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000007d55bdf0a85af179f1",
+   "sym": "QUINTQUILL",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2b6603d6af721d6812e08c00990a549a0934b5d333409823a96ee86bd7f7eb87",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2b6603d6af721d6812e08c00990a549a0934b5d333409823a96ee86bd7f7eb87",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000007d55bdf0a85af179f1",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xb60175181101aeb59bba7a1415ecb650840f40cc",
+     "bloc": 53060922
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000037e423f43ce4ee559d",
+   "sym": "ADOF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe8ad615438e3dad984458a4bb6a5c36e10d39e092ab80da9e452c67c587ad4b2",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe8ad615438e3dad984458a4bb6a5c36e10d39e092ab80da9e452c67c587ad4b2",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000037e423f43ce4ee559d",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xe6b71c9290226b00625bd46c8f7ff50c5b9080cc",
+     "bloc": 53053320
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000000741cc06d2ca46f867",
+   "sym": "ADOF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x49c4da4e8907f3a025865df76cc3804fe431f619775b76add3bebbe66d33f7a9",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x49c4da4e8907f3a025865df76cc3804fe431f619775b76add3bebbe66d33f7a9",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000000741cc06d2ca46f867",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x107130457f29bcc22abe5643bac4b0d60a7e40cc",
+     "bloc": 53055232
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e6a4e8c2e542441d6a",
+   "sym": "AOFD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x4b08d8cb8d884b235ccf92d76298df613717078636a72117c1e9a399dc1979eb",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x4b08d8cb8d884b235ccf92d76298df613717078636a72117c1e9a399dc1979eb",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e6a4e8c2e542441d6a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x5cd2de907db83f15068c6c7a8110c47d5f2a80cc",
+     "bloc": 53059977
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006796657b80c8c3e092",
+   "sym": "Surplus",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2e5edb89dc9cb521aff6ad2b26c11117283fb0fa627c3b2dfd94cca9723b40c0",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2e5edb89dc9cb521aff6ad2b26c11117283fb0fa627c3b2dfd94cca9723b40c0",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006796657b80c8c3e092",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xed261bb477a0ac21ac724e2d38026e400d5880cc",
+     "bloc": 53059936
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000340ef270ba1b641640",
+   "sym": "Clankclank",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x12d52811f58436d3dfd32fc7bab34b0363c23d5d69f43a35be4f31ee55f5af07",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x12d52811f58436d3dfd32fc7bab34b0363c23d5d69f43a35be4f31ee55f5af07",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000340ef270ba1b641640",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x5239ccdb0328523b63561c7fd3a946f96aadc0cc",
+     "bloc": 53064661
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000068e09cf23dc00f7ddc",
+   "sym": "Surplus",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x4522a537caad35dd0f7520356b25a8fd3f438f443b1ab7030ef77e0483d4170a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x4522a537caad35dd0f7520356b25a8fd3f438f443b1ab7030ef77e0483d4170a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000068e09cf23dc00f7ddc",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x19b4a49255bcb42016ac2d6a348e251c7b9040cc",
+     "bloc": 53061814
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000586958ea97c1c5296b",
+   "sym": "BTCD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x5917d320a45dffbaa9ea1bf5a47688c3d16a934f55d53b7ef02a7dbe8a4f7075",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x5917d320a45dffbaa9ea1bf5a47688c3d16a934f55d53b7ef02a7dbe8a4f7075",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000586958ea97c1c5296b",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xf7d7186f1ecc859cbe31be418a9929e6923340cc",
+     "bloc": 53051437
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000009d6fb7deabf8446410",
+   "sym": "STRONGHOLD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2189e668d8c0c5694f7993fb16c7d69226607fb4bff930e18c6d6fec622975a9",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2189e668d8c0c5694f7993fb16c7d69226607fb4bff930e18c6d6fec622975a9",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000009d6fb7deabf8446410",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x34402e2ad82fd88f465c488dfab413af57d280cc",
+     "bloc": 53073221
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000008b6bd13622f0747c9",
+   "sym": "Surplus",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x8b8db6f592bee2613750a0e2719c710dbd4207e2394d3e5d217c3c97077beae2",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x8b8db6f592bee2613750a0e2719c710dbd4207e2394d3e5d217c3c97077beae2",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000008b6bd13622f0747c9",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x571bd93908ecce9c55b187e9b30c104e1fb980cc",
+     "bloc": 53077050
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006c9a3b9d337deee8a4",
+   "sym": "BTCT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xed9406a48c9b624345ceda33b48185807205ce7c29284afde7e4cf8b2397a309",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xed9406a48c9b624345ceda33b48185807205ce7c29284afde7e4cf8b2397a309",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006c9a3b9d337deee8a4",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x865ff15701a6f168bf268d251980f37c44e100cc",
+     "bloc": 53051369
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000004b18b04160d55bffdf",
+   "sym": "EARN",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa0955c21969e3e2748d9c1e7e075d3bdc085bbf485e7c7acbfb514a3c7336e78",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa0955c21969e3e2748d9c1e7e075d3bdc085bbf485e7c7acbfb514a3c7336e78",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000004b18b04160d55bffdf",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x5b9b986430ea52957795cb928d143a15dee400cc",
+     "bloc": 53058990
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d32616abc2f78b5cca",
+   "sym": "OVER",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x8e70186f6f38bc254503ce3c88a52da8798236c485ec5130ae20cb4968d34eb2",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x8e70186f6f38bc254503ce3c88a52da8798236c485ec5130ae20cb4968d34eb2",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d32616abc2f78b5cca",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x8a78b8a38d8916a758af32fd4fd043a2659a80cc",
+     "bloc": 53052311
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000014169884cbf90a339e",
+   "sym": "FADE",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa69516651b197ef64bd095ed0796a59ca64733802307ebd75c969fcd81018e33",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa69516651b197ef64bd095ed0796a59ca64733802307ebd75c969fcd81018e33",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000014169884cbf90a339e",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x80fcc560e1f8804838d1bee6f6bb32d4a4c780cc",
+     "bloc": 53068535
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000007227122b1527ca4477",
+   "sym": "CLANKCLANK",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x6e4b17881acf50cdf79904210f64116055fdb755d5b57786cdafa211d29dcf3a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x6e4b17881acf50cdf79904210f64116055fdb755d5b57786cdafa211d29dcf3a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000007227122b1527ca4477",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd9aa3da9d026c5e857839e6f494dde373050c0cc",
+     "bloc": 53069399
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ffc59cf8f30d1eaeda",
+   "sym": "Archia",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe00e98c857e97d7d177e3a9d4aa7a6a269e27fd0275360fd75602a666085c172",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe00e98c857e97d7d177e3a9d4aa7a6a269e27fd0275360fd75602a666085c172",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000ffc59cf8f30d1eaeda",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd8b6b67ecb0186f4828eed7ad5d1b490ace240cc",
+     "bloc": 53072324
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000009d77313964bece2918",
+   "sym": "Ckrib",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x886eb62e9430825aae525ba464b4859c71497c6ab9959d068d9e94f4e5d8afce",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x886eb62e9430825aae525ba464b4859c71497c6ab9959d068d9e94f4e5d8afce",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000009d77313964bece2918",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x101d89d0e11a2bb68ed779679c7491ba122480cc",
+     "bloc": 53042792
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000f99cc5698ffb606942",
+   "sym": "GUST",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xdd5a9e6416f9de792560c5dde5fbef12515866ee5db2720ffd7fe6b3fb054f07",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xdd5a9e6416f9de792560c5dde5fbef12515866ee5db2720ffd7fe6b3fb054f07",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000f99cc5698ffb606942",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x1b136744fa379264b62a1d881dcb7e56f68680cc",
+     "bloc": 53076081
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000007ddad5d5ed441d5084",
+   "sym": "NFTO",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2880015f314f79a5d9e5da275d8f0e8998ecadf97c5ce33dcc5098b20cff69b6",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2880015f314f79a5d9e5da275d8f0e8998ecadf97c5ce33dcc5098b20cff69b6",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000007ddad5d5ed441d5084",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xa60e6603b230d45a534efc3e5c4235680235c0cc",
+     "bloc": 53045640
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c76edfafd9742bb4f7",
+   "sym": "BLHDW",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000003abebd516e4c2cdea9",
+   "sym": "OMARCHY",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xac1527110171b2abef1e048ccaf465e9f07a1700d3d3f57277819f652fed9582",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xac1527110171b2abef1e048ccaf465e9f07a1700d3d3f57277819f652fed9582",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000003abebd516e4c2cdea9",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xeb1309bf3698a92441b17760cc772154923580cc",
+     "bloc": 53054271
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000059eb535788e27ec144",
+   "sym": "BTCI",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb02154a7ae066ba249bdfe4077bc5e05457cd7df10e695b2aac627895936d525",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb02154a7ae066ba249bdfe4077bc5e05457cd7df10e695b2aac627895936d525",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000059eb535788e27ec144",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x93955c6e0862d5e0e1fa94a0eef2a32833f880cc",
+     "bloc": 53048612
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ae10c9d566dae6f065",
+   "sym": "JCT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2f438de2ea7430ccbdda95587479d948fc835c2c372ffaf132541c43aa485ba2",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2f438de2ea7430ccbdda95587479d948fc835c2c372ffaf132541c43aa485ba2",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000ae10c9d566dae6f065",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x70e48c8ec36acebd232f9414e4c42f41f84d40cc",
+     "bloc": 53067599
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000bb7509cb0aa1b2f406",
+   "sym": "LAUNCH",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa2ed8e06ad4897cc0354e3e9306dc70970e3c94c497eceb8d4583fdbaa872f14",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa2ed8e06ad4897cc0354e3e9306dc70970e3c94c497eceb8d4583fdbaa872f14",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000bb7509cb0aa1b2f406",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x10e59be4331eea3a71ceb3852a9bebd720ec00cc",
+     "bloc": 53079878
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000005e3b6d3c48082de1fe",
+   "sym": "CRQZ",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x5f293c979926ca99834ffdc4154822dc5505d39a9e975fa5ff4d0c65d1c6b0fd",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x5f293c979926ca99834ffdc4154822dc5505d39a9e975fa5ff4d0c65d1c6b0fd",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000005e3b6d3c48082de1fe",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xe265a27e9f8bafff5127567b4fb9f452998d00cc",
+     "bloc": 53047662
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000fe8571983cb3c87ef1",
+   "sym": "STONKXE",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x06c66cafc2c6af60f8eca417907032037db5d891c0699c348e00d0af92c43d91",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x06c66cafc2c6af60f8eca417907032037db5d891c0699c348e00d0af92c43d91",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000fe8571983cb3c87ef1",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xcabc773bb8afb8186a7fbeec0358dff676ef80cc",
+     "bloc": 53043855
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000008f1acc7a58c63bae0",
+   "sym": "CHEEKY",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x0994fd935c5fa1da04a146bff6db2f0e3ed26cc91b8333f1684e59de3c720682",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x0994fd935c5fa1da04a146bff6db2f0e3ed26cc91b8333f1684e59de3c720682",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000008f1acc7a58c63bae0",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x57646c45e02b42b00f21ad80cfa26d35876400cc",
+     "bloc": 53041979
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e26b868cda576cbb6a",
+   "sym": "AIPOS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xd0ff216ae69ce24a64070397aceff30579aaa49b3ebfd570b8f1f25db04f86e6",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xd0ff216ae69ce24a64070397aceff30579aaa49b3ebfd570b8f1f25db04f86e6",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e26b868cda576cbb6a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xa674dd48650102dd41fa40ab308c743dbf0ec0cc",
+     "bloc": 53041021
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d1c63968bd315755d7",
+   "sym": "PIG",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2448b0e13566bd2a298bf82a809824fd2e0d9ff1c93eeb0ba77253123b7d860c",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2448b0e13566bd2a298bf82a809824fd2e0d9ff1c93eeb0ba77253123b7d860c",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d1c63968bd315755d7",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x7dd04e37f2e5d72034d1998ffa8a6125a276c0cc",
+     "bloc": 53078001
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ef835518b0ab2e08e3",
+   "sym": "GTA6",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x79e003af64ab7a2b57f3651467e57208ec55cb4807f823457a92f9783dc946ca",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x79e003af64ab7a2b57f3651467e57208ec55cb4807f823457a92f9783dc946ca",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000ef835518b0ab2e08e3",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x9dc374190d150ffcefccbf1030e940334e0100cc",
+     "bloc": 53076106
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000111437b3e97fd2660c",
+   "sym": "FSDAO",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x35850665f0ef5c5b843f874f425a0309b9baadc62d87f39b6eaf5b482287ba46",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x35850665f0ef5c5b843f874f425a0309b9baadc62d87f39b6eaf5b482287ba46",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000111437b3e97fd2660c",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x52fdb6d3ab30368ffb7010bf166e9a93a81740cc",
+     "bloc": 53057136
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c36ce081dd09e86ca2",
+   "sym": "BUDc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000fc737aea6196ab5a4c",
+   "sym": "AVGOc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000f7a7bf1c29bd687301",
+   "sym": "ETH",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x275e18e1ca913466590c74a411e307e73feed3e99893bc699b8dcbc57c4c6a79",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x275e18e1ca913466590c74a411e307e73feed3e99893bc699b8dcbc57c4c6a79",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000f7a7bf1c29bd687301",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53068040
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585716098431038358705676",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e88efe88d8ade3f0da",
+   "sym": "WRDc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000dd3cb986755d50ef01",
+   "sym": "OVER",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xf62d8b4f69bed48b23e492f78bc1d8e94c4d5fb65fbccd338ff6264fc117f85b",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xf62d8b4f69bed48b23e492f78bc1d8e94c4d5fb65fbccd338ff6264fc117f85b",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000dd3cb986755d50ef01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53048929
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585720832536824900426058",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000349ef3aa93a0897476",
+   "sym": "ULc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000083145fe14ce8a3d01",
+   "sym": "OVER",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x6e81035ea701f2db672b971e339cfebbb8800119ff778007013f1e286232ea99",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x6e81035ea701f2db672b971e339cfebbb8800119ff778007013f1e286232ea99",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000083145fe14ce8a3d01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53048921
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585720832536824900426058",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000081ae906fc6e63a0601",
+   "sym": "NIO",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x4361a8bce942dc20de9f6c3fd5d28866d86d51ac14510a313a302900d042b94e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x4361a8bce942dc20de9f6c3fd5d28866d86d51ac14510a313a302900d042b94e",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000081ae906fc6e63a0601",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53048935
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585720832536824900426058",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000fdf9b79b15e1bc7c01",
+   "sym": "BLUEBALLS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x745c08358db3f12e243b11f2cb615b3f364e70924ef088e268600e663a7a9ab7",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x745c08358db3f12e243b11f2cb615b3f364e70924ef088e268600e663a7a9ab7",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000fdf9b79b15e1bc7c01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53077284
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585720832536824900426058",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000026215d755356e5043f",
+   "sym": "ARMc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000005233a03e371ac11224",
+   "sym": "NVRD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xbcc4460e659432d7753fa29ede4e55295319ebd340564a0f710a443c85c1a7fb",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xbcc4460e659432d7753fa29ede4e55295319ebd340564a0f710a443c85c1a7fb",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000005233a03e371ac11224",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x15357cda05b21f32defbb38e5c419d22ccf628c4",
+     "bloc": 53064416
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000775d318fc488e24e9f",
+   "sym": "WSTETH",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x15f2c8c0bd217c8b6cba73416c8f57b530ec97d60a6b680b48bb9e320c5d726a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x15f2c8c0bd217c8b6cba73416c8f57b530ec97d60a6b680b48bb9e320c5d726a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000775d318fc488e24e9f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x682f626cd6e9c1daaca1711de2b97b595cf5e8c4",
+     "bloc": 53070086
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d2ac84d61550c91ec3",
+   "sym": "NFTO",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x3b3046e9dabefe3d6a4a6d6dfecd0497368834b5e8fbf22f6c0663b58e595aaa",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x3b3046e9dabefe3d6a4a6d6dfecd0497368834b5e8fbf22f6c0663b58e595aaa",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d2ac84d61550c91ec3",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x454783290b478297690e68a2e37e255d0c8528c4",
+     "bloc": 53046466
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000001543b64b6337a62995",
+   "sym": "BMT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x4021b6431718c35491ea19d91822e24faf3ba232c0db266b80e420e8e4130863",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x4021b6431718c35491ea19d91822e24faf3ba232c0db266b80e420e8e4130863",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000001543b64b6337a62995",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xa761c73c1b0b2b24f64e2e226ee4b1b1c8eca8c4",
+     "bloc": 53054944
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000098eb9e42aeb2cb10b0",
+   "sym": "JCT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xaa62ee5ae08380b961626357c8f553b9ac2b3cb15a03844368e3e5cfcc4d50d0",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xaa62ee5ae08380b961626357c8f553b9ac2b3cb15a03844368e3e5cfcc4d50d0",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000098eb9e42aeb2cb10b0",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x4521d55b0667e1f666ad7e48147af0f7ff5568c4",
+     "bloc": 53071022
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000002975d3079a7dc7dd10",
+   "sym": "Surplus",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xc4b64e2866a971af61d403eb6fbd490ab02dd7d091a7ad2a2e55899fc365bbf1",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xc4b64e2866a971af61d403eb6fbd490ab02dd7d091a7ad2a2e55899fc365bbf1",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000002975d3079a7dc7dd10",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd0c1353b3eeaa92dc42ed29bbd9c9654d44ba8c4",
+     "bloc": 53076680
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000017bb66e9301e913a99",
+   "sym": "SANc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb20000000000000000000031b2b28fed1c75646f",
+   "sym": "Clankclank",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa6236851608e11145428cd34dc4a45cefeb7257526014dd9f3fb6c720004a296",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa6236851608e11145428cd34dc4a45cefeb7257526014dd9f3fb6c720004a296",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000031b2b28fed1c75646f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd9b991812a69cae1bc744a7ff900210c409468c4",
+     "bloc": 53065376
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000067d8aa32767614fca1",
+   "sym": "DOGEBOT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe1980177e3753d8eac5552ecaedfbeadeb1996c827ae55c90c862a7f72c096ce",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe1980177e3753d8eac5552ecaedfbeadeb1996c827ae55c90c862a7f72c096ce",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000067d8aa32767614fca1",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x0f6049760b8bc5fe03a5e1e50cfa1040b5e8e8c4",
+     "bloc": 53045520
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000015f68d61bc24f867b3",
+   "sym": "MPLX",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xdf5d0efb498dc001e954dda9c352b1bf32141cda0c529ab103796828fbdb006a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xdf5d0efb498dc001e954dda9c352b1bf32141cda0c529ab103796828fbdb006a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000015f68d61bc24f867b3",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x66b14d7be42a36421cfb60150dcd454340c768c4",
+     "bloc": 53079523
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000541b173aba5570db0a",
+   "sym": "GRASS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x7a9a8a94ce2ed1cfe823daf5d2f34ed4408fa3a8191ca603dcea275f95e91040",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x7a9a8a94ce2ed1cfe823daf5d2f34ed4408fa3a8191ca603dcea275f95e91040",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000541b173aba5570db0a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x76e806e32261e26487eb96d1d4a9540d633b68c4",
+     "bloc": 53080481
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000db8d19987d8f088f78",
+   "sym": "PALUS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2a055b025590ae9b0ce0319a445a7b999fdf1d505851827711ad0f5112fed702",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2a055b025590ae9b0ce0319a445a7b999fdf1d505851827711ad0f5112fed702",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000db8d19987d8f088f78",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd7cc70884aac8be2ce67bce23723b767cc8568c4",
+     "bloc": 53068200
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000010feba84b84fde54e0",
+   "sym": "EARN",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xd7e95749a7a00b84058493e6ba43c1d875a413dad6906f69f39ceceaf11fc844",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xd7e95749a7a00b84058493e6ba43c1d875a413dad6906f69f39ceceaf11fc844",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000010feba84b84fde54e0",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xf40bd159490d8aad4c5075ca715131afc36f28c4",
+     "bloc": 53058713
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000231f8741bc577c0a09",
+   "sym": "AOFD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe7848688b89fb4c15818c4f6cc16318c8c12083ac0cddc383e3fe5fcd4626a30",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe7848688b89fb4c15818c4f6cc16318c8c12083ac0cddc383e3fe5fcd4626a30",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000231f8741bc577c0a09",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x21d3de073730264cbb9d997fe7475896654228c4",
+     "bloc": 53059675
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006200f6ab209de93335",
+   "sym": "NODF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xfdb203e67c7ecce4bbcbab04bb0019a6df028fc554d4c291911dafd44db12b4b",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xfdb203e67c7ecce4bbcbab04bb0019a6df028fc554d4c291911dafd44db12b4b",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006200f6ab209de93335",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xea219eb7acb305d354406b1e8f061bd6a88f68c4",
+     "bloc": 53049287
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000131acf1e18052e58aa",
+   "sym": "UDFS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x9da5b9483d11748812dda3aadff9cc9dcba1764886e540de81edb8762d40664b",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x9da5b9483d11748812dda3aadff9cc9dcba1764886e540de81edb8762d40664b",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000131acf1e18052e58aa",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xa51c6e81effb17fef169a7266b04e804ebb4a8c4",
+     "bloc": 53062507
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000094c70ea8e6f912a57d",
+   "sym": "ckRib",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x976464c42ba8fb714c5e8c47762328518d5eafa1de6dadca5b57cbe85ff8b35c",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x976464c42ba8fb714c5e8c47762328518d5eafa1de6dadca5b57cbe85ff8b35c",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000094c70ea8e6f912a57d",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x0cd9bd7e809a360e3aa51bd3c652ff37c92228c4",
+     "bloc": 53042656
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000820ddbfd2d8488979f",
+   "sym": "CLANKERBOT",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x81310629840cb58cef3c4bf5e8d4359432173a22ab136bd87f0ecdc9ec7cd01a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x81310629840cb58cef3c4bf5e8d4359432173a22ab136bd87f0ecdc9ec7cd01a",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000820ddbfd2d8488979f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xf2b5b8aa74393118dd83695cb2ccfce763ec68c4",
+     "bloc": 53077635
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000000d596f2c645a389d13",
+   "sym": "AIPOS",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000d5808789bee26c096d",
+   "sym": "Beeper",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe6fe7018c1fb248a9c4fcf4510705bda5446c1932392324383cd11ae26f95149",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe6fe7018c1fb248a9c4fcf4510705bda5446c1932392324383cd11ae26f95149",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d5808789bee26c096d",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x16eed5189685d05fa745ad7b234b1dd49c64e8c4",
+     "bloc": 53055892
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000006e259d8c83aa15f53f",
+   "sym": "BLOBB",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb5fbe8985063750cf93a3df71a37e9020718687b2217044ae48f8b827f72527b",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb5fbe8985063750cf93a3df71a37e9020718687b2217044ae48f8b827f72527b",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006e259d8c83aa15f53f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x92e74d68952b755b71f3ec14d2a5ff33723528c4",
+     "bloc": 53078571
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000afac0a6444bb09f7ae",
+   "sym": "BROTHBLOOM",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x03509870f77a04dd0d0606305ccfbd3178b53c1b5d973d549a0c29c1627241ea",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x03509870f77a04dd0d0606305ccfbd3178b53c1b5d973d549a0c29c1627241ea",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000afac0a6444bb09f7ae",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x7b094334fc51514f694a8ee955113c78f55868c4",
+     "bloc": 53071963
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d2b7d9aee52f6c6bef",
+   "sym": "BIDUc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000006325935280158fa753",
+   "sym": "BTCC",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb380dfb3f4cf8504c9ad7cc85d60b92e5aff64569e9a3732b7251686cbefb00f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb380dfb3f4cf8504c9ad7cc85d60b92e5aff64569e9a3732b7251686cbefb00f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000006325935280158fa753",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xece607525de189603c8b90d40d9f1943de68e8c4",
+     "bloc": 53048336
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000007c487d5d1dae52f0f",
+   "sym": "QUINTQUILL",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x9bd8c86b21564a536856e2ac0bb703120a9fb075492478ce71fa2a5961dddda9",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x9bd8c86b21564a536856e2ac0bb703120a9fb075492478ce71fa2a5961dddda9",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000007c487d5d1dae52f0f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x738badf6c6b3aa31f1195d7a304cc9e9226fe8c4",
+     "bloc": 53060630
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d17803f590c29da763",
+   "sym": "CHEEKY",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x72f8d2347425728c4ca3caa1c3e4aaaff0fa8f6cf685cf012aed3d17406cbe3f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x72f8d2347425728c4ca3caa1c3e4aaaff0fa8f6cf685cf012aed3d17406cbe3f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d17803f590c29da763",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x5d5eb7d884d9e8539b9b4f4b82423bb990b428c4",
+     "bloc": 53041707
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000c4700aa9301a709902",
+   "sym": "Archia",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2e639ae0b9ecb9dfe39b0ec5206a1650b350ffa21ed470e2a6efcbf82338d203",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2e639ae0b9ecb9dfe39b0ec5206a1650b350ffa21ed470e2a6efcbf82338d203",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000c4700aa9301a709902",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xdf1e6c92769a7d724f654028a20b2126048ea8c4",
+     "bloc": 53073848
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000224d44a136f8b4b2f3",
+   "sym": "YELLOW",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x6102bd86be52d9bd3ea5ff77214bffacd92626804fafa7cb07719aaa7628d994",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x6102bd86be52d9bd3ea5ff77214bffacd92626804fafa7cb07719aaa7628d994",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000224d44a136f8b4b2f3",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x31618e9cf9abf529babd59b6b220ad84c536e8c4",
+     "bloc": 53075751
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000083a63efad9d2ddb55d",
+   "sym": "ADOF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xb156e2f04b76e182fc8aa47c3080d83862b3205a18998ed5367e453ea185b60b",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xb156e2f04b76e182fc8aa47c3080d83862b3205a18998ed5367e453ea185b60b",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000083a63efad9d2ddb55d",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xff59791c596ce3a536f493c99d42a81c4a2c28c4",
+     "bloc": 53053077
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000b316d2101f11d1134a",
+   "sym": "Surplus",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xcab9964f769f7835e2ba1571b4df12493d937d0fdf4422a7258025d04a04f10d",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xcab9964f769f7835e2ba1571b4df12493d937d0fdf4422a7258025d04a04f10d",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000b316d2101f11d1134a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x785b94d870cf9e501c719f1c4320beb8e40268c4",
+     "bloc": 53061572
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000270c9cb43e2135b394",
+   "sym": "GrapheneOs",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xc32f566ef0f2f149d2b94092d83befcc81c69adf8565bb2c83595cde7e4c743b",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xc32f566ef0f2f149d2b94092d83befcc81c69adf8565bb2c83595cde7e4c743b",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000270c9cb43e2135b394",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd39cff61d3c98751e0a6e4129386f1c277ed28c4",
+     "bloc": 53047408
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000277c83e7d9ad708d55",
+   "sym": "ADOF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x0c2c614ebc17e2e78cf27209a3ce22540359a97703d15b3e3bf5161bd7e72d72",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x0c2c614ebc17e2e78cf27209a3ce22540359a97703d15b3e3bf5161bd7e72d72",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000277c83e7d9ad708d55",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x8b6244757e1b3543c9e639dc2dc8392b3deee8c4",
+     "bloc": 53054016
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000009bc7428f95b44d4a66",
+   "sym": "MCRIB",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe4d22e12638142c5f7144773c5d23e2ced6758cd3c24a156bf6a9df228c9c7fe",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe4d22e12638142c5f7144773c5d23e2ced6758cd3c24a156bf6a9df228c9c7fe",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000009bc7428f95b44d4a66",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x07be7f28d7966b722bdd8980fbd2f039855c28c4",
+     "bloc": 53044573
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000039c694968c40ded144",
+   "sym": "Surplus",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xdaf84a9ceef2218e1e2a81794d1c43112416bd55c36e56997faa5b05ce2f626f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xdaf84a9ceef2218e1e2a81794d1c43112416bd55c36e56997faa5b05ce2f626f",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000039c694968c40ded144",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x42e366db62ef5e57bcbe1180d752304a8ff268c4",
+     "bloc": 53057768
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000a29ea60b910a556c72",
+   "sym": "OVER",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xbe14989b5d3fe2fe37de307e2a1925a47acb43698cbe1d02f334178c465c016d",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xbe14989b5d3fe2fe37de307e2a1925a47acb43698cbe1d02f334178c465c016d",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000a29ea60b910a556c72",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xfb6412367c818cb7b0e15ac533a76c7fdab5a8c4",
+     "bloc": 53050250
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000a42a45def0cb60867f",
+   "sym": "vano",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2a5ab084bc7e110d25ebc39b06186dcd62a12f06f18b451844b5e874881188b1",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2a5ab084bc7e110d25ebc39b06186dcd62a12f06f18b451844b5e874881188b1",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000a42a45def0cb60867f",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x7a103ad3c0a2f410029b73729cf65de1dd6ea8c4",
+     "bloc": 53043617
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d56101001e9caa7264",
+   "sym": "NVRD",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x95f521ec84627e779b8c5f045dbbcba64917347cc197bc1e755dab875242314e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x95f521ec84627e779b8c5f045dbbcba64917347cc197bc1e755dab875242314e",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000d56101001e9caa7264",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x93efb65b577e5237e02d1aa5e2744697b76e28c4",
+     "bloc": 53063459
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000003490f31d928ba1f3",
+   "sym": "FSDAO",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xc6a83a2c67b9643da1243aea4bc620df361fb70e741a2094d322ac9039210f5b",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xc6a83a2c67b9643da1243aea4bc620df361fb70e741a2094d322ac9039210f5b",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000003490f31d928ba1f3",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x82983d7e14370f1021322d8270f506de3c85e8c4",
+     "bloc": 53056839
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d61efd9f54a23ef9eb",
+   "sym": "LIc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000e68b0dfd150c048f7b",
+   "sym": "univer.se",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x44ae04c731c1d5fcc8316c07dbd07f30ab5d789012081bcfe54d11b728c78834",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x44ae04c731c1d5fcc8316c07dbd07f30ab5d789012081bcfe54d11b728c78834",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000e68b0dfd150c048f7b",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x128d8a2f59fff9fec321aa4a126fe632a31ee8c4",
+     "bloc": 53074791
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000004b5d21537b56846d0",
+   "sym": "CLANKCLANK",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x1d422cae2165e2fe34de8009e1b292159b9031154a708059ab54a668fd500ac5",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x1d422cae2165e2fe34de8009e1b292159b9031154a708059ab54a668fd500ac5",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000004b5d21537b56846d0",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xd56ff4ca1a6f8d33c11df61847551720d7ebe8c4",
+     "bloc": 53069139
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000b744bf1e1fc18ed748",
+   "sym": "UTDF",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xd3773d6fd235ff182d25eec82ecd1d0a4ec9a486da3f169a88e0a8d7ce62528c",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xd3773d6fd235ff182d25eec82ecd1d0a4ec9a486da3f169a88e0a8d7ce62528c",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000b744bf1e1fc18ed748",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x907185ce6b6f0f7732e8703f144533ad0703e8c4",
+     "bloc": 53072893
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000009acad64da4003943a",
+   "sym": "FLY",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xe26f7ae3e21da15484bfc735d48789bca09a12c2061f2a03bed8aab52d5abdb8",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xe26f7ae3e21da15484bfc735d48789bca09a12c2061f2a03bed8aab52d5abdb8",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000009acad64da4003943a",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x630177e5bc1065bfe31d19f42370e385b081e8c4",
+     "bloc": 53051211
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000009e0874c651579a3372",
+   "sym": "Clankclank",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x11deb6349733ffbe4280a6371f9300702c5d90491049f8f7d9c7210fa233e402",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x11deb6349733ffbe4280a6371f9300702c5d90491049f8f7d9c7210fa233e402",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000009e0874c651579a3372",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0xc3dca1f452dc3dfb2987653f66cd0a559f87e8c4",
+     "bloc": 53066317
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000105a26e9c7b845cb50",
+   "sym": "SCOPEWHALE",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x10ef423b289d902ffa1d84816779c3e611fcb1d11ec8ddaf22c474e6736ed871",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x10ef423b289d902ffa1d84816779c3e611fcb1d11ec8ddaf22c474e6736ed871",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000105a26e9c7b845cb50",
+     "fee": 100,
+     "tickSpacing": 1,
+     "hooks": "0x2a6e577d1a11c766ede181de0efc0fdb130ea8c4",
+     "bloc": 53052142
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "1 ETH pool(s) known, none quoted (did not quote: execution reverted)",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000d9192b6b456483c2e8",
+   "sym": "AMZNc",
+   "dex": "uniswap",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000ebd10b07f2d1e222cc",
+   "sym": "Chicken",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000a6b5878bc30be04001",
+   "sym": "Base",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x36da9c45f8947060be772d8c991da494896aab91a200a920efbeefd15a828366",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x36da9c45f8947060be772d8c991da494896aab91a200a920efbeefd15a828366",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000a6b5878bc30be04001",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53079418
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585720146198580382591248",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000004884b426556b92883d",
+   "sym": "MSTRc",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x0ecc74c47acad38f5b000f1c35ec6da167db8a20f5531c95b8586b2ad56dd5af",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x0ecc74c47acad38f5b000f1c35ec6da167db8a20f5531c95b8586b2ad56dd5af",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000004884b426556b92883d",
+     "fee": 9000,
+     "tickSpacing": 90,
+     "hooks": "0x0000000000000000000000000000000000000000",
+     "bloc": 52579590
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "1606106",
+    "pourquoi": null,
+    "classe": null
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000071b9a45a6f3ecaea01",
+   "sym": "ttsttt",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x1166a692dda5a5d28b67df78a4516804541bbd3cb2771079f21da12aa43c7685",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x1166a692dda5a5d28b67df78a4516804541bbd3cb2771079f21da12aa43c7685",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000071b9a45a6f3ecaea01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53053052
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585720832536824900426058",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ca7c6d1438e7245eb6",
+   "sym": "BILIc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000ded562cdb03e6a0e01",
+   "sym": "BASE",
+   "dex": "uniswap",
+   "quote": "cbBTC",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x28fff8ff708f1f598624c2c48ca0804ed33c1da48155d571e41db80dd203666c",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x28fff8ff708f1f598624c2c48ca0804ed33c1da48155d571e41db80dd203666c",
+     "currency0": "0xb200000000000000000000ded562cdb03e6a0e01",
+     "currency1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 53069966
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0xb200…): not this Buy",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000066242d4067724cb7a1",
+   "sym": "RDDTc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb200000000000000000000da6f64c306234127e0",
+   "sym": "SAPc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000003db50ae17d64dd8801",
+   "sym": "MERCURY",
+   "dex": "uniswap",
+   "quote": "cbBTC",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xba736857c4d6ff7f23bfe06d56f9fe9b00042bff2c5bb81f2971ed45f0f99395",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xba736857c4d6ff7f23bfe06d56f9fe9b00042bff2c5bb81f2971ed45f0f99395",
+     "currency0": "0xb2000000000000000000003db50ae17d64dd8801",
+     "currency1": "0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 52920885
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0xb200…): not this Buy",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000001e800a7f5189430cd0",
+   "sym": "TSLAc",
+   "dex": "uniswap",
+   "quote": "USDC",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x53923698aed2fa7c609736c96dad26625270421f57af19b1c81b69865d46c55a",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x53923698aed2fa7c609736c96dad26625270421f57af19b1c81b69865d46c55a",
+     "currency0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+     "currency1": "0xb2000000000000000000001e800a7f5189430cd0",
+     "fee": 2000,
+     "tickSpacing": 10,
+     "hooks": "0xeeee3da335342996ab288fbcf70fbe5f9ed81040",
+     "bloc": 52235378
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x8335…): not this Buy",
+    "classe": null
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000063376b142c0764b489",
+   "sym": "VALEc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb20000000000000000000068daae1ffe0c0bcc01",
+   "sym": "伙伴",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x57874bf7adb3c62bbfc563d84f60cf959c48c06b0c7214f617a3b9f2e457053e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x57874bf7adb3c62bbfc563d84f60cf959c48c06b0c7214f617a3b9f2e457053e",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb20000000000000000000068daae1ffe0c0bcc01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 52996001
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "552503539748187420582660",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000e215e9b76ecba02468",
+   "sym": "MRNAc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb20000000000000000000016f9dfe862feba122b",
+   "sym": "BEc",
+   "dex": "uniswap",
+   "quote": "USDC",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xa68987c1412e623c3e2a09d0b5d1f5d34ed5c475c798b0d9bbd005ff6fd21c1f",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xa68987c1412e623c3e2a09d0b5d1f5d34ed5c475c798b0d9bbd005ff6fd21c1f",
+     "currency0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+     "currency1": "0xb20000000000000000000016f9dfe862feba122b",
+     "fee": 50000,
+     "tickSpacing": 500,
+     "hooks": "0x0000000000000000000000000000000000000000",
+     "bloc": 51966303
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x8335…): not this Buy",
+    "classe": null
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000814c98c5f837be0b20",
+   "sym": "MAGUMBO",
+   "dex": "uniswap",
+   "quote": "WETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xca5f3d5f63e23f852843e8b99ca5a8267ab548e554b7af55377494520652c32e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xca5f3d5f63e23f852843e8b99ca5a8267ab548e554b7af55377494520652c32e",
+     "currency0": "0x4200000000000000000000000000000000000006",
+     "currency1": "0xb200000000000000000000814c98c5f837be0b20",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0xb20b00367e37f826a0652c85a6df375d784b20ec",
+     "bloc": 53077486
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x4200…): not this Buy",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000032d50364ae342fb20",
+   "sym": "SWIPER",
+   "dex": "uniswap",
+   "quote": "WETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x624f4eb22c4750c6fb9c991a7ab5163d9957469937dc27077189c0d0484d202d",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x624f4eb22c4750c6fb9c991a7ab5163d9957469937dc27077189c0d0484d202d",
+     "currency0": "0x4200000000000000000000000000000000000006",
+     "currency1": "0xb200000000000000000000032d50364ae342fb20",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0xb20b00367e37f826a0652c85a6df375d784b20ec",
+     "bloc": 53044538
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x4200…): not this Buy",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000003088798f6d0722aaac",
+   "sym": "SEc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000002d2b5dc53c61f1ba06",
+   "sym": "NIOc",
+   "dex": "aerodrome",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  },
+  {
+   "adr": "0xb2000000000000000000000eeb20be4a4b4b0c01",
+   "sym": "SSTR",
+   "dex": "uniswap",
+   "quote": "USDC",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x69ad261f7cc32e35212bf9612906d4e0f1667e853b5ddc7bf055da9381af5284",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x69ad261f7cc32e35212bf9612906d4e0f1667e853b5ddc7bf055da9381af5284",
+     "currency0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+     "currency1": "0xb2000000000000000000000eeb20be4a4b4b0c01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 52558143
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x8335…): not this Buy",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb20000000000000000000051aa989bab0c270b20",
+   "sym": "POISE",
+   "dex": "uniswap",
+   "quote": "WETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x2741e1d9e789036ede9f27026a546ccb14a84d34c7cf162e33ffbd55e77b863d",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x2741e1d9e789036ede9f27026a546ccb14a84d34c7cf162e33ffbd55e77b863d",
+     "currency0": "0x4200000000000000000000000000000000000006",
+     "currency1": "0xb20000000000000000000051aa989bab0c270b20",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0xb20b00367e37f826a0652c85a6df375d784b20ec",
+     "bloc": 53044894
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x4200…): not this Buy",
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000002630a7ca719930af01",
+   "sym": "BASEPIG",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xc7d09117f5df400fb4b08743eb914b857fdf9489a76b344f0788702947745602",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xc7d09117f5df400fb4b08743eb914b857fdf9489a76b344f0788702947745602",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000002630a7ca719930af01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 52990266
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585711989615022376239946",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000428e3a3eebbb20692b",
+   "sym": "DJTc",
+   "dex": "uniswap",
+   "quote": "USDC",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xcbd98315adeb891980d4d63822fb21a2aee0aca70d2c6e7c14aa7ed06d7636bd",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xcbd98315adeb891980d4d63822fb21a2aee0aca70d2c6e7c14aa7ed06d7636bd",
+     "currency0": "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+     "currency1": "0xb200000000000000000000428e3a3eebbb20692b",
+     "fee": 250000,
+     "tickSpacing": 2500,
+     "hooks": "0x0000000000000000000000000000000000000000",
+     "bloc": 52911487
+    }
+   ],
+   "achat": {
+    "achetable": false,
+    "fraisPar": null,
+    "quote": null,
+    "pourquoi": "not an ETH pool (quoted in 0x8335…): not this Buy",
+    "classe": null
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000bb70a7c5c9d3cbaf01",
+   "sym": "bit",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0xfc688f786d5394aa4b84c9da33971a8a2114f4b8ce01ed05330152646a464765",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0xfc688f786d5394aa4b84c9da33971a8a2114f4b8ce01ed05330152646a464765",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb200000000000000000000bb70a7c5c9d3cbaf01",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 52657860
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "594477282833642277012928",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb2000000000000000000002aed952b7e60d65401",
+   "sym": "MCRIB",
+   "dex": "uniswap",
+   "quote": "ETH",
+   "indices": 1,
+   "etats": [
+    {
+     "poolId": "0x80943deb6ad77945001738dda02c77680872bb1f1a9a07a46e759cbc45b9057e",
+     "etat": "LUE",
+     "pourquoi": null
+    }
+   ],
+   "cles": [
+    {
+     "poolId": "0x80943deb6ad77945001738dda02c77680872bb1f1a9a07a46e759cbc45b9057e",
+     "currency0": "0x0000000000000000000000000000000000000000",
+     "currency1": "0xb2000000000000000000002aed952b7e60d65401",
+     "fee": 0,
+     "tickSpacing": 200,
+     "hooks": "0x1f91c998e7c2f4b690d75bdbf6502bdcd6e02acc",
+     "bloc": 52962340
+    }
+   ],
+   "achat": {
+    "achetable": true,
+    "fraisPar": "routeur",
+    "quote": "585509773668106269143789",
+    "pourquoi": null,
+    "classe": "TIERS"
+   }
+  },
+  {
+   "adr": "0xb200000000000000000000ec3c4c7395cc609813",
+   "sym": "MRVLc",
+   "dex": "aero",
+   "quote": "USDC",
+   "indices": 0,
+   "etats": [],
+   "cles": [],
+   "achat": null
+  }
+ ]
+}
