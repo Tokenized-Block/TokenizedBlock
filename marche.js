@@ -277,6 +277,11 @@ export function cleEstUnMarche(c) {
   return (!!c && Number.isFinite(Number(c.fee)) && Number.isFinite(Number(c.tickSpacing))
       && (Number(c.fee) <= FRAIS_LP_MAX_MARCHE || Number(c.fee) === FRAIS_DYNAMIQUE));
 }
+/** Le nom d une cle exacte. ⛔ 2026-10-26 (testeur, /api/marche de GOOGLc : « on-chain key 838.8608 % ») : le drapeau de frais
+ *  dynamique v4 0x800000 n est PAS un pourcentage — le hook fixe le frais a chaque echange ; on le dit, sans chiffre invente. */
+export function nomCleExacte(c) {
+  return Number(c.fee) === FRAIS_DYNAMIQUE ? 'on-chain key · dynamic fee' : 'on-chain key ' + (Number(c.fee) / 10000) + ' %';
+}
 
 export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [], deviseDAbord = false }) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(jeton || ''))) {
@@ -307,7 +312,7 @@ export async function vieDuBlock({ rpc, stateView, jeton, clesExactes = [], devi
   }
   const candidates = [
     ...clesSaines
-      .map((c) => ({ nom: 'on-chain key ' + (Number(c.fee) / 10000) + ' %', fee: Number(c.fee),
+      .map((c) => ({ nom: nomCleExacte(c), fee: Number(c.fee),
         tickSpacing: Number(c.tickSpacing), hooks: nulle(c.hooks) ? null : c.hooks })),
     ...CLES_MARCHE,
   ];
