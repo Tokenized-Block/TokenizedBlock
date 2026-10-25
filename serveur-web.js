@@ -2540,7 +2540,9 @@ async function rpcRails(methode, params) {
       const msg = j && j.error ? String(j.error.message || 'rpc error') : 'HTTP ' + r.status;
       dernier = new Error(msg);
       if (j && j.error) dernier.data = j.error.data; /* 2026-10-11 : les octets du revert (NotEnoughLiquidity.) ne sont QUE la */
-      if (j && j.error && !/rate|limit|timeout|exceed|too many|capacity|unavailable|busy/i.test(msg)) { dernier.definitif = true; throw dernier; }
+      /* 2026-10-25 (revue misables) : « block not found » (-32001, mainnet.base.org, un bloc qu il n a pas encore — la tete vient d un autre
+       *   lecteur, 200 ms/bloc) est une panne de CE noeud, pas une reponse de la chaine : on passe a l endpoint suivant, sans `definitif`. */
+      if (j && j.error && !/rate|limit|timeout|exceed|too many|capacity|unavailable|busy|block not found|header not found|unknown block/i.test(msg)) { dernier.definitif = true; throw dernier; }
     } catch (e) {
       if (!compte) compterEnvoi(url, 'reseau');
       if (e && e.definitif) throw e;

@@ -365,8 +365,9 @@ export function ecartAReference({ jeton, sqrtNous, sqrtRef }) {
 /**
  * LES DEVIS VIVANTS d un candidat CL pour chaque sortie USDC de `sorties`, TOUS LUS AU MEME BLOC : quoteExactOutputSingle (un par taille),
  * slot0, l USDC de la pool, factory() de la pool, et — si `reference` ({ pool }) est donnee — le slot0 de la pool de reference.
- * Un devis qui reverte rend { ok: false, erreur } pour SA taille (la pool ne remplit pas ce montant) ; un devis REFUSE par le transport
- * (rate limit, delai, `0x`) rend { ok: false, nonLu: true, erreur } (eligibilite : NON_MESURE) ; une lecture d etat ratee = NON_MESURE.
+ * Un devis qui reverte (« revert » ou octets dans `data`) rend { ok: false, erreur } pour SA taille (la pool ne remplit pas ce montant) ;
+ * un devis REFUSE par le transport ou le noeud (rate limit, delai, `0x`, block not found) rend { ok: false, nonLu: true, erreur }
+ * (eligibilite : NON_MESURE) ; une lecture d etat ratee = NON_MESURE.
  * @param {function} p.rpc  injecte : (methode, params) => result
  */
 export async function coterMisableTailles({ rpc, candidat, sorties = TAILLES_USDC, reference = null, bloc: blocEpingle = null }) {
@@ -395,11 +396,14 @@ export async function coterMisableTailles({ rpc, candidat, sorties = TAILLES_USD
     const q = await quotes[i];
     const montantIn = q.r ? lireMot(q.r) : null;
     /* 2026-10-25 (prod, bloc 53 066 483) : NOKc a 0,50 et SEc a 5/10 servis SANS_DEVIS « You reached Public endpoint rate limit » — un refus
-     *   de DEBIT pris pour « la pool ne remplit pas ce montant », jamais relu. Seuls un REVERT (rpcRails le marque `definitif` ; un message
-     *   « revert ») ou un devis LU a 0 sont SANS_DEVIS ; un refus de transport, ou une reponse `0x` / illisible, est NON LU (`nonLu: true`). */
+     *   de DEBIT pris pour « la pool ne remplit pas ce montant », jamais relu. Seuls un REVERT (un message « revert », ou des octets de
+     *   revert dans `data`, que rpcRails garde) ou un devis LU a 0 sont SANS_DEVIS ; un refus de transport, ou une reponse `0x` / illisible,
+     *   est NON LU (`nonLu: true`). ⛔ (revue, meme jour) `definitif` SEUL ne prouve PAS un revert : rpcRails le pose sur toute erreur
+     *   JSON-RPC hors debit — mainnet.base.org rend { code: -32001, « block not found: 0x329d7d3 » } a un bloc qu il n a pas encore,
+     *   drpc « empty hex string », les deux « Invalid params ». Un vrai revert (1e18 USDC sur SONYc) : « execution reverted », data 0x08c379a0... */
     if (montantIn === null) {
       const msg = q.e ? String((q.e && q.e.message) || q.e) : 'quote answer unreadable (' + String(q.r).slice(0, 12) + ')';
-      const revert = !!q.e && (q.e.definitif === true || /revert/i.test(msg));
+      const revert = !!q.e && (/revert/i.test(msg) || (typeof q.e.data === 'string' && /^0x[0-9a-f]{2,}$/i.test(q.e.data)));
       devis.push({ usdc: String(outs[i]), usdcSortie: outs[i], ok: false, ...(revert ? {} : { nonLu: true }), erreur: msg.slice(0, 100) }); continue;
     }
     if (!(montantIn > 0n)) { devis.push({ usdc: String(outs[i]), usdcSortie: outs[i], ok: false, erreur: 'empty quote' }); continue; }

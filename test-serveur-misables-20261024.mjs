@@ -8,7 +8,8 @@
  *   sans misables.js (TSLAc retire) ; (3) le nombre d appels de chaine reste sous
  *   appelsMax, et une deuxieme requete dans les 60 s est servie du CACHE (aucun nouvel appel au quoter) ; (4) misables.js est servi (200) ;
  *   (5) un slot0 refuse (rate limit) est RELU ; (6) un DEVIS refuse (rate limit, SONYc 0,50 deux fois) est NON_MESURE puis RELU, un devis
- *   qui REVERTE (HSAIc 10 USDC) reste SANS_DEVIS, ni relu ni nomme.
+ *   qui REVERTE (HSAIc 10 USDC) reste SANS_DEVIS, ni relu ni nomme ; (7) un devis qui rend « block not found » (-32001, la reponse
+ *   de mainnet.base.org a un bloc qu il n a pas encore) n est PAS un revert : rpcRails reessaie, BIDUc est servi comme l oracle, sans relecture.
  * SERVEUR_MODULE : le chemin d une copie de serveur-web.js. ⛔ PORTABLE : process.exitCode.
  * NE PROUVE PAS : le comportement contre un vrai noeud (mesure-misables-20261024.mjs et banc-misables-fork-20261024.mjs le font).
  * serie-delai-s: 240 */
@@ -64,7 +65,10 @@ const compte = { quoter: 0, misables: 0 };
 const LIMITE_DEUX = M.CANDIDATS_CL.find((c) => c.symbole === 'SANc'), LIMITE_TOUJOURS = M.CANDIDATS_CL.find((c) => c.symbole === 'LIc');
 const LIMITE_DEVIS = M.CANDIDATS_CL.find((c) => c.symbole === 'SONYc');
 const REVERT_DEVIS = M.CANDIDATS_CL.find((c) => c.symbole === 'HSAIc');
-let refusDeux = 0, refusDevis = 0, revertsDevis = 0;
+/* (7) 2026-10-25 (revue) : mainnet.base.org, eth_call a un bloc qu il n a pas encore -> { code: -32001, message: 'block not found: 0x329d7d3' }
+ *   (mesure du jour). rpcRails le marquait `definitif` et s arretait au 1er essai ; misables.js en faisait SANS_DEVIS : jamais relu. */
+const BLOC_INCONNU = M.CANDIDATS_CL.find((c) => c.symbole === 'BIDUc');
+let refusDeux = 0, refusDevis = 0, revertsDevis = 0, blocInconnu = 0, devisBidu05 = 0;
 function noeud() {
   return http.createServer((req, res) => {
     let b = ''; req.on('data', (c) => { b += c; });
@@ -86,6 +90,10 @@ function noeud() {
             const k = '0x' + w(0).slice(24) + '|' + BigInt('0x' + w(3)) + '|' + BigInt('0x' + w(2));
             if ('0x' + w(0).slice(24) === bas(LIMITE_DEVIS.jetonIn) && BigInt('0x' + w(3)) === BigInt(LIMITE_DEVIS.tickSpacing) && BigInt('0x' + w(2)) === 500000n && refusDevis < 2) {
               refusDevis += 1; return { jsonrpc: '2.0', id: q.id, error: { code: -32005, message: 'You reached Public endpoint rate limit, please upgrade to paid plan' } };
+            }
+            if ('0x' + w(0).slice(24) === bas(BLOC_INCONNU.jetonIn) && BigInt('0x' + w(3)) === BigInt(BLOC_INCONNU.tickSpacing) && BigInt('0x' + w(2)) === 500000n) {
+              devisBidu05 += 1;
+              if (blocInconnu < 1) { blocInconnu += 1; return { jsonrpc: '2.0', id: q.id, error: { code: -32001, message: 'block not found: 0x329d7d3' } }; }
             }
             /* (6) un VRAI revert : le devis 10 USDC de HSAIc (non misable a 10 dans l enregistrement : l oracle n en change pas) */
             if ('0x' + w(0).slice(24) === bas(REVERT_DEVIS.jetonIn) && BigInt('0x' + w(3)) === BigInt(REVERT_DEVIS.tickSpacing) && BigInt('0x' + w(2)) === 10000000n) { revertsDevis += 1; return err(); }
@@ -155,6 +163,12 @@ try {
     ok(refusDevis === 2 && ORACLE.get(LIMITE_DEVIS.jeton) && ORACLE.get(LIMITE_DEVIS.jeton)[0] === true, '(6) temoin : SONYc a bien refuse 2 devis 0,50, et l oracle le dit misable a 0,50 (' + refusDevis + ')');
     ok(sy && sy.tailles[0].misable && sy.tailles.every((t, i) => t.misable === ORACLE.get(LIMITE_DEVIS.jeton)[i]), '(6) SONYc dont le devis 0,50 est refuse 2 fois (rate limit) : RELU, servi comme l oracle -> ' + (sy && sy.tailles.map((t) => t.code).join(',')));
     ok(a && a.relus === 3, '(6) relus = 3 (SANc, SONYc, LIc) -> ' + (a && a.relus));
+    /* (7) « block not found » : pas un revert — servi comme l oracle (misables.js : definitif seul = NON LU) ; et rpcRails a REESSAYE dans
+     *   la meme lecture (2 devis 0,50 vus, BIDUc pas relu : relus reste 3 ci-dessus) au lieu de s arreter au 1er essai */
+    const bi = L('BIDUc');
+    ok(blocInconnu === 1 && ORACLE.get(BLOC_INCONNU.jeton) && ORACLE.get(BLOC_INCONNU.jeton)[0] === true, '(7) temoin : BIDUc a bien rendu 1 « block not found » a 0,50, et l oracle le dit misable a 0,50 (' + blocInconnu + ')');
+    ok(bi && bi.tailles[0].misable && bi.tailles.every((t, i) => t.misable === ORACLE.get(BLOC_INCONNU.jeton)[i]), '(7) BIDUc dont le devis 0,50 rend « block not found » (-32001) : servi comme l oracle -> ' + (bi && bi.tailles.map((t) => t.code).join(',')));
+    ok(devisBidu05 === 2 && a && a.relus === 3, '(7) rpcRails reessaie apres « block not found » : 2 devis 0,50 vus pour BIDUc, aucune relecture de plus (relus ' + (a && a.relus) + ', devis vus ' + devisBidu05 + ')');
     /* un REVERT reste SANS_DEVIS : une taille que l enregistrement n a pas cotee (le faux noeud reverte) n est ni relue ni nommee */
     const rev = a ? a.lignes.filter((l) => l.tailles.some((t) => t.code === 'SANS_DEVIS')).map((l) => l.symbole) : [];
     const hsai = L('HSAIc');
