@@ -56,7 +56,7 @@ const devis = async (tin, tout, montant, ts) => mot(await rpc('eth_call', [{ to:
 const slot0 = async (pool) => mot(await rpc('eth_call', [{ to: pool, data: selecteur('slot0()') }, 'latest']));
 
 const SEULS = process.env.SYMS ? new Set(process.env.SYMS.split(',')) : null; /* rejouer quelques actions (une erreur 429 du noeud amont) */
-const cibles = mesure.lignes.filter((l) => !SEULS || SEULS.has(l.sym)).map((l) => ({ l, v: l.venues.find((x) => x.venue === 'aero-new') })).filter((x) => x.v && x.v.pool && x.v.achat);
+const cibles = mesure.lignes.filter((l) => !SEULS || SEULS.has(l.sym)).map((l) => ({ l, v: (l.regles || l.venues).find((x) => x.venue === 'aero-new') })) /* `regles` depuis la mesure du serveur (2026-10-25) */.filter((x) => x.v && x.v.pool && x.v.achat);
 const resultats = [];
 for (const { l, v } of cibles) {
   const a = l.adr, ts = v.tickSpacing, pool = v.pool;
@@ -67,7 +67,10 @@ for (const { l, v } of cibles) {
     const sq = await slot0(pool), usdcEst0 = BigInt(USDC) < BigInt(a);
     const mid = usdcEst0 ? (10_000_000n * sq * sq) / (1n << 192n) : (10_000_000n * (1n << 192n)) / (sq * sq);
     const qVenteMemeEtat = await devis(a, USDC, qAchat, ts);
-    const pFork = { usdcPool, achat: qAchat, ecartBps: Number(((mid - qAchat) * 10000n) / mid), venteMemeEtat: qVenteMemeEtat,
+    /* 2026-10-25 (revue) : la profondeur jugee = l USDC UTILISABLE (vente de ce que 10 000 USDC valent au prix de la pool, cotee) */
+    const qte = usdcEst0 ? (REGLES.usdcMin * sq * sq) / (1n << 192n) : (REGLES.usdcMin * (1n << 192n)) / (sq * sq);
+    const usdcUtilisable = qte > 0n ? await devis(a, USDC, qte, ts) : 0n;
+    const pFork = { usdcPool, usdcUtilisable, achat: qAchat, ecartBps: Number(((mid - qAchat) * 10000n) / mid), venteMemeEtat: qVenteMemeEtat,
       perteBps: Number(((10_000_000n - qVenteMemeEtat) * 10000n) / 10_000_000n) };
     const jf = jugerPool(pFork, REGLES);
     Object.assign(ligne, { usdcPool: String(usdcPool), devisAchat: String(qAchat), ecartBps: pFork.ecartBps, perteMemeEtatBps: pFork.perteBps, reglesAuFork: jf });

@@ -52,7 +52,7 @@ import { candidatsActions, decouvrirActions, lireUnites, routeAction, routeServi
   ROUTE_SERVIE_MAX_MS } from './actions-chaine.js';
 /* 2026-10-25 — CHAQUE LIEU D ECHANGE D UNE ACTION (notre factory, la factory « aero » 0x9cb2… et son routeur 0x9ee3… prouves sur fork,
  *   Uniswap v4), cote par les memes regles ; le meilleur qui passe est servi (`routeAction.meilleure`) et le planificateur l emprunte */
-import { coterVenueCL, verdictVenue, verdictServi, choisirVenue, lireCodeQuoteurNouvelle, overrideQuoteur } from './liquidite-actions.js';
+import { coterVenueCL, venuesServies, lireCodeQuoteurNouvelle, overrideQuoteur } from './liquidite-actions.js';
 import { QUOTEUR_AERODROME_CL as QUOTEUR_AERODROME_CL_LIQ } from './rolls-en-action.js';
 import { estDeviseConnue } from './pool-sans-hook.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
@@ -943,20 +943,16 @@ async function actionsChaineTour(em) {
       if (v.etat === 'OK') {
         const servi = routeServie(v);
         /* 2026-10-25 (liquidite-actions.js) : le lieu 'aero-new' (factory 0x9cb2…7a76, routeur 0x9ee3…d418, prouve sur fork) est cote AU MEME
-         *   BLOC par les regles du proprietaire (1 % / 2 % / 10 000 USDC) ; `meilleure` dit le lieu retenu (choisirVenue). Notre verdict
+         *   BLOC par les regles du proprietaire (1 % / 2 % / 10 000 USDC UTILISABLES au prix courant, pas le solde) ; `meilleure` dit le lieu retenu (choisirVenue). Notre verdict
          *   `achetable` est INCHANGE : la fiche n achete que par notre routeur. Une lecture ratee : pas de champ, rien d affirme. */
         try {
           if (codeQuoteurLiq === null) codeQuoteurLiq = await lireCodeQuoteurNouvelle(compteur(rpcServeur, c, 'routes'));
           if (codeQuoteurLiq && appelOverrideEpingle) {
             const appelDevisNeuve = (to, data) => (String(to).toLowerCase() === QUOTEUR_AERODROME_CL_LIQ ? appelOverrideEpingle(to, data, overrideQuoteur(codeQuoteurLiq)) : appelEpingle(to, data));
             const cN = await coterVenueCL({ appel: appelEpingle, appelDevis: appelDevisNeuve, venue: 'aero-new', adr: p.adr, cachePools: poolsActionsCache });
-            if (cN.etat === 'OK') {
-              const vN = verdictVenue(cN);
-              /* ⛔ meme ADMISSION que notre route : le frais se prend dans le jeton qui sort (l action, a l achat) */
-              if (vN.passe && !estDeviseConnue(p.adr)) { vN.passe = false; vN.code = 'HORS_REGISTRE'; }
-              servi.venues = { 'aero-new': verdictServi(vN) };
-              servi.meilleure = choisirVenue({ route: servi, neuve: servi.venues['aero-new'] });
-            }
+            /* ⛔ meme ADMISSION que notre route (le frais se prend dans le jeton qui sort) et « strictement meilleur » : UNE fonction,
+             *   venuesServies, que la mesure appelle aussi (revue de 3d81e06, defaut 4) */
+            if (cN.etat === 'OK') Object.assign(servi, venuesServies({ route: servi, coteNeuve: cN, admise: estDeviseConnue(p.adr) }));
           }
         } catch (_) { /* rien d affirme */ }
         routesActions.set(p.adr, { r: servi, t: Date.now() }); aSauver = true;

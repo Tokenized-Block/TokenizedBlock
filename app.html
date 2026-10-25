@@ -26385,6 +26385,14 @@ function bcDeuxTrades(p, de, vers, montant) {
   return [{ libelle: '1 · Sell ' + de.sym + ' for ' + pivot.sym, de, vers: pivot, montant: String(montant) },
     { libelle: '2 · Then buy ' + vers.sym + ' with ' + pivot.sym, de: pivot, vers, montant: min }];
 }
+/* ⛔ 2026-10-25 (revue de 3d81e06, defaut 2) : le libelle du bouton de signature. « Sell anyway » l emportait sur l approbation : sur un
+ *   plan APPROBATIONS le bouton disait « Sell anyway » et ne signait que l approbation. Une approbation se dit approbation ; « Sell anyway »
+ *   seulement sur la vente elle-meme (le plan PRET d une vente loin sous la reference). */
+function bcLibelleSigner({ franchissement, approbations, venteLoin, n }) {
+  if (franchissement) return 'My wallet can batch — ' + (approbations ? 'sign the ' + n + ' approval(s)' : 'sign the ' + n + ' calls together');
+  if (approbations) return 'Sign the ' + n + ' approval(s)';
+  return venteLoin ? 'Sell anyway' : 'Sign in my wallet';
+}
 async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = null) {
   const moi = brainAdr ? String(brainAdr).toLowerCase() : null;
   let decDe = null, decVers = null;
@@ -26550,8 +26558,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
      *   ou d AiFi garde son clic. */
     /* un franchissement n ouvre JAMAIS le wallet tout seul : la personne lit d abord la ligne ci-dessus, puis dit que son wallet groupe */
     if (direct && !franchissement && !venteLoin) return signer();
-    bcBoutons(m, [[franchissement ? 'My wallet can batch — ' + (approbations ? 'sign the ' + p.aSigner.length + ' approval(s)' : 'sign the ' + p.aSigner.length + ' calls together')
-      : venteLoin ? 'Sell anyway' : approbations ? 'Sign the ' + p.aSigner.length + ' approval(s)' : 'Sign in my wallet', signer], ['Dismiss', refuser, true]]);
+    bcBoutons(m, [[bcLibelleSigner({ franchissement, approbations, venteLoin, n: p.aSigner.length }), signer], ['Dismiss', refuser, true]]);
   };
   /* ⛔⛔ 2026-10-04 (QA wallet reel de Grok, Buy et Sell IB022 passes avec Rabby) : « Buy / Sell DIRECTS ». Une commande que la
    *   personne a ecrite ou validee elle-meme (ticket, barre du Chat) ne demande plus « Prepare the plan » puis « Sign » : son Review

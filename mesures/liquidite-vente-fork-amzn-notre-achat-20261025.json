@@ -1,0 +1,62 @@
+{
+ "blocFork": 53078390,
+ "lu": "2026-10-25T16:49:17.168Z",
+ "feeWallet": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
+ "res": [
+  {
+   "sym": "AMZN",
+   "adr": "0xb200000000000000000000d9192b6b456483c2e8",
+   "serveur": {
+    "achetable": true,
+    "code": null,
+    "meilleure": "aero-new",
+    "aeroNew": {
+     "venue": "aero-new",
+     "passe": true,
+     "code": null,
+     "pool": "0x532e0f46d1e528507fc9454d5847c231f23bddf6",
+     "tickSpacing": 10,
+     "usdcPool": "458769016808",
+     "usdcUtilisable": "9998244200",
+     "achat": "4018034",
+     "venteMemeEtat": "9996996",
+     "ecartBps": 1,
+     "perteBps": 3
+    }
+   },
+   "etapes": [
+    "PRET",
+    "APPROBATIONS",
+    "PRET"
+   ],
+   "achat": {
+    "via": "planAerodromeSegment",
+    "venue": null,
+    "recu": "4013193",
+    "versRouteur": "0x698cb2b6dd822994581fea6ea4fc755d1363a92f"
+   },
+   "vente": {
+    "via": "planVenueNeuve",
+    "venuePlan": "aero-new",
+    "ici": "aero-new",
+    "choix": "PAIE_PLUS",
+    "texte": "Selling through Aerodrome (newer pool factory), about $248.80 per token. Best buy price on a venue that passes $248.88 (-0.03 %).",
+    "ventes": [
+     {
+      "venue": "aero-old",
+      "usdc": "9980011",
+      "prixUsd": 248.68006597240648
+     },
+     {
+      "venue": "aero-new",
+      "usdc": "9984952",
+      "prixUsd": 248.80318489541867
+     }
+    ],
+    "recuUsdc": "9974968",
+    "auMoins": "9875216",
+    "versRouteur": "0x9ee35bf1bd69a03c6f0393582030fce8bb93d418"
+   }
+  }
+ ]
+}

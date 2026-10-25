@@ -36,21 +36,23 @@ await cas('le quoter est patche seulement avec ses 3 occurrences exactes', () =>
   assert.deepEqual(Object.keys(overrideQuoteur(p)), [QUOTEUR_AERODROME_CL]);
 });
 
-const pool = (x) => ({ pool: POOL, tickSpacing: 10, usdcPool: 102_802_141_692n, achat: 3_096_137n, ecartBps: 5, perteBps: 10, venteMemeEtat: 9_989_593n, ...x });
+/* 2026-10-25 (revue de 3d81e06) : la profondeur est `usdcUtilisable` (vente de 10 000 USDC cotee), plus le solde — voir test-liquidite-correctifs */
+const pool = (x) => ({ pool: POOL, tickSpacing: 10, usdcPool: 102_802_141_692n, usdcUtilisable: 9_990_000_000n, achat: 3_096_137n, ecartBps: 5, perteBps: 10, venteMemeEtat: 9_989_593n, ...x });
 await cas('les trois regles, et un chiffre absent ne passe jamais', () => {
   assert.deepEqual(jugerPool(pool()), { passe: true, code: null });
   assert.equal(jugerPool(pool({ ecartBps: 101 })).code, 'ECART');
   assert.equal(jugerPool(pool({ ecartBps: 100 })).passe, true, '1 % pile passe');
   assert.equal(jugerPool(pool({ perteBps: 201 })).code, 'ALLER_RETOUR');
-  assert.equal(jugerPool(pool({ usdcPool: 9_999_999_999n })).code, 'LIQUIDITE_SOUS_SEUIL');
-  assert.equal(jugerPool(pool({ usdcPool: REGLES.usdcMin })).passe, true, '10 000 USDC pile passe');
-  assert.equal(jugerPool(pool({ usdcPool: null })).code, 'PROFONDEUR_NON_MESUREE', 'v4 : pas de solde = jamais la regle de profondeur');
+  assert.equal(jugerPool(pool({ usdcUtilisable: 9_799_999_999n })).code, 'LIQUIDITE_SOUS_SEUIL');
+  assert.equal(jugerPool(pool({ usdcUtilisable: 9_800_000_000n })).passe, true, '10 000 USDC moins 2 % pile passe');
+  assert.equal(REGLES.usdcMin, 10_000_000_000n);
+  assert.equal(jugerPool(pool({ usdcUtilisable: null })).code, 'PROFONDEUR_NON_MESUREE', 'profondeur non cotee = jamais la regle de profondeur');
   assert.equal(jugerPool(pool({ ecartBps: NaN })).code, 'ECART');
   assert.equal(jugerPool(pool({ erreur: 'x' })).code, 'NON_MESURE');
 });
 
 await cas('une pool NON LUE interdit le refus (AVGOc, 2026-10-25)', () => {
-  const v = verdictVenue({ etat: 'OK', venue: 'aero-new', pools: [pool({ erreur: 'state not read' }), pool({ pool: '0x' + '1'.repeat(40), usdcPool: 2_802_000_000n })] });
+  const v = verdictVenue({ etat: 'OK', venue: 'aero-new', pools: [pool({ erreur: 'state not read' }), pool({ pool: '0x' + '1'.repeat(40), usdcUtilisable: 2_802_000_000n })] });
   assert.equal(v.etat, 'NON_MESURE'); assert.equal(v.passe, false);
   const ok = verdictVenue({ etat: 'OK', venue: 'aero-new', pools: [pool({ erreur: 'x' }), pool({ pool: '0x' + '2'.repeat(40) })] });
   assert.equal(ok.passe, true, 'une pool qui passe reste prise meme si une autre n est pas lue');
@@ -165,6 +167,7 @@ await cas('la vente comparee par lieu, au meme montant', async () => {
   assert.equal(v.reference.source, 'chainlink');
   const sans = await venteParVenues({ rpc: c.rpc, action: A, montant: 100_000_000n, route });
   assert.equal(sans.reference.source, 'best-buy');
+  assert.ok(Math.abs(sans.reference.prixUsd - 10 / (3_096_137 / 1e8)) < 1e-6, 'le repli vient du seul lieu qui passe (aero-new) ; notre route refuse');
 });
 
 /* (5) LA ROUTE D AVANT, OCTET POUR OCTET : sans verdict 'aero-new' meilleur, les memes lectures et le meme plan */
@@ -179,7 +182,10 @@ for (const [de, vers] of [[U, A], [A, U]]) {
     const sans = await planRail(q, { rpc: x.rpc, chaine: 8453 });
     const avecVieille = await planRail(q, { rpc: y.rpc, chaine: 8453, venueAction: () => ({ achetable: true, meilleure: 'aero-old', venues: { 'aero-new': VERDICT } }) });
     const neufNonPasse = await planRail(q, { rpc: z.rpc, chaine: 8453, venueAction: () => ({ achetable: false, meilleure: 'aero-new', venues: { 'aero-new': { ...VERDICT, passe: false } } }) });
-    assert.deepEqual(avecVieille, sans); assert.deepEqual(y.log, x.log);
+    /* 2026-10-25 (revue, defaut 1) : la VENTE ne suit plus `meilleure` (verdict d achat) — 'aero-new' qui passe est compare a la vente
+     *   (test-liquidite-correctifs-20261025.mjs). L invariant « memes lectures, meme plan » tient pour l achat, et pour la vente quand
+     *   'aero-new' ne passe pas (neufNonPasse, ci-dessous). */
+    if (de === U) { assert.deepEqual(avecVieille, sans); assert.deepEqual(y.log, x.log); }
     assert.deepEqual(neufNonPasse, sans); assert.deepEqual(z.log, x.log);
     const neuf = await planRail(q, { rpc: chaine({ allowance: 10n ** 12n }).rpc, chaine: 8453, venueAction: () => ({ achetable: false, meilleure: 'aero-new', venues: { 'aero-new': VERDICT } }) });
     assert.equal(neuf.via, 'planVenueNeuve'); assert.equal(neuf.venue, 'aero-new'); assert.equal(neuf.etat, 'PRET');
@@ -196,14 +202,14 @@ await cas('coterVenueCL : la cle de cache est celle de routeAction, une pool tro
   const avant = appels.filter((x) => x.startsWith(FACTORY_AERO_NOUVELLE)).length;
   await coterVenueCL({ appel, venue: 'aero-new', adr: A, cachePools: cache, maintenant: 2 });
   assert.equal(appels.filter((x) => x.startsWith(FACTORY_AERO_NOUVELLE)).length, avant, 'aucun getPool relu');
-  assert.deepEqual(Object.keys(verdictServi({ venue: 'aero-new', passe: true, achat: 1n })).sort(), ['achat', 'code', 'ecartBps', 'passe', 'perteBps', 'pool', 'tickSpacing', 'usdcPool', 'venteMemeEtat', 'venue']);
+  assert.deepEqual(Object.keys(verdictServi({ venue: 'aero-new', passe: true, achat: 1n })).sort(), ['achat', 'code', 'ecartBps', 'passe', 'perteBps', 'pool', 'tickSpacing', 'usdcPool', 'usdcUtilisable', 'venteMemeEtat', 'venue']);
 });
 
 await cas('le serveur, le Market et le panneau sont branches', () => {
   const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   assert.equal((srv.match(/reference: lireReferenceServeur, venueAction: venueActionServie \}/g) || []).length, 2, 'les deux appels du planificateur');
-  assert.match(srv, /servi\.meilleure = choisirVenue\(\{ route: servi, neuve: servi\.venues\['aero-new'\] \}\);/);
-  assert.match(srv, /if \(vN\.passe && !estDeviseConnue\(p\.adr\)\) \{ vN\.passe = false; vN\.code = 'HORS_REGISTRE'; \}/);
+  /* 2026-10-25 : registre + strictement meilleur = venuesServies, la MEME fonction que la mesure (test-liquidite-correctifs, D4) */
+  assert.match(srv, /if \(cN\.etat === 'OK'\) Object\.assign\(servi, venuesServies\(\{ route: servi, coteNeuve: cN, admise: estDeviseConnue\(p\.adr\) \}\)\);/);
   const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
   assert.match(app, /if \(liqOk && l\.routeAction && l\.routeAction\.achetable === false && l\.routeAction\.meilleure === 'aero-new'\) \{\n\s+return avecPair\('<button type="button" class="bouton trAcheter" data-acheter-rail="'/);
   assert.match(app, /if \(assezLiquide && l\.routeAction && l\.routeAction\.achetable === false && l\.routeAction\.meilleure === 'aero-new'\) return 'rail';/);

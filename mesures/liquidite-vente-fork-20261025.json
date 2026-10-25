@@ -1,0 +1,117 @@
+{
+ "blocFork": 53078385,
+ "lu": "2026-10-25T16:48:14.717Z",
+ "feeWallet": "0xa6cf99d35949c6cb911adb910078f4ca46f0f5d4",
+ "res": [
+  {
+   "sym": "AMZN",
+   "adr": "0xb200000000000000000000d9192b6b456483c2e8",
+   "serveur": {
+    "achetable": true,
+    "code": null,
+    "meilleure": "aero-new",
+    "aeroNew": {
+     "venue": "aero-new",
+     "passe": true,
+     "code": null,
+     "pool": "0x532e0f46d1e528507fc9454d5847c231f23bddf6",
+     "tickSpacing": 10,
+     "usdcPool": "458769003806",
+     "usdcUtilisable": "9998244202",
+     "achat": "4018034",
+     "venteMemeEtat": "9996996",
+     "ecartBps": 1,
+     "perteBps": 3
+    }
+   },
+   "etapes": [
+    "APPROBATIONS",
+    "PRET",
+    "APPROBATIONS",
+    "PRET"
+   ],
+   "achat": {
+    "via": "planVenueNeuve",
+    "venue": "aero-new",
+    "recu": "4014016",
+    "versRouteur": "0x9ee35bf1bd69a03c6f0393582030fce8bb93d418"
+   },
+   "vente": {
+    "via": "planVenueNeuve",
+    "venuePlan": "aero-new",
+    "ici": "aero-new",
+    "choix": "PAIE_PLUS",
+    "texte": "Selling through Aerodrome (newer pool factory), about $248.80 per token. Best buy price on a venue that passes $248.88 (-0.03 %).",
+    "ventes": [
+     {
+      "venue": "aero-old",
+      "usdc": "9981833",
+      "prixUsd": 248.67446965831724
+     },
+     {
+      "venue": "aero-new",
+      "usdc": "9986998",
+      "prixUsd": 248.8031437841802
+     }
+    ],
+    "recuUsdc": "9977012",
+    "auMoins": "9877240",
+    "versRouteur": "0x9ee35bf1bd69a03c6f0393582030fce8bb93d418"
+   }
+  },
+  {
+   "sym": "NOKc",
+   "adr": "0xb2000000000000000000005ac674f707e357409c",
+   "serveur": {
+    "achetable": true,
+    "code": null,
+    "meilleure": "aero-old",
+    "aeroNew": {
+     "venue": "aero-new",
+     "passe": false,
+     "code": "LIQUIDITE_SOUS_SEUIL",
+     "pool": "0x37607d455d791470ab53bb48b929730a226e166f",
+     "tickSpacing": 10,
+     "usdcPool": "5461971751",
+     "usdcUtilisable": "5461925478",
+     "achat": "116217725",
+     "venteMemeEtat": "9989993",
+     "ecartBps": 5,
+     "perteBps": 10
+    }
+   },
+   "etapes": [
+    "PRET",
+    "PRET"
+   ],
+   "achat": {
+    "via": "planAerodromeSegment",
+    "venue": null,
+    "recu": "115811322",
+    "versRouteur": "0x698cb2b6dd822994581fea6ea4fc755d1363a92f"
+   },
+   "vente": {
+    "via": "planAerodromeSegment",
+    "venuePlan": "aerodrome",
+    "ici": "aero-old",
+    "choix": null,
+    "texte": "Selling through Aerodrome (this app’s router), about $8.6244 per token. Best buy price on a venue that passes $8.6261 (-0.02 %).",
+    "ventes": [
+     {
+      "venue": "aero-old",
+      "usdc": "9988046",
+      "prixUsd": 8.624412386899444
+     },
+     {
+      "venue": "aero-new",
+      "usdc": "9955059",
+      "prixUsd": 8.595928988704577
+     }
+    ],
+    "recuUsdc": "9978058",
+    "auMoins": "9884165",
+    "versRouteur": "0x698cb2b6dd822994581fea6ea4fc755d1363a92f"
+   }
+  }
+ ]
+}

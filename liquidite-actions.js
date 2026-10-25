@@ -23,9 +23,11 @@
  *
  * ⛔⛔ LES REGLES, LES MEMES POUR CHAQUE LIEU (consigne du proprietaire, 2026-10-25) : a 10 USDC, l achat coute au plus 1 % de plus
  *   que le prix moyen de la pool (son frais compris) ; la revente de ce que 10 USDC achetent, cotee au MEME etat, perd au plus 2 % ;
- *   la pool tient au moins 10 000 USDC. Le MEILLEUR lieu qui passe gagne (la plus grande sortie a 10 USDC) ; a egalite, 'aero-old'
- *   (la route d avant, inchangee). ⚠️ La profondeur d une pool v4 n est pas un solde (le PoolManager tient l USDC de TOUTES les pools) :
- *   elle est NON_MESUREE et une pool v4 ne passe donc jamais la regle de profondeur ici — et a 3-8 % de frais, jamais celle d ecart.
+ *   la VENTE de ce que 10 000 USDC valent au prix de la pool rend au moins 9 800 USDC (l USDC UTILISABLE, cotee — pas le solde de la
+ *   pool : voir REGLES, revue de 3d81e06) ; un devis au-dessus du prix de sa propre pool (< -10 bps) ne passe pas. Le MEILLEUR lieu qui
+ *   passe gagne (la plus grande sortie a 10 USDC) ; a egalite, 'aero-old' (la route d avant, inchangee). La profondeur v4 est cotee de
+ *   la meme facon (le PoolManager tient l USDC de TOUTES les pools : un solde n y dit rien) ; a 3-8 % de frais, v4 ne passe jamais l ecart.
+ *   ⛔ LA VENTE est routee par le meilleur lieu de VENTE qui passe, a son montant (choisirVenteVenue), pas par ce verdict d achat.
  *
  * Pur : `appel` / `appelDevis` injectes. Aucune ecriture, aucune signature. */
 import { FACTORY_AERODROME_CL, ROUTEUR_AERODROME_CL, calldataExactInputSingleCL, calldataApprove, FRAIS_INTERFACE_BPS_CL, FRAIS_BPS_MAX_PRUDENT } from './calldata-aerodrome.js';
@@ -46,7 +48,17 @@ export const QUOTEUR_V4_BASE = QUOTEURS_V4[8453];
 export const STATE_VIEW_BASE = V4_ADRESSES[8453].stateView;
 
 export const DEVIS_USDC = 10_000_000n;
-export const REGLES = Object.freeze({ ecartMaxBps: 100, perteMaxBps: 200, usdcMin: 10_000_000_000n });
+/* ⛔⛔ 2026-10-25 (revue de 3d81e06, 2 defauts) :
+ *   - `ecartMinBps` : un devis AU-DESSUS du prix moyen de sa propre pool (ecart < -10 bps) ne vient pas d elle (override ignore par un
+ *     noeud -> la pool de l ANCIENNE factory, meme paire) ; le planificateur le refusait seul, la regle le laissait passer et gagner.
+ *   - LA PROFONDEUR = L USDC UTILISABLE AU PRIX COURANT, pas balanceOf. Mesure : tx 0x16e0d0bbe789ab1174ef1ed093fe2a0c49f73da00003138d032f6cae654ab11c
+ *     (bloc 53 073 717) retire des positions HORS de la tranche de prix de la pool AVGOc : son solde USDC 102 802 -> 2 802 a liquidity()
+ *     et prix INCHANGES, puis remis. Le solde comptait de l USDC qu un seul gerant deplace, et la regle « 10 000 USDC » passait sur 2,8 k.
+ *     Regle : la VENTE de ce que `usdcMin` vaut au prix de la pool, cotee sur la pool (le quoter traverse les tranches comme le ferait le
+ *     swap), doit rendre au moins `usdcMin` moins `perteProfondeurMaxBps`. Le solde reste dit (`usdcPool`), il ne decide plus. */
+export const REGLES = Object.freeze({ ecartMaxBps: 100, ecartMinBps: -10, perteMaxBps: 200, usdcMin: 10_000_000_000n, perteProfondeurMaxBps: 200 });
+/** le minimum que doit rendre la vente de `usdcMin` (au prix de la pool) pour que la pool passe la regle de profondeur */
+export const seuilUtilisable = (regles = REGLES) => (BigInt(regles.usdcMin) * BigInt(10000 - Number(regles.perteProfondeurMaxBps))) / 10000n;
 /** au-dela de cet ecart sous la reference, la vente est dite « loin sous la reference » (le seuil du ticket, reference-action.js) */
 export const SEUIL_VENTE_LOIN_BPS = 300;
 
@@ -99,7 +111,7 @@ export function dataDevisCL({ tokenIn, tokenOut, montant, tickSpacing }) {
  */
 /** une absence de pool (getPool = 0x0) est relue apres ce delai ; une pool trouvee ne l est jamais (son adresse est fixee par la factory) */
 export const POOL_ABSENTE_TTL_MS = 6 * 60 * 60 * 1000;
-export async function coterVenueCL({ appel, appelDevis = appel, venue, adr, montant = DEVIS_USDC, usdc = USDC_BASE, cachePools = null, maintenant = Date.now() }) {
+export async function coterVenueCL({ appel, appelDevis = appel, venue, adr, montant = DEVIS_USDC, usdc = USDC_BASE, cachePools = null, maintenant = Date.now(), regles = REGLES }) {
   const V = VENUES[venue];
   if (!V || !V.factory) return { etat: 'NON_MESURE', venue, pourquoi: 'not a CL venue', pools: [] };
   const a = bas(adr), u = bas(usdc);
@@ -135,6 +147,12 @@ export async function coterVenueCL({ appel, appelDevis = appel, venue, adr, mont
     try { p.venteMemeEtat = premierMot(await appelDevis(QUOTEUR_AERODROME_CL, dataDevisCL({ tokenIn: a, tokenOut: u, montant: p.achat, tickSpacing: p.tickSpacing }))); }
     catch (e) { if (/revert|execution/i.test(court(e))) { p.code = 'VENTE_NON_COTEE'; continue; } p.erreur = 'sell quote not read: ' + court(e); continue; }
     p.perteBps = bps(BigInt(montant), p.venteMemeEtat);
+    /* l USDC UTILISABLE : la vente de ce que `usdcMin` vaut au prix de la pool, cotee au meme etat (voir REGLES) */
+    const qte = sortieMoyenne({ montant: regles.usdcMin, sqrtP: p.sqrtP, entreeEst0: usdcEst0 });
+    p.quantiteProfondeur = qte;
+    if (!(qte > 0n)) { p.usdcUtilisable = 0n; continue; }
+    try { p.usdcUtilisable = premierMot(await appelDevis(QUOTEUR_AERODROME_CL, dataDevisCL({ tokenIn: a, tokenOut: u, montant: qte, tickSpacing: p.tickSpacing }))); }
+    catch (e) { if (/revert|execution/i.test(court(e))) { p.usdcUtilisable = 0n; p.profondeurRevert = true; continue; } p.erreur = 'depth quote not read: ' + court(e); continue; }
   }
   const lues = pools.filter((p) => !p.erreur);
   if (!lues.length) return { etat: 'NON_MESURE', venue, pourquoi: pools[0].erreur, pools };
@@ -142,7 +160,7 @@ export async function coterVenueCL({ appel, appelDevis = appel, venue, adr, mont
 }
 
 /** une cle v4 { currency0, currency1, fee, tickSpacing, hooks } ; USDC est currency0 sur les 20 cles de cles-v4-actions.js */
-export async function coterVenueV4({ appel, cles = [], adr, montant = DEVIS_USDC, usdc = USDC_BASE, quoteur = QUOTEUR_V4_BASE, stateView = STATE_VIEW_BASE }) {
+export async function coterVenueV4({ appel, cles = [], adr, montant = DEVIS_USDC, usdc = USDC_BASE, quoteur = QUOTEUR_V4_BASE, stateView = STATE_VIEW_BASE, regles = REGLES }) {
   const a = bas(adr), u = bas(usdc);
   const pools = [];
   for (const c of cles) {
@@ -161,6 +179,12 @@ export async function coterVenueV4({ appel, cles = [], adr, montant = DEVIS_USDC
     try { p.venteMemeEtat = premierMot(await appel(quoteur, encodeQuote({ cle, zeroForOne: !usdcEst0, montant: p.achat }))); }
     catch (e) { if (/revert|execution/i.test(court(e))) { p.code = 'VENTE_NON_COTEE'; continue; } p.erreur = 'sell quote not read: ' + court(e); continue; }
     p.perteBps = bps(BigInt(montant), p.venteMemeEtat);
+    /* la profondeur v4 n est pas un solde (le PoolManager tient l USDC de toutes les pools) : elle est COTEE, comme en CL (voir REGLES) */
+    const qte = sortieMoyenne({ montant: regles.usdcMin, sqrtP: p.sqrtP, entreeEst0: usdcEst0 });
+    p.quantiteProfondeur = qte;
+    if (!(qte > 0n)) { p.usdcUtilisable = 0n; continue; }
+    try { p.usdcUtilisable = premierMot(await appel(quoteur, encodeQuote({ cle, zeroForOne: !usdcEst0, montant: qte }))); }
+    catch (e) { if (/revert|execution/i.test(court(e))) { p.usdcUtilisable = 0n; p.profondeurRevert = true; continue; } p.erreur = 'depth quote not read: ' + court(e); continue; }
   }
   const lues = pools.filter((p) => !p.erreur);
   if (pools.length && !lues.length) return { etat: 'NON_MESURE', venue: 'uniswap-v4', pourquoi: pools[0].erreur, pools };
@@ -173,9 +197,12 @@ export function jugerPool(p, regles = REGLES) {
   if (p.code) return { passe: false, code: p.code };
   if (!(typeof p.achat === 'bigint' && p.achat > 0n)) return { passe: false, code: 'NON_COTEE' };
   if (!Number.isFinite(p.ecartBps) || p.ecartBps > regles.ecartMaxBps) return { passe: false, code: 'ECART' };
+  /* ⛔ un devis au-dessus du prix de SA pool ne vient pas d elle (meme borne que planVenueNeuve) */
+  if (p.ecartBps < regles.ecartMinBps) return { passe: false, code: 'ECART_NEGATIF' };
   if (!Number.isFinite(p.perteBps) || p.perteBps > regles.perteMaxBps) return { passe: false, code: 'ALLER_RETOUR' };
-  if (typeof p.usdcPool !== 'bigint') return { passe: false, code: 'PROFONDEUR_NON_MESUREE' };
-  if (p.usdcPool < regles.usdcMin) return { passe: false, code: 'LIQUIDITE_SOUS_SEUIL' };
+  /* ⛔ la profondeur : l USDC UTILISABLE au prix courant (REGLES), jamais le solde de la pool */
+  if (typeof p.usdcUtilisable !== 'bigint') return { passe: false, code: 'PROFONDEUR_NON_MESUREE' };
+  if (p.usdcUtilisable < seuilUtilisable(regles)) return { passe: false, code: 'LIQUIDITE_SOUS_SEUIL' };
   return { passe: true, code: null };
 }
 
@@ -194,7 +221,7 @@ export function verdictVenue(cote, regles = REGLES) {
   const choisie = passent.length ? passent.reduce(plus) : (cotees.length ? cotees.reduce(plus) : jugees[0]);
   const p = choisie.p;
   return { venue: cote.venue, etat: 'OK', passe: choisie.j.passe, code: choisie.j.code, pool: p.pool, tickSpacing: p.tickSpacing ?? null, cle: p.cle || null,
-    usdcPool: p.usdcPool ?? null, achat: p.achat ?? null, venteMemeEtat: p.venteMemeEtat ?? null, ecartBps: p.ecartBps ?? null, perteBps: p.perteBps ?? null };
+    usdcPool: p.usdcPool ?? null, usdcUtilisable: p.usdcUtilisable ?? null, achat: p.achat ?? null, venteMemeEtat: p.venteMemeEtat ?? null, ecartBps: p.ecartBps ?? null, perteBps: p.perteBps ?? null };
 }
 
 /** LE MEILLEUR LIEU QUI PASSE : plus grande sortie a 10 USDC ; a egalite, l ordre ORDRE_VENUES (la route d avant). null si aucun ne passe. */
@@ -234,12 +261,33 @@ export function ecartBpsContre(prix, ref) {
  * profonde (aero-old) cote 197 $ quand la vraie profondeur echange a 220 $ — une reference qui ment).
  * Rend { meilleure, ecartBps, loin, texte } — `loin` : MEME le meilleur lieu paie plus de SEUIL_VENTE_LOIN_BPS sous la reference.
  */
-export function phraseVente({ ventes = [], reference = null, seuilBps = SEUIL_VENTE_LOIN_BPS } = {}) {
+/* ⛔⛔ 2026-10-25 (revue de 3d81e06, defaut 1) : la phrase disait « Best sell: <le mieux cote> » pendant que le plan vendait AILLEURS
+ *   (AMZN sur fork : vendu par 'aero-new' 9 987 000, l ecran nommait notre routeur, 9 988 582 ; NOKc : l inverse, ~1,3 %). Avec `ici`
+ *   (le lieu que le plan EMPRUNTE), la phrase nomme CE lieu et SON prix ; un lieu mieux cote qui n est pas emprunte est dit avec la
+ *   raison (il ne passe pas les regles, ou cette vente n y est pas routee) ; l ecart et l alerte portent sur le prix EMPRUNTE.
+ *   Sans `ici` (aucun plan) : l ancienne phrase, qui ne pretend rien emprunter. */
+export function phraseVente({ ventes = [], reference = null, seuilBps = SEUIL_VENTE_LOIN_BPS, ici = null, passants = null } = {}) {
   const cotees = ventes.filter((v) => v && Number(v.prixUsd) > 0);
+  const libDe = (id) => (VENUES[id] && VENUES[id].libelle) || id;
+  const usd = (x) => { const v = Number(x); return '$' + v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: v < 10 ? 4 : 2 }); };
+  const m = cotees.length ? cotees.reduce((x, y) => (Number(y.prixUsd) > Number(x.prixUsd) ? y : x)) : null;
+  if (ici) {
+    const u = cotees.find((v) => v.venue === ici) || null;
+    let texte = u ? 'Selling through ' + libDe(ici) + ', about ' + usd(u.prixUsd) + ' per token.' : 'Selling through ' + libDe(ici) + ' (its quote at this amount was not read).';
+    if (m && m.venue !== ici && (!u || Number(m.prixUsd) > Number(u.prixUsd))) {
+      const passe = Array.isArray(passants) && passants.includes(m.venue);
+      texte += ' ' + libDe(m.venue) + ' quotes more (' + usd(m.prixUsd) + ') but ' + (passe ? 'this app does not route this sale there.' : 'does not pass this app’s liquidity rules.');
+    }
+    const e = u && reference ? ecartBpsContre(u.prixUsd, reference.prixUsd) : null;
+    const loin = e !== null && e < -seuilBps;
+    if (e !== null) {
+      texte += ' ' + (reference.source === 'chainlink' ? 'Chainlink reference ' : 'Best buy price on a venue that passes ') + usd(reference.prixUsd) + ' (' + (e >= 0 ? '+' : '') + (e / 100).toFixed(2) + ' %).';
+      if (loin) texte += ' ⚠ This sale pays ' + (Math.abs(e) / 100).toFixed(1) + ' % below it. A smaller sale, or waiting, may get more.';
+    } else if (u) texte += ' No reference price to compare with.';
+    return { meilleure: m, ici: u, ecartBps: e, loin, texte };
+  }
   if (!cotees.length) return { meilleure: null, ecartBps: null, loin: false, texte: 'No venue quotes a sale of this stock right now.' };
-  const m = cotees.reduce((x, y) => (Number(y.prixUsd) > Number(x.prixUsd) ? y : x));
-  const lib = (VENUES[m.venue] && VENUES[m.venue].libelle) || m.venue;
-  const usd = (x) => '$' + Number(x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const lib = libDe(m.venue);
   let texte = 'Best sell: ' + lib + ', about ' + usd(m.prixUsd) + ' per token.';
   const e = reference ? ecartBpsContre(m.prixUsd, reference.prixUsd) : null;
   const loin = e !== null && e < -seuilBps;
@@ -255,7 +303,7 @@ export function verdictServi(v) {
   if (!v) return null;
   const s = (x) => (typeof x === 'bigint' ? String(x) : x ?? null);
   return { venue: v.venue, passe: !!v.passe, code: v.code ?? null, pool: v.pool ?? null, tickSpacing: v.tickSpacing ?? null,
-    usdcPool: s(v.usdcPool), achat: s(v.achat), venteMemeEtat: s(v.venteMemeEtat), ecartBps: v.ecartBps ?? null, perteBps: v.perteBps ?? null };
+    usdcPool: s(v.usdcPool), usdcUtilisable: s(v.usdcUtilisable), achat: s(v.achat), venteMemeEtat: s(v.venteMemeEtat), ecartBps: v.ecartBps ?? null, perteBps: v.perteBps ?? null };
 }
 
 /* ── LE MONTAGE SUR LE ROUTEUR DE LA NOUVELLE FACTORY (meme montage que calldataExactInputAvecFrais, en un saut) ── */
@@ -307,6 +355,50 @@ export function choisirVenue({ route, neuve }) {
   if (neuveOk && !ancienneOk) return 'aero-new';
   if (neuveOk && ancienneOk && /^\d+$/.test(String(route.achat || '')) && BigInt(neuve.achat) > BigInt(route.achat)) return 'aero-new';
   return ancienneOk ? 'aero-old' : null;
+}
+
+/**
+ * ⛔⛔ LA DECISION SERVIE, UNE SEULE FONCTION (revue de 3d81e06, defaut 4 : la mesure decidait seule — sans le registre ni la regle
+ *   « strictement meilleur » du serveur — et comptait BUDc « achetable » quand le serveur le refuse HORS_REGISTRE). Le serveur
+ *   (serveur-web.js, chaque passe de route) ET la mesure l appellent. `route` = routeServie (notre route, sa regle a lui) ;
+ *   `coteNeuve` = coterVenueCL('aero-new') ; `admise` = estDeviseConnue(action) (le frais se prend dans le jeton qui sort).
+ * Rend { venues: { 'aero-new': verdictServi }, meilleure } — ou null si la cotation n est pas lue (rien d affirme).
+ */
+export function venuesServies({ route, coteNeuve, admise, regles = REGLES }) {
+  if (!coteNeuve || coteNeuve.etat !== 'OK') return null;
+  const vN = verdictVenue(coteNeuve, regles);
+  if (vN.passe && admise !== true) { vN.passe = false; vN.code = 'HORS_REGISTRE'; }
+  const venues = { 'aero-new': verdictServi(vN) };
+  return { venues, meilleure: choisirVenue({ route, neuve: venues['aero-new'] }) };
+}
+
+/** les lieux de VENTE qui passent pour une action : notre route seulement si la vente d avant y passe (`existante` = 'aero-old', table
+ *  Aerodrome) et qu elle passe sa regle ; 'aero-new' si son verdict servi passe (registre compris). v4 ne passe jamais (frais 3-8 %). */
+export function passantsVente({ route, existante }) {
+  const out = [];
+  if (existante === 'aero-old' && route && route.achetable === true) out.push('aero-old');
+  const n = route && route.venues ? route.venues['aero-new'] : null;
+  if (n && n.passe === true && ADR.test(String(n.pool || '')) && Number.isInteger(Number(n.tickSpacing))) out.push('aero-new');
+  return out;
+}
+
+/**
+ * ⛔⛔ LE LIEU D UNE VENTE (revue de 3d81e06, defaut 1 : la vente suivait `meilleure`, le verdict d ACHAT a 10 USDC). La vente prend le
+ *   MEILLEUR LIEU DE VENTE QUI PASSE, cote a SON montant (`ventes`, venteParVenues) :
+ *   - 'aero-new' ne passe pas : la route d avant (`existante`), sans une lecture de plus ;
+ *   - la route d avant ne passe pas et 'aero-new' passe : 'aero-new' (seul lieu qui passe) ;
+ *   - les deux passent : 'aero-new' seulement s il rend STRICTEMENT plus a ce montant, les deux devis LUS ; sinon la route d avant.
+ * Rend { venue, raison, verdict? } — raison : 'NEUVE_NE_PASSE_PAS' | 'USUELLE_NE_PASSE_PAS' | 'PAIE_PLUS' | 'USUELLE_PAIE_AUTANT' | 'NON_COMPARE'.
+ */
+export function choisirVenteVenue({ route, ventes = [], existante }) {
+  const pass = passantsVente({ route, existante });
+  if (!pass.includes('aero-new')) return { venue: existante, raison: 'NEUVE_NE_PASSE_PAS' };
+  const verdict = route.venues['aero-new'];
+  if (!pass.includes(existante)) return { venue: 'aero-new', raison: 'USUELLE_NE_PASSE_PAS', verdict };
+  const q = (id) => { const v = (ventes || []).find((x) => x && x.venue === id); return v && /^\d+$/.test(String(v.usdc)) ? BigInt(v.usdc) : null; };
+  const qn = q('aero-new'), qe = q(existante);
+  if (qn === null || qe === null) return { venue: existante, raison: 'NON_COMPARE' };
+  return qn > qe ? { venue: 'aero-new', raison: 'PAIE_PLUS', verdict } : { venue: existante, raison: 'USUELLE_PAIE_AUTANT' };
 }
 
 let codeQuoteurMemo = null;
@@ -387,7 +479,7 @@ export async function planVenueNeuve({ rpc, sens, action, montant, compte, verdi
  * MESUREE (`cleV4`). Reference : `refUsd` (Chainlink lue) sinon le prix d achat le plus bas servi (10 USDC / `achat`, 'best-buy').
  * Rend { etat, ventes:[{venue, usdc, prixUsd}], meilleure, ecartBps, loin, texte } — un lieu non cote n est pas dit « 0 ».
  */
-export async function venteParVenues({ rpc, action, montant, route, cleV4 = null, refUsd = null, usdc = USDC_BASE }) {
+export async function venteParVenues({ rpc, action, montant, route, cleV4 = null, refUsd = null, usdc = USDC_BASE, tsAncienne = null, ici = null, passants = null }) {
   const a = bas(action), m = BigInt(montant);
   let dec;
   try { dec = Number(premierMot(await rpc('eth_call', [{ to: a, data: SEL_DECIMALS }, 'latest']))); } catch (_) { return { etat: 'NON_MESURE', ventes: [], texte: null }; }
@@ -396,8 +488,11 @@ export async function venteParVenues({ rpc, action, montant, route, cleV4 = null
   const ventes = [];
   const prix = (r) => (Number(r) / 10 ** 6) / (Number(m) / 10 ** dec);
   const coter = async (venue, f) => { try { const r = premierMot(await f()); if (r > 0n) ventes.push({ venue, usdc: String(r), prixUsd: prix(r) }); } catch (_) { /* non cote : pas dit */ } };
-  if (route && ADR.test(String(route.pool || '')) && Number.isInteger(Number(route.tickSpacing))) {
-    await coter('aero-old', () => rpc('eth_call', [{ to: QUOTEUR_AERODROME_CL, data: dataDevisCL({ tokenIn: a, tokenOut: usdc, montant: m, tickSpacing: route.tickSpacing }) }, 'latest']));
+  /* notre factory : l espacement que la vente d avant EMPRUNTE (`tsAncienne`, la table Aerodrome) quand il est connu, sinon celui de la route */
+  const tsA = Number.isInteger(Number(tsAncienne)) && tsAncienne !== null ? Number(tsAncienne)
+    : (route && ADR.test(String(route.pool || '')) && Number.isInteger(Number(route.tickSpacing)) ? Number(route.tickSpacing) : null);
+  if (tsA !== null) {
+    await coter('aero-old', () => rpc('eth_call', [{ to: QUOTEUR_AERODROME_CL, data: dataDevisCL({ tokenIn: a, tokenOut: usdc, montant: m, tickSpacing: tsA }) }, 'latest']));
   }
   if (neuve && ADR.test(String(neuve.pool || '')) && Number.isInteger(Number(neuve.tickSpacing))) {
     let code = null; try { code = await lireCodeQuoteurNouvelle(rpc); } catch (_) { code = null; }
@@ -406,10 +501,17 @@ export async function venteParVenues({ rpc, action, montant, route, cleV4 = null
   if (cleV4 && cleV4.currency0 && cleV4.currency1) {
     await coter('uniswap-v4', () => rpc('eth_call', [{ to: QUOTEUR_V4_BASE, data: encodeQuote({ cle: cleV4, zeroForOne: bas(cleV4.currency0) === a, montant: m }) }, 'latest']));
   }
-  /* la reference : Chainlink, sinon le prix d achat le plus bas SERVI a 10 USDC (le rachat le moins cher), nomme */
-  const achats = [route && route.achetable ? route.achat : null, neuve ? neuve.achat : null].filter((x) => /^\d+$/.test(String(x || '')) && BigInt(x) > 0n)
-    .map((x) => 10 / (Number(x) / 10 ** dec));
-  const reference = Number(refUsd) > 0 ? { prixUsd: Number(refUsd), source: 'chainlink' } : (achats.length ? { prixUsd: Math.min(...achats), source: 'best-buy' } : null);
-  const pv = phraseVente({ ventes, reference });
-  return { etat: 'OK', ventes, meilleure: pv.meilleure ? pv.meilleure.venue : null, ecartBps: pv.ecartBps, loin: pv.loin, reference, texte: pv.texte };
+  /* la reference : Chainlink, sinon le prix d achat le plus bas SERVI a 10 USDC (le rachat le moins cher), nomme.
+   * ⛔ 2026-10-25 (revue, defaut 4 : HTZc, 3 831 417 $ par action tires d une pool qui REFUSE) : seulement des lieux qui PASSENT. */
+  const reference = Number(refUsd) > 0 ? { prixUsd: Number(refUsd), source: 'chainlink' } : referenceRepli({ route, decimales: dec });
+  const pv = phraseVente({ ventes, reference, ici, passants });
+  return { etat: 'OK', ventes, decimales: dec, meilleure: pv.meilleure ? pv.meilleure.venue : null, ecartBps: pv.ecartBps, loin: pv.loin, reference, texte: pv.texte };
+}
+
+/** la reference de repli ('best-buy') : le prix d achat a 10 USDC le plus bas parmi les lieux servis qui PASSENT ; null si aucun ne passe */
+export function referenceRepli({ route, decimales }) {
+  const neuve = route && route.venues ? route.venues['aero-new'] : null;
+  const achats = [route && route.achetable === true ? route.achat : null, neuve && neuve.passe === true ? neuve.achat : null]
+    .filter((x) => /^\d+$/.test(String(x || '')) && BigInt(x) > 0n).map((x) => 10 / (Number(x) / 10 ** decimales));
+  return achats.length ? { prixUsd: Math.min(...achats), source: 'best-buy' } : null;
 }

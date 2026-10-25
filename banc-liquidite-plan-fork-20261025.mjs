@@ -38,7 +38,7 @@ const maintenant = async () => parseInt((await rpc('eth_getBlockByNumber', ['lat
 const res = [];
 for (const sym of SYMS) {
   const l = mesure.lignes.find((x) => x.sym === sym); assert.ok(l, sym + ' not in the measure');
-  const v = l.venues.find((x) => x.venue === 'aero-new'); assert.ok(v && v.pool, sym + ' has no aero-new pool');
+  const v = (l.regles || l.venues).find((x) => x.venue === 'aero-new'); assert.ok(v && v.pool, sym + ' has no aero-new pool'); /* `regles` : mesure du serveur (2026-10-25) */
   const verdict = { achetable: false, meilleure: 'aero-new', venues: { 'aero-new': { ...v, passe: true } } };
   const deps = async () => ({ rpc, chaine: 8453, maintenant: await maintenant(), venueAction: () => verdict });
   const etapes = [];

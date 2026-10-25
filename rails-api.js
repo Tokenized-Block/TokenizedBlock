@@ -40,7 +40,7 @@ import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { decoderInitialize } from './pools-du-jeton.js';
 /* 2026-10-25 — LE LIEU 'aero-new' (factory 0x9cb2…7a76, routeur 0x9ee3…d418, prouve sur fork) quand le serveur le sert comme MEILLEUR
  *   lieu d une action (`deps.venueAction(action).meilleure === 'aero-new'`) ; sinon les routes ci-dessous, inchangees octet pour octet */
-import { planVenueNeuve, venteParVenues } from './liquidite-actions.js';
+import { planVenueNeuve, venteParVenues, choisirVenteVenue, passantsVente, phraseVente, referenceRepli } from './liquidite-actions.js';
 
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -245,11 +245,19 @@ export async function planRail(q, deps) {
   const lireRef = deps && typeof deps.reference === 'function' ? deps.reference : null;
   const lireAdr = (x) => (String(x || '').toUpperCase() === 'ETH' ? ETH : bas(x));
   const de = lireAdr(q && q.de), vers = lireAdr(q && q.vers), nd = natureJeton(de), nv = natureJeton(vers);
+  /* ⛔⛔ 2026-10-25 (revue de 3d81e06, defaut 1) — UNE VENTE action -> USDC EST ROUTEE PAR LE MEILLEUR LIEU DE VENTE QUI PASSE, cote A SON
+   *   MONTANT, et non par `meilleure` (le verdict d ACHAT a 10 USDC). Les devis de vente sont lus AVANT le plan, seulement quand 'aero-new'
+   *   passe (sinon : la route d avant, sans une lecture de plus) ; ils servent ensuite la phrase, qui nomme le lieu EMPRUNTE. */
+  const vente = nd === 'ACTION' && nv === 'USDC' && deps && typeof deps.venueAction === 'function' ? await preparerVente(q, deps, de) : null;
+  const depsB = vente && vente.choix ? { ...deps, venteChoisie: vente.choix } : deps;
   /* une route qui touche UNE action (pas action>action : deux references, aucune ne serait « la » sienne) */
-  if (!lireRef || (nd === 'ACTION') === (nv === 'ACTION')) return planRailBrut(q, deps);
+  if (!lireRef || (nd === 'ACTION') === (nv === 'ACTION')) {
+    const brut = await planRailBrut(q, depsB);
+    return vente ? attacherVente(brut, vente, { refUsd: null, lirePlusTard: false }) : brut;
+  }
   const action = nd === 'ACTION' ? de : vers;
   const pRef = Promise.resolve().then(() => lireRef(action)).catch(() => null);
-  const plan = await planRailBrut(q, deps);
+  const plan = await planRailBrut(q, depsB);
   const ref = await Promise.race([pRef, new Promise((ok) => setTimeout(() => ok(null), ATTENTE_REFERENCE_MS))]);
   let decimalesAction = null;
   const avecDevis = ((nd === 'USDC' && nv === 'ACTION') || (nd === 'ACTION' && nv === 'USDC')) && ref && ref.reference && ref.reference.etat === 'LU'
@@ -260,31 +268,55 @@ export async function planRail(q, deps) {
     if (Number.isInteger(d) && d >= 0 && d <= 36) decimalesAction = d;
   } catch (_) { /* decimales non lues : pas d ecart, la reference reste */ }
   const avecRef = ajouterReference(plan, { de, vers, nd, nv, decimalesAction, ref });
-  /* ⛔ 2026-10-25 — LA VENTE COMPAREE PAR LIEU, AVANT LA SIGNATURE (consigne du proprietaire : montrer le meilleur lieu de vente et son
-   *   devis, et avertir quand TOUS les lieux paient loin sous la reference). AJOUT D INFORMATION : ni la route, ni un montant, ni l etat
-   *   du plan ne changent. Borne a ATTENTE_VENTE_MS ; rien de lu = pas de champ. Seulement si le serveur sert ses verdicts (`venueAction`). */
-  if (nd === 'ACTION' && nv === 'USDC' && deps && typeof deps.venueAction === 'function' && avecRef && (avecRef.etat === 'PRET' || avecRef.etat === 'APPROBATIONS')) {
-    let m = null; try { m = BigInt(String(q && q.montant)); } catch (_) { m = null; }
-    const route = (() => { try { return deps.venueAction(action) || null; } catch (_) { return null; } })();
-    const refUsd = ref && ref.reference && ref.reference.etat === 'LU' ? ref.reference.prixUsd : null;
-    const v = m && m > 0n ? await Promise.race([venteParVenues({ rpc: deps.rpc, action, montant: m, route, cleV4: cleV4MesureeDe(action), refUsd }).catch(() => null),
-      new Promise((ok) => setTimeout(() => ok(null), ATTENTE_VENTE_MS))]) : null;
-    if (v && v.etat === 'OK' && v.texte) {
-      const ici = avecRef.venue || (avecRef.pool === 'aerodrome' ? 'aero-old' : avecRef.pool === 'uniswap-v4' ? 'uniswap-v4' : null);
-      avecRef.vente = { texte: v.texte, loin: !!v.loin, ecartBps: v.ecartBps, meilleure: v.meilleure, ici, reference: v.reference, ventes: v.ventes };
-    }
-  }
-  return avecRef;
+  if (!vente) return avecRef;
+  const refUsd = ref && ref.reference && ref.reference.etat === 'LU' ? ref.reference.prixUsd : null;
+  return attacherVente(avecRef, vente, { refUsd, lirePlusTard: true });
 }
 const ATTENTE_VENTE_MS = 4000;
-/** le verdict 'aero-new' servi, SEULEMENT quand le serveur le dit meilleur lieu (et qu il passe) ; sinon null et la route d avant */
+const borneVente = (p) => Promise.race([p.catch(() => null), new Promise((ok) => setTimeout(() => ok(null), ATTENTE_VENTE_MS))]);
+/** la vente d avant (sans 'aero-new') : la table Aerodrome -> notre routeur ; sinon la pool v4 lue (voir « 4. VENDRE » plus bas) */
+const venteExistanteDe = (action) => (POOLS_ACTIONS_AERODROME.has(bas(action)) ? 'aero-old' : 'uniswap-v4');
+/** le verdict servi de l action, les lieux de vente qui passent, et — SEULEMENT si 'aero-new' passe — les devis de vente a ce montant et le choix */
+async function preparerVente(q, deps, action) {
+  let m = null; try { m = BigInt(String(q && q.montant)); } catch (_) { m = null; }
+  const route = (() => { try { return deps.venueAction(action) || null; } catch (_) { return null; } })();
+  const existante = venteExistanteDe(action);
+  const passants = passantsVente({ route, existante });
+  const t = POOLS_ACTIONS_AERODROME.get(bas(action));
+  const coter = () => venteParVenues({ rpc: deps.rpc, action, montant: m, route, cleV4: cleV4MesureeDe(action), tsAncienne: t ? t.tickSpacing : null });
+  if (!(m && m > 0n)) return { route, existante, passants, m: null, cotes: null, choix: null, coter: null };
+  if (!passants.includes('aero-new')) return { route, existante, passants, m, cotes: null, choix: null, coter };
+  const cotes = await borneVente(coter());
+  const choix = choisirVenteVenue({ route, ventes: cotes && cotes.etat === 'OK' ? cotes.ventes : [], existante });
+  return { route, existante, passants, m, cotes, choix, coter };
+}
+/** ⛔ AJOUT D INFORMATION : la phrase de vente, posee sur un plan PRET ou APPROBATIONS — elle nomme le lieu EMPRUNTE par CE plan */
+async function attacherVente(plan, vente, { refUsd, lirePlusTard }) {
+  if (!plan || !(plan.etat === 'PRET' || plan.etat === 'APPROBATIONS') || !vente || !vente.m) return plan;
+  /* sans 'aero-new' qui passe, les devis n ont pas ete lus avant le plan : lus maintenant (comme avant), seulement si une reference est demandee */
+  const cotes = vente.cotes || (lirePlusTard && vente.coter ? await borneVente(vente.coter()) : null);
+  if (!cotes || cotes.etat !== 'OK') return plan;
+  const ici = plan.venue || (plan.pool === 'aerodrome' ? 'aero-old' : plan.pool === 'uniswap-v4' ? 'uniswap-v4' : null);
+  const reference = Number(refUsd) > 0 ? { prixUsd: Number(refUsd), source: 'chainlink' } : referenceRepli({ route: vente.route, decimales: cotes.decimales });
+  const pv = phraseVente({ ventes: cotes.ventes, reference, ici, passants: vente.passants });
+  if (!pv.texte) return plan;
+  plan.vente = { texte: pv.texte, loin: !!pv.loin, ecartBps: pv.ecartBps, meilleure: pv.meilleure ? pv.meilleure.venue : null, ici, reference, ventes: cotes.ventes,
+    choix: vente.choix ? vente.choix.raison : null };
+  return plan;
+}
+/** le verdict 'aero-new' servi, SEULEMENT quand le serveur le dit meilleur lieu (et qu il passe) ; sinon null et la route d avant — pour l ACHAT */
 function venueNeuveDe(deps, action) {
   if (!deps || typeof deps.venueAction !== 'function') return null;
   let r = null; try { r = deps.venueAction(action); } catch (_) { r = null; }
   const v = r && r.meilleure === 'aero-new' && r.venues ? r.venues['aero-new'] : null;
-  return v && v.passe === true && ADR.test(String(v.pool || '')) ? v : null;
+  return v && v.passe === true && ADR.test(String(v.pool || '')) ? { v, usuellePasse: r.achetable === true } : null;
 }
-const CHOIX_NEUVE = 'Routed through Aerodrome’s newer pool factory (router 0x9ee3…d418): its pool quotes this stock better than this app’s usual route';
+/* ⛔ 2026-10-25 (revue) : la phrase dit la RAISON vraie du choix — l ancienne disait « quotes better » meme quand notre route ne passait pas */
+const CHOIX_NEUVE_TETE = 'Routed through Aerodrome’s newer pool factory (router 0x9ee3…d418): ';
+const CHOIX_NEUVE_ACHAT_MIEUX = CHOIX_NEUVE_TETE + 'at 10 USDC its pool quotes this stock better than this app’s usual route';
+const CHOIX_NEUVE_ACHAT_SEULE = CHOIX_NEUVE_TETE + 'this app’s usual route does not pass its liquidity rules for this stock';
+const CHOIX_NEUVE_VENTE_MIEUX = CHOIX_NEUVE_TETE + 'at this amount it pays more for this sale than this app’s usual route';
+const CHOIX_NEUVE_VENTE_SEULE = CHOIX_NEUVE_TETE + 'this app’s usual route for this sale does not pass its liquidity rules';
 
 async function planRailBrut(q, deps) {
   const rpcRecu = deps && deps.rpc;
@@ -479,8 +511,8 @@ async function planRailBrut(q, deps) {
       /* 2026-10-25 : USDC -> action sur le lieu 'aero-new' quand le serveur l a juge MEILLEUR (liquidite-actions.js) ; sinon la suite, inchangee */
       const vNeuve = nd === 'USDC' ? venueNeuveDe(deps, vers) : null;
       if (vNeuve) {
-        return normaliser(route, await planVenueNeuve({ rpc, sens: 'ACHAT', action: vers, montant: m, compte, verdict: vNeuve, beneficiaireFrais: FEE_WALLET, maintenant }),
-          { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: CHOIX_NEUVE });
+        return normaliser(route, await planVenueNeuve({ rpc, sens: 'ACHAT', action: vers, montant: m, compte, verdict: vNeuve.v, beneficiaireFrais: FEE_WALLET, maintenant }),
+          { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: vNeuve.usuellePasse ? CHOIX_NEUVE_ACHAT_MIEUX : CHOIX_NEUVE_ACHAT_SEULE });
       }
       const t = POOLS_ACTIONS_AERODROME.get(vers);
       if (!t && (nd === 'ETH' || nd === 'USDC')) {
@@ -536,11 +568,12 @@ async function planRailBrut(q, deps) {
     }
     /* ── 4. VENDRE UNE ACTION TOKENISEE CONTRE USDC sur sa pool v4 LUE (les 20 ; les 12 Aerodrome n ont pas ce chemin ici) ── */
     if (nd === 'ACTION' && nv === 'USDC') {
-      /* 2026-10-25 : action -> USDC sur le lieu 'aero-new' quand le serveur l a juge MEILLEUR (memes regles, deux jambes cotees au meme etat) */
-      const vNeuveV = venueNeuveDe(deps, de);
-      if (vNeuveV) {
-        return normaliser(route, await planVenueNeuve({ rpc, sens: 'VENTE', action: de, montant: m, compte, verdict: vNeuveV, beneficiaireFrais: FEE_WALLET, maintenant }),
-          { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: CHOIX_NEUVE });
+      /* ⛔⛔ 2026-10-25 (revue, defaut 1) : action -> USDC sur 'aero-new' quand c est le MEILLEUR LIEU DE VENTE QUI PASSE a ce montant
+       *   (planRail -> preparerVente -> choisirVenteVenue, `deps.venteChoisie`) — plus `meilleure`, le verdict d ACHAT a 10 USDC */
+      const vc = deps && deps.venteChoisie && deps.venteChoisie.venue === 'aero-new' && deps.venteChoisie.verdict ? deps.venteChoisie : null;
+      if (vc) {
+        return normaliser(route, await planVenueNeuve({ rpc, sens: 'VENTE', action: de, montant: m, compte, verdict: vc.verdict, beneficiaireFrais: FEE_WALLET, maintenant }),
+          { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: vc.raison === 'PAIE_PLUS' ? CHOIX_NEUVE_VENTE_MIEUX : CHOIX_NEUVE_VENTE_SEULE });
       }
       /* ⛔⛔ 2026-10-04 — LES DEUX MARCHES SONT ACCEPTES A LA VENTE (Phil : « pool Aerodrome et Uniswap acceptees, oublie pas »).
        *   Mesure du jour sur ce planificateur : vendre NVDAc rendait REFUSE « no initialized pool among the 16 keys read » — l achat
