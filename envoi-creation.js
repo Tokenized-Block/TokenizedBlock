@@ -92,6 +92,9 @@ export function creerEnvoiCreation({ eth, chaineHex, creation, cle = null, stock
       if (!(await surBase())) return { etat: 'PAS_BASE' };
       relire();
       { const b = bloque(); if (b && b.etat !== 'EN_COURS') return b; }
+      /* ⛔ 2026-10-25 (revue adverse) : notre propre enVol masque EN_COURS devant le marqueur d un AUTRE onglet (bloque teste enVol d abord) :
+       *   un marqueur « attente » relu ici = un autre onglet a sa demande ouverte -> rien n est envoye */
+      if (s.vu === 'ATTENTE') return { etat: 'ATTENTE' };
       ecrireStock(MA_MARQUE);
       if (avant) avant();
       let tx;
