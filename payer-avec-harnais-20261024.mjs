@@ -74,7 +74,13 @@ export function ecran() {
 }
 
 /* ─────────────────────────────── la chaine factice (mesure enregistree) ─────────────────────────────── */
-export const MESURE = JSON.parse(readFileSync(new URL('./mesures/misables-20261024.json', import.meta.url), 'utf8'));
+/* 2026-10-25 : l enregistrement est un PARAMETRE (o.mesure de chaineFactice, argument de lignesServies). Le defaut reste celui du 24/10
+ *   (bloc 53 031 600) : les bancs qui ne l ont pas demande (payer-arret, reponse-spin, le banc fork) gardent leurs chiffres ;
+ *   test-payer-avec passe MESURE_20261025 (bloc 53 048 993, mesure-misables-20261024.mjs relancee le 25/10). */
+export const lireMesure = (nom) => JSON.parse(readFileSync(new URL('./mesures/' + nom, import.meta.url), 'utf8'));
+export const MESURE = lireMesure('misables-20261024.json');
+export const MESURE_20261025 = lireMesure('misables-live-20261025.json');
+const MESURE_DEFAUT = MESURE;
 const bas = (x) => String(x || '').toLowerCase();
 const mot = (v) => BigInt(v).toString(16).padStart(64, '0');
 const hex = (v) => '0x' + BigInt(v).toString(16);
@@ -85,6 +91,7 @@ const SEL = { quote: selecteur(MIS.SIG.quoteExactOutputSingle), slot0: selecteur
  *                    le premier devis), deriveDevis (bruts ajoutes a chaque nouveau devis), ecartForce (Map pool -> facteur sur le devis) }
  */
 export function chaineFactice(o = {}) {
+  const MESURE = o.mesure || MESURE_DEFAUT;
   const pools = new Map(), routesParCle = new Map(), decs = new Map();
   for (const t of MESURE.table) {
     decs.set(bas(t.jeton), t.decimales);
@@ -145,8 +152,8 @@ export function chaineFactice(o = {}) {
 
 /* la liste servie (/api/misables) : la VRAIE regle du serveur (coterMisableTailles -> ligneMisable -> listeMisables) sur la chaine
  *   factice, references = la pool du Market enregistree (cotee en USDC) */
-export async function lignesServies() {
-  const { rpc } = chaineFactice();
+export async function lignesServies(MESURE = MESURE_DEFAUT) {
+  const { rpc } = chaineFactice({ mesure: MESURE });
   const refs = new Map();
   for (const t of MESURE.table) if (t.marche && t.marche.poolAdr && /USDC/.test(String(t.marche.quoteSym || ''))) refs.set(bas(t.jeton), { pool: bas(t.marche.poolAdr) });
   const lignes = [];

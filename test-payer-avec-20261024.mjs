@@ -1,9 +1,9 @@
 /* test-payer-avec-20261024.mjs — « PAY WITH » DANS LA CARTE DRAWS : LE VRAI CODE DE app.html, EXECUTE (payer-avec-harnais-20261024.mjs).
  * Phil 2026-10-24 : payer les jeux en USDC ou en tout jeton de l app qui a une liquidite profonde ; l app swappe en USDC ; les contrats
  *   (USDC seul) ne changent pas ; le wallet du joueur signe tout.
- * La chaine est FACTICE, nourrie par la mesure enregistree (mesures/misables-20261024.json) ; la liste /api/misables est batie par la VRAIE
- * regle du serveur (coterMisableTailles -> ligneMisable -> listeMisables) sur cette chaine : 26 jetons, 20 / 19 / 18 misables a 0,50 / 5 / 10
- * (les chiffres servis du 24/10). Le wallet est FACTICE (un wallet qui groupe : atomic « supported » ; un qui ne groupe pas : 4200).
+ * La chaine est FACTICE, nourrie par la mesure enregistree (2026-10-25 : mesures/misables-live-20261025.json, bloc 53 048 993 ; avant :
+ * celle du 24/10) ; la liste /api/misables est batie par la VRAIE regle du serveur (coterMisableTailles -> ligneMisable -> listeMisables)
+ * sur cette chaine, et ses comptes sont compares a un ORACLE independant de misables.js calcule sur l enregistrement (aucun chiffre tape). Le wallet est FACTICE (un wallet qui groupe : atomic « supported » ; un qui ne groupe pas : 4200).
  * SCENARIOS
  *   SANS_WALLET   « Pay with: USDC » seul + la ligne qui COMPTE les jetons non misables ; aucun selecteur, aucune lecture de solde ;
  *   SANS_JETON    un wallet qui ne tient aucun jeton liste : pas de selecteur (pas de controle mort) ; balanceOf SEULEMENT des jetons listes ;
@@ -29,7 +29,12 @@ import * as Slots from './slots-plan.js';
 import { USDC_BASE } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL } from './calldata-aerodrome.js';
 import { selecteur } from './keccak.js';
-import { lireApp, appDuCommit, chaineFactice, lignesServies, walletFactice, appelsEnvoyes, charger, choisir, tempsRapide, ROLLS, SLOTS } from './payer-avec-harnais-20261024.mjs';
+import { lireApp, appDuCommit, chaineFactice as chaineFacticeDe, lignesServies, walletFactice, appelsEnvoyes, charger, choisir, tempsRapide, ROLLS, SLOTS, MESURE_20261025 } from './payer-avec-harnais-20261024.mjs';
+import { FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
+/* 2026-10-25 : RE-BASE sur l enregistrement du 25/10 (mesures/misables-live-20261025.json). Celui du 24/10 ne cote pas SANc / SEc / NOKc /
+ *   LIc (entres au registre le 25/10) et compte ULc hors candidats : ses chiffres 26 / 20/19/18 ne decrivent plus la liste servie. */
+const MESURE = MESURE_20261025;
+const chaineFactice = (o = {}) => chaineFacticeDe({ mesure: MESURE, ...o });
 
 const remettre = tempsRapide();
 let n = 0;
@@ -37,8 +42,46 @@ const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const APP = lireApp();
 const AVANT = appDuCommit('2f1af11');
 vu(typeof AVANT === 'string' && AVANT.includes('async function rollPaye('), 'app.html de 2f1af11 lu (git show) : le chemin USDC se compare a celui d AVANT');
-const LIGNES = await lignesServies();
-vu(LIGNES.length === 26 && [0, 1, 2].map((i) => LIGNES.filter((l) => l.tailles[i].misable).length).join('/') === '20/19/18', 'la liste rejouee = la liste servie du 24/10 : 26 jetons, 20/19/18 misables');
+const LIGNES = await lignesServies(MESURE);
+/* 2026-10-25 : les chiffres attendus ne sont plus tapes a la main — ils sont DERIVES de l enregistrement par un oracle qui n utilise PAS
+ *   misables.js : ecart <= 100 bps, USDC de la pool >= 10 000 USDC, factory = celle de notre routeur, cout contre la reference
+ *   (1+e)/(1+r)-1 <= 100 bps quand la reference est enregistree. Une ligne par jeton candidat ; un candidat dont la pool n est pas dans
+ *   l enregistrement est « non mesure dans cet enregistrement » : jamais compte misable. */
+const ORACLE = (() => {
+  const parJeton = new Map(), nonMesures = [];
+  for (const c of MIS.CANDIDATS_CL) {
+    const t = MESURE.table.find((x) => x.jeton === c.jeton);
+    const r = t && t.routes.find((x) => x.route === 'aerodrome-cl' && x.pool === c.pool);
+    if (!r) { nonMesures.push(c.symbole); if (!parJeton.has(c.jeton)) parJeton.set(c.jeton, [false, false, false]); continue; }
+    const k = [0, 1, 2].map((i) => {
+      const d = r.devis && r.devis[i];
+      if (!d || d.ok !== true || String(r.factory || '').toLowerCase() !== FACTORY_AERODROME_CL.toLowerCase() || !(Number(d.ecartBps) <= 100) || BigInt(r.usdcPool || 0) < 10000000000n) return false;
+      const ref = r.ecartReferenceBps;
+      return ref === null || ref === undefined || Math.round(((10000 + d.ecartBps) * 10000) / (10000 + ref) - 10000) <= 100;
+    });
+    parJeton.set(c.jeton, (parJeton.get(c.jeton) || [false, false, false]).map((v, i) => v || k[i]));
+  }
+  return { jetons: parJeton.size, misables: [0, 1, 2].map((i) => [...parJeton.values()].filter((v) => v[i]).length),
+    listes: [...parJeton.values()].filter((v) => v.some(Boolean)).length, nonMesures };
+})();
+vu(LIGNES.length === ORACLE.jetons && [0, 1, 2].map((i) => LIGNES.filter((l) => l.tailles[i].misable).length).join('/') === ORACLE.misables.join('/'),
+  'la liste rejouee (regle du serveur) = l oracle sur l enregistrement du bloc ' + MESURE.bloc + ' : ' + ORACLE.jetons + ' jetons, ' + ORACLE.misables.join('/') + ' misables'
+  + (ORACLE.nonMesures.length ? ' (non mesures dans cet enregistrement : ' + ORACLE.nonMesures.join(' ') + ')' : ''));
+/* 2026-10-25 : la ligne muette compte les jetons de la liste NON misables a 0,50 — derive de l oracle (24/10 : 26 - 20 = 6) */
+const AUTRES = (ORACLE.jetons - ORACLE.misables[0]) + ' other tokens are not deep enough to bet.';
+/* 2026-10-25 : les « about Q » du selecteur et de la ligne muette etaient tapes depuis le 24/10 (0.00236, 0.0118, 0.0473, 0.196) ; ils
+ *   sont maintenant DERIVES du devis ENREGISTRE de la pool servie : ceil(montantIn x mise / taille couvrante), tronque a 3 chiffres
+ *   significatifs (formateur local, pas qteJeton de l app) ; l ecart affiche = ecartBps enregistre / 100, 2 decimales. */
+const TAILLES = [500000n, 5000000n, 10000000n];
+const routeEnreg = (l) => { const t = MESURE.table.find((x) => x.jeton === l.jeton); return { t, r: t && t.routes.find((x) => x.route === 'aerodrome-cl' && x.pool === l.pool) }; };
+const decDe = (l) => (l.natif ? 18 : routeEnreg(l).t.decimales);
+const estDe = (l, usdc) => { const i = TAILLES.findIndex((x) => x >= usdc); return (BigInt(routeEnreg(l).r.devis[i].montantIn) * usdc + TAILLES[i] - 1n) / TAILLES[i]; };
+const trois = (v, d) => { /* v < 10^d (une fraction d unite) : 0.<zeros><3 chiffres>, zeros de queue retires */
+  const s = v.toString(); if (s.length > d) throw new Error('trois(): quantite >= 1 non prevue');
+  return ('0.' + '0'.repeat(d - s.length) + s.slice(0, 3)).replace(/0+$/, '');
+};
+const aboutDe = (l, usdc) => trois(estDe(l, usdc), decDe(l));
+const pctDe = (l) => (Number(routeEnreg(l).r.devis[0].ecartBps) / 100).toFixed(2) + ' %';
 const L = (s) => LIGNES.find((l) => l.symbole === s);
 const NV = L('NVDAc'), ETHL = L('ETH'), INFY = L('INFYc'), HSAI = L('HSAIc'), AAPL = L('AAPLc');
 vu(!!(NV && ETHL && INFY && HSAI && AAPL), 'NVDAc, ETH, INFYc, HSAIc, AAPLc dans la liste');
@@ -116,7 +159,7 @@ S.SANS_WALLET = async (t) => {
   const soldes = r.chain.st.appels.filter((a) => a.methode === 'eth_getBalance' || (a.methode === 'eth_call' && a.params[0].data.startsWith('0x70a08231') && a.params[0].data.endsWith(JOUEUR.slice(2))));
   const ok = e('payerAvec').hidden === false && e('payerSeul').hidden === false && e('payerSeul').textContent === '' /* texte du HTML : « Pay with: USDC » */
     && e('payerJeton').hidden === true && e('payerLab').hidden === true && e('payerNote').hidden === false
-    && e('payerNote').textContent === '6 other tokens are not deep enough to bet.' && soldes.length === 0 && r.ch.fetchs.length === 1;
+    && e('payerNote').textContent === AUTRES && soldes.length === 0 && r.ch.fetchs.length === 1;
   const html = /<span class="note" id="payerSeul">Pay with: USDC<\/span>/.test(t);
   return { ok: ok && html, html, note: e('payerNote').textContent, seul: e('payerSeul').hidden, sel: e('payerJeton').hidden, soldes: soldes.length, fetchs: r.ch.fetchs.length };
 };
@@ -136,16 +179,18 @@ S.SELECTEUR = async (t) => {
   const e = r.ch.ecran.el, s = e('payerJeton');
   const vals = s.options.map((o) => o.value), txt = (v) => (s.options.find((o) => o.value === v) || {}).textContent, off = (v) => (s.options.find((o) => o.value === v) || {}).disabled;
   const ordre = vals.join() === ['usdc', HSAI.jeton, MIS.ETH, INFY.jeton, NV.jeton, AAPL.jeton].join();
-  const lib = txt(NV.jeton) === 'NVDAc — about 0.00236 for 0.50 USDC · 0.05 %' && txt(MIS.ETH) === 'ETH — about 0.000212 for 0.50 USDC · 0.00 %' && txt('usdc') === 'USDC';
+  /* 2026-10-25 : derive du devis enregistre (24/10 : 0.00236 / 0.05 % et 0.000212 / 0.00 %) */
+  const lib = txt(NV.jeton) === 'NVDAc — about ' + aboutDe(NV, 500000n) + ' for 0.50 USDC · ' + pctDe(NV) && txt(MIS.ETH) === 'ETH — about ' + aboutDe(ETHL, 500000n) + ' for 0.50 USDC · ' + pctDe(ETHL) && txt('usdc') === 'USDC';
   const gris = off(AAPL.jeton) === true && /\(you hold less\)$/.test(txt(AAPL.jeton)) && !off(NV.jeton) && !off(HSAI.jeton) && !off(INFY.jeton);
   const defaut = s.value === 'usdc' && s.hidden === false && e('payerLab').hidden === false && e('payerSeul').hidden === true && devisDans(r.chain.st.appels) === 0;
   const noteAvant = e('payerNote').textContent;
   const c1 = choisir(r.ch, NV.jeton), noteNv = e('payerNote').textContent;
   const c2 = choisir(r.ch, INFY.jeton), noteInfy = e('payerNote').textContent;
   const c3 = choisir(r.ch, AAPL.jeton) === false; /* grise : la personne ne peut pas le choisir */
-  const notes = noteAvant === '6 other tokens are not deep enough to bet.'
-    && noteNv === 'With NVDAc: Auto-roll ×5 (2.50 USDC) about 0.0118 · Week pass (10.00 USDC) about 0.0473. 6 other tokens are not deep enough to bet.'
-    && noteInfy === 'With INFYc: Auto-roll ×5 (2.50 USDC) about 0.196 · Week pass (10.00 USDC) USDC only: price gap over 1%. 6 other tokens are not deep enough to bet.';
+  const notes = noteAvant === AUTRES
+    /* 2026-10-25 : quantites derivees du devis enregistre (24/10 : 0.0118 / 0.0473 / 0.196) */
+    && noteNv === 'With NVDAc: Auto-roll ×5 (2.50 USDC) about ' + aboutDe(NV, 2500000n) + ' · Week pass (10.00 USDC) about ' + aboutDe(NV, 10000000n) + '. ' + AUTRES
+    && noteInfy === 'With INFYc: Auto-roll ×5 (2.50 USDC) about ' + aboutDe(INFY, 2500000n) + ' · Week pass (10.00 USDC) USDC only: price gap over 1%. ' + AUTRES;
   /* a 10 USDC (un Roll a 10 USDC, hypothetique) : HSAIc et INFYc ne sont pas misables — grises, avec leur raison */
   const r10 = await jouer(t, { rollsCfg: { contrat: ROLLS, prixRoll: '10000000', prixPass: '10000000', passRolls: 3 } });
   const s10 = r10.ch.ecran.el('payerJeton'), t10 = (v) => s10.options.find((o) => o.value === v);
@@ -232,7 +277,11 @@ S.NON_MISABLE = async (t) => {
   const e0 = s2.ch.ecran.ecrits.length;
   await s2.ch.api.rollPaye();
   const fs = s2.ch.ecran.ecrits.slice(e0).filter((w) => w.id === 'rollsEtat').map((w) => w.texte).pop() || '';
-  res.solde = { fin: fs, ok: s2.choisi && /^Not rolled: you hold 0\.00001 NVDAc; the swap may take up to 0\.00238\d*\. Nothing was sent\.$/.test(fs) && envoisWallet(s2.w) === 0 };
+  /* 2026-10-25 : le max-in attendu est DERIVE du devis enregistre (24/10 : 0.00238…) : devis = ceil(montantIn(0,50) x 500 500 / 500 000)
+   *   (la chaine factice, frais d interface 0,1 % compris), max-in = ceil(devis x 1,005) ; ses 3 premiers chiffres significatifs, la suite libre */
+  const devisNv = (BigInt(routeEnreg(NV).r.devis[0].montantIn) * 500500n + 499999n) / 500000n;
+  const maxNv = trois((devisNv * 10050n + 9999n) / 10000n, decDe(NV)).replace('.', '\\.');
+  res.solde = { fin: fs, maxNv, ok: s2.choisi && new RegExp('^Not rolled: you hold 0\\.00001 NVDAc; the swap may take up to ' + maxNv + '\\d*\\. Nothing was sent\\.$').test(fs) && envoisWallet(s2.w) === 0 };
   return { ok: Object.values(res).every((x) => x.ok), res };
 };
 S.RPC = async (t) => {
@@ -242,7 +291,8 @@ S.RPC = async (t) => {
   const repeints = { fetchs: r.ch.fetchs.length, bal, devis: devisDans(r.chain.st.appels) };
   const u = await jouer(t, { flux: 'roll' });
   const j = await jouer(t, { flux: 'roll', choix: NV.jeton });
-  const ok = repeints.fetchs === 1 && repeints.bal === 20 && repeints.devis === 0 && devisDans(u.appelsClic) === 0 && devisDans(j.appelsClic) === 1;
+  /* 2026-10-25 : un solde lu par jeton LISTE (misable a au moins une taille) — derive de l oracle (24/10 : 20) */
+  const ok = repeints.fetchs === 1 && repeints.bal === ORACLE.listes && repeints.devis === 0 && devisDans(u.appelsClic) === 0 && devisDans(j.appelsClic) === 1;
   return { ok, repeints, usdc: devisDans(u.appelsClic), jeton: devisDans(j.appelsClic) };
 };
 

@@ -7,7 +7,9 @@
  *   (3) les ecarts du JSON se recalculent depuis sqrtPriceX96 + montantIn ; (4) le plan : approve EXACT du max-in (jamais illimite), swap
  *   exact-output dont l USDC va AU JOUEUR (directement, ou balaye vers lui avec le frais), allowance remise a 0, puis les appels du jeu
  *   IDENTIQUES a ceux de son module ; l ETH natif en value, refundETH ; (5) les refus : devis perime (30 ok / 31 refuse), futur, non
- *   eligible, route injoignable, destinataire = routeur, montant du devis different, tolerance hors bornes, mise > 10 USDC.
+ *   eligible, route injoignable, destinataire = routeur, montant du devis different, tolerance hors bornes, mise > 10 USDC ;
+ *   (6) 2026-10-25 : la LISTE SERVIE est rejouee sur mesures/misables-live-20261025.json (bloc 53 048 993) et comparee a un ORACLE
+ *   independant de misables.js ; un candidat absent d un enregistrement = « not measured in this recording », jamais misable.
  * MISABLES_MODULE : le chemin d une COPIE mutee (muter-misables-20261024.mjs). ⛔ PORTABLE : process.exitCode. */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -31,7 +33,11 @@ const { DUELS_DEPLOIEMENT } = await import(pathToFileURL(path.join(ICI, 'duels-d
 let n = 0, ko = 0;
 const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
 const bas = (x) => String(x || '').toLowerCase();
+/* J = l enregistrement du 24/10 : c est MESURE_REFERENCE, celui qui JUSTIFIE la regle (seuil, profondeur) — les sections (1) a (3) le
+ *   rejouent tel quel (il ne change pas : c est une mesure datee). J25 = l enregistrement du 25/10 (meme script relance, bloc 53 048 993) :
+ *   la LISTE SERVIE depend des candidats (SANc / SEc / NOKc / LIc et ULc entres le 25/10), elle est rejouee sur lui (fin du fichier). */
 const J = JSON.parse(readFileSync(path.join(ICI, 'mesures', 'misables-20261024.json'), 'utf8'));
+const J25 = JSON.parse(readFileSync(path.join(ICI, 'mesures', 'misables-live-20261025.json'), 'utf8'));
 const ROUTEUR = CA.ROUTEUR_AERODROME_CL, VIEILLE = CA.FACTORY_AERODROME_CL;
 const JOUEUR = '0x5a1e0329309d77777777777777777777777777a1';
 const ROLLS = bas(BLOCKROLLS_DEPLOIEMENT.adresse), SLOTS = bas(SLOTS_DEPLOIEMENT.adresse);
@@ -50,7 +56,11 @@ ok(actions.length >= 20 && actions.every((c) => registre.has(c.jeton)), actions.
 const poolsWethMesurees = J.table.find((t) => t.jeton === M.ETH).routes.filter((r) => r.route === 'aerodrome-cl');
 ok(M.POOLS_WETH_USDC.length === 2 && M.POOLS_WETH_USDC.every((p) => poolsWethMesurees.some((r) => r.pool === p.pool && r.tickSpacing === p.tickSpacing && BigInt(r.usdcPool) >= M.PROFONDEUR_MIN_USDC)),
   'les pools WETH/USDC candidates sont celles rendues par getPool dans la mesure, au-dessus de la profondeur minimum');
-ok(!M.CANDIDATS_CL.some((c) => c.symbole === 'ULc'), 'ULc (au Market, hors registre) n est pas candidat');
+/* 2026-10-25 : le 24/10 ULc etait exclu PARCE QU il etait hors du registre de l emetteur. Il y est entre (paires.js, 5 actions prouvees
+ *   sur la chaine) et sa pool est dans POOLS_ACTIONS_AERODROME : il est candidat PAR LA MEME REGLE (« candidat <=> registre »). */
+const ul = M.CANDIDATS_CL.find((c) => c.symbole === 'ULc');
+ok(!!ul && registre.has(ul.jeton), 'ULc est candidat parce qu il est maintenant dans le registre de l emetteur (paires.js) — la raison de son exclusion du 24/10 ne tient plus');
+ok(J25.temoins.factoryDuQuoteurCl === VIEILLE && J25.temoins.factoryDuRouteur === VIEILLE && J25.temoins.codeFactoryNouvelleOctets > 0, 'l enregistrement du 25/10 a relu les memes temoins (factory du quoter et du routeur, code de la nouvelle factory)');
 
 /* ── (2) la regle rejoue la mesure ──────────────────────────────────────────────────────────────────────── */
 const elig = (t, r, usdc, o = {}) => M.eligibilite({ jeton: t.jeton, route: r.route, factory: r.factory || null, usdcPool: r.usdcPool, ecartReferenceBps: r.ecartReferenceBps, devis: r.devis }, { usdc, ...o });
@@ -198,15 +208,50 @@ ok(jete, 'exactOutputSingle avec un max-in illimite : refuse a l encodage');
 ok(M.besoinDuJeu({ appels: [{ to: M.USDC, data: CA.calldataApprove({ token: M.USDC, montant: 5n, beneficiaire: SLOTS }).data }] }, ROLLS) === null, 'un approve USDC vers un AUTRE contrat que le jeu : besoin illisible');
 
 /* listeMisables : une ligne par jeton, la meilleure pool */
-const cotDe = (c) => { const t = J.table.find((x) => x.jeton === c.jeton); const r = t.routes.find((x) => x.pool === c.pool);
-  return { etat: 'PRET', factory: VIEILLE, usdcPool: BigInt(r.usdcPool), ecartReferenceBps: r.ecartReferenceBps, referencePool: null, bloc: J.bloc,
+/* 2026-10-25 : cotDe lit UN enregistrement donne ; un candidat dont la pool n y est pas (SANc / SEc / NOKc / LIc dans celui du 24/10)
+ *   rend NON_MESURE « not measured in this recording » — jamais un crash (le 24/10 : t.routes sur undefined), jamais misable. */
+const NON_ENREGISTRE = 'not measured in this recording';
+const cotDe = (c, E = J25) => { const t = E.table.find((x) => x.jeton === c.jeton); const r = t && t.routes.find((x) => x.route === 'aerodrome-cl' && x.pool === c.pool);
+  if (!r) return { etat: 'NON_MESURE', pourquoi: NON_ENREGISTRE + ' (block ' + E.bloc + ')' };
+  return { etat: 'PRET', factory: VIEILLE, usdcPool: BigInt(r.usdcPool), ecartReferenceBps: r.ecartReferenceBps, referencePool: null, bloc: E.bloc,
     devis: r.devis.map((d) => ({ usdc: d.usdc, usdcSortie: BigInt(d.usdc), ok: d.ok, montantIn: d.ok ? BigInt(d.montantIn) : null, ecartBps: d.ok ? d.ecartBps : null })) }; };
-const lignes = M.CANDIDATS_CL.map((c) => M.ligneMisable(c, cotDe(c)));
-const liste = M.listeMisables(lignes);
+/* L ATTENDU, DERIVE de l enregistrement par un ORACLE qui n utilise PAS misables.js (sinon un mutant de la regle passerait des deux cotes) :
+ *   les nombres de la consigne — ecart <= 100 bps, USDC de la pool >= 10 000 USDC, factory = celle du routeur (calldata-aerodrome),
+ *   cout contre la reference (1+e)/(1+r)-1 <= 100 bps quand elle est enregistree. Par jeton candidat : misable si UNE de ses pools l est.
+ *   ⛔ La regle de l aller-retour (pools-actions-aerodrome.js ALLER_RETOUR_REFUSES) N EST PAS appliquee par misables.js a ce jour : l oracle
+ *   ne l applique pas non plus (il decrit ce que le module sert, pas ce qu il devrait servir). */
+const oracle = (E) => {
+  const parJeton = new Map(), absents = [];
+  for (const c of M.CANDIDATS_CL) {
+    const t = E.table.find((x) => x.jeton === c.jeton);
+    const r = t && t.routes.find((x) => x.route === 'aerodrome-cl' && x.pool === c.pool);
+    if (!r) absents.push(c.symbole);
+    const k = [0, 1, 2].map((i) => {
+      const d = r && r.devis && r.devis[i];
+      if (!d || d.ok !== true || bas(r.factory) !== VIEILLE || !(Number(d.ecartBps) <= 100) || BigInt(r.usdcPool || 0) < 10000000000n) return false;
+      const ref = r.ecartReferenceBps;
+      return ref === null || ref === undefined || Math.round(((10000 + d.ecartBps) * 10000) / (10000 + ref) - 10000) <= 100;
+    });
+    parJeton.set(c.jeton, (parJeton.get(c.jeton) || [false, false, false]).map((v, i) => v || k[i]));
+  }
+  return { parJeton, absents, comptes: [0, 1, 2].map((i) => [...parJeton.values()].filter((v) => v[i]).length) };
+};
+const servieSur = (E) => M.listeMisables(M.CANDIDATS_CL.map((c) => M.ligneMisable(c, cotDe(c, E))));
+const comptesDe = (ls) => [0, 1, 2].map((i) => ls.filter((l) => l.tailles[i].misable).length);
+const O25 = oracle(J25);
+const liste = servieSur(J25);
 const servis = liste.filter((l) => l.misable).length;
-ok(servis === 20 && liste.find((l) => l.jeton === M.ETH).tickSpacing === 1 && new Set(liste.map((l) => l.jeton)).size === liste.length,
-  'liste servie sur la mesure : ' + servis + ' jetons misables a 0,50 (21 moins ULc), une ligne par jeton, ETH sur sa pool ts 1 (0 bps)');
-ok(liste.filter((l) => l.tailles[1].misable).length === 19 && liste.filter((l) => l.tailles[2].misable).length === 18, 'a 5 / 10 USDC : 19 / 18');
+ok(J25.table.length > 0 && O25.absents.length === 0, 'enregistrement du 25/10 (bloc ' + J25.bloc + ', ' + J25.table.length + ' jetons) : chaque pool candidate y est cotee (' + O25.absents.length + ' absente)');
+ok(comptesDe(liste).join('/') === O25.comptes.join('/') && liste.length === O25.parJeton.size && liste.find((l) => l.jeton === M.ETH).tickSpacing === 1 && new Set(liste.map((l) => l.jeton)).size === liste.length,
+  'liste servie sur l enregistrement du 25/10 : ' + comptesDe(liste).join(' / ') + ' misables a 0,50 / 5 / 10 = l oracle (' + O25.comptes.join(' / ') + '), ' + liste.length + ' lignes, une par jeton, ETH sur sa pool ts 1');
+const diff25 = liste.filter((l) => l.tailles.some((t, i) => t.misable !== O25.parJeton.get(l.jeton)[i])).map((l) => l.symbole);
+ok(diff25.length === 0, 'chaque ligne, a chaque taille, = l oracle (' + diff25.length + ' differente(s) ' + diff25.join(' ') + ')');
+/* l enregistrement du 24/10 rejoue avec les candidats d AUJOURD HUI : les pools qu il n a pas cotees sont NON_MESURE, pas un crash */
+const O24 = oracle(J);
+const liste24 = servieSur(J);
+const absents24 = liste24.filter((l) => l.tailles.every((t) => t.code === 'NON_MESURE' && String(t.raison).startsWith(NON_ENREGISTRE)));
+ok(O24.absents.length > 0 && absents24.length === O24.absents.length && absents24.every((l) => !l.misable && l.tailles.every((t) => !t.misable)) && comptesDe(liste24).join('/') === O24.comptes.join('/'),
+  'sur l enregistrement du 24/10 : ' + absents24.map((l) => l.symbole).join(' ') + ' « ' + NON_ENREGISTRE + ' », jamais misables ; ' + comptesDe(liste24).join(' / ') + ' = l oracle');
 const lNouvelle = M.ligneMisable(NV, { ...cotDe(NV), factory: M.FACTORY_NOUVELLE_INJOIGNABLE });
 ok(!lNouvelle.misable && lNouvelle.tailles.every((t) => t.code === 'ROUTE_INJOIGNABLE'), 'une ligne dont la pool LUE repond la nouvelle factory : ROUTE_INJOIGNABLE aux 3 tailles');
 ok(M.listeMisables([M.ligneMisable(NV, { ...cotDe(NV), usdcPool: 1n }), M.ligneMisable(NV, cotDe(NV))])[0].misable === true, 'deux pools pour un jeton : la liste garde celle qui est misable');

@@ -1,10 +1,11 @@
 /* test-serveur-misables-20261024.mjs — CE QUE LE VRAI SERVEUR SERT SUR /api/misables. serveur-web.js est LANCE contre un faux noeud local
- *   qui REJOUE le bloc 53 031 600 de mesures/misables-20261024.json : pour chaque pool candidate, son slot0, l USDC qu elle tient et
+ *   qui REJOUE le bloc 53 048 993 de mesures/misables-live-20261025.json (2026-10-25 ; avant : bloc 53 031 600 du 24/10) : pour chaque pool candidate, son slot0, l USDC qu elle tient et
  *   factory() ; pour le quoter CL, le montantIn MESURE a chaque taille (une taille non cotee ce jour-la : revert). Une seule entorse,
  *   voulue : la pool TSLAc repond factory() = la NOUVELLE factory (injoignable par notre routeur).
  * AFFIRME : (1) /api/misables sert ok:true, la regle (1 %, 10 000 USDC, 30 blocs, tailles 0,50/5/10) et une ligne par jeton ;
  *   (2) les ecarts servis sont ceux de la mesure (NVDAc 5/5/5 bps) et les codes ceux de la regle (BILIc ECART, HSAIc 0,50 seulement,
- *   TSLAc ROUTE_INJOIGNABLE) ; 19 jetons misables a 0,50 (les 20 de la mesure moins TSLAc) ; (3) le nombre d appels de chaine reste sous
+ *   TSLAc ROUTE_INJOIGNABLE) ; le nombre de misables a 0,50 et chaque ligne a chaque taille = un ORACLE calcule sur l enregistrement
+ *   sans misables.js (TSLAc retire) ; (3) le nombre d appels de chaine reste sous
  *   appelsMax, et une deuxieme requete dans les 60 s est servie du CACHE (aucun nouvel appel au quoter) ; (4) misables.js est servi (200).
  * SERVEUR_MODULE : le chemin d une copie de serveur-web.js. ⛔ PORTABLE : process.exitCode.
  * NE PROUVE PAS : le comportement contre un vrai noeud (mesure-misables-20261024.mjs et banc-misables-fork-20261024.mjs le font).
@@ -22,7 +23,30 @@ let n = 0, ko = 0;
 const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
 const mot = (x) => BigInt(x).toString(16).padStart(64, '0');
 const bas = (x) => String(x || '').toLowerCase();
-const J = JSON.parse(fs.readFileSync(path.join(ICI, 'mesures', 'misables-20261024.json'), 'utf8'));
+/* 2026-10-25 : RE-BASE sur l enregistrement du 25/10 (mesure-misables-20261024.mjs relancee : mesures/misables-live-20261025.json,
+ *   bloc 53 048 993). Celui du 24/10 n a pas les pools de SANc / SEc / NOKc / LIc (entrees au registre le 25/10) : son « 19 » ne decrit
+ *   plus la liste des candidats d aujourd hui. */
+const J = JSON.parse(fs.readFileSync(path.join(ICI, 'mesures', 'misables-live-20261025.json'), 'utf8'));
+/* L ATTENDU, DERIVE DE L ENREGISTREMENT par un oracle qui n utilise PAS misables.js : ecart <= 100 bps, USDC de la pool >= 10 000 USDC,
+ *   factory = celle de notre routeur (l entorse : la pool TSLAc repond la nouvelle factory). SANS reference : le serveur de ce banc ne lit
+ *   la pool du Market que par le faux noeud, qui ne connait pas les pools du Market (slot0 = 0 : reference non lue, non jugee).
+ *   Un candidat dont la pool n est pas dans l enregistrement : « non mesure dans cet enregistrement », jamais misable. */
+const VIEILLE = bas(J.factoryAerodromeCl);
+const ORACLE = new Map(), NON_MESURES = [];
+for (const c of M.CANDIDATS_CL) {
+  const t = J.table.find((x) => x.jeton === c.jeton);
+  const r = t && t.routes.find((x) => x.route === 'aerodrome-cl' && x.pool === c.pool);
+  if (!r) NON_MESURES.push(c.symbole);
+  const k = [0, 1, 2].map((i) => {
+    const d = r && r.devis && r.devis[i];
+    return !!d && d.ok === true && c.symbole !== 'TSLAc' && bas(r.factory) === VIEILLE && Number(d.ecartBps) <= 100 && BigInt(r.usdcPool || 0) >= 10000000000n;
+  });
+  ORACLE.set(c.jeton, (ORACLE.get(c.jeton) || [false, false, false]).map((v, i) => v || k[i]));
+}
+const ATTENDU_050 = [...ORACLE.values()].filter((v) => v[0]).length;
+/* sans l entorse, TSLAc serait-il misable dans l enregistrement ? (sinon l entorse ne retire rien et son assertion est vide) */
+const tslaT = J.table.find((x) => x.symbole === 'TSLAc'), tslaR = tslaT && tslaT.routes.find((x) => x.route === 'aerodrome-cl' && x.tickSpacing === 10);
+const TSLA_MISABLE_SANS_ENTORSE = !!tslaR && tslaR.devis[0].ok && tslaR.devis[0].ecartBps <= 100 && BigInt(tslaR.usdcPool) >= 10000000000n;
 
 /* le rejeu : pool -> etat ; (jetonIn, ts, montant) -> montantIn */
 const POOLS = new Map(), DEVIS = new Map();
@@ -92,7 +116,15 @@ try {
     const hs = L('HSAIc');
     ok(hs && hs.tailles[0].misable && !hs.tailles[1].misable && hs.tailles[1].code === 'ECART', '(2) HSAIc : misable a 0,50 seulement');
     ok(L('TSLAc') && !L('TSLAc').misable && L('TSLAc').tailles[0].code === 'ROUTE_INJOIGNABLE', '(2) TSLAc dont la pool repond la nouvelle factory : ROUTE_INJOIGNABLE');
-    ok(a && a.misables.length === 19 && a.misables.includes(M.ETH) && !a.misables.includes(TSLA.jeton), '(2) 19 jetons misables a 0,50 (20 de la mesure moins TSLAc), ETH compris : ' + (a && a.misables.length));
+    /* 2026-10-25 : le compte attendu est DERIVE (oracle ci-dessus) au lieu du « 19 » tape le 24/10 (20 moins TSLAc) */
+    ok(TSLA_MISABLE_SANS_ENTORSE, '(2) sans l entorse, TSLAc serait misable a 0,50 dans l enregistrement : l entorse retire bien une ligne');
+    ok(a && a.misables.length === ATTENDU_050 && a.misables.includes(M.ETH) && !a.misables.includes(TSLA.jeton),
+      '(2) ' + ATTENDU_050 + ' jetons misables a 0,50 attendus par l oracle (TSLAc retire), ETH compris : ' + (a && a.misables.length) + ' servis');
+    /* chaque ligne servie, a chaque taille, = l oracle ; et un candidat non enregistre n est jamais misable */
+    const ecarts = a ? a.lignes.filter((l) => ORACLE.has(l.jeton) && l.tailles.some((t, i) => t.misable !== ORACLE.get(l.jeton)[i])).map((l) => l.symbole) : ['pas de reponse'];
+    ok(a && a.lignes.length === ORACLE.size && ecarts.length === 0, '(2) ' + (a && a.lignes.length) + ' lignes servies, misable a chaque taille = l oracle (' + ecarts.length + ' differente(s) ' + ecarts.join(' ') + ')');
+    ok(a && NON_MESURES.every((s) => { const l = L(s); return !l || !l.tailles.some((t) => t.misable); }),
+      '(2) non mesures dans cet enregistrement : ' + (NON_MESURES.join(' ') || 'aucun') + ' — aucun servi misable');
     ok(a && a.appelsRpc > 0 && a.appelsRpc <= a.appelsMax && compte.misables <= a.appelsMax, '(3) appels de chaine : ' + (a && a.appelsRpc) + ' comptes par le serveur, ' + compte.misables + ' vus par le noeud, plafond ' + (a && a.appelsMax));
     const q1 = compte.quoter;
     const b = await json(srv + '/api/misables');
