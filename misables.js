@@ -147,6 +147,8 @@ export function eligibilite(m, o = {}) {
   const taille = tailleCouvrante(o.usdc ?? TAILLES_USDC[0]);
   if (taille === null) return non('TAILLE_NON_MESUREE', 'stakes above 10 USDC are not measured: nothing larger is offered');
   const d = Array.isArray(m.devis) ? m.devis.find((x) => entier(x && x.usdc) === taille) : null;
+  /* 2026-10-25 : un devis NON LU (refus de debit, `0x`) n est pas « pas de devis » : NON_MESURE, que le serveur relit et nomme */
+  if (d && d.ok !== true && d.nonLu === true) return non('NON_MESURE', 'the quote for ' + taille + ' raw USDC was not read' + (d.erreur ? ' (' + String(d.erreur).slice(0, 80) + ')' : ''));
   if (!d || d.ok !== true || !(entier(d.montantIn) > 0n)) return non('SANS_DEVIS', 'no exact-output quote for ' + taille + ' raw USDC' + (d && d.erreur ? ' (' + String(d.erreur).slice(0, 80) + ')' : ''));
   const e = Number(d.ecartBps);
   if (!Number.isFinite(e)) return non('SANS_DEVIS', 'the quote has no price gap');
@@ -363,7 +365,8 @@ export function ecartAReference({ jeton, sqrtNous, sqrtRef }) {
 /**
  * LES DEVIS VIVANTS d un candidat CL pour chaque sortie USDC de `sorties`, TOUS LUS AU MEME BLOC : quoteExactOutputSingle (un par taille),
  * slot0, l USDC de la pool, factory() de la pool, et — si `reference` ({ pool }) est donnee — le slot0 de la pool de reference.
- * Un devis qui reverte rend { ok: false, erreur } pour SA taille (la pool ne remplit pas ce montant) ; une lecture d etat ratee = NON_MESURE.
+ * Un devis qui reverte rend { ok: false, erreur } pour SA taille (la pool ne remplit pas ce montant) ; un devis REFUSE par le transport
+ * (rate limit, delai, `0x`) rend { ok: false, nonLu: true, erreur } (eligibilite : NON_MESURE) ; une lecture d etat ratee = NON_MESURE.
  * @param {function} p.rpc  injecte : (methode, params) => result
  */
 export async function coterMisableTailles({ rpc, candidat, sorties = TAILLES_USDC, reference = null, bloc: blocEpingle = null }) {
@@ -391,7 +394,15 @@ export async function coterMisableTailles({ rpc, candidat, sorties = TAILLES_USD
   for (let i = 0; i < outs.length; i += 1) {
     const q = await quotes[i];
     const montantIn = q.r ? lireMot(q.r) : null;
-    if (!(montantIn > 0n)) { devis.push({ usdc: String(outs[i]), usdcSortie: outs[i], ok: false, erreur: q.e ? String((q.e && q.e.message) || q.e).slice(0, 100) : 'empty quote' }); continue; }
+    /* 2026-10-25 (prod, bloc 53 066 483) : NOKc a 0,50 et SEc a 5/10 servis SANS_DEVIS « You reached Public endpoint rate limit » — un refus
+     *   de DEBIT pris pour « la pool ne remplit pas ce montant », jamais relu. Seuls un REVERT (rpcRails le marque `definitif` ; un message
+     *   « revert ») ou un devis LU a 0 sont SANS_DEVIS ; un refus de transport, ou une reponse `0x` / illisible, est NON LU (`nonLu: true`). */
+    if (montantIn === null) {
+      const msg = q.e ? String((q.e && q.e.message) || q.e) : 'quote answer unreadable (' + String(q.r).slice(0, 12) + ')';
+      const revert = !!q.e && (q.e.definitif === true || /revert/i.test(msg));
+      devis.push({ usdc: String(outs[i]), usdcSortie: outs[i], ok: false, ...(revert ? {} : { nonLu: true }), erreur: msg.slice(0, 100) }); continue;
+    }
+    if (!(montantIn > 0n)) { devis.push({ usdc: String(outs[i]), usdcSortie: outs[i], ok: false, erreur: 'empty quote' }); continue; }
     devis.push({ usdc: String(outs[i]), usdcSortie: outs[i], ok: true, montantIn, ecartBps: ecartAuMoyen({ tokenIn: c.jetonIn, tokenOut: USDC, sortie: outs[i], montantIn, sqrtPriceX96: sqrtP }) });
   }
   const sqrtRef = rr ? lireMot(rr) : null;
@@ -417,7 +428,7 @@ export async function coterMisable({ rpc, candidat, usdcSortie, reference = null
 export function ligneMisable(candidat, cot) {
   const ok = cot && cot.etat === 'PRET';
   const mesure = ok ? { jeton: bas(candidat.jeton), route: ROUTES.CL, factory: cot.factory, usdcPool: cot.usdcPool, ecartReferenceBps: cot.ecartReferenceBps, referenceLue: cot.referenceLue,
-    devis: cot.devis.map((d) => ({ usdc: d.usdc, ok: d.ok, montantIn: d.ok ? String(d.montantIn) : null, ecartBps: d.ok ? d.ecartBps : null, erreur: d.erreur || null })) } : null;
+    devis: cot.devis.map((d) => ({ usdc: d.usdc, ok: d.ok, nonLu: d.nonLu === true, montantIn: d.ok ? String(d.montantIn) : null, ecartBps: d.ok ? d.ecartBps : null, erreur: d.erreur || null })) } : null;
   const tailles = TAILLES_USDC.map((t, i) => {
     const e = ok ? eligibilite(mesure, { usdc: t }) : { ok: false, code: 'NON_MESURE', raison: (cot && cot.pourquoi) || 'not read', ecartBps: null };
     const d = mesure && mesure.devis[i];

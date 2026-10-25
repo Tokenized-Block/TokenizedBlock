@@ -6,7 +6,9 @@
  *   (2) les ecarts servis sont ceux de la mesure (NVDAc 5/5/5 bps) et les codes ceux de la regle (BILIc ECART, HSAIc 0,50 seulement,
  *   TSLAc ROUTE_INJOIGNABLE) ; le nombre de misables a 0,50 et chaque ligne a chaque taille = un ORACLE calcule sur l enregistrement
  *   sans misables.js (TSLAc retire) ; (3) le nombre d appels de chaine reste sous
- *   appelsMax, et une deuxieme requete dans les 60 s est servie du CACHE (aucun nouvel appel au quoter) ; (4) misables.js est servi (200).
+ *   appelsMax, et une deuxieme requete dans les 60 s est servie du CACHE (aucun nouvel appel au quoter) ; (4) misables.js est servi (200) ;
+ *   (5) un slot0 refuse (rate limit) est RELU ; (6) un DEVIS refuse (rate limit, SONYc 0,50 deux fois) est NON_MESURE puis RELU, un devis
+ *   qui REVERTE (HSAIc 10 USDC) reste SANS_DEVIS, ni relu ni nomme.
  * SERVEUR_MODULE : le chemin d une copie de serveur-web.js. ⛔ PORTABLE : process.exitCode.
  * NE PROUVE PAS : le comportement contre un vrai noeud (mesure-misables-20261024.mjs et banc-misables-fork-20261024.mjs le font).
  * serie-delai-s: 240 */
@@ -57,8 +59,12 @@ for (const t of J.table) for (const r of t.routes) if (r.route === 'aerodrome-cl
 const TSLA = M.CANDIDATS_CL.find((c) => c.symbole === 'TSLAc');
 const SEL = { q: selecteur(M.SIG.quoteExactOutputSingle), slot0: selecteur('slot0()'), factory: selecteur('factory()'), bal: selecteur('balanceOf(address)') };
 const compte = { quoter: 0, misables: 0 };
-const LIMITE_DEUX = M.CANDIDATS_CL.find((c) => c.symbole === 'SONYc'), LIMITE_TOUJOURS = M.CANDIDATS_CL.find((c) => c.symbole === 'LIc');
-let refusDeux = 0;
+/* 2026-10-25 (6) : le refus de slot0 passe de SONYc a SANc ; SONYc refuse DEUX fois son devis 0,50 (les 2 essais de rpcRails sur un seul
+ *   noeud) — prod, bloc 53 066 483 : NOKc a 0,50 et SEc a 5/10 servis SANS_DEVIS « rate limit », jamais relus */
+const LIMITE_DEUX = M.CANDIDATS_CL.find((c) => c.symbole === 'SANc'), LIMITE_TOUJOURS = M.CANDIDATS_CL.find((c) => c.symbole === 'LIc');
+const LIMITE_DEVIS = M.CANDIDATS_CL.find((c) => c.symbole === 'SONYc');
+const REVERT_DEVIS = M.CANDIDATS_CL.find((c) => c.symbole === 'HSAIc');
+let refusDeux = 0, refusDevis = 0, revertsDevis = 0;
 function noeud() {
   return http.createServer((req, res) => {
     let b = ''; req.on('data', (c) => { b += c; });
@@ -78,6 +84,11 @@ function noeud() {
             compte.quoter += 1; compte.misables += 1;
             const w = (i) => data.slice(10 + i * 64, 10 + (i + 1) * 64);
             const k = '0x' + w(0).slice(24) + '|' + BigInt('0x' + w(3)) + '|' + BigInt('0x' + w(2));
+            if ('0x' + w(0).slice(24) === bas(LIMITE_DEVIS.jetonIn) && BigInt('0x' + w(3)) === BigInt(LIMITE_DEVIS.tickSpacing) && BigInt('0x' + w(2)) === 500000n && refusDevis < 2) {
+              refusDevis += 1; return { jsonrpc: '2.0', id: q.id, error: { code: -32005, message: 'You reached Public endpoint rate limit, please upgrade to paid plan' } };
+            }
+            /* (6) un VRAI revert : le devis 10 USDC de HSAIc (non misable a 10 dans l enregistrement : l oracle n en change pas) */
+            if ('0x' + w(0).slice(24) === bas(REVERT_DEVIS.jetonIn) && BigInt('0x' + w(3)) === BigInt(REVERT_DEVIS.tickSpacing) && BigInt('0x' + w(2)) === 10000000n) { revertsDevis += 1; return err(); }
             return DEVIS.has(k) ? r('0x' + mot(DEVIS.get(k)) + mot(0) + mot(0) + mot(0)) : err();
           }
           /* (5) 2026-10-25 : le « rate limit » de publicnode vu en prod — SONYc refuse ses DEUX premiers slot0 (les 2 essais de rpcRails
@@ -136,9 +147,19 @@ try {
     ok(a && a.appelsRpc > 0 && a.appelsRpc <= a.appelsMax && compte.misables <= a.appelsMax, '(3) appels de chaine : ' + (a && a.appelsRpc) + ' comptes par le serveur, ' + compte.misables + ' vus par le noeud, plafond ' + (a && a.appelsMax));
     /* (5) 2026-10-25 : prod, bloc 53 065 453 : SANc et SONYc (misables par la regle, relus a 53 065 528 : 1/1/1 et 1/1/1 bps) servis
      *   NON_MESURE « rate limit » — absents du menu de paiement pour la minute, sous ok:true LU. Un refus de debit n est pas une mesure. */
-    const so = L('SONYc'), li = L('LIc');
-    ok(refusDeux === 2 && ORACLE.get(LIMITE_DEUX.jeton) && ORACLE.get(LIMITE_DEUX.jeton)[0] === true, '(5) temoin : SONYc a bien refuse 2 slot0, et l oracle le dit misable a 0,50 (' + refusDeux + ')');
-    ok(so && so.misable && so.tailles.every((t, i) => t.misable === ORACLE.get(LIMITE_DEUX.jeton)[i]), '(5) SONYc refuse 2 fois puis lisible : RELU, servi comme l oracle -> ' + (so && so.tailles.map((t) => t.code).join(',')));
+    const so = L('SANc'), li = L('LIc');
+    ok(refusDeux === 2 && ORACLE.get(LIMITE_DEUX.jeton) && ORACLE.get(LIMITE_DEUX.jeton)[0] === true, '(5) temoin : SANc a bien refuse 2 slot0, et l oracle le dit misable a 0,50 (' + refusDeux + ')');
+    ok(so && so.misable && so.tailles.every((t, i) => t.misable === ORACLE.get(LIMITE_DEUX.jeton)[i]), '(5) SANc refuse 2 fois puis lisible : RELU, servi comme l oracle -> ' + (so && so.tailles.map((t) => t.code).join(',')));
+    /* (6) 2026-10-25 : un devis refuse par le DEBIT n est pas « pas de devis a cette taille » : NON_MESURE, relu, servi comme l oracle */
+    const sy = L('SONYc');
+    ok(refusDevis === 2 && ORACLE.get(LIMITE_DEVIS.jeton) && ORACLE.get(LIMITE_DEVIS.jeton)[0] === true, '(6) temoin : SONYc a bien refuse 2 devis 0,50, et l oracle le dit misable a 0,50 (' + refusDevis + ')');
+    ok(sy && sy.tailles[0].misable && sy.tailles.every((t, i) => t.misable === ORACLE.get(LIMITE_DEVIS.jeton)[i]), '(6) SONYc dont le devis 0,50 est refuse 2 fois (rate limit) : RELU, servi comme l oracle -> ' + (sy && sy.tailles.map((t) => t.code).join(',')));
+    ok(a && a.relus === 3, '(6) relus = 3 (SANc, SONYc, LIc) -> ' + (a && a.relus));
+    /* un REVERT reste SANS_DEVIS : une taille que l enregistrement n a pas cotee (le faux noeud reverte) n est ni relue ni nommee */
+    const rev = a ? a.lignes.filter((l) => l.tailles.some((t) => t.code === 'SANS_DEVIS')).map((l) => l.symbole) : [];
+    const hsai = L('HSAIc');
+    ok(revertsDevis === 1 && hsai && hsai.tailles[2].code === 'SANS_DEVIS' && rev.join() === 'HSAIc' && !a.nonMesures.includes('HSAIc'),
+      '(6) le devis 10 USDC de HSAIc REVERTE (1 appel, pas relu) : SANS_DEVIS, hors nonMesures -> ' + (hsai && hsai.tailles.map((t) => t.code).join(',')) + ' ; SANS_DEVIS servis : ' + rev.join(' ') + ' ; reverts vus ' + revertsDevis);
     ok(li && !li.misable && li.tailles.every((t) => t.code === 'NON_MESURE'), '(5) LIc toujours refuse : NON_MESURE, jamais misable -> ' + (li && li.tailles.map((t) => t.code).join(',')));
     ok(a && Array.isArray(a.nonMesures) && a.nonMesures.length === 1 && a.nonMesures[0] === 'LIc', '(5) le corps NOMME ce qui reste non lu : nonMesures = ' + JSON.stringify(a && a.nonMesures));
     const q1 = compte.quoter;

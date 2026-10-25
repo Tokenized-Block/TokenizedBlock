@@ -294,6 +294,33 @@ ok(M.listeMisables([M.ligneMisable(NV, { ...cotDe(NV), usdcPool: 1n }), M.ligneM
   ok(pA.etat === 'REFUSE' && pA.code === 'REFERENCE_NON_LUE' && pA.appels.length === 0, '(7) plan dont la reference est refusee : REFUSE REFERENCE_NON_LUE, 0 appel -> ' + pA.etat + ' ' + pA.code);
   ok(pC.etat === 'PRET', '(7) le meme plan, reference lue : PRET -> ' + pC.etat + ' ' + (pC.pourquoi || ''));
   ok(M.eligibilite({ jeton: NV.jeton, route: 'aerodrome-cl', factory: VIEILLE, usdcPool: r.usdcPool, ecartReferenceBps: null, devis: r.devis }).ok === true, '(7) une mesure SANS champ referenceLue (enregistrements, reference absente) : jugee comme avant');
+
+  /* ── (8) 2026-10-25 : UN DEVIS REFUSE PAR LE DEBIT N EST PAS « PAS DE DEVIS » ───────────────────────────────────────────────────
+   *   Prod, bloc 53 066 483 : NOKc a 0,50 et SEc a 5/10 servis SANS_DEVIS « You reached Public endpoint rate limit » — le jeton quittait
+   *   le menu a cette taille et n etait jamais relu (le serveur ne relit que NON_MESURE). Seuls un REVERT (rpcRails : `definitif`) et un
+   *   devis LU a 0 sont SANS_DEVIS ; un refus de transport ou une reponse `0x` = NON_MESURE. */
+  const fauxDevis = (devis05) => async (methode, params) => {
+    const s = String(params && params[0] && params[0].data || '').slice(0, 10), to = bas(params && params[0] && params[0].to);
+    if (methode === 'eth_call' && to === M.QUOTEUR_CL && s === S.q && BigInt('0x' + String(params[0].data).slice(10 + 2 * 64, 10 + 3 * 64)) === 500000n) return devis05();
+    return faux(() => '0x' + motH(r.sqrtPriceX96) + motH(0).repeat(6))(methode, params);
+  };
+  const ligne8 = async (devis05) => M.ligneMisable(NV, await M.coterMisableTailles({ rpc: fauxDevis(devis05), candidat: NV, reference: { pool: REF }, bloc: J25.bloc }));
+  const revertDef = () => { const e = new Error('execution reverted'); e.definitif = true; return Promise.reject(e); };
+  const revertNu = () => Promise.reject(new Error('execution reverted: SPL'));
+  const delai = () => Promise.reject(new Error('The operation was aborted due to timeout'));
+  const revertSansMot = () => { const e = new Error('invalid opcode: INVALID'); e.definitif = true; return Promise.reject(e); };
+  const l8 = { revertSansMot: await ligne8(revertSansMot), limite: await ligne8(limite), delai: await ligne8(delai), vide: await ligne8(() => '0x'), revertDef: await ligne8(revertDef), revertNu: await ligne8(revertNu), zero: await ligne8(() => '0x' + motH(0).repeat(4)) };
+  const codes8 = (l) => l.tailles.map((x) => x.code).join(',');
+  ok(l8.limite.tailles[0].code === 'NON_MESURE' && !l8.limite.tailles[0].misable && l8.limite.tailles[1].misable && l8.limite.tailles[2].misable, '(8) devis 0,50 refuse (rate limit) : NON_MESURE a 0,50, les autres tailles jugees -> ' + codes8(l8.limite));
+  ok(/rate limit/.test(l8.limite.tailles[0].raison), '(8) la raison garde le message du noeud -> ' + l8.limite.tailles[0].raison.slice(0, 90));
+  ok(l8.delai.tailles[0].code === 'NON_MESURE', '(8) devis 0,50 en delai depasse : NON_MESURE -> ' + codes8(l8.delai));
+  ok(l8.vide.tailles[0].code === 'NON_MESURE', '(8) devis 0,50 = `0x` (non lu) : NON_MESURE -> ' + codes8(l8.vide));
+  ok(l8.revertDef.tailles[0].code === 'SANS_DEVIS', '(8) devis 0,50 REVERTE (definitif, comme rpcRails le marque) : SANS_DEVIS -> ' + codes8(l8.revertDef));
+  ok(l8.revertNu.tailles[0].code === 'SANS_DEVIS', '(8) devis 0,50 « execution reverted » sans marque : SANS_DEVIS -> ' + codes8(l8.revertNu));
+  ok(l8.revertSansMot.tailles[0].code === 'SANS_DEVIS', '(8) refus de la chaine marque definitif sans le mot « revert » : SANS_DEVIS -> ' + codes8(l8.revertSansMot));
+  ok(l8.zero.tailles[0].code === 'SANS_DEVIS', '(8) devis 0,50 LU a 0 (devis vide) : SANS_DEVIS -> ' + codes8(l8.zero));
+  /* une mesure ENREGISTREE (sans champ nonLu) dont le devis est ok:false : SANS_DEVIS comme avant */
+  ok(M.eligibilite({ jeton: NV.jeton, route: 'aerodrome-cl', factory: VIEILLE, usdcPool: r.usdcPool, ecartReferenceBps: null, devis: [{ usdc: '500000', ok: false }] }).code === 'SANS_DEVIS', '(8) une mesure enregistree ok:false sans nonLu : SANS_DEVIS comme avant');
 }
 console.log(n + ' assertions, ' + ko + ' KO');
 process.exitCode = ko ? 1 : 0;
