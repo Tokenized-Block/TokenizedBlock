@@ -107,6 +107,7 @@ async function lireOpenLaunch() {
  * de la factory B20, lecture seule, ~12 h puis increments (tip 20260923-map-trending)), lit DexScreener par lots de 30 et renvoie le classement.
  * Une lecture complete au plus toutes les 5 min, partagee par tous les visiteurs. Echec = { ok:false }, dit tel quel. */
 import { listerCreations, createurDe } from './index-blocks.js';
+import { prouverCreationB20 } from './creation-b20-prouvee.js';
 /* ⛔ 2026-10-02 (Raksha) : COMMENT UN BLOCK PARLE, choisi par son createur — meme module que la page (une seule source). */
 import { verifierEcriture, recupererSignataire, proprietaireDuBlock, voixPublique, nettoyerVoix } from './voix-block.js';
 import { frappesVers } from './mes-blocks.js';
@@ -2027,6 +2028,18 @@ async function apprendreCreationAction(jeton) {
   const r = await prouverAction({ rpc: rpcServeur, adr: j, tx: p.tx });
   if (r && r.etat === 'PROUVE' && r.adr === j && Number.isSafeInteger(r.bloc)) noterCreationsLues([{ jeton: j, bloc: r.bloc }]);
 }
+/* ══ 2026-10-26 — UN BLOCK DU ROUTEUR REPRIS DU VOLUME : sa TX vient de l index, son BLOC du recu relu ICI (creation-b20-prouvee.js) ══
+ * ⛔ MESURE PROD (game54) : UNIT est dans routeurEtat.blocks (reprise du volume, tx 0xe99513f6…8d65), absent de creationsLuesIci —
+ *   /api/holders cherchait sa naissance depuis PREMIER_BLOCK_TB. Le bloc de la reprise n est jamais pris : seul le recu fait foi.
+ *   Non prouve : rien n est note (le plancher, comme avant), retente a la passe suivante. Cout : une lecture, une fois par jeton. */
+async function apprendreCreationRouteur(jeton) {
+  const j = String(jeton).toLowerCase();
+  if (creationsLuesIci.has(j)) return;
+  const b = routeurEtat.blocks.get(j) || [...routeurEtat.blocks.values()].find((x) => x && String(x.jeton).toLowerCase() === j);
+  if (!b || !/^0x[0-9a-fA-F]{64}$/.test(String(b.tx || ''))) return;
+  const r = await prouverCreationB20({ rpc: rpcServeur, adr: j, tx: b.tx });
+  if (r && r.etat === 'PROUVE' && r.adr === j && Number.isSafeInteger(r.bloc)) noterCreationsLues([{ jeton: j, bloc: r.bloc }]);
+}
 /* ══ 2026-10-25 — UNE NAISSANCE CHERCHEE PLUS HAUT QUE LA CREATION CONNUE N EST NI SERVIE, NI REJOUEE, NI ECRITE ══════════════════════
  * ⛔ MESURE PROD (17:2x UTC) : NVDAc, GOOGLc, TSLAc « a replay is running but 807/858/843 window(s) were refused » — leur naissance est
  *   POSEE en memoire, d une recherche partie du plancher, donc un mint POSTERIEUR (elles sont creees a ~49,1 M). jusqua null : pas encore
@@ -3333,8 +3346,12 @@ async function reconstruireHolders(jeton) {
     /* ⛔ 2026-10-25 : la creation d une action prouvee est apprise AVANT tout (meme naissance deja posee) ; une naissance cherchee
      *   plus haut que la creation connue est oubliee et recherchee (naissanceDouteuse) — jamais rejouee ni ecrite. */
     await apprendreCreationAction(jeton);
+    try { await apprendreCreationRouteur(jeton); } catch (_) { /* recu non lu : le plancher, comme avant ; retente a la passe suivante */ }
     if (naissanceDouteuse(jeton, e)) oublierNaissance(e);
     const fin = parseInt(await rpcServeur('eth_blockNumber', []), 16);
+    /* ⛔ 2026-10-26 : une tete illisible (NaN) faisait sauter la boucle de lireNaissance -> ABSENTE « up to block <depuis - 1> »,
+     *   zero fenetre lue. Une tete non lue est une passe ratee (ratees), jamais « aucun mint ». */
+    if (!Number.isSafeInteger(fin) || fin <= 0) throw new Error('head not read');
     if (e.naissance === null) {
       /* ⛔⛔ AUDIT DU 2026-10-09 : une fenetre refusee ARRETE la recherche (lireNaissance). Avant, elle etait
        *    sautee : un mint posterieur devenait la naissance, le rejeu partait de la, l entree etait ecrite sur le

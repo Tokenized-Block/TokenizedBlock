@@ -225,10 +225,12 @@ ok(/const carte = \$\('#bBotLoopCarte'\), niche = \$\('#bcBotLoop'\); if \(carte
 ok(!bcSrc.includes("choix.push([sa, 'for ' + st.symbole])") && !bcSrc.includes('if (!achat && !ACTIONS_PAR_ADR.has(a)) {'),
   'C2 vente d un block : le ticket ne propose PLUS les actions Aerodrome (un franchissement signe appel par appel s arretait en USDC)');
 /* la recherche d un block */
-ok(/<form (onsubmit="return false" )?class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" list="bcChercheListe"/.test(html) && /let j = bcResoudre\(v\);/.test(html) && /if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html) /* 2026-10-10 : repli sur /api/chercher entre les deux */,
-  'C2 recherche : un champ dans l en-tete ; la resolution est celle des commandes (un symbole ambigu est refuse et le dit)');
-ok(/if \(compte2\.get\(k\) > 1\) opts\.push\(\[String\(l\.adr\)\.toLowerCase\(\),/.test(html) && /dl\.append\(bcEl\('option', \{ value: v, label: lib \}\)\);/.test(html),
-  'C2 recherche : un symbole porte par plusieurs blocks est propose par son ADRESSE ; les propositions sont posees en attributs, jamais en HTML');
+/* 2026-10-26 : la datalist locale (~197 options, UNIT absent) est remplacee par la liste de /api/recherche (#bcChercheRes) —
+ *   voir test-panneau-recherche-b20-20261026.mjs ; l egalite exacte locale (bcResoudre) passe toujours en premier */
+ok(/<form (onsubmit="return false" )?class="bcCherche" id="bcChercheForm"/.test(html) && /<input id="bcCherche" placeholder=/.test(html) && /let j = bcResoudre\(v\);/.test(html) && /if \(!j\.ok\) \{ note\.textContent = j\.pourquoi; return; \}/.test(html),
+  'C2 recherche : un champ dans l en-tete ; la resolution exacte est celle des commandes');
+ok(!/list="bcChercheListe"/.test(html) && /peindreResultatsB20\(res, v, s, \(adr\) => bcOuvrirTrouve\(adr\)\);/.test(html),
+  'C2 recherche : plusieurs blocks au meme nom -> la liste du serveur (peindreResultatsB20, texte echappe), la personne choisit');
 /* l achat */
 const achat = bcSrc.slice(bcSrc.indexOf("const BC_CLE_SKIN = 'tblock.panel.skinEnAttente';"));
 ok(/id="bcSkinAcheter" hidden>Buy</.test(html) && /\$\('#bcSkinAcheter'\)\.addEventListener\('click', \(\) => void bcAcheterSkin\(\)\);/.test(html), 'C2 « Buy » lance bcAcheterSkin');

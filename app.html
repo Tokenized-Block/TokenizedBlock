@@ -1059,7 +1059,7 @@ dialog.bcPop[open]{animation:bcPop .18s ease-out}
  *     telephone : ouvert = la feuille du bas, et la page reserve sa hauteur (tout peut defiler au-dessus d elle) ;
  *                 replie = UNE rangee au-dessus des onglets (titre, agent, deplier, fermer), reservee elle aussi.
  *   Replie, la recherche et « Agent link » se cachent : deplier les rend. body.bcReplie (pose en JS) plutot que :has. */
-dialog.bcPop.bcReduit .bcCherche,dialog.bcPop.bcReduit #bcLier,dialog.bcPop.bcReduit #bcChercheNote,dialog.bcPop.bcReduit .bcPousse{display:none}
+dialog.bcPop.bcReduit .bcCherche,dialog.bcPop.bcReduit #bcLier,dialog.bcPop.bcReduit #bcChercheNote,dialog.bcPop.bcReduit #bcChercheRes,dialog.bcPop.bcReduit .bcPousse{display:none}
 dialog.bcPop.bcReduit .bcHaut{flex-wrap:nowrap;cursor:pointer}
 #bcPaletteBtn{display:inline-flex;align-items:center;justify-content:center}
 /* replie (une rangee / un rail), la loupe se cache avec la recherche ; deplier la rend. Ctrl+K reste */
@@ -2301,11 +2301,13 @@ details[open] > summary::before{transform:rotate(90deg)}
              Un symbole, un nom ou une adresse ; les propositions viennent de l index du Market et du registre des actions. -->
         <form onsubmit="return false" class="bcCherche" id="bcChercheForm" autocomplete="off" role="search">
           <span aria-hidden="true">⌕</span>
-          <input id="bcCherche" list="bcChercheListe" placeholder="Find a block — symbol or address" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="search" aria-label="Find another block">
-          <datalist id="bcChercheListe"></datalist>
+          <!-- 2026-10-26 (testeur live game53 : « unit » ne proposait que PALUS — la datalist filtrait ~197 options locales) : les
+               propositions viennent de /api/recherche (la recherche B20 partagee, meme classement que Map Find), dans #bcChercheRes -->
+          <input id="bcCherche" placeholder="Find a block — symbol or address" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="search" aria-label="Find another block" aria-controls="bcChercheRes">
         </form>
       </div>
       <p class="note wKo" id="bcChercheNote" style="margin:6px 0 0"></p>
+      <div id="bcChercheRes" class="rbListe" hidden aria-live="polite"></div>
       <div class="bcScene">
         <div class="bcAvatar" id="bcAvatar" data-phase="NON_LU"><div id="bcAvatarIn">◈</div></div>
         <div class="bcInfos">
@@ -32189,47 +32191,53 @@ $('#bcFermer').addEventListener('click', () => { $('#bcPop').close(); try { docu
 $('#bcPop').addEventListener('close', () => { try { document.body.classList.remove('bcOuvert', 'bcReplie'); } catch (_) {} });
 /* un clic sur le fond (hors de la carte) ferme le pop-up — la carte elle-meme ne le ferme jamais */
 /* ── LA RECHERCHE D UN BLOCK (en-tete du panneau) : un symbole, un nom exact ou une adresse entiere -> ce block s affiche ──
- * Les propositions (datalist) viennent de l index du Market (les plus echanges d abord) et du registre des actions. La resolution est
- * celle des commandes (`bcResoudre`) : un symbole porte par plusieurs blocks est REFUSE et le dit — on ne choisit pas a la place. */
-function bcRemplirRecherche() {
-  const dl = $('#bcChercheListe'); if (!dl) return;
-  const vus = new Set(), opts = [];
-  for (const a of ACTIONS_COINBASE) { const s = String(a.symbole); if (!vus.has(s.toUpperCase())) { vus.add(s.toUpperCase()); opts.push([s, String(a.nom || '')]); } }
-  const lignes = [...marcheParAdr.values()].filter((l) => l && l.sym).sort((x, y) => Number(y.volume24hUsd || 0) - Number(x.volume24hUsd || 0)).slice(0, 150);
-  const compte2 = new Map(); for (const l of lignes) { const k = String(l.sym).toUpperCase(); compte2.set(k, (compte2.get(k) || 0) + 1); }
-  for (const l of lignes) {
-    const k = String(l.sym).toUpperCase();
-    if (vus.has(k) && compte2.get(k) === 1) continue;
-    /* symbole porte par plusieurs blocks : c est l ADRESSE qui est proposee (le symbole seul serait refuse) */
-    if (compte2.get(k) > 1) opts.push([String(l.adr).toLowerCase(), String(l.sym) + (l.nom ? ' — ' + String(l.nom) : '')]);
-    else { vus.add(k); opts.push([String(l.sym), String(l.nom || '')]); }
-  }
-  dl.textContent = '';
-  for (const [v, lib] of opts.slice(0, 200)) dl.append(bcEl('option', { value: v, label: lib }));
+ * La resolution exacte est celle des commandes (`bcResoudre`) ; le reste passe par /api/recherche (ci-dessous). */
+/* ⛔⛔ 2026-10-26 (testeur live game53 : « unit » -> seule PALUS proposee) : les propositions etaient une datalist de ~197 symboles
+ *   LOCAUX (Market + actions), filtree par le navigateur (bcRemplirRecherche, retiree) ; UNIT n y etait pas. Elles
+ *   viennent maintenant de /api/recherche (rechercheB20, la recherche partagee de Map Find / Blocks / Market) : meme classement (UNIT
+ *   d abord pour « unit »), une liste cliquable (#bcChercheRes). Le geste reste celui du panneau : choisirBrain(adr). Une adresse
+ *   entiere et une egalite exacte connue ici (bcResoudre) s ouvrent comme avant. */
+function bcOuvrirTrouve(adr) {
+  const a = String(adr || '').toLowerCase();
+  if (!/^0x[0-9a-f]{40}$/.test(a)) return;
+  const champ = $('#bcCherche'), note = $('#bcChercheNote'), res = $('#bcChercheRes');
+  note.textContent = ''; champ.value = '';
+  if (res) { res.hidden = true; res.textContent = ''; }
+  choisirBrain(a); bcRepeindre();
 }
-$('#bcCherche').addEventListener('focus', bcRemplirRecherche);
+let bcChercheMinuterie = null, bcChercheDemande = 0;
+async function bcChercherAuServeur(v, entree) {
+  const note = $('#bcChercheNote'), res = $('#bcChercheRes');
+  const moi = ++bcChercheDemande;
+  if (res) { res.hidden = false; res.innerHTML = '<p class="rbNote">Searching…</p>'; }
+  const s = await rechercheB20(v, 8);
+  if (moi !== bcChercheDemande) return;
+  const evident = entree ? choixEvidentOuAdresseB20(s) : null;
+  if (evident) { bcOuvrirTrouve(evident.adr); return; }
+  note.textContent = '';
+  peindreResultatsB20(res, v, s, (adr) => bcOuvrirTrouve(adr));
+}
+$('#bcCherche').addEventListener('input', () => {
+  clearTimeout(bcChercheMinuterie);
+  const v = $('#bcCherche').value.trim(), res = $('#bcChercheRes'), note = $('#bcChercheNote');
+  note.textContent = '';
+  if (!v || /^0x[0-9a-fA-F]{40}$/.test(v)) { bcChercheDemande += 1; if (res) { res.hidden = true; res.textContent = ''; } return; }
+  if (adresseAbregee(v)) { bcChercheDemande += 1; if (res) { res.hidden = true; res.textContent = ''; } note.textContent = phraseAdresseAbregee; return; }
+  bcChercheMinuterie = setTimeout(() => { void bcChercherAuServeur(v, false); }, 250);
+});
 $('#bcChercheForm').addEventListener('submit', (e) => {
   e.preventDefault();
+  clearTimeout(bcChercheMinuterie);
   const champ = $('#bcCherche'), note = $('#bcChercheNote'), v = champ.value.trim();
   if (!v) return;
   if (adresseAbregee(v)) { note.textContent = phraseAdresseAbregee; return; }
   let j = bcResoudre(v);
-  /* 2026-10-10 re-QA : rien de connu ICI -> l index du SERVEUR (toutes les creations, noms lus sur la chaine), lecture seule. Homonymes = refus. */
-  if (!j.ok && !/^0x/i.test(v) && !/blocks are named/.test(j.pourquoi)) {
-    note.textContent = 'Looking for \u201c' + v + '\u201d in the full index.';
-    void (async () => {
-      let s = null; try { s = await (await fetch('/api/chercher?q=' + encodeURIComponent(v), { cache: 'no-store', signal: AbortSignal.timeout(15000) })).json(); } catch (_) { s = null; }
-      if (s && s.etat === 'TROUVE' && /^0x[0-9a-f]{40}$/.test(String(s.adr))) { note.textContent = ''; champ.value = ''; choisirBrain(s.adr); bcRepeindre(); return; }
-      note.textContent = s && s.etat === 'AMBIGU' ? s.n + ' blocks are named ' + v + ' - paste the address of the one you mean'
-        : s && s.etat === 'ABSENT' ? j.pourquoi + ' (' + s.couverture.nomsLus + ' names read of ' + (s.couverture.aNommer || s.couverture.blocksConnus) + ' blocks known)'
-        : j.pourquoi + ' (the full index could not be read)';
-    })();
-    return;
-  }
+  /* rien d exact ICI (ou plusieurs blocks a ce nom) -> /api/recherche : le choix evident s ouvre, sinon la liste, la personne choisit */
+  if (!j.ok && !/^0x/i.test(v)) { void bcChercherAuServeur(v, true); return; }
   if (!j.ok) { note.textContent = j.pourquoi; return; }
   if (j.adr === ETH_ADR.toLowerCase() || !/^0x[0-9a-f]{40}$/.test(j.adr)) { note.textContent = 'That is a currency, not a block — name a block or a tokenized stock.'; return; }
-  note.textContent = ''; champ.value = '';
-  choisirBrain(j.adr); bcRepeindre();
+  bcChercheDemande += 1;
+  bcOuvrirTrouve(j.adr);
 });
 $('#bcReduire').addEventListener('click', () => {
   const r = $('#bcPop').classList.toggle('bcReduit');

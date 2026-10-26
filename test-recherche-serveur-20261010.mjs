@@ -32,6 +32,8 @@ assert.match(srv, /rpcServeur\('eth_call', \[\{ to: a, data: sel \}, 'latest'\]\
 assert.match(srv, /indexNoms\.remplir\(liste, indexNoms\.taille\(\) < liste\.length \? 120 : 40\)/);
 assert.match(srv, /Date\.now\(\) - deja\.t < 30000/, 'route sans cache');
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
-const iS = app.indexOf('let j = bcResoudre(v);'), iF = app.indexOf("fetch('/api/chercher?q='", iS);
+/* 2026-10-26 : le panneau interroge /api/recherche (bcChercherAuServeur -> rechercheB20) au lieu de /api/chercher */
+const iS = app.indexOf('let j = bcResoudre(v);'), iF = app.indexOf('void bcChercherAuServeur(v, true)', iS);
 assert.ok(iS > 0 && iF > iS && iF - iS < 1200, 'le panneau ne consulte pas l index du serveur apres un echec local');
+assert.ok(/async function bcChercherAuServeur\(v, entree\) \{[\s\S]{0,300}await rechercheB20\(v, 8\)/.test(app), 'le panneau ne passe pas par rechercheB20 (/api/recherche)');
 console.log('ok recherche-serveur - nom/symbole, homonymes refuses, borne 40/tour, cache ; NE PROUVE PAS le remplissage en prod');
