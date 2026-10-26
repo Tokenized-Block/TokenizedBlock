@@ -16753,6 +16753,10 @@ const soldesPivots = new Map();
 const soldesPivotsDemandes = new Set();
 /* le choix « Pay with » de la personne : { block, devise, sym } — voir `garderChoixPayWith`. Declare avant tout rebatissage. */
 let choixPayWith = null;
+/* vrai pendant que `garderChoixPayWith` REMET le choix (onchange ne doit pas le traiter comme un geste de la personne) */
+let restaurationPayWith = false;
+/* la liste « Pay with » du dernier rebatissage a-t-elle ete LUE (devisesDentree OK) ? Faux : marche illisible, rien a conclure */
+let listePayWithLue = false;
 /**
  * REMPLIR « PAY WITH » — et n y mettre que ce qu on sait VRAIMENT router.
  *
@@ -16794,7 +16798,10 @@ function majDevisesDentree(v) {
  *     · plus offert, ou autre block : le choix est oublie, et un montant TAPE sous lui est RETIRE si le champ parle maintenant
  *       un autre actif — la note dit pourquoi. Jamais un montant sous un autre actif que celui pour lequel il a ete tape.
  *   ⛔ Un montant pose par le retour fiat reste a SON garde (garderPrefillFiat) : on ne le retire pas ici.
- * @returns {'SANS'|'GARDE'|'MEME'|'OUBLIE'|'RETIRE'}
+ *   ⛔ 2026-10-26 (suite de la revue, point 4) : une liste NON LUE (marche illisible, 429 : `listePayWithLue` faux) ne retire rien.
+ *     Le choix reste EN ATTENTE (`attente`) : l etiquette garde son actif et « Prepare buy » refuse tant qu il attend. Seule une
+ *     liste LUE qui ne l offre plus le fait oublier — sinon un seul rebatissage rate effacait le choix et le montant pour de bon.
+ * @returns {'SANS'|'GARDE'|'ATTEND'|'MEME'|'OUBLIE'|'RETIRE'}
  */
 function garderChoixPayWith() {
   const c = choixPayWith;
@@ -16804,27 +16811,48 @@ function garderChoixPayWith() {
   const opts = sel && bloc && !bloc.hidden ? [...sel.options] : [];
   const o = ici === c.block ? opts.find((x) => String(x.value).toLowerCase() === c.devise) : null;
   if (o && !o.disabled) {
+    c.attente = false;
     if (String(sel.value).toLowerCase() !== c.devise) {
       sel.value = o.value;
-      if (typeof sel.onchange === 'function') { try { sel.onchange(); } catch (_) { /* l etiquette n a pas suivi : le test le voit */ } }
+      /* ⛔ une REMISE, pas un choix de la personne : `restaurationPayWith` empeche onchange de retirer le montant tape sous ce choix */
+      restaurationPayWith = true;
+      try { if (typeof sel.onchange === 'function') sel.onchange(); } catch (_) { /* l etiquette n a pas suivi : le test le voit */ }
+      finally { restaurationPayWith = false; }
     }
     return 'GARDE';
+  }
+  if (ici === c.block && !listePayWithLue) {
+    /* la liste n a pas ete LUE : on ne conclut rien. L etiquette dit l actif du montant ; le bouton refuse tant que ca dure. */
+    c.attente = true;
+    const lab = champ && champ.closest && champ.closest('label');
+    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';
+    return 'ATTEND';
   }
   choixPayWith = null;
   if (deviseDuChampBuy() === c.devise) return 'MEME';
   if (!champ || String(champ.value || '').trim() === '') return 'OUBLIE';
   if (fiatRetenu && fiatRetenu.pose !== null && String(champ.value) === fiatRetenu.pose) return 'OUBLIE';
   champ.value = '';
-  const e = $('#peEtat');
-  if (e) {
-    e.className = 'note wKo';
-    e.textContent = 'The amount you typed was in ' + c.sym + ', and the Buy field is no longer paid in ' + c.sym
-      + (ici !== c.block ? ' (you opened another block)' : o && o.disabled ? ' (this wallet holds none)' : ' (the market was read again and “Pay with” no longer offers it)')
-      + ', so it was taken out — nothing stays under a currency it was not typed for.';
-  }
+  noterPayWith('The amount you typed was in ' + c.sym + ', and the Buy field is no longer paid in ' + c.sym
+    + (ici !== c.block ? ' (you opened another block)' : o && o.disabled ? ' (this wallet holds none)' : ' (the market was read again and “Pay with” no longer offers it)')
+    + ', so it was taken out — nothing stays under a currency it was not typed for.');
   return 'RETIRE';
 }
+/** La note « montant retire » de « Pay with », MARQUEE (dataset.notePayWith) : une frappe ou un nouveau choix l efface, et seulement elle. */
+function noterPayWith(texte) {
+  const e = $('#peEtat');
+  if (!e) return;
+  e.className = 'note wKo';
+  e.textContent = texte;
+  if (e.dataset) e.dataset.notePayWith = '1';
+}
+function effacerNotePayWith() {
+  const e = $('#peEtat');
+  if (!e || !e.dataset || e.dataset.notePayWith !== '1') return;
+  e.className = 'note'; e.textContent = ''; delete e.dataset.notePayWith;
+}
 function majDevisesDentreeCorps(v) {
+  listePayWithLue = false; /* vrai seulement une fois `devisesDentree` OK, plus bas */
   const bloc = $('#peDeviseBloc'), sel = $('#peDevise'), note = $('#peDeviseNote');
   if (!bloc || !sel || !note) return;
   deviseDentree = null;
@@ -16959,6 +16987,7 @@ function majDevisesDentreeCorps(v) {
   }
   const r = devisesDentree({ block, deviseDeLaPool, familleDuBlock, candidates, aretes: aretesMesurees() });
   if (r.etat !== 'OK') return;
+  listePayWithLue = true;
   /* ⛔ ON NE GARDE QUE CE QUI EST ASSEMBLABLE. « Offert » par le classement ne suffit pas : une
    *   route a 2 segments est reelle et demande 2 signatures avec DEUX assembleurs differents. */
   /* ⛔⛔⛔ ET UNE CONDITION DE PLUS, QUI EST LA NOTRE ET PAS CELLE DE LA CHAINE : le bouton
@@ -17026,10 +17055,30 @@ function majDevisesDentreeCorps(v) {
     deviseDentree = null; /* le defaut reste la devise de la pool : le chemin historique, intact */
     sel.onchange = () => {
       const d = offerts.find((x) => x.devise === sel.value) || null;
+      const avant = deviseDuChampBuy();
+      const bascule = !!(fiatRetenu && fiatRetenu.enBascule);
+      const parLaPersonne = !bascule && !restaurationPayWith;
       deviseDentree = d && d.etat !== 'DIRECTE' ? d : null;
-      /* ⛔ le choix est RETENU pour les rebatissages (garderChoixPayWith) — sauf la bascule du retour fiat, qui a son propre garde */
-      if (d && !(fiatRetenu && fiatRetenu.enBascule)) {
-        choixPayWith = { block: String(block).toLowerCase(), devise: String(d.devise).toLowerCase(), sym: d.symbole || 'that currency' };
+      /* ⛔ le choix est RETENU pour les rebatissages (garderChoixPayWith). ⛔ 2026-10-26 (suite de la revue, point 2) : la bascule du
+       *   retour fiat EFFACE le choix retenu — sinon le rebatissage suivant remettait un choix d AVANT l arrivee (OUSD) et retirait
+       *   le montant livre ; c est alors le garde du retour fiat qui tient l actif livre. */
+      if (bascule) choixPayWith = null;
+      else if (d) choixPayWith = { block: String(block).toLowerCase(), devise: String(d.devise).toLowerCase(), sym: d.symbole || 'that currency' };
+      if (parLaPersonne) {
+        /* ⛔⛔ 2026-10-26 (suite de la revue, points 1 et 3) : la personne passe a un AUTRE actif — le montant qu elle a tape
+         *   parlait l ancien ; il est RETIRE (jamais converti : 25 USDC devenaient 25 ETH, ~1000 fois la valeur), et la note le
+         *   dit. Revenir en arriere ne le ressuscite pas. Un montant pose par le retour fiat reste a SON garde (plus bas). Une
+         *   ancienne note « retire » s en va a chaque nouveau choix. */
+        effacerNotePayWith();
+        const champ = $('#peAchat');
+        const apres = String(d ? d.devise : sel.value).toLowerCase();
+        if (champ && apres !== avant && String(champ.value || '').trim() !== ''
+          && !(fiatRetenu && fiatRetenu.pose !== null && String(champ.value) === fiatRetenu.pose)) {
+          const symAvant = (offerts.find((x) => String(x.devise).toLowerCase() === avant) || {}).symbole || 'the previous currency';
+          champ.value = '';
+          noterPayWith('The amount you typed was in ' + symAvant + ', so it was taken out when you picked '
+            + ((d && d.symbole) || 'another currency') + ' — an amount is never carried over to another currency.');
+        }
       }
       majEtiquetteDeviseDentree(d, symBlock);
       try { majEntreeCarte(); } catch (_) {}
@@ -17505,6 +17554,8 @@ async function majSoldeDeviseEchange() {
 async function preparerEchange(sens) {
   const adr = $('#profil').dataset.block;
   const e = $('#peEtat');
+  /* ce qui s ecrit ici desormais n est plus la note « montant retire » : une frappe ne doit pas effacer un refus ou un devis */
+  if (e && e.dataset) delete e.dataset.notePayWith;
   $('#peActions').innerHTML = '';
   $('#peLignes').innerHTML = '';
   const marcheLuGate = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
@@ -17579,6 +17630,13 @@ async function preparerEchange(sens) {
    *   1,9 s mesures) ; relire `deviseDentree` apres eux pouvait changer de chemin ou de decimales sous la personne. Tout ce qui suit
    *   lit `choix`, jamais la variable vivante. */
   const choix = sens === 'ACHAT' ? deviseDentree : null;
+  /* ⛔ 2026-10-26 : un choix EN ATTENTE (liste « Pay with » pas encore relue) ne laisse pas partir le chemin de la pool a sa place */
+  if (sens === 'ACHAT' && choixPayWith && choixPayWith.attente === true && choixPayWith.block === String(adr).toLowerCase()) {
+    e.className = 'note wKo';
+    e.textContent = '“Pay with” is being read again — your amount is in ' + choixPayWith.sym + '. Nothing was prepared; try again in a moment.';
+    try { etape('echange_refus_marche_illisible'); } catch (_) {}
+    return;
+  }
   if (!(await pret({ e }))) {
     if (!e.textContent || !/Switch to Base/i.test(e.textContent)) {
       direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'));
@@ -18314,6 +18372,8 @@ for (const id of ['#peAchat', '#peVente']) {
     const e = $('#peEtat');
     if (!e) return;
     const brut = String(champ.value || '').trim();
+    /* ⛔ 2026-10-26 : la note « montant retire » de « Pay with » ne reste pas a cote d un NOUVEAU montant tape (et seulement elle) */
+    if (e.dataset && e.dataset.notePayWith === '1') { e.className = 'note'; e.textContent = ''; delete e.dataset.notePayWith; }
     if (brut !== '' && montantNulOuVide(brut)) { e.className = 'note wKo'; e.textContent = PHRASE_MONTANT_NUL; }
     else if (e.textContent === PHRASE_MONTANT_NUL) { e.className = 'note'; e.textContent = ''; }
   });
@@ -26518,7 +26578,10 @@ function garderPrefillFiat(parLaPersonne = false) {
      * sauf si la personne l a corrige : celui-la est le sien, et le retour s arrete la. */
     if (String(champ.value || '') !== r.pose) {
       n.className = 'note';
-      n.textContent = r.debut + ' The Buy field is no longer paid in ' + r.actif + pourquoi + ', and the amount in it is the one you typed.';
+      /* ⛔ 2026-10-26 : champ VIDE = le montant corrige par la personne a ete retire par « Pay with » (onchange) ; on ne dit pas
+       *   « the amount in it is the one you typed » sous un champ vide, et on ne le ressuscite pas (ce n etait pas le montant pose) */
+      n.textContent = r.debut + ' The Buy field is no longer paid in ' + r.actif + pourquoi
+        + (String(champ.value || '').trim() === '' ? ', so the amount you typed in it was taken out.' : ', and the amount in it is the one you typed.');
       fiatRetenu = null;
       return 'VIDE';
     }

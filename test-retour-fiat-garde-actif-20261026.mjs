@@ -43,7 +43,7 @@ const extraire = (nom) => {
 };
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
   'reprendreRetourFiat', 'montantLisibleFiat', 'actifCarteCourant', 'cablerFundActifs', 'peindreBridgeBlocks', 'repeindreFundApresHub',
-  'pivotsPourPayWith', 'lireSoldesPivots', 'garderChoixPayWith'];
+  'pivotsPourPayWith', 'lireSoldesPivots', 'garderChoixPayWith', 'noterPayWith', 'effacerNotePayWith'];
 const sources = Object.fromEntries(FONCTIONS.map((f) => [f, extraire(f)]));
 
 const ETH = '0x0000000000000000000000000000000000000000';
@@ -96,7 +96,7 @@ function monde({ devises = [D_ETH, D_USDC], solde = 1752n, avant = '0', actif = 
   surDormir = null, marches = [] } = {}) {
   const els = {};
   const el = (id, C = El) => (els['#' + id] = new C(id));
-  for (const id of ['profil', 'pEchange', 'peAchat', 'peRetourFiat', 'peDeviseBloc', 'peDeviseNote', 'brFundWallet', 'brFundActifNote', 'brBlockNote']) el(id);
+  for (const id of ['profil', 'pEchange', 'peAchat', 'peRetourFiat', 'peDeviseBloc', 'peDeviseNote', 'brFundWallet', 'brFundActifNote', 'brBlockNote', 'peEtat']) el(id);
   el('peDevise', Sel); el('brBlock', Sel);
   els['#peAchat'].label = { firstChild: { nodeType: 3, textContent: 'Buy — ETH to spend' } };
   els['#pEchange'].hidden = true; els['#peRetourFiat'].hidden = true;
@@ -120,7 +120,7 @@ function monde({ devises = [D_ETH, D_USDC], solde = 1752n, avant = '0', actif = 
     CLE_FIAT_AVANT: 'tb.fiat.avant', mouvementReduit: true, actifs: [], repeindreDefautFund: null,
     marcheParAdr: new Map(marches), faitsPoolLus: new Map([[BLOC, { famille: 'uniswap-v4' }]]), faitsBlockEnVol: new Set(), devisesSansFaitsEnVol: new Set(),
     devisesPivotVersBloc, soldesPivots: new Map(), soldesPivotsDemandes: new Set(), rpc: async () => { throw new Error('not read'); },
-    choixPayWith: null,
+    choixPayWith: null, restaurationPayWith: false, listePayWithLue: false,
     pairesProposees: () => [], prixUsdDevise: async () => {}, devisesDentree: () => ({ etat: 'OK', devises: etat.devises }),
     aretesMesurees: () => [], peutEtreAssemblee: () => ({ ok: true, par: 'v4', court: null }), resumeDesNonOffertes: () => [],
     phraseDevise: () => '', majEntreeCarte: () => {}, etape: () => {},
@@ -246,14 +246,35 @@ await cas('(1i) la personne choisit OUSD (ni le defaut, ni l actif livre) et tap
   assert.equal(m.els['#peAchat'].value, '7');
   assert.equal(m.els['#peAchat'].label.firstChild.textContent, 'Buy — OUSD to spend');
 });
-await cas('(1h) la personne corrige le montant puis passe « Pay with » sur ETH : sa correction reste, et la note le dit', async () => {
+/* 2026-10-26 (suite de la revue de 4a6018e, point 1) : la regle CHANGE — un montant tape (ici corrige) en USDC ne reste plus
+ *   sous l ETH quand la personne change d actif (25 USDC devenaient 25 ETH). Il est retire, les deux notes le disent, et il
+ *   ne revient pas (ce n etait pas le montant pose par le retour). */
+await cas('(1h) la personne corrige le montant puis passe « Pay with » sur ETH : sa correction est RETIREE, et les notes le disent', async () => {
   const m = monde();
   await m.f.reprendreRetourFiat(BLOC, 'USDC');
   m.els['#peAchat'].value = '0.0015';
   m.els['#peDevise'].value = ETH; m.els['#peDevise'].declencher('change');
-  assert.equal(m.els['#peAchat'].value, '0.0015', 'un montant corrige par la personne a ete retire');
-  assert.match(m.els['#peRetourFiat'].textContent, /the amount in it is the one you typed\.$/);
+  assert.equal(m.els['#peAchat'].value, '', '0.0015 tape en USDC reste sous l ETH');
+  assert.match(m.els['#peEtat'].textContent, /typed was in USDC, so it was taken out when you picked ETH/);
+  assert.match(m.els['#peRetourFiat'].textContent, /so the amount you typed in it was taken out\.$/);
   assert.equal(m.ctx.fiatRetenu, null);
+  m.els['#peDevise'].value = USDC; m.els['#peDevise'].declencher('change');
+  assert.equal(m.els['#peAchat'].value, '', 'le montant tape a ete ressuscite');
+});
+/* point 2 : un choix fait AVANT la lecture de l arrivee (OUSD) defaisait le retour au rebatissage suivant */
+await cas('(1j) OUSD choisi avant l arrivee, puis le retour USDC bascule et preremplit : 15 rebatissages gardent USDC et le montant', async () => {
+  const D_OUSD = { devise: '0xb2000000000000000000002feb517dfec7415344', etat: 'ROUTEE', symbole: 'OUSD', tx: 1 };
+  const m = monde({ devises: [D_ETH, D_USDC, D_OUSD] });
+  m.els['#profil'].dataset.block = BLOC; m.rebatir();
+  m.els['#peDevise'].value = D_OUSD.devise; m.els['#peDevise'].declencher('change');
+  await m.f.reprendreRetourFiat(BLOC, 'USDC');
+  assert.equal(m.champ(), USDC, 'le retour n a pas bascule sur USDC');
+  assert.equal(m.els['#peAchat'].value, '0.001752');
+  for (let i = 1; i <= 15; i += 1) {
+    m.rebatir();
+    assert.equal(m.champ(), USDC, 'rebatissage ' + i + ' : retour defait, « Pay with » sur ' + m.champ());
+    assert.equal(m.els['#peAchat'].value, '0.001752', 'rebatissage ' + i + ' : montant livre retire');
+  }
 });
 
 await cas('(1d) l USDC n est pas offert au retour : rien n est pose sous l ETH ; il l est quand « Pay with » l offre', async () => {
@@ -388,7 +409,7 @@ await cas('(6b) un retour de paiement n affiche pas la banniere du lien partage'
   assert.ok(nu.indexOf('const retourFiat = lireRetourFiat(location.search)') < nu.indexOf('if (blockLien && ADRESSE.test(blockLien) && !retourFiat)'));
 });
 
-assert.equal(n, 19,'compte de cas inattendu : ' + n);
+assert.equal(n, 20,'compte de cas inattendu : ' + n);
 if (ko.length) { console.error(ko.length + ' / ' + n + ' KO'); process.exit(1); }
 console.log('ok retour-fiat-garde-actif - ' + n + ' cas, vraies fonctions de app.html executees : 15 rebatissages, USDC retire,');
 console.log('   choix de la personne, reserve de gas, relecture arretee, attente qui suit le panneau, Fund sur le hub restaure.');

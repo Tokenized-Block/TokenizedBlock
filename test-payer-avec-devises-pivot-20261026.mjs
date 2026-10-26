@@ -50,7 +50,7 @@ const NVDA = String(pairesProposees(8453).find((p) => p.symbole === 'NVDAc').adr
 const BLOC = '0xb200000000000000000000e4b0c5fbe9c8df579e';
 const WALLET = '0x00000000000000000000000000000000c0ffee77';
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
-  'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange'];
+  'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange', 'noterPayWith', 'effacerNotePayWith'];
 const PHRASE_ETIQ = (s) => 'Buy — ' + s + ' to spend';
 
 /* une fonction de premier niveau : de `function NOM(` a la premiere `}` en colonne 0 ; absente = '' */
@@ -63,10 +63,13 @@ const extraire = (src, nom) => {
 };
 
 class El {
-  constructor(id) { this.id = id; this.hidden = false; this._value = ''; this.textContent = ''; this.title = ''; this.className = ''; this.dataset = {}; this.onchange = null; this.label = null; }
+  constructor(id) { this.id = id; this.hidden = false; this._value = ''; this.textContent = ''; this.title = ''; this.className = ''; this.dataset = {}; this.onchange = null; this.label = null; this.ecoute = {}; }
   get value() { return this._value; }
   set value(v) { this._value = String(v); }
   closest() { return this.label; }
+  addEventListener(t, f) { (this.ecoute[t] ||= []).push(f); }
+  /* une frappe de la personne : la valeur, puis les ecouteurs `input` REELS de app.html (voir ecouteursChamps) */
+  taper(v) { this.value = v; for (const f of this.ecoute.input || []) f({ target: this }); }
 }
 class Sel extends El {
   constructor(id) { super(id); this.options = []; this.idx = -1; }
@@ -102,8 +105,8 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
     aretesMesurees: () => (etat.sansUsdc ? [] : [{ de: ETH, vers: USDC_BASE, famille: 'uniswap-v4' }, { de: ETH, vers: USDC_BASE, famille: 'aerodrome' }])
       .concat([{ de: USDC, vers: OUSD, famille: 'uniswap-v4' }, { de: USDC_BASE, vers: CBBTC, famille: 'aerodrome' }, { de: USDC, vers: NVDA, famille: 'uniswap-v4' }]),
     /* ce dont preparerEchange a besoin jusqu a son aiguillage ; le chemin historique et le multi-sauts sont ENREGISTRES puis arretes */
-    marcheProfil: null, etatVieProfil: 'LUE', profilEnLecture: false, echangeCourant: null, PHRASE_MONTANT_NUL: 'zero',
-    montantNulOuVide: (t) => !String(t || '').trim() || Number(t) === 0, echangeAutorise: () => true, fraisEstDynamique: () => false,
+    marcheProfil: null, etatVieProfil: 'LUE', profilEnLecture: false, echangeCourant: null, restaurationPayWith: false, listePayWithLue: false,
+    echangeAutorise: () => true, fraisEstDynamique: () => false,
     direPrealable: () => {}, texteRefusConnexion: (t) => t, texteRefusEchange: () => 'refused',
     pret: async () => { if (etat.surPret) etat.surPret(); return true; },
     decimalesDe: async (a) => { etat.decimales.push(String(a).toLowerCase()); return [EURC, USDC, OUSD].includes(String(a).toLowerCase()) ? 6 : String(a).toLowerCase() === CBBTC ? 8 : 18; },
@@ -126,7 +129,10 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
   };
   vm.createContext(ctx);
   const presentes = FONCTIONS.filter((f) => extraire(src, f));
-  vm.runInContext(presentes.map((f) => extraire(src, f)).join('\n') + '\nthis.__ = { ' + presentes.join(', ') + ' };', ctx);
+  /* les ecouteurs `input` REELS de #peAchat / #peVente (et montantNulOuVide) : la tranche de app.html qui les pose, telle quelle */
+  const iE = src.indexOf('const PHRASE_MONTANT_NUL'), fE = src.indexOf('async function preparerEthUsdc', iE);
+  const ecouteursChamps = iE >= 0 && fE > iE ? src.slice(iE, fE) : '';
+  vm.runInContext(presentes.map((f) => extraire(src, f)).join('\n') + '\n' + ecouteursChamps + '\nthis.__ = { ' + presentes.join(', ') + ' };', ctx);
   const opts = () => els['#peDevise'].options.map((o) => ({ v: String(o.value).toLowerCase(), t: o.textContent, off: !!o.disabled }));
   return { ctx, els, etat, v, f: ctx.__, opts, rebatir: () => ctx.__.majDevisesDentree(v) };
 }
@@ -314,6 +320,77 @@ async function verifier(src) {
     assert.equal(m.etat.multi.length, 1, 'le multi-sauts USDC n a pas ete construit');
     assert.equal(m.etat.multi[0].montant, 25000000n, 'montant en decimales USDC : ' + m.etat.multi[0].montant);
   });
+
+  /* ── P1-P4 : suite de la revue de 4a6018e ── */
+  await cas('P1 la personne passe d USDC (25 tape) a ETH : 25 est RETIRE, la note le dit ; revenir a USDC ne le ressuscite pas', async () => {
+    const m = monde(src);
+    m.rebatir();
+    m.els['#peDevise'].choisir(USDC);
+    m.els['#peAchat'].taper('25');
+    m.els['#peDevise'].choisir(ETH);
+    assert.equal(m.els['#peAchat'].value, '', '25 tape en USDC reste sous ' + m.els['#peAchat'].label.firstChild.textContent);
+    assert.match(m.els['#peEtat'].textContent, /typed was in USDC, so it was taken out when you picked ETH/);
+    m.els['#peDevise'].choisir(USDC);
+    assert.equal(m.els['#peAchat'].value, '', 'le montant retire est revenu');
+    /* une action, puis un pivot : meme regle */
+    m.els['#peAchat'].taper('3');
+    m.els['#peDevise'].choisir(NVDA);
+    assert.equal(m.els['#peAchat'].value, '');
+    assert.match(m.els['#peEtat'].textContent, /typed was in USDC, so it was taken out when you picked NVDAc/);
+    m.els['#peAchat'].taper('4');
+    m.els['#peDevise'].choisir(EURC);
+    assert.equal(m.els['#peAchat'].value, '');
+    assert.match(m.els['#peEtat'].textContent, /typed was in NVDAc/);
+  });
+  await cas('P1b les remises du choix (44 rebatissages) ne retirent rien ; le meme actif re-choisi ne retire rien', async () => {
+    const m = monde(src);
+    m.rebatir();
+    m.els['#peDevise'].choisir(USDC);
+    m.els['#peAchat'].taper('25');
+    for (let i = 0; i < 44; i += 1) m.rebatir();
+    m.els['#peDevise'].choisir(USDC);
+    assert.equal(m.els['#peAchat'].value, '25');
+  });
+  await cas('P3 la note « taken out » s en va a la frappe d un nouveau montant, et a un nouveau choix', async () => {
+    const m = monde(src);
+    m.rebatir();
+    m.els['#peDevise'].choisir(USDC);
+    m.els['#peAchat'].taper('25');
+    m.els['#peDevise'].choisir(EURC);
+    assert.match(m.els['#peEtat'].textContent, /taken out/);
+    m.els['#peAchat'].taper('2');
+    assert.equal(m.els['#peEtat'].textContent, '', 'note perimee a cote du nouveau montant : ' + m.els['#peEtat'].textContent);
+    m.els['#peAchat'].value = '';
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('9'); m.els['#peDevise'].choisir(ETH);
+    assert.match(m.els['#peEtat'].textContent, /taken out/);
+    m.els['#peDevise'].choisir(OUSD);
+    assert.equal(m.els['#peEtat'].textContent, '', 'note perimee apres un nouveau choix (champ vide, rien retire) : ' + m.els['#peEtat'].textContent);
+    /* une autre phrase (un refus) n est PAS effacee par une frappe */
+    m.els['#peEtat'].textContent = 'Not prepared: the cheapest pool charges 9%.';
+    m.els['#peAchat'].taper('5');
+    assert.match(m.els['#peEtat'].textContent, /^Not prepared/);
+  });
+  await cas('P4 liste NON LUE (marche illisible) : le choix ATTEND, 25 reste, etiquette USDC, Prepare buy refuse ; relue : USDC revient ; relue sans USDC : retire', async () => {
+    const m = monde(src);
+    m.rebatir();
+    m.els['#peDevise'].choisir(USDC);
+    m.els['#peAchat'].taper('25');
+    const nonLu = { etat: 'NON_LUE' };
+    for (let i = 0; i < 3; i += 1) m.f.majDevisesDentree(nonLu);
+    assert.equal(m.els['#peDeviseBloc'].hidden, true, 'le banc devait cacher la liste');
+    assert.equal(m.els['#peAchat'].value, '25', 'un rebatissage NON LU a retire le montant');
+    assert.equal(m.els['#peAchat'].label.firstChild.textContent, PHRASE_ETIQ('USDC'));
+    assert.ok(m.ctx.choixPayWith && m.ctx.choixPayWith.devise === USDC && m.ctx.choixPayWith.attente === true, JSON.stringify(m.ctx.choixPayWith));
+    try { await m.f.preparerEchange('ACHAT'); } catch (_) {}
+    assert.deepEqual(m.etat.historique, [], 'Prepare buy a pris le chemin ETH pendant l attente');
+    assert.deepEqual(m.etat.multi, []);
+    assert.match(m.els['#peEtat'].textContent, /being read again.*in USDC/);
+    m.rebatir();
+    assert.equal(m.els['#peDevise'].value, USDC);
+    assert.equal(m.els['#peAchat'].value, '25');
+    m.etat.sansUsdc = true; m.rebatir();
+    assert.equal(m.els['#peAchat'].value, '', 'une liste LUE sans USDC doit retirer le montant');
+  });
   return ko;
 }
 
@@ -322,7 +399,7 @@ const vu = (c, msg) => { assert.ok(c, msg); n += 1; console.log('ok  ' + msg); }
 const ko = await verifier(APP);
 for (const k of ko) console.log('KO  ' + k);
 if (ko.length) { console.log('ROUGE sur app.html : ' + ko.length + ' regles'); process.exit(1); }
-vu(true, 'app.html : toutes les regles (A-L) passent');
+vu(true, 'app.html : toutes les regles (A-L, P1-P4) passent');
 
 /* ── H. les mutants, sur des COPIES en memoire ── */
 const mutants = [
@@ -336,7 +413,14 @@ const mutants = [
   ['le multi-sauts relit la variable vivante (course)', (s) => s.replace("if (sens === 'ACHAT' && choix && Array.isArray(choix.chemin))", "if (sens === 'ACHAT' && deviseDentree && Array.isArray(deviseDentree.chemin))")],
   ['le garde du choix n est plus appele', (s) => s.replace('try { garderChoixPayWith(); } catch (_)', 'try { void 0; } catch (_)')],
   ['le choix n est plus retenu', (s) => s.replace('choixPayWith = { block: String(block).toLowerCase(),', 'void { block: String(block).toLowerCase(),')],
-  ['le montant tape reste sous un choix perdu', (s) => s.replace("  champ.value = '';\n  const e = $('#peEtat');", "  const e = $('#peEtat');").replace("  champ.value = '';\r\n  const e = $('#peEtat');", "  const e = $('#peEtat');")],
+  ['le montant tape reste sous un choix perdu', (s) => s.replace("  champ.value = '';\n  noterPayWith('The amount you typed was in ' + c.sym", "  noterPayWith('The amount you typed was in ' + c.sym").replace("  champ.value = '';\r\n  noterPayWith('The amount you typed was in ' + c.sym", "  noterPayWith('The amount you typed was in ' + c.sym")],
+  /* ── suite de la revue de 4a6018e (points 1, 3, 4) ── */
+  ['P1 la personne change d actif : le montant tape reste', (s) => s.replace("          champ.value = '';\n          noterPayWith('The amount you typed was in ' + symAvant", "          noterPayWith('The amount you typed was in ' + symAvant").replace("          champ.value = '';\r\n          noterPayWith('The amount you typed was in ' + symAvant", "          noterPayWith('The amount you typed was in ' + symAvant")],
+  ['P1 une remise du choix est traitee comme un geste de la personne', (s) => s.replace('const parLaPersonne = !bascule && !restaurationPayWith;', 'const parLaPersonne = !bascule;')],
+  ['P3 un nouveau choix ne retire pas la vieille note', (s) => s.replace('        effacerNotePayWith();\n', '').replace('        effacerNotePayWith();\r\n', '')],
+  ['P3 une frappe ne retire pas la vieille note', (s) => s.replace("if (e.dataset && e.dataset.notePayWith === '1') { e.className = 'note'; e.textContent = ''; delete e.dataset.notePayWith; }", 'void 0;')],
+  ['P4 une liste NON LUE fait oublier le choix', (s) => s.replace('if (ici === c.block && !listePayWithLue) {', 'if (false) {')],
+  ['P4 Prepare buy part pendant l attente', (s) => s.replace('if (sens === \'ACHAT\' && choixPayWith && choixPayWith.attente === true', 'if (false && choixPayWith && choixPayWith.attente === true')],
   ['les soldes relus a chaque repeint', (s) => s.replace('if (soldesPivotsDemandes.has(k)) continue;', '')],
   ['cbBTC reste dit « not offered »', (s) => s.replace('r.devises.filter((d) => !pivots.some((x) => x.devise === d.devise))', 'r.devises')],
 ];
