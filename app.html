@@ -1567,6 +1567,12 @@ table.regles td:first-child{color:var(--doux);width:44%;padding-right:10px}
 .wActions4{grid-template-columns:repeat(4,minmax(0,1fr))}
 .wActions4 .wAct{min-width:0;overflow-wrap:anywhere;text-align:center}
 @media (max-width:360px){.wActions4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+/* 2026-10-26 : la section Fiat du Wallet — une ligne par actif / monnaie, rien ne deborde a 375 px */
+.wfLigne{margin:8px 0 0;padding:8px 0 0;border-top:1px solid var(--bord,rgba(127,127,127,.25));overflow-wrap:anywhere}
+.wfLigne:first-child{border-top:0;padding-top:0}
+.wfLigne .bouton{display:block;width:100%;box-sizing:border-box;text-align:center;margin:0 0 6px}
+.wfNom{margin:0 0 4px;font-weight:600}
+#wfAVenir li{margin:6px 0 0;overflow-wrap:anywhere}
 .bouton[disabled]{opacity:.45;cursor:not-allowed}
 .wListe{list-style:none;margin:6px 0 0;padding:0}
 .wLigne{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--ligne)}
@@ -3184,6 +3190,23 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="wActifsNote"></p>
     </div>
 
+    <!-- 2026-10-26 (Phil : « met les idees fiat dans le Wallet ») : LA SECTION FIAT. Trois blocs, chacun tire d une reponse du serveur
+         ou d une table mesuree (wallet-fiat.js) : acheter par carte ou banque (Coinbase, MoonPay seulement si le serveur dit servi),
+         les stablecoins en monnaie locale routes (AUDF), et ce qui est mesure mais pas route (aucun bouton). Peint par peindreFiatWallet.
+         ⛔ Pas de « Cash out » : aucune sortie vers une banque n existe ici — l ecrire serait promettre. EURC n y apparait jamais. -->
+    <div class="carte" id="wFiat">
+      <p class="titre">Fiat — cash in</p>
+      <p class="sous">Turn your local money into crypto in your own wallet on Base. What is shown depends on your country and on what each service answers right now.</p>
+      <label class="champ">Your country (2 letters)<input id="wfPays" maxlength="2" autocomplete="off" spellcheck="false" placeholder="FR" style="text-transform:uppercase"></label>
+      <p class="titre" style="font-size:1em;margin-top:12px">Buy with a card or a bank</p>
+      <div id="wfAchat"><p class="note">Reading…</p></div>
+      <p class="titre" style="font-size:1em;margin-top:12px">Stablecoins in a local currency</p>
+      <div id="wfLocales"></div>
+      <p class="titre" style="font-size:1em;margin-top:12px">Measured, not routed yet</p>
+      <ul class="wListe" id="wfAVenir"></ul>
+      <p class="note" id="wfEtat" role="status"></p>
+    </div>
+
     <!-- tip 20260922-2010 — TokenizedBank add-liquidity graft (Raksha/Zero 1): any wallet with proof
          may graft to add liquidity; early = yield share at Open (frozen); credit on basket totality;
          hold; losing one still leaves the rest; never show a6cf. -->
@@ -4715,6 +4738,8 @@ import { devisesDentree, peutEtreAssemblee, phraseDevise, resumeDesNonOffertes, 
 /* 2026-10-26 : les devises pivot (WETH, cbBTC, AUDF) dans « Pay with » — la MEME fonction que /api/rails/plan (rails-api.js la re-exporte).
  *   ⛔ EURC est BANNI (Phil, 2026-10-26) : retire de la table pivot, et DEVISES_BANNIES le retire aussi du Swap du Wallet. */
 import { devisesPivotVersBloc } from './entree-vers-bloc.js';
+/* 2026-10-26 : la section Fiat du Wallet (achat carte/banque par pays, monnaies locales routees, mesurees non routees) — pur */
+import { lignesAchat as fiatLignesAchat, monnaiesLocales as fiatMonnaiesLocales, aVenir as fiatAVenir } from './wallet-fiat.js';
 /* ⛔ `BPS_MAX` BORNE CE QU ON S AUTORISE A PRELEVER sur le rail multi-sauts. Il est IMPORTE du
  *   bareme, pas recopie : une constante recopiee ne suit pas une decision de Phil, et la garde
  *   deviendrait fausse le jour ou le bareme change. */
@@ -8297,6 +8322,7 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'trade') void peindreSkinsMarche();
   if (nom === 'wallet' && compte && Date.now() - walletLuA > 15000) void majWallet();
   if (nom === 'wallet') void tbBanquePeindre(); /* 2026-10-11 : la maquette (peindreTokenizedBank et son balayage lourd) est retiree */
+  if (nom === 'wallet') peindreFiatWallet().catch(() => { /* la section garde son dernier etat */ });
   /* tip 20260922-prepaye-inscrire-dust */
   if (nom === 'wallet' || nom === 'bridge') { void peindreBridgeBlocks(); }
   if (nom === 'missions') { void peindreTirage(); void peindreDernierBlock().catch(() => {}).then(() => { void verifierRollsEnAttente(); void peindreTirageJourPass(); }); void peindreMissions(); void peindreEarn(); void peindreSkinsJeu(); void peindreUnitPools(); }
@@ -31301,6 +31327,116 @@ $('#wsGo').addEventListener('click', async () => {
     etat.textContent = 'Quote in the Brain panel — your wallet opens only once the plan is ready.';
   }
 });
+/* ── LA SECTION FIAT DU WALLET (2026-10-26, Phil : « met les idees fiat dans le Wallet ») ─────────────────────────────────────────
+ * ⛔⛔ AUCUN APPEL D ARGENT NEUF. Les boutons ouvrent les rails EXISTANTS : `ouvrirRailFiat` (session Coinbase, repli sur le lien
+ *   public) et `ouvrirRailMoonpay` (URL signee par le serveur, seulement quand /api/moonpay/pays dit servi) ; un achat de monnaie
+ *   locale n aurait de bouton que si le Swap du Wallet l offre en « You get » (aujourd hui non : le serveur repond
+ *   « route USDC>AUTRE is not offered by this API yet », lu en prod le 2026-10-26) et ouvrirait alors CE Swap, inchange.
+ * ⛔ Le pays est le meme que celui de la fiche (paysCarte : langue du navigateur, modifiable), deux lettres et rien d autre.
+ *   Lectures bornees : une par pays (Coinbase) et par pays+actif (MoonPay) et par page, echec retenu 60 s, 8 s au plus. */
+const fiatLus = { coinbase: new Map(), moonpay: new Map() };
+async function fiatLire(carte, cle, url, garder) {
+  const deja = carte.get(cle);
+  if (deja && deja.vol) return deja.vol;
+  if (deja && (deja.v !== null || Date.now() - deja.t < 60000)) return deja.v;
+  const vol = (async () => {
+    let v = null;
+    try {
+      const stop = new AbortController();
+      const m = setTimeout(() => stop.abort(), 8000);
+      const j = await fetch(url, { signal: stop.signal }).then((r) => r.json());
+      clearTimeout(m);
+      v = garder(j);
+    } catch (_) { v = null; }
+    carte.set(cle, { v, t: Date.now(), vol: null });
+    return v;
+  })();
+  carte.set(cle, { v: null, t: Date.now(), vol });
+  return vol;
+}
+function fiatEl(tag, cls, texte) { const e = document.createElement(tag); if (cls) e.className = cls; if (texte !== undefined) e.textContent = texte; return e; }
+let fiatGen = 0;
+async function peindreFiatWallet() {
+  const boite = $('#wfAchat'), loc = $('#wfLocales'), av = $('#wfAVenir'), inp = $('#wfPays');
+  if (!boite || !loc || !av || !inp) return;
+  const gen = ++fiatGen;
+  if (paysCarte === null) {
+    try { paysCarte = paysDuNavigateur(navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language]) || ''; }
+    catch (_) { paysCarte = ''; }
+  }
+  if (document.activeElement !== inp) inp.value = paysCarte;
+  const p = /^[A-Z]{2}$/.test(paysCarte) ? paysCarte : null;
+  let nom = null;
+  if (p) { try { nom = new Intl.DisplayNames(['en'], { type: 'region' }).of(p) || null; } catch (_) { nom = null; } }
+  /* blocs 2 et 3 : purs, peints tout de suite (rien a lire) */
+  let offerts = [];
+  try { offerts = bcChoixPaiement(null, null).map(([v]) => { const r = bcResoudre(v); return r && r.ok ? r.adr : null; }).filter(Boolean); } catch (_) { offerts = []; }
+  loc.replaceChildren(...fiatMonnaiesLocales({ offertsAchat: offerts }).map((m) => {
+    const d = fiatEl('div', 'wfLigne');
+    d.dataset.adr = m.adr;
+    d.append(fiatEl('p', 'wfNom', m.symbole + ' — ' + m.monnaie + ' (' + m.code + ')'), fiatEl('p', 'note', m.faits));
+    if (m.payWith) d.append(fiatEl('p', 'note', m.payWith));
+    if (m.achat.ouvert) {
+      const b = fiatEl('button', 'bouton sec', m.achat.bouton); b.type = 'button';
+      b.addEventListener('click', () => {
+        const w = $('#wSwapCarte'); if (!w) return;
+        for (const id of ['#wSendCarte', '#wReceive', '#wPaire']) { const e = $(id); if (e) e.hidden = true; }
+        w.hidden = false; $('#wsDe').dataset.voulu = String(USDC_BASE).toLowerCase(); wsPeindreDe();
+        const sv = $('#wsVers'); if ([...sv.options].some((o) => o.value.toLowerCase() === m.adr)) sv.value = [...sv.options].find((o) => o.value.toLowerCase() === m.adr).value;
+        w.scrollIntoView({ block: 'nearest' });
+      });
+      d.append(b);
+    } else d.append(fiatEl('p', 'note', m.achat.phrase));
+    d.append(fiatEl('p', 'note', m.adresse));
+    return d;
+  }));
+  av.replaceChildren(...fiatAVenir().map((x) => { const li = fiatEl('li', 'note', x.phrase); li.dataset.adr = x.adr; return li; }));
+  /* bloc 1 : Coinbase d abord ; MoonPay seulement si Coinbase n a rendu AUCUN moyen (la regle de la fiche) */
+  const peindreAchat = (coinbase, moonpay) => {
+    if (gen !== fiatGen) return;
+    boite.replaceChildren(...fiatLignesAchat({ pays: p, nomPays: nom, coinbase, moonpay }).map((l) => {
+      const d = fiatEl('div', 'wfLigne');
+      d.dataset.actif = l.actif; d.dataset.rail = l.rail || '';
+      if (l.bouton && l.rail === 'coinbase') {
+        const a = fiatEl('a', 'bouton sec', l.bouton);
+        a.href = 'https://www.coinbase.com/onramp'; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        a.addEventListener('click', (e) => { void ouvrirRailFiat(e, a, l.actif); });
+        d.append(a);
+      } else if (l.bouton && l.rail === 'moonpay') {
+        const b = fiatEl('button', 'bouton sec', l.bouton); b.type = 'button';
+        b.addEventListener('click', (e) => {
+          if (!compte) { $('#wfEtat').textContent = 'Connect your wallet first: MoonPay sends the ' + l.actif + ' to it.'; return; }
+          void ouvrirRailMoonpay(e, l.actif, p);
+        });
+        d.append(b);
+      }
+      d.append(fiatEl('p', 'note', l.phrase));
+      if (l.moonpay) d.append(fiatEl('p', 'note', l.moonpay));
+      return d;
+    }));
+  };
+  if (!p) { peindreAchat(null, {}); return; }
+  const coinbase = await fiatLire(fiatLus.coinbase, p, '/api/onramp/options?pays=' + encodeURIComponent(p) + '&court=1',
+    (j) => (j && j.ok === true && Array.isArray(j.moyens) ? j.moyens.filter((x) => typeof x === 'string') : null));
+  if (gen !== fiatGen) return;
+  const sert = Array.isArray(coinbase) && coinbase.some((x) => x && x !== 'UNSPECIFIED');
+  const moonpay = {};
+  if (!sert) {
+    peindreAchat(coinbase, {});
+    /* le corps tel que rendu (ok:true pret:true servi:false compris) : la phrase dit ce que MoonPay a repondu, sans rien promettre */
+    const lus = await Promise.all(['USDC', 'ETH'].map((a) => fiatLire(fiatLus.moonpay, p + '|' + a, '/api/moonpay/pays?pays=' + encodeURIComponent(p) + '&actif=' + a,
+      (j) => (j && typeof j === 'object' && (j.ok === true || j.pret === false) ? j : null))));
+    moonpay.USDC = lus[0]; moonpay.ETH = lus[1];
+  }
+  peindreAchat(coinbase, moonpay);
+}
+$('#wfPays') && $('#wfPays').addEventListener('input', (ev) => {
+  const v = String(ev.target.value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
+  ev.target.value = v;
+  if (v.length === 2 && v !== paysCarte) { paysCarte = v; peindreFiatWallet().catch(() => {}); try { majEntreeCarte(); } catch (_) {} }
+});
+/* l onglet Wallet a pu s ouvrir AVANT que ce bloc soit evalue (lien direct) : on peint une fois ici */
+if ($('#v-wallet') && $('#v-wallet').classList.contains('on')) peindreFiatWallet().catch(() => {});
 $('#bcAdr').addEventListener('click', async () => {
   const ad = $('#bcAdr'), a = ad.dataset.adr; if (!a) return;
   try { await navigator.clipboard.writeText(a); ad.textContent = a + ' — copied'; } catch (_) { ad.textContent = a + ' — select it to copy'; }

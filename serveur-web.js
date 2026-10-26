@@ -5411,6 +5411,8 @@ const SERVIS = [
   'creations-index.js',
   /* ⛔ 2026-10-25 : le parcours carte -> block (actif finance, retour lu sur le solde, moyens par pays), importe par `app.html`. */
   'retour-fiat.js',
+  /* 2026-10-26 : la section Fiat de l onglet Wallet (pure), importee par `app.html`. */
+  'wallet-fiat.js',
   /* ⛔ 2026-10-02 : debit et refus permanents des noeuds RPC publics, importe par `app.html`. */
   'regulateur-rpc.js',
   /* ⛔ 2026-10-04 : les lectures independantes d un plan, lancees ensemble et bornees. Importe par `echange.js`, `marche.js` et
