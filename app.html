@@ -10707,10 +10707,10 @@ function peindreResultatsB20(el, brut, s, auChoix) {
   el.onclick = (e) => { const b = e.target && e.target.closest && e.target.closest('[data-rb-adr]'); if (b) auChoix(b.getAttribute('data-rb-adr'), b.getAttribute('data-rb-sym') || null); };
 }
 /** branche un champ de recherche : saisie (250 ms d attente), Entree (immediat ; le choix evident s ouvre), liste des resultats.
- *  `surEntree` (facultatif) : Entree fait CE geste a la place (la Map garde le saut de chercherBlock) — la frappe en attente est annulee.
- *  Rend { annuler } : un autre geste (le bouton Find) annule la frappe en attente, qui ne repeint plus la liste apres lui. */
-function brancherRechercheB20({ champ, liste, auChoix, surSaisie, surEntree }) {
-  if (!champ || !liste) return { annuler() {} };
+ *  `onEnter` (optional): Enter does THIS gesture instead (the Map keeps the chercherBlock jump) — the pending keystroke is cancelled.
+ *  Returns { cancel }: another gesture (the Find button) cancels the pending keystroke, which no longer repaints the list after it. */
+function brancherRechercheB20({ champ, liste, auChoix, surSaisie, onEnter }) {
+  if (!champ || !liste) return { cancel() {} };
   let minuterie = null, demande = 0;
   const lancer = async (entree) => {
     const brut = String(champ.value || '').trim();
@@ -10725,15 +10725,15 @@ function brancherRechercheB20({ champ, liste, auChoix, surSaisie, surEntree }) {
     if (evident) { liste.hidden = true; liste.textContent = ''; auChoix(evident.adr, evident.sym || null); return; }
     peindreResultatsB20(liste, brut, s, auChoix);
   };
-  const annuler = () => { clearTimeout(minuterie); demande += 1; };
+  const cancel = () => { clearTimeout(minuterie); demande += 1; };
   champ.addEventListener('input', () => { clearTimeout(minuterie); minuterie = setTimeout(() => { void lancer(false); }, 250); });
   champ.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
-    if (surEntree) { annuler(); surEntree(); return; }
+    if (onEnter) { cancel(); onEnter(); return; }
     clearTimeout(minuterie); void lancer(true);
   });
-  return { annuler };
+  return { cancel };
 }
 function chercherBlock() {
   const brut = String($('#trouver').value || '').trim();
@@ -10793,8 +10793,8 @@ function chercherBlock() {
   h.el.click();
   h.el.scrollIntoView({ block: 'center' });
 }
-/** un resultat de la recherche de la Map : le block est pose (ou retrouve) sur la carte et ouvert ; la liste se ferme */
-function ouvrirSurCarteB20(adr, sym) {
+/** a Map search result: the block is placed (or found) on the map and opened; the list closes */
+function openOnMapB20(adr, sym) {
   const a = String(adr || '').toLowerCase();
   if (!ADRESSE.test(a)) return;
   const pose = habitants.find((x) => String(x.adr).toLowerCase() === a) || creerHabitant({ jeton: a, symbole: sym || null, vie: null });
@@ -10809,21 +10809,21 @@ function chercherAuServeur(brut, resMap) {
       direMap('Looking for « ' + brut + ' » in the server index…');
       const s = await rechercheB20(brut, 6);
       const evident = choixEvidentOuAdresseB20(s);
-      if (evident) { ouvrirSurCarteB20(evident.adr, evident.sym); return; }
+      if (evident) { openOnMapB20(evident.adr, evident.sym); return; }
       if (s && s.etat === 'TROUVE' && Array.isArray(s.resultats) && s.resultats.length) {
         const nR = s.resultats.length;
         direMap(nR + (s.plus ? '+' : '') + (nR === 1 && !s.plus ? ' block matches « ' : ' blocks match « ') + brut + ' » — pick one below.');
-        if (resMap) peindreResultatsB20(resMap, brut, s, ouvrirSurCarteB20);
+        if (resMap) peindreResultatsB20(resMap, brut, s, openOnMapB20);
         return;
       }
       direMap(phraseRechercheVide(brut, s));
     })();
 }
-/* ⛔⛔ 2026-10-26 (QA game56 : « unit » tape en haut a gauche de la Map, aucune liste ; Find sautait directement) : le champ de la Map
- *   montre pendant la frappe LA liste de Find a block (brancherRechercheB20 -> peindreResultatsB20, le meme code) ; choisir une ligne
- *   ouvre ce block sur la carte. ⛔ ENTREE et « Find » gardent le saut de chercherBlock (egalite exacte d abord, sinon la liste). */
-const rechercheMap = brancherRechercheB20({ champ: $('#trouver'), liste: $('#mapResultats'), auChoix: ouvrirSurCarteB20, surEntree: chercherBlock });
-$('#bTrouver').addEventListener('click', () => { rechercheMap.annuler(); chercherBlock(); });
+/* ⛔⛔ 2026-10-26 (QA game56: « unit » typed top-left on the Map, no list; Find jumped straight away): while typing, the Map field
+ *   shows THE Find a block list (brancherRechercheB20 -> peindreResultatsB20, the same code); picking a row
+ *   opens that block on the map. ⛔ ENTER and « Find » keep the chercherBlock jump (exact match first, otherwise the list). */
+const mapSearch = brancherRechercheB20({ champ: $('#trouver'), liste: $('#mapResultats'), auChoix: openOnMapB20, onEnter: chercherBlock });
+$('#bTrouver').addEventListener('click', () => { mapSearch.cancel(); chercherBlock(); });
 document.addEventListener('click', (e) => { const t = e.target && e.target.closest && e.target.closest('[data-live-relire]'); if (t) { t.disabled = true; void lireLive(); } });
 
 /**
