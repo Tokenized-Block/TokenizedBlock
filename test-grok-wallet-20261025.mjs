@@ -36,6 +36,8 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const { selecteur } = await import(pathToFileURL(path.join(ICI, 'encodeur.js')).href);
 const { MORPHO_BLUE } = await import(pathToFileURL(path.join(ICI, 'banque-morpho.js')).href);
 const { symboleDepuisReponse } = await import(pathToFileURL(path.join(ICI, 'texte-onchain.js')).href);
+/* 2026-10-26 : wsPeindreDe lit DEVISES_BANNIES (EURC banni) — le VRAI module, importe par la page */
+const { DEVISES_BANNIES } = await import(pathToFileURL(path.join(ICI, 'plan-franchissement.js')).href);
 const brut = fs.readFileSync(process.env.TB_APP || path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g, '\n');
 
 const MOI = '0x31e0' + 'a'.repeat(36);
@@ -288,9 +290,9 @@ async function verifier(html) {
       sel.value = '';
       const Option = function (t, v) { this.text = t; this.value = v; };
       const liste = { a: [] };
-      const f = new Function('$', 'actifs', 'Option', 'abrege', 'formaterUnites', 'wsPeindreVers', ou('function wsPeindreDe(') + '\nreturn (a) => { actifs.length = 0; actifs.push(...a); wsPeindreDe(); };');
+      const f = new Function('$', 'actifs', 'Option', 'abrege', 'formaterUnites', 'wsPeindreVers', 'DEVISES_BANNIES', ou('function wsPeindreDe(') + '\nreturn (a) => { actifs.length = 0; actifs.push(...a); wsPeindreDe(); };');
       const actifsS = [];
-      const peindreDe = f((s) => (s === '#wsDe' ? sel : null), actifsS, Option, (x) => x, (b) => String(b), () => {});
+      const peindreDe = f((s) => (s === '#wsDe' ? sel : null), actifsS, Option, (x) => x, (b) => String(b), () => {}, DEVISES_BANNIES);
       const eth = { id: 'ETH', nom: 'ETH', adr: null, etat: 'LU', solde: 1n, decimales: 18 };
       const sndk = { id: SNDK, nom: 'SNDKc', adr: SNDK, etat: 'LU', solde: 3967n, decimales: 6 };
       peindreDe([eth, sndk]);

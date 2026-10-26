@@ -4490,7 +4490,8 @@ import { cheminEntre, transactionsNecessaires, segmenterParFactory,
  *   NOTRE ne doit pas se lire « impossible ». */
 import { devisesDentree, peutEtreAssemblee, phraseDevise, resumeDesNonOffertes, ETATS_OFFERTS }
   from './devises-dentree.js';
-/* 2026-10-26 : WETH, cbBTC, EURC dans « Pay with » — la MEME fonction que /api/rails/plan (rails-api.js la re-exporte) */
+/* 2026-10-26 : les devises pivot (WETH, cbBTC, AUDF) dans « Pay with » — la MEME fonction que /api/rails/plan (rails-api.js la re-exporte).
+ *   ⛔ EURC est BANNI (Phil, 2026-10-26) : retire de la table pivot, et DEVISES_BANNIES le retire aussi du Swap du Wallet. */
 import { devisesPivotVersBloc } from './entree-vers-bloc.js';
 /* ⛔ `BPS_MAX` BORNE CE QU ON S AUTORISE A PRELEVER sur le rail multi-sauts. Il est IMPORTE du
  *   bareme, pas recopie : une constante recopiee ne suit pas une decision de Phil, et la garde
@@ -4503,7 +4504,7 @@ import { sautsDepuisChemin } from './sauts-depuis-chemin.js';
  *   declares, bati la jambe 1 en V4 avec le bareme degressif, derive le minimum de la jambe 2 du
  *   prix spot, et assemble le lot. Son execution est prouvee sur fork, a6cf paye sur les DEUX
  *   jambes au wei. */
-import { planFranchissement } from './plan-franchissement.js';
+import { planFranchissement, DEVISES_BANNIES } from './plan-franchissement.js';
 /* ⛔ Le rail Aerodrome a segment unique : UNE transaction (plus l approbation), pas de lot, donc
  *   aucune exigence d atomicite. C est le chemin de l acheteur en USDC vers une action tokenisee —
  *   236/245 marches offerts depuis USDC mais 23,1 % du volume seulement, avant lui. */
@@ -30114,7 +30115,10 @@ function wsEstBlock(id) {
 function wsPeindreDe() {
   /* le choix de la personne survit a une relecture (la liste se reconstruit jeton par jeton) */
   const s = $('#wsDe'), avant = s.dataset.voulu || s.value;
-  const lus = actifs.filter((a) => a.etat === 'LU' && (a.id === 'ETH' || (typeof a.solde === 'bigint' && a.solde > 0n)));
+  /* ⛔⛔ 2026-10-26 (Phil : « banni EURC pour l instant ») : une devise bannie n est pas offerte a payer, meme detenue (Send la garde :
+   *   ce sont les fonds de la personne, elle peut toujours les envoyer) */
+  const lus = actifs.filter((a) => a.etat === 'LU' && (a.id === 'ETH' || (typeof a.solde === 'bigint' && a.solde > 0n))
+    && !DEVISES_BANNIES.has(String(a.adr || '').toLowerCase()));
   /* options construites par le DOM (new Option = texte), jamais innerHTML : regle du panneau (test-commandes-panel) */
   s.replaceChildren(...lus.map((a) => new Option(a.nom + ' — ' + abrege(formaterUnites(a.solde, a.decimales)), a.adr ? String(a.adr).toLowerCase() : 'ETH')));
   if ([...s.options].some((o) => o.value === avant)) s.value = avant;

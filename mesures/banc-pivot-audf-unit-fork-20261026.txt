@@ -1,0 +1,74 @@
+fork http://127.0.0.1:8637 · chaine 8453 · bloc 53107642
+ok  le fork est Base
+ok  UNIT (app.html UNIT_APP) = UNIT_BLOCK de serveur-web.js (0xb2000000000000000000007afa7ed748b0874f27)
+ok  SSTR : cle v4 decodee du log Initialize mesure, cotee en USDC (0xb2000000000000000000000eeb20be4a4b4b0c01)
+ok  devises pivot : AUDF 0xd2a530170d71a9cfe1651fb468e2b98f7ed7456b, cbBTC, WETH ; EURC absent
+ok  AUDF relu sur le fork : symbol AUDF, 6 decimales
+ok  EURC banni : EURC > UNIT REFUSE (EURC is not offered for now: it cannot be paid with or received here), rien a signer, 0 lecture
+ok  EURC banni : EURC > USDC REFUSE (EURC is not offered for now: it cannot be paid with or received here), rien a signer, 0 lecture
+ok  EURC banni : USDC > EURC REFUSE (EURC is not offered for now: it cannot be paid with or received here), rien a signer, 0 lecture
+ok  EURC banni : EURC > SSTR REFUSE (EURC is not offered for now: it cannot be paid with or received here), rien a signer, 0 lecture
+ok  AUDF > UNIT : le compte detient 5000000 unites de AUDF (transfer depuis la pool 0x87449c01 (fork))
+ok  AUDF > UNIT : plan PRET via deviseAerodromeVersBloc
+ok  AUDF > UNIT : TEMOIN NEGATIF, la jambe v4 seule (sans Aerodrome) reverte : 0x1,0x1,0x0
+ok  AUDF > UNIT : 5 appels du lot executes sans revert, dans l ordre
+ok  AUDF > UNIT : octets executes = octets du plan (to, data, value de chaque transaction minee)
+ok  AUDF > UNIT : paye exactement 5000000 AUDF
+ok  AUDF > UNIT : recu 148021458390952521252415 >= minimum 146541243807042996039890
+ok  AUDF > UNIT : jambe 1, USDC sorti 3495856 vs devis 3495856 (ecart 0 ppm, tolerance 10 bps)
+ok  AUDF > UNIT : jambe 2, block recu 148021458390952521252415 vs devis 148021458390952521252415 (ecart 0 ppm)
+ok  AUDF > UNIT : autorisations revenues a 0 : ERC20 0xd2a530 -> 0x698cb2=0 · ERC20 0x833589 -> 0x000000=0 · Permit2 0x833589 -> 0x6ff569=0
+ok  AUDF > UNIT : le hook paie -> 0 bps sur Aerodrome, 0 USDC au wallet des frais (comme la 4 ter)
+ok  AUDF > UNIT : aucun frais dans la devise payee ni dans le block
+     frais (wallet 0xa6cf99) : ETH 1039107665408 · WETH 0 · USDC 0 · AUDF 0 · UNIT 0 · fraisParHook true · fraisMarcheBps 10
+     USDC reste au compte : 34959 (la marge de la jambe 1 au-dela de son minimum)
+ok  WETH > UNIT : le compte detient 3000000000000000 unites de WETH (deposit())
+ok  WETH > UNIT : plan PRET via deviseAerodromeVersBloc
+ok  WETH > UNIT : 5 appels du lot executes sans revert, dans l ordre
+ok  WETH > UNIT : octets executes = octets du plan (to, data, value de chaque transaction minee)
+ok  WETH > UNIT : paye exactement 3000000000000000 WETH
+ok  WETH > UNIT : recu 295802236981512812600097 >= minimum 292844214611697684474096
+ok  WETH > UNIT : jambe 1, USDC sorti 6987070 vs devis 6987070 (ecart 0 ppm, tolerance 10 bps)
+ok  WETH > UNIT : jambe 2, block recu 295802236981512812600097 vs devis 295802236981512812600097 (ecart 0 ppm)
+ok  WETH > UNIT : autorisations revenues a 0 : ERC20 0x420000 -> 0x698cb2=0 · ERC20 0x833589 -> 0x000000=0 · Permit2 0x833589 -> 0x6ff569=0
+ok  WETH > UNIT : le hook paie -> 0 bps sur Aerodrome, 0 USDC au wallet des frais (comme la 4 ter)
+ok  WETH > UNIT : aucun frais dans la devise payee ni dans le block
+     frais (wallet 0xa6cf99) : ETH 2076833047547 · WETH 0 · USDC 0 · UNIT 0 · fraisParHook true · fraisMarcheBps 10
+     USDC reste au compte : 69871 (la marge de la jambe 1 au-dela de son minimum)
+ok  cbBTC > UNIT : le compte detient 10000 unites de cbBTC (slot 9)
+ok  cbBTC > UNIT : plan PRET via deviseAerodromeVersBloc
+ok  cbBTC > UNIT : 5 appels du lot executes sans revert, dans l ordre
+ok  cbBTC > UNIT : octets executes = octets du plan (to, data, value de chaque transaction minee)
+ok  cbBTC > UNIT : paye exactement 10000 cbBTC
+ok  cbBTC > UNIT : recu 339712119308193424184028 >= minimum 336314998115111489942187
+ok  cbBTC > UNIT : jambe 1, USDC sorti 8024611 vs devis 8024611 (ecart 0 ppm, tolerance 10 bps)
+ok  cbBTC > UNIT : jambe 2, block recu 339712119308193424184028 vs devis 339712119308193424184028 (ecart 0 ppm)
+ok  cbBTC > UNIT : autorisations revenues a 0 : ERC20 0xcbb7c0 -> 0x698cb2=0 · ERC20 0x833589 -> 0x000000=0 · Permit2 0x833589 -> 0x6ff569=0
+ok  cbBTC > UNIT : le hook paie -> 0 bps sur Aerodrome, 0 USDC au wallet des frais (comme la 4 ter)
+ok  cbBTC > UNIT : aucun frais dans la devise payee ni dans le block
+     frais (wallet 0xa6cf99) : ETH 2385230030291 · WETH 0 · USDC 0 · cbBTC 0 · UNIT 0 · fraisParHook true · fraisMarcheBps 10
+     USDC reste au compte : 80247 (la marge de la jambe 1 au-dela de son minimum)
+ok  AUDF > SSTR : le compte detient 5000000 unites de AUDF (transfer depuis la pool 0x87449c01 (fork))
+ok  AUDF > SSTR : plan PRET via deviseAerodromeVersBloc
+ok  AUDF > SSTR : 5 appels du lot executes sans revert, dans l ordre
+ok  AUDF > SSTR : octets executes = octets du plan (to, data, value de chaque transaction minee)
+ok  AUDF > SSTR : paye exactement 5000000 AUDF
+ok  AUDF > SSTR : recu 850294125269926774326031 >= minimum 841791184017227506582770
+ok  AUDF > SSTR : jambe 1, USDC sorti 3495856 vs devis 3495856 (ecart 0 ppm, tolerance 10 bps)
+ok  AUDF > SSTR : jambe 2, block recu 850294125269926774326031 vs devis 850294125269926774326031 (ecart 0 ppm)
+ok  AUDF > SSTR : autorisations revenues a 0 : ERC20 0xd2a530 -> 0x698cb2=0 · ERC20 0x833589 -> 0x000000=0 · Permit2 0x833589 -> 0x6ff569=0
+ok  AUDF > SSTR : hook qui ne paie pas -> 10 bps EN USDC sur la jambe Aerodrome : 3495 = floor(3495856 x 10 / 10000)
+ok  AUDF > SSTR : aucun frais dans la devise payee ni dans le block
+     frais (wallet 0xa6cf99) : ETH 0 · WETH 0 · USDC 3495 · AUDF 0 · SSTR 0 · fraisParHook false · fraisMarcheBps undefined
+     USDC reste au compte : 34925 (la marge de la jambe 1 au-dela de son minimum)
+ok  REPLI AUDF > USDC puis USDC > UNIT : compte credite
+ok  REPLI AUDF > USDC puis USDC > UNIT : le lot porte pivot USDC et pivotAuMoins 3460897 (ce que lit bcDeuxTrades)
+ok  REPLI AUDF > USDC puis USDC > UNIT : trade 1 AUDF > USDC : PRET via planAerodromeSegment
+ok  REPLI AUDF > USDC puis USDC > UNIT : trade 1, appel execute (octets = plan)
+ok  REPLI AUDF > USDC puis USDC > UNIT : trade 1, appel execute (octets = plan)
+ok  REPLI AUDF > USDC puis USDC > UNIT : trade 1, 3492361 USDC >= minimum 3457436, frais 3495 USDC (10 bps, la retenue Aerodrome existante)
+ok  REPLI AUDF > USDC puis USDC > UNIT : trade 1, autorisation revenue a 0
+ok  REPLI AUDF > USDC puis USDC > UNIT : trade 2 USDC > UNIT pour pivotAuMoins : PRET
+ok  REPLI AUDF > USDC puis USDC > UNIT : trade 2 execute, 148021458390952521252415 >= minimum 146541243807042996039890
+RESULTATS [{"titre":"AUDF > UNIT","etat":"EXECUTE","paye":"5000000","recu":"148021458390952521252415","min":"146541243807042996039890","q1":"3495856","brut1":"3495856","q2":"148021458390952521252415","fraisUsdc":"0","fraisEth":"1039107665408","fraisParHook":true},{"titre":"WETH > UNIT","etat":"EXECUTE","paye":"3000000000000000","recu":"295802236981512812600097","min":"292844214611697684474096","q1":"6987070","brut1":"6987070","q2":"295802236981512812600097","fraisUsdc":"0","fraisEth":"2076833047547","fraisParHook":true},{"titre":"cbBTC > UNIT","etat":"EXECUTE","paye":"10000","recu":"339712119308193424184028","min":"336314998115111489942187","q1":"8024611","brut1":"8024611","q2":"339712119308193424184028","fraisUsdc":"0","fraisEth":"2385230030291","fraisParHook":true},{"titre":"AUDF > SSTR","etat":"EXECUTE","paye":"5000000","recu":"850294125269926774326031","min":"841791184017227506582770","q1":"3495856","brut1":"3495856","q2":"850294125269926774326031","fraisUsdc":"3495","fraisEth":"0","fraisParHook":false}]
+63 ok / 0 KO (63 assertions) — fork rendu a son etat d avant le banc

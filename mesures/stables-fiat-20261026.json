@@ -1,0 +1,2004 @@
+{
+ "bloc": 53106990,
+ "rpc": "https://base-rpc.publicnode.com",
+ "regles": {
+  "ecartMaxBps": 100,
+  "ecartMinBps": -10,
+  "perteMaxBps": 200,
+  "usdcMin": "10000000000",
+  "perteProfondeurMaxBps": 200,
+  "seuilUtilisable": "9800000000"
+ },
+ "requetesHttp": 1256,
+ "lignes": [
+  {
+   "annonce": "cgUSD",
+   "peg": "peggedUSD",
+   "source": "defillama:166",
+   "adr": "0xca72827a3d211cfd8f6b00ac98824872b72cab49",
+   "code": 10688,
+   "symbole": "cgUSD",
+   "nom": "Cygnus Global USD",
+   "decimales": 6,
+   "totalSupply": "76259038582292",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "AID",
+   "peg": "peggedUSD",
+   "source": "defillama:353",
+   "adr": "0x18f52b3fb465118731d9e0d276d4eb3599d57596",
+   "code": 212,
+   "symbole": "AID",
+   "nom": "AI Dollar",
+   "decimales": 18,
+   "totalSupply": "8450997560000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 10000,
+      "pool": "0x44cb769d87218d1f11552f9e94769cbdea44bcb9",
+      "usdcPool": "1"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "SBC",
+   "peg": "peggedUSD",
+   "source": "defillama:324",
+   "adr": "0xfdcc3dd6671eab0709a4c0f3f53de9a333d80798",
+   "code": 708,
+   "symbole": "SBC",
+   "nom": "Stable Coin",
+   "decimales": 18,
+   "totalSupply": "654792995983210509933128",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "ECART",
+     "pool": "0x5e247a4a3121eae13bac320d85159b36ed71ffc3",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "27808568",
+     "usdcUtilisable": "27798430",
+     "achat": "9874818443376606847",
+     "venteMemeEtat": "9741402",
+     "ecartBps": 130,
+     "perteBps": 258,
+     "pools": [
+      {
+       "pool": "0x5e247a4a3121eae13bac320d85159b36ed71ffc3",
+       "ts": 1,
+       "usdcPool": "27808568",
+       "usdcUtilisable": "27798430",
+       "ecartBps": 130,
+       "perteBps": 258,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0xbe432703851c43df6056b47cb55312696cf8cd6c",
+      "usdcPool": "31767725863"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "USDO",
+   "peg": "peggedUSD",
+   "source": "defillama:241",
+   "adr": "0xad55aebc9b8c03fc43cd9f62260391c13c23e7c0",
+   "code": 708,
+   "symbole": "USDO",
+   "nom": "OpenEden Open Dollar",
+   "decimales": 18,
+   "totalSupply": "34906032999711119953022",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "USDSM",
+   "peg": "peggedUSD",
+   "source": "defillama:411",
+   "adr": "0x26c358f7c5fedb20a6ddef108cd91efb6b8da0cb",
+   "code": 1129,
+   "symbole": "USDSM",
+   "nom": "USDSM",
+   "decimales": 18,
+   "totalSupply": "116820833000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "eUSD",
+   "peg": "peggedUSD",
+   "source": "defillama:416",
+   "adr": "0x14913815bcfde78baead2111f463d038ac9c2949",
+   "code": 237,
+   "symbole": "eUSD",
+   "nom": "eUSD",
+   "decimales": 6,
+   "totalSupply": "2000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "USDz",
+   "peg": "peggedUSD",
+   "source": "defillama:202",
+   "adr": "0x04d5ddf5f3a8939889f11e97f8c4bb48317f1938",
+   "code": 12776,
+   "symbole": "USDz",
+   "nom": "USDz",
+   "decimales": 18,
+   "totalSupply": "6698306006183810000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0x254efea457150dac5e4f843b170ceaea82304b88",
+      "usdcPool": "161"
+     },
+     {
+      "fee": 500,
+      "pool": "0xf82a5a2d9cdb8a888ca8201c46facee47539bc5e",
+      "usdcPool": "447"
+     },
+     {
+      "fee": 10000,
+      "pool": "0xebc11f9f9c233d03ca916eeb2fe0632919a3e144",
+      "usdcPool": "7"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "USDGLO",
+   "peg": "peggedUSD",
+   "source": "defillama:155",
+   "adr": "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3",
+   "code": 680,
+   "symbole": "USDGLO",
+   "nom": "Glo Dollar",
+   "decimales": 18,
+   "totalSupply": "1506362381965885876828965",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0x60135e8ec8b5075bc30e143dfe732de30e68540d",
+      "usdcPool": "211722683"
+     },
+     {
+      "fee": 500,
+      "pool": "0x6db8d9d795c053ad0fd24723320e47b2a21c3dc1",
+      "usdcPool": "20155280421"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "USDM",
+   "peg": "peggedUSD",
+   "source": "defillama:132",
+   "adr": "0x59d9356e565ab3a36dd77763fc0d87feaf85508c",
+   "code": 708,
+   "symbole": "USDM",
+   "nom": "Mountain Protocol USD",
+   "decimales": 18,
+   "totalSupply": "4247518151063317738944",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "FRNT",
+   "peg": "peggedUSD",
+   "source": "defillama:441",
+   "adr": "0x5e817f2abccb9095585d26c2a3ce234a440574fc",
+   "code": 177,
+   "symbole": "FRNT",
+   "nom": "Frontier Stable Token",
+   "decimales": 6,
+   "totalSupply": "94912000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "rUSD",
+   "peg": "peggedUSD",
+   "source": "defillama:217",
+   "adr": "0x09d4214c03d01f49544c0448dbe3a27f768f2b34",
+   "code": 12275,
+   "symbole": "rUSD",
+   "nom": "Reservoir Stablecoin",
+   "decimales": 18,
+   "totalSupply": "76410117000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "paraUSD",
+   "peg": "peggedUSD",
+   "source": "defillama:279",
+   "adr": "0x1f94d6a61973edf53252b9e61c6250f303957b9d",
+   "code": 163,
+   "symbole": "paraUSD",
+   "nom": "Parabol USD",
+   "decimales": 18,
+   "totalSupply": "2032270265402797671025",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "CASH",
+   "peg": "peggedUSD",
+   "source": "defillama:134",
+   "adr": "0xbe92452bb46485af3308e6d77786bfbe3557808d",
+   "code": 3084,
+   "symbole": "CASH",
+   "nom": "Phase Dollar",
+   "decimales": 18,
+   "totalSupply": "70619307020954564372",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "CADC",
+   "peg": "peggedCAD",
+   "source": "defillama:145",
+   "adr": "0x043eb4b75d0805c43d7c834902e335621983cf03",
+   "code": 1798,
+   "symbole": "CADC",
+   "nom": "CAD Coin",
+   "decimales": 18,
+   "totalSupply": "1515001405428000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "LIQUIDITE_SOUS_SEUIL",
+     "pool": "0xb9e7f3e179aa8e92a97ef473f20c4ad34b161843",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "2312497057",
+     "usdcUtilisable": "2291494129",
+     "achat": "13978472556918123721",
+     "venteMemeEtat": "9968734",
+     "ecartBps": 15,
+     "perteBps": 31,
+     "pools": [
+      {
+       "pool": "0xb9e7f3e179aa8e92a97ef473f20c4ad34b161843",
+       "ts": 10,
+       "usdcPool": "2312497057",
+       "usdcUtilisable": "2291494129",
+       "ecartBps": 15,
+       "perteBps": 31,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 500,
+      "pool": "0xab40b0390bbdedce8a895e20d3ceba901a2f3967",
+      "usdcPool": "1776200"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "VCHF",
+   "peg": "peggedCHF",
+   "source": "defillama:157",
+   "adr": "0x1fca74d9ef54a6ac80ffe7d3b14e76c4330fd5d8",
+   "code": 2048,
+   "symbole": "VCHF",
+   "nom": "VNX Franc",
+   "decimales": 18,
+   "totalSupply": "576618712710000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "ECART",
+     "pool": "0x241e08b3c17a727ccbf2e4a92d63aa55bc866195",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "27881628",
+     "usdcUtilisable": "27865811",
+     "achat": "8165145917451558094",
+     "venteMemeEtat": "9744958",
+     "ecartBps": 129,
+     "perteBps": 255,
+     "pools": [
+      {
+       "pool": "0x241e08b3c17a727ccbf2e4a92d63aa55bc866195",
+       "ts": 10,
+       "usdcPool": "27881628",
+       "usdcUtilisable": "27865811",
+       "ecartBps": 129,
+       "perteBps": 255,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "AUDD",
+   "peg": "peggedAUD",
+   "source": "defillama:165",
+   "adr": "0x449b3317a6d1efb1bc3ba0700c9eaa4ffff4ae65",
+   "code": 2038,
+   "symbole": "AUDD",
+   "nom": "AUDD",
+   "decimales": 6,
+   "totalSupply": "2997227870000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "ECART",
+     "pool": "0x16370aea1879ebc49bcbfafae9320774a2ae0213",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "28239418",
+     "usdcUtilisable": "28228969",
+     "achat": "14048671",
+     "venteMemeEtat": "9752098",
+     "ecartBps": 125,
+     "perteBps": 247,
+     "pools": [
+      {
+       "pool": "0x16370aea1879ebc49bcbfafae9320774a2ae0213",
+       "ts": 1,
+       "usdcPool": "28239418",
+       "usdcUtilisable": "28228969",
+       "ecartBps": 125,
+       "perteBps": 247,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "VGBP",
+   "peg": "peggedGBP",
+   "source": "defillama:292",
+   "adr": "0xaeb4bb7debd1e5e82266f7c3b5cff56b3a7bf411",
+   "code": 2048,
+   "symbole": "VGBP",
+   "nom": "VNX British Pound",
+   "decimales": 18,
+   "totalSupply": "25299320000000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "TRYB",
+   "peg": "peggedTRY",
+   "source": "defillama:300",
+   "adr": "0xfb8718a69aed7726afb3f04d2bd4bfde1bdcb294",
+   "code": 1798,
+   "symbole": "TRYB",
+   "nom": "BiLira",
+   "decimales": 6,
+   "totalSupply": "553683439851",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "tGBP",
+   "peg": "peggedGBP",
+   "source": "defillama:317",
+   "adr": "0x27f6c8289550fce67f6b50bed1f519966afe5287",
+   "code": 2739,
+   "symbole": "tGBP",
+   "nom": "tGBP",
+   "decimales": 18,
+   "totalSupply": "5401196771060000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "ECART",
+     "pool": "0xe530b3f533193d00ba65d16f19fe227779fab2fc",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "33743269",
+     "usdcUtilisable": "33720196",
+     "achat": "7386193683893302099",
+     "venteMemeEtat": "9753689",
+     "ecartBps": 125,
+     "perteBps": 246,
+     "pools": [
+      {
+       "pool": "0xe530b3f533193d00ba65d16f19fe227779fab2fc",
+       "ts": 10,
+       "usdcPool": "33743269",
+       "usdcUtilisable": "33720196",
+       "ecartBps": 125,
+       "perteBps": 246,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 500,
+      "pool": "0x181dfef9bc1b2557a7e05866aa42ff54a6db3060",
+      "usdcPool": "438370940"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "AUDM",
+   "peg": "peggedAUD",
+   "source": "defillama:334",
+   "adr": "0xeded6ae915b129b67a4ad49901518f2736427063",
+   "code": 170,
+   "symbole": "AUDM",
+   "nom": "Macropod",
+   "decimales": 18,
+   "totalSupply": "71155000000000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "LIQUIDITE_SOUS_SEUIL",
+     "pool": "0xc9c676ee81df171b55d30484ed0c2a931c45e9ab",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "9084910087",
+     "usdcUtilisable": "9034150933",
+     "achat": "14227319337189893768",
+     "venteMemeEtat": "9997027",
+     "ecartBps": 1,
+     "perteBps": 2,
+     "pools": [
+      {
+       "pool": "0xc9c676ee81df171b55d30484ed0c2a931c45e9ab",
+       "ts": 1,
+       "usdcPool": "9084910087",
+       "usdcUtilisable": "9034150933",
+       "ecartBps": 1,
+       "perteBps": 2,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "WARS",
+   "peg": "peggedARS",
+   "source": "defillama:379",
+   "adr": "0x0dc4f92879b7670e5f4e4e6e3c801d229129d90d",
+   "code": 163,
+   "symbole": "wARS",
+   "nom": "Peso Argentino",
+   "decimales": 18,
+   "totalSupply": "1684514615224049236646091612",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "WBRL",
+   "peg": "peggedREAL",
+   "source": "defillama:380",
+   "adr": "0xd76f5faf6888e24d9f04bf92a0c8b921fe4390e0",
+   "code": 163,
+   "symbole": "wBRL",
+   "nom": "Real Brasileño",
+   "decimales": 18,
+   "totalSupply": "2225531971076934744985019",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "WCLP",
+   "peg": "peggedCLP",
+   "source": "defillama:381",
+   "adr": "0x61d450a098b6a7f69fc4b98ce68198fe59768651",
+   "code": 163,
+   "symbole": "wCLP",
+   "nom": "Peso Chileno",
+   "decimales": 18,
+   "totalSupply": "5330237836186249317466801",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "WCOP",
+   "peg": "peggedCOP",
+   "source": "defillama:382",
+   "adr": "0x8a1d45e102e886510e891d2ec656a708991e2d76",
+   "code": 163,
+   "symbole": "wCOP",
+   "nom": "Peso Colombiano",
+   "decimales": 18,
+   "totalSupply": "974501851862650247646001776",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "WMXN",
+   "peg": "peggedMXN",
+   "source": "defillama:383",
+   "adr": "0x337e7456b420bd3481e7fa61fa9850343d610d34",
+   "code": 163,
+   "symbole": "wMXN",
+   "nom": "Peso Mexicano",
+   "decimales": 18,
+   "totalSupply": "5472672524166290405401492",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "WPEN",
+   "peg": "peggedPEN",
+   "source": "defillama:384",
+   "adr": "0x4f34c8b3b5fb6d98da888f0fea543d4d9c9f2ebe",
+   "code": 163,
+   "symbole": "wPEN",
+   "nom": "Sol Peruano",
+   "decimales": 18,
+   "totalSupply": "4171170000000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "CADD",
+   "peg": "peggedCAD",
+   "source": "defillama:387",
+   "adr": "0x16f93ebc5320c89efc8701577efe49d14a276a06",
+   "code": 170,
+   "symbole": "CADD",
+   "nom": "CAD Digital Inc",
+   "decimales": 18,
+   "totalSupply": "1211560490000000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "POOL_VIDE",
+     "pool": "0x1a03d2759d43c262c0fe6f2f1f6e9b6fded62de9",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "27684340",
+     "usdcUtilisable": null,
+     "achat": null,
+     "venteMemeEtat": null,
+     "ecartBps": null,
+     "perteBps": null,
+     "pools": [
+      {
+       "pool": "0x1a03d2759d43c262c0fe6f2f1f6e9b6fded62de9",
+       "ts": 10,
+       "usdcPool": "27684340",
+       "usdcUtilisable": null,
+       "ecartBps": null,
+       "perteBps": null,
+       "code": "POOL_VIDE",
+       "erreur": null
+      }
+     ]
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": true,
+     "code": null,
+     "pool": "0xd89017fe0899b0dc087d677388e5a9e5162ecad6",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "57384938135",
+     "usdcUtilisable": "9953120576",
+     "achat": "14037907572900854501",
+     "venteMemeEtat": "9989918",
+     "ecartBps": 5,
+     "perteBps": 10,
+     "pools": [
+      {
+       "pool": "0xd89017fe0899b0dc087d677388e5a9e5162ecad6",
+       "ts": 10,
+       "usdcPool": "57384938135",
+       "usdcUtilisable": "9953120576",
+       "ecartBps": 5,
+       "perteBps": 10,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "PASSE_FACTORY_NEUVE_SEULEMENT"
+  },
+  {
+   "annonce": "GBPA",
+   "peg": "peggedGBP",
+   "source": "defillama:399",
+   "adr": "0xbbe6aab0ed76e90aea0d1cd978ec231c8adcdf8b",
+   "code": 2227,
+   "symbole": "GBPA",
+   "nom": "Agant GBP",
+   "decimales": 6,
+   "totalSupply": "250010841700",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "AUDF",
+   "peg": "peggedAUD",
+   "source": "defillama:422",
+   "adr": "0xd2a530170d71a9cfe1651fb468e2b98f7ed7456b",
+   "code": 1382,
+   "symbole": "AUDF",
+   "nom": "Forte AUD",
+   "decimales": 6,
+   "totalSupply": "147745130087",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": true,
+     "code": null,
+     "pool": "0x87449c0191ad358d54d15ef7ce34e7bf569eee0c",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "25103701609",
+     "usdcUtilisable": "9904240031",
+     "achat": "14289229",
+     "venteMemeEtat": "9989818",
+     "ecartBps": 5,
+     "perteBps": 10,
+     "pools": [
+      {
+       "pool": "0x87449c0191ad358d54d15ef7ce34e7bf569eee0c",
+       "ts": 10,
+       "usdcPool": "25103701609",
+       "usdcUtilisable": "9904240031",
+       "ecartBps": 5,
+       "perteBps": 10,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "PASSE_ROUTEUR"
+  },
+  {
+   "annonce": "QCAD",
+   "peg": "peggedCAD",
+   "source": "defillama:424",
+   "adr": "0xa15705e6fc8b3e08e7253f3758de1a754baa0761",
+   "code": 1167,
+   "symbole": "QCAD",
+   "nom": "QCAD",
+   "decimales": 6,
+   "totalSupply": "0",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "GBPE",
+   "peg": "peggedGBP",
+   "source": "defillama:446",
+   "adr": "0xc4759ed641da77cbdc9fa2f37e9260a29bf7cc52",
+   "code": 163,
+   "symbole": "GBPe",
+   "nom": "Monerium GBPe",
+   "decimales": 18,
+   "totalSupply": "433950000000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "XSGD",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=XSGD",
+   "adr": "0x0a4c9cb2778ab3302996a34befcf9a8bc288c33b",
+   "code": 1496,
+   "symbole": "XSGD",
+   "nom": "XSGD",
+   "decimales": 6,
+   "totalSupply": "4185489690000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "LIQUIDITE_SOUS_SEUIL",
+     "pool": "0x08537fb017485dab8bdd9af3fb7d9cd56e98cb61",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "7742878133",
+     "usdcUtilisable": "7740126764",
+     "achat": "12777865",
+     "venteMemeEtat": "9994051",
+     "ecartBps": 2,
+     "perteBps": 5,
+     "pools": [
+      {
+       "pool": "0x08537fb017485dab8bdd9af3fb7d9cd56e98cb61",
+       "ts": 1,
+       "usdcPool": "7742878133",
+       "usdcUtilisable": "7740126764",
+       "ecartBps": 2,
+       "perteBps": 5,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 500,
+      "pool": "0xe48fea0b31cc836dbb73ca298c59e35cd68892b1",
+      "usdcPool": "3340836254"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "IDRX",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=IDRX",
+   "adr": "0x18bc5bcc660cf2b9ce3cd51a404afe1a0cbd3c22",
+   "code": 680,
+   "symbole": "IDRX",
+   "nom": "IDRX",
+   "decimales": 2,
+   "totalSupply": "1555230485629",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "VENTE_NON_COTEE",
+     "pool": "0x4a40c4d846439c26ae1bace180d1147519fb3bb4",
+     "tickSpacing": 200,
+     "cle": null,
+     "usdcPool": "0",
+     "usdcUtilisable": null,
+     "achat": "43843",
+     "venteMemeEtat": null,
+     "ecartBps": 9975,
+     "perteBps": null,
+     "pools": [
+      {
+       "pool": "0x4a40c4d846439c26ae1bace180d1147519fb3bb4",
+       "ts": 200,
+       "usdcPool": "0",
+       "usdcUtilisable": null,
+       "ecartBps": 9975,
+       "perteBps": null,
+       "code": "VENTE_NON_COTEE",
+       "erreur": null
+      }
+     ]
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0xfd473847720f0277ad6eb9ef1eb7badb365e8137",
+      "usdcPool": "4735457"
+     },
+     {
+      "fee": 10000,
+      "pool": "0x923647a8df8931531605079456cc91706cadd5c2",
+      "usdcPool": "0"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "cNGN",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=cNGN",
+   "adr": "0x46c85152bfe9f96829aa94755d9f915f9b10ef5f",
+   "code": 2196,
+   "symbole": "cNGN",
+   "nom": "cNGN",
+   "decimales": 6,
+   "totalSupply": "2118658080000777",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0x90b443c9d27629a170c11b04f90b15b99331ee97",
+      "usdcPool": "5"
+     },
+     {
+      "fee": 500,
+      "pool": "0x633059aa17c751d6328149ba3fc7c63d528218bc",
+      "usdcPool": "1"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "BRZ",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=BRZ",
+   "adr": "0xe9185ee218cae427af7b9764a011bb89fea761b4",
+   "code": 2227,
+   "symbole": "BRZ",
+   "nom": "BRZ Token",
+   "decimales": 18,
+   "totalSupply": "9200610050141990000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 3000,
+      "pool": "0x09c06386f0b3b3515996e65236785aff9148c39b",
+      "usdcPool": "14854"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "ZARP",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=ZARP",
+   "adr": "0xb755506531786c8ac63b756bab1ac387bacb0c04",
+   "code": 170,
+   "symbole": "ZARP",
+   "nom": "ZARP Stablecoin",
+   "decimales": 18,
+   "totalSupply": "15825448990000000000012000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "ECART",
+     "pool": "0xad1112d023eef4225d5e039b01f8a66169f8adda",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "28896346",
+     "usdcUtilisable": "28886418",
+     "achat": "163213650016103381759",
+     "venteMemeEtat": "9744642",
+     "ecartBps": 129,
+     "perteBps": 255,
+     "pools": [
+      {
+       "pool": "0xad1112d023eef4225d5e039b01f8a66169f8adda",
+       "ts": 10,
+       "usdcPool": "28896346",
+       "usdcUtilisable": "28886418",
+       "ecartBps": 129,
+       "perteBps": 255,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 3000,
+      "pool": "0x6cf879e5564828926aadd3755a13a55ba5946a40",
+      "usdcPool": "165502"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "KRWQ",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=KRWQ",
+   "adr": "0x370923d39f139c64813f173a1bf0b4f9ba36a24f",
+   "code": 796,
+   "symbole": "KRWQ",
+   "nom": "KRWQ",
+   "decimales": 18,
+   "totalSupply": "448841935751248000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "POOL_VIDE",
+     "pool": "0x6cdaaa70d46fb338fc009b35a6d3e8703461313c",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "5",
+     "usdcUtilisable": null,
+     "achat": null,
+     "venteMemeEtat": null,
+     "ecartBps": null,
+     "perteBps": null,
+     "pools": [
+      {
+       "pool": "0x6cdaaa70d46fb338fc009b35a6d3e8703461313c",
+       "ts": 1,
+       "usdcPool": "5",
+       "usdcUtilisable": null,
+       "ecartBps": null,
+       "perteBps": null,
+       "code": "POOL_VIDE",
+       "erreur": null
+      }
+     ]
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "ECART",
+     "pool": "0x72a8c8692b39fa2af145e4c6507053b3e12c7990",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "28203151",
+     "usdcUtilisable": "28193226",
+     "achat": "14120906232840854795645",
+     "venteMemeEtat": "9731929",
+     "ecartBps": 135,
+     "perteBps": 268,
+     "pools": [
+      {
+       "pool": "0x72a8c8692b39fa2af145e4c6507053b3e12c7990",
+       "ts": 10,
+       "usdcPool": "28203151",
+       "usdcUtilisable": "28193226",
+       "ecartBps": 135,
+       "perteBps": 268,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 500,
+      "pool": "0x63d12802866109b83aed25bc6e7a7a4a3a9f6377",
+      "usdcPool": "3"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "USDV",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=USDV",
+   "adr": "0xb719f73b4a47fa22e0fa00cedf5b7fb37f1e6866",
+   "code": 4387,
+   "symbole": "USDV",
+   "nom": "Valtorum USD",
+   "decimales": 6,
+   "totalSupply": "11000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0xa41ceb85d7776d10fab2fdd80c420a36e215bdd4",
+      "usdcPool": "363"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "frxUSD",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=frxUSD",
+   "adr": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+   "code": 1945,
+   "symbole": "frxUSD",
+   "nom": "Frax USD",
+   "decimales": 18,
+   "totalSupply": "338282420464000000000000",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "uniswap-v3": [
+     {
+      "fee": 500,
+      "pool": "0xb2d8266d21b4ca71dc4e0f600eff56fca072df4c",
+      "usdcPool": "1"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "USDT",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=USDT",
+   "adr": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+   "code": 6774,
+   "symbole": "USDT",
+   "nom": "Tether USD",
+   "decimales": 6,
+   "totalSupply": "29439128429347",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": true,
+     "code": null,
+     "pool": "0xd448990883e3bf9cdd8ebca368a3ecf9d629aaf7",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "62856678529",
+     "usdcUtilisable": "9999900138",
+     "achat": "10020764",
+     "venteMemeEtat": "9999838",
+     "ecartBps": 0,
+     "perteBps": 0,
+     "pools": [
+      {
+       "pool": "0xd448990883e3bf9cdd8ebca368a3ecf9d629aaf7",
+       "ts": 1,
+       "usdcPool": "62856678529",
+       "usdcUtilisable": "9999900138",
+       "ecartBps": 0,
+       "perteBps": 0,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0xd56da2b74ba826f19015e6b7dd9dae1903e85da1",
+      "usdcPool": "58159528934"
+     },
+     {
+      "fee": 500,
+      "pool": "0xb7f084c7f7f1c680d08780e2b2ef4f2133db0df8",
+      "usdcPool": "62555656"
+     },
+     {
+      "fee": 3000,
+      "pool": "0x82ccd0de0293ccbd2184901a69fdc2dd8073320e",
+      "usdcPool": "532774900"
+     },
+     {
+      "fee": 10000,
+      "pool": "0x5d165468c8a6cf3d50702850ed29becb9ac9ca4d",
+      "usdcPool": "51445"
+     }
+    ]
+   },
+   "verdict": "PASSE_FACTORY_NEUVE_SEULEMENT"
+  },
+  {
+   "annonce": "USDbC",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=USDbC",
+   "adr": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+   "code": 2096,
+   "symbole": "USDbC",
+   "nom": "USD Base Coin",
+   "decimales": 6,
+   "totalSupply": "5326841951149",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "LIQUIDITE_SOUS_SEUIL",
+     "pool": "0xf2ada40abcaa2f5054cef81f9e5be4e13f48344d",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "1345456468",
+     "usdcUtilisable": "1344933992",
+     "achat": "10001161",
+     "venteMemeEtat": "9999891",
+     "ecartBps": 0,
+     "perteBps": 0,
+     "pools": [
+      {
+       "pool": "0xf2ada40abcaa2f5054cef81f9e5be4e13f48344d",
+       "ts": 1,
+       "usdcPool": "1345456468",
+       "usdcUtilisable": "1344933992",
+       "ecartBps": 0,
+       "perteBps": 0,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0x06959273e9a65433de71f5a452d529544e07ddd0",
+      "usdcPool": "3541143290"
+     },
+     {
+      "fee": 500,
+      "pool": "0x92722287d2819012dd8ec07b4e426ac00dd11103",
+      "usdcPool": "1249893330"
+     },
+     {
+      "fee": 3000,
+      "pool": "0xc986bd739c99f4fda7b82a8bcb49cb159bf5c993",
+      "usdcPool": "21361317"
+     },
+     {
+      "fee": 10000,
+      "pool": "0x4fefc6745c3cbdc8069f6133f61a0951467ddf3f",
+      "usdcPool": "1911212"
+     }
+    ]
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "MXNB",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=MXNB",
+   "adr": "0xf197ffc28c23e0309b5559e7a166f2c6164c80aa",
+   "code": 1496,
+   "symbole": "MXNB",
+   "nom": "MXNB",
+   "decimales": 6,
+   "totalSupply": "5624567528541",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "LIQUIDITE_SOUS_SEUIL",
+     "pool": "0x82312ae1bbf1864ce00dfceb974a10e0d6245b48",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "94538678",
+     "usdcUtilisable": "15822015",
+     "achat": "187126018",
+     "venteMemeEtat": "9982858",
+     "ecartBps": 8,
+     "perteBps": 17,
+     "pools": [
+      {
+       "pool": "0x82312ae1bbf1864ce00dfceb974a10e0d6245b48",
+       "ts": 10,
+       "usdcPool": "94538678",
+       "usdcUtilisable": "15822015",
+       "ecartBps": 8,
+       "perteBps": 17,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": true,
+     "code": null,
+     "pool": "0x4d37a3470a837dfb8bef2386f09dbd51bea6cfd3",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "13473538883",
+     "usdcUtilisable": "9993219770",
+     "achat": "186881476",
+     "venteMemeEtat": "9989998",
+     "ecartBps": 5,
+     "perteBps": 10,
+     "pools": [
+      {
+       "pool": "0x4d37a3470a837dfb8bef2386f09dbd51bea6cfd3",
+       "ts": 10,
+       "usdcPool": "13473538883",
+       "usdcUtilisable": "9993219770",
+       "ecartBps": 5,
+       "perteBps": 10,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "PASSE_FACTORY_NEUVE_SEULEMENT"
+  },
+  {
+   "annonce": "BRLA",
+   "peg": "dexscreener",
+   "source": "dexscreener:q=BRLA",
+   "adr": "0xfcb34c47f850f452c15ea1b84d51231c38a61783",
+   "code": 1101,
+   "symbole": "BRLA",
+   "nom": "BRLA Token",
+   "decimales": 18,
+   "totalSupply": "264760340335909562363251",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": false,
+     "code": "SANS_POOL",
+     "pool": null,
+     "pools": []
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": false,
+     "code": "ECART",
+     "pool": "0x5e4ac6694047b8b757f499a64da01c56eab9d779",
+     "tickSpacing": 10,
+     "cle": null,
+     "usdcPool": "10229837",
+     "usdcUtilisable": "10218257",
+     "achat": "52117152563741319592",
+     "venteMemeEtat": "5284364",
+     "ecartBps": 140,
+     "perteBps": 4715,
+     "pools": [
+      {
+       "pool": "0x5e4ac6694047b8b757f499a64da01c56eab9d779",
+       "ts": 10,
+       "usdcPool": "10229837",
+       "usdcUtilisable": "10218257",
+       "ecartBps": 140,
+       "perteBps": 4715,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": []
+   },
+   "verdict": "NE_PASSE_PAS"
+  },
+  {
+   "annonce": "EURC",
+   "peg": "peggedEUR(reference)",
+   "source": "dexscreener:q=EURC",
+   "adr": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+   "code": 1798,
+   "symbole": "EURC",
+   "nom": "EURC",
+   "decimales": 6,
+   "totalSupply": "49376431464528",
+   "symboleDifferent": false,
+   "venues": {
+    "aero-old": {
+     "venue": "aero-old",
+     "etat": "OK",
+     "passe": true,
+     "code": null,
+     "pool": "0xf39b7c34be147f5dc1bc374f27af2e9f03ad3113",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "29443382955",
+     "usdcUtilisable": "9992393433",
+     "achat": "8918843",
+     "venteMemeEtat": "9998526",
+     "ecartBps": 0,
+     "perteBps": 1,
+     "pools": [
+      {
+       "pool": "0xf39b7c34be147f5dc1bc374f27af2e9f03ad3113",
+       "ts": 1,
+       "usdcPool": "29443382955",
+       "usdcUtilisable": "9992393433",
+       "ecartBps": 0,
+       "perteBps": 1,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "aero-new": {
+     "venue": "aero-new",
+     "etat": "OK",
+     "passe": true,
+     "code": null,
+     "pool": "0x6eaec4f69c92bd16a4b018ceb6fe7a446a113598",
+     "tickSpacing": 1,
+     "cle": null,
+     "usdcPool": "225835437860",
+     "usdcUtilisable": "9999027115",
+     "achat": "8919022",
+     "venteMemeEtat": "9998537",
+     "ecartBps": 0,
+     "perteBps": 1,
+     "pools": [
+      {
+       "pool": "0x6eaec4f69c92bd16a4b018ceb6fe7a446a113598",
+       "ts": 1,
+       "usdcPool": "225835437860",
+       "usdcUtilisable": "9999027115",
+       "ecartBps": 0,
+       "perteBps": 1,
+       "code": null,
+       "erreur": null
+      },
+      {
+       "pool": "0xdc65a7a69e1d647b12e87de6c1c7a84db80c0703",
+       "ts": 50,
+       "usdcPool": "98893227206",
+       "usdcUtilisable": "9996398337",
+       "ecartBps": 0,
+       "perteBps": 1,
+       "code": null,
+       "erreur": null
+      }
+     ]
+    },
+    "uniswap-v3": [
+     {
+      "fee": 100,
+      "pool": "0x6a1c74e023fe2619516f89408e9d8c541e4e3eef",
+      "usdcPool": "64167"
+     },
+     {
+      "fee": 500,
+      "pool": "0x7279c08a36333e12c3fc81747963264c100d66fb",
+      "usdcPool": "39643902733"
+     },
+     {
+      "fee": 3000,
+      "pool": "0x03d8219070e54a55a9ce60889ead2ffd18eb6aa9",
+      "usdcPool": "2558471627"
+     },
+     {
+      "fee": 10000,
+      "pool": "0xd99fad95b3d1235b403ee26c5b16531d9aa8e576",
+      "usdcPool": "15146536"
+     }
+    ]
+   },
+   "verdict": "PASSE_ROUTEUR"
+  }
+ ]
+}

@@ -7,7 +7,7 @@
  *     l importe et la re-exporte : la page et le serveur lisent LA MEME fonction, pas deux copies qui divergeraient.
  * ⛔ CE MODULE N OFFRE RIEN QUE LE SERVEUR REFUSERAIT : `devisesPivotVersBloc` ne rend que les devises pour lesquelles
  *   `entreeVersBloc` dit PIVOT_AERODROME — la branche exacte que planRail construit. */
-import { DEVISES_VIA_USDC_AERODROME, POOLS_PIVOTS_AERODROME } from './plan-franchissement.js';
+import { DEVISES_VIA_USDC_AERODROME, POOLS_PIVOTS_AERODROME, DEVISES_BANNIES } from './plan-franchissement.js';
 import { DEVISES_BASE } from './paires.js';
 import { USDC_BASE } from './frais-creation.js';
 
@@ -24,6 +24,8 @@ const OUSD = bas((DEVISES_BASE.find((d) => d.symbole === 'OUSD') || {}).adr);
  *  - REFUS : le reste (la phrase dit avec quoi payer). */
 export function entreeVersBloc({ de, quote }) {
   const d = bas(de), q = bas(quote);
+  /* ⛔⛔ 2026-10-26 (Phil) : une devise bannie (EURC) ne paie rien — meme un block qui serait cote en elle */
+  if (DEVISES_BANNIES.has(d) || DEVISES_BANNIES.has(q)) return 'REFUS';
   if (d === q) return 'DIRECT';
   const coteeEthOuUsdc = q === ETH || q === USDC;
   if ((d === USDC || d === OUSD) && coteeEthOuUsdc) return 'V4';
@@ -40,7 +42,7 @@ export function devisesPivotVersBloc(quote) {
   for (const [k, v] of POOLS_PIVOTS_AERODROME) {
     const adr = k.split('|').find((t) => t !== USDC);
     const symbole = String((v && v.symbole) || '').split('/')[1] || null;
-    if (!/^0x[0-9a-f]{40}$/.test(String(adr)) || !symbole) continue;
+    if (!/^0x[0-9a-f]{40}$/.test(String(adr)) || !symbole || DEVISES_BANNIES.has(adr)) continue;
     if (entreeVersBloc({ de: adr, quote }) !== 'PIVOT_AERODROME') continue;
     out.push({ adr, symbole });
   }

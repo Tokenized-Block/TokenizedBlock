@@ -19,12 +19,13 @@
  *   ETH > ACTION, USDC > ACTION (pool Aerodrome mesuree)     planAchatEthAction, planAerodromeSegment
  *   ETH|USDC > ACTION, ACTION > USDC (pool v4 USDC LUE)       planEchange / sautsDepuisChemin + planEchangeMultiSauts (2026-10-03)
  *   ETH > BLOCK cote en USDC                                  sautsDepuisChemin + planEchangeMultiSauts (ETH -> USDC -> block, 2026-10-26)
- *   WETH|cbBTC|EURC > BLOCK cote en ETH ou USDC               lotPivotUsdcVersBloc : Aerodrome X -> USDC puis v4 (lot de la 4 ter, 2026-10-26)
- *   WETH|cbBTC|EURC > USDC                                    planAerodromeSegment, pool epinglee, minimum du devis (2026-10-26) */
+ *   WETH|cbBTC|AUDF > BLOCK cote en ETH ou USDC               lotPivotUsdcVersBloc : Aerodrome X -> USDC puis v4 (lot de la 4 ter, 2026-10-26)
+ *   WETH|cbBTC|AUDF > USDC                                    planAerodromeSegment, pool epinglee, minimum du devis (2026-10-26)
+ *   EURC (BANNI, Phil 2026-10-26) en entree ou en sortie      REFUSE nomme, avant toute lecture (DEVISES_BANNIES) */
 import { planEchange, planEchangeMultiSauts, meilleureClePourMontant, meilleureClePourBloc } from './echange.js';
 import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
-import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME, POOLS_PIVOTS_AERODROME } from './plan-franchissement.js';
+import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME, POOLS_PIVOTS_AERODROME, phraseDeviseBannie } from './plan-franchissement.js';
 import { devisSaut } from './multipool.js';
 import { entreeVersBloc } from './entree-vers-bloc.js';
 import { FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
@@ -376,6 +377,9 @@ async function planRailBrut(q, deps) {
   if (!ADR.test(compte)) return normaliser('?', { etat: 'REFUSE', pourquoi: 'compte (the wallet that will sign) is required' });
   if (m <= 0n) return normaliser('?', { etat: 'REFUSE', pourquoi: 'montant must be a positive integer in raw units of the token paid' });
   if (de === vers) return normaliser('?', { etat: 'REFUSE', pourquoi: 'de and vers are the same token' });
+  /* ⛔⛔ 2026-10-26 (Phil : « banni EURC pour l instant ») : une devise bannie ne se paie ni ne se recoit — refus NOMME, avant toute
+   *   lecture (aucune route, meme une adresse tapee a la main, ne la touche) */
+  { const ban = phraseDeviseBannie(de) || phraseDeviseBannie(vers); if (ban) return normaliser('?', { etat: 'REFUSE', pourquoi: ban }); }
   const nd = natureJeton(de), nv = natureJeton(vers), route = nd + '>' + nv;
   /* USDC + les 12 actions de la table MESUREE (pools Aerodrome profondes, >= 360 k$ d USDC lus le 2026-10-03) : un frais pris
    * dans l une d elles se revend. Toute autre devise reste refusee cote serveur (l app, elle, lit prix + liquidite). */

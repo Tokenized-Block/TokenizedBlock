@@ -1,4 +1,7 @@
-/* banc-devises-pivot-vers-bloc-fork-20261026.mjs — GAPS 4 et 7 (2026-10-26) : EURC, cbBTC, WETH PAIENT UN BLOCK, et ETH paie un block
+/* ⛔⛔ 2026-10-26 (soir) : EURC est BANNI (Phil) et le block de test est UNIT, plus IB022 — ce banc est REMPLACE par
+ *   banc-pivot-audf-unit-fork-20261026.mjs (AUDF, WETH, cbBTC -> UNIT ; AUDF -> SSTR ; repli ; EURC refuse). Garde pour l historique :
+ *   relance tel quel, il ROUGIT sur EURC (« les trois devises pivot »), c est attendu.
+ * banc-devises-pivot-vers-bloc-fork-20261026.mjs — GAPS 4 et 7 (2026-10-26) : EURC, cbBTC, WETH PAIENT UN BLOCK, et ETH paie un block
  *   cote en USDC. Route : X -> USDC sur la pool Aerodrome EPINGLEE (POOLS_PIVOTS_AERODROME : approbation exacte, devis du quoteur CL,
  *   minimum), puis USDC -> (ETH ->) block sur Uniswap v4 — le MEME lot que la 4 ter (action Aerodrome -> block), le meme frais.
  * AFFIRME sur un fork de Base (anvil, compte usurpe, fork DEDIE) :

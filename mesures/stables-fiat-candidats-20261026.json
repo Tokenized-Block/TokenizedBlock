@@ -1,0 +1,266 @@
+[
+ {
+  "symbole": "cgUSD",
+  "peg": "peggedUSD",
+  "adr": "0xca72827a3d211cfd8f6b00ac98824872b72cab49",
+  "source": "defillama:166"
+ },
+ {
+  "symbole": "AID",
+  "peg": "peggedUSD",
+  "adr": "0x18f52b3fb465118731d9e0d276d4eb3599d57596",
+  "source": "defillama:353"
+ },
+ {
+  "symbole": "SBC",
+  "peg": "peggedUSD",
+  "adr": "0xfdcc3dd6671eab0709a4c0f3f53de9a333d80798",
+  "source": "defillama:324"
+ },
+ {
+  "symbole": "USDO",
+  "peg": "peggedUSD",
+  "adr": "0xad55aebc9b8c03fc43cd9f62260391c13c23e7c0",
+  "source": "defillama:241"
+ },
+ {
+  "symbole": "USDSM",
+  "peg": "peggedUSD",
+  "adr": "0x26c358f7c5fedb20a6ddef108cd91efb6b8da0cb",
+  "source": "defillama:411"
+ },
+ {
+  "symbole": "eUSD",
+  "peg": "peggedUSD",
+  "adr": "0x14913815bcfde78baead2111f463d038ac9c2949",
+  "source": "defillama:416"
+ },
+ {
+  "symbole": "USDz",
+  "peg": "peggedUSD",
+  "adr": "0x04d5ddf5f3a8939889f11e97f8c4bb48317f1938",
+  "source": "defillama:202"
+ },
+ {
+  "symbole": "USDGLO",
+  "peg": "peggedUSD",
+  "adr": "0x4f604735c1cf31399c6e711d5962b2b3e0225ad3",
+  "source": "defillama:155"
+ },
+ {
+  "symbole": "USDM",
+  "peg": "peggedUSD",
+  "adr": "0x59d9356e565ab3a36dd77763fc0d87feaf85508c",
+  "source": "defillama:132"
+ },
+ {
+  "symbole": "FRNT",
+  "peg": "peggedUSD",
+  "adr": "0x5e817f2abccb9095585d26c2a3ce234a440574fc",
+  "source": "defillama:441"
+ },
+ {
+  "symbole": "rUSD",
+  "peg": "peggedUSD",
+  "adr": "0x09d4214c03d01f49544c0448dbe3a27f768f2b34",
+  "source": "defillama:217"
+ },
+ {
+  "symbole": "paraUSD",
+  "peg": "peggedUSD",
+  "adr": "0x1f94d6a61973edf53252b9e61c6250f303957b9d",
+  "source": "defillama:279"
+ },
+ {
+  "symbole": "CASH",
+  "peg": "peggedUSD",
+  "adr": "0xbe92452bb46485af3308e6d77786bfbe3557808d",
+  "source": "defillama:134"
+ },
+ {
+  "symbole": "CADC",
+  "peg": "peggedCAD",
+  "adr": "0x043eb4b75d0805c43d7c834902e335621983cf03",
+  "source": "defillama:145"
+ },
+ {
+  "symbole": "VCHF",
+  "peg": "peggedCHF",
+  "adr": "0x1fca74d9ef54a6ac80ffe7d3b14e76c4330fd5d8",
+  "source": "defillama:157"
+ },
+ {
+  "symbole": "AUDD",
+  "peg": "peggedAUD",
+  "adr": "0x449b3317a6d1efb1bc3ba0700c9eaa4ffff4ae65",
+  "source": "defillama:165"
+ },
+ {
+  "symbole": "VGBP",
+  "peg": "peggedGBP",
+  "adr": "0xaeb4bb7debd1e5e82266f7c3b5cff56b3a7bf411",
+  "source": "defillama:292"
+ },
+ {
+  "symbole": "TRYB",
+  "peg": "peggedTRY",
+  "adr": "0xfb8718a69aed7726afb3f04d2bd4bfde1bdcb294",
+  "source": "defillama:300"
+ },
+ {
+  "symbole": "tGBP",
+  "peg": "peggedGBP",
+  "adr": "0x27f6c8289550fce67f6b50bed1f519966afe5287",
+  "source": "defillama:317"
+ },
+ {
+  "symbole": "AUDM",
+  "peg": "peggedAUD",
+  "adr": "0xeded6ae915b129b67a4ad49901518f2736427063",
+  "source": "defillama:334"
+ },
+ {
+  "symbole": "WARS",
+  "peg": "peggedARS",
+  "adr": "0x0dc4f92879b7670e5f4e4e6e3c801d229129d90d",
+  "source": "defillama:379"
+ },
+ {
+  "symbole": "WBRL",
+  "peg": "peggedREAL",
+  "adr": "0xd76f5faf6888e24d9f04bf92a0c8b921fe4390e0",
+  "source": "defillama:380"
+ },
+ {
+  "symbole": "WCLP",
+  "peg": "peggedCLP",
+  "adr": "0x61d450a098b6a7f69fc4b98ce68198fe59768651",
+  "source": "defillama:381"
+ },
+ {
+  "symbole": "WCOP",
+  "peg": "peggedCOP",
+  "adr": "0x8a1d45e102e886510e891d2ec656a708991e2d76",
+  "source": "defillama:382"
+ },
+ {
+  "symbole": "WMXN",
+  "peg": "peggedMXN",
+  "adr": "0x337e7456b420bd3481e7fa61fa9850343d610d34",
+  "source": "defillama:383"
+ },
+ {
+  "symbole": "WPEN",
+  "peg": "peggedPEN",
+  "adr": "0x4f34c8b3b5fb6d98da888f0fea543d4d9c9f2ebe",
+  "source": "defillama:384"
+ },
+ {
+  "symbole": "CADD",
+  "peg": "peggedCAD",
+  "adr": "0x16f93ebc5320c89efc8701577efe49d14a276a06",
+  "source": "defillama:387"
+ },
+ {
+  "symbole": "GBPA",
+  "peg": "peggedGBP",
+  "adr": "0xbbe6aab0ed76e90aea0d1cd978ec231c8adcdf8b",
+  "source": "defillama:399"
+ },
+ {
+  "symbole": "AUDF",
+  "peg": "peggedAUD",
+  "adr": "0xd2a530170d71a9cfe1651fb468e2b98f7ed7456b",
+  "source": "defillama:422"
+ },
+ {
+  "symbole": "QCAD",
+  "peg": "peggedCAD",
+  "adr": "0xa15705e6fc8b3e08e7253f3758de1a754baa0761",
+  "source": "defillama:424"
+ },
+ {
+  "symbole": "GBPE",
+  "peg": "peggedGBP",
+  "adr": "0xc4759ed641da77cbdc9fa2f37e9260a29bf7cc52",
+  "source": "defillama:446"
+ },
+ {
+  "symbole": "XSGD",
+  "peg": "dexscreener",
+  "adr": "0x0a4c9cb2778ab3302996a34befcf9a8bc288c33b",
+  "source": "dexscreener:q=XSGD"
+ },
+ {
+  "symbole": "IDRX",
+  "peg": "dexscreener",
+  "adr": "0x18bc5bcc660cf2b9ce3cd51a404afe1a0cbd3c22",
+  "source": "dexscreener:q=IDRX"
+ },
+ {
+  "symbole": "cNGN",
+  "peg": "dexscreener",
+  "adr": "0x46c85152bfe9f96829aa94755d9f915f9b10ef5f",
+  "source": "dexscreener:q=cNGN"
+ },
+ {
+  "symbole": "BRZ",
+  "peg": "dexscreener",
+  "adr": "0xe9185ee218cae427af7b9764a011bb89fea761b4",
+  "source": "dexscreener:q=BRZ"
+ },
+ {
+  "symbole": "ZARP",
+  "peg": "dexscreener",
+  "adr": "0xb755506531786c8ac63b756bab1ac387bacb0c04",
+  "source": "dexscreener:q=ZARP"
+ },
+ {
+  "symbole": "KRWQ",
+  "peg": "dexscreener",
+  "adr": "0x370923d39f139c64813f173a1bf0b4f9ba36a24f",
+  "source": "dexscreener:q=KRWQ"
+ },
+ {
+  "symbole": "USDV",
+  "peg": "dexscreener",
+  "adr": "0xb719f73b4a47fa22e0fa00cedf5b7fb37f1e6866",
+  "source": "dexscreener:q=USDV"
+ },
+ {
+  "symbole": "frxUSD",
+  "peg": "dexscreener",
+  "adr": "0xe5020a6d073a794b6e7f05678707de47986fb0b6",
+  "source": "dexscreener:q=frxUSD"
+ },
+ {
+  "symbole": "USDT",
+  "peg": "dexscreener",
+  "adr": "0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+  "source": "dexscreener:q=USDT"
+ },
+ {
+  "symbole": "USDbC",
+  "peg": "dexscreener",
+  "adr": "0xd9aaec86b65d86f6a7b5b1b0c42ffa531710b6ca",
+  "source": "dexscreener:q=USDbC"
+ },
+ {
+  "symbole": "MXNB",
+  "peg": "dexscreener",
+  "adr": "0xf197ffc28c23e0309b5559e7a166f2c6164c80aa",
+  "source": "dexscreener:q=MXNB"
+ },
+ {
+  "symbole": "BRLA",
+  "peg": "dexscreener",
+  "adr": "0xfcb34c47f850f452c15ea1b84d51231c38a61783",
+  "source": "dexscreener:q=BRLA"
+ },
+ {
+  "symbole": "EURC",
+  "peg": "peggedEUR(reference)",
+  "adr": "0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42",
+  "source": "dexscreener:q=EURC"
+ }
+]

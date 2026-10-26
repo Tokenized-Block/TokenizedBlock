@@ -14,8 +14,10 @@ const [AMZ, INFO] = [...POOLS_ACTIONS_AERODROME].find(([, v]) => v.symbole === '
 const X = {
   WETH: { a: '0x4200000000000000000000000000000000000006', pool: '0x3fe04a59ebd38cf06080a6f60a98d124eb59392a', ts: 50, m: 10n ** 17n },
   cbBTC: { a: '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf', pool: '0x160d7e9d948b16c163332a277b393c288408eb12', ts: 50, m: 10n ** 5n },
-  EURC: { a: '0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42', pool: '0xf39b7c34be147f5dc1bc374f27af2e9f03ad3113', ts: 1, m: 100n * 10n ** 6n },
+  /* 2026-10-26 : EURC BANNI (Phil) — remplace par AUDF, la devise pivot mesuree du jour (plan-franchissement.js, meme mecanisme, 6 dec) */
+  AUDF: { a: '0xd2a530170d71a9cfe1651fb468e2b98f7ed7456b', pool: '0x87449c0191ad358d54d15ef7ce34e7bf569eee0c', ts: 10, m: 100n * 10n ** 6n },
 };
+const EURC_BANNI = '0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42';
 const TIERCE = '0x7e7e000000000000000000000000000000000100', AUTRE = '0x9999000000000000000000000000000000000009';
 const COMPTE = '0x00000000000000000000000000000000c0ffee77';
 const Q96 = 2n ** 96n;
@@ -58,8 +60,8 @@ for (const [s, x] of Object.entries(X)) {
     const rpc = lecteur({ x });
     const r = await plan(rpc, de, vers, m);
     /* ⛔ garde Zero 1 F-c6 (calldata-aerodrome.js) : notre frais n est jamais pris dans un jeton hors ETH/USDC/devise connue/action.
-     *   EURC n y est pas : la VENTE action -> EURC reste un refus NOMME (decision de Phil, pas elargie ici) ; l ACHAT paie le frais en action. */
-    if (s === 'EURC' && sens === 'vente') { ok(r.etat === 'REFUSE' && /fee would be taken in the output token/.test(r.pourquoi || ''), 'EURC vente : refus NOMME (frais jamais pris en EURC) (' + r.etat + ')'); continue; }
+     *   AUDF n y est pas : la VENTE action -> AUDF reste un refus NOMME (comme EURC avant lui) ; l ACHAT paie le frais en action. */
+    if (s === 'AUDF' && sens === 'vente') { ok(r.etat === 'REFUSE' && /fee would be taken in the output token/.test(r.pourquoi || ''), 'AUDF vente : refus NOMME (frais jamais pris en AUDF) (' + r.etat + ')'); continue; }
     const res = r && r.resume || {};
     ok(r.etat === 'PRET' && rpc.vus.length > 0 && rpc.vus.every((p) => pools(x).has(p)) && Array.isArray(rpc.sim) && rpc.sim.length === 2,
       s + ' ' + sens + ' : PRET, sur les DEUX pools mesurees seulement (jamais la tierce), plan simule approve + 1 swap (' + r.etat + ' ' + (r.pourquoi || '') + ')');
@@ -69,6 +71,14 @@ for (const [s, x] of Object.entries(X)) {
     const ra = await plan(lecteur({ x, pivotAutre: true }), de, vers, m);
     ok(ra.etat !== 'PRET', s + ' ' + sens + ' : la fabrique ne rend plus la pool mesuree X/USDC -> pas PRET (' + ra.etat + ')');
   }
+}
+/* 2026-10-26 : EURC banni — ni l achat ni la vente d une action contre EURC ne lisent la chaine ; le refus le nomme */
+for (const [de, vers] of [[EURC_BANNI, AMZ], [AMZ, EURC_BANNI]]) {
+  const rpc = lecteur({ x: X.AUDF });
+  let lu = 0; const compte = async (m, p) => { lu += 1; return rpc(m, p); };
+  const r = await plan(compte, de, vers, 100n * 10n ** 6n);
+  ok(r.etat === 'REFUSE' && /EURC is not offered for now/.test(r.pourquoi || '') && r.aSigner.length === 0 && lu === 0,
+    'EURC ' + (de === EURC_BANNI ? 'achat' : 'vente') + ' : REFUSE nomme, 0 lecture, rien a signer (' + r.etat + ', ' + lu + ' lectures)');
 }
 console.log(n - ko + ' ok / ' + ko + ' KO (' + n + ' assertions)');
 process.exit(ko ? 1 : 0);

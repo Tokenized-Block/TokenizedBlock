@@ -66,10 +66,31 @@ export const POOLS_PIVOTS_AERODROME = new Map([
    *   cbBTC (0xcbb7c000..., symbol cbBTC, 8 dec) ts 50 0x160d7e9d... = 3 217 382 USDC / 35,3 cbBTC (ts 1 : 159 114, ts 10 : 747) ;
    *   EURC (0x60a3e35c..., symbol EURC, 6 dec - adresse NON recoupee avec Circle) ts 1 0xf39b7c34... = 97 473 USDC / 291 328 EURC, seule pool. */
   [[bas(USDC_BASE), '0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf'].sort().join('|'), { symbole: 'USDC/cbBTC', pool: '0x160d7e9d948b16c163332a277b393c288408eb12', tickSpacing: 50, usdcMesure: 3217382 }],
-  [[bas(USDC_BASE), '0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42'].sort().join('|'), { symbole: 'USDC/EURC', pool: '0xf39b7c34be147f5dc1bc374f27af2e9f03ad3113', tickSpacing: 1, usdcMesure: 97473 }],
+  /* ⛔⛔ 2026-10-26 (decision de Phil : « banni EURC pour l instant ») : la ligne USDC/EURC (pool 0xf39b7c34…, ts 1) est RETIREE de
+   *   cette table — donc de « Pay with », des routes pivot du serveur (4 quater, 4 quinquies, route 1) et de DEVISES_VIA_USDC_AERODROME.
+   *   DEVISES_BANNIES (plus bas) la refuse en plus, nommee, avant toute lecture : une adresse tapee a la main ne passe pas non plus. */
+  /* 2026-10-26 (stablecoins adosses a une monnaie autre que USD/EUR, mesure-stables-fiat-20261026.mjs, bloc 53 106 990, publicnode, lecture
+   *   seule ; 44 candidats lus de DefiLlama et DexScreener puis RELUS sur la chaine — mesures/stables-fiat-20261026.json) : un SEUL passe la
+   *   regle des actions (liquidite-actions.js REGLES) sur la factory de notre routeur : AUDF (« Forte AUD », 6 dec, offre 147 745 AUDF) —
+   *   ts 10, 25 104 USDC dans la pool, 9 904 USDC utilisables (seuil 9 800), ecart d achat 5 bps, aller-retour 10 bps.
+   *   ⚠️ adresse COPIEE de DefiLlama (chainConfig base) et relue (symbol AUDF), NON recoupee avec l emetteur ; la profondeur depend
+   *   d une pool de 25 k USDC : sous le seuil, le devis du plan (coteVersUsdc) et le minimum le diront, pas cette ligne. */
+  [[bas(USDC_BASE), '0xd2a530170d71a9cfe1651fb468e2b98f7ed7456b'].sort().join('|'), { symbole: 'USDC/AUDF', pool: '0x87449c0191ad358d54d15ef7ce34e7bf569eee0c', tickSpacing: 10, usdcMesure: 25104 }],
 ]);
+/** ⛔⛔ LES DEVISES BANNIES (decision de Phil, 2026-10-26) : ni payer, ni recevoir, nulle part — adresse -> symbole.
+ *   Lue par rails-api.js (refus nomme avant toute lecture), entree-vers-bloc.js (REFUS) et app.html (« Pay with », Swap du Wallet).
+ *   EURC : adresse copiee de la ligne retiree ci-dessus (lue le 2026-10-10 : symbol EURC, 6 dec). */
+export const DEVISES_BANNIES = new Map([
+  ['0x60a3e35cc302bfa44cb288bc5a4f316fdb1adb42', 'EURC'],
+]);
+/** la phrase du refus d une devise bannie (une seule, pour le serveur et la page) */
+export function phraseDeviseBannie(adr) {
+  const s = DEVISES_BANNIES.get(bas(adr));
+  return s ? s + ' is not offered for now: it cannot be paid with or received here' : null;
+}
 /** Les devises X qui rejoignent une action de la table par X -> USDC -> action (et l inverse) : celles dont la pool X/USDC est epinglee. */
-export const DEVISES_VIA_USDC_AERODROME = new Set([...POOLS_PIVOTS_AERODROME.keys()].map((k) => k.split('|').find((t) => t !== bas(USDC_BASE))));
+export const DEVISES_VIA_USDC_AERODROME = new Set([...POOLS_PIVOTS_AERODROME.keys()].map((k) => k.split('|').find((t) => t !== bas(USDC_BASE)))
+  .filter((a) => !DEVISES_BANNIES.has(a)));
 function pairePingleeOuPivot(a, b) {
   const p = pairePinglee(a, b);
   if (p) return p;
