@@ -61,6 +61,8 @@ const bcBanqueDispoDit = new Function('bcBas2', fonction('function bcBanqueDispo
 const bcBanqueProfondDit = new Function('bcBanqueDispoDit', fonction('function bcBanqueProfondDit(g) {') + '\nreturn bcBanqueProfondDit;')(bcBanqueDispoDit);
 const bcBanque = { marches: lu.marches, lu: Date.now() };
 const bcBanqueListes = new Function('bcBanque', fonction('function bcBanqueListes() {') + '\nreturn bcBanqueListes;')(bcBanque);
+/* 2026-10-26 : la carte peint aussi la ligne des frais (bcBanqueFraisDit, test-banque-frais-pret-20261026) */
+const bcBanqueFraisDit = new Function('bcBanque', fonction('function bcBanqueFraisDit(mk) {') + '\nreturn bcBanqueFraisDit;')(bcBanque);
 
 const { listes, ecartes } = bcBanqueListes();
 vu(listes.length === 9 && ecartes === 10, 'listes / ecartes : ' + listes.length + ' / ' + ecartes);
@@ -141,7 +143,7 @@ const peindreListe = async ({ p = null, etat = bcBanque } = {}) => {
   const deps = {
     document, bcEl, $: (s) => (s === '#bcBanqueMarches' ? ul : null), compte: p ? '0x' + '1'.repeat(40) : null, brainAdr: null, bcBanque: etat,
     bcBanqueLireMarches: async () => ({ ok: true }), bcBanqueDonneesPourToi: async () => p, bcBanqueListes, bcBanquePeindreResume: () => {},
-    bcPourToiDe: (mk, q) => (q ? { emprunt: 10n ** 6n, rien: false, garantie: 10n ** 8n, pret: 0n } : null), bcBanqueChiffres, bcPct, bcBanqueGainDit,
+    bcPourToiDe: (mk, q) => (q ? { emprunt: 10n ** 6n, rien: false, garantie: 10n ** 8n, pret: 0n } : null), bcBanqueChiffres, bcPct, bcBanqueGainDit, bcBanqueFraisDit,
     bcBanqueGrouper, bcBanqueDispoDit, bcBanqueProfondDit, bcOrdreChoix, bcVisage: () => new El('span'), bcPanierPeindre: () => {}, bcBanquePositions: () => {},
     bcBanquePourToi: () => {}, bcBanqueChoisir: (mk, sens) => choisis.push({ mk, sens }), choisirBrain: () => {}, bcRepeindre: () => {}, bcVue: () => {},
   };
@@ -199,8 +201,10 @@ const optionsDe = (li) => li.tous((e) => e.tag === 'button' && e.attrs.role === 
 
 /* ── (7) les appels d argent : le texte de d07afc5 ──────────────────────────────────────────────────────────────────────────── */
 const EMPREINTES = {
-  'function bcBanqueChoisir(mk, sens) {': 'f85628ee9fc5077976f92ef39977a4c0dfad2edd9172b1e544c152883e083552',
-  'async function bcBanqueProposer({': '210784297bcba122f29cd44e2cd44c9fc1e41b14db33cc502c01ec1fa6a174f6',
+  /* 2026-10-26 (frais du Lend, decision de Phil) : les DEUX empreintes changent, a dessein - le choix dit le frais du Lend, la carte du
+   *   plan dit le frais Morpho relu, le frais du Lend et « No TokenizedBlock fee » en sortie (test-banque-frais-pret-20261026) */
+  'function bcBanqueChoisir(mk, sens) {': 'd5b0666cd7da72b97584ba84ff177ac8864f59bec087aeb7c48592cbcd0f0941',
+  'async function bcBanqueProposer({': '4f34d6bcaf33bfd0a4ac6f9ef98cdb1dde9d9d85cc5c8abcf8714ba527f58ca4',
   'async function bcBanqueProposerPanier(lignes) {': '0f8f267ca19a79ea5aeff40410e74a07c03af1ae1f0004fabbd6dd226dc53ead',
   'function bcPanierPeindre(listes) {': '4d7736982e07ae3bad0c0d4e8f0e52d384b2f85a41fff7be004d95b5f8862c60',
   'function bcPanierMaj() {': '2d4b6fe734fcf9e99f20b17c7db1ceaf973d7874b7c239201e5d2549724dc5c0',

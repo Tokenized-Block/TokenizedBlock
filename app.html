@@ -27580,7 +27580,7 @@ async function bcSigner(m, appels, ligne = 'autre') {
       return { ok: false, refuse, diffusee: aEteDiffusee(r.etat), hash: r.hash || hash, hashOperation, faits: i };
     }
     /* 2026-10-25 (rapport Grok : seul le hash final « Done — 0x… » etait dit) : chaque etape confirmee dit SON hash, approbations comprises */
-    hash = r.hash; if (!c.frais) hashOperation = r.hash; bcEtape(m, r.hash ? 'Confirmed — ' + String(r.hash).slice(0, 10) + '…' + String(r.hash).slice(-4) + '.' : 'Confirmed.', 'oui');
+    hash = r.hash; if (!c.frais && !c.remiseA0) hashOperation = r.hash; bcEtape(m, r.hash ? 'Confirmed — ' + String(r.hash).slice(0, 10) + '…' + String(r.hash).slice(-4) + '.' : 'Confirmed.', 'oui');
     if (ligne) signalerPaye(r.hash, ligne); /* null = un envoi sans frais : rien a relire */
     if (ligne) lieuTicketPaye(r.hash, (t) => bcEtape(m, t, 'non')); /* D4 : la note du ticket du jour dans CE fil */
   }
@@ -30537,7 +30537,35 @@ async function bcBanqueLireMarches(force = false) {
   /* 2026-10-11 (frais de service, decision de Phil : 0,1 % de l emprunt) : le taux vient du SERVEUR (FRAIS_EMPRUNT_BPS, banque-morpho.js),
    *   la page ne le recopie pas ; absent ou illisible = null, et la page ne l annonce pas (le plan, lui, le dit toujours) */
   bcBanque.fraisBps = Number.isInteger(r.fraisEmpruntBps) && r.fraisEmpruntBps >= 0 ? r.fraisEmpruntBps : null;
+  /* 2026-10-26 (decision de Phil : le Lend paie la meme regle) : le taux du Lend, de la MEME source (FRAIS_PRET_BPS) ; non lu = null */
+  bcBanque.fraisPretBps = Number.isInteger(r.fraisPretBps) && r.fraisPretBps >= 0 ? r.fraisPretBps : null;
   return { ok: true };
+}
+/** 2026-10-26 : le frais de service du Lend sur un montant brut - MEME calcul que fraisPret (banque-morpho.js) : 0,1 % arrondi a l unite
+ *  superieure, EN PLUS du montant prete. Taux non lu = null (on ne l invente pas). */
+function bcFraisPret(m) {
+  const bps = bcBanque.fraisPretBps;
+  if (!Number.isInteger(bps) || bps < 0 || typeof m !== 'bigint') return null;
+  return m <= 0n ? 0n : (m * BigInt(bps) + 9999n) / 10000n;
+}
+/** Le plus grand pret M que ce solde paie AVEC son frais (M + frais <= solde) - MEME borne que pretMaxAvecFrais (banque-morpho.js) :
+ *  « All » et « You can lend » ne proposent jamais un montant que le plan refuserait. Taux non lu = null. */
+function bcPretMax(solde) {
+  if (typeof solde !== 'bigint' || bcFraisPret(0n) === null) return null;
+  if (solde <= 0n) return 0n;
+  return (solde * 10000n) / (10000n + BigInt(bcBanque.fraisPretBps)); /* exact : voir pretMaxAvecFrais */
+}
+/** 2026-10-26 (Phil : « colle toi au data de morpho, ajoute les bons frais ») : la ligne des FRAIS d un marche, tous LUS - le frais de
+ *  Morpho relu sur la chaine (feeMorpho, WAD : part de l interet des emprunteurs que Morpho garde ; « Earns a year » de l API est deja
+ *  apres lui), puis le notre (serveur), puis sortir = 0. Un chiffre non lu se dit « not read », jamais 0. */
+function bcBanqueFraisDit(mk) {
+  const f = String((mk && mk.feeMorpho) ?? '');
+  const morpho = /^\d+$/.test(f) ? 'Morpho keeps ' + String(Number((Number(BigInt(f) * 10000n / 10n ** 18n) / 100).toFixed(2))) + ' % of the interest (read on chain; « Earns a year » is after it)'
+    : 'Morpho\'s own fee on this market was not read';
+  const e = bcBanque.fraisBps, p = bcBanque.fraisPretBps;
+  const nous = Number.isInteger(e) && Number.isInteger(p) ? (e === p ? 'TokenizedBlock: a one-time ' + e / 100 + ' % of what you borrow or lend' : 'TokenizedBlock: a one-time ' + e / 100 + ' % to borrow, ' + p / 100 + ' % to lend')
+    : 'TokenizedBlock fee not read';
+  return 'Fees · ' + morpho + ' · ' + nous + ' · nothing to repay or withdraw.';
 }
 /** Les marches LISTES par Morpho, tries par liquidite, et le nombre ecarte - le MEME filtre pour l onglet Bank et la carte du Wallet. */
 function bcBanqueListes() {
@@ -30632,7 +30660,9 @@ function bcPeindrePourToi(el, mk, r) {
   /* sous un cent (mesure du 2026-10-11 : 110 unites brutes sur le second marche GOOGLc), « ≈ 0.00 USDC » n est pas un montant : on dit rien */
   const rien = !!r && r.emprunt !== null && r.emprunt < 10n ** BigInt(Math.max(0, Number(pr.decimales) - 2));
   const emprunt = !r || r.emprunt === null ? 'not read' : r.garantie === 0n ? 'Hold ' + g.symbole + ' first' : rien ? 'Nothing now' : '≈ ' + bcBas2(r.emprunt, pr.decimales) + ' ' + pr.symbole;
-  const pret = !r || r.pret === null ? 'not read' : r.pret === 0n ? 'No ' + pr.symbole + ' yet' : bcBas2(r.pret, pr.decimales) + ' ' + pr.symbole;
+  /* 2026-10-26 : ce que CE solde peut preter frais compris (bcPretMax) ; taux du frais non lu = le solde, comme avant */
+  const pretMax = r && typeof r.pret === 'bigint' ? bcPretMax(r.pret) : null;
+  const pret = !r || r.pret === null ? 'not read' : r.pret === 0n ? 'No ' + pr.symbole + ' yet' : bcBas2(pretMax !== null ? pretMax : r.pret, pr.decimales) + ' ' + pr.symbole;
   el.append(bcEl('div', { cls: 'bcMarcheChiffres bcPourToiChiffres' }, [
     bcEl('div', {}, [bcEl('small', { text: 'You can borrow' }), bcEl('b', { text: emprunt })]),
     bcEl('div', {}, [bcEl('small', { text: 'You can lend' }), bcEl('b', { text: pret })])]));
@@ -30759,6 +30789,7 @@ async function bcBanqueCharger(force = false) {
       bcEl('div', {}, [bcEl('small', { text: 'Borrow up to' }), bcEl('b', { text: pctLtv(c.maxPct) })])]));
     const gainDit = bcBanqueGainDit(mk); /* 2026-10-25 : un « 0.00 % » / « < 0.01 % » dit pourquoi (test-banque-taux-lus) */
     if (gainDit) li.append(bcEl('p', { cls: 'bcMarcheBas', text: gainDit }));
+    li.append(bcEl('p', { cls: 'bcMarcheBas bcFrais', text: bcBanqueFraisDit(mk) })); /* 2026-10-26 : les frais, tous lus */
     } else {
       const choix = bcEl('div', { cls: 'bcOptions', role: 'radiogroup', 'aria-label': g.options.length + ' ' + g.symbole + ' markets' });
       for (const o of g.options) {
@@ -30780,6 +30811,8 @@ async function bcBanqueCharger(force = false) {
       li.append(bcEl('p', { cls: 'bcMarcheBas', text: g.options.length + ' Morpho markets accept ' + g.symbole + ', each with its own rates and liquidation threshold — pick one:' }), choix);
       const profond = bcBanqueProfondDit(g);
       if (profond) li.append(bcEl('p', { cls: 'bcMarcheBas bcProfond', text: profond }));
+      /* 2026-10-26 : les frais du marche CHOISI (chacun a son propre frais Morpho, relu sur la chaine) */
+      li.append(bcEl('p', { cls: 'bcMarcheBas bcFrais', text: bcBanqueFraisDit(mk) }));
     }
     li.append(bcEl('div', { cls: 'bcLtv', 'aria-hidden': 'true' }, [bcEl('i', { style: 'width:' + Math.min(100, c.maxPct).toFixed(1) + '%' }),
       bcEl('em', { style: 'left:' + Math.min(100, c.liqPct).toFixed(1) + '%' })]));
@@ -30844,7 +30877,19 @@ function bcPeindreJauge(ltv, max, liq, chute = null, sym = '') {
 function bcBanqueEstimer() {
   const z = $('#bcBanqueEstim'), mk = bcBanque.choisi;
   if (!z || !mk) return;
-  if (bcBanque.sens !== 'emprunter') { bcPeindreJauge(null); z.textContent = 'Lenders earn ' + bcPct(mk.apyPret) + ' (variable). What is borrowed cannot be withdrawn until it is repaid.'; return; }
+  if (bcBanque.sens !== 'emprunter') {
+    bcPeindreJauge(null);
+    /* 2026-10-26 (decision de Phil : le Lend paie la meme regle que le Borrow) : le frais et le TOTAL qui sort du wallet, AVANT le plan -
+     *   meme calcul que fraisPret ; taux non lu = rien d annonce (le plan, lui, le dit toujours) */
+    let fraisTxt = '';
+    if (bcBanque.sens === 'preter' && !bcBanque.lendEnOusd) {
+      const decL = Number(mk.pret.decimales), v = $('#bcBanqueMontant') ? String($('#bcBanqueMontant').value || '').trim() : '';
+      const m = v && Number.isInteger(decL) ? enUnitesBrutes(v, decL) : null, f = typeof m === 'bigint' && m > 0n ? bcFraisPret(m) : null;
+      if (f !== null) fraisTxt = ' TokenizedBlock fee: ' + (bcBanque.fraisPretBps / 100) + ' % of what you lend (≈ ' + bcUnites(f, decL) + ' ' + mk.pret.symbole + '), on top — ≈ ' + bcUnites(m + f, decL) + ' ' + mk.pret.symbole + ' leaves your wallet, ' + bcUnites(m, decL) + ' ' + mk.pret.symbole + ' goes to Morpho and earns.';
+    }
+    z.textContent = 'Lenders earn ' + bcPct(mk.apyPret) + ' (variable). What is borrowed cannot be withdrawn until it is repaid.' + fraisTxt;
+    return;
+  }
   const decG = Number(mk.garantie.decimales), decP = Number(mk.pret.decimales);
   if (!mk.prixOracle || !/^\d+$/.test(mk.prixOracle) || !Number.isInteger(decG)) { bcPeindreJauge(null); z.textContent = 'The oracle price of this market was not read: no estimate. The plan reads it on chain.'; return; }
   /* 2026-10-10 (mesure locale) : enUnitesBrutes rend null pour 0 - un champ VIDE effacait toute l estimation, prix de l oracle compris
@@ -31070,7 +31115,9 @@ function bcBanqueChoisir(mk, sens) {
      *   (1 - marge) liquide - 30 % pour une marge de 70 %. Dit des le choix, avant tout montant. */
     + (sens === 'emprunter' ? '. At our maximum (' + bcBanqueChiffres(mk).maxPct.toFixed(1) + ' % of the value), a ' + (100 - Number(mk.margeBps || 7000) / 100).toFixed(0) + ' % fall of ' + mk.garantie.symbole + ' liquidates you.'
       /* 2026-10-11 (frais de service, decision de Phil) : dit AU CHOIX, avant tout montant */
-      + (Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' TokenizedBlock takes a one-time fee of ' + (bcBanque.fraisBps / 100) + ' % of what you borrow.' : '') : '');
+      + (Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' TokenizedBlock takes a one-time fee of ' + (bcBanque.fraisBps / 100) + ' % of what you borrow.' : '')
+      /* 2026-10-26 (decision de Phil : le Lend paie la meme regle) : dit AU CHOIX aussi */
+      : sens === 'preter' && Number.isInteger(bcBanque.fraisPretBps) && bcBanque.fraisPretBps > 0 ? '. TokenizedBlock takes a one-time fee of ' + (bcBanque.fraisPretBps / 100) + ' % of what you lend, on top of it.' : '');
   $('#bcBanqueNote').textContent = '';
   $('#bcBanqueFiat').hidden = !(sens === 'preter' && mk.pret.symbole === 'USDC');
   /* 2026-10-11 (Phil, capture : « toujours pas de menu deroulant ») : en Lend sur un marche USDC, la devise se CHOISIT - USDC, ou OUSD
@@ -31223,10 +31270,13 @@ function bcBanquePuces(mk, r, soldeG) {
       choix.push({ nom, m, brutG: typeof soldeG === 'bigint' ? soldeG : null, sous: chute !== null ? 'sold if ' + sym + ' falls ' + chute.toFixed(1) + ' %' : '', /* meme arrondi que l estimation (mesure : « 51 % » ici, « 51.5 % » la-bas) */
         titre: 'Borrow ' + bcBas2(m, decP) + ' ' + mk.pret.symbole + (chute !== null ? ': your ' + sym + ' would be sold to repay the loan if its price fell ' + chute.toFixed(1) + ' %' : '') + '. Fills the form; nothing is sent.' });
     }
-  } else if (bcBanque.sens === 'preter' && r.pret !== null && r.pret > 0n) {
+  } else if (bcBanque.sens === 'preter' && r.pret !== null && r.pret > 0n && bcPretMax(r.pret) !== null) {
+    /* 2026-10-26 : « All » = le plus grand pret que le solde paie AVEC le frais (bcPretMax) - tout le solde serait refuse par le plan */
+    const max = bcPretMax(r.pret);
     for (const [nom, k] of [['A quarter', 25n], ['Half', 50n], ['All', 100n]]) {
-      const m = k === 100n ? r.pret : ((r.pret * k) / 100n / cent) * cent; if (m <= 0n) continue;
-      choix.push({ nom, m, brutG: null, sous: '', titre: 'Lend ' + bcBas2(m, decP) + ' ' + mk.pret.symbole + '. Fills the form; nothing is sent.' });
+      const m = k === 100n ? max : ((max * k) / 100n / cent) * cent; if (m <= 0n) continue;
+      const f = bcFraisPret(m);
+      choix.push({ nom, m, brutG: null, sous: '', titre: 'Lend ' + bcUnites(m, decP) + ' ' + mk.pret.symbole + ' + ' + bcUnites(f, decP) + ' TokenizedBlock fee. Fills the form; nothing is sent.' });
     }
   }
   if (!choix.length) return;
@@ -31263,7 +31313,8 @@ async function tbBanquePeindre() {
     /* 2026-10-11 (frais de service, decision de Phil) : le frais unique est dit dans le CHOIX, a cote du cout annuel */
     const fraisTxt = Number.isInteger(bcBanque.fraisBps) && bcBanque.fraisBps > 0 ? ' + a one-time ' + (bcBanque.fraisBps / 100) + ' % fee' : '';
     tauxE.textContent = res.moinsCher !== null ? 'Costs from ' + bcPct(res.moinsCher) + ' a year' + fraisTxt : 'Cost not read right now';
-    tauxP.textContent = res.meilleurPret !== null ? 'Earns up to ' + bcPct(res.meilleurPret) + ' a year' : 'Rate not read right now';
+    const fraisPretTxt = Number.isInteger(bcBanque.fraisPretBps) && bcBanque.fraisPretBps > 0 ? ', a one-time ' + (bcBanque.fraisPretBps / 100) + ' % fee to lend' : '';
+    tauxP.textContent = res.meilleurPret !== null ? 'Earns up to ' + bcPct(res.meilleurPret) + ' a year' + fraisPretTxt : 'Rate not read right now';
   } else {
     tauxE.textContent = 'Rates not read right now'; tauxP.textContent = 'Rates not read right now';
     pos.append(bcEl('p', { cls: 'note', text: 'Lending markets not read right now — ' + lu.pourquoi + '. The Bank reads them again when you open it.' }));
@@ -31429,17 +31480,26 @@ async function bcBanqueProposer({ mk, sens, brutM = null, brutG = 0n, decG = nul
     /* 2026-10-11 (test reel de Grok) : les cartes rembourser / retirer ne disaient AUCUN montant, et le pret n avait pas de ligne de risque.
      *   Les montants viennent du resume du plan (lu sur la chaine). */
     const sym = mk.pret.symbole;
+    /* 2026-10-26 (« colle toi au data de morpho ») : le frais Morpho de CE marche, relu sur la chaine par le plan (resume.feeMorpho, WAD) */
+    if (/^\d+$/.test(String(rs.feeMorpho || ''))) bcEtape(m, 'Morpho\'s own fee on this market, read on chain just now: ' + String(Number((Number(BigInt(rs.feeMorpho) * 10000n / 10n ** 18n) / 100).toFixed(2))) + ' % of the interest borrowers pay.');
     if (sens === 'preter' && rs.prete) {
       bcEtape(m, 'You lend ' + bcUnites(rs.prete, decP) + ' ' + sym + ' to this market.');
+      /* 2026-10-26 (decision de Phil) : le frais du Lend, le montant EXACT du plan, et le total qui sort du wallet */
+      if (/^\d+$/.test(String(rs.fraisApp || '')) && BigInt(rs.fraisApp) > 0n) bcEtape(m, (rs.fraisPour || 'TokenizedBlock') + ' fee: ' + bcUnites(rs.fraisApp, decP) + ' ' + sym + ' (' + (Number(rs.fraisAppBps) / 100) + ' % of what you lend), on top: ' + (enLot ? 'the last call of the batch your wallet signs once, with the deposit' : 'the last step, a separate transfer your wallet asks you to sign right after the deposit') + ' — ' + bcUnites(rs.totalSortant || (BigInt(rs.prete) + BigInt(rs.fraisApp)).toString(), decP) + ' ' + sym + ' leaves your wallet in all.');
       bcEtape(m, 'Risk: if a stock falls faster than its loans are liquidated, the market can lose part of what was lent (bad debt). What is borrowed cannot be withdrawn until it is repaid.');
     }
     if (sens === 'rembourser' && rs.detteLue) bcEtape(m, rs.tout ? 'You repay your whole debt: about ' + bcUnites(rs.detteLue, decP) + ' ' + sym + ' (your wallet allows up to ' + bcUnites(rs.autorise, decP) + ' — interest accrues until the transaction lands).'
       : 'You repay ' + bcUnites(rs.autorise, decP) + ' ' + sym + '.');
-    if (sens === 'retirerpret' && rs.retire) bcEtape(m, 'You withdraw ' + bcUnites(rs.retire, decP) + ' ' + sym + ' of what you lent.');
+    /* 2026-10-26 (banc fork) : TOUT retirer, c est par parts - le montant lu est un MINIMUM exact (Morpho arrondit bas ; les interets
+     *   courus jusqu a la transaction ne peuvent qu ajouter) : la carte dit « at least », pas un chiffre que le wallet ne recevrait pas */
+    if (sens === 'retirerpret' && rs.retire) bcEtape(m, rs.tout ? 'You withdraw all you lent: at least ' + bcUnites(rs.retire, decP) + ' ' + sym + ' (interest accrues until the transaction lands).' : 'You withdraw ' + bcUnites(rs.retire, decP) + ' ' + sym + ' of what you lent.');
+    if (sens === 'rembourser' && rs.autorisationRemiseA0) bcEtape(m, 'The last step sets Morpho\'s allowance back to 0, so nothing stays approved after the repayment.');
     if (sens === 'retirer' && brutM) {
       let dgR = decG; if (dgR === null) { try { dgR = await bcAvecDelai(bcDecimales(mk.garantie.adr), 8000); } catch (_) { dgR = null; } }
       bcEtape(m, 'You withdraw ' + (dgR === null ? brutM + ' raw units of' : bcUnites(brutM, dgR)) + ' ' + mk.garantie.symbole + ' of collateral to your wallet.');
     }
+    /* 2026-10-26 : sortir est gratuit, et la carte le DIT depuis le plan (resume.fraisApp '0'), pas par omission */
+    if (['rembourser', 'retirerpret', 'retirer'].includes(sens) && String(rs.fraisApp) === '0') bcEtape(m, 'No TokenizedBlock fee to ' + (sens === 'rembourser' ? 'repay' : 'withdraw') + '.');
     bcEtape(m, 'Simulated on chain from your wallet: every step goes through.', 'oui');
     if (enLot) bcEtape(m, 'Your wallet can batch: one signature for the ' + p.aSigner.length + ' steps — all of them go through, or none.');
     bcBoutons(m, [[enLot ? 'Sign once in my wallet (' + p.aSigner.length + ' steps)' : 'Sign ' + p.aSigner.length + ' step' + (p.aSigner.length > 1 ? 's' : '') + ' in my wallet', async () => {

@@ -46,7 +46,9 @@ const EMPREINTES_PROD_D07AFC5 = {
   'function bcDeuxTrades(': '4680c774049c0119139b1a3ed7a1c7a03d3c196478424df2e4e3fc7d7a8198e9',
   /* claude/grok-wallet 2026-10-25 (rapport Grok §0.9 ; d07afc5 : 989eaf4d…e29e) : diff relu = la ligne « Confirmed. » dit le hash de
    *   l etape (AFFICHAGE seul) + 1 commentaire ; envoi, ordre, retours et frais inchanges (test-banque-revue-adverse les execute) */
-  'async function bcSigner(': '4ebbfda5d4f40b4c6909acaa227f5d0ef45e1d0eeb9d1977861f081a4667d31a',
+  /* claude/morpho-fees 2026-10-26 (4ebbfda5…d31a avant) : diff relu = UN jeton, `&& !c.remiseA0` dans le choix de hashOperation (le lien
+   *   « See it on the explorer » montre le remboursement, pas la remise a 0 de l autorisation qui le suit) ; envoi, ordre et retours inchanges */
+  'async function bcSigner(': 'fa5c00cec0d9d952c5408ff44a04d3ee293e4d1a66b0223197cda0558a961308',
 };
 const BLOCK = '0x' + 'b2'.padEnd(40, '0').slice(0, 38) + 'e7';
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913';

@@ -27,13 +27,30 @@ export const MARGE_EMPRUNT_BPS = 7000n;
 /** ⛔ LES FRAIS DE SERVICE DE LA BANK - DECISION DE PHIL (chat, 2026-10-11 : « creer un fees comme sur Aave ou Morpho pour que l app
  *  gagne un peu aussi », « ajoute wallet dev comme recipient » ; choix : « 0,1 % de l emprunt », « FEE_WALLET 0xa6cf… »).
  *  0,1 % de l actif EMPRUNTE, arrondi a l unite SUPERIEURE (jamais 0 : un frais qui s arrondit a rien n est pas un frais), pris dans la
- *  MEME sequence que l emprunt (borrow -> transfer a la caisse), donc SIMULE avec elle. Rien pour preter, rembourser ou retirer : on ne
- *  fait pas payer pour sortir. Le destinataire est la caisse de l app (FEE_WALLET, recopie dans frais-creation.js) ; l ecran dit
+ *  MEME sequence que l emprunt (borrow -> transfer a la caisse), donc SIMULE avec elle. Rien pour rembourser ou retirer : on ne
+ *  fait pas payer pour sortir. (Preter : gratuit jusqu au 2026-10-26, puis la MEME regle - FRAIS_PRET_BPS ci-dessous.) Le destinataire est la caisse de l app (FEE_WALLET, recopie dans frais-creation.js) ; l ecran dit
  *  « TokenizedBlock », jamais l adresse - le wallet la montre au moment de signer. Ecrit UNE fois ici ; la page le lit dans
  *  /api/banque/marches (fraisEmpruntBps) et dans le resume du plan, jamais en double. */
 export const FRAIS_EMPRUNT_BPS = 10n;
 export const DESTINATAIRE_FRAIS_BANQUE = FEE_WALLET;
 export const fraisEmprunt = (montant) => (BigInt(montant) <= 0n ? 0n : (BigInt(montant) * FRAIS_EMPRUNT_BPS + 9999n) / 10000n);
+/** ⛔ 2026-10-26 - DECISION DE PHIL (« colle toi au data de morpho, ajoute les bons frais ») : le Lend paie la MEME regle que le Borrow.
+ *  0,1 % du montant PRETE (celui qui arrive sur Morpho et rapporte), arrondi a l unite superieure, EN PLUS de ce montant (le wallet
+ *  sort montant + frais), vers la meme caisse, dans la MEME sequence simulee (approve exact -> supply -> transfer). Le transfer ne
+ *  touche pas Morpho : un transfert ERC-20 du wallet vers la caisse, sans autorisation. Mesure du jour : AUCUN frais Morpho sur nos
+ *  19 marches (market(id).fee = 0 sur la chaine, feeRecipient = 0x0) - le frais Morpho, s il apparait, se lit et se dit a part.
+ *  SORTIR reste GRATUIT : rembourser, retirer un pret, retirer une garantie = 0 (« on ne fait pas payer pour sortir », 2026-10-11 ;
+ *  la decision du jour ne vise que le Lend). Ecrit UNE fois ici. */
+export const FRAIS_PRET_BPS = FRAIS_EMPRUNT_BPS;
+export const fraisPret = (montant) => (BigInt(montant) <= 0n ? 0n : (BigInt(montant) * FRAIS_PRET_BPS + 9999n) / 10000n);
+/** Le plus grand pret M tel que M + fraisPret(M) <= solde (le bouton « All » et « You can lend » ne proposent jamais un pret refuse). */
+export const pretMaxAvecFrais = (solde) => {
+  const s = BigInt(solde); if (s <= 0n) return 0n;
+  /* m = floor(s / (1 + b)) est EXACT : s >= m (1 + b) et s, m entiers donnent s >= m + ceil(m b) = m + frais(m) ; et m + 1 depasse
+   *   (m + 1 + frais(m + 1) >= (m + 1)(1 + b) > s). Les deux boucles de correction ecrites d abord etaient MORTES (mutants equivalents,
+   *   mesure exhaustive 0..30 000 le 2026-10-26) : retirees, le test exhaustif garde la borne. */
+  return (s * 10000n) / (10000n + FRAIS_PRET_BPS);
+};
 const WAD = 10n ** 18n, ECHELLE_PRIX = 10n ** 36n;
 const ADR = /^0x[0-9a-f]{40}$/;
 const ACTIONS = new Map(ACTIONS_COINBASE.map((a) => [String(a.adr).toLowerCase(), a.symbole]));
@@ -87,9 +104,11 @@ export const entierApi = (v) => (typeof v === 'string' && /^\d+$/.test(v) ? v : 
 export const URL_API_MORPHO = 'https://blue-api.morpho.org/graphql';
 export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs = 15000 } = {}) {
   const adrs = [...ACTIONS.keys()];
-  const q = 'query($c:[String!]){ markets(first: 200, where: { chainId_in: [8453], collateralAssetAddress_in: $c }) { items { marketId lltv listed '
+  /* 2026-10-26 : + irmAddress et state.fee (champs lus par introspection ce jour : MarketState.fee, Market.irmAddress). Le frais de
+   *   l API n est qu un temoin : celui qui s affiche est relu sur la chaine (lireFraisMorphoChaine). */
+  const q = 'query($c:[String!]){ markets(first: 200, where: { chainId_in: [8453], collateralAssetAddress_in: $c }) { items { marketId lltv listed irmAddress '
     + 'oracle { address } loanAsset { address symbol decimals } collateralAsset { address symbol decimals } '
-    + 'state { supplyAssetsUsd borrowAssetsUsd liquidityAssets liquidityAssetsUsd utilization borrowApy supplyApy price } } } }';
+    + 'state { supplyAssetsUsd borrowAssetsUsd liquidityAssets liquidityAssetsUsd utilization borrowApy supplyApy price fee } } } }';
   let j;
   try {
     const r = await fetchImpl(URL_API_MORPHO, { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(delaiMs),
@@ -115,11 +134,38 @@ export async function lireMarchesMorpho({ fetchImpl = globalThis.fetch, delaiMs 
       /* 2026-10-11 : la liquidite en unites BRUTES du jeton prete (borne exacte de « ce que TU peux emprunter »). Sonde du jour : l API la
        *   rend en NOMBRE JSON quand elle est petite et en TEXTE au-dela de 2^53 ; un nombre non sur = NON LU (null), jamais arrondi. */
       disponibleBrut: entierApi(s.liquidityAssets),
-      utilisation: s.utilization ?? null, apyEmprunt: s.borrowApy ?? null, apyPret: s.supplyApy ?? null });
+      utilisation: s.utilization ?? null, apyEmprunt: s.borrowApy ?? null, apyPret: s.supplyApy ?? null,
+      irm: String(m.irmAddress || '').toLowerCase() || null,
+      /* le frais Morpho selon l API (fraction de l interet, 0 a 1) : temoin seulement ; feeMorpho = celui de la chaine, null tant que non relu */
+      feeMorphoApi: typeof s.fee === 'number' && Number.isFinite(s.fee) && s.fee >= 0 ? s.fee : null, feeMorpho: null });
   }
   marches.sort((a, b) => (b.offreUsd || 0) - (a.offreUsd || 0));
-  /* fraisEmpruntBps : la page dit le frais de service AVANT le plan, depuis cette source unique (FRAIS_EMPRUNT_BPS) */
-  return { ok: true, etat: 'LU', source: 'blue-api.morpho.org', marches, fraisEmpruntBps: Number(FRAIS_EMPRUNT_BPS) };
+  /* fraisEmpruntBps / fraisPretBps : la page dit le frais de service AVANT le plan, depuis cette source unique ; fraisSortieBps = 0 (dit, pas tu) */
+  return { ok: true, etat: 'LU', source: 'blue-api.morpho.org', marches, fraisEmpruntBps: Number(FRAIS_EMPRUNT_BPS), fraisPretBps: Number(FRAIS_PRET_BPS), fraisSortieBps: 0 };
+}
+
+/** 2026-10-26 (« colle toi au data de morpho ») : le frais de CHAQUE marche, RELU SUR LA CHAINE - Morpho Blue market(id), 6e mot
+ *  (`fee`, WAD = 1e18 pour 100 % de l interet ; il va au feeRecipient de Morpho, pas au preteur). Mesure du jour : 0 sur les 19
+ *  marches, feeRecipient 0x0, et l API dit 0 aussi. Ecrit dans chaque marche : feeMorpho = texte WAD exact, ou null (NON LU - jamais
+ *  0 par defaut) ; feeMorphoAccord = l API dit la meme chose (false = le chiffre de la chaine l emporte, et c est lui qui s affiche).
+ *  Seulement les marches LISTES (ceux que la page montre), en lots de 4. Ne jette jamais : un echec laisse null. */
+export async function lireFraisMorphoChaine({ rpc, lu, lots = 4 }) {
+  if (!lu || lu.ok !== true || !Array.isArray(lu.marches)) return lu;
+  const cibles = lu.marches.filter((m) => m.listeParMorpho === true);
+  let relus = 0;
+  for (let i = 0; i < cibles.length; i += lots) {
+    await Promise.all(cibles.slice(i, i + lots).map(async (m) => {
+      try {
+        const t = mots(await rpc('eth_call', [{ to: MORPHO_BLUE, data: '0x' + SEL.market + m.id.slice(2) }, 'latest']));
+        if (t.length < 6) return;
+        const fee = BigInt('0x' + t[5]);
+        if (fee > WAD) return; /* hors bornes de Morpho (MAX_FEE = 25 %) : pas une lecture */
+        m.feeMorpho = fee.toString(); relus += 1;
+        m.feeMorphoAccord = m.feeMorphoApi === null ? null : Math.abs(Number(fee) / 1e18 - m.feeMorphoApi) < 1e-12;
+      } catch (_) { /* reste null : non lu */ }
+    }));
+  }
+  return { ...lu, feeMorphoRelus: relus, feeMorphoCibles: cibles.length };
 }
 
 /** Les POSITIONS d un compte sur ces marches (API Morpho, marketPositions ; forme lue le 2026-10-10 sur de vrais emprunteurs :
@@ -171,7 +217,8 @@ export async function lireMarche({ rpc, id }) {
     if (p.length < 1) return { etat: 'NON_LU', pourquoi: 'oracle price not read' };
     const prix = BigInt('0x' + p[0]);
     if (prix <= 0n) return { etat: 'NON_LU', pourquoi: 'oracle price is zero' };
-    return { etat: 'LU', id: k, params, totaux, prix, liquidite: totaux.supplyAssets > totaux.borrowAssets ? totaux.supplyAssets - totaux.borrowAssets : 0n };
+    /* 2026-10-26 : le frais Morpho du marche (6e mot de market(id), WAD), relu a chaque plan et dit dans son resume */
+    return { etat: 'LU', id: k, params, totaux, prix, feeMorpho: BigInt('0x' + t[5]), liquidite: totaux.supplyAssets > totaux.borrowAssets ? totaux.supplyAssets - totaux.borrowAssets : 0n };
   } catch (e) { return { etat: 'NON_LU', pourquoi: 'market not read: ' + String((e && e.message) || e).slice(0, 100) }; }
 }
 
@@ -256,7 +303,8 @@ async function construireEmprunt({ rpc, compte, id, garantie = 0n, emprunt }) {
   const resume = { marche: marche.id, garantieAction: ACTIONS.get(p.collateralToken), garantieApres: (pos.garantie + G).toString(),
     detteApres: (pos.dette + E).toString(), plafond: cap.plafond.toString(), maxLltv: cap.max.toString(), lltv: p.lltv.toString(),
     /* 2026-10-11 (Grok, contre-test prod : « 70 % of the LLTV limit » = jargon) : la meme borne, en mots */
-    liquiditeMarche: marche.liquidite.toString(), marge: Number(MARGE_EMPRUNT_BPS) / 100 + ' % of the most Morpho lets you borrow before liquidation' };
+    liquiditeMarche: marche.liquidite.toString(), marge: Number(MARGE_EMPRUNT_BPS) / 100 + ' % of the most Morpho lets you borrow before liquidation',
+    feeMorpho: marche.feeMorpho.toString() };
   if (pos.dette + E > cap.plafond) return refuse('too much for this collateral: at most ' + (cap.plafond > pos.dette ? cap.plafond - pos.dette : 0n) + ' raw units more (we cap your debt at ' + resume.marge + ')', resume);
   if (E > marche.liquidite) return refuse('this market has only ' + marche.liquidite + ' raw units to lend right now', resume);
   /* le prix de la garantie auquel la position devient liquidable (unites brutes de pret par unite brute de garantie × 1e36) */
@@ -291,13 +339,21 @@ export async function planPreter({ rpc, compte, id, montant }) {
   let solde, autorise;
   try { solde = await lireEntier(rpc, p.loanToken, '0x' + SEL.balanceOf + motAdr(c)); autorise = await lireEntier(rpc, p.loanToken, '0x' + SEL.allowance + motAdr(c) + motAdr(MORPHO_BLUE)); } catch (_) { solde = null; }
   if (solde === null || autorise === null) return nonMesure('your balance or allowance could not be read');
-  const resume = { marche: marche.id, garantieAction: ACTIONS.get(p.collateralToken), prete: M.toString(), offreAvant: marche.totaux.supplyAssets.toString() };
-  if (solde < M) return refuse('this wallet holds ' + solde + ' raw units, not ' + M, resume);
+  /* 2026-10-26 (decision de Phil) : le frais de service du Lend - 0,1 % de M, EN PLUS de M ; le wallet doit tenir M + frais */
+  const frais = fraisPret(M), total = M + frais;
+  const resume = { marche: marche.id, garantieAction: ACTIONS.get(p.collateralToken), prete: M.toString(), offreAvant: marche.totaux.supplyAssets.toString(),
+    fraisApp: frais.toString(), fraisAppBps: Number(FRAIS_PRET_BPS), fraisPour: 'TokenizedBlock', totalSortant: total.toString(), feeMorpho: marche.feeMorpho.toString() };
+  if (solde < total) return refuse('this wallet holds ' + solde + ' raw units, not ' + total + ' (' + M + ' to lend + ' + frais + ' TokenizedBlock fee)', resume);
   const appels = [];
+  /* l autorisation couvre EXACTEMENT ce que Morpho prend (M) : le frais est un transfer du wallet, il n a besoin d aucune autorisation */
   if (autorise < M) appels.push({ to: p.loanToken, data: appelApprove(MORPHO_BLUE, M), value: '0x0', nom: 'allow Morpho to take exactly this amount' });
   appels.push({ to: MORPHO_BLUE, data: appelSupply(p, M, c), value: '0x0', nom: 'lend on Morpho (you can withdraw what is not borrowed)' });
+  appels.push({ to: p.loanToken, data: appelTransfer(DESTINATAIRE_FRAIS_BANQUE, frais), value: '0x0', frais: true, nom: 'TokenizedBlock service fee: ' + Number(FRAIS_PRET_BPS) / 100 + ' % of what you lend' });
   return finaliser({ rpc, compte: c, appels, resume });
 }
+
+/** 2026-10-26 : sortir est GRATUIT et le resume le DIT (fraisApp '0'), au lieu de se taire - la carte peut l ecrire sans le deviner. */
+const SANS_FRAIS_SORTIE = Object.freeze({ fraisApp: '0', fraisAppBps: 0, fraisPour: 'TokenizedBlock' });
 
 /** Rembourser : `montant` unites brutes, ou `tout: true` (par parts : la dette entiere, interets courus compris). */
 export async function planRembourser({ rpc, compte, id, montant = null, tout = false }) {
@@ -313,11 +369,16 @@ export async function planRembourser({ rpc, compte, id, montant = null, tout = f
   let solde, autorise;
   try { solde = await lireEntier(rpc, p.loanToken, '0x' + SEL.balanceOf + motAdr(c)); autorise = await lireEntier(rpc, p.loanToken, '0x' + SEL.allowance + motAdr(c) + motAdr(MORPHO_BLUE)); } catch (_) { solde = null; }
   if (solde === null || autorise === null) return nonMesure('your balance or allowance could not be read');
-  const resume = { marche: marche.id, detteLue: pos.dette.toString(), autorise: besoin.toString(), tout: !!tout, ...(tout ? { tolerance: 'the debt read + 0.1 % (interest accrues until the transaction lands)' } : {}) };
+  const resume = { marche: marche.id, detteLue: pos.dette.toString(), autorise: besoin.toString(), tout: !!tout, ...(tout ? { tolerance: 'the debt read + 0.1 % (interest accrues until the transaction lands)' } : {}), ...SANS_FRAIS_SORTIE };
   if (solde < (tout ? pos.dette : besoin)) return refuse('this wallet holds ' + solde + ' raw units, the debt is ' + pos.dette, resume);
   const appels = [];
-  if (autorise < besoin) appels.push({ to: p.loanToken, data: appelApprove(MORPHO_BLUE, besoin), value: '0x0', nom: 'allow Morpho to take at most this amount' });
+  const approuve = autorise < besoin;
+  if (approuve) appels.push({ to: p.loanToken, data: appelApprove(MORPHO_BLUE, besoin), value: '0x0', nom: 'allow Morpho to take at most this amount' });
   appels.push({ to: MORPHO_BLUE, data: tout ? appelRepayShares(p, pos.borrowShares, c) : appelRepayAssets(p, besoin, c), value: '0x0', nom: tout ? 'repay the whole debt on Morpho' : 'repay on Morpho' });
+  /* ⛔ 2026-10-26 (banc fork, marche GOOGLc Safer) : rembourser TOUT par parts laissait 10 001 unites USDC autorisees a Morpho (la marge de
+   *   0,1 % non consommee). L autorisation que CE plan a donnee est remise a 0 a la fin ; une autorisation anterieure (pas d approve ici)
+   *   n est pas touchee. Un remboursement partiel consomme exactement ce qu il autorise : rien a remettre. */
+  if (approuve && tout) { appels.push({ to: p.loanToken, data: appelApprove(MORPHO_BLUE, 0n), value: '0x0', remiseA0: true, nom: 'set Morpho\'s allowance back to 0' }); resume.autorisationRemiseA0 = true; }
   return finaliser({ rpc, compte: c, appels, resume });
 }
 
@@ -331,9 +392,12 @@ export async function planRetirerPret({ rpc, compte, id, montant = null, tout = 
   if (pos.etat !== 'LU') return nonMesure('your position could not be read');
   if (pos.supplyShares === 0n) return refuse('nothing lent on this market');
   const { supplyAssets, supplyShares } = marche.totaux;
-  const prete = supplyShares === 0n ? 0n : (pos.supplyShares * supplyAssets) / supplyShares; /* arrondi BAS : jamais promettre plus */
+  /* ⛔ 2026-10-26 (banc fork, GOOGLc Safer) : parts x actifs / parts annoncait 5 000 000 quand le wallet en recevait 4 999 999. Morpho
+   *   convertit avec ses parts VIRTUELLES (SharesMathLib.toAssetsDown : parts x (actifs + 1) / (parts + 1e6)), arrondi BAS ; ses interets
+   *   courus avant le retrait ne peuvent qu ajouter. C est donc un MINIMUM exact, et c est ce que la carte dit. */
+  const prete = (pos.supplyShares * (supplyAssets + 1n)) / (supplyShares + 10n ** 6n);
   let M; try { M = tout ? prete : BigInt(montant); } catch (_) { return refuse('amounts are raw integer units'); }
-  const resume = { marche: marche.id, preteLu: prete.toString(), retire: M.toString(), tout: !!tout, liquiditeMarche: marche.liquidite.toString() };
+  const resume = { marche: marche.id, preteLu: prete.toString(), retire: M.toString(), tout: !!tout, liquiditeMarche: marche.liquidite.toString(), ...SANS_FRAIS_SORTIE };
   if (M <= 0n || M > prete) return refuse('you can withdraw between 1 and ' + prete + ' raw units', resume);
   if (M > marche.liquidite) return refuse('only ' + marche.liquidite + ' raw units can leave this market right now: the rest is borrowed until it is repaid', resume);
   const appel = tout ? appelWithdrawShares(p, pos.supplyShares, c, c) : appelWithdraw(p, M, c, c);
@@ -350,7 +414,7 @@ export async function planRetirerGarantie({ rpc, compte, id, montant }) {
   if (pos.etat !== 'LU') return nonMesure('your position could not be read');
   if (M <= 0n || M > pos.garantie) return refuse('you can withdraw between 1 and ' + pos.garantie + ' raw units');
   const cap = capacite({ garantie: pos.garantie - M, prix: marche.prix, lltv: p.lltv });
-  const resume = { marche: marche.id, garantieApres: (pos.garantie - M).toString(), dette: pos.dette.toString(), plafondApres: cap.plafond.toString() };
+  const resume = { marche: marche.id, garantieApres: (pos.garantie - M).toString(), dette: pos.dette.toString(), plafondApres: cap.plafond.toString(), ...SANS_FRAIS_SORTIE };
   if (pos.dette > cap.plafond) return refuse('your debt would be too close to liquidation after this withdrawal — repay first', resume);
   return finaliser({ rpc, compte: c, appels: [{ to: MORPHO_BLUE, data: appelWithdrawCollateral(p, M, c, c), value: '0x0', nom: 'withdraw your collateral from Morpho' }], resume });
 }

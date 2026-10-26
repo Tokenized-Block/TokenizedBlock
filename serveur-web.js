@@ -233,7 +233,7 @@ import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
 import { lireAvoirs, classeLot } from './avoirs.js';
 import { planRail, echangesDevisesAnnonces } from './rails-api.js';
-import { lireMarchesMorpho, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
+import { lireMarchesMorpho, lireFraisMorphoChaine, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
 import { traiterMcp } from './mcp-tblock.js';
@@ -6390,9 +6390,11 @@ function traiterRequete(req, res) {
     const rendreB = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'access-control-allow-origin': '*' }); res.end(JSON.stringify(o)); };
     const frais = banqueMarches.r && Date.now() - banqueMarches.t < (banqueMarches.r.ok ? 600000 : 60000);
     if (frais) { rendreB({ ...banqueMarches.r, lu: new Date(banqueMarches.t).toISOString() }); return; }
-    if (!banqueMarches.enVol) banqueMarches.enVol = lireMarchesMorpho().then((r) => { banqueMarches.r = r; banqueMarches.t = Date.now(); return r; }).finally(() => { banqueMarches.enVol = null; });
+    /* 2026-10-26 (« colle toi au data de morpho ») : le frais Morpho de chaque marche liste est RELU SUR LA CHAINE (9 eth_call / 10 min,
+     *   lecteur des rails) ; un echec laisse feeMorpho null - la page dit « not read », jamais 0 */
+    if (!banqueMarches.enVol) banqueMarches.enVol = lireMarchesMorpho().then((r) => lireFraisMorphoChaine({ rpc: rpcRails, lu: r })).then((r) => { banqueMarches.r = r; banqueMarches.t = Date.now(); return r; }).finally(() => { banqueMarches.enVol = null; });
     banqueMarches.enVol.then((r) => rendreB({ ...r, lu: new Date(banqueMarches.t).toISOString(),
-      borne: 'Figures from the Morpho API, not re-read on chain. A plan re-reads the market on chain and simulates it before it is offered.' }))
+      borne: 'Figures from the Morpho API, except feeMorpho (each market\'s Morpho fee, re-read on chain; null = not read). A plan re-reads the market on chain and simulates it before it is offered.' }))
       .catch(() => rendreB({ ok: false, etat: 'NON_LU', pourquoi: 'Morpho markets not read' }));
     return;
   }

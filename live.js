@@ -48,7 +48,7 @@ export function etatLive({ frais, soldes = {}, sondes = {}, build = null, mainte
         derniers: (f.derniers || []).slice(-25).reverse().map((e) => ({ tx: e.tx, bloc: e.bloc, devise: e.devise, montant: String(e.montant), etat: e.etat })) }
       : { etat: f.etat === 'EN_COURS' ? 'EN_COURS' : 'NON_LU', pourquoi: f.pourquoi || (f.etat === 'EN_COURS' ? 'reading the chain in the background — refresh in a minute' : 'not read') },
     borne: 'Fees from TokenizedBlock market hooks (births and trades) over the window, each checked against the fee wallet balance: '
-      + 'ARRIVE = the balance moved by that amount. Bank service fees (0.1 % of a Morpho borrow, paid in USDC) are not listed one by one '
+      + 'ARRIVE = the balance moved by that amount. Bank service fees (0.1 % of a Morpho borrow or lend, paid in USDC) are not listed one by one '
       + 'yet: they show in the fee wallet USDC balance. NON_LU means not read — never zero. Nothing here is a forecast or a promise.',
   };
 }
