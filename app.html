@@ -10599,8 +10599,15 @@ function peindreResultatsB20(el, brut, s, auChoix) {
   const rs = s && Array.isArray(s.resultats) ? s.resultats.filter((r) => /^0x[0-9a-f]{40}$/.test(String(r.adr || ''))) : [];
   el.hidden = false;
   if (!rs.length) { el.innerHTML = '<p class="rbNote">' + enTexte(phraseRechercheVide(brut, s)) + '</p>'; el.onclick = null; return; }
-  el.innerHTML = rs.map((r) => '<button type="button" class="rbChoix" data-rb-adr="' + enTexte(r.adr) + '" data-rb-sym="' + enTexte(r.sym || '') + '">'
-      + '<b>' + enTexte(r.sym || court(r.adr)) + '</b><span>' + enTexte(court(r.adr) + ' · ' + libelleRangB20(r) + (r.nom ? ' · ' + r.nom : '')) + '</span></button>').join('')
+  /* 2026-10-26 (game57) : sans symbole, le titre est le NOM (« United Oil Trust Fund · 0xb200…7a38 · Block ») ; sans nom non plus,
+   *   l adresse courte UNE fois puis le rang — jamais l adresse en titre ET en detail. Avec un symbole : symbole · adresse · rang · nom. */
+  el.innerHTML = rs.map((r) => {
+    const sym = String(r.sym || '').trim(), nom = String(r.nom || '').trim(), adr = court(r.adr);
+    const titre = sym || nom || adr;
+    const detail = [titre === adr ? '' : adr, libelleRangB20(r), sym && nom ? nom : ''].filter(Boolean).join(' · ');
+    return '<button type="button" class="rbChoix" data-rb-adr="' + enTexte(r.adr) + '" data-rb-sym="' + enTexte(r.sym || '') + '">'
+      + '<b>' + enTexte(titre) + '</b><span>' + enTexte(detail) + '</span></button>';
+  }).join('')
     + (s.plus ? '<p class="rbNote">More blocks match — type more of the name, or paste the address.</p>' : '');
   el.onclick = (e) => { const b = e.target && e.target.closest && e.target.closest('[data-rb-adr]'); if (b) auChoix(b.getAttribute('data-rb-adr'), b.getAttribute('data-rb-sym') || null); };
 }
