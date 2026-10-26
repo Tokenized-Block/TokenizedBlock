@@ -1,0 +1,12 @@
+{
+ "lu": "2026-10-26T00:25:04.423Z",
+ "source": "prod /api/trending (x-ms-monitor: 1) lu 2026-10-26T00:18:02.091Z, 196 jetons ; DexScreener /tokens/v1/base, lots de 30 (7 lots, 0 refuses) ; paires chainId base",
+ "pourquoi": "cle-par-pool-id.js indicesPoolIdDepuisPaires : quelles marques DexScreener porte une pairAddress de 66 caracteres (poolId v4) ; cle = longueur de pairAddress, dexId, labels",
+ "paires": 195,
+ "parLongueurDexLabels": {
+  "42 aero null": 22,
+  "66 uniswap [\"v4\"]": 159,
+  "42 aerodrome null": 13,
+  "42 uniswap [\"v3\"]": 1
+ }
+}

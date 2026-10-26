@@ -142,7 +142,13 @@ export async function clePoolParId({ rpc, rpcLogs = null, poolId, jeton, creeLeM
 export function indicesPoolIdDepuisPaires(paires, suivis = null, parJeton = 3) {
   const out = new Map();
   const garde = suivis ? new Set([...suivis].map(bas)) : null;
-  const liste = (Array.isArray(paires) ? paires : []).filter((p) => p && bas(p.chainId) === 'base' && ID.test(bas(p.pairAddress)))
+  /* ⛔ 2026-10-26 (revue) : 66 caracteres ne font pas une pool v4. Seule une paire que DexScreener dit Uniswap v4 (dexId 'uniswap',
+   *   labels contenant 'v4') vaut un getLogs sur le PoolManager v4 — un autre identifiant de 32 octets (un autre dex, une autre
+   *   version) couterait une fenetre profonde toutes les 6 h pour rien. Mesure (mesures/dexscreener-paires-v4-labels-20261026.json,
+   *   195 paires Base des jetons du trending de prod) : les 159 pairAddress de 66 caracteres sont toutes « uniswap ["v4"] », les 36
+   *   autres sont des adresses de 42. Sans ces marques : pas d indice, la recherche par profondeur. */
+  const estV4 = (p) => bas(p.dexId) === 'uniswap' && Array.isArray(p.labels) && p.labels.some((x) => bas(x) === 'v4');
+  const liste = (Array.isArray(paires) ? paires : []).filter((p) => p && bas(p.chainId) === 'base' && ID.test(bas(p.pairAddress)) && estV4(p))
     .sort((a, b) => (Number(b && b.liquidity && b.liquidity.usd) || 0) - (Number(a && a.liquidity && a.liquidity.usd) || 0));
   for (const p of liste) {
     const ms = Number(p.pairCreatedAt);

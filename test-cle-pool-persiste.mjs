@@ -64,7 +64,10 @@ v('⛔ une cle connue ne redemande RIEN au noeud', () => {
   assert.ok(iCache > 0,
     'la route ne lit plus le cache dans `cleCache` : elle pourrait le consulter sans s en servir');
   const branche = route.slice(iCache, route.indexOf('resoudreClePool('));
-  assert.ok(/if \(cleCache\) \{[\s\S]*?res\.end\([\s\S]*?return;\s*\}/.test(branche),
+  /* 2026-10-26 (revue, finding 4) : `entreeComplete(cleCache)` — une entree faite des SEULES cles d indice poolId n est pas complete
+   *   et la recherche par profondeur tourne encore (l union est rendue) ; toute autre entree connue rend la main ici, comme avant.
+   *   Execute : test-cle-par-pool-id-20261026.mjs H4 / H6. */
+  assert.ok(/if \((?:cleCache|entreeComplete\(cleCache\))\) \{[\s\S]*?res\.end\([\s\S]*?return;\s*\}/.test(branche),
     'la branche du cache ne REND PAS la main avant la resolution : une cle deja connue ferait '
     + 'quand meme taper le noeud');
   assert.ok(/depuisCache: true/.test(route),

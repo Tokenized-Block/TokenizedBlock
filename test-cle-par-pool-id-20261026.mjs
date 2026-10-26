@@ -163,7 +163,9 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
 }
 /* ── D ── */
 {
-  const base = { chainId: 'base', baseToken: { address: JETON }, quoteToken: { address: '0x0000000000000000000000000000000000000000' } };
+  /* DexScreener marque une pool v4 : dexId 'uniswap', labels ['v4'] (mesures/dexscreener-paires-v4-labels-20261026.json : 195 paires
+   *   Base, les 159 pairAddress de 66 caracteres sont toutes « uniswap ["v4"] ») */
+  const base = { chainId: 'base', dexId: 'uniswap', labels: ['v4'], baseToken: { address: JETON }, quoteToken: { address: '0x0000000000000000000000000000000000000000' } };
   const paires = [
     { ...base, pairAddress: '0x' + 'a'.repeat(64), pairCreatedAt: 1, liquidity: { usd: 5 } },
     { ...base, pairAddress: ID, pairCreatedAt: F.dexscreener.pairCreatedAt, liquidity: { usd: 9000 } },
@@ -172,7 +174,7 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
     { ...base, chainId: 'ethereum', pairAddress: '0x' + 'c'.repeat(64), pairCreatedAt: 3 },
     { ...base, pairAddress: '0x' + 'd'.repeat(64), pairCreatedAt: 4, liquidity: { usd: 1 } },
     { ...base, pairAddress: '0x' + 'e'.repeat(64), pairCreatedAt: 5, liquidity: { usd: 0 } },
-    { chainId: 'base', baseToken: { address: '0xb2000000000000000000000000000000000000aa' }, quoteToken: { address: JETON }, pairAddress: '0x' + 'f'.repeat(64), pairCreatedAt: 6 },
+    { chainId: 'base', dexId: 'uniswap', labels: ['v4'], baseToken: { address: '0xb2000000000000000000000000000000000000aa' }, quoteToken: { address: JETON }, pairAddress: '0x' + 'f'.repeat(64), pairCreatedAt: 6 },
   ];
   const m = M.indicesPoolIdDepuisPaires(paires, [JETON]);
   const l = m.get(JETON) || [];
@@ -187,6 +189,15 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
   ], [JETON]);
   const l5 = m5.get(JETON) || [];
   ok(l5.length === 1 && l5[0].poolId === ID, 'D5 une paire d une autre chaine n entre pas, meme seule et plus liquide (' + l5.map((x) => x.poolId.slice(0, 6)).join(',') + ')');
+  /* finding 6 : 66 caracteres ne suffisent pas — seule une pool que DexScreener dit Uniswap v4 vaut un getLogs sur le PoolManager v4 */
+  const m6 = M.indicesPoolIdDepuisPaires([
+    { ...base, dexId: 'pancakeswap', pairAddress: '0x' + '1'.repeat(64), pairCreatedAt: 7, liquidity: { usd: 1e9 } },
+    { ...base, labels: ['v3'], pairAddress: '0x' + '2'.repeat(64), pairCreatedAt: 8, liquidity: { usd: 1e8 } },
+    { ...base, labels: undefined, pairAddress: '0x' + '3'.repeat(64), pairCreatedAt: 9, liquidity: { usd: 1e7 } },
+    { ...base, pairAddress: ID, pairCreatedAt: F.dexscreener.pairCreatedAt, liquidity: { usd: 1 } },
+  ], [JETON]);
+  const l6 = m6.get(JETON) || [];
+  ok(l6.length === 1 && l6[0].poolId === ID, 'D6 66 caracteres d un autre dex, labels v3 ou sans label : pas un indice v4 (' + l6.map((x) => x.poolId.slice(0, 6)).join(',') + ')');
 }
 /* ── E ── serveur-web.js : l ORDRE (indices puis profondeur) sur les trois chemins */
 {
@@ -200,8 +211,9 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
   const route = i0 >= 0 ? src.slice(i0, src.indexOf("if (chemin === '/api/skins/prix'", i0)) : '';
   ok(route.indexOf('clesParIndices(') > 0 && route.indexOf('resoudreClePool(') > route.indexOf('clesParIndices('), 'E2 /api/cle lit les indices poolId AVANT resoudreClePool');
   const tr = corps('lireTrending');
-  const a1 = tr.indexOf('retenirIndicesPoolId('), a2 = tr.indexOf('resoudreClesParIndices('), a3 = tr.indexOf('achatsMarche(');
-  ok(a1 > 0 && a3 > a1 && a2 > a3 && /void resoudreClesParIndices\(/.test(tr) && /if \(!clesParIdEnCours\)/.test(tr),
+  const a1 = tr.indexOf('retenirIndicesPoolId('), a2 = tr.indexOf('lancerClesParIndicesEnFond('), a3 = tr.indexOf('achatsMarche(');
+  const fond = src.slice(src.indexOf('function lancerClesParIndicesEnFond('), src.indexOf('/** La cle exacte d un block'));
+  ok(a1 > 0 && a3 > a1 && a2 > a3 && /void consommateurArchive\.run\('fond cles poolId', \(\) => resoudreClesParIndices\(/.test(fond) && /if \(clesParIdEnCours\) return/.test(fond),
     'E3 le tour de trending retient les indices, juge le Buy, PUIS lance la recherche EN FOND (non attendue, une a la fois)');
   ok(/clesCache\.set\(t, \{ ok: true, cles \}\)/.test(corps('garderCleLue') || src.slice(src.indexOf('function garderCleLue('), src.indexOf('function garderCleLue(') + 600)), 'E4 une cle LUE rejoint clesCache (vue par /api/cle, les rails, le Buy)');
   const v = src.slice(src.indexOf('async function cleParUnIndice('), src.indexOf('async function clesParIndices('));
@@ -218,16 +230,25 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
   const blocRails = entre('async function clesRails(', '\n}\n') + '\n}\n';
   const blocConnues = entre('function clesConnuesServeur(', 'async function achatsMarche(');
   const blocRoute = entre("if (chemin.startsWith('/api/cle/')) {", '/* les skins');
-  ok(blocIndices.length > 0 && blocRails.length > 20 && blocConnues.length > 0 && blocRoute.length > 0, 'F0 les quatre blocs du serveur sont extraits du fichier');
+  const blocCreateur = entre('async function createurDuBlock(', '\n}\n') + '\n}\n';
+  ok(blocIndices.length > 0 && blocRails.length > 20 && blocConnues.length > 0 && blocRoute.length > 0 && blocCreateur.length > 20
+    && blocIndices.includes('function lancerClesParIndicesEnFond('), 'F0 les cinq blocs du serveur sont extraits du fichier (dont lancerClesParIndicesEnFond)');
   const NON_ENVOYEE = 'archive node daily budget reached — deep window not sent, it waits for 00:00 UTC';
-  /** un serveur : le code extrait + un faux noeud (blocs a 2 s, les logs donnes) + un lecteurLogs dont le budget peut etre epuise */
-  function serveur({ logs = [LOG], budgetEpuise = false } = {}) {
-    const e = { getLogsNoeud: 0, getLogsRefuses: 0, ecritures: 0, profondeur: 0, clesCache: new Map(), clesPool: new Map() };
+  const { AsyncLocalStorage } = await import('node:async_hooks');
+  /* une pool « template » (NOTRE hook) que seule la recherche par profondeur trouve, et le createur que ce hook rend */
+  const HOOK_NOTRE = '0x' + '70'.repeat(19) + '30', CREATEUR = '0x' + 'c7'.repeat(20);
+  const CLE_TEMPLATE = { poolId: '0x' + '7e'.repeat(32), currency0: '0x0000000000000000000000000000000000000000', currency1: JETON, fee: 0, tickSpacing: 200, hooks: HOOK_NOTRE, bloc: TETE - 500 };
+  /** un serveur : le code extrait + un faux noeud (blocs a 2 s, les logs donnes) + un lecteurLogs dont le budget peut etre epuise ;
+   *  `profondeur` : les cles que rend la recherche par profondeur (resoudreClePool), sinon ok:false */
+  function serveur({ logs = [LOG], budgetEpuise = false, profondeur = null } = {}) {
+    const e = { getLogsNoeud: 0, getLogsRefuses: 0, ecritures: 0, profondeur: 0, clesCache: new Map(), clesPool: new Map(), etiquettes: [], appelsHook: [] };
+    const consommateurArchive = new AsyncLocalStorage();
     const rpcServeur = async (m, p) => {
       if (m === 'eth_blockNumber') return '0x' + TETE.toString(16);
       if (m === 'eth_getBlockByNumber') return { number: p[0], timestamp: '0x' + tsDe(parseInt(p[0], 16)).toString(16) };
       if (m === 'eth_getLogs') {
         e.getLogsNoeud += 1;
+        e.etiquettes.push(consommateurArchive.getStore() || 'sans etiquette');
         const q = p[0], de = parseInt(q.fromBlock, 16), a = parseInt(q.toBlock, 16);
         return logs.filter((l) => parseInt(l.blockNumber, 16) >= de && parseInt(l.blockNumber, 16) <= a
           && q.topics.every((t, i) => t === null || String(l.topics[i]).toLowerCase() === String(t).toLowerCase()));
@@ -241,15 +262,26 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
       if (m === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list');
       return r;
     }, nonEnvoyee: () => false, suivi: {} });
-    const resoudreClePool = async () => { e.profondeur += 1; return { ok: false, pourquoi: 'no Initialize found in the last 9990 blocks' }; };
+    const resoudreClePool = async () => { e.profondeur += 1; return profondeur ? { ok: true, cles: profondeur.map((c) => ({ ...c })) } : { ok: false, pourquoi: 'no Initialize found in the last 9990 blocks' }; };
+    /* createurDuBlock : NOS hooks = HOOK_NOTRE, qui rend CREATEUR ; un autre hook n a pas a etre interroge */
+    const rpcActivite = async (m, p) => {
+      e.appelsHook.push(String(p[0].to).toLowerCase());
+      if (String(p[0].to).toLowerCase() === HOOK_NOTRE) return '0x' + CREATEUR.slice(2).padStart(64, '0');
+      throw new Error('execution reverted');
+    };
     const S = new Function('clesCache', 'clesPool', 'ecrireCles', 'rpcServeur', 'lecteurLogs', 'resoudreClePool', 'clePoolParId', 'indicesPoolIdDepuisPaires',
-      blocIndices + '\n' + blocRails + '\n' + blocConnues + '\nasync function routeCle(chemin, res) {\n' + blocRoute + '\n}\n'
-      + 'return { retenirIndicesPoolId, resoudreClesParIndices, clesConnuesServeur, clesRails, routeCle, clesParIdVerdicts };')(
-      e.clesCache, e.clesPool, () => { e.ecritures += 1; }, rpcServeur, lecteurLogs, resoudreClePool, M.clePoolParId, M.indicesPoolIdDepuisPaires);
-    return { ...S, e };
+      'consommateurArchive', 'HOOKS_FRAIS', 'HOOK_7030', 'fraisScan', 'rpcActivite', 'SEL_CREATEURS', 'SEL_CREATEUR_DE',
+      blocIndices + '\n' + blocRails + '\n' + blocConnues + '\n' + blocCreateur + '\nasync function routeCle(chemin, res) {\n' + blocRoute + '\n}\n'
+      + 'return { retenirIndicesPoolId, resoudreClesParIndices, clesConnuesServeur, clesRails, routeCle, clesParIdVerdicts, createurDuBlock, lancerClesParIndicesEnFond,'
+      + ' enCours: () => clesParIdEnCours, dernier: () => clesParIdDernier };')(
+      e.clesCache, e.clesPool, () => { e.ecritures += 1; }, rpcServeur, lecteurLogs, resoudreClePool, M.clePoolParId, M.indicesPoolIdDepuisPaires,
+      consommateurArchive, [{ nom: 'V8', adr: HOOK_NOTRE }], null, { pools: [] }, rpcActivite, '0x2e1d6cd1', '0x3b1fa6a3');
+    return { ...S, e, consommateurArchive };
   }
-  const paireAdof = { chainId: 'base', baseToken: { address: JETON }, quoteToken: { address: '0x0000000000000000000000000000000000000000' },
+  const v4 = { dexId: 'uniswap', labels: ['v4'] };
+  const paireAdof = { chainId: 'base', ...v4, baseToken: { address: JETON }, quoteToken: { address: '0x0000000000000000000000000000000000000000' },
     pairAddress: ID, pairCreatedAt: F.dexscreener.pairCreatedAt, liquidity: { usd: 9000 } };
+  const corpsDe = (s, chemin) => new Promise((fin) => { s.routeCle(chemin, { writeHead() {}, end: (x) => fin(JSON.parse(x)) }); });
   /* S1 — la cle LUE en fond est GARDEE : le Buy du tour suivant (clesConnuesServeur) la voit, et le tour suivant ne la relit pas */
   {
     const s = serveur();
@@ -271,19 +303,20 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
     const corps = await new Promise((fin) => { s.routeCle('/api/cle/' + JETON, { writeHead() {}, end: (x) => fin(JSON.parse(x)) }); });
     ok(corps.ok === true && Array.isArray(corps.cles) && corps.cles.length === 1 && corps.cles[0].poolId === ID && corps.cles[0].fee === 100,
       'F4 /api/cle rend la cle lue par son poolId (' + JSON.stringify(corps).slice(0, 120) + ')');
-    ok(s.e.profondeur === 0, 'F5 /api/cle n a pas lance la recherche par profondeur (' + s.e.profondeur + ')');
-    const c2 = await new Promise((fin) => { s.routeCle('/api/cle/' + JETON, { writeHead() {}, end: (x) => fin(JSON.parse(x)) }); });
-    ok(c2.depuisCache === true && c2.cles && c2.cles.length === 1 && s.e.getLogsNoeud === 1, 'F6 la seconde visite sert la cle gardee, sans getLogs (' + s.e.getLogsNoeud + ')');
+    /* finding 4 : la cle de l indice S AJOUTE a la recherche par profondeur, elle ne la remplace pas — celle-ci tourne encore */
+    ok(s.e.profondeur === 1, 'F5 /api/cle lance AUSSI la recherche par profondeur (' + s.e.profondeur + ' fois) ; sans resultat, la cle de l indice reste servie');
+    const c2 = await corpsDe(s, '/api/cle/' + JETON);
+    ok(c2.ok === true && c2.cles && c2.cles.length === 1 && s.e.getLogsNoeud === 1, 'F6 la seconde visite sert la cle gardee, sans getLogs de plus (' + s.e.getLogsNoeud + ')');
     const s2 = serveur();
     s2.retenirIndicesPoolId([paireAdof], [JETON]);
     const rails = await s2.clesRails(JETON);
-    ok(rails.length === 1 && rails[0].poolId === ID && s2.e.profondeur === 0, 'F7 les rails recoivent la cle de l indice, sans recherche par profondeur');
+    ok(rails.length === 1 && rails[0].poolId === ID && s2.e.profondeur === 1, 'F7 les rails recoivent la cle de l indice, et la recherche courte tourne encore (' + s2.e.profondeur + ')');
   }
   /* S4 — au plus 40 jetons cherches par tour ; le reste est reporte, pas perdu */
   {
     const s = serveur({ logs: [] });
     const jetons = Array.from({ length: 45 }, (_, i) => '0xb2' + (i + 1).toString(16).padStart(38, '0'));
-    s.retenirIndicesPoolId(jetons.map((t, i) => ({ chainId: 'base', baseToken: { address: t }, quoteToken: { address: '0x0000000000000000000000000000000000000000' },
+    s.retenirIndicesPoolId(jetons.map((t, i) => ({ chainId: 'base', ...v4, baseToken: { address: t }, quoteToken: { address: '0x0000000000000000000000000000000000000000' },
       pairAddress: '0x' + (i + 1).toString(16).padStart(64, '0'), pairCreatedAt: TS * 1000, liquidity: { usd: 1 } })), jetons);
     const c = await s.resoudreClesParIndices(jetons.map((adr) => ({ adr })));
     ok(c.essayees === 40 && c.reportees === 5 && s.e.getLogsNoeud === 40 && c.absentes === 40,
@@ -300,6 +333,56 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) 
     ok(s.clesConnuesServeur(JETON).length === 0 && s.clesParIdVerdicts.size === 0, 'F10 une NON_LUE n est ni gardee comme cle ni retenue comme absence');
     const c2 = await s.resoudreClesParIndices([{ adr: JETON }]);
     ok(c2.essayees === 1 && s.e.getLogsRefuses === 2, 'F11 le tour suivant reessaie (' + c2.essayees + ' essayee)');
+  }
+  /* finding 4 (revue) — la cle d un indice S AJOUTE, ne REMPLACE pas : ADOF a une cle d indice (hook ETRANGER e4af…) ET une pool
+   *   template (NOTRE hook) que seule la profondeur trouve. Les deux sont offertes ; le createur se lit sur la pool template. */
+  {
+    const s = serveur({ profondeur: [CLE_TEMPLATE] });
+    s.retenirIndicesPoolId([paireAdof], [JETON]);
+    await s.resoudreClesParIndices([{ adr: JETON }]); /* la cle de l indice est lue et gardee (comme en prod, par le tour de fond) */
+    ok((s.e.clesCache.get(JETON) || { cles: [] }).cles.length === 1, 'H0 temoin : seule la cle de l indice est gardee avant toute recherche par profondeur');
+    const ids = (l) => (l || []).map((c) => String(c.poolId).toLowerCase()).sort().join(',');
+    const deux = [ID, CLE_TEMPLATE.poolId].sort().join(',');
+    const rails = await s.clesRails(JETON);
+    ok(ids(rails) === deux && rails[0].poolId === CLE_TEMPLATE.poolId, 'H1 les rails offrent les DEUX cles, celle de la profondeur d abord (' + rails.map((c) => c.hooks.slice(0, 6)).join(',') + ')');
+    const s2 = serveur({ profondeur: [CLE_TEMPLATE] });
+    s2.retenirIndicesPoolId([paireAdof], [JETON]);
+    await s2.resoudreClesParIndices([{ adr: JETON }]);
+    const corps = await corpsDe(s2, '/api/cle/' + JETON);
+    ok(corps.ok === true && ids(corps.cles) === deux, 'H2 /api/cle rend les DEUX cles (' + (corps.cles || []).map((c) => c.hooks.slice(0, 6)).join(',') + ')');
+    ok(ids((s2.e.clesCache.get(JETON) || {}).cles) === deux && s2.e.ecritures >= 2, 'H3 l union est gardee (cles-pool.json) : ' + ids((s2.e.clesCache.get(JETON) || {}).cles).length + ' car.');
+    const p0 = s2.e.profondeur;
+    const corps2 = await corpsDe(s2, '/api/cle/' + JETON);
+    ok(corps2.depuisCache === true && ids(corps2.cles) === deux && s2.e.profondeur === p0, 'H4 une fois l union gardee, la visite suivante la sert du cache, sans nouvelle recherche');
+    const s3 = serveur({ profondeur: [CLE_TEMPLATE] });
+    s3.retenirIndicesPoolId([paireAdof], [JETON]);
+    await s3.resoudreClesParIndices([{ adr: JETON }]);
+    const qui = await s3.createurDuBlock(JETON);
+    ok(qui === CREATEUR && s3.e.appelsHook.includes(HOOK_NOTRE), 'H5 createurDuBlock lit le createur sur la pool template malgre la cle d indice (' + qui + ')');
+    /* une entree d AVANT (cle trouvee par profondeur, sans marque d indice) reste servie du cache, sans recherche : pas de surcout */
+    const s4 = serveur({ profondeur: [CLE_TEMPLATE] });
+    s4.e.clesCache.set(JETON, { ok: true, cles: [{ ...CLE_TEMPLATE }] });
+    const r4 = await s4.clesRails(JETON);
+    const c4 = await corpsDe(s4, '/api/cle/' + JETON);
+    ok(r4.length === 1 && c4.depuisCache === true && s4.e.profondeur === 0 && s4.e.getLogsNoeud === 0, 'H6 une cle d avant (profondeur) : servie du cache, aucune recherche ni getLogs');
+  }
+  /* finding 6 (revue) — la recherche de fond a SA propre etiquette d archive, et une paire de 66 caracteres qui n est pas une pool
+   *   Uniswap v4 (dexId / labels de DexScreener) ne coute aucun getLogs */
+  {
+    const s = serveur();
+    s.retenirIndicesPoolId([paireAdof], [JETON]);
+    await s.consommateurArchive.run('fond trending', async () => { s.lancerClesParIndicesEnFond([{ adr: JETON }]); });
+    for (let i = 0; i < 200 && s.enCours(); i += 1) await new Promise((o) => setTimeout(o, 5));
+    ok(!s.enCours() && s.dernier() && s.dernier().lues === 1, 'H7 la recherche de fond aboutit (' + JSON.stringify(s.dernier()) + ')');
+    ok(s.e.etiquettes.length === 1 && s.e.etiquettes[0] === 'fond cles poolId', 'H8 son getLogs est compte sous « fond cles poolId », pas sous le tour qui la lance (' + s.e.etiquettes.join(',') + ')');
+    const z = serveur();
+    const autre = '0xb2' + 'ab'.repeat(19);
+    z.retenirIndicesPoolId([
+      { ...paireAdof, dexId: 'pancakeswap', labels: ['v4'] },
+      { ...paireAdof, baseToken: { address: autre }, labels: ['v3'] },
+    ], [JETON, autre]);
+    const c = await z.resoudreClesParIndices([{ adr: JETON }, { adr: autre }]);
+    ok(c.essayees === 0 && c.sansIndice === 2 && z.e.getLogsNoeud === 0, 'H9 66 caracteres mais pas Uniswap v4 : aucun indice, aucun getLogs (' + JSON.stringify(c) + ')');
   }
 }
 console.log((ko ? 'ROUGE ' : 'VERT ') + (n - ko) + '/' + n);

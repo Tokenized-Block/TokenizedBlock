@@ -2,7 +2,11 @@
  *
  * POURQUOI : prod 20261025-game46 servait 194 lignes de Market, 153 sans cle de pool connue, 0 achetable ; ADOF REFUSE (« no initialized
  *   pool among the 15 keys read »). cle-par-pool-id.js lit la cle par le poolId que DexScreener sert. Mesure du 2026-10-25
- *   (mesures/cles-par-pool-id-trending-20261026.json) : 151 cles lues, 12 lignes achetables par le verdict du Buy.
+ *   (mesures/cles-par-pool-id-trending-20261026.json, compte) : 151 lignes avec un indice v4, 151 avec une cle lue, 12 achetables —
+ *   ⛔ ce « 12 » est celui du SCRIPT de mesure (mesure-cles-par-pool-id-20261026.mjs : verdict du Buy sur les SEULES cles lues par
+ *   l indice, sources TB servies par prod lues, sourcesTbLues true), PAS le Buy du serveur. Le serveur local, lui
+ *   (mesures/trending-local-apres-20261026.json, achatMarche), comptait 1 achetable sur 189 lignes, sources TB NON lues
+ *   (sourcesTbLues false), apres une seule recherche de fond (clesParPoolId : 40 essayees, 35 lues, 5 non lues, 112 reportees).
  * CE BANC (fork de Base, port DEDIE, compte impersonne, aucune cle privee, rien sur mainnet) :
  *   CIBLE = la premiere ligne TIERS achetable de cette mesure ; son indice (poolId, date) est relu chez DexScreener, en direct.
  *   I.   clePoolParId : horodatages lus SUR LE FORK, un getLogs filtre par le poolId ; le poolId se recalcule ; slot0 != 0 sur le fork ;

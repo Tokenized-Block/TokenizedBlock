@@ -15,9 +15,13 @@ const i = src.indexOf('const SEL_CREATEURS = ');
 const k = src.indexOf('async function createurDuBlock(', i), fin = /\r?\n\}\r?\n/.exec(src.slice(k));
 const j = fin ? k + fin.index + fin[0].length : -1; /* le fichier peut etre en CRLF */
 vu(i > 0 && j > i, 'createurDuBlock introuvable');
+/* 2026-10-26 : createurDuBlock unit les cles du cache et celles de la profondeur (entreeComplete / unionCles, extraits du MEME fichier) */
+const h0 = src.indexOf('const estCleIndice = '), h1 = src.indexOf('/** les cles trouvees par profondeur rejoignent', h0);
+const aides = h0 > 0 && h1 > h0 ? src.slice(h0, h1) : '';
+vu(aides.includes('function unionCles('), 'aides des cles (entreeComplete, unionCles) introuvables');
 const V2 = '0x8e1eb57ad2a87a4f7bc89ce94efd5cd77aec2044', ETRANGER = '0x' + 'ee'.repeat(20);
 const fabrique = ({ cles = [], scan = [], rpc }) => new Function('selecteurSrv', 'clesCache', 'resoudreClePool', 'fraisScan', 'HOOKS_FRAIS', 'HOOK_7030', 'rpcActivite',
-  src.slice(i, j) + '\nreturn createurDuBlock;')(selecteur, new Map(), async () => ({ ok: true, cles }), { pools: scan },
+  aides + '\n' + src.slice(i, j) + '\nreturn createurDuBlock;')(selecteur, new Map(), async () => ({ ok: true, cles }), { pools: scan },
   [{ adr: V2 }], HOOK_7030, rpc);
 const B = '0xb2000000000000000000007afa7ed748b0874f27', CREA = '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b', ATTAQUANT = '0x' + 'aa'.repeat(20);
 const mot = (a) => '0x' + a.slice(2).padStart(64, '0');

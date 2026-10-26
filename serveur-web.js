@@ -2669,9 +2669,35 @@ function garderCleLue(jeton, cle) {
   const cur = clesCache.get(t);
   const cles = cur && Array.isArray(cur.cles) ? cur.cles.slice() : [];
   if (cles.some((c) => String(c && c.poolId || '').toLowerCase() === cle.poolId)) return;
-  cles.push(cle);
+  /* marquee : une cle d indice S AJOUTE a la recherche par profondeur, elle ne la dispense pas (entreeComplete) */
+  cles.push({ ...cle, source: 'poolId' });
   clesCache.set(t, { ok: true, cles });
   ecrireCles();
+}
+/* ⛔⛔ 2026-10-26 (revue, finding 4) — UNE CLE D INDICE NE MASQUE PAS LA RECHERCHE PAR PROFONDEUR. Gardee dans clesCache, elle faisait
+ *   rendre a clesRails, /api/cle et createurDuBlock CET ensemble seul, pour toujours (cles-pool.json) : une pool template recente (NOTRE
+ *   hook) que DexScreener n indique pas restait cachee derriere la pool a hook etranger de l indice. Desormais une entree n est
+ *   « complete » (servie sans chercher) que si elle tient au moins une cle qui ne vient PAS d un indice (profondeur, mesuree, ou une
+ *   entree d avant ce jour, qui n a pas la marque) ; sinon la recherche par profondeur tourne (ses propres caches et budget) et
+ *   l UNION est rendue : d abord ses cles (l ordre d avant), puis celles des indices ; rien n est retire. */
+const estCleIndice = (c) => !!c && c.source === 'poolId';
+const entreeComplete = (e) => !!e && Array.isArray(e.cles) && e.cles.some((c) => c && !estCleIndice(c));
+function unionCles(profondes, autres) {
+  const out = [], vus = new Set();
+  for (const c of [...(Array.isArray(profondes) ? profondes : []), ...(Array.isArray(autres) ? autres : [])]) {
+    const id = String(c && c.poolId || '').toLowerCase();
+    if (!c || (id && vus.has(id))) continue;
+    if (id) vus.add(id);
+    out.push(c);
+  }
+  return out;
+}
+/** les cles trouvees par profondeur rejoignent l entree du jeton (union, gardee sur le volume) ; rend l union */
+function garderUnion(t, profondes) {
+  const cur = clesCache.get(t);
+  const cles = unionCles(profondes, cur && Array.isArray(cur.cles) ? cur.cles : []);
+  if (cles.length) { clesCache.set(t, { ok: true, cles }); ecrireCles(); }
+  return cles;
 }
 async function cleParUnIndice(jeton, ind) {
   const id = ind.poolId;
@@ -2730,25 +2756,34 @@ async function resoudreClesParIndices(lignes) {
   }
   return compte;
 }
+/** Lance la recherche des lignes sans cle EN FOND (non attendue, une seule a la fois), sous SA propre etiquette d archive.
+ *  ⛔ 2026-10-26 (revue, finding 6) : lancee depuis le tour de trending, elle heritait de son etiquette — ses getLogs profonds se
+ *    comptaient dans « fond trending » (parQui / refusParQui / nonEnvoyeesParQui de /sante). « fond cles poolId » les dit a part. */
+function lancerClesParIndicesEnFond(lignes) {
+  if (clesParIdEnCours) return;
+  clesParIdEnCours = true;
+  const aChercher = (Array.isArray(lignes) ? lignes : []).map((l) => ({ adr: l && l.adr }));
+  void consommateurArchive.run('fond cles poolId', () => resoudreClesParIndices(aChercher))
+    .then((c) => { clesParIdDernier = { ...c, fini: new Date().toISOString() }; })
+    .catch((e) => { clesParIdDernier = { erreur: String((e && e.message) || e).slice(0, 100), fini: new Date().toISOString() }; })
+    .finally(() => { clesParIdEnCours = false; });
+}
 
-/** La cle exacte d un block : le cache de /api/cle d abord, puis ses indices poolId (2026-10-26), sinon une recherche COURTE (10 fenetres, pas 40). */
+/** La cle exacte d un block : le cache de /api/cle d abord, sinon ses indices poolId (2026-10-26) ET une recherche COURTE (10 fenetres,
+ *  pas 40) — l union. Une entree faite des seules cles d indice n est pas complete : la recherche courte tourne encore (finding 4). */
 async function clesRails(a) {
   const k = String(a || '').toLowerCase();
   const c = clesCache.get(k);
-  if (c && Array.isArray(c.cles) && c.cles.length) return c.cles;
-  try {
-    const p = await clesParIndices(k);
-    if (p.cles.length) return p.cles;
-  } catch (_) { /* indices illisibles : la recherche courte d avant */ }
+  if (entreeComplete(c)) return c.cles;
+  let indices = c && Array.isArray(c.cles) ? c.cles : [];
+  if (!indices.length) {
+    try { indices = (await clesParIndices(k)).cles; } catch (_) { indices = []; /* indices illisibles : la recherche courte seule */ }
+  }
   try {
     const r = await resoudreClePool(k, 10);
-    if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) {
-      clesCache.set(k, { ok: true, cles: r.cles });
-      ecrireCles();
-      return r.cles;
-    }
+    if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) return garderUnion(k, r.cles);
   } catch (_) { /* cle illisible : vieDuBlock essaie ses cles standard et dit s il n a pas lu */ }
-  return [];
+  return indices;
 }
 
 /* ── LE MARCHE D UN BLOCK LU PAR LE SERVEUR : GET /api/marche/0x… (2026-10-04) ───────────────────────────────────────────────
@@ -4087,14 +4122,7 @@ async function lireTrending() {
      *   seule recherche a la fois) : une cle lue entre dans clesCache et le Buy du tour SUIVANT la juge. Le tour de trending ne
      *   l attend pas (meme duree qu avant, y compris sur un noeud qui refuse). Le compte servi est celui de la derniere recherche finie. */
     achatMarche.clesParPoolId = clesParIdDernier;
-    if (!clesParIdEnCours) {
-      clesParIdEnCours = true;
-      const aChercher = (resume.lignes || []).map((l) => ({ adr: l && l.adr }));
-      void resoudreClesParIndices(aChercher)
-        .then((c) => { clesParIdDernier = { ...c, fini: new Date().toISOString() }; })
-        .catch((e) => { clesParIdDernier = { erreur: String((e && e.message) || e).slice(0, 100), fini: new Date().toISOString() }; })
-        .finally(() => { clesParIdEnCours = false; });
-    }
+    lancerClesParIndicesEnFond(resume.lignes || []);
     corps = JSON.stringify({ ok: true, lu: new Date().toISOString(), blocksSuivis: adrs.length,
       fenetresRatees: (cr.fenetresRatees || []).length, lotsMarche: { ok: lotsOk, ko: lotsKo, statuts },
       emetteurEtat: em.etat, emetteurCompte: em.adresses.length, achatMarche, actionsChaine, routesFermees: true,
@@ -4616,9 +4644,11 @@ const SEL_CREATEURS = selecteurSrv('createurs(bytes32)'), SEL_CREATEUR_DE = sele
  *   naissance recente. Les pools viennent d abord des CLES lues (clesCache / resoudreClePool, comme /api/cle : UNIT y rend sa pool 7030
  *   0x79a40c32…), le balayage n est qu un complement. */
 async function createurDuBlock(b) {
-  let cles = (clesCache.get(b) || {}).cles;
-  if (!Array.isArray(cles) || !cles.length) {
-    try { const r = await resoudreClePool(b); cles = r && r.ok === true && Array.isArray(r.cles) ? r.cles : []; } catch (_) { cles = []; }
+  const entree = clesCache.get(b);
+  let cles = entree && Array.isArray(entree.cles) ? entree.cles : [];
+  /* 2026-10-26 (finding 4) : des cles d indice seules (souvent un hook etranger) ne dispensent pas de la recherche : l union */
+  if (!entreeComplete(entree)) {
+    try { const r = await resoudreClePool(b); if (r && r.ok === true && Array.isArray(r.cles)) cles = unionCles(r.cles, cles); } catch (_) { /* les cles deja la */ }
   }
   /* ⛔ NOS HOOKS SEULEMENT : n importe qui peut ouvrir une pool sur notre block avec SON hook ; un hook qui rend son propre
    *   `createurs()` se ferait devoir 30 %. Seuls HOOKS_FRAIS (V1..V8) et HOOK_7030 (lus dans le depot) sont interroges. */
@@ -6621,32 +6651,30 @@ function traiterRequete(req, res) {
      *   ⛔ ON NE CACHE QUE LES SUCCES. Un `ok:false` mis en cache figerait un echec reseau en
      *     verdict permanent — exactement le defaut qu on corrige. */
     const cleCache = clesCache.get(token.toLowerCase());
-    if (cleCache) {
+    /* 2026-10-26 (finding 4) : une entree faite des SEULES cles d indice poolId n est pas complete — la recherche par profondeur tourne
+     *   encore et l union est rendue ; une entree d avant (profondeur, mesuree) reste servie telle quelle */
+    if (entreeComplete(cleCache)) {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(JSON.stringify({ ...cleCache, depuisCache: true }));
       return;
     }
-    /* 2026-10-26 : les indices poolId du fil de marche d abord (un getLogs etroit) ; sans cle LUE par eux, la recherche par profondeur d avant */
+    /* 2026-10-26 : les indices poolId du fil de marche (un getLogs etroit) PUIS la recherche par profondeur d avant : l union */
     clesParIndices(token).catch(() => ({ cles: [] })).then((p) => {
-      /* une cle LUE par son indice est deja dans clesCache (garderCleLue) : rendue telle quelle */
-      if (p && p.cles.length) {
+      /* une cle LUE par son indice est deja dans clesCache (garderCleLue) */
+      const indices = p && p.cles.length ? p.cles : (cleCache && Array.isArray(cleCache.cles) ? cleCache.cles : []);
+      resoudreClePool(token).then((r) => {
+        let corps = r;
+        try {
+          if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) corps = { ...r, cles: garderUnion(token.toLowerCase(), r.cles) };
+          else if (indices.length) corps = { ok: true, cles: indices, viaPoolId: true, profondeur: { ok: false, pourquoi: String((r && r.pourquoi) || 'no key found by depth').slice(0, 120) } };
+        } catch (_) { /* ⛔ une mise en cache ratee ne doit pas priver le client de sa reponse */ }
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
-        res.end(JSON.stringify({ ok: true, cles: p.cles, viaPoolId: true }));
-        return;
-      }
-    resoudreClePool(token).then((r) => {
-      try {
-        if (r && r.ok === true && Array.isArray(r.cles) && r.cles.length) {
-          clesCache.set(token.toLowerCase(), { ok: true, cles: r.cles });
-          ecrireCles();
-        }
-      } catch (_) { /* ⛔ une mise en cache ratee ne doit pas priver le client de sa reponse */ }
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
-      res.end(JSON.stringify(r));
-    }).catch((e) => {
-      res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
-      res.end(JSON.stringify({ ok: false, etat: 'NON_LU', pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
-    });
+        res.end(JSON.stringify(corps));
+      }).catch((e) => {
+        res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+        if (indices.length) res.end(JSON.stringify({ ok: true, cles: indices, viaPoolId: true, profondeur: { ok: false, etat: 'NON_LU', pourquoi: 'depth search not read: ' + String(e.message || e).slice(0, 120) } }));
+        else res.end(JSON.stringify({ ok: false, etat: 'NON_LU', pourquoi: 'pool key not read: ' + String(e.message || e).slice(0, 120) }));
+      });
     });
     return;
   }

@@ -2,7 +2,20 @@
  * (cle-par-pool-id.js), et combien sont achetables par le verdict du Buy de Market (achat-marche.js, vrai Quoter v4 de mainnet,
  * sources TB servies par prod). Lecture seule : DexScreener (paires brutes, lots de 30), un noeud public (blocs, getLogs, eth_call),
  * prod (deux lectures, en-tete x-ms-monitor). Rien n est signe ni envoye.
- * Usage : node mesure-cles-par-pool-id-20261026.mjs <trending.json de prod> [sortie.json] */
+ * Usage : node mesure-cles-par-pool-id-20261026.mjs <trending.json de prod> [sortie.json]
+ * ⛔ CE QUE DISENT LES FICHIERS COMMITES (revue 2026-10-26, finding 5 : le rapport du commit 6d1e86a melangeait les deux sources) :
+ *   - mesures/trending-prod-20261025-game46.json : la reponse de PROD (achatMarche, le Buy du serveur de prod) : 194 lignes, 153 sans
+ *     cle, 0 achetable, sourcesTbLues true.
+ *   - mesures/cles-par-pool-id-trending-20261026.json : la sortie de CE script sur ces 194 lignes (compte) : 151 avec un indice, 151
+ *     avec une cle lue, 12 achetables, 139 refusees. Ce « 12 » est le verdict du Buy (achat-marche.js) calcule ICI, sur les SEULES
+ *     cles lues par l indice, avec les sources TB de prod lues (sourcesTbLues true) — ce n est PAS le compte d un serveur.
+ *   - mesures/trending-local-avant-20261026.json / -apres-20261026.json : la reponse du serveur LOCAL avant / apres le changement
+ *     (achatMarche, son propre Buy), sources TB NON lues (sourcesTbLues false) : avant 167 lignes, 155 sans cle, 0 achetable ; apres
+ *     189 lignes, 141 sans cle, 1 achetable, apres UNE recherche de fond (clesParPoolId : 40 essayees, 35 lues, 5 non lues, 28 sans
+ *     indice, 112 reportees).
+ *   ⚠️ indicesPoolIdDepuisPaires ne retient plus, depuis le 2026-10-26, que les paires que DexScreener dit Uniswap v4 (dexId / labels) :
+ *     ce script relance aujourd hui ne compterait pas une paire de 66 caracteres sans ces marques (le fichier ci-dessus a ete produit
+ *     avant ; mesures/dexscreener-paires-v4-labels-20261026.json : 159 sur 159 portaient ces marques). */
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
