@@ -55,3 +55,14 @@ export function creerCerveauxPage({ creer }) {
     taille() { return m.size; },
   };
 }
+
+/* ⛔⛔ game57 #6 : UN numero de battement. C est le `tick` de L instance de la page pour cette adresse (vu.tick : les battements
+ *     que CE cerveau a vecus, repris de la memoire du navigateur ou de la chaine) — jamais celui d une copie, ni une hauteur de
+ *     bloc, ni un nombre d evenements on-chain, ni le rang d un pas de rejeu. Sans instance sur la page : le repli (instantane). */
+export function battementAffiche(registre, adr, repli = null) {
+  const n = registre && typeof registre.battement === 'function' ? registre.battement(adr) : null;
+  if (Number.isSafeInteger(n)) return n;
+  return repli && Number.isSafeInteger(repli.tick) ? repli.tick : null;
+}
+/** UN format pour ce numero, partout (panneau, Brain, fenetre Brain, Live). */
+export const texteBattement = (n) => (Number.isSafeInteger(n) ? n.toLocaleString('en-US') : '—');

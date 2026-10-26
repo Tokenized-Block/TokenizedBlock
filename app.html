@@ -4930,7 +4930,7 @@ function cerveauAvecMemoire(adr) {
  *     La map, le profil, Brain / le Control panel, la fenetre Brain et Live lisent et font battre la MEME instance (cerveaux-page.js),
  *     creee UNE fois depuis la memoire de ce navigateur, avec un seul pas par battement de page (cycleBattement). */
 const cerveauxPage = creerCerveauxPage({ creer: (a) => cerveauAvecMemoire(a) });
-import { creerCerveauxPage } from './cerveaux-page.js';
+import { creerCerveauxPage, battementAffiche, texteBattement } from './cerveaux-page.js';
 import { nourritureDuBlock } from './nourriture.js';
 /* ⛔ LE CREATEUR D UN BLOCK NE CHANGE JAMAIS (2026-09-19, charge RPC) : nourritureDuBlock le recherchait a CHAQUE lecture
  *    (getLogs + blockNumber + tx). Trouve une fois, il est garde (memoire + stockage navigateur) et passe en `creation`.
@@ -25461,7 +25461,7 @@ function battreBrain() {
         ? ' The beat below is real and its own: it comes from its wiring, not from any price.'
         : '')
     : '';
-  $('#bTick').textContent = r.vu.tick;
+  $('#bTick').textContent = texteBattement(r.vu.tick);
   $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
   $('#bD').textContent = r.vu.droite_hz.toFixed(1);
   $('#bVirage').textContent = r.vu.virage.toFixed(3);
@@ -26051,7 +26051,7 @@ function parlerAuCerveau(cle) {
   if (!r) { vision.parle = null; out.textContent = ''; peindreParleVision(); return; }
   vision.parle = { cle, adr: vision.adr, r };
   const liste = (l) => (l.length ? l.join(', ') : 'none');
-  const dire = (e) => 'on beat ' + e.battement + ': ' + (e.allumes.length || e.eteints.length
+  const dire = (e) => 'on replay step ' + e.battement + ': ' + (e.allumes.length || e.eteints.length
     ? 'fire because of it ' + liste(e.allumes) + ' · go quiet ' + liste(e.eteints) : 'no neuron changed')
     + (e.phaseSans !== e.phaseAvec ? ' · mood ' + humeurCourteVision(e.phaseSans) + ' → ' + humeurCourteVision(e.phaseAvec) : '');
   const w = r.cablage;
@@ -26176,7 +26176,7 @@ function peindreVision() {
   }
   vision.c = c; vision.vu = vuMontre; vision.capMap = capMap; vision.histoMontre = histo; vision.cibleH = h; vision.etatCible = cible.etat || null; vision.faitsCible = cible.faits || null;
   vision.pouls = poulsDe(vuMontre, { reduit: bvReduit() });
-  $('#bvNumero').textContent = numeroBattement(vuMontre) === null ? '—' : 'Beat ' + numeroBattement(vuMontre);
+  $('#bvNumero').textContent = numeroBattement(vuMontre) === null ? '—' : 'Beat ' + texteBattement(numeroBattement(vuMontre));
   $('#bvHumeur').textContent = vuMontre ? humeurCourteVision(vuMontre.phase) : 'no beat yet';
   $('#bvPhrase').textContent = voixDedans(vuMontre).texte;
   $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuMontre ? ', beat ' + vuMontre.tick + ', ' + humeurCourteVision(vuMontre.phase) : ''));
@@ -26415,7 +26415,7 @@ function lancerSimVision() {
   rasterVision($('#bvRasterSi'), s.siEtAlors.pas);
   const dire = (r) => 'ends ' + r.humeurFinale + ' · ' + r.spikes + ' spikes in ' + s.n + ' beats · steering ' + r.virageFinal;
   rLu.textContent = dire(s.lu);
-  rSi.textContent = dire(s.siEtAlors) + (s.premierEcart === null ? ' · no difference' : ' · differs from beat ' + (s.premierEcart + 1))
+  rSi.textContent = dire(s.siEtAlors) + (s.premierEcart === null ? ' · no difference' : ' · differs from replay step ' + (s.premierEcart + 1))
     + (s.refus.length ? ' · ' + s.refus.join(' ') : '');
   emp.textContent = 'Facts from its beat ' + (vision.tickFaits ?? '—') + '. Replay from its seed (tick 0) — the live brain also carries memory, so its mood can differ. '
     + 'Fingerprints (same seed, facts and change give the same value): as read ' + bvCourt(s.lu.empreinte) + ' · what if ' + bvCourt(s.siEtAlors.empreinte)
@@ -26612,7 +26612,7 @@ function peindreTuileLive(t) {
   const ms = Math.round((performance.now() - t0) * 100) / 100;
   const m = liveMesures.get(t.adr) || { n: 0, total: 0, max: 0, dernier: 0 };
   m.n++; m.total += ms; m.max = Math.max(m.max, ms); m.dernier = ms; liveMesures.set(t.adr, m);
-  pied.textContent = 'beat ' + e.tick + ' · ' + e.spikes + ' fired · ' + t.histo.length + ' beats kept · from ' + e.sourceTexte;
+  pied.textContent = 'beat ' + texteBattement(e.tick) + ' · ' + e.spikes + ' fired · ' + t.histo.length + ' beats kept · from ' + e.sourceTexte;
   el.dataset.liveTick = String(e.tick);
   el.dataset.liveEmpreinte = r && r.k ? r.k.empreinte : '';
 }
@@ -30375,7 +30375,7 @@ function bcPeindreCerveau(a, snap) {
   t.push(['Mood', String(snap.humeur || '—')]);
   const ressenti = snap.tick === null || snap.tick === undefined ? [] : bcRessenti(snap);
   if (ressenti.length) t.push(['Feels', ressenti.join(' · ')]);
-  t.push(['Beat', snap.tick === null || snap.tick === undefined ? '—' : Number(snap.tick).toLocaleString('en-US')]);
+  t.push(['Beat', texteBattement(battementAffiche(cerveauxPage, a, snap))]);
   if (Number.isFinite(Number(sp.actifs)) && Number.isFinite(Number(sp.neurones))) t.push(['Firing now', sp.actifs + ' / ' + sp.neurones]);
   if (Number.isFinite(Number(snap.memoire))) t.push(['Memory', Math.round(Number(snap.memoire) * 100) + ' %']);
   if (Number.isFinite(Number(sp.depuis_ouverture))) t.push(['Spikes this visit', Number(sp.depuis_ouverture).toLocaleString('en-US')]);
@@ -31137,7 +31137,7 @@ function bcPeindre(snap) {
   $('#bcAvatar').dataset.phase = snap.phase || 'NON_LU';
   $('#bcHumeur').textContent = snap.phrase || '';
   $('#bcPhase').textContent = snap.humeur || '—';
-  $('#bcTick').textContent = snap.tick === null || snap.tick === undefined ? '—' : String(snap.tick);
+  $('#bcTick').textContent = texteBattement(battementAffiche(cerveauxPage, a, snap));
   $('#bcPrix').textContent = mk && Number(mk.prixUsd) > 0 ? (Number(mk.prixUsd) >= 1 ? '$' + Number(mk.prixUsd).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '$' + Number(mk.prixUsd).toPrecision(3)) : '—';
   $('#bcLiq').textContent = mk && Number(mk.liquiditeUsd) > 0 ? usdCourt(mk.liquiditeUsd) : '—';
   /* tant que le cerveau n a pas battu, le raster n a rien a montrer : pas de cadre vide */
