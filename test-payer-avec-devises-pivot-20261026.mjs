@@ -25,7 +25,7 @@
  *      qui n est plus offert (ou grise, ou une autre fiche) RETIRE le montant tape et dit pourquoi ; preparerEchange EXECUTE prend
  *      le choix AU CLIC (un reset pendant l await de pret ne change ni le chemin ni les decimales) ;
  *   H. chaque regle tue son mutant (copies EN MEMOIRE de app.html, jamais le fichier).
- * serie-delai-s: 900 — 266 s SEUL (2026-10-26, avant les cas S) puis davantage avec 48 mutants ; tue a 300 s dans une serie a 3.
+ * serie-delai-s: 1800 — 977 s SEUL (2026-10-26, 123 assertions, 61 mutants, 4 a la fois) ; 266 s avant les cas S ; tue a 300 s dans une serie a 3.
  * NE PROUVE PAS : un vrai wallet, un vrai plan (le banc fork banc-devises-pivot-vers-bloc-fork-20261026 le fait cote serveur), les
  *   pixels (mesure navigateur a part).
  */
@@ -55,8 +55,12 @@ const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteD
   'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees', 'cleEtapePreparee', 'gardeClicEtape',
   'symboleDuChampBuy', 'majPucesPremier', 'cliquerPucePremier',
   'avancerIntention', 'retirerTexteEtape', 'intentionChangee', 'nouvelleIntention', 'intentionVivante', 'ajouterEtape',
-  'afficherPlanMultiSauts', 'ligneFraisMultiSauts'];
+  'afficherPlanMultiSauts', 'ligneFraisMultiSauts',
+  'reinitialiserChampBuyPourBlock', 'signerEchange', 'afficherFranchissement', 'proposerSortieUsdcApresVente', 'preparerEthUsdc'];
 const PHRASE_ETIQ = (s) => 'Buy — ' + s + ' to spend';
+/* le nombre de rebatissages des cas « survit aux rebatissages » : 44 (la mesure de la revue) sur app.html ; 6 sur les mutants
+ *   (aucun mutant ne depend du nombre — il depend d UN rebatissage — et le banc entier passait 1 000 s) */
+let NREB = 44;
 
 /* une fonction de premier niveau : de `function NOM(` a la premiere `}` en colonne 0 ; absente = '' */
 const extraire = (src, nom) => {
@@ -75,8 +79,10 @@ class El {
   /* #peActions : de vrais enfants (les boutons prepares) ; innerHTML = '' les retire, comme le DOM */
   get children() { return this._enfants || (this._enfants = []); }
   get innerHTML() { return this._html || ''; }
-  set innerHTML(h) { this._html = String(h); this._enfants = []; }
+  set innerHTML(h) { this._html = String(h); this._enfants = []; this.textContent = String(h).replace(/<[^>]*>/g, ''); }
   appendChild(o) { this.children.push(o); return o; }
+  querySelectorAll() { return this.children; }
+  scrollIntoView() {}
   addEventListener(t, f) { (this.ecoute[t] ||= []).push(f); }
   /* une frappe de la personne : la valeur, puis les ecouteurs `input` REELS de app.html (voir ecouteursChamps) */
   taper(v) { this.value = v; for (const f of this.ecoute.input || []) f({ target: this }); }
@@ -94,7 +100,7 @@ class Sel extends El {
 /** Un monde par cas : le code de `src` (app.html ou un mutant), un DOM faux, une chaine factice qui ne repond qu a balanceOf. */
 function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = false } = {}) {
   const els = {};
-  for (const id of ['profil', 'peAchat', 'peDeviseBloc', 'peDeviseNote', 'peRetourFiat', 'peEtat', 'peActions', 'peLignes', 'peVente', 'peMaxEth', 'peMaxBloc', 'peUsdcEth', 'peRecoit']) els['#' + id] = new El(id);
+  for (const id of ['profil', 'peAchat', 'peDeviseBloc', 'peDeviseNote', 'peRetourFiat', 'peEtat', 'peActions', 'peLignes', 'peVente', 'peMaxEth', 'peMaxBloc', 'peUsdcEth', 'peRecoit', 'peUsdcRow']) els['#' + id] = new El(id);
   els['#peDevise'] = new Sel('peDevise');
   els['#peAchat'].label = { firstChild: { nodeType: 3, textContent: 'Buy — ETH to spend' } };
   els['#peRetourFiat'].hidden = true;
@@ -110,7 +116,8 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
   els['#pePremier'] = premier;
   els['#peAcheter'] = new El('peAcheter');
   const etat = { balanceOf: [], panneau: [], ouvert: 0, repeints: 0, historique: [], multi: [], sansUsdc: false, surPret: null, decimales: [], prepare: 0,
-    qui: [], plans: [], delais: [], sautsOk: false, delaiSolde: 0, pendantSolde: null, refuses: [] };
+    qui: [], plans: [], delais: [], sautsOk: false, delaiSolde: 0, pendantSolde: null, refuses: [],
+    planOk: false, delaisPlan: [], plansHist: [], delaiEthUsdc: 0, connecter: null };
   els['#peAcheter'].click = () => { etat.prepare += 1; };
   const v = quote === ETH ? { etat: 'LUE', paire: 'ETH', cle: { hooks: '0x' + '1'.repeat(40) } } : { etat: 'LUE', paire: 'DEVISE', deviseAdr: quote, cle: { hooks: '0x' + '1'.repeat(40) } };
   const ctx = {
@@ -132,17 +139,36 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
     genAchat: 0, intentionCourante: null, etatParSignature: false, champBlocBuy: null,
     echangeAutorise: () => true, fraisEstDynamique: () => false,
     direPrealable: () => {}, texteRefusConnexion: (t) => t, texteRefusEchange: () => 'refused',
-    pret: async () => { if (etat.surPret) etat.surPret(); return true; },
+    /* `etat.connecter` : pret CONNECTE ce compte (le wallet n etait pas connecte au clic) */
+    pret: async () => { if (etat.connecter) ctx.compte = etat.connecter; if (etat.surPret) etat.surPret(); return true; },
     decimalesDe: async (a) => { etat.decimales.push(String(a).toLowerCase()); return [EURC, USDC, OUSD].includes(String(a).toLowerCase()) ? 6 : String(a).toLowerCase() === CBBTC ? 8 : 18; },
     clesReellesDe: async () => [], prixUsdDeviseLus: new Map(), LIQ_MIN_BUY_USD: 1000, FEE_WALLET: '0x' + 'a'.repeat(40), RESEAUX: {},
-    planEchange: async (x) => { etat.historique.push(x); throw new Error('historique arrete par le banc'); },
+    /* `etat.planOk` : le chemin historique (ETH) rend, apres `etat.delaisPlan.shift()` ms, `etat.plansHist[rang]` (D3 sur planEchange) */
+    planEchange: async (x) => {
+      const rang = etat.historique.length;
+      etat.historique.push(x);
+      if (!etat.planOk) throw new Error('historique arrete par le banc');
+      { const d = etat.delaisPlan.length ? etat.delaisPlan.shift() : 0; if (typeof d === 'function') await d(); else await new Promise((r) => setTimeout(r, d)); }
+      return etat.plansHist[rang] || { etat: 'APPROBATIONS', etapes: [{ nom: 'Allow for ' + x.montant, to: USDC, data: '0x' }] };
+    },
+    libelleFrais: () => ({ court: '' }), window: { ethereum: null },
+    /* signerEchange et le bouton du franchissement : un wallet qui REFUSE (la phrase reelle du refus) */
+    echangeEnCours: false, liquiditeEnCours: false,
+    envoyerDepuisWallet: async () => ({ etat: 'REFUSE_PAR_UTILISATEUR', pourquoi: 'User rejected the request.' }),
+    envoyerLotAtomique: async () => ({ etat: 'REFUSE_PAR_UTILISATEUR', pourquoi: 'User rejected the request.' }),
+    estRefusWallet: (r) => r && r.etat === 'REFUSE_PAR_UTILISATEUR', TEXTE_REFUS_WALLET: 'Not done: you declined in your wallet.',
+    messageEnvoi: (l) => (l && l.etat === 'REFUSE_PAR_UTILISATEUR' ? 'Not done: you declined in your wallet.' : 'Not done.'),
+    aEteDiffusee: () => false, enTexte: (t) => String(t), estWalletDeFrais: () => true,
+    /* la sortie ETH -> USDC : un devis lent (`etat.delaiEthUsdc`), puis un refus de plan (on ne mesure que la phrase « Quoting ») */
+    planEthVersUsdc: async () => { await new Promise((r) => setTimeout(r, etat.delaiEthUsdc || 0)); return { etat: 'REFUSE', pourquoi: 'bench' }; },
     /* `etat.sautsOk` : les sauts sont batis (apres `etat.delais.shift()` ms), puis planEchangeMultiSauts rend APPROBATIONS — le rendu
      *   REEL d afficherPlanMultiSauts pose alors « Approval 1 of 1 » (D3 : deux Prepare qui se chevauchent) */
     sautsDepuisChemin: async (x) => {
       const rang = etat.multi.length;
       etat.multi.push(x);
       if (!etat.sautsOk) return { etat: 'REFUSE', pourquoi: 'arrete par le banc' };
-      await new Promise((r) => setTimeout(r, etat.delais.length ? etat.delais.shift() : 0));
+      /* un delai (ms) ou une FONCTION : l appel ne repond qu une fois la condition tenue (l ordre ne depend plus de la charge) */
+      { const d = etat.delais.length ? etat.delais.shift() : 0; if (typeof d === 'function') await d(); else await new Promise((r) => setTimeout(r, d)); }
       /* `etat.refuses` : les appels (par rang) dont les sauts reviennent REFUSES, tard */
       if (etat.refuses.includes(rang)) return { etat: 'REFUSE', pourquoi: 'late refusal of call ' + rang };
       return { etat: 'OK', sauts: [{ cle: { hooks: ETH } }] };
@@ -155,7 +181,9 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
        *   affamer les minuteries du banc ni tourner pour toujours — au-dela de 60 lectures, la chaine factice ne repond plus */
       await new Promise((r) => setTimeout(r, etat.delaiSolde || 0));
       if (etat.pendantSolde) { const f = etat.pendantSolde; etat.pendantSolde = null; f(); }
-      if (etat.balanceOf.length > 60) throw new Error('la chaine factice ne repond plus (borne du banc)');
+      /* au-dela de 60 lectures la chaine factice NE REPOND PLUS (promesse jamais tenue) : la boucle s arrete ; un cas qui attend ce
+       *   solde tombe sur le delai du cas (20 s, voir `cas`) et compte ROUGE — jamais un banc bloque */
+      if (etat.balanceOf.length > 60) return new Promise(() => {});
       if (soldeIllisible) throw new Error('429');
       const s = soldes[String(call.to).toLowerCase()];
       return '0x' + BigInt(s || 0).toString(16);
@@ -182,12 +210,19 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
   return { ctx, els, etat, v, f: ctx.__, opts, rebatir: () => ctx.__.majDevisesDentree(v) };
 }
 const attendre = () => new Promise((r) => setTimeout(r, 10));
+/* attendre un ETAT, pas une duree : sous la charge d une serie, 5 ms ne garantissent rien (borne : 10 s, puis on continue) */
+const attendreQue = async (cond) => { for (let i = 0; i < 1000 && !cond(); i += 1) await new Promise((r) => setTimeout(r, 10)); };
 const pivotsDe = (m) => m.opts().filter((o) => [EURC, CBBTC, WETH].includes(o.v));
 
 /** Toutes les regles sur un texte donne : rend la liste des violations (vide = vert). Le MEME code juge app.html et ses mutants. */
 async function verifier(src) {
   const ko = [];
-  const cas = async (titre, f) => { try { await f(); } catch (e) { ko.push(titre + ' — ' + String(e.message).split('\n')[0]); } };
+  const cas = async (titre, f) => {
+    let minuterie = null;
+    try {
+      await Promise.race([f(), new Promise((_, rej) => { minuterie = setTimeout(() => rej(new Error('delai du cas (20 s) depasse')), 20000); })]);
+    } catch (e) { ko.push(titre + ' — ' + String(e.message).split('\n')[0]); } finally { clearTimeout(minuterie); }
+  };
 
   await cas('A block cote ETH sans wallet : EURC, cbBTC, WETH offerts et selectionnables', async () => {
     const m = monde(src); m.rebatir();
@@ -272,7 +307,7 @@ async function verifier(src) {
   await cas('G garde du retour fiat avec les pivots : USDC + montant tiennent ; choisir EURC retire le montant', async () => {
     const m = monde(src);
     m.ctx.fiatRetenu = { block: BLOC, devise: USDC, actif: 'USDC', montant: '0.001752', pose: null, debut: 'Arrived.', phrasePose: 'Prefilled.', choixPersonne: false };
-    for (let i = 0; i < 15; i += 1) m.rebatir();
+    for (let i = 0; i < Math.min(15, NREB); i += 1) m.rebatir();
     assert.equal(m.els['#peDevise'].value, USDC);
     assert.equal(m.els['#peAchat'].value, '0.001752');
     m.els['#peDevise'].choisir(EURC);
@@ -288,7 +323,7 @@ async function verifier(src) {
       assert.ok(m.opts().some((o) => o.v === adr && !o.off), nom + ' n est pas offert dans le banc : ' + JSON.stringify(m.opts().map((o) => o.t)));
       m.els['#peDevise'].choisir(adr);
       m.els['#peAchat'].value = '25';
-      for (let i = 0; i < 44; i += 1) { m.rebatir(); if (i % 11 === 0) await attendre(); }
+      for (let i = 0; i < NREB; i += 1) { m.rebatir(); if (i % 11 === 0) await attendre(); }
       await attendre();
       assert.equal(m.els['#peDevise'].value, adr, 'apres 44 rebatissages le selecteur est sur ' + m.els['#peDevise'].value);
       assert.ok(m.ctx.deviseDentree && m.ctx.deviseDentree.devise === adr, 'deviseDentree = ' + JSON.stringify(m.ctx.deviseDentree && m.ctx.deviseDentree.devise));
@@ -401,7 +436,7 @@ async function verifier(src) {
     m.rebatir();
     m.els['#peDevise'].choisir(USDC);
     m.els['#peAchat'].taper('25');
-    for (let i = 0; i < 44; i += 1) m.rebatir();
+    for (let i = 0; i < NREB; i += 1) m.rebatir();
     m.els['#peDevise'].choisir(USDC);
     assert.equal(m.els['#peAchat'].value, '25');
   });
@@ -465,7 +500,7 @@ async function verifier(src) {
     const b = { textContent: nom, clics: 0, dataset: {}, ecoute: {}, surClic() { this.clics += 1; },
       addEventListener(t, f) { (this.ecoute[t] ||= []).push(f); } };
     b.closest = () => b;
-    m.f.ajouterEtape(b);
+    m.f.ajouterEtape(b, m.ctx.intentionCourante); /* l intention de la DERNIERE preparation du banc */
     return b;
   };
   /* un clic comme le DOM : les ecouteurs de #peActions (capture) d abord, puis ceux du bouton ; le gestionnaire du bouton seulement
@@ -474,7 +509,7 @@ async function verifier(src) {
     const ev = { target: b, arrete: false, preventDefault() {}, stopImmediatePropagation() { this.arrete = true; } };
     if (!detache) for (const f of m.els['#peActions'].ecoute.click || []) { if (!ev.arrete) f(ev); }
     for (const f of b.ecoute.click || []) { if (!ev.arrete) f(ev); }
-    if (!ev.arrete) b.surClic();
+    if (!ev.arrete && b.surClic) b.surClic();
     return !ev.arrete;
   };
   const preparer = async (m) => { try { await m.f.preparerEchange('ACHAT'); } catch (_) { /* la suite n est pas sous test */ } };
@@ -528,7 +563,7 @@ async function verifier(src) {
     await preparer(m);
     m.etat.surPret = null;
     const b = bouton(m, 'Approval 1 of 2');
-    for (let i = 0; i < 44; i += 1) m.rebatir();
+    for (let i = 0; i < NREB; i += 1) m.rebatir();
     assert.equal(cliquer(m, b), true, 'une etape preparee pour USDC 25 est refusee alors que rien n a change : ' + m.els['#peEtat'].textContent);
     assert.equal(b.clics, 1);
   });
@@ -551,7 +586,7 @@ async function verifier(src) {
     assert.equal(m.els['#peAchat'].value, '0.001752');
     await preparer(m);
     const b = bouton(m, 'Approval 1 of 2');
-    for (let i = 0; i < 15; i += 1) m.rebatir();
+    for (let i = 0; i < Math.min(15, NREB); i += 1) m.rebatir();
     assert.equal(m.els['#peActions'].children.length, 1, 'la bascule du retour fiat a retire le plan');
     assert.equal(cliquer(m, b), true, m.els['#peEtat'].textContent);
   });
@@ -590,9 +625,10 @@ async function verifier(src) {
   await cas('S-D3 deux Prepare qui se chevauchent (le 1er plus lent) : seul le 2e pose une etape, pour 30 ; le 1er se tait', async () => {
     const m = monde(src); m.rebatir();
     m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
-    m.etat.sautsOk = true; m.etat.delais = [40, 5];
+    /* la 1re preparation ne repond qu APRES que la 2e a pose son etape : sa reponse est TARDIVE par construction */
+    m.etat.sautsOk = true; m.etat.delais = [() => attendreQue(() => m.els['#peActions'].children.length >= 1), 5];
     const p1 = preparer(m);
-    await new Promise((r) => setTimeout(r, 5));
+    await attendreQue(() => m.etat.multi.length === 1); /* la 1re preparation est EN VOL (ses sauts demandes) avant la frappe */
     m.els['#peAchat'].taper('30');
     const p2 = preparer(m);
     await Promise.all([p1, p2]); await attendre();
@@ -603,9 +639,9 @@ async function verifier(src) {
     /* et un 1er Prepare dont les sauts reviennent REFUSES, tard : son refus ne s ecrit pas sous l etape du 2e */
     const r = monde(src); r.rebatir();
     r.els['#peDevise'].choisir(USDC); r.els['#peAchat'].taper('25');
-    r.etat.sautsOk = true; r.etat.delais = [40, 5]; r.etat.refuses = [0];
+    r.etat.sautsOk = true; r.etat.delais = [() => attendreQue(() => r.els['#peActions'].children.length >= 1), 5]; r.etat.refuses = [0];
     const q1 = preparer(r);
-    await new Promise((x) => setTimeout(x, 5));
+    await attendreQue(() => r.etat.multi.length === 1);
     r.els['#peAchat'].taper('30');
     await Promise.all([q1, preparer(r)]); await attendre();
     assert.ok(!/refused/.test(r.els['#peEtat'].textContent), 'le refus tardif du 1er Prepare s ecrit sous le 2e : ' + r.els['#peEtat'].textContent);
@@ -613,7 +649,7 @@ async function verifier(src) {
     /* un DOUBLE clic sur Prepare, meme montant : une seule etape (le compteur, pas la cle, distingue les deux) */
     const d = monde(src); d.rebatir();
     d.els['#peDevise'].choisir(USDC); d.els['#peAchat'].taper('25');
-    d.etat.sautsOk = true; d.etat.delais = [30, 5];
+    d.etat.sautsOk = true; d.etat.delais = [() => attendreQue(() => d.els['#peActions'].children.length >= 1), 5];
     await Promise.all([preparer(d), preparer(d)]); await attendre();
     assert.equal(d.els['#peActions'].children.length, 1, 'double Prepare : ' + d.els['#peActions'].children.length + ' etapes');
   });
@@ -702,6 +738,120 @@ async function verifier(src) {
     assert.ok(!/needs an approval first/.test(m.els['#peEtat'].textContent), 'phrase perimee : ' + m.els['#peEtat'].textContent);
   });
 
+  /* ── U : revue de 8b15140 ── */
+  await cas('U1 « Next: turn this ETH into USDC » passe par ajouterEtape avec SON intention (ETHUSDC) ; #peUsdcEth change sans evenement -> clic arrete', async () => {
+    const m = monde(src); m.rebatir();
+    const g0 = m.ctx.genAchat;
+    m.f.proposerSortieUsdcApresVente(10n ** 17n);
+    assert.equal(m.els['#peUsdcEth'].value, '0.1');
+    assert.ok(m.ctx.genAchat > g0, 'ecrire #peUsdcEth n a pas fait avancer le compteur');
+    const b = m.els['#peActions'].children[0];
+    assert.ok(b && /turn this ETH into USDC/.test(b.textContent), 'bouton absent');
+    const i = JSON.parse(b.dataset.intention || 'null');
+    assert.ok(i && i.sens === 'ETHUSDC' && i.montant === '0.1', 'intention du bouton : ' + b.dataset.intention);
+    m.els['#peUsdcEth'].value = '0.5';
+    assert.equal(cliquer(m, b), false, 'le bouton prepare pour 0.1 ETH part pour 0.5');
+  });
+  await cas('U2 une frappe pendant un Prepare retire « Reading the pool… » (et la preparation morte ne le remet pas)', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    m.etat.sautsOk = true; m.etat.delais = [300];
+    const p = preparer(m);
+    await attendreQue(() => m.etat.multi.length === 1);
+    assert.match(m.els['#peEtat'].textContent, /Reading the pool/);
+    m.els['#peAchat'].taper('30');
+    assert.ok(!/Reading the pool/.test(m.els['#peEtat'].textContent), 'phrase restee : ' + m.els['#peEtat'].textContent);
+    await p; await attendre();
+    assert.ok(!/Reading the pool|needs an approval/.test(m.els['#peEtat'].textContent), 'apres la fin muette : ' + m.els['#peEtat'].textContent);
+  });
+  await cas('U2b ETH -> USDC execute : une frappe dans #peUsdcEth pendant le devis retire « Quoting ETH→USDC pools… »', async () => {
+    const m = monde(src, { compte: WALLET }); m.rebatir();
+    m.els['#peUsdcEth'].taper('0.1');
+    m.etat.delaiEthUsdc = 300;
+    const p = m.f.preparerEthUsdc();
+    await attendreQue(() => /Quoting ETH→USDC/.test(m.els['#peEtat'].textContent));
+    assert.match(m.els['#peEtat'].textContent, /Quoting ETH→USDC/);
+    m.els['#peUsdcEth'].taper('0.2');
+    assert.ok(!/Quoting ETH→USDC/.test(m.els['#peEtat'].textContent), 'phrase restee : ' + m.els['#peEtat'].textContent);
+    await p; await attendre();
+    assert.ok(!/Quoting ETH→USDC|bench/.test(m.els['#peEtat'].textContent), 'la preparation morte a peint : ' + m.els['#peEtat'].textContent);
+  });
+  await cas('U3 D3 sur le chemin HISTORIQUE (planEchange, achat en ETH) : la 1re preparation, tardive, ne peint rien', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peAchat'].taper('0.01');
+    m.etat.planOk = true; m.etat.delaisPlan = [() => attendreQue(() => m.els['#peActions'].children.length >= 1), 5];
+    m.etat.plansHist = [{ etat: 'X_BANC', pourquoi: 'late plan for 0.01' }];
+    const p1 = preparer(m);
+    await attendreQue(() => m.etat.historique.length === 1); /* planEchange de la 1re preparation EN VOL avant la frappe */
+    m.els['#peAchat'].taper('0.02');
+    await Promise.all([p1, preparer(m)]); await attendre();
+    assert.ok(!/late plan for 0\.01/.test(m.els['#peEtat'].textContent), 'la 1re preparation a ecrit : ' + m.els['#peEtat'].textContent);
+    const bts = m.els['#peActions'].children;
+    assert.equal(bts.length, 1);
+    assert.equal(JSON.parse(bts[0].dataset.intention).montant, '0.02');
+  });
+  await cas('U4 signerEchange REEL : apres le refus du wallet, une frappe garde le refus (etatParSignature)', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    m.etat.sautsOk = true;
+    await preparer(m);
+    assert.equal(m.els['#peActions'].children.length, 1);
+    await m.f.signerEchange({ to: USDC, data: '0x' }, 'ACHAT', true);
+    assert.equal(m.els['#peEtat'].textContent, 'Not done: you declined in your wallet.');
+    m.els['#peAchat'].taper('3');
+    assert.match(m.els['#peEtat'].textContent, /^Not done: you declined in your wallet\./, 'la frappe a efface le refus : ' + m.els['#peEtat'].textContent);
+  });
+  await cas('U4b le bouton REEL du franchissement : apres le refus du lot, une frappe garde le refus', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    const i = m.f.nouvelleIntention('ACHAT');
+    const pf = { etat: 'PRET', appels: [{ to: USDC, data: '0x' }], resume: { paye: 25000000n, recoitAuMoins: 10n ** 18n, pivot: true, fraisParHook: true, minimumParPrixSpot: false } };
+    m.f.afficherFranchissement({ pf, e: m.els['#peEtat'], dec: 6, symBlock: 'IB022', symPaye: 'USDC', intention: i });
+    const b = m.els['#peActions'].children.find((x) => /Sign — pay with USDC/.test(x.textContent));
+    assert.ok(b, 'bouton du lot absent');
+    cliquer(m, b); await attendre();
+    assert.equal(m.els['#peEtat'].textContent, 'Not done: you declined in your wallet.');
+    m.els['#peAchat'].taper('3');
+    assert.match(m.els['#peEtat'].textContent, /^Not done: you declined in your wallet\./, 'la frappe a efface le refus du lot : ' + m.els['#peEtat'].textContent);
+  });
+  await cas('U5 le compte fait partie de l intention : prepare pour A, clic sous B refuse ; un wallet connecte PAR pret ne tue pas la preparation', async () => {
+    const m = monde(src, { compte: WALLET }); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    m.etat.sautsOk = true;
+    await preparer(m);
+    const b = m.els['#peActions'].children[0];
+    assert.ok(b, 'etape absente');
+    m.ctx.compte = '0x00000000000000000000000000000000000000b2';
+    assert.equal(cliquer(m, b), false, 'une etape preparee pour A se clique sous B');
+    assert.match(m.els['#peEtat'].textContent, /connected wallet changed/);
+    const n = monde(src); n.rebatir();
+    n.els['#peDevise'].choisir(USDC); n.els['#peAchat'].taper('25');
+    n.etat.sautsOk = true; n.etat.connecter = WALLET;
+    await preparer(n);
+    assert.equal(n.els['#peActions'].children.length, 1, 'un wallet connecte pendant pret a tue la preparation');
+    assert.equal(JSON.parse(n.els['#peActions'].children[0].dataset.intention).compte, WALLET);
+  });
+  await cas('U6 autre block : champ vide, etiquette neutre, choix et « Pay with » vides et caches, compteur avance ; meme block : rien ne bouge', async () => {
+    const m = monde(src);
+    m.f.reinitialiserChampBuyPourBlock(BLOC); /* la fiche s ouvre (lireProfil), puis « Pay with » se batit */
+    m.rebatir();
+    m.els['#peDevise'].choisir(EURC); m.els['#peAchat'].taper('25');
+    assert.ok(m.ctx.deviseDentree && m.ctx.deviseDentree.devise === EURC && m.ctx.choixPayWith, 'le banc n a pas choisi EURC');
+    assert.equal(m.f.reinitialiserChampBuyPourBlock(BLOC), false);
+    assert.equal(m.els['#peAchat'].value, '25', 'le meme block relu a vide le champ');
+    const g0 = m.ctx.genAchat;
+    const AUTRE = '0xb20000000000000000000066242d4067724cb7a1';
+    m.els['#profil'].dataset.block = AUTRE;
+    assert.equal(m.f.reinitialiserChampBuyPourBlock(AUTRE), true);
+    assert.equal(m.els['#peAchat'].value, '');
+    assert.equal(m.els['#peAchat'].label.firstChild.textContent, 'Buy — amount to spend');
+    assert.equal(m.ctx.deviseDentree, null);
+    assert.equal(m.ctx.choixPayWith, null);
+    assert.equal(m.els['#peDevise'].options.length, 0, '« Pay with » garde les options du block precedent : ' + m.els['#peDevise'].options.map((o) => o.textContent).join('|'));
+    assert.equal(m.els['#peDeviseBloc'].hidden, true);
+    assert.ok(m.ctx.genAchat > g0, 'le compteur n a pas avance');
+  });
+
   /* ── D1, D2 : revue adverse de 4f0994c ── */
   await cas('D1 apres la note « taken out », un refus du wallet ou un « sent » ecrit dans #peEtat SURVIT a une frappe', async () => {
     const m = monde(src);
@@ -730,7 +880,7 @@ async function verifier(src) {
     assert.equal(m.els['#peLignes'].innerHTML, '');
     assert.match(m.els['#peEtat'].textContent, /removed because you picked ETH/);
     m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25'); preparer();
-    for (let i = 0; i < 44; i += 1) m.rebatir();
+    for (let i = 0; i < NREB; i += 1) m.rebatir();
     assert.equal(m.els['#peActions'].children.length, 1, 'un rebatissage (remise du choix) a retire l etape preparee');
     m.els['#peAchat'].taper('30');
     assert.equal(m.els['#peActions'].children.length, 0, 'l etape preparee pour 25 reste cliquable pour 30');
@@ -774,6 +924,20 @@ const mutants = [
   ['D2 changer le montant garde l etape preparee', (s) => s.replace("if (typeof intentionChangee === 'function') intentionChangee('the amount changed');", 'void 0;')],
   ['M11 l attente n ecrit plus l etiquette', (s) => s.replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\n    return 'ATTEND';", "    return 'ATTEND';").replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\r\n    return 'ATTEND';", "    return 'ATTEND';")],
   ['M12 l attente n est jamais levee', (s) => s.replace('    c.attente = false;\n', '').replace('    c.attente = false;\r\n', '')],
+  /* ── U : revue de 8b15140 ── */
+  ['U M11 pas de controle apres planEchange (achat ETH)', (s) => s.replace("  if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;\n  echangeCourant = p;\n  const r = p.resume;", "  if ($('#profil').dataset.block !== adr) return;\n  echangeCourant = p;\n  const r = p.resume;").replace("  if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;\r\n  echangeCourant = p;\r\n  const r = p.resume;", "  if ($('#profil').dataset.block !== adr) return;\r\n  echangeCourant = p;\r\n  const r = p.resume;")],
+  ['U le bouton porte l intention la PLUS RECENTE', (s) => s.replace('  if (bt.dataset) bt.dataset.intention = JSON.stringify(i);', '  if (bt.dataset) bt.dataset.intention = JSON.stringify(intentionCourante);')],
+  ['U « Next ETH -> USDC » hors ajouterEtape', (s) => s.replace('  ajouterEtape(b, intention);\n}', '  actions.appendChild(b);\n}').replace('  ajouterEtape(b, intention);\r\n}', '  actions.appendChild(b);\r\n}')],
+  ['U M2 signerEchange ne marque pas la signature', (s) => s.replace('  /* ce qui s ecrit desormais dans #peEtat est un resultat de SIGNATURE : jamais efface par une frappe ni par une etape retiree */\n  etatParSignature = true;', '').replace('  /* ce qui s ecrit desormais dans #peEtat est un resultat de SIGNATURE : jamais efface par une frappe ni par une etape retiree */\r\n  etatParSignature = true;', '')],
+  ['U M3 le lot ne marque pas la signature', (s) => s.replace('    bt.disabled = true;\n    etatParSignature = true;', '    bt.disabled = true;').replace('    bt.disabled = true;\r\n    etatParSignature = true;', '    bt.disabled = true;')],
+  ['U le compte sort de la cle', (s) => s.replace("    compte: compte ? String(compte).toLowerCase() : null,\n  };", '  };').replace("    compte: compte ? String(compte).toLowerCase() : null,\r\n  };", '  };')],
+  ['U le compte n est pas repris apres pret', (s) => s.replace("  intention.compte = compte ? String(compte).toLowerCase() : null;\n  try { if (sens === 'ACHAT')", "  try { if (sens === 'ACHAT')").replace("  intention.compte = compte ? String(compte).toLowerCase() : null;\r\n  try { if (sens === 'ACHAT')", "  try { if (sens === 'ACHAT')")],
+  ['U « Reading the pool » non marquee', (s) => s.replace("   *   d actif la retire (retirerTexteEtape), la preparation qui la remplace l ecrase */\n  if (e.dataset) e.dataset.texteEtape = e.textContent;", '   */').replace("   *   d actif la retire (retirerTexteEtape), la preparation qui la remplace l ecrase */\r\n  if (e.dataset) e.dataset.texteEtape = e.textContent;", '   */')],
+  ['U « Quoting ETH→USDC » non marquee', (s) => s.replace('  if (e.dataset) e.dataset.texteEtape = e.textContent; /* phrase de preparation : une frappe ou un changement la retire */', '')],
+  ['U M1 autre block : le champ garde le montant', (s) => s.replace("    for (const id of ['#peAchat', '#peVente']) { const c = $(id); if (c) c.value = ''; }", '')],
+  ['U M14 autre block : « Pay with » garde ses options', (s) => s.replace("    if (sel) { sel.innerHTML = ''; sel.onchange = null; }", '')],
+  ['U M15 autre block : le compteur n avance pas', (s) => s.replace("    if (noteD) { noteD.hidden = true; noteD.textContent = ''; }\n    avancerIntention();", "    if (noteD) { noteD.hidden = true; noteD.textContent = ''; }").replace("    if (noteD) { noteD.hidden = true; noteD.textContent = ''; }\r\n    avancerIntention();", "    if (noteD) { noteD.hidden = true; noteD.textContent = ''; }")],
+  ['U autre block : le choix d entree reste', (s) => s.replace("    deviseDentree = null;\n    if (choixPayWith && choixPayWith.block !== champBlocBuy) choixPayWith = null;", '').replace("    deviseDentree = null;\r\n    if (choixPayWith && choixPayWith.block !== champBlocBuy) choixPayWith = null;", '')],
   /* ── R : les puces ── */
   ['R etiquette des puces en dur ETH', (s) => s.replace("btn.textContent = btn.getAttribute('data-premier') + ' ' + actif;", "btn.textContent = btn.getAttribute('data-premier') + ' ETH';")],
   ['R puces jamais cachees', (s) => s.replace('btn.hidden = actif !== sym;', 'btn.hidden = false;')],
@@ -785,7 +949,7 @@ const mutants = [
   ['Q la garde au clic laisse tout passer', (s) => s.replace('  if (p && intentionVivante(p)) return true;', '  return true;')],
   ['Q le bouton ne porte pas son intention', (s) => s.replace('  if (bt.dataset) bt.dataset.intention = JSON.stringify(i);', '')],
   /* ── S : l intention ── */
-  ['S ajouterEtape pose meme pour une intention morte', (s) => s.replace('  if (!intentionVivante(i)) return bt; /* une preparation perimee ne pose rien */', '')],
+  ['S ajouterEtape pose meme pour une intention morte', (s) => s.replace('  if (!intentionVivante(i)) return bt; /* une preparation perimee (ou sans intention) ne pose rien */', '')],
   ['S pas de controle apres les sauts (D3)', (s) => s.replace('    if (!intentionVivante(intention)) { profilEnLecture = false; return; }', '')],
   ['S les controles de rendu de preparerEchange retires (D3)', (s) => s.split("if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;").join("if ($('#profil').dataset.block !== adr) return;").replace('    if (!intentionVivante(intention)) { profilEnLecture = false; return; }', '').replace('  if (!intentionVivante(intention)) return;\n  const m = montantHumain(', '  const m = montantHumain(').replace('  if (!intentionVivante(intention)) return;\r\n  const m = montantHumain(', '  const m = montantHumain(')],
   ['S le pivot en mode DIRECT (D4)', (s) => s.replace("void bcProposerSwap('Buy panel',", "void bcProposerSwap('You',")],
@@ -807,12 +971,14 @@ const mutants = [
   ['les soldes relus a chaque repeint', (s) => s.replace('if (soldesPivotsDemandes.has(k)) continue;', '')],
   ['cbBTC reste dit « not offered »', (s) => s.replace('r.devises.filter((d) => !pivots.some((x) => x.devise === d.devise))', 'r.devises')],
 ];
-for (const [nom, muter] of mutants) {
-  if (process.env.SEUL_MUTANT && !nom.includes(process.env.SEUL_MUTANT)) continue;
-  const m = muter(APP);
-  vu(m !== APP, 'mutant « ' + nom + ' » applique');
-  const k = await verifier(m);
-  vu(k.length > 0, 'mutant « ' + nom + ' » TUE (' + k.map((x) => x.split(' ')[0]).join(',') + ')');
+/* 4 mutants a la fois (chacun dans SES contextes vm : rien de partage) — la serie a 3 tuait ce banc a 300 s */
+NREB = 6;
+const aJouer = mutants.filter(([nom]) => !process.env.SEUL_MUTANT || nom.includes(process.env.SEUL_MUTANT));
+for (let i = 0; i < aJouer.length; i += 4) {
+  const lot = aJouer.slice(i, i + 4).map(([nom, muter]) => ({ nom, m: muter(APP) }));
+  for (const { nom, m } of lot) vu(m !== APP, 'mutant « ' + nom + ' » applique');
+  const res = await Promise.all(lot.map(({ m }) => verifier(m)));
+  lot.forEach(({ nom }, j) => vu(res[j].length > 0, 'mutant « ' + nom + ' » TUE (' + res[j].map((x) => x.split(' ')[0]).join(',') + ')'));
 }
 console.log(n + ' ok / 0 KO');
 /* un mutant « relus a chaque repeint » laisse une boucle de lectures (bornee, mais vivante) : on sort explicitement */

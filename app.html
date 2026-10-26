@@ -13247,7 +13247,11 @@ function proposerSortieUsdcApresVente(ethWei) {
   b.textContent = 'Next: turn this ETH into USDC';
   b.title = 'Prepares the swap; your wallet signs it.';
   b.addEventListener('click', () => void preparerEthUsdc());
-  actions.appendChild(b);
+  /* ⛔ 2026-10-26 (revue de 8b15140) : CE bouton aussi passe par ajouterEtape, avec SA propre intention (sens ETHUSDC, le montant
+   *   que cette fonction vient d ecrire dans #peUsdcEth) ; ecrire ce champ fait avancer le compteur. Le resultat de la vente
+   *   affiche (signature) reste : on ne touche pas a etatParSignature. */
+  const intention = { gen: avancerIntention(), ...cleEtapePreparee('ETHUSDC') };
+  ajouterEtape(b, intention);
 }
 
 /** Profile honesty: hooked (fee hook) vs legacy unhooked — old pools never gain 2% retroactively. */
@@ -14064,17 +14068,7 @@ async function lireProfil(adr, sym, perime, opts) {
    *   (marche illisible), le champ gardait le montant ET l etiquette du block precedent (« Buy — EURC to spend », 25). A
    *   l ouverture d un AUTRE block : montants vides, etiquette neutre (majDeviseEchange la reecrit des que le marche est lu),
    *   choix d entree oublie, intention avancee. Le meme block relu ne perd rien. */
-  if (champBlocBuy !== String(adr).toLowerCase()) {
-    champBlocBuy = String(adr).toLowerCase();
-    for (const id of ['#peAchat', '#peVente']) { const c = $(id); if (c) c.value = ''; }
-    const labB = $('#peAchat') && $('#peAchat').closest('label');
-    if (labB && labB.firstChild && labB.firstChild.nodeType === 3) labB.firstChild.textContent = 'Buy — amount to spend';
-    deviseDentree = null;
-    if (choixPayWith && choixPayWith.block !== champBlocBuy) choixPayWith = null;
-    try { avancerIntention(); } catch (_) { /* declare plus bas : appele a l execution, jamais a l evaluation */ }
-  }
-  if ($('#peEtat').dataset) { delete $('#peEtat').dataset.notePayWith; delete $('#peEtat').dataset.texteEtape; }
-  etatParSignature = false;
+  reinitialiserChampBuyPourBlock(adr);
   /* ⛔ AUDIT 2026-09-20 (bloquant) : sans ces trois lignes, les soldes du block PRECEDENT restaient a
    *    l ecran sous le nom du nouveau, et MAX remplissait un montant qu on ne detient pas. */
   { const se = $('#peSoldeEth'); if (se) se.textContent = '—'; }
@@ -16945,6 +16939,33 @@ function retirerActionsPreparees() {
  *   ⛔ La remise du choix et le retour fiat ne font PAS avancer le compteur : ils rendent le meme actif et le meme montant.
  */
 function avancerIntention() { genAchat += 1; return genAchat; }
+/**
+ * ⛔ Appelee par lireProfil a CHAQUE ouverture de fiche (revue de 4f0994c..7ed7e93 puis de 8b15140). Un AUTRE block : montants
+ *   vides, etiquette neutre (majDeviseEchange la reecrit des que le marche est lu), choix d entree oublie, « Pay with » VIDE et
+ *   cache (il gardait « EURC — routed » du block precedent ~21 s, jusqu a son rebatissage), intention avancee. Le meme block
+ *   relu ne perd rien. Les marques de #peEtat tombent dans les deux cas (lireProfil vient de vider #peEtat).
+ * @returns {boolean} vrai si c etait un autre block
+ */
+function reinitialiserChampBuyPourBlock(adr) {
+  const autre = champBlocBuy !== String(adr).toLowerCase();
+  if (autre) {
+    champBlocBuy = String(adr).toLowerCase();
+    for (const id of ['#peAchat', '#peVente']) { const c = $(id); if (c) c.value = ''; }
+    const labB = $('#peAchat') && $('#peAchat').closest('label');
+    if (labB && labB.firstChild && labB.firstChild.nodeType === 3) labB.firstChild.textContent = 'Buy — amount to spend';
+    deviseDentree = null;
+    if (choixPayWith && choixPayWith.block !== champBlocBuy) choixPayWith = null;
+    const sel = $('#peDevise'), blocD = $('#peDeviseBloc'), noteD = $('#peDeviseNote');
+    if (sel) { sel.innerHTML = ''; sel.onchange = null; }
+    if (blocD) blocD.hidden = true;
+    if (noteD) { noteD.hidden = true; noteD.textContent = ''; }
+    avancerIntention();
+  }
+  const e = $('#peEtat');
+  if (e && e.dataset) { delete e.dataset.notePayWith; delete e.dataset.texteEtape; }
+  etatParSignature = false;
+  return autre;
+}
 /** Retire de #peEtat la phrase de PREPARATION posee pour l intention precedente (texte exact, en tete) ; rien d autre. */
 function retirerTexteEtape() {
   const e = $('#peEtat');
@@ -16970,6 +16991,9 @@ function cleEtapePreparee(sens, impose = {}) {
     devise: sens === 'ACHAT' ? String(impose.devise !== undefined ? impose.devise : deviseDuChampBuy()).toLowerCase() : null,
     montant: String(impose.montant !== undefined ? impose.montant : (champ ? champ.value : '')).trim(),
     recoit: sens === 'VENTE' ? String((rec && rec.value) || '').toLowerCase() : null,
+    /* ⛔ 2026-10-26 (revue de 8b15140) : le wallet qui signera fait partie de l intention — une etape preparee pour le compte A
+     *   (soldes, approbations, minimum) est refusee apres un changement de compte vers B */
+    compte: compte ? String(compte).toLowerCase() : null,
   };
 }
 /** Une intention neuve, capturee AU CLIC : le compteur avance (toute preparation plus ancienne devient muette). */
@@ -16985,12 +17009,14 @@ function intentionVivante(i) {
   const { gen, ...cle } = i;
   return JSON.stringify(cleEtapePreparee(i.sens)) === JSON.stringify(cle);
 }
-/** Le SEUL chemin pour poser un bouton d etape : il porte l intention qui l a construit, et se garde lui-meme au clic. */
-function ajouterEtape(bt) {
+/** Le SEUL chemin pour poser un bouton d etape : il porte l intention qui l a construit, et se garde lui-meme au clic.
+ *  ⛔ 2026-10-26 (revue de 8b15140) : l intention est celle de la PREPARATION qui pose le bouton (passee en parametre), jamais
+ *    « la plus recente » — sinon le bouton d une preparation perimee porterait l intention neuve, et sa garde ne garderait rien.
+ *    Sans intention, rien n est pose. */
+function ajouterEtape(bt, i = null) {
   const a = $('#peActions');
   if (!a || !bt) return bt;
-  const i = intentionCourante;
-  if (!intentionVivante(i)) return bt; /* une preparation perimee ne pose rien */
+  if (!intentionVivante(i)) return bt; /* une preparation perimee (ou sans intention) ne pose rien */
   if (bt.dataset) bt.dataset.intention = JSON.stringify(i);
   try { bt.addEventListener('click', gardeClicEtape, true); } catch (_) { /* element factice */ }
   return a.appendChild(bt);
@@ -17005,6 +17031,7 @@ function gardeClicEtape(ev) {
   const ici = p ? cleEtapePreparee(p.sens) : null;
   const pourquoi = !p ? 'what it was prepared for could not be read'
     : ici.block !== p.block ? 'you are now on another block'
+      : ici.compte !== p.compte ? 'the connected wallet changed since it was prepared'
       : ici.devise !== p.devise ? 'the currency changed since it was prepared'
         : ici.recoit !== p.recoit ? 'what you receive changed since it was prepared'
           : ici.montant !== p.montant ? 'the amount changed since it was prepared (it was for ' + p.montant + ')'
@@ -17415,7 +17442,7 @@ function ligneFraisMultiSauts(r, taux) {
   }
   return taux !== null ? 'Fee: ' + taux + '% of what you pay, inside the same transaction' : null;
 }
-function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relance = 'ACHAT' }) {
+function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relance = 'ACHAT', intention = null }) {
   const r = p && p.resume;
   /* ⛔⛔⛔ `refuser` NE COMPTE PAS, ET C EST VOLONTAIRE. Ma premiere version prenait le nom du
    *   compteur en PARAMETRE et appelait `etape(compteur)`. Resultat : `test-etapes-comptees.mjs`,
@@ -17434,7 +17461,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange(relance));
-    ajouterEtape(br);
+    ajouterEtape(br, intention);
   };
   if (!p || p.etat === 'NON_MESURE') {
     /* ⛔ « pas pu mesurer » n est PAS « la pool refuse ». Le premier est une panne chez nous. */
@@ -17456,7 +17483,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
     /* ⛔ `relance` : apres l approbation, signerEchange re-prepare DANS CE SENS — une vente block -> block ne doit pas
      *   repartir en achat (2026-10-03). */
     bt.addEventListener('click', () => void signerEchange(et, relance, true));
-    ajouterEtape(bt);
+    ajouterEtape(bt, intention);
     e.className = 'note';
     e.textContent = 'This token needs an approval first, then the swap. Each one is measured again once done.';
     return;
@@ -17500,7 +17527,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
   bt.className = 'bouton'; bt.type = 'button';
   bt.textContent = 'Sign — pay with ' + sym;
   bt.addEventListener('click', () => void signerEchange(p.tx, relance, false));
-  ajouterEtape(bt);
+  ajouterEtape(bt, intention);
   e.className = 'note';
   e.textContent = 'Your wallet signs — this page never does. It shows every amount before you confirm.';
   try { etape('echange_multi_pret'); } catch (_) {}
@@ -17518,7 +17545,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
  *   laisse detenir le pivot. On les envoie donc en SEQUENCE, et ce rail reste ouvert aux wallets
  *   qui ne savent pas grouper.
  */
-function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null }) {
+function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null, intention = null }) {
   const refuser = (texte, compteur, relancer = true) => {
     e.className = 'note wKo';
     e.textContent = texte;
@@ -17527,7 +17554,7 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null }) {
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange('ACHAT'));
-    ajouterEtape(br);
+    ajouterEtape(br, intention);
   };
   if (!pa || pa.etat === 'NON_MESURE') {
     return refuser('Could not price this route right now — nothing to sign, try again.',
@@ -17567,12 +17594,12 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null }) {
   bt.className = 'bouton'; bt.type = 'button';
   bt.textContent = 'Approve ' + sym + ' (1 of 2)';
   bt.addEventListener('click', () => void signerEchange(pa.appels[0], 'ACHAT', true));
-  ajouterEtape(bt);
+  ajouterEtape(bt, intention);
   const bs = document.createElement('button');
   bs.className = 'bouton sec'; bs.type = 'button';
   bs.textContent = 'Sign the swap (2 of 2)';
   bs.addEventListener('click', () => void signerEchange(pa.appels[1], 'ACHAT', false));
-  ajouterEtape(bs);
+  ajouterEtape(bs, intention);
   e.className = 'note';
   e.textContent = 'Two signatures: the approval for the exact amount, then the swap. '
     + 'Your wallet shows both before you confirm.';
@@ -17595,7 +17622,7 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null }) {
  */
 /* ⛔ 2026-10-03 : `symPaye` / `relance` — le meme ecran sert a VENDRE un block contre une action (block -> action) ;
  *   la relance et l approbation re-preparent dans CE sens, et ce qu on paie se nomme (pas deviseDentree). */
-function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance = 'ACHAT' }) {
+function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance = 'ACHAT', intention = null }) {
   const refuser = (texte, compteur, relancer = true) => {
     e.className = 'note wKo';
     e.textContent = texte;
@@ -17604,7 +17631,7 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange(relance));
-    ajouterEtape(br);
+    ajouterEtape(br, intention);
   };
   if (!pf || pf.etat === 'NON_MESURE') {
     /* ⛔ L ETAPE QUI A RATE EST DITE : « la route a echoue » envoie chercher partout. */
@@ -17617,7 +17644,7 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
     bt.className = 'bouton'; bt.type = 'button';
     bt.textContent = 'Approval 1 of ' + pf.etapes.length + ' — ' + et.nom;
     bt.addEventListener('click', () => void signerEchange(et, relance, true));
-    ajouterEtape(bt);
+    ajouterEtape(bt, intention);
     e.className = 'note';
     e.textContent = 'This token needs an approval first. The crossing is measured again once it is done.';
     return;
@@ -17700,7 +17727,7 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
     try { etape(lot.etat === 'PARTIEL' ? 'echange_multi_refus_plan' : 'echange_multi_refus_pool'); } catch (_) {}
     bt.disabled = false;
   });
-  ajouterEtape(bt);
+  ajouterEtape(bt, intention);
   e.className = 'note';
   /* ⛔ ON DIT LA CONDITION AVANT DE CLIQUER : un wallet qui ne groupe pas ne peut pas prendre cette
    *   route en securite, et il vaut mieux le lire ici qu apres avoir signe la premiere jambe. */
@@ -17836,6 +17863,8 @@ async function preparerEchange(sens) {
     try { etape('echange_refus_wallet'); } catch (_) {}
     return;
   }
+  /* le wallet connecte par `pret` est celui qui signera : il entre dans l intention ICI (avant, il pouvait ne pas exister) */
+  intention.compte = compte ? String(compte).toLowerCase() : null;
   try { if (sens === 'ACHAT') etape('achat_prepare'); } catch (_) {}
   let dec = 18;
   if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; try { etape('echange_refus_marche_illisible'); } catch (_) {} return; } }
@@ -17866,6 +17895,9 @@ async function preparerEchange(sens) {
     return payerParRailServeur({ d: choix, block: adr, montant: m.valeur, dec, e, intention });
   }
   e.className = 'note'; e.textContent = 'Reading the pool, quoting the price and asking the chain…';
+  /* ⛔ 2026-10-26 (revue de 8b15140 : restee +140 s apres une frappe) : phrase de PREPARATION, marquee — une frappe ou un changement
+   *   d actif la retire (retirerTexteEtape), la preparation qui la remplace l ecrase */
+  if (e.dataset) e.dataset.texteEtape = e.textContent;
   profilEnLecture = true;
   let p;
   const marcheLu = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
@@ -17945,7 +17977,7 @@ async function preparerEchange(sens) {
       if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
       echangeCourant = pf;
       try { etape('echange_bloc_vers_bloc'); } catch (_) {}
-      afficherFranchissement({ pf, e, dec, symBlock: symCible, symPaye: symProfil || 'blocks', relance: 'VENTE' });
+      afficherFranchissement({ pf, e, dec, symBlock: symCible, symPaye: symProfil || 'blocks', relance: 'VENTE', intention });
       return;
     }
     try {
@@ -17965,7 +17997,7 @@ async function preparerEchange(sens) {
     if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
     echangeCourant = p;
     try { etape('echange_bloc_vers_bloc'); } catch (_) {}
-    afficherPlanMultiSauts({ p, e, b: { sauts: p.sautsBloc || [] }, symBlock: symCible, dec, symPaye: symProfil || 'blocks', relance: 'VENTE' });
+    afficherPlanMultiSauts({ p, e, b: { sauts: p.sautsBloc || [] }, symBlock: symCible, dec, symPaye: symProfil || 'blocks', relance: 'VENTE', intention });
     return;
   }
   /* ══ LE RAIL MULTI-SAUTS : payer un block avec une devise qui n est PAS celle de sa pool ═══════
@@ -18034,7 +18066,7 @@ async function preparerEchange(sens) {
       finally { profilEnLecture = false; }
       if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
       echangeCourant = pa;
-      afficherAerodromeSegment({ pa, e, dec, symBlock: symProfil, symPaye: choix.symbole || null });
+      afficherAerodromeSegment({ pa, e, dec, symBlock: symProfil, symPaye: choix.symbole || null, intention });
       return;
     }
     if (peutEtreAssemblee(choix).par === 'franchissement') {
@@ -18050,7 +18082,7 @@ async function preparerEchange(sens) {
       finally { profilEnLecture = false; }
       if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
       echangeCourant = pf;
-      afficherFranchissement({ pf, e, dec, symBlock: symProfil, symPaye: choix.symbole || null });
+      afficherFranchissement({ pf, e, dec, symBlock: symProfil, symPaye: choix.symbole || null, intention });
       return;
     }
     const b = await sautsDepuisChemin({ chemin: choix.chemin, montant: m.valeur, resoudre });
@@ -18076,7 +18108,7 @@ async function preparerEchange(sens) {
     finally { profilEnLecture = false; }
     if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
     echangeCourant = p;
-    afficherPlanMultiSauts({ p, e, b, symBlock: symProfil, dec, symPaye: choix.symbole || null });
+    afficherPlanMultiSauts({ p, e, b, symBlock: symProfil, dec, symPaye: choix.symbole || null, intention });
     return;
   }
   /* ⛔ 2026-10-17 (toutes les pools d un block) : achat / vente DIRECTS — si le block a d autres pools sur la MEME paire que son
@@ -18152,7 +18184,7 @@ async function preparerEchange(sens) {
     b.className = 'bouton'; b.type = 'button';
     b.textContent = 'Approval 1 of ' + p.etapes.length + ' — ' + etape.nom;
     b.addEventListener('click', () => void signerEchange(etape, sens, true));
-    ajouterEtape(b);
+    ajouterEtape(b, intention);
     e.className = 'note'; e.textContent = 'Approvals first, then the sale. Each is measured again once done.';
     return;
   }
@@ -18184,7 +18216,7 @@ async function preparerEchange(sens) {
       if (marcheProfil && marcheProfil.adr === String(adr).toLowerCase()) marcheProfil = null;
       void preparerEchange(sens);
     });
-    ajouterEtape(br);
+    ajouterEtape(br, intention);
     return;
   }
   if (p.etat === 'REFUSE') {
@@ -18231,7 +18263,7 @@ async function preparerEchange(sens) {
       const br = document.createElement('button');
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
       br.addEventListener('click', () => void preparerEchange(sens));
-      ajouterEtape(br);
+      ajouterEtape(br, intention);
       try {
         const feeEl = $('#peFrais');
         if (feeEl) feeEl.textContent = '0.5 % MISSING — refused';
@@ -18266,7 +18298,7 @@ async function preparerEchange(sens) {
       const br = document.createElement('button');
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
       br.addEventListener('click', () => void preparerEchange(sens));
-      ajouterEtape(br);
+      ajouterEtape(br, intention);
       /* ⛔ LE JUMEAU : le resume disait bien 0,5 % mais les OCTETS ne nomment pas FEE_WALLET. Un
        *   resume n est pas une preuve — seul le calldata part sur la chaine. Meme phrase a l ecran,
        *   compteur distinct, sinon on ne saurait pas laquelle des deux gardes a parle. */
@@ -18278,7 +18310,7 @@ async function preparerEchange(sens) {
   b.className = 'bouton'; b.type = 'button';
   b.textContent = sens === 'ACHAT' ? (estWalletDeFrais(compte) ? 'Sign the buyback' : 'Sign the buy') : 'Sign the sale';
   b.addEventListener('click', () => void signerEchange(p.tx, sens, false));
-  ajouterEtape(b);
+  ajouterEtape(b, intention);
   if (sens === 'VENTE' && r && r.recoitDevise === 'ETH' && typeof r.recoitAuMoins === 'bigint') {
     proposerSortieUsdcApresVente(r.recoitAuMoins);
   }
@@ -18596,6 +18628,8 @@ async function preparerEthUsdc() {
   const intention = nouvelleIntention('ETHUSDC');
   if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
   if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.')); } return; }
+  /* le wallet connecte par `pret` est celui qui signera : il entre dans l intention ICI (avant, il pouvait ne pas exister) */
+  intention.compte = compte ? String(compte).toLowerCase() : null;
   if (!intentionVivante(intention)) return;
   const raw = String(intention.montant || '').trim().replace(',', '.');
   const eth = Number(raw);
@@ -18611,6 +18645,7 @@ async function preparerEthUsdc() {
   }
   if (wei <= 0n) { e.className = 'note wKo'; e.textContent = 'Enter ETH above zero.'; return; }
   e.className = 'note'; e.textContent = 'Quoting ETH→USDC pools (0.5 %)…';
+  if (e.dataset) e.dataset.texteEtape = e.textContent; /* phrase de preparation : une frappe ou un changement la retire */
   profilEnLecture = true;
   let p;
   try { p = await planEthVersUsdc({ rpc, chaine: CHAINE, compte, montantWei: wei }); }
@@ -18624,7 +18659,7 @@ async function preparerEthUsdc() {
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry ETH→USDC';
     br.addEventListener('click', () => void preparerEthUsdc());
-    ajouterEtape(br);
+    ajouterEtape(br, intention);
     return;
   }
   if (p.etat === 'REFUSE') {
@@ -18649,7 +18684,7 @@ async function preparerEthUsdc() {
   const b = document.createElement('button');
   b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign ETH→USDC';
   b.addEventListener('click', () => void signerEchange(p.tx, 'ACHAT', false));
-  ajouterEtape(b);
+  ajouterEtape(b, intention);
   e.className = 'note wOk';
   e.textContent = 'The chain accepts this ETH→USDC. Check it in your wallet before signing.';
 }

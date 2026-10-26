@@ -43,7 +43,8 @@ const html = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g
 ok(/actionsRecevables\(\{ marches: marcheParAdr, actions: ACTIONS_COINBASE \}\)/.test(html) && /o\.dataset\.kind = 'action'/.test(html), '« Receive » liste les actions (Aerodrome)');
 ok(/if \(optC && optC\.dataset\.kind === 'action'\) \{/.test(html) && /planFranchissement\(\{ rpc, chaine: CHAINE, compte, chemin: c\.chemin, devise: adr, block: cible,/.test(html),
   'vente vers une action : planFranchissement (le moteur existant), entree = le block, sortie = l action');
-ok(/afficherFranchissement\(\{ pf, e, dec, symBlock: symCible, symPaye: symProfil \|\| 'blocks', relance: 'VENTE' \}\)/.test(html)
+/* 2026-10-26 : l appel porte aussi l intention de la preparation (ajouterEtape la tamponne sur les boutons) */
+ok(/afficherFranchissement\(\{ pf, e, dec, symBlock: symCible, symPaye: symProfil \|\| 'blocks', relance: 'VENTE'(, intention)? \}\)/.test(html)
   && /void preparerEchange\(relance\)\);/.test(html) && /signerEchange\(et, relance, true\)/.test(html), 'ecran du franchissement : relance et approbation dans le sens VENTE');
 
 /* ── B. Base mainnet, lecture seule ── */
