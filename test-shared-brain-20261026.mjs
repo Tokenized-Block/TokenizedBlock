@@ -79,7 +79,7 @@ const extract = (header) => { const i = app.indexOf(header); ok(i > 0, 'extracti
 /* ══ D. THE THREE PLACES THAT CREATED THEIR OWN BRAIN GO THROUGH THE REGISTRY ══ */
 {
   ok(/import \{[^}]*createPageBrains[^}]*\} from '\.\/page-brains\.js';/.test(app), 'D: app.html imports the registry');
-  ok(/const pageBrains = createPageBrains\(\{ create: \(a\) => cerveauAvecMemoire\(a\) \}\);/.test(app), 'D: the registry creates from THIS browser\'s memory, once');
+  ok(/const pageBrains = createPageBrains\(\{ create: \(a\) => cerveauAvecMemoire\(a\)(, onBeat: \(adr\) => bvOnSharedBeat\(adr\))? \}\);/.test(app), 'D: the registry creates from THIS browser\'s memory, once');
   const uses = (app.match(/cerveauAvecMemoire\(/g) || []).length;
   ok(uses === 2, 'D: cerveauAvecMemoire is only called by the registry (definition + registry), seen ' + uses);
   ok(/cerveau = pageBrains\.state\(c\.jeton\)/.test(app), 'D: the map takes the shared brain');

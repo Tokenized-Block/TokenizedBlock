@@ -44,8 +44,8 @@ const src = { vu: latest, internals: { tick: 138, neurones: Array.from({ length:
   ok(/describeTarget\(hit\.obj, vision\.inspectSrc, vision\.inspectModel, bvShownBeat\(\)\)/.test(fn), 'C: the overlay is given the shown beat');
   ok(/vision\.beatText/.test(app.slice(app.indexOf('function bvShownBeat('), app.indexOf('function bvShownBeat(') + 600)) && app.indexOf('function bvShownBeat(') > 0, 'C: bvShownBeat found and uses vision.beatText');
   ok(/\$\('#bvNumber'\)\.textContent = vision\.beatText;/.test(app), 'C: the header shows vision.beatText');
-  ok(/vision\.beatText = vision\.control \? 'Snapshot of beat ' \+ beatText\(vision\.control\.snap\.tick\)/.test(app), 'C: Take control = "Snapshot of beat N"');
-  ok(app.includes("'Beat ' + beatText(beatNumber(vuShown))"), 'C: otherwise the beat on screen, one format (item 6)');
+  ok(/vision\.beatText = beatHeader\(\{ snapshotTick: vision\.control \? vision\.control\.snap\.tick : null,/.test(app), 'C: Take control = "Snapshot of beat N" (game57 #4d: via beatHeader)');
+  ok(app.includes('fmt: beatText })'), 'C: one format (item 6)');
   ok(/const key = d \? hit\.id \+ '\|' \+ d\.lines/.test(fn), 'C: the overlay repaints when its beat changes');
 }
 console.log('test-one-beat-overlay-20261026: ' + count + ' assertions, OK');

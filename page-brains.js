@@ -8,7 +8,9 @@
  * The entry fields (etat, vu, faits, histo, nourritureLue, source, cycle) keep the names of the brain structures they mirror. */
 const ADR = /^0x[0-9a-f]{40}$/;
 export const SHARED_HISTORY = 64;
-export function createPageBrains({ create }) {
+/* game57 #4d: `onBeat(adr, tick)` (optional) hears each REAL step of an address (not the repeat of a cycle), so a view that
+ * follows live moves with the beat itself; a failing listener never stops a beat. */
+export function createPageBrains({ create, onBeat = null }) {
   const m = new Map();
   const key = (a) => String(a || '').toLowerCase();
   const entry = (adr) => {
@@ -37,6 +39,7 @@ export function createPageBrains({ create }) {
       e.r = { etat: r.etat, vu: r.vu };
       e.histo.push(r.vu);
       if (e.histo.length > SHARED_HISTORY) e.histo.splice(0, e.histo.length - SHARED_HISTORY);
+      if (typeof onBeat === 'function') { try { onBeat(e.adr, r.vu && Number.isSafeInteger(r.vu.tick) ? r.vu.tick : null); } catch (_) { /* a view never stops a beat */ } }
       return { etat: r.etat, vu: r.vu, already: false };
     },
     /** A re-read memory (chain, fragments) REPLACES the instance: every view jumps together, and the origin is stated. */

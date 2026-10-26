@@ -4926,7 +4926,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
 import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
-  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels } from './vision-inside.js';
+  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, beatHeader } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
 import { fieldText as inspectFieldText } from './inspect-block.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
@@ -4950,7 +4950,7 @@ function cerveauAvecMemoire(adr) {
 /* ⛔⛔ game57 #5 (Grok Super QA game56: UNIT "no beat yet" in Live, beat 92 from the Map): ONE brain per address on the page.
  *     The map, the profile, Brain / the Control panel, the Brain window and Live read and step the SAME instance (page-brains.js),
  *     created ONCE from this browser's memory, with a single step per page beat (beatCycle). */
-const pageBrains = createPageBrains({ create: (a) => cerveauAvecMemoire(a) });
+const pageBrains = createPageBrains({ create: (a) => cerveauAvecMemoire(a), onBeat: (adr) => bvOnSharedBeat(adr) });
 import { createPageBrains, displayedBeat, beatText, heldFood } from './page-brains.js';
 import { nourritureDuBlock } from './nourriture.js';
 /* ⛔ LE CREATEUR D UN BLOCK NE CHANGE JAMAIS (2026-09-19, charge RPC) : nourritureDuBlock le recherchait a CHAQUE lecture
@@ -26213,13 +26213,16 @@ function peindreVision() {
   if (vision.book === 'inspect') bvPaintInspect();
   vision.c = c; vision.vu = vuShown; vision.capMap = capMap; vision.historyShown = histo; vision.targetH = h; vision.targetState = cible.etat || null; vision.targetFacts = cible.faits || null;
   vision.pulse = pulseOf(vuShown, { reduced: bvReduit() });
-  /* game57 #4c (a): ONE beat text — the header's — also given to the overlay; Take control names the beat of its snapshot */
-  vision.beatText = vision.control ? 'Snapshot of beat ' + beatText(vision.control.snap.tick)
-    : (beatNumber(vuShown) === null ? '—' : 'Beat ' + beatText(beatNumber(vuShown)));
+  /* game57 #4c (a) + #4d: ONE beat text — the header's — also given to the overlay. Following = the live beat (item 6's
+   *   helper, the number Live shows); a replay says "Replay: beat N · live M"; Take control names the beat of its snapshot */
+  const liveBeat = displayedBeat(pageBrains, cible.adr, dernier);
+  const replaying = !vision.suivre && vision.i >= 0 && vision.i < histo.length - 1;
+  vision.beatText = beatHeader({ snapshotTick: vision.control ? vision.control.snap.tick : null, shownTick: beatNumber(vuShown), liveTick: liveBeat, replaying, fmt: beatText });
   $('#bvNumber').textContent = vision.beatText;
+  { const cv = $('#bv3d'); if (cv) bvPaintAim(vision.aimPoints || [], cv.width, cv.height); }
   $('#bvHumeur').textContent = vuShown ? humeurCourteVision(vuShown.phase) : 'no beat yet';
   $('#bvSentence').textContent = voiceInside(vuShown).text;
-  $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuShown ? ', beat ' + vuShown.tick + ', ' + humeurCourteVision(vuShown.phase) : ''));
+  $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuShown ? ', ' + vision.beatText + ', ' + humeurCourteVision(vuShown.phase) : ''));
   /* game57 #4c (c): one short line; the full explanation is the "How to read" book */
   $('#bvLegende').textContent = vision.control
     ? 'Local snapshot: drag to orbit, scroll to fly. Nothing is sent — see How to read.'
@@ -26465,6 +26468,20 @@ function bvPaintInspect() {
     box.append(ul);
   }
 }
+/* game57 #4d: the brain view follows live WITH the beat: when the shared instance of the address it shows really beats, its
+ *   header (and scene) repaint right after that beat's page work (one repaint per beat at most), not on the view's own timer */
+let bvBeatRepaint = null;
+function bvOnSharedBeat(adr) {
+  const dl = document.getElementById('bvPop');
+  if (!dl || !dl.open || String(adr).toLowerCase() !== vision.adr || vision.control || bvBeatRepaint) return;
+  /* a microtask: after this beat's page work (same task), before anything else can read the screen */
+  bvBeatRepaint = true;
+  queueMicrotask(() => {
+    bvBeatRepaint = null;
+    const target = visionCible();
+    if (target && target.adr === String(adr).toLowerCase() && !vision.control) peindreVision();
+  });
+}
 /* game57 #4c (a): the beat on screen, as the header shows it (the overlay never counts beats by itself) */
 function bvShownBeat() {
   const snap = vision.control ? vision.control.snap : null;
@@ -26613,10 +26630,10 @@ function ouvrirVision(source) {
   vision.backFlight = null; vision.vue = 'dedans';
   vision.flightFrom = mapPose(moteur3d && typeof moteur3d.camera === 'function' ? moteur3d.camera() : null);
   vision.flight = vision.vue === 'dedans' && !bvReduit() ? performance.now() : null;
-  /* la lecture des dernieres decisions REELLES : on repart 24 battements en arriere et on avance a la cadence des cerveaux */
+  /* game57 #4d: it opens ON THE LIVE BEAT and follows live (the number Live shows); replaying the recorded beats is Play only */
   const cible = visionCible();
   const n = cible && Array.isArray(cible.histo) ? cible.histo.length : 0;
-  vision.i = n - Math.min(n, BATTEMENTS_SIM); vision.suivre = n === 0;
+  vision.i = n - 1; vision.suivre = true; vision.jouer = false;
   /* ⛔ mouvement reduit : la lecture attend un geste (Play ou le curseur) */
   if (bvReduit()) vision.jouer = false;
   $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
@@ -26634,14 +26651,14 @@ function bvAdvance() {
   const c2 = visionCible();
   const n2 = c2 && Array.isArray(c2.histo) ? c2.histo.length : 0;
   vision.i++;
-  if (vision.i >= n2 - 1) { vision.i = n2 - 1; vision.suivre = true; }
+  if (vision.i >= n2 - 1) { vision.i = n2 - 1; vision.suivre = true; vision.jouer = false; $('#bvJouer').textContent = 'Play'; }
 }
 function bvRestartTimer() {
   clearInterval(vision.minuteur);
   vision.minuteur = setInterval(() => {
     if (!$('#bvPop').open) { clearInterval(vision.minuteur); return; }
     if (vision.jouer && !vision.suivre && !vision.control) bvAdvance();
-    if (vision.jouer && !vision.control) peindreVision();
+    if ((vision.jouer || vision.suivre) && !vision.control) peindreVision();
   }, beatDuration(vision.speed));
 }
 $('#bVision').addEventListener('click', () => ouvrirVision('brain'));
@@ -26687,6 +26704,8 @@ $('#bvBackToLive').addEventListener('click', bvBackToLive);
 })();
 $('#bvJouer').addEventListener('click', () => {
   vision.jouer = !vision.jouer;
+  /* game57 #4d: Play while following live = replay the recorded beats from the oldest (an explicit action only) */
+  if (vision.jouer && vision.suivre) { vision.i = 0; vision.suivre = false; }
   $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
   if (vision.jouer) peindreVision();
 });

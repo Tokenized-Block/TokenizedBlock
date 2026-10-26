@@ -28,7 +28,7 @@ ok(/import \{ createPageBrains, displayedBeat, beatText(, [A-Za-z]+)* \} from '\
 ok(app.includes("$('#bcTick').textContent = beatText(displayedBeat(pageBrains, a, snap));"), 'B: #bcTick');
 ok(app.includes("t.push(['Beat', beatText(displayedBeat(pageBrains, a, snap))]);"), 'B: the panel\'s Beat row');
 ok(app.includes("$('#bTick').textContent = beatText(r.vu.tick);"), 'B: #bTick');
-ok(app.includes("'Beat ' + beatText(beatNumber(vuShown))"), 'B: #bvNumber');
+ok(app.includes("liveTick: liveBeat, replaying, fmt: beatText })") && app.includes('const liveBeat = displayedBeat(pageBrains, cible.adr, dernier);'), 'B: #bvNumber (game57 #4d: the live beat, via the helper)');
 ok(app.includes("pied.textContent = 'beat ' + beatText(e.tick) + ' · '"), 'B: Live tile');
 ok(!/\$\('#bcTick'\)\.textContent = snap\.tick/.test(app) && !/t\.push\(\['Beat', snap\.tick/.test(app), 'B: no copy tick left in the panel');
 

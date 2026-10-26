@@ -231,3 +231,13 @@ export function placeLabels(items, { max = 6, focus = [] } = {}) {
   }
   return placed;
 }
+
+/* game57 #4d: THE BEAT HEADER of the brain view. Following live = "Beat M", M the page instance's live beat (the number Live,
+ * the Control panel and the Brain tab show) — never the shown copy's own tick. A replay names both, so it is never mistaken
+ * for live; Take control names the beat its snapshot was taken at. `fmt` = page-brains.js#beatText. */
+export function beatHeader({ snapshotTick = null, shownTick = null, liveTick = null, replaying = false, fmt = (n) => (Number.isSafeInteger(n) ? n.toLocaleString('en-US') : '—') } = {}) {
+  if (Number.isSafeInteger(snapshotTick)) return 'Snapshot of beat ' + fmt(snapshotTick);
+  if (replaying && Number.isSafeInteger(shownTick)) return 'Replay: beat ' + fmt(shownTick) + ' · live ' + fmt(liveTick);
+  if (Number.isSafeInteger(liveTick)) return 'Beat ' + fmt(liveTick);
+  return Number.isSafeInteger(shownTick) ? 'Beat ' + fmt(shownTick) : '—';
+}
