@@ -4568,8 +4568,17 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button type="button" class="bvSpine" role="tab" aria-selected="false" data-book="whatIf">What if</button>
     <button type="button" class="bvSpine" role="tab" aria-selected="false" data-book="details">Details</button>
     <button type="button" class="bvSpine" role="tab" aria-selected="false" data-book="inspect">Inspect</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-book="howto">How to read</button>
   </nav>
   <div class="bvTabs" id="bvTabs" role="tablist" aria-label="Open sections"></div>
+  <section class="bDetail bvBook" data-book="howto" hidden><p class="note"><b>How to read</b> this view</p>
+    <ul class="bvListe">
+      <li><span><b>Inside</b>: you are among its neurons. Lit = fired on this beat; faint = its 5 beats before. Warm from the front = a buy reached it, cold from behind = a sell, shimmer at the sides = a transfer, a new speck = a new holder. Its inputs sit on an arc in front of it (their real value, or "not read"); labels show for what you point at and the nearest few.</span></li>
+      <li><span><b>Outside</b>: its real neighbours on the map, by their world positions. They stay dim: its neurons read none of them.</span></li>
+      <li><span>The light is its mood; the edge pulse, how many neurons fired; the horizon tilts with its steering. The beat number at the top is the beat on screen, and the overlay speaks of that same beat.</span></li>
+      <li><span><b>Take control</b>: a LOCAL snapshot of the beat on screen ("Snapshot of beat N") — drag to orbit its 128 neurons, inputs and neighbours, scroll to fly, right-drag or Shift-drag to move. Nothing is sent, nothing is signed.</span></li>
+      <li><span>The centre ring shows what the camera looks at; click an object to pin its overlay, click empty space to release.</span></li>
+    </ul></section>
   <section class="bDetail bvBook" data-book="inspect" hidden><p class="note"><b>Inspect</b> — everything this page holds about it: each line is read (with its source), not read, or has no source in this app</p>
     <div id="bvInspect"></div></section>
   <section class="bDetail bvBook" data-book="why" hidden><p class="note"><b>Why this mood</b> — only fields of the beat shown</p>
@@ -26211,11 +26220,11 @@ function peindreVision() {
   $('#bvHumeur').textContent = vuShown ? humeurCourteVision(vuShown.phase) : 'no beat yet';
   $('#bvSentence').textContent = voiceInside(vuShown).text;
   $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuShown ? ', beat ' + vuShown.tick + ', ' + humeurCourteVision(vuShown.phase) : ''));
+  /* game57 #4c (c): one short line; the full explanation is the "How to read" book */
   $('#bvLegende').textContent = vision.control
-    ? 'Take control: a LOCAL snapshot of beat ' + vision.control.snap.tick + ' — drag to orbit its 128 neurons, inputs and neighbours, scroll to fly, right-drag or Shift-drag to move. Nothing is sent, nothing is signed.'
-    : (dedans ? 'Inside: you are among its neurons. Lit = fired on this beat; faint = its 5 beats before. Warm from the front = a buy reached it, cold from behind = a sell, shimmer at the sides = a transfer, a new speck = a new holder. '
-      : 'Outside: its real neighbours on the map, by their world positions. They stay dim: its neurons read none of them. ')
-      + 'The light is its mood; the edge pulse, how many neurons fired; the horizon tilts with its steering.';
+    ? 'Local snapshot: drag to orbit, scroll to fly. Nothing is sent — see How to read.'
+    : (dedans ? 'Inside its brain: lit = fired on this beat — see How to read.'
+      : 'Outside: its real map neighbours, unread by its neurons — see How to read.');
   peindreListesVision(c, cible);
   if (vision.book === 'why') bvPaintWhy();
   const ref = viewReferenceVision({ histo, tick: vuShown ? vuShown.tick : null });
