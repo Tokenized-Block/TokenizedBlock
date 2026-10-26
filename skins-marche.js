@@ -60,6 +60,18 @@ export function compterSkins(skins, t) {
   }
   return c;
 }
+/** LA PHRASE D ETAT DU MARCHE DES SKINS — UNE seule, dite a l identique par la carte du Game (Skin market) et par la section Skins de
+ *  l onglet Market (Phil, 2026-10-26 : « show the skin market on the Market tab »). Lue dans la liste (lireSkins), jamais tapee.
+ *  `skins` : la liste lue ; `moi` : le wallet connecte (ou null). Une enchere FINIE reste « for sale » tant qu elle n est pas reglee (le
+ *  contrat la garde en vente) : c est ce que la carte du Game disait deja. Rien d invente : 0 en vente = « Nothing listed yet ». */
+export function texteMarcheSkins(skins, moi) {
+  const l = Array.isArray(skins) ? skins : [], m = bas(moi), avecWallet = ADR.test(m);
+  const enVente = l.filter((s) => s && s.enVente), encheres = enVente.filter((s) => s.enchere).length;
+  const miennes = avecWallet ? l.filter((s) => s && s.detenteur === m && !s.enVente).length : 0;
+  if (enVente.length) return enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' in auction)' : '') + (miennes ? ' · ' + miennes + ' yours to list' : '') + '. Each skin sells at a fixed price or in an auction (bids +5%, 7 days max).';
+  if (miennes) return 'Nothing listed yet — you hold ' + miennes + ' skin' + (miennes === 1 ? '' : 's') + ': sell one at a fixed price or start an auction below (bids +5%, 7 days max).';
+  return 'Nothing listed yet — mint a skin, then sell it at a fixed price or open an auction (bids +5%, 7 days max).' + (avecWallet ? '' : ' Connect a wallet to list yours.');
+}
 /** Les libelles des gestes (anglais, a l ecran). Les CLES sont celles de actionsSkin ; aucun geste n est ajoute ici. */
 export const SKM_LIBELLES = Object.freeze({
   ACHETER: 'Buy', ENCHERIR: 'Bid', REGLER: 'Settle ended auction', RETIRER: 'Cancel listing', METTRE_EN_VENTE: 'Sell', OUVRIR_ENCHERE: 'Start an auction',

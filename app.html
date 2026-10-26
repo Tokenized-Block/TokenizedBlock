@@ -3123,6 +3123,11 @@ details[open] > summary::before{transform:rotate(90deg)}
          ⛔ EN TETE de l onglet : sous les Trending (des dizaines de lignes), personne ne la voyait (mesure au navigateur, 375 px). -->
     <div class="carte" id="skinsMarche">
       <p class="titre">Skins</p>
+      <!-- 2026-10-26 (Phil : « show the skin market on the Market tab ») : la phrase de la carte du Game (texteMarcheSkins, LA MEME) et son
+           geste Mint (ouvrirMintSkin, LE MEME : la vue Skin du panneau, MINT_PRICE relu avant de signer) -->
+      <p class="titre jeuTitre" style="font-size:15px;margin-top:2px">Mint a skin for <span class="skinPrix"></span>, dress your block, resell it — fixed price or auction.</p>
+      <p class="note" id="skmEtat" style="margin:2px 0 0">Reading the market on chain…</p>
+      <div class="jourEtapes"><button type="button" class="bouton" id="skmMint">Mint a skin · <span class="skinPrix"></span></button></div>
       <p class="note" id="skmNote" style="margin:2px 0 0">Reading the skins on chain…</p>
       <p class="sous">Every skin minted so far, with its face, its holder and the block it dresses. Buy at a fixed price, bid in an auction (+5% minimum), or sell yours. 10% of each sale goes to TokenizedBlock.</p>
       <div class="stadeLigne skmFiltres" id="skmFiltres" role="group" aria-label="Skins filter"></div>
@@ -4644,7 +4649,7 @@ import { entreesCommandes, entreesOnglets, entreesJeu, filtrerPalette, noterUsag
 import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
   offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin, deviseAdmise, decoderPage, appelPage } from './blockskins.js';
-import { SKM_RAFRAICHIR_MS, SKM_POULS_MS, SKM_FILTRES, SKM_STATUTS, filtrerSkins, ordonnerSkins, compterSkins, gestesSkin, montantOffre, relectureAvantSigner, cleLigneSkin, offresChangees, tempsRestant, apercuSkinFormes, detenteurCourt, statutSkin, brutVersTexte as brutVersTexteSkin } from './skins-marche.js';
+import { SKM_RAFRAICHIR_MS, SKM_POULS_MS, SKM_FILTRES, SKM_STATUTS, filtrerSkins, ordonnerSkins, compterSkins, gestesSkin, montantOffre, relectureAvantSigner, cleLigneSkin, offresChangees, tempsRestant, apercuSkinFormes, detenteurCourt, statutSkin, brutVersTexte as brutVersTexteSkin, texteMarcheSkins } from './skins-marche.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -6385,14 +6390,12 @@ async function peindreSkinsJeu() {
     try { r = await lireSkins({ rpc }); } catch (_) { r = { etat: 'NON_LU' }; }
     if (!r || r.etat !== 'LU') { etat.textContent = 'The market could not be read right now — nothing is listed rather than a wrong list.'; return; }
     const moi = compte ? String(compte).toLowerCase() : null, t = Math.floor(Date.now() / 1000);
-    const enVente = r.skins.filter((s) => s.enVente), encheres = enVente.filter((s) => s.enchere).length;
+    const enVente = r.skins.filter((s) => s.enVente);
     const miennes = moi ? r.skins.filter((s) => s.detenteur === moi && !s.enVente) : [];
     jb('jbSkins', String(enVente.length)); jb('jbSkinsTxt', enVente.length ? 'for sale' : 'mint the first');
-    /* Phil 2026-10-18 08:40 : pas de « 0 minted · 0 for sale » — une phrase courte, vraie, qui invite */
-    etat.textContent = enVente.length
-      ? enVente.length + ' for sale' + (encheres ? ' (' + encheres + ' in auction)' : '') + (moi && miennes.length ? ' · ' + miennes.length + ' yours to list' : '') + '. Each skin sells at a fixed price or in an auction (bids +5%, 7 days max).'
-      : (moi && miennes.length ? 'Nothing listed yet — you hold ' + miennes.length + ' skin' + (miennes.length === 1 ? '' : 's') + ': sell one at a fixed price or start an auction below (bids +5%, 7 days max).'
-        : 'Nothing listed yet — mint a skin, then sell it at a fixed price or open an auction (bids +5%, 7 days max).' + (moi ? '' : ' Connect a wallet to list yours.'));
+    /* Phil 2026-10-18 08:40 : pas de « 0 minted · 0 for sale » — une phrase courte, vraie, qui invite.
+     *   2026-10-26 : la phrase vit dans skins-marche.js (texteMarcheSkins) — la section Skins de l onglet Market dit LA MEME */
+    etat.textContent = texteMarcheSkins(r.skins, moi);
     z.textContent = '';
     /* Phil 2026-10-18 (« revente des skins + encheres que les brains voient ») : trois groupes — les encheres EN COURS (offre actuelle, temps
      *   restant : bcLigneSkin les dit), puis les prix fixes et les encheres finies a regler, puis les skins de CE wallet (vendre / encherir). */
@@ -6407,7 +6410,11 @@ async function peindreSkinsJeu() {
  *   recoit SKIN_MINT_TEXTE (blockskins-actif.js) : le MINT_PRICE du contrat DEPLOYE que l app utilise — « 1 USDC » tant que v2 est le contrat
  *   actif, « 10 USDC » des que l adresse de v3 est notee dans l enregistrement. Avant tout achat, bcAcheterSkin relit MINT_PRICE() sur la chaine. */
 for (const e of document.querySelectorAll('.skinPrix')) e.textContent = SKIN_MINT_TEXTE;
-$('#skinMint').addEventListener('click', () => { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} });
+/* Mint : LE MEME geste depuis le Game et depuis la section Skins de l onglet Market (2026-10-26) — il ouvre la vue Skin du panneau, ou
+ *   bcAcheterSkin relit MINT_PRICE() et fait signer le wallet ; aucun autre chemin de signature */
+function ouvrirMintSkin() { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} }
+$('#skinMint').addEventListener('click', ouvrirMintSkin);
+$('#skmMint').addEventListener('click', ouvrirMintSkin);
 /* 2026-10-23 : « Open the skin market » mene a l onglet Market, section Skins (toutes les skins, encheres en direct) */
 $('#skinOuvrirMarche').addEventListener('click', () => { allerA('trade'); setTimeout(() => { const s = document.getElementById('skinsMarche'); if (s) s.scrollIntoView({ block: 'start' }); }, 60); });
 
@@ -28956,9 +28963,11 @@ function bcTexteDevisesOffertes() {
   const l = Object.values(bcDevisesOffertes()).map((d) => d.sym);
   return l.length ? 'New listings can be priced in ' + l.join(', ') + ' (read on chain).' : 'The currencies this market accepts could not be read — selling waits for the next read.';
 }
+/* 2026-10-26 (regle d ecran : ce que l ecran montre = ce que le wallet signe) : un montant de skin s ecrit EXACT (brutVersTexteSkin) —
+ *   bcUnites coupait a 8 decimales sans le dire : un prix de 0.123456789 ETH s affichait 0.12345678 ETH pendant que le wallet en payait plus */
 function bcMontantSkin(brut, devise) {
   const d = bcDevisesSkin()[String(devise).toLowerCase()];
-  return d ? bcUnites(brut, d.dec) + ' ' + d.sym : String(brut) + ' units of ' + court(devise);
+  return d ? brutVersTexteSkin(BigInt(brut), d.dec) + ' ' + d.sym : String(brut) + ' units of ' + court(devise);
 }
 function bcDureeSkin(s) {
   const n = Math.max(0, Math.floor(Number(s)));
@@ -29085,6 +29094,7 @@ async function peindreSkinsMarche(force = false) {
     if (!r || r.etat !== 'LU') {
       skm.rate = Date.now();
       if (!skm.liste) { z.textContent = ''; note.textContent = 'The skins could not be read right now — nothing is listed rather than a wrong list. Read again in a moment.'; }
+      if (!skm.liste) jb('skmEtat', 'Skins not read on chain just now — no list is shown rather than a wrong one.');
       else skmPeindreListe();
       return;
     }
@@ -29102,9 +29112,11 @@ function skmPeindreListe() {
   if (!note || !z || !skm.liste) return;
   const moi = compte ? String(compte).toLowerCase() : null, t = skmMaintenant(), c = compterSkins(skm.liste, t);
   const lu = ' Read on chain at ' + skmHeure(skm.lu) + (skm.rate ? ' — not read again at ' + skmHeure(skm.rate) + ', this is the last list read' : '') + '.';
+  /* la phrase de la carte du Game, A L IDENTIQUE (texteMarcheSkins), lue dans la MEME liste que les lignes ci-dessous */
+  jb('skmEtat', texteMarcheSkins(skm.liste, moi));
   note.textContent = (c.total
     ? c.total + ' minted · ' + c.fixe + ' at a fixed price · ' + c.enchere + ' in auction' + (c.finie ? ' · ' + c.finie + ' ended, to settle' : '') + ' · ' + c.libre + ' not listed.'
-    : 'No skin minted yet — the first one is minted from the Game tab (Skin market).')
+    : 'No skin minted yet — mint the first one above.')
     + (skm.tronque ? ' Showing the first ' + skm.liste.length + ' of ' + skm.total + '.' : '') + lu + (moi ? '' : ' Connect a wallet to buy, bid or sell.') + ' ' + bcTexteDevisesOffertes();
   /* les devises proposees a la vente entrent dans la cle : une devise lue admise apres coup repeint le formulaire Sell */
   const offertesCle = Object.keys(bcDevisesOffertes()).join(',');

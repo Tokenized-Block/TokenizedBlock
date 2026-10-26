@@ -94,8 +94,9 @@ function prixTapes(html) {
 }
 const hits = prixTapes(app);
 vu(hits.length === 0, 'C app.html : aucun prix de skin tape dans les textes servis (' + hits.join(' ; ') + ')');
-vu((appCode.match(/<span class="skinPrix"><\/span>/g) || []).length === 3 && /for \(const e of document\.querySelectorAll\('\.skinPrix'\)\) e\.textContent = SKIN_MINT_TEXTE;/.test(appCode),
-  'C les 3 <span class="skinPrix"> (bouton Draws, titre et bouton de la carte Skin market) sont remplis depuis SKIN_MINT_TEXTE');
+/* 2026-10-26 : 5 — la section Skins de l onglet Market porte aussi le titre et le bouton Mint (memes spans, meme remplissage) */
+vu((appCode.match(/<span class="skinPrix"><\/span>/g) || []).length === 5 && /for \(const e of document\.querySelectorAll\('\.skinPrix'\)\) e\.textContent = SKIN_MINT_TEXTE;/.test(appCode),
+  'C les 5 <span class="skinPrix"> (bouton Draws, titre et bouton de la carte Skin market, titre et bouton Mint de la section Skins du Market) sont remplis depuis SKIN_MINT_TEXTE');
 vu(/import \{[^}]*\bSKIN_MINT_TEXTE\b[^}]*\} from '\.\/blockskins\.js';/.test(app), 'C app.html importe SKIN_MINT_TEXTE de blockskins.js');
 const achat = corps('async function bcAcheterSkin(');
 vu(/'Pay ' \+ SKIN_MINT_TEXTE/.test(achat) && /a skin is ' \+ SKIN_MINT_TEXTE \+ '\./.test(achat) && /take exactly ' \+ SKIN_MINT_TEXTE\)/.test(achat) && /bcEtape\(m, SKIN_MINT_TEXTE \+ ' goes to TokenizedBlock\./.test(achat) && / — ' \+ SKIN_MINT_TEXTE\);/.test(achat),
