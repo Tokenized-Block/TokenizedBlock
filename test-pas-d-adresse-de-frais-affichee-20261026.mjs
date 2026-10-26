@@ -128,6 +128,18 @@ if (aides.length === 4) {
     const f = new Function('courtAffichable', 'estAdresseFrais', 'libelleAdresseFrais', l + '\nreturn ' + nom + ';')(FC.courtAffichable, FC.estAdresseFrais, FC.libelleAdresseFrais);
     verifier(sansFuite(f(A6)) && sansFuite(f(L37)) && f(AUTRE) === '0x1234…5678', 'C1 app.html ' + nom + ' : « ' + f(A6) + ' », autre = ' + f(AUTRE));
   }
+  /* 2026-10-26 (integration game57/series) : la vue 3D du cerveau (game57 #4) ecrit l adresse d un voisin sur le canvas
+   *   (ctx.fillText(... bvCourt(v.adr))) — un sink que le motif generique ne voit pas. bvCourt passe donc par le masque. */
+  const lb = (appLF.match(/^const bvCourt = [^\r\n]+/m) || [''])[0];
+  verifier(!!lb, 'C3 app.html : const bvCourt trouvee');
+  if (lb) {
+    const f = new Function('courtAffichable', 'estAdresseFrais', 'libelleAdresseFrais', lb + '\nreturn bvCourt;')(FC.courtAffichable, FC.estAdresseFrais, FC.libelleAdresseFrais);
+    const emp = '0xabc123';
+    verifier(sansFuite(f(A6)) && sansFuite(f(L37)) && sansFuite(f(A6.toUpperCase().replace('0X', '0x'))) && f(AUTRE) === '0x123456…5678' && f(emp) === emp,
+      'C4 app.html bvCourt (voisin du cerveau 3D, empreintes) : « ' + f(A6) + ' », autre = ' + f(AUTRE) + ', court inchange = ' + f(emp));
+  }
+  verifier(/ctx\.fillText\(String\(v\.sym \|\| bvCourt\(v\.adr\)\)/.test(appLF) && !/fillText\([^\n]*\.slice\(-4\)/.test(appLF),
+    'C5 app.html : le nom d un voisin ecrit sur le canvas 3D passe par bvCourt (masque), aucun fillText ne raccourcit une adresse lui-meme');
   const AP = await import('./apercu.js');
   const n = AP.nomDe(A6, { chaine: 8453 }), n2 = AP.nomDe(AUTRE, { chaine: 8453 });
   verifier(sansFuite(n) && /fee wallet/i.test(n) && n2 === '0x1234…5678', 'C2 apercu.js nomDe(wallet de frais) = « ' + n + ' » (avant signature : nomme, sans adresse) ; autre = ' + n2);
@@ -166,7 +178,6 @@ const REVUS = [
   ['app.html', "j.slice(0, 6) + '…' + j.slice(-4)", 'block du hub'],
   ['app.html', "sel.value.slice(0, 6) + '…' + sel.value.slice(-4)", 'block du hub (x2)'],
   ['app.html', "|| b.slice(0, 6) + '…' + b.slice(-4)) + '</option>'", 'block cree par ce wallet (liste /api/blocks-de)'],
-  ['app.html', "s.length > 14 ? s.slice(0, 8) + '…' + s.slice(-4) : s;", 'bvCourt : block voisin ou empreinte (Brain vision)'],
   ['brain-os.js', "a.slice(0, 6) + '…' + a.slice(-4)", 'symbole de jeton'],
   ['paires.js', "p.adr.slice(0, 6) + '…' + p.adr.slice(-4)", 'paire B20'],
   ['pont-de-liquidite.js', "String(a).slice(0, 6) + '…' + String(a).slice(-4)", 'jeton du pont'],

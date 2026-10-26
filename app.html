@@ -25982,7 +25982,8 @@ const bvSvg = (tag, attrs, texte) => {
   if (texte !== undefined) el.textContent = String(texte);
   return el;
 };
-const bvCourt = (x) => { const s = String(x || ''); return s.length > 14 ? s.slice(0, 8) + '…' + s.slice(-4) : s; };
+/* ⛔ game57 #10 : bvCourt ecrit aussi sur le canvas 3D (voisins) — il passe par le masque des adresses de frais (courtAffichable). */
+const bvCourt = (x) => { const s = String(x || ''); return s.length > 14 ? courtAffichable(s, 8) : s; };
 /* INSIDE : le cadre vient de vision-cerveau.js#cadreInterieur (pur, deterministe) ; ici on ne fait que le dessiner. */
 /* 2026-10-26 (Live) : le MEME dessin sert aux tuiles du panneau Live — `svg` est la cible, `parle` l echange « Talk to it » (le
  *   dialogue seulement ; une tuile passe null), `clipId` un identifiant propre a chaque SVG (deux clipPath au meme id se melangent). */
