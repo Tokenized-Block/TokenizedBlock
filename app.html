@@ -2523,8 +2523,6 @@ details[open] > summary::before{transform:rotate(90deg)}
         <span class="pBadge" id="bPhase">—</span>
         <span class="pPV"><b id="bTick">0</b> ticks</span>
       </div>
-      <!-- 2026-10-26 (Phil : « un bouton, un pop-up qui retranscrit visuellement ce que le brain voit ») : ouvre #bvPop sur CE cerveau -->
-      <button type="button" class="bouton sec bvOuvrir" id="bVision" style="margin-top:10px">See what it sees</button>
       <!-- ⛔ DEUX SOURCES, DEUX PHRASES (Phil, 2026-09-17 : « il etait dans Trunk mais en realite
            asleep »). Le palier peut venir du marche public ; l humeur ne vient QUE de la lecture
            on-chain. Quand les deux divergent, cette ligne dit laquelle est laquelle. -->
@@ -2753,6 +2751,19 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="titre">Its job</p>
       <p class="note" id="bMetier"></p>
       <p class="note" id="bJamais"></p>
+    </div>
+
+    <!-- 2026-10-26 (Phil : « la vue du cerveau, dans Brain en bas, comme bouton de widget comme pour panel control ») : le widget qui
+         OUVRE #bvPop sur CE cerveau — meme forme que #bcLanceur ; le bouton garde son id #bVision (son gestionnaire ne change pas) -->
+    <div class="carte" id="bvLanceur">
+      <div class="bcLanceurIn">
+        <div class="bcMini" aria-hidden="true">◉</div>
+        <div style="flex:1;min-width:0">
+          <p class="titre" style="margin:0">Inside its brain</p>
+          <p class="sous" style="margin:4px 0 0">See what its neurons receive and decide, replayed from real data. Nothing is sent.</p>
+        </div>
+      </div>
+      <button type="button" class="bouton bvOuvrir" id="bVision" style="margin-top:12px">See what it sees</button>
     </div>
   </section>
 
