@@ -43,7 +43,7 @@ const extraire = (nom) => {
 };
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
   'reprendreRetourFiat', 'montantLisibleFiat', 'actifCarteCourant', 'cablerFundActifs', 'peindreBridgeBlocks', 'repeindreFundApresHub',
-  'pivotsPourPayWith', 'lireSoldesPivots', 'garderChoixPayWith', 'noterPayWith', 'effacerNotePayWith',
+  'pivotsPourPayWith', 'lireSoldesPivots', 'garderChoixPayWith', 'phraseMontantRetire', 'noterPayWith', 'effacerNotePayWith',
   'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees',
   'avancerIntention', 'retirerTexteEtape', 'intentionChangee', 'symboleDuChampBuy', 'majPucesPremier'];
 const sources = Object.fromEntries(FONCTIONS.map((f) => [f, extraire(f)]));

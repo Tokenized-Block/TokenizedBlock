@@ -33,7 +33,7 @@ vu(bcDeuxTrades(null, NV, IB, '1') === null, 'plan absent -> un trade est devine
 const iE = html.indexOf("if (!r.hash) bcEtape(m, 'Nothing was sent. Two trades do the same");
 const branche = html.slice(iE - 200, iE + 900);
 vu(iE > 0 && /bcDeuxTrades\(p, de, vers, montant\)/.test(branche), 'la branche d echec du lot n appelle pas bcDeuxTrades');
-vu(/bcProposerSwap\('You', '', \{ de: x\.de, vers: x\.vers, montant: x\.montant \}, null\)/.test(branche) && /\['Start again', planifier, true\]/.test(branche), 'les boutons ne proposent pas les deux echanges, ou « Start again » a disparu');
+vu(/bcProposerSwap\('You', '', \{ de: x\.de, vers: x\.vers, montant: x\.montant \}, null, null, garde\)/.test(branche) && /\['Start again', planifier, true\]/.test(branche), 'les boutons ne proposent pas les deux echanges, ou « Start again » a disparu');
 /* 2026-10-11 (test REEL de Grok, Rabby) : apres « 1 · Sell », « 2 · Then buy » et « Start again » restaient GRISES - bcBoutons desactivait
  *   tout le groupe au premier clic. EXECUTE bcBoutons sur un DOM simule. */
 const iB = html.indexOf('function bcBoutons(m, liste) {');
@@ -53,5 +53,5 @@ vu(b2.disabled === true && b3.disabled === false && faits.join() === '1,2', 'le 
 const msg2 = fauxEl('div'); bcBoutons(msg2, [['Sign', () => {}], ['Dismiss', () => {}, true]]);
 msg2.enfants[0].enfants[0].ecoute.click();
 vu(msg2.enfants[0].enfants.every((x) => x.disabled), 'temoin : un choix EXCLUSIF (Sign / Dismiss) ne grise plus tout le groupe');
-vu(/x\.montant \}, null\), false, true\]\)/.test(branche), 'les boutons du repli ne sont pas « seul »');
+vu(/x\.montant \}, null, null, garde\), false, true\]\)/.test(branche), 'les boutons du repli ne sont pas « seul »');
 console.log('ok deux-trades-repli - ' + n + ' assertions ; NE PROUVE PAS un vrai Rabby');

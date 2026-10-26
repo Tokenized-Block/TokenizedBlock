@@ -56,7 +56,7 @@ const NVDA = String(pairesProposees(8453).find((p) => p.symbole === 'NVDAc').adr
 const BLOC = '0xb200000000000000000000e4b0c5fbe9c8df579e';
 const WALLET = '0x00000000000000000000000000000000c0ffee77';
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
-  'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange', 'noterPayWith', 'effacerNotePayWith',
+  'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange', 'phraseMontantRetire', 'noterPayWith', 'effacerNotePayWith',
   'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees', 'cleEtapePreparee', 'gardeClicEtape',
   'symboleDuChampBuy', 'majPucesPremier', 'cliquerPucePremier',
   'avancerIntention', 'retirerTexteEtape', 'intentionChangee', 'nouvelleIntention', 'intentionVivante', 'ajouterEtape',
@@ -920,7 +920,8 @@ const mutants = [
   ['le choix n est plus retenu', (s) => s.replace('choixPayWith = { block: String(block).toLowerCase(),', 'void { block: String(block).toLowerCase(),')],
   ['le montant tape reste sous un choix perdu', (s) => s.replace("  champ.value = '';\n  noterPayWith('The amount you typed was in ' + c.sym", "  noterPayWith('The amount you typed was in ' + c.sym").replace("  champ.value = '';\r\n  noterPayWith('The amount you typed was in ' + c.sym", "  noterPayWith('The amount you typed was in ' + c.sym")],
   /* ── suite de la revue de 4a6018e (points 1, 3, 4) ── */
-  ['P1 la personne change d actif : le montant tape reste', (s) => s.replace("          champ.value = '';\n          noterPayWith('The amount you typed was in ' + symAvant", "          noterPayWith('The amount you typed was in ' + symAvant").replace("          champ.value = '';\r\n          noterPayWith('The amount you typed was in ' + symAvant", "          noterPayWith('The amount you typed was in ' + symAvant")],
+  /* 2026-10-26 : la phrase vient de phraseMontantRetire (partagee avec le ticket du Market) — la cible suit */
+  ['P1 la personne change d actif : le montant tape reste', (s) => s.replace("          champ.value = '';\n          noterPayWith(phraseMontantRetire(symAvant", "          noterPayWith(phraseMontantRetire(symAvant").replace("          champ.value = '';\r\n          noterPayWith(phraseMontantRetire(symAvant", "          noterPayWith(phraseMontantRetire(symAvant")],
   ['P1 une remise du choix est traitee comme un geste de la personne', (s) => s.replace('const parLaPersonne = !bascule && !restaurationPayWith;', 'const parLaPersonne = !bascule;')],
   ['P3 un nouveau choix ne retire pas la vieille note', (s) => s.replace('        effacerNotePayWith();\n', '').replace('        effacerNotePayWith();\r\n', '')],
   ['P3 une frappe ne retire pas la vieille note', (s) => s.replace("if (typeof retirerNotePayWith === 'function') retirerNotePayWith(e);", 'void 0;')],

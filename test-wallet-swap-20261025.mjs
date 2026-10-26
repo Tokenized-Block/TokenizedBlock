@@ -18,6 +18,9 @@
  *      seule ; le libelle du bouton passe par bcLibelleSigner (« Sell anyway » jamais sur une approbation). signer() inchange ;
  *      puis sur integ13 (2026-10-26, correctif Market) : diff relu contre integ12 = 1 commentaire + la rangee de boutons d un devis
  *      refuse par la chaine (Dismiss + Try again quand bcDevisRefuse(p), sinon inchangee) ; aucun appel d argent touche ;
+ *      puis sur claude/market-buy-form (2026-10-26) : diff relu = une `garde` facultative (6e parametre) reverifiee en tete de
+ *      planifier() et de signer(), transmise aux deux trades de repli ; bcExecuterTexte la transmet (3e parametre). Sans garde : le
+ *      meme chemin octet pour octet a l execution (test-ticket-market-regles-20261026 F1) ;
  *      bcSigner est epingle sur claude/grok-wallet (2026-10-25) : diff relu = la ligne « Confirmed. » dit le hash de l etape
  *      (affichage seul) + son commentaire ;
  *   E. chaque regle ci-dessus tue son mutant (copies EN MEMOIRE du texte, jamais le fichier).
@@ -38,10 +41,14 @@ const brut = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g
 
 const EMPREINTES_PROD_D07AFC5 = {
   /* integ9 2026-10-25 (d07afc5 : 9df99397…d300) : + show -> bcTerminer, + spin / settle_spin, voir l en-tete D */
-  'async function bcExecuterTexte(': '13b33a98e03a9419a6bf59bbb77e84159cf04b82c819c25f84a0814c2656a027',
+  /* claude/market-buy-form 2026-10-26 (13b33a98…a027 avant) : diff relu = un 3e parametre `garde = null` passe tel quel a
+   *   bcProposerSwap (6e argument) ; la branche swap, l analyse et les refus sont inchanges */
+  'async function bcExecuterTexte(': 'ffaec8a7b684dfa3fa0b034e52be2ac5bb4ac3b3fe0580cc176021cef377eca3',
   /* integ11 2026-10-25 (d07afc5 : cd36ee9d…84db) : + ligne de vente avant signature, venteLoin, bcLibelleSigner ; integ13 2026-10-26
    *   (integ12 : ef52c7fa…b5a3) : + rangee Dismiss + Try again d un devis refuse par la chaine — voir l en-tete D */
-  'async function bcProposerSwap(': 'bab2159035f3850999644065062f37ffaafe8aceda51f18d8656c97d1894d573',
+  /* claude/market-buy-form 2026-10-26 (bab21590…d573 avant) : diff relu = un 6e parametre `garde = null` ; `tient()` (garde absente =
+   *   vrai) en tete de planifier() et de signer() ; les deux trades de repli la recoivent. Plan, devis, frais, appels, envoi : inchanges */
+  'async function bcProposerSwap(': 'dee0ce774730364c4d02cee2f81927173395f2e41a87c762d2689b06be46eb99',
   'function bcModeEnvoi(': 'b2cbcf62fe2fb7ca3ff4ad4087c0fabf9bd6641502f8e30a5e2e4e7936ce7420',
   'function bcDeuxTrades(': '4680c774049c0119139b1a3ed7a1c7a03d3c196478424df2e4e3fc7d7a8198e9',
   /* claude/grok-wallet 2026-10-25 (rapport Grok §0.9 ; d07afc5 : 989eaf4d…e29e) : diff relu = la ligne « Confirmed. » dit le hash de
@@ -135,7 +142,7 @@ async function verifier(html) {
     const c = corps(sig);
     exige(!!c && crypto.createHash('sha256').update(c).digest('hex') === h, 'D ' + sig + ' n est plus octet pour octet celui de d07afc5');
   }
-  exige(/if \(c\.type === 'swap'\) \{[\s\S]{0,1600}void bcProposerSwap\('You', '', \{ de, vers, montant: brut\.toString\(\) \}, null\);/.test(corps('async function bcExecuterTexte(') || ''),
+  exige(/if \(c\.type === 'swap'\) \{[\s\S]{0,1600}void bcProposerSwap\('You', '', \{ de, vers, montant: brut\.toString\(\) \}, null, null, garde\);/.test(corps('async function bcExecuterTexte(') || ''),
     'D2 la commande swap du Chat ne mene plus a bcProposerSwap(\'You\', …)');
   return ko;
 }
@@ -159,7 +166,7 @@ const MUTANTS = [
   ['M7 plus de repli a 2 colonnes sous 360 px', remplace('@media (max-width:360px){.wActions4{grid-template-columns:repeat(2,minmax(0,1fr))}}', '')],
   ['M8 la vente revient dans le Bridge', remplace('<div class="carte" id="brFundCarte">', '<div class="carte" id="brSwapCarte" hidden><button id="brConfirm">Sell</button></div><div class="carte" id="brFundCarte">')],
   ['M9 bcProposerSwap modifie (etiquette du paiement)', remplace("bcSigner(m, p.aSigner, 'swap_action')", "bcSigner(m, p.aSigner, 'swap_wallet')")],
-  ['M10 le Chat ne mene plus a bcProposerSwap', remplace("void bcProposerSwap('You', '', { de, vers, montant: brut.toString() }, null);", 'void 0;')],
+  ['M10 le Chat ne mene plus a bcProposerSwap', remplace("void bcProposerSwap('You', '', { de, vers, montant: brut.toString() }, null, null, garde);", 'void 0;')],
   ['M11 le refus s ecrit dans la note du Chat', remplace('bcExecuterTexte(wsCommande(de, vers, n), etat)', 'bcExecuterTexte(wsCommande(de, vers, n))')],
 ];
 for (const [nom, muter] of MUTANTS) {

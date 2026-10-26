@@ -17368,6 +17368,12 @@ function garderChoixPayWith() {
  *     qu un autre a ecrit depuis n est jamais touche. Et notre note s AJOUTE a un etat deja affiche (« sent… ») au lieu de le
  *     remplacer.
  */
+/** LA phrase d un montant RETIRE parce que la personne a choisi un autre actif — une seule, pour « Pay with » de la fiche et pour
+ *  le ticket du Market (2026-10-26) : la meme regle se lit avec les memes mots sur les deux ecrans. */
+function phraseMontantRetire(symAvant, symApres) {
+  return 'The amount you typed was in ' + symAvant + ', so it was taken out when you picked ' + symApres
+    + ' — an amount is never carried over to another currency.';
+}
 function noterPayWith(texte) {
   const e = $('#peEtat');
   if (!e) return;
@@ -17761,8 +17767,7 @@ function majDevisesDentreeCorps(v) {
           && !(fiatRetenu && fiatRetenu.pose !== null && String(champ.value) === fiatRetenu.pose)) {
           const symAvant = (offerts.find((x) => String(x.devise).toLowerCase() === avant) || {}).symbole || 'the previous currency';
           champ.value = '';
-          noterPayWith('The amount you typed was in ' + symAvant + ', so it was taken out when you picked '
-            + ((d && d.symbole) || 'another currency') + ' — an amount is never carried over to another currency.');
+          noterPayWith(phraseMontantRetire(symAvant, (d && d.symbole) || 'another currency'));
         }
       }
       majEtiquetteDeviseDentree(d, symBlock);
@@ -28629,7 +28634,7 @@ function bcLibelleSigner({ franchissement, approbations, venteLoin, n }) {
   if (approbations) return 'Sign the ' + n + ' approval(s)';
   return venteLoin ? 'Sell anyway' : 'Sign in my wallet';
 }
-async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = null) {
+async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = null, garde = null) {
   const moi = brainAdr ? String(brainAdr).toLowerCase() : null;
   let decDe = null, decVers = null;
   /* les deux lectures en parallele, chacune bornee a 6 s : illisibles = unites brutes, la carte s affiche quand meme */
@@ -28664,7 +28669,19 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     }
   } else bcEtape(m, 'Not the block shown — its brain does not judge this one.');
   const refuser = () => { bcEtape(m, 'Dismissed — nothing was sent.'); bcNoter({ type: 'declined', ...refs }); bcOpMaj(op, 'declined'); };
+  /* ⛔ 2026-10-26 (ticket du Market) : `garde` (facultatif) rend null tant que l intention prise au clic tient, sinon sa raison.
+   *   Reverifiee avant CHAQUE plan (Try again, Start again, apres les approbations) et avant CHAQUE ouverture du wallet : une carte
+   *   dont l ecran a change ne planifie plus et n ouvre plus rien. Sans garde (Chat, Wallet, agents) : rien ne change. */
+  const tient = () => {
+    const pq = garde ? garde() : null;
+    if (!pq) return true;
+    bcEtape(m, 'Stopped: ' + pq + ' — nothing was sent. Press Review again on the ticket.', 'non');
+    bcBoutons(m, []);
+    bcOpMaj(op, 'declined');
+    return false;
+  };
   const planifier = async () => {
+    if (!tient()) return;
     if (!(await bcAvecWallet(m, planifier))) { bcEtape(m, 'Not measured \u2014 no wallet connected, so no plan was built. Nothing was sent.', 'non'); bcOpMaj(op, 'noWallet'); return; }
     /* ⛔ LE SOLDE EST RELU AVANT LE PLAN. Mesure sur fork (banc-vente-aerodrome) : un plan Aerodrome n est PAS simule cote serveur —
      *   sans solde il revient PRET, l approbation passe, et le swap reverte dans le wallet. On refuse ici, avant toute signature.
@@ -28743,6 +28760,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
     }
     if (ethParDeballage) bcEtape(m, 'This route pays native ETH after unwrapping: your wallet may show “0 WETH received”. The minimum you receive, in ETH, is the line above. For a figure your wallet shows as is, sell for USDC.');
     const signer = async () => {
+      if (!tient()) return;
       bcOpMaj(op, 'signing');
       /* ⛔⛔ UN PLAN ATOMIQUE PART EN UN LOT, OU NE PART PAS. `bcSigner` envoie les appels un par un : pour un franchissement cela
        *   signait la jambe 1 seule (retest Rabby du 2026-10-04 : la transaction s arretait en USDC). L envoi groupe est celui de la
@@ -28774,7 +28792,7 @@ async function bcProposerSwap(qui, classe, { de, vers, montant }, ref, suivi = n
           + (deux ? ' Use the two buttons below, in order — each one is planned and checked before you sign.' : ''));
         bcNoter({ type: 'failed', ...refs, ...(r.hash ? { tx: r.hash } : {}) });
         bcOpMaj(op, r.hash ? 'sent' : 'notOffered', r.hash);
-        bcBoutons(m, [...(deux || []).map((x) => [x.libelle, () => void bcProposerSwap('You', '', { de: x.de, vers: x.vers, montant: x.montant }, null), false, true]),
+        bcBoutons(m, [...(deux || []).map((x) => [x.libelle, () => void bcProposerSwap('You', '', { de: x.de, vers: x.vers, montant: x.montant }, null, null, garde), false, true]),
           ['Start again', planifier, true]]);
         return;
       }
@@ -29125,7 +29143,7 @@ async function bcLigneSurete(vers) {
 /** Une commande ECRITE ici (ou une pre-commande touchee) : la grammaire de commandes-panel.js, puis le meme chemin. */
 /* ⛔ `note` = l endroit ou le refus s ecrit. Le ticket de l onglet Trade passe LE SIEN : ecrit dans la note du Chat, un refus du
  *   ticket serait juste et invisible (la vue Chat est masquee a ce moment-la). */
-async function bcExecuterTexte(texte, note = $('#bcNote')) {
+async function bcExecuterTexte(texte, note = $('#bcNote'), garde = null) {
   const a = analyserCommande(texte);
   if (!a.ok) { note.className = 'note wKo'; note.textContent = a.pourquoi; return false; }
   note.className = 'note'; note.textContent = '';
@@ -29183,7 +29201,7 @@ async function bcExecuterTexte(texte, note = $('#bcNote')) {
     const brut = enUnitesBrutes(c.montant, dec);
     if (brut === null) return erreur(de.sym + ' has ' + dec + ' decimals: ' + c.montant + ' is not an amount it can carry');
     note.textContent = '';
-    void bcProposerSwap('You', '', { de, vers, montant: brut.toString() }, null);
+    void bcProposerSwap('You', '', { de, vers, montant: brut.toString() }, null, null, garde);
     return true;
   }
   if (c.type === 'send') {
@@ -29442,12 +29460,72 @@ async function bcLireReference(a) {
   } finally { bcRefEnVol = false; }
   try { bcRepeindre(); } catch (_) { /* le panneau n est pas encore construit */ }
 }
+/* ⛔⛔ 2026-10-26 (testeur, prod game54, UNIT, 375 px) : LE TICKET DU MARKET SUIT LES REGLES DU PANNEAU BUY DE LA FICHE.
+ *   Mesure : USDC + « 25 », puis ETH dans la liste — « 25 » restait, sans un mot : un montant tape en USDC se lisait 25 ETH. Et la
+ *   liste n offrait ni AUDF, ni cbBTC, ni WETH, que /api/rails/plan route depuis game48/54.
+ *   ⇒ (1) un montant n est JAMAIS porte vers un autre actif : un changement de devise par la personne le RETIRE, avec la phrase de
+ *         la fiche (phraseMontantRetire) ; un rebatissage qui n offre plus la devise le retire aussi ; un autre block vide le champ.
+ *     (2) les pivots viennent de `pivotsPourPayWith` (devisesPivotVersBloc, la fonction du serveur ; EURC banni n y est jamais).
+ *     (3) l intention { gen, sens, block, devise, montant, compte } est prise AU CLIC « Review » ; la carte du Chat la reverifie avant
+ *         chaque plan et chaque ouverture du wallet (`garde` de bcProposerSwap) : un autre geste sur le ticket, un autre block ou un
+ *         autre compte = refuse, rien n est envoye.
+ *     (4) une puce nomme l actif du champ, et refuse sous un autre. */
+function bcAvancerTicket(pourquoi) { bc.genTicket = (bc.genTicket || 0) + 1; bc.ticketPourquoi = pourquoi || 'the ticket changed'; return bc.genTicket; }
+/** le symbole de l actif choisi dans « You pay » / « You get » (pose sur l option), sinon sa valeur */
+function bcSymTicket(s) {
+  const o = s && s.options && s.selectedIndex >= 0 ? s.options[s.selectedIndex] : null;
+  return (o && o.dataset && o.dataset.sym) || (s ? s.value : '') || 'another currency';
+}
+/** L intention du clic « Review » : le compteur avance (toute carte plus ancienne du ticket devient refusee). */
+function bcIntentionTicket(devise, n) {
+  const gen = bcAvancerTicket('a newer Review was pressed');
+  return { gen, sens: bc.cote, block: brainAdr ? String(brainAdr).toLowerCase() : null, devise: String(devise), montant: String(n),
+    compte: compte ? String(compte).toLowerCase() : null };
+}
+/** La garde de la carte : null tant que l intention tient, sinon la raison. Un wallet connecte APRES le clic devient celui de l intention. */
+function bcGardeTicket(i) {
+  return () => {
+    const ici = brainAdr ? String(brainAdr).toLowerCase() : null, moi = compte ? String(compte).toLowerCase() : null;
+    if (i.compte === null && moi) i.compte = moi;
+    if (ici !== i.block) return 'the panel now shows another block';
+    if (moi !== i.compte) return 'the connected wallet changed since you pressed Review';
+    if ((bc.genTicket || 0) !== i.gen) return (bc.ticketPourquoi || 'the ticket changed') + ' since you pressed Review';
+    return null;
+  };
+}
+/** La note du ticket posee pour un montant retire (texte exact) : elle part au choix suivant, rien d autre n est efface. */
+function bcNoteMontantTicket(t) {
+  const note = $('#bcTicketNote');
+  if (!note) return;
+  if (note.dataset.montantRetire && note.textContent === note.dataset.montantRetire) { note.textContent = ''; note.className = 'note'; }
+  delete note.dataset.montantRetire;
+  if (!t) return;
+  note.className = 'note wKo'; note.textContent = t; note.dataset.montantRetire = t;
+}
+/** La personne change la devise du ticket. A l ACHAT le montant est dans cette devise : il est retire, et la note le dit. */
+function bcTicketDeviseChangee() {
+  const s = $('#bcDevise'), champ = $('#bcMontant');
+  const avant = bc.ticketChoix || null, apres = { v: s.value, sym: bcSymTicket(s) };
+  bc.ticketChoix = apres;
+  if (avant && avant.v === apres.v) return 'MEME';
+  bcAvancerTicket(bc.cote === 'buy' ? 'the currency you pay with changed' : 'what you receive changed');
+  bcNoteMontantTicket(null);
+  /* a la vente le montant est en block : changer ce qu on recoit ne change pas son actif */
+  if (bc.cote !== 'buy' || !avant || !champ || String(champ.value || '').trim() === '') return 'GARDE';
+  champ.value = '';
+  bcNoteMontantTicket(phraseMontantRetire(avant.sym, apres.sym));
+  return 'RETIRE';
+}
 function bcPeindreTicket(a, sym, mk, snap) {
   const achat = bc.cote === 'buy', nomB = sym || 'this block', q = bcCotation(a);
   const s = $('#bcDevise');
   /* la cle inclut l arrivee de l index : les sorties vers les actions Aerodrome n apparaissent qu une fois l index lu */
   const cle = a + '|' + (sym || '') + '|' + bc.cote + '|' + (q && q.ok ? q.adr : '') + '|' + (marcheParAdr.size ? 1 : 0);
   if (bc.ticketDe !== cle) {
+    /* un AUTRE block : le montant tape pour le precedent ne passe pas a celui-ci (comme le champ Buy de la fiche) */
+    const autreBloc = bc.ticketBloc !== undefined && bc.ticketBloc !== a, memeSens = bc.ticketSens === bc.cote;
+    bc.ticketBloc = a; bc.ticketSens = bc.cote;
+    if (autreBloc) { $('#bcMontant').value = ''; bcAvancerTicket('the panel now shows another block'); }
     bc.ticketDe = cle; bc.rapidesDe = null;
     /* un autre block ou un autre sens : la note du ticket precedent ne vaut plus */
     const tn = $('#bcTicketNote'); tn.className = 'note'; tn.textContent = '';
@@ -29486,9 +29564,30 @@ function bcPeindreTicket(a, sym, mk, snap) {
         for (const st of ACTIONS_COINBASE) { const sa = String(st.adr).toLowerCase(); if (v4.has(sa)) choix.push([sa, 'for ' + st.symbole + ' (stock)']); }
       }
     }
-    const avant = s.value; s.textContent = '';
-    for (const [v, l] of choix) s.append(bcEl('option', { value: v, text: l }));
-    if (choix.some(([v]) => v === avant)) s.value = avant;
+    /* [valeur, libelle, symbole, grise] : le symbole est celui de l ACTIF (sans « for », sans « (stock) ») — c est lui que la note et
+     *   les puces nomment */
+    choix = choix.map(([v, l]) => [v, l, String(l).replace(/^for /, '').replace(/ \(stock\)$/, ''), false]);
+    /* ⛔ 2026-10-26 : les pivots que le serveur route (AUDF, cbBTC, WETH), de la MEME source que « Pay with » de la fiche */
+    if (achat && !ACTIONS_PAR_ADR.has(a) && q && q.ok) {
+      const deja = choix.map(([v]) => ({ devise: v === 'ETH' ? eth : String((bcResoudre(v) || {}).adr || v).toLowerCase() }));
+      for (const p of pivotsPourPayWith(q.adr, deja)) {
+        choix.push([p.devise, p.symbole + (p.tenu === false ? ' — you hold none' : ' — routed'), p.symbole, p.tenu === false]);
+        try { bcIdentite(p.devise); } catch (_) { /* son nom se lit sur la chaine ; sinon l adresse abregee */ }
+      }
+    }
+    const avant = s.value, symAvant = bc.ticketChoix && bc.ticketChoix.v === avant ? bc.ticketChoix.sym : avant;
+    s.textContent = '';
+    for (const [v, l, sy, off] of choix) { const o = bcEl('option', { value: v, text: l }); o.dataset.sym = sy; if (off) o.disabled = true; s.append(o); }
+    const garde = choix.some(([v, , , off]) => v === avant && !off);
+    if (garde) s.value = avant;
+    /* ⛔ un montant tape sous une devise que la liste relue n offre plus n est PAS porte vers la nouvelle (meme block, meme sens) */
+    if (!garde && avant && achat && memeSens && !autreBloc && String($('#bcMontant').value || '').trim() !== '') {
+      $('#bcMontant').value = '';
+      bcAvancerTicket('the currency you pay with changed');
+      bcNoteMontantTicket('The amount you typed was in ' + symAvant + ', and the ticket no longer offers ' + symAvant
+        + ' (the market was read again), so it was taken out — nothing stays under a currency it was not typed for.');
+    }
+    bc.ticketChoix = { v: s.value, sym: bcSymTicket(s) };
   }
   /* les montants rapides : par devise a l achat ; une PART du solde lu a la vente (aucune part sans solde lu) */
   const so = bc.soldes && bc.soldes.adr === a && compte && bc.soldes.compte === String(compte).toLowerCase() ? bc.soldes : null;
@@ -29496,8 +29595,25 @@ function bcPeindreTicket(a, sym, mk, snap) {
   if (bc.rapidesDe !== cleR) {
     bc.rapidesDe = cleR;
     const r = $('#bcRapides'); r.textContent = '';
-    const puce = (lib, valeur) => { const b = bcEl('button', { type: 'button', cls: 'puce', text: lib }); b.addEventListener('click', () => { $('#bcMontant').value = valeur; $('#bcMontant').focus(); }); r.append(b); };
-    if (achat) for (const v of (BC_RAPIDES[s.value] || [])) puce(v + ' ' + s.value, v);
+    /* ⛔ 2026-10-26 : une puce nomme l actif de son montant et ne remplit que sous lui (la regle des puces de la fiche) */
+    const puce = (lib, valeur, actif) => {
+      const b = bcEl('button', { type: 'button', cls: 'puce', text: lib });
+      if (actif) b.dataset.actif = actif;
+      b.addEventListener('click', () => {
+        if (actif && $('#bcDevise').value !== actif) {
+          const n = $('#bcTicketNote'); n.className = 'note wKo';
+          n.textContent = 'That amount is in ' + actif + ', and the ticket pays in ' + bcSymTicket($('#bcDevise')) + ' — nothing was filled.';
+          return;
+        }
+        $('#bcMontant').value = valeur; bcAvancerTicket('the amount changed'); $('#bcMontant').focus();
+      });
+      r.append(b);
+    };
+    if (achat) {
+      const vs = BC_RAPIDES[s.value] || [];
+      for (const v of vs) puce(v + ' ' + bcSymTicket(s), v, s.value);
+      if (!vs.length && s.value) r.append(bcEl('span', { cls: 'note', text: 'No quick amounts in ' + bcSymTicket(s) + ' — type the amount.' }));
+    }
     else if (so && so.block !== null && so.dec !== null && so.block > 0n) for (const p of [25n, 50n, 100n]) puce(p + ' %', bcDecimal(so.block * p / 100n, so.dec));
     else r.append(bcEl('span', { cls: 'note', text: !compte ? 'Connect your wallet to sell a share of what you hold.' : so && so.block === 0n ? 'This wallet holds none of it.' : 'Reading what you hold…' }));
   }
@@ -31232,8 +31348,11 @@ document.addEventListener('keydown', (e) => {
 });
 /* ══ FIN DE LA PALETTE ══ */
 /* ── le ticket de l onglet Trade ── */
-for (const b of document.querySelectorAll('#bcTicket [data-cote]')) b.addEventListener('click', () => { bc.cote = b.getAttribute('data-cote'); $('#bcMontant').value = ''; bcRepeindre(); });
-$('#bcDevise').addEventListener('change', () => { bc.rapidesDe = null; bcRepeindre(); });
+for (const b of document.querySelectorAll('#bcTicket [data-cote]')) b.addEventListener('click', () => { bc.cote = b.getAttribute('data-cote'); $('#bcMontant').value = ''; bcAvancerTicket('you switched between Buy and Sell'); bcRepeindre(); });
+/* un geste de la personne sur la devise (jamais un rebatissage : `change` ne part que d elle) : le montant ne la suit pas */
+$('#bcDevise').addEventListener('change', () => { bcTicketDeviseChangee(); bc.rapidesDe = null; bcRepeindre(); });
+/* chaque frappe change l intention : une carte preparee pour l ancien montant n ouvre plus le wallet */
+$('#bcMontant').addEventListener('input', () => { bcAvancerTicket('the amount changed'); });
 $('#bcTicket').addEventListener('submit', async (e) => {
   e.preventDefault();
   const note = $('#bcTicketNote'), n = $('#bcMontant').value.trim(), d = $('#bcDevise').value;
@@ -31243,8 +31362,10 @@ $('#bcTicket').addEventListener('submit', async (e) => {
   /* le ticket dit ce qui cloche DANS SES MOTS : « abc » rendait « not understood — type help », une reponse de ligne de commande */
   if (!/^\d+([.,]\d+)?$/.test(n) || !(Number(n.replace(',', '.')) > 0)) return dire('That is not an amount — write a number above zero, like 0.002.');
   if (!d) return dire('The currency list is not ready yet — try again in a moment.');
-  /* meme grammaire, meme chemin que la barre du Chat ; le refus s ecrit ICI (la vue Chat est masquee a ce moment) */
-  if (await bcExecuterTexte(bc.cote === 'buy' ? 'buy this with ' + n + ' ' + d : 'sell ' + n + ' this for ' + d, note)) {
+  /* meme grammaire, meme chemin que la barre du Chat ; le refus s ecrit ICI (la vue Chat est masquee a ce moment).
+   * ⛔ 2026-10-26 : l intention est prise ICI, au clic — la carte du Chat refuse de planifier et d ouvrir le wallet si elle ne tient plus */
+  const intention = bcIntentionTicket(d, n);
+  if (await bcExecuterTexte(bc.cote === 'buy' ? 'buy this with ' + n + ' ' + d : 'sell ' + n + ' this for ' + d, note, bcGardeTicket(intention))) {
     $('#bcMontant').value = ''; note.className = 'note'; note.textContent = '';
   }
 });

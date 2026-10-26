@@ -51,7 +51,7 @@ const ok = (nom, cond, vu) => {
  *      le Swap du Wallet, qui ecrit une commande du Chat ; c est donc `bcProposerSwap` qui montre le devis ET fait signer.
  *      L invariant est le meme, et plus simple a tenir : devis et appels signes viennent du MEME objet `p` (un seul plan,
  *      /api/rails/plan), dans la MEME fonction. Les cas ci-dessous gardent leur numero, re-ancres sur ce chemin. */
-const mFn = /async function bcProposerSwap\(qui, classe, \{ de, vers, montant \}, ref, suivi = null\) \{([\s\S]*?)\n\}/.exec(app);
+const mFn = /async function bcProposerSwap\(qui, classe, \{ de, vers, montant \}, ref, suivi = null, garde = null\) \{([\s\S]*?)\n\}/.exec(app);
 ok('0. le chemin du devis et de la signature (bcProposerSwap) est trouve, borne par sa grammaire', !!mFn);
 const devis = mFn ? mFn[1] : '';
 ok('0b. TEMOIN — son corps est substantiel (une extraction ratee rendrait tout vrai par absence)',

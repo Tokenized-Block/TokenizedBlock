@@ -95,9 +95,10 @@ ok(/<button type="button" class="bcAdr" id="bcAdr" hidden/.test(html) && /ad\.te
 ok(/navigator\.clipboard\.writeText\(a\)/.test(html.slice(html.indexOf("$('#bcAdr').addEventListener"))), 'C … et se copie d un clic');
 ok(/<form (onsubmit="return false" )?class="bcTicket" id="bcTicket"/ /* 2026-10-10 : garde HTML anti-rechargement */.test(html) && /id="bcMontant"/.test(html) && /id="bcDevise"/.test(html) && /id="bcPosition"/.test(html) && /id="bcTicketNote"/.test(html),
   'C onglet Trade : le ticket (sens, montant, devise), sa note, et ce que la personne detient');
-ok(/await bcExecuterTexte\(bc\.cote === 'buy' \? 'buy this with ' \+ n \+ ' ' \+ d : 'sell ' \+ n \+ ' this for ' \+ d, note\)/.test(html),
+/* 2026-10-26 : + la garde de l intention prise au clic (test-ticket-market-regles-20261026) — la note reste celle du ticket */
+ok(/await bcExecuterTexte\(bc\.cote === 'buy' \? 'buy this with ' \+ n \+ ' ' \+ d : 'sell ' \+ n \+ ' this for ' \+ d, note, bcGardeTicket\(intention\)\)/.test(html),
   'C le ticket ECRIT la commande de la barre du Chat (meme grammaire, meme porte, meme plan) et recoit le refus dans SA note');
-ok(/async function bcExecuterTexte\(texte, note = \$\('#bcNote'\)\) \{/.test(bcSrc), 'C bcExecuterTexte ecrit son refus la ou on le lui dit (un refus du ticket dans la note du Chat serait invisible)');
+ok(/async function bcExecuterTexte\(texte, note = \$\('#bcNote'\), garde = null\) \{/.test(bcSrc), 'C bcExecuterTexte ecrit son refus la ou on le lui dit (un refus du ticket dans la note du Chat serait invisible)');
 ok(/vers = bcCotation\(de\.adr\);\n\s+if \(!vers\) return erreur\(/.test(bcSrc) && !/: bcResoudre\('USDC'\); \} else vers = bcResoudre\(c\.vers\);/.test(bcSrc),
   'C « sell <n> <token> » sans devise : la cotation LUE, jamais USDC par defaut ; pas lue = on le dit');
 ok(/if \(ACTIONS_PAR_ADR\.has\(a\)\) return bcResoudre\('USDC'\);/.test(bcSrc) && /\n\s*choix = q && q\.ok \? \[\[q\.adr === eth \? 'ETH' : q\.adr, 'for ' \+ q\.sym\]\] : \[\['ETH', 'for ETH'\]\];/.test(bcSrc),

@@ -41,7 +41,7 @@ ok(!extraire('marcheDuHubBridge') && !extraire('recuBridge'), 'les lecteurs de l
 const appels = code.match(/planEchange\(\{[^}]*\}\)/g) || [];
 ok(appels.length >= 1 && appels.every((a) => /marcheLu: /.test(a)), 'tout appel planEchange de l ecran passe marcheLu (' + appels.length + ')');
 /* (`extraire` s arrete a la premiere accolade : ici celle du parametre destructure — on borne donc par la signature entiere) */
-const swap = (/async function bcProposerSwap\(qui, classe, \{ de, vers, montant \}, ref, suivi = null\) \{([\s\S]*?)\n\}/.exec(html) || ['', ''])[1];
+const swap = (/async function bcProposerSwap\(qui, classe, \{ de, vers, montant \}, ref, suivi = null, garde = null\) \{([\s\S]*?)\n\}/.exec(html) || ['', ''])[1];
 ok(swap.length > 3000, 'bcProposerSwap extraite (' + swap.length + ')');
 const ligneMin = (swap.match(/bcEtape\(m, 'You receive at least '[^\n]*/) || [''])[0];
 ok(/bcUnites\(rs\.recoitAuMoins, decVers\)/.test(ligneMin) && !/, 18\)/.test(ligneMin),
