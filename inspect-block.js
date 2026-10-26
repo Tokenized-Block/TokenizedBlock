@@ -77,6 +77,7 @@ export const FIELDS = Object.freeze([
 ]);
 const TITLES = { identity: 'Identity', personality: 'Personality', state: 'Full state', perceives: 'What it perceives now', done: 'What it has done', expectations: 'Its expectations' };
 
+const NO_VOICE = Object.freeze({ none: 'none — its creator has not written its voice (/api/voix: voix null)' });
 /** the value for each field, or null — only ever taken from `src`, never made up */
 function valueOf(key, src) {
   const m = src.market && typeof src.market === 'object' ? src.market : null;
@@ -91,9 +92,10 @@ function valueOf(key, src) {
     case 'creationTx': return src.creator ? text(src.creator.tx) : null;
     case 'createdAt': return m ? text(m.creeLe) : null;
     case 'birthBlock': return birthBlockFrom(src.holders);
-    case 'bio': return src.voice ? text(src.voice.bio) : null;
-    case 'tone': return src.voice ? text(src.voice.ton) : null;
-    case 'topics': return src.voice ? list(src.voice.sujets) : null;
+    /* game59 4: a voice READ as empty (/api/voix: voix null) is a fact, not a missing read */
+    case 'bio': return src.voice ? text(src.voice.bio) : src.voiceRead === true ? NO_VOICE : null;
+    case 'tone': return src.voice ? text(src.voice.ton) : src.voiceRead === true ? NO_VOICE : null;
+    case 'topics': return src.voice ? list(src.voice.sujets) : src.voiceRead === true ? NO_VOICE : null;
     case 'neurons': return inn ? inn.neurones : null;
     case 'sensors': return inn ? { potentials: inn.neurones.slice(0, 16).map((x) => x.potentiel),
       current: src.champ && src.champ.sensations && finite(src.champ.sensations.total) ? src.champ.sensations.total : null } : null;
@@ -196,6 +198,7 @@ function fieldTextRaw(f) {
   if (!f) return NOT_READ;
   if (f.status !== 'read') return f.status + (f.note ? ' — ' + f.note : '');
   const v = f.value;
+  if (v === NO_VOICE || (v && typeof v === 'object' && typeof v.none === 'string' && Object.keys(v).length === 1)) return v.none;
   if (f.key === 'neighboursRead') return v.read.length ? v.read.map((n) => (n.sym || n.adr) + ' (' + n.key + ')').join(' · ')
     : NONE_READ + ' — its input vector (' + v.keys.join(', ') + ') holds no neighbour';
   if (f.key === 'birthBlock') return 'block ' + v + ' (its first transfer from the zero address)';
