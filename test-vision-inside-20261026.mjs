@@ -149,7 +149,10 @@ const VU = HISTO[0];   /* first beat: buys 1→2, sells 0→1, gm 2→3, holders
   const fetchStub = (url, o = {}) => { calls.push({ via: 'fetch', method: String((o && o.method) || 'GET').toUpperCase(), url }); return Promise.resolve({ ok: true, json: async () => ({}) }); };
   class XHR { open(m, u) { calls.push({ via: 'xhr', method: String(m).toUpperCase(), url: u }); } send() {} setRequestHeader() {} }
   const ethereum = { request: (a) => { calls.push({ via: 'wallet', method: 'WALLET', url: a && a.method }); return Promise.resolve(null); } };
-  const saved = { fetch: globalThis.fetch, XMLHttpRequest: globalThis.XMLHttpRequest, window: globalThis.window, navigator: globalThis.navigator };
+  // Save only the globals this test overwrites, as property descriptors (null = absent). navigator is never touched:
+  // on Node 24 it is a getter-only global, so writing it back (the old Object.assign restore) throws a TypeError.
+  const stubbed = ['fetch', 'XMLHttpRequest', 'window'];
+  const savedDescriptors = new Map(stubbed.map((k) => [k, Object.getOwnPropertyDescriptor(globalThis, k) || null]));
   globalThis.fetch = fetchStub; globalThis.XMLHttpRequest = XHR; globalThis.window = { ethereum, fetch: fetchStub };
   try {
     const el = () => ({ hidden: false, textContent: '', style: {}, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, focus() {} });
@@ -166,7 +169,9 @@ const VU = HISTO[0];   /* first beat: buys 1→2, sells 0→1, gm 2→3, holders
     ok(painted > 0, 'E: gestures repaint the scene');
     f.bvBackToLive();
     ok(vision.control === null && vision.jouer === true, 'E: Back to live resumes live playback');
-  } finally { Object.assign(globalThis, saved); }
+  } finally {
+    for (const [k, d] of savedDescriptors) { if (d) Object.defineProperty(globalThis, k, d); else delete globalThis[k]; }
+  }
   eq(calls.filter((a) => a.method !== 'GET'), [], 'E: zero non-GET call (fetch / XHR / wallet)');
   eq(calls, [], 'E: and not even a network call');
   const block = src.replace(/\/\*[\s\S]*?\*\//g, '');
