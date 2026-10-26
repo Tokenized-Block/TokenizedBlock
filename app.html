@@ -5167,6 +5167,25 @@ function vieServeurPourCerveau(adr) {
  *   tout echange. Pour ces blocks-la, le « fait de chaine » etait la limite de NOTRE lecteur.
  *   ⇒ Le repli sur l index s applique aussi quand l index montre un marche Aerodrome PRIXE pour ce block. Un `NON_TROUVEE` sans
  *     marche a l index reste ce qu il est : on n invente de marche a personne. */
+/* game59 2: THE PREVIOUS SERVER-INDEX LIFE of a block, kept when a new /api/trending row replaces the one it had. The fallback
+ *   below feeds it as vieAvant — same source, same field (fdvUsd, else liquiditeUsd), so no change of unit is ever invented. */
+const serverLifeBefore = new Map();
+function serverLifeOf(row) {
+  if (!row || !(Number(row.prixUsd) > 0)) return null;
+  if (Number(row.fdvUsd) > 0) return { v: Number(row.fdvUsd), field: 'fdvUsd' };
+  if (Number(row.liquiditeUsd) > 0) return { v: Number(row.liquiditeUsd), field: 'liquiditeUsd' };
+  return null;
+}
+function rememberServerLife(adr) {
+  const k = String(adr || '').toLowerCase();
+  const prev = serverLifeOf(marcheParAdr.get(k));
+  if (prev) serverLifeBefore.set(k, prev);
+}
+function previousServerLife(adr) {
+  const k = String(adr || '').toLowerCase();
+  const now = serverLifeOf(marcheParAdr.get(k)), prev = serverLifeBefore.get(k);
+  return now && prev && prev.field === now.field ? prev.v : null;
+}
 function marcheAerodromeIndexe(adr) {
   const mk = adr ? marcheParAdr.get(String(adr).toLowerCase()) : null;
   return !!(mk && Number(mk.prixUsd) > 0 && /^aerodrome$/i.test(String(mk.dex || '')));
@@ -5176,7 +5195,7 @@ function entreesCerveau(vie, vieAvant, n, etatVie, nAvant, h = null) {
   const seraitNonLu = !etatVie || etatVie === 'NON_LUE' || etatVie === 'LUE' || (etatVie === 'NON_TROUVEE' && !!(h && h.adr) && marcheAerodromeIndexe(h.adr));
   if (!vieLue && seraitNonLu && h && h.adr) {
     const vs = vieServeurPourCerveau(h.adr);
-    if (vs !== null) { vie = vs; vieAvant = null; etatVie = 'LUE'; }
+    if (vs !== null) { vie = vs; vieAvant = previousServerLife(h.adr); etatVie = 'LUE'; }
   }
   const lue = n && n.etat === 'LUE' ? n : null;
   /* ⛔ LE NOUVEAU = la lecture courante moins la PRECEDENTE lecture reussie ; sans precedente, rien n est nouveau */
@@ -12888,6 +12907,10 @@ let symProfil = null, vieProfil = null, etatVieProfil = undefined, deviseProfil 
 let profilNourriture = null;
 /* game57 #4b (a): the address of THAT read — an off-map block only gets its own (page-brains.js#heldFood) */
 let profileFoodAddress = null;
+/* game59 2: the profile's previous market read of its block ({ adr, v, devise }), fed as vieAvant; re-read every 45 s */
+let profileLifeBefore = null;
+const profileLifeRefresh = { at: 0, busy: false };
+const PROFILE_LIFE_REFRESH_MS = 45000;
 /* the food reads made off the map by the profile and by Brain, each with its address */
 function offMapFoodReads() {
   return [{ adr: profileFoodAddress, n: profilNourriture }, brainNourriture];
@@ -13302,7 +13325,10 @@ function battreProfil() {
   void relireNourriture(hP);
   /* game57 #4b (a): off the map, the food THIS profile read (it used to be thrown away: "not read yet" on facts that were read) */
   const profileFood = heldFood(profilCerveau.adr, hP, offMapFoodReads());
-  const fP = entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
+  void refreshProfileLife();
+  /* game59 2: without a map read, the profile's own previous read of the same market */
+  const fP = entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant
+    : (profileLifeBefore && profileLifeBefore.adr === String(profilCerveau.adr).toLowerCase() ? profileLifeBefore.v : null),
     profileFood, etatVieProfil, hP ? hP.nourritureAvant : null, hP || { adr: profilCerveau.adr });
   const r = pageBrains.step(profilCerveau.adr, fP, cerveauPas, beatCycle, { source: 'profil', nourritureLue: !!(profileFood && profileFood.etat === 'LUE') });
   if (!r) return;
@@ -13314,6 +13340,31 @@ function battreProfil() {
   const hp = profilCerveau.histo || [];
   if (!hp.length || hp[hp.length - 1].tick !== r.vu.tick) profilCerveau.histo = hp.concat([r.vu]).slice(-64);
   peindreCerveau();
+}
+/* game59 2: RE-READ THE PROFILE BLOCK'S MARKET, read-only, every 45 s — the same chain read as the profile (vieDuBlock, then the
+ *   Live-discovered pools), and its server-index row (GET /api/trending). A new read in the SAME currency makes the old one its
+ *   previous life; another currency or a failed read changes nothing. */
+async function refreshProfileLife() {
+  const adr = profilCerveau && profilCerveau.adr ? String(profilCerveau.adr).toLowerCase() : null;
+  if (!adr || profileLifeRefresh.busy || Date.now() - profileLifeRefresh.at < PROFILE_LIFE_REFRESH_MS) return;
+  profileLifeRefresh.busy = true; profileLifeRefresh.at = Date.now();
+  const still = () => String($('#profil').dataset.block || '').toLowerCase() === adr;
+  try {
+    if (etatVieProfil === 'LUE' && typeof vieProfil === 'number') {
+      let v = null;
+      try { v = await vieDuBlock({ rpc, stateView: RESEAUX[CHAINE].stateView, jeton: adr, clesExactes: await clesReellesDe(adr) }); } catch (_) { v = null; }
+      if (!v || v.etat !== 'LUE') { try { v = await enrichirMarcheSiDecouvert(adr, v || { etat: 'NON_TROUVEE' }); } catch (_) { v = null; } }
+      if (still() && v && v.etat === 'LUE' && typeof v.vie === 'number' && Number.isFinite(v.vie) && v.devise === deviseProfil) {
+        profileLifeBefore = { adr, v: vieProfil, devise: deviseProfil };
+        vieProfil = v.vie;
+      }
+    }
+    if (marcheParAdr.has(adr)) {
+      const d = await (await fetch('/api/trending', { cache: 'no-store', signal: AbortSignal.timeout(30000) })).json();
+      const l = d && d.ok === true && Array.isArray(d.lignes) ? d.lignes.find((x) => x && String(x.adr).toLowerCase() === adr) : null;
+      if (l && still()) { rememberServerLife(l.adr); marcheParAdr.set(adr, avecPoolAction(l)); peindrePaires(); }
+    }
+  } catch (_) { /* the next beat retries */ } finally { profileLifeRefresh.busy = false; }
 }
 /**
  * Companion Mode glue: mirror mood / HP·stage / role already painted on the profile.
@@ -14547,6 +14598,7 @@ async function lireProfil(adr, sym, perime, opts) {
   if (!compte) $('#pSolde').textContent = 'Connect to see';
   $('#pNote').textContent = 'reading the chain…';
   symProfil = sym || null; vieProfil = null; etatVieProfil = undefined; profilNourriture = null; profileFoodAddress = null;
+  profileLifeBefore = null; profileLifeRefresh.at = Date.now();
   traceProfilVider(); /* la bande appartient au block qu on regarde, jamais au precedent */
   $('#pPV').textContent = '…';
   $('#pPalier').textContent = 'reading…';
@@ -30562,7 +30614,7 @@ async function bcChargerIndex() {
     const d = await (await fetch('/api/trending', { cache: 'no-store', signal: AbortSignal.timeout(30000) })).json();
     /* ⛔ `ok: true` avec ZERO ligne existe (mesure : serveur a froid, « Trending refresh in progress ») : ce n est pas une lecture */
     if (d && d.ok === true && Array.isArray(d.lignes) && d.lignes.length) {
-      for (const l of d.lignes) if (l && /^0x[0-9a-fA-F]{40}$/.test(String(l.adr))) marcheParAdr.set(String(l.adr).toLowerCase(), avecPoolAction(l));
+      for (const l of d.lignes) if (l && /^0x[0-9a-fA-F]{40}$/.test(String(l.adr))) { rememberServerLife(l.adr); marcheParAdr.set(String(l.adr).toLowerCase(), avecPoolAction(l)); }
       bc.avatarDe = null; /* le nom et le symbole de l index remplacent ceux lus sur le contrat */
       /* ⛔ REGLE DU DEPOT (test-puces-paire-calculees, qui a attrape cet oubli) : ce qui se CALCULE depuis l index doit etre REPEINT
        *   a son arrivee — les paires de Create comprises, sinon « Live blocks » reste calcule sur une Map vide. */
@@ -34043,6 +34095,7 @@ async function soleilsSurLaMap(essai = 0) {
         h.el.classList.remove('sansPrix');
       }
       /* 2026-10-03 : une action tokenisee garde SA pool Aerodrome mesuree (pools-actions-aerodrome.js), pas celle d un meme */
+      rememberServerLife(l.adr);
       marcheParAdr.set(String(l.adr).toLowerCase(), avecPoolAction(l));
     }
     /* ⛔ LA PHOTO EST POSEE ICI AUSSI, APRES LA BOUCLE : `soleilsSurLaMap` lit le meme endpoint que
