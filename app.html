@@ -4531,6 +4531,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button type="button" class="bouton sec bvPetit" id="bvVueDehors" aria-pressed="false">Outside</button>
     <button type="button" class="bouton sec bvPetit" id="bvControle" title="Free camera over its 128 neurons, on a local snapshot — nothing is sent">Take control</button>
     <button type="button" class="bouton sec bvPetit" id="bvRetourLive" hidden>Back to live</button>
+    <button type="button" class="bouton sec bvPetit" id="bvBackToMap" title="Fly back out of the block, to the map">Back to map</button>
   </div>
   <div class="bvScene" id="bvScene">
     <canvas id="bv3d" width="720" height="440" role="img" aria-label="Its brain in 3D"></canvas>
@@ -4907,7 +4908,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, referenceVue as referenceVueVision, dureeBattement, vitesseBornee } from './vision-cerveau.js';
 import { effetsDe, lumiereDe, poulsDe, echosDe, horizonDe, numeroBattement, voixDe as voixDedans, pourquoiDe, instantaneDedans, camLibre, orbiterCam, zoomerCam,
-  projeterNeurones, poseCamera, planAnimation, voisinsDehors, DUREE_VOL_MS } from './vision-dedans.js';
+  projeterNeurones, poseCamera, planAnimation, voisinsDehors, DUREE_VOL_MS, panCam, mapPose, flightPose, spaceScene } from './vision-dedans.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
@@ -5062,7 +5063,7 @@ import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
  *   aurait fait telecharger un module que rien n appelle, et surtout aurait laisse croire, a la
  *   relecture, que le Relay existe encore quelque part. */
 import { dollarsCourts, lienOL } from './openlaunch.js';
-import { creerMoteur3D } from './map3d.js';
+import { creerMoteur3D, skyStars } from './map3d.js';
 import { usdCourt } from './trending.js';
 import { tirageUniforme } from './tirage.js';
 import { planLaunchOL, tickPourFdv, OL_FACTORY } from './openlaunch-launch.js';
@@ -26192,7 +26193,7 @@ function peindreVision() {
   $('#bvPhrase').textContent = voixDedans(vuMontre).texte;
   $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuMontre ? ', beat ' + vuMontre.tick + ', ' + humeurCourteVision(vuMontre.phase) : ''));
   $('#bvLegende').textContent = vision.controle
-    ? 'Take control: a LOCAL snapshot of beat ' + vision.controle.snap.tick + ' — drag to look around its 128 neurons, scroll to move. Nothing is sent, nothing is signed.'
+    ? 'Take control: a LOCAL snapshot of beat ' + vision.controle.snap.tick + ' — drag to orbit its 128 neurons, inputs and neighbours, scroll to fly, right-drag or Shift-drag to move. Nothing is sent, nothing is signed.'
     : (dedans ? 'Inside: you are among its neurons. Lit = fired on this beat; faint = its 5 beats before. Warm from the front = a buy reached it, cold from behind = a sell, shimmer at the sides = a transfer, a new speck = a new holder. '
       : 'Outside: its real neighbours on the map, by their world positions. They stay dim: its neurons read none of them. ')
       + 'The light is its mood; the edge pulse, how many neurons fired; the horizon tilts with its steering.';
@@ -26210,6 +26211,28 @@ function peindreVision() {
  * ⛔ chaque lumiere, effet et point vient d un champ du battement montre (vision-dedans.js) ; les voisins viennent des positions
  *   monde de la map (habitants) et restent eteints : ses neurones n en lisent aucun. */
 const BV_COULEUR = { warm: [255, 170, 60], cold: [90, 170, 255] };
+/* game57 #4b (b): the map sky, computed once */
+const BV_STARS = skyStars();
+/* the camera shown: Back to map (flight back), Take control (free), the entry flight from the map, or the Inside / Outside pose */
+function currentCam(t = performance.now()) {
+  const reduced = bvReduit();
+  const arrival = poseCamera(vision.vue, 1, reduced);
+  if (vision.backFlight) return flightPose(vision.backFlight.from, vision.backFlight.to, (t - vision.backFlight.t0) / DUREE_VOL_MS, reduced);
+  if (vision.controle) return vision.controle.cam;
+  if (vision.vol && vision.flightFrom) return flightPose(vision.flightFrom, arrival, (t - vision.vol) / DUREE_VOL_MS, reduced);
+  return flightPose(null, arrival, 1, true);
+}
+/* Back to map: the camera flies out of the block towards the map heading, then the window closes. Reduced motion: a cut. */
+function bvBackToMap() {
+  const dl = $('#bvPop');
+  if (bvReduit()) { vision.backFlight = null; if (dl) dl.close(); return; }
+  vision.backFlight = { t0: performance.now(), from: currentCam(performance.now()), to: mapPose(moteur3d && typeof moteur3d.camera === 'function' ? moteur3d.camera() : null) };
+}
+function bvPanControl(dx, dy) {
+  if (!vision.controle) return;
+  vision.controle = { ...vision.controle, cam: panCam(vision.controle.cam, dx, dy) };
+  peindreVision();
+}
 function bvPeindre3D(t) {
   const cv = $('#bv3d'); if (!cv) return;
   const ctx = cv.getContext('2d'), L = cv.width, H = cv.height;
@@ -26234,8 +26257,8 @@ function bvPeindre3D(t) {
   ctx.strokeStyle = 'rgb(255 255 255 / .18)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(-L, H * 0.58); ctx.lineTo(L * 2, H * 0.58); ctx.stroke();
   /* la camera : Take control (libre, sur l instantane) ; sinon Outside, ou le vol vers l interieur */
-  const tv = vision.vol ? (t - vision.vol) / DUREE_VOL_MS : 1;
-  const cam = vision.controle ? vision.controle.cam : poseCamera(vision.vue, plan.vol ? tv : 1, reduit);
+  /* game57 #4b (b): the camera is the map's (map3d.js#projectCam); it flies from the map into the block, or back */
+  const cam = currentCam(t);
   const pos = posSphere(NEURONES).map(([x, y, z]) => [x * 0.92, y * 0.92, z * 0.92]);
   const proj = (pts) => projeterNeurones(pts, cam, L, H);
   const dehors = !vision.controle && vision.vue !== 'dedans';
@@ -26249,14 +26272,34 @@ function bvPeindre3D(t) {
       ctx.beginPath(); ctx.moveTo(par.get(a).x, par.get(a).y); ctx.lineTo(par.get(b).x, par.get(b).y); ctx.stroke();
     }
   }
-  if (dehors) {
-    for (const v of voisinsDehors(vision.cibleH, habitants, new Set())) {
-      const [q] = proj([[v.x, v.y, v.z]]); if (!q) continue;
-      const r = Math.max(3, 14 * q.k);
-      ctx.fillStyle = v.lu ? 'hsl(' + teinteH() + ' 80% 65%)' : 'rgb(160 170 190 / .28)';
-      ctx.fillRect(q.x - r, q.y - r, r * 2, r * 2);
-      ctx.fillStyle = 'rgb(200 210 230 / .55)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(String(v.sym || bvCourt(v.adr)).slice(0, 10), q.x, q.y + r + 12);
+  /* game57 #4b (b): THE MAP SKY (same stars, same seed), far away, turning with the camera; dimmer than the neurons */
+  for (const star of BV_STARS) {
+    const [q] = proj([[star[0] * 40, star[1] * 40, star[2] * 40]]); if (!q || q.x < -4 || q.y < -4 || q.x > L + 4 || q.y > H + 4) continue;
+    ctx.fillStyle = 'rgb(233 227 255 / ' + (Number(star[4]) * 0.55).toFixed(2) + ')'; ctx.beginPath(); ctx.arc(q.x, q.y, Number(star[3]) * 0.6, 0, Math.PI * 2); ctx.fill();
+  }
+  /* ONE space: its inputs on an arc in front of it (true value or "not read"), its REAL neighbours (cubes like on the map, grey:
+   *   no neuron reads them); the neurons are painted right after */
+  const scene = spaceScene({ inputs: vision.c ? vision.c.entrees.map((e) => ({ key: e.cle, label: e.libelle, read: e.lu, text: e.texte })) : [],
+    neighbours: voisinsDehors(vision.cibleH, habitants, new Set()) });
+  for (const o of scene) {
+    if (o.kind === 'neighbour') {
+      const a = 0.16, sides = [-a, a], corners = []; for (const x of sides) for (const y of sides) for (const z of sides) corners.push([o.x + x, o.y + y, o.z + z]);
+      const pc = proj(corners); if (pc.length < 8) continue; const byN = new Map(pc.map((q) => [q.n, q]));
+      ctx.strokeStyle = 'rgb(170 180 205 / .5)'; ctx.lineWidth = 1;
+      for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+        if (corners[i].reduce((s2, v, k2) => s2 + (v !== corners[j][k2] ? 1 : 0), 0) !== 1) continue;
+        ctx.beginPath(); ctx.moveTo(byN.get(i).x, byN.get(i).y); ctx.lineTo(byN.get(j).x, byN.get(j).y); ctx.stroke();
+      }
+      const [c0] = proj([[o.x, o.y, o.z]]); if (!c0) continue;
+      ctx.fillStyle = 'rgb(200 210 230 / .6)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(String(o.sym || bvCourt(o.adr)).slice(0, 10) + ' · not read', c0.x, c0.y + 14 + 16 * c0.k);
+    } else if (o.kind === 'input') {
+      const [q] = proj([[o.x, o.y, o.z]]); if (!q) continue;
+      const r = Math.max(2.5, 5 * q.k);
+      ctx.fillStyle = o.read ? 'hsl(' + (lum.neutre ? teinteH() : th) + ' 85% 70%)' : 'rgb(150 160 190 / .35)';
+      ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = o.read ? 'rgb(235 238 255 / .9)' : 'rgb(170 178 200 / .7)'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(String(o.label).slice(0, 18), q.x, q.y - r - 4); ctx.fillText(String(o.text).slice(0, 22), q.x, q.y + r + 11);
     }
   }
   /* les neurones : allumes = vu.indices (ou l instantane) ; echos = ceux des 5 battements d avant, plus pales avec l age */
@@ -26265,9 +26308,12 @@ function bvPeindre3D(t) {
   if (!vision.controle) for (const e of echosDe(vision.histoMontre || [], vision.i)) for (const n of e.indices) if (!ages.has(n)) ages.set(n, e.age);
   for (const q of proj(pos)) {
     const on = allumes.has(q.n), age = ages.get(q.n);
-    const r = Math.max(1.2, (q.n < CAPTEURS ? 3.2 : 2.2) * q.k * 1.4);
-    ctx.fillStyle = on ? 'hsl(' + (lum.neutre ? teinteH() : th) + ' 95% 75%)' : age ? 'rgb(220 225 255 / ' + (0.42 - age * 0.07).toFixed(2) + ')' : 'rgb(150 160 190 / .22)';
-    ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
+    /* game57 #4b (b): neurons readable among the stars; a neuron that fired glows, like a lit tile on the map */
+    const r = Math.max(2, (q.n < CAPTEURS ? 4.6 : 3.3) * Math.min(q.k, 3));
+    ctx.fillStyle = on ? 'hsl(' + (lum.neutre ? teinteH() : th) + ' 95% 75%)' : age ? 'rgb(220 225 255 / ' + (0.8 - age * 0.06).toFixed(2) + ')' : 'rgb(170 180 210 / .45)';
+    if (on) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10; }
+    ctx.beginPath(); ctx.arc(q.x, q.y, on ? r * 1.5 : r, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
   }
   for (const pt of vision.particules) { const [q] = proj([pt.p]); if (q) { ctx.fillStyle = 'rgb(255 255 255 / .85)'; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); } }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -26298,7 +26344,10 @@ function bvDemarrerBoucle() {
   const tour = (t) => {
     const dl = document.getElementById('bvPop');
     if (!vision.boucle || !dl || !dl.open || dl.classList.contains('bcReduit')) { vision.boucle = null; return; }
-    bvPeindre3D(t); vision.boucle = requestAnimationFrame(tour);
+    bvPeindre3D(t);
+    /* Back to map: once the flight back is over, the window closes onto the map */
+    if (vision.backFlight && t - vision.backFlight.t0 >= DUREE_VOL_MS) { vision.backFlight = null; vision.boucle = null; dl.close(); return; }
+    vision.boucle = requestAnimationFrame(tour);
   };
   vision.boucle = requestAnimationFrame(tour);
 }
@@ -26445,6 +26494,9 @@ function ouvrirVision(source) {
   try { dl.show(); } catch (_) { dl.setAttribute('open', ''); }
   vision.controle = null; vision.particules = []; vision.tickMontre = null;
   $('#bvControle').hidden = false; $('#bvRetourLive').hidden = true;
+  /* game57 #4b (b): we ENTER from the map — the flight starts at the map camera heading and goes inside (a cut with reduced motion) */
+  vision.backFlight = null; vision.vue = 'dedans';
+  vision.flightFrom = mapPose(moteur3d && typeof moteur3d.camera === 'function' ? moteur3d.camera() : null);
   vision.vol = vision.vue === 'dedans' && !bvReduit() ? performance.now() : null;
   /* la lecture des dernieres decisions REELLES : on repart 24 battements en arriere et on avance a la cadence des cerveaux */
   const cible = visionCible();
@@ -26499,8 +26551,10 @@ $('#bvRetourLive').addEventListener('click', bvRetourLive);
 (function bvGestesCamera() {
   const cv = $('#bv3d'); if (!cv) return;
   let prec = null;
-  cv.addEventListener('pointerdown', (e) => { if (!vision.controle) return; prec = { x: e.clientX, y: e.clientY }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
-  cv.addEventListener('pointermove', (e) => { if (!prec) return; bvGesteControle(e.clientX - prec.x, e.clientY - prec.y, 0); prec = { x: e.clientX, y: e.clientY }; });
+  /* game57 #4b (b): like the map — drag = orbit, right-drag or Shift-drag = pan, wheel = fly */
+  cv.addEventListener('pointerdown', (e) => { if (!vision.controle) return; prec = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
+  cv.addEventListener('pointermove', (e) => { if (!prec) return; const dx = e.clientX - prec.x, dy = e.clientY - prec.y; if (prec.pan) bvPanControl(dx, dy); else bvGesteControle(dx, dy, 0); prec = { ...prec, x: e.clientX, y: e.clientY }; });
+  cv.addEventListener('contextmenu', (e) => { if (vision.controle) e.preventDefault(); });
   cv.addEventListener('pointerup', () => { prec = null; });
   cv.addEventListener('pointercancel', () => { prec = null; });
   cv.addEventListener('wheel', (e) => { if (!vision.controle) return; e.preventDefault(); bvGesteControle(0, 0, Math.sign(e.deltaY)); }, { passive: false });
@@ -26515,8 +26569,9 @@ $('#bvBattement').addEventListener('input', (e) => {
   peindreVision();
 });
 $('#bvRejouer').addEventListener('click', lancerSimVision);
-$('#bvVueDedans').addEventListener('click', () => { if (vision.controle) bvRetourLive(); vision.vue = 'dedans'; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
-$('#bvVueDehors').addEventListener('click', () => { if (vision.controle) bvRetourLive(); vision.vue = 'dehors'; vision.vol = null; peindreVision(); });
+$('#bvVueDedans').addEventListener('click', () => { const from = currentCam(); if (vision.controle) bvRetourLive(); vision.backFlight = null; vision.vue = 'dedans'; vision.flightFrom = from; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
+$('#bvVueDehors').addEventListener('click', () => { const from = currentCam(); if (vision.controle) bvRetourLive(); vision.backFlight = null; vision.vue = 'dehors'; vision.flightFrom = from; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
+$('#bvBackToMap').addEventListener('click', bvBackToMap);
 $('#bvRemettre').addEventListener('click', () => {
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
   geler(); lancerSimVision();

@@ -30,6 +30,43 @@ const VOIR_CUBE_DEHORS = 1.15;
 const LIEN_VIE_MS = 7000;
 const ROT_AUTO = 0.0014;
 
+/* == game57 #4b (b): THE MAP CAMERA AS PURE FUNCTIONS — the "inside the brain" view uses them too: same engine, same numbers.
+ *    Nothing changed for the map: `tourner`/`projeter` below delegate to them unchanged (near plane = 40 units). == */
+/* tip 0027: wide angle (~84 degrees across the width) */
+export const camFocal = (L, H) => 0.5 * Math.max(L, H);
+/** yaw then pitch, around the centre */
+export function rotateCam(cam, x, y, z) {
+  const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+  const x1 = x * cy - z * sy, z1 = x * sy + z * cy;
+  const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
+  return [x1, y2, z2];
+}
+/** perspective: null behind the near plane; ox/oy = on-screen offset (pan) */
+export function projectCam(cam, x, y, z, L, H, near = 40) {
+  const [x1, y2, z2] = rotateCam(cam, x, y, z);
+  const zc = z2 + cam.dist;
+  if (zc < near) return null;
+  const f = camFocal(L, H);
+  return { sx: L / 2 + (cam.ox || 0) + x1 * f / zc, sy: H / 2 + (cam.oy || 0) + y2 * f / zc, zc, z2, k: f / zc };
+}
+/** one step of the map's camera smoothing (cam.cible, q = 0.14): returns a NEW camera */
+export function easeCam(cam, target, q = 0.14) {
+  const out = { ...cam };
+  for (const key of ['yaw', 'pitch', 'dist', 'ox', 'oy']) out[key] = (cam[key] || 0) + ((target[key] || 0) - (cam[key] || 0)) * q;
+  return out;
+}
+/** stars: directions on the sphere, fixed seed (the same sky for everyone), varied size and brightness */
+export function skyStars() {
+  const stars = [];
+  let g = 20260916;
+  const rnd = () => { g = (g * 1664525 + 1013904223) % 4294967296; return g / 4294967296; };
+  for (let i = 0; i < 260; i++) {
+    const u = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = Math.sqrt(1 - u * u);
+    stars.push([r * Math.cos(a), u, r * Math.sin(a), (0.5 + rnd() * 1.3).toFixed(1), (0.25 + rnd() * 0.6).toFixed(2)]);
+  }
+  return stars;
+}
+
 export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false }) {
   /* tip 0038 — EXPANSION DE L UNIVERS (Phil : « une expansion des limites qui s agrandit tout doucement, comme l expansion
    * de l univers ») : S part de 0,7 x DEMI_COTE et grandit de ~0,06 % par seconde jusqu a 2,5 x. Positions des blocks,
@@ -61,15 +98,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
   }
   let glisse = false;
   /* etoiles : directions sur la sphere, graine fixe (meme ciel chez tout le monde), taille et eclat varies */
-  const ETOILES = [];
-  {
-    let g = 20260916;
-    const rnd = () => { g = (g * 1664525 + 1013904223) % 4294967296; return g / 4294967296; };
-    for (let i = 0; i < 260; i++) {
-      const u = rnd() * 2 - 1, a = rnd() * Math.PI * 2, r = Math.sqrt(1 - u * u);
-      ETOILES.push([r * Math.cos(a), u, r * Math.sin(a), (0.5 + rnd() * 1.3).toFixed(1), (0.25 + rnd() * 0.6).toFixed(2)]);
-    }
-  }
+  const ETOILES = skyStars();
 
   map.classList.add('a3d');
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -102,7 +131,7 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
 
   const taille = () => ({ L: map.clientWidth, H: map.clientHeight });
   /* tip 0027 : grand angle (~84° sur la largeur) pour voir l univers autour de soi, pas un tunnel */
-  const focale = (L, H) => 0.5 * Math.max(L, H);
+  const focale = camFocal;
   /* tip 0026 (Phil « agrandis de base le cube, c est trop petit ») : la distance de depart est CALCULEE pour que les 8 coins
    * projetes remplissent ~94 % de la fenetre (largeur ET hauteur), mesuree sur l angle le plus large du tour (45°).
    * Une formule sur le rayon laissait le cube a la moitie de l ecran (vu en test, fenetre 1568x670). */
@@ -133,19 +162,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
     cam.auto = !mouvementReduit;
   }
 
-  function tourner(x, y, z) {
-    const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
-    const x1 = x * cy - z * sy, z1 = x * sy + z * cy;
-    const y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
-    return [x1, y2, z2];
-  }
-  function projeter(x, y, z, L, H) {
-    const [x1, y2, z2] = tourner(x, y, z);
-    const zc = z2 + cam.dist;
-    if (zc < 40) return null;
-    const f = focale(L, H);
-    return { sx: L / 2 + cam.ox + x1 * f / zc, sy: H / 2 + cam.oy + y2 * f / zc, zc, z2, k: f / zc };
-  }
+  function tourner(x, y, z) { return rotateCam(cam, x, y, z); }
+  function projeter(x, y, z, L, H) { return projectCam(cam, x, y, z, L, H, 40); }
 
   /** place un block neuf dans le cube (position, derive 3D, rotation propre)
    * ⛔⛔ CETTE FONCTION NE POSAIT QUE `vz`, ET C ETAIT UN BUG A NaN. La derive fait
@@ -693,6 +711,8 @@ export function creerMoteur3D({ map, habitants, enTexte, mouvementReduit = false
 
   return {
     image, placer, centrerSur, impulsion, onde, signalVersWallet, vueDeDepart,
+    /* game57 #4b (b): the camera heading, read-only — the brain view starts its flight from WHERE the map is looking */
+    camera: () => ({ yaw: cam.yaw, pitch: cam.pitch }),
     glisseAuClic: () => glisse, oublierGlisse: () => { glisse = false; },
     nbLiens: () => liens.length,
     derniereMain: () => mainA,

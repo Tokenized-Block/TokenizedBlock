@@ -6,6 +6,7 @@
  * ⛔ La voix = phraseBattement (vision-cerveau.js) : seuls les champs du battement parlent, jamais une cause devinee.
  * ⛔ PUR : aucun reseau, aucune horloge, aucun hasard, aucun DOM. Le dessin vit dans app.html (moteur 3D de la page). */
 import { NEURONES } from './cerveau.js';
+import { projectCam } from './map3d.js';
 import { phraseBattement, apportDe, interne, SOURCES_INTERIEUR, humeurCourte } from './vision-cerveau.js';
 
 export const VERSION_DEDANS = 'tblock-brain-view-inside/1';
@@ -123,18 +124,54 @@ export function zoomerCam(cam, dz) {
   const c = cam || camLibre();
   return { ...c, dist: Math.max(0.2, Math.min(6, c.dist + (fini(dz) ? dz : 0) * 0.15)) };
 }
-/** Tourne (yaw puis pitch, comme map3d.js#tourner) puis projette ; ce qui est derriere la camera n est pas rendu. */
+/** game57 #4b (b): projected with THE map engine (map3d.js#projectCam); behind the camera = not drawn. */
 export function projeterNeurones(pos, cam, L, H) {
-  const c = cam || camLibre(), f = 0.5 * Math.max(L, H);
-  const cy = Math.cos(c.yaw), sy = Math.sin(c.yaw), cp = Math.cos(c.pitch), sp = Math.sin(c.pitch);
+  const c = cam || camLibre();
   const out = [];
   (Array.isArray(pos) ? pos : []).forEach(([x, y, z], n) => {
-    const x1 = x * cy - z * sy, z1 = x * sy + z * cy, y2 = y * cp - z1 * sp, z2 = y * sp + z1 * cp;
-    const zc = z2 + c.dist;
-    if (!(zc > 0.05)) return;
-    out.push({ n, x: L / 2 + (x1 * f) / zc, y: H / 2 + (y2 * f) / zc, z: zc, k: 1 / zc });
+    const p = projectCam(c, x, y, z, L, H, 0.05);
+    if (p) out.push({ n, x: p.sx, y: p.sy, z: p.zc, k: 1 / p.zc });
   });
   return out.sort((a, b) => b.z - a.z);
+}
+/** pan the camera on screen (like right-drag on the map), bounded to +-600 px */
+export function panCam(cam, dx, dy) {
+  const c = cam || camLibre(), bound = (v) => Math.max(-600, Math.min(600, v));
+  return { ...c, ox: bound((c.ox || 0) + (fini(dx) ? dx : 0)), oy: bound((c.oy || 0) + (fini(dy) ? dy : 0)) };
+}
+/* the "seen from the map" pose: the map camera's heading, from afar (the block among its real neighbours) */
+const MAP_POSE_DIST = 6;
+export function mapPose(mapCam) {
+  const known = mapCam && fini(mapCam.yaw) && fini(mapCam.pitch);
+  return { yaw: known ? mapCam.yaw : 0.65, pitch: known ? mapCam.pitch : -0.18, dist: MAP_POSE_DIST, ox: 0, oy: 0 };
+}
+/** the flight between two poses (map -> inside, or back); u in [0, 1]; reduced motion = the arrival pose, no flight */
+export function flightPose(from, to, u, reduced = false) {
+  const end = { yaw: to.yaw, pitch: to.pitch, dist: to.dist, ox: to.ox || 0, oy: to.oy || 0 };
+  if (reduced || !from) return end;
+  const t = Math.max(0, Math.min(1, fini(u) ? u : 1));
+  if (t >= 1) return end;
+  const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const mix = (a, b) => (a || 0) + ((b || 0) - (a || 0)) * e;
+  return t <= 0 ? { yaw: from.yaw, pitch: from.pitch, dist: from.dist, ox: from.ox || 0, oy: from.oy || 0 }
+    : { yaw: mix(from.yaw, end.yaw), pitch: mix(from.pitch, end.pitch), dist: mix(from.dist, end.dist), ox: mix(from.ox, end.ox), oy: mix(from.oy, end.oy) };
+}
+/** ONE space: the 128 neurons (positions given), its inputs on an arc in front of it (outside the sphere), its REAL neighbours in
+ *  their place. No value is changed: a "not read" input stays so; a neighbour is never said to be read by its neurons. */
+export function spaceScene({ pos = [], inputs = [], neighbours = [] } = {}) {
+  const out = [];
+  (Array.isArray(pos) ? pos : []).forEach(([x, y, z], n) => out.push({ kind: 'neuron', n, x, y, z }));
+  const list = Array.isArray(inputs) ? inputs : [];
+  list.forEach((s, k) => {
+    const a = (list.length > 1 ? k / (list.length - 1) - 0.5 : 0) * Math.PI * 0.9;
+    out.push({ kind: 'input', key: s.key, label: s.label || s.key, read: s.read === true, text: s.text ?? 'not read',
+      x: r3(Math.sin(a) * 1.7), y: -0.35, z: r3(Math.cos(a) * 1.7) });
+  });
+  for (const v of Array.isArray(neighbours) ? neighbours : []) {
+    if (!v || !fini(v.x) || !fini(v.y) || !fini(v.z)) continue;
+    out.push({ kind: 'neighbour', adr: v.adr, sym: v.sym || null, x: v.x, y: v.y, z: v.z, read: false, note: 'not read by its neurons' });
+  }
+  return out;
 }
 /* Outside : la vue de depart de map3d.js (yaw 0,65, pitch −0,18), reculee pour voir ses voisins ; Inside : premiere personne */
 const DEHORS = Object.freeze({ yaw: 0.65, pitch: -0.18, dist: 4.2 });
