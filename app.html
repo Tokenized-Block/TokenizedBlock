@@ -3627,9 +3627,11 @@ details[open] > summary::before{transform:rotate(90deg)}
              PREPARENT l achat : aucune signature sans le wallet. Montre seulement juste apres « It is alive ». -->
         <div class="pePremier" id="pePremier" hidden>
           <b>Be its first buyer</b> <span class="note">— optional, you sign in your wallet</span><br>
-          <button type="button" class="puce" data-premier="0.001">0.001 ETH</button>
-          <button type="button" class="puce" data-premier="0.005">0.005 ETH</button>
-          <button type="button" class="puce" data-premier="0.02">0.02 ETH</button>
+          <!-- ⛔ 2026-10-26 : data-actif = l actif du montant. Les puces ne se montrent (et ne remplissent) que si le champ Buy
+               parle CET actif — sous « Pay with » USDC, « 0.005 ETH » preparait 0.005 USDC. -->
+          <button type="button" class="puce" data-premier="0.001" data-actif="ETH">0.001 ETH</button>
+          <button type="button" class="puce" data-premier="0.005" data-actif="ETH">0.005 ETH</button>
+          <button type="button" class="puce" data-premier="0.02" data-actif="ETH">0.02 ETH</button>
         </div>
         <!-- ⛔ 2026-10-25 : le retour de Coinbase parle ICI, au-dessus du champ qu il preremplit — et seulement d un solde LU. -->
         <p class="note" id="peRetourFiat" role="status" hidden></p>
@@ -16803,6 +16805,8 @@ function majDevisesDentree(v) {
     /* ⛔⛔ 2026-10-26 (revue adverse de 0b18fb3) : le choix de la personne d abord, puis le retour fiat (qui respecte ce choix) */
     try { garderChoixPayWith(); } catch (_) { /* le garde ne doit jamais casser le selecteur */ }
     try { garderPrefillFiat(); } catch (_) { /* le garde ne doit jamais casser le selecteur */ }
+    /* les puces de montant ne montrent que l actif du champ (apres la remise du choix et le retour fiat) */
+    try { majPucesPremier(); } catch (_) { /* puces absentes */ }
   }
 }
 /**
@@ -17185,6 +17189,7 @@ function majDevisesDentreeCorps(v) {
         }
       }
       majEtiquetteDeviseDentree(d, symBlock);
+      try { majPucesPremier(); } catch (_) {}
       try { majEntreeCarte(); } catch (_) {}
       /* un choix de la personne aussi : un montant pose en USDC ne reste pas sous une autre devise */
       try { garderPrefillFiat(true); } catch (_) {}
@@ -19563,6 +19568,7 @@ function montrerPremierAcheteur(adr) {
   const ok = !$('#pEchange').hidden && !deviseEchange
     && String(($('#profil') || {}).dataset?.block || '').toLowerCase() === String(adr).toLowerCase();
   z.hidden = !ok;
+  try { majPucesPremier(); } catch (_) { /* les puces suivent l actif du champ Buy */ }
   if (ok) {
     /* ⛔ capture de Phil (Rabby) : 0.001 ETH propose avec 0.00085 ETH en solde -> « OutOfFunds ». Un montant au-dessus du
      *    solde (moins ~0.00015 ETH de gas) n est plus proposable ; si aucun ne l est, on le dit. */
@@ -19581,15 +19587,53 @@ function montrerPremierAcheteur(adr) {
     etape('premier_propose'); z.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 }
-document.addEventListener('click', (ev) => {
-  const b = ev.target.closest('[data-premier]');
+/**
+ * ⛔⛔ 2026-10-26 : UNE PUCE DE MONTANT NOMME L ACTIF DU MONTANT, ET NE SERT QUE SOUS CET ACTIF. Les puces « premier acheteur »
+ *   sont en ETH (data-actif). Sous « Pay with » USDC, « 0.005 ETH » remplissait le champ et pressait Prepare : 0.005 USDC prepare
+ *   sous une etiquette ETH. ⇒ les puces se CACHENT quand le champ parle un autre actif (une ligne dit pourquoi) ; et le clic
+ *   REFUSE — sans remplir, sans presser Prepare — si l actif de la puce n est pas celui du champ (un clic programme, une puce
+ *   restee affichee). Pas de puces dans un autre actif : aucun montant « sensible » n est mesure pour lui ici.
+ */
+function symboleDuChampBuy() {
+  if (deviseDentree) return deviseDentree.symbole || null;
+  if (deviseEchange) return deviseEchange.sym || null;
+  return 'ETH';
+}
+function majPucesPremier() {
+  const z = $('#pePremier');
+  if (!z || z.hidden) return;
+  const sym = symboleDuChampBuy();
+  let caches = 0;
+  z.querySelectorAll('[data-premier]').forEach((btn) => {
+    const actif = btn.getAttribute('data-actif');
+    btn.textContent = btn.getAttribute('data-premier') + ' ' + actif;
+    btn.hidden = actif !== sym;
+    if (btn.hidden) caches += 1;
+  });
+  let n = z.querySelector('.premierActif');
+  if (!n) { n = document.createElement('p'); n.className = 'note premierActif'; n.style.margin = '6px 0 0'; z.appendChild(n); }
+  n.textContent = caches ? 'These amounts are in ETH; “Pay with” is on ' + (sym || 'another currency') + ' — type the amount instead.' : '';
+}
+function cliquerPucePremier(ev) {
+  const b = ev.target && ev.target.closest ? ev.target.closest('[data-premier]') : null;
   if (!b || b.disabled) return;
+  if (b.getAttribute('data-actif') !== symboleDuChampBuy()) {
+    try { majPucesPremier(); } catch (_) {}
+    const e = $('#peEtat');
+    if (e) {
+      const t = 'That amount is in ' + b.getAttribute('data-actif') + ', and the Buy field is in ' + (symboleDuChampBuy() || 'another currency') + ' — nothing was filled or prepared.';
+      const base = String(e.textContent || '').trim();
+      if (!base.endsWith(t)) { if (!base) e.className = 'note wKo'; e.textContent = (base ? base + ' ' : '') + t; }
+    }
+    return;
+  }
   const champ = $('#peAchat');
   champ.value = b.getAttribute('data-premier');
   champ.dispatchEvent(new Event('input', { bubbles: true }));
   etape('premier_prepare');
   $('#peAcheter').click();
-});
+}
+document.addEventListener('click', cliquerPucePremier);
 
 async function lancerMarcheBlock(adr) {
   if (lancementEnCours || !planCourant || !planCourant.tx) return;

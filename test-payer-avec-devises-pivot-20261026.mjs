@@ -51,7 +51,8 @@ const BLOC = '0xb200000000000000000000e4b0c5fbe9c8df579e';
 const WALLET = '0x00000000000000000000000000000000c0ffee77';
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
   'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange', 'noterPayWith', 'effacerNotePayWith',
-  'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees', 'cleEtapePreparee', 'gardeClicEtape'];
+  'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees', 'cleEtapePreparee', 'gardeClicEtape',
+  'symboleDuChampBuy', 'majPucesPremier', 'cliquerPucePremier'];
 const PHRASE_ETIQ = (s) => 'Buy — ' + s + ' to spend';
 
 /* une fonction de premier niveau : de `function NOM(` a la premiere `}` en colonne 0 ; absente = '' */
@@ -95,12 +96,23 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
   els['#peAchat'].label = { firstChild: { nodeType: 3, textContent: 'Buy — ETH to spend' } };
   els['#peRetourFiat'].hidden = true;
   els['#profil'].dataset.block = BLOC;
-  const etat = { balanceOf: [], panneau: [], ouvert: 0, repeints: 0, historique: [], multi: [], sansUsdc: false, surPret: null, decimales: [] };
+  /* les puces « premier acheteur » : les trois de app.html (ETH) + une puce TEMOIN en USDC (la fonction est generique : son
+   *   etiquette doit nommer SON actif — tue le mutant « etiquette en dur ETH ») */
+  const puce = (montant, actif) => ({ attrs: { 'data-premier': montant, 'data-actif': actif }, hidden: false, disabled: false, textContent: montant + ' ' + actif,
+    getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }, closest() { return this; } });
+  const puces = [puce('0.001', 'ETH'), puce('0.005', 'ETH'), puce('0.02', 'ETH'), puce('5', 'USDC')];
+  const premier = new El('pePremier');
+  premier.querySelectorAll = () => puces;
+  premier.querySelector = (q) => premier.children.find((x) => q === '.premierActif' && x.className === 'note premierActif') || null;
+  els['#pePremier'] = premier;
+  els['#peAcheter'] = new El('peAcheter');
+  const etat = { balanceOf: [], panneau: [], ouvert: 0, repeints: 0, historique: [], multi: [], sansUsdc: false, surPret: null, decimales: [], prepare: 0 };
+  els['#peAcheter'].click = () => { etat.prepare += 1; };
   const v = quote === ETH ? { etat: 'LUE', paire: 'ETH', cle: { hooks: '0x' + '1'.repeat(40) } } : { etat: 'LUE', paire: 'DEVISE', deviseAdr: quote, cle: { hooks: '0x' + '1'.repeat(40) } };
   const ctx = {
     console, JSON, String, Number, BigInt, Array, Set, Map, Object, Promise, Math, RegExp, Error, Date,
     $: (s) => els[s] || null,
-    document: { createElement: () => ({ value: '', textContent: '', dataset: {}, disabled: false, title: '' }), activeElement: null },
+    document: { createElement: () => ({ value: '', textContent: '', dataset: {}, disabled: false, title: '', style: {}, className: '' }), activeElement: null },
     deviseDentree: null, deviseEchange: null, fiatRetenu: null, quotePourCarte: null, offertsPourCarte: [], symProfil: 'IB022',
     compte, CHAINE: 8453, ETH_ADR: ETH, USDC_BASE,
     marcheParAdr: new Map(), faitsPoolLus: new Map([[BLOC, { famille: 'uniswap-v4' }], [CBBTC, { famille: 'aerodrome' }], [NVDA, { famille: 'uniswap-v4' }]]),
@@ -509,6 +521,36 @@ async function verifier(src) {
     assert.equal(cliquer(m, b), true, m.els['#peEtat'].textContent);
   });
 
+  /* ── R : les puces de montant nomment l actif du champ, et ne servent que sous lui ── */
+  for (const [nom, adr] of [['ETH', null], ['USDC', USDC], ['NVDAc', NVDA], ['EURC', EURC]]) {
+    await cas('R puces sous ' + nom + ' : chaque puce visible porte le symbole du champ ; une puce d un autre actif ne remplit ni ne prepare', async () => {
+      const m = monde(src); m.rebatir();
+      /* AUCUN appel direct : les puces doivent suivre d elles-memes le rebatissage et le choix de la personne */
+      if (adr) m.els['#peDevise'].choisir(adr);
+      const symChamp = m.els['#peAchat'].label.firstChild.textContent.replace(/^Buy — (.*) to spend$/, '$1');
+      assert.equal(symChamp, nom, 'etiquette du champ : ' + m.els['#peAchat'].label.firstChild.textContent);
+      const puces = m.els['#pePremier'].querySelectorAll('[data-premier]');
+      const visibles = puces.filter((p) => !p.hidden);
+      assert.ok(visibles.length > 0 || nom !== 'ETH', 'sous ETH, aucune puce visible');
+      for (const p of visibles) assert.ok(p.textContent.endsWith(' ' + symChamp), 'puce « ' + p.textContent + ' » visible sous un champ en ' + symChamp);
+      if (nom === 'USDC') assert.equal(visibles.map((p) => p.textContent).join('|'), '5 USDC', 'sous USDC : ' + visibles.map((p) => p.textContent).join('|'));
+      if (nom !== 'ETH') {
+        const note = m.els['#pePremier'].children.find((x) => x.className === 'note premierActif');
+        assert.ok(note && /These amounts are in ETH; “Pay with” is on/.test(note.textContent), 'aucune ligne ne dit pourquoi les puces ETH sont cachees');
+      }
+      /* un clic sur la puce 0.005 ETH (meme cachee : un clic programme) */
+      m.els['#peAchat'].value = '7';
+      m.f.cliquerPucePremier({ target: puces[1] });
+      if (nom === 'ETH') {
+        assert.equal(m.els['#peAchat'].value, '0.005'); assert.equal(m.etat.prepare, 1);
+      } else {
+        assert.equal(m.els['#peAchat'].value, '7', 'la puce ETH a rempli le champ en ' + nom);
+        assert.equal(m.etat.prepare, 0, 'la puce ETH a presse Prepare sous ' + nom);
+        assert.match(m.els['#peEtat'].textContent, new RegExp('That amount is in ETH, and the Buy field is in ' + nom + ' — nothing was filled or prepared'));
+      }
+    });
+  }
+
   /* ── D1, D2 : revue adverse de 4f0994c ── */
   await cas('D1 apres la note « taken out », un refus du wallet ou un « sent » ecrit dans #peEtat SURVIT a une frappe', async () => {
     const m = monde(src);
@@ -581,6 +623,11 @@ const mutants = [
   ['D2 changer le montant garde l etape preparee', (s) => s.replace("if (typeof retirerActionsPreparees === 'function' && retirerActionsPreparees())", 'if (false)')],
   ['M11 l attente n ecrit plus l etiquette', (s) => s.replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\n    return 'ATTEND';", "    return 'ATTEND';").replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\r\n    return 'ATTEND';", "    return 'ATTEND';")],
   ['M12 l attente n est jamais levee', (s) => s.replace('    c.attente = false;\n', '').replace('    c.attente = false;\r\n', '')],
+  /* ── R : les puces ── */
+  ['R etiquette des puces en dur ETH', (s) => s.replace("btn.textContent = btn.getAttribute('data-premier') + ' ' + actif;", "btn.textContent = btn.getAttribute('data-premier') + ' ETH';")],
+  ['R puces jamais cachees', (s) => s.replace('btn.hidden = actif !== sym;', 'btn.hidden = false;')],
+  ['R le clic d une puce sans garde d actif', (s) => s.replace("if (b.getAttribute('data-actif') !== symboleDuChampBuy()) {", 'if (false) {')],
+  ['R les puces ne suivent pas le choix', (s) => s.replace('      try { majPucesPremier(); } catch (_) {}\n', '').replace('      try { majPucesPremier(); } catch (_) {}\r\n', '')],
   /* ── Q : la verification au clic ── */
   ['Q la garde au clic n est pas branchee', (s) => s.replace("$('#peActions') && $('#peActions').addEventListener('click', gardeClicEtape, true);", '')],
   ['Q la garde au clic laisse tout passer', (s) => s.replace('  if (p && JSON.stringify(ici) === a.dataset.pour) return true;', '  return true;')],
