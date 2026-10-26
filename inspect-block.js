@@ -4,6 +4,8 @@
 //   - "read":      a real value, passed through unchanged, with the source it came from;
 //   - NOT_READ:    the app has a source for it, but holds no value right now (never a zero, never a default);
 //   - NO_SOURCE:   the app has no data source for it at all — said plainly, with why, instead of fabricating one.
+import { maskFeeAddresses } from './frais-creation.js';
+
 export const NOT_READ = 'not read';
 export const NO_SOURCE = 'no source in this app';
 export const VERSION_INSPECT = 'tblock-inspect/1';
@@ -107,8 +109,13 @@ export function aimedAt(points, L, H, radius = 60) {
 }
 
 const num = (x) => (finite(x) ? String(Math.round(x * 1e4) / 1e4) : NOT_READ);
-/** The overlay for one looked-at object: real values only, "not read" otherwise. */
+/** The overlay for one looked-at object: real values only, "not read" otherwise.
+ *  ⛔ game57 #10: a fee address is never displayed — the title and every value go through maskFeeAddresses. */
 export function describeTarget(obj, src, model) {
+  const d = describeTargetRaw(obj, src, model);
+  return d ? { title: maskFeeAddresses(d.title), lines: d.lines.map((l) => ({ label: l.label, value: maskFeeAddresses(l.value) })) } : null;
+}
+function describeTargetRaw(obj, src, model) {
   if (!obj || typeof obj !== 'object') return null;
   const s = src || {};
   if (obj.kind === 'neuron' && Number.isInteger(obj.n)) {
@@ -136,8 +143,10 @@ export function describeTarget(obj, src, model) {
   return null;
 }
 
-/** One line of text for a field, for the Inspect book. A field that is not read or has no source says so, with why. */
-export function fieldText(f) {
+/** One line of text for a field, for the Inspect book. A field that is not read or has no source says so, with why.
+ *  ⛔ game57 #10: the creator, neighbours and logs may hold a fee address — the line goes through maskFeeAddresses. */
+export function fieldText(f) { return maskFeeAddresses(fieldTextRaw(f)); }
+function fieldTextRaw(f) {
   if (!f) return NOT_READ;
   if (f.status !== 'read') return f.status + (f.note ? ' — ' + f.note : '');
   const v = f.value;

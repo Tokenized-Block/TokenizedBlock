@@ -138,11 +138,35 @@ if (helpers.length === 4) {
     check(noLeak(f(A6)) && noLeak(f(L37)) && noLeak(f(A6.toUpperCase().replace('0X', '0x'))) && f(OTHER) === '0x123456…5678' && f(fp) === fp,
       'C4 app.html bvCourt (3D brain neighbour, fingerprints): « ' + f(A6) + ' », other = ' + f(OTHER) + ', short unchanged = ' + f(fp));
   }
-  check(/ctx\.fillText\(String\(v\.sym \|\| bvCourt\(v\.adr\)\)/.test(appLF) && !/fillText\([^\n]*\.slice\(-4\)/.test(appLF),
-    'C5 app.html: a neighbour name written on the 3D canvas goes through bvCourt (masked), no fillText shortens an address by itself');
+  /* game57 #4b reworded the canvas label (« … · not read »): every canvas fillText that writes an `.adr` goes through bvCourt / displayShort */
+  const canvasAdr = appLF.split('\n').filter((l) => /fillText\(/.test(l) && /\.adr\b/.test(l));
+  check(canvasAdr.length > 0 && canvasAdr.every((l) => /bvCourt\(\w+\.adr\)|displayShort\(/.test(l)) && !/fillText\([^\n]*\.slice\(-4\)/.test(appLF),
+    'C5 app.html: the ' + canvasAdr.length + ' canvas fillText line(s) writing an address go through bvCourt (masked), no fillText shortens an address by itself');
   const AP = await import('./apercu.js');
   const n = AP.nomDe(A6, { chaine: 8453 }), n2 = AP.nomDe(OTHER, { chaine: 8453 });
   check(noLeak(n) && /fee wallet/i.test(n) && n2 === '0x1234…5678', 'C2 apercu.js nomDe(fee wallet) = « ' + n + ' » (before signing: named, no address); other = ' + n2);
+}
+
+/* ─────────────────────────────── E. the brain's inspector (game57 #4b) ─────────────────────────────── */
+/* 2026-10-26 (integration game57/series): the Inspect book and the pick overlay of « View inside the brain » show the block's
+ *   creator, its neighbours and its logs IN FULL — a block created by the operator wallet would show it. Both display functions of
+ *   inspect-block.js (fieldText, describeTarget) go through maskFeeAddresses. */
+console.log('E. inspect-block.js: what the inspector displays');
+{
+  const IB = await import('./inspect-block.js');
+  const shown = [
+    IB.fieldText({ status: 'read', key: 'creator', value: A6 }),
+    IB.fieldText({ status: 'read', key: 'neighboursNearby', value: [{ adr: A6, distance: 3 }, { adr: L37.toUpperCase().replace('0X', '0x'), distance: 9 }] }),
+    IB.fieldText({ status: 'read', key: 'thoughts', value: [{ tick: 4, texte: 'paid ' + A6 }] }),
+    IB.fieldText({ status: 'read', key: 'spoken', value: [{ heure: '10:00', texte: 'hello ' + L37 }] }),
+  ];
+  check(shown.every(noLeak), 'E1 fieldText (creator, neighbours nearby, thoughts, spoken) never shows a fee address: « ' + shown.join(' | ').slice(0, 160) + ' »');
+  check(IB.fieldText({ status: 'read', key: 'creator', value: OTHER }) === OTHER, 'E2 fieldText keeps any other address whole (no blind masking)');
+  const d = IB.describeTarget({ kind: 'neighbour', adr: A6, sym: null }, {}, null);
+  const dText = d ? [d.title, ...d.lines.map((l) => l.label + ': ' + l.value)].join(' | ') : '';
+  check(!!d && noLeak(dText), 'E3 describeTarget(neighbour = fee wallet) shows no trace of it: « ' + dText.slice(0, 140) + ' »');
+  const o = IB.describeTarget({ kind: 'neighbour', adr: OTHER, sym: null }, {}, null);
+  check(!!o && o.lines.some((l) => l.value === OTHER), 'E4 describeTarget keeps another neighbour address');
 }
 
 /* ─────────────────────────────── D. the static guard on every served file ─────────────────────────────── */
