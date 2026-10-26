@@ -53,7 +53,7 @@ ok(typeof V.beatHeader === 'function', 'B: vision-inside.js exports beatHeader')
   ok(/vision\.beatText = beatHeader\(\{ snapshotTick: vision\.control \? vision\.control\.snap\.tick : null, shownTick: beatNumber\(vuShown\), liveTick: liveBeat, replaying, fmt: beatText \}\);/.test(app), 'C: the header is beatHeader');
   ok(/\$\('#bvNumber'\)\.textContent = vision\.beatText;/.test(app), 'C: #bvNumber shows it');
   ok(/describeTarget\(hit\.obj, vision\.inspectSrc, vision\.inspectModel, bvShownBeat\(\)\)/.test(fnOf('bvPaintAim')), 'C: the overlay copies it');
-  ok(/if \(vision\.jouer && vision\.suivre\) \{ vision\.i = 0; vision\.suivre = false; \}/.test(app), 'C: Play at live = replay the recorded beats (explicit)');
+  ok(/if \(vision\.jouer && vision\.suivre\) \{ (vision\.i = 0|bvPinAt\(0\)); vision\.suivre = false; \}/.test(app), 'C: Play at live = replay the recorded beats (explicit)');
   ok(/if \(\(vision\.jouer \|\| vision\.suivre\) && !vision\.control\) peindreVision\(\);/.test(fnOf('bvRestartTimer')), 'C: following live repaints');
 }
 /* D: the header moves WITH the live beat (measured: header 146 while Live said 148 — the view repainted on its own 1.5 s timer).

@@ -4926,7 +4926,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
 import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
-  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, beatHeader } from './vision-inside.js';
+  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, beatHeader, replayPosition, nextPinned, leftWindowText } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
 import { fieldText as inspectFieldText } from './inspect-block.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
@@ -26236,6 +26236,12 @@ function peindreVision() {
   const histo = Array.isArray(cible.histo) ? cible.histo : [];
   const curseur = $('#bvBattement');
   curseur.max = String(Math.max(0, histo.length - 1));
+  /* game59 3: a replay keeps its BEAT (vision.pinTick), not its place, while new beats slide the 64-beat window */
+  if (vision.suivre) { vision.pinTick = null; vision.leftWindow = null; }
+  else if (!vision.control) {
+    const p = replayPosition(histo, vision.pinTick);
+    if (Number.isSafeInteger(vision.pinTick) || p.i < 0) { vision.i = p.i; vision.pinTick = p.tick; if (p.left !== null) vision.leftWindow = p.left; }
+  }
   if (vision.suivre || vision.i < 0 || vision.i > histo.length - 1) vision.i = histo.length - 1;
   curseur.value = String(Math.max(0, vision.i));
   const vuAnime = vision.i >= 0 ? histo[vision.i] : null;
@@ -26245,7 +26251,8 @@ function peindreVision() {
   if (!c) return;
   $('#bvTitre').textContent = 'View inside ' + (cible.sym || 'this block') + '\'s brain';
   /* ⛔ ONE SINGLE BEAT NUMBER (#bvNumber): the one of the beat shown. The cursor states its PLACE, not a second number. */
-  $('#bvBattementTexte').textContent = vuAnime ? (vision.i + 1) + ' of ' + histo.length + ' recorded' : 'no beat recorded';
+  $('#bvBattementTexte').textContent = (vision.leftWindow !== null && vision.leftWindow !== undefined && !vision.suivre ? leftWindowText(vision.leftWindow, beatText) + ' · ' : '')
+    + (vuAnime ? (vision.i + 1) + ' of ' + histo.length + ' recorded' : 'no beat recorded');
   const dedans = vision.vue === 'dedans';
   $('#bvVueDedans').setAttribute('aria-pressed', dedans ? 'true' : 'false');
   $('#bvVueDehors').setAttribute('aria-pressed', dedans ? 'false' : 'true');
@@ -26676,7 +26683,7 @@ function ouvrirVision(source) {
   const dl = $('#bvPop');
   if (!dl) return;
   vision.ouvertA = performance.now();
-  vision.source = source; vision.suivre = true; vision.jouer = true; vision.i = -1;
+  vision.source = source; vision.suivre = true; vision.jouer = true; vision.i = -1; vision.pinTick = null; vision.leftWindow = null;
   if (dl.parentElement !== document.body) document.body.append(dl);
   peindreEditsVision();
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
@@ -26707,9 +26714,20 @@ function ouvrirVision(source) {
 /* playback at human speed (vision-cerveau.js#beatDuration: 1.5 s at 1x); Step moves on by one recorded beat */
 function bvAdvance() {
   const c2 = visionCible();
-  const n2 = c2 && Array.isArray(c2.histo) ? c2.histo.length : 0;
-  vision.i++;
-  if (vision.i >= n2 - 1) { vision.i = n2 - 1; vision.suivre = true; vision.jouer = false; $('#bvJouer').textContent = 'Play'; }
+  const h2 = c2 && Array.isArray(c2.histo) ? c2.histo : [];
+  /* game59 3: the next beat BY NUMBER after the pinned one (from the current place when nothing is pinned yet) */
+  const from = Number.isSafeInteger(vision.pinTick) ? vision.pinTick : h2[vision.i] ? h2[vision.i].tick : null;
+  const nx = nextPinned(h2, from);
+  vision.i = nx.i; vision.pinTick = nx.tick; vision.leftWindow = null;
+  if (nx.live) { vision.i = h2.length - 1; vision.pinTick = null; vision.suivre = true; vision.jouer = false; $('#bvJouer').textContent = 'Play'; }
+}
+/* game59 3: pin the replay on the beat at place i of the recorded window */
+function bvPinAt(i) {
+  const c2 = visionCible();
+  const h2 = c2 && Array.isArray(c2.histo) ? c2.histo : [];
+  vision.i = Math.max(0, Math.min(h2.length - 1, i));
+  vision.pinTick = h2[vision.i] && Number.isSafeInteger(h2[vision.i].tick) ? h2[vision.i].tick : null;
+  vision.leftWindow = null;
 }
 function bvRestartTimer() {
   clearInterval(vision.minuteur);
@@ -26763,12 +26781,12 @@ $('#bvBackToLive').addEventListener('click', bvBackToLive);
 $('#bvJouer').addEventListener('click', () => {
   vision.jouer = !vision.jouer;
   /* game57 #4d: Play while following live = replay the recorded beats from the oldest (an explicit action only) */
-  if (vision.jouer && vision.suivre) { vision.i = 0; vision.suivre = false; }
+  if (vision.jouer && vision.suivre) { bvPinAt(0); vision.suivre = false; }
   $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
   if (vision.jouer) peindreVision();
 });
 $('#bvBattement').addEventListener('input', (e) => {
-  vision.i = Number(e.target.value); vision.suivre = false; vision.jouer = false; $('#bvJouer').textContent = 'Play';
+  bvPinAt(Number(e.target.value)); vision.suivre = false; vision.jouer = false; $('#bvJouer').textContent = 'Play';
   peindreVision();
 });
 $('#bvRejouer').addEventListener('click', lancerSimVision);

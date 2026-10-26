@@ -241,3 +241,29 @@ export function beatHeader({ snapshotTick = null, shownTick = null, liveTick = n
   if (Number.isSafeInteger(liveTick)) return 'Beat ' + fmt(liveTick);
   return Number.isSafeInteger(shownTick) ? 'Beat ' + fmt(shownTick) : '—';
 }
+
+/* game59 3: A REPLAY IS PINNED BY BEAT NUMBER. The brain keeps its last 64 beats; new beats push the oldest out, so an index
+ * into that window means a different beat after each new one. `pinTick` = the number (tick) of the beat being replayed.
+ * Found -> its place now; gone -> `left` = its number (to say so) and the oldest beat still recorded is shown. Pure. */
+export function replayPosition(histo, pinTick) {
+  const list = Array.isArray(histo) ? histo : [];
+  const n = list.length;
+  if (!n) return { i: -1, tick: null, left: null };
+  const tickAt = (i) => (list[i] && Number.isSafeInteger(list[i].tick) ? list[i].tick : null);
+  if (!Number.isSafeInteger(pinTick)) return { i: n - 1, tick: tickAt(n - 1), left: null };
+  const i = list.findIndex((v) => v && v.tick === pinTick);
+  if (i >= 0) return { i, tick: pinTick, left: null };
+  return { i: 0, tick: tickAt(0), left: pinTick };
+}
+/* the beat recorded right after the pinned one (Play, Step); `live` = it is the latest beat recorded */
+export function nextPinned(histo, pinTick) {
+  const list = Array.isArray(histo) ? histo : [];
+  const n = list.length;
+  if (!n) return { i: -1, tick: null, live: true };
+  const p = replayPosition(list, pinTick);
+  const i = Math.min(n - 1, p.i + 1);
+  return { i, tick: list[i] && Number.isSafeInteger(list[i].tick) ? list[i].tick : null, live: i >= n - 1 };
+}
+export function leftWindowText(tick, fmt = (n) => String(n)) {
+  return Number.isSafeInteger(tick) ? 'beat ' + fmt(tick) + ' left the window' : '';
+}
