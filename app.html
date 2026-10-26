@@ -14402,6 +14402,8 @@ function peindreMarcheUnreadRetry(adr, sym) {
  *  raison) · pret. « Incomplet » qui ressemblerait a « personne » ferait croire un block abandonne.
  *  ⛔ AUCUNE PROMESSE DE PAIEMENT : rien n est distribue, et l ecran le dit lui-meme. */
 let holdersEnCours = null;
+/* game59 1(a): the last /api/holders reply per address — the inspector reads its birth block (naissance) from it */
+const holdersReplies = new Map();
 async function peindreHolders(adr, essai = 0) {
   const carte = $('#pHolders'), liste = $('#pHoldersListe'), note = $('#pHoldersNote'), compte = $('#pHoldersCompte');
   if (!carte || !liste || !note || !compte) return;
@@ -14416,6 +14418,7 @@ async function peindreHolders(adr, essai = 0) {
   let j = null;
   try { j = await fetch('/api/holders/' + String(adr).toLowerCase(), { cache: 'no-store' }).then((x) => x.json()); }
   catch (e) { j = null; }
+  if (j && j.ok === true) holdersReplies.set(String(adr).toLowerCase(), j);
   if (holdersEnCours !== String(adr).toLowerCase()) return;
   /* ⛔ « EN TRAIN DE LIRE » EST TRANSITOIRE : on revient, et on ARRETE apres un nombre d essais dit
    *    a l ecran. Un etat transitoire affiche comme final est exactement le bug du classement. */
@@ -26445,7 +26448,8 @@ function bvInspectSources() {
   return { address: a, symbol: target.sym || null, market: marcheParAdr.get(a) || null, creator: createursConnus.get(CHAINE + ':' + a) || null,
     voice: voixDe(a), vu, histo, internals: target.etat ? interneVision(target.etat) : null, champ: vision.c || null, why,
     onMap: !!h, neighbours: voisinsVision(h).map((v) => ({ adr: v.adr, sym: v.sym || null, phase: v.phase || null, distance: v.distance })),
-    journal: journalLu(a), spoken: parolesFil.filter((p) => String(p.de || '').toLowerCase() === a).map((p) => ({ texte: p.texte, heure: p.heure })) };
+    journal: journalLu(a), spoken: parolesFil.filter((p) => String(p.de || '').toLowerCase() === a).map((p) => ({ texte: p.texte, heure: p.heure })),
+    holders: holdersReplies.get(a) || null };
 }
 function bvPaintInspect() {
   const box = $('#bvInspect'); if (!box) return;

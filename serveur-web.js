@@ -3391,7 +3391,7 @@ async function holdersCorps(jeton) {
   if (!dejaLa) {
     if (!/^0xb20[0-9a-f]{37}$/.test(jeton)) return JSON.stringify({ ok: false, pourquoi: 'not a B20 address' });
     void reconstruireHolders(jeton).catch(() => {});
-    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: null,
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: null, naissance: null,
       pourquoi: 'reading every transfer of this block from its birth — ask again in a moment' });
   }
   /* ⛔ 2026-10-25 : jamais servir une naissance cherchee plus haut que la creation connue (naissanceDouteuse) : oubliee ici, avant la passe */
@@ -3437,14 +3437,15 @@ async function holdersCorps(jeton) {
      *     25 000 au lieu de 15 000, avec les trois gardes au vert. Retourner cet invariant demande
      *     sa propre garde et sa propre mesure — consigne dans REPRISE plutot que bricole ici. */
     const ratees = Number(e.ratees || 0);
-    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, ratees,
+    /* game59 1(a): the birth this replay started from, when known (the inspector shows it as the block's birth block) */
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, ratees, naissance: Number.isSafeInteger(e.naissance) ? e.naissance : null,
       pourquoi: ratees > 0
         ? 'a replay is running but ' + ratees + ' window(s) were refused by the node, so it starts '
           + 'over each time — balances stay unpublishable until one full pass succeeds'
         : 'a replay is running — balances are not publishable until it finishes' });
   }
   if (e.naissance === null) {
-    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu,
+    return JSON.stringify({ ok: true, etat: 'NON_LU', jeton, lu: e.lu, naissance: null,
       pourquoi: 'no mint found for this token yet — reading, or it was never minted' });
   }
   /* ⛔ TROIS RAISONS DE REFUSER D AFFICHER DES PARTS, chacune nommee. */

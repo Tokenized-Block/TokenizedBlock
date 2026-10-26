@@ -67,7 +67,8 @@ const WANTED = ['identity.name', 'identity.symbol', 'identity.pairedWith', 'iden
   ok(all.every((x) => (FIELDS.find((d) => d.section + '.' + d.key === m.sections.find((s) => s.fields.includes(x)).key + '.' + x.key).source === null) === (x.status === NO_SOURCE)), 'B: "no source" exactly for the fields the app has no source for');
   ok(m.counts.read === 0 && m.counts.notRead + m.counts.noSource === all.length, 'B: counts');
   const f = byKey(m);
-  for (const k of ['identity.birthBlock', 'perceives.neighboursRead', 'expectations.next']) ok(f[k].status === NO_SOURCE && f[k].note, 'B: ' + k + ' says it has no source, and why');
+  /* game59 1(a): the birth block now has a source (the holders replay) */
+  for (const k of ['perceives.neighboursRead', 'expectations.next']) ok(f[k].status === NO_SOURCE && f[k].note, 'B: ' + k + ' says it has no source, and why');
   ok(inspectBlock(null) === null, 'B: no address, no model');
 }
 /* C */

@@ -11,6 +11,13 @@ export const NO_SOURCE = 'no source in this app';
 export const VERSION_INSPECT = 'tblock-inspect/1';
 
 const finite = (x) => typeof x === 'number' && Number.isFinite(x);
+
+/** game59 1(a): the birth block held by a holders-replay reply (/api/holders), or null. Only a successful reply, only a positive
+ *  integer: a failed read, a missing field or a string is "not read", never a guess. */
+export function birthBlockFrom(reply) {
+  if (!reply || typeof reply !== 'object' || reply.ok !== true) return null;
+  return Number.isSafeInteger(reply.naissance) && reply.naissance > 0 ? reply.naissance : null;
+}
 const text = (x) => (typeof x === 'string' && x.trim() ? x : null);
 const list = (x) => (Array.isArray(x) && x.length ? x : null);
 
@@ -22,7 +29,8 @@ export const FIELDS = Object.freeze([
   { section: 'identity', key: 'creator', label: 'Creator', source: 'chain: its creation transaction, looked up in an 8000-block window (createursConnus)' },
   { section: 'identity', key: 'creationTx', label: 'Creation transaction', source: 'chain: same lookup as the creator' },
   { section: 'identity', key: 'createdAt', label: 'Created at', source: 'server market index (creeLe)' },
-  { section: 'identity', key: 'birthBlock', label: 'Birth block', source: null, note: 'the creator lookup keeps the creation transaction hash, not its block number' },
+  /* game59 1(a): the holders replay starts at the block's first Transfer from the zero address — that is its birth */
+  { section: 'identity', key: 'birthBlock', label: 'Birth block', source: 'holders replay (/api/holders naissance): the block of its first Transfer from the zero address' },
   { section: 'personality', key: 'bio', label: 'Bio', source: 'its voice, signed by its creator (/api/voix)' },
   { section: 'personality', key: 'tone', label: 'Tone', source: 'its voice (/api/voix)' },
   { section: 'personality', key: 'topics', label: 'Topics', source: 'its voice (/api/voix)' },
@@ -57,6 +65,7 @@ function valueOf(key, src) {
     case 'creator': return src.creator ? text(src.creator.createur) : null;
     case 'creationTx': return src.creator ? text(src.creator.tx) : null;
     case 'createdAt': return m ? text(m.creeLe) : null;
+    case 'birthBlock': return birthBlockFrom(src.holders);
     case 'bio': return src.voice ? text(src.voice.bio) : null;
     case 'tone': return src.voice ? text(src.voice.ton) : null;
     case 'topics': return src.voice ? list(src.voice.sujets) : null;
@@ -154,6 +163,7 @@ function fieldTextRaw(f) {
   if (!f) return NOT_READ;
   if (f.status !== 'read') return f.status + (f.note ? ' — ' + f.note : '');
   const v = f.value;
+  if (f.key === 'birthBlock') return 'block ' + v + ' (its first transfer from the zero address)';
   if (f.key === 'neurons') {
     const p = v.map((x) => x.potentiel).filter(finite);
     return v.length + ' neurons · potential ' + (p.length ? num(Math.min(...p)) + ' … ' + num(Math.max(...p)) : NOT_READ) + ' · ' + v.filter((x) => finite(x.potentiel) && x.potentiel < 0).length + ' held below zero';
