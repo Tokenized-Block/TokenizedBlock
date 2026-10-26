@@ -436,6 +436,133 @@ export function cablageCapteurs(adr) {
   return { cablage: c.empreinte, capteurs: CAPTEURS, liens: CAPTEURS * c.liens[0].length, cibles: l,
     excitent: l.filter((x) => x.poids > 0).length, inhibent: l.filter((x) => x.poids < 0).length };
 }
+/* ══ « FEEL » — UN BATTEMENT A RYTHME HUMAIN (proprietaire, 2026-10-26 : « le dialogue n est pas representatif ; je veux RESSENTIR
+ *    ce que le block vit a chaque battement, perceptible a l oeil humain ») ══════════════════════════════════════════════════════
+ * Le cerveau bat toutes les 600 ms ; l oeil ne suit pas. La vue REJOUE donc les battements ENREGISTRES, un par un, a ~1,5 s chacun
+ * (vitesse 0,5x / 1x / 2x, pause, pas a pas). ⛔⛔ RIEN N EST RECALCULE ET RIEN N EST INVENTE :
+ *   · la phrase d un battement est faite UNIQUEMENT des champs de SON `vu` (nouveaux, delta, phase) — chaque morceau porte la cle
+ *     et la valeur qui l ont fait dire (`traces`), et « nothing new reached me » n est dit que si aucun de ces champs ne porte rien ;
+ *   · la teinte de la vue = l humeur que `pas()` a DECIDEE a ce battement (`vu.phase`), par une table fixe ;
+ *   · la vitesse ne change QUE la duree : le cadre, les impulsions et leur ordre sont les memes a toute vitesse (meme empreinte) ;
+ *   · un battement saute (retard trop grand) ne l est que s il etait CALME (aucune entree, meme humeur) — et le nombre est dit. */
+export const VERSION_RYTHME = 'tblock-brain-feel/1';
+/** Un battement a 1x : 1,5 s (dans la fourchette 1 .. 2 s demandee). */
+export const BATTEMENT_HUMAIN_MS = 1500;
+export const VITESSES = Object.freeze([0.5, 1, 2]);
+export const vitesseBornee = (v) => (VITESSES.includes(Number(v)) ? Number(v) : 1);
+export const dureeBattement = (v) => Math.round(BATTEMENT_HUMAIN_MS / vitesseBornee(v));
+/** Au-dela de ce retard (en battements enregistres), la lecture saute les battements CALMES pour se rapprocher du present. */
+export const RETARD_MAX = 6;
+
+/** L humeur -> sa palette. ⛔ Une table fixe, indexee par la phase DECIDEE ; une phase inconnue n emprunte pas une autre teinte. */
+export const PALETTES = Object.freeze({
+  CALME: 'calm', CURIEUX: 'curious', INQUIET: 'worried', EXCITE: 'excited', DORMANT: 'asleep', EVEILLE: 'awake', MORT: 'dead',
+  NON_LU: 'unjudged',
+});
+export function paletteDe(phase) {
+  const cle = Object.prototype.hasOwnProperty.call(PALETTES, phase) ? PALETTES[phase] : 'none';
+  return { cle, phase: typeof phase === 'string' ? phase : null, nom: typeof phase === 'string' ? humeurCourte(phase) : 'no beat yet' };
+}
+
+const ENTREES_PHRASE = Object.freeze([
+  { cle: 'achats', un: 'a buy reached me', n: (k) => k + ' buys reached me' },
+  { cle: 'ventes', un: 'a sell reached me', n: (k) => k + ' sells reached me' },
+  { cle: 'detenteurs', un: 'a new holder reached me', n: (k) => k + ' new holders reached me' },
+  { cle: 'gm', un: 'a transfer reached me', n: (k) => k + ' transfers reached me' },
+  { cle: 'messages', un: 'a message reached me', n: (k) => k + ' messages reached me' },
+]);
+/**
+ * La phrase d UN battement, faite de SON `vu` et de rien d autre.
+ * @returns {{ texte: string, traces: Array<{cle: string, valeur: *, dit: string}>, tick: number|null }}
+ */
+export function phraseBattement(vu) {
+  if (!vu || typeof vu !== 'object' || !Number.isSafeInteger(vu.tick)) return { texte: 'No beat has reached me here yet.', traces: [], tick: null };
+  const traces = [];
+  if (vu.phase === 'MORT') {
+    traces.push({ cle: 'phase', valeur: 'MORT', dit: 'my creator holds none of me — nothing reaches me' });
+  } else if (vu.phase === 'NON_LU') {
+    traces.push({ cle: 'phase', valeur: 'NON_LU', dit: 'my market could not be read on this beat, so I judge no mood' });
+  }
+  if (vu.phase !== 'MORT') {
+    const nv = vu.nouveaux && typeof vu.nouveaux === 'object' ? vu.nouveaux : {};
+    for (const e of ENTREES_PHRASE) {
+      const k = nv[e.cle];
+      if (fini(k) && k > 0) traces.push({ cle: 'nouveaux.' + e.cle, valeur: k, dit: k === 1 ? e.un : e.n(k) });
+    }
+    if (fini(vu.delta) && vu.delta !== 0) {
+      const pct = Math.round(Math.abs(vu.delta) * 1000) / 10;
+      const p = pct > 0 ? pct + ' %' : 'under 0.1 %';
+      traces.push({ cle: 'delta', valeur: vu.delta, dit: vu.delta > 0 ? 'my market warmed (+' + p + ')' : 'my market cooled (−' + p + ')' });
+    }
+  }
+  if (!traces.length) traces.push({ cle: 'rien', valeur: null, dit: 'nothing new reached me' });
+  const morceaux = traces.map((t) => t.dit);
+  const corps = morceaux.length === 1 ? morceaux[0] : morceaux.slice(0, -1).join(', ') + ' and ' + morceaux[morceaux.length - 1];
+  return { texte: corps.charAt(0).toUpperCase() + corps.slice(1) + '.', traces, tick: vu.tick };
+}
+
+/** Les impulsions d un cadre : chaque entree REELLE de ce battement (`arrive` > 0, ou la vie qui a bouge), dans l ordre des sources.
+ *  `depart` est une FRACTION du battement — la vitesse ne la change pas. */
+export function impulsionsDe(k) {
+  if (!k || !Array.isArray(k.sources) || k.mort) return [];
+  const l = k.sources.filter((s) => (s.arrive > 0) || (s.cle === 'vie' && s.lu && (s.sens === 'rising' || s.sens === 'falling')));
+  return l.map((s, j) => ({ cle: s.cle, x: s.x, y: s.y, n: s.cle === 'vie' ? null : s.arrive, sens: s.sens || null,
+    depart: Math.round(Math.min(0.3, j * 0.06) * 100) / 100 }));
+}
+/** Le rythme d un cadre a une vitesse : sa duree, et un CONTENU (cadre + impulsions) dont l empreinte ne depend pas de la vitesse. */
+export function rythmeDuCadre(k, vitesse = 1) {
+  const imp = impulsionsDe(k);
+  const contenu = { version: VERSION_RYTHME, cadre: k && k.empreinte ? k.empreinte : null, impulsions: imp, allumage: 0.5 };
+  return { vitesse: vitesseBornee(vitesse), dureeMs: dureeBattement(vitesse), ...contenu, empreinte: empreinte(JSON.stringify(contenu)) };
+}
+
+const calmeEntre = (vu, avant) => {
+  if (!vu || !avant) return false;
+  const nv = vu.nouveaux && typeof vu.nouveaux === 'object' ? vu.nouveaux : {};
+  const rien = ENTREES_PHRASE.every((e) => !(fini(nv[e.cle]) && nv[e.cle] > 0));
+  return rien && !(fini(vu.delta) && vu.delta !== 0) && vu.phase === avant.phase;
+};
+/**
+ * Le battement suivant a montrer, depuis le battement montre `tick` (null = pas encore commence).
+ * ⛔ Un battement n est saute que s il est CALME et que la vue a plus de RETARD_MAX battements de retard ; un battement sorti de la
+ *    memoire (histo borne) est compte dans `perdus`, jamais tu.
+ * @returns {{ tick: number|null, sautes: number, perdus: number, aJour: boolean }}
+ */
+export function battementSuivant(histo, tick, { retardMax = RETARD_MAX, depart = 4 } = {}) {
+  const H = Array.isArray(histo) ? histo.filter((v) => v && Number.isSafeInteger(v.tick)) : [];
+  if (!H.length) return { tick: null, sautes: 0, perdus: 0, aJour: true };
+  if (!Number.isSafeInteger(tick)) { const k0 = Math.max(0, H.length - 1 - depart); return { tick: H[k0].tick, sautes: 0, perdus: 0, aJour: k0 === H.length - 1 }; }
+  let k = H.findIndex((v) => v.tick > tick);
+  if (k < 0) return { tick: H[H.length - 1].tick === tick ? tick : H[H.length - 1].tick, sautes: 0, perdus: 0, aJour: true };
+  const perdus = H[0].tick > tick + 1 && k === 0 ? H[0].tick - tick - 1 : 0;
+  let sautes = 0;
+  while (H.length - 1 - k > retardMax && k < H.length - 1 && calmeEntre(H[k], H[k - 1] || null)) { k++; sautes++; }
+  return { tick: H[k].tick, sautes, perdus, aJour: k === H.length - 1 };
+}
+
+/**
+ * LE battement de reference d une vue, et les textes qui le nomment. ⛔ Un seul numero sans etiquette : celui du battement montre ;
+ * l en-tete dit SON humeur. Tout autre numero porte son nom (« newest beat », « facts frozen at beat »).
+ */
+export function referenceVue({ histo = [], tick = null, tickFaits = null } = {}) {
+  const H = Array.isArray(histo) ? histo : [];
+  const i = Number.isSafeInteger(tick) ? H.findIndex((v) => v && v.tick === tick) : -1;
+  const vu = i >= 0 ? H[i] : null;
+  const dernier = H.length ? H[H.length - 1] : null;
+  const retard = vu && dernier ? H.length - 1 - i : null;
+  const pal = paletteDe(vu ? vu.phase : null);
+  return {
+    i, vu, tick: vu ? vu.tick : null, phase: vu ? vu.phase : null, humeur: vu ? humeurCourte(vu.phase) : null, palette: pal.cle,
+    dernierTick: dernier ? dernier.tick : null, retard,
+    entete: vu ? 'Beat ' + vu.tick + ' · ' + humeurCourte(vu.phase) : 'No beat recorded here yet',
+    sortie: vu ? 'Beat ' + vu.tick + ': ' + humeurCourte(vu.phase) + ' · ' + vu.spikes + ' of ' + NEURONES + ' fired · steering ' + vu.virage
+      + (vu.virage < 0 ? ' (left)' : vu.virage > 0 ? ' (right)' : '') + ' · speed ' + vu.vitesse : '',
+    present: !vu || !dernier ? '' : retard === 0 ? 'This is its newest beat.'
+      : 'Newest beat recorded: ' + dernier.tick + ' (' + retard + ' beat' + (retard === 1 ? '' : 's') + ' ahead of this view).',
+    faits: Number.isSafeInteger(tickFaits) ? 'The what-if replays the facts frozen when this window opened (newest beat then: ' + tickFaits + ') — not the beat shown above.' : '',
+  };
+}
+
 export function parler(adr, faits, cle, a = 1) {
   if (!ADR.test(String(adr || '')) || !faits || typeof faits !== 'object' || !PAROLES[cle]) return null;
   const A = Math.max(0, Math.min(20, Math.round(Number(a)) || 0));

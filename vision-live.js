@@ -14,7 +14,7 @@
  * ⛔ PUR : aucun reseau, aucune horloge, aucun hasard, aucun stockage, aucun DOM. La taille gardee par visiteur est lue / ecrite par
  *    l appelant (localStorage sous try/catch) ; ce module ne fait que la BORNER. */
 import { connectome } from './cerveau.js';
-import { champ, cadreInterieur, humeurCourte } from './vision-cerveau.js';
+import { champ, cadreInterieur, humeurCourte, battementSuivant, phraseBattement, paletteDe } from './vision-cerveau.js';
 
 export const VERSION_LIVE = 'tblock-brain-live/1';
 /* 4 vues sur grand ecran, 2 sur telephone : au-dela, chaque vue devient trop petite pour qu un neurone allume se distingue */
@@ -44,7 +44,7 @@ export function ajouterTuile(live, { adr, sym = null } = {}, { etroit = false } 
   const max = maxTuiles(etroit);
   if (live.tuiles.length >= max) return { ok: false, pourquoi: 'Up to ' + max + ' live views at once on this screen — remove one first.' };
   const tuile = { adr: a, sym: sym ? String(sym).slice(0, 24) : null, cablage: cablageDe(a), source: null, histo: [], faits: null,
-    nourritureLue: null, h: null, refus: 0 };
+    nourritureLue: null, h: null, refus: 0, vueTick: null };
   live.tuiles.push(tuile);
   return { ok: true, tuile };
 }
@@ -96,12 +96,30 @@ export function nourrirLive(live, sourceDe) {
   return pris;
 }
 
-/** L etiquette d une tuile : son symbole et l humeur de SON dernier battement pris, rien d autre. */
+/* 2026-10-26 (« feel ») : une tuile REJOUE ses battements a rythme humain. `t.vueTick` = le battement MONTRE (null = le dernier pris).
+ * ⛔ L etiquette, le cadre et la phrase parlent du MEME battement : celui-la. */
+const indiceMontre = (t) => {
+  if (!t || !t.histo.length) return -1;
+  if (Number.isSafeInteger(t.vueTick)) { const i = t.histo.findIndex((v) => v.tick === t.vueTick); if (i >= 0) return i; }
+  return t.histo.length - 1;
+};
+/** Avance la tuile au battement suivant a montrer (vision-cerveau.js#battementSuivant). Rend ce qui a ete saute ou perdu. */
+export function avancerTuile(t, o = {}) {
+  if (!t) return null;
+  const r = battementSuivant(t.histo, Number.isSafeInteger(t.vueTick) ? t.vueTick : null, o);
+  t.vueTick = r.tick;
+  return r;
+}
+/** L etiquette d une tuile : son symbole et l humeur du battement MONTRE (le dernier pris tant qu aucun n est rejoue), rien d autre. */
 export function etiquetteTuile(t) {
   if (!t) return null;
-  const vu = t.histo.length ? t.histo[t.histo.length - 1] : null;
+  const i = indiceMontre(t);
+  const vu = i >= 0 ? t.histo[i] : null;
+  const dernier = t.histo.length ? t.histo[t.histo.length - 1] : null;
   return { adr: t.adr, sym: t.sym, phase: vu ? vu.phase : null, humeur: vu ? humeurCourte(vu.phase) : 'no beat yet',
-    tick: vu ? vu.tick : null, spikes: vu ? vu.spikes : null, source: t.source, sourceTexte: t.source ? SOURCES[t.source] : null };
+    tick: vu ? vu.tick : null, spikes: vu ? vu.spikes : null, source: t.source, sourceTexte: t.source ? SOURCES[t.source] : null,
+    dernierTick: dernier ? dernier.tick : null, retard: vu ? t.histo.length - 1 - i : null, palette: paletteDe(vu ? vu.phase : null).cle,
+    phrase: phraseBattement(vu) };
 }
 
 /**
@@ -111,10 +129,11 @@ export function etiquetteTuile(t) {
  */
 export function cadreTuile(t, { voisins = [], marche = null, echange = null, capMap = null, reduit = false } = {}) {
   if (!t || !ADR.test(t.adr)) return null;
-  const vu = t.histo.length ? t.histo[t.histo.length - 1] : null;
+  const i = indiceMontre(t);
+  const vu = i >= 0 ? t.histo[i] : null;
   const c = champ({ adr: t.adr, faits: t.faits, vu, voisins, marche, echange, nourritureLue: t.nourritureLue });
   if (!c) return null;
-  const k = cadreInterieur({ c, faits: t.faits, histo: t.histo, i: t.histo.length - 1, capMap: fini(capMap) ? capMap : null, reduit: !!reduit });
+  const k = cadreInterieur({ c, faits: t.faits, histo: t.histo, i, capMap: fini(capMap) ? capMap : null, reduit: !!reduit });
   return { c, k };
 }
 

@@ -2842,11 +2842,11 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="bcLanceurIn">
         <div class="bcMini" aria-hidden="true">◉</div>
         <div style="flex:1;min-width:0">
-          <p class="titre" style="margin:0">Inside its brain</p>
-          <p class="sous" style="margin:4px 0 0">See what its neurons receive and decide, replayed from real data. Nothing is sent.</p>
+          <p class="titre" style="margin:0">View inside the brain</p>
+          <p class="sous" style="margin:4px 0 0">Feel each of its beats at human speed: what reached it, which neurons fired, its mood. Real data only; nothing is sent.</p>
         </div>
       </div>
-      <button type="button" class="bouton bvOuvrir" id="bVision" style="margin-top:12px">See what it sees</button>
+      <button type="button" class="bouton bvOuvrir" id="bVision" style="margin-top:12px">View inside the brain</button>
     </div>
   </section>
 
@@ -4495,21 +4495,33 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button type="button" class="bouton sec bvPetit" id="bvVueDehors" aria-pressed="false">Outside</button>
   </div>
   <svg id="bvChamp" viewBox="0 0 360 310" role="img" aria-label="Its brain: inputs, sensors, neurons, neighbours"></svg>
-  <p class="note" id="bvLegende" style="margin:0 0 4px"></p>
+  <!-- 2026-10-26 (« feel ») : UNE phrase par battement, faite des seules donnees de CE battement (vision-cerveau.js#phraseBattement) -->
+  <p class="bvPhrase" id="bvPhrase"></p>
   <div class="bvLecteur">
     <button type="button" class="bouton sec bvPetit" id="bvJouer">Pause</button>
+    <button type="button" class="bouton sec bvPetit" id="bvPas">Step</button>
+    <span class="bvVitesses" role="group" aria-label="Speed">
+      <button type="button" class="bouton sec bvPetit" data-vitesse="0.5" aria-pressed="false">0.5×</button>
+      <button type="button" class="bouton sec bvPetit" data-vitesse="1" aria-pressed="true">1×</button>
+      <button type="button" class="bouton sec bvPetit" data-vitesse="2" aria-pressed="false">2×</button>
+    </span>
     <input type="range" id="bvBattement" min="0" max="0" value="0" aria-label="Recorded beat">
     <span class="note mono" id="bvBattementTexte">—</span>
   </div>
   <p class="note" id="bvSortie"></p>
+  <p class="note" id="bvLegende" style="margin:0 0 4px"></p>
   <details class="bDetail" open><summary class="note"><b>Talk to it</b> — pick an input, see which neurons it reaches</summary>
     <p class="note">Read only: nothing is sent. The neurons come from its real wiring and a replay of the same brain — no answer is made up.</p>
     <div class="bvParle" id="bvParle"></div>
     <p class="note" id="bvParleTexte"></p>
   </details>
-  <details class="bDetail" open><summary class="note"><b>What it reads</b> — each input, as received on its last beat</summary>
+  <details class="bDetail" open><summary class="note"><b>What it reads</b> — each input it received, <span id="bvLuQuand">on its newest beat</span></summary>
     <ul class="bvListe" id="bvEntrees"></ul>
     <p class="note" id="bvForces"></p>
+  </details>
+  <!-- 2026-10-26 (« feel ») : ce qui N EST PAS nourri ou PAS lu quitte la vue principale — replie ici, jamais cache -->
+  <details class="bDetail" id="bvDetails"><summary class="note"><b>Details</b> — <span id="bvDetailsResume">inputs not fed or not read</span></summary>
+    <ul class="bvListe" id="bvDetailsListe"></ul>
   </details>
   <!-- 2026-10-26 (Brain senses) : son etat INTERNE, copie de l etat reel de cerveau.js (vision-cerveau.js#interne), lecture seule -->
   <details class="bDetail" id="bvInterneBloc"><summary class="note"><b>Inside its neurons</b> — its internal state after its last beat</summary>
