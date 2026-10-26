@@ -1134,6 +1134,10 @@ dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;he
 .bvBoutonsFen{display:flex;gap:6px;flex:0 0 auto}
 .bvScene{position:relative;margin:8px 0 4px}
 #bv3d{display:block;width:100%;height:auto;max-height:52vh;background:#05070c;border:1px solid var(--ligne);border-radius:12px;touch-action:none}
+.bvAim{position:absolute;left:10px;bottom:10px;max-width:min(320px,70%);padding:8px 10px;border-radius:10px;background:rgb(10 12 20 / .82);border:1px solid var(--ligne);font-size:12px;line-height:1.35;color:#e8eaf6;pointer-events:none}
+.bvAim b{display:block;margin-bottom:3px}.bvAim .bvNr{color:#9aa3bd}
+#bvInspect h5{margin:10px 0 4px;font-size:12px}#bvInspect li{display:flex;gap:8px;justify-content:space-between}#bvInspect li>span{flex:0 0 auto;max-width:42%}#bvInspect li b{font-weight:600;text-align:right;overflow-wrap:anywhere}
+#bvInspect li[data-status="not read"] b,#bvInspect li[data-status="no source in this app"] b{color:var(--doux);font-weight:400}
 .bvNumero{position:absolute;left:10px;top:8px;font:800 15px/1 var(--mono,monospace);color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
 .bvHumeurBtn{position:absolute;right:8px;top:6px;border:1px solid rgb(255 255 255 / .35);background:rgb(0 0 0 / .45);color:#fff;border-radius:99px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
 .bvHumeurBtn:hover,.bvHumeurBtn:focus-visible{border-color:var(--accent)}
@@ -4537,6 +4541,8 @@ details[open] > summary::before{transform:rotate(90deg)}
     <canvas id="bv3d" width="720" height="440" role="img" aria-label="Its brain in 3D"></canvas>
     <span class="bvNumero" id="bvNumero" aria-label="Beat">—</span>
     <button type="button" class="bvHumeurBtn" id="bvHumeur" aria-haspopup="true" title="Why this mood?">—</button>
+    <!-- game57 #4b (d): what the camera looks at (centre ring), or what you clicked — real values only -->
+    <div class="bvAim" id="bvAim" role="status" aria-live="polite" hidden></div>
   </div>
   <!-- 2026-10-26 (« feel ») : UNE phrase par battement, faite des seules donnees de CE battement (vision-cerveau.js#phraseBattement) -->
   <p class="bvPhrase" id="bvPhrase" aria-live="polite"></p>
@@ -4561,8 +4567,11 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="autour">Around it</button>
     <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="siEtAlors">What if</button>
     <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="details">Details</button>
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="inspect">Inspect</button>
   </nav>
   <div class="bvOnglets" id="bvOnglets" role="tablist" aria-label="Open sections"></div>
+  <section class="bDetail bvLivre" data-livre="inspect" hidden><p class="note"><b>Inspect</b> — everything this page holds about it: each line is read (with its source), not read, or has no source in this app</p>
+    <div id="bvInspect"></div></section>
   <section class="bDetail bvLivre" data-livre="pourquoi" hidden><p class="note"><b>Why this mood</b> — only fields of the beat shown</p>
     <ul class="bvListe" id="bvPourquoi"></ul></section>
   <details class="bDetail bvLivre" data-livre="parle" hidden open><summary class="note"><b>Talk to it</b> — pick an input, see which neurons it reaches</summary>
@@ -4909,6 +4918,8 @@ import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSIO
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, referenceVue as referenceVueVision, dureeBattement, vitesseBornee } from './vision-cerveau.js';
 import { effetsDe, lumiereDe, poulsDe, echosDe, horizonDe, numeroBattement, voixDe as voixDedans, pourquoiDe, instantaneDedans, camLibre, orbiterCam, zoomerCam,
   projeterNeurones, poseCamera, planAnimation, voisinsDehors, DUREE_VOL_MS, panCam, mapPose, flightPose, spaceScene } from './vision-dedans.js';
+import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
+import { fieldText as inspectFieldText } from './inspect-block.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
@@ -26186,6 +26197,10 @@ function peindreVision() {
     }
     if (vision.particules.length > 40) vision.particules = vision.particules.slice(-40);
   }
+  /* game57 #4b (d): the inspect model, rebuilt once per beat from what the page holds */
+  vision.c = c;
+  try { vision.inspectSrc = bvInspectSources(); vision.inspectModel = inspectBlock(vision.inspectSrc); } catch (_) { vision.inspectSrc = null; vision.inspectModel = null; }
+  if (vision.livre === 'inspect') bvPaintInspect();
   vision.c = c; vision.vu = vuMontre; vision.capMap = capMap; vision.histoMontre = histo; vision.cibleH = h; vision.etatCible = cible.etat || null; vision.faitsCible = cible.faits || null;
   vision.pouls = poulsDe(vuMontre, { reduit: bvReduit() });
   $('#bvNumero').textContent = numeroBattement(vuMontre) === null ? '—' : 'Beat ' + texteBattement(numeroBattement(vuMontre));
@@ -26281,6 +26296,7 @@ function bvPeindre3D(t) {
    *   no neuron reads them); the neurons are painted right after */
   const scene = spaceScene({ inputs: vision.c ? vision.c.entrees.map((e) => ({ key: e.cle, label: e.libelle, read: e.lu, text: e.texte })) : [],
     neighbours: voisinsDehors(vision.cibleH, habitants, new Set()) });
+  const aimPoints = [];
   for (const o of scene) {
     if (o.kind === 'neighbour') {
       const a = 0.16, sides = [-a, a], corners = []; for (const x of sides) for (const y of sides) for (const z of sides) corners.push([o.x + x, o.y + y, o.z + z]);
@@ -26291,10 +26307,12 @@ function bvPeindre3D(t) {
         ctx.beginPath(); ctx.moveTo(byN.get(i).x, byN.get(i).y); ctx.lineTo(byN.get(j).x, byN.get(j).y); ctx.stroke();
       }
       const [c0] = proj([[o.x, o.y, o.z]]); if (!c0) continue;
+      aimPoints.push({ x: c0.x, y: c0.y, id: 'neighbour:' + o.adr, obj: o });
       ctx.fillStyle = 'rgb(200 210 230 / .6)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
       ctx.fillText(String(o.sym || bvCourt(o.adr)).slice(0, 10) + ' · not read', c0.x, c0.y + 14 + 16 * c0.k);
     } else if (o.kind === 'input') {
       const [q] = proj([[o.x, o.y, o.z]]); if (!q) continue;
+      aimPoints.push({ x: q.x, y: q.y, id: 'input:' + o.key, obj: o });
       const r = Math.max(2.5, 5 * q.k);
       ctx.fillStyle = o.read ? 'hsl(' + (lum.neutre ? teinteH() : th) + ' 85% 70%)' : 'rgb(150 160 190 / .35)';
       ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
@@ -26309,12 +26327,17 @@ function bvPeindre3D(t) {
   for (const q of proj(pos)) {
     const on = allumes.has(q.n), age = ages.get(q.n);
     /* game57 #4b (b): neurons readable among the stars; a neuron that fired glows, like a lit tile on the map */
+    aimPoints.push({ x: q.x, y: q.y, id: 'neuron:' + q.n, obj: { kind: 'neuron', n: q.n } });
     const r = Math.max(2, (q.n < CAPTEURS ? 4.6 : 3.3) * Math.min(q.k, 3));
     ctx.fillStyle = on ? 'hsl(' + (lum.neutre ? teinteH() : th) + ' 95% 75%)' : age ? 'rgb(220 225 255 / ' + (0.8 - age * 0.06).toFixed(2) + ')' : 'rgb(170 180 210 / .45)';
     if (on) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10; }
     ctx.beginPath(); ctx.arc(q.x, q.y, on ? r * 1.5 : r, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
   }
+  /* game57 #4b (d): the centre ring = what the camera looks at; its overlay says what it really is */
+  vision.aimPoints = aimPoints;
+  ctx.strokeStyle = 'rgb(255 255 255 / .35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(L / 2, H / 2, 10, 0, Math.PI * 2); ctx.stroke();
+  bvPaintAim(aimPoints, L, H);
   for (const pt of vision.particules) { const [q] = proj([pt.p]); if (q) { ctx.fillStyle = 'rgb(255 255 255 / .85)'; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); } }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   /* les sensations directionnelles (ecran) : buy de face (centre, chaud), sell de dos (bords, froid), transfer sur les cotes */
@@ -26372,6 +26395,61 @@ function bvOuvrirLivre(cle) {
   if (!vision.livres.includes(cle)) vision.livres.push(cle);
   vision.livre = cle; bvPeindreOnglets();
   if (cle === 'pourquoi') bvPeindrePourquoi();
+  if (cle === 'inspect') bvPaintInspect();
+}
+/* == game57 #4b (d): OMNISCIENT INSPECT — everything the page already holds about this block, read from memory only ==
+ *    No request is made here: each source is what another part of the page has already read (market index, creator lookup,
+ *    voice, live brain state, journal, map talk). Missing = "not read"; no data source in the app = said so (inspect-block.js). */
+function bvInspectSources() {
+  const target = visionCible();
+  if (!target) return null;
+  const a = target.adr, h = target.h;
+  const histo = Array.isArray(target.histo) ? target.histo : [];
+  const vu = histo.length ? histo[histo.length - 1] : null;
+  let why = null;
+  try { why = vision.c && vu ? pourquoiDe({ c: vision.c, faits: target.faits, vu, vuAvant: histo[histo.length - 2] || null, etat: target.etat, capMap: vision.capMap }) : null; } catch (_) { why = null; }
+  return { address: a, symbol: target.sym || null, market: marcheParAdr.get(a) || null, creator: createursConnus.get(CHAINE + ':' + a) || null,
+    voice: voixDe(a), vu, histo, internals: target.etat ? interneVision(target.etat) : null, champ: vision.c || null, why,
+    onMap: !!h, neighbours: voisinsVision(h).map((v) => ({ adr: v.adr, sym: v.sym || null, phase: v.phase || null, distance: v.distance })),
+    journal: journalLu(a), spoken: parolesFil.filter((p) => String(p.de || '').toLowerCase() === a).map((p) => ({ texte: p.texte, heure: p.heure })) };
+}
+function bvPaintInspect() {
+  const box = $('#bvInspect'); if (!box) return;
+  box.replaceChildren();
+  const m = vision.inspectModel;
+  if (!m) { const p = document.createElement('p'); p.className = 'note'; p.textContent = 'No block is open in this view.'; box.append(p); return; }
+  const sum = document.createElement('p'); sum.className = 'note';
+  sum.textContent = m.counts.read + ' read · ' + m.counts.notRead + ' not read · ' + m.counts.noSource + ' with no source in this app';
+  box.append(sum);
+  for (const s of m.sections) {
+    const h5 = document.createElement('h5'); h5.textContent = s.title; box.append(h5);
+    const ul = document.createElement('ul'); ul.className = 'bvListe';
+    for (const f of s.fields) {
+      const li = document.createElement('li'); li.dataset.inspect = s.key + '.' + f.key; li.dataset.status = f.status;
+      if (f.source) li.title = 'Source: ' + f.source;
+      const a = document.createElement('span'); a.textContent = f.label;
+      const b = document.createElement('b'); b.textContent = inspectFieldText(f);
+      li.append(a, b); ul.append(li);
+    }
+    box.append(ul);
+  }
+}
+/* the overlay on what the camera looks at (or the clicked object): only repainted when the target changes */
+function bvPaintAim(points, L, H) {
+  const el = $('#bvAim'); if (!el) return;
+  const pinned = vision.pinned ? points.find((p) => p.id === vision.pinned) : null;
+  const hit = pinned || aimedAt(points, L, H);
+  const d = hit ? describeTarget(hit.obj, vision.inspectSrc, vision.inspectModel) : null;
+  const key = d ? hit.id + '|' + d.lines.map((l) => l.value).join('|') : '';
+  if (key === vision.aimKey) return;
+  vision.aimKey = key;
+  el.hidden = !d; el.replaceChildren();
+  if (!d) return;
+  const t = document.createElement('b'); t.textContent = d.title + (pinned ? ' (pinned — click empty space to release)' : ''); el.append(t);
+  for (const l of d.lines) {
+    const row = document.createElement('div'); if (l.value === INSPECT_NOT_READ) row.className = 'bvNr';
+    row.textContent = l.label + ': ' + l.value; el.append(row);
+  }
 }
 function bvFermerLivre(cle) {
   vision.livres = vision.livres.filter((x) => x !== cle);
@@ -26555,6 +26633,14 @@ $('#bvRetourLive').addEventListener('click', bvRetourLive);
   cv.addEventListener('pointerdown', (e) => { if (!vision.controle) return; prec = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
   cv.addEventListener('pointermove', (e) => { if (!prec) return; const dx = e.clientX - prec.x, dy = e.clientY - prec.y; if (prec.pan) bvPanControl(dx, dy); else bvGesteControle(dx, dy, 0); prec = { ...prec, x: e.clientX, y: e.clientY }; });
   cv.addEventListener('contextmenu', (e) => { if (vision.controle) e.preventDefault(); });
+  /* game57 #4b (d): click an object to pin its overlay; click empty space to release (no drag moved the camera) */
+  cv.addEventListener('click', (e) => {
+    const r = cv.getBoundingClientRect(), sx = cv.width / r.width, sy = cv.height / r.height;
+    const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sy;
+    const hit = aimedAt((vision.aimPoints || []).map((p) => ({ ...p, x: p.x - x + cv.width / 2, y: p.y - y + cv.height / 2 })), cv.width, cv.height, 24);
+    vision.pinned = hit ? hit.id : null; vision.aimKey = null;
+    if (!bvReduit()) return; bvPeindre3D(0);
+  });
   cv.addEventListener('pointerup', () => { prec = null; });
   cv.addEventListener('pointercancel', () => { prec = null; });
   cv.addEventListener('wheel', (e) => { if (!vision.controle) return; e.preventDefault(); bvGesteControle(0, 0, Math.sign(e.deltaY)); }, { passive: false });
