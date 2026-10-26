@@ -58,5 +58,22 @@ export function creerIndexNoms({ lire }) {
     },
     entrees() { return [...noms.values()]; },
     taille() { return noms.size; },
+    /* 2026-10-26 (mesure prod game53 : 1 091 noms lus sur 21 686 a nommer, UNIT absent) : l index repartait de zero a chaque deploiement
+     *   (~3 h a 120/min). Il est PERSISTE : `exporter` -> [[adr, nom, sym]], `charger` relit en validant chaque champ (adresse entiere,
+     *   texte borne, sans caractere de controle ni de format) ; un nom deja lu n est jamais ecrase par le disque. Rend le nombre admis. */
+    exporter(max = 200000) { return [...noms.values()].slice(0, max).map((e) => [e.adr, e.nom, e.sym]); },
+    charger(liste) {
+      let n = 0;
+      const texte = (s) => (typeof s === 'string' && s.length && s.length <= 64 && !/[\p{Cc}\p{Cf}]/u.test(s) ? s : null);
+      for (const x of Array.isArray(liste) ? liste : []) {
+        if (!Array.isArray(x)) continue;
+        const a = String(x[0] || '').toLowerCase();
+        const nom = texte(x[1]), sym = texte(x[2]);
+        if (!ADR.test(a) || noms.has(a) || !(nom || sym)) continue;
+        noms.set(a, { adr: a, nom, sym });
+        n += 1;
+      }
+      return n;
+    },
   };
 }

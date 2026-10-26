@@ -15,7 +15,8 @@ const ok = (c, m) => { n += 1; if (!c) { ko += 1; console.log('KO  ' + m); } els
 ok(/ouvrirSeule\(nom, true\);/.test(html) && !/ouvrirSeule\(dejaOuverte \? null : nom, true\)/.test(html), 'P0 la bulle ouverte ne referme plus la carte');
 ok(/!liveEvts\.length && liveRatees && !liveEnCours\s*\? '<li class="filL"><p class="note">Live feed not read \\u2014 the network is busy\. <button[^>]*data-live-relire>Retry<\/button>/.test(html), 'P0 Live vide + refus -> phrase + Retry');
 ok(/closest\('\[data-live-relire\]'\); if \(t\) \{ t\.disabled = true; void lireLive\(\); \}/.test(html), 'P0 Retry relit le Live');
-ok(/fetch\('\/api\/chercher\?q=' \+ encodeURIComponent\(brut\)/.test(html), 'P0 la recherche Map interroge l index serveur');
+/* 2026-10-26 : la Map interroge /api/recherche (recherche B20 partagee, test-recherche-b20-20261026) au lieu de /api/chercher */
+ok(/await rechercheB20\(brut, 6\)/.test(html) && /fetch\('\/api\/recherche\?q=' \+ encodeURIComponent/.test(html), 'P0 la recherche Map interroge l index serveur');
 const iAcc = html.indexOf("if (g.ok) accordCerveau = 'Its brain ("), iPlan = html.indexOf("if (accordCerveau) bcEtape(m, accordCerveau, 'oui');"), iNon = html.search(/if \(p\.etat !== 'PRET' && p\.etat !== 'APPROBATIONS'\) \{\r?\n\s+bcEtape\(m, bcLigneEtatPlan\(p\), 'non'\);/);
 ok(iAcc > 0 && iPlan > iNon && iNon > iAcc, 'P1 « accepts » differe apres le refus du plan (dit seulement si PRET/APPROBATIONS)');
 ok(!/bcEtape\(m, g\.ok \? 'Its brain \(' \+ humeur \+ '\) accepts\.' : 'Its brain \(' \+ humeur \+ '\) refuses: ' \+ bcRaison\(g\.pourquoi\) \+ '\.', g\.ok \? 'oui' : 'non'\);\n    bcNoter\(\{ type: 'verdict', \.\.\.refs/.test(html), 'P1 temoin : plus de verdict immediat dans bcProposerSwap');

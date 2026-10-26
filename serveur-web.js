@@ -248,6 +248,7 @@ import { etatInitial as etatInitialCerveau, pas as pasCerveau } from './cerveau.
 import { snapshotCerveau } from './export-cerveau.js';
 import { tacheAutorisee } from './brain-tasks.js';
 import { adressesANommer, chercherNom, creerIndexNoms } from './recherche-noms.js';
+import { validerRequete, construireIndex, chercherB20 } from './recherche-b20.js';
 import { prixEthUsd } from './prix-eth.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -3495,13 +3496,66 @@ let lignesNomsTrending = { t: 0, lignes: [] };
  *   deploiement au lieu de ~25 min (l index des noms n est pas persiste). Jamais l archive.
  *   ⛔ un tour a la fois : 120 lectures sequentielles peuvent depasser 60 s, et deux tours lisaient alors les memes adresses. */
 let nomsEnCours = false, aNommerTaille = 0;
+/* ⛔⛔ 2026-10-26 (mesure prod game53, x-ms-monitor : /api/chercher « nomsLus 1 091 / aNommer 21 686 », UNIT ABSENT) — L INDEX DES NOMS EST
+ *   PERSISTE (noms-b20.json, a cote des autres fichiers du volume) : relu au demarrage, ecrit au plus toutes les 5 min quand il a grandi.
+ *   Un deploiement ne repaie plus ~3 h de lectures. Et UNIT (le block de l app) est nomme EN PREMIER, avant nos blocks. */
+const FICHIER_NOMS = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'noms-b20.json') : null;
+let nomsSauves = { t: 0, n: 0 };
+function chargerNomsDisque() {
+  try {
+    if (!FICHIER_NOMS || !existsSync(FICHIER_NOMS)) return;
+    const x = JSON.parse(readFileSync(FICHIER_NOMS, 'utf8'));
+    const n = indexNoms.charger(x && x.v === 1 ? x.noms : []);
+    nomsSauves = { t: Date.now(), n: indexNoms.taille() };
+    console.log('[noms] disk: ' + n + ' name(s) loaded');
+  } catch (e) { console.log('[noms] disk unread: ' + e.message); }
+}
+function sauverNomsDisque(force = false) {
+  if (!FICHIER_NOMS || indexNoms.taille() === nomsSauves.n || (!force && Date.now() - nomsSauves.t < 5 * 60 * 1000)) return;
+  try {
+    writeFileSync(FICHIER_NOMS + '.tmp', JSON.stringify({ v: 1, a: Date.now(), noms: indexNoms.exporter() }));
+    renameSync(FICHIER_NOMS + '.tmp', FICHIER_NOMS);
+    nomsSauves = { t: Date.now(), n: indexNoms.taille() };
+  } catch (e) { console.log('[noms] disk write failed: ' + e.message); }
+}
+chargerNomsDisque();
+/* /api/recherche (recherche-b20.js) : l index fusionne, reconstruit au plus toutes les 30 s, a partir de ce que le serveur tient DEJA en
+ *   memoire — le corps du trending (lignes + actions prouvees), les faits de creation, les noms lus, les adresses connues. */
+const RECHERCHE_IP_MINUTE = 60, RECHERCHE_MINUTE = 3000;
+const rechercheBudget = { minute: 0, n: 0, parIp: new Map() };
+const reponsesRecherche = new Map();
+let indexRechercheEtat = { t: 0, index: null, enVol: null };
+async function indexRecherche() {
+  if (indexRechercheEtat.index && Date.now() - indexRechercheEtat.t < 30000) return indexRechercheEtat;
+  if (indexRechercheEtat.enVol) return indexRechercheEtat.enVol;
+  indexRechercheEtat.enVol = (async () => {
+    let corps = null;
+    try { corps = JSON.parse(await trending()); } catch (_) { corps = null; }
+    const lignes = corps && Array.isArray(corps.lignes) ? corps.lignes : [];
+    const actions = corps && corps.actionsChaine && Array.isArray(corps.actionsChaine.liste) ? corps.actionsChaine.liste : [];
+    const estAction = (l) => !!(l && (l.emetteur || l.routeAction));
+    const sources = [
+      { nom: 'app', entrees: [{ adr: UNIT_BLOCK, sym: 'UNIT', notre: true }, ...[...nosBlocksEtat.blocks].map((adr) => ({ adr, notre: true }))] },
+      { nom: 'trending', entrees: lignes.map((l) => ({ adr: l && l.adr, sym: l && l.sym, nom: l && l.nom, marche: true, action: estAction(l), volume: l && l.volume24hUsd })) },
+      { nom: 'actions', entrees: actions.map((a) => ({ adr: a && a.adr, sym: a && a.sym, action: true })) },
+      { nom: 'creations', entrees: [...faitsCreation].map(([adr, f]) => ({ adr, sym: f.symbole, nom: f.nom })) },
+      { nom: 'noms', entrees: indexNoms.entrees() },
+      { nom: 'connus', entrees: [...adressesANommer(createurParBlock.keys(), blocksConnus)].map((adr) => ({ adr })) },
+    ];
+    indexRechercheEtat = { t: Date.now(), index: construireIndex(sources), enVol: null, actions: actions.length, trending: lignes.length, creations: faitsCreation.size };
+    return indexRechercheEtat;
+  })().catch((e) => { indexRechercheEtat.enVol = null; throw e; });
+  return indexRechercheEtat.enVol;
+}
 if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) {
   setInterval(() => {
     if (nomsEnCours) return;
-    const liste = adressesANommer(nosBlocksEtat.blocks, blocksConnus, createurParBlock.keys()); /* lus a l appel : declares plus bas, c est sur */
+    /* UNIT_BLOCK d abord (declare plus bas, lu a l appel), puis l union d avant, dans le meme ordre */
+    const liste = adressesANommer([UNIT_BLOCK], adressesANommer(nosBlocksEtat.blocks, blocksConnus, createurParBlock.keys())); /* lus a l appel : declares plus bas, c est sur */
     aNommerTaille = liste.length;
     nomsEnCours = true;
-    void indexNoms.remplir(liste, indexNoms.taille() < liste.length ? 120 : 40).catch(() => {}).finally(() => { nomsEnCours = false; });
+    void indexNoms.remplir(liste, indexNoms.taille() < liste.length ? 120 : 40).catch(() => {}).finally(() => { nomsEnCours = false; sauverNomsDisque(); });
   }, 60000).unref?.();
 }
 /* ⛔⛔ QUI A CREE QUOI — L INDEX QUI MANQUAIT, ET SON ABSENCE RENDAIT LES BLOCKS DES GENS INVISIBLES.
@@ -6289,6 +6343,41 @@ function traiterRequete(req, res) {
       reponsesNoms.set(cle, { t: Date.now(), corps });
       repondre(corps);
     })().catch(() => repondre({ ok: false, etat: 'NON_MESURE', pourquoi: 'the name index could not be read' }));
+    return;
+  }
+
+  /* ══ 2026-10-26 — GET /api/recherche?q=<symbole, nom ou adresse>&n=<1..20> : UNE recherche pour tout B20 (recherche-b20.js) ══════════
+   *   Prefixe, sans casse ni diacritiques, classee (adresse exacte > symbole exact > nom exact > debut > contient ; a rang egal UNIT, puis
+   *   les actions, puis les blocks a marche). Sources : UNIT et nos blocks, trending (lignes de marche), actions PROUVEES, faits de
+   *   creation, noms lus, adresses connues (createurs + suivis). ⛔ AUCUNE lecture de chaine : la requete ne touche que la memoire.
+   *   Requete validee (400 sinon), 60 par minute et par IP, resultats bornes, cache 15 s, couverture rendue (combien de blocks connus,
+   *   combien ont un nom lu) pour qu un vide se dise « pas encore indexe » et jamais « n existe pas ». */
+  if (chemin === '/api/recherche') {
+    const rendreR = (code, o, extra = {}) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'GET') { rendreR(405, { ok: false, etat: 'REFUSE', pourquoi: 'GET only' }); return; }
+    const p = new URL(req.url, 'http://x').searchParams;
+    const v = validerRequete(p.get('q'), p.get('n'));
+    if (!v.ok) { rendreR(400, { ok: false, etat: 'REFUSE', pourquoi: v.pourquoi }); return; }
+    const ipR = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const minuteR = Math.floor(Date.now() / 60000);
+    if (rechercheBudget.minute !== minuteR) { rechercheBudget.minute = minuteR; rechercheBudget.n = 0; rechercheBudget.parIp.clear(); }
+    const nIpR = (rechercheBudget.parIp.get(ipR) || 0) + 1;
+    if (nIpR > RECHERCHE_IP_MINUTE || rechercheBudget.n >= RECHERCHE_MINUTE) { rendreR(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'too many searches - retry in a minute' }, { 'retry-after': '60' }); return; }
+    if (rechercheBudget.parIp.size < 20000) rechercheBudget.parIp.set(ipR, nIpR);
+    rechercheBudget.n += 1;
+    const cleR = v.q + '|' + v.limite, dejaR = reponsesRecherche.get(cleR);
+    if (dejaR && Date.now() - dejaR.t < 15000) { rendreR(200, dejaR.corps); return; }
+    indexRecherche().then((idx) => {
+      const r = chercherB20(v, idx.index);
+      const corps = { ok: true, etat: r.resultats.length ? 'TROUVE' : 'ABSENT', q: v.q, mode: v.mode, ...r, lu: new Date(idx.t).toISOString(),
+        couverture: { connus: idx.index.taille, nommes: idx.index.nommes, nomsLus: indexNoms.taille(), aNommer: aNommerTaille,
+          actions: idx.actions, trending: idx.trending, creations: idx.creations,
+          complet: aNommerTaille > 0 && indexNoms.taille() >= aNommerTaille },
+        borne: 'Names and symbols are what each creator wrote on chain: they prove nothing. Open the whole address to check.' };
+      if (reponsesRecherche.size > 500) reponsesRecherche.clear();
+      reponsesRecherche.set(cleR, { t: Date.now(), corps });
+      rendreR(200, corps);
+    }).catch(() => rendreR(200, { ok: false, etat: 'NON_MESURE', pourquoi: 'the search index could not be built' }));
     return;
   }
 

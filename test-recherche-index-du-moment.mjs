@@ -30,9 +30,9 @@ async function chercher(q, { habitants = [], creations = [], lignes = null, serv
   const $ = (s) => champs[s] || null;
   const creerHabitant = (c) => { const h = { adr: c.jeton, sym: c.symbole, el: { click: () => { clic = c.jeton; }, scrollIntoView() {}, classList: { add() {} } } }; crees.push(h); habitants.push(h); return h; };
   const fetch = async () => { if (!serveur) throw new Error('busy'); return { json: async () => serveur }; };
-  const fn = new Function('$', 'habitants', 'creationsLues', 'dernierTrending', 'creerHabitant', 'anim', 'animer', 'ADRESSE', 'direMap', 'ouvrirProfil', 'fetch', 'AbortSignal',
+  const fn = new Function('$', 'habitants', 'creationsLues', 'dernierTrending', 'creerHabitant', 'anim', 'animer', 'ADRESSE', 'direMap', 'ouvrirProfil', 'fetch', 'AbortSignal', 'enTexte', 'court',
     source + '\nchercherBlock(); return { fusionnerCreationsLues, indexDeRecherche };');
-  const api = fn($, habitants, creations, lignes ? { lignes } : null, creerHabitant, 1, () => {}, /^0x[0-9a-fA-F]{40}$/, (t) => dits.push(t), () => {}, fetch, { timeout: () => null });
+  const api = fn($, habitants, creations, lignes ? { lignes } : null, creerHabitant, 1, () => {}, /^0x[0-9a-fA-F]{40}$/, (t) => dits.push(t), () => {}, fetch, { timeout: () => null }, (t) => String(t), (a) => a.slice(0, 6) + '…' + a.slice(-4));
   for (let i = 0; i < 10; i += 1) await new Promise((o) => setTimeout(o, 0));
   if (dits.length && /^Looking for/.test(dits[0])) dits.shift();
   return { dits, crees, clic, api };
@@ -43,27 +43,60 @@ await cas('⛔⛔⛔ SNDKc HORS CARTE, 0 CREATION LUE, MAIS DANS LE MARCHE DU MO
   assert.equal(r.dits.length, 0, 'message au lieu du block : ' + r.dits[0]);
   assert.equal(r.clic, SNDKC, 'la fiche de SNDKc ne s ouvre pas');
 });
-await cas('⛔⛔ INTROUVABLE : « N read here » COMPTE LES BLOCKS DISTINCTS PARCOURUS (creations + marches)', async () => {
+/* ⛔ 2026-10-26 : « No block named X among the N names read so far » est REMPLACE (proprietaire, testeur live : RBLXc etait dans l index
+ *   du serveur et la phrase disait « no block named ») par la couverture du serveur, /api/recherche : « among the M blocks indexed so far
+ *   (N with a name read) », et « Names are still being read » tant que l index n est pas complet. */
+await cas('⛔⛔ INTROUVABLE : la phrase dit la COUVERTURE DU SERVEUR (connus / nommes), et « still being read » tant que ce n est pas complet', async () => {
   const r = await chercher('ZZZZ', { creations: [{ jeton: '0x' + '1'.repeat(40) }, { jeton: '0x' + '2'.repeat(40) }, { jeton: SNDKC }],
-    lignes: [{ adr: SNDKC, sym: 'SNDKc' }, { adr: '0x' + '3'.repeat(40), sym: 'AAA' }] });
+    lignes: [{ adr: SNDKC, sym: 'SNDKc' }, { adr: '0x' + '3'.repeat(40), sym: 'AAA' }],
+    serveur: { ok: true, etat: 'ABSENT', resultats: [], couverture: { connus: 21686, nommes: 1910, complet: false } } });
   assert.equal(r.dits.length, 1);
-  assert.match(r.dits[0], /among the 4 names read so far/, r.dits[0]);
+  assert.match(r.dits[0], /^No block matches « ZZZZ » among the 21,686 blocks indexed so far \(1,910 with a name read\)\. Names are still being read/, r.dits[0]);
+  assert.doesNotMatch(r.dits[0], /No block named/, r.dits[0]);
+  const c = await chercher('ZZZZ', { lignes: [], serveur: { ok: true, etat: 'ABSENT', resultats: [], couverture: { connus: 30, nommes: 30, complet: true } } });
+  assert.doesNotMatch(c.dits[0], /still being read/, 'index complet dit « still being read » : ' + c.dits[0]);
 });
 await cas('TEMOIN — UN BLOCK DEJA SUR LA CARTE EST TROUVE SANS EN CREER UN SECOND', async () => {
-  const r0 = await chercher('SNDKc', { lignes: [] });
   const h = { adr: SNDKC, sym: 'SNDKc', el: { click() {}, scrollIntoView() {} } };
   const r = await chercher('sndkc', { habitants: [h], lignes: [{ adr: SNDKC, sym: 'SNDKc' }] });
   assert.equal(r.crees.length, 0);
-  assert.ok(r0.dits[0].includes('among the 0 names read so far'), 'sans rien lu, 0 reste vrai : ' + r0.dits[0]);
 });
 await cas('2026-10-10 (QA Grok) : 0 lu ICI mais IB022 dans l index du SERVEUR : trouve et ouvert', async () => {
   const IB = '0xb200000000000000000000e4b0c5fbe9c8df579e';
-  const r = await chercher('IB022', { lignes: [], serveur: { etat: 'TROUVE', adr: IB, sym: 'IB022' } });
+  const r = await chercher('IB022', { lignes: [], serveur: { ok: true, etat: 'TROUVE', resultats: [{ adr: IB, sym: 'IB022', rang: 'SYMBOLE' }] } });
   assert.equal(r.clic, IB, 'pas ouvert : ' + r.dits.join(' | '));
 });
-await cas('2026-10-10 : le compte dit est le plus grand des deux index (serveur 527 > navigateur 0)', async () => {
-  const r = await chercher('ZZZZ', { lignes: [], serveur: { etat: 'ABSENT', couverture: { nomsLus: 527 } } });
-  assert.match(r.dits[0], /among the 527 names read so far/, r.dits[0]);
+await cas('⛔⛔ 2026-10-26 : le `includes` local N OUVRE PLUS un autre block (« A » ouvrait METAc) — le serveur classe', async () => {
+  const META = '0xb2000000000000000000008bc8786b856e61707c', A = '0xb200000000000000000000ab549fa65ad4edae3f';
+  const r = await chercher('A', { lignes: [{ adr: META, sym: 'METAc' }], serveur: { ok: true, etat: 'TROUVE', resultats: [{ adr: A, sym: 'A', rang: 'SYMBOLE' }, { adr: META, sym: 'METAc', rang: 'SYMBOLE_CONTIENT' }] } });
+  assert.equal(r.clic, A, 'ouvert : ' + r.clic + ' | ' + r.dits.join(' | '));
+});
+await cas('2026-10-26 : un debut d adresse qui ne designe qu UN block (« 0xb2000000000000000000007afa ») l ouvre ; deux -> la liste', async () => {
+  const UNIT = '0xb2000000000000000000007afa7ed748b0874f27';
+  const r = await chercher('0xb2000000000000000000007afa', { lignes: [], serveur: { ok: true, etat: 'TROUVE', total: 1, resultats: [{ adr: UNIT, sym: 'UNIT', rang: 'ADRESSE_DEBUT', notre: true }] } });
+  assert.equal(r.clic, UNIT, r.dits.join(' | '));
+  const X1 = '0xb2' + '7'.repeat(38), X2 = '0xb2' + '8'.repeat(38);
+  const deux = await chercher('0xb2', { lignes: [], serveur: { ok: true, etat: 'TROUVE', total: 2, resultats: [{ adr: X1, rang: 'ADRESSE_DEBUT' }, { adr: X2, rang: 'ADRESSE_DEBUT' }] } });
+  assert.equal(deux.clic, null);
+  const un = await chercher('0xb27', { lignes: [], serveur: { ok: true, etat: 'TROUVE', total: 1, resultats: [{ adr: X1, sym: 'S', rang: 'SYMBOLE_CONTIENT' }] } });
+  assert.equal(un.clic, null, 'un resultat unique NON exact ne s ouvre pas tout seul');
+  assert.match(un.dits[0], /^1 block matches « 0xb27 »/, un.dits[0]);
+});
+await cas('⛔ 2026-10-26 (navigateur, 375 px : « Shadr » ouvrait le 1er de 21 homonymes du trending) : homonymes LOCAUX -> liste du serveur', async () => {
+  const S1 = '0x' + '61'.repeat(20), S2 = '0x' + '62'.repeat(20);
+  const r = await chercher('Shadr', { lignes: [{ adr: S1, sym: 'Shadr' }, { adr: S2, sym: 'Shadr' }],
+    serveur: { ok: true, etat: 'TROUVE', resultats: [{ adr: S1, sym: 'Shadr', rang: 'SYMBOLE' }, { adr: S2, sym: 'Shadr', rang: 'SYMBOLE' }] } });
+  assert.equal(r.clic, null, 'un homonyme local a ete ouvert');
+  assert.match(r.dits[0], /^2 blocks match « Shadr »/, r.dits.join(' | '));
+});
+await cas('⛔ 2026-10-26 : deux blocks au MEME symbole exact -> pas de choix a la place de la personne (liste), sauf notre block', async () => {
+  const X1 = '0x' + '4'.repeat(40), X2 = '0x' + '5'.repeat(40);
+  const r = await chercher('Bots', { lignes: [], serveur: { ok: true, etat: 'TROUVE', resultats: [{ adr: X1, sym: 'Bots', rang: 'SYMBOLE' }, { adr: X2, sym: 'Bots', rang: 'SYMBOLE' }] } });
+  assert.equal(r.clic, null, 'un homonyme a ete ouvert');
+  assert.match(r.dits[0], /^2 blocks match « Bots » — pick one below\./, r.dits[0]);
+  const UNIT = '0xb2000000000000000000007afa7ed748b0874f27';
+  const u = await chercher('unit', { lignes: [], serveur: { ok: true, etat: 'TROUVE', resultats: [{ adr: UNIT, sym: 'UNIT', rang: 'SYMBOLE', notre: true }, { adr: X1, sym: 'UNIT', rang: 'SYMBOLE' }] } });
+  assert.equal(u.clic, UNIT, 'UNIT (notre block) non ouvert');
 });
 await cas('TEMOIN NEGATIF 2026-10-10 : index serveur illisible -> « network is busy », jamais « among the 0 »', async () => {
   const r = await chercher('ZZZZ', { lignes: [], serveur: null });

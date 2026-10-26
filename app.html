@@ -548,7 +548,19 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
  *    plus PETIT que ceux qui ont un marche. La legende porte le mot, et la fiche donne la phrase
  *    entiere quand on clique. Un signal qu on lit vingt fois par ecran n est plus un signal. */
 .bloc.sansPrix{opacity:.7}
-.mapBarre{display:flex;gap:8px;align-items:center;margin:0 0 10px}
+.mapBarre{display:flex;gap:8px;align-items:center;margin:0 0 10px;position:relative}
+/* la liste de la Map flotte SOUS la barre (mesure 375 px : en flex-wrap, le bouton Find passait a la ligne) */
+#mapResultats{position:absolute;top:100%;left:0;right:0;z-index:21}
+/* 2026-10-26 : recherche B20 partagee (Map, Blocks, Market) — une liste de choix, jamais plus large que l ecran (375 px) */
+.rbListe{flex-basis:100%;display:flex;flex-direction:column;gap:4px;max-height:46vh;overflow:auto;margin:6px 0 0;padding:6px;
+  background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);min-width:0;box-sizing:border-box}
+.rbListe[hidden]{display:none}
+.rbChoix{display:flex;gap:8px;align-items:baseline;width:100%;min-width:0;text-align:left;padding:9px 10px;cursor:pointer;
+  background:transparent;color:inherit;border:1px solid var(--ligne);border-radius:var(--rs);font:inherit}
+.rbChoix b{flex:none;max-width:45%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rbChoix span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--doux);font-size:12px}
+.rbNote{margin:2px;font-size:12px;color:var(--doux)}
+.rbChamp{width:100%;box-sizing:border-box;margin:8px 0 0;background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);padding:10px 12px;color:inherit;font:inherit}
 .mapBarre input{flex:1;background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);
   color:var(--texte);font:inherit;padding:11px 12px;min-height:44px}
 .mapLeg{display:flex;gap:14px;align-items:center;color:var(--doux);font-size:11.5px;margin:10px 0 0}
@@ -1738,6 +1750,8 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="mapBarre">
       <input id="trouver" placeholder="Find a block — name or address" autocomplete="off" spellcheck="false">
       <button class="bouton sec" id="bTrouver" style="width:auto;padding:11px 16px">Find</button>
+      <!-- 2026-10-26 : plusieurs blocks correspondent -> la liste (recherche B20 partagee, /api/recherche) ; la personne choisit -->
+      <div id="mapResultats" class="rbListe" hidden aria-live="polite"></div>
     </div>
 
     <div class="scene" id="scene">
@@ -3144,6 +3158,9 @@ details[open] > summary::before{transform:rotate(90deg)}
              `#trNote` feraient diverger l un des deux en silence. -->
       <p class="note" id="trNote" style="margin:2px 0 0"></p>
       <p class="sous">Every block on Base with a live market, ranked by what is moving right now — read from the chain and DexScreener.</p>
+      <!-- 2026-10-26 : le filtre du Market — filtre les lignes ci-dessous ET cherche dans l index entier du serveur (/api/recherche) -->
+      <input id="trFiltre" class="rbChamp" type="search" placeholder="Filter — symbol, name or 0x…" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="search" aria-label="Filter the market and search every block">
+      <div id="trResultats" class="rbListe" hidden aria-live="polite"></div>
       <div class="stadeLigne" id="trTri" style="margin-top:4px">
         <button type="button" class="puce on" data-tri="h1">🔥 Last hour</button>
         <button type="button" class="puce" data-tri="h24">24h volume</button>
@@ -3369,6 +3386,13 @@ details[open] > summary::before{transform:rotate(90deg)}
     <!-- ⛔ LE CLASSEMENT EST UN ECHANTILLON, ET IL LE DIT. « Le plus gros » ne vaut que parmi ce que
          cette page a SU LIRE ; la borne rendue par `classement.js` est affichee sous la liste. -->
     <!-- 2026-10-17 soir (Phil) : la carte Missions a demenage dans l onglet Missions (#v-missions). -->
+    <!-- 2026-10-26 (proprietaire : « every B20 easy to find ») : trouver N IMPORTE QUEL block depuis cet onglet — /api/recherche -->
+    <div class="carte" id="carteTrouverB20">
+      <p class="titre">Find any block</p>
+      <p class="sous">By symbol, name or address — every block the server has indexed, tokenized stocks included.</p>
+      <input id="mienTrouver" class="rbChamp" type="search" placeholder="Symbol, name or 0x…" autocomplete="off" spellcheck="false" autocapitalize="off" autocorrect="off" enterkeyhint="search" aria-label="Find any block">
+      <div id="mienResultats" class="rbListe" hidden aria-live="polite"></div>
+    </div>
     <div class="carte" id="carteRang">
       <p class="titre">Biggest blocks</p>
             <!-- ⛔ Phil (2026-09-20) : « on s en fout de TBLOCK et TTB » — residu d une ancienne version ; la phrase dit ce
@@ -10299,19 +10323,103 @@ function indexDeRecherche() {
  *   ouvrir, puis acheter, le mauvais block. */
 function adresseAbregee(q) { return /^\s*(?:0x)?[0-9a-f]{2,}\s*(?:…|\.{2,3})\s*[0-9a-f]{2,}\s*$/i.test(String(q || '')); }
 const phraseAdresseAbregee = 'This address is shortened (…). Paste the whole address: 42 characters starting with 0x.';
+/* ══ 2026-10-26 — LA RECHERCHE B20 PARTAGEE (Map Find, onglet Blocks, filtre du Market) : /api/recherche (recherche-b20.js cote serveur).
+ *   Une seule route, une seule facon de dire « rien » : la couverture que le serveur rend (blocks connus, blocks nommes, noms encore a
+ *   lire). Le texte d un resultat (symbole, nom) vient de la chaine ou de DexScreener : toujours echappe (enTexte), l adresse montree. */
+function normaliserB20(s) { return String(s == null ? '' : s).normalize('NFKD').replace(/\p{M}+/gu, '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+/** un filtre LOCAL (lignes deja chargees) : debut d adresse, ou symbole / nom qui contient la saisie, sans casse ni diacritiques */
+function correspondB20(fq, adr, sym, nom) {
+  if (!fq) return true;
+  if (/^0x[0-9a-f]*$/.test(fq)) return String(adr || '').toLowerCase().startsWith(fq);
+  return normaliserB20(sym).includes(fq) || normaliserB20(nom).includes(fq);
+}
+async function rechercheB20(q, n) {
+  try {
+    const r = await fetch('/api/recherche?q=' + encodeURIComponent(String(q || '').slice(0, 64)) + '&n=' + (Number(n) || 8), { cache: 'no-store', signal: AbortSignal.timeout(15000) });
+    const j = await r.json();
+    return j && typeof j === 'object' ? j : null;
+  } catch (_) { return null; }
+}
+const RANGS_EXACTS_B20 = ['ADRESSE', 'SYMBOLE', 'NOM'];
+/** le resultat a ouvrir SANS demander : egalite exacte et seul a ce rang (ou notre block). Plusieurs blocks au meme nom : on ne choisit pas. */
+function choixEvidentB20(s) {
+  const rs = s && s.etat === 'TROUVE' && Array.isArray(s.resultats) ? s.resultats : [];
+  const t = rs[0];
+  if (!t || !/^0x[0-9a-f]{40}$/.test(String(t.adr || '')) || !RANGS_EXACTS_B20.includes(t.rang)) return null;
+  if (t.notre || !rs.slice(1).some((r) => r.rang === t.rang)) return t;
+  return null;
+}
+/* un debut d adresse qui ne designe qu UN block connu (« 0xb2000000000000000000007afa ») s ouvre aussi : l adresse le prouve */
+function choixEvidentOuAdresseB20(s) {
+  const e = choixEvidentB20(s);
+  if (e) return e;
+  const rs = s && s.etat === 'TROUVE' && Array.isArray(s.resultats) ? s.resultats : [];
+  return rs.length === 1 && s.total === 1 && rs[0].rang === 'ADRESSE_DEBUT' && /^0x[0-9a-f]{40}$/.test(String(rs[0].adr || '')) ? rs[0] : null;
+}
+function phraseRechercheVide(brut, s) {
+  if (!s || (s.ok === false && s.etat !== 'REFUSE')) return 'Search not read — the network is busy. Retry, or paste its address to open it.';
+  if (s.etat === 'REFUSE') return String(s.pourquoi || 'This search is not accepted.').slice(0, 160);
+  const c = s.couverture || {};
+  const nb = (x) => Number(x || 0).toLocaleString('en-US');
+  return 'No block matches « ' + brut + ' » among the ' + nb(c.connus) + ' blocks indexed so far (' + nb(c.nommes) + ' with a name read).'
+    + (c.complet ? ' Paste its address to open it.' : ' Names are still being read — retry later, or paste its address to open it.');
+}
+function libelleRangB20(r) {
+  return r.notre ? 'This app’s block' : r.action ? 'Tokenized stock' : r.marche ? 'Live market' : 'Block';
+}
+/** peint la liste des resultats dans `el` ; un clic appelle `auChoix(adr, sym)` */
+function peindreResultatsB20(el, brut, s, auChoix) {
+  if (!el) return;
+  const rs = s && Array.isArray(s.resultats) ? s.resultats.filter((r) => /^0x[0-9a-f]{40}$/.test(String(r.adr || ''))) : [];
+  el.hidden = false;
+  if (!rs.length) { el.innerHTML = '<p class="rbNote">' + enTexte(phraseRechercheVide(brut, s)) + '</p>'; el.onclick = null; return; }
+  el.innerHTML = rs.map((r) => '<button type="button" class="rbChoix" data-rb-adr="' + enTexte(r.adr) + '" data-rb-sym="' + enTexte(r.sym || '') + '">'
+      + '<b>' + enTexte(r.sym || court(r.adr)) + '</b><span>' + enTexte(court(r.adr) + ' · ' + libelleRangB20(r) + (r.nom ? ' · ' + r.nom : '')) + '</span></button>').join('')
+    + (s.plus ? '<p class="rbNote">More blocks match — type more of the name, or paste the address.</p>' : '');
+  el.onclick = (e) => { const b = e.target && e.target.closest && e.target.closest('[data-rb-adr]'); if (b) auChoix(b.getAttribute('data-rb-adr'), b.getAttribute('data-rb-sym') || null); };
+}
+/** branche un champ de recherche : saisie (250 ms d attente), Entree (immediat ; le choix evident s ouvre), liste des resultats */
+function brancherRechercheB20({ champ, liste, auChoix, surSaisie }) {
+  if (!champ || !liste) return;
+  let minuterie = null, demande = 0;
+  const lancer = async (entree) => {
+    const brut = String(champ.value || '').trim();
+    if (surSaisie) surSaisie(brut);
+    if (!brut) { liste.hidden = true; liste.textContent = ''; demande += 1; return; }
+    if (adresseAbregee(brut)) { liste.hidden = false; liste.innerHTML = '<p class="rbNote">' + enTexte(phraseAdresseAbregee) + '</p>'; return; }
+    const moi = ++demande;
+    liste.hidden = false; liste.innerHTML = '<p class="rbNote">Searching…</p>';
+    const s = await rechercheB20(brut, 8);
+    if (moi !== demande) return;
+    const evident = entree ? choixEvidentOuAdresseB20(s) : null;
+    if (evident) { liste.hidden = true; liste.textContent = ''; auChoix(evident.adr, evident.sym || null); return; }
+    peindreResultatsB20(liste, brut, s, auChoix);
+  };
+  champ.addEventListener('input', () => { clearTimeout(minuterie); minuterie = setTimeout(() => { void lancer(false); }, 250); });
+  champ.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(minuterie); void lancer(true); } });
+}
 function chercherBlock() {
   const brut = String($('#trouver').value || '').trim();
   const q = brut.toLowerCase();
   const note = $('#mapNote');
   if (!q) return;
   if (adresseAbregee(brut)) { direMap(phraseAdresseAbregee); return; }
+  const resMap = $('#mapResultats');
+  if (resMap) { resMap.hidden = true; resMap.textContent = ''; }
+  /* ⛔⛔ 2026-10-26 (mesure, 31 requetes sur les donnees de prod) : le `includes` local ouvrait le PREMIER block dont le symbole CONTIENT
+   *   la saisie — « BASED », « A » et « SHADR » ouvraient chacun un AUTRE block (dont METAc pour « A »). Ici, seule l egalite exacte
+   *   (adresse ou symbole) ouvre sans demander ; tout le reste passe par l index du serveur, classe (/api/recherche). */
+  /* un symbole porte par PLUSIEURS blocks connus ici (21 « Shadr » au trending, mesure) : on ne choisit pas — la liste du serveur */
+  const homonymes = new Set();
+  for (const [liste, a, s] of [[habitants, 'adr', 'sym'], [creationsLues, 'jeton', 'symbole'], [lignesMarcheDuMoment(), 'adr', 'sym']]) {
+    for (const x of liste || []) if (x && String(x[s] || '').toLowerCase() === q) homonymes.add(String(x[a]).toLowerCase());
+  }
+  if (homonymes.size > 1) { chercherAuServeur(brut, resMap); return; }
   let h = habitants.find((x) => String(x.adr).toLowerCase() === q)
-    || habitants.find((x) => String(x.sym || '').toLowerCase() === q)
-    || habitants.find((x) => String(x.sym || '').toLowerCase().includes(q));
+    || habitants.find((x) => String(x.sym || '').toLowerCase() === q);
   if (!h) {
     const c = creationsLues.find((x) => String(x.jeton).toLowerCase() === q)
-      || creationsLues.find((x) => String(x.symbole || '').toLowerCase() === q)
-      || creationsLues.find((x) => String(x.symbole || '').toLowerCase().includes(q));
+      || creationsLues.find((x) => String(x.symbole || '').toLowerCase() === q);
     if (c) {
       h = creerHabitant({ jeton: c.jeton, symbole: c.symbole, vie: null });
       if (!anim) animer();
@@ -10320,8 +10428,7 @@ function chercherBlock() {
   if (!h) {
     const lignes = lignesMarcheDuMoment();
     const l = lignes.find((x) => String(x.adr).toLowerCase() === q)
-      || lignes.find((x) => String(x.sym || '').toLowerCase() === q)
-      || lignes.find((x) => String(x.sym || '').toLowerCase().includes(q));
+      || lignes.find((x) => String(x.sym || '').toLowerCase() === q);
     if (l && ADRESSE.test(String(l.adr))) {
       h = creerHabitant({ jeton: l.adr, symbole: l.sym || null, vie: null });
       if (!anim) animer();
@@ -10338,27 +10445,41 @@ function chercherBlock() {
   if (!h) {
     /* 2026-10-10 (QA Grok : « among the 0 read here ») : l index de ce navigateur vient de SA lecture de chaine, a 0 quand le
      *   noeud refuse. On demande l index du SERVEUR (/api/chercher, eth_call `latest`, hors budget d archive) avant de dire « absent ». */
-    void (async () => {
-      direMap('Looking for « ' + brut + ' » in the server index…');
-      let s = null;
-      try { s = await (await fetch('/api/chercher?q=' + encodeURIComponent(brut), { cache: 'no-store', signal: AbortSignal.timeout(15000) })).json(); } catch (_) { s = null; }
-      if (s && s.etat === 'TROUVE' && ADRESSE.test(String(s.adr))) {
-        const pose = creerHabitant({ jeton: s.adr, symbole: s.sym || null, vie: null });
-        if (!anim) animer();
-        $('#mapNote').textContent = '';
-        pose.el.click();
-        return;
-      }
-      const lus = Math.max(indexDeRecherche(), (s && s.couverture && s.couverture.nomsLus) || 0);
-      direMap(s ? 'No block named « ' + brut + ' » among the ' + lus.toLocaleString('en-US')
-        + ' names read so far. Older blocks are not indexed yet — paste its address to open it.'
-        : 'Search not read — the network is busy. Retry, or paste its address to open it.');
-    })();
+    /* ⛔⛔ 2026-10-26 (testeur live, prod game53 : « RBLXc » -> « No block named « RBLXc » among the 1,171 names read so far ») — RBLXc
+     *   etait dans la liste des actions PROUVEES du serveur ; /api/chercher ne la lisait pas. On interroge /api/recherche (symbole, nom
+     *   ou adresse, debut compris, toutes les sources du serveur). Un choix EVIDENT (egalite exacte, seul a ce rang, ou notre block)
+     *   s ouvre ; sinon la liste est montree et la personne choisit. Rien trouve : la couverture vraie (« N of M indexed so far »). */
+    chercherAuServeur(brut, resMap);
     return;
   }
   note.textContent = '';
   h.el.click();
   h.el.scrollIntoView({ block: 'center' });
+}
+/** Map Find, cote serveur : /api/recherche ; un choix evident s ouvre sur la carte, sinon la liste (#mapResultats), sinon la couverture */
+function chercherAuServeur(brut, resMap) {
+    void (async () => {
+      direMap('Looking for « ' + brut + ' » in the server index…');
+      const s = await rechercheB20(brut, 6);
+      const ouvrirSurCarte = (adr, sym) => {
+        const a = String(adr || '').toLowerCase();
+        if (!ADRESSE.test(a)) return;
+        const pose = habitants.find((x) => String(x.adr).toLowerCase() === a) || creerHabitant({ jeton: a, symbole: sym || null, vie: null });
+        if (!anim) animer();
+        direMap('');
+        const r = $('#mapResultats'); if (r) { r.hidden = true; r.textContent = ''; }
+        pose.el.click();
+      };
+      const evident = choixEvidentOuAdresseB20(s);
+      if (evident) { ouvrirSurCarte(evident.adr, evident.sym); return; }
+      if (s && s.etat === 'TROUVE' && Array.isArray(s.resultats) && s.resultats.length) {
+        const nR = s.resultats.length;
+        direMap(nR + (s.plus ? '+' : '') + (nR === 1 && !s.plus ? ' block matches « ' : ' blocks match « ') + brut + ' » — pick one below.');
+        if (resMap) peindreResultatsB20(resMap, brut, s, ouvrirSurCarte);
+        return;
+      }
+      direMap(phraseRechercheVide(brut, s));
+    })();
 }
 $('#bTrouver').addEventListener('click', chercherBlock);
 document.addEventListener('click', (e) => { const t = e.target && e.target.closest && e.target.closest('[data-live-relire]'); if (t) { t.disabled = true; void lireLive(); } });
@@ -23067,6 +23188,8 @@ $('#olPreparer').addEventListener('click', async () => {
  * Donnees : /api/trending (serveur : creations B20 lues sur la chaine + DexScreener). « Buy » ouvre le profil du block,
  * remplit 0.01 ETH et prepare l achat (0,5 % au wallet de frais, controle dans la calldata) : il ne reste qu a signer. */
 let trDonnees = null, trTri = 'h1', trLuA = 0;
+/* 2026-10-26 : la saisie du filtre du Market, normalisee (normaliserB20) ; vide = pas de filtre */
+let trFiltreQ = '';
 /* ⛔ PHIL (2026-09-19, capture du Trade vide) : un echec de lecture ne doit pas laisser l utilisateur devant « try again ».
  * On reessaie seul, toutes les 30 s, tant que l onglet Trade est affiche et la page visible. */
 let trRelecture = null;
@@ -23157,7 +23280,11 @@ function peindreTrending() {
    *   d ACTION (le serveur pose `routeAction` sur chacune, null ailleurs) n est plus jamais coupee : les 50 premieres restent les memes,
    *   les actions plus bas suivent, a leur RANG VRAI. « Show more » compte ce qui reste cache. */
   const rang = new Map(toutes.map((l, k) => [l, k]));
-  const lignes = toutes.filter((l, k) => k < trAffiches || l.routeAction);
+  /* 2026-10-26 : le filtre du Market (#trFiltre) — toutes les lignes qui correspondent, sans la coupe des 50 ; sans filtre, comme avant.
+   *   `typeof` : des bancs EXTRAIENT peindreTrending seule (test-market-actions-visibles, test-ligne-raison) ; sans la variable, pas de filtre.
+   *   L index complet du serveur est montre a part (#trResultats). */
+  const fq = typeof trFiltreQ === 'string' ? trFiltreQ : '';
+  const lignes = fq ? toutes.filter((l) => correspondB20(fq, l.adr, l.sym, l.nom)) : toutes.filter((l, k) => k < trAffiches || l.routeAction);
   const cachees = toutes.length - lignes.length;
   const actifs = toutes.filter(bouge).length;
   /* et les actions de l emetteur A UNITES EN CIRCULATION que DexScreener ne rend pas (aucune ligne) : leur nom et la raison lue sur la
@@ -23183,6 +23310,8 @@ function peindreTrending() {
     : x.route ? 'No buy: its route read on chain does not pass this app’s checks (pool, a 10 USDC buy and the sale back).'
     : 'Its route on chain is not read yet.');
   const pct = (v) => v === null || v === undefined ? '' : (!Number.isFinite(Number(v)) || Math.abs(Number(v)) > 1e5) /* QA 2026-10-10 : '+1.28e+29 %' - non fini ou absurde (> 100 000 %) = non lu */ ? '<span>—</span>' : '<span class="' + (v >= 0 ? 'trUp' : 'trDown') + '">' + (v >= 0 ? '+' : '') + (Math.abs(v) >= 100 ? Math.round(v) : v.toFixed(1)) + '%</span>';
+  const sansLigneVues = fq ? sansLigne.filter((x) => correspondB20(fq, x.adr, x.sym, null)) : sansLigne;
+  const cacheesVues = fq ? 0 : cachees;
   ul.innerHTML = lignes.map((l, i) => (trTri === 'h1' && rang.get(l) === actifs && rang.get(l) > 0
       ? '<li class="filL"><p class="note" style="margin:6px 0">Quiet in the last hour — sorted by 24h volume</p></li>' : '')
     + '<li class="filL trLigne" data-block="' + enTexte(l.adr) + '" data-sym="' + enTexte(l.sym) + '">'
@@ -23273,9 +23402,10 @@ function peindreTrending() {
         const raison = '<p class="note trRaison">' + enTexte(raisonSb.phrase) + '</p>';
         return pairable ? '<span class="trBoutons">' + pairer + '</span>' + raison : raison;
       })() + '</li>').join('')
-    + (cachees > 0 ? '<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + cachees + ')</button></li>' : '')
-    + (sansLigne.length ? '<li class="filL"><p class="note" style="margin:6px 0">Tokenized stocks with no market row (DexScreener sends no figures for them) — with units in circulation, or with their supply not read yet but a route read on chain — each with its reason</p></li>'
-      + sansLigne.map((x) => '<li class="filL trLigne trSansLigne" data-block="' + enTexte(x.adr) + '" data-sym="' + enTexte(x.sym || '') + '">'
+    + (fq && !lignes.length && !sansLigneVues.length ? '<li class="filL"><p class="note">No market row here matches this filter — the search above covers every indexed block.</p></li>' : '')
+    + (cacheesVues > 0 ?'<li class="filL"><button type="button" class="bouton sec" id="trPlus">Show more (' + cacheesVues + ')</button></li>' : '')
+    + (sansLigneVues.length ?'<li class="filL"><p class="note" style="margin:6px 0">Tokenized stocks with no market row (DexScreener sends no figures for them) — with units in circulation, or with their supply not read yet but a route read on chain — each with its reason</p></li>'
+      + sansLigneVues.map((x) => '<li class="filL trLigne trSansLigne" data-block="' + enTexte(x.adr) + '" data-sym="' + enTexte(x.sym || '') + '">'
         + '<span class="trRang">·</span><div class="filArt">' + dessin(x.adr, x.sym || '') + '</div>'
         + '<div class="trInfo"><p class="filT"><b>' + enTexte(x.sym || x.adr) + '</b></p><p class="filS">Tokenized stock · no market figures</p></div>'
         + '<p class="note trRaison">' + enTexte(raisonSansLigne(x)) + '</p></li>').join('') : '')
@@ -23342,6 +23472,11 @@ function peindreTrending() {
     + ' · updated ' + new Date(d.lu).toLocaleTimeString();
 }
 let trAffiches = 50;
+/* 2026-10-26 (proprietaire : « every B20 easy to find ») — le filtre du Market et la recherche de l onglet Blocks : la recherche B20
+ *   partagee (brancherRechercheB20, pres de chercherBlock). Un resultat ouvre le profil du block, comme une ligne de la liste. */
+brancherRechercheB20({ champ: $('#trFiltre'), liste: $('#trResultats'), auChoix: (adr, sym) => { void ouvrirProfil(adr, sym); },
+  surSaisie: (brut) => { const n = normaliserB20(brut); if (n !== trFiltreQ) { trFiltreQ = n; if (trDonnees) peindreTrending(); } } });
+brancherRechercheB20({ champ: $('#mienTrouver'), liste: $('#mienResultats'), auChoix: (adr, sym) => { void ouvrirProfil(adr, sym); } });
 /* ══ FACES GRAVEES DANS LES LISTES (Phil 2026-09-19, capture du Relay : « les blocks originaux ne suivent pas ») ══════════
  * Mesure : BASED (face gravee par notre Create) s affichait avec la face calculee depuis son adresse — la face gravee n etait
  * lue que pour les 30 premiers blocks de la map ou a l ouverture d un profil. Ici, pour l onglet VISIBLE (Feed, Blocks) :
