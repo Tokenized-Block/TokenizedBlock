@@ -13,7 +13,7 @@
  *     (keccak256 de l adresse), tick 0. Rien n est envoye, rien n est signe, aucun reseau : meme graine + memes faits = meme
  *     sortie, et l empreinte du rejeu le prouve a quiconque relance.
  * ⛔ PUR : aucun reseau, aucune horloge, aucun `Math.random`, aucun stockage, aucun DOM. */
-import { etatInitial, pas, forces, nomHumeur, empreinte, connectome, VERSION_CERVEAU, NEURONES, CAPTEURS } from './cerveau.js';
+import { etatInitial, pas, forces, nomHumeur, empreinte, connectome, VERSION_CERVEAU, NEURONES, CAPTEURS, PARAMETRES, INTERNES } from './cerveau.js';
 import { METIERS } from './metiers.js';
 
 export const VERSION_VISION = 'tblock-brain-vision/1';
@@ -38,9 +38,15 @@ export const ENTREES = Object.freeze([
   { cle: 'role', libelle: 'Role', source: 'derived from its address' },
   { cle: 'reveil', libelle: 'Daily wake-up', source: 'this browser: once per local day, sleepers only' },
   { cle: 'bloc', libelle: 'Read at block', source: 'the chain head this page knew when the facts were put together' },
-  { cle: 'part', libelle: 'Share', source: null },
-  { cle: 'scelle', libelle: 'Sealed', source: null },
+  /* ⛔⛔ MESURE 2026-10-26 (Brain senses) : `part` et `scelle` sont ACCEPTES par courant() (bornes, puis graves dans l empreinte
+   *     d entree `vu.entree`) mais AUCUNE formule de neurone ne les lit — ni forces(), ni pas(). Les nourrir ne changerait pas un
+   *     seul tir : ce serait une entree decorative. On le dit ; test-sens-cerveau-20261026.mjs le prouve (memes potentiels avec
+   *     et sans) et cassera le jour ou un neurone les lira. `scelle` ressemble a « mint ferme » (faits.js#mintFerme) et `part`
+   *     n est documente nulle part : leur sens n est pas ecrit dans cerveau.js. */
+  { cle: 'part', libelle: 'Share', source: null, aucunNeurone: true },
+  { cle: 'scelle', libelle: 'Sealed', source: null, aucunNeurone: true },
 ]);
+export const TEXTE_SANS_NEURONE = 'not fed — and no neuron reads it (input fingerprint only)';
 
 /** Les termes que `pas()` ajoute aux capteurs, nommes pour l ecran. L ordre est celui de l addition dans `pas()`. */
 export const TERMES = Object.freeze([
@@ -84,7 +90,8 @@ export function champ({ adr, faits = null, vu = null, voisins = [], marche = nul
   if (!ADR.test(String(adr || ''))) return null;
   const aFaits = !!faits && typeof faits === 'object';
   const entrees = ENTREES.map((d) => {
-    if (d.source === null) return { cle: d.cle, libelle: d.libelle, valeur: null, brut: null, source: null, lu: false, texte: 'not fed by this app' };
+    if (d.source === null) return { cle: d.cle, libelle: d.libelle, valeur: null, brut: null, source: null, lu: false,
+      aucunNeurone: d.aucunNeurone === true, texte: d.aucunNeurone ? TEXTE_SANS_NEURONE : 'not fed by this app' };
     /* ⛔ un reveil non passe EST un reveil faux pour `courant()` (defaut) : c est ce que le cerveau a recu, on le dit */
     const brut = aFaits && Object.prototype.hasOwnProperty.call(faits, d.cle) ? faits[d.cle]
       : aFaits && d.cle === 'reveil' ? false : undefined;
@@ -112,6 +119,8 @@ export function champ({ adr, faits = null, vu = null, voisins = [], marche = nul
     indices: Array.isArray(vu.indices) ? vu.indices.slice() : [], virage: vu.virage, vitesse: vu.vitesse,
     gauche_hz: vu.gauche_hz, droite_hz: vu.droite_hz, memoire: vu.memoire, entree: vu.entree || null, cablage: vu.cablage || null,
     bloc: vu.bloc ?? null,
+    /* ⛔ rendus par pas() a chaque battement et jamais montres dans cet ecran jusqu ici */
+    nourriture: fini(vu.nourriture) ? vu.nourriture : null, delta: fini(vu.delta) ? vu.delta : null,
   } : null;
   /* ⛔ LE CONTEXTE NE GARDE QUE CE QUI A ETE TENU : un voisin sans phase est « not judged yet », jamais « calm ». */
   const ctxVoisins = (Array.isArray(voisins) ? voisins : []).filter((v) => v && ADR.test(String(v.adr || '')))
@@ -137,6 +146,58 @@ export function champ({ adr, faits = null, vu = null, voisins = [], marche = nul
     aBattu: aFaits && !!sortie, entrees, sensations, sortie,
     contexte: { voisins: ctxVoisins, marche: ctxMarche, echange: ctxEchange,
       nonLus: ['its neighbours on the map', 'rolls and duels', 'pool depth and price'] },
+  };
+}
+
+/* ══ « INTERNALS » — L ETAT INTERNE, EN LECTURE SEULE (Phil, 2026-10-26 : « capter les entrees, sorties et internes du brain
+ *    qu on ne voyait pas ») ══════════════════════════════════════════════════════════════════════════════════════════════
+ * ⛔⛔ RIEN N EST CALCULE A LA PLACE DU CERVEAU : chaque potentiel et chaque trace sont COPIES de `etat.potentiels` /
+ *     `etat.memoire` (l etat que `pas()` vient de rendre), au bit pres ; les regles (seuil, fuite, ailes, bornes) sont LUES
+ *     dans `PARAMETRES` et `INTERNES` de cerveau.js, que `pas()` lit lui-meme. `lueur` = potentiel / seuil borne a [0, 1] :
+ *     une division d affichage, rien d autre.
+ * ⛔ CE QUI N EXISTE PAS SE DIT : ce reseau n a PAS de periode refractaire — un neurone qui tire est remis a 0 et peut tirer au
+ *    battement suivant. Les 16 capteurs recoivent TOUS le meme courant (seul le bruit differe) : il n y a pas un capteur par fait.
+ * ⛔ L ETAT EST CELUI D APRES LE DERNIER BATTEMENT : il ne vaut que pour CE battement (`etat.tick`). Un battement plus ancien
+ *    n a pas son etat garde — `cadreInterieur` n allume donc la lueur que si le battement montre EST le dernier. */
+export const VERSION_INTERNE = 'tblock-brain-internals/1';
+/** Au-dessus de cette part du seuil, un neurone est « pres de tirer » (repere d affichage, pas une regle du cerveau). */
+export const PRES_DU_SEUIL = 0.8;
+export function interne(etat) {
+  if (!etat || typeof etat !== 'object' || !etat.c || !Array.isArray(etat.c.liens) || !Array.isArray(etat.potentiels)
+    || etat.potentiels.length !== NEURONES || !Number.isSafeInteger(etat.tick)) return null;
+  const c = etat.c, seuil = PARAMETRES.seuil, M = INTERNES.ailesModulo;
+  const mem = Array.isArray(etat.memoire) && etat.memoire.length === NEURONES ? etat.memoire : null;
+  const neurones = [];
+  for (let i = 0; i < NEURONES; i++) {
+    const p = etat.potentiels[i];
+    const g = (i + c.aileG) % M === 0, d = (i + c.aileD) % M === 0;
+    neurones.push({ n: i, capteur: i < CAPTEURS, potentiel: p, trace: mem ? mem[i] : null,
+      lueur: fini(p) ? Math.max(0, Math.min(1, p / seuil)) : null, retenu: fini(p) && p < 0,
+      aile: g && d ? 'both' : g ? 'left' : d ? 'right' : 'neither',
+      /* ce que sa trace lui ajoutera au prochain battement (sous le seuil, toujours) */
+      amorce: mem && fini(mem[i]) ? mem[i] * PARAMETRES.memoireGain : null });
+  }
+  const ps = neurones.map((x) => x.potentiel).filter(fini);
+  const parTrace = mem ? neurones.filter((x) => fini(x.trace)).sort((a, b) => b.trace - a.trace || a.n - b.n) : [];
+  const ailes = { left: 0, right: 0, both: 0, neither: 0 };
+  for (const x of neurones) ailes[x.aile]++;
+  return {
+    version: VERSION_INTERNE, cerveau: VERSION_CERVEAU, tick: etat.tick,
+    spikes: Number.isSafeInteger(etat.spikes) ? etat.spikes : null,
+    /* ⛔ calcule par pas() et garde dans l etat, jamais montre jusqu ici : les tirs du battement d AVANT */
+    spikesAvant: Number.isSafeInteger(etat.dernierSpikes) ? etat.dernierSpikes : null,
+    regles: { seuil, fuite: PARAMETRES.fuite, bruitMax: PARAMETRES.bruitMax, memoireGain: PARAMETRES.memoireGain,
+      memoireDecroissance: PARAMETRES.memoireDecroissance, liensParNeurone: PARAMETRES.liensParNeurone, ...INTERNES,
+      refractaire: null, aileG: c.aileG, aileD: c.aileD },
+    neurones,
+    resume: {
+      pres: neurones.filter((x) => fini(x.potentiel) && x.potentiel >= PRES_DU_SEUIL * seuil).length,
+      retenus: neurones.filter((x) => x.retenu).length,
+      moyenne: ps.length ? ps.reduce((s, x) => s + x, 0) / ps.length : null,
+      min: ps.length ? Math.min(...ps) : null, max: ps.length ? Math.max(...ps) : null,
+      traceMax: parTrace.length ? { n: parTrace[0].n, trace: parTrace[0].trace } : null,
+      ailes,
+    },
   };
 }
 
@@ -283,10 +344,14 @@ function trajet(histo, i) {
  * @param {number|null} [a.capMap] ou il regarde sur la map MAINTENANT (radians), pour placer ses voisins ; null = inconnu
  * @param {boolean} [a.reduit] prefers-reduced-motion : aucun mouvement
  */
-export function cadreInterieur({ c, faits = null, histo = [], i = -1, capMap = null, reduit = false } = {}) {
+export function cadreInterieur({ c, faits = null, histo = [], i = -1, capMap = null, reduit = false, etat = null } = {}) {
   if (!c || typeof c !== 'object' || !Array.isArray(c.entrees)) return null;
   const H = Array.isArray(histo) ? histo : [];
   const vu = i >= 0 && i < H.length && H[i] && typeof H[i] === 'object' ? H[i] : null;
+  /* ⛔ la lueur (potentiel / seuil) n existe que pour le battement dont on TIENT l etat : le dernier, et seulement s il concorde */
+  const inn = vu && etat ? interne(etat) : null;
+  const lueurs = inn && Number.isSafeInteger(vu.tick) && inn.tick === vu.tick ? inn.neurones : null;
+  const avecLueur = (o) => (lueurs ? { ...o, lueur: lueurs[o.n].lueur, retenu: lueurs[o.n].retenu } : o);
   const anime = !reduit && !!vu;
   const allumes = new Set(vu && Array.isArray(vu.indices) ? vu.indices.filter((n) => Number.isInteger(n) && n >= 0 && n < NEURONES) : []);
   const mort = !!(c.sensations && c.sensations.morte);
@@ -308,7 +373,7 @@ export function cadreInterieur({ c, faits = null, histo = [], i = -1, capMap = n
   const capteurs = [];
   for (let n = 0; n < CAPTEURS; n++) {
     const u = (n / (CAPTEURS - 1)) * 2 - 1;
-    capteurs.push({ n, on: allumes.has(n), x: rad(180 + u * 104), y: rad(208 + 14 * u * u) });
+    capteurs.push(avecLueur({ n, on: allumes.has(n), x: rad(180 + u * 104), y: rad(208 + 14 * u * u) }));
   }
   const neurones = [];
   const reste = NEURONES - CAPTEURS, parRang = Math.ceil(reste / 2);
@@ -316,7 +381,7 @@ export function cadreInterieur({ c, faits = null, histo = [], i = -1, capMap = n
     const n = CAPTEURS + k, rang = k % 2, j = Math.floor(k / 2);
     const phi = (Math.PI * 0.06) + (j / (parRang - 1)) * Math.PI * 0.88;
     const rx = rang ? 150 : 170, ry = rang ? 70 : 88;
-    neurones.push({ n, on: allumes.has(n), x: rad(180 - Math.cos(phi) * rx), y: rad(214 + Math.sin(phi) * ry) });
+    neurones.push(avecLueur({ n, on: allumes.has(n), x: rad(180 - Math.cos(phi) * rx), y: rad(214 + Math.sin(phi) * ry) }));
   }
   /* le sol : il tourne a l oppose de son cap enregistre et defile avec sa vitesse enregistree */
   const t = vu ? trajet(H, i) : { cap: 0, capAvant: 0, d: 0, dAvant: 0 };
@@ -344,6 +409,8 @@ export function cadreInterieur({ c, faits = null, histo = [], i = -1, capMap = n
     mort, anime, horizon: HORIZON, oeil: OEIL, sources, capteurs, neurones, voisins, sol,
     allumes: [...allumes].sort((a, b) => a - b),
   };
+  /* ⛔ ajoute SEULEMENT quand l etat concorde : sans lui, le cadre (et son empreinte) est exactement celui d avant */
+  if (lueurs) cadre.lueurTick = inn.tick;
   /* ⛔ l empreinte ne porte pas `anime` : le mouvement est un habillage, le contenu est le meme avec ou sans */
   const { anime: _a, ...contenu } = cadre;
   cadre.empreinte = empreinte(JSON.stringify(contenu));

@@ -47,6 +47,22 @@ export const PARAMETRES = Object.freeze({
   graine: 'keccak256(lowercase block address)',
 });
 
+/** ⛔⛔ LES CONSTANTES QUE `pas()` ECRIVAIT EN DUR (2026-10-26, Brain senses) — sorties ici pour que l ecran « internals » les
+ *     LISE au lieu d en recopier les valeurs. `pas()` les lit ICI : une seule source. Memes nombres qu avant, memes
+ *     operations dans le meme ordre — test-sens-cerveau-20261026.mjs exige l empreinte 0xed4344f6… (176 cas x 40 pas).
+ *  ⛔ Elles ne sont PAS dans `PARAMETRES` : `PARAMETRES` est ce que Create grave ; y ajouter une cle changerait ce qui est grave. */
+export const INTERNES = Object.freeze({
+  gainLien: 0.5,        /* un tir pousse chaque cible de poids x 0,5 */
+  borne: 4,             /* potentiel borne a [-4, 4] */
+  aileBaseHz: 12,       /* frequence d aile au repos (0 si mort) */
+  hzParTir: 4,          /* + 4 Hz par neurone de l aile qui tire */
+  hzTaille: 18,         /* + taille du marche x 18 Hz, sur les deux ailes */
+  tirsVitesseMax: 40,   /* vitesse = tirs / 40, bornee a 1 */
+  ailesModulo: 3,       /* un neurone i compte pour l aile G si (i + aileG) % 3 === 0 (idem D) */
+  deltaHumeur: 0.05,    /* |variation de vie| >= 5 % : INQUIET ou EXCITE */
+  tirsCurieux: 8,       /* plus de 8 tirs sur un marche calme : CURIEUX */
+});
+
 /** ⛔ Taille FIXE : le cerveau de deux blocks doit etre comparable, sinon « plus actif » ne veut rien dire. */
 export const NEURONES = PARAMETRES.neurones;
 /** Combien de neurones recoivent directement les faits de la chaine. */
@@ -277,7 +293,7 @@ export function pas(etat, faits = {}) {
       spikes++;
       actifs.push(i);
       p[i] = 0;
-      for (const l of c.liens[i]) p[l.vers] += l.poids * 0.5;
+      for (const l of c.liens[i]) p[l.vers] += l.poids * INTERNES.gainLien;
     } else {
       p[i] *= PARAMETRES.fuite;
     }
@@ -285,26 +301,26 @@ export function pas(etat, faits = {}) {
     m[i] = m[i] * PARAMETRES.memoireDecroissance + (tire && !f.mort ? 1 - PARAMETRES.memoireDecroissance : 0);
     /* ⛔ BORNES DURES : sans elles un potentiel diverge et `left_hz` devient NaN. */
     if (!Number.isFinite(p[i])) p[i] = 0;
-    p[i] = Math.max(-4, Math.min(4, p[i]));
+    p[i] = Math.max(-INTERNES.borne, Math.min(INTERNES.borne, p[i]));
   }
 
-  const tireG = actifs.filter((i) => (i + c.aileG) % 3 === 0).length;
-  const tireD = actifs.filter((i) => (i + c.aileD) % 3 === 0).length;
-  const base = f.mort ? 0 : 12;
-  const gauche = Math.round((base + tireG * 4 + f.taille * 18) * 100) / 100;
-  const droite = Math.round((base + tireD * 4 + f.taille * 18) * 100) / 100;
+  const tireG = actifs.filter((i) => (i + c.aileG) % INTERNES.ailesModulo === 0).length;
+  const tireD = actifs.filter((i) => (i + c.aileD) % INTERNES.ailesModulo === 0).length;
+  const base = f.mort ? 0 : INTERNES.aileBaseHz;
+  const gauche = Math.round((base + tireG * INTERNES.hzParTir + f.taille * INTERNES.hzTaille) * 100) / 100;
+  const droite = Math.round((base + tireD * INTERNES.hzParTir + f.taille * INTERNES.hzTaille) * 100) / 100;
   const somme = gauche + droite;
   const virage = somme > 0 ? Math.round(((gauche - droite) / somme) * 1000) / 1000 : 0;
-  const vitesse = Math.round(Math.min(1, spikes / 40) * 1000) / 1000;
+  const vitesse = Math.round(Math.min(1, spikes / INTERNES.tirsVitesseMax) * 1000) / 1000;
 
   /* ⛔ L ORDRE DES REGLES EST LA REGLE : la mort d abord, puis sans marche (nourri ou non), puis le marche. */
   let phase;
   if (f.mort) phase = 'MORT';
   else if (f.nonLu) phase = 'NON_LU';
   else if (!f.aMarche) phase = miam > 0 ? 'EVEILLE' : 'DORMANT';
-  else if (f.delta <= -0.05 || f.pression > 0) phase = 'INQUIET';
-  else if (f.delta >= 0.05 || f.nouveau > 0) phase = 'EXCITE';
-  else if (spikes > 8) phase = 'CURIEUX';
+  else if (f.delta <= -INTERNES.deltaHumeur || f.pression > 0) phase = 'INQUIET';
+  else if (f.delta >= INTERNES.deltaHumeur || f.nouveau > 0) phase = 'EXCITE';
+  else if (spikes > INTERNES.tirsCurieux) phase = 'CURIEUX';
   else phase = 'CALME';
 
   const nouvel = { c, tick: etat.tick + 1, potentiels: p, memoire: m, spikes, dernierSpikes: etat.spikes };

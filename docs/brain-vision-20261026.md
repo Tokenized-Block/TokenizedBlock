@@ -25,7 +25,7 @@ then the MVP that ships in `app.html` + `vision-cerveau.js`.
 | `role` | derived from its address (`metiers.js`), multiplies sensitivities |
 | `reveil` | once per local day in this browser, sleepers only (map only) |
 | `bloc` | chain head known when facts were assembled; carried, never computed with |
-| `part`, `scelle` | accepted by `courant()` but **never fed by the app** (always 0) |
+| `part`, `scelle` | accepted by `courant()` but **never fed by the app** (not passed) — and no neuron reads them: input fingerprint only (corrected 26/10, see brain-senses-20261026.md) |
 
 What it does NOT read: its neighbours on the map, rolls, duels, missions, skins, pool depth, price in USD (except the
 fallback size). `brain-jeu.js` (game proposals) and `brain-tasks.js` (task gate, 32-signal offer circuit) are separate

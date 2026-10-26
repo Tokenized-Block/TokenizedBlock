@@ -1167,6 +1167,9 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 :is(#bvChamp,.blvSvg) .bviMoi{fill:var(--texte)}
 :is(#bvChamp,.blvSvg) .bvN.bviAtteint{stroke:var(--accent);stroke-width:.9}
 :is(#bvChamp,.blvSvg) .bvN.bviPlus{stroke:var(--vif);stroke-width:1.6} :is(#bvChamp,.blvSvg) .bvN.bviMoins{stroke:var(--dur);stroke-width:1.6}
+/* 2026-10-26 (Brain senses) : halo = potentiel / seuil du DERNIER battement (etat reel de cerveau.js) ; pointille rouge = retenu sous 0 */
+:is(#bvChamp,.blvSvg) .bviLueur{fill:var(--accent2);stroke:none}
+:is(#bvChamp,.blvSvg) .bvN.bviRetenu{stroke:var(--dur);stroke-width:.7;stroke-dasharray:1.5 1}
 @media (prefers-reduced-motion:no-preference){
   #bvChamp .bviGlisse{animation:bviTourne .45s ease-out both}
   #bvChamp .bviOnde{animation:bviArrive .55s ease-in both}
@@ -4483,6 +4486,11 @@ details[open] > summary::before{transform:rotate(90deg)}
     <ul class="bvListe" id="bvEntrees"></ul>
     <p class="note" id="bvForces"></p>
   </details>
+  <!-- 2026-10-26 (Brain senses) : son etat INTERNE, copie de l etat reel de cerveau.js (vision-cerveau.js#interne), lecture seule -->
+  <details class="bDetail" id="bvInterneBloc"><summary class="note"><b>Inside its neurons</b> — its internal state after its last beat</summary>
+    <ul class="bvListe" id="bvInterne"></ul>
+    <p class="note" id="bvInterneNote"></p>
+  </details>
   <details class="bDetail"><summary class="note"><b>Around it, not read by its neurons</b></summary>
     <ul class="bvListe" id="bvContexte"></ul>
   </details>
@@ -4803,7 +4811,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  *   les lisent jetteraient un ReferenceError et la page entiere serait MORTE. Un import manquant ne
  *   se voit pas a la lecture — il se voit a l ecran, trop tard. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES } from './cerveau.js';
-import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION } from './vision-cerveau.js';
+import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL } from './vision-cerveau.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
@@ -25772,7 +25780,7 @@ function visionCible() {
     const adr = bas(profilCerveau.adr);
     const h = habitants.find((x) => bas(x.adr) === adr) || null;
     return { adr, sym: symProfil || (h && h.sym) || null, faits: profilCerveau.faits || null, histo: profilCerveau.histo || [], h,
-      nourritureLue: !!(h && h.nourriture && h.nourriture.etat === 'LUE') };
+      nourritureLue: !!(h && h.nourriture && h.nourriture.etat === 'LUE'), etat: profilCerveau.etat || null };
   }
   if (vision.source === 'brain' && brainAdr) {
     const adr = bas(brainAdr);
@@ -25780,7 +25788,9 @@ function visionCible() {
     const fv = brainFaitsVus && brainFaitsVus.adr === adr ? brainFaitsVus : null;
     const mk = marcheParAdr.get(adr);
     return { adr, sym: (h && h.sym) || (mk && mk.sym) || null, faits: fv ? fv.faits : null, histo: brainHisto, h,
-      nourritureLue: fv ? fv.nourritureLue : null };
+      nourritureLue: fv ? fv.nourritureLue : null,
+      /* ⛔ l etat reel du cerveau de l onglet Brain, seulement s il est bien celui de CE block */
+      etat: brainEtat && brainEtat.c && brainEtat.c.adresse === adr ? brainEtat : null };
   }
   return null;
 }
@@ -25911,8 +25921,11 @@ function peindreInterieur(k, svg = $('#bvChamp'), parle = vision.parle, clipId =
   const plus = new Set(p ? [...p.arrivee.allumes, ...p.suivant.allumes] : []);
   const moins = new Set(p ? [...p.arrivee.eteints, ...p.suivant.eteints] : []);
   const marque = (n) => (plus.has(n) ? ' bviPlus' : moins.has(n) ? ' bviMoins' : atteints.has(n) ? ' bviAtteint' : '');
-  for (const n of k.neurones) svg.append(bvSvg('circle', { cx: n.x, cy: n.y, r: 2.4, class: 'bvN' + (n.on ? ' on' : '') + marque(n.n), 'data-n': n.n }));
-  for (const n of k.capteurs) svg.append(bvSvg('circle', { cx: n.x, cy: n.y, r: 3.6, class: 'bvN bvCapteur' + (n.on ? ' on' : '') + marque(n.n), 'data-n': n.n }));
+  /* ⛔ le halo n existe que si le cadre porte une lueur (etat du DERNIER battement) ; sa force = potentiel / seuil, rien d autre */
+  const halo = (n, r) => { if (typeof n.lueur === 'number' && n.lueur > 0 && !n.on) svg.append(bvSvg('circle', { cx: n.x, cy: n.y, r: r + 2.6, class: 'bviLueur', 'fill-opacity': Math.round(n.lueur * 0.7 * 1000) / 1000, 'data-lueur': n.n })); };
+  const retenu = (n) => (n.retenu === true ? ' bviRetenu' : '');
+  for (const n of k.neurones) { halo(n, 2.4); svg.append(bvSvg('circle', { cx: n.x, cy: n.y, r: 2.4, class: 'bvN' + (n.on ? ' on' : '') + retenu(n) + marque(n.n), 'data-n': n.n })); }
+  for (const n of k.capteurs) { halo(n, 3.6); svg.append(bvSvg('circle', { cx: n.x, cy: n.y, r: 3.6, class: 'bvN bvCapteur' + (n.on ? ' on' : '') + retenu(n) + marque(n.n), 'data-n': n.n })); }
   svg.append(bvSvg('text', { x: 180, y: 196, class: 'bvTx', 'text-anchor': 'middle' }, 'its 16 sensors'));
   svg.append(bvSvg('path', { d: 'M180 252 l-7 12 l7 -4 l7 4 z', class: 'bviMoi' }));
   if (k.mort) svg.append(bvSvg('text', { x: 180, y: 278, class: 'bvTx', 'text-anchor': 'middle' }, 'Its creator holds none: no current reaches it.'));
@@ -25994,6 +26007,42 @@ function peindreListesVision(c, cible) {
   const ech = c.contexte.echange;
   ligneCtx('Last verified trade seen live', ech ? ech.type + (ech.quantite !== null && ech.quantite !== undefined ? ' · ' + ech.quantite : '') + (ech.devise ? ' ' + ech.devise : '') : 'none since this page opened', { ctx: 'echange' });
   ligneCtx('Not read by its neurons', c.contexte.nonLus.join(', '), { ctx: 'nonlus' });
+  peindreInterneVision(c, cible);
+}
+/* ⛔⛔ « INSIDE ITS NEURONS » (2026-10-26, Brain senses) : chaque ligne est un champ de vision-cerveau.js#interne, qui COPIE l etat
+ *     reel (potentiels, traces) et LIT les regles de cerveau.js (PARAMETRES, INTERNES). Rien n est calcule ici, sauf l arrondi. */
+function peindreInterneVision(c, cible) {
+  const ul = $('#bvInterne'), note = $('#bvInterneNote');
+  if (!ul || !note) return;
+  ul.replaceChildren();
+  const x = cible && cible.etat ? interneVision(cible.etat) : null;
+  window.__TB_BRAIN_INTERNE__ = x;
+  const ligne = (g, d, cle) => {
+    const li = document.createElement('li'); if (cle) li.dataset.interne = cle;
+    const a = document.createElement('span'); a.textContent = g;
+    const b = document.createElement('b'); b.textContent = d;
+    li.append(a, b); ul.append(li);
+  };
+  if (!x) { note.textContent = 'Its internal state is not held by this page yet — nothing is shown in its place.'; return; }
+  const r = x.regles, s = x.resume, f2 = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '—');
+  ligne('Beats lived (memory kept in this browser)', x.tick.toLocaleString('en-US'), 'tick');
+  ligne('Fired · beat before', (x.spikes ?? '—') + ' · ' + (x.spikesAvant ?? '—'), 'spikes');
+  ligne('Near firing (≥ ' + Math.round(PRES_DU_SEUIL * 100) + ' % of threshold)', s.pres + ' of ' + x.neurones.length, 'pres');
+  ligne('Held below zero (inhibited)', s.retenus + ' of ' + x.neurones.length, 'retenus');
+  ligne('Potential: lowest · mean · highest', f2(s.min) + ' · ' + f2(s.moyenne) + ' · ' + f2(s.max), 'potentiels');
+  if (s.traceMax) ligne('Strongest own trace', '#' + s.traceMax.n + ' · ' + (s.traceMax.trace * 100).toFixed(1) + ' %', 'trace');
+  ligne('Wing neurons: left · right · both · neither', s.ailes.left + ' · ' + s.ailes.right + ' · ' + s.ailes.both + ' · ' + s.ailes.neither, 'ailes');
+  const o = c.sortie;
+  if (o) {
+    ligne('Wings now: left · right', o.gauche_hz + ' Hz · ' + o.droite_hz + ' Hz', 'hz');
+    ligne('Working memory (mean trace)', typeof o.memoire === 'number' ? Math.round(o.memoire * 100) + ' %' : '—', 'memoire');
+    ligne('Food its neurons computed (0–1)', o.nourriture === null ? '—' : String(o.nourriture), 'nourriture');
+  }
+  ligne('Rules', 'fires at ' + r.seuil + ' · keeps ' + Math.round(r.fuite * 100) + ' % per beat · a spike pushes each of its ' + r.liensParNeurone
+    + ' links × ' + r.gainLien + ' · clamped ±' + r.borne + ' · trace ×' + r.memoireDecroissance + ', re-fed ×' + r.memoireGain, 'regles');
+  ligne('Rest after firing', 'none: reset to 0, can fire on the next beat', 'refractaire');
+  note.textContent = 'Copied from its live state (' + x.version + ', ' + x.cerveau + '). All 16 sensors get the same current; only their noise (up to '
+    + r.bruitMax + ') differs. Share and Sealed are accepted by its code but no neuron reads them.';
 }
 function peindreVision() {
   const dl = $('#bvPop');
@@ -26021,12 +26070,13 @@ function peindreVision() {
     /* ou il regarde sur la map MAINTENANT — seulement pour poser ses voisins ; sans vitesse lue, aucune direction n est inventee */
     const capMap = h && Number.isFinite(h.vx) && Number.isFinite(h.vy) && (h.vx !== 0 || h.vy !== 0) ? Math.atan2(h.vy, h.vx) : null;
     const t0 = performance.now();
-    const k = cadreInterieur({ c, faits: cible.faits, histo, i: vision.i, capMap, reduit: bvReduit() });
+    const k = cadreInterieur({ c, faits: cible.faits, histo, i: vision.i, capMap, reduit: bvReduit(), etat: cible.etat || null });
     vision.cadre = k;
     peindreInterieur(k);
     window.__TB_BRAIN_INSIDE_MS__ = Math.round((performance.now() - t0) * 100) / 100;
     $('#bvLegende').textContent = 'You are the block, looking out. Above: where each input comes from — a line means it reached all 16 of its sensors on its last read, grey means not read. '
       + 'Lit dots: its neurons that fired on this beat (16 sensors in front, 112 around you). The ground turns and slides as its wings steered it. '
+      + (k && k.lueurTick ? 'Halo: how close each neuron is to firing (its potential over the threshold of ' + PARAMETRES.seuil + ', on this latest beat); red dotted: held below zero. ' : '')
       + 'Dashed squares are neighbours on the map: not read by its neurons.';
   } else {
     vision.cadre = null;

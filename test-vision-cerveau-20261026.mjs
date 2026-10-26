@@ -62,7 +62,7 @@ const FAITS = { vie: 12000, vieAvant: 11000, gm: 2, messages: 0, detenteurs: 1, 
   ok(champ({ adr: 'pas une adresse' }) === null, 'B: adresse illisible -> null');
   const vide = champ({ adr: ADR });
   ok(vide.entrees.length === ENTREES.length && vide.entrees.every((e) => e.lu === false), 'B: sans faits, aucune entree n est dite lue');
-  ok(vide.entrees.every((e) => e.texte === 'not read' || e.texte === 'not fed by this app'), 'B: sans faits, chaque entree dit not read / not fed');
+  ok(vide.entrees.every((e) => e.texte === 'not read' || e.texte === V.TEXTE_SANS_NEURONE), 'B: sans faits, chaque entree dit not read / not fed (part, scelle : lus par aucun neurone)');
   ok(vide.sensations === null && vide.sortie === null && vide.aBattu === false, 'B: sans battement, ni sensations ni sortie');
   ok(!JSON.stringify(vide.entrees.map((e) => e.texte)).match(/\d/), 'B: sans faits, aucun chiffre n apparait dans les entrees');
 
