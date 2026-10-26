@@ -50,7 +50,8 @@ const NVDA = String(pairesProposees(8453).find((p) => p.symbole === 'NVDAc').adr
 const BLOC = '0xb200000000000000000000e4b0c5fbe9c8df579e';
 const WALLET = '0x00000000000000000000000000000000c0ffee77';
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
-  'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange', 'noterPayWith', 'effacerNotePayWith'];
+  'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange', 'noterPayWith', 'effacerNotePayWith',
+  'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees'];
 const PHRASE_ETIQ = (s) => 'Buy — ' + s + ' to spend';
 
 /* une fonction de premier niveau : de `function NOM(` a la premiere `}` en colonne 0 ; absente = '' */
@@ -67,6 +68,11 @@ class El {
   get value() { return this._value; }
   set value(v) { this._value = String(v); }
   closest() { return this.label; }
+  /* #peActions : de vrais enfants (les boutons prepares) ; innerHTML = '' les retire, comme le DOM */
+  get children() { return this._enfants || (this._enfants = []); }
+  get innerHTML() { return this._html || ''; }
+  set innerHTML(h) { this._html = String(h); this._enfants = []; }
+  appendChild(o) { this.children.push(o); return o; }
   addEventListener(t, f) { (this.ecoute[t] ||= []).push(f); }
   /* une frappe de la personne : la valeur, puis les ecouteurs `input` REELS de app.html (voir ecouteursChamps) */
   taper(v) { this.value = v; for (const f of this.ecoute.input || []) f({ target: this }); }
@@ -376,7 +382,8 @@ async function verifier(src) {
     m.els['#peDevise'].choisir(USDC);
     m.els['#peAchat'].taper('25');
     const nonLu = { etat: 'NON_LUE' };
-    for (let i = 0; i < 3; i += 1) m.f.majDevisesDentree(nonLu);
+    /* comme majDeviseEchange, qui remet l etiquette sur la devise de la pool AVANT chaque rebatissage (M11) */
+    for (let i = 0; i < 3; i += 1) { m.els['#peAchat'].label.firstChild.textContent = PHRASE_ETIQ('ETH'); m.f.majDevisesDentree(nonLu); }
     assert.equal(m.els['#peDeviseBloc'].hidden, true, 'le banc devait cacher la liste');
     assert.equal(m.els['#peAchat'].value, '25', 'un rebatissage NON LU a retire le montant');
     assert.equal(m.els['#peAchat'].label.firstChild.textContent, PHRASE_ETIQ('USDC'));
@@ -388,8 +395,58 @@ async function verifier(src) {
     m.rebatir();
     assert.equal(m.els['#peDevise'].value, USDC);
     assert.equal(m.els['#peAchat'].value, '25');
+    /* M12 : relue, l attente est levee — Prepare buy construit le chemin USDC au lieu de refuser pour toujours */
+    try { await m.f.preparerEchange('ACHAT'); } catch (_) {}
+    assert.equal(m.etat.multi.length, 1, 'apres relecture, Prepare buy refuse encore : ' + m.els['#peEtat'].textContent);
     m.etat.sansUsdc = true; m.rebatir();
     assert.equal(m.els['#peAchat'].value, '', 'une liste LUE sans USDC doit retirer le montant');
+    /* M12, le cas ou la remise ne repasse pas par onchange : le choix EST la devise de la pool (ETH choisi explicitement) */
+    const p = monde(src);
+    p.rebatir();
+    p.els['#peDevise'].choisir(ETH); p.els['#peAchat'].taper('0.01');
+    p.f.majDevisesDentree(nonLu);
+    assert.equal(p.ctx.choixPayWith && p.ctx.choixPayWith.attente, true);
+    p.rebatir();
+    try { await p.f.preparerEchange('ACHAT'); } catch (_) {}
+    assert.equal(p.etat.historique.length, 1, 'ETH choisi, liste relue : Prepare buy refuse encore (« ' + p.els['#peEtat'].textContent + ' »)');
+  });
+
+  /* ── D1, D2 : revue adverse de 4f0994c ── */
+  await cas('D1 apres la note « taken out », un refus du wallet ou un « sent » ecrit dans #peEtat SURVIT a une frappe', async () => {
+    const m = monde(src);
+    m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25'); m.els['#peDevise'].choisir(ETH);
+    assert.match(m.els['#peEtat'].textContent, /taken out/);
+    /* signerEchange ecrit son resultat par-dessus (sans connaitre la marque) */
+    m.els['#peEtat'].textContent = 'Not done: you declined in your wallet.';
+    m.els['#peAchat'].taper('1');
+    assert.equal(m.els['#peEtat'].textContent, 'Not done: you declined in your wallet.', 'une frappe a efface le refus du wallet');
+    /* un « sent » deja affiche, puis la personne change d actif avec un montant : la note s AJOUTE, puis la frappe ne retire qu elle */
+    m.els['#peEtat'].textContent = 'Sent — waiting for the receipt.';
+    m.els['#peDevise'].choisir(USDC);
+    assert.match(m.els['#peEtat'].textContent, /^Sent — waiting for the receipt\. The amount you typed was in ETH/);
+    m.els['#peAchat'].taper('2');
+    assert.equal(m.els['#peEtat'].textContent, 'Sent — waiting for the receipt.', 'la frappe a efface l etat « sent »');
+  });
+  await cas('D2 une etape preparee est retiree quand la personne change d actif ou de montant ; jamais par les rebatissages', async () => {
+    const m = monde(src);
+    m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    const preparer = () => { m.els['#peActions'].appendChild({ textContent: 'Approval 1 of 2 — Allow Permit2' }); m.els['#peLignes'].innerHTML = '<li>You pay: 25 USDC</li>'; };
+    preparer();
+    m.els['#peDevise'].choisir(ETH);
+    assert.equal(m.els['#peActions'].children.length, 0, 'l approbation USDC reste cliquable sous ETH');
+    assert.equal(m.els['#peLignes'].innerHTML, '');
+    assert.match(m.els['#peEtat'].textContent, /removed because you picked ETH/);
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25'); preparer();
+    for (let i = 0; i < 44; i += 1) m.rebatir();
+    assert.equal(m.els['#peActions'].children.length, 1, 'un rebatissage (remise du choix) a retire l etape preparee');
+    m.els['#peAchat'].taper('30');
+    assert.equal(m.els['#peActions'].children.length, 0, 'l etape preparee pour 25 reste cliquable pour 30');
+    assert.match(m.els['#peEtat'].textContent, /removed because the amount changed/);
+    /* une frappe de plus ne retire pas cette phrase (elle n est pas marquee) */
+    m.els['#peAchat'].taper('31');
+    assert.match(m.els['#peEtat'].textContent, /removed because the amount changed/);
   });
   return ko;
 }
@@ -418,7 +475,14 @@ const mutants = [
   ['P1 la personne change d actif : le montant tape reste', (s) => s.replace("          champ.value = '';\n          noterPayWith('The amount you typed was in ' + symAvant", "          noterPayWith('The amount you typed was in ' + symAvant").replace("          champ.value = '';\r\n          noterPayWith('The amount you typed was in ' + symAvant", "          noterPayWith('The amount you typed was in ' + symAvant")],
   ['P1 une remise du choix est traitee comme un geste de la personne', (s) => s.replace('const parLaPersonne = !bascule && !restaurationPayWith;', 'const parLaPersonne = !bascule;')],
   ['P3 un nouveau choix ne retire pas la vieille note', (s) => s.replace('        effacerNotePayWith();\n', '').replace('        effacerNotePayWith();\r\n', '')],
-  ['P3 une frappe ne retire pas la vieille note', (s) => s.replace("if (e.dataset && e.dataset.notePayWith === '1') { e.className = 'note'; e.textContent = ''; delete e.dataset.notePayWith; }", 'void 0;')],
+  ['P3 une frappe ne retire pas la vieille note', (s) => s.replace("if (typeof retirerNotePayWith === 'function') retirerNotePayWith(e);", 'void 0;')],
+  ['D1 la note se retire sans verifier son texte', (s) => s.replace('  if (!t.endsWith(n)) return;', '  if (false) return;')],
+  ['D1 la note ecrase l etat deja affiche', (s) => s.replace("  e.textContent = base ? base + ' ' + texte : texte;", '  e.textContent = texte;')],
+  ['D2 changer d actif garde l etape preparee', (s) => s.replace("if (parLaPersonne && String(d ? d.devise : sel.value).toLowerCase() !== avant && retirerActionsPreparees())", 'if (false)')],
+  ['D2 une remise du choix retire l etape preparee', (s) => s.replace("if (parLaPersonne && String(d ? d.devise : sel.value).toLowerCase() !== avant && retirerActionsPreparees())", "if (String(d ? d.devise : sel.value).toLowerCase() !== avant && retirerActionsPreparees())")],
+  ['D2 changer le montant garde l etape preparee', (s) => s.replace("if (typeof retirerActionsPreparees === 'function' && retirerActionsPreparees())", 'if (false)')],
+  ['M11 l attente n ecrit plus l etiquette', (s) => s.replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\n    return 'ATTEND';", "    return 'ATTEND';").replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\r\n    return 'ATTEND';", "    return 'ATTEND';")],
+  ['M12 l attente n est jamais levee', (s) => s.replace('    c.attente = false;\n', '').replace('    c.attente = false;\r\n', '')],
   ['P4 une liste NON LUE fait oublier le choix', (s) => s.replace('if (ici === c.block && !listePayWithLue) {', 'if (false) {')],
   ['P4 Prepare buy part pendant l attente', (s) => s.replace('if (sens === \'ACHAT\' && choixPayWith && choixPayWith.attente === true', 'if (false && choixPayWith && choixPayWith.attente === true')],
   ['les soldes relus a chaque repeint', (s) => s.replace('if (soldesPivotsDemandes.has(k)) continue;', '')],

@@ -16838,18 +16838,59 @@ function garderChoixPayWith() {
     + ', so it was taken out — nothing stays under a currency it was not typed for.');
   return 'RETIRE';
 }
-/** La note « montant retire » de « Pay with », MARQUEE (dataset.notePayWith) : une frappe ou un nouveau choix l efface, et seulement elle. */
+/**
+ * LES NOTES DE « PAY WITH » DANS #peEtat — et ce qui deja s y lit n est JAMAIS ecrase.
+ * ⛔⛔ 2026-10-26 (revue adverse de 4f0994c, D1, reproduit au navigateur) : la marque etait un drapeau « 1 » que seuls
+ *   preparerEchange et l ecouteur de frappe retiraient. signerEchange, preparerEthUsdc, pret, le repli « market unread » ecrivent
+ *   aussi #peEtat : apres « Not done: you declined in your wallet. », UNE frappe effacait ce refus — et elle effacerait de meme
+ *   « envoye, en attente du recu » (risque de payer deux fois).
+ *   ⇒ La marque porte le TEXTE EXACT de notre note. On ne retire que ce texte-la, et seulement s il termine encore #peEtat ; ce
+ *     qu un autre a ecrit depuis n est jamais touche. Et notre note s AJOUTE a un etat deja affiche (« sent… ») au lieu de le
+ *     remplacer.
+ */
 function noterPayWith(texte) {
   const e = $('#peEtat');
   if (!e) return;
-  e.className = 'note wKo';
-  e.textContent = texte;
-  if (e.dataset) e.dataset.notePayWith = '1';
+  retirerNotePayWith(e);
+  const base = String(e.textContent || '').trim();
+  if (!base) e.className = 'note wKo';
+  e.textContent = base ? base + ' ' + texte : texte;
+  if (e.dataset) e.dataset.notePayWith = texte;
 }
-function effacerNotePayWith() {
+/** Retire NOTRE note (texte exact, en fin de #peEtat) ; tout autre texte reste tel quel. Toujours sans danger. */
+function retirerNotePayWith(e) {
+  if (!e || !e.dataset || !e.dataset.notePayWith) return;
+  const n = e.dataset.notePayWith, t = String(e.textContent || '');
+  delete e.dataset.notePayWith;
+  if (!t.endsWith(n)) return;
+  const reste = t.slice(0, t.length - n.length).trim();
+  e.textContent = reste;
+  if (!reste) e.className = 'note';
+}
+function effacerNotePayWith() { retirerNotePayWith($('#peEtat')); }
+/**
+ * ⛔⛔ 2026-10-26 (revue adverse de 4f0994c, D2, deja en prod game52) : une approbation Permit2 preparee pour 25 USDC restait
+ *   CLIQUABLE sous « Buy — ETH to spend », champ vide, apres un changement de « Pay with ». Une etape preparee ne vaut que pour
+ *   l actif, le montant et le block pour lesquels elle a ete preparee : quand l un change, elle est RETIREE (avec ses lignes).
+ *   Le block est deja couvert (la fiche vide #peActions a l ouverture). Rend vrai si quelque chose a ete retire.
+ */
+function retirerActionsPreparees() {
+  const a = $('#peActions');
+  if (!a) return false;
+  const plein = a.children ? a.children.length > 0 : String(a.innerHTML || '').trim() !== '';
+  if (!plein) return false;
+  a.innerHTML = '';
+  const l = $('#peLignes');
+  if (l) l.innerHTML = '';
+  return true;
+}
+/** Ajoute (sans rien ecraser) la phrase « etape retiree » a #peEtat. Non marquee : la frappe suivante ne l efface pas. */
+function direActionsRetirees(pourquoi) {
   const e = $('#peEtat');
-  if (!e || !e.dataset || e.dataset.notePayWith !== '1') return;
-  e.className = 'note'; e.textContent = ''; delete e.dataset.notePayWith;
+  if (!e) return;
+  retirerNotePayWith(e);
+  const base = String(e.textContent || '').trim();
+  e.textContent = (base ? base + ' ' : '') + 'The step prepared before was removed because ' + pourquoi + ' — press Prepare again.';
 }
 function majDevisesDentreeCorps(v) {
   listePayWithLue = false; /* vrai seulement une fois `devisesDentree` OK, plus bas */
@@ -17064,6 +17105,12 @@ function majDevisesDentreeCorps(v) {
        *   le montant livre ; c est alors le garde du retour fiat qui tient l actif livre. */
       if (bascule) choixPayWith = null;
       else if (d) choixPayWith = { block: String(block).toLowerCase(), devise: String(d.devise).toLowerCase(), sym: d.symbole || 'that currency' };
+      /* ⛔ D2 (revue de 4f0994c) : une etape preparee pour l ancien actif ne reste pas cliquable sous le nouveau. Geste de la personne
+       *   seulement : une remise du choix rend le MEME actif, et la bascule du retour fiat se rejoue apres chaque rebatissage (depuis
+       *   la devise de la pool remise par le rebatissage) — y retirer les etapes effacerait le plan USDC prepare apres l arrivee. */
+      if (parLaPersonne && String(d ? d.devise : sel.value).toLowerCase() !== avant && retirerActionsPreparees()) {
+        direActionsRetirees('you picked ' + ((d && d.symbole) || 'another currency') + ' in “Pay with”');
+      }
       if (parLaPersonne) {
         /* ⛔⛔ 2026-10-26 (suite de la revue, points 1 et 3) : la personne passe a un AUTRE actif — le montant qu elle a tape
          *   parlait l ancien ; il est RETIRE (jamais converti : 25 USDC devenaient 25 ETH, ~1000 fois la valeur), et la note le
@@ -17554,8 +17601,6 @@ async function majSoldeDeviseEchange() {
 async function preparerEchange(sens) {
   const adr = $('#profil').dataset.block;
   const e = $('#peEtat');
-  /* ce qui s ecrit ici desormais n est plus la note « montant retire » : une frappe ne doit pas effacer un refus ou un devis */
-  if (e && e.dataset) delete e.dataset.notePayWith;
   $('#peActions').innerHTML = '';
   $('#peLignes').innerHTML = '';
   const marcheLuGate = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
@@ -18372,8 +18417,11 @@ for (const id of ['#peAchat', '#peVente']) {
     const e = $('#peEtat');
     if (!e) return;
     const brut = String(champ.value || '').trim();
-    /* ⛔ 2026-10-26 : la note « montant retire » de « Pay with » ne reste pas a cote d un NOUVEAU montant tape (et seulement elle) */
-    if (e.dataset && e.dataset.notePayWith === '1') { e.className = 'note'; e.textContent = ''; delete e.dataset.notePayWith; }
+    /* ⛔ 2026-10-26 : la note « montant retire » de « Pay with » ne reste pas a cote d un NOUVEAU montant tape — et SEULEMENT son
+     *   texte exact (retirerNotePayWith) : un refus du wallet ou un « sent » ecrit depuis n est jamais efface par une frappe (D1).
+     *   ⛔ D2 : une etape preparee pour l ANCIEN montant (approbation, signature) est retiree, avec une phrase qui s ajoute. */
+    if (typeof retirerNotePayWith === 'function') retirerNotePayWith(e);
+    if (typeof retirerActionsPreparees === 'function' && retirerActionsPreparees()) direActionsRetirees('the amount changed');
     if (brut !== '' && montantNulOuVide(brut)) { e.className = 'note wKo'; e.textContent = PHRASE_MONTANT_NUL; }
     else if (e.textContent === PHRASE_MONTANT_NUL) { e.className = 'note'; e.textContent = ''; }
   });
