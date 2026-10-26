@@ -4926,7 +4926,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
 import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
-  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, beatHeader, replayPosition, nextPinned, leftWindowText } from './vision-inside.js';
+  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, labelBox, beatHeader, replayPosition, nextPinned, leftWindowText } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
 import { fieldText as inspectFieldText } from './inspect-block.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
@@ -26330,8 +26330,8 @@ function bvPanControl(dx, dy) {
 const BV_LABELS_MAX = 6;
 function bvLabelItem(list, ctx, id, lines, cx, top, near, read) {
   ctx.font = '10px system-ui';
-  const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 6, h = lines.length * 12 + 2;
-  list.push({ id, lines, cx, read, near, box: { x: cx - w / 2, y: top, w, h } });
+  /* game59 3: the measured text plus a margin (vision-inside.js#labelBox) */
+  list.push({ id, lines, cx, top, read, near, box: labelBox(lines, cx, top, (l) => ctx.measureText(l).width) });
 }
 /* what must be labelled first: the hovered object, the pinned one, the one the camera looks at */
 function bvLabelFocus(points, L, H) {
@@ -26428,9 +26428,9 @@ function bvPaint3D(t) {
   /* game57 #4c (b): labels only for the hovered / pinned / aimed object and the nearest few, never on top of each other */
   const focusIds = bvLabelFocus(aimPoints, L, H);
   for (const q of labelNeurons) if (focusIds.includes(q.id)) bvLabelItem(labelItems, ctx, q.id, [q.id.replace('neuron:', 'Neuron #')], q.x, q.y - 22, q.k, true);
-  for (const it of placeLabels(labelItems, { max: BV_LABELS_MAX, focus: bvLabelFocus(aimPoints, L, H) })) {
+  for (const it of placeLabels(labelItems, { max: BV_LABELS_MAX, focus: bvLabelFocus(aimPoints, L, H), bounds: { w: L, h: H } })) {
     ctx.fillStyle = it.read ? 'rgb(235 238 255 / .92)' : 'rgb(170 178 200 / .8)'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-    it.lines.forEach((line, n) => ctx.fillText(line, it.cx, it.box.y + 10 + n * 12));
+    it.lines.forEach((line, n) => ctx.fillText(line, it.cx, it.top + 10 + n * 12));
   }
   ctx.strokeStyle = 'rgb(255 255 255 / .35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(L / 2, H / 2, 10, 0, Math.PI * 2); ctx.stroke();
   bvPaintAim(aimPoints, L, H);

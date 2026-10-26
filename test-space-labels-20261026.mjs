@@ -39,7 +39,7 @@ ok(typeof V.placeLabels === 'function', 'A: vision-inside.js exports placeLabels
 {
   const i = app.indexOf('function bvPaint3D('); ok(i > 0, 'B: bvPaint3D found');
   const fn = app.slice(i, i + app.slice(i).search(/\n\}/));
-  ok(/placeLabels\(labelItems, \{ max: BV_LABELS_MAX, focus: bvLabelFocus\(aimPoints, L, H\) \}\)/.test(fn), 'B: labels are placed by placeLabels');
+  ok(/placeLabels\(labelItems, \{ max: BV_LABELS_MAX, focus: bvLabelFocus\(aimPoints, L, H\)(, bounds: \{ w: L, h: H \})? \}\)/.test(fn), 'B: labels are placed by placeLabels');
   ok(/const BV_LABELS_MAX = 6;/.test(app), 'B: 6 labels at most');
   ok(!fn.includes('ctx.fillText(String(o.label).slice(0, 18), q.x'), 'B: no label written for every input any more');
   ok(/import \{[^}]*placeLabels[^}]*\} from '\.\/vision-inside\.js';/.test(app), 'B: app imports placeLabels');

@@ -211,12 +211,29 @@ export function outsideNeighbours(h, habitants, readSet = new Set(), n = 6) {
   });
 }
 
+/* game59 3: THE BOX OF A LABEL = its drawn text (10px lines every 12 px, first baseline at top + 10) plus a margin, so two
+ * labels closer than twice the margin overlap and placeLabels keeps one — measured in Chrome, "Sealed / not fed" 10 px from
+ * "Read at block" read as one line. `widthOf(line)` = the canvas's measureText width. */
+export const LABEL_PAD_X = 8;
+export const LABEL_PAD_Y = 3;
+export function labelBox(lines, cx, top, widthOf) {
+  const list = Array.isArray(lines) ? lines : [];
+  const w = Math.max(0, ...list.map((l) => Number(widthOf(String(l))) || 0));
+  const h = list.length ? (list.length - 1) * 12 + 13 : 0;
+  return { x: cx - w / 2 - LABEL_PAD_X, y: top - LABEL_PAD_Y, w: w + 2 * LABEL_PAD_X, h: h + 2 * LABEL_PAD_Y };
+}
+
 /* game57 #4c (b): DECLUTTERED LABELS for the space view. `items` = [{ id, near, box: { x, y, w, h } }] in screen space (bigger
  * `near` = closer to the camera). The focus ids (hovered, pinned, aimed — in that order) come first and the first one is always
  * placed; then the nearest. A label whose box overlaps one already placed is skipped; at most `max` are placed. Pure: the
  * given items are returned as they are (no text is made up). */
-export function placeLabels(items, { max = 6, focus = [] } = {}) {
-  const list = Array.isArray(items) ? items.filter((it) => it && it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every(Number.isFinite)) : [];
+/* game59 3: `bounds` = { w, h } of the canvas: a label whose text is not fully inside is not placed (it would take a place
+ * for nothing); the focus rule stays. */
+export function placeLabels(items, { max = 6, focus = [], bounds = null } = {}) {
+  const inside = (b) => !bounds || (b.x + LABEL_PAD_X >= 0 && b.y + LABEL_PAD_Y >= 0 && b.x + b.w - LABEL_PAD_X <= bounds.w && b.y + b.h - LABEL_PAD_Y <= bounds.h);
+  const all = Array.isArray(items) ? items.filter((it) => it && it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every(Number.isFinite)) : [];
+  const focusIds = Array.isArray(focus) ? focus : [];
+  const list = all.filter((it) => focusIds.includes(it.id) || inside(it.box));
   const byId = new Map(list.map((it) => [it.id, it]));
   const first = [];
   for (const id of Array.isArray(focus) ? focus : []) { const it = byId.get(id); if (it && !first.includes(it)) first.push(it); }
