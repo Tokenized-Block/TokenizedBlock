@@ -291,3 +291,21 @@ export async function lireOptionsAchat({ env = {}, pays = 'US', subdivision = nu
     return { etat: 'NON_MESURE', pourquoi: 'options call failed: ' + String((e && e.message) || e).slice(0, 120) };
   }
 }
+
+/**
+ * LE CORPS DE `/api/onramp/options`, A PARTIR DE CE QUE `lireOptionsAchat` A RENDU.
+ * ⛔ 2026-10-26 (revue adverse) : sorti de la route pour qu un banc l EXECUTE — « court=1 renvoie encore la liste des
+ *   actifs » survivait, faute de lecteur. `court` (le panneau Buy) ne veut que les moyens de paiement du pays : pas les
+ *   ~400 actifs (~25 Ko par pays mesures) a chaque ouverture de fiche. Le compte `n` reste, la liste part seulement.
+ * ⛔ LES LISTES VOYAGENT TELLES QUE LUES : `null` = Coinbase ne l a pas rendue, jamais « aucune ». Le compte des fiats vaut
+ *   `null` quand on n a pas pu le lire — un 0 dirait « aucune devise ».
+ */
+export function corpsReponseOptions(r, { court = false } = {}) {
+  if (!r || r.etat !== 'OK') return { ok: false, pret: true, etat: r && r.etat, pourquoi: r && r.pourquoi };
+  const actifs = Array.isArray(r.actifs) ? r.actifs : [];
+  return {
+    ok: true, pret: true, n: actifs.length, ...(court === true ? {} : { actifs }),
+    moyens: r.moyens, moyensParFiat: r.moyensParFiat,
+    fiatsDeclares: r.fiatsDeclares, nFiats: Array.isArray(r.fiatsDeclares) ? r.fiatsDeclares.length : null, pays: r.pays,
+  };
+}

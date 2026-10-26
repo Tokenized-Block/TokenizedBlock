@@ -16727,6 +16727,16 @@ function majRecoitBlocs() {
 let deviseEchange = null;
 /** La devise d entree choisie dans le selecteur, ou `null` = celle de la pool (chemin historique). */
 let deviseDentree = null;
+/* ⛔⛔⛔ 2026-10-26 (revue adverse de 400020e, reproduite 3 fois a 375 px) : CE QUE LE RETOUR FIAT A LIVRE, RETENU ICI.
+ *   `reprendreRetourFiat` basculait « Pay with » sur l USDC livre et preremplissait 0.001752 ; ~3,5 s plus tard les
+ *   lectures de prix rebatissaient ce selecteur ~15 fois, chacune le remettant sur la devise de la pool (ETH) et
+ *   `deviseDentree` a null. Le montant restait sous « Buy — ETH to spend » : ~2000 fois la valeur arrivee, dans un autre
+ *   actif, sous une note qui disait encore « arrived in USDC ».
+ *   ⇒ Le retour se RETIENT : { block, devise (adresse livree), actif, montant, pose, debut, phrasePose, choixPersonne }.
+ *     `garderPrefillFiat` passe apres CHAQUE rebatissage du selecteur et a chaque choix de la personne : il remet l actif
+ *     livre s il est encore offert, ne pose le montant que sous cet actif, et RETIRE le montant pose (en disant pourquoi)
+ *     des que le champ parle un autre actif. Declare ici, avant tout appel de `majDevisesDentree`. */
+let fiatRetenu = null;
 /* ⛔ Les blocks dont on a DEMANDE les faits de pool, pour ne pas relancer la lecture a chaque
  *   repeinture. Un echec reste un refus AFFICHE, jamais une boucle silencieuse. */
 const faitsBlockEnVol = new Set();
@@ -16755,6 +16765,12 @@ const devisesSansFaitsEnVol = new Set();
  *   ne marche ». Afficher un selecteur vide serait transformer notre ignorance en verdict.
  */
 function majDevisesDentree(v) {
+  /* ⛔ 2026-10-26 : CHAQUE sortie du rebatissage (quatre `return`) repasse par le garde du retour fiat — le rebatissage remet
+   *   le selecteur sur la devise de la pool, et c est apres lui qu on sait sous quel actif le montant se trouve. */
+  try { majDevisesDentreeCorps(v); }
+  finally { try { garderPrefillFiat(); } catch (_) { /* le garde ne doit jamais casser le selecteur */ } }
+}
+function majDevisesDentreeCorps(v) {
   const bloc = $('#peDeviseBloc'), sel = $('#peDevise'), note = $('#peDeviseNote');
   if (!bloc || !sel || !note) return;
   deviseDentree = null;
@@ -16949,6 +16965,8 @@ function majDevisesDentree(v) {
       deviseDentree = d && d.etat !== 'DIRECTE' ? d : null;
       majEtiquetteDeviseDentree(d, symBlock);
       try { majEntreeCarte(); } catch (_) {}
+      /* un choix de la personne aussi : un montant pose en USDC ne reste pas sous une autre devise */
+      try { garderPrefillFiat(true); } catch (_) {}
     };
     majEtiquetteDeviseDentree(cliquables.find((x) => x.devise === sel.value) || null, symBlock);
     offertsPourCarte = cliquables.map((x) => String(x.devise).toLowerCase());
@@ -25923,6 +25941,11 @@ window.addEventListener('hashchange', () => {
  *      `presence-dun-nom-nest-pas-son-usage`, qui a deja coute trois mutations ici. Un nom qui
  *      existe encore fait croire qu un geste existe encore. Les DEUX appelants partent avec elle. */
 
+/** Le repeint du defaut de « Fund wallet », pose par `cablerFundActifs` ; `peindreBridgeBlocks` l appelle quand il RESTAURE
+ *  le hub (stockage ou liste relue) : il pose `sel.value` sans evenement `change`, et le defaut restait sur la derniere fiche
+ *  (revue du 2026-10-26). Declare AVANT `filBridge`, qui le pose ; appele sous try (un appel tres tot le trouverait en TDZ). */
+let repeindreDefautFund = null;
+function repeindreFundApresHub() { try { if (repeindreDefautFund) repeindreDefautFund(); } catch (_) { /* Fund pas encore cable */ } }
 async function peindreBridgeBlocks() {
   const sel = $('#brBlock'), note = $('#brBlockNote');
   if (!sel) return;
@@ -25934,6 +25957,7 @@ async function peindreBridgeBlocks() {
       sel.innerHTML += '<option value="' + enTexte(saved) + '">' + enTexte(saved.slice(0, 6) + '…' + saved.slice(-4)) + ' (saved)</option>';
       sel.value = saved;
     }
+    repeindreFundApresHub();
     if (note) note.textContent = 'Connect a wallet to pick a Bridge hub, or Create a new block.';
     return;
   }
@@ -25979,6 +26003,7 @@ async function peindreBridgeBlocks() {
       sel.innerHTML += '<option value="' + enTexte(saved) + '">' + enTexte(saved.slice(0, 6) + '…' + saved.slice(-4)) + ' (saved)</option>';
       sel.value = saved;
     }
+    repeindreFundApresHub();
     if (note) note.textContent = 'Create a block (Instant Birth), then return here to set it as Bridge hub.';
     return;
   }
@@ -25987,6 +26012,7 @@ async function peindreBridgeBlocks() {
   if (hold && [...sel.options].some((o) => o.value === hold)) sel.value = hold;
   else if (saved && [...sel.options].some((o) => o.value === saved)) sel.value = saved;
   if (sel.value) ecrireBridgeBlock(sel.value);
+  repeindreFundApresHub();
   if (note) note.textContent = sel.value
     /* 2026-10-25 : la mention du tarif sur le volume du Bridge est RETIREE (et dans le jumeau plus bas) : aucun geste de l onglet ne preleve plus
      *   ce tarif depuis le retrait de la vente du Bridge — un prix a cote d une capacite absente. */
@@ -26028,7 +26054,24 @@ async function peindreBridgeBlocks() {
    *     finançait le mauvais actif et devait refaire un echange. Deux puces ETH / USDC ; le DEFAUT est l actif que le Buy du
    *     block choisi consomme (hub du Bridge, sinon la derniere fiche ouverte) ; sans block ou sans cotation lue, l ETH —
    *     la raison de l ancien choix (le gas se paie en ETH) reste vraie, et la note le dit.
-   *   ⛔ UN CLIC DE LA PERSONNE FIGE SON CHOIX : un repeint du defaut ne doit jamais defaire ce qu elle a choisi. */
+   *   ⛔ UN CLIC DE LA PERSONNE FIGE SON CHOIX : un repeint du defaut ne doit jamais defaire ce qu elle a choisi.
+   *   ⛔ 2026-10-26 (revue) : le cablage sort dans `cablerFundActifs`, une fonction de premier niveau — enferme ici, aucun banc
+   *     ne pouvait l executer, et « defaut = l actif du Buy » survivait a la mutation « toujours ETH ». */
+  cablerFundActifs(sel);
+  const cGo = $('#cGoBridge');
+  if (cGo) cGo.addEventListener('click', (e) => { e.preventDefault(); etape('create_go_bridge'); allerA('bridge'); });
+  /* ⛔ `peindreBridgeActifs()` RETIRE ICI AUSSI : c etait le second des deux appelants. Laisser un
+   *   seul appel d une fonction supprimee aurait leve a l EVALUATION de ce bloc IIFE — donc casse
+   *   tout le module, pas seulement le Bridge. */
+  /* 2026-10-25 : `basculerBridgeMode('fund')` RETIRE avec les onglets Fund / Swap — meme raison que ci-dessus. */
+})();
+/**
+ * « FUND WALLET » DU BRIDGE : ETH OU USDC, LE DEFAUT ETANT L ACTIF QUE LE BUY DU BLOCK CHOISI CONSOMME.
+ * Hub du Bridge (`sel`), sinon la derniere fiche ouverte ; sans block ou sans cotation lue, l ETH (il paie le gas) — et la
+ * note le dit. Un clic de la personne FIGE son choix : aucun repeint du defaut ne le defait.
+ * @returns {() => void} le repeint du defaut (aussi pose dans `repeindreDefautFund`)
+ */
+function cablerFundActifs(sel) {
   const brFund = $('#brFundWallet');
   let actifFund = 'ETH', actifFundChoisiParLaPersonne = false;
   const peindreFund = (actif, raison) => {
@@ -26061,13 +26104,9 @@ async function peindreBridgeBlocks() {
   window.addEventListener('hashchange', defautFund);
   defautFund();
   if (brFund) brFund.addEventListener('click', (e) => { try { etape('bridge_fund_wallet'); } catch (_) {} ouvrirRailFiat(e, brFund, actifFund); });
-  const cGo = $('#cGoBridge');
-  if (cGo) cGo.addEventListener('click', (e) => { e.preventDefault(); etape('create_go_bridge'); allerA('bridge'); });
-  /* ⛔ `peindreBridgeActifs()` RETIRE ICI AUSSI : c etait le second des deux appelants. Laisser un
-   *   seul appel d une fonction supprimee aurait leve a l EVALUATION de ce bloc IIFE — donc casse
-   *   tout le module, pas seulement le Bridge. */
-  /* 2026-10-25 : `basculerBridgeMode('fund')` RETIRE avec les onglets Fund / Swap — meme raison que ci-dessus. */
-})();
+  repeindreDefautFund = defautFund;
+  return defautFund;
+}
 
 
 
@@ -26180,9 +26219,17 @@ function montantLisibleFiat(x, actif, dec) {
 /** Le retour de Coinbase sur la fiche d un block. Bornee : 20 relectures espacees de 15 s (5 min), puis un bouton. */
 async function reprendreRetourFiat(block, actif) {
   try { await ouvrirProfil(block, null); } catch (_) { /* la fiche nue reste le secours */ }
-  for (let essais = 0; ; essais += 1) {
+  const encoreIci = () => String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase() === block;
+  /* ⛔⛔ 2026-10-26 (revue) : L ATTENTE SUIT LE PANNEAU, PAS UNE MONTRE. 24 x 500 ms (12 s) coupaient avant un panneau qui
+   *     a mis ~36 s a s ouvrir en local (une seconde lecture de la fiche, lancee ailleurs, tenait encore le marche).
+   *   ⇒ On attend TANT QUE la fiche est en lecture (`profilEnLecture`) ; lecture finie sans panneau = 2 s de grace, puis le
+   *     repli « Retry market ». Plafond de surete 360 x 500 ms (3 min) : une attente reste bornee. Fiche quittee = on se tait. */
+  for (let essais = 0, finiDepuis = 0; ; essais += 1) {
+    if (!encoreIci()) return;
     const c = $('#pEchange');
-    if ((c && !c.hidden && $('#peAchat')) || essais >= 24) break;
+    if (c && !c.hidden && $('#peAchat')) break;
+    finiDepuis = profilEnLecture ? 0 : finiDepuis + 1;
+    if (finiDepuis >= 4 || essais >= 360) break;
     await dormir(500);
   }
   const carte = $('#pEchange'), n = $('#peRetourFiat');
@@ -26192,7 +26239,6 @@ async function reprendreRetourFiat(block, actif) {
   n.textContent = 'Back from Coinbase. Reading your ' + actif + ' balance…';
   let decUsdc = 6;
   if (actif === 'USDC') { try { decUsdc = await decimalesDe(USDC_BASE); } catch (_) { decUsdc = null; } }
-  const encoreIci = () => String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase() === block;
   for (let tour = 0; tour < 20; tour += 1) {
     if (!encoreIci()) return;
     let brut = null;
@@ -26217,33 +26263,30 @@ async function reprendreRetourFiat(block, actif) {
         + ' (read now: ' + montantLisibleFiat(maintenant, actif, decUsdc) + ' ' + actif + '). Reading again in 15 s.';
       await dormir(15000); continue;
     }
-    /* ARRIVE, ARRIVE_SOUS_GAS ou SANS_REPERE : un solde LU. On ne preremplit que si le champ Buy parle CET actif. */
-    const livre = actif === 'ETH' ? String(ETH_ADR).toLowerCase() : String(USDC_BASE).toLowerCase();
-    const sel = $('#peDevise');
-    const champDevise = () => String(deviseDentree ? deviseDentree.devise : (deviseEchange ? deviseEchange.adr : ETH_ADR)).toLowerCase();
-    if (champDevise() !== livre && sel && $('#peDeviseBloc') && !$('#peDeviseBloc').hidden &&[...sel.options].some((o) => String(o.value).toLowerCase() === livre)) {
-      sel.value = [...sel.options].find((o) => String(o.value).toLowerCase() === livre).value;
-      try { if (typeof sel.onchange === 'function') sel.onchange(); } catch (_) {}
-    }
+    /* ARRIVE, ARRIVE_SOUS_GAS ou SANS_REPERE : un solde LU. */
     const lu = montantLisibleFiat(v.arrive !== null && v.arrive !== undefined && v.etat !== 'SANS_REPERE' ? v.arrive : maintenant, actif, decUsdc);
-    if (champDevise() !== livre) {
-      n.className = 'note';
-      n.textContent = (v.etat === 'SANS_REPERE' ? 'Your wallet holds ' : 'Arrived in your wallet: ') + lu + ' ' + actif
-        + ' (read on chain). This block’s Buy is not paid in ' + actif + ' here, so nothing was prefilled.';
-      break;
-    }
+    /* ⛔ 2026-10-26 : `return` et plus `break` — un `break` tombait dans la phrase finale (« Could not read what arrived during
+     *   5 minutes ») et ecrasait ce qui venait d etre LU et dit. */
     if (v.etat === 'ARRIVE_SOUS_GAS') {
+      fiatRetenu = null;
       n.className = 'note wKo';
       n.textContent = lu + ' ' + actif + ' read in your wallet — not more than the network fee needs, so nothing was prefilled.';
-      break;
+      return;
     }
-    $('#peAchat').value = montantLisibleFiat(v.montant, actif, decUsdc);
-    n.className = 'note';
-    n.textContent = (v.etat === 'SANS_REPERE'
-      ? 'Your wallet holds ' + lu + ' ' + actif + ' (read now). We have no reading from before you paid, so we cannot tell whether this purchase has landed yet. '
-      : 'Arrived in your wallet: ' + lu + ' ' + actif + ' (read on chain). ')
-      + 'The Buy amount is prefilled' + (actif === 'ETH' ? ', keeping some ETH for the network fee' : '')
-      + ' — check it, then press Prepare buy. Nothing is sent until you sign in your wallet.';
+    /* ⛔⛔ LE MONTANT NE SE POSE PLUS ICI, IL SE RETIENT. Le poser une fois puis laisser le selecteur se rebatir l a laisse sous
+     *     l ETH (revue du 2026-10-26). `garderPrefillFiat` le pose sous l actif LIVRE, et seulement la ; il repasse a chaque
+     *     rebatissage du selecteur et a chaque choix de la personne. */
+    const debut = v.etat === 'SANS_REPERE'
+      ? 'Your wallet holds ' + lu + ' ' + actif + ' (read now).'
+      : 'Arrived in your wallet: ' + lu + ' ' + actif + ' (read on chain).';
+    fiatRetenu = {
+      block, actif, devise: actif === 'ETH' ? String(ETH_ADR).toLowerCase() : String(USDC_BASE).toLowerCase(),
+      montant: montantLisibleFiat(v.montant, actif, decUsdc), pose: null, choixPersonne: false, enBascule: false, debut,
+      phrasePose: debut + (v.etat === 'SANS_REPERE' ? ' We have no reading from before you paid, so we cannot tell whether this purchase has landed yet.' : '')
+        + ' The Buy amount is prefilled' + (actif === 'ETH' ? ', keeping some ETH for the network fee' : '')
+        + ' — check it, then press Prepare buy. Nothing is sent until you sign in your wallet.',
+    };
+    garderPrefillFiat();
     if (v.etat === 'ARRIVE') { try { localStorage.removeItem(CLE_FIAT_AVANT); } catch (_) {} }
     return;
   }
@@ -26258,6 +26301,69 @@ async function reprendreRetourFiat(block, actif) {
     + '<button type="button" class="puce" id="peRetourFiatRelire">Read again</button>';
   const b = $('#peRetourFiatRelire');
   if (b) b.onclick = () => { void reprendreRetourFiat(block, actif); };
+}
+/** L actif que le champ Buy depense MAINTENANT : la devise choisie dans « Pay with », sinon celle de la pool (ETH par defaut). */
+function deviseDuChampBuy() {
+  return String(deviseDentree ? deviseDentree.devise : (deviseEchange ? deviseEchange.adr : ETH_ADR)).toLowerCase();
+}
+/**
+ * ⛔⛔⛔ LE GARDE DU MONTANT LIVRE (2026-10-26, revue adverse de 400020e). Un montant arrive en USDC ne reste JAMAIS sous
+ *   une autre devise. Appele par `reprendreRetourFiat`, apres CHAQUE rebatissage de « Pay with » (`majDevisesDentree`)
+ *   et a chaque choix de la personne dans ce selecteur (`parLaPersonne`).
+ *   1. tant que la personne n a pas choisi autre chose, l actif livre est REMIS dans « Pay with » s il y est offert ;
+ *   2. sous l actif livre, le montant est pose UNE fois (jamais par-dessus un montant tape par la personne) ;
+ *   3. le champ parle un autre actif : un montant deja pose est RETIRE et la note dit pourquoi ; pas encore pose, on dit
+ *      qu il ne l est pas, et on attend un rebatissage qui offrirait l actif livre.
+ * Fiche d un autre block : le retour est oublie. Rend ce qui a ete fait (lu par le banc, jamais par l ecran).
+ * @returns {'SANS'|'AILLEURS'|'BASCULE'|'POSE'|'GARDE'|'TAPE'|'VIDE'|'ATTEND'}
+ */
+function garderPrefillFiat(parLaPersonne = false) {
+  const r = fiatRetenu;
+  if (!r) return 'SANS';
+  if (r.enBascule) return 'BASCULE';
+  if (String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase() !== r.block) { fiatRetenu = null; return 'AILLEURS'; }
+  const champ = $('#peAchat'), n = $('#peRetourFiat'), sel = $('#peDevise'), bloc = $('#peDeviseBloc');
+  if (!champ || !n) return 'SANS';
+  if (parLaPersonne && sel && String(sel.value || '').toLowerCase() !== r.devise) r.choixPersonne = true;
+  n.hidden = false; n.dataset.block = r.block;
+  /* rien encore pose, et la personne a tape son propre montant : on ne change ni sa devise ni son montant */
+  if (r.pose === null && String(champ.value || '').trim() !== '') {
+    n.className = 'note';
+    n.textContent = r.debut + ' The Buy field already holds an amount you typed, so it was left as it is.';
+    fiatRetenu = null;
+    return 'TAPE';
+  }
+  const offerte =!!(sel && bloc && !bloc.hidden && [...sel.options].some((o) => String(o.value).toLowerCase() === r.devise));
+  if (deviseDuChampBuy() !== r.devise && !r.choixPersonne && offerte && typeof sel.onchange === 'function') {
+    sel.value = [...sel.options].find((o) => String(o.value).toLowerCase() === r.devise).value;
+    r.enBascule = true;
+    try { sel.onchange(); } catch (_) { /* l etiquette n a pas suivi : le test ci-dessous le voit */ } finally { r.enBascule = false; }
+  }
+  if (deviseDuChampBuy() === r.devise) {
+    if (r.pose !== null) return 'GARDE';
+    champ.value = r.montant;
+    r.pose = r.montant;
+    n.className = 'note';
+    n.textContent = r.phrasePose;
+    return 'POSE';
+  }
+  if (r.pose !== null) {
+    /* le montant pose parlait l actif livre ; le champ en parle un autre. Le retirer est la seule chose vraie a faire —
+     * sauf si la personne a elle-meme change de devise ET retape un montant : celui-la est le sien. */
+    const retire = !r.choixPersonne || String(champ.value || '') === r.pose;
+    if (retire) champ.value = '';
+    n.className = 'note wKo';
+    n.textContent = r.debut + ' The Buy field is no longer paid in ' + r.actif
+      + (r.choixPersonne ? ' (you changed “Pay with”)' : ' (the market was read again and ' + r.actif + ' is not offered in “Pay with” right now)')
+      + (retire ? ', so the ' + r.actif + ' amount was taken out of it — nothing stays prefilled in a currency that did not arrive.'
+        : ', and the amount in it is the one you typed.')
+      + (offerte ? ' Pick ' + r.actif + ' in “Pay with” to use it.' : '');
+    fiatRetenu = null;
+    return 'VIDE';
+  }
+  n.className = 'note';
+  n.textContent = r.debut + ' This block’s Buy is not paid in ' + r.actif + ' here, so nothing was prefilled.';
+  return 'ATTEND';
 }
 
 /* ── Brain bot loop Option A + x402 recognition (tip 20260923-bridge-x402-brain) ─────────────── */

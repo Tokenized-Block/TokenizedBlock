@@ -56,7 +56,7 @@ import { coterVenueCL, venuesServies, lireCodeQuoteurNouvelle, overrideQuoteur }
 import { QUOTEUR_AERODROME_CL as QUOTEUR_AERODROME_CL_LIQ } from './rolls-en-action.js';
 import { estDeviseConnue } from './pool-sans-hook.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
-import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
+import { etatCdp, validerDemande, urlOnramp, creerSession, lireOptionsAchat, corpsReponseOptions, CHEMIN_OPTIONS_ACHAT } from './onramp-session.js';
 /* le post grave, demande a X depuis ICI — jamais par un script dans la page du visiteur */
 import { lirePostPublie } from './post-grave.js';
 /* 2026-10-25 : les bornes de l index des createurs, servies a /api/blocks-de (le navigateur ne relit que le reste) */
@@ -7008,21 +7008,13 @@ function traiterRequete(req, res) {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
         /* ⛔ 2026-10-25 : `court=1` (le panneau Buy) ne veut que les moyens de paiement du pays — pas 400 actifs
          *   (~25 Ko par pays mesures) a chaque ouverture de fiche. Le compte `n` reste, la liste part seulement. */
-        const court = q.get('court') === '1';
-        res.end(JSON.stringify(r.etat === 'OK'
-          ? { ok: true, pret: true, n: r.actifs.length, ...(court ? {} : { actifs: r.actifs }),
-              /* les moyens de paiement par devise, LUS chez Coinbase ; null = non lu, jamais « aucun » */
-              moyens: r.moyens, moyensParFiat: r.moyensParFiat,
-              /* ⛔ LES DEUX LISTES VOYAGENT, ET LE COMPTE DES FIATS VAUT null QUAND ON N A PAS PU
-               *   LIRE : un 0 dirait « aucune devise » la ou il faut lire « Coinbase ne l a pas
-               *   rendue ». Deux faits opposes, et le second est notre ignorance.
-               * ⛔⛔ CE COMMENTAIRE A ETE REECRIT PARCE QUE JE L AI D ABORD INJECTE PAR UNE CHAINE
-               *     SHELL : bash a interprete les accents graves comme une substitution de commande
-               *     (« null: command not found ») et a MANGE deux mots. Le code a survecu par
-               *     chance — la substitution est tombee dans un commentaire. Toute edition passe par
-               *     Write/Edit, jamais par une chaine shell. La regle existe pour ca. */
-              fiatsDeclares: r.fiatsDeclares, nFiats: Array.isArray(r.fiatsDeclares) ? r.fiatsDeclares.length : null, pays: r.pays }
-          : { ok: false, pret: true, etat: r.etat, pourquoi: r.pourquoi }));
+        /* ⛔ 2026-10-26 : le corps est bati par `corpsReponseOptions` (onramp-session.js), qu un banc EXECUTE avec et sans
+         *   `court` — ici il n avait aucun lecteur. Les deux listes (actifs, fiats) et les moyens y voyagent tels que lus :
+         *   null = non lu, jamais « aucun ».
+         * ⛔⛔ (garde du 2026-10-25) CE COMMENTAIRE AVAIT ETE REECRIT PARCE QU IL AVAIT D ABORD ETE INJECTE PAR UNE CHAINE
+         *     SHELL : bash a interprete les accents graves comme une substitution de commande et a MANGE deux mots. Toute
+         *     edition passe par Write/Edit, jamais par une chaine shell. La regle existe pour ca. */
+        res.end(JSON.stringify(corpsReponseOptions(r, { court: q.get('court') === '1' })));
       })
       .catch((e) => {
         res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });

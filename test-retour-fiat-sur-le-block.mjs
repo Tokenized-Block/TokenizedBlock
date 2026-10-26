@@ -107,7 +107,13 @@ cas('⛔⛔ le retour REARME l achat — sur ce qui est ARRIVE, pas sur 0,01 ETH
   assert.ok(i > 0, 'le retour ne rearme plus rien : le visiteur devra tout recommencer');
   const m = /\r?\n\}\r?\n/.exec(nu.slice(i));
   const corps = m ? nu.slice(i, i + m.index) : '';
-  assert.ok(/\$\('#peAchat'\)\.value = montantLisibleFiat\(v\.montant/.test(corps), 'le retour ne preremplit plus le montant LU');
+  /* 2026-10-26 (revue adverse) : le montant LU se RETIENT ici et se pose par `garderPrefillFiat`, sous l actif livre seulement
+   *   (pose une fois, il etait reste sous l ETH apres un rebatissage de « Pay with »). Le comportement est EXECUTE par
+   *   test-retour-fiat-garde-actif-20261026 ; cette epingle garde le fil entre les deux. */
+  assert.ok(/montant: montantLisibleFiat\(v\.montant, actif, decUsdc\)/.test(corps) && /garderPrefillFiat\(\)/.test(corps), 'le retour ne preremplit plus le montant LU');
+  const g = nu.indexOf('function garderPrefillFiat(');
+  const mg = g > 0 ? /\r?\n\}\r?\n/.exec(nu.slice(g)) : null;
+  assert.ok(mg && /champ\.value = r\.montant/.test(nu.slice(g, g + mg.index)), 'le garde ne pose plus le montant retenu');
   /* ⛔ ET ON NE PRETEND PAS QUE LES FONDS SONT ARRIVES SANS LES AVOIR LUS : la seule phrase d arrivee est derriere un
    *   verdict calcule sur des soldes lus — `verdictArrivee` — et le cas « pas de repere » le DIT. */
   assert.ok(/verdictArrivee\(\{ avant, maintenant, actif/.test(corps), 'une arrivee serait affirmee sans comparer deux soldes lus');

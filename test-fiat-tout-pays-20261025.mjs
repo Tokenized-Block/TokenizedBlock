@@ -66,7 +66,11 @@ await cas('(6) liste absente = null (non lu), liste vide = [] — jamais confond
 await cas('(6) la route /api/onramp/options rend les moyens au client', async () => {
   const i = nuSrv.indexOf("chemin === '/api/onramp/options'");
   const corps = nuSrv.slice(i, nuSrv.indexOf("chemin === '/api/onramp/session'", i));
-  assert.ok(i > 0 && /moyens: r\.moyens/.test(corps) && /moyensParFiat: r\.moyensParFiat/.test(corps), 'la route ne transmet pas les moyens');
+  /* 2026-10-26 : le corps est bati par `corpsReponseOptions` (execute, avec et sans court, dans test-retour-fiat-garde-actif) */
+  assert.ok(i > 0 && /corpsReponseOptions\(r, /.test(corps), 'la route ne batit plus son corps par corpsReponseOptions');
+  const { corpsReponseOptions } = await import('./onramp-session.js');
+  const c = corpsReponseOptions({ etat: 'OK', actifs: [], moyens: ['CARD'], moyensParFiat: { EUR: ['CARD'] } }, { court: true });
+  assert.ok(Array.isArray(c.moyens) && c.moyensParFiat && c.moyensParFiat.EUR, 'la route ne transmet pas les moyens');
 });
 await cas('(6) a l ecran : vide = « could not read », jamais « none » ; hors US = compte Coinbase', async () => {
   assert.match(phraseMoyens({ pays: 'JP', moyens: [] }), /^Could not read which payment methods/);
