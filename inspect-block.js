@@ -29,7 +29,7 @@ export const FIELDS = Object.freeze([
   { section: 'state', key: 'neurons', label: '128 neurons', source: 'its live state on this page (potentials and traces after the newest beat)' },
   { section: 'state', key: 'sensors', label: '16 sensors', source: 'its live state + the current pas() gave its sensors' },
   { section: 'state', key: 'mood', label: 'Mood', source: 'the phase its brain decided on this beat' },
-  { section: 'state', key: 'why', label: 'Why this mood', source: 'its strongest read input on this beat (vision-dedans#pourquoiDe)' },
+  { section: 'state', key: 'why', label: 'Why this mood', source: 'its strongest read input on this beat (vision-inside#whyOf)' },
   { section: 'state', key: 'steering', label: 'Steering', source: 'its wings on this beat (vu.virage)' },
   { section: 'state', key: 'speed', label: 'Speed', source: 'its wings on this beat (vu.vitesse)' },
   { section: 'state', key: 'memory', label: 'Memory of its last beats', source: 'the beats recorded on this page, and its mean trace' },

@@ -165,9 +165,9 @@ const total = (f) => { const t = forces(f).termes; return t === null ? null : t.
   const fin = app.indexOf('function dessinerRasterSur(c, histoTout)');
   const bloc = app.slice(debut, fin).replace(/\/\*[\s\S]*?\*\//g, '');
   ok(debut > 0 && fin > debut && bloc.length > 5000, 'D: le bloc de l ecran est trouve');
-  /* game57 #4 (« View inside the brain ») : le schema plat Inside / Outside de la fenetre est REMPLACE par la scene 3D (bvPeindre3D) ;
-   *   peindreInterieur reste le dessin des tuiles Live. test-vision-dedans-20261026.mjs couvre la scene. */
-  ok(/function bvPeindre3D\(t\)/.test(bloc) && !/function peindreChampVision\(/.test(bloc), 'D: Inside / Outside sont la scene 3D, le schema plat est retire');
+  /* game57 #4 (« View inside the brain ») : le schema plat Inside / Outside de la fenetre est REMPLACE par la scene 3D (bvPaint3D) ;
+   *   peindreInterieur reste le dessin des tuiles Live. test-vision-inside-20261026.mjs couvre la scene. */
+  ok(/function bvPaint3D\(t\)/.test(bloc) && !/function peindreChampVision\(/.test(bloc), 'D: Inside / Outside sont la scene 3D, le schema plat est retire');
   ok(/reduit: bvReduit\(\)/.test(bloc) && /if \(bvReduit\(\)\) vision\.jouer = false;/.test(bloc), 'D: prefers-reduced-motion — cadre fixe, lecture en pause');
   ok(/@media \(prefers-reduced-motion:no-preference\)\{\s*#bvChamp \.bviGlisse\{animation/.test(app), 'D: les animations Inside ne vivent que sans mouvement reduit');
   ok(/k\.anime \? bvSvg\('g', \{ class: 'bviSol bviGlisse'/.test(bloc) && /if \(s\.arrive && k\.anime\)/.test(bloc), 'D: aucun mouvement quand le cadre n est pas anime');

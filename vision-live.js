@@ -14,7 +14,7 @@
  * ⛔ PUR : aucun reseau, aucune horloge, aucun hasard, aucun stockage, aucun DOM. La taille gardee par visiteur est lue / ecrite par
  *    l appelant (localStorage sous try/catch) ; ce module ne fait que la BORNER. */
 import { connectome } from './cerveau.js';
-import { champ, cadreInterieur, humeurCourte, battementSuivant, phraseBattement, paletteDe } from './vision-cerveau.js';
+import { champ, cadreInterieur, humeurCourte, nextBeat, beatSentence, paletteOf } from './vision-cerveau.js';
 
 export const VERSION_LIVE = 'tblock-brain-live/1';
 /* 4 vues sur grand ecran, 2 sur telephone : au-dela, chaque vue devient trop petite pour qu un neurone allume se distingue */
@@ -26,7 +26,7 @@ export const SOURCES = Object.freeze({
   carte: 'its brain on the map (beats every 600 ms)',
   brain: 'its Brain tab (beats while the Brain tab or the control panel is open)',
   profil: 'its block profile (beats while the profile is open)',
-  /* game57 #5 : la seule instance de son adresse sur la page (cerveaux-page.js), qui que ce soit qui la fasse battre */
+  /* game57 #5 : la seule instance de son adresse sur la page (page-brains.js), qui que ce soit qui la fasse battre */
   page: 'its one brain on this page (shared by the map, its profile, Brain and Live)',
 });
 const ADR = /^0x[0-9a-fA-F]{40}$/;
@@ -105,10 +105,10 @@ const indiceMontre = (t) => {
   if (Number.isSafeInteger(t.vueTick)) { const i = t.histo.findIndex((v) => v.tick === t.vueTick); if (i >= 0) return i; }
   return t.histo.length - 1;
 };
-/** Avance la tuile au battement suivant a montrer (vision-cerveau.js#battementSuivant). Rend ce qui a ete saute ou perdu. */
-export function avancerTuile(t, o = {}) {
+/** Avance la tuile au battement suivant a montrer (vision-cerveau.js#nextBeat). Rend ce qui a ete saute ou perdu. */
+export function advanceTile(t, o = {}) {
   if (!t) return null;
-  const r = battementSuivant(t.histo, Number.isSafeInteger(t.vueTick) ? t.vueTick : null, o);
+  const r = nextBeat(t.histo, Number.isSafeInteger(t.vueTick) ? t.vueTick : null, o);
   t.vueTick = r.tick;
   return r;
 }
@@ -120,8 +120,8 @@ export function etiquetteTuile(t) {
   const dernier = t.histo.length ? t.histo[t.histo.length - 1] : null;
   return { adr: t.adr, sym: t.sym, phase: vu ? vu.phase : null, humeur: vu ? humeurCourte(vu.phase) : 'no beat yet',
     tick: vu ? vu.tick : null, spikes: vu ? vu.spikes : null, source: t.source, sourceTexte: t.source ? SOURCES[t.source] : null,
-    dernierTick: dernier ? dernier.tick : null, retard: vu ? t.histo.length - 1 - i : null, palette: paletteDe(vu ? vu.phase : null).cle,
-    phrase: phraseBattement(vu) };
+    dernierTick: dernier ? dernier.tick : null, retard: vu ? t.histo.length - 1 - i : null, palette: paletteOf(vu ? vu.phase : null).cle,
+    phrase: beatSentence(vu) };
 }
 
 /**

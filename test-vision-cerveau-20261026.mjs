@@ -155,11 +155,11 @@ const FAITS = { vie: 12000, vieAvant: 11000, gm: 2, messages: 0, detenteurs: 1, 
 /* ══ D. LE CABLAGE DANS APP.HTML ══ */
 {
   const app = readFileSync(new URL(process.env.APP_HTML || './app.html', import.meta.url), 'utf8');
-  /* game57 #5 : les trois vues font battre L instance partagee (cerveaux-page.js#battre, qui appelle pas() avec ces faits) ;
+  /* game57 #5 : les trois vues font battre L instance partagee (page-brains.js#battre, qui appelle pas() avec ces faits) ;
    *   deja battue dans le cycle, les faits gardes sont ceux que l instance a REELLEMENT recus (lire().faits) */
-  ok(/const r = cerveauxPage\.battre\(h\.adr, faitsH, cerveauPas, cycleBattement[^\n]*\n[\s\S]{0,300}h\.faitsVus = faitsH;/.test(app), 'D: map — les faits gardes sont ceux passes a pas()');
-  ok(/const r = cerveauxPage\.battre\(profilCerveau\.adr, fP, cerveauPas, cycleBattement[\s\S]{0,500}profilCerveau\.faits = r\.deja \? \(cerveauxPage\.lire\(profilCerveau\.adr\) \|\| \{\}\)\.faits \|\| fP : fP;/.test(app), 'D: fiche — idem');
-  ok(/const r = cerveauxPage\.battre\(brainAdr, fB, cerveauPas, cycleBattement[\s\S]{0,700}brainFaitsVus = dj \? \{ adr: dj\.adr, faits: dj\.faits[^}]*\} : \{ adr: [^}]*faits: fB/.test(app), 'D: onglet Brain — idem');
+  ok(/const r = pageBrains\.battre\(h\.adr, faitsH, cerveauPas, beatCycle[^\n]*\n[\s\S]{0,300}h\.faitsVus = faitsH;/.test(app), 'D: map — les faits gardes sont ceux passes a pas()');
+  ok(/const r = pageBrains\.battre\(profilCerveau\.adr, fP, cerveauPas, beatCycle[\s\S]{0,500}profilCerveau\.faits = r\.deja \? \(pageBrains\.lire\(profilCerveau\.adr\) \|\| \{\}\)\.faits \|\| fP : fP;/.test(app), 'D: fiche — idem');
+  ok(/const r = pageBrains\.battre\(brainAdr, fB, cerveauPas, beatCycle[\s\S]{0,700}brainFaitsVus = dj \? \{ adr: dj\.adr, faits: dj\.faits[^}]*\} : \{ adr: [^}]*faits: fB/.test(app), 'D: onglet Brain — idem');
   const debut = app.indexOf('/* ══ BRAIN VISION (2026-10-26)');
   const fin = app.indexOf('function dessinerRasterSur(c, histoTout)');
   ok(debut > 0 && fin > debut, 'D: le bloc de l ecran est trouve');

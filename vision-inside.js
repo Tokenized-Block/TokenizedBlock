@@ -1,15 +1,15 @@
-/* vision-dedans.js — « VIEW INSIDE THE BRAIN » (proprietaire, 2026-10-26, game57 item 4) : la logique PURE de la fenetre 3D.
+/* vision-inside.js — « VIEW INSIDE THE BRAIN » (proprietaire, 2026-10-26, game57 item 4) : la logique PURE de la fenetre 3D.
  * ⛔⛔ CHAQUE EFFET VIENT D UN CHAMP REEL DU BATTEMENT (`vu` rendu par cerveau.js#pas) et porte ce champ et sa valeur :
  *     buy = vu.nouveaux.achats (de face, chaud) · sell = vu.nouveaux.ventes (de dos, froid) · transfer = vu.nouveaux.gm (miroitement
  *     sur les cotes) · new holder = vu.nouveaux.detenteurs (une particule chacun). Absent, nul ou illisible = AUCUN effet.
  * ⛔ La lumiere = la phase DECIDEE (vu.phase) ; sa force = vu.spikes / 128. NON_LU et MORT ne colorent rien (comme haloDeLHumeur).
- * ⛔ La voix = phraseBattement (vision-cerveau.js) : seuls les champs du battement parlent, jamais une cause devinee.
+ * ⛔ La voix = beatSentence (vision-cerveau.js) : seuls les champs du battement parlent, jamais une cause devinee.
  * ⛔ PUR : aucun reseau, aucune horloge, aucun hasard, aucun DOM. Le dessin vit dans app.html (moteur 3D de la page). */
 import { NEURONES } from './cerveau.js';
 import { projectCam } from './map3d.js';
-import { phraseBattement, apportDe, interne, SOURCES_INTERIEUR, humeurCourte } from './vision-cerveau.js';
+import { beatSentence, apportDe, interne, SOURCES_INTERIEUR, humeurCourte } from './vision-cerveau.js';
 
-export const VERSION_DEDANS = 'tblock-brain-view-inside/1';
+export const VERSION_INSIDE = 'tblock-brain-view-inside/1';
 const fini = (x) => typeof x === 'number' && Number.isFinite(x);
 const r3 = (x) => Math.round(x * 1000) / 1000;
 
@@ -19,8 +19,8 @@ export const SENSATIONS = Object.freeze([
   Object.freeze({ cle: 'gm', champ: 'nouveaux.gm', effet: 'transfer', direction: 'sides', temperature: null, forme: 'shimmer' }),
   Object.freeze({ cle: 'detenteurs', champ: 'nouveaux.detenteurs', effet: 'holder', direction: 'center', temperature: null, forme: 'particle' }),
 ]);
-/** Les sensations d UN battement. Un block mort ne ressent rien (meme regle que phraseBattement). */
-export function effetsDe(vu) {
+/** Les sensations d UN battement. Un block mort ne ressent rien (meme regle que beatSentence). */
+export function effectsOf(vu) {
   if (!vu || typeof vu !== 'object' || vu.phase === 'MORT') return [];
   const nv = vu.nouveaux && typeof vu.nouveaux === 'object' ? vu.nouveaux : null;
   if (!nv) return [];
@@ -37,20 +37,20 @@ export function effetsDe(vu) {
 }
 
 /* la teinte par phase : MEME table que app.html#TEINTE_HUMEUR (null = la teinte du theme) ; MORT et NON_LU absents = neutre */
-export const TEINTES = Object.freeze({ DORMANT: 220, EVEILLE: 190, CALME: 160, CURIEUX: null, EXCITE: 45, INQUIET: 20 });
-export function lumiereDe(vu, teintes = TEINTES) {
+export const TINTS = Object.freeze({ DORMANT: 220, EVEILLE: 190, CALME: 160, CURIEUX: null, EXCITE: 45, INQUIET: 20 });
+export function lightOf(vu, teintes = TINTS) {
   const phase = vu && typeof vu.phase === 'string' ? vu.phase : null;
   if (!phase || !Object.prototype.hasOwnProperty.call(teintes, phase)) return { phase, neutre: true, teinte: null, theme: false, force: 0 };
   const force = fini(vu.spikes) ? r3(Math.max(0, Math.min(1, vu.spikes / NEURONES))) : 0;
   return { phase, neutre: false, teinte: teintes[phase], theme: teintes[phase] === null, force };
 }
 /** Le pouls au bord de l ecran : sa force = la part de neurones qui ont tire ; il ne bat a l ecran que sans mouvement reduit. */
-export function poulsDe(vu, { reduit = false } = {}) {
+export function pulseOf(vu, { reduit = false } = {}) {
   const ok = !!vu && Number.isSafeInteger(vu.tick);
   return { tick: ok ? vu.tick : null, force: ok && fini(vu.spikes) ? r3(Math.max(0, Math.min(1, vu.spikes / NEURONES))) : 0, anime: ok && !reduit };
 }
 /** Les echos : les (jusqu a) 5 battements ENREGISTRES avant le battement montre, du plus recent au plus ancien. */
-export function echosDe(histo, i, n = 5) {
+export function echoesOf(histo, i, n = 5) {
   const H = Array.isArray(histo) ? histo : [];
   const out = [];
   for (let k = i - 1; k >= 0 && out.length < n; k--) {
@@ -62,19 +62,19 @@ export function echosDe(histo, i, n = 5) {
   return out;
 }
 /** Le virage penche l horizon (borne a ±20°). Sans virage lu, il ne penche pas. */
-export function horizonDe(vu) {
+export function horizonOf(vu) {
   if (!vu || !fini(vu.virage)) return { deg: 0, virage: null };
   return { deg: Math.round(Math.max(-20, Math.min(20, vu.virage * 14)) * 100) / 100, virage: vu.virage };
 }
 /** LE numero de battement : celui du battement montre, et aucun autre. */
-export const numeroBattement = (vu) => (vu && Number.isSafeInteger(vu.tick) ? vu.tick : null);
+export const beatNumber = (vu) => (vu && Number.isSafeInteger(vu.tick) ? vu.tick : null);
 /** La voix interieure : une phrase, faite des seuls champs du battement. */
-export function voixDe(vu) { return phraseBattement(vu); }
+export function voiceOf(vu) { return beatSentence(vu); }
 
 const CHANGES = ['phase', 'spikes', 'virage', 'vitesse', 'delta'];
 const NOUVEAUX = ['achats', 'ventes', 'gm', 'messages', 'detenteurs'];
 /** « Why » : ce qui a pese le plus, ses neurones, ce qui a change, ou il regarde. Rien n est devine. */
-export function pourquoiDe({ c = null, faits = null, vu = null, vuAvant = null, etat = null, capMap = null } = {}) {
+export function whyOf({ c = null, faits = null, vu = null, vuAvant = null, etat = null, capMap = null } = {}) {
   if (!vu || !Number.isSafeInteger(vu.tick) || !c || !Array.isArray(c.entrees)) return null;
   let dominante = null;
   for (const s of SOURCES_INTERIEUR) {
@@ -105,28 +105,28 @@ export function pourquoiDe({ c = null, faits = null, vu = null, vuAvant = null, 
 
 /* ══ TAKE CONTROL — un instantane LOCAL, fige ; la camera libre est une fonction pure ══ */
 const geler = (o) => { if (o && typeof o === 'object') { for (const k of Object.keys(o)) geler(o[k]); Object.freeze(o); } return o; };
-export function instantaneDedans({ adr = null, etat = null, histo = [], i = -1 } = {}) {
+export function insideSnapshot({ adr = null, etat = null, histo = [], i = -1 } = {}) {
   const H = Array.isArray(histo) ? histo : [];
   const k = i >= 0 && i < H.length ? i : H.length - 1;
   const vu = k >= 0 ? H[k] : null;
   if (!vu || !Number.isSafeInteger(vu.tick)) return null;
   const pots = etat && Array.isArray(etat.potentiels) && etat.potentiels.length === NEURONES && etat.tick === vu.tick ? etat.potentiels.slice() : null;
   const liens = etat && etat.c && Array.isArray(etat.c.liens) ? etat.c.liens.map((l) => l.map((x) => ({ vers: x.vers, poids: x.poids }))) : null;
-  return geler({ version: VERSION_DEDANS, adr: adr ? String(adr).toLowerCase() : null, tick: vu.tick, phase: vu.phase || null,
+  return geler({ version: VERSION_INSIDE, adr: adr ? String(adr).toLowerCase() : null, tick: vu.tick, phase: vu.phase || null,
     indices: Array.isArray(vu.indices) ? vu.indices.slice() : [], potentiels: pots || new Array(NEURONES).fill(null), etatDuBattement: !!pots, liens });
 }
-export const camLibre = () => ({ yaw: 0, pitch: 0, dist: 0.35 });
-export function orbiterCam(cam, dx, dy) {
-  const c = cam || camLibre();
+export const freeCam = () => ({ yaw: 0, pitch: 0, dist: 0.35 });
+export function orbitCam(cam, dx, dy) {
+  const c = cam || freeCam();
   return { ...c, yaw: c.yaw + (fini(dx) ? dx : 0) * 0.01, pitch: Math.max(-1.4, Math.min(1.4, c.pitch + (fini(dy) ? dy : 0) * 0.01)) };
 }
-export function zoomerCam(cam, dz) {
-  const c = cam || camLibre();
+export function zoomCam(cam, dz) {
+  const c = cam || freeCam();
   return { ...c, dist: Math.max(0.2, Math.min(6, c.dist + (fini(dz) ? dz : 0) * 0.15)) };
 }
 /** game57 #4b (b): projected with THE map engine (map3d.js#projectCam); behind the camera = not drawn. */
-export function projeterNeurones(pos, cam, L, H) {
-  const c = cam || camLibre();
+export function projectNeurons(pos, cam, L, H) {
+  const c = cam || freeCam();
   const out = [];
   (Array.isArray(pos) ? pos : []).forEach(([x, y, z], n) => {
     const p = projectCam(c, x, y, z, L, H, 0.05);
@@ -136,7 +136,7 @@ export function projeterNeurones(pos, cam, L, H) {
 }
 /** pan the camera on screen (like right-drag on the map), bounded to +-600 px */
 export function panCam(cam, dx, dy) {
-  const c = cam || camLibre(), bound = (v) => Math.max(-600, Math.min(600, v));
+  const c = cam || freeCam(), bound = (v) => Math.max(-600, Math.min(600, v));
   return { ...c, ox: bound((c.ox || 0) + (fini(dx) ? dx : 0)), oy: bound((c.oy || 0) + (fini(dy) ? dy : 0)) };
 }
 /* the "seen from the map" pose: the map camera's heading, from afar (the block among its real neighbours) */
@@ -176,8 +176,8 @@ export function spaceScene({ pos = [], inputs = [], neighbours = [] } = {}) {
 /* Outside : la vue de depart de map3d.js (yaw 0,65, pitch −0,18), reculee pour voir ses voisins ; Inside : premiere personne */
 const DEHORS = Object.freeze({ yaw: 0.65, pitch: -0.18, dist: 4.2 });
 const DEDANS = Object.freeze({ yaw: 0, pitch: 0, dist: 0.35 });
-export const DUREE_VOL_MS = 1400;
-export function poseCamera(mode, t, reduit = false) {
+export const FLIGHT_MS = 1400;
+export function cameraPose(mode, t, reduit = false) {
   if (mode !== 'dedans') return { ...DEHORS };
   if (reduit) return { ...DEDANS };
   const u = Math.max(0, Math.min(1, fini(t) ? t : 1)), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
@@ -185,11 +185,11 @@ export function poseCamera(mode, t, reduit = false) {
   return u >= 1 ? { ...DEDANS } : { yaw: m(DEHORS.yaw, DEDANS.yaw), pitch: m(DEHORS.pitch, DEDANS.pitch), dist: m(DEHORS.dist, DEDANS.dist) };
 }
 /** prefers-reduced-motion : ni vol, ni secousse, lumiere statique, aucune boucle d animation. */
-export function planAnimation(reduit) {
+export function animationPlan(reduit) {
   return reduit ? { vol: false, secousse: false, lumiere: 'statique', boucle: false } : { vol: true, secousse: true, lumiere: 'vivante', boucle: true };
 }
 /** Outside : ses 6 plus proches voisins REELS (positions monde de la map), a l echelle ; allume = seulement s il est lu. */
-export function voisinsDehors(h, habitants, lus = new Set(), n = 6) {
+export function outsideNeighbours(h, habitants, lus = new Set(), n = 6) {
   if (!h || !fini(h.wx) || !fini(h.wy) || !fini(h.wz)) return [];
   const l = [];
   for (const o of Array.isArray(habitants) ? habitants : []) {

@@ -1,4 +1,4 @@
-/* cerveaux-page.js — UN cerveau par adresse sur la page (game57 #5/#6, Grok Super QA game56 : UNIT « no beat yet » dans Live alors que
+/* page-brains.js — UN cerveau par adresse sur la page (game57 #5/#6, Grok Super QA game56 : UNIT « no beat yet » dans Live alors que
  *   la Map le montrait a beat 92 ; des compteurs de battement a des echelles differentes d une vue a l autre).
  * ⛔⛔ AVANT : la map (h.cerveau), le profil (profilCerveau.etat) et Brain / le Control panel (brainEtat) recreaient CHACUN leur copie
  *     du meme block depuis la memoire de ce navigateur, a des moments differents, et chacune comptait ses battements : trois numeros
@@ -6,8 +6,8 @@
  *     par battement de page (`cycle`) quel que soit le nombre de vues qui la regardent. Son `vu.tick` est LE numero de battement.
  * ⛔ PUR : aucun reseau, aucune horloge, aucun DOM. `creer(adr)` (la memoire du navigateur) est fourni par l appelant. */
 const ADR = /^0x[0-9a-f]{40}$/;
-export const HISTO_PARTAGE = 64;
-export function creerCerveauxPage({ creer }) {
+export const SHARED_HISTORY = 64;
+export function createPageBrains({ creer }) {
   const m = new Map();
   const cle = (a) => String(a || '').toLowerCase();
   const entree = (adr) => {
@@ -35,7 +35,7 @@ export function creerCerveauxPage({ creer }) {
       e.etat = r.etat; e.vu = r.vu; e.faits = faits; e.nourritureLue = nourritureLue; e.source = source; e.cycle = cycle;
       e.r = { etat: r.etat, vu: r.vu };
       e.histo.push(r.vu);
-      if (e.histo.length > HISTO_PARTAGE) e.histo.splice(0, e.histo.length - HISTO_PARTAGE);
+      if (e.histo.length > SHARED_HISTORY) e.histo.splice(0, e.histo.length - SHARED_HISTORY);
       return { etat: r.etat, vu: r.vu, deja: false };
     },
     /** Une memoire relue (chaine, fragments) REMPLACE l instance : toutes les vues sautent ensemble, et l origine est dite. */
@@ -59,13 +59,13 @@ export function creerCerveauxPage({ creer }) {
 /* ⛔⛔ game57 #6 : UN numero de battement. C est le `tick` de L instance de la page pour cette adresse (vu.tick : les battements
  *     que CE cerveau a vecus, repris de la memoire du navigateur ou de la chaine) — jamais celui d une copie, ni une hauteur de
  *     bloc, ni un nombre d evenements on-chain, ni le rang d un pas de rejeu. Sans instance sur la page : le repli (instantane). */
-export function battementAffiche(registre, adr, repli = null) {
+export function displayedBeat(registre, adr, repli = null) {
   const n = registre && typeof registre.battement === 'function' ? registre.battement(adr) : null;
   if (Number.isSafeInteger(n)) return n;
   return repli && Number.isSafeInteger(repli.tick) ? repli.tick : null;
 }
 /** UN format pour ce numero, partout (panneau, Brain, fenetre Brain, Live). */
-export const texteBattement = (n) => (Number.isSafeInteger(n) ? n.toLocaleString('en-US') : '—');
+export const beatText = (n) => (Number.isSafeInteger(n) ? n.toLocaleString('en-US') : '—');
 
 /* game57 #4b (a): THE FOOD THIS PAGE HAS READ FOR THIS BLOCK. The map reads it for its habitants (h.nourriture); an OFF-MAP block
  * (UNIT) is read by its profile (profilNourriture) or by Brain (brainNourriture), and that read used to be thrown away: the brain

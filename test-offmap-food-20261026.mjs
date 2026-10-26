@@ -3,16 +3,16 @@
 //   SAME page had read that food (profile "Who holds it": nourritureDe(adr) -> profilNourriture with etat 'LUE'). UNIT is not on the
 //   map: battreProfil took food from the map habitant (hP) only, so for an off-map block the read was thrown away and the brain got 0
 //   "by default"; visionCible('profil') also said "default" because there was no habitant.
-//   A. cerveaux-page.js#heldFood: the habitant's successful read, else a successful off-map read of the SAME address;
+//   A. page-brains.js#heldFood: the habitant's successful read, else a successful off-map read of the SAME address;
 //      never another address, never a failed read shown as read.
 //   B. battreProfil + visionCible extracted: UNIT off the map, profile food read -> the brain receives gm/messages/detenteurs/mort
 //      as read, and champ() shows them read (no "not read"); food that was NOT read stays "not read yet" (nothing invented).
-//   C. Live (faitsHorsCarte) uses the same read; Brain already had its own (brainNourriture, test-brain-marche-hors-carte).
+//   C. Live (offMapFacts) uses the same read; Brain already had its own (brainNourriture, test-brain-marche-hors-carte).
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { etatInitial as initialBrain, pas as step } from './cerveau.js';
 import { champ } from './vision-cerveau.js';
-import * as CP from './cerveaux-page.js';
+import * as CP from './page-brains.js';
 const DIR = new URL('./', import.meta.url);
 const read = (f) => readFileSync(new URL(f, DIR), 'utf8').replace(/\r\n/g, '\n');
 let count = 0; const ok = (c, m) => { assert.ok(c, m); count++; };
@@ -28,10 +28,10 @@ const srcInputs = extract('function entreesCerveau(vie, vieAvant, n, etatVie, nA
 const srcTrades = extract('function echangesDe(h) {');
 const srcOffMap = extract('function offMapFoodReads() {', false);
 function run(profilNourriture) {
-  const registry = CP.creerCerveauxPage({ creer: (a) => initialBrain(a) });
+  const registry = CP.createPageBrains({ creer: (a) => initialBrain(a) });
   const env = { $: (s) => (s === '#profil' ? { hidden: false } : s === '#pcActif' ? { checked: true } : {}),
     habitants: [], profilCerveau: { adr: UNIT, etat: registry.etat(UNIT), vu: null, histo: [] }, relireNourriture: () => {},
-    vieProfil: 10.017, etatVieProfil: 'LUE', cerveauxPage: registry, cerveauPas: step, cycleBattement: 1, peindreCerveau: () => {},
+    vieProfil: 10.017, etatVieProfil: 'LUE', pageBrains: registry, cerveauPas: step, beatCycle: 1, peindreCerveau: () => {},
     vieServeurPourCerveau: () => null, marcheAerodromeIndexe: () => false, roleDe: () => 'accueil', rpcTete: { n: 53121388 },
     profilNourriture, profileFoodAddress: profilNourriture ? UNIT : null, brainNourriture: null, heldFood: CP.heldFood,
     vision: { source: 'profil' }, brainAdr: null, brainFaitsVus: null, brainHisto: [], brainEtat: null, marcheParAdr: new Map(), symProfil: 'UNIT' };
@@ -67,6 +67,6 @@ if (typeof CP.heldFood === 'function') {
 }
 /* C */
 ok(!!srcOffMap, 'C: offMapFoodReads found');
-ok(/function faitsHorsCarte\(adr\) \{[\s\S]{0,400}heldFood\(a, h, offMapFoodReads\(\)\)/.test(app), 'C: Live — the same read');
+ok(/function offMapFacts\(adr\) \{[\s\S]{0,400}heldFood\(a, h, offMapFoodReads\(\)\)/.test(app), 'C: Live — the same read');
 ok(/profilNourriture = n;\n\s*profileFoodAddress = String\(adr\)\.toLowerCase\(\);/.test(app), 'C: the profile read keeps its address');
 console.log('test-offmap-food-20261026: ' + count + ' assertions, OK');

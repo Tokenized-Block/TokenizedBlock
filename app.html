@@ -1119,37 +1119,37 @@ dialog.bcDialogue::backdrop{background:rgb(var(--fondRgb) / .75)}
 dialog.bcDialogue pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--creux);border:1px solid var(--ligne);border-radius:10px;padding:10px;font-size:12px}
 /* 2026-10-26 — BRAIN VISION : memes jetons que la page (le coloris suit), 16 px de marge a 375 px, jamais de defilement horizontal */
 /* 2026-10-26 (game57 #4, « View inside the brain ») : une FENETRE comme le Control panel (non modale, bord a tirer, replier,
- *   agrandir, deplacer par l en-tete) — fenetreCommeLePanneau() reutilise bcBornerTaille / bcAxeTaille / bcNavPx du panneau. */
+ *   agrandir, deplacer par l en-tete) — windowLikePanel() reutilise bcBornerTaille / bcAxeTaille / bcNavPx du panneau. */
 dialog.bvPop{background:var(--carte);color:var(--texte);border:1px solid var(--ligne);border-radius:16px;box-sizing:border-box;padding:0;margin:0;
-  position:fixed;z-index:72;inset:auto;right:12px;top:12px;width:var(--bvWLibre,min(620px,calc(100% - 24px)));height:calc(100dvh - 24px - var(--bcNav,66px));
+  position:fixed;z-index:72;inset:auto;right:12px;top:12px;width:var(--bvWFree,min(620px,calc(100% - 24px)));height:calc(100dvh - 24px - var(--bcNav,66px));
   max-width:none;max-height:none;overflow:visible;translate:var(--bvDx,0px) var(--bvDy,0px);box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
-dialog.bvPop>.bvTete,dialog.bvPop>.bvCorps{padding:0 14px}
+dialog.bvPop>.bvTete,dialog.bvPop>.bvBody{padding:0 14px}
 dialog.bvPop>.bvTete{padding-top:10px;cursor:move;user-select:none;-webkit-user-select:none}
-dialog.bvPop>.bvCorps{height:calc(100% - 64px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-bottom:12px}
-@media (max-width:760px){dialog.bvPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:var(--bvHLibre,70dvh);translate:none}
+dialog.bvPop>.bvBody{height:calc(100% - 64px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-bottom:12px}
+@media (max-width:760px){dialog.bvPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:var(--bvHFree,70dvh);translate:none}
   dialog.bvPop>.bvTete{cursor:default}}
 dialog.bvPop.bcReduit{height:auto}
-dialog.bvPop.bcReduit>.bvCorps,dialog.bvPop.bcReduit .bcPoignee{display:none}
+dialog.bvPop.bcReduit>.bvBody,dialog.bvPop.bcReduit .bcPoignee{display:none}
 dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;height:auto;translate:none}
-.bvBoutonsFen{display:flex;gap:6px;flex:0 0 auto}
+.bvWinButtons{display:flex;gap:6px;flex:0 0 auto}
 .bvScene{position:relative;margin:8px 0 4px}
 #bv3d{display:block;width:100%;height:auto;max-height:52vh;background:#05070c;border:1px solid var(--ligne);border-radius:12px;touch-action:none}
 .bvAim{position:absolute;left:10px;bottom:10px;max-width:min(320px,70%);padding:8px 10px;border-radius:10px;background:rgb(10 12 20 / .82);border:1px solid var(--ligne);font-size:12px;line-height:1.35;color:#e8eaf6;pointer-events:none}
 .bvAim b{display:block;margin-bottom:3px}.bvAim .bvNr{color:#9aa3bd}
 #bvInspect h5{margin:10px 0 4px;font-size:12px}#bvInspect li{display:flex;gap:8px;justify-content:space-between}#bvInspect li>span{flex:0 0 auto;max-width:42%}#bvInspect li b{font-weight:600;text-align:right;overflow-wrap:anywhere}
 #bvInspect li[data-status="not read"] b,#bvInspect li[data-status="no source in this app"] b{color:var(--doux);font-weight:400}
-.bvNumero{position:absolute;left:10px;top:8px;font:800 15px/1 var(--mono,monospace);color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
-.bvHumeurBtn{position:absolute;right:8px;top:6px;border:1px solid rgb(255 255 255 / .35);background:rgb(0 0 0 / .45);color:#fff;border-radius:99px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
-.bvHumeurBtn:hover,.bvHumeurBtn:focus-visible{border-color:var(--accent)}
-.bvPhrase{margin:4px 0;font-style:italic;min-height:1.3em}
-.bvEtagere{display:flex;gap:4px;align-items:flex-end;margin:10px 0 0;padding:6px 6px 0;border-bottom:4px solid var(--ligne);overflow-x:auto;scrollbar-width:thin}
-.bvEtagere .bvDos{flex:0 0 auto;writing-mode:vertical-rl;transform:rotate(180deg);min-height:96px;padding:8px 5px;border:1px solid var(--ligne);border-radius:4px 4px 2px 2px;
+.bvNumber{position:absolute;left:10px;top:8px;font:800 15px/1 var(--mono,monospace);color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
+.bvMoodBtn{position:absolute;right:8px;top:6px;border:1px solid rgb(255 255 255 / .35);background:rgb(0 0 0 / .45);color:#fff;border-radius:99px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
+.bvMoodBtn:hover,.bvMoodBtn:focus-visible{border-color:var(--accent)}
+.bvSentence{margin:4px 0;font-style:italic;min-height:1.3em}
+.bvShelf{display:flex;gap:4px;align-items:flex-end;margin:10px 0 0;padding:6px 6px 0;border-bottom:4px solid var(--ligne);overflow-x:auto;scrollbar-width:thin}
+.bvShelf .bvSpine{flex:0 0 auto;writing-mode:vertical-rl;transform:rotate(180deg);min-height:96px;padding:8px 5px;border:1px solid var(--ligne);border-radius:4px 4px 2px 2px;
   background:var(--creux);color:var(--texte);font-size:11px;font-weight:700;cursor:pointer}
-.bvEtagere .bvDos:nth-child(odd){min-height:108px}
-.bvEtagere .bvDos[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
-.bvOnglets{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}
-.bvOnglets .bvOnglet{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ligne);border-radius:8px 8px 0 0;padding:3px 8px;font-size:12px;background:transparent;color:var(--texte);cursor:pointer}
-.bvOnglets .bvOnglet[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
+.bvShelf .bvSpine:nth-child(odd){min-height:108px}
+.bvShelf .bvSpine[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
+.bvTabs{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}
+.bvTabs .bvTab{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ligne);border-radius:8px 8px 0 0;padding:3px 8px;font-size:12px;background:transparent;color:var(--texte);cursor:pointer}
+.bvTabs .bvTab[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
 @media (prefers-reduced-motion:reduce){#bvPop,#bvPop *{animation:none!important;transition:none!important}}
 .bvTete{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
@@ -4517,39 +4517,39 @@ details[open] > summary::before{transform:rotate(90deg)}
      agrandir, deplacer par l en-tete), une scene 3D (le moteur de la page : sphere de neurones dans son cube, voisins de la map),
      et les sections rangees comme des livres sur une etagere ; un livre clique s ouvre en onglet. -->
 <dialog class="bvPop" id="bvPop" data-fenetre="panneau" aria-label="View inside the brain">
-  <div class="bcPoignee" id="bvPoignee" role="separator" tabindex="0" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
+  <div class="bcPoignee" id="bvHandle" role="separator" tabindex="0" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
     aria-label="Resize the brain window: drag this edge; double click to switch between largest and original size" title="Drag to resize · double click: largest / original"></div>
   <div class="bvTete" id="bvTete">
     <div style="min-width:0"><p class="titre" style="margin:0" id="bvTitre">View inside the brain</p>
       <p class="note" style="margin:2px 0 0" id="bvSous">Only what its neurons really received. Nothing is sent, nothing is signed.</p></div>
-    <span class="bvBoutonsFen">
+    <span class="bvWinButtons">
       <button type="button" class="bouton sec bvPetit" id="bvReduire" aria-label="Fold or unfold the brain window" aria-expanded="true">–</button>
-      <button type="button" class="bouton sec bvPetit" id="bvAgrandir" aria-label="Maximise or restore the brain window" aria-pressed="false">□</button>
+      <button type="button" class="bouton sec bvPetit" id="bvMaximize" aria-label="Maximise or restore the brain window" aria-pressed="false">□</button>
       <button type="button" class="bouton sec bvPetit" id="bvFermer" aria-label="Close">✕</button>
     </span>
   </div>
-  <div class="bvCorps" id="bvCorps">
+  <div class="bvBody" id="bvBody">
   <!-- INSIDE = la camera vole dans le block et finit a la premiere personne parmi ses neurones ; OUTSIDE = la map 3D et ses vrais voisins -->
   <div class="bvVues" role="group" aria-label="View">
     <button type="button" class="bouton sec bvPetit" id="bvVueDedans" aria-pressed="true">Inside</button>
     <button type="button" class="bouton sec bvPetit" id="bvVueDehors" aria-pressed="false">Outside</button>
-    <button type="button" class="bouton sec bvPetit" id="bvControle" title="Free camera over its 128 neurons, on a local snapshot — nothing is sent">Take control</button>
-    <button type="button" class="bouton sec bvPetit" id="bvRetourLive" hidden>Back to live</button>
+    <button type="button" class="bouton sec bvPetit" id="bvControl" title="Free camera over its 128 neurons, on a local snapshot — nothing is sent">Take control</button>
+    <button type="button" class="bouton sec bvPetit" id="bvBackToLive" hidden>Back to live</button>
     <button type="button" class="bouton sec bvPetit" id="bvBackToMap" title="Fly back out of the block, to the map">Back to map</button>
   </div>
   <div class="bvScene" id="bvScene">
     <canvas id="bv3d" width="720" height="440" role="img" aria-label="Its brain in 3D"></canvas>
-    <span class="bvNumero" id="bvNumero" aria-label="Beat">—</span>
-    <button type="button" class="bvHumeurBtn" id="bvHumeur" aria-haspopup="true" title="Why this mood?">—</button>
+    <span class="bvNumber" id="bvNumber" aria-label="Beat">—</span>
+    <button type="button" class="bvMoodBtn" id="bvHumeur" aria-haspopup="true" title="Why this mood?">—</button>
     <!-- game57 #4b (d): what the camera looks at (centre ring), or what you clicked — real values only -->
     <div class="bvAim" id="bvAim" role="status" aria-live="polite" hidden></div>
   </div>
-  <!-- 2026-10-26 (« feel ») : UNE phrase par battement, faite des seules donnees de CE battement (vision-cerveau.js#phraseBattement) -->
-  <p class="bvPhrase" id="bvPhrase" aria-live="polite"></p>
+  <!-- 2026-10-26 (« feel ») : UNE phrase par battement, faite des seules donnees de CE battement (vision-cerveau.js#beatSentence) -->
+  <p class="bvSentence" id="bvSentence" aria-live="polite"></p>
   <div class="bvLecteur">
     <button type="button" class="bouton sec bvPetit" id="bvJouer">Pause</button>
-    <button type="button" class="bouton sec bvPetit" id="bvPas">Step</button>
-    <span class="bvVitesses" role="group" aria-label="Speed">
+    <button type="button" class="bouton sec bvPetit" id="bvStep">Step</button>
+    <span class="bvSpeeds" role="group" aria-label="Speed">
       <button type="button" class="bouton sec bvPetit" data-vitesse="0.5" aria-pressed="false">0.5×</button>
       <button type="button" class="bouton sec bvPetit" data-vitesse="1" aria-pressed="true">1×</button>
       <button type="button" class="bouton sec bvPetit" data-vitesse="2" aria-pressed="false">2×</button>
@@ -4559,43 +4559,43 @@ details[open] > summary::before{transform:rotate(90deg)}
   </div>
   <p class="note" id="bvSortie"></p>
   <p class="note" id="bvLegende" style="margin:0 0 4px"></p>
-  <nav class="bvEtagere" id="bvEtagere" role="tablist" aria-label="Sections — pick a book">
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="pourquoi">Why</button>
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="parle">Talk to it</button>
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="lit">What it reads</button>
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="neurones">Its neurons</button>
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="autour">Around it</button>
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="siEtAlors">What if</button>
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="details">Details</button>
-    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="inspect">Inspect</button>
+  <nav class="bvShelf" id="bvShelf" role="tablist" aria-label="Sections — pick a book">
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="pourquoi">Why</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="parle">Talk to it</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="lit">What it reads</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="neurones">Its neurons</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="autour">Around it</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="siEtAlors">What if</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="details">Details</button>
+    <button type="button" class="bvSpine" role="tab" aria-selected="false" data-livre="inspect">Inspect</button>
   </nav>
-  <div class="bvOnglets" id="bvOnglets" role="tablist" aria-label="Open sections"></div>
-  <section class="bDetail bvLivre" data-livre="inspect" hidden><p class="note"><b>Inspect</b> — everything this page holds about it: each line is read (with its source), not read, or has no source in this app</p>
+  <div class="bvTabs" id="bvTabs" role="tablist" aria-label="Open sections"></div>
+  <section class="bDetail bvBook" data-livre="inspect" hidden><p class="note"><b>Inspect</b> — everything this page holds about it: each line is read (with its source), not read, or has no source in this app</p>
     <div id="bvInspect"></div></section>
-  <section class="bDetail bvLivre" data-livre="pourquoi" hidden><p class="note"><b>Why this mood</b> — only fields of the beat shown</p>
-    <ul class="bvListe" id="bvPourquoi"></ul></section>
-  <details class="bDetail bvLivre" data-livre="parle" hidden open><summary class="note"><b>Talk to it</b> — pick an input, see which neurons it reaches</summary>
+  <section class="bDetail bvBook" data-livre="pourquoi" hidden><p class="note"><b>Why this mood</b> — only fields of the beat shown</p>
+    <ul class="bvListe" id="bvWhy"></ul></section>
+  <details class="bDetail bvBook" data-livre="parle" hidden open><summary class="note"><b>Talk to it</b> — pick an input, see which neurons it reaches</summary>
     <p class="note">Read only: nothing is sent. The neurons come from its real wiring and a replay of the same brain — no answer is made up.</p>
     <div class="bvParle" id="bvParle"></div>
     <p class="note" id="bvParleTexte"></p>
   </details>
-  <details class="bDetail bvLivre" data-livre="lit" hidden open><summary class="note"><b>What it reads</b> — each input it received, <span id="bvLuQuand">on its newest beat</span></summary>
+  <details class="bDetail bvBook" data-livre="lit" hidden open><summary class="note"><b>What it reads</b> — each input it received, <span id="bvReadWhen">on its newest beat</span></summary>
     <ul class="bvListe" id="bvEntrees"></ul>
     <p class="note" id="bvForces"></p>
   </details>
   <!-- 2026-10-26 (« feel ») : ce qui N EST PAS nourri ou PAS lu quitte la vue principale — replie ici, jamais cache -->
-  <details class="bDetail bvLivre" data-livre="details" hidden open id="bvDetails"><summary class="note"><b>Details</b> — <span id="bvDetailsResume">inputs not fed or not read</span></summary>
-    <ul class="bvListe" id="bvDetailsListe"></ul>
+  <details class="bDetail bvBook" data-livre="details" hidden open id="bvDetails"><summary class="note"><b>Details</b> — <span id="bvDetailsSummary">inputs not fed or not read</span></summary>
+    <ul class="bvListe" id="bvDetailsList"></ul>
   </details>
   <!-- 2026-10-26 (Brain senses) : son etat INTERNE, copie de l etat reel de cerveau.js (vision-cerveau.js#interne), lecture seule -->
-  <details class="bDetail bvLivre" data-livre="neurones" hidden open id="bvInterneBloc"><summary class="note"><b>Inside its neurons</b> — its internal state after its last beat</summary>
+  <details class="bDetail bvBook" data-livre="neurones" hidden open id="bvInterneBloc"><summary class="note"><b>Inside its neurons</b> — its internal state after its last beat</summary>
     <ul class="bvListe" id="bvInterne"></ul>
     <p class="note" id="bvInterneNote"></p>
   </details>
-  <details class="bDetail bvLivre" data-livre="autour" hidden open><summary class="note"><b>Around it, not read by its neurons</b></summary>
+  <details class="bDetail bvBook" data-livre="autour" hidden open><summary class="note"><b>Around it, not read by its neurons</b></summary>
     <ul class="bvListe" id="bvContexte"></ul>
   </details>
-  <details class="bDetail bvLivre" data-livre="siEtAlors" hidden open><summary class="note"><b>What if…</b> — replay the same brain from its seed</summary>
+  <details class="bDetail bvBook" data-livre="siEtAlors" hidden open><summary class="note"><b>What if…</b> — replay the same brain from its seed</summary>
     <p class="note">Same address, same wiring, the facts it read — plus your change. Nothing is sent, nothing is signed: it runs in this page.</p>
     <div class="bvEdits" id="bvEdits"></div>
     <div class="rang" style="gap:8px;margin-top:6px"><button type="button" class="bouton sec bvPetit" id="bvRejouer">Replay 24 beats</button>
@@ -4915,9 +4915,9 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  *   les lisent jetteraient un ReferenceError et la page entiere serait MORTE. Un import manquant ne
  *   se voit pas a la lecture — il se voit a l ecran, trop tard. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
-import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, referenceVue as referenceVueVision, dureeBattement, vitesseBornee } from './vision-cerveau.js';
-import { effetsDe, lumiereDe, poulsDe, echosDe, horizonDe, numeroBattement, voixDe as voixDedans, pourquoiDe, instantaneDedans, camLibre, orbiterCam, zoomerCam,
-  projeterNeurones, poseCamera, planAnimation, voisinsDehors, DUREE_VOL_MS, panCam, mapPose, flightPose, spaceScene } from './vision-dedans.js';
+import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
+import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
+  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
 import { fieldText as inspectFieldText } from './inspect-block.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
@@ -4939,10 +4939,10 @@ function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
 /* ⛔⛔ game57 #5 (Grok Super QA game56 : UNIT « no beat yet » dans Live, beat 92 depuis la Map) : UN cerveau par adresse sur la page.
- *     La map, le profil, Brain / le Control panel, la fenetre Brain et Live lisent et font battre la MEME instance (cerveaux-page.js),
- *     creee UNE fois depuis la memoire de ce navigateur, avec un seul pas par battement de page (cycleBattement). */
-const cerveauxPage = creerCerveauxPage({ creer: (a) => cerveauAvecMemoire(a) });
-import { creerCerveauxPage, battementAffiche, texteBattement, heldFood } from './cerveaux-page.js';
+ *     La map, le profil, Brain / le Control panel, la fenetre Brain et Live lisent et font battre la MEME instance (page-brains.js),
+ *     creee UNE fois depuis la memoire de ce navigateur, avec un seul pas par battement de page (beatCycle). */
+const pageBrains = createPageBrains({ creer: (a) => cerveauAvecMemoire(a) });
+import { createPageBrains, displayedBeat, beatText, heldFood } from './page-brains.js';
 import { nourritureDuBlock } from './nourriture.js';
 /* ⛔ LE CREATEUR D UN BLOCK NE CHANGE JAMAIS (2026-09-19, charge RPC) : nourritureDuBlock le recherchait a CHAQUE lecture
  *    (getLogs + blockNumber + tx). Trouve une fois, il est garde (memoire + stockage navigateur) et passe en `creation`.
@@ -9544,7 +9544,7 @@ function creerHabitant(c) {
    * pareil, et le meme block bougera pareil chez tout le monde. Une adresse illisible n a pas de
    * cerveau plutot qu un cerveau au hasard. */
   let cerveau = null;
-  try { cerveau = cerveauxPage.etat(c.jeton); } catch (e) { cerveau = null; }
+  try { cerveau = pageBrains.etat(c.jeton); } catch (e) { cerveau = null; }
   const h = {
     el, adr: c.jeton, sym: c.symbole, vie: c.vie, etatVie: c.etatVie, t, cerveau, vu: null, phase: null,
     /* ⚠️ DERIVE LENTE, PAS UNE COURSE. Des blocks qui filent seraient impossibles a viser au
@@ -9657,9 +9657,9 @@ function poserBlocks(liste) {
 const BATTEMENT_MS = 600;
 let battement = null;
 /* game57 #5 : un battement de page = un cycle ; une adresse ne fait qu UN pas par cycle, quelle que soit la vue qui l appelle */
-let cycleBattement = 0;
+let beatCycle = 0;
 function battre() {
-  cycleBattement++;
+  beatCycle++;
   for (const h of habitants) {
     if (!h.cerveau) continue;
     const vc = viePourCerveau(h.adr, h.vie, h.etatVie);
@@ -9689,7 +9689,7 @@ function battre() {
       }
     }
     const faitsH = { ...entreesCerveau(vc.vie, h.vieAvant, h.nourriture, vc.etatVie, h.nourritureAvant, h), reveil };
-    const r = cerveauxPage.battre(h.adr, faitsH, cerveauPas, cycleBattement, { source: 'carte', nourritureLue: !!(h.nourriture && h.nourriture.etat === 'LUE') });
+    const r = pageBrains.battre(h.adr, faitsH, cerveauPas, beatCycle, { source: 'carte', nourritureLue: !!(h.nourriture && h.nourriture.etat === 'LUE') });
     /* ⛔ 2026-10-26 (Brain vision) : l objet EXACT que ses neurones viennent de recevoir — la vue « what it sees » ne montre que lui */
     h.faitsVus = faitsH;
     h.cerveau = r.etat;
@@ -12877,7 +12877,7 @@ let profilEnLecture = false;
 let symProfil = null, vieProfil = null, etatVieProfil = undefined, deviseProfil = null, soldeProfil = null;
 /* tip 2040: holders window measured for open profile — never invent */
 let profilNourriture = null;
-/* game57 #4b (a): the address of THAT read — an off-map block only gets its own (cerveaux-page.js#heldFood) */
+/* game57 #4b (a): the address of THAT read — an off-map block only gets its own (page-brains.js#heldFood) */
 let profileFoodAddress = null;
 /* the food reads made off the map by the profile and by Brain, each with its address */
 function offMapFoodReads() {
@@ -13295,13 +13295,13 @@ function battreProfil() {
   const profileFood = heldFood(profilCerveau.adr, hP, offMapFoodReads());
   const fP = entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
     profileFood, etatVieProfil, hP ? hP.nourritureAvant : null, hP || { adr: profilCerveau.adr });
-  const r = cerveauxPage.battre(profilCerveau.adr, fP, cerveauPas, cycleBattement, { source: 'profil', nourritureLue: !!(profileFood && profileFood.etat === 'LUE') });
+  const r = pageBrains.battre(profilCerveau.adr, fP, cerveauPas, beatCycle, { source: 'profil', nourritureLue: !!(profileFood && profileFood.etat === 'LUE') });
   if (!r) return;
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
   /* ⛔ 2026-10-26 (Brain vision) : les faits EXACTS de ce battement et ses 64 dernieres sorties, pour « what it sees » */
   /* game57 #5 : battu deja dans ce cycle par la map -> les faits sont ceux que l instance a REELLEMENT recus */
-  profilCerveau.faits = r.deja ? (cerveauxPage.lire(profilCerveau.adr) || {}).faits || fP : fP;
+  profilCerveau.faits = r.deja ? (pageBrains.lire(profilCerveau.adr) || {}).faits || fP : fP;
   const hp = profilCerveau.histo || [];
   if (!hp.length || hp[hp.length - 1].tick !== r.vu.tick) profilCerveau.histo = hp.concat([r.vu]).slice(-64);
   peindreCerveau();
@@ -14593,7 +14593,7 @@ async function lireProfil(adr, sym, perime, opts) {
   try { peindreChoixParler(); } catch (_) { /* painted after wallet load */ }
   $('#pcActif').checked = cerveauVoulu();
   /* game57 #5 : le cerveau DEJA en marche pour cette adresse (map, Brain, Live), et ses battements deja vus ; sinon cree une fois */
-  try { const dj = cerveauxPage.lire(adr); profilCerveau = { etat: cerveauxPage.etat(adr), vu: dj ? dj.vu : null, adr, histo: dj ? dj.histo.slice() : [] }; } catch (e) { profilCerveau = null; }
+  try { const dj = pageBrains.lire(adr); profilCerveau = { etat: pageBrains.etat(adr), vu: dj ? dj.vu : null, adr, histo: dj ? dj.histo.slice() : [] }; } catch (e) { profilCerveau = null; }
   peindreCerveau();
   /* ⛔ LE METIER S AFFICHE TOUT DE SUITE : il ne depend QUE de l adresse. L attacher a la fin des
    * lectures laissait « … » pendant vingt secondes — une identite connue, cachee par une attente
@@ -25263,7 +25263,7 @@ function choisirBrain(adr) {
   }
   brainHisto = [];
   brainTotal = 0; brainDernier = null;
-  try { brainEtat = cerveauxPage.etat(adr); } catch (e) { brainEtat = null; }
+  try { brainEtat = pageBrains.etat(adr); } catch (e) { brainEtat = null; }
   brainPhaseJournal = null;
   brainVuAvant = null;
   peindreJournal(adr);
@@ -25404,11 +25404,11 @@ function battreBrain() {
       ? brainNourriture.n : null);
   const fB = entreesCerveau(vc.vie, h ? h.vieAvant : null, nBrain, vc.etatVie,
     h ? h.nourritureAvant : null, h || { adr: brainAdr });
-  const r = cerveauxPage.battre(brainAdr, fB, cerveauPas, cycleBattement, { source: 'brain', nourritureLue: !!(nBrain && nBrain.etat === 'LUE') });
+  const r = pageBrains.battre(brainAdr, fB, cerveauPas, beatCycle, { source: 'brain', nourritureLue: !!(nBrain && nBrain.etat === 'LUE') });
   if (!r) return;
   /* ⛔ 2026-10-26 (Brain vision) : l objet EXACT recu par ce cerveau, avec la nourriture qui l a fait (lue ou non) */
   /* game57 #5 : deja battu dans ce cycle (par la map) -> les faits gardes sont ceux que l instance a REELLEMENT recus */
-  { const dj = r.deja ? cerveauxPage.lire(brainAdr) : null;
+  { const dj = r.deja ? pageBrains.lire(brainAdr) : null;
     brainFaitsVus = dj ? { adr: dj.adr, faits: dj.faits, nourritureLue: dj.nourritureLue } : { adr: String(brainAdr || '').toLowerCase(), faits: fB, nourritureLue: !!(nBrain && nBrain.etat === 'LUE') }; }
   /* ⛔ MEME SOURCE QUE LE RESEAU : sinon l ecran annonce « Food not read yet » sur une lecture
    *   REUSSIE, et « pas encore lu » devient indiscernable de « lu puis perdu ». */
@@ -25482,7 +25482,7 @@ function battreBrain() {
         ? ' The beat below is real and its own: it comes from its wiring, not from any price.'
         : '')
     : '';
-  $('#bTick').textContent = texteBattement(r.vu.tick);
+  $('#bTick').textContent = beatText(r.vu.tick);
   $('#bG').textContent = r.vu.gauche_hz.toFixed(1);
   $('#bD').textContent = r.vu.droite_hz.toFixed(1);
   $('#bVirage').textContent = r.vu.virage.toFixed(3);
@@ -25822,7 +25822,7 @@ $('#bReconstruire').addEventListener('click', async () => {
     const borne = ratees ? ' ' + ratees + ' window(s) could not be read, so missing fragments may exist.' : '';
     if (rec.etat === 'EXACTE') {
       brainEtat = rec.cerveau;
-      cerveauxPage.remplacer(adr, rec.cerveau, 'fragments');
+      pageBrains.remplacer(adr, rec.cerveau, 'fragments');
       brainHisto = [];
       noterMemoire(adr, rec.cerveau);
       e.className = 'note wOk';
@@ -25903,7 +25903,7 @@ $('#bReprendre').addEventListener('click', async () => {
     const etat = restaurerDepuisChaine(adr, trouve.lu);
     if (!etat) { e.className = 'note wKo'; e.textContent = 'A memory was found but it cannot be resumed with this brain version.'; return; }
     brainEtat = etat;
-    cerveauxPage.remplacer(adr, etat, 'chain');
+    pageBrains.remplacer(adr, etat, 'chain');
     brainHisto = [];
     noterMemoire(adr, etat);
     e.className = 'note wOk';
@@ -25949,7 +25949,7 @@ function visionCible() {
     const adr = bas(profilCerveau.adr);
     const h = habitants.find((x) => bas(x.adr) === adr) || null;
     /* game57 #4b (a): "read" = what the shared instance REALLY received (an off-map block's food counts too) */
-    const sharedEntry = cerveauxPage.lire(adr);
+    const sharedEntry = pageBrains.lire(adr);
     return { adr, sym: symProfil || (h && h.sym) || null, faits: profilCerveau.faits || null, histo: profilCerveau.histo || [], h,
       nourritureLue: sharedEntry && sharedEntry.faits === profilCerveau.faits ? sharedEntry.nourritureLue === true : !!(h && h.nourriture && h.nourriture.etat === 'LUE'), etat: profilCerveau.etat || null };
   }
@@ -26180,7 +26180,7 @@ function peindreVision() {
     marche: marcheParAdr.get(cible.adr) || null, echange: cible.h ? cible.h.dernierEchange || null : null, nourritureLue: cible.nourritureLue });
   if (!c) return;
   $('#bvTitre').textContent = 'View inside ' + (cible.sym || 'this block') + '\'s brain';
-  /* ⛔ UN SEUL NUMERO DE BATTEMENT (#bvNumero) : celui du battement montre. Le curseur dit sa PLACE, pas un second numero. */
+  /* ⛔ UN SEUL NUMERO DE BATTEMENT (#bvNumber) : celui du battement montre. Le curseur dit sa PLACE, pas un second numero. */
   $('#bvBattementTexte').textContent = vuAnime ? (vision.i + 1) + ' of ' + histo.length + ' recorded' : 'no beat recorded';
   const dedans = vision.vue === 'dedans';
   $('#bvVueDedans').setAttribute('aria-pressed', dedans ? 'true' : 'false');
@@ -26192,7 +26192,7 @@ function peindreVision() {
   if (!vuMontre || vuMontre.tick !== vision.tickMontre) {
     vision.tickMontre = vuMontre ? vuMontre.tick : null; vision.tBattement = performance.now();
     /* une particule par nouveau holder REEL de ce battement (champ vu.nouveaux.detenteurs), placee par son numero — aucun hasard */
-    for (const e of effetsDe(vuMontre)) if (e.effet === 'holder') for (let q = 0; q < e.particules; q++) {
+    for (const e of effectsOf(vuMontre)) if (e.effet === 'holder') for (let q = 0; q < e.particules; q++) {
       const a = ((vuMontre.tick * 7 + q * 13) % 64) / 64 * Math.PI * 2, y = (((vuMontre.tick * 5 + q * 11) % 32) / 32) * 1.4 - 0.7;
       vision.particules.push({ tick: vuMontre.tick, p: [Math.cos(a) * 0.6, y, Math.sin(a) * 0.6] });
     }
@@ -26203,10 +26203,10 @@ function peindreVision() {
   try { vision.inspectSrc = bvInspectSources(); vision.inspectModel = inspectBlock(vision.inspectSrc); } catch (_) { vision.inspectSrc = null; vision.inspectModel = null; }
   if (vision.livre === 'inspect') bvPaintInspect();
   vision.c = c; vision.vu = vuMontre; vision.capMap = capMap; vision.histoMontre = histo; vision.cibleH = h; vision.etatCible = cible.etat || null; vision.faitsCible = cible.faits || null;
-  vision.pouls = poulsDe(vuMontre, { reduit: bvReduit() });
-  $('#bvNumero').textContent = numeroBattement(vuMontre) === null ? '—' : 'Beat ' + texteBattement(numeroBattement(vuMontre));
+  vision.pouls = pulseOf(vuMontre, { reduit: bvReduit() });
+  $('#bvNumber').textContent = beatNumber(vuMontre) === null ? '—' : 'Beat ' + beatText(beatNumber(vuMontre));
   $('#bvHumeur').textContent = vuMontre ? humeurCourteVision(vuMontre.phase) : 'no beat yet';
-  $('#bvPhrase').textContent = voixDedans(vuMontre).texte;
+  $('#bvSentence').textContent = voiceInside(vuMontre).texte;
   $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuMontre ? ', beat ' + vuMontre.tick + ', ' + humeurCourteVision(vuMontre.phase) : ''));
   $('#bvLegende').textContent = vision.controle
     ? 'Take control: a LOCAL snapshot of beat ' + vision.controle.snap.tick + ' — drag to orbit its 128 neurons, inputs and neighbours, scroll to fly, right-drag or Shift-drag to move. Nothing is sent, nothing is signed.'
@@ -26214,28 +26214,28 @@ function peindreVision() {
       : 'Outside: its real neighbours on the map, by their world positions. They stay dim: its neurons read none of them. ')
       + 'The light is its mood; the edge pulse, how many neurons fired; the horizon tilts with its steering.';
   peindreListesVision(c, cible);
-  if (vision.livre === 'pourquoi') bvPeindrePourquoi();
-  const ref = referenceVueVision({ histo, tick: vuMontre ? vuMontre.tick : null });
+  if (vision.livre === 'pourquoi') bvPaintWhy();
+  const ref = viewReferenceVision({ histo, tick: vuMontre ? vuMontre.tick : null });
   const sortie = $('#bvSortie');
   const o = c.sortie;
   sortie.textContent = vuMontre ? ref.sortie.replace(/^Beat \d+: /, '') + (ref.present ? ' · ' + ref.present.replace(/Newest beat recorded: \d+ \(/, '(').replace(/\.$/, '') : '') + '.' : '';
   if (o && o.entree) sortie.title = 'Input fingerprint ' + o.entree + ' · wiring ' + o.cablage;
-  if (!vision.boucle) bvPeindre3D(performance.now());
+  if (!vision.boucle) bvPaint3D(performance.now());
   window.__TB_BRAIN_VISION__ = c;
 }
 /* ══ LA SCENE 3D (game57 #4) — le moteur de la page : posSphere (la sphere de l onglet Brain), son cube, la camera de map3d.js ══
- * ⛔ chaque lumiere, effet et point vient d un champ du battement montre (vision-dedans.js) ; les voisins viennent des positions
+ * ⛔ chaque lumiere, effet et point vient d un champ du battement montre (vision-inside.js) ; les voisins viennent des positions
  *   monde de la map (habitants) et restent eteints : ses neurones n en lisent aucun. */
-const BV_COULEUR = { warm: [255, 170, 60], cold: [90, 170, 255] };
+const BV_COLOUR = { warm: [255, 170, 60], cold: [90, 170, 255] };
 /* game57 #4b (b): the map sky, computed once */
 const BV_STARS = skyStars();
 /* the camera shown: Back to map (flight back), Take control (free), the entry flight from the map, or the Inside / Outside pose */
 function currentCam(t = performance.now()) {
   const reduced = bvReduit();
-  const arrival = poseCamera(vision.vue, 1, reduced);
-  if (vision.backFlight) return flightPose(vision.backFlight.from, vision.backFlight.to, (t - vision.backFlight.t0) / DUREE_VOL_MS, reduced);
+  const arrival = cameraPose(vision.vue, 1, reduced);
+  if (vision.backFlight) return flightPose(vision.backFlight.from, vision.backFlight.to, (t - vision.backFlight.t0) / FLIGHT_MS, reduced);
   if (vision.controle) return vision.controle.cam;
-  if (vision.vol && vision.flightFrom) return flightPose(vision.flightFrom, arrival, (t - vision.vol) / DUREE_VOL_MS, reduced);
+  if (vision.vol && vision.flightFrom) return flightPose(vision.flightFrom, arrival, (t - vision.vol) / FLIGHT_MS, reduced);
   return flightPose(null, arrival, 1, true);
 }
 /* Back to map: the camera flies out of the block towards the map heading, then the window closes. Reduced motion: a cut. */
@@ -26249,24 +26249,24 @@ function bvPanControl(dx, dy) {
   vision.controle = { ...vision.controle, cam: panCam(vision.controle.cam, dx, dy) };
   peindreVision();
 }
-function bvPeindre3D(t) {
+function bvPaint3D(t) {
   const cv = $('#bv3d'); if (!cv) return;
   const ctx = cv.getContext('2d'), L = cv.width, H = cv.height;
-  const vu = vision.vu, reduit = bvReduit(), plan = planAnimation(reduit);
-  const dureeB = dureeBattement(vision.vitesse);
+  const vu = vision.vu, reduit = bvReduit(), plan = animationPlan(reduit);
+  const dureeB = beatDuration(vision.vitesse);
   const prog = plan.lumiere === 'statique' ? 0.5 : Math.max(0, Math.min(1, (t - vision.tBattement) / dureeB));
   /* la lumiere de TOUTE la scene = l humeur decidee (vu.phase) ; NON_LU / MORT = neutre */
-  const lum = lumiereDe(vu, TEINTE_HUMEUR);
+  const lum = lightOf(vu, TEINTE_HUMEUR);
   const th = lum.theme ? teinteH() : lum.teinte;
   const env = plan.lumiere === 'statique' ? 1 : 0.85 + 0.15 * Math.cos(prog * Math.PI * 2);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.fillStyle = lum.neutre ? '#0b0d12' : 'hsl(' + th + ' 45% ' + (6 + 10 * lum.force * env).toFixed(1) + '%)';
   ctx.fillRect(0, 0, L, H);
-  const effets = effetsDe(vu);
+  const effets = effectsOf(vu);
   const fort = (nom) => { const e = effets.find((x) => x.effet === nom); return e ? e.intensite : 0; };
   /* secousse : seulement sans mouvement reduit, et seulement quand un echange REEL arrive, au debut du battement */
   const sec = plan.secousse && (fort('buy') || fort('sell')) && prog < 0.25 ? (1 - prog * 4) * 3 * Math.max(fort('buy'), fort('sell')) : 0;
-  const hz = horizonDe(vu);
+  const hz = horizonOf(vu);
   ctx.translate(L / 2 + (sec ? Math.sin(t / 23) * sec : 0), H / 2);
   ctx.rotate((hz.deg * Math.PI) / 180);
   ctx.translate(-L / 2, -H / 2);
@@ -26276,12 +26276,12 @@ function bvPeindre3D(t) {
   /* game57 #4b (b): the camera is the map's (map3d.js#projectCam); it flies from the map into the block, or back */
   const cam = currentCam(t);
   const pos = posSphere(NEURONES).map(([x, y, z]) => [x * 0.92, y * 0.92, z * 0.92]);
-  const proj = (pts) => projeterNeurones(pts, cam, L, H);
+  const proj = (pts) => projectNeurons(pts, cam, L, H);
   const dehors = !vision.controle && vision.vue !== 'dedans';
   if (dehors || cam.dist > 1.2) {
     /* son cube : 12 aretes, comme aretesDuCube */
     const S = [-1, 1], coins = []; for (const x of S) for (const y of S) for (const z of S) coins.push([x, y, z]);
-    const pc = projeterNeurones(coins, cam, L, H); const par = new Map(pc.map((q) => [q.n, q]));
+    const pc = projectNeurons(coins, cam, L, H); const par = new Map(pc.map((q) => [q.n, q]));
     ctx.strokeStyle = 'hsl(' + teinteH() + ' 70% 70% / .55)';
     for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) {
       if (coins[a].reduce((s2, v, k2) => s2 + (v !== coins[b][k2] ? 1 : 0), 0) !== 1 || !par.has(a) || !par.has(b)) continue;
@@ -26296,7 +26296,7 @@ function bvPeindre3D(t) {
   /* ONE space: its inputs on an arc in front of it (true value or "not read"), its REAL neighbours (cubes like on the map, grey:
    *   no neuron reads them); the neurons are painted right after */
   const scene = spaceScene({ inputs: vision.c ? vision.c.entrees.map((e) => ({ key: e.cle, label: e.libelle, read: e.lu, text: e.texte })) : [],
-    neighbours: voisinsDehors(vision.cibleH, habitants, new Set()) });
+    neighbours: outsideNeighbours(vision.cibleH, habitants, new Set()) });
   const aimPoints = [];
   for (const o of scene) {
     if (o.kind === 'neighbour') {
@@ -26324,7 +26324,7 @@ function bvPeindre3D(t) {
   /* les neurones : allumes = vu.indices (ou l instantane) ; echos = ceux des 5 battements d avant, plus pales avec l age */
   const allumes = new Set(vision.controle ? vision.controle.snap.indices : vu && Array.isArray(vu.indices) ? vu.indices : []);
   const ages = new Map();
-  if (!vision.controle) for (const e of echosDe(vision.histoMontre || [], vision.i)) for (const n of e.indices) if (!ages.has(n)) ages.set(n, e.age);
+  if (!vision.controle) for (const e of echoesOf(vision.histoMontre || [], vision.i)) for (const n of e.indices) if (!ages.has(n)) ages.set(n, e.age);
   for (const q of proj(pos)) {
     const on = allumes.has(q.n), age = ages.get(q.n);
     /* game57 #4b (b): neurons readable among the stars; a neuron that fired glows, like a lit tile on the map */
@@ -26345,15 +26345,15 @@ function bvPeindre3D(t) {
   const fond = plan.lumiere === 'statique' ? 0.6 : 1 - prog;
   for (const e of effets) {
     const a = e.intensite * fond;
-    if (e.effet === 'buy') { const g = ctx.createRadialGradient(L / 2, H / 2, 4, L / 2, H / 2, Math.max(L, H) * 0.45); g.addColorStop(0, 'rgb(' + BV_COULEUR.warm + ' / ' + (0.45 * a).toFixed(3) + ')'); g.addColorStop(1, 'rgb(' + BV_COULEUR.warm + ' / 0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, L, H); }
-    if (e.effet === 'sell') { const g = ctx.createRadialGradient(L / 2, H / 2, Math.min(L, H) * 0.3, L / 2, H / 2, Math.max(L, H) * 0.7); g.addColorStop(0, 'rgb(' + BV_COULEUR.cold + ' / 0)'); g.addColorStop(1, 'rgb(' + BV_COULEUR.cold + ' / ' + (0.55 * a).toFixed(3) + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, L, H); }
+    if (e.effet === 'buy') { const g = ctx.createRadialGradient(L / 2, H / 2, 4, L / 2, H / 2, Math.max(L, H) * 0.45); g.addColorStop(0, 'rgb(' + BV_COLOUR.warm + ' / ' + (0.45 * a).toFixed(3) + ')'); g.addColorStop(1, 'rgb(' + BV_COLOUR.warm + ' / 0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, L, H); }
+    if (e.effet === 'sell') { const g = ctx.createRadialGradient(L / 2, H / 2, Math.min(L, H) * 0.3, L / 2, H / 2, Math.max(L, H) * 0.7); g.addColorStop(0, 'rgb(' + BV_COLOUR.cold + ' / 0)'); g.addColorStop(1, 'rgb(' + BV_COLOUR.cold + ' / ' + (0.55 * a).toFixed(3) + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, L, H); }
     if (e.effet === 'transfer') for (const x0 of [0, L - 28]) for (let y = 0; y < H; y += 12) {
       const m = plan.lumiere === 'statique' ? 0.5 : 0.5 + 0.5 * Math.sin(t / 90 + y / 17);
       ctx.fillStyle = 'rgb(230 230 255 / ' + (0.22 * a * m).toFixed(3) + ')'; ctx.fillRect(x0, y, 28, 6);
     }
   }
   /* le pouls au bord de l ecran : force = part de neurones qui ont tire ; statique en mouvement reduit */
-  const pl = vision.pouls || poulsDe(vu, { reduit });
+  const pl = vision.pouls || pulseOf(vu, { reduit });
   if (pl.force > 0) {
     const bat = pl.anime ? Math.max(0, 1 - prog * 2.5) : 0.5;
     ctx.strokeStyle = 'hsl(' + (lum.neutre ? 0 : th) + ' ' + (lum.neutre ? 0 : 80) + '% 70% / ' + (0.15 + 0.6 * pl.force * bat).toFixed(3) + ')';
@@ -26361,25 +26361,25 @@ function bvPeindre3D(t) {
   }
 }
 /* la boucle d animation : AUCUNE en mouvement reduit (une peinture statique), sinon requestAnimationFrame tant que la fenetre est ouverte */
-function bvDemarrerBoucle() {
-  const plan = planAnimation(bvReduit());
+function bvStartLoop() {
+  const plan = animationPlan(bvReduit());
   if (vision.boucle) { cancelAnimationFrame(vision.boucle); vision.boucle = null; }
-  if (!plan.boucle) { vision.vol = null; bvPeindre3D(0); return; }
+  if (!plan.boucle) { vision.vol = null; bvPaint3D(0); return; }
   const tour = (t) => {
     const dl = document.getElementById('bvPop');
     if (!vision.boucle || !dl || !dl.open || dl.classList.contains('bcReduit')) { vision.boucle = null; return; }
-    bvPeindre3D(t);
+    bvPaint3D(t);
     /* Back to map: once the flight back is over, the window closes onto the map */
-    if (vision.backFlight && t - vision.backFlight.t0 >= DUREE_VOL_MS) { vision.backFlight = null; vision.boucle = null; dl.close(); return; }
+    if (vision.backFlight && t - vision.backFlight.t0 >= FLIGHT_MS) { vision.backFlight = null; vision.boucle = null; dl.close(); return; }
     vision.boucle = requestAnimationFrame(tour);
   };
   vision.boucle = requestAnimationFrame(tour);
 }
-/* « WHY » : ouvert en cliquant l humeur. Chaque ligne = un champ de vision-dedans.js#pourquoiDe (vraies valeurs). */
-function bvPeindrePourquoi() {
-  const ul = $('#bvPourquoi'); if (!ul) return;
+/* « WHY » : ouvert en cliquant l humeur. Chaque ligne = un champ de vision-inside.js#whyOf (vraies valeurs). */
+function bvPaintWhy() {
+  const ul = $('#bvWhy'); if (!ul) return;
   ul.replaceChildren();
-  const w = vision.c && vision.vu ? pourquoiDe({ c: vision.c, faits: vision.faitsCible, vu: vision.vu,
+  const w = vision.c && vision.vu ? whyOf({ c: vision.c, faits: vision.faitsCible, vu: vision.vu,
     vuAvant: (vision.histoMontre || [])[(vision.histoMontre || []).indexOf(vision.vu) - 1] || null, etat: vision.etatCible, capMap: vision.capMap }) : null;
   const ligne = (g, d) => { const li = document.createElement('li'); const a = document.createElement('span'); a.textContent = g; const b = document.createElement('b'); b.textContent = d; li.append(a, b); ul.append(li); };
   if (!w) { ligne('Mood', 'no beat recorded here yet — nothing to explain'); return; }
@@ -26392,10 +26392,10 @@ function bvPeindrePourquoi() {
   ligne('Where it is looking', r.virage === null ? 'steering not recorded' : 'steering ' + r.virage + ' (' + r.cote + ') · speed ' + r.vitesse + (r.capMap === null ? '' : ' · heading ' + Math.round(r.capMap * 180 / Math.PI) + '° on the map'));
 }
 /* l etagere : un livre clique s ouvre en ONGLET ; un onglet se ferme par son × */
-function bvOuvrirLivre(cle) {
+function bvOpenBook(cle) {
   if (!vision.livres.includes(cle)) vision.livres.push(cle);
-  vision.livre = cle; bvPeindreOnglets();
-  if (cle === 'pourquoi') bvPeindrePourquoi();
+  vision.livre = cle; bvPaintTabs();
+  if (cle === 'pourquoi') bvPaintWhy();
   if (cle === 'inspect') bvPaintInspect();
 }
 /* == game57 #4b (d): OMNISCIENT INSPECT — everything the page already holds about this block, read from memory only ==
@@ -26408,7 +26408,7 @@ function bvInspectSources() {
   const histo = Array.isArray(target.histo) ? target.histo : [];
   const vu = histo.length ? histo[histo.length - 1] : null;
   let why = null;
-  try { why = vision.c && vu ? pourquoiDe({ c: vision.c, faits: target.faits, vu, vuAvant: histo[histo.length - 2] || null, etat: target.etat, capMap: vision.capMap }) : null; } catch (_) { why = null; }
+  try { why = vision.c && vu ? whyOf({ c: vision.c, faits: target.faits, vu, vuAvant: histo[histo.length - 2] || null, etat: target.etat, capMap: vision.capMap }) : null; } catch (_) { why = null; }
   return { address: a, symbol: target.sym || null, market: marcheParAdr.get(a) || null, creator: createursConnus.get(CHAINE + ':' + a) || null,
     voice: voixDe(a), vu, histo, internals: target.etat ? interneVision(target.etat) : null, champ: vision.c || null, why,
     onMap: !!h, neighbours: voisinsVision(h).map((v) => ({ adr: v.adr, sym: v.sym || null, phase: v.phase || null, distance: v.distance })),
@@ -26452,46 +26452,46 @@ function bvPaintAim(points, L, H) {
     row.textContent = l.label + ': ' + l.value; el.append(row);
   }
 }
-function bvFermerLivre(cle) {
+function bvCloseBook(cle) {
   vision.livres = vision.livres.filter((x) => x !== cle);
   if (vision.livre === cle) vision.livre = vision.livres[vision.livres.length - 1] || null;
-  bvPeindreOnglets();
+  bvPaintTabs();
 }
-function bvPeindreOnglets() {
-  const bar = $('#bvOnglets'); if (!bar) return;
+function bvPaintTabs() {
+  const bar = $('#bvTabs'); if (!bar) return;
   bar.replaceChildren();
   for (const cle of vision.livres) {
-    const dos = document.querySelector('#bvEtagere [data-livre="' + cle + '"]');
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'bvOnglet'; b.setAttribute('role', 'tab');
+    const dos = document.querySelector('#bvShelf [data-livre="' + cle + '"]');
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'bvTab'; b.setAttribute('role', 'tab');
     b.setAttribute('aria-selected', cle === vision.livre ? 'true' : 'false'); b.dataset.onglet = cle;
     const t = document.createElement('span'); t.textContent = dos ? dos.textContent : cle;
     const x = document.createElement('span'); x.textContent = '×'; x.setAttribute('aria-label', 'Close this tab'); x.dataset.fermer = cle;
     b.append(t, x); bar.append(b);
   }
-  for (const d of document.querySelectorAll('#bvEtagere [data-livre]')) d.setAttribute('aria-selected', d.dataset.livre === vision.livre ? 'true' : 'false');
-  for (const sct of document.querySelectorAll('#bvPop .bvLivre')) { const on = sct.dataset.livre === vision.livre; sct.hidden = !on; if (on && 'open' in sct) sct.open = true; }
+  for (const d of document.querySelectorAll('#bvShelf [data-livre]')) d.setAttribute('aria-selected', d.dataset.livre === vision.livre ? 'true' : 'false');
+  for (const sct of document.querySelectorAll('#bvPop .bvBook')) { const on = sct.dataset.livre === vision.livre; sct.hidden = !on; if (on && 'open' in sct) sct.open = true; }
 }
 /* ══ TAKE CONTROL : une camera libre sur un instantane LOCAL des 128 neurones ; aucune requete, aucun wallet ; Back to live ══ */
-function bvPrendreControle() {
+function bvTakeControl() {
   const cible = visionCible();
-  const snap = cible ? instantaneDedans({ adr: cible.adr, etat: cible.etat || null, histo: cible.histo || [], i: vision.i }) : null;
+  const snap = cible ? insideSnapshot({ adr: cible.adr, etat: cible.etat || null, histo: cible.histo || [], i: vision.i }) : null;
   if (!snap) { $('#bvLegende').textContent = 'No beat recorded here yet — there is nothing to take control of.'; return; }
-  vision.controle = { snap, cam: camLibre() };
+  vision.controle = { snap, cam: freeCam() };
   vision.jouer = false;
-  $('#bvControle').hidden = true; $('#bvRetourLive').hidden = false;
+  $('#bvControl').hidden = true; $('#bvBackToLive').hidden = false;
   $('#bvJouer').textContent = 'Play';
   peindreVision();
 }
-function bvGesteControle(dx, dy, dz) {
+function bvControlGesture(dx, dy, dz) {
   if (!vision.controle) return;
-  let cam = orbiterCam(vision.controle.cam, dx, dy);
-  if (dz) cam = zoomerCam(cam, dz);
+  let cam = orbitCam(vision.controle.cam, dx, dy);
+  if (dz) cam = zoomCam(cam, dz);
   vision.controle = { ...vision.controle, cam };
   peindreVision();
 }
-function bvRetourLive() {
+function bvBackToLive() {
   vision.controle = null; vision.suivre = true; vision.jouer = !bvReduit();
-  $('#bvControle').hidden = false; $('#bvRetourLive').hidden = true;
+  $('#bvControl').hidden = false; $('#bvBackToLive').hidden = true;
   $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
   peindreVision();
 }
@@ -26572,7 +26572,7 @@ function ouvrirVision(source) {
   /* ⛔ game57 #4 : une fenetre, PAS une modale — la page reste utilisable derriere (comme le Control panel) */
   try { dl.show(); } catch (_) { dl.setAttribute('open', ''); }
   vision.controle = null; vision.particules = []; vision.tickMontre = null;
-  $('#bvControle').hidden = false; $('#bvRetourLive').hidden = true;
+  $('#bvControl').hidden = false; $('#bvBackToLive').hidden = true;
   /* game57 #4b (b): we ENTER from the map — the flight starts at the map camera heading and goes inside (a cut with reduced motion) */
   vision.backFlight = null; vision.vue = 'dedans';
   vision.flightFrom = mapPose(moteur3d && typeof moteur3d.camera === 'function' ? moteur3d.camera() : null);
@@ -26589,50 +26589,50 @@ function ouvrirVision(source) {
   peindreParleVision();
   peindreVision();
   lancerSimVision();
-  bvRelancerMinuteur();
-  bvDemarrerBoucle();
+  bvRestartTimer();
+  bvStartLoop();
   window.__TB_BRAIN_VISION_MS__ = Math.round(performance.now() - vision.ouvertA);
 }
-/* la lecture a rythme humain (vision-cerveau.js#dureeBattement : 1,5 s a 1x) ; Step avance d un battement enregistre */
-function bvAvancer() {
+/* la lecture a rythme humain (vision-cerveau.js#beatDuration : 1,5 s a 1x) ; Step avance d un battement enregistre */
+function bvAdvance() {
   const c2 = visionCible();
   const n2 = c2 && Array.isArray(c2.histo) ? c2.histo.length : 0;
   vision.i++;
   if (vision.i >= n2 - 1) { vision.i = n2 - 1; vision.suivre = true; }
 }
-function bvRelancerMinuteur() {
+function bvRestartTimer() {
   clearInterval(vision.minuteur);
   vision.minuteur = setInterval(() => {
     if (!$('#bvPop').open) { clearInterval(vision.minuteur); return; }
-    if (vision.jouer && !vision.suivre && !vision.controle) bvAvancer();
+    if (vision.jouer && !vision.suivre && !vision.controle) bvAdvance();
     if (vision.jouer && !vision.controle) peindreVision();
-  }, dureeBattement(vision.vitesse));
+  }, beatDuration(vision.vitesse));
 }
 $('#bVision').addEventListener('click', () => ouvrirVision('brain'));
 $('#pcVision').addEventListener('click', () => ouvrirVision('profil'));
 $('#bvFermer').addEventListener('click', () => $('#bvPop').close());
 $('#bvPop').addEventListener('close', () => { clearInterval(vision.minuteur); vision.minuteur = null; if (vision.boucle) cancelAnimationFrame(vision.boucle); vision.boucle = null; vision.controle = null; });
 $('#bvPop').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); $('#bvPop').close(); } });
-$('#bvPas').addEventListener('click', () => { vision.jouer = false; vision.suivre = false; $('#bvJouer').textContent = 'Play'; if (vision.controle) bvRetourLive(); bvAvancer(); peindreVision(); });
+$('#bvStep').addEventListener('click', () => { vision.jouer = false; vision.suivre = false; $('#bvJouer').textContent = 'Play'; if (vision.controle) bvBackToLive(); bvAdvance(); peindreVision(); });
 for (const b of document.querySelectorAll('#bvPop [data-vitesse]')) b.addEventListener('click', () => {
-  vision.vitesse = vitesseBornee(b.dataset.vitesse);
+  vision.vitesse = boundedSpeed(b.dataset.vitesse);
   for (const x of document.querySelectorAll('#bvPop [data-vitesse]')) x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
-  bvRelancerMinuteur();
+  bvRestartTimer();
 });
-$('#bvHumeur').addEventListener('click', () => bvOuvrirLivre('pourquoi'));
-$('#bvEtagere').addEventListener('click', (e) => { const d = e.target.closest('[data-livre]'); if (d) bvOuvrirLivre(d.dataset.livre); });
-$('#bvOnglets').addEventListener('click', (e) => {
-  const x = e.target.closest('[data-fermer]'); if (x) { bvFermerLivre(x.dataset.fermer); return; }
-  const o = e.target.closest('[data-onglet]'); if (o) { vision.livre = o.dataset.onglet; bvPeindreOnglets(); if (vision.livre === 'pourquoi') bvPeindrePourquoi(); }
+$('#bvHumeur').addEventListener('click', () => bvOpenBook('pourquoi'));
+$('#bvShelf').addEventListener('click', (e) => { const d = e.target.closest('[data-livre]'); if (d) bvOpenBook(d.dataset.livre); });
+$('#bvTabs').addEventListener('click', (e) => {
+  const x = e.target.closest('[data-fermer]'); if (x) { bvCloseBook(x.dataset.fermer); return; }
+  const o = e.target.closest('[data-onglet]'); if (o) { vision.livre = o.dataset.onglet; bvPaintTabs(); if (vision.livre === 'pourquoi') bvPaintWhy(); }
 });
-$('#bvControle').addEventListener('click', bvPrendreControle);
-$('#bvRetourLive').addEventListener('click', bvRetourLive);
+$('#bvControl').addEventListener('click', bvTakeControl);
+$('#bvBackToLive').addEventListener('click', bvBackToLive);
 (function bvGestesCamera() {
   const cv = $('#bv3d'); if (!cv) return;
   let prec = null;
   /* game57 #4b (b): like the map — drag = orbit, right-drag or Shift-drag = pan, wheel = fly */
   cv.addEventListener('pointerdown', (e) => { if (!vision.controle) return; prec = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
-  cv.addEventListener('pointermove', (e) => { if (!prec) return; const dx = e.clientX - prec.x, dy = e.clientY - prec.y; if (prec.pan) bvPanControl(dx, dy); else bvGesteControle(dx, dy, 0); prec = { ...prec, x: e.clientX, y: e.clientY }; });
+  cv.addEventListener('pointermove', (e) => { if (!prec) return; const dx = e.clientX - prec.x, dy = e.clientY - prec.y; if (prec.pan) bvPanControl(dx, dy); else bvControlGesture(dx, dy, 0); prec = { ...prec, x: e.clientX, y: e.clientY }; });
   cv.addEventListener('contextmenu', (e) => { if (vision.controle) e.preventDefault(); });
   /* game57 #4b (d): click an object to pin its overlay; click empty space to release (no drag moved the camera) */
   cv.addEventListener('click', (e) => {
@@ -26640,11 +26640,11 @@ $('#bvRetourLive').addEventListener('click', bvRetourLive);
     const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sy;
     const hit = aimedAt((vision.aimPoints || []).map((p) => ({ ...p, x: p.x - x + cv.width / 2, y: p.y - y + cv.height / 2 })), cv.width, cv.height, 24);
     vision.pinned = hit ? hit.id : null; vision.aimKey = null;
-    if (!bvReduit()) return; bvPeindre3D(0);
+    if (!bvReduit()) return; bvPaint3D(0);
   });
   cv.addEventListener('pointerup', () => { prec = null; });
   cv.addEventListener('pointercancel', () => { prec = null; });
-  cv.addEventListener('wheel', (e) => { if (!vision.controle) return; e.preventDefault(); bvGesteControle(0, 0, Math.sign(e.deltaY)); }, { passive: false });
+  cv.addEventListener('wheel', (e) => { if (!vision.controle) return; e.preventDefault(); bvControlGesture(0, 0, Math.sign(e.deltaY)); }, { passive: false });
 })();
 $('#bvJouer').addEventListener('click', () => {
   vision.jouer = !vision.jouer;
@@ -26656,8 +26656,8 @@ $('#bvBattement').addEventListener('input', (e) => {
   peindreVision();
 });
 $('#bvRejouer').addEventListener('click', lancerSimVision);
-$('#bvVueDedans').addEventListener('click', () => { const from = currentCam(); if (vision.controle) bvRetourLive(); vision.backFlight = null; vision.vue = 'dedans'; vision.flightFrom = from; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
-$('#bvVueDehors').addEventListener('click', () => { const from = currentCam(); if (vision.controle) bvRetourLive(); vision.backFlight = null; vision.vue = 'dehors'; vision.flightFrom = from; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
+$('#bvVueDedans').addEventListener('click', () => { const from = currentCam(); if (vision.controle) bvBackToLive(); vision.backFlight = null; vision.vue = 'dedans'; vision.flightFrom = from; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
+$('#bvVueDehors').addEventListener('click', () => { const from = currentCam(); if (vision.controle) bvBackToLive(); vision.backFlight = null; vision.vue = 'dehors'; vision.flightFrom = from; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
 $('#bvBackToMap').addEventListener('click', bvBackToMap);
 $('#bvRemettre').addEventListener('click', () => {
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
@@ -26707,18 +26707,18 @@ const liveMesures = new Map(); /* adresse -> { n, total, max, dernier } : le tem
 const liveEtroit = () => { try { return window.matchMedia('(max-width:760px)').matches; } catch (_) { return false; } };
 const liveOuvert = () => { const p = $('#blvPop'); return !!(p && !p.hidden); };
 /** la source de battements d UNE adresse, ou null. `deja` = la source a laquelle la tuile est attachee (on n en change pas). */
-/* ⛔⛔ game57 #5 : la tuile lit L instance de son adresse (cerveaux-page.js) — celle que la map, le profil ou Brain font deja battre.
+/* ⛔⛔ game57 #5 : la tuile lit L instance de son adresse (page-brains.js) — celle que la map, le profil ou Brain font deja battre.
  *     Avant, elle cherchait la copie de la map, puis de Brain, puis du profil : UNIT, hors carte et profil ferme, restait
  *     « no beat yet » alors que la page l avait fait battre jusqu a beat 92. */
 function liveSourceDe(adr, deja) {
   const bas = (x) => String(x || '').toLowerCase();
   const h = habitants.find((x) => bas(x.adr) === adr) || null;
-  const e = cerveauxPage.lire(adr);
+  const e = pageBrains.lire(adr);
   if (!e || !e.vu) return null;
   return { source: 'page', vu: e.vu, faits: e.faits || null, nourritureLue: e.nourritureLue, h };
 }
 /* les faits d un block que seule une tuile Live regarde : les MEMES entrees que Brain pour un block hors carte (entreesCerveau) */
-function faitsHorsCarte(adr) {
+function offMapFacts(adr) {
   const a = String(adr || '').toLowerCase();
   const h = habitants.find((x) => String(x.adr).toLowerCase() === a) || null;
   const vc = viePourCerveau(a, h ? h.vie : null, h ? h.etatVie : null);
@@ -26772,14 +26772,14 @@ function peindreTuileLive(t) {
   const ms = Math.round((performance.now() - t0) * 100) / 100;
   const m = liveMesures.get(t.adr) || { n: 0, total: 0, max: 0, dernier: 0 };
   m.n++; m.total += ms; m.max = Math.max(m.max, ms); m.dernier = ms; liveMesures.set(t.adr, m);
-  pied.textContent = 'beat ' + texteBattement(e.tick) + ' · ' + e.spikes + ' fired · ' + t.histo.length + ' beats kept · from ' + e.sourceTexte;
+  pied.textContent = 'beat ' + beatText(e.tick) + ' · ' + e.spikes + ' fired · ' + t.histo.length + ' beats kept · from ' + e.sourceTexte;
   el.dataset.liveTick = String(e.tick);
   el.dataset.liveEmpreinte = r && r.k ? r.k.empreinte : '';
 }
 function battreLive() {
   if (!live.tuiles.length || !liveOuvert()) return;
   /* game57 #5 : une tuile dont le block ne bat nulle part ailleurs fait battre l instance PARTAGEE (deja battue ce cycle = rien de plus) */
-  for (const t of live.tuiles) cerveauxPage.battre(t.adr, faitsHorsCarte(t.adr), cerveauPas, cycleBattement, { source: 'live', nourritureLue: pageFoodRead(t.adr) });
+  for (const t of live.tuiles) pageBrains.battre(t.adr, offMapFacts(t.adr), cerveauPas, beatCycle, { source: 'live', nourritureLue: pageFoodRead(t.adr) });
   const pris = nourrirLive(live, liveSourceDe);
   for (const adr of pris) { const t = live.tuiles.find((x) => x.adr === adr); if (t) peindreTuileLive(t); }
   window.__TB_LIVE_MS__ = Object.fromEntries([...liveMesures].map(([a, m]) => [a, { n: m.n, moyenne: Math.round((m.total / m.n) * 100) / 100, max: m.max, dernier: m.dernier }]));
@@ -30535,7 +30535,7 @@ function bcPeindreCerveau(a, snap) {
   t.push(['Mood', String(snap.humeur || '—')]);
   const ressenti = snap.tick === null || snap.tick === undefined ? [] : bcRessenti(snap);
   if (ressenti.length) t.push(['Feels', ressenti.join(' · ')]);
-  t.push(['Beat', texteBattement(battementAffiche(cerveauxPage, a, snap))]);
+  t.push(['Beat', beatText(displayedBeat(pageBrains, a, snap))]);
   if (Number.isFinite(Number(sp.actifs)) && Number.isFinite(Number(sp.neurones))) t.push(['Firing now', sp.actifs + ' / ' + sp.neurones]);
   if (Number.isFinite(Number(snap.memoire))) t.push(['Memory', Math.round(Number(snap.memoire) * 100) + ' %']);
   if (Number.isFinite(Number(sp.depuis_ouverture))) t.push(['Spikes this visit', Number(sp.depuis_ouverture).toLocaleString('en-US')]);
@@ -31297,7 +31297,7 @@ function bcPeindre(snap) {
   $('#bcAvatar').dataset.phase = snap.phase || 'NON_LU';
   $('#bcHumeur').textContent = snap.phrase || '';
   $('#bcPhase').textContent = snap.humeur || '—';
-  $('#bcTick').textContent = texteBattement(battementAffiche(cerveauxPage, a, snap));
+  $('#bcTick').textContent = beatText(displayedBeat(pageBrains, a, snap));
   $('#bcPrix').textContent = mk && Number(mk.prixUsd) > 0 ? (Number(mk.prixUsd) >= 1 ? '$' + Number(mk.prixUsd).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '$' + Number(mk.prixUsd).toPrecision(3)) : '—';
   $('#bcLiq').textContent = mk && Number(mk.liquiditeUsd) > 0 ? usdCourt(mk.liquiditeUsd) : '—';
   /* tant que le cerveau n a pas battu, le raster n a rien a montrer : pas de cadre vide */
@@ -33635,7 +33635,7 @@ function bcBasculerTaille(axe) {
  * Le MEME comportement que #bcPop pour une autre fenetre : bord a tirer (bcBornerTaille, bcAxeTaille, bcNavPx — les bornes du panneau),
  *   double clic / double tap = le maximum <-> la taille d origine, clavier (fleches, Entree, Origine), replier (–/+), agrandir (□),
  *   et, sur grand ecran, deplacer par l en-tete (borne a l ecran). Tailles gardees dans CE navigateur (localStorage, en try/catch). */
-function fenetreCommeLePanneau({ d, p, cle, prefixe, haut, reduire, agrandir }) {
+function windowLikePanel({ d, p, cle, prefixe, haut, reduire, agrandir }) {
   if (!d || !p) return null;
   const prop = (axe) => '--' + prefixe + (axe === 'h' ? 'HLibre' : 'WLibre');
   const lire = () => { try { const o = JSON.parse(localStorage.getItem(cle) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (_) { return {}; } };
@@ -33712,8 +33712,8 @@ function fenetreCommeLePanneau({ d, p, cle, prefixe, haut, reduire, agrandir }) 
   }
   return { appliquer, basculer };
 }
-fenetreCommeLePanneau({ d: $('#bvPop'), p: $('#bvPoignee'), cle: 'tblock.brainview.taille.v1', prefixe: 'bv', haut: $('#bvTete'), reduire: $('#bvReduire'), agrandir: $('#bvAgrandir') });
-$('#bvPop').addEventListener('fenetre', () => { if ($('#bvPop').open && !$('#bvPop').classList.contains('bcReduit') && !vision.boucle) bvDemarrerBoucle(); });
+windowLikePanel({ d: $('#bvPop'), p: $('#bvHandle'), cle: 'tblock.brainview.taille.v1', prefixe: 'bv', haut: $('#bvTete'), reduire: $('#bvReduire'), agrandir: $('#bvMaximize') });
+$('#bvPop').addEventListener('fenetre', () => { if ($('#bvPop').open && !$('#bvPop').classList.contains('bcReduit') && !vision.boucle) bvStartLoop(); });
 /* le lien rendu par tblock_panel_open : /app.html?panel=1#s=<session>&b=<block> — la session vit dans le FRAGMENT, jamais envoyee */
 (function bcDemarrage() {
   const h = new URLSearchParams(location.hash.replace(/^#/, ''));

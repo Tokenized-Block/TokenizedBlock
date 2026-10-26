@@ -1,7 +1,7 @@
 // test-brain-space-20261026 — game57 #4b (b): INSIDE the brain is the continuation of the 3D map.
 //   A. map3d.js exposes ITS camera as pure functions (rotateCam, projectCam, camFocal, easeCam, skyStars) and uses them itself:
 //      the map and the brain view project with THE SAME engine (same numbers, bit for bit).
-//   B. vision-dedans.js: projeterNeurones goes through projectCam; panCam (move), mapPose (the map's camera heading),
+//   B. vision-inside.js: projectNeurons goes through projectCam; panCam (move), mapPose (the map's camera heading),
 //      flightPose (map -> inside fly, or back; reduced motion = a cut), spaceScene (neurons, inputs, REAL neighbours) changes no
 //      value: "not read" stays "not read", a neighbour stays "not read by its neurons".
 //   C. app.html: opening = a fly from the map's camera; Back to map = a fly back then close (a cut with reduced motion);
@@ -12,7 +12,7 @@ const DIR = new URL('./', import.meta.url);
 const read = (f) => readFileSync(new URL(f, DIR), 'utf8').replace(/\r\n/g, '\n');
 let count = 0; const ok = (c, m) => { assert.ok(c, m); count++; };
 const M = await import(new URL('map3d.js', DIR));
-const V = await import(new URL('vision-dedans.js', DIR));
+const V = await import(new URL('vision-inside.js', DIR));
 const map3d = read('map3d.js'), app = read('app.html');
 
 /* A */
@@ -36,14 +36,14 @@ ok(/const ETOILES = skyStars\(\);/.test(map3d), 'A: the map draws the sky from s
 ok(/camera: \(\) => \(\{ yaw: cam\.yaw, pitch: cam\.pitch \}\)/.test(map3d), 'A: the engine reports its heading (read-only)');
 
 /* B */
-for (const k of ['panCam', 'mapPose', 'flightPose', 'spaceScene']) ok(typeof V[k] === 'function', 'B: vision-dedans exports ' + k);
+for (const k of ['panCam', 'mapPose', 'flightPose', 'spaceScene']) ok(typeof V[k] === 'function', 'B: vision-inside exports ' + k);
 {
   const cam = { yaw: 0.3, pitch: -0.2, dist: 0.9, ox: 12, oy: -4 };
-  const p = V.projeterNeurones([[0.1, 0.2, 0.3]], cam, 400, 300)[0], q = M.projectCam(cam, 0.1, 0.2, 0.3, 400, 300, 0.05);
+  const p = V.projectNeurons([[0.1, 0.2, 0.3]], cam, 400, 300)[0], q = M.projectCam(cam, 0.1, 0.2, 0.3, 400, 300, 0.05);
   ok(p && q && p.x === q.sx && p.y === q.sy, 'B: neurons are projected by the map engine');
-  const t = V.panCam(V.camLibre(), 30, -20);
-  ok(t.ox === 30 && t.oy === -20 && t.dist === V.camLibre().dist && t.yaw === 0, 'B: panCam moves, does not rotate');
-  ok(V.panCam(V.camLibre(), 9999, -9999).ox === 600 && V.panCam(V.camLibre(), 9999, -9999).oy === -600, 'B: pan is bounded');
+  const t = V.panCam(V.freeCam(), 30, -20);
+  ok(t.ox === 30 && t.oy === -20 && t.dist === V.freeCam().dist && t.yaw === 0, 'B: panCam moves, does not rotate');
+  ok(V.panCam(V.freeCam(), 9999, -9999).ox === 600 && V.panCam(V.freeCam(), 9999, -9999).oy === -600, 'B: pan is bounded');
   const mp = V.mapPose({ yaw: 1.1, pitch: -0.42 });
   ok(mp.yaw === 1.1 && mp.pitch === -0.42 && mp.dist > 4, 'B: the start pose = the map heading, from afar');
   ok(V.mapPose(null).dist > 4 && Number.isFinite(V.mapPose(null).yaw), 'B: without a map, an outside pose');
@@ -73,7 +73,7 @@ for (const reduced of [true, false]) {
   if (reduced) ok(closed === 1 && !out.backFlight, 'C: Back to map with reduced motion: the window closes, no flight');
   else ok(closed === 0 && out.backFlight && out.backFlight.t0 === 1000 && out.backFlight.to.yaw === 0.7, 'C: Back to map: a flight back to the map heading, then close');
 }
-const paint = extract('function bvPeindre3D(t) {');
+const paint = extract('function bvPaint3D(t) {');
 ok(/BV_STARS/.test(paint) && /spaceScene\(/.test(paint), 'C: painting = the map sky + the scene (neurons, inputs, neighbours)');
 ok(!/fetch\(|localStorage\.setItem|rpc\(|eth_|sendTransaction|signer/.test(paint), 'C: painting writes nothing and reads nothing from the network');
 ok(/const BV_STARS = skyStars\(\);/.test(app), 'C: the sky comes from map3d.js#skyStars');

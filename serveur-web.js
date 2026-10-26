@@ -5480,9 +5480,9 @@ const SERVIS = [
   'vision-cerveau.js',
   /* ⛔ 2026-10-26 : le panneau Live (plusieurs vues Inside en direct ; pur, lecture seule) — importe par `app.html`. */
   'vision-live.js',
-  'vision-dedans.js',
+  'vision-inside.js',
   /* ⛔ game57 #5 : un cerveau par adresse sur la page (pur) — importe par `app.html`. */
-  'cerveaux-page.js',
+  'page-brains.js',
   /* game57 #4b (d): the block inspect model (pure), imported by `app.html`. */
   'inspect-block.js',
   /* ⛔ `route-multi-factory.js` refuse une route a cheval sur deux factories — le cas ou CHAQUE
