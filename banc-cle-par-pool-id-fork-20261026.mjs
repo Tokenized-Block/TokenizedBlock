@@ -16,7 +16,10 @@
  * Les sources TB sont celles que prod sert (lues : le banc le verifie).
  * ⚠️ l amont du fork (passerelle tenderly) rend « invalid params » a un getLogs historique : le getLogs (lecture seule) part a publicnode
  *   (LOGS_URL) ; les horodatages de blocs et TOUT le reste sont lus sur le fork.
- * Usage : anvil.exe --base --fork-url https://base.gateway.tenderly.co --port 9971 ; node banc-cle-par-pool-id-fork-20261026.mjs [http://127.0.0.1:9971] */
+ * Usage : ~/.foundry/versions/base-v1.1.1/anvil --base --fork-url https://base.gateway.tenderly.co --port 9971 ;
+ *         node banc-cle-par-pool-id-fork-20261026.mjs [http://127.0.0.1:9971]
+ * ⛔ L anvil de la build BASE (foundry base-v1.1.1) : l anvil stock (1.7.1) n a pas d option --base, et sans elle le fork ne lit pas
+ *   les B20 (revue 2026-10-26 : 15 ok / 1 KO « decimals or supply unread »). */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';

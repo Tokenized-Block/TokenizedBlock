@@ -13,11 +13,19 @@
  *   D. indices : seules les paires v4 (pairAddress 66 caracteres) avec une date entrent, la plus liquide d abord, au plus 3 par jeton ;
  *   E. serveur (texte source, insensible aux fins de ligne) : les rails, /api/cle et le tour de trending consultent les indices AVANT
  *      la recherche par profondeur, et la recherche d avant reste derriere.
+ *   F. serveur EXECUTE (2026-10-26, revue) : le code de serveur-web.js, extrait tel quel, tourne sur un faux noeud — la cle lue en fond
+ *      est gardee et vue par le Buy du tour suivant, /api/cle et les rails la rendent, 40 jetons au plus par tour, et le getLogs passe
+ *      par lecteurLogs (budget d archive epuise : non envoye, NON_LUE, ni gardee ni retenue comme absence).
+ *   G. temps de bloc qui CHANGE (2 s -> 0,2 s, Base nov. 2026) : la date devient le bon bloc, ou NON_LU — jamais un bloc faux LU.
+ * Mutants (sur copies, 2026-10-26, via CLE_PAR_POOL_ID_MODULE / SERVEUR_SOURCE) : 12 sur cle-par-pool-id.js, 6 sur serveur-web.js,
+ *   dont les 5 survivants de la revue (poolId non compare, filtre de chaine, date apres la tete, boucle de correction, tete non bornee)
+ *   et S1/S3/S4/S5 du serveur : tous tues par ce banc.
  * Usage : node test-cle-par-pool-id-20261026.mjs   (SERVEUR_SOURCE=<fichier> pour juger un autre serveur-web.js) */
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 const ICI = path.dirname(fileURLToPath(import.meta.url));
+const { cleDePool, poolId: poolIdDe } = await import(pathToFileURL(path.join(ICI, 'pool.js')).href);
 /* CLE_PAR_POOL_ID_MODULE=<copie> : juger un mutant (copie a cote, pour que ses imports relatifs resolvent) */
 const M = await import(pathToFileURL(process.env.CLE_PAR_POOL_ID_MODULE || path.join(ICI, 'cle-par-pool-id.js')).href);
 let n = 0, ko = 0;
@@ -29,7 +37,7 @@ const BLOC = parseInt(LOG.blockNumber, 16), TS = parseInt(LOG.blockTimestamp, 16
 const TETE = BLOC + 28289; /* l ecart du 2026-10-25 (tete 53 084 406) */
 /* un faux Base : 2 s par bloc, calees sur le bloc et l horodatage du vrai log */
 const tsDe = (b) => TS + (b - BLOC) * 2;
-function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
+function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [], ts = tsDe } = {}) {
   const appels = [];
   const rpc = async (methode, params) => {
     appels.push(methode);
@@ -37,7 +45,7 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
       if (bloc === 'refus') throw new Error('over rate limit');
       if (bloc === 'null') return null;
       const b = parseInt(params[0], 16);
-      return { number: params[0], timestamp: '0x' + tsDe(b).toString(16) };
+      return { number: params[0], timestamp: '0x' + Math.floor(ts(b)).toString(16) };
     }
     if (methode === 'eth_getLogs') {
       const q = params[0];
@@ -71,6 +79,10 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
   ok(r2.etat === 'LUE', 'A7 une date 20 min apres l Initialize trouve encore la cle (' + r2.etat + ')');
   const d = await M.blocDeDate({ rpc: fauxNoeud().rpc, tsS: TS, tete: TETE });
   ok(d.etat === 'LU' && d.bloc === BLOC, 'A8 blocDeDate rend le bloc exact de la date (' + d.bloc + ')');
+  /* une pool nee 100 blocs sous la tete : la fenetre s arrete A la tete (un toBlock futur n est pas une lecture de ce qui existe) */
+  let vers = null;
+  const r9 = await M.clePoolParId({ rpc: fauxNoeud().rpc, rpcLogs: async (m, p) => { vers = parseInt(p[0].toBlock, 16); return [LOG]; }, poolId: ID, jeton: JETON, creeLeMs: TS * 1000, tete: BLOC + 100 });
+  ok(r9.etat === 'LUE' && vers === BLOC + 100, 'A9 la fenetre est bornee par la tete (toBlock ' + vers + ', tete ' + (BLOC + 100) + ')');
 }
 /* ── B ── */
 {
@@ -89,6 +101,37 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
   ok(e.etat === 'ABSENTE_PRES_DE_LA_DATE', 'B6 date a 24 h de l Initialize -> ABSENTE_PRES_DE_LA_DATE (' + e.etat + ')');
   const f = await M.clePoolParId({ rpc: fauxNoeud().rpc, poolId: ID, jeton: JETON, creeLeMs: null, tete: TETE });
   ok(f.etat === 'NON_LUE', 'B7 sans date -> NON_LUE (rien n est cherche ni affirme)');
+  /* une date APRES la tete : NON_LU, nommee — meme sur un noeud qui sert n importe quel numero de bloc (le faux sert aussi l avenir) */
+  const g = await M.blocDeDate({ rpc: fauxNoeud().rpc, tsS: tsDe(TETE) + 3600, tete: TETE });
+  ok(g.etat === 'NON_LU' && /after the chain head/.test(String(g.pourquoi || '')), 'B8 date apres la tete -> NON_LU « after the chain head » (' + g.etat + ' : ' + (g.pourquoi || g.bloc) + ')');
+}
+/* ── G ── un temps de bloc qui CHANGE (2 s -> 0,2 s, Base nov. 2026) : la date se convertit encore en bloc, ou se dit NON LUE —
+ *   jamais un bloc faux rendu LU, qui ferait lire une fenetre sans la pool et retenir « absente » 6 h */
+{
+  const kink = (K) => (b) => (b <= K ? TS + (b - BLOC) * 2 : TS + (K - BLOC) * 2 + (b - K) * 0.2);
+  /* [K - BLOC, tete - K] : ou bascule la chaine par rapport a l Initialize d ADOF, et ou est la tete apres la bascule */
+  const cas = [[50_000, 3_000_000], [200_000, 300_000], [10_000, 20_000_000], [1_000, 900_000], [-100_000, 2_000_000], [-1_000, 50_000]];
+  for (const [dk, dt] of cas) {
+    const K = BLOC + dk, tete = K + dt, ts = kink(K);
+    const f = fauxNoeud({ ts });
+    const d = await M.blocDeDate({ rpc: f.rpc, tsS: Math.floor(ts(BLOC)), tete });
+    const r = await M.clePoolParId({ rpc: fauxNoeud({ ts }).rpc, poolId: ID, jeton: JETON, creeLeMs: Math.floor(ts(BLOC)) * 1000, tete });
+    ok(d.etat === 'LU' && Math.abs(d.bloc - BLOC) <= 2 && f.appels.length <= 12 && r.etat === 'LUE',
+      'G1 bascule ' + (dk > 0 ? dk + ' blocs APRES' : -dk + ' blocs AVANT') + ' l Initialize, tete ' + dt + ' blocs apres : bloc ' + d.bloc
+      + ' (ecart ' + (d.bloc - BLOC) + ', ' + f.appels.length + ' lectures), cle ' + r.etat);
+  }
+  /* sans assez d essais pour converger : NON_LU (et NON_LUE, jamais retenue), pas LU avec un ecart de centaines de milliers de blocs */
+  const K = BLOC + 50_000, tete = K + 3_000_000, ts = kink(K);
+  const d1 = await M.blocDeDate({ rpc: fauxNoeud({ ts }).rpc, tsS: Math.floor(ts(BLOC)), tete, essais: 1 });
+  ok(d1.etat === 'NON_LU' || Math.abs(d1.bloc - BLOC) <= M.MARGE_BLOCS, 'G2 un essai seulement : ' + d1.etat + ' ' + (d1.pourquoi || ('bloc ' + d1.bloc + ', ecart ' + (d1.bloc - BLOC))));
+  ok(d1.etat === 'NON_LU' && /not converged/.test(String(d1.pourquoi || '')), 'G3 non converge -> NON_LU nomme (' + String(d1.pourquoi || '').slice(0, 90) + ')');
+  const r1 = await M.clePoolParId({ rpc: async (m, p) => { if (m === 'eth_getLogs') return []; return fauxNoeud({ ts }).rpc(m, p); }, poolId: ID, jeton: JETON, creeLeMs: Math.floor(ts(BLOC)) * 1000, tete, essais: 1 });
+  ok(r1.etat === 'NON_LUE', 'G4 la cle d une date non convertie est NON_LUE, pas ABSENTE_PRES_DE_LA_DATE (' + r1.etat + ')');
+  /* la borne est en temps de bloc le plus COURT (0,2 s) : apres la bascule, 540 s d ecart = 2 700 blocs, hors de la fenetre de 999,
+   *   meme si 540 s ne font que 270 blocs a 2 s */
+  const Kf = BLOC - 100_000, tsF = kink(Kf), teteF = BLOC + 3000;
+  const d5 = await M.blocDeDate({ rpc: fauxNoeud({ ts: tsF }).rpc, tsS: Math.floor(tsF(BLOC)), tete: teteF, essais: 1 });
+  ok(d5.etat === 'NON_LU' || Math.abs(d5.bloc - BLOC) <= M.MARGE_BLOCS, 'G5 a 0,2 s par bloc, un ecart en secondes hors fenetre n est pas LU (' + d5.etat + ' ' + (d5.pourquoi || ('bloc ' + d5.bloc + ', ecart ' + (d5.bloc - BLOC))) + ')');
 }
 /* ── C ── */
 {
@@ -106,6 +149,17 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
   let vu = 0;
   const e = await M.clePoolParId({ rpc: fauxNoeud({ logs: 'refus' }).rpc, rpcLogs: async (m, p) => { vu += 1; return [LOG]; }, poolId: ID, jeton: JETON, creeLeMs: TS * 1000, tete: TETE });
   ok(e.etat === 'LUE' && vu === 1, 'C5 rpcLogs recoit le getLogs (' + vu + ' appel)');
+  /* un log Initialize VALIDE (son poolId se recalcule) mais d UNE AUTRE pool du meme jeton, rendu par un noeud qui ignore le filtre de
+   *   topic : ce n est pas la pool demandee — sa cle ne doit pas etre rendue sous ce poolId */
+  const k2 = cleDePool(LOG.topics[2].replace(/^0x0{24}/, '0x'), JETON, { fee: 500, tickSpacing: 10, hooks: '0x0000000000000000000000000000000000000000' });
+  const id2 = poolIdDe(k2).toLowerCase();
+  const autrePool = { ...LOG, topics: [LOG.topics[0], id2, LOG.topics[2], LOG.topics[3]],
+    data: '0x' + (500).toString(16).padStart(64, '0') + (10).toString(16).padStart(64, '0') + '0'.repeat(64) + LOG.data.slice(2 + 192) };
+  ok(id2 !== ID, 'C6a temoin : l autre pool a un autre poolId');
+  const g = await M.clePoolParId({ rpc: fauxNoeud().rpc, rpcLogs: async () => [autrePool], poolId: ID, jeton: JETON, creeLeMs: TS * 1000, tete: TETE });
+  ok(g.etat === 'ABSENTE_PRES_DE_LA_DATE' && !g.cle, 'C6 une autre pool valide du meme jeton, servie sous ce poolId, ne donne pas de cle (' + g.etat + (g.cle ? ' fee ' + g.cle.fee : '') + ')');
+  const g2 = await M.clePoolParId({ rpc: fauxNoeud().rpc, rpcLogs: async () => [autrePool], poolId: id2, jeton: JETON, creeLeMs: TS * 1000, tete: TETE });
+  ok(g2.etat === 'LUE' && g2.cle.fee === 500, 'C7 temoin : demandee par SON poolId, cette autre pool est LUE (' + g2.etat + ')');
 }
 /* ── D ── */
 {
@@ -126,6 +180,13 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
   ok(!l.some((x) => x.poolId.length !== 66) && !l.some((x) => x.poolId === '0x' + 'b'.repeat(64)) && !l.some((x) => x.poolId === '0x' + 'c'.repeat(64)), 'D2 ni adresse Aerodrome, ni paire sans date, ni autre chaine');
   ok(!m.has('0xb2000000000000000000000000000000000000aa'), 'D3 un jeton non suivi n entre pas');
   ok(M.indicesPoolIdDepuisPaires(null).size === 0, 'D4 rien sans paires');
+  /* D2 « ni autre chaine » etait vide : la borne de 3 par jeton ecartait deja la paire ethereum. Ici elle est SEULE et la plus liquide */
+  const m5 = M.indicesPoolIdDepuisPaires([
+    { ...base, chainId: 'ethereum', pairAddress: '0x' + 'c'.repeat(64), pairCreatedAt: 3, liquidity: { usd: 1e9 } },
+    { ...base, pairAddress: ID, pairCreatedAt: F.dexscreener.pairCreatedAt, liquidity: { usd: 1 } },
+  ], [JETON]);
+  const l5 = m5.get(JETON) || [];
+  ok(l5.length === 1 && l5[0].poolId === ID, 'D5 une paire d une autre chaine n entre pas, meme seule et plus liquide (' + l5.map((x) => x.poolId.slice(0, 6)).join(',') + ')');
 }
 /* ── E ── serveur-web.js : l ORDRE (indices puis profondeur) sur les trois chemins */
 {
@@ -146,6 +207,100 @@ function fauxNoeud({ logs = 'vrai', bloc = 'ok', autres = [] } = {}) {
   const v = src.slice(src.indexOf('async function cleParUnIndice('), src.indexOf('async function clesParIndices('));
   ok(/r\.etat === 'ABSENTE_PRES_DE_LA_DATE' \|\| r\.etat === 'HORS_JETON'/.test(v) && !/NON_LUE[^\n]*clesParIdVerdicts\.set/.test(v), 'E5 seules une absence lue et HORS_JETON sont retenues ; une NON_LUE jamais');
   ok(/lecteurLogs\(tete\)\.rpc/.test(v), 'E6 le getLogs passe par lecteurLogs (budget d archive epuise : non envoye, NON_LUE)');
+}
+/* ── F ── serveur-web.js EXECUTE : le code du fichier (extrait tel quel, pas recopie) tourne sur un faux noeud. E ne lit que le
+ *   texte ; F fait mourir ce que le texte ne voit pas : la cle lue jamais gardee, /api/cle qui la perd, la borne par tour, et le
+ *   getLogs qui contournerait lecteurLogs (budget d archive). */
+{
+  const src = readFileSync(process.env.SERVEUR_SOURCE || path.join(ICI, 'serveur-web.js'), 'utf8').replace(/\r\n/g, '\n');
+  const entre = (de, a) => { const i = src.indexOf(de); const j = i < 0 ? -1 : src.indexOf(a, i); return i < 0 || j < 0 ? '' : src.slice(i, j); };
+  const blocIndices = entre('const indicesPoolId = new Map();', '/** La cle exacte d un block');
+  const blocRails = entre('async function clesRails(', '\n}\n') + '\n}\n';
+  const blocConnues = entre('function clesConnuesServeur(', 'async function achatsMarche(');
+  const blocRoute = entre("if (chemin.startsWith('/api/cle/')) {", '/* les skins');
+  ok(blocIndices.length > 0 && blocRails.length > 20 && blocConnues.length > 0 && blocRoute.length > 0, 'F0 les quatre blocs du serveur sont extraits du fichier');
+  const NON_ENVOYEE = 'archive node daily budget reached — deep window not sent, it waits for 00:00 UTC';
+  /** un serveur : le code extrait + un faux noeud (blocs a 2 s, les logs donnes) + un lecteurLogs dont le budget peut etre epuise */
+  function serveur({ logs = [LOG], budgetEpuise = false } = {}) {
+    const e = { getLogsNoeud: 0, getLogsRefuses: 0, ecritures: 0, profondeur: 0, clesCache: new Map(), clesPool: new Map() };
+    const rpcServeur = async (m, p) => {
+      if (m === 'eth_blockNumber') return '0x' + TETE.toString(16);
+      if (m === 'eth_getBlockByNumber') return { number: p[0], timestamp: '0x' + tsDe(parseInt(p[0], 16)).toString(16) };
+      if (m === 'eth_getLogs') {
+        e.getLogsNoeud += 1;
+        const q = p[0], de = parseInt(q.fromBlock, 16), a = parseInt(q.toBlock, 16);
+        return logs.filter((l) => parseInt(l.blockNumber, 16) >= de && parseInt(l.blockNumber, 16) <= a
+          && q.topics.every((t, i) => t === null || String(l.topics[i]).toLowerCase() === String(t).toLowerCase()));
+      }
+      throw new Error('unexpected ' + m);
+    };
+    /* comme le vrai (serveur-web.js lecteurLogs) : budget epuise, la fenetre profonde n est PAS envoyee et le lecteur leve */
+    const lecteurLogs = (tete) => ({ rpc: async (m, p) => {
+      if (m === 'eth_getLogs' && budgetEpuise && tete - parseInt(p[0].fromBlock, 16) >= 9000) { e.getLogsRefuses += 1; throw new Error(NON_ENVOYEE); }
+      const r = await rpcServeur(m, p);
+      if (m === 'eth_getLogs' && !Array.isArray(r)) throw new Error('not a list');
+      return r;
+    }, nonEnvoyee: () => false, suivi: {} });
+    const resoudreClePool = async () => { e.profondeur += 1; return { ok: false, pourquoi: 'no Initialize found in the last 9990 blocks' }; };
+    const S = new Function('clesCache', 'clesPool', 'ecrireCles', 'rpcServeur', 'lecteurLogs', 'resoudreClePool', 'clePoolParId', 'indicesPoolIdDepuisPaires',
+      blocIndices + '\n' + blocRails + '\n' + blocConnues + '\nasync function routeCle(chemin, res) {\n' + blocRoute + '\n}\n'
+      + 'return { retenirIndicesPoolId, resoudreClesParIndices, clesConnuesServeur, clesRails, routeCle, clesParIdVerdicts };')(
+      e.clesCache, e.clesPool, () => { e.ecritures += 1; }, rpcServeur, lecteurLogs, resoudreClePool, M.clePoolParId, M.indicesPoolIdDepuisPaires);
+    return { ...S, e };
+  }
+  const paireAdof = { chainId: 'base', baseToken: { address: JETON }, quoteToken: { address: '0x0000000000000000000000000000000000000000' },
+    pairAddress: ID, pairCreatedAt: F.dexscreener.pairCreatedAt, liquidity: { usd: 9000 } };
+  /* S1 — la cle LUE en fond est GARDEE : le Buy du tour suivant (clesConnuesServeur) la voit, et le tour suivant ne la relit pas */
+  {
+    const s = serveur();
+    s.retenirIndicesPoolId([paireAdof], [JETON]);
+    ok(s.clesConnuesServeur(JETON).length === 0, 'F1a temoin : avant la recherche, le Buy ne voit aucune cle d ADOF');
+    const c1 = await s.resoudreClesParIndices([{ adr: JETON }]);
+    const vues = s.clesConnuesServeur(JETON);
+    ok(c1.lues === 1 && vues.length === 1 && vues[0].fee === 100 && vues[0].tickSpacing === 1 && vues[0].hooks === '0x' + LOG.data.slice(2 + 152, 2 + 192),
+      'F1 tour 1 : cle lue (' + JSON.stringify(c1) + ') ET vue par le Buy du tour suivant (' + vues.length + ' cle)');
+    ok(s.e.ecritures >= 1, 'F2 la cle lue est ecrite (cles-pool.json) : ' + s.e.ecritures + ' ecriture(s)');
+    const avant = s.e.getLogsNoeud;
+    const c2 = await s.resoudreClesParIndices([{ adr: JETON }]);
+    ok(c2.essayees === 0 && s.e.getLogsNoeud === avant, 'F3 tour 2 : la cle connue n est pas relue (' + c2.essayees + ' essayee, ' + (s.e.getLogsNoeud - avant) + ' getLogs)');
+  }
+  /* S3 — /api/cle rend la cle lue par l indice */
+  {
+    const s = serveur();
+    s.retenirIndicesPoolId([paireAdof], [JETON]);
+    const corps = await new Promise((fin) => { s.routeCle('/api/cle/' + JETON, { writeHead() {}, end: (x) => fin(JSON.parse(x)) }); });
+    ok(corps.ok === true && Array.isArray(corps.cles) && corps.cles.length === 1 && corps.cles[0].poolId === ID && corps.cles[0].fee === 100,
+      'F4 /api/cle rend la cle lue par son poolId (' + JSON.stringify(corps).slice(0, 120) + ')');
+    ok(s.e.profondeur === 0, 'F5 /api/cle n a pas lance la recherche par profondeur (' + s.e.profondeur + ')');
+    const c2 = await new Promise((fin) => { s.routeCle('/api/cle/' + JETON, { writeHead() {}, end: (x) => fin(JSON.parse(x)) }); });
+    ok(c2.depuisCache === true && c2.cles && c2.cles.length === 1 && s.e.getLogsNoeud === 1, 'F6 la seconde visite sert la cle gardee, sans getLogs (' + s.e.getLogsNoeud + ')');
+    const s2 = serveur();
+    s2.retenirIndicesPoolId([paireAdof], [JETON]);
+    const rails = await s2.clesRails(JETON);
+    ok(rails.length === 1 && rails[0].poolId === ID && s2.e.profondeur === 0, 'F7 les rails recoivent la cle de l indice, sans recherche par profondeur');
+  }
+  /* S4 — au plus 40 jetons cherches par tour ; le reste est reporte, pas perdu */
+  {
+    const s = serveur({ logs: [] });
+    const jetons = Array.from({ length: 45 }, (_, i) => '0xb2' + (i + 1).toString(16).padStart(38, '0'));
+    s.retenirIndicesPoolId(jetons.map((t, i) => ({ chainId: 'base', baseToken: { address: t }, quoteToken: { address: '0x0000000000000000000000000000000000000000' },
+      pairAddress: '0x' + (i + 1).toString(16).padStart(64, '0'), pairCreatedAt: TS * 1000, liquidity: { usd: 1 } })), jetons);
+    const c = await s.resoudreClesParIndices(jetons.map((adr) => ({ adr })));
+    ok(c.essayees === 40 && c.reportees === 5 && s.e.getLogsNoeud === 40 && c.absentes === 40,
+      'F8 45 jetons a indice : 40 cherches, 5 reportes, 40 getLogs (' + JSON.stringify(c) + ', ' + s.e.getLogsNoeud + ' getLogs)');
+  }
+  /* S5 — le getLogs passe par lecteurLogs : budget d archive epuise, la fenetre (28 000 blocs sous la tete) n est PAS envoyee, NON_LUE,
+   *   rien de garde ni de retenu comme absent ; le tour suivant reessaie */
+  {
+    const s = serveur({ budgetEpuise: true });
+    s.retenirIndicesPoolId([paireAdof], [JETON]);
+    const c = await s.resoudreClesParIndices([{ adr: JETON }]);
+    ok(c.nonLues === 1 && c.lues === 0 && s.e.getLogsNoeud === 0 && s.e.getLogsRefuses === 1,
+      'F9 budget epuise : fenetre non envoyee, NON_LUE (' + JSON.stringify(c) + ', ' + s.e.getLogsNoeud + ' getLogs au noeud)');
+    ok(s.clesConnuesServeur(JETON).length === 0 && s.clesParIdVerdicts.size === 0, 'F10 une NON_LUE n est ni gardee comme cle ni retenue comme absence');
+    const c2 = await s.resoudreClesParIndices([{ adr: JETON }]);
+    ok(c2.essayees === 1 && s.e.getLogsRefuses === 2, 'F11 le tour suivant reessaie (' + c2.essayees + ' essayee)');
+  }
 }
 console.log((ko ? 'ROUGE ' : 'VERT ') + (n - ko) + '/' + n);
 process.exit(ko ? 1 : 0);

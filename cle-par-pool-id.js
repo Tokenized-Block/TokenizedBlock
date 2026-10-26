@@ -7,7 +7,9 @@
 //   tete. Une pool nee il y a plus de ~5 h (10 fenetres, 2 s par bloc mesures le 2026-10-25 : 100 000 blocs = 200 000 s) n est pas
 //   dans la fenetre d un plan ; au-dela de ~9 000 blocs, seul le noeud d archive sert les logs.
 //   OR DexScreener rend deja, pour une pool v4, son poolId (`pairAddress`, 66 caracteres) et sa date (`pairCreatedAt`).
-// ⇒ CE MODULE : de la DATE, le bloc (lu sur la chaine : horodatage de la tete puis d un bloc estime, corrige par secante) ; puis UN
+// ⇒ CE MODULE : de la DATE, le bloc (lu sur la chaine : horodatage de la tete puis d un bloc estime, encadre puis resserre ; NON_LU
+//   si l ecart restant ne tient pas dans la fenetre — 2026-10-26, revue : un temps de bloc qui change 2 s -> 0,2 s rendait un bloc
+//   « LU » a 862 500 blocs de la pool, donc une absence fausse retenue 6 h) ; puis UN
 //   eth_getLogs sur le PoolManager, filtre par le topic Initialize ET ce poolId, sur une fenetre etroite autour de ce bloc.
 // ⛔ LA DATE ET LE poolId SONT DES INDICES D UN AGREGATEUR, PAS DES PREUVES. La preuve est le log : decoderInitialize exige que le
 //   poolId se RECALCULE depuis la cle (keccak) ; la cle doit contenir le jeton demande ; le log doit venir du PoolManager. Un indice
@@ -35,31 +37,61 @@ async function horodatage(rpc, n) {
   return t;
 }
 
+/** le temps de bloc le plus COURT envisage : 0,2 s (Base « Denim », nov. 2026). Un ecart restant de E secondes peut valoir jusqu a
+ *  E / 0,2 blocs : c est cette borne, pas la pente du moment, qui dit si la fenetre de `marge` blocs contient encore la date. */
+export const BLOC_S_MIN = 0.2;
+
 /**
- * Le bloc d une date, LU : horodatage de la tete, puis d un bloc estime ; l ecart restant est corrige par la pente mesuree entre les
- * deux (secante), au plus `essais` fois. Rend { etat: 'LU', bloc, ecartS } ou { etat: 'NON_LU', pourquoi }.
+ * Le bloc d une date, LU : horodatage de la tete, puis d un bloc estime (2 s par bloc) ; ensuite la date est ENCADREE entre un bloc
+ * plus ancien et un plus recent, et l encadrement se resserre par interpolation (secante tant qu il n y a pas de borne basse), avec
+ * une bissection des que l interpolation ne le coupe pas de moitie — une chaine dont le temps de bloc CHANGE (2 s -> 0,2 s) ne
+ * fait pas tourner la secante en rond. Au plus `essais` lectures apres la tete.
+ * ⛔ Rend { etat: 'LU', bloc, ecartS } SEULEMENT si l ecart restant tient dans la fenetre : |ecartS| <= marge x BLOC_S_MIN. Sinon
+ *   NON_LU « not converged » : un bloc faux rendu LU ferait lire une fenetre sans la pool, et une absence fausse serait retenue.
  */
-export async function blocDeDate({ rpc, tsS, tete, essais = 3 } = {}) {
+export async function blocDeDate({ rpc, tsS, tete, essais = 10, marge = MARGE_BLOCS } = {}) {
   if (typeof rpc !== 'function' || !Number.isSafeInteger(tsS) || tsS <= 0 || !Number.isSafeInteger(tete) || tete <= 0) {
     return { etat: 'NON_LU', pourquoi: 'date or chain head missing' };
   }
   try {
     const tTete = await horodatage(rpc, tete);
     if (tsS > tTete) return { etat: 'NON_LU', pourquoi: 'the date is after the chain head' };
-    /* premiere estimation : 2 s par bloc (Base, mesure 2026-10-25) ; ensuite la pente LUE */
-    let a = { n: tete, t: tTete };
+    const tolS = Math.max(2, Math.floor(Math.max(0, Number(marge) || 0) * BLOC_S_MIN));
+    let meilleur = { n: tete, t: tTete };
+    const rendre = () => (Math.abs(meilleur.t - tsS) <= tolS
+      ? { etat: 'LU', bloc: meilleur.n, ecartS: meilleur.t - tsS }
+      : { etat: 'NON_LU', pourquoi: 'creation block not converged: block ' + meilleur.n + ' is ' + (meilleur.t - tsS) + ' s from the date (window ' + tolS + ' s)' });
+    if (Math.abs(tTete - tsS) <= 2) return rendre();
+    /* hi : le plus ancien bloc lu POSTERIEUR a la date (la tete au depart) ; lo : le plus recent ANTERIEUR (aucun au depart).
+     *   f = horodatage - date. Interpolation dans l encadrement (regula falsi) avec la correction « Illinois » : quand le MEME cote
+     *   est remplace deux fois de suite, le f de l autre borne est divise par deux — sinon une borne restee dans la zone a 0,2 s
+     *   fige l interpolation (mesure : 11 lectures sans converger sur une bascule 50 000 blocs apres la pool). */
+    let hi = { n: tete, t: tTete, f: tTete - tsS }, lo = null, prec = null, cote = 0;
+    /* premiere estimation : 2 s par bloc (Base, mesure 2026-10-25) */
     let n = Math.max(1, tete - Math.round((tTete - tsS) / 2));
     for (let i = 0; i < essais; i += 1) {
       const t = await horodatage(rpc, n);
-      if (Math.abs(t - tsS) <= 2) return { etat: 'LU', bloc: n, ecartS: t - tsS };
-      const pente = (a.t - t) / (a.n - n || 1);
-      const suivant = Math.max(1, Math.min(tete, Math.round(n + (tsS - t) / (pente > 0 ? pente : 2))));
-      a = { n, t };
-      if (suivant === n) return { etat: 'LU', bloc: n, ecartS: t - tsS };
+      if (Math.abs(t - tsS) < Math.abs(meilleur.t - tsS)) meilleur = { n, t };
+      if (Math.abs(t - tsS) <= 2) break;
+      const point = { n, t, f: t - tsS };
+      if (t < tsS) { if (cote === -1 && hi) hi.f /= 2; lo = point; cote = -1; } else { if (cote === 1 && lo) lo.f /= 2; hi = point; cote = 1; }
+      let suivant;
+      if (lo) {
+        if (hi.n - lo.n <= 1) break;
+        suivant = lo.n + Math.round(-lo.f * (hi.n - lo.n) / ((hi.f - lo.f) || 1));
+        suivant = Math.max(lo.n + 1, Math.min(hi.n - 1, suivant));
+      } else {
+        /* pas encore de borne basse : secante entre les deux derniers blocs lus (ou 2 s), vers le passe */
+        const a = prec || { n: tete, t: tTete };
+        const pente = a.n !== n ? (a.t - t) / (a.n - n) : 0;
+        suivant = Math.round(n - (t - tsS) / (pente > 0 ? pente : 2));
+        if (suivant >= n) suivant = n - 1;
+        if (suivant < 1) { if (n === 1) break; suivant = 1; }
+      }
+      prec = point;
       n = suivant;
     }
-    const t = await horodatage(rpc, n);
-    return { etat: 'LU', bloc: n, ecartS: t - tsS };
+    return rendre();
   } catch (e) {
     return { etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) };
   }
@@ -73,14 +105,15 @@ export async function blocDeDate({ rpc, tsS, tete, essais = 3 } = {}) {
  * @returns {Promise<{etat:'LUE', cle:object, poolId:string, bloc:number} | {etat:'ABSENTE_PRES_DE_LA_DATE', depuis:number, jusqua:number,
  *   poolId:string} | {etat:'HORS_JETON', poolId:string, pourquoi:string} | {etat:'NON_LUE', poolId:string, pourquoi:string}>}
  */
-export async function clePoolParId({ rpc, rpcLogs = null, poolId, jeton, creeLeMs, tete, marge = MARGE_BLOCS } = {}) {
+export async function clePoolParId({ rpc, rpcLogs = null, poolId, jeton, creeLeMs, tete, marge = MARGE_BLOCS, essais = undefined } = {}) {
   const id = bas(poolId), j = bas(jeton);
   const nonLue = (pourquoi) => ({ etat: 'NON_LUE', poolId: id, pourquoi });
   if (!ID.test(id)) return nonLue('not a v4 poolId');
   if (!ADR.test(j)) return nonLue('not a token address');
   const ms = Number(creeLeMs);
   if (!Number.isFinite(ms) || ms <= 0) return nonLue('no creation date for this pool');
-  const d = await blocDeDate({ rpc, tsS: Math.floor(ms / 1000), tete });
+  /* ⛔ la fenetre lue est celle que blocDeDate a garantie : marge passee, sinon un bloc « LU » hors fenetre rendrait une absence fausse */
+  const d = await blocDeDate({ rpc, tsS: Math.floor(ms / 1000), tete, marge, essais });
   if (d.etat !== 'LU') return nonLue('creation block not read: ' + d.pourquoi);
   const depuis = Math.max(1, d.bloc - marge), jusqua = Math.min(tete, d.bloc + marge);
   let logs;
