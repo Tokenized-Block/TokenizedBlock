@@ -4578,7 +4578,7 @@ import { encodeCreateB20, encodeCreatePaid, paramsAsset, encodeUpdateSupplyCap, 
  * plusieurs pools (mesure : elles rendaient 2 536, 2 533, 2 526… et aussi 1 004), refuser quand elles
  * se contredisaient, arrondir l affichage, et se garder d afficher « 0 » pour un montant non nul.
  * 1 USDC = 1 000 000 unites, exactement, toujours. Phil, 2026-09-12 : « plus simple ». */
-import { FEE_WALLET, USDC_BASE, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage, besoinNaissance, phraseAvoirPourNaitre, phraseManquePourNaitre } from './frais-creation.js';
+import { FEE_WALLET, courtAffichable, USDC_BASE, CREATE_ROUTER, CREATE_FEE_WEI_FLOOR, FRAIS_OUVERTURE_WEI, fraisCreationUsd, fraisLancementUsd, phraseFrais, phraseFraisLancement, formaterEthCourt, arrondiAffichage, besoinNaissance, phraseAvoirPourNaitre, phraseManquePourNaitre } from './frais-creation.js';
 /* ⛔ Phil (test « Paired with ») : un bouton disait « Bring it to life — 0.000379689641686885 ETH ». A L ECRAN : 6 decimales
  *    au plus ; formaterEthCourt reste EXACT pour remplir un champ qui sera signe (bouton MAX). */
 const ethLisible = (w) => arrondiAffichage(w, 6);
@@ -6313,7 +6313,7 @@ async function tirerJourPass() {
     if (!rd || rd.etat !== 'CONFIRME' || !rd.hash) { dit(phraseNonConfirme(rd, 'Not drawn')); return; }
     const lus = await recusLogs(rd), dd = lireDayDrawn(lus.logs, contrat);
     const moi = String(c).toLowerCase();
-    dit(dd ? 'Day ' + dd.day + ' drawn: ' + (dd.winner === moi ? 'you won ' : dd.winner.slice(0, 6) + '…' + dd.winner.slice(-4) + ' won ') + usdcTexte(dd.amount) + ' USDC among ' + dd.buyers + ' buyer' + (dd.buyers === 1 ? '' : 's') + ', paid by the contract.'
+    dit(dd ? 'Day ' + dd.day + ' drawn: ' + (dd.winner === moi ? 'you won ' : courtAffichable(dd.winner) + ' won ') + usdcTexte(dd.amount) + ' USDC among ' + dd.buyers + ' buyer' + (dd.buyers === 1 ? '' : 's') + ', paid by the contract.'
       : 'Drawn (' + rd.hash.slice(0, 10) + '…) but not read back yet.');
   } finally { bt.disabled = false; void peindreTirageJourPass(); }
 }
@@ -6785,7 +6785,7 @@ function symDuel(token) {
 }
 async function decDuel(token) { return String(token).toLowerCase() === String(USDC_BASE).toLowerCase() ? 6 : bcDecimales(token); }
 async function montantDuel(brut, token) { try { return bcUnites(brut, await decDuel(token)) + ' ' + symDuel(token); } catch (_) { return BigInt(brut).toString() + ' raw ' + symDuel(token); } }
-const courtAdr = (a) => String(a).slice(0, 6) + '…' + String(a).slice(-4);
+const courtAdr = (a) => courtAffichable(String(a));
 /* le getter d admission du contrat : celui des noms plausibles (Duels.SIGS_ADMIS) qui rend EXACTEMENT 1 pour l USDC (admis a la construction).
  *   Aucun ne repond : les actions ne sont PAS proposees (fail-closed), l USDC reste. */
 async function getterAdmis(contrat) {
@@ -7497,7 +7497,7 @@ function bjMontrer(p, rolls, walletCarte) {
    *   elle se libere tout de suite et le tour suivant continue (POT_FUND). Le lien reste utilisable. */
   if (p.kind === 'POT_SIGN' && !p.sign.signerIsVerifier) {
     bj.seen.push(p.cle); bj.seen = bj.seen.slice(-200); bjSauver();
-    bcEtape(m, 'Switch to the verifier wallet ' + p.sign.verifier.slice(0, 6) + '… to sign the shares — or open the verifier page with that wallet. Shown once; its brain goes on with the next move.');
+    bcEtape(m, 'Switch to the verifier wallet (' + courtAffichable(p.sign.verifier) + ') to sign the shares — or open the verifier page with that wallet. Shown once; its brain goes on with the next move.');
     bcBoutons(m, [['Open the verifier page', () => { try { window.open('attester-ticketpot.html?day=' + encodeURIComponent(p.sign.jourId) + (p.sign.week ? '&week=1' : ''), '_blank', 'noopener'); } catch (_) {} }]]);
     bjVol.ouverte = 0; bjVol.signe = false;
     bjPeindre('On — the shares of ' + p.sign.jourId + ' wait for the verifier wallet (see its brain\'s panel).');
@@ -11859,7 +11859,7 @@ async function connecter() {
   /* tip 0035 : mauvais reseau -> on demande tout de suite au wallet de basculer */
   if (chaineWallet !== null && chaineWallet !== CHAINE && await basculerChaine(CHAINE)) chaineWallet = CHAINE;
 
-  $('#pCompte').textContent = compte.slice(0, 6) + '…' + compte.slice(-4);
+  $('#pCompte').textContent = courtAffichable(compte);
   $('#pCompte').classList.add('connecte');
   const surLaBonne = chaineWallet === CHAINE;
   dire('Connected. This page holds no key: your wallet signs, and it shows you what it '
@@ -12227,7 +12227,8 @@ const JETONS_CONNUS = {
 };
 const ADRESSE = /^0x[0-9a-fA-F]{40}$/;
 const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
-const court = (a) => a.slice(0, 6) + '…' + a.slice(-4);
+/* ⛔ 2026-10-26 (game57 item 10) : par courtAffichable — un wallet de frais est NOMME, jamais montre */
+const court = (a) => courtAffichable(a);
 /* ⛔ ABREGER SE VOIT. Un solde coupe sans marque se lirait comme exact ; le « … » dit qu il y a
  * plus, et le survol porte la valeur entiere. */
 function abrege(txt, n = 6) {
@@ -14346,7 +14347,7 @@ async function peindreHolders(adr, essai = 0) {
     /* ⛔ UNE PART REELLE PLUS PETITE QUE LE PAS D AFFICHAGE N EST PAS ZERO. Le serveur a deja retire
      *    les parts vraiment nulles ; ce qui reste et s affiche « 0.00% » touche quelque chose. */
     const part = x.part ? (x.part / 100).toFixed(x.part < 100 ? 2 : 1) + '%' : '<0.01%';
-    const court = x.adr.slice(0, 6) + '…' + x.adr.slice(-4);
+    const court = courtAffichable(x.adr);
     return '<span class="puce' + (x.part ? '' : ' vide') + '">' + enTexte(court) + ' <b>' + part + '</b></span>';
   }).join('');
   /* ⛔ OU DORT LE RESTE : sans cette phrase, « 6 holders » laisserait croire que six adresses se
@@ -30508,13 +30509,14 @@ function skmLigne(s, moi, t) {
   /* UNIT est LE block de l app : nomme sans attendre l index du Market (mesure 2026-10-23 : la skin #1 affichait « 0xb200…4f27 ») */
   const sym = String(s.block) === UNIT_APP.toLowerCase() ? 'UNIT' : (bcResoudre(s.block).sym || court(s.block)), st = statutSkin(s, t), qui = detenteurCourt(s, moi);
   const statut = bcEl('span', { cls: 'skmStatut note' });
-  if (st === 'FIXE') statut.textContent = 'For sale · ' + bcMontantSkin(s.prix, s.devise) + ' · seller ' + qui;
+  /* ⛔ 2026-10-26 (game57 item 10) : qui === null = le wallet de frais -> ni « seller » ni « held by » (jamais son adresse a l ecran) */
+  if (st === 'FIXE') statut.textContent = 'For sale · ' + bcMontantSkin(s.prix, s.devise) + (qui ? ' · seller ' + qui : '');
   else if (st === 'ENCHERE') {
     statut.append(document.createTextNode('Auction · ' + (BigInt(s.offre) > 0n ? 'highest bid ' + bcMontantSkin(s.offre, s.devise) : 'no bid yet, opens at ' + bcMontantSkin(s.prix, s.devise)) + ' · ends in '));
     const tr = bcEl('span', { cls: 'skmTemps', text: tempsRestant(s.fin, t) }); tr.dataset.fin = String(s.fin);
-    statut.append(tr, document.createTextNode(' · seller ' + qui));
+    statut.append(tr, document.createTextNode(qui ? ' · seller ' + qui : ''));
   } else if (st === 'ENCHERE_FINIE') statut.textContent = 'Auction ended · ' + (BigInt(s.offre) > 0n ? 'winning bid ' + bcMontantSkin(s.offre, s.devise) : 'no bid — it goes back to its seller') + ' · anyone can settle it';
-  else statut.textContent = 'Not listed · held by ' + qui;
+  else statut.textContent = 'Not listed' + (qui ? ' · held by ' + qui : '');
   li.append(face, bcEl('span', { cls: 'skmInfo' }, [bcEl('b', { text: 'Skin #' + id }), document.createTextNode(' dresses ' + sym), statut]));
   const gestes = bcEl('div', { cls: 'skmGestes' });
   const bouton = (texte, genre, x) => { const b = bcEl('button', { type: 'button', cls: 'bouton sec', text: texte }); b.addEventListener('click', () => void bcActionMarche(genre, s, x)); gestes.append(b); return b; };

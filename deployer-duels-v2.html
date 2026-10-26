@@ -97,6 +97,7 @@ import { DUELS_DEPLOIEMENT as V1 } from './duels-deploiement.js';
 import { verifierEnregistrementV2 } from './duels-v2-config.js';
 import { WINNER_BPS, POOL_BPS, BPS, FENETRE } from './duels-plan.js';
 import { selecteur } from './keccak.js';
+import { masquerAdressesFrais } from './frais-creation.js';
 /* revue 2026-10-24 (LOW n°3) : UNE creation au plus — le hash est garde, Deploy ne se rallume jamais apres un envoi (« Check again »), et
  *   eth_chainId est relu apres un changement de reseau (envoi-creation.js, la MEME regle pour les trois pages de deploiement) */
 import { creerEnvoiCreation, phraseEnvoi } from './envoi-creation.js';
@@ -110,7 +111,7 @@ const E = creerEnvoiCreation({ eth, chaineHex: CHAINE_HEX, creation: D.creation,
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
 const MOTS = { winner: String(Number(WINNER_BPS) / 100), pool: String(Number(POOL_BPS) / 100), dev: String(Number(BPS - WINNER_BPS - POOL_BPS) / 100), window: String(FENETRE) };
 for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
-$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (C[k] || '— not set —') + '</dd>').join('')
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + masquerAdressesFrais(C[k] || '— not set —') + '</dd>').join('')
   + '<dt>Same parameters as</dt><dd>Block Duels v1 ' + (V1.adresse || '—') + '</dd>'
   + '<dt>Owner</dt><dd>none</dd>'
   + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
@@ -129,7 +130,7 @@ $('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manqu
   peindre();
 })();
 function peindre() {
-  $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet pays the deployment gas; it gets no power over the duels.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#dCompte').textContent = compte ? 'Connected: ' + masquerAdressesFrais(compte) + ' — this wallet pays the deployment gas; it gets no power over the duels.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
   const st = E.etat(), tx = st.tx, bloque = !tx && (st.attente || st.incertain);
   $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse || !E.peutEnvoyer();
@@ -167,7 +168,7 @@ async function suite(r) {
     const code = String(await eth().request({ method: 'eth_getCode', params: [a, 'latest'] })).toLowerCase();
     const regleV2 = code.includes('63' + SEL_DEFAUT);
     const bon = D.ordre.every((k) => relu[k] === String(C[k]).toLowerCase()) && usdcAdmis && prochain === 1n && parts.winner === WINNER_BPS && parts.pool === POOL_BPS && parts.fenetre === BigInt(FENETRE) && regleV2;
-    $('#rLu').textContent = Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · USDC admitted ' + usdcAdmis + ' · next duel #' + prochain + ' · split ' + parts.winner + '/' + parts.pool + ' bps · window ' + parts.fenetre + ' blocks · settleDefault ' + (regleV2 ? 'present' : 'MISSING');
+    $('#rLu').textContent = masquerAdressesFrais(Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · USDC admitted ' + usdcAdmis + ' · next duel #' + prochain + ' · split ' + parts.winner + '/' + parts.pool + ' bps · window ' + parts.fenetre + ' blocks · settleDefault ' + (regleV2 ? 'present' : 'MISSING'));
     if (bon) adresse = a;
     dire(bon ? 'Deployed: the contract reads back exactly what was signed. Send the transaction hash to the team: the app opens v2 duels once the record is written from it.'
       : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');

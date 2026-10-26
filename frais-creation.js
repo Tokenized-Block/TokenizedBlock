@@ -35,6 +35,25 @@ export const FEE_WALLET_LEGACY_37EB = '0x37eb9b7ce0b51fe12fbf092026e001918128580
 export const CREATE_ROUTER_FEE_WALLET = WALLET_TRESOR_SMART;
 /** ⛔ GRAVE DANS LE CONTRAT : HOOK_PREVU.FEE_WALLET() rend le smart wallet (eth_call tip 2356). */
 export const HOOK_FEE_WALLET = WALLET_TRESOR_SMART;
+/* ⛔ 2026-10-26 (game57 item 10, Phil : « no fee wallet address may ever be rendered in the UI ») : AUCUNE adresse de frais — entiere ou
+ *   abregee, quelle que soit sa casse — n est AFFICHEE (texte, title, aria, infobulle). Vu en prod : la carte Skins de l onglet Market
+ *   disait « Not listed · held by 0x…(abrege) » avec le wallet de frais. Les constantes ci-dessus restent le ROUTAGE on-chain, intact ;
+ *   ces aides ne servent qu a l ECRAN. Tout raccourcisseur d adresse affichee passe par courtAffichable (garde :
+ *   test-pas-d-adresse-de-frais-affichee-20261026.mjs, qui scanne chaque fichier servi). */
+export const ADRESSES_FRAIS = Object.freeze([...new Set([FEE_WALLET, WALLET_TRESOR_SMART, CREATE_ROUTER_FEE_WALLET, HOOK_FEE_WALLET, FEE_WALLET_LEGACY_37EB].map((a) => a.toLowerCase()))]);
+const LIBELLES_FRAIS = Object.freeze({ [FEE_WALLET.toLowerCase()]: 'Tokenized Block fee wallet', [FEE_WALLET_LEGACY_37EB.toLowerCase()]: 'Tokenized Block operator wallet' });
+/** Vrai si `a` est une adresse de frais (toutes casses). */
+export function estAdresseFrais(a) { return ADRESSES_FRAIS.includes(String(a ?? '').trim().toLowerCase()); }
+/** Le NOM a afficher a la place d une adresse de frais ; null pour toute autre adresse. */
+export function libelleAdresseFrais(a) { return estAdresseFrais(a) ? LIBELLES_FRAIS[String(a).trim().toLowerCase()] || 'Tokenized Block fee wallet' : null; }
+/** L adresse courte affichable (0x1234…abcd, `n` premiers caracteres) — ou le NOM si c est une adresse de frais. */
+export function courtAffichable(a, n = 6) { const s = String(a ?? ''); return libelleAdresseFrais(s) || s.slice(0, n) + '…' + s.slice(-4); }
+/** Un texte a afficher, chaque adresse de frais ENTIERE qu il contient (toutes casses) remplacee par son nom. */
+export function masquerAdressesFrais(texte) {
+  let s = String(texte ?? '');
+  for (const a of ADRESSES_FRAIS) s = s.replace(new RegExp(a, 'gi'), libelleAdresseFrais(a));
+  return s;
+}
 /** Base mainnet CreateRouter — on-chain FEE_WALLET a6cf; sealed 1B 100% creator. */
 export const CREATE_ROUTER = '0xe05CD0336cD18A0909BCA980a4191A0B00a3FdF5';
 /** On-chain floor inside CreateRouter (0.0003 ETH). App may send more (~$1 oracle). */

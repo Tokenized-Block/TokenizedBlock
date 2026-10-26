@@ -70,6 +70,7 @@
  *    une fortune, ou a des miettes. */
 import { periodesDuPot, etatReclamation, montantLisible, decoderChaine } from './reclamation.js';
 import { envoyerDepuisWallet } from './envoi.js';
+import { courtAffichable } from './frais-creation.js';
 
 const $ = (s) => document.querySelector(s);
 const RPC = 'https://mainnet.base.org';
@@ -218,7 +219,7 @@ $('#connecter').addEventListener('click', async () => {
     const c = await window.ethereum.request({ method: 'eth_requestAccounts' });
     try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
     compte = c && c[0];
-    $('#connecter').textContent = compte ? String(compte).slice(0, 6) + '…' + String(compte).slice(-4) : 'Connect wallet';
+    $('#connecter').textContent = compte ? courtAffichable(compte) : 'Connect wallet';
     await lire();
   } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }
 });
@@ -226,7 +227,7 @@ $('#connecter').addEventListener('click', async () => {
 /* ⛔ REPRENDRE UNE AUTORISATION DEJA DONNEE SANS REDEMANDER : `eth_accounts` n ouvre aucune fenetre. */
 if (window.ethereum) {
   window.ethereum.request({ method: 'eth_accounts' }).then((c) => {
-    if (c && c[0]) { compte = c[0]; $('#connecter').textContent = String(c[0]).slice(0, 6) + '…' + String(c[0]).slice(-4); void lire(); }
+    if (c && c[0]) { compte = c[0]; $('#connecter').textContent = courtAffichable(c[0]); void lire(); }
   }).catch(() => {});
   if (window.ethereum.on) {
     window.ethereum.on('accountsChanged', (c) => { compte = c && c[0]; void lire(); });

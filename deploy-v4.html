@@ -65,6 +65,7 @@
  *    nativement par le noeud Base : l EVM locale rend OpcodeNotFound). Si elle rend `false`, le verrou du label
  *    refuserait nos propres createurs, et il ne faut surtout pas brancher l app dessus. */
 import { envoyerDepuisWallet } from './envoi.js';
+import { masquerAdressesFrais } from './frais-creation.js';
 
 const $ = (s) => document.querySelector(s);
 const RPC = 'https://mainnet.base.org';
@@ -81,7 +82,7 @@ let tx = null, compte = null, pret = { vide: false, simu: false };
 async function verifier() {
   tx = await fetch('./deploy-v4.json', { cache: 'no-store' }).then((r) => r.json());
   $('#attendu').textContent = tx.hook;
-  $('#fee').textContent = tx.feeWallet;
+  $('#fee').textContent = masquerAdressesFrais(tx.feeWallet);
   $('#vie').textContent = tx.fraisVieWei;
   $('#marq').textContent = tx.marqueur;
   const code = await rpc('eth_getCode', [tx.hook, 'latest']);
@@ -106,7 +107,7 @@ async function relire() {
   try {
     /* ⛔ Les trois selecteurs sont MESURES avec `cast sig` et ecrits dans deploy-v4.json, jamais devines ici. */
     const fee = '0x' + String(await appel(tx.selecteurs.feeWallet)).slice(-40);
-    lignes.push((fee.toLowerCase() === tx.feeWallet.toLowerCase() ? '✓' : '✗') + ' fee wallet: ' + fee);
+    lignes.push((fee.toLowerCase() === tx.feeWallet.toLowerCase() ? '✓' : '✗') + ' fee wallet: ' + masquerAdressesFrais(fee));
     const taille = BigInt(await appel(tx.selecteurs.tailleMarqueur));
     lignes.push((taille === BigInt(tx.marqueur.length) ? '✓' : '✗') + ' label length: ' + taille);
     const arg = tx.temoinLabel.replace(/^0x/, '').toLowerCase().padStart(64, '0');

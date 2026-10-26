@@ -103,6 +103,7 @@ b[data-k]{color:var(--or)}
 import { BLOCKROLLS_DEPLOIEMENT as D } from './blockrolls-deploiement.js';
 import { verifierEnregistrement, usdc6, pct } from './blockrolls-config.js';
 import { selecteur } from './keccak.js';
+import { masquerAdressesFrais } from './frais-creation.js';
 const $ = (s) => document.querySelector(s);
 const eth = () => window.ethereum;
 const CHAINE_HEX = '0x' + D.chaine.toString(16);
@@ -117,7 +118,7 @@ const MOTS = { roll: usdc6(C.rollPrice), potShare: pct(C.potShareBps), devShare:
   minScore: String(C.minScore), pass: usdc6(C.passPrice), passRolls: String(C.passRolls), passHours: String(Number(C.passWindow) / 3600),
   passPot: usdc6(BigInt(C.passPrice) * BigInt(C.potShareBps) / 10000n), passDev: usdc6(BigInt(C.passPrice) - BigInt(C.passPrice) * BigInt(C.potShareBps) / 10000n), window: '256' };
 for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
-$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + C[k] + '</dd>').join('')
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + masquerAdressesFrais(C[k]) + '</dd>').join('')
   + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
   + '<dt>Fingerprint</dt><dd>sha256 ' + D.sha256Creation + ' · ' + D.octetsCreation + ' bytes</dd>';
 (async () => {
@@ -132,7 +133,7 @@ $('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((
   peindre();
 })();
 function peindre() {
-  $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet pays the deployment gas; it gets no power over the game.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#dCompte').textContent = compte ? 'Connected: ' + masquerAdressesFrais(compte) + ' — this wallet pays the deployment gas; it gets no power over the game.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
   $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;
   $('#bFonds').disabled = !compte || !adresse || envoi;
@@ -173,7 +174,7 @@ $('#bDeployer').addEventListener('click', async () => {
     const regles = (await appel(a, 'currentRules()')).slice(2).match(/.{64}/g).map((w) => BigInt('0x' + w).toString());
     const bon = ['usdc', 'devWallet', 'hook', 'unitPoolId', 'rollPrice', 'passPrice'].every((k) => relu[k] === String(C[k]).toLowerCase())
       && regles.join() === [C.prize5, C.prize4, C.prize3, C.prize2, C.minScore].map(String).join() && /^0x[0-9a-f]{40}$/.test(createur) && !/^0x0{40}$/.test(createur);
-    $('#rLu').textContent = Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · rules ' + regles.join('/') + ' · UNIT creator ' + createur;
+    $('#rLu').textContent = masquerAdressesFrais(Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · rules ' + regles.join('/') + ' · UNIT creator ' + createur);
     if (bon) adresse = a;
     dire(bon ? 'Deployed: the contract reads back exactly what was signed, and it knows UNIT\'s creator. Send the address to the team: the app opens the game once it knows it.'
       : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');

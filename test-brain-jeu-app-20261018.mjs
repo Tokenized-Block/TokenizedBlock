@@ -99,7 +99,7 @@ vu(/fetch\('\/api\/ticketpot\/signature', \{ method: 'POST', headers: \{ 'conten
 /* 2026-10-24 (3e tour ticketpot, D4 ; execute par test-ticketpot-fix4) : le refus du wallet arrete ; un serveur muet ou un 412 PERIME aussi */
 vu(/if \(issue === 'PERIMEE' \|\| issue === 'SANS_REPONSE'\) \{ arret = issue; break; \}/.test(sp) && /catch \(e\) \{ bcEtape\(m, 'Declined in your wallet/.test(sp), 'un refus du wallet, un serveur muet ou des parts perimees ARRETENT la serie (rien de plus)');
 vu(!/eth_sendTransaction|wallet_sendCalls|bcSigner\(/.test(sp), 'signer les parts n envoie AUCUNE transaction');
-vu(/if \(p\.kind === 'POT_SIGN' && !p\.sign\.signerIsVerifier\) \{/.test(bloc) && /'Switch to the verifier wallet ' \+ p\.sign\.verifier\.slice\(0, 6\) \+ '… to sign the shares/.test(bloc)
+vu(/if \(p\.kind === 'POT_SIGN' && !p\.sign\.signerIsVerifier\) \{/.test(bloc) && /'Switch to the verifier wallet \(' \+ courtAffichable\(p\.sign\.verifier\) \+ '\) to sign the shares/.test(bloc) /* 2026-10-26 (game57 item 10) : le verifier peut etre un wallet de frais -> nomme, jamais montre */
   && /attester-ticketpot\.html\?day=' \+ encodeURIComponent\(p\.sign\.jourId\) \+ \(p\.sign\.week \? '&week=1' : ''\)/.test(bloc), 'pas le verifier : la carte le dit (verifier LU, jamais tape) et ouvre la page verifier — aucun Sign mort');
 vu(/if \(p\.kind === 'POT_SIGN'\) \{\n      const s = await bjSignerParts\(m, p, walletCarte\);/.test(bloc), 'le Sign de POT_SIGN signe les parts (pas de bcSigner)');
 vu((bloc.match(/bcSigner\(/g) || []).length === 1, 'toujours UN seul bcSigner (close et fund passent par le meme Sign)');

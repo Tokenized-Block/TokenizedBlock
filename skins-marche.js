@@ -8,6 +8,7 @@
  *   contrat ACCEPTERAIT — jamais d une regle a cote.
  */
 import { actionsSkin, offreMinimale } from './blockskins.js';
+import { estAdresseFrais, courtAffichable } from './frais-creation.js';
 
 /** Relecture de la liste tant que la section est visible (Phil : « live ») : 25 s, bornee a lireSkins (1 + ceil(n/100) eth_call). */
 export const SKM_RAFRAICHIR_MS = 25000;
@@ -177,9 +178,12 @@ export function apercuSkinSvg(r) {
   return '<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true" focusable="false">'
     + apercuSkinFormes(r).map(([tag, at]) => '<' + tag + Object.entries(at).map(([k, v]) => ' ' + k + '="' + v + '"').join('') + '/>').join('') + '</svg>';
 }
-/** Ce qu on dit du detenteur : « you », ou l adresse courte (0x1234…abcd). Pendant une vente, le contrat garde la skin : on dit le VENDEUR. */
+/** Ce qu on dit du detenteur : « you », ou l adresse courte (0x1234…abcd). Pendant une vente, le contrat garde la skin : on dit le VENDEUR.
+ *  ⛔ 2026-10-26 (game57 item 10) : null pour un wallet de frais — la carte ne dit alors NI « held by » NI « seller » (aucune adresse de
+ *  frais n est jamais affichee ; vu en prod : « Not listed · held by 0x…(abrege) »). */
 export function detenteurCourt(s, moi) {
   const d = bas(s && s.detenteur);
   if (ADR.test(bas(moi)) && d === bas(moi)) return 'you';
-  return ADR.test(d) ? d.slice(0, 6) + '…' + d.slice(-4) : 'not read';
+  if (estAdresseFrais(d)) return null;
+  return ADR.test(d) ? courtAffichable(d) : 'not read';
 }

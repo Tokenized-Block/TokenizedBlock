@@ -253,7 +253,8 @@ vu(/\(stock\)/.test(form), 'B10d une action tokenisee est dite « (stock) » dan
 if (!process.env.TB_RB_SANS_MUTANTS) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'skrb-mut-'));
   const abs = (f) => pathToFileURL(path.join(ICI, f)).href;
-  const srcSkm = fs.readFileSync(path.join(ICI, 'skins-marche.js'), 'utf8').replace(/\r\n/g, '\n').replace("from './blockskins.js'", "from '" + abs('blockskins.js') + "'");
+  const srcSkm = fs.readFileSync(path.join(ICI, 'skins-marche.js'), 'utf8').replace(/\r\n/g, '\n').replace("from './blockskins.js'", "from '" + abs('blockskins.js') + "'")
+    .replace("from './frais-creation.js'", "from '" + abs('frais-creation.js') + "'"); /* 2026-10-26 (game57 item 10) : le masque des adresses de frais */
   const srcBsk = fs.readFileSync(path.join(ICI, 'blockskins.js'), 'utf8').replace(/\r\n/g, '\n').replace(/from '\.\/([a-z-]+\.js)'/g, (_, f) => "from '" + abs(f) + "'");
   const srcApp = html;
   const MUTANTS = [

@@ -31,7 +31,7 @@ import { EV_FUNDED, EV_CLOSED, EV_CLAIMED, EV_ROLLED_OVER } from './ticketpot-pl
 import { DEVISES_BASE, ACTIONS_COINBASE } from './paires.js';
 import { actionMesuree, calldataDevis } from './rolls-en-action.js';
 import { ALLER_RETOUR_MAX_BPS } from './pools-actions-aerodrome.js';
-import { USDC_BASE } from './frais-creation.js';
+import { USDC_BASE, masquerAdressesFrais } from './frais-creation.js';
 
 const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-fA-F]{40}$/, HASH = /^0x[0-9a-fA-F]{64}$/;
@@ -39,7 +39,8 @@ const bas = (x) => String(x || '').toLowerCase();
 const motAdr = (w) => '0x' + String(w || '').replace(/^0x/, '').slice(-40).toLowerCase();
 const mots = (data) => (String(data || '').replace(/^0x/, '').match(/.{64}/g) || []).map((w) => BigInt('0x' + w));
 const signe128 = (v) => { const x = BigInt.asUintN(128, v); return x >= (1n << 127n) ? x - (1n << 128n) : x; };
-const ligne = (texte, classe = '') => ({ texte, classe });
+/* ⛔ 2026-10-26 (game57 item 10) : chaque ligne dite passe par le masque — un wallet de frais lu dans un log est NOMME, jamais montre */
+const ligne = (texte, classe = '') => ({ texte: masquerAdressesFrais(texte), classe });
 
 /** Un montant brut en unites humaines : 6 decimales au plus, zeros de fin retires. */
 export function unites(brut, dec, frac = 6) {

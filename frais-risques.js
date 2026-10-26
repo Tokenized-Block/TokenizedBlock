@@ -13,7 +13,7 @@
  * ⛔ `live` = la reponse de /api/tirage (mode du tirage, pot des rolls lu par le serveur), ou null : non lu -> « not read », jamais 0.
  * ⛔ Les risques disent la STRUCTURE (qui signe, d ou vient le hasard, ce que le contrat permet), jamais l intention de quiconque. */
 import { HOOK_7030, HOOK_7030_PPM, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
-import { FRAIS_OUVERTURE_WEI, CREATE_FEE_WEI_FLOOR } from './frais-creation.js';
+import { FRAIS_OUVERTURE_WEI, CREATE_FEE_WEI_FLOOR, courtAffichable } from './frais-creation.js';
 import { FRAIS_INTERFACE_BPS } from './echange.js';
 import { PALIERS } from './frais-degressif.js';
 import { FRAIS_GESTE_BPS } from './frais-du-geste.js';
@@ -116,7 +116,7 @@ const pctFrac = (num, den) => decimal(num * 100n, den, 1) + '%';
 const heures = (s) => decimal(s, 3600n, 2) + ' hours';
 const jours = (s) => { const j = decimal(s, 86400n, 2); return j + (j === '1' ? ' day' : ' days'); };
 const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const court = (a) => esc(String(a).slice(0, 6) + '…' + String(a).slice(-4));
+const court = (a) => esc(courtAffichable(String(a)));
 const lienBase = (a) => '<a href="https://basescan.org/address/' + esc(a) + '" target="_blank" rel="noopener">' + court(a) + '</a>';
 
 /* ------------------------------------------------------------------ le rendu */

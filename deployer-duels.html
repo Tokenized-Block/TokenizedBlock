@@ -98,6 +98,7 @@ import { DUELS_DEPLOIEMENT as D } from './duels-deploiement.js';
 import { verifierEnregistrement } from './duels-config.js';
 import { MIN_STAKE, MIN_EXPIRY, MAX_EXPIRY, WINNER_BPS, POOL_BPS, BPS, DELAI_CIBLE, FENETRE } from './duels-plan.js';
 import { selecteur } from './keccak.js';
+import { masquerAdressesFrais } from './frais-creation.js';
 /* revue 2026-10-24 (LOW n°3) : UNE creation au plus (hash garde, « Check again », eth_chainId relu apres un changement) : envoi-creation.js */
 import { creerEnvoiCreation, phraseEnvoi } from './envoi-creation.js';
 const $ = (s) => document.querySelector(s);
@@ -112,7 +113,7 @@ const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.
 const MOTS = { minStake: MIN_STAKE.toString(), minMinutes: String(MIN_EXPIRY / 60), maxDays: String(MAX_EXPIRY / 86400), delay: String(DELAI_CIBLE),
   winner: String(Number(WINNER_BPS) / 100), pool: String(Number(POOL_BPS) / 100), dev: String(Number(BPS - WINNER_BPS - POOL_BPS) / 100), window: String(FENETRE) };
 for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.dataset.k] ?? '?';
-$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (C[k] || '— not set —') + '</dd>').join('')
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + masquerAdressesFrais(C[k] || '— not set —') + '</dd>').join('')
   + '<dt>Owner</dt><dd>none</dd>'
   + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
   + '<dt>Fingerprint</dt><dd>' + (D.sha256Creation ? 'sha256 ' + D.sha256Creation + ' · ' + D.octetsCreation + ' bytes' : '—') + '</dd>';
@@ -130,7 +131,7 @@ $('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manqu
   peindre();
 })();
 function peindre() {
-  $('#dCompte').textContent = compte ? 'Connected: ' + compte + ' — this wallet pays the deployment gas; it gets no power over the duels.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#dCompte').textContent = compte ? 'Connected: ' + masquerAdressesFrais(compte) + ' — this wallet pays the deployment gas; it gets no power over the duels.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
   const st = E.etat(), tx = st.tx, bloque = !tx && (st.attente || st.incertain);
   $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse || !E.peutEnvoyer();
@@ -165,7 +166,7 @@ async function suite(r) {
     const prochain = await lireU(a, 'nextId()');
     const parts = { winner: await lireU(a, 'WINNER_BPS()'), pool: await lireU(a, 'POOL_BPS()') };
     const bon = D.ordre.every((k) => relu[k] === String(C[k]).toLowerCase()) && usdcAdmis && prochain === 1n && parts.winner === WINNER_BPS && parts.pool === POOL_BPS;
-    $('#rLu').textContent = Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · USDC admitted ' + usdcAdmis + ' · next duel #' + prochain + ' · split ' + parts.winner + '/' + parts.pool + ' bps';
+    $('#rLu').textContent = masquerAdressesFrais(Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · USDC admitted ' + usdcAdmis + ' · next duel #' + prochain + ' · split ' + parts.winner + '/' + parts.pool + ' bps');
     if (bon) adresse = a;
     dire(bon ? 'Deployed: the contract reads back exactly what was signed. Send the address to the team: the app opens duels once it knows it.'
       : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
