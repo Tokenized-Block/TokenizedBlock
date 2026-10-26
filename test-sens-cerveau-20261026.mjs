@@ -158,7 +158,8 @@ for (let t = 0; t < 30; t++) { const r = pas(e, FAITS); e = r.etat; histo.push(r
   const app = readFileSync(new URL(process.env.APP_HTML || './app.html', import.meta.url), 'utf8');
   ok(/etat: profilCerveau\.etat \|\| null/.test(app), 'F: fiche — l etat montre est celui du cerveau de la fiche');
   ok(/etat: brainEtat && brainEtat\.c && brainEtat\.c\.adresse === adr \? brainEtat : null/.test(app), 'F: Brain — l etat n est montre que s il est celui de CE block');
-  ok(/cadreInterieur\(\{[^}]*etat: cible\.etat \|\| null \}\)/.test(app), 'F: Inside recoit cet etat');
+  /* game57 #4 : la fenetre 3D garde l etat de la cible (vision.etatCible) pour « Why » et Take control ; les tuiles Live passent par cadreTuile */
+  ok(/vision\.etatCible = cible\.etat \|\| null/.test(app), 'F: Inside recoit cet etat');
   const i0 = app.indexOf('function peindreInterneVision(');
   const bloc = app.slice(i0, app.indexOf('function peindreVision()', i0)).replace(/\/\*[\s\S]*?\*\//g, '');
   ok(bloc.length > 800 && bloc.length < 6000, 'F: panneau trouve (' + bloc.length + ' octets)');

@@ -1118,9 +1118,35 @@ dialog.bcDialogue{background:var(--carte);color:var(--texte);border:1px solid va
 dialog.bcDialogue::backdrop{background:rgb(var(--fondRgb) / .75)}
 dialog.bcDialogue pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--creux);border:1px solid var(--ligne);border-radius:10px;padding:10px;font-size:12px}
 /* 2026-10-26 — BRAIN VISION : memes jetons que la page (le coloris suit), 16 px de marge a 375 px, jamais de defilement horizontal */
-dialog.bvPop{background:var(--carte);color:var(--texte);border:1px solid var(--ligne);border-radius:16px;width:calc(100% - 32px);max-width:720px;
-  max-height:calc(100dvh - 32px);box-sizing:border-box;padding:14px 16px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
-dialog.bvPop::backdrop{background:rgb(var(--fondRgb) / .78)}
+/* 2026-10-26 (game57 #4, « View inside the brain ») : une FENETRE comme le Control panel (non modale, bord a tirer, replier,
+ *   agrandir, deplacer par l en-tete) — fenetreCommeLePanneau() reutilise bcBornerTaille / bcAxeTaille / bcNavPx du panneau. */
+dialog.bvPop{background:var(--carte);color:var(--texte);border:1px solid var(--ligne);border-radius:16px;box-sizing:border-box;padding:0;margin:0;
+  position:fixed;z-index:72;inset:auto;right:12px;top:12px;width:var(--bvWLibre,min(620px,calc(100% - 24px)));height:calc(100dvh - 24px - var(--bcNav,66px));
+  max-width:none;max-height:none;overflow:visible;translate:var(--bvDx,0px) var(--bvDy,0px);box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
+dialog.bvPop>.bvTete,dialog.bvPop>.bvCorps{padding:0 14px}
+dialog.bvPop>.bvTete{padding-top:10px;cursor:move;user-select:none;-webkit-user-select:none}
+dialog.bvPop>.bvCorps{height:calc(100% - 64px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-bottom:12px}
+@media (max-width:760px){dialog.bvPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:var(--bvHLibre,70dvh);translate:none}
+  dialog.bvPop>.bvTete{cursor:default}}
+dialog.bvPop.bcReduit{height:auto}
+dialog.bvPop.bcReduit>.bvCorps,dialog.bvPop.bcReduit .bcPoignee{display:none}
+dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;height:auto;translate:none}
+.bvBoutonsFen{display:flex;gap:6px;flex:0 0 auto}
+.bvScene{position:relative;margin:8px 0 4px}
+#bv3d{display:block;width:100%;height:auto;max-height:52vh;background:#05070c;border:1px solid var(--ligne);border-radius:12px;touch-action:none}
+.bvNumero{position:absolute;left:10px;top:8px;font:800 15px/1 var(--mono,monospace);color:#fff;text-shadow:0 1px 3px #000;pointer-events:none}
+.bvHumeurBtn{position:absolute;right:8px;top:6px;border:1px solid rgb(255 255 255 / .35);background:rgb(0 0 0 / .45);color:#fff;border-radius:99px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
+.bvHumeurBtn:hover,.bvHumeurBtn:focus-visible{border-color:var(--accent)}
+.bvPhrase{margin:4px 0;font-style:italic;min-height:1.3em}
+.bvEtagere{display:flex;gap:4px;align-items:flex-end;margin:10px 0 0;padding:6px 6px 0;border-bottom:4px solid var(--ligne);overflow-x:auto;scrollbar-width:thin}
+.bvEtagere .bvDos{flex:0 0 auto;writing-mode:vertical-rl;transform:rotate(180deg);min-height:96px;padding:8px 5px;border:1px solid var(--ligne);border-radius:4px 4px 2px 2px;
+  background:var(--creux);color:var(--texte);font-size:11px;font-weight:700;cursor:pointer}
+.bvEtagere .bvDos:nth-child(odd){min-height:108px}
+.bvEtagere .bvDos[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
+.bvOnglets{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}
+.bvOnglets .bvOnglet{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ligne);border-radius:8px 8px 0 0;padding:3px 8px;font-size:12px;background:transparent;color:var(--texte);cursor:pointer}
+.bvOnglets .bvOnglet[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
+@media (prefers-reduced-motion:reduce){#bvPop,#bvPop *{animation:none!important;transition:none!important}}
 .bvTete{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 #bvChamp{display:block;width:100%;height:auto;max-height:52vh;margin:8px 0 4px;background:var(--creux);border:1px solid var(--ligne);border-radius:12px}
@@ -4483,20 +4509,36 @@ details[open] > summary::before{transform:rotate(90deg)}
 <!-- ══ BRAIN VISION (2026-10-26) — ce que le cerveau d UN block voit : ses entrees (avec leur source), ce qu elles font a ses
      16 capteurs, ses dernieres sorties REELLES rejouees, et un « what if » qui relance le MEME cerveau (cerveau.js) depuis sa
      graine sur des faits edites. ⛔ Lecture seule : aucun reseau, aucune signature, rien n est envoye. vision-cerveau.js. -->
-<dialog class="bvPop" id="bvPop" aria-label="What its brain sees">
-  <div class="bvTete">
-    <div><p class="titre" style="margin:0" id="bvTitre">What its brain sees</p>
-      <p class="note" style="margin:2px 0 0" id="bvSous">Only what its neurons really received, with where it came from.</p></div>
-    <button type="button" class="bouton sec bvPetit" id="bvFermer" aria-label="Close">Close</button>
+<!-- 2026-10-26 (game57 #4) : « View inside the brain » — une FENETRE comme le Control panel (non modale : bord a tirer, replier,
+     agrandir, deplacer par l en-tete), une scene 3D (le moteur de la page : sphere de neurones dans son cube, voisins de la map),
+     et les sections rangees comme des livres sur une etagere ; un livre clique s ouvre en onglet. -->
+<dialog class="bvPop" id="bvPop" data-fenetre="panneau" aria-label="View inside the brain">
+  <div class="bcPoignee" id="bvPoignee" role="separator" tabindex="0" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
+    aria-label="Resize the brain window: drag this edge; double click to switch between largest and original size" title="Drag to resize · double click: largest / original"></div>
+  <div class="bvTete" id="bvTete">
+    <div style="min-width:0"><p class="titre" style="margin:0" id="bvTitre">View inside the brain</p>
+      <p class="note" style="margin:2px 0 0" id="bvSous">Only what its neurons really received. Nothing is sent, nothing is signed.</p></div>
+    <span class="bvBoutonsFen">
+      <button type="button" class="bouton sec bvPetit" id="bvReduire" aria-label="Fold or unfold the brain window" aria-expanded="true">–</button>
+      <button type="button" class="bouton sec bvPetit" id="bvAgrandir" aria-label="Maximise or restore the brain window" aria-pressed="false">□</button>
+      <button type="button" class="bouton sec bvPetit" id="bvFermer" aria-label="Close">✕</button>
+    </span>
   </div>
-  <!-- 2026-10-26 (Phil : « etre dans le brain ») : INSIDE = la vue depuis le block, OUTSIDE = le schema d avant, intact -->
+  <div class="bvCorps" id="bvCorps">
+  <!-- INSIDE = la camera vole dans le block et finit a la premiere personne parmi ses neurones ; OUTSIDE = la map 3D et ses vrais voisins -->
   <div class="bvVues" role="group" aria-label="View">
     <button type="button" class="bouton sec bvPetit" id="bvVueDedans" aria-pressed="true">Inside</button>
     <button type="button" class="bouton sec bvPetit" id="bvVueDehors" aria-pressed="false">Outside</button>
+    <button type="button" class="bouton sec bvPetit" id="bvControle" title="Free camera over its 128 neurons, on a local snapshot — nothing is sent">Take control</button>
+    <button type="button" class="bouton sec bvPetit" id="bvRetourLive" hidden>Back to live</button>
   </div>
-  <svg id="bvChamp" viewBox="0 0 360 310" role="img" aria-label="Its brain: inputs, sensors, neurons, neighbours"></svg>
+  <div class="bvScene" id="bvScene">
+    <canvas id="bv3d" width="720" height="440" role="img" aria-label="Its brain in 3D"></canvas>
+    <span class="bvNumero" id="bvNumero" aria-label="Beat">—</span>
+    <button type="button" class="bvHumeurBtn" id="bvHumeur" aria-haspopup="true" title="Why this mood?">—</button>
+  </div>
   <!-- 2026-10-26 (« feel ») : UNE phrase par battement, faite des seules donnees de CE battement (vision-cerveau.js#phraseBattement) -->
-  <p class="bvPhrase" id="bvPhrase"></p>
+  <p class="bvPhrase" id="bvPhrase" aria-live="polite"></p>
   <div class="bvLecteur">
     <button type="button" class="bouton sec bvPetit" id="bvJouer">Pause</button>
     <button type="button" class="bouton sec bvPetit" id="bvPas">Step</button>
@@ -4510,28 +4552,40 @@ details[open] > summary::before{transform:rotate(90deg)}
   </div>
   <p class="note" id="bvSortie"></p>
   <p class="note" id="bvLegende" style="margin:0 0 4px"></p>
-  <details class="bDetail" open><summary class="note"><b>Talk to it</b> — pick an input, see which neurons it reaches</summary>
+  <nav class="bvEtagere" id="bvEtagere" role="tablist" aria-label="Sections — pick a book">
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="pourquoi">Why</button>
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="parle">Talk to it</button>
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="lit">What it reads</button>
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="neurones">Its neurons</button>
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="autour">Around it</button>
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="siEtAlors">What if</button>
+    <button type="button" class="bvDos" role="tab" aria-selected="false" data-livre="details">Details</button>
+  </nav>
+  <div class="bvOnglets" id="bvOnglets" role="tablist" aria-label="Open sections"></div>
+  <section class="bDetail bvLivre" data-livre="pourquoi" hidden><p class="note"><b>Why this mood</b> — only fields of the beat shown</p>
+    <ul class="bvListe" id="bvPourquoi"></ul></section>
+  <details class="bDetail bvLivre" data-livre="parle" hidden open><summary class="note"><b>Talk to it</b> — pick an input, see which neurons it reaches</summary>
     <p class="note">Read only: nothing is sent. The neurons come from its real wiring and a replay of the same brain — no answer is made up.</p>
     <div class="bvParle" id="bvParle"></div>
     <p class="note" id="bvParleTexte"></p>
   </details>
-  <details class="bDetail" open><summary class="note"><b>What it reads</b> — each input it received, <span id="bvLuQuand">on its newest beat</span></summary>
+  <details class="bDetail bvLivre" data-livre="lit" hidden open><summary class="note"><b>What it reads</b> — each input it received, <span id="bvLuQuand">on its newest beat</span></summary>
     <ul class="bvListe" id="bvEntrees"></ul>
     <p class="note" id="bvForces"></p>
   </details>
   <!-- 2026-10-26 (« feel ») : ce qui N EST PAS nourri ou PAS lu quitte la vue principale — replie ici, jamais cache -->
-  <details class="bDetail" id="bvDetails"><summary class="note"><b>Details</b> — <span id="bvDetailsResume">inputs not fed or not read</span></summary>
+  <details class="bDetail bvLivre" data-livre="details" hidden open id="bvDetails"><summary class="note"><b>Details</b> — <span id="bvDetailsResume">inputs not fed or not read</span></summary>
     <ul class="bvListe" id="bvDetailsListe"></ul>
   </details>
   <!-- 2026-10-26 (Brain senses) : son etat INTERNE, copie de l etat reel de cerveau.js (vision-cerveau.js#interne), lecture seule -->
-  <details class="bDetail" id="bvInterneBloc"><summary class="note"><b>Inside its neurons</b> — its internal state after its last beat</summary>
+  <details class="bDetail bvLivre" data-livre="neurones" hidden open id="bvInterneBloc"><summary class="note"><b>Inside its neurons</b> — its internal state after its last beat</summary>
     <ul class="bvListe" id="bvInterne"></ul>
     <p class="note" id="bvInterneNote"></p>
   </details>
-  <details class="bDetail"><summary class="note"><b>Around it, not read by its neurons</b></summary>
+  <details class="bDetail bvLivre" data-livre="autour" hidden open><summary class="note"><b>Around it, not read by its neurons</b></summary>
     <ul class="bvListe" id="bvContexte"></ul>
   </details>
-  <details class="bDetail" open><summary class="note"><b>What if…</b> — replay the same brain from its seed</summary>
+  <details class="bDetail bvLivre" data-livre="siEtAlors" hidden open><summary class="note"><b>What if…</b> — replay the same brain from its seed</summary>
     <p class="note">Same address, same wiring, the facts it read — plus your change. Nothing is sent, nothing is signed: it runs in this page.</p>
     <div class="bvEdits" id="bvEdits"></div>
     <div class="rang" style="gap:8px;margin-top:6px"><button type="button" class="bouton sec bvPetit" id="bvRejouer">Replay 24 beats</button>
@@ -4543,6 +4597,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
     <p class="note mono" id="bvEmpreinte"></p>
   </details>
+  </div>
 </dialog>
 <!-- ══ LIVE (2026-10-26, proprietaire) — un SECOND panneau, docke a GAUCHE, non modal : la vue Inside EN DIRECT de plusieurs blocks a la
      fois (4 sur grand ecran, 2 sur telephone). Chaque tuile ne peint que les battements que la page a deja executes pour SON adresse
@@ -4849,8 +4904,10 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 /* ⛔ `CAPTEURS` et `PARAMETRES` sont importes pour le panneau du neurone : sans eux, les lignes qui
  *   les lisent jetteraient un ReferenceError et la page entiere serait MORTE. Un import manquant ne
  *   se voit pas a la lecture — il se voit a l ecran, trop tard. */
-import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES } from './cerveau.js';
-import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL } from './vision-cerveau.js';
+import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
+import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, referenceVue as referenceVueVision, dureeBattement, vitesseBornee } from './vision-cerveau.js';
+import { effetsDe, lumiereDe, poulsDe, echosDe, horizonDe, numeroBattement, voixDe as voixDedans, pourquoiDe, instantaneDedans, camLibre, orbiterCam, zoomerCam,
+  projeterNeurones, poseCamera, planAnimation, voisinsDehors, DUREE_VOL_MS } from './vision-dedans.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
@@ -25841,7 +25898,10 @@ function dessinerRaster() { dessinerRasterSur($('#bRaster'), brainHisto); }
  *     serveur deja charge (marcheParAdr) et le fil Live (h.dernierEchange). Aucun fetch, aucun getLogs, aucune signature.
  * ⛔ CE QUI N A PAS ETE LU SE DIT « not read » — vision-cerveau.js#champ ne rend jamais un zero a la place d un absent. */
 const vision = { source: null, i: -1, suivre: true, jouer: true, minuteur: null, faits: null, tickFaits: null, nourritureLue: null, adr: null, sim: null, ouvertA: 0,
-  vue: 'dedans', parle: null, cadre: null };
+  vue: 'dedans', parle: null, cadre: null,
+  /* game57 #4 : la scene 3D — c (champ), vu montre, vol (fly-in), boucle (rAF), controle (Take control : instantane LOCAL), particules
+   *   (une par nouveau holder REEL), tBattement (quand le battement montre a change), vitesse (0,5x / 1x / 2x) */
+  c: null, vu: null, vol: null, boucle: null, controle: null, particules: [], tBattement: 0, tickMontre: null, vitesse: 1, livres: [], livre: null };
 /* ⛔ prefers-reduced-motion : aucun glissement, aucune impulsion, et la lecture ne demarre pas seule */
 const bvReduit = (() => { try { const mq = window.matchMedia('(prefers-reduced-motion: reduce)'); return () => !!mq.matches; } catch (_) { return () => false; } })();
 const PHASE_CLASSE = { EXCITE: 'bvVif', INQUIET: 'bvDur', CALME: 'bvCalme', CURIEUX: 'bvTiede' };
@@ -25883,59 +25943,6 @@ const bvSvg = (tag, attrs, texte) => {
   return el;
 };
 const bvCourt = (x) => { const s = String(x || ''); return s.length > 14 ? s.slice(0, 8) + '…' + s.slice(-4) : s; };
-function peindreChampVision(c, vuAnime) {
-  const svg = $('#bvChamp');
-  if (!svg) return;
-  svg.replaceChildren();
-  const CX = 180, CY = 182, R = 78;
-  /* les forces exactes du dernier battement (cerveau.js#forces), en barres : 1,0 = 100 px — un capteur tire a 1 */
-  const s = c.sensations;
-  const COURTS = { reveil: 'wake-up', base: 'rest', delta: 'life change', nourriture: 'food', nouveau: 'new' };
-  if (s && !s.morte) {
-    s.termes.forEach((t, k) => {
-      const y = 14 + k * 13;
-      svg.append(bvSvg('text', { x: 6, y: y + 8, class: 'bvTx' }, COURTS[t.cle]));
-      svg.append(bvSvg('rect', { x: 66, y, width: Math.max(0.5, Math.min(100, Math.abs(t.valeur) * 100)), height: 8, rx: 2,
-        class: 'bvBarre' + (t.valeur < 0 ? ' bvDur' : ''), 'data-terme': t.cle, 'data-valeur': t.valeur }));
-      svg.append(bvSvg('text', { x: 66 + Math.min(100, Math.abs(t.valeur) * 100) + 4, y: y + 8, class: 'bvTx' }, t.valeur));
-    });
-    svg.append(bvSvg('line', { x1: 66 + 100, y1: 10, x2: 66 + 100, y2: 14 + 5 * 13, class: 'bvSeuil' }));
-    svg.append(bvSvg('text', { x: 66 + 100 - 2, y: 8, class: 'bvTx', 'text-anchor': 'end' }, 'fires at 1'));
-  } else {
-    svg.append(bvSvg('text', { x: 6, y: 20, class: 'bvTx' }, s && s.morte ? 'No current: it is dead.' : 'No beat recorded here yet.'));
-  }
-  /* les voisins — CONTEXTE, pas entrees : trait pointille, et la legende le dit */
-  for (const v of c.contexte.voisins) {
-    if (v.angle === null) continue;
-    const x = CX + Math.cos(v.angle) * (R + 32), y = CY + Math.sin(v.angle) * (R + 32);
-    svg.append(bvSvg('line', { x1: CX + Math.cos(v.angle) * (R + 6), y1: CY + Math.sin(v.angle) * (R + 6), x2: x, y2: y, class: 'bvVoisinTrait' }));
-    const g = bvSvg('g', { 'data-voisin': v.adr });
-    g.append(bvSvg('title', {}, (v.sym || v.adr) + ' — ' + v.humeur + ' — ' + (v.distance === null ? '' : v.distance + ' away on the map') + ' — not read by its neurons'));
-    g.append(bvSvg('rect', { x: x - 5, y: y - 5, width: 10, height: 10, rx: 2, class: 'bvVoisin ' + (PHASE_CLASSE[v.phase] || '') }));
-    g.append(bvSvg('text', { x, y: y + 15, class: 'bvTx', 'text-anchor': 'middle' }, String(v.sym || '?').slice(0, 8)));
-    svg.append(g);
-  }
-  /* les 128 neurones : les 16 capteurs (indices 0..15) en haut, plus gros ; allume = a tire sur le battement montre */
-  const allumes = new Set(vuAnime && Array.isArray(vuAnime.indices) ? vuAnime.indices : []);
-  for (let i = 0; i < 128; i++) {
-    const a = -Math.PI / 2 + (i / 128) * Math.PI * 2;
-    const capteur = i < CAPTEURS;
-    svg.append(bvSvg('circle', { cx: CX + Math.cos(a) * R, cy: CY + Math.sin(a) * R, r: capteur ? 3.4 : 2.2,
-      class: 'bvN' + (capteur ? ' bvCapteur' : '') + (allumes.has(i) ? ' on' : ''), 'data-n': i }));
-  }
-  const a0 = -Math.PI / 2, a1 = -Math.PI / 2 + (CAPTEURS / 128) * Math.PI * 2;
-  svg.append(bvSvg('text', { x: CX + Math.cos((a0 + a1) / 2) * (R + 14) + 10, y: CY + Math.sin((a0 + a1) / 2) * (R + 14), class: 'bvTx' }, '16 sensors'));
-  /* la sortie : le virage (gauche − droite) en fleche, sa longueur = la vitesse ; au centre, l humeur de CE battement */
-  if (vuAnime) {
-    const ang = -Math.PI / 2 + Number(vuAnime.virage || 0) * 0.7;
-    const L = 14 + Number(vuAnime.vitesse || 0) * 44;
-    svg.append(bvSvg('line', { x1: CX, y1: CY, x2: CX + Math.cos(ang) * L, y2: CY + Math.sin(ang) * L, class: 'bvFleche ' + (PHASE_CLASSE[vuAnime.phase] || '') }));
-    svg.append(bvSvg('text', { x: CX, y: CY + 26, class: 'bvHumeur ' + (PHASE_CLASSE[vuAnime.phase] || ''), 'text-anchor': 'middle' }, humeurCourteVision(vuAnime.phase)));
-    svg.append(bvSvg('text', { x: CX, y: CY + 40, class: 'bvTx', 'text-anchor': 'middle' }, 'beat ' + vuAnime.tick + ' · ' + vuAnime.spikes + ' fired'));
-  } else {
-    svg.append(bvSvg('text', { x: CX, y: CY + 4, class: 'bvTx', 'text-anchor': 'middle' }, 'no beat yet'));
-  }
-}
 /* INSIDE : le cadre vient de vision-cerveau.js#cadreInterieur (pur, deterministe) ; ici on ne fait que le dessiner. */
 /* 2026-10-26 (Live) : le MEME dessin sert aux tuiles du panneau Live — `svg` est la cible, `parle` l echange « Talk to it » (le
  *   dialogue seulement ; une tuile passe null), `clipId` un identifiant propre a chaque SVG (deux clipPath au meme id se melangent). */
@@ -26130,38 +26137,206 @@ function peindreVision() {
   const c = champVision({ adr: cible.adr, faits: cible.faits, vu: dernier, voisins: voisinsVision(cible.h),
     marche: marcheParAdr.get(cible.adr) || null, echange: cible.h ? cible.h.dernierEchange || null : null, nourritureLue: cible.nourritureLue });
   if (!c) return;
-  $('#bvTitre').textContent = 'What ' + (cible.sym || 'this block') + '\'s brain sees';
-  $('#bvBattementTexte').textContent = vuAnime ? 'beat ' + vuAnime.tick + ' (' + (vision.i + 1) + ' of ' + histo.length + ' recorded)' : 'no beat recorded';
+  $('#bvTitre').textContent = 'View inside ' + (cible.sym || 'this block') + '\'s brain';
+  /* ⛔ UN SEUL NUMERO DE BATTEMENT (#bvNumero) : celui du battement montre. Le curseur dit sa PLACE, pas un second numero. */
+  $('#bvBattementTexte').textContent = vuAnime ? (vision.i + 1) + ' of ' + histo.length + ' recorded' : 'no beat recorded';
   const dedans = vision.vue === 'dedans';
   $('#bvVueDedans').setAttribute('aria-pressed', dedans ? 'true' : 'false');
   $('#bvVueDehors').setAttribute('aria-pressed', dedans ? 'false' : 'true');
-  $('#bvChamp').setAttribute('aria-label', dedans ? 'Inside its brain: what reaches it, its neurons, its steering' : 'Its brain: inputs, sensors, neurons, neighbours');
-  if (dedans) {
-    const h = cible.h;
-    /* ou il regarde sur la map MAINTENANT — seulement pour poser ses voisins ; sans vitesse lue, aucune direction n est inventee */
-    const capMap = h && Number.isFinite(h.vx) && Number.isFinite(h.vy) && (h.vx !== 0 || h.vy !== 0) ? Math.atan2(h.vy, h.vx) : null;
-    const t0 = performance.now();
-    const k = cadreInterieur({ c, faits: cible.faits, histo, i: vision.i, capMap, reduit: bvReduit(), etat: cible.etat || null });
-    vision.cadre = k;
-    peindreInterieur(k);
-    window.__TB_BRAIN_INSIDE_MS__ = Math.round((performance.now() - t0) * 100) / 100;
-    $('#bvLegende').textContent = 'You are the block, looking out. Above: where each input comes from — a line means it reached all 16 of its sensors on its last read, grey means not read. '
-      + 'Lit dots: its neurons that fired on this beat (16 sensors in front, 112 around you). The ground turns and slides as its wings steered it. '
-      + (k && k.lueurTick ? 'Halo: how close each neuron is to firing (its potential over the threshold of ' + PARAMETRES.seuil + ', on this latest beat); red dotted: held below zero. ' : '')
-      + 'Dashed squares are neighbours on the map: not read by its neurons.';
-  } else {
-    vision.cadre = null;
-    peindreChampVision(c, vuAnime);
-    $('#bvLegende').textContent = '';
+  const h = cible.h;
+  /* ou il regarde sur la map MAINTENANT ; sans vitesse lue, aucune direction n est inventee */
+  const capMap = h && Number.isFinite(h.vx) && Number.isFinite(h.vy) && (h.vx !== 0 || h.vy !== 0) ? Math.atan2(h.vy, h.vx) : null;
+  const vuMontre = vision.controle ? histo.find((v) => v && v.tick === vision.controle.snap.tick) || vuAnime : vuAnime;
+  if (!vuMontre || vuMontre.tick !== vision.tickMontre) {
+    vision.tickMontre = vuMontre ? vuMontre.tick : null; vision.tBattement = performance.now();
+    /* une particule par nouveau holder REEL de ce battement (champ vu.nouveaux.detenteurs), placee par son numero — aucun hasard */
+    for (const e of effetsDe(vuMontre)) if (e.effet === 'holder') for (let q = 0; q < e.particules; q++) {
+      const a = ((vuMontre.tick * 7 + q * 13) % 64) / 64 * Math.PI * 2, y = (((vuMontre.tick * 5 + q * 11) % 32) / 32) * 1.4 - 0.7;
+      vision.particules.push({ tick: vuMontre.tick, p: [Math.cos(a) * 0.6, y, Math.sin(a) * 0.6] });
+    }
+    if (vision.particules.length > 40) vision.particules = vision.particules.slice(-40);
   }
+  vision.c = c; vision.vu = vuMontre; vision.capMap = capMap; vision.histoMontre = histo; vision.cibleH = h; vision.etatCible = cible.etat || null; vision.faitsCible = cible.faits || null;
+  vision.pouls = poulsDe(vuMontre, { reduit: bvReduit() });
+  $('#bvNumero').textContent = numeroBattement(vuMontre) === null ? '—' : 'Beat ' + numeroBattement(vuMontre);
+  $('#bvHumeur').textContent = vuMontre ? humeurCourteVision(vuMontre.phase) : 'no beat yet';
+  $('#bvPhrase').textContent = voixDedans(vuMontre).texte;
+  $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuMontre ? ', beat ' + vuMontre.tick + ', ' + humeurCourteVision(vuMontre.phase) : ''));
+  $('#bvLegende').textContent = vision.controle
+    ? 'Take control: a LOCAL snapshot of beat ' + vision.controle.snap.tick + ' — drag to look around its 128 neurons, scroll to move. Nothing is sent, nothing is signed.'
+    : (dedans ? 'Inside: you are among its neurons. Lit = fired on this beat; faint = its 5 beats before. Warm from the front = a buy reached it, cold from behind = a sell, shimmer at the sides = a transfer, a new speck = a new holder. '
+      : 'Outside: its real neighbours on the map, by their world positions. They stay dim: its neurons read none of them. ')
+      + 'The light is its mood; the edge pulse, how many neurons fired; the horizon tilts with its steering.';
   peindreListesVision(c, cible);
-  const o = c.sortie;
+  if (vision.livre === 'pourquoi') bvPeindrePourquoi();
+  const ref = referenceVueVision({ histo, tick: vuMontre ? vuMontre.tick : null });
   const sortie = $('#bvSortie');
-  sortie.textContent = !o ? '' : 'Its last beat (' + o.tick + '): ' + o.humeur + ' · ' + o.spikes + ' of ' + c.neurones + ' fired · steering '
-    + o.virage + (o.virage < 0 ? ' (left)' : o.virage > 0 ? ' (right)' : '') + ' · speed ' + o.vitesse
-    + (o.bloc ? ' · facts read near block ' + o.bloc : ' · facts not dated') + '. Input fingerprint ' + bvCourt(o.entree) + '.';
+  const o = c.sortie;
+  sortie.textContent = vuMontre ? ref.sortie.replace(/^Beat \d+: /, '') + (ref.present ? ' · ' + ref.present.replace(/Newest beat recorded: \d+ \(/, '(').replace(/\.$/, '') : '') + '.' : '';
   if (o && o.entree) sortie.title = 'Input fingerprint ' + o.entree + ' · wiring ' + o.cablage;
+  if (!vision.boucle) bvPeindre3D(performance.now());
   window.__TB_BRAIN_VISION__ = c;
+}
+/* ══ LA SCENE 3D (game57 #4) — le moteur de la page : posSphere (la sphere de l onglet Brain), son cube, la camera de map3d.js ══
+ * ⛔ chaque lumiere, effet et point vient d un champ du battement montre (vision-dedans.js) ; les voisins viennent des positions
+ *   monde de la map (habitants) et restent eteints : ses neurones n en lisent aucun. */
+const BV_COULEUR = { warm: [255, 170, 60], cold: [90, 170, 255] };
+function bvPeindre3D(t) {
+  const cv = $('#bv3d'); if (!cv) return;
+  const ctx = cv.getContext('2d'), L = cv.width, H = cv.height;
+  const vu = vision.vu, reduit = bvReduit(), plan = planAnimation(reduit);
+  const dureeB = dureeBattement(vision.vitesse);
+  const prog = plan.lumiere === 'statique' ? 0.5 : Math.max(0, Math.min(1, (t - vision.tBattement) / dureeB));
+  /* la lumiere de TOUTE la scene = l humeur decidee (vu.phase) ; NON_LU / MORT = neutre */
+  const lum = lumiereDe(vu, TEINTE_HUMEUR);
+  const th = lum.theme ? teinteH() : lum.teinte;
+  const env = plan.lumiere === 'statique' ? 1 : 0.85 + 0.15 * Math.cos(prog * Math.PI * 2);
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = lum.neutre ? '#0b0d12' : 'hsl(' + th + ' 45% ' + (6 + 10 * lum.force * env).toFixed(1) + '%)';
+  ctx.fillRect(0, 0, L, H);
+  const effets = effetsDe(vu);
+  const fort = (nom) => { const e = effets.find((x) => x.effet === nom); return e ? e.intensite : 0; };
+  /* secousse : seulement sans mouvement reduit, et seulement quand un echange REEL arrive, au debut du battement */
+  const sec = plan.secousse && (fort('buy') || fort('sell')) && prog < 0.25 ? (1 - prog * 4) * 3 * Math.max(fort('buy'), fort('sell')) : 0;
+  const hz = horizonDe(vu);
+  ctx.translate(L / 2 + (sec ? Math.sin(t / 23) * sec : 0), H / 2);
+  ctx.rotate((hz.deg * Math.PI) / 180);
+  ctx.translate(-L / 2, -H / 2);
+  ctx.strokeStyle = 'rgb(255 255 255 / .18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(-L, H * 0.58); ctx.lineTo(L * 2, H * 0.58); ctx.stroke();
+  /* la camera : Take control (libre, sur l instantane) ; sinon Outside, ou le vol vers l interieur */
+  const tv = vision.vol ? (t - vision.vol) / DUREE_VOL_MS : 1;
+  const cam = vision.controle ? vision.controle.cam : poseCamera(vision.vue, plan.vol ? tv : 1, reduit);
+  const pos = posSphere(NEURONES).map(([x, y, z]) => [x * 0.92, y * 0.92, z * 0.92]);
+  const proj = (pts) => projeterNeurones(pts, cam, L, H);
+  const dehors = !vision.controle && vision.vue !== 'dedans';
+  if (dehors || cam.dist > 1.2) {
+    /* son cube : 12 aretes, comme aretesDuCube */
+    const S = [-1, 1], coins = []; for (const x of S) for (const y of S) for (const z of S) coins.push([x, y, z]);
+    const pc = projeterNeurones(coins, cam, L, H); const par = new Map(pc.map((q) => [q.n, q]));
+    ctx.strokeStyle = 'hsl(' + teinteH() + ' 70% 70% / .55)';
+    for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) {
+      if (coins[a].reduce((s2, v, k2) => s2 + (v !== coins[b][k2] ? 1 : 0), 0) !== 1 || !par.has(a) || !par.has(b)) continue;
+      ctx.beginPath(); ctx.moveTo(par.get(a).x, par.get(a).y); ctx.lineTo(par.get(b).x, par.get(b).y); ctx.stroke();
+    }
+  }
+  if (dehors) {
+    for (const v of voisinsDehors(vision.cibleH, habitants, new Set())) {
+      const [q] = proj([[v.x, v.y, v.z]]); if (!q) continue;
+      const r = Math.max(3, 14 * q.k);
+      ctx.fillStyle = v.lu ? 'hsl(' + teinteH() + ' 80% 65%)' : 'rgb(160 170 190 / .28)';
+      ctx.fillRect(q.x - r, q.y - r, r * 2, r * 2);
+      ctx.fillStyle = 'rgb(200 210 230 / .55)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
+      ctx.fillText(String(v.sym || bvCourt(v.adr)).slice(0, 10), q.x, q.y + r + 12);
+    }
+  }
+  /* les neurones : allumes = vu.indices (ou l instantane) ; echos = ceux des 5 battements d avant, plus pales avec l age */
+  const allumes = new Set(vision.controle ? vision.controle.snap.indices : vu && Array.isArray(vu.indices) ? vu.indices : []);
+  const ages = new Map();
+  if (!vision.controle) for (const e of echosDe(vision.histoMontre || [], vision.i)) for (const n of e.indices) if (!ages.has(n)) ages.set(n, e.age);
+  for (const q of proj(pos)) {
+    const on = allumes.has(q.n), age = ages.get(q.n);
+    const r = Math.max(1.2, (q.n < CAPTEURS ? 3.2 : 2.2) * q.k * 1.4);
+    ctx.fillStyle = on ? 'hsl(' + (lum.neutre ? teinteH() : th) + ' 95% 75%)' : age ? 'rgb(220 225 255 / ' + (0.42 - age * 0.07).toFixed(2) + ')' : 'rgb(150 160 190 / .22)';
+    ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const pt of vision.particules) { const [q] = proj([pt.p]); if (q) { ctx.fillStyle = 'rgb(255 255 255 / .85)'; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); } }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  /* les sensations directionnelles (ecran) : buy de face (centre, chaud), sell de dos (bords, froid), transfer sur les cotes */
+  const fond = plan.lumiere === 'statique' ? 0.6 : 1 - prog;
+  for (const e of effets) {
+    const a = e.intensite * fond;
+    if (e.effet === 'buy') { const g = ctx.createRadialGradient(L / 2, H / 2, 4, L / 2, H / 2, Math.max(L, H) * 0.45); g.addColorStop(0, 'rgb(' + BV_COULEUR.warm + ' / ' + (0.45 * a).toFixed(3) + ')'); g.addColorStop(1, 'rgb(' + BV_COULEUR.warm + ' / 0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, L, H); }
+    if (e.effet === 'sell') { const g = ctx.createRadialGradient(L / 2, H / 2, Math.min(L, H) * 0.3, L / 2, H / 2, Math.max(L, H) * 0.7); g.addColorStop(0, 'rgb(' + BV_COULEUR.cold + ' / 0)'); g.addColorStop(1, 'rgb(' + BV_COULEUR.cold + ' / ' + (0.55 * a).toFixed(3) + ')'); ctx.fillStyle = g; ctx.fillRect(0, 0, L, H); }
+    if (e.effet === 'transfer') for (const x0 of [0, L - 28]) for (let y = 0; y < H; y += 12) {
+      const m = plan.lumiere === 'statique' ? 0.5 : 0.5 + 0.5 * Math.sin(t / 90 + y / 17);
+      ctx.fillStyle = 'rgb(230 230 255 / ' + (0.22 * a * m).toFixed(3) + ')'; ctx.fillRect(x0, y, 28, 6);
+    }
+  }
+  /* le pouls au bord de l ecran : force = part de neurones qui ont tire ; statique en mouvement reduit */
+  const pl = vision.pouls || poulsDe(vu, { reduit });
+  if (pl.force > 0) {
+    const bat = pl.anime ? Math.max(0, 1 - prog * 2.5) : 0.5;
+    ctx.strokeStyle = 'hsl(' + (lum.neutre ? 0 : th) + ' ' + (lum.neutre ? 0 : 80) + '% 70% / ' + (0.15 + 0.6 * pl.force * bat).toFixed(3) + ')';
+    ctx.lineWidth = 2 + 8 * pl.force * bat; ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, L - ctx.lineWidth, H - ctx.lineWidth);
+  }
+}
+/* la boucle d animation : AUCUNE en mouvement reduit (une peinture statique), sinon requestAnimationFrame tant que la fenetre est ouverte */
+function bvDemarrerBoucle() {
+  const plan = planAnimation(bvReduit());
+  if (vision.boucle) { cancelAnimationFrame(vision.boucle); vision.boucle = null; }
+  if (!plan.boucle) { vision.vol = null; bvPeindre3D(0); return; }
+  const tour = (t) => {
+    const dl = document.getElementById('bvPop');
+    if (!vision.boucle || !dl || !dl.open || dl.classList.contains('bcReduit')) { vision.boucle = null; return; }
+    bvPeindre3D(t); vision.boucle = requestAnimationFrame(tour);
+  };
+  vision.boucle = requestAnimationFrame(tour);
+}
+/* « WHY » : ouvert en cliquant l humeur. Chaque ligne = un champ de vision-dedans.js#pourquoiDe (vraies valeurs). */
+function bvPeindrePourquoi() {
+  const ul = $('#bvPourquoi'); if (!ul) return;
+  ul.replaceChildren();
+  const w = vision.c && vision.vu ? pourquoiDe({ c: vision.c, faits: vision.faitsCible, vu: vision.vu,
+    vuAvant: (vision.histoMontre || [])[(vision.histoMontre || []).indexOf(vision.vu) - 1] || null, etat: vision.etatCible, capMap: vision.capMap }) : null;
+  const ligne = (g, d) => { const li = document.createElement('li'); const a = document.createElement('span'); a.textContent = g; const b = document.createElement('b'); b.textContent = d; li.append(a, b); ul.append(li); };
+  if (!w) { ligne('Mood', 'no beat recorded here yet — nothing to explain'); return; }
+  ligne('Mood on this beat', w.humeur || '—');
+  ligne('Strongest input', w.dominante ? w.dominante.libelle + ': ' + w.dominante.valeur + ' (adds ' + w.dominante.apport + ' to each sensor)' : 'none of its read inputs added current');
+  ligne('Neurons that fired', (w.neurones.nTires ?? '—') + (w.neurones.tires.length ? ' · first: #' + w.neurones.tires.join(', #') : ''));
+  ligne('Closest to firing', w.neurones.proches ? w.neurones.proches.map((x) => '#' + x.n + ' ' + x.potentiel.toFixed(2)).join(', ') : 'its state is only held for its newest beat');
+  ligne('What changed since the beat before', w.changements.length ? w.changements.map((x) => x.champ + ' ' + x.avant + ' → ' + x.apres).join(' · ') : 'nothing recorded to compare');
+  const r = w.regard;
+  ligne('Where it is looking', r.virage === null ? 'steering not recorded' : 'steering ' + r.virage + ' (' + r.cote + ') · speed ' + r.vitesse + (r.capMap === null ? '' : ' · heading ' + Math.round(r.capMap * 180 / Math.PI) + '° on the map'));
+}
+/* l etagere : un livre clique s ouvre en ONGLET ; un onglet se ferme par son × */
+function bvOuvrirLivre(cle) {
+  if (!vision.livres.includes(cle)) vision.livres.push(cle);
+  vision.livre = cle; bvPeindreOnglets();
+  if (cle === 'pourquoi') bvPeindrePourquoi();
+}
+function bvFermerLivre(cle) {
+  vision.livres = vision.livres.filter((x) => x !== cle);
+  if (vision.livre === cle) vision.livre = vision.livres[vision.livres.length - 1] || null;
+  bvPeindreOnglets();
+}
+function bvPeindreOnglets() {
+  const bar = $('#bvOnglets'); if (!bar) return;
+  bar.replaceChildren();
+  for (const cle of vision.livres) {
+    const dos = document.querySelector('#bvEtagere [data-livre="' + cle + '"]');
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'bvOnglet'; b.setAttribute('role', 'tab');
+    b.setAttribute('aria-selected', cle === vision.livre ? 'true' : 'false'); b.dataset.onglet = cle;
+    const t = document.createElement('span'); t.textContent = dos ? dos.textContent : cle;
+    const x = document.createElement('span'); x.textContent = '×'; x.setAttribute('aria-label', 'Close this tab'); x.dataset.fermer = cle;
+    b.append(t, x); bar.append(b);
+  }
+  for (const d of document.querySelectorAll('#bvEtagere [data-livre]')) d.setAttribute('aria-selected', d.dataset.livre === vision.livre ? 'true' : 'false');
+  for (const sct of document.querySelectorAll('#bvPop .bvLivre')) { const on = sct.dataset.livre === vision.livre; sct.hidden = !on; if (on && 'open' in sct) sct.open = true; }
+}
+/* ══ TAKE CONTROL : une camera libre sur un instantane LOCAL des 128 neurones ; aucune requete, aucun wallet ; Back to live ══ */
+function bvPrendreControle() {
+  const cible = visionCible();
+  const snap = cible ? instantaneDedans({ adr: cible.adr, etat: cible.etat || null, histo: cible.histo || [], i: vision.i }) : null;
+  if (!snap) { $('#bvLegende').textContent = 'No beat recorded here yet — there is nothing to take control of.'; return; }
+  vision.controle = { snap, cam: camLibre() };
+  vision.jouer = false;
+  $('#bvControle').hidden = true; $('#bvRetourLive').hidden = false;
+  $('#bvJouer').textContent = 'Play';
+  peindreVision();
+}
+function bvGesteControle(dx, dy, dz) {
+  if (!vision.controle) return;
+  let cam = orbiterCam(vision.controle.cam, dx, dy);
+  if (dz) cam = zoomerCam(cam, dz);
+  vision.controle = { ...vision.controle, cam };
+  peindreVision();
+}
+function bvRetourLive() {
+  vision.controle = null; vision.suivre = true; vision.jouer = !bvReduit();
+  $('#bvControle').hidden = false; $('#bvRetourLive').hidden = true;
+  $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
+  peindreVision();
 }
 function peindreEditsVision() {
   const box = $('#bvEdits');
@@ -26237,7 +26412,11 @@ function ouvrirVision(source) {
   if (dl.parentElement !== document.body) document.body.append(dl);
   peindreEditsVision();
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
-  try { dl.showModal(); } catch (_) { dl.setAttribute('open', ''); }
+  /* ⛔ game57 #4 : une fenetre, PAS une modale — la page reste utilisable derriere (comme le Control panel) */
+  try { dl.show(); } catch (_) { dl.setAttribute('open', ''); }
+  vision.controle = null; vision.particules = []; vision.tickMontre = null;
+  $('#bvControle').hidden = false; $('#bvRetourLive').hidden = true;
+  vision.vol = vision.vue === 'dedans' && !bvReduit() ? performance.now() : null;
   /* la lecture des dernieres decisions REELLES : on repart 24 battements en arriere et on avance a la cadence des cerveaux */
   const cible = visionCible();
   const n = cible && Array.isArray(cible.histo) ? cible.histo.length : 0;
@@ -26250,23 +26429,53 @@ function ouvrirVision(source) {
   peindreParleVision();
   peindreVision();
   lancerSimVision();
+  bvRelancerMinuteur();
+  bvDemarrerBoucle();
+  window.__TB_BRAIN_VISION_MS__ = Math.round(performance.now() - vision.ouvertA);
+}
+/* la lecture a rythme humain (vision-cerveau.js#dureeBattement : 1,5 s a 1x) ; Step avance d un battement enregistre */
+function bvAvancer() {
+  const c2 = visionCible();
+  const n2 = c2 && Array.isArray(c2.histo) ? c2.histo.length : 0;
+  vision.i++;
+  if (vision.i >= n2 - 1) { vision.i = n2 - 1; vision.suivre = true; }
+}
+function bvRelancerMinuteur() {
   clearInterval(vision.minuteur);
   vision.minuteur = setInterval(() => {
     if (!$('#bvPop').open) { clearInterval(vision.minuteur); return; }
-    if (vision.jouer && !vision.suivre) {
-      const c2 = visionCible();
-      const n2 = c2 && Array.isArray(c2.histo) ? c2.histo.length : 0;
-      vision.i++;
-      if (vision.i >= n2 - 1) vision.suivre = true;
-    }
-    if (vision.jouer) peindreVision();
-  }, BATTEMENT_MS);
-  window.__TB_BRAIN_VISION_MS__ = Math.round(performance.now() - vision.ouvertA);
+    if (vision.jouer && !vision.suivre && !vision.controle) bvAvancer();
+    if (vision.jouer && !vision.controle) peindreVision();
+  }, dureeBattement(vision.vitesse));
 }
 $('#bVision').addEventListener('click', () => ouvrirVision('brain'));
 $('#pcVision').addEventListener('click', () => ouvrirVision('profil'));
 $('#bvFermer').addEventListener('click', () => $('#bvPop').close());
-$('#bvPop').addEventListener('close', () => { clearInterval(vision.minuteur); vision.minuteur = null; });
+$('#bvPop').addEventListener('close', () => { clearInterval(vision.minuteur); vision.minuteur = null; if (vision.boucle) cancelAnimationFrame(vision.boucle); vision.boucle = null; vision.controle = null; });
+$('#bvPop').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); $('#bvPop').close(); } });
+$('#bvPas').addEventListener('click', () => { vision.jouer = false; vision.suivre = false; $('#bvJouer').textContent = 'Play'; if (vision.controle) bvRetourLive(); bvAvancer(); peindreVision(); });
+for (const b of document.querySelectorAll('#bvPop [data-vitesse]')) b.addEventListener('click', () => {
+  vision.vitesse = vitesseBornee(b.dataset.vitesse);
+  for (const x of document.querySelectorAll('#bvPop [data-vitesse]')) x.setAttribute('aria-pressed', x === b ? 'true' : 'false');
+  bvRelancerMinuteur();
+});
+$('#bvHumeur').addEventListener('click', () => bvOuvrirLivre('pourquoi'));
+$('#bvEtagere').addEventListener('click', (e) => { const d = e.target.closest('[data-livre]'); if (d) bvOuvrirLivre(d.dataset.livre); });
+$('#bvOnglets').addEventListener('click', (e) => {
+  const x = e.target.closest('[data-fermer]'); if (x) { bvFermerLivre(x.dataset.fermer); return; }
+  const o = e.target.closest('[data-onglet]'); if (o) { vision.livre = o.dataset.onglet; bvPeindreOnglets(); if (vision.livre === 'pourquoi') bvPeindrePourquoi(); }
+});
+$('#bvControle').addEventListener('click', bvPrendreControle);
+$('#bvRetourLive').addEventListener('click', bvRetourLive);
+(function bvGestesCamera() {
+  const cv = $('#bv3d'); if (!cv) return;
+  let prec = null;
+  cv.addEventListener('pointerdown', (e) => { if (!vision.controle) return; prec = { x: e.clientX, y: e.clientY }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
+  cv.addEventListener('pointermove', (e) => { if (!prec) return; bvGesteControle(e.clientX - prec.x, e.clientY - prec.y, 0); prec = { x: e.clientX, y: e.clientY }; });
+  cv.addEventListener('pointerup', () => { prec = null; });
+  cv.addEventListener('pointercancel', () => { prec = null; });
+  cv.addEventListener('wheel', (e) => { if (!vision.controle) return; e.preventDefault(); bvGesteControle(0, 0, Math.sign(e.deltaY)); }, { passive: false });
+})();
 $('#bvJouer').addEventListener('click', () => {
   vision.jouer = !vision.jouer;
   $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
@@ -26277,8 +26486,8 @@ $('#bvBattement').addEventListener('input', (e) => {
   peindreVision();
 });
 $('#bvRejouer').addEventListener('click', lancerSimVision);
-$('#bvVueDedans').addEventListener('click', () => { vision.vue = 'dedans'; peindreVision(); });
-$('#bvVueDehors').addEventListener('click', () => { vision.vue = 'dehors'; peindreVision(); });
+$('#bvVueDedans').addEventListener('click', () => { if (vision.controle) bvRetourLive(); vision.vue = 'dedans'; vision.vol = bvReduit() ? null : performance.now(); peindreVision(); });
+$('#bvVueDehors').addEventListener('click', () => { if (vision.controle) bvRetourLive(); vision.vue = 'dehors'; vision.vol = null; peindreVision(); });
 $('#bvRemettre').addEventListener('click', () => {
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
   geler(); lancerSimVision();
@@ -33240,6 +33449,89 @@ function bcBasculerTaille(axe) {
     else if (e.key === 'Home') { e.preventDefault(); bcAppliquerTaille(axe, null, true); }
   });
 })();
+/* ══ 2026-10-26 (game57 #4) — UNE FENETRE COMME LE CONTROL PANEL ═════════════════════════════════════════════════════════════════
+ * Le MEME comportement que #bcPop pour une autre fenetre : bord a tirer (bcBornerTaille, bcAxeTaille, bcNavPx — les bornes du panneau),
+ *   double clic / double tap = le maximum <-> la taille d origine, clavier (fleches, Entree, Origine), replier (–/+), agrandir (□),
+ *   et, sur grand ecran, deplacer par l en-tete (borne a l ecran). Tailles gardees dans CE navigateur (localStorage, en try/catch). */
+function fenetreCommeLePanneau({ d, p, cle, prefixe, haut, reduire, agrandir }) {
+  if (!d || !p) return null;
+  const prop = (axe) => '--' + prefixe + (axe === 'h' ? 'HLibre' : 'WLibre');
+  const lire = () => { try { const o = JSON.parse(localStorage.getItem(cle) || 'null'); return o && typeof o === 'object' ? o : {}; } catch (_) { return {}; } };
+  const appliquer = (axe, v, garder) => {
+    const b = bcBornerTaille(axe, v, window.innerWidth, window.innerHeight, bcNavPx());
+    if (b === null) d.style.removeProperty(prop(axe)); else d.style.setProperty(prop(axe), b + 'px');
+    if (garder) { try { const t = lire(); if (b === null) delete t[axe]; else t[axe] = b; localStorage.setItem(cle, JSON.stringify(t)); } catch (_) { /* cette visite */ } }
+    return b;
+  };
+  const basculer = (axe) => {
+    const max = bcBornerTaille(axe, 1e6, window.innerWidth, window.innerHeight, bcNavPx());
+    const reel = axe === 'h' ? d.offsetHeight : d.offsetWidth;
+    appliquer(axe, reel >= max - 2 ? null : max, true);
+  };
+  const restaurer = () => { for (const [axe, v] of Object.entries(lire())) if (axe === 'h' || axe === 'w') appliquer(axe, v, false); };
+  restaurer(); window.addEventListener('resize', restaurer);
+  let depart = null, dernierTap = 0;
+  p.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const axe = bcAxeTaille();
+    depart = { axe, x: e.clientX, y: e.clientY, taille: axe === 'h' ? d.offsetHeight : d.offsetWidth, bouge: false };
+    try { p.setPointerCapture(e.pointerId); } catch (_) {}
+    p.classList.add('tire'); e.preventDefault();
+  });
+  p.addEventListener('pointermove', (e) => {
+    if (!depart) return;
+    const delta = depart.axe === 'h' ? depart.y - e.clientY : depart.x - e.clientX;
+    if (Math.abs(delta) > 4) depart.bouge = true;
+    if (depart.bouge) appliquer(depart.axe, depart.taille + delta, false);
+  });
+  p.addEventListener('pointerup', () => {
+    if (!depart) return;
+    const { axe, bouge } = depart; depart = null; p.classList.remove('tire');
+    if (bouge) { appliquer(axe, axe === 'h' ? d.offsetHeight : d.offsetWidth, true); return; }
+    const t = Date.now();
+    if (t - dernierTap < 350) { dernierTap = 0; basculer(axe); return; }
+    dernierTap = t;
+  });
+  p.addEventListener('pointercancel', () => { if (depart) { depart = null; p.classList.remove('tire'); } });
+  p.addEventListener('keydown', (e) => {
+    const axe = bcAxeTaille(), reel = axe === 'h' ? d.offsetHeight : d.offsetWidth;
+    const pas = { ArrowUp: axe === 'h' ? 40 : 0, ArrowDown: axe === 'h' ? -40 : 0, ArrowLeft: axe === 'w' ? 40 : 0, ArrowRight: axe === 'w' ? -40 : 0 }[e.key];
+    if (pas) { e.preventDefault(); appliquer(axe, reel + pas, true); }
+    else if (e.key === 'Enter') { e.preventDefault(); basculer(axe); }
+    else if (e.key === 'Home') { e.preventDefault(); appliquer(axe, null, true); }
+  });
+  if (reduire) reduire.addEventListener('click', () => {
+    const r = d.classList.toggle('bcReduit');
+    reduire.textContent = r ? '+' : '–'; reduire.setAttribute('aria-expanded', String(!r));
+    d.dispatchEvent(new Event('fenetre'));
+  });
+  const max = () => { const m = d.classList.toggle('bvMax'); if (agrandir) agrandir.setAttribute('aria-pressed', String(m)); d.dispatchEvent(new Event('fenetre')); };
+  if (agrandir) agrandir.addEventListener('click', max);
+  /* deplacer par l en-tete (grand ecran seulement ; telephone = feuille du bas, comme le panneau) */
+  if (haut) {
+    let g = null;
+    const borne = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    haut.addEventListener('pointerdown', (e) => {
+      if (bcAxeTaille() === 'h' || d.classList.contains('bvMax') || (e.target && e.target.closest && e.target.closest('button, a, input'))) return;
+      const dx = parseFloat(d.style.getPropertyValue('--' + prefixe + 'Dx')) || 0, dy = parseFloat(d.style.getPropertyValue('--' + prefixe + 'Dy')) || 0;
+      const r = d.getBoundingClientRect();
+      g = { x: e.clientX, y: e.clientY, dx, dy, r };
+      try { haut.setPointerCapture(e.pointerId); } catch (_) {}
+    });
+    haut.addEventListener('pointermove', (e) => {
+      if (!g) return;
+      const nx = borne(g.dx + e.clientX - g.x, g.dx - g.r.left, g.dx + window.innerWidth - g.r.right);
+      const ny = borne(g.dy + e.clientY - g.y, g.dy - g.r.top, g.dy + window.innerHeight - g.r.top - 48);
+      d.style.setProperty('--' + prefixe + 'Dx', Math.round(nx) + 'px'); d.style.setProperty('--' + prefixe + 'Dy', Math.round(ny) + 'px');
+    });
+    haut.addEventListener('pointerup', () => { g = null; });
+    haut.addEventListener('pointercancel', () => { g = null; });
+    haut.addEventListener('dblclick', (e) => { if (!(e.target && e.target.closest && e.target.closest('button'))) max(); });
+  }
+  return { appliquer, basculer };
+}
+fenetreCommeLePanneau({ d: $('#bvPop'), p: $('#bvPoignee'), cle: 'tblock.brainview.taille.v1', prefixe: 'bv', haut: $('#bvTete'), reduire: $('#bvReduire'), agrandir: $('#bvAgrandir') });
+$('#bvPop').addEventListener('fenetre', () => { if ($('#bvPop').open && !$('#bvPop').classList.contains('bcReduit') && !vision.boucle) bvDemarrerBoucle(); });
 /* le lien rendu par tblock_panel_open : /app.html?panel=1#s=<session>&b=<block> — la session vit dans le FRAGMENT, jamais envoyee */
 (function bcDemarrage() {
   const h = new URLSearchParams(location.hash.replace(/^#/, ''));
