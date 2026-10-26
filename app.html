@@ -5261,10 +5261,12 @@ function rendrePayerTous(moi, taille) {
       : dec == null ? (payer.decRatees.has(l.jeton) ? 'cost not read' : '') : 'about ' + qteJeton(e.est, dec) + ' for ' + usdcTexte(taille) + ' USDC · ' + pctPayer(e.ecartBps);
     let buy = null;
     try { buy = l.natif ? null : achatMarcheDe(ligneMarchePour(l.jeton)); } catch (_) { buy = null; }
-    return { jeton: l.jeton, sym: symbolePayer(l), texte: [pourquoi, cout].filter(Boolean).join(' · '), buy: !!buy };
+    /* 2026-10-26 (Phil, capture : MUc, SAPc sans « Buy ») : sans verdict Buy du Market (paire DexScreener mince, ligne absente), le
+     *   « Buy » ouvre SA page dans l onglet Blocks (ouvrirProfil : le panneau Buy y lit sa vraie route) — jamais aucun bouton pour un misable */
+    return { jeton: l.jeton, sym: symbolePayer(l), texte: [pourquoi, cout].filter(Boolean).join(' · '), buy: !!buy, fiche: !buy && !l.natif };
   });
   const titreTxt = 'All ' + toutes.length + ' bettable tokens' + (moi ? (k ? ' · ' + k + ' in the menu, ' + autres.length + ' not payable yet' : ' · you hold none of them') : '');
-  const noteTxt = moi ? 'Greyed tokens cannot be picked until your wallet holds enough.' + (lignes.some((x) => x.buy) ? ' Buy opens the stock in the Market.' : '')
+  const noteTxt = moi ? 'Greyed tokens cannot be picked until your wallet holds enough.' + (lignes.some((x) => x.buy || x.fiche) ? ' Buy opens the stock in the Market, or its page in Blocks.' : '')
     : 'Connect a wallet to pay with a token.';
   const sig = JSON.stringify([titreTxt, noteTxt, lignes]);
   if (sig === payer.sigTous) return;
@@ -5273,7 +5275,8 @@ function rendrePayerTous(moi, taille) {
   tn.textContent = noteTxt; tn.hidden = false;
   /* le symbole est filtre (symbolePayer : [A-Za-z0-9.$-]), l adresse validee (payerListees : 0x + 40 hex), le reste vient de nos nombres */
   ul.innerHTML = lignes.map((x) => '<li data-token="' + x.jeton + '" aria-disabled="true"><b>' + x.sym + '</b><span class="pRaison">' + x.texte + '</span>'
-    + (x.buy ? '<button type="button" class="payerAchat" data-payer-achat="' + x.jeton + '">Buy</button>' : '') + '</li>').join('');
+    + (x.buy ? '<button type="button" class="payerAchat" data-payer-achat="' + x.jeton + '">Buy</button>'
+      : x.fiche ? '<button type="button" class="payerAchat" data-payer-fiche="' + x.jeton + '" data-sym="' + x.sym + '">Buy</button>' : '') + '</li>').join('');
 }
 /* a l ouverture de #payerTous : decimals() des misables qui n en ont pas (jamais au repeint), puis un rendu */
 async function lireDecimalesTous() {
@@ -5311,7 +5314,9 @@ function allerLigneMarche(adr) {
   if (z && typeof z.addEventListener === 'function') z.addEventListener('toggle', () => { if (z.open) void lireDecimalesTous().catch(() => {}); });
   if (ul && typeof ul.addEventListener === 'function') ul.addEventListener('click', (ev) => {
     const b = ev && ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('[data-payer-achat]') : null;
-    if (b) allerLigneMarche(String(b.getAttribute('data-payer-achat') || '').toLowerCase());
+    if (b) { allerLigneMarche(String(b.getAttribute('data-payer-achat') || '').toLowerCase()); return; }
+    const f = ev && ev.target && typeof ev.target.closest === 'function' ? ev.target.closest('[data-payer-fiche]') : null;
+    if (f) { const adr = String(f.getAttribute('data-payer-fiche') || '').toLowerCase(); if (/^0x[0-9a-f]{40}$/.test(adr)) void ouvrirProfil(adr, f.getAttribute('data-sym') || null); }
   });
 }
 async function peindrePayerAvec() {

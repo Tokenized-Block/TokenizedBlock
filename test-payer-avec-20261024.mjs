@@ -111,8 +111,9 @@ const decsDans = (appels) => appels.filter((a) => a.methode === 'eth_call' && ba
 /* la liste rendue (#payerListe), lue dans son HTML : jeton, symbole, texte, lien Buy ; `reste` = ce qui n a pas ete reconnu */
 function lireListe(ch) {
   const h = String(ch.ecran.el('payerListe').innerHTML || '');
-  const re = /<li data-token="(0x[0-9a-f]{40})" aria-disabled="true"><b>([^<]*)<\/b><span class="pRaison">([^<]*)<\/span>(?:<button type="button" class="payerAchat" data-payer-achat="(0x[0-9a-f]{40})">Buy<\/button>)?<\/li>/g;
-  const out = []; let m; while ((m = re.exec(h))) out.push({ jeton: m[1], sym: m[2], texte: m[3], buy: !!m[4], buyAdr: m[4] || null });
+  /* 2026-10-26 : un misable sans verdict Buy du Market porte un « Buy » vers SA page dans Blocks (data-payer-fiche) */
+  const re = /<li data-token="(0x[0-9a-f]{40})" aria-disabled="true"><b>([^<]*)<\/b><span class="pRaison">([^<]*)<\/span>(?:<button type="button" class="payerAchat" data-payer-achat="(0x[0-9a-f]{40})">Buy<\/button>|<button type="button" class="payerAchat" data-payer-fiche="(0x[0-9a-f]{40})" data-sym="[^"]*">Buy<\/button>)?<\/li>/g;
+  const out = []; let m; while ((m = re.exec(h))) out.push({ jeton: m[1], sym: m[2], texte: m[3], buy: !!m[4], buyAdr: m[4] || null, fiche: !!m[5], ficheAdr: m[5] || null });
   return { lignes: out, reste: h.replace(re, '') };
 }
 async function ouvrirListe(ch) { const z = ch.ecran.el('payerTous'); z.open = true; if (z.ecouteurs.toggle) z.ecouteurs.toggle(); const p = ch.api.lireDecimalesTous(); if (p) await p; }
@@ -239,7 +240,9 @@ S.TOUS = async (t) => {
     && e('payerTousTitre').textContent === 'All ' + LISTEES.length + ' bettable tokens · ' + attendusOuverts.size + ' in the menu, ' + attendusListe.length + ' not payable yet';
   const raisons = av.lignes.every((x) => (x.jeton === AAPL.jeton ? x.texte === 'you hold too little · ' + coutAttendu(AAPL)
     : x.texte === 'you hold none' || (!L(x.sym).tailles[0].misable && x.texte.startsWith('you hold none · not for 0.50 USDC: '))));
-  const buys = av.lignes.every((x) => x.buy === buyAttendu(L(x.sym)) && (!x.buy || x.buyAdr === x.jeton));
+  const buys = av.lignes.every((x) => x.buy === buyAttendu(L(x.sym)) && (!x.buy || x.buyAdr === x.jeton)
+    /* 2026-10-26 : chaque misable non natif a UN Buy — le Market s il en donne un, sinon sa page dans Blocks */
+    && x.fiche === (!x.buy && !L(x.sym).natif) && (!x.fiche || x.ficheAdr === x.jeton));
   const nBuy = av.lignes.filter((x) => x.buy).length;
   /* aucun n est choisissable : ce n est pas une option (AAPLc : une option GRISEE) */
   const nonChoisis = av.lignes.every((x) => choisir(r.ch, x.jeton) === false);
