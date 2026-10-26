@@ -68,7 +68,8 @@ const WANTED = ['identity.name', 'identity.symbol', 'identity.pairedWith', 'iden
   ok(m.counts.read === 0 && m.counts.notRead + m.counts.noSource === all.length, 'B: counts');
   const f = byKey(m);
   /* game59 1(a): the birth block now has a source (the holders replay) */
-  for (const k of ['perceives.neighboursRead', 'expectations.next']) ok(f[k].status === NO_SOURCE && f[k].note, 'B: ' + k + ' says it has no source, and why');
+  /* game59 1(b): neighbours read now come from the input vector (not read without facts) */
+  for (const k of ['expectations.next']) ok(f[k].status === NO_SOURCE && f[k].note, 'B: ' + k + ' says it has no source, and why');
   ok(inspectBlock(null) === null, 'B: no address, no model');
 }
 /* C */
@@ -96,7 +97,7 @@ const WANTED = ['identity.name', 'identity.symbol', 'identity.pairedWith', 'iden
   const inp = describeTarget({ kind: 'input', key: 'vieAvant' }, FULL, full);
   ok(inp.lines.some((l) => l.value === 'not read') && inp.lines.some((l) => l.label === 'Source'), 'E: an input: its value or "not read", and its source');
   const nb = describeTarget({ kind: 'neighbour', adr: '0x' + '22'.repeat(20), sym: 'SUIT' }, FULL, full);
-  ok(nb.lines.some((l) => /not read by its neurons/.test(l.value)), 'E: a neighbour is never said to be read');
+  ok(nb.lines.some((l) => /^(no|not read) — /.test(l.value)), 'E: a neighbour is never said to be read (game59: from its input vector)');
 }
 /* F */
 const app = read('app.html'), server = read('serveur-web.js');

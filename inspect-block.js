@@ -12,6 +12,30 @@ export const VERSION_INSPECT = 'tblock-inspect/1';
 
 const finite = (x) => typeof x === 'number' && Number.isFinite(x);
 
+/** game59 1(b): the neighbours that appear in the EXACT facts given to pas() (an address as a key or as a value), or null without
+ *  facts. `keys` = that input vector. A neighbour that is only near on the map is not "read". */
+export function neighboursReadFrom(facts, neighbours) {
+  if (!facts || typeof facts !== 'object') return null;
+  const near = new Map((Array.isArray(neighbours) ? neighbours : []).filter((n) => n && /^0x[0-9a-fA-F]{40}$/.test(String(n.adr || '')))
+    .map((n) => [String(n.adr).toLowerCase(), n]));
+  const keys = Object.keys(facts);
+  const found = [];
+  for (const k of keys) {
+    const v = facts[k];
+    for (const cand of [k, typeof v === 'string' ? v : null]) {
+      const a = cand ? String(cand).toLowerCase() : null;
+      if (a && near.has(a) && !found.some((x) => x.adr === a)) found.push({ adr: a, sym: near.get(a).sym || null, key: k });
+    }
+  }
+  return { read: found, keys };
+}
+const NONE_READ = 'none read this beat';
+/** game59 1(c): why "its expectations" has no source — named from the real brain state keys */
+function expectationsNote(stateKeys) {
+  const keys = Array.isArray(stateKeys) && stateKeys.length ? stateKeys.join(', ') : 'c, tick, potentiels, memoire, spikes, dernierSpikes';
+  return 'its brain state has no prediction field (it holds: ' + keys + '); memoire is a trace of past firing, not an expectation; the What-if book replays a change you pick, it is not its expectation';
+}
+
 /** game59 1(a): the birth block held by a holders-replay reply (/api/holders), or null. Only a successful reply, only a positive
  *  integer: a failed read, a missing field or a string is "not read", never a guess. */
 export function birthBlockFrom(reply) {
@@ -42,7 +66,8 @@ export const FIELDS = Object.freeze([
   { section: 'state', key: 'speed', label: 'Speed', source: 'its wings on this beat (vu.vitesse)' },
   { section: 'state', key: 'memory', label: 'Memory of its last beats', source: 'the beats recorded on this page, and its mean trace' },
   { section: 'perceives', key: 'inputs', label: 'Inputs', source: 'the exact facts given to pas() on its newest beat' },
-  { section: 'perceives', key: 'neighboursRead', label: 'Neighbours its neurons read', source: null, note: 'no neuron input reads its neighbours (cerveau.js): they are context, never perception' },
+  /* game59 1(b): read from the exact input vector given to pas() — today it holds no neighbour, and the inspector says so */
+  { section: 'perceives', key: 'neighboursRead', label: 'Neighbours its neurons read', source: 'its input vector on this beat (the exact facts given to pas(), cerveau.js#courant)' },
   { section: 'perceives', key: 'neighboursNearby', label: 'Neighbours nearby', source: 'the map: nearest blocks by world position' },
   { section: 'perceives', key: 'market', label: 'Market', source: 'server market index (price, liquidity, venue)' },
   { section: 'done', key: 'recentBeats', label: 'Recent beats', source: 'the beats recorded on this page' },
@@ -80,6 +105,7 @@ function valueOf(key, src) {
     case 'inputs': return src.champ && Array.isArray(src.champ.entrees) && src.champ.entrees.length
       ? src.champ.entrees.map((e) => ({ key: e.cle, label: e.libelle, read: e.lu === true, text: e.texte, source: e.source || null })) : null;
     case 'neighboursNearby': return src.onMap === true ? list(src.neighbours) : null;
+    case 'neighboursRead': return neighboursReadFrom(src.facts, src.neighbours);
     case 'market': return m && (finite(m.prixUsd) || finite(m.liquiditeUsd))
       ? { prixUsd: finite(m.prixUsd) ? m.prixUsd : null, liquiditeUsd: finite(m.liquiditeUsd) ? m.liquiditeUsd : null, dex: text(m.dex) } : null;
     case 'recentBeats': return histo.length ? histo.slice(-5).map((v) => ({ tick: v.tick, phase: v.phase || null, spikes: finite(v.spikes) ? v.spikes : null })) : null;
@@ -99,7 +125,8 @@ export function inspectBlock(src) {
     if (!s) { s = { key: d.section, title: TITLES[d.section], fields: [] }; sections.push(s); }
     const value = d.source === null ? null : valueOf(d.key, src);
     const status = d.source === null ? NO_SOURCE : value === null || value === undefined ? NOT_READ : 'read';
-    const note = d.note || (d.key === 'neighboursNearby' && src.onMap !== true ? 'not on the map on this page' : null);
+    const note = d.key === 'next' ? expectationsNote(src.stateKeys)
+      : d.note || (d.key === 'neighboursNearby' && src.onMap !== true ? 'not on the map on this page' : null);
     s.fields.push({ key: d.key, label: d.label, status, value: value === undefined ? null : value, source: d.source, note });
     counts[status === 'read' ? 'read' : status === NOT_READ ? 'notRead' : 'noSource']++;
   }
@@ -118,6 +145,12 @@ export function aimedAt(points, L, H, radius = 60) {
 }
 
 const num = (x) => (finite(x) ? String(Math.round(x * 1e4) / 1e4) : NOT_READ);
+/* game59 1(b): the overlay of a neighbour, from the same input vector as the inspector */
+function neighbourReadLine(obj, s) {
+  const r = neighboursReadFrom(s.facts, [{ adr: obj.adr, sym: obj.sym }]);
+  if (!r) return 'not read — no beat facts held yet';
+  return r.read.length ? 'yes — in its input vector (' + r.read[0].key + ')' : 'no — ' + NONE_READ + ' (context from the map only)';
+}
 /** The overlay for one looked-at object: real values only, "not read" otherwise.
  *  ⛔ game57 #10: a fee address is never displayed — the title and every value go through maskFeeAddresses. */
 export function describeTarget(obj, src, model, shown = null) {
@@ -151,7 +184,7 @@ function describeTargetRaw(obj, src, model, shown = null) {
   if (obj.kind === 'neighbour') {
     return { title: 'Neighbour: ' + (obj.sym || obj.adr), lines: [
       { label: 'Address', value: obj.adr || NOT_READ },
-      { label: 'Read by its neurons', value: 'no — not read by its neurons (context from the map only)' }] };
+      { label: 'Read by its neurons', value: neighbourReadLine(obj, s) }] };
   }
   return null;
 }
@@ -163,6 +196,8 @@ function fieldTextRaw(f) {
   if (!f) return NOT_READ;
   if (f.status !== 'read') return f.status + (f.note ? ' — ' + f.note : '');
   const v = f.value;
+  if (f.key === 'neighboursRead') return v.read.length ? v.read.map((n) => (n.sym || n.adr) + ' (' + n.key + ')').join(' · ')
+    : NONE_READ + ' — its input vector (' + v.keys.join(', ') + ') holds no neighbour';
   if (f.key === 'birthBlock') return 'block ' + v + ' (its first transfer from the zero address)';
   if (f.key === 'neurons') {
     const p = v.map((x) => x.potentiel).filter(finite);

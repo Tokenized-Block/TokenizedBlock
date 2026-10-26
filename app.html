@@ -26449,7 +26449,9 @@ function bvInspectSources() {
     voice: voixDe(a), vu, histo, internals: target.etat ? interneVision(target.etat) : null, champ: vision.c || null, why,
     onMap: !!h, neighbours: voisinsVision(h).map((v) => ({ adr: v.adr, sym: v.sym || null, phase: v.phase || null, distance: v.distance })),
     journal: journalLu(a), spoken: parolesFil.filter((p) => String(p.de || '').toLowerCase() === a).map((p) => ({ texte: p.texte, heure: p.heure })),
-    holders: holdersReplies.get(a) || null };
+    holders: holdersReplies.get(a) || null,
+    /* game59 1(b)/(c): the exact facts of its newest beat (what its neurons read) and its real state fields */
+    facts: target.faits || null, stateKeys: target.etat ? Object.keys(target.etat) : null };
 }
 function bvPaintInspect() {
   const box = $('#bvInspect'); if (!box) return;
