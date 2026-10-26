@@ -24,7 +24,7 @@ ok(battementAffiche(reg, '0x' + 'b2'.repeat(20), { tick: 43 }) === 43, 'A: aucun
 ok(battementAffiche(reg, '0x' + 'b2'.repeat(20), { tick: null }) === null && battementAffiche(null, UNIT, null) === null, 'A: rien -> null');
 
 const app = lire('app.html');
-ok(/import \{ creerCerveauxPage, battementAffiche, texteBattement \} from '\.\/cerveaux-page\.js';/.test(app), 'B: import');
+ok(/import \{ creerCerveauxPage, battementAffiche, texteBattement(, [A-Za-z]+)* \} from '\.\/cerveaux-page\.js';/.test(app), 'B: import');
 ok(app.includes("$('#bcTick').textContent = texteBattement(battementAffiche(cerveauxPage, a, snap));"), 'B: #bcTick');
 ok(app.includes("t.push(['Beat', texteBattement(battementAffiche(cerveauxPage, a, snap))]);"), 'B: ligne Beat du panneau');
 ok(app.includes("$('#bTick').textContent = texteBattement(r.vu.tick);"), 'B: #bTick');

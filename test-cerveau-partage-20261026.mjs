@@ -68,7 +68,7 @@ const fonction = (entete) => { const i = app.indexOf(entete); ok(i > 0, 'extract
   const live = L.creerLive(); L.ajouterTuile(live, { adr: UNIT, sym: 'UNIT' });
   const env = { habitants: [], brainAdr: null, brainHisto: [], brainFaitsVus: null, profilCerveau: null, cerveauxPage: R, live,
     liveOuvert: () => true, nourrirLive: L.nourrirLive, peindreTuileLive: (t) => peints.push(t.histo[t.histo.length - 1].tick), liveMesures: new Map(),
-    window: {}, cycleBattement: 6, cerveauPas: C.pas, faitsHorsCarte: () => FAITS };
+    window: {}, cycleBattement: 6, cerveauPas: C.pas, faitsHorsCarte: () => FAITS, pageFoodRead: () => false };
   const noms = Object.keys(env);
   const g = new Function(...noms, srcL + '\n' + srcB + '\nreturn battreLive;')(...noms.map((x) => env[x]));
   g();

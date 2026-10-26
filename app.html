@@ -4930,7 +4930,7 @@ function cerveauAvecMemoire(adr) {
  *     La map, le profil, Brain / le Control panel, la fenetre Brain et Live lisent et font battre la MEME instance (cerveaux-page.js),
  *     creee UNE fois depuis la memoire de ce navigateur, avec un seul pas par battement de page (cycleBattement). */
 const cerveauxPage = creerCerveauxPage({ creer: (a) => cerveauAvecMemoire(a) });
-import { creerCerveauxPage, battementAffiche, texteBattement } from './cerveaux-page.js';
+import { creerCerveauxPage, battementAffiche, texteBattement, heldFood } from './cerveaux-page.js';
 import { nourritureDuBlock } from './nourriture.js';
 /* ⛔ LE CREATEUR D UN BLOCK NE CHANGE JAMAIS (2026-09-19, charge RPC) : nourritureDuBlock le recherchait a CHAQUE lecture
  *    (getLogs + blockNumber + tx). Trouve une fois, il est garde (memoire + stockage navigateur) et passe en `creation`.
@@ -12865,6 +12865,12 @@ let profilEnLecture = false;
 let symProfil = null, vieProfil = null, etatVieProfil = undefined, deviseProfil = null, soldeProfil = null;
 /* tip 2040: holders window measured for open profile — never invent */
 let profilNourriture = null;
+/* game57 #4b (a): the address of THAT read — an off-map block only gets its own (cerveaux-page.js#heldFood) */
+let profileFoodAddress = null;
+/* the food reads made off the map by the profile and by Brain, each with its address */
+function offMapFoodReads() {
+  return [{ adr: profileFoodAddress, n: profilNourriture }, brainNourriture];
+}
 
 /* ⛔ LE CLASSEMENT SE CALCULE SUR CE QU ON A LU, ET RIEN D AUTRE. Les blocks sans vie lue partent en
  * NON MESURES — jamais au fond de la liste, ou ils se liraient comme « les moins bons ». */
@@ -13273,9 +13279,11 @@ function battreProfil() {
   /* ⛔ JUMEAUX QUI DIVERGEAIENT : le profil passait `vieAvant: null` (variation toujours 0, donc jamais INQUIET ni
    *    EXCITE par le prix) quand la map passait la lecture precedente — deux humeurs pour le meme block. */
   void relireNourriture(hP);
+  /* game57 #4b (a): off the map, the food THIS profile read (it used to be thrown away: "not read yet" on facts that were read) */
+  const profileFood = heldFood(profilCerveau.adr, hP, offMapFoodReads());
   const fP = entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
-    hP ? hP.nourriture : null, etatVieProfil, hP ? hP.nourritureAvant : null, hP || { adr: profilCerveau.adr });
-  const r = cerveauxPage.battre(profilCerveau.adr, fP, cerveauPas, cycleBattement, { source: 'profil', nourritureLue: !!(hP && hP.nourriture && hP.nourriture.etat === 'LUE') });
+    profileFood, etatVieProfil, hP ? hP.nourritureAvant : null, hP || { adr: profilCerveau.adr });
+  const r = cerveauxPage.battre(profilCerveau.adr, fP, cerveauPas, cycleBattement, { source: 'profil', nourritureLue: !!(profileFood && profileFood.etat === 'LUE') });
   if (!r) return;
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
@@ -14514,7 +14522,7 @@ async function lireProfil(adr, sym, perime, opts) {
   /* 2026-10-10 (QA Grok) : sans wallet, « You hold » ne lit rien — il le dit tout de suite, pas « … » pendant la lecture du reste. */
   if (!compte) $('#pSolde').textContent = 'Connect to see';
   $('#pNote').textContent = 'reading the chain…';
-  symProfil = sym || null; vieProfil = null; etatVieProfil = undefined; profilNourriture = null;
+  symProfil = sym || null; vieProfil = null; etatVieProfil = undefined; profilNourriture = null; profileFoodAddress = null;
   traceProfilVider(); /* la bande appartient au block qu on regarde, jamais au precedent */
   $('#pPV').textContent = '…';
   $('#pPalier').textContent = 'reading…';
@@ -14936,6 +14944,7 @@ async function lireProfil(adr, sym, perime, opts) {
       const n = await nourritureDe(adr);
       if (perime()) return;
       profilNourriture = n;
+      profileFoodAddress = String(adr).toLowerCase();
       const hN = habitants.find((x) => String(x.adr).toLowerCase() === String(adr).toLowerCase());
       if (hN) hN.nourriture = n;
       peindreTrustFacts(adr, marcheProfil && marcheProfil.v ? marcheProfil.v : v, origineProfil);
@@ -25927,8 +25936,10 @@ function visionCible() {
   if (vision.source === 'profil' && profilCerveau) {
     const adr = bas(profilCerveau.adr);
     const h = habitants.find((x) => bas(x.adr) === adr) || null;
+    /* game57 #4b (a): "read" = what the shared instance REALLY received (an off-map block's food counts too) */
+    const sharedEntry = cerveauxPage.lire(adr);
     return { adr, sym: symProfil || (h && h.sym) || null, faits: profilCerveau.faits || null, histo: profilCerveau.histo || [], h,
-      nourritureLue: !!(h && h.nourriture && h.nourriture.etat === 'LUE'), etat: profilCerveau.etat || null };
+      nourritureLue: sharedEntry && sharedEntry.faits === profilCerveau.faits ? sharedEntry.nourritureLue === true : !!(h && h.nourriture && h.nourriture.etat === 'LUE'), etat: profilCerveau.etat || null };
   }
   if (vision.source === 'brain' && brainAdr) {
     const adr = bas(brainAdr);
@@ -26569,7 +26580,14 @@ function faitsHorsCarte(adr) {
   const a = String(adr || '').toLowerCase();
   const h = habitants.find((x) => String(x.adr).toLowerCase() === a) || null;
   const vc = viePourCerveau(a, h ? h.vie : null, h ? h.etatVie : null);
-  return entreesCerveau(vc.vie, h ? h.vieAvant : null, h ? h.nourriture : null, vc.etatVie, h ? h.nourritureAvant : null, h || { adr: a });
+  const food = heldFood(a, h, offMapFoodReads());
+  return entreesCerveau(vc.vie, h ? h.vieAvant : null, food, vc.etatVie, h ? h.nourritureAvant : null, h || { adr: a });
+}
+/* game57 #4b (a): whether the page holds a successful food read for this address (map habitant or off-map read) */
+function pageFoodRead(address) {
+  const a = String(address || '').toLowerCase();
+  const food = heldFood(a, habitants.find((x) => String(x.adr).toLowerCase() === a) || null, offMapFoodReads());
+  return !!(food && food.etat === 'LUE');
 }
 function liveTuileEl(adr) { return $('#blvTuiles').querySelector('[data-live="' + adr + '"]'); }
 function peindreTuileLive(t) {
@@ -26619,7 +26637,7 @@ function peindreTuileLive(t) {
 function battreLive() {
   if (!live.tuiles.length || !liveOuvert()) return;
   /* game57 #5 : une tuile dont le block ne bat nulle part ailleurs fait battre l instance PARTAGEE (deja battue ce cycle = rien de plus) */
-  for (const t of live.tuiles) cerveauxPage.battre(t.adr, faitsHorsCarte(t.adr), cerveauPas, cycleBattement, { source: 'live' });
+  for (const t of live.tuiles) cerveauxPage.battre(t.adr, faitsHorsCarte(t.adr), cerveauPas, cycleBattement, { source: 'live', nourritureLue: pageFoodRead(t.adr) });
   const pris = nourrirLive(live, liveSourceDe);
   for (const adr of pris) { const t = live.tuiles.find((x) => x.adr === adr); if (t) peindreTuileLive(t); }
   window.__TB_LIVE_MS__ = Object.fromEntries([...liveMesures].map(([a, m]) => [a, { n: m.n, moyenne: Math.round((m.total / m.n) * 100) / 100, max: m.max, dernier: m.dernier }]));

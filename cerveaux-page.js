@@ -66,3 +66,15 @@ export function battementAffiche(registre, adr, repli = null) {
 }
 /** UN format pour ce numero, partout (panneau, Brain, fenetre Brain, Live). */
 export const texteBattement = (n) => (Number.isSafeInteger(n) ? n.toLocaleString('en-US') : '—');
+
+/* game57 #4b (a): THE FOOD THIS PAGE HAS READ FOR THIS BLOCK. The map reads it for its habitants (h.nourriture); an OFF-MAP block
+ * (UNIT) is read by its profile (profilNourriture) or by Brain (brainNourriture), and that read used to be thrown away: the brain
+ * got 0 "by default" and the view said "not read yet". Order: the habitant's successful read, else a successful off-map read of the
+ * SAME address, else the habitant's (unread) state or null. Never another address, never a failed read shown as read. */
+export function heldFood(address, habitant, offMapReads = []) {
+  const a = String(address || '').toLowerCase();
+  const isRead = (n) => !!(n && typeof n === 'object' && n.etat === 'LUE');
+  if (habitant && isRead(habitant.nourriture)) return habitant.nourriture;
+  for (const r of Array.isArray(offMapReads) ? offMapReads : []) if (r && String(r.adr || '').toLowerCase() === a && isRead(r.n)) return r.n;
+  return habitant && habitant.nourriture ? habitant.nourriture : null;
+}
