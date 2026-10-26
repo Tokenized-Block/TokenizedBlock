@@ -2486,6 +2486,8 @@ details[open] > summary::before{transform:rotate(90deg)}
           <p class="note" id="bcTicketRef" style="margin:6px 0 0" hidden></p>
           <button type="submit" class="bouton" id="bcTicketGo">Review the buy</button>
           <p class="note" id="bcTicketNote" style="margin:6px 0 0"></p>
+          <!-- 2026-10-26 (game57) : sans wallet, Review ne quitte plus le ticket — la connexion se propose ICI, sous le montant qui reste -->
+          <button type="button" class="bouton sec" id="bcTicketConnect" hidden>Connect wallet</button>
         </form>
         <p class="bcSousTitre">You hold</p>
         <div id="bcPosition"></div>
@@ -31369,6 +31371,12 @@ $('#bcTicket').addEventListener('submit', async (e) => {
   /* le ticket dit ce qui cloche DANS SES MOTS : « abc » rendait « not understood — type help », une reponse de ligne de commande */
   if (!/^\d+([.,]\d+)?$/.test(n) || !(Number(n.replace(',', '.')) > 0)) return dire('That is not an amount — write a number above zero, like 0.002.');
   if (!d) return dire('The currency list is not ready yet — try again in a moment.');
+  /* ⛔ 2026-10-26 (game57, mesure navigateur 390x844 sans wallet) : Review basculait sur le Chat, la carte « Connect your wallet first. »
+   *   prenait la place du ticket et le montant disparaissait (vide au retour). Sans wallet, on RESTE sur le ticket : le montant reste tape,
+   *   la phrase et le bouton de connexion sont ici ; connecte, la revue repart avec ce montant (#bcTicketConnect, ci-dessous). */
+  const connecterIci = $('#bcTicketConnect');
+  if (!compte) { if (connecterIci) connecterIci.hidden = false; return dire('Connect your wallet first — your amount stays here, and the review goes on once it is connected.'); }
+  if (connecterIci) connecterIci.hidden = true;
   /* meme grammaire, meme chemin que la barre du Chat ; le refus s ecrit ICI (la vue Chat est masquee a ce moment).
    * ⛔ 2026-10-26 : l intention est prise ICI, au clic — la carte du Chat refuse de planifier et d ouvrir le wallet si elle ne tient plus */
   const intention = bcIntentionTicket(d, n);
@@ -31376,6 +31384,17 @@ $('#bcTicket').addEventListener('submit', async (e) => {
     $('#bcMontant').value = ''; note.className = 'note'; note.textContent = '';
   }
 });
+{
+  const b = $('#bcTicketConnect');
+  if (b) b.addEventListener('click', async () => {
+    b.disabled = true;
+    try { await connecter(); } catch (_) {}
+    b.disabled = false;
+    if (!compte) { const note = $('#bcTicketNote'); note.className = 'note wKo'; note.textContent = texteRefusConnexion('The wallet did not connect — nothing was prepared. Your amount stays here.'); return; }
+    b.hidden = true;
+    await $('#bcTicket').requestSubmit();
+  });
+}
 /* ── LE SWAP DU WALLET (2026-10-25, Phil : « add a Swap button in Wallet next to Send and Paired ») ──────────────────────────
  * ⛔⛔ AUCUN ECHANGE N EST ECRIT ICI. Ce bloc choisit « ce que tu paies » (ce que le wallet DETIENT, soldes lus) et « ce que tu
  *   recois », puis ecrit LA commande que la barre du Chat accepte deja (`swap <n> <de> to <vers>`, ou `sell <n> <block>` pour

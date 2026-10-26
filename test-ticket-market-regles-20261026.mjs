@@ -251,8 +251,8 @@ async function verifier(src) {
     exige(!v.opts().some((o) => [AUDF, CBBTC, WETH].includes(o.v)), 'C2 un pivot est offert a la vente');
   });
   await cas('C3', async () => {
-    /* un pivot choisi ecrit une commande que le Chat lit (adresse entiere) */
-    const w = mondeTicket(src);
+    /* un pivot choisi ecrit une commande que le Chat lit (adresse entiere) ; game57 : sans wallet le ticket ne part plus -> W1 */
+    const w = mondeTicket(src, { compte: W1 });
     w.peindre(); w.s.choisir(AUDF); w.peindre(); w.taper('25');
     await w.soumettre();
     exige(w.etat.executes.length === 1, 'C3 aucune commande');
@@ -298,11 +298,12 @@ async function verifier(src) {
   await cas('E5', () => intention((w) => { w.ctx.compte = W2; }, /wallet changed/));
   await cas('E6', () => intention((w) => { w.puces()[0] && w.puces()[0].emettre('click'); }, /amount changed/));
   await cas('E7', async () => {
-    /* un second Review rend la premiere carte refusee ; le wallet connecte apres le clic devient celui de l intention */
+    /* un second Review rend la premiere carte refusee ; le wallet connecte apres le clic devient celui de l intention.
+     * game57 : sans wallet, Review ne pose plus de carte (test-ticket-montant-visible-sans-wallet-20261026.mjs) ; l intention sans
+     *   compte est donc prise ici directement (bcIntentionTicket / bcGardeTicket, le vrai code) pour garder la liaison au wallet (M21). */
     const w = mondeTicket(src);
     w.peindre(); w.s.choisir('USDC'); w.peindre(); w.taper('25');
-    await w.soumettre();
-    const g1 = w.etat.executes[0].garde;
+    const g1 = w.ctx.__.bcGardeTicket(w.ctx.__.bcIntentionTicket('USDC', '25'));
     w.ctx.compte = W1;
     exige(g1() === null, 'E7 un wallet connecte apres le clic fait refuser : ' + g1());
     w.ctx.compte = W2;
@@ -310,7 +311,7 @@ async function verifier(src) {
     w.ctx.compte = W1;
     w.taper('30'); await w.soumettre();
     exige(/newer Review/.test(String(g1())), 'E7 la premiere carte tient encore apres un second Review : ' + g1());
-    exige(w.etat.executes[1].garde() === null, 'E7 la seconde carte ne tient pas');
+    exige(w.etat.executes[0].garde() === null, 'E7 la seconde carte ne tient pas');
   });
   await cas('E8', async () => {
     /* bcExecuterTexte EXECUTE transmet la garde a bcProposerSwap */
