@@ -243,6 +243,8 @@ import { creerRegistrePanel } from './panel-sessions.js';
 import { vieDuBlock } from './marche.js';
 /* 2026-10-17 : le Buy de Market, par ligne — cle deja connue ici + filtres du planificateur + devis reel (achat-marche.js) */
 import { verdictAchatMarche, quoterV4 } from './achat-marche.js';
+import { lireCauseRefusPool, phraseRefusPool } from './pool-lanceur-taxe.js';
+import { poolId as poolIdV4 } from './pool.js';
 import { lireReferenceAction, estActionCoinbase } from './reference-action.js';
 import { etatInitial as etatInitialCerveau, pas as pasCerveau } from './cerveau.js';
 import { snapshotCerveau } from './export-cerveau.js';
@@ -4228,7 +4230,7 @@ function clesConnuesServeur(jeton) {
   return out;
 }
 async function achatsMarche(lignes) {
-  const compte = { lignes: 0, sansCle: 0, achetables: 0, refusees: 0, nonMesures: 0, devis: 0, depuisCache: 0, lu: new Date().toISOString() };
+  const compte = { lignes: 0, sansCle: 0, achetables: 0, refusees: 0, nonMesures: 0, devis: 0, depuisCache: 0, lecturesCause: 0, refusCauses: {}, lu: new Date().toISOString() };
   try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
   compte.sourcesTbLues = sourcesTbLues();
   let quoter;
@@ -4237,6 +4239,7 @@ async function achatsMarche(lignes) {
   for (const l of (Array.isArray(lignes) ? lignes : [])) {
     compte.lignes += 1;
     l.achat = null;
+    l.achatRefus = null;
     const jeton = String(l && l.adr || '').toLowerCase();
     const cles = clesConnuesServeur(jeton);
     if (!cles.length) { compte.sansCle += 1; continue; }
@@ -4250,17 +4253,35 @@ async function achatsMarche(lignes) {
       catch (e) { compte.nonMesures += 1; continue; }
       /* une lecture ratee (nonCotees sans aucune pool qui cote) n est pas gardee : elle sera relue au tour suivant */
       const lectureRatee = !v.achetable && v.essayees > 0 && v.nonCotees.some((x) => !/revert|quoted zero/i.test(x.raison));
+      /* 2026-10-26 (pool-lanceur-taxe.js) : une pool v4 a hook tiers que le Quoter refuse -> sa cause LUE (liquidite en cours, taxBps du
+       *   hook), dite sur la ligne. 2 a 3 eth_call, seulement au premier jugement du jeton (garde ACHAT_CACHE_MS avec le verdict). */
+      if (!lectureRatee && !v.achetable && v.nonCotees.length) {
+        const k = v.nonCotees[0];
+        try {
+          const cle = { currency0: k.currency0, currency1: k.currency1, fee: k.fee, tickSpacing: k.tickSpacing, hooks: k.hooks };
+          const cause = await lireCauseRefusPool({ appel: (to, data) => rpcRails('eth_call', [{ to, data }, 'latest']),
+            stateView: V4_ADRESSES[8453].stateView, cle, poolId: poolIdV4(cle) });
+          compte.lecturesCause += 1;
+          v = { ...v, refus: phraseRefusPool(cause) };
+        } catch (_) { /* cause non lue : la phrase generale reste */ }
+      }
       if (!lectureRatee) achatsParJeton.set(jeton, { t: Date.now(), empreinte, v });
       if (lectureRatee) { compte.nonMesures += 1; continue; }
     }
     if (v.achetable) {
       compte.achetables += 1;
       l.achat = { cle: v.cle, quote: String(v.quote), montant: String(v.montant), fraisPar: v.fraisPar, lu: compte.lu };
-    } else compte.refusees += 1;
+    } else {
+      compte.refusees += 1;
+      if (v.refus && v.refus.code) {
+        l.achatRefus = { code: v.refus.code, phrase: v.refus.phrase };
+        compte.refusCauses[v.refus.code] = (compte.refusCauses[v.refus.code] || 0) + 1;
+      }
+    }
   }
   if (achatsParJeton.size > 5000) for (const k of [...achatsParJeton.keys()].slice(0, achatsParJeton.size - 5000)) achatsParJeton.delete(k);
   console.log('[achat-marche] ' + compte.achetables + ' achetable(s) / ' + compte.lignes + ' lignes · ' + compte.sansCle + ' sans cle connue · '
-    + compte.refusees + ' refusee(s) · ' + compte.nonMesures + ' non mesuree(s) · ' + compte.devis + ' devis (' + compte.depuisCache + ' du cache)'
+    + compte.refusees + ' refusee(s) (causes lues ' + JSON.stringify(compte.refusCauses) + ') · ' + compte.nonMesures + ' non mesuree(s) · ' + compte.devis + ' devis (' + compte.depuisCache + ' du cache)'
     + (compte.sourcesTbLues ? '' : ' · ⛔ sources TB non lues : tout B20 inconnu juge en block'));
   return compte;
 }

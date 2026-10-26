@@ -23398,7 +23398,8 @@ function peindreTrending() {
          *   sa largeur max-content (« No buy: on the pool this app's router can reach, what 10 USDC buys sells for 9.41 USDC… ») prenait la
          *   rangee et ecrasait .trInfo a 0. Elle vit maintenant sur SA ligne, pleine largeur, SOUS la rangee (.trRaison, flex-basis 100 %) ;
          *   seul le bouton Pair reste a droite. Banc : test-ligne-raison-20261025.mjs (mesure 375 / 1280 px). */
-        const raisonSb = raisonSansBuy(vR, { liqOk, liqMin: LIQ_MIN_BUY_USD }) || raisonSansBuy(null);
+        /* 2026-10-26 : `l.achatRefus` = la cause lue sur la chaine par le serveur (pool vide, taxe de revente du hook) — pool-lanceur-taxe.js */
+        const raisonSb = raisonSansBuy(vR, { liqOk, liqMin: LIQ_MIN_BUY_USD, refusServi: l.achatRefus }) || raisonSansBuy(null);
         const raison = '<p class="note trRaison">' + enTexte(raisonSb.phrase) + '</p>';
         return pairable ? '<span class="trBoutons">' + pairer + '</span>' + raison : raison;
       })() + '</li>').join('')

@@ -120,7 +120,16 @@ export function verdictRoutage({ aMarche, dex = null, poolAdr = null, routeActio
  *  @param {object} [o] `liqOk: false` quand la liquidite affichee est sous le seuil du Buy (`liqMin`, en $).
  *  @returns {?{code:'DEX_HORS_ROUTEUR'|'LIQUIDITE_SOUS_SEUIL'|'NON_COTEE', phrase:string}} null seulement si le verdict ouvre un achat
  *   en ETH/USDC et que la liquidite passe : il n y a alors rien a dire, un Buy est rendu. */
+/* ⛔ 2026-10-26 `o.refusServi` : la cause LUE SUR LA CHAINE par le serveur (pool-lanceur-taxe.js : liquidite en cours 0, taxe de revente
+ *   du hook), servie sur la ligne (`l.achatRefus`). Elle passe AVANT le seuil DexScreener : la lecture de chaine (StateView, hook) est le
+ *   fait du moment ; le chiffre de liquidite de l agregateur peut dater. Seuls les codes de ce module sont admis (une phrase d ailleurs ne
+ *   passe pas). */
+export const CODES_REFUS_SERVI = Object.freeze(['POOL_VIDE', 'POOL_VIDE_TAXE_REVENTE', 'TAXE_REVENTE']);
 export function raisonSansBuy(v, o = {}) {
+  const rs = o.refusServi;
+  if (rs && CODES_REFUS_SERVI.includes(rs.code) && typeof rs.phrase === 'string' && rs.phrase && !(v && (v.achetableEnEth || v.achetableEnUsdc))) {
+    return { code: rs.code, phrase: rs.phrase.slice(0, 220) };
+  }
   if (o.liqOk === false) {
     const seuil = Number.isFinite(Number(o.liqMin)) ? Math.round(Number(o.liqMin)) : 500;
     return { code: 'LIQUIDITE_SOUS_SEUIL', phrase: 'No buy: less than $' + seuil + ' of liquidity on its market (DexScreener figure).' };
