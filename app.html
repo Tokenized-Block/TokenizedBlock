@@ -4739,7 +4739,7 @@ import { devisesDentree, peutEtreAssemblee, phraseDevise, resumeDesNonOffertes, 
   from './devises-dentree.js';
 /* 2026-10-26 : les devises pivot (WETH, cbBTC, AUDF) dans « Pay with » — la MEME fonction que /api/rails/plan (rails-api.js la re-exporte).
  *   ⛔ EURC est BANNI (Phil, 2026-10-26) : retire de la table pivot, et DEVISES_BANNIES le retire aussi du Swap du Wallet. */
-import { devisesPivotVersBloc } from './entree-vers-bloc.js';
+import { devisesPivotVersBloc, devisesPivotVersAction } from './entree-vers-bloc.js';
 /* 2026-10-26 : la section Fiat du Wallet (achat carte/banque par pays, monnaies locales routees, mesurees non routees) — pur */
 import { lignesAchat as fiatLignesAchat, monnaiesLocales as fiatMonnaiesLocales, aVenir as fiatAVenir } from './wallet-fiat.js';
 /* ⛔ `BPS_MAX` BORNE CE QU ON S AUTORISE A PRELEVER sur le rail multi-sauts. Il est IMPORTE du
@@ -17731,7 +17731,7 @@ function majDevisesDentreeCorps(v) {
    *   X -> USDC sur Aerodrome, puis USDC -> (ETH ->) block ; EURC -> ce block mesure PRET en prod). Le graphe de cette page ne sait
    *   pas assembler « Aerodrome puis v4 » : c est le SERVEUR qui batit ce lot, et le bouton passe par le panneau (payerParRailServeur).
    *   ⛔ La liste vient de `devisesPivotVersBloc`, la fonction meme du serveur : rien n est offert qu il refuserait. */
-  const pivots = pivotsPourPayWith(deviseDeLaPool, cliquables);
+  const pivots = pivotsPourPayWith(deviseDeLaPool, cliquables, block);
   const offerts = cliquables.concat(pivots);
   if (compte && pivots.length) lireSoldesPivots(block, v, pivots);
   const symBlock = (symProfil || 'this block');
@@ -17836,13 +17836,17 @@ function majDevisesDentreeCorps(v) {
  * ⛔ Sans cotation LUE, rien (le serveur juge sur la cle du marche ; ici `deviseDeLaPool`, la meme lecture que le reste du selecteur).
  * ⛔ Une devise que le graphe de la page offre deja garde SA route ; le pivot ne la double pas.
  * `tenu` : true/false si le solde du wallet connecte a ete LU, null sinon (sans wallet, ou lecture ratee) — null ne grise rien.
+ * `cible` : ce qu on achete. ⛔ 2026-10-26 (QA game56, METAc : USDC / ETH seulement) : une ACTION tokenisee n est pas un block — ses
+ *   pivots sont ceux de la route 4 quater (devisesPivotVersAction : action de la table Aerodrome), pas ceux d un block cote en USDC
+ *   (qui auraient offert cbBTC a AMDc, que le serveur refuse).
  */
-function pivotsPourPayWith(quote, deja) {
+function pivotsPourPayWith(quote, deja, cible = null) {
   if (!/^0x[0-9a-fA-F]{40}$/.test(String(quote || ''))) return [];
   const vus = new Set((deja || []).map((d) => String(d.devise).toLowerCase()));
   const moi = compte ? String(compte).toLowerCase() : null;
+  const action = cible !== null && ACTIONS_PAR_ADR.has(String(cible).toLowerCase());
   const out = [];
-  for (const p of devisesPivotVersBloc(quote)) {
+  for (const p of action ? devisesPivotVersAction(String(cible).toLowerCase()) : devisesPivotVersBloc(quote)) {
     if (vus.has(p.adr)) continue;
     const s = moi ? soldesPivots.get(moi + '|' + p.adr) : undefined;
     out.push({ etat: 'PIVOT_SERVEUR', parRailServeur: true, devise: p.adr, symbole: p.symbole, tx: 1, chemin: null,
@@ -29576,10 +29580,11 @@ function bcPeindreTicket(a, sym, mk, snap) {
     /* [valeur, libelle, symbole, grise] : le symbole est celui de l ACTIF (sans « for », sans « (stock) ») — c est lui que la note et
      *   les puces nomment */
     choix = choix.map(([v, l]) => [v, l, String(l).replace(/^for /, '').replace(/ \(stock\)$/, ''), false]);
-    /* ⛔ 2026-10-26 : les pivots que le serveur route (AUDF, cbBTC, WETH), de la MEME source que « Pay with » de la fiche */
-    if (achat && !ACTIONS_PAR_ADR.has(a) && q && q.ok) {
+    /* ⛔ 2026-10-26 : les pivots que le serveur route (AUDF, cbBTC, WETH), de la MEME source que « Pay with » de la fiche — pour une
+     *   action aussi (QA game56 : METAc n offrait que USDC / ETH) : pivotsPourPayWith ne rend que ceux de SA route (4 quater) */
+    if (achat && q && q.ok) {
       const deja = choix.map(([v]) => ({ devise: v === 'ETH' ? eth : String((bcResoudre(v) || {}).adr || v).toLowerCase() }));
-      for (const p of pivotsPourPayWith(q.adr, deja)) {
+      for (const p of pivotsPourPayWith(q.adr, deja, a)) {
         choix.push([p.devise, p.symbole + (p.tenu === false ? ' — you hold none' : ' — routed'), p.symbole, p.tenu === false]);
         try { bcIdentite(p.devise); } catch (_) { /* son nom se lit sur la chaine ; sinon l adresse abregee */ }
       }
@@ -31360,8 +31365,14 @@ document.addEventListener('keydown', (e) => {
 for (const b of document.querySelectorAll('#bcTicket [data-cote]')) b.addEventListener('click', () => { bc.cote = b.getAttribute('data-cote'); $('#bcMontant').value = ''; bcAvancerTicket('you switched between Buy and Sell'); bcRepeindre(); });
 /* un geste de la personne sur la devise (jamais un rebatissage : `change` ne part que d elle) : le montant ne la suit pas */
 $('#bcDevise').addEventListener('change', () => { bcTicketDeviseChangee(); bc.rapidesDe = null; bcRepeindre(); });
-/* chaque frappe change l intention : une carte preparee pour l ancien montant n ouvre plus le wallet */
-$('#bcMontant').addEventListener('input', () => { bcAvancerTicket('the amount changed'); });
+/* ⛔ 2026-10-26 (QA game56 : apres « Review », le ticket ne disait jamais la suite) : la phrase de l etape 2, posee quand le Review part */
+const BC_TICKET_ETAPE2 = 'Step 2 — check the swap in the Chat view: its plan, the fee and the minimum you receive, then sign in your wallet. Nothing is sent before you sign.';
+/* chaque frappe change l intention : une carte preparee pour l ancien montant n ouvre plus le wallet — et la note d etape 2 part */
+$('#bcMontant').addEventListener('input', () => {
+  bcAvancerTicket('the amount changed');
+  const note = $('#bcTicketNote');
+  if (note && note.textContent === BC_TICKET_ETAPE2) { note.className = 'note'; note.textContent = ''; }
+});
 $('#bcTicket').addEventListener('submit', async (e) => {
   e.preventDefault();
   const note = $('#bcTicketNote'), n = $('#bcMontant').value.trim(), d = $('#bcDevise').value;
@@ -31381,7 +31392,7 @@ $('#bcTicket').addEventListener('submit', async (e) => {
    * ⛔ 2026-10-26 : l intention est prise ICI, au clic — la carte du Chat refuse de planifier et d ouvrir le wallet si elle ne tient plus */
   const intention = bcIntentionTicket(d, n);
   if (await bcExecuterTexte(bc.cote === 'buy' ? 'buy this with ' + n + ' ' + d : 'sell ' + n + ' this for ' + d, note, bcGardeTicket(intention))) {
-    $('#bcMontant').value = ''; note.className = 'note'; note.textContent = '';
+    $('#bcMontant').value = ''; note.className = 'note'; note.textContent = BC_TICKET_ETAPE2;
   }
 });
 {

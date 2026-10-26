@@ -38,7 +38,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import { devisesDentree, peutEtreAssemblee, phraseDevise, resumeDesNonOffertes } from './devises-dentree.js';
 import { pairesProposees } from './paires.js';
-import { devisesPivotVersBloc, entreeVersBloc } from './entree-vers-bloc.js';
+import { devisesPivotVersBloc, devisesPivotVersAction, entreeVersBloc } from './entree-vers-bloc.js';
 import { entreeVersBloc as entreeServeur } from './rails-api.js';
 import { formaterUnites, montantHumain } from './montants.js';
 import { USDC_BASE, formaterEthCourt } from './frais-creation.js';
@@ -135,6 +135,7 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
     marcheParAdr: new Map(), faitsPoolLus: new Map([[BLOC, { famille: 'uniswap-v4' }], [CBBTC, { famille: 'aerodrome' }], [NVDA, { famille: 'uniswap-v4' }]]),
     faitsBlockEnVol: new Set(), devisesSansFaitsEnVol: new Set(), soldesPivots: new Map(), soldesPivotsDemandes: new Set(), choixPayWith: null,
     pairesProposees, devisesDentree, peutEtreAssemblee, resumeDesNonOffertes, phraseDevise, devisesPivotVersBloc, formaterUnites, montantHumain,
+    devisesPivotVersAction, ACTIONS_PAR_ADR: new Map(), /* la fiche d un block : pas une action (les actions : test-market-buy-pivots-action) */
     prixUsdDevise: async () => {}, majEntreeCarte: () => {}, etape: () => {}, court: (a) => String(a).slice(0, 6),
     /* une action a pool v4 USDC (NVDAc) pour le cas « une action » ; `sansUsdc` retire le pont ETH/USDC (USDC et l action ne sont plus offerts) */
     aretesMesurees: () => (etat.sansUsdc ? [] : [{ de: ETH, vers: USDC_BASE, famille: 'uniswap-v4' }, { de: ETH, vers: USDC_BASE, famille: 'aerodrome' }])
@@ -908,8 +909,8 @@ vu(true, 'app.html : toutes les regles (A-L, P1-P4) passent');
 
 /* ── H. les mutants, sur des COPIES en memoire ── */
 const mutants = [
-  ['pivots retires de la liste', (s) => s.replace('const pivots = pivotsPourPayWith(deviseDeLaPool, cliquables);', 'const pivots = [];')],
-  ['pivots offerts quelle que soit la cotation', (s) => s.replace('for (const p of devisesPivotVersBloc(quote))', 'for (const p of devisesPivotVersBloc(ETH_ADR))')],
+  ['pivots retires de la liste', (s) => s.replace('const pivots = pivotsPourPayWith(deviseDeLaPool, cliquables, block);', 'const pivots = [];')],
+  ['pivots offerts quelle que soit la cotation', (s) => s.replace(': devisesPivotVersBloc(quote))', ': devisesPivotVersBloc(ETH_ADR))')],
   ['un pivot a 0 n est plus grise', (s) => s.replace('o.disabled = d.tenu === false;', 'o.disabled = false;')],
   ['le refus du solde saute', (s) => s.replace('if (solde !== null && solde < montant) {', 'if (false) {')],
   ['preparerEchange ne branche plus le rail serveur', (s) => s.replace('choix && choix.parRailServeur === true)', 'choix && choix.parRailServeur === "x")')],

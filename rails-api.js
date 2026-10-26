@@ -27,7 +27,7 @@ import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
 import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME, POOLS_PIVOTS_AERODROME, phraseDeviseBannie } from './plan-franchissement.js';
 import { devisSaut } from './multipool.js';
-import { entreeVersBloc } from './entree-vers-bloc.js';
+import { entreeVersBloc, entreeVersAction } from './entree-vers-bloc.js';
 import { FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 import { planAchatEthAction } from './echange-eth.js';
 import { WETH_BASE } from './plan-eth-block.js';
@@ -504,7 +504,8 @@ async function planRailBrut(q, deps) {
       return normaliser(route, await planAerodromeSegment({ rpc, chemin, devise: de, block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }),
         { via: 'planAerodromeSegment', chemin, cotation: USDC, pool: 'aerodrome' });
     }
-    if (nv === 'ACTION' && POOLS_ACTIONS_AERODROME.has(vers) && DEVISES_VIA_USDC_AERODROME.has(de)) {
+    /* la condition est `entreeVersAction` (entree-vers-bloc.js) : la MEME fonction qui fait offrir ces pivots par le ticket et la fiche */
+    if (nv === 'ACTION' && entreeVersAction({ de, action: vers }) === 'PIVOT_AERODROME') {
       const chemin = [{ de, vers: USDC, famille: 'aerodrome' }, { de: USDC, vers, famille: 'aerodrome' }];
       return normaliser(route, await planAerodromeSegment({ rpc, chemin, devise: de, block: vers, montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant }),
         { via: 'planAerodromeSegment', chemin, cotation: USDC, pool: 'aerodrome' });
