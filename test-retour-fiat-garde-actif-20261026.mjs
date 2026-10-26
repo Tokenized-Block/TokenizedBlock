@@ -27,7 +27,8 @@ let n = 0;
 const ko = [];
 const cas = async (titre, f) => { n += 1; try { await f(); } catch (e) { ko.push(titre); console.error('KO ' + titre + ' — ' + String(e.message).split('\n')[0]); } };
 
-const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+/* TB_APP_HTML : rejouer sur un autre app.html (ex. `git show 0b18fb3:app.html`) pour mesurer le rouge d avant */
+const app = readFileSync(process.env.TB_APP_HTML || new URL('./app.html', import.meta.url), 'utf8');
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const nu = app.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/<!--[\s\S]*?-->/g, ' ');
 const nuSrv = srv.replace(/\/\*[\s\S]*?\*\//g, ' ');
@@ -42,7 +43,7 @@ const extraire = (nom) => {
 };
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
   'reprendreRetourFiat', 'montantLisibleFiat', 'actifCarteCourant', 'cablerFundActifs', 'peindreBridgeBlocks', 'repeindreFundApresHub',
-  'pivotsPourPayWith', 'lireSoldesPivots'];
+  'pivotsPourPayWith', 'lireSoldesPivots', 'garderChoixPayWith'];
 const sources = Object.fromEntries(FONCTIONS.map((f) => [f, extraire(f)]));
 
 const ETH = '0x0000000000000000000000000000000000000000';
@@ -119,6 +120,7 @@ function monde({ devises = [D_ETH, D_USDC], solde = 1752n, avant = '0', actif = 
     CLE_FIAT_AVANT: 'tb.fiat.avant', mouvementReduit: true, actifs: [], repeindreDefautFund: null,
     marcheParAdr: new Map(marches), faitsPoolLus: new Map([[BLOC, { famille: 'uniswap-v4' }]]), faitsBlockEnVol: new Set(), devisesSansFaitsEnVol: new Set(),
     devisesPivotVersBloc, soldesPivots: new Map(), soldesPivotsDemandes: new Set(), rpc: async () => { throw new Error('not read'); },
+    choixPayWith: null,
     pairesProposees: () => [], prixUsdDevise: async () => {}, devisesDentree: () => ({ etat: 'OK', devises: etat.devises }),
     aretesMesurees: () => [], peutEtreAssemblee: () => ({ ok: true, par: 'v4', court: null }), resumeDesNonOffertes: () => [],
     phraseDevise: () => '', majEntreeCarte: () => {}, etape: () => {},
@@ -225,6 +227,24 @@ await cas('(1g) la personne corrige le montant APRES le prefill : 21 rebatissage
   assert.equal(m.champ(), USDC);
   m.els['#profil'].dataset.block = AUTRE_BLOC; m.rebatir();
   assert.equal(m.els['#peAchat'].value, '0.0015', 'en quittant le block, on a retire un montant que la personne a tape');
+});
+/* 2026-10-26 (revue adverse de 0b18fb3) : (1c) choisit ETH — la devise PAR DEFAUT — donc il passait meme quand chaque rebatissage
+ *   remettait le selecteur sur la pool. Ce cas-ci choisit une devise qui n est NI le defaut NI l actif livre. */
+await cas('(1i) la personne choisit OUSD (ni le defaut, ni l actif livre) et tape 7 : 15 rebatissages gardent OUSD et 7, sans rebascule USDC', async () => {
+  const D_OUSD = { devise: '0xb2000000000000000000002feb517dfec7415344', etat: 'ROUTEE', symbole: 'OUSD', tx: 1 };
+  const m = monde({ devises: [D_ETH, D_USDC, D_OUSD] });
+  await m.f.reprendreRetourFiat(BLOC, 'USDC');
+  assert.equal(m.els['#peAchat'].value, '0.001752');
+  m.els['#peDevise'].value = D_OUSD.devise; m.els['#peDevise'].declencher('change');
+  assert.equal(m.els['#peAchat'].value, '', 'le montant USDC pose est reste sous OUSD');
+  m.els['#peAchat'].value = '7';
+  for (let i = 1; i <= 15; i += 1) {
+    m.rebatir();
+    assert.equal(m.els['#peDevise'].value, D_OUSD.devise, 'rebatissage ' + i + ' : « Pay with » est revenu sur ' + m.els['#peDevise'].value);
+  }
+  assert.equal(m.champ(), D_OUSD.devise, 'deviseDentree n est plus OUSD');
+  assert.equal(m.els['#peAchat'].value, '7');
+  assert.equal(m.els['#peAchat'].label.firstChild.textContent, 'Buy — OUSD to spend');
 });
 await cas('(1h) la personne corrige le montant puis passe « Pay with » sur ETH : sa correction reste, et la note le dit', async () => {
   const m = monde();
@@ -368,7 +388,7 @@ await cas('(6b) un retour de paiement n affiche pas la banniere du lien partage'
   assert.ok(nu.indexOf('const retourFiat = lireRetourFiat(location.search)') < nu.indexOf('if (blockLien && ADRESSE.test(blockLien) && !retourFiat)'));
 });
 
-assert.equal(n, 18,'compte de cas inattendu : ' + n);
+assert.equal(n, 19,'compte de cas inattendu : ' + n);
 if (ko.length) { console.error(ko.length + ' / ' + n + ' KO'); process.exit(1); }
 console.log('ok retour-fiat-garde-actif - ' + n + ' cas, vraies fonctions de app.html executees : 15 rebatissages, USDC retire,');
 console.log('   choix de la personne, reserve de gas, relecture arretee, attente qui suit le panneau, Fund sur le hub restaure.');

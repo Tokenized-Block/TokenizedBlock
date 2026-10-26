@@ -16751,6 +16751,8 @@ const devisesSansFaitsEnVol = new Set();
  *   pivot reste selectionnable et le bouton relit le solde avant tout plan. Declares ici, avant tout appel de `majDevisesDentree`. */
 const soldesPivots = new Map();
 const soldesPivotsDemandes = new Set();
+/* le choix « Pay with » de la personne : { block, devise, sym } — voir `garderChoixPayWith`. Declare avant tout rebatissage. */
+let choixPayWith = null;
 /**
  * REMPLIR « PAY WITH » — et n y mettre que ce qu on sait VRAIMENT router.
  *
@@ -16775,7 +16777,52 @@ function majDevisesDentree(v) {
   /* ⛔ 2026-10-26 : CHAQUE sortie du rebatissage (quatre `return`) repasse par le garde du retour fiat — le rebatissage remet
    *   le selecteur sur la devise de la pool, et c est apres lui qu on sait sous quel actif le montant se trouve. */
   try { majDevisesDentreeCorps(v); }
-  finally { try { garderPrefillFiat(); } catch (_) { /* le garde ne doit jamais casser le selecteur */ } }
+  finally {
+    /* ⛔⛔ 2026-10-26 (revue adverse de 0b18fb3) : le choix de la personne d abord, puis le retour fiat (qui respecte ce choix) */
+    try { garderChoixPayWith(); } catch (_) { /* le garde ne doit jamais casser le selecteur */ }
+    try { garderPrefillFiat(); } catch (_) { /* le garde ne doit jamais casser le selecteur */ }
+  }
+}
+/**
+ * ⛔⛔⛔ LE CHOIX « PAY WITH » DE LA PERSONNE SURVIT AUX REBATISSAGES (revue adverse de 0b18fb3, mesure a 375 px, wallet en lecture
+ *   seule) : EURC choisi a 33,807 s, 44 rebatissages de #peDevise entre 33,805 et 35,687 s, « 25 » tape a 34,627 s — etat final
+ *   « Buy — ETH to spend », 25 dans le champ, et Prepare buy prenait le chemin ETH : un wallet a 25 ETH aurait ete invite a acheter
+ *   pour 25 ETH. Chaque rebatissage remettait le selecteur sur la devise de la pool et `deviseDentree` a null ; rien ne retenait
+ *   le choix. Vrai pour TOUTES les devises (USDC, actions, OUSD, pivots), deja en prod (game51).
+ *   ⇒ Le choix est RETENU ({ block, devise, sym }) par `sel.onchange`. Apres CHAQUE rebatissage :
+ *     · encore offert (et selectionnable) : il est remis, avec son etiquette et son chemin ;
+ *     · plus offert, ou autre block : le choix est oublie, et un montant TAPE sous lui est RETIRE si le champ parle maintenant
+ *       un autre actif — la note dit pourquoi. Jamais un montant sous un autre actif que celui pour lequel il a ete tape.
+ *   ⛔ Un montant pose par le retour fiat reste a SON garde (garderPrefillFiat) : on ne le retire pas ici.
+ * @returns {'SANS'|'GARDE'|'MEME'|'OUBLIE'|'RETIRE'}
+ */
+function garderChoixPayWith() {
+  const c = choixPayWith;
+  if (!c) return 'SANS';
+  const sel = $('#peDevise'), bloc = $('#peDeviseBloc'), champ = $('#peAchat');
+  const ici = String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase();
+  const opts = sel && bloc && !bloc.hidden ? [...sel.options] : [];
+  const o = ici === c.block ? opts.find((x) => String(x.value).toLowerCase() === c.devise) : null;
+  if (o && !o.disabled) {
+    if (String(sel.value).toLowerCase() !== c.devise) {
+      sel.value = o.value;
+      if (typeof sel.onchange === 'function') { try { sel.onchange(); } catch (_) { /* l etiquette n a pas suivi : le test le voit */ } }
+    }
+    return 'GARDE';
+  }
+  choixPayWith = null;
+  if (deviseDuChampBuy() === c.devise) return 'MEME';
+  if (!champ || String(champ.value || '').trim() === '') return 'OUBLIE';
+  if (fiatRetenu && fiatRetenu.pose !== null && String(champ.value) === fiatRetenu.pose) return 'OUBLIE';
+  champ.value = '';
+  const e = $('#peEtat');
+  if (e) {
+    e.className = 'note wKo';
+    e.textContent = 'The amount you typed was in ' + c.sym + ', and the Buy field is no longer paid in ' + c.sym
+      + (ici !== c.block ? ' (you opened another block)' : o && o.disabled ? ' (this wallet holds none)' : ' (the market was read again and “Pay with” no longer offers it)')
+      + ', so it was taken out — nothing stays under a currency it was not typed for.';
+  }
+  return 'RETIRE';
 }
 function majDevisesDentreeCorps(v) {
   const bloc = $('#peDeviseBloc'), sel = $('#peDevise'), note = $('#peDeviseNote');
@@ -16980,6 +17027,10 @@ function majDevisesDentreeCorps(v) {
     sel.onchange = () => {
       const d = offerts.find((x) => x.devise === sel.value) || null;
       deviseDentree = d && d.etat !== 'DIRECTE' ? d : null;
+      /* ⛔ le choix est RETENU pour les rebatissages (garderChoixPayWith) — sauf la bascule du retour fiat, qui a son propre garde */
+      if (d && !(fiatRetenu && fiatRetenu.enBascule)) {
+        choixPayWith = { block: String(block).toLowerCase(), devise: String(d.devise).toLowerCase(), sym: d.symbole || 'that currency' };
+      }
       majEtiquetteDeviseDentree(d, symBlock);
       try { majEntreeCarte(); } catch (_) {}
       /* un choix de la personne aussi : un montant pose en USDC ne reste pas sous une autre devise */
@@ -17232,7 +17283,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
  *   laisse detenir le pivot. On les envoie donc en SEQUENCE, et ce rail reste ouvert aux wallets
  *   qui ne savent pas grouper.
  */
-function afficherAerodromeSegment({ pa, e, dec, symBlock }) {
+function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null }) {
   const refuser = (texte, compteur, relancer = true) => {
     e.className = 'note wKo';
     e.textContent = texte;
@@ -17263,7 +17314,7 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock }) {
         'echange_multi_refus_frais');
     }
   }
-  const sym = deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token';
+  const sym = symPaye || (deviseDentree && deviseDentree.symbole ? deviseDentree.symbole : 'your token');
   $('#peLignes').innerHTML = [
     'You pay: ' + formaterUnites(r.paye, dec) + ' ' + sym,
     /* ⚠️ « AT LEAST » VIENT D UN PRIX SPOT, PAS D UN DEVIS : il ignore la profondeur du carnet, donc
@@ -17523,6 +17574,11 @@ async function preparerEchange(sens) {
     try { etape('echange_refus_frais_pool'); } catch (_) {}
     return;
   }
+  /* ⛔⛔ 2026-10-26 (revue adverse de 0b18fb3) : LE CHOIX « PAY WITH » EST PRIS UNE FOIS, AU CLIC — ici, juste avant le premier
+   *   `await` (tout ce qui precede est synchrone). Le selecteur se rebatit pendant les `await` (pret, decimales : 44 rebatissages en
+   *   1,9 s mesures) ; relire `deviseDentree` apres eux pouvait changer de chemin ou de decimales sous la personne. Tout ce qui suit
+   *   lit `choix`, jamais la variable vivante. */
+  const choix = sens === 'ACHAT' ? deviseDentree : null;
   if (!(await pret({ e }))) {
     if (!e.textContent || !/Switch to Base/i.test(e.textContent)) {
       direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.'));
@@ -17535,17 +17591,17 @@ async function preparerEchange(sens) {
   try { if (sens === 'ACHAT') etape('achat_prepare'); } catch (_) {}
   let dec = 18;
   if (sens === 'VENTE') { try { dec = await decimalesDe(adr); } catch { e.className = 'note wKo'; e.textContent = 'Decimals not read — nothing to sign.'; try { etape('echange_refus_marche_illisible'); } catch (_) {} return; } }
-  else if (deviseDentree) {
+  else if (choix) {
     /* ⛔⛔ LES DECIMALES DE LA DEVISE D ENTREE SONT LUES SUR LE JETON, JAMAIS SUPPOSEES. Le registre
      *   `DEVISES_BASE` n en porte AUCUNE, et 18 par defaut serait un pari : OUSD en a SIX. L ecart
      *   serait de 10^12 sur le montant — assez pour placer un echange de 100 $ dans le mauvais
      *   palier du bareme ET pour coter une taille qui n a rien a voir.
      * ⛔ UNE LECTURE RATEE REFUSE, elle ne retombe pas sur 18. Un defaut permissif ici signerait un
      *   montant que personne n a verifie. */
-    try { dec = await decimalesDe(deviseDentree.devise); }
+    try { dec = await decimalesDe(choix.devise); }
     catch {
       e.className = 'note wKo';
-      e.textContent = 'Decimals of ' + (deviseDentree.symbole || 'that token') + ' were not read — nothing to sign.';
+      e.textContent = 'Decimals of ' + (choix.symbole || 'that token') + ' were not read — nothing to sign.';
       try { etape('echange_refus_marche_illisible'); } catch (_) {}
       return;
     }
@@ -17555,8 +17611,8 @@ async function preparerEchange(sens) {
   if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; try { etape('echange_refus_montant'); } catch (_) {} return; }
   /* ⛔⛔ 2026-10-26 : un pivot choisi dans « Pay with » (WETH, cbBTC, EURC) part vers le plan du SERVEUR, AVANT le multi-sauts et le
    *   chemin historique — sinon l etiquette dirait EURC et le wallet signerait l achat en ETH de la pool. */
-  if (sens === 'ACHAT' && deviseDentree && deviseDentree.parRailServeur === true) {
-    return payerParRailServeur({ d: deviseDentree, block: adr, montant: m.valeur, dec, e });
+  if (sens === 'ACHAT' && choix && choix.parRailServeur === true) {
+    return payerParRailServeur({ d: choix, block: adr, montant: m.valeur, dec, e });
   }
   e.className = 'note'; e.textContent = 'Reading the pool, quoting the price and asking the chain…';
   profilEnLecture = true;
@@ -17671,7 +17727,7 @@ async function preparerEchange(sens) {
    *   de rail une baisse de revenu non demandee.
    * ⛔ ET IL NE S ACTIVE QUE SUR UN CHOIX EXPLICITE : `deviseDentree` vaut `null` tant que personne
    *   n a change le selecteur, donc le comportement par defaut est EXACTEMENT celui d avant. */
-  if (sens === 'ACHAT' && deviseDentree && Array.isArray(deviseDentree.chemin)) {
+  if (sens === 'ACHAT' && choix && Array.isArray(choix.chemin)) {
     /* ⛔⛔ LE RESOLVEUR INJECTE : la cle CONNUE d abord, le balayage ensuite — jamais l un SANS
      *   l autre. Les pools de blocks portent souvent un HOOK, et `CLES_PRIX` ne contient que
      *   quatre combinaisons SANS hook : sans la cle connue, la jambe du block ne serait jamais
@@ -17717,36 +17773,36 @@ async function preparerEchange(sens) {
      * ⭐ ET IL N EXIGE PAS L ATOMICITE : approbation puis swap, deux appels independants. Une
      *   approbation qui passe seule ne coute que du gaz. Ce rail est donc ouvert aux wallets qui ne
      *   savent pas grouper — ceux a qui le franchissement est ferme. */
-    if (peutEtreAssemblee(deviseDentree).par === 'aerodrome-segment') {
+    if (peutEtreAssemblee(choix).par === 'aerodrome-segment') {
       let pa;
       try {
-        pa = await planAerodromeSegment({ rpc, chemin: deviseDentree.chemin,
-          devise: deviseDentree.devise, block: adr, montant: m.valeur, compte,
+        pa = await planAerodromeSegment({ rpc, chemin: choix.chemin,
+          devise: choix.devise, block: adr, montant: m.valeur, compte,
           beneficiaireFrais: FEE_WALLET });
       } catch (err) { pa = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
       finally { profilEnLecture = false; }
       if ($('#profil').dataset.block !== adr) return;
       echangeCourant = pa;
-      afficherAerodromeSegment({ pa, e, dec, symBlock: symProfil });
+      afficherAerodromeSegment({ pa, e, dec, symBlock: symProfil, symPaye: choix.symbole || null });
       return;
     }
-    if (peutEtreAssemblee(deviseDentree).par === 'franchissement') {
+    if (peutEtreAssemblee(choix).par === 'franchissement') {
       let prixE = null;
-      try { prixE = await prixUsdDevise(deviseDentree.devise); } catch (_) { prixE = null; }
+      try { prixE = await prixUsdDevise(choix.devise); } catch (_) { prixE = null; }
       let pf;
       try {
         pf = await planFranchissement({ rpc, chaine: CHAINE, compte,
-          chemin: deviseDentree.chemin, devise: deviseDentree.devise, block: adr,
+          chemin: choix.chemin, devise: choix.devise, block: adr,
           montant: m.valeur, decimalesEntree: dec, prixUsdEntree: prixE,
           resoudreV4: resoudre, beneficiaireFrais: FEE_WALLET, fraisDevisesOk });
       } catch (err) { pf = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
       finally { profilEnLecture = false; }
       if ($('#profil').dataset.block !== adr) return;
       echangeCourant = pf;
-      afficherFranchissement({ pf, e, dec, symBlock: symProfil });
+      afficherFranchissement({ pf, e, dec, symBlock: symProfil, symPaye: choix.symbole || null });
       return;
     }
-    const b = await sautsDepuisChemin({ chemin: deviseDentree.chemin, montant: m.valeur, resoudre });
+    const b = await sautsDepuisChemin({ chemin: choix.chemin, montant: m.valeur, resoudre });
     if (b.etat !== 'OK') {
       e.className = 'note wKo';
       /* ⛔ LE REFUS PORTE LE SAUT QUI A MANQUE. « La route a echoue » envoie chercher partout. */
@@ -17759,16 +17815,16 @@ async function preparerEchange(sens) {
      *   bareme applique alors le taux LE PLUS HAUT et le DIT. Le doute nous coute un revenu
      *   potentiel, jamais une surprise a l utilisateur, et jamais une sous-facturation supposee. */
     let prixEntree = null;
-    try { prixEntree = await prixUsdDevise(deviseDentree.devise); } catch (_) { prixEntree = null; }
+    try { prixEntree = await prixUsdDevise(choix.devise); } catch (_) { prixEntree = null; }
     try {
       p = await planEchangeMultiSauts({ rpc, chaine: CHAINE, compte, sauts: b.sauts,
-        entree: deviseDentree.devise, sortie: adr, montant: m.valeur,
+        entree: choix.devise, sortie: adr, montant: m.valeur,
         fraisDevisesOk, decimalesEntree: dec, prixUsdEntree: prixEntree });
     } catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
     finally { profilEnLecture = false; }
     if ($('#profil').dataset.block !== adr) return;
     echangeCourant = p;
-    afficherPlanMultiSauts({ p, e, b, symBlock: symProfil, dec });
+    afficherPlanMultiSauts({ p, e, b, symBlock: symProfil, dec, symPaye: choix.symbole || null });
     return;
   }
   /* ⛔ 2026-10-17 (toutes les pools d un block) : achat / vente DIRECTS — si le block a d autres pools sur la MEME paire que son
