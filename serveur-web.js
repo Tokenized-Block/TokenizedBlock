@@ -5476,6 +5476,8 @@ const SERVIS = [
   'interactions-cerveaux.js',
   /* ⛔ 2026-10-26 : « what its brain sees » (pur, lecture seule) — importe par `app.html`. */
   'vision-cerveau.js',
+  /* ⛔ 2026-10-26 : le panneau Live (plusieurs vues Inside en direct ; pur, lecture seule) — importe par `app.html`. */
+  'vision-live.js',
   /* ⛔ `route-multi-factory.js` refuse une route a cheval sur deux factories — le cas ou CHAQUE
    *   jambe existe et ou l appel reverte quand meme (OUSD : 10 M$ au pair sur Uniswap V4, 0 pool
    *   Aerodrome CL). Servi AVANT d etre importe, comme `cobalt.js` : un module servi et pas encore

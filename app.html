@@ -1136,41 +1136,85 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 .bvEdits input{width:100%;min-width:0}
 .bvDeux{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
 .bvDeux canvas{width:100%;height:auto;display:block}
-#bvChamp .bvTx{fill:var(--doux);font-size:9px}
-#bvChamp .bvN{fill:var(--ligne)}
-#bvChamp .bvN.bvCapteur{fill:var(--contour);stroke:var(--accent);stroke-width:.8}
-#bvChamp .bvN.on{fill:var(--accent2)}
+:is(#bvChamp,.blvSvg) .bvTx{fill:var(--doux);font-size:9px}
+:is(#bvChamp,.blvSvg) .bvN{fill:var(--ligne)}
+:is(#bvChamp,.blvSvg) .bvN.bvCapteur{fill:var(--contour);stroke:var(--accent);stroke-width:.8}
+:is(#bvChamp,.blvSvg) .bvN.on{fill:var(--accent2)}
 #bvChamp .bvBarre{fill:var(--accent)}
 #bvChamp .bvSeuil{stroke:var(--doux);stroke-dasharray:2 2;stroke-width:1}
 #bvChamp .bvVoisinTrait{stroke:var(--doux);stroke-dasharray:3 3;stroke-width:.8;opacity:.6}
 #bvChamp .bvVoisin{fill:var(--doux)}
 #bvChamp .bvFleche{stroke:var(--doux);stroke-width:3;stroke-linecap:round}
-#bvChamp .bvHumeur{fill:var(--texte);font-size:12px;font-weight:700}
-#bvChamp .bvVif{fill:var(--vif);stroke:var(--vif)} #bvChamp .bvDur{fill:var(--dur);stroke:var(--dur)}
-#bvChamp .bvCalme{fill:var(--accent);stroke:var(--accent)} #bvChamp .bvTiede{fill:var(--tiede);stroke:var(--tiede)}
-#bvChamp text.bvVif,#bvChamp text.bvDur,#bvChamp text.bvCalme,#bvChamp text.bvTiede{stroke:none}
+:is(#bvChamp,.blvSvg) .bvHumeur{fill:var(--texte);font-size:12px;font-weight:700}
+:is(#bvChamp,.blvSvg) .bvVif{fill:var(--vif);stroke:var(--vif)} :is(#bvChamp,.blvSvg) .bvDur{fill:var(--dur);stroke:var(--dur)}
+:is(#bvChamp,.blvSvg) .bvCalme{fill:var(--accent);stroke:var(--accent)} :is(#bvChamp,.blvSvg) .bvTiede{fill:var(--tiede);stroke:var(--tiede)}
+:is(#bvChamp,.blvSvg) text.bvVif,:is(#bvChamp,.blvSvg) text.bvDur,:is(#bvChamp,.blvSvg) text.bvCalme,:is(#bvChamp,.blvSvg) text.bvTiede{stroke:none}
 /* INSIDE — memes jetons de couleur, donc clair / sombre suivent le coloris */
 .bvVues,.bvParle{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .bvVues .bouton[aria-pressed=true],.bvParle .bouton[aria-pressed=true]{border-color:var(--accent);color:var(--accent2)}
-#bvChamp .bviCiel{fill:var(--accent);stroke:none;opacity:.10}
-#bvChamp .bviCiel.bvVif{fill:var(--vif)} #bvChamp .bviCiel.bvDur{fill:var(--dur)} #bvChamp .bviCiel.bvTiede{fill:var(--tiede)}
-#bvChamp .bviHorizon{stroke:var(--ligne);stroke-width:1}
-#bvChamp .bviGrille,#bvChamp .bviAnneau{stroke:var(--ligne);stroke-width:.7;fill:none}
-#bvChamp .bviSol{transform-box:view-box;transform-origin:180px 300px}
-#bvChamp .bviSrc{fill:var(--accent2);stroke:var(--accent);stroke-width:1}
-#bvChamp .bviSrc.bviAbsent{fill:none;stroke:var(--doux);stroke-dasharray:2 2;opacity:.6}
-#bvChamp .bviTxAbsent{fill:var(--doux);font-style:italic;opacity:.75}
-#bvChamp .bviSignal{stroke:var(--accent);opacity:.55;stroke-linecap:round}
-#bvChamp .bviOnde{fill:var(--accent2)}
-#bvChamp .bviVoisin{fill:none;stroke:var(--doux);stroke-dasharray:2 2;opacity:.55}
-#bvChamp .bviVoisinTx{fill:var(--doux);opacity:.6;font-size:8px}
-#bvChamp .bviMoi{fill:var(--texte)}
-#bvChamp .bvN.bviAtteint{stroke:var(--accent);stroke-width:.9}
-#bvChamp .bvN.bviPlus{stroke:var(--vif);stroke-width:1.6} #bvChamp .bvN.bviMoins{stroke:var(--dur);stroke-width:1.6}
+:is(#bvChamp,.blvSvg) .bviCiel{fill:var(--accent);stroke:none;opacity:.10}
+:is(#bvChamp,.blvSvg) .bviCiel.bvVif{fill:var(--vif)} :is(#bvChamp,.blvSvg) .bviCiel.bvDur{fill:var(--dur)} :is(#bvChamp,.blvSvg) .bviCiel.bvTiede{fill:var(--tiede)}
+:is(#bvChamp,.blvSvg) .bviHorizon{stroke:var(--ligne);stroke-width:1}
+:is(#bvChamp,.blvSvg) .bviGrille,:is(#bvChamp,.blvSvg) .bviAnneau{stroke:var(--ligne);stroke-width:.7;fill:none}
+:is(#bvChamp,.blvSvg) .bviSol{transform-box:view-box;transform-origin:180px 300px}
+:is(#bvChamp,.blvSvg) .bviSrc{fill:var(--accent2);stroke:var(--accent);stroke-width:1}
+:is(#bvChamp,.blvSvg) .bviSrc.bviAbsent{fill:none;stroke:var(--doux);stroke-dasharray:2 2;opacity:.6}
+:is(#bvChamp,.blvSvg) .bviTxAbsent{fill:var(--doux);font-style:italic;opacity:.75}
+:is(#bvChamp,.blvSvg) .bviSignal{stroke:var(--accent);opacity:.55;stroke-linecap:round}
+:is(#bvChamp,.blvSvg) .bviOnde{fill:var(--accent2)}
+:is(#bvChamp,.blvSvg) .bviVoisin{fill:none;stroke:var(--doux);stroke-dasharray:2 2;opacity:.55}
+:is(#bvChamp,.blvSvg) .bviVoisinTx{fill:var(--doux);opacity:.6;font-size:8px}
+:is(#bvChamp,.blvSvg) .bviMoi{fill:var(--texte)}
+:is(#bvChamp,.blvSvg) .bvN.bviAtteint{stroke:var(--accent);stroke-width:.9}
+:is(#bvChamp,.blvSvg) .bvN.bviPlus{stroke:var(--vif);stroke-width:1.6} :is(#bvChamp,.blvSvg) .bvN.bviMoins{stroke:var(--dur);stroke-width:1.6}
 @media (prefers-reduced-motion:no-preference){
   #bvChamp .bviGlisse{animation:bviTourne .45s ease-out both}
   #bvChamp .bviOnde{animation:bviArrive .55s ease-in both}
+  .blvSvg .bviGlisse{animation:bviTourne .45s ease-out both}
+  .blvSvg .bviOnde{animation:bviArrive .55s ease-in both}
 }
+/* 2026-10-26 — LIVE : un second panneau, docke a GAUCHE (le control panel est a droite) ; telephone = une feuille en bas, repliable.
+ *   ⛔ jamais de defilement horizontal : tout est en largeurs bornees, min-width:0, et les tuiles se rangent en grille fluide. */
+.bLive{right:auto;left:12px;top:64px}
+#v-map.on .bLive{position:fixed;left:12px;right:auto;top:calc(var(--mapHaut,64px) + 66px);z-index:20}
+.bLive .blvPoint{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--vif);margin-right:6px;vertical-align:1px}
+.blvPop{position:fixed;z-index:71;left:12px;top:calc(var(--mapHaut,64px) + 62px);bottom:calc(var(--bcNav,66px) + 12px);
+  width:var(--blvW,min(400px,calc(100% - 24px)));box-sizing:border-box;display:flex;flex-direction:column;min-width:0;
+  background:rgb(var(--fondRgb));color:var(--texte);border:1px solid var(--ligne);border-radius:16px;
+  box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18);overflow:hidden}
+.blvPop[hidden]{display:none}
+.blvTete{display:flex;align-items:center;gap:8px;padding:10px 12px 6px;min-width:0}
+.blvTete h3{margin:0;font-size:14px;flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.blvTete .bouton{flex:0 0 auto;width:auto;padding:6px 12px;min-height:0}
+.blvCorps{flex:1 1 auto;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding:0 12px 12px;min-width:0}
+.blvCherche{position:relative;display:flex;gap:6px;min-width:0}
+.blvCherche input{flex:1 1 auto;min-width:0;background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);color:var(--texte);font:inherit;padding:8px 10px}
+.blvRes{margin:6px 0 0}
+.blvNote{font-size:12px;color:var(--doux);margin:6px 0}
+.blvNote:empty{display:none}
+.blvTuiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:8px;min-width:0}
+.blvTuile{border:1px solid var(--ligne);border-radius:12px;background:var(--creux);padding:6px;min-width:0;display:flex;flex-direction:column;gap:4px}
+.blvTuileTete{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px}
+.blvTuileTete b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.blvTuileTete span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--doux)}
+.blvTuileTete span.bvVif{color:var(--vif)} .blvTuileTete span.bvDur{color:var(--dur)} .blvTuileTete span.bvCalme{color:var(--accent2)} .blvTuileTete span.bvTiede{color:var(--tiede)}
+.blvRetirer{flex:0 0 auto;appearance:none;border:1px solid var(--ligne);background:transparent;color:var(--doux);font:inherit;font-size:13px;line-height:1;
+  width:26px;height:26px;border-radius:50%;cursor:pointer;padding:0}
+.blvRetirer:hover,.blvRetirer:focus-visible{color:var(--texte);border-color:var(--accent)}
+.blvSvg{display:block;width:100%;height:auto;background:var(--fond2);border-radius:8px}
+.blvPied{font-size:11px;color:var(--doux);overflow-wrap:anywhere;min-width:0}
+.blvPoignee{position:absolute;z-index:3;touch-action:none;user-select:none;-webkit-user-select:none;background:transparent;outline:none}
+.blvPoignee::after{content:'';position:absolute;border-radius:99px;background:var(--accent);opacity:0;transition:opacity .15s}
+.blvPoignee:hover::after,.blvPoignee:focus-visible::after,.blvPoignee.tire::after{opacity:.8}
+@media (min-width:761px){.blvPoignee{right:-8px;top:18px;bottom:18px;width:16px;cursor:ew-resize}.blvPoignee::after{top:0;bottom:0;left:6px;width:3px}}
+@media (max-width:760px){
+  .blvPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:var(--blvH,46dvh)}
+  .blvPop.blvReduit{height:auto}
+  .blvPop.blvReduit .blvCorps,.blvPop.blvReduit .blvPoignee{display:none}
+  .blvPoignee{top:-8px;left:18px;right:18px;height:16px;cursor:ns-resize}.blvPoignee::after{left:0;right:0;top:6px;height:3px}
+}
+@media (min-width:761px){.blvPop .blvReplier{display:none}}
+@media (prefers-reduced-motion:reduce){.blvPoignee::after{transition:none}}
 @keyframes bviTourne{from{transform:rotate(var(--de))}to{transform:rotate(var(--a))}}
 @keyframes bviArrive{from{transform:translate(0,0);opacity:1}to{transform:translate(var(--dx),var(--dy));opacity:.2}}
 .pBadge{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);
@@ -1822,6 +1866,8 @@ details[open] > summary::before{transform:rotate(90deg)}
                vide #map) ; un defi dont le createur a un block a l ecran est pose SUR ce block (peindreDuelsMap) -->
           <div class="mapDuels" id="mapDuels"></div>
           <button class="bMasquer" id="bMasquer" aria-expanded="false" aria-controls="cote">Info</button>
+          <!-- 2026-10-26 (proprietaire) : « Live » — un second panneau, a GAUCHE, la vue Inside en direct du block vise, et d autres a cote -->
+          <button type="button" class="bMasquer bLive" id="bLiveMap" aria-expanded="false" aria-controls="blvPop"><span class="blvPoint" aria-hidden="true"></span>Live</button>
           <!-- Phil 2026-10-18 : le journal du jour (/api/jeu/journal). Bouton cache tant qu il n y a rien ; liste fermee par defaut. -->
           <button type="button" class="bMasquer bJournal" id="bJourMap" aria-expanded="false" aria-controls="journalMap" hidden>Today</button>
           <div class="journalMap" id="journalMap" hidden><ol class="journalListe" id="journalMapListe"></ol></div>
@@ -4453,6 +4499,26 @@ details[open] > summary::before{transform:rotate(90deg)}
     <p class="note mono" id="bvEmpreinte"></p>
   </details>
 </dialog>
+<!-- ══ LIVE (2026-10-26, proprietaire) — un SECOND panneau, docke a GAUCHE, non modal : la vue Inside EN DIRECT de plusieurs blocks a la
+     fois (4 sur grand ecran, 2 sur telephone). Chaque tuile ne peint que les battements que la page a deja executes pour SON adresse
+     (vision-live.js) avec le meme renderer que le dialogue ci-dessus. ⛔ Aucun nouvel appel reseau hors de la recherche (/api/recherche). -->
+<aside class="blvPop" id="blvPop" aria-label="Live brains" hidden>
+  <div class="blvPoignee" id="blvPoignee" role="separator" tabindex="0" aria-label="Resize the Live panel" aria-orientation="vertical"></div>
+  <div class="blvTete">
+    <h3 id="blvTitre">Live — inside their brains</h3>
+    <button type="button" class="bouton sec blvReplier" id="blvReplier" aria-expanded="true" aria-controls="blvCorps">Hide</button>
+    <button type="button" class="bouton sec" id="blvFermer" aria-label="Close Live">Close</button>
+  </div>
+  <div class="blvCorps" id="blvCorps">
+    <div class="blvCherche">
+      <input id="blvChamp" type="search" placeholder="Add a block — name or address" autocomplete="off" spellcheck="false" aria-label="Add a block to Live">
+    </div>
+    <div id="blvRes" class="rbListe blvRes" hidden aria-live="polite"></div>
+    <p class="blvNote" id="blvNote" aria-live="polite"></p>
+    <div class="blvTuiles" id="blvTuiles"></div>
+    <p class="blvNote">Each view is the block itself, looking out: lit dots are its neurons that fired on that beat, lines are inputs that reached its 16 sensors, the ground turns as its wings steered it. Only beats this page really ran are shown.</p>
+  </div>
+</aside>
 <dialog class="palette" id="palette" aria-label="Commands">
   <div class="palIn">
     <div class="palChamp">
@@ -4738,6 +4804,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  *   se voit pas a la lecture — il se voit a l ecran, trop tard. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION } from './vision-cerveau.js';
+import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
 const CLE_MEMOIRE = 'tblock.memoire.';
@@ -9520,6 +9587,9 @@ function battre() {
   battreProfil();
   battreBrain();
   parlerCerveaux();
+  /* 2026-10-26 (Live) : les tuiles prennent les battements qui VIENNENT d etre executes ci-dessus — aucun cerveau de plus, aucun reseau.
+   *   ⛔ try : `live` est declare plus bas dans ce module ; un battement qui partirait avant sa declaration ne doit pas arreter les autres. */
+  try { battreLive(); } catch (e) { if (!(e instanceof ReferenceError)) console.warn('[live]', e && e.message); }
   /* le front des achats / ventes : ce battement devient le « precedent » du suivant, pour TOUS les cerveaux a la fois */
   for (const h of habitants) h.echAvant = { a: h.achatsVus || 0, v: h.ventesVus || 0 };
 }
@@ -25786,18 +25856,19 @@ function peindreChampVision(c, vuAnime) {
   }
 }
 /* INSIDE : le cadre vient de vision-cerveau.js#cadreInterieur (pur, deterministe) ; ici on ne fait que le dessiner. */
-function peindreInterieur(k) {
-  const svg = $('#bvChamp');
+/* 2026-10-26 (Live) : le MEME dessin sert aux tuiles du panneau Live — `svg` est la cible, `parle` l echange « Talk to it » (le
+ *   dialogue seulement ; une tuile passe null), `clipId` un identifiant propre a chaque SVG (deux clipPath au meme id se melangent). */
+function peindreInterieur(k, svg = $('#bvChamp'), parle = vision.parle, clipId = 'bviSolClip') {
   if (!svg || !k) return;
   svg.replaceChildren();
   const P = PHASE_CLASSE[k.phase] || '';
   svg.append(bvSvg('rect', { x: 0, y: 0, width: 360, height: k.horizon, class: 'bviCiel ' + P }));
   const defs = bvSvg('defs');
-  const cp = bvSvg('clipPath', { id: 'bviSolClip' });
+  const cp = bvSvg('clipPath', { id: clipId });
   cp.append(bvSvg('rect', { x: 0, y: k.horizon, width: 360, height: 310 - k.horizon }));
   defs.append(cp); svg.append(defs);
   /* la map sous lui : elle tourne a l oppose de son cap enregistre, et ses anneaux viennent vers lui avec sa vitesse */
-  const solClip = bvSvg('g', { 'clip-path': 'url(#bviSolClip)' });
+  const solClip = bvSvg('g', { 'clip-path': 'url(#' + clipId + ')' });
   const sol = k.anime ? bvSvg('g', { class: 'bviSol bviGlisse', style: '--de:' + k.sol.rotationAvant + 'deg;--a:' + k.sol.rotation + 'deg' })
     : bvSvg('g', { class: 'bviSol', transform: 'rotate(' + k.sol.rotation + ' 180 300)' });
   for (let a = 0; a < 360; a += 30) {
@@ -25835,7 +25906,7 @@ function peindreInterieur(k) {
     svg.append(g);
   }
   /* « Talk to it » : on marque les neurones existants — aucun neurone n est ajoute */
-  const p = vision.parle && vision.parle.adr === k.adr ? vision.parle.r : null;
+  const p = parle && parle.adr === k.adr ? parle.r : null;
   const atteints = new Set(p && p.cablage ? p.cablage.cibles.map((x) => x.vers) : []);
   const plus = new Set(p ? [...p.arrivee.allumes, ...p.suivant.allumes] : []);
   const moins = new Set(p ? [...p.arrivee.eteints, ...p.suivant.eteints] : []);
@@ -26122,6 +26193,199 @@ function dessinerRasterSur(c, histoTout) {
   ctx.globalAlpha = 1;
   ctx.shadowBlur = 0;
 }
+
+/* ══ LIVE (2026-10-26, proprietaire : « un bouton Live plus simple, un second panneau a gauche, la vue Inside en direct ; une
+ *   recherche pour ajouter d autres blocks, plusieurs vues a la fois pour suivre tout un trajet ») ══════════════════════════════════
+ * ⛔⛔ AUCUN CERVEAU DE PLUS, AUCUN RESEAU DE PLUS : chaque tuile prend, a chaque battement de la page (`battre`), le `vu` et les faits
+ *     que la page VIENT d executer pour SON adresse — la map (h.vu / h.faitsVus), Brain (brainHisto / brainFaitsVus) ou le profil
+ *     (profilCerveau). Un block qui ne bat nulle part sur cette page le dit, au lieu d une vue inventee. La seule requete est la
+ *     recherche (/api/recherche, brancherRechercheB20, la meme que Map Find).
+ * ⛔ LE DESSIN EST CELUI DU DIALOGUE : vision-live.js#cadreTuile appelle champ() + cadreInterieur(), et peindreInterieur() dessine. */
+const live = creerLive();
+const liveMesures = new Map(); /* adresse -> { n, total, max, dernier } : le temps de rendu de chaque tuile, en ms */
+const liveEtroit = () => { try { return window.matchMedia('(max-width:760px)').matches; } catch (_) { return false; } };
+const liveOuvert = () => { const p = $('#blvPop'); return !!(p && !p.hidden); };
+/** la source de battements d UNE adresse, ou null. `deja` = la source a laquelle la tuile est attachee (on n en change pas). */
+function liveSourceDe(adr, deja) {
+  const bas = (x) => String(x || '').toLowerCase();
+  const h = habitants.find((x) => bas(x.adr) === adr) || null;
+  const nlH = !!(h && h.nourriture && h.nourriture.etat === 'LUE');
+  const carte = () => (h && h.cerveau && h.vu ? { source: 'carte', vu: h.vu, faits: h.faitsVus || null, nourritureLue: nlH, h } : null);
+  const brain = () => (brainAdr && bas(brainAdr) === adr && brainHisto.length
+    ? { source: 'brain', vu: brainHisto[brainHisto.length - 1], faits: brainFaitsVus && brainFaitsVus.adr === adr ? brainFaitsVus.faits : null,
+      nourritureLue: brainFaitsVus && brainFaitsVus.adr === adr ? brainFaitsVus.nourritureLue : null, h } : null);
+  const profil = () => (profilCerveau && bas(profilCerveau.adr) === adr && profilCerveau.vu
+    ? { source: 'profil', vu: profilCerveau.vu, faits: profilCerveau.faits || null, nourritureLue: nlH, h } : null);
+  if (deja === 'carte') return carte();
+  if (deja === 'brain') return brain();
+  if (deja === 'profil') return profil();
+  return carte() || brain() || profil();
+}
+function liveTuileEl(adr) { return $('#blvTuiles').querySelector('[data-live="' + adr + '"]'); }
+function peindreTuileLive(t) {
+  let el = liveTuileEl(t.adr);
+  if (!el) {
+    el = document.createElement('div');
+    el.className = 'blvTuile'; el.dataset.live = t.adr;
+    const tete = document.createElement('div'); tete.className = 'blvTuileTete';
+    const b = document.createElement('b'); b.dataset.liveSym = '';
+    const s = document.createElement('span'); s.dataset.liveHumeur = '';
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'blvRetirer'; x.textContent = '×'; x.dataset.liveRetirer = t.adr;
+    tete.append(b, s, x);
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 360 310'); svg.setAttribute('class', 'blvSvg'); svg.setAttribute('role', 'img');
+    const pied = document.createElement('p'); pied.className = 'blvPied'; pied.dataset.livePied = '';
+    el.append(tete, svg, pied);
+    $('#blvTuiles').append(el);
+  }
+  const e = etiquetteTuile(t);
+  const nom = e.sym || bvCourt(t.adr);
+  el.querySelector('[data-live-sym]').textContent = nom;
+  el.querySelector('[data-live-sym]').title = t.adr;
+  const hu = el.querySelector('[data-live-humeur]');
+  hu.textContent = e.humeur; hu.className = PHASE_CLASSE[e.phase] || '';
+  el.querySelector('[data-live-retirer]').setAttribute('aria-label', 'Remove ' + nom + ' from Live');
+  const svg = el.querySelector('svg');
+  svg.setAttribute('aria-label', 'Inside ' + nom + '\'s brain, live: ' + e.humeur);
+  const pied = el.querySelector('[data-live-pied]');
+  if (!t.histo.length) {
+    svg.replaceChildren();
+    pied.textContent = 'Its brain is not beating on this page yet: it beats on the map, in its Brain tab, or in its open profile. Nothing is shown until it does.';
+    return;
+  }
+  const h = t.h;
+  const capMap = h && Number.isFinite(h.vx) && Number.isFinite(h.vy) && (h.vx !== 0 || h.vy !== 0) ? Math.atan2(h.vy, h.vx) : null;
+  const t0 = performance.now();
+  const r = cadreTuile(t, { voisins: voisinsVision(h), marche: marcheParAdr.get(t.adr) || null, echange: h ? h.dernierEchange || null : null,
+    capMap, reduit: bvReduit() });
+  if (r && r.k) peindreInterieur(r.k, svg, null, 'blvClip' + t.adr);
+  const ms = Math.round((performance.now() - t0) * 100) / 100;
+  const m = liveMesures.get(t.adr) || { n: 0, total: 0, max: 0, dernier: 0 };
+  m.n++; m.total += ms; m.max = Math.max(m.max, ms); m.dernier = ms; liveMesures.set(t.adr, m);
+  pied.textContent = 'beat ' + e.tick + ' · ' + e.spikes + ' fired · ' + t.histo.length + ' beats kept · from ' + e.sourceTexte;
+  el.dataset.liveTick = String(e.tick);
+  el.dataset.liveEmpreinte = r && r.k ? r.k.empreinte : '';
+}
+function battreLive() {
+  if (!live.tuiles.length || !liveOuvert()) return;
+  const pris = nourrirLive(live, liveSourceDe);
+  for (const adr of pris) { const t = live.tuiles.find((x) => x.adr === adr); if (t) peindreTuileLive(t); }
+  window.__TB_LIVE_MS__ = Object.fromEntries([...liveMesures].map(([a, m]) => [a, { n: m.n, moyenne: Math.round((m.total / m.n) * 100) / 100, max: m.max, dernier: m.dernier }]));
+}
+function noteLive(texte) { $('#blvNote').textContent = texte || ''; }
+function ajouterLive(adr, sym) {
+  const a = String(adr || '').toLowerCase();
+  const hab = habitants.find((x) => String(x.adr).toLowerCase() === a);
+  const mk = marcheParAdr.get(a);
+  const r = ajouterTuile(live, { adr: a, sym: sym || (hab && hab.sym) || (mk && mk.sym) || null }, { etroit: liveEtroit() });
+  if (!r.ok) { noteLive(r.pourquoi); return false; }
+  noteLive('');
+  nourrirLive({ tuiles: [r.tuile] }, liveSourceDe);
+  peindreTuileLive(r.tuile);
+  return true;
+}
+function retirerLive(adr) {
+  if (!retirerTuile(live, adr)) return;
+  const el = liveTuileEl(String(adr).toLowerCase()); if (el) el.remove();
+  liveMesures.delete(String(adr).toLowerCase());
+  noteLive(live.tuiles.length ? '' : 'Pick a block on the map, or add one above.');
+}
+/* le block VISE : celui choisi sur la map (sa fiche est ouverte), sinon celui de Brain ; aucun autre n est devine */
+function liveCibleActuelle() {
+  const h = habitants.find((x) => x.el && x.el.classList && x.el.classList.contains('actif'));
+  if (h) return { adr: h.adr, sym: h.sym || null };
+  if (brainAdr) return { adr: brainAdr, sym: null };
+  return null;
+}
+/* ══ la taille, par visiteur (localStorage sous try/catch : illisible ou bloque = la taille d origine) ══ */
+const liveAxe = () => (liveEtroit() ? 'h' : 'w');
+const liveNav = () => { const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bcNav')); return Number.isFinite(v) ? v : 66; };
+function liveLireTailles() { let s = null; try { s = localStorage.getItem(CLE_TAILLE_LIVE); } catch (_) { s = null; } return lireTailleLive(s, window.innerWidth, window.innerHeight, liveNav()); }
+function liveAppliquerTaille(axe, v, garder) {
+  const p = $('#blvPop'); if (!p) return null;
+  const b = bornerTailleLive(axe, v, window.innerWidth, window.innerHeight, liveNav());
+  const prop = axe === 'h' ? '--blvH' : '--blvW';
+  if (b === null) p.style.removeProperty(prop); else p.style.setProperty(prop, b + 'px');
+  if (garder) {
+    try {
+      /* ⛔ l AUTRE axe est garde tel qu ecrit, pas reborne a CET ecran : sinon une largeur de bureau (440) relue a 375 px
+       *   (bornee a 280) etait reecrite a 280 au premier geste sur telephone — mesure du 2026-10-26 */
+      const t = {}; const brut = lireTailleLive(localStorage.getItem(CLE_TAILLE_LIVE), 1e6, 1e6, 0);
+      for (const k of ['w', 'h']) if (brut[k] !== undefined) t[k] = brut[k];
+      if (b === null) delete t[axe]; else t[axe] = b;
+      localStorage.setItem(CLE_TAILLE_LIVE, JSON.stringify(t));
+    } catch (_) { /* la taille vaut pour cette visite */ }
+  }
+  return b;
+}
+function liveReposerTailles() { const t = liveLireTailles(); for (const axe of ['w', 'h']) liveAppliquerTaille(axe, t[axe] ?? null, false); }
+function ouvrirLive() {
+  const p = $('#blvPop'); if (!p) return;
+  liveReposerTailles();
+  p.hidden = false;
+  $('#bLiveMap').setAttribute('aria-expanded', 'true');
+  const c = liveCibleActuelle();
+  if (c && !live.tuiles.some((t) => t.adr === String(c.adr).toLowerCase())) ajouterLive(c.adr, c.sym);
+  else if (!live.tuiles.length) noteLive('Pick a block on the map, or add one above.');
+  for (const t of live.tuiles) peindreTuileLive(t);
+}
+function fermerLive() {
+  const p = $('#blvPop'); if (!p) return;
+  p.hidden = true;
+  $('#bLiveMap').setAttribute('aria-expanded', 'false');
+}
+(function brancherLive() {
+  const p = $('#blvPop'), g = $('#blvPoignee'); if (!p || !g) return;
+  $('#bLiveMap').addEventListener('click', () => { if (liveOuvert()) fermerLive(); else ouvrirLive(); });
+  $('#blvFermer').addEventListener('click', fermerLive);
+  $('#blvReplier').addEventListener('click', () => {
+    const r = p.classList.toggle('blvReduit');
+    $('#blvReplier').textContent = r ? 'Show' : 'Hide';
+    $('#blvReplier').setAttribute('aria-expanded', r ? 'false' : 'true');
+  });
+  $('#blvTuiles').addEventListener('click', (e) => { const b = e.target && e.target.closest && e.target.closest('[data-live-retirer]'); if (b) retirerLive(b.dataset.liveRetirer); });
+  /* ⛔ UNE ADRESSE ENTIERE COLLEE S AJOUTE SANS L INDEX (mesure du 2026-10-26, serveur frais : l adresse d un block POSE SUR LA MAP
+   *   rendait « No block matches » — l index n avait que 5 blocks). L adresse se prouve elle-meme ; la tuile ne montrera que les
+   *   battements que la page execute vraiment pour elle. Ecoute posee AVANT la recherche partagee, qui ne la voit donc pas. */
+  $('#blvChamp').addEventListener('keydown', (e) => {
+    const v = String($('#blvChamp').value || '').trim();
+    if (e.key !== 'Enter' || !/^0x[0-9a-fA-F]{40}$/.test(v)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (ajouterLive(v, null)) { $('#blvChamp').value = ''; $('#blvRes').hidden = true; $('#blvRes').textContent = ''; }
+  });
+  brancherRechercheB20({ champ: $('#blvChamp'), liste: $('#blvRes'), auChoix: (adr, sym) => {
+    if (ajouterLive(adr, sym)) { $('#blvChamp').value = ''; $('#blvRes').hidden = true; $('#blvRes').textContent = ''; }
+  } });
+  window.addEventListener('resize', () => { if (liveOuvert()) liveReposerTailles(); });
+  /* la poignee : grand ecran = son bord DROIT (tirer a droite = plus large) ; telephone = son bord HAUT (tirer vers le haut = plus haut) */
+  let depart = null;
+  g.addEventListener('pointerdown', (e) => {
+    if (e.button !== undefined && e.button !== 0) return;
+    const axe = liveAxe();
+    depart = { axe, x: e.clientX, y: e.clientY, taille: axe === 'h' ? p.offsetHeight : p.offsetWidth, bouge: false };
+    try { g.setPointerCapture(e.pointerId); } catch (_) {}
+    g.classList.add('tire'); e.preventDefault();
+  });
+  g.addEventListener('pointermove', (e) => {
+    if (!depart) return;
+    const delta = depart.axe === 'h' ? depart.y - e.clientY : e.clientX - depart.x;
+    if (Math.abs(delta) > 4) depart.bouge = true;
+    if (depart.bouge) liveAppliquerTaille(depart.axe, depart.taille + delta, false);
+  });
+  const lacher = () => {
+    if (!depart) return;
+    const { axe, bouge } = depart; depart = null; g.classList.remove('tire');
+    if (bouge) liveAppliquerTaille(axe, axe === 'h' ? p.offsetHeight : p.offsetWidth, true);
+  };
+  g.addEventListener('pointerup', lacher);
+  g.addEventListener('pointercancel', lacher);
+  g.addEventListener('keydown', (e) => {
+    const axe = liveAxe(), reel = axe === 'h' ? p.offsetHeight : p.offsetWidth;
+    const pas = { ArrowUp: axe === 'h' ? 40 : 0, ArrowDown: axe === 'h' ? -40 : 0, ArrowRight: axe === 'w' ? 40 : 0, ArrowLeft: axe === 'w' ? -40 : 0 }[e.key];
+    if (pas) { e.preventDefault(); liveAppliquerTaille(axe, reel + pas, true); }
+    else if (e.key === 'Home') { e.preventDefault(); liveAppliquerTaille(axe, null, true); }
+  });
+})();
 
 /**
  * Le cablage, redessine A CHAQUE BATTEMENT.
