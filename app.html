@@ -4917,7 +4917,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
 import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
-  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene } from './vision-inside.js';
+  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
 import { fieldText as inspectFieldText } from './inspect-block.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
@@ -26252,6 +26252,18 @@ function bvPanControl(dx, dy) {
   vision.control = { ...vision.control, cam: panCam(vision.control.cam, dx, dy) };
   peindreVision();
 }
+/* game57 #4c (b): at most 6 labels in the space view; a label = its real text, measured, in screen space */
+const BV_LABELS_MAX = 6;
+function bvLabelItem(list, ctx, id, lines, cx, top, near, read) {
+  ctx.font = '10px system-ui';
+  const w = Math.max(...lines.map((l) => ctx.measureText(l).width)) + 6, h = lines.length * 12 + 2;
+  list.push({ id, lines, cx, read, near, box: { x: cx - w / 2, y: top, w, h } });
+}
+/* what must be labelled first: the hovered object, the pinned one, the one the camera looks at */
+function bvLabelFocus(points, L, H) {
+  const aimed = aimedAt(points, L, H);
+  return [vision.hover, vision.pinned, aimed ? aimed.id : null].filter(Boolean);
+}
 function bvPaint3D(t) {
   const cv = $('#bv3d'); if (!cv) return;
   const ctx = cv.getContext('2d'), L = cv.width, H = cv.height;
@@ -26300,7 +26312,7 @@ function bvPaint3D(t) {
    *   no neuron reads them); the neurons are painted right after */
   const scene = spaceScene({ inputs: vision.c ? vision.c.entrees.map((e) => ({ key: e.cle, label: e.libelle, read: e.lu, text: e.texte })) : [],
     neighbours: outsideNeighbours(vision.targetH, habitants, new Set()) });
-  const aimPoints = [];
+  const aimPoints = [], labelItems = [];
   for (const o of scene) {
     if (o.kind === 'neighbour') {
       const a = 0.16, sides = [-a, a], corners = []; for (const x of sides) for (const y of sides) for (const z of sides) corners.push([o.x + x, o.y + y, o.z + z]);
@@ -26312,26 +26324,25 @@ function bvPaint3D(t) {
       }
       const [c0] = proj([[o.x, o.y, o.z]]); if (!c0) continue;
       aimPoints.push({ x: c0.x, y: c0.y, id: 'neighbour:' + o.adr, obj: o });
-      ctx.fillStyle = 'rgb(200 210 230 / .6)'; ctx.font = '11px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(String(o.sym || bvCourt(o.adr)).slice(0, 10) + ' · not read', c0.x, c0.y + 14 + 16 * c0.k);
+      bvLabelItem(labelItems, ctx, 'neighbour:' + o.adr, [String(o.sym || bvCourt(o.adr)).slice(0, 10) + ' · not read'], c0.x, c0.y + 6 + 16 * c0.k, c0.k, false);
     } else if (o.kind === 'input') {
       const [q] = proj([[o.x, o.y, o.z]]); if (!q) continue;
       aimPoints.push({ x: q.x, y: q.y, id: 'input:' + o.key, obj: o });
       const r = Math.max(2.5, 5 * q.k);
       ctx.fillStyle = o.read ? 'hsl(' + (lum.neutral ? teinteH() : th) + ' 85% 70%)' : 'rgb(150 160 190 / .35)';
       ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = o.read ? 'rgb(235 238 255 / .9)' : 'rgb(170 178 200 / .7)'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
-      ctx.fillText(String(o.label).slice(0, 18), q.x, q.y - r - 4); ctx.fillText(String(o.text).slice(0, 22), q.x, q.y + r + 11);
+      bvLabelItem(labelItems, ctx, 'input:' + o.key, [String(o.label).slice(0, 18), String(o.text).slice(0, 22)], q.x, q.y - r - 28, q.k, o.read);
     }
   }
   /* the neurons: lit = vu.indices (or the snapshot); echoes = those of the 5 beats before, paler with age */
   const lit = new Set(vision.control ? vision.control.snap.indices : vu && Array.isArray(vu.indices) ? vu.indices : []);
-  const ages = new Map();
+  const ages = new Map(), labelNeurons = [];
   if (!vision.control) for (const e of echoesOf(vision.historyShown || [], vision.i)) for (const n of e.indices) if (!ages.has(n)) ages.set(n, e.age);
   for (const q of proj(pos)) {
     const on = lit.has(q.n), age = ages.get(q.n);
     /* game57 #4b (b): neurons readable among the stars; a neuron that fired glows, like a lit tile on the map */
     aimPoints.push({ x: q.x, y: q.y, id: 'neuron:' + q.n, obj: { kind: 'neuron', n: q.n } });
+    labelNeurons.push({ id: 'neuron:' + q.n, x: q.x, y: q.y, k: q.k });
     const r = Math.max(2, (q.n < CAPTEURS ? 4.6 : 3.3) * Math.min(q.k, 3));
     ctx.fillStyle = on ? 'hsl(' + (lum.neutral ? teinteH() : th) + ' 95% 75%)' : age ? 'rgb(220 225 255 / ' + (0.8 - age * 0.06).toFixed(2) + ')' : 'rgb(170 180 210 / .45)';
     if (on) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10; }
@@ -26340,6 +26351,13 @@ function bvPaint3D(t) {
   }
   /* game57 #4b (d): the centre ring = what the camera looks at; its overlay says what it really is */
   vision.aimPoints = aimPoints;
+  /* game57 #4c (b): labels only for the hovered / pinned / aimed object and the nearest few, never on top of each other */
+  const focusIds = bvLabelFocus(aimPoints, L, H);
+  for (const q of labelNeurons) if (focusIds.includes(q.id)) bvLabelItem(labelItems, ctx, q.id, [q.id.replace('neuron:', 'Neuron #')], q.x, q.y - 22, q.k, true);
+  for (const it of placeLabels(labelItems, { max: BV_LABELS_MAX, focus: bvLabelFocus(aimPoints, L, H) })) {
+    ctx.fillStyle = it.read ? 'rgb(235 238 255 / .92)' : 'rgb(170 178 200 / .8)'; ctx.font = '10px system-ui'; ctx.textAlign = 'center';
+    it.lines.forEach((line, n) => ctx.fillText(line, it.cx, it.box.y + 10 + n * 12));
+  }
   ctx.strokeStyle = 'rgb(255 255 255 / .35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(L / 2, H / 2, 10, 0, Math.PI * 2); ctx.stroke();
   bvPaintAim(aimPoints, L, H);
   for (const pt of vision.particles) { const [q] = proj([pt.p]); if (q) { ctx.fillStyle = 'rgb(255 255 255 / .85)'; ctx.fillRect(q.x - 1.5, q.y - 1.5, 3, 3); } }
@@ -26643,6 +26661,9 @@ $('#bvBackToLive').addEventListener('click', bvBackToLive);
   cv.addEventListener('pointerdown', (e) => { if (!vision.control) return; prev = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
   cv.addEventListener('pointermove', (e) => { if (!prev) return; const dx = e.clientX - prev.x, dy = e.clientY - prev.y; if (prev.pan) bvPanControl(dx, dy); else bvControlGesture(dx, dy, 0); prev = { ...prev, x: e.clientX, y: e.clientY }; });
   cv.addEventListener('contextmenu', (e) => { if (vision.control) e.preventDefault(); });
+  /* game57 #4c (b): the object under the pointer is labelled (hover) */
+  cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * cv.width / r.width, y = (e.clientY - r.top) * cv.height / r.height; const hit = aimedAt((vision.aimPoints || []).map((p) => ({ ...p, x: p.x - x + cv.width / 2, y: p.y - y + cv.height / 2 })), cv.width, cv.height, 18); vision.hover = hit ? hit.id : null; });
+  cv.addEventListener('pointerleave', () => { vision.hover = null; });
   /* game57 #4b (d): click an object to pin its overlay; click empty space to release (no drag moved the camera) */
   cv.addEventListener('click', (e) => {
     const r = cv.getBoundingClientRect(), sx = cv.width / r.width, sy = cv.height / r.height;

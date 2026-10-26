@@ -210,3 +210,24 @@ export function outsideNeighbours(h, habitants, readSet = new Set(), n = 6) {
     return { adr, sym: o.sym || null, phase: o.phase || null, distance: Math.round(d), x: r3(dx * k), y: r3(dy * k), z: r3(dz * k), read: readSet instanceof Set && readSet.has(adr) };
   });
 }
+
+/* game57 #4c (b): DECLUTTERED LABELS for the space view. `items` = [{ id, near, box: { x, y, w, h } }] in screen space (bigger
+ * `near` = closer to the camera). The focus ids (hovered, pinned, aimed — in that order) come first and the first one is always
+ * placed; then the nearest. A label whose box overlaps one already placed is skipped; at most `max` are placed. Pure: the
+ * given items are returned as they are (no text is made up). */
+export function placeLabels(items, { max = 6, focus = [] } = {}) {
+  const list = Array.isArray(items) ? items.filter((it) => it && it.box && [it.box.x, it.box.y, it.box.w, it.box.h].every(Number.isFinite)) : [];
+  const byId = new Map(list.map((it) => [it.id, it]));
+  const first = [];
+  for (const id of Array.isArray(focus) ? focus : []) { const it = byId.get(id); if (it && !first.includes(it)) first.push(it); }
+  const rest = list.filter((it) => !first.includes(it)).map((it, i) => ({ it, i }))
+    .sort((a, b) => (Number(b.it.near) || 0) - (Number(a.it.near) || 0) || a.i - b.i).map((x) => x.it);
+  const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  const placed = [];
+  for (const it of [...first, ...rest]) {
+    if (placed.length >= Math.max(0, max)) break;
+    if (placed.some((p) => overlaps(p.box, it.box))) continue;
+    placed.push(it);
+  }
+  return placed;
+}

@@ -138,10 +138,11 @@ if (helpers.length === 4) {
     check(noLeak(f(A6)) && noLeak(f(L37)) && noLeak(f(A6.toUpperCase().replace('0X', '0x'))) && f(OTHER) === '0x123456…5678' && f(fp) === fp,
       'C4 app.html bvCourt (3D brain neighbour, fingerprints): « ' + f(A6) + ' », other = ' + f(OTHER) + ', short unchanged = ' + f(fp));
   }
-  /* game57 #4b reworded the canvas label (« … · not read »): every canvas fillText that writes an `.adr` goes through bvCourt / displayShort */
-  const canvasAdr = appLF.split('\n').filter((l) => /fillText\(/.test(l) && /\.adr\b/.test(l));
+  /* game57 #4b reworded the canvas label (« … · not read »); game57 #4c (b) builds canvas labels with bvLabelItem(...) and paints
+   * them later (placeLabels): every canvas fillText / bvLabelItem line that writes an `.adr` goes through bvCourt / displayShort */
+  const canvasAdr = appLF.split('\n').filter((l) => /fillText\(|bvLabelItem\(/.test(l) && /\.adr\b/.test(l));
   check(canvasAdr.length > 0 && canvasAdr.every((l) => /bvCourt\(\w+\.adr\)|displayShort\(/.test(l)) && !/fillText\([^\n]*\.slice\(-4\)/.test(appLF),
-    'C5 app.html: the ' + canvasAdr.length + ' canvas fillText line(s) writing an address go through bvCourt (masked), no fillText shortens an address by itself');
+    'C5 app.html: the ' + canvasAdr.length + ' canvas fillText / bvLabelItem line(s) writing an address go through bvCourt (masked), no fillText shortens an address by itself');
   const AP = await import('./apercu.js');
   const n = AP.nomDe(A6, { chaine: 8453 }), n2 = AP.nomDe(OTHER, { chaine: 8453 });
   check(noLeak(n) && /fee wallet/i.test(n) && n2 === '0x1234…5678', 'C2 apercu.js nomDe(fee wallet) = « ' + n + ' » (before signing: named, no address); other = ' + n2);
