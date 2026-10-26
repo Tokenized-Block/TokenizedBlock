@@ -13,7 +13,7 @@
  *     (keccak256 de l adresse), tick 0. Rien n est envoye, rien n est signe, aucun reseau : meme graine + memes faits = meme
  *     sortie, et l empreinte du rejeu le prouve a quiconque relance.
  * ⛔ PUR : aucun reseau, aucune horloge, aucun `Math.random`, aucun stockage, aucun DOM. */
-import { etatInitial, pas, forces, nomHumeur, empreinte, VERSION_CERVEAU, NEURONES, CAPTEURS } from './cerveau.js';
+import { etatInitial, pas, forces, nomHumeur, empreinte, connectome, VERSION_CERVEAU, NEURONES, CAPTEURS } from './cerveau.js';
 import { METIERS } from './metiers.js';
 
 export const VERSION_VISION = 'tblock-brain-vision/1';
@@ -220,4 +220,167 @@ export function simuler(adr, faits, edits = {}, n = BATTEMENTS_SIM, a = 1) {
     if (lu[i].phase !== si[i].phase || lu[i].indices.join(',') !== si[i].indices.join(',')) { premierEcart = i; break; }
   }
   return { n: N, a: A, lu: { pas: lu, ...resume(lu) }, siEtAlors: { pas: si, ...resume(si) }, refus: sans.refus, premierEcart, edits: sans.edits };
+}
+
+/* ══ « INSIDE » — LA VUE A LA PREMIERE PERSONNE (Phil, 2026-10-26 : « etre dans le brain ») ════════════════════════════════
+ * Le block regarde devant lui : en haut, les SOURCES de ses entrees (chaque fait arrive comme un signal depuis d ou il vient) ;
+ * devant lui, ses 16 capteurs ; autour de lui, ses 112 autres neurones ; sous lui, la map qui tourne et defile comme ses ailes
+ * le pilotent. Ses voisins sont sur la map, ATTENUES, et dits « not read by its neurons ».
+ * ⛔⛔ UN CADRE EST UNE FONCTION DE DONNEES TENUES, RIEN D AUTRE :
+ *     · une source n est « lue » que si `champ()` la dit lue — sinon elle est grise et ne porte AUCUN signal ;
+ *     · ce qu une source apporte = forces(faits) − forces(faits SANS elle) : le MEME cerveau.js, pas une copie de ses formules ;
+ *     · une impulsion « arrive » n existe que si le battement ENREGISTRE la porte (`vu.nouveaux[cle] > 0`) ;
+ *     · un neurone allume = un indice de `vu.indices` de ce battement, et seulement lui ;
+ *     · le virage et la vitesse du sol = la somme des `virage` / `vitesse` ENREGISTRES jusqu a ce battement.
+ * ⛔ DETERMINISTE : memes battements + memes faits = meme cadre = meme empreinte. Aucune horloge ; le mouvement (CSS) est un
+ *    habillage que `reduit` retire entierement (prefers-reduced-motion), le cadre reste le meme hors du drapeau `anime`. */
+export const VERSION_INTERIEUR = 'tblock-brain-inside/1';
+/** Les sources montrees devant lui, dans l ordre de gauche a droite. Chaque cle est une cle de ENTREES. */
+export const SOURCES_INTERIEUR = Object.freeze([
+  { cle: 'vie', court: 'Life' }, { cle: 'gm', court: 'Transfers' }, { cle: 'messages', court: 'Messages' },
+  { cle: 'detenteurs', court: 'Holders' }, { cle: 'achats', court: 'Buys' }, { cle: 'ventes', court: 'Sells' },
+  { cle: 'reveil', court: 'Wake-up' },
+]);
+/* ⛔ « sans elle » : le fait retire comme s il n avait jamais ete fourni — un compteur sans rien de nouveau, une vie absente */
+const SANS = {
+  vie: (f) => ({ ...f, vie: null, vieAvant: null }),
+  gm: (f) => ({ ...f, gm: 0, gmAvant: fini(f.gmAvant) ? 0 : f.gmAvant }),
+  messages: (f) => ({ ...f, messages: 0, messagesAvant: fini(f.messagesAvant) ? 0 : f.messagesAvant }),
+  detenteurs: (f) => ({ ...f, detenteurs: 0, detenteursAvant: fini(f.detenteursAvant) ? 0 : f.detenteursAvant }),
+  achats: (f) => ({ ...f, achats: fini(f.achatsAvant) ? f.achatsAvant : 0 }),
+  ventes: (f) => ({ ...f, ventes: fini(f.ventesAvant) ? f.ventesAvant : 0 }),
+  reveil: (f) => ({ ...f, reveil: false }),
+};
+const totalTermes = (faits) => { const { termes } = forces(faits); return termes === null ? null : TERMES.reduce((s, t) => s + termes[t.cle], 0); };
+/** Ce que la source `cle` ajoute a CHACUN des 16 capteurs : la difference des forces de cerveau.js avec et sans elle. */
+export function apportDe(faits, cle) {
+  if (!faits || typeof faits !== 'object' || !SANS[cle]) return null;
+  const avec = totalTermes(faits), sans = totalTermes(SANS[cle](faits));
+  if (avec === null || sans === null) return null;
+  return Math.round((avec - sans) * 1e4) / 1e4;
+}
+const W = 360, HORIZON = 82, OEIL = { x: 180, y: 300 };
+const rad = (x) => Math.round(x * 1e4) / 1e4;
+const angleNorm = (a) => { let x = a % (2 * Math.PI); if (x > Math.PI) x -= 2 * Math.PI; if (x <= -Math.PI) x += 2 * Math.PI; return x; };
+/** Le cap et la distance cumules depuis le premier battement enregistre (cap 0 = la ou il regardait alors). */
+function trajet(histo, i) {
+  let cap = 0, d = 0, capAvant = 0, dAvant = 0;
+  for (let k = 0; k <= i && k < histo.length; k++) {
+    const v = histo[k];
+    capAvant = cap; dAvant = d;
+    cap += (fini(v && v.virage) ? v.virage : 0) * 0.7;
+    d += fini(v && v.vitesse) ? v.vitesse : 0;
+  }
+  return { cap, capAvant, d, dAvant };
+}
+/**
+ * Le cadre « inside » du battement `i` de `histo`.
+ * @param {object} a
+ * @param {object} a.c        la sortie de `champ()` (entrees, sensations, contexte)
+ * @param {object} a.faits    les faits EXACTS du dernier battement (ceux de `champ`), ou null
+ * @param {Array}  a.histo    les sorties ENREGISTREES de `pas()` (le `vu` de chaque battement)
+ * @param {number} a.i        l indice du battement montre
+ * @param {number|null} [a.capMap] ou il regarde sur la map MAINTENANT (radians), pour placer ses voisins ; null = inconnu
+ * @param {boolean} [a.reduit] prefers-reduced-motion : aucun mouvement
+ */
+export function cadreInterieur({ c, faits = null, histo = [], i = -1, capMap = null, reduit = false } = {}) {
+  if (!c || typeof c !== 'object' || !Array.isArray(c.entrees)) return null;
+  const H = Array.isArray(histo) ? histo : [];
+  const vu = i >= 0 && i < H.length && H[i] && typeof H[i] === 'object' ? H[i] : null;
+  const anime = !reduit && !!vu;
+  const allumes = new Set(vu && Array.isArray(vu.indices) ? vu.indices.filter((n) => Number.isInteger(n) && n >= 0 && n < NEURONES) : []);
+  const mort = !!(c.sensations && c.sensations.morte);
+  /* les sources : uniquement ce que champ() a tenu */
+  const nSrc = SOURCES_INTERIEUR.length;
+  const sources = SOURCES_INTERIEUR.map((s, k) => {
+    const e = c.entrees.find((x) => x.cle === s.cle);
+    const lu = !!(e && e.lu);
+    const apport = lu && !mort ? apportDe(faits, s.cle) : null;
+    const nouveaux = vu && vu.nouveaux && typeof vu.nouveaux === 'object' ? vu.nouveaux : null;
+    const arrive = lu && !mort && s.cle !== 'vie' && s.cle !== 'reveil' && nouveaux && fini(nouveaux[s.cle]) && nouveaux[s.cle] > 0 ? nouveaux[s.cle] : 0;
+    const sens = s.cle === 'vie' && lu && vu && fini(vu.delta) ? (vu.delta > 0 ? 'rising' : vu.delta < 0 ? 'falling' : 'flat') : null;
+    const x = Math.round(28 + k * ((W - 56) / (nSrc - 1)));
+    return { cle: s.cle, court: s.court, libelle: e ? e.libelle : s.court, source: e ? e.source : null, lu,
+      texte: e ? (lu ? e.valeur : e.parDefaut ? 'not read yet' : 'not read') : 'not read',
+      apport, signal: lu && fini(apport) && apport !== 0, arrive, sens, x, y: 20 };
+  });
+  /* les 16 capteurs devant lui, en arc ; les 112 autres autour de lui, en deux rangs */
+  const capteurs = [];
+  for (let n = 0; n < CAPTEURS; n++) {
+    const u = (n / (CAPTEURS - 1)) * 2 - 1;
+    capteurs.push({ n, on: allumes.has(n), x: rad(180 + u * 104), y: rad(208 + 14 * u * u) });
+  }
+  const neurones = [];
+  const reste = NEURONES - CAPTEURS, parRang = Math.ceil(reste / 2);
+  for (let k = 0; k < reste; k++) {
+    const n = CAPTEURS + k, rang = k % 2, j = Math.floor(k / 2);
+    const phi = (Math.PI * 0.06) + (j / (parRang - 1)) * Math.PI * 0.88;
+    const rx = rang ? 150 : 170, ry = rang ? 70 : 88;
+    neurones.push({ n, on: allumes.has(n), x: rad(180 - Math.cos(phi) * rx), y: rad(214 + Math.sin(phi) * ry) });
+  }
+  /* le sol : il tourne a l oppose de son cap enregistre et defile avec sa vitesse enregistree */
+  const t = vu ? trajet(H, i) : { cap: 0, capAvant: 0, d: 0, dAvant: 0 };
+  const deg = (x) => Math.round((-x * 180) / Math.PI * 100) / 100;
+  const sol = { rotation: deg(t.cap), rotationAvant: deg(t.capAvant), decalage: Math.round((t.d * 40) % 40 * 100) / 100,
+    decalageAvant: Math.round((t.dAvant * 40) % 40 * 100) / 100 };
+  /* les voisins : sur la map, jamais dans le champ de ses neurones. ⛔ Sans cap connu, aucune direction n est inventee. */
+  const vs = Array.isArray(c.contexte && c.contexte.voisins) ? c.contexte.voisins : [];
+  const dMax = Math.max(1, ...vs.map((v) => (fini(v.distance) ? v.distance : 0)));
+  const DEMI = (50 * Math.PI) / 180;
+  const voisins = vs.map((v, k) => {
+    const base = { adr: v.adr, sym: v.sym, humeur: v.humeur, lu: false, note: 'not read by its neurons' };
+    if (!fini(capMap) || !fini(v.angle)) return { ...base, rel: null, ou: 'unknown', x: 14, y: rad(96 + k * 16) };
+    const rel = angleNorm(v.angle - capMap);
+    const prox = fini(v.distance) ? v.distance / dMax : 1;
+    if (Math.abs(rel) <= DEMI) {
+      return { ...base, rel: rad(rel), ou: 'ahead', x: rad(180 + (Math.tan(rel) / Math.tan(DEMI)) * 150), y: rad(HORIZON + 14 + (1 - prox) * 92) };
+    }
+    const ou = Math.abs(rel) > (2.4) ? 'behind' : rel > 0 ? 'right' : 'left';
+    return { ...base, rel: rad(rel), ou, x: ou === 'left' ? 14 : W - 14, y: rad(96 + k * 16) };
+  });
+  const cadre = {
+    version: VERSION_INTERIEUR, adr: c.adr, i, tick: vu ? vu.tick : null, phase: vu ? vu.phase : null,
+    humeur: vu ? humeurCourte(vu.phase) : null, spikes: vu ? vu.spikes : null, virage: vu ? vu.virage : null, vitesse: vu ? vu.vitesse : null,
+    mort, anime, horizon: HORIZON, oeil: OEIL, sources, capteurs, neurones, voisins, sol,
+    allumes: [...allumes].sort((a, b) => a - b),
+  };
+  /* ⛔ l empreinte ne porte pas `anime` : le mouvement est un habillage, le contenu est le meme avec ou sans */
+  const { anime: _a, ...contenu } = cadre;
+  cadre.empreinte = empreinte(JSON.stringify(contenu));
+  return cadre;
+}
+
+/* ══ « TALK TO IT » — LECTURE SEULE ════════════════════════════════════════════════════════════════════════════════════════
+ * On choisit une entree ; on montre (1) son CABLAGE REEL : chaque entree arrive sur les 16 capteurs (pas() leur donne le meme
+ * courant), et les liens sortants de ces capteurs, lus dans connectome(adresse) ; (2) son effet REJOUE : le meme cerveau depuis
+ * sa graine (simuler), avec et sans elle, neurone par neurone, au battement ou elle arrive et au suivant.
+ * ⛔ Aucune reponse inventee : si rien ne change, on dit « no neuron changed » ; si l entree est refusee, on dit pourquoi. */
+export const PAROLES = Object.freeze({
+  vieDeltaPct: { valeur: 10, dire: 'its life rises 10 %' }, achats: { valeur: 1, dire: 'one new buy arrives' },
+  ventes: { valeur: 1, dire: 'one new sell arrives' }, detenteurs: { valeur: 1, dire: 'one new holder arrives' },
+  gm: { valeur: 1, dire: 'one new transfer arrives' }, messages: { valeur: 1, dire: 'one new message arrives' },
+});
+export function cablageCapteurs(adr) {
+  if (!ADR.test(String(adr || ''))) return null;
+  const c = connectome(String(adr).toLowerCase());
+  const cibles = new Map();
+  for (let s = 0; s < CAPTEURS; s++) for (const l of c.liens[s]) cibles.set(l.vers, Math.round(((cibles.get(l.vers) || 0) + l.poids) * 100) / 100);
+  const l = [...cibles.entries()].map(([vers, poids]) => ({ vers, poids })).sort((a, b) => a.vers - b.vers);
+  return { cablage: c.empreinte, capteurs: CAPTEURS, liens: CAPTEURS * c.liens[0].length, cibles: l,
+    excitent: l.filter((x) => x.poids > 0).length, inhibent: l.filter((x) => x.poids < 0).length };
+}
+export function parler(adr, faits, cle, a = 1) {
+  if (!ADR.test(String(adr || '')) || !faits || typeof faits !== 'object' || !PAROLES[cle]) return null;
+  const A = Math.max(0, Math.min(20, Math.round(Number(a)) || 0));
+  const s = simuler(adr, faits, { [cle]: PAROLES[cle].valeur }, A + 2, A);
+  if (!s) return null;
+  /* ⛔ un echange dure UN battement (il arrive a A) ; un fait nourricier ou la vie tient toute la fenetre (il arrive a 0) */
+  const arrivee = cle === 'achats' || cle === 'ventes' ? A : 0;
+  const ecart = (k) => {
+    const x = new Set(s.lu.pas[k].indices), y = new Set(s.siEtAlors.pas[k].indices);
+    return { battement: k + 1, allumes: [...y].filter((n) => !x.has(n)).sort((p, q) => p - q),
+      eteints: [...x].filter((n) => !y.has(n)).sort((p, q) => p - q), phaseSans: s.lu.pas[k].phase, phaseAvec: s.siEtAlors.pas[k].phase };
+  };
+  return { cle, dire: PAROLES[cle].dire, refus: s.refus, cablage: cablageCapteurs(adr), arrivee: ecart(arrivee), suivant: ecart(arrivee + 1),
+    empreinte: empreinte(JSON.stringify([VERSION_INTERIEUR, s.lu.empreinte, s.siEtAlors.empreinte])) };
 }

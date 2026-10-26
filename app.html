@@ -1149,6 +1149,30 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 #bvChamp .bvVif{fill:var(--vif);stroke:var(--vif)} #bvChamp .bvDur{fill:var(--dur);stroke:var(--dur)}
 #bvChamp .bvCalme{fill:var(--accent);stroke:var(--accent)} #bvChamp .bvTiede{fill:var(--tiede);stroke:var(--tiede)}
 #bvChamp text.bvVif,#bvChamp text.bvDur,#bvChamp text.bvCalme,#bvChamp text.bvTiede{stroke:none}
+/* INSIDE — memes jetons de couleur, donc clair / sombre suivent le coloris */
+.bvVues,.bvParle{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.bvVues .bouton[aria-pressed=true],.bvParle .bouton[aria-pressed=true]{border-color:var(--accent);color:var(--accent2)}
+#bvChamp .bviCiel{fill:var(--accent);stroke:none;opacity:.10}
+#bvChamp .bviCiel.bvVif{fill:var(--vif)} #bvChamp .bviCiel.bvDur{fill:var(--dur)} #bvChamp .bviCiel.bvTiede{fill:var(--tiede)}
+#bvChamp .bviHorizon{stroke:var(--ligne);stroke-width:1}
+#bvChamp .bviGrille,#bvChamp .bviAnneau{stroke:var(--ligne);stroke-width:.7;fill:none}
+#bvChamp .bviSol{transform-box:view-box;transform-origin:180px 300px}
+#bvChamp .bviSrc{fill:var(--accent2);stroke:var(--accent);stroke-width:1}
+#bvChamp .bviSrc.bviAbsent{fill:none;stroke:var(--doux);stroke-dasharray:2 2;opacity:.6}
+#bvChamp .bviTxAbsent{fill:var(--doux);font-style:italic;opacity:.75}
+#bvChamp .bviSignal{stroke:var(--accent);opacity:.55;stroke-linecap:round}
+#bvChamp .bviOnde{fill:var(--accent2)}
+#bvChamp .bviVoisin{fill:none;stroke:var(--doux);stroke-dasharray:2 2;opacity:.55}
+#bvChamp .bviVoisinTx{fill:var(--doux);opacity:.6;font-size:8px}
+#bvChamp .bviMoi{fill:var(--texte)}
+#bvChamp .bvN.bviAtteint{stroke:var(--accent);stroke-width:.9}
+#bvChamp .bvN.bviPlus{stroke:var(--vif);stroke-width:1.6} #bvChamp .bvN.bviMoins{stroke:var(--dur);stroke-width:1.6}
+@media (prefers-reduced-motion:no-preference){
+  #bvChamp .bviGlisse{animation:bviTourne .45s ease-out both}
+  #bvChamp .bviOnde{animation:bviArrive .55s ease-in both}
+}
+@keyframes bviTourne{from{transform:rotate(var(--de))}to{transform:rotate(var(--a))}}
+@keyframes bviArrive{from{transform:translate(0,0);opacity:1}to{transform:translate(var(--dx),var(--dy));opacity:.2}}
 .pBadge{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--accent2);
   border:1px solid var(--accent);border-radius:99px;padding:4px 10px}
 .pPV{color:var(--doux);font-size:12px;font-weight:700}
@@ -4391,13 +4415,24 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" style="margin:2px 0 0" id="bvSous">Only what its neurons really received, with where it came from.</p></div>
     <button type="button" class="bouton sec bvPetit" id="bvFermer" aria-label="Close">Close</button>
   </div>
+  <!-- 2026-10-26 (Phil : « etre dans le brain ») : INSIDE = la vue depuis le block, OUTSIDE = le schema d avant, intact -->
+  <div class="bvVues" role="group" aria-label="View">
+    <button type="button" class="bouton sec bvPetit" id="bvVueDedans" aria-pressed="true">Inside</button>
+    <button type="button" class="bouton sec bvPetit" id="bvVueDehors" aria-pressed="false">Outside</button>
+  </div>
   <svg id="bvChamp" viewBox="0 0 360 310" role="img" aria-label="Its brain: inputs, sensors, neurons, neighbours"></svg>
+  <p class="note" id="bvLegende" style="margin:0 0 4px"></p>
   <div class="bvLecteur">
     <button type="button" class="bouton sec bvPetit" id="bvJouer">Pause</button>
     <input type="range" id="bvBattement" min="0" max="0" value="0" aria-label="Recorded beat">
     <span class="note mono" id="bvBattementTexte">—</span>
   </div>
   <p class="note" id="bvSortie"></p>
+  <details class="bDetail" open><summary class="note"><b>Talk to it</b> — pick an input, see which neurons it reaches</summary>
+    <p class="note">Read only: nothing is sent. The neurons come from its real wiring and a replay of the same brain — no answer is made up.</p>
+    <div class="bvParle" id="bvParle"></div>
+    <p class="note" id="bvParleTexte"></p>
+  </details>
   <details class="bDetail" open><summary class="note"><b>What it reads</b> — each input, as received on its last beat</summary>
     <ul class="bvListe" id="bvEntrees"></ul>
     <p class="note" id="bvForces"></p>
@@ -4702,7 +4737,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  *   les lisent jetteraient un ReferenceError et la page entiere serait MORTE. Un import manquant ne
  *   se voit pas a la lecture — il se voit a l ecran, trop tard. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES } from './cerveau.js';
-import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision } from './vision-cerveau.js';
+import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION } from './vision-cerveau.js';
 /* ⛔ LA MEMOIRE DES NEURONES (Phil, 2026-09-13) : gardee dans CE navigateur, par block, reprise a l ouverture.
  *    Invalide, d une autre version ou illisible ⇒ on repart de zero, jamais d un etat a moitie valide. */
 const CLE_MEMOIRE = 'tblock.memoire.';
@@ -25656,7 +25691,10 @@ function dessinerRaster() { dessinerRasterSur($('#bRaster'), brainHisto); }
  *     profilCerveau.faits), les sorties REELLES deja enregistrees (brainHisto, profilCerveau.histo), la map (habitants), l index
  *     serveur deja charge (marcheParAdr) et le fil Live (h.dernierEchange). Aucun fetch, aucun getLogs, aucune signature.
  * ⛔ CE QUI N A PAS ETE LU SE DIT « not read » — vision-cerveau.js#champ ne rend jamais un zero a la place d un absent. */
-const vision = { source: null, i: -1, suivre: true, jouer: true, minuteur: null, faits: null, tickFaits: null, nourritureLue: null, adr: null, sim: null, ouvertA: 0 };
+const vision = { source: null, i: -1, suivre: true, jouer: true, minuteur: null, faits: null, tickFaits: null, nourritureLue: null, adr: null, sim: null, ouvertA: 0,
+  vue: 'dedans', parle: null, cadre: null };
+/* ⛔ prefers-reduced-motion : aucun glissement, aucune impulsion, et la lecture ne demarre pas seule */
+const bvReduit = (() => { try { const mq = window.matchMedia('(prefers-reduced-motion: reduce)'); return () => !!mq.matches; } catch (_) { return () => false; } })();
 const PHASE_CLASSE = { EXCITE: 'bvVif', INQUIET: 'bvDur', CALME: 'bvCalme', CURIEUX: 'bvTiede' };
 function visionCible() {
   const bas = (x) => String(x || '').toLowerCase();
@@ -25747,6 +25785,105 @@ function peindreChampVision(c, vuAnime) {
     svg.append(bvSvg('text', { x: CX, y: CY + 4, class: 'bvTx', 'text-anchor': 'middle' }, 'no beat yet'));
   }
 }
+/* INSIDE : le cadre vient de vision-cerveau.js#cadreInterieur (pur, deterministe) ; ici on ne fait que le dessiner. */
+function peindreInterieur(k) {
+  const svg = $('#bvChamp');
+  if (!svg || !k) return;
+  svg.replaceChildren();
+  const P = PHASE_CLASSE[k.phase] || '';
+  svg.append(bvSvg('rect', { x: 0, y: 0, width: 360, height: k.horizon, class: 'bviCiel ' + P }));
+  const defs = bvSvg('defs');
+  const cp = bvSvg('clipPath', { id: 'bviSolClip' });
+  cp.append(bvSvg('rect', { x: 0, y: k.horizon, width: 360, height: 310 - k.horizon }));
+  defs.append(cp); svg.append(defs);
+  /* la map sous lui : elle tourne a l oppose de son cap enregistre, et ses anneaux viennent vers lui avec sa vitesse */
+  const solClip = bvSvg('g', { 'clip-path': 'url(#bviSolClip)' });
+  const sol = k.anime ? bvSvg('g', { class: 'bviSol bviGlisse', style: '--de:' + k.sol.rotationAvant + 'deg;--a:' + k.sol.rotation + 'deg' })
+    : bvSvg('g', { class: 'bviSol', transform: 'rotate(' + k.sol.rotation + ' 180 300)' });
+  for (let a = 0; a < 360; a += 30) {
+    const r = (a * Math.PI) / 180;
+    sol.append(bvSvg('line', { x1: 180, y1: 300, x2: 180 + Math.sin(r) * 420, y2: 300 - Math.cos(r) * 420, class: 'bviGrille' }));
+  }
+  solClip.append(sol);
+  for (let j = 1; j <= 5; j++) {
+    const r = j * 40 - k.sol.decalage;
+    if (r > 4) solClip.append(bvSvg('ellipse', { cx: 180, cy: 300, rx: r * 1.7, ry: r * 0.6, class: 'bviAnneau' }));
+  }
+  svg.append(solClip);
+  svg.append(bvSvg('line', { x1: 0, y1: k.horizon, x2: 360, y2: k.horizon, class: 'bviHorizon' }));
+  /* ses voisins : sur la map, attenues, et jamais relies a un capteur */
+  for (const v of k.voisins) {
+    const g = bvSvg('g', { 'data-voisin': v.adr, 'data-lu': '0' });
+    g.append(bvSvg('title', {}, (v.sym || v.adr) + ' — ' + v.humeur + ' — ' + (v.ou === 'ahead' ? 'ahead of it' : v.ou === 'unknown' ? 'direction not known' : v.ou) + ' — not read by its neurons'));
+    g.append(bvSvg('rect', { x: v.x - 5, y: v.y - 5, width: 10, height: 10, rx: 2, class: 'bviVoisin' }));
+    const fl = v.ou === 'left' ? '◀ ' : v.ou === 'right' ? '▶ ' : v.ou === 'behind' ? '▼ ' : '';
+    g.append(bvSvg('text', { x: v.x, y: v.y + 14, class: 'bviVoisinTx', 'text-anchor': v.x < 40 ? 'start' : v.x > 320 ? 'end' : 'middle' }, fl + String(v.sym || '?').slice(0, 7)));
+    svg.append(g);
+  }
+  if (k.voisins.length) svg.append(bvSvg('text', { x: 356, y: k.horizon + 10, class: 'bviVoisinTx', 'text-anchor': 'end' }, 'neighbours: not read by its neurons'));
+  /* les sources de ses entrees, devant lui : un trait = ce fait a atteint ses 16 capteurs a sa derniere lecture */
+  for (const s of k.sources) {
+    const g = bvSvg('g', { 'data-source': s.cle, 'data-lu': s.lu ? '1' : '0' });
+    g.append(bvSvg('title', {}, s.libelle + ' — ' + (s.lu ? s.texte : s.texte) + (s.source ? ' — source: ' + s.source : '')
+      + (s.signal ? ' — adds ' + s.apport + ' to each of its 16 sensors' : '')));
+    if (s.signal) g.append(bvSvg('line', { x1: s.x, y1: s.y + 8, x2: 180, y2: 200, class: 'bviSignal', 'stroke-width': Math.max(0.6, Math.min(4, Math.abs(s.apport) * 4)) }));
+    if (s.arrive && k.anime) g.append(bvSvg('circle', { cx: s.x, cy: s.y + 8, r: 3, class: 'bviOnde', style: '--dx:' + (180 - s.x) + 'px;--dy:' + (192 - s.y) + 'px' }));
+    g.append(bvSvg('circle', { cx: s.x, cy: s.y, r: 6, class: 'bviSrc' + (s.lu ? '' : ' bviAbsent') }));
+    g.append(bvSvg('text', { x: s.x, y: s.y + 20, class: 'bvTx', 'text-anchor': 'middle' }, s.court));
+    const val = !s.lu ? s.texte : s.texte + (s.sens === 'rising' ? ' ▲' : s.sens === 'falling' ? ' ▼' : '') + (s.arrive ? ' +' + s.arrive : '');
+    g.append(bvSvg('text', { x: s.x, y: s.y + 30, class: 'bvTx' + (s.lu ? '' : ' bviTxAbsent'), 'text-anchor': 'middle' }, String(val).slice(0, 12)));
+    svg.append(g);
+  }
+  /* « Talk to it » : on marque les neurones existants — aucun neurone n est ajoute */
+  const p = vision.parle && vision.parle.adr === k.adr ? vision.parle.r : null;
+  const atteints = new Set(p && p.cablage ? p.cablage.cibles.map((x) => x.vers) : []);
+  const plus = new Set(p ? [...p.arrivee.allumes, ...p.suivant.allumes] : []);
+  const moins = new Set(p ? [...p.arrivee.eteints, ...p.suivant.eteints] : []);
+  const marque = (n) => (plus.has(n) ? ' bviPlus' : moins.has(n) ? ' bviMoins' : atteints.has(n) ? ' bviAtteint' : '');
+  for (const n of k.neurones) svg.append(bvSvg('circle', { cx: n.x, cy: n.y, r: 2.4, class: 'bvN' + (n.on ? ' on' : '') + marque(n.n), 'data-n': n.n }));
+  for (const n of k.capteurs) svg.append(bvSvg('circle', { cx: n.x, cy: n.y, r: 3.6, class: 'bvN bvCapteur' + (n.on ? ' on' : '') + marque(n.n), 'data-n': n.n }));
+  svg.append(bvSvg('text', { x: 180, y: 196, class: 'bvTx', 'text-anchor': 'middle' }, 'its 16 sensors'));
+  svg.append(bvSvg('path', { d: 'M180 252 l-7 12 l7 -4 l7 4 z', class: 'bviMoi' }));
+  if (k.mort) svg.append(bvSvg('text', { x: 180, y: 278, class: 'bvTx', 'text-anchor': 'middle' }, 'Its creator holds none: no current reaches it.'));
+  else if (k.tick !== null) {
+    svg.append(bvSvg('text', { x: 180, y: 280, class: 'bvHumeur ' + P, 'text-anchor': 'middle' }, k.humeur));
+    svg.append(bvSvg('text', { x: 180, y: 293, class: 'bvTx', 'text-anchor': 'middle' }, 'beat ' + k.tick + ' · ' + k.spikes + ' fired · steering ' + k.virage));
+  } else svg.append(bvSvg('text', { x: 180, y: 280, class: 'bvTx', 'text-anchor': 'middle' }, 'no beat recorded here yet'));
+}
+function peindreParleVision() {
+  const box = $('#bvParle');
+  if (!box.childElementCount) {
+    for (const [cle, d] of Object.entries(PAROLES_VISION)) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'bouton sec bvPetit'; b.dataset.parle = cle; b.setAttribute('aria-pressed', 'false');
+      b.textContent = d.dire.charAt(0).toUpperCase() + d.dire.slice(1);
+      b.addEventListener('click', () => parlerAuCerveau(cle));
+      box.append(b);
+    }
+  }
+  for (const b of box.querySelectorAll('button[data-parle]')) b.setAttribute('aria-pressed', vision.parle && vision.parle.cle === b.dataset.parle ? 'true' : 'false');
+}
+function parlerAuCerveau(cle) {
+  const out = $('#bvParleTexte');
+  if (vision.parle && vision.parle.cle === cle) { vision.parle = null; out.textContent = ''; peindreParleVision(); peindreVision(); return; }
+  if (!vision.faits || !vision.adr) { vision.parle = null; out.textContent = 'Its brain has not beaten here yet — there are no facts to replay.'; peindreParleVision(); return; }
+  const r = parlerVision(vision.adr, vision.faits, cle, 1);
+  if (!r) { vision.parle = null; out.textContent = ''; peindreParleVision(); return; }
+  vision.parle = { cle, adr: vision.adr, r };
+  const liste = (l) => (l.length ? l.join(', ') : 'none');
+  const dire = (e) => 'on beat ' + e.battement + ': ' + (e.allumes.length || e.eteints.length
+    ? 'fire because of it ' + liste(e.allumes) + ' · go quiet ' + liste(e.eteints) : 'no neuron changed')
+    + (e.phaseSans !== e.phaseAvec ? ' · mood ' + humeurCourteVision(e.phaseSans) + ' → ' + humeurCourteVision(e.phaseAvec) : '');
+  const w = r.cablage;
+  out.textContent = r.refus.length ? r.refus.join(' ')
+    : 'If ' + r.dire + ': it reaches all ' + w.capteurs + ' sensors, whose ' + w.liens + ' wires lead to ' + w.cibles.length + ' neurons ('
+      + w.excitent + ' pushed up, ' + w.inhibent + ' held down' + (w.cibles.length - w.excitent - w.inhibent > 0 ? ', ' + (w.cibles.length - w.excitent - w.inhibent) + ' whose wires cancel out' : '') + '; ringed). Replayed from its seed, with and without it — ' + dire(r.arrivee) + '; ' + dire(r.suivant)
+      + '. Green ring: fires because of it, red: goes quiet. The live brain also carries memory, so it can answer differently.';
+  out.title = 'Wiring ' + w.cablage + ' · replay ' + r.empreinte;
+  vision.vue = 'dedans';
+  peindreParleVision();
+  peindreVision();
+}
 function peindreListesVision(c, cible) {
   const ul = $('#bvEntrees');
   ul.replaceChildren();
@@ -25804,7 +25941,27 @@ function peindreVision() {
   if (!c) return;
   $('#bvTitre').textContent = 'What ' + (cible.sym || 'this block') + '\'s brain sees';
   $('#bvBattementTexte').textContent = vuAnime ? 'beat ' + vuAnime.tick + ' (' + (vision.i + 1) + ' of ' + histo.length + ' recorded)' : 'no beat recorded';
-  peindreChampVision(c, vuAnime);
+  const dedans = vision.vue === 'dedans';
+  $('#bvVueDedans').setAttribute('aria-pressed', dedans ? 'true' : 'false');
+  $('#bvVueDehors').setAttribute('aria-pressed', dedans ? 'false' : 'true');
+  $('#bvChamp').setAttribute('aria-label', dedans ? 'Inside its brain: what reaches it, its neurons, its steering' : 'Its brain: inputs, sensors, neurons, neighbours');
+  if (dedans) {
+    const h = cible.h;
+    /* ou il regarde sur la map MAINTENANT — seulement pour poser ses voisins ; sans vitesse lue, aucune direction n est inventee */
+    const capMap = h && Number.isFinite(h.vx) && Number.isFinite(h.vy) && (h.vx !== 0 || h.vy !== 0) ? Math.atan2(h.vy, h.vx) : null;
+    const t0 = performance.now();
+    const k = cadreInterieur({ c, faits: cible.faits, histo, i: vision.i, capMap, reduit: bvReduit() });
+    vision.cadre = k;
+    peindreInterieur(k);
+    window.__TB_BRAIN_INSIDE_MS__ = Math.round((performance.now() - t0) * 100) / 100;
+    $('#bvLegende').textContent = 'You are the block, looking out. Above: where each input comes from — a line means it reached all 16 of its sensors on its last read, grey means not read. '
+      + 'Lit dots: its neurons that fired on this beat (16 sensors in front, 112 around you). The ground turns and slides as its wings steered it. '
+      + 'Dashed squares are neighbours on the map: not read by its neurons.';
+  } else {
+    vision.cadre = null;
+    peindreChampVision(c, vuAnime);
+    $('#bvLegende').textContent = '';
+  }
   peindreListesVision(c, cible);
   const o = c.sortie;
   const sortie = $('#bvSortie');
@@ -25893,8 +26050,12 @@ function ouvrirVision(source) {
   const cible = visionCible();
   const n = cible && Array.isArray(cible.histo) ? cible.histo.length : 0;
   vision.i = n - Math.min(n, BATTEMENTS_SIM); vision.suivre = n === 0;
-  $('#bvJouer').textContent = 'Pause';
+  /* ⛔ mouvement reduit : la lecture attend un geste (Play ou le curseur) */
+  if (bvReduit()) vision.jouer = false;
+  $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
+  vision.parle = null; $('#bvParleTexte').textContent = '';
   geler();
+  peindreParleVision();
   peindreVision();
   lancerSimVision();
   clearInterval(vision.minuteur);
@@ -25924,6 +26085,8 @@ $('#bvBattement').addEventListener('input', (e) => {
   peindreVision();
 });
 $('#bvRejouer').addEventListener('click', lancerSimVision);
+$('#bvVueDedans').addEventListener('click', () => { vision.vue = 'dedans'; peindreVision(); });
+$('#bvVueDehors').addEventListener('click', () => { vision.vue = 'dehors'; peindreVision(); });
 $('#bvRemettre').addEventListener('click', () => {
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
   geler(); lancerSimVision();
