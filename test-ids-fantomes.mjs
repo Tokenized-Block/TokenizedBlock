@@ -47,6 +47,9 @@ for (const f of SOURCES) {
   const src = readFileSync(new URL(f, D), 'utf8');     /* univers : BRUT, le plus large possible */
   for (const m of src.matchAll(/\bid\s*=\s*["']([A-Za-z][\w-]*)["']/g)) existent.add(m[1]);
   for (const m of src.matchAll(/\bid=([A-Za-z][\w-]*)[\s">]/g)) existent.add(m[1]);
+  /* game57: an element built by the page's own builder, bcEl('div', { ..., id: 'x' }), is a written counterpart too
+   *   (#bcSkinsMarket, the skins boutique box, only exists that way). Only bcEl props count, not any `id:` key. */
+  for (const m of src.matchAll(/\bbcEl\(\s*['"][a-z][\w-]*['"]\s*,\s*\{[^}]*\bid:\s*['"]([A-Za-z][\w-]*)['"]/g)) existent.add(m[1]);
 }
 
 const LECTURES = [
