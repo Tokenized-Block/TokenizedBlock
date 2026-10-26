@@ -13357,6 +13357,9 @@ async function refreshProfileLife() {
       if (still() && v && v.etat === 'LUE' && typeof v.vie === 'number' && Number.isFinite(v.vie) && v.devise === deviseProfil) {
         profileLifeBefore = { adr, v: vieProfil, devise: deviseProfil };
         vieProfil = v.vie;
+        /* on the map, the map steps its brain first with its tile's vieAvant: the tile gets the same read (the map's one function) */
+        const tile = habitants.find((x) => String(x.adr).toLowerCase() === adr);
+        if (tile && (tile.devise == null || tile.devise === v.devise)) appliquerVie(tile, v);
       }
     }
     if (marcheParAdr.has(adr)) {

@@ -60,10 +60,10 @@ const ADR = '0x' + 'ab'.repeat(20);
   ok(/profileLifeBefore = null;/.test(fnOf('lireProfil')), 'C: a new profile starts without one');
   const build = (deps) => new Function('deps', 'let vieProfil = deps.vieProfil, deviseProfil = deps.deviseProfil, etatVieProfil = deps.etatVieProfil, profileLifeBefore = null;'
     + 'const profileLifeRefresh = { at: 0, busy: false }; const PROFILE_LIFE_REFRESH_MS = 45000;'
-    + 'const { profilCerveau, vieDuBlock, rpc, RESEAUX, CHAINE, clesReellesDe, enrichirMarcheSiDecouvert, fetch, marcheParAdr, rememberServerLife, avecPoolAction, $ } = deps;'
+    + 'const { profilCerveau, vieDuBlock, rpc, RESEAUX, CHAINE, clesReellesDe, enrichirMarcheSiDecouvert, fetch, marcheParAdr, rememberServerLife, avecPoolAction, $, habitants, appliquerVie } = deps;'
     + src + '\nreturn { run: refreshProfileLife, get: () => ({ vieProfil, profileLifeBefore }) };')(deps);
   const deps = (v) => ({ vieProfil: 10, deviseProfil: 'ETH', etatVieProfil: 'LUE', profilCerveau: { adr: ADR }, rpc: null, RESEAUX: { 8453: { stateView: '0x' } }, CHAINE: 8453,
-    vieDuBlock: async () => v, clesReellesDe: async () => [], enrichirMarcheSiDecouvert: async (a, x) => x, marcheParAdr: new Map(), rememberServerLife: () => {}, avecPoolAction: (l) => l,
+    habitants: [], appliquerVie: () => { throw new Error('appliquerVie without a tile'); }, vieDuBlock: async () => v, clesReellesDe: async () => [], enrichirMarcheSiDecouvert: async (a, x) => x, marcheParAdr: new Map(), rememberServerLife: () => {}, avecPoolAction: (l) => l,
     fetch: async () => ({ json: async () => ({ ok: true, lignes: [] }) }), $: () => ({ dataset: { block: ADR } }) });
   { const R = build(deps({ etat: 'LUE', vie: 10.5, devise: 'ETH' })); await R.run(); const g = R.get();
     ok(g.vieProfil === 10.5 && g.profileLifeBefore && g.profileLifeBefore.v === 10 && g.profileLifeBefore.adr === ADR, 'C: same currency -> the old read becomes the previous life'); }
@@ -79,11 +79,28 @@ const ADR = '0x' + 'ab'.repeat(20);
     d.peindrePaires = () => { painted++; };
     const R = new Function('deps', 'let vieProfil = deps.vieProfil, deviseProfil = deps.deviseProfil, etatVieProfil = deps.etatVieProfil, profileLifeBefore = null;'
       + 'const profileLifeRefresh = { at: 0, busy: false }; const PROFILE_LIFE_REFRESH_MS = 45000;'
-      + 'const { profilCerveau, vieDuBlock, rpc, RESEAUX, CHAINE, clesReellesDe, enrichirMarcheSiDecouvert, fetch, marcheParAdr, rememberServerLife, avecPoolAction, $, peindrePaires } = deps;'
+      + 'const { profilCerveau, vieDuBlock, rpc, RESEAUX, CHAINE, clesReellesDe, enrichirMarcheSiDecouvert, fetch, marcheParAdr, rememberServerLife, avecPoolAction, $, peindrePaires, habitants, appliquerVie } = deps;'
       + src + '\nreturn { run: refreshProfileLife };')(d);
     await R.run();
     ok(seen.length === 2 && seen[0][0] === 'fetch' && seen[0][1] === '/api/trending' && seen[0][2] === undefined, 'D: one GET /api/trending');
     ok(seen[1][0] === 'remember' && seen[1][1] === ADR && seen[1][2] === 100, 'D: the old row is remembered before it is replaced');
     ok(d.marcheParAdr.get(ADR).fdvUsd === 120 && painted === 1, 'D: the new row is stored and the pairs repainted'); }
+  { // E. measured on AAPLc (on the map): the map stepped its brain first, with the map tile's vieAvant — so the profile's new
+    //    read goes to its map tile too, through the map's one function (appliquerVie), same currency only
+    const run = async (tileDevise) => {
+      const d = deps({ etat: 'LUE', vie: 10.5, devise: 'ETH' }); const applied = [];
+      d.habitants = [{ adr: ADR.toUpperCase().replace('0X', '0x'), vie: 9, devise: tileDevise }];
+      d.appliquerVie = (h, r) => { applied.push(r.vie); h.vieAvant = h.vie; h.vie = r.vie; };
+      const R = new Function('deps', 'let vieProfil = deps.vieProfil, deviseProfil = deps.deviseProfil, etatVieProfil = deps.etatVieProfil, profileLifeBefore = null;'
+        + 'const profileLifeRefresh = { at: 0, busy: false }; const PROFILE_LIFE_REFRESH_MS = 45000;'
+        + 'const { profilCerveau, vieDuBlock, rpc, RESEAUX, CHAINE, clesReellesDe, enrichirMarcheSiDecouvert, fetch, marcheParAdr, rememberServerLife, avecPoolAction, $, habitants, appliquerVie } = deps;'
+        + src + '\nreturn { run: refreshProfileLife };')(d);
+      await R.run(); return { tile: d.habitants[0], applied };
+    };
+    const same = await run('ETH');
+    ok(same.applied.join() === '10.5' && same.tile.vieAvant === 9 && same.tile.vie === 10.5, 'E: same currency -> its map tile gets the read (vieAvant 9, vie 10.5)');
+    const other = await run('USDC');
+    ok(other.applied.length === 0 && other.tile.vie === 9 && other.tile.vieAvant === undefined, 'E: another currency on the tile -> untouched');
+  }
 }
 console.log('test-previous-life-20261026: ' + count + ' assertions, OK');
