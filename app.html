@@ -14561,24 +14561,42 @@ let soldesDex = { eth: null, bloc: null, decimales: null };
 /* ⛔ MAX EN ETH GARDE DE QUOI PAYER LE GAS : tout depenser rendrait la transaction impossible a
  * envoyer. 0,0003 ETH couvre largement un swap sur Base (≈ 0,00002 ETH mesures) ; le reste part. */
 const RESERVE_GAS_WEI = 300000000000000n;
+/* ⛔ 2026-10-26 : un montant ecrit par MAX passe par l evenement `input`, comme une frappe — une etape preparee pour l ancien
+ *   montant est retiree (et gardeClicEtape l arrete au clic de toute facon) */
+const ecrireMontantMax = (champ, valeur) => { champ.value = valeur; champ.dispatchEvent(new Event('input', { bubbles: true })); };
 $('#peMaxEth') && $('#peMaxEth').addEventListener('click', (ev) => {
-  /* MAX dans la devise du marche : tout le solde (le gas se paie en ETH, pas dans cette devise) */
-  if (deviseEchange && typeof soldesDex.devise === 'bigint') {
-    ev.preventDefault();
-    $('#peAchat').value = formaterUnites(soldesDex.devise, deviseEchange.dec).replace(/,/g, '');
+  ev.preventDefault();
+  /* ⛔ 2026-10-26 : MAX lit le solde de la devise de la POOL (ETH, ou deviseEchange). « Pay with » sur une autre devise : ecrire
+   *   ce solde dans un champ qui parle EURC mettrait une quantite d ETH sous « Buy — EURC to spend ». On refuse, et on le dit. */
+  const attendu = String(deviseEchange ? deviseEchange.adr : ETH_ADR).toLowerCase();
+  if (deviseDuChampBuy() !== attendu) {
+    const e = $('#peEtat');
+    /* ⛔ AJOUTEE, jamais par-dessus : un « sent » ou un refus du wallet deja affiche reste lisible (D1) */
+    const phraseMax = 'MAX reads this market’s own currency; with “Pay with” on another currency, type the amount.';
+    if (e && !String(e.textContent || '').endsWith(phraseMax)) {
+      const base = String(e.textContent || '').trim();
+      if (!base) e.className = 'note wKo';
+      e.textContent = (base ? base + ' ' : '') + phraseMax;
+    }
     return;
   }
-  ev.preventDefault();
+  /* MAX dans la devise du marche : tout le solde (le gas se paie en ETH, pas dans cette devise) */
+  if (deviseEchange && typeof soldesDex.devise === 'bigint') {
+    ecrireMontantMax($('#peAchat'), formaterUnites(soldesDex.devise, deviseEchange.dec).replace(/,/g, ''));
+    return;
+  }
   if (soldesDex.eth === null) return;
   const net = soldesDex.eth > RESERVE_GAS_WEI ? soldesDex.eth - RESERVE_GAS_WEI : 0n;
-  $('#peAchat').value = formaterEthCourt(net);
+  ecrireMontantMax($('#peAchat'), formaterEthCourt(net));
 });
 $('#peMaxBloc') && $('#peMaxBloc').addEventListener('click', (ev) => {
   ev.preventDefault();
   if (soldesDex.bloc === null || soldesDex.decimales === null) return;
   /* valeur EXACTE, sans separateur de milliers : c est elle qui sera relue et signee */
-  $('#peVente').value = formaterUnites(soldesDex.bloc, soldesDex.decimales).replace(/[,\s]/g, '');
+  ecrireMontantMax($('#peVente'), formaterUnites(soldesDex.bloc, soldesDex.decimales).replace(/[,\s]/g, ''));
 });
+/* la verification au clic de toute etape preparee (phase de CAPTURE : avant le gestionnaire du bouton) */
+$('#peActions') && $('#peActions').addEventListener('click', gardeClicEtape, true);
 /* EN DIRECT, SANS BOUTON (Phil : « tu montres en live, comme les autres DEX ») : toutes les 15 s tant
  * que le profil est ouvert et la page visible, et tout de suite quand le wallet change de compte. */
 setInterval(() => {
@@ -16884,6 +16902,45 @@ function retirerActionsPreparees() {
   if (l) l.innerHTML = '';
   return true;
 }
+/**
+ * ⛔⛔ 2026-10-26 : CE POUR QUOI UNE ETAPE A ETE PREPAREE, ET LA VERIFICATION AU CLIC. Retirer l etape « quand ca change » ne tient
+ *   que pour les chemins qu on a vus : MAX ecrivait #peAchat / #peVente sans evenement `input`, le retour fiat et les intentions
+ *   aussi. ⇒ preparerEchange inscrit { sens, block, devise, montant, recoit } sur #peActions (dataset.pour) au moment ou il lit
+ *   le montant ; au CLIC sur n importe quel bouton de #peActions, `gardeClicEtape` (phase de capture, avant le bouton) recompare
+ *   avec l ecran : une seule difference et le clic est ARRETE, l etape retiree, la raison dite. Quel que soit l auteur du
+ *   changement — y compris un chemin qu on n aurait pas trouve.
+ *   ⛔ Le retour fiat et la remise du choix ne cassent rien : ils rendent le MEME actif et le MEME montant.
+ */
+function cleEtapePreparee(sens, impose = {}) {
+  const champ = $(sens === 'VENTE' ? '#peVente' : '#peAchat');
+  const rec = $('#peRecoit');
+  return {
+    sens,
+    block: String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase(),
+    devise: sens === 'VENTE' ? null : String(impose.devise !== undefined ? impose.devise : deviseDuChampBuy()).toLowerCase(),
+    montant: String(impose.montant !== undefined ? impose.montant : (champ ? champ.value : '')).trim(),
+    recoit: sens === 'VENTE' ? String((rec && rec.value) || '').toLowerCase() : null,
+  };
+}
+function gardeClicEtape(ev) {
+  const a = $('#peActions');
+  const b = ev && ev.target && ev.target.closest ? ev.target.closest('button') : null;
+  if (!a || !b || !a.dataset || !a.dataset.pour) return true;
+  let p;
+  try { p = JSON.parse(a.dataset.pour); } catch (_) { p = null; }
+  const ici = p ? cleEtapePreparee(p.sens) : null;
+  if (p && JSON.stringify(ici) === a.dataset.pour) return true;
+  try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch (_) { /* evenement factice */ }
+  const pourquoi = !p ? 'what it was prepared for could not be read'
+    : ici.block !== p.block ? 'you are now on another block'
+      : ici.devise !== p.devise ? 'the currency changed since it was prepared'
+        : ici.recoit !== p.recoit ? 'what you receive changed since it was prepared'
+          : 'the amount changed since it was prepared (it was for ' + p.montant + ')';
+  retirerActionsPreparees();
+  delete a.dataset.pour;
+  direActionsRetirees(pourquoi + ' — nothing was sent');
+  return false;
+}
 /** Ajoute (sans rien ecraser) la phrase « etape retiree » a #peEtat. Non marquee : la frappe suivante ne l efface pas. */
 function direActionsRetirees(pourquoi) {
   const e = $('#peEtat');
@@ -17602,6 +17659,7 @@ async function preparerEchange(sens) {
   const adr = $('#profil').dataset.block;
   const e = $('#peEtat');
   $('#peActions').innerHTML = '';
+  if ($('#peActions').dataset) delete $('#peActions').dataset.pour; /* inscrit plus bas, quand le montant est LU */
   $('#peLignes').innerHTML = '';
   const marcheLuGate = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
   /* ⛔⛔ UN MONTANT NUL EST REFUSE EN PREMIER (Raksha, 2026-10-01 : « 0 » rendait autre chose qu une
@@ -17710,7 +17768,14 @@ async function preparerEchange(sens) {
     }
   }
   else if (deviseEchange) dec = deviseEchange.dec; /* achat paye dans la devise du marche (AAPLc : 8 decimales) */
-  const m = montantHumain($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value, dec);
+  const brutMontant = $(sens === 'ACHAT' ? '#peAchat' : '#peVente').value;
+  const m = montantHumain(brutMontant, dec);
+  /* ⛔ 2026-10-26 : CE POUR QUOI les etapes qui vont suivre sont preparees — l actif du clic (`choix`), le montant LU ici, ce block.
+   *   gardeClicEtape le recompare au clic de chaque bouton de #peActions. */
+  if ($('#peActions').dataset) {
+    $('#peActions').dataset.pour = JSON.stringify(cleEtapePreparee(sens, sens === 'ACHAT'
+      ? { devise: choix ? choix.devise : (deviseEchange ? deviseEchange.adr : ETH_ADR), montant: brutMontant } : { montant: brutMontant }));
+  }
   if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; try { etape('echange_refus_montant'); } catch (_) {} return; }
   /* ⛔⛔ 2026-10-26 : un pivot choisi dans « Pay with » (WETH, cbBTC, EURC) part vers le plan du SERVEUR, AVANT le multi-sauts et le
    *   chemin historique — sinon l etiquette dirait EURC et le wallet signerait l achat en ETH de la pool. */
@@ -18431,6 +18496,8 @@ for (const id of ['#peAchat', '#peVente']) {
 async function preparerEthUsdc() {
   const e = $('#peEtat');
   $('#peActions').innerHTML = ''; $('#peLignes').innerHTML = '';
+  /* ses etapes ne viennent pas du champ Buy (#peUsdcEth) : l inscription d un Buy precedent ne doit pas les juger */
+  if ($('#peActions').dataset) delete $('#peActions').dataset.pour;
   if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
   if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.')); } return; }
   const raw = String($('#peUsdcEth').value || '').trim().replace(',', '.');

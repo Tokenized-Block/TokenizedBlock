@@ -36,7 +36,7 @@ import { pairesProposees } from './paires.js';
 import { devisesPivotVersBloc, entreeVersBloc } from './entree-vers-bloc.js';
 import { entreeVersBloc as entreeServeur } from './rails-api.js';
 import { formaterUnites, montantHumain } from './montants.js';
-import { USDC_BASE } from './frais-creation.js';
+import { USDC_BASE, formaterEthCourt } from './frais-creation.js';
 
 /* TB_APP_HTML : rejouer le banc sur un AUTRE app.html (ex. `git show 0b18fb3:app.html`) pour mesurer le rouge d avant */
 const APP = readFileSync(process.env.TB_APP_HTML || new URL('./app.html', import.meta.url), 'utf8');
@@ -51,7 +51,7 @@ const BLOC = '0xb200000000000000000000e4b0c5fbe9c8df579e';
 const WALLET = '0x00000000000000000000000000000000c0ffee77';
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
   'pivotsPourPayWith', 'lireSoldesPivots', 'payerParRailServeur', 'garderChoixPayWith', 'preparerEchange', 'noterPayWith', 'effacerNotePayWith',
-  'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees'];
+  'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees', 'cleEtapePreparee', 'gardeClicEtape'];
 const PHRASE_ETIQ = (s) => 'Buy — ' + s + ' to spend';
 
 /* une fonction de premier niveau : de `function NOM(` a la premiere `}` en colonne 0 ; absente = '' */
@@ -90,7 +90,7 @@ class Sel extends El {
 /** Un monde par cas : le code de `src` (app.html ou un mutant), un DOM faux, une chaine factice qui ne repond qu a balanceOf. */
 function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = false } = {}) {
   const els = {};
-  for (const id of ['profil', 'peAchat', 'peDeviseBloc', 'peDeviseNote', 'peRetourFiat', 'peEtat', 'peActions', 'peLignes', 'peVente']) els['#' + id] = new El(id);
+  for (const id of ['profil', 'peAchat', 'peDeviseBloc', 'peDeviseNote', 'peRetourFiat', 'peEtat', 'peActions', 'peLignes', 'peVente', 'peMaxEth', 'peMaxBloc']) els['#' + id] = new El(id);
   els['#peDevise'] = new Sel('peDevise');
   els['#peAchat'].label = { firstChild: { nodeType: 3, textContent: 'Buy — ETH to spend' } };
   els['#peRetourFiat'].hidden = true;
@@ -132,13 +132,22 @@ function monde(src, { quote = ETH, compte = null, soldes = {}, soldeIllisible = 
     },
     bcOuvrirPop: () => { etat.ouvert += 1; },
     bcProposerSwap: async (qui, classe, arg) => { etat.panneau.push(arg); },
+    /* MAX : soldes lus (2 ETH), la reserve de gas, le formateur reel */
+    soldesDex: { eth: 2n * 10n ** 18n, bloc: 5n * 10n ** 18n, decimales: 18, devise: null }, RESERVE_GAS_WEI: 300000000000000n, formaterEthCourt,
+    Event: class { constructor(t) { this.type = t; } },
   };
+  /* un dispatchEvent minimal : les ecouteurs du type, comme le DOM (utilise par MAX) */
+  for (const el of Object.values(els)) el.dispatchEvent = (ev) => { for (const f of el.ecoute[ev.type] || []) f({ target: el, preventDefault() {} }); return true; };
   vm.createContext(ctx);
   const presentes = FONCTIONS.filter((f) => extraire(src, f));
   /* les ecouteurs `input` REELS de #peAchat / #peVente (et montantNulOuVide) : la tranche de app.html qui les pose, telle quelle */
   const iE = src.indexOf('const PHRASE_MONTANT_NUL'), fE = src.indexOf('async function preparerEthUsdc', iE);
   const ecouteursChamps = iE >= 0 && fE > iE ? src.slice(iE, fE) : '';
-  vm.runInContext(presentes.map((f) => extraire(src, f)).join('\n') + '\n' + ecouteursChamps + '\nthis.__ = { ' + presentes.join(', ') + ' };', ctx);
+  /* les boutons MAX et la garde au clic de #peActions : la tranche de app.html qui les pose, telle quelle */
+  const iM = src.indexOf('$(\'#peMaxEth\') && $(\'#peMaxEth\').addEventListener'), fM = src.indexOf('/* EN DIRECT, SANS BOUTON', iM);
+  const iM0 = src.lastIndexOf('const ecrireMontantMax', iM);
+  const tMax = iM >= 0 && fM > iM ? src.slice(iM0 >= 0 && iM - iM0 < 600 ? iM0 : iM, fM) : '';
+  vm.runInContext(presentes.map((f) => extraire(src, f)).join('\n') + '\n' + ecouteursChamps + '\n' + tMax + '\nthis.__ = { ' + presentes.join(', ') + ' };', ctx);
   const opts = () => els['#peDevise'].options.map((o) => ({ v: String(o.value).toLowerCase(), t: o.textContent, off: !!o.disabled }));
   return { ctx, els, etat, v, f: ctx.__, opts, rebatir: () => ctx.__.majDevisesDentree(v) };
 }
@@ -411,6 +420,95 @@ async function verifier(src) {
     assert.equal(p.etat.historique.length, 1, 'ETH choisi, liste relue : Prepare buy refuse encore (« ' + p.els['#peEtat'].textContent + ' »)');
   });
 
+  /* ── Q : une etape preparee ne se clique que pour l actif / le montant / le block pour lesquels elle a ete preparee ── */
+  const bouton = (m, nom) => { const b = { textContent: nom, clics: 0, surClic() { this.clics += 1; } }; b.closest = () => b; m.els['#peActions'].appendChild(b); return b; };
+  /* un clic comme le DOM : les ecouteurs de #peActions (capture) d abord ; le bouton seulement si personne n a arrete l evenement */
+  const cliquer = (m, b) => {
+    const ev = { target: b, arrete: false, preventDefault() {}, stopImmediatePropagation() { this.arrete = true; } };
+    for (const f of m.els['#peActions'].ecoute.click || []) f(ev);
+    if (!ev.arrete) b.surClic();
+    return !ev.arrete;
+  };
+  const preparer = async (m) => { try { await m.f.preparerEchange('ACHAT'); } catch (_) { /* la suite n est pas sous test */ } };
+  const maxEth = (m) => { for (const f of m.els['#peMaxEth'].ecoute.click || []) f({ target: m.els['#peMaxEth'], preventDefault() {} }); };
+  await cas('Q1 MAX apres Prepare : le montant change PAR UN EVENEMENT, l etape preparee est retiree', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peAchat'].taper('0.01');
+    await preparer(m); bouton(m, 'Sign the buy');
+    maxEth(m);
+    assert.equal(m.els['#peAchat'].value, formaterEthCourt(2n * 10n ** 18n - 300000000000000n), 'MAX n a pas ecrit le solde moins la reserve');
+    assert.equal(m.els['#peActions'].children.length, 0, 'l etape preparee pour 0.01 reste cliquable apres MAX');
+    assert.match(m.els['#peEtat'].textContent, /removed because the amount changed/);
+  });
+  await cas('Q1b MAX avec « Pay with » sur USDC (marche cote ETH) : refuse, rien n est ecrit sous USDC', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    m.els['#peEtat'].textContent = 'Sent, not confirmed yet — do not sign it again.';
+    maxEth(m); maxEth(m);
+    assert.equal(m.els['#peAchat'].value, '25', 'MAX a ecrit un solde ETH sous « Buy — USDC to spend »');
+    assert.equal(m.els['#peEtat'].textContent, 'Sent, not confirmed yet — do not sign it again. MAX reads this market’s own currency; with “Pay with” on another currency, type the amount.',
+      'la phrase MAX a ecrase (ou repete) l etat « sent » : ' + m.els['#peEtat'].textContent);
+  });
+  await cas('Q2 une puce de montant apres Prepare (valeur + input, comme le gestionnaire data-premier) : etape retiree', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peAchat'].taper('0.01');
+    await preparer(m); bouton(m, 'Sign the buy');
+    m.els['#peAchat'].value = '0.005'; m.els['#peAchat'].dispatchEvent(new m.ctx.Event('input'));
+    assert.equal(m.els['#peActions'].children.length, 0);
+  });
+  await cas('Q3 au clic : montant, devise ou block change SANS evenement -> clic ARRETE, etape retiree, raison dite', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    await preparer(m);
+    let b = bouton(m, 'Approval 1 of 2');
+    m.els['#peAchat'].value = '30'; /* ecrit sans evenement (retour fiat, intention, chemin oublie) */
+    assert.equal(cliquer(m, b), false, 'le clic est passe pour 30 alors que l etape etait pour 25');
+    assert.equal(b.clics, 0);
+    assert.equal(m.els['#peActions'].children.length, 0);
+    assert.match(m.els['#peEtat'].textContent, /amount changed since it was prepared \(it was for 25\) — nothing was sent/);
+    m.els['#peAchat'].value = '25'; await preparer(m); b = bouton(m, 'Approval 1 of 2');
+    m.ctx.deviseDentree = null; /* la devise vivante change sans remise */
+    assert.equal(cliquer(m, b), false); assert.match(m.els['#peEtat'].textContent, /currency changed/);
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25'); await preparer(m); b = bouton(m, 'Approval 1 of 2');
+    m.els['#profil'].dataset.block = '0xb20000000000000000000066242d4067724cb7a1';
+    assert.equal(cliquer(m, b), false); assert.match(m.els['#peEtat'].textContent, /another block/);
+  });
+  await cas('Q4 meme actif, meme montant, meme block : 44 rebatissages (et un reset pendant pret) laissent le clic passer', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    m.etat.surPret = () => { m.ctx.deviseDentree = null; };
+    await preparer(m);
+    m.etat.surPret = null;
+    const b = bouton(m, 'Approval 1 of 2');
+    for (let i = 0; i < 44; i += 1) m.rebatir();
+    assert.equal(cliquer(m, b), true, 'une etape preparee pour USDC 25 est refusee alors que rien n a change : ' + m.els['#peEtat'].textContent);
+    assert.equal(b.clics, 1);
+  });
+  await cas('Q4c le choix est PERDU pendant la preparation (le plan est bati pour USDC) : l inscription dit USDC, le clic sous ETH est refuse', async () => {
+    const m = monde(src); m.rebatir();
+    m.els['#peDevise'].choisir(USDC); m.els['#peAchat'].taper('25');
+    await attendre();
+    m.etat.surPret = () => { m.ctx.deviseDentree = null; m.ctx.choixPayWith = null; };
+    await preparer(m);
+    m.etat.surPret = null;
+    assert.equal(m.etat.multi.length, 1, 'le plan USDC n a pas ete bati (choix pris au clic)');
+    const b = bouton(m, 'Approval 1 of 2');
+    m.rebatir();
+    assert.equal(cliquer(m, b), false, 'l etape batie pour USDC se clique sous ' + m.els['#peAchat'].label.firstChild.textContent);
+    assert.match(m.els['#peEtat'].textContent, /currency changed/);
+  });
+  await cas('Q4b retour fiat : le plan prepare pour l actif livre et son montant survit aux rebatissages (bascules)', async () => {
+    const m = monde(src);
+    m.ctx.fiatRetenu = { block: BLOC, devise: USDC, actif: 'USDC', montant: '0.001752', pose: null, debut: 'Arrived.', phrasePose: 'Prefilled.', choixPersonne: false };
+    m.rebatir();
+    assert.equal(m.els['#peAchat'].value, '0.001752');
+    await preparer(m);
+    const b = bouton(m, 'Approval 1 of 2');
+    for (let i = 0; i < 15; i += 1) m.rebatir();
+    assert.equal(m.els['#peActions'].children.length, 1, 'la bascule du retour fiat a retire le plan');
+    assert.equal(cliquer(m, b), true, m.els['#peEtat'].textContent);
+  });
+
   /* ── D1, D2 : revue adverse de 4f0994c ── */
   await cas('D1 apres la note « taken out », un refus du wallet ou un « sent » ecrit dans #peEtat SURVIT a une frappe', async () => {
     const m = monde(src);
@@ -483,6 +581,13 @@ const mutants = [
   ['D2 changer le montant garde l etape preparee', (s) => s.replace("if (typeof retirerActionsPreparees === 'function' && retirerActionsPreparees())", 'if (false)')],
   ['M11 l attente n ecrit plus l etiquette', (s) => s.replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\n    return 'ATTEND';", "    return 'ATTEND';").replace("    if (lab && lab.firstChild && lab.firstChild.nodeType === 3) lab.firstChild.textContent = 'Buy — ' + c.sym + ' to spend';\r\n    return 'ATTEND';", "    return 'ATTEND';")],
   ['M12 l attente n est jamais levee', (s) => s.replace('    c.attente = false;\n', '').replace('    c.attente = false;\r\n', '')],
+  /* ── Q : la verification au clic ── */
+  ['Q la garde au clic n est pas branchee', (s) => s.replace("$('#peActions') && $('#peActions').addEventListener('click', gardeClicEtape, true);", '')],
+  ['Q la garde au clic laisse tout passer', (s) => s.replace('  if (p && JSON.stringify(ici) === a.dataset.pour) return true;', '  return true;')],
+  ['Q rien n est inscrit sur l etape preparee', (s) => s.replace("$('#peActions').dataset.pour = JSON.stringify(", 'void (')],
+  ['Q l inscription lit la devise VIVANTE au lieu du choix du clic', (s) => s.replace('{ devise: choix ? choix.devise : (deviseEchange ? deviseEchange.adr : ETH_ADR), montant: brutMontant }', '{ montant: brutMontant }')],
+  ['Q MAX ecrit sans evenement', (s) => s.replace("const ecrireMontantMax = (champ, valeur) => { champ.value = valeur; champ.dispatchEvent(new Event('input', { bubbles: true })); };", 'const ecrireMontantMax = (champ, valeur) => { champ.value = valeur; };')],
+  ['Q MAX ecrit sous une autre devise', (s) => s.replace('  if (deviseDuChampBuy() !== attendu) {', '  if (false) {')],
   ['P4 une liste NON LUE fait oublier le choix', (s) => s.replace('if (ici === c.block && !listePayWithLue) {', 'if (false) {')],
   ['P4 Prepare buy part pendant l attente', (s) => s.replace('if (sens === \'ACHAT\' && choixPayWith && choixPayWith.attente === true', 'if (false && choixPayWith && choixPayWith.attente === true')],
   ['les soldes relus a chaque repeint', (s) => s.replace('if (soldesPivotsDemandes.has(k)) continue;', '')],
