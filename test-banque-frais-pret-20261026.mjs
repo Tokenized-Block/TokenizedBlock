@@ -13,6 +13,8 @@
  *   (5) la page : bcFraisPret et bcPretMax == fraisPret et pretMaxAvecFrais (parite exhaustive sur 0..30 000) ; la ligne des frais de
  *       la carte dit le frais Morpho lu, ou « not read » ; l estimation du Lend dit le frais et le total sortant ;
  *   (6) mutants : chacun ROUGE.
+ *   (7) l ECRAN == le plan, au runtime (vraies fonctions d app.html dans un vm) : total « leaves your wallet » de l estimation du Lend,
+ *       « You can lend », la ligne des frais a taux differents ; 6 mutants sur copies.
  * L EXECUTION est prouvee a part, sur les SOLDES d un fork : banc-banque-frais-pret-fork-20261026.mjs. NE PROUVE PAS : un vrai wallet.
  */
 import fs from 'node:fs';
@@ -176,5 +178,80 @@ await muter("const SANS_FRAIS_SORTIE = Object.freeze({ fraisApp: '0'", "const SA
 await muter('  if (approuve && tout) {', '  if (false) {', 'remise a 0 retiree', async (Mm) => !(await Mm.planRembourser({ rpc: noeud({ pos: [0n, 10n ** 6n, 10n ** 7n] }), compte: COMPTE, id: ID, tout: true })).aSigner.some((c) => c.remiseA0));
 await muter('  const prete = (pos.supplyShares * (supplyAssets + 1n)) / (supplyShares + 10n ** 6n);', '  const prete = supplyShares === 0n ? 0n : (pos.supplyShares * supplyAssets) / supplyShares;', 'parts virtuelles oubliees',
   async (Mm) => (await Mm.planRetirerPret({ rpc: noeud({ pos: [10n ** 12n, 0n, 0n] }), compte: COMPTE, id: ID, tout: true })).resume.preteLu !== rpV.resume.preteLu);
+
+/* (7) 2026-10-26 (revue adverse wf6-morpho-fees : deux mutants ou l ECRAN ment sur ce que le wallet signe survivaient - le total
+ *   « leaves your wallet » de l estimation du Lend, et « You can lend ») : les VRAIES fonctions d app.html, executees dans un vm avec un
+ *   faux DOM, comparees au plan de banque-morpho.js (le meme que le wallet signe). Mutants sur des COPIES en memoire de leur source. */
+const { enUnitesBrutes } = await import(pathToFileURL(path.join(ICI, 'commandes-panel.js')).href);
+const vm = await import('node:vm');
+const constante = (entete, fin) => { const i = html.indexOf(entete); if (i < 0) return null; const j = html.indexOf(fin, i); return j < 0 ? null : html.slice(i, j + fin.length); };
+const srcPage = {
+  bcEl: constante('const bcEl = (tag, props = {}, enfants = []) => {', '\n};'), bcUnites: constante('const bcUnites = (brut, dec) => {', '};'),
+  bcPct: constante('const bcPct = (x) =>', "%');"), bcBas2: constante('const bcBas2 = (brut, dec) => {', '};'),
+  bcFraisPret: srcFP, bcPretMax: srcPM, bcBanqueFraisDit: srcFD,
+  bcPeindrePourToi: fonction('function bcPeindrePourToi(el, mk, r) {'), bcBanqueEstimer: est };
+ok(Object.values(srcPage).every((s) => typeof s === 'string' && s.length > 0), '(7) les 9 sources d app.html extraites pour le vm');
+class Noeud { constructor(tag) { this.tag = tag; this.className = ''; this.children = []; this._t = ''; this.value = ''; this.placeholder = ''; }
+  get textContent() { return this._t + this.children.map((c) => c.textContent).join(''); } set textContent(v) { this._t = String(v); this.children = []; }
+  append(...c) { this.children.push(...c); } setAttribute() {} }
+const pageVm = (sources, banque) => {
+  const els = { '#bcBanqueEstim': new Noeud('p'), '#bcBanqueMontant': new Noeud('input') };
+  const ctx = vm.createContext({ bcBanque: banque, enUnitesBrutes, document: { createElement: (t) => new Noeud(t), querySelector: (s) => els[s] || null }, bcPeindreJauge: () => {} });
+  const api = vm.runInContext('(() => { const $ = (s) => document.querySelector(s);\n' + Object.values(sources).join('\n') + '\nreturn { bcPeindrePourToi, bcBanqueEstimer, bcBanqueFraisDit, bcPretMax }; })()', ctx);
+  return { api, els };
+};
+const MK = { id: ID, garantie: { symbole: 'GOOGLc', decimales: 8 }, pret: { symbole: 'USDC', decimales: 6 }, apyPret: 0.05 };
+const banqueDe = () => ({ fraisPretBps: 10, fraisBps: 10, sens: 'preter', lendEnOusd: false, choisi: MK });
+/* (7a) l estimation : le total qui sort du wallet == ce que le plan fait sortir (approve M consomme par supply + transfer du frais) */
+const jugerEstimation = async (sources, montants) => {
+  const fautes = [];
+  for (const v of montants) {
+    const { api, els } = pageVm(sources, banqueDe()); els['#bcBanqueMontant'].value = v; api.bcBanqueEstimer();
+    const t = els['#bcBanqueEstim'].textContent, mt = /([\d.]+) USDC leaves your wallet, ([\d.]+) USDC goes to Morpho/.exec(t);
+    const Mv = enUnitesBrutes(v, 6), Fv = B.fraisPret(Mv), plan = await B.planPreter({ rpc: noeud({ solde: Mv + Fv }), compte: COMPTE, id: ID, montant: Mv });
+    const sortPlan = plan.aSigner.filter((c) => c.data.startsWith('0x' + B.SEL.supply) || versCaisse(c)).reduce((s, c) => s + (versCaisse(c) ? BigInt('0x' + motsDe(c.data)[1]) : BigInt('0x' + motsDe(c.data)[5])), 0n);
+    const ecran = mt ? enUnitesBrutes(mt[1], 6) : null, morpho = mt ? enUnitesBrutes(mt[2], 6) : null;
+    if (plan.etat !== 'PRET' || ecran !== BigInt(plan.resume.totalSortant) || ecran !== sortPlan || morpho !== Mv) fautes.push(v + ' : ecran ' + ecran + ' / plan ' + plan.resume.totalSortant + ' / signe ' + sortPlan);
+  }
+  return fautes;
+};
+const MONTANTS = ['5', '10', '0.000001', '1234.567891', '7.5'];
+const fE = await jugerEstimation(srcPage, MONTANTS);
+ok(fE.length === 0, '(7a) estimation du Lend : « leaves your wallet » == totalSortant du plan == supply + frais signes, sur ' + MONTANTS.length + ' montants' + (fE.length ? ' : ' + fE.join(' ; ') : ''));
+/* (7b) « You can lend » : le montant affiche, ressaisi tel quel, est ACCEPTE par le plan sur ce solde ; et c est bcPretMax tronque au cent */
+const jugerPourToi = async (sources, soldes) => {
+  const fautes = [];
+  for (const s of soldes) {
+    const { api } = pageVm(sources, banqueDe()), el = new Noeud('div');
+    api.bcPeindrePourToi(el, MK, { emprunt: null, garantie: 0n, pret: s });
+    const bloc = el.children[0] && el.children[0].children.find((d) => d.children[0] && d.children[0].textContent === 'You can lend');
+    const txt = bloc ? bloc.children[1].textContent : '', mt = /^([\d,]+\.\d\d) USDC$/.exec(txt);
+    const vu = mt ? enUnitesBrutes(mt[1].replace(/,/g, ''), 6) : null, attendu = (B.pretMaxAvecFrais(s) / 10000n) * 10000n;
+    const plan = vu ? await B.planPreter({ rpc: noeud({ solde: s }), compte: COMPTE, id: ID, montant: vu }) : null;
+    if (vu !== attendu || !plan || plan.etat !== 'PRET') fautes.push(s + ' : ecran « ' + txt + ' », attendu ' + attendu + ', plan ' + (plan && plan.etat));
+  }
+  return fautes;
+};
+const SOLDES = [10n ** 7n, 10n ** 6n, 123456789n, 5005000n, 2n * 10n ** 9n];
+const fP = await jugerPourToi(srcPage, SOLDES);
+ok(fP.length === 0, '(7b) « You can lend » == bcPretMax tronque au cent, et le plan ACCEPTE ce montant sur ce solde (' + SOLDES.length + ' soldes)' + (fP.length ? ' : ' + fP.join(' ; ') : ''));
+const plein = await B.planPreter({ rpc: noeud({ solde: 10n ** 7n }), compte: COMPTE, id: ID, montant: 10n ** 7n });
+ok(plein.etat === 'REFUSE', '(7b) temoin : le solde entier (10 USDC) est REFUSE par le plan - afficher le solde serait un montant que le wallet ne peut pas signer');
+/* (7c) la ligne des frais quand le taux du Lend differe de celui du Borrow (aujourd hui tous deux 10 : seul un taux FAUX le montre) */
+const ligneDiff = (sources) => pageVm(sources, { ...banqueDe(), fraisBps: 10, fraisPretBps: 20 }).api.bcBanqueFraisDit({ feeMorpho: '0' });
+const tD = ligneDiff(srcPage);
+ok(/one-time 0\.1 % to borrow, 0\.2 % to lend/.test(tD), '(7c) taux differents (10 / 20 bps) : la ligne dit les DEUX : ' + tD);
+/* (7d) mutants des revues, sur des copies de la source extraite : chacun ROUGE */
+const muterPage = async (cle, de, vers, nom, juge) => {
+  if (!srcPage[cle] || !srcPage[cle].includes(de)) return ok(false, '(7d) mutant introuvable : ' + nom);
+  let rouge; try { rouge = await juge({ ...srcPage, [cle]: srcPage[cle].replace(de, vers) }); } catch (_) { rouge = true; }
+  ok(rouge, '(7d) mutant « ' + nom + ' » : ROUGE');
+};
+await muterPage('bcBanqueEstimer', 'bcUnites(m + f, decL)', 'bcUnites(m, decL)', 'estimation : total = M sans le frais', async (s) => (await jugerEstimation(s, MONTANTS)).length > 0);
+await muterPage('bcBanqueEstimer', 'bcFraisPret(m) : null', '0n : null', 'estimation : frais 0', async (s) => (await jugerEstimation(s, MONTANTS)).length > 0);
+await muterPage('bcPeindrePourToi', 'bcBas2(pretMax !== null ? pretMax : r.pret, pr.decimales)', 'bcBas2(r.pret, pr.decimales)', '« You can lend » = tout le solde', async (s) => (await jugerPourToi(s, SOLDES)).length > 0);
+await muterPage('bcPretMax', '(10000n + BigInt(bcBanque.fraisPretBps))', '10000n', 'bcPretMax sans le frais', async (s) => (await jugerPourToi(s, SOLDES)).length > 0);
+await muterPage('bcBanqueFraisDit', "p / 100 + ' % to lend'", "e / 100 + ' % to lend'", 'ligne des frais : taux du Lend ignore', async (s) => !/0\.2 % to lend/.test(ligneDiff(s)));
+await muterPage('bcBanqueFraisDit', '(e === p ?', '(true ?', 'ligne des frais : un seul taux toujours', async (s) => !/0\.2 % to lend/.test(ligneDiff(s)));
 console.log(n - ko + ' ok / ' + ko + ' KO (' + n + ' assertions)');
 process.exit(ko ? 1 : 0);
