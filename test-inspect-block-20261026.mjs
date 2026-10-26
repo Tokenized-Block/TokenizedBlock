@@ -30,7 +30,7 @@ const FULL = {
   internals: { tick: 141, neurones, resume: { min: 0, max: 0.635, moyenne: 0.3175 } },
   champ: { entrees: [{ cle: 'vie', libelle: 'Life', lu: true, texte: '608,061', source: 'its market' }, { cle: 'vieAvant', libelle: 'Previous life', lu: false, texte: 'not read', source: 'the previous read' }],
     sensations: { total: 0.42 } },
-  why: { humeur: 'curious', dominante: { libelle: 'Transfers', valeur: 2742, apport: 0.2 } },
+  why: { mood: 'curious', strongest: { label: 'Transfers', value: 2742, contribution: 0.2 } },
   onMap: true, neighbours: [{ adr: '0x' + '22'.repeat(20), sym: 'SUIT', phase: 'CALME', distance: 410 }],
   journal: [{ tick: 120, texte: 'I feel transfers again.', genre: 'SENT' }], spoken: [{ texte: 'Hello SUIT', heure: '17:40:01' }],
 };
@@ -52,7 +52,7 @@ const WANTED = ['identity.name', 'identity.symbol', 'identity.pairedWith', 'iden
   ok(f['state.neurons'].status === 'read' && f['state.neurons'].value.length === 128 && f['state.neurons'].value[40].potentiel === 0.2, 'A: 128 neurons with their real potentials');
   ok(f['state.sensors'].value.potentials.length === 16 && f['state.sensors'].value.current === 0.42, 'A: 16 sensors and the current they received');
   ok(f['state.mood'].value === 'CURIEUX' && f['state.steering'].value === 0.153 && f['state.speed'].value === 0.25, 'A: mood, steering, speed as decided');
-  ok(f['state.why'].value.libelle === 'Transfers', 'A: why = the strongest read input');
+  ok(f['state.why'].value.label === 'Transfers', 'A: why = the strongest read input');
   ok(f['state.memory'].value.beats === 3 && f['state.memory'].value.from === 139 && f['state.memory'].value.to === 141 && f['state.memory'].value.trace === 0.31, 'A: memory of the last beats');
   ok(f['perceives.inputs'].value.length === 2 && f['perceives.inputs'].value[1].text === 'not read', 'A: inputs keep their own "not read"');
   ok(f['perceives.neighboursNearby'].value[0].sym === 'SUIT' && f['perceives.market'].value.prixUsd === 262.1, 'A: neighbours nearby and market, as held');
@@ -101,7 +101,7 @@ const WANTED = ['identity.name', 'identity.symbol', 'identity.pairedWith', 'iden
 const app = read('app.html'), server = read('serveur-web.js');
 ok(/import \{ inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ \} from '\.\/inspect-block\.js';/.test(app), 'F: app imports inspect-block.js');
 ok(server.includes("'inspect-block.js',"), 'F: served by serveur-web.js');
-ok(/data-livre="inspect"/.test(app) && /id="bvInspect"/.test(app) && /id="bvAim"/.test(app), 'F: the Inspect book and the overlay');
+ok(/data-book="inspect"/.test(app) && /id="bvInspect"/.test(app) && /id="bvAim"/.test(app), 'F: the Inspect book and the overlay');
 const i = app.indexOf('function bvInspectSources() {'); ok(i > 0, 'extraction found: function bvInspectSources() {');
 const src = app.slice(i, i + /\n\}/.exec(app.slice(i)).index + 2);
 ok(!/fetch\(|localStorage\.setItem|rpc\(|eth_/.test(src), 'F: the inspect sources are read from what the page holds, nothing is fetched or written');

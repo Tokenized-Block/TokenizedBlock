@@ -28,9 +28,9 @@ const srcInputs = extract('function entreesCerveau(vie, vieAvant, n, etatVie, nA
 const srcTrades = extract('function echangesDe(h) {');
 const srcOffMap = extract('function offMapFoodReads() {', false);
 function run(profilNourriture) {
-  const registry = CP.createPageBrains({ creer: (a) => initialBrain(a) });
+  const registry = CP.createPageBrains({ create: (a) => initialBrain(a) });
   const env = { $: (s) => (s === '#profil' ? { hidden: false } : s === '#pcActif' ? { checked: true } : {}),
-    habitants: [], profilCerveau: { adr: UNIT, etat: registry.etat(UNIT), vu: null, histo: [] }, relireNourriture: () => {},
+    habitants: [], profilCerveau: { adr: UNIT, etat: registry.state(UNIT), vu: null, histo: [] }, relireNourriture: () => {},
     vieProfil: 10.017, etatVieProfil: 'LUE', pageBrains: registry, cerveauPas: step, beatCycle: 1, peindreCerveau: () => {},
     vieServeurPourCerveau: () => null, marcheAerodromeIndexe: () => false, roleDe: () => 'accueil', rpcTete: { n: 53121388 },
     profilNourriture, profileFoodAddress: profilNourriture ? UNIT : null, brainNourriture: null, heldFood: CP.heldFood,

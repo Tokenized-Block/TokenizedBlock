@@ -5481,7 +5481,7 @@ const SERVIS = [
   /* ⛔ 2026-10-26 : le panneau Live (plusieurs vues Inside en direct ; pur, lecture seule) — importe par `app.html`. */
   'vision-live.js',
   'vision-inside.js',
-  /* ⛔ game57 #5 : un cerveau par adresse sur la page (pur) — importe par `app.html`. */
+  /* ⛔ game57 #5: one brain per address on the page (pure) — imported by `app.html`. */
   'page-brains.js',
   /* game57 #4b (d): the block inspect model (pure), imported by `app.html`. */
   'inspect-block.js',

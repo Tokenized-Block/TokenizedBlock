@@ -26,7 +26,7 @@ export const SOURCES = Object.freeze({
   carte: 'its brain on the map (beats every 600 ms)',
   brain: 'its Brain tab (beats while the Brain tab or the control panel is open)',
   profil: 'its block profile (beats while the profile is open)',
-  /* game57 #5 : la seule instance de son adresse sur la page (page-brains.js), qui que ce soit qui la fasse battre */
+  /* game57 #5: the single instance of its address on the page (page-brains.js), whoever makes it beat */
   page: 'its one brain on this page (shared by the map, its profile, Brain and Live)',
 });
 const ADR = /^0x[0-9a-fA-F]{40}$/;
@@ -46,7 +46,7 @@ export function ajouterTuile(live, { adr, sym = null } = {}, { etroit = false } 
   const max = maxTuiles(etroit);
   if (live.tuiles.length >= max) return { ok: false, pourquoi: 'Up to ' + max + ' live views at once on this screen — remove one first.' };
   const tuile = { adr: a, sym: sym ? String(sym).slice(0, 24) : null, cablage: cablageDe(a), source: null, histo: [], faits: null,
-    nourritureLue: null, h: null, refus: 0, vueTick: null };
+    nourritureLue: null, h: null, refus: 0, shownTick: null };
   live.tuiles.push(tuile);
   return { ok: true, tuile };
 }
@@ -98,30 +98,30 @@ export function nourrirLive(live, sourceDe) {
   return pris;
 }
 
-/* 2026-10-26 (« feel ») : une tuile REJOUE ses battements a rythme humain. `t.vueTick` = le battement MONTRE (null = le dernier pris).
- * ⛔ L etiquette, le cadre et la phrase parlent du MEME battement : celui-la. */
-const indiceMontre = (t) => {
+/* 2026-10-26 ("feel"): a tile REPLAYS its beats at human speed. `t.shownTick` = the beat SHOWN (null = the newest taken).
+ * ⛔ The label, the frame and the sentence speak about the SAME beat: that one. */
+const indexShown = (t) => {
   if (!t || !t.histo.length) return -1;
-  if (Number.isSafeInteger(t.vueTick)) { const i = t.histo.findIndex((v) => v.tick === t.vueTick); if (i >= 0) return i; }
+  if (Number.isSafeInteger(t.shownTick)) { const i = t.histo.findIndex((v) => v.tick === t.shownTick); if (i >= 0) return i; }
   return t.histo.length - 1;
 };
-/** Avance la tuile au battement suivant a montrer (vision-cerveau.js#nextBeat). Rend ce qui a ete saute ou perdu. */
+/** Moves the tile to the next beat to show (vision-cerveau.js#nextBeat). Returns what was skipped or lost. */
 export function advanceTile(t, o = {}) {
   if (!t) return null;
-  const r = nextBeat(t.histo, Number.isSafeInteger(t.vueTick) ? t.vueTick : null, o);
-  t.vueTick = r.tick;
+  const r = nextBeat(t.histo, Number.isSafeInteger(t.shownTick) ? t.shownTick : null, o);
+  t.shownTick = r.tick;
   return r;
 }
-/** L etiquette d une tuile : son symbole et l humeur du battement MONTRE (le dernier pris tant qu aucun n est rejoue), rien d autre. */
+/** A tile's label: its symbol and the mood of the beat SHOWN (the newest taken while none is replayed), nothing else. */
 export function etiquetteTuile(t) {
   if (!t) return null;
-  const i = indiceMontre(t);
+  const i = indexShown(t);
   const vu = i >= 0 ? t.histo[i] : null;
-  const dernier = t.histo.length ? t.histo[t.histo.length - 1] : null;
+  const newest = t.histo.length ? t.histo[t.histo.length - 1] : null;
   return { adr: t.adr, sym: t.sym, phase: vu ? vu.phase : null, humeur: vu ? humeurCourte(vu.phase) : 'no beat yet',
     tick: vu ? vu.tick : null, spikes: vu ? vu.spikes : null, source: t.source, sourceTexte: t.source ? SOURCES[t.source] : null,
-    dernierTick: dernier ? dernier.tick : null, retard: vu ? t.histo.length - 1 - i : null, palette: paletteOf(vu ? vu.phase : null).cle,
-    phrase: beatSentence(vu) };
+    newestTick: newest ? newest.tick : null, lag: vu ? t.histo.length - 1 - i : null, palette: paletteOf(vu ? vu.phase : null).key,
+    sentence: beatSentence(vu) };
 }
 
 /**
@@ -131,7 +131,7 @@ export function etiquetteTuile(t) {
  */
 export function cadreTuile(t, { voisins = [], marche = null, echange = null, capMap = null, reduit = false } = {}) {
   if (!t || !ADR.test(t.adr)) return null;
-  const i = indiceMontre(t);
+  const i = indexShown(t);
   const vu = i >= 0 ? t.histo[i] : null;
   const c = champ({ adr: t.adr, faits: t.faits, vu, voisins, marche, echange, nourritureLue: t.nourritureLue });
   if (!c) return null;

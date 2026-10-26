@@ -64,7 +64,7 @@ function valueOf(key, src) {
     case 'sensors': return inn ? { potentials: inn.neurones.slice(0, 16).map((x) => x.potentiel),
       current: src.champ && src.champ.sensations && finite(src.champ.sensations.total) ? src.champ.sensations.total : null } : null;
     case 'mood': return vu && text(vu.phase);
-    case 'why': return src.why && src.why.dominante ? src.why.dominante : null;
+    case 'why': return src.why && src.why.strongest ? src.why.strongest : null;
     case 'steering': return vu && finite(vu.virage) ? vu.virage : null;
     case 'speed': return vu && finite(vu.vitesse) ? vu.vitesse : null;
     case 'memory': return histo.length ? { beats: histo.length, from: histo[0].tick, to: histo[histo.length - 1].tick, trace: vu && finite(vu.memoire) ? vu.memoire : null } : null;
@@ -155,7 +155,7 @@ function fieldTextRaw(f) {
     return v.length + ' neurons · potential ' + (p.length ? num(Math.min(...p)) + ' … ' + num(Math.max(...p)) : NOT_READ) + ' · ' + v.filter((x) => finite(x.potentiel) && x.potentiel < 0).length + ' held below zero';
   }
   if (f.key === 'sensors') return v.potentials.map(num).join(' · ') + ' · current received ' + (v.current === null ? NOT_READ : num(v.current));
-  if (f.key === 'why') return v.libelle + ': ' + v.valeur + ' (adds ' + v.apport + ')';
+  if (f.key === 'why') return v.label + ': ' + v.value + ' (adds ' + v.contribution + ')';
   if (f.key === 'memory') return v.beats + ' beats recorded (' + v.from + ' → ' + v.to + ') · mean trace ' + (v.trace === null ? NOT_READ : Math.round(v.trace * 100) + ' %');
   if (f.key === 'inputs') return v.map((e) => e.label + ': ' + e.text).join(' · ');
   if (f.key === 'neighboursNearby') return v.map((n) => (n.sym || n.adr) + (finite(n.distance) ? ' (' + Math.round(n.distance) + ' away)' : '')).join(' · ');

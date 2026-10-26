@@ -1,128 +1,130 @@
-/* vision-inside.js — « VIEW INSIDE THE BRAIN » (proprietaire, 2026-10-26, game57 item 4) : la logique PURE de la fenetre 3D.
- * ⛔⛔ CHAQUE EFFET VIENT D UN CHAMP REEL DU BATTEMENT (`vu` rendu par cerveau.js#pas) et porte ce champ et sa valeur :
- *     buy = vu.nouveaux.achats (de face, chaud) · sell = vu.nouveaux.ventes (de dos, froid) · transfer = vu.nouveaux.gm (miroitement
- *     sur les cotes) · new holder = vu.nouveaux.detenteurs (une particule chacun). Absent, nul ou illisible = AUCUN effet.
- * ⛔ La lumiere = la phase DECIDEE (vu.phase) ; sa force = vu.spikes / 128. NON_LU et MORT ne colorent rien (comme haloDeLHumeur).
- * ⛔ La voix = beatSentence (vision-cerveau.js) : seuls les champs du battement parlent, jamais une cause devinee.
- * ⛔ PUR : aucun reseau, aucune horloge, aucun hasard, aucun DOM. Le dessin vit dans app.html (moteur 3D de la page). */
+/* vision-inside.js — "VIEW INSIDE THE BRAIN" (owner, 2026-10-26, game57 item 4): the PURE logic of the 3D window.
+ * ⛔⛔ EVERY EFFECT COMES FROM A REAL FIELD OF THE BEAT (`vu` returned by cerveau.js#pas) and carries that field and its value:
+ *     buy = vu.nouveaux.achats (from the front, warm) · sell = vu.nouveaux.ventes (from behind, cold) · transfer = vu.nouveaux.gm
+ *     (shimmer at the sides) · new holder = vu.nouveaux.detenteurs (one particle each). Missing, zero or unreadable = NO effect.
+ * ⛔ The light = the DECIDED phase (vu.phase); its strength = vu.spikes / 128. NON_LU and MORT colour nothing (like haloDeLHumeur).
+ * ⛔ The voice = beatSentence (vision-cerveau.js): only the beat's fields speak, never a guessed cause.
+ * ⛔ PURE: no network, no clock, no randomness, no DOM. The drawing lives in app.html (the page's 3D engine).
+ * Field names read from the beat, the brain state and vision-cerveau.js#champ (vu.*, entrees[].cle/libelle/valeur/brut/lu,
+ * etat.potentiels, liens[].vers/poids, interne().neurones[].potentiel/lueur) keep the names of those base structures. */
 import { NEURONES } from './cerveau.js';
 import { projectCam } from './map3d.js';
 import { beatSentence, apportDe, interne, SOURCES_INTERIEUR, humeurCourte } from './vision-cerveau.js';
 
 export const VERSION_INSIDE = 'tblock-brain-view-inside/1';
-const fini = (x) => typeof x === 'number' && Number.isFinite(x);
+const finite = (x) => typeof x === 'number' && Number.isFinite(x);
 const r3 = (x) => Math.round(x * 1000) / 1000;
 
 export const SENSATIONS = Object.freeze([
-  Object.freeze({ cle: 'achats', champ: 'nouveaux.achats', effet: 'buy', direction: 'front', temperature: 'warm', forme: 'glow' }),
-  Object.freeze({ cle: 'ventes', champ: 'nouveaux.ventes', effet: 'sell', direction: 'back', temperature: 'cold', forme: 'glow' }),
-  Object.freeze({ cle: 'gm', champ: 'nouveaux.gm', effet: 'transfer', direction: 'sides', temperature: null, forme: 'shimmer' }),
-  Object.freeze({ cle: 'detenteurs', champ: 'nouveaux.detenteurs', effet: 'holder', direction: 'center', temperature: null, forme: 'particle' }),
+  Object.freeze({ key: 'achats', field: 'nouveaux.achats', effect: 'buy', direction: 'front', temperature: 'warm', shape: 'glow' }),
+  Object.freeze({ key: 'ventes', field: 'nouveaux.ventes', effect: 'sell', direction: 'back', temperature: 'cold', shape: 'glow' }),
+  Object.freeze({ key: 'gm', field: 'nouveaux.gm', effect: 'transfer', direction: 'sides', temperature: null, shape: 'shimmer' }),
+  Object.freeze({ key: 'detenteurs', field: 'nouveaux.detenteurs', effect: 'holder', direction: 'center', temperature: null, shape: 'particle' }),
 ]);
-/** Les sensations d UN battement. Un block mort ne ressent rien (meme regle que beatSentence). */
+/** The sensations of ONE beat. A dead block feels nothing (same rule as beatSentence). */
 export function effectsOf(vu) {
   if (!vu || typeof vu !== 'object' || vu.phase === 'MORT') return [];
-  const nv = vu.nouveaux && typeof vu.nouveaux === 'object' ? vu.nouveaux : null;
-  if (!nv) return [];
+  const counts = vu.nouveaux && typeof vu.nouveaux === 'object' ? vu.nouveaux : null;
+  if (!counts) return [];
   const out = [];
   for (const s of SENSATIONS) {
-    const v = nv[s.cle];
-    if (!fini(v) || v <= 0) continue;
-    const e = { champ: s.champ, valeur: v, effet: s.effet, direction: s.direction, temperature: s.temperature, forme: s.forme,
-      intensite: r3(Math.min(1, 0.35 + 0.2 * v)) };
-    if (s.forme === 'particle') e.particules = Math.min(12, Math.round(v));
+    const v = counts[s.key];
+    if (!finite(v) || v <= 0) continue;
+    const e = { field: s.field, value: v, effect: s.effect, direction: s.direction, temperature: s.temperature, shape: s.shape,
+      intensity: r3(Math.min(1, 0.35 + 0.2 * v)) };
+    if (s.shape === 'particle') e.particles = Math.min(12, Math.round(v));
     out.push(e);
   }
   return out;
 }
 
-/* la teinte par phase : MEME table que app.html#TEINTE_HUMEUR (null = la teinte du theme) ; MORT et NON_LU absents = neutre */
+/* the hue per phase: SAME table as app.html#TEINTE_HUMEUR (null = the theme's hue); MORT and NON_LU absent = neutral */
 export const TINTS = Object.freeze({ DORMANT: 220, EVEILLE: 190, CALME: 160, CURIEUX: null, EXCITE: 45, INQUIET: 20 });
-export function lightOf(vu, teintes = TINTS) {
+export function lightOf(vu, tints = TINTS) {
   const phase = vu && typeof vu.phase === 'string' ? vu.phase : null;
-  if (!phase || !Object.prototype.hasOwnProperty.call(teintes, phase)) return { phase, neutre: true, teinte: null, theme: false, force: 0 };
-  const force = fini(vu.spikes) ? r3(Math.max(0, Math.min(1, vu.spikes / NEURONES))) : 0;
-  return { phase, neutre: false, teinte: teintes[phase], theme: teintes[phase] === null, force };
+  if (!phase || !Object.prototype.hasOwnProperty.call(tints, phase)) return { phase, neutral: true, hue: null, theme: false, strength: 0 };
+  const strength = finite(vu.spikes) ? r3(Math.max(0, Math.min(1, vu.spikes / NEURONES))) : 0;
+  return { phase, neutral: false, hue: tints[phase], theme: tints[phase] === null, strength };
 }
-/** Le pouls au bord de l ecran : sa force = la part de neurones qui ont tire ; il ne bat a l ecran que sans mouvement reduit. */
-export function pulseOf(vu, { reduit = false } = {}) {
+/** The pulse at the screen edge: its strength = the share of neurons that fired; it only beats on screen without reduced motion. */
+export function pulseOf(vu, { reduced = false } = {}) {
   const ok = !!vu && Number.isSafeInteger(vu.tick);
-  return { tick: ok ? vu.tick : null, force: ok && fini(vu.spikes) ? r3(Math.max(0, Math.min(1, vu.spikes / NEURONES))) : 0, anime: ok && !reduit };
+  return { tick: ok ? vu.tick : null, strength: ok && finite(vu.spikes) ? r3(Math.max(0, Math.min(1, vu.spikes / NEURONES))) : 0, animated: ok && !reduced };
 }
-/** Les echos : les (jusqu a) 5 battements ENREGISTRES avant le battement montre, du plus recent au plus ancien. */
+/** The echoes: the (up to) 5 RECORDED beats before the beat shown, newest first. */
 export function echoesOf(histo, i, n = 5) {
   const H = Array.isArray(histo) ? histo : [];
   const out = [];
   for (let k = i - 1; k >= 0 && out.length < n; k--) {
     const v = H[k];
     if (!v || !Number.isSafeInteger(v.tick)) continue;
-    out.push({ tick: v.tick, phase: v.phase || null, spikes: fini(v.spikes) ? v.spikes : null,
+    out.push({ tick: v.tick, phase: v.phase || null, spikes: finite(v.spikes) ? v.spikes : null,
       indices: Array.isArray(v.indices) ? v.indices.slice() : [], age: out.length + 1 });
   }
   return out;
 }
-/** Le virage penche l horizon (borne a ±20°). Sans virage lu, il ne penche pas. */
+/** Steering tilts the horizon (bounded to ±20°). Without a read steering, it does not tilt. */
 export function horizonOf(vu) {
-  if (!vu || !fini(vu.virage)) return { deg: 0, virage: null };
-  return { deg: Math.round(Math.max(-20, Math.min(20, vu.virage * 14)) * 100) / 100, virage: vu.virage };
+  if (!vu || !finite(vu.virage)) return { deg: 0, steering: null };
+  return { deg: Math.round(Math.max(-20, Math.min(20, vu.virage * 14)) * 100) / 100, steering: vu.virage };
 }
-/** LE numero de battement : celui du battement montre, et aucun autre. */
+/** THE beat number: the one of the beat shown, and no other. */
 export const beatNumber = (vu) => (vu && Number.isSafeInteger(vu.tick) ? vu.tick : null);
-/** La voix interieure : une phrase, faite des seuls champs du battement. */
+/** The inner voice: one sentence, made only of the beat's fields. */
 export function voiceOf(vu) { return beatSentence(vu); }
 
 const CHANGES = ['phase', 'spikes', 'virage', 'vitesse', 'delta'];
-const NOUVEAUX = ['achats', 'ventes', 'gm', 'messages', 'detenteurs'];
-/** « Why » : ce qui a pese le plus, ses neurones, ce qui a change, ou il regarde. Rien n est devine. */
+const NEW_COUNTS = ['achats', 'ventes', 'gm', 'messages', 'detenteurs'];
+/** "Why": what weighed the most, its neurons, what changed, where it is looking. Nothing is guessed. */
 export function whyOf({ c = null, faits = null, vu = null, vuAvant = null, etat = null, capMap = null } = {}) {
   if (!vu || !Number.isSafeInteger(vu.tick) || !c || !Array.isArray(c.entrees)) return null;
-  let dominante = null;
+  let strongest = null;
   for (const s of SOURCES_INTERIEUR) {
     const e = c.entrees.find((x) => x.cle === s.cle);
     if (!e || !e.lu) continue;
     const a = apportDe(faits, s.cle);
-    if (!fini(a) || a === 0) continue;
-    if (!dominante || Math.abs(a) > Math.abs(dominante.apport)) dominante = { cle: e.cle, libelle: e.libelle, valeur: e.valeur, brut: e.brut, apport: a };
+    if (!finite(a) || a === 0) continue;
+    if (!strongest || Math.abs(a) > Math.abs(strongest.contribution)) strongest = { key: e.cle, label: e.libelle, value: e.valeur, raw: e.brut, contribution: a };
   }
   const inn = etat ? interne(etat) : null;
-  const proches = inn && inn.tick === vu.tick
-    ? inn.neurones.filter((x) => fini(x.potentiel)).sort((a, b) => b.potentiel - a.potentiel || a.n - b.n).slice(0, 5).map((x) => ({ n: x.n, potentiel: x.potentiel, lueur: x.lueur }))
+  const closest = inn && inn.tick === vu.tick
+    ? inn.neurones.filter((x) => finite(x.potentiel)).sort((a, b) => b.potentiel - a.potentiel || a.n - b.n).slice(0, 5).map((x) => ({ n: x.n, potential: x.potentiel, glow: x.lueur }))
     : null;
-  const changements = [];
+  const changes = [];
   if (vuAvant && Number.isSafeInteger(vuAvant.tick)) {
-    for (const k of CHANGES) if (k in vu && k in vuAvant && vu[k] !== vuAvant[k]) changements.push({ champ: k, avant: vuAvant[k], apres: vu[k] });
+    for (const k of CHANGES) if (k in vu && k in vuAvant && vu[k] !== vuAvant[k]) changes.push({ field: k, before: vuAvant[k], after: vu[k] });
     const a = vuAvant.nouveaux || {}, b = vu.nouveaux || {};
-    for (const k of NOUVEAUX) if (fini(a[k]) && fini(b[k]) && a[k] !== b[k]) changements.push({ champ: 'nouveaux.' + k, avant: a[k], apres: b[k] });
+    for (const k of NEW_COUNTS) if (finite(a[k]) && finite(b[k]) && a[k] !== b[k]) changes.push({ field: 'nouveaux.' + k, before: a[k], after: b[k] });
   }
   return {
-    tick: vu.tick, phase: vu.phase || null, humeur: typeof vu.phase === 'string' ? humeurCourte(vu.phase) : null, dominante,
-    neurones: { tires: Array.isArray(vu.indices) ? vu.indices.slice(0, 8) : [], nTires: fini(vu.spikes) ? vu.spikes : null, proches },
-    changements,
-    regard: { virage: fini(vu.virage) ? vu.virage : null, vitesse: fini(vu.vitesse) ? vu.vitesse : null,
-      cote: !fini(vu.virage) ? null : vu.virage < 0 ? 'left' : vu.virage > 0 ? 'right' : 'straight', capMap: fini(capMap) ? capMap : null },
+    tick: vu.tick, phase: vu.phase || null, mood: typeof vu.phase === 'string' ? humeurCourte(vu.phase) : null, strongest,
+    neurons: { fired: Array.isArray(vu.indices) ? vu.indices.slice(0, 8) : [], nFired: finite(vu.spikes) ? vu.spikes : null, closest },
+    changes,
+    gaze: { steering: finite(vu.virage) ? vu.virage : null, speed: finite(vu.vitesse) ? vu.vitesse : null,
+      side: !finite(vu.virage) ? null : vu.virage < 0 ? 'left' : vu.virage > 0 ? 'right' : 'straight', capMap: finite(capMap) ? capMap : null },
   };
 }
 
-/* ══ TAKE CONTROL — un instantane LOCAL, fige ; la camera libre est une fonction pure ══ */
-const geler = (o) => { if (o && typeof o === 'object') { for (const k of Object.keys(o)) geler(o[k]); Object.freeze(o); } return o; };
+/* ══ TAKE CONTROL — a LOCAL, frozen snapshot; the free camera is a pure function ══ */
+const deepFreeze = (o) => { if (o && typeof o === 'object') { for (const k of Object.keys(o)) deepFreeze(o[k]); Object.freeze(o); } return o; };
 export function insideSnapshot({ adr = null, etat = null, histo = [], i = -1 } = {}) {
   const H = Array.isArray(histo) ? histo : [];
   const k = i >= 0 && i < H.length ? i : H.length - 1;
   const vu = k >= 0 ? H[k] : null;
   if (!vu || !Number.isSafeInteger(vu.tick)) return null;
   const pots = etat && Array.isArray(etat.potentiels) && etat.potentiels.length === NEURONES && etat.tick === vu.tick ? etat.potentiels.slice() : null;
-  const liens = etat && etat.c && Array.isArray(etat.c.liens) ? etat.c.liens.map((l) => l.map((x) => ({ vers: x.vers, poids: x.poids }))) : null;
-  return geler({ version: VERSION_INSIDE, adr: adr ? String(adr).toLowerCase() : null, tick: vu.tick, phase: vu.phase || null,
-    indices: Array.isArray(vu.indices) ? vu.indices.slice() : [], potentiels: pots || new Array(NEURONES).fill(null), etatDuBattement: !!pots, liens });
+  const links = etat && etat.c && Array.isArray(etat.c.liens) ? etat.c.liens.map((l) => l.map((x) => ({ to: x.vers, weight: x.poids }))) : null;
+  return deepFreeze({ version: VERSION_INSIDE, adr: adr ? String(adr).toLowerCase() : null, tick: vu.tick, phase: vu.phase || null,
+    indices: Array.isArray(vu.indices) ? vu.indices.slice() : [], potentials: pots || new Array(NEURONES).fill(null), stateOfThisBeat: !!pots, links });
 }
 export const freeCam = () => ({ yaw: 0, pitch: 0, dist: 0.35 });
 export function orbitCam(cam, dx, dy) {
   const c = cam || freeCam();
-  return { ...c, yaw: c.yaw + (fini(dx) ? dx : 0) * 0.01, pitch: Math.max(-1.4, Math.min(1.4, c.pitch + (fini(dy) ? dy : 0) * 0.01)) };
+  return { ...c, yaw: c.yaw + (finite(dx) ? dx : 0) * 0.01, pitch: Math.max(-1.4, Math.min(1.4, c.pitch + (finite(dy) ? dy : 0) * 0.01)) };
 }
 export function zoomCam(cam, dz) {
   const c = cam || freeCam();
-  return { ...c, dist: Math.max(0.2, Math.min(6, c.dist + (fini(dz) ? dz : 0) * 0.15)) };
+  return { ...c, dist: Math.max(0.2, Math.min(6, c.dist + (finite(dz) ? dz : 0) * 0.15)) };
 }
 /** game57 #4b (b): projected with THE map engine (map3d.js#projectCam); behind the camera = not drawn. */
 export function projectNeurons(pos, cam, L, H) {
@@ -137,19 +139,19 @@ export function projectNeurons(pos, cam, L, H) {
 /** pan the camera on screen (like right-drag on the map), bounded to +-600 px */
 export function panCam(cam, dx, dy) {
   const c = cam || freeCam(), bound = (v) => Math.max(-600, Math.min(600, v));
-  return { ...c, ox: bound((c.ox || 0) + (fini(dx) ? dx : 0)), oy: bound((c.oy || 0) + (fini(dy) ? dy : 0)) };
+  return { ...c, ox: bound((c.ox || 0) + (finite(dx) ? dx : 0)), oy: bound((c.oy || 0) + (finite(dy) ? dy : 0)) };
 }
 /* the "seen from the map" pose: the map camera's heading, from afar (the block among its real neighbours) */
 const MAP_POSE_DIST = 6;
 export function mapPose(mapCam) {
-  const known = mapCam && fini(mapCam.yaw) && fini(mapCam.pitch);
+  const known = mapCam && finite(mapCam.yaw) && finite(mapCam.pitch);
   return { yaw: known ? mapCam.yaw : 0.65, pitch: known ? mapCam.pitch : -0.18, dist: MAP_POSE_DIST, ox: 0, oy: 0 };
 }
 /** the flight between two poses (map -> inside, or back); u in [0, 1]; reduced motion = the arrival pose, no flight */
 export function flightPose(from, to, u, reduced = false) {
   const end = { yaw: to.yaw, pitch: to.pitch, dist: to.dist, ox: to.ox || 0, oy: to.oy || 0 };
   if (reduced || !from) return end;
-  const t = Math.max(0, Math.min(1, fini(u) ? u : 1));
+  const t = Math.max(0, Math.min(1, finite(u) ? u : 1));
   if (t >= 1) return end;
   const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
   const mix = (a, b) => (a || 0) + ((b || 0) - (a || 0)) * e;
@@ -168,42 +170,43 @@ export function spaceScene({ pos = [], inputs = [], neighbours = [] } = {}) {
       x: r3(Math.sin(a) * 1.7), y: -0.35, z: r3(Math.cos(a) * 1.7) });
   });
   for (const v of Array.isArray(neighbours) ? neighbours : []) {
-    if (!v || !fini(v.x) || !fini(v.y) || !fini(v.z)) continue;
+    if (!v || !finite(v.x) || !finite(v.y) || !finite(v.z)) continue;
     out.push({ kind: 'neighbour', adr: v.adr, sym: v.sym || null, x: v.x, y: v.y, z: v.z, read: false, note: 'not read by its neurons' });
   }
   return out;
 }
-/* Outside : la vue de depart de map3d.js (yaw 0,65, pitch −0,18), reculee pour voir ses voisins ; Inside : premiere personne */
-const DEHORS = Object.freeze({ yaw: 0.65, pitch: -0.18, dist: 4.2 });
-const DEDANS = Object.freeze({ yaw: 0, pitch: 0, dist: 0.35 });
+/* Outside: map3d.js's starting view (yaw 0.65, pitch −0.18), pulled back to see its neighbours; Inside: first person.
+ * The mode values 'dedans' / 'dehors' are the existing vision.vue values of app.html. */
+const OUTSIDE_POSE = Object.freeze({ yaw: 0.65, pitch: -0.18, dist: 4.2 });
+const INSIDE_POSE = Object.freeze({ yaw: 0, pitch: 0, dist: 0.35 });
 export const FLIGHT_MS = 1400;
-export function cameraPose(mode, t, reduit = false) {
-  if (mode !== 'dedans') return { ...DEHORS };
-  if (reduit) return { ...DEDANS };
-  const u = Math.max(0, Math.min(1, fini(t) ? t : 1)), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
+export function cameraPose(mode, t, reduced = false) {
+  if (mode !== 'dedans') return { ...OUTSIDE_POSE };
+  if (reduced) return { ...INSIDE_POSE };
+  const u = Math.max(0, Math.min(1, finite(t) ? t : 1)), e = u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2;
   const m = (a, b) => Math.round((a + (b - a) * e) * 1e4) / 1e4;
-  return u >= 1 ? { ...DEDANS } : { yaw: m(DEHORS.yaw, DEDANS.yaw), pitch: m(DEHORS.pitch, DEDANS.pitch), dist: m(DEHORS.dist, DEDANS.dist) };
+  return u >= 1 ? { ...INSIDE_POSE } : { yaw: m(OUTSIDE_POSE.yaw, INSIDE_POSE.yaw), pitch: m(OUTSIDE_POSE.pitch, INSIDE_POSE.pitch), dist: m(OUTSIDE_POSE.dist, INSIDE_POSE.dist) };
 }
-/** prefers-reduced-motion : ni vol, ni secousse, lumiere statique, aucune boucle d animation. */
-export function animationPlan(reduit) {
-  return reduit ? { vol: false, secousse: false, lumiere: 'statique', boucle: false } : { vol: true, secousse: true, lumiere: 'vivante', boucle: true };
+/** prefers-reduced-motion: no flight, no shake, static light, no animation loop. */
+export function animationPlan(reduced) {
+  return reduced ? { flight: false, shake: false, light: 'static', loop: false } : { flight: true, shake: true, light: 'live', loop: true };
 }
-/** Outside : ses 6 plus proches voisins REELS (positions monde de la map), a l echelle ; allume = seulement s il est lu. */
-export function outsideNeighbours(h, habitants, lus = new Set(), n = 6) {
-  if (!h || !fini(h.wx) || !fini(h.wy) || !fini(h.wz)) return [];
-  const l = [];
+/** Outside: its 6 closest REAL neighbours (the map's world positions), to scale; lit = only if it is read. */
+export function outsideNeighbours(h, habitants, readSet = new Set(), n = 6) {
+  if (!h || !finite(h.wx) || !finite(h.wy) || !finite(h.wz)) return [];
+  const list = [];
   for (const o of Array.isArray(habitants) ? habitants : []) {
-    if (!o || o === h || !fini(o.wx) || !fini(o.wy) || !fini(o.wz)) continue;
+    if (!o || o === h || !finite(o.wx) || !finite(o.wy) || !finite(o.wz)) continue;
     const dx = o.wx - h.wx, dy = o.wy - h.wy, dz = o.wz - h.wz, d = Math.hypot(dx, dy, dz);
     if (!(d > 0)) continue;
-    l.push({ o, dx, dy, dz, d });
+    list.push({ o, dx, dy, dz, d });
   }
-  l.sort((a, b) => a.d - b.d);
-  const pris = l.slice(0, n), dMax = Math.max(...pris.map((x) => x.d), 1);
-  /* echelle racine : le plus proche reste le plus proche, les lointains restent dans le cadre */
-  return pris.map(({ o, dx, dy, dz, d }) => {
+  list.sort((a, b) => a.d - b.d);
+  const taken = list.slice(0, n), dMax = Math.max(...taken.map((x) => x.d), 1);
+  /* square-root scale: the closest stays the closest, the far ones stay in frame */
+  return taken.map(({ o, dx, dy, dz, d }) => {
     const k = (1.6 + 1.6 * Math.sqrt(d / dMax)) / d;
     const adr = String(o.adr || '').toLowerCase();
-    return { adr, sym: o.sym || null, phase: o.phase || null, distance: Math.round(d), x: r3(dx * k), y: r3(dy * k), z: r3(dz * k), lu: lus instanceof Set && lus.has(adr) };
+    return { adr, sym: o.sym || null, phase: o.phase || null, distance: Math.round(d), x: r3(dx * k), y: r3(dy * k), z: r3(dz * k), read: readSet instanceof Set && readSet.has(adr) };
   });
 }

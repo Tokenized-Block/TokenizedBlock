@@ -155,11 +155,11 @@ const FAITS = { vie: 12000, vieAvant: 11000, gm: 2, messages: 0, detenteurs: 1, 
 /* ══ D. LE CABLAGE DANS APP.HTML ══ */
 {
   const app = readFileSync(new URL(process.env.APP_HTML || './app.html', import.meta.url), 'utf8');
-  /* game57 #5 : les trois vues font battre L instance partagee (page-brains.js#battre, qui appelle pas() avec ces faits) ;
-   *   deja battue dans le cycle, les faits gardes sont ceux que l instance a REELLEMENT recus (lire().faits) */
-  ok(/const r = pageBrains\.battre\(h\.adr, faitsH, cerveauPas, beatCycle[^\n]*\n[\s\S]{0,300}h\.faitsVus = faitsH;/.test(app), 'D: map — les faits gardes sont ceux passes a pas()');
-  ok(/const r = pageBrains\.battre\(profilCerveau\.adr, fP, cerveauPas, beatCycle[\s\S]{0,500}profilCerveau\.faits = r\.deja \? \(pageBrains\.lire\(profilCerveau\.adr\) \|\| \{\}\)\.faits \|\| fP : fP;/.test(app), 'D: fiche — idem');
-  ok(/const r = pageBrains\.battre\(brainAdr, fB, cerveauPas, beatCycle[\s\S]{0,700}brainFaitsVus = dj \? \{ adr: dj\.adr, faits: dj\.faits[^}]*\} : \{ adr: [^}]*faits: fB/.test(app), 'D: onglet Brain — idem');
+  /* game57 #5: the three views step THE shared instance (page-brains.js#step, which calls pas() with these facts);
+   *   already stepped in the cycle, the facts kept are the ones the instance REALLY received (read().faits) */
+  ok(/const r = pageBrains\.step\(h\.adr, faitsH, cerveauPas, beatCycle[^\n]*\n[\s\S]{0,300}h\.faitsVus = faitsH;/.test(app), 'D: map — les faits gardes sont ceux passes a pas()');
+  ok(/const r = pageBrains\.step\(profilCerveau\.adr, fP, cerveauPas, beatCycle[\s\S]{0,500}profilCerveau\.faits = r\.already \? \(pageBrains\.read\(profilCerveau\.adr\) \|\| \{\}\)\.faits \|\| fP : fP;/.test(app), 'D: fiche — idem');
+  ok(/const r = pageBrains\.step\(brainAdr, fB, cerveauPas, beatCycle[\s\S]{0,700}brainFaitsVus = dj \? \{ adr: dj\.adr, faits: dj\.faits[^}]*\} : \{ adr: [^}]*faits: fB/.test(app), 'D: onglet Brain — idem');
   const debut = app.indexOf('/* ══ BRAIN VISION (2026-10-26)');
   const fin = app.indexOf('function dessinerRasterSur(c, histoTout)');
   ok(debut > 0 && fin > debut, 'D: le bloc de l ecran est trouve');

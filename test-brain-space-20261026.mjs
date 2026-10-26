@@ -67,7 +67,7 @@ for (const k of ['panCam', 'mapPose', 'flightPose', 'spaceScene']) ok(typeof V[k
 const extract = (header) => { const i = app.indexOf(header); ok(i > 0, 'extraction found: ' + header); const f = /\n\}/.exec(app.slice(i)); return app.slice(i, i + f.index + 2); };
 const back = extract('function bvBackToMap() {');
 for (const reduced of [true, false]) {
-  let closed = 0; const vision = { controle: null, vue: 'dedans' };
+  let closed = 0; const vision = { control: null, vue: 'dedans' };
   const f = new Function('vision', '$', 'bvReduit', 'performance', 'currentCam', 'mapPose', 'moteur3d', back + '\nbvBackToMap(); return vision;');
   const out = f(vision, (s) => (s === '#bvPop' ? { close: () => { closed++; } } : {}), () => reduced, { now: () => 1000 }, () => ({ yaw: 0, pitch: 0, dist: 0.35, ox: 0, oy: 0 }), V.mapPose, { camera: () => ({ yaw: 0.7, pitch: -0.4 }) });
   if (reduced) ok(closed === 1 && !out.backFlight, 'C: Back to map with reduced motion: the window closes, no flight');
@@ -80,7 +80,7 @@ ok(/const BV_STARS = skyStars\(\);/.test(app), 'C: the sky comes from map3d.js#s
 const open = extract('function ouvrirVision(source) {');
 ok(/vision\.flightFrom = mapPose\(moteur3d && typeof moteur3d\.camera === 'function' \? moteur3d\.camera\(\) : null\);/.test(open) && /vision\.vue = 'dedans';/.test(open), 'C: on open, the flight starts at the map camera and goes inside');
 const pan = extract('function bvPanControl(dx, dy) {');
-ok(/panCam\(vision\.controle\.cam, dx, dy\)/.test(pan) && /if \(!vision\.controle\) return;/.test(pan), 'C: pan only in Take control (local snapshot)');
+ok(/panCam\(vision\.control\.cam, dx, dy\)/.test(pan) && /if \(!vision\.control\) return;/.test(pan), 'C: pan only in Take control (local snapshot)');
 ok(/e\.button === 2 \|\| e\.shiftKey/.test(app), 'C: right button or Shift = pan, like the map');
 ok(/id="bvBackToMap"/.test(app), 'C: the Back to map button');
 console.log('test-brain-space-20261026: ' + count + ' assertions, OK');

@@ -1,25 +1,25 @@
-// test-vision-inside-20261026.mjs — « VIEW INSIDE THE BRAIN » : la fenetre 3D ne montre que des champs REELS.
+// test-vision-inside-20261026.mjs — "VIEW INSIDE THE BRAIN": the 3D window only shows REAL fields.
 //
-// Ce que ce banc exige (proprietaire, 2026-10-26, game57 item 4) :
-//   A. effets directionnels 1:1 avec des champs reels : buy = nouveaux.achats (devant, chaud), sell = nouveaux.ventes (derriere,
-//      froid), transfer = nouveaux.gm (cotes, miroitement), new holder = nouveaux.detenteurs (une particule) ; chaque effet porte
-//      le champ et la valeur qui l ont fait naitre ;
-//   B. une entree absente (ou nulle) ne produit AUCUN effet ;
-//   C. la voix interieure : une phrase par battement, chaque morceau vient d un champ PRESENT du battement ; aucun champ invente
-//      (cause, raison, baleine…) ne passe jamais dans la phrase ;
-//   D. « Why » : l entree dominante porte sa vraie valeur, les neurones viennent de vu.indices / de l etat, « what changed » ne
-//      compare que des champs tenus ;
-//   E. « Take control » : instantane LOCAL, zero requete d ecriture (fetch / XHR / wallet stubbes, zero appel non-GET) ;
-//   F. prefers-reduced-motion : pas de vol, pas de secousse, lumiere statique, aucune boucle requestAnimationFrame ;
-//   G. app.html : la fenetre reprend le code du Control panel (bcBornerTaille), n est pas modale, range ses sections en etagere.
-// ⛔ Lecture EOL-agnostique (le checkout de Phil est en CRLF) ; chaque extraction affirme avoir trouve sa fonction.
+// What this bench requires (owner, 2026-10-26, game57 item 4):
+//   A. directional effects 1:1 with real fields: buy = nouveaux.achats (front, warm), sell = nouveaux.ventes (behind, cold),
+//      transfer = nouveaux.gm (sides, shimmer), new holder = nouveaux.detenteurs (one particle); each effect carries the field
+//      and the value that created it;
+//   B. a missing (or zero) input produces NO effect;
+//   C. the inner voice: one sentence per beat, each piece comes from a field PRESENT in the beat; no invented field
+//      (cause, reason, whale…) ever reaches the sentence;
+//   D. "Why": the strongest input carries its real value, the neurons come from vu.indices / from the state, "what changed"
+//      only compares held fields;
+//   E. "Take control": a LOCAL snapshot, zero write request (fetch / XHR / wallet stubbed, zero non-GET call);
+//   F. prefers-reduced-motion: no flight, no shake, static light, no requestAnimationFrame loop;
+//   G. app.html: the window reuses the Control panel code (bcBornerTaille), is not modal, shelves its sections like books.
+// ⛔ EOL-agnostic reading (Phil's checkout is CRLF); every extraction asserts it found its function.
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; };
 const eq = (a, b, m) => { assert.deepEqual(a, b, m); n++; };
-const lire = (p) => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 const D = await import(new URL(process.env.INSIDE_MODULE || './vision-inside.js', import.meta.url).href);
 const V = await import(new URL('./vision-cerveau.js', import.meta.url).href);
@@ -29,193 +29,193 @@ const { effectsOf, SENSATIONS, lightOf, pulseOf, echoesOf, horizonOf, beatNumber
 const { etatInitial, pas, NEURONES } = C;
 
 const ADR = '0xb2000000000000000000007afa7ed748b0874f27';
-const FAITS = { vie: 12000, vieAvant: 11000, gm: 3, messages: 1, detenteurs: 2, mort: false, etatVie: 'LUE', gmAvant: 2, messagesAvant: 0,
+const FACTS = { vie: 12000, vieAvant: 11000, gm: 3, messages: 1, detenteurs: 2, mort: false, etatVie: 'LUE', gmAvant: 2, messagesAvant: 0,
   detenteursAvant: 1, achats: 2, ventes: 1, achatsAvant: 1, ventesAvant: 0, role: 'SENTINELLE', bloc: 53106615 };
-const derouler = (f, k) => { let e = etatInitial(ADR); const h = []; for (let i = 0; i < k; i++) { const r = pas(e, f(i)); e = r.etat; h.push(r.vu); } return { h, e }; };
-const { h: HISTO, e: ETAT } = derouler(() => FAITS, 8);
-const VU = HISTO[0];   /* premier battement : achats 1→2, ventes 0→1, gm 2→3, detenteurs 1→2 sont NOUVEAUX */
+const run = (f, k) => { let e = etatInitial(ADR); const h = []; for (let i = 0; i < k; i++) { const r = pas(e, f(i)); e = r.etat; h.push(r.vu); } return { h, e }; };
+const { h: HISTO, e: STATE } = run(() => FACTS, 8);
+const VU = HISTO[0];   /* first beat: buys 1→2, sells 0→1, gm 2→3, holders 1→2 are NEW */
 
-/* ══ A. 1:1 AVEC DES CHAMPS REELS ══ */
+/* ══ A. 1:1 WITH REAL FIELDS ══ */
 {
-  ok(VU.nouveaux.achats === 1 && VU.nouveaux.ventes === 1 && VU.nouveaux.gm === 1 && VU.nouveaux.detenteurs === 1, 'A: le battement de reference porte bien 4 nouveautes');
+  ok(VU.nouveaux.achats === 1 && VU.nouveaux.ventes === 1 && VU.nouveaux.gm === 1 && VU.nouveaux.detenteurs === 1, 'A: the reference beat does carry 4 new counts');
   const e = effectsOf(VU);
-  eq(e.map((x) => x.champ).sort(), ['nouveaux.achats', 'nouveaux.detenteurs', 'nouveaux.gm', 'nouveaux.ventes'], 'A: un effet par champ non nul, ni plus ni moins');
-  const par = Object.fromEntries(e.map((x) => [x.effet, x]));
-  ok(par.buy.direction === 'front' && par.buy.temperature === 'warm', 'A: buy arrive de face, chaud');
-  ok(par.sell.direction === 'back' && par.sell.temperature === 'cold', 'A: sell arrive de dos, froid');
-  ok(par.transfer.direction === 'sides' && par.transfer.forme === 'shimmer', 'A: transfer miroite sur les cotes');
-  ok(par.holder.forme === 'particle' && par.holder.particules === 1, 'A: un nouveau holder ajoute UNE particule');
+  eq(e.map((x) => x.field).sort(), ['nouveaux.achats', 'nouveaux.detenteurs', 'nouveaux.gm', 'nouveaux.ventes'], 'A: one effect per non-zero field, no more, no less');
+  const by = Object.fromEntries(e.map((x) => [x.effect, x]));
+  ok(by.buy.direction === 'front' && by.buy.temperature === 'warm', 'A: buy arrives from the front, warm');
+  ok(by.sell.direction === 'back' && by.sell.temperature === 'cold', 'A: sell arrives from behind, cold');
+  ok(by.transfer.direction === 'sides' && by.transfer.shape === 'shimmer', 'A: transfer shimmers at the sides');
+  ok(by.holder.shape === 'particle' && by.holder.particles === 1, 'A: a new holder adds ONE particle');
   for (const x of e) {
-    const [a, b] = x.champ.split('.');
-    ok(VU[a][b] === x.valeur && x.valeur > 0, 'A: l effet ' + x.effet + ' porte la valeur exacte de ' + x.champ);
+    const [a, b] = x.field.split('.');
+    ok(VU[a][b] === x.value && x.value > 0, 'A: the ' + x.effect + ' effect carries the exact value of ' + x.field);
   }
-  eq(SENSATIONS.map((s) => s.champ), ['nouveaux.achats', 'nouveaux.ventes', 'nouveaux.gm', 'nouveaux.detenteurs'], 'A: la table des sensations est fixe');
-  const trois = effectsOf({ tick: 5, phase: 'CALME', nouveaux: { detenteurs: 3 } });
-  ok(trois.length === 1 && trois[0].particules === 3, 'A: 3 nouveaux holders = 3 particules');
+  eq(SENSATIONS.map((s) => s.field), ['nouveaux.achats', 'nouveaux.ventes', 'nouveaux.gm', 'nouveaux.detenteurs'], 'A: the sensations table is fixed');
+  const three = effectsOf({ tick: 5, phase: 'CALME', nouveaux: { detenteurs: 3 } });
+  ok(three.length === 1 && three[0].particles === 3, 'A: 3 new holders = 3 particles');
 }
 
-/* ══ B. UNE ENTREE ABSENTE NE PRODUIT RIEN ══ */
+/* ══ B. A MISSING INPUT PRODUCES NOTHING ══ */
 {
-  eq(effectsOf(null), [], 'B: pas de battement, pas d effet');
-  eq(effectsOf({ tick: 3, phase: 'CALME' }), [], 'B: sans `nouveaux`, aucun effet');
-  eq(effectsOf({ tick: 3, phase: 'CALME', nouveaux: { achats: 0, ventes: 0, gm: 0, detenteurs: 0 } }), [], 'B: des zeros ne font rien');
-  eq(effectsOf({ tick: 3, phase: 'CALME', nouveaux: { achats: null, ventes: undefined, gm: NaN, detenteurs: '2' } }), [], 'B: un champ illisible ne fait rien');
-  eq(effectsOf({ tick: 3, phase: 'CALME', nouveaux: { ventes: 2 } }).map((x) => x.effet), ['sell'], 'B: seule la vente presente agit');
-  eq(effectsOf({ tick: 3, phase: 'MORT', nouveaux: { achats: 4 } }), [], 'B: un block mort ne ressent rien (comme beatSentence)');
+  eq(effectsOf(null), [], 'B: no beat, no effect');
+  eq(effectsOf({ tick: 3, phase: 'CALME' }), [], 'B: without `nouveaux`, no effect');
+  eq(effectsOf({ tick: 3, phase: 'CALME', nouveaux: { achats: 0, ventes: 0, gm: 0, detenteurs: 0 } }), [], 'B: zeros do nothing');
+  eq(effectsOf({ tick: 3, phase: 'CALME', nouveaux: { achats: null, ventes: undefined, gm: NaN, detenteurs: '2' } }), [], 'B: an unreadable field does nothing');
+  eq(effectsOf({ tick: 3, phase: 'CALME', nouveaux: { ventes: 2 } }).map((x) => x.effect), ['sell'], 'B: only the sell present acts');
+  eq(effectsOf({ tick: 3, phase: 'MORT', nouveaux: { achats: 4 } }), [], 'B: a dead block feels nothing (like beatSentence)');
   const l0 = lightOf(null);
-  ok(l0.neutre === true && l0.teinte === null, 'B: sans battement, lumiere neutre');
-  ok(lightOf({ tick: 1, phase: 'NON_LU', spikes: 9 }).neutre === true, 'B: NON_LU ne colore pas la scene');
-  ok(lightOf({ tick: 1, phase: 'MORT', spikes: 0 }).neutre === true, 'B: MORT ne colore pas la scene');
+  ok(l0.neutral === true && l0.hue === null, 'B: without a beat, neutral light');
+  ok(lightOf({ tick: 1, phase: 'NON_LU', spikes: 9 }).neutral === true, 'B: NON_LU does not colour the scene');
+  ok(lightOf({ tick: 1, phase: 'MORT', spikes: 0 }).neutral === true, 'B: MORT does not colour the scene');
   const l1 = lightOf({ tick: 1, phase: 'EXCITE', spikes: 64 });
-  ok(l1.neutre === false && l1.phase === 'EXCITE' && l1.force === 0.5, 'B: la lumiere = la phase decidee, sa force = spikes / 128');
-  eq(horizonOf({ tick: 1 }), { deg: 0, virage: null }, 'B: sans virage, l horizon ne penche pas');
-  ok(horizonOf({ tick: 1, virage: -0.5 }).deg < 0 && horizonOf({ tick: 1, virage: 0.5 }).deg > 0, 'B: le virage penche l horizon de son cote');
-  ok(Math.abs(horizonOf({ tick: 1, virage: 99 }).deg) <= 20, 'B: l inclinaison est bornee');
-  ok(beatNumber(VU) === VU.tick && beatNumber(null) === null, 'B: UN numero de battement, celui du battement montre');
+  ok(l1.neutral === false && l1.phase === 'EXCITE' && l1.strength === 0.5, 'B: the light = the decided phase, its strength = spikes / 128');
+  eq(horizonOf({ tick: 1 }), { deg: 0, steering: null }, 'B: without steering, the horizon does not tilt');
+  ok(horizonOf({ tick: 1, virage: -0.5 }).deg < 0 && horizonOf({ tick: 1, virage: 0.5 }).deg > 0, 'B: steering tilts the horizon to its side');
+  ok(Math.abs(horizonOf({ tick: 1, virage: 99 }).deg) <= 20, 'B: the tilt is bounded');
+  ok(beatNumber(VU) === VU.tick && beatNumber(null) === null, 'B: ONE beat number, the one of the beat shown');
   const ec = echoesOf(HISTO, 7);
-  ok(ec.length === 5 && ec[0].tick === HISTO[6].tick && ec[4].tick === HISTO[2].tick, 'B: les echos = les 5 battements d avant, du plus recent au plus ancien');
-  eq(echoesOf(HISTO, 1).map((x) => x.tick), [HISTO[0].tick], 'B: pas d echo invente avant le premier battement');
-  const moi = { adr: ADR, wx: 0, wy: 0, wz: 0 };
-  const hab = [moi, { adr: '0x' + '1'.repeat(40), sym: 'AAA', wx: 100, wy: 0, wz: 0, phase: 'CALME' }, { adr: '0x' + '2'.repeat(40), sym: 'BBB', wx: 0, wy: 300, wz: 0 },
+  ok(ec.length === 5 && ec[0].tick === HISTO[6].tick && ec[4].tick === HISTO[2].tick, 'B: the echoes = the 5 beats before, newest first');
+  eq(echoesOf(HISTO, 1).map((x) => x.tick), [HISTO[0].tick], 'B: no echo invented before the first beat');
+  const me = { adr: ADR, wx: 0, wy: 0, wz: 0 };
+  const hab = [me, { adr: '0x' + '1'.repeat(40), sym: 'AAA', wx: 100, wy: 0, wz: 0, phase: 'CALME' }, { adr: '0x' + '2'.repeat(40), sym: 'BBB', wx: 0, wy: 300, wz: 0 },
     { adr: '0x' + '3'.repeat(40), wx: NaN, wy: 0, wz: 0 }];
-  const vd = outsideNeighbours(moi, hab, new Set());
-  ok(vd.length === 2 && vd.every((v) => v.lu === false), 'B: Outside — ses vrais voisins, aucun allume sans lecture');
-  ok(vd[0].adr === hab[1].adr && Math.hypot(vd[1].x, vd[1].y, vd[1].z) > Math.hypot(vd[0].x, vd[0].y, vd[0].z), 'B: les distances du monde sont gardees (le plus proche reste le plus proche)');
-  const vl = outsideNeighbours(moi, hab, new Set([hab[2].adr]));
-  eq(vl.filter((v) => v.lu).map((v) => v.adr), [hab[2].adr], 'B: seul un voisin REELLEMENT lu est allume');
-  eq(outsideNeighbours(null, hab, new Set()), [], 'B: sans position, aucun voisin invente');
-  ok(pulseOf(null).force === 0 && pulseOf(VU).force === Math.round(VU.spikes / NEURONES * 1000) / 1000, 'B: le pouls = la part de neurones qui ont tire');
+  const nb = outsideNeighbours(me, hab, new Set());
+  ok(nb.length === 2 && nb.every((v) => v.read === false), 'B: Outside — its real neighbours, none lit without a read');
+  ok(nb[0].adr === hab[1].adr && Math.hypot(nb[1].x, nb[1].y, nb[1].z) > Math.hypot(nb[0].x, nb[0].y, nb[0].z), 'B: world distances are kept (the closest stays the closest)');
+  const nl = outsideNeighbours(me, hab, new Set([hab[2].adr]));
+  eq(nl.filter((v) => v.read).map((v) => v.adr), [hab[2].adr], 'B: only a REALLY read neighbour is lit');
+  eq(outsideNeighbours(null, hab, new Set()), [], 'B: without a position, no invented neighbour');
+  ok(pulseOf(null).strength === 0 && pulseOf(VU).strength === Math.round(VU.spikes / NEURONES * 1000) / 1000, 'B: the pulse = the share of neurons that fired');
 }
 
-/* ══ C. LA VOIX NE DIT QUE CE QUI EST DANS LE BATTEMENT ══ */
+/* ══ C. THE VOICE ONLY SAYS WHAT IS IN THE BEAT ══ */
 {
   const v = voiceOf(VU);
-  ok(typeof v.texte === 'string' && /^[A-Z]/.test(v.texte) && /\.$/.test(v.texte) && (v.texte.match(/[.!?](\s|$)/g) || []).length === 1, 'C: une seule phrase');
-  const chemin = (o, p) => p.split('.').reduce((x, k) => (x && typeof x === 'object' ? x[k] : undefined), o);
-  /* un battement truffe de champs qui ressemblent a des causes : aucun ne doit passer dans la voix */
-  const PIEGES = { cause: 'whale dumped', raison: 'news', pourquoi: 'rug pull', whale: true, message: 'pump it', because: 'x' };
-  const brut = [VU, ...HISTO, { tick: 9, phase: 'NON_LU' }, { tick: 10, phase: 'MORT', nouveaux: { achats: 3 } }, { tick: 11, phase: 'CALME', delta: -0.04, nouveaux: { ventes: 2 } }];
-  for (const b of brut) {
-    const x = voiceOf({ ...b, ...PIEGES });
+  ok(typeof v.text === 'string' && /^[A-Z]/.test(v.text) && /\.$/.test(v.text) && (v.text.match(/[.!?](\s|$)/g) || []).length === 1, 'C: a single sentence');
+  const path = (o, p) => p.split('.').reduce((x, k) => (x && typeof x === 'object' ? x[k] : undefined), o);
+  /* a beat stuffed with fields that look like causes: none may reach the voice */
+  const TRAPS = { cause: 'whale dumped', raison: 'news', pourquoi: 'rug pull', whale: true, message: 'pump it', because: 'x' };
+  const raw = [VU, ...HISTO, { tick: 9, phase: 'NON_LU' }, { tick: 10, phase: 'MORT', nouveaux: { achats: 3 } }, { tick: 11, phase: 'CALME', delta: -0.04, nouveaux: { ventes: 2 } }];
+  for (const b of raw) {
+    const x = voiceOf({ ...b, ...TRAPS });
     for (const t of x.traces) {
-      if (t.cle === 'rien') { ok(t.valeur === null, 'C: « rien » ne porte aucune valeur'); continue; }
-      ok(chemin(b, t.cle) === t.valeur, 'C: le morceau « ' + t.dit + ' » vient du champ present ' + t.cle);
+      if (t.key === 'nothing') { ok(t.value === null, 'C: "nothing" carries no value'); continue; }
+      ok(path(b, t.key) === t.value, 'C: the piece "' + t.says + '" comes from the present field ' + t.key);
     }
-    ok(!/whale|news|rug|pump|because|due to/i.test(x.texte), 'C: aucune cause inventee dans « ' + x.texte + ' »');
+    ok(!/whale|news|rug|pump|because|due to/i.test(x.text), 'C: no invented cause in "' + x.text + '"');
   }
-  const vide = voiceOf({ tick: 4, phase: 'CALME', nouveaux: {} });
-  eq(vide.traces.map((t) => t.cle), ['rien'], 'C: sans donnee, une ligne neutre et factuelle');
-  ok(voiceOf(null).texte && voiceOf(null).traces.length === 0, 'C: sans battement, rien d affirme');
+  const empty = voiceOf({ tick: 4, phase: 'CALME', nouveaux: {} });
+  eq(empty.traces.map((t) => t.key), ['nothing'], 'C: without data, one neutral and factual line');
+  ok(voiceOf(null).text && voiceOf(null).traces.length === 0, 'C: without a beat, nothing is asserted');
 }
 
-/* ══ D. « WHY » ══ */
+/* ══ D. "WHY" ══ */
 {
-  const c = V.champ({ adr: ADR, faits: FAITS, vu: HISTO[HISTO.length - 1], voisins: [], nourritureLue: true });
-  const last = HISTO[HISTO.length - 1], avant = HISTO[HISTO.length - 2];
-  const w = whyOf({ c, faits: FAITS, vu: last, vuAvant: avant, etat: ETAT, capMap: 0.5 });
-  ok(w && w.dominante && typeof w.dominante.cle === 'string', 'D: une entree dominante');
-  const e = c.entrees.find((x) => x.cle === w.dominante.cle);
-  ok(e.lu && w.dominante.valeur === e.valeur && w.dominante.brut === e.brut, 'D: la dominante porte sa vraie valeur lue');
-  ok(w.dominante.apport === V.apportDe(FAITS, w.dominante.cle), 'D: son poids = apportDe (cerveau.js), pas une copie');
-  eq(w.neurones.tires, last.indices.slice(0, 8), 'D: les neurones qui ont tire viennent de vu.indices');
-  ok(Array.isArray(w.neurones.proches) && w.neurones.proches.length <= 5, 'D: les plus proches du seuil viennent de l etat tenu');
-  ok(w.changements.every((x) => ['phase', 'spikes', 'virage', 'vitesse', 'delta', 'nouveaux.achats', 'nouveaux.ventes', 'nouveaux.gm', 'nouveaux.messages', 'nouveaux.detenteurs'].includes(x.champ)), 'D: what changed ne compare que des champs tenus');
-  ok(w.regard.virage === last.virage && w.regard.capMap === 0.5, 'D: ou il regarde = son virage et son cap reels');
-  const sans = whyOf({ c, faits: FAITS, vu: last, vuAvant: null, etat: null, capMap: null });
-  ok(sans.changements.length === 0 && sans.neurones.proches === null && sans.regard.capMap === null, 'D: sans battement precedent ni etat, rien n est invente');
-  const mauvaisEtat = whyOf({ c, faits: FAITS, vu: avant, vuAvant: null, etat: ETAT, capMap: null });
-  ok(mauvaisEtat.neurones.proches === null, 'D: un etat d un autre battement n est pas montre');
-  ok(whyOf({ c: null, faits: null, vu: null }) === null, 'D: rien a expliquer sans battement');
+  const c = V.champ({ adr: ADR, faits: FACTS, vu: HISTO[HISTO.length - 1], voisins: [], nourritureLue: true });
+  const last = HISTO[HISTO.length - 1], before = HISTO[HISTO.length - 2];
+  const w = whyOf({ c, faits: FACTS, vu: last, vuAvant: before, etat: STATE, capMap: 0.5 });
+  ok(w && w.strongest && typeof w.strongest.key === 'string', 'D: a strongest input');
+  const e = c.entrees.find((x) => x.cle === w.strongest.key);
+  ok(e.lu && w.strongest.value === e.valeur && w.strongest.raw === e.brut, 'D: the strongest input carries its real read value');
+  ok(w.strongest.contribution === V.apportDe(FACTS, w.strongest.key), 'D: its weight = apportDe (cerveau.js), not a copy');
+  eq(w.neurons.fired, last.indices.slice(0, 8), 'D: the neurons that fired come from vu.indices');
+  ok(Array.isArray(w.neurons.closest) && w.neurons.closest.length <= 5, 'D: the closest to threshold come from the held state');
+  ok(w.changes.every((x) => ['phase', 'spikes', 'virage', 'vitesse', 'delta', 'nouveaux.achats', 'nouveaux.ventes', 'nouveaux.gm', 'nouveaux.messages', 'nouveaux.detenteurs'].includes(x.field)), 'D: what changed only compares held fields');
+  ok(w.gaze.steering === last.virage && w.gaze.capMap === 0.5, 'D: where it is looking = its real steering and heading');
+  const bare = whyOf({ c, faits: FACTS, vu: last, vuAvant: null, etat: null, capMap: null });
+  ok(bare.changes.length === 0 && bare.neurons.closest === null && bare.gaze.capMap === null, 'D: without a previous beat or state, nothing is invented');
+  const wrongState = whyOf({ c, faits: FACTS, vu: before, vuAvant: null, etat: STATE, capMap: null });
+  ok(wrongState.neurons.closest === null, 'D: the state of another beat is not shown');
+  ok(whyOf({ c: null, faits: null, vu: null }) === null, 'D: nothing to explain without a beat');
 }
 
-/* ══ E. TAKE CONTROL : INSTANTANE LOCAL, ZERO ECRITURE ══ */
+/* ══ E. TAKE CONTROL: LOCAL SNAPSHOT, ZERO WRITE ══ */
 {
-  const snap = insideSnapshot({ adr: ADR, etat: ETAT, histo: HISTO, i: 7 });
-  ok(snap && Object.isFrozen(snap) && Object.isFrozen(snap.potentiels) && snap.potentiels.length === NEURONES, 'E: instantane fige des 128 potentiels');
-  ETAT.potentiels[0] = 999;
-  ok(snap.potentiels[0] !== 999, 'E: l instantane est une COPIE (le cerveau vivant ne le modifie pas)');
-  ok(snap.indices.join() === HISTO[7].indices.join() && snap.tick === HISTO[7].tick, 'E: il fige le battement montre');
+  const snap = insideSnapshot({ adr: ADR, etat: STATE, histo: HISTO, i: 7 });
+  ok(snap && Object.isFrozen(snap) && Object.isFrozen(snap.potentials) && snap.potentials.length === NEURONES, 'E: a frozen snapshot of the 128 potentials');
+  STATE.potentiels[0] = 999;
+  ok(snap.potentials[0] !== 999, 'E: the snapshot is a COPY (the live brain does not change it)');
+  ok(snap.indices.join() === HISTO[7].indices.join() && snap.tick === HISTO[7].tick, 'E: it freezes the beat shown');
   let cam = freeCam();
   cam = orbitCam(cam, 30, -10); cam = zoomCam(cam, 100);
-  ok(cam.dist >= 0.2 && cam.dist <= 6 && Math.abs(cam.pitch) <= 1.4, 'E: camera libre bornee');
+  ok(cam.dist >= 0.2 && cam.dist <= 6 && Math.abs(cam.pitch) <= 1.4, 'E: free camera bounded');
   const pos = Array.from({ length: NEURONES }, (_, i) => [Math.cos(i), Math.sin(i) * 0.5, Math.sin(i)]);
   const p = projectNeurons(pos, cam, 360, 300);
-  ok(p.every((x) => Number.isFinite(x.x) && Number.isFinite(x.y) && x.n >= 0 && x.n < NEURONES), 'E: projection finie, indices conserves');
+  ok(p.every((x) => Number.isFinite(x.x) && Number.isFinite(x.y) && x.n >= 0 && x.n < NEURONES), 'E: finite projection, indices kept');
 
-  const app = lire('./app.html');
-  const fonction = (entete) => { const i = app.indexOf(entete); ok(i > 0, 'E: extraction trouvee : ' + entete); const f = /\n\}/.exec(app.slice(i)); return app.slice(i, i + f.index + 2); };
-  const src = ['function bvTakeControl() {', 'function bvControlGesture(dx, dy, dz) {', 'function bvBackToLive() {'].map(fonction).join('\n');
-  const appels = [];
-  const fetchStub = (url, o = {}) => { appels.push({ via: 'fetch', methode: String((o && o.method) || 'GET').toUpperCase(), url }); return Promise.resolve({ ok: true, json: async () => ({}) }); };
-  class XHR { open(m, u) { appels.push({ via: 'xhr', methode: String(m).toUpperCase(), url: u }); } send() {} setRequestHeader() {} }
-  const ethereum = { request: (a) => { appels.push({ via: 'wallet', methode: 'WALLET', url: a && a.method }); return Promise.resolve(null); } };
-  const sav = { fetch: globalThis.fetch, XMLHttpRequest: globalThis.XMLHttpRequest, window: globalThis.window, navigator: globalThis.navigator };
-  globalThis.fetch = fetchStub; globalThis.XMLHttpRequest = XHR; globalThis.window = { ethereum, fetch: fetchStub }; 
+  const app = read('./app.html');
+  const extract = (header) => { const i = app.indexOf(header); ok(i > 0, 'E: extraction found: ' + header); const f = /\n\}/.exec(app.slice(i)); return app.slice(i, i + f.index + 2); };
+  const src = ['function bvTakeControl() {', 'function bvControlGesture(dx, dy, dz) {', 'function bvBackToLive() {'].map(extract).join('\n');
+  const calls = [];
+  const fetchStub = (url, o = {}) => { calls.push({ via: 'fetch', method: String((o && o.method) || 'GET').toUpperCase(), url }); return Promise.resolve({ ok: true, json: async () => ({}) }); };
+  class XHR { open(m, u) { calls.push({ via: 'xhr', method: String(m).toUpperCase(), url: u }); } send() {} setRequestHeader() {} }
+  const ethereum = { request: (a) => { calls.push({ via: 'wallet', method: 'WALLET', url: a && a.method }); return Promise.resolve(null); } };
+  const saved = { fetch: globalThis.fetch, XMLHttpRequest: globalThis.XMLHttpRequest, window: globalThis.window, navigator: globalThis.navigator };
+  globalThis.fetch = fetchStub; globalThis.XMLHttpRequest = XHR; globalThis.window = { ethereum, fetch: fetchStub };
   try {
     const el = () => ({ hidden: false, textContent: '', style: {}, classList: { toggle() {}, add() {}, remove() {} }, setAttribute() {}, focus() {} });
     const els = {};
     const $ = (s) => (els[s] = els[s] || el());
-    const vision = { jouer: true, controle: null, i: 7 };
-    let peint = 0;
+    const vision = { jouer: true, control: null, i: 7 };
+    let painted = 0;
     const f = new Function('vision', '$', 'visionCible', 'insideSnapshot', 'freeCam', 'orbitCam', 'zoomCam', 'peindreVision', 'bvReduit',
-      src + '\nreturn { bvTakeControl, bvControlGesture, bvBackToLive };')(vision, $, () => ({ adr: ADR, etat: ETAT, histo: HISTO }), insideSnapshot,
-      freeCam, orbitCam, zoomCam, () => { peint++; }, () => false);
+      src + '\nreturn { bvTakeControl, bvControlGesture, bvBackToLive };')(vision, $, () => ({ adr: ADR, etat: STATE, histo: HISTO }), insideSnapshot,
+      freeCam, orbitCam, zoomCam, () => { painted++; }, () => false);
     f.bvTakeControl();
-    ok(vision.controle && vision.controle.snap && vision.jouer === false, 'E: Take control fige un instantane et met le direct en pause');
+    ok(vision.control && vision.control.snap && vision.jouer === false, 'E: Take control freezes a snapshot and pauses live playback');
     for (let k = 0; k < 20; k++) f.bvControlGesture(k * 3, -k, k % 2 ? 1 : -1);
-    ok(peint > 0, 'E: les gestes repeignent la scene');
+    ok(painted > 0, 'E: gestures repaint the scene');
     f.bvBackToLive();
-    ok(vision.controle === null && vision.jouer === true, 'E: Back to live reprend le direct');
-  } finally { Object.assign(globalThis, sav); }
-  eq(appels.filter((a) => a.methode !== 'GET'), [], 'E: zero appel non-GET (fetch / XHR / wallet)');
-  eq(appels, [], 'E: et meme aucun appel reseau');
-  const bloc = src.replace(/\/\*[\s\S]*?\*\//g, '');
-  ok(!/fetch\s*\(|XMLHttpRequest|sendBeacon|ethereum|eth_|wallet_|\brpc\s*\(|bcSigner|method\s*:/.test(bloc), 'E: le code de Take control ne nomme aucune ecriture');
-  const mod = lire(process.env.INSIDE_MODULE || './vision-inside.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
-  ok(!/Math\.random|Date\.now|new Date|performance\.now|fetch\s*\(|XMLHttpRequest|localStorage|document\.|window\./.test(mod), 'E: vision-inside.js est pur');
+    ok(vision.control === null && vision.jouer === true, 'E: Back to live resumes live playback');
+  } finally { Object.assign(globalThis, saved); }
+  eq(calls.filter((a) => a.method !== 'GET'), [], 'E: zero non-GET call (fetch / XHR / wallet)');
+  eq(calls, [], 'E: and not even a network call');
+  const block = src.replace(/\/\*[\s\S]*?\*\//g, '');
+  ok(!/fetch\s*\(|XMLHttpRequest|sendBeacon|ethereum|eth_|wallet_|\brpc\s*\(|bcSigner|method\s*:/.test(block), 'E: the Take control code names no write');
+  const mod = read(process.env.INSIDE_MODULE || './vision-inside.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  ok(!/Math\.random|Date\.now|new Date|performance\.now|fetch\s*\(|XMLHttpRequest|localStorage|document\.|window\./.test(mod), 'E: vision-inside.js is pure');
 }
 
 /* ══ F. PREFERS-REDUCED-MOTION ══ */
 {
-  eq(animationPlan(true), { vol: false, secousse: false, lumiere: 'statique', boucle: false }, 'F: mouvement reduit = rien ne bouge');
-  eq(animationPlan(false), { vol: true, secousse: true, lumiere: 'vivante', boucle: true }, 'F: sinon, vol, secousse, lumiere vivante');
+  eq(animationPlan(true), { flight: false, shake: false, light: 'static', loop: false }, 'F: reduced motion = nothing moves');
+  eq(animationPlan(false), { flight: true, shake: true, light: 'live', loop: true }, 'F: otherwise, flight, shake, live light');
   const a = cameraPose('dedans', 0, true), b = cameraPose('dedans', 1, true), c = cameraPose('dedans', 1, false);
-  eq(a, b, 'F: mouvement reduit — la camera est d emblee a sa pose finale (pas de vol)');
-  eq(b, c, 'F: la pose finale est la meme avec ou sans mouvement');
-  ok(cameraPose('dedans', 0, false).dist > cameraPose('dedans', 1, false).dist, 'F: sans reduction, la camera vole vers l interieur');
-  ok(cameraPose('dehors', 0.3, false).dist > 1.5, 'F: Outside = la camera hors du block');
-  ok(pulseOf(HISTO[3], { reduit: true }).anime === false && pulseOf(HISTO[3]).anime === true, 'F: le pouls ne bat pas a l ecran en mouvement reduit');
-  const app = lire('./app.html');
-  const i = app.indexOf('function bvStartLoop() {'); ok(i > 0, 'F: extraction trouvee : bvStartLoop');
+  eq(a, b, 'F: reduced motion — the camera is at its final pose right away (no flight)');
+  eq(b, c, 'F: the final pose is the same with or without motion');
+  ok(cameraPose('dedans', 0, false).dist > cameraPose('dedans', 1, false).dist, 'F: without reduction, the camera flies inside');
+  ok(cameraPose('dehors', 0.3, false).dist > 1.5, 'F: Outside = the camera outside the block');
+  ok(pulseOf(HISTO[3], { reduced: true }).animated === false && pulseOf(HISTO[3]).animated === true, 'F: the pulse does not beat on screen with reduced motion');
+  const app = read('./app.html');
+  const i = app.indexOf('function bvStartLoop() {'); ok(i > 0, 'F: extraction found: bvStartLoop');
   const f = /\n\}/.exec(app.slice(i)); const src = app.slice(i, i + f.index + 2);
-  for (const reduit of [true, false]) {
-    let raf = 0, peint = 0; const vision = { boucle: null, vol: null };
+  for (const reduced of [true, false]) {
+    let raf = 0, painted = 0; const vision = { loop: null, flight: null };
     const g = new Function('vision', 'animationPlan', 'bvReduit', 'requestAnimationFrame', 'cancelAnimationFrame', 'bvPaint3D', 'performance',
-      src + '\nreturn bvStartLoop;')(vision, animationPlan, () => reduit, () => { raf++; return 1; }, () => {}, () => { peint++; }, { now: () => 0 });
+      src + '\nreturn bvStartLoop;')(vision, animationPlan, () => reduced, () => { raf++; return 1; }, () => {}, () => { painted++; }, { now: () => 0 });
     g();
-    if (reduit) ok(raf === 0 && peint === 1, 'F: mouvement reduit — aucune boucle rAF, une seule peinture statique');
-    else ok(raf === 1, 'F: sinon, la boucle demarre');
+    if (reduced) ok(raf === 0 && painted === 1, 'F: reduced motion — no rAF loop, a single static paint');
+    else ok(raf === 1, 'F: otherwise, the loop starts');
   }
-  ok(/@media \(prefers-reduced-motion:reduce\)\{[^}]*#bvPop/.test(app), 'F: la fenetre a sa regle CSS de mouvement reduit');
+  ok(/@media \(prefers-reduced-motion:reduce\)\{[^}]*#bvPop/.test(app), 'F: the window has its reduced-motion CSS rule');
 }
 
-/* ══ G. LA FENETRE ══ */
+/* ══ G. THE WINDOW ══ */
 {
-  const app = lire('./app.html');
-  ok(/<dialog class="bvPop" id="bvPop" data-fenetre="panneau"/.test(app), 'G: la fenetre porte la forme du panneau');
-  ok(/id="bvHandle"[^>]*role="separator"/.test(app) && /id="bvReduire"/.test(app) && /id="bvMaximize"/.test(app), 'G: bord a tirer, replier, agrandir');
-  const i = app.indexOf('function windowLikePanel('); ok(i > 0, 'G: extraction trouvee : windowLikePanel');
-  const corps = app.slice(i, i + /\n\}/.exec(app.slice(i)).index);
-  ok(/bcBornerTaille\(/.test(corps) && /bcAxeTaille\(\)/.test(corps) && /bcNavPx\(\)/.test(corps), 'G: elle reutilise les bornes et l axe du Control panel');
-  ok(/windowLikePanel\(\{ d: \$\('#bvPop'\)/.test(app), 'G: la fenetre Brain est branchee dessus');
-  const o = app.indexOf('function ouvrirVision(source) {'); ok(o > 0, 'G: extraction trouvee : ouvrirVision');
+  const app = read('./app.html');
+  ok(/<dialog class="bvPop" id="bvPop" data-window="panel"/.test(app), 'G: the window has the panel\'s shape');
+  ok(/id="bvHandle"[^>]*role="separator"/.test(app) && /id="bvFold"/.test(app) && /id="bvMaximize"/.test(app), 'G: edge to drag, fold, maximise');
+  const i = app.indexOf('function windowLikePanel('); ok(i > 0, 'G: extraction found: windowLikePanel');
+  const body = app.slice(i, i + /\n\}/.exec(app.slice(i)).index);
+  ok(/bcBornerTaille\(/.test(body) && /bcAxeTaille\(\)/.test(body) && /bcNavPx\(\)/.test(body), 'G: it reuses the Control panel\'s bounds and axis');
+  ok(/windowLikePanel\(\{ d: \$\('#bvPop'\)/.test(app), 'G: the Brain window is wired to it');
+  const o = app.indexOf('function ouvrirVision(source) {'); ok(o > 0, 'G: extraction found: ouvrirVision');
   const ov = app.slice(o, o + /\n\}/.exec(app.slice(o)).index);
-  ok(!/showModal/.test(ov) && /dl\.show\(\)/.test(ov), 'G: pas une modale');
-  ok(/id="bvShelf"[^>]*role="tablist"/.test(app) && /id="bvTabs"/.test(app), 'G: une etagere et des onglets');
-  const livres = [...app.matchAll(/data-livre="([a-zA-Z]+)"/g)].map((m) => m[1]);
-  for (const l of ['parle', 'lit', 'details', 'neurones', 'autour', 'siEtAlors', 'pourquoi']) ok(livres.includes(l), 'G: le livre ' + l + ' est sur l etagere');
-  ok(/<canvas id="bv3d"/.test(app) && !/<svg id="bvChamp"/.test(app), 'G: la scene est le moteur 3D, le schema plat est retire');
-  ok(/id="bvHumeur"[^>]*type="button"/.test(app.replace(/type="button"([^>]*)id="bvHumeur"/, 'id="bvHumeur"$1 type="button"')), 'G: l humeur est cliquable');
+  ok(!/showModal/.test(ov) && /dl\.show\(\)/.test(ov), 'G: not a modal');
+  ok(/id="bvShelf"[^>]*role="tablist"/.test(app) && /id="bvTabs"/.test(app), 'G: a shelf and tabs');
+  const books = [...app.matchAll(/data-book="([a-zA-Z]+)"/g)].map((m) => m[1]);
+  for (const l of ['talk', 'reads', 'details', 'neurons', 'around', 'whatIf', 'why']) ok(books.includes(l), 'G: the ' + l + ' book is on the shelf');
+  ok(/<canvas id="bv3d"/.test(app) && !/<svg id="bvChamp"/.test(app), 'G: the scene is the 3D engine, the flat diagram is removed');
+  ok(/id="bvHumeur"[^>]*type="button"/.test(app.replace(/type="button"([^>]*)id="bvHumeur"/, 'id="bvHumeur"$1 type="button"')), 'G: the mood is clickable');
   ok(/id="bvControl"/.test(app) && /id="bvBackToLive"/.test(app), 'G: Take control / Back to live');
 }
 
