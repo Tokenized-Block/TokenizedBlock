@@ -14060,6 +14060,21 @@ async function lireProfil(adr, sym, perime, opts) {
   $('#pLiquidite').hidden = true;
   $('#plqLignes').innerHTML = ''; $('#plqActions').innerHTML = ''; $('#plqEtat').textContent = ''; $('#plqPositions').innerHTML = '';
   $('#peLignes').innerHTML = ''; $('#peActions').innerHTML = ''; $('#peEtat').textContent = ''; $('#peJournal').innerHTML = '';
+  /* ⛔⛔ 2026-10-26 (revue de 4f0994c..7ed7e93) : UNE AUTRE FICHE, UN AUTRE CHAMP. Sur un block dont le panneau Buy reste cache
+   *   (marche illisible), le champ gardait le montant ET l etiquette du block precedent (« Buy — EURC to spend », 25). A
+   *   l ouverture d un AUTRE block : montants vides, etiquette neutre (majDeviseEchange la reecrit des que le marche est lu),
+   *   choix d entree oublie, intention avancee. Le meme block relu ne perd rien. */
+  if (champBlocBuy !== String(adr).toLowerCase()) {
+    champBlocBuy = String(adr).toLowerCase();
+    for (const id of ['#peAchat', '#peVente']) { const c = $(id); if (c) c.value = ''; }
+    const labB = $('#peAchat') && $('#peAchat').closest('label');
+    if (labB && labB.firstChild && labB.firstChild.nodeType === 3) labB.firstChild.textContent = 'Buy — amount to spend';
+    deviseDentree = null;
+    if (choixPayWith && choixPayWith.block !== champBlocBuy) choixPayWith = null;
+    try { avancerIntention(); } catch (_) { /* declare plus bas : appele a l execution, jamais a l evaluation */ }
+  }
+  if ($('#peEtat').dataset) { delete $('#peEtat').dataset.notePayWith; delete $('#peEtat').dataset.texteEtape; }
+  etatParSignature = false;
   /* ⛔ AUDIT 2026-09-20 (bloquant) : sans ces trois lignes, les soldes du block PRECEDENT restaient a
    *    l ecran sous le nom du nouveau, et MAX remplissait un montant qu on ne detient pas. */
   { const se = $('#peSoldeEth'); if (se) se.textContent = '—'; }
@@ -16773,6 +16788,13 @@ const soldesPivots = new Map();
 const soldesPivotsDemandes = new Set();
 /* le choix « Pay with » de la personne : { block, devise, sym } — voir `garderChoixPayWith`. Declare avant tout rebatissage. */
 let choixPayWith = null;
+/* l intention du panneau Buy (voir `nouvelleIntention`) — declaree ici, avant tout rebatissage et toute preparation */
+let genAchat = 0;
+let intentionCourante = null;
+/* vrai des qu une SIGNATURE a ecrit dans #peEtat (refus, envoye, confirme) : ces phrases ne s effacent jamais d elles-memes */
+let etatParSignature = false;
+/* le block auquel appartiennent le montant et l etiquette du champ Buy (lireProfil les vide a l ouverture d un AUTRE block) */
+let champBlocBuy = null;
 /* vrai pendant que `garderChoixPayWith` REMET le choix (onchange ne doit pas le traiter comme un geste de la personne) */
 let restaurationPayWith = false;
 /* la liste « Pay with » du dernier rebatissage a-t-elle ete LUE (devisesDentree OK) ? Faux : marche illisible, rien a conclure */
@@ -16904,44 +16926,90 @@ function retirerActionsPreparees() {
   a.innerHTML = '';
   const l = $('#peLignes');
   if (l) l.innerHTML = '';
+  /* ⛔ la phrase de PREPARATION de l etape (« This token needs an approval first… ») part avec elle ; un resultat de SIGNATURE
+   *   (refus du wallet, « Sent, not confirmed yet — do not sign it again ») reste toujours lisible (D1) */
+  const e = $('#peEtat');
+  if (e && !etatParSignature) { e.textContent = ''; e.className = 'note'; if (e.dataset) delete e.dataset.notePayWith; }
   return true;
 }
 /**
- * ⛔⛔ 2026-10-26 : CE POUR QUOI UNE ETAPE A ETE PREPAREE, ET LA VERIFICATION AU CLIC. Retirer l etape « quand ca change » ne tient
- *   que pour les chemins qu on a vus : MAX ecrivait #peAchat / #peVente sans evenement `input`, le retour fiat et les intentions
- *   aussi. ⇒ preparerEchange inscrit { sens, block, devise, montant, recoit } sur #peActions (dataset.pour) au moment ou il lit
- *   le montant ; au CLIC sur n importe quel bouton de #peActions, `gardeClicEtape` (phase de capture, avant le bouton) recompare
- *   avec l ecran : une seule difference et le clic est ARRETE, l etape retiree, la raison dite. Quel que soit l auteur du
- *   changement — y compris un chemin qu on n aurait pas trouve.
- *   ⛔ Le retour fiat et la remise du choix ne cassent rien : ils rendent le MEME actif et le MEME montant.
+ * ⛔⛔⛔ 2026-10-26 (revue adverse de 4f0994c..7ed7e93) : L INTENTION DU PANNEAU BUY — UN SEUL MECANISME, A LA RACINE.
+ *   Mesure de la revue : deux « Prepare » qui se chevauchent — les boutons TARDIFS du premier ont signe 25 USDC sous un ecran a
+ *   30 (D3) ; EURC choisi, passe a ETH pendant le chargement du plan, et le wallet s ouvrait 13,5 s plus tard SANS clic (D4) ; la
+ *   sortie ETH -> USDC (#peUsdcEth) n etait pas gardee (D5).
+ *   ⇒ `genAchat` : un compteur qui AVANCE a chaque nouvelle preparation, chaque changement d actif, chaque frappe de montant,
+ *     chaque fiche ouverte. Une preparation capture AU CLIC { gen, sens, block, devise, montant, recoit } (`nouvelleIntention`).
+ *     (a) Une suite asynchrone (devis, plan, solde) ne peint QUE si son intention est encore VIVANTE (meme gen ET meme ecran) ;
+ *         sinon elle se tait — aucun bouton. (b) Chaque bouton porte SA propre intention (`ajouterEtape`), et la garde du clic
+ *         la compare a l ecran vivant — y compris pour un bouton detache du DOM (l ecouteur est sur le bouton lui-meme).
+ *   ⛔ La remise du choix et le retour fiat ne font PAS avancer le compteur : ils rendent le meme actif et le meme montant.
  */
+function avancerIntention() { genAchat += 1; return genAchat; }
+/** Retire de #peEtat la phrase de PREPARATION posee pour l intention precedente (texte exact, en tete) ; rien d autre. */
+function retirerTexteEtape() {
+  const e = $('#peEtat');
+  if (!e || !e.dataset || !e.dataset.texteEtape) return;
+  const t = String(e.textContent || ''), n = e.dataset.texteEtape;
+  delete e.dataset.texteEtape;
+  if (!t.startsWith(n)) return;
+  e.textContent = t.slice(n.length).trim();
+  if (!e.textContent) e.className = 'note';
+}
+/** L ecran du panneau Buy vient de changer (actif, montant, block) : l intention avance, les etapes et leurs phrases partent. */
+function intentionChangee(pourquoi) {
+  avancerIntention();
+  retirerTexteEtape();
+  if (retirerActionsPreparees() && pourquoi) direActionsRetirees(pourquoi);
+}
 function cleEtapePreparee(sens, impose = {}) {
-  const champ = $(sens === 'VENTE' ? '#peVente' : '#peAchat');
+  const champ = $(sens === 'VENTE' ? '#peVente' : sens === 'ETHUSDC' ? '#peUsdcEth' : '#peAchat');
   const rec = $('#peRecoit');
   return {
     sens,
     block: String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase(),
-    devise: sens === 'VENTE' ? null : String(impose.devise !== undefined ? impose.devise : deviseDuChampBuy()).toLowerCase(),
+    devise: sens === 'ACHAT' ? String(impose.devise !== undefined ? impose.devise : deviseDuChampBuy()).toLowerCase() : null,
     montant: String(impose.montant !== undefined ? impose.montant : (champ ? champ.value : '')).trim(),
     recoit: sens === 'VENTE' ? String((rec && rec.value) || '').toLowerCase() : null,
   };
 }
-function gardeClicEtape(ev) {
+/** Une intention neuve, capturee AU CLIC : le compteur avance (toute preparation plus ancienne devient muette). */
+function nouvelleIntention(sens, impose = {}) {
+  const i = { gen: avancerIntention(), ...cleEtapePreparee(sens, impose) };
+  intentionCourante = i;
+  etatParSignature = false;
+  return i;
+}
+/** L intention est-elle encore celle de l ecran ? Meme generation ET meme block / actif / montant / reception. */
+function intentionVivante(i) {
+  if (!i || i.gen !== genAchat) return false;
+  const { gen, ...cle } = i;
+  return JSON.stringify(cleEtapePreparee(i.sens)) === JSON.stringify(cle);
+}
+/** Le SEUL chemin pour poser un bouton d etape : il porte l intention qui l a construit, et se garde lui-meme au clic. */
+function ajouterEtape(bt) {
   const a = $('#peActions');
+  if (!a || !bt) return bt;
+  const i = intentionCourante;
+  if (!intentionVivante(i)) return bt; /* une preparation perimee ne pose rien */
+  if (bt.dataset) bt.dataset.intention = JSON.stringify(i);
+  try { bt.addEventListener('click', gardeClicEtape, true); } catch (_) { /* element factice */ }
+  return a.appendChild(bt);
+}
+function gardeClicEtape(ev) {
   const b = ev && ev.target && ev.target.closest ? ev.target.closest('button') : null;
-  if (!a || !b || !a.dataset || !a.dataset.pour) return true;
+  if (!b || !b.dataset || !b.dataset.intention) return true;
   let p;
-  try { p = JSON.parse(a.dataset.pour); } catch (_) { p = null; }
-  const ici = p ? cleEtapePreparee(p.sens) : null;
-  if (p && JSON.stringify(ici) === a.dataset.pour) return true;
+  try { p = JSON.parse(b.dataset.intention); } catch (_) { p = null; }
+  if (p && intentionVivante(p)) return true;
   try { ev.preventDefault(); ev.stopImmediatePropagation(); } catch (_) { /* evenement factice */ }
+  const ici = p ? cleEtapePreparee(p.sens) : null;
   const pourquoi = !p ? 'what it was prepared for could not be read'
     : ici.block !== p.block ? 'you are now on another block'
       : ici.devise !== p.devise ? 'the currency changed since it was prepared'
         : ici.recoit !== p.recoit ? 'what you receive changed since it was prepared'
-          : 'the amount changed since it was prepared (it was for ' + p.montant + ')';
+          : ici.montant !== p.montant ? 'the amount changed since it was prepared (it was for ' + p.montant + ')'
+            : 'a newer request replaced it';
   retirerActionsPreparees();
-  delete a.dataset.pour;
   direActionsRetirees(pourquoi + ' — nothing was sent');
   return false;
 }
@@ -17169,8 +17237,8 @@ function majDevisesDentreeCorps(v) {
       /* ⛔ D2 (revue de 4f0994c) : une etape preparee pour l ancien actif ne reste pas cliquable sous le nouveau. Geste de la personne
        *   seulement : une remise du choix rend le MEME actif, et la bascule du retour fiat se rejoue apres chaque rebatissage (depuis
        *   la devise de la pool remise par le rebatissage) — y retirer les etapes effacerait le plan USDC prepare apres l arrivee. */
-      if (parLaPersonne && String(d ? d.devise : sel.value).toLowerCase() !== avant && retirerActionsPreparees()) {
-        direActionsRetirees('you picked ' + ((d && d.symbole) || 'another currency') + ' in “Pay with”');
+      if (parLaPersonne && String(d ? d.devise : sel.value).toLowerCase() !== avant) {
+        intentionChangee('you picked ' + ((d && d.symbole) || 'another currency') + ' in “Pay with”');
       }
       if (parLaPersonne) {
         /* ⛔⛔ 2026-10-26 (suite de la revue, points 1 et 3) : la personne passe a un AUTRE actif — le montant qu elle a tape
@@ -17285,12 +17353,14 @@ function lireSoldesPivots(block, v, pivots) {
  *   Solde illisible : le panneau relit et juge (jamais un refus sur une lecture ratee).
  * @returns {'SOLDE'|'PANNEAU'}
  */
-async function payerParRailServeur({ d, block, montant, dec, e }) {
+async function payerParRailServeur({ d, block, montant, dec, e, intention = null }) {
   const sym = d.symbole || 'that token';
   let solde = null;
   try {
     solde = BigInt(await rpc('eth_call', [{ to: d.devise, data: '0x70a08231' + String(compte).toLowerCase().slice(2).padStart(64, '0') }, 'latest']));
   } catch (_) { solde = null; }
+  /* ⛔ D4 : l ecran a change pendant la lecture du solde (autre actif, autre montant, autre block, autre Prepare) : on se tait */
+  if (intention && !intentionVivante(intention)) return 'PERIME';
   if (solde !== null && compte) soldesPivots.set(String(compte).toLowerCase() + '|' + String(d.devise).toLowerCase(), solde);
   if (solde !== null && solde < montant) {
     e.className = 'note wKo';
@@ -17300,11 +17370,18 @@ async function payerParRailServeur({ d, block, montant, dec, e }) {
     return 'SOLDE';
   }
   e.className = 'note';
-  e.textContent = 'Paying with ' + sym + ' goes through USDC (Aerodrome, then Uniswap v4). Our server builds the plan; the Chat panel shows '
-    + 'its quote, fee and minimum before your wallet signs.'
+  e.textContent = 'Paying with ' + sym + ' goes through USDC (Aerodrome, then Uniswap v4). The Chat panel holds this exact swap: press '
+    + '“Prepare the plan” there, read its quote, fee and minimum, then sign — your wallet never opens on its own from here.'
     + (solde === null ? ' Your ' + sym + ' balance could not be read here — the Chat panel reads it again.' : '');
+  /* la phrase de PREPARATION de ce choix : elle part quand l intention change (retirerTexteEtape) */
+  if (e.dataset) e.dataset.texteEtape = e.textContent;
   try { bcOuvrirPop({ sansBasculer: true, vue: 'chat', deplier: true }); } catch (_) {}
-  void bcProposerSwap('You', '', { de: { ok: true, adr: String(d.devise).toLowerCase(), sym },
+  /* ⛔⛔ D4 (revue de 4f0994c..7ed7e93, mesure : passe a ETH pendant le chargement, wallet ouvert 13,5 s plus tard SANS clic) :
+   *   `qui === 'You'` est le mode DIRECT de bcProposerSwap (le plan pret, le wallet s ouvre). On passe par son mode PROPOSITION,
+   *   deja supporte et inchange octet pour octet (bcProposerSwap est epingle par test-wallet-swap) : « Prepare the plan » puis
+   *   « Sign … », deux clics de la personne dans la carte du Chat, qui nomme ce swap exact (actif, montant, block). La carte porte
+   *   SA propre intention figee (de, vers, montant) : « Start again » y rejoue CE swap, jamais l etat vivant du panneau Buy. */
+  void bcProposerSwap('Buy panel', '', { de: { ok: true, adr: String(d.devise).toLowerCase(), sym },
     vers: { ok: true, adr: String(block).toLowerCase(), sym: symProfil || court(String(block)) }, montant: String(montant) }, null);
   return 'PANNEAU';
 }
@@ -17357,7 +17434,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange(relance));
-    $('#peActions').appendChild(br);
+    ajouterEtape(br);
   };
   if (!p || p.etat === 'NON_MESURE') {
     /* ⛔ « pas pu mesurer » n est PAS « la pool refuse ». Le premier est une panne chez nous. */
@@ -17379,7 +17456,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
     /* ⛔ `relance` : apres l approbation, signerEchange re-prepare DANS CE SENS — une vente block -> block ne doit pas
      *   repartir en achat (2026-10-03). */
     bt.addEventListener('click', () => void signerEchange(et, relance, true));
-    $('#peActions').appendChild(bt);
+    ajouterEtape(bt);
     e.className = 'note';
     e.textContent = 'This token needs an approval first, then the swap. Each one is measured again once done.';
     return;
@@ -17423,7 +17500,7 @@ function afficherPlanMultiSauts({ p, e, b, symBlock, dec, symPaye = null, relanc
   bt.className = 'bouton'; bt.type = 'button';
   bt.textContent = 'Sign — pay with ' + sym;
   bt.addEventListener('click', () => void signerEchange(p.tx, relance, false));
-  $('#peActions').appendChild(bt);
+  ajouterEtape(bt);
   e.className = 'note';
   e.textContent = 'Your wallet signs — this page never does. It shows every amount before you confirm.';
   try { etape('echange_multi_pret'); } catch (_) {}
@@ -17450,7 +17527,7 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null }) {
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange('ACHAT'));
-    $('#peActions').appendChild(br);
+    ajouterEtape(br);
   };
   if (!pa || pa.etat === 'NON_MESURE') {
     return refuser('Could not price this route right now — nothing to sign, try again.',
@@ -17490,12 +17567,12 @@ function afficherAerodromeSegment({ pa, e, dec, symBlock, symPaye = null }) {
   bt.className = 'bouton'; bt.type = 'button';
   bt.textContent = 'Approve ' + sym + ' (1 of 2)';
   bt.addEventListener('click', () => void signerEchange(pa.appels[0], 'ACHAT', true));
-  $('#peActions').appendChild(bt);
+  ajouterEtape(bt);
   const bs = document.createElement('button');
   bs.className = 'bouton sec'; bs.type = 'button';
   bs.textContent = 'Sign the swap (2 of 2)';
   bs.addEventListener('click', () => void signerEchange(pa.appels[1], 'ACHAT', false));
-  $('#peActions').appendChild(bs);
+  ajouterEtape(bs);
   e.className = 'note';
   e.textContent = 'Two signatures: the approval for the exact amount, then the swap. '
     + 'Your wallet shows both before you confirm.';
@@ -17527,7 +17604,7 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
     br.addEventListener('click', () => void preparerEchange(relance));
-    $('#peActions').appendChild(br);
+    ajouterEtape(br);
   };
   if (!pf || pf.etat === 'NON_MESURE') {
     /* ⛔ L ETAPE QUI A RATE EST DITE : « la route a echoue » envoie chercher partout. */
@@ -17540,7 +17617,7 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
     bt.className = 'bouton'; bt.type = 'button';
     bt.textContent = 'Approval 1 of ' + pf.etapes.length + ' — ' + et.nom;
     bt.addEventListener('click', () => void signerEchange(et, relance, true));
-    $('#peActions').appendChild(bt);
+    ajouterEtape(bt);
     e.className = 'note';
     e.textContent = 'This token needs an approval first. The crossing is measured again once it is done.';
     return;
@@ -17591,6 +17668,7 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
   bt.textContent = 'Sign — pay with ' + sym;
   bt.addEventListener('click', async () => {
     bt.disabled = true;
+    etatParSignature = true;
     e.className = 'note'; e.textContent = 'Your wallet signs the three calls together…';
     let lot;
     try { etape('echange_multi_sign_propos'); } catch (_) {}
@@ -17622,7 +17700,7 @@ function afficherFranchissement({ pf, e, dec, symBlock, symPaye = null, relance 
     try { etape(lot.etat === 'PARTIEL' ? 'echange_multi_refus_plan' : 'echange_multi_refus_pool'); } catch (_) {}
     bt.disabled = false;
   });
-  $('#peActions').appendChild(bt);
+  ajouterEtape(bt);
   e.className = 'note';
   /* ⛔ ON DIT LA CONDITION AVANT DE CLIQUER : un wallet qui ne groupe pas ne peut pas prendre cette
    *   route en securite, et il vaut mieux le lire ici qu apres avoir signe la premiere jambe. */
@@ -17664,7 +17742,8 @@ async function preparerEchange(sens) {
   const adr = $('#profil').dataset.block;
   const e = $('#peEtat');
   $('#peActions').innerHTML = '';
-  if ($('#peActions').dataset) delete $('#peActions').dataset.pour; /* inscrit plus bas, quand le montant est LU */
+  /* ⛔ D3 : une nouvelle preparation rend MUETTE toute preparation precedente encore en vol (son intention n est plus vivante) */
+  if (typeof avancerIntention === 'function') avancerIntention();
   $('#peLignes').innerHTML = '';
   const marcheLuGate = marcheProfil && marcheProfil.adr === String(adr).toLowerCase() && marcheProfil.chaine === CHAINE ? marcheProfil.v : null;
   /* ⛔⛔ UN MONTANT NUL EST REFUSE EN PREMIER (Raksha, 2026-10-01 : « 0 » rendait autre chose qu une
@@ -17738,6 +17817,9 @@ async function preparerEchange(sens) {
    *   1,9 s mesures) ; relire `deviseDentree` apres eux pouvait changer de chemin ou de decimales sous la personne. Tout ce qui suit
    *   lit `choix`, jamais la variable vivante. */
   const choix = sens === 'ACHAT' ? deviseDentree : null;
+  /* ⛔⛔ L INTENTION DE CE CLIC (gen, block, actif, montant, reception) : tout ce qui suit ne peint que si elle est encore vivante */
+  const intention = nouvelleIntention(sens, sens === 'ACHAT'
+    ? { devise: choix ? choix.devise : (deviseEchange ? deviseEchange.adr : ETH_ADR) } : {});
   /* ⛔ 2026-10-26 : un choix EN ATTENTE (liste « Pay with » pas encore relue) ne laisse pas partir le chemin de la pool a sa place */
   if (sens === 'ACHAT' && choixPayWith && choixPayWith.attente === true && choixPayWith.block === String(adr).toLowerCase()) {
     e.className = 'note wKo';
@@ -17773,19 +17855,15 @@ async function preparerEchange(sens) {
     }
   }
   else if (deviseEchange) dec = deviseEchange.dec; /* achat paye dans la devise du marche (AAPLc : 8 decimales) */
-  const brutMontant = $(sens === 'ACHAT' ? '#peAchat' : '#peVente').value;
-  const m = montantHumain(brutMontant, dec);
-  /* ⛔ 2026-10-26 : CE POUR QUOI les etapes qui vont suivre sont preparees — l actif du clic (`choix`), le montant LU ici, ce block.
-   *   gardeClicEtape le recompare au clic de chaque bouton de #peActions. */
-  if ($('#peActions').dataset) {
-    $('#peActions').dataset.pour = JSON.stringify(cleEtapePreparee(sens, sens === 'ACHAT'
-      ? { devise: choix ? choix.devise : (deviseEchange ? deviseEchange.adr : ETH_ADR), montant: brutMontant } : { montant: brutMontant }));
-  }
+  /* ⛔ le montant est celui du CLIC (l intention), pas celui que le champ porte apres les `await` ; si l ecran a change entre-temps,
+   *   on se tait : une preparation plus recente, ou aucune, parle a sa place */
+  if (!intentionVivante(intention)) return;
+  const m = montantHumain(intention.montant, dec);
   if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; try { etape('echange_refus_montant'); } catch (_) {} return; }
   /* ⛔⛔ 2026-10-26 : un pivot choisi dans « Pay with » (WETH, cbBTC, EURC) part vers le plan du SERVEUR, AVANT le multi-sauts et le
    *   chemin historique — sinon l etiquette dirait EURC et le wallet signerait l achat en ETH de la pool. */
   if (sens === 'ACHAT' && choix && choix.parRailServeur === true) {
-    return payerParRailServeur({ d: choix, block: adr, montant: m.valeur, dec, e });
+    return payerParRailServeur({ d: choix, block: adr, montant: m.valeur, dec, e, intention });
   }
   e.className = 'note'; e.textContent = 'Reading the pool, quoting the price and asking the chain…';
   profilEnLecture = true;
@@ -17864,7 +17942,7 @@ async function preparerEchange(sens) {
         }
       } catch (err) { pf = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 120) }; }
       finally { profilEnLecture = false; }
-      if ($('#profil').dataset.block !== adr) return;
+      if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
       echangeCourant = pf;
       try { etape('echange_bloc_vers_bloc'); } catch (_) {}
       afficherFranchissement({ pf, e, dec, symBlock: symCible, symPaye: symProfil || 'blocks', relance: 'VENTE' });
@@ -17884,7 +17962,7 @@ async function preparerEchange(sens) {
       }
     } catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err).slice(0, 120) }; }
     finally { profilEnLecture = false; }
-    if ($('#profil').dataset.block !== adr) return;
+    if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
     echangeCourant = p;
     try { etape('echange_bloc_vers_bloc'); } catch (_) {}
     afficherPlanMultiSauts({ p, e, b: { sauts: p.sautsBloc || [] }, symBlock: symCible, dec, symPaye: symProfil || 'blocks', relance: 'VENTE' });
@@ -17954,7 +18032,7 @@ async function preparerEchange(sens) {
           beneficiaireFrais: FEE_WALLET });
       } catch (err) { pa = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
       finally { profilEnLecture = false; }
-      if ($('#profil').dataset.block !== adr) return;
+      if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
       echangeCourant = pa;
       afficherAerodromeSegment({ pa, e, dec, symBlock: symProfil, symPaye: choix.symbole || null });
       return;
@@ -17970,12 +18048,13 @@ async function preparerEchange(sens) {
           resoudreV4: resoudre, beneficiaireFrais: FEE_WALLET, fraisDevisesOk });
       } catch (err) { pf = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
       finally { profilEnLecture = false; }
-      if ($('#profil').dataset.block !== adr) return;
+      if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
       echangeCourant = pf;
       afficherFranchissement({ pf, e, dec, symBlock: symProfil, symPaye: choix.symbole || null });
       return;
     }
     const b = await sautsDepuisChemin({ chemin: choix.chemin, montant: m.valeur, resoudre });
+    if (!intentionVivante(intention)) { profilEnLecture = false; return; }
     if (b.etat !== 'OK') {
       e.className = 'note wKo';
       /* ⛔ LE REFUS PORTE LE SAUT QUI A MANQUE. « La route a echoue » envoie chercher partout. */
@@ -17995,7 +18074,7 @@ async function preparerEchange(sens) {
         fraisDevisesOk, decimalesEntree: dec, prixUsdEntree: prixEntree });
     } catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
     finally { profilEnLecture = false; }
-    if ($('#profil').dataset.block !== adr) return;
+    if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
     echangeCourant = p;
     afficherPlanMultiSauts({ p, e, b, symBlock: symProfil, dec, symPaye: choix.symbole || null });
     return;
@@ -18017,7 +18096,7 @@ async function preparerEchange(sens) {
   try { p = await planEchange({ rpc, chaine: CHAINE, jeton: adr, compte, sens, montant: m.valeur, marcheLu: marcheEch, fraisDevisesOk }); }
   catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; }
-  if ($('#profil').dataset.block !== adr) return;
+  if ($('#profil').dataset.block !== adr || !intentionVivante(intention)) return;
   echangeCourant = p;
   const r = p.resume;
   if (r) {
@@ -18073,7 +18152,7 @@ async function preparerEchange(sens) {
     b.className = 'bouton'; b.type = 'button';
     b.textContent = 'Approval 1 of ' + p.etapes.length + ' — ' + etape.nom;
     b.addEventListener('click', () => void signerEchange(etape, sens, true));
-    $('#peActions').appendChild(b);
+    ajouterEtape(b);
     e.className = 'note'; e.textContent = 'Approvals first, then the sale. Each is measured again once done.';
     return;
   }
@@ -18105,7 +18184,7 @@ async function preparerEchange(sens) {
       if (marcheProfil && marcheProfil.adr === String(adr).toLowerCase()) marcheProfil = null;
       void preparerEchange(sens);
     });
-    $('#peActions').appendChild(br);
+    ajouterEtape(br);
     return;
   }
   if (p.etat === 'REFUSE') {
@@ -18152,7 +18231,7 @@ async function preparerEchange(sens) {
       const br = document.createElement('button');
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
       br.addEventListener('click', () => void preparerEchange(sens));
-      $('#peActions').appendChild(br);
+      ajouterEtape(br);
       try {
         const feeEl = $('#peFrais');
         if (feeEl) feeEl.textContent = '0.5 % MISSING — refused';
@@ -18187,7 +18266,7 @@ async function preparerEchange(sens) {
       const br = document.createElement('button');
       br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry quote';
       br.addEventListener('click', () => void preparerEchange(sens));
-      $('#peActions').appendChild(br);
+      ajouterEtape(br);
       /* ⛔ LE JUMEAU : le resume disait bien 0,5 % mais les OCTETS ne nomment pas FEE_WALLET. Un
        *   resume n est pas une preuve — seul le calldata part sur la chaine. Meme phrase a l ecran,
        *   compteur distinct, sinon on ne saurait pas laquelle des deux gardes a parle. */
@@ -18199,7 +18278,7 @@ async function preparerEchange(sens) {
   b.className = 'bouton'; b.type = 'button';
   b.textContent = sens === 'ACHAT' ? (estWalletDeFrais(compte) ? 'Sign the buyback' : 'Sign the buy') : 'Sign the sale';
   b.addEventListener('click', () => void signerEchange(p.tx, sens, false));
-  $('#peActions').appendChild(b);
+  ajouterEtape(b);
   if (sens === 'VENTE' && r && r.recoitDevise === 'ETH' && typeof r.recoitAuMoins === 'bigint') {
     proposerSortieUsdcApresVente(r.recoitAuMoins);
   }
@@ -18221,6 +18300,8 @@ const aEteDiffusee = (etat) => ETATS_DIFFUSES.includes(String(etat));
 async function signerEchange(tx, sens, estApprobation) {
   if (echangeEnCours) return;
   echangeEnCours = true;
+  /* ce qui s ecrit desormais dans #peEtat est un resultat de SIGNATURE : jamais efface par une frappe ni par une etape retiree */
+  etatParSignature = true;
   const e = $('#peEtat');
   e.className = 'note'; e.textContent = 'Opening your wallet — check what it shows before you sign.';
   try { etape('achat_sign_propos'); } catch (_) {}
@@ -18480,7 +18561,8 @@ $('#peVendre').addEventListener('click', () => void preparerEchange('VENTE'));
  *     jamais ecrase par une frappe — seule la demande de montant s en va quand le montant devient bon. */
 const PHRASE_MONTANT_NUL = 'Enter an amount above zero.';
 function montantNulOuVide(texte) { return /^0*(?:[.,]0*)?$/.test(String(texte == null ? '' : texte).trim()); }
-for (const id of ['#peAchat', '#peVente']) {
+/* ⛔ 2026-10-26 : #peUsdcEth (la sortie ETH -> USDC, D5) passe par le MEME ecouteur : une frappe y fait avancer l intention */
+for (const id of ['#peAchat', '#peVente', '#peUsdcEth']) {
   const champ = $(id);
   if (!champ) continue;
   champ.addEventListener('input', () => {
@@ -18489,11 +18571,19 @@ for (const id of ['#peAchat', '#peVente']) {
     const brut = String(champ.value || '').trim();
     /* ⛔ 2026-10-26 : la note « montant retire » de « Pay with » ne reste pas a cote d un NOUVEAU montant tape — et SEULEMENT son
      *   texte exact (retirerNotePayWith) : un refus du wallet ou un « sent » ecrit depuis n est jamais efface par une frappe (D1).
-     *   ⛔ D2 : une etape preparee pour l ANCIEN montant (approbation, signature) est retiree, avec une phrase qui s ajoute. */
+     *   ⛔ D2 / D3 : l intention avance ; une etape preparee pour l ANCIEN montant est retiree, avec une phrase qui s ajoute. */
     if (typeof retirerNotePayWith === 'function') retirerNotePayWith(e);
-    if (typeof retirerActionsPreparees === 'function' && retirerActionsPreparees()) direActionsRetirees('the amount changed');
-    if (brut !== '' && montantNulOuVide(brut)) { e.className = 'note wKo'; e.textContent = PHRASE_MONTANT_NUL; }
-    else if (e.textContent === PHRASE_MONTANT_NUL) { e.className = 'note'; e.textContent = ''; }
+    if (typeof intentionChangee === 'function') intentionChangee('the amount changed');
+    /* ⛔ D1b : la demande de montant s AJOUTE (jamais par-dessus un refus du wallet ou un « Sent, not confirmed yet — do not sign it
+     *   again ») et ne retire, quand le montant devient bon, que SA propre phrase, en fin de ligne */
+    const t = String(e.textContent || '');
+    if (brut !== '' && montantNulOuVide(brut)) {
+      if (!t.endsWith(PHRASE_MONTANT_NUL)) { const base = t.trim(); if (!base) e.className = 'note wKo'; e.textContent = (base ? base + ' ' : '') + PHRASE_MONTANT_NUL; }
+    } else if (t.endsWith(PHRASE_MONTANT_NUL)) {
+      const reste = t.slice(0, t.length - PHRASE_MONTANT_NUL.length).trim();
+      e.textContent = reste;
+      if (!reste) e.className = 'note';
+    }
   });
 }
 
@@ -18501,11 +18591,13 @@ for (const id of ['#peAchat', '#peVente']) {
 async function preparerEthUsdc() {
   const e = $('#peEtat');
   $('#peActions').innerHTML = ''; $('#peLignes').innerHTML = '';
-  /* ses etapes ne viennent pas du champ Buy (#peUsdcEth) : l inscription d un Buy precedent ne doit pas les juger */
-  if ($('#peActions').dataset) delete $('#peActions').dataset.pour;
+  /* ⛔ D5 (revue de 4f0994c..7ed7e93) : SES etapes portent SA propre intention (sens ETHUSDC, montant de #peUsdcEth, ce block),
+   *   capturee au clic ; la suite ne peint que si elle est encore vivante, et la garde du clic la recompare */
+  const intention = nouvelleIntention('ETHUSDC');
   if (CHAINE !== 8453) { e.className = 'note wKo'; e.textContent = 'ETH→USDC exit is Base mainnet only.'; return; }
   if (!(await pret({ e }))) { if (!/Switch to Base/i.test(e.textContent || '')) { direPrealable(e, texteRefusConnexion('Open your wallet to continue — it signs, this page never does.')); } return; }
-  const raw = String($('#peUsdcEth').value || '').trim().replace(',', '.');
+  if (!intentionVivante(intention)) return;
+  const raw = String(intention.montant || '').trim().replace(',', '.');
   const eth = Number(raw);
   if (!(eth > 0) || !Number.isFinite(eth)) { e.className = 'note wKo'; e.textContent = 'Enter ETH to convert to USDC.'; return; }
   /* wei from ETH string without float drift: use parse like other mounts */
@@ -18524,6 +18616,7 @@ async function preparerEthUsdc() {
   try { p = await planEthVersUsdc({ rpc, chaine: CHAINE, compte, montantWei: wei }); }
   catch (err) { p = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
   finally { profilEnLecture = false; }
+  if (!intentionVivante(intention)) return; /* l ecran a change pendant le devis : on se tait */
   const r = p.resume || {};
   if (p.etat === 'NON_MESURE') {
     e.className = 'note wKo';
@@ -18531,7 +18624,7 @@ async function preparerEthUsdc() {
     const br = document.createElement('button');
     br.className = 'bouton sec'; br.type = 'button'; br.textContent = 'Retry ETH→USDC';
     br.addEventListener('click', () => void preparerEthUsdc());
-    $('#peActions').appendChild(br);
+    ajouterEtape(br);
     return;
   }
   if (p.etat === 'REFUSE') {
@@ -18556,7 +18649,7 @@ async function preparerEthUsdc() {
   const b = document.createElement('button');
   b.className = 'bouton'; b.type = 'button'; b.textContent = 'Sign ETH→USDC';
   b.addEventListener('click', () => void signerEchange(p.tx, 'ACHAT', false));
-  $('#peActions').appendChild(b);
+  ajouterEtape(b);
   e.className = 'note wOk';
   e.textContent = 'The chain accepts this ETH→USDC. Check it in your wallet before signing.';
 }

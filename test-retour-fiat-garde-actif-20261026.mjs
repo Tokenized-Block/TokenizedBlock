@@ -44,7 +44,8 @@ const extraire = (nom) => {
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
   'reprendreRetourFiat', 'montantLisibleFiat', 'actifCarteCourant', 'cablerFundActifs', 'peindreBridgeBlocks', 'repeindreFundApresHub',
   'pivotsPourPayWith', 'lireSoldesPivots', 'garderChoixPayWith', 'noterPayWith', 'effacerNotePayWith',
-  'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees'];
+  'retirerNotePayWith', 'retirerActionsPreparees', 'direActionsRetirees',
+  'avancerIntention', 'retirerTexteEtape', 'intentionChangee', 'symboleDuChampBuy', 'majPucesPremier'];
 const sources = Object.fromEntries(FONCTIONS.map((f) => [f, extraire(f)]));
 
 const ETH = '0x0000000000000000000000000000000000000000';
@@ -122,6 +123,7 @@ function monde({ devises = [D_ETH, D_USDC], solde = 1752n, avant = '0', actif = 
     marcheParAdr: new Map(marches), faitsPoolLus: new Map([[BLOC, { famille: 'uniswap-v4' }]]), faitsBlockEnVol: new Set(), devisesSansFaitsEnVol: new Set(),
     devisesPivotVersBloc, soldesPivots: new Map(), soldesPivotsDemandes: new Set(), rpc: async () => { throw new Error('not read'); },
     choixPayWith: null, restaurationPayWith: false, listePayWithLue: false,
+    genAchat: 0, intentionCourante: null, etatParSignature: false, champBlocBuy: null,
     pairesProposees: () => [], prixUsdDevise: async () => {}, devisesDentree: () => ({ etat: 'OK', devises: etat.devises }),
     aretesMesurees: () => [], peutEtreAssemblee: () => ({ ok: true, par: 'v4', court: null }), resumeDesNonOffertes: () => [],
     phraseDevise: () => '', majEntreeCarte: () => {}, etape: () => {},
