@@ -23,16 +23,16 @@ let ko = 0, n = 0;
 const seen = (ok, msg) => { n++; if (ok) console.log('OK  ' + msg); else { ko++; console.log('KO  ' + msg); } };
 
 const extract = (src, name) => {
-  const m = new RegExp('\\n(async )?function ' + name + '\\(').exec(src);
+  const m = new RegExp('\\r?\\n((async )?function ' + name + '\\()').exec(src);
   if (!m) return '';
-  const i = m.index + 1, f = /\n\}\n/.exec(src.slice(i));
-  return f ? src.slice(i, i + f.index + 3) : '';
+  const i = m.index + m[0].length - m[1].length, f = /\r?\n\}\r?\n/.exec(src.slice(i));
+  return f ? src.slice(i, i + f.index + f[0].length) : '';
 };
 const extractConst = (src, name) => {
-  const i = src.indexOf('\nconst ' + name + ' = ');
-  if (i < 0) return '';
-  const f = src.indexOf('\n};\n', i);
-  return f > i ? src.slice(i + 1, f + 4) : '';
+  const m = new RegExp('\\r?\\nconst ' + name + ' = ').exec(src);
+  if (!m) return '';
+  const i = m.index + m[0].indexOf('const'), e = /\r?\n\};\r?\n/.exec(src.slice(i));
+  return e ? src.slice(i, i + e.index + e[0].length) : '';
 };
 
 /* ── a small DOM: tree, document order, focus, caret, events bubbling up to the document ── */

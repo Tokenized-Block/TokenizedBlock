@@ -67,7 +67,7 @@ function world(src) {
   if (missing.length) throw new Error('EXTRACTION FAILED: ' + missing.join(', ') + ' not found');
   /* the Map field wiring: from the end of chercherAuServeur up to the doc comment of poserNosBlocks */
   const server = extract(src, 'chercherAuServeur');
-  const i = server ? src.indexOf(server) + server.length : -1, f = src.indexOf('/**\n * Pose NOS blocks', i);
+  const i = server ? src.indexOf(server) + server.length : -1, f = i > 0 ? (() => { const k = src.slice(i).search(/\/\*\*\r?\n \* Pose NOS blocks/); return k < 0 ? -1 : i + k; })() : -1;
   if (!(i > 0 && f > i)) throw new Error('EXTRACTION FAILED: the #trouver wiring was not found');
   const open = extract(src, 'openOnMapB20');
   const wiring = src.slice(i, f);
