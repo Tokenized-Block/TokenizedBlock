@@ -12248,6 +12248,22 @@ async function majWallet({ recus = [] } = {}) {
     }
     if (!av || av.etat === 'NON_LU') note += '⚠️ The stocks and currencies of our list could not be read right now — not read, not empty. ';
     else if (av.etat === 'PARTIEL' && Number(av.nonLus) > 0) note += '⚠️ ' + Number(av.nonLus) + ' of the stocks and currencies of our list not read right now — not read, not empty. ';
+    /* ⛔ 2026-10-26 (game54 : AUDF, le pivot fiat mesure, n etait JAMAIS dans « You pay ») : les devises pivot (wsPivotsWallet — la
+     *   table du serveur, EURC banni deja retire) ne sont pas dans /api/avoirs ; elles sont lues ici par lireJeton, UNE fois par compte
+     *   et par page (lirePivotWallet, cache partage avec « Pay with »). Seuls les detenus sont montres ; un non lu se DIT, jamais zero. */
+    let pivotsNonLus = 0;
+    for (const p of wsPivotsWallet()) {
+      if (actifs.some((x) => String(x.adr || '').toLowerCase() === p.adr)) continue;
+      let lu = null;
+      try { lu = await lirePivotWallet(p.adr, String(compte).toLowerCase()); } catch (_) { lu = null; }
+      if (perime()) return;
+      if (!lu) { pivotsNonLus++; continue; }
+      if (lu.solde === 0n) continue;
+      actifs.push({ id: p.adr, nom: p.symbole, sous: 'currency · ' + court(p.adr), adr: p.adr, ic: '$', decimales: lu.decimales, solde: lu.solde,
+        multiplicateur: null, multiplicateurUi: null, etat: 'LU' });
+      peindreActifs();
+    }
+    if (pivotsNonLus) note += '⚠️ ' + pivotsNonLus + ' pay-with currenc' + (pivotsNonLus > 1 ? 'ies' : 'y') + ' (cbBTC, WETH, AUDF) not read right now — not read, not empty. ';
   }
   try {
     const { r, gardees, nonResolues } = await mesCreations();
@@ -17084,6 +17100,29 @@ const devisesSansFaitsEnVol = new Set();
  *   pivot reste selectionnable et le bouton relit le solde avant tout plan. Declares ici, avant tout appel de `majDevisesDentree`. */
 const soldesPivots = new Map();
 const soldesPivotsDemandes = new Set();
+/* 2026-10-26 (Swap du Wallet) : les pivots que le Wallet lit — la table du serveur (devisesPivotVersBloc, EURC banni deja retire), pour
+ *   un block cote en ETH : toutes les lignes PIVOT_AERODROME. Les monnaies fiat parmi eux viennent juste apres USDC dans « You pay ». */
+const wsPivotsWallet = () => devisesPivotVersBloc(ETH_ADR);
+const WS_PIVOTS_FIAT = new Set(['AUDF']);
+/* compte|adr -> { solde, decimales } : lireJeton (le chemin du Wallet) UNE fois par compte et par page ; un echec n est PAS retenu */
+const pivotsWalletLus = new Map();
+async function lirePivotWallet(adr, moi) {
+  const k = moi + '|' + adr;
+  if (pivotsWalletLus.has(k)) return pivotsWalletLus.get(k);
+  /* « Pay with » a deja lu ce solde : un zero lu suffit (rien a montrer, aucune lecture de plus) */
+  if (soldesPivots.get(k) === 0n) return { solde: 0n, decimales: null };
+  const lu = await lireJeton(adr, moi);
+  const r = { solde: lu.solde, decimales: lu.decimales };
+  pivotsWalletLus.set(k, r);
+  soldesPivots.set(k, r.solde);
+  soldesPivotsDemandes.add(k);
+  return r;
+}
+/** apres une transaction confirmee de ce compte, ses soldes pivot gardes sont perimes : on les oublie (relus a la relecture suivante) */
+function oublierPivotsDuCompte(moi) {
+  for (const m of [pivotsWalletLus, soldesPivots]) for (const k of [...m.keys()]) if (k.startsWith(moi + '|')) m.delete(k);
+  for (const k of [...soldesPivotsDemandes]) if (k.startsWith(moi + '|')) soldesPivotsDemandes.delete(k);
+}
 /* le choix « Pay with » de la personne : { block, devise, sym } — voir `garderChoixPayWith`. Declare avant tout rebatissage. */
 let choixPayWith = null;
 /* l intention du panneau Buy (voir `nouvelleIntention`) — declaree ici, avant tout rebatissage et toute preparation */
@@ -27744,6 +27783,7 @@ async function bcApresConfirme(hash) {
   /* recu illisible : le Wallet est relu quand meme (sans jeton en plus) — jamais une erreur qui l empeche */
   try { if (/^0x[0-9a-fA-F]{64}$/.test(String(hash || ''))) recus = jetonsRecusDuRecu(await rpc('eth_getTransactionReceipt', [hash]), moi); } catch (_) { recus = []; }
   if (!compte || String(compte).toLowerCase() !== moi) return;
+  oublierPivotsDuCompte(moi);
   try { await majWallet({ recus }); } catch (_) { /* relu a l ouverture de l onglet */ }
 }
 /* 2026-10-11 (QA Grok 17:47 : UNALYN montrait « Swap 0.002 ETH -> IB022 . LEFT UNFINISHED ») : l historique d un block ne montre
@@ -30722,7 +30762,17 @@ function wsCommande(de, vers, n) {
 function wsEstBlock(id) {
   const a = String(id || '').toLowerCase();
   if (!/^0x[0-9a-f]{40}$/.test(a)) return false;
-  return !DEVISES_BASE.some((d) => String(d.adr).toLowerCase() === a) && !ACTIONS_PAR_ADR.has(a);
+  /* une devise pivot (AUDF n est pas dans DEVISES_BASE) n est pas un block : pas de « son propre marche » pour elle */
+  return !DEVISES_BASE.some((d) => String(d.adr).toLowerCase() === a) && !ACTIONS_PAR_ADR.has(a)
+    && !wsPivotsWallet().some((p) => p.adr === a) && !DEVISES_BANNIES.has(a);
+}
+/** Le rang dans « You pay » (Phil : USDC d abord, puis les autres monnaies fiat, puis le reste dans l ordre lu). */
+function wsRang(a) {
+  const adr = String((a && a.adr) || '').toLowerCase();
+  if (adr === String(USDC_BASE).toLowerCase()) return 0;
+  if (DEVISES_BASE.some((d) => d.type === 'STABLE' && String(d.adr).toLowerCase() === adr)
+    || wsPivotsWallet().some((p) => p.adr === adr && WS_PIVOTS_FIAT.has(p.symbole))) return 1;
+  return 2;
 }
 /** « You pay » : SEULS les soldes LUS et non nuls (l ETH reste, meme a zero) — la meme regle que la liste de Send. */
 function wsPeindreDe() {
@@ -30731,7 +30781,8 @@ function wsPeindreDe() {
   /* ⛔⛔ 2026-10-26 (Phil : « banni EURC pour l instant ») : une devise bannie n est pas offerte a payer, meme detenue (Send la garde :
    *   ce sont les fonds de la personne, elle peut toujours les envoyer) */
   const lus = actifs.filter((a) => a.etat === 'LU' && (a.id === 'ETH' || (typeof a.solde === 'bigint' && a.solde > 0n))
-    && !DEVISES_BANNIES.has(String(a.adr || '').toLowerCase()));
+    && !DEVISES_BANNIES.has(String(a.adr || '').toLowerCase()))
+    .map((a, i) => [a, i]).sort(([x, i], [y, j]) => wsRang(x) - wsRang(y) || i - j).map(([a]) => a);
   /* options construites par le DOM (new Option = texte), jamais innerHTML : regle du panneau (test-commandes-panel) */
   s.replaceChildren(...lus.map((a) => new Option(a.nom + ' — ' + abrege(formaterUnites(a.solde, a.decimales)), a.adr ? String(a.adr).toLowerCase() : 'ETH')));
   if ([...s.options].some((o) => o.value === avant)) s.value = avant;
