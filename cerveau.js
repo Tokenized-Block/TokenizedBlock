@@ -218,16 +218,35 @@ function nourriture(f) {
 }
 
 /**
+ * Ce que les faits FONT aux capteurs : les termes exacts que `pas()` ajoute a chacun des 16 capteurs, avant le bruit.
+ * ⛔⛔ SOURCE UNIQUE (2026-10-26, Brain vision) : `pas()` additionne CES valeurs, dans CET ordre. L ecran « what it sees »
+ *     les montre telles quelles — une copie de la formule cote ecran aurait fini par dire autre chose que le reseau.
+ *     Banc : test-vision-cerveau-20261026.mjs rejoue 176 cas x 40 pas et exige l empreinte d avant ce refactor, bit pour bit.
+ * ⛔ UN BLOCK MORT NE RECOIT RIEN : `termes` vaut `null`, pas des zeros — « aucun courant » n est pas « un courant nul calcule ».
+ */
+export function forces(faits = {}) {
+  const f = courant(faits);
+  const miam = nourriture(f);
+  const termes = f.mort ? null : {
+    reveil: f.reveil ? REVEIL_IMPULSION : 0,
+    base: f.aMarche ? 0.25 + f.taille * 0.5 * f.sensibilite.taille : PARAMETRES.reposSansMarche,
+    delta: f.delta * 0.4 * f.sensibilite.delta,
+    nourriture: miam * 0.6,
+    nouveau: (f.nouveau + f.pression) * 0.8,
+  };
+  return { f, miam, termes };
+}
+
+/**
  * Un pas de temps. Rend le nouvel etat ET ce qui se voit.
  * ⛔ UN BLOCK MORT NE RECOIT PLUS AUCUN COURANT : son reseau s eteint pour de vrai. Le dire « mort » tout
  *    en le laissant tirer serait une animation qui ment.
  */
 export function pas(etat, faits = {}) {
-  const f = courant(faits);
+  const { f, miam, termes: t } = forces(faits);
   const { c } = etat;
   const p = etat.potentiels.slice();
   const suivant = tirage((parseInt(c.empreinte.slice(10, 18), 16) ^ etat.tick) >>> 0);
-  const miam = nourriture(f);
 
   if (!f.mort) {
     for (let i = 0; i < CAPTEURS; i++) {
@@ -236,11 +255,13 @@ export function pas(etat, faits = {}) {
        * potentiel tourne autour de 1,1 — il tire RAREMENT. La nourriture s ajoute, avec ou sans marche. */
       /* ⛔ LE REVEIL S AJOUTE AU COURANT DE REPOS, IL NE LE REMPLACE PAS : un dormeur reveille est
        *   un dormeur qui tire une fois, pas un block qui a soudain un marche. */
-      p[i] += (f.reveil ? REVEIL_IMPULSION : 0)
-        + (f.aMarche ? 0.25 + f.taille * 0.5 * f.sensibilite.taille : PARAMETRES.reposSansMarche)
-        + f.delta * 0.4 * f.sensibilite.delta + miam * 0.6 + bruit
+      /* ⛔ MEME ORDRE D ADDITION QU AVANT `forces()` : reveil + base + delta + nourriture + bruit + nouveau — les flottants
+       *   ne sont pas associatifs, changer l ordre changerait des potentiels au dernier bit. */
+      p[i] += t.reveil
+        + t.base
+        + t.delta + t.nourriture + bruit
         /* un evenement NOUVEAU (achat, vente, transfert, detenteur, message) secoue le reseau le battement ou il arrive */
-        + (f.nouveau + f.pression) * 0.8;
+        + t.nouveau;
     }
   }
   /* ⛔ UN ETAT SANS MEMOIRE (sauvegarde d avant la v3) repart de zero, il ne casse pas. */
