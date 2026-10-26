@@ -146,6 +146,8 @@ const peindreListe = async ({ p = null, etat = bcBanque } = {}) => {
     bcPourToiDe: (mk, q) => (q ? { emprunt: 10n ** 6n, rien: false, garantie: 10n ** 8n, pret: 0n } : null), bcBanqueChiffres, bcPct, bcBanqueGainDit, bcBanqueFraisDit,
     bcBanqueGrouper, bcBanqueDispoDit, bcBanqueProfondDit, bcOrdreChoix, bcVisage: () => new El('span'), bcPanierPeindre: () => {}, bcBanquePositions: () => {},
     bcBanquePourToi: () => {}, bcBanqueChoisir: (mk, sens) => choisis.push({ mk, sens }), choisirBrain: () => {}, bcRepeindre: () => {}, bcVue: () => {},
+    /* 2026-10-26 : le repeint du panier garde ce qui y est tape (couvert par test-saisies-gardees-20261026) ; ici, la liste des cartes seule */
+    saisiesEnCours: () => new Map(), rendreSaisies: () => {}, cleChampPanier: () => null, bcPanierMaj: () => {},
   };
   const f = new Function(...Object.keys(deps), charger + '\nreturn bcBanqueCharger;')(...Object.values(deps));
   await f(true);

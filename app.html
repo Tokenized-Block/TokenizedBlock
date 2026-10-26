@@ -6384,6 +6384,7 @@ async function peindreMissions() {
   if (!etat || !ul) return;
   let j = null;
   try { j = await fetch('/api/missions', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+  const gardees = saisiesEnCours(ul);
   /* mesure prod game3 21:36 : PAS_OUVERT laissait le texte precedent (« Reading the board… ») -> chaque etat ecrit le sien */
   if (!j || !j.ok) { ul.innerHTML = ''; jb('jbMissions', j && j.etat === 'PAS_OUVERT' ? '0' : '—'); jb('jbMissionsTxt', j && j.etat === 'PAS_OUVERT' ? 'board not open yet' : 'board not read'); etat.textContent = j && j.etat === 'NON_LU' ? 'The mission board could not be read just now.' : j && j.etat === 'PAS_OUVERT' ? 'The board waits for its contract on Base.' : 'The mission board could not be reached.'; return; }
   const ouvertes = (j.missions || []).filter((x) => x.lue && x.etat === 'OUVERTE');
@@ -6392,8 +6393,9 @@ async function peindreMissions() {
   ul.innerHTML = ouvertes.map((x) => '<li class="filL" data-mission="' + x.id + '"><p class="filT"><b>Mission #' + x.id + '</b> · reward ' + enTexte(x.reward) + ' (raw units) · '
     + x.done + '/' + x.maxDone + ' done · hold ' + Math.round(x.detention.window / 3600) + ' h</p>'
     + '<p class="filS">Hold at least ' + enTexte(x.detention.minBlock) + ' raw units of the block' + (BigInt(x.detention.minPaired) > 0n ? ' and ' + enTexte(x.detention.minPaired) + ' of its pair' : '') + '.</p>'
-    + '<input class="champ" data-mtx placeholder="Hash of the transaction where you did it (0x…)" style="width:100%;margin:6px 0">'
+    + '<input class="champ" data-mtx data-saisie="mission-tx:' + enTexte(x.id) + '" placeholder="Hash of the transaction where you did it (0x…)" style="width:100%;margin:6px 0">'
     + '<button type="button" class="bouton" data-claim="' + x.id + '">I did it — claim</button><p class="note" data-metat></p></li>').join('');
+  rendreSaisies(ul, gardees);
   ul.dataset.contrat = String(j.contrat || '');
   /* le contrat existe : le createur peut poster (bouton montre) */
 }
@@ -6642,6 +6644,7 @@ async function peindreSkinsJeu() {
     /* Phil 2026-10-18 08:40 : pas de « 0 minted · 0 for sale » — une phrase courte, vraie, qui invite.
      *   2026-10-26 : la phrase vit dans skins-marche.js (texteMarcheSkins) — la section Skins de l onglet Market dit LA MEME */
     etat.textContent = texteMarcheSkins(r.skins, moi);
+    const gardees = saisiesEnCours(z);
     z.textContent = '';
     /* Phil 2026-10-18 (« revente des skins + encheres que les brains voient ») : trois groupes — les encheres EN COURS (offre actuelle, temps
      *   restant : bcLigneSkin les dit), puis les prix fixes et les encheres finies a regler, puis les skins de CE wallet (vendre / encherir). */
@@ -6650,6 +6653,7 @@ async function peindreSkinsJeu() {
     if (enCours.length) { titreSkin('Auctions in progress — current bid and time left:'); for (const s of enCours.slice(0, 12)) z.append(bcLigneSkin(s, moi, t)); }
     if (autres.length) { titreSkin('Fixed price' + (autres.some((s) => s.enchere) ? ' and ended auctions to settle' : '') + ':'); for (const s of autres.slice(0, 12)) z.append(bcLigneSkin(s, moi, t)); }
     if (miennes.length) { titreSkin('Your skins — sell at a price, or start an auction (7 days at most):'); for (const s of miennes.slice(0, 8)) z.append(bcLigneSkin(s, moi, t)); }
+    rendreSaisies(z, gardees);
   } finally { skinsJeuEnVol = false; }
 }
 /* ⛔ 2026-10-18 (Phil : « tous les skins a 10 dollars ») : le prix d une skin n est TAPE nulle part dans cette page. Chaque <span class="skinPrix">
@@ -28352,6 +28356,59 @@ const bcEl = (tag, props = {}, enfants = []) => {
   for (const c of enfants) e.append(c);
   return e;
 };
+/* ══ 2026-10-26 (QA game56 : « la page se repeint pendant la frappe et vide le champ ») — UN REPEINT NE VIDE JAMAIS CE QU ON TAPE.
+ *   Une liste repeinte de zero (textContent = '' / innerHTML) remplace ses champs : ce qui etait tape, le focus et le curseur partaient
+ *   avec. Chaque champ d une liste repeinte a une cle stable (data-saisie, ou la fonction de cle de sa liste : cleChampPanier) ;
+ *   saisiesEnCours la lit AVANT le repeint (seulement ce que
+ *   la personne a tape ou coche, ou le champ ou elle se trouve), rendreSaisies la remet APRES dans le nouveau champ de meme cle, avec le
+ *   focus et le curseur. Un pre-rempli jamais touche prend la nouvelle valeur ; un champ disparu ne revient pas ; rien n est invente. */
+function brancherSaisiesTapees() {
+  const marquer = (e) => { const t = e && e.target; if (e && e.isTrusted && t && t.dataset && /^(INPUT|SELECT|TEXTAREA)$/.test(String(t.tagName))) t.dataset.saisieTapee = '1'; };
+  document.addEventListener('input', marquer, true);
+  document.addEventListener('change', marquer, true);
+}
+/** la cle d un champ : son data-saisie (une ligne repeinte qui ne peut pas en porter passe sa propre fonction, cleChampPanier) */
+function cleSaisie(i) { return i && i.getAttribute ? i.getAttribute('data-saisie') : null; }
+/** un champ du panier de la Bank : la ligne (data-id = le marche) et son rang dans la ligne (case, garantie, emprunt) */
+function cleChampPanier(i) {
+  const li = i && i.closest ? i.closest('li.bcPanierLigne') : null;
+  return li && li.dataset.id ? li.dataset.id + ':' + [...li.querySelectorAll('input')].indexOf(i) : null;
+}
+function saisiesEnCours(zone, cleDe = cleSaisie) {
+  const r = new Map();
+  if (!zone || !zone.querySelectorAll) return r;
+  for (const i of zone.querySelectorAll('input, select, textarea')) {
+    const cle = cleDe(i), focus = document.activeElement === i;
+    if (!cle || !(focus || i.dataset.saisieTapee === '1')) continue;
+    if (i.type === 'checkbox' || i.type === 'radio') { r.set(cle, { coche: !!i.checked, focus }); continue; }
+    let deb = null, fin = null;
+    if (focus) { try { deb = i.selectionStart; fin = i.selectionEnd; } catch (_) { deb = fin = null; } }
+    r.set(cle, { valeur: String(i.value), focus, deb, fin });
+  }
+  return r;
+}
+function rendreSaisies(zone, gardees, cleDe = cleSaisie) {
+  if (!zone || !zone.querySelectorAll || !gardees || !gardees.size) return;
+  const champs = [...zone.querySelectorAll('input, select, textarea')];
+  let ici = null;
+  /* les cases d abord : leur `change` rend actifs les champs qu elles commandent (le panier de la Bank) */
+  for (const passe of ['coche', 'valeur']) {
+    for (const i of champs) {
+      const g = gardees.get(cleDe(i));
+      if (!g || !(passe in g)) continue;
+      if (passe === 'valeur' && i.tagName === 'SELECT' && ![...i.options].some((o) => o.value === g.valeur)) continue;
+      i.dataset.saisieTapee = '1';
+      if (passe === 'coche') { if (i.checked !== g.coche) { i.checked = g.coche; i.dispatchEvent(new Event('change', { bubbles: true })); } }
+      else if (i.value !== g.valeur) i.value = g.valeur;
+      if (g.focus) ici = [i, g];
+    }
+  }
+  if (!ici || document.activeElement === ici[0]) return;
+  const [i, g] = ici;
+  try { i.focus({ preventScroll: true }); } catch (_) { /* un champ cache ne prend pas le focus : sa valeur est quand meme rendue */ }
+  if (g.deb !== null && g.deb !== undefined) { try { i.setSelectionRange(g.deb, g.fin); } catch (_) { /* type sans curseur */ } }
+}
+brancherSaisiesTapees();
 /** La vignette d une action / d un block (Phil, 2026-10-11 : « ajoute l image des blocks de notre app pour les tokenized stocks, pour que
  *  le user repere plus facilement au visuel ») : la MEME face que le panneau - dessin(adresse, symbole), dessinee dans la page, aucune
  *  requete. Rien de dessinable : la premiere lettre du symbole, jamais une image cassee. Decorative (aria-hidden) : le symbole est ecrit a cote. */
@@ -30215,7 +30272,10 @@ function bcPeindreBoutique() {
   }
   z.append(grille);
   /* le marche des skins, sous les curseurs : lu sur la chaine a chaque ouverture de la boutique */
-  z.append(bcEl('div', { cls: 'bcMarche', id: 'bcMarche' }));
+  /* ⛔ 2026-10-26 : son id est le SIEN. Il s appelait #bcMarche, comme la boite des tuiles de la vue Market (statique, plus haut dans la
+   *   page) : $('#bcMarche') rendait les tuiles, le marche des skins y etait peint, et le repeint des tuiles (toutes les 3 s) l effacait
+   *   avec le prix tape dans « Sell at a price ». */
+  z.append(bcEl('div', { cls: 'bcMarche', id: 'bcSkinsMarche' }));
   void bcPeindreMarche();
 }
 /* ── LE MARCHE DES SKINS (Phil, 2026-10-11 : « le market des skins … tu peux faire des enchères … des fees de l app a mettre pour
@@ -30258,10 +30318,11 @@ function bcPastilleSkin(r) {
   return p;
 }
 async function bcPeindreMarche() {
-  const z = $('#bcMarche');
+  const z = $('#bcSkinsMarche');
   if (!z || bc.marcheEnVol) return;
   bc.marcheEnVol = true;
   try {
+    const gardees = saisiesEnCours(z);
     z.textContent = '';
     z.append(bcEl('p', { cls: 'bcSousTitre', text: 'Skins market' }));
     const etat = bcEl('p', { cls: 'note', text: 'Reading the market on chain…' });
@@ -30284,6 +30345,7 @@ async function bcPeindreMarche() {
       + (moi ? '' : ' Connect your wallet to buy, bid or sell.') + ' ' + bcTexteDevisesOffertes();
     for (const s of enVente) z.append(bcLigneSkin(s, moi, t));
     if (miennes.length) { z.append(bcEl('p', { cls: 'bcSousTitre', text: 'Your skins' })); for (const s of miennes) z.append(bcLigneSkin(s, moi, t)); }
+    rendreSaisies(z, gardees);
     /* ce que le marche doit a ce compte (offre depassee, paiement qu il n a pas pu recevoir) : on le lit ; une lecture ratee est DITE */
     if (bc.devisesSkinNonLues && bc.devisesSkinNonLues.length) z.append(bcEl('p', { cls: 'note', text: 'Not read this time, so not offered: ' + bc.devisesSkinNonLues.join(', ') + '.' }));
     if (moi) {
@@ -30322,8 +30384,9 @@ function bcLigneSkin(s, moi, t) {
 /** Vendre SA skin : un prix tape, une devise admise, et pour une enchere une duree (7 jours au plus). Le prix tape sert aux deux : prix
  *  fixe, ou offre d ouverture. Partage par la ligne du panneau / du Game (bcLigneSkin) et la section Skins de l onglet Market. */
 function bcFormVendreSkin(s, texteVente) {
-  const prix = bcEl('input', { type: 'text', inputmode: 'decimal', placeholder: 'price', 'aria-label': 'Price' });
-  const dev = bcEl('select', { 'aria-label': 'Currency' }), duree = bcEl('select', { 'aria-label': 'Auction length' });
+  const id = String(s.tokenId);
+  const prix = bcEl('input', { type: 'text', inputmode: 'decimal', placeholder: 'price', 'aria-label': 'Price', 'data-saisie': 'skin-prix:' + id });
+  const dev = bcEl('select', { 'aria-label': 'Currency', 'data-saisie': 'skin-devise:' + id }), duree = bcEl('select', { 'aria-label': 'Auction length', 'data-saisie': 'skin-duree:' + id });
   /* SEULEMENT les devises LUES admises (bcDevisesOffertes) : une action tokenisee y entre quand currencyAllowed la dit vraie, jamais avant */
   const offertes = bcDevisesOffertes();
   if (!Object.keys(offertes).length) return bcEl('p', { cls: 'note', text: bcTexteDevisesOffertes() });
@@ -32064,7 +32127,9 @@ async function bcBanqueCharger(force = false) {
     ul.append(bcEl('li', { cls: 'bcAutresLi' }, [plis]));
   }
   if (ecartes > 0) ul.append(bcEl('li', { cls: 'note', text: ecartes + ' unlisted market' + (ecartes > 1 ? 's' : '') + ' not shown.' }));
-  bcPanierPeindre(listes);
+  /* le panier repeint garde ce qui y est coche ou tape (bcPanierPeindre, au texte gele, n est pas touchee : ses champs sont reconnus par
+   *   leur ligne, cleChampPanier) ; les totaux sont relus sur ce qui a ete rendu */
+  { const z = $('#bcPanierLignes'), gardees = saisiesEnCours(z, cleChampPanier); bcPanierPeindre(listes); rendreSaisies(z, gardees, cleChampPanier); if (gardees.size) bcPanierMaj(); }
   void bcBanquePositions();
   void bcBanquePourToi();
 }

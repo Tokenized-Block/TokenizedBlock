@@ -15,7 +15,8 @@ const vu = (c, m) => { assert.ok(c, m); n += 1; };
 const corps = (nom) => { const i = html.indexOf(nom); if (i < 0) return ''; const j = html.slice(i + 10).search(/\n(async )?function /); return html.slice(i, j > 0 ? i + 10 + j : i + 6000); };
 const boutique = corps('function bcPeindreBoutique('), marche = corps('async function bcPeindreMarche('), ligne = corps('function bcLigneSkin('), action = corps('async function bcActionMarche(');
 vu(marche.length > 0 && ligne.length > 0 && action.length > 0, 'app.html n a pas le marche des skins (bcPeindreMarche / bcLigneSkin / bcActionMarche)');
-vu(/z\.append\(bcEl\('div', \{ cls: 'bcMarche', id: 'bcMarche' \}\)\);\s*void bcPeindreMarche\(\);/.test(boutique), 'la boutique ne pose pas le marche');
+/* 2026-10-26 : la boite du marche des skins a son PROPRE id (#bcSkinsMarche) — #bcMarche est la boite des tuiles de la vue Market */
+vu(/z\.append\(bcEl\('div', \{ cls: 'bcMarche', id: 'bcSkinsMarche' \}\)\);\s*void bcPeindreMarche\(\);/.test(boutique) && /const z = \$\('#bcSkinsMarche'\);/.test(marche), 'la boutique ne pose pas le marche (ou bcPeindreMarche ne peint pas dans SA boite)');
 vu(/if \(r\.etat !== 'LU'\) \{[\s\S]{0,120}could not be read right now — nothing is listed rather than a wrong list/.test(marche), 'une lecture ratee du marche doit etre DITE');
 vu(/const acts = actionsSkin\(s, moi, t\);/.test(ligne) && !/ACHETER'|ENCHERIR'/.test(ligne.replace(/acts\.includes\('(ACHETER|ENCHERIR|REGLER|RETIRER|METTRE_EN_VENTE)'\)/g, '').replace(/bouton\([^;]*\);/g, '')),
   'les boutons d une ligne doivent venir de actionsSkin (ce que le contrat accepterait), pas d une regle a cote');

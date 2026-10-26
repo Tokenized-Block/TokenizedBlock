@@ -56,6 +56,8 @@ const SRC = {
   skmPeindreListe: fonction('function skmPeindreListe('), skmPouls: fonction('function skmPouls('), bcLigneSkin: fonction('function bcLigneSkin('),
   bcPastilleSkin: fonction('function bcPastilleSkin('), bcDureeSkin: fonction('function bcDureeSkin('), peindreSkinsJeu: fonction('async function peindreSkinsJeu('),
   bcActionMarche: fonction('async function bcActionMarche('), jb: ligneDe('const jb = '), bcEl: bcElSrc, peindreSkinsMarche: fonction('async function peindreSkinsMarche('),
+  /* 2026-10-26 : peindreSkinsJeu garde ce qui est tape pendant son repeint (test-saisies-gardees-20261026) */
+  cleSaisie: fonction('function cleSaisie('), saisiesEnCours: fonction('function saisiesEnCours('), rendreSaisies: fonction('function rendreSaisies('),
 };
 for (const [k, v] of Object.entries(SRC)) vu(v.length > 20, 'B0 extrait : ' + k);
 
@@ -129,7 +131,7 @@ function monde(liste, { moi = MOI } = {}) {
   };
   vm.createContext(ctx);
   vm.runInContext([SRC.bcEl, SRC.jb, SRC.bcMontantSkin, SRC.bcDureeSkin, SRC.bcPastilleSkin, SRC.bcFormVendreSkin, SRC.bcLigneSkin, SRC.skmPouls, SRC.skmLigne, SRC.skmPeindreListe,
-    SRC.peindreSkinsJeu, SRC.bcActionMarche, SRC.peindreSkinsMarche.replace(/^async function peindreSkinsMarche\(/, 'async function vraiPeindreSkinsMarche('),
+    SRC.cleSaisie, SRC.saisiesEnCours, SRC.rendreSaisies, SRC.peindreSkinsJeu, SRC.bcActionMarche, SRC.peindreSkinsMarche.replace(/^async function peindreSkinsMarche\(/, 'async function vraiPeindreSkinsMarche('),
     'this.__f = { bcActionMarche, bcMontantSkin };'].join('\n'), ctx);
   /* bcActionMarche ECOUTE : chaque geste d une ligne est note, puis execute pour de vrai */
   const vrai = ctx.__f.bcActionMarche;
