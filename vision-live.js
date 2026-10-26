@@ -26,6 +26,8 @@ export const SOURCES = Object.freeze({
   carte: 'its brain on the map (beats every 600 ms)',
   brain: 'its Brain tab (beats while the Brain tab or the control panel is open)',
   profil: 'its block profile (beats while the profile is open)',
+  /* game57 #5 : la seule instance de son adresse sur la page (cerveaux-page.js), qui que ce soit qui la fasse battre */
+  page: 'its one brain on this page (shared by the map, its profile, Brain and Live)',
 });
 const ADR = /^0x[0-9a-fA-F]{40}$/;
 const fini = (x) => typeof x === 'number' && Number.isFinite(x);

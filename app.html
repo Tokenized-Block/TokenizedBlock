@@ -4926,6 +4926,11 @@ import { nettoyerVoix, messageVoix, lireVoixPublique, voixPublique, reactionVoix
 function cerveauAvecMemoire(adr) {
   return restaurerMemoire(adr, memoireLue(adr)) || cerveauInitial(adr);
 }
+/* ⛔⛔ game57 #5 (Grok Super QA game56 : UNIT « no beat yet » dans Live, beat 92 depuis la Map) : UN cerveau par adresse sur la page.
+ *     La map, le profil, Brain / le Control panel, la fenetre Brain et Live lisent et font battre la MEME instance (cerveaux-page.js),
+ *     creee UNE fois depuis la memoire de ce navigateur, avec un seul pas par battement de page (cycleBattement). */
+const cerveauxPage = creerCerveauxPage({ creer: (a) => cerveauAvecMemoire(a) });
+import { creerCerveauxPage } from './cerveaux-page.js';
 import { nourritureDuBlock } from './nourriture.js';
 /* ⛔ LE CREATEUR D UN BLOCK NE CHANGE JAMAIS (2026-09-19, charge RPC) : nourritureDuBlock le recherchait a CHAQUE lecture
  *    (getLogs + blockNumber + tx). Trouve une fois, il est garde (memoire + stockage navigateur) et passe en `creation`.
@@ -9527,7 +9532,7 @@ function creerHabitant(c) {
    * pareil, et le meme block bougera pareil chez tout le monde. Une adresse illisible n a pas de
    * cerveau plutot qu un cerveau au hasard. */
   let cerveau = null;
-  try { cerveau = cerveauAvecMemoire(c.jeton); } catch (e) { cerveau = null; }
+  try { cerveau = cerveauxPage.etat(c.jeton); } catch (e) { cerveau = null; }
   const h = {
     el, adr: c.jeton, sym: c.symbole, vie: c.vie, etatVie: c.etatVie, t, cerveau, vu: null, phase: null,
     /* ⚠️ DERIVE LENTE, PAS UNE COURSE. Des blocks qui filent seraient impossibles a viser au
@@ -9639,7 +9644,10 @@ function poserBlocks(liste) {
  *    difference entre ses deux ailes. Avant, les blocks flottaient au hasard — joli, mais vide. */
 const BATTEMENT_MS = 600;
 let battement = null;
+/* game57 #5 : un battement de page = un cycle ; une adresse ne fait qu UN pas par cycle, quelle que soit la vue qui l appelle */
+let cycleBattement = 0;
 function battre() {
+  cycleBattement++;
   for (const h of habitants) {
     if (!h.cerveau) continue;
     const vc = viePourCerveau(h.adr, h.vie, h.etatVie);
@@ -9669,7 +9677,7 @@ function battre() {
       }
     }
     const faitsH = { ...entreesCerveau(vc.vie, h.vieAvant, h.nourriture, vc.etatVie, h.nourritureAvant, h), reveil };
-    const r = cerveauPas(h.cerveau, faitsH);
+    const r = cerveauxPage.battre(h.adr, faitsH, cerveauPas, cycleBattement, { source: 'carte', nourritureLue: !!(h.nourriture && h.nourriture.etat === 'LUE') });
     /* ⛔ 2026-10-26 (Brain vision) : l objet EXACT que ses neurones viennent de recevoir — la vue « what it sees » ne montre que lui */
     h.faitsVus = faitsH;
     h.cerveau = r.etat;
@@ -13267,12 +13275,15 @@ function battreProfil() {
   void relireNourriture(hP);
   const fP = entreesCerveau(vieProfil, hP && typeof hP.vieAvant === 'number' ? hP.vieAvant : null,
     hP ? hP.nourriture : null, etatVieProfil, hP ? hP.nourritureAvant : null, hP || { adr: profilCerveau.adr });
-  const r = cerveauPas(profilCerveau.etat, fP);
+  const r = cerveauxPage.battre(profilCerveau.adr, fP, cerveauPas, cycleBattement, { source: 'profil', nourritureLue: !!(hP && hP.nourriture && hP.nourriture.etat === 'LUE') });
+  if (!r) return;
   profilCerveau.etat = r.etat;
   profilCerveau.vu = r.vu;
   /* ⛔ 2026-10-26 (Brain vision) : les faits EXACTS de ce battement et ses 64 dernieres sorties, pour « what it sees » */
-  profilCerveau.faits = fP;
-  profilCerveau.histo = (profilCerveau.histo || []).concat([r.vu]).slice(-64);
+  /* game57 #5 : battu deja dans ce cycle par la map -> les faits sont ceux que l instance a REELLEMENT recus */
+  profilCerveau.faits = r.deja ? (cerveauxPage.lire(profilCerveau.adr) || {}).faits || fP : fP;
+  const hp = profilCerveau.histo || [];
+  if (!hp.length || hp[hp.length - 1].tick !== r.vu.tick) profilCerveau.histo = hp.concat([r.vu]).slice(-64);
   peindreCerveau();
 }
 /**
@@ -14561,7 +14572,8 @@ async function lireProfil(adr, sym, perime, opts) {
   messagePayeCourant = null;
   try { peindreChoixParler(); } catch (_) { /* painted after wallet load */ }
   $('#pcActif').checked = cerveauVoulu();
-  try { profilCerveau = { etat: cerveauAvecMemoire(adr), vu: null, adr }; } catch (e) { profilCerveau = null; }
+  /* game57 #5 : le cerveau DEJA en marche pour cette adresse (map, Brain, Live), et ses battements deja vus ; sinon cree une fois */
+  try { const dj = cerveauxPage.lire(adr); profilCerveau = { etat: cerveauxPage.etat(adr), vu: dj ? dj.vu : null, adr, histo: dj ? dj.histo.slice() : [] }; } catch (e) { profilCerveau = null; }
   peindreCerveau();
   /* ⛔ LE METIER S AFFICHE TOUT DE SUITE : il ne depend QUE de l adresse. L attacher a la fin des
    * lectures laissait « … » pendant vingt secondes — une identite connue, cachee par une attente
@@ -25230,7 +25242,7 @@ function choisirBrain(adr) {
   }
   brainHisto = [];
   brainTotal = 0; brainDernier = null;
-  try { brainEtat = cerveauAvecMemoire(adr); } catch (e) { brainEtat = null; }
+  try { brainEtat = cerveauxPage.etat(adr); } catch (e) { brainEtat = null; }
   brainPhaseJournal = null;
   brainVuAvant = null;
   peindreJournal(adr);
@@ -25371,9 +25383,12 @@ function battreBrain() {
       ? brainNourriture.n : null);
   const fB = entreesCerveau(vc.vie, h ? h.vieAvant : null, nBrain, vc.etatVie,
     h ? h.nourritureAvant : null, h || { adr: brainAdr });
-  const r = cerveauPas(brainEtat, fB);
+  const r = cerveauxPage.battre(brainAdr, fB, cerveauPas, cycleBattement, { source: 'brain', nourritureLue: !!(nBrain && nBrain.etat === 'LUE') });
+  if (!r) return;
   /* ⛔ 2026-10-26 (Brain vision) : l objet EXACT recu par ce cerveau, avec la nourriture qui l a fait (lue ou non) */
-  brainFaitsVus = { adr: String(brainAdr || '').toLowerCase(), faits: fB, nourritureLue: !!(nBrain && nBrain.etat === 'LUE') };
+  /* game57 #5 : deja battu dans ce cycle (par la map) -> les faits gardes sont ceux que l instance a REELLEMENT recus */
+  { const dj = r.deja ? cerveauxPage.lire(brainAdr) : null;
+    brainFaitsVus = dj ? { adr: dj.adr, faits: dj.faits, nourritureLue: dj.nourritureLue } : { adr: String(brainAdr || '').toLowerCase(), faits: fB, nourritureLue: !!(nBrain && nBrain.etat === 'LUE') }; }
   /* ⛔ MEME SOURCE QUE LE RESEAU : sinon l ecran annonce « Food not read yet » sur une lecture
    *   REUSSIE, et « pas encore lu » devient indiscernable de « lu puis perdu ». */
   const n = nBrain;
@@ -25416,7 +25431,7 @@ function battreBrain() {
     ecrireJournal(brainAdr, r.vu, h);
   }
   if (brainAdr) appliquerReglesDuBrain(brainAdr, r.vu);
-  brainHisto.push(r.vu);
+  if (!brainHisto.length || brainHisto[brainHisto.length - 1].tick !== r.vu.tick) brainHisto.push(r.vu);
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
   dessinerRaster();
   /* le cablage suit le meme battement : ce qui s allume est ce qui vient de tirer */
@@ -25786,6 +25801,7 @@ $('#bReconstruire').addEventListener('click', async () => {
     const borne = ratees ? ' ' + ratees + ' window(s) could not be read, so missing fragments may exist.' : '';
     if (rec.etat === 'EXACTE') {
       brainEtat = rec.cerveau;
+      cerveauxPage.remplacer(adr, rec.cerveau, 'fragments');
       brainHisto = [];
       noterMemoire(adr, rec.cerveau);
       e.className = 'note wOk';
@@ -25866,6 +25882,7 @@ $('#bReprendre').addEventListener('click', async () => {
     const etat = restaurerDepuisChaine(adr, trouve.lu);
     if (!etat) { e.className = 'note wKo'; e.textContent = 'A memory was found but it cannot be resumed with this brain version.'; return; }
     brainEtat = etat;
+    cerveauxPage.remplacer(adr, etat, 'chain');
     brainHisto = [];
     noterMemoire(adr, etat);
     e.className = 'note wOk';
@@ -26537,20 +26554,22 @@ const liveMesures = new Map(); /* adresse -> { n, total, max, dernier } : le tem
 const liveEtroit = () => { try { return window.matchMedia('(max-width:760px)').matches; } catch (_) { return false; } };
 const liveOuvert = () => { const p = $('#blvPop'); return !!(p && !p.hidden); };
 /** la source de battements d UNE adresse, ou null. `deja` = la source a laquelle la tuile est attachee (on n en change pas). */
+/* ⛔⛔ game57 #5 : la tuile lit L instance de son adresse (cerveaux-page.js) — celle que la map, le profil ou Brain font deja battre.
+ *     Avant, elle cherchait la copie de la map, puis de Brain, puis du profil : UNIT, hors carte et profil ferme, restait
+ *     « no beat yet » alors que la page l avait fait battre jusqu a beat 92. */
 function liveSourceDe(adr, deja) {
   const bas = (x) => String(x || '').toLowerCase();
   const h = habitants.find((x) => bas(x.adr) === adr) || null;
-  const nlH = !!(h && h.nourriture && h.nourriture.etat === 'LUE');
-  const carte = () => (h && h.cerveau && h.vu ? { source: 'carte', vu: h.vu, faits: h.faitsVus || null, nourritureLue: nlH, h } : null);
-  const brain = () => (brainAdr && bas(brainAdr) === adr && brainHisto.length
-    ? { source: 'brain', vu: brainHisto[brainHisto.length - 1], faits: brainFaitsVus && brainFaitsVus.adr === adr ? brainFaitsVus.faits : null,
-      nourritureLue: brainFaitsVus && brainFaitsVus.adr === adr ? brainFaitsVus.nourritureLue : null, h } : null);
-  const profil = () => (profilCerveau && bas(profilCerveau.adr) === adr && profilCerveau.vu
-    ? { source: 'profil', vu: profilCerveau.vu, faits: profilCerveau.faits || null, nourritureLue: nlH, h } : null);
-  if (deja === 'carte') return carte();
-  if (deja === 'brain') return brain();
-  if (deja === 'profil') return profil();
-  return carte() || brain() || profil();
+  const e = cerveauxPage.lire(adr);
+  if (!e || !e.vu) return null;
+  return { source: 'page', vu: e.vu, faits: e.faits || null, nourritureLue: e.nourritureLue, h };
+}
+/* les faits d un block que seule une tuile Live regarde : les MEMES entrees que Brain pour un block hors carte (entreesCerveau) */
+function faitsHorsCarte(adr) {
+  const a = String(adr || '').toLowerCase();
+  const h = habitants.find((x) => String(x.adr).toLowerCase() === a) || null;
+  const vc = viePourCerveau(a, h ? h.vie : null, h ? h.etatVie : null);
+  return entreesCerveau(vc.vie, h ? h.vieAvant : null, h ? h.nourriture : null, vc.etatVie, h ? h.nourritureAvant : null, h || { adr: a });
 }
 function liveTuileEl(adr) { return $('#blvTuiles').querySelector('[data-live="' + adr + '"]'); }
 function peindreTuileLive(t) {
@@ -26599,6 +26618,8 @@ function peindreTuileLive(t) {
 }
 function battreLive() {
   if (!live.tuiles.length || !liveOuvert()) return;
+  /* game57 #5 : une tuile dont le block ne bat nulle part ailleurs fait battre l instance PARTAGEE (deja battue ce cycle = rien de plus) */
+  for (const t of live.tuiles) cerveauxPage.battre(t.adr, faitsHorsCarte(t.adr), cerveauPas, cycleBattement, { source: 'live' });
   const pris = nourrirLive(live, liveSourceDe);
   for (const adr of pris) { const t = live.tuiles.find((x) => x.adr === adr); if (t) peindreTuileLive(t); }
   window.__TB_LIVE_MS__ = Object.fromEntries([...liveMesures].map(([a, m]) => [a, { n: m.n, moyenne: Math.round((m.total / m.n) * 100) / 100, max: m.max, dernier: m.dernier }]));
