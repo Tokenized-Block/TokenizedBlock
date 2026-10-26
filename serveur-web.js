@@ -5498,6 +5498,8 @@ const SERVIS = [
    *   `banc-franchissement-ousd-action-fork.mjs` (3 appels status 0x1, a6cf paye sur les DEUX
    *   jambes au wei). */
   'plan-franchissement.js',
+  /* 2026-10-26 : l aiguillage « comment une entree paie un block » (route 1 de rails-api.js), charge par « Pay with » */
+  'entree-vers-bloc.js',
   /* ⛔⛔ `plan-aerodrome-segment.js` : un segment Aerodrome de bout en bout, en UNE transaction.
    *   Mesure du 2026-10-01 : depuis USDC, 236/245 marches etaient offerts mais seulement 23,1 % du
    *   VOLUME — les neuf manquants (AAPLc, METAc, GOOGLc...) portaient 76,9 %. 40 assertions,

@@ -20,6 +20,8 @@ import { actifCarte, repereValide, verdictArrivee } from './retour-fiat.js';
 import { formaterUnites } from './montants.js';
 import { formaterEthCourt, USDC_BASE } from './frais-creation.js';
 import { corpsReponseOptions } from './onramp-session.js';
+/* 2026-10-26 : « Pay with » offre aussi les pivots (WETH, cbBTC, EURC) du serveur — le vrai module ; leurs soldes restent « non lus » ici */
+import { devisesPivotVersBloc } from './entree-vers-bloc.js';
 
 let n = 0;
 const ko = [];
@@ -39,7 +41,8 @@ const extraire = (nom) => {
   return f ? app.slice(i, i + f.index + f[0].length) : '';
 };
 const FONCTIONS = ['majDevisesDentree', 'majDevisesDentreeCorps', 'majEtiquetteDeviseDentree', 'garderPrefillFiat', 'deviseDuChampBuy',
-  'reprendreRetourFiat', 'montantLisibleFiat', 'actifCarteCourant', 'cablerFundActifs', 'peindreBridgeBlocks', 'repeindreFundApresHub'];
+  'reprendreRetourFiat', 'montantLisibleFiat', 'actifCarteCourant', 'cablerFundActifs', 'peindreBridgeBlocks', 'repeindreFundApresHub',
+  'pivotsPourPayWith', 'lireSoldesPivots'];
 const sources = Object.fromEntries(FONCTIONS.map((f) => [f, extraire(f)]));
 
 const ETH = '0x0000000000000000000000000000000000000000';
@@ -115,6 +118,7 @@ function monde({ devises = [D_ETH, D_USDC], solde = 1752n, avant = '0', actif = 
     profilEnLecture: false, compte: WALLET, CHAINE: 8453, ETH_ADR: ETH, USDC_BASE, RESERVE_GAS_WEI: 300000000000000n,
     CLE_FIAT_AVANT: 'tb.fiat.avant', mouvementReduit: true, actifs: [], repeindreDefautFund: null,
     marcheParAdr: new Map(marches), faitsPoolLus: new Map([[BLOC, { famille: 'uniswap-v4' }]]), faitsBlockEnVol: new Set(), devisesSansFaitsEnVol: new Set(),
+    devisesPivotVersBloc, soldesPivots: new Map(), soldesPivotsDemandes: new Set(), rpc: async () => { throw new Error('not read'); },
     pairesProposees: () => [], prixUsdDevise: async () => {}, devisesDentree: () => ({ etat: 'OK', devises: etat.devises }),
     aretesMesurees: () => [], peutEtreAssemblee: () => ({ ok: true, par: 'v4', court: null }), resumeDesNonOffertes: () => [],
     phraseDevise: () => '', majEntreeCarte: () => {}, etape: () => {},

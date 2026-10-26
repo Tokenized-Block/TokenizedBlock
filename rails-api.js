@@ -26,6 +26,7 @@ import { planFranchissement } from './plan-franchissement.js';
 import { planAerodromeSegment } from './plan-aerodrome-segment.js';
 import { poolAerodromeDe, DEVISES_VIA_USDC_AERODROME, POOLS_PIVOTS_AERODROME } from './plan-franchissement.js';
 import { devisSaut } from './multipool.js';
+import { entreeVersBloc } from './entree-vers-bloc.js';
 import { FRAIS_INTERFACE_BPS_CL } from './calldata-aerodrome.js';
 import { planAchatEthAction } from './echange-eth.js';
 import { WETH_BASE } from './plan-eth-block.js';
@@ -145,21 +146,9 @@ export function nomJeton(a) {
   if (x === ETH) return 'ETH';
   return DEVISES.get(x) || ACTIONS.get(x) || SYMBOLES_PIVOTS.get(x) || x;
 }
-/** Comment une entree `de` paie un block cote en `quote` (route 1). Pur : aucune lecture.
- *  - DIRECT : `de` est la cotation (planEchange) ;
- *  - V4 : USDC ou OUSD vers un block cote en ETH ou USDC, ETH vers un block cote en USDC — un seul appel au routeur Uniswap ;
- *  - PIVOT_AERODROME : une devise de POOLS_PIVOTS_AERODROME (WETH, cbBTC, EURC) vers un block cote en ETH ou USDC — le lot de la 4 ter :
- *    X -> USDC sur sa pool Aerodrome epinglee, puis USDC -> (ETH ->) block ;
- *  - REFUS : le reste (la phrase dit avec quoi payer). */
-export function entreeVersBloc({ de, quote }) {
-  const d = bas(de), q = bas(quote);
-  if (d === q) return 'DIRECT';
-  const coteeEthOuUsdc = q === ETH || q === USDC;
-  if ((d === USDC || d === OUSD) && coteeEthOuUsdc) return 'V4';
-  if (d === ETH && q === USDC) return 'V4';
-  if (DEVISES_VIA_USDC_AERODROME.has(d) && coteeEthOuUsdc) return 'PIVOT_AERODROME';
-  return 'REFUS';
-}
+/* `entreeVersBloc` (DIRECT / V4 / PIVOT_AERODROME / REFUS) vit dans entree-vers-bloc.js depuis le 2026-10-26 : la page la charge
+ *   aussi (« Pay with » n offre que ce que cette fonction route) — UNE fonction pour les deux, re-exportee ici telle quelle. */
+export { entreeVersBloc };
 /** La phrase du refus de la route 1 : ce qui paie CE block ici, dit en noms (jamais l adresse nulle). */
 export function phraseRefusEntreeBloc(quote) {
   const q = bas(quote);

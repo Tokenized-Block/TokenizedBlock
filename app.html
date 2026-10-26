@@ -4488,6 +4488,8 @@ import { cheminEntre, transactionsNecessaires, segmenterParFactory,
  *   NOTRE ne doit pas se lire « impossible ». */
 import { devisesDentree, peutEtreAssemblee, phraseDevise, resumeDesNonOffertes, ETATS_OFFERTS }
   from './devises-dentree.js';
+/* 2026-10-26 : WETH, cbBTC, EURC dans « Pay with » — la MEME fonction que /api/rails/plan (rails-api.js la re-exporte) */
+import { devisesPivotVersBloc } from './entree-vers-bloc.js';
 /* ⛔ `BPS_MAX` BORNE CE QU ON S AUTORISE A PRELEVER sur le rail multi-sauts. Il est IMPORTE du
  *   bareme, pas recopie : une constante recopiee ne suit pas une decision de Phil, et la garde
  *   deviendrait fausse le jour ou le bareme change. */
@@ -16744,6 +16746,11 @@ const faitsBlockEnVol = new Set();
  *   selecteur relancerait la lecture de toutes les devises non lues — et le selecteur se repeint a
  *   chaque arrivee de prix, donc ce serait une boucle qui se nourrit elle-meme. */
 const devisesSansFaitsEnVol = new Set();
+/* ⛔ 2026-10-26 : LES SOLDES DES PIVOTS (WETH, cbBTC, EURC) SONT LUS UNE FOIS PAR COMPTE ET PAR PAGE — le selecteur se repeint a
+ *   chaque arrivee de prix : sans ce registre, chaque repeint relancerait 3 balanceOf. Un echec n est pas retenu comme zero : le
+ *   pivot reste selectionnable et le bouton relit le solde avant tout plan. Declares ici, avant tout appel de `majDevisesDentree`. */
+const soldesPivots = new Map();
+const soldesPivotsDemandes = new Set();
 /**
  * REMPLIR « PAY WITH » — et n y mettre que ce qu on sait VRAIMENT router.
  *
@@ -16949,27 +16956,37 @@ function majDevisesDentreeCorps(v) {
     return ASSEMBLEUR_CABLE_SUR_LE_BOUTON || d.etat === 'DIRECTE';
   };
   const cliquables = r.devises.filter(offrable);
+  /* ⛔⛔ 2026-10-26 (mesure prod game51, 375 px, block 0xb200…579e) : WETH, cbBTC et EURC n etaient PAS offerts ici — cbBTC finissait
+   *   dans « no route » — alors que /api/rails/plan les route vers un block cote en ETH ou USDC depuis game48 (lotPivotUsdcVersBloc :
+   *   X -> USDC sur Aerodrome, puis USDC -> (ETH ->) block ; EURC -> ce block mesure PRET en prod). Le graphe de cette page ne sait
+   *   pas assembler « Aerodrome puis v4 » : c est le SERVEUR qui batit ce lot, et le bouton passe par le panneau (payerParRailServeur).
+   *   ⛔ La liste vient de `devisesPivotVersBloc`, la fonction meme du serveur : rien n est offert qu il refuserait. */
+  const pivots = pivotsPourPayWith(deviseDeLaPool, cliquables);
+  const offerts = cliquables.concat(pivots);
+  if (compte && pivots.length) lireSoldesPivots(block, v, pivots);
   const symBlock = (symProfil || 'this block');
-  if (cliquables.length > 1) {
-    for (const d of cliquables) {
+  if (offerts.length > 1) {
+    for (const d of offerts) {
       const o = document.createElement('option');
       o.value = d.devise;
-      o.textContent = (d.symbole || d.devise.slice(0, 8)) + (d.etat === 'DIRECTE' ? '' : ' — routed');
+      o.textContent = (d.symbole || d.devise.slice(0, 8)) + (d.etat === 'DIRECTE' ? '' : d.tenu === false ? ' — you hold none' : ' — routed');
+      /* un pivot dont le solde LU est zero se lit sans se cliquer ; un solde non lu ne grise rien (le bouton relit) */
+      o.disabled = d.tenu === false;
       sel.appendChild(o);
     }
     sel.value = String(deviseDeLaPool).toLowerCase();
     bloc.hidden = false;
     deviseDentree = null; /* le defaut reste la devise de la pool : le chemin historique, intact */
     sel.onchange = () => {
-      const d = cliquables.find((x) => x.devise === sel.value) || null;
+      const d = offerts.find((x) => x.devise === sel.value) || null;
       deviseDentree = d && d.etat !== 'DIRECTE' ? d : null;
       majEtiquetteDeviseDentree(d, symBlock);
       try { majEntreeCarte(); } catch (_) {}
       /* un choix de la personne aussi : un montant pose en USDC ne reste pas sous une autre devise */
       try { garderPrefillFiat(true); } catch (_) {}
     };
-    majEtiquetteDeviseDentree(cliquables.find((x) => x.devise === sel.value) || null, symBlock);
-    offertsPourCarte = cliquables.map((x) => String(x.devise).toLowerCase());
+    majEtiquetteDeviseDentree(offerts.find((x) => x.devise === sel.value) || null, symBlock);
+    offertsPourCarte = offerts.map((x) => String(x.devise).toLowerCase());
     try { majEntreeCarte(); } catch (_) {}
   }
   /* ⛔⛔ CE QUI A ETE LU ET N EST PAS OFFRABLE SE DIT, AVEC SA RAISON — et seulement ce qui a ete
@@ -16996,7 +17013,8 @@ function majDevisesDentreeCorps(v) {
    *     le defaut d a cote — une route reelle ni offerte ni dite. */
   /* ⛔⛔ ON GROUPE SUR L ETIQUETTE COURTE, PAS SUR LA PHRASE. Grouper sur la phrase entiere donnait
    *   encore un paragraphe — Phil : « ya toujours ce, retirer ou resume en qlq mots ». */
-  const groupes = resumeDesNonOffertes(r.devises,
+  /* ⛔ un pivot offert par le rail serveur n est pas « not offered » (cbBTC l etait, mesure prod game51) */
+  const groupes = resumeDesNonOffertes(r.devises.filter((d) => !pivots.some((x) => x.devise === d.devise)),
     (d) => (offrable(d) ? null : (peutEtreAssemblee(d).court || 'other')));
   if (groupes.length) {
     note.hidden = false;
@@ -17012,6 +17030,74 @@ function majDevisesDentreeCorps(v) {
       + (raisonDeNePasOffrir({ ...r.devises.find((d) => (d.symbole || '') === g.noms[0]) }) || g.raison))
       .join('\n');
   }
+}
+/**
+ * LES DEVISES PIVOT (WETH, cbBTC, EURC) QUE « PAY WITH » OFFRE POUR CE BLOCK — celles que /api/rails/plan route (PIVOT_AERODROME).
+ * ⛔ Sans cotation LUE, rien (le serveur juge sur la cle du marche ; ici `deviseDeLaPool`, la meme lecture que le reste du selecteur).
+ * ⛔ Une devise que le graphe de la page offre deja garde SA route ; le pivot ne la double pas.
+ * `tenu` : true/false si le solde du wallet connecte a ete LU, null sinon (sans wallet, ou lecture ratee) — null ne grise rien.
+ */
+function pivotsPourPayWith(quote, deja) {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(String(quote || ''))) return [];
+  const vus = new Set((deja || []).map((d) => String(d.devise).toLowerCase()));
+  const moi = compte ? String(compte).toLowerCase() : null;
+  const out = [];
+  for (const p of devisesPivotVersBloc(quote)) {
+    if (vus.has(p.adr)) continue;
+    const s = moi ? soldesPivots.get(moi + '|' + p.adr) : undefined;
+    out.push({ etat: 'PIVOT_SERVEUR', parRailServeur: true, devise: p.adr, symbole: p.symbole, tx: 1, chemin: null,
+      tenu: typeof s === 'bigint' ? s > 0n : null });
+  }
+  return out;
+}
+function lireSoldesPivots(block, v, pivots) {
+  const moi = compte ? String(compte).toLowerCase() : null;
+  if (!moi) return;
+  const lectures = [];
+  for (const p of pivots) {
+    const k = moi + '|' + String(p.devise).toLowerCase();
+    if (soldesPivotsDemandes.has(k)) continue;
+    soldesPivotsDemandes.add(k);
+    lectures.push(rpc('eth_call', [{ to: p.devise, data: '0x70a08231' + moi.slice(2).padStart(64, '0') }, 'latest'])
+      .then((x) => { soldesPivots.set(k, BigInt(x)); }).catch(() => { /* non lu : ni zero ni tenu */ }));
+  }
+  if (!lectures.length) return;
+  void Promise.all(lectures).then(() => {
+    /* un seul repeint, et seulement si la fiche est toujours sur ce block et ce compte */
+    const encore = $('#profil') && $('#profil').dataset.block;
+    if (String(encore || '').toLowerCase() !== String(block).toLowerCase() || String(compte || '').toLowerCase() !== moi) return;
+    try { majDevisesDentree(v); } catch (_) { /* l ecran a bouge */ }
+  });
+}
+/**
+ * « PREPARE BUY » AVEC UN PIVOT : le plan est celui du SERVEUR (/api/rails/plan, lotPivotUsdcVersBloc), par le chemin du panneau
+ *   (bcProposerSwap : devis, frais, minimum, lot atomique ou deux trades) — celui du Buy du Market et du Swap du Wallet, pas une copie.
+ * ⛔ LE SOLDE EST LU D ABORD : un wallet qui ne tient pas le montant n obtient AUCUN plan, et l ecran dit ce qu il tient.
+ *   Solde illisible : le panneau relit et juge (jamais un refus sur une lecture ratee).
+ * @returns {'SOLDE'|'PANNEAU'}
+ */
+async function payerParRailServeur({ d, block, montant, dec, e }) {
+  const sym = d.symbole || 'that token';
+  let solde = null;
+  try {
+    solde = BigInt(await rpc('eth_call', [{ to: d.devise, data: '0x70a08231' + String(compte).toLowerCase().slice(2).padStart(64, '0') }, 'latest']));
+  } catch (_) { solde = null; }
+  if (solde !== null && compte) soldesPivots.set(String(compte).toLowerCase() + '|' + String(d.devise).toLowerCase(), solde);
+  if (solde !== null && solde < montant) {
+    e.className = 'note wKo';
+    e.textContent = 'This wallet holds ' + formaterUnites(solde, dec) + ' ' + sym + ' — not enough for ' + formaterUnites(montant, dec)
+      + ' ' + sym + '. No plan was built: nothing to sign.';
+    try { etape('echange_refus_montant'); } catch (_) {}
+    return 'SOLDE';
+  }
+  e.className = 'note';
+  e.textContent = 'Paying with ' + sym + ' goes through USDC (Aerodrome, then Uniswap v4). Our server builds the plan; the Chat panel shows '
+    + 'its quote, fee and minimum before your wallet signs.'
+    + (solde === null ? ' Your ' + sym + ' balance could not be read here — the Chat panel reads it again.' : '');
+  try { bcOuvrirPop({ sansBasculer: true, vue: 'chat', deplier: true }); } catch (_) {}
+  void bcProposerSwap('You', '', { de: { ok: true, adr: String(d.devise).toLowerCase(), sym },
+    vers: { ok: true, adr: String(block).toLowerCase(), sym: symProfil || court(String(block)) }, montant: String(montant) }, null);
+  return 'PANNEAU';
 }
 /**
  * L AFFICHAGE DU RAIL MULTI-SAUTS — avec SES gardes, pas celles du chemin historique.
@@ -17343,6 +17429,14 @@ function majEtiquetteDeviseDentree(d, symBlock) {
     lab.firstChild.textContent = 'Buy — ' + (d.symbole || 'tokens') + ' to spend';
   }
   const note = $('#peDeviseNote');
+  /* ⛔ 2026-10-26 : un pivot (WETH, cbBTC, EURC) n est PAS le rail multi-sauts de cette page — ni son bareme, ni son nombre de
+   *   signatures : le plan vient du serveur et se lit dans le panneau avant la signature. */
+  if (note && d && d.parRailServeur === true) {
+    note.hidden = false;
+    note.textContent = (d.symbole || 'This token') + ' — routed to ' + symBlock + ' through USDC (Aerodrome, then Uniswap v4). '
+      + 'Prepare buy asks our server for the plan; the Chat panel shows its quote, fee and minimum before your wallet signs.';
+    return;
+  }
   if (note && d && d.etat !== 'DIRECTE') {
     note.hidden = false;
     note.textContent = phraseDevise(d, symBlock)
@@ -17459,6 +17553,11 @@ async function preparerEchange(sens) {
   else if (deviseEchange) dec = deviseEchange.dec; /* achat paye dans la devise du marche (AAPLc : 8 decimales) */
   const m = montantHumain($(sens === 'ACHAT' ? '#peAchat' : '#peVente').value, dec);
   if (!m || typeof m.valeur !== 'bigint' || m.valeur <= 0n) { e.className = 'note wKo'; e.textContent = (m && m.pourquoi) || 'Enter an amount above zero.'; try { etape('echange_refus_montant'); } catch (_) {} return; }
+  /* ⛔⛔ 2026-10-26 : un pivot choisi dans « Pay with » (WETH, cbBTC, EURC) part vers le plan du SERVEUR, AVANT le multi-sauts et le
+   *   chemin historique — sinon l etiquette dirait EURC et le wallet signerait l achat en ETH de la pool. */
+  if (sens === 'ACHAT' && deviseDentree && deviseDentree.parRailServeur === true) {
+    return payerParRailServeur({ d: deviseDentree, block: adr, montant: m.valeur, dec, e });
+  }
   e.className = 'note'; e.textContent = 'Reading the pool, quoting the price and asking the chain…';
   profilEnLecture = true;
   let p;
