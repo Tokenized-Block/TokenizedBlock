@@ -68,6 +68,13 @@ export function lireRetourFiat(search) {
   return { block: block.toLowerCase(), actif };
 }
 
+/** QUI A PORTE LE PAIEMENT, pour la phrase du retour : `via=moonpay` est pose par NOTRE serveur dans le redirectURL
+ *  MoonPay ; toute autre valeur (ou rien) = Coinbase, le rail d avant. Ne decide rien d autre que le nom affiche. */
+export function fournisseurRetour(search) {
+  try { return new URLSearchParams(String(search || '')).get('via') === 'moonpay' ? 'MoonPay' : 'Coinbase'; }
+  catch (_) { return 'Coinbase'; }
+}
+
 /**
  * LE SOLDE NOTE AVANT DE PARTIR PAYER, S IL VAUT ENCORE QUELQUE CHOSE.
  * ⛔ MEME WALLET, MEME ACTIF, ET PAS TROP VIEUX : un repere d un autre compte ou d il y a deux jours
@@ -156,4 +163,34 @@ export function phraseMoyens({ pays, nomPays = null, moyens = null } = {}) {
   }
   const noms = [...new Set(ids.map((id) => NOMS_MOYENS[id] || id.toLowerCase().replace(/_/g, ' ')))];
   return 'Coinbase lists for ' + nom + ': ' + noms.join(', ') + '.' + (horsUs ? ' ' + PHRASE_COMPTE_HORS_US : '');
+}
+
+/**
+ * QUEL RAIL POUR CE PAYS (2026-10-26). Coinbase quand IL sert le pays (une liste de moyens LUE et non vide) ; MoonPay quand
+ * Coinbase ne le sert pas ET que le serveur dit MoonPay pret ET servant ce pays (catalogue public lu) ; sinon Coinbase,
+ * c est-a-dire exactement le comportement d avant. Sans cles MoonPay le serveur rend `pret:false` : le rail reste invisible.
+ * @param {{coinbaseMoyens?:string[]|null, moonpay?:object|null}} o
+ * @returns {'coinbase'|'moonpay'}
+ */
+export function choisirRail({ coinbaseMoyens = null, moonpay = null } = {}) {
+  if (Array.isArray(coinbaseMoyens) && coinbaseMoyens.some((x) => typeof x === 'string' && x && x !== 'UNSPECIFIED')) return 'coinbase';
+  if (moonpay && moonpay.ok === true && moonpay.pret === true && moonpay.servi === true) return 'moonpay';
+  return 'coinbase';
+}
+
+/** Seule destination MoonPay acceptee par la page : le widget de production, SIGNE. Le serveur la batit ; la page verifie. */
+export function estUrlMoonpay(url) {
+  return /^https:\/\/buy\.moonpay\.com\/\?[^\s#]*&signature=[A-Za-z0-9%]+$/.test(String(url || ''));
+}
+
+/** La phrase quand MoonPay porte le paiement : le fournisseur, ce qu il pose, et ses frais PUBLIES (rendus par le serveur). */
+export function phraseMoonpay({ pays, nomPays = null, actif, frais = null } = {}) {
+  const p = /^[A-Z]{2}$/.test(String(pays || '')) ? String(pays) : null;
+  const a = ACTIFS_CARTE.includes(String(actif || '')) ? String(actif) : null;
+  if (!p || !a) return 'Pick your country to see how you can pay there.';
+  const nom = nomPays ? nomPays + ' (' + p + ')' : p;
+  const f = frais && typeof frais.carte === 'string' && typeof frais.banque === 'string'
+    ? ' MoonPay publishes its fees as ' + frais.carte + ', ' + frais.banque + '; it shows the exact amount before you pay.'
+    : ' MoonPay shows its fee before you pay.';
+  return 'In ' + nom + ', MoonPay sends ' + a + ' to your own wallet on Base, then brings you back to this block. MoonPay checks your identity itself.' + f;
 }

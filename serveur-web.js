@@ -63,6 +63,21 @@ import { lirePostPublie } from './post-grave.js';
 import { bornesIndex, noterFaitsCreations, plusRecentesDabord, CREATIONS_SERVIES_MAX } from './creations-index.js';
 const postsLus = new Map();
 import { signerJwtCdp } from './cdp-jwt.js';
+/* 2026-10-26 : le second rail fiat (MoonPay) pour les pays que Coinbase ne sert pas ; cache sans les deux cles */
+import { lireCatalogueMoonpay, corpsPaysMoonpay, corpsSessionMoonpay } from './moonpay-rail.js';
+/* Catalogue PUBLIC MoonPay : une lecture par heure au plus, un echec retenu 60 s (une absence ne doit pas etre repayee a
+ * chaque ouverture de fiche), une seule lecture en vol. Echec = null = rail cache, jamais « tous les pays ». */
+let catMoonpay = { t: 0, r: null, vol: null };
+function catalogueMoonpay() {
+  const age = Date.now() - catMoonpay.t;
+  if (catMoonpay.r && age < 3600000) return Promise.resolve(catMoonpay.r);
+  if (!catMoonpay.r && catMoonpay.t && age < 60000) return Promise.resolve(null);
+  if (catMoonpay.vol) return catMoonpay.vol;
+  catMoonpay.vol = lireCatalogueMoonpay()
+    .then((r) => { catMoonpay = { t: Date.now(), r: r || null, vol: null }; return r || null; },
+      () => { catMoonpay = { t: Date.now(), r: null, vol: null }; return null; });
+  return catMoonpay.vol;
+}
 
 /* ⛔ PONT OPENLAUNCH (tip 0022). Leur API ne renvoie aucun en-tete CORS : la page ne peut pas la lire. Ce serveur la
  * lit pour elle — GET seul, 8 s max, UNE lecture par minute quel que soit le trafic, et il ne renvoie que le RESUME
@@ -4407,6 +4422,8 @@ const ETAPES_ENTONNOIR = [
   'bridge_fee_err', 'bridge_fee_plan_ko', 'bridge_fee_need_wallet', 'bridge_fee_wrong_chain',
   /* rail fiat -> Base */
   'onramp_session_ok', 'onramp_session_repli',
+  /* second rail fiat (MoonPay, 2026-10-26) : session signee rendue / refusee ou injoignable */
+  'moonpay_session_ok', 'moonpay_session_refus',
   /* ⛔ `onramp_retour_block` AJOUTE LE 2026-09-27, ET C EST LA SUITE DE TESTS QUI L A EXIGE, pas
    *   moi : une etape appelee par l app et absente de cette liste est JETEE EN SILENCE par
    *   /api/etape et affiche 0 pour toujours — un zero qui ne peut pas monter, donc indiscernable
@@ -7081,6 +7098,24 @@ function traiterRequete(req, res) {
         res.end(JSON.stringify({ ok: false, pret: true, etat: 'NON_MESURE',
           pourquoi: 'onramp session failed: ' + String((e && e.message) || e).slice(0, 120) }));
       });
+    return;
+  }
+  /* ══ LE SECOND RAIL FIAT : MOONPAY (2026-10-26) ══ moonpay-rail.js porte les deux corps ; ici on ne fait que cabler.
+   * Sans MOONPAY_PUBLISHABLE_KEY + MOONPAY_SECRET_KEY : `pret:false`, aucune lecture reseau, et l app ne montre rien.
+   * Le secret ne quitte pas moonpay-rail.js (signature seulement) ; aucune reponse ni erreur ne le contient. */
+  if (chemin === '/api/moonpay/pays' || chemin === '/api/moonpay/session') {
+    const q = new URL(req.url, 'http://x').searchParams;
+    const rendreMp = (statut, corps) => {
+      res.writeHead(statut, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(corps));
+    };
+    const travail = chemin === '/api/moonpay/pays'
+      ? corpsPaysMoonpay({ env: process.env, pays: q.get('pays'), actif: q.get('actif'), lireCatalogue: catalogueMoonpay })
+        .then((corps) => ({ statut: 200, corps }))
+      : corpsSessionMoonpay({ env: process.env, adresse: q.get('adresse'), actif: q.get('actif'), block: q.get('block'),
+        pays: q.get('pays'), lireCatalogue: catalogueMoonpay });
+    travail.then((r) => rendreMp(r.statut, r.corps))
+      .catch(() => rendreMp(200, { ok: false, pret: true, etat: 'NON_MESURE', pourquoi: 'MoonPay rail failed' }));
     return;
   }
 

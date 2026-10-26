@@ -4456,7 +4456,7 @@ import { symboleTrompeur, symbolePourListe, phraseTrompeur } from './symbole-tro
  *   AUSSI cet onglet. 27 assertions, 4/4 mutations. */
 import { placePourLeBlock } from './place-sur-la-map.js';
 import { phraseMarcheActions } from './heures-marche.js';
-import { actifCarte, lireRetourFiat, repereValide, verdictArrivee, phraseMoyens, paysDuNavigateur } from './retour-fiat.js';
+import { actifCarte, lireRetourFiat, repereValide, verdictArrivee, phraseMoyens, paysDuNavigateur, choisirRail, estUrlMoonpay, phraseMoonpay, fournisseurRetour } from './retour-fiat.js';
 /* ⛔ LA FACE GRAVEE, RELUE : sans elle, un block cree avec une face choisie s affichait avec une
  * autre, derivee de son adresse (test de Phil, 2026-09-12 : « l image ne reste pas »). */
 import { faceDuBlock, validerFace } from './face.js';
@@ -16624,13 +16624,20 @@ async function decimalesDe(jeton) {
  * ⛔ AUCUNE SIGNATURE ICI. `ouvrirRailFiat` demande une session au serveur et ouvre Coinbase ; l achat du block reste le
  *   bouton « Prepare buy », clique par la personne. */
 let quotePourCarte = null, offertsPourCarte = [];
+/* le rail decide pour le pays et l actif COURANTS (voir deciderRailCarte) ; Coinbase tant que rien n a ete decide */
+let railCarte = { rail: 'coinbase', pays: null, actif: null };
 $('#peCarteBtn') && $('#peCarteBtn').addEventListener('click', (ev) => {
   const a = actifCarteCourant();
   const note = $('#peCarteNote');
   if (!a.actif) return;
   if (!compte) {
-    if (note) note.textContent = 'Connect your wallet first: Coinbase sends the ' + a.actif + ' to it, and the trip back lands on this block.';
+    if (note) note.textContent = 'Connect your wallet first: ' + (railCarte.rail === 'moonpay' && railCarte.pays === paysCarte ? 'MoonPay' : 'Coinbase') + ' sends the ' + a.actif + ' to it, and the trip back lands on this block.';
     try { montrerSansWallet(true); } catch (_) { /* volet wallet absent */ }
+    return;
+  }
+  /* 2026-10-26 : MoonPay seulement si la decision a ete prise pour CE pays et CET actif (sinon Coinbase, comme avant) */
+  if (railCarte.rail === 'moonpay' && railCarte.pays === paysCarte && railCarte.actif === a.actif) {
+    void ouvrirRailMoonpay(ev, a.actif, paysCarte);
     return;
   }
   ouvrirRailFiat(ev, { href: 'https://www.coinbase.com/onramp' }, a.actif);
@@ -16648,6 +16655,7 @@ function majEntreeCarte() {
   if (rf && !rf.hidden && rf.dataset.block !== String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase()) rf.hidden = true;
   if (CHAINE !== 8453) { box.hidden = true; return; }
   box.hidden = false;
+  railCarte = { rail: 'coinbase', pays: null, actif: null };
   const a = actifCarteCourant();
   const compteHorsUs = paysCarte ? '' : ' Outside the U.S., paying by card needs a Coinbase account.';
   if (!a.actif) {
@@ -16686,6 +16694,7 @@ async function majMoyensCarte() {
   if (deja && (deja.moyens || Date.now() - deja.t < 60000)) {
     if (deja.vol) { out.textContent = 'Reading how you can pay in ' + (nom || p) + '…'; return; }
     out.textContent = phraseMoyens({ pays: p, nomPays: nom, moyens: deja.moyens });
+    void deciderRailCarte(p, nom, deja.moyens);
     return;
   }
   moyensParPays.set(p, { vol: true, moyens: null, t: Date.now() });
@@ -16701,6 +16710,76 @@ async function majMoyensCarte() {
   moyensParPays.set(p, { vol: false, moyens, t: Date.now() });
   if (paysCarte !== p) return;
   out.textContent = phraseMoyens({ pays: p, nomPays: nom, moyens });
+  void deciderRailCarte(p, nom, moyens);
+}
+/* ══ LE SECOND RAIL : MOONPAY, LA OU COINBASE NE SERT PAS (2026-10-26) ══════════════════════════════════════════════════
+ * On ne demande MoonPay que si Coinbase n a rendu AUCUN moyen pour ce pays. Le serveur repond `pret:false` sans ses cles :
+ * alors rien ne change a l ecran. Avec ses cles, il lit le catalogue PUBLIC de MoonPay et dit si ce pays est servi pour
+ * cet actif sur Base — on n ecrit ici aucune liste de pays. Une lecture par pays+actif ; un echec retenu 60 s ; 8 s au plus. */
+const moonpayParCle = new Map();
+async function deciderRailCarte(p, nom, moyens) {
+  const a = actifCarteCourant();
+  if (!a.actif) return;
+  let mp = null;
+  if (!(Array.isArray(moyens) && moyens.some((x) => typeof x === 'string' && x && x !== 'UNSPECIFIED'))) {
+    const cle = p + '|' + a.actif;
+    const deja = moonpayParCle.get(cle);
+    if (deja && (deja.mp || Date.now() - deja.t < 60000)) mp = deja.mp;
+    else {
+      try {
+        const stop = new AbortController();
+        const m = setTimeout(() => stop.abort(), 8000);
+        const j = await fetch('/api/moonpay/pays?pays=' + encodeURIComponent(p) + '&actif=' + encodeURIComponent(a.actif), { signal: stop.signal }).then((r) => r.json());
+        clearTimeout(m);
+        mp = j && typeof j === 'object' && j.ok === true ? j : null;
+      } catch (_) { mp = null; }
+      moonpayParCle.set(cle, { mp, t: Date.now() });
+    }
+  }
+  /* la personne a pu changer de pays ou de devise pendant la lecture : on ne decide que pour l etat COURANT */
+  const a2 = actifCarteCourant();
+  if (paysCarte !== p || a2.actif !== a.actif) return;
+  const rail = choisirRail({ coinbaseMoyens: moyens, moonpay: mp });
+  railCarte = { rail, pays: p, actif: a.actif };
+  if (rail !== 'moonpay') return;
+  const bt = $('#peCarteBtn'), note = $('#peCarteNote'), out = $('#peCarteMoyensTexte');
+  if (bt) bt.textContent = 'Pay by card or bank with MoonPay — get ' + a.actif;
+  if (note) note.textContent = 'MoonPay sends ' + a.actif + ' to your own wallet on Base, then brings you back to this block'
+    + (a.parPayWith ? ' — there, pick ' + a.actif + ' in “Pay with”.' : '.');
+  if (out) out.textContent = phraseMoonpay({ pays: p, nomPays: nom, actif: a.actif, frais: mp && mp.frais });
+}
+/* L URL MoonPay est batie ET signee par le serveur (adresse figee au wallet connecte, actif, retour sur ce block) ; la page
+ * n envoie que l adresse, l actif, le block et le pays, et n accepte en retour que le widget MoonPay de production, SIGNE (estUrlMoonpay). Pas de
+ * lien public en repli : sans URL signee, on referme l onglet et on le dit. Aucune signature de wallet ici. */
+async function ouvrirRailMoonpay(evt, actif, pays) {
+  const adr = String(compte || '');
+  if (!/^0x[0-9a-fA-F]{40}$/.test(adr) || !/^[A-Z]{2}$/.test(String(pays || ''))) return;
+  if (evt && typeof evt.preventDefault === 'function') evt.preventDefault();
+  const onglet = window.open('', '_blank');
+  if (onglet) { try { onglet.opener = null; } catch (_) { /* deja coupe */ } }
+  void noterSoldeAvantFiat(adr, String(actif || '').toUpperCase());
+  const note = $('#peCarteNote');
+  const echec = () => {
+    if (onglet) { try { onglet.close(); } catch (_) {} }
+    if (note) note.textContent = 'MoonPay could not be opened right now. Nothing was charged — try again in a moment.';
+    try { etape('moonpay_session_refus'); } catch (_) {}
+  };
+  try {
+    const stop = new AbortController();
+    const minuteur = setTimeout(() => stop.abort(), 6000);
+    const pOuv = $('#profil'), fOuv = $('#fiche');
+    const blockOuvert = (pOuv && !pOuv.hidden && pOuv.dataset.block) || (fOuv && !fOuv.hidden && fOuv.dataset.block) || '';
+    const qBlock = /^0x[0-9a-fA-F]{40}$/.test(String(blockOuvert)) ? '&block=' + encodeURIComponent(String(blockOuvert).toLowerCase()) : '';
+    const r = await fetch('/api/moonpay/session?adresse=' + encodeURIComponent(adr) + '&actif=' + encodeURIComponent(actif)
+      + '&pays=' + encodeURIComponent(pays) + qBlock, { signal: stop.signal });
+    clearTimeout(minuteur);
+    const j = await r.json();
+    const url = j && j.ok === true ? String(j.url || '') : '';
+    if (!estUrlMoonpay(url)) { echec(); return; }
+    if (onglet) onglet.location = url;
+    else window.location.href = url;
+    try { etape('moonpay_session_ok'); } catch (_) {}
+  } catch (_) { echec(); }
 }
 $('#peCartePays') && $('#peCartePays').addEventListener('input', (ev) => {
   const v = String(ev.target.value || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2);
@@ -26056,6 +26135,8 @@ try { verifierSansWalletAuChargement(); } catch (_) { /* volet wallet absent : r
 const blockRetour = String(paramsLien.get('block') || '');
 /* ⛔ lu AVANT le nettoyage de l URL juste en dessous : `block` + `actif` valides, sinon null (un lien partage n est pas un paiement) */
 const retourFiat = lireRetourFiat(location.search);
+/* 2026-10-26 : le nom du rail dans la phrase du retour (MoonPay si notre serveur a pose `via=moonpay`, sinon Coinbase) */
+const fournisseurRetourFiat = fournisseurRetour(location.search);
 if (/^0x[0-9a-fA-F]{40}$/.test(blockRetour)) {
   try { history.replaceState(null, '', location.pathname + location.hash); } catch (_) { /* ancien navigateur */ }
   /* ⛔⛔⛔ 2026-10-25 — LE RETOUR NE PREPARE PLUS 0,01 ETH FIXE. L ancien rearmement (ci-dessous, garde en commentaire pour
@@ -26752,7 +26833,9 @@ async function reprendreRetourFiat(block, actif) {
   if (!carte || carte.hidden || !n) { peindreMarcheUnreadRetry(block, null); return; }
   try { carte.scrollIntoView({ block: 'center', behavior: mouvementReduit ? 'auto' : 'smooth' }); } catch (_) {}
   n.hidden = false; n.className = 'note'; n.dataset.block = block;
-  n.textContent = 'Back from Coinbase. Reading your ' + actif + ' balance…';
+  /* typeof : une copie extraite de cette fonction (bancs) n a pas la constante de module ; le nom retombe sur Coinbase */
+  const via = typeof fournisseurRetourFiat === 'string' ? fournisseurRetourFiat : 'Coinbase';
+  n.textContent = 'Back from ' + via + '. Reading your ' + actif + ' balance…';
   let decUsdc = 6;
   if (actif === 'USDC') { try { decUsdc = await decimalesDe(USDC_BASE); } catch (_) { decUsdc = null; } }
   for (let tour = 0; tour < 20; tour += 1) {
@@ -26761,7 +26844,7 @@ async function reprendreRetourFiat(block, actif) {
     try { brut = JSON.parse(localStorage.getItem(CLE_FIAT_AVANT) || 'null'); } catch (_) { brut = null; }
     const adr = compte || (brut && brut.adr) || null;
     if (!adr) {
-      n.textContent = 'Back from Coinbase. Connect your wallet so we can read what arrived — nothing is prefilled until we read it.';
+      n.textContent = 'Back from ' + via + '. Connect your wallet so we can read what arrived — nothing is prefilled until we read it.';
       await dormir(15000); continue;
     }
     const avant = repereValide(brut, { adr, actif, maintenantMs: Date.now() });
