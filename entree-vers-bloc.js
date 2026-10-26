@@ -39,33 +39,33 @@ export function entreeVersBloc({ de, quote }) {
  *  ⛔ Le symbole est LU dans la table epinglee (« USDC/EURC » -> EURC), jamais recopie ; une ligne sans symbole lisible n est pas rendue.
  *  ⛔ Ordre stable (par symbole) : l ecran ne se reordonne pas d un repeint a l autre. Vide si la cotation n est ni ETH ni USDC. */
 export function devisesPivotVersBloc(quote) {
-  return pivotsDeLaTable((adr) => entreeVersBloc({ de: adr, quote }) === 'PIVOT_AERODROME');
+  return pinnedTablePivots((adr) => entreeVersBloc({ de: adr, quote }) === 'PIVOT_AERODROME');
 }
-/** les pivots de la table epinglee que `passe(adr)` admet, symbole lu dans la table, tries par symbole */
-function pivotsDeLaTable(passe) {
+/** The pivots of the pinned table that `admits(adr)` accepts, symbol read from the table, sorted by symbol. */
+function pinnedTablePivots(admits) {
   const out = [];
   for (const [k, v] of POOLS_PIVOTS_AERODROME) {
     const adr = k.split('|').find((t) => t !== USDC);
     const symbole = String((v && v.symbole) || '').split('/')[1] || null;
     if (!/^0x[0-9a-f]{40}$/.test(String(adr)) || !symbole || DEVISES_BANNIES.has(adr)) continue;
-    if (!passe(adr)) continue;
+    if (!admits(adr)) continue;
     out.push({ adr, symbole });
   }
   return out.sort((a, b) => a.symbole.localeCompare(b.symbole));
 }
 
-/** Comment une entree `de` paie une ACTION tokenisee `action` par un pivot — la condition de la route « 4 quater » de rails-api.js
- *  (X -> USDC -> action, deux sauts Aerodrome) : l action est dans la table Aerodrome MESUREE et X a sa pool X/USDC epinglee.
- *  PIVOT_AERODROME, sinon REFUS (une action hors table n a aucune route pivot ici : le serveur la refuse). Pur : aucune lecture. */
-export function entreeVersAction({ de, action }) {
-  const d = bas(de), a = bas(action);
+/** How an input `from` pays a tokenized STOCK `stock` through a pivot — the condition of the « 4 quater » route of rails-api.js
+ *  (X -> USDC -> stock, two Aerodrome hops): the stock is in the MEASURED Aerodrome table and X has its pinned X/USDC pool.
+ *  PIVOT_AERODROME, otherwise REFUS (a stock outside the table has no pivot route here: the server refuses it). Pure: no reads. */
+export function entryToStock({ from, stock }) {
+  const d = bas(from), a = bas(stock);
   if (DEVISES_BANNIES.has(d)) return 'REFUS';
   return POOLS_ACTIONS_AERODROME.has(a) && DEVISES_VIA_USDC_AERODROME.has(d) ? 'PIVOT_AERODROME' : 'REFUS';
 }
 
-/** Les devises pivot qui paient l action `action` par la route 4 quater : [{ adr, symbole }], meme table, meme ordre que
- *  devisesPivotVersBloc. ⛔ 2026-10-26 (QA game56 : METAc n offrait que USDC / ETH alors que le serveur route cbBTC, WETH, AUDF vers
- *  elle) : rien n est offert que `entreeVersAction` ne dise PIVOT_AERODROME. */
-export function devisesPivotVersAction(action) {
-  return pivotsDeLaTable((adr) => entreeVersAction({ de: adr, action }) === 'PIVOT_AERODROME');
+/** The pivot currencies that pay the stock `stock` through the 4 quater route: [{ adr, symbole }], same table, same order as
+ *  devisesPivotVersBloc. ⛔ 2026-10-26 (QA game56: METAc only offered USDC / ETH while the server routes cbBTC, WETH, AUDF to
+ *  it): nothing is offered unless `entryToStock` says PIVOT_AERODROME. */
+export function pivotCurrenciesForStock(stock) {
+  return pinnedTablePivots((adr) => entryToStock({ from: adr, stock }) === 'PIVOT_AERODROME');
 }

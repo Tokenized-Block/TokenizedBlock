@@ -11,8 +11,8 @@
  *   B. (b) la PERSONNE passe de USDC a ETH : le montant est RETIRE et la note est LA phrase de la fiche (phraseMontantRetire) ;
  *      a la vente (montant en block) changer ce qu on recoit ne retire rien ; un autre block vide le champ ; une liste relue qui
  *      n offre plus la devise retire le montant et le dit ;
- *   C. (d) AUDF, cbBTC, WETH offerts (valeurs = devisesPivotVersBloc), EURC jamais ; pas de pivot pour acheter une action HORS de la table
- *      Aerodrome (celles de la table : test-market-buy-pivots-action-20261026.mjs) ;
+ *   C. (d) AUDF, cbBTC, WETH offerts (valeurs = devisesPivotVersBloc), EURC jamais ; pas de pivot pour acheter une action
+ *      — except a stock in the Aerodrome table (those: test-market-buy-stock-pivots-20261026.mjs) ;
  *   D. les puces nomment l actif choisi, n existent pas pour un actif sans montant mesure, et refusent sous un autre actif ;
  *   E. l intention prise au clic « Review » : la garde tient tant que rien ne bouge ; frappe, devise, sens, nouveau Review, autre
  *      block, autre compte = refus avec sa raison ; un wallet connecte APRES le clic devient celui de l intention ;
@@ -26,7 +26,7 @@
  */
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { devisesPivotVersBloc, devisesPivotVersAction } from './entree-vers-bloc.js';
+import { devisesPivotVersBloc, pivotCurrenciesForStock } from './entree-vers-bloc.js';
 import { analyserCommande, enUnitesBrutes } from './commandes-panel.js';
 
 const APP = readFileSync(process.env.TB_APP_HTML || new URL('./app.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
@@ -101,7 +101,7 @@ function mondeTicket(src, { compte = null } = {}) {
     POOLS_ACTIONS_AERODROME: new Set(), bcActionsV4: () => new Set([NVDA]),
     bcCotation: (a) => (a === NVDA ? { ok: true, adr: USDC, sym: 'USDC' } : { ok: true, adr: ETH, sym: 'ETH' }),
     bcResoudre: (r) => (r === 'USDC' ? { ok: true, adr: USDC, sym: 'USDC' } : /^0x[0-9a-fA-F]{40}$/.test(r) ? { ok: true, adr: r.toLowerCase(), sym: r.slice(0, 6) } : { ok: false }),
-    devisesPivotVersBloc, devisesPivotVersAction, soldesPivots: new Map(), bcIdentite: (a) => etat.identites.push(a), bcEl,
+    devisesPivotVersBloc, pivotCurrenciesForStock, soldesPivots: new Map(), bcIdentite: (a) => etat.identites.push(a), bcEl,
     bcSnapDe: () => null, tacheAutorisee: () => ({ ok: true }), bcCerveauAttend: () => false, bcRaison: (x) => x,
     bcRefs: new Map(), phraseReference: () => ({ texte: '', alerte: false }), bcLireSoldes: async () => {}, bcLireReference: async () => {},
     connecter: async () => {}, bcUnites: (b) => String(b), bcDecimal: (b) => String(b), equivalentActions: () => null, court: (a) => String(a).slice(0, 6),
@@ -244,10 +244,10 @@ async function verifier(src) {
     exige(o.sym === 'cbBTC' && /cbBTC/.test(o.t), 'C1 l option cbBTC ne porte pas son symbole');
   });
   await cas('C2', async () => {
-    /* acheter une ACTION hors table Aerodrome (le NVDA du banc) : pas de pivot ; vendre : pas de pivot */
+    /* buying a STOCK outside the Aerodrome table (the bench's NVDA): no pivot; selling: no pivot */
     const w = mondeTicket(src);
     w.ctx.brainAdr = NVDA; w.peindre();
-    exige(!w.opts().some((o) => [AUDF, CBBTC, WETH].includes(o.v)), 'C2 un pivot est offert pour acheter une action hors table Aerodrome');
+    exige(!w.opts().some((o) => [AUDF, CBBTC, WETH].includes(o.v)), 'C2 a pivot is offered to buy a stock outside the Aerodrome table');
     const v = mondeTicket(src); v.peindre(); v.cotes[1].emettre('click'); v.peindre();
     exige(!v.opts().some((o) => [AUDF, CBBTC, WETH].includes(o.v)), 'C2 un pivot est offert a la vente');
   });
@@ -391,8 +391,8 @@ if (!process.env.TB_APP_HTML) {
     ['M1 le changement de devise garde le montant', remplace("  champ.value = '';\n  bcNoteMontantTicket(phraseMontantRetire(avant.sym, apres.sym));", "  bcNoteMontantTicket(phraseMontantRetire(avant.sym, apres.sym));")],
     ['M2 la note du ticket est une autre phrase', remplace('bcNoteMontantTicket(phraseMontantRetire(avant.sym, apres.sym));', "bcNoteMontantTicket('Amount cleared.');")],
     ['M3 plus de pivots dans le ticket', remplace('for (const p of pivotsPourPayWith(q.adr, deja, a)) {', 'for (const p of []) {')],
-    /* 2026-10-26 (game57) : une action a SES pivots (route 4 quater) ; le mutant lui donne ceux d un block cote en USDC */
-    ['M4 une action recoit les pivots d un block', remplace('for (const p of pivotsPourPayWith(q.adr, deja, a)) {', 'for (const p of pivotsPourPayWith(q.adr, deja, null)) {')],
+    /* 2026-10-26 (game57): a stock has ITS pivots (4 quater route); the mutant gives it those of a block quoted in USDC */
+    ['M4 a stock gets the pivots of a block', remplace('for (const p of pivotsPourPayWith(q.adr, deja, a)) {', 'for (const p of pivotsPourPayWith(q.adr, deja, null)) {')],
     ['M5 la garde ignore le compte', remplace("if (moi !== i.compte) return 'the connected wallet changed since you pressed Review';", '')],
     ['M6 la garde ignore le compteur', remplace("if ((bc.genTicket || 0) !== i.gen) return", 'if (false) return')],
     ['M7 la garde ignore le block', remplace("if (ici !== i.block) return 'the panel now shows another block';", '')],
