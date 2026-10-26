@@ -74,7 +74,7 @@
  *    nativement par le noeud Base : l EVM locale rend OpcodeNotFound). Si elle rend `false`, le verrou du label
  *    refuserait nos propres createurs, et il ne faut surtout pas brancher l app dessus. */
 import { envoyerDepuisWallet } from './envoi.js';
-import { masquerAdressesFrais } from './frais-creation.js';
+import { maskFeeAddresses } from './frais-creation.js';
 
 const $ = (s) => document.querySelector(s);
 const RPC = 'https://mainnet.base.org';
@@ -91,7 +91,7 @@ let tx = null, compte = null, pret = { vide: false, simu: false };
 async function verifier() {
   tx = await fetch('./deploy-pot.json', { cache: 'no-store' }).then((r) => r.json());
   $('#attendu').textContent = tx.contrat;
-  $('#fee').textContent = masquerAdressesFrais(tx.operateur);
+  $('#fee').textContent = maskFeeAddresses(tx.operateur);
   $('#vie').textContent = String(tx.delaiContestationHeures);
   $('#marq').textContent = String(tx.dureeReclamationJours);
   const code = await rpc('eth_getCode', [tx.contrat, 'latest']);
@@ -116,7 +116,7 @@ async function relire() {
   try {
     /* ⛔ Les selecteurs sont MESURES avec cast sig et ecrits dans deploy-pot.json, jamais devines. */
     const op = '0x' + String(await appel(tx.selecteurs.operateur)).slice(-40);
-    lignes.push((op.toLowerCase() === tx.operateur.toLowerCase() ? '✓' : '✗') + ' operator: ' + masquerAdressesFrais(op));
+    lignes.push((op.toLowerCase() === tx.operateur.toLowerCase() ? '✓' : '✗') + ' operator: ' + maskFeeAddresses(op));
     const delai = BigInt(await appel(tx.selecteurs.delai));
     lignes.push((delai === BigInt(tx.delaiContestationHeures) * 3600n ? '✓' : '✗')
       + ' challenge delay: ' + (Number(delai) / 3600) + ' h');

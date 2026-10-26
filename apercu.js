@@ -10,7 +10,7 @@
 //    adresse n est recopiee ici.
 import { selecteur, MAX_UINT256, MAX_UINT160 } from './pool.js';
 import { lireMemo } from './messages.js';
-import { FEE_WALLET, CREATE_ROUTER, USDC_BASE, USDC_DECIMALES, courtAffichable, estAdresseFrais } from './frais-creation.js';
+import { FEE_WALLET, CREATE_ROUTER, USDC_BASE, USDC_DECIMALES, displayShort, isFeeAddress } from './frais-creation.js';
 import { FACTORY } from './index-blocks.js';
 import { V4_ADRESSES, PERMIT2, PROPRIETAIRE_PERMANENT } from './lancer-pool.js';
 import { formaterUnites } from './montants.js';
@@ -36,7 +36,7 @@ const S = {
   transfererPart: selecteur('transfererPart(bytes32,address)'),
 };
 
-const court = (a) => courtAffichable(a);
+const court = (a) => displayShort(a);
 
 /** Le nom d une adresse connue de l app, sinon l adresse courte. */
 export function nomDe(adr, { chaine, compte = null, jeton = null, symbole = null } = {}) {
@@ -62,8 +62,8 @@ export function nomDe(adr, { chaine, compte = null, jeton = null, symbole = null
     [PERMIT2, 'Permit2 (Uniswap)'], [V.posm, 'Uniswap v4 position manager'], [ROUTEUR_SWAP[Number(chaine)], 'Uniswap router'],
     [PROPRIETAIRE_PERMANENT, 'dead address (nobody)'],
   ];
-  /* ⛔ 2026-10-26 (game57 item 10) : un wallet de frais est NOMME, son adresse n est jamais ecrite */
-  for (const [x, nom] of connus) if (x && String(x).toLowerCase() === a) return estAdresseFrais(a) ? nom : nom + ' ' + court(a);
+  /* ⛔ 2026-10-26 (game57 item 10): a fee wallet is NAMED, its address is never written */
+  for (const [x, nom] of connus) if (x && String(x).toLowerCase() === a) return isFeeAddress(a) ? nom : nom + ' ' + court(a);
   return court(a);
 }
 

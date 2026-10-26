@@ -45,7 +45,7 @@
  *    handleHookFees(devises) paie TOUJOURS le wallet de frais fixe dans le contrat ; la page ne touche a aucune cle, le
  *    wallet de l utilisateur signe. Les montants viennent de /api/frais-hook (lecture seule sur la chaine). */
 import { envoyerDepuisWallet } from './envoi.js';
-import { courtAffichable } from './frais-creation.js';
+import { displayShort } from './frais-creation.js';
 const $ = (s) => document.querySelector(s);
 const RPC = 'https://mainnet.base.org';
 const rpc = async (method, params) => {
@@ -118,7 +118,7 @@ $('#connecter').addEventListener('click', async () => {
   try {
     compte = (await window.ethereum.request({ method: 'eth_requestAccounts' }))[0];
     try { await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: '0x2105' }] }); } catch (_) {}
-    $('#compteTxt').textContent = 'Connected: ' + courtAffichable(compte) + ' — any wallet can send; the fee wallet receives.';
+    $('#compteTxt').textContent = 'Connected: ' + displayShort(compte) + ' — any wallet can send; the fee wallet receives.';
     await charger();
     await chargerParts();
   } catch (e) { $('#etat').textContent = 'Connection refused: ' + (e.message || e); }

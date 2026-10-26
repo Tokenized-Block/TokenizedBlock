@@ -194,9 +194,9 @@ const w3 = monde([sk({ tokenId: 1n, block: '0xb2000000000000000000007afa7ed748b0
 await w3.ctx.peindreSkinsJeu(); w3.ctx.skmPeindreListe();
 vu(w3.ids.skmEtat.textContent === PHRASE_GAME_VIDE + ' Connect a wallet to list yours.' && w3.ids.skinEtat.textContent === w3.ids.skmEtat.textContent, 'B17 aujourd hui (1 mintee, 0 en vente, sans wallet) : la phrase vide du Game, au Market comme au Game');
 const l31 = w3.ids.skmListe.querySelectorAll('.skmLigne');
-/* ⛔ 2026-10-26 (game57 item 10) : B18 attendait « held by » + l adresse abregee du wallet de frais — c etait la FUITE vue en prod. La skin #1
- *   est detenue par le wallet de frais : la carte dit « Not listed », sans « held by » ni aucune trace de son adresse. */
-vu(l31.length === 1 && /Not listed/.test(l31[0].textContent) && !/held by/.test(l31[0].textContent) && !/a6cf|f5d4/i.test(l31[0].textContent) && l31[0].querySelectorAll('button').length === 0 && /dresses UNIT/.test(l31[0].textContent), 'B18 la skin #1 : « Not listed » (detenue par le wallet de frais : ni « held by » ni son adresse), habille UNIT, aucun bouton sans wallet');
+/* ⛔ 2026-10-26 (game57 item 10): B18 expected « held by » + the shortened fee wallet address — that was the LEAK seen in prod. Skin #1
+ *   is held by the fee wallet: the card says « Not listed », without « held by » or any trace of its address. */
+vu(l31.length === 1 && /Not listed/.test(l31[0].textContent) && !/held by/.test(l31[0].textContent) && !/a6cf|f5d4/i.test(l31[0].textContent) && l31[0].querySelectorAll('button').length === 0 && /dresses UNIT/.test(l31[0].textContent), 'B18 skin #1: « Not listed » (held by the fee wallet: neither « held by » nor its address), dresses UNIT, no button without a wallet');
 const w4 = monde([], { moi: null }); w4.ctx.skmPeindreListe();
 vu(/^No skin minted yet — mint the first one above\./.test(w4.ids.skmNote.textContent) && w4.ids.skmListe.textContent === 'No skin minted yet.', 'B19 rien de minte : dit, et la liste le dit');
 /* lecture ratee, rien de lu avant : la phrase du Market DIT l echec (jamais « Nothing listed yet » sur une liste qu on n a pas lue) */
@@ -222,7 +222,7 @@ vu(!/bcUnites\(/.test(SRC.bcMontantSkin) && /brutVersTexteSkin\(BigInt\(brut\), 
 if (!process.env.TB_SKO_SANS_MUTANTS) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sko-mut-'));
   const srcSkm = fs.readFileSync(path.join(ICI, 'skins-marche.js'), 'utf8').replace("from './blockskins.js'", "from '" + pathToFileURL(path.join(ICI, 'blockskins.js')).href + "'")
-    .replace("from './frais-creation.js'", "from '" + pathToFileURL(path.join(ICI, 'frais-creation.js')).href + "'"); /* 2026-10-26 (game57 item 10) : skins-marche importe le masque des adresses de frais */
+    .replace("from './frais-creation.js'", "from '" + pathToFileURL(path.join(ICI, 'frais-creation.js')).href + "'"); /* 2026-10-26 (game57 item 10): skins-marche imports the fee-address mask */
   const srcApp = fs.readFileSync(APP, 'utf8').replace(/\r\n/g, '\n');
   const MUTANTS = [
     ['app', 'le Market montre un autre prix sur Buy', "if (g.genre === 'ACHETER') bouton(g.libelle + ' · ' + bcMontantSkin(s.prix, s.devise), 'ACHETER');", "if (g.genre === 'ACHETER') bouton(g.libelle + ' · ' + bcMontantSkin(BigInt(s.prix) + 1000n, s.devise), 'ACHETER');"],

@@ -71,7 +71,7 @@
  *    APRES : elle relit sur la chaine feeWallet(), HOOK_FEE() / PART_CREATEUR() (700 / 300), deviseAdmise() et
  *    plancherCaution() pour TOUTES les 62 devises + ETH, contre deploy-7030.json (selecteurs calcules par keccak.js, pas devines). */
 import { envoyerDepuisWallet } from './envoi.js';
-import { masquerAdressesFrais } from './frais-creation.js';
+import { maskFeeAddresses } from './frais-creation.js';
 
 const $ = (s) => document.querySelector(s);
 /* ⛔ MESURE (2026-10-03, cette page en local) : « over rate limit » des le premier dry run sur mainnet.base.org seul.
@@ -102,7 +102,7 @@ let tx = null, compte = null, pret = { vide: false, simu: false };
 async function verifier() {
   tx = await fetch('./deploy-7030.json', { cache: 'no-store' }).then((r) => r.json());
   $('#attendu').textContent = tx.hook;
-  $('#fee').textContent = masquerAdressesFrais(tx.feeWallet);
+  $('#fee').textContent = maskFeeAddresses(tx.feeWallet);
   $('#split').textContent = (tx.hookFeePips / 10000) + '% + ' + (tx.partCreateurPips / 10000) + '%';
   $('#taille').textContent = String(tx.octets);
   $('#gaz').textContent = String(tx.gazEstimeMainnet);
@@ -138,7 +138,7 @@ async function relire() {
   const lignes = [];
   try {
     const fee = '0x' + String(await appel(tx.selecteurs.feeWallet)).slice(-40);
-    lignes.push((fee.toLowerCase() === tx.feeWallet.toLowerCase() ? '✓' : '✗') + ' fee wallet: ' + masquerAdressesFrais(fee));
+    lignes.push((fee.toLowerCase() === tx.feeWallet.toLowerCase() ? '✓' : '✗') + ' fee wallet: ' + maskFeeAddresses(fee));
     const hf = BigInt(await appel(tx.selecteurs.hookFee)), pc = BigInt(await appel(tx.selecteurs.partCreateur));
     lignes.push((hf === BigInt(tx.hookFeePips) && pc === BigInt(tx.partCreateurPips) ? '✓' : '✗') + ' fee split on chain: ' + hf + ' / ' + pc + ' per million (expected ' + tx.hookFeePips + ' / ' + tx.partCreateurPips + ')');
     let admises = 0, planchersOk = 0;

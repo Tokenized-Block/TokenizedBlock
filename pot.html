@@ -112,7 +112,7 @@ import { tour, prepararAlimentation } from './boucle-pot.js';
  *    premier changement, et celle-ci porterait une transaction qui deplace des jetons reels. */
 import { encodeApprove } from './pool.js';
 import { envoyerDepuisWallet } from './envoi.js';
-import { courtAffichable, libelleAdresseFrais } from './frais-creation.js';
+import { displayShort, feeAddressLabel } from './frais-creation.js';
 
 const $ = (s) => document.querySelector(s);
 const RPC = 'https://mainnet.base.org';
@@ -189,7 +189,7 @@ async function lire() {
   /* ⛔ L ARBRE EST MONTRE AVANT LA SIGNATURE : ce qu on s apprete a graver doit etre lisible. */
   if (t.arbre) {
     const lignes = t.arbre.preuves.slice(0, 15).map((p) =>
-      '<tr><td><code>' + txt(courtAffichable(p.compte, 8)) + '</code></td><td>' + txt(p.montant) + '</td></tr>').join('');
+      '<tr><td><code>' + txt(displayShort(p.compte, 8)) + '</code></td><td>' + txt(p.montant) + '</td></tr>').join('');
     /* ⛔⛔ CE QUI NE VAUT PAS SON GAS DOIT ETRE DIT AVANT LA SIGNATURE. Mesure du 2026-09-20 : sur un
      *    block a 62 detenteurs, la plus petite part valait 2 849 507 902 wei pour un gas de
      *    reclamation d environ 20 000 000 000 000 wei — 7 000 fois moins que ce qu elle coute.
@@ -260,12 +260,12 @@ async function appliquerCompte(nouveau) {
   const estOperateur = !!compte && String(compte).toLowerCase() === OPERATEUR.toLowerCase();
   marque('#c3', compte ? (estOperateur && surBase) : null);
   $('#connecter').textContent = compte
-    ? courtAffichable(compte)
+    ? displayShort(compte)
     : 'Connect wallet';
   /* ⛔ ON NOMME LE PROBLEME : « bouton grise » sans raison est le pire des messages. */
   if (compte && !estOperateur) {
     $('#etat').innerHTML = '<span class="ko">This wallet is not the operator. Only the '
-      + txt(libelleAdresseFrais(OPERATEUR) || 'operator wallet') + ' can open or anchor.</span>';
+      + txt(feeAddressLabel(OPERATEUR) || 'operator wallet') + ' can open or anchor.</span>';
   } else if (compte && !surBase) {
     $('#etat').textContent = 'Switch your wallet to Base.';
   } else if ($('#etat').textContent.startsWith('This wallet') || $('#etat').textContent.startsWith('Switch')) {

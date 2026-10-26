@@ -38,7 +38,7 @@ import * as DuelsV2 from './duels-v2-plan.js';
  *   signe alors les parts de la SEMAINE (&week=1) — jamais les parts du jour ET de la semaine pour ce jour. */
 import { planFund as planFundPot, planClose as planClosePot, jourDe as jourContrat, jourIdDeDay } from './ticketpot-plan.js';
 import { saisonDe } from './tirage-saison.js';
-import { courtAffichable } from './frais-creation.js';
+import { displayShort } from './frais-creation.js';
 
 export const KINDS = Object.freeze(['ROLL', 'SETTLE', 'TAKE_MISSION', 'POST_MISSION', 'BID_SKIN', 'BUY_SKIN', 'DUEL_CREATE', 'DUEL_JOIN', 'DUEL_SETTLE', 'DUEL_SETTLE_DEFAULT', 'POT_CLOSE', 'POT_SIGN', 'POT_FUND', 'NONE']);
 export const MAX_ROLLS_HEURE = 60;
@@ -264,7 +264,7 @@ export function prochaineProposition(etat = {}) {
         const cle = 'POT_SIGN:' + jidHier + (week ? '#S' : '');
         /* l owner qui n est PAS le verifier : une INFORMATION (le lien de la page verifier), montree UNE fois — la cle vue est honoree et
          *   l ordre continue (POT_FUND). Le verifier, lui, recoit la carte tant qu il reste des parts (au-dela de 50, la suivante revient). */
-        if (!signe && vus.has(cle)) { pourquoiPas.push('reward pot: the shares of ' + jidHier + ' wait for the verifier wallet (' + courtAffichable(verifier) + ')'); return null; }
+        if (!signe && vus.has(cle)) { pourquoiPas.push('reward pot: the shares of ' + jidHier + ' wait for the verifier wallet (' + displayShort(verifier) + ')'); return null; }
         /* ⛔ 2026-10-24 (revue adverse, 2e tour ticketpot, defaut 4) : une part que le serveur a REFUSEE (409 : une autre part de ce wallet
          *   deja signee et servie) est vue par l app (POT_SIGN_REFUS:<jour>[#S]:<wallet>) — jamais reproposee, sinon la meme carte revenait
          *   a chaque tour pour une signature que le serveur refusera toujours. */

@@ -1848,7 +1848,7 @@ main[data-app="market"] > #blockHome{display:none !important}
 <script type="module">
 import { encodeCreateB20, paramsAsset, encodeUpdateSupplyCap, encodeUpdateContractURI, encodeBatchMint, adresseOuRefus, expliquerRefus, adresseDejaPrise } from './encodeur.js';
 import { handleNormalise } from './lien-x.js';
-import { courtAffichable } from './frais-creation.js';
+import { displayShort } from './frais-creation.js';
 /* ⛔ Le formatage des montants vit dans son module POUR ETRE TESTE : la conversion wei -> ETH
  * fait de la division et du remplissage sur des BigInt, et elle arrondit VERS LE HAUT — un cout
  * affiche ne doit jamais etre inferieur au cout reel. 8 tests dans `test-montants.mjs`. */
@@ -1962,7 +1962,7 @@ function majCtaFee() {
   const practice = chaine === 84532;
   const wei = createServiceFeeWei();
   const lien = '<a class="ctaPtr" href="' + feeWalletScanUrl() + '" target="_blank" rel="noopener">'
-    + courtAffichable(FEE_WALLET) + '</a>';
+    + displayShort(FEE_WALLET) + '</a>';
   el.classList.toggle('real', !practice && wei > 0n);
   if (practice || wei === 0n) {
     el.innerHTML = '<span class="ctaFeeLab">Tokenized Block service fee</span>'
@@ -3368,7 +3368,7 @@ async function rafraichir() {
           + '<br><span class="dim">No Tokenized Block fee on Practice. Network gas ≠ TB fee.</span>';
         return pastille('0.00005 ETH', 'warn')
           + ' → <a class="mono" href="' + feeWalletScanUrl() + '" target="_blank" rel="noopener">'
-          + courtAffichable(FEE_WALLET) + '</a>'
+          + displayShort(FEE_WALLET) + '</a>'
           + '<br><span class="dim">Separate ETH transfer <b>before</b> Create. Not gas. '
           + 'Network gas goes to Base validators/builders and cannot be redirected to this wallet.</span>';
       })())
@@ -4805,7 +4805,7 @@ const BH_HIST_MAX_ROWS = 40;
 function raccourciAdr(a) {
   const s = String(a || '');
   if (!/^0x[0-9a-fA-F]{40}$/.test(s)) return s || '—';
-  return courtAffichable(s);
+  return displayShort(s);
 }
 
 /**
@@ -8784,7 +8784,7 @@ $('#agir').onclick = async () => {
           + 'Next: Create only (factory calldata, value 0 — network gas separate).', 'ok');
       } else {
         dire('Real Create: first a Tokenized Block service fee of 0.00005 ETH to\n'
-          + courtAffichable(FEE_WALLET)
+          + displayShort(FEE_WALLET)
           + '\n(This is NOT network gas — gas still goes to Base validators.)\n'
           + 'Create will open only after this transfer confirms.', 'warn');
         afficherTx('wallet', 'Confirm the 0.00005 ETH Tokenized Block service fee (not gas).');
@@ -8799,7 +8799,7 @@ $('#agir').onclick = async () => {
           afficherTx('fail', 'Service fee failed — Create NOT sent');
           return dire('⛔ Create was NOT sent — Tokenized Block service fee did not confirm.\n'
             + 'No Create calldata was broadcast. Fix the fee transfer (or decline), then try again.\n'
-            + 'Fee wallet: ' + courtAffichable(FEE_WALLET) + '\nAmount: 0.00005 ETH (service fee, not gas).', 'bad');
+            + 'Fee wallet: ' + displayShort(FEE_WALLET) + '\nAmount: 0.00005 ETH (service fee, not gas).', 'bad');
         }
         ecrireCreateFeeSession({
           hash: frais.hash,

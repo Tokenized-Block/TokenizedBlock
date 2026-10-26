@@ -118,7 +118,7 @@ import { SLOTS_DEPLOIEMENT as D } from './slots-deploiement.js';
 import { verifierEnregistrement, usdc6, pct } from './slots-config.js';
 import { distributionExacte, esperance, secondesFenetre, FENETRE } from './slots-plan.js';
 import { selecteur } from './keccak.js';
-import { masquerAdressesFrais } from './frais-creation.js';
+import { maskFeeAddresses } from './frais-creation.js';
 /* revue 2026-10-24 (LOW n°3) : UNE creation au plus (hash garde, « Check again », eth_chainId relu apres un changement) : envoi-creation.js ;
  *   le depot du pot passe aussi par sa verification de reseau (eth_chainId relu) */
 import { creerEnvoiCreation, phraseEnvoi } from './envoi-creation.js';
@@ -143,7 +143,7 @@ for (const e of document.querySelectorAll('b[data-k]')) e.textContent = MOTS[e.d
   num.forEach((v, k) => { const tr = document.createElement('tr'); for (const t of [String(k), chance(v), usdc6(C.prizes[k])]) { const td = document.createElement('td'); td.textContent = t; tr.append(td); } corps.append(tr); });
   $('#dTableNote').textContent = 'Average payout ' + usdc6(ev.brut) + ' USDC per ' + usdc6(C.spinPrice) + ' USDC spin before the pot cap (exact, from the trait sizes; it assumes the bytes of a keccak hash are uniform). There is no refund of a missed window, so the best a player can do is to settle every spin: ' + usdc6(ev.meilleureBrut) + ' USDC per spin on average, below the price. A prize is never more than the pot holds at settle time.';
 }
-$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + masquerAdressesFrais(Array.isArray(C[k]) ? C[k].join(' · ') : C[k]) + '</dd>').join('')
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + maskFeeAddresses(Array.isArray(C[k]) ? C[k].join(' · ') : C[k]) + '</dd>').join('')
   + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
   + '<dt>Fingerprint</dt><dd>sha256 ' + D.sha256Creation + ' · ' + D.octetsCreation + ' bytes</dd>';
 (async () => {
@@ -158,7 +158,7 @@ $('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((
   peindre();
 })();
 function peindre() {
-  $('#dCompte').textContent = compte ? 'Connected: ' + masquerAdressesFrais(compte) + ' — this wallet pays the deployment gas; it gets no power over the game.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#dCompte').textContent = compte ? 'Connected: ' + maskFeeAddresses(compte) + ' — this wallet pays the deployment gas; it gets no power over the game.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
   const st = E.etat(), tx = st.tx, bloque = !tx && (st.attente || st.incertain);
   $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse || !E.peutEnvoyer();
@@ -194,7 +194,7 @@ async function suite(r) {
     const relu = { usdc: await lireAdr(a, 'USDC()'), devWallet: await lireAdr(a, 'DEV_WALLET()'), spinPrice: (await lireU(a, 'SPIN_PRICE()')).toString(), potShareBps: (await lireU(a, 'POT_SHARE_BPS()')).toString() };
     const table = (await appel(a, 'prizes()')).slice(2).match(/.{64}/g).map((w) => BigInt('0x' + w).toString());
     const bon = ['usdc', 'devWallet', 'spinPrice', 'potShareBps'].every((k) => relu[k] === String(C[k]).toLowerCase()) && table.join() === C.prizes.map(String).join();
-    $('#rLu').textContent = masquerAdressesFrais(Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · prizes ' + table.join('/'));
+    $('#rLu').textContent = maskFeeAddresses(Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · prizes ' + table.join('/'));
     if (bon) adresse = a;
     dire(bon ? 'Deployed: the contract reads back exactly what was signed. Send the transaction hash to the team: the app opens the game once the record carries the address.'
       : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');

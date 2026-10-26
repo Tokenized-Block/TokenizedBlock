@@ -8,7 +8,7 @@
  *   contrat ACCEPTERAIT — jamais d une regle a cote.
  */
 import { actionsSkin, offreMinimale } from './blockskins.js';
-import { estAdresseFrais, courtAffichable } from './frais-creation.js';
+import { isFeeAddress, displayShort } from './frais-creation.js';
 
 /** Relecture de la liste tant que la section est visible (Phil : « live ») : 25 s, bornee a lireSkins (1 + ceil(n/100) eth_call). */
 export const SKM_RAFRAICHIR_MS = 25000;
@@ -178,12 +178,12 @@ export function apercuSkinSvg(r) {
   return '<svg viewBox="0 0 48 48" width="44" height="44" aria-hidden="true" focusable="false">'
     + apercuSkinFormes(r).map(([tag, at]) => '<' + tag + Object.entries(at).map(([k, v]) => ' ' + k + '="' + v + '"').join('') + '/>').join('') + '</svg>';
 }
-/** Ce qu on dit du detenteur : « you », ou l adresse courte (0x1234…abcd). Pendant une vente, le contrat garde la skin : on dit le VENDEUR.
- *  ⛔ 2026-10-26 (game57 item 10) : null pour un wallet de frais — la carte ne dit alors NI « held by » NI « seller » (aucune adresse de
- *  frais n est jamais affichee ; vu en prod : « Not listed · held by 0x…(abrege) »). */
+/** What is said about the holder: « you », or the short address (0x1234…abcd). During a sale the contract holds the skin: the SELLER is named.
+ *  ⛔ 2026-10-26 (game57 item 10): null for a fee wallet — the card then says NEITHER « held by » NOR « seller » (no fee
+ *  address is ever displayed; seen in prod: « Not listed · held by 0x…(shortened) »). */
 export function detenteurCourt(s, moi) {
   const d = bas(s && s.detenteur);
   if (ADR.test(bas(moi)) && d === bas(moi)) return 'you';
-  if (estAdresseFrais(d)) return null;
-  return ADR.test(d) ? courtAffichable(d) : 'not read';
+  if (isFeeAddress(d)) return null;
+  return ADR.test(d) ? displayShort(d) : 'not read';
 }

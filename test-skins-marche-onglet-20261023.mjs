@@ -129,7 +129,7 @@ for (const l of ecran) vu(!/\bNFTs?\b|0xa6cf|\b(enchere|vente|detenteur|lecture|
 if (!process.env.TB_SKM_SANS_MUTANTS) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'skm-mut-'));
   const srcSkm = fs.readFileSync(path.join(ICI, 'skins-marche.js'), 'utf8').replace("from './blockskins.js'", "from '" + pathToFileURL(path.join(ICI, 'blockskins.js')).href + "'")
-    .replace("from './frais-creation.js'", "from '" + pathToFileURL(path.join(ICI, 'frais-creation.js')).href + "'"); /* 2026-10-26 (game57 item 10) : skins-marche importe le masque des adresses de frais */
+    .replace("from './frais-creation.js'", "from '" + pathToFileURL(path.join(ICI, 'frais-creation.js')).href + "'"); /* 2026-10-26 (game57 item 10): skins-marche imports the fee-address mask */
   const srcApp = fs.readFileSync(APP, 'utf8').replace(/\r\n/g, '\n'); /* la COPIE est en LF (le depot l est ; core.autocrlf rend du CRLF sur Windows) */
   const MUTANTS = [
     ['skm', 'une enchere finit une seconde trop tard', "return Number(t) >= Number(s.fin) ? 'ENCHERE_FINIE'", "return Number(t) > Number(s.fin) ? 'ENCHERE_FINIE'"],

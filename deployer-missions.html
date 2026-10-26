@@ -120,7 +120,7 @@ ul{padding-left:20px;margin:8px 0}
 import { MISSIONS_DEPLOIEMENT as D } from './missions-deploiement.js';
 import { encoderArgsDeployer, RAIL_ROUTE } from './missions-rail.js';
 import { selecteur } from './keccak.js';
-import { masquerAdressesFrais } from './frais-creation.js';
+import { maskFeeAddresses } from './frais-creation.js';
 const $ = (s) => document.querySelector(s);
 const eth = () => window.ethereum;
 const CHAINE_HEX = '0x' + D.chaine.toString(16);
@@ -128,7 +128,7 @@ const NOMS = { hook: 'TokenizedBlock hook (which pools are ours)', poolManager: 
   usdc: 'USDC', verifier: 'Mission checker key', guardian: 'Guardian (can only pause)' };
 let compte = null, intacte = false, envoi = false, v3Adr = null;
 const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
-$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (masquerAdressesFrais(D.constructeur[k]) || '<span class="ko">missing</span>') + '</dd>').join('')
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + (maskFeeAddresses(D.constructeur[k]) || '<span class="ko">missing</span>') + '</dd>').join('')
   + '<dt>Stocks paid to the dev directly</dt><dd>' + D.devDirect.length + ' tokenized stocks of the hook (the dev\'s 3% of a reward in one of them goes to the dev in that stock; block units never)</dd>'
   + '<dt>Converter route (fixed)</dt><dd>UNIT → ETH (UNIT\'s TokenizedBlock pool) → USDC (Uniswap v4, 0.05%) — sells the dev\'s 3% of a UNIT reward, USDC to the dev wallet</dd>'
   + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
@@ -151,7 +151,7 @@ $('#dManque').innerHTML = !D.pret ? '<span class="ko">Not ready: ' + [...D.manqu
   peindre();
 })();
 function peindre() {
-  $('#dCompte').textContent = compte ? 'Connected: ' + masquerAdressesFrais(compte) + ' — this wallet will own the contract.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#dCompte').textContent = compte ? 'Connected: ' + maskFeeAddresses(compte) + ' — this wallet will own the contract.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
   $('#bConnecter').hidden = !!compte;
   $('#bDeployer').disabled = !compte || !intacte || envoi || !!D.adresse;
   if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second contract.', 'note ok');
@@ -190,7 +190,7 @@ $('#bDeployer').addEventListener('click', async () => {
     const lies = await lireDe(v3, 'RAIL()') === rail && await lireDe(rail, 'MISSIONS()') === v3;
     const o = await lireDe(v3, 'owner()'), po = await lireDe(v3, 'pendingOwner()'), op = await lireDe(rail, 'OPERATOR()');
     const bon = lies && D.ordre.every((k) => relu[k] === D.constructeur[k]) && o === fac && po === compte.toLowerCase() && op === compte.toLowerCase();
-    $('#rLu').textContent = masquerAdressesFrais(D.ordre.map((k) => k + ' ' + relu[k]).join(' · ') + ' · linked ' + lies + ' · pending owner ' + po + ' · converter operator ' + op);
+    $('#rLu').textContent = maskFeeAddresses(D.ordre.map((k) => k + ' ' + relu[k]).join(' · ') + ' · linked ' + lies + ' · pending owner ' + po + ' · converter operator ' + op);
     if (bon) { v3Adr = v3; $('#bAccepter').hidden = false; }
     dire(bon ? 'Deployed: the board and its converter read back exactly what was signed. Last step: confirm you own the board (one short signature).'
       : 'Deployed, but what the contracts read back differs from what was signed. Do not use them.', bon ? 'note ok' : 'note ko');
