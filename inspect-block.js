@@ -111,21 +111,25 @@ export function aimedAt(points, L, H, radius = 60) {
 const num = (x) => (finite(x) ? String(Math.round(x * 1e4) / 1e4) : NOT_READ);
 /** The overlay for one looked-at object: real values only, "not read" otherwise.
  *  ⛔ game57 #10: a fee address is never displayed — the title and every value go through maskFeeAddresses. */
-export function describeTarget(obj, src, model) {
-  const d = describeTargetRaw(obj, src, model);
+export function describeTarget(obj, src, model, shown = null) {
+  const d = describeTargetRaw(obj, src, model, shown);
   return d ? { title: maskFeeAddresses(d.title), lines: d.lines.map((l) => ({ label: l.label, value: maskFeeAddresses(l.value) })) } : null;
 }
-function describeTargetRaw(obj, src, model) {
+/* game57 #4c (a): `shown` = the beat ON SCREEN ({ vu, beatText }, the header's own text). A neuron is described at that beat,
+ *  and its beat line is that text — never a second counter. Without `shown`, no beat line at all. */
+function describeTargetRaw(obj, src, model, shown = null) {
   if (!obj || typeof obj !== 'object') return null;
   const s = src || {};
   if (obj.kind === 'neuron' && Number.isInteger(obj.n)) {
-    const vu = s.vu && Number.isSafeInteger(s.vu.tick) ? s.vu : null;
+    const base = shown && shown.vu ? shown.vu : s.vu;
+    const vu = base && Number.isSafeInteger(base.tick) ? base : null;
     const inn = s.internals && vu && s.internals.tick === vu.tick && Array.isArray(s.internals.neurones) ? s.internals.neurones[obj.n] : null;
-    return { title: 'Neuron #' + obj.n + (obj.n < 16 ? ' (sensor)' : ''), lines: [
+    const lines = [
       { label: 'Fired this beat', value: vu && Array.isArray(vu.indices) ? (vu.indices.includes(obj.n) ? 'yes' : 'no') : NOT_READ },
       { label: 'Potential', value: inn ? num(inn.potentiel) : NOT_READ },
-      { label: 'Trace (memory)', value: inn ? num(inn.trace) : NOT_READ },
-      { label: 'Beat', value: vu ? String(vu.tick) : NOT_READ }] };
+      { label: 'Trace (memory)', value: inn ? num(inn.trace) : NOT_READ }];
+    if (shown && typeof shown.beatText === 'string' && shown.beatText) lines.push({ label: 'On screen', value: shown.beatText });
+    return { title: 'Neuron #' + obj.n + (obj.n < 16 ? ' (sensor)' : ''), lines };
   }
   if (obj.kind === 'input') {
     const f = model && model.sections ? model.sections.flatMap((x) => x.fields).find((x) => x.key === 'inputs') : null;

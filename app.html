@@ -26204,7 +26204,10 @@ function peindreVision() {
   if (vision.book === 'inspect') bvPaintInspect();
   vision.c = c; vision.vu = vuShown; vision.capMap = capMap; vision.historyShown = histo; vision.targetH = h; vision.targetState = cible.etat || null; vision.targetFacts = cible.faits || null;
   vision.pulse = pulseOf(vuShown, { reduced: bvReduit() });
-  $('#bvNumber').textContent = beatNumber(vuShown) === null ? '—' : 'Beat ' + beatText(beatNumber(vuShown));
+  /* game57 #4c (a): ONE beat text — the header's — also given to the overlay; Take control names the beat of its snapshot */
+  vision.beatText = vision.control ? 'Snapshot of beat ' + beatText(vision.control.snap.tick)
+    : (beatNumber(vuShown) === null ? '—' : 'Beat ' + beatText(beatNumber(vuShown)));
+  $('#bvNumber').textContent = vision.beatText;
   $('#bvHumeur').textContent = vuShown ? humeurCourteVision(vuShown.phase) : 'no beat yet';
   $('#bvSentence').textContent = voiceInside(vuShown).text;
   $('#bv3d').setAttribute('aria-label', (dedans ? 'Inside its brain, first person among its 128 neurons' : 'Outside: the 3D map with its real neighbours') + (vuShown ? ', beat ' + vuShown.tick + ', ' + humeurCourteVision(vuShown.phase) : ''));
@@ -26435,12 +26438,18 @@ function bvPaintInspect() {
     box.append(ul);
   }
 }
+/* game57 #4c (a): the beat on screen, as the header shows it (the overlay never counts beats by itself) */
+function bvShownBeat() {
+  const snap = vision.control ? vision.control.snap : null;
+  const vu = snap ? { tick: snap.tick, indices: Array.isArray(snap.indices) ? snap.indices : [] } : vision.vu;
+  return { vu: vu || null, beatText: vision.beatText && vision.beatText !== '—' ? vision.beatText : null };
+}
 /* the overlay on what the camera looks at (or the clicked object): only repainted when the target changes */
 function bvPaintAim(points, L, H) {
   const el = $('#bvAim'); if (!el) return;
   const pinned = vision.pinned ? points.find((p) => p.id === vision.pinned) : null;
   const hit = pinned || aimedAt(points, L, H);
-  const d = hit ? describeTarget(hit.obj, vision.inspectSrc, vision.inspectModel) : null;
+  const d = hit ? describeTarget(hit.obj, vision.inspectSrc, vision.inspectModel, bvShownBeat()) : null;
   const key = d ? hit.id + '|' + d.lines.map((l) => l.value).join('|') : '';
   if (key === vision.aimKey) return;
   vision.aimKey = key;
