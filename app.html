@@ -25590,7 +25590,8 @@ if (/^0x[0-9a-fA-F]{40}$/.test(blockRetour)) {
      *   ⛔ ET LA FICHE S OUVRE TOUT DE SUITE, elle : le visiteur ne doit pas rester devant l accueil
      *     pendant qu on attend le marche. `reprendreIntentApresConnect` la rouvrira sans dommage. */
     /* ⛔ 2026-10-25 : ces lecons tiennent toujours et vivent dans `reprendreRetourFiat` — fiche ouverte tout de suite,
-     *   attente du panneau BORNEE (24 x 500 ms), repli « Retry market » si le marche reste illisible. Ce qui change :
+     *   attente du panneau BORNEE (2026-10-26 : elle suit la lecture de la fiche, plafond 360 x 500 ms), repli « Retry market »
+     *   si le marche reste illisible. Ce qui change :
      *   plus d intention a consommer, donc plus de montant fixe ni de clic a la place de la personne. */
     void reprendreRetourFiat(retourFiat.block, retourFiat.actif);
   }, 1200);
@@ -26321,10 +26322,18 @@ function garderPrefillFiat(parLaPersonne = false) {
   const r = fiatRetenu;
   if (!r) return 'SANS';
   if (r.enBascule) return 'BASCULE';
-  if (String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase() !== r.block) { fiatRetenu = null; return 'AILLEURS'; }
   const champ = $('#peAchat'), n = $('#peRetourFiat'), sel = $('#peDevise'), bloc = $('#peDeviseBloc');
+  /* ⛔⛔ 2026-10-26 (2e revue, reproduit au navigateur : IB022 -> METAc -> BASEDAY) : la fiche d un AUTRE block garde le meme
+   *     champ #peAchat. Oublier le retour sans retirer le montant POSE laissait 0.001752 sous « Buy — ETH to spend » d un
+   *     autre block. On retire ce que NOUS avons pose — jamais un montant que la personne a tape ou corrige. */
+  if (String(($('#profil') && $('#profil').dataset.block) || '').toLowerCase() !== r.block) {
+    if (champ && r.pose !== null && String(champ.value || '') === r.pose) champ.value = '';
+    fiatRetenu = null;
+    return 'AILLEURS';
+  }
   if (!champ || !n) return 'SANS';
-  if (parLaPersonne && sel && String(sel.value || '').toLowerCase() !== r.devise) r.choixPersonne = true;
+  /* le choix de la personne est relu a chaque changement : revenir sur l actif livre le rend au retour */
+  if (parLaPersonne && sel) r.choixPersonne = String(sel.value || '').toLowerCase() !== r.devise;
   n.hidden = false; n.dataset.block = r.block;
   /* rien encore pose, et la personne a tape son propre montant : on ne change ni sa devise ni son montant */
   if (r.pose === null && String(champ.value || '').trim() !== '') {
@@ -26347,22 +26356,33 @@ function garderPrefillFiat(parLaPersonne = false) {
     n.textContent = r.phrasePose;
     return 'POSE';
   }
+  const pourquoi = r.choixPersonne ? ' (you changed “Pay with”)'
+    : ' (the market was read again and ' + r.actif + ' is not offered in “Pay with” right now)';
   if (r.pose !== null) {
     /* le montant pose parlait l actif livre ; le champ en parle un autre. Le retirer est la seule chose vraie a faire —
-     * sauf si la personne a elle-meme change de devise ET retape un montant : celui-la est le sien. */
-    const retire = !r.choixPersonne || String(champ.value || '') === r.pose;
-    if (retire) champ.value = '';
+     * sauf si la personne l a corrige : celui-la est le sien, et le retour s arrete la. */
+    if (String(champ.value || '') !== r.pose) {
+      n.className = 'note';
+      n.textContent = r.debut + ' The Buy field is no longer paid in ' + r.actif + pourquoi + ', and the amount in it is the one you typed.';
+      fiatRetenu = null;
+      return 'VIDE';
+    }
+    champ.value = '';
+    /* ⛔ 2026-10-26 (2e revue) : le retour est GARDE (pose remis a null). La note disait « Pick USDC in Pay with to use it »
+     *   et, la personne l ayant fait, le champ restait vide sous « no longer paid in USDC ». Revenir sur l actif livre (choix de
+     *   la personne, ou rebatissage qui le re-offre) le repose maintenant, et la note le promet seulement dans ce cas. */
+    r.pose = null;
     n.className = 'note wKo';
-    n.textContent = r.debut + ' The Buy field is no longer paid in ' + r.actif
-      + (r.choixPersonne ? ' (you changed “Pay with”)' : ' (the market was read again and ' + r.actif + ' is not offered in “Pay with” right now)')
-      + (retire ? ', so the ' + r.actif + ' amount was taken out of it — nothing stays prefilled in a currency that did not arrive.'
-        : ', and the amount in it is the one you typed.')
-      + (offerte ? ' Pick ' + r.actif + ' in “Pay with” to use it.' : '');
-    fiatRetenu = null;
+    n.textContent = r.debut + ' The Buy field is no longer paid in ' + r.actif + pourquoi + ', so the ' + r.actif
+      + ' amount was taken out of it — nothing stays prefilled in a currency that did not arrive.'
+      + (offerte ? ' Pick ' + r.actif + ' in “Pay with” again and the amount comes back.'
+        : ' If ' + r.actif + ' is offered here again, the amount comes back.');
     return 'VIDE';
   }
   n.className = 'note';
-  n.textContent = r.debut + ' This block’s Buy is not paid in ' + r.actif + ' here, so nothing was prefilled.';
+  n.textContent = r.choixPersonne
+    ? r.debut + ' “Pay with” is on another currency, so nothing is prefilled. Pick ' + r.actif + ' in “Pay with” to use what arrived.'
+    : r.debut + ' This block’s Buy is not paid in ' + r.actif + ' here, so nothing was prefilled.';
   return 'ATTEND';
 }
 

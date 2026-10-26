@@ -177,9 +177,13 @@ await cas('(1b) le rebatissage n offre plus l USDC : le montant est RETIRE, et l
   jamaisSousUnAutreActif(m, USDC, 'rebatissage sans USDC');
   assert.equal(m.els['#peAchat'].value, '', 'le montant USDC reste dans un champ ETH');
   assert.match(m.els['#peRetourFiat'].textContent, /no longer paid in USDC .*taken out of it/);
+  assert.match(m.els['#peRetourFiat'].textContent, /If USDC is offered here again, the amount comes back\.$/);
+  /* 2026-10-26 (2e revue) : la note promet le retour ; le rebatissage qui re-offre l USDC le tient */
   m.etat.devises = [D_ETH, D_USDC];
   m.rebatir();
-  assert.equal(m.els['#peAchat'].value, '', 'un montant retire ne revient pas tout seul');
+  assert.equal(m.champ(), USDC);
+  assert.equal(m.els['#peAchat'].value, '0.001752', 'la note promettait que le montant revient, il n est pas revenu');
+  assert.match(m.els['#peRetourFiat'].textContent, /The Buy amount is prefilled/);
 });
 
 await cas('(1c) la personne choisit ETH dans « Pay with » : le montant USDC pose sort du champ', async () => {
@@ -192,6 +196,40 @@ await cas('(1c) la personne choisit ETH dans « Pay with » : le montant USDC po
   assert.match(m.els['#peRetourFiat'].textContent, /you changed “Pay with”/);
   m.rebatir();
   assert.equal(m.champ(), ETH, 'un rebatissage a defait le choix de la personne');
+  assert.equal(m.els['#peAchat'].value, '');
+  assert.match(m.els['#peRetourFiat'].textContent, /Pick USDC in “Pay with” to use what arrived/);
+});
+await cas('(1f) la note dit « Pick USDC again » : la personne le fait, et le montant revient (mesure de la promesse)', async () => {
+  const m = monde();
+  await m.f.reprendreRetourFiat(BLOC, 'USDC');
+  m.els['#peDevise'].value = ETH; m.els['#peDevise'].declencher('change');
+  assert.match(m.els['#peRetourFiat'].textContent, /Pick USDC in “Pay with” again and the amount comes back\./);
+  m.els['#peDevise'].value = USDC; m.els['#peDevise'].declencher('change');
+  assert.equal(m.champ(), USDC);
+  assert.equal(m.els['#peAchat'].value, '0.001752', 'la note promettait le retour du montant : le champ est vide');
+  assert.match(m.els['#peRetourFiat'].textContent, /^Arrived in your wallet: 0\.001752 USDC .*The Buy amount is prefilled/);
+  assert.ok(!/no longer paid/.test(m.els['#peRetourFiat'].textContent), 'la note dit encore « no longer paid in USDC » sous un champ en USDC');
+  for (let i = 0; i < 5; i += 1) { m.rebatir(); jamaisSousUnAutreActif(m, USDC, 'rebatissage apres retour ' + i); }
+  assert.equal(m.els['#peAchat'].value, '0.001752');
+});
+await cas('(1g) la personne corrige le montant APRES le prefill : 21 rebatissages ne le reecrivent pas', async () => {
+  const m = monde();
+  await m.f.reprendreRetourFiat(BLOC, 'USDC');
+  m.els['#peAchat'].value = '0.0015';
+  for (let i = 0; i < 21; i += 1) m.rebatir();
+  assert.equal(m.els['#peAchat'].value, '0.0015', 'un rebatissage a ecrase la correction de la personne');
+  assert.equal(m.champ(), USDC);
+  m.els['#profil'].dataset.block = AUTRE_BLOC; m.rebatir();
+  assert.equal(m.els['#peAchat'].value, '0.0015', 'en quittant le block, on a retire un montant que la personne a tape');
+});
+await cas('(1h) la personne corrige le montant puis passe « Pay with » sur ETH : sa correction reste, et la note le dit', async () => {
+  const m = monde();
+  await m.f.reprendreRetourFiat(BLOC, 'USDC');
+  m.els['#peAchat'].value = '0.0015';
+  m.els['#peDevise'].value = ETH; m.els['#peDevise'].declencher('change');
+  assert.equal(m.els['#peAchat'].value, '0.0015', 'un montant corrige par la personne a ete retire');
+  assert.match(m.els['#peRetourFiat'].textContent, /the amount in it is the one you typed\.$/);
+  assert.equal(m.ctx.fiatRetenu, null);
 });
 
 await cas('(1d) l USDC n est pas offert au retour : rien n est pose sous l ETH ; il l est quand « Pay with » l offre', async () => {
@@ -244,6 +282,18 @@ await cas('(3b) le retour appartient a SON block : apres un detour par une autre
   m.els['#profil'].dataset.block = BLOC; m.etat.devises = [D_ETH, D_USDC]; m.rebatir();
   assert.equal(m.els['#peAchat'].value, '', 'un retour oublie a ete repose apres un detour par une autre fiche');
   assert.equal(m.champ(), ETH);
+});
+
+await cas('(3c) prefill sur IB022, puis une AUTRE fiche s ouvre : le champ partage est vide (2e revue, reproduit au navigateur)', async () => {
+  const m = monde();
+  await m.f.reprendreRetourFiat(BLOC, 'USDC');
+  assert.equal(m.els['#peAchat'].value, '0.001752');
+  /* comme lireProfil : le block change, le panneau se repeint, « Pay with » se rebatit (cote ETH, sans USDC) */
+  m.els['#profil'].dataset.block = AUTRE_BLOC; m.etat.devises = [D_ETH]; m.rebatir();
+  assert.equal(m.els['#peAchat'].value, '', 'le montant pose pour IB022 reste dans le Buy d un autre block, sous ' + (m.champ() === ETH ? 'ETH' : m.champ()));
+  assert.equal(m.ctx.fiatRetenu, null);
+  for (let i = 0; i < 5; i += 1) m.rebatir();
+  assert.equal(m.els['#peAchat'].value, '');
 });
 
 /* ── 4. l attente suit le panneau, pas une montre de 12 s ──────────────────────────────────────── */
@@ -314,7 +364,7 @@ await cas('(6b) un retour de paiement n affiche pas la banniere du lien partage'
   assert.ok(nu.indexOf('const retourFiat = lireRetourFiat(location.search)') < nu.indexOf('if (blockLien && ADRESSE.test(blockLien) && !retourFiat)'));
 });
 
-assert.equal(n, 14, 'compte de cas inattendu : ' + n);
+assert.equal(n, 18,'compte de cas inattendu : ' + n);
 if (ko.length) { console.error(ko.length + ' / ' + n + ' KO'); process.exit(1); }
 console.log('ok retour-fiat-garde-actif - ' + n + ' cas, vraies fonctions de app.html executees : 15 rebatissages, USDC retire,');
 console.log('   choix de la personne, reserve de gas, relecture arretee, attente qui suit le panneau, Fund sur le hub restaure.');
