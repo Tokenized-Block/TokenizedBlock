@@ -17,6 +17,21 @@
 export const TOPIC_TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef';
 export const ADRESSE_ZERO = '0x0000000000000000000000000000000000000000';
 export const PAS_LOGS = 2000;
+/* ══ 2026-10-26 (game57) — LA PASSE DES HOLDERS RELIT AU LIEU DE TOUT JETER ═════════════════════════════════════════════════════════
+ * ⛔ MESURE PROD (game56) : /api/holders/<UNIT> NON_LU en boucle — le noeud refuse au-dela de ~138 fenetres eth_getLogs ; la passe est
+ *   ATOMIQUE (une fenetre ratee la jette), donc elle repartait de la naissance (52 694 118) a chaque tour et ne finissait jamais.
+ * ⇒ passeIncrementale (seule appelee par /api/holders) lit par PAS_HOLDERS blocs, et RELIT une fenetre refusee (REPRISE_HOLDERS) :
+ *   attente exponentielle ; « range too large » ou limite de debit = fenetre divisee par deux (une limite de debit la laisse regrandir
+ *   apres un succes, un « too large » plafonne la suite de la passe) ; refus de budget d archive (certain jusqu a 00:00 UTC) : arret net.
+ * ⛔ L ATOMICITE NE CHANGE PAS : une fenetre n est appliquee que LUE en entier, le curseur n avance que sur elle (ni trou, ni double
+ *   comptage) ; une fenetre qui epuise ses essais ARRETE la passe, ratees > 0, rien n est publie -> la route dit NON_LU.
+ * ⛔ rejouerTransferts SANS `reprise` (soldesAuBloc, boucle-pot) : exactement le comportement d avant. */
+export const PAS_HOLDERS = 1000;
+export const REPRISE_HOLDERS = Object.freeze({ essais: 7, attenteMs: 500, attenteMaxMs: 10000, pasMin: 10 });
+const RE_BUDGET = /archive node daily budget reached/i;
+const RE_DEBIT = /429|rate.?limit|too many requests|request limit|throttl|capacity|-3200[5]/i;
+const RE_TROP_LARGE = /413|too large|block range|range (is )?too|exceed|more than \d+|response size|too many (logs|results)|ranges over/i;
+const dormir = (ms) => new Promise((ok) => setTimeout(ok, ms));
 
 const hex = (n) => '0x' + Number(n).toString(16);
 /* ⛔ 2026-10-25 : un topic eth_getLogs est un mot 0x-prefixe. Sans « 0x », publicnode le tolerait et l archive Coinbase
@@ -75,7 +90,8 @@ export async function naissanceDuJeton(args) {
  * Rejoue les Transfer de [deBloc, aBloc] et cumule dans `soldes` (Map adresse -> bigint).
  * @returns {{nLogs:number, ratees:number}}
  */
-export async function rejouerTransferts({ rpc, jeton, deBloc, aBloc, soldes, pas = PAS_LOGS }) {
+export async function rejouerTransferts({ rpc, jeton, deBloc, aBloc, soldes, pas = PAS_LOGS, reprise = null, attendre = dormir }) {
+  if (reprise) return rejouerAvecReprise({ rpc, jeton, deBloc, aBloc, soldes, pas, reprise, attendre });
   let nLogs = 0, ratees = 0;
   for (let d = deBloc; d <= aBloc; d += pas) {
     const a = Math.min(d + pas - 1, aBloc);
@@ -93,6 +109,53 @@ export async function rejouerTransferts({ rpc, jeton, deBloc, aBloc, soldes, pas
     }
   }
   return { nLogs, ratees };
+}
+
+/** Applique les Transfer d une fenetre LUE EN ENTIER a `soldes`. */
+function appliquer(logs, soldes) {
+  for (const l of logs) {
+    const de = adrDeTopic(l.topics[1]), vers = adrDeTopic(l.topics[2]);
+    const v = BigInt(l.data);
+    if (de !== ADRESSE_ZERO) soldes.set(de, (soldes.get(de) || 0n) - v);
+    if (vers !== ADRESSE_ZERO) soldes.set(vers, (soldes.get(vers) || 0n) + v);
+  }
+  return logs.length;
+}
+
+/**
+ * rejouerTransferts AVEC RELECTURE (REPRISE_HOLDERS) — voir l en-tete PAS_HOLDERS.
+ * ⛔ Le curseur `d` n avance que sur une fenetre lue en entier (une liste) : aucune fenetre sautee, aucune lue deux fois.
+ * ⛔ Une fenetre qui epuise `essais` echecs CONSECUTIFS (ou un refus de budget) ARRETE le rejeu : { ratees: 1, refusee, pourquoi }.
+ *   Continuer ne servirait a rien — la passe est jetee de toute facon — et couterait une requete par fenetre restante.
+ * @returns {{nLogs:number, ratees:number, refusee?:{de:number,a:number}, pourquoi?:string}}
+ */
+async function rejouerAvecReprise({ rpc, jeton, deBloc, aBloc, soldes, pas, reprise, attendre }) {
+  const { essais, attenteMs, attenteMaxMs, pasMin } = { ...REPRISE_HOLDERS, ...reprise };
+  let nLogs = 0, plafond = Math.max(pasMin, pas), courant = plafond, echecs = 0;
+  for (let d = deBloc; d <= aBloc;) {
+    const a = Math.min(d + courant - 1, aBloc);
+    let logs = null, err = null;
+    try {
+      logs = await rpc('eth_getLogs', [{ address: jeton, topics: [TOPIC_TRANSFER], fromBlock: hex(d), toBlock: hex(a) }]);
+      if (!Array.isArray(logs)) err = new Error('not a list');
+    } catch (e) { err = e; }
+    if (!err) {
+      nLogs += appliquer(logs, soldes);
+      d = a + 1; echecs = 0;
+      courant = Math.min(plafond, courant * 2);
+      continue;
+    }
+    const msg = String((err && err.message) || err);
+    const refus = () => ({ nLogs, ratees: 1, refusee: { de: d, a }, pourquoi: msg.slice(0, 120) });
+    if (RE_BUDGET.test(msg)) return refus();
+    const debit = RE_DEBIT.test(msg), large = !debit && RE_TROP_LARGE.test(msg);
+    if (large && courant > pasMin) { plafond = Math.max(pasMin, Math.floor(courant / 2)); courant = plafond; continue; }
+    if (debit) courant = Math.max(pasMin, Math.floor(courant / 2));
+    echecs += 1;
+    if (echecs >= essais) return refus();
+    await attendre(Math.min(attenteMaxMs, attenteMs * 2 ** (echecs - 1)));
+  }
+  return { nLogs, ratees: 0 };
 }
 
 /**
@@ -115,14 +178,14 @@ export async function rejouerTransferts({ rpc, jeton, deBloc, aBloc, soldes, pas
  * @param {{soldes:Map, jusqua:number|null, ratees:number}} e.etat  muté en place, atomiquement
  * @returns {{publie:boolean, ratees:number, deBloc:number|null}}
  */
-export async function passeIncrementale({ rpc, jeton, etat, naissance, fin, pas = PAS_LOGS }) {
+export async function passeIncrementale({ rpc, jeton, etat, naissance, fin, pas = PAS_HOLDERS, reprise = REPRISE_HOLDERS, attendre = dormir }) {
   const deBloc = etat.jusqua === null ? naissance : etat.jusqua + 1;
   if (!Number.isInteger(deBloc) || !Number.isInteger(fin) || deBloc > fin) {
     return { publie: false, ratees: etat.ratees || 0, deBloc: null };
   }
   /* ⛔ MAP NEUVE : rien de ce qui suit ne peut salir l etat publie si la passe echoue. */
   const neuf = new Map(etat.soldes);
-  const passe = await rejouerTransferts({ rpc, jeton, deBloc, aBloc: fin, soldes: neuf, pas });
+  const passe = await rejouerTransferts({ rpc, jeton, deBloc, aBloc: fin, soldes: neuf, pas, reprise, attendre });
   if (passe.ratees) {
     etat.ratees = passe.ratees;
     return { publie: false, ratees: passe.ratees, deBloc };
