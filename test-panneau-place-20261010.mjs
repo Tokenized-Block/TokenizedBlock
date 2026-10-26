@@ -42,7 +42,9 @@ function verifier(html) {
   ok(/@media \(max-width:760px\)\{\s*body\.bcOuvert\{padding-bottom:calc\(var\(--bcPopH,62dvh\) \+ var\(--bcNav,66px\) \+ 24px\)\}/.test(html), 'P4 telephone : rien n est reserve sous le panneau');
   ok(html.includes('body.bcOuvert.bcReplie .mapZoom{transform:translateY(calc(-1 * var(--bcPopH,60px) - 14px))}'), 'P4b telephone replie : le zoom de la Map n suit plus la rangee');
   /* 5. replie = une seule rangee : la recherche et « Agent link » se cachent */
-  ok(html.includes('dialog.bcPop.bcReduit .bcCherche,dialog.bcPop.bcReduit #bcLier,dialog.bcPop.bcReduit #bcChercheNote,dialog.bcPop.bcReduit .bcPousse{display:none}'), 'P5 replie : la recherche reste (le replie retrouve deux rangees)');
+  /* 2026-10-26 (integ21, d60b784) : la recherche du panneau rend ses resultats dans #bcChercheRes (/api/recherche) — replie, ils se
+   *   cachent AUSSI (sinon la liste resterait ouverte sous la rangee unique) */
+  ok(html.includes('dialog.bcPop.bcReduit .bcCherche,dialog.bcPop.bcReduit #bcLier,dialog.bcPop.bcReduit #bcChercheNote,dialog.bcPop.bcReduit #bcChercheRes,dialog.bcPop.bcReduit .bcPousse{display:none}'), 'P5 replie : la recherche reste (le replie retrouve deux rangees)');
   /* 6. la taille est MESUREE : ResizeObserver, apres l ouverture, apres un repli ; la classe suit l etat */
   ok(/function bcPoserTaille\(\) \{/.test(html) && html.includes("s.setProperty('--bcPopW', d.offsetWidth + 'px'); s.setProperty('--bcPopH', d.offsetHeight + 'px');"), 'P6a la taille n est plus mesuree');
   ok(html.includes("try { new ResizeObserver(() => bcPoserTaille()).observe(document.getElementById('bcPop')); }"), 'P6b aucun observateur ne suit la taille du panneau');
@@ -79,6 +81,7 @@ const MUTANTS = [
   ['m3 le rail remonte AVANT la regle de base (cascade)', null, null, /^P3c /],
   ['m4 telephone : plus rien de reserve', 'body.bcOuvert{padding-bottom:calc(var(--bcPopH,62dvh) + var(--bcNav,66px) + 24px)}', 'body.bcOuvert{padding-bottom:96px}', /^P4 /],
   ['m5 replie : la recherche reste', 'dialog.bcPop.bcReduit .bcCherche,dialog.bcPop.bcReduit #bcLier,', 'dialog.bcPop.bcReduit #bcLier,', /^P5 /],
+  ['m5b replie : les resultats de la recherche restent', 'dialog.bcPop.bcReduit #bcChercheNote,dialog.bcPop.bcReduit #bcChercheRes,', 'dialog.bcPop.bcReduit #bcChercheNote,', /^P5 /],
   ['m6 pas d observateur', "try { new ResizeObserver(() => bcPoserTaille()).observe(document.getElementById('bcPop')); }", 'try { }', /^P6b /],
   ['m7 pas de mesure apres l ouverture', 'bcPoserTaille(); /* 2026-10-10 : la place laissee a la page, mesuree juste apres l ouverture */', '/* plus de mesure */', /^P6c /],
   ['m8 ✕ laisse bcReplie', "$('#bcFermer').addEventListener('click', () => { $('#bcPop').close(); try { document.body.classList.remove('bcOuvert', 'bcReplie');", "$('#bcFermer').addEventListener('click', () => { $('#bcPop').close(); try { document.body.classList.remove('bcOuvert');", /^P7a /],

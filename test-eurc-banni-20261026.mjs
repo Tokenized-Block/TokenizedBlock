@@ -78,12 +78,27 @@ async function verifier(DIR) {
   const i = html.indexOf('function wsPeindreDe() {');
   const fin = i < 0 ? null : /\r?\n\}\r?\n/.exec(html.slice(i));
   exige(i >= 0 && !!fin, 'D wsPeindreDe introuvable dans app.html');
+  /* 2026-10-26 (integ21) : wsPeindreDe range avec wsRang / wsEstBlock (claude/wallet-audf) — les VRAIES fonctions, extraites aussi,
+   *   avec les VRAIES lignes de la page (ETH_ADR, ACTIONS_PAR_ADR, wsPivotsWallet, WS_PIVOTS_FIAT) et les VRAIES constantes des modules
+   *   que la page importe (USDC_BASE de frais-creation.js, DEVISES_BASE / ACTIONS_COINBASE de paires.js, devisesPivotVersBloc de
+   *   entree-vers-bloc.js) — aucune doublure : un rang ou un filtre faux se verrait ici. */
+  const fn = (sig) => { const a = html.indexOf(sig); const f = a < 0 ? null : /\r?\n\}\r?\n/.exec(html.slice(a)); return a < 0 || !f ? '' : html.slice(a, a + f.index + f[0].length); };
+  const LIGNES = [
+    /^const ETH_ADR = '0x0{40}';/m,
+    /^const ACTIONS_PAR_ADR = new Set\(ACTIONS_COINBASE\.map\([^\r\n]*/m,
+    /^const wsPivotsWallet = \(\) => devisesPivotVersBloc\(ETH_ADR\);/m,
+    /^const WS_PIVOTS_FIAT = new Set\([^\r\n]*/m,
+  ];
+  const prelude = LIGNES.map((re) => { const m = re.exec(html); return m ? m[0] + '\n' : ''; });
+  exige(prelude.every(Boolean), 'D lignes du Wallet introuvables dans app.html : ' + LIGNES.filter((re, k) => !prelude[k]).map(String).join(' '));
+  const PA = await imp('paires.js');
   if (i >= 0 && fin) {
-    const corps = html.slice(i, i + fin.index + fin[0].length);
+    const corps = prelude.join('') + fn('function wsEstBlock(') + fn('function wsRang(') + html.slice(i, i + fin.index + fin[0].length);
     const sel = (v = '') => ({ dataset: {}, value: v, options: [], replaceChildren(...o) { this.options = o; this.value = o[0] ? o[0].value : ''; } });
     const els = { '#wsDe': sel() };
     const ctx = {
       $: (q) => els[q], abrege: (x) => x, formaterUnites: () => '1', wsPeindreVers: () => {}, DEVISES_BANNIES: PF.DEVISES_BANNIES,
+      USDC_BASE, DEVISES_BASE: PA.DEVISES_BASE, ACTIONS_COINBASE: PA.ACTIONS_COINBASE, devisesPivotVersBloc: EV.devisesPivotVersBloc,
       Option: class { constructor(t, v) { this.text = t; this.value = v; } },
       actifs: [
         { id: 'ETH', nom: 'ETH', adr: null, etat: 'LU', solde: 1n, decimales: 18 },
@@ -96,6 +111,8 @@ async function verifier(DIR) {
       vm.runInNewContext(corps + '\nwsPeindreDe();', ctx);
       const vals = els['#wsDe'].options.map((o) => o.value);
       exige(!vals.includes(EURC) && vals.includes(USDC) && vals.includes('ETH'), 'D « You pay » du Wallet : ' + JSON.stringify(vals));
+      /* l ordre de wsRang (Phil : USDC d abord, puis la monnaie fiat pivot AUDF, puis le reste dans l ordre lu) */
+      exige(JSON.stringify(vals) === JSON.stringify([USDC, LIGNE_AUDF.adr, 'ETH']), 'D ordre de « You pay » : ' + JSON.stringify(vals));
     } catch (e) { exige(false, 'D wsPeindreDe a jete : ' + String(e.message).slice(0, 120)); }
   }
   /* E */
@@ -129,7 +146,8 @@ const MUTANTS = [
   ['EURC remis dans la table pivot', 'plan-franchissement.js', (s) => s.replace("  [[bas(USDC_BASE), '0xd2a5", "  [[bas(USDC_BASE), '" + EURC + "'].sort().join('|'), { symbole: 'USDC/EURC', pool: '0xf39b7c34be147f5dc1bc374f27af2e9f03ad3113', tickSpacing: 1, usdcMesure: 1 }], [[bas(USDC_BASE), '0xd2a5")],
   ['DEVISES_BANNIES vide', 'plan-franchissement.js', (s) => s.replace("['" + EURC + "', 'EURC'],", '')],
   ['garde de entreeVersBloc retiree', 'entree-vers-bloc.js', (s) => s.replace("if (DEVISES_BANNIES.has(d) || DEVISES_BANNIES.has(q)) return 'REFUS';", '')],
-  ['filtre du Swap du Wallet retire', 'app.html', (s) => s.replace(/\r?\n {4}&& !DEVISES_BANNIES\.has\(String\(a\.adr \|\| ''\)\.toLowerCase\(\)\)\);/, ');')],
+  ['filtre du Swap du Wallet retire', 'app.html', (s) => s.replace(/\r?\n {4}&& !DEVISES_BANNIES\.has\(String\(a\.adr \|\| ''\)\.toLowerCase\(\)\)\)(\r?\n {4}\.map\(\(a, i\) => \[a, i\]\)\.sort\(\(\[x, i\], \[y, j\]\) => wsRang)/, ')$1')],
+  ['wsRang : la monnaie fiat pivot retombe au rang du reste', 'app.html', (s) => s.replace('WS_PIVOTS_FIAT.has(p.symbole))) return 1;', 'WS_PIVOTS_FIAT.has(p.symbole))) return 2;')],
   ['import de DEVISES_BANNIES retire de la page', 'app.html', (s) => s.replace("import { planFranchissement, DEVISES_BANNIES } from './plan-franchissement.js';", "import { planFranchissement } from './plan-franchissement.js';")],
   ['AUDF retire de la table pivot', 'plan-franchissement.js', (s) => s.replace(/ {2}\[\[bas\(USDC_BASE\), '0xd2a5[^\r\n]*/, '')],
 ];

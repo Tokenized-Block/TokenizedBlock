@@ -38,6 +38,11 @@ const { MORPHO_BLUE } = await import(pathToFileURL(path.join(ICI, 'banque-morpho
 const { symboleDepuisReponse } = await import(pathToFileURL(path.join(ICI, 'texte-onchain.js')).href);
 /* 2026-10-26 : wsPeindreDe lit DEVISES_BANNIES (EURC banni) — le VRAI module, importe par la page */
 const { DEVISES_BANNIES } = await import(pathToFileURL(path.join(ICI, 'plan-franchissement.js')).href);
+/* 2026-10-26 (integ21, claude/wallet-audf) : majWallet lit les pivots (wsPivotsWallet = devisesPivotVersBloc(ETH_ADR)) et wsPeindreDe
+ *   range par wsRang (USDC_BASE, DEVISES_BASE) — les VRAIS modules que la page importe, jamais une doublure */
+const { devisesPivotVersBloc } = await import(pathToFileURL(path.join(ICI, 'entree-vers-bloc.js')).href);
+const { DEVISES_BASE: DEVISES_BASE_VRAIES } = await import(pathToFileURL(path.join(ICI, 'paires.js')).href);
+const { USDC_BASE } = await import(pathToFileURL(path.join(ICI, 'frais-creation.js')).href);
 const brut = fs.readFileSync(process.env.TB_APP || path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g, '\n');
 
 const MOI = '0x31e0' + 'a'.repeat(36);
@@ -66,10 +71,18 @@ async function verifier(html) {
     const m = /\n\}\n/.exec(html.slice(i)); return m ? html.slice(i, i + m.index + 2) : null;
   };
   const ou = (sig) => corps(sig) || '';
+  /* 2026-10-26 (integ21, claude/wallet-audf) : les pivots du Wallet — les VRAIES lignes de la page (memoires, table, lecture, oubli) ;
+   *   une ligne introuvable se DIT (sinon une ReferenceError passerait pour une regle cassee) */
+  const LIGNES_PIVOTS = [/\nconst ETH_ADR = [^\n]*/, /\nconst soldesPivots = new Map\(\);/, /\nconst soldesPivotsDemandes = new Set\(\);/,
+    /\nconst wsPivotsWallet = [^\n]*/, /\nconst WS_PIVOTS_FIAT = [^\n]*/, /\nconst pivotsWalletLus = new Map\(\);/];
+  const lignesPivots = LIGNES_PIVOTS.map((re) => (re.exec(html) || [''])[0]);
+  exige(lignesPivots.every(Boolean), 'P0 lignes des pivots du Wallet introuvables : ' + LIGNES_PIVOTS.filter((re, k) => !lignesPivots[k]).map(String).join(' '));
+  const PIVOTS = lignesPivots.join('') + '\n' + ou('async function lirePivotWallet(') + '\n' + ou('function oublierPivotsDuCompte(') + '\n';
 
   /* ── A. bcOpMaj -> relecture du Wallet avec le jeton recu ── */
   {
-    const src = ou('function bcOpMaj(') + '\n' + ou('function jetonsRecusDuRecu(') + '\n' + ou('async function bcApresConfirme(');
+    /* 2026-10-26 (integ21) : bcApresConfirme oublie les soldes pivot du compte (claude/wallet-audf) — la VRAIE fonction, memoires vides */
+    const src = PIVOTS + ou('function bcOpMaj(') + '\n' + ou('function jetonsRecusDuRecu(') + '\n' + ou('async function bcApresConfirme(');
     const appels = [];
     const recu = { status: '0x1', from: MOI, logs: [
       { address: SNDK, topics: [TRANSFER, motA('0x' + '9'.repeat(40)), motA(MOI)], data: '0x' + mot(3970) },
@@ -97,7 +110,7 @@ async function verifier(html) {
     /* A5. le compte change pendant la lecture du recu : le Wallet de l AUTRE compte ne recoit pas les jetons du premier */
     try {
       const vus = []; let poser = null;
-      const g = new Function('majWallet', 'rpc', 'let compte = ' + JSON.stringify(MOI) + ';\n' + ou('function jetonsRecusDuRecu(') + '\n' + ou('async function bcApresConfirme(')
+      const g = new Function('majWallet', 'rpc', 'let compte = ' + JSON.stringify(MOI) + ';\n' + PIVOTS + ou('function jetonsRecusDuRecu(') + '\n' + ou('async function bcApresConfirme(')
         + '\nreturn { bcApresConfirme, poser: (v) => { compte = v; } };');
       const o = g(async (x) => { vus.push(x); }, async () => { poser(AUTRE); return recu; });
       poser = o.poser;
@@ -109,7 +122,7 @@ async function verifier(html) {
   /* ── B / C. majWallet : le jeton recu entre dans la liste ; un block de l index porte son symbole LU ── */
   /* une instance du Wallet (memes globales d une relecture a l autre : walletRecus survit) ; avoirs, soldes et horloge reglables */
   const instanceWallet = ({ avoirs, gardees } = {}) => {
-    const src = ou('async function majWallet(') + '\n' + ou('async function nomJetonWallet(') + '\n' + ou('function texteAbi(')
+    const src = PIVOTS + ou('async function majWallet(') + '\n' + ou('async function nomJetonWallet(') + '\n' + ou('function texteAbi(')
       + '\n' + ((/\nconst walletRecus = [^\n]*/.exec(html) || [''])[0]) + '\n' + ((/\nconst WALLET_RECU_ATTENTE_MS = [^\n]*/.exec(html) || [''])[0]);
     const el = () => ({ hidden: false, textContent: '', title: '', innerHTML: '' });
     const els = new Map(); const $ = (s) => { if (!els.has(s)) els.set(s, el()); return els.get(s); };
@@ -126,12 +139,12 @@ async function verifier(html) {
     const reg = new Map([[USDC, 'USDC'], [SNDK, 'SNDKc']]);
     const bcResoudre = (a) => ({ ok: true, adr: String(a).toLowerCase(), sym: reg.get(String(a).toLowerCase()) || (String(a).slice(0, 6) + '…' + String(a).slice(-4)) });
     const f = new Function('$', 'compte', 'CHAINE', 'RESEAUX', 'rpc', 'abrege', 'formaterUnites', 'peindreActifs', 'remplirChoixActif', 'JETONS_CONNUS', 'dormir',
-      'lireJeton', 'fetch', 'mesCreations', 'mesFrappes', 'creationsLues', 'SYMBOLES_GENESE', 'court', 'symboleDepuisReponse', 'bcResoudre', 'ACTIONS_PAR_ADR', 'DEVISES_BASE', 'Date',
+      'lireJeton', 'fetch', 'mesCreations', 'mesFrappes', 'creationsLues', 'SYMBOLES_GENESE', 'court', 'symboleDepuisReponse', 'bcResoudre', 'ACTIONS_PAR_ADR', 'DEVISES_BASE', 'Date', 'devisesPivotVersBloc',
       'let actifs = [], jetonLecture = 0, walletLuA = 0;\n' + src + '\nreturn async (o) => { await majWallet(o); return actifs; };');
     const run = f($, MOI, 8453, { 8453: { nom: 'Base' } }, rpc, (x) => x, (b) => String(b), () => {}, () => {},
       { 8453: [{ adr: USDC, nom: 'USDC', ic: '$' }] }, async () => {}, lireJeton, fetch,
       async () => ({ r: { fenetresRatees: [] }, gardees: gardees || [], nonResolues: [] }), async () => ({ blocks: [] }), [], {},
-      (a) => a.slice(0, 6) + '…' + a.slice(-4), symboleDepuisReponse, bcResoudre, new Set([SNDK]), [{ adr: USDC, symbole: 'USDC' }], { now: () => etat.t });
+      (a) => a.slice(0, 6) + '…' + a.slice(-4), symboleDepuisReponse, bcResoudre, new Set([SNDK]), [{ adr: USDC, symbole: 'USDC' }], { now: () => etat.t }, devisesPivotVersBloc);
     return { run, etat };
   };
   const lancerWallet = async ({ recus, avoirs, gardees }) => instanceWallet({ avoirs, gardees }).run(recus === undefined ? undefined : { recus });
@@ -290,9 +303,10 @@ async function verifier(html) {
       sel.value = '';
       const Option = function (t, v) { this.text = t; this.value = v; };
       const liste = { a: [] };
-      const f = new Function('$', 'actifs', 'Option', 'abrege', 'formaterUnites', 'wsPeindreVers', 'DEVISES_BANNIES', ou('function wsPeindreDe(') + '\nreturn (a) => { actifs.length = 0; actifs.push(...a); wsPeindreDe(); };');
+      const f = new Function('$', 'actifs', 'Option', 'abrege', 'formaterUnites', 'wsPeindreVers', 'DEVISES_BANNIES', 'USDC_BASE', 'DEVISES_BASE', 'devisesPivotVersBloc',
+        PIVOTS + ou('function wsRang(') + '\n' + ou('function wsPeindreDe(') + '\nreturn (a) => { actifs.length = 0; actifs.push(...a); wsPeindreDe(); };');
       const actifsS = [];
-      const peindreDe = f((s) => (s === '#wsDe' ? sel : null), actifsS, Option, (x) => x, (b) => String(b), () => {}, DEVISES_BANNIES);
+      const peindreDe = f((s) => (s === '#wsDe' ? sel : null), actifsS, Option, (x) => x, (b) => String(b), () => {}, DEVISES_BANNIES, USDC_BASE, DEVISES_BASE_VRAIES, devisesPivotVersBloc);
       const eth = { id: 'ETH', nom: 'ETH', adr: null, etat: 'LU', solde: 1n, decimales: 18 };
       const sndk = { id: SNDK, nom: 'SNDKc', adr: SNDK, etat: 'LU', solde: 3967n, decimales: 6 };
       peindreDe([eth, sndk]);
@@ -418,7 +432,7 @@ const MUTANTS = [
   ['X5 le symbole n est plus lu ni nettoye', (h) => h.replace("nom = texteAbi(String(await rpc('eth_call', [{ to: a, data: '0x95d89b41' }, 'latest'])));", "nom = 'UNIT';")],
   ['X5b le symbole lu est decode brut (sans nettoyage)', (h) => h.replace("nom = texteAbi(String(await rpc('eth_call', [{ to: a, data: '0x95d89b41' }, 'latest'])));",
     "{ const x = String(await rpc('eth_call', [{ to: a, data: '0x95d89b41' }, 'latest'])).slice(2); const n = parseInt(x.slice(64, 128), 16); nom = Buffer.from(x.slice(128, 128 + n * 2), 'hex').toString('utf8'); }")],
-  ['X6 la garde de changement de compte de bcApresConfirme retiree', (h) => h.replace('  if (!compte || String(compte).toLowerCase() !== moi) return;\n  try { await majWallet({ recus }); }', '  try { await majWallet({ recus }); }')],
+  ['X6 la garde de changement de compte de bcApresConfirme retiree', (h) => h.replace('  if (!compte || String(compte).toLowerCase() !== moi) return;\n  oublierPivotsDuCompte(moi);\n  try { await majWallet({ recus }); }', '  oublierPivotsDuCompte(moi);\n  try { await majWallet({ recus }); }')],
   ['X7 un solde recu NON lu marque lu', (h) => h.replace("try { Object.assign(a, await lireJeton(aR, compte)); a.etat = 'LU'; } catch { a.etat = 'NON_LU'; }", "try { Object.assign(a, await lireJeton(aR, compte)); } catch { } a.etat = 'LU';")],
   ['X8 la dette arrondie vers le bas', (h) => h.replace('(pb * bA + bS - 1n) / bS', '(pb * bA) / bS')],
   /* les regles de ce commit */

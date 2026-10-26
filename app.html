@@ -32423,7 +32423,7 @@ let bcChercheMinuterie = null, bcChercheDemande = 0;
 async function bcChercherAuServeur(v, entree) {
   const note = $('#bcChercheNote'), res = $('#bcChercheRes');
   const moi = ++bcChercheDemande;
-  if (res) { res.hidden = false; res.innerHTML = '<p class="rbNote">Searching…</p>'; }
+  if (res) { res.hidden = false; const p = document.createElement('p'); p.className = 'rbNote'; p.textContent = 'Searching…'; res.replaceChildren(p); }
   const s = await rechercheB20(v, 8);
   if (moi !== bcChercheDemande) return;
   const evident = entree ? choixEvidentOuAdresseB20(s) : null;
