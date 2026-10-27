@@ -197,7 +197,8 @@ function verifier(L, app, serveur) {
     ok(debut > 0 && fin > debut && bloc.length > 3000, 'G: le bloc Live est trouve');
     ok(/cadreTuile\(t, \{/.test(bloc) && /peindreInterieur\(r\.k, svg, null, 'blvClip' \+ t\.adr\)/.test(bloc), 'G: une tuile est dessinee par le MEME peindreInterieur, dans SON svg, sans « talk »');
     ok((app.match(/function peindreInterieur\(/g) || []).length === 1 && !/cadreInterieur\(/.test(bloc), 'G: un seul dessin Inside dans la page — aucune copie');
-    ok(/hu\.textContent = e\.humeur;/.test(bloc) && /const e = etiquetteTuile\(t\);/.test(bloc), 'G: l humeur affichee est celle de etiquetteTuile, rien d autre');
+    /* game66 (owner: emotions in the feed): mood = etiquetteTuile; the feeling is the reading of the tile's OWN beats (penseeVision) */
+    ok(/hu\.textContent = e\.humeur \+ \(senti \? ' · ' \+ senti\.word : ''\);/.test(bloc) && /penseeVision\(t\.histo, t\.histo\.length - 1, \{\}\)/.test(bloc) && /const e = etiquetteTuile\(t\);/.test(bloc), 'G: l humeur affichee est celle de etiquetteTuile, le ressenti celui de SES battements');
     ok(/if \(!t\.histo\.length\) \{\s*svg\.replaceChildren\(\);/.test(bloc), 'G: sans battement, la tuile ne dessine rien');
     ok(/reduit: bvReduit\(\)/.test(bloc), 'G: prefers-reduced-motion passe au cadre');
     ok(/nourrirLive\(live, liveSourceDe\)/.test(bloc) && /function liveSourceDe\(adr, deja\)/.test(bloc), 'G: chaque tuile lit la source de SA propre adresse');
@@ -245,7 +246,7 @@ try {
     ['M7 la taille non bornee', 'mod', 'return Math.round(Math.min(max, Math.max(min, n)));', 'return Math.round(n);'],
     ['M8 un booleen pris pour une taille', 'mod', "typeof v === 'boolean' || ", ''],
     ['M9 plus de 4 tuiles', 'mod', 'if (live.tuiles.length >= max)', 'if (live.tuiles.length > max)'],
-    ['M10 l humeur affichee inventee (app)', 'app', 'hu.textContent = e.humeur;', "hu.textContent = 'calm';"],
+    ['M10 l humeur affichee inventee (app)', 'app', "hu.textContent = e.humeur + (senti ? ' · ' + senti.word : '');", "hu.textContent = 'calm' + (senti ? ' · ' + senti.word : '');"],
     ['M11 la tuile dessine sans battement (app)', 'app', 'if (!t.histo.length) {', 'if (false) {'],
     ['M12 le battement ne nourrit plus Live (app)', 'app', '  try { battreLive(); }', '  try { void 0; }'],
     ['M13 une copie du renderer (app)', 'app', "if (r && r.k) peindreInterieur(r.k, svg, null, 'blvClip' + t.adr);", "if (r && r.k) peindreInterieurLive(r.k, svg);"],
