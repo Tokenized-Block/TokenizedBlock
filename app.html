@@ -1906,7 +1906,7 @@ details[open] > summary::before{transform:rotate(90deg)}
           <div class="mapDuels" id="mapDuels"></div>
           <button class="bMasquer" id="bMasquer" aria-expanded="false" aria-controls="cote">Info</button>
           <!-- 2026-10-26 (proprietaire) : « Live » — un second panneau, a GAUCHE, la vue Inside en direct du block vise, et d autres a cote -->
-          <button type="button" class="bMasquer bLive" id="bLiveMap" aria-expanded="false" aria-controls="blvPop"><span class="blvPoint" aria-hidden="true"></span>Live</button>
+          <button type="button" class="bMasquer bLive" id="bLiveMap" aria-expanded="false" aria-controls="bvPop"><span class="blvPoint" aria-hidden="true"></span>Live</button>
           <!-- Phil 2026-10-18 : le journal du jour (/api/jeu/journal). Bouton cache tant qu il n y a rien ; liste fermee par defaut. -->
           <button type="button" class="bMasquer bJournal" id="bJourMap" aria-expanded="false" aria-controls="journalMap" hidden>Today</button>
           <div class="journalMap" id="journalMap" hidden><ol class="journalListe" id="journalMapListe"></ol></div>
@@ -26978,6 +26978,15 @@ function ouvrirLive() {
   else if (!live.tuiles.length) noteLive('Pick a block on the map, or add one above.');
   for (const t of live.tuiles) peindreTuileLive(t);
 }
+function ouvrirLiveVision() {
+  const dl = $('#bvPop'), b = $('#bLiveMap');
+  if (dl && dl.open) { try { dl.close(); } catch (_) { dl.removeAttribute('open'); } if (b) b.setAttribute('aria-expanded', 'false'); return; }
+  const c = liveCibleActuelle();
+  const adr = c && c.adr ? String(c.adr).toLowerCase() : UNIT_APP;
+  try { if (!(brainAdr && String(brainAdr).toLowerCase() === adr)) choisirBrain(adr); } catch (_) { /* la fenetre s ouvre sur le cerveau courant */ }
+  ouvrirVision('brain');
+  if (b) b.setAttribute('aria-expanded', 'true');
+}
 function fermerLive() {
   const p = $('#blvPop'); if (!p) return;
   p.hidden = true;
@@ -26985,7 +26994,10 @@ function fermerLive() {
 }
 (function brancherLive() {
   const p = $('#blvPop'), g = $('#blvPoignee'); if (!p || !g) return;
-  $('#bLiveMap').addEventListener('click', () => { if (liveOuvert()) fermerLive(); else ouvrirLive(); });
+  /* 2026-10-27 (Phil : « sur la Map, le bouton Live donne sur l ancienne version — il doit ouvrir View inside the brain ») : le bouton
+   *   Live de la Map ouvre la fenetre #bvPop sur le block CIBLE (tuile active de la Map, sinon le block du Brain, sinon UNIT), au battement
+   *   en direct ; un 2e clic la ferme. L ancien panneau #blvPop n est plus ouvert depuis la Map. */
+  $('#bLiveMap').addEventListener('click', ouvrirLiveVision);
   $('#blvFermer').addEventListener('click', fermerLive);
   $('#blvReplier').addEventListener('click', () => {
     const r = p.classList.toggle('blvReduit');
