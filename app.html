@@ -4961,7 +4961,7 @@ import { devisesDentree, peutEtreAssemblee, phraseDevise, resumeDesNonOffertes, 
  *   ⛔ EURC est BANNI (Phil, 2026-10-26) : retire de la table pivot, et DEVISES_BANNIES le retire aussi du Swap du Wallet. */
 import { devisesPivotVersBloc, pivotCurrenciesForStock } from './entree-vers-bloc.js';
 /* 2026-10-26 : la section Fiat du Wallet (achat carte/banque par pays, monnaies locales routees, mesurees non routees) — pur */
-import { lignesAchat as fiatLignesAchat, monnaiesLocales as fiatMonnaiesLocales, aVenir as fiatAVenir } from './wallet-fiat.js';
+import { lignesAchat as fiatLignesAchat, monnaiesLocales as fiatMonnaiesLocales, aVenir as fiatAVenir, A_VENIR as FIAT_A_VENIR } from './wallet-fiat.js';
 /* ⛔ `BPS_MAX` BORNE CE QU ON S AUTORISE A PRELEVER sur le rail multi-sauts. Il est IMPORTE du
  *   bareme, pas recopie : une constante recopiee ne suit pas une decision de Phil, et la garde
  *   deviendrait fausse le jour ou le bareme change. */
@@ -12765,6 +12765,20 @@ async function majWallet({ recus = [] } = {}) {
       if (!lu) { pivotsNonLus++; continue; }
       if (lu.solde === 0n) continue;
       actifs.push({ id: p.adr, nom: p.symbole, sous: 'currency · ' + court(p.adr), adr: p.adr, ic: '$', decimales: lu.decimales, solde: lu.solde,
+        multiplicateur: null, multiplicateurUi: null, etat: 'LU' });
+      peindreActifs();
+    }
+    /* 2026-10-27 : CADD / MXNB / USDT (wallet-fiat.js A_VENIR, EURC banni exclu) — lus de la meme facon, pour que « You pay » du Swap
+     *   puisse les revendre en USDC par 'aero-new' ; seuls les detenus sont montres, un non lu compte dans la note */
+    for (const x of FIAT_A_VENIR) {
+      const adrS = String(x.adr).toLowerCase();
+      if (DEVISES_BANNIES.has(adrS) || actifs.some((y) => String(y.adr || '').toLowerCase() === adrS)) continue;
+      let lu = null;
+      try { lu = await lirePivotWallet(adrS, String(compte).toLowerCase()); } catch (_) { lu = null; }
+      if (perime()) return;
+      if (!lu) { pivotsNonLus++; continue; }
+      if (!(typeof lu.solde === 'bigint' && lu.solde > 0n) || !Number.isInteger(lu.decimales)) continue;
+      actifs.push({ id: adrS, nom: x.symbole, sous: 'currency · ' + court(adrS), adr: adrS, ic: '$', decimales: lu.decimales, solde: lu.solde,
         multiplicateur: null, multiplicateurUi: null, etat: 'LU' });
       peindreActifs();
     }
@@ -32510,15 +32524,32 @@ function wsPeindreDe() {
   if ([...s.options].some((o) => o.value === avant)) s.value = avant;
   wsPeindreVers();
 }
+/* ── 2026-10-27 : CADD / MXNB / USDT par le lieu 'aero-new' (stables-neuve.js) — /api/stables-neuve, la mesure du SERVEUR ──────
+ *   « You get » ne les offre depuis USDC que si leur mesure servie est FRAICHE et PASSE ; depuis l un d eux, seul USDC est offert.
+ *   Le serveur re-juge a chaque plan (porteStableNeuve) : ce filtre n ouvre rien, il evite seulement d offrir ce qui sera refuse. */
+let wsStablesServis = null;
+let wsStablesT = 0;
+async function lireStablesNeuve() {
+  if (wsStablesServis && Date.now() - wsStablesT < 60000) return wsStablesServis;
+  try {
+    const j = await (await fetch('/api/stables-neuve', { cache: 'no-store', signal: AbortSignal.timeout(8000) })).json();
+    if (j && j.ok === true && Array.isArray(j.stables)) { wsStablesServis = j.stables; wsStablesT = Date.now(); }
+  } catch (_) { /* non lu : rien d offert de plus */ }
+  return wsStablesServis;
+}
+const wsStableConnu = (a) => (wsStablesServis || []).some((s) => s && String(s.adr).toLowerCase() === String(a || '').toLowerCase());
+const wsStablesRoutes = () => (wsStablesServis || []).filter((s) => s && s.frais === true && s.verdict && s.verdict.passe === true && !DEVISES_BANNIES.has(String(s.adr).toLowerCase()));
 /** « You get » : les choix du ticket (ETH, USDC, actions a pool) moins ce qu on paie ; pour un block, son propre marche d abord. */
 function wsPeindreVers() {
   const de = String($('#wsDe').value || ''), s = $('#wsVers'), avant = s.value;
   const deAdr = de === 'ETH' ? ETH_ADR.toLowerCase() : de.toLowerCase();
-  const choix = bcChoixPaiement(null, null).filter(([v]) => {
+  let choix = bcChoixPaiement(null, null).filter(([v]) => {
     if (v === 'ETH') return de !== 'ETH';
     const r = bcResoudre(v);
     return !(r.ok && r.adr === deAdr);
   });
+  if (wsStableConnu(deAdr)) choix = choix.filter(([v]) => v === 'USDC');
+  else if (deAdr === String(USDC_BASE).toLowerCase()) for (const st of wsStablesRoutes()) choix.push([String(st.adr).toLowerCase(), st.symbole + ' (local-currency stablecoin)']);
   if (wsEstBlock(de)) choix.unshift([WS_SON_MARCHE, 'Its own market (sell the block)']);
   s.replaceChildren(...choix.map(([v, l]) => new Option(l, v)));
   if ([...s.options].some((o) => o.value === avant)) s.value = avant;
@@ -32609,7 +32640,26 @@ async function peindreFiatWallet() {
     d.append(fiatEl('p', 'note', m.adresse));
     return d;
   }));
-  av.replaceChildren(...fiatAVenir().map((x) => { const li = fiatEl('li', 'note', x.phrase); li.dataset.adr = x.adr; return li; }));
+  /* 2026-10-27 (stables-neuve.js) : une ligne dont la mesure FRAICHE du serveur passe devient routee (bouton : le Swap du Wallet,
+   *   USDC -> ce stable ; le plan /api/rails/plan re-cote et simule avant la signature) ; sinon « measured, not routed » + la raison */
+  const peindreAVenir = (servis) => av.replaceChildren(...fiatAVenir({ servis }).map((x) => {
+    const li = fiatEl('li', 'note', x.phrase); li.dataset.adr = x.adr; li.dataset.routee = x.routee ? '1' : '0';
+    if (x.routee) {
+      const b = fiatEl('button', 'bouton sec', x.bouton); b.type = 'button';
+      b.addEventListener('click', () => {
+        const w = $('#wSwapCarte'); if (!w) return;
+        for (const id of ['#wSendCarte', '#wReceive', '#wPaire']) { const e = $(id); if (e) e.hidden = true; }
+        w.hidden = false; $('#wsDe').dataset.voulu = String(USDC_BASE).toLowerCase(); wsPeindreDe();
+        const sv = $('#wsVers'), o = [...sv.options].find((op) => op.value.toLowerCase() === x.adr);
+        if (o) sv.value = o.value;
+        w.scrollIntoView({ block: 'nearest' });
+      });
+      li.append(document.createElement('br'), b);
+    }
+    return li;
+  }));
+  peindreAVenir(wsStablesServis);
+  void lireStablesNeuve().then((s) => { if (gen === fiatGen && s) { peindreAVenir(s); try { wsPeindreVers(); } catch (_) {} } });
   /* bloc 1 : Coinbase d abord ; MoonPay seulement si Coinbase n a rendu AUCUN moyen (la regle de la fiche) */
   const peindreAchat = (coinbase, moonpay) => {
     if (gen !== fiatGen) return;

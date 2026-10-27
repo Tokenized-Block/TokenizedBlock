@@ -46,6 +46,8 @@ import { decoderInitialize } from './pools-du-jeton.js';
 /* 2026-10-25 — LE LIEU 'aero-new' (factory 0x9cb2…7a76, routeur 0x9ee3…d418, prouve sur fork) quand le serveur le sert comme MEILLEUR
  *   lieu d une action (`deps.venueAction(action).meilleure === 'aero-new'`) ; sinon les routes ci-dessous, inchangees octet pour octet */
 import { planVenueNeuve, venteParVenues, choisirVenteVenue, lieuxVente, phraseVente, referenceRepli } from './liquidite-actions.js';
+/* 2026-10-27 — USDC <-> CADD / MXNB / USDT par le meme lieu 'aero-new', derriere la mesure FRAICHE du serveur (stables-neuve.js) */
+import { estStableNeuve, porteStableNeuve, CHOIX_STABLE_NEUVE } from './stables-neuve.js';
 
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -494,6 +496,18 @@ async function planRailBrut(q, deps) {
     } catch (_) { return null; }
   };
   try {
+    /* ── 4 sexies. USDC <-> UN STABLE EN MONNAIE LOCALE SUR 'aero-new' (2026-10-27, stables-neuve.js) ─────────────────────────
+     *   Seulement quand le SERVEUR a mesure la pool 'aero-new' de ce stable il y a moins de 15 min ET qu elle passe la regle
+     *   (deps.venueStable) ; sinon « measured, not routed » avec la raison mesuree. planVenueNeuve re-cote au montant, confronte le
+     *   devis au prix de la pool, approbation EXACTE, et SIMULE avant PRET. Le ban (EURC) a deja refuse plus haut. */
+    if ((nd === 'USDC' && estStableNeuve(vers)) || (nv === 'USDC' && estStableNeuve(de))) {
+      const stable = nd === 'USDC' ? vers : de;
+      let servi = null; try { servi = deps && typeof deps.venueStable === 'function' ? deps.venueStable(stable) : null; } catch (_) { servi = null; }
+      const porte = porteStableNeuve({ adr: stable, servi, maintenant });
+      if (porte.etat !== 'OK') return normaliser(route, { etat: porte.etat, pourquoi: porte.pourquoi }, { via: 'stableNeuve', venue: 'aero-new' });
+      return normaliser(route, await planVenueNeuve({ rpc, sens: nd === 'USDC' ? 'ACHAT' : 'VENTE', action: stable, montant: m, compte, verdict: porte.v,
+        beneficiaireFrais: FEE_WALLET, maintenant }), { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: CHOIX_STABLE_NEUVE });
+    }
     /* ── 4 quater. UNE ACTION DE LA TABLE AERODROME CONTRE WETH / cbBTC / EURC (Phil, 2026-10-10, DIG-actions-hors-USDC) ──
      *   X -> USDC -> action et action -> USDC -> X, deux sauts Aerodrome dans UN exactInput (meme batisseur que la 4 bis) ;
      *   la pool X/USDC est EPINGLEE (POOLS_PIVOTS_AERODROME, mesuree), celle de l action aussi ; le plan est SIMULE

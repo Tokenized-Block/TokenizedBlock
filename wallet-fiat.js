@@ -128,12 +128,42 @@ export function monnaiesLocales({ offertsAchat = [], table = POOLS_PIVOTS_AERODR
   return out;
 }
 
-/** BLOC 3 — mesure, pas encore route. Une ligne deja routee (dans la table du serveur) ou bannie n y est pas. Aucun bouton. */
-export function aVenir({ liste = A_VENIR, table = POOLS_PIVOTS_AERODROME } = {}) {
+/** 2026-10-27 : la raison d un verdict 'aero-new' qui ne passe pas (code de liquidite-actions.js jugerPool / verdictVenue) */
+const RAISONS_NEUVE = Object.freeze({
+  NON_MESURE: 'its newer-factory pool could not be read just now',
+  SANS_POOL: 'it has no USDC pool on the newer Aerodrome pool factory',
+  POOL_VIDE: 'its USDC pool on the newer Aerodrome pool factory is empty',
+  NON_COTEE: 'its pool does not quote a 10 USDC buy',
+  VENTE_NON_COTEE: 'its pool does not quote the sale back',
+  ECART: 'a 10 USDC buy costs more than 1 % above the pool price',
+  ECART_NEGATIF: 'the quote is above the pool’s own price (it does not come from this pool)',
+  ALLER_RETOUR: 'a round trip loses more than 2 %',
+  PROFONDEUR_NON_MESUREE: 'its usable depth was not measured',
+  LIQUIDITE_SOUS_SEUIL: 'selling 10,000 USDC worth would lose more than 2 % (too shallow)',
+});
+export const raisonStable = (code) => RAISONS_NEUVE[code] || 'it does not pass our rule';
+
+/**
+ * BLOC 3 — mesure, pas encore route. Une ligne deja routee (dans la table du serveur) ou bannie n y est pas.
+ * 2026-10-27 : `servis` = les lignes de /api/stables-neuve ({ adr, frais, bloc, verdict }). Une ligne dont la mesure du SERVEUR est
+ * fraiche ET passe devient `routee` (bouton : le Swap du Wallet, le plan re-cote avant la signature) ; sinon elle reste « measured,
+ * not routed », avec la raison mesuree quand le serveur en a une. Sans `servis` (non lu) : la phrase d avant, aucun bouton.
+ */
+export function aVenir({ liste = A_VENIR, table = POOLS_PIVOTS_AERODROME, servis = null } = {}) {
   const routees = new Set([...table.keys()].map((k) => k.split('|').find((t) => t !== USDC)));
-  return liste.filter((x) => !DEVISES_BANNIES.has(x.adr) && !routees.has(x.adr)).map((x) => ({
-    adr: x.adr, symbole: x.symbole, monnaie: x.monnaie, code: x.code,
-    phrase: x.symbole + ' (' + x.monnaie + ') — measured, not routed yet: it passes our rule (' + PHRASE_REGLE + ') only on the newer Aerodrome pool factory ('
-      + usdcLisible(x.usdcPool) + ' in the pool), which our router does not trade on yet; ' + (RAISON_ANCIEN[x.ancien] || 'it does not pass on the factory our router uses') + '.',
-  }));
+  const parAdr = new Map((Array.isArray(servis) ? servis : []).filter((s) => s && typeof s.adr === 'string').map((s) => [bas(s.adr), s]));
+  return liste.filter((x) => !DEVISES_BANNIES.has(x.adr) && !routees.has(x.adr)).map((x) => {
+    const base = { adr: x.adr, symbole: x.symbole, monnaie: x.monnaie, code: x.code };
+    const s = parAdr.get(bas(x.adr)), v = s && s.verdict;
+    if (s && s.frais === true && v && v.passe === true && /^0x[0-9a-f]{40}$/.test(bas(v.pool))) {
+      return { ...base, routee: true, bouton: 'Swap USDC to ' + x.symbole,
+        phrase: x.symbole + ' (' + x.monnaie + ') — routed through the newer Aerodrome pool factory (router 0x9ee3…d418): the server measured it at Base block '
+          + Number(s.bloc).toLocaleString('en-US') + ' and it passes our rule (' + PHRASE_REGLE + ')' + (usdcLisible(v.usdcPool) ? '; ' + usdcLisible(v.usdcPool) + ' in the pool' : '')
+          + '. USDC to ' + x.symbole + ' and back; the quote shown before you sign is what counts.' };
+    }
+    const mesure = s && s.frais === true && v ? ' The server’s fresh measurement (Base block ' + Number(s.bloc).toLocaleString('en-US') + '): ' + raisonStable(v.code) + '.' : '';
+    return { ...base, routee: false,
+      phrase: x.symbole + ' (' + x.monnaie + ') — measured, not routed yet: it passes our rule (' + PHRASE_REGLE + ') only on the newer Aerodrome pool factory ('
+        + usdcLisible(x.usdcPool) + ' in the pool), which our router does not trade on yet; ' + (RAISON_ANCIEN[x.ancien] || 'it does not pass on the factory our router uses') + '.' + mesure };
+  });
 }

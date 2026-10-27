@@ -53,6 +53,7 @@ import { candidatsActions, decouvrirActions, lireUnites, routeAction, routeServi
 /* 2026-10-25 — CHAQUE LIEU D ECHANGE D UNE ACTION (notre factory, la factory « aero » 0x9cb2… et son routeur 0x9ee3… prouves sur fork,
  *   Uniswap v4), cote par les memes regles ; le meilleur qui passe est servi (`routeAction.meilleure`) et le planificateur l emprunte */
 import { coterVenueCL, venuesServies, lireCodeQuoteurNouvelle, overrideQuoteur } from './liquidite-actions.js';
+import { STABLES_NEUVE, verdictStableNeuve, STABLE_NEUVE_MAX_MS, STABLE_NEUVE_TOUR_MS } from './stables-neuve.js';
 import { QUOTEUR_AERODROME_CL as QUOTEUR_AERODROME_CL_LIQ } from './rolls-en-action.js';
 import { estDeviseConnue } from './pool-sans-hook.js';
 /* le rail fiat->Base : validation pure + transport, et la signature isolee dans son propre module */
@@ -1003,6 +1004,38 @@ function venueActionServie(a) {
 }
 /** le code du quoter 0x514c… patche pour la factory 'aero-new' (immuable : lu une fois ; null = pas encore lu, false jamais garde) */
 let codeQuoteurLiq = null;
+
+/* ══ 2026-10-27 — LA MESURE DES STABLES EN MONNAIE LOCALE SUR 'aero-new' (stables-neuve.js) ═══════════════════════════════════
+ *   CADD, MXNB, USDT : leur pool 'aero-new' est cotee toutes les 5 min, au bloc epingle (10 sous la tete), par coterVenueCL et la
+ *   regle des actions (verdictVenue). Le planificateur ne les route que sur un verdict QUI PASSE et de moins de 15 min
+ *   (porteStableNeuve). Une lecture ratee garde le verdict NON_MESURE (rien d affirme) ; l ancienne mesure perime seule. */
+const stablesNeuve = new Map(); /* adr -> { v: verdictServi, t, bloc } */
+let stablesNeuveEnVol = false;
+async function mesurerStablesNeuve() {
+  if (stablesNeuveEnVol) return;
+  stablesNeuveEnVol = true;
+  try {
+    const bloc = parseInt(await rpcRails('eth_blockNumber', []), 16) - 10;
+    if (!(Number.isSafeInteger(bloc) && bloc > 0)) return;
+    const tag = '0x' + bloc.toString(16);
+    if (codeQuoteurLiq === null) codeQuoteurLiq = await lireCodeQuoteurNouvelle(rpcServeur);
+    if (!codeQuoteurLiq) return;
+    const appel = (to, data) => rpcRails('eth_call', [{ to, data }, tag]);
+    const quoteur = String(QUOTEUR_AERODROME_CL_LIQ).toLowerCase();
+    const appelDevis = (to, data) => (String(to).toLowerCase() === quoteur ? rpcRails('eth_call', [{ to, data }, tag, overrideQuoteur(codeQuoteurLiq)]) : appel(to, data));
+    for (const adr of STABLES_NEUVE.keys()) {
+      try {
+        const cote = await coterVenueCL({ appel, appelDevis, venue: 'aero-new', adr, cachePools: poolsActionsCache });
+        stablesNeuve.set(adr, { v: verdictStableNeuve(cote), t: Date.now(), bloc });
+      } catch (_) { /* rien d affirme : la mesure d avant perime seule */ }
+    }
+  } catch (e) { console.log('[stables-neuve] pass interrupted: ' + String((e && e.message) || e).slice(0, 120)); }
+  finally { stablesNeuveEnVol = false; }
+}
+/** ce que le serveur garde pour un stable (la porte juge la fraicheur) */
+function venueStableServie(a) { return stablesNeuve.get(String(a || '').toLowerCase()) || null; }
+setTimeout(() => { void mesurerStablesNeuve(); }, 45000).unref?.();
+setInterval(() => { void mesurerStablesNeuve(); }, STABLE_NEUVE_TOUR_MS).unref?.();
 
 async function alternativeAerodrome(jeton, famille) {
   const cle = String(jeton || '').toLowerCase();
@@ -3146,7 +3179,7 @@ async function faireRail(demande) {
    *   eth_call a sa liste large et passe le reste a rpcServeur (RPC_LIST : base.org, +1 231 refus de debit en 23 min mesures, et
    *   developer-access, DNS mort) ; rpcNaissance envoie eth_simulateV1 a RPC_SIMULATION (base.org, publicnode, drpc : les trois
    *   l executent, mesure depuis une page le 2026-10-10) et TOUT LE RESTE a rpcRails, comme avant. */
-  const r = await planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie });
+  const r = await planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie, venueStable: venueStableServie });
   if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
   return r;
 }
@@ -7097,6 +7130,17 @@ function traiterRequete(req, res) {
   /* ══ NOS RAILS, EXPOSES : /api/rails/plan?de=&vers=&montant=&compte= (2026-10-03) ═══════════════════════════════════
    * ⛔ RIEN N EST SIGNE ICI : la reponse porte des appels NON SIGNES, construits par les planificateurs de l app. Le wallet
    *   de l agent les signe, dans l ordre de `aSigner`. Le budget ne se compte qu AU MOMENT DU RESEAU. */
+  /* 2026-10-27 — la mesure servie des stables 'aero-new' (stables-neuve.js), pour la carte du Wallet : lecture de la Map, aucun reseau */
+  if (chemin === '/api/stables-neuve') {
+    const lignes = [...STABLES_NEUVE].map(([adr, s]) => {
+      const r = stablesNeuve.get(adr);
+      const frais = !!(r && Number.isFinite(r.t) && Date.now() - r.t <= STABLE_NEUVE_MAX_MS);
+      return { adr, symbole: s.symbole, frais, t: r ? r.t : null, bloc: r ? r.bloc : null, verdict: r ? r.v : null };
+    });
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+    res.end(JSON.stringify({ ok: true, maxAgeMs: STABLE_NEUVE_MAX_MS, stables: lignes }));
+    return;
+  }
   if (chemin === '/api/rails/plan') {
     const rendreR = (code, corps, extra = {}) => {
       res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store',
@@ -7136,7 +7180,7 @@ function traiterRequete(req, res) {
      *   PROPRES corps, exactement comme le client les jugerait (meme chargeur, meme fraicheur) : index incomplet ou tete
      *   figee = sources non lues = tout B20 inconnu reste un block (fail-closed), et la reponse le DIT. */
     try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
-    planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie }).then((r) => { /* rpcNaissance : voir faireRail */
+    planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie, venueStable: venueStableServie }).then((r) => { /* rpcNaissance : voir faireRail */
       if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
       if (!sonde) {
         if (r.etat === 'PRET') railsCompteurs.prets += 1;

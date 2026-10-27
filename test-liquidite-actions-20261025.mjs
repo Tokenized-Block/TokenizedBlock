@@ -207,7 +207,7 @@ await cas('coterVenueCL : la cle de cache est celle de routeAction, une pool tro
 
 await cas('le serveur, le Market et le panneau sont branches', () => {
   const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
-  assert.equal((srv.match(/reference: lireReferenceServeur, venueAction: venueActionServie \}/g) || []).length, 2, 'les deux appels du planificateur');
+  assert.equal((srv.match(/reference: lireReferenceServeur, venueAction: venueActionServie, venueStable: venueStableServie \}/g) || []).length, 2, /* 2026-10-27 : + venueStable (stables-neuve.js) */ 'les deux appels du planificateur');
   /* 2026-10-25 : registre + strictement meilleur = venuesServies, la MEME fonction que la mesure (test-liquidite-correctifs, D4) */
   assert.match(srv, /if \(cN\.etat === 'OK'\) Object\.assign\(servi, venuesServies\(\{ route: servi, coteNeuve: cN, admise: estDeviseConnue\(p\.adr\) \}\)\);/);
   const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
