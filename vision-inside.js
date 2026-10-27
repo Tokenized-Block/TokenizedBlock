@@ -14,6 +14,17 @@ import { beatSentence, apportDe, interne, SOURCES_INTERIEUR, humeurCourte } from
 export const VERSION_INSIDE = 'tblock-brain-view-inside/1';
 const finite = (x) => typeof x === 'number' && Number.isFinite(x);
 const r3 = (x) => Math.round(x * 1000) / 1000;
+/** The scene background (owner, 2026-10-27): the viewer's OWN skin background for this block (`skin.fond`, a CSS colour read from
+ *  the palette posed on the window), else plain black. ⛔ It takes NO mood: the mood never paints the background. */
+export const SCENE_BLACK = '#000000';
+export function sceneBackground(skin) {
+  const f = skin && typeof skin.fond === 'string' ? skin.fond.trim() : '';
+  return /^(#[0-9a-f]{3,8}|rgba?\([\d\s.,/%]+\))$/i.test(f) ? f : SCENE_BLACK;
+}
+/** The mood FLASH, 0..1, timed with the beat: strongest at its start, gone by 40 % of it; static 0.5 with reduced motion. */
+export function moodFlash(progress, animated) {
+  return animated ? Math.max(0, 1 - (finite(progress) ? progress : 1) * 2.5) : 0.5;
+}
 
 export const SENSATIONS = Object.freeze([
   Object.freeze({ key: 'achats', field: 'nouveaux.achats', effect: 'buy', direction: 'front', temperature: 'warm', shape: 'glow' }),

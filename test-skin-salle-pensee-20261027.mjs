@@ -22,7 +22,8 @@ const beat = (tick, o = {}) => ({ tick, phase: 'EXCITE', spikes: 10, virage: 0, 
 const histo = [beat(1, { spikes: 8 }), beat(2, { spikes: 10 }), beat(3, { spikes: 12 }), beat(4, { spikes: 10, vitesse: 0.3 }),
   beat(5, { spikes: 26, virage: -0.143, vitesse: 0.65, delta: 0.012, nouveaux: N({ achats: 2, detenteurs: 1 }) })];
 const p = P.pensee(histo, 4, { voisins: 3 });
-ok(p && p.clauses.length >= 2 && p.clauses.length <= 3, '2-3 sentences (' + (p && p.clauses.length) + ')');
+/* 2026-10-27 (owner, later): the thought now covers its whole beat (test-pensee-lexique-20261027.mjs) — 2 to 5 sentences */
+ok(p && p.clauses.length >= 2 && p.clauses.length <= 5, '2-5 sentences (' + (p && p.clauses.length) + ')');
 ok(p.text === P.pensee(histo, 4, { voisins: 3 }).text, 'same beat -> same text');
 ok(p.text === p.clauses.map((c) => c.text).join(' '), 'the text is exactly its clauses');
 ok(/^[A-Z0-9]/.test(p.text) && /\bI\b|\bmy\b|\bme\b/.test(p.text), 'first person: ' + p.text);
@@ -30,14 +31,14 @@ ok(/^[A-Z0-9]/.test(p.text) && /\bI\b|\bmy\b|\bme\b/.test(p.text), 'first person
 const nums = (s) => (s.match(/\d+(?:\.\d+)?/g) || []).map(Number);
 for (const c of p.clauses) {
   ok(Array.isArray(c.from) && c.from.length > 0, 'clause traced: ' + c.text);
-  const vals = c.from.flatMap((f) => (typeof f.value === 'number' ? [f.value, Math.round(f.value * 100) / 100, Math.round(Math.abs(f.value) * 1000) / 10] : []));
+  const vals = c.from.flatMap((f) => (typeof f.value === 'number' ? [f.value, Math.round(f.value * 100) / 100, Math.round(f.value * 1000) / 1000, Math.round(Math.abs(f.value) * 1000) / 10] : []));
   for (const n of nums(c.text)) ok(n === 128 || vals.some((v) => Math.abs(v - n) < 1e-9), 'number ' + n + ' comes from a datum in: ' + c.text);
   /* each traced key names a real field of the beat (or the history / page datum it was computed from) */
-  for (const f of c.from) ok(/^(phase|nouveaux\.\w+|delta|nothing|spikes|average|averageOver|virage|vitesse|vitesseAvant|voisins)$/.test(f.key), 'known datum ' + f.key);
+  for (const f of c.from) ok(/^(phase|nouveaux\.\w+|delta|deltaHumeur|tirsCurieux|nourriture|nothing|spikes|average|averageOver|nearThreshold|memoire|memoireAvant|virage|vitesse|vitesseAvant|gauche_hz|droite_hz|role|reveil|voisins)$/.test(f.key), 'known datum ' + f.key);
 }
 ok(/2 buys reached me/.test(p.text) && /a new holder reached me/.test(p.text) && /warmed \(\+1\.2 %\)/.test(p.text), 'inputs of THIS beat named: ' + p.clauses[0].text);
-ok(/26 of my 128 neurons fired — well above my average of 10 over my last 4 beats/.test(p.text), 'fired vs its recent average');
-ok(/I turn left and speed up from 0\.3 to 0\.65; my 3 map neighbours never reach my neurons/.test(p.text), 'steering, speed vs previous, neighbours not read');
+ok(/26 of my 128 neurons \w+ — well above my average of 10 over my last 4 beats/.test(p.text), 'fired vs its recent average');
+ok(/I (turn|lean|veer) left and (speed up|quicken|pick up pace) from 0\.3 to 0\.65\./.test(p.text) && /3 map neighbours are around me, but none reach my neurons/.test(p.text), 'steering, speed vs previous, neighbours not read: ' + p.text);
 ok(p.reading.key === 'restless' && p.reading.from.some((f) => f.key === 'delta'), 'restless = high firing + rising life');
 /* readings: each rule from real state */
 const r = (h, i) => P.lecture(h, i).key;
@@ -53,7 +54,7 @@ const p0 = P.pensee([beat(1)], 0);
 ok(/too few earlier beats/.test(p0.text) && !/average/.test(p0.text), 'no history -> no comparison is invented');
 ok(P.pensee([], 0) === null && P.pensee(histo, 9) === null, 'no beat -> no thought');
 const pm = P.pensee([beat(1, { phase: 'MORT', spikes: 0 })], 0);
-ok(pm.clauses.length === 1 && /creator holds none of me/.test(pm.text), 'dead: only what is true');
+ok(pm.clauses.length === 2 && /creator holds none of me/.test(pm.text) && !/reached me|turn|speed|neighbour/.test(pm.text), 'dead: only what is true');
 const src = readFileSync(new URL(process.env.SP_PENSEE || 'pensee-cerveau.js', DIR), 'utf8');
 ok(!/fetch\(|https?:\/\/|anthropic|openai|Math\.random|Date\.now/.test(src), 'no network, no LLM, no randomness, no clock in the thought');
 /* cerveau.js v1 untouched (moods, rules, fingerprint) */
@@ -120,7 +121,7 @@ ok(/\$\('#bvVueDehors'\)\.addEventListener\('click', \(\) => bvChangerVue\('deho
 const ov = app.slice(app.indexOf('function ouvrirVision('), app.indexOf('function bvAdvance('));
 ok(/bvOublierCible\(\)/.test(ov), 'opening the window releases a pin from a previous opening');
 const p3 = app.slice(app.indexOf('function bvPaint3D('), app.indexOf('function bvStartLoop('));
-ok(/ctx\.fillStyle = '#0b0d12';\n\s*ctx\.fillRect\(0, 0, L, H\);/.test(p3) && !/fillStyle = lum\.neutral \? '#0b0d12' : 'hsl\(/.test(p3), 'the scene background is the same neutral night for every mood (no gold "skin" background)');
+ok(/ctx\.fillStyle = sceneBackground\(vision\.fondScene\);\n\s*ctx\.fillRect\(0, 0, L, H\);/.test(p3) && !/fillStyle = lum\.neutral \? '#0b0d12' : 'hsl\(/.test(p3), 'the scene background is black / the owned skin, never the mood (no gold "skin" background)');
 const pv = app.slice(app.indexOf('function peindreVision('), app.indexOf('/* ══ THE 3D SCENE'));
 ok(/if \(vision\.skinAdr !== cible\.adr\) \{[^\n]*\n[^\n]*removeProperty/.test(pv), 'another block shown -> the previous palette is removed and the new one read');
 ok(/penseeVision\(histo, iShown/.test(pv) && /'Reading of its state: '/.test(pv) && /not its engine mood/.test(pv), 'the thought is painted, its reading labelled as a reading');
@@ -133,13 +134,13 @@ if (!process.env.SP_APP && !process.env.SP_PENSEE && !process.env.SP_SALLE) {
   const me = fileURLToPath(import.meta.url), here = fileURLToPath(DIR);
   const pen = readFileSync(new URL('pensee-cerveau.js', DIR), 'utf8'), sal = readFileSync(new URL('salle-encheres.js', DIR), 'utf8');
   const mutants = [
-    ['SP_PENSEE', 'mut-pensee-invente.tmp.mjs', pen.replace("clauses.push({ text: b.text,", "clauses.push({ text: 'I feel 3 whales watching me.', from: [{ key: 'nothing', value: null }] }); clauses.push({ text: b.text,")],
-    ['SP_PENSEE', 'mut-pensee-nombre.tmp.mjs', pen.replace("' over my last ' + m.n + ' beats.'", "' over my last ' + (m.n + 2) + ' beats.'")],
+    ['SP_PENSEE', 'mut-pensee-invente.tmp.mjs', pen.replace("clauses.push({ text: cause.text,", "clauses.push({ text: 'I feel 3 whales watching me.', from: [{ key: 'nothing', value: null }] }); clauses.push({ text: cause.text,")],
+    ['SP_PENSEE', 'mut-pensee-nombre.tmp.mjs', pen.replace("' over my last ' + m.n + ' beats'", "' over my last ' + (m.n + 2) + ' beats'")],
     ['SP_PENSEE', 'mut-pensee-horloge.tmp.mjs', pen.replace("return { version: VERSION_PENSEE, tick: vu.tick,", "return { version: VERSION_PENSEE, tick: vu.tick + (Date.now() % 2),")],
     ['SP_SALLE', 'mut-salle-offre.tmp.mjs', sal.replace("'No bid yet — it opens at '", "'The highest bid is ' + M(podium.prix, podium.devise) + ' — it opens at '")],
     ['SP_SALLE', 'mut-salle-lu.tmp.mjs', sal.replace('if (!lu) return {', 'if (false) return {')],
     ['SP_APP', 'mut-app-pin.tmp.html', app.replace('bvOublierCible(); vision.vue = vue;', 'vision.vue = vue;')],
-    ['SP_APP', 'mut-app-or.tmp.html', app.replace("  ctx.fillStyle = '#0b0d12';\n  ctx.fillRect(0, 0, L, H);", "  ctx.fillStyle = lum.neutral ? '#0b0d12' : 'hsl(' + th + ' 45% ' + (6 + 10 * lum.strength * env).toFixed(1) + '%)';\n  ctx.fillRect(0, 0, L, H);")],
+    ['SP_APP', 'mut-app-or.tmp.html', app.replace("  ctx.fillStyle = sceneBackground(vision.fondScene);\n  ctx.fillRect(0, 0, L, H);", "  ctx.fillStyle = lum.neutral ? '#0b0d12' : 'hsl(' + th + ' 45% ' + (6 + 10 * lum.strength * env).toFixed(1) + '%)';\n  ctx.fillRect(0, 0, L, H);")],
     ['SP_APP', 'mut-app-signe.tmp.html', app.replace("$('#skinOuvrirMarche').addEventListener('click', () => void ouvrirSalle());", "$('#skinOuvrirMarche').addEventListener('click', () => allerAuMarcheSkins());")],
   ];
   let dead = 0;

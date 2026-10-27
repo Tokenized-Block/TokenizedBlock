@@ -1166,7 +1166,22 @@ dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;he
 @keyframes skMarteau{0%,100%{transform:rotate(0)}40%{transform:rotate(-28deg)}60%{transform:rotate(6deg)}}
 .skCrieur .skMarteau{transform-origin:118px 96px;transform-box:view-box}
 .skCrieur.tape .skMarteau{animation:skMarteau .6s ease-in-out 2}
-@media (prefers-reduced-motion:reduce){.skCrieur.tape .skMarteau{animation:none}}
+/* 2026-10-27 (owner): the auctioneer's idle life — CSS only; the idle gavel lift (-7deg) never strikes like the real tap (-28deg x2) */
+@keyframes skSouffle{0%,100%{transform:translateY(0) scaleY(1)}50%{transform:translateY(.6px) scaleY(.992)}}
+@keyframes skCligne{0%,93%,100%{transform:scaleY(0)}95.5%{transform:scaleY(1)}}
+@keyframes skRegard{0%,22%,100%{transform:translateX(0)}28%,44%{transform:translateX(-2.4px)}52%,70%{transform:translateX(2.4px)}76%{transform:translate(0,-.8px)}}
+@keyframes skAjuste{0%,88%,100%{transform:translateY(0)}91%,95%{transform:translateY(-1.6px)}}
+@keyframes skRepos{0%,84%,100%{transform:rotate(0)}89%{transform:rotate(-7deg)}94%{transform:rotate(-2deg)}}
+@keyframes skParle{0%,100%{transform:scaleY(1)}25%,75%{transform:scaleY(1.12)}50%{transform:scaleY(.94)}}
+.skCrieur .skSouffle{transform-origin:70px 168px;transform-box:view-box;animation:skSouffle 4.2s ease-in-out infinite}
+.skCrieur .skPaupieres{transform-origin:70px 51px;transform-box:view-box;transform:scaleY(0);animation:skCligne 5.3s linear infinite}
+.skCrieur .skYeux{transform-box:view-box;animation:skRegard 11s ease-in-out infinite}
+.skCrieur .skLunettes{transform-box:view-box;animation:skAjuste 17s ease-in-out infinite}
+.skCrieur .skMarteauRepos{transform-origin:118px 96px;transform-box:view-box;animation:skRepos 13s ease-in-out infinite}
+.skCrieur .skBouche{transform-origin:70px 72px;transform-box:view-box}
+.skCrieur.parle .skBouche{animation:skParle .45s ease-in-out 3}
+#skPop.bcReduit .skCrieur *,.skCrieur.pause *{animation-play-state:paused!important}
+@media (prefers-reduced-motion:reduce){.skCrieur.tape .skMarteau,.skCrieur *,.skCrieur.parle .skBouche{animation:none!important}}
 @media (max-width:420px){.skStage{grid-template-columns:84px 1fr}}
 /* 2026-10-27 (owner: "the section tabs render as vertical, rotated, cramped text — unreadable"). MEASURED in game59 at 1280 px:
  *   9 spines of 24 x 96/108 px, writing-mode vertical-rl + rotate(180deg), 11 px text, a 118 px shelf. Now ONE horizontal row of
@@ -4570,19 +4585,27 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="skStage">
       <!-- an ORIGINAL drawing (not any brand's mascot): an old-style auctioneer — top hat, round spectacles, moustache, bow tie, gavel -->
       <svg class="skCrieur" id="skCrieur" viewBox="0 0 150 170" role="img" aria-label="The auctioneer, gavel in hand">
+        <!-- 2026-10-27 (owner): he LIVES even with no auction — breathing, blinking, looking around the room, adjusting his
+             spectacles, a small idle lift of the gavel, and a gesture when he says a new line. CSS only (no JS frame loop); paused
+             when the window is folded or the page hidden; none under prefers-reduced-motion. ⛔ The idle lift never strikes: only
+             a bid change read on chain plays the real tap (.tape). Nothing here stands for a bid or an event. -->
+        <g class="skSouffle">
         <rect x="48" y="2" width="44" height="36" rx="4" fill="#15131c"/><rect x="36" y="34" width="68" height="8" rx="4" fill="#15131c"/>
         <rect x="48" y="26" width="44" height="6" fill="#8b2b3a"/>
         <circle cx="70" cy="62" r="22" fill="#f1c9a5"/>
-        <circle cx="61" cy="57" r="6" fill="none" stroke="#3a3326" stroke-width="2"/><circle cx="79" cy="57" r="6" fill="none" stroke="#3a3326" stroke-width="2"/>
-        <path d="M67 57h6" stroke="#3a3326" stroke-width="2"/><circle cx="61" cy="57" r="1.8" fill="#222"/><circle cx="79" cy="57" r="1.8" fill="#222"/>
-        <path d="M52 70c6-6 12-4 18 0c6-4 12-6 18 0c-5 7-12 5-18 1c-6 4-13 6-18-1z" fill="#e8e2d6"/>
-        <path d="M64 77q6 4 12 0" stroke="#7a3b2e" stroke-width="2" fill="none"/>
+        <g class="skYeux"><circle cx="61" cy="57" r="1.8" fill="#222"/><circle cx="79" cy="57" r="1.8" fill="#222"/></g>
+        <g class="skPaupieres"><rect x="55" y="51" width="12" height="12" rx="6" fill="#e3b892"/><rect x="73" y="51" width="12" height="12" rx="6" fill="#e3b892"/></g>
+        <g class="skLunettes"><circle cx="61" cy="57" r="6" fill="none" stroke="#3a3326" stroke-width="2"/><circle cx="79" cy="57" r="6" fill="none" stroke="#3a3326" stroke-width="2"/>
+          <path d="M67 57h6" stroke="#3a3326" stroke-width="2"/></g>
+        <g class="skBouche"><path d="M52 70c6-6 12-4 18 0c6-4 12-6 18 0c-5 7-12 5-18 1c-6 4-13 6-18-1z" fill="#e8e2d6"/>
+          <path d="M64 77q6 4 12 0" stroke="#7a3b2e" stroke-width="2" fill="none"/></g>
         <path d="M36 168l6-64q28-14 56 0l6 64z" fill="#1f2a44"/>
         <path d="M58 92l12 30 12-30z" fill="#f4f1ea"/><path d="M60 96l10 10 10-10-10 6z" fill="#8b2b3a"/>
         <path d="M62 88l8 6 8-6-8 3z" fill="#c9a227"/>
-        <g class="skMarteau"><path d="M100 104l18-8" stroke="#1f2a44" stroke-width="9" stroke-linecap="round"/>
+        </g>
+        <g class="skMarteau"><g class="skMarteauRepos"><path d="M100 104l18-8" stroke="#1f2a44" stroke-width="9" stroke-linecap="round"/>
           <rect x="112" y="64" width="8" height="40" rx="3" fill="#7a4a22" transform="rotate(-25 116 84)"/>
-          <rect x="104" y="58" width="26" height="14" rx="4" fill="#5b3415" transform="rotate(-25 117 65)"/></g>
+          <rect x="104" y="58" width="26" height="14" rx="4" fill="#5b3415" transform="rotate(-25 117 65)"/></g></g>
         <rect x="18" y="130" width="104" height="38" rx="4" fill="#5b3415"/><rect x="22" y="134" width="96" height="6" rx="2" fill="#7a4a22"/>
         <text x="70" y="158" text-anchor="middle" font-size="12" font-family="Georgia,serif" fill="#f3d27a">LOT</text>
       </svg>
@@ -5019,7 +5042,7 @@ import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSIO
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
 import { skinDuBlock, paletteSkin, melange as melangeSkin, VARS_SKIN } from './vision-skin.js';
 import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
-  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, labelBox, beatHeader, replayPosition, nextPinned, leftWindowText } from './vision-inside.js';
+  projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, labelBox, beatHeader, replayPosition, nextPinned, leftWindowText, sceneBackground, moodFlash } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
 import { fieldText as inspectFieldText } from './inspect-block.js';
 import { creerLive, ajouterTuile, retirerTuile, nourrirLive, etiquetteTuile, cadreTuile, maxTuiles as maxTuilesLive, bornerTailleLive, lireTailleLive, CLE_TAILLE_LIVE } from './vision-live.js';
@@ -6904,6 +6927,8 @@ function peindreSalle() {
   const a = annonceSalle({ skins: skm.liste || [], lu: !!skm.liste, moi, t, montant: bcMontantSkin, nomBlock: nomBlockSalle });
   window.__TB_SALLE__ = a;
   bulle.replaceChildren(...a.lignes.map((l) => bcEl('p', { text: l.text })));
+  /* he gestures when he SAYS A NEW LINE (the text read on chain changed) — a gesture, never a bid */
+  { const dit = a.lignes.map((l) => l.text).join('\n'); if (salle.dit !== dit) { salle.dit = dit; const c = $('#skCrieur'); c.classList.remove('parle'); void c.getBoundingClientRect(); c.classList.add('parle'); } }
   const p = a.podium;
   podium.hidden = !p; podium.replaceChildren();
   if (p) {
@@ -6950,7 +6975,10 @@ async function ouvrirSalle() {
 }
 $('#skinOuvrirMarche').addEventListener('click', () => void ouvrirSalle());
 $('#skFermer').addEventListener('click', () => $('#skPop').close());
-$('#skPop').addEventListener('close', () => { clearInterval(salle.minuteur); salle.minuteur = null; });
+$('#skPop').addEventListener('close', () => { clearInterval(salle.minuteur); salle.minuteur = null; salle.dit = null; });
+/* his idle life pauses while the page is hidden (folded = #skPop.bcReduit, in CSS) */
+document.addEventListener('visibilitychange', () => { const c = $('#skCrieur'); if (c) c.classList.toggle('pause', document.hidden); });
+$('#skCrieur').addEventListener('animationend', (e) => { if (e.animationName === 'skParle') e.currentTarget.classList.remove('parle'); });
 $('#skPop').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); $('#skPop').close(); } });
 $('#skMint').addEventListener('click', ouvrirMintSkin);
 $('#skVersMarket').addEventListener('click', () => { $('#skPop').close(); allerAuMarcheSkins(); });
@@ -26459,6 +26487,7 @@ function peindreVision() {
   if (vision.book === 'inspect') bvPaintInspect();
   vision.c = c; vision.vu = vuShown; vision.capMap = capMap; vision.historyShown = histo; vision.targetH = h; vision.targetState = cible.etat || null; vision.targetFacts = cible.faits || null;
   vision.pulse = pulseOf(vuShown, { reduced: bvReduit() });
+  { const dlv = $('#bvPop'); vision.fondScene = dlv && /^#\d+$/.test(dlv.dataset.skin || '') ? { fond: getComputedStyle(dlv).getPropertyValue('--creux') } : null; }
   /* game57 #4c (a) + #4d: ONE beat text — the header's — also given to the overlay. Following = the live beat (item 6's
    *   helper, the number Live shows); a replay says "Replay: beat N · live M"; Take control names the beat of its snapshot */
   const liveBeat = displayedBeat(pageBrains, cible.adr, dernier);
@@ -26485,10 +26514,10 @@ function peindreVision() {
    *   real ones listed under "Around it" (c.contexte.voisins); nothing else enters */
   {
     const iShown = vuShown ? histo.indexOf(vuShown) : -1;
-    const p = iShown >= 0 ? penseeVision(histo, iShown, { voisins: Array.isArray(c.contexte.voisins) ? c.contexte.voisins.length : null }) : null;
+    const p = iShown >= 0 ? penseeVision(histo, iShown, { voisins: Array.isArray(c.contexte.voisins) ? c.contexte.voisins.length : null, etat: cible.etat || null, faits: cible.faits || null }) : null;
     vision.pensee = p; window.__TB_BRAIN_PENSEE__ = p;
     $('#bvPenseeTexte').textContent = p ? p.text : 'No beat recorded here yet — I have nothing to think about.';
-    $('#bvLecture').textContent = p && p.reading ? 'Reading of its state: ' + p.reading.word + ' — ' + p.reading.why + '. (A reading of the numbers below, not its engine mood: ' + p.mood + '.)' : '';
+    $('#bvLecture').textContent = p && p.reading ? 'Reading of its state: ' + p.reading.word + ' (' + p.reading.key + ', ' + p.reading.tier + ') — ' + p.reading.why + '. (A reading of the numbers below, not its engine mood: ' + p.mood + '.)' : '';
   }
   if (!vision.loop) bvPaint3D(performance.now());
   window.__TB_BRAIN_VISION__ = c;
@@ -26545,9 +26574,13 @@ function bvPaint3D(t) {
   /* ⛔ 2026-10-27 (owner, "Outside" bug, AAPLc): the WHOLE background used to be painted in the mood's hue — excited = hue 45, a
    *   dark gold (hsl(45 45% 6..16%)) that is the very colour family of a skin background (BlockSkins: hsl(fond 45% 9%)), so a viewer
    *   with NO skin saw a "skin-coloured" scene, most of all Outside, where nothing covers the background. The background is now the
-   *   same neutral night for every mood and every viewer; the mood still lights the neurons that fired, the inputs and the edge pulse. */
+   *   same neutral night for every mood and every viewer; the mood still lights the neurons that fired, the inputs and the edge pulse.
+   * ⛔ 2026-10-27 (owner, later): plain BLACK when the viewer owns no skin for this block; with an owned skin, that skin's own
+   *   background (vision.fondScene, read from the palette posed on #bvPop). NEVER the mood: the mood shows only as FLASHES of its hue
+   *   on the fired neurons, the read inputs and the edge, timed with the beat (moodFlash; static with reduced motion). */
   void env;
-  ctx.fillStyle = '#0b0d12';
+  const flash = moodFlash(progress, plan.light !== 'static');
+  ctx.fillStyle = sceneBackground(vision.fondScene);
   ctx.fillRect(0, 0, L, H);
   const effects = effectsOf(vu);
   const strength = (name) => { const e = effects.find((x) => x.effect === name); return e ? e.intensity : 0; };
@@ -26603,6 +26636,7 @@ function bvPaint3D(t) {
       const r = Math.max(2.5, 5 * q.k);
       ctx.fillStyle = o.read ? 'hsl(' + (lum.neutral ? teinteH() : th) + ' 85% 70%)' : 'rgb(150 160 190 / .35)';
       ctx.beginPath(); ctx.arc(q.x, q.y, r, 0, Math.PI * 2); ctx.fill();
+      if (o.read && !lum.neutral && flash > 0) { ctx.strokeStyle = 'hsl(' + th + ' 90% 70% / ' + (0.6 * flash).toFixed(3) + ')'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(q.x, q.y, r * (1.4 + flash), 0, Math.PI * 2); ctx.stroke(); }
       bvLabelItem(labelItems, ctx, 'input:' + o.key, [String(o.label).slice(0, 18), String(o.text).slice(0, 22)], q.x, q.y - r - 28, q.k, o.read);
     }
   }
@@ -26620,6 +26654,7 @@ function bvPaint3D(t) {
     if (on) { ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 10; }
     ctx.beginPath(); ctx.arc(q.x, q.y, on ? r * 1.5 : r, 0, Math.PI * 2); ctx.fill();
     ctx.shadowBlur = 0;
+    if (on && !lum.neutral && flash > 0) { ctx.strokeStyle = 'hsl(' + th + ' 95% 72% / ' + (0.55 * flash).toFixed(3) + ')'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(q.x, q.y, r * (1.6 + 1.4 * flash), 0, Math.PI * 2); ctx.stroke(); }
   }
   /* game57 #4b (d): the centre ring = what the camera looks at; its overlay says what it really is */
   vision.aimPoints = aimPoints;
@@ -26648,7 +26683,7 @@ function bvPaint3D(t) {
   /* the pulse at the screen edge: strength = share of neurons that fired; static with reduced motion */
   const pl = vision.pulse || pulseOf(vu, { reduced });
   if (pl.strength > 0) {
-    const beatK = pl.animated ? Math.max(0, 1 - progress * 2.5) : 0.5;
+    const beatK = pl.animated ? flash : 0.5;
     ctx.strokeStyle = 'hsl(' + (lum.neutral ? 0 : th) + ' ' + (lum.neutral ? 0 : 80) + '% 70% / ' + (0.15 + 0.6 * pl.strength * beatK).toFixed(3) + ')';
     ctx.lineWidth = 2 + 8 * pl.strength * beatK; ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, L - ctx.lineWidth, H - ctx.lineWidth);
   }
