@@ -51,9 +51,12 @@ const skins = [
 ok(S.skinDuBlock([], UNIT, null) === null, 'no skin on chain -> no skin');
 ok(S.skinDuBlock(skins, '0x' + 'c'.repeat(40), null) === null, 'a block no skin names -> no skin');
 ok(S.skinDuBlock(null, UNIT, null) === null, 'a list not read -> no skin (never a guess)');
-ok(S.skinDuBlock(skins, UNIT, null).tokenId === 3n, 'no viewer: the newest skin minted for this block');
+/* ⛔ Owner (Phil, 2026-10-27): "a skin belongs to the user who owns it" — another account's skin is never shown */
+ok(S.skinDuBlock(skins, UNIT, null) === null, 'no wallet: no skin (another account\'s skin is never shown)');
+ok(S.skinDuBlock(skins, UNIT, '0x' + 'd'.repeat(40)) === null, 'a viewer who holds no skin for this block sees none (BOB\'s and ALICE\'s stay theirs)');
 ok(S.skinDuBlock(skins, UNIT, ALICE).tokenId === 1n, 'the viewer who holds a skin for this block sees theirs');
-ok(S.skinDuBlock(skins, OTHER.toUpperCase().replace('0X', '0x'), null).tokenId === 2n, 'block address compared case-insensitively');
+ok(S.skinDuBlock(skins, UNIT, BOB).tokenId === 3n, 'each holder sees THEIR skin of the same block');
+ok(S.skinDuBlock(skins, OTHER.toUpperCase().replace('0X', '0x'), BOB.toUpperCase().replace('0X', '0x')).tokenId === 2n, 'addresses compared case-insensitively');
 /* the colours are the CONTRACT's (BlockSkins.sol#_svg): bg hsl(h6,45%,9%), ring hsl(h1,90%,62%), hsl(h3,90%,70%), edges hsl(h4,90%,60%) */
 ok(JSON.stringify(S.hslVersRgb([0, 90, 62])) === '[245,71,71]', 'hsl(0,90%,62%) = rgb(245,71,71) (computed by hand)');
 ok(JSON.stringify(S.hslVersRgb([0, 0, 100])) === '[255,255,255]' && JSON.stringify(S.hslVersRgb([120, 100, 25])) === '[0,128,0]', 'hsl->rgb reference points');

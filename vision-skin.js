@@ -13,17 +13,16 @@ const bas = (x) => String(x || '').toLowerCase();
 const teinte = (n) => (Number.isInteger(n) && n >= 0 && n <= 359 ? n : null);
 export const AA_TEXTE = 4.5;
 
-/** The skin a block WEARS, from the on-chain list: the viewer's own skin for this block when they hold one (blockskins.js#skinPortee
- *  rule), otherwise the newest skin minted for this block (highest tokenId). Null when no skin names this block. */
+/** The skin a block wears FOR THIS VIEWER, from the on-chain list: the viewer's own skin for this block (blockskins.js#skinPortee rule;
+ *  the newest one if they hold several). ⛔ Owner (Phil, 2026-10-27): "a skin belongs to the user who owns it" — another account's
+ *  skin is NEVER shown (same doctrine as the Map's poserMesSkins). No wallet, or no skin of theirs for this block -> null (default palette). */
 export function skinDuBlock(skins, block, moi) {
   const b = bas(block), m = bas(moi);
-  if (!ADR.test(b) || !Array.isArray(skins)) return null;
-  const pourCeBlock = skins.filter((s) => s && bas(s.block) === b && s.recette);
-  if (!pourCeBlock.length) return null;
+  if (!ADR.test(b) || !ADR.test(m) || !Array.isArray(skins)) return null;
+  const miennes = skins.filter((s) => s && bas(s.block) === b && s.recette && bas(s.detenteur) === m);
+  if (!miennes.length) return null;
   const id = (s) => { try { return BigInt(s.tokenId); } catch (_) { return -1n; } };
-  const plusRecent = (l) => l.reduce((a, s) => (id(s) > id(a) ? s : a));
-  const miennes = ADR.test(m) ? pourCeBlock.filter((s) => bas(s.detenteur) === m) : [];
-  return plusRecent(miennes.length ? miennes : pourCeBlock);
+  return miennes.reduce((a, s) => (id(s) > id(a) ? s : a));
 }
 
 /** The contract's own colours for a recipe ({ angle, h:[h1,h2,h3], cube, noyau, fond }), as [h, s, l]. Null on any hue outside 0..359. */
