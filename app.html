@@ -1137,7 +1137,7 @@ dialog.bvPop.bcReduit{height:auto}
 dialog.bvPop.bcReduit>.bvBody,dialog.bvPop.bcReduit .bcPoignee{display:none}
 dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;height:auto;translate:none}
 .bvWinButtons{display:flex;gap:6px;flex:0 0 auto}
-.bvScene{position:relative;margin:8px 0 4px}
+.bvScene{position:relative;margin:8px 0 4px;overflow:hidden} /* game63: a neighbour cube projected past the canvas edge drew over the Play bar */
 #bv3d{display:block;width:100%;height:auto;max-height:52vh;background:#05070c;border:1px solid var(--ligne);border-radius:12px;touch-action:none}
 .bvAim{position:absolute;left:10px;bottom:10px;max-width:min(320px,70%);padding:8px 10px;border-radius:10px;background:rgb(10 12 20 / .82);border:1px solid var(--ligne);font-size:12px;line-height:1.35;color:#e8eaf6;pointer-events:none}
 .bvAim b{display:block;margin-bottom:3px}.bvAim .bvNr{color:#9aa3bd}
@@ -27377,7 +27377,9 @@ function ouvrirLiveVision() {
   if (dl && dl.open) { try { dl.close(); } catch (_) { dl.removeAttribute('open'); } if (b) b.setAttribute('aria-expanded', 'false'); return; }
   const c = liveCibleActuelle();
   const adr = c && c.adr ? String(c.adr).toLowerCase() : UNIT_APP;
-  try { if (!(brainAdr && String(brainAdr).toLowerCase() === adr)) choisirBrain(adr); } catch (_) { /* la fenetre s ouvre sur le cerveau courant */ }
+  /* game63 (prod 2026-10-27): after a reload brainAdr is RESTORED from localStorage but its brain never loaded (brainEtat null) — the
+   *   old "skip if same address" opened an empty window ("this block's brain", no beat). choisirBrain itself keeps a loaded brain intact. */
+  try { choisirBrain(adr); } catch (_) { /* la fenetre s ouvre sur le cerveau courant */ }
   ouvrirVision('brain');
   if (b) b.setAttribute('aria-expanded', 'true');
 }
