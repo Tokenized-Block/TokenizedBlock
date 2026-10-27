@@ -5479,6 +5479,8 @@ const SERVIS = [
   'interactions-cerveaux.js',
   /* ⛔ 2026-10-26 : « what its brain sees » (pur, lecture seule) — importe par `app.html`. */
   'vision-cerveau.js',
+  /* ⛔ 2026-10-27 : les couleurs de la skin portee par un block (pur, sans reseau) — importe par `app.html`. */
+  'vision-skin.js',
   /* ⛔ 2026-10-26 : le panneau Live (plusieurs vues Inside en direct ; pur, lecture seule) — importe par `app.html`. */
   'vision-live.js',
   'vision-inside.js',

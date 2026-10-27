@@ -1125,7 +1125,12 @@ dialog.bvPop{background:var(--carte);color:var(--texte);border:1px solid var(--l
   max-width:none;max-height:none;overflow:visible;translate:var(--bvDx,0px) var(--bvDy,0px);box-shadow:0 18px 50px rgb(0 0 0 / .55),0 0 0 1px rgb(var(--accentRgb) / .18)}
 dialog.bvPop>.bvTete,dialog.bvPop>.bvBody{padding:0 14px}
 dialog.bvPop>.bvTete{padding-top:10px;cursor:move;user-select:none;-webkit-user-select:none}
-dialog.bvPop>.bvBody{height:calc(100% - 64px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-bottom:12px}
+/* 2026-10-27 (measured 375 px, UNIT): the header wraps to 94 px, so `height:calc(100% - 64px)` pushed the body 30 px BELOW the
+ *   window's bottom edge (window 169..737, body 264..767), over the tab bar. The open window is now a column: the body takes
+ *   exactly what the header leaves. ([open] only — a closed dialog must keep the browser's display:none.) */
+dialog.bvPop[open]{display:flex;flex-direction:column}
+dialog.bvPop>.bvTete{flex:0 0 auto}
+dialog.bvPop>.bvBody{flex:1 1 auto;min-height:0;height:auto;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;padding-bottom:12px}
 @media (max-width:760px){dialog.bvPop{left:8px;right:8px;top:auto;bottom:calc(var(--bcNav,66px) + 8px);width:auto;height:var(--bvHFree,70dvh);translate:none}
   dialog.bvPop>.bvTete{cursor:default}}
 dialog.bvPop.bcReduit{height:auto}
@@ -1142,11 +1147,20 @@ dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;he
 .bvMoodBtn{position:absolute;right:8px;top:6px;border:1px solid rgb(255 255 255 / .35);background:rgb(0 0 0 / .45);color:#fff;border-radius:99px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
 .bvMoodBtn:hover,.bvMoodBtn:focus-visible{border-color:var(--accent)}
 .bvSentence{margin:4px 0;font-style:italic;min-height:1.3em}
-.bvShelf{display:flex;gap:4px;align-items:flex-end;margin:10px 0 0;padding:6px 6px 0;border-bottom:4px solid var(--ligne);overflow-x:auto;scrollbar-width:thin}
-.bvShelf .bvSpine{flex:0 0 auto;writing-mode:vertical-rl;transform:rotate(180deg);min-height:96px;padding:8px 5px;border:1px solid var(--ligne);border-radius:4px 4px 2px 2px;
-  background:var(--creux);color:var(--texte);font-size:11px;font-weight:700;cursor:pointer}
-.bvShelf .bvSpine:nth-child(odd){min-height:108px}
-.bvShelf .bvSpine[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
+/* 2026-10-27 (owner: "the section tabs render as vertical, rotated, cramped text — unreadable"). MEASURED in game59 at 1280 px:
+ *   9 spines of 24 x 96/108 px, writing-mode vertical-rl + rotate(180deg), 11 px text, a 118 px shelf. Now ONE horizontal row of
+ *   tabs: no rotation, no wrapping (the ROW scrolls sideways on a narrow window, never the page), 13 px text, the active tab
+ *   underlined in the accent. ⛔ test-brain-ux-20261027.mjs kills any return of writing-mode/rotate/wrap here. */
+.bvShelf{display:flex;flex-wrap:nowrap;gap:2px;align-items:stretch;margin:10px 0 0;padding:0;border-bottom:1px solid var(--ligne);overflow-x:auto;overflow-y:hidden;scrollbar-width:thin;overscroll-behavior-x:contain}
+.bvShelf .bvSpine{flex:0 0 auto;writing-mode:horizontal-tb;transform:none;white-space:nowrap;min-height:36px;padding:8px 10px;border:0;border-bottom:3px solid transparent;border-radius:8px 8px 0 0;
+  background:transparent;color:var(--doux);font-size:13px;font-weight:700;line-height:1.2;cursor:pointer}
+/* more tabs off the row's edge (measured 1280 px: 727 px of tabs in a 575 px row): that edge fades, so the hidden tabs are announced */
+.bvShelf[data-more=right]{-webkit-mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 32px),transparent)}
+.bvShelf[data-more=left]{-webkit-mask-image:linear-gradient(to left,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to left,#000 calc(100% - 32px),transparent)}
+.bvShelf[data-more=both]{-webkit-mask-image:linear-gradient(to right,transparent,#000 32px,#000 calc(100% - 32px),transparent);mask-image:linear-gradient(to right,transparent,#000 32px,#000 calc(100% - 32px),transparent)}
+.bvShelf .bvSpine:hover{color:var(--texte);background:var(--creux)}
+.bvShelf .bvSpine:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+.bvShelf .bvSpine[aria-selected=true]{border-bottom-color:var(--accent);color:var(--accent2);background:var(--creux)}
 .bvTabs{display:flex;gap:4px;flex-wrap:wrap;margin:6px 0}
 .bvTabs .bvTab{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--ligne);border-radius:8px 8px 0 0;padding:3px 8px;font-size:12px;background:transparent;color:var(--texte);cursor:pointer}
 .bvTabs .bvTab[aria-selected=true]{border-color:var(--accent);color:var(--accent2)}
@@ -4925,6 +4939,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
  *   se voit pas a la lecture — il se voit a l ecran, trop tard. */
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
+import { skinDuBlock, paletteSkin, melange as melangeSkin, VARS_SKIN } from './vision-skin.js';
 import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
   projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, labelBox, beatHeader, replayPosition, nextPinned, leftWindowText } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
@@ -25315,6 +25330,8 @@ function choisirBrain(adr) {
   if (!adr) return;
   const meme = brainAdr && adrBrainEq(brainAdr, adr);
   brainAdr = adr;
+  /* 2026-10-27 (owner): the Brain tab wears the colours of THIS block's on-chain skin (bvPoserSkin, contrast-checked) */
+  { const a = adr; void bvPoserSkin($('#v-brain'), a, { translucide: true, encore: () => brainAdr === a }); }
   /* 2026-10-11 (Grok, a9afbdd adapte) : l historique du panneau ne montre que les operations du block ouvert - repeint au changement.
    *   (la Bank, elle, suit le block par bcChangerFil, 76cc62c) */
   if (!meme) { try { bcPeindreOps(); } catch (_) { /* panneau pas encore pret */ } }
@@ -26589,7 +26606,11 @@ function bvPaintTabs() {
     const x = document.createElement('span'); x.textContent = '×'; x.setAttribute('aria-label', 'Close this tab'); x.dataset.close = key;
     b.append(t, x); bar.append(b);
   }
-  for (const d of document.querySelectorAll('#bvShelf [data-book]')) d.setAttribute('aria-selected', d.dataset.book === vision.book ? 'true' : 'false');
+  /* 2026-10-27: a real tablist — ONE tab in the Tab order (the selected one, else the first), the arrows move between them */
+  const spines = [...document.querySelectorAll('#bvShelf [data-book]')];
+  const focusable = spines.find((d) => d.dataset.book === vision.book) || spines[0];
+  for (const d of spines) { d.setAttribute('aria-selected', d.dataset.book === vision.book ? 'true' : 'false'); d.tabIndex = d === focusable ? 0 : -1; }
+  bvShelfEdges();
   for (const sct of document.querySelectorAll('#bvPop .bvBook')) { const on = sct.dataset.book === vision.book; sct.hidden = !on; if (on && 'open' in sct) sct.open = true; }
 }
 /* ══ TAKE CONTROL: a free camera over a LOCAL snapshot of the 128 neurons; no request, no wallet; Back to live ══ */
@@ -26682,6 +26703,43 @@ function lancerSimVision() {
     + ' · ' + Math.round(performance.now() - t0) + ' ms.';
   emp.title = s.lu.empreinte + ' / ' + s.siEtAlors.empreinte;
 }
+/* ══ 2026-10-27 (owner): the brain window and the Brain tab wear the colours of the block's SKIN — read on chain (lireSkins, the
+ *   BlockSkins contract), never the panel's try-on (bc.skinPortee can be a Random that nobody paid). vision-skin.js picks the skin
+ *   and checks every text colour at WCAG AA 4.5:1 on the skin background; a failing colour falls back to the page's own token. A
+ *   failed chain read poses NOTHING (the default palette stays) — never a colour guessed in its place. ══ */
+const skinsVision = { lu: 0, r: null, enVol: null };
+async function skinsVisionLus() {
+  if (skinsVision.r && Date.now() - skinsVision.lu < 120000) return skinsVision.r;
+  if (!skinsVision.enVol) skinsVision.enVol = (async () => {
+    try { const r = await lireSkins({ rpc }); if (r && r.etat === 'LU') { skinsVision.r = r; skinsVision.lu = Date.now(); } }
+    catch (_) { /* not read: nothing is posed */ } finally { skinsVision.enVol = null; }
+  })();
+  await skinsVision.enVol;
+  return skinsVision.r;
+}
+/** The page's tokens resolved to [r,g,b] by the browser itself (a probe outside any skinned scope). */
+function themeRgbVision() {
+  const p = document.createElement('span'); p.style.display = 'none'; document.body.append(p);
+  const lire = (v) => { p.style.color = 'var(' + v + ')'; const m = getComputedStyle(p).color.match(/[\d.]+/g); return m && m.length >= 3 ? m.slice(0, 3).map(Number) : null; };
+  try { return { texte: lire('--texte'), doux: lire('--doux'), accent: lire('--accent'), accent2: lire('--accent2'), fond: lire('--fond') }; } finally { p.remove(); }
+}
+/** Pose (or remove) the skin palette on `el` for `block`. `translucide`: the Brain tab's cards sit at 55 % over the page background. */
+async function bvPoserSkin(el, block, { translucide = false, encore = () => true } = {}) {
+  if (!el || !block) return null;
+  /* choisirBrain can run while this module is still being evaluated, above the `skinsVision` declaration: wait one microtask */
+  await null;
+  const r = await skinsVisionLus();
+  if (!encore()) return null;
+  const effacer = (etat) => { for (const v of VARS_SKIN) el.style.removeProperty(v); el.dataset.skin = etat; delete el.dataset.skinRatios; };
+  if (!r) { effacer('not-read'); return null; }
+  const theme = themeRgbVision();
+  const fonds = translucide ? [(f) => f, (f) => melangeSkin(f, theme.fond || [0, 0, 0], 0.55)] : [(f) => f];
+  const pal = paletteSkin(skinDuBlock(r.skins, block, compte), theme, { fonds });
+  if (pal.etat !== 'SKIN') { effacer('default'); if (pal.ratios) el.dataset.skinRatios = JSON.stringify(pal.ratios); return pal; }
+  for (const [k, v] of Object.entries(pal.vars)) el.style.setProperty(k, v);
+  el.dataset.skin = '#' + pal.tokenId; el.dataset.skinRatios = JSON.stringify(pal.ratios);
+  return pal;
+}
 function ouvrirVision(source) {
   const dl = $('#bvPop');
   if (!dl) return;
@@ -26692,6 +26750,7 @@ function ouvrirVision(source) {
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
   /* ⛔ game57 #4: a window, NOT a modal — the page stays usable behind it (like the Control panel) */
   try { dl.show(); } catch (_) { dl.setAttribute('open', ''); }
+  bvShelfEdges();
   vision.control = null; vision.particles = []; vision.tickShown = null;
   $('#bvControl').hidden = false; $('#bvBackToLive').hidden = true;
   /* game57 #4b (b): we ENTER from the map — the flight starts at the map camera heading and goes inside (a cut with reduced motion) */
@@ -26702,6 +26761,7 @@ function ouvrirVision(source) {
   const cible = visionCible();
   const n = cible && Array.isArray(cible.histo) ? cible.histo.length : 0;
   vision.i = n - 1; vision.suivre = true; vision.jouer = false;
+  if (cible && cible.adr) { const a = cible.adr; void bvPoserSkin(dl, a, { encore: () => { const c = visionCible(); return !!(c && c.adr === a); } }); }
   /* ⛔ mouvement reduit : la lecture attend un geste (Play ou le curseur) */
   if (bvReduit()) vision.jouer = false;
   $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
@@ -26753,6 +26813,29 @@ for (const b of document.querySelectorAll('#bvPop [data-speed]')) b.addEventList
 });
 $('#bvHumeur').addEventListener('click', () => bvOpenBook('why'));
 $('#bvShelf').addEventListener('click', (e) => { const d = e.target.closest('[data-book]'); if (d) bvOpenBook(d.dataset.book); });
+/* 2026-10-27: arrow keys / Home / End move along the tab row and open the section (WAI-ARIA tabs, automatic activation) */
+$('#bvShelf').addEventListener('keydown', (e) => {
+  const spines = [...document.querySelectorAll('#bvShelf [data-book]')];
+  const i = spines.indexOf(e.target.closest('[data-book]'));
+  if (i < 0) return;
+  const n = spines.length;
+  const j = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i - 1 + n) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : -1;
+  if (j < 0) return;
+  e.preventDefault();
+  bvOpenBook(spines[j].dataset.book);
+  spines[j].focus();
+  try { spines[j].scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (_) {}
+});
+for (const [k, d] of [...document.querySelectorAll('#bvShelf [data-book]')].entries()) d.tabIndex = k === 0 ? 0 : -1;
+/** which edge of the tab row hides more tabs (the CSS fades that edge) */
+function bvShelfEdges() {
+  const sh = $('#bvShelf'); if (!sh) return;
+  const g = sh.scrollLeft > 1, d = sh.scrollLeft + sh.clientWidth < sh.scrollWidth - 1;
+  const v = g && d ? 'both' : d ? 'right' : g ? 'left' : '';
+  if (v) sh.dataset.more = v; else delete sh.dataset.more;
+}
+$('#bvShelf').addEventListener('scroll', bvShelfEdges, { passive: true });
+try { new ResizeObserver(bvShelfEdges).observe($('#bvShelf')); } catch (_) { window.addEventListener('resize', bvShelfEdges); }
 $('#bvTabs').addEventListener('click', (e) => {
   const x = e.target.closest('[data-close]'); if (x) { bvCloseBook(x.dataset.close); return; }
   const o = e.target.closest('[data-tab]'); if (o) { vision.book = o.dataset.tab; bvPaintTabs(); if (vision.book === 'why') bvPaintWhy(); }
