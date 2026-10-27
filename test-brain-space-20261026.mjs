@@ -80,7 +80,9 @@ ok(/const BV_STARS = skyStars\(\);/.test(app), 'C: the sky comes from map3d.js#s
 const open = extract('function ouvrirVision(source) {');
 ok(/vision\.flightFrom = mapPose\(moteur3d && typeof moteur3d\.camera === 'function' \? moteur3d\.camera\(\) : null\);/.test(open) && /vision\.vue = 'dedans';/.test(open), 'C: on open, the flight starts at the map camera and goes inside');
 const pan = extract('function bvPanControl(dx, dy) {');
-ok(/panCam\(vision\.control\.cam, dx, dy\)/.test(pan) && /if \(!vision\.control\) return;/.test(pan), 'C: pan only in Take control (local snapshot)');
+/* 2026-10-27 (owner: "roam inside the box even when the brain is live"): outside Take control, pan moves the viewer's live camera
+ *   (bvNavGesture — test-vue-libre-20261027.mjs) instead of doing nothing; in Take control it still pans the local snapshot */
+ok(/panCam\(vision\.control\.cam, dx, dy\)/.test(pan) && /if \(!vision\.control\) \{ bvNavGesture\(\{ dx, dy, pan: true \}\); return; \}/.test(pan), 'C: pan = snapshot camera in Take control, live camera otherwise');
 ok(/e\.button === 2 \|\| e\.shiftKey/.test(app), 'C: right button or Shift = pan, like the map');
 ok(/id="bvBackToMap"/.test(app), 'C: the Back to map button');
 console.log('test-brain-space-20261026: ' + count + ' assertions, OK');

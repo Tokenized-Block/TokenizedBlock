@@ -26514,8 +26514,8 @@ function peindreVision() {
   /* game57 #4c (c): one short line; the full explanation is the "How to read" book */
   $('#bvLegende').textContent = vision.control
     ? 'Local snapshot: drag to orbit, scroll to fly. Nothing is sent — see How to read.'
-    : (dedans ? 'Inside its brain: lit = fired on this beat · drag to look around, scroll or pinch to fly — see How to read.'
-      : 'Outside: its real map neighbours, unread by its neurons · drag to look around — see How to read.');
+    : (dedans ? 'Inside: lit = fired this beat · drag, scroll or pinch to move — see How to read.'
+      : 'Outside: map neighbours (not read) · drag or pinch to move — see How to read.');
   peindreListesVision(c, cible);
   if (vision.book === 'why') bvPaintWhy();
   const ref = viewReferenceVision({ histo, tick: vuShown ? vuShown.tick : null });

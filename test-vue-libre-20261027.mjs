@@ -9,7 +9,7 @@ const DIR = new URL('./', import.meta.url);
 const app = readFileSync(process.env.VL_APP || new URL('app.html', DIR), 'utf8').replace(/\r\n/g, '\n');
 const VI = await import(new URL('vision-inside.js', DIR));
 let count = 0; const ok = (c, m) => { assert.ok(c, m); count++; };
-const fn = (name, end) => { const a = app.indexOf('function ' + name + '('); assert.ok(a >= 0, 'missing ' + name); return app.slice(a, end ? app.indexOf(end, a) : app.indexOf('\n}\n', a) + 2); };
+const fn = (name, end) => { const a = app.indexOf('function ' + name + '('); assert.ok(a >= 0, 'missing ' + name); return app.slice(a, end ? app.indexOf(end, a) : a + app.slice(a).search(/\r?\n\}\r?\n/) + 2); };
 
 /* 1. pure: a gesture moves the viewer's camera from the pose shown; nothing else */
 const from = { yaw: 0, pitch: 0, dist: 0.35 };

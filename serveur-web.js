@@ -1248,7 +1248,7 @@ const USAGE_PAS_MS = 10 * 60 * 1000;
 function usageServeur() {
   if (!moteurUsageSrv && !usageGraineErreur) {
     try {
-      const graine = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'mesures', 'usage-onchain-20261027.json'), 'utf8'));
+      const graine = JSON.parse(readFileSync(join(ici, 'mesures', 'usage-onchain-20261027.json') /* module-level `ici` (read at call time): no import.meta here, benches eval this stretch as a script */, 'utf8'));
       if (!graine || !Array.isArray(graine.lignes) || !graine.fin || !Number.isInteger(graine.fin.bloc)) throw new Error('seed malformed');
       moteurUsageSrv = moteurUsage({ rpc: rpcServeur, graine,
         prixEth: async () => { try { const p = await prixEthUsd({ rpc: rpcServeur, stateView: STATE_VIEW_USAGE }); return p && p.etat === 'LU' ? p.usd : null; } catch (_) { return null; } } });
