@@ -170,8 +170,10 @@ function describeTargetRaw(obj, src, model, shown = null) {
     const inn = s.internals && vu && s.internals.tick === vu.tick && Array.isArray(s.internals.neurones) ? s.internals.neurones[obj.n] : null;
     const lines = [
       { label: 'Fired this beat', value: vu && Array.isArray(vu.indices) ? (vu.indices.includes(obj.n) ? 'yes' : 'no') : NOT_READ },
-      { label: 'Potential', value: inn ? num(inn.potentiel) : NOT_READ },
-      { label: 'Trace (memory)', value: inn ? num(inn.trace) : NOT_READ }];
+    /* 2026-10-27 (owner: two "not read" lines teach nothing): potential and trace exist only for the LIVE beat — say so once,
+     *   and how to see them, instead of two dead lines on every past beat. */
+    ].concat(inn ? [{ label: 'Potential', value: num(inn.potentiel) }, { label: 'Trace (memory)', value: num(inn.trace) }]
+      : [{ label: 'Potential & memory', value: 'kept only while it plays live — press Back to live to see them' }]);
     if (shown && typeof shown.beatText === 'string' && shown.beatText) lines.push({ label: 'On screen', value: shown.beatText });
     return { title: 'Neuron #' + obj.n + (obj.n < 16 ? ' (sensor)' : ''), lines };
   }

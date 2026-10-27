@@ -93,7 +93,8 @@ const WANTED = ['identity.name', 'identity.symbol', 'identity.pairedWith', 'iden
   const n40 = describeTarget({ kind: 'neuron', n: 40 }, FULL, full);
   ok(n40.lines.some((l) => l.label === 'Potential' && l.value === '0.2') && n40.lines.some((l) => l.label === 'Fired this beat' && l.value === 'yes'), 'E: a neuron: real potential, fired');
   const nx = describeTarget({ kind: 'neuron', n: 40 }, { ...FULL, internals: null }, full);
-  ok(nx.lines.some((l) => l.label === 'Potential' && l.value === NOT_READ), 'E: no state -> potential not read');
+  /* 2026-10-27: no state -> ONE line saying where to see it, never a made-up value (nor two dead "not read" lines) */
+  ok(!nx.lines.some((l) => l.label === 'Potential') && nx.lines.some((l) => l.label === 'Potential & memory' && /Back to live/.test(l.value)), 'E: no state -> potential not shown, says how to see it');
   const inp = describeTarget({ kind: 'input', key: 'vieAvant' }, FULL, full);
   ok(inp.lines.some((l) => l.value === 'not read') && inp.lines.some((l) => l.label === 'Source'), 'E: an input: its value or "not read", and its source');
   const nb = describeTarget({ kind: 'neighbour', adr: '0x' + '22'.repeat(20), sym: 'SUIT' }, FULL, full);

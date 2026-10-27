@@ -26532,6 +26532,8 @@ function peindreVision() {
     tx.textContent = p ? (ouvert ? p.complet : p.text) : 'No beat recorded here yet — I have nothing to think about.';
     if (long) tx.title = p.complet; else tx.removeAttribute('title');
     plus.hidden = !long; plus.textContent = ouvert ? 'less' : 'more'; plus.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+    /* 2026-10-27 (owner: "more emotions"): the pill = the engine's mood · the feeling read off the numbers (10 kinds × 3 tiers) */
+    if (vuShown && p && p.reading && p.reading.word) $('#bvHumeur').textContent = humeurCourteVision(vuShown.phase) + ' · ' + p.reading.word;
     $('#bvLecture').textContent = p && p.reading ? 'Feeling: ' + p.reading.word + ' — ' + p.reading.why + '.' : '';
     $('#bvLecture').title = p && p.reading ? 'A reading of the numbers (' + p.reading.key + ', ' + p.reading.tier + '), not its engine mood: ' + p.mood + '.' : '';
   }

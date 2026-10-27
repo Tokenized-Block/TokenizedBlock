@@ -24,7 +24,7 @@ const src = { vu: latest, internals: { tick: 138, neurones: Array.from({ length:
   const fired = d.lines.find((l) => l.label === 'Fired this beat');
   ok(beatLines.length === 1 && beatLines[0].value === 'Beat 123', 'A: the overlay shows the header beat ("Beat 123"), not the latest recorded (138)');
   ok(fired && fired.value === 'no', 'A: "fired" is read from the shown beat (#40 fired on 138, not on 123)');
-  ok(d.lines.find((l) => l.label === 'Potential').value === NOT_READ, 'A: potential of another beat is not passed off as this one');
+  ok(!d.lines.some((l) => l.label === 'Potential') && /Back to live/.test(d.lines.find((l) => l.label === 'Potential & memory').value), 'A: potential of another beat is not passed off as this one');
   const d7 = describeTarget({ kind: 'neuron', n: 7 }, src, null, { vu: shownVu, beatText: 'Beat 123' });
   ok(d7.lines.find((l) => l.label === 'Fired this beat').value === 'yes', 'A: #7 fired on the shown beat');
   const same = describeTarget({ kind: 'neuron', n: 40 }, src, null, { vu: latest, beatText: 'Beat 138' });
