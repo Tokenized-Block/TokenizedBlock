@@ -41,7 +41,7 @@ await t('AUDF is never a newer-factory stable', () => { assert.ok(AUDF); assert.
 for (const [s, a] of [['CADD', CADD], ['MXNB', MXNB], ['USDT', USDT]]) {
   await t(s + ': USDC -> ' + s + ' on a fresh passing measurement goes to planVenueNeuve (aero-new)', async () => {
     const r = await plan(USDC, a, { v: passe, t: MAINTENANT - 60_000, bloc: 53_200_000 });
-    assert.equal(r.via, 'planVenueNeuve'); assert.equal(r.venue, 'aero-new');
+    assert.equal(r.via, 'planVenueNeuveFraisEntree'); assert.equal(r.venue, 'aero-new'); /* 2026-10-27 : frais en USDC a l entree */
     assert.notEqual(r.etat, 'PRET'); /* hors reseau : jamais PRET sans devis lu */
   });
   await t(s + ': ' + s + ' -> USDC on a fresh passing measurement goes to planVenueNeuve', async () => {
@@ -75,7 +75,7 @@ await t('EURC: USDC -> EURC and EURC -> USDC stay REFUSED even if everything « 
 });
 await t('AUDF: USDC -> AUDF never goes through the newer-factory stable route', async () => {
   const r = await plan(USDC, AUDF, { v: passe, t: MAINTENANT, bloc: 1 });
-  assert.notEqual(r.via, 'planVenueNeuve'); assert.notEqual(r.via, 'stableNeuve'); assert.notEqual(r.etat, 'PRET');
+  assert.ok(!['planVenueNeuve', 'planVenueNeuveFraisEntree', 'stableNeuve'].includes(r.via)); assert.notEqual(r.etat, 'PRET');
 });
 await t('verdictStableNeuve: a pool under the depth rule does not pass; a lookup that was not read is NON_MESURE', () => {
   const pool = { pool: POOL, tickSpacing: 1, usdcPool: 13473538883n, liquidite: 1n, sqrtP: 1n, achat: 9_990_000n, ecartBps: 5, venteMemeEtat: 9_980_000n, perteBps: 10, usdcUtilisable: 9_000_000_000n };
@@ -91,6 +91,53 @@ await t('card: fresh passing -> routed line with a Swap button; failing -> « me
   assert.equal(de(USDT).routee, false); assert.ok(!de(USDT).bouton);
   assert.deepEqual(aVenir().map((x) => x.phrase), aVenir({ servis: null }).map((x) => x.phrase));
   assert.ok(aVenir({ servis: [{ adr: EURC, frais: true, bloc: 1, verdict: passe }] }).every((x) => x.adr !== EURC && !x.routee));
+});
+/* ── 2026-10-27 (proprietaire) : ACHAT = frais EN USDC A L ENTREE. Une chaine SIMULEE (prix 1:1, tout repond) : la FORME du plan. ── */
+const { FEE_WALLET } = await imp('frais-creation.js');
+const { QUOTEUR_AERODROME_CL } = await imp('rolls-en-action.js');
+const { FACTORY_AERODROME_CL, FRAIS_INTERFACE_BPS_CL } = await imp('calldata-aerodrome.js');
+const { ROUTEUR_AERO_NOUVEAU } = await imp('liquidite-actions.js');
+const mot = (n) => BigInt(n).toString(16).padStart(64, '0');
+const montantsCotes = [];
+const rpcChaine = async (methode, params) => {
+  if (methode === 'eth_getCode') return '0x' + '60'.repeat(600) + bas(FACTORY_AERODROME_CL).slice(2).repeat(3);
+  if (methode !== 'eth_call') throw new Error('unexpected ' + methode);
+  const { to, data } = params[0], d = String(data);
+  if (bas(to) === bas(QUOTEUR_AERODROME_CL)) { const m = BigInt('0x' + d.slice(10 + 128, 10 + 192)); montantsCotes.push(m); return '0x' + mot(m); }
+  if (d.startsWith('0x3850c7bd')) return '0x' + mot(1n << 96n);            /* slot0 : prix 1 */
+  if (d.startsWith('0x70a08231') || d.startsWith('0xdd62ed3e')) return '0x' + mot(10n ** 30n); /* solde, allowance */
+  return '0x' + mot(0);                                                    /* simulations */
+};
+const planChaine = (de, vers) => planRail({ de, vers, montant: '10000000', compte: COMPTE },
+  { rpc: rpcChaine, chaine: 8453, maintenant: MAINTENANT, venueStable: () => ({ v: passe, t: MAINTENANT - 60_000, bloc: 53_200_000 }) });
+const FRAIS = (10_000_000n * BigInt(FRAIS_INTERFACE_BPS_CL)) / 10000n;
+await t('buy fee: USDC -> CADD has a USDC.transfer(FEE_WALLET, fee) leg at today’s rate, and the swap is quoted on amount - fee', async () => {
+  assert.ok(FRAIS > 0n && /^0x[0-9a-fA-F]{40}$/.test(FEE_WALLET));
+  montantsCotes.length = 0;
+  const r = await planChaine(USDC, CADD);
+  assert.equal(r.etat, 'PRET', String(r.pourquoi));
+  const f = r.appels.filter((x) => bas(x.to) === USDC && x.data.startsWith('0xa9059cbb'));
+  assert.equal(f.length, 1);
+  assert.equal(f[0].data, '0xa9059cbb' + bas(FEE_WALLET).slice(2).padStart(64, '0') + mot(FRAIS));
+  assert.deepEqual(montantsCotes, [10_000_000n - FRAIS]);
+  assert.equal(r.resume.fraisDevise, USDC); assert.equal(r.resume.fraisMontant, String(FRAIS)); assert.equal(r.resume.montantEchange, String(10_000_000n - FRAIS));
+  const sw = r.appels.filter((x) => bas(x.to) === bas(ROUTEUR_AERO_NOUVEAU));
+  assert.equal(sw.length, 1); assert.ok(sw[0].data.includes(mot(10_000_000n - FRAIS)), 'swap amountIn = amount - fee');
+});
+await t('buy fee: no sweepTokenWithFee on the output stable (MXNB, USDT too)', async () => {
+  for (const a of [CADD, MXNB, USDT]) {
+    const r = await planChaine(USDC, a);
+    assert.equal(r.etat, 'PRET');
+    assert.ok(r.aSigner.every((x) => !x.data.includes('e0e189a0')), 'no sweepTokenWithFee');
+    assert.ok(r.aSigner.every((x) => !(bas(x.to) === a)), 'nothing sent from the stable');
+  }
+});
+await t('sell side unchanged: CADD -> USDC = planVenueNeuve, one multicall with sweepTokenWithFee in USDC', async () => {
+  const r = await planChaine(CADD, USDC);
+  assert.equal(r.via, 'planVenueNeuve'); assert.equal(r.etat, 'PRET');
+  assert.equal(r.appels.length, 1); assert.equal(bas(r.appels[0].to), bas(ROUTEUR_AERO_NOUVEAU));
+  const i = r.appels[0].data.indexOf('e0e189a0'); assert.ok(i > 0);
+  assert.equal(r.appels[0].data.slice(i + 8, i + 72), USDC.slice(2).padStart(64, '0'));
 });
 console.log(ok + ' ok, ' + ko + ' failed');
 process.exit(ko ? 1 : 0);

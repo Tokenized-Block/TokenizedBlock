@@ -487,6 +487,67 @@ export async function planVenueNeuve({ rpc, sens, action, montant, compte, verdi
 }
 
 /**
+ * 2026-10-27 (decision du proprietaire) — L ACHAT USDC -> STABLE EN MONNAIE LOCALE SUR 'aero-new', FRAIS PRIS EN USDC A L ENTREE.
+ *   Meme taux (FRAIS_INTERFACE_BPS_CL). Deux appels : 1) USDC.transfer(beneficiaireFrais, frais) ; 2) exactInputSingle sur le routeur
+ *   0x9ee3…d418 de `montant - frais`, recipient = le compte (AUCUN sweepTokenWithFee : rien n est preleve dans le stable qui sort).
+ *   Re-cote sur `montant - frais`, controle du prix de la pool, approbation EXACTE de `montant - frais`, SIMULATION des deux appels
+ *   depuis le compte avant PRET — la discipline de planVenueNeuve. Le resume dit le frais EN USDC avant la signature.
+ */
+export const SELECTEUR_TRANSFER = selecteur('transfer(address,uint256)');
+export async function planVenueNeuveFraisEntree({ rpc, action, montant, compte, verdict, beneficiaireFrais, maintenant = Date.now(), toleranceBps = 100n, usdc = USDC_BASE, fraisBps = FRAIS_INTERFACE_BPS_CL }) {
+  const a = bas(action), u = bas(usdc), m = BigInt(montant), b = BigInt(fraisBps);
+  if (!verdict || !ADR.test(String(verdict.pool || '')) || !Number.isInteger(Number(verdict.tickSpacing))) return { etat: 'NON_MESURE', pourquoi: 'the newer-factory pool of this currency is not known yet' };
+  if (!ADR.test(String(beneficiaireFrais || ''))) return { etat: 'REFUSE', pourquoi: 'a whole fee-recipient address is required, with no default' };
+  if (b <= 0n || b > FRAIS_BPS_MAX_PRUDENT) return { etat: 'REFUSE', pourquoi: 'the interface fee must be between 1 and ' + FRAIS_BPS_MAX_PRUDENT + ' bps' };
+  const frais = (m * b) / 10000n, mSwap = m - frais, ts = Number(verdict.tickSpacing);
+  if (frais <= 0n || mSwap <= 0n) return { etat: 'REFUSE', pourquoi: 'this amount is too small to carry the interface fee' };
+  let code;
+  try { code = await lireCodeQuoteurNouvelle(rpc); } catch (e) { return { etat: 'NON_MESURE', pourquoi: 'quoter code not read: ' + court(e) }; }
+  if (!code) return { etat: 'NON_MESURE', pourquoi: 'the quoter code no longer has the measured shape: no quote on the newer factory' };
+  let q;
+  try { q = premierMot(await rpc('eth_call', [{ to: QUOTEUR_AERODROME_CL, data: dataDevisCL({ tokenIn: u, tokenOut: a, montant: mSwap, tickSpacing: ts }) }, 'latest', overrideQuoteur(code)])); }
+  catch (e) { return estRevert(e) ? { etat: 'REFUSE', pourquoi: 'the newer-factory pool cannot quote this amount' } : { etat: 'NON_MESURE', pourquoi: 'quote not read: ' + court(e) }; }
+  if (!(q > 0n)) return { etat: 'REFUSE', pourquoi: 'the newer-factory pool quotes nothing for this amount' };
+  let impactBps = null;
+  try {
+    const sq = premierMot(await rpc('eth_call', [{ to: bas(verdict.pool), data: SEL.slot0 }, 'latest']));
+    const mid = sortieMoyenne({ montant: mSwap, sqrtP: sq, entreeEst0: BigInt(u) < BigInt(a) });
+    if (mid > 0n) impactBps = Number(((mid - q) * 10000n) / mid);
+  } catch (e) { return { etat: 'NON_MESURE', pourquoi: 'pool price not read: ' + court(e) }; }
+  if (impactBps === null) return { etat: 'NON_MESURE', pourquoi: 'pool price not read' };
+  if (impactBps < -10) return { etat: 'REFUSE', pourquoi: 'the quote is above this pool’s own price: it does not come from this pool, not offered' };
+  if (impactBps > 5000) return { etat: 'REFUSE', pourquoi: 'this amount would get more than 50 % below this pool’s price: not offered — try a smaller amount' };
+  const min = (q * (10000n - BigInt(toleranceBps))) / 10000n;
+  if (min <= 0n) return { etat: 'REFUSE', pourquoi: 'the guaranteed minimum would be zero' };
+  const resume = { paye: String(m), payeDevise: u, montantEchange: String(mSwap), quote: String(q), recoitAuMoins: String(min), recoitDevise: a,
+    fraisBps: String(b), fraisMontant: String(frais), fraisDevise: u, fraisEntree: true, beneficiaireFrais: bas(beneficiaireFrais),
+    impactBps: String(Math.max(0, impactBps)), venue: 'aero-new', pool: bas(verdict.pool), routeur: ROUTEUR_AERO_NOUVEAU };
+  try {
+    const s = premierMot(await rpc('eth_call', [{ to: u, data: SEL.balanceOf + motA(compte) }, 'latest']));
+    if (s < m) return { etat: 'REFUSE', pourquoi: 'this wallet holds less than the amount to pay', resume };
+  } catch (_) { /* solde non lu : la simulation jugera */ }
+  let allow = null;
+  try { allow = premierMot(await rpc('eth_call', [{ to: u, data: SEL_ALLOWANCE + motA(compte) + motA(ROUTEUR_AERO_NOUVEAU) }, 'latest'])); }
+  catch (e) { return { etat: 'NON_MESURE', pourquoi: 'allowance not read: ' + court(e) }; }
+  if (allow < mSwap) {
+    const ap = calldataApproveNouvelle({ token: u, montant: mSwap });
+    if (ap.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: ap.pourquoi };
+    return { etat: 'APPROBATIONS', etapes: [{ to: ap.to, data: ap.data, value: '0x0', nom: 'approve the exact swapped amount for the newer-factory router' }], resume };
+  }
+  const t = Math.floor(Number(maintenant) / 1000);
+  const sw = calldataExactInputSingleCL({ tokenIn: u, tokenOut: a, tickSpacing: ts, recipient: compte, deadline: t + 600, amountIn: mSwap, amountOutMinimum: min, maintenant: t });
+  if (sw.etat !== 'PRET') return { etat: 'REFUSE', pourquoi: 'swap refused: ' + sw.pourquoi };
+  const txFrais = { to: u, data: SELECTEUR_TRANSFER + motAddr(beneficiaireFrais) + mot(frais), value: '0x0', nom: 'interface fee in USDC to the fee wallet' };
+  const txSwap = { to: ROUTEUR_AERO_NOUVEAU, data: sw.data, value: '0x0', nom: 'swap the rest on the newer-factory router' };
+  /* ordre : le swap D ABORD, le frais ensuite — un swap qui echoue a la signature ne laisse pas un frais deja paye (signes un par un) */
+  for (const tx of [txSwap, txFrais]) {
+    try { await rpc('eth_call', [{ from: bas(compte), to: tx.to, data: tx.data, value: '0x0' }, 'latest']); }
+    catch (e) { return estRevert(e) ? { etat: 'REFUSE', pourquoi: 'the chain refuses this exact plan right now (simulation reverted)' } : { etat: 'NON_MESURE', pourquoi: 'simulation not read: ' + court(e) }; }
+  }
+  return { etat: 'PRET', appels: [txSwap, txFrais], resume };
+}
+
+/**
  * LA VENTE DE `montant` (brut) D UNE ACTION, COTEE SUR CHAQUE LIEU CONNU AU MEME INSTANT, et la phrase dite avant la signature.
  * Lieux : la pool de NOTRE route (`route.pool`/`route.tickSpacing`, servis), celle de 'aero-new' (`route.venues['aero-new']`), la cle v4
  * MESUREE (`cleV4`). Reference : `refUsd` (Chainlink lue) sinon le prix d achat le plus bas servi (10 USDC / `achat`, 'best-buy').

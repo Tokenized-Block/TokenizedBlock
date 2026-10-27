@@ -45,7 +45,7 @@ import { LOGS_INITIALIZE_MESURES } from './cles-v4-mesurees.js';
 import { decoderInitialize } from './pools-du-jeton.js';
 /* 2026-10-25 — LE LIEU 'aero-new' (factory 0x9cb2…7a76, routeur 0x9ee3…d418, prouve sur fork) quand le serveur le sert comme MEILLEUR
  *   lieu d une action (`deps.venueAction(action).meilleure === 'aero-new'`) ; sinon les routes ci-dessous, inchangees octet pour octet */
-import { planVenueNeuve, venteParVenues, choisirVenteVenue, lieuxVente, phraseVente, referenceRepli } from './liquidite-actions.js';
+import { planVenueNeuve, planVenueNeuveFraisEntree, venteParVenues, choisirVenteVenue, lieuxVente, phraseVente, referenceRepli } from './liquidite-actions.js';
 /* 2026-10-27 — USDC <-> CADD / MXNB / USDT par le meme lieu 'aero-new', derriere la mesure FRAICHE du serveur (stables-neuve.js) */
 import { estStableNeuve, porteStableNeuve, CHOIX_STABLE_NEUVE } from './stables-neuve.js';
 
@@ -505,7 +505,12 @@ async function planRailBrut(q, deps) {
       let servi = null; try { servi = deps && typeof deps.venueStable === 'function' ? deps.venueStable(stable) : null; } catch (_) { servi = null; }
       const porte = porteStableNeuve({ adr: stable, servi, maintenant });
       if (porte.etat !== 'OK') return normaliser(route, { etat: porte.etat, pourquoi: porte.pourquoi }, { via: 'stableNeuve', venue: 'aero-new' });
-      return normaliser(route, await planVenueNeuve({ rpc, sens: nd === 'USDC' ? 'ACHAT' : 'VENTE', action: stable, montant: m, compte, verdict: porte.v,
+      /* 2026-10-27 (proprietaire) : ACHAT = frais EN USDC A L ENTREE (transfer au FEE_WALLET, swap de montant - frais) ; VENTE inchangee */
+      if (nd === 'USDC') {
+        return normaliser(route, await planVenueNeuveFraisEntree({ rpc, action: stable, montant: m, compte, verdict: porte.v, beneficiaireFrais: FEE_WALLET, maintenant }),
+          { via: 'planVenueNeuveFraisEntree', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: CHOIX_STABLE_NEUVE });
+      }
+      return normaliser(route, await planVenueNeuve({ rpc, sens: 'VENTE', action: stable, montant: m, compte, verdict: porte.v,
         beneficiaireFrais: FEE_WALLET, maintenant }), { via: 'planVenueNeuve', cotation: USDC, pool: 'aero-new', venue: 'aero-new', choix: CHOIX_STABLE_NEUVE });
     }
     /* ── 4 quater. UNE ACTION DE LA TABLE AERODROME CONTRE WETH / cbBTC / EURC (Phil, 2026-10-10, DIG-actions-hors-USDC) ──
