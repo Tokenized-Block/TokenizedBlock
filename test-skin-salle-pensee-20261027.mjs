@@ -22,8 +22,9 @@ const beat = (tick, o = {}) => ({ tick, phase: 'EXCITE', spikes: 10, virage: 0, 
 const histo = [beat(1, { spikes: 8 }), beat(2, { spikes: 10 }), beat(3, { spikes: 12 }), beat(4, { spikes: 10, vitesse: 0.3 }),
   beat(5, { spikes: 26, virage: -0.143, vitesse: 0.65, delta: 0.012, nouveaux: N({ achats: 2, detenteurs: 1 }) })];
 const p = P.pensee(histo, 4, { voisins: 3 });
-/* 2026-10-27 (owner, later): the thought now covers its whole beat (test-pensee-lexique-20261027.mjs) — 2 to 5 sentences */
-ok(p && p.clauses.length >= 2 && p.clauses.length <= 5, '2-5 sentences (' + (p && p.clauses.length) + ')');
+/* 2026-10-27 (owner, later): the thought now covers its whole beat (test-pensee-lexique-20261027.mjs) — 2 to 6 sentences (6th: what would change its mood) */
+ok(p && p.clauses.length >= 2 && p.clauses.length <= 6, '2-6 sentences (' + (p && p.clauses.length) + ')');
+ok(p && p.clauses[1].from[0].key === 'phase' && /worry|lift/.test(p.clauses[1].text) && p.text.includes(p.clauses[1].text), 'essential = why + what would change the mood');
 ok(p.text === P.pensee(histo, 4, { voisins: 3 }).text, 'same beat -> same text');
 /* 2026-10-27 (owner, "text too big, keep the essential"): text = the ESSENTIAL (its first two clauses); complet = all of them */
 ok(p.text === p.clauses.slice(0, 2).map((c) => c.text).join(' '), 'the text is exactly its first two clauses');
@@ -38,7 +39,7 @@ for (const c of p.clauses) {
   /* each traced key names a real field of the beat (or the history / page datum it was computed from) */
   for (const f of c.from) ok(/^(phase|nouveaux\.\w+|delta|deltaHumeur|tirsCurieux|nourriture|nothing|spikes|average|averageOver|nearThreshold|memoire|memoireAvant|virage|vitesse|vitesseAvant|gauche_hz|droite_hz|role|reveil|voisins)$/.test(f.key), 'known datum ' + f.key);
 }
-ok(/2 buys reached me/.test(p.text) && /a new holder reached me/.test(p.text) && /warmed \(\+1\.2 %\)/.test(p.text), 'inputs of THIS beat named: ' + p.clauses[0].text);
+ok(/2 buys reached me/.test(p.complet) && /a new holder reached me/.test(p.complet) && /warmed \(\+1\.2 %\)/.test(p.complet), 'inputs of THIS beat named: ' + p.clauses[0].text);
 ok(/26 of my 128 neurons \w+ — well above my average of 10 over my last 4 beats/.test(p.complet) && !/neurons/.test(p.text), 'fired vs its recent average (in complet, not in the essential)');
 ok(/I (turn|lean|veer) left and (speed up|quicken|pick up pace) from 0\.3 to 0\.65\./.test(p.complet) && /3 map neighbours are around me, but none reach my neurons/.test(p.complet), 'steering, speed vs previous, neighbours not read: ' + p.complet);
 ok(p.reading.key === 'restless' && p.reading.from.some((f) => f.key === 'delta'), 'restless = high firing + rising life');
@@ -126,7 +127,7 @@ const p3 = app.slice(app.indexOf('function bvPaint3D('), app.indexOf('function b
 ok(/ctx\.fillStyle = sceneBackground\(vision\.fondScene\);\n\s*ctx\.fillRect\(0, 0, L, H\);/.test(p3) && !/fillStyle = lum\.neutral \? '#0b0d12' : 'hsl\(/.test(p3), 'the scene background is black / the owned skin, never the mood (no gold "skin" background)');
 const pv = app.slice(app.indexOf('function peindreVision('), app.indexOf('/* ══ THE 3D SCENE'));
 ok(/if \(vision\.skinAdr !== cible\.adr\) \{[^\n]*\n[^\n]*removeProperty/.test(pv), 'another block shown -> the previous palette is removed and the new one read');
-ok(/penseeVision\(histo, iShown/.test(pv) && /'Reading: ' \+ p\.reading\.word \+ ' — ' \+ p\.reading\.why \+ '\.'/.test(pv) && /not its engine mood/.test(pv), 'the thought is painted, its reading short and labelled as a reading');
+ok(/penseeVision\(histo, iShown/.test(pv) && /'Feeling: ' \+ p\.reading\.word \+ ' — ' \+ p\.reading\.why \+ '\.'/.test(pv) && /not its engine mood/.test(pv), 'the thought is painted, its reading short and labelled as a reading');
 ok(/tx\.textContent = p \? \(ouvert \? p\.complet : p\.text\)/.test(pv) && /vision\.penseeComplete === true/.test(pv) && /tx\.title = p\.complet/.test(pv) && /id="bvPenseePlus"/.test(app), 'the essential by default; the whole thought on demand (more / tooltip)');
 ok(/<details class="bvTech"><summary class="note">Numbers of this beat<\/summary><p class="note mono" id="bvSortie"><\/p><\/details>/.test(app), 'the technical numbers stay, folded');
 

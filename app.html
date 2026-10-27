@@ -26532,7 +26532,7 @@ function peindreVision() {
     tx.textContent = p ? (ouvert ? p.complet : p.text) : 'No beat recorded here yet — I have nothing to think about.';
     if (long) tx.title = p.complet; else tx.removeAttribute('title');
     plus.hidden = !long; plus.textContent = ouvert ? 'less' : 'more'; plus.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
-    $('#bvLecture').textContent = p && p.reading ? 'Reading: ' + p.reading.word + ' — ' + p.reading.why + '.' : '';
+    $('#bvLecture').textContent = p && p.reading ? 'Feeling: ' + p.reading.word + ' — ' + p.reading.why + '.' : '';
     $('#bvLecture').title = p && p.reading ? 'A reading of the numbers (' + p.reading.key + ', ' + p.reading.tier + '), not its engine mood: ' + p.mood + '.' : '';
   }
   if (!vision.loop) bvPaint3D(performance.now());

@@ -154,6 +154,13 @@ export function pensee(histo, i, { voisins = null, etat = null, faits = null } =
   /* 1. WHY its engine judges (or does not judge) a mood — the engine's own rule */
   const cause = causeHumeur(vu);
   clauses.push({ text: cause.text, from: cause.from });
+  /* 1b. (owner 2026-10-27: "the text gives nothing useful") WHAT WOULD CHANGE ITS MOOD — read off the engine's own rule order
+   *   (cerveau.js: worried on a 5 % drop or more sells than buys, then excited on a 5 % rise or anything new). "can": each input is
+   *   weighted by the block's own sensitivity, so a single event is not promised to tip it. */
+  const ligneH = pct(INTERNES.deltaHumeur) + ' %', fH = [{ key: 'phase', value: vu.phase }, { key: 'deltaHumeur', value: INTERNES.deltaHumeur }];
+  if (vu.phase === 'CALME' || vu.phase === 'CURIEUX') clauses.push({ text: 'What would change me: a new buy, holder or message can excite me; more sells than buys, or my price falling ' + ligneH + ', would worry me.', from: fH });
+  else if (vu.phase === 'EXCITE') clauses.push({ text: 'If nothing new comes and my price holds, I settle back down; more sells than buys would worry me.', from: fH });
+  else if (vu.phase === 'INQUIET') clauses.push({ text: 'What would lift me: buys at least matching sells, and my price no longer falling ' + ligneH + '.', from: fH });
   if (vu.phase !== 'MORT') {
     /* 2. what reached it — and what did not (only inputs RECORDED at zero are named as absent) */
     const recu = beatSentence(vu).traces.filter((t) => t.key !== 'phase' && t.key !== 'nothing');
