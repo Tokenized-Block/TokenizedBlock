@@ -24090,6 +24090,10 @@ function peindreTrending() {
       + sansLigneVues.map((x) => '<li class="filL trLigne trSansLigne" data-block="' + enTexte(x.adr) + '" data-sym="' + enTexte(x.sym || '') + '">'
         + '<span class="trRang">·</span><div class="filArt">' + dessin(x.adr, x.sym || '') + '</div>'
         + '<div class="trInfo"><p class="filT"><b>' + enTexte(x.sym || x.adr) + '</b></p><p class="filS">Tokenized stock · no market figures</p></div>'
+        /* 2026-10-27 (owner: "all Coinbase stocks live") — MUc: route ACHETABLE read on chain + in the measured Aerodrome table, but
+         *   DexScreener only sees a thin Uniswap pair, so it had no line and NO Buy. Same button + path as the table rows (the sheet buys
+         *   through the table pool); only ACHETABLE + table, never on a DexScreener figure. */
+        + (x.route === 'ACHETABLE' && x.table === true ? '<span class="trBoutons"><button type="button" class="bouton trAcheter" data-acheter="' + enTexte(x.adr) + '">Buy</button></span>' : '')
         + '<p class="note trRaison">' + enTexte(raisonSansLigne(x)) + '</p></li>').join('') : '')
     /* ⛔⛔ CE `||` NE COUVRE QUE LA LISTE VIDE, et c est correct — mais c etait LE SEUL endroit ou
      *   l avertissement de refus partiel apparaissait. Comme `+` lie plus fort que `||`, l ensemble
