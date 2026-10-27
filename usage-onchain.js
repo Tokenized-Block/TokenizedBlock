@@ -71,6 +71,9 @@ export const EQUIPE = Object.freeze([
   { nom: 'fee wallet (smart wallet)', adresse: bas(FEE_WALLET) },
   { nom: 'legacy operator / owner wallet', adresse: bas(FEE_WALLET_LEGACY_37EB) },
   { nom: 'community reserve / deployment signer / test wallet', adresse: '0x31e0dbc9038c82184b9fa6a90057a3ed500bde3b' },
+  /* 2026-10-27, owner in chat: "oui a moi" — the Block 0 creator is the owner's own wallet (access lost after a bug). Address copied
+   *   from mesures/usage-onchain-20261027.json, never typed from memory. */
+  { nom: 'owner wallet (Block 0 creator, access lost)', adresse: '0xaf8e0a44496a6b90da03fbadd9daec875fc3e2a6' },
 ]);
 
 /** Stables priced at face value (USD). AUDF is an AUD stable: NOT converted, reported apart. */

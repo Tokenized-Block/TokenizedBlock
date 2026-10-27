@@ -1552,12 +1552,12 @@
    "txsWithUnpricedLegs": 15
   },
   "sansEquipe": {
-   "usersAllTime": 7,
+   "usersAllTime": 6,
    "dau": 0,
    "wau": 0,
-   "volumeUsdAllTime": 543.67,
-   "volumeUsd30d": 1.59,
-   "txs": 54,
+   "volumeUsdAllTime": 150.16,
+   "volumeUsd30d": 0.79,
+   "txs": 30,
    "txsWithUnpricedLegs": 3
   }
  },
@@ -3051,32 +3051,68 @@
  ],
  "txsVolumeDerivedFromFee": 0,
  "reprise": {
-  "quand": "2026-10-27T11:43:17.149Z",
+  "quand": "2026-10-27T12:01:10.026Z",
   "rpc": "https://base-rpc.publicnode.com",
   "pas": 10000,
   "plagesRelues": [
    [
     50861088,
+    50871087
+   ],
+   [
+    50871088,
+    50881087
+   ],
+   [
+    50881088,
+    50891087
+   ],
+   [
+    50891088,
+    50901087
+   ],
+   [
+    50901088,
     50911087
    ],
    [
     50911088,
+    50921087
+   ],
+   [
+    50921088,
+    50931087
+   ],
+   [
+    50931088,
+    50941087
+   ],
+   [
+    50941088,
+    50951087
+   ],
+   [
+    50951088,
     50961087
    ],
    [
     50961088,
-    51011087
+    50971087
    ],
    [
-    52311088,
-    52361087
+    50971088,
+    50981087
    ],
    [
-    52511088,
-    52561087
+    50981088,
+    50991087
+   ],
+   [
+    50991088,
+    51001087
    ]
   ],
-  "nonLusAvant": 35,
+  "nonLusAvant": 168,
   "nonLusApres": 168,
   "txsTrouvees": 0,
   "lignesNouvelles": 0,
