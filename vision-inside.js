@@ -152,6 +152,16 @@ export function panCam(cam, dx, dy) {
   const c = cam || freeCam(), bound = (v) => Math.max(-600, Math.min(600, v));
   return { ...c, ox: bound((c.ox || 0) + (finite(dx) ? dx : 0)), oy: bound((c.oy || 0) + (finite(dy) ? dy : 0)) };
 }
+/** 2026-10-27 (owner: "let us roam inside the box even when the brain is live"): ONE gesture on the viewer's camera — drag = orbit,
+ *  pan = move, dz = fly (wheel or pinch). `cam` = where the viewer left it (null = not moved yet: start from `from`, the pose shown).
+ *  A beat never calls this: only a gesture moves the camera, only Reset view puts it back. */
+export function navGesture(cam, from, { dx = 0, dy = 0, dz = 0, pan = false } = {}) {
+  const c0 = cam || from || freeCam();
+  const c = { yaw: finite(c0.yaw) ? c0.yaw : 0, pitch: finite(c0.pitch) ? c0.pitch : 0, dist: finite(c0.dist) ? c0.dist : 0.35, ox: finite(c0.ox) ? c0.ox : 0, oy: finite(c0.oy) ? c0.oy : 0 };
+  if (pan) return panCam(c, dx, dy);
+  const o = orbitCam(c, dx, dy);
+  return finite(dz) && dz !== 0 ? zoomCam(o, dz) : o;
+}
 /* the "seen from the map" pose: the map camera's heading, from afar (the block among its real neighbours) */
 const MAP_POSE_DIST = 6;
 export function mapPose(mapCam) {

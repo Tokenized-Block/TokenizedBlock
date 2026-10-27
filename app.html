@@ -1151,6 +1151,13 @@ dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;he
 .bvPensee{margin:6px 0;padding:8px 12px;border-left:3px solid var(--accent);background:rgb(var(--accentRgb) / .07);border-radius:0 10px 10px 0}
 .bvPenseeTexte{margin:0;font-size:14px;line-height:1.45;overflow-wrap:anywhere}
 .bvLecture{margin:4px 0 0}
+#bvScene .bvNb{position:absolute;pointer-events:none;cursor:default;z-index:1}
+#bvScene .bvNb:not(.maSkin){border:0;box-shadow:none}
+#bvScene .bvNb.fige .c3r,#bvScene .bvNb.fige .c3o,#bvScene .bvNb.fige .c3m{animation-play-state:paused}
+.bvNbTag{position:absolute;left:50%;bottom:-14px;transform:translateX(-50%);white-space:nowrap;font-size:10px;color:rgb(200 205 225 / .8);text-shadow:0 1px 2px #000}
+@media (max-width:600px){#bvPop .bvPetit,#bvPop .bvShelf .bvSpine,#bvPop .bvTabs .bvTab,#bvPop .bvMoodBtn,#bvPop .bvPenseePlus,#bvPop #bvBattement{min-height:44px}
+  #bvPop .bvAim{max-width:calc(100% - 20px);box-sizing:border-box}}
+.bvPenseePlus{background:none;border:0;padding:2px 0;min-height:24px;color:var(--accent);font:inherit;font-size:12px;text-decoration:underline;cursor:pointer}
 .bvTech{margin:2px 0}.bvTech>summary{cursor:pointer;min-height:24px}.bvTech p{margin:2px 0 0;overflow-wrap:anywhere}
 /* 2026-10-27 (owner): THE SKIN AUCTION ROOM — a window like the brain window (dialog.bvPop), a stage with the auctioneer */
 .skStage{display:grid;grid-template-columns:minmax(96px,150px) 1fr;gap:10px;align-items:end;margin:8px 0;padding:10px;border-radius:14px;
@@ -4644,6 +4651,7 @@ details[open] > summary::before{transform:rotate(90deg)}
     <button type="button" class="bouton sec bvPetit" id="bvVueDehors" aria-pressed="false">Outside</button>
     <button type="button" class="bouton sec bvPetit" id="bvControl" title="Free camera over its 128 neurons, on a local snapshot — nothing is sent">Take control</button>
     <button type="button" class="bouton sec bvPetit" id="bvBackToLive" hidden>Back to live</button>
+    <button type="button" class="bouton sec bvPetit" id="bvResetView" hidden title="Put the camera back where this view starts">Reset view</button>
     <button type="button" class="bouton sec bvPetit" id="bvBackToMap" title="Fly back out of the block, to the map">Back to map</button>
   </div>
   <div class="bvScene" id="bvScene">
@@ -4670,6 +4678,7 @@ details[open] > summary::before{transform:rotate(90deg)}
        (pensee-cerveau.js, fixed templates, never an LLM); the reading is labelled as a reading; the numbers stay one click away -->
   <div class="bvPensee" id="bvPensee" aria-live="polite">
     <p class="bvPenseeTexte" id="bvPenseeTexte"></p>
+    <button type="button" class="bvPenseePlus" id="bvPenseePlus" aria-expanded="false" aria-controls="bvPenseeTexte" hidden>more</button>
     <p class="note bvLecture" id="bvLecture"></p>
   </div>
   <details class="bvTech"><summary class="note">Numbers of this beat</summary><p class="note mono" id="bvSortie"></p></details>
@@ -5041,7 +5050,7 @@ import { pointsDeVie, etatPaliers, PALIERS } from './pointsdevie.js';
 import { etatInitial as cerveauInitial, pas as cerveauPas, phraseDePhase, VERSION_CERVEAU, serialiserMemoire, restaurerMemoire, nomHumeur, CAPTEURS, PARAMETRES, NEURONES } from './cerveau.js';
 import { champ as champVision, simuler as simulerVision, EDITS as EDITS_VISION, BATTEMENTS_SIM, humeurCourte as humeurCourteVision, cadreInterieur, parler as parlerVision, PAROLES as PAROLES_VISION, interne as interneVision, PRES_DU_SEUIL, viewReference as viewReferenceVision, beatDuration, boundedSpeed } from './vision-cerveau.js';
 import { skinDuBlock, paletteSkin, melange as melangeSkin, VARS_SKIN } from './vision-skin.js';
-import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam,
+import { effectsOf, lightOf, pulseOf, echoesOf, horizonOf, beatNumber, voiceOf as voiceInside, whyOf, insideSnapshot, freeCam, orbitCam, zoomCam, navGesture,
   projectNeurons, cameraPose, animationPlan, outsideNeighbours, FLIGHT_MS, panCam, mapPose, flightPose, spaceScene, placeLabels, labelBox, beatHeader, replayPosition, nextPinned, leftWindowText, sceneBackground, moodFlash } from './vision-inside.js';
 import { inspectBlock, aimedAt, describeTarget, NOT_READ as INSPECT_NOT_READ } from './inspect-block.js';
 import { fieldText as inspectFieldText } from './inspect-block.js';
@@ -26501,8 +26510,8 @@ function peindreVision() {
   /* game57 #4c (c): one short line; the full explanation is the "How to read" book */
   $('#bvLegende').textContent = vision.control
     ? 'Local snapshot: drag to orbit, scroll to fly. Nothing is sent — see How to read.'
-    : (dedans ? 'Inside its brain: lit = fired on this beat — see How to read.'
-      : 'Outside: its real map neighbours, unread by its neurons — see How to read.');
+    : (dedans ? 'Inside its brain: lit = fired on this beat · drag to look around, scroll or pinch to fly — see How to read.'
+      : 'Outside: its real map neighbours, unread by its neurons · drag to look around — see How to read.');
   peindreListesVision(c, cible);
   if (vision.book === 'why') bvPaintWhy();
   const ref = viewReferenceVision({ histo, tick: vuShown ? vuShown.tick : null });
@@ -26516,8 +26525,15 @@ function peindreVision() {
     const iShown = vuShown ? histo.indexOf(vuShown) : -1;
     const p = iShown >= 0 ? penseeVision(histo, iShown, { voisins: Array.isArray(c.contexte.voisins) ? c.contexte.voisins.length : null, etat: cible.etat || null, faits: cible.faits || null }) : null;
     vision.pensee = p; window.__TB_BRAIN_PENSEE__ = p;
-    $('#bvPenseeTexte').textContent = p ? p.text : 'No beat recorded here yet — I have nothing to think about.';
-    $('#bvLecture').textContent = p && p.reading ? 'Reading of its state: ' + p.reading.word + ' (' + p.reading.key + ', ' + p.reading.tier + ') — ' + p.reading.why + '. (A reading of the numbers below, not its engine mood: ' + p.mood + '.)' : '';
+    /* 2026-10-27 (owner, "text too big, keep the essential"): the essential (p.text = its first two clauses) is shown; the whole
+     *   thought (p.complet) stays one tap away ("more") and in the tooltip */
+    const tx = $('#bvPenseeTexte'), plus = $('#bvPenseePlus');
+    const long = !!(p && p.complet && p.complet !== p.text), ouvert = long && vision.penseeComplete === true;
+    tx.textContent = p ? (ouvert ? p.complet : p.text) : 'No beat recorded here yet — I have nothing to think about.';
+    if (long) tx.title = p.complet; else tx.removeAttribute('title');
+    plus.hidden = !long; plus.textContent = ouvert ? 'less' : 'more'; plus.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+    $('#bvLecture').textContent = p && p.reading ? 'Reading: ' + p.reading.word + ' — ' + p.reading.why + '.' : '';
+    $('#bvLecture').title = p && p.reading ? 'A reading of the numbers (' + p.reading.key + ', ' + p.reading.tier + '), not its engine mood: ' + p.mood + '.' : '';
   }
   if (!vision.loop) bvPaint3D(performance.now());
   window.__TB_BRAIN_VISION__ = c;
@@ -26534,6 +26550,8 @@ function currentCam(t = performance.now()) {
   const arrival = cameraPose(vision.vue, 1, reduced);
   if (vision.backFlight) return flightPose(vision.backFlight.from, vision.backFlight.to, (t - vision.backFlight.t0) / FLIGHT_MS, reduced);
   if (vision.control) return vision.control.cam;
+  /* 2026-10-27 (owner): the camera the viewer moved, live — a beat never resets it; only Reset view / a view change does */
+  if (vision.nav) return vision.nav;
   if (vision.flight && vision.flightFrom) return flightPose(vision.flightFrom, arrival, (t - vision.flight) / FLIGHT_MS, reduced);
   return flightPose(null, arrival, 1, true);
 }
@@ -26544,9 +26562,48 @@ function bvBackToMap() {
   vision.backFlight = { t0: performance.now(), from: currentCam(performance.now()), to: mapPose(moteur3d && typeof moteur3d.camera === 'function' ? moteur3d.camera() : null) };
 }
 function bvPanControl(dx, dy) {
-  if (!vision.control) return;
+  if (!vision.control) { bvNavGesture({ dx, dy, pan: true }); return; }
   vision.control = { ...vision.control, cam: panCam(vision.control.cam, dx, dy) };
   peindreVision();
+}
+/* 2026-10-27 (owner, "roam inside the box even when the brain is live"): a gesture moves the viewer's camera WHILE the beats keep
+ *   playing — no pause, no snapshot. Repaints the scene only (the live data keeps coming from peindreVision). */
+function bvNavGesture(g) {
+  vision.nav = navGesture(vision.nav, currentCam(performance.now()), g);
+  vision.flight = null; vision.backFlight = null;
+  $('#bvResetView').hidden = false;
+  if (!vision.loop) bvPaint3D(performance.now());
+}
+function bvResetView() {
+  vision.nav = null;
+  if (vision.control) vision.control = { ...vision.control, cam: freeCam() };
+  $('#bvResetView').hidden = true;
+  if (vision.control) peindreVision(); else if (!vision.loop) bvPaint3D(performance.now());
+}
+/* 2026-10-27 (owner): a neighbour = the Map's own block (dessinMap: cube3d.js, its spin, its skin via poserMesSkins on .bloc[data-block]),
+ *   laid over the canvas at its projected place. Pinned (clicked) = its spin stops (.fige); the beat's pulses keep playing on the canvas. */
+const bvNbEls = new Map(); let bvNbFrame = 0;
+function bvNeighbourBlock(o, c0, pc, cv, L) {
+  const scene = $('#bvScene'); if (!scene || !cv || !o || !o.adr) return null;
+  let el = bvNbEls.get(o.adr);
+  if (!el) {
+    const html = dessinMap(o.adr, o.sym); if (!html) return null;
+    el = document.createElement('div'); el.className = 'bloc bvNb'; el.dataset.block = o.adr;
+    el.innerHTML = html; const tag = document.createElement('span'); tag.className = 'bvNbTag';
+    tag.textContent = String(o.sym || bvCourt(o.adr)).slice(0, 10) + ' · not read'; el.append(tag);
+    scene.append(el); bvNbEls.set(o.adr, el); try { poserMesSkins(); } catch (_) {}
+  }
+  const k = cv.clientWidth / L, xs = pc.map((q) => q.x);
+  const t = Math.max(14, Math.min(220, (Math.max(...xs) - Math.min(...xs)) * k));
+  el.style.width = t + 'px'; el.style.height = Math.round(t * 1.1) + 'px';
+  el.style.left = (cv.offsetLeft + c0.x * k - t / 2) + 'px'; el.style.top = (cv.offsetTop + c0.y * k - t * 0.55) + 'px';
+  el.classList.toggle('fige', vision.pinned === 'neighbour:' + o.adr);
+  el.dataset.f = String(bvNbFrame); el.hidden = false;
+  return el;
+}
+function bvNeighbourSweep() {
+  for (const [a, el] of bvNbEls) { if (el.dataset.f !== String(bvNbFrame)) el.hidden = true; if (!el.isConnected) bvNbEls.delete(a); }
+  bvNbFrame++;
 }
 /* game57 #4c (b): at most 6 labels in the space view; a label = its real text, measured, in screen space */
 const BV_LABELS_MAX = 6;
@@ -26622,14 +26679,19 @@ function bvPaint3D(t) {
     if (o.kind === 'neighbour') {
       const a = 0.16, sides = [-a, a], corners = []; for (const x of sides) for (const y of sides) for (const z of sides) corners.push([o.x + x, o.y + y, o.z + z]);
       const pc = proj(corners); if (pc.length < 8) continue; const byN = new Map(pc.map((q) => [q.n, q]));
-      ctx.strokeStyle = 'rgb(170 180 205 / .5)'; ctx.lineWidth = 1;
-      for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
-        if (corners[i].reduce((s2, v, k2) => s2 + (v !== corners[j][k2] ? 1 : 0), 0) !== 1) continue;
-        ctx.beginPath(); ctx.moveTo(byN.get(i).x, byN.get(i).y); ctx.lineTo(byN.get(j).x, byN.get(j).y); ctx.stroke();
-      }
       const [c0] = proj([[o.x, o.y, o.z]]); if (!c0) continue;
+      /* 2026-10-27 (owner): the neighbour drawn AS ON THE MAP — the Map's own cube (dessinMap -> cube3d.js, same spin), its skin only
+       *   for the account that owns it (poserMesSkins, the Map's rule); a click pins it and stops its spin. Wireframe only if no cube. */
+      const nb = bvNeighbourBlock(o, c0, pc, cv, L);
+      if (!nb) {
+        ctx.strokeStyle = 'rgb(170 180 205 / .5)'; ctx.lineWidth = 1;
+        for (let i = 0; i < 8; i++) for (let j = i + 1; j < 8; j++) {
+          if (corners[i].reduce((s2, v, k2) => s2 + (v !== corners[j][k2] ? 1 : 0), 0) !== 1) continue;
+          ctx.beginPath(); ctx.moveTo(byN.get(i).x, byN.get(i).y); ctx.lineTo(byN.get(j).x, byN.get(j).y); ctx.stroke();
+        }
+      }
       aimPoints.push({ x: c0.x, y: c0.y, id: 'neighbour:' + o.adr, obj: o });
-      bvLabelItem(labelItems, ctx, 'neighbour:' + o.adr, [String(o.sym || bvCourt(o.adr)).slice(0, 10) + ' · not read'], c0.x, c0.y + 6 + 16 * c0.k, c0.k, false);
+      if (!nb) bvLabelItem(labelItems, ctx, 'neighbour:' + o.adr, [String(o.sym || bvCourt(o.adr)).slice(0, 10) + ' · not read'], c0.x, c0.y + 6 + 16 * c0.k, c0.k, false);
     } else if (o.kind === 'input') {
       const [q] = proj([[o.x, o.y, o.z]]); if (!q) continue;
       aimPoints.push({ x: q.x, y: q.y, id: 'input:' + o.key, obj: o });
@@ -26640,6 +26702,7 @@ function bvPaint3D(t) {
       bvLabelItem(labelItems, ctx, 'input:' + o.key, [String(o.label).slice(0, 18), String(o.text).slice(0, 22)], q.x, q.y - r - 28, q.k, o.read);
     }
   }
+  bvNeighbourSweep();
   /* the neurons: lit = vu.indices (or the snapshot); echoes = those of the 5 beats before, paler with age */
   const lit = new Set(vision.control ? vision.control.snap.indices : vu && Array.isArray(vu.indices) ? vu.indices : []);
   const ages = new Map(), labelNeurons = [];
@@ -26838,7 +26901,8 @@ function bvTakeControl() {
   peindreVision();
 }
 function bvControlGesture(dx, dy, dz) {
-  if (!vision.control) return;
+  if (!vision.control) { bvNavGesture({ dx, dy, dz }); return; }
+  $('#bvResetView').hidden = false;
   let cam = orbitCam(vision.control.cam, dx, dy);
   if (dz) cam = zoomCam(cam, dz);
   vision.control = { ...vision.control, cam };
@@ -26964,8 +27028,8 @@ function ouvrirVision(source) {
   /* ⛔ game57 #4: a window, NOT a modal — the page stays usable behind it (like the Control panel) */
   try { dl.show(); } catch (_) { dl.setAttribute('open', ''); }
   bvShelfEdges();
-  vision.control = null; vision.particles = []; vision.tickShown = null; bvOublierCible();
-  $('#bvControl').hidden = false; $('#bvBackToLive').hidden = true;
+  vision.control = null; vision.nav = null; vision.particles = []; vision.tickShown = null; bvOublierCible();
+  $('#bvControl').hidden = false; $('#bvBackToLive').hidden = true; $('#bvResetView').hidden = true;
   /* game57 #4b (b): we ENTER from the map — the flight starts at the map camera heading and goes inside (a cut with reduced motion) */
   vision.backFlight = null; vision.vue = 'dedans';
   vision.flightFrom = mapPose(moteur3d && typeof moteur3d.camera === 'function' ? moteur3d.camera() : null);
@@ -27055,27 +27119,50 @@ $('#bvTabs').addEventListener('click', (e) => {
 });
 $('#bvControl').addEventListener('click', bvTakeControl);
 $('#bvBackToLive').addEventListener('click', bvBackToLive);
+$('#bvResetView').addEventListener('click', bvResetView);
+$('#bvPenseePlus').addEventListener('click', () => { vision.penseeComplete = !vision.penseeComplete; peindreVision(); });
 (function bvCameraGestures() {
   const cv = $('#bv3d'); if (!cv) return;
-  let prev = null;
-  /* game57 #4b (b): like the map — drag = orbit, right-drag or Shift-drag = pan, wheel = fly */
-  cv.addEventListener('pointerdown', (e) => { if (!vision.control) return; prev = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; try { cv.setPointerCapture(e.pointerId); } catch (_) {} });
-  cv.addEventListener('pointermove', (e) => { if (!prev) return; const dx = e.clientX - prev.x, dy = e.clientY - prev.y; if (prev.pan) bvPanControl(dx, dy); else bvControlGesture(dx, dy, 0); prev = { ...prev, x: e.clientX, y: e.clientY }; });
-  cv.addEventListener('contextmenu', (e) => { if (vision.control) e.preventDefault(); });
+  let prev = null, moved = 0;
+  const touches = new Map(); let pinch = null;
+  /* game57 #4b (b): like the map — drag = orbit, right-drag or Shift-drag = pan, wheel = fly.
+   * ⛔ 2026-10-27 (owner): ALWAYS available — live, paused, replay or snapshot; two fingers = pinch to fly */
+  cv.addEventListener('pointerdown', (e) => {
+    touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (touches.size === 2) { const [a, b] = [...touches.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); prev = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, pan: true, deux: true }; }
+    else { prev = { x: e.clientX, y: e.clientY, pan: e.button === 2 || e.shiftKey }; moved = 0; }
+    try { cv.setPointerCapture(e.pointerId); } catch (_) {}
+  });
+  cv.addEventListener('pointermove', (e) => {
+    if (touches.has(e.pointerId)) touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch !== null && touches.size === 2) {
+      const [a, b] = [...touches.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (Math.abs(d - pinch) > 2) { bvControlGesture(0, 0, (pinch - d) / 40); pinch = d; moved += 10; }
+      /* two fingers dragged together = move the view */
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      if (prev && prev.deux && (mx !== prev.x || my !== prev.y)) { bvPanControl(mx - prev.x, my - prev.y); moved += Math.abs(mx - prev.x) + Math.abs(my - prev.y); prev = { ...prev, x: mx, y: my }; }
+      return;
+    }
+    if (!prev) return; const dx = e.clientX - prev.x, dy = e.clientY - prev.y; moved += Math.abs(dx) + Math.abs(dy);
+    if (prev.pan) bvPanControl(dx, dy); else bvControlGesture(dx, dy, 0); prev = { ...prev, x: e.clientX, y: e.clientY };
+  });
+  cv.addEventListener('contextmenu', (e) => e.preventDefault());
   /* game57 #4c (b): the object under the pointer is labelled (hover) */
   cv.addEventListener('pointermove', (e) => { const r = cv.getBoundingClientRect(), x = (e.clientX - r.left) * cv.width / r.width, y = (e.clientY - r.top) * cv.height / r.height; const hit = aimedAt((vision.aimPoints || []).map((p) => ({ ...p, x: p.x - x + cv.width / 2, y: p.y - y + cv.height / 2 })), cv.width, cv.height, 18); vision.hover = hit ? hit.id : null; });
   cv.addEventListener('pointerleave', () => { vision.hover = null; });
   /* game57 #4b (d): click an object to pin its overlay; click empty space to release (no drag moved the camera) */
   cv.addEventListener('click', (e) => {
+    if (moved > 6) { moved = 0; return; } /* the end of a drag is not a click: the pin stays as it was */
     const r = cv.getBoundingClientRect(), sx = cv.width / r.width, sy = cv.height / r.height;
     const x = (e.clientX - r.left) * sx, y = (e.clientY - r.top) * sy;
     const hit = aimedAt((vision.aimPoints || []).map((p) => ({ ...p, x: p.x - x + cv.width / 2, y: p.y - y + cv.height / 2 })), cv.width, cv.height, 24);
-    vision.pinned = hit ? hit.id : null; vision.aimKey = null;
+    vision.pinned = hit && hit.id !== vision.pinned ? hit.id : null; vision.aimKey = null; /* click it again = release */
     if (!bvReduit()) return; bvPaint3D(0);
   });
-  cv.addEventListener('pointerup', () => { prev = null; });
-  cv.addEventListener('pointercancel', () => { prev = null; });
-  cv.addEventListener('wheel', (e) => { if (!vision.control) return; e.preventDefault(); bvControlGesture(0, 0, Math.sign(e.deltaY)); }, { passive: false });
+  const fin = (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = null; prev = null; };
+  cv.addEventListener('pointerup', fin);
+  cv.addEventListener('pointercancel', fin);
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); bvControlGesture(0, 0, Math.sign(e.deltaY)); }, { passive: false });
 })();
 $('#bvJouer').addEventListener('click', () => {
   vision.jouer = !vision.jouer;
@@ -27093,7 +27180,7 @@ $('#bvRejouer').addEventListener('click', lancerSimVision);
  *   pinned (and labelled "Neuron #86 (pinned…)") Outside, and even after closing and reopening the window on another block.
  *   Switching view (or opening the window) now releases the pin, the hover and the overlay key: nothing carries over. */
 function bvOublierCible() { vision.pinned = null; vision.hover = null; vision.aimKey = null; }
-function bvChangerVue(vue) { const from = currentCam(); if (vision.control) bvBackToLive(); vision.backFlight = null; bvOublierCible(); vision.vue = vue; vision.flightFrom = from; vision.flight = bvReduit() ? null : performance.now(); peindreVision(); }
+function bvChangerVue(vue) { const from = currentCam(); if (vision.control) bvBackToLive(); vision.nav = null; $('#bvResetView').hidden = true; vision.backFlight = null; bvOublierCible(); vision.vue = vue; vision.flightFrom = from; vision.flight = bvReduit() ? null : performance.now(); peindreVision(); }
 $('#bvVueDedans').addEventListener('click', () => bvChangerVue('dedans'));
 $('#bvVueDehors').addEventListener('click', () => bvChangerVue('dehors'));
 $('#bvBackToMap').addEventListener('click', bvBackToMap);

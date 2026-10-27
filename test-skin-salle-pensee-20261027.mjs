@@ -25,7 +25,9 @@ const p = P.pensee(histo, 4, { voisins: 3 });
 /* 2026-10-27 (owner, later): the thought now covers its whole beat (test-pensee-lexique-20261027.mjs) — 2 to 5 sentences */
 ok(p && p.clauses.length >= 2 && p.clauses.length <= 5, '2-5 sentences (' + (p && p.clauses.length) + ')');
 ok(p.text === P.pensee(histo, 4, { voisins: 3 }).text, 'same beat -> same text');
-ok(p.text === p.clauses.map((c) => c.text).join(' '), 'the text is exactly its clauses');
+/* 2026-10-27 (owner, "text too big, keep the essential"): text = the ESSENTIAL (its first two clauses); complet = all of them */
+ok(p.text === p.clauses.slice(0, 2).map((c) => c.text).join(' '), 'the text is exactly its first two clauses');
+ok(p.complet === p.clauses.map((c) => c.text).join(' ') && p.clauses.length > 2 && p.complet.length > p.text.length, 'complet is exactly all its clauses');
 ok(/^[A-Z0-9]/.test(p.text) && /\bI\b|\bmy\b|\bme\b/.test(p.text), 'first person: ' + p.text);
 /* every clause is traced, and every number it says is one of its traced values (or the fixed 128 neurons) */
 const nums = (s) => (s.match(/\d+(?:\.\d+)?/g) || []).map(Number);
@@ -37,8 +39,8 @@ for (const c of p.clauses) {
   for (const f of c.from) ok(/^(phase|nouveaux\.\w+|delta|deltaHumeur|tirsCurieux|nourriture|nothing|spikes|average|averageOver|nearThreshold|memoire|memoireAvant|virage|vitesse|vitesseAvant|gauche_hz|droite_hz|role|reveil|voisins)$/.test(f.key), 'known datum ' + f.key);
 }
 ok(/2 buys reached me/.test(p.text) && /a new holder reached me/.test(p.text) && /warmed \(\+1\.2 %\)/.test(p.text), 'inputs of THIS beat named: ' + p.clauses[0].text);
-ok(/26 of my 128 neurons \w+ — well above my average of 10 over my last 4 beats/.test(p.text), 'fired vs its recent average');
-ok(/I (turn|lean|veer) left and (speed up|quicken|pick up pace) from 0\.3 to 0\.65\./.test(p.text) && /3 map neighbours are around me, but none reach my neurons/.test(p.text), 'steering, speed vs previous, neighbours not read: ' + p.text);
+ok(/26 of my 128 neurons \w+ — well above my average of 10 over my last 4 beats/.test(p.complet) && !/neurons/.test(p.text), 'fired vs its recent average (in complet, not in the essential)');
+ok(/I (turn|lean|veer) left and (speed up|quicken|pick up pace) from 0\.3 to 0\.65\./.test(p.complet) && /3 map neighbours are around me, but none reach my neurons/.test(p.complet), 'steering, speed vs previous, neighbours not read: ' + p.complet);
 ok(p.reading.key === 'restless' && p.reading.from.some((f) => f.key === 'delta'), 'restless = high firing + rising life');
 /* readings: each rule from real state */
 const r = (h, i) => P.lecture(h, i).key;
@@ -51,10 +53,10 @@ ok(r(calm, 7) === 'lonely' && r(calm, 6) !== 'lonely', 'lonely only after ' + P.
 ok(r([beat(1), beat(2), beat(3), beat(4, { spikes: 30 })], 3) === 'stirred', 'high firing alone -> stirred');
 ok(r([beat(1), beat(2), beat(3), beat(4, { spikes: 2 })], 3) === 'settling', 'low firing -> settling');
 const p0 = P.pensee([beat(1)], 0);
-ok(/too few earlier beats/.test(p0.text) && !/average/.test(p0.text), 'no history -> no comparison is invented');
+ok(/too few earlier beats/.test(p0.complet) && !/average/.test(p0.complet), 'no history -> no comparison is invented');
 ok(P.pensee([], 0) === null && P.pensee(histo, 9) === null, 'no beat -> no thought');
 const pm = P.pensee([beat(1, { phase: 'MORT', spikes: 0 })], 0);
-ok(pm.clauses.length === 2 && /creator holds none of me/.test(pm.text) && !/reached me|turn|speed|neighbour/.test(pm.text), 'dead: only what is true');
+ok(pm.clauses.length === 2 && pm.text === pm.complet && /creator holds none of me/.test(pm.text) && !/reached me|turn|speed|neighbour/.test(pm.text), 'dead: only what is true');
 const src = readFileSync(new URL(process.env.SP_PENSEE || 'pensee-cerveau.js', DIR), 'utf8');
 ok(!/fetch\(|https?:\/\/|anthropic|openai|Math\.random|Date\.now/.test(src), 'no network, no LLM, no randomness, no clock in the thought');
 /* cerveau.js v1 untouched (moods, rules, fingerprint) */
@@ -124,7 +126,8 @@ const p3 = app.slice(app.indexOf('function bvPaint3D('), app.indexOf('function b
 ok(/ctx\.fillStyle = sceneBackground\(vision\.fondScene\);\n\s*ctx\.fillRect\(0, 0, L, H\);/.test(p3) && !/fillStyle = lum\.neutral \? '#0b0d12' : 'hsl\(/.test(p3), 'the scene background is black / the owned skin, never the mood (no gold "skin" background)');
 const pv = app.slice(app.indexOf('function peindreVision('), app.indexOf('/* ══ THE 3D SCENE'));
 ok(/if \(vision\.skinAdr !== cible\.adr\) \{[^\n]*\n[^\n]*removeProperty/.test(pv), 'another block shown -> the previous palette is removed and the new one read');
-ok(/penseeVision\(histo, iShown/.test(pv) && /'Reading of its state: '/.test(pv) && /not its engine mood/.test(pv), 'the thought is painted, its reading labelled as a reading');
+ok(/penseeVision\(histo, iShown/.test(pv) && /'Reading: ' \+ p\.reading\.word \+ ' — ' \+ p\.reading\.why \+ '\.'/.test(pv) && /not its engine mood/.test(pv), 'the thought is painted, its reading short and labelled as a reading');
+ok(/tx\.textContent = p \? \(ouvert \? p\.complet : p\.text\)/.test(pv) && /vision\.penseeComplete === true/.test(pv) && /tx\.title = p\.complet/.test(pv) && /id="bvPenseePlus"/.test(app), 'the essential by default; the whole thought on demand (more / tooltip)');
 ok(/<details class="bvTech"><summary class="note">Numbers of this beat<\/summary><p class="note mono" id="bvSortie"><\/p><\/details>/.test(app), 'the technical numbers stay, folded');
 
 console.log('test-skin-salle-pensee-20261027: ' + count + ' checks OK');
@@ -137,6 +140,8 @@ if (!process.env.SP_APP && !process.env.SP_PENSEE && !process.env.SP_SALLE) {
     ['SP_PENSEE', 'mut-pensee-invente.tmp.mjs', pen.replace("clauses.push({ text: cause.text,", "clauses.push({ text: 'I feel 3 whales watching me.', from: [{ key: 'nothing', value: null }] }); clauses.push({ text: cause.text,")],
     ['SP_PENSEE', 'mut-pensee-nombre.tmp.mjs', pen.replace("' over my last ' + m.n + ' beats'", "' over my last ' + (m.n + 2) + ' beats'")],
     ['SP_PENSEE', 'mut-pensee-horloge.tmp.mjs', pen.replace("return { version: VERSION_PENSEE, tick: vu.tick,", "return { version: VERSION_PENSEE, tick: vu.tick + (Date.now() % 2),")],
+    ['SP_PENSEE', 'mut-pensee-tout.tmp.mjs', pen.replace('text: clauses.slice(0, ESSENTIEL)', 'text: clauses')],
+    ['SP_APP', 'mut-app-complet.tmp.html', app.replace('tx.textContent = p ? (ouvert ? p.complet : p.text)', 'tx.textContent = p ? (true ? p.complet : p.text)')],
     ['SP_SALLE', 'mut-salle-offre.tmp.mjs', sal.replace("'No bid yet — it opens at '", "'The highest bid is ' + M(podium.prix, podium.devise) + ' — it opens at '")],
     ['SP_SALLE', 'mut-salle-lu.tmp.mjs', sal.replace('if (!lu) return {', 'if (false) return {')],
     ['SP_APP', 'mut-app-pin.tmp.html', app.replace('bvOublierCible(); vision.vue = vue;', 'vision.vue = vue;')],

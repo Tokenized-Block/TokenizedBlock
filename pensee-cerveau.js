@@ -219,6 +219,10 @@ export function pensee(histo, i, { voisins = null, etat = null, faits = null } =
   if (bouts.length) clauses.push({ text: majuscule(bouts.join('; ')) + '.', from: from5 });
   return fin(vu, H, i, clauses);
 }
+/* 2026-10-27 (owner: "text too big, keep the essential"): `text` = the ESSENTIAL — the first two clauses (why the mood + what reached
+ *   it; for a dead block, why + inside). `complet` = every clause, unchanged, shown on demand. Every clause keeps its own `from`. */
+export const ESSENTIEL = 2;
 function fin(vu, H, i, clauses) {
-  return { version: VERSION_PENSEE, tick: vu.tick, mood: humeurCourte(vu.phase), reading: lecture(H, i), clauses, text: clauses.map((c) => c.text).join(' ') };
+  return { version: VERSION_PENSEE, tick: vu.tick, mood: humeurCourte(vu.phase), reading: lecture(H, i), clauses,
+    text: clauses.slice(0, ESSENTIEL).map((c) => c.text).join(' '), complet: clauses.map((c) => c.text).join(' ') };
 }

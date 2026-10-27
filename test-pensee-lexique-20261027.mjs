@@ -68,7 +68,9 @@ for (const r of runs) {
     for (const c of [ctx, ctxLive]) {
       const p = P.pensee(c.H, i, { voisins: 4, etat: c.etat, faits: c.faits });
       ok(p.text === P.pensee(c.H, i, { voisins: 4, etat: c.etat, faits: c.faits }).text, 'same beat -> same text');
-      texts.add(p.text); beats++;
+      /* 2026-10-27 (owner, "keep the essential"): text = its first two clauses; complet = all its clauses, each still traced */
+      ok(p.text === p.clauses.slice(0, 2).map((x) => x.text).join(' ') && p.complet === p.clauses.map((x) => x.text).join(' '), 'text = essential (2 clauses), complet = all');
+      texts.add(p.complet); beats++;
       for (const cl of p.clauses) {
         ok(Array.isArray(cl.from) && cl.from.length > 0, 'clause traced: ' + cl.text);
         for (const f of cl.from) {
@@ -115,7 +117,7 @@ for (const r of runs) {
 }
 ok(texts.size > runs.length * 40, 'different beats read differently (' + texts.size + ' distinct texts)');
 ok(moveWords.size >= 4, 'movement words vary: ' + [...moveWords].join(','));
-ok(runs.some((r) => r.histo.some((v, i) => v.phase !== 'MORT' && P.pensee(r.histo, i, { etat: r.etats[i], faits: r.faitsL[i] }).text.includes('daily wake-up pulse — not a market event'))), 'the daily wake-up is said on its beat, as NOT a market event');
+ok(runs.some((r) => r.histo.some((v, i) => v.phase !== 'MORT' && P.pensee(r.histo, i, { etat: r.etats[i], faits: r.faitsL[i] }).complet.includes('daily wake-up pulse — not a market event'))), 'the daily wake-up is said on its beat, as NOT a market event');
 /* a record that does not hold its reason -> says so, never guesses */
 ok(!P.causeHumeur({ tick: 1, phase: 'EXCITE', spikes: 3, delta: 0, nouveaux: { achats: 0, ventes: 0, detenteurs: 0, gm: 0, messages: 0 } }).ok
   && /does not hold enough to tell why/.test(P.causeHumeur({ tick: 1, phase: 'CALME', spikes: 3 }).text), 'no re-derivable reason -> "cannot tell"');
