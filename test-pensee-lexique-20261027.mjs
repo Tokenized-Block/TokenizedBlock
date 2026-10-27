@@ -167,7 +167,7 @@ console.log('test-pensee-lexique-20261027: ' + count + ' checks OK (' + beats + 
 /* ── MUTANTS ── */
 if (!process.env.LX_PENSEE && !process.env.LX_LEX && !process.env.LX_VI && !process.env.LX_APP) {
   const me = fileURLToPath(import.meta.url), here = fileURLToPath(DIR);
-  const pen = readFileSync(new URL('pensee-cerveau.js', DIR), 'utf8'), lex = readFileSync(new URL('lexique-cerveau.js', DIR), 'utf8');
+  const pen = readFileSync(new URL('pensee-cerveau.js', DIR), 'utf8').replace(/\r\n/g, '\n'), lex = readFileSync(new URL('lexique-cerveau.js', DIR), 'utf8');
   const vi = readFileSync(new URL('vision-inside.js', DIR), 'utf8');
   const M = [
     ['LX_PENSEE', 'mut-lx-nouveaux.tmp.mjs', pen, pen.replace("const nouv = ['achats', 'detenteurs', 'gm', 'messages'].filter((k) => N[k] > 0);", "const nouv = ['achats', 'detenteurs', 'gm', 'messages'].filter((k) => N[k] >= 0);")],
