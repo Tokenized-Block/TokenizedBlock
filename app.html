@@ -1289,6 +1289,10 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 .blvTuile[data-phase="CURIEUX"]{--glow:var(--tiede,#f0c674)}.blvTuile[data-phase="CALME"]{--glow:var(--accent,#a78bfa)}
 .blvTuile[data-phase="EXCITE"],.blvTuile[data-phase="INQUIET"],.blvTuile[data-phase="CURIEUX"],.blvTuile[data-phase="CALME"]{border-color:var(--glow);box-shadow:0 0 14px -4px var(--glow);animation:blvSouffle 4s ease-in-out infinite}
 @keyframes blvSouffle{50%{box-shadow:0 0 22px -2px var(--glow)}}
+/* game66: the Feed line of a block glows in its mood's colour; its feeling line under the event */
+.filEmo[data-phase="EXCITE"]{--glow:var(--vif,#3ddc97)}.filEmo[data-phase="INQUIET"]{--glow:var(--dur,#ff6b6b)}.filEmo[data-phase="CURIEUX"]{--glow:var(--tiede,#f0c674)}.filEmo[data-phase="CALME"]{--glow:var(--accent,#a78bfa)}
+.filEmo[data-phase="EXCITE"],.filEmo[data-phase="INQUIET"],.filEmo[data-phase="CURIEUX"],.filEmo[data-phase="CALME"]{border-left:3px solid var(--glow);box-shadow:inset 8px 0 14px -10px var(--glow)}
+.filE{margin:2px 0 0;font-size:12px;color:var(--glow,var(--doux))}
 @media (prefers-reduced-motion: reduce){.blvTuile{animation:none!important}}
 .blvTuileTete{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px}
 .blvTuileTete b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -9945,6 +9949,8 @@ function battre() {
     h.vuAvant = h.vu || null;
     h.vu = r.vu;
     h.phase = r.vu.phase;
+    /* game66 (owner: Feed tells what happens live, with the blocks' emotions): its last 16 beats, enough for its feeling (lecture) */
+    if (!h.histoCourt || !h.histoCourt.length || h.histoCourt[h.histoCourt.length - 1].tick !== r.vu.tick) h.histoCourt = (h.histoCourt || []).concat([r.vu]).slice(-16);
     const vitesse = 0.05 + r.vu.vitesse * 0.45;
     /* ⛔⛔ UN NaN ENTRE ICI ET NE RESSORT JAMAIS. Si `h.vx`/`h.vy` sont absents — le cerveau bat
      *     avant que la map n ait place le block — `Math.atan2(undefined, undefined)` rend NaN,
@@ -17289,8 +17295,17 @@ function peindreFil(vusCeLot) {
     const lien = l.tx ? ' · <a href="' + RESEAUX[CHAINE].explorateur + '/tx/' + enTexte(l.tx)
       + '" target="_blank" rel="noopener">tx</a>' : '';
     const icone = { ACHAT: '🟢', VENTE: '🔴', ALLER_RETOUR: '↔', FRAPPE: '🧱', MEMOIRE: '🧠', MESSAGE: '✉️', ENVOI: '➡️' }[r.genre] || '·';
-    return '<li class="filL"><div class="filArt">' + dessin(l.token, l.sym) + '</div><div style="min-width:0;flex:1">'
-      + '<p class="filT">' + icone + ' ' + enTexte(r.phrase) + '</p>' + msg
+    /* game66 (owner: "Feed = what happens live, with the blocks' new emotions, glow up"): the block's mood + feeling NOW, read off its
+     *   own beats on this page (never at the tx time — said so); its line glows in its mood's colour. No beat yet: nothing is shown. */
+    const hF = habitants.find((x) => String(x.adr).toLowerCase() === String(l.token).toLowerCase());
+    let emo = '', ph = '';
+    try {
+      const H = hF && Array.isArray(hF.histoCourt) ? hF.histoCourt : [];
+      const p = H.length ? penseeVision(H, H.length - 1, {}) : null;
+      if (p) { ph = H[H.length - 1].phase || ''; emo = '<p class="filE">' + enTexte((l.sym || 'It') + ' now feels ' + p.mood + (p.reading ? ' · ' + p.reading.word : '')) + '</p>'; }
+    } catch (_) { emo = ''; }
+    return '<li class="filL filEmo" data-phase="' + enTexte(ph) + '"><div class="filArt">' + dessin(l.token, l.sym) + '</div><div style="min-width:0;flex:1">'
+      + '<p class="filT">' + icone + ' ' + enTexte(r.phrase) + '</p>' + emo + msg
       + '<p class="filS">block ' + d + lien + (groupe.length > 1 ? ' · ' + groupe.length + ' transfers' : '') + '</p></div></li>';
   }).join('');
   const avecMsg = filLignes.filter((l) => l.memo && l.memo.etat === 'LU').length;
