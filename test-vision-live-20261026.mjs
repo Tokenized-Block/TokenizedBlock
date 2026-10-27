@@ -182,8 +182,9 @@ function verifier(L, app, serveur) {
     ok(/<button[^>]*id="bLiveMap"[^>]*aria-controls="bvPop"[^>]*>[\s\S]{0,80}Live<\/button>/.test(vmap), 'G: le bouton Live est sur la Map');
     /* 2026-10-27 (Phil) : le Live de la Map ouvre « View inside the brain » (#bvPop) sur le block cible, plus l ancien panneau */
     ok(/\$\('#bLiveMap'\)\.addEventListener\('click', ouvrirLiveVision\)/.test(app)
-      && /function ouvrirLiveVision\(\) \{[\s\S]{0,700}ouvrirVision\('brain'\)/.test(app)
-      && /function ouvrirLiveVision\(\) \{[\s\S]{0,500}liveCibleActuelle\(\)[\s\S]{0,120}UNIT_APP/.test(app), 'G: Live (Map) -> fenetre cerveau, block cible sinon UNIT');
+      && /function ouvrirLiveVision\(\) \{[\s\S]{0,1600}ouvrirVision\('brain'\)/.test(app)
+      /* game64: a target OFF the map (UNIT, prod 2026-10-27) gets no beat -> the map's first living block; UNIT only with an empty map */
+      && /function ouvrirLiveVision\(\) \{[\s\S]{0,500}liveCibleActuelle\(\)[\s\S]{0,900}voulu && surCarte\(voulu\) \? voulu : \(habitants\[0\][\s\S]{0,120}UNIT_APP/.test(app), 'G: Live (Map) -> fenetre cerveau, block cible SUR LA CARTE, sinon le premier block vivant, sinon UNIT');
     ok(/<aside class="blvPop" id="blvPop"[^>]*hidden>/.test(app) && /id="blvChamp"/.test(app) && /id="blvTuiles"/.test(app), 'G: le panneau Live, sa recherche et ses tuiles');
     ok(/\.bLive\{right:auto;left:12px/.test(app) && /\.blvPop\{position:fixed;z-index:71;left:12px/.test(app), 'G: le bouton en haut a gauche, le panneau docke a GAUCHE');
     ok(/@media \(max-width:760px\)\{\s*\.blvPop\{left:8px;right:8px;top:auto;bottom:/.test(app) && /\.blvPop\.blvReduit \.blvCorps/.test(app), 'G: telephone = une feuille en bas, repliable');

@@ -27376,9 +27376,13 @@ function ouvrirLiveVision() {
   const dl = $('#bvPop'), b = $('#bLiveMap');
   if (dl && dl.open) { try { dl.close(); } catch (_) { dl.removeAttribute('open'); } if (b) b.setAttribute('aria-expanded', 'false'); return; }
   const c = liveCibleActuelle();
-  const adr = c && c.adr ? String(c.adr).toLowerCase() : UNIT_APP;
-  /* game63 (prod 2026-10-27): after a reload brainAdr is RESTORED from localStorage but its brain never loaded (brainEtat null) — the
-   *   old "skip if same address" opened an empty window ("this block's brain", no beat). choisirBrain itself keeps a loaded brain intact. */
+  /* game64 (prod 2026-10-27, measured): the remembered brain was UNIT, which is NOT on the map (pool under the listing bar, 0 options in
+   *   #bChoix) — a brain off the map gets no beat, so Live opened an empty window. Live opens a block that lives on the map: the
+   *   targeted one if it is there, else the map's first living block; UNIT only when the map has none. */
+  const surCarte = (a) => habitants.some((x) => String(x.adr).toLowerCase() === a);
+  const voulu = c && c.adr ? String(c.adr).toLowerCase() : null;
+  const adr = voulu && surCarte(voulu) ? voulu : (habitants[0] && habitants[0].adr ? String(habitants[0].adr).toLowerCase() : (voulu || UNIT_APP));
+  /* game63: choisirBrain is always called (it keeps an already-loaded brain intact) */
   try { choisirBrain(adr); } catch (_) { /* la fenetre s ouvre sur le cerveau courant */ }
   ouvrirVision('brain');
   if (b) b.setAttribute('aria-expanded', 'true');
