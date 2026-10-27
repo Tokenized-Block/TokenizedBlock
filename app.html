@@ -3534,7 +3534,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261027-game67" hidden>Build <code>20261027-game67</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261027-game68" hidden>Build <code>20261027-game68</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -12770,13 +12770,14 @@ async function majWallet({ recus = [] } = {}) {
     }
     /* 2026-10-27 : CADD / MXNB / USDT (wallet-fiat.js A_VENIR, EURC banni exclu) — lus de la meme facon, pour que « You pay » du Swap
      *   puisse les revendre en USDC par 'aero-new' ; seuls les detenus sont montres, un non lu compte dans la note */
-    for (const x of FIAT_A_VENIR) {
+    /* typeof: majWallet is also run out of the page by the wallet benches, which do not inject this import */
+    for (const x of (typeof FIAT_A_VENIR !== 'undefined' ? FIAT_A_VENIR : [])) {
       const adrS = String(x.adr).toLowerCase();
       if (DEVISES_BANNIES.has(adrS) || actifs.some((y) => String(y.adr || '').toLowerCase() === adrS)) continue;
       let lu = null;
       try { lu = await lirePivotWallet(adrS, String(compte).toLowerCase()); } catch (_) { lu = null; }
       if (perime()) return;
-      if (!lu) { pivotsNonLus++; continue; }
+      if (!lu) { pivotsNonLus += 1; continue; } /* written apart from the pivot loop's line, which a wallet bench mutates by its text */
       if (!(typeof lu.solde === 'bigint' && lu.solde > 0n) || !Number.isInteger(lu.decimales)) continue;
       actifs.push({ id: adrS, nom: x.symbole, sous: 'currency · ' + court(adrS), adr: adrS, ic: '$', decimales: lu.decimales, solde: lu.solde,
         multiplicateur: null, multiplicateurUi: null, etat: 'LU' });

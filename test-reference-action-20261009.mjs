@@ -213,7 +213,7 @@ ok(/if \(chemin\.startsWith\('\/api\/actions\/reference\/'\)\) \{/.test(srv) && 
 ok(/if \(referencesEnVol >= 3\) return \{ ok: false, occupe: true/.test(srv) && /Date\.now\(\) - c\.t < 60000/.test(srv), 'serveur : 3 lectures en vol au plus, cache 60 s');
 ok(/const complet = r\.multiplicateur\.etat === 'LU' && \(r\.reference\.etat === 'LU' \|\| r\.reference\.etat === 'NON_DISPONIBLE'\);/.test(srv), 'serveur : un NON_LU n est jamais mis en cache');
 ok(/'reference-action\.js',/.test(srv), 'serveur : reference-action.js est dans la liste servie (import de la page)');
-ok((srv.match(/reference: lireReferenceServeur(?:, venueAction: venueActionServie)? \}/g) || []).length === 2, 'serveur : les deux appels du planificateur recoivent le lecteur de reference');
+ok((srv.match(/reference: lireReferenceServeur(?:, venueAction: venueActionServie)?(?:, venueStable: venueStableServie)? \}/g) || []).length === 2, 'serveur : les deux appels du planificateur recoivent le lecteur de reference');
 ok(/import \{ phraseReference \} from '\.\/reference-action\.js';/.test(html) && /import \{ equivalentActions \} from '\.\/multiplicateur-action\.js';/.test(html), 'page : les deux imports');
 const iRef = html.indexOf('id="bcTicketRef"'), iGo = html.indexOf('id="bcTicketGo"');
 ok(iRef > 0 && iRef < iGo, 'page : la ligne de reference est AVANT le bouton de revue');
