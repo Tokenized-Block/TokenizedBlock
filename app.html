@@ -550,7 +550,7 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bloc.sansPrix{opacity:.7}
 .mapBarre{display:flex;gap:8px;align-items:center;margin:0 0 10px;position:relative}
 /* la liste de la Map flotte SOUS la barre (mesure 375 px : en flex-wrap, le bouton Find passait a la ligne) */
-#mapResultats{position:absolute;top:100%;left:0;right:0;z-index:21}
+#mapResultats{position:absolute;top:100%;left:0;right:0;z-index:21;background:var(--creux);border-radius:12px} /* game68: an opaque list — the Live pill showed through its first row */
 /* 2026-10-26 : recherche B20 partagee (Map, Blocks, Market) — une liste de choix, jamais plus large que l ecran (375 px) */
 .rbListe{flex-basis:100%;display:flex;flex-direction:column;gap:4px;max-height:46vh;overflow:auto;margin:6px 0 0;padding:6px;
   background:var(--fond2);border:1px solid var(--ligne);border-radius:var(--rs);min-width:0;box-sizing:border-box}
@@ -26501,7 +26501,8 @@ function peindreVision() {
   const c = champVision({ adr: cible.adr, faits: cible.faits, vu: dernier, voisins: voisinsVision(cible.h),
     marche: marcheParAdr.get(cible.adr) || null, echange: cible.h ? cible.h.dernierEchange || null : null, nourritureLue: cible.nourritureLue });
   if (!c) return;
-  $('#bvTitre').textContent = 'View inside ' + (cible.sym || 'this block') + '\'s brain';
+  /* game68: no symbol read -> its short address, never a nameless "this block" */
+  $('#bvTitre').textContent = 'View inside ' + (cible.sym && cible.sym !== '?' ? cible.sym : bvCourt(cible.adr)) + '\'s brain';
   /* ⛔ ONE SINGLE BEAT NUMBER (#bvNumber): the one of the beat shown. The cursor states its PLACE, not a second number. */
   $('#bvBattementTexte').textContent = (vision.leftWindow !== null && vision.leftWindow !== undefined && !vision.suivre ? leftWindowText(vision.leftWindow, beatText) + ' · ' : '')
     + (vuAnime ? (vision.i + 1) + ' of ' + histo.length + ' recorded' : 'no beat recorded');
