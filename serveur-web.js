@@ -253,6 +253,7 @@ import { tacheAutorisee } from './brain-tasks.js';
 import { adressesANommer, chercherNom, creerIndexNoms } from './recherche-noms.js';
 import { validerRequete, construireIndex, chercherB20 } from './recherche-b20.js';
 import { prixEthUsd } from './prix-eth.js';
+import { moteurUsage, STATE_VIEW as STATE_VIEW_USAGE } from './usage-onchain.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
 /* 2026-10-04 : l etat des devises de paire de Create (born / not_born / not_read), lu une fois ici pour tous les visiteurs */
@@ -1238,6 +1239,24 @@ let archiveDirect = null;
 async function rpcHistoire(methode, params) {
   if (RPC_ARCHIVE && methode === 'eth_getLogs') { if (!archiveDirect) archiveDirect = lecteurArchive('histoire'); return archiveDirect(methode, params); }
   return rpcServeur(methode, params);
+}
+/* GET /api/usage (2026-10-27): the incremental on-chain usage counter. Seed = the published measure; a missing or unreadable seed
+ *   answers ok:false (never a count started from an empty seed, which would be a zero by impossibility). */
+let moteurUsageSrv = null;
+let usageGraineErreur = null;
+const USAGE_PAS_MS = 10 * 60 * 1000;
+function usageServeur() {
+  if (!moteurUsageSrv && !usageGraineErreur) {
+    try {
+      const graine = JSON.parse(readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'mesures', 'usage-onchain-20261027.json'), 'utf8'));
+      if (!graine || !Array.isArray(graine.lignes) || !graine.fin || !Number.isInteger(graine.fin.bloc)) throw new Error('seed malformed');
+      moteurUsageSrv = moteurUsage({ rpc: rpcServeur, graine,
+        prixEth: async () => { try { const p = await prixEthUsd({ rpc: rpcServeur, stateView: STATE_VIEW_USAGE }); return p && p.etat === 'LU' ? p.usd : null; } catch (_) { return null; } } });
+    } catch (e) { usageGraineErreur = String((e && e.message) || e).slice(0, 120); }
+  }
+  if (!moteurUsageSrv) return { ok: false, pourquoi: 'usage seed not readable: ' + usageGraineErreur };
+  if (Date.now() - moteurUsageSrv.etat.lu > USAGE_PAS_MS && !moteurUsageSrv.etat.enCours) moteurUsageSrv.avancer();
+  return moteurUsageSrv.resume();
 }
 /* BlockMissions : l etat lu par le verifier. rpcServeur d abord (base.org sert l etat a -24 h, sonde du 2026-10-17) ; un eth_call
  *   HISTORIQUE qu il ne sert pas va a l archive si elle est posee. Le reste (tete, en-tetes, tx, recu) ne touche jamais l archive. */
@@ -6877,6 +6896,15 @@ function traiterRequete(req, res) {
     const blockS = chemin.slice('/api/skins/'.length).toLowerCase();
     if (!/^0x[0-9a-f]{40}$/.test(blockS)) { rendreS(400, { ok: false, pourquoi: 'whole block address required' }); return; }
     rendreS(200, { ok: true, block: blockS, achats: skinsDuBlock(blockS) });
+    return;
+  }
+  /* 2026-10-27 — on-chain usage counts (users, DAU, WAU, volume), read-only: GET /api/usage. Seeded with the published measure
+   *   (mesures/usage-onchain-20261027.json), then caught up in the background, at most one step every 10 min, with the SAME rules
+   *   (usage-onchain.js). Counts only: no address, no hash. */
+  if (chemin === '/api/usage') {
+    const rendreU = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'public, max-age=60', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(corps)); };
+    if (req.method !== 'GET') { rendreU(405, { ok: false, pourquoi: 'GET only' }); return; }
+    try { rendreU(200, usageServeur()); } catch (e) { rendreU(200, { ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }); }
     return;
   }
   /* qui bouge ce block, en direct (onglet Market du panneau) : /api/activite/0x… */
