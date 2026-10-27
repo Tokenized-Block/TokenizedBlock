@@ -5546,6 +5546,8 @@ const SERVIS = [
   'blockskins.js', 'blockskins-actif.js', 'blockskins-deploiement.js',
   /* 2026-10-23 : la section Skins de l onglet Market (logique pure : statut, filtres, apercu, « new bid ») — importee par app.html */
   'skins-marche.js',
+  /* 2026-10-27 : la salle des encheres des skins (ce que dit le crieur) et la pensee du brain (gabarits fixes) — importees par app.html */
+  'salle-encheres.js', 'pensee-cerveau.js',
   /* 2026-10-04 : l etat des devises de paire (born / not_born / not_read) et LA regle de l ecran qui grise (importe par app.html :
    *   absent d ici = 404 = app morte). Sa seule dependance, keccak.js, est deja servie plus haut. */
   'etat-paires.js',

@@ -1147,6 +1147,27 @@ dialog.bvPop.bvMax{inset:8px 8px calc(var(--bcNav,66px) + 8px) 8px;width:auto;he
 .bvMoodBtn{position:absolute;right:8px;top:6px;border:1px solid rgb(255 255 255 / .35);background:rgb(0 0 0 / .45);color:#fff;border-radius:99px;padding:4px 10px;font-weight:700;font-size:12px;cursor:pointer}
 .bvMoodBtn:hover,.bvMoodBtn:focus-visible{border-color:var(--accent)}
 .bvSentence{margin:4px 0;font-style:italic;min-height:1.3em}
+/* 2026-10-27 (owner): its live thought (pensee-cerveau.js) — a quote block; the reading under it; the numbers folded */
+.bvPensee{margin:6px 0;padding:8px 12px;border-left:3px solid var(--accent);background:rgb(var(--accentRgb) / .07);border-radius:0 10px 10px 0}
+.bvPenseeTexte{margin:0;font-size:14px;line-height:1.45;overflow-wrap:anywhere}
+.bvLecture{margin:4px 0 0}
+.bvTech{margin:2px 0}.bvTech>summary{cursor:pointer;min-height:24px}.bvTech p{margin:2px 0 0;overflow-wrap:anywhere}
+/* 2026-10-27 (owner): THE SKIN AUCTION ROOM — a window like the brain window (dialog.bvPop), a stage with the auctioneer */
+.skStage{display:grid;grid-template-columns:minmax(96px,150px) 1fr;gap:10px;align-items:end;margin:8px 0;padding:10px;border-radius:14px;
+  background:linear-gradient(180deg,rgb(var(--accentRgb) / .10),transparent 70%),var(--fond2);border:1px solid var(--ligne)}
+.skCrieur{width:100%;height:auto;display:block}
+.skBulle{position:relative;margin:0 0 6px;padding:10px 12px;border-radius:14px;background:var(--carte);border:1px solid var(--ligne);min-width:0}
+.skBulle p{margin:0 0 4px;line-height:1.4;overflow-wrap:anywhere}.skBulle p:last-child{margin:0}
+.skPodium{display:flex;gap:10px;align-items:center;margin:8px 0;padding:8px 10px;border:1px dashed var(--ligne);border-radius:12px;min-width:0}
+.skPodium svg{flex:0 0 auto;width:64px;height:64px}
+.skSigne{margin:6px 0;padding:8px 10px;border-radius:10px;background:var(--fond2);border:1px solid var(--ligne);font-size:13px;overflow-wrap:anywhere}
+.skEtagere h4{margin:12px 0 4px;font-size:13px}
+#skPop .skmLigne{min-width:0}
+@keyframes skMarteau{0%,100%{transform:rotate(0)}40%{transform:rotate(-28deg)}60%{transform:rotate(6deg)}}
+.skCrieur .skMarteau{transform-origin:118px 96px;transform-box:view-box}
+.skCrieur.tape .skMarteau{animation:skMarteau .6s ease-in-out 2}
+@media (prefers-reduced-motion:reduce){.skCrieur.tape .skMarteau{animation:none}}
+@media (max-width:420px){.skStage{grid-template-columns:84px 1fr}}
 /* 2026-10-27 (owner: "the section tabs render as vertical, rotated, cramped text — unreadable"). MEASURED in game59 at 1280 px:
  *   9 spines of 24 x 96/108 px, writing-mode vertical-rl + rotate(180deg), 11 px text, a 118 px shelf. Now ONE horizontal row of
  *   tabs: no rotation, no wrapping (the ROW scrolls sideways on a narrow window, never the page), 13 px text, the active tab
@@ -4530,6 +4551,57 @@ details[open] > summary::before{transform:rotate(90deg)}
 <!-- 2026-10-26 (game57 #4): "View inside the brain" — a WINDOW like the Control panel (not modal: edge to drag, fold,
      maximise, move by the header), a 3D scene (the page's engine: sphere of neurons in its cube, neighbours from the map),
      and the sections shelved like books; a clicked book opens as a tab. -->
+<!-- 2026-10-27 (owner): THE SKIN AUCTION ROOM — "Open the skin market" opens this WINDOW (same frame as the brain window and the
+     Control panel: edge to drag, –/□/✕, move by the header, bottom sheet on a phone). The auctioneer announces ONLY what the list read
+     on chain says (salle-encheres.js); every button is the Market tab's own (skmLigne -> bcActionMarche, ouvrirMintSkin). -->
+<dialog class="bvPop" id="skPop" data-window="panel" aria-label="Skin auction room">
+  <div class="bcPoignee" id="skHandle" role="separator" tabindex="0" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
+    aria-label="Resize the auction room: drag this edge; double click to switch between largest and original size" title="Drag to resize · double click: largest / original"></div>
+  <div class="bvTete" id="skTete">
+    <div style="min-width:0"><p class="titre" style="margin:0">Skin auction room</p>
+      <p class="note" style="margin:2px 0 0" id="skSous">Every word is read on chain. Nothing is signed until your wallet asks.</p></div>
+    <span class="bvWinButtons">
+      <button type="button" class="bouton sec bvPetit" id="skFold" aria-label="Fold or unfold the auction room" aria-expanded="true">–</button>
+      <button type="button" class="bouton sec bvPetit" id="skMaximize" aria-label="Maximise or restore the auction room" aria-pressed="false">□</button>
+      <button type="button" class="bouton sec bvPetit" id="skFermer" aria-label="Close">✕</button>
+    </span>
+  </div>
+  <div class="bvBody" id="skBody">
+    <div class="skStage">
+      <!-- an ORIGINAL drawing (not any brand's mascot): an old-style auctioneer — top hat, round spectacles, moustache, bow tie, gavel -->
+      <svg class="skCrieur" id="skCrieur" viewBox="0 0 150 170" role="img" aria-label="The auctioneer, gavel in hand">
+        <rect x="48" y="2" width="44" height="36" rx="4" fill="#15131c"/><rect x="36" y="34" width="68" height="8" rx="4" fill="#15131c"/>
+        <rect x="48" y="26" width="44" height="6" fill="#8b2b3a"/>
+        <circle cx="70" cy="62" r="22" fill="#f1c9a5"/>
+        <circle cx="61" cy="57" r="6" fill="none" stroke="#3a3326" stroke-width="2"/><circle cx="79" cy="57" r="6" fill="none" stroke="#3a3326" stroke-width="2"/>
+        <path d="M67 57h6" stroke="#3a3326" stroke-width="2"/><circle cx="61" cy="57" r="1.8" fill="#222"/><circle cx="79" cy="57" r="1.8" fill="#222"/>
+        <path d="M52 70c6-6 12-4 18 0c6-4 12-6 18 0c-5 7-12 5-18 1c-6 4-13 6-18-1z" fill="#e8e2d6"/>
+        <path d="M64 77q6 4 12 0" stroke="#7a3b2e" stroke-width="2" fill="none"/>
+        <path d="M36 168l6-64q28-14 56 0l6 64z" fill="#1f2a44"/>
+        <path d="M58 92l12 30 12-30z" fill="#f4f1ea"/><path d="M60 96l10 10 10-10-10 6z" fill="#8b2b3a"/>
+        <path d="M62 88l8 6 8-6-8 3z" fill="#c9a227"/>
+        <g class="skMarteau"><path d="M100 104l18-8" stroke="#1f2a44" stroke-width="9" stroke-linecap="round"/>
+          <rect x="112" y="64" width="8" height="40" rx="3" fill="#7a4a22" transform="rotate(-25 116 84)"/>
+          <rect x="104" y="58" width="26" height="14" rx="4" fill="#5b3415" transform="rotate(-25 117 65)"/></g>
+        <rect x="18" y="130" width="104" height="38" rx="4" fill="#5b3415"/><rect x="22" y="134" width="96" height="6" rx="2" fill="#7a4a22"/>
+        <text x="70" y="158" text-anchor="middle" font-size="12" font-family="Georgia,serif" fill="#f3d27a">LOT</text>
+      </svg>
+      <div class="skBulle" id="skBulle" aria-live="polite"><p>Reading the market on chain…</p></div>
+    </div>
+    <div class="skPodium" id="skPodium" hidden></div>
+    <div id="skLot"></div>
+    <p class="skSigne" id="skSigne" hidden></p>
+    <div class="skEtagere">
+      <h4>On the shelf — fixed price</h4><div id="skEtagere"></div>
+      <h4 id="skMiennesTitre" hidden>Your skins — sell one or start an auction</h4><div id="skMiennes"></div>
+    </div>
+    <p class="note" id="skNote"></p>
+    <div class="bcRangee" style="gap:8px;flex-wrap:wrap">
+      <button type="button" class="bouton" id="skMint">Mint a skin · <span class="skinPrix">1 USDC</span></button>
+      <button type="button" class="bouton sec" id="skVersMarket">See every skin in the Market tab</button>
+    </div>
+  </div>
+</dialog>
 <dialog class="bvPop" id="bvPop" data-window="panel" aria-label="View inside the brain">
   <div class="bcPoignee" id="bvHandle" role="separator" tabindex="0" aria-orientation="vertical" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"
     aria-label="Resize the brain window: drag this edge; double click to switch between largest and original size" title="Drag to resize · double click: largest / original"></div>
@@ -4571,7 +4643,13 @@ details[open] > summary::before{transform:rotate(90deg)}
     <input type="range" id="bvBattement" min="0" max="0" value="0" aria-label="Recorded beat">
     <span class="note mono" id="bvBattementTexte">—</span>
   </div>
-  <p class="note" id="bvSortie"></p>
+  <!-- 2026-10-27 (owner): its LIVE THOUGHT on this beat — 2-3 first-person sentences made only of this beat's data
+       (pensee-cerveau.js, fixed templates, never an LLM); the reading is labelled as a reading; the numbers stay one click away -->
+  <div class="bvPensee" id="bvPensee" aria-live="polite">
+    <p class="bvPenseeTexte" id="bvPenseeTexte"></p>
+    <p class="note bvLecture" id="bvLecture"></p>
+  </div>
+  <details class="bvTech"><summary class="note">Numbers of this beat</summary><p class="note mono" id="bvSortie"></p></details>
   <p class="note" id="bvLegende" style="margin:0 0 4px"></p>
   <nav class="bvShelf" id="bvShelf" role="tablist" aria-label="Sections — pick a book">
     <button type="button" class="bvSpine" role="tab" aria-selected="false" data-book="why">Why</button>
@@ -5006,6 +5084,8 @@ import { appelAchatSkin, SKIN_PRIX_USDC } from './skins.js';
 import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT, appelMint, appelApprouver, lireSkins, skinsDe, skinPortee, DEVISES_SKIN, montantVersBrut, actionsSkin, appelCredit,
   offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin, deviseAdmise, decoderPage, appelPage } from './blockskins.js';
 import { SKM_RAFRAICHIR_MS, SKM_POULS_MS, SKM_FILTRES, SKM_STATUTS, filtrerSkins, ordonnerSkins, compterSkins, gestesSkin, montantOffre, relectureAvantSigner, cleLigneSkin, offresChangees, tempsRestant, apercuSkinFormes, detenteurCourt, statutSkin, brutVersTexte as brutVersTexteSkin, texteMarcheSkins } from './skins-marche.js';
+import { annonce as annonceSalle } from './salle-encheres.js';
+import { pensee as penseeVision } from './pensee-cerveau.js';
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -6794,8 +6874,86 @@ for (const e of document.querySelectorAll('.skinPrix')) e.textContent = SKIN_MIN
 function ouvrirMintSkin() { try { choisirBrain(UNIT_APP); } catch (_) {} try { bcOuvrirPop({ vue: 'brain', deplier: true, sansBasculer: true }); } catch (_) {} }
 $('#skinMint').addEventListener('click', ouvrirMintSkin);
 $('#skmMint').addEventListener('click', ouvrirMintSkin);
-/* 2026-10-23 : « Open the skin market » mene a l onglet Market, section Skins (toutes les skins, encheres en direct) */
-$('#skinOuvrirMarche').addEventListener('click', () => { allerA('trade'); setTimeout(() => { const s = document.getElementById('skinsMarche'); if (s) s.scrollIntoView({ block: 'start' }); }, 60); });
+/* 2026-10-23 : la section Skins de l onglet Market (toutes les skins, encheres en direct) — gardee telle quelle, atteinte depuis la salle */
+function allerAuMarcheSkins() { allerA('trade'); setTimeout(() => { const s = document.getElementById('skinsMarche'); if (s) s.scrollIntoView({ block: 'start' }); }, 60); }
+/* ══ 2026-10-27 (owner): « Open the skin market » opens THE SKIN AUCTION ROOM — a window like the brain window (#skPop, windowLikePanel).
+ *   The auctioneer's lines = salle-encheres.js#annonce on the SAME list the Market tab reads (skm.liste, lireSkins); the podium, the
+ *   shelf and "your skins" rows are the Market tab's own rows (skmLigne), so every button is bcActionMarche — its re-read on chain
+ *   before signing, its exact approval, its wallet card. Mint = ouvrirMintSkin. No new contract call, no new signing path. ══ */
+const salle = { minuteur: null, offrePodium: null, lignes: new Map() };
+function nomBlockSalle(adr) { return String(adr).toLowerCase() === UNIT_APP.toLowerCase() ? 'UNIT' : (bcResoudre(adr).sym || court(adr)); }
+/** rows of the room, kept while someone types in them (same rule as skmPeindreListe) */
+function salleLignes(zone, skins, moi, t) {
+  const offertesCle = Object.keys(bcDevisesOffertes()).join(','), enfants = [];
+  for (const s of skins) {
+    const id = String(s.tokenId), cle = cleLigneSkin(s, moi, t) + '|' + offertesCle, ancien = salle.lignes.get(zone.id + id);
+    const occupe = !!ancien && (ancien.el.contains(document.activeElement) || [...ancien.el.querySelectorAll('input')].some((i) => i.value && i.value !== i.defaultValue));
+    const garder = !!ancien && (occupe || ancien.cle === cle);
+    const el = garder ? ancien.el : skmLigne(s, moi, t);
+    salle.lignes.set(zone.id + id, { cle: garder ? ancien.cle : cle, el });
+    for (const e of el.querySelectorAll('.skmTemps')) e.textContent = tempsRestant(e.dataset.fin, t);
+    enfants.push(el);
+  }
+  if (zone.children.length !== enfants.length || enfants.some((e, i) => zone.children[i] !== e)) zone.replaceChildren(...enfants);
+}
+function peindreSalle() {
+  const dl = $('#skPop'); if (!dl || !dl.open) return;
+  const moi = compte ? String(compte).toLowerCase() : null, t = skmMaintenant();
+  const bulle = $('#skBulle'), podium = $('#skPodium'), signe = $('#skSigne');
+  if (!skm.liste && !skm.rate) { bulle.replaceChildren(bcEl('p', { text: 'Reading the market on chain…' })); return; }
+  const a = annonceSalle({ skins: skm.liste || [], lu: !!skm.liste, moi, t, montant: bcMontantSkin, nomBlock: nomBlockSalle });
+  window.__TB_SALLE__ = a;
+  bulle.replaceChildren(...a.lignes.map((l) => bcEl('p', { text: l.text })));
+  const p = a.podium;
+  podium.hidden = !p; podium.replaceChildren();
+  if (p) {
+    const NS = 'http://www.w3.org/2000/svg', svg = document.createElementNS(NS, 'svg');
+    for (const [k, v] of [['viewBox', '0 0 48 48'], ['aria-hidden', 'true'], ['focusable', 'false']]) svg.setAttribute(k, v);
+    for (const [tag, at] of apercuSkinFormes(p.recette)) { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(at)) e.setAttribute(k, v); svg.append(e); }
+    podium.append(svg, bcEl('span', {}, [bcEl('b', { text: 'Skin #' + p.tokenId }), document.createTextNode(' — the face it gives ' + nomBlockSalle(p.block) + ' (its colours, read on chain)')]));
+    /* the gavel taps when the highest bid read on chain changes (never on the first read) */
+    const o = String(p.tokenId) + ':' + String(p.offre);
+    if (salle.offrePodium && salle.offrePodium !== o) { const c = $('#skCrieur'); c.classList.remove('tape'); void c.getBoundingClientRect(); c.classList.add('tape'); }
+    salle.offrePodium = o;
+  }
+  salleLignes($('#skLot'), p ? [p] : [], moi, t);
+  /* what the wallet would sign for the lot on the podium: the contract's minimum, its currency, the skin id — re-read before signing */
+  const g = p ? gestesSkin(p, moi, t).map((x) => x.genre) : [];
+  signe.hidden = !p;
+  if (p) signe.textContent = !moi ? 'Connect a wallet to bid or settle — nothing can be signed without one.'
+    : g.includes('ENCHERIR') ? 'If you bid, your wallet signs a bid on skin #' + p.tokenId + ' of at least ' + bcMontantSkin(offreMinimale(p), p.devise) + ' (the amount you type, never less), on the BlockSkins contract' + (String(p.devise).toLowerCase() === ETH_SKIN ? '.' : ', after an approval of exactly that amount if needed.') + ' It is read again on chain first.'
+      : g.includes('REGLER') ? 'Settling skin #' + p.tokenId + ' signs one call on the BlockSkins contract: no payment from you.'
+        : 'This lot is yours — you cannot bid on it.';
+  const shelf = a.etagere || [];
+  salleLignes($('#skEtagere'), shelf, moi, t);
+  if (!shelf.length) $('#skEtagere').replaceChildren(bcEl('p', { cls: 'note', text: a.lu ? 'Nothing at a fixed price right now.' : 'Not read.' }));
+  const miennes = moi && skm.liste ? skm.liste.filter((s) => s.detenteur === moi && !s.enVente) : [];
+  $('#skMiennesTitre').hidden = !miennes.length;
+  salleLignes($('#skMiennes'), miennes, moi, t);
+  $('#skNote').textContent = (skm.lu ? 'Read on chain at ' + skmHeure(skm.lu) + (skm.rate ? ' — not read again at ' + skmHeure(skm.rate) + ', this is the last list read' : '') + '. ' : '')
+    + (moi ? '' : 'Connect a wallet to buy, bid or sell. ') + bcTexteDevisesOffertes();
+}
+async function ouvrirSalle() {
+  const dl = $('#skPop'); if (!dl) return;
+  if (dl.parentElement !== document.body) document.body.append(dl);
+  try { dl.show(); } catch (_) { dl.setAttribute('open', ''); }
+  peindreSalle();
+  await peindreSkinsMarche(true);
+  peindreSalle();
+  clearInterval(salle.minuteur);
+  /* while the room is open and the page visible: repaint every 5 s (time left), read the chain again every SKM_RAFRAICHIR_MS */
+  salle.minuteur = setInterval(() => {
+    if (!dl.open) { clearInterval(salle.minuteur); salle.minuteur = null; return; }
+    if (document.hidden) return;
+    if (Date.now() - skm.lu >= SKM_RAFRAICHIR_MS && Date.now() - skm.rate >= SKM_RAFRAICHIR_MS) void peindreSkinsMarche(true).then(peindreSalle); else peindreSalle();
+  }, 5000);
+}
+$('#skinOuvrirMarche').addEventListener('click', () => void ouvrirSalle());
+$('#skFermer').addEventListener('click', () => $('#skPop').close());
+$('#skPop').addEventListener('close', () => { clearInterval(salle.minuteur); salle.minuteur = null; });
+$('#skPop').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); $('#skPop').close(); } });
+$('#skMint').addEventListener('click', ouvrirMintSkin);
+$('#skVersMarket').addEventListener('click', () => { $('#skPop').close(); allerAuMarcheSkins(); });
 
 /* ══ LES DUELS (Phil 2026-10-18 : « les brains peuvent se faire des duels — gagnant 90 %, 7 % pool de reward commun, 3 % dev »).
  *   LECTURE : /api/duels (le serveur lit l ETAT de BlockDuels, nextId + duels(id), 2026-10-24 ; l app ne balaie JAMAIS la chaine).
@@ -26253,6 +26411,12 @@ function peindreVision() {
   if (!dl || !dl.open) return;
   const cible = visionCible();
   if (!cible) { $('#bvSous').textContent = 'Pick a block first.'; return; }
+  /* ⛔ 2026-10-27: the palette belongs to the block SHOWN. If the target changed while the window stayed open (another block picked),
+   *   the previous block's skin is removed at once and the new block's is read — never one block's colours on another. */
+  if (vision.skinAdr !== cible.adr) {
+    vision.skinAdr = cible.adr; for (const v of VARS_SKIN) dl.style.removeProperty(v); dl.dataset.skin = 'default';
+    const a = cible.adr; void bvPoserSkin(dl, a, { encore: () => { const c2 = visionCible(); return !!(c2 && c2.adr === a); } });
+  }
   const histo = Array.isArray(cible.histo) ? cible.histo : [];
   const curseur = $('#bvBattement');
   curseur.max = String(Math.max(0, histo.length - 1));
@@ -26317,6 +26481,15 @@ function peindreVision() {
   const o = c.sortie;
   sortie.textContent = vuShown ? ref.output.replace(/^Beat \d+: /, '') + (ref.present ? ' · ' + ref.present.replace(/Newest beat recorded: \d+ \(/, '(').replace(/\.$/, '') : '') + '.' : '';
   if (o && o.entree) sortie.title = 'Input fingerprint ' + o.entree + ' · wiring ' + o.cablage;
+  /* 2026-10-27 (owner): the live thought of the beat SHOWN (pensee-cerveau.js) — the same beat as the header, its neighbours = the
+   *   real ones listed under "Around it" (c.contexte.voisins); nothing else enters */
+  {
+    const iShown = vuShown ? histo.indexOf(vuShown) : -1;
+    const p = iShown >= 0 ? penseeVision(histo, iShown, { voisins: Array.isArray(c.contexte.voisins) ? c.contexte.voisins.length : null }) : null;
+    vision.pensee = p; window.__TB_BRAIN_PENSEE__ = p;
+    $('#bvPenseeTexte').textContent = p ? p.text : 'No beat recorded here yet — I have nothing to think about.';
+    $('#bvLecture').textContent = p && p.reading ? 'Reading of its state: ' + p.reading.word + ' — ' + p.reading.why + '. (A reading of the numbers below, not its engine mood: ' + p.mood + '.)' : '';
+  }
   if (!vision.loop) bvPaint3D(performance.now());
   window.__TB_BRAIN_VISION__ = c;
 }
@@ -26369,7 +26542,12 @@ function bvPaint3D(t) {
   const th = lum.theme ? teinteH() : lum.hue;
   const env = plan.light === 'static' ? 1 : 0.85 + 0.15 * Math.cos(progress * Math.PI * 2);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.fillStyle = lum.neutral ? '#0b0d12' : 'hsl(' + th + ' 45% ' + (6 + 10 * lum.strength * env).toFixed(1) + '%)';
+  /* ⛔ 2026-10-27 (owner, "Outside" bug, AAPLc): the WHOLE background used to be painted in the mood's hue — excited = hue 45, a
+   *   dark gold (hsl(45 45% 6..16%)) that is the very colour family of a skin background (BlockSkins: hsl(fond 45% 9%)), so a viewer
+   *   with NO skin saw a "skin-coloured" scene, most of all Outside, where nothing covers the background. The background is now the
+   *   same neutral night for every mood and every viewer; the mood still lights the neurons that fired, the inputs and the edge pulse. */
+  void env;
+  ctx.fillStyle = '#0b0d12';
   ctx.fillRect(0, 0, L, H);
   const effects = effectsOf(vu);
   const strength = (name) => { const e = effects.find((x) => x.effect === name); return e ? e.intensity : 0; };
@@ -26751,7 +26929,7 @@ function ouvrirVision(source) {
   /* ⛔ game57 #4: a window, NOT a modal — the page stays usable behind it (like the Control panel) */
   try { dl.show(); } catch (_) { dl.setAttribute('open', ''); }
   bvShelfEdges();
-  vision.control = null; vision.particles = []; vision.tickShown = null;
+  vision.control = null; vision.particles = []; vision.tickShown = null; bvOublierCible();
   $('#bvControl').hidden = false; $('#bvBackToLive').hidden = true;
   /* game57 #4b (b): we ENTER from the map — the flight starts at the map camera heading and goes inside (a cut with reduced motion) */
   vision.backFlight = null; vision.vue = 'dedans';
@@ -26761,7 +26939,7 @@ function ouvrirVision(source) {
   const cible = visionCible();
   const n = cible && Array.isArray(cible.histo) ? cible.histo.length : 0;
   vision.i = n - 1; vision.suivre = true; vision.jouer = false;
-  if (cible && cible.adr) { const a = cible.adr; void bvPoserSkin(dl, a, { encore: () => { const c = visionCible(); return !!(c && c.adr === a); } }); }
+  if (cible && cible.adr) { const a = cible.adr; vision.skinAdr = a; void bvPoserSkin(dl, a, { encore: () => { const c = visionCible(); return !!(c && c.adr === a); } }); }
   /* ⛔ mouvement reduit : la lecture attend un geste (Play ou le curseur) */
   if (bvReduit()) vision.jouer = false;
   $('#bvJouer').textContent = vision.jouer ? 'Pause' : 'Play';
@@ -26876,8 +27054,13 @@ $('#bvBattement').addEventListener('input', (e) => {
   peindreVision();
 });
 $('#bvRejouer').addEventListener('click', lancerSimVision);
-$('#bvVueDedans').addEventListener('click', () => { const from = currentCam(); if (vision.control) bvBackToLive(); vision.backFlight = null; vision.vue = 'dedans'; vision.flightFrom = from; vision.flight = bvReduit() ? null : performance.now(); peindreVision(); });
-$('#bvVueDehors').addEventListener('click', () => { const from = currentCam(); if (vision.control) bvBackToLive(); vision.backFlight = null; vision.vue = 'dehors'; vision.flightFrom = from; vision.flight = bvReduit() ? null : performance.now(); peindreVision(); });
+/* ⛔ 2026-10-27 (owner, "Outside" bug): a pinned object belongs to the view it was clicked in — a neuron pinned Inside stayed
+ *   pinned (and labelled "Neuron #86 (pinned…)") Outside, and even after closing and reopening the window on another block.
+ *   Switching view (or opening the window) now releases the pin, the hover and the overlay key: nothing carries over. */
+function bvOublierCible() { vision.pinned = null; vision.hover = null; vision.aimKey = null; }
+function bvChangerVue(vue) { const from = currentCam(); if (vision.control) bvBackToLive(); vision.backFlight = null; bvOublierCible(); vision.vue = vue; vision.flightFrom = from; vision.flight = bvReduit() ? null : performance.now(); peindreVision(); }
+$('#bvVueDedans').addEventListener('click', () => bvChangerVue('dedans'));
+$('#bvVueDehors').addEventListener('click', () => bvChangerVue('dehors'));
 $('#bvBackToMap').addEventListener('click', bvBackToMap);
 $('#bvRemettre').addEventListener('click', () => {
   for (const inp of document.querySelectorAll('#bvEdits input[data-edit]')) { inp.value = 0; inp.dispatchEvent(new Event('input')); }
@@ -33945,6 +34128,8 @@ function windowLikePanel({ d, p, key, prefix, header, fold, maximize }) {
   return { apply, toggle };
 }
 windowLikePanel({ d: $('#bvPop'), p: $('#bvHandle'), key: 'tblock.brainview.size.v1', prefix: 'bv', header: $('#bvTete'), fold: $('#bvFold'), maximize: $('#bvMaximize') });
+/* 2026-10-27 (owner): the skin auction room is the SAME kind of window (its own sizes; prefix `bv` = the dialog.bvPop CSS variables, set on THIS dialog only) */
+windowLikePanel({ d: $('#skPop'), p: $('#skHandle'), key: 'tblock.skinroom.size.v1', prefix: 'bv', header: $('#skTete'), fold: $('#skFold'), maximize: $('#skMaximize') });
 $('#bvPop').addEventListener('windowstate', () => { if ($('#bvPop').open && !$('#bvPop').classList.contains('bcReduit') && !vision.loop) bvStartLoop(); });
 /* le lien rendu par tblock_panel_open : /app.html?panel=1#s=<session>&b=<block> — la session vit dans le FRAGMENT, jamais envoyee */
 (function bcDemarrage() {

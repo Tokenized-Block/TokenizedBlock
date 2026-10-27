@@ -113,7 +113,10 @@ vu(/if \(rl\.code === 'NON_LU'\) bcBoutons\(m, \[\['Try again', go, true\]/.test
 vu(!/s = frais;/.test(action) && !/montantOffre\(/.test(action), 'B17 le montant n est plus recalcule apres la relecture (ni « s = frais », ni montantOffre sur la skin relue)');
 const carte = html.slice(html.indexOf('<div class="carte" id="skinCarte">'), html.indexOf('<!-- HOW IT WORKS'));
 vu(/<button type="button" class="bouton sec" id="skinOuvrirMarche">Open the skin market<\/button>/.test(carte)
-  && /\$\('#skinOuvrirMarche'\)\.addEventListener\('click', \(\) => \{ allerA\('trade'\);[^\n]*getElementById\('skinsMarche'\)/.test(html), 'B18 le Game (Skin market) mene a la section Skins de l onglet Market');
+  /* 2026-10-27 (owner): the button opens the skin auction room window; the room leads to the Market tab Skins section */
+  && /\$\('#skinOuvrirMarche'\)\.addEventListener\('click', \(\) => void ouvrirSalle\(\)\)/.test(html)
+  && /function allerAuMarcheSkins\(\) \{ allerA\('trade'\);[^\n]*getElementById\('skinsMarche'\)/.test(html)
+  && /\$\('#skVersMarket'\)\.addEventListener\('click', \(\) => \{ \$\('#skPop'\)\.close\(\); allerAuMarcheSkins\(\); \}\)/.test(html), 'B18 le Game (Skin market) ouvre la salle des encheres, qui mene a la section Skins de l onglet Market');
 vu(/import \{[^}]*gestesSkin[^}]*\} from '\.\/skins-marche\.js';/.test(html), 'B19 app.html importe skins-marche.js');
 const serveur = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8');
 const servis = (serveur.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/) || [, ''])[1];
