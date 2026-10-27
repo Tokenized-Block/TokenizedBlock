@@ -25657,7 +25657,10 @@ async function relireMarcheBrainSiNonLu() {
 function battreBrain() {
   /* 2026-10-04 : le panneau de commande n est plus modal — on peut changer d onglet en le gardant ouvert. Tant qu il est ouvert,
    * le cerveau qu il montre continue de battre (sinon ses chiffres se figeaient des qu on quittait l onglet Brain). */
-  const panneauOuvert = (() => { const p = document.getElementById('bcPop'); return !!(p && p.open); })();
+  /* game64 (prod 2026-10-27, measured): the brain window opened from the Map's Live (#bvPop, source 'brain') also needs its beats —
+   *   it showed the live beat number but "no beat recorded" because this guard only knew the Brain tab and the control panel. */
+  const panneauOuvert = (() => { const p = document.getElementById('bcPop'), v = document.getElementById('bvPop');
+    return !!(p && p.open) || !!(v && v.open && vision.source === 'brain'); })();
   if (($('#v-brain').classList.contains('on') === false && !panneauOuvert) || !brainEtat) return;
   const h = habitants.find((x) => String(x.adr).toLowerCase() === String(brainAdr || '').toLowerCase());
   void relireNourriture(h);

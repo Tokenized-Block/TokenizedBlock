@@ -157,7 +157,7 @@ ok(/const seraitNonLu = !etatVie \|\| etatVie === 'NON_LUE' \|\| etatVie === 'LU
 /* le panneau ne couvre plus l app ; la skin est un contour ; le bouton d achat ne demande rien */
 ok(/try \{ d\.show\(\); \}/.test(html) && !/\$\('#bcPop'\)\.showModal\(\)|d\.showModal\(\)/.test(html) && !/dialog\.bcPop::backdrop/.test(html) && /if \(d && d\.parentElement !== document\.body\) document\.body\.append\(d\);/.test(html),
   'C2 le panneau n est PLUS modal (show, pas showModal ; aucun voile) et vit sous <body> : l app reste visible et utilisable, d un onglet a l autre');
-ok(/const panneauOuvert = \(\(\) => \{ const p = document\.getElementById\('bcPop'\); return !!\(p && p\.open\); \}\)\(\);/.test(html) && /if \(\(\$\('#v-brain'\)\.classList\.contains\('on'\) === false && !panneauOuvert\) \|\| !brainEtat\) return;/.test(html),
+ok(/const panneauOuvert = \(\(\) => \{ const p = document\.getElementById\('bcPop'\), v = document\.getElementById\('bvPop'\);\s*return !!\(p && p\.open\) \|\| !!\(v && v\.open && vision\.source === 'brain'\); \}\)\(\);/.test(html) && /if \(\(\$\('#v-brain'\)\.classList\.contains\('on'\) === false && !panneauOuvert\) \|\| !brainEtat\) return;/.test(html),
   'C2 tant que le panneau est ouvert, le cerveau qu il montre continue de battre hors de l onglet Brain');
 /* 2026-10-11 (poignee : « abaisser ou agrandir le control panel ») : 62dvh reste la taille PAR DEFAUT - le repli de --bcHLibre, que seule
  *   la personne pose en tirant le bord. La garde exige toujours 62dvh comme defaut ; elle ne se contente pas d une variable. */
