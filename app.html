@@ -9647,7 +9647,10 @@ function mondeMap() {
   return map;
 }
 
-function centrerSur(h) { if (moteur3d) moteur3d.centrerSur(h); }
+/* game66 (owner: "search targeting bugs because of the centre of the universe"): the drawn centre SLIDES to 0,0,0 — aiming at its
+ *   current place lands on empty space; aim at the origin instead (where it is going). */
+function centrerSur(h) { if (!moteur3d) return; let ce = null; try { ce = centreActuel; } catch (_) { /* declared further down: not drawn yet */ }
+  if (h && h === ce && typeof moteur3d.montrerOrigine === 'function') moteur3d.montrerOrigine(); else moteur3d.centrerSur(h); }
 /* tip 0026 : la map plein ecran se cale sous l en-tete et au-dessus de la barre du bas, mesures (pas devines) */
 function caleMapPleinEcran() {
   const t = document.querySelector('header.tete'), n = document.querySelector('nav.nav');
@@ -34708,7 +34711,10 @@ function nouveauCentre(parClic = false) {
   if (moteur3d && typeof moteur3d.fixerCentre === 'function') moteur3d.fixerCentre(centreActuel);
   const carteVisible = $('#v-map') && $('#v-map').classList.contains('on') && !document.hidden;
   const mainRecente = moteur3d && typeof moteur3d.derniereMain === 'function' && performance.now() - moteur3d.derniereMain() < 20000;
-  if (moteur3d && carteVisible && (parClic || (!mainRecente && !mouvementReduit))) {
+  /* game66: a block the visitor targeted (search pick or click: its sheet is open, or a tile is active) keeps the camera — the draw
+   *   used to yank the view back to the origin every 5 min, because targeting is not a "hand" on the map (derniereMain). */
+  const cible = ($('#cote') && $('#cote').classList.contains('aFiche')) || habitants.some((x) => x && x.el && x.el.classList.contains('actif'));
+  if (moteur3d && carteVisible && (parClic || (!mainRecente && !mouvementReduit && !cible))) {
     try { if (typeof moteur3d.montrerOrigine === 'function') moteur3d.montrerOrigine(); else moteur3d.centrerSur(centreActuel); } catch (_) {}
   }
   peindreCentre();
