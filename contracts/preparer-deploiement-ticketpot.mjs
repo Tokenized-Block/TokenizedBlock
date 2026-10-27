@@ -22,7 +22,11 @@ if (!ADR.test(usdc) || !ADR.test(feeWallet)) throw new Error('USDC_BASE / FEE_WA
 const parametresChemin = process.env.PARAMETRES || path.join(ICI, 'ticketpot-parametres.json');
 /* un BOM (ecrit par certains editeurs Windows) n est pas une erreur de Phil : on l ote avant de lire */
 const p = fs.existsSync(parametresChemin) ? JSON.parse(fs.readFileSync(parametresChemin, 'utf8').replace(/^﻿/, '')) : {};
-const constructeur = { usdc, verifier: ADR.test(bas(p.verifier)) ? bas(p.verifier) : '', guardian: ADR.test(bas(p.guardian)) ? bas(p.guardian) : '' };
+/* 2026-10-27 (owner GO, docs/rachat-unit-simple-20261027.md): JETON=<address> freezes a SECOND pot paying in that token (UNIT). TicketPot
+ *   reads no decimals; the constructor only needs code at the token (a B20 has 0xef). Default: USDC, unchanged. */
+const jeton = process.env.JETON ? bas(process.env.JETON) : usdc;
+if (!ADR.test(jeton)) throw new Error('JETON is not an address');
+const constructeur = { usdc: jeton, verifier: ADR.test(bas(p.verifier)) ? bas(p.verifier) : '', guardian: ADR.test(bas(p.guardian)) ? bas(p.guardian) : '' };
 const manquants = ['verifier', 'guardian'].filter((k) => !constructeur[k]);
 const refus = manquants.length ? [] : C.refusParametres(constructeur, { devWallet: feeWallet });
 const pret = manquants.length === 0 && refus.length === 0;
