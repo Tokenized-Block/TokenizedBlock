@@ -1,6 +1,7 @@
 /* contracts/noter-deploiement-ticketpot.mjs — APRES la signature de Phil : inscrit `adresse` + `bloc` dans ticketpot-deploiement.js depuis le
  * RECU de la transaction de creation, et seulement si TOUT concorde. Rien n est signe ni envoye : lecture seule.
  *   Usage : node contracts/noter-deploiement-ticketpot.mjs <txHash> [rpcUrl=https://mainnet.base.org]
+ *   [FICHE=ticketpot-unit-deploiement.js : le second pot, en UNIT]
  * REFUSE (et n ecrit rien) si : la fiche n est pas prete ou porte deja une adresse ; le recu n est pas status 0x1 ou n a pas de
  *   contractAddress ; l `input` de la transaction n est pas OCTET POUR OCTET la `creation` de la fiche ; une relecture on-chain (USDC,
  *   verifier, guardian) differe de la fiche ; owner() n est pas le signataire (tx.from) ; domainSeparator() n est pas celui que le serveur
@@ -56,8 +57,11 @@ export function noter({ fiche, texte, tx, recu, relectures, owner, domaine, tota
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const [txHash, rpcUrl = 'https://mainnet.base.org'] = process.argv.slice(2);
   if (!/^0x[0-9a-f]{64}$/i.test(String(txHash || ''))) { console.error('usage: node contracts/noter-deploiement-ticketpot.mjs <txHash> [rpcUrl]'); process.exit(2); }
-  const ICI = path.dirname(fileURLToPath(import.meta.url)), chemin = path.join(ICI, '..', 'ticketpot-deploiement.js');
-  const { TICKETPOT_DEPLOIEMENT: fiche } = await import('../ticketpot-deploiement.js');
+  /* 2026-10-27 : FICHE=ticketpot-unit-deploiement.js note le SECOND pot (UNIT), meme fiche generee (preparer + SORTIE), memes refus */
+  const nomFiche = process.env.FICHE || 'ticketpot-deploiement.js';
+  if (!['ticketpot-deploiement.js', 'ticketpot-unit-deploiement.js'].includes(nomFiche)) { console.error('FICHE must be ticketpot-deploiement.js or ticketpot-unit-deploiement.js'); process.exit(2); }
+  const ICI = path.dirname(fileURLToPath(import.meta.url)), chemin = path.join(ICI, '..', nomFiche);
+  const { TICKETPOT_DEPLOIEMENT: fiche } = await import('../' + nomFiche);
   let id = 0;
   const rpc = async (method, params) => {
     const r = await fetch(rpcUrl, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }) }).then((x) => x.json());
@@ -78,5 +82,5 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const v = noter({ fiche, texte: fs.readFileSync(chemin, 'utf8'), tx, recu, relectures, owner, domaine, totalPots });
   if (!v.ok) { console.error('REFUSED: ' + v.pourquoi); process.exit(1); }
   fs.writeFileSync(chemin, v.texte);
-  console.log('ticketpot-deploiement.js: adresse ' + v.adresse + ', bloc ' + v.bloc + ' (owner ' + owner + ')');
+  console.log(nomFiche + ': adresse ' + v.adresse + ', bloc ' + v.bloc + ' (owner ' + owner + ')');
 }

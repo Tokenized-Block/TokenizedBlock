@@ -50,7 +50,7 @@ vu(PR.reduce((s, p) => s + BigInt(p.amount), 0n) <= 10n && PR.find((p) => p.wall
 vu(PW[0].digest !== partsDuJour({ chainId: 8453, contrat: C, jourId: J, tickets: [W1, W2], potAtClose: 1000000n })[0].digest, 'semaine et jour : digests differents (une signature ne passe pas d un mode a l autre)');
 vu(/if \(!verifierSignaturePart\(\{ digest: p\.digest, signature, verifier: r\.verifier \}\)\)/.test(bloc) && /if \(!r\.ferme\)/.test(bloc) && /if \(!p\)/.test(bloc), 'POST : jour ferme, holder du jour, signataire = verifier() relu ; sinon rien n est garde');
 vu(!/signerDigest|MISSIONS_VERIFIER_KEY|attesterPart|attesterJour/.test(bloc), 'le serveur ne signe RIEN ici');
-vu(/brutTP\.length > 2048/.test(bloc) && /revenu\.ticketpotSig\[cleSig\]\[wallet\] = \{ digest: p\.digest, signature,/.test(bloc) && /revenuSale = true;/.test(bloc), 'corps borne ; signature gardee sous son digest (cle jour ou jour#S), persistee');
+vu(/brutTP\.length > 2048/.test(bloc) && /* 2026-10-27 : la cle du magasin est celle du pot (ticketpotSig | ticketpotSigUnit, cleSigTP) */ /revenu\[cleSigTP\]\[cleSig\]\[wallet\] = \{ digest: p\.digest, signature,/.test(bloc) && /cleSigTP = uniteTP \? 'ticketpotSigUnit' : 'ticketpotSig'/.test(bloc) && /revenuSale = true;/.test(bloc), 'corps borne ; signature gardee sous son digest (cle jour ou jour#S), persistee');
 vu(/'attester-ticketpot\.html',/.test(srv.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/)[1]), 'attester-ticketpot.html servie');
 const page = readFileSync(new URL('./attester-ticketpot.html', import.meta.url), 'utf8');
 vu(/eth_signTypedData_v4/.test(page) && /JSON\.stringify\(p\.donnees\)/.test(page) && /noindex/.test(page) && !/eth_sendTransaction|sendCalls/.test(page), 'la page signe un MESSAGE type (jamais une transaction)');

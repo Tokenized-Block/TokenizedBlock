@@ -4243,6 +4243,8 @@ details[open] > summary::before{transform:rotate(90deg)}
            l alimente (jamais rendu au donateur). Les parts sont signees par le wallet verifier (Phil) : la reclamation s ouvre avec sa
            signature — dit tel quel, rien n est promis. Caches sans fiche servie ; le montant est tape, jamais fixe ici. -->
       <p class="note" id="potJour" style="margin:2px 0 0" hidden></p>
+      <!-- 2026-10-27 : le SECOND pot, en UNIT (/api/tirage.ticketpotUnit) : memes tickets, montants a 18 decimales ; cache sans fiche servie -->
+      <p class="note" id="potJourUnit" style="margin:2px 0 0" hidden></p>
       <label class="champ" id="potFondLab" hidden>Add to this week's pot (USDC)<input id="potMontant" inputmode="decimal" value="1"></label>
       <div class="jourEtapes">
         <button type="button" class="bouton sec" id="jourUnit">Trade UNIT</button>
@@ -4262,6 +4264,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton sec" id="jourFondPot" hidden>Add to this week's pot</button>
         <!-- la part signee par le verifier (attester-ticketpot.html) : ce wallet la reclame LUI-MEME (planClaim) ; cache sans signature -->
         <button type="button" class="bouton" id="jourReclamerPot" hidden>Claim my share</button>
+        <!-- la part signee du pot UNIT : meme chemin (planClaim, le wallet de ce holder signe) ; cache sans signature -->
+        <button type="button" class="bouton" id="jourReclamerPotUnit" hidden>Claim my UNIT share</button>
         <!-- close(day) : l owner tout de suite, n importe qui 12 h apres la fin du jour ; fige le pot (les parts deviennent finales) -->
         <button type="button" class="bouton sec" id="jourFermerPot" hidden>Close yesterday's pot</button>
       </div>
@@ -4828,7 +4832,7 @@ import * as Rg from './rolls-regles.js';
  *   jamais suppose — les fenetres de 256 blocs disent leur duree a ce temps, et le Game se relit assez souvent pour une fenetre de ~51 s */
 import { blocsPour, secondesPour, dureeTexte, texteBlocs, intervalleSondageMs, pasAttenteBlocMs } from './temps-de-bloc.js';
 /* 2026-10-18 : TicketPot LIVE — alimenter le pot du jour (planFund : approve EXACT + fund), le jour UTC du contrat depuis l id du jour */
-import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, claimableUntil as reclamablePot, appelDayPot as appelDayPotTP, lireUintMot as lireUintMotTP, appelClaimed as appelClaimedTP, lireBoolMot as lireBoolTP, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
+import { planFund as planFundPot, planClaim as planClaimPot, planClose as planClosePot, closableByAnyoneAt as fermablePot, claimableUntil as reclamablePot, appelDayPot as appelDayPotTP, lireUintMot as lireUintMotTP, appelClaimed as appelClaimedTP, lireBoolMot as lireBoolTP, montantTexte as montantPotTexte, dayDeJourId as dayDeJourIdPot } from './ticketpot-plan.js';
 /* 2026-10-18 : « Let the brain play » — la proposition suivante, pure (brain-jeu.js) ; le wallet signe chaque appel par bcSigner */
 import { prochaineProposition as bjProposition, dernierJourDeSemaine as bjDernierJour } from './brain-jeu.js';
 /* 2026-10-18 : les duels — encodeurs purs et lecteurs (duels-plan-app.js) ; le contrat vient de /api/duels (fiche signee), sinon rien de payant */
@@ -6131,6 +6135,7 @@ function peindrePotJour(t, c) {
   const fondOk = !!(tp && c && sem && sem.aujourdhui === true && sem.ferme === false);
   p.hidden = !tp; b.hidden = !fondOk; if (lab) lab.hidden = !fondOk;
   void peindreReclamerPot(tp, c);
+  peindrePotUnit(t, c);
   peindreFermerPot(tp, c);
   if (!tp) return;
   const v = tp.veille;
@@ -6235,6 +6240,71 @@ async function reclamerPot() {
   } finally { b.disabled = false; }
 }
 $('#jourReclamerPot').addEventListener('click', () => { void reclamerPot(); });
+/* ══ LE POT UNIT (2026-10-27, docs/rachat-unit-simple-20261027.md) : le meme TicketPot, son token est UNIT (18 decimales). La ligne LUE par
+ *   le serveur (/api/tirage.ticketpotUnit) ; la part signee par le verifier (/api/ticketpot-unit/parts, SON domaine EIP-712) ; ce wallet la
+ *   reclame LUI-MEME par planClaim, comme le pot USDC. Le financement est manuel (le wallet owner) : aucun bouton ici. */
+const DEC_UNIT_POT = 18;
+let maPartPotUnit = null;
+function peindrePotUnit(t, c) {
+  const p = $('#potJourUnit');
+  const tp = t && t.ticketpotUnit && /^0x[0-9a-fA-F]{40}$/.test(String(t.ticketpotUnit.contrat)) && t.ticketpotUnit.jeton === 'UNIT' ? t.ticketpotUnit : null;
+  if (p) p.hidden = !tp;
+  void peindreReclamerPotUnit(tp, c);
+  if (!tp || !p) return;
+  const u = (x) => montantPotTexte(x, DEC_UNIT_POT);
+  const sem = tp.semaine && /^J\d{4}-\d{2}-\d{2}$/.test(String(tp.semaine.jourId)) ? tp.semaine : null, v = tp.veille;
+  p.textContent = (!sem ? 'This week\'s UNIT pot: not read yet (TicketPot ' + tp.contrat.slice(0, 6) + '…' + tp.contrat.slice(-4) + ').'
+    : 'This week\'s UNIT pot: ' + (sem.ferme ? u(sem.potAtClose) + ' UNIT frozen, ' + u(sem.reste) + ' UNIT left to claim' : u(sem.reste) + ' UNIT') + ' — it lives on ' + sem.jourId.slice(1) + '.')
+    + (v && v.ferme && String(v.reste) !== '0' ? ' Pot of ' + v.jourId.slice(1) + ': ' + u(v.reste) + ' UNIT left to claim.' : '')
+    + (sem && sem.enPause ? ' · claims paused' : '') + ' Same tickets as the USDC pot; your claim opens here once your share is signed.';
+}
+async function peindreReclamerPotUnit(tp, c) {
+  const b = $('#jourReclamerPotUnit'); if (!b) return;
+  maPartPotUnit = null; b.hidden = true;
+  if (!tp || !c) return;
+  const v = tp.veille, s = semaineReclamableDe(tp), maintenant = Math.floor(Date.now() / 1000), essais = [];
+  if (v && v.ferme) essais.push([v, false], [v, true]);
+  if (s && s.ferme && !(v && v.jourId === s.jourId)) essais.push([s, true]);
+  const signesU = Array.isArray(tp.signes) ? tp.signes : [];
+  for (const x of signesU) {
+    if (!x || !/^J\d{4}-\d{2}-\d{2}$/.test(String(x.jourId)) || !Number.isInteger(x.day) || maintenant > reclamablePot(x.day)) continue;
+    if (essais.some(([j, m]) => j.jourId === x.jourId && m === !!x.semaine)) continue;
+    essais.push([{ jourId: x.jourId, day: x.day, ferme: true }, !!x.semaine]);
+  }
+  const moi = String(c).toLowerCase(), contratU = String(tp.contrat).toLowerCase();
+  for (const [jr, sem] of essais) {
+    let r = null;
+    try { r = await fetch('/api/ticketpot-unit/parts?day=' + encodeURIComponent(jr.jourId) + (sem ? '&week=1' : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
+    /* la part du pot UNIT seulement : son contrat (jamais une part du pot USDC montree en UNIT) */
+    if (!r || !r.ok || r.jeton !== 'UNIT' || String(r.contrat).toLowerCase() !== contratU) continue;
+    const p = (r.parts || []).find((x) => x.wallet === moi && x.signature);
+    if (!p) continue;
+    if ((await dejaReclamePot(contratU, p.day, moi)) !== false) continue;
+    maPartPotUnit = { ...p, contrat: contratU };
+    b.textContent = 'Claim my ' + (sem ? 'weekly ' : '') + 'UNIT share · ' + montantPotTexte(p.amount, DEC_UNIT_POT) + ' UNIT (' + jr.jourId + ')'; b.hidden = false;
+    return;
+  }
+}
+async function reclamerPotUnit() {
+  const e = $('#potEtat'), b = $('#jourReclamerPotUnit'), m = maPartPotUnit;
+  let c = null; try { c = compte; } catch (_) { c = null; }
+  if (!m || !c || !b || b.disabled || String(c).toLowerCase() !== m.wallet) return;
+  const dit = (txt) => { e.hidden = false; e.textContent = txt; };
+  const u = montantPotTexte(m.amount, DEC_UNIT_POT);
+  b.disabled = true;
+  try {
+    const deja = await dejaReclamePot(m.contrat, m.day, m.wallet);
+    const plan = planClaimPot({ contrat: m.contrat, day: m.day, wallet: m.wallet, ticket: m.ticket, amount: m.amount, deadline: m.deadline, signature: m.signature, ferme: true, dejaPaye: deja === true });
+    if (plan.etat !== 'PRET' && deja === true) b.hidden = true;
+    if (plan.etat !== 'PRET') { dit('Not claimed: ' + plan.pourquoi); return; }
+    dit('Claim your UNIT share of ' + m.jourId + ' (' + u + ' UNIT, paid to your wallet by the contract). Sign in your wallet…');
+    const r = await envoyerAppels(plan.appels, c);
+    if (!r || r.etat !== 'CONFIRME') { dit(phraseNonConfirme(r, 'Not claimed')); return; }
+    dit('Claimed (' + String(r.hash || '').slice(0, 10) + '…): ' + u + ' UNIT paid to your wallet.');
+    b.hidden = true;
+  } finally { b.disabled = false; }
+}
+$('#jourReclamerPotUnit').addEventListener('click', () => { void reclamerPotUnit(); });
 /* LA FERMETURE (close(day)) : l owner LU (tp.veille.owner) tout de suite, n importe qui 12 h apres la fin du jour (closableByAnyoneAt) ;
  *   avant, un non-owner ne voit pas le bouton (le contrat refuserait, gas perdu). Fermer fige le pot : les parts deviennent signables. */
 /* 2026-10-23 : le pot a fermer = celui de la SEMAINE reclamable d abord (servi, encore dans sa grace), sinon la veille ; un seul bouton. */

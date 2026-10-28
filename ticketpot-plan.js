@@ -90,6 +90,15 @@ export function dayDeJourId(id) {
 export const jourIdDeDay = (day) => 'J' + new Date(Number(day) * DAY_S * 1000).toISOString().slice(0, 10);
 
 /* ------------------------------------------------------------------ la part : ce que le serveur signe pour CHAQUE holder */
+/** 2026-10-27 : un montant BRUT du pot en texte, avec SES decimales (USDC 6, UNIT 18) : tronque (jamais arrondi vers le haut), `chiffres`
+ *  apres la virgule. Illisible -> '—' (jamais 0). */
+export function montantTexte(brut, decimales, chiffres = 4) {
+  let v; try { v = BigInt(brut); } catch (_) { return '—'; }
+  const d = Number(decimales);
+  if (!Number.isInteger(d) || d < 0 || d > 36 || v < 0n) return '—';
+  const base = 10n ** BigInt(d), f = (v % base).toString().padStart(d, '0').slice(0, Math.min(chiffres, d));
+  return (v / base).toString() + (f ? '.' + f : '');
+}
 /** floor(potAtClose / nTickets) en USDC brut ; 0n si pas de ticket ou pot vide (le contrat refuse amount 0 : rien a signer). La poussiere
  *  (potAtClose - n x part) reste dans le pot du jour et roule au jour courant apres la grace. */
 export function partDuJour(potAtClose, nTickets) {

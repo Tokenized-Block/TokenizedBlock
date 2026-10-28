@@ -176,7 +176,8 @@ vu(/partsCacheTP\.obtenir\(jourId \+ \(semaineQ \? '#S' : ''\), \(\) => partsDe\
 vu(/jourChaineTP\.obtenir\(day, \(\) => lireJourTicketPot\(\{ rpc: rpcServeur, contrat: contratTP \}, day\), \(x\) => !!x\)/.test(bloc), 'lireJour : en cache par jour (le POST ne relit pas 6 appels par part)');
 /* 2026-10-24 (3e tour ticketpot, D1) : le POST invalide aussi la cle sur un 412 PERIME (avant de garder quoi que ce soit) ; l invalidation
  *   qui suit le depot est la DERNIERE */
-vu(/partsCacheTP\.invalider\(cleSig\);/.test(bloc) && bloc.lastIndexOf('partsCacheTP.invalider(cleSig);') > bloc.indexOf('revenu.ticketpotSig[cleSig][wallet] = {'), 'POST : invalide la cle APRES avoir garde la signature');
+/* 2026-10-27 : le cache et le magasin sont ceux du pot (USDC ou UNIT : cachePartsTP, cleSigTP) */
+vu(/cachePartsTP\.invalider\(cleSig\);/.test(bloc) && bloc.lastIndexOf('cachePartsTP.invalider(cleSig);') > bloc.indexOf('revenu[cleSigTP][cleSig][wallet] = {') && bloc.indexOf('revenu[cleSigTP][cleSig][wallet] = {') > 0, 'POST : invalide la cle APRES avoir garde la signature');
 vu(/const couverture = couvertureParts\(\{ debutMs: perTP\.debut, finMs: perTP\.fin, joursIds: joursEntre\(perTP\.debut, perTP\.fin\), registreDepuis: revenu\.depuis,/.test(bloc) && /nTickets: tickets\.length, parts,\s*couverture \};/.test(bloc), 'la reponse porte la couverture');
 vu(/revenu\.skinsLus\[jour\] = new Date\(\)\.toISOString\(\)/.test(srv), 'chaque lecture reussie des skins note son jour (couverture des skins)');
 /* ══ le cablage app (source + re-controle au Sign EXECUTE) ══ */
