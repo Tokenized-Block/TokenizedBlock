@@ -4245,6 +4245,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="potJour" style="margin:2px 0 0" hidden></p>
       <!-- 2026-10-27 : le SECOND pot, en UNIT (/api/tirage.ticketpotUnit) : memes tickets, montants a 18 decimales ; cache sans fiche servie -->
       <p class="note" id="potJourUnit" style="margin:2px 0 0" hidden></p>
+      <!-- 2026-10-28 (Phil) : la mesure de CE wallet pour le pot UNIT (solde au dernier bloc du jour, servi par /api/ticketpot-unit/parts) -->
+      <p class="note" id="potEligUnit" style="margin:2px 0 0" hidden></p>
       <label class="champ" id="potFondLab" hidden>Add to this week's pot (USDC)<input id="potMontant" inputmode="decimal" value="1"></label>
       <div class="jourEtapes">
         <button type="button" class="bouton sec" id="jourUnit">Trade UNIT</button>
@@ -6256,16 +6258,25 @@ function peindrePotUnit(t, c) {
   p.textContent = (!sem ? 'This week\'s UNIT pot: not read yet (TicketPot ' + tp.contrat.slice(0, 6) + '…' + tp.contrat.slice(-4) + ').'
     : 'This week\'s UNIT pot: ' + (sem.ferme ? u(sem.potAtClose) + ' UNIT frozen, ' + u(sem.reste) + ' UNIT left to claim' : u(sem.reste) + ' UNIT') + ' — it lives on ' + sem.jourId.slice(1) + '.')
     + (v && v.ferme && String(v.reste) !== '0' ? ' Pot of ' + v.jourId.slice(1) + ': ' + u(v.reste) + ' UNIT left to claim.' : '')
-    + (sem && sem.enPause ? ' · claims paused' : '') + ' Same tickets as the USDC pot; your claim opens here once your share is signed.';
+    + (sem && sem.enPause ? ' · claims paused' : '') + ' Hold at least $10 of UNIT at the end of the day to share it (on top of the day\'s ticket); your claim opens here once your share is signed.';
+}
+/* 2026-10-28 : la mesure de CE wallet pour un jour (servie avec les parts UNIT) : eligible, ou pourquoi pas — jamais devinee */
+function phraseEligUnit(r, moi, jourId) {
+  const e = r && r.eligibilite && r.eligibilite.parWallet ? r.eligibilite.parWallet[moi] : null;
+  if (!e) return null;
+  const val = Number.isFinite(e.usd) ? '$' + e.usd.toFixed(2) + ' of UNIT' : 'not read';
+  return 'Your UNIT at the end of ' + jourId.slice(1) + ': ' + val + ' — ' + (e.ok === true ? 'eligible for the UNIT pot.' : 'not eligible (' + (e.pourquoi || 'not read') + ').');
 }
 async function peindreReclamerPotUnit(tp, c) {
   const b = $('#jourReclamerPotUnit'); if (!b) return;
   maPartPotUnit = null; b.hidden = true;
   if (!tp || !c) return;
-  const v = tp.veille, s = semaineReclamableDe(tp), maintenant = Math.floor(Date.now() / 1000), essais = [];
-  if (v && v.ferme) essais.push([v, false], [v, true]);
-  if (s && s.ferme && !(v && v.jourId === s.jourId)) essais.push([s, true]);
-  const signesU = Array.isArray(tp.signes) ? tp.signes : [];
+  /* le pot UNIT se partage par JOUR seulement (le serveur refuse le mode semaine) */
+  const v = tp.veille, maintenant = Math.floor(Date.now() / 1000), essais = [];
+  if (v && v.ferme) essais.push([v, false]);
+  const pe = $('#potEligUnit');
+  if (pe) pe.hidden = true;
+  const signesU = Array.isArray(tp.signes) ? tp.signes.filter((x) => x && !x.semaine) : [];
   for (const x of signesU) {
     if (!x || !/^J\d{4}-\d{2}-\d{2}$/.test(String(x.jourId)) || !Number.isInteger(x.day) || maintenant > reclamablePot(x.day)) continue;
     if (essais.some(([j, m]) => j.jourId === x.jourId && m === !!x.semaine)) continue;
@@ -6277,6 +6288,8 @@ async function peindreReclamerPotUnit(tp, c) {
     try { r = await fetch('/api/ticketpot-unit/parts?day=' + encodeURIComponent(jr.jourId) + (sem ? '&week=1' : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
     /* la part du pot UNIT seulement : son contrat (jamais une part du pot USDC montree en UNIT) */
     if (!r || !r.ok || r.jeton !== 'UNIT' || String(r.contrat).toLowerCase() !== contratU) continue;
+    const ph = phraseEligUnit(r, moi, jr.jourId);
+    if (pe && ph && pe.hidden) { pe.textContent = ph; pe.hidden = false; }
     const p = (r.parts || []).find((x) => x.wallet === moi && x.signature);
     if (!p) continue;
     if ((await dejaReclamePot(contratU, p.day, moi)) !== false) continue;

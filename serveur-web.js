@@ -255,7 +255,9 @@ import { snapshotCerveau } from './export-cerveau.js';
 import { tacheAutorisee } from './brain-tasks.js';
 import { adressesANommer, chercherNom, creerIndexNoms } from './recherche-noms.js';
 import { validerRequete, construireIndex, chercherB20 } from './recherche-b20.js';
-import { prixEthUsd } from './prix-eth.js';
+import { prixEthUsd, CLES_PRIX as CLES_PRIX_ETH } from './prix-eth.js';
+/* 2026-10-28 (Phil) : le pot UNIT exige 10 $ d UNIT detenus au DERNIER bloc du jour (solde d archive, plus bas de deux prix) */
+import { evaluerJour as evaluerJourUnit } from './eligibilite-unit.js';
 import { moteurUsage, STATE_VIEW as STATE_VIEW_USAGE } from './usage-onchain.js';
 import { plancher7030, DESCRIPTEUR_7030 } from './hook-7030-descripteur.js';
 import { V4_ADRESSES } from './lancer-pool.js';
@@ -4666,6 +4668,27 @@ const WETH_SRV = WETH_BASE.toLowerCase();
  *   la pool initialisee lue par StateView (test-volume-tirage le verifie). Les actions = jetons d actions connus (descripteur 7030 + Aerodrome). */
 const UNIT_BLOCK = '0xb2000000000000000000007afa7ed748b0874f27';
 const POOLS_UNIT_TB = new Set([poolIdDe({ currency0: '0x' + '0'.repeat(40), currency1: UNIT_BLOCK, fee: 0, tickSpacing: 200, hooks: HOOK_7030 })]);
+/* ══ L ELIGIBILITE AU POT UNIT (2026-10-28, Phil) : ticket du jour ET >= 10 $ d UNIT au DERNIER bloc du jour UTC (eligibilite-unit.js).
+ *   Solde et prix lus a ce bloc par l ARCHIVE (BASE_RPC_ARCHIVE ; sans elle : non lu, donc personne n est eligible, et c est dit) ; prix =
+ *   le plus bas du spot de la pool UNIT de l app (POOLS_UNIT_TB) a ce bloc et ~10 min plus tot, fois l ETH median des pools ETH/USDC.
+ *   Un jour entierement lu est garde pour toujours (le passe ne change plus) ; une lecture incomplete est relue apres 5 min. */
+const IDS_ETH_USDC_ELIG = CLES_PRIX_ETH.map((k) => poolIdDe({ currency0: '0x' + '0'.repeat(40), currency1: USDC_SRV, fee: k.fee, tickSpacing: k.tickSpacing, hooks: '0x' + '0'.repeat(40) }));
+const eligUnitCache = new Map();
+let lireArchiveEligU = null;
+async function eligibiliteUnitJour(day, wallets) {
+  const cle = day + '|' + [...new Set(wallets.map((w) => String(w).toLowerCase()))].sort().join(',');
+  const c = eligUnitCache.get(cle);
+  if (c && (c.complet || Date.now() - c.t < 300000)) return c.r;
+  if (!lireArchiveEligU && RPC_ARCHIVE) lireArchiveEligU = lecteurArchive('eligibilite-unit');
+  const lire = async (to, data, bloc) => { if (!lireArchiveEligU) throw new Error('no archive node'); return lireArchiveEligU('eth_call', [{ to, data }, '0x' + Number(bloc).toString(16)]); };
+  let tete = null; try { tete = Number(BigInt(await rpcServeur('eth_blockNumber', []))); } catch (_) { tete = null; }
+  const r = await evaluerJourUnit({ day, wallets, tete, lire, stateView: V4_ADRESSES[8453].stateView, idUnit: [...POOLS_UNIT_TB][0], idsEth: IDS_ETH_USDC_ELIG, unit: UNIT_BLOCK,
+    lireTs: async (n) => { const ts = await horodatageBloc(n); return ts === null ? NaN : ts; } });
+  const complet = r.ok && Object.values(r.parWallet).every((x) => x.pourquoi !== 'UNIT balance not read' && x.pourquoi !== 'UNIT price not read');
+  eligUnitCache.set(cle, { t: Date.now(), r, complet });
+  if (eligUnitCache.size > 64) eligUnitCache.delete(eligUnitCache.keys().next().value);
+  return r;
+}
 const JETONS_ACTIONS = new Set([...DESCRIPTEUR_7030.devises.filter((d) => /c$/.test(d.sym)).map((d) => d.adresse.toLowerCase()), ...[...POOLS_ACTIONS_AERODROME.keys()].map((x) => String(x).toLowerCase())]);
 /* ══ LE JOUR DU BLOC (2026-10-24, revue adverse, audit-ticketpot 4) : le volume et le pass skin creditaient le jour ou le hash etait POSTE
  *   (Date.now) : un wallet gardait ses swaps et en postait un par jour (un ticket chaque jour sans trader), un vieux swap se postait
@@ -7754,6 +7777,8 @@ function traiterRequete(req, res) {
     const partsDe = async (jourId, semaine = false) => {
       const day = dayDeJourIdPot(jourId);
       if (day === null) return { ok: false, etat: 'REFUSE', pourquoi: 'day is JYYYY-MM-DD' };
+      /* 2026-10-28 : le pot UNIT se partage par JOUR (son eligibilite est un solde au dernier bloc d UN jour) */
+      if (uniteTP && semaine) return { ok: false, etat: 'REFUSE', pourquoi: 'the UNIT pot is shared by day only' };
       const cleTP = jourId + (semaine ? '#S' : '');
       let gel = gelTP(cleTP);
       let poids = null, semaineId = null;
@@ -7773,14 +7798,19 @@ function traiterRequete(req, res) {
       }
       let j; try { j = await (uniteTP ? jourChaineTPUnit.obtenir(day, () => lireJourTicketPot({ rpc: rpcServeur, contrat: contratTP }, day), (x) => !!x) : jourChaineTP.obtenir(day, () => lireJourTicketPot({ rpc: rpcServeur, contrat: contratTP }, day), (x) => !!x)); } catch (_) { return { ok: false, etat: 'NON_LU', pourquoi: 'the ticket pot could not be read just now' }; }
       const ticketsCourants = () => (semaine ? Object.keys(poids) : ticketsJour(revenu.jours || {}, jourId, revenu.passes || {}, SEUIL_VOLUME_JOUR_USD));
+      /* ⛔ 2026-10-28 (Phil) : le pot UNIT = la MEME liste filtree par >= 10 $ d UNIT au dernier bloc du jour ; non lu -> non eligible.
+       *   Le pot USDC garde sa liste entiere. */
+      let eligU = null;
+      if (uniteTP) { try { eligU = await eligibiliteUnitJour(day, ticketsCourants()); } catch (_) { eligU = null; } }
+      const ticketsDuPot = () => (uniteTP ? ticketsCourants().filter((w) => !!(eligU && eligU.parWallet && eligU.parWallet[w] && eligU.parWallet[w].ok === true)) : ticketsCourants());
       const sigs = (uniteTP ? ((revenu.ticketpotSigUnit || {})[jourId + (semaine ? '#S' : '')]) : ((revenu.ticketpotSig || {})[jourId + (semaine ? '#S' : '')])) || {};
       /* une cle signee AVANT le gel (aucune table gardee) : gelee a sa premiere lecture SI toutes ses signatures tiennent encore sur le calcul
        *   courant ; une cle deja derivee (une signature caduque) n est pas gelee sur une table qui n est pas celle qui a ete signee */
-      const partsBrutes = j.ferme && !gel && Object.keys(sigs).length ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets: ticketsCourants(), potAtClose: j.potAtClose, signatures: sigs, poids }) : [];
+      const partsBrutes = j.ferme && !gel && Object.keys(sigs).length ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets: ticketsDuPot(), potAtClose: j.potAtClose, signatures: sigs, poids }) : [];
       const sigsTenues = () => Object.keys(sigs).length > 0 && Object.keys(sigs).every((w) => partsBrutes.some((p) => p.wallet === w && p.signature));
       if (!gel && j.ferme && sigsTenues()) gel = gelerTP(cleTP, { mode: semaine ? 'SEMAINE' : 'JOUR', poids, parts: partsBrutes, potAtClose: j.potAtClose });
       if (gel && semaine && gel.poids && typeof gel.poids === 'object') poids = { ...gel.poids };
-      const tickets = gel && !semaine && Array.isArray(gel.tickets) ? [...gel.tickets] : ticketsCourants();
+      const tickets = gel && !semaine && Array.isArray(gel.tickets) ? [...gel.tickets] : ticketsDuPot();
       const potTP = gel ? BigInt(gel.potAtClose) : j.potAtClose;
       const parts = j.ferme ? partsTicketPot({ chainId: 8453, contrat: contratTP, jourId, tickets, potAtClose: potTP, signatures: sigs, poids }) : [];
       /* LA COUVERTURE des index qui font les tickets (ticketpot-parts-serveur.js) : inconnu -> complete false ; le brain ne propose alors
@@ -7791,7 +7821,11 @@ function traiterRequete(req, res) {
       const couverture = couvertureParts({ debutMs: perTP.debut, finMs: perTP.fin, joursIds: joursEntre(perTP.debut, perTP.fin), registreDepuis: revenu.depuis,
         rolls: BLOCKROLLS_DEPLOIEMENT.adresse ? { curseurTs } : null, skins: BLOCKSKINS_SRV ? { joursLus: revenu.skinsLus || {} } : null });
       return { ok: true, day, jourId, mode: semaine ? 'SEMAINE' : 'JOUR', semaine: semaineId, poids, contrat: contratTP, jeton: jetonTP, decimales: uniteTP ? 18 : 6, verifier: j.verifier, ferme: j.ferme, enPause: j.enPause, potAtClose: j.potAtClose.toString(), reste: j.reste.toString(),
-        dernierJourSemaine: dernierDeSemaine(jourId), gele: gel ? gel.at : null, nTickets: tickets.length, parts,
+        dernierJourSemaine: dernierDeSemaine(jourId), gele: gel ? gel.at : null,
+        ...(uniteTP ? { eligibilite: { seuilUsd: 10, lu: !!(eligU && eligU.ok), blocFin: eligU ? eligU.blocFin || null : null, blocAvant: eligU ? eligU.blocAvant || null : null,
+          prixFin: eligU ? eligU.prixFin ?? null : null, prixAvant: eligU ? eligU.prixAvant ?? null : null, pourquoi: eligU ? eligU.pourquoi || null : 'not read',
+          parWallet: Object.fromEntries(ticketsCourants().map((w) => [w, eligU && eligU.parWallet && eligU.parWallet[w] ? { ok: eligU.parWallet[w].ok, usd: eligU.parWallet[w].usd, pourquoi: eligU.parWallet[w].pourquoi } : { ok: false, usd: null, pourquoi: 'UNIT balance not read' }])) } } : {}),
+        nTickets: tickets.length, parts,
         couverture };
     };
     if (chemin === '/api/ticketpot/parts') {
@@ -7811,7 +7845,8 @@ function traiterRequete(req, res) {
       if (!/^J\d{4}-\d{2}-\d{2}$/.test(jourId) || !/^0x[0-9a-f]{40}$/.test(wallet) || !/^0x[0-9a-fA-F]{130}$/.test(signature)) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day (JYYYY-MM-DD), wallet and a 65-byte signature are needed' }); return; }
       const semaine = !!(b && b.week === true);
       /* 2026-10-24 (audit-ticketpot 3) : le dernier jour d une semaine, son dayPot EST le pot de la semaine — ses parts du JOUR ne se signent pas */
-      if (!semaine && dernierDeSemaine(jourId)) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: jourId + ' is the last day of its week: its pot is the weekly pot, sign its weekly shares (week: true)' }); return; }
+      /* le pot UNIT n a pas de pot de semaine : son dernier jour de semaine se partage par jour comme les autres */
+      if (!semaine && dernierDeSemaine(jourId)) if (!uniteTP) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: jourId + ' is the last day of its week: its pot is the weekly pot, sign its weekly shares (week: true)' }); return; }
       const r = await partsDe(jourId, semaine);
       if (!r.ok) { rendreTP(r.etat === 'NON_LU' ? 202 : 400, r); return; }
       if (!r.ferme) { rendreTP(400, { ok: false, etat: 'REFUSE', pourquoi: 'day ' + jourId + ' is not closed on chain: nothing is signed before close(day)' }); return; }
