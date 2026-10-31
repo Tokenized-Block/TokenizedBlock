@@ -312,6 +312,41 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');
 }
 
+/* ── 9. (2026-11-01, coordinateur) LA GARDE CPU : au plus 2 calculs TAM en cours (503 OCCUPE sans calculer), 20 par IP et par minute (429),
+ *   un cache touche ne compte pas ; l app le dit et ne relance rien seule. ── */
+{
+  const { TAM_CALCULS_MAX, TAM_BUDGET_IP_MINUTE } = await import('./tam-serveur.js');
+  ok(TAM_CALCULS_MAX === 2 && TAM_BUDGET_IP_MINUTE === 20, 'plafonds : 2 calculs simultanes, 20 par IP et par minute');
+  const b64 = (P) => Buffer.from(JSON.stringify(P), 'utf8').toString('base64url');
+  const Pr = (r) => T.appliquerReglage(T.structurer({ famille: 'lorenz' }), 'params.r', r);
+  const srvG = serveurTam({ rpc: rpcFaux, deploiement: TAMART_DEPLOIEMENT, lireVie, lireSymbole: async () => 'ZZZ', maintenant: () => 1.8e12 });
+  /* (a) le plafond simultane : 3 calculs (caches rates) lances ensemble -> 2 admis, le 3e OCCUPE, sans calcul */
+  const trois = await Promise.all([20, 21, 22].map((r, i) => srvG.certifierParams(b64(Pr(r)), 'ip-c' + i)));
+  const occ = trois.filter((x) => x.etat === 'OCCUPE');
+  ok(occ.length === 1 && occ[0].statut === 503 && occ[0].ok === false && occ[0].pourquoi === 'busy, try again in a few seconds' && occ[0].hash === undefined, '3 calculs ensemble : 2 admis, 1 OCCUPE 503 sans calcul');
+  ok(trois.filter((x) => x.etat === 'CERTIFIE' || x.etat === 'REFUSE').length === 2, 'les 2 admis ont calcule');
+  const apres = await srvG.certifierParams(b64(Pr(22)), 'ip-c2');
+  ok(apres.etat !== 'OCCUPE', 'la place se libere apres le calcul (pas de place perdue)');
+  /* (b) le budget par IP : 20 calculs, le 21e -> 429 ; une autre IP passe ; choix() est garde aussi */
+  const rep = [];
+  for (let i = 0; i < 21; i++) rep.push(await srvG.certifierParams(b64(Pr(30 + i * 0.25)), 'ip-a'));
+  ok(rep.slice(0, 20).every((x) => x.etat !== 'TROP' && x.etat !== 'OCCUPE') && rep[20].etat === 'TROP' && rep[20].statut === 429 && /20 a minute/.test(rep[20].pourquoi), '21e calcul de la meme IP dans la minute : 429 TROP');
+  ok((await srvG.certifierParams(b64(Pr(39)), 'ip-b')).etat !== 'TROP', 'une autre IP a son propre budget');
+  const chA = await srvG.choix(graineDe('garde-1'), null, null, 'ip-a');
+  ok(chA.etat === 'TROP' && chA.statut === 429, '/api/tam/choix compte dans le meme budget (429)');
+  /* (c) un cache touche ne compte pas */
+  const P0 = b64(Pr(25));
+  const premier = await srvG.certifierParams(P0, 'ip-d');
+  const repetes = []; for (let i = 0; i < 30; i++) repetes.push(await srvG.certifierParams(P0, 'ip-d'));
+  ok(premier.etat === 'CERTIFIE' && repetes.every((x) => x === premier), '30 caches touches : la meme reponse, jamais TROP');
+  const neufs = []; for (let i = 0; i < 19; i++) neufs.push(await srvG.certifierParams(b64(Pr(26 + i * 0.25)), 'ip-d'));
+  ok(neufs.every((x) => x.etat !== 'TROP'), 'apres 30 caches touches, 19 calculs neufs passent encore (20 au total)');
+  /* (d) le serveur rend 503/429 avec la meme source d IP que /api/jeu/roll ; l app le dit sans relancer */
+  ok(/statut === 503 \|\| statut === 429 \? statut : 200/.test(serveur) && /const ipT = String\(req\.headers\['x-forwarded-for'\] \|\| req\.socket\.remoteAddress \|\| ''\)\.split\(','\)\[0\]\.trim\(\);/.test(serveur)
+    && /certifierParams\(q\.get\('p'\), ipT\)/.test(serveur) && /q\.get\('minter'\), ipT\)/.test(serveur), 'serveur : code HTTP du refus, IP lue comme /api/jeu/roll, passee aux deux routes');
+  ok(/j\.etat === 'OCCUPE' \|\| j\.etat === 'TROP'/.test(onglet) && !/setInterval\([^)]*api\/tam|setTimeout\([^)]*fetch\('\/api\/tam/.test(onglet), 'l onglet dit « busy » et ne relance aucun appel /api/tam en boucle');
+}
+
 console.log('test-tam-onglet-20261031 : ' + n + ' assertions OK');
 
 /* ── MUTANTS sur COPIES (2026-11-01) : chaque defaut nomme par le lead doit faire ROUGIR ce banc. Copie de la racine dans D:\tmp\tam-mut,
@@ -330,7 +365,10 @@ if (!process.env.TAM_MUTANT) {
     ['curseur qui ecrit le mauvais angle', 'tam-moteur.js', "else if (tete === 'angles') Q.angles[Number(sous)] = v;", "else if (tete === 'angles') Q.angles[Math.min(Q.angles.length - 1, Number(sous) + 1)] = v;"],
     ['curseur qui ecrit le mauvais parametre', 'tam-moteur.js', 'Q.params[sous] = v;', 'Q.params[Object.keys(Q.params).sort()[0]] = v;'],
     ['signature non lue ecartee en silence (serveur)', 'tam-serveur.js', 'const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);\n    const cle = graine', 'const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId)).filter(Boolean);\n    const cle = graine'],
-    ['minteur non transmis au moteur (serveur)', 'tam-serveur.js', 'existantes, minteur });', 'existantes, minteur: null });'],
+    ['minteur non transmis au moteur (serveur)', 'tam-serveur.js', 'existantes, minteur }));', 'existantes, minteur: null }));'],
+    ['garde CPU : plafond simultane retire', 'tam-serveur.js', 'if (garde.enCours >= TAM_CALCULS_MAX) return', 'if (false) return'],
+    ['garde CPU : budget par IP retire', 'tam-serveur.js', 'if (n > TAM_BUDGET_IP_MINUTE) return', 'if (false) return'],
+    ['garde CPU : un cache touche compte dans le budget', 'tam-serveur.js', 'if (parReglage.has(cle)) return parReglage.get(cle);', 'if (parReglage.has(cle)) { const a = admettre(ip); if (a) return a; garde.enCours--; return parReglage.get(cle); }'],
   ];
   const base = 'D:\\tmp\\tam-mut';
   let tues = 0;

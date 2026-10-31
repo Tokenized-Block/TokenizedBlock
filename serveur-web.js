@@ -7934,7 +7934,9 @@ function traiterRequete(req, res) {
    * ⛔ 2026-11-01 : place AVANT la route /api/jeu, jamais entre elle et BLOCK MISSIONS — test-map-rolls lit cette tranche et y interdit
    *   toute lecture de chaine (cette route lit la chaine : rpcServeur / rpcRails). */
   if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres' || chemin === '/api/tam/certifier') {
-    const rendreT = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    /* 2026-11-01 : un refus de la garde CPU (tam-serveur.js#admettre) porte son code : 503 OCCUPE, 429 TROP ; le reste 200 */
+    const rendreT = (o) => { const { statut, ...corps } = o || {}; res.writeHead(statut === 503 || statut === 429 ? statut : 200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(statut === 503 ? { 'retry-after': '5' } : statut === 429 ? { 'retry-after': '60' } : {}) }); res.end(JSON.stringify(corps)); };
+    const ipT = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(); /* la meme source d IP que /api/jeu/roll */
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
     /* le cerveau d un block est nourri comme sonderLeReste nourrit celui de IB022 : sa vie lue par vieDuBlock (rpcRails), la tete de lecture, son symbol() */
     if (!tamSrv) tamSrv = serveurTam({ rpc: rpcServeur, deploiement: TAMART_DEPLOIEMENT,
@@ -7948,8 +7950,8 @@ function traiterRequete(req, res) {
     if (chemin === '/api/tam/oeuvres') { void tamSrv.oeuvres().then(rendreT, echec); return; }
     const q = new URL(req.url, 'http://x').searchParams;
     /* 2026-11-01 : une oeuvre REGLEE (curseurs du joueur, ou coup de pouce du cerveau) : les memes certificats, distance contre les mintees */
-    if (chemin === '/api/tam/certifier') { void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.certifierParams(q.get('p'))).then(rendreT, echec); return; }
-    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'), q.get('minter'))).then(rendreT, echec);
+    if (chemin === '/api/tam/certifier') { void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.certifierParams(q.get('p'), ipT)).then(rendreT, echec); return; }
+    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'), q.get('minter'), ipT)).then(rendreT, echec);
     return;
   }
 

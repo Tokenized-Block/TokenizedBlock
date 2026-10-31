@@ -231,6 +231,8 @@ export function monter(racine, ctx = {}) {
     /* 2026-11-01 : le wallet connecte entre dans la graine — deux joueurs sur le meme bloc ne recoivent jamais la meme oeuvre */
     const c = compte();
     try { j = await fetch('/api/tam/choix' + (c ? '?minter=' + c : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+    /* OCCUPE / TROP : on le dit, et on ne relance RIEN tout seul (le joueur reclique s il veut) */
+    if (j && (j.etat === 'OCCUPE' || j.etat === 'TROP')) { etatLigne.textContent = j.etat === 'OCCUPE' ? 'The server is busy, try again in a few seconds.' : 'Too many TAM computations from here: try again in a minute.'; return; }
     if (!j || j.ok !== true) { etatLigne.textContent = 'The brain\'s choice could not be read' + (j && j.pourquoi ? ': ' + j.pourquoi : '') + '.'; return; }
     S.nMintees = Number(j.comparees) || 0;
     /* l etat du cerveau qui a choisi : c est LUI qui bouge les variables (coupDePouce), de facon deterministe */

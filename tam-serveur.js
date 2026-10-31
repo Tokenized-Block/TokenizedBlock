@@ -14,6 +14,7 @@ import { etatInitial, pas } from './cerveau.js';
 
 export const TOPIC_MINTED = topic(SIG_TAM.minted);
 export const FENETRE_LOGS = 9000, FENETRES_PAR_APPEL = 20, TTL_MS = 60000;
+export const TAM_CALCULS_MAX = 2, TAM_BUDGET_IP_MINUTE = 20;
 const G32 = /^0x[0-9a-fA-F]{64}$/;
 
 /* 2026-10-31 (decision du lead) : le cerveau d UN block, nomme. Defaut : UNIT ; repli : IB022, ETIQUETE comme repli. */
@@ -64,6 +65,25 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     try { return etatCerveauTam(a, { vie: v.vie, etatVie: v.etatVie, bloc: v.bloc, symbole: v.symbole }); }
     catch (_) { return etatCerveauTam(CERVEAU_REPLI.adresse, { symbole: CERVEAU_REPLI.symbole, repli: true }); }
   }
+  /* ⛔ 2026-11-01 (coordinateur, avant deploy) : un calcul TAM (choisirOeuvre / certifierReglage) coute ~100-500 ms de CPU dans UN process.
+   *   Au plus TAM_CALCULS_MAX en cours dans tout le serveur, sinon 503 OCCUPE SANS calculer (aucune file) ; au plus TAM_BUDGET_IP_MINUTE
+   *   calculs par IP et par minute, sinon 429. Un cache touche ne passe pas par ici. Le calcul cede la main une fois (setImmediate) apres
+   *   son admission : la place est tenue pendant qu il attend, donc le plafond borne vraiment les calculs simultanes admis. */
+  const garde = { enCours: 0, minute: -1, parIp: new Map() };
+  function admettre(ip) {
+    if (garde.enCours >= TAM_CALCULS_MAX) return { statut: 503, ok: false, etat: 'OCCUPE', pourquoi: 'busy, try again in a few seconds' };
+    const m = Math.floor(maintenant() / 60000);
+    if (garde.minute !== m || garde.parIp.size > 10000) { garde.minute = m; garde.parIp.clear(); }
+    const k = String(ip || '?'), n = (garde.parIp.get(k) || 0) + 1;
+    if (n > TAM_BUDGET_IP_MINUTE) return { statut: 429, ok: false, etat: 'TROP', pourquoi: 'too many TAM computations from here: ' + TAM_BUDGET_IP_MINUTE + ' a minute, try again in a minute' };
+    garde.parIp.set(k, n); garde.enCours++;
+    return null;
+  }
+  async function calculer(ip, f) {
+    const refus = admettre(ip);
+    if (refus) return refus;
+    try { await new Promise((r) => setImmediate(r)); return f(); } finally { garde.enCours--; }
+  }
   let tete = null; /* { bloc, hash, a } */
   const oe = { oeuvres: [], sigs: new Map(), jusqua: null, a: 0, enVol: null, erreur: null };
 
@@ -75,7 +95,7 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     return tete;
   }
 
-  async function choix(graineDemandee, blockDemande = null, minteurDemande = null) {
+  async function choix(graineDemandee, blockDemande = null, minteurDemande = null, ip = null) {
     let graine = null, bloc = null;
     if (blockDemande !== null && blockDemande !== undefined && blockDemande !== '' && !ADR.test(String(blockDemande))) return { ok: false, etat: 'REFUSE', pourquoi: 'block must be a whole address (0x + 40 hex)' };
     const vide = (x) => x === null || x === undefined || x === '';
@@ -96,8 +116,9 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     }
     const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);
     const cle = graine + ':' + etat.cerveau + ':' + etat.tick + ':' + etat.etatVie + ':' + etat.vie + ':' + existantes.length + ':' + minteur;
-    if (parGraine.has(cle)) return parGraine.get(cle);
-    const r = choisirOeuvre({ graine, etatCerveau: etat, existantes, minteur });
+    if (parGraine.has(cle)) return parGraine.get(cle); /* un cache touche ne coute rien : ni budget, ni place */
+    const r = await calculer(ip, () => choisirOeuvre({ graine, etatCerveau: etat, existantes, minteur }));
+    if (r.statut) return r; /* OCCUPE (503) ou TROP (429) : rien n a ete calcule */
     if (r.etat === 'NON_LU') return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: r.pourquoi };
     const cerveau = { adresse: etat.cerveau, symbole: etat.symbole, battement: etat.tick, spikes: etat.spikes, vie: etat.vie, etatVie: etat.etatVie, blocFaits: etat.blocFaits,
       repli: etat.repli, vivant: false, etiquette: etiquetteCerveau(etat) };
@@ -120,7 +141,7 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
    *   que le choix du cerveau, distance comprise contre TOUTES les oeuvres mintees (memes regles NON_LU que choix). Bornes d abord
    *   (validerReglage : n, q, pas = ceux du moteur — une requete ne peut pas commander un calcul plus long). */
   const parReglage = new Map();
-  async function certifierParams(p64) {
+  async function certifierParams(p64, ip = null) {
     let json;
     try { json = Buffer.from(String(p64 || ''), 'base64url').toString('utf8'); } catch (_) { json = ''; }
     if (!json || json.length > MAX_PARAMS_JSON) return { ok: false, etat: 'REFUSE', codes: ['HORS_BORNES'], pourquoi: 'params missing or longer than ' + MAX_PARAMS_JSON + ' bytes' };
@@ -130,8 +151,9 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     }
     const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);
     const cle = json + ':' + existantes.length;
-    if (parReglage.has(cle)) return parReglage.get(cle);
-    const c = certifierReglage(P, existantes);
+    if (parReglage.has(cle)) return parReglage.get(cle); /* un cache touche ne coute rien : ni budget, ni place */
+    const c = await calculer(ip, () => certifierReglage(P, existantes));
+    if (c.statut) return c; /* OCCUPE (503) ou TROP (429) : rien n a ete calcule */
     const { oeuvre: _o, octets, signature: _s, ...reste } = c;
     const rep = { ...reste, ok: c.ok === true, etat: c.ok ? 'CERTIFIE' : c.etat === 'NON_LU' ? 'NON_LU' : 'REFUSE', hash: octets ? keccak256Hex(octets) : null, comparees: existantes.length,
       pourquoi: c.ok ? null : (c.raisons || []).join('; ') };
