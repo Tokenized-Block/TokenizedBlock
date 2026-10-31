@@ -7929,6 +7929,28 @@ function traiterRequete(req, res) {
     return;
   }
 
+  /* ══ TAM (2026-10-31, phase C) — GET /api/tam/choix?graine=… (le choix du cerveau, par le moteur) et GET /api/tam/oeuvres (les Minted de
+   *   TamArt, cache 60 s ; avant le deploiement : liste vide + raison). LECTURE SEULE (tam-serveur.js).
+   * ⛔ 2026-11-01 : place AVANT la route /api/jeu, jamais entre elle et BLOCK MISSIONS — test-map-rolls lit cette tranche et y interdit
+   *   toute lecture de chaine (cette route lit la chaine : rpcServeur / rpcRails). */
+  if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres') {
+    const rendreT = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
+    /* le cerveau d un block est nourri comme sonderLeReste nourrit celui de IB022 : sa vie lue par vieDuBlock (rpcRails), la tete de lecture, son symbol() */
+    if (!tamSrv) tamSrv = serveurTam({ rpc: rpcServeur, deploiement: TAMART_DEPLOIEMENT,
+      lireVie: async (jeton) => {
+        const v = await vieDuBlock({ rpc: rpcRails, stateView: V4_ADRESSES[8453].stateView, jeton, clesExactes: await clesRails(jeton) });
+        let bloc = null; try { bloc = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { bloc = null; }
+        return v ? { etat: v.etat, vie: v.vie, bloc } : null;
+      },
+      lireSymbole: async (jeton) => { const x = String(await rpcServeur('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest'])).slice(2); const n = parseInt(x.slice(64, 128), 16); return Buffer.from(x.slice(128, 128 + 2 * n), 'hex').toString('utf8'); } });
+    const echec = (e) => rendreT({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) });
+    if (chemin === '/api/tam/oeuvres') { void tamSrv.oeuvres().then(rendreT, echec); return; }
+    const q = new URL(req.url, 'http://x').searchParams;
+    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'))).then(rendreT, echec);
+    return;
+  }
+
   /* ══ LES ROLLS DU JEU (Phil 2026-10-17 23:50) — POST /api/jeu/roll {bloc, score} apres un Roll de l onglet Game ; GET /api/jeu/rolls
    *   -> {ok, rolls:[{t, bloc, score}], maintenant} que la Map relit toutes les 10 s pour faire « rouler » le block UNIT.
    * ⛔ HORS CHAINE, HORS FIL LIVE (voir jeuRolls). 30 POST par minute et par IP ; corps <= JEU_ROLL_CORPS_MAX octets ; un corps qui n est
@@ -8004,26 +8026,6 @@ function traiterRequete(req, res) {
     const rendreMi = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(o); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
     void misables().then(rendreMi, (e) => rendreMi(JSON.stringify({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120), misables: [], lignes: [] })));
-    return;
-  }
-
-  /* ══ TAM (2026-10-31, phase C) — GET /api/tam/choix?graine=… (le choix du cerveau, par le moteur) et GET /api/tam/oeuvres (les Minted de
-   *   TamArt, cache 60 s ; avant le deploiement : liste vide + raison). LECTURE SEULE (tam-serveur.js). */
-  if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres') {
-    const rendreT = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
-    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
-    /* le cerveau d un block est nourri comme sonderLeReste nourrit celui de IB022 : sa vie lue par vieDuBlock (rpcRails), la tete de lecture, son symbol() */
-    if (!tamSrv) tamSrv = serveurTam({ rpc: rpcServeur, deploiement: TAMART_DEPLOIEMENT,
-      lireVie: async (jeton) => {
-        const v = await vieDuBlock({ rpc: rpcRails, stateView: V4_ADRESSES[8453].stateView, jeton, clesExactes: await clesRails(jeton) });
-        let bloc = null; try { bloc = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { bloc = null; }
-        return v ? { etat: v.etat, vie: v.vie, bloc } : null;
-      },
-      lireSymbole: async (jeton) => { const x = String(await rpcServeur('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest'])).slice(2); const n = parseInt(x.slice(64, 128), 16); return Buffer.from(x.slice(128, 128 + 2 * n), 'hex').toString('utf8'); } });
-    const echec = (e) => rendreT({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) });
-    if (chemin === '/api/tam/oeuvres') { void tamSrv.oeuvres().then(rendreT, echec); return; }
-    const q = new URL(req.url, 'http://x').searchParams;
-    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'))).then(rendreT, echec);
     return;
   }
 

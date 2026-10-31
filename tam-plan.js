@@ -7,7 +7,7 @@
  *   ⛔ C est le premier appel « approve(USDC -> contrat, montant exact) » que misables.js#besoinDuJeu lit : Pay with (USDC, actions, UNIT)
  *     construit son swap exact-output pour CE montant, puis pose ces deux appels tels quels (planJeuUsdc, genre 'tam'). */
 import { keccak256Hex, selecteur } from './keccak.js';
-import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
+import { FEE_WALLET, USDC_BASE, displayShort } from './frais-creation.js';
 import { calldataApprove } from './calldata-aerodrome.js';
 
 export const PRIX_TAM = 5000000n; /* 5 USDC, 6 decimales — la constante PRICE de TamArt.sol */
@@ -77,7 +77,7 @@ export function planMintTam({ deploiement, lu, octets, graine, paramsJson } = {}
   if (ap.etat !== 'PRET') return refuse('APPROBATION', ap.pourquoi);
   const empreinte = keccak256Hex(o);
   const appels = [
-    { to: USDC, data: ap.data, value: '0x0', quoi: 'approve exactly 5 USDC for TamArt (' + contrat.slice(0, 6) + '…' + contrat.slice(-4) + ')' },
+    { to: USDC, data: ap.data, value: '0x0', quoi: 'approve exactly 5 USDC for TamArt (' + displayShort(contrat) + ')' },
     { to: contrat, data: calldataMint({ octets: o, graine, paramsJson }), value: '0x0', quoi: 'mint this work: ' + o.length + ' bytes, keccak ' + empreinte.slice(0, 10) + '…; TamArt sends the 5 USDC to the fee wallet' },
   ];
   return { etat: 'PRET', code: 'PRET', pourquoi: null, appels, exigeAtomique: false, atomiquePrefere: true,

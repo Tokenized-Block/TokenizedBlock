@@ -11,7 +11,7 @@ import { planJeuUsdc } from './misables.js';
 import { projectCam } from './map3d.js';
 import { navGesture } from './vision-inside.js';
 import { keccak256Hex } from './keccak.js';
-import { FEE_WALLET } from './frais-creation.js';
+import { FEE_WALLET, maskFeeAddresses, displayShort } from './frais-creation.js';
 
 const CSS = `
 #v-tam{--tam-fond:#0b0d17;--tam-carte:rgba(255,255,255,.04);--tam-bord:rgba(255,255,255,.12);--tam-txt:#e8ecf5;--tam-doux:#9aa3b8;--tam-acc:#7fd1ff}
@@ -50,6 +50,7 @@ const el = (tag, attrs = {}, ...kids) => {
   for (const k of kids) if (k) e.append(k);
   return e;
 };
+let cssPose = false;
 const reduit = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } };
 const hexDe = (u8) => '0x' + [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -60,7 +61,8 @@ const hexDe = (u8) => '0x' + [...u8].map((b) => b.toString(16).padStart(2, '0'))
 export function monter(racine, ctx = {}) {
   if (racine.dataset.tamMonte === '1') return racine.__tam;
   racine.dataset.tamMonte = '1';
-  if (!document.getElementById('tamCss')) document.head.append(el('style', { id: 'tamCss', text: CSS }));
+  /* 2026-11-01 (test-ids-fantomes) : le style est pose UNE fois par chargement du module — un drapeau du module, pas un id relu dans le DOM */
+  if (!cssPose) { document.head.append(el('style', { text: CSS })); cssPose = true; }
   const S = { P: null, o: null, c: null, choix: null, z: null, n: 0, D: 0, couches: null, t: 0, rotation: !reduit(), dessines: 0, cam: null, survol: null,
     sale: true, son: null, dom: null, ser: null, nMintees: 0 };
 
@@ -370,12 +372,13 @@ export function monter(racine, ctx = {}) {
       pj = ligne ? await ctx.preparer({ ligne, c, planUsdc, jeu }) : { ok: false, pourquoi: 'that token is not offered.' };
     }
     if (!pj.ok) { dit.textContent = 'Not ready: ' + pj.pourquoi; return; }
-    const rs = planUsdc.resume, fee = String(FEE_WALLET).toLowerCase();
+    const rs = planUsdc.resume;
     signe.hidden = false;
+    /* ⛔ 2026-11-01 (test-no-fee-address-shown D2) : le calldata signe porte l adresse ; l ECRAN jamais — tout texte passe par le masque */
     signe.replaceChildren(
-      el('p', { text: 'You sign: 5 USDC to the TokenizedBlock fee wallet ' + fee + ' (TamArt ' + contrat + ' moves it, in the mint).' }),
-      el('p', { text: 'The work: ' + rs.octets + ' bytes, keccak ' + rs.empreinte + '. Seed ' + rs.graine + '.' }),
-      el('p', { text: pj.phrase + ' ' + pj.plan.appels.length + ' calls: ' + pj.plan.appels.map((a) => a.quoi).join(' · ') + '.' }),
+      el('p', { text: maskFeeAddresses('You sign: 5 USDC to ' + String(FEE_WALLET).toLowerCase() + ' (TamArt ' + displayShort(contrat) + ' moves it, in the mint).') }),
+      el('p', { text: maskFeeAddresses('The work: ' + rs.octets + ' bytes, keccak ' + rs.empreinte + '. Seed ' + rs.graine + '.') }),
+      el('p', { text: maskFeeAddresses(pj.phrase + ' ' + pj.plan.appels.length + ' calls: ' + pj.plan.appels.map((a) => a.quoi).join(' · ') + '.') }),
       el('button', { type: 'button', class: 'tamPrim', text: 'Sign in my wallet', onclick: async () => {
         dit.textContent = 'Waiting for your wallet…';
         const res = await ctx.envoyer(pj, c, (t) => { dit.textContent = t; });

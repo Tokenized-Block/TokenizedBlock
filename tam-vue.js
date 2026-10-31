@@ -7,6 +7,7 @@
  * ⛔ Le moteur (tam-moteur.js) n est PAS modifie : ses octets sont ce qui se stocke. La vue vivante est une VUE. */
 import { ODE, MAPS, PORTEUSES } from './tam-moteur.js';
 import { adresseTam } from './tam-plan.js';
+import { displayShort } from './frais-creation.js';
 
 const DEUX_PI = 2 * Math.PI, ANGLE_OR = 2.399963229728653;
 
@@ -115,7 +116,7 @@ const MOTIFS_EN = { ifs: 'an iterated function system', julia: 'a Julia set', ph
 const VARIANTES = { fougere: 'fern', sierpinski: 'Sierpinski', dragon: 'dragon', koch: 'Koch', plante: 'plant' };
 export const nomFamille = (f) => NOMS[f] || String(f);
 const nb = (x, k = 3) => (Number.isFinite(Number(x)) ? Number(x).toFixed(k) : 'not measured');
-const court = (h) => (typeof h === 'string' && h.length > 14 ? h.slice(0, 10) + '…' + h.slice(-4) : String(h || ''));
+const court = (h) => (typeof h === 'string' && h.length > 14 ? displayShort(h, 10) : String(h || ''));
 export function combinaison(P) {
   const D = dimensionDe(P), c = nomFamille(P.famille) + (P.famille === 'lorenz96' ? ' (' + P.dim + ' variables)' : '');
   const m = P.motif ? MOTIFS_EN[P.motif.famille] + (P.motif.variante ? ' (' + (VARIANTES[P.motif.variante] || P.motif.variante) + ')' : '') : '';
