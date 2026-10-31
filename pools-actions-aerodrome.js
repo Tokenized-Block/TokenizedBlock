@@ -62,6 +62,12 @@ export const POOLS_ACTIONS_AERODROME = new Map([
   ['0xb200000000000000000000349ef3aa93a0897476', { symbole: 'ULc', pool: '0x013fcb940735d17c81d3b91557acc62da723d9d5', tickSpacing: 1, usdcMesure: 31791 }],
   ['0xb2000000000000000000005ac674f707e357409c', { symbole: 'NOKc', pool: '0xc541eac49f32d46c1e2f88952f22215ef0f2db71', tickSpacing: 1, usdcMesure: 25490 }],
   ['0xb200000000000000000000d61efd9f54a23ef9eb', { symbole: 'LIc', pool: '0xd71b2d9cb3532477df77ae26e780963cce784a0c', tickSpacing: 1, usdcMesure: 25397 }],
+  /* 2026-10-31 — NFLXc : prod /api/trending (20:34Z) la donnait ACHETABLE hors table (`achetablesHorsTable: 1`), donc SANS Buy (le Market
+   *   n ouvre le Buy d une action sans ligne DexScreener que si `table === true`). Pool copiee du banc, jamais tapee : getPool(USDC, NFLXc, 10)
+   *   sur la factory de notre routeur ; banc-actions-chaine-fork-20261025.mjs, fork frais bloc 53 345 834 : ecart 10 bps, achat de 10 USDC
+   *   EXECUTE (recu 15 296 180 >= minimum 15 158 418), revente immediate executee (9,970039 USDC, 0,29 %). ⚠️ POOL MINCE : 652 USDC, a peine
+   *   au-dessus du plancher de 500 — le serveur relit la route et retire le Buy (LIQUIDITE_SOUS_SEUIL) des qu elle passe dessous. */
+  ['0xb20000000000000000000058b8c947e44011dfe6', { symbole: 'NFLXc', pool: '0x40e8d293ca4e0cce3221eb13a78bff1d0d2b70a7', tickSpacing: 10, usdcMesure: 652 }],
 ]);
 
 /* ⛔⛔ 2026-10-25 (revue) — LE COTE VENTE. Un aller-retour de 10 USDC (achat, puis revente de ce qu il rend, les deux devis au MEME bloc,

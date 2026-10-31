@@ -30,8 +30,9 @@ ok(T.avecPoolAction(lnv) === lnv, 'deja sur la bonne pool : meme objet, rien de 
  *   approvisionnees a 21:08 UTC). SEc et SONYc DEHORS : achat PRET qui reverte sur fork (« Too little received »). */
 /* 2026-10-10 : 24 -> 25 — SONYc entre (pool remesuree : achat, revente et paiement d un block executes sur fork, bloc 52 432 772) ; SEc reste dehors. */
 /* 2026-10-25 : 25 -> 30 — SANc SEc ULc NOKc LIc (prouvees sur la chaine ; achat de 10 USDC execute sur fork frais, bloc 53 044 084). BUDc dehors. */
-ok(T.POOLS_ACTIONS_AERODROME.size === 30 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
-  '30 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
+/* 2026-10-31 : 30 -> 31 — NFLXc (ACHETABLE hors table en prod ; achat et revente de 10 USDC executes sur fork frais, bloc 53 345 834). Pool mince : 652 USDC. */
+ok(T.POOLS_ACTIONS_AERODROME.size === 31 && [...T.POOLS_ACTIONS_AERODROME.values()].every((x) => x.usdcMesure >= 500 && /^0x[0-9a-f]{40}$/.test(x.pool)),
+  '31 lignes, toutes >= 500 $ d USDC mesures, adresses bien formees');
 const TS1 = [...T.POOLS_ACTIONS_AERODROME.values()].filter((x) => x.tickSpacing === 1).map((x) => x.symbole).sort().join(' ');
 ok(TS1 === 'ARMc BIDUc BILIc HSAIc INFYc LIc NIOc NOKc NVOc PDDc SANc SAPc SEc SKHYc SONYc ULc VALEc WRDc', 'les douze du 2026-10-09, SONYc (2026-10-10) et les cinq du 2026-10-25 portent tickSpacing 1 (jamais 10 suppose) : ' + TS1);
 /* chaque entree de la table est une action du registre (sinon la fiche refuserait le frais : estDeviseConnue) */
