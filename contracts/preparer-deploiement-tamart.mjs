@@ -37,31 +37,15 @@ const sha256Sources = Object.fromEntries(SOURCES.map((s) => [s, crypto.createHas
 const args = ORDRE.map((k) => constructeur[k].slice(2).padStart(64, '0')).join('');
 const creation = code + args;
 const sha = crypto.createHash('sha256').update(Buffer.from(creation.slice(2), 'hex')).digest('hex');
-const sortie = [
-  '/* tamart-deploiement.js — GENERE par contracts/preparer-deploiement-tamart.mjs. NE PAS EDITER A LA MAIN.',
-  ' * La transaction de deploiement NON SIGNEE de TamArt. Rien ici ne signe ni n envoie. usdc et beneficiaire viennent du depot',
-  ' * (frais-creation.js USDC_BASE, FEE_WALLET). TamArt n a pas d owner. */',
-  'export const TAMART_DEPLOIEMENT = Object.freeze({',
-  '  chaine: 8453,',
-  "  contrat: 'TamArt',",
-  "  compilateur: '" + String((meta.compiler && meta.compiler.version) || 'unknown') + "',",
-  '  optimiseur: ' + JSON.stringify((meta.settings && meta.settings.optimizer) || null) + ',',
-  "  evm: '" + String((meta.settings && meta.settings.evmVersion) || 'unknown') + "',",
-  '  constructeur: Object.freeze(' + JSON.stringify(constructeur) + '),',
-  '  ordre: ' + JSON.stringify(ORDRE) + ',',
-  '  prix: 5000000,',
-  '  pret: true,',
-  '  octetsArgs: ' + args.length / 2 + ',',
-  '  sha256Sources: Object.freeze(' + JSON.stringify(sha256Sources) + '),',
-  "  sha256Creation: '" + sha + "',",
-  '  octetsCreation: ' + (creation.length - 2) / 2 + ',',
-  /* apres le deploiement reel : l adresse et le bloc, RELUS sur la chaine, ecrits ENSEMBLE (jamais l un sans l autre) */
-  '  adresse: null,',
-  '  bloc: null,',
-  "  creation: '" + creation + "',",
-  '});',
-  '',
-].join('\n');
+/* 2026-11-01 : le gabarit vit dans fiche-tamart.mjs — noter-deploiement-tamart.mjs ecrit adresse + bloc avec CE MEME ecrivain */
+const { texteFicheTamart } = await import(pathToFileURL(path.join(ICI, 'fiche-tamart.mjs')).href);
+const sortie = texteFicheTamart({
+  compilateur: String((meta.compiler && meta.compiler.version) || 'unknown'),
+  optimiseur: (meta.settings && meta.settings.optimizer) || null,
+  evm: String((meta.settings && meta.settings.evmVersion) || 'unknown'),
+  constructeur, ordre: ORDRE, prix: 5000000, pret: true, octetsArgs: args.length / 2, sha256Sources,
+  sha256Creation: sha, octetsCreation: (creation.length - 2) / 2, adresse: null, bloc: null, creation,
+});
 const dest = process.env.SORTIE || path.join(ICI, '..', 'tamart-deploiement.js');
 fs.writeFileSync(dest, sortie);
 console.log(path.basename(dest) + ' written: ' + (creation.length - 2) / 2 + ' bytes, sha256 ' + sha.slice(0, 16) + '…');
