@@ -4848,6 +4848,9 @@ let Duels = DuelsV1;
 import * as Slots from './slots-plan.js';
 /* 2026-10-24 : « Pay with » — payer un jeu avec un jeton profond (swap exact-output en USDC, puis les appels du jeu inchanges) */
 import { CANDIDATS_CL as MISABLES_CANDIDATS, coterMisable, planPayerEnJeton, usdcAViser, besoinDuJeu, tailleCouvrante as tailleMisable } from './misables.js';
+/* 2026-10-28 (Phil) : UNIT, UNE option de plus (UNIT -> ETH -> USDC, un lot atomique) — la ligne servie a la forme des autres ; au clic, un
+ *   devis VIVANT a la taille EXACTE du geste decide (<= 1 %), jamais 10 000 USDC ; sans lot atomique : refuse, rien n est envoye */
+import { coterUnit, planPayerEnUnit, ROUTE_UNIT } from './payer-unit.js';
 /* 2026-10-24 (revue adverse D1/D2) : un paiement en jeton arrete en route (envoi a la suite) — la phrase par etape, les approbations LUES */
 import { phraseArret, bilanArret, paresAVerifier, etapesDuPaiement, phraseOuvertes, appelAllowance, appelRemiseAZero } from './payer-arret.js';
 /* 2026-10-24 : les trois rouleaux de la carte Draws (LIVE : les faces des derniers blocs Base ; SPIN : les faces d un spin) — pur, servi */
@@ -5854,6 +5857,7 @@ async function preparerPaiementJeton({ ligne, c, planUsdc, jeu }) {
   const sym = symbolePayer(ligne), non = (pourquoi) => ({ ok: false, pourquoi });
   const besoin = besoinDuJeu(planUsdc, jeu.contrat);
   if (besoin === null) return non('the game plan does not start with an exact USDC approval.');
+  if (ligne.route === ROUTE_UNIT) return preparerPaiementUnit({ ligne, c, planUsdc, jeu, besoin });
   const e = payerTaille(ligne, besoin);
   if (!e.ok) return non(sym + ' cannot pay ' + usdcTexte(besoin) + ' USDC (' + e.raison + ').');
   const candidat = MISABLES_CANDIDATS.find((x) => x.jeton === ligne.jeton && x.pool === ligne.pool);
@@ -5887,6 +5891,29 @@ async function preparerPaiementJeton({ ligne, c, planUsdc, jeu }) {
     + (Number(r.fraisBps) > 0 ? ' Your wallet may show the router' + routeurCourt(plan) + ' as the USDC receiver: the same transaction sends at least ' + Slots.usdcPrecis(r.usdcRecuAuMoins) + ' USDC on to you.' : '');
   return { ok: true, plan, phrase, sym, dec };
 }
+/* 2026-10-28 : UNIT. La taille servie n est PAS le juge (elle couvre 0,50 / 5 / 10) : le devis VIVANT a la sortie EXACTE du geste l est.
+ *   Devis non lu, perte > 1 %, jambes a des blocs differents : refuse avec la raison. Le plan exige un lot atomique (envoyerPaiementJeton). */
+async function preparerPaiementUnit({ ligne, c, planUsdc, jeu, besoin }) {
+  const non = (pourquoi) => ({ ok: false, pourquoi });
+  const vise = usdcAViser({ besoin });
+  let devis;
+  try { devis = await coterUnit({ rpc, usdcSortie: vise }); } catch (err) { devis = { etat: 'NON_MESURE', pourquoi: String((err && err.message) || err) }; }
+  if (!devis || devis.etat !== 'PRET') return non('the live UNIT quote could not be read (' + String((devis && devis.pourquoi) || 'no answer').slice(0, 100) + ').');
+  let tete = NaN, ts = NaN;
+  try { const b = await rpc('eth_getBlockByNumber', ['latest', false]); tete = parseInt(b.number, 16); ts = parseInt(b.timestamp, 16); } catch (_) { tete = NaN; }
+  if (!Number.isSafeInteger(tete) || !Number.isSafeInteger(ts)) return non('the latest block could not be read.');
+  const blocUnit = Math.max(tete, Number(devis.bloc)); /* the head re-read, as for the other tokens (kept apart: a bench mutates the token line by its text) */
+  const plan = planPayerEnUnit({ devis, compte: c, jeu, blocActuel: blocUnit, maintenant: ts });
+  if (plan.etat !== 'PRET') return non(String(plan.pourquoi || plan.code) + '.');
+  if (!memesAppels(plan.appels.slice(-planUsdc.appels.length), planUsdc.appels)) return non('the game calls would differ from the game plan.');
+  const dec = await decimalesPayer(ligne), solde = await soldePayer(ligne, c), r = plan.resume;
+  if (dec === null || solde === null) return non('your UNIT balance could not be read.');
+  if (r.maxEntree > solde) return non('you hold ' + qteJeton(solde, dec, 6) + ' UNIT; this payment sells exactly ' + qteJeton(r.maxEntree, dec, 6, true) + '.');
+  const phrase = 'Pay with UNIT: exactly ' + qteJeton(r.maxEntree, dec, 6, true) + ' UNIT sold for ETH on the UNIT pool, that ETH swapped for exactly ' + Slots.usdcPrecis(r.usdcSortie)
+    + ' USDC (' + (Number(r.fraisBps) / 100).toFixed(2) + '% of that swap kept by the app; unused ETH comes back to you); cost vs the pools mid price ' + pctPayer(r.ecartBps)
+    + '; the game takes ' + Slots.usdcPrecis(r.besoinUsdc) + ' USDC. Prizes are paid in USDC.';
+  return { ok: true, plan, phrase, sym: 'UNIT', dec };
+}
 /* L ENVOI : un lot atomique (wallet_sendCalls 2.0, atomicRequired) si le wallet le declare (wallet_getCapabilities « supported »),
  *   sinon chaque appel a la suite — et c est DIT avant : l USDC arrive d abord dans le wallet du joueur. */
 async function envoyerPaiementJeton(pj, c, dit, suite = '') {
@@ -5899,6 +5926,8 @@ async function envoyerPaiementJeton(pj, c, dit, suite = '') {
     try { r = await envoyerLotAtomique({ eth: window.ethereum, rpc, chaineAttendue: CHAINE, compte: c, calls: appels, sansRepliV1: true }); } catch (err) { r = { etat: 'ECHEC_ENVOI', pourquoi: String((err && err.message) || err) }; }
     if (!(r && r.sendCallsUnsupported)) { payer.soldesA = 0; return r; }
   }
+  /* 2026-10-28 : un plan qui EXIGE l atomicite (UNIT : deux jambes) ne part jamais appel par appel — refuse, rien n est envoye */
+  if (pj.plan.exigeAtomique === true) return { etat: 'REFUSE', pourquoi: 'paying with ' + pj.sym + ' needs one all-or-nothing batch, and this wallet does not offer one — nothing was sent; pay with USDC or another token' };
   dit(pj.phrase + ' Your wallet asks for ' + appels.length + ' signatures in order: the USDC lands in your wallet first, then the game takes it.' + suite);
   r = await envoyerUnParUn(appels, c);
   payer.soldesA = 0;

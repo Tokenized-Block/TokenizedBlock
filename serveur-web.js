@@ -148,6 +148,8 @@ import { SLOTS_DEPLOIEMENT } from './slots-deploiement.js';
 import { CANDIDATS_CL as CANDIDATS_MISABLES, coterMisableTailles, ligneMisable, listeMisables, SEUIL_ECART_BPS as SEUIL_MISABLE_BPS,
   PROFONDEUR_MIN_USDC as PROFONDEUR_MISABLE, DEVIS_BLOCS_MAX as DEVIS_MISABLE_BLOCS, TAILLES_USDC as TAILLES_MISABLES, MESURE_REFERENCE as MESURE_MISABLES,
   USDC as USDC_MISABLES } from './misables.js';
+/* 2026-10-28 (Phil) : UNIT, UNE option de plus — chemin UNIT -> ETH (pool UNIT, hook 7030) -> USDC, juge a la taille REELLE (pas 10 000 USDC) */
+import { coterUnitTailles, ligneUnit, UNIT_APPELS_MAX } from './payer-unit.js';
 /* 2026-10-23 (Phil, option 3) : le REGLEUR des slots — sans SLOTS_KEEPER_KEY il ne fait rien et le dit (/sante) ; avec, il envoie settleMany
  *   (et rien d autre) au contrat de la fiche, du wallet du regleur (gas seulement ; le contrat paie les joueurs). slots-regleur.js. */
 import { creerRegleur } from './slots-regleur.js';
@@ -5756,6 +5758,7 @@ const SERVIS = [
   'approbations-exactes.js',
   'rolls-en-action.js', /* 2026-10-18 : un roll paye en action tokenisee (vente Aerodrome + approve EXACT + roll, un lot) et le gain converti en action */
   'misables.js', /* 2026-10-24 : payer un jeu avec un autre jeton (swap exact-output USDC + les appels du jeu inchanges) et la regle « misable » */
+  'payer-unit.js', /* 2026-10-28 : payer un jeu avec UNIT (UNIT -> ETH sur la pool UNIT, puis le chemin ETH natif), juge a la taille reelle */
   'payer-arret.js', /* 2026-10-24 (revue adverse D1/D2) : un paiement en jeton arrete en route — la phrase par etape et les approbations a remettre a 0 */
   'reponse-spin.js', /* 2026-10-24 (Phil : « un seul jeu au centre, une reponse ») : le panneau de reponse du Spin, pur */
   /* 2026-10-04 : le mode essai. `mode-essai.js` est importe par app.html (absent d ici = 404 = app morte) : il ne fait que
@@ -5786,7 +5789,7 @@ const SERVIS_EN_ESSAI_SEULEMENT = ['wallet-simule.js'];
 const MISABLES_TTL_MS = 60_000, MISABLES_PERIME_MS = 600_000, MISABLES_EN_VOL = 3;
 /* 2026-10-25 : + MISABLES_RELECTURES candidats relus un a un (un refus de debit n est pas une mesure) ; le plafond les compte */
 const MISABLES_RELECTURES = 8, MISABLES_RELECTURE_PAUSE_MS = 1000;
-const MISABLES_APPELS_MAX = 1 + (CANDIDATS_MISABLES.length + MISABLES_RELECTURES) * (TAILLES_MISABLES.length + 4);
+const MISABLES_APPELS_MAX = 1 + (CANDIDATS_MISABLES.length + MISABLES_RELECTURES) * (TAILLES_MISABLES.length + 4) + UNIT_APPELS_MAX(TAILLES_MISABLES.length);
 const misablesCache = { corps: null, a: 0, enVol: null };
 /** la pool de reference de chaque jeton : celle que le Market (trending) montre pour lui, si elle est cotee en USDC (pas de lecture ici) */
 function referencesMisables() {
@@ -5830,6 +5833,9 @@ async function lireMisablesSrv() {
     const cot = await coterMisableTailles({ rpc, candidat: c, sorties: TAILLES_MISABLES, reference: refs.get(c.jeton) || null, bloc }).catch((e) => ({ etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 100) }));
     lignes[k] = ligneMisable(c, cot);
   }
+  /* 2026-10-28 : la ligne UNIT, AU MEME BLOC, de la meme forme ; triee par listeMisables comme les autres (jamais epinglee) */
+  const cotUnit = await coterUnitTailles({ rpc, sorties: TAILLES_MISABLES, bloc }).catch((e) => ({ etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 100) }));
+  lignes.push(ligneUnit(cotUnit));
   const liste = listeMisables(lignes);
   const nonMesures = liste.filter((l) => l.tailles.some((t) => t.code === 'NON_MESURE' || t.code === 'REFERENCE_NON_LUE')).map((l) => l.symbole);
   const j = (o) => JSON.stringify(o, (_, v) => (typeof v === 'bigint' ? v.toString() : v));

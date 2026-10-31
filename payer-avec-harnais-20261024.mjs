@@ -18,6 +18,8 @@ import { envoyerLotAtomique, envoyerDepuisWallet } from './envoi.js';
 import { selecteur } from './keccak.js';
 /* 2026-10-24 (revue adverse D1/D2) : la phrase d un paiement en jeton arrete en route et ses approbations (opts.arret : une copie mutee) */
 import * as PA_REEL from './payer-arret.js';
+/* 2026-10-28 : UNIT (payer-unit.js), importe par app.html dans le bloc PAY WITH — le VRAI module (opts.unit : une copie mutee) */
+import * as PU_REEL from './payer-unit.js';
 /* 2026-10-25 (#payerTous) : le verdict Buy du Market, avec les modules que app.html importe pour lui */
 import { verdictRoutage, raisonSansBuy } from './routage.js';
 import { avecPoolAction } from './pools-actions-aerodrome.js';
@@ -252,6 +254,7 @@ export function charger(t, opts = {}) {
     fetch: async (url) => { fetchs.push(url); if (opts.sansMisables) throw new Error('offline'); return { json: async () => ({ ok: true, etat: 'LU', lignes: opts.lignes || [] }) }; },
     rollsCfg, slotsCfg, slotsContrat: (j) => (j && j.ok && /^0x[0-9a-f]{40}$/.test(String(j.contrat || '').toLowerCase()) ? String(j.contrat).toLowerCase() : null),
     usdcTexte, Slots, USDC_BASE, capaciteDeGroupement, envoyerLotAtomique, envoyerDepuisWallet,
+    coterUnit: (opts.unit || PU_REEL).coterUnit, planPayerEnUnit: (opts.unit || PU_REEL).planPayerEnUnit, ROUTE_UNIT: (opts.unit || PU_REEL).ROUTE_UNIT,
     MISABLES_CANDIDATS: MIS.CANDIDATS_CL, coterMisable: MIS.coterMisable, planPayerEnJeton: MIS.planPayerEnJeton, usdcAViser: MIS.usdcAViser, besoinDuJeu: MIS.besoinDuJeu, tailleMisable: MIS.tailleCouvrante,
     planRoll: BR.planRoll, planRolls: BR.planRolls, planPass: BR.planPass, planRollAvecPass: BR.planRollAvecPass, planRollsAvecPass: BR.planRollsAvecPass,
     planSettle: BR.planSettle, planSettleMany: BR.planSettleMany, lireRolledTous: BR.lireRolledTous, lireSettled: BR.lireSettled, lireSettledTous: BR.lireSettledTous,

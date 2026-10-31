@@ -149,7 +149,11 @@ try {
       '(2) ' + ATTENDU_050 + ' jetons misables a 0,50 attendus par l oracle (TSLAc retire), ETH compris : ' + (a && a.misables.length) + ' servis');
     /* chaque ligne servie, a chaque taille, = l oracle ; et un candidat non enregistre n est jamais misable */
     const ecarts = a ? a.lignes.filter((l) => ORACLE.has(l.jeton) && l.tailles.some((t, i) => t.misable !== ORACLE.get(l.jeton)[i])).map((l) => l.symbole) : ['pas de reponse'];
-    ok(a && a.lignes.length === ORACLE.size && ecarts.length === 0, '(2) ' + (a && a.lignes.length) + ' lignes servies, misable a chaque taille = l oracle (' + ecarts.length + ' differente(s) ' + ecarts.join(' ') + ')');
+    /* 2026-10-28 : + the UNIT line (payer-unit.js, its own bench test-payer-unit-20261028.mjs) ; this fake chain has no UNIT pool, so it is
+     *   served NOT misable and named unread — never offered on a missing read */
+    const lu = a ? a.lignes.find((l) => l.symbole === 'UNIT') : null;
+    ok(lu && lu.tailles.every((t) => t.misable === false), '(2b) the UNIT line is served, never misable without its pool read');
+    ok(a && a.lignes.length === ORACLE.size + 1 && ecarts.length === 0, '(2) ' + (a && a.lignes.length) + ' lignes servies, misable a chaque taille = l oracle (' + ecarts.length + ' differente(s) ' + ecarts.join(' ') + ')');
     ok(a && NON_MESURES.every((s) => { const l = L(s); return !l || !l.tailles.some((t) => t.misable); }),
       '(2) non mesures dans cet enregistrement : ' + (NON_MESURES.join(' ') || 'aucun') + ' — aucun servi misable');
     ok(a && a.appelsRpc > 0 && a.appelsRpc <= a.appelsMax && compte.misables <= a.appelsMax, '(3) appels de chaine : ' + (a && a.appelsRpc) + ' comptes par le serveur, ' + compte.misables + ' vus par le noeud, plafond ' + (a && a.appelsMax));
@@ -175,7 +179,7 @@ try {
     ok(revertsDevis === 1 && hsai && hsai.tailles[2].code === 'SANS_DEVIS' && rev.join() === 'HSAIc' && !a.nonMesures.includes('HSAIc'),
       '(6) le devis 10 USDC de HSAIc REVERTE (1 appel, pas relu) : SANS_DEVIS, hors nonMesures -> ' + (hsai && hsai.tailles.map((t) => t.code).join(',')) + ' ; SANS_DEVIS servis : ' + rev.join(' ') + ' ; reverts vus ' + revertsDevis);
     ok(li && !li.misable && li.tailles.every((t) => t.code === 'NON_MESURE'), '(5) LIc toujours refuse : NON_MESURE, jamais misable -> ' + (li && li.tailles.map((t) => t.code).join(',')));
-    ok(a && Array.isArray(a.nonMesures) && a.nonMesures.length === 1 && a.nonMesures[0] === 'LIc', '(5) le corps NOMME ce qui reste non lu : nonMesures = ' + JSON.stringify(a && a.nonMesures));
+    ok(a && Array.isArray(a.nonMesures) && a.nonMesures.length === 2 && a.nonMesures.join() === 'LIc,UNIT', '(5) le corps NOMME ce qui reste non lu : nonMesures = ' + JSON.stringify(a && a.nonMesures));
     const q1 = compte.quoter;
     const b = await json(srv + '/api/misables');
     /* un rafraichissement lance EN FOND (cache servi pendant la relecture) appellerait le quoter APRES la reponse : on attend 3 s avant de compter */
