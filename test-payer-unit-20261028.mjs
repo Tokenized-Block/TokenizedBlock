@@ -212,7 +212,9 @@ const eB = await clientB(APP);
 vu(eB.length === 0, 'B app.html : ' + (eB.join(' | ') || 'tout vert'));
 
 /* mutants du module : copies dans un dossier temporaire a cote des vrais modules (imports relatifs resolus par un lien de chaque import) */
-const SRC = readFileSync(path.join(ICI, 'payer-unit.js'), 'utf8');
+/* 2026-10-31 : fins de ligne NORMALISEES avant les ancres (une copie de travail en CRLF — core.autocrlf sous Windows — rendait l ancre
+ *   « ...seuilBps);\n » introuvable : « ancre unique » rouge sans aucun defaut du module). Meme correctif que le banc du lexique. */
+const SRC = readFileSync(path.join(ICI, 'payer-unit.js'), 'utf8').replace(/\r\n/g, '\n');
 const MUT_MODULE = [
   ['UNIT juge a 10 000 USDC de profondeur au lieu de la taille reelle', "  const s = Number(seuilBps);\n", "  const s = Number(seuilBps);\n  if (!(entier(d.usdcPool) >= 10000000000n)) return non('PEU_PROFONDE', 'pool under 10,000 USDC');\n"],
   ['UNIT cote a 10 000 USDC au lieu de la taille reelle', 'const t = await coterUnitTailles({ rpc, sorties: [usdcSortie], ...o });', 'const t = await coterUnitTailles({ rpc, sorties: [10000000000n], ...o });'],

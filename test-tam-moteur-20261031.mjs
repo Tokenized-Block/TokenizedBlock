@@ -56,6 +56,18 @@ function suite(T, bavard = false) {
   }
   const rot0 = T.generer({ famille: 'lorenz96', dim: 8 }), rot1 = T.generer({ famille: 'lorenz96', dim: 8, angles: [1, 1, 1, 1, 1] });
   ok('rotation des plans caches change la projection', !egaux(Array.from(rot0.points), Array.from(rot1.points)));
+  // 5b. (phase C) CHAQUE dimension compte dans la vue STOCKEE : pour D = 6, 9, 12 et chaque k, eteindre k (colonne a 0) change la vue
+  for (const p of [{ famille: 'lorenz', operateur: 'couplage', k: 2, eps: 0.2, angles: [0.5, 1, 1.5] }, { famille: 'lorenz', operateur: 'couplage', k: 3, eps: 0.2, angles: [0.5, 1, 1.5, 2, 2.5, 3] },
+    { famille: 'lorenz96', dim: 12, angles: [0.3, 1.1, 2.0, 0.7, 2.9, 1.4, 0.2, 2.2, 1.9] }]) {
+    const o = T.generer({ n: 300, ...p }), D = o.D, n = o.n, z = T.standardiserND(o.brut, n, D), ref = T.projeterND(z, n, D, o.params.angles);
+    const muettes = [];
+    for (let k = 0; k < D; k++) {
+      const zk = z.slice(); for (let i = 0; i < n; i++) zk[i * D + k] = 0;
+      const pk = T.projeterND(zk, n, D, o.params.angles); let dmax = 0; for (let i = 0; i < pk.length; i++) dmax = Math.max(dmax, Math.abs(pk[i] - ref[i]));
+      if (!(dmax > 1e-3)) muettes.push('x' + (k + 1));
+    }
+    ok('D=' + D + ' : chacune des ' + D + ' dimensions change la vue stockee', muettes.length === 0, muettes.length ? 'muettes : ' + muettes.join(',') : '');
+  }
   // 6. distinction
   const cd = T.certifier(lor, [T.certifier(lor).signature]);
   ok('quasi-doublon REJETE', !cd.ok && cd.raisons.includes('quasi-doublon'), 'distance=' + cd.distanceMin);
@@ -102,6 +114,7 @@ const MUTANTS = [
   ['seuil Lyapunov desactive', "if (!(lyap > LYAP_MIN))", "if (!(lyap > -1e9))"],
   ['varint casse', 'v >>>= 7; }', 'v >>>= 6; }'],
   ['rotation plans caches ignoree', 'v[m] = c * a - s * b; v[m + 3] = s * a + c * b;', ''],
+  ['ordre CROISSANT restaure (x7..x12 invisibles)', 'for (let m = D - 4; m >= 0; m--)', 'for (let m = 0; m + 3 < D; m++)'],
 ];
 const brut = readFileSync(SOURCE, 'utf8');
 let tues = 0;

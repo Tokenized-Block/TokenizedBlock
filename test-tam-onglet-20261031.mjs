@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import * as T from './tam-moteur.js';
 import * as V from './tam-vue.js';
 import * as TP from './tam-plan.js';
-import { serveurTam } from './tam-serveur.js';
+import { serveurTam, etatCerveauTam } from './tam-serveur.js';
 import { TAMART_DEPLOIEMENT } from './tamart-deploiement.js';
 import { planJeuUsdc, besoinDuJeu, planPayerEnJeton, usdcAViser, CANDIDATS_CL } from './misables.js';
 import { FEE_WALLET } from './frais-creation.js';
@@ -115,8 +115,7 @@ for (const j of [0, 1, 3, 7, 11]) {
     const b = V.projeterVivant({ z: sansCol(j), n: o12.n, D: 12, actives: null, angles: P12.angles, t });
     const k = (j + 1) % 12, c2 = V.projeterVivant({ z: sansCol(k), n: o12.n, D: 12, actives: null, angles: P12.angles, t });
     ok(egal(a, b), 'x' + (j + 1) + ' eteinte (t=' + t + ') = la projection SANS la colonne ' + j);
-    /* a t=0 les colonnes >= 6 ne touchent pas la vue du moteur (ses plans m=0..2 seulement) : deux d entre elles eteintes donnent la meme vue */
-    if (t !== 0 || j < 6 || k < 6) ok(!egal(a, c2), 'x' + (j + 1) + ' eteinte (t=' + t + ') != la projection sans la colonne ' + k + ' (pas la mauvaise dimension)');
+    ok(!egal(a, c2), 'x' + (j + 1) + ' eteinte (t=' + t + ') != la projection sans la colonne ' + k + ' (pas la mauvaise dimension)');
   }
 }
 ok(V.dimsVisibles(V.isoler(e, 5)).join() === '5', 'isoler(5) : seule x6');
@@ -128,9 +127,9 @@ const pos0 = V.projeterVivant({ z, n: o12.n, D: 12, actives: null, angles: P12.a
 const M = (1 << o12.params.q) - 1;
 let diff = 0; for (let i = 0; i < pos0.length; i++) { const q = Math.min(M, Math.max(0, Math.round((pos0[i] + 1) / 2 * M))); if (Math.abs(q - o12.points[i]) > 1) diff++; }
 ok(diff === 0, 'vue vivante a t=0 = les points du moteur (a 1 pas de quantification pres, cos/sin natifs) : ' + diff + ' ecarts');
-/* la rotation cachee fait bouger les dimensions >= 6 (le moteur seul ne les montre jamais) */
+/* 2026-10-31 (cascade decroissante du moteur) : la vue STOCKEE porte aussi x7..x12 */
 const sans9 = V.projeterVivant({ z: sansCol(9), n: o12.n, D: 12, actives: null, angles: P12.angles, t: 0 });
-ok(egal(pos0, sans9), 'temoin : a t=0 la dimension x10 ne change rien (plans du moteur m=0..2 seulement)');
+ok(!egal(pos0, sans9), 'a t=0 (vue stockee) la dimension x10 change la vue');
 ok(!egal(V.projeterVivant({ z, n: o12.n, D: 12, actives: null, angles: P12.angles, t: 0.8 }), V.projeterVivant({ z: sansCol(9), n: o12.n, D: 12, actives: null, angles: P12.angles, t: 0.8 })), 'rotation vivante : x10 apparait');
 
 /* ── 5. la carte ── */
@@ -148,13 +147,30 @@ ok(V.carte({ P: ch.params, c: { ...cc, lyapunov: -0.1 } }).find((x) => x.k === '
 const HASH = graineDe('bloc-de-test');
 const appels = [];
 const rpcFaux = async (m, params) => { appels.push(m); if (m === 'eth_getBlockByNumber') return { number: '0x64', hash: HASH }; throw new Error('pas attendu: ' + m); };
-const srv = serveurTam({ rpc: rpcFaux, deploiement: TAMART_DEPLOIEMENT, adresseCerveau: '0xb200000000000000000000e4b0c5fbe9c8df579e' });
+const UNIT = '0xb2000000000000000000007afa7ed748b0874f27', IB022 = '0xb200000000000000000000e4b0c5fbe9c8df579e';
+const viesLues = [];
+const lireVie = async (a) => { viesLues.push(a); if (a === IB022) throw new Error('rpc en panne'); return { etat: 'LUE', vie: 1234.5, bloc: 100 }; };
+const srv = serveurTam({ rpc: rpcFaux, deploiement: TAMART_DEPLOIEMENT, lireVie, lireSymbole: async () => 'ZZZ' });
 const oe = await srv.oeuvres();
 ok(oe.ok === true && oe.etat === 'PAS_DEPLOYE' && Array.isArray(oe.oeuvres) && oe.oeuvres.length === 0 && /not deployed/.test(oe.pourquoi), '/api/tam/oeuvres avant deploiement : liste vide + raison');
 ok(!appels.includes('eth_getLogs'), 'avant deploiement : aucun eth_getLogs');
 const c1 = await srv.choix(null);
 ok(c1.ok && c1.graine === HASH && c1.bloc === 100, '/api/tam/choix sans graine : le hash du dernier bloc');
-ok(c1.empreinteEtat === keccak256Hex(new TextEncoder().encode(T.canon(srv.etatCerveau))), 'l empreinte = keccak(canon(etat du cerveau))');
+const etU = etatCerveauTam(UNIT, { vie: 1234.5, etatVie: 'LUE', bloc: 100, symbole: 'UNIT' });
+ok(c1.empreinteEtat === keccak256Hex(new TextEncoder().encode(T.canon(etU))), 'defaut : le cerveau de UNIT (24 battements, sa vie lue) ; empreinte = keccak(canon(etat))');
+ok(c1.cerveau.adresse === UNIT && c1.cerveau.symbole === 'UNIT' && c1.cerveau.battement === 24 && c1.cerveau.vivant === false && c1.cerveau.repli === false, 'la reponse nomme le cerveau : UNIT, battement 24, pas vivant');
+ok(/^brain of UNIT at beat 24, rebuilt on the server from its seed, fed its market life read on chain at block 100; not your live brain$/.test(c1.cerveau.etiquette), 'etiquette : ' + c1.cerveau.etiquette);
+ok(etU.empreinte !== etatCerveauTam(IB022).empreinte, 'temoin : le connectome depend du block (empreinte UNIT != IB022)');
+const cI = await srv.choix(null, IB022);
+ok(cI.ok && cI.cerveau.symbole === 'IB022' && cI.cerveau.etatVie === 'NON_LUE' && /with its market life not read/.test(cI.cerveau.etiquette) && cI.empreinteEtat !== c1.empreinteEtat, 'block=IB022 (vie non lue) : SON cerveau, dit « not read », autre empreinte');
+const cZ = await srv.choix(null, '0x' + '12'.repeat(20));
+ok(cZ.ok && cZ.cerveau.symbole === 'ZZZ' && /^brain of ZZZ at beat 24/.test(cZ.cerveau.etiquette), 'block quelconque : son symbol() lu');
+ok((await srv.choix(null, '0x1234')).etat === 'REFUSE', 'block tronque : refuse');
+const Lc = V.carte({ P: c1.params, c: c1.certificats, choix: { ...c1, essai: c1.params.essai } });
+const wb = (Lc.find((x) => x.k === 'Which brain') || {}).v || '';
+ok(wb === 'Seed: hash of Base block 100 + ' + c1.cerveau.etiquette + '.', 'la carte : « Seed: hash of Base block N + brain of SYM at beat B … »');
+ok(!/live brain/.test(wb.replace('not your live brain', '')), 'la carte ne pretend jamais un cerveau vivant');
+ok(/an unnamed brain state/.test(V.carte({ P: c1.params, c: c1.certificats, choix: { graine: c1.graine, bloc: 1, empreinteEtat: c1.empreinteEtat, essai: 0, rejets: [] } }).find((x) => x.k === 'Which brain').v), 'sans etiquette : « an unnamed brain state », jamais un nom invente');
 const rr = T.rejouer(c1.params);
 ok(V.verdictRejeu(rr.octets, TP.octetsDe(c1.octets)).identique && rr.hash === c1.hash, 'les octets servis se rejouent a l identique depuis les params servis');
 ok(c1.certificats && c1.certificats.signature === undefined && Number.isFinite(c1.certificats.lyapunov), 'certificats servis (sans la signature de 512 cases)');

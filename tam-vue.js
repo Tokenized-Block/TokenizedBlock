@@ -50,9 +50,8 @@ function normaliser(a) {
 }
 /**
  * N-D -> 3-D, VIVANT. Les dimensions eteintes (actives[j] faux) valent 0 AVANT toute rotation : elles ne contribuent a rien.
- * t = 0 : exactement la projection du moteur (rotations de Givens (m, m+3), m croissant, aux angles de l oeuvre).
- * t != 0 : d abord une cascade (m decroissant, angle t·(1 + 0,17 m)) qui fait remonter TOUTES les dimensions cachees vers les 3 vues —
- *   sans elle, le moteur ne laisse jamais voir les dimensions >= 6 (seuls ses plans m = 0, 1, 2 touchent x, y, z) — puis celle du moteur.
+ * La cascade du moteur (tam-moteur.js#projeterND : Givens (m, m+3), m DECROISSANT), aux angles de l oeuvre + t·(1 + 0,17 m).
+ * t = 0 : exactement la projection stockee (a cos/sin natifs pres). t != 0 : chaque plan cache tourne a sa vitesse.
  */
 export function projeterVivant({ z, n, D, actives, angles = [], t = 0 }) {
   const out = new Float64Array(n * 3), v = new Float64Array(Math.max(D, 3));
@@ -60,8 +59,7 @@ export function projeterVivant({ z, n, D, actives, angles = [], t = 0 }) {
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < D; j++) v[j] = on(j) ? z[i * D + j] : 0;
     if (D === 2) { out[3 * i] = v[0]; out[3 * i + 1] = v[1]; const p = Math.max(0, i - 1); out[3 * i + 2] = on(0) ? z[p * 2] : 0; continue; }
-    if (t !== 0) for (let m = D - 4; m >= 0; m--) { const th = t * (1 + 0.17 * m), c = Math.cos(th), s = Math.sin(th), a = v[m], b = v[m + 3]; v[m] = c * a - s * b; v[m + 3] = s * a + c * b; }
-    for (let m = 0; m + 3 < D; m++) { const th = angles[m] ?? 0, c = Math.cos(th), s = Math.sin(th), a = v[m], b = v[m + 3]; v[m] = c * a - s * b; v[m + 3] = s * a + c * b; }
+    for (let m = D - 4; m >= 0; m--) { const th = (angles[m] ?? 0) + t * (1 + 0.17 * m), c = Math.cos(th), s = Math.sin(th), a = v[m], b = v[m + 3]; v[m] = c * a - s * b; v[m + 3] = s * a + c * b; }
     out[3 * i] = v[0]; out[3 * i + 1] = v[1]; out[3 * i + 2] = v[2];
   }
   return normaliser(out);
@@ -136,7 +134,10 @@ export function carte({ P, c, choix = null, nMintees = 0 }) {
   L.push({ k: 'Combination', v: combinaison(P) });
   if (choix) {
     const rej = Array.isArray(choix.rejets) ? choix.rejets : [];
-    L.push({ k: 'What the brain chose', v: 'Seed ' + court(choix.graine) + (choix.bloc ? ' (hash of Base block ' + choix.bloc + ')' : '') + ' and the brain state hash ' + court(choix.empreinteEtat)
+    /* quel cerveau, quel battement (etiquette du serveur, tam-serveur.js#etiquetteCerveau) ; sans etiquette : « an unnamed brain state » */
+    const cv = choix.cerveau && typeof choix.cerveau.etiquette === 'string' ? choix.cerveau.etiquette : 'an unnamed brain state';
+    L.push({ k: 'Which brain', v: 'Seed: ' + (choix.bloc ? 'hash of Base block ' + choix.bloc : court(choix.graine)) + ' + ' + cv + '.' });
+    L.push({ k: 'What the brain chose', v: 'The seed ' + court(choix.graine) + ' and the brain state hash ' + court(choix.empreinteEtat)
       + ' are hashed together. That hash stream draws the combination, then each parameter, in a fixed order.' });
     L.push({ k: 'Why this one', v: 'Try #' + choix.essai + ' was the first to pass every certificate.' + (rej.length ? ' Earlier tries were dropped: '
       + rej.slice(0, 4).map((r) => nomFamille(r.famille) + ' — ' + (r.raisons || []).map((x) => RAISONS_EN[x] || x).join(', ')).join('; ') + (rej.length > 4 ? '; and ' + (rej.length - 4) + ' more' : '') + '.' : '')

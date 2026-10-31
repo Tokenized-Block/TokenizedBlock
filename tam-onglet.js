@@ -146,7 +146,7 @@ export function monter(racine, ctx = {}) {
     /* les selecteurs disent la porteuse choisie (pas l ancienne selection) */
     selFam.value = j.params.famille; optionsDims();
     selDim.value = j.params.famille === 'lorenz96' ? String(j.params.dim) : j.params.operateur === 'couplage' ? String(j.params.k) : '1';
-    charger(j.params, { graine: j.graine, bloc: j.bloc, empreinteEtat: j.empreinteEtat, essai: j.params.essai, rejets: j.rejets, certificats: j.certificats }, j.octets);
+    charger(j.params, { graine: j.graine, bloc: j.bloc, cerveau: j.cerveau, empreinteEtat: j.empreinteEtat, essai: j.params.essai, rejets: j.rejets, certificats: j.certificats }, j.octets);
   });
 
   /* ── couches ── */

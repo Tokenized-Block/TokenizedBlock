@@ -1,8 +1,9 @@
 /* tam-serveur.js — TAM phase C : ce que le serveur repond pour l onglet TAM. LECTURE SEULE : rien n est signe ni envoye ; `rpc` est INJECTE.
  *   GET /api/tam/choix?graine=0x…  le choix du cerveau (tam-moteur.js#choisirOeuvre) : params, certificats, octets, keccak.
  *     Sans graine : le hash du DERNIER bloc lu (cache 60 s : a 200 ms par bloc, une graine par requete brulerait le CPU et le RPC).
- *     L etat du cerveau : le cerveau de IB022 (BLOCK_SONDE) apres 24 battements SANS faits de marche — deterministe, rejouable par
- *     n importe qui avec cerveau.js ; son keccak entre dans la graine (empreinteEtat). Ce n est pas le cerveau « en direct » d un block.
+ *     &block=0x… : le cerveau de CE block (defaut UNIT ; repli IB022 etiquete), rebati par cerveau.js depuis sa graine, 24 battements
+ *     nourris de sa vie de marche lue par le serveur (etatCerveauTam). Son keccak entre dans la graine (empreinteEtat). La reponse
+ *     porte `cerveau.etiquette` : quel cerveau, quel battement, ce qu il a mange — et qu il n est PAS le cerveau vivant du visiteur.
  *   GET /api/tam/oeuvres  les oeuvres mintees, lues dans les evenements Minted de TamArt (une fois l adresse ecrite) ; cache 60 s,
  *     balayage INCREMENTAL par fenetres. Avant le deploiement : une liste vide AVEC sa raison (etat PAS_DEPLOYE), jamais un vide muet. */
 import { choisirOeuvre, decoder, signature } from './tam-moteur.js';
@@ -14,20 +15,54 @@ export const TOPIC_MINTED = topic(SIG_TAM.minted);
 export const FENETRE_LOGS = 9000, FENETRES_PAR_APPEL = 20, TTL_MS = 60000;
 const G32 = /^0x[0-9a-fA-F]{64}$/;
 
-/** l etat du cerveau qui entre dans la graine : IB022 apres `battements` pas, sans faits (vie inconnue) */
-export function etatCerveauTam(adresse, battements = 24) {
+/* 2026-10-31 (decision du lead) : le cerveau d UN block, nomme. Defaut : UNIT ; repli : IB022, ETIQUETE comme repli. */
+export const CERVEAU_DEFAUT = Object.freeze({ adresse: '0xb2000000000000000000007afa7ed748b0874f27', symbole: 'UNIT' });
+export const CERVEAU_REPLI = Object.freeze({ adresse: '0xb200000000000000000000e4b0c5fbe9c8df579e', symbole: 'IB022' });
+export const BATTEMENTS = 24;
+const ADR = /^0x[0-9a-fA-F]{40}$/;
+/**
+ * L etat du cerveau d un block qui entre dans la graine : cerveau.js, depuis SA graine (etatInitial(adresse)), `battements` pas
+ * nourris comme l app nourrit un block (entreesCerveau) avec ce que le SERVEUR sait : sa vie de marche lue (ou NON_LUE), aucune
+ * nourriture (gm, messages, detenteurs a 0), aucun echange vu, la hauteur de lecture. ⛔ Ce n est PAS le cerveau vivant du
+ * visiteur : celui-la vit dans SON navigateur (memoire locale, echanges vus par son fil). C est le meme cerveau, REBATI ici, et
+ * c est dit tel quel (etiquette).
+ */
+export function etatCerveauTam(adresse, { battements = BATTEMENTS, vie = null, etatVie = 'NON_LUE', bloc = null, symbole = null, repli = false } = {}) {
+  const faits = { vie: typeof vie === 'number' && Number.isFinite(vie) ? vie : null, vieAvant: null, gm: 0, messages: 0, detenteurs: 0, mort: false,
+    etatVie: etatVie || 'NON_LUE', gmAvant: null, messagesAvant: null, detenteursAvant: null, role: null, bloc: Number.isSafeInteger(bloc) ? bloc : null };
   let e = etatInitial(adresse);
-  for (let i = 0; i < battements; i++) e = pas(e, { vie: null, vieAvant: null, etatVie: 'NON_LUE' }).etat;
-  return { cerveau: String(adresse).toLowerCase(), battements, tick: e.tick, spikes: e.spikes, empreinte: e.c.empreinte, potentiels: e.potentiels.map((x) => Math.round(x * 1e6) / 1e6) };
+  for (let i = 0; i < battements; i++) e = pas(e, faits).etat;
+  return { cerveau: String(adresse).toLowerCase(), symbole: symbole || null, battements, tick: e.tick, spikes: e.spikes, empreinte: e.c.empreinte,
+    vie: faits.vie, etatVie: faits.etatVie, blocFaits: faits.bloc, repli: !!repli, potentiels: e.potentiels.map((x) => Math.round(x * 1e6) / 1e6) };
+}
+/** l etiquette, en anglais simple, de ce cerveau-la (jamais « live ») */
+export function etiquetteCerveau(et) {
+  const nom = et.symbole || (et.cerveau.slice(0, 6) + '…' + et.cerveau.slice(-4));
+  const marche = et.etatVie === 'LUE' && et.vie !== null ? 'fed its market life read on chain' + (et.blocFaits ? ' at block ' + et.blocFaits : '') : 'with its market life not read (no market facts)';
+  return 'brain of ' + nom + ' at beat ' + et.tick + ', rebuilt on the server from its seed, ' + marche + '; not your live brain'
+    + (et.repli ? ' (fallback: the ' + (et.symbole || 'default') + ' brain could not be built)' : '');
 }
 
 const sansSignature = (c) => { const { signature: _s, ...r } = c || {}; return r; };
 const hexDe = (u8) => '0x' + [...u8].map((b) => b.toString(16).padStart(2, '0')).join('');
 
 /** le moteur de reponses ; `rpc(methode, params)` injecte, `deploiement` = TAMART_DEPLOIEMENT */
-export function serveurTam({ rpc, deploiement, adresseCerveau, maintenant = () => Date.now() }) {
-  const etat = etatCerveauTam(adresseCerveau);
-  const parGraine = new Map();
+export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = null, maintenant = () => Date.now() }) {
+  const parGraine = new Map(), vies = new Map();
+  /* le cerveau d un block : sa vie lue (cache 60 s), puis cerveau.js ; repli IB022 SEULEMENT si celui-la ne se construit pas */
+  async function cerveauDe(adr) {
+    const a = String(adr).toLowerCase();
+    let v = vies.get(a);
+    if (!v || maintenant() - v.a >= TTL_MS) {
+      let vie = null, etatVie = 'NON_LUE', symbole = a === CERVEAU_DEFAUT.adresse ? CERVEAU_DEFAUT.symbole : a === CERVEAU_REPLI.adresse ? CERVEAU_REPLI.symbole : null, bloc = null;
+      try { const r = lireVie ? await lireVie(a) : null; if (r && r.etat === 'LUE' && typeof r.vie === 'number') { vie = r.vie; etatVie = 'LUE'; bloc = Number.isSafeInteger(r.bloc) ? r.bloc : null; } } catch (_) { /* NON_LUE, dit dans l etiquette */ }
+      if (!symbole && lireSymbole) { try { const s = await lireSymbole(a); if (typeof s === 'string' && /^[A-Za-z0-9.$-]{1,16}$/.test(s)) symbole = s; } catch (_) { symbole = null; } }
+      v = { vie, etatVie, symbole, bloc, a: maintenant() };
+      vies.set(a, v); if (vies.size > 64) vies.delete(vies.keys().next().value);
+    }
+    try { return etatCerveauTam(a, { vie: v.vie, etatVie: v.etatVie, bloc: v.bloc, symbole: v.symbole }); }
+    catch (_) { return etatCerveauTam(CERVEAU_REPLI.adresse, { symbole: CERVEAU_REPLI.symbole, repli: true }); }
+  }
   let tete = null; /* { bloc, hash, a } */
   const oe = { oeuvres: [], signatures: [], jusqua: null, a: 0, enVol: null, erreur: null };
 
@@ -39,21 +74,25 @@ export function serveurTam({ rpc, deploiement, adresseCerveau, maintenant = () =
     return tete;
   }
 
-  async function choix(graineDemandee) {
+  async function choix(graineDemandee, blockDemande = null) {
     let graine = null, bloc = null;
+    if (blockDemande !== null && blockDemande !== undefined && blockDemande !== '' && !ADR.test(String(blockDemande))) return { ok: false, etat: 'REFUSE', pourquoi: 'block must be a whole address (0x + 40 hex)' };
+    const etat = await cerveauDe(blockDemande ? blockDemande : CERVEAU_DEFAUT.adresse);
     if (graineDemandee !== null && graineDemandee !== undefined && graineDemandee !== '') {
       if (!G32.test(String(graineDemandee))) return { ok: false, etat: 'REFUSE', pourquoi: 'the seed must be 32 bytes in hex (0x + 64 hex)' };
       graine = String(graineDemandee).toLowerCase();
     } else {
       try { const t = await teteLue(); graine = t.hash; bloc = t.bloc; } catch (e) { return { ok: false, etat: 'NON_LU', pourquoi: 'the latest block was not read: ' + String((e && e.message) || e).slice(0, 100) }; }
     }
-    const cle = graine + ':' + oe.signatures.length;
+    const cle = graine + ':' + etat.cerveau + ':' + etat.tick + ':' + etat.etatVie + ':' + etat.vie + ':' + oe.signatures.length;
     if (parGraine.has(cle)) return parGraine.get(cle);
     const r = choisirOeuvre({ graine, etatCerveau: etat, existantes: oe.signatures });
+    const cerveau = { adresse: etat.cerveau, symbole: etat.symbole, battement: etat.tick, spikes: etat.spikes, vie: etat.vie, etatVie: etat.etatVie, blocFaits: etat.blocFaits,
+      repli: etat.repli, vivant: false, etiquette: etiquetteCerveau(etat) };
     const rep = r.ok
-      ? { ok: true, etat: 'PRET', graine, bloc, etatCerveau: { cerveau: etat.cerveau, battements: etat.battements, tick: etat.tick, spikes: etat.spikes }, empreinteEtat: r.params.empreinteEtat,
+      ? { ok: true, etat: 'PRET', graine, bloc, cerveau, empreinteEtat: r.params.empreinteEtat,
         params: r.params, certificats: sansSignature(r.certificats), octets: hexDe(r.octets), hash: r.hash, rejets: r.rejets, comparees: oe.signatures.length }
-      : { ok: false, etat: 'AUCUNE', graine, bloc, pourquoi: 'no combination passed the certificates for this seed', rejets: r.rejets };
+      : { ok: false, etat: 'AUCUNE', graine, bloc, cerveau, pourquoi: 'no combination passed the certificates for this seed', rejets: r.rejets };
     if (parGraine.size > 64) parGraine.delete(parGraine.keys().next().value);
     parGraine.set(cle, rep);
     return rep;
@@ -90,5 +129,5 @@ export function serveurTam({ rpc, deploiement, adresseCerveau, maintenant = () =
     return { ok: true, etat: oe.erreur ? 'PARTIEL' : oe.aJour ? 'LU' : 'EN_RETARD', pourquoi: oe.erreur, contrat, jusqua: oe.jusqua, oeuvres: oe.oeuvres };
   }
 
-  return { choix, oeuvres, etatCerveau: etat };
+  return { choix, oeuvres, cerveauDe };
 }

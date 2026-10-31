@@ -8012,11 +8012,18 @@ function traiterRequete(req, res) {
   if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres') {
     const rendreT = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
-    if (!tamSrv) tamSrv = serveurTam({ rpc: rpcServeur, deploiement: TAMART_DEPLOIEMENT, adresseCerveau: BLOCK_SONDE });
+    /* le cerveau d un block est nourri comme sonderLeReste nourrit celui de IB022 : sa vie lue par vieDuBlock (rpcRails), la tete de lecture, son symbol() */
+    if (!tamSrv) tamSrv = serveurTam({ rpc: rpcServeur, deploiement: TAMART_DEPLOIEMENT,
+      lireVie: async (jeton) => {
+        const v = await vieDuBlock({ rpc: rpcRails, stateView: V4_ADRESSES[8453].stateView, jeton, clesExactes: await clesRails(jeton) });
+        let bloc = null; try { bloc = parseInt(await rpcServeur('eth_blockNumber', []), 16); } catch (_) { bloc = null; }
+        return v ? { etat: v.etat, vie: v.vie, bloc } : null;
+      },
+      lireSymbole: async (jeton) => { const x = String(await rpcServeur('eth_call', [{ to: jeton, data: '0x95d89b41' }, 'latest'])).slice(2); const n = parseInt(x.slice(64, 128), 16); return Buffer.from(x.slice(128, 128 + 2 * n), 'hex').toString('utf8'); } });
     const echec = (e) => rendreT({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) });
     if (chemin === '/api/tam/oeuvres') { void tamSrv.oeuvres().then(rendreT, echec); return; }
-    const g = new URL(req.url, 'http://x').searchParams.get('graine');
-    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(g)).then(rendreT, echec);
+    const q = new URL(req.url, 'http://x').searchParams;
+    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'))).then(rendreT, echec);
     return;
   }
 

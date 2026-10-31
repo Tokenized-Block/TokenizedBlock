@@ -16,6 +16,10 @@
 //   [couplage: k = 2 + u32%3, eps] ; jitter de chaque parametre (cles triees, +-4 % ODE, +-3 % map) ;
 //   angles des plans caches (D-3 angles, unite*2pi) ; [somme/composition: motif, ses params, w].
 //   Si l'essai echoue a un certificat, e+1 (jusqu'a ESSAIS_MAX). Tout est dans params -> rejouer().
+//
+// Projection N-D -> 3-D (2026-10-31, phase C) : rotations de Givens (m, m+3) en cascade DECROISSANTE (m = D-4 .. 0) aux angles
+//   tires, puis x1..x3. Chaque dimension cachee descend vers x1/x2/x3 : toutes comptent dans la vue STOCKEE (l ordre croissant
+//   d avant laissait x7..x12 invisibles). Voir projeterND.
 import { keccak256, keccak256Hex } from './keccak.js';
 
 export const VERSION = 1;
@@ -258,8 +262,24 @@ function standardiser(brut, n, D) {
   }
   return z;
 }
-// N-D -> 3-D : rotations de Givens dans les plans (m, m+3), m = 0..D-4 (dimensions cachees), puis 3 premieres.
+// N-D -> 3-D : rotations de Givens dans les plans (m, m+3), m = D-4 .. 0 (DECROISSANT), puis 3 premieres.
+// 2026-10-31 (phase C, decision du lead, aucune oeuvre mintee) : l ordre CROISSANT d avant ne laissait jamais voir x7..x12 (le plan
+//   (m, m+3) avec m >= 3 ne mele que deux dimensions cachees APRES que x1..x3 ont recu leur part). En cascade decroissante, la
+//   dimension d descend vers d-3, d-6, ... jusqu a x1/x2/x3 : chaque dimension touche la vue stockee (poids = produit de sinus des
+//   angles tires, nul seulement pour un angle exactement 0 ou pi). Choisi parce que c est le plus petit changement (memes angles, meme
+//   format) ; une projection orthonormee N->3 tiree de la graine aurait ajoute des tirages.
 // Map 2-D -> 3-D : plongement a retard (x_n, y_n, x_{n-1}).
+/** la vue stockee d un etat N-D standardise `z` (n x D) : pure, exportee pour le banc « chaque dimension compte » */
+export function projeterND(z, n, D, angles) {
+  const out = new Float64Array(n * 3), cs = angles.map(cosD), sn = angles.map(sinD), v = new Float64Array(D);
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < D; j++) v[j] = z[i * D + j];
+    for (let m = D - 4; m >= 0; m--) { const a = v[m], b = v[m + 3], c = cs[m] ?? 1, s = sn[m] ?? 0; v[m] = c * a - s * b; v[m + 3] = s * a + c * b; }
+    out[3 * i] = v[0]; out[3 * i + 1] = v[1]; out[3 * i + 2] = v[2];
+  }
+  return normaliser(out);
+}
+export function standardiserND(brut, n, D) { return standardiser(brut, n, D); }
 function projeter(car, P) {
   const n = P.n, D = car.D, out = new Float64Array(n * 3);
   if (D === 2) {
@@ -267,13 +287,7 @@ function projeter(car, P) {
     for (let i = 0; i < n; i++) { out[3 * i] = b[2 * i]; out[3 * i + 1] = b[2 * i + 1]; out[3 * i + 2] = b[2 * Math.max(0, i - 1)]; }
     return normaliser(out);
   }
-  const z = standardiser(car.brut, n, D), cs = P.angles.map(cosD), sn = P.angles.map(sinD), v = new Float64Array(D);
-  for (let i = 0; i < n; i++) {
-    for (let j = 0; j < D; j++) v[j] = z[i * D + j];
-    for (let m = 0; m + 3 < D; m++) { const a = v[m], b = v[m + 3], c = cs[m] ?? 1, s = sn[m] ?? 0; v[m] = c * a - s * b; v[m + 3] = s * a + c * b; }
-    out[3 * i] = v[0]; out[3 * i + 1] = v[1]; out[3 * i + 2] = v[2];
-  }
-  return normaliser(out);
+  return projeterND(standardiser(car.brut, n, D), n, D, P.angles);
 }
 
 const polylignes = new Map();
