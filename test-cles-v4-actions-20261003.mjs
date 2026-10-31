@@ -40,7 +40,8 @@ ok(new Set(actions).size === 20, 'aucune action en double');
 ok(dec.every((d) => d.cle.hooks === ETH), 'sans hook (0x0) : le routeur prend son frais d interface, 0,5 % en USDC');
 ok(dec.every((d) => d.cle.fee <= FRAIS_LP_MAX_MARCHE && d.cle.fee >= 30000), 'frais LP de 3 % a ' + (FRAIS_LP_MAX_MARCHE / 10000) + ' % : passe le filtre a pieges (max lu ' + Math.max(...dec.map((d) => d.cle.fee)) + ')');
 const dansAero = actions.filter((a) => POOLS_ACTIONS_AERODROME.has(a)).map((a) => parAdr.get(a));
-ok(dansAero.length === 1 && dansAero[0] === 'MSTRc', 'une seule est aussi dans la table Aerodrome : ' + dansAero.join(' ') + ' (la table garde la main)');
+/* 2026-10-31 : + NFLXc (ACHETABLE hors table en prod, fork-proven buy and resale on its Aerodrome pool) — the table keeps priority */
+ok(dansAero.join() === 'MSTRc,NFLXc', 'exactly these are also in the Aerodrome table : ' + dansAero.join(' ') + ' (la table garde la main)');
 ok(LOGS_INITIALIZE_MESURES.length === 21 && decoderInitialize(LOGS_INITIALIZE_MESURES[0]).cle.currency1 === '0xb2000000000000000000002feb517dfec7415344'
   && LOGS_INITIALIZE_ACTIONS.every((l) => LOGS_INITIALIZE_MESURES.includes(l)), 'LOGS_INITIALIZE_MESURES = OUSD en [0] + les 20');
 const altere = { ...LOGS_INITIALIZE_ACTIONS[0], data: '0x' + '0'.repeat(60) + 'c350' + LOGS_INITIALIZE_ACTIONS[0].data.slice(66) };
