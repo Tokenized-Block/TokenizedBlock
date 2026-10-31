@@ -143,6 +143,8 @@ import { BLOCKROLLS_DEPLOIEMENT } from './blockrolls-deploiement.js';
 /* 2026-10-23 (Phil) : BlockSlots — la machine a sous a trois faces de bloc. La fiche GENEREE (preparer-deploiement-slots.mjs) ; `adresse`
  *   reste null tant que le proprietaire n a pas signe : /api/slots rend alors PAS_OUVERT et l app ne montre AUCUN bouton Slots. */
 import { SLOTS_DEPLOIEMENT } from './slots-deploiement.js';
+import { TAMART_DEPLOIEMENT } from './tamart-deploiement.js';
+import { serveurTam } from './tam-serveur.js';
 /* 2026-10-24 (Phil : « miser en USDC ou en tout B20 / action de l app, seul ce qui a une liquidite profonde ») : la regle et les devis
  *   exact-output des jetons misables (misables.js) ; /api/misables sert la liste, LECTURE SEULE, en cache 60 s. */
 import { CANDIDATS_CL as CANDIDATS_MISABLES, coterMisableTailles, ligneMisable, listeMisables, SEUIL_ECART_BPS as SEUIL_MISABLE_BPS,
@@ -3259,6 +3261,7 @@ async function sonderNaissance() {
  * ⛔ BORNES : UN block de reference (IB022, cote en ETH sur notre hook) — une sonde verte ne dit rien des autres blocks ; des
  *   plans simules, pas des executions ; le cerveau de la sonde n a ni memoire ni nourriture (celui d un visiteur en a). */
 const BLOCK_SONDE = '0xb200000000000000000000e4b0c5fbe9c8df579e';
+let tamSrv = null; /* TAM phase C : cree au premier appel de /api/tam/* (tam-serveur.js) */
 let autresSondes = { marche: { etat: 'PAS_ENCORE' }, echange: { etat: 'PAS_ENCORE' }, cerveau: { etat: 'PAS_ENCORE' } };
 async function sonderLeReste() {
   const lu = new Date().toISOString();
@@ -5766,6 +5769,9 @@ const SERVIS = [
    *   il est nomme ici pour que la garde des imports le suive, mais il n entre dans le cache — donc il n est SERVI — que si CE
    *   serveur est lui-meme en mode essai (`SERVIS_EN_ESSAI_SEULEMENT`, juste dessous). En production : 404. */
   'mode-essai.js', 'wallet-simule.js',
+  /* 2026-10-31 (TAM phase C) : l onglet TAM (tam-onglet.js, importe a l ouverture de l onglet) et sa chaine : le moteur (phase A), la vue pure,
+   *   le plan du mint, la fiche de deploiement de TamArt (phase B ; adresse null tant que Phil n a pas signe). */
+  'tam-onglet.js', 'tam-vue.js', 'tam-moteur.js', 'tam-plan.js', 'tamart-deploiement.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
@@ -7998,6 +8004,19 @@ function traiterRequete(req, res) {
     const rendreMi = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(o); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
     void misables().then(rendreMi, (e) => rendreMi(JSON.stringify({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120), misables: [], lignes: [] })));
+    return;
+  }
+
+  /* ══ TAM (2026-10-31, phase C) — GET /api/tam/choix?graine=… (le choix du cerveau, par le moteur) et GET /api/tam/oeuvres (les Minted de
+   *   TamArt, cache 60 s ; avant le deploiement : liste vide + raison). LECTURE SEULE (tam-serveur.js). */
+  if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres') {
+    const rendreT = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
+    if (!tamSrv) tamSrv = serveurTam({ rpc: rpcServeur, deploiement: TAMART_DEPLOIEMENT, adresseCerveau: BLOCK_SONDE });
+    const echec = (e) => rendreT({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) });
+    if (chemin === '/api/tam/oeuvres') { void tamSrv.oeuvres().then(rendreT, echec); return; }
+    const g = new URL(req.url, 'http://x').searchParams.get('graine');
+    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(g)).then(rendreT, echec);
     return;
   }
 

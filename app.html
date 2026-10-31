@@ -1621,7 +1621,7 @@ button.mienTuile:hover{border-color:var(--accent)}
 
 .nav{position:fixed;left:0;right:0;bottom:0;background:rgb(var(--fondRgb) / .93);backdrop-filter:blur(12px);
   border-top:1px solid var(--ligne);padding:8px 10px calc(8px + env(safe-area-inset-bottom));z-index:20}
-.navIn{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(9,1fr);gap:2px}
+.navIn{max-width:760px;margin:0 auto;display:grid;grid-template-columns:repeat(10,1fr);gap:2px}
 .navB{appearance:none;border:0;background:transparent;color:var(--doux);font:inherit;font-size:11px;
   font-weight:700;padding:7px 3px;border-radius:10px;cursor:pointer;display:flex;flex-direction:column;
   align-items:center;gap:3px;min-height:48px}
@@ -4449,7 +4449,9 @@ details[open] > summary::before{transform:rotate(90deg)}
     </div>
   </section>
 
-  <section class="volet" id="v-bridge" aria-label="Bridge">
+  <!-- 2026-10-31 (TAM phase C) : l onglet TAM. Le contenu est peint par tam-onglet.js a la premiere ouverture (ouvrirTam). -->
+<section class="volet" id="v-tam" aria-label="TAM math art"><div id="tamRacine"><p class="note">Loading…</p></div></section>
+<section class="volet" id="v-bridge" aria-label="Bridge">
     <div class="carte">
       <p class="titre">Bridge</p>
       <p class="sous">Move value through a <b>Bridge block</b> hub — not a naked external Dex.
@@ -4579,6 +4581,10 @@ details[open] > summary::before{transform:rotate(90deg)}
          lisible pour economiser une largeur qui n existait pas.
          ⛔ ET IL REND : temoin tofu a 10,97 px, `⬢` mesure 13,46 — donc pas un tofu. -->
     <button class="navB" role="tab" aria-selected="false" data-volet="tokenx"><b>⬢</b>Tokenized</button>
+    <!-- 2026-10-31 (TAM phase C) : un ONZIEME onglet. « φ » (le nombre d or, grec : present dans toutes les polices) ; libelle de 3 lettres.
+         ⛔ MESURE (375 px emules) : a `repeat(9,1fr)` TAM tombait sur une 2e rangee (nav 100 px) ; a `repeat(10,1fr)` : une rangee, 50 px,
+            355 == 355, aucun debordement, Tokenized 51,6 px, les autres ~33 px (sous 44 px de large, comme avant : 37,9 a 9 onglets). -->
+    <button class="navB" role="tab" aria-selected="false" data-volet="tam"><b>φ</b>TAM</button>
   </div>
 </nav>
 <!-- 2026-10-18 : LA PALETTE (Ctrl+K · Cmd+K · « / » · le bouton loupe du panneau). Hors des volets : un volet masque masquerait son enfant.
@@ -8736,6 +8742,25 @@ setTimeout(() => { peindreTirage(); setInterval(() => { if (!document.hidden) pe
 /* le dernier block ne : relu toutes les 60 s, seulement onglet Missions ouvert et page visible (pas de lecture pour personne) */
 setInterval(() => { const v = document.getElementById('v-missions'); if (!document.hidden && v && v.classList.contains('on')) void peindreDernierBlock(); }, 8000);
 
+/* ══ TAM (2026-10-31, phase C) — l onglet de l art mathematique : tam-onglet.js, importe a la premiere ouverture. Il recoit le « Pay with »
+ *   de cette page (les memes fonctions que les jeux : lignes servies, taille, soldes, devis vivant, envoi en lot ou a la suite) ; rien
+ *   n est signe hors du wallet. Sans adresse TamArt, le module ne montre aucun bouton Mint. */
+let tamEnVol = null;
+function ouvrirTam() {
+  if (tamEnVol) return tamEnVol;
+  const r = document.getElementById('tamRacine');
+  if (!r) return null;
+  tamEnVol = import('./tam-onglet.js').then((m) => m.monter(r, {
+    rpc: (methode, params) => rpc(methode, params),
+    compte: () => { try { return compte; } catch (_) { return null; } },
+    payer: { lignes: () => payerListees(), taille: (l, usdc) => payerTaille(l, usdc), get soldes() { return payer.soldes; }, get dec() { return payer.dec; },
+      sym: (l) => symbolePayer(l), qte: (b, d) => qteJeton(b, d),
+      lire: async (moi) => { await lireMisablesPage(); if (moi !== payer.compte) { payer.compte = moi; payer.soldes = new Map(); payer.soldesA = 0; } if (payer.lignes && Date.now() - payer.soldesA >= PAYER_TTL_MS) await lireSoldesPayer(moi); } },
+    preparer: (o) => preparerPaiementJeton(o),
+    envoyer: (pj, c, dit) => envoyerPaiementJeton(pj, c, dit),
+  })).catch((e) => { tamEnVol = null; r.textContent = 'The TAM tab could not load. Reload the page to try again.'; try { console.error(e); } catch (_) { /* rien */ } });
+  return tamEnVol;
+}
 document.querySelector('.navIn').addEventListener('click', (e) => {
   const b = e.target.closest('.navB');
   if (!b) return;
@@ -8766,6 +8791,8 @@ document.querySelector('.navIn').addEventListener('click', (e) => {
   if (nom === 'map') void peindreJournalMap();
   if (nom === 'missions') void lireJournal();
   if (nom === 'brain') peindreChoixBrain();
+  /* 2026-10-31 (TAM phase C) : l onglet TAM charge son module A L OUVERTURE (rien de plus au chargement de la page) */
+  if (nom === 'tam') void ouvrirTam();
   /* ⛔ LE FEED SE LIT A L OUVERTURE DE L ONGLET (Phil : « fais le feed automatiquement »). Declencheur
    * DETERMINISTE : il ne depend pas d un IntersectionObserver, qu un panneau non peint ne declenche jamais. */
   if (nom === 'social') { demarrerLive(); setTimeout(() => { if (!filEnCours && !filLignes.length) void chargerFil(false); }, 300); }
