@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>TAM mint contract — TokenizedBlock</title>
+<style>
+:root{color-scheme:dark;--fond:#060f14;--carte:#0c1c24;--bord:#1d3a44;--texte:#e8f4f6;--doux:#9db4ba;--cyan:#2fd0c8;--or:#f6c76e;--rose:#ff7eb6;--vert:#6fe3a5}
+body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#123a44 0%,transparent 60%),radial-gradient(900px 500px at 110% 10%,#3a1838 0%,transparent 55%),var(--fond);color:var(--texte);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+main{max-width:760px;margin:0 auto;padding:28px 16px 72px}
+.kicker{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--or);border:1px solid #5a4a26;border-radius:999px;padding:3px 10px}
+h1{font-size:34px;line-height:1.1;margin:12px 0 6px;background:linear-gradient(90deg,#7ff3ea,#f6c76e 55%,#ff7eb6);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:15px;margin:30px 0 10px;color:#9fd6dd;letter-spacing:.02em}
+p{margin:8px 0}
+.note{color:var(--doux);font-size:14px}
+.grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.tuile{border:1px solid var(--bord);border-radius:16px;padding:16px;background:linear-gradient(180deg,#0f2530,#0a1820);position:relative;overflow:hidden}
+.tuile::before{content:"";position:absolute;inset:-1px -1px auto -1px;height:3px;background:var(--c,var(--cyan))}
+.tuile .num{font-size:12px;color:var(--c,var(--cyan));font-weight:800;letter-spacing:.12em}
+.tuile h3{margin:6px 0 6px;font-size:17px}
+.tuile p{font-size:14px;color:#c9dde1;margin:0}
+.carte{border:1px solid var(--bord);border-radius:16px;padding:16px;margin:12px 0;background:var(--carte)}
+.sur li{margin:6px 0}
+details summary{cursor:pointer;color:#9fd6dd;font-weight:700}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:12px 0 0;font-size:13px}
+dt{color:var(--doux)}
+dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace}
+button{appearance:none;border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:800;cursor:pointer;background:linear-gradient(90deg,#2fd0c8,#7ff3ea);color:#04262a;box-shadow:0 6px 24px rgba(47,208,200,.25)}
+button.sec{background:transparent;color:var(--texte);border:1px solid #2a4a55;box-shadow:none}
+button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.ok{color:var(--vert)}.ko{color:#ff8f8f}
+ul{padding-left:20px;margin:8px 0}
+[hidden]{display:none!important}
+@media (max-width:420px){h1{font-size:28px}dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <span class="kicker">TokenizedBlock · TAM</span>
+  <h1>Mathematical works, stored on chain.</h1>
+  <p class="note">One token per work. Minting costs 5 USDC, paid straight to the TokenizedBlock fee wallet. The work's points are written on Base, readable by anyone. One signature from your wallet deploys the contract. This page sends nothing by itself.</p>
+
+  <h2>How it works</h2>
+  <div class="grille">
+    <div class="tuile" style="--c:var(--cyan)"><div class="num">01 · PAY</div><h3>5 USDC, once</h3><p>The minter approves 5 USDC; the mint moves them from the minter to the fee wallet in the same call. The contract never holds any.</p></div>
+    <div class="tuile" style="--c:var(--or)"><div class="num">02 · STORE</div><h3>The bytes, not a hash</h3><p>The encoded points are written as the code of a small contract. A hash cannot be decoded; the stored bytes are what makes the work readable.</p></div>
+    <div class="tuile" style="--c:var(--rose)"><div class="num">03 · REPLAY</div><h3>The proof is public</h3><p>Anyone can rerun the public engine with the stored params and compare it with the stored bytes. The contract itself cannot tell whether a work is chaotic or brain-made.</p></div>
+  </div>
+
+  <h2>What is fixed, and what is not</h2>
+  <div class="carte sur">
+    <ul>
+      <li>No owner. No admin, pause, upgrade or withdrawal. Deploying gives your wallet no power over the contract.</li>
+      <li>The price (5 USDC), the USDC address and the fee wallet are written in at deployment and can never change.</li>
+      <li>The same bytes cannot be minted twice.</li>
+      <li>The contract checks only the format header and the sizes. What a work is (chaotic, certified, chosen by the brain) is shown by the public replay in the app, not by the contract.</li>
+    </ul>
+  </div>
+
+  <h2>What you sign</h2>
+  <div class="carte">
+    <details>
+      <summary>The values built into the contract</summary>
+      <dl id="dParams"></dl>
+    </details>
+    <p class="note" id="dVerif">Checking the fingerprint…</p>
+  </div>
+
+  <h2>Deploy the TAM contract</h2>
+  <div class="carte">
+    <p id="dCompte" class="note">No wallet connected.</p>
+    <p>
+      <button type="button" id="bConnecter" class="sec">Connect wallet</button>
+      <button type="button" id="bDeployer" disabled>Deploy TAM</button>
+    </p>
+    <p id="dEtat" class="note"></p>
+    <dl id="dResultat" hidden>
+      <dt>Transaction</dt><dd id="rTx">—</dd>
+      <dt>TAM contract</dt><dd id="rAdr">—</dd>
+      <dt>Reads back</dt><dd id="rLu">—</dd>
+    </dl>
+  </div>
+</main>
+<script type="module">
+/* deployer-tamart.html — propose AU WALLET CONNECTE la transaction de deploiement de TamArt, FIGEE dans tamart-deploiement.js
+ * (generee par contracts/preparer-deploiement-tamart.mjs). Meme regle que deployer-ticketpot.html :
+ * ⛔ rien n est envoye sans un appui ET la signature du wallet ; aucune cle ; aucun argument saisi a la main.
+ * ⛔ les arguments sont RE-ENCODES ici depuis les valeurs affichees, qui doivent etre USDC_BASE et FEE_WALLET de frais-creation.js, et
+ *   compares a la FIN de la donnee figee ; l empreinte sha256 est recalculee dans ce navigateur. Un ecart -> bouton eteint.
+ *   Apres deploiement : USDC(), beneficiaire(), PRICE() (= 5 000 000) et totalSupply() (= 0) sont RELUS. */
+import { TAMART_DEPLOIEMENT as D } from './tamart-deploiement.js';
+import { selecteur } from './keccak.js';
+import { USDC_BASE, FEE_WALLET, maskFeeAddresses } from './frais-creation.js';
+const $ = (s) => document.querySelector(s);
+const eth = () => window.ethereum;
+const CHAINE_HEX = '0x' + D.chaine.toString(16);
+const C = D.constructeur;
+const PRIX = 5000000n;
+const NOMS = { usdc: 'USDC', beneficiaire: 'Beneficiary (receives each 5 USDC)' };
+let compte = null, intacte = false, envoi = false, adresse = D.adresse || null;
+const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>' + D.ordre.map((k) => '<dt>' + NOMS[k] + '</dt><dd>' + maskFeeAddresses(C[k] || '— not set —') + '</dd>').join('')
+  + '<dt>Price</dt><dd>5 USDC per mint (fixed in the code)</dd>'
+  + '<dt>Owner</dt><dd>none</dd>'
+  + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
+  + '<dt>Fingerprint</dt><dd>sha256 ' + D.sha256Creation + ' · ' + D.octetsCreation + ' bytes</dd>';
+const verifier = (h) => {
+  const pourquoi = [];
+  if (D.chaine !== 8453) pourquoi.push('not Base');
+  if (String(C.usdc).toLowerCase() !== String(USDC_BASE).toLowerCase()) pourquoi.push('USDC differs from the repo');
+  if (String(C.beneficiaire).toLowerCase() !== String(FEE_WALLET).toLowerCase()) pourquoi.push('beneficiary differs from the fee wallet');
+  const args = D.ordre.map((k) => String(C[k]).toLowerCase().slice(2).padStart(64, '0')).join('');
+  if (!String(D.creation).toLowerCase().endsWith(args)) pourquoi.push('the arguments are not the values shown');
+  if (h !== D.sha256Creation) pourquoi.push('fingerprint differs');
+  if ((D.creation.length - 2) / 2 !== D.octetsCreation) pourquoi.push('size differs');
+  return { intacte: pourquoi.length === 0, pourquoi };
+};
+(async () => {
+  try {
+    if (!D.pret || !D.creation) throw new Error('not ready');
+    const octets = new Uint8Array(D.creation.slice(2).match(/../g).map((x) => parseInt(x, 16)));
+    const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const v = verifier(h);
+    intacte = v.intacte;
+    $('#dVerif').className = intacte ? 'note ok' : 'note ko';
+    $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser; the values above re-encoded and found at the end of the data: they match.' : 'Nothing can be deployed from this page: ' + v.pourquoi.join('; ') + '.';
+  } catch (_) { intacte = false; $('#dVerif').className = 'note ko'; $('#dVerif').textContent = 'The fingerprint could not be computed here. Nothing can be deployed from this page.'; }
+  peindre();
+})();
+function peindre() {
+  $('#dCompte').textContent = compte ? 'Connected: ' + maskFeeAddresses(compte) + ' — this wallet pays the deployment gas. It gets no power over the contract.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#bConnecter').hidden = !!compte;
+  $('#bDeployer').disabled = !compte || !intacte || envoi || !!adresse;
+  if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second collection.', 'note ok');
+}
+$('#bConnecter').addEventListener('click', async () => {
+  if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); }
+  catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
+  peindre();
+});
+const attendre = async (tx) => { let recu = null; for (let i = 0; i < 90 && !recu; i += 1) { await new Promise((r) => setTimeout(r, 2000)); try { recu = await eth().request({ method: 'eth_getTransactionReceipt', params: [tx] }); } catch (_) { recu = null; } } return recu; };
+const surBase = async () => {
+  const chaine = await eth().request({ method: 'eth_chainId' });
+  if (String(chaine).toLowerCase() === CHAINE_HEX) return true;
+  try { await eth().request({ method: 'wallet_switchEthereumChain', params: [{ chainId: CHAINE_HEX }] }); return true; } catch (_) { return false; }
+};
+const appel = async (to, sig) => String(await eth().request({ method: 'eth_call', params: [{ to, data: selecteur(sig) }, 'latest'] }));
+const lireAdr = async (to, sig) => ('0x' + (await appel(to, sig)).slice(-40)).toLowerCase();
+const lireU = async (to, sig) => BigInt(await appel(to, sig));
+$('#bDeployer').addEventListener('click', async () => {
+  if (!compte || !intacte || envoi || adresse) return;
+  envoi = true; peindre();
+  try {
+    if (!(await surBase())) { dire('Switch your wallet to Base, then try again.', 'note ko'); return; }
+    dire('Confirm in your wallet…');
+    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: compte, data: D.creation }] });
+    $('#dResultat').hidden = false; $('#rTx').textContent = String(tx);
+    dire('Sent. Waiting for Base to confirm…');
+    const recu = await attendre(tx);
+    if (!recu) { dire('Not confirmed yet after 3 minutes. Keep the transaction hash above and check it on a block explorer.', 'note ko'); return; }
+    if (recu.status !== '0x1' || !recu.contractAddress) { dire('The transaction was confirmed but failed: no contract was created.', 'note ko'); return; }
+    const a = String(recu.contractAddress).toLowerCase();
+    $('#rAdr').textContent = a + ' (block ' + parseInt(recu.blockNumber, 16) + ')';
+    const relu = { usdc: await lireAdr(a, 'USDC()'), beneficiaire: await lireAdr(a, 'beneficiaire()') };
+    const prix = await lireU(a, 'PRICE()');
+    const total = await lireU(a, 'totalSupply()');
+    const bon = D.ordre.every((k) => relu[k] === String(C[k]).toLowerCase()) && prix === PRIX && total === 0n;
+    $('#rLu').textContent = maskFeeAddresses(Object.entries(relu).map(([k, v]) => k + ' ' + v).join(' · ') + ' · price ' + prix + ' (USDC units) · supply ' + total);
+    if (bon) adresse = a;
+    dire(bon ? 'Deployed: the contract reads back exactly what was signed. Send the address to the team: the app opens TAM minting once it knows it.'
+      : 'Deployed, but what the contract reads back differs from what was signed. Do not use it.', bon ? 'note ok' : 'note ko');
+  } catch (e) {
+    dire(e && e.code === 4001 ? 'You declined in your wallet. Nothing was sent.' : 'Not sent: ' + String((e && e.message) || e).slice(0, 160), 'note ko');
+  } finally { envoi = false; peindre(); }
+});
+try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; peindre(); }); } catch (_) {}
+peindre();
+</script>
+</body>
+</html>
