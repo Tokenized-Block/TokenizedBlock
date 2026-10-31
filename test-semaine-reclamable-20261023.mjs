@@ -49,7 +49,7 @@ if (typeof f === 'function') {
 
 /* (2) le serveur, source */
 const srv = lire('serveur-web.js');
-const ts = srv.slice(srv.indexOf('async function lireTicketPotSrv()'), srv.indexOf('function ticketpotJson()'));
+const ts = srv.slice(srv.indexOf('async function lireTicketPotSrv(') /* 2026-10-28: (pot = POT_TP_USDC), the UNIT pot reads through the same function */, srv.indexOf('function ticketpotJson()'));
 const tj = srv.slice(srv.indexOf('function ticketpotJson()'), srv.indexOf('/* ══ LES DUELS LUS SUR LA CHAINE'));
 ok(/import \{[^}]*jourSemaineReclamable[^}]*\} from '\.\/ticketpot-plan\.js';/.test(srv), 'serveur : jourSemaineReclamable importe de ticketpot-plan.js');
 ok(/const dRec = jourSemaineReclamable\(Math\.floor\(Date\.now\(\) \/ 1000\), \(ms\) => saisonDe\(ms\)\.fin\);/.test(ts) && /lireJourTicketPot\(\{ rpc: rpcServeur, contrat \}, dRec\)/.test(ts), 'lu dans lireTicketPotSrv (minuteur 60 s) : lireJour(le dernier dimanche reclamable)');
