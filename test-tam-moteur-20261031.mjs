@@ -75,6 +75,43 @@ function suite(T, bavard = false) {
   ok('choix avec existante identique -> autre oeuvre distincte', a2.ok && a2.hash !== a.hash && a2.certificats.distanceMin >= T.SEUIL_DISTINCT, a2.ok ? 'essai ' + a2.params.essai + ' d=' + a2.certificats.distanceMin.toFixed(3) : '');
   // 7. dimension boite
   ok('Lorenz dimension boite in [1.5, 2.3]', cl.dimension > 1.5 && cl.dimension < 2.3, 'D=' + cl.dimension.toFixed(3));
+  // 8. (2026-11-01, campagne tam-sim) les graines FAUTIVES de la campagne : graine = keccak("sim-"+i), etat null. L ancien choix (essai
+  //    et famille/operateur releves dans indep0.json) doit etre REJETE pour la raison attendue, et le nouveau tenir a n = 4500.
+  const FAUTIVES = [[10, 0, 'rossler/somme', 'CYCLE_LONG'], [225, 0, 'halvorsen/couplage', 'CYCLE_LONG'], [146, 0, 'rossler/composition', 'CYCLE_LONG'],
+    [232, 3, 'aizawa/couplage', 'CYCLE_LONG'], [266, 1, 'halvorsen/couplage', 'COURBE'], [730, 0, 'halvorsen/couplage', 'COURBE'],
+    [893, 2, 'halvorsen/couplage', 'COURBE'], [158, 0, 'rossler/couplage', 'PLAT'], [906, 0, 'aizawa/couplage', 'PLAT']];
+  for (const [i, essai, fo, code] of FAUTIVES) {
+    const ch = T.choisirOeuvre({ graine: graineDe('sim-' + i), etatCerveau: null });
+    const rj = ch.rejets && ch.rejets.find((x) => x.essai === essai);
+    const c45 = ch.ok && T.certifier(T.generer({ ...ch.params, n: 4500 }), []);
+    ok('graine sim-' + i + ' : ancien choix ' + fo + ' (essai ' + essai + ') rejete ' + code + ', nouveau tient a n=4500',
+      ch.ok && ch.params.essai > essai && rj && rj.famille + '/' + rj.operateur === fo && (rj.codes || []).includes(code) && c45 && c45.ok,
+      ch.ok ? 'nouveau ' + ch.params.famille + '/' + ch.params.operateur + ' essai ' + ch.params.essai + (rj ? ' ; rejet ' + (rj.codes || []).join('+') : ' ; pas de rejet a cet essai') : 'aucun');
+  }
+  // 8b. les DEUX fenetres sont exigees (une trajectoire chaotique puis lente, ou l inverse, est refusee)
+  for (const fen of [[0.5, 0.001], [0.001, 0.5]]) {
+    const cw = T.certifier({ ...lor, prolonger: () => ({ bornee: true, etapes: T.LYAP_ETAPES_LONG, fenetres: fen }) }, []);
+    ok('fenetres ' + fen.join('/') + ' -> REJETE CYCLE_LONG', !cw.ok && cw.codes.includes('CYCLE_LONG'));
+  }
+  const cw2 = T.certifier({ ...lor, prolonger: () => ({ bornee: false, etapes: 10, fenetres: [] }) }, []);
+  ok('trajectoire longue qui diverge -> REJETE', !cw2.ok && cw2.codes.includes('DIVERGE_LONG'));
+  // 9. geometrie : une feuille plate REJETEE ; lorenz non
+  const gl = T.geometrie(lor.points);
+  ok('geometrie Lorenz : plat >= PLAT_MIN', gl.plat >= T.PLAT_MIN, 'plat=' + gl.plat.toFixed(3));
+  const feuille = { ...lor, points: Int32Array.from(lor.points, (v, k) => (k % 3 === 2 ? 2048 : v)) };
+  const cf = T.certifier(feuille, []);
+  ok('feuille (z constant) REJETEE plat', !cf.ok && cf.codes.includes('PLAT'), 'plat=' + cf.plat);
+  // 10. le minteur entre dans la graine ; une signature illisible -> NON_LU, jamais ecartee
+  const m1 = T.choisirOeuvre({ graine: G, etatCerveau: E, minteur: '0x' + '1'.repeat(40) }), m2 = T.choisirOeuvre({ graine: G, etatCerveau: E, minteur: '0x' + '2'.repeat(40) });
+  ok('deux minteurs, meme bloc -> deux oeuvres differentes', m1.ok && m2.ok && m1.hash !== m2.hash && m1.params.minteur === '0x' + '1'.repeat(40));
+  const m1b = m1.ok && T.rejouer(JSON.parse(JSON.stringify(m1.params)));
+  ok('oeuvre avec minteur : rejeu octet pour octet', m1b && m1b.ok && egaux(m1b.octets, m1.octets));
+  let refusMinteur = false; try { T.choisirOeuvre({ graine: G, minteur: '0x12' }); } catch { refusMinteur = true; }
+  ok('minteur invalide refuse', refusMinteur);
+  const nl = T.choisirOeuvre({ graine: G, etatCerveau: E, existantes: [a.certificats.signature, null] });
+  ok('signature existante illisible -> NON_LU (pas de choix)', nl.ok === false && nl.etat === 'NON_LU');
+  const cnl = T.certifier(lor, [new Float64Array(3)]);
+  ok('certifier : signature illisible -> NON_LU, jamais ecartee', !cnl.ok && cnl.etat === 'NON_LU' && cnl.codes.includes('SIGNATURE_NON_LUE'));
   return res;
 }
 
@@ -109,7 +146,13 @@ const MUTANTS = [
   ['Math.random injecte', 'unite() { return this.u32() / 4294967296; }', 'unite() { return Math.random(); }'],
   ['signe Lyapunov inverse', "lyapunov: somme / (n * P.pas * dt)", "lyapunov: -somme / (n * P.pas * dt)"],
   ['quantification decode != encode', 'const q = o[4], ordre = o[5];', 'const q = o[4] - 1, ordre = o[5];'],
-  ['distinction retiree', "if (dmin < SEUIL_DISTINCT) raisons.push('quasi-doublon');", ''],
+  ['distinction retiree', "else if (dmin < SEUIL_DISTINCT) refus('DOUBLON');", ''],
+  ['trajectoire longue ignoree', "else if (!(L.fenetres.length === LYAP_FENETRES && L.fenetres.every((x) => x > LYAP_MIN))) refus('CYCLE_LONG');", ''],
+  ['une seule fenetre exigee', 'L.fenetres.every((x) => x > LYAP_MIN)', 'L.fenetres.some((x) => x > LYAP_MIN)'],
+  ['certificat geometrie retire', "if (!(geo.plat >= PLAT_MIN)) refus('PLAT');", ''],
+  ['DIM_MIN couplage = DIM_MIN', "o.params.operateur === 'couplage' ? DIM_MIN_COUPLAGE : DIM_MIN", 'DIM_MIN'],
+  ['minteur ignore dans la graine', 'const base = keccak256(mt ? concat(concat(g, he), hexEnOctets(mt)) : concat(g, he));', 'const base = keccak256(concat(g, he));'],
+  ['signature illisible ecartee en silence', "if (nonLues > 0) return { ok: false, etat: 'NON_LU'", "if (false) return { ok: false, etat: 'NON_LU'"],
   ['borne retiree', 'if (!(v <= B && v >= -B)) return true;', ''],
   ['seuil Lyapunov desactive', "if (!(lyap > LYAP_MIN))", "if (!(lyap > -1e9))"],
   ['varint casse', 'v >>>= 7; }', 'v >>>= 6; }'],

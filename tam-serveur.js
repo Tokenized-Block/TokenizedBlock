@@ -6,9 +6,10 @@
  *     porte `cerveau.etiquette` : quel cerveau, quel battement, ce qu il a mange — et qu il n est PAS le cerveau vivant du visiteur.
  *   GET /api/tam/oeuvres  les oeuvres mintees, lues dans les evenements Minted de TamArt (une fois l adresse ecrite) ; cache 60 s,
  *     balayage INCREMENTAL par fenetres. Avant le deploiement : une liste vide AVEC sa raison (etat PAS_DEPLOYE), jamais un vide muet. */
-import { choisirOeuvre, decoder, signature } from './tam-moteur.js';
-import { adresseTam, SIG_TAM, appelLecture, decoderBytes } from './tam-plan.js';
-import { topic } from './keccak.js';
+import { choisirOeuvre, decoder, signature, certifierReglage } from './tam-moteur.js';
+import { adresseTam, SIG_TAM, appelLecture, decoderBytes, MAX_PARAMS } from './tam-plan.js';
+import { topic, keccak256Hex } from './keccak.js';
+const MAX_PARAMS_JSON = MAX_PARAMS;
 import { etatInitial, pas } from './cerveau.js';
 
 export const TOPIC_MINTED = topic(SIG_TAM.minted);
@@ -64,7 +65,7 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     catch (_) { return etatCerveauTam(CERVEAU_REPLI.adresse, { symbole: CERVEAU_REPLI.symbole, repli: true }); }
   }
   let tete = null; /* { bloc, hash, a } */
-  const oe = { oeuvres: [], signatures: [], jusqua: null, a: 0, enVol: null, erreur: null };
+  const oe = { oeuvres: [], sigs: new Map(), jusqua: null, a: 0, enVol: null, erreur: null };
 
   async function teteLue() {
     if (tete && maintenant() - tete.a < TTL_MS) return tete;
@@ -74,9 +75,12 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     return tete;
   }
 
-  async function choix(graineDemandee, blockDemande = null) {
+  async function choix(graineDemandee, blockDemande = null, minteurDemande = null) {
     let graine = null, bloc = null;
     if (blockDemande !== null && blockDemande !== undefined && blockDemande !== '' && !ADR.test(String(blockDemande))) return { ok: false, etat: 'REFUSE', pourquoi: 'block must be a whole address (0x + 40 hex)' };
+    const vide = (x) => x === null || x === undefined || x === '';
+    if (!vide(minteurDemande) && !ADR.test(String(minteurDemande))) return { ok: false, etat: 'REFUSE', pourquoi: 'minter must be a whole address (0x + 40 hex)' };
+    const minteur = vide(minteurDemande) ? null : String(minteurDemande).toLowerCase(); /* le wallet qui mintera : il entre dans la graine */
     const etat = await cerveauDe(blockDemande ? blockDemande : CERVEAU_DEFAUT.adresse);
     if (graineDemandee !== null && graineDemandee !== undefined && graineDemandee !== '') {
       if (!G32.test(String(graineDemandee))) return { ok: false, etat: 'REFUSE', pourquoi: 'the seed must be 32 bytes in hex (0x + 64 hex)' };
@@ -84,21 +88,59 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     } else {
       try { const t = await teteLue(); graine = t.hash; bloc = t.bloc; } catch (e) { return { ok: false, etat: 'NON_LU', pourquoi: 'the latest block was not read: ' + String((e && e.message) || e).slice(0, 100) }; }
     }
-    const cle = graine + ':' + etat.cerveau + ':' + etat.tick + ':' + etat.etatVie + ':' + etat.vie + ':' + oe.signatures.length;
+    /* ⛔ 2026-11-01 : la distinction se mesure contre TOUTES les oeuvres mintees. Une fois TamArt deploye : liste non lue jusqu a la tete,
+     *   ou UNE signature non lue -> NON_LU, jamais une oeuvre comparee a une liste trouee. */
+    if (adresseTam(deploiement)) {
+      if (oe.jusqua === null || oe.erreur) return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: 'the minted works were not read, so distinctness cannot be measured' + (oe.erreur ? ': ' + oe.erreur : '') };
+      if (!oe.aJour) return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: 'the minted works are still being read up to the latest block' };
+    }
+    const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);
+    const cle = graine + ':' + etat.cerveau + ':' + etat.tick + ':' + etat.etatVie + ':' + etat.vie + ':' + existantes.length + ':' + minteur;
     if (parGraine.has(cle)) return parGraine.get(cle);
-    const r = choisirOeuvre({ graine, etatCerveau: etat, existantes: oe.signatures });
+    const r = choisirOeuvre({ graine, etatCerveau: etat, existantes, minteur });
+    if (r.etat === 'NON_LU') return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: r.pourquoi };
     const cerveau = { adresse: etat.cerveau, symbole: etat.symbole, battement: etat.tick, spikes: etat.spikes, vie: etat.vie, etatVie: etat.etatVie, blocFaits: etat.blocFaits,
       repli: etat.repli, vivant: false, etiquette: etiquetteCerveau(etat) };
     const rep = r.ok
       ? { ok: true, etat: 'PRET', graine, bloc, cerveau, empreinteEtat: r.params.empreinteEtat,
-        params: r.params, certificats: sansSignature(r.certificats), octets: hexDe(r.octets), hash: r.hash, rejets: r.rejets, comparees: oe.signatures.length }
+        params: r.params, certificats: sansSignature(r.certificats), octets: hexDe(r.octets), hash: r.hash, rejets: r.rejets, comparees: existantes.length, minteur }
       : { ok: false, etat: 'AUCUNE', graine, bloc, cerveau, pourquoi: 'no combination passed the certificates for this seed', rejets: r.rejets };
     if (parGraine.size > 64) parGraine.delete(parGraine.keys().next().value);
     parGraine.set(cle, rep);
     return rep;
   }
 
+  /* la signature (distance) d une oeuvre existante : lue dans ses OCTETS stockes, jamais supposee. Echec -> signatureNonLue (relue au
+   *   balayage suivant) ; tant qu une seule manque, choix() rend NON_LU — elle n est jamais retiree en silence des `existantes`. */
+  async function lireSignature(contrat, o) {
+    try { const d = decoderBytes(await rpc('eth_call', [appelLecture(contrat, SIG_TAM.donnees, o.tokenId), 'latest'])); const x = decoder(d); oe.sigs.set(o.tokenId, signature(x.points, x.q)); delete o.signatureNonLue; }
+    catch (_) { o.signatureNonLue = true; }
+  }
+  /* 2026-11-01 : GET /api/tam/certifier?p=<base64url(JSON des params)> — une oeuvre REGLEE (joueur ou cerveau) passe les MEMES certificats
+   *   que le choix du cerveau, distance comprise contre TOUTES les oeuvres mintees (memes regles NON_LU que choix). Bornes d abord
+   *   (validerReglage : n, q, pas = ceux du moteur — une requete ne peut pas commander un calcul plus long). */
+  const parReglage = new Map();
+  async function certifierParams(p64) {
+    let json;
+    try { json = Buffer.from(String(p64 || ''), 'base64url').toString('utf8'); } catch (_) { json = ''; }
+    if (!json || json.length > MAX_PARAMS_JSON) return { ok: false, etat: 'REFUSE', codes: ['HORS_BORNES'], pourquoi: 'params missing or longer than ' + MAX_PARAMS_JSON + ' bytes' };
+    let P; try { P = JSON.parse(json); } catch (_) { return { ok: false, etat: 'REFUSE', codes: ['HORS_BORNES'], pourquoi: 'params are not JSON' }; }
+    if (adresseTam(deploiement)) {
+      if (oe.jusqua === null || oe.erreur || !oe.aJour) return { ok: false, etat: 'NON_LU', codes: ['SIGNATURE_NON_LUE'], pourquoi: 'the minted works were not read up to the latest block, so distinctness cannot be measured' };
+    }
+    const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);
+    const cle = json + ':' + existantes.length;
+    if (parReglage.has(cle)) return parReglage.get(cle);
+    const c = certifierReglage(P, existantes);
+    const { oeuvre: _o, octets, signature: _s, ...reste } = c;
+    const rep = { ...reste, ok: c.ok === true, etat: c.ok ? 'CERTIFIE' : c.etat === 'NON_LU' ? 'NON_LU' : 'REFUSE', hash: octets ? keccak256Hex(octets) : null, comparees: existantes.length,
+      pourquoi: c.ok ? null : (c.raisons || []).join('; ') };
+    if (rep.etat !== 'NON_LU') { if (parReglage.size > 64) parReglage.delete(parReglage.keys().next().value); parReglage.set(cle, rep); }
+    return rep;
+  }
+
   async function balayer(contrat) {
+    for (const o of oe.oeuvres) if (o.signatureNonLue) await lireSignature(contrat, o);
     const h = parseInt(await rpc('eth_blockNumber', []), 16);
     let de = oe.jusqua === null ? deploiement.bloc : oe.jusqua + 1;
     for (let f = 0; f < FENETRES_PAR_APPEL && de <= h; f++) {
@@ -110,8 +152,7 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
         if (oe.oeuvres.some((o) => o.tokenId === id)) continue;
         const o = { tokenId: id, minter: '0x' + String(l.topics[2]).slice(26).toLowerCase(), empreinte: String(l.topics[3]).toLowerCase(), graine: '0x' + String(l.data).slice(2, 66).toLowerCase(), tx: l.transactionHash, bloc: parseInt(l.blockNumber, 16) };
         oe.oeuvres.push(o);
-        /* la signature (distance) des oeuvres existantes : lue dans les OCTETS stockes, jamais supposee */
-        try { const d = decoderBytes(await rpc('eth_call', [appelLecture(contrat, SIG_TAM.donnees, id), 'latest'])); const x = decoder(d); oe.signatures.push(signature(x.points, x.q)); } catch (_) { o.signatureNonLue = true; }
+        await lireSignature(contrat, o);
       }
       oe.jusqua = a; de = a + 1;
     }
@@ -129,5 +170,5 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     return { ok: true, etat: oe.erreur ? 'PARTIEL' : oe.aJour ? 'LU' : 'EN_RETARD', pourquoi: oe.erreur, contrat, jusqua: oe.jusqua, oeuvres: oe.oeuvres };
   }
 
-  return { choix, oeuvres, cerveauDe };
+  return { choix, oeuvres, cerveauDe, certifierParams };
 }

@@ -180,6 +180,37 @@ ok((await srv.choix('0x12')).etat === 'REFUSE', 'graine invalide : refuse');
 const c2 = await srv.choix(graineDe('autre'));
 ok(c2.ok && c2.graine === graineDe('autre') && c2.bloc === null, 'graine donnee : utilisee telle quelle');
 
+/* ── 6b. (2026-11-01) deploye : une signature existante NON LUE -> NON_LU (jamais ecartee) ; le minteur entre dans la graine ── */
+{
+  const { TOPIC_MINTED } = await import('./tam-serveur.js');
+  const C = '0x' + '11'.repeat(20), mot = (x) => BigInt(x).toString(16).padStart(64, '0');
+  const oct = Buffer.from(ch.octets).toString('hex'), pad = oct + '0'.repeat((64 - (oct.length % 64)) % 64);
+  let donneesOk = false;
+  const rpcD = async (m, prm) => {
+    if (m === 'eth_getBlockByNumber') return { number: '0x' + (2000).toString(16), hash: HASH };
+    if (m === 'eth_blockNumber') return '0x' + (2000).toString(16);
+    if (m === 'eth_getLogs') return [{ address: C, topics: [TOPIC_MINTED, '0x' + mot(1), '0x' + mot('0x' + 'ab'.repeat(20)), '0x' + mot(ch.hash)], data: bas(ch.params.graine), transactionHash: '0x' + '77'.repeat(32), blockNumber: '0x3e9' }];
+    if (m === 'eth_call') { if (!donneesOk) throw new Error('rpc en panne'); return '0x' + mot(32) + mot(ch.octets.length) + pad; }
+    throw new Error('pas attendu: ' + m);
+  };
+  const srvD = serveurTam({ rpc: rpcD, deploiement: { ...DEP }, lireVie, lireSymbole: async () => 'ZZZ', maintenant: (() => { let t = 0; return () => (t += 61000); })() });
+  const oD = await srvD.oeuvres();
+  ok(oD.ok && oD.oeuvres.length === 1 && oD.oeuvres[0].signatureNonLue === true, 'deploye : 1 oeuvre lue, sa signature NON lue (marquee)');
+  const cD = await srvD.choix(graineDe('x'));
+  ok(cD.ok === false && cD.etat === 'NON_LU' && /could not be read/.test(cD.pourquoi), 'signature non lue -> choix NON_LU (' + cD.pourquoi + ')');
+  donneesOk = true;
+  await srvD.oeuvres();
+  const cD2 = await srvD.choix(graineDe('x'));
+  ok(cD2.ok === true && cD2.comparees === 1, 'signature relue au balayage suivant -> choix PRET, compare a 1 oeuvre');
+  const a1 = await srvD.choix(graineDe('x'), null, '0x' + 'a1'.repeat(20)), a2 = await srvD.choix(graineDe('x'), null, '0x' + 'a2'.repeat(20));
+  ok(a1.ok && a2.ok && a1.hash !== a2.hash && a1.params.minteur === '0x' + 'a1'.repeat(20), 'meme bloc, deux minteurs -> deux oeuvres');
+  ok((await srvD.choix(graineDe('x'), null, '0x12')).etat === 'REFUSE', 'minteur tronque : refuse');
+  const srvP = serveurTam({ rpc: async (m) => { if (m === 'eth_getBlockByNumber') return { number: '0x64', hash: HASH }; throw new Error('panne'); }, deploiement: { ...DEP }, lireVie });
+  await srvP.oeuvres().catch(() => null);
+  const cP = await srvP.choix(graineDe('x'));
+  ok(cP.ok === false && cP.etat === 'NON_LU', 'liste des oeuvres non lue (deploye) -> NON_LU, jamais une liste vide supposee');
+}
+
 /* ── 7. la liste servie ── */
 const serveur = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 const bloc = serveur.match(/const SERVIS\s*=\s*\[([\s\S]*?)\];/);
@@ -189,4 +220,137 @@ for (const f of ['tam-onglet.js', 'tam-vue.js', 'tam-moteur.js', 'tam-plan.js', 
 ok(/import\('\.\/tam-onglet\.js'\)/.test(readFileSync(new URL('./app.html', import.meta.url), 'utf8')), 'app.html importe tam-onglet.js (suivi par test-imports-servis)');
 ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(serveur), 'les routes /api/tam/* existent');
 
+/* ── 8. (2026-11-01, Phil 31/10) LES VARIABLES : joueur et cerveau ── */
+{
+  const egauxO = (a, b) => a instanceof Uint8Array && b instanceof Uint8Array && a.length === b.length && a.every((x, i) => x === b[i]);
+  const structures = [
+    T.structurer({ famille: 'lorenz', operateur: 'couplage', copies: 4 }),
+    T.structurer({ famille: 'lorenz96', operateur: 'seul', dim96: 9 }),
+    T.structurer({ famille: 'dadras', operateur: 'somme', motif: { famille: 'ifs', variante: 'fougere' } }),
+    T.structurer({ famille: 'clifford', operateur: 'composition', motif: { famille: 'julia' } }),
+    ch.params,
+  ];
+  ok(T.generer(structures[0]).D === 12 && T.generer(structures[1]).D === 9, 'dimension reglable jusqu a 12 (4 copies couplees = 12-D ; Lorenz-96 a 9 variables)');
+  /* (a) UN curseur ecrit SON parametre, et rien d autre */
+  let curseursVus = 0;
+  for (const P of structures) {
+    const R = T.reglagesDe(P);
+    for (const r of R) {
+      const v = r.min + (r.max - r.min) * 0.3141592653;
+      const Q = T.appliquerReglage(P, r.chemin, v);
+      const R2 = T.reglagesDe(Q), autres = R2.filter((x) => x.chemin !== r.chemin), avant = R.filter((x) => x.chemin !== r.chemin);
+      const lui = R2.find((x) => x.chemin === r.chemin);
+      ok(Math.abs(lui.valeur - v) <= 1e-6 && autres.every((x, i) => x.valeur === avant[i].valeur && x.chemin === avant[i].chemin),
+        'curseur ' + P.famille + '/' + P.operateur + ' ' + r.chemin + ' ecrit SA variable (' + lui.valeur + ') et aucune autre');
+      const { params: _a, angles: _b, eps: _c, w: _d, regle: _e, ...restP } = P, { params: _f, angles: _g, eps: _h, w: _i, regle: _j, ...restQ } = Q;
+      ok(T.canon(restP) === T.canon(restQ), 'curseur ' + r.chemin + ' : la structure (famille, operateur, motif, graine, minteur) intacte');
+      curseursVus++;
+    }
+    const hors = T.appliquerReglage(P, R[0].chemin, R[0].max * 10 + 10);
+    ok(T.reglagesDe(hors).find((x) => x.chemin === R[0].chemin).valeur === R[0].max, 'curseur au-dela de sa borne : ramene a la borne (' + R[0].chemin + ')');
+  }
+  ok(curseursVus >= 30, curseursVus + ' curseurs verifies');
+  /* (b) une oeuvre reglee se REJOUE aux memes octets (octets generes depuis les params ARRONDIS) */
+  for (const P of structures) for (const r of T.reglagesDe(P).slice(0, 3)) {
+    const x = V.oeuvreReglee(P, r.chemin, r.min + (r.max - r.min) * 0.123456789123);
+    if (!x.octets) continue;
+    const rj = T.rejouer(JSON.parse(JSON.stringify(x.params)));
+    ok(rj.ok && egauxO(rj.octets, x.octets), 'reglage ' + P.famille + ' ' + r.chemin + ' : rejouer(JSON des params) = les octets du curseur, octet pour octet');
+  }
+  /* (c) le cerveau bouge des variables : DETERMINISTE, dit ce qu il a bouge, de a vers b */
+  const E1 = { cerveau: { adresse: UNIT, battement: 24 }, empreinteEtat: c1.empreinteEtat }, E2 = { cerveau: { adresse: IB022, battement: 24 }, empreinteEtat: cI.empreinteEtat };
+  for (const P of structures) {
+    const a = T.coupDePouce(P, E1), b = T.coupDePouce(JSON.parse(JSON.stringify(P)), JSON.parse(JSON.stringify(E1)));
+    ok(T.canon(a.params) === T.canon(b.params) && a.mouvements.length >= 1, 'coup de pouce ' + P.famille + ' : meme etat, memes params -> meme reglage (' + a.mouvements.map((m) => m.chemin).join(',') + ')');
+    for (const m of a.mouvements) ok(T.reglagesDe(a.params).find((x) => x.chemin === m.chemin).valeur === m.a && m.a !== m.de, 'coup de pouce : ' + m.chemin + ' vaut ce que la carte dit (' + m.de + ' -> ' + m.a + ')');
+    ok(a.params.reglage && a.params.reglage.par === 'cerveau' && a.params.reglage.mouvements.length === a.mouvements.length, 'le reglage dit qu il vient du cerveau');
+    const rj = T.rejouer(JSON.parse(JSON.stringify(a.params)));
+    ok(rj.ok === T.generer(a.params).bornee && (!rj.ok || egauxO(rj.octets, T.encoderOeuvre(T.generer(a.params)))), 'coup de pouce : l oeuvre se rejoue aux memes octets');
+  }
+  const d1 = structures.map((P) => T.canon(T.coupDePouce(P, E1).params)), d2 = structures.map((P) => T.canon(T.coupDePouce(P, E2).params));
+  ok(d1.some((x, i) => x !== d2[i]), 'un autre etat du cerveau bouge autre chose');
+  const ph = V.phraseMouvements([{ nom: 'b', de: 2.7, a: 2.9123 }, { nom: 'coupling', de: 0.2, a: 0.25 }]);
+  ok(ph === 'The brain moved b from 2.700 to 2.912 and coupling from 0.200 to 0.250.', 'la carte : « ' + ph + ' »');
+  const Pb = T.coupDePouce(structures[0], E1).params;
+  ok(V.carte({ P: Pb, c: null }).find((x) => x.k === 'Tuned').v.startsWith('The brain moved '), 'la carte d une oeuvre poussee par le cerveau le dit');
+  /* (d) chaque reglage passe les MEMES certificats ; un refus dit SA raison */
+  const cycle = T.appliquerReglage(T.structurer({ famille: 'lorenz' }), 'params.r', 14);
+  const cc1 = T.certifierReglage(cycle, []);
+  ok(!cc1.ok && cc1.codes.includes('CYCLE') && /simple cycle/.test(V.verdictReglage(cc1).texte), 'Lorenz r=14 (dans les bornes) : refuse, « simple cycle » (' + V.verdictReglage(cc1).texte + ')');
+  const hors = T.certifierReglage({ ...T.structurer({ famille: 'lorenz' }), n: 20000 }, []);
+  ok(!hors.ok && hors.codes.includes('HORS_BORNES') && /outside the allowed range/.test(V.verdictReglage(hors).texte), 'n = 20000 (calcul plus long commande) : refuse hors bornes');
+  ok(!T.certifierReglage({ ...T.structurer({ famille: 'lorenz' }), params: { s: 10, r: 100, b: 8 / 3 } }, []).ok, 'r = 100 (hors bornes) : refuse');
+  const bon = T.certifierReglage(T.structurer({ famille: 'lorenz' }), []);
+  ok(bon.ok && bon.octets instanceof Uint8Array, 'Lorenz par defaut, regle : certifie');
+  const doublon = T.certifierReglage(T.structurer({ famille: 'lorenz' }), [bon.signature]);
+  ok(!doublon.ok && doublon.codes.includes('DOUBLON') && /too close to an existing work/.test(V.verdictReglage(doublon).texte), 'le meme reglage qu une oeuvre existante : « too close to an existing work »');
+  ok(/flat/.test(V.CODES_EN.PLAT) && /escapes to infinity/.test(V.CODES_EN.DIVERGE) && /simple cycle/.test(V.CODES_EN.CYCLE_LONG), 'les raisons a l ecran : flat, escapes to infinity, simple cycle');
+  /* (e) LE portail du mint : rien ne passe sans certificats locaux ET serveur sur les MEMES octets, pour CE wallet */
+  const moi = '0x' + 'ab'.repeat(20), Pm = { ...T.structurer({ famille: 'lorenz' }), minteur: moi }, cm = T.certifierReglage(Pm, []);
+  const sOk = { ok: true, etat: 'CERTIFIE', hash: keccak256Hex(cm.octets) };
+  const porte = (o) => V.peutMinter({ dep: DEP, local: cm, serveur: sOk, octets: cm.octets, P: Pm, compte: moi, ...o });
+  ok(porte({}).ok === true, 'portail : tout certifie -> ouvert');
+  ok(porte({ local: cc1 }).ok === false, 'portail : certificat local refuse -> ferme');
+  ok(porte({ local: hors }).ok === false, 'portail : hors bornes -> ferme');
+  ok(porte({ serveur: null }).ok === false && porte({ serveur: { ...sOk, etat: 'NON_LU', ok: false } }).ok === false && porte({ serveur: { ...sOk, etat: 'REFUSE', ok: false } }).ok === false, 'portail : serveur absent / NON_LU / REFUSE -> ferme');
+  ok(porte({ serveur: { ...sOk, hash: '0x' + '00'.repeat(32) } }).ok === false, 'portail : serveur a certifie d autres octets -> ferme');
+  ok(porte({ compte: '0x' + 'cd'.repeat(20) }).ok === false && porte({ P: { ...Pm, minteur: undefined } }).ok === false, 'portail : autre wallet, ou oeuvre tiree pour personne -> ferme');
+  ok(porte({ dep: TAMART_DEPLOIEMENT }).ok === false, 'portail : TamArt non deploye -> ferme');
+  /* le serveur certifie une oeuvre reglee (memes certificats, distance aux mintees) */
+  const b64 = (P) => Buffer.from(JSON.stringify(P), 'utf8').toString('base64url');
+  const sv = await srv.certifierParams(b64(Pm));
+  ok(sv.ok && sv.etat === 'CERTIFIE' && sv.hash === keccak256Hex(cm.octets) && sv.signature === undefined, '/api/tam/certifier : oeuvre reglee CERTIFIEE, hash des memes octets');
+  const sv2 = await srv.certifierParams(b64(cycle));
+  ok(!sv2.ok && sv2.etat === 'REFUSE' && sv2.codes.includes('CYCLE'), '/api/tam/certifier : un cycle est REFUSE avec sa raison');
+  ok((await srv.certifierParams(b64({ ...Pm, n: 50000 }))).codes.includes('HORS_BORNES') && (await srv.certifierParams('%%%')).etat === 'REFUSE' && (await srv.certifierParams(Buffer.from('x'.repeat(5000)).toString('base64url'))).etat === 'REFUSE', '/api/tam/certifier : hors bornes, illisible, trop long -> REFUSE');
+  /* (f) l onglet est cable sur CES fonctions (presence ; le comportement est prouve ci-dessus) */
+  ok(/V\.peutMinter\(\{ dep: TAMART_DEPLOIEMENT, local: S\.c, serveur, octets: oct, P: S\.P, compte: c \}\)/.test(onglet) && /if \(!porte\.ok\) \{ dit\.textContent = 'Not ready: '/.test(onglet), 'preparerMint passe par V.peutMinter avant toute lecture du contrat');
+  ok(/const vb = S\.P\.regle \? M\.validerReglage\(S\.P\)/.test(onglet) && /S\.c && S\.c\.ok\);/.test(onglet), 'une oeuvre reglee : bornes puis certificats ; pas de zone Mint sans certificat local');
+  ok(/V\.oeuvreReglee\(/.test(onglet) && /M\.coupDePouce\(S\.P, S\.cerveauEtat\)/.test(onglet) && /data-chemin/.test(onglet), 'curseurs -> V.oeuvreReglee ; bouton du cerveau -> M.coupDePouce');
+  ok(/'\/api\/tam\/choix' \+ \(c \? '\?minter=' \+ c : ''\)/.test(onglet) && /q\.get\('minter'\)/.test(serveur) && /chemin === '\/api\/tam\/certifier'/.test(serveur), 'le wallet est transmis au choix ; la route /api/tam/certifier existe');
+  const textes = [...(onglet + readFileSync(new URL('./tam-vue.js', import.meta.url), 'utf8')).matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).join('\n');
+  ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');
+}
+
 console.log('test-tam-onglet-20261031 : ' + n + ' assertions OK');
+
+/* ── MUTANTS sur COPIES (2026-11-01) : chaque defaut nomme par le lead doit faire ROUGIR ce banc. Copie de la racine dans D:\tmp\tam-mut,
+ *   mutation dans la COPIE, ce banc relance sur la copie (TAM_MUTANT=1 : pas de recursion). Jamais le depot. ── */
+if (!process.env.TAM_MUTANT) {
+  const { cpSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync: ecrire } = await import('node:fs');
+  const { spawnSync } = await import('node:child_process');
+  const { join } = await import('node:path');
+  const ICI = new URL('.', import.meta.url), racine = decodeURIComponent(ICI.pathname.replace(/^\/([A-Za-z]:)/, '$1'));
+  const MUTANTS = [
+    ['reglage qui contourne les certificats (portail local)', 'tam-vue.js', "  if (!local || !local.ok) return { ok: false, pourquoi: verdictReglage(local).texte };\n", ''],
+    ['reglage qui contourne les bornes (certifierReglage)', 'tam-moteur.js', "  if (!v.ok) return { ok: false, etat: 'REFUSE', codes: ['HORS_BORNES'], raisons: [v.raison], oeuvre: null };\n", ''],
+    ['portail qui croit le serveur sans comparer les octets', 'tam-vue.js', "serveur.hash !== keccak256Hex(octets)", 'false'],
+    ['coup de pouce du cerveau NON deterministe', 'tam-moteur.js', 'const r = R[idx], depl = ((h[o + 2] / 255) * 2 - 1)', 'const r = R[idx], depl = ((Math.random()) * 2 - 1)'],
+    ['rejeu d une oeuvre reglee qui differe (octets du curseur non arrondi)', 'tam-vue.js', '  const o = generer(Q);\n', "  const o = generer(chemin.startsWith('params.') ? { ...Q, params: { ...Q.params, [chemin.slice(7)]: Number(valeur) } } : Q);\n"],
+    ['curseur qui ecrit le mauvais angle', 'tam-moteur.js', "else if (tete === 'angles') Q.angles[Number(sous)] = v;", "else if (tete === 'angles') Q.angles[Math.min(Q.angles.length - 1, Number(sous) + 1)] = v;"],
+    ['curseur qui ecrit le mauvais parametre', 'tam-moteur.js', 'Q.params[sous] = v;', 'Q.params[Object.keys(Q.params).sort()[0]] = v;'],
+    ['signature non lue ecartee en silence (serveur)', 'tam-serveur.js', 'const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);\n    const cle = graine', 'const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId)).filter(Boolean);\n    const cle = graine'],
+    ['minteur non transmis au moteur (serveur)', 'tam-serveur.js', 'existantes, minteur });', 'existantes, minteur: null });'],
+  ];
+  const base = 'D:\\tmp\\tam-mut';
+  let tues = 0;
+  console.log('MUTANTS (copies dans ' + base + ') :');
+  for (const [i, [nom, fichier, de, vers]] of MUTANTS.entries()) {
+    const dir = join(base, 'm' + (i + 1));
+    rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
+    for (const f of readdirSync(racine)) {
+      if (!/\.(js|mjs|html|json)$/.test(f) || (f.startsWith('test-') && f !== 'test-tam-onglet-20261031.mjs')) continue;
+      if (statSync(join(racine, f)).isFile()) cpSync(join(racine, f), join(dir, f));
+    }
+    const src = readFileSync(join(dir, fichier), 'utf8').replace(/\r\n/g, '\n'), nb = src.split(de).length - 1;
+    if (nb !== 1) { console.log('  M' + (i + 1) + ' ' + nom + ' : NON APPLIQUE (motif ' + nb + ' fois) -> SURVIVANT'); continue; }
+    ecrire(join(dir, fichier), src.replace(de, vers));
+    const r = spawnSync(process.execPath, [join(dir, 'test-tam-onglet-20261031.mjs')], { env: { ...process.env, TAM_MUTANT: '1' }, encoding: 'utf8', timeout: 300000 });
+    const tue = r.status !== 0, msg = ((r.stderr || '').match(/AssertionError[^\n]*\n?[^\n]*|Error: [^\n]*/) || [''])[0].replace(/\s+/g, ' ').slice(0, 150);
+    if (tue) tues++;
+    console.log('  M' + (i + 1) + ' ' + nom + ' : ' + (tue ? 'TUE' : 'SURVIT') + (msg ? ' (' + msg + ')' : ''));
+    rmSync(dir, { recursive: true, force: true });
+  }
+  console.log('MUTANTS : ' + tues + '/' + MUTANTS.length + ' tues');
+  if (tues !== MUTANTS.length) process.exit(1);
+}

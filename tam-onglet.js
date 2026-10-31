@@ -2,8 +2,9 @@
  *   La logique prouvee vit dans tam-vue.js (projection, couches, verdict du rejeu, carte, regle du Mint) et tam-plan.js (le plan du mint).
  *   ⛔ Rien n est signe ici : le mint passe par le « Pay with » de l app (ctx.preparer / ctx.envoyer), que le WALLET signe.
  *   ⛔ Sans adresse TamArt (tamart-deploiement.js), AUCUN bouton Mint : une phrase dans « How it works », pas un controle inerte. */
-import { generer, certifier, rejouer, decoder } from './tam-moteur.js';
+import { generer, certifier, rejouer, decoder, canon } from './tam-moteur.js';
 import { PORTEUSES } from './tam-moteur.js';
+import * as M from './tam-moteur.js';
 import * as V from './tam-vue.js';
 import { adresseTam, PRIX_TAM, SIG_TAM, appelLecture, decoderBytes, decoderMot, decoderAdresse, octetsDe } from './tam-plan.js';
 import { TAMART_DEPLOIEMENT } from './tamart-deploiement.js';
@@ -41,6 +42,7 @@ const CSS = `
 #v-tam .tamBadge{font-weight:600}#v-tam .tamBadge.ok{color:#7ee2a8}#v-tam .tamBadge.ko{color:#ff8a8a}
 #v-tam .tamSigne{border:1px dashed var(--tam-acc);border-radius:10px;padding:10px;margin:8px 0;font-size:.88rem;overflow-wrap:anywhere}
 #v-tam details summary{min-height:44px;display:flex;align-items:center;cursor:pointer}
+#v-tam .tamReglage{margin:2px 0}#v-tam .tamReglage output{font-variant-numeric:tabular-nums;font-size:.86rem}
 #v-tam *{box-sizing:border-box}#v-tam{overflow-x:hidden}
 `;
 
@@ -88,6 +90,17 @@ export function monter(racine, ctx = {}) {
   const grille = el('div', { class: 'tamGrille', id: 'tamGrille' });
   const eclate = el('details', {}, el('summary', { text: 'Exploded view: every pair of layers' }), grille);
 
+  /* ── 2026-11-01 : les VARIABLES (Phil 31/10) — familles, operateur, dimension (jusqu a 12), chaque parametre ; le cerveau peut les bouger.
+   *   Un espace vaste, pas infini : chaque curseur est borne (tam-moteur.js#BORNES) et chaque reglage passe les MEMES certificats. */
+  const OPS_EN = { seul: 'alone', somme: 'blended with a pattern', composition: 'driving a pattern', couplage: 'coupled copies' };
+  const MOTIFS_UI = [['ifs:fougere', 'fern (IFS)'], ['ifs:sierpinski', 'Sierpinski (IFS)'], ['ifs:dragon', 'dragon (IFS)'], ['julia', 'Julia set'], ['phyllotaxie', 'golden-angle phyllotaxis'],
+    ['epicycles', 'epicycles'], ['lsysteme:koch', 'Koch (L-system)'], ['lsysteme:dragon', 'dragon (L-system)'], ['lsysteme:plante', 'plant (L-system)']];
+  const selOp = el('select', { 'aria-label': 'Operator', id: 'tamOperateur' }, ...M.OPERATEURS.map((o) => el('option', { value: o, text: OPS_EN[o] })));
+  const selMotif = el('select', { 'aria-label': 'Pattern', id: 'tamMotif' }, ...MOTIFS_UI.map(([v, t]) => el('option', { value: v, text: t })));
+  const curseurs = el('div', { id: 'tamCurseurs' });
+  const bPouce = el('button', { type: 'button', id: 'tamPouce', text: 'Let the brain nudge it' });
+  const verdictTxt = el('p', { class: 'tamDoux', id: 'tamVerdict', 'aria-live': 'polite' });
+
   const dl = el('dl', { id: 'tamCarteOeuvre' });
   const zMint = el('div', { id: 'tamMint', hidden: true });
   const gal = el('div', { class: 'tamGal', id: 'tamGalerie' });
@@ -106,6 +119,10 @@ export function monter(racine, ctx = {}) {
       el('h3', { text: 'Layers' }),
       el('p', { class: 'tamDoux', text: 'One colour per dimension. Turn layers on and off, isolate one, or grow the shape from 3-D to all of its dimensions.' }),
       curseur, curseurTxt, puces, el('div', { class: 'tamRang' }, bToutes, bIsoler), cvSeries, eclate),
+    el('div', { class: 'tamCarte' },
+      el('h3', { text: 'Variables' }),
+      el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
+      el('div', { class: 'tamRang' }, selOp, selMotif, bPouce), curseurs, verdictTxt),
     el('div', { class: 'tamCarte' }, el('h3', { text: 'This work' }), dl, zMint),
     el('div', { class: 'tamCarte' }, el('h3', { text: 'Minted works' }), galEtat, gal,
       el('details', {}, el('summary', { text: 'How it works' }), el('p', { class: 'tamDoux', text: 'Each work is stored on Base byte for byte, with its seed and parameters. Anyone can replay the parameters in this page and compare the result with the stored bytes. Minting costs 5 USDC, paid to the TokenizedBlock fee wallet; it opens when the TamArt contract is deployed.' }))));
@@ -114,41 +131,114 @@ export function monter(racine, ctx = {}) {
   function charger(P, choix = null, octetsServeur = null) {
     let o;
     try { o = generer(P); } catch (e) { etatLigne.textContent = 'This combination could not be computed.'; return; }
-    if (!o.bornee) { etatLigne.textContent = 'This combination escapes to infinity: nothing to draw.'; return; }
+    if (!o.bornee) {
+      /* un reglage qui diverge : la scene se vide, le verdict le dit, rien n est mintable (pas un vieux dessin sous un nouveau curseur) */
+      S.P = o.params; S.o = null; S.ser = null; S.octets = null; S.choix = choix; S.c = { ok: false, codes: ['DIVERGE'], raisons: ['diverge'] };
+      etatLigne.textContent = 'This combination escapes to infinity: nothing to draw.';
+      verdictTxt.textContent = V.verdictReglage(S.c).texte; peindreReglages(); peindreMint(); S.sale = true; return;
+    }
     S.P = o.params; S.o = o; S.D = o.D; S.n = o.n; S.choix = choix;
-    S.c = certifier(o, []);
+    /* une oeuvre REGLEE : les bornes d abord (validerReglage), puis les MEMES certificats que le choix du cerveau */
+    const vb = S.P.regle ? M.validerReglage(S.P) : { ok: true };
+    S.c = vb.ok ? certifier(o, []) : { ok: false, bornee: true, codes: ['HORS_BORNES'], raisons: [vb.raison], lyapunov: o.lyapunov };
+    verdictTxt.textContent = V.verdictReglage(S.c).texte;
     S.z = V.standardiser(o.brut, o.n, o.D); S.ser = V.series(S.z, o.n, o.D);
     S.couches = V.etatCouches(S.D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
     S.octets = octetsServeur; S.stocke = (() => { try { const d = decoder(octetsDe(octetsServeur) || rejouer(P).octets); return d.positions; } catch (_) { return null; } })();
     curseur.min = String(Math.min(S.D, 2)); curseur.max = String(S.D); curseur.value = String(S.D);
-    peindrePuces(); peindreCarte(); peindreGrille(); peindreMint();
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint();
     etatLigne.textContent = V.combinaison(S.P) + '.';
     racine.dataset.dims = String(S.D);
     S.sale = true;
   }
   function optionsDims() {
     const f = selFam.value, o = [];
-    if (f === 'lorenz96') o.push(['6', '6-D'], ['8', '8-D'], ['12', '12-D']);
+    if (f === 'lorenz96') for (let d = M.BORNES.dim96[0]; d <= M.BORNES.dim96[1]; d++) o.push([String(d), d + '-D']);
     else if (f === 'clifford' || f === 'dejong') o.push(['1', '2-D map']);
     else o.push(['1', '3-D'], ['2', '6-D (2 coupled)'], ['3', '9-D (3 coupled)'], ['4', '12-D (4 coupled)']);
     selDim.replaceChildren(...o.map(([v, t]) => el('option', { value: v, text: t })));
   }
-  function depuisExplorateur() {
-    const f = selFam.value, d = Number(selDim.value);
-    charger(V.paramsExplorateur({ famille: f, copies: f === 'lorenz96' ? 1 : d, dim96: d }));
+  const compte = () => { const c = ctx.compte && ctx.compte(); return c && /^0x[0-9a-fA-F]{40}$/.test(String(c)) ? String(c).toLowerCase() : null; };
+  const motifChoisi = () => { const [famille, variante] = selMotif.value.split(':'); return { famille, variante }; };
+  /* la STRUCTURE (famille, operateur, dimension, motif) : des params complets, reglables ; le dimension 1/2/3/4 copies = 3..12-D */
+  function depuisExplorateur(source = '') {
+    const f = selFam.value, d = Number(selDim.value) || 1, coupl = M.PORTEUSES_3D.includes(f);
+    let op = selOp.value;
+    if (source === 'dims' && coupl) op = d > 1 ? 'couplage' : op === 'couplage' ? 'seul' : op;
+    if (op === 'couplage' && !coupl) op = 'seul';
+    if (op === 'couplage' && d < 2) selDim.value = '2';
+    if (op !== 'couplage' && coupl && d > 1) selDim.value = '1';
+    selOp.value = op;
+    let P;
+    try { P = M.structurer({ famille: f, operateur: op, copies: Number(selDim.value), dim96: Number(selDim.value), motif: motifChoisi(), base: S.P }); }
+    catch (e) { verdictTxt.textContent = 'This combination is not offered: ' + String(e.message || e) + '.'; return; }
+    regler(P);
+  }
+  /* toute oeuvre REGLEE passe par ici : tiree pour CE wallet (minteur), ses octets (rejoues des params), puis charger + verdict */
+  function regler(P, octets = null) {
+    const Q = { ...P }; const c = compte(); if (c) Q.minteur = c; else delete Q.minteur;
+    let oct = octets;
+    if (!oct || (Q.minteur || null) !== (P.minteur || null)) { const r = rejouer(Q); oct = r.ok ? r.octets : null; }
+    charger(Q, null, oct ? hexDe(oct) : null);
   }
   selFam.addEventListener('change', () => { optionsDims(); depuisExplorateur(); });
-  selDim.addEventListener('change', depuisExplorateur);
+  selDim.addEventListener('change', () => depuisExplorateur('dims'));
+  selOp.addEventListener('change', () => depuisExplorateur('op'));
+  selMotif.addEventListener('change', () => depuisExplorateur('motif'));
+  /* les curseurs : un par variable de reglagesDe ; rebatis seulement si la LISTE change (un glissement en cours n est pas casse) */
+  let cheminsPeints = '';
+  function peindreReglages() {
+    selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
+    if (S.P.motif) { const v = S.P.motif.famille + (S.P.motif.variante ? ':' + S.P.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
+    const R = M.reglagesDe(S.P), cles = R.map((r) => r.chemin).join('|');
+    if (cles !== cheminsPeints) {
+      cheminsPeints = cles;
+      curseurs.replaceChildren(...R.map((r) => {
+        const id = 'tamR-' + r.chemin.replace('.', '-');
+        return el('div', { class: 'tamReglage' },
+          el('label', { for: id, class: 'tamDoux', text: r.nom + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: r.valeur.toFixed(3) }),
+          el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: String((r.max - r.min) / 400), value: String(r.valeur), 'aria-label': r.nom }));
+      }));
+    } else for (const r of R) {
+      const i = curseurs.querySelector('input[data-chemin="' + r.chemin + '"]'), s = curseurs.querySelector('output[data-sortie="' + r.chemin + '"]');
+      if (i && document.activeElement !== i) i.value = String(r.valeur);
+      if (s) s.textContent = r.valeur.toFixed(3);
+    }
+    racine.dataset.reglages = String(R.length);
+  }
+  let minuteur = null;
+  curseurs.addEventListener('input', (e) => {
+    const inp = e.target.closest('input[data-chemin]'); if (!inp || !S.P) return;
+    const s = curseurs.querySelector('output[data-sortie="' + inp.dataset.chemin + '"]'); if (s) s.textContent = Number(inp.value).toFixed(3);
+    clearTimeout(minuteur);
+    minuteur = setTimeout(() => {
+      /* V.oeuvreReglee : SEUL ce chemin change, arrondi AVANT la generation — les octets sont ceux que le rejeu recalcule */
+      const r = V.oeuvreReglee({ ...S.P, ...(compte() ? { minteur: compte() } : {}) }, inp.dataset.chemin, Number(inp.value));
+      const { reglage: _r, ...sans } = r.params;
+      regler(sans, r.octets);
+    }, 90);
+  });
+  bPouce.addEventListener('click', () => {
+    if (!S.P) return;
+    if (!S.cerveauEtat) { verdictTxt.textContent = 'Ask the brain first (Let the brain choose): its state is what moves the variables.'; return; }
+    const r = M.coupDePouce(S.P, S.cerveauEtat);
+    regler(r.params);
+    verdictTxt.textContent = V.phraseMouvements(r.mouvements) + ' ' + verdictTxt.textContent;
+  });
   bCerveau.addEventListener('click', async () => {
     etatLigne.textContent = 'The brain is choosing from the latest block…';
     let j = null;
-    try { j = await fetch('/api/tam/choix', { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+    /* 2026-11-01 : le wallet connecte entre dans la graine — deux joueurs sur le meme bloc ne recoivent jamais la meme oeuvre */
+    const c = compte();
+    try { j = await fetch('/api/tam/choix' + (c ? '?minter=' + c : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
     if (!j || j.ok !== true) { etatLigne.textContent = 'The brain\'s choice could not be read' + (j && j.pourquoi ? ': ' + j.pourquoi : '') + '.'; return; }
     S.nMintees = Number(j.comparees) || 0;
+    /* l etat du cerveau qui a choisi : c est LUI qui bouge les variables (coupDePouce), de facon deterministe */
+    S.cerveauEtat = { cerveau: j.cerveau, empreinteEtat: j.empreinteEtat, graine: j.graine };
     /* les selecteurs disent la porteuse choisie (pas l ancienne selection) */
     selFam.value = j.params.famille; optionsDims();
     selDim.value = j.params.famille === 'lorenz96' ? String(j.params.dim) : j.params.operateur === 'couplage' ? String(j.params.k) : '1';
-    charger(j.params, { graine: j.graine, bloc: j.bloc, cerveau: j.cerveau, empreinteEtat: j.empreinteEtat, essai: j.params.essai, rejets: j.rejets, certificats: j.certificats }, j.octets);
+    charger(j.params, { graine: j.graine, bloc: j.bloc, cerveau: j.cerveau, empreinteEtat: j.empreinteEtat, essai: j.params.essai, rejets: j.rejets, certificats: j.certificats, hash: j.hash }, j.octets);
   });
 
   /* ── couches ── */
@@ -327,7 +417,8 @@ export function monter(racine, ctx = {}) {
 
   /* ── le Mint (seulement adresse connue ; seulement une oeuvre choisie par le cerveau) ── */
   function peindreMint() {
-    const visible = V.mintVisible(TAMART_DEPLOIEMENT) && !!(S.choix && S.octets);
+    /* 2026-11-01 : le choix du cerveau OU une oeuvre reglee, et seulement si les certificats LOCAUX passent ; le serveur re-certifie au clic */
+    const visible = V.mintVisible(TAMART_DEPLOIEMENT) && !!((S.choix || (S.P && S.P.regle)) && S.octets && S.c && S.c.ok);
     zMint.hidden = !visible; racine.dataset.mint = visible ? 'on' : 'off';
     if (!visible) { zMint.replaceChildren(); return; }
     const selPay = el('select', { 'aria-label': 'Pay with', id: 'tamPayer' }, el('option', { value: 'usdc', text: 'USDC' }));
@@ -358,11 +449,24 @@ export function monter(racine, ctx = {}) {
     if (!c) { dit.textContent = 'Connect a wallet to mint.'; return; }
     const contrat = adresseTam(TAMART_DEPLOIEMENT);
     /* ⛔ on ne signe que des octets REJOUES ici : le serveur a choisi, la page recalcule */
-    const r = rejouer(S.P), oct = octetsDe(S.octets);
-    if (!r.ok || !V.verdictRejeu(r.octets, oct).identique) { dit.textContent = 'This page could not replay the brain\'s work to the same bytes, so nothing is offered to sign.'; return; }
-    let lu; try { lu = await lireContrat(contrat); } catch (_) { dit.textContent = 'The TamArt contract could not be read.'; return; }
+    const r = rejouer(JSON.parse(JSON.stringify(S.P))), oct = octetsDe(S.octets);
+    if (!r.ok || !V.verdictRejeu(r.octets, oct).identique) { dit.textContent = 'This page could not replay this work to the same bytes, so nothing is offered to sign.'; return; }
     const paramsJson = JSON.stringify(S.P);
-    const jeu = { genre: 'tam', contrat, deploiement: TAMART_DEPLOIEMENT, lu, octets: oct, graine: S.choix.graine, paramsJson };
+    /* ⛔ 2026-11-01 : LE portail (V.peutMinter) — certificats locaux, ceux du SERVEUR (distance a toutes les oeuvres mintees) sur les memes
+     *   octets, et une oeuvre tiree pour CE wallet. Une oeuvre reglee est re-certifiee par le serveur ; le choix du cerveau l a deja ete. */
+    let serveur = null;
+    if (S.P.regle) {
+      dit.textContent = 'Checking this setting against every minted work…';
+      const b = new TextEncoder().encode(paramsJson); let s = ''; for (const x of b) s += String.fromCharCode(x);
+      const p64 = btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      try { serveur = await fetch('/api/tam/certifier?p=' + p64, { cache: 'no-store' }).then((x) => x.json()); } catch (_) { serveur = null; }
+    } else if (S.choix && S.choix.hash) serveur = { ok: true, etat: 'CERTIFIE', hash: S.choix.hash };
+    const porte = V.peutMinter({ dep: TAMART_DEPLOIEMENT, local: S.c, serveur, octets: oct, P: S.P, compte: c });
+    if (!porte.ok) { dit.textContent = 'Not ready: ' + porte.pourquoi + '.'; return; }
+    let lu; try { lu = await lireContrat(contrat); } catch (_) { dit.textContent = 'The TamArt contract could not be read.'; return; }
+    /* la graine : celle du cerveau quand il y en a une ; sinon le keccak des params (dit tel quel dans les params stockes) */
+    const graine = S.P.graine || keccak256Hex(new TextEncoder().encode(canon(S.P)));
+    const jeu = { genre: 'tam', contrat, deploiement: TAMART_DEPLOIEMENT, lu, octets: oct, graine, paramsJson };
     const planUsdc = planJeuUsdc(jeu);
     if (planUsdc.etat !== 'PRET') { dit.textContent = planUsdc.pourquoi + '.'; return; }
     let pj;

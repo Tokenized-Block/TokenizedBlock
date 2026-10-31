@@ -27,6 +27,16 @@ export const LYAP_MIN = 0.02;       // exposant maximal minimum (par unite de te
 export const DIM_MIN = 1.1;         // dimension boite minimale (une courbe ~1.0)
 export const SEUIL_DISTINCT = 0.2;  // distance (variation totale, 0..1) minimale a toute oeuvre existante
 export const ESSAIS_MAX = 24;
+// 2026-11-01 (campagne de simulation, scratchpad tam-sim) : le certificat chaotique sur les 1500 points stockes etait FAUX sur ~7,5 %
+//   (lambda > 0.02 sur 1500 pas, ~0 sur 4500 : cycles limites lents). Lambda est donc AUSSI estime sur une trajectoire LONGUE,
+//   distincte de la stockee (elle la PROLONGE : memes x et e, apres le dernier point stocke), coupee en FENETRES disjointes ; chacune
+//   doit depasser LYAP_MIN. Les octets stockes ne changent pas.
+export const LYAP_ETAPES_LONG = 6000, LYAP_FENETRES = 2;
+// certificat de geometrie : sqrt(ev3/ev1) de la covariance des points projetes (quantifies) ; en dessous, une feuille ou une ligne vue
+//   de profil (4 « degenerees » sur 1000, dont i=158 rossler/couplage plat 0.020, i=906 aizawa/couplage 0.014).
+export const PLAT_MIN = 0.03;
+// couplage : des copies quasi synchronisees tracent une courbe epaissie (halvorsen/couplage dim 1.10..1.11, lambda long ~0) -> 1.2
+export const DIM_MIN_COUPLAGE = 1.2;
 const PI = 3.141592653589793, DEUX_PI = 6.283185307179586, PI_2 = 1.5707963267948966;
 const LN2 = 0.6931471805599453;
 const ANGLE_OR = 2.399963229728653; // pi*(3 - sqrt 5), angle d'or (phyllotaxie)
@@ -172,20 +182,183 @@ function dimension(P) {
   return base * (P.operateur === 'couplage' ? P.k : 1);
 }
 
-export function choisirOeuvre({ graine, etatCerveau = null, existantes = [] } = {}) {
+/** une signature de distinction lisible : 512 cases finies, >= 0 */
+export const signatureLisible = (s) => !!s && typeof s.length === 'number' && s.length === 512 && Array.prototype.every.call(s, (x) => typeof x === 'number' && x >= 0 && x <= 1);
+const ADR_MINTEUR = /^0x[0-9a-fA-F]{40}$/;
+
+// 2026-11-01 : `minteur` (adresse du wallet qui mintera) entre dans la graine : deux joueurs sur le MEME bloc ne recoivent jamais la meme
+//   oeuvre. base = keccak256(graine || keccak(canon(etat)) || minteur 20 octets) ; sans minteur : l ancienne formule (exploration, banc).
+//   Le minteur est ecrit dans params (P.minteur) : rejouer() n en a pas besoin (tout est dans params), mais il dit pour QUI l oeuvre fut tiree.
+export function choisirOeuvre({ graine, etatCerveau = null, existantes = [], minteur = null } = {}) {
   const g = graine instanceof Uint8Array ? graine : hexEnOctets(graine);
+  if (minteur !== null && minteur !== undefined && !ADR_MINTEUR.test(String(minteur))) throw new Error('minteur invalide (0x + 40 hex)');
+  const mt = minteur ? String(minteur).toLowerCase() : null;
+  /* ⛔ une signature existante illisible : on ne choisit PAS (la distance n est pas mesurable) — jamais ecartee en silence */
+  const nonLues = existantes.filter((e) => !signatureLisible(e && (e.signature || e))).length;
+  if (nonLues > 0) return { ok: false, etat: 'NON_LU', pourquoi: nonLues + ' existing work signature(s) could not be read', rejets: [] };
   const he = keccak256(new TextEncoder().encode(canon(etatCerveau)));
-  const base = keccak256(concat(g, he));
+  const base = keccak256(mt ? concat(concat(g, he), hexEnOctets(mt)) : concat(g, he));
   const rejets = [];
   for (let essai = 0; essai < ESSAIS_MAX; essai++) {
     const fl = new Flux(keccak256(concat(base, u32be(essai))));
     const P = tirerParams(fl);
     P.graine = enHex(g); P.empreinteEtat = enHex(he); P.essai = essai;
+    if (mt) P.minteur = mt;
     const o = generer(P); const c = certifier(o, existantes);
     if (c.ok) { const octets = encoderOeuvre(o); return { ok: true, params: o.params, oeuvre: o, certificats: c, octets, hash: keccak256Hex(octets), rejets }; }
-    rejets.push({ essai, famille: P.famille, operateur: P.operateur, raisons: c.raisons });
+    rejets.push({ essai, famille: P.famille, operateur: P.operateur, raisons: c.raisons, codes: c.codes });
   }
-  return { ok: false, rejets };
+  return { ok: false, etat: 'AUCUNE', rejets };
+}
+
+// ---------- reglages (2026-11-01, Phil 31/10 : « l utilisateur peut CHANGER LES VARIABLES ») ----------
+// Un espace VASTE (jamais « infini ») : familles x operateurs x dimension (jusqu a 12) x chaque parametre, dans des BORNES fixees ici.
+// Une oeuvre reglee passe les MEMES certificats (certifierReglage) et se rejoue aux memes octets : tout ce qui la fait est dans params.
+// Le CERVEAU peut aussi bouger des variables (coupDePouce) : deterministe, keccak de son etat et des params, dit « the brain moved X ».
+const ARRONDI = 1e6, arrondir = (v) => Math.round(v * ARRONDI) / ARRONDI;
+export const BORNES = Object.freeze({ eps: [0.02, 0.8], w: [0.1, 0.6], k: [2, 4], dim96: [4, 12], angle: [0, DEUX_PI], facteur: [0.5, 1.5] });
+const MOTIF_DEFAUT = {
+  ifs: (v = 'fougere') => ({ famille: 'ifs', variante: v, cartes: IFS[v].map((c) => c.slice()), s: 1 }),
+  julia: () => ({ famille: 'julia', c: JULIA_C[0].slice(), s: 1 }),
+  phyllotaxie: () => ({ famille: 'phyllotaxie', torsion: 0.5 }),
+  epicycles: () => ({ famille: 'epicycles', termes: [[1, 1, 0], [0.5, -3, 1], [1 / 3, 5, 2]], verticaux: [[0.5, 2], [0.25, 3]] }),
+  lsysteme: (v = 'plante') => ({ famille: 'lsysteme', variante: v, dAngle: 0 }),
+};
+/** le motif par defaut d une famille de motif (pour un reglage qui passe a somme/composition) */
+export const motifDefaut = (famille, variante) => (MOTIF_DEFAUT[famille] ? MOTIF_DEFAUT[famille](variante) : null);
+export function bornesParam(famille, cle) {
+  const fam = ODE[famille] || MAPS[famille], v = fam && fam.p[cle];
+  if (typeof v !== 'number') return null;
+  const a = v * BORNES.facteur[0], b = v * BORNES.facteur[1];
+  return [Math.min(a, b), Math.max(a, b)];
+}
+/** les curseurs d une oeuvre : { chemin, nom, min, max, valeur } — chemin = 'params.<cle>' | 'eps' | 'w' | 'angles.<i>' */
+export function reglagesDe(P) {
+  const fam = ODE[P.famille] || MAPS[P.famille]; if (!fam) return [];
+  const L = [];
+  for (const c of Object.keys(fam.p).sort()) { const [min, max] = bornesParam(P.famille, c); L.push({ chemin: 'params.' + c, nom: c, min, max, valeur: (P.params && P.params[c]) ?? fam.p[c] }); }
+  if (P.operateur === 'couplage') L.push({ chemin: 'eps', nom: 'coupling', min: BORNES.eps[0], max: BORNES.eps[1], valeur: P.eps ?? 0.2 });
+  if (P.operateur === 'somme' || P.operateur === 'composition') L.push({ chemin: 'w', nom: 'blend weight', min: BORNES.w[0], max: BORNES.w[1], valeur: P.w ?? 0.25 });
+  (P.angles || []).forEach((a, i) => L.push({ chemin: 'angles.' + i, nom: 'hidden plane ' + (i + 1), min: BORNES.angle[0], max: BORNES.angle[1], valeur: a }));
+  return L;
+}
+const clone = (P) => JSON.parse(JSON.stringify(P));
+/** ecrit UNE variable (chemin) dans une COPIE des params, arrondie a 1e-6, bornee ; ne touche rien d autre que ce chemin et `regle` */
+export function appliquerReglage(P, chemin, valeur) {
+  const Q = clone(P), r = reglagesDe(Q).find((x) => x.chemin === chemin);
+  if (!r) throw new Error('reglage inconnu: ' + chemin);
+  const v = arrondir(Math.min(r.max, Math.max(r.min, Number(valeur))));
+  if (!Number.isFinite(v)) throw new Error('valeur non finie');
+  const [tete, sous] = chemin.split('.');
+  if (tete === 'params') { Q.params = { ...(Q.params || {}) }; Q.params[sous] = v; }
+  else if (tete === 'angles') Q.angles[Number(sous)] = v;
+  else Q[tete] = v;
+  Q.regle = true;
+  return Q;
+}
+/** la STRUCTURE d une oeuvre reglee : famille, operateur, dimension (jusqu a 12), motif. Rend des params complets, angles a la bonne taille. */
+export function structurer({ famille, operateur = 'seul', copies = 1, dim96 = 6, motif = null, base = null } = {}) {
+  if (!PORTEUSES.includes(famille)) throw new Error('famille inconnue: ' + famille);
+  if (!OPERATEURS.includes(operateur)) throw new Error('operateur inconnu: ' + JSON.stringify({ op: operateur }));
+  if (operateur === 'couplage' && !PORTEUSES_3D.includes(famille)) throw new Error('couplage : une porteuse 3-D seulement');
+  const fam = ODE[famille] || MAPS[famille], b = base && base.famille === famille ? base : null;
+  const P = { v: VERSION, operateur, famille, params: {} };
+  for (const c of Object.keys(fam.p).sort()) P.params[c] = b && b.params && typeof b.params[c] === 'number' ? b.params[c] : fam.p[c];
+  if (famille === 'lorenz96') P.dim = Math.min(BORNES.dim96[1], Math.max(BORNES.dim96[0], Math.round(Number(dim96) || 6)));
+  if (operateur === 'couplage') { P.k = Math.min(BORNES.k[1], Math.max(BORNES.k[0], Math.round(Number(copies) || 2))); P.eps = base && typeof base.eps === 'number' ? base.eps : 0.2; }
+  if (operateur === 'somme' || operateur === 'composition') {
+    const complet = motif && Object.keys(motif).some((k) => k !== 'famille' && k !== 'variante');
+    P.motif = motif && MOTIF_DEFAUT[motif.famille] ? (complet ? clone(motif) : motifDefaut(motif.famille, motif.variante)) : motifDefaut('phyllotaxie');
+    P.w = base && typeof base.w === 'number' ? base.w : 0.25;
+  }
+  const D = dimension(P), anc = (base && base.angles) || [];
+  P.angles = []; for (let i = 0; i < D - 3; i++) P.angles.push(typeof anc[i] === 'number' ? anc[i] : arrondir((i + 1) * ANGLE_OR % DEUX_PI));
+  for (const k of ['graine', 'empreinteEtat', 'minteur']) if (base && base[k]) P[k] = base[k];
+  P.regle = true;
+  return P;
+}
+const CLES_PARAMS = new Set(['v', 'operateur', 'famille', 'dim', 'k', 'eps', 'params', 'angles', 'motif', 'w', 'graine', 'empreinteEtat', 'essai', 'minteur', 'regle', 'reglage',
+  'n', 'q', 'dt', 'pas', 'transitoire', 'ordre']);
+const H32 = /^0x[0-9a-f]{64}$/, entier = (x, a, b) => Number.isInteger(x) && x >= a && x <= b, dans = (x, a, b) => typeof x === 'number' && Number.isFinite(x) && x >= a && x <= b;
+const proche = (x, ref, tol) => typeof x === 'number' && Math.abs(x - ref) <= Math.abs(ref) * tol + 1e-12;
+function motifValide(m) {
+  if (!m || typeof m !== 'object' || !MOTIF_DEFAUT[m.famille]) return 'motif inconnu';
+  if (m.famille === 'ifs') {
+    const ref = IFS[m.variante]; if (!ref || !Array.isArray(m.cartes) || m.cartes.length !== ref.length) return 'IFS invalide';
+    for (let i = 0; i < ref.length; i++) for (let j = 0; j < 7; j++) if (!(j < 6 ? proche(m.cartes[i][j], ref[i][j], 0.021) : m.cartes[i][j] === ref[i][j])) return 'IFS hors bornes';
+    return entier(m.s, 0, 4294967295) ? null : 'IFS : graine invalide';
+  }
+  if (m.famille === 'julia') return Array.isArray(m.c) && m.c.length === 2 && JULIA_C.some((c) => proche(m.c[0], c[0], 0.011) && proche(m.c[1], c[1], 0.011)) && entier(m.s, 0, 4294967295) ? null : 'Julia hors bornes';
+  if (m.famille === 'phyllotaxie') return dans(m.torsion, 0, PI) ? null : 'phyllotaxie hors bornes';
+  if (m.famille === 'epicycles') {
+    if (!Array.isArray(m.termes) || m.termes.length < 3 || m.termes.length > 6 || !Array.isArray(m.verticaux) || m.verticaux.length !== 2) return 'epicycles invalides';
+    if (!m.termes.every((t, k) => Array.isArray(t) && t.length === 3 && t[0] === 1 / (k + 1) && entier(t[1], -7, 7) && t[1] !== 0 && dans(t[2], 0, DEUX_PI))) return 'epicycles hors bornes';
+    return m.verticaux.every((t, k) => Array.isArray(t) && t.length === 2 && t[0] === 0.5 / (k + 1) && entier(t[1], 1, 5)) ? null : 'epicycles hors bornes';
+  }
+  return LSYS[m.variante] && dans(m.dAngle, -0.02, 0.02) ? null : 'L-systeme hors bornes';
+}
+/** les params tiennent-ils dans les BORNES ? (un curseur ne peut pas sortir de l espace certifiable ; n, q, dt, pas = ceux du moteur) */
+export function validerReglage(P) {
+  const non = (raison) => ({ ok: false, code: 'HORS_BORNES', raison });
+  if (!P || typeof P !== 'object' || Array.isArray(P)) return non('params absents');
+  for (const k of Object.keys(P)) if (!CLES_PARAMS.has(k)) return non('cle inconnue: ' + k);
+  if (P.v !== VERSION) return non('version');
+  if (!PORTEUSES.includes(P.famille)) return non('famille');
+  if (!OPERATEURS.includes(P.operateur)) return non('operateur');
+  const fam = ODE[P.famille] || MAPS[P.famille];
+  if (P.operateur === 'couplage') { if (!PORTEUSES_3D.includes(P.famille) || !entier(P.k, BORNES.k[0], BORNES.k[1]) || !dans(P.eps, BORNES.eps[0], BORNES.eps[1])) return non('couplage hors bornes'); }
+  else if (P.k !== undefined || P.eps !== undefined) return non('k/eps sans couplage');
+  if (P.famille === 'lorenz96') { if (!entier(P.dim, BORNES.dim96[0], BORNES.dim96[1])) return non('dimension hors bornes'); } else if (P.dim !== undefined) return non('dim hors lorenz96');
+  if (!P.params || typeof P.params !== 'object') return non('parametres absents');
+  const cles = Object.keys(fam.p).sort();
+  if (Object.keys(P.params).sort().join() !== cles.join()) return non('parametres inattendus');
+  for (const c of cles) { const [a, b] = bornesParam(P.famille, c); if (!dans(P.params[c], a, b)) return non(c + ' hors bornes'); }
+  const D = dimension(P);
+  if (D > 12) return non('plus de 12 dimensions');
+  if (!Array.isArray(P.angles) || P.angles.length !== Math.max(0, D - 3) || !P.angles.every((x) => dans(x, BORNES.angle[0], BORNES.angle[1]))) return non('angles hors bornes');
+  if (P.operateur === 'somme' || P.operateur === 'composition') { const e = motifValide(P.motif); if (e) return non(e); if (!dans(P.w, BORNES.w[0], BORNES.w[1])) return non('poids hors bornes'); }
+  else if (P.motif !== undefined || P.w !== undefined) return non('motif sans somme/composition');
+  if (P.n !== undefined && P.n !== 1500) return non('n'); if (P.q !== undefined && P.q !== 12) return non('q');
+  if (ODE[P.famille]) { if ((P.dt !== undefined && P.dt !== fam.dt) || (P.pas !== undefined && P.pas !== fam.pas) || (P.transitoire !== undefined && P.transitoire !== 4000)) return non('pas d integration'); }
+  else if ((P.dt !== undefined || P.pas !== undefined) || (P.transitoire !== undefined && P.transitoire !== 300)) return non('pas d iteration');
+  const ordre = (MAPS[P.famille] || (P.operateur === 'composition' && (P.motif.famille === 'ifs' || P.motif.famille === 'julia'))) ? 1 : 0;
+  if (P.ordre !== undefined && P.ordre !== ordre) return non('ordre');
+  for (const k of ['graine', 'empreinteEtat']) if (P[k] !== undefined && !H32.test(P[k])) return non(k);
+  if (P.minteur !== undefined && !ADR_MINTEUR.test(P.minteur)) return non('minteur');
+  if (P.essai !== undefined && !entier(P.essai, 0, ESSAIS_MAX - 1)) return non('essai');
+  if (P.reglage !== undefined && JSON.stringify(P.reglage).length > 800) return non('reglage trop long');
+  return { ok: true, code: 'DANS_LES_BORNES', raison: null };
+}
+/** LE portail d une oeuvre reglee (joueur ou cerveau) : bornes, puis generer, puis les MEMES certificats que le choix du cerveau */
+export function certifierReglage(P, existantes = []) {
+  const v = validerReglage(P);
+  if (!v.ok) return { ok: false, etat: 'REFUSE', codes: ['HORS_BORNES'], raisons: [v.raison], oeuvre: null };
+  if (existantes.some((e) => !signatureLisible(e && (e.signature || e)))) return { ok: false, etat: 'NON_LU', codes: ['SIGNATURE_NON_LUE'], raisons: [RAISONS.SIGNATURE_NON_LUE], oeuvre: null };
+  const o = generer(P), c = certifier(o, existantes);
+  return c.ok ? { ...c, oeuvre: o, octets: encoderOeuvre(o) } : { ...c, oeuvre: o };
+}
+/**
+ * LE CERVEAU BOUGE DES VARIABLES. Deterministe : h = keccak256(utf8(canon(etat) + '|' + canon(params sans reglage))). 1 ou 2 curseurs
+ * choisis par h, chacun deplace de +-15 % de sa plage (h), borne, arrondi. Rend { params, mouvements: [{ chemin, nom, de, a }] } ;
+ * params.reglage = { par: 'cerveau', empreinteEtat, mouvements } — la carte le dit tel quel.
+ */
+export function coupDePouce(P, etatCerveau) {
+  const { reglage: _r, ...nu } = P;
+  const h = keccak256(new TextEncoder().encode(canon(etatCerveau) + '|' + canon(nu)));
+  const R = reglagesDe(P); if (!R.length) return { params: clone(P), mouvements: [] };
+  const nb = 1 + (h[0] % 2), pris = [], mouvements = [];
+  let Q = clone(nu);
+  for (let m = 0, o = 1; m < nb && o + 4 < 32; m++, o += 5) {
+    let idx = ((h[o] << 8) | h[o + 1]) % R.length;
+    while (pris.includes(idx)) idx = (idx + 1) % R.length;
+    pris.push(idx);
+    const r = R[idx], depl = ((h[o + 2] / 255) * 2 - 1) * 0.15 * (r.max - r.min);
+    const de = reglagesDe(Q).find((x) => x.chemin === r.chemin).valeur;
+    Q = appliquerReglage(Q, r.chemin, de + depl);
+    mouvements.push({ chemin: r.chemin, nom: r.nom, de: arrondir(de), a: reglagesDe(Q).find((x) => x.chemin === r.chemin).valeur });
+  }
+  Q.reglage = { par: 'cerveau', empreinteEtat: keccak256Hex(new TextEncoder().encode(canon(etatCerveau))), mouvements };
+  return { params: Q, mouvements };
 }
 
 // ---------- generation ----------
@@ -215,7 +388,24 @@ function genererPorteuse(P) {
       if (d > 0) { e[0] = s[0] + dx * D0 / d; e[1] = s[1] + dy * D0 / d; } else { e[0] = s[0] + D0; e[1] = s[1]; }
       brut[2 * i] = s[0]; brut[2 * i + 1] = s[1];
     }
-    return { D: 2, bornee: true, brut, lyapunov: somme / n, unite: 'par iteration' };
+    let long = null; // la trajectoire LONGUE : prolonge s et e apres le dernier point stocke ; calculee une fois, a la demande
+    const prolonger = () => {
+      if (long) return long;
+      const parF = Math.floor(LYAP_ETAPES_LONG / LYAP_FENETRES), sommes = [];
+      for (let w = 0; w < LYAP_FENETRES; w++) {
+        let sw = 0;
+        for (let i = 0; i < parF; i++) {
+          m.f(s, p); m.f(e, p);
+          if (horsBorne(s, 2, B)) return (long = { bornee: false, etapes: w * parF + i, fenetres: sommes });
+          const dx = e[0] - s[0], dy = e[1] - s[1], d = Math.sqrt(dx * dx + dy * dy);
+          sw += lnD(d / D0);
+          if (d > 0) { e[0] = s[0] + dx * D0 / d; e[1] = s[1] + dy * D0 / d; } else { e[0] = s[0] + D0; e[1] = s[1]; }
+        }
+        sommes.push(sw / parF);
+      }
+      return (long = { bornee: true, etapes: parF * LYAP_FENETRES, fenetres: sommes });
+    };
+    return { D: 2, bornee: true, brut, lyapunov: somme / n, unite: 'par iteration', prolonger };
   }
   const fam = ODE[P.famille], k = P.operateur === 'couplage' ? P.k : 1, D = dimension(P);
   const p = P.params, eps = P.eps || 0, dt = P.dt, B = fam.borne || 1e3;
@@ -242,7 +432,24 @@ function genererPorteuse(P) {
     for (let j = 0; j < D; j++) e[j] = d > 0 ? x[j] + (e[j] - x[j]) * D0 / d : x[j] + u;
     brut.set(x, i * D);
   }
-  return { D, bornee: true, brut, lyapunov: somme / (n * P.pas * dt), unite: 'par unite de temps' };
+  let long = null; // la trajectoire LONGUE (voir LYAP_ETAPES_LONG) : prolonge x et e, jamais stockee
+  const prolonger = () => {
+    if (long) return long;
+    const parF = Math.floor(LYAP_ETAPES_LONG / LYAP_FENETRES), sommes = [];
+    for (let w = 0; w < LYAP_FENETRES; w++) {
+      let sw = 0;
+      for (let i = 0; i < parF; i++) {
+        for (let s = 0; s < P.pas; s++) { rk4(x); rk4(e); }
+        if (horsBorne(x, D, B)) return (long = { bornee: false, etapes: w * parF + i, fenetres: sommes });
+        let d2 = 0; for (let j = 0; j < D; j++) { const v = e[j] - x[j]; d2 += v * v; }
+        const d = Math.sqrt(d2); sw += lnD(d / D0);
+        for (let j = 0; j < D; j++) e[j] = d > 0 ? x[j] + (e[j] - x[j]) * D0 / d : x[j] + u;
+      }
+      sommes.push(sw / (parF * P.pas * dt));
+    }
+    return (long = { bornee: true, etapes: parF * LYAP_FENETRES, fenetres: sommes });
+  };
+  return { D, bornee: true, brut, lyapunov: somme / (n * P.pas * dt), unite: 'par unite de temps', prolonger };
 }
 
 function normaliser(a) { // centre milieu, echelle commune -> [-1, 1], aspect conserve
@@ -369,7 +576,7 @@ export function generer(params) {
     idx.sort((a, b) => cle[a] - cle[b] || a - b);
     const t = new Int32Array(n * 3); idx.forEach((s, d) => { t[3 * d] = pts[3 * s]; t[3 * d + 1] = pts[3 * s + 1]; t[3 * d + 2] = pts[3 * s + 2]; }); pts = t;
   }
-  return { params: P, D: car.D, n, bornee: true, brut: car.brut, lyapunov: car.lyapunov, uniteLyapunov: car.unite, points: pts };
+  return { params: P, D: car.D, n, bornee: true, brut: car.brut, lyapunov: car.lyapunov, uniteLyapunov: car.unite, points: pts, prolonger: car.prolonger };
 }
 
 // ---------- certificats ----------
@@ -391,16 +598,75 @@ export function signature(points, q) { // histogramme 8x8x8 normalise
 }
 export function distance(a, b) { let t = 0; for (let i = 0; i < 512; i++) t += Math.abs(a[i] - b[i]); return t / 2; }
 
+// geometrie des points projetes : valeurs propres de la covariance 3x3 (Jacobi cyclique, racines carrees SEULEMENT -> bits identiques
+//   d un moteur JS a l autre ; ni atan2 ni sin/cos). Rend ev decroissantes, plat = sqrt(ev3/ev1), ligne = sqrt(ev2/ev1).
+export function geometrie(points) {
+  const n = points.length / 3, mu = [0, 0, 0];
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) mu[c] += points[3 * i + c];
+  for (let c = 0; c < 3; c++) mu[c] /= n;
+  const A = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+  for (let i = 0; i < n; i++) {
+    const v0 = points[3 * i] - mu[0], v1 = points[3 * i + 1] - mu[1], v2 = points[3 * i + 2] - mu[2], v = [v0, v1, v2];
+    for (let a = 0; a < 3; a++) for (let b = a; b < 3; b++) A[a][b] += v[a] * v[b];
+  }
+  for (let a = 0; a < 3; a++) for (let b = a; b < 3; b++) { A[a][b] /= n; A[b][a] = A[a][b]; }
+  for (let balayage = 0; balayage < 30; balayage++) {
+    const hors = Math.abs(A[0][1]) + Math.abs(A[0][2]) + Math.abs(A[1][2]);
+    if (!(hors > 1e-12 * (Math.abs(A[0][0]) + Math.abs(A[1][1]) + Math.abs(A[2][2]) + 1e-300))) break;
+    for (let p = 0; p < 2; p++) for (let q = p + 1; q < 3; q++) {
+      if (A[p][q] === 0) continue;
+      const th = (A[q][q] - A[p][p]) / (2 * A[p][q]), t = (th >= 0 ? 1 : -1) / (Math.abs(th) + Math.sqrt(th * th + 1));
+      const c = 1 / Math.sqrt(t * t + 1), s = t * c;
+      for (let k = 0; k < 3; k++) { const x = A[k][p], y = A[k][q]; A[k][p] = c * x - s * y; A[k][q] = s * x + c * y; }
+      for (let k = 0; k < 3; k++) { const x = A[p][k], y = A[q][k]; A[p][k] = c * x - s * y; A[q][k] = s * x + c * y; }
+    }
+  }
+  const ev = [A[0][0], A[1][1], A[2][2]].map((x) => Math.max(0, x)).sort((a, b) => b - a);
+  return { ev, plat: ev[0] > 0 ? Math.sqrt(ev[2] / ev[0]) : 0, ligne: ev[0] > 0 ? Math.sqrt(ev[1] / ev[0]) : 0 };
+}
+
+/** la trajectoire longue d une oeuvre (prolonge la stockee) ; regeneree depuis les params si l objet ne la porte pas */
+export function lyapunovLong(o) {
+  const f = o && typeof o.prolonger === 'function' ? o.prolonger : (() => { const g = generer(o.params); return g.bornee ? g.prolonger : () => ({ bornee: false, etapes: 0, fenetres: [] }); })();
+  return f();
+}
+
+// les raisons d un refus : un CODE stable (l ecran le traduit) et une phrase. Ordre des tests = ordre des raisons.
+export const RAISONS = Object.freeze({
+  DIVERGE: 'diverge',
+  DIVERGE_LONG: 'diverge (trajectoire longue)',
+  CYCLE: 'non chaotique (cycle limite ou point fixe)',
+  CYCLE_LONG: 'non chaotique sur la trajectoire longue (cycle limite lent)',
+  COURBE: 'dimension trop basse (courbe)',
+  PLAT: 'plat (feuille ou ligne vue de profil)',
+  DOUBLON: 'quasi-doublon',
+  SIGNATURE_NON_LUE: 'signature d une oeuvre existante non lue',
+});
+
 export function certifier(o, existantes = []) {
-  const raisons = [];
-  if (!o.bornee) return { ok: false, bornee: false, echappeA: o.echappeA, lyapunov: NaN, dimension: NaN, distanceMin: NaN, raisons: ['diverge'] };
-  const lyap = o.lyapunov, bd = dimensionBoites(o.points, o.params.q), sig = signature(o.points, o.params.q);
-  let dmin = 1; for (const e of existantes) { const d = distance(sig, e.signature || e); if (d < dmin) dmin = d; }
-  if (!(lyap > LYAP_MIN)) raisons.push('non chaotique (cycle limite ou point fixe)');
-  if (!(bd.dimension > DIM_MIN)) raisons.push('dimension trop basse (courbe)');
-  if (dmin < SEUIL_DISTINCT) raisons.push('quasi-doublon');
-  return { ok: raisons.length === 0, bornee: true, etapes: o.params.n, lyapunov: lyap, uniteLyapunov: o.uniteLyapunov,
-    dimension: bd.dimension, comptesBoites: bd.comptes, distanceMin: dmin, signature: sig, raisons };
+  const raisons = [], codes = [];
+  const refus = (code) => { codes.push(code); raisons.push(RAISONS[code]); };
+  if (!o.bornee) return { ok: false, bornee: false, echappeA: o.echappeA, lyapunov: NaN, dimension: NaN, distanceMin: NaN, raisons: [RAISONS.DIVERGE], codes: ['DIVERGE'] };
+  const lyap = o.lyapunov, bd = dimensionBoites(o.points, o.params.q), sig = signature(o.points, o.params.q), geo = geometrie(o.points);
+  /* ⛔ une signature existante ILLISIBLE n est jamais ecartee en silence : la distance n est pas mesuree, l oeuvre est refusee (NON_LU) */
+  let dmin = 1, nonLues = 0;
+  for (const e of existantes) {
+    const s = e && (e.signature || e);
+    if (!s || typeof s.length !== 'number' || s.length !== 512) { nonLues++; continue; }
+    const d = distance(sig, s); if (!(d >= 0)) { nonLues++; continue; } if (d < dmin) dmin = d;
+  }
+  const L = lyap > LYAP_MIN ? lyapunovLong(o) : null;
+  const dimMin = o.params.operateur === 'couplage' ? DIM_MIN_COUPLAGE : DIM_MIN;
+  if (!(lyap > LYAP_MIN)) refus('CYCLE');
+  else if (!L || !L.bornee) refus('DIVERGE_LONG');
+  else if (!(L.fenetres.length === LYAP_FENETRES && L.fenetres.every((x) => x > LYAP_MIN))) refus('CYCLE_LONG');
+  if (!(bd.dimension > dimMin)) refus('COURBE');
+  if (!(geo.plat >= PLAT_MIN)) refus('PLAT');
+  if (nonLues > 0) refus('SIGNATURE_NON_LUE');
+  else if (dmin < SEUIL_DISTINCT) refus('DOUBLON');
+  return { ok: raisons.length === 0, etat: nonLues > 0 ? 'NON_LU' : raisons.length ? 'REFUSE' : 'CERTIFIE', bornee: true, etapes: o.params.n, lyapunov: lyap, uniteLyapunov: o.uniteLyapunov,
+    lyapunovFenetres: L ? L.fenetres : [], etapesLongues: L ? L.etapes : 0,
+    dimension: bd.dimension, dimensionMin: dimMin, comptesBoites: bd.comptes, plat: geo.plat, distanceMin: dmin, signaturesNonLues: nonLues, signature: sig, raisons, codes };
 }
 
 // ---------- couches (chaque dimension / chaque paire, separement) ----------

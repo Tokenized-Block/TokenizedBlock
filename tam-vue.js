@@ -5,7 +5,8 @@
  *   - la carte en anglais simple (familles, combinaison, le choix du cerveau tel que la graine le dit, les certificats LUS) ;
  *   - la regle du bouton Mint : pas d adresse TamArt = pas de bouton (bouton-mort-vaut-brouillon).
  * ⛔ Le moteur (tam-moteur.js) n est PAS modifie : ses octets sont ce qui se stocke. La vue vivante est une VUE. */
-import { ODE, MAPS, PORTEUSES } from './tam-moteur.js';
+import { ODE, MAPS, PORTEUSES, RAISONS, appliquerReglage, generer, encoderOeuvre } from './tam-moteur.js';
+import { keccak256Hex } from './keccak.js';
 import { adresseTam } from './tam-plan.js';
 import { displayShort } from './frais-creation.js';
 
@@ -143,13 +144,59 @@ export function carte({ P, c, choix = null, nMintees = 0 }) {
     L.push({ k: 'Why this one', v: 'Try #' + choix.essai + ' was the first to pass every certificate.' + (rej.length ? ' Earlier tries were dropped: '
       + rej.slice(0, 4).map((r) => nomFamille(r.famille) + ' — ' + (r.raisons || []).map((x) => RAISONS_EN[x] || x).join(', ')).join('; ') + (rej.length > 4 ? '; and ' + (rej.length - 4) + ' more' : '') + '.' : '')
       + ' The brain searches combinations of known families; this is not new mathematics.' });
-  } else L.push({ k: 'Who chose', v: 'You did, in the free explorer. Nothing here is minted.' });
+  } else L.push({ k: 'Who chose', v: 'You did, in the free explorer.' });
+  /* 2026-11-01 : une oeuvre REGLEE le dit : par le joueur, ou par le cerveau (ce qu il a bouge, de a vers b) */
+  if (P.regle) L.push({ k: 'Tuned', v: P.reglage && P.reglage.par === 'cerveau' ? phraseMouvements(P.reglage.mouvements) : 'You set the variables yourself. The same checks apply before any mint.' });
   if (c) {
-    L.push({ k: 'Chaotic', v: c.lyapunov > 0.02 ? 'yes, λ = ' + nb(c.lyapunov) + ' ' + (c.uniteLyapunov === 'par iteration' ? 'per iteration' : 'per time unit') : 'no, λ = ' + nb(c.lyapunov) });
+    const fen = Array.isArray(c.lyapunovFenetres) && c.lyapunovFenetres.length ? '; on a longer run: ' + c.lyapunovFenetres.map((x) => nb(x)).join(' and ') : '';
+    L.push({ k: 'Chaotic', v: c.lyapunov > 0.02 && !(c.codes || []).some((k) => k === 'CYCLE_LONG') ? 'yes, λ = ' + nb(c.lyapunov) + ' ' + (c.uniteLyapunov === 'par iteration' ? 'per iteration' : 'per time unit') + fen : 'no, λ = ' + nb(c.lyapunov) + fen });
+    if (Number.isFinite(c.plat)) L.push({ k: 'Not flat', v: (c.plat >= 0.03 ? 'yes' : 'no') + ' (thinnest axis ' + nb(c.plat, 2) + ' of the widest, minimum 0.03)' });
     L.push({ k: 'Bounded', v: c.bornee ? 'yes, for all ' + (c.etapes || P.n || 1500) + ' recorded steps' : 'no, it escaped' });
     L.push({ k: 'Box dimension', v: '≈ ' + nb(c.dimension, 2) + ' (rough estimate, 4 box sizes)' });
     L.push({ k: 'Distinct from the minted works', v: nMintees > 0 ? (c.distanceMin >= 0.2 ? 'yes' : 'no') + ' (closest distance ' + nb(c.distanceMin, 2) + ' over ' + nMintees + ' works, threshold 0.20)' : 'yes (no minted work to compare with yet)' });
   }
   return L;
 }
-const RAISONS_EN = { diverge: 'it escaped to infinity', 'non chaotique (cycle limite ou point fixe)': 'not chaotic', 'dimension trop basse (courbe)': 'too thin (a curve)', 'quasi-doublon': 'too close to a minted work' };
+/* 2026-11-01 : les raisons d un refus, par CODE stable du moteur (tam-moteur.js#RAISONS) — ce que l ecran dit d un reglage refuse */
+export const CODES_EN = Object.freeze({
+  DIVERGE: 'escapes to infinity', DIVERGE_LONG: 'escapes to infinity on a longer run',
+  CYCLE: 'simple cycle (it settles into a loop or a point)', CYCLE_LONG: 'simple cycle on a longer run (a slow loop, not chaos)',
+  COURBE: 'too thin (a curve, not a shape)', PLAT: 'flat (a sheet seen edge-on)', DOUBLON: 'too close to an existing work',
+  SIGNATURE_NON_LUE: 'the minted works could not be read, so closeness was not measured', HORS_BORNES: 'outside the allowed range',
+});
+const RAISONS_EN = Object.fromEntries(Object.entries(RAISONS).map(([code, fr]) => [fr, CODES_EN[code]]));
+/** le verdict d un reglage (joueur ou cerveau), en anglais simple, avec SES raisons */
+export function verdictReglage(c) {
+  if (!c) return { ok: false, texte: 'Not checked yet.' };
+  if (c.ok) return { ok: true, texte: 'Passes every check: chaotic on two separate long runs, bounded, not flat, not a curve' + (c.distanceMin < 1 ? ', distinct' : '') + '.' };
+  const r = (c.codes || []).map((k) => CODES_EN[k] || k);
+  return { ok: false, texte: 'Not mintable: ' + (r.length ? r.join('; ') : 'not certified') + '.' };
+}
+const n3 = (x) => (Number.isFinite(Number(x)) ? Number(x).toFixed(3) : String(x));
+/** « the brain moved b from 2.700 to 2.912 and eps from 0.200 to 0.236 » */
+export function phraseMouvements(mouvements) {
+  const m = Array.isArray(mouvements) ? mouvements : [];
+  return m.length ? 'The brain moved ' + m.map((x) => x.nom + ' from ' + n3(x.de) + ' to ' + n3(x.a)).join(' and ') + '.' : 'The brain moved nothing.';
+}
+/**
+ * UNE variable bougee par un curseur : la copie des params (appliquerReglage : SEUL ce chemin change, arrondi d abord), l oeuvre et SES
+ * octets — generes depuis les params ARRONDIS, donc exactement ce que rejouer(JSON.parse(paramsJson)) recalcule.
+ */
+export function oeuvreReglee(P, chemin, valeur) {
+  const Q = appliquerReglage(P, chemin, valeur);
+  const o = generer(Q);
+  return { params: Q, oeuvre: o, octets: o.bornee ? encoderOeuvre(o) : null };
+}
+/**
+ * LE PORTAIL DU MINT (choix du cerveau ET oeuvre reglee) : TamArt deploye, les certificats de CETTE page sur CES params (local), ceux du
+ * SERVEUR (qui mesure la distance a toutes les oeuvres mintees) sur les MEMES octets, et une oeuvre tiree pour CE wallet.
+ */
+export function peutMinter({ dep, local, serveur, octets, P, compte = null }) {
+  if (!mintVisible(dep)) return { ok: false, pourquoi: 'TamArt is not deployed yet' };
+  if (!local || !local.ok) return { ok: false, pourquoi: verdictReglage(local).texte };
+  if (!serveur || serveur.ok !== true || serveur.etat !== 'CERTIFIE') return { ok: false, pourquoi: serveur && serveur.pourquoi ? serveur.pourquoi : 'the server has not certified this work' };
+  if (!(octets instanceof Uint8Array) || serveur.hash !== keccak256Hex(octets)) return { ok: false, pourquoi: 'the server certified other bytes' };
+  if (!P || !P.minteur || !compte) return { ok: false, pourquoi: 'connect your wallet, then ask again: each work is drawn for one wallet' };
+  if (String(P.minteur).toLowerCase() !== String(compte).toLowerCase()) return { ok: false, pourquoi: 'this work was drawn for another wallet' };
+  return { ok: true, pourquoi: null };
+}

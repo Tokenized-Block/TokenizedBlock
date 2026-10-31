@@ -7933,7 +7933,7 @@ function traiterRequete(req, res) {
    *   TamArt, cache 60 s ; avant le deploiement : liste vide + raison). LECTURE SEULE (tam-serveur.js).
    * ⛔ 2026-11-01 : place AVANT la route /api/jeu, jamais entre elle et BLOCK MISSIONS — test-map-rolls lit cette tranche et y interdit
    *   toute lecture de chaine (cette route lit la chaine : rpcServeur / rpcRails). */
-  if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres') {
+  if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres' || chemin === '/api/tam/certifier') {
     const rendreT = (o) => { res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(o)); };
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
     /* le cerveau d un block est nourri comme sonderLeReste nourrit celui de IB022 : sa vie lue par vieDuBlock (rpcRails), la tete de lecture, son symbol() */
@@ -7947,7 +7947,9 @@ function traiterRequete(req, res) {
     const echec = (e) => rendreT({ ok: false, etat: 'NON_LU', pourquoi: String((e && e.message) || e).slice(0, 120) });
     if (chemin === '/api/tam/oeuvres') { void tamSrv.oeuvres().then(rendreT, echec); return; }
     const q = new URL(req.url, 'http://x').searchParams;
-    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'))).then(rendreT, echec);
+    /* 2026-11-01 : une oeuvre REGLEE (curseurs du joueur, ou coup de pouce du cerveau) : les memes certificats, distance contre les mintees */
+    if (chemin === '/api/tam/certifier') { void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.certifierParams(q.get('p'))).then(rendreT, echec); return; }
+    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'), q.get('minter'))).then(rendreT, echec);
     return;
   }
 
