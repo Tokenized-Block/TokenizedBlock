@@ -10,7 +10,8 @@ import { choisirOeuvre, decoder, signature, certifierReglage } from './tam-moteu
 import { adresseTam, SIG_TAM, appelLecture, decoderBytes, MAX_PARAMS } from './tam-plan.js';
 import { topic, keccak256Hex } from './keccak.js';
 const MAX_PARAMS_JSON = MAX_PARAMS;
-import { etatInitial, pas } from './cerveau.js';
+import { etatInitial, pas, nomHumeur } from './cerveau.js';
+import { lecture } from './pensee-cerveau.js';
 
 export const TOPIC_MINTED = topic(SIG_TAM.minted);
 export const FENETRE_LOGS = 9000, FENETRES_PAR_APPEL = 20, TTL_MS = 60000;
@@ -33,10 +34,20 @@ export function etatCerveauTam(adresse, { battements = BATTEMENTS, vie = null, e
   const faits = { vie: typeof vie === 'number' && Number.isFinite(vie) ? vie : null, vieAvant: null, gm: 0, messages: 0, detenteurs: 0, mort: false,
     etatVie: etatVie || 'NON_LUE', gmAvant: null, messagesAvant: null, detenteursAvant: null, role: null, bloc: Number.isSafeInteger(bloc) ? bloc : null };
   let e = etatInitial(adresse);
-  for (let i = 0; i < battements; i++) e = pas(e, faits).etat;
-  return { cerveau: String(adresse).toLowerCase(), symbole: symbole || null, battements, tick: e.tick, spikes: e.spikes, empreinte: e.c.empreinte,
+  /* 2026-11-01 (Phil : « en haut, quel block fait le graph, et son humeur ») : on garde les `vu` pour dire son humeur (phase du moteur)
+   *   et sa lecture (pensee-cerveau#lecture : le mot humain, 9 regles) au dernier battement — elles n entrent PAS dans la graine */
+  const histo = [];
+  for (let i = 0; i < battements; i++) { const r = pas(e, faits); e = r.etat; histo.push(r.vu); }
+  const der = histo[histo.length - 1] || null, lu = der ? lecture(histo, histo.length - 1) : null;
+  const etat = { cerveau: String(adresse).toLowerCase(), symbole: symbole || null, battements, tick: e.tick, spikes: e.spikes, empreinte: e.c.empreinte,
     vie: faits.vie, etatVie: faits.etatVie, blocFaits: faits.bloc, repli: !!repli, potentiels: e.potentiels.map((x) => Math.round(x * 1e6) / 1e6) };
+  /* ⛔ a cote de l etat, jamais DEDANS : canon(etat) fait la graine, une cle de plus changerait toutes les oeuvres */
+  HUMEURS.set(etat, { phase: der ? der.phase : null, humeur: der ? nomHumeur(der.phase) : null, ressenti: lu ? lu.word : null, ressentiCle: lu ? lu.key : null });
+  return etat;
 }
+const HUMEURS = new WeakMap();
+/** l humeur (phase du moteur, son nom) et la lecture (le mot humain) au dernier battement d un etat rendu par etatCerveauTam */
+export const humeurCerveauTam = (etat) => HUMEURS.get(etat) || { phase: null, humeur: null, ressenti: null, ressentiCle: null };
 /** l etiquette, en anglais simple, de ce cerveau-la (jamais « live ») */
 export function etiquetteCerveau(et) {
   const nom = et.symbole || (et.cerveau.slice(0, 6) + '…' + et.cerveau.slice(-4));
@@ -127,6 +138,7 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     if (r.statut) return r; /* OCCUPE (503) ou TROP (429) : rien n a ete calcule */
     if (r.etat === 'NON_LU') return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: r.pourquoi };
     const cerveau = { adresse: etat.cerveau, symbole: etat.symbole, battement: etat.tick, spikes: etat.spikes, vie: etat.vie, etatVie: etat.etatVie, blocFaits: etat.blocFaits,
+      ...humeurCerveauTam(etat),
       repli: etat.repli, vivant: false, etiquette: etiquetteCerveau(etat) };
     const rep = r.ok
       ? { ok: true, etat: 'PRET', graine, bloc, tirage, cerveau, empreinteEtat: r.params.empreinteEtat,

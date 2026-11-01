@@ -15,6 +15,8 @@ import { planJeuUsdc, besoinDuJeu, planPayerEnJeton, usdcAViser, CANDIDATS_CL } 
 import { FEE_WALLET } from './frais-creation.js';
 import { keccak256Hex } from './keccak.js';
 import { FACTORY_AERODROME_CL } from './calldata-aerodrome.js';
+import { PHASES } from './cerveau.js';
+const PHASES_OK = PHASES;
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -161,6 +163,9 @@ const c1 = await srv.choix(null);
 ok(c1.ok && c1.graine === HASH && c1.bloc === 100, '/api/tam/choix sans graine : le hash du dernier bloc');
 const etU = etatCerveauTam(UNIT, { vie: 1234.5, etatVie: 'LUE', bloc: 100, symbole: 'UNIT' });
 ok(c1.empreinteEtat === keccak256Hex(new TextEncoder().encode(T.canon(etU))), 'defaut : le cerveau de UNIT (24 battements, sa vie lue) ; empreinte = keccak(canon(etat))');
+/* 2026-11-01 : l humeur et la lecture sont DITES, jamais dans la graine (canon(etat) sans elles : l empreinte ci-dessus reste la meme) */
+ok(PHASES_OK.includes(c1.cerveau.phase) && typeof c1.cerveau.humeur === 'string' && typeof c1.cerveau.ressenti === 'string' && c1.cerveau.ressenti.length > 0, 'la reponse dit l humeur (' + c1.cerveau.humeur + ') et la lecture (' + c1.cerveau.ressenti + ') du cerveau');
+ok(!['phase', 'humeur', 'ressenti', 'ressentiCle'].some((k) => k in etU), 'humeur et lecture ne sont PAS des cles de l etat qui fait la graine');
 ok(c1.cerveau.adresse === UNIT && c1.cerveau.symbole === 'UNIT' && c1.cerveau.battement === 24 && c1.cerveau.vivant === false && c1.cerveau.repli === false, 'la reponse nomme le cerveau : UNIT, battement 24, pas vivant');
 ok(/^brain of UNIT at beat 24, rebuilt on the server from its seed, fed its market life read on chain at block 100; not your live brain$/.test(c1.cerveau.etiquette), 'etiquette : ' + c1.cerveau.etiquette);
 ok(etU.empreinte !== etatCerveauTam(IB022).empreinte, 'temoin : le connectome depend du block (empreinte UNIT != IB022)');
@@ -319,6 +324,17 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/const vb = S\.P\.regle \? M\.validerReglage\(S\.P\)/.test(onglet) && /S\.c && S\.c\.ok\);/.test(onglet), 'une oeuvre reglee : bornes puis certificats ; pas de zone Mint sans certificat local');
   ok(/V\.oeuvreReglee\(/.test(onglet) && /M\.coupDePouce\(S\.P, S\.cerveauEtat\)/.test(onglet) && /data-chemin/.test(onglet), 'curseurs -> V.oeuvreReglee ; bouton du cerveau -> M.coupDePouce');
   ok(/'\/api\/tam\/choix\?draw=' \+ tirage \+ \(c \? '&minter=' \+ c : ''\)/.test(onglet) && /q\.get\('minter'\), ipT, q\.get\('draw'\)/.test(serveur) && /crypto\.getRandomValues\(new Uint8Array\(8\)\)/.test(onglet) && /chemin === '\/api\/tam\/certifier'/.test(serveur), 'le wallet est transmis au choix ; la route /api/tam/certifier existe');
+  /* 2026-11-01 : le cerveau du block de l onglet Brain choisit (bascule vers UNIT), passe au serveur par &block= */
+  ok(/\(src \? '&block=' \+ src : ''\)/.test(onglet) && /const src = sourceCerveau\(\);/.test(onglet) && /a && S\.sourceBloc !== false \? a : null/.test(onglet), 'le block de l onglet Brain est passe au choix (&block=), sauf si le joueur bascule sur UNIT');
+  const appHtml = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  ok(/blocCerveau: \(\) => \{ try \{ return brainAdr; \}/.test(appHtml), 'l app donne a TAM le block ouvert dans l onglet Brain (brainAdr)');
+  ok(/id="bArtTam"/.test(appHtml) && /api\.choisirDepuisBloc\(\)/.test(appHtml) && /choisirDepuisBloc = \(\) => \{ S\.sourceBloc = true;/.test(onglet), 'Brain : « Make art from this block’s brain » ouvre TAM avec CE cerveau');
+  /* chaos : chaque variable passe par M.appliquerReglage (bornee, arrondie), puis regler -> memes certificats */
+  ok(/Q = M\.appliquerReglage\(Q, r\.chemin, r\.valeur \+ \(u\[i\] \/ 4294967296 \* 2 - 1\) \* k \* \(r\.max - r\.min\) \/ 2\)/.test(onglet) && /regler\(sans\);\n    verdictTxt\.textContent = 'Chaos '/.test(onglet), 'chaos : bornes + arrondi par appliquerReglage, puis regler (certificats)');
+  { let Q = { ...ch.params }; for (const r of T.reglagesDe(Q)) Q = T.appliquerReglage(Q, r.chemin, r.valeur + 1e9); ok(T.reglagesDe(Q).every((r) => r.valeur <= r.max + 1e-9), 'chaos maximal : chaque variable reste dans sa borne'); }
+  /* le son suit le point montre (tete puis curseur), plus un index qui avance d un point par image */
+  ok(/S\.tete = Math\.max\(0, Math\.floor\(S\.dessines\) - 1\)/.test(onglet) && /S\.ser\[j\]\[i\]/.test(onglet) && !/idx = \(idx \+ 1\) % S\.n/.test(onglet), 'son : la frequence lit le point dessine, pas un compteur d images');
+  ok(/el\('h2', \{ text: 'Tokenized Art Math' \}\)/.test(onglet), 'titre : Tokenized Art Math');
   const textes = [...(onglet + readFileSync(new URL('./tam-vue.js', import.meta.url), 'utf8')).matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).join('\n');
   ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');
 }

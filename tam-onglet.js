@@ -28,12 +28,23 @@ const CSS = `
 #v-tam .tamInfo{position:absolute;left:8px;top:6px;font-size:.78rem;color:var(--tam-doux);pointer-events:none}
 #v-tam .tamVars{position:absolute;left:8px;bottom:6px;right:8px;display:flex;flex-wrap:wrap;gap:2px 10px;max-height:40%;overflow:hidden;font:11px/1.35 ui-monospace,Consolas,monospace;color:#cfd6ff;opacity:.85;pointer-events:none;text-shadow:0 0 4px #0b0d17}
 #v-tam .tamVars b{width:100%;font-weight:600;color:#fff}
+#v-tam .tamPayListe{margin:.3rem 0;padding-left:1.1rem;font-size:.82rem;color:var(--tam-doux);max-height:220px;overflow:auto}
+#v-tam .tamVars .tamMesure{width:100%;color:#ffe9a8}
+#v-tam .tamQui{margin:.2rem 0 .5rem;font-size:.9rem}
+#v-tam .tamQui .tamHumeur{padding:0 .35rem;border-radius:6px;color:#fff;text-shadow:0 0 6px currentColor}
+#v-tam .tamQui[data-phase="CALME"] .tamHumeur{background:#1d3b5a;box-shadow:0 0 10px #4aa3ff}
+#v-tam .tamQui[data-phase="CURIEUX"] .tamHumeur{background:#3b2f5a;box-shadow:0 0 10px #b48cff}
+#v-tam .tamQui[data-phase="EXCITE"] .tamHumeur{background:#5a3a12;box-shadow:0 0 12px #ffb23f}
+#v-tam .tamQui[data-phase="INQUIET"] .tamHumeur{background:#5a1d2a;box-shadow:0 0 12px #ff5c7a}
+#v-tam .tamQui[data-phase="EVEILLE"] .tamHumeur{background:#1d4a3a;box-shadow:0 0 10px #4fe0a8}
+#v-tam .tamQui[data-phase="DORMANT"] .tamHumeur,#v-tam .tamQui[data-phase="MORT"] .tamHumeur,#v-tam .tamQui[data-phase="NON_LU"] .tamHumeur{background:#2a2d3a;box-shadow:none}
 #v-tam .tamPuces{display:flex;flex-wrap:wrap;gap:6px}
 #v-tam .tamPuce{display:inline-flex;align-items:center;gap:6px}
 #v-tam .tamPuce i{width:12px;height:12px;border-radius:50%;display:inline-block}
 #v-tam .tamPuce[aria-pressed="false"]{opacity:.45}
 #v-tam input[type=range]{width:100%;min-height:44px}
 #v-tam .tamSeries{width:100%;height:120px;display:block;background:var(--tam-fond);border-radius:10px}
+#v-tam .tamSeries.tamSplit{height:auto;min-height:120px}
 #v-tam .tamGrille{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px;margin-top:8px}
 #v-tam .tamGrille figure{margin:0;background:var(--tam-fond);border-radius:8px;overflow:hidden}
 #v-tam .tamGrille canvas{width:100%;aspect-ratio:1/1;display:block}
@@ -74,6 +85,8 @@ export function monter(racine, ctx = {}) {
   const selFam = el('select', { 'aria-label': 'Family', id: 'tamFamille' }, ...PORTEUSES.map((f) => el('option', { value: f, text: V.nomFamille(f) })));
   const selDim = el('select', { 'aria-label': 'Dimensions', id: 'tamDims' });
   const bCerveau = el('button', { type: 'button', id: 'tamCerveau', text: 'Let the brain choose' });
+  /* 2026-11-01 : QUEL cerveau choisit — UNIT par defaut, ou le block ouvert dans l onglet Brain (bascule visible seulement s il y en a un) */
+  const bSource = el('button', { type: 'button', id: 'tamSourceCerveau', 'aria-pressed': 'false', hidden: true });
   const bRot = el('button', { type: 'button', id: 'tamRotation', 'aria-pressed': String(S.rotation), text: 'Hidden rotation' });
   const bVue = el('button', { type: 'button', text: 'Reset view' });
   const bSon = el('button', { type: 'button', id: 'tamSon', 'aria-pressed': 'false', text: 'Sound: off' });
@@ -85,6 +98,20 @@ export function monter(racine, ctx = {}) {
   const varsScene = el('div', { class: 'tamVars', id: 'tamVarsScene' });
   const scene = el('div', { class: 'tamScene' }, cv, info, varsScene);
   const etatLigne = el('p', { class: 'tamDoux', id: 'tamEtat', 'aria-live': 'polite' });
+  /* 2026-11-01 (Phil) : en haut, QUEL block fait le graphe, son humeur (moteur) et sa lecture (le mot humain), avec le glow de l humeur */
+  const qui = el('p', { class: 'tamQui', id: 'tamQui', text: 'No work yet: let a brain choose, or pick a family.' });
+  function peindreQui() {
+    /* le cerveau qui a choisi reste nomme apres un reglage (S.origine) : « then tuned » le dit */
+    const ch = (S.choix && S.choix.cerveau) || S.origine;
+    if (ch) {
+      const nom = ch.symbole || (ch.adresse ? court(ch.adresse) : 'a block');
+      qui.dataset.phase = ch.phase || '';
+      qui.replaceChildren(document.createTextNode('Drawn by the brain of '), el('b', { text: nom }),
+        ...(ch.humeur ? [document.createTextNode(' · mood '), el('b', { class: 'tamHumeur', text: ch.humeur })] : []),
+        ...(ch.ressenti ? [document.createTextNode(' · feeling '), el('b', { text: ch.ressenti })] : []),
+        ...(S.P && S.P.regle ? [document.createTextNode(' · then tuned')] : []));
+    } else { qui.dataset.phase = ''; qui.textContent = S.P ? 'Set by you in the explorer' + (S.P.regle && S.P.reglage && S.P.reglage.par === 'cerveau' ? ', nudged by the brain' : '') + '.' : 'No work yet.'; }
+  }
 
   /* ── les couches ── */
   const curseur = el('input', { type: 'range', min: '2', max: '3', step: '1', value: '3', id: 'tamCurseur', 'aria-label': 'Dimensions shown' });
@@ -92,6 +119,8 @@ export function monter(racine, ctx = {}) {
   const puces = el('div', { class: 'tamPuces', id: 'tamPuces', role: 'group', 'aria-label': 'Layers' });
   const bToutes = el('button', { type: 'button', text: 'All layers' });
   const bIsoler = el('button', { type: 'button', 'aria-pressed': 'false', text: 'Isolate' });
+  /* 2026-11-01 (Phil : « le split des courbes pour voir tous les details ») : une bande par couche, chacune a sa propre echelle */
+  const bSplit = el('button', { type: 'button', id: 'tamSplit', 'aria-pressed': 'false', text: 'Split curves' });
   const cvSeries = el('canvas', { class: 'tamSeries', 'aria-label': 'Each layer over time' });
   const grille = el('div', { class: 'tamGrille', id: 'tamGrille' });
   const eclate = el('details', {}, el('summary', { text: 'Exploded view: every pair of layers' }), grille);
@@ -105,6 +134,15 @@ export function monter(racine, ctx = {}) {
   const selMotif = el('select', { 'aria-label': 'Pattern', id: 'tamMotif' }, ...MOTIFS_UI.map(([v, t]) => el('option', { value: v, text: t })));
   const curseurs = el('div', { id: 'tamCurseurs' });
   const bPouce = el('button', { type: 'button', id: 'tamPouce', text: 'Let the brain nudge it' });
+  /* 2026-11-01 (Phil : « une variable chaos pour jouer sur le random ») : CHAOS = de combien CHAQUE variable peut sauter, au hasard du
+   *   navigateur, dans ses bornes. Le resultat est une oeuvre reglee comme une autre : memes bornes, memes certificats, rejouable (params stockes). */
+  const curChaos = el('input', { type: 'range', id: 'tamChaos', min: '0', max: '100', step: '1', value: '25', 'aria-label': 'Chaos' });
+  const chaosTxt = el('output', { for: 'tamChaos', text: '25 %' });
+  const bChaos = el('button', { type: 'button', id: 'tamSecouer', text: 'Shake with chaos' });
+  /* 2026-11-01 (Phil : « un calcul avec une resolution pour donner un sens au graph ») : la RESOLUTION de la mesure (boites par cote) ;
+   *   elle ne change pas l oeuvre stockee, elle dit combien de boites la forme occupe et la dimension locale qui en sort */
+  const curRes = el('input', { type: 'range', id: 'tamResolution', min: '2', max: '6', step: '1', value: '4', 'aria-label': 'Measurement resolution' });
+  const resTxt = el('output', { for: 'tamResolution' });
   const verdictTxt = el('p', { class: 'tamDoux', id: 'tamVerdict', 'aria-live': 'polite' });
 
   const dl = el('dl', { id: 'tamCarteOeuvre' });
@@ -114,21 +152,25 @@ export function monter(racine, ctx = {}) {
 
   racine.replaceChildren(
     el('div', { class: 'tamCarte' },
-      el('h2', { text: 'TAM — math art · Tokenized Art Math' }),
+      el('h2', { text: 'Tokenized Art Math' }),
+      qui,
       el('p', { class: 'tamDoux', text: 'Strange attractors, fractals and the golden angle, combined by the brain and drawn in 3-D. Up to 12 dimensions, shown one layer at a time.' }),
-      el('div', { class: 'tamRang' }, selFam, selDim, bCerveau),
+      el('div', { class: 'tamRang' }, selFam, selDim, bCerveau, bSource),
       scene,
       el('div', { class: 'tamRang' }, bRot, bVue, bBoucle, bSon),
+      el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamResolution', text: 'Resolution' }), curRes, resTxt),
       el('p', { class: 'tamDoux', text: 'Drag to orbit · Shift-drag or two fingers to pan · wheel or pinch to zoom.' }),
       etatLigne),
     el('div', { class: 'tamCarte' },
       el('h3', { text: 'Layers' }),
       el('p', { class: 'tamDoux', text: 'One colour per dimension. Turn layers on and off, isolate one, or grow the shape from 3-D to all of its dimensions.' }),
-      curseur, curseurTxt, puces, el('div', { class: 'tamRang' }, bToutes, bIsoler), cvSeries, eclate),
+      curseur, curseurTxt, puces, el('div', { class: 'tamRang' }, bToutes, bIsoler, bSplit), cvSeries, eclate),
     el('div', { class: 'tamCarte' },
       el('h3', { text: 'Variables' }),
       el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
-      el('div', { class: 'tamRang' }, selOp, selMotif, bPouce), curseurs, verdictTxt),
+      el('div', { class: 'tamRang' }, selOp, selMotif, bPouce),
+      el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
+      curseurs, verdictTxt),
     el('div', { class: 'tamCarte' }, el('h3', { text: 'This work' }), dl, zMint),
     el('div', { class: 'tamCarte' }, el('h3', { text: 'Minted works' }), galEtat, gal,
       el('details', {}, el('summary', { text: 'How it works' }), el('p', { class: 'tamDoux', text: 'Each work is stored on Base byte for byte, with its seed and parameters. Anyone can replay the parameters in this page and compare the result with the stored bytes. Minting costs 5 USDC, paid to the TokenizedBlock fee wallet; it opens when the TamArt contract is deployed.' }))));
@@ -144,6 +186,7 @@ export function monter(racine, ctx = {}) {
       verdictTxt.textContent = V.verdictReglage(S.c).texte; peindreReglages(); peindreMint(); S.sale = true; return;
     }
     S.P = o.params; S.o = o; S.D = o.D; S.n = o.n; S.choix = choix;
+    if (choix && choix.cerveau) S.origine = choix.cerveau;
     /* une oeuvre REGLEE : les bornes d abord (validerReglage), puis les MEMES certificats que le choix du cerveau */
     const vb = S.P.regle ? M.validerReglage(S.P) : { ok: true };
     S.c = vb.ok ? certifier(o, []) : { ok: false, bornee: true, codes: ['HORS_BORNES'], raisons: [vb.raison], lyapunov: o.lyapunov };
@@ -152,7 +195,7 @@ export function monter(racine, ctx = {}) {
     S.couches = V.etatCouches(S.D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
     S.octets = octetsServeur; S.stocke = (() => { try { const d = decoder(octetsDe(octetsServeur) || rejouer(P).octets); return d.positions; } catch (_) { return null; } })();
     curseur.min = String(Math.min(S.D, 2)); curseur.max = String(S.D); curseur.value = String(S.D);
-    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene();
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
     etatLigne.textContent = V.combinaison(S.P) + '.';
     racine.dataset.dims = String(S.D);
     S.sale = true;
@@ -162,10 +205,17 @@ export function monter(racine, ctx = {}) {
     if (!S.P) { varsScene.replaceChildren(); return; }
     const R = M.reglagesDe(S.P);
     const graine = S.P.graine ? String(S.P.graine) : '';
+    const m = mesureResolution(), c = S.c || {};
+    resTxt.textContent = m ? '1/' + m.cote : '';
+    const lam = Number.isFinite(c.lyapunov) ? 'λ = ' + c.lyapunov.toFixed(3) + (c.uniteLyapunov === 'par iteration' ? ' per step' : ' per time unit') + (c.lyapunov > 0.02 ? ' (above 0.02: nearby paths split apart — chaotic)' : ' (0.02 or less: no measurable chaos — nearby paths stay together)') : null;
+    const res = m ? 'resolution 1/' + m.cote + ' on ' + m.vis + ' layers: ' + m.N + ' boxes hold the curve · local dimension ≈ ' + (Number.isFinite(m.dim) ? m.dim.toFixed(2) : '—')
+      + (m.sature ? ' (too fine for ' + S.n + ' points: read it as a lower bound)' : '') : null;
     varsScene.replaceChildren(
       el('b', { text: V.combinaison(S.P) }),
       ...R.map((r) => el('span', { text: r.nom + ' = ' + r.valeur.toFixed(4) })),
-      el('span', { text: S.D + '-D · ' + S.n + ' points' + (graine ? ' · seed ' + graine.slice(0, 10) + '…' : '') }));
+      el('span', { text: S.D + '-D · ' + S.n + ' points' + (graine ? ' · seed ' + graine.slice(0, 10) + '…' : '') }),
+      ...(lam ? [el('span', { class: 'tamMesure', text: lam })] : []),
+      ...(res ? [el('span', { class: 'tamMesure', text: res })] : []));
   }
   function optionsDims() {
     const f = selFam.value, o = [];
@@ -197,7 +247,7 @@ export function monter(racine, ctx = {}) {
     if (!oct || (Q.minteur || null) !== (P.minteur || null)) { const r = rejouer(Q); oct = r.ok ? r.octets : null; }
     charger(Q, null, oct ? hexDe(oct) : null);
   }
-  selFam.addEventListener('change', () => { optionsDims(); depuisExplorateur(); });
+  selFam.addEventListener('change', () => { S.origine = null; optionsDims(); depuisExplorateur(); });
   selDim.addEventListener('change', () => depuisExplorateur('dims'));
   selOp.addEventListener('change', () => depuisExplorateur('op'));
   selMotif.addEventListener('change', () => depuisExplorateur('motif'));
@@ -234,6 +284,31 @@ export function monter(racine, ctx = {}) {
       regler(sans, r.octets);
     }, 90);
   });
+  curChaos.addEventListener('input', () => { chaosTxt.textContent = curChaos.value + ' %'; });
+  bChaos.addEventListener('click', () => {
+    if (!S.P) return;
+    const k = Number(curChaos.value) / 100, R = M.reglagesDe(S.P), u = new Uint32Array(Math.max(1, R.length));
+    crypto.getRandomValues(u);
+    /* chaque variable : valeur + (hasard dans [-1, 1]) x chaos x demi-plage ; appliquerReglage borne et arrondit */
+    let Q = S.P;
+    R.forEach((r, i) => { Q = M.appliquerReglage(Q, r.chemin, r.valeur + (u[i] / 4294967296 * 2 - 1) * k * (r.max - r.min) / 2); });
+    const { reglage: _r, ...sans } = Q;
+    regler(sans);
+    verdictTxt.textContent = 'Chaos ' + curChaos.value + ' %: ' + R.length + ' variables moved at random, each by up to ' + curChaos.value + ' % of half its range. ' + verdictTxt.textContent;
+  });
+  /* la mesure a une resolution : 2^r boites par cote, sur les couches visibles (series normalisees 0..1) ; la dimension locale = pente
+   *   log2 N(2^r) / N(2^(r-1)). Avec 1 500 points, une resolution trop fine sature : on le dit au lieu d afficher un chiffre faux. */
+  function boites(r) {
+    const cote = 1 << r, vis = V.dimsVisibles(S.couches), occ = new Set();
+    for (let i = 0; i < S.n; i++) occ.add(vis.map((j) => Math.min(cote - 1, Math.floor(S.ser[j][i] * cote))).join(','));
+    return occ.size;
+  }
+  function mesureResolution() {
+    if (!S.ser || !S.couches) return null;
+    const r = Number(curRes.value), N = boites(r), N0 = boites(r - 1);
+    return { cote: 1 << r, N, dim: N0 > 0 ? Math.log2(N / N0) : NaN, sature: N > S.n / 3, vis: V.dimsVisibles(S.couches).length };
+  }
+  curRes.addEventListener('input', () => peindreVarsScene());
   bPouce.addEventListener('click', () => {
     if (!S.P) return;
     if (!S.cerveauEtat) { verdictTxt.textContent = 'Ask the brain first (Let the brain choose): its state is what moves the variables.'; return; }
@@ -241,14 +316,29 @@ export function monter(racine, ctx = {}) {
     regler(r.params);
     verdictTxt.textContent = V.phraseMouvements(r.mouvements) + ' ' + verdictTxt.textContent;
   });
+  const court = (a) => displayShort(a); /* le raccourci qui masque le fee wallet (test-no-fee-address-shown) */
+  const blocVu = () => { const a = ctx.blocCerveau && ctx.blocCerveau(); return a && /^0x[0-9a-fA-F]{40}$/.test(String(a)) ? String(a).toLowerCase() : null; };
+  /* le block de l onglet Brain s il y en a un et que le joueur ne l a pas ecarte ; sinon null -> le serveur prend UNIT */
+  const sourceCerveau = () => { const a = blocVu(); return a && S.sourceBloc !== false ? a : null; };
+  function peindreSource() {
+    const a = blocVu(); bSource.hidden = !a; if (!a) return;
+    const sur = S.sourceBloc !== false;
+    bSource.setAttribute('aria-pressed', String(sur));
+    bSource.textContent = sur ? 'Brain: block ' + court(a) : 'Brain: UNIT';
+    bSource.title = sur ? 'The brain of the block open in the Brain tab chooses. Click to use UNIT\'s brain.' : 'UNIT\'s brain chooses. Click to use the block open in the Brain tab.';
+  }
+  bSource.addEventListener('click', () => { S.sourceBloc = S.sourceBloc === false; peindreSource(); });
+  peindreSource();
   bCerveau.addEventListener('click', async () => {
-    etatLigne.textContent = 'The brain is choosing from the latest block…';
+    peindreSource();
+    const src = sourceCerveau();
+    etatLigne.textContent = (src ? 'The brain of block ' + court(src) : 'The brain') + ' is choosing from the latest block…';
     let j = null;
     /* 2026-11-01 : le wallet connecte entre dans la graine — deux joueurs sur le meme bloc ne recoivent jamais la meme oeuvre */
     const c = compte();
     /* 2026-11-01 : un tirage NEUF a chaque clic (crypto du navigateur) — sinon la tete en cache 60 s rendait la meme oeuvre */
     const tirage = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join('');
-    try { j = await fetch('/api/tam/choix?draw=' + tirage + (c ? '&minter=' + c : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+    try { j = await fetch('/api/tam/choix?draw=' + tirage + (c ? '&minter=' + c : '') + (src ? '&block=' + src : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
     /* OCCUPE / TROP : on le dit, et on ne relance RIEN tout seul (le joueur reclique s il veut) */
     if (j && (j.etat === 'OCCUPE' || j.etat === 'TROP')) { etatLigne.textContent = j.etat === 'OCCUPE' ? 'The server is busy, try again in a few seconds.' : 'Too many TAM computations from here: try again in a minute.'; return; }
     if (!j || j.ok !== true) { etatLigne.textContent = 'The brain\'s choice could not be read' + (j && j.pourquoi ? ': ' + j.pourquoi : '') + '.'; return; }
@@ -268,6 +358,8 @@ export function monter(racine, ctx = {}) {
     const v = V.dimsVisibles(S.couches).length;
     curseurTxt.textContent = v + ' of ' + S.D + ' dimensions shown';
     racine.dataset.visibles = V.dimsVisibles(S.couches).join(',');
+    peindreVarsScene(); /* la mesure de resolution porte sur les couches visibles */
+    if (S.split) tailleSeries();
   }
   puces.addEventListener('click', (e) => {
     const b = e.target.closest('[data-dim]'); if (!b) return;
@@ -276,6 +368,11 @@ export function monter(racine, ctx = {}) {
     peindrePuces(); peindreGrille(); majSon(); S.sale = true;
   });
   bToutes.addEventListener('click', () => { S.couches = V.toutes(S.couches); curseur.value = String(S.D); peindrePuces(); peindreGrille(); majSon(); S.sale = true; });
+  function tailleSeries() { cvSeries.style.height = S.split && S.couches ? Math.max(120, V.dimsVisibles(S.couches).length * 52) + 'px' : ''; }
+  bSplit.addEventListener('click', () => {
+    S.split = !S.split; bSplit.setAttribute('aria-pressed', String(S.split)); cvSeries.classList.toggle('tamSplit', S.split);
+    tailleSeries(); racine.dataset.split = S.split ? 'on' : 'off'; S.sale = true;
+  });
   bIsoler.addEventListener('click', () => bIsoler.setAttribute('aria-pressed', String(bIsoler.getAttribute('aria-pressed') !== 'true')));
   curseur.addEventListener('input', () => { S.couches = V.jusqua(S.couches, Number(curseur.value)); peindrePuces(); peindreGrille(); majSon(); S.sale = true; });
 
@@ -352,6 +449,8 @@ export function monter(racine, ctx = {}) {
     point(0, '#5dffa0', 4, 'start · t = 0');
     if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, 'end · t = ' + (S.n - 1));
     else point(n - 1, '#ffffff', 3.2, null);
+    /* le son allume : le point qu il joue, sur la courbe (le meme index que la frequence) */
+    if (S.son && S.tete !== null && n >= S.n) point(S.tete, '#ffffff', 4.5, 't = ' + S.tete);
     g.shadowBlur = 0;
     if (S.survol !== null && Number.isFinite(projSx[S.survol])) { g.fillStyle = '#fff'; g.beginPath(); g.arc(projSx[S.survol], projSy[S.survol], 5 * dpr, 0, 2 * Math.PI); g.fill(); }
     info.textContent = S.D + '-D · ' + V.dimsVisibles(S.couches).length + ' layers on' + (S.rotation && S.D > 3 ? ' · hidden planes turning' : '') + (S.t === 0 && S.stocke && S.couches.actives.every(Boolean) ? ' · stored view' : ' · live view');
@@ -369,12 +468,29 @@ export function monter(racine, ctx = {}) {
     if (cvSeries.width !== L || cvSeries.height !== H) { cvSeries.width = L; cvSeries.height = H; }
     const g = cvSeries.getContext('2d'); g.clearRect(0, 0, L, H); if (!S.ser) return;
     const n = Math.min(S.n, Math.max(2, Math.floor(S.dessines)));
+    if (S.split) {
+      /* une bande par couche visible : son nom, sa couleur, ses valeurs reelles min/max (avant normalisation) */
+      const vis = V.dimsVisibles(S.couches), h = H / Math.max(1, vis.length);
+      g.font = (10 * dpr) + 'px ui-monospace,Consolas,monospace';
+      vis.forEach((j, k) => {
+        const y0 = k * h, col = V.couleurDim(j);
+        g.fillStyle = 'rgba(255,255,255,.04)'; if (k % 2) g.fillRect(0, y0, L, h);
+        g.strokeStyle = col; g.shadowColor = col; g.shadowBlur = 4 * dpr; g.lineWidth = dpr; g.beginPath();
+        for (let i = 0; i < n; i++) { const x = (i / (S.n - 1)) * L, y = y0 + h - 3 * dpr - S.ser[j][i] * (h - 6 * dpr); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); }
+        g.stroke(); g.shadowBlur = 0;
+        let lo = Infinity, hi = -Infinity; for (let i = 0; i < S.n; i++) { const v = S.o.brut[i * S.D + j]; if (v < lo) lo = v; if (v > hi) hi = v; }
+        const etq = 'x' + (j + 1) + '  ' + lo.toFixed(2) + ' … ' + hi.toFixed(2);
+        g.fillStyle = 'rgba(11,13,23,.82)'; g.fillRect(2 * dpr, y0 + 2 * dpr, g.measureText(etq).width + 6 * dpr, 12 * dpr);
+        g.fillStyle = col; g.fillText(etq, 5 * dpr, y0 + 11 * dpr);
+      });
+    } else
     for (const j of V.dimsVisibles(S.couches)) {
       g.strokeStyle = V.couleurDim(j); g.lineWidth = dpr; g.beginPath();
       for (let i = 0; i < n; i += 2) { const x = (i / (S.n - 1)) * L, y = H - 4 - S.ser[j][i] * (H - 8); if (i === 0) g.moveTo(x, y); else g.lineTo(x, y); }
       g.stroke();
     }
     if (S.survol !== null) { const x = (S.survol / (S.n - 1)) * L; g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); }
+    if (S.son && S.tete !== null) { const x = (S.tete / (S.n - 1)) * L; g.strokeStyle = 'rgba(255,255,255,.55)'; g.setLineDash([3, 3]); g.beginPath(); g.moveTo(x, 0); g.lineTo(x, H); g.stroke(); g.setLineDash([]); }
   }
   let panneaux = [];
   function peindreGrille() {
@@ -434,17 +550,26 @@ export function monter(racine, ctx = {}) {
   });
 
   /* ── la boucle : seulement onglet visible et page visible ── */
-  let dernier = 0, idx = 0;
+  let dernier = 0, tickSource = 0;
   function boucle(ts) {
     requestAnimationFrame(boucle);
     const vol = racine.closest('.volet');
     if (document.hidden || (vol && !vol.classList.contains('on'))) { if (S.son) arreterSon(); return; }
+    if ((++tickSource & 63) === 0) peindreSource(); /* le block de l onglet Brain a pu changer pendant que TAM etait cache */
     const dt = dernier ? Math.min(0.1, (ts - dernier) / 1000) : 0; dernier = ts;
     if (S.o && S.dessines < S.n) { S.dessines = Math.min(S.n, S.dessines + S.n * dt / 3); S.sale = true; }
     /* en boucle : la fin reste affichee 1,5 s, puis le trace repart du debut */
     else if (S.o && S.boucle && !reduit()) { S.pause = (S.pause || 0) + dt; if (S.pause > 1.5) { S.pause = 0; S.dessines = 0; S.sale = true; } }
     if (S.o && S.rotation && S.D > 3) { S.t += dt * 0.35; S.sale = true; racine.dataset.t = S.t.toFixed(3); }
-    if (S.son && S.ser) { idx = (idx + 1) % S.n; const vis = new Set(V.dimsVisibles(S.couches)); S.son.voix.forEach((v, j) => { v.o.frequency.setTargetAtTime(v.f0 * (0.85 + 0.3 * S.ser[j][idx]), S.son.ctx.currentTime, 0.03); if (!vis.has(j)) v.g.gain.value = 0; }); }
+    /* 2026-11-01 (Phil : « le son correspond pas au graph ») : le son jouait un index qui avancait d UN point par image, sans lien avec le
+     *   trace. Il suit maintenant LE point montre : la tete pendant le trace, puis un curseur visible qui parcourt la courbe a la meme vitesse. */
+    if (S.son && S.ser) {
+      if (S.dessines < S.n) S.tete = Math.max(0, Math.floor(S.dessines) - 1);
+      else { S.lecteur = ((S.lecteur || 0) + S.n * dt / 3) % S.n; S.tete = Math.floor(S.lecteur); S.sale = true; }
+      const i = S.tete, vis = new Set(V.dimsVisibles(S.couches));
+      S.son.voix.forEach((v, j) => { v.o.frequency.setTargetAtTime(v.f0 * (0.85 + 0.3 * S.ser[j][i]), S.son.ctx.currentTime, 0.03); if (!vis.has(j)) v.g.gain.value = 0; });
+      racine.dataset.tete = String(i);
+    } else S.tete = null;
     if (S.sale) { S.sale = false; dessiner(); peindreSeries(); if (S.dessines < S.n || S.rotation) peindrePanneaux(); }
   }
   requestAnimationFrame(boucle);
@@ -464,15 +589,27 @@ export function monter(racine, ctx = {}) {
     void optionsPayer(selPay);
     bMint.addEventListener('click', () => preparerMint({ selPay, signe, dit }));
   }
+  /* 2026-11-01 (Phil : « payement des stocks tokenized et usdc comme pour les slots ») : comme la carte des jeux — le menu = USDC + les
+   *   jetons TENUS en assez grande quantite ; en dessous, TOUS les jetons qui peuvent payer, grises avec leur raison et leur cout pour 5 USDC.
+   *   Sans wallet : la liste quand meme (lecture seule), « Connect a wallet to pay with a token ». */
   async function optionsPayer(sel) {
     const P = ctx.payer, c = ctx.compte && ctx.compte();
-    if (!P || !c) return;
-    try { await P.lire(String(c).toLowerCase()); } catch (_) { return; }
-    for (const l of P.lignes()) {
-      const e = P.taille(l, PRIX_TAM), s = P.soldes.get(l.jeton), d = P.dec.get(l.jeton);
-      if (!e.ok || s == null || d == null || s < e.est) continue;
-      sel.append(el('option', { value: l.jeton, text: P.sym(l) + ' — about ' + P.qte(e.est, d) + ' for 5 USDC' }));
+    if (!P) return;
+    const tous = el('details', { class: 'tamPayTous', id: 'tamPayTous' }), ul = el('ul', { class: 'tamPayListe' });
+    try { if (c) await P.lire(String(c).toLowerCase()); else if (P.lister) await P.lister(); } catch (_) { return; }
+    const lignes = P.lignes(), autres = [];
+    for (const l of lignes) {
+      const e = P.taille(l, PRIX_TAM), s = c ? P.soldes.get(l.jeton) : null, d = P.dec.get(l.jeton);
+      const cout = !e.ok ? 'not for 5 USDC: ' + e.raison : d == null ? 'cost not read yet' : 'about ' + P.qte(e.est, d) + ' for 5 USDC';
+      if (c && e.ok && s != null && d != null && s >= e.est) { sel.append(el('option', { value: l.jeton, text: P.sym(l) + ' — ' + cout })); continue; }
+      const pourquoi = !c ? '' : s == null ? 'balance not read' : s === 0n ? 'you hold none' : e.ok && s < e.est ? 'you hold too little' : '';
+      autres.push(el('li', {}, el('b', { text: P.sym(l) }), document.createTextNode(' — ' + [pourquoi, cout].filter(Boolean).join(' · '))));
     }
+    if (!autres.length) return;
+    ul.replaceChildren(...autres);
+    tous.replaceChildren(el('summary', { text: 'All ' + lignes.length + ' tokens that can pay' + (c ? ' · ' + (lignes.length - autres.length) + ' in the menu' : '') }), ul,
+      el('p', { class: 'tamDoux', text: c ? 'Greyed tokens cannot be picked until your wallet holds enough.' : 'Connect a wallet to pay with a token.' }));
+    sel.closest('.tamRang').after(tous);
   }
   async function lireContrat(contrat) {
     const lire = async (sig) => ctx.rpc('eth_call', [appelLecture(contrat, sig), 'latest']);
@@ -566,6 +703,8 @@ export function monter(racine, ctx = {}) {
   }
 
   optionsDims(); depuisExplorateur(); void galerie();
-  racine.__tam = { S, charger };
+  /* 2026-11-01 : le bouton « Make art from this block's brain » de l onglet Brain — la source = ce block, puis le meme clic que l onglet */
+  const choisirDepuisBloc = () => { S.sourceBloc = true; peindreSource(); bCerveau.click(); };
+  racine.__tam = { S, charger, choisirDepuisBloc };
   return racine.__tam;
 }

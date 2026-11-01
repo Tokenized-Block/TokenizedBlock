@@ -2699,6 +2699,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="sous">128 spiking neurons per block, seeded by its address. <b>Not an LLM</b> — feeds on market + chain, moves the block, <b>signs nothing</b>.
         Option A: it proposes; you pay; it writes the journal — never freestyle-signs markets. Pick any listed block — TBLOCK is not forced.</p>
       <label class="champ">Block<select id="bChoix"></select></label>
+      <!-- 2026-11-01 (Phil) : l art de CE cerveau — ouvre TAM, le block choisi ici choisit l oeuvre (rebati sur le serveur, dit tel quel) -->
+      <button type="button" class="bouton sec" id="bArtTam" style="margin-top:8px">Make art from this block’s brain</button>
       <div class="pJeuTete" style="margin-top:12px">
         <span class="pBadge" id="bPhase">—</span>
         <span class="pPV"><b id="bTick">0</b> ticks</span>
@@ -3534,7 +3536,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261101-game74" hidden>Build <code>20261101-game74</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261101-game75" hidden>Build <code>20261101-game75</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8753,14 +8755,24 @@ function ouvrirTam() {
   tamEnVol = import('./tam-onglet.js').then((m) => m.monter(r, {
     rpc: (methode, params) => rpc(methode, params),
     compte: () => { try { return compte; } catch (_) { return null; } },
+    /* 2026-11-01 (Phil : « integrer au brain actuel ») : le block ouvert dans l onglet Brain — son cerveau peut choisir l oeuvre */
+    blocCerveau: () => { try { return brainAdr; } catch (_) { return null; } },
     payer: { lignes: () => payerListees(), taille: (l, usdc) => payerTaille(l, usdc), get soldes() { return payer.soldes; }, get dec() { return payer.dec; },
       sym: (l) => symbolePayer(l), qte: (b, d) => qteJeton(b, d),
+      /* 2026-11-01 (Phil : payer en actions tokenisees comme les slots) : la liste des misables, MEME sans wallet (lecture seule) */
+      lister: async () => { await lireMisablesPage(); },
       lire: async (moi) => { await lireMisablesPage(); if (moi !== payer.compte) { payer.compte = moi; payer.soldes = new Map(); payer.soldesA = 0; } if (payer.lignes && Date.now() - payer.soldesA >= PAYER_TTL_MS) await lireSoldesPayer(moi); } },
     preparer: (o) => preparerPaiementJeton(o),
     envoyer: (pj, c, dit) => envoyerPaiementJeton(pj, c, dit),
   })).catch((e) => { tamEnVol = null; r.textContent = 'The TAM tab could not load. Reload the page to try again.'; try { console.error(e); } catch (_) { /* rien */ } });
   return tamEnVol;
 }
+document.getElementById('bArtTam')?.addEventListener('click', async () => {
+  const nav = document.querySelector('.navB[data-volet="tam"]');
+  if (nav) nav.click();
+  const api = await ouvrirTam();
+  if (api && api.choisirDepuisBloc) api.choisirDepuisBloc();
+});
 document.querySelector('.navIn').addEventListener('click', (e) => {
   const b = e.target.closest('.navB');
   if (!b) return;
