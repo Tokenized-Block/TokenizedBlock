@@ -10,7 +10,7 @@
 import * as PHY from './tam-physique.js';
 import * as SCI from './tam-sciences.js';
 import * as FLU from './tam-fluides.js';
-import { projeterND, standardiserND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
+import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
 
 export const VERSION_SCIENCE = 'sci1';
@@ -53,6 +53,20 @@ export function validerScience(P) {
   return { ok: true, code: 'DANS_LES_BORNES', raison: null };
 }
 
+/** game77 (chasse aux bugs : Rabi 0.1 vs 5 -> distance 0.005, omega, lambda, hauteur -> 0.000) : la standardisation PAR AXE ramenait
+ *   chaque axe a la meme taille et effacait ce que ces curseurs reglent. Une science garde ses PROPORTIONS : centree par axe, divisee
+ *   par UN seul ecart-type (le plus grand des axes). Aucune science n est mintee (totalSupply = 0 le 01/11). */
+export function standardiserIso(brut, n, D) {
+  const z = new Float64Array(n * D), m = new Float64Array(D); let sMax = 0;
+  for (let j = 0; j < D; j++) {
+    let a = 0; for (let i = 0; i < n; i++) a += brut[i * D + j]; m[j] = a / n;
+    let v = 0; for (let i = 0; i < n; i++) { const w = brut[i * D + j] - m[j]; v += w * w; }
+    const s = Math.sqrt(v / n); if (s > sMax) sMax = s;
+  }
+  const k = sMax > 0 ? 1 / sMax : 0;
+  for (let i = 0; i < n; i++) for (let j = 0; j < D; j++) z[i * D + j] = (brut[i * D + j] - m[j]) * k;
+  return z;
+}
 /* le tri Morton d un nuage : la MEME cle que tam-moteur.js#morton (10 bits de poids fort par axe) */
 function morton(x, y, z, q) {
   let k = 0; const s = q - 10;
@@ -65,7 +79,7 @@ export function genererScience(P) {
   const o = s.mod.simuler(P.science, P.params);
   if (!o.bornee || !o.brut) return { ...o, bornee: false };
   const n = o.n, D = o.D, M = (1 << P.q) - 1, ordre = o.nuage ? 1 : 0;
-  const fin = projeterND(standardiserND(o.brut, n, D), n, D, P.angles);
+  const fin = projeterND(standardiserIso(o.brut, n, D), n, D, P.angles);
   let pts = new Int32Array(n * 3);
   for (let i = 0; i < 3 * n; i++) { const v = Math.round((fin[i] + 1) / 2 * M); pts[i] = v < 0 ? 0 : v > M ? M : v; }
   if (ordre === 1) {

@@ -552,9 +552,12 @@ function combiner(proj, P) {
     const m = genererMotif(P.motif, n, null);
     for (let i = 0; i < 3 * n; i++) out[i] = (1 - P.w) * proj[i] + P.w * m[i];
   } else { // composition : motif( u(porteuse) ), u = frac(97 * x_porteuse normalise)
+    /* game77 (chasse aux bugs, mesure : w=0.1 et w=0.6 donnaient le MEME hash, 11/11 familles) : le curseur « blend weight » etait
+     *   offert mais jamais lu ici. Il dose maintenant la part de la porteuse en z (w = 0.5 : l ancien melange). Aucune oeuvre mintee
+     *   (TamArt totalSupply = 0 le 01/11) : aucun rejeu stocke ne change. */
     const u = new Float64Array(n); for (let i = 0; i < n; i++) u[i] = frac((proj[3 * i] + 1) * 0.5 * 97);
     const m = genererMotif(P.motif, n, u);
-    for (let i = 0; i < n; i++) { out[3 * i] = m[3 * i]; out[3 * i + 1] = m[3 * i + 1]; out[3 * i + 2] = 0.5 * m[3 * i + 2] + 0.5 * proj[3 * i + 2]; }
+    for (let i = 0; i < n; i++) { out[3 * i] = m[3 * i]; out[3 * i + 1] = m[3 * i + 1]; out[3 * i + 2] = (1 - P.w) * m[3 * i + 2] + P.w * proj[3 * i + 2]; }
   }
   return normaliser(out);
 }
@@ -564,6 +567,23 @@ function morton(x, y, z, q) {
   return k;
 }
 
+/** game77 : la vue VIVANTE d un melange (somme/composition) — la meme combinaison que la vue stockee, appliquee a une projection
+ *   vivante (couches eteintes, plans caches qui tournent) ; avant, la vue vivante ne montrait que la porteuse. */
+export function combinerVue(proj, params) {
+  const P = completer(params);
+  return P.operateur === 'somme' || P.operateur === 'composition' ? combiner(proj, P) : proj;
+}
+/** game77 : l AFFICHAGE dense d une map 2-D seule (De Jong, Clifford) — N iterations apres le transitoire, pour la VUE seulement :
+ *   jamais stockees ni mintees (l oeuvre reste ses n points). Avant : 1 500 points pales, la forme illisible. null si elle s echappe. */
+export function nuageMap(params, N = 40000) {
+  const P = completer(params), m = MAPS[P.famille];
+  if (!m || P.operateur !== 'seul') return null;
+  const p = P.params, s = [m.x0[0], m.x0[1]];
+  for (let i = 0; i < P.transitoire; i++) { m.f(s, p); if (horsBorne(s, 2, 1e3)) return null; }
+  const out = new Float32Array(2 * N);
+  for (let i = 0; i < N; i++) { m.f(s, p); if (horsBorne(s, 2, 1e3)) return null; out[2 * i] = s[0]; out[2 * i + 1] = s[1]; }
+  return out;
+}
 export function generer(params) {
   const P = completer(params), car = genererPorteuse(P);
   if (!car.bornee) return { params: P, D: car.D, bornee: false, echappeA: car.echappeA, lyapunov: NaN, points: null };

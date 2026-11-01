@@ -320,7 +320,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(!sv2.ok && sv2.etat === 'REFUSE' && sv2.codes.includes('CYCLE'), '/api/tam/certifier : un cycle est REFUSE avec sa raison');
   ok((await srv.certifierParams(b64({ ...Pm, n: 50000 }))).codes.includes('HORS_BORNES') && (await srv.certifierParams('%%%')).etat === 'REFUSE' && (await srv.certifierParams(Buffer.from('x'.repeat(5000)).toString('base64url'))).etat === 'REFUSE', '/api/tam/certifier : hors bornes, illisible, trop long -> REFUSE');
   /* (f) l onglet est cable sur CES fonctions (presence ; le comportement est prouve ci-dessus) */
-  ok(/V\.peutMinter\(\{ dep: TAMART_DEPLOIEMENT, local: S\.c, serveur, octets: oct, P: S\.P, compte: c \}\)/.test(onglet) && /if \(!porte\.ok\) \{ dit\.textContent = 'Not ready: '/.test(onglet), 'preparerMint passe par V.peutMinter avant toute lecture du contrat');
+  ok(/V\.peutMinter\(\{ dep: TAMART_DEPLOIEMENT, local: c0, serveur, octets: oct, P: P0, compte: c \}\)/.test(onglet) && /if \(!porte\.ok\) \{ dit\.textContent = 'Not ready: '/.test(onglet), 'preparerMint passe par V.peutMinter avant toute lecture du contrat');
   ok(/const vb = S\.P\.regle \? M\.validerReglage\(S\.P\)/.test(onglet) && /S\.c && S\.c\.ok\);/.test(onglet), 'une oeuvre reglee : bornes puis certificats ; pas de zone Mint sans certificat local');
   ok(/V\.oeuvreReglee\(/.test(onglet) && /M\.coupDePouce\(S\.P, S\.cerveauEtat\)/.test(onglet) && /data-chemin/.test(onglet), 'curseurs -> V.oeuvreReglee ; bouton du cerveau -> M.coupDePouce');
   ok(/'\/api\/tam\/choix\?draw=' \+ tirage \+ \(c \? '&minter=' \+ c : ''\)/.test(onglet) && /q\.get\('minter'\), ipT, q\.get\('draw'\)/.test(serveur) && /crypto\.getRandomValues\(new Uint8Array\(8\)\)/.test(onglet) && /chemin === '\/api\/tam\/certifier'/.test(serveur), 'le wallet est transmis au choix ; la route /api/tam/certifier existe');
@@ -335,6 +335,17 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   /* le son suit le point montre (tete puis curseur), plus un index qui avance d un point par image */
   ok(/S\.tete = Math\.max\(0, Math\.floor\(S\.dessines\) - 1\)/.test(onglet) && /S\.ser\[j\]\[i\]/.test(onglet) && !/idx = \(idx \+ 1\) % S\.n/.test(onglet), 'son : la frequence lit le point dessine, pas un compteur d images');
   ok(/el\('h2', \{ text: 'Tokenized Art Math' \}\)/.test(onglet), 'titre : Tokenized Art Math');
+  /* game77 : la chasse aux bugs (chaque correctif a son temoin) */
+  { const Pc = T.structurer({ famille: 'lorenz', operateur: 'composition', motif: { famille: 'julia' } });
+    ok(T.rejouer(T.appliquerReglage(Pc, 'w', 0.1)).hash !== T.rejouer(T.appliquerReglage(Pc, 'w', 0.6)).hash, 'composition : le curseur « blend weight » change l oeuvre (avant : meme hash)'); }
+  { const d = T.nuageMap(T.structurer({ famille: 'dejong' }), 40000); ok(d && d.length === 80000 && d.every(Number.isFinite), 'De Jong : 40 000 iterations pour la VUE');
+    ok(T.nuageMap(T.structurer({ famille: 'lorenz' })) === null, 'nuageMap : rien pour un attracteur continu'); }
+  ok((onglet.match(/if \(S\.son\) arreterSon\(\);/g) || []).length >= 4, 'le son est coupe a chaque nouvelle oeuvre (D change : plus de plantage par image)');
+  ok(/M\.combinerVue\(vif, S\.P\)/.test(onglet) && /const nuageStocke = S\.P\.ordre === 1;/.test(onglet), 'vue vivante : le melange garde son motif ; un nuage se dessine dans l ordre du temps');
+  ok(/if \(entierReglage\(r\)\) \{ v = Math\.round\(v\); if \(k > 0 && v === r\.valeur\)/.test(onglet), 'chaos : un parametre entier bouge au moins d un cran');
+  ok(/R\.filter\(\(r\) => r\.nom !== 'G4'\)/.test(onglet) && /max: Math\.max\(0, params\.n - 1\)/.test(onglet), 'curseurs morts retires : G4 a 3 tourbillons, l <= n-1');
+  { const TSm = await import('./tam-science.js'); const z = TSm.standardiserIso(Float64Array.from([0, 0, 0, 1, 0, 0, 2, 0, 0, 3, 0, 0]), 4, 3);
+    ok(Math.abs(z[3] - z[0]) > 0.5 && [1, 2, 4, 5, 7, 8, 10, 11].every((i) => z[i] === 0), 'science : echelle commune (un axe plat reste plat, il n est pas gonfle)'); }
   /* game76 : les sciences en direct — modules SERVIS (sinon page morte), vue seule (jamais de Mint), unites en anglais */
   ok(/'tam-physique\.js', 'tam-sciences\.js', 'tam-fluides\.js'/.test(serveur), 'les 3 modules de science sont dans la liste servie');
   /* ⛔ corrige le 01/11 : TamArt v1 ne connait pas la famille (octet 4 = q) — une science se minte, par le MEME portail */

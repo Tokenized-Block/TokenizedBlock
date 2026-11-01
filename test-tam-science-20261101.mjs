@@ -49,7 +49,9 @@ ok(T.certifierScience(P0, [autre]).ok, 'une oeuvre differente deja mintee : cert
 /* 4. cablage : serveur et onglet */
 const serveur = fs.readFileSync(path.join(ICI, 'tam-serveur.js'), 'utf8'), onglet = fs.readFileSync(path.join(ICI, 'tam-onglet.js'), 'utf8'), web = fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8');
 ok(/P && P\.science \? certifierScience\(P, existantes\) : certifierReglage\(P, existantes\)/.test(serveur), 'le serveur certifie une science avec certifierScience');
-ok(/\(S\.science \? TS\.rejouerScience : rejouer\)\(/.test(onglet) && /if \(S\.P\.regle \|\| S\.science\) \{/.test(onglet), 'l onglet rejoue une science et la fait certifier par le serveur avant de signer');
+ok(/\(sci0 \? TS\.rejouerScience : rejouer\)\(/.test(onglet) && /if \(P0\.regle \|\| sci0\) \{/.test(onglet), 'l onglet rejoue une science et la fait certifier par le serveur avant de signer');
+/* game77 : l oeuvre est FIGEE au clic (course : un curseur bouge pendant la verification) */
+ok(/const P0 = S\.P, oct0 = S\.octets, c0 = S\.c, choix0 = S\.choix, sci0 = !!S\.science;/.test(onglet) && (onglet.match(/if \(change\(\)\) \{ dit\.textContent = 'The work changed/g) || []).length === 2, 'mint : oeuvre figee au clic, verifiee deux fois apres les attentes');
 ok(/'tam-science\.js'/.test(web), 'tam-science.js est servi');
 
 /* 5. mutants sur COPIES */

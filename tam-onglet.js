@@ -27,6 +27,16 @@ const groupeDe = (s) => s.science === 'Quantum mechanics' ? 'quantique' : s.scie
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
 const GROUPES = [['attracteurs', 'Attractors (chosen by the brain)'],['physique', 'Physics: gravity, relativity, fusion'], ['fractales', 'Fractals & golden ratio'],
   ['quantique', 'Quantum'], ['fluides', 'Fluid mechanics']];
+/* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
+ *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */
+function reglagesVivants(s, params) {
+  let R = s.mod.reglagesPhysique(s.id, params);
+  if (s.id === 'hydrogene') R = R.map((r) => r.nom === 'l' ? { ...r, max: Math.max(0, params.n - 1) } : r.nom === 'm' ? { ...r, min: -params.l, max: params.l } : r);
+  if (s.id === 'tourbillonsPonctuels' && params.nombre < 4) R = R.filter((r) => r.nom !== 'G4');
+  return R;
+}
+/* un reglage ENTIER : bornes et valeur entieres, plage courte (n, l, m, k, nombre, graine…) */
+const entierReglage = (r) => Number.isInteger(r.min) && Number.isInteger(r.max) && Number.isInteger(r.valeur) && r.max - r.min <= 1e6 && /^(n|l|m|k|nombre|graine|tours|maxIter|puissance|periodes)$/.test(r.nom);
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
@@ -39,7 +49,13 @@ function ligneInvariant(k, v) {
     /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
     if ('mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' vs formula ' + nb4(v.formule) + (k === 'precession' ? ' (weak-field formula: it underestimates close to the black hole)' : '');
     if ('mesure' in v && 'theorie' in v) return k + ': measured ' + nb4(v.mesure) + ' vs theory ' + nb4(v.theorie);
-    if ('derive' in v) return k + ': drift ' + nb4(v.derive) + ('debut' in v ? ' (from ' + nb4(v.debut) + ')' : '');
+    if ('derive' in v) {
+      /* game77 (chasse aux bugs : « gamma: drift 1.6 » se lisait comme un test rate) : une derive RELATIVE au-dela de 1e-3 n est pas une
+       *   loi conservee — on dit la plage ; une petite derive est dite relative a sa valeur de depart (ou absolue si le depart vaut 0) */
+      const ref = Math.abs(v.debut ?? 0), rel = ref > 1e-12 ? Math.abs(v.derive) / ref : null;
+      if ((rel !== null && rel > 1e-3) || (rel === null && Math.abs(v.derive) > 1e-6)) return k + ': varies' + ('min' in v && 'max' in v ? ' from ' + nb4(v.min) + ' to ' + nb4(v.max) : ' by ' + nb4(v.derive)) + ' (not conserved here)';
+      return k + ': conserved — drift ' + nb4(rel !== null ? rel : Math.abs(v.derive)) + (rel !== null ? ' relative' : ' absolute');
+    }
     return k + ': ' + Object.entries(v).filter(([, x]) => typeof x === 'number').slice(0, 3).map(([a, x]) => a + ' ' + nb4(x)).join(', ');
   }
   return k + ': ' + nb4(v);
@@ -52,6 +68,9 @@ const CSS = `
 #v-tam .tamDoux{color:var(--tam-doux);font-size:.86rem;margin:4px 0}
 #v-tam .tamRang{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
 #v-tam button,#v-tam select{min-height:44px;min-width:44px;border-radius:10px;border:1px solid var(--tam-bord);background:rgba(255,255,255,.06);color:var(--tam-txt);padding:0 12px;font:inherit;font-size:.92rem;max-width:100%}
+/* game77 (Phil, capture : le menu deroulant est transparent, on voit le graphe a travers) : menus et options sur fond OPAQUE */
+#v-tam select{background:#161a2b;color:var(--tam-txt);color-scheme:dark}
+#v-tam select option,#v-tam select optgroup{background:#161a2b;color:var(--tam-txt)}
 #v-tam button[aria-pressed="true"]{background:rgba(127,209,255,.18);border-color:var(--tam-acc)}
 #v-tam .tamPrim{background:var(--tam-acc);color:#06121d;border-color:var(--tam-acc);font-weight:600}
 #v-tam .tamScene{position:relative;width:100%;aspect-ratio:1/1;max-height:62vh;border-radius:12px;overflow:hidden;background:var(--tam-fond);touch-action:none}
@@ -217,8 +236,9 @@ export function monter(racine, ctx = {}) {
     if (!o.bornee) {
       /* un reglage qui diverge : la scene se vide, le verdict le dit, rien n est mintable (pas un vieux dessin sous un nouveau curseur) */
       S.P = o.params; S.o = null; S.ser = null; S.octets = null; S.choix = choix; S.c = { ok: false, codes: ['DIVERGE'], raisons: ['diverge'] };
-      etatLigne.textContent = 'This combination escapes to infinity: nothing to draw.';
-      verdictTxt.textContent = V.verdictReglage(S.c).texte; peindreReglages(); peindreMint(); S.sale = true; return;
+      etatLigne.textContent = 'This combination escapes to infinity: nothing to draw.'; S.dense = null; S.science = null;
+      if (S.son) arreterSon();
+      verdictTxt.textContent = V.verdictReglage(S.c).texte; peindreReglages(); peindreMint(); peindreCarte(); peindreVarsScene(); S.sale = true; return;
     }
     S.P = o.params; S.o = o; S.D = o.D; S.n = o.n; S.choix = choix; S.science = null; racine.dataset.science = '';
     if (choix && choix.cerveau) S.origine = choix.cerveau;
@@ -227,7 +247,10 @@ export function monter(racine, ctx = {}) {
     S.c = vb.ok ? certifier(o, []) : { ok: false, bornee: true, codes: ['HORS_BORNES'], raisons: [vb.raison], lyapunov: o.lyapunov };
     verdictTxt.textContent = V.verdictReglage(S.c).texte;
     S.z = V.standardiser(o.brut, o.n, o.D); S.ser = V.series(S.z, o.n, o.D);
+    if (S.son) arreterSon(); /* game77 : voir chargerScience */
     S.couches = V.etatCouches(S.D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
+    /* game77 (De Jong « reste le meme ») : une map 2-D seule est dessinee DENSE (40 000 iterations, vue seulement) */
+    S.dense = null; try { const d = M.nuageMap(S.P, 40000); if (d) S.dense = d; } catch (_) { S.dense = null; }
     S.octets = octetsServeur; S.stocke = (() => { try { const d = decoder(octetsDe(octetsServeur) || rejouer(P).octets); return d.positions; } catch (_) { return null; } })();
     curseur.min = String(Math.min(S.D, 2)); curseur.max = String(S.D); curseur.value = String(S.D);
     peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
@@ -242,9 +265,11 @@ export function monter(racine, ctx = {}) {
     try { o = s.mod.simuler(id, params); } catch (_) { etatLigne.textContent = 'This system could not be computed.'; return; }
     if (!o || !o.bornee || !o.brut) {
       S.o = null; S.ser = null; S.science = { s, o: o || null }; S.P = { science: id, params: (o && o.params) || params, angles: [] };
-      S.octets = null; S.c = { ok: false, raisons: ['the simulation left its valid domain'] };
+      S.octets = null; S.c = { ok: false, raisons: ['the simulation left its valid domain'] }; S.dense = null;
+      if (S.son) arreterSon();
       etatLigne.textContent = s.nom + ': the simulation left its valid domain (' + ((o && o.raison) || 'escaped') + '). Nothing to draw — change a variable.';
-      peindreReglages(); peindreMint(); S.sale = true; return;
+      /* game77 : la carte et la scene ne gardent plus les valeurs de l oeuvre d avant (« Bounded: yes » sous une scene vide) */
+      peindreReglages(); peindreMint(); peindreCarte(); peindreVarsScene(); peindreQui(); S.sale = true; return;
     }
     const D = o.D;
     /* les params MINTABLES (tam-science.js) : bornes du module, angles d or, q = 12, tires pour CE wallet ; les octets = le rejeu */
@@ -255,8 +280,10 @@ export function monter(racine, ctx = {}) {
     S.octets = cert.octets ? hexDe(cert.octets) : null;
     /* le certificat LOCAL (aucune oeuvre mintee comparee) ; le serveur refait la distance contre TOUTES au clic sur Mint */
     S.c = { ...cert, lyapunov: typeof o.lyapunov === 'number' ? o.lyapunov : NaN, uniteLyapunov: o.uniteLyapunov };
-    S.z = V.standardiser(o.brut, o.n, D); S.ser = V.series(S.z, o.n, D);
-    S.couches = V.etatCouches(D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
+    /* game77 : les proportions de la science (meme echelle pour tous les axes), comme les octets mintes (tam-science.js) */
+    S.z = TS.standardiserIso(o.brut, o.n, D); S.ser = V.series(S.z, o.n, D);
+    if (S.son) arreterSon(); /* game77 : le son avait min(D,12) voix ; une oeuvre a moins de dimensions le faisait planter a chaque image */
+    S.couches = V.etatCouches(D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null; S.dense = null;
     curseur.min = String(Math.min(D, 2)); curseur.max = String(D); curseur.value = String(D);
     peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
     etatLigne.textContent = s.phrase;
@@ -288,7 +315,7 @@ export function monter(racine, ctx = {}) {
         el('span', { text: S.D + '-D · ' + S.n + (o && o.nuage ? ' samples (a cloud, not a path)' : ' points') }),
         ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).slice(0, 4).map(([k, v]) => el('span', { class: 'tamMesure', text: ligneInvariant(k, v) })),
         ...(lam ? [el('span', { class: 'tamMesure', text: lam })] : []),
-        ...(m ? [el('span', { class: 'tamMesure', text: 'resolution 1/' + m.cote + ': ' + m.N + ' boxes · local dimension ≈ ' + (Number.isFinite(m.dim) ? m.dim.toFixed(2) : '—') + (m.sature ? ' (too fine for ' + S.n + ' points)' : '') })] : []));
+        ...(m ? [el('span', { class: 'tamMesure', text: 'resolution 1/' + m.cote + ': ' + m.N + ' boxes · local dimension ≈ ' + (Number.isFinite(m.dim) ? m.dim.toFixed(2) : '—') + (m.sature ? ' (too fine for ' + m.points + ' points)' : '') })] : []));
       return;
     }
     const R = M.reglagesDe(S.P);
@@ -296,8 +323,8 @@ export function monter(racine, ctx = {}) {
     const m = mesureResolution(), c = S.c || {};
     resTxt.textContent = m ? '1/' + m.cote : '';
     const lam = Number.isFinite(c.lyapunov) ? 'λ = ' + c.lyapunov.toFixed(3) + (c.uniteLyapunov === 'par iteration' ? ' per step' : ' per time unit') + (c.lyapunov > 0.02 ? ' (above 0.02: nearby paths split apart — chaotic)' : ' (0.02 or less: no measurable chaos — nearby paths stay together)') : null;
-    const res = m ? 'resolution 1/' + m.cote + ' on ' + m.vis + ' layers: ' + m.N + ' boxes hold the curve · local dimension ≈ ' + (Number.isFinite(m.dim) ? m.dim.toFixed(2) : '—')
-      + (m.sature ? ' (too fine for ' + S.n + ' points: read it as a lower bound)' : '') : null;
+    const res = m ? 'resolution 1/' + m.cote + ' on the drawn view (' + (m.dense ? 'the 2-D map, ' + m.points.toLocaleString('en-US') + ' points' : m.vis + ' layers') + '): ' + m.N + ' boxes hold the shape · local dimension ≈ ' + (Number.isFinite(m.dim) ? m.dim.toFixed(2) : '—')
+      + (m.sature ? ' (too fine for ' + m.points.toLocaleString('en-US') + ' points: read it as a lower bound)' : '') : null;
     varsScene.replaceChildren(
       el('b', { text: V.combinaison(S.P) }),
       ...R.map((r) => el('span', { text: r.nom + ' = ' + r.valeur.toFixed(4) })),
@@ -343,15 +370,22 @@ export function monter(racine, ctx = {}) {
   let cheminsPeints = '';
   function peindreReglages() {
     if (S.science) {
-      const R = S.science.s.mod.reglagesPhysique(S.science.s.id, S.P.params), cles = 'sci:' + S.science.s.id;
+      const R = reglagesVivants(S.science.s, S.P.params), cles = 'sci:' + S.science.s.id + ':' + R.map((r) => r.chemin + r.min + r.max).join('|');
       if (cles !== cheminsPeints) {
         cheminsPeints = cles;
         curseurs.replaceChildren(...R.map((r) => {
           const id = 'tamR-' + r.chemin.replace('.', '-');
+          /* game77 : un parametre ENTIER (nombres quantiques, nombre de tourbillons, graine) a un pas de 1 — plus de « 2.347 » */
+          const pas = entierReglage(r) ? '1' : String((r.max - r.min) / 400);
           return el('div', { class: 'tamReglage' },
             el('label', { for: id, class: 'tamDoux', text: r.nom + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
-            el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: String((r.max - r.min) / 400), value: String(r.valeur), 'aria-label': r.nom }));
+            el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': r.nom }));
         }));
+      } else for (const r of R) {
+        /* game77 : apres Chaos (ou un parametre ramene par le module), curseurs et etiquettes disent la valeur REELLE */
+        const i = curseurs.querySelector('input[data-chemin="' + r.chemin + '"]'), s = curseurs.querySelector('output[data-sortie="' + r.chemin + '"]');
+        if (i && document.activeElement !== i) i.value = String(r.valeur);
+        if (s) s.textContent = nb4(r.valeur);
       }
       racine.dataset.reglages = String(R.length);
       verdictTxt.textContent = S.c && S.c.ok ? 'Mintable for 5 USDC once the server checks it is distinct from every minted work.' : 'Not mintable: ' + ((S.c && S.c.raisons || []).join('; ') || 'the simulation left its valid domain') + '.';
@@ -398,10 +432,17 @@ export function monter(racine, ctx = {}) {
     if (!S.P) return;
     if (S.science) {
       /* une science : chaque variable saute au hasard dans ses bornes, puis on resimule (le module borne encore) */
-      const k = Number(curChaos.value) / 100, id = S.science.s.id, R = S.science.s.mod.reglagesPhysique(id, S.P.params), u = new Uint32Array(Math.max(1, R.length));
+      const k = Number(curChaos.value) / 100, id = S.science.s.id, R = reglagesVivants(S.science.s, S.P.params), u = new Uint32Array(Math.max(1, R.length));
       crypto.getRandomValues(u);
       const Q = { ...S.P.params };
-      R.forEach((r, i) => { Q[r.chemin.replace(/^params\./, '')] = Math.min(r.max, Math.max(r.min, r.valeur + (u[i] / 4294967296 * 2 - 1) * k * (r.max - r.min) / 2)); });
+      R.forEach((r, i) => {
+        const x = u[i] / 4294967296 * 2 - 1;
+        let v = Math.min(r.max, Math.max(r.min, r.valeur + x * k * (r.max - r.min) / 2));
+        /* game77 (2 000 secousses : n, l, m, k, nombre restaient fixes 100 % du temps) : un entier est arrondi, et s il retombe sur sa
+         *   valeur alors que chaos > 0, il bouge d UN cran (vers le cote tire) — dans ses bornes */
+        if (entierReglage(r)) { v = Math.round(v); if (k > 0 && v === r.valeur) v = Math.min(r.max, Math.max(r.min, r.valeur + (x >= 0 ? 1 : -1))); }
+        Q[r.chemin.replace(/^params\./, '')] = v;
+      });
       chargerScience(id, Q);
       return;
     }
@@ -416,15 +457,25 @@ export function monter(racine, ctx = {}) {
   });
   /* la mesure a une resolution : 2^r boites par cote, sur les couches visibles (series normalisees 0..1) ; la dimension locale = pente
    *   log2 N(2^r) / N(2^(r-1)). Avec 1 500 points, une resolution trop fine sature : on le dit au lieu d afficher un chiffre faux. */
-  function boites(r) {
-    const cote = 1 << r, vis = V.dimsVisibles(S.couches), occ = new Set();
-    for (let i = 0; i < S.n; i++) occ.add(vis.map((j) => Math.min(cote - 1, Math.floor(S.ser[j][i] * cote))).join(','));
+  /* game77 (chasse aux bugs : 12-D sature a toutes les resolutions, un melange mesurait sa porteuse, « 1 boxes » couches eteintes) :
+   *   on mesure la VUE DESSINEE (3-D normalisee, melange et nuage compris) — ou le nuage dense d une map (2-D, 40 000 points). */
+  function boites(pts, dim, r) {
+    const cote = 1 << r, occ = new Set(), m = pts.length / dim;
+    for (let i = 0; i < m; i++) { let cle = 0; for (let c = 0; c < dim; c++) cle = cle * cote + Math.min(cote - 1, Math.max(0, Math.floor((pts[i * dim + c] + 1) / 2 * cote))); occ.add(cle); }
     return occ.size;
   }
   function mesureResolution() {
-    if (!S.ser || !S.couches) return null;
-    const r = Number(curRes.value), N = boites(r), N0 = boites(r - 1);
-    return { cote: 1 << r, N, dim: N0 > 0 ? Math.log2(N / N0) : NaN, sature: N > S.n / 3, vis: V.dimsVisibles(S.couches).length };
+    if (!S.o || !S.couches || V.dimsVisibles(S.couches).length === 0) return null;
+    let pts, dim;
+    if (S.dense && !S.science) {
+      const d = S.dense; let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+      for (let i = 0; i < d.length; i += 2) { if (d[i] < x0) x0 = d[i]; if (d[i] > x1) x1 = d[i]; if (d[i + 1] < y0) y0 = d[i + 1]; if (d[i + 1] > y1) y1 = d[i + 1]; }
+      const h = Math.max(x1 - x0, y1 - y0) / 2 || 1; pts = new Float64Array(d.length);
+      for (let i = 0; i < d.length; i += 2) { pts[i] = (d[i] - (x0 + x1) / 2) / h; pts[i + 1] = (d[i + 1] - (y0 + y1) / 2) / h; }
+      dim = 2;
+    } else { pts = positions(); dim = 3; }
+    const r = Number(curRes.value), N = boites(pts, dim, r), N0 = boites(pts, dim, r - 1), m = pts.length / dim;
+    return { cote: 1 << r, N, dim: N0 > 0 ? Math.log2(N / N0) : NaN, sature: N > m / 3, vis: V.dimsVisibles(S.couches).length, points: m, dense: dim === 2 };
   }
   curRes.addEventListener('input', () => peindreVarsScene());
   bPouce.addEventListener('click', () => {
@@ -522,8 +573,13 @@ export function monter(racine, ctx = {}) {
   let proj = null, projSx = null, projSy = null, dominant = null;
   function positions() {
     const tous = S.couches.actives.every(Boolean);
-    if (tous && S.t === 0 && S.stocke && S.stocke.length === S.n * 3) return S.stocke; /* arrete, toutes couches : l oeuvre STOCKEE */
-    return V.projeterVivant({ z: S.z, n: S.n, D: S.D, actives: S.couches.actives, angles: S.P.angles, t: S.t });
+    /* game77 : un NUAGE stocke est trie (Morton) — ses index ne sont plus le temps : couleurs et survol visaient d autres points.
+     *   Pour un nuage on dessine la projection dans l ordre du temps (la meme geometrie). */
+    const nuageStocke = S.P.ordre === 1;
+    if (!nuageStocke && tous && S.t === 0 && S.stocke && S.stocke.length === S.n * 3) return S.stocke; /* arrete, toutes couches : l oeuvre STOCKEE */
+    const vif = V.projeterVivant({ z: S.z, n: S.n, D: S.D, actives: S.couches.actives, angles: S.P.angles, t: S.t });
+    /* game77 : la vue vivante d un MELANGE garde son motif (avant : la porteuse seule des qu une couche etait eteinte ou que ca tournait) */
+    return !S.science && (S.P.operateur === 'somme' || S.P.operateur === 'composition') ? M.combinerVue(vif, S.P) : vif;
   }
   function dimDominante() {
     const d = new Int8Array(S.n), act = S.couches.actives;
@@ -535,6 +591,7 @@ export function monter(racine, ctx = {}) {
     if (cv.width !== L || cv.height !== H) { cv.width = L; cv.height = H; }
     const g = cv.getContext('2d'); g.fillStyle = '#0b0d17'; g.fillRect(0, 0, L, H);
     if (!S.o) return;
+    if (S.dense && !S.science) { proj = null; projSx = null; dessinerDense(g, L, H, dpr); return; }
     const cam = S.cam || CAM0, pos = positions(); proj = pos; dominant = dimDominante();
     const sc = Math.min(L, H) * 0.42, n = Math.min(S.n, Math.max(2, Math.floor(S.dessines)));
     projSx = new Float32Array(S.n); projSy = new Float32Array(S.n);
@@ -546,7 +603,8 @@ export function monter(racine, ctx = {}) {
       projSx[i] = u ? u.sx : NaN; projSy[i] = u ? u.sy : NaN; pz[i] = u ? u.zc : 0;
     }
     const nuage = S.P.ordre === 1 || !!(S.science && S.o && S.o.nuage);
-    g.lineWidth = Math.max(1, dpr * 1.1); g.lineCap = 'round';
+    /* game77 : un nuage se dessinait en points de 0,6 px a peine visibles — des points ronds de ~2 px, plus lisibles */
+    g.lineWidth = nuage ? Math.max(2, dpr * 2.2) : Math.max(1, dpr * 1.1); g.lineCap = 'round';
     /* glow : un halo de la couleur du trait (shadowBlur), sur des chemins groupes par couleur — quelques dizaines de stroke, pas un par point */
     g.shadowBlur = 7 * dpr;
     let cour = -2;
@@ -564,14 +622,41 @@ export function monter(racine, ctx = {}) {
       g.shadowColor = coul; g.shadowBlur = 14 * dpr; g.fillStyle = coul; g.beginPath(); g.arc(projSx[i], projSy[i], r * dpr, 0, 2 * Math.PI); g.fill();
       if (txt) { g.shadowBlur = 0; g.font = (11 * dpr) + 'px system-ui,sans-serif'; g.fillText(txt, projSx[i] + 7 * dpr, projSy[i] - 6 * dpr); }
     };
-    point(0, '#5dffa0', 4, 'start · t = 0');
-    if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, 'end · t = ' + (S.n - 1));
-    else point(n - 1, '#ffffff', 3.2, null);
+    /* game77 : un nuage n a ni debut ni fin (points tires, pas un chemin) : pas de reperes start/end */
+    if (!nuage) {
+      point(0, '#5dffa0', 4, 'start · t = 0');
+      if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, 'end · t = ' + (S.n - 1));
+      else point(n - 1, '#ffffff', 3.2, null);
+    }
     /* le son allume : le point qu il joue, sur la courbe (le meme index que la frequence) */
     if (S.son && S.tete !== null && n >= S.n) point(S.tete, '#ffffff', 4.5, 't = ' + S.tete);
     g.shadowBlur = 0;
     if (S.survol !== null && Number.isFinite(projSx[S.survol])) { g.fillStyle = '#fff'; g.beginPath(); g.arc(projSx[S.survol], projSy[S.survol], 5 * dpr, 0, 2 * Math.PI); g.fill(); }
     info.textContent = S.D + '-D · ' + V.dimsVisibles(S.couches).length + ' layers on' + (S.rotation && S.D > 3 ? ' · hidden planes turning' : '') + (S.t === 0 && S.stocke && S.couches.actives.every(Boolean) ? ' · stored view' : ' · live view');
+  }
+  /* game77 (Phil : « De Jong reste le meme en changeant les variables ») : une map 2-D se lit DE FACE et en DENSITE — 40 000 points
+   *   additionnes en lumiere (composite « lighter »), la couleur suit l ordre d iteration. Zoom et pan de la camera s appliquent ; la
+   *   rotation 3-D, non (une map n a que 2 dimensions). Vue seulement : l oeuvre stockee reste ses 1 500 points. */
+  function dessinerDense(g, L, H, dpr) {
+    const d = S.dense, N = d.length / 2, cam = S.cam || CAM0;
+    /* le cadre : quantiles 0,2 % - 99,8 % (quelques points isoles ecrasaient la forme au centre), calcules une fois par nuage */
+    if (!S.denseCadre || S.denseCadre.d !== d) {
+      const xs = new Float32Array(N), ys = new Float32Array(N); for (let i = 0; i < N; i++) { xs[i] = d[2 * i]; ys[i] = d[2 * i + 1]; }
+      xs.sort(); ys.sort(); const q = (a, p) => a[Math.min(N - 1, Math.max(0, Math.floor(p * (N - 1))))];
+      S.denseCadre = { d, x0: q(xs, 0.002), x1: q(xs, 0.998), y0: q(ys, 0.002), y1: q(ys, 0.998) };
+    }
+    const { x0, x1, y0, y1 } = S.denseCadre;
+    const ech = Math.min(L, H) * 0.44 / Math.max(1e-9, Math.max(x1 - x0, y1 - y0) / 2) * (CAM0.dist / (cam.dist || CAM0.dist));
+    const cx = L / 2 + (cam.ox || 0) * dpr, cy = H / 2 + (cam.oy || 0) * dpr, mx = (x0 + x1) / 2, my = (y0 + y1) / 2;
+    const n = Math.min(N, Math.max(2, Math.floor(S.dessines / S.n * N))), r = Math.max(1, dpr * 0.9);
+    g.globalCompositeOperation = 'lighter'; g.globalAlpha = 0.22;
+    const cols = [V.couleurDim(0), V.couleurDim(1), V.couleurDim(2)];
+    for (let k = 0; k < 3; k++) {
+      g.fillStyle = cols[k];
+      for (let i = k; i < n; i += 3) g.fillRect(cx + (d[2 * i] - mx) * ech - r / 2, cy - (d[2 * i + 1] - my) * ech - r / 2, r, r);
+    }
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+    info.textContent = '2-D map · ' + n.toLocaleString('en-US') + ' iterations shown (view only; the work stores ' + S.n + ')';
   }
   function survolScene(e) {
     if (!projSx) return;
@@ -748,23 +833,29 @@ export function monter(racine, ctx = {}) {
     if (!c) { dit.textContent = 'Connect a wallet to mint.'; return; }
     const contrat = adresseTam(TAMART_DEPLOIEMENT);
     /* ⛔ on ne signe que des octets REJOUES ici : le serveur a choisi, la page recalcule */
-    const r = (S.science ? TS.rejouerScience : rejouer)(JSON.parse(JSON.stringify(S.P))), oct = octetsDe(S.octets);
+    /* game77 (chasse aux bugs : course) : l oeuvre est FIGEE au clic — params, octets, certificat, choix. Un curseur bouge pendant la
+     *   verification du serveur : on s arrete et on le dit, au lieu de signer les octets d une oeuvre avec le certificat d une autre. */
+    const P0 = S.P, oct0 = S.octets, c0 = S.c, choix0 = S.choix, sci0 = !!S.science;
+    const change = () => S.P !== P0 || S.octets !== oct0;
+    const r = (sci0 ? TS.rejouerScience : rejouer)(JSON.parse(JSON.stringify(P0))), oct = octetsDe(oct0);
     if (!r.ok || !V.verdictRejeu(r.octets, oct).identique) { dit.textContent = 'This page could not replay this work to the same bytes, so nothing is offered to sign.'; return; }
-    const paramsJson = JSON.stringify(S.P);
+    const paramsJson = JSON.stringify(P0);
     /* ⛔ 2026-11-01 : LE portail (V.peutMinter) — certificats locaux, ceux du SERVEUR (distance a toutes les oeuvres mintees) sur les memes
      *   octets, et une oeuvre tiree pour CE wallet. Une oeuvre reglee est re-certifiee par le serveur ; le choix du cerveau l a deja ete. */
     let serveur = null;
-    if (S.P.regle || S.science) {
+    if (P0.regle || sci0) {
       dit.textContent = 'Checking this setting against every minted work…';
       const b = new TextEncoder().encode(paramsJson); let s = ''; for (const x of b) s += String.fromCharCode(x);
       const p64 = btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       try { serveur = await fetch('/api/tam/certifier?p=' + p64, { cache: 'no-store' }).then((x) => x.json()); } catch (_) { serveur = null; }
-    } else if (S.choix && S.choix.hash) serveur = { ok: true, etat: 'CERTIFIE', hash: S.choix.hash };
-    const porte = V.peutMinter({ dep: TAMART_DEPLOIEMENT, local: S.c, serveur, octets: oct, P: S.P, compte: c });
+    } else if (choix0 && choix0.hash) serveur = { ok: true, etat: 'CERTIFIE', hash: choix0.hash };
+    if (change()) { dit.textContent = 'The work changed while it was being checked. Press Mint again for the work on screen.'; return; }
+    const porte = V.peutMinter({ dep: TAMART_DEPLOIEMENT, local: c0, serveur, octets: oct, P: P0, compte: c });
     if (!porte.ok) { dit.textContent = 'Not ready: ' + porte.pourquoi + '.'; return; }
     let lu; try { lu = await lireContrat(contrat); } catch (_) { dit.textContent = 'The TamArt contract could not be read.'; return; }
+    if (change()) { dit.textContent = 'The work changed while it was being checked. Press Mint again for the work on screen.'; return; }
     /* la graine : celle du cerveau quand il y en a une ; sinon le keccak des params (dit tel quel dans les params stockes) */
-    const graine = S.P.graine || keccak256Hex(new TextEncoder().encode(canon(S.P)));
+    const graine = P0.graine || keccak256Hex(new TextEncoder().encode(canon(P0)));
     const jeu = { genre: 'tam', contrat, deploiement: TAMART_DEPLOIEMENT, lu, octets: oct, graine, paramsJson };
     const planUsdc = planJeuUsdc(jeu);
     if (planUsdc.etat !== 'PRET') { dit.textContent = planUsdc.pourquoi + '.'; return; }
