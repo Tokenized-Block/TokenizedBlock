@@ -1005,15 +1005,23 @@ export function monter(racine, ctx = {}) {
     const ecrire = (txt, x, y) => {
       if (ecrits.has(txt)) return;
       const w = g.measureText(txt).width;
+      /* game91 (balayage a 375 px : 71 vues / 98 en defaut) : le libelle reste DANS le canvas — x ramene pour que le texte tienne en
+       *   largeur ; une ligne hors champ (le placeur poussait des libelles a y = 698 sous un canvas de 635) est remplacee par la plus
+       *   proche a l interieur */
+      const Wc = g.canvas ? g.canvas.width : Infinity, Hc = g.canvas ? g.canvas.height : Infinity;
+      x = Math.max(2, Math.min(x, Wc - w - 2));
+      const dedans = (yy) => Math.min(Hc - 3, Math.max(hL - 3, yy));
       /* game90 : quand une place est prise, on essaie JUSTE AU-DESSUS et JUSTE AU-DESSOUS de ce qui gene (le banc : le panneau du bas
        *   monte jusqu a 40 % de la scene, 3 lignes de remontee n y suffisaient pas) ; 16 essais au plus, le plus proche d abord */
-      const essais = [y], vus = new Set();
+      const essais = [dedans(y)], vus = new Set();
       for (let k = 0; k < essais.length && k < 16; k++) {
-        const yy = essais[k]; if (vus.has(yy)) continue; vus.add(yy);
+        const yy = dedans(essais[k]); if (vus.has(yy)) continue; vus.add(yy);
         const b = [x - 1, yy - hL + 3, x + w + 1, yy + 3]; /* hauteur = le pas hL (14 px pour un pas de 13 perdait une place sur deux) */
         const q = poses.find((p) => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1]);
         if (!q) { poses.push(b); ecrits.add(txt); g.fillText(txt, x, yy); return; }
-        const dessous = q[3] + hL - 3, dessus = q[1] - 3;
+        /* +-1 px (balayage mobile : avec dpr = 2.0000000298, q[3] + hL - 3 - hL + 3 retombait SOUS q[3] d un arrondi -> « chevauche »,
+         *   les deux memes essais en boucle, et l etiquette d echelle de 5 vues n etait JAMAIS ecrite) */
+        const dessous = q[3] + hL - 3 + 1, dessus = q[1] - 3 - 1;
         if (Math.abs(dessous - y) <= Math.abs(dessus - y)) essais.push(dessous, dessus); else essais.push(dessus, dessous);
       }
     };

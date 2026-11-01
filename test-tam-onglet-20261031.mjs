@@ -280,6 +280,21 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ecrire('Horizon sous le panneau', 50, 940);
     const hp = ecrits.find((e) => e.t === 'Horizon sous le panneau');
     ok(hp && hp.y + 3 <= 900, 'un libelle tombe sur le panneau reserve est remonte au-dessus (y ' + (hp && hp.y) + ')');
+    /* game91 (balayage a 375 px : libelles coupes a droite, et pousses SOUS le bas du canvas) : un petit canvas de 300 x 200 */
+    { const ecr = [], gp = { canvas: { width: 300, height: 200 }, measureText: (t) => ({ width: 6 * t.length }), fillText: (t, x, y) => ecr.push({ t, x, y }) };
+      const ep = new Function('g', 'dpr', onglet.slice(d0, f0) + '\nreturn ecrire;')(gp, 1);
+      ep('Core-mantle boundary (3480 km)', 280, 100); ep('Sous le bas', 20, 260);
+      for (let k = 0; k < 10; k++) ep('Couche ' + k, 40, 195);
+      const dehors = ecr.filter((e) => e.x < 0 || e.x + 6 * e.t.length > 300 || e.y - 10 < 0 || e.y + 3 > 200);
+      let nc = 0; for (let i = 0; i < ecr.length; i++) for (let j = i + 1; j < ecr.length; j++) if (chev(bx(ecr[i]), bx(ecr[j]))) nc++;
+      ok(ecr.length >= 8 && dehors.length === 0 && nc === 0, 'petit canvas : ' + ecr.length + ' libelles, 0 hors du canvas (' + dehors.map((e) => e.t).join(', ') + '), 0 chevauchement'); }
+    /* game91 (balayage a 375 px : l echelle de 5 vues jamais ecrite) : les valeurs EXACTES lues dans le navigateur (dpr 2.0000000298,
+     *   bords non entiers) — « juste dessous » retombait sous le bord d un arrondi et le placeur tournait sur 2 essais */
+    { const ecr = [], gf = { canvas: { width: 635, height: 635 }, measureText: () => ({ width: 158.25390625 }), fillText: (t, x, y) => ecr.push({ t, x, y }) };
+      const ef = new Function('g', 'dpr', onglet.slice(d0, f0) + '\necrire.poses = poses; return ecrire;')(gf, 2.0000000298023224);
+      ef.poses.push([15.994958095743518, 11.996221431929708, 576.7433214513203, 49.40943626006126], [15.994958095743518, 369.0087696717544, 619.0050342772643, 623.003763314086]);
+      ef('≈ 50 lattice sites', 635 - 16 * 2.0000000298023224 - 158.25390625, 21 * 2.0000000298023224);
+      ok(ecr.length === 1 && ecr[0].y - 26 + 3 >= 49.40943626006126, 'arrondi flottant : l etiquette sous la ligne d info est ECRITE (' + JSON.stringify(ecr.map((e) => e.y)) + ')'); }
     ok(/for \(const sur of \[info, varsScene\]\)/.test(onglet) && /poses\.push\(\[\(r\.left - rc\.left\) \* kx/.test(onglet), 'les deux surcouches HTML (ligne du haut, panneau des valeurs) sont reservees a chaque image');
     const scene = onglet.slice(onglet.indexOf('const poses = [], hL'), onglet.indexOf('/* le son allume : le point qu il joue'));
     ok((scene.match(/g\.fillText\(/g) || []).length === 1 && /const ancre = d\.q\.type === 'segment' && dernier \? dernier : premier;/.test(onglet), 'dans la scene, un seul fillText (celui du placeur) ; un segment est nomme a son bout eloigne');
