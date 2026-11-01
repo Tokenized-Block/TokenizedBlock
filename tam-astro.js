@@ -769,7 +769,7 @@ export const SYSTEMES = Object.freeze([
     params: { rapportMasses: 1, inclinaison1: 15, inclinaison2: 60, duree: 4 }, bornes: { rapportMasses: [0.25, 1], inclinaison1: [0, 180], inclinaison2: [0, 180], duree: [0, 10] },
     phrase: 'Two galaxy cores on a parabolic encounter, each carrying a disk of massless test stars (Toomre and Toomre 1972), G = 1, first core mass 1, closest approach 1; disk tilts in degrees (0 = spinning with the orbit, which throws out tidal tails), shown as a film of 12 snapshots of the same stars, evenly spaced from before the encounter (cores 8 apart) to duree time units after closest approach; no dark-matter halo and no star-star gravity.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { systemeSolaire: ['groupe'], etoileS2: ['tours', 'rg'], amasEtoiles: ['etoiles', 'graine'], supernova: ['graine'] };
+export const ENTIERS = { systemeSolaire: ['groupe'], etoileS2: ['tours', 'rg'], amasEtoiles: ['etoiles', 'graine'], supernova: ['graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis ; binaire : periastre initial a (1-e) >= 6.5 */

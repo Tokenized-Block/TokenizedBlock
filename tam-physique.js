@@ -12,7 +12,7 @@
 import { sinD, cosD, lnD } from './tam-moteur.js';
 
 const PI = 3.141592653589793, DEUX_PI = 6.283185307179586, LN2 = 0.6931471805599453;
-const D0 = 1e-8, BORNE = 1e3, MICRO_MAX = 4e6;
+const D0 = 1e-8, BORNE = 1e3, MICRO_MAX = 4e6, MICRO_RAFFINE = 250000;
 
 function expD(x) { /* e^x avec + - * / seulement (meme esprit que sinD/lnD du moteur) */
   if (x === -Infinity) return 0;
@@ -320,7 +320,7 @@ export const SYSTEMES = Object.freeze([
   { id: 'hydrogene', nom: 'Hydrogen electron cloud', science: 'Quantum mechanics', D: 3, nuage: true, params: { n: 3, l: 2, m: 1, graine: 1 }, bornes: { n: [1, 4], l: [0, 3], m: [-3, 3], graine: [1, 1000000] },
     phrase: 'The probability cloud of the electron of hydrogen in the state (n, l, m), sampled from |psi|^2; not a path: the electron has no orbit in quantum mechanics.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { hydrogene: ['n', 'l', 'm', 'graine'] };
+export const ENTIERS = { hydrogene: ['n', 'l', 'm', 'graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis ; hydrogene : l <= n-1, |m| <= l */
@@ -389,6 +389,10 @@ function integrer(S, c, n, g) {
   };
   const echec = (i, raison) => ({ echec: true, i, raison });
   noter(0);
+  /* game82 (audit : troisCorps 0.24 / 114 -> 5,5 s au certificat) : le raffinement est borne a max(250 000, 1.5 x la base).
+   *   Mesure (400 tirages) : pire 261 ms au lieu de secondes, 12/400 rencontres trop serrees refusees ; les systemes sans
+   *   raffinement (ratio 1.00 mesure) ne l atteignent jamais. MICRO_MAX reste le plafond absolu. */
+  const microBudget = Math.min(MICRO_MAX, Math.max(MICRO_RAFFINE, 1.5 * (n - 1) * pas));
   let somme = 0, micro = 0, tc = 0;
   for (let i = 1; i < n; i++) {
     for (let st = 0; st < pas; st++) {
@@ -398,7 +402,7 @@ function integrer(S, c, n, g) {
         const pm = S.pasMax ? S.pasMax(y, c) : h, k = Math.ceil(reste / pm - 1e-9), hk = k <= 1 ? reste : reste / k;
         if (obs) obs.avant(y); S.avance(y, c, hk); S.avance(e, c, hk); if (obs) obs.apres(y);
         reste = k <= 1 ? 0 : reste - hk;
-        if (++micro > MICRO_MAX) return echec(i, 'rencontre trop serree (pas local epuise)');
+        if (++micro > microBudget) return echec(i, 'rencontre trop serree (pas local epuise)');
         const raison = S.hors(y, c);
         if (raison) {
           const ev = S.evenement ? S.evenement(raison) : null;

@@ -598,7 +598,7 @@ export const SYSTEMES = Object.freeze([
     params: { jusqua: 9, graine: 1 }, bornes: { jusqua: [2, 9], graine: [1, 1000000] },
     phrase: 'The Earth, the Sun and seven well-known stars drawn as concentric spheres with their relative radii from the same sourced table, so the smallest ones vanish next to the giants; supergiant radii such as those of Betelgeuse and UY Scuti are very uncertain because they depend on disputed distances.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { mouvementTerre: ['cmb'], tailleEtoiles: ['jusqua', 'graine'] };
+export const ENTIERS = { mouvementTerre: ['cmb'], tailleEtoiles: ['jusqua', 'graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */

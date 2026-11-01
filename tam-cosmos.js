@@ -679,7 +679,7 @@ export const SYSTEMES = Object.freeze([
     params: { masse: 10, nu: 0.05, temps: 2000, rext: 30, graine: 1 }, bornes: { masse: [3, 1e10], nu: [0.001, 1], temps: [0, 1e5], rext: [8, 100], graine: [1, 1000000] },
     phrase: 'Test particles of a thin disk around a non-rotating black hole (G = c = M = 1) on circular Keplerian orbits with an inner edge at the innermost stable circular orbit r = 6M, drifting inward with a constant-viscosity prescription dr/dt = -3 nu / (2r) and re-injected at the outer edge when they reach it; column 4 is the orbital speed seen by a static observer; no gas pressure, radiation or magnetic fields.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { pointsLagrange: ['monde', 'orbite'], trappist1: ['premiere'], disqueAccretion: ['graine'] };
+export const ENTIERS = { pointsLagrange: ['monde', 'orbite'], trappist1: ['premiere'], disqueAccretion: ['graine'] };
 const SIMS = { lumiereTrouNoir: simLumiere, kerr: simKerr, trouDeVer: simTrouDeVer, trouDeVerSurface: simTrouDeVerSurface, pointsLagrange: simLagrange,
   pulsarHulseTaylor: simHulseTaylor, courbeRotation: simCourbe, expansionUnivers: simExpansion, cometeHalley: simHalley, trappist1: simTrappist, disqueAccretion: simDisque };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };

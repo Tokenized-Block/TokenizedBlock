@@ -118,6 +118,8 @@ function filmDe(id, params = {}, n = N_DEFAUT) {
     case 'tsunami': { const F = Math.min(24, n); f = regulieres(n, F, Math.max(1, Math.floor(n / F))); colonneTemps = 3; break; }
     default: return null;
   }
+  /* game82 (audit, atomes Z = 1) : la page ne lit un film qu a partir de 2 images (tam-onglet.js#filmDe) ; 1 image = pas de film */
+  if (!(f.images >= 2)) return null;
   if (f.parImage === null) note = 'frames of unequal size: ' + [...new Set(f.tailles)].join(' or ') + ' rows' + (note ? '; ' + note : '');
   if (f.reste) note = (note ? note + '; ' : '') + 'the last ' + f.reste + ' rows repeat points of the last moment and belong to no frame';
   return { images: f.images, parImage: f.parImage, debuts: Object.freeze(f.debuts), tailles: Object.freeze(f.tailles), ordre: 'images-successives', colonneTemps, ...(note ? { note } : {}) };

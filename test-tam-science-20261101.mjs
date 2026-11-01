@@ -72,6 +72,17 @@ for (const [id, cher] of [['paquetOscillateur', { periodes: 20 }], ['amasEtoiles
   ok(!T.validerScience(T.paramsScience(id, cher)).ok, id + ' : le coin couteux ' + JSON.stringify(cher) + ' est refuse AVANT simulation');
 }
 ok(T.validerScience(T.paramsScience('systemeSolaire', { groupe: 1, annees: 400 })).ok, 'systeme solaire exterieur : 400 ans restent certifiables (37 ms)');
+/* game82 (audit : supernova, versMars, karman... dessines en LIGNE, une colonne de temps ecrasait l echelle commune) : chaque colonne
+ *   garde au moins 30 % de la plus large (quantiles 0.5-99.5 %) ; une science sans ECHELLE_PROPRE garde ses proportions exactes */
+{
+  const etendues = (id, over = {}) => { const P = T.paramsScience(id, over), o = T.systeme(id).mod.simuler(id, P.params), z = T.standardiserIso(o.brut, o.n, o.D, id);
+    const e = []; for (let j = 0; j < o.D; j++) { const v = []; for (let i = 0; i < o.n; i++) v.push(z[i * o.D + j]); v.sort((a, b) => a - b); e.push(v[Math.floor(o.n * 0.995)] - v[Math.floor(o.n * 0.005)]); }
+    const M = Math.max(...e); return e.map((x) => x / M); };
+  for (const [id, over] of [['supernova'], ['supernovaHydro'], ['versMars'], ['fusionTrousNoirs'], ['karman', { y0: 0.8 }], ['mandelbrot', { zoom: 100 }]])
+    { const e = etendues(id, over); ok(Math.min(...e) >= 0.3, id + ' ' + JSON.stringify(over || {}) + ' : plus une ligne (' + e.map((x) => x.toFixed(3)).join(' ') + ')'); }
+  const o = T.systeme('schwarzschild').mod.simuler('schwarzschild', T.paramsScience('schwarzschild').params), zA = T.standardiserIso(o.brut, o.n, o.D), zB = T.standardiserIso(o.brut, o.n, o.D, 'schwarzschild');
+  ok(zA.every((x, i) => x === zB[i]), 'schwarzschild (sans ECHELLE_PROPRE) : les memes nombres qu avant');
+}
 /* 2. les bornes */
 const P0 = T.paramsScience('schwarzschild', {}, { minteur: MOI });
 ok(T.validerScience(P0).ok, 'temoin : params de paramsScience valides');

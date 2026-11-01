@@ -435,7 +435,7 @@ const FONCTIONS = { mandelbrot, mandelbulb, spiraleOr, phyllotaxieOr, ifs3d, blo
 const SANS_LYAP = 'sans objet (ensemble ou nuage, pas une trajectoire)', LIN = 'sans objet (evolution unitaire lineaire : pas de chaos)';
 export const SYSTEMES = Object.freeze([
   { id: 'mandelbrot', nom: 'Mandelbrot set boundary', science: 'Fractals', D: 3, nuage: true,
-    params: { cx: -0.75, cy: 0, zoom: 1, maxIter: 200 }, bornes: { cx: [-2, 1], cy: [-1.5, 1.5], zoom: [1, 10000], maxIter: [50, 1000] },
+    params: { cx: -0.75, cy: 0.1, zoom: 1, maxIter: 200 }, bornes: { cx: [-2, 1], cy: [-1.5, 1.5], zoom: [1, 10000], maxIter: [50, 1000] },
     phrase: 'Grid points c just outside the Mandelbrot set (they escape |z| > 2 but touch a pixel that never escaped in maxIter steps), lifted by the log of their escape time; a pixel grid and finite iterations only approximate the true boundary.' },
   { id: 'mandelbulb', nom: 'Mandelbulb surface', science: 'Fractals', D: 3, nuage: true,
     params: { puissance: 8, maxIter: 10 }, bornes: { puissance: [2, 12], maxIter: [4, 20] },
@@ -462,7 +462,7 @@ export const SYSTEMES = Object.freeze([
     params: { n: 2, m: 3, k: 1, graine: 1 }, bornes: { n: [1, 5], m: [1, 5], k: [1, 5], graine: [1, 1000000] },
     phrase: 'The probability cloud |psi|^2 of a particle in a cubic box with perfectly hard walls in the state (n, m, k), sampled point by point; not a path, and the walls are an idealisation.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { mandelbrot: ['maxIter'], mandelbulb: ['puissance', 'maxIter'], spiraleOr: ['tours'], ifs3d: ['graine'], fentesYoung: ['graine'], boiteQuantique: ['n', 'm', 'k', 'graine'] };
+export const ENTIERS = { mandelbrot: ['maxIter'], mandelbulb: ['puissance', 'maxIter'], spiraleOr: ['tours'], ifs3d: ['graine'], fentesYoung: ['graine'], boiteQuantique: ['n', 'm', 'k', 'graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis ; fentes : a <= d/2 */

@@ -19,6 +19,8 @@ import * as FLU from './tam-fluides.js';
 import * as TS from './tam-science.js';
 /* game79 : « Your formula » (tam-formule.js : analyseur maison, jamais eval ; solveurs numeriques avec leur residu) */
 import * as F from './tam-formule.js';
+/* game82 : les elements de CONTEXTE (Soleil, trou noir et horizon, Terre et ses couches, noyau, plaques, fentes, points de Lagrange…) */
+import * as DEC from './tam-decor.js';
 
 /* game76 (Phil : « relativite generale, gravite, fusion, toutes les sciences… fractales, chiffre d or, quantique, fluides — en direct ») :
  *   des simulations VERIFIEES (chaque module a son banc : invariants contre la theorie, mutants), dessinees par la meme scene.
@@ -57,6 +59,18 @@ function reglagesVivants(s, params) {
 }
 /* un reglage ENTIER : bornes et valeur entieres, plage courte (n, l, m, k, nombre, graine…) */
 const entierReglage = (r) => Number.isInteger(r.min) && Number.isInteger(r.max) && Number.isInteger(r.valeur) && r.max - r.min <= 1e6 && /^(n|l|m|k|nombre|graine|tours|maxIter|puissance|periodes)$/.test(r.nom);
+/* les parametres des modules nommes en francais -> l ecran ; les symboles (L, M, omega, a...) restent des symboles */
+const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
+  densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
+  excentricite: 'eccentricity', frequence: 'frequency', graine: 'seed', grille: 'grid', groupe: 'group', hauteur: 'height', heures: 'hours',
+  horloges: 'clocks', images: 'frames', inclinaison: 'inclination', inclinaison1: 'inclination 1', inclinaison2: 'inclination 2', jours: 'days',
+  jusqua: 'up to', largeur: 'width', longueur: 'length', longueursOnde: 'wavelengths', masse: 'mass', masseEjecta: 'ejecta mass',
+  masseTrouNoir: 'black-hole mass', modes: 'modes', monde: 'world', nombre: 'count', orbite: 'orbit', paires: 'pairs', particules: 'particles',
+  pas: 'steps', periode: 'period', periodes: 'periods', poussee: 'thrust', premiere: 'first', profondeur: 'depth', puissance: 'power',
+  rapport: 'ratio', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
+  tours: 'turns', traversees: 'crossings', uniforme: 'uniform', vitesse: 'speed', viriel: 'virial ratio', ageUnivers: 'age of the universe',
+  aCible: 'target orbit (AU)', finGa: 'end (Gyr)', log10Masse: 'log10 mass', Mbulbe: 'bulge mass', Mdisque: 'disk mass', cmb: 'CMB frame',
+  fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
@@ -64,6 +78,11 @@ const UNITES_EN = { 'par radian d orbite': 'per radian of orbit', 'par unite de 
 const uniteEn = (u) => (u ? UNITES_EN[u] || String(u).replace(/^par /, 'per ') : '');
 /* les invariants qui ne disent rien a l ecran (un compteur de temps, pas une loi conservee) */
 const INVARIANT_MUET = new Set(['tempsFinal']);
+/* les cles des invariants des modules (francais) -> ce que lit le visiteur */
+const CLES_EN = { valeur: 'value', erreur: 'error', termes: 'terms', NfoisErreur: 'terms x error', estimation: 'estimate', points: 'points',
+  ecartTypeAttendu: 'expected spread (1 sigma)', termesPour1e12: 'terms for 1e-12', mesure: 'measured', formule: 'formula', theorie: 'theory',
+  reference: 'reference', debut: 'start', fin: 'end', min: 'min', max: 'max', derive: 'drift', pi: 'true pi', rayon: 'radius', periode: 'period',
+  duree: 'duration', age: 'age', masse: 'mass', energie: 'energy', vitesse: 'speed', distance: 'distance', temperature: 'temperature', nombre: 'count' };
 function ligneInvariant(k, v) {
   if (v && typeof v === 'object') {
     /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
@@ -76,7 +95,11 @@ function ligneInvariant(k, v) {
       if ((rel !== null && rel > 1e-3) || (rel === null && Math.abs(v.derive) > 1e-6)) return k + ': ' + ('min' in v && 'max' in v ? 'from ' + nb4(v.min) + ' to ' + nb4(v.max) : 'changes by ' + nb4(v.derive));
       return k + ': conserved — drift ' + nb4(rel !== null ? rel : Math.abs(v.derive)) + (rel !== null ? ' relative' : ' absolute');
     }
-    return k + ': ' + Object.entries(v).filter(([, x]) => typeof x === 'number').slice(0, 3).map(([a, x]) => a + ' ' + nb4(x)).join(', ');
+    /* game82 (Phil, « Three roads to pi » : « valeur 4, erreur 0.8584, NfoisErreur ») : les 3 premieres cles brutes, en francais,
+     *   coupaient « termes » (le 4 venait d UN terme) ; jusqu a 6 valeurs, nommees en anglais, et la vraie valeur quand il y en a une */
+    const nums = Object.entries(v).filter(([, x]) => typeof x === 'number' && Number.isFinite(x));
+    if (!nums.length) return k + ': ' + (Object.values(v).some(Array.isArray) ? 'data series (in the CSV export and the curves)' : 'no number');
+    return k + ': ' + nums.slice(0, 6).map(([a, x]) => (CLES_EN[a] || a) + ' ' + (Math.abs(x) >= 1 && Math.abs(x) < 1e6 && /^(pi|e|phi|valeur|estimation|reference)$/.test(a) ? String(x) : nb4(x))).join(', ');
   }
   return k + ': ' + nb4(v);
 }
@@ -84,6 +107,8 @@ function ligneInvariant(k, v) {
 const CSS = `
 #v-tam{--tam-fond:#0b0d17;--tam-carte:rgba(255,255,255,.04);--tam-bord:rgba(255,255,255,.12);--tam-txt:#e8ecf5;--tam-doux:#9aa3b8;--tam-acc:#7fd1ff}
 #v-tam .tamCarte{background:var(--tam-carte);border:1px solid var(--tam-bord);border-radius:14px;padding:14px;margin:0 0 14px}
+#v-tam .tamReglagesHaut{border-top:1px solid var(--tam-bord);margin-top:10px;padding-top:8px}
+#v-tam .tamReglagesHaut>summary{cursor:pointer;font-weight:600;padding:4px 0}
 #v-tam h2{font-size:1.15rem;margin:0 0 4px}#v-tam h3{font-size:1rem;margin:0 0 8px}
 #v-tam .tamDoux{color:var(--tam-doux);font-size:.86rem;margin:4px 0}
 #v-tam .tamRang{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
@@ -176,6 +201,10 @@ export function monter(racine, ctx = {}) {
   /* 2026-11-01 (Phil) : le trace a un debut et une fin, peut tourner en boucle ; Reset view le redessine */
   const bBoucle = el('button', { type: 'button', id: 'tamBoucle', 'aria-pressed': 'false', text: 'Loop: off' });
   /* game80 (Phil : « on voit qu une partie, continue jusqu a une fin ») : la VITESSE du trace — il va toujours jusqu au dernier point */
+  /* game82 : partager l oeuvre a l ecran (un lien qui la rouvre a l identique) et telecharger ses VRAIES valeurs (CSV) */
+  const bLien = el('button', { type: 'button', id: 'tamLien', text: 'Copy a link to this work' });
+  const bCsv = el('button', { type: 'button', id: 'tamCsv', text: 'Download the data (CSV)' });
+  const bDecor = el('button', { type: 'button', id: 'tamDecor', 'aria-pressed': 'true', text: 'Context: on' });
   const selVitesse = el('select', { id: 'tamVitesse', 'aria-label': 'Drawing speed' },
     el('option', { value: '15', text: 'Draw slowly (15 s)' }), el('option', { value: '6', text: 'Draw: normal (6 s)' }), el('option', { value: '2', text: 'Draw fast (2 s)' }));
   selVitesse.value = '6';
@@ -280,8 +309,18 @@ export function monter(racine, ctx = {}) {
       el('p', { class: 'tamDoux', text: 'Strange attractors combined by the brain, plus live physics, fractals, the golden ratio, quantum and fluids — each checked against its theory and drawn in 3-D. Up to 12 dimensions, shown one layer at a time.' }),
       el('div', { class: 'tamRang' }, selGroupe, selSys, selFam, selDim, bCerveau, bSource),
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamBloc', text: 'Brain of' }), selBloc, chBloc),
+      /* game82 (Phil : « mets les variables au dessus pour pouvoir tout selectionner d un coup ») : tout le CHOIX dans la premiere
+       *   carte — systeme, famille, dimensions, cerveau, puis chaque variable — la scene juste en dessous */
+      el('details', { class: 'tamReglagesHaut', id: 'tamReglagesHaut', open: '' },
+        el('summary', { text: 'Variables — every setting of this work' }),
+        el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
+        el('div', { class: 'tamRang' }, selOp, selMotif, bPouce),
+        el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
+        curseurs, verdictTxt)),
+    el('div', { class: 'tamCarte' },
       scene,
       el('div', { class: 'tamRang' }, bRot, bVue, bBoucle, bSon, selVitesse),
+      el('div', { class: 'tamRang' }, bDecor, bLien, bCsv),
       zFilm,
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamResolution', text: 'Resolution' }), curRes, resTxt),
       el('p', { class: 'tamDoux', text: 'Drag to orbit · Shift-drag or two fingers to pan · wheel or pinch to zoom · hover or tap a point to read its values.' }),
@@ -290,12 +329,6 @@ export function monter(racine, ctx = {}) {
       el('h3', { text: 'Layers' }),
       el('p', { class: 'tamDoux', text: 'One colour per dimension. Turn layers on and off, isolate one, or grow the shape from 3-D to all of its dimensions.' }),
       curseur, curseurTxt, puces, el('div', { class: 'tamRang' }, bToutes, bIsoler, bSplit), cvSeries, eclate),
-    el('div', { class: 'tamCarte' },
-      el('h3', { text: 'Variables' }),
-      el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
-      el('div', { class: 'tamRang' }, selOp, selMotif, bPouce),
-      el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
-      curseurs, verdictTxt),
     carteFormule,
     el('div', { class: 'tamCarte' }, el('h3', { text: 'This work' }), dl, zMint),
     /* game76 (Phil : « retire ca pas utile ») : plus de « How it works » ; la carte des oeuvres n apparait qu une fois une oeuvre mintee */
@@ -365,7 +398,7 @@ export function monter(racine, ctx = {}) {
     /* le certificat LOCAL (aucune oeuvre mintee comparee) ; le serveur refait la distance contre TOUTES au clic sur Mint */
     S.c = { ...cert, lyapunov: typeof o.lyapunov === 'number' ? o.lyapunov : NaN, uniteLyapunov: o.uniteLyapunov };
     /* game77 : les proportions de la science (meme echelle pour tous les axes), comme les octets mintes (tam-science.js) */
-    S.z = TS.standardiserIso(o.brut, o.n, D); S.ser = V.series(S.z, o.n, D);
+    S.z = TS.standardiserIso(o.brut, o.n, D, id); S.ser = V.series(S.z, o.n, D);
     /* game78 : plusieurs corps (planetes, etoiles, rayons) -> chacun dans le MEME espace, sa couleur (tam-science.js#vueCorps, = les octets mintes) */
     S.corps = TS.CORPS[id] ? TS.vueCorps(o, TS.CORPS[id]) : null;
     S.corpsActifs = S.corps ? Array(S.corps.corps).fill(true) : null; S.filmImage = 0;
@@ -570,9 +603,10 @@ export function monter(racine, ctx = {}) {
         curseurs.replaceChildren(...R.map((r) => {
           const id = 'tamR-' + r.chemin.replace('.', '-');
           /* game77 : un parametre ENTIER (nombres quantiques, nombre de tourbillons, graine) a un pas de 1 — plus de « 2.347 » */
-          const pas = entierReglage(r) ? '1' : String((r.max - r.min) / 400);
-          return el('div', { class: 'tamReglage' },
-            el('label', { for: id, class: 'tamDoux', text: r.nom + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
+          const cle = r.chemin.split('.').pop(), pas = entierReglage(r) || TS.paramEntier(S.science.s.id, cle) ? '1' : String((r.max - r.min) / 400);
+          /* game82 (vu a l ecran : « termesLeibniz », « graine ») : le nom anglais, le nom du code en info-bulle pour qui lit le source */
+          return el('div', { class: 'tamReglage', title: 'parameter ' + cle },
+            el('label', { for: id, class: 'tamDoux', text: (NOMS_PARAMS_EN[cle] || r.nom) + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
             el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': r.nom }));
         }));
       } else for (const r of R) {
@@ -805,6 +839,7 @@ export function monter(racine, ctx = {}) {
   bRot.addEventListener('click', () => { S.rotation = !S.rotation; bRot.setAttribute('aria-pressed', String(S.rotation)); racine.dataset.rotation = S.rotation ? 'on' : 'off'; S.sale = true; });
   racine.dataset.rotation = S.rotation ? 'on' : 'off';
   bVue.addEventListener('click', () => { S.cam = null; S.t = 0; S.dessines = reduit() ? S.n : 0; S.pause = 0; S.sale = true; });
+  bDecor.addEventListener('click', () => { S.decorOn = S.decorOn === false; bDecor.setAttribute('aria-pressed', String(S.decorOn)); bDecor.textContent = 'Context: ' + (S.decorOn ? 'on' : 'off'); S.sale = true; });
   bBoucle.addEventListener('click', () => { S.boucle = !S.boucle; bBoucle.setAttribute('aria-pressed', String(S.boucle)); bBoucle.textContent = 'Loop: ' + (S.boucle ? 'on' : 'off'); racine.dataset.boucle = S.boucle ? 'on' : 'off'; });
   const CAM0 = { yaw: 0.6, pitch: 0.35, dist: 1.7, ox: 0, oy: 0 };
   const ptrs = new Map(); let pinch = null;
@@ -934,6 +969,31 @@ export function monter(racine, ctx = {}) {
       if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, fin && fin.evenement ? 'end · ' + fin.evenement : 'end · t = ' + (S.n - 1));
       else point(n - 1, '#ffffff', 3.2, null);
     }
+    /* game82 : le CONTEXTE (Soleil, horizon, couches de la Terre, plaques, fentes…), sous les etiquettes, dans la meme camera */
+    if (S.decorOn !== false && S.science && !(S.P && S.P.melange)) {
+      let dv = []; try { dv = decorVue(); } catch (_) { dv = []; }
+      const ecran = (p) => projectCam(camPx, p[0] * sc, -p[1] * sc, p[2] * sc, L, H, 1);
+      g.font = (11 * dpr) + 'px system-ui,sans-serif';
+      for (const d of dv) {
+        const col = d.q.couleur || '#ffffff';
+        if (d.vue) {
+          const u = ecran(d.vue[0]); if (!u) continue;
+          g.shadowColor = col; g.shadowBlur = 14 * dpr; g.fillStyle = col; g.beginPath(); g.arc(u.sx, u.sy, 5 * dpr, 0, TOUR); g.fill();
+          g.shadowBlur = 0; g.fillStyle = '#e8ecf5'; if (d.q.libelle) g.fillText(d.q.libelle, u.sx + 8 * dpr, u.sy - 6 * dpr);
+          continue;
+        }
+        let premier = null;
+        g.strokeStyle = col; g.lineWidth = Math.max(1, dpr * (d.q.largeur ? 2.5 : 1.4)); g.globalAlpha = 0.75; g.setLineDash(d.q.type === 'plan' ? [5 * dpr, 4 * dpr] : []);
+        for (const ligne of d.lignesVue || []) {
+          g.beginPath(); let ouvert = false;
+          for (const p of ligne) { const u = ecran(p); if (!u) { ouvert = false; continue; } if (!premier) premier = u; if (!ouvert) { g.moveTo(u.sx, u.sy); ouvert = true; } else g.lineTo(u.sx, u.sy); }
+          if (d.e.plein && ouvert) { g.globalAlpha = 0.18; g.fillStyle = col; g.fill(); g.globalAlpha = 0.75; }
+          g.stroke();
+        }
+        g.setLineDash([]); g.globalAlpha = 1;
+        if (premier && d.q.libelle && !d.q.muet) { g.fillStyle = col; g.fillText(d.q.libelle, premier.sx + 6 * dpr, premier.sy - 4 * dpr); }
+      }
+    }
     /* le son allume : le point qu il joue, sur la courbe (le meme index que la frequence) */
     if (S.son && S.tete !== null && n >= S.n) point(S.tete, '#ffffff', 4.5, 't = ' + S.tete);
     g.shadowBlur = 0;
@@ -973,6 +1033,48 @@ export function monter(racine, ctx = {}) {
     if (i !== S.survol) { S.survol = i; S.sale = true; peindreSurvol(); }
     peindreBulle(i, e.clientX - r.left, e.clientY - r.top, r.width);
   }
+  /* ── game82 : le LIEN de partage — #tam=<base64url(JSON)> : le genre (attracteur / science / formule) et ses params complets ;
+   *   rien de secret (ni wallet, ni note : le minteur est retire), rejoue a l identique par n importe qui ── */
+  const b64u = (s) => { const b = new TextEncoder().encode(s); let t = ''; for (const x of b) t += String.fromCharCode(x); return btoa(t).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
+  const deB64u = (s) => { const t = atob(String(s).replace(/-/g, '+').replace(/_/g, '/')); return new TextDecoder().decode(Uint8Array.from(t, (c) => c.charCodeAt(0))); };
+  function etatPartage() {
+    if (!S.P) return null;
+    if (S.science && S.science.s.id === 'formule') return { k: 'form', p: S.P.params };
+    if (S.science) { const { minteur: _m, note: _n, graine: _g, ...P } = S.P; return { k: 'sci', p: P }; }
+    const { minteur: _m, ...P } = S.P; return { k: 'att', p: P };
+  }
+  bLien.addEventListener('click', async () => {
+    const e = etatPartage(); if (!e) return;
+    const url = location.origin + location.pathname + '#tam=' + b64u(JSON.stringify(e));
+    try { await navigator.clipboard.writeText(url); bLien.textContent = 'Link copied'; } catch (_) { bLien.textContent = 'Copy failed — the link is in the address bar'; history.replaceState(null, '', url); }
+    setTimeout(() => { bLien.textContent = 'Copy a link to this work'; }, 2500);
+  });
+  /* a l ouverture : un lien #tam= rouvre l oeuvre (params bornes par les modules : un lien trafique ne fait que ce qu un curseur ferait) */
+  function ouvrirLien() {
+    const m = /#tam=([A-Za-z0-9_-]{1,8000})/.exec(location.hash || ''); if (!m) return false;
+    let e; try { e = JSON.parse(deB64u(m[1])); } catch (_) { etatLigne.textContent = 'This link could not be read.'; return false; }
+    if (!e || typeof e !== 'object' || !e.p || typeof e.p !== 'object') return false;
+    if (e.k === 'sci' && typeof e.p.science === 'string' && SYSTEMES_SCI.some((s) => s.id === e.p.science)) {
+      const s = SYSTEMES_SCI.find((x) => x.id === e.p.science);
+      selGroupe.value = groupeDe(s); peindreGroupe(); selSys.value = s.id;
+      chargerScience(s.id, e.p.params || {}, { melange: e.p.melange || null }); return true;
+    }
+    if (e.k === 'form') { selGroupe.value = 'formule'; peindreGroupe(); selMode.value = e.p.mode || 'courbe'; peindreExpressions(F.normaliserSpec(e.p)); chargerFormule(F.normaliserSpec(e.p)); return true; }
+    if (e.k === 'att' && typeof e.p.famille === 'string') { selGroupe.value = 'attracteurs'; peindreGroupe(); try { regler(e.p); return true; } catch (_) { return false; } }
+    return false;
+  }
+  /* ── game82 : les VRAIES valeurs de l oeuvre (avant toute mise a l echelle), une ligne par point, colonnes nommees par la legende ── */
+  bCsv.addEventListener('click', () => {
+    if (!S.o || !S.o.brut) return;
+    const D = S.D, b = S.o.brut; let noms = null;
+    try { const L = S.leg && S.leg.legende(S.science ? S.science.s.id : '__attracteur', (S.P && S.P.params) || {}); noms = L && L.colonnes && L.colonnes.length === D ? L.colonnes : null; } catch (_) { noms = null; }
+    const q = (s) => '"' + String(s).replace(/"/g, '""') + '"';
+    const lignes = [['index', ...(noms || Array.from({ length: D }, (_, j) => 'x' + (j + 1)))].map(q).join(',')];
+    for (let i = 0; i < S.n; i++) { const r = [i]; for (let j = 0; j < D; j++) r.push(b[i * D + j]); lignes.push(r.join(',')); }
+    const nom = 'tam-' + (S.science ? S.science.s.id : (S.P && S.P.famille) || 'oeuvre') + '.csv';
+    const a = el('a', { href: URL.createObjectURL(new Blob([lignes.join('\n')], { type: 'text/csv' })), download: nom });
+    document.body.append(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  });
   /* ── game80 : la legende (tam-legendes.js, chargee a part : son absence n empeche rien) ── */
   /* (le module est garde dans S.leg : peindreLegende peut etre appelee avant cette ligne, sans zone morte de `let`) */
   import('./tam-legendes.js').then((m) => { S.leg = m; peindreLegende(); }).catch(() => { S.leg = null; });
@@ -989,6 +1091,73 @@ export function monter(racine, ctx = {}) {
       ...(L.couleurs ? [ligne('Colours:', L.couleurs)] : []),
       ...((L.aRegarder || []).length ? [el('p', { class: 'tamDoux' }, el('b', { text: 'What to notice:' })), el('ul', { class: 'tamPayListe' }, ...L.aRegarder.map((t) => el('li', { text: t })))] : []),
       ...(L.fin ? [ligne('How it ends:', L.fin)] : []));
+  }
+  /* ── game82 : les elements de CONTEXTE, passes par la MEME transformation que les donnees (sinon le Soleil ne tomberait pas a sa place).
+   *   Espace « brut » : z = (x - moyenne) x k (standardiserIso), projection vivante (memes couches, angles, t), puis le cadrage des
+   *   DONNEES seules (le decor ne recadre jamais l oeuvre). Espace « corps3 » : la normalisation de vueCorps (DEC.normaliserCorps). */
+  const TOUR = 2 * Math.PI;
+  /* deux directions orthogonales a une normale (Gram-Schmidt sur les axes) — pour tracer un cercle ou un plan en D dimensions */
+  function base2(normale, D) {
+    const nz = Math.hypot(...normale) || 1, nrm = normale.map((x) => x / nz), sortie = [];
+    for (let ax = 0; ax < D && sortie.length < 2; ax++) {
+      let v = Array.from({ length: D }, (_, j) => (j === ax ? 1 : 0));
+      const pr = (u, w) => u.reduce((s, x, j) => s + x * w[j], 0);
+      v = v.map((x, j) => x - pr(v, nrm) * nrm[j]); for (const u of sortie) { const c = pr(v, u); v = v.map((x, j) => x - c * u[j]); }
+      const l = Math.hypot(...v); if (l > 1e-9) sortie.push(v.map((x) => x / l));
+    }
+    return sortie;
+  }
+  /* un objet du decor -> une liste de polylignes (points dans l espace de l objet) */
+  function echantillonner(q, D) {
+    const c = q.centre, aj = (u, v, a, b) => c.map((x, j) => x + a * u[j] + b * v[j]);
+    if (q.type === 'point') return { pts: [c], point: true };
+    if (q.type === 'segment') return { pts: [q.a, q.b] };
+    if (q.type === 'cercle' || q.type === 'sphere') {
+      const [u, v] = q.type === 'cercle' && q.normale ? base2(q.normale, D) : [Array.from({ length: D }, (_, j) => (j === 0 ? 1 : 0)), Array.from({ length: D }, (_, j) => (j === 1 ? 1 : 0))];
+      if (!u || !v) return null;
+      const a0 = q.arc ? q.arc[0] : 0, a1 = q.arc ? q.arc[1] : TOUR, N = 64, lignes = [[]];
+      for (let i = 0; i <= N; i++) { const t = a0 + (a1 - a0) * i / N; lignes[0].push(aj(u, v, q.rayon * Math.cos(t), q.rayon * Math.sin(t))); }
+      if (q.type === 'sphere' && D >= 3) { /* une sphere : trois grands cercles */
+        const w = Array.from({ length: D }, (_, j) => (j === 2 ? 1 : 0)), l2 = [], l3 = [];
+        for (let i = 0; i <= N; i++) { const t = TOUR * i / N; l2.push(aj(u, w, q.rayon * Math.cos(t), q.rayon * Math.sin(t))); l3.push(aj(v, w, q.rayon * Math.cos(t), q.rayon * Math.sin(t))); }
+        lignes.push(l2, l3);
+      }
+      return { lignes, plein: !!q.remplissage };
+    }
+    if (q.type === 'plan') {
+      const [u, v] = base2(q.normale || [1], D); if (!u || !v) return null; const r = q.rayon || 1;
+      return { lignes: [[aj(u, v, -r, -r), aj(u, v, r, -r), aj(u, v, r, r), aj(u, v, -r, r), aj(u, v, -r, -r)]] };
+    }
+    return null;
+  }
+  function decorVue() {
+    if (!S.science || !S.o || !S.o.brut || !S.o.bornee) return [];
+    let objs; try { objs = DEC.decorDe(S.science.s.id, S.P.params, S.o) || []; } catch (_) { return []; }
+    const f = filmDe(), k = f ? imageCourante() : null;
+    objs = objs.filter((q) => q.image === undefined || q.image === k);
+    if (!objs.length) return [];
+    const D = S.D, sortie = [];
+    if (S.corps) {
+      /* les corps : l objet est deja dans la vue normalisee (pas de projection N-D) */
+      const vus = DEC.normaliserCorps(objs.filter((q) => q.espace === 'corps3'), S.o, TS.CORPS[S.science.s.id]);
+      for (const q of vus) { const e = echantillonner(q, 3); if (e) sortie.push({ q, e, vue: e.point ? [q.centre] : null, lignesVue: e.lignes || null }); }
+      return sortie;
+    }
+    /* l espace brut : moyennes et echelle de standardiserIso, projection jointe, puis le cadrage des donnees seules */
+    const n = S.n, { m, k: kz } = TS.echelleIso(S.o.brut, n, D, S.science.s.id);
+    const items = []; for (const q of objs) { if (q.espace && q.espace !== 'brut') continue; const e = echantillonner(q, D); if (e) items.push({ q, e }); }
+    const pts = []; for (const it of items) { it.idx = []; for (const ligne of (it.e.lignes || [it.e.pts])) { const li = []; for (const p of ligne) { li.push(pts.length); pts.push(p); } it.idx.push(li); } }
+    if (!pts.length) return [];
+    const zc = new Float64Array((n + pts.length) * D); zc.set(S.z.subarray(0, n * D));
+    pts.forEach((p, r) => { for (let j = 0; j < D; j++) zc[(n + r) * D + j] = ((Number(p[j]) || 0) - m[j]) * kz[j]; });
+    const pr = V.projeterVivant({ z: zc, n: n + pts.length, D, actives: S.couches.actives, angles: S.P.angles, t: S.t });
+    /* recadrage : le cadre des DONNEES dans la projection jointe -> le cadre que positions() donne aux donnees seules */
+    const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+    for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) { const v = pr[3 * i + c]; if (v < lo[c]) lo[c] = v; if (v > hi[c]) hi[c] = v; }
+    const r = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 || 1, mil = [0, 1, 2].map((c) => (lo[c] + hi[c]) / 2);
+    const vue = (r2) => [0, 1, 2].map((c) => (pr[3 * (n + r2) + c] - mil[c]) / r);
+    for (const it of items) sortie.push({ q: it.q, e: it.e, vue: it.e.point ? [vue(it.idx[0][0])] : null, lignesVue: it.e.point ? null : it.idx.map((li) => li.map(vue)) });
+    return sortie;
   }
   /* ── game80 : le FILM — une suite d images (o.film = { images, parImage }) se lit image par image ── */
   function filmDe() {
@@ -1187,6 +1356,8 @@ export function monter(racine, ctx = {}) {
     if (!P) return;
     const tous = el('details', { class: 'tamPayTous', id: 'tamPayTous' }), ul = el('ul', { class: 'tamPayListe' });
     try { if (c) await P.lire(String(c).toLowerCase()); else if (P.lister) await P.lister(); } catch (_) { return; }
+    /* game82 : le cout de chaque jeton, tenu ou non (les decimals de toute la liste ; une lecture ratee reste « cost not read yet ») */
+    try { if (P.decimales) await P.decimales(); } catch (_) { /* rien : le cout reste non lu */ }
     const lignes = P.lignes(), autres = [];
     for (const l of lignes) {
       const e = P.taille(l, PRIX_TAM), s = c ? P.soldes.get(l.jeton) : null, d = P.dec.get(l.jeton);
@@ -1300,7 +1471,9 @@ export function monter(racine, ctx = {}) {
     g.stroke();
   }
 
-  optionsDims(); depuisExplorateur(); void galerie();
+  /* game82 : un lien #tam= rouvre l oeuvre partagee ; sinon l oeuvre par defaut */
+  optionsDims(); if (!ouvrirLien()) depuisExplorateur(); void galerie();
+  window.addEventListener('hashchange', () => { if (/#tam=/.test(location.hash)) ouvrirLien(); });
   /* 2026-11-01 : le bouton « Make art from this block's brain » de l onglet Brain — la source = ce block, puis le meme clic que l onglet */
   const choisirDepuisBloc = () => { S.sourceBloc = true; peindreSource(); const a = blocVu(); if (a) selBloc.value = a; bCerveau.click(); };
   racine.__tam = { S, charger, choisirDepuisBloc };

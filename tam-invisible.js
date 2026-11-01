@@ -573,7 +573,7 @@ export const SYSTEMES = Object.freeze([
     params: { particules: 2500, pas: 120, D: 0.5, kT: 1, graine: 1 }, bornes: { particules: [500, 4000], pas: [50, 300], D: [0.1, 2], kT: [0.5, 4], graine: [1, 1000000] },
     phrase: 'A visualisation of Brownian motion as a seeded Gaussian random walk (time step 1), whose spread obeys Einstein\'s law <r^2> = 6 D t in three dimensions, with Maxwell-Boltzmann speeds; no real fluid is simulated, it is a drawing of the statistical law, not a photo.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { ondeGravitationnelle: ['masses'], dilatationTemps: ['horloges'], superpositionQuantique: ['graine', 'images'],
+export const ENTIERS = { ondeGravitationnelle: ['masses'], dilatationTemps: ['horloges'], superpositionQuantique: ['graine', 'images'],
   ondeLumiere: ['graine'], diagrammeEspaceTemps: ['grille'], mouvementBrownien: ['particules', 'pas', 'graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 

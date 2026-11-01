@@ -131,6 +131,8 @@ for (const [id, p] of [['tourbillonsPonctuels', { nombre: 3 }], ['systemeSolaire
   }
 }
 ok(legende('versMars', { aCible: 5.2 }).noms[2] === 'Target planet (orbit at 5.2 AU)' && LEGENDES.versMars.noms.join() === 'Spacecraft,Earth,Mars', 'versMars : la cible nommee Mars seulement a 1.524 UA');
+/* game82 (audit) : atomes Z = 1 -> o.film a 1 image ; la page ne montre pas de film, la legende ne doit pas en annoncer un */
+ok(!legende('atomes', { Z: 1 }).film && !/own colour/.test(legende('atomes', { Z: 1 }).couleurs || ''), 'atomes Z = 1 : pas de film annonce');
 ok(legende('systemeSolaire', { groupe: 1 }).noms[0] === 'Jupiter' && LEGENDES.systemeSolaire.noms[3] === 'Mars', 'planetes par groupe');
 ok(legende('systemeSolaire', { groupe: 0.6 }).noms[0] === 'Jupiter', 'groupe 0.6 arrondi a 1 comme le module');
 ok(nomsDe('trappist1', { premiere: 3 }).join() === 'TRAPPIST-1 e,TRAPPIST-1 f,TRAPPIST-1 g,TRAPPIST-1 h', 'TRAPPIST-1 e..h');

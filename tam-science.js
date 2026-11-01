@@ -76,6 +76,8 @@ export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpi
 
 export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
+/** game82 (audit : le curseur « groupe » glissait par 1/400 et le module l arrondissait) : un parametre ENTIER selon le module lui-meme */
+export const paramEntier = (id, k) => { const s = systeme(id); return !!(s && s.mod.ENTIERS && (s.mod.ENTIERS[id] || []).includes(k)); };
 
 /** les angles des plans caches par defaut : l angle d or, comme le moteur (D - 3 angles) */
 export function anglesDefaut(D) {
@@ -162,15 +164,29 @@ export function vueCorps(o, k) {
 /** game77 (chasse aux bugs : Rabi 0.1 vs 5 -> distance 0.005, omega, lambda, hauteur -> 0.000) : la standardisation PAR AXE ramenait
  *   chaque axe a la meme taille et effacait ce que ces curseurs reglent. Une science garde ses PROPORTIONS : centree par axe, divisee
  *   par UN seul ecart-type (le plus grand des axes). Aucune science n est mintee (totalSupply = 0 le 01/11). */
-export function standardiserIso(brut, n, D) {
-  const z = new Float64Array(n * D), m = new Float64Array(D); let sMax = 0;
+/** game82 (audit des 83 systemes) : une colonne d une AUTRE grandeur (le temps, l echappement) ecrasait l echelle commune —
+ *   supernova : temps 10 500 ans contre 5 pc -> une ligne [2, 0.003, 0.003] ; versMars, fusion, karman, Mandelbrot zoome idem.
+ *   Ces colonnes (indices lus dans tam-legendes.js) ont leur PROPRE echelle et sortent du sMax ; les axes de meme grandeur
+ *   gardent leurs proportions (le correctif game77 tient). */
+export const ECHELLE_PROPRE = {
+  supernova: [3], supernovaHydro: [3, 4], versMars: [2], fusionTrousNoirs: [0, 3], binaireFusion: [0, 3],
+  mandelbrot: [2], karman: [2], evaporationTrouNoir: [0, 1, 2, 3],
+};
+/** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
+export function echelleIso(brut, n, D, id) {
+  const m = new Float64Array(D), s = new Float64Array(D), k = new Float64Array(D), propre = new Set(ECHELLE_PROPRE[id] || []);
+  let sMax = 0;
   for (let j = 0; j < D; j++) {
     let a = 0; for (let i = 0; i < n; i++) a += brut[i * D + j]; m[j] = a / n;
     let v = 0; for (let i = 0; i < n; i++) { const w = brut[i * D + j] - m[j]; v += w * w; }
-    const s = Math.sqrt(v / n); if (s > sMax) sMax = s;
+    s[j] = Math.sqrt(v / n); if (!propre.has(j) && s[j] > sMax) sMax = s[j];
   }
-  const k = sMax > 0 ? 1 / sMax : 0;
-  for (let i = 0; i < n; i++) for (let j = 0; j < D; j++) z[i * D + j] = (brut[i * D + j] - m[j]) * k;
+  for (let j = 0; j < D; j++) { const d = propre.has(j) ? s[j] : sMax; k[j] = d > 0 ? 1 / d : 0; }
+  return { m, k };
+}
+export function standardiserIso(brut, n, D, id) {
+  const z = new Float64Array(n * D), { m, k } = echelleIso(brut, n, D, id);
+  for (let i = 0; i < n; i++) for (let j = 0; j < D; j++) z[i * D + j] = (brut[i * D + j] - m[j]) * k[j];
   return z;
 }
 /* le tri Morton d un nuage : la MEME cle que tam-moteur.js#morton (10 bits de poids fort par axe) */
@@ -185,7 +201,7 @@ export function genererScience(P) {
   const o = s.mod.simuler(P.science, P.params);
   if (!o.bornee || !o.brut) return { ...o, bornee: false };
   const n = o.n, D = o.D, M = (1 << P.q) - 1, ordre = estNuage(P, o) ? 1 : 0;
-  let fin = CORPS[P.science] ? vueCorps(o, CORPS[P.science]).vue : projeterND(standardiserIso(o.brut, n, D), n, D, P.angles);
+  let fin = CORPS[P.science] ? vueCorps(o, CORPS[P.science]).vue : projeterND(standardiserIso(o.brut, n, D, P.science), n, D, P.angles);
   /* game79 : une science MELANGEE a un motif (somme ou composition, comme les attracteurs) */
   if (P.melange) fin = melangerVue(fin, n, P.melange);
   let pts = new Int32Array(n * 3);

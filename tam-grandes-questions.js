@@ -352,7 +352,8 @@ function tailleUnivers(P, n) {
   const versS = (dMpc) => { const q = dMpc / T.dH; let a = 0, b = T.NS; while (b - a > 1) { const m = (a + b) >> 1; if (T.DC[m] > q) a = m; else b = m; } const fr = (T.DC[a] - q) / (T.DC[a] - T.DC[b] || 1); return a + fr; };
   for (let i = 0; i < n; i++) {
     const bord = i < nH, d = bord ? horizon : dcCMB * Math.sqrt(alea()), ph = DEUX_PI * alea();
-    const j = versS(d), j0 = Math.min(T.NS - 1, Math.floor(j)), fr = j - j0, tl = (T.TL[j0] + fr * (T.TL[j0 + 1] - T.TL[j0]));
+    /* game82 (audit) : au bord, d / dH depasse DC[0] d un arrondi -> j = -1e-16 -> TL[-1] -> NaN (H0 50-58, 14 positions sur 401) ; j borne */
+    const j = Math.min(T.NS, Math.max(0, versS(d))), j0 = Math.min(T.NS - 1, Math.floor(j)), fr = j - j0, tl = (T.TL[j0] + fr * (T.TL[j0 + 1] - T.TL[j0]));
     brut[3 * i] = d / 1000 * cosD(ph); brut[3 * i + 1] = d / 1000 * sinD(ph); brut[3 * i + 2] = (T.TL[0] - tl) * T.tH;
   }
   return { brut, invariants: {
@@ -382,6 +383,8 @@ function nombrePi(P, n) {
   }
   const mc = 4 * dedans / n, eM = Math.abs(machin(P.termesMachin) - PI);
   return { brut, invariants: {
+    /* game82 (Phil : « les donnees reelles ») : la valeur de reference de toutes les erreurs ci-dessous (pi en double precision) */
+    reference: { pi: PI },
     leibniz: { valeur: sl, erreur: Math.abs(sl - PI), NfoisErreur: NL * Math.abs(sl - PI), termes: NL },
     machin: { valeur: machin(P.termesMachin), erreur: eM, termes: P.termesMachin, termesPour1e12: pour1e12 },
     monteCarlo: { estimation: mc, erreur: Math.abs(mc - PI), points: n, ecartTypeAttendu: Math.sqrt(PI * (4 - PI) / n) },
@@ -469,7 +472,7 @@ export const SYSTEMES = Object.freeze([
     params: { ageUnivers: 13.797 }, bornes: { ageUnivers: [13.5, 14] },
     phrase: 'The history of the universe squeezed into one year, one turn of the spiral per month, with key events placed by their published ages; ages of the first stars and first life are uncertain by hundreds of millions of years.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { videQuantique: ['modes', 'graine'], bigRip: ['graine'], fauxVide: ['graine'], centreTerre: ['traversees', 'uniforme'],
+export const ENTIERS = { videQuantique: ['modes', 'graine'], bigRip: ['graine'], fauxVide: ['graine'], centreTerre: ['traversees', 'uniforme'],
   zeroAbsolu: ['atomes', 'graine'], tailleUnivers: ['graine'], nombrePi: ['termesLeibniz', 'termesMachin', 'graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 

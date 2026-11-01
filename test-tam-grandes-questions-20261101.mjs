@@ -155,6 +155,8 @@ function suite(T, bavard = false) {
   ok('univers : rayon et D_C(z=1) = integrale independante a 1e-5', () => { assert.ok(rel(tu.rayonObservable.Gpc, horizonRef(67.36, 0.3153) / 1000) < 1e-5); assert.ok(rel(tu.distanceZ1.Gpc, horizonRef(67.36, 0.3153, 0.5) / 1000) < 1e-5); });
   ok('univers : age = 13.8 Gyr a 1 %', () => { assert.ok(rel(tu.age.Gyr, 13.8) < 0.01); return tu.age.Gyr.toFixed(3) + ' Gyr'; });
   ok('univers : points dans le disque de la derniere diffusion, temps de regard en arriere dans [0, age]', () => { const r = sim('tailleUnivers'); for (let i = 0; i < r.n; i++) { const d = Math.hypot(r.brut[3 * i], r.brut[3 * i + 1]); assert.ok(d <= tu.rayonObservable.Gpc * (1 + 1e-9)); assert.ok(r.brut[3 * i + 2] >= -1e-9 && r.brut[3 * i + 2] <= tu.age.Gyr + 1e-9); } });
+  /* game82 (audit) : H0 = 57.5 et 13 autres positions du curseur donnaient « valeur non finie » (le bord arrondi au-dela de DC[0]) */
+  ok('univers : tout le curseur H0 (401 positions) dessine', () => { for (let i = 0; i <= 400; i++) { const r = sim('tailleUnivers', { H0: 50 + 30 * i / 400 }); assert.equal(r.bornee, true, 'H0 ' + (50 + 30 * i / 400)); } });
 
   // 9. pi
   ok('pi : Machin atteint 1e-12 en 8 a 10 termes', () => { const v = I('nombrePi', {}, { n: 10 }).machin; assert.ok(v.termesPour1e12 >= 8 && v.termesPour1e12 <= 10); return v.termesPour1e12 + ' termes'; });
@@ -206,6 +208,7 @@ for (const s of T.SYSTEMES) {
 
 // ---------- mutants (copies dans un dossier temporaire ; l import du moteur pointe vers l original) ----------
 const MUTANTS = [
+  ['univers : borne de j retiree (le NaN du bord revient)', 'const j = Math.min(T.NS, Math.max(0, versS(d))), j0', 'const j = versS(d), j0'],
   ['casimir : exposant d^4 -> d^3 dans la formule', 'PI * PI * HBAR * C / (240 * d * d * d * d)', 'PI * PI * HBAR * C / (240 * d * d * d)'],
   ['casimir : extrapolation de Richardson retiree', 'return (4 * pressionModes(d, l / 2) - pressionModes(d, l)) / 3;', 'return pressionModes(d, l);'],
   ['big rip : facteur 2/3 -> 1/3', 'const formule = 2 / (3 * eps * Math.sqrt(OL)) * tH;', 'const formule = 1 / (3 * eps * Math.sqrt(OL)) * tH;'],

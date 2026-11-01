@@ -461,7 +461,7 @@ export const SYSTEMES = Object.freeze([
     params: { theta: 2 * PI / 3, gradient: 1, largeur: 0.08, graine: 1 }, bornes: { theta: [0, PI], gradient: [0.5, 3], largeur: [0.02, 0.2], graine: GR },
     phrase: 'A visualisation of the formula for spin-1/2 atoms prepared at angle theta and measured along a field gradient: each atom lands in the upper spot with probability cos^2(theta/2), drawn at random, and the beam density follows the mean deflection of each spin component, not individual paths.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { tapisTalbot: ['graine'], oscillateurEtats: ['n', 'graine'], wigner: ['graine'], marcheQuantique: ['pas', 'graine'],
+export const ENTIERS = { tapisTalbot: ['graine'], oscillateurEtats: ['n', 'graine'], wigner: ['graine'], marcheQuantique: ['pas', 'graine'],
   bellCHSH: ['essais', 'graine'], rotorPulse: ['coups', 'graine'], niveauxLandau: ['n', 'periodes', 'graine'], sternGerlach: ['graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 

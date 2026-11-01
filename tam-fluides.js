@@ -15,7 +15,7 @@
 import { sinD, cosD, lnD } from './tam-moteur.js';
 
 const PI = 3.141592653589793, DEUX_PI = 6.283185307179586, LN2 = 0.6931471805599453;
-const D0 = 1e-8, BORNE = 1e3, MICRO_MAX = 4e6, DELTA = 2e-4;
+const D0 = 1e-8, BORNE = 1e3, MICRO_MAX = 4e6, MICRO_RAFFINE = 100000, DELTA = 2e-4;
 
 function expD(x) { /* e^x avec + - * / seulement (meme esprit que sinD/lnD du moteur) */
   if (x === -Infinity) return 0;
@@ -253,7 +253,7 @@ export const SYSTEMES = Object.freeze([
     bornes: { A: [0.05, 1], B: [0, 0.4], omega: [0.2, 10], x0: [0, 1], z0: [0.02, 0.98], duree: [20, 200] },
     phrase: 'A passive tracer in prescribed Rayleigh-Benard convection rolls (stream function A sin(pi x) sin(pi z), free-slip walls) whose boundaries oscillate sideways, after Solomon and Gollub (1988); a kinematic model, no heat equation is solved.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { tourbillonsPonctuels: ['nombre'] };
+export const ENTIERS = { tourbillonsPonctuels: ['nombre'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */
@@ -296,6 +296,9 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   const echec = (i, raison) => ({ params: P, D, n, bornee: false, echappeA: i, raison, brut: null, lyapunov: NaN, uniteLyapunov: S.uniteLyapunov, points: null, invariants: null });
   if (obs) obs.apres(y);
   noter(0);
+  /* game82 (audit : karman -> 1,4 s, base 13 500 micro-pas mais 405 000 pres d un tourbillon) : raffinement borne a
+   *   max(100 000, 1.5 x la base ; le banc Lamb rapport 0.6 en demande 84 000) ; les autres fluides (ratio 1.00 mesure, base <= 59 960) ne l atteignent pas. */
+  const microBudget = Math.min(MICRO_MAX, Math.max(MICRO_RAFFINE, 1.5 * (n - 1) * pas));
   let somme = 0, micro = 0;
   for (let i = 1; i < n; i++) {
     for (let st = 0; st < pas; st++) {
@@ -304,7 +307,7 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
         const pm = S.pasMax ? S.pasMax(y, c) : h, k = Math.ceil(reste / pm - 1e-9), hk = k <= 1 ? reste : reste / k;
         if (obs) obs.avant(y); S.avance(y, c, hk); S.avance(e, c, hk); if (obs) obs.apres(y);
         reste = k <= 1 ? 0 : reste - hk;
-        if (++micro > MICRO_MAX) return echec(i, 'rencontre trop serree (pas local epuise)');
+        if (++micro > microBudget) return echec(i, 'rencontre trop serree (pas local epuise)');
         const raison = S.hors(y, c);
         if (raison) return echec(i, raison);
       }

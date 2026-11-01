@@ -117,7 +117,7 @@ function suite(T, bavard = false) {
   });
   // 11. bornage
   ok('bornage : hors bornes ramene, NaN -> defaut, entiers arrondis, a <= d/2', () => {
-    assert.deepEqual(sim('mandelbrot', { cx: 9, cy: NaN, zoom: 0, maxIter: 1e9 }, { n: 50 }).params, { cx: 1, cy: 0, zoom: 1, maxIter: 1000 });
+    assert.deepEqual(sim('mandelbrot', { cx: 9, cy: NaN, zoom: 0, maxIter: 1e9 }, { n: 50 }).params, { cx: 1, cy: 0.1, zoom: 1, maxIter: 1000 });
     assert.deepEqual(sim('boiteQuantique', { n: 7.6, m: 0, k: 'x', graine: 4.4 }, { n: 50 }).params, { n: 5, m: 1, k: 1, graine: 4 });
     assert.deepEqual(sim('fentesYoung', { d: 0.1, a: 0.1 }, { n: 50 }).params, { d: 0.1, a: 0.05, lambda: 550, graine: 1 });
     assert.deepEqual(sim('mandelbulb', { puissance: 99, maxIter: -3 }, { n: 20 }).params, { puissance: 12, maxIter: 4 });

@@ -5791,6 +5791,8 @@ const SERVIS = [
   'tam-grandes-questions.js', 'tam-grandes-questions-2.js',
   /* game81 : champs quantiques, atomes, quarks */
   'tam-champs-quantiques.js',
+  /* game82 : les elements de contexte (Soleil, horizons, couches de la Terre…) */
+  'tam-decor.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

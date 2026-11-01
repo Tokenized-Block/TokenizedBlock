@@ -599,7 +599,7 @@ export const SYSTEMES = Object.freeze([
   { id: 'quarks', nom: 'Quark confinement and string breaking', science: QFT, D: 4, params: { images: 10, graine: 1 }, bornes: { images: [4, 20], graine: [1, 1000000] },
     phrase: 'A visualisation of a phenomenological potential model of QCD, not lattice QCD: a charm quark and antiquark bound by the Cornell potential (Coulomb plus linear string, parameters of Barnes, Godfrey and Swanson 2005), the charmonium levels solved from the radial Schrodinger equation, and the colour string drawn as an illustrative cloud until it breaks into two D mesons.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-const ENTIERS = { fluctuationsVide: ['echantillons', 'graine'], interactionChamps: ['graine'], paireSchwinger: ['paires', 'graine'], effetUnruh: ['graine'],
+export const ENTIERS = { fluctuationsVide: ['echantillons', 'graine'], interactionChamps: ['graine'], paireSchwinger: ['paires', 'graine'], effetUnruh: ['graine'],
   comptonKleinNishina: ['graine'], atomes: ['Z', 'graine'], quarks: ['images', 'graine'] };
 const FONCTIONS = { champLibre, fluctuationsVide, interactionChamps, paireSchwinger, effetUnruh, couplageCourant, comptonKleinNishina, atomes, quarks };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };

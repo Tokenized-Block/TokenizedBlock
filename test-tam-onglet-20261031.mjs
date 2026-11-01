@@ -235,6 +235,32 @@ for (const f of ['tam-onglet.js', 'tam-vue.js', 'tam-moteur.js', 'tam-plan.js', 
   ok(servis.has(f), f + ' est servi');
 ok(/import\('\.\/tam-onglet\.js'\)/.test(readFileSync(new URL('./app.html', import.meta.url), 'utf8')), 'app.html importe tam-onglet.js (suivi par test-imports-servis)');
 ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(serveur), 'les routes /api/tam/* existent');
+/* game82 (Phil, « Three roads to pi ») : la ligne « Check » d un invariant — la VRAIE fonction du source, executee */
+{
+  /* la fin de la fonction : `}` seul en debut de ligne, LF ou CRLF (test-tests-portables) */
+  const deb = onglet.indexOf('function ligneInvariant('), fin = /\r?\n\}\r?\n/.exec(onglet.slice(deb));
+  const a = onglet.indexOf('const nb4 = '), b = deb > 0 && fin ? deb + fin.index + fin[0].length : -1;
+  ok(a > 0 && b > a, 'nb4 .. ligneInvariant extraits du source');
+  const ligne = new Function(onglet.slice(a, b) + '\nreturn ligneInvariant;')();
+  const TSq = await import('./tam-science.js'), P1 = TSq.paramsScience('nombrePi'); P1.params.termesLeibniz = 1;
+  const I1 = TSq.systeme('nombrePi').mod.simuler('nombrePi', P1.params).invariants;
+  const L1 = ligne('leibniz', I1.leibniz);
+  ok(/value 4\b/.test(L1) && /terms 1\b/.test(L1) && !/valeur|NfoisErreur/.test(L1), 'Leibniz a 1 terme : « terms 1 » dit, cles en anglais : ' + L1);
+  ok(ligne('reference', I1.reference) === 'reference: true pi 3.141592653589793', 'la vraie valeur de pi affichee en entier : ' + ligne('reference', I1.reference));
+  ok(/data series/.test(ligne('courbes', I1.courbes)), 'un invariant sans nombre (courbes) n est plus une ligne vide');
+  /* game82 (Phil : « mets les variables au dessus ») : dans la page montee, les curseurs viennent AVANT la scene */
+  const corps = onglet.slice(onglet.indexOf('racine.replaceChildren('));
+  ok(corps.indexOf('curseurs, verdictTxt') > 0 && corps.indexOf('curseurs, verdictTxt') < corps.indexOf('      scene,') && corps.indexOf('selGroupe, selSys') < corps.indexOf('curseurs, verdictTxt'), 'les variables sont en haut, avec les selecteurs, avant la scene');
+  /* game82 (audit) : un curseur entier selon le MODULE (groupe du systeme solaire glissait par 1/400) ; un continu ne l est pas */
+  ok(TSq.paramEntier('systemeSolaire', 'groupe') && TSq.paramEntier('nombrePi', 'termesLeibniz') && !TSq.paramEntier('nombrePi', 'nope') && !TSq.paramEntier('schwarzschild', 'L')
+    && /TS\.paramEntier\(S\.science\.s\.id, cle\) \? '1'/.test(onglet), 'les pas entiers viennent de la declaration ENTIERS des modules');
+  /* vu a l ecran : la 1re version reprenait la classe .tamVars (panneau EN ABSOLU sur la scene) -> rendu hors de la carte */
+  ok(/el\('details', \{ class: 'tamReglagesHaut'/.test(onglet) && !/\.tamReglagesHaut\{[^}]*position:/.test(onglet) && (onglet.match(/class: 'tamVars'/g) || []).length === 1, 'le bloc des variables du haut a sa propre classe, en flux');
+  /* game82 (Phil : « cost not read yet ») : les decimals de TOUTE la liste, pas seulement des jetons tenus */
+  const appD = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  ok(/decimales: async \(\) => \{ const file = payerListees\(\)\.filter\(\(l\) => !payer\.dec\.has\(l\.jeton\)\);[^\n]*await decimalesPayer\(l\)/.test(appD)
+    && /if \(P\.decimales\) await P\.decimales\(\);/.test(onglet), 'Pay with : le cout pour 5 USDC lu pour chaque jeton (decimals de toute la liste)');
+}
 
 /* ── 8. (2026-11-01, Phil 31/10) LES VARIABLES : joueur et cerveau ── */
 {
@@ -379,6 +405,10 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok(/'data-corps': String\(b\)/.test(onglet) && /if \(S\.corpsActifs && !S\.corpsActifs\[b\]\) continue;/.test(onglet), 'une puce par corps, un corps cache n est pas trace');
     ok(/S\.n \* dt \/ \(Number\(selVitesse\.value\) \|\| 6\)/.test(onglet), 'la vitesse du trace pilote le dessin jusqu au dernier point');
     ok(/import\('\.\/tam-legendes\.js'\)\.then\(\(m\) => \{ S\.leg = m;/.test(onglet), 'la legende est chargee a part (son absence n empeche rien)');
+    /* game82 : le lien de partage (sans wallet ni note) et l export CSV des valeurs brutes, colonnes nommees par la legende */
+    ok(/const \{ minteur: _m, note: _n, graine: _g, \.\.\.P \} = S\.P; return \{ k: 'sci', p: P \};/.test(onglet) && /#tam=\(\[A-Za-z0-9_-\]\{1,8000\}\)/.test(onglet), 'lien : ni wallet, ni note, ni graine ; format borne');
+    ok(/optionsDims\(\); if \(!ouvrirLien\(\)\) depuisExplorateur\(\);/.test(onglet) && /#tam=\/\.test\(location\.hash/.test(readFileSync(new URL('./app.html', import.meta.url), 'utf8')), 'un lien #tam= rouvre l oeuvre et ouvre l onglet');
+    ok(/r\.push\(b\[i \* D \+ j\]\)/.test(onglet) && /L\.colonnes\.length === D \? L\.colonnes : null/.test(onglet), 'CSV : valeurs BRUTES, colonnes de la legende quand elles correspondent');
     for (const [m, s] of tous) { const o = m.simuler(s.id, {}); ok(o.bornee && o.brut && o.brut.length === o.n * o.D && o.D >= 3 && o.D <= 12, s.id + ' : borne, n*D valeurs, 3..12 dimensions'); } }
   const textes = [...(onglet + readFileSync(new URL('./tam-vue.js', import.meta.url), 'utf8')).matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).join('\n');
   ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');
