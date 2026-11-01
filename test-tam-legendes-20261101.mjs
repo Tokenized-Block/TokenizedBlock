@@ -1,0 +1,241 @@
+/* test-tam-legendes-20261101.mjs — les legendes de tam-legendes.js contre la VRAIE sortie des modules (simuler lance ici).
+ *   colonnes = D reel, noms = nombre de corps reel, films = blocs d images reellement successifs, chaines en anglais ASCII,
+ *   et les chiffres annonces dans les legendes relus dans les invariants des modules. */
+import { pathToFileURL } from 'node:url';
+const ici = (f) => pathToFileURL('D:/tmp/wt-tam/' + f).href;
+const TS = await import(ici('tam-science.js'));
+const { LEGENDES, legende, nomsDe } = await import(ici('tam-legendes.js'));
+
+let nOk = 0;
+const ok = (c, msg) => { if (!c) { console.error('ECHEC : ' + msg); process.exit(1); } nOk++; };
+const sim = (id, p = {}) => TS.systeme(id).mod.simuler(id, p);
+
+/* 1. couverture : chaque systeme a sa legende, colonnes = D reel aux params par defaut */
+const ids = TS.SYSTEMES.map((s) => s.id);
+/* game80 : + les 16 grandes questions (tam-grandes-questions.js : 9, tam-grandes-questions-2.js : 7) */
+ok(ids.length === 74, '74 systemes attendus, ' + ids.length + ' trouves');
+const GQ = ['videQuantique', 'bigRip', 'fauxVide', 'centreTerre', 'versMars', 'zeroAbsolu', 'tailleUnivers', 'nombrePi', 'calendrierCosmique',
+  'penduleFoucault', 'mouvementTerre', 'etoilesHR', 'evaporationTrouNoir', 'tsunami', 'geometrieUnivers', 'tailleEtoiles'];
+ok(GQ.every((id) => ids.includes(id)), 'les 16 grandes questions sont dans tam-science.js#SYSTEMES');
+/* les objets nommes hors systeme de corps (la page les projette : pas de couleur par corps, les noms sont dits dans couleurs) */
+const NOMMES = new Set(['versMars', 'bigRip', 'geometrieUnivers', 'etoilesHR', 'tailleEtoiles', 'calendrierCosmique']);
+const sorties = {};
+for (const id of ids) {
+  const L = LEGENDES[id], o = sim(id); sorties[id] = o;
+  ok(L && typeof L === 'object', 'legende manquante : ' + id);
+  ok(o.bornee && o.brut && o.brut.length === o.n * o.D, id + ' : simuler ne rend pas un brut n x D');
+  ok(Array.isArray(L.colonnes) && L.colonnes.length === o.D, id + ' : colonnes ' + (L.colonnes && L.colonnes.length) + ' pour D = ' + o.D);
+  ok(typeof L.titre === 'string' && L.titre.length > 2, id + ' : titre');
+  ok(typeof L.enUnePhrase === 'string' && L.enUnePhrase.length > 20, id + ' : enUnePhrase');
+  ok(typeof L.couleurs === 'string' && L.couleurs.length > 10, id + ' : couleurs');
+  ok(Array.isArray(L.aRegarder) && L.aRegarder.length >= 1 && L.aRegarder.length <= 3, id + ' : aRegarder 1..3');
+  ok(L.fin === null || typeof L.fin === 'string', id + ' : fin');
+  const k = TS.CORPS[id];
+  if (k) {
+    const m = Math.floor(o.D / k);
+    ok(Array.isArray(L.noms) && L.noms.length === m, id + ' : noms ' + (L.noms && L.noms.length) + ' pour ' + m + ' corps');
+    ok(L.noms.every((b) => L.couleurs.includes(b)), id + ' : chaque corps a sa couleur nommee');
+    /* chaque colonne nomme le corps auquel elle appartient (k colonnes par corps, dans l ordre) */
+    ok(L.colonnes.every((c, j) => c.includes(L.noms[Math.floor(j / k)])), id + ' : colonne j appartient au corps floor(j/k)');
+    const ts = TS.nomsCorps(id, {});
+    if (ts) ok(ts.length === L.noms.length && ts.every((b, j) => b === L.noms[j]), id + ' : memes noms que tam-science.js#nomsCorps');
+  } else {
+    if (NOMMES.has(id)) ok(Array.isArray(L.noms) && L.noms.length >= 2 && L.noms.every((b) => L.couleurs.includes(b)), id + ' : objets nommes, chacun dit dans couleurs');
+    else ok(L.noms === null, id + ' : noms null hors systeme de corps et hors objets nommes');
+    /* un film se colore par MOMENT (tam-onglet.js : couleurDim(q % 12)) ; sinon une couleur par colonne */
+    if (L.film) ok(L.couleurs.startsWith('A film of ' + L.film.images + ' moments'), id + ' : couleurs d un film = par moment');
+    else ok(L.colonnes.every((c, j) => L.couleurs.includes('colour ' + (j + 1) + ' = ')), id + ' : chaque colonne a sa couleur nommee');
+  }
+  /* films : la legende dit EXACTEMENT le film que le module declare (o.film), et rien quand il n en declare pas */
+  ok(!!L.film === !!o.film, id + ' : film legende ' + !!L.film + ' / module ' + !!o.film);
+  if (L.film) {
+    const F = L.film, M = o.film;
+    ok(F.ordre === 'images-successives' && F.images >= 2 && F.debuts.length === F.images && F.tailles.length === F.images, id + ' : forme du film');
+    ok(F.images === M.images, id + ' : images ' + F.images + ' / module ' + M.images);
+    ok((F.parImage ?? null) === (M.parImage ?? null), id + ' : parImage ' + F.parImage + ' / module ' + M.parImage);
+    const dm = M.debuts || Array.from({ length: M.images }, (_, k) => k * M.parImage), tm = M.tailles || Array(M.images).fill(M.parImage);
+    ok(F.debuts.every((d, k) => d === dm[k] && F.tailles[k] === tm[k]), id + ' : debuts et tailles = ceux du module');
+    ok(F.debuts[F.images - 1] + F.tailles[F.images - 1] <= o.n, id + ' : la derniere image tient dans n');
+    ok(F.colonneTemps === null || (Number.isInteger(F.colonneTemps) && F.colonneTemps < o.D), id + ' : colonneTemps');
+  }
+}
+ok(Object.keys(LEGENDES).length === 76 && LEGENDES.__attracteur && LEGENDES.__formule, '74 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
+ok(Object.keys(LEGENDES).every((id) => id.startsWith('__') || ids.includes(id)), 'aucune legende orpheline');
+ok(legende('__attracteur', { D: 5 }).colonnes.length === 5 && LEGENDES.__attracteur.colonnes.length === 3, 'attracteur : une colonne par variable');
+ok(LEGENDES.__formule.colonnes.length === 3 && legende('inconnu') === null, 'formule x y z ; id inconnu -> null');
+
+/* 2. films : les lignes sont VRAIMENT des blocs d images successifs (colonne du temps constante par bloc, croissante d un bloc au suivant) */
+const films = ids.filter((id) => LEGENDES[id].film);
+/* game80 : + la collision de galaxies, devenue un film de 12 moments (tam-astro.js) — sa legende suit le film que le module declare */
+/* game80 : + fauxVide, versMars, tsunami (grandes questions) */
+const FILMS = ['supernova', 'supernovaHydro', 'effetTunnel', 'superpositionQuantique', 'ondeGravitationnelle', 'collisionGalaxies', 'fauxVide', 'versMars', 'tsunami'];
+ok(FILMS.every((id) => films.includes(id)) && films.length === 9, 'les 9 films : ' + films.join(','));
+function blocsExacts(id, o, F) {
+  const c = F.colonneTemps, D = o.D, b = o.brut;
+  for (let k = 0; k < F.images; k++) {
+    const a = F.debuts[k], t0 = b[a * D + c];
+    for (let r = 1; r < F.tailles[k]; r++) if (b[(a + r) * D + c] !== t0) return 'bloc ' + k + ' ligne ' + r + ' change de temps';
+    if (k > 0 && !(t0 > b[F.debuts[k - 1] * D + c])) return 'bloc ' + k + ' pas apres le bloc ' + (k - 1);
+  }
+  return null;
+}
+for (const id of ['effetTunnel', 'superpositionQuantique', 'ondeGravitationnelle', 'versMars', 'tsunami']) {
+  const r = blocsExacts(id, sorties[id], LEGENDES[id].film); ok(r === null, id + ' : ' + r);
+}
+/* faux vide : pas de colonne de temps ; les MEMES points a chaque moment (x, y identiques), un point devenu vrai vide le reste */
+{ const o = sorties.fauxVide, F = LEGENDES.fauxVide.film; let memes = true, monte = true;
+  ok(F.colonneTemps === null, 'fauxVide : aucune colonne de temps');
+  for (let k = 1; k < F.images; k++) for (let r = 0; r < F.parImage; r++) {
+    const i = (F.debuts[k] + r) * 3, j = (F.debuts[k - 1] + r) * 3;
+    if (o.brut[i] !== o.brut[j] || o.brut[i + 1] !== o.brut[j + 1]) memes = false;
+    if (o.brut[i + 2] < o.brut[j + 2]) monte = false;
+  }
+  ok(memes && monte, 'fauxVide : memes points d image en image (' + memes + '), vrai vide irreversible (' + monte + ')');
+  const v = new Set(); for (let i = 0; i < o.n; i++) v.add(o.brut[3 * i + 2]); ok([...v].every((x) => x === 0 || x === 0.3), 'fauxVide : colonne 3 = 0 ou 0.3'); }
+/* supernovas : 16 instants, blocs de 93 ou 94 lignes ; colonne du temps non decroissante, 16 valeurs distinctes */
+for (const id of ['supernova', 'supernovaHydro']) {
+  const o = sorties[id], c = LEGENDES[id].film.colonneTemps, v = [];
+  let monte = true; for (let i = 0; i < o.n; i++) { v.push(o.brut[i * o.D + c]); if (i && v[i] < v[i - 1]) monte = false; }
+  const distincts = [...new Set(v)];
+  ok(monte && distincts.length === 16, id + ' : ' + distincts.length + ' instants, croissant ' + monte);
+  const longueurs = distincts.map((t) => v.filter((x) => x === t).length);
+  ok(longueurs.every((x) => x === 93 || x === 94), id + ' : blocs de 93/94 lignes : ' + longueurs.join(','));
+}
+/* l effet tunnel change vraiment d image en image (la densite bouge) */
+{ const o = sorties.effetTunnel, F = LEGENDES.effetTunnel.film; let diff = 0;
+  for (let r = 0; r < F.parImage; r++) diff += Math.abs(o.brut[r * 3 + 2] - o.brut[((F.images - 1) * F.parImage + r) * 3 + 2]);
+  ok(diff > 1e-3, 'effetTunnel : premiere et derniere image differentes'); }
+/* les nuages a temps tire au hasard ne sont PAS des films (tapisTalbot, marche, rotor, Landau) */
+for (const [id, c] of [['tapisTalbot', 1], ['marcheQuantique', 1], ['rotorPulse', 0], ['niveauxLandau', 2]]) {
+  const o = sorties[id]; let desc = 0; for (let i = 1; i < o.n; i++) if (o.brut[i * o.D + c] < o.brut[(i - 1) * o.D + c]) desc++;
+  ok(LEGENDES[id].film === null && desc > o.n / 4, id + ' : temps tire au hasard, pas un film (' + desc + ' descentes)');
+}
+
+/* 3. params : la legende suit le module */
+for (const [id, p] of [['tourbillonsPonctuels', { nombre: 3 }], ['systemeSolaire', { groupe: 1 }], ['trappist1', { premiere: 3 }], ['superpositionQuantique', { images: 7 }], ['ondeGravitationnelle', { masses: 16 }], ['superpositionQuantique', { images: 24 }],
+  ['versMars', { aCible: 5.2 }], ['tsunami', { profondeur: 1000 }], ['tailleEtoiles', { jusqua: 4 }], ['calendrierCosmique', { ageUnivers: 14 }]]) {
+  const o = sim(id, p), L = legende(id, p), q = id + ' ' + JSON.stringify(p);
+  ok(L.colonnes.length === o.D, q + ' : colonnes = D');
+  if (TS.CORPS[id]) ok(L.noms.length === Math.floor(o.D / TS.CORPS[id]), q + ' : noms');
+  ok(!!L.film === !!o.film, q + ' : film ssi le module en declare un');
+  if (L.film) {
+    ok(L.film.images === o.film.images && (L.film.parImage ?? null) === (o.film.parImage ?? null), q + ' : meme film que le module');
+    if (o.film.debuts) ok(L.film.debuts.every((d, k) => d === o.film.debuts[k] && L.film.tailles[k] === o.film.tailles[k]), q + ' : debuts / tailles du module');
+    const r = blocsExacts(id, o, L.film); ok(r === null, q + ' : ' + r);
+  }
+}
+ok(legende('versMars', { aCible: 5.2 }).noms[2] === 'Target planet (orbit at 5.2 AU)' && LEGENDES.versMars.noms.join() === 'Spacecraft,Earth,Mars', 'versMars : la cible nommee Mars seulement a 1.524 UA');
+ok(legende('systemeSolaire', { groupe: 1 }).noms[0] === 'Jupiter' && LEGENDES.systemeSolaire.noms[3] === 'Mars', 'planetes par groupe');
+ok(legende('systemeSolaire', { groupe: 0.6 }).noms[0] === 'Jupiter', 'groupe 0.6 arrondi a 1 comme le module');
+ok(nomsDe('trappist1', { premiere: 3 }).join() === 'TRAPPIST-1 e,TRAPPIST-1 f,TRAPPIST-1 g,TRAPPIST-1 h', 'TRAPPIST-1 e..h');
+ok(nomsDe('kepler') === null, 'pas de noms hors corps');
+/* trappist : les rayons des orbites croissent dans l ordre des noms (b plus proche que c...) */
+{ const o = sorties.trappist1, r = [0, 1, 2, 3].map((k) => Math.hypot(o.brut[2 * k], o.brut[2 * k + 1]));
+  ok(r[0] < r[1] && r[1] < r[2] && r[2] < r[3], 'trappist : b < c < d < e en distance'); }
+/* systeme solaire : la 3e planete du groupe 0 est a ~1 UA (Earth) */
+{ const o = sorties.systemeSolaire, d = Math.hypot(o.brut[6], o.brut[7], o.brut[8]); ok(Math.abs(d - 1) < 0.02, 'Earth a 1 UA : ' + d); }
+/* Halley : Earth (colonnes 4-6) sur un cercle de 1 UA, z = 0 */
+{ const o = sorties.cometeHalley; let pire = 0, z = 0; for (let i = 0; i < o.n; i++) { pire = Math.max(pire, Math.abs(Math.hypot(o.brut[i * 6 + 3], o.brut[i * 6 + 4]) - 1)); z = Math.max(z, Math.abs(o.brut[i * 6 + 5])); }
+  ok(pire < 1e-9 && z === 0, 'Halley : Earth sur le cercle unite'); }
+
+/* 4. chaines : anglais ASCII, aucun identifiant francais du code */
+const INTERDITS = /\b(brut|params?|simuler|graine|duree|annees|groupe|premiere|nombre|nuage|corps|etoiles?|rayons?|temps|vitesse|masses?Trou|densite|orbite|tours|rapport|undefined|NaN|null)\b|params\./;
+const toutes = [];
+const ramasser = (x) => { if (typeof x === 'string') toutes.push(x); else if (Array.isArray(x)) x.forEach(ramasser); else if (x && typeof x === 'object') Object.values(x).forEach(ramasser); };
+ramasser(LEGENDES);
+for (const [id, p] of [['tourbillonsPonctuels', { nombre: 3 }], ['systemeSolaire', { groupe: 1 }], ['trappist1', { premiere: 2 }], ['__attracteur', { D: 7 }]]) ramasser(legende(id, p));
+for (const s of toutes) {
+  ok(/^[\x20-\x7e]*$/.test(s), 'chaine non ASCII : ' + s);
+  if (s !== 'images-successives') ok(!INTERDITS.test(s), 'identifiant du code dans une chaine : ' + s);
+}
+ok(Object.isFrozen(LEGENDES) && Object.isFrozen(LEGENDES.kepler) && Object.isFrozen(LEGENDES.kepler.colonnes), 'gele');
+
+/* 5. les chiffres et faits annonces, relus dans les modules */
+{ const inv = sorties.pulsarHulseTaylor.invariants; ok(inv.coalescence.mesure > 250 && inv.coalescence.mesure < 350, 'pulsar : coalescence ~300 Ma : ' + inv.coalescence.mesure); }
+{ const inv = sorties.etoileS2.invariants; ok(Math.abs(inv.pericentre.mesure - 120) < 5, 'S2 pericentre ~120 UA : ' + inv.pericentre.mesure);
+  const o = sorties.etoileS2; let rmax = 0; for (let i = 0; i < o.n; i++) rmax = Math.max(rmax, Math.hypot(o.brut[3 * i], o.brut[3 * i + 1], o.brut[3 * i + 2])); ok(Math.abs(rmax - 2000) < 100, 'S2 apocentre ~2000 UA : ' + rmax); }
+{ const inv = sorties.lumiereTrouNoir.invariants; ok(Math.abs(inv.bCritique.mesure - 5.2) < 0.01 && inv.rayon1.issue === 'capture', 'b critique 5.2, rayon 1 capture'); }
+{ const inv = sorties.disqueAccretion.invariants; ok(Math.abs(inv.isco.mesure - 6) < 1e-6 && inv.vitesseIsco.mesure > 0.45 && inv.vitesseIsco.mesure <= 0.5, 'disque : ISCO 6, vitesse ~0.5 c'); }
+{ const inv = sorties.courbeRotation.invariants; ok(inv.platitude.avecHalo > 0.9 && inv.platitude.visibleSeul < 0.85, 'rotation plate avec halo, chute sans : ' + JSON.stringify(inv.platitude)); }
+{ const inv = sorties.effetTunnel.invariants.transmission; ok(inv.mesure > 0.01 && inv.reflexion > 0.01, 'tunnel : partie transmise ET reflechie'); }
+{ const o = sorties.effetTunnel; let x0 = Infinity; for (let i = 0; i < o.n; i++) if (Math.abs(o.brut[3 * i]) < Math.abs(x0)) x0 = o.brut[3 * i]; ok(Math.abs(x0) < 0.3, 'tunnel : la barriere commence a 0 (grille passe par 0)'); }
+{ const inv = sorties.binaireTrouNoir.invariants; ok(inv.excentricite.decroissante && inv.excentricite.fin < inv.excentricite.debut, 'inspirale : excentricite decroissante'); }
+{ const o = sorties.binaireTrouNoir, e0 = o.brut[3], e1 = o.brut[(o.n - 1) * 4 + 3]; ok(e0 === 0.4 && e1 < e0, 'colonne 4 = excentricite (0.4 au depart)'); }
+{ const o = sorties.supernovaHydro; let m = 0; for (let i = 0; i < o.n; i++) m = Math.max(m, o.brut[i * 5 + 4]); ok(m > 3 && m <= 4.05, 'supernovaHydro : densite max ~4 : ' + m); }
+{ const o = sorties.supernova; ok(Math.abs(o.brut[3] - 4) < 1e-6 && Math.abs(o.brut[(o.n - 1) * 4 + 3] - 40000) < 1e-6, 'supernova : temps 4 a 40000 ans'); }
+{ const o = sorties.binaireFusion; let tMin = Infinity, tMax = -Infinity; for (let i = 0; i < o.n; i++) { tMin = Math.min(tMin, o.brut[4 * i]); tMax = Math.max(tMax, o.brut[4 * i]); } ok(tMin < 0 && tMax > 0, 'binaireFusion : le temps passe par 0'); }
+{ const o = sorties.fusionTrousNoirs; let im = 0, a = 0; for (let i = 0; i < o.n; i++) { const h = Math.hypot(o.brut[4 * i + 1], o.brut[4 * i + 2]); if (h > a) { a = h; im = i; } } ok(Math.abs(o.brut[4 * im]) < 0.01, 'fusion : pic du signal pres de t = 0 : ' + o.brut[4 * im]); }
+{ const o = sorties.collisionGalaxies; ok(o.n % 2 === 0, 'collision : deux moities'); }
+{ const o = sorties.mouvementBrownien, lignes = 121; ok(o.brut[0] === 0 && o.brut[3 * lignes] === 0 && o.brut[3 * lignes + 1] === 0, 'brownien : chaque trace part de l origine'); }
+{ const o = sorties.chuteTrouNoir; ok(o.brut[0] === 10 && o.brut[3 * (o.n - 1)] < 1e-9 && o.brut[3 * (o.n - 1) + 2] === o.brut[3 * (o.n - 2) + 2], 'chute : r de 10 a 0, temps lointain fige'); }
+{ const o = sorties.pointsLagrange; let z = 0; for (let i = 0; i < o.n; i++) z = Math.max(z, Math.abs(o.brut[3 * i + 2])); ok(z === 0, 'Lagrange : z = 0 par defaut'); }
+{ const o = sorties.paquetOscillateur; let a = Infinity, b = -Infinity; for (let i = 0; i < o.n; i++) { a = Math.min(a, o.brut[3 * i + 2]); b = Math.max(b, o.brut[3 * i + 2]); } ok(b - a < 1e-3, 'paquet : largeur plate a largeur 1'); }
+{ const o = sorties.dilatationTemps; ok(Math.abs(Math.hypot(o.brut[0], o.brut[1]) - 3) < 1e-9 && Math.abs(Math.hypot(o.brut[3 * (o.n - 1)], o.brut[3 * (o.n - 1) + 1]) - 36) < 1e-9, 'dilatation : horloge proche d abord, horloge mobile (r 36) en dernier'); }
+{ const o = sorties.ondeLumiere; ok(o.brut[0] === 3 && o.brut[3] === 3, 'lumiere : lignes E puis B au meme x, depart en 3'); }
+{ const o = sorties.champDipolaire, i = Math.floor(0.3 * o.n) - 1; ok(o.brut[3 * i + 1] === 0, 'dipole : les 30 % premieres lignes sont des lignes de champ (y = 0)'); }
+{ const o = sorties.amasEtoiles; ok(o.D === 12, 'amas : 4 etoiles dessinees'); }
+
+/* 6. game80 : les grandes questions — noms et dispositions relus dans les LIGNES, chiffres annonces relus dans les invariants */
+const inv = (id) => sorties[id].invariants, entre = (x, a, b, m) => ok(x >= a && x <= b, m + ' : ' + x);
+/* noms : versMars, l ordre des 3 points d un moment (vaisseau au perihelie r = 1 au depart, Terre sur r = 1, Mars sur r = 1.524) */
+{ const o = sorties.versMars, r = (i) => Math.hypot(o.brut[3 * i], o.brut[3 * i + 1]), last = 3 * (LEGENDES.versMars.film.images - 1);
+  let terre = 0, mars = 0; for (let k = 0; k < LEGENDES.versMars.film.images; k++) { terre = Math.max(terre, Math.abs(r(3 * k + 1) - 1)); mars = Math.max(mars, Math.abs(r(3 * k + 2) - 1.524)); }
+  ok(terre < 1e-9 && mars < 1e-9 && Math.abs(r(0) - 1) < 1e-12 && Math.abs(r(last) - 1.524) < 1e-6, 'versMars : point 1 = vaisseau (1 -> 1.524 UA), 2 = Terre (1 UA), 3 = Mars (1.524 UA)'); }
+/* bigRip : 12 blocs, un par galaxie, chacun repart du temps 0 */
+{ const o = sorties.bigRip, m = Math.floor(o.n / 12); ok(LEGENDES.bigRip.noms.length === 12 && [...Array(12).keys()].every((g) => o.brut[3 * g * m + 2] === 0 && o.brut[3 * (g * m + m - 1) + 2] > 20), 'bigRip : 12 galaxies, blocs de ' + m + ' lignes du present au rip'); }
+/* geometrie : 3 blocs, colonne 4 = +1, 0, -1 dans l ordre des noms */
+{ const o = sorties.geometrieUnivers, q = Math.floor(o.n / 3), K = [1, 0, -1]; let bon = true;
+  for (let i = 0; i < o.n; i++) if (o.brut[4 * i + 3] !== K[Math.min(2, Math.floor(i / q))]) bon = false;
+  ok(bon && LEGENDES.geometrieUnivers.noms.every((nm, j) => nm.includes('curvature ' + ['+1', '0', '-1'][j])), 'geometrie : blocs sphere (+1), plan (0), hyperbolique (-1)'); }
+/* etoiles HR : les noms = ceux du module ; ce sont les PREMIERES lignes */
+{ const I = inv('etoilesHR'), N = LEGENDES.etoilesHR.noms; ok(N.join() === I.etoiles.noms.join() && N.length === I.etoiles.lignes, 'etoilesHR : ' + N.length + ' etoiles nommees = lignes etoiles du module');
+  ok(['Sun', 'Betelgeuse', 'Sirius B'].every((x) => N.includes(x)), 'etoilesHR : les etoiles citees existent dans la table');
+  const o = sorties.etoilesHR, iSun = N.indexOf('Sun'); ok(Math.abs(o.brut[3 * iSun + 1]) < 1e-12 && Math.abs(o.brut[3 * iSun + 2]) < 1e-12, 'etoilesHR : Soleil = 0 en log L et log R'); }
+/* tailles : colonne 4 = indice du corps, dans l ordre des noms ; rayon max de chaque bloc = rayon de la table */
+for (const p of [{}, { jusqua: 4 }]) {
+  const o = sim('tailleEtoiles', p), N = legende('tailleEtoiles', p).noms, I = o.invariants.rayons, per = Math.floor(o.n / N.length); let bon = true;
+  for (let i = 0; i < o.n; i++) if (o.brut[4 * i + 3] !== Math.min(N.length - 1, Math.floor(i / per))) bon = false;
+  ok(bon && N.join() === I.map((r) => r.nom).join() && N[0] === 'Earth' && N[1] === 'Sun', 'tailleEtoiles ' + JSON.stringify(p) + ' : ' + N.length + ' corps dans l ordre de la colonne 4');
+}
+/* calendrier : 9 evenements = ceux du module ; leurs batons = les lignes de hauteur > 0, apres la spirale */
+{ const o = sorties.calendrierCosmique, N = LEGENDES.calendrierCosmique.noms, E = inv('calendrierCosmique').evenements; let premier = -1, nb = 0;
+  for (let i = 0; i < o.n; i++) if (o.brut[3 * i + 2] > 0) { nb++; if (premier < 0) premier = i; }
+  ok(N.join() === E.map((e) => e.nom).join() && nb === Math.floor(o.n / 4 / N.length) * N.length && premier === o.n - nb, 'calendrier : ' + N.length + ' evenements, ' + nb + ' lignes de batons a la fin'); }
+/* colonnes et chiffres annonces */
+{ const I = inv('videQuantique'); entre(I.pression.mesure, 1.2e-3, 1.4e-3, 'Casimir ~1.3 mPa a 1 micrometre'); entre(I.loiEnPuissance.rapportD_2D, 15.9, 16.1, 'Casimir : x16 a gap moitie');
+  const o = sorties.videQuantique, k = Math.floor(0.6 * o.n); let dedans = true; for (let i = 0; i < k; i++) if (!(o.brut[3 * i] >= 0 && o.brut[3 * i] <= 1 && Number.isInteger(o.brut[3 * i + 1]))) dedans = false;
+  let fort = 0; for (let i = 0; i < o.n; i++) fort = Math.max(fort, Math.abs(o.brut[3 * i + 2])); ok(dedans && fort <= 0.4 + 1e-12, 'Casimir : dedans k entiers entre 0 et 1, champ <= 0.4'); }
+{ const I = inv('bigRip'); entre(I.tempsAvantRip.mesure, 20.5, 23.5, 'bigRip ~22 Gyr'); entre(I.dernierInstantDessine.avantRip, 0.01, 0.03, 'bigRip : dernier point ~0.02 Gyr avant'); ok(Math.abs(I.dernierInstantDessine.log10a - 4) < 1e-9, 'bigRip : 10 000 fois'); ok(sorties.bigRip.fin && sorties.bigRip.fin.evenement === 'big rip', 'bigRip : fin declaree'); }
+{ const f = inv('fauxVide').fractionVraiVide; entre(f.mesure[9], 0.95, 0.99, 'faux vide : ~97 % mesure a la fin'); entre(f.avrami[9], 0.975, 0.99, 'faux vide : ~98 % Avrami'); }
+{ const I = inv('centreTerre'), o = sorties.centreTerre; entre(I.traverseePREM.mesure, 37.5, 39, 'Terre : ~38 min'); entre(I.traverseeUniforme.mesure, 41.5, 42.8, 'Terre uniforme ~42 min');
+  entre(I.gMax.valeur, 10.5, 10.9, 'g max ~10.7'); ok(I.gMax.rayonKm === 3480, 'g max au sommet du noyau (3480 km)');
+  let v = 0; for (let i = 0; i < o.n; i++) v = Math.max(v, Math.abs(o.brut[4 * i + 1])); entre(v, 9.5, 10.3, 'Terre : vitesse max ~10 km/s');
+  ok(o.brut[0] === 1 && Math.abs(o.brut[4 * (o.n - 1)] - 1) < 1e-3 && Math.abs(o.brut[4 * (o.n - 1) + 2] - 2 * I.traverseePREM.mesure) < 1e-6, 'Terre : part de 1, revient a 1 apres 2 traversees (minutes)'); }
+{ const I = inv('versMars'); entre(I.dureeTransfert.mesure, 255, 262, 'Mars ~259 j'); entre(I.anglePhase.valeur, 43, 46, 'Mars ~44 deg'); entre(I.periodeSynodique.valeur, 770, 790, 'Mars ~780 j');
+  const o = sorties.versMars; ok(Math.abs(o.brut[3 * (o.n - 1) + 2] - I.dureeTransfert.formule) < 1e-6, 'Mars : colonne 3 en jours, jusqu a l arrivee'); }
+{ entre(inv('zeroAbsolu').fractionCondensat.mesure, 0.75, 0.81, 'BEC ~78 %'); entre(sim('zeroAbsolu', { T: 1.5 }).invariants.fractionCondensat.mesure, 0, 0.01, 'BEC : pas de coeur au-dessus de Tc'); }
+{ const I = inv('tailleUnivers'), o = sorties.tailleUnivers, nH = Math.floor(o.n / 10); entre(I.rayonObservable.Gpc, 13.5, 14.8, 'univers ~14 Gpc'); entre(I.rayonObservable.Gal, 44, 48, 'univers ~46 Gal'); entre(I.age.Gyr, 13.6, 14, 'age ~13.8');
+  let bord = 0, iMin = nH, dMin = Infinity; for (let i = 0; i < o.n; i++) { const d = Math.hypot(o.brut[3 * i], o.brut[3 * i + 1]); if (i < nH) bord = Math.max(bord, o.brut[3 * i + 2]); else if (d < dMin) { dMin = d; iMin = i; } }
+  ok(bord < 0.05 && o.brut[3 * iMin + 2] > 12 && o.brut[3 * iMin + 2] <= I.age.Gyr, 'univers : colonne 3 = temps cosmique au depart de la lumiere (0 au bord, ~13.8 tout pres) : bord ' + bord + ', pres ' + o.brut[3 * iMin + 2]); }
+{ const I = inv('nombrePi'); entre(I.leibniz.erreur, 0.0009, 0.0011, 'Leibniz 1000 termes ~0.001'); ok(I.machin.termesPour1e12 <= 10 && I.machin.erreur < 1e-14, 'Machin : precision machine en ~10 termes');
+  const o = sorties.nombrePi; let dedans = 0; for (let i = 0; i < o.n; i++) if (o.brut[3 * i] ** 2 + o.brut[3 * i + 1] ** 2 <= 1) dedans++; ok(Math.abs(o.brut[3 * (o.n - 1) + 2] - Math.abs(4 * dedans / o.n - Math.PI)) < 1e-12, 'pi : colonne 3 = erreur courante de Monte-Carlo'); }
+{ const I = inv('calendrierCosmique'), E = I.evenements, d = (nm) => E.find((e) => e.nom === nm).date;
+  ok(I.soleil.date.startsWith('Sep') && d('Earth forms').startsWith('Sep') && d('Non-avian dinosaurs extinct').startsWith('Dec 30') && d('Big Bang').startsWith('Jan 1 '), 'calendrier : Soleil/Terre en septembre, dinosaures le 30 decembre');
+  entre(I.humains.minutesAvantMinuit, 10, 13, 'Homo sapiens ~11 min avant minuit'); }
+{ const I = inv('penduleFoucault').precession, o = sorties.penduleFoucault; entre(I.tourCompletHeures, 31, 33, 'Foucault Paris ~32 h'); ok(I.mesure < 0, 'Foucault : sens horaire au nord');
+  ok(sim('penduleFoucault', { latitude: -48.85 }).invariants.precession.mesure > 0, 'Foucault : sens inverse au sud'); entre(sim('penduleFoucault', { latitude: 90 }).invariants.precession.tourCompletHeures, 23.5, 24.5, 'Foucault pole ~24 h');
+  entre(Math.abs(sim('penduleFoucault', { latitude: 0 }).invariants.precession.mesure), 0, 1e-6, 'Foucault : rien a l equateur');
+  let pire = 0; for (let i = 0; i < o.n; i++) pire = Math.max(pire, Math.abs(Math.hypot(o.brut[3 * i], o.brut[3 * i + 1]) - 3)); ok(pire < 0.05, 'Foucault : chaque point = une extremite (r = amplitude 3 m) : ' + pire); }
+{ const I = inv('mouvementTerre'), o = sorties.mouvementTerre; entre(I.vitesseSoleil.kms, 200, 260, 'Soleil > 200 km/s'); entre(I.pasHelice.mesure, 44, 56, 'helice ~50 UA par an'); entre(I.inclinaison.degres, 55, 65, 'inclinaison ~60 deg');
+  ok(o.brut[3] === 0 && Math.abs(o.brut[4 * (o.n - 1) + 3] - 6) < 1e-9, 'mouvementTerre : colonne 4 = temps en annees (0 -> 6)'); }
+{ const I = inv('evaporationTrouNoir'), o = sorties.evaporationTrouNoir; entre(I.dureeDeVie.log10Ans, 66.5, 67.8, 'evaporation ~1e67 ans'); entre(I.loiM3.rapport, 7.9, 8.1, 'evaporation : x8');
+  entre(I.temperature.kelvin, 5e-8, 7e-8, 'Hawking ~6e-8 K'); entre(o.brut[4 * (o.n - 1)], 0.9998, 0.99995, 'evaporation : dessine jusqu a 99.99 %');
+  ok(Math.abs(o.brut[4 * (o.n - 1) + 2] - Math.log10(1 / o.brut[4 * (o.n - 1) + 1])) < 1e-9, 'evaporation : colonne 3 = log10(M0 / M) = log10(T / T0)'); }
+{ const I = inv('tsunami'), o = sorties.tsunami, F = LEGENDES.tsunami.film; entre(I.vitesse.kmh, 690, 730, 'tsunami ~700 km/h'); entre(I.traversee.totalMesureH, 13.5, 15, 'tsunami ~14 h'); entre(I.loiDeGreen.amplitudeCoteM, 2, 2.4, 'tsunami ~2.2 m');
+  ok(F.reste === undefined && LEGENDES.tsunami.film.note.includes('last ' + (o.n - F.images * F.parImage) + ' rows'), 'tsunami : lignes hors film annoncees');
+  ok(Math.abs(o.brut[4 * (F.debuts[F.images - 1]) + 3] - I.traversee.totalMesureH) < 0.05, 'tsunami : colonne 4 en heures'); }
+{ const I = inv('geometrieUnivers'); entre(I.sphere.sommeAnglesDeg, 222, 226, 'sphere ~224 deg'); entre(I.plat.sommeAnglesDeg, 179.999, 180.001, 'plan 180'); entre(I.hyperbolique.sommeAnglesDeg, 148, 152, 'hyperbolique ~150');
+  ok(I.sphere.circonference < I.plat.circonference && I.plat.circonference < I.hyperbolique.circonference, 'cercles : sphere < plan < hyperbolique'); ok(sorties.geometrieUnivers.params.cote === 1.2, 'cote 1.2 par defaut'); }
+entre(inv('tailleEtoiles').terreSoleil.inverse, 108, 110, 'Soleil ~109 Terres');
+
+console.log('test-tam-legendes-20261101 : ' + nOk + ' assertions OK');

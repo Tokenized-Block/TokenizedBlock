@@ -360,13 +360,24 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   /* ⛔ corrige le 01/11 : TamArt v1 ne connait pas la famille (octet 4 = q) — une science se minte, par le MEME portail */
   ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
   ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
-  { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js'];
+  { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js',
+    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js'];
+    ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
     const mods = await Promise.all(fichiers.map((f) => import(f)));
     const tous = mods.flatMap((m) => m.SYSTEMES.map((s) => [m, s]));
     ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
     for (const f of fichiers) ok(serveur.includes("'" + f.slice(2) + "'"), f + ' est dans la liste servie');
     /* chaque systeme est dans un groupe du menu (aucun orphelin) */
-    ok(/const groupeDe = \(s\) => THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet), 'menu : groupes par theme (astres, trous noirs, ...)');
+    ok(/const groupeDe = \(s\) => THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+    /* game80 : aucun systeme orphelin — chaque id des grandes questions est range dans son groupe */
+    { const gq = [...(await import('./tam-grandes-questions.js')).SYSTEMES, ...(await import('./tam-grandes-questions-2.js')).SYSTEMES].map((s) => s.id);
+      ok(gq.every((id) => onglet.includes("'" + id + "'")), 'les ' + gq.length + ' grandes questions sont toutes dans THEMES.questions'); }
+    /* game80 : fins dessinees, film (debuts/tailles), puces par corps, vitesse du trace, legende */
+    ok(/S\.o\.fin && !Array\.isArray\(S\.o\.fin\)/.test(onglet) && /'end · ' \+ fin\.evenement/.test(onglet), 'une fin physique (capture…) est nommee sur le trace');
+    ok(/Array\.isArray\(f\.debuts\) && Array\.isArray\(f\.tailles\)/.test(onglet) && /film\.debuts\[q\]/.test(onglet), 'film : images de tailles inegales (debuts/tailles) supportees');
+    ok(/'data-corps': String\(b\)/.test(onglet) && /if \(S\.corpsActifs && !S\.corpsActifs\[b\]\) continue;/.test(onglet), 'une puce par corps, un corps cache n est pas trace');
+    ok(/S\.n \* dt \/ \(Number\(selVitesse\.value\) \|\| 6\)/.test(onglet), 'la vitesse du trace pilote le dessin jusqu au dernier point');
+    ok(/import\('\.\/tam-legendes\.js'\)\.then\(\(m\) => \{ S\.leg = m;/.test(onglet), 'la legende est chargee a part (son absence n empeche rien)');
     for (const [m, s] of tous) { const o = m.simuler(s.id, {}); ok(o.bornee && o.brut && o.brut.length === o.n * o.D && o.D >= 3 && o.D <= 12, s.id + ' : borne, n*D valeurs, 3..12 dimensions'); } }
   const textes = [...(onglet + readFileSync(new URL('./tam-vue.js', import.meta.url), 'utf8')).matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).join('\n');
   ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');

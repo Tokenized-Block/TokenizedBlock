@@ -80,6 +80,14 @@ function suivi() {
   return o;
 }
 const fraction = (i, m) => (m > 1 ? i / (m - 1) : 0);
+/* disposition d un FILM mesuree sur les lignes : image(i) = numero d image de la ligne i (croissant) ; debuts[k] = premiere
+   ligne de l image k, tailles[k] = ses lignes ; parImage = taille commune si toutes egales, sinon null */
+function filmDe(n, image) {
+  const debuts = []; let p = -1;
+  for (let i = 0; i < n; i++) { const f = image(i); if (f !== p) { debuts.push(i); p = f; } }
+  const tailles = debuts.map((d, k) => (k + 1 < debuts.length ? debuts[k + 1] : n) - d);
+  return { images: debuts.length, parImage: tailles.every((t) => t === tailles[0]) ? tailles[0] : null, debuts, tailles };
+}
 
 // ---------- 1 : onde gravitationnelle sur un anneau de masses libres (jauge TT, ordre lineaire en h) ----------
 // Onde le long de z, pulsation 1. Deplacement TT : x' = x + (h+ x + hx y)/2 cos t, y' = y + (hx x - h+ y)/2 cos t.
@@ -116,7 +124,7 @@ function ondeGravitationnelle(P, n) {
     aire: aire.sortir(),
     aireOrdre2: { mesure: ecartAire, formule: h * h / 4, note: 'relative area change; second order in h (first order cancels)' },
     etirement: { mesure: rmax, formule: 1 + h / 2, angleDegres: 360 * jmax / N, angleFormuleDegres: h > 0 ? 90 * atan2D(hx, hp) / PI : 0 },
-  } };
+  }, film: filmDe(n, (i) => Math.floor(i / N)) };
 }
 
 // ---------- 2 : courbure de l espace-temps, paraboloide de Flamm (tranche spatiale de Schwarzschild plongee) ----------
@@ -196,7 +204,9 @@ function chuteTrouNoir(P, n) {
     tempsCoordonne4M: { mesure: t4, formule: tSchwarzschild(etaDe(r4), r0, M), r: r4 },
     divergenceHorizon: { t_1e4: tA, t_1e8: tB, mesure: (tB - tA) / lnD(1e4), formule: 2 * M, note: 't ~ -2M ln(r - 2M): slope per e-fold of (r - 2M)' },
     coupure: { valeur: coupure, note: 't drawn clipped at this value; inside r < 2M it is not a time coordinate and is held at the clip' },
-  } };
+  }, /* FIN connue : la derniere ligne est r = 0 (eta = pi) au temps propre tau total ; l horizon est franchi a la ligne horizon.indice */
+  fin: { evenement: 'singularity', indice: n - 1, t: brut[3 * (n - 1) + 1], r: brut[3 * (n - 1)],
+    horizon: { indice: (() => { for (let i = 0; i < n; i++) if (brut[3 * i] <= 2 * M) return i; return null; })(), tau: A * (etaH + sinD(etaH)) } } };
 }
 
 // ---------- 4 : dilatation du temps (horloges statiques autour d une masse, M = 1, et horloge en mouvement) ----------
@@ -295,7 +305,10 @@ function effetTunnel(P, n) {
     transmission: { mesure: T, formule: transmission(E, V0, aEff), paquet: Tpaquet, reflexion: R, energie: E, V0, largeurEffective: aEff,
       note: 'formule = plane wave at the central energy k0^2/2; paquet = T(E) averaged over the packet\'s own momentum spectrum' },
     grille: { points: NX, longueur: L, dx, dt: h, pas: pasParImage * (F - 1), duree: tFin },
-  } };
+  }, film: filmDe(n, (i) => Math.min(F - 1, Math.floor(i / m))),
+  /* FIN connue : a t = tFin (derniere image) le paquet est scinde en une part transmise (au-dela de la barriere) et une
+     part reflechie (avant elle) ; reste = probabilite encore sur la barriere */
+  fin: { evenement: 'split', indice: n - 1, t: tFin, transmis: T, reflechi: R, reste: 1 - T - R } };
 }
 
 // ---------- 6 : superposition quantique (1s + 2p_z)/sqrt(2) de l hydrogene (unites atomiques) ----------
@@ -336,7 +349,7 @@ function superpositionQuantique(P, n) {
     amplitudeCentroide: { mesure: (hi - lo) / 2, formule: AMPLITUDE_Z, echantillons: NM, unite: 'Bohr radii' },
     centroideMoyen: { mesure: S0, formule: 0 },
     echantillonnage: { tirages, acceptes: n },
-  } };
+  }, film: filmDe(n, (i) => Math.min(F - 1, Math.floor(i / m))) };
 }
 
 // ---------- 7 : champ dipolaire terrestre et particule piegee (ceintures de Van Allen), unites : rayon terrestre = 1, q/m = 1 ----------
@@ -530,7 +543,7 @@ const SANS_LYAP = {
 };
 export const SYSTEMES = Object.freeze([
   { id: 'ondeGravitationnelle', nom: 'Gravitational wave on a ring', science: 'General relativity', D: 3, nuage: true,
-    params: { hPlus: 0.3, hCroix: 0, masses: 24, cycles: 2 }, bornes: { hPlus: [0, 0.5], hCroix: [0, 0.5], masses: [8, 64], cycles: [1, 8] },
+    params: { hPlus: 0.3, hCroix: 0, masses: 24, cycles: 2 }, bornes: { hPlus: [0, 0.5], hCroix: [0, 0.5], masses: [8, 64], cycles: [1, 4] },
     phrase: 'A visualisation of the formula for a ring of free test masses hit by a gravitational wave travelling along the axis (TT gauge, linear in h, plus and cross polarisations); h is exaggerated about 10^20 times over real waves, and it is a drawing of the formula, not a photo.' },
   { id: 'courbureEspaceTemps', nom: 'Curved space around a black hole', science: 'General relativity', D: 3, nuage: true,
     params: { M: 1, rmax: 20, r0: 10 }, bornes: { M: [0.5, 2], rmax: [6, 40], r0: [3, 20] },
@@ -548,7 +561,7 @@ export const SYSTEMES = Object.freeze([
     params: { graine: 1, images: 12, periodes: 2 }, bornes: { graine: [1, 1000000], images: [4, 24], periodes: [1, 4] },
     phrase: 'A visualisation of the hydrogen superposition (1s + 2p_z)/sqrt(2): points drawn from |psi(t)|^2 at successive times, projected on the x-z plane and spread along time, so the cloud sloshes up and down at the beat frequency (E2 - E1)/h; a drawing of the formula, not a photo of an atom.' },
   { id: 'champDipolaire', nom: 'Earth\'s magnetic trap', science: 'Space plasma physics', D: 3, nuage: true,
-    params: { B0: 1000, L0: 3, pitch: 40, duree: 40 }, bornes: { B0: [200, 2000], L0: [2, 6], pitch: [25, 80], duree: [15, 60] },
+    params: { B0: 1000, L0: 3, pitch: 40, duree: 40 }, bornes: { B0: [200, 2000], L0: [2, 6], pitch: [25, 80], duree: [15, 240] },
     phrase: 'A visualisation of an ideal dipole field (field lines r = L cos^2 latitude) and one charged particle trapped in it like the Van Allen belts, bouncing between mirror points and drifting around; scaled units (Earth radius 1, non-relativistic Boris pusher, no real Earth field), a drawing of formulas, not a photo.' },
   { id: 'ondeLumiere', nom: 'Light as a wave', science: 'Electromagnetism', D: 3, nuage: true,
     params: { ellipticite: 0, longueursOnde: 3, graine: 1 }, bornes: { ellipticite: [-1, 1], longueursOnde: [1, 6], graine: [1, 1000000] },
@@ -590,5 +603,7 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   let fini = g.brut.length === n * D; for (let i = 0; fini && i < g.brut.length; i++) if (!Number.isFinite(g.brut[i])) fini = false;
   const r = { params: P, D, n, bornee: fini, brut: g.brut, lyapunov: null, uniteLyapunov: SANS_LYAP[id], points: null, invariants: g.invariants };
   if (s.nuage) r.nuage = true;
+  if (g.film) r.film = g.film;
+  if (g.fin) r.fin = g.fin;
   return r;
 }

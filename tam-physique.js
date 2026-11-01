@@ -65,6 +65,9 @@ function orbite(rg) {
     grille: (c, n) => { const tot = c.tours * DEUX_PI, pas = Math.ceil(tot / (n - 1) / 0.004); return { h: tot / ((n - 1) * pas), pas, duree: tot }; },
     avance: (y, c, h) => rk4(y, c, h),
     hors: (y, c) => (c.rg && y[0] >= 0.5 / c.M ? 'capture (horizon r = 2M franchi)' : y[0] <= 0 ? 'echappe (orbite non liee)' : null),
+    /* la capture est une FIN dessinee (trajet jusqu a l horizon) ; l orbite non liee (u -> 0, r infini) reste un refus */
+    evenement: (raison) => (raison.startsWith('capture') ? 'capture' : null),
+    temps: (y) => y[3], /* fin.t = temps coordonne du dernier etat sain avant l horizon */
     sortie: (y, o, i) => { const r = 1 / y[0]; o[i] = r * cosD(y[2]); o[i + 1] = r * sinD(y[2]); o[i + 2] = y[3]; },
     invariants: (y, c) => {
       const u = y[0], w = y[1], L2 = c.L * c.L;
@@ -300,19 +303,19 @@ const INTERNES = {
   schwarzschild: orbite(true), kepler: orbite(false), troisCorps: troisCorps(), tokamak: tokamak(),
   doublePendule: doublePendule(), lorentzRelativiste: lorentzRelativiste(),
 };
-const ORB_P = { L: 4, r0: 20, tours: 6 }, ORB_B = { L: [3.6, 12], r0: [6, 400], tours: [2, 20] };
+const ORB_P = { L: 4, r0: 20, tours: 6 }, ORB_B = { L: [3.6, 12], r0: [6, 400], tours: [2, 35] };
 export const SYSTEMES = Object.freeze([
-  { id: 'schwarzschild', nom: 'Orbit around a black hole', science: 'General relativity', D: 3, params: ORB_P, bornes: ORB_B,
+  { id: 'schwarzschild', nom: 'Orbit around a black hole', science: 'General relativity', D: 3, params: { ...ORB_P, tours: 12 }, bornes: ORB_B,
     phrase: 'A test particle on a timelike geodesic in the equatorial plane of a non-rotating (Schwarzschild) black hole, G = c = M = 1; the orbiting body has no mass of its own, no radiation, no spin.' },
   { id: 'kepler', nom: 'Newtonian orbit', science: 'Newtonian gravity', D: 3, params: ORB_P, bornes: ORB_B,
     phrase: 'The same start as the black-hole orbit under Newton\'s inverse-square gravity: a closed ellipse with no precession, a point mass around a fixed centre.' },
   { id: 'troisCorps', nom: 'Three-body problem', science: 'Newtonian gravity', D: 9, params: { perturbation: 0, duree: 20 }, bornes: { perturbation: [0, 0.5], duree: [2, 200] },
     phrase: 'Three equal point masses under Newtonian gravity (G = m = 1), no softening; perturbation 0 is the Chenciner-Montgomery figure-eight, a nudge breaks it.' },
-  { id: 'tokamak', nom: 'Particle in a tokamak field', science: 'Fusion plasma physics', D: 3, params: { B0: 60, q: 2, rapport: 0.3, duree: 100 }, bornes: { B0: [10, 200], q: [1, 5], rapport: [0.05, 5], duree: [10, 300] },
+  { id: 'tokamak', nom: 'Particle in a tokamak field', science: 'Fusion plasma physics', D: 3, params: { B0: 60, q: 2, rapport: 0.3, duree: 100 }, bornes: { B0: [10, 200], q: [1, 5], rapport: [0.05, 5], duree: [10, 600] },
     phrase: 'One charged test particle (non-relativistic Boris pusher) in a fixed analytic tokamak-like field (toroidal 1/R plus poloidal field of safety factor q); not a fusion reactor: no plasma, no collisions, no fusion reactions.' },
-  { id: 'doublePendule', nom: 'Double pendulum', science: 'Classical mechanics', D: 4, params: { theta1: 2, theta2: 2, duree: 40 }, bornes: { theta1: [-PI, PI], theta2: [-PI, PI], duree: [5, 120] },
+  { id: 'doublePendule', nom: 'Double pendulum', science: 'Classical mechanics', D: 4, params: { theta1: 2, theta2: 2, duree: 40 }, bornes: { theta1: [-PI, PI], theta2: [-PI, PI], duree: [5, 160] },
     phrase: 'An ideal frictionless double pendulum with equal unit masses and rods (g = 1), started at rest; shown as the path of the lower bob, lifted by its angular speed.' },
-  { id: 'lorentzRelativiste', nom: 'Relativistic charge in crossed fields', science: 'Special relativity', D: 3, params: { rapport: 0.5, u0: 1, uz: 0.2, duree: 120 }, bornes: { rapport: [0, 0.95], u0: [0, 5], uz: [0, 1], duree: [20, 300] },
+  { id: 'lorentzRelativiste', nom: 'Relativistic charge in crossed fields', science: 'Special relativity', D: 3, params: { rapport: 0.5, u0: 1, uz: 0.2, duree: 120 }, bornes: { rapport: [0, 0.95], u0: [0, 5], uz: [0, 1], duree: [20, 600] },
     phrase: 'One charged particle in uniform crossed electric and magnetic fields (E/B < 1, c = 1), relativistic Boris pusher; it drifts along E x B and gyrates, no radiation reaction.' },
   { id: 'hydrogene', nom: 'Hydrogen electron cloud', science: 'Quantum mechanics', D: 3, nuage: true, params: { n: 3, l: 2, m: 1, graine: 1 }, bornes: { n: [1, 4], l: [0, 3], m: [-3, 3], graine: [1, 1000000] },
     phrase: 'The probability cloud of the electron of hydrogen in the state (n, l, m), sampled from |psi|^2; not a path: the electron has no orbit in quantum mechanics.' },
@@ -345,7 +348,30 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
     const h = hydrogene(P, n);
     return { params: P, D: 3, n, bornee: true, nuage: true, brut: h.brut, lyapunov: null, uniteLyapunov: 'sans objet (nuage de probabilite, pas une trajectoire)', points: null, invariants: h.invariants };
   }
-  const S = INTERNES[id], c = S.prep(P), y = S.init(c), D = S.D, F = S.phase, { h, pas, duree } = S.grille(c, n);
+  const S = INTERNES[id], c = S.prep(P), D = S.D, g0 = S.grille(c, n);
+  const echec = (i, raison) => ({ params: P, D, n, bornee: false, echappeA: i, raison, brut: null, lyapunov: NaN, uniteLyapunov: S.uniteLyapunov, points: null, invariants: null });
+  let k = integrer(S, c, n, g0);
+  /* FIN PHYSIQUE (capture a l horizon) : le trajet est rejoue jusqu au dernier etat sain avant l evenement, sur n lignes
+     uniformes dans la variable d integration (phi pour les orbites) ; la derniere ligne (n-1) EST l evenement.
+     Le pas de reference reste celui de la grille d origine ; si le rejeu croise plus tot (pas different), on recule encore. */
+  let evenement = null, raisonFin = null;
+  for (let essai = 0; essai < 6 && k.evenement; essai++) {
+    evenement = k.evenement; raisonFin = k.raison;
+    const T = k.tAvant;
+    if (!(T > 0)) return echec(k.i, k.raison);
+    const pas = Math.max(1, Math.ceil(T / (n - 1) / g0.h - 1e-9));
+    k = integrer(S, c, n, { h: T / ((n - 1) * pas), pas, duree: T });
+  }
+  if (k.evenement || k.echec) return echec(k.i, k.raison);
+  const r = { params: P, D, n, bornee: true, brut: k.brut, lyapunov: k.somme / k.duree, uniteLyapunov: S.uniteLyapunov, points: null, invariants: k.invariants };
+  if (evenement) { r.raison = raisonFin; r.fin = { evenement, indice: n - 1, t: S.temps ? S.temps(k.y) : k.duree }; }
+  if (S.finir) S.finir(r, c, k.obs);
+  return r;
+}
+
+/* une integration complete sur la grille g ; rend { brut, ... } ou { echec } ou { evenement, tAvant } */
+function integrer(S, c, n, g) {
+  const { h, pas, duree } = g, y = S.init(c), D = S.D, F = S.phase;
   /* ecart initial du temoin : direction fixe non uniforme, privee des modes neutres (S.neutre), norme D0 */
   const e = Float64Array.from(y), ecart = new Float64Array(F), dep = new Float64Array(F);
   for (let j = 0; j < F; j++) dep[j] = 1 + 0.37 * ((j * 5) % 7);
@@ -361,9 +387,9 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
       const d = Math.abs(x - I.debut); if (d > I.ecart || !(d === d)) I.ecart = d;
     }
   };
-  const echec = (i, raison) => ({ params: P, D, n, bornee: false, echappeA: i, raison, brut: null, lyapunov: NaN, uniteLyapunov: S.uniteLyapunov, points: null, invariants: null });
+  const echec = (i, raison) => ({ echec: true, i, raison });
   noter(0);
-  let somme = 0, micro = 0;
+  let somme = 0, micro = 0, tc = 0;
   for (let i = 1; i < n; i++) {
     for (let st = 0; st < pas; st++) {
       /* pas local : pasMax(y) est relu a CHAQUE micro-pas (rencontre serree) ; le temoin suit le meme decoupage */
@@ -374,7 +400,11 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
         reste = k <= 1 ? 0 : reste - hk;
         if (++micro > MICRO_MAX) return echec(i, 'rencontre trop serree (pas local epuise)');
         const raison = S.hors(y, c);
-        if (raison) return echec(i, raison);
+        if (raison) {
+          const ev = S.evenement ? S.evenement(raison) : null;
+          return ev ? { evenement: ev, tAvant: tc, i, raison } : echec(i, raison);
+        }
+        tc += hk;
       }
     }
     for (let j = 0; j < y.length; j++) if (!Number.isFinite(y[j])) return echec(i, 'NaN');
@@ -389,9 +419,7 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   }
   const invariants = {};
   for (const k of Object.keys(inv)) { const I = inv[k]; invariants[k] = { debut: I.debut, fin: I.fin, derive: Math.abs(I.debut) > 1e-9 ? I.ecart / Math.abs(I.debut) : I.ecart, min: I.min, max: I.max }; }
-  const r = { params: P, D, n, bornee: true, brut, lyapunov: somme / duree, uniteLyapunov: S.uniteLyapunov, points: null, invariants };
-  if (S.finir) S.finir(r, c, obs);
-  return r;
+  return { brut, somme, duree, invariants, obs, y };
 }
 
 export const T_HUIT = T8;

@@ -67,7 +67,12 @@ function suite(T, bavard = false) {
   for (const [a, inc] of [[0.9, 0], [0.9, 180], [0, 0]]) ok(`kerr a=${a} i=${inc} : 0.97 ISCO + poussee plonge, 1.05 ISCO reste liee`, () => {
     const ri = iscoRef(a, inc > 90 ? -1 : 1);
     const bas = sim('kerr', { a, inclinaison: inc, r0: 0.97 * ri, poussee: 0.001 }), haut = sim('kerr', { a, inclinaison: inc, r0: 1.05 * ri, poussee: 0.001 });
-    assert.equal(bas.bornee, false); assert.match(bas.raison, /capture/); assert.equal(haut.bornee, true, haut.raison);
+    /* 2026-11-01 (demande du proprietaire) : la capture est une FIN dessinee (n lignes, la derniere juste hors de l horizon) */
+    assert.equal(bas.bornee, true); assert.match(bas.raison, /capture/); assert.equal(bas.brut.length, bas.n * 3);
+    assert.equal(bas.fin.evenement, 'capture'); assert.equal(bas.fin.indice, bas.n - 1); assert.ok(bas.fin.t > 0 && bas.fin.tempsPropre > 0);
+    const rp = 1 + Math.sqrt(1 - a * a); assert.ok(bas.fin.r > rp * 1.01 && bas.fin.r < rp * 1.01 + 0.2, String(bas.fin.r));
+    assert.equal(haut.bornee, true, haut.raison); assert.equal(haut.fin, undefined);
+    return `r fin ${bas.fin.r.toFixed(4)} (r+ ${rp.toFixed(4)}), t ${bas.fin.t.toFixed(1)}`;
   });
   const kp = J('kerr'), kr = J('kerr', { inclinaison: 170 });
   ok('kerr : H = -1/2 et constante de Carter conservees a 1e-9', () => { for (const k of [kp, kr]) { assert.ok(Math.abs(k.hamiltonien.debut + 0.5) < 1e-12 && k.hamiltonien.derive < 1e-9 && k.carter.derive < 1e-9, JSON.stringify(k.carter)); } return kp.carter.derive.toExponential(1); });
@@ -104,6 +109,19 @@ function suite(T, bavard = false) {
     assert.equal(sj.angleAuSecondaire.forme, 'tetard autour de L4'); assert.equal(em.angleAuSecondaire.forme, 'tetard autour de L4');
     const h = I('pointsLagrange', { orbite: 1, duree: 1500 }); assert.equal(h.angleAuSecondaire.forme, 'fer a cheval'); assert.ok(h.angleAuSecondaire.min < 60 && h.angleAuSecondaire.max > 300);
     return `fer a cheval ${h.angleAuSecondaire.min.toFixed(1)}..${h.angleAuSecondaire.max.toFixed(1)} deg`;
+  });
+  ok('lagrange Terre-Lune fer a cheval (duree 3000) : escape = fin dessinee, derniere ligne au bord |x|+|y|+|z| ~ 10', () => {
+    const r = sim('pointsLagrange', { monde: 1, orbite: 1, duree: 3000 }), b = r.brut, o = (r.n - 1) * 3, s = Math.abs(b[o]) + Math.abs(b[o + 1]) + Math.abs(b[o + 2]);
+    assert.equal(r.bornee, true); assert.equal(r.fin.evenement, 'escape'); assert.equal(r.fin.indice, r.n - 1); assert.ok(r.fin.t > 0 && r.fin.t < 3000);
+    assert.ok(s < 10 && s > 9.5, String(s)); assert.ok(r.invariants.jacobi.derive < 1e-8, String(r.invariants.jacobi.derive)); assert.ok(Number.isFinite(r.lyapunov));
+    return `t ${r.fin.t.toFixed(2)}, |x|+|y|+|z| ${s.toFixed(3)}`;
+  });
+  ok('lagrange : collision avec un primaire reste un refus', () => { const r = sim('pointsLagrange', { orbite: 1, ecart: 0.05, duree: 3000 }); assert.equal(r.bornee, false); assert.match(r.raison, /collision/); });
+  ok('lumiere : fin par rayon (capture b=4, escape b=5.2/7/15 au bord r = 30M)', () => {
+    const r = sim('lumiereTrouNoir'), f = r.fin, b = r.brut, o = (r.n - 1) * 12;
+    assert.deepEqual(f.map((x) => x.evenement), ['capture', 'escape', 'escape', 'escape']); for (const x of f) assert.equal(x.indice, r.n - 1);
+    assert.ok(Math.hypot(b[o], b[o + 1]) <= 2.05, 'capture a l horizon');
+    for (let k = 1; k < 4; k++) assert.ok(Math.abs(Math.hypot(b[o + 3 * k], b[o + 3 * k + 1]) - 30) < 0.1, 'rayon ' + (k + 1));
   });
   ok('lagrange : lambda tetard (duree 1500) < 0.01 ; rencontres proches (ecart 0.05) > 0.04 et > 5x', () => {
     const a = sim('pointsLagrange', { duree: 1500 }).lyapunov, b = sim('pointsLagrange', { ecart: 0.05, duree: 1500 }).lyapunov;
@@ -167,6 +185,8 @@ function suite(T, bavard = false) {
     assert.deepEqual(sim('kerr', { a: 5, r0: NaN, inclinaison: -9, tours: 1e9, poussee: 'x' }, { n: 20 }).params, { a: 0.99, r0: 10, inclinaison: 0, tours: 30, poussee: 0 });
     assert.deepEqual(sim('pointsLagrange', { monde: 0.7, orbite: 9, ecart: 0, z0: 1, duree: 20 }, { n: 20 }).params, { monde: 1, orbite: 1, ecart: 0.001, z0: 0.1, duree: 20 });
     assert.deepEqual(sim('trappist1', { premiere: 2.6, jours: -1 }, { n: 20 }).params, { premiere: 3, jours: 2 });
+    assert.equal(sim('trappist1', { jours: 1e9 }, { n: 20 }).params.jours, 60); assert.equal(sim('cometeHalley', { tours: 1e9 }, { n: 20 }).params.tours, 20);
+    assert.equal(sim('pulsarHulseTaylor', {}, { n: 20 }).params.fraction, 0.999);
     assert.deepEqual(sim('lumiereTrouNoir', { b1: 1e6, b2: 0 }, { n: 20 }).params, { b1: 25, b2: 1, b3: 7, b4: 15 });
   });
   ok('reglagesPhysique : forme reglagesDe, valeur bornee', () => {
@@ -211,6 +231,9 @@ const MUTANTS = [
   ['disque : energie circulaire newtonienne (pas d ISCO)', '(1 - 2 / r) / Math.sqrt(1 - 3 / r)', '(1 - 2 / r) / Math.sqrt(1 - 2 / r)'],
   ['disque : Math.random injecte', 'const alea = mulberry32(P.graine >>> 0)', 'const alea = Math.random'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
+  ['kerr : capture redevient un refus (pas de rejeu)', 'run = courir(run.tAvant);', 'break;'],
+  ['lagrange : escape redevient un refus (pas de rejeu)', 'run = courirLagrange(run.tAvant);', 'break;'],
+  ['lumiere : capture notee comme escape', "ev.issue === 'capture' ? { rayon: k + 1, evenement: 'capture'", "ev.issue === 'capture' ? { rayon: k + 1, evenement: 'escape'"],
 ];
 const brut = readFileSync(SOURCE, 'utf8'), moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
 const dossier = mkdtempSync(join(process.env.TAM_TMP || tmpdir(), 'tam-cosmos-mutants-'));

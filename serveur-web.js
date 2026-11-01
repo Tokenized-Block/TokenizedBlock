@@ -5778,6 +5778,9 @@ const SERVIS = [
   'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js',
   /* game79 : la fusion IMRPhenomB, et « Your formula » */
   'tam-fusion.js', 'tam-formule.js',
+  /* game80 : les legendes (« What you are seeing ») */
+  'tam-legendes.js',
+  'tam-grandes-questions.js', 'tam-grandes-questions-2.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

@@ -20,6 +20,11 @@ import * as INV from './tam-invisible.js';
 import * as QUA from './tam-quantique.js';
 /* game79 : la fusion de trous noirs IMRPhenomB (arXiv 0909.2867), spins alignes, restes Hofmann-Barausse-Rezzolla / Barausse-Morozova-Rezzolla */
 import * as FUS from './tam-fusion.js';
+/* game80 : les « grandes questions » (vide quantique, Big Rip, faux vide, centre de la Terre, Mars, zero absolu, taille de l Univers,
+ *   pi, calendrier cosmique ; pendule de Foucault, mouvement de la Terre, etoiles, evaporation des trous noirs, tsunami, geometrie de
+ *   l Univers, tailles des etoiles) — chaque valeur sourcee (URL en commentaire), chaque systeme verifie contre la valeur publiee */
+import * as GQ1 from './tam-grandes-questions.js';
+import * as GQ2 from './tam-grandes-questions-2.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -37,6 +42,18 @@ export const NON_MINTABLES = Object.freeze(new Set([]));
 /** game79 (Phil : « fais que la fusion passe on-chain ») : le cout de la fusion suit le nombre de cycles, ~ (Mc_det x fDepart)^(-5/3)
  *   (Mc_det = masse de chirp detectee = (m1 m2)^(3/5) / (m1+m2)^(1/5) x (1+z)). Mesure 01/11 : defaut (Mc_det x f = 612) 26 ms ;
  *   coin 5+5 Msun, 10 Hz, z = 0 (43.5) 997 ms. Seuil 150 -> ~270 ms au pire, comme la supernova hydrodynamique. */
+/* game80 (audit des durees : des coins de reglage depassent 300 ms de calcul serveur) : des gardes de COUT, calculees AVANT toute
+ *   simulation, mesurees le 01/11 a n = 1500. Au-dela : visible dans la page, pas certifiable (la raison est dite). */
+export const GARDES_COUT = Object.freeze({
+  /* cout ~ periodes (612 ms a 20 periodes, omega 0.5, largeur 2) -> au plus 8 periodes (~300 ms au pire mesure) */
+  paquetOscillateur: (p) => (Number(p.periodes) <= 8 ? null : 'at most 8 periods can be certified here (each period costs computing time)'),
+  /* cout ~ etoiles^2 x duree (825 ms a 60 etoiles, duree 12) : etoiles^2 x duree / 1600 <= 9 (~300 ms) */
+  amasEtoiles: (p) => ((Number(p.etoiles) ** 2) * Number(p.duree) / 1600 <= 9 ? null : 'fewer stars or a shorter run can be certified here (stars^2 x duration / 1600 must stay <= 9)'),
+  /* cout ~ B0 x duree (496 ms a 2000 x 240) : B0 x duree <= 250 000 (~250 ms) */
+  /* le systeme solaire INTERIEUR (groupe 0) : cout ~ annees (962 ms a 400 ans, 246 ms a 100) -> 100 ans ; le groupe 1 est rapide (37 ms a 400) */
+  systemeSolaire: (p) => (Math.round(Number(p.groupe)) === 1 || Number(p.annees) <= 100 ? null : 'at most 100 years of the inner planets can be certified here'),
+  champDipolaire: (p) => (Number(p.B0) * Number(p.duree) <= 250000 ? null : 'a weaker field or a shorter run can be certified here (field x duration must stay <= 250 000)'),
+});
 export const FUSION_PRODUIT_MIN = 90; /* Phil : « augmente les limites » — 150 -> 90 : plus de couples acceptes, pire cas mesure au banc */
 export function coutFusion(p) {
   const m1 = Number(p.m1), m2 = Number(p.m2), z = Number(p.z) || 0, f = Number(p.fDepart);
@@ -54,7 +71,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 
 /** les angles des plans caches par defaut : l angle d or, comme le moteur (D - 3 angles) */
@@ -81,6 +98,7 @@ export function validerScience(P) {
   /* revue game79 (high) : un systeme dont un reglage peut couter des SECONDES de calcul synchrone n est pas certifiable (la route
    *   publique /api/tam/certifier etait un levier de deni de service) ; il reste visible, sans Mint */
   if (NON_MINTABLES.has(P.science)) return non('this system is shown, not minted (too costly to certify on the server)');
+  if (GARDES_COUT[P.science] && P.params && typeof P.params === 'object') { const g = GARDES_COUT[P.science](P.params); if (g) return non(g); }
   /* la fusion : le cout borne AVANT toute simulation (la route publique ne peut plus commander des secondes de calcul) */
   if (P.science === 'fusionTrousNoirs' && P.params && typeof P.params === 'object' && !(coutFusion(P.params) >= FUSION_PRODUIT_MIN))
     return non('too many cycles to certify here: raise the masses, the redshift or the starting frequency (chirp mass x (1+z) x fDepart >= ' + FUSION_PRODUIT_MIN + ')');

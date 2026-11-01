@@ -238,19 +238,19 @@ const SCI = 'Fluid mechanics';
 export const SYSTEMES = Object.freeze([
   { id: 'tourbillonsPonctuels', nom: 'Point vortices', science: SCI, D: 8,
     params: { nombre: 4, G1: 1, G2: 1, G3: 1, G4: 1, duree: 1000 },
-    bornes: { nombre: [3, 4], G1: [0.25, 3], G2: [0.25, 3], G3: [0.25, 3], G4: [0.25, 3], duree: [100, 2000] },
+    bornes: { nombre: [3, 4], G1: [0.25, 3], G2: [0.25, 3], G3: [0.25, 3], G4: [0.25, 3], duree: [100, 3000] },
     phrase: 'Kirchhoff point vortices in the plane: inviscid 2-D Euler flow with all vorticity in 3 or 4 points of positive circulation (D = 2 x number); 3 vortices are integrable, 4 are generically chaotic; no viscosity, no vortex cores.' },
   { id: 'doubleGyre', nom: 'Double gyre', science: SCI, D: 3,
     params: { A: 0.1, eps: 0.25, periode: 10, x0: 1.0, y0: 0.3, duree: 100 },
-    bornes: { A: [0.02, 0.3], eps: [0, 0.5], periode: [2, 40], x0: [0.02, 1.98], y0: [0.02, 0.98], duree: [10, 300] },
+    bornes: { A: [0.02, 0.3], eps: [0, 0.5], periode: [2, 40], x0: [0.02, 1.98], y0: [0.02, 0.98], duree: [10, 400] },
     phrase: 'A passive tracer in the prescribed, time-periodic double-gyre velocity field of Shadden, Lekien and Marsden (2005): chaotic advection in a kinematic 2-D model, not a solution of the Navier-Stokes equations; shown as x, y and time.' },
   { id: 'karman', nom: 'Von Karman vortex street', science: SCI, D: 3,
     params: { gamma: 1, rapport: 0.2805, x0: 0, y0: 0.25, duree: 20 },
-    bornes: { gamma: [0.2, 5], rapport: [0.1, 1], x0: [-0.5, 0.5], y0: [-0.8, 0.8], duree: [2, 60] },
+    bornes: { gamma: [0.2, 5], rapport: [0.1, 1], x0: [-0.5, 0.5], y0: [-0.8, 0.8], duree: [2, 25] },
     phrase: 'A passive tracer in an idealised von Karman street: two staggered infinite rows of inviscid point vortices drifting at Lamb\'s speed (Gamma / 2a) tanh(pi h / a); no cylinder, no viscosity, no vortex shedding is computed.' },
   { id: 'rayleighBenard', nom: 'Convection rolls', science: SCI, D: 3,
     params: { A: 0.3, B: 0.1, omega: 2, x0: 0.05, z0: 0.5, duree: 200 },
-    bornes: { A: [0.05, 1], B: [0, 0.4], omega: [0.2, 10], x0: [0, 1], z0: [0.02, 0.98], duree: [20, 600] },
+    bornes: { A: [0.05, 1], B: [0, 0.4], omega: [0.2, 10], x0: [0, 1], z0: [0.02, 0.98], duree: [20, 200] },
     phrase: 'A passive tracer in prescribed Rayleigh-Benard convection rolls (stream function A sin(pi x) sin(pi z), free-slip walls) whose boundaries oscillate sideways, after Solomon and Gollub (1988); a kinematic model, no heat equation is solved.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
 const ENTIERS = { tourbillonsPonctuels: ['nombre'] };

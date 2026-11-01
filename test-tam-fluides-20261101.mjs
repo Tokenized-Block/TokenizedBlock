@@ -85,8 +85,9 @@ function suite(T, bavard = false) {
     assert.ok(Math.abs(I.stabilite.rapportKarman - Math.asinh(1) / PI) < 1e-12); assert.equal(I.stabilite.stableLineaire, true);
     return I.stabilite.sinhPiHsurA.toFixed(5);
   });
-  ok('karman (stationnaire dans le repere mobile) : lambda decroit 20 -> 60 (pas de chaos)', () => {
-    const a = sim('karman').lyapunov, b = sim('karman', { duree: 60 }).lyapunov; assert.ok(b < 0.5 * a, `${a} ${b}`); return `${a.toFixed(3)} -> ${b.toFixed(3)}`;
+  /* 2026-11-01 : duree max abaissee 60 -> 25 (dessin dentele a 1500 points) ; la decroissance est verifiee 5 -> 25 */
+  ok('karman (stationnaire dans le repere mobile) : lambda decroit 5 -> 25 (pas de chaos)', () => {
+    const a = sim('karman', { duree: 5 }).lyapunov, b = sim('karman', { duree: 25 }).lyapunov; assert.ok(b < 0.5 * a, `${a} ${b}`); return `${a.toFixed(3)} -> ${b.toFixed(3)}`;
   });
   // 5. Rayleigh-Benard
   ok('rayleighBenard B = 0 : 0 passage de frontiere, 1 cellule, psi conserve < 1e-6, div < 1e-9', () => {
@@ -101,13 +102,16 @@ function suite(T, bavard = false) {
     assert.ok(I.divergence.max < 1e-9, String(I.divergence.max));
     return `${I.transport.passagesDeFrontiere} passages, ${I.transport.cellulesVisitees} cellules`;
   });
-  ok('rayleighBenard duree 600 : lambda(B 0.1) > 0.1 et > 10x lambda(B 0)', () => {
-    const a = sim('rayleighBenard', { duree: 600 }).lyapunov, b = sim('rayleighBenard', { B: 0, duree: 600 }).lyapunov;
+  /* 2026-11-01 : duree max abaissee 600 -> 200 ; le contraste est mesure a 200 (le max) */
+  ok('rayleighBenard duree 200 : lambda(B 0.1) > 0.1 et > 10x lambda(B 0)', () => {
+    const a = sim('rayleighBenard', { duree: 200 }).lyapunov, b = sim('rayleighBenard', { B: 0, duree: 200 }).lyapunov;
     assert.ok(a > 0.1 && a > 10 * b, `${a} ${b}`); return `${a.toFixed(4)} vs ${b.toFixed(4)}`;
   });
   // 6. bornage
   ok('bornage : hors bornes ramene, NaN -> defaut, nombre arrondi', () => {
-    assert.deepEqual(sim('tourbillonsPonctuels', { nombre: 3.6, G1: -5, G2: 99, G3: NaN, duree: 1e9 }, { n: 50 }).params, { nombre: 4, G1: 0.25, G2: 3, G3: 1, G4: 1, duree: 2000 });
+    assert.deepEqual(sim('tourbillonsPonctuels', { nombre: 3.6, G1: -5, G2: 99, G3: NaN, duree: 1e9 }, { n: 50 }).params, { nombre: 4, G1: 0.25, G2: 3, G3: 1, G4: 1, duree: 3000 });
+    assert.equal(sim('karman', { duree: 1e9 }, { n: 50 }).params.duree, 25); assert.equal(sim('rayleighBenard', { duree: 1e9 }, { n: 50 }).params.duree, 200);
+    assert.equal(sim('doubleGyre', { duree: 1e9 }, { n: 50 }).params.duree, 400);
     assert.deepEqual(sim('karman', { gamma: 'x', rapport: 0, x0: 9, y0: -9, duree: 1 }, { n: 50 }).params, { gamma: 1, rapport: 0.1, x0: 0.5, y0: -0.8, duree: 2 });
     assert.deepEqual(sim('doubleGyre', { A: 1, eps: -1 }, { n: 50 }).params, { A: 0.3, eps: 0, periode: 10, x0: 1, y0: 0.3, duree: 100 });
   });

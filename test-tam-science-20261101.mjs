@@ -18,7 +18,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const MOI = '0x' + 'ab'.repeat(20);
 
 /* 1. TOUTES les sciences (game78 : 7 modules — physique, sciences, fluides, astres, cosmos, invisible, quantique) : rejeu, en-tete, decodage, tailles */
-{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1]];
+{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1], ['tam-grandes-questions.js', 9], ['tam-grandes-questions-2.js', 7]];
   let attendu = 0; for (const [f, min] of parModule) { const m = await import('./' + f); ok(m.SYSTEMES.length >= min, f + ' : au moins ' + min + ' systemes (' + m.SYSTEMES.length + ')'); attendu += m.SYSTEMES.length; }
   ok(T.SYSTEMES.length === attendu && new Set(T.SYSTEMES.map((s) => s.id)).size === attendu, 'tam-science rassemble les ' + attendu + ' systemes, sans doublon d id'); }
 for (const s of T.SYSTEMES) {
@@ -66,6 +66,12 @@ ok(!T.validerScience({ ...T.paramsScience('systemeSolaire', {}), melange: { oper
   ok(corpsMel === 0, 'le cerveau ne melange jamais un systeme a plusieurs corps (60 tirages)'); }
 { const n = T.noteCerveau(T.paramsScience('bloch', {}), { nomCerveau: '0xb200' + '…' + 'bbe3' }); ok(n.includes('0xb200...bbe3') && !/0xb200bbe3/.test(n), 'note : l adresse courte garde « ... » (jamais un faux identifiant colle)'); }
 ok(T.validerScience(T.paramsScience('fusionTrousNoirs', {})).ok && !T.validerScience(T.paramsScience('fusionTrousNoirs', { m1: 5, m2: 5, fDepart: 10, z: 0 })).ok, 'fusion : GW150914 certifiable ; le coin couteux (5+5, 10 Hz) refuse AVANT simulation');
+/* 1e. game80 : gardes de COUT avant simulation (route publique) — defaut certifiable, coin couteux refuse */
+for (const [id, cher] of [['paquetOscillateur', { periodes: 20 }], ['amasEtoiles', { etoiles: 60, duree: 12 }], ['champDipolaire', { B0: 2000, duree: 240 }], ['systemeSolaire', { groupe: 0, annees: 400 }]]) {
+  ok(T.validerScience(T.paramsScience(id, {})).ok, id + ' : le reglage par defaut reste certifiable');
+  ok(!T.validerScience(T.paramsScience(id, cher)).ok, id + ' : le coin couteux ' + JSON.stringify(cher) + ' est refuse AVANT simulation');
+}
+ok(T.validerScience(T.paramsScience('systemeSolaire', { groupe: 1, annees: 400 })).ok, 'systeme solaire exterieur : 400 ans restent certifiables (37 ms)');
 /* 2. les bornes */
 const P0 = T.paramsScience('schwarzschild', {}, { minteur: MOI });
 ok(T.validerScience(P0).ok, 'temoin : params de paramsScience valides');
@@ -92,7 +98,7 @@ ok(/'tam-science\.js'/.test(web), 'tam-science.js est servi');
 
 /* 5. mutants sur COPIES */
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tam-science-mut-'));
-for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
+for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'tam-grandes-questions.js', 'tam-grandes-questions-2.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
 const SRC = fs.readFileSync(path.join(ICI, 'tam-science.js'), 'utf8');
 const MUTANTS = [
   ['params hors bornes acceptes', (s) => s.replace("if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');", '')],

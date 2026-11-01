@@ -56,7 +56,17 @@ function suite(T, bavard = false) {
   });
   ok('schwarzschild champ fort (defaut) : precession > formule faible champ', () => { const P = sim('schwarzschild').invariants.precession; assert.ok(P.mesure > P.formule); return `${P.mesure.toFixed(3)} > ${P.formule.toFixed(3)}`; });
   ok('kepler : precession ~ 0 (< 1e-6 rad/orbite)', () => { const P = sim('kepler', { L: 10, r0: 150 }).invariants.precession; assert.ok(P.orbites >= 3 && Math.abs(P.mesure) < 1e-6, String(P.mesure)); });
-  ok('schwarzschild L=3.6 r0=20 : capture (bornee false, brut null)', () => { const r = sim('schwarzschild', { L: 3.6, r0: 20 }); assert.equal(r.bornee, false); assert.equal(r.brut, null); assert.match(r.raison, /capture/); });
+  /* 2026-11-01 (demande du proprietaire) : la capture n est plus un refus, c est une FIN dessinee jusqu a l horizon */
+  ok('schwarzschild L=3.6 r0=20 : capture = fin dessinee (n lignes, derniere ligne a l horizon)', () => {
+    const r = sim('schwarzschild', { L: 3.6, r0: 20 }), n = r.n, b = r.brut;
+    assert.equal(r.bornee, true); assert.match(r.raison, /capture/); assert.equal(b.length, n * 3); assert.ok(b.every(Number.isFinite));
+    assert.equal(r.fin.evenement, 'capture'); assert.equal(r.fin.indice, n - 1); assert.ok(r.fin.t > 0 && Number.isFinite(r.fin.t));
+    const rr = (i) => Math.sqrt(b[3 * i] * b[3 * i] + b[3 * i + 1] * b[3 * i + 1]);
+    assert.ok(rr(n - 1) >= 2 && rr(n - 1) < 2.2, String(rr(n - 1))); assert.ok(Math.abs(rr(0) - 20) < 1e-9);
+    for (let i = 1; i < n; i++) assert.ok(rr(i) <= rr(i - 1) + 1e-9, 'plongee monotone ' + i);
+    return `r final ${rr(n - 1).toFixed(4)}, t ${r.fin.t.toFixed(2)}`;
+  });
+  ok('schwarzschild defaut (tours 12) : orbite liee, pas de fin', () => { const r = sim('schwarzschild'); assert.equal(r.params.tours, 12); assert.equal(r.fin, undefined); assert.ok(r.invariants.precession.orbites >= 5); });
   ok('kepler L=12 r0=6 : non liee (echappe)', () => { const r = sim('kepler', { L: 12, r0: 6 }); assert.equal(r.bornee, false); assert.match(r.raison, /echappe/); });
   // 4. huit et chaos
   ok('huit : retour au depart apres une periode (< 1e-5)', () => {
@@ -87,8 +97,8 @@ function suite(T, bavard = false) {
   ok('hydrogene : autre graine -> autre nuage', () => assert.ok(!octets(sim('hydrogene', { graine: 2 }).brut).equals(octets(sim('hydrogene').brut))));
   // 7. bornage
   ok('bornage : hors bornes ramene, NaN -> defaut', () => {
-    assert.deepEqual(sim('schwarzschild', { L: 100, r0: -5, tours: 1e9 }, { n: 50 }).params, { L: 12, r0: 6, tours: 20 });
-    assert.deepEqual(sim('doublePendule', { theta1: NaN, theta2: 'x', duree: 1e6 }, { n: 50 }).params, { theta1: 2, theta2: 2, duree: 120 });
+    assert.deepEqual(sim('schwarzschild', { L: 100, r0: -5, tours: 1e9 }, { n: 50 }).params, { L: 12, r0: 6, tours: 35 });
+    assert.deepEqual(sim('doublePendule', { theta1: NaN, theta2: 'x', duree: 1e6 }, { n: 50 }).params, { theta1: 2, theta2: 2, duree: 160 });
     assert.deepEqual(sim('hydrogene', { n: 2, l: 3, m: -3, graine: 7.6 }, { n: 50 }).params, { n: 2, l: 1, m: -1, graine: 8 });
   });
   ok('reglagesPhysique : forme reglagesDe, valeur bornee', () => {
@@ -121,6 +131,8 @@ const MUTANTS = [
   ['hydrogene : exp(-rho) au lieu de exp(-rho/2)', 'expD(-rho / 2)', 'expD(-rho)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte', 'alea = mulberry32(c.graine >>> 0)', 'alea = Math.random'],
+  ['capture redevient un refus', "evenement: (raison) => (raison.startsWith('capture') ? 'capture' : null),", ''],
+  ['rejeu jusqu APRES l evenement (tAvant -> tc + hk)', 'tAvant: tc,', 'tAvant: tc + hk,'],
 ];
 const brut = readFileSync(SOURCE, 'utf8'), moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
 const dossier = mkdtempSync(join(process.env.TAM_TMP || tmpdir(), 'tam-physique-mutants-'));

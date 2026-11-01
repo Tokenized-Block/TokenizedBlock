@@ -66,6 +66,12 @@ function suiveur() {
     },
   };
 }
+/* disposition d un FILM mesuree sur les lignes : debuts[k] = premiere ligne de l image k ; parImage = nombre de lignes par
+   image s il est le meme pour toutes, sinon null (alors seules les bornes debuts font foi) */
+function filmDe(debuts, n) {
+  const tailles = debuts.map((d, k) => (k + 1 < debuts.length ? debuts[k + 1] : n) - d);
+  return { images: debuts.length, parImage: tailles.every((t) => t === tailles[0]) ? tailles[0] : null, debuts, tailles };
+}
 const echec = (P, D, n, i, raison, unite) => ({ params: P, D, n, bornee: false, echappeA: i, raison, brut: null, lyapunov: NaN, uniteLyapunov: unite, points: null, invariants: null });
 const fini = (b) => { for (let i = 0; i < b.length; i++) if (!Number.isFinite(b[i])) return false; return true; };
 /* RK4 a tampons propres ; f(y, d) ecrit la derivee */
@@ -303,7 +309,8 @@ function binaireTrouNoir(P, n) {
   inv.tempsFusion = { mesure: tFin, formule, ecart: Math.abs(tFin - formule) / formule, aFinal: y[0], eFinal: y[1], unite: 'GM/c^3 (M = 10 masses solaires : 4.93e-5 s)' };
   inv.excentricite.decroissante = !croissante;
   inv.orbites = { mesure: lTot / DEUX_PI };
-  return { brut, invariants: inv };
+  /* FIN connue du modele : le periastre atteint 6 GM/c^2 a la derniere ligne (t en GM/c^3) */
+  return { brut, invariants: inv, fin: { evenement: 'periastron-6M', indice: n - 1, t: tFin, periastre: rp(y) } };
 }
 
 // ---------- 3b : binaire de trous noirs JUSQU A LA FUSION (signal d ondes gravitationnelles complet, non tournants) ----------
@@ -511,8 +518,10 @@ function supernova(P, n) {
   const temps = []; for (let k = 0; k < INSTANTS; k++) temps.push(P.annees * expD(-4 * LN10 * (1 - k / (INSTANTS - 1))) * AN);
   const R = temps.map((t) => rayonSN(c, t));
   const D = 4, brut = new Float64Array(n * D), alea = mulberry32(P.graine >>> 0), somme = new Float64Array(INSTANTS), compte = new Float64Array(INSTANTS);
+  const debuts = []; let kPrec = -1;
   for (let i = 0; i < n; i++) {
     const k = Math.min(INSTANTS - 1, Math.floor(i * INSTANTS / n)), r = R[k] / PC;
+    if (k !== kPrec) { debuts.push(i); kPrec = k; }
     const ct = 2 * alea() - 1, st = Math.sqrt(1 - ct * ct), ph = DEUX_PI * alea(), o = i * D;
     brut[o] = r * st * cosD(ph); brut[o + 1] = r * st * sinD(ph); brut[o + 2] = r * ct; brut[o + 3] = temps[k] / AN;
     somme[k] += Math.sqrt(brut[o] * brut[o] + brut[o + 1] * brut[o + 1] + brut[o + 2] * brut[o + 2]); compte[k]++;
@@ -525,7 +534,7 @@ function supernova(P, n) {
     exposantSedov: { mesure: pente(INSTANTS - 2, INSTANTS - 1), formule: 0.4, temps: [temps[INSTANTS - 2] / AN, tF / AN], unite: 'd ln R / d ln t' },
     rayonFinal: { mesure: Rm(INSTANTS - 1), formule: XI * expD(lnD(c.E * tF * tF / c.rho) / 5) / PC, unite: 'parsec' },
     transition: { annees: tCroise / AN, rayonPc: c.v * tCroise / PC, rayonBalayagePc: expD(lnD(3 * c.M / (4 * PI * c.rho)) / 3) / PC, vitesseEjectaKmS: c.v / 1e5 },
-  } };
+  }, film: filmDe(debuts, n) };
 }
 
 // ---------- 5b : reste de supernova par HYDRODYNAMIQUE reelle (Lagrange 1-D spherique, von Neumann-Richtmyer) ----------
@@ -617,10 +626,11 @@ function supernovaHydro(P, n) {
   const chocs = H.photos.map(chocDe); if (chocs.some((c) => !c)) return null;
   const E = P.energie * 1e51, rho0 = 1.4 * MH * P.densite, tF = P.annees * AN, L = expD(lnD(E * tF * tF / rho0) / 5) / PC;
   /* nuage : instant k = floor(i K / n) ; dans l instant, quantiles de masse sur les zones derriere le choc, directions de Fibonacci */
-  const K = INSTANTS_H, D = 5, brut = new Float64Array(n * D);
+  const K = INSTANTS_H, D = 5, brut = new Float64Array(n * D), debuts = [];
   for (let k = 0; k < K; k++) {
     const i0 = Math.ceil(k * n / K), i1 = Math.ceil((k + 1) * n / K), c = i1 - i0, ph = H.photos[k], zs = chocs[k].zs;
     if (c <= 0) continue;
+    debuts.push(i0);
     let mt = 0; for (let z = 0; z <= zs; z++) mt += ph.m[z];
     let z = 0, cum = ph.m[0];
     for (let j = 0; j < c; j++) {
@@ -645,7 +655,7 @@ function supernovaHydro(P, n) {
     energie: { debut: H.E0, derive: H.derive, unite: 'energie totale (cinetique + interne), derive max relative' },
     exposant: { mesure: expo, formule: 0.4, unite: 'd ln R / d ln t (moindres carres, t >= 0.1 t final)' },
     grille: { zones: ZONES_SN, pas: H.pas, rayonDomaine: RMAX_SN, viscosite: [CQ2_SN, CQ1_SN] },
-  } };
+  }, film: filmDe(debuts, n) };
 }
 
 // ---------- 6 : collision de galaxies (Toomre & Toomre 1972, trois corps restreint) ----------
@@ -657,11 +667,19 @@ function supernovaHydro(P, n) {
 const EPS_G2 = 0.05 * 0.05, R_DEPART = 8, H_G = 0.004;
 const CB = 1.2599210498948732, W1 = 1 / (2 - CB), W0 = -CB / (2 - CB);
 const YC = [W1 / 2, (W0 + W1) / 2, (W0 + W1) / 2, W1 / 2], YD = [W1, W0, W1];
-function collisionGalaxies(P, n) {
+/* FILM : IMAGES_G instantanes egalement espaces de t0 (separation 8, avant la rencontre) a duree ; chaque image = les memes
+   etoiles test (n / images par image). Nombre d images = le plus grand diviseur de n <= 12 laissant >= 2 etoiles par image
+   (n = 1500 -> 12 x 125) : toutes les images ont EXACTEMENT le meme nombre de lignes. */
+const IMAGES_G = 12;
+function imagesFilm(n) { for (let d = Math.min(IMAGES_G, n); d >= 1; d--) if (n % d === 0 && n / d >= 2) return d; return 1; }
+function collisionGalaxies(P, nLignes) {
+  const images = imagesFilm(nLignes), n = nLignes / images; /* n = etoiles integrees = lignes par image */
   const m1 = 1, m2 = P.rapportMasses, M = m1 + m2, mu = m1 * m2 / M, p = 2;
   const Dd = -Math.sqrt(R_DEPART - 1), q1 = 1 + Dd * Dd, sf = 2 * Dd / q1, cf = (1 - Dd * Dd) / q1, vk = Math.sqrt(M / p);
   const rel = Float64Array.from([1 - Dd * Dd, 2 * Dd, -vk * sf, vk * (cf + 1)]);
-  const t0 = Math.sqrt(p * p * p / M) * (Dd + Dd * Dd * Dd / 3) / 2, T = P.duree - t0, pas = Math.ceil(T / H_G), h = T / pas;
+  const t0 = Math.sqrt(p * p * p / M) * (Dd + Dd * Dd * Dd / 3) / 2, T = P.duree - t0;
+  /* pas par intervalle entre images (le dernier instantane tombe exactement sur duree) */
+  const inter = Math.max(1, images - 1), pasImage = Math.ceil(T / inter / H_G), pas = pasImage * inter, h = T / pas;
   const coeurs = new Float64Array(6); /* x1, y1, z1, x2, y2, z2 (repere du centre de masse) */
   const placer = () => { coeurs[0] = -m2 / M * rel[0]; coeurs[1] = -m2 / M * rel[1]; coeurs[3] = m1 / M * rel[0]; coeurs[4] = m1 / M * rel[1]; };
   const energieC = () => { const r = Math.sqrt(rel[0] * rel[0] + rel[1] * rel[1]); return mu * (rel[2] * rel[2] + rel[3] * rel[3]) / 2 - m1 * m2 / r; };
@@ -693,6 +711,10 @@ function collisionGalaxies(P, n) {
     }
   };
   const S = suiveur(); S.noter({ energieCoeurs: energieC() / (m1 * m2) });
+  const brut = new Float64Array(3 * nLignes), tImages = [], coeursImages = [];
+  let k = 0;
+  const photo = (t) => { brut.set(x, 3 * n * k); tImages.push(t); coeursImages.push([coeurs[0], coeurs[1], coeurs[3], coeurs[4]]); k++; };
+  if (images > 1) photo(t0);
   forces();
   let rmin = Infinity, tPeri = NaN, t = t0;
   for (let s = 0; s < pas; s++) {
@@ -702,9 +724,10 @@ function collisionGalaxies(P, n) {
     forces();
     for (let j = 0; j < 3 * n; j++) v[j] += 0.5 * h * a[j];
     if (s % 64 === 63) S.noter({ energieCoeurs: energieC() / (m1 * m2) });
+    if ((s + 1) % pasImage === 0 && k < images) photo(t);
   }
   S.noter({ energieCoeurs: energieC() / (m1 * m2) });
-  if (!fini(x)) return null;
+  if (k !== images || !fini(x)) return null;
   /* queues de maree : etoiles a plus de 2 rmax de leur propre noyau a la fin */
   const queue = [0, 0];
   for (let k = 0; k < n; k++) {
@@ -713,23 +736,25 @@ function collisionGalaxies(P, n) {
   }
   const inv = S.fini();
   inv.pericentre = { mesure: rmin, formule: 1, tempsMesure: tPeri, tempsFormule: 0, pas: h };
-  inv.queues = { galaxie1: queue[0] / n1, galaxie2: n - n1 ? queue[1] / (n - n1) : 0, definition: 'fraction a plus de 2 rayons de disque de son noyau' };
-  return { brut: x, invariants: inv };
+  inv.queues = { galaxie1: queue[0] / n1, galaxie2: n - n1 ? queue[1] / (n - n1) : 0, definition: 'fraction a plus de 2 rayons de disque de son noyau (image finale)' };
+  inv.film = { temps: tImages, coeurs: coeursImages, unite: 'temps (pericentre a t = 0) ; coeurs [x1, y1, x2, y2] par image (z = 0)' };
+  return { brut, invariants: inv, film: filmDe(tImages.map((_, j) => j * n), nLignes) };
 }
 
 // ---------- catalogue ----------
+const ANNEES_GROUPE1 = 165; /* > periode de Neptune (164.8 ans) */
 export const SYSTEMES = Object.freeze([
   { id: 'systemeSolaire', nom: 'Our solar system', science: 'Celestial mechanics', D: 12,
     params: { groupe: 0, annees: 4 }, bornes: { groupe: [0, 1], annees: [0.5, 400] },
     phrase: 'The 8 planets on Keplerian ellipses from the JPL J2000 mean orbital elements and their slow drifts (Standish 1992, valid 1800-2050), heliocentric positions in AU of 4 planets (group 0: Mercury to Mars, group 1: Jupiter to Neptune); no mutual perturbations beyond those mean drifts, no moons.' },
   { id: 'etoileS2', nom: 'Star S2 around our black hole', science: 'General relativity', D: 3,
-    params: { tours: 3, rg: 1 }, bornes: { tours: [1, 10], rg: [0, 1] },
+    params: { tours: 3, rg: 1 }, bornes: { tours: [1, 20], rg: [0, 1] },
     phrase: 'The star S2 orbiting Sagittarius A*, the 4.26-million-solar-mass black hole at the centre of the Milky Way, from the GRAVITY 2020 orbit, integrated with Newtonian gravity plus the first post-Newtonian (Schwarzschild) correction (rg = 0 turns it off); positions in AU, the star is a test particle and the 12-arcminute-per-orbit precession is real but too small to see by eye.' },
   { id: 'binaireTrouNoir', nom: 'Black hole binary inspiral', science: 'Gravitational waves', D: 4,
     params: { q: 1, a0: 20, e0: 0.4 }, bornes: { q: [0.1, 1], a0: [8, 25], e0: [0, 0.9] },
     phrase: 'Two black holes losing orbital energy to gravitational waves with the orbit-averaged Peters (1964) rates plus the mean relativistic periastron advance, in units G = c = total mass = 1; the orbit shrinks and circularises until the periastron reaches 6 GM/c^2, where this averaged model stops (no merger, no full general relativity).' },
   { id: 'amasEtoiles', nom: 'Star cluster around a black hole', science: 'Stellar dynamics', D: 12,
-    params: { masseTrouNoir: 1, etoiles: 40, viriel: 0.5, duree: 4, graine: 1 }, bornes: { masseTrouNoir: [0.1, 10], etoiles: [20, 60], viriel: [0.05, 1], duree: [1, 8], graine: [1, 1000000] },
+    params: { masseTrouNoir: 1, etoiles: 40, viriel: 0.5, duree: 4, graine: 1 }, bornes: { masseTrouNoir: [0.1, 10], etoiles: [20, 60], viriel: [0.05, 1], duree: [1, 12], graine: [1, 1000000] },
     phrase: 'A Plummer cluster of 20 to 60 equal-mass stars around one massive black hole (masses in units of the total star mass, G = 1), softened Newtonian gravity (softening 0.1) with a leapfrog integrator; the paths of 4 of the stars are drawn, and viriel below 0.5 makes the cluster fall in.' },
   { id: 'supernova', nom: 'Supernova remnant', science: 'Astrophysical gas dynamics', D: 4, nuage: true,
     params: { energie: 1, masseEjecta: 1.4, densite: 1, annees: 40000, graine: 1 }, bornes: { energie: [0.1, 10], masseEjecta: [0.5, 10], densite: [0.01, 10], annees: [1000, 100000], graine: [1, 1000000] },
@@ -742,7 +767,7 @@ export const SYSTEMES = Object.freeze([
     phrase: 'The gravitational-wave signal of two non-spinning black holes (source-frame masses in solar masses, redshift z, distance in Mpc, tilt in degrees, starting wave frequency in Hz): inspiral from the 3.5PN TaylorT4 post-Newtonian equation, then merger and ringdown from fitted formulas (remnant mass and spin from Jimenez-Forteza 2017, l = m = 2 ringing from Berti 2006) joined by a simple frequency bridge; not numerical relativity. Drawn as time (s), h+ and hx (x 1e21, no detector response) and wave frequency (Hz).' },
   { id: 'collisionGalaxies', nom: 'Colliding galaxies', science: 'Galactic dynamics', D: 3, nuage: true,
     params: { rapportMasses: 1, inclinaison1: 15, inclinaison2: 60, duree: 4 }, bornes: { rapportMasses: [0.25, 1], inclinaison1: [0, 180], inclinaison2: [0, 180], duree: [0, 10] },
-    phrase: 'Two galaxy cores on a parabolic encounter, each carrying a disk of massless test stars (Toomre and Toomre 1972), G = 1, first core mass 1, closest approach 1; disk tilts in degrees (0 = spinning with the orbit, which throws out tidal tails), shown as the star positions duree time units after closest approach, no dark-matter halo and no star-star gravity.' },
+    phrase: 'Two galaxy cores on a parabolic encounter, each carrying a disk of massless test stars (Toomre and Toomre 1972), G = 1, first core mass 1, closest approach 1; disk tilts in degrees (0 = spinning with the orbit, which throws out tidal tails), shown as a film of 12 snapshots of the same stars, evenly spaced from before the encounter (cores 8 apart) to duree time units after closest approach; no dark-matter halo and no star-star gravity.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
 const ENTIERS = { systemeSolaire: ['groupe'], etoileS2: ['tours', 'rg'], amasEtoiles: ['etoiles', 'graine'], supernova: ['graine'] };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
@@ -757,6 +782,8 @@ function borner(id, params) {
     P[k] = v;
   }
   if (id === 'binaireTrouNoir') P.e0 = Math.min(P.e0, 1 - 6.5 / P.a0);
+  /* systeme solaire : sans annees donnees, la duree par defaut depend du groupe (groupe 1 : 165 ans, Neptune fait un tour) */
+  if (id === 'systemeSolaire' && !Number.isFinite(Number(params && params.annees))) P.annees = P.groupe ? ANNEES_GROUPE1 : s.params.annees;
   return P;
 }
 
@@ -770,7 +797,7 @@ const UNITES = {
   systemeSolaire: 'sans objet (orbites kepleriennes analytiques)', etoileS2: 'sans objet (orbite reguliere)',
   binaireTrouNoir: 'sans objet (equations moyennees)', amasEtoiles: 'par unite de temps N corps',
   supernova: 'sans objet (solution analytique)', supernovaHydro: 'sans objet (hydrodynamique dissipative)',
-  binaireFusion: 'sans objet (signal deterministe)', collisionGalaxies: 'sans objet (etoiles test, nuage final)',
+  binaireFusion: 'sans objet (signal deterministe)', collisionGalaxies: 'sans objet (etoiles test, film d instantanes)',
 };
 export function simuler(id, params = {}, { n = 1500 } = {}) {
   const s = parId(id), P = borner(id, params);
@@ -780,5 +807,7 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   if (!fini(r.brut)) return echec(P, s.D, n, -1, 'NaN', UNITES[id]);
   const o = { params: P, D: s.D, n, bornee: true, brut: r.brut, lyapunov: r.lyapunov === undefined ? null : r.lyapunov, uniteLyapunov: UNITES[id], points: null, invariants: r.invariants };
   if (s.nuage) o.nuage = true;
+  if (r.film) o.film = r.film;
+  if (r.fin) o.fin = r.fin;
   return o;
 }

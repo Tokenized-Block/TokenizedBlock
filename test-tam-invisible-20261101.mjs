@@ -223,8 +223,29 @@ function suite(T, texte, bavard = false) {
   });
   ok('brownien D = 1.5 : D mesure a 5 %', () => { const d = sim('mouvementBrownien', { D: 1.5, particules: 2500 }).invariants.diffusion.mesure; assert.ok(rel(d, 1.5) < 0.05, String(d)); return d.toFixed(4); });
 
+  // 11b. films et fins (2026-11-01, demande du proprietaire) : disposition MESUREE sur les lignes, jamais supposee
+  ok('films : effetTunnel 25 x 60, superposition 12 x 125, GW 63 images (62 x 24 + 12), chaque image a temps constant', () => {
+    const cas = [['effetTunnel', {}, 25, 60, 1], ['superpositionQuantique', {}, 12, 125, 2], ['ondeGravitationnelle', {}, 63, null, 2]];
+    for (const [id, p, im, par, col] of cas) {
+      const r = sim(id, p), f = r.film; assert.equal(f.images, im, id); assert.equal(f.parImage, par, id); assert.equal(f.tailles.reduce((a, x) => a + x, 0), r.n, id);
+      for (let k = 0; k < f.images; k++) { const t = ligne(r, f.debuts[k])[col]; for (let i = f.debuts[k]; i < f.debuts[k] + f.tailles[k]; i++) assert.equal(ligne(r, i)[col], t, `${id} image ${k} ligne ${i}`); if (k) assert.ok(t > ligne(r, f.debuts[k - 1])[col], id); }
+    }
+    const g = sim('ondeGravitationnelle').film; assert.deepEqual(g.tailles.slice(-2), [24, 12]);
+    assert.deepEqual(sim('superpositionQuantique', { images: 7 }).film.tailles, [215, 215, 215, 215, 215, 215, 210]);
+  });
+  ok('fin chuteTrouNoir : r = 0 a la derniere ligne, horizon franchi a la ligne indiquee, tau fini', () => {
+    const r = sim('chuteTrouNoir'), f = r.fin, h = f.horizon;
+    assert.equal(f.evenement, 'singularity'); assert.equal(f.indice, r.n - 1); assert.ok(Math.abs(f.r) < 1e-12 && rel(f.t, r.invariants.tempsPropreTotal.formule) < 1e-9);
+    assert.ok(ligne(r, h.indice)[0] <= 2 && ligne(r, h.indice - 1)[0] > 2 && h.tau < f.t);
+    return `horizon ligne ${h.indice}, tau ${h.tau.toFixed(3)} -> ${f.t.toFixed(3)}`;
+  });
+  ok('fin effetTunnel : split, transmis = mesure de transmission, transmis + reflechi ~ 1', () => {
+    const r = sim('effetTunnel'), f = r.fin; assert.equal(f.evenement, 'split'); assert.equal(f.indice, r.n - 1);
+    assert.equal(f.transmis, r.invariants.transmission.mesure); assert.ok(Math.abs(f.transmis + f.reflechi + f.reste - 1) < 1e-12 && Math.abs(f.reste) < 1e-3);
+  });
   // 12. bornage
   ok('bornage : hors bornes ramene, NaN -> defaut, entiers arrondis, masses multiple de 8, r0 <= rmax', () => {
+    assert.equal(sim('ondeGravitationnelle', { cycles: 99 }, { n: 50 }).params.cycles, 4); assert.equal(sim('champDipolaire', { duree: 1e9 }, { n: 50 }).params.duree, 240);
     assert.deepEqual(sim('ondeGravitationnelle', { hPlus: 9, hCroix: NaN, masses: 29.4, cycles: -1 }, { n: 50 }).params, { hPlus: 0.5, hCroix: 0, masses: 32, cycles: 1 });
     assert.deepEqual(sim('courbureEspaceTemps', { M: 'x', rmax: 8, r0: 15 }, { n: 50 }).params, { M: 1, rmax: 8, r0: 8 });
     assert.deepEqual(sim('mouvementBrownien', { particules: 1e9, pas: 3.7, D: -1, kT: Infinity, graine: 2.5 }, { n: 50 }).params, { particules: 4000, pas: 50, D: 0.1, kT: 1, graine: 3 });
@@ -267,6 +288,7 @@ const MUTANTS = [
   ['lumiere : B parallele a E', 'const Bx = (ky * Ez - kz * Ey) / C_SI, By = (kz * Ex - kx * Ez) / C_SI, Bz = (kx * Ey - ky * Ex) / C_SI;', 'const Bx = Ex / C_SI, By = Ey / C_SI, Bz = Ez / C_SI;'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte', 'alea = mulberry32(P.graine >>> 0), o = {}', 'alea = Math.random, o = {}'],
+  ['film : taille commune annoncee meme quand les images different', 'parImage: tailles.every((t) => t === tailles[0]) ? tailles[0] : null', 'parImage: tailles[0]'],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
 const dossier = mkdtempSync(join(process.env.TAM_TMP || tmpdir(), 'tam-invisible-mutants-'));

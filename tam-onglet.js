@@ -31,7 +31,10 @@ const THEMES = {
   trousNoirs: ['schwarzschild', 'etoileS2', 'binaireTrouNoir', 'binaireFusion', 'fusionTrousNoirs', 'lumiereTrouNoir', 'kerr', 'trouDeVer', 'trouDeVerSurface', 'pulsarHulseTaylor', 'disqueAccretion',
     'ondeGravitationnelle', 'courbureEspaceTemps', 'chuteTrouNoir', 'dilatationTemps', 'diagrammeEspaceTemps', 'lorentzRelativiste'],
 };
-const groupeDe = (s) => THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
+/* game80 : les « grandes questions » ont leur groupe */
+THEMES.questions = ['videQuantique', 'bigRip', 'fauxVide', 'centreTerre', 'versMars', 'zeroAbsolu', 'tailleUnivers', 'nombrePi', 'calendrierCosmique',
+  'penduleFoucault', 'mouvementTerre', 'etoilesHR', 'evaporationTrouNoir', 'tsunami', 'geometrieUnivers', 'tailleEtoiles'];
+const groupeDe = (s) => THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
 /* game79 : la formule de la personne (ou du cerveau) passe par la MEME scene : un « systeme » adapte, vue seule (pas de mint) */
@@ -40,7 +43,7 @@ const SYS_FORMULE = Object.freeze({ id: 'formule', nom: 'Your formula', science:
     simuler: (_id, p = {}) => { const { a, b, c, d, ...spec } = p; return F.simulerFormule({ ...spec, vars: { ...(spec.vars || {}), ...(a !== undefined ? { a } : {}), ...(b !== undefined ? { b } : {}), ...(c !== undefined ? { c } : {}), ...(d !== undefined ? { d } : {}) } }); },
     reglagesPhysique: (_id, p = {}) => ['a', 'b', 'c', 'd'].map((k) => ({ chemin: 'params.' + k, nom: k, min: -10, max: 10, valeur: (p.vars && typeof p.vars[k] === 'number' ? p.vars[k] : (typeof p[k] === 'number' ? p[k] : 1)) })),
   } });
-const GROUPES = [['attracteurs', 'Attractors'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
+const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
   ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics']];
 /* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
  *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */
@@ -99,6 +102,9 @@ const CSS = `
 #v-tam .tamPayListe{margin:.3rem 0;padding-left:1.1rem;font-size:.82rem;color:var(--tam-doux);max-height:220px;overflow:auto}
 #v-tam .tamBulle{position:absolute;z-index:3;pointer-events:none;max-width:260px;background:rgba(11,13,23,.94);border:1px solid var(--tam-acc);border-radius:10px;padding:6px 9px;font:11px/1.45 ui-monospace,Consolas,monospace;color:#e8ecf5;box-shadow:0 0 14px rgba(127,209,255,.35)}
 #v-tam .tamBulle b{color:#fff}
+#v-tam .tamLegende{margin-top:8px;border:1px solid var(--tam-bord);border-radius:10px;padding:6px 10px;background:rgba(127,209,255,.05)}
+#v-tam .tamLegende summary{cursor:pointer;font-weight:600}
+#v-tam .tamPastille{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle}
 #v-tam .tamVars .tamMesure{width:100%;color:#ffe9a8}
 #v-tam .tamQui{margin:.2rem 0 .5rem;font-size:.9rem}
 #v-tam .tamQui .tamHumeur{padding:0 .35rem;border-radius:6px;color:#fff;text-shadow:0 0 6px currentColor}
@@ -167,12 +173,22 @@ export function monter(racine, ctx = {}) {
   const bSon = el('button', { type: 'button', id: 'tamSon', 'aria-pressed': 'false', text: 'Sound: off' });
   /* 2026-11-01 (Phil) : le trace a un debut et une fin, peut tourner en boucle ; Reset view le redessine */
   const bBoucle = el('button', { type: 'button', id: 'tamBoucle', 'aria-pressed': 'false', text: 'Loop: off' });
+  /* game80 (Phil : « on voit qu une partie, continue jusqu a une fin ») : la VITESSE du trace — il va toujours jusqu au dernier point */
+  const selVitesse = el('select', { id: 'tamVitesse', 'aria-label': 'Drawing speed' },
+    el('option', { value: '15', text: 'Draw slowly (15 s)' }), el('option', { value: '6', text: 'Draw: normal (6 s)' }), el('option', { value: '2', text: 'Draw fast (2 s)' }));
+  selVitesse.value = '6';
+  /* game80 : un FILM (suite d images : galaxies qui se croisent, supernova, effet tunnel…) — le curseur choisit l instant */
+  const curFilm = el('input', { type: 'range', id: 'tamFilm', min: '0', max: '0', step: '1', value: '0', 'aria-label': 'Moment in the film' });
+  const filmTxt = el('output', { for: 'tamFilm', class: 'tamDoux' });
+  const zFilm = el('div', { class: 'tamRang', id: 'tamZoneFilm', hidden: true }, el('label', { class: 'tamDoux', for: 'tamFilm', text: 'Moment' }), curFilm, filmTxt);
   const cv = el('canvas', { id: 'tamCanvas', 'aria-label': 'The work in 3-D' });
   const info = el('div', { class: 'tamInfo' });
   /* 2026-11-01 (Phil) : les variables SUR le graphe — un mathematicien lit l equation et ses valeurs sans quitter la scene */
   const varsScene = el('div', { class: 'tamVars', id: 'tamVarsScene' });
   /* game79 (Phil : « les donnees visibles en live sur le graph quand on passe le curseur ») : la bulle des VRAIES valeurs du point survole */
   const bulle = el('div', { class: 'tamBulle', id: 'tamBulle', hidden: true, role: 'status', 'aria-live': 'off' });
+  /* game80 (Phil : « on doit mieux comprendre ce qu on voit, pas juste des graphes et courbes ») : la legende de CE systeme */
+  const legende = el('details', { class: 'tamLegende', id: 'tamLegende', open: true }, el('summary', { text: 'What you are seeing' }));
   const scene = el('div', { class: 'tamScene' }, cv, info, varsScene, bulle);
   const etatLigne = el('p', { class: 'tamDoux', id: 'tamEtat', 'aria-live': 'polite' });
   /* 2026-11-01 (Phil) : en haut, QUEL block fait le graphe, son humeur (moteur) et sa lecture (le mot humain), avec le glow de l humeur */
@@ -263,10 +279,11 @@ export function monter(racine, ctx = {}) {
       el('div', { class: 'tamRang' }, selGroupe, selSys, selFam, selDim, bCerveau, bSource),
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamBloc', text: 'Brain of' }), selBloc, chBloc),
       scene,
-      el('div', { class: 'tamRang' }, bRot, bVue, bBoucle, bSon),
+      el('div', { class: 'tamRang' }, bRot, bVue, bBoucle, bSon, selVitesse),
+      zFilm,
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamResolution', text: 'Resolution' }), curRes, resTxt),
-      el('p', { class: 'tamDoux', text: 'Drag to orbit · Shift-drag or two fingers to pan · wheel or pinch to zoom.' }),
-      etatLigne),
+      el('p', { class: 'tamDoux', text: 'Drag to orbit · Shift-drag or two fingers to pan · wheel or pinch to zoom · hover or tap a point to read its values.' }),
+      etatLigne, legende),
     el('div', { class: 'tamCarte' },
       el('h3', { text: 'Layers' }),
       el('p', { class: 'tamDoux', text: 'One colour per dimension. Turn layers on and off, isolate one, or grow the shape from 3-D to all of its dimensions.' }),
@@ -306,7 +323,7 @@ export function monter(racine, ctx = {}) {
     S.dense = null; try { const d = M.nuageMap(S.P, 40000); if (d) S.dense = d; } catch (_) { S.dense = null; }
     S.octets = octetsServeur; S.stocke = (() => { try { const d = decoder(octetsDe(octetsServeur) || rejouer(P).octets); return d.positions; } catch (_) { return null; } })();
     curseur.min = String(Math.min(S.D, 2)); curseur.max = String(S.D); curseur.value = String(S.D);
-    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui(); syncFilm(); peindreLegende();
     etatLigne.textContent = V.combinaison(S.P) + '.';
     racine.dataset.dims = String(S.D);
     S.sale = true;
@@ -349,10 +366,11 @@ export function monter(racine, ctx = {}) {
     S.z = TS.standardiserIso(o.brut, o.n, D); S.ser = V.series(S.z, o.n, D);
     /* game78 : plusieurs corps (planetes, etoiles, rayons) -> chacun dans le MEME espace, sa couleur (tam-science.js#vueCorps, = les octets mintes) */
     S.corps = TS.CORPS[id] ? TS.vueCorps(o, TS.CORPS[id]) : null;
+    S.corpsActifs = S.corps ? Array(S.corps.corps).fill(true) : null; S.filmImage = 0;
     if (S.son) arreterSon(); /* game77 : le son avait min(D,12) voix ; une oeuvre a moins de dimensions le faisait planter a chaque image */
     S.couches = V.etatCouches(D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null; S.dense = null;
     curseur.min = String(Math.min(D, 2)); curseur.max = String(D); curseur.value = String(D);
-    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui(); syncFilm(); peindreLegende();
     etatLigne.textContent = s.phrase;
     racine.dataset.dims = String(D); racine.dataset.science = id;
     S.sale = true;
@@ -389,7 +407,7 @@ export function monter(racine, ctx = {}) {
     if (S.son) arreterSon();
     S.couches = V.etatCouches(D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
     curseur.min = String(Math.min(D, 2)); curseur.max = String(D); curseur.value = String(D);
-    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui(); syncFilm(); peindreLegende();
     const nRej = typeof o.rejets === 'number' ? o.rejets : o.rejets && typeof o.rejets === 'object' ? Object.values(o.rejets).reduce((s, v) => s + (Number(v) || 0), 0) : 0;
     etatLigne.textContent = modeDe(spec.mode).phrase + (nRej ? ' ' + nRej + ' point(s) dropped (division by zero or not finite).' : '');
     formDit.textContent = 'Drawn: ' + o.n + ' points.'; formRes.replaceChildren();
@@ -742,6 +760,15 @@ export function monter(racine, ctx = {}) {
 
   /* ── couches ── */
   function peindrePuces() {
+    /* game80 (Phil : « pas la possibilite de changer les layers ») : pour plusieurs corps, une puce PAR CORPS, avec son nom */
+    if (S.science && S.corps) {
+      const noms = nomsCorpsCourants();
+      if (!S.corpsActifs || S.corpsActifs.length !== S.corps.corps) S.corpsActifs = Array(S.corps.corps).fill(true);
+      puces.replaceChildren(...S.corpsActifs.map((a, b) => el('button', { type: 'button', class: 'tamPuce', 'aria-pressed': String(a), 'data-corps': String(b), 'aria-label': 'Show ' + noms[b] },
+        el('i', { style: 'background:' + V.couleurDim(b) }), document.createTextNode(noms[b]))));
+      curseurTxt.textContent = S.corpsActifs.filter(Boolean).length + ' of ' + S.corps.corps + ' bodies shown';
+      peindreVarsScene(); return;
+    }
     puces.replaceChildren(...S.couches.actives.map((a, j) => el('button', { type: 'button', class: 'tamPuce', 'aria-pressed': String(a), 'data-dim': String(j), 'aria-label': 'Layer x' + (j + 1) },
       el('i', { style: 'background:' + V.couleurDim(j) }), document.createTextNode('x' + (j + 1)))));
     const v = V.dimsVisibles(S.couches).length;
@@ -751,6 +778,13 @@ export function monter(racine, ctx = {}) {
     if (S.split) tailleSeries();
   }
   puces.addEventListener('click', (e) => {
+    const bc = e.target.closest('[data-corps]');
+    if (bc && S.corpsActifs) {
+      const k = Number(bc.getAttribute('data-corps'));
+      if (bIsoler.getAttribute('aria-pressed') === 'true') S.corpsActifs = S.corpsActifs.map((_, q) => q === k);
+      else { S.corpsActifs[k] = !S.corpsActifs[k]; if (!S.corpsActifs.some(Boolean)) S.corpsActifs[k] = true; }
+      peindrePuces(); S.sale = true; return;
+    }
     const b = e.target.closest('[data-dim]'); if (!b) return;
     const j = Number(b.getAttribute('data-dim'));
     S.couches = bIsoler.getAttribute('aria-pressed') === 'true' ? V.isoler(S.couches, j) : V.basculer(S.couches, j);
@@ -838,7 +872,18 @@ export function monter(racine, ctx = {}) {
     g.shadowBlur = 7 * dpr;
     let cour = -2;
     g.beginPath();
-    for (let i = 1; i < (corps ? 0 : n); i++) { /* game78 : les corps ont leur propre boucle (plus bas) */
+    const film = filmDe();
+    if (film) {
+      /* game80 : le FILM — l image du moment en clair, les 2 precedentes en traine pale (on voit le mouvement), jamais les images futures */
+      const k = imageCourante(), r = Math.max(1.6, dpr * 2);
+      for (let q = Math.max(0, k - 2); q <= k; q++) {
+        g.globalAlpha = q === k ? 0.95 : 0.18 * (q - k + 3); g.fillStyle = g.shadowColor = V.couleurDim(q % 12);
+        const a = film.debuts[q], b = a + film.tailles[q];
+        for (let i = a; i < b; i++) if (Number.isFinite(projSx[i])) g.fillRect(projSx[i] - r / 2, projSy[i] - r / 2, r, r);
+      }
+      g.globalAlpha = 1;
+    }
+    for (let i = 1; i < (corps || film ? 0 : n); i++) { /* game78 : les corps ont leur propre boucle (plus bas) ; game80 : le film aussi */
       if (!Number.isFinite(projSx[i]) || !Number.isFinite(projSx[i - 1])) continue;
       const c = dominant[i];
       if (c !== cour) { g.stroke(); g.beginPath(); g.strokeStyle = g.shadowColor = c >= 0 ? V.couleurDim(c) : '#556'; g.globalAlpha = 0.8; cour = c; g.moveTo(projSx[i - 1], projSy[i - 1]); }
@@ -854,8 +899,9 @@ export function monter(racine, ctx = {}) {
     /* game77 : un nuage n a ni debut ni fin (points tires, pas un chemin) : pas de reperes start/end */
     if (corps) {
       /* game78 : chaque corps (planete, etoile, rayon) avance EN MEME TEMPS, sa couleur, un point lumineux a sa position du moment */
-      const lim = Math.max(2, Math.min(corps.par, Math.floor(n / S.n * corps.par)));
+      const lim = Math.max(2, Math.min(corps.par, Math.floor(n / S.n * corps.par))), noms = nomsCorpsCourants();
       for (let b = 0; b < corps.corps; b++) {
+        if (S.corpsActifs && !S.corpsActifs[b]) continue; /* game80 : un corps cache n est pas trace */
         const a = b * corps.par, col = V.couleurDim(b);
         g.strokeStyle = g.shadowColor = col; g.shadowBlur = 7 * dpr; g.globalAlpha = 0.85; g.beginPath();
         let ouvert = false;
@@ -864,7 +910,8 @@ export function monter(racine, ctx = {}) {
           if (!ouvert) { g.moveTo(projSx[i], projSy[i]); ouvert = true; } else g.lineTo(projSx[i], projSy[i]);
         }
         g.stroke(); g.globalAlpha = 1;
-        point(Math.min(S.n - 1, a + lim - 1), col, 4.5, null);
+        /* game80 : le NOM du corps ecrit a sa position du moment (Mercury, Earth, Halley…) */
+        point(Math.min(S.n - 1, a + lim - 1), col, 4.5, noms[b] || null);
       }
       /* le corps central (Soleil, etoile, trou noir) a l origine du repere */
       const nomCentre = TS.CENTRE[S.science.s.id];
@@ -878,9 +925,11 @@ export function monter(racine, ctx = {}) {
         }
       }
     }
-    if (!nuage && !corps) {
+    if (!nuage && !corps && !film) {
       point(0, '#5dffa0', 4, 'start · t = 0');
-      if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, 'end · t = ' + (S.n - 1));
+      /* game80 : une fin PHYSIQUE (capture a l horizon, fuite, fusion…) est nommee */
+      const fin = S.science && S.o && S.o.fin && !Array.isArray(S.o.fin) ? S.o.fin : null;
+      if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, fin && fin.evenement ? 'end · ' + fin.evenement : 'end · t = ' + (S.n - 1));
       else point(n - 1, '#ffffff', 3.2, null);
     }
     /* le son allume : le point qu il joue, sur la courbe (le meme index que la frequence) */
@@ -888,6 +937,7 @@ export function monter(racine, ctx = {}) {
     g.shadowBlur = 0;
     if (S.survol !== null && Number.isFinite(projSx[S.survol])) { g.fillStyle = '#fff'; g.beginPath(); g.arc(projSx[S.survol], projSy[S.survol], 5 * dpr, 0, 2 * Math.PI); g.fill(); }
     if (corps) { info.textContent = corps.corps + ' bodies in the same space, one colour each · drag to orbit'; return; }
+    if (film) { info.textContent = 'A film: ' + film.images + ' moments · moment ' + (imageCourante() + 1) + ' of ' + film.images + ' (' + film.tailles[imageCourante()] + ' points)'; return; }
     info.textContent = S.D + '-D · ' + V.dimsVisibles(S.couches).length + ' layers on' + (S.rotation && S.D > 3 ? ' · hidden planes turning' : '') + (S.t === 0 && S.stocke && S.couches.actives.every(Boolean) ? ' · stored view' : ' · live view');
   }
   /* game77 (Phil : « De Jong reste le meme en changeant les variables ») : une map 2-D se lit DE FACE et en DENSITE — 40 000 points
@@ -921,6 +971,45 @@ export function monter(racine, ctx = {}) {
     if (i !== S.survol) { S.survol = i; S.sale = true; peindreSurvol(); }
     peindreBulle(i, e.clientX - r.left, e.clientY - r.top, r.width);
   }
+  /* ── game80 : la legende (tam-legendes.js, chargee a part : son absence n empeche rien) ── */
+  /* (le module est garde dans S.leg : peindreLegende peut etre appelee avant cette ligne, sans zone morte de `let`) */
+  import('./tam-legendes.js').then((m) => { S.leg = m; peindreLegende(); }).catch(() => { S.leg = null; });
+  function peindreLegende() {
+    const id = S.science ? S.science.s.id : S.P ? '__attracteur' : null;
+    let L = null; try { L = S.leg && id ? S.leg.legende(id, (S.P && S.P.params) || {}) : null; } catch (_) { L = null; }
+    if (!L) { legende.hidden = true; return; }
+    legende.hidden = false;
+    const ligne = (k, v) => el('p', { class: 'tamDoux' }, el('b', { text: k + ' ' }), document.createTextNode(v));
+    const cols = (L.colonnes || []).map((c, j) => el('li', {}, el('i', { class: 'tamPastille', style: 'background:' + V.couleurDim(j) }), document.createTextNode(' x' + (j + 1) + ' — ' + c)));
+    legende.replaceChildren(el('summary', { text: 'What you are seeing' + (L.titre ? ': ' + L.titre : '') }),
+      ...(L.enUnePhrase ? [ligne('In one sentence:', L.enUnePhrase)] : []),
+      ...(cols.length ? [el('p', { class: 'tamDoux' }, el('b', { text: 'Each value of a point:' })), el('ul', { class: 'tamPayListe' }, ...cols)] : []),
+      ...(L.couleurs ? [ligne('Colours:', L.couleurs)] : []),
+      ...((L.aRegarder || []).length ? [el('p', { class: 'tamDoux' }, el('b', { text: 'What to notice:' })), el('ul', { class: 'tamPayListe' }, ...L.aRegarder.map((t) => el('li', { text: t })))] : []),
+      ...(L.fin ? [ligne('How it ends:', L.fin)] : []));
+  }
+  /* ── game80 : le FILM — une suite d images (o.film = { images, parImage }) se lit image par image ── */
+  function filmDe() {
+    const f = S.science && S.o && S.o.film;
+    if (!f || !Number.isInteger(f.images) || f.images < 2) return null;
+    /* game80 : les modules donnent debuts/tailles par image (des images de tailles inegales : parImage null, ex. supernova 93/94 lignes) */
+    if (Array.isArray(f.debuts) && Array.isArray(f.tailles) && f.debuts.length === f.images && f.tailles.length === f.images) {
+      const ok = f.debuts.every((d, k) => Number.isInteger(d) && d >= 0 && Number.isInteger(f.tailles[k]) && d + f.tailles[k] <= S.n);
+      return ok ? f : null;
+    }
+    return Number.isInteger(f.parImage) && f.images * f.parImage <= S.n ? { ...f, debuts: Array.from({ length: f.images }, (_, k) => k * f.parImage), tailles: Array(f.images).fill(f.parImage) } : null;
+  }
+  function imageCourante() { const f = filmDe(); return f ? Math.min(f.images - 1, Math.max(0, S.filmImage ?? 0)) : 0; }
+  function syncFilm() {
+    const f = filmDe(); zFilm.hidden = !f; if (!f) return;
+    curFilm.max = String(f.images - 1);
+    if (S.dessines < S.n) S.filmImage = Math.min(f.images - 1, Math.floor(S.dessines / S.n * f.images));
+    curFilm.value = String(imageCourante());
+    filmTxt.textContent = 'image ' + (imageCourante() + 1) + ' of ' + f.images;
+  }
+  curFilm.addEventListener('input', () => { S.filmImage = Number(curFilm.value); S.dessines = S.n; syncFilm(); S.sale = true; });
+  /* ── game80 : un systeme a plusieurs corps — chaque corps s affiche / se cache (les « couches » deviennent les corps) ── */
+  const nomsCorpsCourants = () => (S.science && S.corps ? (TS.nomsCorps(S.science.s.id, S.P.params) || Array.from({ length: S.corps.corps }, (_, b) => 'Body ' + (b + 1))) : []);
   /* game79 : la bulle — l index (le temps), puis les VALEURS BRUTES du point (avant toute normalisation), dimension par dimension,
    *   ou corps par corps pour un systeme a plusieurs corps. Un nuage : « sample », pas un temps. */
   function peindreBulle(i, x, y, larg) {
@@ -1056,7 +1145,7 @@ export function monter(racine, ctx = {}) {
     if ((++tickSource & 63) === 0) peindreSource(); /* le block de l onglet Brain a pu changer pendant que TAM etait cache */
     if ((tickSource % 60) === 0) peindreQui(); /* game79 : les valeurs vivantes du cerveau, ~1 fois par seconde */
     const dt = dernier ? Math.min(0.1, (ts - dernier) / 1000) : 0; dernier = ts;
-    if (S.o && S.dessines < S.n) { S.dessines = Math.min(S.n, S.dessines + S.n * dt / 3); S.sale = true; }
+    if (S.o && S.dessines < S.n) { S.dessines = Math.min(S.n, S.dessines + S.n * dt / (Number(selVitesse.value) || 6)); S.sale = true; if (filmDe()) syncFilm(); }
     /* en boucle : la fin reste affichee 1,5 s, puis le trace repart du debut */
     else if (S.o && S.boucle && !reduit()) { S.pause = (S.pause || 0) + dt; if (S.pause > 1.5) { S.pause = 0; S.dessines = 0; S.sale = true; } }
     if (S.o && S.rotation && S.D > 3) { S.t += dt * 0.35; S.sale = true; racine.dataset.t = S.t.toFixed(3); }

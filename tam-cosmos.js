@@ -128,7 +128,7 @@ function photon(b, h, phiMax) {
 }
 function simLumiere(P, n) {
   const D = 12, brut = new Float64Array(n * D), inv = {}, S = suivi();
-  const bs = [P.b1, P.b2, P.b3, P.b4];
+  const bs = [P.b1, P.b2, P.b3, P.b4], fins = [];
   for (let k = 0; k < 4; k++) {
     const b = bs[k], ev = photon(b, 0.002, 300);
     const y = new Float64Array([ev.entree.u, ev.entree.w]); let phi = ev.entree.phi;
@@ -146,6 +146,11 @@ function simLumiere(P, n) {
     }
     inv['rayon' + (k + 1)] = { b, issue: ev.issue, rMin: 1 / ev.umax, tours: ev.phiFin / DEUX_PI,
       deviation: ev.issue === 'echappe' ? ev.phiFin - PI : null, deviationFaibleChamp: 4 * M_TN / b, unite: 'radian' };
+    /* fin du trace de CE rayon (colonnes 3k..3k+2) : capture = derniere ligne a l horizon ; escape = derniere ligne sur le
+       bord de la vue r = 30M en sortant ; piege (tourne encore a phi = 300) = pas de fin */
+    fins.push(ev.issue === 'capture' ? { rayon: k + 1, evenement: 'capture', indice: n - 1, t: fin, unite: 'phi balaye (radian)' }
+      : ev.issue === 'echappe' ? { rayon: k + 1, evenement: 'escape', indice: n - 1, t: fin, unite: 'phi balaye (radian)' }
+        : { rayon: k + 1, evenement: null, indice: null, t: null });
   }
   /* b critique MESURE : bissection sur l issue (capture / echappe) */
   const echappe = (b) => photon(b, 0.004, 300).issue === 'echappe';
@@ -157,7 +162,7 @@ function simLumiere(P, n) {
   /* champ faible (rayons hors de la vue) : deviation mesuree vs 4M/b (Einstein 1915) */
   inv.champFaible = [200, 1000].map((b) => { const ev = photon(b, 0.002, 300), d = ev.phiFin - PI; return { b, mesure: d, formule: 4 * M_TN / b, ecart: Math.abs(d - 4 * M_TN / b) / (4 * M_TN / b) }; });
   S.sortir(inv);
-  return { D, brut, invariants: inv, lyapunov: null, uniteLyapunov: 'sans objet (rayons integrables)' };
+  return { D, brut, invariants: inv, lyapunov: null, uniteLyapunov: 'sans objet (rayons integrables)', fin: fins };
 }
 
 // ======================================================================================================
@@ -215,28 +220,44 @@ function simKerr(P, n) {
   const A = -ra * ra / Del + a2, B = 2 * a * ra * Lz / Del - 2 * a * Lz, C = -a2 * Lz * Lz / Del + Lz * Lz + Del * pr * pr + pth * pth + r2;
   const dis = Math.sqrt(B * B - 4 * A * C), E = Math.max((-B + dis) / (2 * A), (-B - dis) / (2 * A));
   const c = { a, E, Lz };
-  const y = new Float64Array([0, r0, PI_2, 0, pr, pth]);
-  const periode = DEUX_PI * r0 * Math.sqrt(r0), etapes = Math.ceil(P.tours * 2000), sous = Math.max(1, Math.ceil(etapes / (n - 1)));
-  const h = P.tours * periode / ((n - 1) * sous);
-  const D = 3, brut = new Float64Array(n * D), S = suivi(), noeuds = [];
-  const carter = () => { const s = sinD(y[2]), co = cosD(y[2]); return y[5] * y[5] + co * co * (a2 * (1 - E * E) + Lz * Lz / (s * s)); };
-  const noter = (k) => {
-    const R = Math.sqrt(y[1] * y[1] + a2), s = sinD(y[2]), o = k * D;
-    brut[o] = R * s * cosD(y[3]); brut[o + 1] = R * s * sinD(y[3]); brut[o + 2] = y[1] * cosD(y[2]);
-    S.noter({ hamiltonien: kerrH(y, c), carter: carter() });
-  };
-  noter(0);
-  for (let k = 1; k < n; k++) {
-    for (let st = 0; st < sous; st++) {
-      const cp = cosD(y[2]), fp = y[3];
-      pasKerr(y, c, h);
-      const cn = cosD(y[2]);
-      if (cp < 0 && cn >= 0) noeuds.push(fp + (y[3] - fp) * (-cp) / (cn - cp));
-      if (!(y[1] > rp * 1.01 + 0.01)) return { bornee: false, echappeA: k, raison: 'capture (horizon r+ = ' + rp.toFixed(4) + ' M franchi)', invariants: inv, uniteLyapunov: 'sans objet' };
-      if (y[1] > 1e3) return { bornee: false, echappeA: k, raison: 'echappe', invariants: inv, uniteLyapunov: 'sans objet' };
+  const periode = DEUX_PI * r0 * Math.sqrt(r0), etapes = Math.ceil(P.tours * 2000), sous0 = Math.max(1, Math.ceil(etapes / (n - 1)));
+  const h0 = P.tours * periode / ((n - 1) * sous0), D = 3;
+  /* une integration de duree propre totale `total` (pas <= h0) ; rend le trajet, ou l evenement (capture / escape) et le
+     temps propre du dernier etat sain avant lui */
+  const courir = (total) => {
+    const sous = Math.max(1, Math.ceil(total / (n - 1) / h0 - 1e-9)), h = total / ((n - 1) * sous);
+    const y = new Float64Array([0, r0, PI_2, 0, pr, pth]), brut = new Float64Array(n * D), S = suivi(), noeuds = [];
+    const carter = () => { const s = sinD(y[2]), co = cosD(y[2]); return y[5] * y[5] + co * co * (a2 * (1 - E * E) + Lz * Lz / (s * s)); };
+    const noter = (k) => {
+      const R = Math.sqrt(y[1] * y[1] + a2), s = sinD(y[2]), o = k * D;
+      brut[o] = R * s * cosD(y[3]); brut[o + 1] = R * s * sinD(y[3]); brut[o + 2] = y[1] * cosD(y[2]);
+      S.noter({ hamiltonien: kerrH(y, c), carter: carter() });
+    };
+    noter(0);
+    let tc = 0;
+    for (let k = 1; k < n; k++) {
+      for (let st = 0; st < sous; st++) {
+        const cp = cosD(y[2]), fp = y[3];
+        pasKerr(y, c, h);
+        const cn = cosD(y[2]);
+        if (cp < 0 && cn >= 0) noeuds.push(fp + (y[3] - fp) * (-cp) / (cn - cp));
+        if (!(y[1] > rp * 1.01 + 0.01)) return { evenement: 'capture', tAvant: tc, k, raison: 'capture (horizon r+ = ' + rp.toFixed(4) + ' M franchi)' };
+        if (y[1] > 1e3) return { evenement: 'escape', tAvant: tc, k, raison: 'echappe (r > 1000 M)' };
+        tc += h;
+      }
+      noter(k);
     }
-    noter(k);
+    return { brut, S, noeuds, y, total };
+  };
+  /* FIN PHYSIQUE : le trajet est rejoue jusqu au dernier etat sain, n lignes uniformes en temps propre, ligne n-1 = l evenement */
+  let run = courir(P.tours * periode), fin = null, raisonFin = null;
+  for (let essai = 0; essai < 6 && run.evenement; essai++) {
+    fin = run.evenement; raisonFin = run.raison;
+    if (!(run.tAvant > 0)) return { bornee: false, echappeA: run.k, raison: run.raison, invariants: inv, uniteLyapunov: 'sans objet' };
+    run = courir(run.tAvant);
   }
+  if (run.evenement) return { bornee: false, echappeA: run.k, raison: run.raison, invariants: inv, uniteLyapunov: 'sans objet' };
+  const { brut, S, noeuds, y } = run;
   const dn = []; for (let k = 1; k < noeuds.length; k++) dn.push(noeuds[k] - noeuds[k - 1] - DEUX_PI * sens);
   const m15 = 1 / (r0 * Math.sqrt(r0));
   inv.noeuds = { mesure: dn.length ? dn.reduce((p, q) => p + q, 0) / dn.length : NaN,
@@ -244,7 +265,10 @@ function simKerr(P, n) {
     faibleChamp: 4 * PI * a * m15, passages: noeuds.length, unite: 'radian par oscillation verticale (> 0 = dans le sens de la rotation du trou)' };
   inv.energie = { E, Lz, rHorizon: rp };
   S.sortir(inv);
-  return { D, brut, invariants: inv, lyapunov: null, uniteLyapunov: 'sans objet (geodesiques de Kerr integrables)' };
+  const out = { D, brut, invariants: inv, lyapunov: null, uniteLyapunov: 'sans objet (geodesiques de Kerr integrables)' };
+  /* fin.t = temps COORDONNE t du dernier etat sain ; fin.tempsPropre = la duree propre dessinee ; fin.r = son rayon */
+  if (fin) { out.raison = raisonFin; out.fin = { evenement: fin, indice: n - 1, t: y[0], tempsPropre: run.total, r: y[1] }; }
+  return out;
 }
 
 // ======================================================================================================
@@ -329,11 +353,37 @@ function simLagrange(P, n) {
   if (P.orbite === 0) { y[0] = L4[0] * (1 + P.ecart); y[1] = L4[1] * (1 + P.ecart); }
   else { const r = 1 + P.ecart; y[0] = -r; y[4] = r - Math.sqrt((1 - mu) / r); }
   y[2] = P.z0;
-  const D = 3, brut = new Float64Array(n * D), S = suivi(), base = 0.01, sous = Math.max(1, Math.ceil(P.duree / (n - 1) / base)), h = P.duree / ((n - 1) * sous);
+  const y0 = Float64Array.from(y), D = 3, base = 0.01;
+  /* FIN PHYSIQUE (escape : le corps quitte la zone dessinee |x| + |y| + |z| >= 10) : rejeu jusqu au dernier etat sain,
+     n lignes uniformes en temps, ligne n-1 = l evenement ; une collision avec un primaire reste un refus */
+  let run = courirLagrange(P.duree), fin = null, raisonFin = null;
+  for (let essai = 0; essai < 6 && run.evenement; essai++) {
+    fin = run.evenement; raisonFin = run.raison;
+    if (!(run.tAvant > 0)) break;
+    run = courirLagrange(run.tAvant);
+  }
+  if (run.evenement || run.echec) return { bornee: false, echappeA: run.k, raison: run.raison, uniteLyapunov: 'par unite de temps' };
+  const { brut, S, somme, amin, amax, tours, dmin, duree } = run;
+  const inv = {
+    L1: { mesure: col.L1 }, L2: { mesure: col.L2 }, L3: { mesure: col.L3 },
+    L4: { x: L4[0], y: L4[1], distanceAuPrimaire: Math.sqrt((L4[0] + mu) * (L4[0] + mu) + L4[1] * L4[1]), distanceAuSecondaire: Math.sqrt((L4[0] - 1 + mu) * (L4[0] - 1 + mu) + L4[1] * L4[1]) },
+    rayonDeHill: { formule: racineCubique(mu / 3) },
+    angleAuSecondaire: { min: amin / RAD, max: amax / RAD, passagesParZero: tours, unite: 'degre, vu du barycentre, secondaire a 0',
+      forme: tours > 0 ? 'circulation' : amax < PI ? 'tetard autour de L4' : amin > PI ? 'tetard autour de L5' : 'fer a cheval' },
+    distanceMinAuSecondaire: { mesure: dmin },
+    mu,
+  };
+  S.sortir(inv);
+  const out = { D, brut, invariants: inv, lyapunov: somme / duree, uniteLyapunov: 'par unite de temps (2 pi = une periode du secondaire)' };
+  if (fin) { out.raison = raisonFin; out.fin = { evenement: fin, indice: n - 1, t: duree }; }
+  return out;
+
+  function courirLagrange(duree) {
+  const y = Float64Array.from(y0), brut = new Float64Array(n * D), S = suivi(), sous = Math.max(1, Math.ceil(duree / (n - 1) / base)), h = duree / ((n - 1) * sous);
   /* temoin de Benettin : ecart initial D0 dans une direction fixe non uniforme */
   const e = Float64Array.from(y), ec = new Float64Array(6);
   { let q = 0; const dep = []; for (let j = 0; j < 6; j++) { dep.push(1 + 0.37 * ((j * 5) % 7)); q += dep[j] * dep[j]; } q = D0 / Math.sqrt(q); for (let j = 0; j < 6; j++) e[j] += dep[j] * q; }
-  let somme = 0, amin = Infinity, amax = -Infinity, aPrec = NaN, tours = 0, dmin = Infinity;
+  let somme = 0, amin = Infinity, amax = -Infinity, aPrec = NaN, tours = 0, dmin = Infinity, tc = 0;
   const angle = () => { let t = atan2D(y[1], y[0]); if (t < 0) t += DEUX_PI; return t; };
   const noter = (k) => {
     const o = k * D; brut[o] = y[0]; brut[o + 1] = y[1]; brut[o + 2] = y[2];
@@ -350,8 +400,9 @@ function simLagrange(P, n) {
         const f = Math.min(1, r1 / 0.05, r2 / 0.05), pm = base * f * Math.sqrt(f), q = Math.ceil(reste / pm - 1e-9), hk = q <= 1 ? reste : reste / q;
         pasLagrange(y, c, hk); pasLagrange(e, c, hk); reste = q <= 1 ? 0 : reste - hk;
         const [s1, s2] = distances(y, mu);
-        if (s2 < 1e-4 || s1 < 1e-3) return { bornee: false, echappeA: k, raison: 'collision avec un primaire', uniteLyapunov: 'par unite de temps' };
-        if (!(Math.abs(y[0]) + Math.abs(y[1]) + Math.abs(y[2]) < 10)) return { bornee: false, echappeA: k, raison: 'echappe', uniteLyapunov: 'par unite de temps' };
+        if (s2 < 1e-4 || s1 < 1e-3) return { echec: true, k, raison: 'collision avec un primaire' };
+        if (!(Math.abs(y[0]) + Math.abs(y[1]) + Math.abs(y[2]) < 10)) return { evenement: 'escape', tAvant: tc, k, raison: 'echappe' };
+        tc += hk;
       }
     }
     let d2 = 0; for (let j = 0; j < 6; j++) { ec[j] = e[j] - y[j]; d2 += ec[j] * ec[j]; }
@@ -359,17 +410,8 @@ function simLagrange(P, n) {
     if (d > 0) { somme += lnD(d / D0); for (let j = 0; j < 6; j++) e[j] = y[j] + ec[j] * D0 / d; }
     noter(k);
   }
-  const inv = {
-    L1: { mesure: col.L1 }, L2: { mesure: col.L2 }, L3: { mesure: col.L3 },
-    L4: { x: L4[0], y: L4[1], distanceAuPrimaire: Math.sqrt((L4[0] + mu) * (L4[0] + mu) + L4[1] * L4[1]), distanceAuSecondaire: Math.sqrt((L4[0] - 1 + mu) * (L4[0] - 1 + mu) + L4[1] * L4[1]) },
-    rayonDeHill: { formule: racineCubique(mu / 3) },
-    angleAuSecondaire: { min: amin / RAD, max: amax / RAD, passagesParZero: tours, unite: 'degre, vu du barycentre, secondaire a 0',
-      forme: tours > 0 ? 'circulation' : amax < PI ? 'tetard autour de L4' : amin > PI ? 'tetard autour de L5' : 'fer a cheval' },
-    distanceMinAuSecondaire: { mesure: dmin },
-    mu,
-  };
-  S.sortir(inv);
-  return { D, brut, invariants: inv, lyapunov: somme / P.duree, uniteLyapunov: 'par unite de temps (2 pi = une periode du secondaire)' };
+  return { brut, S, somme, amin, amax, tours, dmin, duree };
+  }
 }
 
 // ======================================================================================================
@@ -619,7 +661,7 @@ export const SYSTEMES = Object.freeze([
     params: { monde: 0, orbite: 0, ecart: 0.01, z0: 0, duree: 500 }, bornes: { monde: [0, 1], orbite: [0, 1], ecart: [0.001, 0.05], z0: [0, 0.1], duree: [20, 3000] },
     phrase: 'A massless body in the circular restricted three-body problem (rotating frame, unit distance and total mass, mass ratio 9.5388e-4 for Sun-Jupiter or 0.012150585 for Earth-Moon), started near L4 (tadpole) or opposite the planet (horseshoe); no other planets, no eccentricity of the primaries.' },
   { id: 'pulsarHulseTaylor', nom: 'Hulse-Taylor binary pulsar', science: 'Gravitational waves', D: 6,
-    params: { fraction: 0.99, tours: 12 }, bornes: { fraction: [0.05, 0.999], tours: [3, 40] },
+    params: { fraction: 0.999, tours: 12 }, bornes: { fraction: [0.05, 0.999], tours: [3, 40] },
     phrase: 'The orbital decay of PSR B1913+16 from the quadrupole gravitational-wave formulas of Peters and Mathews with the published period, eccentricity and masses (1.438 and 1.390 solar masses); the drawn orbit is HUGELY accelerated: its shape is shown at even epochs up to the computed merger time while the orbital phase is not to scale.' },
   { id: 'courbeRotation', nom: 'Galaxy rotation curve', science: 'Galactic dynamics', D: 4, nuage: true,
     params: { Mdisque: 6.8e10, Mbulbe: 1e10, rho0: 1.1e7, rs: 16, rmax: 30, tempsMa: 250 }, bornes: { Mdisque: [1e10, 2e11], Mbulbe: [0, 5e10], rho0: [0, 5e7], rs: [2, 50], rmax: [10, 60], tempsMa: [0, 2000] },
@@ -628,10 +670,10 @@ export const SYSTEMES = Object.freeze([
     params: { H0: 67.4, Om: 0.315, finGa: 30 }, bornes: { H0: [50, 90], Om: [0.05, 1], finGa: [5, 60] },
     phrase: 'The scale factor a(t) of a flat Lambda-CDM universe (Planck 2018 defaults H0 = 67.4 km/s/Mpc, matter 0.315, dark energy 1 - matter, radiation neglected) integrated from the Friedmann equation, carrying four galaxies at fixed comoving positions 1 Gpc from us; rows are evenly spaced in time from the Big Bang.' },
   { id: 'cometeHalley', nom: 'Halley\'s comet', science: 'Celestial mechanics', D: 6,
-    params: { tours: 2 }, bornes: { tours: [1, 5] },
+    params: { tours: 2 }, bornes: { tours: [1, 20] },
     phrase: 'Comet 1P/Halley on its published orbit (a = 17.834 AU, e = 0.96714, inclination 162.26 deg, retrograde) around the Sun alone, Newtonian two-body problem integrated in regularised time from perihelion, with Earth on a circular 1 AU orbit for scale; no planetary perturbations or outgassing, which shift the real period by a few years.' },
   { id: 'trappist1', nom: 'TRAPPIST-1 planets', science: 'Exoplanets', D: 8,
-    params: { premiere: 0, jours: 40 }, bornes: { premiere: [0, 3], jours: [2, 400] },
+    params: { premiere: 0, jours: 40 }, bornes: { premiere: [0, 3], jours: [2, 60] },
     phrase: 'Four consecutive planets of TRAPPIST-1 (starting at b, c, d or e) on circular coplanar Keplerian orbits from the published periods and a 0.0898 solar-mass star, positions in AU with arbitrary starting phases; the planets do not pull on each other here, so the measured transit-timing variations are not reproduced.' },
   { id: 'disqueAccretion', nom: 'Black hole accretion disk', science: 'Astrophysics', D: 4, nuage: true,
     params: { masse: 10, nu: 0.05, temps: 2000, rext: 30, graine: 1 }, bornes: { masse: [3, 1e10], nu: [0.001, 1], temps: [0, 1e5], rext: [8, 100], graine: [1, 1000000] },
@@ -668,5 +710,7 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   for (let i = 0; i < r.brut.length; i++) if (!Number.isFinite(r.brut[i])) return echec('NaN', Math.floor(i / s.D));
   const out = { params: P, D: s.D, n, bornee: true, brut: r.brut, lyapunov: r.lyapunov === undefined ? null : r.lyapunov, uniteLyapunov: r.uniteLyapunov, points: null, invariants: r.invariants };
   if (s.nuage) out.nuage = true;
+  if (r.fin) out.fin = r.fin;
+  if (r.raison) out.raison = r.raison;
   return out;
 }

@@ -91,14 +91,14 @@ function suite(T, bavard = false) {
     const I = sim('ifs3d', { graine }).invariants.dimensionBoite; assert.ok(Math.abs(I.mesure - 2) < 0.15 && Math.abs(I.theorie - 2) < 1e-12, String(I.mesure)); return I.mesure.toFixed(4);
   });
   // 7. Bloch
-  for (const p of [{}, { delta: 2, rabi: 3, duree: 40 }, { delta: -4, rabi: 0.5, duree: 60 }]) ok(`bloch ${JSON.stringify(p)} : |s| derive < 1e-9, Rabi a 1 %`, () => {
+  for (const p of [{}, { delta: 2, rabi: 3, duree: 40 }, { delta: -4, rabi: 0.5, duree: 60 }, { delta: 5, rabi: 5, duree: 200 }]) ok(`bloch ${JSON.stringify(p)} : |s| derive < 1e-9, Rabi a 1 %`, () => {
     const I = sim('bloch', p).invariants;
     assert.ok(I.normeBloch.derive < 1e-9, String(I.normeBloch.derive)); assert.ok(I.frequenceRabi.oscillations >= 2 && I.frequenceRabi.ecart < 0.01, JSON.stringify(I.frequenceRabi));
     assert.ok(Math.abs(I.transfertMax.mesure - I.transfertMax.theorie) < 1e-3, JSON.stringify(I.transfertMax));
     return `derive ${I.normeBloch.derive.toExponential(1)}, W ${I.frequenceRabi.mesure.toFixed(6)} vs ${I.frequenceRabi.theorie.toFixed(6)}`;
   });
   // 8. oscillateur
-  for (const p of [{}, { largeur: 2, omega: 0.5, x0: 4, periodes: 6 }, { largeur: 0.5, omega: 2, x0: 1 }]) ok(`paquetOscillateur ${JSON.stringify(p)} : Ehrenfest a 1 %, energie < 1e-3`, () => {
+  for (const p of [{}, { largeur: 2, omega: 0.5, x0: 4, periodes: 6 }, { largeur: 0.5, omega: 2, x0: 1 }, { periodes: 20 }, { largeur: 0.5, omega: 2, x0: 4, periodes: 20 }]) ok(`paquetOscillateur ${JSON.stringify(p)} : Ehrenfest a 1 %, energie < 1e-3`, () => {
     const I = sim('paquetOscillateur', p).invariants;
     assert.ok(I.ehrenfest.ecartX < 0.01 && I.ehrenfest.ecartP < 0.01, JSON.stringify(I.ehrenfest));
     assert.ok(I.energie.derive < 1e-3 && I.energie.ecartTheorie < 1e-3, JSON.stringify(I.energie)); assert.ok(I.largeur.ecart < 0.01, String(I.largeur.ecart));

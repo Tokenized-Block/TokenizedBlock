@@ -96,7 +96,7 @@ function suite(T, bavard = false) {
     return `int ${v.integrale.fin.toFixed(9)} minW ${v.negativite.fin.toFixed(4)} ecart formule ${e.toExponential(1)}`;
   });
   // 5. marche quantique
-  for (const pas of [100, 200]) ok(`marche ${pas} pas : somme 1, pente ~ 0.5412, exposants 1 (quantique) / 0.5 (classique)`, () => {
+  for (const pas of [100, 200, 400]) ok(`marche ${pas} pas : somme 1, pente ~ 0.5412, exposants 1 (quantique) / 0.5 (classique)`, () => {
     const v = I('marcheQuantique', { pas });
     assert.ok(v.sommeProbabilites.derive < 1e-12); assert.ok(Math.abs(v.penteQuantique.fin - 0.5412) < 0.01, String(v.penteQuantique.fin));
     assert.ok(Math.abs(v.exposantQuantique.fin - 1) < 0.02, String(v.exposantQuantique.fin)); assert.ok(Math.abs(v.exposantClassique.fin - 0.5) < 0.02, String(v.exposantClassique.fin));
@@ -151,7 +151,8 @@ function suite(T, bavard = false) {
     assert.deepEqual(sim('oscillateurEtats', { n: 20.7, omega: 'x', graine: 3.4 }, { n: 20 }).params, { n: 12, omega: 1, graine: 3 });
     assert.deepEqual(sim('oscillateurEtats', { n: 3.6 }, { n: 20 }).params.n, 4);
     assert.deepEqual(sim('tapisTalbot', { k0: 1e9, x0: -1, sigma: 1, duree: NaN }, { n: 20 }).params, { k0: 40, x0: 0.25, sigma: 0.04, duree: 1, graine: 1 });
-    assert.deepEqual(sim('marcheQuantique', { pas: 1e6 }, { n: 20 }).params.pas, 200);
+    assert.deepEqual(sim('marcheQuantique', { pas: 1e6 }, { n: 20 }).params.pas, 400);
+    assert.deepEqual(sim('rotorPulse', { coups: 1e6 }, { n: 20 }).params.coups, 600);
     assert.deepEqual(sim('niveauxLandau', { n: -4, melange: 7, B: 0, periodes: 2.5 }, { n: 20 }).params, { n: 0, melange: 1, B: 0.5, periodes: 3, graine: 1 });
     assert.deepEqual(sim('sternGerlach', { theta: 9 }, { n: 20 }).params.theta, Math.PI);
   });
@@ -175,7 +176,8 @@ assertions++; if (interdits) ech.push({ nom: 'source sans Math transcendante', d
 console.log(`${interdits ? 'ECHEC ' : 'OK    '}source : aucune Math.sin/cos/exp/log/pow/atan/... ni Math.random`);
 
 console.log('\nTEMPS simuler(id) a n = 1500 (mediane de 3) :');
-const CHER = { wigner: { q0: 4 }, rotorPulse: { coups: 400, K: 10 }, bellCHSH: { essais: 2000 }, niveauxLandau: { n: 8, periodes: 6, melange: 0.5 }, marcheQuantique: { pas: 200 }, oscillateurEtats: { n: 12 } };
+/* 2026-11-01 : maxima releves (rotor coups 400 -> 600, marche pas 200 -> 400) : le pire cas suit la nouvelle borne */
+const CHER = { wigner: { q0: 4 }, rotorPulse: { coups: 600, K: 10 }, bellCHSH: { essais: 2000 }, niveauxLandau: { n: 8, periodes: 6, melange: 0.5 }, marcheQuantique: { pas: 400 }, oscillateurEtats: { n: 12 } };
 for (const s of T.SYSTEMES) {
   for (const [lib, p] of [['defaut', {}], ...(CHER[s.id] ? [['pire  ', CHER[s.id]]] : [])]) {
     const t = []; for (let k = 0; k < 3; k++) { const a = performance.now(); T.simuler(s.id, p); t.push(performance.now() - a); }

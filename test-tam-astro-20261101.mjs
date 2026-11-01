@@ -163,10 +163,35 @@ function suite(T, texte, bavard = false) {
   ok('galaxies : disque direct -> queues de maree (> 10 %), retrograde -> presque rien (< 2 %)', () => {
     const a = gp.invariants.queues.galaxie1, b = gr.invariants.queues.galaxie1; assert.ok(a > 0.1 && b < 0.02 && a > 5 * b, `${a} ${b}`); return `${(100 * a).toFixed(1)} % vs ${(100 * b).toFixed(1)} %`;
   });
+  /* 2026-11-01 (demande du proprietaire) : la collision est un FILM (12 x 125), ses queues sont lues sur l image finale */
+  ok('galaxies : film 12 images x 125 etoiles, image 0 = disques au depart (noyaux a 8), temps croissants jusqu a duree', () => {
+    const f = gp.film, b = gp.brut, I = gp.invariants.film; assert.equal(gp.nuage, true);
+    assert.equal(f.images, 12); assert.equal(f.parImage, 125); assert.equal(f.images * f.parImage, gp.n); assert.deepEqual(f.debuts, Array.from({ length: 12 }, (_, k) => 125 * k));
+    assert.equal(I.temps.length, 12); assert.ok(rel(I.temps[11], 4) < 1e-9 && I.temps[0] < -8); for (let k = 1; k < 12; k++) assert.ok(I.temps[k] > I.temps[k - 1]);
+    const c0 = I.coeurs[0]; assert.ok(rel(Math.hypot(c0[2] - c0[0], c0[3] - c0[1]), 8) < 1e-9);
+    /* image 0 : chaque etoile a 0.2..0.7 de son noyau ; images 0 et 11 differentes */
+    for (let j = 0; j < 125; j++) { const g = j < 63 ? 0 : 1, d = Math.hypot(b[3 * j] - c0[2 * g], b[3 * j + 1] - c0[2 * g + 1], b[3 * j + 2]); assert.ok(d > 0.19 && d < 0.71, `etoile ${j} a ${d}`); }
+    assert.ok(!octets(b.subarray(0, 375)).equals(octets(b.subarray(11 * 375))));
+    return `t ${I.temps[0].toFixed(2)} -> ${I.temps[11].toFixed(2)}`;
+  });
+  ok('galaxies n = 50 : film 10 x 5 (plus grand diviseur <= 12)', () => { const r = sim('collisionGalaxies', {}, { n: 50 }); assert.equal(r.bornee, true); assert.deepEqual([r.film.images, r.film.parImage], [10, 5]); });
+  ok('supernova et supernovaHydro : film de 16 instants, disposition MESUREE (93 ou 94 lignes, debuts croissants)', () => {
+    for (const r of [sn, sh]) {
+      const f = r.film; assert.equal(f.images, 16); assert.equal(f.debuts[0], 0); assert.equal(f.tailles.reduce((a, x) => a + x, 0), r.n); assert.equal(f.parImage, null);
+      for (let k = 0; k < 16; k++) { const t = r.brut[f.debuts[k] * r.D + 3]; for (let i = f.debuts[k]; i < f.debuts[k] + f.tailles[k]; i++) assert.equal(r.brut[i * r.D + 3], t); if (k) assert.ok(t > r.brut[f.debuts[k - 1] * r.D + 3]); }
+    }
+  });
+  ok('binaire : fin = periastre 6M a la derniere ligne', () => { const f = be.fin; assert.equal(f.evenement, 'periastron-6M'); assert.equal(f.indice, be.n - 1); assert.ok(rel(f.periastre, 6) < 1e-9 && rel(f.t, be.invariants.tempsFusion.mesure) < 1e-12); });
+  ok('systemeSolaire : annees par defaut selon le groupe (0 -> 4, 1 -> 165, Neptune fait un tour) ; annees donnees respectees', () => {
+    assert.equal(interne.params.annees, 4); const e = sim('systemeSolaire', { groupe: 1 });
+    assert.equal(e.params.annees, 165); assert.ok(e.invariants.periodeNeptune.orbites >= 1 && e.invariants.periodeNeptune.ecartConnue < 0.005);
+    assert.equal(sim('systemeSolaire', { groupe: 1, annees: 10 }, { n: 20 }).params.annees, 10); assert.equal(T.reglagesPhysique('systemeSolaire', { groupe: 1 })[1].valeur, 165);
+  });
   // 8. bornage
   ok('bornage : hors bornes ramene, NaN -> defaut, entiers arrondis, periastre >= 6.5', () => {
     assert.deepEqual(sim('systemeSolaire', { groupe: 7.6, annees: -3 }, { n: 20 }).params, { groupe: 1, annees: 0.5 });
-    assert.deepEqual(sim('etoileS2', { tours: 99.4, rg: 0.4 }, { n: 20 }).params, { tours: 10, rg: 0 });
+    assert.deepEqual(sim('etoileS2', { tours: 99.4, rg: 0.4 }, { n: 20 }).params, { tours: 20, rg: 0 });
+    assert.equal(sim('amasEtoiles', { duree: 1e9 }, { n: 20 }).params.duree, 12);
     assert.deepEqual(sim('binaireTrouNoir', { q: 5, a0: 8, e0: 0.9 }, { n: 20 }).params, { q: 1, a0: 8, e0: 1 - 6.5 / 8 });
     assert.deepEqual(sim('amasEtoiles', { etoiles: 33.6, graine: NaN, masseTrouNoir: 'x', viriel: 9, duree: 0 }, { n: 20 }).params, { masseTrouNoir: 1, etoiles: 34, viriel: 1, duree: 1, graine: 1 });
     assert.deepEqual(sim('collisionGalaxies', { rapportMasses: 0, inclinaison1: -9, duree: 99 }, { n: 20 }).params, { rapportMasses: 0.25, inclinaison1: 0, inclinaison2: 60, duree: 10 });
@@ -211,6 +236,8 @@ const MUTANTS = [
   ['galaxies : equation de Barker sans le facteur 1/2', '(Dd + Dd * Dd * Dd / 3) / 2', '(Dd + Dd * Dd * Dd / 3)'],
   ['Math.random injecte (supernova)', 'alea = mulberry32(P.graine >>> 0), somme', 'alea = Math.random, somme'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
+  ['galaxies : film fige (chaque image = l etat initial)', 'brut.set(x, 3 * n * k); tImages', 'brut.set(k ? brut.subarray(0, 3 * n) : x, 3 * n * k); tImages'],
+  ['systeme solaire : defaut par groupe retire', 'P.annees = P.groupe ? ANNEES_GROUPE1 : s.params.annees;', ''],
   ['S2 : demi-grand axe 125.058 -> 126.058 mas', 'aMas: 125.058', 'aMas: 126.058'],
   ['S2 : excentricite 0.884649 -> 0.874649', 'e: 0.884649', 'e: 0.874649'],
   ['Sedov : xi faux (delta 2/5 -> 1/2 dans les equations auto-semblables)', 'del = 0.4, eps', 'del = 0.5, eps'],
