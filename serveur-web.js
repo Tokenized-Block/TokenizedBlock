@@ -68,6 +68,14 @@ import { signerJwtCdp } from './cdp-jwt.js';
 import { lireCatalogueMoonpay, corpsPaysMoonpay, corpsSessionMoonpay } from './moonpay-rail.js';
 /* Catalogue PUBLIC MoonPay : une lecture par heure au plus, un echec retenu 60 s (une absence ne doit pas etre repayee a
  * chaque ouverture de fiche), une seule lecture en vol. Echec = null = rail cache, jamais « tous les pays ». */
+/* game81 (reste connu depuis le 31/10) : l IP du visiteur pour les budgets par IP (/api/jeu/roll, TAM, recherche…). Avant : le PREMIER
+ *   element de x-forwarded-for — celui que le CLIENT ecrit lui-meme, donc falsifiable (un nouveau budget a chaque requete).
+ *   Maintenant : le DERNIER element, celui qu ajoute le proxy de Railway devant nous ; s il remplace l en-tete, c est le seul element.
+ *   Sans en-tete : l adresse de la socket. (Le comportement exact de l edge Railway est verifie en prod par une sonde, pas suppose.) */
+function ipClient(req) {
+  const xff = String((req && req.headers && req.headers['x-forwarded-for']) || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return xff.length ? xff[xff.length - 1] : String((req && req.socket && req.socket.remoteAddress) || '');
+}
 let catMoonpay = { t: 0, r: null, vol: null };
 function catalogueMoonpay() {
   const age = Date.now() - catMoonpay.t;
@@ -5781,6 +5789,8 @@ const SERVIS = [
   /* game80 : les legendes (« What you are seeing ») */
   'tam-legendes.js',
   'tam-grandes-questions.js', 'tam-grandes-questions-2.js',
+  /* game81 : champs quantiques, atomes, quarks */
+  'tam-champs-quantiques.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
@@ -6531,7 +6541,7 @@ function traiterRequete(req, res) {
     const p = new URL(req.url, 'http://x').searchParams;
     const v = validerRequete(p.get('q'), p.get('n'));
     if (!v.ok) { rendreR(400, { ok: false, etat: 'REFUSE', pourquoi: v.pourquoi }); return; }
-    const ipR = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ipR = ipClient(req);
     const minuteR = Math.floor(Date.now() / 60000);
     if (rechercheBudget.minute !== minuteR) { rechercheBudget.minute = minuteR; rechercheBudget.n = 0; rechercheBudget.parIp.clear(); }
     const nIpR = (rechercheBudget.parIp.get(ipR) || 0) + 1;
@@ -6635,7 +6645,7 @@ function traiterRequete(req, res) {
     const usage = 'usage: /api/banque/plan?action=emprunter|preter|rembourser|retirer|retirerpret&id=<Morpho market id, bytes32>&compte=<the wallet that will sign>'
       + ' and: emprunter -> garantie=<raw units of the stock, 0 for none>&emprunt=<raw units>; preter|retirer -> montant=<raw units>; rembourser|retirerpret -> montant=<raw units> or tout=1';
     if (action !== 'panier' && (!['emprunter', 'preter', 'rembourser', 'retirer', 'retirerpret'].includes(action) || !/^0x[0-9a-fA-F]{64}$/.test(id) || !/^0x[0-9a-fA-F]{40}$/.test(compte))) { rendreB(400, { ok: false, etat: 'REFUSE', pourquoi: usage }); return; }
-    const ipB = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ipB = ipClient(req);
     const minuteB = Math.floor(Date.now() / 60000);
     if (railsBudget.minute !== minuteB) { railsBudget.minute = minuteB; railsBudget.n = 0; railsBudget.parIp.clear(); }
     const nIpB = (railsBudget.parIp.get(ipB) || 0) + 1;
@@ -6881,7 +6891,7 @@ function traiterRequete(req, res) {
     }
     if (req.method !== 'POST') { rendreV(405, { ok: false, pourquoi: 'GET or POST only' }); return; }
     /* ⛔ le budget ne se compte qu AU MOMENT DU RESEAU : un corps mal forme ne prive personne de son enregistrement */
-    const ipV = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ipV = ipClient(req);
     const budgetV = () => {
       const minute = Math.floor(Date.now() / 60000);
       if (voixPosts.minute !== minute) { voixPosts.minute = minute; voixPosts.n = 0; voixPosts.parIp.clear(); }
@@ -7067,7 +7077,7 @@ function traiterRequete(req, res) {
       res.end(corps === null ? '' : JSON.stringify(corps));
     };
     if (req.method === 'OPTIONS') { res.writeHead(204, cors); res.end(); return; }
-    const ipN = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ipN = ipClient(req);
     const sondeN = req.headers['x-ms-monitor'] === '1';
     const occupe = () => rendreN(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'busy: each plan reads the chain on a node shared with the whole site — retry in a minute' }, { 'retry-after': '60' });
     const qN = new URL(req.url, 'http://x').searchParams;
@@ -7228,7 +7238,7 @@ function traiterRequete(req, res) {
     const cleR = [demande.de, demande.vers, demande.montant, demande.compte].join('|').toLowerCase();
     const enCache = railsCache.get(cleR);
     if (enCache && Date.now() - enCache.t < RAILS_CACHE_MS) { rendreR(200, { ...enCache.corps, depuisCache: true }); return; }
-    const ipR = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ipR = ipClient(req);
     const minuteR = Math.floor(Date.now() / 60000);
     if (railsBudget.minute !== minuteR) { railsBudget.minute = minuteR; railsBudget.n = 0; railsBudget.parIp.clear(); }
     const nIp = (railsBudget.parIp.get(ipR) || 0) + 1;
@@ -7945,7 +7955,7 @@ function traiterRequete(req, res) {
   if (chemin === '/api/tam/choix' || chemin === '/api/tam/oeuvres' || chemin === '/api/tam/certifier') {
     /* 2026-11-01 : un refus de la garde CPU (tam-serveur.js#admettre) porte son code : 503 OCCUPE, 429 TROP ; le reste 200 */
     const rendreT = (o) => { const { statut, ...corps } = o || {}; res.writeHead(statut === 503 || statut === 429 ? statut : 200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...(statut === 503 ? { 'retry-after': '5' } : statut === 429 ? { 'retry-after': '60' } : {}) }); res.end(JSON.stringify(corps)); };
-    const ipT = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim(); /* la meme source d IP que /api/jeu/roll */
+    const ipT = ipClient(req); /* la meme source d IP que /api/jeu/roll */
     if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { 'content-type': 'application/json; charset=utf-8' }); res.end(JSON.stringify({ ok: false, pourquoi: 'GET only' })); return; }
     /* le cerveau d un block est nourri comme sonderLeReste nourrit celui de IB022 : sa vie lue par vieDuBlock (rpcRails), la tete de lecture, son symbol() */
     if (!tamSrv) tamSrv = serveurTam({ rpc: rpcServeur, deploiement: TAMART_DEPLOIEMENT,
@@ -7977,7 +7987,7 @@ function traiterRequete(req, res) {
       return;
     }
     if (req.method !== 'POST') { rendreJ(405, { ok: false, pourquoi: 'POST only' }); return; }
-    const ipJ = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ipJ = ipClient(req);
     const minuteJ = Math.floor(Date.now() / 60000);
     if (jeuRollPosts.minute !== minuteJ) { jeuRollPosts.minute = minuteJ; jeuRollPosts.parIp.clear(); }
     const nJ = (jeuRollPosts.parIp.get(ipJ) || 0) + 1;

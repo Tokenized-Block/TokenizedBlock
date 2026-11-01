@@ -13,12 +13,15 @@ const sim = (id, p = {}) => TS.systeme(id).mod.simuler(id, p);
 /* 1. couverture : chaque systeme a sa legende, colonnes = D reel aux params par defaut */
 const ids = TS.SYSTEMES.map((s) => s.id);
 /* game80 : + les 16 grandes questions (tam-grandes-questions.js : 9, tam-grandes-questions-2.js : 7) */
-ok(ids.length === 74, '74 systemes attendus, ' + ids.length + ' trouves');
+/* game81 : + les 9 champs quantiques (tam-champs-quantiques.js) */
+ok(ids.length === 83, '83 systemes attendus, ' + ids.length + ' trouves');
+const CHQ_IDS = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'effetUnruh', 'couplageCourant', 'comptonKleinNishina', 'atomes', 'quarks'];
+ok(CHQ_IDS.every((id) => ids.includes(id) && TS.systeme(id).mod.SOURCES), 'les 9 champs quantiques sont dans tam-science.js#SYSTEMES');
 const GQ = ['videQuantique', 'bigRip', 'fauxVide', 'centreTerre', 'versMars', 'zeroAbsolu', 'tailleUnivers', 'nombrePi', 'calendrierCosmique',
   'penduleFoucault', 'mouvementTerre', 'etoilesHR', 'evaporationTrouNoir', 'tsunami', 'geometrieUnivers', 'tailleEtoiles'];
 ok(GQ.every((id) => ids.includes(id)), 'les 16 grandes questions sont dans tam-science.js#SYSTEMES');
 /* les objets nommes hors systeme de corps (la page les projette : pas de couleur par corps, les noms sont dits dans couleurs) */
-const NOMMES = new Set(['versMars', 'bigRip', 'geometrieUnivers', 'etoilesHR', 'tailleEtoiles', 'calendrierCosmique']);
+const NOMMES = new Set(['versMars', 'bigRip', 'geometrieUnivers', 'etoilesHR', 'tailleEtoiles', 'calendrierCosmique', 'couplageCourant', 'atomes']);
 const sorties = {};
 for (const id of ids) {
   const L = LEGENDES[id], o = sim(id); sorties[id] = o;
@@ -59,7 +62,7 @@ for (const id of ids) {
     ok(F.colonneTemps === null || (Number.isInteger(F.colonneTemps) && F.colonneTemps < o.D), id + ' : colonneTemps');
   }
 }
-ok(Object.keys(LEGENDES).length === 76 && LEGENDES.__attracteur && LEGENDES.__formule, '74 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
+ok(Object.keys(LEGENDES).length === 85 && LEGENDES.__attracteur && LEGENDES.__formule, '83 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
 ok(Object.keys(LEGENDES).every((id) => id.startsWith('__') || ids.includes(id)), 'aucune legende orpheline');
 ok(legende('__attracteur', { D: 5 }).colonnes.length === 5 && LEGENDES.__attracteur.colonnes.length === 3, 'attracteur : une colonne par variable');
 ok(LEGENDES.__formule.colonnes.length === 3 && legende('inconnu') === null, 'formule x y z ; id inconnu -> null');
@@ -68,8 +71,10 @@ ok(LEGENDES.__formule.colonnes.length === 3 && legende('inconnu') === null, 'for
 const films = ids.filter((id) => LEGENDES[id].film);
 /* game80 : + la collision de galaxies, devenue un film de 12 moments (tam-astro.js) — sa legende suit le film que le module declare */
 /* game80 : + fauxVide, versMars, tsunami (grandes questions) */
-const FILMS = ['supernova', 'supernovaHydro', 'effetTunnel', 'superpositionQuantique', 'ondeGravitationnelle', 'collisionGalaxies', 'fauxVide', 'versMars', 'tsunami'];
-ok(FILMS.every((id) => films.includes(id)) && films.length === 9, 'les 9 films : ' + films.join(','));
+/* game81 : + 7 films declares par tam-champs-quantiques.js (Unruh et Compton sont des nuages sans film) */
+const FILMS = ['supernova', 'supernovaHydro', 'effetTunnel', 'superpositionQuantique', 'ondeGravitationnelle', 'collisionGalaxies', 'fauxVide', 'versMars', 'tsunami',
+  'champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'couplageCourant', 'atomes', 'quarks'];
+ok(FILMS.every((id) => films.includes(id)) && films.length === 16, 'les 16 films : ' + films.join(','));
 function blocsExacts(id, o, F) {
   const c = F.colonneTemps, D = o.D, b = o.brut;
   for (let k = 0; k < F.images; k++) {
@@ -79,7 +84,7 @@ function blocsExacts(id, o, F) {
   }
   return null;
 }
-for (const id of ['effetTunnel', 'superpositionQuantique', 'ondeGravitationnelle', 'versMars', 'tsunami']) {
+for (const id of ['effetTunnel', 'superpositionQuantique', 'ondeGravitationnelle', 'versMars', 'tsunami', 'champLibre', 'interactionChamps']) {
   const r = blocsExacts(id, sorties[id], LEGENDES[id].film); ok(r === null, id + ' : ' + r);
 }
 /* faux vide : pas de colonne de temps ; les MEMES points a chaque moment (x, y identiques), un point devenu vrai vide le reste */
@@ -113,7 +118,8 @@ for (const [id, c] of [['tapisTalbot', 1], ['marcheQuantique', 1], ['rotorPulse'
 
 /* 3. params : la legende suit le module */
 for (const [id, p] of [['tourbillonsPonctuels', { nombre: 3 }], ['systemeSolaire', { groupe: 1 }], ['trappist1', { premiere: 3 }], ['superpositionQuantique', { images: 7 }], ['ondeGravitationnelle', { masses: 16 }], ['superpositionQuantique', { images: 24 }],
-  ['versMars', { aCible: 5.2 }], ['tsunami', { profondeur: 1000 }], ['tailleEtoiles', { jusqua: 4 }], ['calendrierCosmique', { ageUnivers: 14 }]]) {
+  ['versMars', { aCible: 5.2 }], ['tsunami', { profondeur: 1000 }], ['tailleEtoiles', { jusqua: 4 }], ['calendrierCosmique', { ageUnivers: 14 }],
+  ['quarks', { images: 6 }], ['atomes', { Z: 10 }], ['paireSchwinger', { paires: 10 }], ['champLibre', { duree: 40 }]]) {
   const o = sim(id, p), L = legende(id, p), q = id + ' ' + JSON.stringify(p);
   ok(L.colonnes.length === o.D, q + ' : colonnes = D');
   if (TS.CORPS[id]) ok(L.noms.length === Math.floor(o.D / TS.CORPS[id]), q + ' : noms');
@@ -121,7 +127,7 @@ for (const [id, p] of [['tourbillonsPonctuels', { nombre: 3 }], ['systemeSolaire
   if (L.film) {
     ok(L.film.images === o.film.images && (L.film.parImage ?? null) === (o.film.parImage ?? null), q + ' : meme film que le module');
     if (o.film.debuts) ok(L.film.debuts.every((d, k) => d === o.film.debuts[k] && L.film.tailles[k] === o.film.tailles[k]), q + ' : debuts / tailles du module');
-    const r = blocsExacts(id, o, L.film); ok(r === null, q + ' : ' + r);
+    if (L.film.colonneTemps !== null) { const r = blocsExacts(id, o, L.film); ok(r === null, q + ' : ' + r); }
   }
 }
 ok(legende('versMars', { aCible: 5.2 }).noms[2] === 'Target planet (orbit at 5.2 AU)' && LEGENDES.versMars.noms.join() === 'Spacecraft,Earth,Mars', 'versMars : la cible nommee Mars seulement a 1.524 UA');
@@ -237,5 +243,66 @@ for (const p of [{}, { jusqua: 4 }]) {
 { const I = inv('geometrieUnivers'); entre(I.sphere.sommeAnglesDeg, 222, 226, 'sphere ~224 deg'); entre(I.plat.sommeAnglesDeg, 179.999, 180.001, 'plan 180'); entre(I.hyperbolique.sommeAnglesDeg, 148, 152, 'hyperbolique ~150');
   ok(I.sphere.circonference < I.plat.circonference && I.plat.circonference < I.hyperbolique.circonference, 'cercles : sphere < plan < hyperbolique'); ok(sorties.geometrieUnivers.params.cote === 1.2, 'cote 1.2 par defaut'); }
 entre(inv('tailleEtoiles').terreSoleil.inverse, 108, 110, 'Soleil ~109 Terres');
+
+/* 7. game81 : les champs quantiques — colonnes relues dans les lignes, chiffres annonces relus dans les invariants / SOURCES du module */
+const CHQ = TS.systeme('champLibre').mod, SRC = (k) => CHQ.SOURCES[k].valeur;
+const col = (o, j) => { const v = []; for (let i = 0; i < o.n; i++) v.push(o.brut[i * o.D + j]); return v; };
+const mn = (v) => v.reduce((a, b) => Math.min(a, b), Infinity), mx = (v) => v.reduce((a, b) => Math.max(a, b), -Infinity);
+const bloc = (o, F, k, j) => { const v = []; for (let r = 0; r < F.tailles[k]; r++) v.push(o.brut[(F.debuts[k] + r) * o.D + j]); return v; };
+/* les films dont un « moment » n est pas un instant le disent, dans le film et dans les couleurs */
+for (const id of ['fluctuationsVide', 'paireSchwinger', 'couplageCourant', 'atomes', 'quarks']) ok(LEGENDES[id].film.note && LEGENDES[id].film.note.split('; ').some((seg) => !seg.startsWith('frames of unequal') && LEGENDES[id].couleurs.includes('Here ' + seg)), id + ' : sens d une image dit');
+/* champ libre : sites entiers 0..255, paquet a ~0.75 c, s elargit */
+{ const o = sorties.champLibre, I = inv('champLibre'), s = col(o, 0); ok(s.every((x) => Number.isInteger(x) && x >= 0 && x < 256), 'champLibre : colonne 1 = site 0..255');
+  entre(I.vitesseGroupe.mesure, 0.74, 0.76, 'champLibre : vitesse de groupe ~0.75 c'); entre(I.vitesseGroupe.formule, 0.74, 0.76, 'champLibre : formule ~0.75');
+  ok(I.largeurPaquet.fin > I.largeurPaquet.debut && I.energie.derive < 1e-6, 'champLibre : le paquet s elargit, energie conservee'); }
+/* vide : 64 sites, echantillons 0..11, 3000 tirages, variances conformes */
+{ const o = sorties.fluctuationsVide, I = inv('fluctuationsVide'); ok(mx(col(o, 0)) < 64 && col(o, 1).every((x) => Number.isInteger(x) && x >= 0 && x <= 11) && mx(col(o, 1)) === 11, 'vide : sites < 64, echantillons 0..11');
+  ok(I.echantillons === 3000 && I.variancesModes.pireEcartSigma < 5, 'vide : 3000 tirages, variances 1/(2 omega) a < 5 sigma : ' + I.variancesModes.pireEcartSigma); }
+/* interaction : phi = 1 partout au depart, chi ~1e-6, taux ~0.125 (KLS), ~15 % dans chi a la fin */
+{ const o = sorties.interactionChamps, F = LEGENDES.interactionChamps.film, R = inv('interactionChamps').resonance, T = inv('interactionChamps').transfert;
+  ok(bloc(o, F, 0, 2).every((x) => x === 1) && mx(bloc(o, F, 0, 3).map(Math.abs)) < 1e-5, 'interaction : phi = 1 et chi minuscule au depart');
+  ok(col(o, 0).every((x) => Number.isInteger(2 * x) && x >= 0 && x <= 127.5) && mx(col(o, 0)) > 126, 'interaction : sites de pas 0.5, 256 sites (0 a 127.5)'); entre(R.tauxMax, 0.11, 0.14, 'interaction : taux ~0.125'); ok(R.tauxKLS === 0.125, 'interaction : taux KLS 0.125');
+  entre(T.fractionChiFin, 0.12, 0.18, 'interaction : ~15 % dans chi'); ok(inv('interactionChamps').energieTotale.derive < 1e-3, 'interaction : energie conservee'); }
+/* Schwinger : 40 paires dessinees, ~0.3 attendue, champs critique ~1.3e18 et defaut ~6.6e17 V/m ; electron vers -x, positron vers +x */
+{ const o = sorties.paireSchwinger, F = LEGENDES.paireSchwinger.film, I = inv('paireSchwinger');
+  ok(I.attendu.dessinees === 40 && F.images === 80, 'Schwinger : 40 paires = 80 lignes d univers'); entre(I.attendu.paires, 0.25, 0.35, 'Schwinger : ~0.3 paire attendue');
+  entre(I.taux.champCritique, 1.32e18, 1.33e18, 'Schwinger : champ critique ~1.3e18 V/m'); entre(I.taux.champSI, 6.6e17, 6.7e17, 'Schwinger : defaut ~6.6e17 V/m');
+  ok(I.vitesseMax.fin < 1 && I.vitesseMax.fin > 0.95 && I.hyperbole.derive < 1e-9, 'Schwinger : hyperboles, vitesse -> c sans l atteindre');
+  let sens = true; for (let k = 0; k < F.images; k++) { const x = bloc(o, F, k, 0), y = bloc(o, F, k, 1), t = bloc(o, F, k, 3);
+    if ((k % 2 === 0 ? x[x.length - 1] >= x[0] : x[x.length - 1] <= x[0]) || mx(y) !== mn(y) || mx(t) !== 10) sens = false; }
+  ok(sens, 'Schwinger : electron (image paire) vers -x, positron vers +x, position laterale fixe, jusqu au temps 10'); }
+/* Unruh : hyperbole x^2 - t^2 = 1, tau de -3 a 3, energie moyenne ~2.7 T, 4e-21 K pour 1 m/s^2, ~2.5e20 m/s^2 pour 1 K */
+{ const o = sorties.effetUnruh, I = inv('effetUnruh'); let h = 0; for (let i = 0; i < o.n; i++) h = Math.max(h, Math.abs(o.brut[4 * i] ** 2 - o.brut[4 * i + 1] ** 2 - 1)); ok(h < 1e-9, 'Unruh : colonnes 1, 2 = x, t sur x^2 - t^2 = 1');
+  ok(Math.abs(mn(col(o, 3)) + 3) < 1e-12 && Math.abs(mx(col(o, 3)) - 3) < 1e-12 && mn(col(o, 2)) > 0, 'Unruh : temps propre -3..3, energies > 0');
+  entre(I.energieMoyenne.theorie / I.temperature.naturelle, 2.69, 2.71, 'Unruh : energie moyenne ~2.7 T'); ok(Math.abs(I.energieMoyenne.mesure / I.energieMoyenne.theorie - 1) < 0.05, 'Unruh : tirages conformes');
+  entre(I.temperature.pourUnMetreParSeconde2, 4.0e-21, 4.1e-21, 'Unruh : ~4e-21 K a 1 m/s^2'); entre(1 / I.temperature.pourUnMetreParSeconde2, 2.4e20, 2.5e20, 'Unruh : ~2.5e20 m/s^2 pour 1 K'); }
+/* couplages : log10 Q de -4 a 3, 1/alpha 137 -> ~133 au Z, alpha_s ~0.17 / 0.118 / 0.088, QCD des 3 GeV */
+{ const o = sorties.couplageCourant, F = LEGENDES.couplageCourant.film, I = inv('couplageCourant');
+  ok(F.images === 2 && bloc(o, F, 0, 2).every((x) => x === 0) && bloc(o, F, 1, 2).every((x) => x === 1), 'couplage : image 1 = QED (0), image 2 = QCD (1), dans l ordre des noms');
+  ok(Math.abs(mn(col(o, 0)) + 4) < 1e-12 && Math.abs(mx(col(o, 0)) - 3) < 1e-12 && Math.abs(10 ** mn(bloc(o, F, 1, 0)) - 3) < 1e-9, 'couplage : log10 Q de -4 a 3, QCD des 3 GeV');
+  entre(I.inverseAlpha.Q0, 136.9, 137.1, 'couplage : 1/alpha ~137'); entre(I.inverseAlpha.MZleptons, 132.5, 133.5, 'couplage : ~133 au Z'); entre(I.deltaAlphaLeptonsMZ.MZ, 91, 91.3, 'couplage : Z a 91 GeV');
+  entre(I.alphaS.Q10, 0.165, 0.175, 'alpha_s(10) ~0.17'); entre(I.alphaS.MZ, 0.1175, 0.1185, 'alpha_s(MZ) ~0.118'); entre(I.alphaS.Q1000, 0.0875, 0.0885, 'alpha_s(1000) ~0.088');
+  ok(SRC('alphaSMZ') === 0.1179, 'couplage : 0.1179 = SOURCES.alphaSMZ'); }
+/* Compton : directions sur la sphere unite, ~65 % vers l avant, 50 % a basse energie, moitie de l energie en arriere, ~56 % de Thomson */
+{ const o = sorties.comptonKleinNishina, I = inv('comptonKleinNishina'); let s = 0; for (let i = 0; i < o.n; i++) s = Math.max(s, Math.abs(Math.hypot(o.brut[4 * i], o.brut[4 * i + 1], o.brut[4 * i + 2]) - 1)); ok(s < 1e-12, 'Compton : directions unitaires');
+  ok(o.params.energie === 0.5, 'Compton : defaut 0.5 m_e c^2'); entre(0.5 * SRC('meMeV'), 0.25, 0.26, 'Compton : ~0.26 MeV');
+  entre(I.avant.theorie, 0.64, 0.66, 'Compton : ~65 % vers l avant'); ok(Math.abs(I.avant.fraction - I.avant.theorie) < 4 * I.avant.sigma, 'Compton : tirages conformes');
+  entre(sim('comptonKleinNishina', { energie: 0.001 }).invariants.avant.theorie, 0.49, 0.51, 'Compton : 50 % a basse energie');
+  entre(mn(col(o, 3)), 0.5, 0.505, 'Compton : moitie de l energie gardee en arriere'); ok(mx(col(o, 3)) <= 1 && I.decalageCompton.pireEcart < 1e-12, 'Compton : decalage exact');
+  entre(I.sectionEfficace.mesure / I.sectionEfficace.thomson, 0.55, 0.57, 'Compton : ~56 % de Thomson'); }
+/* atomes : fer, configuration lue, colonne 4 = n + l/10 dans l ordre des noms, rayons 1s ~0.06 et 4s ~6 */
+{ const o = sorties.atomes, F = LEGENDES.atomes.film, I = inv('atomes'), N = LEGENDES.atomes.noms;
+  ok(o.params.Z === 26 && I.configuration === '1s2 2s2 2p6 3s2 3p6 4s2 3d6' && F.images === 26, 'atomes : fer, 26 electrons, configuration du module');
+  const vus = []; for (let k = 0; k < F.images; k++) { const v = bloc(o, F, k, 3); if (mx(v) !== mn(v)) vus.push('?'); const nm = Math.floor(v[0]) + 'spdf'[Math.round(10 * (v[0] - Math.floor(v[0])))]; if (vus[vus.length - 1] !== nm) vus.push(nm); }
+  ok(vus.join() === N.map((x) => x.slice(9, 11)).join(), 'atomes : sous-couches des images = noms : ' + vus.join());
+  entre(I.rayonsMoyens['1s'].mesure, 0.05, 0.07, 'atomes : 1s ~0.06 Bohr'); entre(I.rayonsMoyens['4s'].mesure, 5.5, 7, 'atomes : 4s ~6 Bohr');
+  ok(nomsDe('atomes', { Z: 10 }).join() === 'Subshell 1s (2 electrons),Subshell 2s (2 electrons),Subshell 2p (6 electrons)', 'atomes : neon'); }
+/* quarks : 10 + 1 images, 0.2 fm -> ~1.2 fm, energie croissante, derniere image = apres cassure, niveaux ~3090 / ~3672 MeV */
+{ const o = sorties.quarks, F = LEGENDES.quarks.film, I = inv('quarks'), E = F.debuts.map((d) => o.brut[4 * d + 3]);
+  ok(o.params.images === 10 && F.images === 11, 'quarks : 10 images etirees + 1 cassee');
+  ok(mx(bloc(o, F, 0, 0).map(Math.abs)) <= 0.1 && E.slice(0, 10).every((e, k) => k === 0 || e > E[k - 1]) && Math.abs(E[10] - I.cassure.seuil) < 1e-12, 'quarks : depart 0.2 fm, energie croissante, derniere = seuil de cassure');
+  entre(I.cassure.rayonFm, 1.2, 1.26, 'quarks : cassure ~1.2 fm'); ok(I.cassure.sousSeuil2S, 'quarks : psi(2S) sous le seuil DD');
+  entre(I.spectre.JPsi, 3085, 3095, 'quarks : J/psi ~3090'); entre(I.spectre.psi2S, 3665, 3680, 'quarks : psi(2S) ~3672');
+  const w = col(o, 1); let s2 = 0; for (const x of w) s2 += x * x; entre(Math.sqrt(s2 / w.length), 0.13, 0.17, 'quarks : largeur illustrative 0.15 fm'); }
 
 console.log('test-tam-legendes-20261101 : ' + nOk + ' assertions OK');

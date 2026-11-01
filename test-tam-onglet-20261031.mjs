@@ -361,14 +361,15 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
   ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
   { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js',
-    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js'];
+    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js'];
+    { const cq = (await import('./tam-champs-quantiques.js')).SYSTEMES.map((s) => s.id); ok(cq.every((id) => onglet.includes("'" + id + "'")) && /\['champs', 'Quantum fields, the vacuum, atoms & quarks'\]/.test(onglet), 'game81 : les ' + cq.length + ' champs quantiques ont leur groupe'); }
     ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
     const mods = await Promise.all(fichiers.map((f) => import(f)));
     const tous = mods.flatMap((m) => m.SYSTEMES.map((s) => [m, s]));
     ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
     for (const f of fichiers) ok(serveur.includes("'" + f.slice(2) + "'"), f + ' est dans la liste servie');
     /* chaque systeme est dans un groupe du menu (aucun orphelin) */
-    ok(/const groupeDe = \(s\) => THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+    ok(/const groupeDe = \(s\) => THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
     /* game80 : aucun systeme orphelin — chaque id des grandes questions est range dans son groupe */
     { const gq = [...(await import('./tam-grandes-questions.js')).SYSTEMES, ...(await import('./tam-grandes-questions-2.js')).SYSTEMES].map((s) => s.id);
       ok(gq.every((id) => onglet.includes("'" + id + "'")), 'les ' + gq.length + ' grandes questions sont toutes dans THEMES.questions'); }
@@ -413,7 +414,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   const neufs = []; for (let i = 0; i < 19; i++) neufs.push(await srvG.certifierParams(b64(Pr(26 + i * 0.25)), 'ip-d'));
   ok(neufs.every((x) => x.etat !== 'TROP'), 'apres 30 caches touches, 19 calculs neufs passent encore (20 au total)');
   /* (d) le serveur rend 503/429 avec la meme source d IP que /api/jeu/roll ; l app le dit sans relancer */
-  ok(/statut === 503 \|\| statut === 429 \? statut : 200/.test(serveur) && /const ipT = String\(req\.headers\['x-forwarded-for'\] \|\| req\.socket\.remoteAddress \|\| ''\)\.split\(','\)\[0\]\.trim\(\);/.test(serveur)
+  ok(/statut === 503 \|\| statut === 429 \? statut : 200/.test(serveur) && /const ipT = ipClient\(req\);/.test(serveur)
     && /certifierParams\(q\.get\('p'\), ipT\)/.test(serveur) && /q\.get\('minter'\), ipT, q\.get\('draw'\)\)/.test(serveur), 'serveur : code HTTP du refus, IP lue comme /api/jeu/roll, passee aux deux routes');
   ok(/j\.etat === 'OCCUPE' \|\| j\.etat === 'TROP'/.test(onglet) && !/setInterval\([^)]*api\/tam|setTimeout\([^)]*fetch\('\/api\/tam/.test(onglet), 'l onglet dit « busy » et ne relance aucun appel /api/tam en boucle');
 }

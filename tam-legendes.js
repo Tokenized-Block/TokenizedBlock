@@ -29,6 +29,29 @@ function lire(id, params, cle, entier) {
 }
 /* game80 : les grandes questions dont les NOMS vivent dans le module (table d etoiles, evenements) : relus dans sa sortie, jamais recopies */
 function lusDansLeModule(id, params) { const s = SYSTEMES.find((x) => x.id === id); return s.mod.simuler(id, params, { n: 40 }).invariants; }
+/* game81 : les champs quantiques declarent leur film (o.film) et leur configuration ; on les relit dans la sortie du module
+ *   (n lignes), jamais recalcules ici. Petit cache : la page redemande la legende a chaque dessin. */
+const CACHE_MODULE = new Map();
+function sortieDuModule(id, params, n) {
+  const cle = id + '|' + n + '|' + JSON.stringify(params || {});
+  if (!CACHE_MODULE.has(cle)) { if (CACHE_MODULE.size > 64) CACHE_MODULE.clear(); const s = SYSTEMES.find((x) => x.id === id); CACHE_MODULE.set(cle, s.mod.simuler(id, params, { n })); }
+  return CACHE_MODULE.get(cle);
+}
+/* les films de tam-champs-quantiques.js : la disposition = o.film du module ; colonneTemps et le sens d une image dits ici */
+const FILMS_DU_MODULE = {
+  champLibre: { colonneTemps: 1 },
+  fluctuationsVide: { colonneTemps: null, note: 'each moment is an independent random sample of the vacuum, not a later time' },
+  interactionChamps: { colonneTemps: 1 },
+  paireSchwinger: { colonneTemps: null, note: 'each frame is the whole worldline of one particle (an electron, then its positron, pair after pair), not one instant' },
+  couplageCourant: { colonneTemps: null, note: 'frame 1 is the electromagnetic curve, frame 2 the strong-force curve; they are not instants of time' },
+  atomes: { colonneTemps: null, note: 'each frame is the cloud of one electron, in filling order' },
+  quarks: { colonneTemps: null, note: 'the string is stretched from frame to frame; the last frame is after it has broken' },
+};
+const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
+/* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
+function sousCouches(params) {
+  return sortieDuModule('atomes', params, N_DEFAUT).invariants.configuration.split(' ').map((t) => 'Subshell ' + t.slice(0, 2) + ' (' + t.slice(2) + ' electron' + (t.slice(2) === '1' ? '' : 's') + ')');
+}
 const SURFACES = ['Sphere (closed universe, curvature +1)', 'Flat plane (curvature 0)', 'Hyperbolic surface (open universe, curvature -1)'];
 const TRAPPIST = ['b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const PLANETES = ['Mercury', 'Venus', 'Earth', 'Mars', 'Jupiter', 'Saturn', 'Uranus', 'Neptune'];
@@ -54,6 +77,9 @@ export function nomsDe(id, params = {}) {
     case 'etoilesHR': return lusDansLeModule(id, params).etoiles.noms.slice();
     case 'tailleEtoiles': return lusDansLeModule(id, params).rayons.map((r) => r.nom);
     case 'calendrierCosmique': return lusDansLeModule(id, params).evenements.map((e) => e.nom);
+    /* game81 : les deux courbes du couplage courant ; les sous-couches d un atome */
+    case 'couplageCourant': return COUPLAGES.slice();
+    case 'atomes': return sousCouches(params);
     default: return null;
   }
 }
@@ -75,7 +101,11 @@ function regulieres(n, F, m) {
 /** un film : les lignes sont des images successives ; colonneTemps = la colonne qui porte l instant (null : aucune) */
 function filmDe(id, params = {}, n = N_DEFAUT) {
   let f = null, colonneTemps = null, note = null;
-  switch (id) {
+  if (FILMS_DU_MODULE[id]) {
+    const M = sortieDuModule(id, params, n).film; if (!M) return null;
+    f = { images: M.images, parImage: M.parImage ?? null, debuts: M.debuts.slice(), tailles: M.tailles.slice() };
+    colonneTemps = FILMS_DU_MODULE[id].colonneTemps; note = FILMS_DU_MODULE[id].note || null;
+  } else switch (id) {
     case 'supernova': case 'supernovaHydro': f = disposition(n, (i) => Math.min(15, Math.floor(i * 16 / n))); colonneTemps = 3; break;
     case 'collisionGalaxies': { let F = 1; for (let d = Math.min(12, n); d >= 1; d--) if (n % d === 0 && n / d >= 2) { F = d; break; }
       f = disposition(n, (i) => Math.floor(i / (n / F))); note = 'moments from before the encounter to the end'; break; }
@@ -635,6 +665,72 @@ const L = {
     fin: null,
     objets: (noms) => 'Rows come in blocks, one sphere per body, in this order: ' + noms.join(', ') + '.',
   },
+  /* ---------- tam-champs-quantiques.js (game81) ---------- */
+  champLibre: {
+    titre: 'A free quantum field: a travelling wave packet',
+    enUnePhrase: 'A film of a bump in a field with mass, on a ring of 256 points: it travels along the ring and slowly spreads out.',
+    colonnes: ['lattice site number (the ring has 256 sites, spacing 1; its two ends join up)', 'time (natural units: c = 1, lattice spacing 1; one value per moment)', 'field value phi at that site and moment (natural units)'],
+    aRegarder: ['The bump travels at about 0.75 times the speed of light: its group velocity, slower than light because the field has a mass.', 'It slowly widens as it goes: waves of different lengths travel at different speeds (dispersion).', 'This is the field equation treated as a classical wave on a lattice; quantum fluctuations are not included.'],
+    fin: null,
+  },
+  fluctuationsVide: {
+    titre: 'The quantum vacuum of a free field',
+    enUnePhrase: 'Snapshots of a field in its lowest-energy state, the vacuum: even with nothing in it, the field is never flat.',
+    colonnes: ['lattice site number (the ring has 64 sites, spacing 1)', 'sample number (0 to 11: each is an independent random draw, not a time)', 'field value phi at that site in that sample (natural units, hbar = c = 1)'],
+    aRegarder: ['Every sample is jagged: the vacuum of a quantum field always jitters.', 'The samples are independent draws from the exact vacuum probability law of a field with mass on 64 points; they are not a film of motion.', 'Averaged over 3000 samples, each wave of the field has the spread quantum theory predicts (variance 1/(2 omega)).'],
+    fin: null,
+  },
+  interactionChamps: {
+    titre: 'Two interacting fields (preheating)',
+    enUnePhrase: 'A film of a field phi swinging up and down everywhere at once, which pumps energy into a second field chi coupled to it.',
+    colonnes: ['position along the line (units of 1 / the phi mass; lattice spacing 0.5, 256 sites)', 'time (units of 1 / the phi mass)', 'phi field value (the oscillating condensate; 1 everywhere at the start)', 'chi field value (tiny random noise at the start, about a millionth)'],
+    aRegarder: ['At first phi swings everywhere together while chi looks flat at zero.', 'Waves of chi of one favoured length then grow exponentially, like a swing pumped at the right rhythm (parametric resonance): the growth rate is about 0.125 per unit time, as the Mathieu-equation theory predicts.', 'By the end about 15 percent of the energy has moved into chi. A classical-field approximation of a quantum process, on a 1-D lattice.'],
+    fin: null,
+  },
+  paireSchwinger: {
+    titre: 'Pairs torn out of the vacuum (Schwinger effect)',
+    enUnePhrase: 'A very strong electric field pulls electron-positron pairs out of empty space; each particle is drawn as its path through space and time.',
+    colonnes: ['position along the electric field (natural units: hbar / (m c) of the electron; electrons move toward negative values, positrons toward positive)', 'sideways position where the pair appeared (same units; fixed for each particle)', 'second sideways position (same units; fixed)', 'time (natural units: hbar / (m c^2) of the electron; each path starts when its pair appears)'],
+    aRegarder: ['Each pair appears at rest, the electron and the positron already a small distance apart; the field then pushes them apart on curved paths that approach the speed of light.', 'The 40 pairs drawn are an illustrative sample: at the default field (half the critical field, about 6.6 x 10^17 V/m) only about 0.3 pairs would actually be expected in this box and time.', 'The rate is the one-loop Schwinger formula; it is tiny for fields well below the critical field of about 1.3 x 10^18 V/m.'],
+    fin: null,
+  },
+  effetUnruh: {
+    titre: 'An accelerated observer sees a warm vacuum (Unruh effect)',
+    enUnePhrase: 'An observer who keeps accelerating finds empty space glowing with heat: their path through spacetime, with the energies of the quanta they would detect.',
+    colonnes: ['position x (units c^2 / a, a = the acceleration; the path is the hyperbola x^2 - t^2 = 1)', 'time t of a non-accelerating observer (units c / a)', 'energy of one detected quantum (units hbar a / c; drawn at random from a thermal spectrum)', 'proper time on the accelerated observer\'s own clock (units c / a; -3 to 3 by default)'],
+    aRegarder: ['The path bends into a hyperbola: the observer speeds up forever but never reaches the speed of light.', 'The heights follow a thermal (Planck) spectrum: the vacuum looks warm to this observer, with an average quantum energy about 2.7 times the temperature.', 'The effect is tiny: 1 m/s^2 gives about 4 x 10^-21 K, and about 2.5 x 10^20 m/s^2 is needed for 1 kelvin.'],
+    fin: null,
+  },
+  couplageCourant: {
+    titre: 'Running coupling constants',
+    enUnePhrase: 'How strong electromagnetism and the strong nuclear force are, depending on the energy at which you probe them.',
+    colonnes: ['log10 of the momentum scale Q (GeV; -4 is 0.1 MeV, 3 is 1000 GeV)', 'one over the coupling strength: 1/alpha for electromagnetism (first half of the rows), 1/alpha_s for the strong force (second half, from 3 GeV up)', 'which force: 0 = electromagnetism, 1 = strong force'],
+    aRegarder: ['Electromagnetism gets slightly stronger at high energy: 1/alpha falls from about 137 at low energy to about 133 at the Z boson mass (91 GeV). Only the three charged leptons are counted; quark loops are not computed.', 'The strong force does the opposite (asymptotic freedom): alpha_s is about 0.17 at 10 GeV, 0.118 at 91 GeV and 0.088 at 1000 GeV.', 'Both curves are one-loop approximations; the strong curve starts from the measured value 0.1179 at the Z mass.'],
+    fin: null,
+    objets: (noms) => 'The two curves, in frame order: ' + noms.join(', ') + '.',
+  },
+  comptonKleinNishina: {
+    titre: 'A photon scattering off an electron (Compton)',
+    enUnePhrase: 'Where photons go after bouncing off a free electron: each dot is one possible direction, raised by how much energy the photon kept.',
+    colonnes: ['x of the scattered photon\'s direction (unit sphere; the photon came in along z)', 'y of that direction (unit sphere)', 'z of that direction (cosine of the scattering angle: 1 = straight on, -1 = straight back)', 'fraction of its energy the photon keeps (1 when going straight on, lowest when bounced straight back)'],
+    aRegarder: ['At the default energy (half the electron rest energy, about 0.26 MeV) about 65 percent of the photons scatter forward; at very low energy the split would be even, 50 percent.', 'A photon bounced straight back keeps only half its energy here: the Compton shift.', 'The total cross-section is about 56 percent of the low-energy Thomson value (Klein-Nishina formula, lowest order of QED).'],
+    fin: null,
+  },
+  atomes: {
+    titre: 'Electron clouds of atoms',
+    enUnePhrase: 'Where the electrons of an atom can be found, one electron per frame, shell by shell from the innermost out.',
+    colonnes: ['x (Bohr radii)', 'y (Bohr radii)', 'z (Bohr radii)', 'which subshell the electron is in: n + l/10 (1 = 1s, 2 = 2s, 2.1 = 2p, 3.2 = 3d)'],
+    aRegarder: ['The default atom is iron (26 electrons, 1s2 2s2 2p6 3s2 3p6 4s2 3d6); each frame is the cloud of one electron, filled in Madelung order.', 'Inner electrons feel almost the whole nuclear charge and sit very close (1s: about 0.06 Bohr radii on average); the screened outer 4s electrons spread out to about 6 Bohr radii.', 'Each cloud is a hydrogen-like orbital with an effective charge from Slater\'s rules: an approximation of a many-electron atom, not an exact solution.'],
+    fin: null,
+    objets: (noms) => 'Frames go electron by electron through these subshells, in this order: ' + noms.join(', ') + '.',
+  },
+  quarks: {
+    titre: 'Quark confinement and string breaking',
+    enUnePhrase: 'A film of a charm quark and its antiquark pulled apart: the colour string between them stores more and more energy until it breaks into two mesons.',
+    colonnes: ['position along the string between the quark and the antiquark (fm; 1 fm = 10^-15 m)', 'sideways spread of the string (fm; an illustrative width of 0.15 fm, not computed)', 'second sideways spread (fm; same illustrative width)', 'energy stored in the string at that separation (GeV; the Cornell potential V(r), quark masses not included)'],
+    aRegarder: ['In every frame but the last the pair is pulled further apart, from 0.2 fm to about 1.2 fm, and the stored energy keeps rising, like a rubber band that never goes slack (confinement).', 'In the last frame the string has broken: its energy was enough to create a new quark pair, so two clusters (two D mesons) remain instead of free quarks.', 'A phenomenological potential model, not lattice QCD; it gives charmonium levels of about 3090 MeV (J/psi) and 3672 MeV (psi(2S)).'],
+    fin: 'the string breaks into two D mesons in the last frame',
+  },
   /* ---------- familles hors science ---------- */
   __attracteur: {
     titre: 'Strange attractor',
@@ -660,6 +756,8 @@ export function legende(id, params = {}) {
   const film = filmDe(id, params);
   /* game80 : un film se colore par moment (pas par colonne) ; des objets nommes hors systeme de corps sont dits en plus */
   const couleurs = (CORPS[id] && noms ? couleursCorps(noms, CENTRES[id]) : film ? couleursFilm(film) : couleursDominantes(colonnes))
+    /* game81 : un « moment » d un film de champs quantiques n est pas toujours un instant : le module le dit, la legende aussi */
+    + (film && FILMS_DU_MODULE[id] && FILMS_DU_MODULE[id].note ? ' Here ' + FILMS_DU_MODULE[id].note + '.' : '')
     + (noms && !CORPS[id] && e.objets ? ' ' + e.objets(noms) : '');
   return Object.freeze({
     titre: e.titre, enUnePhrase: e.enUnePhrase, colonnes, couleurs,

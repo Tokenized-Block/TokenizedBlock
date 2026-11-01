@@ -34,7 +34,9 @@ const THEMES = {
 /* game80 : les « grandes questions » ont leur groupe */
 THEMES.questions = ['videQuantique', 'bigRip', 'fauxVide', 'centreTerre', 'versMars', 'zeroAbsolu', 'tailleUnivers', 'nombrePi', 'calendrierCosmique',
   'penduleFoucault', 'mouvementTerre', 'etoilesHR', 'evaporationTrouNoir', 'tsunami', 'geometrieUnivers', 'tailleEtoiles'];
-const groupeDe = (s) => THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
+/* game81 : les champs quantiques, les atomes et les quarks */
+THEMES.champs = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'effetUnruh', 'couplageCourant', 'comptonKleinNishina', 'atomes', 'quarks'];
+const groupeDe = (s) => THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
 /* game79 : la formule de la personne (ou du cerveau) passe par la MEME scene : un « systeme » adapte, vue seule (pas de mint) */
@@ -43,7 +45,7 @@ const SYS_FORMULE = Object.freeze({ id: 'formule', nom: 'Your formula', science:
     simuler: (_id, p = {}) => { const { a, b, c, d, ...spec } = p; return F.simulerFormule({ ...spec, vars: { ...(spec.vars || {}), ...(a !== undefined ? { a } : {}), ...(b !== undefined ? { b } : {}), ...(c !== undefined ? { c } : {}), ...(d !== undefined ? { d } : {}) } }); },
     reglagesPhysique: (_id, p = {}) => ['a', 'b', 'c', 'd'].map((k) => ({ chemin: 'params.' + k, nom: k, min: -10, max: 10, valeur: (p.vars && typeof p.vars[k] === 'number' ? p.vars[k] : (typeof p[k] === 'number' ? p[k] : 1)) })),
   } });
-const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
+const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['champs', 'Quantum fields, the vacuum, atoms & quarks'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
   ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics']];
 /* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
  *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */

@@ -25,6 +25,9 @@ import * as FUS from './tam-fusion.js';
  *   l Univers, tailles des etoiles) — chaque valeur sourcee (URL en commentaire), chaque systeme verifie contre la valeur publiee */
 import * as GQ1 from './tam-grandes-questions.js';
 import * as GQ2 from './tam-grandes-questions-2.js';
+/* game81 : les champs quantiques (champ libre, fluctuations du vide, interaction de champs, Schwinger, Unruh, couplage courant, Compton),
+ *   les atomes (Slater, raies NIST) et les quarks (potentiel de Cornell, charmonium vs PDG) — valeurs de comparaison sourcees (SOURCES) */
+import * as CHQ from './tam-champs-quantiques.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -71,7 +74,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 
 /** les angles des plans caches par defaut : l angle d or, comme le moteur (D - 3 angles) */
