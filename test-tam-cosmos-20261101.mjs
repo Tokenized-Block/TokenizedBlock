@@ -112,11 +112,23 @@ function suite(T, bavard = false) {
   });
   ok('lagrange Terre-Lune fer a cheval (duree 3000) : escape = fin dessinee, derniere ligne au bord |x|+|y|+|z| ~ 10', () => {
     const r = sim('pointsLagrange', { monde: 1, orbite: 1, duree: 3000 }), b = r.brut, o = (r.n - 1) * 3, s = Math.abs(b[o]) + Math.abs(b[o + 1]) + Math.abs(b[o + 2]);
-    assert.equal(r.bornee, true); assert.equal(r.fin.evenement, 'escape'); assert.equal(r.fin.indice, r.n - 1); assert.ok(r.fin.t > 0 && r.fin.t < 3000);
-    assert.ok(s < 10 && s > 9.5, String(s)); assert.ok(r.invariants.jacobi.derive < 1e-8, String(r.invariants.jacobi.derive)); assert.ok(Number.isFinite(r.lyapunov));
+    /* game84 : plus de rejeu (57 « escape » sur 72 finissaient loin du bord) — la fin est la ligne ou le corps sort, figee ensuite */
+    assert.equal(r.bornee, true); assert.equal(r.fin.evenement, 'escape'); assert.ok(r.fin.indice > 0 && r.fin.indice < r.n); assert.ok(r.fin.t > 0 && r.fin.t < 3000);
+    assert.ok(s >= 10 && s < 10.5, String(s)); assert.ok(r.invariants.jacobi.derive < 1e-8, String(r.invariants.jacobi.derive)); assert.ok(Number.isFinite(r.lyapunov));
     return `t ${r.fin.t.toFixed(2)}, |x|+|y|+|z| ${s.toFixed(3)}`;
   });
-  ok('lagrange : collision avec un primaire reste un refus', () => { const r = sim('pointsLagrange', { orbite: 1, ecart: 0.05, duree: 3000 }); assert.equal(r.bornee, false); assert.match(r.raison, /collision/); });
+  /* game84 : la collision est une FIN dessinee « impact » — et le point d impact est SUR le corps percute (la 1re version rejouait
+   *   la trajectoire chaotique avec un autre pas : la « fin » tombait a 1.5 unite du corps) */
+  ok('lagrange : collision -> fin « impact », derniere ligne sur le corps percute, lignes suivantes = le point d impact', () => {
+    let N = 0;
+    for (const p of [{ orbite: 1, ecart: 0.05, duree: 3000 }, { ecart: 0.04 }, { ecart: 0.05 }, { monde: 1, ecart: 0.04 }]) {
+      const r = sim('pointsLagrange', p); if (!(r.fin && r.fin.evenement === 'impact')) continue;
+      assert.equal(r.bornee, true); const mu = r.invariants.mu, i = r.n - 1, x = r.brut[3 * i], y = r.brut[3 * i + 1], z = r.brut[3 * i + 2];
+      const d = Math.min(Math.hypot(x - 1 + mu, y, z) / 1e-4, Math.hypot(x + mu, y, z) / 1e-3);
+      assert.ok(d < 1.02, JSON.stringify(p) + ' : point d impact a ' + d.toFixed(3) + ' rayon(s) du corps');
+      const k = r.fin.indice; assert.ok(k > 0 && k < r.n && r.brut[3 * k] === x && r.brut[3 * k + 1] === y, 'les lignes depuis l indice d impact = le point d impact');
+      N++; }
+    assert.ok(N > 0, 'au moins un impact exerce'); });
   ok('lumiere : fin par rayon (capture b=4, escape b=5.2/7/15 au bord r = 30M)', () => {
     const r = sim('lumiereTrouNoir'), f = r.fin, b = r.brut, o = (r.n - 1) * 12;
     assert.deepEqual(f.map((x) => x.evenement), ['capture', 'escape', 'escape', 'escape']); for (const x of f) assert.equal(x.indice, r.n - 1);
@@ -221,6 +233,7 @@ for (const s of T.SYSTEMES) {
 
 // ---------- mutants (copies dans un dossier temporaire ; l import du moteur pointe vers l original) ----------
 const MUTANTS = [
+  ['lagrange : la fin (impact, escape) redevient REJOUEE (elle tombe loin du corps, loin du bord)', '        if (choc || sortie) {', "        if (choc || sortie) { return { evenement: choc ? 'impact' : 'escape', tAvant: tc, k, raison: 'fin' };"],
   ['lumiere : terme 3 M u^2 retire (sphere de photons)', 'd[1] = 3 * M_TN * y[0] * y[0] - y[0];', 'd[1] = -y[0];'],
   ['kerr : signe du spin inverse dans les equations', 'const a = c.a, E = c.E, Lz = c.Lz;', 'const a = -c.a, E = c.E, Lz = c.Lz;'],
   ['lagrange : rapport de masses Terre-Lune faux', '0.012150585]', '0.0123]'],
@@ -232,7 +245,7 @@ const MUTANTS = [
   ['disque : Math.random injecte', 'const alea = mulberry32(P.graine >>> 0)', 'const alea = Math.random'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['kerr : capture redevient un refus (pas de rejeu)', 'run = courir(run.tAvant);', 'break;'],
-  ['lagrange : escape redevient un refus (pas de rejeu)', 'run = courirLagrange(run.tAvant);', 'break;'],
+  ['lagrange : escape redevient un refus', '        if (choc || sortie) {', "        if (sortie && !choc) return { echec: true, k, raison: 'echappe' }; if (choc || sortie) {"],
   ['lumiere : capture notee comme escape', "ev.issue === 'capture' ? { rayon: k + 1, evenement: 'capture'", "ev.issue === 'capture' ? { rayon: k + 1, evenement: 'escape'"],
 ];
 const brut = readFileSync(SOURCE, 'utf8'), moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;

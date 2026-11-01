@@ -354,15 +354,10 @@ function simLagrange(P, n) {
   else { const r = 1 + P.ecart; y[0] = -r; y[4] = r - Math.sqrt((1 - mu) / r); }
   y[2] = P.z0;
   const y0 = Float64Array.from(y), D = 3, base = 0.01;
-  /* FIN PHYSIQUE (escape : le corps quitte la zone dessinee |x| + |y| + |z| >= 10) : rejeu jusqu au dernier etat sain,
-     n lignes uniformes en temps, ligne n-1 = l evenement ; une collision avec un primaire reste un refus */
-  let run = courirLagrange(P.duree), fin = null, raisonFin = null;
-  for (let essai = 0; essai < 6 && run.evenement; essai++) {
-    fin = run.evenement; raisonFin = run.raison;
-    if (!(run.tAvant > 0)) break;
-    run = courirLagrange(run.tAvant);
-  }
-  if (run.evenement || run.echec) return { bornee: false, echappeA: run.k, raison: run.raison, uniteLyapunov: 'par unite de temps' };
+  /* FINS PHYSIQUES (escape : |x| + |y| + |z| >= 10 ; impact : collision avec un primaire) : dessinees SANS rejeu (game84, voir
+     courirLagrange) — le trajet calcule jusqu a la fin, puis le point de la fin fige jusqu a la ligne n-1 */
+  const run = courirLagrange(P.duree);
+  if (run.echec) return { bornee: false, echappeA: run.k, raison: run.raison, uniteLyapunov: 'par unite de temps' };
   const { brut, S, somme, amin, amax, tours, dmin, duree } = run;
   const inv = {
     L1: { mesure: col.L1 }, L2: { mesure: col.L2 }, L3: { mesure: col.L3 },
@@ -375,7 +370,7 @@ function simLagrange(P, n) {
   };
   S.sortir(inv);
   const out = { D, brut, invariants: inv, lyapunov: somme / duree, uniteLyapunov: 'par unite de temps (2 pi = une periode du secondaire)' };
-  if (fin) { out.raison = raisonFin; out.fin = { evenement: fin, indice: n - 1, t: duree }; }
+  if (run.impact) { out.raison = run.impact.raison; out.fin = { evenement: run.impact.evenement, indice: run.impact.k, t: duree, note: 'rows after the end repeat its point' }; }
   return out;
 
   function courirLagrange(duree) {
@@ -400,8 +395,15 @@ function simLagrange(P, n) {
         const f = Math.min(1, r1 / 0.05, r2 / 0.05), pm = base * f * Math.sqrt(f), q = Math.ceil(reste / pm - 1e-9), hk = q <= 1 ? reste : reste / q;
         pasLagrange(y, c, hk); pasLagrange(e, c, hk); reste = q <= 1 ? 0 : reste - hk;
         const [s1, s2] = distances(y, mu);
-        if (s2 < 1e-4 || s1 < 1e-3) return { echec: true, k, raison: 'collision avec un primaire' };
-        if (!(Math.abs(y[0]) + Math.abs(y[1]) + Math.abs(y[2]) < 10)) return { evenement: 'escape', tAvant: tc, k, raison: 'echappe' };
+        /* une FIN (impact, sortie de la zone) n est PAS rejouee (vu au banc : pres d une rencontre serree le rejeu a un autre pas suit
+         *   une AUTRE trajectoire chaotique — 57 « escape » sur 72 finissaient loin du bord, les impacts loin du corps) : les lignes deja
+         *   calculees restent, les suivantes = le point de la fin */
+        const sortie = !(Math.abs(y[0]) + Math.abs(y[1]) + Math.abs(y[2]) < 10), choc = s2 < 1e-4 || s1 < 1e-3;
+        if (choc || sortie) {
+          for (let j = k; j < n; j++) { brut[j * D] = y[0]; brut[j * D + 1] = y[1]; brut[j * D + 2] = y[2]; }
+          return { brut, S, somme, amin, amax, tours, dmin, duree: Math.max(tc + hk, 1e-9),
+            impact: { k, evenement: choc ? 'impact' : 'escape', raison: choc ? (s2 < 1e-4 ? 'collision avec le secondaire' : 'collision avec le primaire') : 'echappe' } };
+        }
         tc += hk;
       }
     }
