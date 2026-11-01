@@ -188,6 +188,13 @@ export const ECHELLE_PROPRE = {
   /* game89 (passe « rien oublie » sur les 87 systemes) : la densite de probabilite ecrasait position et temps [0.074 0.079 1] ; 1/alpha
    *   (~137) ecrasait log10 Q [0.052 1 0.008], et l indice de la force (0/1) est une etiquette, pas une longueur */
   tapisTalbot: [2], couplageCourant: [1, 2],
+  /* game92 (audit des curseurs « muets » : effetTunnel V0 changeait la transmission de 98 % a 7 % sans changer le dessin — |psi|^2,
+   *   ~0.05, ecrase par la position, ~150) : toute colonne d une AUTRE grandeur a son echelle. Gardees telles quelles, parce qu elles
+   *   sont petites pour une raison PHYSIQUE : y de karman, z de Lagrange et du disque, y des lignes de champ, largeur constante du
+   *   paquet coherent (son echelle propre gonflerait le bruit numerique a la taille du dessin) */
+  effetTunnel: [2], wigner: [2], marcheQuantique: [2, 3], binaireTrouNoir: [3], disqueAccretion: [3], rotorPulse: [3],
+  champLibre: [2], interactionChamps: [2, 3], tsunami: [2, 3], mouvementTerre: [3], tailleEtoiles: [3], oscillateurEtats: [1, 2],
+  centreTerre: [0, 1, 2, 3],
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {

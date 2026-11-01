@@ -88,6 +88,14 @@ ok(T.validerScience(T.paramsScience('systemeSolaire', { groupe: 1, annees: 400 }
     /* game89 (passe « rien oublie ») */
     ['tapisTalbot'], ['couplageCourant']])
     { const e = etendues(id, over); ok(Math.min(...e) >= 0.3, id + ' ' + JSON.stringify(over || {}) + ' : plus une ligne (' + e.map((x) => x.toFixed(3)).join(' ') + ')'); }
+  /* game92 (effetTunnel : |psi|^2 ecrase a 0 par la position, le curseur V0 « muet ») : GARDE GENERALE — dans tout systeme (hors corps),
+   *   une colonne a moins de 5 % de la plus large doit etre dans cette liste, chacune petite pour une raison PHYSIQUE */
+  { const PETITES_VRAIES = { 'paquetOscillateur.2': 'width of a coherent packet: constant', 'karman.1': 'y across the street, same units as x',
+      'pointsLagrange.2': 'z out of the plane: 0 unless started above', 'disqueAccretion.2': 'thin disk thickness, same units', 'champDipolaire.1': 'y = 0 on the field lines' };
+    const ecrasees = [];
+    for (const s of T.SYSTEMES) { if (T.CORPS[s.id]) continue; const o = s.mod.simuler(s.id, T.paramsScience(s.id).params); if (!o.bornee || !o.brut) continue;
+      const e = etendues(s.id, {}); e.forEach((x, j) => { if (x < 0.05 && !PETITES_VRAIES[s.id + '.' + j]) ecrasees.push(s.id + '.' + j + ' (' + x.toFixed(3) + ')'); }); }
+    ok(ecrasees.length === 0, 'aucune colonne d une autre grandeur ecrasee (sous 5 %) hors des ' + Object.keys(PETITES_VRAIES).length + ' petites valeurs physiques' + (ecrasees.length ? ' : ' + ecrasees.join(', ') : '')); }
   const o = T.systeme('schwarzschild').mod.simuler('schwarzschild', T.paramsScience('schwarzschild').params), zA = T.standardiserIso(o.brut, o.n, o.D), zB = T.standardiserIso(o.brut, o.n, o.D, 'schwarzschild');
   ok(zA.every((x, i) => x === zB[i]), 'schwarzschild (sans ECHELLE_PROPRE) : les memes nombres qu avant');
 }

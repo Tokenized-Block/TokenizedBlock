@@ -113,6 +113,19 @@ function bordMandelbrot(cx, cy) {
   }
   return mieux; /* le dernier point DEHORS : il s echappe, et touche un point dedans a ~1e-17 pres */
 }
+/* game92 (audit des 87 systemes : curseur min / defaut / max, dessin standardise) : les curseurs qui ne changent PAS la forme, et
+ *   pourquoi — 'echelle' : la physique est auto-similaire (la forme est la meme, seules l echelle et les valeurs changent) ;
+ *   'checks' : le parametre ne regle que les mesures (lignes « Check »), pas les points dessines. Le banc verifie chaque entree. */
+const CURSEURS_SANS_FORME = {
+  /* (le banc a corrige la 1re table : disque, Casimir, piege, Unruh dessinent en unites NATURELLES — memes points, seules les mesures
+   *   changent : 'checks', pas 'echelle') */
+  'disqueAccretion.masse': 'checks', 'courbureEspaceTemps.M': 'echelle', 'videQuantique.d': 'checks', 'zeroAbsolu.frequence': 'checks',
+  'effetUnruh.log10a': 'checks', 'binaireFusion.distance': 'echelle', 'fusionTrousNoirs.distance': 'echelle', 'evaporationTrouNoir.log10Masse': 'echelle',
+  'higgsVide.lambda': 'echelle', 'emissionSpontanee.espacement': 'echelle', 'oscillateurEtats.omega': 'echelle', 'mouvementBrownien.D': 'echelle',
+  'supernovaHydro.energie': 'echelle', 'supernovaHydro.densite': 'echelle', 'supernovaHydro.annees': 'echelle', 'tsunami.amplitude': 'echelle',
+  'nombrePi.termesLeibniz': 'checks', 'nombrePi.termesMachin': 'checks', 'fluctuationsVide.echantillons': 'checks',
+  'mouvementBrownien.particules': 'checks', 'mouvementBrownien.kT': 'checks',
+};
 /* une longueur « ronde » (1, 2 ou 5 x 10^k) au plus egale a x — la barre ; et son ecriture courte */
 const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
 const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
@@ -674,8 +687,11 @@ export function monter(racine, ctx = {}) {
           /* game77 : un parametre ENTIER (nombres quantiques, nombre de tourbillons, graine) a un pas de 1 — plus de « 2.347 » */
           const cle = r.chemin.split('.').pop(), pas = entierReglage(r) || TS.paramEntier(S.science.s.id, cle) ? '1' : String((r.max - r.min) / 400);
           /* game82 (vu a l ecran : « termesLeibniz », « graine ») : le nom anglais, le nom du code en info-bulle pour qui lit le source */
+          /* game92 : un curseur dont la FORME ne change pas le dit (auto-similarite, ou seuls les « Check » bougent) — mesure au banc */
+          const note = CURSEURS_SANS_FORME[S.science.s.id + '.' + cle];
           return el('div', { class: 'tamReglage', title: 'parameter ' + cle },
             el('label', { for: id, class: 'tamDoux', text: (NOMS_PARAMS_EN[cle] || r.nom) + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
+            ...(note ? [el('span', { class: 'tamDoux tamNoteCurseur', text: ' — ' + (note === 'echelle' ? 'sets the scale only: the shape stays the same (see the scale bar and the checks)' : 'changes the checks below, not the drawing') })] : []),
             el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': r.nom }));
         }));
       } else for (const r of R) {

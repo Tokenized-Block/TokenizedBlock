@@ -296,6 +296,22 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
       ef('≈ 50 lattice sites', 635 - 16 * 2.0000000298023224 - 158.25390625, 21 * 2.0000000298023224);
       ok(ecr.length === 1 && ecr[0].y - 26 + 3 >= 49.40943626006126, 'arrondi flottant : l etiquette sous la ligne d info est ECRITE (' + JSON.stringify(ecr.map((e) => e.y)) + ')'); }
     ok(/for \(const sur of \[info, varsScene\]\)/.test(onglet) && /poses\.push\(\[\(r\.left - rc\.left\) \* kx/.test(onglet), 'les deux surcouches HTML (ligne du haut, panneau des valeurs) sont reservees a chaque image');
+    /* game92 : chaque curseur annonce « sans forme » est MESURE — la forme ne bouge pas (min / defaut / max) ; « echelle » : les nombres
+     *   bruts bougent (sinon le curseur serait mort) ; « checks » : memes points, au moins une mesure bouge */
+    { const d1 = onglet.indexOf('const CURSEURS_SANS_FORME = {'), f1 = onglet.indexOf('/* une longueur « ronde »');
+      const CSF = new Function(onglet.slice(d1, f1) + '\nreturn CURSEURS_SANS_FORME;')();
+      const sim = (id, p) => { const P = TSq.paramsScience(id); Object.assign(P.params, p); const o = TSq.systeme(id).mod.simuler(id, P.params); return { o, z: TSq.standardiserIso(o.brut, o.n, o.D, id) }; };
+      const dz = (a, b) => { let s = 0; for (let i = 0; i < a.z.length; i++) s += Math.abs(a.z[i] - b.z[i]); return s / a.z.length; };
+      const db = (a, b) => { let s = 0, m = 0; for (let i = 0; i < a.o.brut.length; i++) { s += Math.abs(a.o.brut[i] - b.o.brut[i]); m += Math.abs(a.o.brut[i]); } return m > 0 ? s / m : 0; };
+      const faux = [];
+      for (const [cleSys, sorte] of Object.entries(CSF)) {
+        const [id, k] = cleSys.split('.'), [lo, hi] = TSq.systeme(id).bornes[k], d = sim(id, {}), a = sim(id, { [k]: lo }), b = sim(id, { [k]: hi });
+        const forme = Math.max(dz(d, a), dz(d, b)), brut = Math.max(db(d, a), db(d, b));
+        const inv = JSON.stringify(a.o.invariants) !== JSON.stringify(b.o.invariants);
+        if (!(forme < 0.02) || (sorte === 'echelle' && !(brut > 1e-6)) || (sorte === 'checks' && !(brut === 0 && inv))) faux.push(cleSys + ' (forme ' + forme.toFixed(4) + ', brut ' + brut.toFixed(4) + ', mesures ' + inv + ')');
+      }
+      ok(faux.length === 0 && Object.keys(CSF).length >= 20, 'curseurs « sans forme » mesures (' + Object.keys(CSF).length + ')' + (faux.length ? ' — FAUX : ' + faux.join(' ; ') : ''));
+      ok(/const note = CURSEURS_SANS_FORME\[S\.science\.s\.id \+ '\.' \+ cle\];/.test(onglet) && /'changes the checks below, not the drawing'/.test(onglet), 'la note est ecrite sous le curseur'); }
     const scene = onglet.slice(onglet.indexOf('const poses = [], hL'), onglet.indexOf('/* le son allume : le point qu il joue'));
     ok((scene.match(/g\.fillText\(/g) || []).length === 1 && /const ancre = d\.q\.type === 'segment' && dernier \? dernier : premier;/.test(onglet), 'dans la scene, un seul fillText (celui du placeur) ; un segment est nomme a son bout eloigne');
   }
