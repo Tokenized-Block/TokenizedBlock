@@ -48,14 +48,14 @@ export const NON_MINTABLES = Object.freeze(new Set([]));
 /* game80 (audit des durees : des coins de reglage depassent 300 ms de calcul serveur) : des gardes de COUT, calculees AVANT toute
  *   simulation, mesurees le 01/11 a n = 1500. Au-dela : visible dans la page, pas certifiable (la raison est dite). */
 export const GARDES_COUT = Object.freeze({
-  /* cout ~ periodes (612 ms a 20 periodes, omega 0.5, largeur 2) -> au plus 8 periodes (~300 ms au pire mesure) */
-  paquetOscillateur: (p) => (Number(p.periodes) <= 8 ? null : 'at most 8 periods can be certified here (each period costs computing time)'),
-  /* cout ~ etoiles^2 x duree (825 ms a 60 etoiles, duree 12) : etoiles^2 x duree / 1600 <= 9 (~300 ms) */
+  /* game82 : un certificat ne simule plus qu UNE fois (il simulait 3 fois) — gardes re-mesurees seules sur 1 simulation, cible ~400 ms.
+   * paquetOscillateur : 16 periodes = 398 ms au pire mesure (x0 0, largeur 2, omega 0.5), 20 = 485 ms -> 16 (etait 8) */
+  paquetOscillateur: (p) => (Number(p.periodes) <= 16 ? null : 'at most 16 periods can be certified here (each period costs computing time)'),
+  /* amasEtoiles : etoiles^2 x duree / 1600 <= 9 -> 308 ms au pire sur masseTrouNoir x viriel ; 12 -> 428 ms : on garde 9 */
   amasEtoiles: (p) => ((Number(p.etoiles) ** 2) * Number(p.duree) / 1600 <= 9 ? null : 'fewer stars or a shorter run can be certified here (stars^2 x duration / 1600 must stay <= 9)'),
-  /* cout ~ B0 x duree (496 ms a 2000 x 240) : B0 x duree <= 250 000 (~250 ms) */
-  /* le systeme solaire INTERIEUR (groupe 0) : cout ~ annees (962 ms a 400 ans, 246 ms a 100) -> 100 ans ; le groupe 1 est rapide (37 ms a 400) */
-  systemeSolaire: (p) => (Math.round(Number(p.groupe)) === 1 || Number(p.annees) <= 100 ? null : 'at most 100 years of the inner planets can be certified here'),
-  champDipolaire: (p) => (Number(p.B0) * Number(p.duree) <= 250000 ? null : 'a weaker field or a shorter run can be certified here (field x duration must stay <= 250 000)'),
+  /* le systeme solaire INTERIEUR (groupe 0) : 244 ms a 100 ans, 482 a 200 -> 150 ans (etait 100) ; le groupe 1 est rapide (37 ms a 400) */
+  systemeSolaire: (p) => (Math.round(Number(p.groupe)) === 1 || Number(p.annees) <= 150 ? null : 'at most 150 years of the inner planets can be certified here'),
+  /* champDipolaire : 80 ms au pire des bornes (B0 2000, duree 240) -> plus de garde (elle refusait 37 tirages / 200 pour rien) */
 });
 export const FUSION_PRODUIT_MIN = 90; /* Phil : « augmente les limites » — 150 -> 90 : plus de couples acceptes, pire cas mesure au banc */
 export function coutFusion(p) {
@@ -94,7 +94,14 @@ export function paramsScience(id, params = {}, { minteur = null, angles = null }
 }
 
 /** les params tiennent-ils ? (cles connues, science connue, params = ceux que le module rend apres bornage, angles, q, minteur) */
-export function validerScience(P) {
+/** game82 (mesure : un certificat SIMULAIT 3 FOIS la meme oeuvre — valider, puis rejouer = valider + generer ; effetTunnel 923 ms
+ *   pour 141 ms de simulation) : la validation garde sa sortie, la generation la reprend. Meme appel, memes nombres : une seule fois. */
+export function validerScience(P) { return validerEtSimuler(P).v; }
+function validerEtSimuler(P) {
+  const sortie = { o: null }, v = validerInterne(P, sortie);
+  return { v, o: v.ok ? sortie.o : null };
+}
+function validerInterne(P, sortie) {
   const non = (raison) => ({ ok: false, code: 'HORS_BORNES', raison });
   if (!P || typeof P !== 'object' || Array.isArray(P)) return non('params absents');
   for (const k of Object.keys(P)) if (!CLES.has(k)) return non('cle inconnue: ' + k);
@@ -110,6 +117,7 @@ export function validerScience(P) {
   if (P.q !== Q_SCIENCE) return non('q');
   if (!P.params || typeof P.params !== 'object' || Array.isArray(P.params)) return non('parametres absents');
   let o; try { o = s.mod.simuler(P.science, P.params); } catch (_) { return non('parametres refuses par le module'); }
+  sortie.o = o;
   /* un params hors bornes serait RAMENE par le module : on exige qu il le soit deja (sinon deux JSON differents = la meme oeuvre) */
   if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');
   if (!Array.isArray(P.angles) || P.angles.length !== Math.max(0, o.D - 3) || !P.angles.every((x) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= DEUX_PI)) return non('angles hors bornes');
@@ -196,9 +204,11 @@ function morton(x, y, z, q) {
   return k;
 }
 /** la simulation, puis la vue stockee (points quantifies, comme generer du moteur) */
-export function genererScience(P) {
+export function genererScience(P) { return genererDepuis(P, null); }
+/* oPre : la sortie de simuler deja calculee par la validation (memes P.science, P.params) ; null = simuler ici */
+function genererDepuis(P, oPre) {
   const s = systeme(P.science); if (!s) return { bornee: false, raison: 'science inconnue' };
-  const o = s.mod.simuler(P.science, P.params);
+  const o = oPre || s.mod.simuler(P.science, P.params);
   if (!o.bornee || !o.brut) return { ...o, bornee: false };
   const n = o.n, D = o.D, M = (1 << P.q) - 1, ordre = estNuage(P, o) ? 1 : 0;
   let fin = CORPS[P.science] ? vueCorps(o, CORPS[P.science]).vue : projeterND(standardiserIso(o.brut, n, D, P.science), n, D, P.angles);
@@ -215,8 +225,12 @@ export function genererScience(P) {
 }
 /** n importe qui, avec les params publics, recalcule les memes octets */
 export function rejouerScience(P) {
-  const v = validerScience(P); if (!v.ok) return { ok: false, raisons: [v.raison] };
-  const o = genererScience(P); if (!o.bornee) return { ok: false, raisons: ['the simulation left its valid domain'] };
+  const { v, o: oV } = validerEtSimuler(P); if (!v.ok) return { ok: false, raisons: [v.raison] };
+  return rejouerApres(P, oV);
+}
+/* la fin du rejeu, P DEJA valide et oV sa simulation : generer, encoder, hacher */
+function rejouerApres(P, oV) {
+  const o = genererDepuis(P, oV); if (!o.bornee) return { ok: false, raisons: ['the simulation left its valid domain'] };
   const octets = encoder({ q: o.q, ordre: o.ordre, points: o.points });
   return { ok: true, octets, hash: keccak256Hex(octets), oeuvre: o };
 }
@@ -295,9 +309,9 @@ export function noteCerveau(P, { nomCerveau = null, humeur = null, ressenti = nu
 }
 /** les certificats d une science : bornes, bornee, distincte de TOUTES les oeuvres mintees (une signature illisible -> NON_LU) */
 export function certifierScience(P, existantes = []) {
-  const v = validerScience(P);
+  const { v, o: oV } = validerEtSimuler(P);
   if (!v.ok) return { ok: false, etat: 'REFUSE', codes: ['HORS_BORNES'], raisons: [v.raison] };
-  const r = rejouerScience(P);
+  const r = rejouerApres(P, oV);
   if (!r.ok) return { ok: false, etat: 'REFUSE', codes: ['DIVERGE'], raisons: r.raisons };
   const sig = signature(r.oeuvre.points, r.oeuvre.q);
   let dmin = 1, nonLues = 0;

@@ -67,10 +67,14 @@ ok(!T.validerScience({ ...T.paramsScience('systemeSolaire', {}), melange: { oper
 { const n = T.noteCerveau(T.paramsScience('bloch', {}), { nomCerveau: '0xb200' + '…' + 'bbe3' }); ok(n.includes('0xb200...bbe3') && !/0xb200bbe3/.test(n), 'note : l adresse courte garde « ... » (jamais un faux identifiant colle)'); }
 ok(T.validerScience(T.paramsScience('fusionTrousNoirs', {})).ok && !T.validerScience(T.paramsScience('fusionTrousNoirs', { m1: 5, m2: 5, fDepart: 10, z: 0 })).ok, 'fusion : GW150914 certifiable ; le coin couteux (5+5, 10 Hz) refuse AVANT simulation');
 /* 1e. game80 : gardes de COUT avant simulation (route publique) — defaut certifiable, coin couteux refuse */
-for (const [id, cher] of [['paquetOscillateur', { periodes: 20 }], ['amasEtoiles', { etoiles: 60, duree: 12 }], ['champDipolaire', { B0: 2000, duree: 240 }], ['systemeSolaire', { groupe: 0, annees: 400 }]]) {
+for (const [id, cher] of [['paquetOscillateur', { periodes: 20 }], ['amasEtoiles', { etoiles: 60, duree: 12 }], ['systemeSolaire', { groupe: 0, annees: 400 }]]) {
   ok(T.validerScience(T.paramsScience(id, {})).ok, id + ' : le reglage par defaut reste certifiable');
   ok(!T.validerScience(T.paramsScience(id, cher)).ok, id + ' : le coin couteux ' + JSON.stringify(cher) + ' est refuse AVANT simulation');
 }
+/* game82 : 1 simulation par certificat (3 avant) -> limites re-mesurees ; les deux bords de chaque nouvelle limite */
+ok(T.validerScience(T.paramsScience('paquetOscillateur', { periodes: 16 })).ok && !T.validerScience(T.paramsScience('paquetOscillateur', { periodes: 17 })).ok, 'paquet : 16 periodes certifiables (398 ms mesures), 17 non');
+ok(T.validerScience(T.paramsScience('systemeSolaire', { groupe: 0, annees: 150 })).ok && !T.validerScience(T.paramsScience('systemeSolaire', { groupe: 0, annees: 151 })).ok, 'systeme solaire interieur : 150 ans oui, 151 non');
+ok(T.validerScience(T.paramsScience('champDipolaire', { B0: 2000, duree: 240 })).ok, 'champDipolaire : le pire coin des bornes (80 ms mesures) est certifiable, plus de garde');
 ok(T.validerScience(T.paramsScience('systemeSolaire', { groupe: 1, annees: 400 })).ok, 'systeme solaire exterieur : 400 ans restent certifiables (37 ms)');
 /* game82 (audit : supernova, versMars, karman... dessines en LIGNE, une colonne de temps ecrasait l echelle commune) : chaque colonne
  *   garde au moins 30 % de la plus large (quantiles 0.5-99.5 %) ; une science sans ECHELLE_PROPRE garde ses proportions exactes */

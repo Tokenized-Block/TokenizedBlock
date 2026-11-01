@@ -58,15 +58,19 @@ function orbite(rg) {
   return {
     S: 4, phase: 2, D: 3,
     prep: (p) => {
-      const u0 = 1 / p.r0;
-      return { ...p, M, rg: rg ? 1 : 0, E: Math.sqrt((1 - 2 * M * u0) * (1 + p.L * p.L * u0 * u0)) };
+      const u0 = 1 / p.r0, E = Math.sqrt((1 - 2 * M * u0) * (1 + p.L * p.L * u0 * u0));
+      /* game82 (audit : L >= 7.8 a r0 = 20 -> « Nothing to draw » ; Kepler a r0 = 6 non lie sur TOUTE la plage de L) : une orbite
+       *   NON LIEE (energie au depart : E >= 1 en RG, L^2 u0^2 / 2 - M u0 >= 0 en Newton) est une FIN dessinee, coupee a r = 10 r0.
+       *   Une orbite liee n est jamais coupee (son apoastre peut depasser 10 r0 : le critere est l energie, pas la distance). */
+      const libre = rg ? E >= 1 : p.L * p.L * u0 * u0 / 2 - M * u0 >= 0;
+      return { ...p, M, rg: rg ? 1 : 0, E, libre, uFuite: u0 / 10 };
     },
     init: (c) => Float64Array.from([1 / c.r0, 0, 0, 0]),
     grille: (c, n) => { const tot = c.tours * DEUX_PI, pas = Math.ceil(tot / (n - 1) / 0.004); return { h: tot / ((n - 1) * pas), pas, duree: tot }; },
     avance: (y, c, h) => rk4(y, c, h),
-    hors: (y, c) => (c.rg && y[0] >= 0.5 / c.M ? 'capture (horizon r = 2M franchi)' : y[0] <= 0 ? 'echappe (orbite non liee)' : null),
-    /* la capture est une FIN dessinee (trajet jusqu a l horizon) ; l orbite non liee (u -> 0, r infini) reste un refus */
-    evenement: (raison) => (raison.startsWith('capture') ? 'capture' : null),
+    hors: (y, c) => (c.rg && y[0] >= 0.5 / c.M ? 'capture (horizon r = 2M franchi)' : c.libre && y[0] <= c.uFuite ? 'fuite (orbite non liee, r > 10 r0)' : y[0] <= 0 ? 'echappe (orbite non liee)' : null),
+    /* la capture (trajet jusqu a l horizon) et la fuite d une orbite non liee (jusqu a 10 r0) sont des FINS dessinees */
+    evenement: (raison) => (raison.startsWith('capture') ? 'capture' : raison.startsWith('fuite') ? 'escape' : null),
     temps: (y) => y[3], /* fin.t = temps coordonne du dernier etat sain avant l horizon */
     sortie: (y, o, i) => { const r = 1 / y[0]; o[i] = r * cosD(y[2]); o[i + 1] = r * sinD(y[2]); o[i + 2] = y[3]; },
     invariants: (y, c) => {
@@ -192,6 +196,8 @@ function tokamak() {
       y[0] += h * y[3]; y[1] += h * y[4]; y[2] += h * y[5];
     },
     hors: (y) => { const R = Math.sqrt(y[0] * y[0] + y[1] * y[1]), r = Math.sqrt((R - 1) * (R - 1) + y[2] * y[2]); return r > 0.8 ? 'perdue (touche la paroi r = 0.8)' : null; },
+    /* game82 (audit : B0 = 10 -> « Nothing to draw ») : la particule mal confinee qui touche la paroi est une FIN dessinee */
+    evenement: (raison) => (raison.startsWith('perdue') ? 'hits the wall' : null),
     sortie: (y, o, i) => { o[i] = y[0]; o[i + 1] = y[1]; o[i + 2] = y[2]; },
     invariants: (y, c) => {
       champTokamak(y[0], y[1], y[2], c, b);

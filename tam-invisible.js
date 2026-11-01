@@ -265,7 +265,9 @@ function transmission(E, V0, a) {
   const s = sinD(Math.sqrt(2 * (E - V0)) * a); return 1 / (1 + V0 * V0 * s * s / (4 * E * (E - V0)));
 }
 function effetTunnel(P, n) {
-  const NX = 1024, L = 300, dx = L / NX, sig = 8, x0 = -45, k0 = P.k0, V0 = P.V0, F = 25, dt = 0.05;
+  /* game82 (audit : k0 = 0.6 -> 962 ms au certificat, 3 000 pas) : le pas cinetique est exact en split-step, l erreur de decoupage
+   *   croit avec k0 x dt -> dt = 0.06 / k0 garde k0 x dt constant : 1 500 pas pour tout k0 de [0.6, 2.5], precision mesuree au banc */
+  const NX = 1024, L = 300, dx = L / NX, sig = 8, x0 = -45, k0 = P.k0, V0 = P.V0, F = 25, dt = 0.06 / k0;
   const cellules = Math.max(1, Math.round(P.largeur / dx)), aEff = cellules * dx, j0 = NX / 2;
   const tFin = 90 / k0, pasParImage = Math.ceil(tFin / dt / (F - 1)), h = tFin / (pasParImage * (F - 1));
   const re = new Float64Array(NX), im = new Float64Array(NX), V = new Float64Array(NX), fft = fabriquerFFT(NX);

@@ -67,7 +67,18 @@ function suite(T, bavard = false) {
     return `r final ${rr(n - 1).toFixed(4)}, t ${r.fin.t.toFixed(2)}`;
   });
   ok('schwarzschild defaut (tours 12) : orbite liee, pas de fin', () => { const r = sim('schwarzschild'); assert.equal(r.params.tours, 12); assert.equal(r.fin, undefined); assert.ok(r.invariants.precession.orbites >= 5); });
-  ok('kepler L=12 r0=6 : non liee (echappe)', () => { const r = sim('kepler', { L: 12, r0: 6 }); assert.equal(r.bornee, false); assert.match(r.raison, /echappe/); });
+  /* game82 : une orbite NON LIEE est une fin dessinee (fuite jusqu a 10 r0), plus un refus */
+  ok('kepler L=12 r0=6 : non liee -> fin « escape » dessinee jusqu a 10 r0', () => {
+    const r = sim('kepler', { L: 12, r0: 6 }); assert.equal(r.bornee, true); assert.equal(r.fin && r.fin.evenement, 'escape');
+    const rr = (i) => Math.hypot(r.brut[3 * i], r.brut[3 * i + 1]); assert.ok(rr(r.n - 1) > 55 && rr(r.n - 1) <= 60 * (1 + 1e-9), 'derniere ligne vers 10 r0 : ' + rr(r.n - 1));
+    for (let i = 0; i < r.n; i++) assert.ok(rr(i) <= 60 * (1 + 1e-9)); });
+  ok('schwarzschild L=7.8 r0=20 : non liee (E >= 1) -> fin « escape »', () => { const r = sim('schwarzschild', { L: 7.8, r0: 20 }); assert.equal(r.bornee, true); assert.equal(r.fin.evenement, 'escape'); });
+  ok('tokamak B0=10 : la particule touche la paroi -> fin « hits the wall » dessinee, derniere ligne a la paroi', () => {
+    const r = sim('tokamak', { B0: 10 }); assert.equal(r.bornee, true); assert.equal(r.fin && r.fin.evenement, 'hits the wall');
+    const i = r.n - 1, R = Math.hypot(r.brut[3 * i], r.brut[3 * i + 1]), d = Math.hypot(R - 1, r.brut[3 * i + 2]); assert.ok(d <= 0.8 + 1e-9 && d > 0.7, 'distance au coeur ' + d); });
+  /* le piege : une orbite LIEE tres excentrique depasse 10 r0 (apoastre ~ 492 pour L = 6.2, r0 = 20) — elle n est jamais coupee */
+  ok('kepler L=6.2 r0=20 : liee, apoastre > 10 r0, PAS coupee', () => { const r = sim('kepler', { L: 6.2, r0: 20 }); assert.equal(r.bornee, true); assert.ok(!r.fin, 'pas de fin');
+    let m = 0; for (let i = 0; i < r.n; i++) m = Math.max(m, Math.hypot(r.brut[3 * i], r.brut[3 * i + 1])); assert.ok(m > 200, 'apoastre ' + m); });
   // 4. huit et chaos
   ok('huit : retour au depart apres une periode (< 1e-5)', () => {
     const r = sim('troisCorps', { duree: T.T_HUIT }), b = r.brut, n = r.n; let d = 0;
@@ -131,7 +142,8 @@ const MUTANTS = [
   ['hydrogene : exp(-rho) au lieu de exp(-rho/2)', 'expD(-rho / 2)', 'expD(-rho)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte', 'alea = mulberry32(c.graine >>> 0)', 'alea = Math.random'],
-  ['capture redevient un refus', "evenement: (raison) => (raison.startsWith('capture') ? 'capture' : null),", ''],
+  ['capture redevient un refus', "evenement: (raison) => (raison.startsWith('capture') ? 'capture' : raison.startsWith('fuite') ? 'escape' : null),", "evenement: (raison) => (raison.startsWith('fuite') ? 'escape' : null),"],
+  ['fuite coupee aussi sur une orbite LIEE (critere de distance au lieu de l energie)', 'c.libre && y[0] <= c.uFuite', 'y[0] <= c.uFuite'],
   ['rejeu jusqu APRES l evenement (tAvant -> tc + hk)', 'tAvant: tc,', 'tAvant: tc + hk,'],
 ];
 const brut = readFileSync(SOURCE, 'utf8'), moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;

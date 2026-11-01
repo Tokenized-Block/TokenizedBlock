@@ -138,14 +138,14 @@ const L = {
     enUnePhrase: 'A small body circling a non-rotating black hole, seen from above, with time lifting the path into a spiral staircase.',
     colonnes: ['x in the orbit plane (black-hole mass units, G = c = M = 1)', 'y in the orbit plane (same units)', 'time (scaled so it ends at twice the largest distance; goes up as the path is drawn)'],
     aRegarder: ['The orbit does not close: each turn starts a little further round. That is general relativity\'s precession (Mercury does the same, much more slowly).', 'Compare with the Newtonian orbit, same start: there the loops close exactly.'],
-    fin: null,
+    fin: 'ends early at the horizon (r = 2M) if the body falls in, or at 10 times the starting distance if it is not bound and flies away for ever',
   },
   kepler: {
     titre: 'Newtonian orbit',
     enUnePhrase: 'The same start as the black-hole orbit, under Newton\'s gravity: a closed ellipse, lifted by time.',
     colonnes: ['x in the orbit plane (central-mass units, G = M = 1)', 'y in the orbit plane (same units)', 'time (scaled so it ends at twice the largest distance; goes up as the path is drawn)'],
     aRegarder: ['Seen from above every loop lands exactly on the previous one: no precession in Newton\'s gravity.'],
-    fin: null,
+    fin: 'ends at 10 times the starting distance if the speed is above escape speed (the path is then a hyperbola or parabola, not an ellipse)',
   },
   troisCorps: {
     titre: 'Three-body problem',
