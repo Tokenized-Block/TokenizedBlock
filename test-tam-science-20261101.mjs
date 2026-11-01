@@ -84,7 +84,9 @@ ok(T.validerScience(T.paramsScience('systemeSolaire', { groupe: 1, annees: 400 }
     const M = Math.max(...e); return e.map((x) => x / M); };
   /* game88 : + 3 principes du vide (Higgs exclu : Im phi y est petit pour une raison PHYSIQUE, le champ roule dans une direction) */
   for (const [id, over] of [['supernova'], ['supernovaHydro'], ['versMars'], ['fusionTrousNoirs'], ['karman', { y0: 0.8 }], ['mandelbrot', { zoom: 100 }],
-    ['videComprime'], ['casimirDynamique'], ['emissionSpontanee']])
+    ['videComprime'], ['casimirDynamique'], ['emissionSpontanee'],
+    /* game89 (passe « rien oublie ») */
+    ['tapisTalbot'], ['couplageCourant']])
     { const e = etendues(id, over); ok(Math.min(...e) >= 0.3, id + ' ' + JSON.stringify(over || {}) + ' : plus une ligne (' + e.map((x) => x.toFixed(3)).join(' ') + ')'); }
   const o = T.systeme('schwarzschild').mod.simuler('schwarzschild', T.paramsScience('schwarzschild').params), zA = T.standardiserIso(o.brut, o.n, o.D), zB = T.standardiserIso(o.brut, o.n, o.D, 'schwarzschild');
   ok(zA.every((x, i) => x === zB[i]), 'schwarzschild (sans ECHELLE_PROPRE) : les memes nombres qu avant');

@@ -256,6 +256,27 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     && /TS\.paramEntier\(S\.science\.s\.id, cle\) \? '1'/.test(onglet), 'les pas entiers viennent de la declaration ENTIERS des modules');
   /* vu a l ecran : la 1re version reprenait la classe .tamVars (panneau EN ABSOLU sur la scene) -> rendu hors de la carte */
   ok(/el\('details', \{ class: 'tamReglagesHaut'/.test(onglet) && !/\.tamReglagesHaut\{[^}]*position:/.test(onglet) && (onglet.match(/class: 'tamVars'/g) || []).length === 1, 'le bloc des variables du haut a sa propre classe, en flux');
+  /* game89 (Phil, Unruh : deux libelles ecrits l un SUR l autre) : le VRAI placeur du source, sur un faux canvas — deux textes au meme
+   *   point ne se chevauchent plus ; et toute ecriture de la scene passe par lui (un seul fillText nu : le sien) */
+  {
+    const d0 = onglet.indexOf('const poses = [], hL = 13 * dpr, ecrits = new Set();'), f0 = onglet.indexOf('const point = (i, coul, r, txt) => {');
+    ok(d0 > 0 && f0 > d0, 'placeur de libelles extrait');
+    const ecrits = [], g = { measureText: (t) => ({ width: 6 * t.length }), fillText: (t, x, y) => ecrits.push({ t, x, y }) };
+    const ecrire = new Function('g', 'dpr', onglet.slice(d0, f0) + '\nreturn ecrire;')(g, 1);
+    ecrire('Past horizon (x = -t)', 100, 50); ecrire('Future horizon (x = t): light from behind it never arrives', 100, 50); ecrire('start', 104, 52); ecrire('loin', 400, 50);
+    /* la boite d un libelle = celle du placeur : hauteur 13 (le texte fait 11 px), de y - 10 a y + 3 */
+    const bx = (e) => [e.x, e.y - 10, e.x + 6 * e.t.length, e.y + 3], chev = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+    let n = 0; for (let i = 0; i < ecrits.length; i++) for (let j = i + 1; j < ecrits.length; j++) if (chev(bx(ecrits[i]), bx(ecrits[j]))) n++;
+    ok(n === 0 && ecrits[3].y === 50, 'trois libelles au meme point : 0 chevauchement ; un libelle libre reste a sa place (' + JSON.stringify(ecrits.map((e) => e.y)) + ')');
+    /* les 4 cotes d une boite portent le meme nom (fauxVide, nombrePi au balayage) : ecrit UNE fois ; 12 libelles au meme point : aucun superpose */
+    for (const p of [[10, 200], [300, 220], [10, 400], [300, 420]]) ecrire('Edge of the periodic box (side 1)', p[0], p[1]);
+    ok(ecrits.filter((e) => e.t === 'Edge of the periodic box (side 1)').length === 1, 'un meme nom n est ecrit qu une fois par image');
+    for (let k = 0; k < 12; k++) ecrire('Layer ' + k, 500, 600);
+    let n2 = 0; for (let i = 0; i < ecrits.length; i++) for (let j = i + 1; j < ecrits.length; j++) if (chev(bx(ecrits[i]), bx(ecrits[j]))) n2++;
+    ok(n2 === 0 && ecrits.filter((e) => /^Layer /.test(e.t)).length === 8, '12 libelles au meme point : 8 places, les 4 autres NON ecrits (jamais superposes)');
+    const scene = onglet.slice(onglet.indexOf('const poses = [], hL'), onglet.indexOf('/* le son allume : le point qu il joue'));
+    ok((scene.match(/g\.fillText\(/g) || []).length === 1 && /const ancre = d\.q\.type === 'segment' && dernier \? dernier : premier;/.test(onglet), 'dans la scene, un seul fillText (celui du placeur) ; un segment est nomme a son bout eloigne');
+  }
   /* game86 (Phil : « une echelle de grandeur ») : la VRAIE table et les vraies fonctions du source, executees */
   {
     const d = onglet.indexOf('const ECHELLE_UNITE = {'), f = onglet.indexOf('/* les parametres des modules nommes en francais');

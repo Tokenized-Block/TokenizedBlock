@@ -997,10 +997,24 @@ export function monter(racine, ctx = {}) {
     }
     g.stroke(); g.globalAlpha = 1;
     /* debut et fin : le premier point (t = 0) et le dernier trace ; pendant le trace, une tete lumineuse avance */
+    /* game89 (Phil, Unruh : « Past horizon » et « Future horizon » ecrits l un SUR l autre) : chaque libelle de l image passe par ici ;
+     *   un texte qui chevaucherait un texte deja pose descend d une ligne (8 essais) — plus jamais deux libelles superposes */
+    /* (balayage des 98 vues, game89) : un MEME nom n est ecrit qu une fois par image (les 4 cotes d une boite, les 2 cotes d un tunnel
+     *   portent le meme libelle) ; sans place libre apres 8 essais, le libelle n est PAS ecrit (il reste dans la legende et la bulle) */
+    const poses = [], hL = 13 * dpr, ecrits = new Set();
+    const ecrire = (txt, x, y) => {
+      if (ecrits.has(txt)) return;
+      const w = g.measureText(txt).width; let yy = y;
+      for (let k = 0; k < 8; k++) {
+        const b = [x - 1, yy - hL + 3, x + w + 1, yy + 3]; /* hauteur = le pas hL (14 px pour un pas de 13 perdait une place sur deux) */
+        if (!poses.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1])) { poses.push(b); ecrits.add(txt); g.fillText(txt, x, yy); return; }
+        yy += hL;
+      }
+    };
     const point = (i, coul, r, txt) => {
       if (!Number.isFinite(projSx[i])) return;
       g.shadowColor = coul; g.shadowBlur = 14 * dpr; g.fillStyle = coul; g.beginPath(); g.arc(projSx[i], projSy[i], r * dpr, 0, 2 * Math.PI); g.fill();
-      if (txt) { g.shadowBlur = 0; g.font = (11 * dpr) + 'px system-ui,sans-serif'; g.fillText(txt, projSx[i] + 7 * dpr, projSy[i] - 6 * dpr); }
+      if (txt) { g.shadowBlur = 0; g.font = (11 * dpr) + 'px system-ui,sans-serif'; ecrire(txt, projSx[i] + 7 * dpr, projSy[i] - 6 * dpr); }
     };
     /* game77 : un nuage n a ni debut ni fin (points tires, pas un chemin) : pas de reperes start/end */
     if (corps) {
@@ -1027,7 +1041,7 @@ export function monter(racine, ctx = {}) {
           const noir = /black hole|throat/.test(nomCentre), coul = noir ? '#000000' : '#ffd36b';
           g.shadowColor = noir ? '#b48cff' : '#ffd36b'; g.shadowBlur = 18 * dpr; g.fillStyle = coul; g.beginPath(); g.arc(u.sx, u.sy, 6 * dpr, 0, 2 * Math.PI); g.fill();
           if (noir) { g.strokeStyle = '#b48cff'; g.lineWidth = 1.5 * dpr; g.stroke(); }
-          g.shadowBlur = 0; g.fillStyle = '#e8ecf5'; g.font = (11 * dpr) + 'px system-ui,sans-serif'; g.fillText(nomCentre, u.sx + 9 * dpr, u.sy + 4 * dpr);
+          g.shadowBlur = 0; g.fillStyle = '#e8ecf5'; g.font = (11 * dpr) + 'px system-ui,sans-serif'; ecrire(nomCentre, u.sx + 9 * dpr, u.sy + 4 * dpr);
         }
       }
     }
@@ -1050,7 +1064,7 @@ export function monter(racine, ctx = {}) {
           if (S.corps && d.q.libelle && d.q.libelle === TS.CENTRE[S.science.s.id]) continue;
           const u = ecran(d.vue[0]); if (!u) continue;
           g.shadowColor = col; g.shadowBlur = 14 * dpr; g.fillStyle = col; g.beginPath(); g.arc(u.sx, u.sy, 5 * dpr, 0, TOUR); g.fill();
-          g.shadowBlur = 0; g.fillStyle = '#e8ecf5'; if (d.q.libelle) g.fillText(d.q.libelle, u.sx + 8 * dpr, u.sy - 6 * dpr);
+          g.shadowBlur = 0; g.fillStyle = '#e8ecf5'; if (d.q.libelle) ecrire(d.q.libelle, u.sx + 8 * dpr, u.sy - 6 * dpr);
           continue;
         }
         let premier = null, dernier = null;
@@ -1064,7 +1078,8 @@ export function monter(racine, ctx = {}) {
             const x1 = Wc - 16 * dpr, x0 = x1 - l, y = 30 * dpr;
             g.strokeStyle = col; g.lineWidth = Math.max(1, 2 * dpr); g.globalAlpha = 0.95; g.setLineDash([]);
             g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); for (const x of [x0, x1]) { g.moveTo(x, y - 5 * dpr); g.lineTo(x, y + 5 * dpr); } g.stroke();
-            g.globalAlpha = 1; g.fillStyle = col; g.textAlign = 'right'; g.fillText('≈ ' + d.q.libelle.replace(/^Scale: /, ''), x1, y - 9 * dpr); g.textAlign = 'left';
+            /* l etiquette de l echelle reserve sa place (les libelles de la scene la contournent) */
+            const te = '≈ ' + d.q.libelle.replace(/^Scale: /, ''); g.globalAlpha = 1; g.fillStyle = col; ecrire(te, x1 - g.measureText(te).width, y - 9 * dpr);
           }
           continue;
         }
@@ -1076,7 +1091,9 @@ export function monter(racine, ctx = {}) {
           g.stroke();
         }
         g.setLineDash([]); g.globalAlpha = 1;
-        if (premier && d.q.libelle && !d.q.muet) { g.fillStyle = col; g.fillText(d.q.libelle, premier.sx + 6 * dpr, premier.sy - 4 * dpr); }
+        /* un SEGMENT est nomme a son bout eloigne (deux segments partis du meme point — les horizons d Unruh — ne s ecrivent plus au meme endroit) */
+        const ancre = d.q.type === 'segment' && dernier ? dernier : premier;
+        if (ancre && d.q.libelle && !d.q.muet) { g.fillStyle = col; ecrire(d.q.libelle, ancre.sx + 6 * dpr, ancre.sy - 4 * dpr); }
       }
     }
     /* le son allume : le point qu il joue, sur la courbe (le meme index que la frequence) */

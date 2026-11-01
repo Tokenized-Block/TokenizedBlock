@@ -185,6 +185,9 @@ export const ECHELLE_PROPRE = {
   /* game88 (vu a l ecran : Higgs dessine en LIGNE, le temps ~260 et V ecrasaient phi ~1) : les principes du vide — seules les colonnes de
    *   MEME grandeur gardent l echelle commune (x et p ; Re phi et Im phi ; le desaccord seul) */
   higgsVide: [2, 3], videComprime: [2, 3], casimirDynamique: [2, 3], emissionSpontanee: [1, 2, 3],
+  /* game89 (passe « rien oublie » sur les 87 systemes) : la densite de probabilite ecrasait position et temps [0.074 0.079 1] ; 1/alpha
+   *   (~137) ecrasait log10 Q [0.052 1 0.008], et l indice de la force (0/1) est une etiquette, pas une longueur */
+  tapisTalbot: [2], couplageCourant: [1, 2],
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {
