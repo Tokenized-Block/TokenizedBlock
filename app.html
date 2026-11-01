@@ -3549,7 +3549,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261101-game78" hidden>Build <code>20261101-game78</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261101-game79" hidden>Build <code>20261101-game79</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -8778,6 +8778,17 @@ function ouvrirTam() {
     compte: () => { try { return compte; } catch (_) { return null; } },
     /* 2026-11-01 (Phil : « integrer au brain actuel ») : le block ouvert dans l onglet Brain — son cerveau peut choisir l oeuvre */
     blocCerveau: () => { try { return brainAdr; } catch (_) { return null; } },
+    /* game79 (Phil : « t es toujours sur UNIT, chaque brain doit faire sa propre experience ») : les blocks de la Map, et la recherche B20 */
+    blocsCarte: () => { try { return habitants.slice(0, 60).map((h) => ({ adr: String(h.adr || '').toLowerCase(), sym: h.sym || null })).filter((h) => /^0x[0-9a-f]{40}$/.test(h.adr)); } catch (_) { return []; } },
+    chercherBlocs: async (q) => { const s = await rechercheB20(q, 8); return s && Array.isArray(s.resultats) ? s.resultats.map((r) => ({ adr: String(r.adr || '').toLowerCase(), sym: r.sym || null })).filter((h) => /^0x[0-9a-f]{40}$/.test(h.adr)) : []; },
+    /* game79 : le cerveau VIVANT de l onglet Brain (son dernier battement) — TAM affiche ses valeurs en direct quand c est lui qui a dessine */
+    cerveauVivant: () => {
+      try {
+        const v = brainHisto.length ? brainHisto[brainHisto.length - 1] : null;
+        if (!brainAdr || !v || Date.now() - brainVuA > 30000) return null;
+        return { adr: String(brainAdr).toLowerCase(), phase: v.phase, humeur: humeurAffichee(v.phase), ressenti: v.phase === 'NON_LU' ? null : ressentiDe(brainHisto), tick: v.tick, spikes: v.spikes };
+      } catch (_) { return null; }
+    },
     payer: { lignes: () => payerListees(), taille: (l, usdc) => payerTaille(l, usdc), get soldes() { return payer.soldes; }, get dec() { return payer.dec; },
       sym: (l) => symbolePayer(l), qte: (b, d) => qteJeton(b, d),
       /* 2026-11-01 (Phil : payer en actions tokenisees comme les slots) : la liste des misables, MEME sans wallet (lecture seule) */
@@ -25379,6 +25390,8 @@ async function creerBlock() {
  * ⛔ ON DESSINE CE QUI EST LU, PAS UNE ANIMATION. Le raster utilise les INDICES des neurones qui ont
  *    tire ; sans eux, ce serait un joli bruit qui ressemble a une mesure. */
 let brainAdr = null, brainEtat = null, brainHisto = [];
+/* game79 : l heure du dernier battement (TAM ne dit « live » que pour un battement de moins de 30 s) */
+let brainVuA = 0;
 /* ⛔ 2026-10-26 (Brain vision) : { adr, faits, nourritureLue } du DERNIER battement de l onglet Brain — porte son adresse : un
  *   changement de block ne laisse jamais les faits de l ancien sous le nom du nouveau. */
 let brainFaitsVus = null;
@@ -25949,7 +25962,7 @@ function battreBrain() {
     ecrireJournal(brainAdr, r.vu, h);
   }
   if (brainAdr) appliquerReglesDuBrain(brainAdr, r.vu);
-  if (!brainHisto.length || brainHisto[brainHisto.length - 1].tick !== r.vu.tick) brainHisto.push(r.vu);
+  if (!brainHisto.length || brainHisto[brainHisto.length - 1].tick !== r.vu.tick) { brainHisto.push(r.vu); brainVuA = Date.now(); }
   if (brainHisto.length > HISTO_MAX) brainHisto.shift();
   dessinerRaster();
   /* le cablage suit le meme battement : ce qui s allume est ce qui vient de tirer */

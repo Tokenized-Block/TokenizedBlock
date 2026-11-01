@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import * as T from './tam-science.js';
-import { decoder, signature } from './tam-moteur.js';
+import { decoder, signature, canon } from './tam-moteur.js';
 
 let n = 0;
 const ok = (c, m) => { assert.ok(c, m); n++; };
@@ -18,7 +18,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const MOI = '0x' + 'ab'.repeat(20);
 
 /* 1. TOUTES les sciences (game78 : 7 modules — physique, sciences, fluides, astres, cosmos, invisible, quantique) : rejeu, en-tete, decodage, tailles */
-{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8]];
+{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1]];
   let attendu = 0; for (const [f, min] of parModule) { const m = await import('./' + f); ok(m.SYSTEMES.length >= min, f + ' : au moins ' + min + ' systemes (' + m.SYSTEMES.length + ')'); attendu += m.SYSTEMES.length; }
   ok(T.SYSTEMES.length === attendu && new Set(T.SYSTEMES.map((s) => s.id)).size === attendu, 'tam-science rassemble les ' + attendu + ' systemes, sans doublon d id'); }
 for (const s of T.SYSTEMES) {
@@ -41,6 +41,31 @@ for (const s of T.SYSTEMES) {
   ok(T.CENTRE.systemeSolaire === 'Sun' && Object.keys(T.CORPS).every((id) => T.systeme(id)), 'chaque systeme « corps » existe ; le Soleil est le centre du systeme solaire');
   const P = T.paramsScience('systemeSolaire', {}), g = T.genererScience(P), M = 4095;
   ok(g.points.every((x, i) => Math.abs(x - Math.round((v.vue[i] + 1) / 2 * M)) <= 1), 'les octets mintes portent la MEME vue « corps » que l ecran'); }
+/* 1c. game79 : le cerveau choisit parmi TOUTES les sciences, melange parfois un motif, et ECRIT une note (stockee avec l oeuvre) */
+{ const { keccak256Hex: kh } = await import('./keccak.js');
+  const vus = new Set(); let melanges = 0, ok40 = 0;
+  for (let i = 0; i < 24; i++) {
+    const g = kh(new TextEncoder().encode('banc-choix-' + i)), r = T.choisirScience({ graine: g, etatCerveau: { t: i }, minteur: MOI });
+    if (!r.ok) continue; ok40++; vus.add(r.params.science); if (r.params.melange) melanges++;
+    const r2 = T.choisirScience({ graine: g, etatCerveau: { t: i }, minteur: MOI });
+    if (i < 3) ok(canon(r.params) === canon(r2.params), 'choix ' + i + ' : memes entrees, meme oeuvre (' + r.params.science + ')');
+    const note = T.noteCerveau(r.params, { nomCerveau: 'UNIT', humeur: 'calm', ressenti: 'steady', battement: 24 }), P = { ...r.params, note };
+    ok(note.length > 40 && note.length <= T.NOTE_MAX && /chose /.test(note) && /Conclusion: /.test(note), 'choix ' + i + ' : une note avec un choix et une conclusion');
+    ok(T.validerScience(P).ok && T.rejouerScience(P).hash === T.rejouerScience(r.params).hash && JSON.stringify(P).length <= 4096, 'choix ' + i + ' : la note est valide, ne change PAS les octets, tient dans MAX_PARAMS');
+  }
+  ok(ok40 >= 20 && vus.size >= 12, 'le cerveau tire des sciences variees : ' + ok40 + '/24 certifiees, ' + vus.size + ' systemes differents');
+  ok(melanges >= 3, 'des melanges de types differents (science x motif) : ' + melanges);
+  const Pm = { ...T.paramsScience('bloch', {}), melange: { operateur: 'somme', motif: { famille: 'phyllotaxie', torsion: 0.5 }, w: 0.3 } };
+  ok(T.validerScience(Pm).ok && T.rejouerScience(Pm).hash !== T.rejouerScience(T.paramsScience('bloch', {})).hash, 'un melange change l oeuvre et se rejoue');
+  ok(!T.validerScience({ ...Pm, melange: { ...Pm.melange, motif: { famille: 'phyllotaxie', torsion: 0.7 } } }).ok, 'un motif retouche (hors defaut) est refuse');
+  ok(!T.validerScience({ ...Pm, note: 'x'.repeat(T.NOTE_MAX + 1) }).ok && !T.validerScience({ ...Pm, note: '<script>' + String.fromCharCode(0) }).ok, 'note trop longue ou caracteres interdits : refusee'); }
+/* 1d. revue game79 : jamais de melange sur un systeme a plusieurs corps ; la note n invente pas d identifiant ; la fusion bornee */
+ok(!T.validerScience({ ...T.paramsScience('systemeSolaire', {}), melange: { operateur: 'somme', motif: { famille: 'phyllotaxie', torsion: 0.5 }, w: 0.3 } }).ok, 'melange refuse sur un systeme a plusieurs corps');
+{ const { keccak256Hex: kh } = await import('./keccak.js'); let corpsMel = 0;
+  for (let i = 0; i < 60; i++) { const r = T.choisirScience({ graine: kh(new TextEncoder().encode('rev79-' + i)), etatCerveau: { r: i } }); if (r.ok && r.params.melange && T.CORPS[r.params.science]) corpsMel++; }
+  ok(corpsMel === 0, 'le cerveau ne melange jamais un systeme a plusieurs corps (60 tirages)'); }
+{ const n = T.noteCerveau(T.paramsScience('bloch', {}), { nomCerveau: '0xb200' + '…' + 'bbe3' }); ok(n.includes('0xb200...bbe3') && !/0xb200bbe3/.test(n), 'note : l adresse courte garde « ... » (jamais un faux identifiant colle)'); }
+ok(T.validerScience(T.paramsScience('fusionTrousNoirs', {})).ok && !T.validerScience(T.paramsScience('fusionTrousNoirs', { m1: 5, m2: 5, fDepart: 10, z: 0 })).ok, 'fusion : GW150914 certifiable ; le coin couteux (5+5, 10 Hz) refuse AVANT simulation');
 /* 2. les bornes */
 const P0 = T.paramsScience('schwarzschild', {}, { minteur: MOI });
 ok(T.validerScience(P0).ok, 'temoin : params de paramsScience valides');
@@ -67,7 +92,7 @@ ok(/'tam-science\.js'/.test(web), 'tam-science.js est servi');
 
 /* 5. mutants sur COPIES */
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tam-science-mut-'));
-for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
+for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
 const SRC = fs.readFileSync(path.join(ICI, 'tam-science.js'), 'utf8');
 const MUTANTS = [
   ['params hors bornes acceptes', (s) => s.replace("if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');", '')],

@@ -325,10 +325,19 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.oeuvreReglee\(/.test(onglet) && /M\.coupDePouce\(S\.P, S\.cerveauEtat\)/.test(onglet) && /data-chemin/.test(onglet), 'curseurs -> V.oeuvreReglee ; bouton du cerveau -> M.coupDePouce');
   ok(/'\/api\/tam\/choix\?draw=' \+ tirage \+ \(c \? '&minter=' \+ c : ''\)/.test(onglet) && /q\.get\('minter'\), ipT, q\.get\('draw'\)/.test(serveur) && /crypto\.getRandomValues\(new Uint8Array\(8\)\)/.test(onglet) && /chemin === '\/api\/tam\/certifier'/.test(serveur), 'le wallet est transmis au choix ; la route /api/tam/certifier existe');
   /* 2026-11-01 : le cerveau du block de l onglet Brain choisit (bascule vers UNIT), passe au serveur par &block= */
-  ok(/\(src \? '&block=' \+ src : ''\)/.test(onglet) && /const src = sourceCerveau\(\);/.test(onglet) && /a && S\.sourceBloc !== false \? a : null/.test(onglet), 'le block de l onglet Brain est passe au choix (&block=), sauf si le joueur bascule sur UNIT');
+  ok(/\(src \? '&block=' \+ src : ''\)/.test(onglet) && /const src = sourceCerveau\(\);/.test(onglet) && /const sourceCerveau = \(\) => \(ADR_OK\.test\(selBloc\.value\) \? selBloc\.value : null\);/.test(onglet), 'game79 : le block CHOISI dans « Brain of » (n importe lequel) est passe au choix (&block=) ; vide = UNIT');
+  /* game79 : le selecteur propose UNIT, le block de l onglet Brain, ceux de la Map, et la recherche B20 */
+  const appH79 = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  ok(/blocsCarte: \(\) =>/.test(appH79) && /chercherBlocs: async \(q\) =>/.test(appH79) && /\['', 'UNIT \(default brain\)'\]/.test(onglet) && /' · on your Map'/.test(onglet), '« Brain of » : UNIT, onglet Brain, Map, recherche');
+  /* game79 : la bulle des vraies valeurs (survol / tap), les valeurs vivantes du cerveau (< 30 s), le tirage sur TOUS les genres */
+  ok(/function peindreBulle\(i, x, y, larg\)/.test(onglet) && /b\[i \* D \+ j\]/.test(onglet) && /survolScene\(e\);\n    ptrs\.delete/.test(onglet), 'bulle : valeurs brutes du point, au survol et au tap');
+  ok(/Date\.now\(\) - brainVuA > 30000/.test(appH79) && /' \(rebuilt on the server when it drew\)'/.test(onglet) && /' · now live: '/.test(onglet), 'valeurs : l etat qui a DESSINE, puis « now live » seulement pour un battement de moins de 30 s (revue game79)');
+  const tamSrv79 = readFileSync(new URL('./tam-serveur.js', import.meta.url), 'utf8');
+  ok(/if \(tirage && genre >= PORTEUSES\.length\)/.test(tamSrv79) && /SCIENCES_HORS_CHOIX = new Set\(\[\]\)/.test(tamSrv79) && /if \(c\.ok\) c\.note = noteCerveau\(/.test(tamSrv79) && /\+ ':' \+ \(tirage \|\| '-'\);/.test(tamSrv79),
+    'le cerveau tire attracteurs ET toutes les sciences (fusion bornee par coutFusion) ; la note DANS la garde CPU ; le tirage dans la cle du cache');
   const appHtml = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
   ok(/blocCerveau: \(\) => \{ try \{ return brainAdr; \}/.test(appHtml), 'l app donne a TAM le block ouvert dans l onglet Brain (brainAdr)');
-  ok(/id="bArtTam"/.test(appHtml) && /api\.choisirDepuisBloc\(\)/.test(appHtml) && /choisirDepuisBloc = \(\) => \{ selGroupe\.value = 'attracteurs'; peindreGroupe\(\); S\.sourceBloc = true;/.test(onglet), 'Brain : « Make art from this block’s brain » ouvre TAM avec CE cerveau');
+  ok(/id="bArtTam"/.test(appHtml) && /api\.choisirDepuisBloc\(\)/.test(appHtml) && /choisirDepuisBloc = \(\) => \{ S\.sourceBloc = true; peindreSource\(\); const a = blocVu\(\); if \(a\) selBloc\.value = a; bCerveau\.click\(\); \}/.test(onglet), 'Brain : « Make art from this block’s brain » ouvre TAM avec CE cerveau (game79 : tous les genres)');
   /* chaos : chaque variable passe par M.appliquerReglage (bornee, arrondie), puis regler -> memes certificats */
   ok(/Q = M\.appliquerReglage\(Q, r\.chemin, r\.valeur \+ \(u\[i\] \/ 4294967296 \* 2 - 1\) \* k \* \(r\.max - r\.min\) \/ 2\)/.test(onglet) && /regler\(sans\);\n    verdictTxt\.textContent = 'Chaos '/.test(onglet), 'chaos : bornes + arrondi par appliquerReglage, puis regler (certificats)');
   { let Q = { ...ch.params }; for (const r of T.reglagesDe(Q)) Q = T.appliquerReglage(Q, r.chemin, r.valeur + 1e9); ok(T.reglagesDe(Q).every((r) => r.valeur <= r.max + 1e-9), 'chaos maximal : chaque variable reste dans sa borne'); }

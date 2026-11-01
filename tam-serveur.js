@@ -12,7 +12,11 @@ import { topic, keccak256Hex } from './keccak.js';
 const MAX_PARAMS_JSON = MAX_PARAMS;
 import { etatInitial, pas, nomHumeur } from './cerveau.js';
 import { lecture } from './pensee-cerveau.js';
-import { certifierScience } from './tam-science.js';
+import { certifierScience, choisirScience, noteCerveau, SYSTEMES as SYSTEMES_SCIENCE } from './tam-science.js';
+import { PORTEUSES, canon as canonEtat } from './tam-moteur.js';
+/* la fusion phenomenologique (tam-fusion.js) n est pas tiree par le cerveau : son pire coin coute ~1 s de calcul serveur */
+/* game79 (Phil) : la fusion revient dans les choix du cerveau — son cout est borne par tam-science.js#coutFusion avant toute simulation */
+const SCIENCES_HORS_CHOIX = new Set([]);
 
 export const TOPIC_MINTED = topic(SIG_TAM.minted);
 export const FENETRE_LOGS = 9000, FENETRES_PAR_APPEL = 20, TTL_MS = 60000;
@@ -43,7 +47,8 @@ export function etatCerveauTam(adresse, { battements = BATTEMENTS, vie = null, e
   const etat = { cerveau: String(adresse).toLowerCase(), symbole: symbole || null, battements, tick: e.tick, spikes: e.spikes, empreinte: e.c.empreinte,
     vie: faits.vie, etatVie: faits.etatVie, blocFaits: faits.bloc, repli: !!repli, potentiels: e.potentiels.map((x) => Math.round(x * 1e6) / 1e6) };
   /* ⛔ a cote de l etat, jamais DEDANS : canon(etat) fait la graine, une cle de plus changerait toutes les oeuvres */
-  HUMEURS.set(etat, { phase: der ? der.phase : null, humeur: der ? nomHumeur(der.phase) : null, ressenti: lu ? lu.word : null, ressentiCle: lu ? lu.key : null });
+  /* game79 : NON_LU se dit « not read » (comme partout depuis game76), jamais le long « Mood not judged — our read failed » */
+  HUMEURS.set(etat, { phase: der ? der.phase : null, humeur: der ? (der.phase === 'NON_LU' ? 'not read' : nomHumeur(der.phase)) : null, ressenti: lu ? lu.word : null, ressentiCle: lu ? lu.key : null });
   return etat;
 }
 const HUMEURS = new WeakMap();
@@ -133,14 +138,42 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
       if (!oe.aJour) return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: 'the minted works are still being read up to the latest block' };
     }
     const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);
-    const cle = graine + ':' + etat.cerveau + ':' + etat.tick + ':' + etat.etatVie + ':' + etat.vie + ':' + existantes.length + ':' + minteur;
+    const cle = graine + ':' + etat.cerveau + ':' + etat.tick + ':' + etat.etatVie + ':' + etat.vie + ':' + existantes.length + ':' + minteur + ':' + (tirage || '-');
+    /* revue game79 (medium) : le tirage entre dans la cle — sinon un appel « graine seule » (attracteur) recevait la science en cache */
     if (parGraine.has(cle)) return parGraine.get(cle); /* un cache touche ne coute rien : ni budget, ni place */
-    const r = await calculer(ip, () => choisirOeuvre({ graine, etatCerveau: etat, existantes, minteur }));
-    if (r.statut) return r; /* OCCUPE (503) ou TROP (429) : rien n a ete calcule */
-    if (r.etat === 'NON_LU') return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: r.pourquoi };
     const cerveau = { adresse: etat.cerveau, symbole: etat.symbole, battement: etat.tick, spikes: etat.spikes, vie: etat.vie, etatVie: etat.etatVie, blocFaits: etat.blocFaits,
       ...humeurCerveauTam(etat),
       repli: etat.repli, vivant: false, etiquette: etiquetteCerveau(etat) };
+    /* game79 (Phil : « let brain choose : un vrai random sur TOUTES les combinaisons, pas juste attractor ») : le GENRE se tire d abord
+     *   (rejouable : keccak(graine | etat du cerveau | genre)) — un attracteur (16 familles) ou une des sciences (toutes ; la fusion
+     *   phenomenologique en est exclue : son pire coin coute ~1 s de calcul). */
+    const idsScience = SYSTEMES_SCIENCE.map((s) => s.id).filter((id) => !SCIENCES_HORS_CHOIX.has(id));
+    const genre = parseInt(keccak256Hex(new TextEncoder().encode(graine + '|' + canonEtat(etat) + '|genre')).slice(2, 10), 16) % (PORTEUSES.length + idsScience.length);
+    /* sans tirage (appel API a graine fixe) : un attracteur, comme avant game79 ; le bouton envoie TOUJOURS un tirage */
+    if (tirage && genre >= PORTEUSES.length) {
+      /* revue game79 : la NOTE (une simulation de plus) se calcule DANS la garde CPU, avec le choix — jamais hors du plafond */
+      const hm = humeurCerveauTam(etat);
+      const rs = await calculer(ip, () => {
+        const c = choisirScience({ graine, etatCerveau: etat, existantes, minteur, ids: idsScience });
+        if (c.ok) c.note = noteCerveau(c.params, { nomCerveau: etat.symbole || (etat.cerveau.slice(0, 6) + '...' + etat.cerveau.slice(-4)), humeur: hm.humeur, ressenti: hm.ressenti, battement: etat.tick });
+        return c;
+      });
+      if (rs.statut) return rs;
+      if (rs.etat === 'NON_LU') return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: rs.pourquoi };
+      let repS;
+      if (rs.ok) {
+        /* la NOTE du cerveau (ce qu il a choisi, mesure, conclu) : dans les params, donc stockee on-chain si quelqu un minte cette oeuvre */
+        const P = { ...rs.params, note: rs.note };
+        repS = { ok: true, etat: 'PRET', genre: 'science', graine, bloc, tirage, cerveau, params: P, empreinteEtat: keccak256Hex(new TextEncoder().encode(canonEtat(etat))), certificats: sansSignature(rs.certificats), octets: hexDe(rs.certificats.octets),
+          hash: rs.certificats.hash, rejets: rs.rejets, essai: rs.essai, comparees: existantes.length, minteur };
+      } else repS = { ok: false, etat: 'AUCUNE', graine, bloc, cerveau, pourquoi: 'no science passed the certificates for this seed', rejets: rs.rejets };
+      if (parGraine.size > 64) parGraine.delete(parGraine.keys().next().value);
+      parGraine.set(cle, repS);
+      return repS;
+    }
+    const r = await calculer(ip, () => choisirOeuvre({ graine, etatCerveau: etat, existantes, minteur }));
+    if (r.statut) return r; /* OCCUPE (503) ou TROP (429) : rien n a ete calcule */
+    if (r.etat === 'NON_LU') return { ok: false, etat: 'NON_LU', graine, bloc, pourquoi: r.pourquoi };
     const rep = r.ok
       ? { ok: true, etat: 'PRET', graine, bloc, tirage, cerveau, empreinteEtat: r.params.empreinteEtat,
         params: r.params, certificats: sansSignature(r.certificats), octets: hexDe(r.octets), hash: r.hash, rejets: r.rejets, comparees: existantes.length, minteur }

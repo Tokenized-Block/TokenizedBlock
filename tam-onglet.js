@@ -17,6 +17,8 @@ import * as PHY from './tam-physique.js';
 import * as SCI from './tam-sciences.js';
 import * as FLU from './tam-fluides.js';
 import * as TS from './tam-science.js';
+/* game79 : « Your formula » (tam-formule.js : analyseur maison, jamais eval ; solveurs numeriques avec leur residu) */
+import * as F from './tam-formule.js';
 
 /* game76 (Phil : « relativite generale, gravite, fusion, toutes les sciences… fractales, chiffre d or, quantique, fluides — en direct ») :
  *   des simulations VERIFIEES (chaque module a son banc : invariants contre la theorie, mutants), dessinees par la meme scene.
@@ -26,13 +28,19 @@ import * as TS from './tam-science.js';
 const SYSTEMES_SCI = TS.SYSTEMES;
 const THEMES = {
   astres: ['systemeSolaire', 'cometeHalley', 'trappist1', 'pointsLagrange', 'amasEtoiles', 'supernova', 'supernovaHydro', 'collisionGalaxies', 'courbeRotation', 'expansionUnivers', 'kepler', 'troisCorps'],
-  trousNoirs: ['schwarzschild', 'etoileS2', 'binaireTrouNoir', 'binaireFusion', 'lumiereTrouNoir', 'kerr', 'trouDeVer', 'trouDeVerSurface', 'pulsarHulseTaylor', 'disqueAccretion',
+  trousNoirs: ['schwarzschild', 'etoileS2', 'binaireTrouNoir', 'binaireFusion', 'fusionTrousNoirs', 'lumiereTrouNoir', 'kerr', 'trouDeVer', 'trouDeVerSurface', 'pulsarHulseTaylor', 'disqueAccretion',
     'ondeGravitationnelle', 'courbureEspaceTemps', 'chuteTrouNoir', 'dilatationTemps', 'diagrammeEspaceTemps', 'lorentzRelativiste'],
 };
 const groupeDe = (s) => THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
-const GROUPES = [['attracteurs', 'Attractors (chosen by the brain)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
+/* game79 : la formule de la personne (ou du cerveau) passe par la MEME scene : un « systeme » adapte, vue seule (pas de mint) */
+const SYS_FORMULE = Object.freeze({ id: 'formule', nom: 'Your formula', science: 'Your mathematics', D: 3, phrase: 'Your own formula, drawn and solved numerically.',
+  mod: {
+    simuler: (_id, p = {}) => { const { a, b, c, d, ...spec } = p; return F.simulerFormule({ ...spec, vars: { ...(spec.vars || {}), ...(a !== undefined ? { a } : {}), ...(b !== undefined ? { b } : {}), ...(c !== undefined ? { c } : {}), ...(d !== undefined ? { d } : {}) } }); },
+    reglagesPhysique: (_id, p = {}) => ['a', 'b', 'c', 'd'].map((k) => ({ chemin: 'params.' + k, nom: k, min: -10, max: 10, valeur: (p.vars && typeof p.vars[k] === 'number' ? p.vars[k] : (typeof p[k] === 'number' ? p[k] : 1)) })),
+  } });
+const GROUPES = [['attracteurs', 'Attractors'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
   ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics']];
 /* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
  *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */
@@ -77,6 +85,9 @@ const CSS = `
 #v-tam button,#v-tam select{min-height:44px;min-width:44px;border-radius:10px;border:1px solid var(--tam-bord);background:rgba(255,255,255,.06);color:var(--tam-txt);padding:0 12px;font:inherit;font-size:.92rem;max-width:100%}
 /* game77 (Phil, capture : le menu deroulant est transparent, on voit le graphe a travers) : menus et options sur fond OPAQUE */
 #v-tam select{background:#161a2b;color:var(--tam-txt);color-scheme:dark}
+/* game79 : les champs (recherche de block, formules, intervalles) en sombre, lisibles */
+#v-tam input[type="search"],#v-tam input[type="text"],#v-tam input[type="number"]{min-height:44px;border-radius:10px;border:1px solid var(--tam-bord);background:#161a2b;color:var(--tam-txt);padding:0 10px;font:inherit;font-size:.92rem;color-scheme:dark;max-width:100%}
+#v-tam input[type="text"]{font-family:ui-monospace,Consolas,monospace}
 #v-tam select option,#v-tam select optgroup{background:#161a2b;color:var(--tam-txt)}
 #v-tam button[aria-pressed="true"]{background:rgba(127,209,255,.18);border-color:var(--tam-acc)}
 #v-tam .tamPrim{background:var(--tam-acc);color:#06121d;border-color:var(--tam-acc);font-weight:600}
@@ -86,6 +97,8 @@ const CSS = `
 #v-tam .tamVars{position:absolute;left:8px;bottom:6px;right:8px;display:flex;flex-wrap:wrap;gap:2px 10px;max-height:40%;overflow:hidden;font:11px/1.35 ui-monospace,Consolas,monospace;color:#cfd6ff;opacity:.85;pointer-events:none;text-shadow:0 0 4px #0b0d17}
 #v-tam .tamVars b{width:100%;font-weight:600;color:#fff}
 #v-tam .tamPayListe{margin:.3rem 0;padding-left:1.1rem;font-size:.82rem;color:var(--tam-doux);max-height:220px;overflow:auto}
+#v-tam .tamBulle{position:absolute;z-index:3;pointer-events:none;max-width:260px;background:rgba(11,13,23,.94);border:1px solid var(--tam-acc);border-radius:10px;padding:6px 9px;font:11px/1.45 ui-monospace,Consolas,monospace;color:#e8ecf5;box-shadow:0 0 14px rgba(127,209,255,.35)}
+#v-tam .tamBulle b{color:#fff}
 #v-tam .tamVars .tamMesure{width:100%;color:#ffe9a8}
 #v-tam .tamQui{margin:.2rem 0 .5rem;font-size:.9rem}
 #v-tam .tamQui .tamHumeur{padding:0 .35rem;border-radius:6px;color:#fff;text-shadow:0 0 6px currentColor}
@@ -146,6 +159,9 @@ export function monter(racine, ctx = {}) {
   const bCerveau = el('button', { type: 'button', id: 'tamCerveau', text: 'Let the brain choose' });
   /* 2026-11-01 : QUEL cerveau choisit — UNIT par defaut, ou le block ouvert dans l onglet Brain (bascule visible seulement s il y en a un) */
   const bSource = el('button', { type: 'button', id: 'tamSourceCerveau', 'aria-pressed': 'false', hidden: true });
+  /* game79 : QUEL cerveau dessine — n importe quel block : UNIT, celui de l onglet Brain, ceux de la Map, ou une recherche */
+  const selBloc = el('select', { id: 'tamBloc', 'aria-label': 'Which block\'s brain draws' });
+  const chBloc = el('input', { type: 'search', id: 'tamBlocCherche', placeholder: 'Find a block — symbol or address', 'aria-label': 'Find a block', autocomplete: 'off', spellcheck: 'false' });
   const bRot = el('button', { type: 'button', id: 'tamRotation', 'aria-pressed': String(S.rotation), text: 'Hidden rotation' });
   const bVue = el('button', { type: 'button', text: 'Reset view' });
   const bSon = el('button', { type: 'button', id: 'tamSon', 'aria-pressed': 'false', text: 'Sound: off' });
@@ -155,21 +171,33 @@ export function monter(racine, ctx = {}) {
   const info = el('div', { class: 'tamInfo' });
   /* 2026-11-01 (Phil) : les variables SUR le graphe — un mathematicien lit l equation et ses valeurs sans quitter la scene */
   const varsScene = el('div', { class: 'tamVars', id: 'tamVarsScene' });
-  const scene = el('div', { class: 'tamScene' }, cv, info, varsScene);
+  /* game79 (Phil : « les donnees visibles en live sur le graph quand on passe le curseur ») : la bulle des VRAIES valeurs du point survole */
+  const bulle = el('div', { class: 'tamBulle', id: 'tamBulle', hidden: true, role: 'status', 'aria-live': 'off' });
+  const scene = el('div', { class: 'tamScene' }, cv, info, varsScene, bulle);
   const etatLigne = el('p', { class: 'tamDoux', id: 'tamEtat', 'aria-live': 'polite' });
   /* 2026-11-01 (Phil) : en haut, QUEL block fait le graphe, son humeur (moteur) et sa lecture (le mot humain), avec le glow de l humeur */
   const qui = el('p', { class: 'tamQui', id: 'tamQui', text: 'No work yet: let a brain choose, or pick a family.' });
   function peindreQui() {
-    if (S.science) { qui.dataset.phase = ''; qui.replaceChildren(document.createTextNode('Live simulation: '), el('b', { text: S.science.s.nom }), document.createTextNode(' · ' + S.science.s.science + ' · you set it')); return; }
+    if (S.science && !((S.choix && S.choix.cerveau) || S.origine)) { qui.dataset.phase = ''; qui.replaceChildren(document.createTextNode('Live simulation: '), el('b', { text: S.science.s.nom }), document.createTextNode(' · ' + S.science.s.science + ' · you set it')); return; }
     /* le cerveau qui a choisi reste nomme apres un reglage (S.origine) : « then tuned » le dit */
     const ch = (S.choix && S.choix.cerveau) || S.origine;
     if (ch) {
       const nom = ch.symbole || (ch.adresse ? court(ch.adresse) : 'a block');
-      qui.dataset.phase = ch.phase || '';
+      /* game79 (Phil : « mets la reel valeur en direct ») : si ce block est celui qui VIT dans l onglet Brain, ses valeurs du moment
+       *   (humeur, ressenti, battement, spikes) se lisent la, rafraichies ; sinon : l etat rebati sur le serveur, au battement dit. */
+      const v = ctx.cerveauVivant ? ctx.cerveauVivant() : null;
+      const vif = v && ch.adresse && String(v.adr || '').toLowerCase() === String(ch.adresse).toLowerCase() ? v : null;
+      /* revue game79 : l etat QUI A DESSINE (rebati sur le serveur, celui de la note on-chain) d abord ; l etat VIVANT ensuite, dit « now » */
+      qui.dataset.phase = (vif ? vif.phase : ch.phase) || ''; qui.dataset.vif = vif ? 'oui' : 'non';
       qui.replaceChildren(document.createTextNode('Drawn by the brain of '), el('b', { text: nom }),
         ...(ch.humeur ? [document.createTextNode(' · mood '), el('b', { class: 'tamHumeur', text: ch.humeur })] : []),
         ...(ch.ressenti ? [document.createTextNode(' · feeling '), el('b', { text: ch.ressenti })] : []),
-        ...(S.P && S.P.regle ? [document.createTextNode(' · then tuned')] : []));
+        ...(Number.isFinite(ch.battement) ? [document.createTextNode(' · beat '), el('b', { text: String(ch.battement) })] : []),
+        ...(Number.isFinite(ch.spikes) ? [document.createTextNode(' · ' + ch.spikes + ' spikes')] : []),
+        el('span', { class: 'tamDoux', text: ' (rebuilt on the server when it drew)' }),
+        ...(vif ? [document.createTextNode(' · now live: '), el('b', { text: [vif.humeur, vif.ressenti, 'beat ' + vif.tick, vif.spikes + ' spikes'].filter(Boolean).join(' · ') })] : []),
+        ...(S.science ? [document.createTextNode(' · ' + S.science.s.nom)] : []),
+        ...(S.P && (S.P.regle || (S.science && !S.choix && S.origine)) ? [document.createTextNode(' · then tuned')] : []));
     } else { qui.dataset.phase = ''; qui.textContent = S.P ? 'Set by you in the explorer' + (S.P.regle && S.P.reglage && S.P.reglage.par === 'cerveau' ? ', nudged by the brain' : '') + '.' : 'No work yet.'; }
   }
 
@@ -205,6 +233,22 @@ export function monter(racine, ctx = {}) {
   const resTxt = el('output', { for: 'tamResolution' });
   const verdictTxt = el('p', { class: 'tamDoux', id: 'tamVerdict', 'aria-live': 'polite' });
 
+  /* ── game79 : « Your formula » — ecrire, tracer, resoudre (racines, croisements, extremums, integrale, equilibres) avec le residu ── */
+  const selMode = el('select', { id: 'tamFormMode', 'aria-label': 'Kind of formula' }, ...F.MODES.map((m) => el('option', { value: m.id, text: m.nom })));
+  const zExpr = el('div', { id: 'tamFormExpr' });
+  const deI = el('input', { type: 'number', id: 'tamFormDe', step: 'any', value: '-6.283', 'aria-label': 'From' });
+  const aI = el('input', { type: 'number', id: 'tamFormA', step: 'any', value: '6.283', 'aria-label': 'To' });
+  const zIntervalle = el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamFormDe', text: 'from' }), deI, el('label', { class: 'tamDoux', for: 'tamFormA', text: 'to' }), aI);
+  const bTracer = el('button', { type: 'button', class: 'tamPrim', id: 'tamFormTracer', text: 'Draw it' });
+  const bResoudre = el('button', { type: 'button', id: 'tamFormResoudre', text: 'Solve it' });
+  const bFormCerveau = el('button', { type: 'button', id: 'tamFormCerveau', text: 'Let the brain write a formula' });
+  const formDit = el('p', { class: 'tamDoux', id: 'tamFormDit', 'aria-live': 'polite' });
+  const formRes = el('ul', { class: 'tamPayListe', id: 'tamFormResultats' });
+  const carteFormule = el('div', { class: 'tamCarte', id: 'tamCarteFormule', hidden: true },
+    el('h3', { text: 'Your formula' }),
+    el('p', { class: 'tamDoux', text: 'Write your own maths and see it in 3-D. Use x, y, z, t, the sliders a, b, c, d, pi, e, phi and sin cos tan exp ln sqrt abs … Solutions are numerical: each one is shown with its residual — the formula evaluated at the answer, which should be close to 0.' }),
+    el('div', { class: 'tamRang' }, selMode, bFormCerveau), zExpr, zIntervalle,
+    el('div', { class: 'tamRang' }, bTracer, bResoudre), formDit, formRes);
   const dl = el('dl', { id: 'tamCarteOeuvre' });
   const zMint = el('div', { id: 'tamMint', hidden: true });
   const gal = el('div', { class: 'tamGal', id: 'tamGalerie' });
@@ -217,6 +261,7 @@ export function monter(racine, ctx = {}) {
       qui,
       el('p', { class: 'tamDoux', text: 'Strange attractors combined by the brain, plus live physics, fractals, the golden ratio, quantum and fluids — each checked against its theory and drawn in 3-D. Up to 12 dimensions, shown one layer at a time.' }),
       el('div', { class: 'tamRang' }, selGroupe, selSys, selFam, selDim, bCerveau, bSource),
+      el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamBloc', text: 'Brain of' }), selBloc, chBloc),
       scene,
       el('div', { class: 'tamRang' }, bRot, bVue, bBoucle, bSon),
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamResolution', text: 'Resolution' }), curRes, resTxt),
@@ -232,6 +277,7 @@ export function monter(racine, ctx = {}) {
       el('div', { class: 'tamRang' }, selOp, selMotif, bPouce),
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
       curseurs, verdictTxt),
+    carteFormule,
     el('div', { class: 'tamCarte' }, el('h3', { text: 'This work' }), dl, zMint),
     /* game76 (Phil : « retire ca pas utile ») : plus de « How it works » ; la carte des oeuvres n apparait qu une fois une oeuvre mintee */
     carteGal);
@@ -266,7 +312,11 @@ export function monter(racine, ctx = {}) {
     S.sale = true;
   }
   /* ── game76 : une simulation de science (vue seule) — meme scene, memes couches, meme son ; pas de certificats, pas de Mint ── */
-  function chargerScience(id, params = {}) {
+  /* game79 : extra = { melange, graine, note, choix } — ce que le CERVEAU a tire (melange d un motif, sa graine, sa note on-chain) ;
+   *   un reglage a la main garde le melange mais perd la note (elle ne decrit plus l oeuvre) */
+  function chargerScience(id, params = {}, extra = {}) {
+    /* game79 : un curseur a..d ou Chaos sur « Your formula » repasse par la formule (vue seule) */
+    if (id === 'formule') { const { a, b, c, d, ...spec } = params; const vars = { ...(spec.vars || {}) }; for (const [k, v] of Object.entries({ a, b, c, d })) if (typeof v === 'number') vars[k] = v; chargerFormule({ ...spec, vars }); return; }
     const s = SYSTEMES_SCI.find((x) => x.id === id); if (!s) return;
     let o;
     try { o = s.mod.simuler(id, params); } catch (_) { etatLigne.textContent = 'This system could not be computed.'; return; }
@@ -274,16 +324,24 @@ export function monter(racine, ctx = {}) {
       S.o = null; S.ser = null; S.science = { s, o: o || null }; S.P = { science: id, params: (o && o.params) || params, angles: [] };
       S.octets = null; S.c = { ok: false, raisons: ['the simulation left its valid domain'] }; S.dense = null;
       if (S.son) arreterSon();
+      /* revue game79 : le melange reste (revenir en arriere au curseur redonne la meme oeuvre) ; le choix du cerveau ne vaut plus */
+      if (extra.melange && !TS.CORPS[id]) S.P.melange = extra.melange;
+      S.choix = null; S.origine = extra.origine || S.origine || null;
       etatLigne.textContent = s.nom + ': the simulation left its valid domain (' + ((o && o.raison) || 'escaped') + '). Nothing to draw — change a variable.';
       /* game77 : la carte et la scene ne gardent plus les valeurs de l oeuvre d avant (« Bounded: yes » sous une scene vide) */
       peindreReglages(); peindreMint(); peindreCarte(); peindreVarsScene(); peindreQui(); S.sale = true; return;
     }
     const D = o.D;
     /* les params MINTABLES (tam-science.js) : bornes du module, angles d or, q = 12, tires pour CE wallet ; les octets = le rejeu */
-    const P = TS.paramsScience(id, o.params, { minteur: compte() }), cert = TS.certifierScience(P, []);
+    const P = TS.paramsScience(id, o.params, { minteur: compte() });
+    if (extra.melange && !TS.CORPS[id]) P.melange = extra.melange; /* les corps se lisent seuls : pas de melange sur un systeme a plusieurs corps */
+    if (extra.graine) P.graine = extra.graine;
+    if (extra.note) P.note = extra.note;
+    const cert = TS.certifierScience(P, []);
     S.science = { s, o };
     S.P = P;
-    S.o = o; S.D = D; S.n = o.n; S.choix = null; S.origine = null; S.stocke = null;
+    /* revue game79 (low) : un reglage a la main garde le NOM du cerveau qui avait choisi (« then tuned ») — extra.origine */
+    S.o = o; S.D = D; S.n = o.n; S.choix = extra.choix || null; S.origine = extra.choix ? extra.choix.cerveau : (extra.origine || null); S.stocke = null;
     S.octets = cert.octets ? hexDe(cert.octets) : null;
     /* le certificat LOCAL (aucune oeuvre mintee comparee) ; le serveur refait la distance contre TOUTES au clic sur Mint */
     S.c = { ...cert, lyapunov: typeof o.lyapunov === 'number' ? o.lyapunov : NaN, uniteLyapunov: o.uniteLyapunov };
@@ -299,16 +357,112 @@ export function monter(racine, ctx = {}) {
     racine.dataset.dims = String(D); racine.dataset.science = id;
     S.sale = true;
   }
+  /* ── game79 : « Your formula » ── */
+  const modeDe = (id) => F.MODES.find((m) => m.id === id) || F.MODES[0];
+  function peindreExpressions(spec) {
+    const m = modeDe(spec.mode);
+    zExpr.replaceChildren(...m.expressions.map((k) => el('div', { class: 'tamRang' },
+      el('label', { class: 'tamDoux', for: 'tamFormE-' + k, text: (spec.mode === 'systeme' ? 'd' + k + '/dt' : spec.mode === 'surface' ? 'z' : k) + ' =' }),
+      el('input', { type: 'text', id: 'tamFormE-' + k, 'data-expr': k, value: (spec.expressions && spec.expressions[k]) || '', spellcheck: 'false', autocomplete: 'off', maxlength: String(F.LIMITES.longueur), style: 'flex:1;min-width:12rem' }))));
+    const iv = spec.intervalle || null; zIntervalle.hidden = !iv;
+    if (iv) { deI.value = String(Math.round(iv[0] * 1e4) / 1e4); aI.value = String(Math.round(iv[1] * 1e4) / 1e4); }
+  }
+  function specDeLaCarte() {
+    const spec = F.normaliserSpec({ mode: selMode.value });
+    for (const i of zExpr.querySelectorAll('input[data-expr]')) spec.expressions[i.dataset.expr] = i.value;
+    if (spec.intervalle) spec.intervalle = [Number(deI.value), Number(aI.value)];
+    if (S.science && S.science.s.id === 'formule' && S.P && S.P.params && S.P.params.vars) spec.vars = { ...S.P.params.vars };
+    return spec;
+  }
+  /* la formule passe par la MEME scene que les sciences ; vue seule (pas d octets, pas de Mint) */
+  function chargerFormule(spec, { note = null } = {}) {
+    for (const [k, txt] of Object.entries(spec.expressions || {})) {
+      const a = F.analyser(txt); if (!a.ok) { formDit.textContent = (spec.mode === 'systeme' ? 'd' + k + '/dt' : k) + ': ' + a.erreur; return false; }
+    }
+    let o; try { o = F.simulerFormule(spec); } catch (e) { formDit.textContent = 'This formula could not be computed: ' + String(e.message || e); return false; }
+    if (!o || !o.bornee || !o.brut) { formDit.textContent = 'This formula escapes or gives no finite point on this range' + (o && o.erreurs && o.erreurs.length ? ' (' + o.erreurs.join('; ') + ')' : '') + '.'; return false; }
+    const D = o.D;
+    S.science = { s: SYS_FORMULE, o }; S.P = { science: 'formule', params: o.params, angles: TS.anglesDefaut(D), ...(note ? { note } : {}) };
+    S.o = o; S.D = D; S.n = o.n; S.choix = null; S.origine = null; S.stocke = null; S.octets = null; S.corps = null; S.dense = null;
+    S.c = { ok: false, lyapunov: typeof o.lyapunov === 'number' ? o.lyapunov : NaN, uniteLyapunov: o.uniteLyapunov, raisons: ['your formula is shown, not minted'] };
+    S.z = TS.standardiserIso(o.brut, o.n, D); S.ser = V.series(S.z, o.n, D);
+    if (S.son) arreterSon();
+    S.couches = V.etatCouches(D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
+    curseur.min = String(Math.min(D, 2)); curseur.max = String(D); curseur.value = String(D);
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
+    const nRej = typeof o.rejets === 'number' ? o.rejets : o.rejets && typeof o.rejets === 'object' ? Object.values(o.rejets).reduce((s, v) => s + (Number(v) || 0), 0) : 0;
+    etatLigne.textContent = modeDe(spec.mode).phrase + (nRej ? ' ' + nRej + ' point(s) dropped (division by zero or not finite).' : '');
+    formDit.textContent = 'Drawn: ' + o.n + ' points.'; formRes.replaceChildren();
+    racine.dataset.dims = String(D); racine.dataset.science = 'formule';
+    S.sale = true; return true;
+  }
+  /* resoudre : chaque reponse avec son RESIDU (la formule evaluee a la reponse) — la verification « sur les donnees reelles » */
+  function resoudre() {
+    const spec = specDeLaCarte(), vars = spec.vars || {}, li = [], dit = (t) => li.push(el('li', { text: t }));
+    try {
+      if (spec.mode === 'courbe') {
+        const [a, b] = spec.intervalle, e = spec.expressions.y;
+        const rs = F.racines(e, { a, b, vars }); dit(rs.length ? rs.length + ' root(s) of y = 0:' : 'No root of y = 0 on [' + a + ', ' + b + '].');
+        for (const r of rs.slice(0, 12)) dit('x = ' + r.x.toPrecision(12) + '   check: y(x) = ' + Number(r.fx).toExponential(2) + '  (' + r.methode + ')');
+        const ex = F.extremums(e, { a, b, vars }); for (const x of ex.slice(0, 8)) dit((x.type === 'max' ? 'maximum' : x.type === 'min' ? 'minimum' : 'extremum') + ' at x = ' + Number(x.x).toPrecision(10) + ', y = ' + Number(x.fx).toPrecision(8) + '   check: slope there ' + Number(x.derivee).toExponential(1));
+        const I = F.integrale(e, { a, b, vars }); if (I && Number.isFinite(I.valeur)) dit('Integral from ' + a + ' to ' + b + ' = ' + Number(I.valeur).toPrecision(12) + (Number.isFinite(I.erreurEstimee) ? '  (estimated error ' + Number(I.erreurEstimee).toExponential(1) + ')' : ''));
+      } else if (spec.mode === 'systeme') {
+        const eq = F.equilibres(spec.expressions.x, spec.expressions.y, spec.expressions.z, { vars });
+        const L = Array.isArray(eq) ? eq : (eq && eq.points) || [];
+        dit(L.length ? L.length + ' equilibrium point(s) (where dx/dt = dy/dt = dz/dt = 0):' : 'No equilibrium found in the search box.');
+        for (const p of L.slice(0, 10)) dit('(' + [p.x, p.y, p.z].map((v) => Number(v).toPrecision(8)).join(', ') + ')  ' + (p.type || '') + (p.stable ? ' (stable)' : '') + '   check: residual ' + Number(p.residu).toExponential(2));
+      } else dit('Solving is offered for curves y = f(x) (roots, extremes, integral) and for differential systems (equilibria).');
+    } catch (e) { dit('Could not solve: ' + String(e.message || e)); }
+    formRes.replaceChildren(...li);
+  }
+  /* le cerveau ECRIT une formule : un gabarit et des coefficients tires (crypto du navigateur + etat de son cerveau s il y en a un) ;
+   *   il la trace, la resout, et ecrit ce qu il a trouve. Il COMPOSE dans une grammaire fixe — il ne decouvre pas de mathematiques. */
+  function formuleDuCerveau() {
+    const u = new Uint32Array(8); crypto.getRandomValues(u); let k = 0; const r = () => u[k++ % 8] / 4294967296;
+    const c = (lo, hi, d = 2) => Math.round((lo + r() * (hi - lo)) * 10 ** d) / 10 ** d, sg = (x) => (x < 0 ? ' - ' + (-x) : ' + ' + x);
+    const gabarits = [
+      () => ({ mode: 'courbe', expressions: { y: c(-2, 2) + '*x^3' + sg(c(-3, 3)) + '*x^2' + sg(c(-4, 4)) + '*x' + sg(c(-3, 3)) }, intervalle: [-4, 4] }),
+      () => ({ mode: 'courbe', expressions: { y: 'sin(' + c(0.5, 3) + '*x)' + sg(c(0.2, 1.5)) + '*cos(' + c(0.5, 4) + '*x)' + sg(c(-0.5, 0.5)) }, intervalle: [-6.283, 6.283] }),
+      () => ({ mode: 'courbe', expressions: { y: 'exp(-x^2/' + c(1, 6) + ')*sin(' + c(1, 5) + '*x)' }, intervalle: [-6, 6] }),
+      () => ({ mode: 'systeme', expressions: { x: c(5, 15) + '*(y - x)', y: 'x*(' + c(20, 40) + ' - z) - y', z: 'x*y - ' + c(1.5, 4) + '*z' } }),
+      () => ({ mode: 'systeme', expressions: { x: '-y - z', y: 'x + ' + c(0.1, 0.35) + '*y', z: c(0.1, 0.4) + ' + z*(x - ' + c(4, 9) + ')' } }),
+      () => ({ mode: 'parametrique', expressions: { x: 'sin(' + c(1, 5, 0) + '*t)', y: 'sin(' + c(1, 7, 0) + '*t + ' + c(0, 3) + ')', z: 'cos(' + c(1, 4, 0) + '*t)' }, intervalle: [0, 6.283] }),
+      () => ({ mode: 'surface', expressions: { z: 'sin(' + c(0.5, 2) + '*x)*cos(' + c(0.5, 2) + '*y)' } }),
+    ];
+    const brut = gabarits[Math.floor(r() * gabarits.length) % gabarits.length]();
+    const spec = { ...F.normaliserSpec({ mode: brut.mode }), ...brut, expressions: { ...F.normaliserSpec({ mode: brut.mode }).expressions, ...brut.expressions } };
+    selMode.value = spec.mode; peindreExpressions(spec);
+    if (chargerFormule(spec)) {
+      resoudre();
+      const n1 = formRes.querySelectorAll('li').length;
+      /* revue game79 : honnete — ce tirage ne lit PAS l etat d un cerveau de block (gabarits + coefficients au hasard du navigateur) */
+      formDit.textContent = 'A brain-style formula: a ' + modeDe(spec.mode).nom.toLowerCase() + ' picked from a fixed set of patterns with random coefficients (it does not read a block\'s brain state), drawn and solved (' + n1 + ' line(s) below). It composes formulas; it does not discover new mathematics.';
+    }
+  }
+  selMode.addEventListener('change', () => { const spec = F.normaliserSpec({ mode: selMode.value }); peindreExpressions(spec); chargerFormule(spec); });
+  bTracer.addEventListener('click', () => chargerFormule(specDeLaCarte()));
+  bResoudre.addEventListener('click', () => { if (chargerFormule(specDeLaCarte())) resoudre(); });
+  bFormCerveau.addEventListener('click', formuleDuCerveau);
   function peindreGroupe() {
     const g = selGroupe.value, sci = g !== 'attracteurs';
-    for (const x of [selFam, selDim, bCerveau]) x.hidden = sci;
-    if (sci) bSource.hidden = true; else peindreSource();
-    selSys.hidden = !sci; bPouce.hidden = sci; selOp.hidden = sci; if (sci) selMotif.hidden = true;
+    carteFormule.hidden = g !== 'formule';
+    /* revue game79 : dans « Your formula », operateur et motif n ont pas d effet — caches */
+    if (g === 'formule') { for (const x of [selFam, selDim, selSys, selOp, selMotif]) x.hidden = true; bPouce.hidden = true; return; }
+    /* game79 : « Let the brain choose » reste visible PARTOUT — le cerveau tire parmi tous les genres (attracteurs et sciences) */
+    for (const x of [selFam, selDim]) x.hidden = sci;
+    peindreSource();
+    selSys.hidden = !sci; bPouce.hidden = sci;
+    /* une science se MELANGE aussi a un motif (somme / composition), sauf un systeme a plusieurs corps */
+    const coupl = selOp.querySelector('option[value="couplage"]'); if (coupl) coupl.hidden = sci;
     if (sci) selSys.replaceChildren(...SYSTEMES_SCI.filter((s) => groupeDe(s) === g).map((s) => el('option', { value: s.id, text: s.nom + ' · ' + s.science })));
   }
   selGroupe.addEventListener('change', () => {
     peindreGroupe();
-    if (selGroupe.value === 'attracteurs') depuisExplorateur(); else chargerScience(selSys.value);
+    /* revue game79 : en quittant une science, son cerveau (S.origine) et sa graine ne passent pas a un attracteur qu il n a pas dessine */
+    if (S.science) { S.origine = null; S.choix = null; S.P = null; S.science = null; }
+    if (selGroupe.value === 'attracteurs') depuisExplorateur();
+    else if (selGroupe.value === 'formule') { const spec = F.normaliserSpec({ mode: selMode.value }); peindreExpressions(spec); chargerFormule(spec); }
+    else chargerScience(selSys.value);
   });
   selSys.addEventListener('change', () => chargerScience(selSys.value));
   /* les variables sur la scene : la combinaison, chaque parametre a sa valeur, la dimension, le nombre de points, la graine */
@@ -373,12 +527,23 @@ export function monter(racine, ctx = {}) {
   }
   selFam.addEventListener('change', () => { S.origine = null; optionsDims(); depuisExplorateur(); });
   selDim.addEventListener('change', () => depuisExplorateur('dims'));
-  selOp.addEventListener('change', () => depuisExplorateur('op'));
-  selMotif.addEventListener('change', () => depuisExplorateur('motif'));
+  /* game79 : dans une science, operateur + motif = un MELANGE de types differents (science x fractale / angle d or) */
+  function melangeScience() {
+    const op = selOp.value;
+    if (op !== 'somme' && op !== 'composition') return null;
+    const { famille, variante } = motifChoisi();
+    return { operateur: op, motif: M.motifDefaut(famille, variante), w: (S.P && S.P.melange && S.P.melange.w) || 0.25 };
+  }
+  selOp.addEventListener('change', () => { if (S.science) { selMotif.hidden = !(selOp.value === 'somme' || selOp.value === 'composition'); chargerScience(S.science.s.id, S.P.params, { melange: melangeScience() }); } else depuisExplorateur('op'); });
+  selMotif.addEventListener('change', () => { if (S.science) chargerScience(S.science.s.id, S.P.params, { melange: melangeScience() }); else depuisExplorateur('motif'); });
   /* les curseurs : un par variable de reglagesDe ; rebatis seulement si la LISTE change (un glissement en cours n est pas casse) */
   let cheminsPeints = '';
   function peindreReglages() {
     if (S.science) {
+      /* game79 : le melange de la science (operateur + motif) se lit et se regle ici aussi */
+      selOp.hidden = !!TS.CORPS[S.science.s.id]; selOp.value = S.P.melange ? S.P.melange.operateur : 'seul';
+      selMotif.hidden = !S.P.melange;
+      if (S.P.melange) { const v = S.P.melange.motif.famille + (S.P.melange.motif.variante ? ':' + S.P.melange.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
       const R = reglagesVivants(S.science.s, S.P.params), cles = 'sci:' + S.science.s.id + ':' + R.map((r) => r.chemin + r.min + r.max).join('|');
       if (cles !== cheminsPeints) {
         cheminsPeints = cles;
@@ -426,7 +591,8 @@ export function monter(racine, ctx = {}) {
     if (S.science) {
       /* une science : on resimule avec CETTE variable (bornee par le module), rien d autre ne change */
       const cle = inp.dataset.chemin.replace(/^params\./, ''), id = S.science.s.id, base = { ...S.P.params };
-      minuteur = setTimeout(() => chargerScience(id, { ...base, [cle]: Number(inp.value) }), 90);
+      const mel = S.P.melange || null, ori = (S.choix && S.choix.cerveau) || S.origine || null;
+      minuteur = setTimeout(() => chargerScience(id, { ...base, [cle]: Number(inp.value) }, { melange: mel, origine: ori }), 90);
       return;
     }
     minuteur = setTimeout(() => {
@@ -452,7 +618,7 @@ export function monter(racine, ctx = {}) {
         if (entierReglage(r)) { v = Math.round(v); if (k > 0 && v === r.valeur) v = Math.min(r.max, Math.max(r.min, r.valeur + (x >= 0 ? 1 : -1))); }
         Q[r.chemin.replace(/^params\./, '')] = v;
       });
-      chargerScience(id, Q);
+      chargerScience(id, Q, { melange: S.P.melange || null, origine: (S.choix && S.choix.cerveau) || S.origine || null });
       return;
     }
     const k = Number(curChaos.value) / 100, R = M.reglagesDe(S.P), u = new Uint32Array(Math.max(1, R.length));
@@ -496,10 +662,42 @@ export function monter(racine, ctx = {}) {
   });
   const court = (a) => displayShort(a); /* le raccourci qui masque le fee wallet (test-no-fee-address-shown) */
   const blocVu = () => { const a = ctx.blocCerveau && ctx.blocCerveau(); return a && /^0x[0-9a-fA-F]{40}$/.test(String(a)) ? String(a).toLowerCase() : null; };
-  /* le block de l onglet Brain s il y en a un et que le joueur ne l a pas ecarte ; sinon null -> le serveur prend UNIT */
-  const sourceCerveau = () => { const a = blocVu(); return a && S.sourceBloc !== false ? a : null; };
+  /* game79 : le cerveau qui dessine = le block CHOISI dans le selecteur ('' = UNIT, le cerveau par defaut du serveur) */
+  const ADR_OK = /^0x[0-9a-f]{40}$/;
+  const sourceCerveau = () => (ADR_OK.test(selBloc.value) ? selBloc.value : null);
+  const trouves = new Map(); /* les blocks trouves par la recherche (gardes dans la liste) */
+  let sigBlocs = '';
+  function peindreBlocs() {
+    const vu = blocVu(), carte = ctx.blocsCarte ? ctx.blocsCarte() : [];
+    const lignes = [['', 'UNIT (default brain)']];
+    if (vu) lignes.push([vu, 'Brain tab: ' + court(vu)]);
+    for (const [a, s] of trouves) if (a !== vu) lignes.push([a, (s || court(a)) + ' · found']);
+    for (const h of carte) if (h.adr !== vu && !trouves.has(h.adr)) lignes.push([h.adr, (h.sym || court(h.adr)) + ' · on your Map']);
+    const sig = lignes.map((l) => l[0]).join('|');
+    if (sig === sigBlocs) return;
+    const garde = selBloc.value; sigBlocs = sig;
+    selBloc.replaceChildren(...lignes.map(([v, t]) => el('option', { value: v, text: t })));
+    /* revue game79 : tant que la personne n a rien choisi, le block ouvert dans l onglet Brain est pre-selectionne (avant : UNIT toujours) */
+    selBloc.value = S.blocChoisiMain && lignes.some((l) => l[0] === garde) ? garde : (vu ? vu : (lignes.some((l) => l[0] === garde) ? garde : ''));
+    racine.dataset.blocs = String(lignes.length);
+  }
+  let minuteurBloc = null;
+  chBloc.addEventListener('input', () => {
+    clearTimeout(minuteurBloc);
+    const q = chBloc.value.trim(); if (q.length < 2 || !ctx.chercherBlocs) return;
+    minuteurBloc = setTimeout(async () => {
+      const r = await ctx.chercherBlocs(q).catch(() => []);
+      for (const h of r) trouves.set(h.adr, h.sym);
+      peindreBlocs();
+      if (r[0]) { S.blocChoisiMain = true; trouves.set(r[0].adr, r[0].sym); peindreBlocs(); selBloc.value = r[0].adr; }
+    }, 350);
+  });
+  selBloc.addEventListener('change', () => { S.sourceBloc = selBloc.value !== ''; S.blocChoisiMain = true; peindreSource(); });
   function peindreSource() {
-    const a = blocVu(); bSource.hidden = !a || selGroupe.value !== 'attracteurs'; if (bSource.hidden) return;
+    peindreBlocs();
+    bSource.hidden = true; /* game79 : remplace par le selecteur « Brain of » */
+    return;
+    const a = blocVu(); bSource.hidden = !a; if (bSource.hidden) return;
     const sur = S.sourceBloc !== false;
     bSource.setAttribute('aria-pressed', String(sur));
     bSource.textContent = sur ? 'Brain: block ' + court(a) : 'Brain: UNIT';
@@ -523,6 +721,19 @@ export function monter(racine, ctx = {}) {
     S.nMintees = Number(j.comparees) || 0;
     /* l etat du cerveau qui a choisi : c est LUI qui bouge les variables (coupDePouce), de facon deterministe */
     S.cerveauEtat = { cerveau: j.cerveau, empreinteEtat: j.empreinteEtat, graine: j.graine };
+    /* game79 : le cerveau a pu tirer une SCIENCE (n importe laquelle, variables au hasard, parfois melangee) : le menu suit son choix */
+    if (j.genre === 'science' && j.params && j.params.science) {
+      const s = SYSTEMES_SCI.find((x) => x.id === j.params.science);
+      if (!s) { etatLigne.textContent = 'The brain chose a system this page does not know yet: reload the page.'; return; }
+      selGroupe.value = groupeDe(s); peindreGroupe(); selSys.value = s.id;
+      /* ⛔ les octets du serveur doivent etre ceux que la page rejoue (le portail du Mint le revérifie au clic) */
+      chargerScience(s.id, j.params.params, { melange: j.params.melange || null, graine: j.params.graine, note: j.params.note,
+        choix: { graine: j.graine, bloc: j.bloc, cerveau: j.cerveau, hash: j.hash, essai: j.essai, rejets: j.rejets, certificats: j.certificats } });
+      /* revue game79 (high) : des octets differents de ceux du serveur FERMENT le Mint (avant : un simple avertissement, et le Mint passait) */
+      if (S.octets !== j.octets) { S.c = { ...S.c, ok: false, raisons: ['this page replayed different bytes than the server chose'] }; peindreMint(); verdictTxt.textContent = 'Not mintable: this page replayed different bytes than the server chose.'; }
+      return;
+    }
+    if (selGroupe.value !== 'attracteurs') { selGroupe.value = 'attracteurs'; peindreGroupe(); }
     /* les selecteurs disent la porteuse choisie (pas l ancienne selection) */
     selFam.value = j.params.famille; optionsDims();
     selDim.value = j.params.famille === 'lorenz96' ? String(j.params.dim) : j.params.operateur === 'couplage' ? String(j.params.k) : '1';
@@ -561,8 +772,13 @@ export function monter(racine, ctx = {}) {
   bBoucle.addEventListener('click', () => { S.boucle = !S.boucle; bBoucle.setAttribute('aria-pressed', String(S.boucle)); bBoucle.textContent = 'Loop: ' + (S.boucle ? 'on' : 'off'); racine.dataset.boucle = S.boucle ? 'on' : 'off'; });
   const CAM0 = { yaw: 0.6, pitch: 0.35, dist: 1.7, ox: 0, oy: 0 };
   const ptrs = new Map(); let pinch = null;
-  cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, shift: e.shiftKey || e.button === 2 }); });
-  cv.addEventListener('pointerup', (e) => { ptrs.delete(e.pointerId); pinch = null; });
+  cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, shift: e.shiftKey || e.button === 2 }); });
+  cv.addEventListener('pointerup', (e) => {
+    /* game79 : un TAP (pas un glisser) montre la bulle des valeurs — le survol n existe pas au doigt */
+    const p = ptrs.get(e.pointerId);
+    if (p && Math.abs(e.clientX - (p.x0 ?? p.x)) < 6 && Math.abs(e.clientY - (p.y0 ?? p.y)) < 6) survolScene(e);
+    ptrs.delete(e.pointerId); pinch = null;
+  });
   cv.addEventListener('pointercancel', (e) => { ptrs.delete(e.pointerId); pinch = null; });
   cv.addEventListener('contextmenu', (e) => e.preventDefault());
   cv.addEventListener('pointermove', (e) => {
@@ -582,6 +798,7 @@ export function monter(racine, ctx = {}) {
   let proj = null, projSx = null, projSy = null, dominant = null;
   function positions() {
     if (S.science && S.corps) return S.corps.vue; /* game78 : la vue « corps » (les couches n y melangent rien) */
+    if (S.science && S.P.melange) return M.melangerVue(V.projeterVivant({ z: S.z, n: S.n, D: S.D, actives: S.couches.actives, angles: S.P.angles, t: S.t }), S.n, S.P.melange);
     const tous = S.couches.actives.every(Boolean);
     /* game77 : un NUAGE stocke est trie (Morton) — ses index ne sont plus le temps : couleurs et survol visaient d autres points.
      *   Pour un nuage on dessine la projection dans l ordre du temps (la meme geometrie). */
@@ -614,7 +831,7 @@ export function monter(racine, ctx = {}) {
       const u = projectCam(camPx, pos[3 * i] * sc, -pos[3 * i + 1] * sc, pos[3 * i + 2] * sc, L, H, 1);
       projSx[i] = u ? u.sx : NaN; projSy[i] = u ? u.sy : NaN; pz[i] = u ? u.zc : 0;
     }
-    const nuage = S.P.ordre === 1 || !!(S.science && S.o && S.o.nuage);
+    const nuage = S.P.ordre === 1 || !!(S.science && TS.estNuage(S.P, S.o));
     /* game77 : un nuage se dessinait en points de 0,6 px a peine visibles — des points ronds de ~2 px, plus lisibles */
     g.lineWidth = nuage ? Math.max(2, dpr * 2.2) : Math.max(1, dpr * 1.1); g.lineCap = 'round';
     /* glow : un halo de la couleur du trait (shadowBlur), sur des chemins groupes par couleur — quelques dizaines de stroke, pas un par point */
@@ -698,11 +915,37 @@ export function monter(racine, ctx = {}) {
     info.textContent = '2-D map · ' + n.toLocaleString('en-US') + ' iterations shown (view only; the work stores ' + S.n + ')';
   }
   function survolScene(e) {
-    if (!projSx) return;
+    if (!projSx) { bulle.hidden = true; return; }
     const r = cv.getBoundingClientRect(), k = cv.width / r.width;
     const i = V.indexProche(projSx, projSy, (e.clientX - r.left) * k, (e.clientY - r.top) * k, 16 * k);
     if (i !== S.survol) { S.survol = i; S.sale = true; peindreSurvol(); }
+    peindreBulle(i, e.clientX - r.left, e.clientY - r.top, r.width);
   }
+  /* game79 : la bulle — l index (le temps), puis les VALEURS BRUTES du point (avant toute normalisation), dimension par dimension,
+   *   ou corps par corps pour un systeme a plusieurs corps. Un nuage : « sample », pas un temps. */
+  function peindreBulle(i, x, y, larg) {
+    if (i === null || i === undefined || !S.o || !S.o.brut) { bulle.hidden = true; return; }
+    /* revue game79 : pas de valeurs pour un point PAS ENCORE dessine (le trace progresse) */
+    const traces = Math.min(S.n, Math.floor(S.dessines));
+    if (S.science && S.corps) { const j = i % S.corps.par; if (j >= Math.max(2, Math.floor(traces / S.n * S.corps.par))) { bulle.hidden = true; return; } }
+    else if (i >= traces) { bulle.hidden = true; return; }
+    const D = S.D, b = S.o.brut, lignes = [];
+    if (S.science && S.corps) {
+      const c = Math.min(S.corps.corps - 1, Math.floor(i / S.corps.par)), j = i - c * S.corps.par, src = Math.min(S.n - 1, Math.floor(j * S.n / S.corps.par)), k = TS.CORPS[S.science.s.id];
+      const noms = TS.nomsCorps(S.science.s.id, S.P.params);
+      lignes.push(['body', noms && noms[c] ? noms[c] : String(c + 1) + ' of ' + S.corps.corps], ['step', String(src) + ' of ' + (S.n - 1)]);
+      ['x', 'y', 'z'].slice(0, k).forEach((n, q) => lignes.push([n, nb4(b[src * D + c * k + q])]));
+    } else {
+      const nuageB = S.P.ordre === 1 || (S.science && TS.estNuage(S.P, S.o));
+      lignes.push([nuageB ? 'sample' : 't', String(i) + ' of ' + (S.n - 1)]);
+      for (const j of V.dimsVisibles(S.couches).slice(0, 12)) lignes.push(['x' + (j + 1), nb4(b[i * D + j])]);
+    }
+    bulle.replaceChildren(...lignes.flatMap(([kk, v], q) => [...(q ? [el('br')] : []), document.createTextNode(kk + ' = '), el('b', { text: v })]));
+    bulle.hidden = false;
+    const gauche = x + 14 + 260 > larg ? Math.max(4, x - 270) : x + 14;
+    bulle.style.left = gauche + 'px'; bulle.style.top = Math.max(4, y - 10) + 'px';
+  }
+  cv.addEventListener('pointerleave', () => { bulle.hidden = true; });
 
   /* ── series et grille eclatee (memes couleurs, meme point survole) ── */
   function peindreSeries() {
@@ -769,6 +1012,10 @@ export function monter(racine, ctx = {}) {
     if (S.science) {
       const { s, o } = S.science;
       const lignes = [{ k: 'System', v: s.nom }, { k: 'Science', v: s.science }, { k: 'What is computed', v: s.phrase },
+        /* game79 : ce que le CERVEAU a ecrit — dans les params, donc sur Base avec l oeuvre au moment du mint (signe par celui qui minte) */
+        ...(S.P && S.P.note ? [{ k: 'The brain\'s note (stored on Base with the work when it is minted)', v: S.P.note }] : []),
+        /* (l operateur MATHEMATIQUE du melange — somme / composition — dit par un tableau joint : jamais concatene comme un nom de wallet) */
+        ...(S.P && S.P.melange ? [{ k: 'Blended with', v: [S.P.melange.motif.famille, S.P.melange.motif.variante, S.P.melange.operateur, 'weight ' + nb4(S.P.melange.w)].filter(Boolean).join(' · ') }] : []),
         ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).map(([k, v]) => ({ k: 'Check: ' + k, v: ligneInvariant(k, v).replace(/^[^:]+: /, '') })),
         { k: 'Chaos (λ)', v: o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? nb4(o.lyapunov) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' — finite-run estimate' : 'not defined for this system' },
         { k: 'Mint', v: '5 USDC, stored on Base like every work (same contract). Anyone can replay these parameters to the same bytes.' }];
@@ -807,6 +1054,7 @@ export function monter(racine, ctx = {}) {
     const vol = racine.closest('.volet');
     if (document.hidden || (vol && !vol.classList.contains('on'))) { if (S.son) arreterSon(); return; }
     if ((++tickSource & 63) === 0) peindreSource(); /* le block de l onglet Brain a pu changer pendant que TAM etait cache */
+    if ((tickSource % 60) === 0) peindreQui(); /* game79 : les valeurs vivantes du cerveau, ~1 fois par seconde */
     const dt = dernier ? Math.min(0.1, (ts - dernier) / 1000) : 0; dernier = ts;
     if (S.o && S.dessines < S.n) { S.dessines = Math.min(S.n, S.dessines + S.n * dt / 3); S.sale = true; }
     /* en boucle : la fin reste affichee 1,5 s, puis le trace repart du debut */
@@ -947,7 +1195,8 @@ export function monter(racine, ctx = {}) {
     })();
     bRejouer.addEventListener('click', () => {
       if (!donnees || !params) { badge.className = 'tamBadge ko'; badge.textContent = 'not read'; return; }
-      let r = null; try { r = rejouer(JSON.parse(params)); } catch (_) { r = null; }
+      /* revue game79 : une oeuvre de SCIENCE se rejoue avec tam-science.js (avant : rejouer du moteur -> toujours « different ») */
+      let r = null; try { const Pj = JSON.parse(params); r = Pj && Pj.science ? TS.rejouerScience(Pj) : rejouer(Pj); } catch (_) { r = null; }
       const v = V.verdictRejeu(r && r.ok ? r.octets : null, donnees);
       badge.className = 'tamBadge ' + (v.identique ? 'ok' : 'ko'); badge.textContent = v.texte;
     });
@@ -962,7 +1211,7 @@ export function monter(racine, ctx = {}) {
 
   optionsDims(); depuisExplorateur(); void galerie();
   /* 2026-11-01 : le bouton « Make art from this block's brain » de l onglet Brain — la source = ce block, puis le meme clic que l onglet */
-  const choisirDepuisBloc = () => { selGroupe.value = 'attracteurs'; peindreGroupe(); S.sourceBloc = true; peindreSource(); bCerveau.click(); };
+  const choisirDepuisBloc = () => { S.sourceBloc = true; peindreSource(); const a = blocVu(); if (a) selBloc.value = a; bCerveau.click(); };
   racine.__tam = { S, charger, choisirDepuisBloc };
   return racine.__tam;
 }

@@ -573,6 +573,11 @@ export function combinerVue(proj, params) {
   const P = completer(params);
   return P.operateur === 'somme' || P.operateur === 'composition' ? combiner(proj, P) : proj;
 }
+/** game79 : le MEME melange (somme / composition avec un motif) applique a une vue 3-D quelconque — une science par exemple.
+ *   melange = { operateur, motif, w } ; proj normalisee n x 3. */
+export function melangerVue(proj, n, melange) {
+  return combiner(Float64Array.from(proj), { n, operateur: melange.operateur, motif: melange.motif, w: melange.w });
+}
 /** game77 : l AFFICHAGE dense d une map 2-D seule (De Jong, Clifford) — N iterations apres le transitoire, pour la VUE seulement :
  *   jamais stockees ni mintees (l oeuvre reste ses n points). Avant : 1 500 points pales, la forme illisible. null si elle s echappe. */
 export function nuageMap(params, N = 40000) {

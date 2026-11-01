@@ -18,6 +18,9 @@ import * as AST from './tam-astro.js';
 import * as COS from './tam-cosmos.js';
 import * as INV from './tam-invisible.js';
 import * as QUA from './tam-quantique.js';
+/* game79 : la fusion de trous noirs IMRPhenomB (arXiv 0909.2867), spins alignes, restes Hofmann-Barausse-Rezzolla / Barausse-Morozova-Rezzolla */
+import * as FUS from './tam-fusion.js';
+import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
 
@@ -25,9 +28,33 @@ export const VERSION_SCIENCE = 'sci1';
 export const Q_SCIENCE = 12;
 const DEUX_PI = 6.283185307179586, ANGLE_OR = 2.399963229728653;
 const ADR = /^0x[0-9a-f]{40}$/;
-const CLES = new Set(['v', 'science', 'params', 'angles', 'q', 'minteur']);
+/* game79 : + melange (une science x un motif fractal / angle d or — des types DIFFERENTS combines), graine (le cerveau qui a tire),
+ *   note (ce que le cerveau a mesure et conclu : stockee on-chain AVEC l oeuvre, dans les params, quand quelqu un la minte) */
+const CLES = new Set(['v', 'science', 'params', 'angles', 'q', 'minteur', 'melange', 'graine', 'note']);
+export const NOTE_MAX = 700;
+/* les systemes VUS mais jamais certifies/mintes (aucun aujourd hui : la fusion est bornee par coutFusion ci-dessous) */
+export const NON_MINTABLES = Object.freeze(new Set([]));
+/** game79 (Phil : « fais que la fusion passe on-chain ») : le cout de la fusion suit le nombre de cycles, ~ (Mc_det x fDepart)^(-5/3)
+ *   (Mc_det = masse de chirp detectee = (m1 m2)^(3/5) / (m1+m2)^(1/5) x (1+z)). Mesure 01/11 : defaut (Mc_det x f = 612) 26 ms ;
+ *   coin 5+5 Msun, 10 Hz, z = 0 (43.5) 997 ms. Seuil 150 -> ~270 ms au pire, comme la supernova hydrodynamique. */
+export const FUSION_PRODUIT_MIN = 90; /* Phil : « augmente les limites » — 150 -> 90 : plus de couples acceptes, pire cas mesure au banc */
+export function coutFusion(p) {
+  const m1 = Number(p.m1), m2 = Number(p.m2), z = Number(p.z) || 0, f = Number(p.fDepart);
+  return chirp(m1, m2) * (1 + z) * f;
+}
+/* masse de chirp (m1 m2)^(3/5) / (m1+m2)^(1/5) — par exp/ln deterministes (lnD du moteur, expD local) */
+function chirp(m1, m2) { return expL(0.6 * lnD(m1 * m2) - 0.2 * lnD(m1 + m2)); }
+function expL(x) { /* exp deterministe : 2^k x serie de Taylor sur le reste (meme principe que les modules) */
+  const k = Math.round(x / 0.6931471805599453), r = x - k * 0.6931471805599453; let s = 1, t = 1;
+  for (let i = 1; i < 30; i++) { t *= r / i; s += t; }
+  return s * 2 ** k;
+}
+const H32 = /^0x[0-9a-f]{64}$/;
+/* les motifs offerts au melange : les MEMES que les attracteurs (tam-moteur.js#motifDefaut), sans retouche (une oeuvre = un JSON canonique) */
+export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
+  ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 
 /** les angles des plans caches par defaut : l angle d or, comme le moteur (D - 3 angles) */
@@ -51,6 +78,12 @@ export function validerScience(P) {
   for (const k of Object.keys(P)) if (!CLES.has(k)) return non('cle inconnue: ' + k);
   if (P.v !== VERSION_SCIENCE) return non('version');
   const s = systeme(P.science); if (!s) return non('science inconnue');
+  /* revue game79 (high) : un systeme dont un reglage peut couter des SECONDES de calcul synchrone n est pas certifiable (la route
+   *   publique /api/tam/certifier etait un levier de deni de service) ; il reste visible, sans Mint */
+  if (NON_MINTABLES.has(P.science)) return non('this system is shown, not minted (too costly to certify on the server)');
+  /* la fusion : le cout borne AVANT toute simulation (la route publique ne peut plus commander des secondes de calcul) */
+  if (P.science === 'fusionTrousNoirs' && P.params && typeof P.params === 'object' && !(coutFusion(P.params) >= FUSION_PRODUIT_MIN))
+    return non('too many cycles to certify here: raise the masses, the redshift or the starting frequency (chirp mass x (1+z) x fDepart >= ' + FUSION_PRODUIT_MIN + ')');
   if (P.q !== Q_SCIENCE) return non('q');
   if (!P.params || typeof P.params !== 'object' || Array.isArray(P.params)) return non('parametres absents');
   let o; try { o = s.mod.simuler(P.science, P.params); } catch (_) { return non('parametres refuses par le module'); }
@@ -58,6 +91,17 @@ export function validerScience(P) {
   if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');
   if (!Array.isArray(P.angles) || P.angles.length !== Math.max(0, o.D - 3) || !P.angles.every((x) => typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= DEUX_PI)) return non('angles hors bornes');
   if (P.minteur !== undefined && !ADR.test(P.minteur)) return non('minteur');
+  if (P.graine !== undefined && !H32.test(P.graine)) return non('graine');
+  if (P.note !== undefined && !(typeof P.note === 'string' && P.note.length <= NOTE_MAX && /^[\x20-\x7e·—≈λσπ°]*$/.test(P.note))) return non('note');
+  if (P.melange !== undefined) {
+    const m = P.melange;
+    if (CORPS[P.science]) return non('melange : pas sur un systeme a plusieurs corps');
+    if (!m || typeof m !== 'object' || Object.keys(m).sort().join() !== 'motif,operateur,w') return non('melange');
+    if (m.operateur !== 'somme' && m.operateur !== 'composition') return non('melange : operateur');
+    if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');
+    const ok = MOTIFS_MELANGE.some(([f, v]) => canon(motifDefaut(f, v)) === canon(m.motif));
+    if (!ok) return non('melange : motif');
+  }
   return { ok: true, code: 'DANS_LES_BORNES', raison: null };
 }
 
@@ -66,6 +110,17 @@ export function validerScience(P) {
  *   k = 3 : (x, y, z) par corps ; k = 2 : (x, y) dans le plan, z = 0. */
 export const CORPS = Object.freeze({ troisCorps: 3, systemeSolaire: 3, amasEtoiles: 3, lumiereTrouNoir: 3, expansionUnivers: 3, cometeHalley: 3,
   trouDeVer: 3, pulsarHulseTaylor: 3, tourbillonsPonctuels: 2, trappist1: 2 });
+/** un nuage (points tires, pas un chemin) : la science elle-meme, ou une COMPOSITION avec un IFS / Julia (comme les attracteurs) */
+export const estNuage = (P, o) => !!(o && o.nuage) || !!(P && P.melange && P.melange.operateur === 'composition' && (P.melange.motif.famille === 'ifs' || P.melange.motif.famille === 'julia'));
+/** game79 : le NOM de chaque corps (la bulle de survol dit « Earth », pas « body 3 ») ; null = « body k » */
+export function nomsCorps(id, params = {}) {
+  if (id === 'systemeSolaire') return Number(params.groupe) === 1 ? ['Jupiter', 'Saturn', 'Uranus', 'Neptune'] : ['Mercury', 'Venus', 'Earth', 'Mars'];
+  if (id === 'cometeHalley') return ['Halley', 'Earth'];
+  if (id === 'troisCorps') return ['Star 1', 'Star 2', 'Star 3'];
+  if (id === 'lumiereTrouNoir') return ['Light ray 1', 'Light ray 2', 'Light ray 3', 'Light ray 4'];
+  if (id === 'trouDeVer') return ['Light ray 1', 'Light ray 2'];
+  return null;
+}
 /** le corps CENTRAL a l origine du repere de ces systemes (affiche, jamais stocke) */
 export const CENTRE = Object.freeze({ systemeSolaire: 'Sun', cometeHalley: 'Sun', trappist1: 'TRAPPIST-1', amasEtoiles: 'black hole', lumiereTrouNoir: 'black hole', trouDeVer: 'throat' });
 /** la vue « corps » : m = D/k corps, n/m echantillons chacun (dans l ordre du temps), concatenes ; centree et a l echelle COMMUNE ([-1, 1]) */
@@ -108,8 +163,10 @@ export function genererScience(P) {
   const s = systeme(P.science); if (!s) return { bornee: false, raison: 'science inconnue' };
   const o = s.mod.simuler(P.science, P.params);
   if (!o.bornee || !o.brut) return { ...o, bornee: false };
-  const n = o.n, D = o.D, M = (1 << P.q) - 1, ordre = o.nuage ? 1 : 0;
-  const fin = CORPS[P.science] ? vueCorps(o, CORPS[P.science]).vue : projeterND(standardiserIso(o.brut, n, D), n, D, P.angles);
+  const n = o.n, D = o.D, M = (1 << P.q) - 1, ordre = estNuage(P, o) ? 1 : 0;
+  let fin = CORPS[P.science] ? vueCorps(o, CORPS[P.science]).vue : projeterND(standardiserIso(o.brut, n, D), n, D, P.angles);
+  /* game79 : une science MELANGEE a un motif (somme ou composition, comme les attracteurs) */
+  if (P.melange) fin = melangerVue(fin, n, P.melange);
   let pts = new Int32Array(n * 3);
   for (let i = 0; i < 3 * n; i++) { const v = Math.round((fin[i] + 1) / 2 * M); pts[i] = v < 0 ? 0 : v > M ? M : v; }
   if (ordre === 1) {
@@ -125,6 +182,79 @@ export function rejouerScience(P) {
   const o = genererScience(P); if (!o.bornee) return { ok: false, raisons: ['the simulation left its valid domain'] };
   const octets = encoder({ q: o.q, ordre: o.ordre, points: o.points });
   return { ok: true, octets, hash: keccak256Hex(octets), oeuvre: o };
+}
+/* ---------- game79 : le CERVEAU choisit parmi TOUTES les sciences, et ecrit ce qu il a mesure ---------- */
+/* un tirage deterministe a partir d une empreinte (mulberry32 sur 32 bits de keccak) : rejouable par n importe qui */
+function tirage(empreinte) {
+  let a = parseInt(String(empreinte).slice(2, 10), 16) >>> 0;
+  return () => { a = (a + 0x6d2b79f5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const entier = (r) => Number.isInteger(r.min) && Number.isInteger(r.max) && Number.isInteger(r.valeur) && /^(n|l|m|k|nombre|graine|tours|maxIter|puissance|periodes|groupe)$/.test(r.nom);
+/** des params tires UNIFORMEMENT dans les bornes de chaque variable (entiers arrondis), puis bornes par le module (l <= n-1…) */
+export function tirerParams(id, alea) {
+  const s = systeme(id); if (!s) throw new Error('science inconnue: ' + id);
+  const R = s.mod.reglagesPhysique(id, s.mod.simuler(id, {}).params), p = {};
+  for (const r of R) { let v = r.min + alea() * (r.max - r.min); if (entier(r)) v = Math.round(v); p[r.chemin.replace(/^params\./, '')] = Math.round(v * 1e6) / 1e6; }
+  return s.mod.simuler(id, p).params;
+}
+/**
+ * Le choix du cerveau parmi les sciences : graine (bloc + tirage) et etat du cerveau -> une science, ses variables au hasard dans leurs
+ * bornes, un melange une fois sur trois ; le premier essai qui passe les certificats. Deterministe : memes entrees, meme oeuvre.
+ * @returns {{ ok, params, certificats, essai, rejets }}
+ */
+export function choisirScience({ graine, etatCerveau = null, existantes = [], minteur = null, essais = 8, ids = null } = {}) {
+  if (!H32.test(String(graine || ''))) throw new Error('graine invalide');
+  const liste = (ids && ids.length ? ids : SYSTEMES.map((s) => s.id)).filter((id) => systeme(id));
+  const base = keccak256Hex(new TextEncoder().encode(String(graine) + '|' + canon(etatCerveau)));
+  const rejets = [];
+  for (let e = 0; e < essais; e++) {
+    const alea = tirage(keccak256Hex(new TextEncoder().encode(base + ':' + e)));
+    const id = liste[Math.floor(alea() * liste.length) % liste.length];
+    let P;
+    try { P = paramsScience(id, tirerParams(id, alea), { minteur }); } catch (_) { rejets.push({ essai: e, id, raison: 'module' }); continue; }
+    /* revue game79 (high) : JAMAIS de melange sur un systeme a plusieurs corps (la page dessine les corps seuls : octets differents) */
+    if (!CORPS[id] && alea() < 1 / 3) {
+      const [f, v] = MOTIFS_MELANGE[Math.floor(alea() * MOTIFS_MELANGE.length) % MOTIFS_MELANGE.length];
+      P.melange = { operateur: alea() < 0.5 ? 'somme' : 'composition', motif: motifDefaut(f, v), w: Math.round((BORNES.w[0] + alea() * (BORNES.w[1] - BORNES.w[0])) * 1e6) / 1e6 };
+    }
+    P.graine = String(graine).toLowerCase();
+    const c = certifierScience(P, existantes);
+    if (c.ok) return { ok: true, params: P, certificats: c, essai: e, rejets };
+    if (c.etat === 'NON_LU') return { ok: false, etat: 'NON_LU', pourquoi: (c.raisons || []).join('; '), rejets };
+    rejets.push({ essai: e, id, raison: (c.raisons || []).join('; ') });
+  }
+  return { ok: false, etat: 'AUCUNE', rejets };
+}
+/* un nombre court pour la note (sans exposant inutile) */
+const court = (x) => (typeof x !== 'number' || !Number.isFinite(x) ? String(x) : x === 0 ? '0' : Math.abs(x) >= 1e-3 && Math.abs(x) < 1e6 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2));
+/**
+ * Ce que le cerveau ECRIT : ce qu il a choisi, ce qu il a MESURE (invariants contre la theorie, lambda), et sa conclusion — des faits,
+ * jamais une promesse. ASCII + quelques symboles, <= NOTE_MAX. Stocke on-chain dans les params QUAND quelqu un minte l oeuvre.
+ */
+export function noteCerveau(P, { nomCerveau = null, humeur = null, ressenti = null, battement = null } = {}) {
+  const s = systeme(P.science); if (!s) return '';
+  const o = s.mod.simuler(P.science, P.params), morceaux = [];
+  morceaux.push((nomCerveau ? nomCerveau + "'s brain" : 'The brain') + (humeur ? ' (' + humeur + (ressenti ? ', ' + ressenti : '') + (battement !== null ? ', beat ' + battement : '') + ')' : '') + ' chose ' + s.nom + '.');
+  const vars = Object.entries(P.params).slice(0, 6).map(([k, v]) => k + '=' + court(v)).join(' ');
+  if (vars) morceaux.push('Variables: ' + vars + '.');
+  /* (l operateur MATHEMATIQUE du melange, joint par un tableau — jamais concatene comme un nom de wallet, cf. test-no-fee-address-shown) */
+  if (P.melange) morceaux.push('Blended with ' + [P.melange.motif.famille, P.melange.motif.variante].filter(Boolean).join(' ') + ' (' + [P.melange.operateur, 'w=' + court(P.melange.w)].join(', ') + ').');
+  let conserve = 0, varie = 0, compare = null;
+  for (const [k, v] of Object.entries(o.invariants || {})) {
+    if (v && typeof v === 'object' && 'mesure' in v && ('formule' in v || 'theorie' in v)) { const ref = 'formule' in v ? v.formule : v.theorie; if (!compare) compare = k + ' measured ' + court(v.mesure) + ' vs ' + court(ref); }
+    else if (v && typeof v === 'object' && 'derive' in v) { const ref = Math.abs(v.debut ?? 0), rel = ref > 1e-12 ? Math.abs(v.derive) / ref : Math.abs(v.derive); if (rel <= 1e-3) conserve++; else varie++; }
+  }
+  if (compare) morceaux.push('Check: ' + compare + '.');
+  if (conserve || varie) morceaux.push(conserve + ' conserved quantit' + (conserve === 1 ? 'y' : 'ies') + ' held' + (varie ? ', ' + varie + ' varied' : '') + '.');
+  const lam = typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? o.lyapunov : null;
+  morceaux.push(lam === null ? 'Conclusion: a ' + (estNuage(P, o) ? 'probability or sample cloud' : 'regular law') + ', no chaos measure applies.'
+    : lam > 0.02 ? 'Conclusion: chaotic over this run (lambda ' + court(lam) + ' > 0.02): nearby starts split apart.'
+      : 'Conclusion: regular over this run (lambda ' + court(lam) + ' <= 0.02): nearby starts stay together.');
+  /* revue game79 : l ellipse d une adresse courte (« 0xb200…bbe3 ») devient « ... » AVANT le filtre ASCII — sinon les deux moitiees
+   *   collees fabriquaient un faux identifiant hexadecimal (« 0xb200bbe3 ») ecrit on-chain */
+  let t = morceaux.join(' ').replace(/…/g, '...').replace(/[^\x20-\x7e]/g, '');
+  if (t.length > NOTE_MAX) t = t.slice(0, NOTE_MAX - 1) + '.';
+  return t;
 }
 /** les certificats d une science : bornes, bornee, distincte de TOUTES les oeuvres mintees (une signature illisible -> NON_LU) */
 export function certifierScience(P, existantes = []) {

@@ -5776,6 +5776,8 @@ const SERVIS = [
   'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-science.js',
   /* game78 : astres, cosmos, phenomenes « invisibles », quantique */
   'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js',
+  /* game79 : la fusion IMRPhenomB, et « Your formula » */
+  'tam-fusion.js', 'tam-formule.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
