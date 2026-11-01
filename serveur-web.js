@@ -7951,7 +7951,7 @@ function traiterRequete(req, res) {
     const q = new URL(req.url, 'http://x').searchParams;
     /* 2026-11-01 : une oeuvre REGLEE (curseurs du joueur, ou coup de pouce du cerveau) : les memes certificats, distance contre les mintees */
     if (chemin === '/api/tam/certifier') { void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.certifierParams(q.get('p'), ipT)).then(rendreT, echec); return; }
-    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'), q.get('minter'), ipT)).then(rendreT, echec);
+    void tamSrv.oeuvres().catch(() => null).then(() => tamSrv.choix(q.get('graine'), q.get('block'), q.get('minter'), ipT, q.get('draw'))).then(rendreT, echec);
     return;
   }
 

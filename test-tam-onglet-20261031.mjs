@@ -38,9 +38,12 @@ ok(!V.verdictRejeu(new Uint8Array(0), new Uint8Array(0)).identique, 'deux vides 
 ok(!V.verdictRejeu(Array.from(ch.octets), ch.octets).identique, 'un tableau qui n est pas des octets : jamais ✓');
 
 /* ── 2. le bouton Mint ── */
-ok(TAMART_DEPLOIEMENT.adresse === null, 'temoin : la fiche du depot n a PAS d adresse (TamArt non deploye)');
-ok(V.mintVisible(TAMART_DEPLOIEMENT) === false, 'sans adresse : pas de bouton Mint');
+/* 2026-11-01 : TamArt deploye (0x802d…0013, bloc 53366474) — la fiche du depot ouvre le Mint ; la fiche vierge le ferme */
+ok(TAMART_DEPLOIEMENT.adresse === '0x802d79a0d30538948f1e5c1d9d264c47dd4e0013' && TAMART_DEPLOIEMENT.bloc === 53366474, 'temoin : la fiche du depot porte le deploiement relu');
+ok(V.mintVisible(TAMART_DEPLOIEMENT) === true, 'fiche du depot : le bouton Mint');
+ok(V.mintVisible({ ...TAMART_DEPLOIEMENT, adresse: null, bloc: null }) === false, 'sans adresse : pas de bouton Mint');
 const DEP = { ...TAMART_DEPLOIEMENT, adresse: '0x' + '11'.repeat(20), bloc: 1000 };
+const VIERGE = Object.freeze({ ...TAMART_DEPLOIEMENT, adresse: null, bloc: null }); /* la fiche d avant la signature : les scenarios « non deploye » */
 ok(V.mintVisible(DEP) === true, 'adresse ET bloc : le bouton Mint');
 ok(V.mintVisible({ ...DEP, bloc: null }) === false, 'adresse sans bloc : pas de bouton');
 ok(V.mintVisible({ ...DEP, adresse: '0x' + '00'.repeat(20) }) === false, 'adresse zero : pas de bouton');
@@ -73,7 +76,7 @@ ok(Buffer.from(d.slice(offP + 64, offP + 64 + lenP * 2), 'hex').toString('utf8')
 ok(p.appels.every((a) => a.value === '0x0'), 'aucun ETH envoye');
 /* les refus */
 const refuse = (o, code, m) => { const x = planJeuUsdc({ ...jeu, ...o }); ok(x.etat === 'REFUSE' && (!code || x.code === code), m + ' (' + x.code + ')'); };
-refuse({ deploiement: TAMART_DEPLOIEMENT, contrat: DEP.adresse }, 'PAS_DEPLOYE', 'fiche sans adresse : refuse');
+refuse({ deploiement: VIERGE, contrat: DEP.adresse }, 'PAS_DEPLOYE', 'fiche sans adresse : refuse');
 refuse({ lu: { ...LU, beneficiaire: '0x' + 'be'.repeat(20) } }, 'BENEFICIAIRE', 'contrat LU qui paie un autre wallet : refuse');
 refuse({ lu: { ...LU, prix: 5000001n } }, 'PRIX', 'contrat LU a 5,000001 USDC : refuse');
 refuse({ lu: { ...LU, prix: 4999999n } }, 'PRIX', 'contrat LU a 4,999999 USDC : refuse');
@@ -150,7 +153,7 @@ const rpcFaux = async (m, params) => { appels.push(m); if (m === 'eth_getBlockBy
 const UNIT = '0xb2000000000000000000007afa7ed748b0874f27', IB022 = '0xb200000000000000000000e4b0c5fbe9c8df579e';
 const viesLues = [];
 const lireVie = async (a) => { viesLues.push(a); if (a === IB022) throw new Error('rpc en panne'); return { etat: 'LUE', vie: 1234.5, bloc: 100 }; };
-const srv = serveurTam({ rpc: rpcFaux, deploiement: TAMART_DEPLOIEMENT, lireVie, lireSymbole: async () => 'ZZZ' });
+const srv = serveurTam({ rpc: rpcFaux, deploiement: VIERGE, lireVie, lireSymbole: async () => 'ZZZ' });
 const oe = await srv.oeuvres();
 ok(oe.ok === true && oe.etat === 'PAS_DEPLOYE' && Array.isArray(oe.oeuvres) && oe.oeuvres.length === 0 && /not deployed/.test(oe.pourquoi), '/api/tam/oeuvres avant deploiement : liste vide + raison');
 ok(!appels.includes('eth_getLogs'), 'avant deploiement : aucun eth_getLogs');
@@ -166,6 +169,14 @@ ok(cI.ok && cI.cerveau.symbole === 'IB022' && cI.cerveau.etatVie === 'NON_LUE' &
 const cZ = await srv.choix(null, '0x' + '12'.repeat(20));
 ok(cZ.ok && cZ.cerveau.symbole === 'ZZZ' && /^brain of ZZZ at beat 24/.test(cZ.cerveau.etiquette), 'block quelconque : son symbol() lu');
 ok((await srv.choix(null, '0x1234')).etat === 'REFUSE', 'block tronque : refuse');
+/* 2026-11-01 (Phil : « fait tout la meme chose ») : un tirage neuf = une graine neuve sur le MEME bloc ; le meme tirage = la meme graine */
+const dA = await srv.choix(null, null, null, null, '1a2b3c4d5e6f7081'), dB = await srv.choix(null, null, null, null, '00000000000000ff');
+ok(dA.ok && dB.ok && dA.bloc === 100 && dB.bloc === 100 && dA.graine !== dB.graine && dA.graine !== HASH, 'deux tirages, meme bloc : deux graines, aucune n est le hash nu');
+ok(dA.graine === keccak256Hex(new TextEncoder().encode(HASH + ':1a2b3c4d5e6f7081')) && dA.tirage === '1a2b3c4d5e6f7081', 'graine = keccak(hash : tirage), tirage rendu');
+ok(dA.hash !== dB.hash, 'deux tirages : deux oeuvres differentes (keccak des octets)');
+ok((await srv.choix(null, null, null, null, '1A2B3C4D5E6F7081')).graine === dA.graine, 'le meme tirage (casse ignoree) : la meme graine');
+for (const mauvais of ['xyz', '0x12', '1'.repeat(17), ' 12'])
+  ok((await srv.choix(null, null, null, null, mauvais)).etat === 'REFUSE', 'tirage mal forme refuse : ' + JSON.stringify(mauvais));
 const Lc = V.carte({ P: c1.params, c: c1.certificats, choix: { ...c1, essai: c1.params.essai } });
 const wb = (Lc.find((x) => x.k === 'Which brain') || {}).v || '';
 ok(wb === 'Seed: hash of Base block 100 + ' + c1.cerveau.etiquette + '.', 'la carte : « Seed: hash of Base block N + brain of SYM at beat B … »');
@@ -295,7 +306,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(porte({ serveur: null }).ok === false && porte({ serveur: { ...sOk, etat: 'NON_LU', ok: false } }).ok === false && porte({ serveur: { ...sOk, etat: 'REFUSE', ok: false } }).ok === false, 'portail : serveur absent / NON_LU / REFUSE -> ferme');
   ok(porte({ serveur: { ...sOk, hash: '0x' + '00'.repeat(32) } }).ok === false, 'portail : serveur a certifie d autres octets -> ferme');
   ok(porte({ compte: '0x' + 'cd'.repeat(20) }).ok === false && porte({ P: { ...Pm, minteur: undefined } }).ok === false, 'portail : autre wallet, ou oeuvre tiree pour personne -> ferme');
-  ok(porte({ dep: TAMART_DEPLOIEMENT }).ok === false, 'portail : TamArt non deploye -> ferme');
+  ok(porte({ dep: VIERGE }).ok === false, 'portail : TamArt non deploye -> ferme');
   /* le serveur certifie une oeuvre reglee (memes certificats, distance aux mintees) */
   const b64 = (P) => Buffer.from(JSON.stringify(P), 'utf8').toString('base64url');
   const sv = await srv.certifierParams(b64(Pm));
@@ -307,7 +318,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.peutMinter\(\{ dep: TAMART_DEPLOIEMENT, local: S\.c, serveur, octets: oct, P: S\.P, compte: c \}\)/.test(onglet) && /if \(!porte\.ok\) \{ dit\.textContent = 'Not ready: '/.test(onglet), 'preparerMint passe par V.peutMinter avant toute lecture du contrat');
   ok(/const vb = S\.P\.regle \? M\.validerReglage\(S\.P\)/.test(onglet) && /S\.c && S\.c\.ok\);/.test(onglet), 'une oeuvre reglee : bornes puis certificats ; pas de zone Mint sans certificat local');
   ok(/V\.oeuvreReglee\(/.test(onglet) && /M\.coupDePouce\(S\.P, S\.cerveauEtat\)/.test(onglet) && /data-chemin/.test(onglet), 'curseurs -> V.oeuvreReglee ; bouton du cerveau -> M.coupDePouce');
-  ok(/'\/api\/tam\/choix' \+ \(c \? '\?minter=' \+ c : ''\)/.test(onglet) && /q\.get\('minter'\)/.test(serveur) && /chemin === '\/api\/tam\/certifier'/.test(serveur), 'le wallet est transmis au choix ; la route /api/tam/certifier existe');
+  ok(/'\/api\/tam\/choix\?draw=' \+ tirage \+ \(c \? '&minter=' \+ c : ''\)/.test(onglet) && /q\.get\('minter'\), ipT, q\.get\('draw'\)/.test(serveur) && /crypto\.getRandomValues\(new Uint8Array\(8\)\)/.test(onglet) && /chemin === '\/api\/tam\/certifier'/.test(serveur), 'le wallet est transmis au choix ; la route /api/tam/certifier existe');
   const textes = [...(onglet + readFileSync(new URL('./tam-vue.js', import.meta.url), 'utf8')).matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).join('\n');
   ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');
 }
@@ -319,7 +330,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(TAM_CALCULS_MAX === 2 && TAM_BUDGET_IP_MINUTE === 20, 'plafonds : 2 calculs simultanes, 20 par IP et par minute');
   const b64 = (P) => Buffer.from(JSON.stringify(P), 'utf8').toString('base64url');
   const Pr = (r) => T.appliquerReglage(T.structurer({ famille: 'lorenz' }), 'params.r', r);
-  const srvG = serveurTam({ rpc: rpcFaux, deploiement: TAMART_DEPLOIEMENT, lireVie, lireSymbole: async () => 'ZZZ', maintenant: () => 1.8e12 });
+  const srvG = serveurTam({ rpc: rpcFaux, deploiement: VIERGE, lireVie, lireSymbole: async () => 'ZZZ', maintenant: () => 1.8e12 });
   /* (a) le plafond simultane : 3 calculs (caches rates) lances ensemble -> 2 admis, le 3e OCCUPE, sans calcul */
   const trois = await Promise.all([20, 21, 22].map((r, i) => srvG.certifierParams(b64(Pr(r)), 'ip-c' + i)));
   const occ = trois.filter((x) => x.etat === 'OCCUPE');
@@ -343,7 +354,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(neufs.every((x) => x.etat !== 'TROP'), 'apres 30 caches touches, 19 calculs neufs passent encore (20 au total)');
   /* (d) le serveur rend 503/429 avec la meme source d IP que /api/jeu/roll ; l app le dit sans relancer */
   ok(/statut === 503 \|\| statut === 429 \? statut : 200/.test(serveur) && /const ipT = String\(req\.headers\['x-forwarded-for'\] \|\| req\.socket\.remoteAddress \|\| ''\)\.split\(','\)\[0\]\.trim\(\);/.test(serveur)
-    && /certifierParams\(q\.get\('p'\), ipT\)/.test(serveur) && /q\.get\('minter'\), ipT\)/.test(serveur), 'serveur : code HTTP du refus, IP lue comme /api/jeu/roll, passee aux deux routes');
+    && /certifierParams\(q\.get\('p'\), ipT\)/.test(serveur) && /q\.get\('minter'\), ipT, q\.get\('draw'\)\)/.test(serveur), 'serveur : code HTTP du refus, IP lue comme /api/jeu/roll, passee aux deux routes');
   ok(/j\.etat === 'OCCUPE' \|\| j\.etat === 'TROP'/.test(onglet) && !/setInterval\([^)]*api\/tam|setTimeout\([^)]*fetch\('\/api\/tam/.test(onglet), 'l onglet dit « busy » et ne relance aucun appel /api/tam en boucle');
 }
 

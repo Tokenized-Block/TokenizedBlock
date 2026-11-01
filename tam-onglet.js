@@ -26,6 +26,8 @@ const CSS = `
 #v-tam .tamScene{position:relative;width:100%;aspect-ratio:1/1;max-height:62vh;border-radius:12px;overflow:hidden;background:var(--tam-fond);touch-action:none}
 #v-tam .tamScene canvas{width:100%;height:100%;display:block}
 #v-tam .tamInfo{position:absolute;left:8px;top:6px;font-size:.78rem;color:var(--tam-doux);pointer-events:none}
+#v-tam .tamVars{position:absolute;left:8px;bottom:6px;right:8px;display:flex;flex-wrap:wrap;gap:2px 10px;max-height:40%;overflow:hidden;font:11px/1.35 ui-monospace,Consolas,monospace;color:#cfd6ff;opacity:.85;pointer-events:none;text-shadow:0 0 4px #0b0d17}
+#v-tam .tamVars b{width:100%;font-weight:600;color:#fff}
 #v-tam .tamPuces{display:flex;flex-wrap:wrap;gap:6px}
 #v-tam .tamPuce{display:inline-flex;align-items:center;gap:6px}
 #v-tam .tamPuce i{width:12px;height:12px;border-radius:50%;display:inline-block}
@@ -75,9 +77,13 @@ export function monter(racine, ctx = {}) {
   const bRot = el('button', { type: 'button', id: 'tamRotation', 'aria-pressed': String(S.rotation), text: 'Hidden rotation' });
   const bVue = el('button', { type: 'button', text: 'Reset view' });
   const bSon = el('button', { type: 'button', id: 'tamSon', 'aria-pressed': 'false', text: 'Sound: off' });
+  /* 2026-11-01 (Phil) : le trace a un debut et une fin, peut tourner en boucle ; Reset view le redessine */
+  const bBoucle = el('button', { type: 'button', id: 'tamBoucle', 'aria-pressed': 'false', text: 'Loop: off' });
   const cv = el('canvas', { id: 'tamCanvas', 'aria-label': 'The work in 3-D' });
   const info = el('div', { class: 'tamInfo' });
-  const scene = el('div', { class: 'tamScene' }, cv, info);
+  /* 2026-11-01 (Phil) : les variables SUR le graphe — un mathematicien lit l equation et ses valeurs sans quitter la scene */
+  const varsScene = el('div', { class: 'tamVars', id: 'tamVarsScene' });
+  const scene = el('div', { class: 'tamScene' }, cv, info, varsScene);
   const etatLigne = el('p', { class: 'tamDoux', id: 'tamEtat', 'aria-live': 'polite' });
 
   /* ── les couches ── */
@@ -108,11 +114,11 @@ export function monter(racine, ctx = {}) {
 
   racine.replaceChildren(
     el('div', { class: 'tamCarte' },
-      el('h2', { text: 'TAM — math art' }),
+      el('h2', { text: 'TAM — math art · Tokenized Art Math' }),
       el('p', { class: 'tamDoux', text: 'Strange attractors, fractals and the golden angle, combined by the brain and drawn in 3-D. Up to 12 dimensions, shown one layer at a time.' }),
       el('div', { class: 'tamRang' }, selFam, selDim, bCerveau),
       scene,
-      el('div', { class: 'tamRang' }, bRot, bVue, bSon),
+      el('div', { class: 'tamRang' }, bRot, bVue, bBoucle, bSon),
       el('p', { class: 'tamDoux', text: 'Drag to orbit · Shift-drag or two fingers to pan · wheel or pinch to zoom.' }),
       etatLigne),
     el('div', { class: 'tamCarte' },
@@ -146,10 +152,20 @@ export function monter(racine, ctx = {}) {
     S.couches = V.etatCouches(S.D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
     S.octets = octetsServeur; S.stocke = (() => { try { const d = decoder(octetsDe(octetsServeur) || rejouer(P).octets); return d.positions; } catch (_) { return null; } })();
     curseur.min = String(Math.min(S.D, 2)); curseur.max = String(S.D); curseur.value = String(S.D);
-    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint();
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene();
     etatLigne.textContent = V.combinaison(S.P) + '.';
     racine.dataset.dims = String(S.D);
     S.sale = true;
+  }
+  /* les variables sur la scene : la combinaison, chaque parametre a sa valeur, la dimension, le nombre de points, la graine */
+  function peindreVarsScene() {
+    if (!S.P) { varsScene.replaceChildren(); return; }
+    const R = M.reglagesDe(S.P);
+    const graine = S.P.graine ? String(S.P.graine) : '';
+    varsScene.replaceChildren(
+      el('b', { text: V.combinaison(S.P) }),
+      ...R.map((r) => el('span', { text: r.nom + ' = ' + r.valeur.toFixed(4) })),
+      el('span', { text: S.D + '-D · ' + S.n + ' points' + (graine ? ' · seed ' + graine.slice(0, 10) + '…' : '') }));
   }
   function optionsDims() {
     const f = selFam.value, o = [];
@@ -230,7 +246,9 @@ export function monter(racine, ctx = {}) {
     let j = null;
     /* 2026-11-01 : le wallet connecte entre dans la graine — deux joueurs sur le meme bloc ne recoivent jamais la meme oeuvre */
     const c = compte();
-    try { j = await fetch('/api/tam/choix' + (c ? '?minter=' + c : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
+    /* 2026-11-01 : un tirage NEUF a chaque clic (crypto du navigateur) — sinon la tete en cache 60 s rendait la meme oeuvre */
+    const tirage = Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, '0')).join('');
+    try { j = await fetch('/api/tam/choix?draw=' + tirage + (c ? '&minter=' + c : ''), { cache: 'no-store' }).then((r) => r.json()); } catch (_) { j = null; }
     /* OCCUPE / TROP : on le dit, et on ne relance RIEN tout seul (le joueur reclique s il veut) */
     if (j && (j.etat === 'OCCUPE' || j.etat === 'TROP')) { etatLigne.textContent = j.etat === 'OCCUPE' ? 'The server is busy, try again in a few seconds.' : 'Too many TAM computations from here: try again in a minute.'; return; }
     if (!j || j.ok !== true) { etatLigne.textContent = 'The brain\'s choice could not be read' + (j && j.pourquoi ? ': ' + j.pourquoi : '') + '.'; return; }
@@ -264,7 +282,8 @@ export function monter(racine, ctx = {}) {
   /* ── rotation, camera ── */
   bRot.addEventListener('click', () => { S.rotation = !S.rotation; bRot.setAttribute('aria-pressed', String(S.rotation)); racine.dataset.rotation = S.rotation ? 'on' : 'off'; S.sale = true; });
   racine.dataset.rotation = S.rotation ? 'on' : 'off';
-  bVue.addEventListener('click', () => { S.cam = null; S.t = 0; S.sale = true; });
+  bVue.addEventListener('click', () => { S.cam = null; S.t = 0; S.dessines = reduit() ? S.n : 0; S.pause = 0; S.sale = true; });
+  bBoucle.addEventListener('click', () => { S.boucle = !S.boucle; bBoucle.setAttribute('aria-pressed', String(S.boucle)); bBoucle.textContent = 'Loop: ' + (S.boucle ? 'on' : 'off'); racine.dataset.boucle = S.boucle ? 'on' : 'off'; });
   const CAM0 = { yaw: 0.6, pitch: 0.35, dist: 1.7, ox: 0, oy: 0 };
   const ptrs = new Map(); let pinch = null;
   cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, shift: e.shiftKey || e.button === 2 }); });
@@ -313,15 +332,27 @@ export function monter(racine, ctx = {}) {
     }
     const nuage = S.P.ordre === 1;
     g.lineWidth = Math.max(1, dpr * 1.1); g.lineCap = 'round';
+    /* glow : un halo de la couleur du trait (shadowBlur), sur des chemins groupes par couleur — quelques dizaines de stroke, pas un par point */
+    g.shadowBlur = 7 * dpr;
     let cour = -2;
     g.beginPath();
     for (let i = 1; i < n; i++) {
       if (!Number.isFinite(projSx[i]) || !Number.isFinite(projSx[i - 1])) continue;
       const c = dominant[i];
-      if (c !== cour) { g.stroke(); g.beginPath(); g.strokeStyle = c >= 0 ? V.couleurDim(c) : '#556'; g.globalAlpha = 0.8; cour = c; g.moveTo(projSx[i - 1], projSy[i - 1]); }
+      if (c !== cour) { g.stroke(); g.beginPath(); g.strokeStyle = g.shadowColor = c >= 0 ? V.couleurDim(c) : '#556'; g.globalAlpha = 0.8; cour = c; g.moveTo(projSx[i - 1], projSy[i - 1]); }
       if (nuage) { g.moveTo(projSx[i], projSy[i]); g.lineTo(projSx[i] + 0.6, projSy[i]); } else g.lineTo(projSx[i], projSy[i]);
     }
     g.stroke(); g.globalAlpha = 1;
+    /* debut et fin : le premier point (t = 0) et le dernier trace ; pendant le trace, une tete lumineuse avance */
+    const point = (i, coul, r, txt) => {
+      if (!Number.isFinite(projSx[i])) return;
+      g.shadowColor = coul; g.shadowBlur = 14 * dpr; g.fillStyle = coul; g.beginPath(); g.arc(projSx[i], projSy[i], r * dpr, 0, 2 * Math.PI); g.fill();
+      if (txt) { g.shadowBlur = 0; g.font = (11 * dpr) + 'px system-ui,sans-serif'; g.fillText(txt, projSx[i] + 7 * dpr, projSy[i] - 6 * dpr); }
+    };
+    point(0, '#5dffa0', 4, 'start · t = 0');
+    if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, 'end · t = ' + (S.n - 1));
+    else point(n - 1, '#ffffff', 3.2, null);
+    g.shadowBlur = 0;
     if (S.survol !== null && Number.isFinite(projSx[S.survol])) { g.fillStyle = '#fff'; g.beginPath(); g.arc(projSx[S.survol], projSy[S.survol], 5 * dpr, 0, 2 * Math.PI); g.fill(); }
     info.textContent = S.D + '-D · ' + V.dimsVisibles(S.couches).length + ' layers on' + (S.rotation && S.D > 3 ? ' · hidden planes turning' : '') + (S.t === 0 && S.stocke && S.couches.actives.every(Boolean) ? ' · stored view' : ' · live view');
   }
@@ -410,6 +441,8 @@ export function monter(racine, ctx = {}) {
     if (document.hidden || (vol && !vol.classList.contains('on'))) { if (S.son) arreterSon(); return; }
     const dt = dernier ? Math.min(0.1, (ts - dernier) / 1000) : 0; dernier = ts;
     if (S.o && S.dessines < S.n) { S.dessines = Math.min(S.n, S.dessines + S.n * dt / 3); S.sale = true; }
+    /* en boucle : la fin reste affichee 1,5 s, puis le trace repart du debut */
+    else if (S.o && S.boucle && !reduit()) { S.pause = (S.pause || 0) + dt; if (S.pause > 1.5) { S.pause = 0; S.dessines = 0; S.sale = true; } }
     if (S.o && S.rotation && S.D > 3) { S.t += dt * 0.35; S.sale = true; racine.dataset.t = S.t.toFixed(3); }
     if (S.son && S.ser) { idx = (idx + 1) % S.n; const vis = new Set(V.dimsVisibles(S.couches)); S.son.voix.forEach((v, j) => { v.o.frequency.setTargetAtTime(v.f0 * (0.85 + 0.3 * S.ser[j][idx]), S.son.ctx.currentTime, 0.03); if (!vis.has(j)) v.g.gain.value = 0; }); }
     if (S.sale) { S.sale = false; dessiner(); peindreSeries(); if (S.dessines < S.n || S.rotation) peindrePanneaux(); }

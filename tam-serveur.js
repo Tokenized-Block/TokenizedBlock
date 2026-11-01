@@ -95,8 +95,14 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     return tete;
   }
 
-  async function choix(graineDemandee, blockDemande = null, minteurDemande = null, ip = null) {
-    let graine = null, bloc = null;
+  async function choix(graineDemandee, blockDemande = null, minteurDemande = null, ip = null, tirageDemande = null) {
+    let graine = null, bloc = null, tirage = null;
+    /* 2026-11-01 (Phil : « fait tout la meme chose ») : sans tirage, la tete est en cache 60 s -> chaque clic rendait la MEME oeuvre.
+     *   &draw=<1..16 hex> : le navigateur tire un nombre a chaque clic ; graine = keccak(hash du bloc : tirage). Rejouable : la graine est stockee. */
+    if (tirageDemande !== null && tirageDemande !== undefined && tirageDemande !== '') {
+      if (!/^[0-9a-f]{1,16}$/i.test(String(tirageDemande))) return { ok: false, etat: 'REFUSE', pourquoi: 'draw must be 1 to 16 hex digits' };
+      tirage = String(tirageDemande).toLowerCase();
+    }
     if (blockDemande !== null && blockDemande !== undefined && blockDemande !== '' && !ADR.test(String(blockDemande))) return { ok: false, etat: 'REFUSE', pourquoi: 'block must be a whole address (0x + 40 hex)' };
     const vide = (x) => x === null || x === undefined || x === '';
     if (!vide(minteurDemande) && !ADR.test(String(minteurDemande))) return { ok: false, etat: 'REFUSE', pourquoi: 'minter must be a whole address (0x + 40 hex)' };
@@ -106,7 +112,7 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
       if (!G32.test(String(graineDemandee))) return { ok: false, etat: 'REFUSE', pourquoi: 'the seed must be 32 bytes in hex (0x + 64 hex)' };
       graine = String(graineDemandee).toLowerCase();
     } else {
-      try { const t = await teteLue(); graine = t.hash; bloc = t.bloc; } catch (e) { return { ok: false, etat: 'NON_LU', pourquoi: 'the latest block was not read: ' + String((e && e.message) || e).slice(0, 100) }; }
+      try { const t = await teteLue(); graine = tirage ? keccak256Hex(new TextEncoder().encode(t.hash + ':' + tirage)) : t.hash; bloc = t.bloc; } catch (e) { return { ok: false, etat: 'NON_LU', pourquoi: 'the latest block was not read: ' + String((e && e.message) || e).slice(0, 100) }; }
     }
     /* ⛔ 2026-11-01 : la distinction se mesure contre TOUTES les oeuvres mintees. Une fois TamArt deploye : liste non lue jusqu a la tete,
      *   ou UNE signature non lue -> NON_LU, jamais une oeuvre comparee a une liste trouee. */
@@ -123,7 +129,7 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     const cerveau = { adresse: etat.cerveau, symbole: etat.symbole, battement: etat.tick, spikes: etat.spikes, vie: etat.vie, etatVie: etat.etatVie, blocFaits: etat.blocFaits,
       repli: etat.repli, vivant: false, etiquette: etiquetteCerveau(etat) };
     const rep = r.ok
-      ? { ok: true, etat: 'PRET', graine, bloc, cerveau, empreinteEtat: r.params.empreinteEtat,
+      ? { ok: true, etat: 'PRET', graine, bloc, tirage, cerveau, empreinteEtat: r.params.empreinteEtat,
         params: r.params, certificats: sansSignature(r.certificats), octets: hexDe(r.octets), hash: r.hash, rejets: r.rejets, comparees: existantes.length, minteur }
       : { ok: false, etat: 'AUCUNE', graine, bloc, cerveau, pourquoi: 'no combination passed the certificates for this seed', rejets: r.rejets };
     if (parGraine.size > 64) parGraine.delete(parGraine.keys().next().value);

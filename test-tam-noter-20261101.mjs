@@ -15,7 +15,7 @@ import { execFile } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { noter, noterDepuisRpc } from './contracts/noter-deploiement-tamart.mjs';
 import { texteFicheTamart } from './contracts/fiche-tamart.mjs';
-import { TAMART_DEPLOIEMENT as FICHE } from './tamart-deploiement.js';
+import { TAMART_DEPLOIEMENT as FICHE_DEPOT } from './tamart-deploiement.js';
 import { FEE_WALLET, USDC_BASE } from './frais-creation.js';
 import { selecteur } from './keccak.js';
 import * as V from './tam-vue.js';
@@ -28,7 +28,10 @@ const ok = (c, m) => { assert.ok(c, m); n++; };
 const bas = (x) => String(x).toLowerCase();
 const sha = (p) => crypto.createHash('sha256').update(fs.readFileSync(p)).digest('hex');
 const SHA_AVANT = sha(CHEMIN);
-const TEXTE = fs.readFileSync(CHEMIN, 'utf8');
+const TEXTE_DEPOT = fs.readFileSync(CHEMIN, 'utf8');
+/* 2026-11-01 : TamArt est deploye (fiche notee) — les scenarios partent de la fiche VIERGE rebatie par l ecrivain unique */
+const FICHE = Object.freeze({ ...FICHE_DEPOT, adresse: null, bloc: null });
+const TEXTE = texteFicheTamart(FICHE);
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tam-noter-'));
 
 const HASH = '0x' + 'ab'.repeat(32), DE = '0x' + '77'.repeat(20), TAM = '0x' + 'c0'.repeat(20);
@@ -51,8 +54,10 @@ const fauxRpc = (sc) => async (m, p) => {
 };
 
 /* ── 0. l ecrivain : la fiche du depot est exactement son texte ── */
-ok(texteFicheTamart(FICHE) === TEXTE.replace(/\r\n/g, '\n'), 'la fiche du depot = texteFicheTamart(fiche), octet pour octet (LF)');
-ok(FICHE.adresse === null && FICHE.bloc === null, 'temoin : la fiche du depot n a pas d adresse');
+const noteDepot = /\/\* tx (0x[0-9a-f]{64}) signed by (0x[0-9a-f]{40}) \*\//.exec(TEXTE_DEPOT);
+ok(noteDepot !== null, 'la fiche du depot porte la tx et le signataire notes');
+ok(texteFicheTamart({ ...FICHE_DEPOT, tx: noteDepot[1], signataire: noteDepot[2] }) === TEXTE_DEPOT.replace(/\r\n/g, '\n'), 'la fiche du depot = texteFicheTamart(fiche notee), octet pour octet (LF)');
+ok(FICHE_DEPOT.adresse === '0x802d79a0d30538948f1e5c1d9d264c47dd4e0013' && FICHE_DEPOT.bloc === 53366474, 'temoin : la fiche du depot = le deploiement relu sur Base (tx 0x435daac6…003a)');
 
 /* ── 1. la bonne tx ── */
 const v = await noterDepuisRpc({ rpc: fauxRpc(bon()), txHash: HASH, fiche: FICHE, texte: TEXTE });
