@@ -48,6 +48,9 @@ const FILMS_DU_MODULE = {
   quarks: { colonneTemps: null, note: 'the string is stretched from frame to frame; the last frame is after it has broken' },
   /* game88 : tam-vide-quantique.js — chaque image = l etat des modes a un instant */
   emissionSpontanee: { colonneTemps: 1 },
+  /* game93 : tam-theories-2.js */
+  kuramoto: { colonneTemps: 3 },
+  gibbsFourier: { colonneTemps: null, note: 'each frame adds more sine terms (N grows); frames are not instants of time' },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
 /* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
@@ -762,6 +765,49 @@ const L = {
     enUnePhrase: 'An excited atom alone in the vacuum still gives off light, because it is coupled to the vacuum modes; the excitation leaks out at the rate Fermi\'s golden rule predicts.',
     colonnes: ['detuning of a vacuum mode from the atom frequency (mode number x spacing, dimensionless)', 'time of the frame', 'population of that mode |c_k|^2 (the chance the photon is in it)', 'probability that the atom is still excited, P_e(t)'],
     aRegarder: ['P_e(t) falls exponentially at Gamma = 2 pi g^2 / spacing (Fermi\'s golden rule).', 'The emitted photon fills the modes with a Lorentzian shape: the natural width of a spectral line.', 'With a finite set of modes the light comes back to the atom at the recurrence time 2 pi / spacing: a revival that a true continuum of modes would never show. One excitation and evenly spaced modes: a simplified model.'],
+    fin: null,
+  },
+  /* game93 : six theories classiques (tam-theories-2.js) — formules seulement, aucun chiffre publie */
+  ising2D: {
+    titre: 'A magnet on a lattice (2D Ising model)',
+    enUnePhrase: 'Tiny magnets on a grid, each pointing up or down, quenched from disorder: below a critical temperature they line up into large domains, above it they stay mixed.',
+    colonnes: ['x, column of the lattice (lattice spacing 1)', 'y, row of the lattice (same units)', 'local magnetisation: the mean of the 5 x 5 spins around the site (-1 to 1)', 'the spin itself (+1 up, -1 down)'],
+    aRegarder: ['Below the critical temperature Tc = 2 / ln(1 + sqrt 2) (computed in the code, units J = k = 1) the grid splits into big up and down domains; above it, only small speckles.', 'The measured magnetisation is compared with Onsager\'s exact formula M(T) = (1 - sinh(2/T)^-4)^(1/8).', 'A finite grid simulated by Monte Carlo: near Tc the agreement is only statistical, a drawing of the formula.'],
+    fin: null,
+  },
+  lotkaVolterra: {
+    titre: 'Predators and prey (Lotka-Volterra)',
+    enUnePhrase: 'Prey and predators in a closed loop: more prey feed more predators, more predators eat the prey, and both numbers cycle for ever.',
+    colonnes: ['prey density x', 'predator density y (same units)', 'time t'],
+    aRegarder: ['The path is a closed loop: the cycle repeats exactly, because H = d x - c ln x + b y - a ln y never changes.', 'Averaged over whole cycles the populations sit exactly at the balance point.', 'Small cycles last 2 pi / sqrt(a c); bigger swings last longer. No age, no space, no chance: a simplified model.'],
+    fin: null,
+  },
+  epidemieSIR: {
+    titre: 'How an epidemic runs (SIR model)',
+    enUnePhrase: 'A population split into susceptible, infected and recovered people: an outbreak grows, peaks and fades, and never reaches everyone.',
+    colonnes: ['susceptible fraction s (population fraction)', 'infected fraction i (same units)', 'recovered fraction r (same units)', 'time (in units of the average time to recover)'],
+    aRegarder: ['The outbreak only takes off if R0 times the susceptible fraction is above 1; the infected curve peaks exactly when s falls to 1 / R0.', 'The peak height and the share never infected both follow exact formulas, checked against the simulation.', 'Everyone mixes with everyone, no vaccines or behaviour changes: a simplified model.'],
+    fin: null,
+  },
+  lentilleGravitationnelle: {
+    titre: 'A gravitational lens',
+    enUnePhrase: 'A mass bends the light of a small source behind it: we see two distorted images, and a full ring when the source is exactly behind.',
+    colonnes: ['image position theta x (in Einstein radii)', 'image position theta y (same units)', 'source position beta x (same units)', 'source position beta y (same units)'],
+    aRegarder: ['The two images sit at theta = (beta +- sqrt(beta^2 + 4)) / 2, on either side of the lens.', 'Their total brightness grows as the source lines up: magnification (u^2 + 2) / (u sqrt(u^2 + 4)) for a point source.', 'With beta = 0 the images merge into the Einstein ring. A point mass and a thin lens: a simplified model.'],
+    fin: null,
+  },
+  kuramoto: {
+    titre: 'Fireflies falling into step (Kuramoto model)',
+    enUnePhrase: 'A film of many oscillators, each with its own natural rhythm, pulling on each other: above a critical coupling a crowd of them ticks together.',
+    colonnes: ['cos of the phase (the point runs round the unit circle)', 'sin of the phase (same units)', 'rank of the natural frequency (-1/2 to 1/2)', 'time'],
+    aRegarder: ['Below the critical coupling Kc = 2 gamma the points stay spread round the circle; above it they bunch together.', 'How tightly they bunch, r, follows sqrt(1 - Kc / K) for a very large crowd.', 'Oscillators near the middle frequency lock first; the fastest and slowest keep drifting. A finite crowd, so r jitters.'],
+    fin: null,
+  },
+  gibbsFourier: {
+    titre: 'Building a square wave from sines (Gibbs phenomenon)',
+    enUnePhrase: 'A film of more and more sine waves added up: they rebuild a square wave, but next to each jump a small overshoot never goes away.',
+    colonnes: ['x, the angle (radians)', 'the sum of the first N sines, S_N(x)', 'the error, square wave minus S_N (same units)', 'the number of terms N'],
+    aRegarder: ['As N grows the curve hugs the square wave, but the peak next to the jump stays about 9 percent of the jump too high: the Gibbs constant (2 / pi) Si(pi), computed in the code.', 'The overshoot only gets narrower, closer to the jump, as N grows.', 'The squared error falls like 1 / N.'],
     fin: null,
   },
   /* ---------- familles hors science ---------- */

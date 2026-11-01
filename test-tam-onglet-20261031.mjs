@@ -287,6 +287,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
       for (let k = 0; k < 10; k++) ep('Couche ' + k, 40, 195);
       const dehors = ecr.filter((e) => e.x < 0 || e.x + 6 * e.t.length > 300 || e.y - 10 < 0 || e.y + 3 > 200);
       let nc = 0; for (let i = 0; i < ecr.length; i++) for (let j = i + 1; j < ecr.length; j++) if (chev(bx(ecr[i]), bx(ecr[j]))) nc++;
+      { const e2 = [], g2 = { canvas: { width: 300, height: 200 }, measureText: (t) => ({ width: 6 * t.length }), fillText: (t, x, y) => e2.push({ t, x, y }) };
+        new Function('g', 'dpr', onglet.slice(d0, f0) + '\nreturn ecrire;')(g2, 1)('Herd-immunity threshold s = 1 / R0: the infected curve peaks here (a long label)', 100, 100);
+        ok(e2.length === 1 && e2[0].x >= 0 && e2[0].x + 6 * e2[0].t.length <= 300 && /…$/.test(e2[0].t), 'game93 : un libelle plus large que le canvas est raccourci avec « … » et tient (' + (e2[0] && e2[0].t.length) + ' car.)'); }
       ok(ecr.length >= 8 && dehors.length === 0 && nc === 0, 'petit canvas : ' + ecr.length + ' libelles, 0 hors du canvas (' + dehors.map((e) => e.t).join(', ') + '), 0 chevauchement'); }
     /* game91 (balayage a 375 px : l echelle de 5 vues jamais ecrite) : les valeurs EXACTES lues dans le navigateur (dpr 2.0000000298,
      *   bords non entiers) — « juste dessous » retombait sous le bord d un arrondi et le placeur tournait sur 2 essais */
@@ -472,7 +475,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
   ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
   { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js',
-    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js'];
+    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js', './tam-theories-2.js'];
     { const cq = (await import('./tam-champs-quantiques.js')).SYSTEMES.map((s) => s.id); ok(cq.every((id) => onglet.includes("'" + id + "'")) && /\['champs', 'Quantum fields, the vacuum, atoms & quarks'\]/.test(onglet), 'game81 : les ' + cq.length + ' champs quantiques ont leur groupe'); }
     ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
     const mods = await Promise.all(fichiers.map((f) => import(f)));
@@ -480,7 +483,8 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
     for (const f of fichiers) ok(serveur.includes("'" + f.slice(2) + "'"), f + ' est dans la liste servie');
     /* chaque systeme est dans un groupe du menu (aucun orphelin) */
-    ok(/const groupeDe = \(s\) => THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+    ok(/const groupeDe = \(s\) => THEMES\.theories\.includes\(s\.id\) \? 'theories' : THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet)
+      && /\['theories', 'Classic theories: magnets, life, epidemics, lensing, sync, waves'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
     /* game80 : aucun systeme orphelin — chaque id des grandes questions est range dans son groupe */
     { const gq = [...(await import('./tam-grandes-questions.js')).SYSTEMES, ...(await import('./tam-grandes-questions-2.js')).SYSTEMES].map((s) => s.id);
       ok(gq.every((id) => onglet.includes("'" + id + "'")), 'les ' + gq.length + ' grandes questions sont toutes dans THEMES.questions'); }

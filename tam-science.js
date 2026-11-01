@@ -31,6 +31,9 @@ import * as CHQ from './tam-champs-quantiques.js';
 /* game88 (Phil : « les principes du vide quantique ») : vide comprime, Casimir dynamique, vide de Higgs, emission spontanee —
  *   adimensionnels, chacun contre sa formule exacte (aucune valeur publiee : SOURCES vide) */
 import * as VQ from './tam-vide-quantique.js';
+/* game93 (nuit du 01/11, « ce qu il manque comme theories ») : Ising 2D (Onsager), Lotka-Volterra (H conserve), SIR (taille finale exacte),
+ *   lentille gravitationnelle (images et amplification exactes), Kuramoto (Kc = 2 gamma), Gibbs (Si(pi) calcule) — SOURCES vide */
+import * as T2 from './tam-theories-2.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -77,7 +80,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 /** game82 (audit : le curseur « groupe » glissait par 1/400 et le module l arrondissait) : un parametre ENTIER selon le module lui-meme */
 export const paramEntier = (id, k) => { const s = systeme(id); return !!(s && s.mod.ENTIERS && (s.mod.ENTIERS[id] || []).includes(k)); };
@@ -195,6 +198,8 @@ export const ECHELLE_PROPRE = {
   effetTunnel: [2], wigner: [2], marcheQuantique: [2, 3], binaireTrouNoir: [3], disqueAccretion: [3], rotorPulse: [3],
   champLibre: [2], interactionChamps: [2, 3], tsunami: [2, 3], mouvementTerre: [3], tailleEtoiles: [3], oscillateurEtats: [1, 2],
   centreTerre: [0, 1, 2, 3],
+  /* game93 : les colonnes « autres » declarees par tam-theories-2.js#COLONNES (temps, magnetisation, rang de frequence, N) */
+  ising2D: [2, 3], lotkaVolterra: [2], epidemieSIR: [3], kuramoto: [2, 3], gibbsFourier: [0, 3],
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {

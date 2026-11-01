@@ -403,10 +403,22 @@ const DECORS = {
   },
   /* colonnes : desaccord du mode, t, population, P_e ; desaccord 0 = la frequence de l atome (la raie se centre la) */
   emissionSpontanee: (P, o, B) => [seg([0, B.lo[1], 0, 0], [0, B.hi[1], 0, 0], C.photons, 'Atom frequency (detuning 0): the line is centred here')],
+  /* ---------- game93 : tam-theories-2.js ---------- */
+  /* colonnes : theta x, theta y, beta x, beta y (rayons d Einstein) ; l anneau |theta| = 1 dans le plan image, la lentille a l origine */
+  lentilleGravitationnelle: () => [cer([0, 0, 0, 0], 1, [0, 0, 1, 0], C.photons, 'Einstein ring |theta| = 1 (a source exactly behind would fill it)'),
+    pt([0, 0, 0, 0], C.trouNoir, 'Lens (a point mass)')],
+  /* colonnes : x (proies), y (predateurs), t ; a = b = d = 1 : equilibre (c, 1), le centre des boucles a tout instant */
+  lotkaVolterra: (P, o, B) => [seg([P.c, 1, B.lo[2]], [P.c, 1, B.hi[2]], C.zone, 'Balance point (x = c, y = 1): the cycles turn round it')],
+  /* colonnes : s, i, r, t ; di/dt = (R0 s - 1) i : les infectes culminent EXACTEMENT quand s = 1 / R0 (seuil d immunite collective) */
+  epidemieSIR: (P, o, B) => [hyper(B, 0, 1 / P.R0, C.zone, 'Herd-immunity threshold s = 1 / R0: the infected curve peaks here')],
+  /* colonnes : x, S_N, erreur, N ; l onde carree vaut +1 sur (0, pi) */
+  gibbsFourier: (P, o, B) => [seg([Math.max(0, B.lo[0]), 1, 0, B.lo[3]], [B.hi[0], 1, 0, B.lo[3]], C.repere, 'Square wave level +1 (the sums overshoot it next to the jump)')],
 };
 
 /** les systemes sans decor, et pourquoi (le module n expose pas d objet de contexte vrai dans ses coordonnees) */
 export const SANS_DECOR = Object.freeze({
+  ising2D: 'axes are the lattice and the spins: the grid IS the data, no other object exists in the model',
+  kuramoto: 'the oscillators already sit on the unit circle (cos, sin): the circle is the data',
   mandelbrot: 'axes are the complex plane of c and log escape time; the escape circle |c| = 2 lies far outside zoomed views',
   mandelbulb: 'the cloud IS the surface; no other object exists in the model',
   paquetOscillateur: 'axes are <x>, <p>, width (a phase-space plot), not a place',

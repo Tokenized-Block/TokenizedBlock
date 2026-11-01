@@ -87,6 +87,14 @@ for (const p of [{}, { mu: 2, lambda: 0.1 }, { mu: 0.5, lambda: 2 }]) {
   ok(Math.abs(sd - c.rayon) < 0.03, 'vide ordinaire : ecart-type mesure ' + sd.toFixed(4) + ' = rayon du cercle ' + c.rayon.toFixed(4)); }
 { const o = sim('casimirDynamique'), c = DEC.decorDe('casimirDynamique', o.params, o)[0];
   ok(Math.abs(Math.hypot(o.brut[0], o.brut[1]) - c.rayon) < 1e-9, 'casimir dynamique : le mode part SUR le cercle du vide'); }
+/* game93 : les decors des theories classiques DISENT VRAI — le pic des infectes tombe sur le plan s = 1/R0 (a l echantillonnage pres),
+ *   les moyennes de Lotka-Volterra sur le point d equilibre trace, les images de la lentille (beta 0) sur l anneau |theta| = 1 */
+for (const R0 of [1.5, 2.5, 5]) { const o = sim('epidemieSIR', { R0 }), D = o.D; let k = 0; for (let i = 1; i < o.n; i++) if (o.brut[i * D + 1] > o.brut[k * D + 1]) k = i;
+  const p = DEC.decorDe('epidemieSIR', o.params, o)[0]; ok(Math.abs(o.brut[k * D] - p.centre[0]) < 0.02 * p.centre[0], 'SIR R0 ' + R0 + ' : s au pic ' + o.brut[k * D].toFixed(4) + ' = plan du decor ' + p.centre[0].toFixed(4)); }
+for (const c of [0.5, 1, 3]) { const o = sim('lotkaVolterra', { c }), D = o.D; let sx = 0, sy = 0; for (let i = 0; i < o.n; i++) { sx += o.brut[i * D]; sy += o.brut[i * D + 1]; }
+  const s = DEC.decorDe('lotkaVolterra', o.params, o)[0]; ok(Math.abs(sx / o.n - s.a[0]) < 0.01 * s.a[0] && Math.abs(sy / o.n - s.a[1]) < 0.01, 'Lotka c ' + c + ' : moyennes sur le point d equilibre trace'); }
+{ const o = sim('lentilleGravitationnelle', { beta: 0 }), D = o.D; let s = 0; for (let i = 0; i < o.n; i++) s += Math.hypot(o.brut[i * D], o.brut[i * D + 1]);
+  const r = DEC.decorDe('lentilleGravitationnelle', o.params, o).find((q) => /^Einstein ring/.test(q.libelle)).rayon; ok(Math.abs(s / o.n - r) < 0.02, 'lentille beta 0 : images sur l anneau (rayon moyen ' + (s / o.n).toFixed(4) + ')'); }
 /* normaliserCorps = la mise a l echelle de vueCorps (l origine retombe sur vueCorps().origine) */
 for (const [id, k] of Object.entries(SCI.CORPS)) {
   const o = sim(id), w = DEC.normaliserCorps([{ type: 'point', centre: [0, 0, 0], couleur: '#ffffff', libelle: 'o' }], o, k)[0], vc = SCI.vueCorps(o, k);

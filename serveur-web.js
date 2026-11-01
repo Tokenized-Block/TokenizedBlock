@@ -5795,6 +5795,8 @@ const SERVIS = [
   'tam-decor.js',
   /* game88 : les principes du vide quantique (vide comprime, Casimir dynamique, Higgs, emission spontanee) */
   'tam-vide-quantique.js',
+  /* game93 : six theories classiques (Ising, Lotka-Volterra, SIR, lentille, Kuramoto, Gibbs) */
+  'tam-theories-2.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];
