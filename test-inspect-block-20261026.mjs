@@ -51,7 +51,8 @@ const WANTED = ['identity.name', 'identity.symbol', 'identity.pairedWith', 'iden
   ok(f['personality.bio'].value === 'I follow Apple.' && f['personality.tone'].value === 'joueur', 'A: bio and tone as written by its creator');
   ok(f['state.neurons'].status === 'read' && f['state.neurons'].value.length === 128 && f['state.neurons'].value[40].potentiel === 0.2, 'A: 128 neurons with their real potentials');
   ok(f['state.sensors'].value.potentials.length === 16 && f['state.sensors'].value.current === 0.42, 'A: 16 sensors and the current they received');
-  ok(f['state.mood'].value === 'CURIEUX' && f['state.steering'].value === 0.153 && f['state.speed'].value === 0.25, 'A: mood, steering, speed as decided');
+  /* game76 : le nom lisible, plus l identifiant du moteur (Phil : « EXCITED, calm, Mood sont les seuls que je vois ») */
+  ok(f['state.mood'].value === 'curious' && f['state.steering'].value === 0.153 && f['state.speed'].value === 0.25, 'A: mood, steering, speed as decided');
   ok(f['state.why'].value.label === 'Transfers', 'A: why = the strongest read input');
   ok(f['state.memory'].value.beats === 3 && f['state.memory'].value.from === 139 && f['state.memory'].value.to === 141 && f['state.memory'].value.trace === 0.31, 'A: memory of the last beats');
   ok(f['perceives.inputs'].value.length === 2 && f['perceives.inputs'].value[1].text === 'not read', 'A: inputs keep their own "not read"');

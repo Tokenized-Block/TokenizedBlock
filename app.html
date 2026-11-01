@@ -1292,12 +1292,25 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 /* game66: the Feed line of a block glows in its mood's colour; its feeling line under the event */
 .filEmo[data-phase="EXCITE"]{--glow:var(--vif,#3ddc97)}.filEmo[data-phase="INQUIET"]{--glow:var(--dur,#ff6b6b)}.filEmo[data-phase="CURIEUX"]{--glow:var(--tiede,#f0c674)}.filEmo[data-phase="CALME"]{--glow:var(--accent,#a78bfa)}
 .filEmo[data-phase="EXCITE"],.filEmo[data-phase="INQUIET"],.filEmo[data-phase="CURIEUX"],.filEmo[data-phase="CALME"]{border-left:3px solid var(--glow);box-shadow:inset 8px 0 14px -10px var(--glow)}
+/* game76 : les 4 humeurs qui n avaient AUCUNE couleur (awake, asleep, dead, not read) — tuiles Live, Feed, avatar du panneau */
+.blvTuile[data-phase="EVEILLE"],.filEmo[data-phase="EVEILLE"]{--glow:#4fe0d0}
+.blvTuile[data-phase="DORMANT"],.filEmo[data-phase="DORMANT"]{--glow:#6b7aa8}
+.blvTuile[data-phase="MORT"],.filEmo[data-phase="MORT"]{--glow:#8a8f99}
+.blvTuile[data-phase="NON_LU"],.filEmo[data-phase="NON_LU"]{--glow:#9aa0b4}
+.blvTuile[data-phase="EVEILLE"],.blvTuile[data-phase="DORMANT"],.blvTuile[data-phase="MORT"],.blvTuile[data-phase="NON_LU"]{border-color:var(--glow);box-shadow:0 0 10px -5px var(--glow)}
+.filEmo[data-phase="EVEILLE"],.filEmo[data-phase="DORMANT"],.filEmo[data-phase="MORT"],.filEmo[data-phase="NON_LU"]{border-left:3px solid var(--glow);box-shadow:inset 8px 0 14px -12px var(--glow)}
+.bcAvatar[data-phase="INQUIET"]{filter:drop-shadow(0 0 14px #ff6b6b)} .bcAvatar[data-phase="CURIEUX"]{filter:drop-shadow(0 0 12px #f0c674)}
+.bcAvatar[data-phase="CALME"]{filter:drop-shadow(0 0 10px #a78bfa)} .bcAvatar[data-phase="EVEILLE"]{filter:drop-shadow(0 0 10px #4fe0d0)} .bcAvatar[data-phase="MORT"]{filter:grayscale(1)}
+/* le badge d humeur : « EXCITED » en capitales criait ; l humeur et le ressenti se lisent en minuscules */
+#bPhase,#pcPhase{text-transform:none;letter-spacing:0}
 .filE{margin:2px 0 0;font-size:12px;color:var(--glow,var(--doux))}
 @media (prefers-reduced-motion: reduce){.blvTuile{animation:none!important}}
 .blvTuileTete{display:flex;align-items:center;gap:6px;min-width:0;font-size:12px}
 .blvTuileTete b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .blvTuileTete span{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--doux)}
 .blvTuileTete span.bvVif{color:var(--vif)} .blvTuileTete span.bvDur{color:var(--dur)} .blvTuileTete span.bvCalme{color:var(--accent2)} .blvTuileTete span.bvTiede{color:var(--tiede)}
+.blvTuileTete span.bvEveil{color:#4fe0d0} .blvTuileTete span.bvEteint{color:#9aa0b4}
+:is(#bvChamp,.blvSvg) .bvEveil{fill:#4fe0d0;stroke:#4fe0d0} :is(#bvChamp,.blvSvg) .bvEteint{fill:#9aa0b4;stroke:#9aa0b4} :is(#bvChamp,.blvSvg) text.bvEveil,:is(#bvChamp,.blvSvg) text.bvEteint{stroke:none}
 .blvRetirer{flex:0 0 auto;appearance:none;border:1px solid var(--ligne);background:transparent;color:var(--doux);font:inherit;font-size:13px;line-height:1;
   width:26px;height:26px;border-radius:50%;cursor:pointer;padding:0}
 .blvRetirer:hover,.blvRetirer:focus-visible{color:var(--texte);border-color:var(--accent)}
@@ -3536,7 +3549,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261101-game75" hidden>Build <code>20261101-game75</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261101-game76" hidden>Build <code>20261101-game76</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5144,7 +5157,15 @@ import { BLOCKSKINS, SKIN_MINT_USDC, SKIN_MINT_TEXTE, SKIN_MINT_OUVERT, appelMin
   offreMinimale, partage, appelAcheter, appelEncherir, appelRegler, appelRetirer, appelMettreEnVente, appelOuvrirEnchere, appelRetirerCredit, ETH as ETH_SKIN, propositionSkin, lireDevisesSkin, deviseAdmise, decoderPage, appelPage } from './blockskins.js';
 import { SKM_RAFRAICHIR_MS, SKM_POULS_MS, SKM_FILTRES, SKM_STATUTS, filtrerSkins, ordonnerSkins, compterSkins, gestesSkin, montantOffre, relectureAvantSigner, cleLigneSkin, offresChangees, tempsRestant, apercuSkinFormes, detenteurCourt, statutSkin, brutVersTexte as brutVersTexteSkin, texteMarcheSkins } from './skins-marche.js';
 import { annonce as annonceSalle } from './salle-encheres.js';
-import { pensee as penseeVision } from './pensee-cerveau.js';
+import { pensee as penseeVision, lecture as lectureCerveau } from './pensee-cerveau.js';
+/* game76 (Phil : « EXCITED, calm, Mood sont les seuls que je vois ») : partout ou l humeur s ecrit, le RESSENTI (pensee-cerveau#lecture,
+ *   9 lectures : wary, eager, restless, lonely, stirred, settling, steady…) s ecrit a cote ; NON_LU se dit « not read » (le long
+ *   « Mood not judged — our read failed » de nomHumeur restait dans les badges et les verdicts). Affichage seulement : cerveau.js intact. */
+function humeurAffichee(phase) { return phase === 'NON_LU' ? 'not read' : nomHumeur(phase); }
+function ressentiDe(histo) {
+  try { const H = Array.isArray(histo) ? histo : []; const l = H.length ? lectureCerveau(H, H.length - 1) : null; return l ? l.word : null; } catch (_) { return null; }
+}
+function humeurEtRessenti(phase, histo) { const r = phase === 'NON_LU' ? null : ressentiDe(histo); return humeurAffichee(phase) + (r ? ' · ' + r : ''); }
 import { lireRegles, ecrireRegles, evenementsDuPas, appliquerRegles, compter } from './regles-cerveau.js';
 /* ⛔ NOS BLOCKS D ABORD (Phil, 2026-09-13) : en tete du fil, plus grands et marques 🟦 sur la map, 🟦 dans Live. */
 let nosSet = new Set(NOS_BLOCKS_GENESE);
@@ -13832,7 +13853,7 @@ function peindreCerveau() {
   }
   const v = profilCerveau && profilCerveau.vu;
   if (!v) { $('#pcPhase').textContent = 'waking…'; $('#pcPhrase').textContent = ''; peindreCompanion(); return; }
-  $('#pcPhase').textContent = nomHumeur(v.phase);
+  $('#pcPhase').textContent = humeurAffichee(v.phase);
   /* ⛔ MARCHE NON LU : on ne juge pas d humeur, et on ne laisse pas une phrase morte a la place. La
    * bande montre le battement, qui ne depend que du cablage — et le dit. */
   /* ⛔⛔ LA PROMESSE NE DOIT PAS PRECEDER LA MESURE. « The beat below is real » s affichait au-dessus
@@ -17034,7 +17055,7 @@ const voixDe = (adr) => { const v = voixConnues.get(String(adr).toLowerCase()); 
 function estParoleMood(p) {
   if (!p) return false;
   if (p.evenement === 'mood_changes') return true;
-  return /mood_changes/.test(String(p.parce_que || '')) || /\bI am (curious|calm|awake|asleep|excited|tired) now\b/i.test(String(p.texte || ''));
+  return /mood_changes/.test(String(p.parce_que || '')) || /\bI am (curious|calm|awake|asleep|excited|worried|dead|tired) now\b/i.test(String(p.texte || ''));
 }
 function parlerCerveaux() {
   parolesTour++;
@@ -25935,7 +25956,7 @@ function battreBrain() {
   brainDernierVu = r.vu;
   dessinerReseau(r.vu);
   dessinerReseauDit(r.vu);
-  $('#bPhase').textContent = nomHumeur(r.vu.phase);
+  $('#bPhase').textContent = humeurEtRessenti(r.vu.phase, brainHisto);
   /* ⛔ LA CHAINE EST LA VERITE POUR L HUMEUR. Si le marche public cote ce block alors que notre noeud
    * ne l a pas lu, on le dit ici au lieu de laisser « Trunk » et « asleep » se contredire a l ecran. */
   const mk = marcheParAdr.get(String(brainAdr || '').toLowerCase());
@@ -26418,7 +26439,7 @@ const vision = { source: null, i: -1, suivre: true, jouer: true, minuteur: null,
   c: null, vu: null, flight: null, loop: null, control: null, particles: [], beatStartedAt: 0, tickShown: null, speed: 1, books: [], book: null };
 /* ⛔ prefers-reduced-motion : aucun glissement, aucune impulsion, et la lecture ne demarre pas seule */
 const bvReduit = (() => { try { const mq = window.matchMedia('(prefers-reduced-motion: reduce)'); return () => !!mq.matches; } catch (_) { return () => false; } })();
-const PHASE_CLASSE = { EXCITE: 'bvVif', INQUIET: 'bvDur', CALME: 'bvCalme', CURIEUX: 'bvTiede' };
+const PHASE_CLASSE = { EXCITE: 'bvVif', INQUIET: 'bvDur', CALME: 'bvCalme', CURIEUX: 'bvTiede', EVEILLE: 'bvEveil', DORMANT: 'bvEteint', MORT: 'bvEteint', NON_LU: 'bvEteint' };
 function visionCible() {
   const bas = (x) => String(x || '').toLowerCase();
   if (vision.source === 'profil' && profilCerveau) {
@@ -30103,7 +30124,8 @@ function bcProposerTache(qui, classe, c, ref) {
   const m = bcMessage(qui + ' · brain task', classe, t ? t.label : c.task);
   bcVue('chat');
   const g = tacheAutorisee(c.task, window.__TB_BRAIN_SNAPSHOT__ || {});
-  const humeur = (window.__TB_BRAIN_SNAPSHOT__ && window.__TB_BRAIN_SNAPSHOT__.humeur) || 'unread';
+  const snapG = window.__TB_BRAIN_SNAPSHOT__;
+  const humeur = snapG && snapG.phase ? humeurAffichee(snapG.phase) : (snapG && snapG.humeur) || 'unread';
   bcEtape(m, g.ok ? 'Its brain (' + humeur + ') accepts.' : 'Its brain (' + humeur + ') refuses: ' + bcRaison(g.pourquoi) + '.', g.ok ? 'oui' : 'non');
   bcNoter({ type: 'verdict', ...(ref ? { ref } : {}), etat: g.ok ? 'accepted' : 'refused', text: g.ok ? 'brain accepts ' + c.task : String(g.pourquoi || 'refused') });
   if (!g.ok) return;
@@ -31075,13 +31097,13 @@ function bcPeindreActions(a, sym) {
     bcMessage('You', 'moi', 'How are you, ' + nom + '?');
     const snap = window.__TB_BRAIN_SNAPSHOT__;
     const mots = snap && String(snap.address || '').toLowerCase() === a ? bcRessenti(snap) : [];
-    bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', repliqueDe(ph) +(mots.length ? ' (' + mots.join(', ') + ')' : ''));
+    bcMessage(nom + ' · ' + humeurEtRessenti(ph, adrBrainEq(a, brainAdr) ? brainHisto : null), 'agent', repliqueDe(ph) +(mots.length ? ' (' + mots.join(', ') + ')' : ''));
   });
   parler('What would you do? 🧠', () => {
     const ph = bcPhaseDe(a), c = conseilDe(ph);
     bcVue('chat');
     bcMessage('You', 'moi', 'What would you do now, ' + nom + '?');
-    const m = bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', c.texte + ' It is a suggestion: nothing leaves without your wallet.');
+    const m = bcMessage(nom + ' · ' + humeurEtRessenti(ph, adrBrainEq(a, brainAdr) ? brainHisto : null), 'agent', c.texte + ' It is a suggestion: nothing leaves without your wallet.');
     if (c.geste === 'buy') bcBoutons(m, [['Prepare it — buy', () => bcTraderSurDemande(a, sym, 'buy')], ['Write my own amount', () => { const s = $('#bcSaisie'); s.value = 'buy this with '; s.focus(); const n = $('#bcNote'); n.className = 'note'; n.textContent = 'Add the amount and the currency (e.g. 0.002 ETH), then send.'; }, true]]);
     else if (c.geste === 'sell_quarter') bcBoutons(m, [['Prepare it — sell 25 %', () => bcTraderSurDemande(a, sym, 'sell_quarter')], ['Open the sell ticket', () => { bc.cote = 'sell'; bcVue('trade'); bcRepeindre(); }, true]]);
     else if (c.geste === 'gm') bcBoutons(m, [['Say GM 👋', () => bcSaluer(a, sym, 'GM')]]);
@@ -31095,14 +31117,14 @@ function bcPeindreActions(a, sym) {
     bcVue('chat');
     bcMessage('You', 'moi', 'Trade ' + nom + ' for me.');
     if (c.geste === 'buy' || c.geste === 'sell_quarter') {
-      bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', (c.geste === 'buy' ? 'I am excited: I prepare a buy' : 'I am worried: I prepare a sale of a quarter of what you hold') + '. Check the card, then your wallet signs — I never sign.');
+      bcMessage(nom + ' · ' + humeurEtRessenti(ph, adrBrainEq(a, brainAdr) ? brainHisto : null), 'agent', (c.geste === 'buy' ? 'I am excited: I prepare a buy' : 'I am worried: I prepare a sale of a quarter of what you hold') + '. Check the card, then your wallet signs — I never sign.');
       void bcTraderSurDemande(a, sym, c.geste);
       return;
     }
     /* ⛔ mesure (navigateur local) : marche NON LU -> la porte du cerveau refuse toute carte. Proposer Buy/Sell la ne menait qu a un
      *   refus : on le dit, sans bouton. Mort : rien a trader. */
-    if (ph === 'NON_LU' || ph === 'MORT') { bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', c.texte + (ph === 'NON_LU' ? ' Ask me again in a moment.' : '')); return; }
-    const m = bcMessage(nom + ' · ' + humeurCourte(ph), 'agent', 'My mood does not call for a trade right now (' + humeurCourte(ph) + '). If you still want one, pick the side — I prepare it, your wallet signs.');
+    if (ph === 'NON_LU' || ph === 'MORT') { bcMessage(nom + ' · ' + humeurEtRessenti(ph, adrBrainEq(a, brainAdr) ? brainHisto : null), 'agent', c.texte + (ph === 'NON_LU' ? ' Ask me again in a moment.' : '')); return; }
+    const m = bcMessage(nom + ' · ' + humeurEtRessenti(ph, adrBrainEq(a, brainAdr) ? brainHisto : null), 'agent', 'My mood does not call for a trade right now (' + humeurAffichee(ph) + '). If you still want one, pick the side — I prepare it, your wallet signs.');
     bcBoutons(m, [['Buy (S.I amount)', () => bcTraderSurDemande(a, sym, 'buy')], ['Sell 25 %', () => bcTraderSurDemande(a, sym, 'sell_quarter'), true]]);
   });
   /* 👥 et non 🫂 : 🫂 (Unicode 13) n existe pas dans la police emoji de Windows 10 — capture de Phil, un carre vide */
@@ -32047,7 +32069,7 @@ function bcPeindre(snap) {
   if ($('#bcPop').open && CHAINE === 8453 && Date.now() - (bc.skinsLues || 0) > 60000) void bcLireSkins(a);
   $('#bcAvatar').dataset.phase = snap.phase || 'NON_LU';
   $('#bcHumeur').textContent = snap.phrase || '';
-  $('#bcPhase').textContent = snap.humeur || '—';
+  $('#bcPhase').textContent = snap.phase ? humeurEtRessenti(snap.phase, adrBrainEq(a, brainAdr) ? brainHisto : null) : (snap.humeur || '—');
   $('#bcTick').textContent = beatText(displayedBeat(pageBrains, a, snap));
   $('#bcPrix').textContent = mk && Number(mk.prixUsd) > 0 ? (Number(mk.prixUsd) >= 1 ? '$' + Number(mk.prixUsd).toLocaleString('en-US', { maximumFractionDigits: 2 }) : '$' + Number(mk.prixUsd).toPrecision(3)) : '—';
   $('#bcLiq').textContent = mk && Number(mk.liquiditeUsd) > 0 ? usdCourt(mk.liquiditeUsd) : '—';

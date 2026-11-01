@@ -328,13 +328,22 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/\(src \? '&block=' \+ src : ''\)/.test(onglet) && /const src = sourceCerveau\(\);/.test(onglet) && /a && S\.sourceBloc !== false \? a : null/.test(onglet), 'le block de l onglet Brain est passe au choix (&block=), sauf si le joueur bascule sur UNIT');
   const appHtml = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
   ok(/blocCerveau: \(\) => \{ try \{ return brainAdr; \}/.test(appHtml), 'l app donne a TAM le block ouvert dans l onglet Brain (brainAdr)');
-  ok(/id="bArtTam"/.test(appHtml) && /api\.choisirDepuisBloc\(\)/.test(appHtml) && /choisirDepuisBloc = \(\) => \{ S\.sourceBloc = true;/.test(onglet), 'Brain : « Make art from this block’s brain » ouvre TAM avec CE cerveau');
+  ok(/id="bArtTam"/.test(appHtml) && /api\.choisirDepuisBloc\(\)/.test(appHtml) && /choisirDepuisBloc = \(\) => \{ selGroupe\.value = 'attracteurs'; peindreGroupe\(\); S\.sourceBloc = true;/.test(onglet), 'Brain : « Make art from this block’s brain » ouvre TAM avec CE cerveau');
   /* chaos : chaque variable passe par M.appliquerReglage (bornee, arrondie), puis regler -> memes certificats */
   ok(/Q = M\.appliquerReglage\(Q, r\.chemin, r\.valeur \+ \(u\[i\] \/ 4294967296 \* 2 - 1\) \* k \* \(r\.max - r\.min\) \/ 2\)/.test(onglet) && /regler\(sans\);\n    verdictTxt\.textContent = 'Chaos '/.test(onglet), 'chaos : bornes + arrondi par appliquerReglage, puis regler (certificats)');
   { let Q = { ...ch.params }; for (const r of T.reglagesDe(Q)) Q = T.appliquerReglage(Q, r.chemin, r.valeur + 1e9); ok(T.reglagesDe(Q).every((r) => r.valeur <= r.max + 1e-9), 'chaos maximal : chaque variable reste dans sa borne'); }
   /* le son suit le point montre (tete puis curseur), plus un index qui avance d un point par image */
   ok(/S\.tete = Math\.max\(0, Math\.floor\(S\.dessines\) - 1\)/.test(onglet) && /S\.ser\[j\]\[i\]/.test(onglet) && !/idx = \(idx \+ 1\) % S\.n/.test(onglet), 'son : la frequence lit le point dessine, pas un compteur d images');
   ok(/el\('h2', \{ text: 'Tokenized Art Math' \}\)/.test(onglet), 'titre : Tokenized Art Math');
+  /* game76 : les sciences en direct — modules SERVIS (sinon page morte), vue seule (jamais de Mint), unites en anglais */
+  ok(/'tam-physique\.js', 'tam-sciences\.js', 'tam-fluides\.js'/.test(serveur), 'les 3 modules de science sont dans la liste servie');
+  /* ⛔ corrige le 01/11 : TamArt v1 ne connait pas la famille (octet 4 = q) — une science se minte, par le MEME portail */
+  ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
+  ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
+  { const [P, Sc, F] = await Promise.all(['./tam-physique.js', './tam-sciences.js', './tam-fluides.js'].map((f) => import(f)));
+    const tous = [P, Sc, F].flatMap((m) => m.SYSTEMES.map((s) => [m, s]));
+    ok(tous.length === 20, '20 systemes de science (7 physique, 9 fractales/or/quantique, 4 fluides) : ' + tous.length);
+    for (const [m, s] of tous) { const o = m.simuler(s.id, {}); ok(o.bornee && o.brut && o.brut.length === o.n * o.D && o.D >= 3 && o.D <= 12, s.id + ' : borne, n*D valeurs, 3..12 dimensions'); } }
   const textes = [...(onglet + readFileSync(new URL('./tam-vue.js', import.meta.url), 'utf8')).matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).join('\n');
   ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');
 }
@@ -405,7 +414,10 @@ if (!process.env.TAM_MUTANT) {
     rmSync(dir, { recursive: true, force: true }); mkdirSync(dir, { recursive: true });
     for (const f of readdirSync(racine)) {
       if (!/\.(js|mjs|html|json)$/.test(f) || (f.startsWith('test-') && f !== 'test-tam-onglet-20261031.mjs')) continue;
-      if (statSync(join(racine, f)).isFile()) cpSync(join(racine, f), join(dir, f));
+      /* game76 : les mutants temporaires des AUTRES bancs (tam-mutant-N.tmp.js…) naissent et meurent pendant la serie concurrente :
+       *   les copier faisait ENOENT au hasard. Ils ne servent a rien ici ; un fichier disparu entre la liste et la copie est saute. */
+      if (/\.tmp\./.test(f)) continue;
+      try { if (statSync(join(racine, f)).isFile()) cpSync(join(racine, f), join(dir, f)); } catch (e) { if (e && e.code !== 'ENOENT') throw e; }
     }
     const src = readFileSync(join(dir, fichier), 'utf8').replace(/\r\n/g, '\n'), nb = src.split(de).length - 1;
     if (nb !== 1) { console.log('  M' + (i + 1) + ' ' + nom + ' : NON APPLIQUE (motif ' + nb + ' fois) -> SURVIVANT'); continue; }

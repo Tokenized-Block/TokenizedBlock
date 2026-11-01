@@ -63,7 +63,8 @@ export function snapshotCerveau({
     symbole: symbole || null,
     role: role || null,
     phase,
-    humeur: phase ? nomHumeur(phase) : null,
+    /* game76 : NON_LU se dit « not read » (le long « Mood not judged — our read failed » de nomHumeur s ecrivait dans les verdicts du bot) */
+    humeur: phase ? (phase === 'NON_LU' ? 'not read' : nomHumeur(phase)) : null,
     phrase: phase ? phraseDePhase(phase, symbole || 'this block') : null,
     tick: vu && Number.isFinite(vu.tick) ? vu.tick : (etat && Number.isFinite(etat.tick) ? etat.tick : null),
     hz: vu ? {

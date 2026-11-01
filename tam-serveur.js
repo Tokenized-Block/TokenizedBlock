@@ -12,6 +12,7 @@ import { topic, keccak256Hex } from './keccak.js';
 const MAX_PARAMS_JSON = MAX_PARAMS;
 import { etatInitial, pas, nomHumeur } from './cerveau.js';
 import { lecture } from './pensee-cerveau.js';
+import { certifierScience } from './tam-science.js';
 
 export const TOPIC_MINTED = topic(SIG_TAM.minted);
 export const FENETRE_LOGS = 9000, FENETRES_PAR_APPEL = 20, TTL_MS = 60000;
@@ -170,7 +171,8 @@ export function serveurTam({ rpc, deploiement, lireVie = null, lireSymbole = nul
     const existantes = oe.oeuvres.map((o) => oe.sigs.get(o.tokenId) || null);
     const cle = json + ':' + existantes.length;
     if (parReglage.has(cle)) return parReglage.get(cle); /* un cache touche ne coute rien : ni budget, ni place */
-    const c = await calculer(ip, () => certifierReglage(P, existantes));
+    /* game76 : une oeuvre de SCIENCE (P.science) passe ses propres certificats (tam-science.js) : bornes du module, bornee, distincte */
+    const c = await calculer(ip, () => (P && P.science ? certifierScience(P, existantes) : certifierReglage(P, existantes)));
     if (c.statut) return c; /* OCCUPE (503) ou TROP (429) : rien n a ete calcule */
     const { oeuvre: _o, octets, signature: _s, ...reste } = c;
     const rep = { ...reste, ok: c.ok === true, etat: c.ok ? 'CERTIFIE' : c.etat === 'NON_LU' ? 'NON_LU' : 'REFUSE', hash: octets ? keccak256Hex(octets) : null, comparees: existantes.length,

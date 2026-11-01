@@ -5,6 +5,7 @@
 //   - NOT_READ:    the app has a source for it, but holds no value right now (never a zero, never a default);
 //   - NO_SOURCE:   the app has no data source for it at all — said plainly, with why, instead of fabricating one.
 import { maskFeeAddresses } from './frais-creation.js';
+import { nomHumeur } from './cerveau.js';
 
 export const NOT_READ = 'not read';
 export const NO_SOURCE = 'no source in this app';
@@ -99,7 +100,8 @@ function valueOf(key, src) {
     case 'neurons': return inn ? inn.neurones : null;
     case 'sensors': return inn ? { potentials: inn.neurones.slice(0, 16).map((x) => x.potentiel),
       current: src.champ && src.champ.sensations && finite(src.champ.sensations.total) ? src.champ.sensations.total : null } : null;
-    case 'mood': return vu && text(vu.phase);
+    /* game76 : le nom lisible (« excited »), plus l identifiant brut du moteur (« EXCITE ») ; NON_LU se dit « not read » */
+    case 'mood': return vu && vu.phase ? (vu.phase === 'NON_LU' ? 'not read' : nomHumeur(vu.phase)) : null;
     case 'why': return src.why && src.why.strongest ? src.why.strongest : null;
     case 'steering': return vu && finite(vu.virage) ? vu.virage : null;
     case 'speed': return vu && finite(vu.vitesse) ? vu.vitesse : null;
@@ -214,7 +216,7 @@ function fieldTextRaw(f) {
   if (f.key === 'inputs') return v.map((e) => e.label + ': ' + e.text).join(' · ');
   if (f.key === 'neighboursNearby') return v.map((n) => (n.sym || n.adr) + (finite(n.distance) ? ' (' + Math.round(n.distance) + ' away)' : '')).join(' · ');
   if (f.key === 'market') return [v.dex, v.prixUsd === null ? 'price ' + NOT_READ : '$' + v.prixUsd, v.liquiditeUsd === null ? 'liquidity ' + NOT_READ : 'liquidity $' + Math.round(v.liquiditeUsd)].filter(Boolean).join(' · ');
-  if (f.key === 'recentBeats') return v.map((b) => 'beat ' + b.tick + ' ' + (b.phase || NOT_READ) + ' ' + (b.spikes === null ? '' : b.spikes + ' fired')).join(' · ');
+  if (f.key === 'recentBeats') return v.map((b) => 'beat ' + b.tick + ' ' + (b.phase ? (b.phase === 'NON_LU' ? 'not read' : nomHumeur(b.phase)) : NOT_READ) + ' ' + (b.spikes === null ? '' : b.spikes + ' fired')).join(' · ');
   if (f.key === 'thoughts') return v.map((t) => 'beat ' + t.tick + ': ' + t.texte).join(' · ');
   if (f.key === 'spoken') return v.map((t) => (t.heure ? t.heure + ' ' : '') + t.texte).join(' · ');
   if (Array.isArray(v)) return v.join(', ');

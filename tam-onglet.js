@@ -1,7 +1,7 @@
 /* tam-onglet.js — TAM phase C : l onglet TAM (le DOM, le canvas, les gestes, le son). Importe par app.html A L OUVERTURE de l onglet.
  *   La logique prouvee vit dans tam-vue.js (projection, couches, verdict du rejeu, carte, regle du Mint) et tam-plan.js (le plan du mint).
  *   ⛔ Rien n est signe ici : le mint passe par le « Pay with » de l app (ctx.preparer / ctx.envoyer), que le WALLET signe.
- *   ⛔ Sans adresse TamArt (tamart-deploiement.js), AUCUN bouton Mint : une phrase dans « How it works », pas un controle inerte. */
+ *   ⛔ Sans adresse TamArt (tamart-deploiement.js), AUCUN bouton Mint : pas un controle inerte. */
 import { generer, certifier, rejouer, decoder, canon } from './tam-moteur.js';
 import { PORTEUSES } from './tam-moteur.js';
 import * as M from './tam-moteur.js';
@@ -13,6 +13,37 @@ import { projectCam } from './map3d.js';
 import { navGesture } from './vision-inside.js';
 import { keccak256Hex } from './keccak.js';
 import { FEE_WALLET, maskFeeAddresses, displayShort } from './frais-creation.js';
+import * as PHY from './tam-physique.js';
+import * as SCI from './tam-sciences.js';
+import * as FLU from './tam-fluides.js';
+import * as TS from './tam-science.js';
+
+/* game76 (Phil : « relativite generale, gravite, fusion, toutes les sciences… fractales, chiffre d or, quantique, fluides — en direct ») :
+ *   des simulations VERIFIEES (chaque module a son banc : invariants contre la theorie, mutants), dessinees par la meme scene.
+ *   ⛔ Correction du 01/11 : j avais dit « vue seule, TamArt v2 requis » en lisant l octet 4 comme une famille ; c est q (1..16 bits).
+ *   Le contrat deploye ne connait pas la famille : une science se minte avec TamArt v1, encodee et rejouee par tam-science.js. */
+const SYSTEMES_SCI = [PHY, SCI, FLU].flatMap((mod) => mod.SYSTEMES.map((s) => ({ ...s, mod })));
+const groupeDe = (s) => s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
+  : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
+const GROUPES = [['attracteurs', 'Attractors (chosen by the brain)'],['physique', 'Physics: gravity, relativity, fusion'], ['fractales', 'Fractals & golden ratio'],
+  ['quantique', 'Quantum'], ['fluides', 'Fluid mechanics']];
+const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
+/* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
+/* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
+const UNITES_EN = { 'par radian d orbite': 'per radian of orbit', 'par unite de temps': 'per time unit', 'par iteration': 'per step', 'par periode': 'per period' };
+const uniteEn = (u) => (u ? UNITES_EN[u] || String(u).replace(/^par /, 'per ') : '');
+/* les invariants qui ne disent rien a l ecran (un compteur de temps, pas une loi conservee) */
+const INVARIANT_MUET = new Set(['tempsFinal']);
+function ligneInvariant(k, v) {
+  if (v && typeof v === 'object') {
+    /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
+    if ('mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' vs formula ' + nb4(v.formule) + (k === 'precession' ? ' (weak-field formula: it underestimates close to the black hole)' : '');
+    if ('mesure' in v && 'theorie' in v) return k + ': measured ' + nb4(v.mesure) + ' vs theory ' + nb4(v.theorie);
+    if ('derive' in v) return k + ': drift ' + nb4(v.derive) + ('debut' in v ? ' (from ' + nb4(v.debut) + ')' : '');
+    return k + ': ' + Object.entries(v).filter(([, x]) => typeof x === 'number').slice(0, 3).map(([a, x]) => a + ' ' + nb4(x)).join(', ');
+  }
+  return k + ': ' + nb4(v);
+}
 
 const CSS = `
 #v-tam{--tam-fond:#0b0d17;--tam-carte:rgba(255,255,255,.04);--tam-bord:rgba(255,255,255,.12);--tam-txt:#e8ecf5;--tam-doux:#9aa3b8;--tam-acc:#7fd1ff}
@@ -82,6 +113,8 @@ export function monter(racine, ctx = {}) {
     sale: true, son: null, dom: null, ser: null, nMintees: 0 };
 
   /* ── l explorateur ── */
+  const selGroupe = el('select', { 'aria-label': 'Kind of graph', id: 'tamGroupe' }, ...GROUPES.map(([v, t]) => el('option', { value: v, text: t })));
+  const selSys = el('select', { 'aria-label': 'System', id: 'tamSysteme', hidden: true });
   const selFam = el('select', { 'aria-label': 'Family', id: 'tamFamille' }, ...PORTEUSES.map((f) => el('option', { value: f, text: V.nomFamille(f) })));
   const selDim = el('select', { 'aria-label': 'Dimensions', id: 'tamDims' });
   const bCerveau = el('button', { type: 'button', id: 'tamCerveau', text: 'Let the brain choose' });
@@ -101,6 +134,7 @@ export function monter(racine, ctx = {}) {
   /* 2026-11-01 (Phil) : en haut, QUEL block fait le graphe, son humeur (moteur) et sa lecture (le mot humain), avec le glow de l humeur */
   const qui = el('p', { class: 'tamQui', id: 'tamQui', text: 'No work yet: let a brain choose, or pick a family.' });
   function peindreQui() {
+    if (S.science) { qui.dataset.phase = ''; qui.replaceChildren(document.createTextNode('Live simulation: '), el('b', { text: S.science.s.nom }), document.createTextNode(' · ' + S.science.s.science + ' · you set it')); return; }
     /* le cerveau qui a choisi reste nomme apres un reglage (S.origine) : « then tuned » le dit */
     const ch = (S.choix && S.choix.cerveau) || S.origine;
     if (ch) {
@@ -149,13 +183,14 @@ export function monter(racine, ctx = {}) {
   const zMint = el('div', { id: 'tamMint', hidden: true });
   const gal = el('div', { class: 'tamGal', id: 'tamGalerie' });
   const galEtat = el('p', { class: 'tamDoux', id: 'tamGalerieEtat' });
+  const carteGal = el('div', { class: 'tamCarte', id: 'tamCarteGalerie', hidden: true }, el('h3', { text: 'Minted works' }), galEtat, gal);
 
   racine.replaceChildren(
     el('div', { class: 'tamCarte' },
       el('h2', { text: 'Tokenized Art Math' }),
       qui,
-      el('p', { class: 'tamDoux', text: 'Strange attractors, fractals and the golden angle, combined by the brain and drawn in 3-D. Up to 12 dimensions, shown one layer at a time.' }),
-      el('div', { class: 'tamRang' }, selFam, selDim, bCerveau, bSource),
+      el('p', { class: 'tamDoux', text: 'Strange attractors combined by the brain, plus live physics, fractals, the golden ratio, quantum and fluids — each checked against its theory and drawn in 3-D. Up to 12 dimensions, shown one layer at a time.' }),
+      el('div', { class: 'tamRang' }, selGroupe, selSys, selFam, selDim, bCerveau, bSource),
       scene,
       el('div', { class: 'tamRang' }, bRot, bVue, bBoucle, bSon),
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamResolution', text: 'Resolution' }), curRes, resTxt),
@@ -172,8 +207,8 @@ export function monter(racine, ctx = {}) {
       el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
       curseurs, verdictTxt),
     el('div', { class: 'tamCarte' }, el('h3', { text: 'This work' }), dl, zMint),
-    el('div', { class: 'tamCarte' }, el('h3', { text: 'Minted works' }), galEtat, gal,
-      el('details', {}, el('summary', { text: 'How it works' }), el('p', { class: 'tamDoux', text: 'Each work is stored on Base byte for byte, with its seed and parameters. Anyone can replay the parameters in this page and compare the result with the stored bytes. Minting costs 5 USDC, paid to the TokenizedBlock fee wallet; it opens when the TamArt contract is deployed.' }))));
+    /* game76 (Phil : « retire ca pas utile ») : plus de « How it works » ; la carte des oeuvres n apparait qu une fois une oeuvre mintee */
+    carteGal);
 
   /* ── charger une oeuvre (params) ── */
   function charger(P, choix = null, octetsServeur = null) {
@@ -185,7 +220,7 @@ export function monter(racine, ctx = {}) {
       etatLigne.textContent = 'This combination escapes to infinity: nothing to draw.';
       verdictTxt.textContent = V.verdictReglage(S.c).texte; peindreReglages(); peindreMint(); S.sale = true; return;
     }
-    S.P = o.params; S.o = o; S.D = o.D; S.n = o.n; S.choix = choix;
+    S.P = o.params; S.o = o; S.D = o.D; S.n = o.n; S.choix = choix; S.science = null; racine.dataset.science = '';
     if (choix && choix.cerveau) S.origine = choix.cerveau;
     /* une oeuvre REGLEE : les bornes d abord (validerReglage), puis les MEMES certificats que le choix du cerveau */
     const vb = S.P.regle ? M.validerReglage(S.P) : { ok: true };
@@ -200,9 +235,62 @@ export function monter(racine, ctx = {}) {
     racine.dataset.dims = String(S.D);
     S.sale = true;
   }
+  /* ── game76 : une simulation de science (vue seule) — meme scene, memes couches, meme son ; pas de certificats, pas de Mint ── */
+  function chargerScience(id, params = {}) {
+    const s = SYSTEMES_SCI.find((x) => x.id === id); if (!s) return;
+    let o;
+    try { o = s.mod.simuler(id, params); } catch (_) { etatLigne.textContent = 'This system could not be computed.'; return; }
+    if (!o || !o.bornee || !o.brut) {
+      S.o = null; S.ser = null; S.science = { s, o: o || null }; S.P = { science: id, params: (o && o.params) || params, angles: [] };
+      S.octets = null; S.c = { ok: false, raisons: ['the simulation left its valid domain'] };
+      etatLigne.textContent = s.nom + ': the simulation left its valid domain (' + ((o && o.raison) || 'escaped') + '). Nothing to draw — change a variable.';
+      peindreReglages(); peindreMint(); S.sale = true; return;
+    }
+    const D = o.D;
+    /* les params MINTABLES (tam-science.js) : bornes du module, angles d or, q = 12, tires pour CE wallet ; les octets = le rejeu */
+    const P = TS.paramsScience(id, o.params, { minteur: compte() }), cert = TS.certifierScience(P, []);
+    S.science = { s, o };
+    S.P = P;
+    S.o = o; S.D = D; S.n = o.n; S.choix = null; S.origine = null; S.stocke = null;
+    S.octets = cert.octets ? hexDe(cert.octets) : null;
+    /* le certificat LOCAL (aucune oeuvre mintee comparee) ; le serveur refait la distance contre TOUTES au clic sur Mint */
+    S.c = { ...cert, lyapunov: typeof o.lyapunov === 'number' ? o.lyapunov : NaN, uniteLyapunov: o.uniteLyapunov };
+    S.z = V.standardiser(o.brut, o.n, D); S.ser = V.series(S.z, o.n, D);
+    S.couches = V.etatCouches(D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null;
+    curseur.min = String(Math.min(D, 2)); curseur.max = String(D); curseur.value = String(D);
+    peindrePuces(); peindreCarte(); peindreGrille(); peindreReglages(); peindreMint(); peindreVarsScene(); peindreQui();
+    etatLigne.textContent = s.phrase;
+    racine.dataset.dims = String(D); racine.dataset.science = id;
+    S.sale = true;
+  }
+  function peindreGroupe() {
+    const g = selGroupe.value, sci = g !== 'attracteurs';
+    for (const x of [selFam, selDim, bCerveau]) x.hidden = sci;
+    if (sci) bSource.hidden = true; else peindreSource();
+    selSys.hidden = !sci; bPouce.hidden = sci; selOp.hidden = sci; if (sci) selMotif.hidden = true;
+    if (sci) selSys.replaceChildren(...SYSTEMES_SCI.filter((s) => groupeDe(s) === g).map((s) => el('option', { value: s.id, text: s.nom + ' · ' + s.science })));
+  }
+  selGroupe.addEventListener('change', () => {
+    peindreGroupe();
+    if (selGroupe.value === 'attracteurs') depuisExplorateur(); else chargerScience(selSys.value);
+  });
+  selSys.addEventListener('change', () => chargerScience(selSys.value));
   /* les variables sur la scene : la combinaison, chaque parametre a sa valeur, la dimension, le nombre de points, la graine */
   function peindreVarsScene() {
     if (!S.P) { varsScene.replaceChildren(); return; }
+    if (S.science) {
+      const { s, o } = S.science, m = o ? mesureResolution() : null;
+      if (m) resTxt.textContent = '1/' + m.cote;
+      const lam = o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? 'λ = ' + o.lyapunov.toFixed(3) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' (measured over this run)' : null;
+      varsScene.replaceChildren(
+        el('b', { text: s.nom + ' — ' + s.science + ' · live simulation' }),
+        ...s.mod.reglagesPhysique(s.id, S.P.params).map((r) => el('span', { text: r.nom + ' = ' + nb4(r.valeur) })),
+        el('span', { text: S.D + '-D · ' + S.n + (o && o.nuage ? ' samples (a cloud, not a path)' : ' points') }),
+        ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).slice(0, 4).map(([k, v]) => el('span', { class: 'tamMesure', text: ligneInvariant(k, v) })),
+        ...(lam ? [el('span', { class: 'tamMesure', text: lam })] : []),
+        ...(m ? [el('span', { class: 'tamMesure', text: 'resolution 1/' + m.cote + ': ' + m.N + ' boxes · local dimension ≈ ' + (Number.isFinite(m.dim) ? m.dim.toFixed(2) : '—') + (m.sature ? ' (too fine for ' + S.n + ' points)' : '') })] : []));
+      return;
+    }
     const R = M.reglagesDe(S.P);
     const graine = S.P.graine ? String(S.P.graine) : '';
     const m = mesureResolution(), c = S.c || {};
@@ -254,6 +342,21 @@ export function monter(racine, ctx = {}) {
   /* les curseurs : un par variable de reglagesDe ; rebatis seulement si la LISTE change (un glissement en cours n est pas casse) */
   let cheminsPeints = '';
   function peindreReglages() {
+    if (S.science) {
+      const R = S.science.s.mod.reglagesPhysique(S.science.s.id, S.P.params), cles = 'sci:' + S.science.s.id;
+      if (cles !== cheminsPeints) {
+        cheminsPeints = cles;
+        curseurs.replaceChildren(...R.map((r) => {
+          const id = 'tamR-' + r.chemin.replace('.', '-');
+          return el('div', { class: 'tamReglage' },
+            el('label', { for: id, class: 'tamDoux', text: r.nom + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
+            el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: String((r.max - r.min) / 400), value: String(r.valeur), 'aria-label': r.nom }));
+        }));
+      }
+      racine.dataset.reglages = String(R.length);
+      verdictTxt.textContent = S.c && S.c.ok ? 'Mintable for 5 USDC once the server checks it is distinct from every minted work.' : 'Not mintable: ' + ((S.c && S.c.raisons || []).join('; ') || 'the simulation left its valid domain') + '.';
+      return;
+    }
     selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
     if (S.P.motif) { const v = S.P.motif.famille + (S.P.motif.variante ? ':' + S.P.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
     const R = M.reglagesDe(S.P), cles = R.map((r) => r.chemin).join('|');
@@ -277,6 +380,12 @@ export function monter(racine, ctx = {}) {
     const inp = e.target.closest('input[data-chemin]'); if (!inp || !S.P) return;
     const s = curseurs.querySelector('output[data-sortie="' + inp.dataset.chemin + '"]'); if (s) s.textContent = Number(inp.value).toFixed(3);
     clearTimeout(minuteur);
+    if (S.science) {
+      /* une science : on resimule avec CETTE variable (bornee par le module), rien d autre ne change */
+      const cle = inp.dataset.chemin.replace(/^params\./, ''), id = S.science.s.id, base = { ...S.P.params };
+      minuteur = setTimeout(() => chargerScience(id, { ...base, [cle]: Number(inp.value) }), 90);
+      return;
+    }
     minuteur = setTimeout(() => {
       /* V.oeuvreReglee : SEUL ce chemin change, arrondi AVANT la generation — les octets sont ceux que le rejeu recalcule */
       const r = V.oeuvreReglee({ ...S.P, ...(compte() ? { minteur: compte() } : {}) }, inp.dataset.chemin, Number(inp.value));
@@ -287,6 +396,15 @@ export function monter(racine, ctx = {}) {
   curChaos.addEventListener('input', () => { chaosTxt.textContent = curChaos.value + ' %'; });
   bChaos.addEventListener('click', () => {
     if (!S.P) return;
+    if (S.science) {
+      /* une science : chaque variable saute au hasard dans ses bornes, puis on resimule (le module borne encore) */
+      const k = Number(curChaos.value) / 100, id = S.science.s.id, R = S.science.s.mod.reglagesPhysique(id, S.P.params), u = new Uint32Array(Math.max(1, R.length));
+      crypto.getRandomValues(u);
+      const Q = { ...S.P.params };
+      R.forEach((r, i) => { Q[r.chemin.replace(/^params\./, '')] = Math.min(r.max, Math.max(r.min, r.valeur + (u[i] / 4294967296 * 2 - 1) * k * (r.max - r.min) / 2)); });
+      chargerScience(id, Q);
+      return;
+    }
     const k = Number(curChaos.value) / 100, R = M.reglagesDe(S.P), u = new Uint32Array(Math.max(1, R.length));
     crypto.getRandomValues(u);
     /* chaque variable : valeur + (hasard dans [-1, 1]) x chaos x demi-plage ; appliquerReglage borne et arrondit */
@@ -321,7 +439,7 @@ export function monter(racine, ctx = {}) {
   /* le block de l onglet Brain s il y en a un et que le joueur ne l a pas ecarte ; sinon null -> le serveur prend UNIT */
   const sourceCerveau = () => { const a = blocVu(); return a && S.sourceBloc !== false ? a : null; };
   function peindreSource() {
-    const a = blocVu(); bSource.hidden = !a; if (!a) return;
+    const a = blocVu(); bSource.hidden = !a || selGroupe.value !== 'attracteurs'; if (bSource.hidden) return;
     const sur = S.sourceBloc !== false;
     bSource.setAttribute('aria-pressed', String(sur));
     bSource.textContent = sur ? 'Brain: block ' + court(a) : 'Brain: UNIT';
@@ -427,7 +545,7 @@ export function monter(racine, ctx = {}) {
       const u = projectCam(camPx, pos[3 * i] * sc, -pos[3 * i + 1] * sc, pos[3 * i + 2] * sc, L, H, 1);
       projSx[i] = u ? u.sx : NaN; projSy[i] = u ? u.sy : NaN; pz[i] = u ? u.zc : 0;
     }
-    const nuage = S.P.ordre === 1;
+    const nuage = S.P.ordre === 1 || !!(S.science && S.o && S.o.nuage);
     g.lineWidth = Math.max(1, dpr * 1.1); g.lineCap = 'round';
     /* glow : un halo de la couleur du trait (shadowBlur), sur des chemins groupes par couleur — quelques dizaines de stroke, pas un par point */
     g.shadowBlur = 7 * dpr;
@@ -524,6 +642,15 @@ export function monter(racine, ctx = {}) {
 
   /* ── la carte ── */
   function peindreCarte() {
+    if (S.science) {
+      const { s, o } = S.science;
+      const lignes = [{ k: 'System', v: s.nom }, { k: 'Science', v: s.science }, { k: 'What is computed', v: s.phrase },
+        ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).map(([k, v]) => ({ k: 'Check: ' + k, v: ligneInvariant(k, v).replace(/^[^:]+: /, '') })),
+        { k: 'Chaos (λ)', v: o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? nb4(o.lyapunov) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' — finite-run estimate' : 'not defined for this system' },
+        { k: 'Mint', v: '5 USDC, stored on Base like every work (same contract). Anyone can replay these parameters to the same bytes.' }];
+      dl.replaceChildren(...lignes.flatMap((l) => [el('dt', { text: l.k }), el('dd', { text: l.v })]));
+      return;
+    }
     const c = S.choix && S.choix.certificats ? { ...S.c, ...S.choix.certificats } : S.c;
     const lignes = V.carte({ P: S.P, c, choix: S.choix, nMintees: S.choix ? S.nMintees : 0 });
     dl.replaceChildren(...lignes.flatMap((l) => [el('dt', { text: l.k }), el('dd', { text: l.v })]));
@@ -578,7 +705,7 @@ export function monter(racine, ctx = {}) {
   /* ── le Mint (seulement adresse connue ; seulement une oeuvre choisie par le cerveau) ── */
   function peindreMint() {
     /* 2026-11-01 : le choix du cerveau OU une oeuvre reglee, et seulement si les certificats LOCAUX passent ; le serveur re-certifie au clic */
-    const visible = V.mintVisible(TAMART_DEPLOIEMENT) && !!((S.choix || (S.P && S.P.regle)) && S.octets && S.c && S.c.ok);
+    const visible = V.mintVisible(TAMART_DEPLOIEMENT) && !!((S.choix || (S.P && S.P.regle) || S.science) && S.octets && S.c && S.c.ok);
     zMint.hidden = !visible; racine.dataset.mint = visible ? 'on' : 'off';
     if (!visible) { zMint.replaceChildren(); return; }
     const selPay = el('select', { 'aria-label': 'Pay with', id: 'tamPayer' }, el('option', { value: 'usdc', text: 'USDC' }));
@@ -621,13 +748,13 @@ export function monter(racine, ctx = {}) {
     if (!c) { dit.textContent = 'Connect a wallet to mint.'; return; }
     const contrat = adresseTam(TAMART_DEPLOIEMENT);
     /* ⛔ on ne signe que des octets REJOUES ici : le serveur a choisi, la page recalcule */
-    const r = rejouer(JSON.parse(JSON.stringify(S.P))), oct = octetsDe(S.octets);
+    const r = (S.science ? TS.rejouerScience : rejouer)(JSON.parse(JSON.stringify(S.P))), oct = octetsDe(S.octets);
     if (!r.ok || !V.verdictRejeu(r.octets, oct).identique) { dit.textContent = 'This page could not replay this work to the same bytes, so nothing is offered to sign.'; return; }
     const paramsJson = JSON.stringify(S.P);
     /* ⛔ 2026-11-01 : LE portail (V.peutMinter) — certificats locaux, ceux du SERVEUR (distance a toutes les oeuvres mintees) sur les memes
      *   octets, et une oeuvre tiree pour CE wallet. Une oeuvre reglee est re-certifiee par le serveur ; le choix du cerveau l a deja ete. */
     let serveur = null;
-    if (S.P.regle) {
+    if (S.P.regle || S.science) {
       dit.textContent = 'Checking this setting against every minted work…';
       const b = new TextEncoder().encode(paramsJson); let s = ''; for (const x of b) s += String.fromCharCode(x);
       const p64 = btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
@@ -671,6 +798,7 @@ export function monter(racine, ctx = {}) {
     try { const j = await fetch('/api/tam/oeuvres', { cache: 'no-store' }).then((r) => r.json()); if (j && Array.isArray(j.oeuvres)) ids = j.oeuvres.map((o) => o.tokenId); } catch (_) { ids = []; }
     if (!ids.length) { try { const n = Number(BigInt(decoderMot(await ctx.rpc('eth_call', [appelLecture(contrat, SIG_TAM.totalSupply), 'latest'])))); ids = Array.from({ length: Math.min(n, 60) }, (_, i) => i + 1); } catch (_) { ids = []; } }
     galEtat.textContent = ids.length ? ids.length + ' work' + (ids.length === 1 ? '' : 's') + ', read from Base.' : 'No work minted yet.';
+    carteGal.hidden = ids.length === 0;
     S.nMintees = ids.length;
     gal.replaceChildren(...ids.map((id) => carteOeuvre(contrat, id)));
   }
@@ -704,7 +832,7 @@ export function monter(racine, ctx = {}) {
 
   optionsDims(); depuisExplorateur(); void galerie();
   /* 2026-11-01 : le bouton « Make art from this block's brain » de l onglet Brain — la source = ce block, puis le meme clic que l onglet */
-  const choisirDepuisBloc = () => { S.sourceBloc = true; peindreSource(); bCerveau.click(); };
+  const choisirDepuisBloc = () => { selGroupe.value = 'attracteurs'; peindreGroupe(); S.sourceBloc = true; peindreSource(); bCerveau.click(); };
   racine.__tam = { S, charger, choisirDepuisBloc };
   return racine.__tam;
 }
