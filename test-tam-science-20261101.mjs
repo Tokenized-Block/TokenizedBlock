@@ -17,8 +17,10 @@ const ok = (c, m) => { assert.ok(c, m); n++; };
 const ICI = path.dirname(fileURLToPath(import.meta.url));
 const MOI = '0x' + 'ab'.repeat(20);
 
-/* 1. les 20 sciences : rejeu, en-tete, decodage, tailles */
-ok(T.SYSTEMES.length === 20, '20 sciences : ' + T.SYSTEMES.length);
+/* 1. TOUTES les sciences (game78 : 7 modules — physique, sciences, fluides, astres, cosmos, invisible, quantique) : rejeu, en-tete, decodage, tailles */
+{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8]];
+  let attendu = 0; for (const [f, min] of parModule) { const m = await import('./' + f); ok(m.SYSTEMES.length >= min, f + ' : au moins ' + min + ' systemes (' + m.SYSTEMES.length + ')'); attendu += m.SYSTEMES.length; }
+  ok(T.SYSTEMES.length === attendu && new Set(T.SYSTEMES.map((s) => s.id)).size === attendu, 'tam-science rassemble les ' + attendu + ' systemes, sans doublon d id'); }
 for (const s of T.SYSTEMES) {
   const P = T.paramsScience(s.id, {}, { minteur: MOI });
   const a = T.rejouerScience(JSON.parse(JSON.stringify(P))), b = T.rejouerScience(P);
@@ -30,6 +32,15 @@ for (const s of T.SYSTEMES) {
   ok(d.n === g.n && d.points.every((v, i) => v === g.points[i]) && d.ordre === (g.nuage ? 1 : 0), s.id + ' : le decodeur du moteur relit les memes points');
   ok(T.certifierScience(P, []).ok, s.id + ' : certificat local (aucune oeuvre mintee)');
 }
+/* 1b. game78 : la vue « corps » — chaque corps dans le MEME espace (le systeme solaire 12-D n est plus une projection melangee) */
+{ const o = (await import('./tam-astro.js')).simuler('systemeSolaire', {}), v = T.vueCorps(o, 3);
+  ok(v.corps === 4 && v.par === Math.floor(o.n / 4) && v.vue.length === o.n * 3, 'systeme solaire : 4 corps, n/4 echantillons chacun');
+  /* le temoin physique : chaque planete reste a distance ~constante de l origine (le Soleil) — rapport max/min de son rayon < 1.6 (Mercure e = 0.206) */
+  for (let b = 0; b < 4; b++) { let lo = Infinity, hi = 0; for (let j = 0; j < v.par; j++) { const p = (b * v.par + j) * 3, dx = v.vue[p] - v.origine[0], dy = v.vue[p + 1] - v.origine[1], dz = v.vue[p + 2] - v.origine[2], r = Math.sqrt(dx * dx + dy * dy + dz * dz); if (r < lo) lo = r; if (r > hi) hi = r; }
+    ok(hi / lo < 1.6, 'planete ' + b + ' : orbite autour du Soleil (r max / r min = ' + (hi / lo).toFixed(3) + ')'); }
+  ok(T.CENTRE.systemeSolaire === 'Sun' && Object.keys(T.CORPS).every((id) => T.systeme(id)), 'chaque systeme « corps » existe ; le Soleil est le centre du systeme solaire');
+  const P = T.paramsScience('systemeSolaire', {}), g = T.genererScience(P), M = 4095;
+  ok(g.points.every((x, i) => Math.abs(x - Math.round((v.vue[i] + 1) / 2 * M)) <= 1), 'les octets mintes portent la MEME vue « corps » que l ecran'); }
 /* 2. les bornes */
 const P0 = T.paramsScience('schwarzschild', {}, { minteur: MOI });
 ok(T.validerScience(P0).ok, 'temoin : params de paramsScience valides');
@@ -56,7 +67,7 @@ ok(/'tam-science\.js'/.test(web), 'tam-science.js est servi');
 
 /* 5. mutants sur COPIES */
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tam-science-mut-'));
-for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
+for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
 const SRC = fs.readFileSync(path.join(ICI, 'tam-science.js'), 'utf8');
 const MUTANTS = [
   ['params hors bornes acceptes', (s) => s.replace("if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');", '')],

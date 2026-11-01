@@ -351,9 +351,13 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   /* ⛔ corrige le 01/11 : TamArt v1 ne connait pas la famille (octet 4 = q) — une science se minte, par le MEME portail */
   ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
   ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
-  { const [P, Sc, F] = await Promise.all(['./tam-physique.js', './tam-sciences.js', './tam-fluides.js'].map((f) => import(f)));
-    const tous = [P, Sc, F].flatMap((m) => m.SYSTEMES.map((s) => [m, s]));
-    ok(tous.length === 20, '20 systemes de science (7 physique, 9 fractales/or/quantique, 4 fluides) : ' + tous.length);
+  { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js'];
+    const mods = await Promise.all(fichiers.map((f) => import(f)));
+    const tous = mods.flatMap((m) => m.SYSTEMES.map((s) => [m, s]));
+    ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
+    for (const f of fichiers) ok(serveur.includes("'" + f.slice(2) + "'"), f + ' est dans la liste servie');
+    /* chaque systeme est dans un groupe du menu (aucun orphelin) */
+    ok(/const groupeDe = \(s\) => THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet), 'menu : groupes par theme (astres, trous noirs, ...)');
     for (const [m, s] of tous) { const o = m.simuler(s.id, {}); ok(o.bornee && o.brut && o.brut.length === o.n * o.D && o.D >= 3 && o.D <= 12, s.id + ' : borne, n*D valeurs, 3..12 dimensions'); } }
   const textes = [...(onglet + readFileSync(new URL('./tam-vue.js', import.meta.url), 'utf8')).matchAll(/'([^'\n]*)'/g)].map((m) => m[1]).join('\n');
   ok(!/\binfinite\b|\bunlimited\b|\bendless\b/i.test(textes.replace(/vast, not infinite/g, '')) && /vast, not infinite/.test(textes), 'mots : « vast », jamais « infinite » (sauf pour dire « not infinite »)');

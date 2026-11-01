@@ -5774,6 +5774,8 @@ const SERVIS = [
   'tam-onglet.js', 'tam-vue.js', 'tam-moteur.js', 'tam-plan.js', 'tamart-deploiement.js',
   /* game76 : les sciences en direct de l onglet TAM (vue seule, pas de mint : TamArt v1 n accepte que les familles 1..16) */
   'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-science.js',
+  /* game78 : astres, cosmos, phenomenes « invisibles », quantique */
+  'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

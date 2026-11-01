@@ -10,6 +10,14 @@
 import * as PHY from './tam-physique.js';
 import * as SCI from './tam-sciences.js';
 import * as FLU from './tam-fluides.js';
+/* game78 : les astres (systeme solaire J2000, S2/Sgr A*, binaire, amas, supernova, galaxies), le cosmos (lumiere et trous noirs, Kerr,
+ *   trou de ver, Lagrange, Hulse-Taylor, matiere noire, expansion, Halley, TRAPPIST-1, disque), l invisible (onde gravitationnelle,
+ *   courbure, chute, dilatation, tunnel, superposition, dipole, lumiere, Minkowski, Brown) et le quantique (Talbot, oscillateur, Wigner,
+ *   marche, Bell, rotor, Landau, Stern-Gerlach) — chaque module a son banc (valeurs connues + mutants) */
+import * as AST from './tam-astro.js';
+import * as COS from './tam-cosmos.js';
+import * as INV from './tam-invisible.js';
+import * as QUA from './tam-quantique.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
 
@@ -19,7 +27,7 @@ const DEUX_PI = 6.283185307179586, ANGLE_OR = 2.399963229728653;
 const ADR = /^0x[0-9a-f]{40}$/;
 const CLES = new Set(['v', 'science', 'params', 'angles', 'q', 'minteur']);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 
 /** les angles des plans caches par defaut : l angle d or, comme le moteur (D - 3 angles) */
@@ -53,6 +61,28 @@ export function validerScience(P) {
   return { ok: true, code: 'DANS_LES_BORNES', raison: null };
 }
 
+/** game78 (systeme solaire en 12-D : la projection N-D melangeait les axes de 4 planetes — boucles emmelees au lieu de 4 orbites) :
+ *   les systemes a PLUSIEURS CORPS rangent k coordonnees par corps ; on les dessine dans le MEME espace, corps apres corps.
+ *   k = 3 : (x, y, z) par corps ; k = 2 : (x, y) dans le plan, z = 0. */
+export const CORPS = Object.freeze({ troisCorps: 3, systemeSolaire: 3, amasEtoiles: 3, lumiereTrouNoir: 3, expansionUnivers: 3, cometeHalley: 3,
+  trouDeVer: 3, pulsarHulseTaylor: 3, tourbillonsPonctuels: 2, trappist1: 2 });
+/** le corps CENTRAL a l origine du repere de ces systemes (affiche, jamais stocke) */
+export const CENTRE = Object.freeze({ systemeSolaire: 'Sun', cometeHalley: 'Sun', trappist1: 'TRAPPIST-1', amasEtoiles: 'black hole', lumiereTrouNoir: 'black hole', trouDeVer: 'throat' });
+/** la vue « corps » : m = D/k corps, n/m echantillons chacun (dans l ordre du temps), concatenes ; centree et a l echelle COMMUNE ([-1, 1]) */
+export function vueCorps(o, k) {
+  const n = o.n, D = o.D, m = Math.max(1, Math.floor(D / k)), par = Math.max(1, Math.floor(n / m)), out = new Float64Array(n * 3);
+  for (let p = 0; p < n; p++) {
+    const b = Math.min(m - 1, Math.floor(p / par)), j = p - b * par, i = Math.min(n - 1, Math.floor(Math.min(j, par - 1) * n / par));
+    out[3 * p] = o.brut[i * D + b * k]; out[3 * p + 1] = o.brut[i * D + b * k + 1]; out[3 * p + 2] = k === 3 ? o.brut[i * D + b * k + 2] : 0;
+  }
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let p = 0; p < n; p++) for (let c = 0; c < 3; c++) { const v = out[3 * p + c]; if (v < lo[c]) lo[c] = v; if (v > hi[c]) hi[c] = v; }
+  const r = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2, s = r > 0 ? 1 / r : 0;
+  for (let p = 0; p < n; p++) for (let c = 0; c < 3; c++) out[3 * p + c] = (out[3 * p + c] - (lo[c] + hi[c]) / 2) * s;
+  /* l origine du repere (le Soleil, l etoile, le trou noir), dans la meme echelle — pour l affichage seulement */
+  const origine = [0, 1, 2].map((c) => (0 - (lo[c] + hi[c]) / 2) * s);
+  return { vue: out, corps: m, par, origine };
+}
 /** game77 (chasse aux bugs : Rabi 0.1 vs 5 -> distance 0.005, omega, lambda, hauteur -> 0.000) : la standardisation PAR AXE ramenait
  *   chaque axe a la meme taille et effacait ce que ces curseurs reglent. Une science garde ses PROPORTIONS : centree par axe, divisee
  *   par UN seul ecart-type (le plus grand des axes). Aucune science n est mintee (totalSupply = 0 le 01/11). */
@@ -79,7 +109,7 @@ export function genererScience(P) {
   const o = s.mod.simuler(P.science, P.params);
   if (!o.bornee || !o.brut) return { ...o, bornee: false };
   const n = o.n, D = o.D, M = (1 << P.q) - 1, ordre = o.nuage ? 1 : 0;
-  const fin = projeterND(standardiserIso(o.brut, n, D), n, D, P.angles);
+  const fin = CORPS[P.science] ? vueCorps(o, CORPS[P.science]).vue : projeterND(standardiserIso(o.brut, n, D), n, D, P.angles);
   let pts = new Int32Array(n * 3);
   for (let i = 0; i < 3 * n; i++) { const v = Math.round((fin[i] + 1) / 2 * M); pts[i] = v < 0 ? 0 : v > M ? M : v; }
   if (ordre === 1) {

@@ -22,11 +22,18 @@ import * as TS from './tam-science.js';
  *   des simulations VERIFIEES (chaque module a son banc : invariants contre la theorie, mutants), dessinees par la meme scene.
  *   ⛔ Correction du 01/11 : j avais dit « vue seule, TamArt v2 requis » en lisant l octet 4 comme une famille ; c est q (1..16 bits).
  *   Le contrat deploye ne connait pas la famille : une science se minte avec TamArt v1, encodee et rejouee par tam-science.js. */
-const SYSTEMES_SCI = [PHY, SCI, FLU].flatMap((mod) => mod.SYSTEMES.map((s) => ({ ...s, mod })));
-const groupeDe = (s) => s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
+/* game78 : 54 systemes (tam-science.js les rassemble, meme mint) ranges par THEME, pas par etiquette de science */
+const SYSTEMES_SCI = TS.SYSTEMES;
+const THEMES = {
+  astres: ['systemeSolaire', 'cometeHalley', 'trappist1', 'pointsLagrange', 'amasEtoiles', 'supernova', 'supernovaHydro', 'collisionGalaxies', 'courbeRotation', 'expansionUnivers', 'kepler', 'troisCorps'],
+  trousNoirs: ['schwarzschild', 'etoileS2', 'binaireTrouNoir', 'binaireFusion', 'lumiereTrouNoir', 'kerr', 'trouDeVer', 'trouDeVerSurface', 'pulsarHulseTaylor', 'disqueAccretion',
+    'ondeGravitationnelle', 'courbureEspaceTemps', 'chuteTrouNoir', 'dilatationTemps', 'diagrammeEspaceTemps', 'lorentzRelativiste'],
+};
+const groupeDe = (s) => THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
+  : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
-const GROUPES = [['attracteurs', 'Attractors (chosen by the brain)'],['physique', 'Physics: gravity, relativity, fusion'], ['fractales', 'Fractals & golden ratio'],
-  ['quantique', 'Quantum'], ['fluides', 'Fluid mechanics']];
+const GROUPES = [['attracteurs', 'Attractors (chosen by the brain)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
+  ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics']];
 /* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
  *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */
 function reglagesVivants(s, params) {
@@ -37,7 +44,7 @@ function reglagesVivants(s, params) {
 }
 /* un reglage ENTIER : bornes et valeur entieres, plage courte (n, l, m, k, nombre, graine…) */
 const entierReglage = (r) => Number.isInteger(r.min) && Number.isInteger(r.max) && Number.isInteger(r.valeur) && r.max - r.min <= 1e6 && /^(n|l|m|k|nombre|graine|tours|maxIter|puissance|periodes)$/.test(r.nom);
-const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
+const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
 const UNITES_EN = { 'par radian d orbite': 'per radian of orbit', 'par unite de temps': 'per time unit', 'par iteration': 'per step', 'par periode': 'per period' };
@@ -53,7 +60,7 @@ function ligneInvariant(k, v) {
       /* game77 (chasse aux bugs : « gamma: drift 1.6 » se lisait comme un test rate) : une derive RELATIVE au-dela de 1e-3 n est pas une
        *   loi conservee — on dit la plage ; une petite derive est dite relative a sa valeur de depart (ou absolue si le depart vaut 0) */
       const ref = Math.abs(v.debut ?? 0), rel = ref > 1e-12 ? Math.abs(v.derive) / ref : null;
-      if ((rel !== null && rel > 1e-3) || (rel === null && Math.abs(v.derive) > 1e-6)) return k + ': varies' + ('min' in v && 'max' in v ? ' from ' + nb4(v.min) + ' to ' + nb4(v.max) : ' by ' + nb4(v.derive)) + ' (not conserved here)';
+      if ((rel !== null && rel > 1e-3) || (rel === null && Math.abs(v.derive) > 1e-6)) return k + ': ' + ('min' in v && 'max' in v ? 'from ' + nb4(v.min) + ' to ' + nb4(v.max) : 'changes by ' + nb4(v.derive));
       return k + ': conserved — drift ' + nb4(rel !== null ? rel : Math.abs(v.derive)) + (rel !== null ? ' relative' : ' absolute');
     }
     return k + ': ' + Object.entries(v).filter(([, x]) => typeof x === 'number').slice(0, 3).map(([a, x]) => a + ' ' + nb4(x)).join(', ');
@@ -282,6 +289,8 @@ export function monter(racine, ctx = {}) {
     S.c = { ...cert, lyapunov: typeof o.lyapunov === 'number' ? o.lyapunov : NaN, uniteLyapunov: o.uniteLyapunov };
     /* game77 : les proportions de la science (meme echelle pour tous les axes), comme les octets mintes (tam-science.js) */
     S.z = TS.standardiserIso(o.brut, o.n, D); S.ser = V.series(S.z, o.n, D);
+    /* game78 : plusieurs corps (planetes, etoiles, rayons) -> chacun dans le MEME espace, sa couleur (tam-science.js#vueCorps, = les octets mintes) */
+    S.corps = TS.CORPS[id] ? TS.vueCorps(o, TS.CORPS[id]) : null;
     if (S.son) arreterSon(); /* game77 : le son avait min(D,12) voix ; une oeuvre a moins de dimensions le faisait planter a chaque image */
     S.couches = V.etatCouches(D); S.t = 0; S.dessines = reduit() ? S.n : 0; S.survol = null; S.dense = null;
     curseur.min = String(Math.min(D, 2)); curseur.max = String(D); curseur.value = String(D);
@@ -572,6 +581,7 @@ export function monter(racine, ctx = {}) {
   /* ── dessin 3-D ── */
   let proj = null, projSx = null, projSy = null, dominant = null;
   function positions() {
+    if (S.science && S.corps) return S.corps.vue; /* game78 : la vue « corps » (les couches n y melangent rien) */
     const tous = S.couches.actives.every(Boolean);
     /* game77 : un NUAGE stocke est trie (Morton) — ses index ne sont plus le temps : couleurs et survol visaient d autres points.
      *   Pour un nuage on dessine la projection dans l ordre du temps (la meme geometrie). */
@@ -593,6 +603,8 @@ export function monter(racine, ctx = {}) {
     if (!S.o) return;
     if (S.dense && !S.science) { proj = null; projSx = null; dessinerDense(g, L, H, dpr); return; }
     const cam = S.cam || CAM0, pos = positions(); proj = pos; dominant = dimDominante();
+    const corps = S.science && S.corps ? S.corps : null;
+    if (corps) for (let i = 0; i < S.n; i++) dominant[i] = Math.min(corps.corps - 1, Math.floor(i / corps.par)); /* une couleur par corps */
     const sc = Math.min(L, H) * 0.42, n = Math.min(S.n, Math.max(2, Math.floor(S.dessines)));
     projSx = new Float32Array(S.n); projSy = new Float32Array(S.n);
     const pz = new Float32Array(S.n);
@@ -609,7 +621,7 @@ export function monter(racine, ctx = {}) {
     g.shadowBlur = 7 * dpr;
     let cour = -2;
     g.beginPath();
-    for (let i = 1; i < n; i++) {
+    for (let i = 1; i < (corps ? 0 : n); i++) { /* game78 : les corps ont leur propre boucle (plus bas) */
       if (!Number.isFinite(projSx[i]) || !Number.isFinite(projSx[i - 1])) continue;
       const c = dominant[i];
       if (c !== cour) { g.stroke(); g.beginPath(); g.strokeStyle = g.shadowColor = c >= 0 ? V.couleurDim(c) : '#556'; g.globalAlpha = 0.8; cour = c; g.moveTo(projSx[i - 1], projSy[i - 1]); }
@@ -623,7 +635,33 @@ export function monter(racine, ctx = {}) {
       if (txt) { g.shadowBlur = 0; g.font = (11 * dpr) + 'px system-ui,sans-serif'; g.fillText(txt, projSx[i] + 7 * dpr, projSy[i] - 6 * dpr); }
     };
     /* game77 : un nuage n a ni debut ni fin (points tires, pas un chemin) : pas de reperes start/end */
-    if (!nuage) {
+    if (corps) {
+      /* game78 : chaque corps (planete, etoile, rayon) avance EN MEME TEMPS, sa couleur, un point lumineux a sa position du moment */
+      const lim = Math.max(2, Math.min(corps.par, Math.floor(n / S.n * corps.par)));
+      for (let b = 0; b < corps.corps; b++) {
+        const a = b * corps.par, col = V.couleurDim(b);
+        g.strokeStyle = g.shadowColor = col; g.shadowBlur = 7 * dpr; g.globalAlpha = 0.85; g.beginPath();
+        let ouvert = false;
+        for (let i = a; i < a + lim && i < S.n; i++) {
+          if (!Number.isFinite(projSx[i])) { ouvert = false; continue; }
+          if (!ouvert) { g.moveTo(projSx[i], projSy[i]); ouvert = true; } else g.lineTo(projSx[i], projSy[i]);
+        }
+        g.stroke(); g.globalAlpha = 1;
+        point(Math.min(S.n - 1, a + lim - 1), col, 4.5, null);
+      }
+      /* le corps central (Soleil, etoile, trou noir) a l origine du repere */
+      const nomCentre = TS.CENTRE[S.science.s.id];
+      if (nomCentre && corps.origine) {
+        const o = corps.origine, u = projectCam(camPx, o[0] * sc, -o[1] * sc, o[2] * sc, L, H, 1);
+        if (u) {
+          const noir = /black hole|throat/.test(nomCentre), coul = noir ? '#000000' : '#ffd36b';
+          g.shadowColor = noir ? '#b48cff' : '#ffd36b'; g.shadowBlur = 18 * dpr; g.fillStyle = coul; g.beginPath(); g.arc(u.sx, u.sy, 6 * dpr, 0, 2 * Math.PI); g.fill();
+          if (noir) { g.strokeStyle = '#b48cff'; g.lineWidth = 1.5 * dpr; g.stroke(); }
+          g.shadowBlur = 0; g.fillStyle = '#e8ecf5'; g.font = (11 * dpr) + 'px system-ui,sans-serif'; g.fillText(nomCentre, u.sx + 9 * dpr, u.sy + 4 * dpr);
+        }
+      }
+    }
+    if (!nuage && !corps) {
       point(0, '#5dffa0', 4, 'start · t = 0');
       if (n >= S.n) point(S.n - 1, '#ff6b9a', 4, 'end · t = ' + (S.n - 1));
       else point(n - 1, '#ffffff', 3.2, null);
@@ -632,6 +670,7 @@ export function monter(racine, ctx = {}) {
     if (S.son && S.tete !== null && n >= S.n) point(S.tete, '#ffffff', 4.5, 't = ' + S.tete);
     g.shadowBlur = 0;
     if (S.survol !== null && Number.isFinite(projSx[S.survol])) { g.fillStyle = '#fff'; g.beginPath(); g.arc(projSx[S.survol], projSy[S.survol], 5 * dpr, 0, 2 * Math.PI); g.fill(); }
+    if (corps) { info.textContent = corps.corps + ' bodies in the same space, one colour each · drag to orbit'; return; }
     info.textContent = S.D + '-D · ' + V.dimsVisibles(S.couches).length + ' layers on' + (S.rotation && S.D > 3 ? ' · hidden planes turning' : '') + (S.t === 0 && S.stocke && S.couches.actives.every(Boolean) ? ' · stored view' : ' · live view');
   }
   /* game77 (Phil : « De Jong reste le meme en changeant les variables ») : une map 2-D se lit DE FACE et en DENSITE — 40 000 points
