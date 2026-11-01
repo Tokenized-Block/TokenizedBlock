@@ -262,7 +262,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     const d0 = onglet.indexOf('const poses = [], hL = 13 * dpr, ecrits = new Set();'), f0 = onglet.indexOf('const point = (i, coul, r, txt) => {');
     ok(d0 > 0 && f0 > d0, 'placeur de libelles extrait');
     const ecrits = [], g = { measureText: (t) => ({ width: 6 * t.length }), fillText: (t, x, y) => ecrits.push({ t, x, y }) };
-    const ecrire = new Function('g', 'dpr', onglet.slice(d0, f0) + '\nreturn ecrire;')(g, 1);
+    const ecrire = new Function('g', 'dpr', onglet.slice(d0, f0) + '\necrire.poses = poses; return ecrire;')(g, 1);
     ecrire('Past horizon (x = -t)', 100, 50); ecrire('Future horizon (x = t): light from behind it never arrives', 100, 50); ecrire('start', 104, 52); ecrire('loin', 400, 50);
     /* la boite d un libelle = celle du placeur : hauteur 13 (le texte fait 11 px), de y - 10 a y + 3 */
     const bx = (e) => [e.x, e.y - 10, e.x + 6 * e.t.length, e.y + 3], chev = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
@@ -273,7 +273,14 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok(ecrits.filter((e) => e.t === 'Edge of the periodic box (side 1)').length === 1, 'un meme nom n est ecrit qu une fois par image');
     for (let k = 0; k < 12; k++) ecrire('Layer ' + k, 500, 600);
     let n2 = 0; for (let i = 0; i < ecrits.length; i++) for (let j = i + 1; j < ecrits.length; j++) if (chev(bx(ecrits[i]), bx(ecrits[j]))) n2++;
-    ok(n2 === 0 && ecrits.filter((e) => /^Layer /.test(e.t)).length === 8, '12 libelles au meme point : 8 places, les 4 autres NON ecrits (jamais superposes)');
+    const nL = ecrits.filter((e) => /^Layer /.test(e.t)).length;
+    ok(n2 === 0 && nL >= 8 && nL <= 12, '12 libelles au meme point : ' + nL + ' places (au-dessus ET au-dessous), les autres NON ecrits — jamais superposes');
+    /* game90 : une place RESERVEE (le panneau des valeurs en bas) : un libelle pose dessus REMONTE au-dessus (essais 0, +1, -1, ...) */
+    ecrire.poses.push([0, 900, 700, 1000]);
+    ecrire('Horizon sous le panneau', 50, 940);
+    const hp = ecrits.find((e) => e.t === 'Horizon sous le panneau');
+    ok(hp && hp.y + 3 <= 900, 'un libelle tombe sur le panneau reserve est remonte au-dessus (y ' + (hp && hp.y) + ')');
+    ok(/for \(const sur of \[info, varsScene\]\)/.test(onglet) && /poses\.push\(\[\(r\.left - rc\.left\) \* kx/.test(onglet), 'les deux surcouches HTML (ligne du haut, panneau des valeurs) sont reservees a chaque image');
     const scene = onglet.slice(onglet.indexOf('const poses = [], hL'), onglet.indexOf('/* le son allume : le point qu il joue'));
     ok((scene.match(/g\.fillText\(/g) || []).length === 1 && /const ancre = d\.q\.type === 'segment' && dernier \? dernier : premier;/.test(onglet), 'dans la scene, un seul fillText (celui du placeur) ; un segment est nomme a son bout eloigne');
   }

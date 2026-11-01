@@ -1004,11 +1004,17 @@ export function monter(racine, ctx = {}) {
     const poses = [], hL = 13 * dpr, ecrits = new Set();
     const ecrire = (txt, x, y) => {
       if (ecrits.has(txt)) return;
-      const w = g.measureText(txt).width; let yy = y;
-      for (let k = 0; k < 8; k++) {
+      const w = g.measureText(txt).width;
+      /* game90 : quand une place est prise, on essaie JUSTE AU-DESSUS et JUSTE AU-DESSOUS de ce qui gene (le banc : le panneau du bas
+       *   monte jusqu a 40 % de la scene, 3 lignes de remontee n y suffisaient pas) ; 16 essais au plus, le plus proche d abord */
+      const essais = [y], vus = new Set();
+      for (let k = 0; k < essais.length && k < 16; k++) {
+        const yy = essais[k]; if (vus.has(yy)) continue; vus.add(yy);
         const b = [x - 1, yy - hL + 3, x + w + 1, yy + 3]; /* hauteur = le pas hL (14 px pour un pas de 13 perdait une place sur deux) */
-        if (!poses.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1])) { poses.push(b); ecrits.add(txt); g.fillText(txt, x, yy); return; }
-        yy += hL;
+        const q = poses.find((p) => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1]);
+        if (!q) { poses.push(b); ecrits.add(txt); g.fillText(txt, x, yy); return; }
+        const dessous = q[3] + hL - 3, dessus = q[1] - 3;
+        if (Math.abs(dessous - y) <= Math.abs(dessus - y)) essais.push(dessous, dessus); else essais.push(dessus, dessous);
       }
     };
     const point = (i, coul, r, txt) => {
@@ -1016,6 +1022,14 @@ export function monter(racine, ctx = {}) {
       g.shadowColor = coul; g.shadowBlur = 14 * dpr; g.fillStyle = coul; g.beginPath(); g.arc(projSx[i], projSy[i], r * dpr, 0, 2 * Math.PI); g.fill();
       if (txt) { g.shadowBlur = 0; g.font = (11 * dpr) + 'px system-ui,sans-serif'; ecrire(txt, projSx[i] + 7 * dpr, projSy[i] - 6 * dpr); }
     };
+    /* game90 : les surcouches HTML posees SUR le canvas (la ligne du haut, le panneau des valeurs en bas) sont des places prises —
+     *   un libelle de la scene ne finit plus dessous (pixels du canvas : rectangle de l element ramene a la taille interne du canvas) */
+    { const rc = cv.getBoundingClientRect(), kx = rc.width > 0 ? cv.width / rc.width : 1, ky = rc.height > 0 ? cv.height / rc.height : 1;
+      for (const sur of [info, varsScene]) {
+        if (!sur || sur.hidden || !sur.textContent) continue;
+        const r = sur.getBoundingClientRect(); if (!(r.width > 0 && r.height > 0)) continue;
+        poses.push([(r.left - rc.left) * kx, (r.top - rc.top) * ky, (r.right - rc.left) * kx, (r.bottom - rc.top) * ky]);
+      } }
     /* game77 : un nuage n a ni debut ni fin (points tires, pas un chemin) : pas de reperes start/end */
     if (corps) {
       /* game78 : chaque corps (planete, etoile, rayon) avance EN MEME TEMPS, sa couleur, un point lumineux a sa position du moment */
