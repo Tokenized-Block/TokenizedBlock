@@ -88,6 +88,9 @@ function verifierPublie(m, compter = true) {
   pr(bh.dureeDeVie.mesureAns, 2.1e67, 0.03, 'duree de vie 1 Msun ~2.1e67 ans');
   pr(bh.dureeDeVie.mesureAns, bh.dureeDeVie.formuleAns, 1e-6, 'duree mesuree vs 5120 pi G^2 M^3 / (hbar c^4)');
   pr(bh.loiM3.rapport, 8, 1e-6, 'tau(2M) / tau(M) = 8');
+  /* game85 (audit) : la 1re ligne a t = 0 mettait log10(1 + t) a 0 contre 65-67 ailleurs -> colonne 3 ecrasee par UN point */
+  { const s = m.simuler('evaporationTrouNoir'), n = s.n, c3 = []; for (let i = 0; i < n; i++) c3.push(s.brut[4 * i + 3]); const t = [...c3].sort((a, b) => a - b);
+    ok(s.brut[0] > 0 && t[Math.floor(n * 0.01)] - t[0] < 1.5, 'evaporation : pas de point isole en colonne 3 (min ' + t[0].toFixed(2) + ', p1 ' + t[Math.floor(n * 0.01)].toFixed(2) + ')'); }
 
   // 5. tsunami : c(4 km) ~ 198 m/s = 713 km/h ; 10 000 km a 4 km de fond ~ 14 h ; Green A ~ h^(-1/4)
   const ts = m.simuler('tsunami', { profondeur: 4000, distance: 10100, plateau: 100 }).invariants;
@@ -177,6 +180,7 @@ verifierPublie(mod);
 
 // ---------- mutants sur COPIES ----------
 const MUTANTS = [
+  ['evaporation : la 1re ligne revient a t = 0 (point isole en colonne 3)', 'const cible = fin * (i + 1) / n;', 'const cible = n > 1 ? fin * i / (n - 1) : 0;'],
   ['Foucault sin -> cos', 'const omz = OMEGA_TERRE * sinD(phi);', 'const omz = OMEGA_TERRE * cosD(phi);'],
   ['Stefan-Boltzmann T^4 -> T^3', 'puissance(T / T_SOLEIL, 4)', 'puissance(T / T_SOLEIL, 3)'],
   ['Hawking 8 pi -> 4 pi', '/ (8 * PI * G_N * m * K_B)', '/ (4 * PI * G_N * m * K_B)'],

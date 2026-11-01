@@ -381,7 +381,9 @@ function evaporationTrouNoir(P, n) {
   const brut = new Float64Array(n * 4), fin = tau * (1 - 1e-4);
   let m = m0, t = 0;
   for (let i = 0; i < n; i++) {
-    const cible = n > 1 ? fin * i / (n - 1) : 0;
+    /* game85 (audit : la 1re ligne a t = 0 donnait log10(1 + 0) = 0 contre 65-67 pour les 1 499 autres -> la colonne 3 ecrasee par
+     *   UN point) : on echantillonne depuis le premier pas, t = fin x (i + 1) / n ; la derniere ligne reste a fin */
+    const cible = fin * (i + 1) / n;
     while (t < cible) { const h = Math.min(cible - t, 0.01 * m / -dMdt(m)); m = pasMasse(m, h); t = h === cible - t ? cible : t + h; }
     brut[4 * i] = t / tau; brut[4 * i + 1] = m / m0; brut[4 * i + 2] = log10D(m0 / m); brut[4 * i + 3] = log10D(1 + t / AN_S);
   }

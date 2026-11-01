@@ -640,7 +640,7 @@ const L = {
   evaporationTrouNoir: {
     titre: 'Black hole evaporation',
     enUnePhrase: 'A black hole slowly losing mass as it glows (Hawking radiation): the smaller it gets, the hotter it glows and the faster it shrinks.',
-    colonnes: ['time as a fraction of the black hole\'s whole lifetime (0 to 1)', 'mass left, as a fraction of the starting mass', 'log10 of how many times hotter it is than at the start (it heats up as the mass shrinks)', 'log10 of (1 + time in years)'],
+    colonnes: ['time as a fraction of the black hole\'s whole lifetime (from the first step, 1/1500, to 0.9999)', 'mass left, as a fraction of the starting mass', 'log10 of how many times hotter it is than at the start (it heats up as the mass shrinks)', 'log10 of (1 + time in years)'],
     aRegarder: ['The mass hardly changes for most of the life, then plunges at the very end.', 'A black hole of one solar mass (the default) would take about 10^67 years to evaporate; double the mass and it lasts 8 times longer.', 'Today it would not shrink at all: at about 0.00000006 K it is colder than the cosmic microwave background (2.7 K) and absorbs more than it emits.'],
     fin: 'drawn up to 99.99 percent of the lifetime; the very last instant is not drawn',
   },
