@@ -85,6 +85,29 @@ const ECHELLE_UNITE = {
   fluctuationsVide: ['lattice sites'], interactionChamps: ['1/m', 'inverse phi mass'], paireSchwinger: ['hbar/(mc)', 'electron Compton length / 2 pi'],
   effetUnruh: ['c2/a'], comptonKleinNishina: ['units', 'unit sphere'], atomes: ['Bohr radii'], quarks: ['fm', 'femtometres'],
 };
+/* game87 : c dans l ensemble de Mandelbrot ? (pas d echappement |z| > 2 en N pas — la meme regle que tam-sciences.js#mandelbrot) */
+const dansMandelbrot = (cr, ci, N) => { let zr = 0, zi = 0; for (let k = 0; k < N; k++) { const t = zr * zr - zi * zi + cr; zi = 2 * zr * zi + ci; zr = t; if (zr * zr + zi * zi > 4) return false; } return true; };
+/* un point de la FRONTIERE pres de (cx, cy) : dichotomie sur le segment qui va d un point dedans a un point dehors (0 est dans la
+ *   cardioide principale ; un centre deja dedans part vers l exterieur, rayon 3). 60 coupes : precision bien sous la fenetre a zoom 10 000.
+ *   N = 5000 pas : un point classe « dedans » peut s echapper plus tard — la frontiere trouvee est celle de l ensemble a 5000 pas. */
+function bordMandelbrot(cx, cy) {
+  if (!Number.isFinite(cx) || !Number.isFinite(cy)) return null;
+  const N = 5000, dansBornes = (p) => p[0] >= -2 && p[0] <= 1 && p[1] >= -1.5 && p[1] <= 1.5; /* = les bornes du module (cx, cy) */
+  const couper = (dedans, dehors) => { for (let k = 0; k < 60; k++) { const m = [(dedans[0] + dehors[0]) / 2, (dedans[1] + dehors[1]) / 2]; if (dansMandelbrot(m[0], m[1], N)) dedans = m; else dehors = m; } return dehors; };
+  /* dehors : vers 0 (dans la cardioide) — le segment reste dans les bornes */
+  if (!dansMandelbrot(cx, cy, N)) { const b = couper([0, 0], [cx, cy]); return dansBornes(b) ? b : null; }
+  /* dedans (vu au banc : (-0.75, 0) partait jusqu a -2.000..., HORS bornes -> certificat refuse) : 16 directions, la frontiere la plus
+   *   PROCHE — c est elle qui corrige ce cas. Le filtre dansBornes est une DEFENSE : un mutant qui le retire survit sur les 6 departs
+   *   du banc (la plus proche y est toujours dans les bornes) ; il n est donc pas prouve, seulement inoffensif. */
+  let mieux = null, dMin = Infinity;
+  for (let k = 0; k < 16; k++) {
+    const a = 2 * Math.PI * k / 16, loin = [cx + 3 * Math.cos(a), cy + 3 * Math.sin(a)];
+    if (dansMandelbrot(loin[0], loin[1], N)) continue;
+    const b = couper([cx, cy], loin), d = Math.hypot(b[0] - cx, b[1] - cy);
+    if (dansBornes(b) && d < dMin) { dMin = d; mieux = b; }
+  }
+  return mieux; /* le dernier point DEHORS : il s echappe, et touche un point dedans a ~1e-17 pres */
+}
 /* une longueur « ronde » (1, 2 ou 5 x 10^k) au plus egale a x — la barre ; et son ecriture courte */
 const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
 const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
@@ -298,6 +321,17 @@ export function monter(racine, ctx = {}) {
   const selMotif = el('select', { 'aria-label': 'Pattern', id: 'tamMotif' }, ...MOTIFS_UI.map(([v, t]) => el('option', { value: v, text: t })));
   const curseurs = el('div', { id: 'tamCurseurs' });
   const bPouce = el('button', { type: 'button', id: 'tamPouce', text: 'Let the brain nudge it' });
+  /* game87 (audit : Mandelbrot a zoom 10 000 = une image PLATE — la fenetre de 3e-4 ne contenait aucun point de l ensemble) : le centre
+   *   pose SUR la frontiere, calcule ici (jamais des coordonnees « celebres » tapees de memoire). Le module ne change pas : seuls cx, cy. */
+  const bBord = el('button', { type: 'button', id: 'tamBord', hidden: true, text: 'Snap the centre to the boundary' });
+  bBord.addEventListener('click', () => {
+    if (!S.science || S.science.s.id !== 'mandelbrot' || !S.P) return;
+    const p = S.P.params, b = bordMandelbrot(Number(p.cx), Number(p.cy));
+    if (!b) return;
+    /* mesure : a zoom 10 000 il faut ~1000 pas (200 : encore plat, 2 temps d echappement ; 1000 : 554) -> 200 + 200 log10(zoom), plafond 1000 */
+    const it = Math.max(Number(p.maxIter) || 200, Math.min(1000, Math.round(200 + 200 * Math.log10(Math.max(1, Number(p.zoom) || 1)))));
+    chargerScience('mandelbrot', { ...p, cx: b[0], cy: b[1], maxIter: it }, { melange: S.P.melange || null, origine: S.origine || null });
+  });
   /* 2026-11-01 (Phil : « une variable chaos pour jouer sur le random ») : CHAOS = de combien CHAQUE variable peut sauter, au hasard du
    *   navigateur, dans ses bornes. Le resultat est une oeuvre reglee comme une autre : memes bornes, memes certificats, rejouable (params stockes). */
   const curChaos = el('input', { type: 'range', id: 'tamChaos', min: '0', max: '100', step: '1', value: '25', 'aria-label': 'Chaos' });
@@ -343,7 +377,7 @@ export function monter(racine, ctx = {}) {
       el('details', { class: 'tamReglagesHaut', id: 'tamReglagesHaut', open: '' },
         el('summary', { text: 'Variables — every setting of this work' }),
         el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
-        el('div', { class: 'tamRang' }, selOp, selMotif, bPouce),
+        el('div', { class: 'tamRang' }, selOp, selMotif, bPouce, bBord),
         el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
         curseurs, verdictTxt)),
     el('div', { class: 'tamCarte' },
@@ -621,6 +655,7 @@ export function monter(racine, ctx = {}) {
   /* les curseurs : un par variable de reglagesDe ; rebatis seulement si la LISTE change (un glissement en cours n est pas casse) */
   let cheminsPeints = '';
   function peindreReglages() {
+    bBord.hidden = !(S.science && S.science.s.id === 'mandelbrot');
     if (S.science) {
       /* game79 : le melange de la science (operateur + motif) se lit et se regle ici aussi */
       selOp.hidden = !!TS.CORPS[S.science.s.id]; selOp.value = S.P.melange ? S.P.melange.operateur : 'seul';

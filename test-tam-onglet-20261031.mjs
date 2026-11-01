@@ -271,6 +271,16 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     const faux = cles.filter((k) => MOTS[U[k][0]] && !new RegExp('\\b' + MOTS[U[k][0]].replace('-', '\\-') + '\\b').test((LEG.legende(k, {}).colonnes || [])[0] || ''));
     ok(faux.length === 0, 'unite physique de la barre = celle de la colonne 0 de la legende' + (faux.length ? ' : ' + faux.join(', ') : ''));
     ok(/function barreEchelle\(\)/.test(onglet) && /\{ const be = barreEchelle\(\); if \(be\) objs\.push\(be\.objet\); \}/.test(onglet) && /\{ k: 'Scale', v: 'the drawing is about '/.test(onglet), 'la barre passe par le decor (meme transformation) et la carte dit la largeur');
+    /* game87 : le centre Mandelbrot pose SUR la frontiere — la vraie fonction, executee : le point rendu s echappe, un voisin a 1e-9
+     *   ne s echappe pas (c est une frontiere), il reste dans les bornes du module (vu au banc : (-0.75, 0) partait a -2.000... hors bornes) */
+    const dm = onglet.indexOf('const dansMandelbrot = '), fm = onglet.indexOf('const longueurRonde = ');
+    const { dans, bord } = new Function(onglet.slice(dm, fm) + '\nreturn { dans: dansMandelbrot, bord: bordMandelbrot };')();
+    for (const [cx, cy] of [[-0.75, 0.1], [-0.75, 0], [0.3, 0.6], [-1.2, 0.3], [0, 0], [0.9, -1.4]]) {
+      const b = bord(cx, cy); ok(b && b[0] >= -2 && b[0] <= 1 && b[1] >= -1.5 && b[1] <= 1.5, 'bord(' + cx + ', ' + cy + ') dans les bornes du module');
+      let voisinDedans = false; for (let k = 0; k < 16 && !voisinDedans; k++) { const a = 2 * Math.PI * k / 16; voisinDedans = dans(b[0] + 1e-9 * Math.cos(a), b[1] + 1e-9 * Math.sin(a), 5000); }
+      ok(!dans(b[0], b[1], 5000) && voisinDedans, 'bord(' + cx + ', ' + cy + ') = un point qui s echappe a cote d un point qui ne s echappe pas (frontiere a 1e-9)');
+    }
+    ok(/id: 'tamBord'/.test(onglet) && /bBord\.hidden = !\(S\.science && S\.science\.s\.id === 'mandelbrot'\);/.test(onglet) && /Math\.min\(1000, Math\.round\(200 \+ 200 \* Math\.log10/.test(onglet), 'bouton visible sur Mandelbrot seulement ; maxIter releve avec le zoom (plafond 1000 = borne du module)');
   }
   /* game82 (Phil : « cost not read yet ») : les decimals de TOUTE la liste, pas seulement des jetons tenus */
   const appD = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
