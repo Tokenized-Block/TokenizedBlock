@@ -59,6 +59,35 @@ function reglagesVivants(s, params) {
 }
 /* un reglage ENTIER : bornes et valeur entieres, plage courte (n, l, m, k, nombre, graine…) */
 const entierReglage = (r) => Number.isInteger(r.min) && Number.isInteger(r.max) && Number.isInteger(r.valeur) && r.max - r.min <= 1e6 && /^(n|l|m|k|nombre|graine|tours|maxIter|puissance|periodes)$/.test(r.nom);
+/* game86 (Phil : « ajoute une echelle de grandeur pour se retrouver ») : l unite de l AXE x (colonne 0) de chaque systeme, pour une
+ *   barre d echelle dans la scene. [unite, ce qu elle vaut] — la 2e partie seulement quand c est une DEFINITION (aucun chiffre de
+ *   memoire). Absents : axes en echelle log (bigRip, etoilesHR, couplageCourant, evaporationTrouNoir) et formes sans unite (spirale,
+ *   phyllotaxie, IFS, Bloch, Wigner, marche, rotor, calendrier, geometrie) : une barre y serait fausse. */
+const ECHELLE_UNITE = {
+  schwarzschild: ['M', 'M = GM/c2; the horizon is at 2 M'], kepler: ['units', 'G = M = 1'], troisCorps: ['units', 'G = mass = 1'],
+  tokamak: ['main radii', 'the doughnut\'s main radius'], doublePendule: ['arm lengths'], lorentzRelativiste: ['units', 'c = charge = mass = B = 1'],
+  hydrogene: ['Bohr radii'], mandelbrot: ['units', 'of the complex plane'], mandelbulb: ['units', 'of the fractal'],
+  paquetOscillateur: ['units', 'hbar = mass = 1'], fentesYoung: ['mm'], boiteQuantique: ['box sides'], tourbillonsPonctuels: ['length units'],
+  doubleGyre: ['box units'], karman: ['vortex spacings'], rayleighBenard: ['roll widths'],
+  systemeSolaire: ['AU', 'Earth-Sun mean distance'], etoileS2: ['AU', 'Earth-Sun mean distance'], binaireTrouNoir: ['M', 'total mass, G = c = 1'],
+  amasEtoiles: ['cluster units'], supernova: ['pc', 'parsecs'], supernovaHydro: ['pc', 'parsecs'], binaireFusion: ['s', 'time axis'],
+  collisionGalaxies: ['closest approaches'], lumiereTrouNoir: ['M', 'M = GM/c2; the horizon is at 2 M'], kerr: ['M', 'M = GM/c2'],
+  trouDeVer: ['throat radii'], trouDeVerSurface: ['throat radii'], pointsLagrange: ['star-planet distances'],
+  pulsarHulseTaylor: ['light-seconds', 'the distance light travels in one second'], courbeRotation: ['kpc', 'kiloparsecs'],
+  expansionUnivers: ['Gpc', 'billion parsecs'], cometeHalley: ['AU', 'Earth-Sun mean distance'], trappist1: ['AU', 'Earth-Sun mean distance'],
+  disqueAccretion: ['M', 'M = GM/c2'], ondeGravitationnelle: ['ring radii'], courbureEspaceTemps: ['M', 'M = GM/c2'], chuteTrouNoir: ['M', 'M = GM/c2'],
+  dilatationTemps: ['mass units'], effetTunnel: ['units', 'hbar = mass = 1'], superpositionQuantique: ['Bohr radii'], champDipolaire: ['Earth radii'],
+  ondeLumiere: ['wavelengths'], diagrammeEspaceTemps: ['units', 'c = 1'], mouvementBrownien: ['length units'], tapisTalbot: ['box widths'],
+  oscillateurEtats: ['units', 'hbar = mass = 1'], bellCHSH: ['rad'], niveauxLandau: ['units', 'hbar = mass = charge = 1'], sternGerlach: ['scaled units'],
+  fusionTrousNoirs: ['s', 'time axis'], videQuantique: ['gap widths'], fauxVide: ['box sides'], centreTerre: ['Earth radii'], versMars: ['AU', 'Earth-Sun mean distance'],
+  zeroAbsolu: ['trap lengths'], tailleUnivers: ['Gpc', 'billion parsecs'], nombrePi: ['units', 'unit square'], penduleFoucault: ['m'],
+  mouvementTerre: ['AU', 'Earth-Sun mean distance'], tsunami: ['km'], tailleEtoiles: ['solar radii'], champLibre: ['lattice sites'],
+  fluctuationsVide: ['lattice sites'], interactionChamps: ['1/m', 'inverse phi mass'], paireSchwinger: ['hbar/(mc)', 'electron Compton length / 2 pi'],
+  effetUnruh: ['c2/a'], comptonKleinNishina: ['units', 'unit sphere'], atomes: ['Bohr radii'], quarks: ['fm', 'femtometres'],
+};
+/* une longueur « ronde » (1, 2 ou 5 x 10^k) au plus egale a x — la barre ; et son ecriture courte */
+const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
+const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
 /* les parametres des modules nommes en francais -> l ecran ; les symboles (L, M, omega, a...) restent des symboles */
 const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
@@ -977,16 +1006,32 @@ export function monter(racine, ctx = {}) {
       for (const d of dv) {
         const col = d.q.couleur || '#ffffff';
         if (d.vue) {
+          /* vu a l ecran (game86) : « Sun Sun » — le corps central est deja dessine et nomme (TS.CENTRE) ; le decor ne le repete pas */
+          if (S.corps && d.q.libelle && d.q.libelle === TS.CENTRE[S.science.s.id]) continue;
           const u = ecran(d.vue[0]); if (!u) continue;
           g.shadowColor = col; g.shadowBlur = 14 * dpr; g.fillStyle = col; g.beginPath(); g.arc(u.sx, u.sy, 5 * dpr, 0, TOUR); g.fill();
           g.shadowBlur = 0; g.fillStyle = '#e8ecf5'; if (d.q.libelle) g.fillText(d.q.libelle, u.sx + 8 * dpr, u.sy - 6 * dpr);
           continue;
         }
-        let premier = null;
+        let premier = null, dernier = null;
+        /* game86 (vu a l ecran : posee dans la scene, la barre tombait sur le bord du canvas selon l angle de vue) : la barre d echelle
+         *   est MESUREE dans la scene (L projete au centre des donnees, a chaque image : juste quand on tourne ou zoome) et DESSINEE a une
+         *   place fixe, en haut a droite, comme une regle ; « ≈ » : en perspective la longueur depend de la profondeur */
+        if (d.q.echelle) {
+          const ps = (d.lignesVue && d.lignesVue[0]) || [], u0 = ps.length ? ecran(ps[0]) : null, u1 = ps.length ? ecran(ps[ps.length - 1]) : null;
+          const l = u0 && u1 ? Math.hypot(u1.sx - u0.sx, u1.sy - u0.sy) : 0, Wc = g.canvas.width;
+          if (l >= 8 * dpr && l <= 0.6 * Wc) {
+            const x1 = Wc - 16 * dpr, x0 = x1 - l, y = 30 * dpr;
+            g.strokeStyle = col; g.lineWidth = Math.max(1, 2 * dpr); g.globalAlpha = 0.95; g.setLineDash([]);
+            g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); for (const x of [x0, x1]) { g.moveTo(x, y - 5 * dpr); g.lineTo(x, y + 5 * dpr); } g.stroke();
+            g.globalAlpha = 1; g.fillStyle = col; g.textAlign = 'right'; g.fillText('≈ ' + d.q.libelle.replace(/^Scale: /, ''), x1, y - 9 * dpr); g.textAlign = 'left';
+          }
+          continue;
+        }
         g.strokeStyle = col; g.lineWidth = Math.max(1, dpr * (d.q.largeur ? 2.5 : 1.4)); g.globalAlpha = 0.75; g.setLineDash(d.q.type === 'plan' ? [5 * dpr, 4 * dpr] : []);
         for (const ligne of d.lignesVue || []) {
           g.beginPath(); let ouvert = false;
-          for (const p of ligne) { const u = ecran(p); if (!u) { ouvert = false; continue; } if (!premier) premier = u; if (!ouvert) { g.moveTo(u.sx, u.sy); ouvert = true; } else g.lineTo(u.sx, u.sy); }
+          for (const p of ligne) { const u = ecran(p); if (!u) { ouvert = false; continue; } if (!premier) premier = u; dernier = u; if (!ouvert) { g.moveTo(u.sx, u.sy); ouvert = true; } else g.lineTo(u.sx, u.sy); }
           if (d.e.plein && ouvert) { g.globalAlpha = 0.18; g.fillStyle = col; g.fill(); g.globalAlpha = 0.75; }
           g.stroke();
         }
@@ -1130,17 +1175,33 @@ export function monter(racine, ctx = {}) {
     }
     return null;
   }
+  /* game86 : la barre d echelle — le long de l axe x (colonne 0), depuis le coin bas des donnees, d une longueur ronde ~ 1/4 du dessin ;
+   *   null si le systeme n a pas d unite lineaire (ECHELLE_UNITE). Rend aussi la largeur du dessin pour la carte « This work ». */
+  function barreEchelle() {
+    if (!S.science || !S.o || !S.o.brut || !S.o.bornee || (S.P && S.P.melange)) return null;
+    const id = S.science.s.id, u = ECHELLE_UNITE[id]; if (!u) return null;
+    let B; try { B = DEC.boiteDonnees(id, S.o); } catch (_) { return null; }
+    const largeur = B.hi[0] - B.lo[0], L = longueurRonde(largeur / 4); if (!L) return null;
+    /* mesuree au CENTRE des donnees (la barre est dessinee a une place fixe de l ecran, voir dessiner) */
+    const a = B.centre.slice(); a[0] -= L / 2; const b = a.slice(); b[0] += L;
+    const texte = ecrireLongueur(L) + ' ' + u[0];
+    return { L, largeur, unite: u, texte,
+      objet: { type: 'segment', espace: S.corps ? 'corps3' : 'brut', centre: a.map((x, j) => (x + b[j]) / 2), a, b, couleur: '#ffffff', libelle: 'Scale: ' + texte, largeur: 1, echelle: true } };
+  }
   function decorVue() {
     if (!S.science || !S.o || !S.o.brut || !S.o.bornee) return [];
     let objs; try { objs = DEC.decorDe(S.science.s.id, S.P.params, S.o) || []; } catch (_) { return []; }
     const f = filmDe(), k = f ? imageCourante() : null;
     objs = objs.filter((q) => q.image === undefined || q.image === k);
+    /* game86 : la barre d echelle, un objet du decor comme les autres (meme transformation que les donnees) */
+    { const be = barreEchelle(); if (be) objs.push(be.objet); }
     if (!objs.length) return [];
     const D = S.D, sortie = [];
     if (S.corps) {
       /* les corps : l objet est deja dans la vue normalisee (pas de projection N-D) */
       const vus = DEC.normaliserCorps(objs.filter((q) => q.espace === 'corps3'), S.o, TS.CORPS[S.science.s.id]);
-      for (const q of vus) { const e = echantillonner(q, 3); if (e) sortie.push({ q, e, vue: e.point ? [q.centre] : null, lignesVue: e.lignes || null }); }
+      /* game86 : un SEGMENT (pts, pas de lignes) n etait pas dessine dans l espace des corps */
+      for (const q of vus) { const e = echantillonner(q, 3); if (e) sortie.push({ q, e, vue: e.point ? [q.centre] : null, lignesVue: e.lignes || (e.pts && !e.point ? [e.pts] : null) }); }
       return sortie;
     }
     /* l espace brut : moyennes et echelle de standardiserIso, projection jointe, puis le cadrage des donnees seules */
@@ -1271,7 +1332,10 @@ export function monter(racine, ctx = {}) {
   function peindreCarte() {
     if (S.science) {
       const { s, o } = S.science;
+      /* game86 : l echelle de grandeur, en mots — la largeur du dessin le long de x, et ce que vaut l unite quand c est une definition */
+      const be = (() => { try { return barreEchelle(); } catch (_) { return null; } })();
       const lignes = [{ k: 'System', v: s.nom }, { k: 'Science', v: s.science }, { k: 'What is computed', v: s.phrase },
+        ...(be ? [{ k: 'Scale', v: 'the drawing is about ' + (be.largeur >= 1e-3 && be.largeur < 1e6 ? String(Number(be.largeur.toPrecision(2))) : be.largeur.toExponential(1).replace('e+', 'e')) + ' ' + be.unite[0] + ' wide along x; the white bar is ' + be.texte + (be.unite[1] ? ' (' + be.unite[1] + ')' : '') }] : []),
         /* game79 : ce que le CERVEAU a ecrit — dans les params, donc sur Base avec l oeuvre au moment du mint (signe par celui qui minte) */
         ...(S.P && S.P.note ? [{ k: 'The brain\'s note (stored on Base with the work when it is minted)', v: S.P.note }] : []),
         /* (l operateur MATHEMATIQUE du melange — somme / composition — dit par un tableau joint : jamais concatene comme un nom de wallet) */

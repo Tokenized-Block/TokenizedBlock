@@ -256,6 +256,22 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     && /TS\.paramEntier\(S\.science\.s\.id, cle\) \? '1'/.test(onglet), 'les pas entiers viennent de la declaration ENTIERS des modules');
   /* vu a l ecran : la 1re version reprenait la classe .tamVars (panneau EN ABSOLU sur la scene) -> rendu hors de la carte */
   ok(/el\('details', \{ class: 'tamReglagesHaut'/.test(onglet) && !/\.tamReglagesHaut\{[^}]*position:/.test(onglet) && (onglet.match(/class: 'tamVars'/g) || []).length === 1, 'le bloc des variables du haut a sa propre classe, en flux');
+  /* game86 (Phil : « une echelle de grandeur ») : la VRAIE table et les vraies fonctions du source, executees */
+  {
+    const d = onglet.indexOf('const ECHELLE_UNITE = {'), f = onglet.indexOf('/* les parametres des modules nommes en francais');
+    ok(d > 0 && f > d, 'table ECHELLE_UNITE .. ecrireLongueur extraites');
+    const { U, ronde, ecrire } = new Function(onglet.slice(d, f) + '\nreturn { U: ECHELLE_UNITE, ronde: longueurRonde, ecrire: ecrireLongueur };')();
+    ok(ronde(37) === 20 && ronde(10) === 10 && ronde(0.0042) === 0.002 && ronde(5.5) === 5 && ronde(0) === null && ronde(NaN) === null, 'longueur ronde : 1, 2 ou 5 x 10^k au plus egale');
+    ok(ecrire(20) === '20' && ecrire(0.002) === '0.002' && ecrire(5e-7) === '5e-7' && ecrire(2e9) === '2e9', 'ecriture courte de la longueur');
+    const ids = new Set(TSq.SYSTEMES.map((s) => s.id)), cles = Object.keys(U);
+    ok(cles.every((k) => ids.has(k)) && cles.length >= 70, 'chaque cle d ECHELLE_UNITE est un systeme reel (' + cles.length + ')');
+    ok(['bigRip', 'etoilesHR', 'couplageCourant', 'evaporationTrouNoir'].every((k) => !U[k]), 'pas de barre sur un axe en echelle LOG');
+    /* coherence avec la legende : une unite PHYSIQUE nommee doit l etre aussi dans la colonne 0 (sinon la barre serait sur la mauvaise colonne) */
+    const LEG = await import('./tam-legendes.js'), MOTS = { AU: 'AU', pc: 'parsecs', kpc: 'kpc', Gpc: 'parsecs', mm: 'mm', m: 'm', km: 'km', fm: 'fm', s: 'seconds', rad: 'radians', 'Bohr radii': 'Bohr radii', 'Earth radii': 'Earth radii', 'solar radii': 'solar radii', 'light-seconds': 'light-seconds' };
+    const faux = cles.filter((k) => MOTS[U[k][0]] && !new RegExp('\\b' + MOTS[U[k][0]].replace('-', '\\-') + '\\b').test((LEG.legende(k, {}).colonnes || [])[0] || ''));
+    ok(faux.length === 0, 'unite physique de la barre = celle de la colonne 0 de la legende' + (faux.length ? ' : ' + faux.join(', ') : ''));
+    ok(/function barreEchelle\(\)/.test(onglet) && /\{ const be = barreEchelle\(\); if \(be\) objs\.push\(be\.objet\); \}/.test(onglet) && /\{ k: 'Scale', v: 'the drawing is about '/.test(onglet), 'la barre passe par le decor (meme transformation) et la carte dit la largeur');
+  }
   /* game82 (Phil : « cost not read yet ») : les decimals de TOUTE la liste, pas seulement des jetons tenus */
   const appD = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
   ok(/decimales: async \(\) => \{ const file = payerListees\(\)\.filter\(\(l\) => !payer\.dec\.has\(l\.jeton\)\);[^\n]*await decimalesPayer\(l\)/.test(appD)
