@@ -28,6 +28,9 @@ import * as GQ2 from './tam-grandes-questions-2.js';
 /* game81 : les champs quantiques (champ libre, fluctuations du vide, interaction de champs, Schwinger, Unruh, couplage courant, Compton),
  *   les atomes (Slater, raies NIST) et les quarks (potentiel de Cornell, charmonium vs PDG) — valeurs de comparaison sourcees (SOURCES) */
 import * as CHQ from './tam-champs-quantiques.js';
+/* game88 (Phil : « les principes du vide quantique ») : vide comprime, Casimir dynamique, vide de Higgs, emission spontanee —
+ *   adimensionnels, chacun contre sa formule exacte (aucune valeur publiee : SOURCES vide) */
+import * as VQ from './tam-vide-quantique.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -74,7 +77,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 /** game82 (audit : le curseur « groupe » glissait par 1/400 et le module l arrondissait) : un parametre ENTIER selon le module lui-meme */
 export const paramEntier = (id, k) => { const s = systeme(id); return !!(s && s.mod.ENTIERS && (s.mod.ENTIERS[id] || []).includes(k)); };
@@ -179,6 +182,9 @@ export function vueCorps(o, k) {
 export const ECHELLE_PROPRE = {
   supernova: [3], supernovaHydro: [3, 4], versMars: [2], fusionTrousNoirs: [0, 3], binaireFusion: [0, 3],
   mandelbrot: [2], karman: [2], evaporationTrouNoir: [0, 1, 2, 3],
+  /* game88 (vu a l ecran : Higgs dessine en LIGNE, le temps ~260 et V ecrasaient phi ~1) : les principes du vide — seules les colonnes de
+   *   MEME grandeur gardent l echelle commune (x et p ; Re phi et Im phi ; le desaccord seul) */
+  higgsVide: [2, 3], videComprime: [2, 3], casimirDynamique: [2, 3], emissionSpontanee: [1, 2, 3],
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {

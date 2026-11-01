@@ -5793,6 +5793,8 @@ const SERVIS = [
   'tam-champs-quantiques.js',
   /* game82 : les elements de contexte (Soleil, horizons, couches de la Terre…) */
   'tam-decor.js',
+  /* game88 : les principes du vide quantique (vide comprime, Casimir dynamique, Higgs, emission spontanee) */
+  'tam-vide-quantique.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

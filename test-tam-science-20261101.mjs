@@ -18,7 +18,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const MOI = '0x' + 'ab'.repeat(20);
 
 /* 1. TOUTES les sciences (game78 : 7 modules — physique, sciences, fluides, astres, cosmos, invisible, quantique) : rejeu, en-tete, decodage, tailles */
-{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1], ['tam-grandes-questions.js', 9], ['tam-grandes-questions-2.js', 7], ['tam-champs-quantiques.js', 9]];
+{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1], ['tam-grandes-questions.js', 9], ['tam-grandes-questions-2.js', 7], ['tam-champs-quantiques.js', 9], ['tam-vide-quantique.js', 4]];
   let attendu = 0; for (const [f, min] of parModule) { const m = await import('./' + f); ok(m.SYSTEMES.length >= min, f + ' : au moins ' + min + ' systemes (' + m.SYSTEMES.length + ')'); attendu += m.SYSTEMES.length; }
   ok(T.SYSTEMES.length === attendu && new Set(T.SYSTEMES.map((s) => s.id)).size === attendu, 'tam-science rassemble les ' + attendu + ' systemes, sans doublon d id'); }
 for (const s of T.SYSTEMES) {
@@ -82,7 +82,9 @@ ok(T.validerScience(T.paramsScience('systemeSolaire', { groupe: 1, annees: 400 }
   const etendues = (id, over = {}) => { const P = T.paramsScience(id, over), o = T.systeme(id).mod.simuler(id, P.params), z = T.standardiserIso(o.brut, o.n, o.D, id);
     const e = []; for (let j = 0; j < o.D; j++) { const v = []; for (let i = 0; i < o.n; i++) v.push(z[i * o.D + j]); v.sort((a, b) => a - b); e.push(v[Math.floor(o.n * 0.995)] - v[Math.floor(o.n * 0.005)]); }
     const M = Math.max(...e); return e.map((x) => x / M); };
-  for (const [id, over] of [['supernova'], ['supernovaHydro'], ['versMars'], ['fusionTrousNoirs'], ['karman', { y0: 0.8 }], ['mandelbrot', { zoom: 100 }]])
+  /* game88 : + 3 principes du vide (Higgs exclu : Im phi y est petit pour une raison PHYSIQUE, le champ roule dans une direction) */
+  for (const [id, over] of [['supernova'], ['supernovaHydro'], ['versMars'], ['fusionTrousNoirs'], ['karman', { y0: 0.8 }], ['mandelbrot', { zoom: 100 }],
+    ['videComprime'], ['casimirDynamique'], ['emissionSpontanee']])
     { const e = etendues(id, over); ok(Math.min(...e) >= 0.3, id + ' ' + JSON.stringify(over || {}) + ' : plus une ligne (' + e.map((x) => x.toFixed(3)).join(' ') + ')'); }
   const o = T.systeme('schwarzschild').mod.simuler('schwarzschild', T.paramsScience('schwarzschild').params), zA = T.standardiserIso(o.brut, o.n, o.D), zB = T.standardiserIso(o.brut, o.n, o.D, 'schwarzschild');
   ok(zA.every((x, i) => x === zB[i]), 'schwarzschild (sans ECHELLE_PROPRE) : les memes nombres qu avant');
@@ -113,7 +115,7 @@ ok(/'tam-science\.js'/.test(web), 'tam-science.js est servi');
 
 /* 5. mutants sur COPIES */
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tam-science-mut-'));
-for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'tam-grandes-questions.js', 'tam-grandes-questions-2.js', 'tam-champs-quantiques.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
+for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'tam-grandes-questions.js', 'tam-grandes-questions-2.js', 'tam-champs-quantiques.js', 'tam-vide-quantique.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
 const SRC = fs.readFileSync(path.join(ICI, 'tam-science.js'), 'utf8');
 const MUTANTS = [
   ['params hors bornes acceptes', (s) => s.replace("if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');", '')],

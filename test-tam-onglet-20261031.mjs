@@ -413,7 +413,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
   ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
   { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js',
-    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js'];
+    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js'];
     { const cq = (await import('./tam-champs-quantiques.js')).SYSTEMES.map((s) => s.id); ok(cq.every((id) => onglet.includes("'" + id + "'")) && /\['champs', 'Quantum fields, the vacuum, atoms & quarks'\]/.test(onglet), 'game81 : les ' + cq.length + ' champs quantiques ont leur groupe'); }
     ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
     const mods = await Promise.all(fichiers.map((f) => import(f)));

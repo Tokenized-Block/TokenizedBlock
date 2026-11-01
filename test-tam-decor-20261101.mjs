@@ -75,6 +75,18 @@ ok(DEC.decorDe('inconnu', {}).length === 0, 'id inconnu -> []');
 for (const id of ['kerr', 'centreTerre', 'pointsLagrange']) { assert.deepEqual(DEC.decorDe(id, { }), DEC.decorDe(id, {}, sim(id))); N++; }
 /* systeme qui quitte son domaine (kerr sous l orbite des photons) : pas de decor plutot qu un decor sur rien */
 { const o = sim('kerr', { a: 0.99, r0: 2 }); if (!o.bornee) ok(DEC.decorDe('kerr', o.params, o).length === 0, 'kerr non borne -> []'); }
+/* game88 : le decor du vide DIT VRAI — le champ de Higgs finit SUR le cercle trace et au niveau Vmin ; le cercle du vide ordinaire a le
+ *   rayon de l ecart-type mesure a r = 0 (1500 tirages) et le Casimir dynamique part SUR lui */
+for (const p of [{}, { mu: 2, lambda: 0.1 }, { mu: 0.5, lambda: 2 }]) {
+  const o = sim('higgsVide', p), c = DEC.decorDe('higgsVide', o.params, o).find((q) => /^Circle of vacua/.test(q.libelle)), k = o.n - 1;
+  const R = Math.hypot(o.brut[4 * k], o.brut[4 * k + 1]), V = o.brut[4 * k + 2];
+  ok(Math.abs(R - c.rayon) < 1e-3 * c.rayon && Math.abs(V - c.centre[2]) < 1e-3 * Math.abs(c.centre[2]), 'higgs ' + JSON.stringify(p) + ' : fin sur le cercle (|phi| ' + R + ' / ' + c.rayon + ', V ' + V + ' / ' + c.centre[2] + ')');
+}
+{ const o = sim('videComprime', { r: 0 }); let sx = 0, sp = 0; for (let i = 0; i < o.n; i++) { sx += o.brut[4 * i] ** 2; sp += o.brut[4 * i + 1] ** 2; }
+  const c = DEC.decorDe('videComprime', o.params, o)[0], sd = Math.sqrt(0.5 * (sx + sp) / o.n);
+  ok(Math.abs(sd - c.rayon) < 0.03, 'vide ordinaire : ecart-type mesure ' + sd.toFixed(4) + ' = rayon du cercle ' + c.rayon.toFixed(4)); }
+{ const o = sim('casimirDynamique'), c = DEC.decorDe('casimirDynamique', o.params, o)[0];
+  ok(Math.abs(Math.hypot(o.brut[0], o.brut[1]) - c.rayon) < 1e-9, 'casimir dynamique : le mode part SUR le cercle du vide'); }
 /* normaliserCorps = la mise a l echelle de vueCorps (l origine retombe sur vueCorps().origine) */
 for (const [id, k] of Object.entries(SCI.CORPS)) {
   const o = sim(id), w = DEC.normaliserCorps([{ type: 'point', centre: [0, 0, 0], couleur: '#ffffff', libelle: 'o' }], o, k)[0], vc = SCI.vueCorps(o, k);

@@ -390,6 +390,19 @@ const DECORS = {
     }
     return l;
   },
+  /* ---------- game88 : tam-vide-quantique.js ---------- */
+  /* colonnes : x, p, t, W ; le vide ORDINAIRE a la variance 1/2 -> son cercle a 1 sigma a le rayon sqrt(1/2) : la compression se lit contre lui */
+  videComprime: (P, o, B) => [cer([0, 0, B.centre[2], B.lo[3]], Math.sqrt(0.5), [0, 0, 1, 0], C.repere, 'Ordinary vacuum (1-sigma circle, variance 1/2)')],
+  /* colonnes : x, p, t, N ; au depart (t = 0, N = 0) le mode EST le vide ordinaire */
+  casimirDynamique: () => [cer([0, 0, 0, 0], Math.sqrt(0.5), [0, 0, 1, 0], C.repere, 'Starting vacuum (1-sigma circle, variance 1/2)')],
+  /* colonnes : Re phi, Im phi, V, t ; V = -mu^2 |phi|^2 + lambda |phi|^4 : minimum V = -mu^4 / (4 lambda) sur le cercle |phi| = v */
+  higgsVide: (P, o, B) => {
+    const v = P.mu / Math.sqrt(2 * P.lambda), Vmin = -P.mu * P.mu * P.mu * P.mu / (4 * P.lambda);
+    return [cer([0, 0, Vmin, B.centre[3]], v, [0, 0, 1, 0], C.zone, 'Circle of vacua |phi| = v = mu / sqrt(2 lambda)'),
+      pt([0, 0, 0, B.lo[3]], C.trouNoir, 'Symmetric top (phi = 0): unstable, not a vacuum')];
+  },
+  /* colonnes : desaccord du mode, t, population, P_e ; desaccord 0 = la frequence de l atome (la raie se centre la) */
+  emissionSpontanee: (P, o, B) => [seg([0, B.lo[1], 0, 0], [0, B.hi[1], 0, 0], C.photons, 'Atom frequency (detuning 0): the line is centred here')],
 };
 
 /** les systemes sans decor, et pourquoi (le module n expose pas d objet de contexte vrai dans ses coordonnees) */

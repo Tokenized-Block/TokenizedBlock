@@ -37,7 +37,9 @@ const THEMES = {
 THEMES.questions = ['videQuantique', 'bigRip', 'fauxVide', 'centreTerre', 'versMars', 'zeroAbsolu', 'tailleUnivers', 'nombrePi', 'calendrierCosmique',
   'penduleFoucault', 'mouvementTerre', 'etoilesHR', 'evaporationTrouNoir', 'tsunami', 'geometrieUnivers', 'tailleEtoiles'];
 /* game81 : les champs quantiques, les atomes et les quarks */
-THEMES.champs = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'effetUnruh', 'couplageCourant', 'comptonKleinNishina', 'atomes', 'quarks'];
+THEMES.champs = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'effetUnruh', 'couplageCourant', 'comptonKleinNishina', 'atomes', 'quarks',
+  /* game88 : les principes du vide qui manquaient */
+  'videComprime', 'casimirDynamique', 'higgsVide', 'emissionSpontanee'];
 const groupeDe = (s) => THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -84,6 +86,9 @@ const ECHELLE_UNITE = {
   mouvementTerre: ['AU', 'Earth-Sun mean distance'], tsunami: ['km'], tailleEtoiles: ['solar radii'], champLibre: ['lattice sites'],
   fluctuationsVide: ['lattice sites'], interactionChamps: ['1/m', 'inverse phi mass'], paireSchwinger: ['hbar/(mc)', 'electron Compton length / 2 pi'],
   effetUnruh: ['c2/a'], comptonKleinNishina: ['units', 'unit sphere'], atomes: ['Bohr radii'], quarks: ['fm', 'femtometres'],
+  /* game88 : quadratures et champ sans dimension (hbar = 1) ; l emission spontanee a un axe x en DESACCORD de frequence (unite du pas) */
+  videComprime: ['units', 'hbar = 1; the ordinary vacuum spread is 1/2'], casimirDynamique: ['units', 'hbar = 1; the ordinary vacuum spread is 1/2'],
+  higgsVide: ['units', 'of the field'], emissionSpontanee: ['frequency units', 'detuning from the atom'],
 };
 /* game87 : c dans l ensemble de Mandelbrot ? (pas d echappement |z| > 2 en N pas — la meme regle que tam-sciences.js#mandelbrot) */
 const dansMandelbrot = (cr, ci, N) => { let zr = 0, zi = 0; for (let k = 0; k < N; k++) { const t = zr * zr - zi * zi + cr; zi = 2 * zr * zi + ci; zr = t; if (zr * zr + zi * zi > 4) return false; } return true; };

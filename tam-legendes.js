@@ -46,6 +46,8 @@ const FILMS_DU_MODULE = {
   couplageCourant: { colonneTemps: null, note: 'frame 1 is the electromagnetic curve, frame 2 the strong-force curve; they are not instants of time' },
   atomes: { colonneTemps: null, note: 'each frame is the cloud of one electron, in filling order' },
   quarks: { colonneTemps: null, note: 'the string is stretched from frame to frame; the last frame is after it has broken' },
+  /* game88 : tam-vide-quantique.js — chaque image = l etat des modes a un instant */
+  emissionSpontanee: { colonneTemps: 1 },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
 /* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
@@ -732,6 +734,35 @@ const L = {
     colonnes: ['position along the string between the quark and the antiquark (fm; 1 fm = 10^-15 m)', 'sideways spread of the string (fm; an illustrative width of 0.15 fm, not computed)', 'second sideways spread (fm; same illustrative width)', 'energy stored in the string at that separation (GeV; the Cornell potential V(r), quark masses not included)'],
     aRegarder: ['In every frame but the last the pair is pulled further apart, from 0.2 fm to about 1.2 fm, and the stored energy keeps rising, like a rubber band that never goes slack (confinement).', 'In the last frame the string has broken: its energy was enough to create a new quark pair, so two clusters (two D mesons) remain instead of free quarks.', 'A phenomenological potential model, not lattice QCD; it gives charmonium levels of about 3090 MeV (J/psi) and 3672 MeV (psi(2S)).'],
     fin: 'the string breaks into two D mesons in the last frame',
+  },
+  /* game88 : les principes du vide qui manquaient (tam-vide-quantique.js) — formules seulement, aucun chiffre publie */
+  videComprime: {
+    titre: 'Squeezed vacuum',
+    enUnePhrase: 'The vacuum of one light mode, squeezed: the unavoidable quantum jitter is pushed out of one direction and into the other, while their product stays at its quantum minimum.',
+    colonnes: ['x quadrature (dimensionless, hbar = 1; the ordinary vacuum has variance 1/2)', 'p quadrature (same units)', 'time (each point is an independent sample, turned by the oscillator up to that time)', 'Wigner function W(x, p) at that point (exact formula, between 0 and 1/pi)'],
+    aRegarder: ['The cloud is an ellipse, not the round ordinary vacuum: thinner along one direction, wider along the other.', 'The product of the two spreads stays at the minimum quantum theory allows (Delta x Delta p = 1/2): squeezing moves the noise, it does not remove it.', 'A squeezed vacuum is not empty: it holds sinh^2 r photons on average; with time the ellipse turns (the spreads repeat at twice the oscillator frequency).'],
+    fin: null,
+  },
+  casimirDynamique: {
+    titre: 'Light made from the vacuum (dynamical Casimir effect)',
+    enUnePhrase: 'A cavity mirror shaken at twice the frequency of a light mode turns vacuum jitter into real photons, whose number grows exponentially.',
+    colonnes: ['x of a point on the 1-sigma ellipse of the mode (dimensionless quadrature; the vacuum spread is 1/2)', 'p of that point (same units)', 'time (units of 1 / the mode frequency)', 'photons created from the vacuum so far, N(t)'],
+    aRegarder: ['At the start the ellipse is the round vacuum: zero photons.', 'Shaking at twice the mode frequency pumps the mode like a swing (parametric resonance): the ellipse stretches and squeezes, and N(t) follows sinh^2(eps omega0 t / 2).', 'The photons are made in pairs out of vacuum fluctuations, not from light already in the cavity. One mode, no losses: a simplified model, a drawing of the formula.'],
+    fin: null,
+  },
+  higgsVide: {
+    titre: 'The Higgs vacuum (spontaneous symmetry breaking)',
+    enUnePhrase: 'A field released at the top of a "Mexican hat" rolls down and settles somewhere on the circle of lowest energy: the vacuum picks a direction that the laws themselves do not.',
+    colonnes: ['real part of the field phi (dimensionless)', 'imaginary part of phi (same units)', 'potential energy V(phi) = -mu^2 |phi|^2 + lambda |phi|^4', 'time (dimensionless)'],
+    aRegarder: ['Every point of the circle |phi| = v = mu / sqrt(2 lambda) is an equally good vacuum; another seed (another tiny nudge) settles somewhere else on it.', 'Across the circle the field rings at a frequency set by the curvature: the massive Higgs mode, m_H^2 = 2 mu^2.', 'Along the circle nothing pushes back: the massless Goldstone direction. A classical, uniform field with friction: no quantum fluctuations and no space, a drawing of the formula.'],
+    fin: null,
+  },
+  emissionSpontanee: {
+    titre: 'Spontaneous emission: an atom and the vacuum',
+    enUnePhrase: 'An excited atom alone in the vacuum still gives off light, because it is coupled to the vacuum modes; the excitation leaks out at the rate Fermi\'s golden rule predicts.',
+    colonnes: ['detuning of a vacuum mode from the atom frequency (mode number x spacing, dimensionless)', 'time of the frame', 'population of that mode |c_k|^2 (the chance the photon is in it)', 'probability that the atom is still excited, P_e(t)'],
+    aRegarder: ['P_e(t) falls exponentially at Gamma = 2 pi g^2 / spacing (Fermi\'s golden rule).', 'The emitted photon fills the modes with a Lorentzian shape: the natural width of a spectral line.', 'With a finite set of modes the light comes back to the atom at the recurrence time 2 pi / spacing: a revival that a true continuum of modes would never show. One excitation and evenly spaced modes: a simplified model.'],
+    fin: null,
   },
   /* ---------- familles hors science ---------- */
   __attracteur: {
