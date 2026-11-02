@@ -1163,13 +1163,19 @@ export function monter(racine, ctx = {}) {
          *   place fixe, en haut a droite, comme une regle ; « ≈ » : en perspective la longueur depend de la profondeur */
         if (d.q.echelle) {
           const ps = (d.lignesVue && d.lignesVue[0]) || [], u0 = ps.length ? ecran(ps[0]) : null, u1 = ps.length ? ecran(ps[ps.length - 1]) : null;
-          const l = u0 && u1 ? Math.hypot(u1.sx - u0.sx, u1.sy - u0.sy) : 0, Wc = g.canvas.width;
+          const l0 = u0 && u1 ? Math.hypot(u1.sx - u0.sx, u1.sy - u0.sy) : 0, Wc = g.canvas.width;
+          /* game99 (mesure : 5 barres absentes, 4 a 8 px — le quart de la largeur des donnees ne suit pas l echelle de l ecran ; Kepler 23 px) :
+           *   les pixels par unite MESURES dans la scene (l0 / longueur), puis une longueur ronde qui fait ~20 % de la toile — jamais plus
+           *   longue que les donnees elles-memes (tsunami disait « 20000 km » pour un bassin de 10100 km) */
+          const parUnite = d.q.longueur > 0 ? l0 / d.q.longueur : 0;
+          const Lr = parUnite > 0 ? longueurRonde(Math.min(0.2 * Wc / parUnite, d.q.etendue > 0 ? d.q.etendue : Infinity)) : null, l = Lr ? Lr * parUnite : 0;
+          racine.dataset.echellePx = (l / dpr).toFixed(1);
           if (l >= 8 * dpr && l <= 0.6 * Wc) {
             const x1 = Wc - 16 * dpr, x0 = x1 - l, y = 30 * dpr;
             g.strokeStyle = col; g.lineWidth = Math.max(1, 2 * dpr); g.globalAlpha = 0.95; g.setLineDash([]);
             g.beginPath(); g.moveTo(x0, y); g.lineTo(x1, y); for (const x of [x0, x1]) { g.moveTo(x, y - 5 * dpr); g.lineTo(x, y + 5 * dpr); } g.stroke();
             /* l etiquette de l echelle reserve sa place (les libelles de la scene la contournent) */
-            const te = '≈ ' + d.q.libelle.replace(/^Scale: /, ''); g.globalAlpha = 1; g.fillStyle = col; ecrire(te, x1 - g.measureText(te).width, y - 9 * dpr);
+            const te = '≈ ' + ecrireLongueur(Lr) + ' ' + d.q.unite; g.globalAlpha = 1; g.fillStyle = col; ecrire(te, x1 - g.measureText(te).width, y - 9 * dpr);
           }
           continue;
         }
@@ -1333,7 +1339,7 @@ export function monter(racine, ctx = {}) {
     const a = B.centre.slice(); a[0] -= L / 2; const b = a.slice(); b[0] += L;
     const texte = ecrireLongueur(L) + ' ' + u[0];
     return { L, largeur, unite: u, texte,
-      objet: { type: 'segment', espace: S.corps ? 'corps3' : 'brut', centre: a.map((x, j) => (x + b[j]) / 2), a, b, couleur: '#ffffff', libelle: 'Scale: ' + texte, largeur: 1, echelle: true } };
+      objet: { type: 'segment', espace: S.corps ? 'corps3' : 'brut', centre: a.map((x, j) => (x + b[j]) / 2), a, b, couleur: '#ffffff', libelle: 'Scale: ' + texte, largeur: 1, echelle: true, longueur: L, unite: u[0], etendue: largeur } };
   }
   function decorVue() {
     if (!S.science || !S.o || !S.o.brut || !S.o.bornee) return [];

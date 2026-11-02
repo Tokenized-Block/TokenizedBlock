@@ -494,6 +494,10 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok((onglet.match(/projectCam\(/g) || []).length === 2 && /const ecran = \(p\) => projeter\(/.test(onglet) && /S\.ajuste = m > 0 \? Math\.min\(4, 1 \/ m\) : 1;/.test(onglet)
       && /S\.cam = null; S\.ajuste = null;/.test(onglet) && /const CAM0 = \{ yaw: 0\.6, pitch: 0\.35, dist: 4,/.test(onglet),
       'game98 : camera a dist 4 (perspective douce), recadrage par une seule projection (remplit, au plus 4 x), refait par Reset view');
+    /* game99 : la barre d echelle choisit sa longueur ronde sur les pixels par unite MESURES (et le texte dit cette longueur-la) */
+    ok(/const parUnite = d\.q\.longueur > 0 \? l0 \/ d\.q\.longueur : 0;/.test(onglet)
+      && /Lr = parUnite > 0 \? longueurRonde\(Math\.min\(0\.2 \* Wc \/ parUnite, d\.q\.etendue > 0 \? d\.q\.etendue : Infinity\)\) : null, l = Lr \? Lr \* parUnite : 0;/.test(onglet)
+      && /const te = '≈ ' \+ ecrireLongueur\(Lr\) \+ ' ' \+ d\.q\.unite;/.test(onglet), 'game99 : barre d echelle adaptee a l ecran, jamais plus longue que les donnees, texte = la longueur dessinee');
     const mods = await Promise.all(fichiers.map((f) => import(f)));
     const tous = mods.flatMap((m) => m.SYSTEMES.map((s) => [m, s]));
     ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
