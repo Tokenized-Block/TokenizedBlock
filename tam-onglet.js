@@ -155,7 +155,9 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom',
   /* game94 (panneau de la scene : « balayages = 200 ») — les symboles physiques (theta, omega, lambda, gamma, sigma, beta, kT, hbar...) restent */
   balayages: 'sweeps', espacement: 'mode spacing', fenetre: 'window', ecart: 'offset', taux: 'rate', melange: 'blend', fraction: 'fraction',
-  masses: 'masses', maxIter: 'max iterations', hPlus: 'h plus', hCroix: 'h cross', tauMax: 'max proper time', plateau: 'shelf' };
+  masses: 'masses', maxIter: 'max iterations', hPlus: 'h plus', hCroix: 'h cross', tauMax: 'max proper time', plateau: 'shelf',
+  /* game105 (sonde : tous les noms de curseurs contre cette table — 3 mots francais a l ecran depuis game96) */
+  billes: 'balls', rangees: 'rows of pegs', rayons: 'paths', penchant: 'tilt (chance to bounce right)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
@@ -734,7 +736,7 @@ export function monter(racine, ctx = {}) {
           return el('div', { class: 'tamReglage', title: 'parameter ' + cle },
             el('label', { for: id, class: 'tamDoux', text: (NOMS_PARAMS_EN[cle] || r.nom) + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
             ...(note ? [el('span', { class: 'tamDoux tamNoteCurseur', text: ' — ' + (note === 'echelle' ? 'sets the scale only: the shape stays the same (see the scale bar and the checks)' : 'changes the checks below, not the drawing') })] : []),
-            el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': r.nom }));
+            el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': NOMS_PARAMS_EN[cle] || r.nom }));
         }));
       } else for (const r of R) {
         /* game77 : apres Chaos (ou un parametre ramene par le module), curseurs et etiquettes disent la valeur REELLE */

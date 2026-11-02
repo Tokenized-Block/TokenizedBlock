@@ -58,6 +58,8 @@ function tempsArc(R, phiB, M = 20000) {
   return s * h / 3;
 }
 function binomRef(L) { const p = []; for (let k = 0; k <= L; k++) { let c = 1; for (let j = 1; j <= k; j++) c *= (L - k + j) / j; p.push(c / 2 ** L); } return p; }
+/* game105 : la reference a penchant q, calculee autrement (Math.pow, coefficient par produit) */
+function binomRefQ(L, q) { const p = []; for (let k = 0; k <= L; k++) { let c = 1; for (let j = 1; j <= k; j++) c *= (L - k + j) / j; p.push(c * Math.pow(q, k) * Math.pow(1 - q, L - k)); } return p; }
 /* standardisation par colonne et par groupe de longueurs de meme nature (meme definition que le banc de tam-theories-2) */
 function standardiser(b, n, D, groupes = []) {
   const z = new Float64Array(n * D), moy = [], et = [];
@@ -233,15 +235,19 @@ function suite(T, bavard = false) {
     return `cycloid ${C.mesure.toFixed(8)}/${C.formule.toFixed(8)} (${C.ecart.toExponential(1)}, ordre ${C.ordre.toFixed(3)}), line ${I.droite.mesure.toFixed(6)}, arc ${I.arc.mesure.toFixed(6)}/${ta.toFixed(6)}`;
   });
   // 7. galton
-  for (const p of [...extremes(sys('galton')), { graine: 2 }, { graine: 3, billes: 5000 }, { graine: 4, rangees: 30, billes: 100 }]) ok(`galton ${JSON.stringify(p)} : binomiale exacte, moyenne 0 et variance L/4 a 4.5 sigma, chi2, chemins a pas de 1/2, tas sous les cases`, () => {
-    const R = S('galton', p), P = R.params, I = R.invariants, Bn = I.binomiale, L = P.rangees, N = P.billes, pr = binomRef(L), b = R.brut;
+  for (const p of [...extremes(sys('galton')), { graine: 2 }, { graine: 3, billes: 5000 }, { graine: 4, rangees: 30, billes: 100 }, { penchant: 0.25, graine: 5 }, { penchant: 0.8, rangees: 7, graine: 6 }]) ok(`galton ${JSON.stringify(p)} : binomiale exacte B(L, q), moyenne L (q - 1/2) et variance L q (1 - q) a 4.5 sigma, chi2, chemins a pas de 1/2, tas sous les cases`, () => {
+    const R = S('galton', p), P = R.params, I = R.invariants, Bn = I.binomiale, L = P.rangees, N = P.billes, q = P.penchant, pq = q * (1 - q), b = R.brut;
+    const pr = q === 0.5 ? binomRef(L) : binomRefQ(L, q), kc = q === 0.5 ? Math.floor(L / 2) : Math.floor((L + 1) * q);
     Bn.probabilites.forEach((x, k) => assert.ok(Math.abs(x - pr[k]) < 1e-15, 'p ' + k));
-    assert.ok(Math.abs(Bn.frequences.reduce((a, x) => a + x, 0) - 1) < 1e-12 && Math.abs(Bn.formule - pr[Math.floor(L / 2)]) < 1e-15);
+    /* la case de reference est bien la plus probable (le mode) */
+    assert.ok(pr.every((x) => x <= pr[kc] + 1e-15), 'mode ' + kc);
+    assert.ok(Math.abs(Bn.frequences.reduce((a, x) => a + x, 0) - 1) < 1e-12 && Math.abs(Bn.formule - pr[kc]) < 1e-15 && Math.abs(Bn.sigma - Math.sqrt(pr[kc] * (1 - pr[kc]) / N)) < 1e-15);
     const M = I.moyenne, V = I.variance;
-    assert.ok(Math.abs(M.sigma - Math.sqrt(L / (4 * N))) < 1e-15 && Math.abs(V.sigma - Math.sqrt(L * (L - 1) / (8 * N))) < 1e-15 && V.formule === L / 4 && M.formule === 0);
+    assert.ok(Math.abs(M.sigma - Math.sqrt(L * pq / N)) < 1e-15 && Math.abs(V.sigma - Math.sqrt(L * pq * (1 + (2 * L - 6) * pq) / N)) < 1e-15 && Math.abs(V.formule - L * pq) < 1e-12 && Math.abs(M.formule - L * (q - 0.5)) < 1e-12);
+    if (q === 0.5) assert.ok(Math.abs(V.sigma - Math.sqrt(L * (L - 1) / (8 * N))) < 1e-15 && V.formule === L / 4 && M.formule === 0, 'sans penchant : les formules d avant');
     let s1 = 0, s2 = 0; Bn.frequences.forEach((fq, k) => { s1 += fq * (k - L / 2); s2 += fq * (k - L / 2) ** 2; });
     assert.ok(Math.abs(M.mesure - s1) < 1e-12 && Math.abs(V.mesure - (s2 - s1 * s1)) < 1e-9, 'moments = histogramme');
-    assert.ok(Math.abs(M.mesure) < 4.5 * M.sigma && Math.abs(V.mesure - L / 4) < 4.5 * V.sigma, `moyenne ${M.mesure} +- ${M.sigma}, variance ${V.mesure} +- ${V.sigma}`);
+    assert.ok(Math.abs(M.mesure - M.formule) < 4.5 * M.sigma && Math.abs(V.mesure - V.formule) < 4.5 * V.sigma, `moyenne ${M.mesure} +- ${M.sigma}, variance ${V.mesure} +- ${V.sigma}`);
     assert.ok(Bn.chi2 < Bn.ddl + 5 * Math.sqrt(2 * Math.max(1, Bn.ddl)) && Bn.pireEcartSigma < 4.5, `chi2 ${Bn.chi2} ddl ${Bn.ddl} pire ${Bn.pireEcartSigma}`);
     const B = I.dessin.chemins; assert.equal(B, Math.min(N, Math.floor(750 / (L + 1))));
     for (let c = 0; c < B; c++) for (let j = 0; j <= L; j++) { const o = 3 * (c * (L + 1) + j); assert.ok(b[o + 1] === -j && b[o + 2] === c); if (j) assert.ok(Math.abs(Math.abs(b[o] - b[o - 3]) - 0.5) < 1e-15); else assert.equal(b[o], 0); }
@@ -250,14 +256,30 @@ function suite(T, bavard = false) {
     { const haut = new Map(); for (let r = B * (L + 1); r < R.n; r++) { const o = 3 * r, avant = haut.get(b[o]);
         if (avant && b[o + 2] > avant[0]) assert.ok(b[o + 1] > avant[1], 'la pile monte (case ' + b[o] + ')');
         if (!avant || b[o + 2] > avant[0]) haut.set(b[o], [b[o + 2], b[o + 1]]); } }
-    return `mean ${M.mesure.toFixed(4)} (+-${M.sigma.toFixed(4)}), var ${V.mesure.toFixed(4)}/${L / 4} (+-${V.sigma.toFixed(4)}), chi2 ${Bn.chi2.toFixed(1)}/${Bn.ddl}, pire ${Bn.pireEcartSigma.toFixed(2)} sigma`;
+    return `mean ${M.mesure.toFixed(4)} (+-${M.sigma.toFixed(4)}), var ${V.mesure.toFixed(4)}/${V.formule.toFixed(4)} (+-${V.sigma.toFixed(4)}), chi2 ${Bn.chi2.toFixed(1)}/${Bn.ddl}, pire ${Bn.pireEcartSigma.toFixed(2)} sigma`;
+  });
+  /* game105 : le sigma de la VARIANCE (4e moment central de la binomiale) contre la dispersion reelle sur 120 graines, a q = 0.2 */
+  ok('galton penchant 0.2 : sigma de la variance derive = dispersion mesuree sur 120 graines (a 25 %)', () => {
+    const vs = []; let sig = 0;
+    for (let g = 1; g <= 120; g++) { const V = S('galton', { penchant: 0.2, rangees: 10, billes: 300, graine: g }).invariants.variance; vs.push(V.mesure); sig = V.sigma; }
+    const m = vs.reduce((a, x) => a + x, 0) / vs.length, sd = Math.sqrt(vs.reduce((a, x) => a + (x - m) ** 2, 0) / (vs.length - 1));
+    assert.ok(Math.abs(sd / sig - 1) < 0.25, `dispersion ${sd} contre sigma ${sig}`);
+    return `ratio ${(sd / sig).toFixed(3)}`;
+  });
+  ok('galton : sans penchant, les octets sont ceux d avant (rejeu des oeuvres)', () => {
+    /* q = 0.5 doit donner EXACTEMENT 2^-L par case et le meme tirage : on compare au calcul d avant game105, c / 2^L */
+    const a = S('galton'), L = a.params.rangees, c = [1]; for (let k = 1; k <= L; k++) c.push(c[k - 1] * (L - k + 1) / k);
+    const pr = c.map((x) => x / 2 ** L);
+    assert.ok(a.invariants.binomiale.probabilites.every((x, k) => x === pr[k]), 'probabilites identiques au bit pres');
+    assert.ok(S('galton', { penchant: 0.5 }).brut.every((x, i) => x === a.brut[i]));
   });
   ok('galton : la graine change le tirage, pas la loi', () => { const a = S('galton'), c = S('galton', { graine: 2 }); assert.ok(!octets(a.brut).equals(octets(c.brut))); assert.deepEqual(a.invariants.binomiale.probabilites, c.invariants.binomiale.probabilites); });
   // 8. bornage
   ok('bornage : hors bornes ramene, NaN -> defaut, entiers arrondis', () => {
     assert.deepEqual(sim('rutherford', { E: 9, bMax: 'x', rayons: 7.6 }, { n: 50 }).params, { E: 4, bMax: 2, rayons: 8 });
     assert.deepEqual(sim('logistique', { rMin: 0, rMax: 5, points: 9.4 }, { n: 50 }).params, { rMin: 1, rMax: 4, points: 9 });
-    assert.deepEqual(sim('galton', { billes: 99999, rangees: 3.5, graine: NaN }, { n: 50 }).params, { billes: 5000, rangees: 4, graine: 1 });
+    assert.deepEqual(sim('galton', { billes: 99999, rangees: 3.5, graine: NaN }, { n: 50 }).params, { billes: 5000, rangees: 4, penchant: 0.5, graine: 1 });
+    assert.equal(sim('galton', { penchant: 2 }, { n: 50 }).params.penchant, 0.9);
     assert.deepEqual(sim('chaleur', { D: -1, duree: Infinity, largeur: null }, { n: 50 }).params, { D: 0.05, duree: 1, largeur: 0.1 });
   });
   ok('reglagesPhysique : forme, valeur bornee', () => {
@@ -325,9 +347,10 @@ const MUTANTS = [
   ['brachistochrone : T = sqrt(2a/g) theta', 'Math.sqrt(a / G_BRACHI) * thB', 'Math.sqrt(2 * a / G_BRACHI) * thB'],
   ['brachistochrone : vitesse sqrt(1.9 g h)', 'Math.max(0, -2 * G_BRACHI * py[k + 1])', 'Math.max(0, -1.9 * G_BRACHI * py[k + 1])'],
   ['brachistochrone : equation de theta_B avec 1 + cos', '(m - sinD(m)) / (1 - cosD(m))', '(m - sinD(m)) / (1 + cosD(m))'],
-  ['galton : piece biaisee 0.52', 'if (alea() < 0.5) k++;', 'if (alea() < 0.52) k++;'],
+  ['galton : piece biaisee (+0.02 sur le penchant)', 'if (alea() < q) k++;', 'if (alea() < q + 0.02) k++;'],
   ['galton : binomiale (L - k)/k', 'c.push(c[k - 1] * (L - k + 1) / k)', 'c.push(c[k - 1] * (L - k) / k)'],
-  ['galton : sigma de la variance avec 4 N', 'Math.sqrt(L * (L - 1) / (8 * N))', 'Math.sqrt(L * (L - 1) / (4 * N))'],
+  ['galton : sigma de la variance sans le 4e moment', 'Math.sqrt(L * pq * (1 + (2 * L - 6) * pq) / N)', 'Math.sqrt(L * pq * (1 + (2 * L - 2) * pq) / N)'],
+  ['galton : la case de reference reste la centrale avec penchant', 'Math.min(L, Math.floor((L + 1) * q))', 'Math.floor(L / 2)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (galton)', 'alea = mulberry32(P.graine >>> 0), nChemins', 'alea = Math.random, nChemins'],
 ];

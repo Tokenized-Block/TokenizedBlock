@@ -402,16 +402,20 @@ function brachistochrone(P, n) {
 //   en unites de sqrt(N p (1 - p)).
 // Dessin (nuage) : les chemins des premieres billes (x, -rangee), puis le tas des N billes sous les cases, posees sur le fond
 //   y = -(2L + 1) et montant du rang d arrivee dans leur case, mise a l echelle de la plus haute pile (L rangees).
-function binomiale(L) { const c = [1]; for (let k = 1; k <= L; k++) c.push(c[k - 1] * (L - k + 1) / k); const d = 2 ** L; return c.map((x) => x / d); }
+// game105 (Phil : « ajoute d autres variables ») : le PENCHANT q = probabilite de rebondir a droite (planche inclinee). Loi B(L, q) :
+//   moyenne L (q - 1/2), variance L q (1 - q), 4e moment central L q (1-q) (1 + 3 (L - 2) q (1-q)), d ou
+//   sigma_var = sqrt(L q (1-q) (1 + (2 L - 6) q (1-q)) / N) — a q = 1/2 c est exactement sqrt(L (L - 1)/(8 N)) ci-dessus.
+//   A q = 1/2 tout est identique au bit pres (0.5^k 0.5^(L-k) = 2^-L exact, meme tirage) : les oeuvres existantes se rejouent.
+function binomiale(L, q = 0.5) { const c = [1]; for (let k = 1; k <= L; k++) c.push(c[k - 1] * (L - k + 1) / k); return c.map((x, k) => x * q ** k * (1 - q) ** (L - k)); }
 function galton(P, n) {
-  const N = P.billes, L = P.rangees, alea = mulberry32(P.graine >>> 0), nChemins = Math.floor(n / 2), B = Math.min(N, Math.floor(nChemins / (L + 1)));
+  const N = P.billes, L = P.rangees, q = P.penchant, alea = mulberry32(P.graine >>> 0), nChemins = Math.floor(n / 2), B = Math.min(N, Math.floor(nChemins / (L + 1)));
   const ks = new Int32Array(N), rangs = new Int32Array(N), compte = new Int32Array(L + 1), brut = new Float64Array(n * 3);
   let ligne = 0;
   for (let b = 0; b < N; b++) {
     let k = 0;
     if (b < B) { brut[3 * ligne] = 0; brut[3 * ligne + 1] = 0; brut[3 * ligne + 2] = b; ligne++; }
     for (let j = 1; j <= L; j++) {
-      if (alea() < 0.5) k++;
+      if (alea() < q) k++;
       if (b < B) { const o = 3 * ligne; brut[o] = k - j / 2; brut[o + 1] = -j; brut[o + 2] = b; ligne++; }
     }
     ks[b] = k; rangs[b] = compte[k]; compte[k]++;
@@ -423,7 +427,7 @@ function galton(P, n) {
     /* game97 : la pile MONTE depuis le fond (-(2L + 1)) comme dans une vraie planche ; la plus haute touche -(L + 1), sous les clous */
     brut[o] = ks[b] - L / 2; brut[o + 1] = -(2 * L + 1) + L * (rangs[b] + 0.5) / hMax; brut[o + 2] = b;
   }
-  const p = binomiale(L);
+  const p = binomiale(L, q), pq = q * (1 - q);
   let s1 = 0, s2 = 0; for (let b = 0; b < N; b++) { const x = ks[b] - L / 2; s1 += x; s2 += x * x; }
   const moy = s1 / N, vr = s2 / N - moy * moy;
   /* chi2 sur les cases E >= 5, queues regroupees de chaque cote */
@@ -431,14 +435,18 @@ function galton(P, n) {
   for (let k = 0; k <= L; k++) { accO += compte[k]; accE += N * p[k]; if (accE >= 5) { cases.push([accO, accE]); accO = 0; accE = 0; } }
   if (accE > 0) { if (cases.length) { cases[cases.length - 1][0] += accO; cases[cases.length - 1][1] += accE; } else cases.push([accO, accE]); }
   let chi2 = 0; for (const [O, E] of cases) chi2 += (O - E) * (O - E) / E;
-  let pire = 0; for (let k = 0; k <= L; k++) { const E = N * p[k], s = Math.sqrt(E * (1 - p[k])); if (s > 0) pire = Math.max(pire, Math.abs(compte[k] - E) / s); }
-  const kc = Math.floor(L / 2);
+  /* game105 (penchant 0.9, 30 rangees : UNE bille dans une case qui en attend 0.01 = « 9.9 sigma ») : le pire ecart sur les cases
+   *   ou l approximation normale tient, E >= 5 — les memes que le chi2 */
+  let pire = 0; for (let k = 0; k <= L; k++) { const E = N * p[k], s = Math.sqrt(E * (1 - p[k])); if (E >= 5 && s > 0) pire = Math.max(pire, Math.abs(compte[k] - E) / s); }
+  /* la case de reference : la centrale sans penchant (inchange), sinon le MODE de B(L, q), floor((L + 1) q) */
+  const kc = q === 0.5 ? Math.floor(L / 2) : Math.min(L, Math.floor((L + 1) * q));
   return { D: 3, brut, nuage: true, unite: 'sans objet (billes tirees au hasard, pas une trajectoire)', invariants: {
     /* game104 (sonde aux bouts : « 0.31 vs 0.2256 » a 100 billes se lisait 37 % — c est 2.0 sigma) : le sigma EXACT d une frequence binomiale */
     binomiale: { mesure: compte[kc] / N, formule: p[kc], sigma: Math.sqrt(p[kc] * (1 - p[kc]) / N), caseCentrale: kc - L / 2, chi2, ddl: cases.length - 1, pireEcartSigma: pire, frequences: Array.from(compte, (c) => c / N), probabilites: p,
-      note: 'fraction of balls in the central bin against C(L, k)/2^L ; chi2 over bins with at least 5 expected balls, and the worst bin deviation in units of sqrt(N p (1 - p))' },
-    moyenne: { mesure: moy, formule: 0, sigma: Math.sqrt(L / (4 * N)), note: 'mean landing position (in peg spacings) against 0' },
-    variance: { mesure: vr, formule: L / 4, sigma: Math.sqrt(L * (L - 1) / (8 * N)), note: 'variance of the landing position against L/4 (L independent steps of +-1/2)' },
+      note: q === 0.5 ? 'fraction of balls in the central bin against C(L, k)/2^L ; chi2 and the worst bin deviation (in units of sqrt(N p (1 - p))) over bins with at least 5 expected balls'
+        : 'fraction of balls in the most likely bin against C(L, k) q^k (1 - q)^(L - k) ; chi2 and the worst bin deviation (in units of sqrt(N p (1 - p))) over bins with at least 5 expected balls' },
+    moyenne: { mesure: moy, formule: L * (q - 0.5), sigma: Math.sqrt(L * pq / N), note: q === 0.5 ? 'mean landing position (in peg spacings) against 0' : 'mean landing position (in peg spacings) against L (q - 1/2)' },
+    variance: { mesure: vr, formule: L * pq, sigma: Math.sqrt(L * pq * (1 + (2 * L - 6) * pq) / N), note: q === 0.5 ? 'variance of the landing position against L/4 (L independent steps of +-1/2)' : 'variance of the landing position against L q (1 - q)' },
     dessin: { chemins: B, billes: N, pileMax: hMax, note: 'first the paths of the first balls, then every ball stacked in its bin' } } };
 }
 
@@ -469,9 +477,9 @@ export const SYSTEMES = Object.freeze([
   { id: 'brachistochrone', nom: 'The fastest slide (brachistochrone)', science: 'Calculus of variations', D: 3, params: { X: 1.5, Y: 1 },
     bornes: { X: [0.2, 3], Y: [0.3, 2] },
     phrase: 'A visualisation of the brachistochrone problem (g = 1): beads released together slide without friction from the same start to the same end along a cycloid, a straight line and a circular arc, one frame each. The cycloid wins; its time is compared with the exact sqrt(a/g) theta and the line with sqrt(2 L^2/(g Y)), the arc is measured only.' },
-  { id: 'galton', nom: 'Balls through pegs (Galton board)', science: 'Probability', D: 3, nuage: true, params: { billes: 2000, rangees: 12, graine: 1 },
-    bornes: { billes: [100, 5000], rangees: [4, 30], graine: [1, 1000000] },
-    phrase: 'A visualisation of a Galton board: balls fall through rows of pegs, bouncing left or right at random at each one, and pile up into a bell shape. The pile is compared with the exact binomial law C(L, k)/2^L, with mean 0 and variance L/4; a finite number of balls, so the agreement is statistical.' },
+  { id: 'galton', nom: 'Balls through pegs (Galton board)', science: 'Probability', D: 3, nuage: true, params: { billes: 2000, rangees: 12, penchant: 0.5, graine: 1 },
+    bornes: { billes: [100, 5000], rangees: [4, 30], penchant: [0.1, 0.9], graine: [1, 1000000] },
+    phrase: 'A visualisation of a Galton board: balls fall through rows of pegs, bouncing left or right at random at each one, and pile up into a bell shape. The pile is compared with the exact binomial law C(L, k)/2^L, with mean 0 and variance L/4; tilt the board (chance q of bouncing right) and it becomes C(L, k) q^k (1 - q)^(L - k), mean L (q - 1/2), variance L q (1 - q). A finite number of balls, so the agreement is statistical.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
 export const ENTIERS = { rutherford: ['rayons'], logistique: ['points'], chaleur: [], oscillateurForce: [], brachistochrone: [], galton: ['billes', 'rangees', 'graine'] };
 const FONCTIONS = { rutherford, logistique, chaleur, oscillateurForce, brachistochrone, galton };
