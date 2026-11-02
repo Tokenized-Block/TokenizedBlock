@@ -248,6 +248,19 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/value 4\b/.test(L1) && /terms 1\b/.test(L1) && !/valeur|NfoisErreur/.test(L1), 'Leibniz a 1 terme : « terms 1 » dit, cles en anglais : ' + L1);
   ok(ligne('reference', I1.reference) === 'reference: true pi 3.141592653589793', 'la vraie valeur de pi affichee en entier : ' + ligne('reference', I1.reference));
   ok(/data series/.test(ligne('courbes', I1.courbes)), 'un invariant sans nombre (courbes) n est plus une ligne vide');
+  /* game103 (sonde aux bouts des curseurs : 12 lignes « measured NaN ») : de VRAIS runs ou la mesure n existe pas — jamais « NaN » */
+  {
+    const run = (id, p) => TSq.systeme(id).mod.simuler(id, p).invariants;
+    const Lc = ligne('precession', run('schwarzschild', { L: 3.6 }).precession), Lt = ligne('precession', run('schwarzschild', { tours: 2 }).precession);
+    const Ls = ligne('periodeEarth', run('systemeSolaire', { annees: 0.5 }).periodeEarth), Lk = ligne('noeuds', run('kerr', { inclinaison: 0 }).noeuds);
+    const Lo = ligne('transitionAcceleration', run('expansionUnivers', { Om: 1 }).transitionAcceleration);
+    ok([Lc, Lt, Ls, Lk, Lo].every((l) => !/NaN|null|undefined/.test(l) && /not measured/.test(l)), 'mesure absente : « not measured », jamais NaN : ' + [Lc, Lt, Ls, Lk, Lo].join(' | '));
+    ok(/no full orbit/.test(Lc) && /formula 5\.17/.test(Lc) && /formula 2\.78/.test(Lt) && /no full oscillation/.test(Lk) && /not defined/.test(Lo) && !/formula/.test(Lo), 'la raison et la formule (exacte quand elle existe) : ' + Lt);
+    const Li = ligne('aimantation', run('ising2D', { T: 3.5 }).aimantation), Li0 = ligne('aimantation', run('ising2D', {}).aimantation);
+    ok(/not compared at these settings/.test(Li) && !/statistical/.test(Li) && /measured 0\.\d/.test(Li), 'hors domaine (le module dit comparable: false) : pas d egalite pretendue : ' + Li);
+    ok(!/not compared/.test(Li0) && /statistical/.test(Li0), 'temoin : Ising aux defauts reste compare avec son sigma : ' + Li0);
+    ok(/measured \d+\.\d+ vs exact GR/.test(ligne('precession', run('schwarzschild', {}).precession)), 'temoin : un run normal garde sa mesure');
+  }
   /* game82 (Phil : « mets les variables au dessus ») : dans la page montee, les curseurs viennent AVANT la scene */
   const corps = onglet.slice(onglet.indexOf('racine.replaceChildren('));
   ok(corps.indexOf('curseurs, verdictTxt') > 0 && corps.indexOf('curseurs, verdictTxt') < corps.indexOf('      scene,') && corps.indexOf('selGroupe, selSys') < corps.indexOf('curseurs, verdictTxt'), 'les variables sont en haut, avec les selecteurs, avant la scene');

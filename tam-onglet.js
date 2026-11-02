@@ -174,6 +174,16 @@ const NOMS_MESURES = {};
 function ligneInvariant(k0, v) {
   const k = NOMS_MESURES[k0] || k0;
   if (v && typeof v === 'object') {
+    /* game103 (sonde aux bouts des curseurs : 12 lignes « measured NaN vs formula 5.177 » — se lisaient comme une panne) : une mesure
+     *   qui n existe pas dans CE run (0 orbite complete, capture, pas de passage) le dit, avec la formule a cote */
+    if ('mesure' in v && !(typeof v.mesure === 'number' && Number.isFinite(v.mesure))) {
+      const pourquoi = v.orbites === 0 ? 'no full orbit in this run' : typeof v.passages === 'number' && v.passages < 2 ? 'no full oscillation in this run' : 'not defined with these settings';
+      const f = typeof v.exacte === 'number' && Number.isFinite(v.exacte) ? v.exacte : v.formule;
+      return k + ': not measured (' + pourquoi + ')' + (typeof f === 'number' && Number.isFinite(f) ? ', formula ' + nb4(f) : '');
+    }
+    /* game103 (meme sonde : Ising a T = 3.5 affichait « measured 0.0439 vs formula 0 (statistical, ± 0.0028) » = 15.6 sigma) : le MODULE
+     *   dit lui-meme `comparable: false` hors du domaine de sa formule (taille finie au-dessus de Tc, pres de Kc, impulsion trop large) */
+    if (v.comparable === false && 'mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' — not compared at these settings (the formula, ' + nb4(v.formule) + ', is outside its range here)';
     /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
     /* game100 : la precession de Schwarzschild porte aussi la valeur EXACTE (integrale elliptique) — c est elle qu on compare */
     if (k0 === 'precession' && typeof v.exacte === 'number' && 'mesure' in v) return k + ': measured ' + nb4(v.mesure) + ' vs exact GR ' + nb4(v.exacte) + ' (weak-field formula ' + nb4(v.formule) + ')';
