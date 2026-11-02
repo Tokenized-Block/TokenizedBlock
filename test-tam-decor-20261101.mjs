@@ -162,6 +162,10 @@ const PHYS = [
       const v = x(re); ok(v.length === 2, re + ' : deux cotes');
       proche(v[0], -km / R, 1e-12, re + ' cote -'); proche(v[1], km / R, 1e-12, re + ' cote +');
     }
+    /* Moho confondu avec la surface a l ecran (0.4 % du rayon) : trace mais muet, la surface porte l epaisseur de la croute */
+    ok(tousLib(d, /^Base of the crust/).every((q) => q.muet === true), 'Moho muet');
+    ok(tousLib(d, /^Surface/).every((q) => !q.muet && q.libelle.includes('Moho ' + (Math.round((R - PREM_SOURCE[6]) * 10) / 10) + ' km below')), 'surface : epaisseur de la croute');
+    ok(tousLib(d, /^(Inner core|Core-mantle)/).every((q) => !q.muet), 'graine et noyau ecrits');
     proche(PREM_SOURCE[0], 1221.5, 0, 'graine 1221.5'); proche(PREM_SOURCE[1], 3480, 0, 'noyau 3480');
     proche(x(/^Core-mantle/)[1] * R, o.invariants.gMax.rayonKm, 1e-12, 'g max mesure par le module a la frontiere noyau/manteau');
     ok(lignes(o, (l) => Math.abs(l[0])).every((a) => a <= x(/^Surface/)[1] * (1 + 1e-9)), 'la chute reste dans la Terre');

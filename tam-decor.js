@@ -328,7 +328,11 @@ const DECORS = {
   /* colonnes : x / R (diametre), v (km/s), t (min), g ; les rayons PREM de part et d autre du centre */
   centreTerre: (P, o, B) => {
     const l = [hyper(B, 0, 0, C.noyau, 'Centre of the Earth')];
-    for (const [r, nom] of PREM_KM) for (const s of [-1, 1]) l.push(hyper(B, 0, s * r / R_TERRE_KM, nom === 'Surface' ? C.terre : C.paroi, nom + ' (' + r + ' km)'));
+    /* le Moho est a (6371 - 6346.6) km sous la surface, soit 0.4 % du rayon : deux plans confondus a l ecran, une seule place
+       pour ecrire. Le Moho reste trace (muet) et la surface porte l epaisseur de la croute, calculee depuis la table. */
+    const moho = PREM_KM[2][0], croute = Math.round((R_TERRE_KM - moho) * 10) / 10;
+    for (const [r, nom] of PREM_KM) for (const s of [-1, 1]) l.push(hyper(B, 0, s * r / R_TERRE_KM, nom === 'Surface' ? C.terre : C.paroi,
+      nom + ' (' + r + ' km)' + (nom === 'Surface' ? ', Moho ' + croute + ' km below' : ''), r === moho ? { muet: true } : {}));
     return l;
   },
   /* colonnes : x, y (UA), t (jours) ; Soleil a l origine, Terre a 1 UA, Mars a aCible ; depart en (1, 0), arrivee en (-aCible, 0) */
