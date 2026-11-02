@@ -965,6 +965,11 @@ export function monter(racine, ctx = {}) {
   /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
   const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;
+  /* game101 (Phil : « augmente la limite de dezoom ») : zoomCam (vision-inside.js, partage avec la carte) ajoute 0.15 et borne a 6 —
+   *   depuis dist 4 (game98) il ne restait presque rien. Ici : x 1.15 par cran, de 0.5 a 60 (15 x plus loin que la vue de depart) ;
+   *   la carte garde son propre zoom. */
+  const DIST_MIN = 0.5, DIST_MAX = 60;
+  const zoomTam = (cam, dz) => { const c = cam || camBase(); return Number.isFinite(dz) && dz !== 0 ? { ...c, dist: Math.max(DIST_MIN, Math.min(DIST_MAX, c.dist * 1.15 ** dz)) } : c; };
   const ptrs = new Map(); let pinch = null;
   cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, shift: e.shiftKey || e.button === 2 }); });
   cv.addEventListener('pointerup', (e) => {
@@ -981,12 +986,12 @@ export function monter(racine, ctx = {}) {
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     if (ptrs.size === 2) {
       const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (pinch !== null) S.cam = navGesture(S.cam, camBase(),{ dz: (pinch - d) / 30 });
+      if (pinch !== null) S.cam = zoomTam(S.cam, (pinch - d) / 30);
       pinch = d; S.cam = navGesture(S.cam, camBase(),{ dx: dx / 2, dy: dy / 2, pan: true });
     } else S.cam = navGesture(S.cam, camBase(),{ dx, dy, pan: p.shift });
     S.sale = true;
   });
-  cv.addEventListener('wheel', (e) => { e.preventDefault(); S.cam = navGesture(S.cam, camBase(),{ dz: Math.sign(e.deltaY) }); S.sale = true; }, { passive: false });
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); S.cam = zoomTam(S.cam, Math.sign(e.deltaY)); S.sale = true; }, { passive: false });
 
   /* ── dessin 3-D ── */
   let proj = null, projSx = null, projSy = null, dominant = null;

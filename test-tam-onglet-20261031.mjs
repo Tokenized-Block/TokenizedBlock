@@ -494,6 +494,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok((onglet.match(/projectCam\(/g) || []).length === 2 && /const ecran = \(p\) => projeter\(/.test(onglet) && /S\.ajuste = m > 0 \? Math\.min\(4, 1 \/ m\) : 1;/.test(onglet)
       && /S\.cam = null; S\.ajuste = null;/.test(onglet) && /const CAM0 = \{ yaw: 0\.6, pitch: 0\.35, dist: 4,/.test(onglet),
       'game98 : camera a dist 4 (perspective douce), recadrage par une seule projection (remplit, au plus 4 x), refait par Reset view');
+    /* game101 : dezoom propre a TAM (x 1.15 par cran, 0.5 a 60) ; la molette et le pincement n appellent plus zoomCam (borne 6) */
+    ok(/const DIST_MIN = 0\.5, DIST_MAX = 60;/.test(onglet) && /S\.cam = zoomTam\(S\.cam, Math\.sign\(e\.deltaY\)\)/.test(onglet)
+      && /S\.cam = zoomTam\(S\.cam, \(pinch - d\) \/ 30\)/.test(onglet) && !/dz:/.test(onglet.replace(/dx\/dt = dy\/dt = dz\/dt/, '')), 'game101 : dezoom jusqu a dist 60, molette et pincement');
     /* game100 : precession exacte RG ; formule approchee et mesure statistique le disent */
     ok(/k0 === 'precession' && typeof v\.exacte === 'number'/.test(onglet) && /' vs exact GR ' \+ nb4\(v\.exacte\)/.test(onglet)
       && /' \(approximate formula: ' \+ v\.approchee \+ '\)'/.test(onglet) && /' \(statistical, ± ' \+ nb4\(v\.sigma\) \+ '\)'/.test(onglet), 'game100 : Check exact / approche / statistique');
