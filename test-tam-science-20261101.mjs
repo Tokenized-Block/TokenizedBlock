@@ -18,7 +18,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const MOI = '0x' + 'ab'.repeat(20);
 
 /* 1. TOUTES les sciences (game78 : 7 modules — physique, sciences, fluides, astres, cosmos, invisible, quantique) : rejeu, en-tete, decodage, tailles */
-{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1], ['tam-grandes-questions.js', 9], ['tam-grandes-questions-2.js', 7], ['tam-champs-quantiques.js', 9], ['tam-vide-quantique.js', 4], ['tam-theories-2.js', 6]];
+{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1], ['tam-grandes-questions.js', 9], ['tam-grandes-questions-2.js', 7], ['tam-champs-quantiques.js', 9], ['tam-vide-quantique.js', 4], ['tam-theories-2.js', 6], ['tam-theories-3.js', 6]];
   let attendu = 0; for (const [f, min] of parModule) { const m = await import('./' + f); ok(m.SYSTEMES.length >= min, f + ' : au moins ' + min + ' systemes (' + m.SYSTEMES.length + ')'); attendu += m.SYSTEMES.length; }
   ok(T.SYSTEMES.length === attendu && new Set(T.SYSTEMES.map((s) => s.id)).size === attendu, 'tam-science rassemble les ' + attendu + ' systemes, sans doublon d id'); }
 for (const s of T.SYSTEMES) {
@@ -125,7 +125,7 @@ ok(/'tam-science\.js'/.test(web), 'tam-science.js est servi');
 
 /* 5. mutants sur COPIES */
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tam-science-mut-'));
-for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'tam-grandes-questions.js', 'tam-grandes-questions-2.js', 'tam-champs-quantiques.js', 'tam-vide-quantique.js', 'tam-theories-2.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
+for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'tam-grandes-questions.js', 'tam-grandes-questions-2.js', 'tam-champs-quantiques.js', 'tam-vide-quantique.js', 'tam-theories-2.js', 'tam-theories-3.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
 const SRC = fs.readFileSync(path.join(ICI, 'tam-science.js'), 'utf8');
 const MUTANTS = [
   ['params hors bornes acceptes', (s) => s.replace("if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');", '')],

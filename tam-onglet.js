@@ -43,7 +43,9 @@ THEMES.champs = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSc
   /* game88 : les principes du vide qui manquaient */
   'videComprime', 'casimirDynamique', 'higgsVide', 'emissionSpontanee'];
 /* game93 : six theories classiques qui manquaient (tam-theories-2.js) */
-THEMES.theories = ['ising2D', 'lotkaVolterra', 'epidemieSIR', 'lentilleGravitationnelle', 'kuramoto', 'gibbsFourier'];
+THEMES.theories = ['ising2D', 'lotkaVolterra', 'epidemieSIR', 'lentilleGravitationnelle', 'kuramoto', 'gibbsFourier',
+  /* game96 : six de plus (tam-theories-3.js) */
+  'rutherford', 'logistique', 'chaleur', 'oscillateurForce', 'brachistochrone', 'galton'];
 const groupeDe = (s) => THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -53,7 +55,7 @@ const SYS_FORMULE = Object.freeze({ id: 'formule', nom: 'Your formula', science:
     simuler: (_id, p = {}) => { const { a, b, c, d, ...spec } = p; return F.simulerFormule({ ...spec, vars: { ...(spec.vars || {}), ...(a !== undefined ? { a } : {}), ...(b !== undefined ? { b } : {}), ...(c !== undefined ? { c } : {}), ...(d !== undefined ? { d } : {}) } }); },
     reglagesPhysique: (_id, p = {}) => ['a', 'b', 'c', 'd'].map((k) => ({ chemin: 'params.' + k, nom: k, min: -10, max: 10, valeur: (p.vars && typeof p.vars[k] === 'number' ? p.vars[k] : (typeof p[k] === 'number' ? p[k] : 1)) })),
   } });
-const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['theories', 'Classic theories: magnets, life, epidemics, lensing, sync, waves'], ['champs', 'Quantum fields, the vacuum, atoms & quarks'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
+const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'], ['champs', 'Quantum fields, the vacuum, atoms & quarks'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
   ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics']];
 /* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
  *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */
@@ -95,6 +97,9 @@ const ECHELLE_UNITE = {
   /* game93 */
   ising2D: ['lattice sites'], lotkaVolterra: ['density units'], epidemieSIR: ['population fraction'],
   lentilleGravitationnelle: ['Einstein radii'], kuramoto: ['units', 'unit circle'], gibbsFourier: ['rad'],
+  /* game96 (logistique absente : son axe x est le taux r, sans unite) */
+  rutherford: ['units', 'k = mass = 1'], chaleur: ['length units'], oscillateurForce: ['units', 'omega0 = 1'],
+  brachistochrone: ['length units'], galton: ['peg spacings'],
   higgsVide: ['units', 'of the field'], emissionSpontanee: ['frequency units', 'detuning from the atom'],
 };
 /* game87 : c dans l ensemble de Mandelbrot ? (pas d echappement |z| > 2 en N pas — la meme regle que tam-sciences.js#mandelbrot) */

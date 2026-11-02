@@ -51,6 +51,10 @@ const FILMS_DU_MODULE = {
   /* game93 : tam-theories-2.js */
   kuramoto: { colonneTemps: 3 },
   gibbsFourier: { colonneTemps: null, note: 'each frame adds more sine terms (N grows); frames are not instants of time' },
+  /* game96 : tam-theories-3.js */
+  rutherford: { colonneTemps: 3, note: 'each frame is one trajectory (one impact parameter), not an instant' },
+  chaleur: { colonneTemps: 1 },
+  brachistochrone: { colonneTemps: 2, note: 'frame 1 is the cycloid, 2 the straight line, 3 the circular arc; the same start and end' },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
 /* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
@@ -808,6 +812,49 @@ const L = {
     enUnePhrase: 'A film of more and more sine waves added up: they rebuild a square wave, but next to each jump a small overshoot never goes away.',
     colonnes: ['x, the angle (radians)', 'the sum of the first N sines, S_N(x)', 'the error, square wave minus S_N (same units)', 'the number of terms N'],
     aRegarder: ['As N grows the curve hugs the square wave, but the peak next to the jump stays about 9 percent of the jump too high: the Gibbs constant (2 / pi) Si(pi), computed in the code.', 'The overshoot only gets narrower, closer to the jump, as N grows.', 'The squared error falls like 1 / N.'],
+    fin: null,
+  },
+  /* game96 : six theories de plus (tam-theories-3.js) — formules seulement */
+  rutherford: {
+    titre: 'Alpha particles on a nucleus (Rutherford scattering)',
+    enUnePhrase: 'A film of charged particles fired past a fixed nucleus that repels them, one frame per impact parameter b: the closer they pass, the harder they are thrown back.',
+    colonnes: ['x (units k = mass = 1, nucleus at the origin)', 'y (same units)', 'impact parameter b of this trajectory (a label)', 'time since entering the window'],
+    aRegarder: ['The measured deflection follows Rutherford\'s law b = (k / (2E)) cot(theta / 2).', 'Energy and angular momentum stay constant along each path; the closest approach is computed exactly.', 'A point nucleus that does not recoil, classical mechanics: a simplified model.'],
+    fin: null,
+  },
+  logistique: {
+    titre: 'Order to chaos (logistic map)',
+    enUnePhrase: 'For each growth rate r, the values the rule x -> r x (1 - x) settles on: one value, then 2, 4, 8, then chaos.',
+    colonnes: ['growth rate r', 'state x_n (0 to 1)', 'next state x_n+1 (same units)'],
+    aRegarder: ['Below r = 3 everything settles on the single value x = 1 - 1/r.', 'The first doublings sit exactly at r = 3 and r = 1 + sqrt 6, both measured and compared.', 'The later doublings crowd together by a nearly constant ratio: it is measured here, not typed in.'],
+    fin: null,
+  },
+  chaleur: {
+    titre: 'Heat spreading along a bar (heat equation)',
+    enUnePhrase: 'A film of a narrow block of heat on an insulated bar spreading into a bell.',
+    colonnes: ['position x along the bar (length units, the middle of the bar)', 'time t', 'temperature u'],
+    aRegarder: ['The total heat never changes.', 'The width grows exactly as sigma^2 = sigma0^2 + 2 D t: faster with a larger diffusion D.', 'The peak approaches the Gaussian bell once the start is much narrower than the spread.'],
+    fin: null,
+  },
+  oscillateurForce: {
+    titre: 'A driven spring and resonance (damped driven oscillator)',
+    enUnePhrase: 'A mass on a spring, damped and pushed by a periodic force, released from x0: the start dies away and it settles into a steady swing.',
+    colonnes: ['displacement x (natural frequency omega0 = 1)', 'velocity v (same units)', 'time t'],
+    aRegarder: ['The steady swing is the closed ellipse; its size follows A = F0 / sqrt((omega0^2 - omega^2)^2 + (2 gamma omega)^2).', 'Sweeping the drive frequency finds the resonance peak at sqrt(1 - 2 gamma^2); with strong damping there is no peak.', 'The release point only changes the start: every start ends on the same ellipse.'],
+    fin: null,
+  },
+  brachistochrone: {
+    titre: 'The fastest slide (brachistochrone)',
+    enUnePhrase: 'A film of three beads sliding without friction from the same start to the same end: on a cycloid, a straight line and a circular arc.',
+    colonnes: ['x (length units)', 'height y (the start is at 0)', 'time t since release'],
+    aRegarder: ['The cycloid always arrives first, even though it is longer than the straight line.', 'Its time matches sqrt(a / g) theta exactly; the straight line has its own exact time.', 'The arc has no simple formula: its time is only measured.'],
+    fin: null,
+  },
+  galton: {
+    titre: 'Balls through pegs (Galton board)',
+    enUnePhrase: 'Balls fall through rows of pegs, bouncing left or right at random, and pile up into a bell.',
+    colonnes: ['x (peg spacings)', 'height: down the rows along a path, then the pile under the bins', 'index of the ball (a label)'],
+    aRegarder: ['The pile follows the binomial law C(L, k) / 2^L, with mean 0 and variance L / 4.', 'With more rows the bell gets wider and smoother: the central limit theorem.', 'A finite number of balls: the match is statistical, and a new seed gives a slightly different pile.'],
     fin: null,
   },
   /* ---------- familles hors science ---------- */

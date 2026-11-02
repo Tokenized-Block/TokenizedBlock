@@ -484,7 +484,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
   ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
   { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js',
-    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js', './tam-theories-2.js'];
+    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js', './tam-theories-2.js', './tam-theories-3.js'];
     { const cq = (await import('./tam-champs-quantiques.js')).SYSTEMES.map((s) => s.id); ok(cq.every((id) => onglet.includes("'" + id + "'")) && /\['champs', 'Quantum fields, the vacuum, atoms & quarks'\]/.test(onglet), 'game81 : les ' + cq.length + ' champs quantiques ont leur groupe'); }
     ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
     const mods = await Promise.all(fichiers.map((f) => import(f)));
@@ -493,7 +493,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     for (const f of fichiers) ok(serveur.includes("'" + f.slice(2) + "'"), f + ' est dans la liste servie');
     /* chaque systeme est dans un groupe du menu (aucun orphelin) */
     ok(/const groupeDe = \(s\) => THEMES\.theories\.includes\(s\.id\) \? 'theories' : THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet)
-      && /\['theories', 'Classic theories: magnets, life, epidemics, lensing, sync, waves'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+      && /\['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
     /* game80 : aucun systeme orphelin — chaque id des grandes questions est range dans son groupe */
     { const gq = [...(await import('./tam-grandes-questions.js')).SYSTEMES, ...(await import('./tam-grandes-questions-2.js')).SYSTEMES].map((s) => s.id);
       ok(gq.every((id) => onglet.includes("'" + id + "'")), 'les ' + gq.length + ' grandes questions sont toutes dans THEMES.questions'); }

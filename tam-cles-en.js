@@ -4,7 +4,7 @@
    NOMS_MESURES_EN : nom de chaque invariant (cle de simuler(...).invariants) affiche en tete de ligne.
    Le sens de chaque cle est lu dans le module qui construit l invariant ; une cle partagee par plusieurs
    systemes recoit un libelle vrai pour tous (sinon neutre). Unites seulement si le nom de la cle les porte.
-   ASCII seulement. Le banc verifie la couverture : chaque cle et chaque nom produit par les 93 systemes
+   ASCII seulement. Le banc verifie la couverture : chaque cle et chaque nom produit par les 99 systemes
    doit avoir une entree non vide. */
 
 export const CLES_EN_MODULES = Object.freeze({
@@ -317,6 +317,15 @@ export const CLES_EN_MODULES = Object.freeze({
   zmax: 'z max',
   zmin: 'z min',
   zones: 'zones',
+  /* game96 : tam-theories-3.js */
+  r3: 'third doubling r3', r4: 'fourth doubling r4', rapport1: 'gap ratio 1', rapport2: 'gap ratio 2',
+  colonnes: 'columns', parColonne: 'per column', transitoire: 'transient', colonnesPointFixe: 'columns on the fixed point',
+  pireEcartPointFixe: 'worst gap to the fixed point', colonnesDeuxCycle: 'columns on the 2-cycle', pireEcartDeuxCycle: 'worst gap to the 2-cycle',
+  cellules: 'cells', nombreDeFourier: 'Fourier number', cellulesInitiales: 'initial cells', demiLargeur: 'half-width',
+  margeSigma: 'margin in sigma', fenetreDessin: 'drawn window', mesureCos: 'measured cos part', formuleCos: 'formula cos part',
+  mesureSin: 'measured sin part', formuleSin: 'formula sin part', omega: 'omega', F0: 'force F0', x0: 'start x0',
+  periodesTransitoire: 'transient periods', periodesDessinees: 'drawn periods', pasParPeriode: 'steps per period',
+  phiB: 'end angle phiB', gainSurDroite: 'time saved on the line', chemins: 'paths drawn', billes: 'balls', pileMax: 'tallest pile',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
@@ -646,4 +655,10 @@ export const NOMS_MESURES_EN = Object.freeze({
   x2Echantillon: 'Sampled x^2',
   x2Quadrature: 'Quadrature x^2',
   xiSedov: 'Sedov xi',
+  /* game96 : tam-theories-3.js */
+  deviation: 'Deflection angle', distanceMin: 'Closest approach', doublement1: 'First period doubling', doublement2: 'Second period doubling',
+  feigenbaum: 'Doubling ratios (measured)', pointFixe: 'Fixed point', deuxCycle: 'Two-cycle', diagramme: 'Drawn diagram',
+  variance: 'Variance', chaleur: 'Total heat', centre: 'Centre', amplitude: 'Steady amplitude', phase: 'Phase lag', regime: 'Regime',
+  cycloide: 'Cycloid time', droite: 'Straight-line time', arc: 'Circular-arc time', course: 'Race', extremites: 'End points',
+  binomiale: 'Binomial law', moyenne: 'Mean',
 });
