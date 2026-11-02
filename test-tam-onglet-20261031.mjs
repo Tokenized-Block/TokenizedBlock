@@ -314,6 +314,15 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
         if (!(forme < 0.02) || (sorte === 'echelle' && !(brut > 1e-6)) || (sorte === 'checks' && !(brut === 0 && inv))) faux.push(cleSys + ' (forme ' + forme.toFixed(4) + ', brut ' + brut.toFixed(4) + ', mesures ' + inv + ')');
       }
       ok(faux.length === 0 && Object.keys(CSF).length >= 20, 'curseurs « sans forme » mesures (' + Object.keys(CSF).length + ')' + (faux.length ? ' — FAUX : ' + faux.join(' ; ') : ''));
+      /* game94 (vu en prod : « Check: sinh2surTc ») : chaque NOM de mesure et chaque cle numerique d un resume a son anglais — un futur
+       *   module qui en oublie une fait rougir le banc */
+      { const CE = await import('./tam-cles-en.js'), dC = onglet.indexOf('const CLES_EN = {'), fC = onglet.indexOf('};', dC) + 2;
+        const CLES = { ...new Function(onglet.slice(dC, fC) + '\nreturn CLES_EN;')(), ...CE.CLES_EN_MODULES }, sansNom = new Set(), sansCle = new Set();
+        for (const s of TSq.SYSTEMES) { const o = s.mod.simuler(s.id, TSq.paramsScience(s.id).params);
+          for (const [k, v] of Object.entries(o.invariants || {})) { if (!CE.NOMS_MESURES_EN[k]) sansNom.add(k);
+            if (v && typeof v === 'object' && !('mesure' in v && ('formule' in v || 'theorie' in v)) && !('derive' in v)) for (const [a, x] of Object.entries(v)) if (typeof x === 'number' && !CLES[a]) sansCle.add(a); } }
+        ok(sansNom.size === 0 && sansCle.size === 0, 'toutes les mesures des ' + TSq.SYSTEMES.length + ' systemes ont leur nom et leurs cles en anglais' + (sansNom.size + sansCle.size ? ' — MANQUENT : ' + [...sansNom, ...sansCle].join(', ') : ''));
+        ok(/import \* as CLESEN from '\.\/tam-cles-en\.js';/.test(onglet) && /Object\.assign\(NOMS_MESURES, CLESEN\.NOMS_MESURES_EN\);/.test(onglet) && serveur.includes("'tam-cles-en.js'"), 'le dictionnaire est importe, applique et servi'); }
       ok(/const note = CURSEURS_SANS_FORME\[S\.science\.s\.id \+ '\.' \+ cle\];/.test(onglet) && /'changes the checks below, not the drawing'/.test(onglet), 'la note est ecrite sous le curseur'); }
     const scene = onglet.slice(onglet.indexOf('const poses = [], hL'), onglet.indexOf('/* le son allume : le point qu il joue'));
     ok((scene.match(/g\.fillText\(/g) || []).length === 1 && /const ancre = d\.q\.type === 'segment' && dernier \? dernier : premier;/.test(onglet), 'dans la scene, un seul fillText (celui du placeur) ; un segment est nomme a son bout eloigne');

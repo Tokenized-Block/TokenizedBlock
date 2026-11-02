@@ -5797,6 +5797,8 @@ const SERVIS = [
   'tam-vide-quantique.js',
   /* game93 : six theories classiques (Ising, Lotka-Volterra, SIR, lentille, Kuramoto, Gibbs) */
   'tam-theories-2.js',
+  /* game94 : les noms et cles des mesures en anglais */
+  'tam-cles-en.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
   'icon.png', 'splash.png', 'embed.png',
 ];

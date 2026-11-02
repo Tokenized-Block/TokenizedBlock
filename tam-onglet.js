@@ -21,6 +21,8 @@ import * as TS from './tam-science.js';
 import * as F from './tam-formule.js';
 /* game82 : les elements de CONTEXTE (Soleil, trou noir et horizon, Terre et ses couches, noyau, plaques, fentes, points de Lagrange…) */
 import * as DEC from './tam-decor.js';
+/* game94 : les noms et les cles des mesures, en anglais (tam-cles-en.js) */
+import * as CLESEN from './tam-cles-en.js';
 
 /* game76 (Phil : « relativite generale, gravite, fusion, toutes les sciences… fractales, chiffre d or, quantique, fluides — en direct ») :
  *   des simulations VERIFIEES (chaque module a son banc : invariants contre la theorie, mutants), dessinees par la meme scene.
@@ -145,7 +147,10 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   rapport: 'ratio', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
   tours: 'turns', traversees: 'crossings', uniforme: 'uniform', vitesse: 'speed', viriel: 'virial ratio', ageUnivers: 'age of the universe',
   aCible: 'target orbit (AU)', finGa: 'end (Gyr)', log10Masse: 'log10 mass', Mbulbe: 'bulge mass', Mdisque: 'disk mass', cmb: 'CMB frame',
-  fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom' };
+  fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom',
+  /* game94 (panneau de la scene : « balayages = 200 ») — les symboles physiques (theta, omega, lambda, gamma, sigma, beta, kT, hbar...) restent */
+  balayages: 'sweeps', espacement: 'mode spacing', fenetre: 'window', ecart: 'offset', taux: 'rate', melange: 'blend', fraction: 'fraction',
+  masses: 'masses', maxIter: 'max iterations', hPlus: 'h plus', hCroix: 'h cross', tauMax: 'max proper time', plateau: 'shelf' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
@@ -158,10 +163,14 @@ const CLES_EN = { valeur: 'value', erreur: 'error', termes: 'terms', NfoisErreur
   ecartTypeAttendu: 'expected spread (1 sigma)', termesPour1e12: 'terms for 1e-12', mesure: 'measured', formule: 'formula', theorie: 'theory',
   reference: 'reference', debut: 'start', fin: 'end', min: 'min', max: 'max', derive: 'drift', pi: 'true pi', rayon: 'radius', periode: 'period',
   duree: 'duration', age: 'age', masse: 'mass', energie: 'energy', vitesse: 'speed', distance: 'distance', temperature: 'temperature', nombre: 'count' };
-function ligneInvariant(k, v) {
+/* game94 (vu en prod : « Check: sinh2surTc », « aimantationFinale ») : le NOM de chaque mesure, en anglais — rempli a l import depuis
+ *   tam-cles-en.js (326 noms, 309 cles ; couverture verifiee au banc) */
+const NOMS_MESURES = {};
+function ligneInvariant(k0, v) {
+  const k = NOMS_MESURES[k0] || k0;
   if (v && typeof v === 'object') {
     /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
-    if ('mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' vs formula ' + nb4(v.formule) + (k === 'precession' ? ' (weak-field formula: it underestimates close to the black hole)' : '');
+    if ('mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' vs formula ' + nb4(v.formule) + (k0 === 'precession' ? ' (weak-field formula: it underestimates close to the black hole)' : '');
     if ('mesure' in v && 'theorie' in v) return k + ': measured ' + nb4(v.mesure) + ' vs theory ' + nb4(v.theorie);
     if ('derive' in v) {
       /* game77 (chasse aux bugs : « gamma: drift 1.6 » se lisait comme un test rate) : une derive RELATIVE au-dela de 1e-3 n est pas une
@@ -178,6 +187,9 @@ function ligneInvariant(k, v) {
   }
   return k + ': ' + nb4(v);
 }
+/* les cles deja traduites ici gardent leur libelle ; tam-cles-en.js ne fait qu ajouter celles qui manquaient */
+for (const [a, b] of Object.entries(CLESEN.CLES_EN_MODULES)) if (!CLES_EN[a]) CLES_EN[a] = b;
+Object.assign(NOMS_MESURES, CLESEN.NOMS_MESURES_EN);
 
 const CSS = `
 #v-tam{--tam-fond:#0b0d17;--tam-carte:rgba(255,255,255,.04);--tam-bord:rgba(255,255,255,.12);--tam-txt:#e8ecf5;--tam-doux:#9aa3b8;--tam-acc:#7fd1ff}
@@ -613,7 +625,7 @@ export function monter(racine, ctx = {}) {
       const lam = o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? 'λ = ' + o.lyapunov.toFixed(3) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' (measured over this run)' : null;
       varsScene.replaceChildren(
         el('b', { text: s.nom + ' — ' + s.science + ' · live simulation' }),
-        ...s.mod.reglagesPhysique(s.id, S.P.params).map((r) => el('span', { text: r.nom + ' = ' + nb4(r.valeur) })),
+        ...s.mod.reglagesPhysique(s.id, S.P.params).map((r) => el('span', { text: (NOMS_PARAMS_EN[r.nom] || r.nom) + ' = ' + nb4(r.valeur) })),
         el('span', { text: S.D + '-D · ' + S.n + (o && o.nuage ? ' samples (a cloud, not a path)' : ' points') }),
         ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).slice(0, 4).map(([k, v]) => el('span', { class: 'tamMesure', text: ligneInvariant(k, v) })),
         ...(lam ? [el('span', { class: 'tamMesure', text: lam })] : []),
@@ -1443,7 +1455,7 @@ export function monter(racine, ctx = {}) {
         ...(S.P && S.P.note ? [{ k: 'The brain\'s note (stored on Base with the work when it is minted)', v: S.P.note }] : []),
         /* (l operateur MATHEMATIQUE du melange — somme / composition — dit par un tableau joint : jamais concatene comme un nom de wallet) */
         ...(S.P && S.P.melange ? [{ k: 'Blended with', v: [S.P.melange.motif.famille, S.P.melange.motif.variante, S.P.melange.operateur, 'weight ' + nb4(S.P.melange.w)].filter(Boolean).join(' · ') }] : []),
-        ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).map(([k, v]) => ({ k: 'Check: ' + k, v: ligneInvariant(k, v).replace(/^[^:]+: /, '') })),
+        ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).map(([k, v]) => { const nom = NOMS_MESURES[k] || k; return { k: 'Check: ' + nom, v: ligneInvariant(k, v).slice(nom.length + 2) }; }),
         { k: 'Chaos (λ)', v: o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? nb4(o.lyapunov) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' — finite-run estimate' : 'not defined for this system' },
         { k: 'Mint', v: '5 USDC, stored on Base like every work (same contract). Anyone can replay these parameters to the same bytes.' }];
       dl.replaceChildren(...lignes.flatMap((l) => [el('dt', { text: l.k }), el('dd', { text: l.v })]));
