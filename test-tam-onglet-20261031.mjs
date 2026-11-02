@@ -259,6 +259,14 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     const Li = ligne('aimantation', run('ising2D', { T: 3.5 }).aimantation), Li0 = ligne('aimantation', run('ising2D', {}).aimantation);
     ok(/not compared at these settings/.test(Li) && !/statistical/.test(Li) && /measured 0\.\d/.test(Li), 'hors domaine (le module dit comparable: false) : pas d egalite pretendue : ' + Li);
     ok(!/not compared/.test(Li0) && /statistical/.test(Li0), 'temoin : Ising aux defauts reste compare avec son sigma : ' + Li0);
+    /* game104 : les 4 derniers ecarts de la sonde aux bouts — chacun dit sa vraie reference */
+    const Lw = ligne('transmission', run('effetTunnel', { largeur: 4 }).transmission), w = run('effetTunnel', { largeur: 4 }).transmission;
+    ok(/averaged over the packet/.test(Lw) && Math.abs(w.mesure - w.paquet) / w.paquet < 0.03 && Math.abs(w.mesure - w.formule) / w.formule > 0.2, 'tunnel : la reference est la moyenne sur le paquet (a < 3 %), pas l onde plane (> 20 %) : ' + Lw);
+    const Lsn = ligne('exposantSedov', run('supernova', { annees: 1000 }).exposantSedov), Lsn0 = ligne('exposantSedov', run('supernova', {}).exposantSedov);
+    ok(/not compared/.test(Lsn) && !/not compared/.test(Lsn0) && /measured 0\.4 vs formula 0\.4/.test(Lsn0), 'Sedov : pas compare avant 10 temps de croisement, compare aux defauts : ' + Lsn + ' | ' + Lsn0);
+    const Lg =ligne('binomiale', run('galton', { billes: 100 }).binomiale);
+    ok(/statistical, ± 0\.04\d/.test(Lg), 'Galton 100 billes : le sigma binomial exact est dit : ' + Lg);
+    ok(/approximate formula: the 1 - \(T\/Tc\)\^3 law/.test(ligne('fractionCondensat', run('zeroAbsolu', { atomes: 1000 }).fractionCondensat)), 'BEC : la loi en T^3 est dite limite N infini');
     ok(/measured \d+\.\d+ vs exact GR/.test(ligne('precession', run('schwarzschild', {}).precession)), 'temoin : un run normal garde sa mesure');
   }
   /* game82 (Phil : « mets les variables au dessus ») : dans la page montee, les curseurs viennent AVANT la scene */

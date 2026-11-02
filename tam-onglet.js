@@ -183,6 +183,9 @@ function ligneInvariant(k0, v) {
     }
     /* game103 (meme sonde : Ising a T = 3.5 affichait « measured 0.0439 vs formula 0 (statistical, ± 0.0028) » = 15.6 sigma) : le MODULE
      *   dit lui-meme `comparable: false` hors du domaine de sa formule (taille finie au-dessus de Tc, pres de Kc, impulsion trop large) */
+    /* game104 (sonde aux bouts : effet tunnel, barriere de largeur 4, « measured 0.0089 vs formula 0.0069 » = 29 %) : un paquet n a pas UNE
+     *   energie ; le module calcule T(E) moyenne sur son propre spectre (a <= 1.8 % de la mesure sur tous les bouts) — c est elle la reference */
+    if (typeof v.paquet === 'number' && Number.isFinite(v.paquet) && 'mesure' in v) return k + ': measured ' + nb4(v.mesure) + ' vs ' + nb4(v.paquet) + ' averaged over the packet\'s energies (single-energy formula ' + nb4(v.formule) + ')';
     if (v.comparable === false && 'mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' — not compared at these settings (the formula, ' + nb4(v.formule) + ', is outside its range here)';
     /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
     /* game100 : la precession de Schwarzschild porte aussi la valeur EXACTE (integrale elliptique) — c est elle qu on compare */

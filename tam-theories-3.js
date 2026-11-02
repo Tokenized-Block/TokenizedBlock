@@ -434,7 +434,8 @@ function galton(P, n) {
   let pire = 0; for (let k = 0; k <= L; k++) { const E = N * p[k], s = Math.sqrt(E * (1 - p[k])); if (s > 0) pire = Math.max(pire, Math.abs(compte[k] - E) / s); }
   const kc = Math.floor(L / 2);
   return { D: 3, brut, nuage: true, unite: 'sans objet (billes tirees au hasard, pas une trajectoire)', invariants: {
-    binomiale: { mesure: compte[kc] / N, formule: p[kc], caseCentrale: kc - L / 2, chi2, ddl: cases.length - 1, pireEcartSigma: pire, frequences: Array.from(compte, (c) => c / N), probabilites: p,
+    /* game104 (sonde aux bouts : « 0.31 vs 0.2256 » a 100 billes se lisait 37 % — c est 2.0 sigma) : le sigma EXACT d une frequence binomiale */
+    binomiale: { mesure: compte[kc] / N, formule: p[kc], sigma: Math.sqrt(p[kc] * (1 - p[kc]) / N), caseCentrale: kc - L / 2, chi2, ddl: cases.length - 1, pireEcartSigma: pire, frequences: Array.from(compte, (c) => c / N), probabilites: p,
       note: 'fraction of balls in the central bin against C(L, k)/2^L ; chi2 over bins with at least 5 expected balls, and the worst bin deviation in units of sqrt(N p (1 - p))' },
     moyenne: { mesure: moy, formule: 0, sigma: Math.sqrt(L / (4 * N)), note: 'mean landing position (in peg spacings) against 0' },
     variance: { mesure: vr, formule: L / 4, sigma: Math.sqrt(L * (L - 1) / (8 * N)), note: 'variance of the landing position against L/4 (L independent steps of +-1/2)' },

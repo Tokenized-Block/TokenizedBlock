@@ -495,7 +495,9 @@ function simCourbe(P, n) {
     vitesseHaloEnRs: { mesure: Math.sqrt(v2Halo(P.rs, P)), formule: Math.sqrt(4 * PI * G_KPC * P.rho0 * P.rs * P.rs * (LN2 - 0.5)), unite: 'km/s' },
     masseHaloEnRs: { mesure: simpson, formule: 4 * PI * P.rho0 * P.rs * P.rs * P.rs * (LN2 - 0.5), unite: 'Msol (Simpson sur la densite NFW)' },
     platitude: { avecHalo: vt(30) / vt(10), visibleSeul: vv(30) / vv(10), unite: 'v(30 kpc) / v(10 kpc)' },
-    chuteKepler: { mesure: vv(2 * P.rmax) / vv(P.rmax), formule: Math.sqrt(0.5), unite: 'v_visible(2 rmax) / v_visible(rmax)' },
+    /* game104 (sonde aux bouts : rmax = 10, 0.746 contre 0.707) : sqrt(1/2) est la limite d une masse PONCTUELLE ; le disque a une echelle a + b */
+    chuteKepler: { mesure: vv(2 * P.rmax) / vv(P.rmax), formule: Math.sqrt(0.5), unite: 'v_visible(2 rmax) / v_visible(rmax)',
+      approchee: 'point-mass limit; the visible disk has a scale of ' + (MN_A + MN_B) + ' kpc, so the fall-off is slower until r is many times that' },
     vitesseA8kpc: { avecHalo: vt(8.2), visibleSeul: vv(8.2), unite: 'km/s (sortie du modele, pas une mesure)' },
   };
   return { D, brut, invariants: inv, lyapunov: null, uniteLyapunov: 'sans objet (orbites circulaires, nuage d etoiles)' };

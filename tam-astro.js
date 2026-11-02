@@ -529,10 +529,13 @@ function supernova(P, n) {
   /* exposants MESURES sur les rayons moyens des traceurs (deux premiers instants / deux derniers) */
   const Rm = (k) => (compte[k] ? somme[k] / compte[k] : NaN), pente = (i, j) => lnD(Rm(j) / Rm(i)) / lnD(temps[j] / temps[i]);
   const tF = P.annees * AN;
+  /* game104 (sonde aux bouts : 1000 ans = 2.5 temps de croisement, pente 0.516 contre 2/5) : la loi de Sedov n est comparee qu une fois
+   *   la masse balayee dominante, t >= 10 t_croisement (le raccord y donne une pente a 0.6 % de 2/5) ; tous les autres bouts sont a >= 19 */
+  const sedov = tF >= 10 * tCroise;
   return { brut, invariants: {
     exposantLibre: { mesure: pente(0, 1), formule: 1, temps: [temps[0] / AN, temps[1] / AN], unite: 'd ln R / d ln t' },
-    exposantSedov: { mesure: pente(INSTANTS - 2, INSTANTS - 1), formule: 0.4, temps: [temps[INSTANTS - 2] / AN, tF / AN], unite: 'd ln R / d ln t' },
-    rayonFinal: { mesure: Rm(INSTANTS - 1), formule: XI * expD(lnD(c.E * tF * tF / c.rho) / 5) / PC, unite: 'parsec' },
+    exposantSedov: { mesure: pente(INSTANTS - 2, INSTANTS - 1), formule: 0.4, comparable: sedov, temps: [temps[INSTANTS - 2] / AN, tF / AN], unite: 'd ln R / d ln t' },
+    rayonFinal: { mesure: Rm(INSTANTS - 1), formule: XI * expD(lnD(c.E * tF * tF / c.rho) / 5) / PC, comparable: sedov, unite: 'parsec' },
     transition: { annees: tCroise / AN, rayonPc: c.v * tCroise / PC, rayonBalayagePc: expD(lnD(3 * c.M / (4 * PI * c.rho)) / 3) / PC, vitesseEjectaKmS: c.v / 1e5 },
   }, film: filmDe(debuts, n) };
 }

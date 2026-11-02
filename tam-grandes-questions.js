@@ -313,7 +313,9 @@ function zeroAbsolu(P, n) {
     brut[3 * i] = s * gauss(); brut[3 * i + 1] = s * gauss(); brut[3 * i + 2] = s * gauss();
   }
   return { brut, invariants: {
-    fractionCondensat: { mesure: f0, formule, ecart: Math.abs(f0 - formule), echantillon: dansCondensat / n, atomes: N },
+    /* game104 (sonde aux bouts : 1000 atomes, 0.697 contre 0.784) : la mesure somme l occupation EXACTE de N atomes, la formule est la limite N -> infini */
+    fractionCondensat: { mesure: f0, formule, ecart: Math.abs(f0 - formule), echantillon: dansCondensat / n, atomes: N,
+      approchee: 'the 1 - (T/Tc)^3 law is the limit of infinitely many atoms; the measured value sums the exact Bose occupation of these ' + N + ' atoms' },
     temperatureCritique: { kTc_sur_hbarOmega: kTc_hw, Tc_nK: Tc * 1e9, T_nK: t * Tc * 1e9 },
     rayons: { condensat: Math.SQRT1_2, thermique: Math.sqrt(kT_hw), unite: 'a_ho = sqrt(hbar / m omega)' },
     fugacite: { z: ex.z, zeta3: ZETA3 },
