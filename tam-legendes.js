@@ -819,7 +819,7 @@ const L = {
     titre: 'Alpha particles on a nucleus (Rutherford scattering)',
     enUnePhrase: 'A film of charged particles fired past a fixed nucleus that repels them, one frame per impact parameter b: the closer they pass, the harder they are thrown back.',
     colonnes: ['x (units k = mass = 1, nucleus at the origin)', 'y (same units)', 'impact parameter b of this trajectory (a label)', 'time since entering the window'],
-    aRegarder: ['The measured deflection follows Rutherford\'s law b = (k / (2E)) cot(theta / 2).', 'Energy and angular momentum stay constant along each path; the closest approach is computed exactly.', 'A point nucleus that does not recoil, classical mechanics: a simplified model.'],
+    aRegarder: ['The measured deflection follows Rutherford\'s law b = (k / (2E)) cot(theta / 2). Switch on "opposite charges" and the nucleus pulls them round it instead: same law with k = -1, same angle on the other side.', 'Energy and angular momentum stay constant along each path; the closest approach is computed exactly.', 'A point nucleus that does not recoil, classical mechanics: a simplified model.'],
     fin: null,
   },
   logistique: {

@@ -83,8 +83,13 @@ const objetDImage = (f, images, F) => (images === 1 ? 0 : Math.round(f * (F - 1)
 const RUTH_ETA = 0.004, RUTH_R0 = 2000; /* mesure 02/11 : l ecart d angle suit 1/R0^2 (R0 1000 -> 1.1e-7, 2000 -> 2.8e-8) ; eta 0.004 coute 2 fois moins que 0.002 pour le meme angle */
 const deviationRutherford = (E, b, k = 1) => 2 * atanD(k / (2 * E * b));
 const rMinRutherford = (E, b, k = 1) => { const d = k / E; return d / 2 + Math.sqrt(d * d / 4 + b * b); };
+/* game106 (Phil : « d autres variables ») : `attirant` = 1 met des charges OPPOSEES, k = -1. Les memes formules tiennent avec k signe :
+ *   tan(theta/2) = k/(2 E b) donne une deviation NEGATIVE (la particule est tiree vers le noyau, |theta| < pi, toujours une hyperbole
+ *   puisque E > 0) et r_min = d/2 + sqrt(d^2/4 + b^2), d = k/E < 0, est la plus courte approche d une orbite attiree. Le pas adaptatif
+ *   prend |k|. Repulsif (defaut) : k = 1 exactement comme avant — les oeuvres se rejouent. */
 function rutherford(P, n) {
-  const k = 1, E = P.E, F = P.rayons, bMax = P.bMax, R0 = RUTH_R0 * (bMax + k / E), W = 2.5 * (bMax + k / E);
+  /* R0 et la fenetre sont des LONGUEURS d echelle : |k| (avec k = -1, bMax + k/E serait negatif des E < 1/bMax) */
+  const k = P.attirant ? -1 : 1, E = P.E, F = P.rayons, bMax = P.bMax, R0 = RUTH_R0 * (bMax + Math.abs(k) / E), W = 2.5 * (bMax + Math.abs(k) / E);
   const images = Math.min(F, n), debuts = decouper(n, images), film = filmDe(debuts, n), brut = new Float64Array(n * 4);
   const dessine = new Map(); for (let f = 0; f < images; f++) dessine.set(objetDImage(f, images, F), f);
   const serie = { b: [], bEff: [], mesure: [], formule: [], rMin: [], rMinFormule: [], pas: [] };
@@ -98,7 +103,7 @@ function rutherford(P, n) {
     const garde = dessine.has(j), T = [], X = [], Y = [];
     let rMin = Infinity, sorti = false, st = 0, tEntree = NaN;
     while (st < 400000) {
-      const r = Math.sqrt(x * x + y * y), v = Math.sqrt(vx * vx + vy * vy), h = RUTH_ETA * Math.min(r / v, Math.sqrt(r * r * r / k));
+      const r = Math.sqrt(x * x + y * y), v = Math.sqrt(vx * vx + vy * vy), h = RUTH_ETA * Math.min(r / v, Math.sqrt(r * r * r / Math.abs(k)));
       const [a1x, a1y] = acc(x, y);
       const x2 = x + h / 2 * vx, y2 = y + h / 2 * vy, u2 = vx + h / 2 * a1x, w2 = vy + h / 2 * a1y, [a2x, a2y] = acc(x2, y2);
       const x3 = x + h / 2 * u2, y3 = y + h / 2 * w2, u3 = vx + h / 2 * a2x, w3 = vy + h / 2 * a2y, [a3x, a3y] = acc(x3, y3);
@@ -462,9 +467,9 @@ export const COLONNES = Object.freeze({
 
 // ---------- catalogue ----------
 export const SYSTEMES = Object.freeze([
-  { id: 'rutherford', nom: 'Alpha particles on a nucleus (Rutherford scattering)', science: 'Nuclear physics', D: 4, params: { E: 1, bMax: 2, rayons: 9 },
-    bornes: { E: [0.25, 4], bMax: [0.5, 4], rayons: [3, 15] },
-    phrase: 'A visualisation of Rutherford scattering (k = m = 1): a fan of charged particles fired past a fixed nucleus that repels them, one frame per impact parameter b; each is integrated step by step and its deflection angle is compared with the exact b = (k/(2E)) cot(theta/2), with energy and angular momentum conserved. A point nucleus, classical mechanics, no recoil.' },
+  { id: 'rutherford', nom: 'Alpha particles on a nucleus (Rutherford scattering)', science: 'Nuclear physics', D: 4, params: { E: 1, bMax: 2, rayons: 9, attirant: 0 },
+    bornes: { E: [0.25, 4], bMax: [0.5, 4], rayons: [3, 15], attirant: [0, 1] },
+    phrase: 'A visualisation of Rutherford scattering (|k| = m = 1): a fan of charged particles fired past a fixed nucleus that repels them, one frame per impact parameter b; each is integrated step by step and its deflection angle is compared with the exact b = (k/(2E)) cot(theta/2), with energy and angular momentum conserved. Switch to opposite charges (k = -1) and the nucleus pulls them round instead: the same formula, with a negative angle. A point nucleus, classical mechanics, no recoil.' },
   { id: 'logistique', nom: 'Order to chaos (logistic map)', science: 'Chaos theory', D: 3, nuage: true, params: { rMin: 2.8, rMax: 4, points: 40 },
     bornes: { rMin: [1, 3.4], rMax: [3.5, 4], points: [8, 60] },
     phrase: 'A visualisation of the bifurcation diagram of the logistic map x -> r x (1 - x): for each growth rate r the states it settles on, a single value, then 2, 4, 8 and finally chaos. The period doublings are measured on the cycle multipliers and compared with the exact r1 = 3 and r2 = 1 + sqrt 6; later doublings and their shrinking ratio are measurements only.' },
@@ -481,7 +486,7 @@ export const SYSTEMES = Object.freeze([
     bornes: { billes: [100, 5000], rangees: [4, 30], penchant: [0.1, 0.9], graine: [1, 1000000] },
     phrase: 'A visualisation of a Galton board: balls fall through rows of pegs, bouncing left or right at random at each one, and pile up into a bell shape. The pile is compared with the exact binomial law C(L, k)/2^L, with mean 0 and variance L/4; tilt the board (chance q of bouncing right) and it becomes C(L, k) q^k (1 - q)^(L - k), mean L (q - 1/2), variance L q (1 - q). A finite number of balls, so the agreement is statistical.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { rutherford: ['rayons'], logistique: ['points'], chaleur: [], oscillateurForce: [], brachistochrone: [], galton: ['billes', 'rangees', 'graine'] };
+export const ENTIERS = { rutherford: ['rayons', 'attirant'], logistique: ['points'], chaleur: [], oscillateurForce: [], brachistochrone: [], galton: ['billes', 'rangees', 'graine'] };
 const FONCTIONS = { rutherford, logistique, chaleur, oscillateurForce, brachistochrone, galton };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 

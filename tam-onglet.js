@@ -157,7 +157,9 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   balayages: 'sweeps', espacement: 'mode spacing', fenetre: 'window', ecart: 'offset', taux: 'rate', melange: 'blend', fraction: 'fraction',
   masses: 'masses', maxIter: 'max iterations', hPlus: 'h plus', hCroix: 'h cross', tauMax: 'max proper time', plateau: 'shelf',
   /* game105 (sonde : tous les noms de curseurs contre cette table — 3 mots francais a l ecran depuis game96) */
-  billes: 'balls', rangees: 'rows of pegs', rayons: 'paths', penchant: 'tilt (chance to bounce right)' };
+  billes: 'balls', rangees: 'rows of pegs', rayons: 'paths', penchant: 'tilt (chance to bounce right)',
+  /* game106 */
+  attirant: 'opposite charges (1 = attract)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */

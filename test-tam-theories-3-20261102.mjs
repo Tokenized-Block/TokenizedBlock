@@ -129,19 +129,23 @@ function suite(T, bavard = false) {
   // 2. rutherford
   for (const p of extremes(sys('rutherford'))) ok(`rutherford ${JSON.stringify(p)} : angle mesure = 2 atan(k/(2 E b_eff)) (Math.atan), r_min exact, E et L conserves, trace hors du noyau`, () => {
     const R = S('rutherford', p), P = R.params, I = R.invariants, D = I.deviation, se = D.serie, R0 = I.depart.R0, F = P.rayons;
+    /* game106 : k signe (charges opposees = -1) ; R0 est une longueur, |k| */
+    const k = P.attirant ? -1 : 1;
     assert.equal(se.b.length, F); assert.ok(Math.abs(R0 - 2000 * (P.bMax + 1 / P.E)) < 1e-9);
     let pire = 0, pireR = 0;
     for (let j = 0; j < F; j++) {
-      const b = P.bMax * (j + 1) / F, bEff = b * Math.sqrt(2 * (P.E - 1 / R0)) / Math.sqrt(2 * P.E), th = 2 * Math.atan(1 / (2 * P.E * bEff)), rm = 1 / (2 * P.E) + Math.sqrt(1 / (4 * P.E * P.E) + bEff * bEff);
+      const b = P.bMax * (j + 1) / F, bEff = b * Math.sqrt(2 * (P.E - k / R0)) / Math.sqrt(2 * P.E), th = 2 * Math.atan(k / (2 * P.E * bEff)), rm = k / (2 * P.E) + Math.sqrt(1 / (4 * P.E * P.E) + bEff * bEff);
       assert.ok(Math.abs(se.b[j] - b) < 1e-15 && Math.abs(se.bEff[j] - bEff) < 1e-12 * b, 'b_eff ' + j);
       assert.ok(Math.abs(se.formule[j] - th) < 1e-12, `formule ${j} ${se.formule[j]} vs ${th}`);
-      const u = 1 / (2 * P.E * bEff); assert.ok(Math.abs(Math.cos(se.mesure[j]) - (1 - u * u) / (1 + u * u)) < 2e-7, 'cos theta algebrique ' + j);
+      assert.ok(Math.sign(se.mesure[j]) === k, 'le signe de la deviation est celui de la charge ' + j);
+      const u = k / (2 * P.E * bEff); assert.ok(Math.abs(Math.cos(se.mesure[j]) - (1 - u * u) / (1 + u * u)) < 2e-7, 'cos theta algebrique ' + j);
       pire = Math.max(pire, Math.abs(se.mesure[j] - th));
       assert.ok(Math.abs(se.rMinFormule[j] - rm) < 1e-12 * rm && se.rMin[j] >= rm * (1 - 1e-12), 'r_min ' + j); pireR = Math.max(pireR, (se.rMin[j] - rm) / rm);
-      if (j) assert.ok(se.mesure[j] < se.mesure[j - 1], 'deviation decroit avec b');
+      if (j) assert.ok(k * se.mesure[j] < k * se.mesure[j - 1], 'la deviation (en valeur absolue) decroit avec b');
     }
     assert.ok(pire < 2e-7, 'angle ' + pire); assert.ok(pireR < 1e-5, 'r_min ' + pireR); assert.ok(Math.abs(D.pireEcart - pire) < 1e-15);
-    assert.ok(I.energie.derive < 1e-10 && Math.abs(I.energie.debut - P.E) < 1e-12, 'E ' + I.energie.derive); assert.ok(I.momentCinetique.derive < 1e-9, 'L ' + I.momentCinetique.derive);
+    /* attire : le passage rapproche (r_min ~ b^2 E/|k|) coute plus ; mesure 02/11 : pire 1.5e-7 (E 0.25, bMax 0.5, 15 rayons) */
+    assert.ok(I.energie.derive < (k > 0 ? 1e-10 : 1e-6) && Math.abs(I.energie.debut - P.E) < 1e-12, 'E ' + I.energie.derive); assert.ok(I.momentCinetique.derive < 1e-9, 'L ' + I.momentCinetique.derive);
     const b = R.brut, W = I.depart.fenetre, rmin0 = se.rMinFormule.reduce((a, x) => Math.min(a, x), Infinity);
     for (let f = 0; f < R.film.images; f++) { const d0 = R.film.debuts[f], c = R.film.tailles[f];
       for (let r = 0; r < c; r++) { const o = 4 * (d0 + r); assert.ok(Math.abs(b[o]) <= W + 1e-9 && Math.abs(b[o + 1]) <= W + 1e-9 && Math.hypot(b[o], b[o + 1]) >= rmin0 * (1 - 1e-4), 'point ' + f + ' ' + r); assert.ok(b[o + 2] === b[4 * d0 + 2]); if (r) assert.ok(b[o + 3] >= b[o - 1]); } }
@@ -276,7 +280,9 @@ function suite(T, bavard = false) {
   ok('galton : la graine change le tirage, pas la loi', () => { const a = S('galton'), c = S('galton', { graine: 2 }); assert.ok(!octets(a.brut).equals(octets(c.brut))); assert.deepEqual(a.invariants.binomiale.probabilites, c.invariants.binomiale.probabilites); });
   // 8. bornage
   ok('bornage : hors bornes ramene, NaN -> defaut, entiers arrondis', () => {
-    assert.deepEqual(sim('rutherford', { E: 9, bMax: 'x', rayons: 7.6 }, { n: 50 }).params, { E: 4, bMax: 2, rayons: 8 });
+    assert.deepEqual(sim('rutherford', { E: 9, bMax: 'x', rayons: 7.6 }, { n: 50 }).params, { E: 4, bMax: 2, rayons: 8, attirant: 0 });
+    /* game106 : l interrupteur est entier (0 ou 1), jamais une « demi-charge » */
+    assert.equal(sim('rutherford', { attirant: 0.6 }, { n: 50 }).params.attirant, 1); assert.equal(sim('rutherford', { attirant: 7 }, { n: 50 }).params.attirant, 1);
     assert.deepEqual(sim('logistique', { rMin: 0, rMax: 5, points: 9.4 }, { n: 50 }).params, { rMin: 1, rMax: 4, points: 9 });
     assert.deepEqual(sim('galton', { billes: 99999, rangees: 3.5, graine: NaN }, { n: 50 }).params, { billes: 5000, rangees: 4, penchant: 0.5, graine: 1 });
     assert.equal(sim('galton', { penchant: 2 }, { n: 50 }).params.penchant, 0.9);
@@ -329,6 +335,9 @@ const MUTANTS = [
   ['Rutherford : tan(theta/2) = k/(E b) (facteur 2 perdu)', 'const deviationRutherford = (E, b, k = 1) => 2 * atanD(k / (2 * E * b));', 'const deviationRutherford = (E, b, k = 1) => 2 * atanD(k / (E * b));'],
   ['Rutherford : b de depart au lieu du b asymptotique', 'bEff = Math.abs(L0) / Math.sqrt(2 * E0)', 'bEff = b'],
   ['Rutherford : RK4 mal pondere sur la position', 'x += h / 6 * (vx + 2 * u2 + 2 * u3 + u4)', 'x += h / 6 * (vx + u2 + 3 * u3 + u4)'],
+  ['Rutherford : interrupteur attirant sans effet (k toujours 1)', 'const k = P.attirant ? -1 : 1, E = P.E', 'const k = 1, E = P.E'],
+  ['Rutherford : pas adaptatif sans |k| (NaN si attire)', 'Math.sqrt(r * r * r / Math.abs(k))', 'Math.sqrt(r * r * r / k)'],
+  ['Rutherford : R0 avec k signe (rayon de depart negatif si attire)', 'R0 = RUTH_R0 * (bMax + Math.abs(k) / E)', 'R0 = RUTH_R0 * (bMax + k / E)'],
   ['Rutherford : r_min avec d^2/2', 'return d / 2 + Math.sqrt(d * d / 4 + b * b);', 'return d / 2 + Math.sqrt(d * d / 2 + b * b);'],
   ['atan : une seule reduction comptee (2 s au lieu de 4 s)', 'return 4 * s;', 'return 2 * s;'],
   ['logistique : multiplicateur r (1 - x) au lieu de r (1 - 2x)', 'let y = x, d = 1; for (let i = 0; i < p; i++) { d *= r * (1 - 2 * y);', 'let y = x, d = 1; for (let i = 0; i < p; i++) { d *= r * (1 - y);'],
