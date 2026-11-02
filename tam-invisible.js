@@ -518,12 +518,18 @@ function mouvementBrownien(P, n) {
   let num = 0, den = 0;
   for (let s = 1; s <= S; s++) { msd[s] /= Np; num += s * msd[s]; den += s * s; }
   const Dmesure = num / den / 6;
+  /* game101 : sigma EXACT de la pente. Par composante, X_s = somme de s pas N(0, 2D) : Cov(X_s^2, X_t^2) = 2 (2 D min(s, t))^2 ; 3 axes
+   *   -> Cov(r_s^2, r_t^2) = 24 D^2 min(s, t)^2 ; Var(pente) = 24 D^2 sum_s sum_t s t min(s,t)^2 / (Np (6 den)^2). Double somme en O(S) :
+   *   2 sum_s s^3 (sum_{t > s} t) + sum_s s^4. */
+  let suffixe = S * (S + 1) / 2, dbl = 0;
+  for (let s = 1; s <= S; s++) { suffixe -= s; dbl += 2 * s * s * s * suffixe + s * s * s * s; }
+  const sigmaD = Math.sqrt(24 * D * D * dbl / Np) / (6 * den);
   const sv = Math.sqrt(P.kT); let somme = 0, somme2 = 0;
   for (let p = 0; p < Np; p++) { const a = sv * gauss(), b = sv * gauss(), c = sv * gauss(), w = a * a + b * b + c * c; somme += Math.sqrt(w); somme2 += w; }
   const brut = new Float64Array(n * 3), tot = montres * lignes;
   for (let i = 0; i < n; i++) { const k = 3 * (i % tot); brut[3 * i] = traces[k]; brut[3 * i + 1] = traces[k + 1]; brut[3 * i + 2] = traces[k + 2]; }
   return { brut, invariants: {
-    diffusion: { mesure: Dmesure, formule: D, msdFinal: msd[S], msdFormule: 6 * D * S, particules: Np, note: 'least-squares slope of <r^2>(t) through 0, divided by 6' },
+    diffusion: { mesure: Dmesure, formule: D, sigma: sigmaD, msdFinal: msd[S], msdFormule: 6 * D * S, particules: Np, note: 'least-squares slope of <r^2>(t) through 0, divided by 6' },
     vitesseMoyenne: { mesure: somme / Np, formule: Math.sqrt(8 * P.kT / PI), quadratique: Math.sqrt(somme2 / Np), quadratiqueFormule: Math.sqrt(3 * P.kT) },
     traces: { particulesDessinees: montres, pointsParTrace: lignes },
   } };

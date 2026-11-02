@@ -221,6 +221,14 @@ function suite(T, texte, bavard = false) {
     const L = I.traces.pointsParTrace; for (let p = 0; p * L < r.n; p++) assert.deepEqual(ligne(r, p * L), [0, 0, 0]);
     return `D ${I.diffusion.mesure.toFixed(4)} vs 0.5 ; <v> ${I.vitesseMoyenne.mesure.toFixed(4)} vs ${mb.toFixed(4)}`;
   });
+  /* game101 : le sigma DERIVE de la pente = l ecart-type sur 80 graines (petit cas : 400 particules, 50 pas) a 25 % pres
+   *   (l incertitude d un ecart-type sur 80 tirages est ~8 % : 25 % = ~3 sigma) */
+  ok('brownien : sigma derive de D = ecart-type mesure sur 80 graines', () => {
+    const v = []; let sg = 0;
+    for (let g = 1; g <= 80; g++) { const d = sim('mouvementBrownien', { graine: g, particules: 400, pas: 50 }).invariants.diffusion; v.push(d.mesure); sg = d.sigma; }
+    const m = v.reduce((a, b) => a + b, 0) / v.length, sd = Math.sqrt(v.reduce((a, b) => a + (b - m) * (b - m), 0) / (v.length - 1));
+    assert.ok(sg > 0 && Math.abs(sd / sg - 1) < 0.25, `sd ${sd} sigma ${sg}`); return `sd ${sd.toFixed(5)} / sigma ${sg.toFixed(5)} = ${(sd / sg).toFixed(3)}`;
+  });
   ok('brownien D = 1.5 : D mesure a 5 %', () => { const d = sim('mouvementBrownien', { D: 1.5, particules: 2500 }).invariants.diffusion.mesure; assert.ok(rel(d, 1.5) < 0.05, String(d)); return d.toFixed(4); });
 
   // 11b. films et fins (2026-11-01, demande du proprietaire) : disposition MESUREE sur les lignes, jamais supposee
