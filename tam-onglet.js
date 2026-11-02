@@ -945,16 +945,18 @@ export function monter(racine, ctx = {}) {
   /* ── rotation, camera ── */
   bRot.addEventListener('click', () => { S.rotation = !S.rotation; bRot.setAttribute('aria-pressed', String(S.rotation)); racine.dataset.rotation = S.rotation ? 'on' : 'off'; S.sale = true; });
   racine.dataset.rotation = S.rotation ? 'on' : 'off';
-  bVue.addEventListener('click', () => { S.cam = null; S.t = 0; S.dessines = reduit() ? S.n : 0; S.pause = 0; S.sale = true; });
+  bVue.addEventListener('click', () => { S.cam = null; S.ajuste = null; S.t = 0; S.dessines = reduit() ? S.n : 0; S.pause = 0; S.sale = true; });
   bDecor.addEventListener('click', () => { S.decorOn = S.decorOn === false; bDecor.setAttribute('aria-pressed', String(S.decorOn)); bDecor.textContent = 'Context: ' + (S.decorOn ? 'on' : 'off'); S.sale = true; });
   bBoucle.addEventListener('click', () => { S.boucle = !S.boucle; bBoucle.setAttribute('aria-pressed', String(S.boucle)); bBoucle.textContent = 'Loop: ' + (S.boucle ? 'on' : 'off'); racine.dataset.boucle = S.boucle ? 'on' : 'off'; });
-  const CAM0 = { yaw: 0.6, pitch: 0.35, dist: 1.7, ox: 0, oy: 0 };
+  /* game98 : dist 1.7 -> 4. Les positions vivent dans le cube [-1, 1] ; a 1.7 un coin passait a ~0.3 de l objectif (grossi ~5.7 x,
+   *   parfois DERRIERE la camera) et un seul point faisait deborder la vue. A 4, un coin est grossi d au plus ~1.8 x ; la taille de la
+   *   scene est ensuite REGLEE par le recadrage (dessiner), pas par la distance. */
+  const CAM0 = { yaw: 0.6, pitch: 0.35, dist: 4, ox: 0, oy: 0 };
   /* game97 : les systemes dont la figure CLASSIQUE est plate (colonne 0 a l horizontale, colonne 1 a la verticale) partent de FACE —
    *   yaw = pitch = 0 ; la colonne 2 reste en profondeur et on tourne toujours a la main. Bifurcation (r, x), planche (x, hauteur), pistes (x, y). */
   const DE_FACE = new Set(['logistique', 'galton', 'brachistochrone']);
-  /* de face, la colonne 2 est TOUTE en profondeur : a dist 1.7 la perspective grossissait les points proches de ~1.9 x et la pile de
-   *   Galton sortait par le bas (mesure a l ecran) ; plus loin, la perspective s aplatit */
-  const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0, dist: 2.6 };
+  /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
+  const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;
   const ptrs = new Map(); let pinch = null;
   cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, shift: e.shiftKey || e.button === 2 }); });
@@ -1012,8 +1014,26 @@ export function monter(racine, ctx = {}) {
     const pz = new Float32Array(S.n);
     /* la camera du cerveau (navGesture) : dist en multiples de l echelle de la scene, pan en px ecran */
     const camPx = { ...cam, dist: cam.dist * sc, ox: (cam.ox || 0) * dpr, oy: (cam.oy || 0) * dpr };
+    /* game98 (balayage des 99 vues, pixels relus : 29 touchaient un bord — Lotka-Volterra, Kepler, Ising, SIR, chaleur...) : la taille a
+     *   l ecran vaut f x / (z + dist), sc s y simplifie ; la cause etait la PERSPECTIVE a dist 1.7 (voir CAM0), pas la largeur des
+     *   donnees. Recadrage : la projection de TOUTE l oeuvre remplit la toile a 8 px du bord (reduit, ou agrandit au plus 4 x). Calcule une
+     *   fois par oeuvre et par taille de toile (le zoom ne tremble pas ; la molette reste libre), refait par « Reset view » ; donnees, decor,
+     *   echelle et survol passent par la meme fonction, la barre d echelle reste juste. Une rotation des plans caches (D > 3) peut
+     *   deborder un peu ensuite. */
+    const cx0 = L / 2 + camPx.ox, cy0 = H / 2 + camPx.oy;
+    if (S.ajuste == null || S.ajusteCle !== S.o || S.ajusteL !== L || S.ajusteH !== H) {
+      let m = 0; const mx = Math.max(1, L / 2 - 8 * dpr), my = Math.max(1, H / 2 - 8 * dpr);
+      for (let i = 0; i < S.n; i++) {
+        const u = projectCam(camPx, pos[3 * i] * sc, -pos[3 * i + 1] * sc, pos[3 * i + 2] * sc, L, H, 1);
+        if (u && Number.isFinite(u.sx) && Number.isFinite(u.sy)) m = Math.max(m, Math.abs(u.sx - cx0) / mx, Math.abs(u.sy - cy0) / my);
+      }
+      S.ajuste = m > 0 ? Math.min(4, 1 / m) : 1; S.ajusteCle = S.o; S.ajusteL = L; S.ajusteH = H; racine.dataset.recadrage = S.ajuste.toFixed(3);
+    }
+    const projeter = (x, y, z) => { const u = projectCam(camPx, x, y, z, L, H, 1);
+      if (u && S.ajuste !== 1) { u.sx = cx0 + (u.sx - cx0) * S.ajuste; u.sy = cy0 + (u.sy - cy0) * S.ajuste; }
+      return u; };
     for (let i = 0; i < S.n; i++) {
-      const u = projectCam(camPx, pos[3 * i] * sc, -pos[3 * i + 1] * sc, pos[3 * i + 2] * sc, L, H, 1);
+      const u = projeter(pos[3 * i] * sc, -pos[3 * i + 1] * sc, pos[3 * i + 2] * sc);
       projSx[i] = u ? u.sx : NaN; projSy[i] = u ? u.sy : NaN; pz[i] = u ? u.zc : 0;
     }
     const nuage = S.P.ordre === 1 || !!(S.science && TS.estNuage(S.P, S.o));
@@ -1106,7 +1126,7 @@ export function monter(racine, ctx = {}) {
       /* le corps central (Soleil, etoile, trou noir) a l origine du repere */
       const nomCentre = TS.CENTRE[S.science.s.id];
       if (nomCentre && corps.origine) {
-        const o = corps.origine, u = projectCam(camPx, o[0] * sc, -o[1] * sc, o[2] * sc, L, H, 1);
+        const o = corps.origine, u = projeter(o[0] * sc, -o[1] * sc, o[2] * sc);
         if (u) {
           const noir = /black hole|throat/.test(nomCentre), coul = noir ? '#000000' : '#ffd36b';
           g.shadowColor = noir ? '#b48cff' : '#ffd36b'; g.shadowBlur = 18 * dpr; g.fillStyle = coul; g.beginPath(); g.arc(u.sx, u.sy, 6 * dpr, 0, 2 * Math.PI); g.fill();
@@ -1125,7 +1145,7 @@ export function monter(racine, ctx = {}) {
     /* game82 : le CONTEXTE (Soleil, horizon, couches de la Terre, plaques, fentes…), sous les etiquettes, dans la meme camera */
     if (S.decorOn !== false && S.science && !(S.P && S.P.melange)) {
       let dv = []; try { dv = decorVue(); } catch (_) { dv = []; }
-      const ecran = (p) => projectCam(camPx, p[0] * sc, -p[1] * sc, p[2] * sc, L, H, 1);
+      const ecran = (p) => projeter(p[0] * sc, -p[1] * sc, p[2] * sc);
       g.font = (11 * dpr) + 'px system-ui,sans-serif';
       for (const d of dv) {
         const col = d.q.couleur || '#ffffff';
