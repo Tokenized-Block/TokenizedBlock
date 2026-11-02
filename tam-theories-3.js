@@ -400,8 +400,8 @@ function brachistochrone(P, n) {
 //   variance de l estimateur (mu4 - sigma^4)/N, mu4 = (3 L^2 - 2 L)/16, d ou sigma_var = sqrt(L (L - 1)/(8 N)).
 // Histogramme : chi2 = sum (O - E)^2 / E sur les cases de E >= 5 (queues regroupees), ddl = cases - 1 ; et le pire ecart d une case
 //   en unites de sqrt(N p (1 - p)).
-// Dessin (nuage) : les chemins des premieres billes (x, -rangee), puis le tas des N billes sous les cases, hauteur = rang d arrivee
-//   dans sa case, mise a l echelle de la plus haute pile (L rangees).
+// Dessin (nuage) : les chemins des premieres billes (x, -rangee), puis le tas des N billes sous les cases, posees sur le fond
+//   y = -(2L + 1) et montant du rang d arrivee dans leur case, mise a l echelle de la plus haute pile (L rangees).
 function binomiale(L) { const c = [1]; for (let k = 1; k <= L; k++) c.push(c[k - 1] * (L - k + 1) / k); const d = 2 ** L; return c.map((x) => x / d); }
 function galton(P, n) {
   const N = P.billes, L = P.rangees, alea = mulberry32(P.graine >>> 0), nChemins = Math.floor(n / 2), B = Math.min(N, Math.floor(nChemins / (L + 1)));
@@ -420,7 +420,8 @@ function galton(P, n) {
   const reste = n - ligne;
   for (let r = 0; r < reste; r++) {
     const b = Math.min(N - 1, Math.floor((r + 0.5) * N / reste)), o = 3 * (ligne + r);
-    brut[o] = ks[b] - L / 2; brut[o + 1] = -(L + 1) - L * (rangs[b] + 0.5) / hMax; brut[o + 2] = b;
+    /* game97 : la pile MONTE depuis le fond (-(2L + 1)) comme dans une vraie planche ; la plus haute touche -(L + 1), sous les clous */
+    brut[o] = ks[b] - L / 2; brut[o + 1] = -(2 * L + 1) + L * (rangs[b] + 0.5) / hMax; brut[o + 2] = b;
   }
   const p = binomiale(L);
   let s1 = 0, s2 = 0; for (let b = 0; b < N; b++) { const x = ks[b] - L / 2; s1 += x; s2 += x * x; }

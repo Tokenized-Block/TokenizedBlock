@@ -853,7 +853,7 @@ const L = {
   galton: {
     titre: 'Balls through pegs (Galton board)',
     enUnePhrase: 'Balls fall through rows of pegs, bouncing left or right at random, and pile up into a bell.',
-    colonnes: ['x (peg spacings)', 'height: down the rows along a path, then the pile under the bins', 'index of the ball (a label)'],
+    colonnes: ['x (peg spacings)', 'height: down the rows along a path, then the pile rising from the floor under the bins', 'index of the ball (a label)'],
     aRegarder: ['The pile follows the binomial law C(L, k) / 2^L, with mean 0 and variance L / 4.', 'With more rows the bell gets wider and smoother: the central limit theorem.', 'A finite number of balls: the match is statistical, and a new seed gives a slightly different pile.'],
     fin: null,
   },

@@ -949,6 +949,13 @@ export function monter(racine, ctx = {}) {
   bDecor.addEventListener('click', () => { S.decorOn = S.decorOn === false; bDecor.setAttribute('aria-pressed', String(S.decorOn)); bDecor.textContent = 'Context: ' + (S.decorOn ? 'on' : 'off'); S.sale = true; });
   bBoucle.addEventListener('click', () => { S.boucle = !S.boucle; bBoucle.setAttribute('aria-pressed', String(S.boucle)); bBoucle.textContent = 'Loop: ' + (S.boucle ? 'on' : 'off'); racine.dataset.boucle = S.boucle ? 'on' : 'off'; });
   const CAM0 = { yaw: 0.6, pitch: 0.35, dist: 1.7, ox: 0, oy: 0 };
+  /* game97 : les systemes dont la figure CLASSIQUE est plate (colonne 0 a l horizontale, colonne 1 a la verticale) partent de FACE —
+   *   yaw = pitch = 0 ; la colonne 2 reste en profondeur et on tourne toujours a la main. Bifurcation (r, x), planche (x, hauteur), pistes (x, y). */
+  const DE_FACE = new Set(['logistique', 'galton', 'brachistochrone']);
+  /* de face, la colonne 2 est TOUTE en profondeur : a dist 1.7 la perspective grossissait les points proches de ~1.9 x et la pile de
+   *   Galton sortait par le bas (mesure a l ecran) ; plus loin, la perspective s aplatit */
+  const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0, dist: 2.6 };
+  const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;
   const ptrs = new Map(); let pinch = null;
   cv.addEventListener('pointerdown', (e) => { cv.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, shift: e.shiftKey || e.button === 2 }); });
   cv.addEventListener('pointerup', (e) => {
@@ -965,12 +972,12 @@ export function monter(racine, ctx = {}) {
     const dx = e.clientX - p.x, dy = e.clientY - p.y; p.x = e.clientX; p.y = e.clientY;
     if (ptrs.size === 2) {
       const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
-      if (pinch !== null) S.cam = navGesture(S.cam, CAM0, { dz: (pinch - d) / 30 });
-      pinch = d; S.cam = navGesture(S.cam, CAM0, { dx: dx / 2, dy: dy / 2, pan: true });
-    } else S.cam = navGesture(S.cam, CAM0, { dx, dy, pan: p.shift });
+      if (pinch !== null) S.cam = navGesture(S.cam, camBase(),{ dz: (pinch - d) / 30 });
+      pinch = d; S.cam = navGesture(S.cam, camBase(),{ dx: dx / 2, dy: dy / 2, pan: true });
+    } else S.cam = navGesture(S.cam, camBase(),{ dx, dy, pan: p.shift });
     S.sale = true;
   });
-  cv.addEventListener('wheel', (e) => { e.preventDefault(); S.cam = navGesture(S.cam, CAM0, { dz: Math.sign(e.deltaY) }); S.sale = true; }, { passive: false });
+  cv.addEventListener('wheel', (e) => { e.preventDefault(); S.cam = navGesture(S.cam, camBase(),{ dz: Math.sign(e.deltaY) }); S.sale = true; }, { passive: false });
 
   /* ── dessin 3-D ── */
   let proj = null, projSx = null, projSy = null, dominant = null;
@@ -997,7 +1004,7 @@ export function monter(racine, ctx = {}) {
     const g = cv.getContext('2d'); g.fillStyle = '#0b0d17'; g.fillRect(0, 0, L, H);
     if (!S.o) return;
     if (S.dense && !S.science) { proj = null; projSx = null; dessinerDense(g, L, H, dpr); return; }
-    const cam = S.cam || CAM0, pos = positions(); proj = pos; dominant = dimDominante();
+    const cam = S.cam || camBase(), pos = positions(); proj = pos; dominant = dimDominante();
     const corps = S.science && S.corps ? S.corps : null;
     if (corps) for (let i = 0; i < S.n; i++) dominant[i] = Math.min(corps.corps - 1, Math.floor(i / corps.par)); /* une couleur par corps */
     const sc = Math.min(L, H) * 0.42, n = Math.min(S.n, Math.max(2, Math.floor(S.dessines)));

@@ -246,6 +246,10 @@ function suite(T, bavard = false) {
     const B = I.dessin.chemins; assert.equal(B, Math.min(N, Math.floor(750 / (L + 1))));
     for (let c = 0; c < B; c++) for (let j = 0; j <= L; j++) { const o = 3 * (c * (L + 1) + j); assert.ok(b[o + 1] === -j && b[o + 2] === c); if (j) assert.ok(Math.abs(Math.abs(b[o] - b[o - 3]) - 0.5) < 1e-15); else assert.equal(b[o], 0); }
     for (let r = B * (L + 1); r < R.n; r++) { const o = 3 * r; assert.ok(b[o + 1] < -(L + 1) && b[o + 1] >= -(2 * L + 1) && Number.isInteger(b[o] + L / 2) && Math.abs(b[o]) <= L / 2); }
+    /* game97 : la pile MONTE depuis le fond — dans une meme case, une bille arrivee plus tard (indice plus grand) est plus HAUTE */
+    { const haut = new Map(); for (let r = B * (L + 1); r < R.n; r++) { const o = 3 * r, avant = haut.get(b[o]);
+        if (avant && b[o + 2] > avant[0]) assert.ok(b[o + 1] > avant[1], 'la pile monte (case ' + b[o] + ')');
+        if (!avant || b[o + 2] > avant[0]) haut.set(b[o], [b[o + 2], b[o + 1]]); } }
     return `mean ${M.mesure.toFixed(4)} (+-${M.sigma.toFixed(4)}), var ${V.mesure.toFixed(4)}/${L / 4} (+-${V.sigma.toFixed(4)}), chi2 ${Bn.chi2.toFixed(1)}/${Bn.ddl}, pire ${Bn.pireEcartSigma.toFixed(2)} sigma`;
   });
   ok('galton : la graine change le tirage, pas la loi', () => { const a = S('galton'), c = S('galton', { graine: 2 }); assert.ok(!octets(a.brut).equals(octets(c.brut))); assert.deepEqual(a.invariants.binomiale.probabilites, c.invariants.binomiale.probabilites); });

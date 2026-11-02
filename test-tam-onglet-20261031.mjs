@@ -487,6 +487,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js', './tam-theories-2.js', './tam-theories-3.js'];
     { const cq = (await import('./tam-champs-quantiques.js')).SYSTEMES.map((s) => s.id); ok(cq.every((id) => onglet.includes("'" + id + "'")) && /\['champs', 'Quantum fields, the vacuum, atoms & quarks'\]/.test(onglet), 'game81 : les ' + cq.length + ' champs quantiques ont leur groupe'); }
     ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
+    /* game97 : les figures classiques plates partent de face ; la scene ET les gestes partent de la meme base */
+    ok(/const DE_FACE = new Set\(\['logistique', 'galton', 'brachistochrone'\]\)/.test(onglet) && /const cam = S\.cam \|\| camBase\(\), pos = positions\(\)/.test(onglet)
+      && !/navGesture\(S\.cam, CAM0,/.test(onglet), 'game97 : vue de face pour bifurcation, Galton, brachistochrone (scene et gestes)');
     const mods = await Promise.all(fichiers.map((f) => import(f)));
     const tous = mods.flatMap((m) => m.SYSTEMES.map((s) => [m, s]));
     ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
