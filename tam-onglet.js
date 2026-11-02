@@ -175,7 +175,14 @@ function ligneInvariant(k0, v) {
   const k = NOMS_MESURES[k0] || k0;
   if (v && typeof v === 'object') {
     /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
-    if ('mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' vs formula ' + nb4(v.formule) + (k0 === 'precession' ? ' (weak-field formula: it underestimates close to the black hole)' : '');
+    /* game100 : la precession de Schwarzschild porte aussi la valeur EXACTE (integrale elliptique) — c est elle qu on compare */
+    if (k0 === 'precession' && typeof v.exacte === 'number' && 'mesure' in v) return k + ': measured ' + nb4(v.mesure) + ' vs exact GR ' + nb4(v.exacte) + ' (weak-field formula ' + nb4(v.formule) + ')';
+    /* game100 (sonde : « measured 21.68 vs formula 22.26 » se lisait comme un echec) : une formule APPROCHEE dit pourquoi, une mesure
+     *   STATISTIQUE dit son sigma */
+    if ('mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' vs formula ' + nb4(v.formule)
+      + (k0 === 'precession' ? ' (weak-field formula: it underestimates close to the black hole)' : '')
+      + (typeof v.approchee === 'string' ? ' (approximate formula: ' + v.approchee + ')' : '')
+      + (typeof v.sigma === 'number' && Number.isFinite(v.sigma) ? ' (statistical, ± ' + nb4(v.sigma) + ')' : '');
     if ('mesure' in v && 'theorie' in v) return k + ': measured ' + nb4(v.mesure) + ' vs theory ' + nb4(v.theorie);
     if ('derive' in v) {
       /* game77 (chasse aux bugs : « gamma: drift 1.6 » se lisait comme un test rate) : une derive RELATIVE au-dela de 1e-3 n est pas une

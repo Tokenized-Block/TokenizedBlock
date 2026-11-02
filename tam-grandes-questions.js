@@ -113,7 +113,7 @@ function bigRip(P, n) {
   }
   for (let i = K * m; i < n; i++) for (let k = 0; k < 3; k++) brut[3 * i + k] = brut[3 * (K * m - 1) + k];
   return { brut, tRip: t0 + mesure, invariants: {
-    tempsAvantRip: { mesure, formule, ecart: Math.abs(mesure - formule) / formule, unite: 'Gyr after today' },
+    tempsAvantRip: { mesure, formule, ecart: Math.abs(mesure - formule) / formule, unite: 'Gyr after today', approchee: 'it neglects matter; the measured value integrates the full history' },
     ageAujourdhui: { valeur: t0, unite: 'Gyr' },
     dernierInstantDessine: { avantRip: mesure - tU[m - 1], log10a: Ufin / LN10, unite: 'Gyr' },
   } };

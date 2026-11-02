@@ -453,7 +453,8 @@ function ondeLumiere(P, n) {
   return { brut, invariants: {
     orthogonalite: { mesure: ortho, formule: 0, note: 'max of |E.B|/(|E||B|), |E.k|/|E|, |B.k|/|B|' },
     rapportEB: { mesure: rap, formule: 0, c: C_SI, note: 'max | |E|/(c|B|) - 1 |' },
-    motifDipolaire: { mesure: nC > 0 ? su2 / nC : NaN, formule: 0.2, echantillons: nC, tirages, note: '<cos^2 theta> for a sin^2(theta) pattern is 1/5 (isotropic: 1/3)' },
+    /* game100 : un tirage — sigma de la moyenne = sqrt(Var(u^2) / nC), Var(u^2) = E[u^4] - 1/25 = 3/35 - 1/25 = 8/175 sous la loi (1 - u^2) */
+    motifDipolaire: { mesure: nC > 0 ? su2 / nC : NaN, formule: 0.2, sigma: nC > 0 ? Math.sqrt(8 / (175 * nC)) : NaN, echantillons: nC, tirages, note: '<cos^2 theta> for a sin^2(theta) pattern is 1/5 (isotropic: 1/3)' },
   } };
 }
 

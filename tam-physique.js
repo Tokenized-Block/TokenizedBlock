@@ -95,6 +95,20 @@ function orbite(rg) {
       const formule = c.rg ? 6 * PI * c.M / semiLatus : 0;
       r.invariants.precession = { mesure, formule, ecart: formule > 0 ? Math.abs(mesure - formule) / formule : Math.abs(mesure), orbites: dp.length,
         rmin, rmax, a: (rmin + rmax) / 2, e: (rmax - rmin) / (rmax + rmin), unite: 'radian par orbite' };
+      /* game100 (sonde des Check : defaut 2.78 mesure vs 1.62 « formule » — 6 pi M / p n est que le CHAMP FAIBLE) : la precession EXACTE,
+       *   depuis E et L du DEPART (pas depuis la mesure). (du/dphi)^2 = 2M (u - u1)(u - u2)(u - u3) ; u0 = 1/r0 est une racine (w = 0 au
+       *   depart), les deux autres par division puis sqrt ; dphi peri->peri = 4 K(k) / sqrt(2M (u3 - u1)), k^2 = (u2 - u1)/(u3 - u1),
+       *   K par moyenne arithmetico-geometrique (sqrt seulement : deterministe). */
+      if (c.rg && !c.libre) {
+        const u0 = 1 / c.r0, q1 = u0 - 1 / (2 * c.M), q0 = 1 / (c.L * c.L) + u0 * q1, D = q1 * q1 - 4 * q0;
+        if (D > 0) {
+          const s = Math.sqrt(D), rac = [u0, (-q1 - s) / 2, (-q1 + s) / 2].sort((x, y) => x - y), [u1, u2, u3] = rac, k2 = (u2 - u1) / (u3 - u1);
+          if (u1 > 0 && k2 > 0 && k2 < 1) {
+            let am = 1, gm = Math.sqrt(1 - k2); for (let j = 0; j < 40 && Math.abs(am - gm) > 1e-16 * am; j++) { const t = (am + gm) / 2; gm = Math.sqrt(am * gm); am = t; }
+            r.invariants.precession.exacte = 4 * (PI / (2 * am)) / Math.sqrt(2 * c.M * (u3 - u1)) - DEUX_PI;
+          }
+        }
+      }
       /* z = t remis a l echelle du rayon (la vue 3-D devient une helice lisible) ; le temps brut final est garde */
       const n = r.n, tFin = r.brut[(n - 1) * 3 + 2], s = tFin > 0 ? 2 * rmax / tFin : 0;
       r.invariants.tempsFinal = { debut: 0, fin: tFin, derive: 0 };

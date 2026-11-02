@@ -494,6 +494,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok((onglet.match(/projectCam\(/g) || []).length === 2 && /const ecran = \(p\) => projeter\(/.test(onglet) && /S\.ajuste = m > 0 \? Math\.min\(4, 1 \/ m\) : 1;/.test(onglet)
       && /S\.cam = null; S\.ajuste = null;/.test(onglet) && /const CAM0 = \{ yaw: 0\.6, pitch: 0\.35, dist: 4,/.test(onglet),
       'game98 : camera a dist 4 (perspective douce), recadrage par une seule projection (remplit, au plus 4 x), refait par Reset view');
+    /* game100 : precession exacte RG ; formule approchee et mesure statistique le disent */
+    ok(/k0 === 'precession' && typeof v\.exacte === 'number'/.test(onglet) && /' vs exact GR ' \+ nb4\(v\.exacte\)/.test(onglet)
+      && /' \(approximate formula: ' \+ v\.approchee \+ '\)'/.test(onglet) && /' \(statistical, ± ' \+ nb4\(v\.sigma\) \+ '\)'/.test(onglet), 'game100 : Check exact / approche / statistique');
     /* game99 : la barre d echelle choisit sa longueur ronde sur les pixels par unite MESURES (et le texte dit cette longueur-la) */
     ok(/const parUnite = d\.q\.longueur > 0 \? l0 \/ d\.q\.longueur : 0;/.test(onglet)
       && /Lr = parUnite > 0 \? longueurRonde\(Math\.min\(0\.2 \* Wc \/ parUnite, d\.q\.etendue > 0 \? d\.q\.etendue : Infinity\)\) : null, l = Lr \? Lr \* parUnite : 0;/.test(onglet)

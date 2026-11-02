@@ -55,6 +55,12 @@ function suite(T, bavard = false) {
     return `${P.mesure.toFixed(4)} vs ${P.formule.toFixed(4)} (${(100 * P.ecart).toFixed(1)} %)`;
   });
   ok('schwarzschild champ fort (defaut) : precession > formule faible champ', () => { const P = sim('schwarzschild').invariants.precession; assert.ok(P.mesure > P.formule); return `${P.mesure.toFixed(3)} > ${P.formule.toFixed(3)}`; });
+  /* game100 : la precession EXACTE (integrale elliptique depuis E, L du depart) — champ fort et champ faible, a 1e-6 */
+  for (const p of [{}, { L: 10, r0: 150 }, { L: 12, r0: 300, tours: 10 }, { L: 4.2, r0: 10 }, { L: 3.8, r0: 12 }]) ok(`schwarzschild ${JSON.stringify(p)} : precession = valeur exacte RG a 1e-6`, () => {
+    const P = sim('schwarzschild', p).invariants.precession; assert.ok(P.orbites >= 3 && typeof P.exacte === 'number');
+    assert.ok(Math.abs(P.mesure - P.exacte) < 1e-6 * Math.abs(P.exacte), `${P.mesure} vs ${P.exacte}`); return `${P.mesure.toFixed(7)} vs exact ${P.exacte.toFixed(7)} (weak ${P.formule.toFixed(4)})`;
+  });
+  ok('kepler : pas de valeur exacte RG (Newton)', () => { assert.equal(sim('kepler').invariants.precession.exacte, undefined); });
   ok('kepler : precession ~ 0 (< 1e-6 rad/orbite)', () => { const P = sim('kepler', { L: 10, r0: 150 }).invariants.precession; assert.ok(P.orbites >= 3 && Math.abs(P.mesure) < 1e-6, String(P.mesure)); });
   /* 2026-11-01 (demande du proprietaire) : la capture n est plus un refus, c est une FIN dessinee jusqu a l horizon */
   ok('schwarzschild L=3.6 r0=20 : capture = fin dessinee (n lignes, derniere ligne a l horizon)', () => {
