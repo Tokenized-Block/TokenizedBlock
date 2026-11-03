@@ -1019,6 +1019,10 @@ export function monter(racine, ctx = {}) {
   /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
   const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;
+  /* game119 (vu a l ecran : le repere « paroi droite » du gaz tombait AU MILIEU du nuage ; les courbes A, B, C a des profondeurs
+   *   differentes avaient des echelles differentes) : la perspective (taille f x / (z + dist)) deforme un GRAPHIQUE. De face et tant que
+   *   personne n a tourne la camera, la profondeur est aplatie a 0 (donnees ET decor) ; des qu on tourne, la 3-D revient. */
+  const aplati = () => !!(S.science && DE_FACE.has(S.science.s.id) && !S.cam);
   /* game101 (Phil : « augmente la limite de dezoom ») : zoomCam (vision-inside.js, partage avec la carte) ajoute 0.15 et borne a 6 —
    *   depuis dist 4 (game98) il ne restait presque rien. Ici : x 1.15 par cran, de 0.5 a 60 (15 x plus loin que la vue de depart) ;
    *   la carte garde son propre zoom. */
@@ -1050,6 +1054,11 @@ export function monter(racine, ctx = {}) {
   /* ── dessin 3-D ── */
   let proj = null, projSx = null, projSy = null, dominant = null;
   function positions() {
+    const v = positionsBrutes();
+    if (!aplati()) return v;
+    const f = new Float32Array(v.length); for (let i = 0; i < v.length; i += 3) { f[i] = v[i]; f[i + 1] = v[i + 1]; f[i + 2] = 0; } return f;
+  }
+  function positionsBrutes() {
     if (S.science && S.corps) return S.corps.vue; /* game78 : la vue « corps » (les couches n y melangent rien) */
     if (S.science && S.P.melange) return M.melangerVue(V.projeterVivant({ z: S.z, n: S.n, D: S.D, actives: S.couches.actives, angles: S.P.angles, t: S.t }), S.n, S.P.melange);
     const tous = S.couches.actives.every(Boolean);
@@ -1211,7 +1220,7 @@ export function monter(racine, ctx = {}) {
     /* game82 : le CONTEXTE (Soleil, horizon, couches de la Terre, plaques, fentes…), sous les etiquettes, dans la meme camera */
     if (S.decorOn !== false && S.science && !(S.P && S.P.melange)) {
       let dv = []; try { dv = decorVue(); } catch (_) { dv = []; }
-      const ecran = (p) => projeter(p[0] * sc, -p[1] * sc, p[2] * sc);
+      const ecran = (p) => projeter(p[0] * sc, -p[1] * sc, aplati() ? 0 : p[2] * sc);
       g.font = (11 * dpr) + 'px system-ui,sans-serif';
       for (const d of dv) {
         const col = d.q.couleur || '#ffffff';

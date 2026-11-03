@@ -287,6 +287,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/#v-tam \.tamVars\.replie > :not\(b\)\{display:none\}/.test(onglet) && /varsScene\.classList\.toggle\('replie', !S\.varsOuvert\)/.test(onglet)
     && (onglet.match(/titreVars\(/g) || []).length === 2 && /role: 'button', tabindex: '0', 'aria-expanded'/.test(onglet) && /e\.key === 'Enter' \|\| e\.key === ' '/.test(onglet),
     'game117 : le bloc sur la scene est replie par defaut (titre cliquable, clavier, aria-expanded)');
+  /* game119 : de face et camera non tournee, profondeur aplatie pour les donnees ET le decor (un graphique n a pas de perspective) */
+  ok(/const aplati = \(\) => !!\(S\.science && DE_FACE\.has\(S\.science\.s\.id\) && !S\.cam\);/.test(onglet) && /if \(!aplati\(\)\) return v;/.test(onglet)
+    && /projeter\(p\[0\] \* sc, -p\[1\] \* sc, aplati\(\) \? 0 : p\[2\] \* sc\)/.test(onglet), 'game119 : graphiques de face sans perspective (donnees et decor)');
   /* game89 (Phil, Unruh : deux libelles ecrits l un SUR l autre) : le VRAI placeur du source, sur un faux canvas — deux textes au meme
    *   point ne se chevauchent plus ; et toute ecriture de la scene passe par lui (un seul fillText nu : le sien) */
   {
