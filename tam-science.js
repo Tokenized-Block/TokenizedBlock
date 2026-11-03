@@ -46,6 +46,9 @@ import * as CHI from './tam-chimie.js';
 /* game115 (Phil : « un codex math et science extremement complet ») : mathematiques du hasard et des nombres — marches au hasard,
  *   aiguilles de Buffon, anniversaires, spirale d Ulam — SOURCES vide (le nombre de jours d une annee est un curseur) */
 import * as MAT from './tam-maths.js';
+/* game120 (passe « ce qui manque » : un seul systeme d ondes dans tout le codex) : arc-en-ciel (Descartes), corde vibrante (schema exact
+ *   a Courant 1), effet Doppler et cone de Mach — SOURCES vide (l indice de refraction est un curseur) */
+import * as OND from './tam-ondes.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -92,7 +95,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3, BIO, CHI, MAT].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3, BIO, CHI, MAT, OND].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 /** game82 (audit : le curseur « groupe » glissait par 1/400 et le module l arrondissait) : un parametre ENTIER selon le module lui-meme */
 export const paramEntier = (id, k) => { const s = systeme(id); return !!(s && s.mod.ENTIERS && (s.mod.ENTIERS[id] || []).includes(k)); };
@@ -224,6 +227,8 @@ export const ECHELLE_PROPRE = {
   marcheAleatoire: [2], aiguilleBuffon: [2], anniversaires: [2], spiraleUlam: [2],
   /* game118 : vitesse (etiquette) ; copies, generation et numero (3 grandeurs) */
   gazParfait: [2], hardyWeinberg: [0, 1, 2],
+  /* game120 : hauteur d entree (etiquette) ; position, deplacement, temps ; instant d emission (etiquette) */
+  arcEnCiel: [2], cordeVibrante: [0, 1, 2], effetDoppler: [2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

@@ -454,6 +454,10 @@ const DECORS = {
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   /* game116 : colonnes t, part, courbe ; mi-parcours (S = S0/2), la ou la loi de vitesse est comparee */
   enzyme: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Half the substrate used: the rate is checked here')],
+  /* ---------- game120 : tam-ondes.js ---------- */
+  arcEnCiel: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'The drop (radius 1)')],
+  cordeVibrante: (P, o, B) => [hyper(B, 1, 0, C.repere, 'The string at rest (u = 0)')],
+  effetDoppler: (P, o, B) => [pt([P.mach * 16, 0, B.centre[2]], C.zone, P.mach > 1 ? 'The source, ahead of its own waves' : 'The source (moving right)')],
   /* game118 : la boite du gaz (cote 10) ; la frontiere entre parents et enfants */
   gazParfait: (P, o, B) => [hyper(B, 0, 10, C.repere, 'The right wall (its hits make the pressure)')],
   hardyWeinberg: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Parents below, children above')],

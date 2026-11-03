@@ -62,6 +62,8 @@ const FILMS_DU_MODULE = {
   /* game113 : chaque image = les memes molecules a un instant plus tard */
   equilibreChimique: { colonneTemps: 2 },
   /* game114 */
+  /* game120 */
+  cordeVibrante: { colonneTemps: 2 },
   /* game118 */
   gazParfait: { colonneTemps: null, note: 'each frame is the same gas a little later (positions are exact, folded off the walls)' },
   /* game115 */
@@ -912,6 +914,28 @@ const L = {
     enUnePhrase: 'The membrane potential of a model neuron for seven input currents, one per frame: it charges, fires at 1, resets.',
     colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of the frame'],
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
+    fin: null,
+  },
+  /* game120 : ondes (tam-ondes.js) */
+  arcEnCiel: {
+    titre: 'Why a rainbow (rays in a raindrop)',
+    enUnePhrase: 'Light rays coming from the left, bending into a round drop, bouncing once off its back and leaving.',
+    colonnes: ['x (drop of radius 1)', 'y (same)', 'height b at which the ray came in (a label)'],
+    aRegarder: ['Every ray turns back by at least one smallest angle, and many rays leave close to it: the light piles up there.', 'That angle is Descartes\' exact cos^2 i = (n^2 - 1)/3; the rainbow sits at 180 degrees minus it.', 'Change the index n: a different colour bends differently, which spreads the bow into colours.'],
+    fin: null,
+  },
+  cordeVibrante: {
+    titre: 'A plucked string (the wave equation)',
+    enUnePhrase: 'A string plucked at one point, frame by frame over half a period.',
+    colonnes: ['position along the string (0 to 1)', 'displacement u', 'time (in units of L / c)'],
+    aRegarder: ['The kink splits in two and travels both ways; after half a period the shape is upside down and mirrored.', 'After a full period the string is back in its exact starting shape (the scheme is exact for this equation).', 'Pluck it in the middle: every even harmonic vanishes.'],
+    fin: null,
+  },
+  effetDoppler: {
+    titre: 'The Doppler effect and the sonic boom',
+    enUnePhrase: 'The wavefronts sent once per period by a source moving to the right.',
+    colonnes: ['x (wavelengths)', 'y (wavelengths)', 'time the front was sent (a label)'],
+    aRegarder: ['Ahead of the source the fronts bunch up to (c - v) T: a higher pitch.', 'Behind they spread to (c + v) T: a lower pitch.', 'Faster than the waves (M > 1) the fronts gather on a cone with sin(theta) = 1/M: the sonic boom.'],
     fin: null,
   },
   /* game118 */
