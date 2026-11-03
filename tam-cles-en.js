@@ -330,6 +330,10 @@ export const CLES_EN_MODULES = Object.freeze({
   pointFixe: 'rest point', retours: 'returns used', s: 'crowding s',
   /* game109 */
   xi: 'immunity loss xi',
+  /* game110 */
+  schema: 'scheme value', ecartSchema: 'gap to the scheme', borneDiscret: 'step-size gap', kPerte: 'loss rate k',
+  /* game111 */
+  sites: 'sites', evenements: 'reactions simulated', rodage: 'warm-up time', blocs: 'time blocks', baseA: 'share of A', baseC: 'share of C', baseG: 'share of G', baseT: 'share of T',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
@@ -339,6 +343,11 @@ export const NOMS_MESURES_EN = Object.freeze({
   Hdecroit: 'H (can only go down)', dissipation: 'H lost vs crowding integral', amortissement: 'Damping rate',
   /* game109 (immunite qui s estompe) */
   equilibre: 'Endemic level of infected', approche: 'Approach rate to the endemic level',
+  /* game110 (perte de chaleur vers l air) */
+  refroidissement: 'Total heat (fading to the air)',
+  /* game111 (sciences de la vie) */
+  differences: 'Sites that differ from the ancestor', distance: 'Evolutionary distance read back', substitutions: 'Real base changes per site', composition: 'Base composition (chi-square)',
+  arnMoyen: 'Mean mRNA count', bruitArn: 'mRNA noise (Fano factor)', proteineMoyenne: 'Mean protein count', bruitProteine: 'Protein noise (Fano factor)', covariance: 'mRNA-protein covariance', simulation: 'Simulation',
   L: 'Angular momentum L',
   L1: 'L1',
   L2: 'L2',

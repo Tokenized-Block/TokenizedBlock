@@ -5799,6 +5799,8 @@ const SERVIS = [
   'tam-theories-2.js',
   /* game96 : Rutherford, logistique, chaleur, oscillateur force, brachistochrone, Galton */
   'tam-theories-3.js',
+  /* game111 : sciences de la vie (ADN, ARN, genes) */
+  'tam-biologie.js',
   /* game94 : les noms et cles des mesures en anglais */
   'tam-cles-en.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',

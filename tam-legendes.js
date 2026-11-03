@@ -55,6 +55,8 @@ const FILMS_DU_MODULE = {
   rutherford: { colonneTemps: 3, note: 'each frame is one trajectory (one impact parameter), not an instant' },
   chaleur: { colonneTemps: 1 },
   brachistochrone: { colonneTemps: 2, note: 'frame 1 is the cycloid, 2 the straight line, 3 the circular arc; the same start and end' },
+  /* game111 : tam-biologie.js — chaque image = la meme sequence a un instant plus tard */
+  adnMutations: { colonneTemps: 4 },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
 /* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
@@ -833,7 +835,7 @@ const L = {
     titre: 'Heat spreading along a bar (heat equation)',
     enUnePhrase: 'A film of a narrow block of heat on an insulated bar spreading into a bell.',
     colonnes: ['position x along the bar (length units, the middle of the bar)', 'time t', 'temperature u'],
-    aRegarder: ['The total heat never changes.', 'The width grows exactly as sigma^2 = sigma0^2 + 2 D t: faster with a larger diffusion D.', 'The peak approaches the Gaussian bell once the start is much narrower than the spread.'],
+    aRegarder: ['The total heat never changes on insulated walls; with loss to the air k it fades as e^(-k t) while the spread grows just the same.', 'The width grows exactly as sigma^2 = sigma0^2 + 2 D t: faster with a larger diffusion D.', 'The peak approaches the Gaussian bell once the start is much narrower than the spread.'],
     fin: null,
   },
   oscillateurForce: {
@@ -855,6 +857,21 @@ const L = {
     enUnePhrase: 'Balls fall through rows of pegs, bouncing left or right at random, and pile up into a bell.',
     colonnes: ['x (peg spacings)', 'height: down the rows along a path, then the pile rising from the floor under the bins', 'index of the ball (a label)'],
     aRegarder: ['The pile follows the binomial law C(L, k) / 2^L, with mean 0 and variance L / 4.', 'With more rows the bell gets wider and smoother: the central limit theorem.', 'A finite number of balls: the match is statistical, and a new seed gives a slightly different pile.'],
+    fin: null,
+  },
+  /* game111 : sciences de la vie (tam-biologie.js) — formules seulement, aucune valeur publiee */
+  adnMutations: {
+    titre: 'DNA that mutates (Jukes-Cantor model)',
+    enUnePhrase: 'The start of a DNA sequence drawn as a double helix, frame by frame, while random copying mistakes change its bases.',
+    colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base: 0 = A, 1 = C, 2 = G, 3 = T (the second strand is the complement: A with T, C with G)', 'time t'],
+    aRegarder: ['The share of sites that differ from the ancestor follows 3/4 (1 - e^(-4 mu t / 3)) and never passes 3/4.', 'Real base changes outnumber the differences once a site is hit twice; the distance -3/4 ln(1 - 4p/3) corrects for it.', 'A finite sequence: the match is statistical, and a new seed gives another history.'],
+    fin: null,
+  },
+  dogmeCentral: {
+    titre: 'Gene to RNA to protein (the central dogma, one molecule at a time)',
+    enUnePhrase: 'The numbers of messenger RNA and protein molecules made from one gene, reaction by reaction, over the last 30 mRNA lifetimes.',
+    colonnes: ['time t (mRNA lifetimes, the last 30)', 'number of mRNA molecules', 'number of protein molecules'],
+    aRegarder: ['The mRNA count jumps one by one around k: Poisson noise, variance equal to the mean.', 'Proteins come in bursts from each mRNA, so their noise is larger: Fano factor 1 + kp / (1 + gp).', 'The means, the noises and the mRNA-protein covariance are compared with exact formulas, with uncertainties measured on the run.'],
     fin: null,
   },
   /* ---------- familles hors science ---------- */

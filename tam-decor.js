@@ -442,6 +442,12 @@ const DECORS = {
    *   game105 ; la formule est celle que le module compare, lue dans ses invariants) */
   galton: (P, o, B) => { const m = o.invariants.moyenne.formule;
     return [hyper(B, 0, m, C.repere, m === 0 ? 'Mean landing position (x = 0)' : 'Expected mean landing position (x = L (q - 1/2) = ' + Math.round(m * 1000) / 1000 + ')')]; },
+  /* ---------- game111 : tam-biologie.js ---------- */
+  /* colonnes : x, y, position, base, t ; l axe de l helice passe par (0, 0) */
+  adnMutations: (P, o, B) => [seg([0, 0, B.lo[2], B.centre[3], B.centre[4]], [0, 0, B.hi[2], B.centre[3], B.centre[4]], C.repere, 'Axis of the double helix')],
+  /* colonnes : t, ARN, proteine ; les moyennes EXACTES que le module compare (lues dans ses invariants) */
+  dogmeCentral: (P, o, B) => { const a = o.invariants.arnMoyen.formule, p = o.invariants.proteineMoyenne.formule, r = (x) => Math.round(x * 100) / 100;
+    return [hyper(B, 1, a, C.repere, 'Exact mean mRNA count (k = ' + r(a) + ')'), hyper(B, 2, p, C.zone, 'Exact mean protein count (k kp / gp = ' + r(p) + ')')]; },
 };
 
 /** les systemes sans decor, et pourquoi (le module n expose pas d objet de contexte vrai dans ses coordonnees) */

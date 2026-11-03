@@ -231,12 +231,14 @@ function logistique(P, n) {
 //   (mesure 02/11 : la barre entiere, presque partout froide, rendait les curseurs D et largeur presque muets apres standardisation).
 // Pic : la solution tend vers une gaussienne, u_max -> Q / sqrt(2 pi sigma^2) ; ce n est exact qu a la limite sigma0 << sigma(t)
 //   (comparaison declaree seulement pour sigma0^2 <= 0.1 sigma^2(T)).
+/* e^(-x) pour 0 <= x <= 2 par la serie (+ - * / seulement : deterministe) ; 60 termes, reste < 2^61/61! */
+function expNeg(x) { let s = 1, t = 1; for (let j = 1; j <= 60; j++) { t *= -x / j; s += t; } return s; }
 const CHALEUR_CELLULES = 851, CHALEUR_IMAGES = 8, CHALEUR_DEMI = 9, CHALEUR_FENETRE = 3;
 function chaleur(P, n) {
-  const Dc = P.D, T = P.duree, w = P.largeur, M = CHALEUR_CELLULES, c0 = (M - 1) / 2;
+  const Dc = P.D, T = P.duree, w = P.largeur, kp = P.perte || 0, M = CHALEUR_CELLULES, c0 = (M - 1) / 2;
   const X = CHALEUR_DEMI, dx = X / c0;
   const h = Math.max(0, Math.round(w / (2 * dx))), m = 2 * h + 1, sigma0 = dx * dx * (m * m - 1) / 12;
-  const S = Math.ceil(T * Dc / (0.4 * dx * dx)), dt = T / S, q = Dc * dt / (dx * dx);
+  const S = Math.ceil(T * Dc / (0.4 * dx * dx)), dt = T / S, q = Dc * dt / (dx * dx), a = 1 - kp * dt;
   let u = new Float64Array(M), v = new Float64Array(M);
   for (let i = c0 - h; i <= c0 + h; i++) u[i] = 1 / (m * dx);
   const xs = (i) => (i - c0) * dx, iw = Math.round(CHALEUR_FENETRE / dx);
@@ -254,17 +256,29 @@ function chaleur(P, n) {
   suivi.noter({ chaleur: moments(u).Q });
   imageDe(0);
   for (let st = 1; st <= S; st++) {
-    for (let i = 0; i < M; i++) { const g = i === 0 ? u[0] : u[i - 1], d = i === M - 1 ? u[M - 1] : u[i + 1]; v[i] = u[i] + q * (d - 2 * u[i] + g); }
+    for (let i = 0; i < M; i++) { const g = i === 0 ? u[0] : u[i - 1], d = i === M - 1 ? u[M - 1] : u[i + 1]; v[i] = (u[i] + q * (d - 2 * u[i] + g)) * a; }
     const tmp = u; u = v; v = tmp;
     if (st % 25 === 0 || st === S) suivi.noter({ chaleur: moments(u).Q });
     imageDe(st);
   }
   const fin = moments(u), sT = sigma0 + 2 * Dc * T, inv = suivi.fini();
   inv.chaleur.note = 'total heat sum u dx with no-flux walls : conserved exactly by the scheme (telescoping sum), drift = rounding';
-  return { D: 3, brut, film, unite: 'sans objet (diffusion, non chaotique)', invariants: {
+  /* game110 : perte vers l air k (Newton), du/dt = D u'' - k u. Chaque pas multiplie TOUT le profil par a = 1 - k dt : la somme est
+   *   multipliee par a (exact, au rond pres), la variance (rapport de moments) ne bouge pas. Continu : Q(t) = Q0 e^(-k t) ; le schema donne
+   *   Q0 a^S, plus bas de k^2 T dt / 2 relatif au premier ordre (S ln(1 - k dt) = -kT - k^2 T dt / 2...) : e^(-kT) est APPROCHEE de cet ecart.
+   *   k = 0 : a = 1 exactement, x * 1 = x en IEEE, le run est identique au bit pres a celui d avant. */
+  const pertes = {};
+  if (kp > 0) {
+    const Q0 = inv.chaleur.debut, sch = Q0 * a ** S, ct = Q0 * expNeg(kp * T), bd = kp * kp * T * dt / 2;
+    delete inv.chaleur;
+    pertes.refroidissement = { mesure: fin.Q, formule: ct, schema: sch, kPerte: kp, t: T, ecartSchema: Math.abs(fin.Q - sch) / sch, borneDiscret: bd,
+      approchee: 'each step multiplies the bar by (1 - k dt), which lands about k^2 T dt / 2 = ' + bd.toExponential(1) + ' (relative) below e^(-kT)',
+      note: 'total heat with loss to the air at rate k against Q0 e^(-k t) ; the scheme value Q0 (1 - k dt)^S is matched to rounding' };
+  }
+  return { D: 3, brut, film, unite: 'sans objet (diffusion, non chaotique)', invariants: { ...pertes,
     variance: { mesure: fin.v, formule: sT, ecart: Math.abs(fin.v - sT) / sT, sigma0carre: sigma0, D: Dc, t: T, serie,
       note: 'spread of the heat (second moment) against sigma^2(t) = sigma0^2 + 2 D t, which the explicit scheme obeys exactly while the walls stay cold ; sigma0^2 = dx^2 (m^2 - 1)/12 for the initial block of m cells' },
-    chaleur: inv.chaleur,
+    ...(inv.chaleur ? { chaleur: inv.chaleur } : {}),
     centre: { mesure: fin.moy, formule: 0, note: 'centre of the heat stays at x = 0 (symmetric start)' },
     pic: { mesure: fin.max, formule: fin.Q / Math.sqrt(DEUX_PI * sT), comparable: sigma0 <= 0.1 * sT, rapportSigma0: sigma0 / sT,
       note: 'peak temperature against the Gaussian limit Q / sqrt(2 pi sigma^2(t)) ; exact only when the start is much narrower than the spread, compared only for sigma0^2 <= 0.1 sigma^2' },
@@ -473,9 +487,9 @@ export const SYSTEMES = Object.freeze([
   { id: 'logistique', nom: 'Order to chaos (logistic map)', science: 'Chaos theory', D: 3, nuage: true, params: { rMin: 2.8, rMax: 4, points: 40 },
     bornes: { rMin: [1, 3.4], rMax: [3.5, 4], points: [8, 60] },
     phrase: 'A visualisation of the bifurcation diagram of the logistic map x -> r x (1 - x): for each growth rate r the states it settles on, a single value, then 2, 4, 8 and finally chaos. The period doublings are measured on the cycle multipliers and compared with the exact r1 = 3 and r2 = 1 + sqrt 6; later doublings and their shrinking ratio are measurements only.' },
-  { id: 'chaleur', nom: 'Heat spreading along a bar (heat equation)', science: 'Thermal physics', D: 3, params: { D: 0.25, duree: 1, largeur: 0.6 },
-    bornes: { D: [0.05, 0.5], duree: [0.1, 1], largeur: [0.1, 1.5] },
-    phrase: 'A visualisation of the 1D heat equation solved by an explicit, stable finite-difference scheme: a narrow block of heat spreads into a bell along a fixed bar, frame by frame, between insulated walls. The total heat stays constant and the spread obeys sigma^2(t) = sigma0^2 + 2 D t exactly; the peak approaches the Gaussian value only once the start is much narrower than the spread.' },
+  { id: 'chaleur', nom: 'Heat spreading along a bar (heat equation)', science: 'Thermal physics', D: 3, params: { D: 0.25, duree: 1, largeur: 0.6, perte: 0 },
+    bornes: { D: [0.05, 0.5], duree: [0.1, 1], largeur: [0.1, 1.5], perte: [0, 2] },
+    phrase: 'A visualisation of the 1D heat equation solved by an explicit, stable finite-difference scheme: a narrow block of heat spreads into a bell along a fixed bar, frame by frame, between insulated walls. The total heat stays constant (with loss to the air at rate k it fades as e^(-k t)) and the spread obeys sigma^2(t) = sigma0^2 + 2 D t exactly; the peak approaches the Gaussian value only once the start is much narrower than the spread.' },
   { id: 'oscillateurForce', nom: 'A driven spring and resonance (damped driven oscillator)', science: 'Classical mechanics', D: 3, params: { gamma: 0.1, omega: 0.8, x0: 1 },
     bornes: { gamma: [0.05, 1], omega: [0.2, 3], x0: [-3, 3] },
     phrase: 'A visualisation of a damped mass on a spring pushed by a periodic force (natural frequency 1, force amplitude 1): released from x0, it forgets its start and settles into a steady swing whose amplitude and phase are compared with the exact formulas, and a frequency sweep finds the resonance peak at sqrt(1 - 2 gamma^2). A linear spring, no friction other than the damping term.' },

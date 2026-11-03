@@ -190,14 +190,21 @@ function suite(T, bavard = false) {
     assert.ok(G.nombreDeFourier <= 0.4 + 1e-12 && Math.abs(G.dt * G.pas - P.duree) < 1e-12 * P.duree && Math.abs(G.nombreDeFourier - P.D * G.dt / G.dx ** 2) < 1e-12, 'stabilite');
     assert.ok(V.ecart < 1e-12, 'variance ' + V.ecart);
     V.serie.t.forEach((t, k) => { assert.ok(Math.abs(V.serie.formule[k] - (s0 + 2 * P.D * t)) < 1e-12 * sT && Math.abs(V.serie.variance[k] - V.serie.formule[k]) < 1e-12 * sT, 'image ' + k); });
-    assert.ok(I.chaleur.derive < 1e-13 && Math.abs(I.chaleur.debut - 1) < 1e-12, 'chaleur ' + I.chaleur.derive); assert.ok(Math.abs(I.centre.mesure) < 1e-12);
+    let Q = 1;
+    if (P.perte > 0) { /* game110 : perte vers l air — la reference est recalculee ICI (Math.exp, (1 - k dt)^S), pas lue dans le module */
+      const C = I.refroidissement, a = 1 - P.perte * G.dt, sch = a ** G.pas, ct = Math.exp(-P.perte * P.duree), bd = P.perte * P.perte * P.duree * G.dt / 2;
+      assert.ok(!('chaleur' in I), 'plus de chaleur conservee'); Q = C.mesure;
+      assert.ok(Math.abs(C.mesure / sch - 1) < 1e-13, 'schema ' + C.mesure + ' ' + sch); assert.ok(Math.abs(C.formule / ct - 1) < 1e-14, 'e^-kT ' + C.formule + ' ' + ct);
+      const rel = (ct - C.mesure) / ct; assert.ok(rel > 0 && Math.abs(rel / bd - 1) < 0.01, 'ecart au continu ' + rel + ' borne ' + bd); assert.ok(typeof C.approchee === 'string');
+    } else assert.ok(I.chaleur.derive < 1e-13 && Math.abs(I.chaleur.debut - 1) < 1e-12, 'chaleur ' + I.chaleur.derive);
+    assert.ok(Math.abs(I.centre.mesure) < 1e-12);
     const ratio = s0 / sT, P_ = I.pic; assert.equal(P_.comparable, ratio <= 0.1);
-    if (P_.comparable) { assert.ok(Math.abs(P_.formule - 1 / Math.sqrt(2 * Math.PI * sT)) < 1e-12 / Math.sqrt(sT)); const e = Math.abs(P_.mesure / P_.formule - 1); assert.ok(e < 0.2 * ratio * ratio + 0.5 * G.dx * G.dx / sT, `pic ${e} (ratio ${ratio}, dx^2/s^2 ${G.dx * G.dx / sT})`); }
+    if (P_.comparable) { assert.ok(Math.abs(P_.formule - Q / Math.sqrt(2 * Math.PI * sT)) < 1e-12 / Math.sqrt(sT)); const e = Math.abs(P_.mesure / P_.formule - 1); assert.ok(e < 0.2 * ratio * ratio + 0.5 * G.dx * G.dx / sT, `pic ${e} (ratio ${ratio}, dx^2/s^2 ${G.dx * G.dx / sT})`); }
     for (let f = 0; f < R.film.images; f++) { const d0 = R.film.debuts[f], c = R.film.tailles[f];
       for (let r = 0; r < c; r++) { const o = 3 * (d0 + r); assert.ok(b[o + 2] >= 0 && b[o + 1] === b[3 * d0 + 1] && Math.abs(b[o]) <= G.fenetreDessin + 1e-9 && Math.abs(G.fenetreDessin - 3) <= G.dx); if (r) assert.ok(b[o] > b[o - 3]); }
       if (f) assert.ok(b[3 * d0 + 1] > b[3 * R.film.debuts[f - 1] + 1]); }
     assert.equal(b[1], 0); assert.ok(Math.abs(b[3 * 1499 + 1] - P.duree) < 1e-12);
-    return `var ${V.mesure.toFixed(6)}/${V.formule.toFixed(6)} (${V.ecart.toExponential(1)}), chaleur ${I.chaleur.derive.toExponential(1)}, pic ${P_.comparable ? Math.abs(P_.mesure / P_.formule - 1).toExponential(1) : 'non compare'}`;
+    return `var ${V.mesure.toFixed(6)}/${V.formule.toFixed(6)} (${V.ecart.toExponential(1)}), chaleur ${I.chaleur ? I.chaleur.derive.toExponential(1) : 'Q ' + I.refroidissement.mesure.toFixed(6)}, pic ${P_.comparable ? Math.abs(P_.mesure / P_.formule - 1).toExponential(1) : 'non compare'}`;
   });
   ok('chaleur : la variance initiale du creneau discret vaut w^2/12 (continu) a moins de deux cellules', () => {
     const G = S('chaleur').invariants.grille, w = S('chaleur').params.largeur; assert.ok(Math.abs(Math.sqrt(12 * S('chaleur').invariants.variance.sigma0carre) - w) < 2 * G.dx);
@@ -286,7 +293,7 @@ function suite(T, bavard = false) {
     assert.deepEqual(sim('logistique', { rMin: 0, rMax: 5, points: 9.4 }, { n: 50 }).params, { rMin: 1, rMax: 4, points: 9 });
     assert.deepEqual(sim('galton', { billes: 99999, rangees: 3.5, graine: NaN }, { n: 50 }).params, { billes: 5000, rangees: 4, penchant: 0.5, graine: 1 });
     assert.equal(sim('galton', { penchant: 2 }, { n: 50 }).params.penchant, 0.9);
-    assert.deepEqual(sim('chaleur', { D: -1, duree: Infinity, largeur: null }, { n: 50 }).params, { D: 0.05, duree: 1, largeur: 0.1 });
+    assert.deepEqual(sim('chaleur', { D: -1, duree: Infinity, largeur: null, perte: 9 }, { n: 50 }).params, { D: 0.05, duree: 1, largeur: 0.1, perte: 2 });
   });
   ok('reglagesPhysique : forme, valeur bornee', () => {
     const r = T.reglagesPhysique('oscillateurForce', { omega: 99 });
@@ -348,6 +355,9 @@ const MUTANTS = [
   ['chaleur : laplacien -2.01 u', '(d - 2 * u[i] + g)', '(d - 2.01 * u[i] + g)'],
   ['chaleur : sigma0^2 = dx^2 m^2/12', 'sigma0 = dx * dx * (m * m - 1) / 12', 'sigma0 = dx * dx * (m * m) / 12'],
   ['chaleur : sigma^2 = sigma0^2 + D t', 'const fin = moments(u), sT = sigma0 + 2 * Dc * T', 'const fin = moments(u), sT = sigma0 + Dc * T'],
+  ['chaleur : perte (1 - 2k dt)', 'a = 1 - kp * dt;', 'a = 1 - 2 * kp * dt;'],
+  ['chaleur : perte appliquee au seul laplacien', 'v[i] = (u[i] + q * (d - 2 * u[i] + g)) * a;', 'v[i] = u[i] + q * (d - 2 * u[i] + g) * a;'],
+  ['chaleur : e^(-x) a 3 termes', 'for (let j = 1; j <= 60; j++) { t *= -x / j; s += t; }', 'for (let j = 1; j <= 3; j++) { t *= -x / j; s += t; }'],
   ['chaleur : pas instable (D dt/dx^2 = 0.6)', 'Math.ceil(T * Dc / (0.4 * dx * dx))', 'Math.ceil(T * Dc / (0.6 * dx * dx))'],
   ['oscillateur : amplitude avec (gamma omega)^2', '(2 * gamma * w) * (2 * gamma * w));', '(gamma * w) * (gamma * w));'],
   ['oscillateur : amortissement gamma au lieu de 2 gamma', '-px - 2 * gamma * pv', '-px - gamma * pv'],

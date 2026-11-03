@@ -15,7 +15,7 @@ const ids = TS.SYSTEMES.map((s) => s.id);
 /* game80 : + les 16 grandes questions (tam-grandes-questions.js : 9, tam-grandes-questions-2.js : 7) */
 /* game81 : + les 9 champs quantiques (tam-champs-quantiques.js) */
 /* game88 : + les 4 principes du vide (tam-vide-quantique.js) */
-ok(ids.length === 99, '99 systemes attendus, ' + ids.length + ' trouves'); /* game93 : + 6 theories classiques (tam-theories-2.js) ; game96 : + 6 (tam-theories-3.js) */
+ok(ids.length === 101, '101 systemes attendus, ' + ids.length + ' trouves'); /* game93 : + 6 theories classiques (tam-theories-2.js) ; game96 : + 6 (tam-theories-3.js) ; game111 : + 2 (tam-biologie.js) */
 ok(['videComprime', 'casimirDynamique', 'higgsVide', 'emissionSpontanee'].every((id) => ids.includes(id) && TS.systeme(id).mod.SOURCES), 'les 4 principes du vide sont dans tam-science.js#SYSTEMES');
 const CHQ_IDS = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'effetUnruh', 'couplageCourant', 'comptonKleinNishina', 'atomes', 'quarks'];
 ok(CHQ_IDS.every((id) => ids.includes(id) && TS.systeme(id).mod.SOURCES), 'les 9 champs quantiques sont dans tam-science.js#SYSTEMES');
@@ -64,7 +64,7 @@ for (const id of ids) {
     ok(F.colonneTemps === null || (Number.isInteger(F.colonneTemps) && F.colonneTemps < o.D), id + ' : colonneTemps');
   }
 }
-ok(Object.keys(LEGENDES).length === 101 && LEGENDES.__attracteur && LEGENDES.__formule, '99 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
+ok(Object.keys(LEGENDES).length === 103 && LEGENDES.__attracteur && LEGENDES.__formule, '101 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
 ok(Object.keys(LEGENDES).every((id) => id.startsWith('__') || ids.includes(id)), 'aucune legende orpheline');
 ok(legende('__attracteur', { D: 5 }).colonnes.length === 5 && LEGENDES.__attracteur.colonnes.length === 3, 'attracteur : une colonne par variable');
 ok(LEGENDES.__formule.colonnes.length === 3 && legende('inconnu') === null, 'formule x y z ; id inconnu -> null');
@@ -79,8 +79,10 @@ const FILMS = ['supernova', 'supernovaHydro', 'effetTunnel', 'superpositionQuant
   /* game88 : l emission spontanee (16 instants) ; les 3 autres principes du vide n ont pas de film */
   'emissionSpontanee', 'kuramoto', 'gibbsFourier',
   /* game96 : une trajectoire par image (Rutherford), 8 instants (chaleur), trois pistes (brachistochrone) */
-  'rutherford', 'chaleur', 'brachistochrone'];
-ok(FILMS.every((id) => films.includes(id)) && films.length === 22, 'les 22 films : ' + films.join(','));
+  'rutherford', 'chaleur', 'brachistochrone',
+  /* game111 : 8 instants de la meme sequence d ADN */
+  'adnMutations'];
+ok(FILMS.every((id) => films.includes(id)) && films.length === 23, 'les 23 films : ' + films.join(','));
 function blocsExacts(id, o, F) {
   const c = F.colonneTemps, D = o.D, b = o.brut;
   for (let k = 0; k < F.images; k++) {

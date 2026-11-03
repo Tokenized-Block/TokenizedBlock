@@ -37,6 +37,9 @@ import * as T2 from './tam-theories-2.js';
 /* game96 : Rutherford (b = k/(2E) cot(theta/2)), logistique (r1 = 3, r2 = 1 + sqrt 6), chaleur (sigma^2 = sigma0^2 + 2Dt),
  *   oscillateur force (amplitude exacte), brachistochrone (sqrt(a/g) theta), Galton (binomiale) — SOURCES vide */
 import * as T3 from './tam-theories-3.js';
+/* game111 (Phil : « ajoute tout ce qui est relie a l ADN, l ARN et le reste ») : sciences de la vie — mutations de l ADN (Jukes-Cantor),
+ *   gene -> ARN -> proteine (Gillespie, moments exacts) — SOURCES vide */
+import * as BIO from './tam-biologie.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -83,7 +86,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3, BIO].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 /** game82 (audit : le curseur « groupe » glissait par 1/400 et le module l arrondissait) : un parametre ENTIER selon le module lui-meme */
 export const paramEntier = (id, k) => { const s = systeme(id); return !!(s && s.mod.ENTIERS && (s.mod.ENTIERS[id] || []).includes(k)); };
@@ -205,6 +208,8 @@ export const ECHELLE_PROPRE = {
   ising2D: [2, 3], lotkaVolterra: [2], epidemieSIR: [3], kuramoto: [2, 3], gibbsFourier: [0, 3],
   /* game96 : tam-theories-3.js#COLONNES (b et temps, r, x et temps, temps, temps, indice de bille) */
   rutherford: [2, 3], logistique: [0], chaleur: [1, 2], oscillateurForce: [2], brachistochrone: [2], galton: [2],
+  /* game111 : tam-biologie.js#COLONNES (base et temps ; temps, ARN, proteine : trois grandeurs differentes) */
+  adnMutations: [3, 4], dogmeCentral: [0, 1, 2],
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {
