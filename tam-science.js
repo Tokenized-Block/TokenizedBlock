@@ -43,6 +43,9 @@ import * as BIO from './tam-biologie.js';
 /* game113 (Phil : « ajoute aussi une categorie science chimique ») : reactions en chaine (Bateman), equilibre A <-> B, brusselator
  *   (seuil de Hopf exact) — SOURCES vide (pas de pH : la constante de l eau est une valeur publiee non lue) */
 import * as CHI from './tam-chimie.js';
+/* game115 (Phil : « un codex math et science extremement complet ») : mathematiques du hasard et des nombres — marches au hasard,
+ *   aiguilles de Buffon, anniversaires, spirale d Ulam — SOURCES vide (le nombre de jours d une annee est un curseur) */
+import * as MAT from './tam-maths.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -89,7 +92,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3, BIO, CHI].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3, BIO, CHI, MAT].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 /** game82 (audit : le curseur « groupe » glissait par 1/400 et le module l arrondissait) : un parametre ENTIER selon le module lui-meme */
 export const paramEntier = (id, k) => { const s = systeme(id); return !!(s && s.mod.ENTIERS && (s.mod.ENTIERS[id] || []).includes(k)); };
@@ -217,6 +220,8 @@ export const ECHELLE_PROPRE = {
   deriveGenetique: [0, 1, 2], enzyme: [2],
   /* game114 : numero de descendant ; temps, potentiel, courant (3 grandeurs) */
   mendel: [2], neurone: [0, 1, 2],
+  /* game115 : numero de pas ; croise ou non ; numero de groupe ; le premier lui-meme */
+  marcheAleatoire: [2], aiguilleBuffon: [2], anniversaires: [2], spiraleUlam: [2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0], equilibreChimique: [2], brusselator: [2],
 };

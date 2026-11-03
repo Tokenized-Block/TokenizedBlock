@@ -453,6 +453,11 @@ const DECORS = {
     return [hyper(B, 1, p, C.repere, 'Starting share p0 = ' + Math.round(p * 1000) / 1000 + ' (the expected mean, forever)')]; },
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   enzyme: (P, o, B) => { const s0 = P.substrat; return [seg([s0, 0, B.lo[2]], [0, s0, B.lo[2]], C.repere, 'S + P = S0 (all matter, when the complex is empty)')]; },
+  /* ---------- game115 : tam-maths.js ---------- */
+  marcheAleatoire: (P, o, B) => [pt([0, 0, B.lo[2]], C.repere, 'Start (every walker begins here)')],
+  aiguilleBuffon: (P, o, B) => [hyper(B, 1, 5, C.repere, 'A floor line (y = 5; one every unit)')],
+  anniversaires: (P, o, B) => [pt([1, 0, B.centre[2]], C.repere, 'Day 0 of the year (the circle turns once per year)')],
+  spiraleUlam: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, '1, the centre of the spiral')],
   /* game114 : colonnes copies de A, copies de B, numero ; la case des parents (AaBb) */
   mendel: (P, o, B) => [pt([1, 1, B.centre[2]], C.repere, 'AaBb, like both parents (a quarter of the offspring)')],
   /* colonnes t, v, I ; le seuil v = 1 */

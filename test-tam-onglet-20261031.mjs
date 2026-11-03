@@ -345,7 +345,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
       { const CE = await import('./tam-cles-en.js'), dC = onglet.indexOf('const CLES_EN = {'), fC = onglet.indexOf('};', dC) + 2;
         const CLES = { ...new Function(onglet.slice(dC, fC) + '\nreturn CLES_EN;')(), ...CE.CLES_EN_MODULES }, sansNom = new Set(), sansCle = new Set();
         /* game109 : aussi les variables de la nuit du 02-03/11 au MAX — leurs mesures n existent qu avec elles (aux defauts, rien a voir) */
-        const VARIANTES = { galton: { penchant: 0.9 }, rutherford: { attirant: 1 }, lotkaVolterra: { saturation: 0.2 }, epidemieSIR: { perteImmunite: 0.2 }, chaleur: { perte: 2 }, brusselator: { ecartSeuil: 3 }, mendel: { recombinaison: 0 }, neurone: { courant: 0.5 }, equilibreChimique: { kf: 5, kb: 0.1 } };
+        const VARIANTES = { galton: { penchant: 0.9 }, rutherford: { attirant: 1 }, lotkaVolterra: { saturation: 0.2 }, epidemieSIR: { perteImmunite: 0.2 }, chaleur: { perte: 2 }, brusselator: { ecartSeuil: 3 }, mendel: { recombinaison: 0 }, neurone: { courant: 0.5 }, aiguilleBuffon: { aiguilles: 100 }, anniversaires: { personnes: 80, jours: 50 }, equilibreChimique: { kf: 5, kb: 0.1 } };
         for (const s of TSq.SYSTEMES) for (const extra of [{}, VARIANTES[s.id]].filter(Boolean)) { const o = s.mod.simuler(s.id, { ...TSq.paramsScience(s.id).params, ...extra });
           for (const [k, v] of Object.entries(o.invariants || {})) { if (!CE.NOMS_MESURES_EN[k]) sansNom.add(k);
             if (v && typeof v === 'object' && !('mesure' in v && ('formule' in v || 'theorie' in v)) && !('derive' in v)) for (const [a, x] of Object.entries(v)) if (typeof x === 'number' && !CLES[a]) sansCle.add(a); } }
@@ -512,7 +512,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.mintVisible\(TAMART_DEPLOIEMENT\) && !!\(\(S\.choix \|\| \(S\.P && S\.P\.regle\) \|\| S\.science\) && S\.octets && S\.c && S\.c\.ok\)/.test(onglet), 'une science montre le Mint seulement avec ses octets et son certificat local');
   ok(/'par radian d orbite': 'per radian of orbit'/.test(onglet) && /uniteEn\(o\.uniteLyapunov\)/.test(onglet), 'les unites des modules sont dites en anglais a l ecran');
   { const fichiers = ['./tam-physique.js', './tam-sciences.js', './tam-fluides.js', './tam-astro.js', './tam-cosmos.js', './tam-invisible.js', './tam-quantique.js',
-    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js', './tam-theories-2.js', './tam-theories-3.js', './tam-biologie.js', './tam-chimie.js'];
+    './tam-fusion.js', './tam-grandes-questions.js', './tam-grandes-questions-2.js', './tam-champs-quantiques.js', './tam-vide-quantique.js', './tam-theories-2.js', './tam-theories-3.js', './tam-biologie.js', './tam-chimie.js', './tam-maths.js'];
     { const cq = (await import('./tam-champs-quantiques.js')).SYSTEMES.map((s) => s.id); ok(cq.every((id) => onglet.includes("'" + id + "'")) && /\['champs', 'Quantum fields, the vacuum, atoms & quarks'\]/.test(onglet), 'game81 : les ' + cq.length + ' champs quantiques ont leur groupe'); }
     ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
     /* game97 : les figures classiques plates partent de face ; la scene ET les gestes partent de la meme base */
@@ -537,9 +537,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
     for (const f of fichiers) ok(serveur.includes("'" + f.slice(2) + "'"), f + ' est dans la liste servie');
     /* chaque systeme est dans un groupe du menu (aucun orphelin) */
-    ok(/const groupeDe = \(s\) => THEMES\.chimie\.includes\(s\.id\) \? 'chimie' : THEMES\.biologie\.includes\(s\.id\) \? 'biologie' : THEMES\.theories\.includes\(s\.id\) \? 'theories' : THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet)
+    ok(/const groupeDe = \(s\) => THEMES\.maths\.includes\(s\.id\) \? 'maths' : THEMES\.chimie\.includes\(s\.id\) \? 'chimie' : THEMES\.biologie\.includes\(s\.id\) \? 'biologie' : THEMES\.theories\.includes\(s\.id\) \? 'theories' : THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet)
       && /\['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet)
-      && /\['biologie', 'Life sciences: DNA, RNA, genes, enzymes, neurons'\]/.test(onglet) && /\['chimie', 'Chemistry: reactions, equilibrium, chemical clocks'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+      && /\['biologie', 'Life sciences: DNA, RNA, genes, enzymes, neurons'\]/.test(onglet) && /\['chimie', 'Chemistry: reactions, equilibrium, chemical clocks'\]/.test(onglet) && /\['maths', 'Mathematics: chance, primes, random walks'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
     /* game112 (vu a l ecran : « Speed: measured 0.0715 » — ma cle vitesse etait redefinie plus bas dans la MEME table, la derniere
      *   gagne en silence ; game111 : « A » et « k » deja pris) : aucune cle en double dans les tables de noms anglais */
     { const t = readFileSync(new URL('./tam-cles-en.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''), doublons = [];

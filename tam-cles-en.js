@@ -341,7 +341,9 @@ export const CLES_EN_MODULES = Object.freeze({
   ecartSeuil: 'distance to the threshold', xFixe: 'fixed point x = A', yFixe: 'fixed point y = B/A',
   /* game114 */
   descendants: 'offspring', dominantsDeux: 'A_B_', dominantA: 'A_bb', dominantB: 'aaB_', recessifsDeux: 'aabb', impulsions: 'spikes', courant: 'current I',
-  courants: 'currents', compares: 'compared', courantSeuil: 'threshold current', courantsMuets: 'silent currents', impulsionsSousSeuil: 'spikes below threshold',
+  courants: 'currents', compares: 'compared',
+  /* game115 */
+  marcheurs: 'walkers', aiguilles: 'needles', groupes: 'groups', personnes: 'people', jours: 'days', jusqua: 'up to N', courantSeuil: 'threshold current', courantsMuets: 'silent currents', impulsionsSousSeuil: 'spikes below threshold',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
@@ -358,6 +360,9 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game114 (Mendel, neurone) */
   dominants: 'Both dominant traits (A_B_)', recessifs: 'Both recessive traits (aabb)', heterozygotes: 'Share of Aa (1 : 2 : 1)', phenotypes: 'Four traits (chi-square)',
   recombinaisonLue: 'Recombination rate read back', courbeFI: 'Firing rate vs current (frames)', repos: 'Silent currents (below threshold)',
+  /* game115 (mathematiques) */
+  carreDistance: 'Mean squared distance', croisements: 'Needles crossing a line', piLu: 'Pi read back from the needles', partage: 'Groups with a shared birthday',
+  paires: 'Pairs born the same day', compteLi: 'Primes up to N vs Li(N)', compteLn: 'Primes up to N vs N / ln N', ecartMoyen: 'Mean gap between primes',
   relaxation: 'Share of B at the relaxation time', constante: 'Equilibrium constant K = [B]/[A]', seuil: 'Oscillation threshold (Hopf)',
   /* game111 (sciences de la vie) */
   differences: 'Sites that differ from the ancestor', distance: 'Evolutionary distance read back', substitutions: 'Real base changes per site', composition: 'Base composition (chi-square)',

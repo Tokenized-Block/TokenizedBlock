@@ -62,6 +62,8 @@ const FILMS_DU_MODULE = {
   /* game113 : chaque image = les memes molecules a un instant plus tard */
   equilibreChimique: { colonneTemps: 2 },
   /* game114 */
+  /* game115 */
+  marcheAleatoire: { colonneTemps: 2, note: 'each frame is one walker, followed step by step' },
   neurone: { colonneTemps: 0, note: 'each frame is one input current, from 0.4 to 1.6 times the one chosen; frames are not instants' },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
@@ -908,6 +910,35 @@ const L = {
     enUnePhrase: 'The membrane potential of a model neuron for seven input currents, one per frame: it charges, fires at 1, resets.',
     colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of the frame'],
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
+    fin: null,
+  },
+  /* game115 : mathematiques (tam-maths.js) */
+  marcheAleatoire: {
+    titre: 'Random walks on a grid',
+    enUnePhrase: 'The path of a walker stepping to a random neighbour on a grid, one walker per frame.',
+    colonnes: ['x (grid steps)', 'y (grid steps)', 'step number'],
+    aRegarder: ['Each path wanders with no plan, yet the mean squared distance after n steps is exactly n.', 'Doubling the steps only multiplies the typical distance by sqrt 2.', 'A finite number of walkers: the match is statistical.'],
+    fin: null,
+  },
+  aiguilleBuffon: {
+    titre: 'Buffon\'s needles (finding pi by throwing needles)',
+    enUnePhrase: 'Needles thrown at random on a floor of boards one unit wide; each needle is drawn by its two ends.',
+    colonnes: ['x (floor widths)', 'y (floor widths; the lines are at whole numbers)', 'crosses a line (1) or not (0)'],
+    aRegarder: ['The share of needles crossing a line is exactly 2 l / pi.', 'So the needles estimate pi: 2 l divided by that share.', 'The estimate tightens slowly: four times the needles for twice the precision.'],
+    fin: null,
+  },
+  anniversaires: {
+    titre: 'The birthday paradox',
+    enUnePhrase: 'The birthdays of groups of people drawn round a circle, one ring per group.',
+    colonnes: ['x (birthday as an angle round the circle)', 'y (same)', 'group number (a label)'],
+    aRegarder: ['With 23 people and 365 days, two share a birthday more often than not: 1 - prod (1 - i/D) is above one half.', 'There are k (k - 1) / 2 pairs in a group, each with a 1/D chance: that is why it happens so fast.', 'A finite number of groups: the match is statistical.'],
+    fin: null,
+  },
+  spiraleUlam: {
+    titre: 'Primes on the Ulam spiral',
+    enUnePhrase: 'The integers wound in a square spiral from 1 in the middle; only the primes are drawn.',
+    colonnes: ['x on the Ulam spiral', 'y on the Ulam spiral', 'the prime itself'],
+    aRegarder: ['The primes gather along diagonals, a pattern nobody has fully explained.', 'Their exact count (from a sieve) is compared with Li(N) and N / ln N, approximations from the prime number theorem.', 'Near N, primes are on average about ln N apart.'],
     fin: null,
   },
   /* game113 : chimie (tam-chimie.js) */
