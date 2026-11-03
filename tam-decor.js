@@ -454,6 +454,9 @@ const DECORS = {
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   /* game116 : colonnes t, part, courbe ; mi-parcours (S = S0/2), la ou la loi de vitesse est comparee */
   enzyme: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Half the substrate used: the rate is checked here')],
+  /* ---------- game124 ---------- */
+  paraboleTir: (P, o, B) => [hyper(B, 1, 0, C.repere, 'The ground')],
+  solidesPlatoniques: (P, o, B) => [pt([0, 0, 0], C.repere, 'Centre (every vertex at the same distance)')],
   /* ---------- game123 : tam-mecanique.js ---------- */
   billardPi: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Centre of the energy circle')],
   modesNormaux: (P, o, B) => [hyper(B, 1, 0, C.repere, 'Chain at rest')],

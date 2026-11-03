@@ -57,6 +57,8 @@ THEMES.ondes = ['arcEnCiel', 'cordeVibrante', 'effetDoppler'];
 /* game122 : electricite (tam-electricite.js) ; le triangle de Pascal rejoint les maths */
 THEMES.electricite = ['lignesChamp', 'circuitRC'];
 THEMES.maths.push('pascalSierpinski');
+/* game124 : les solides de Platon rejoignent les maths */
+THEMES.maths.push('solidesPlatoniques');
 const groupeDe = (s) => THEMES.electricite.includes(s.id) ? 'electricite' : THEMES.ondes.includes(s.id) ? 'ondes' : THEMES.maths.includes(s.id) ? 'maths' : THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -186,7 +188,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   /* game118 */
   partA: 'share of AA parents (p)',
   /* game120 */
-  indice: 'refractive index n', cellules: 'grid cells', charge: 'second charge q2 (the first is +1)', tau: 'time constant tau = R C', lignes: 'rows', chiffres: 'mass ratio 100^k (k)', mode: 'mode excited (j)', pince: 'where it is plucked (a, from one end)', mach: 'source speed (Mach number M = v / c)' };
+  indice: 'refractive index n', cellules: 'grid cells', charge: 'second charge q2 (the first is +1)', tau: 'time constant tau = R C', lignes: 'rows', chiffres: 'mass ratio 100^k (k)', mode: 'mode excited (j)', angles: 'throws drawn', solide: 'solid (0 tetra, 1 cube, 2 octa, 3 dodeca, 4 icosa)', pince: 'where it is plucked (a, from one end)', mach: 'source speed (Mach number M = v / c)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
@@ -1028,7 +1030,9 @@ export function monter(racine, ctx = {}) {
     /* game122 */
     'lignesChamp', 'circuitRC', 'pascalSierpinski',
     /* game123 */
-    'billardPi', 'modesNormaux']);
+    'billardPi', 'modesNormaux',
+    /* game124 (les solides de Platon restent en 3-D, la vue tourne) */
+    'paraboleTir']);
   /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
   const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;

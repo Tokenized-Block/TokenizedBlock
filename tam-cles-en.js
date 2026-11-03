@@ -349,6 +349,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game122 */
   lignesArrivees: 'lines landing', partContinue: 'share for a continuous fan', nonConclues: 'lines not settled', gardee: 'energy kept', puissance: 'm', impairs: 'odd numbers drawn from',
   /* game123 */
+  /* game124 */
+  resolution: 'scan step (degrees)', hauteurTir: 'launch height h', contact: 'closest approach to the parabola', sommets: 'vertices', aretes: 'edges', faces: 'faces', cotesParFace: 'sides per face p', aretesParSommet: 'edges per vertex q',
   rapportMasses: 'mass ratio M/m', mode: 'mode j', pulsation: 'omega_j',
   hauteur: 'entry height b', indice: 'index n', pireEcart6: 'worst gap, 6 harmonics', rang: 'harmonic', mach: 'Mach', fronts: 'wavefronts', angleDegres: 'half-angle (degrees)',
   marcheurs: 'walkers', aiguilles: 'needles', groupes: 'groups', personnes: 'people', jours: 'days', jusqua: 'up to N', courantSeuil: 'threshold current', courantsMuets: 'silent currents', impulsionsSousSeuil: 'spikes below threshold',
@@ -382,6 +384,9 @@ export const NOMS_MESURES_EN = Object.freeze({
   angleArrivee: 'Arrival angle vs flux (worst gap, degrees)', echappees: 'Lines escaping to infinity', tensionTau: 'Voltage after one tau', demiCharge: 'Half-charge time (units of tau)',
   energieFournie: 'Energy given by the battery', energiePerdue: 'Energy lost as heat', impairsParLigne: 'Odd numbers per row vs 2^(1s of n) (worst gap)', impairsTotal: 'Odd numbers in the first 2^m rows',
   /* game123 */
+  /* game124 */
+  angleOptimal: 'Best throwing angle (degrees)', porteeMax: 'Longest throw', enveloppe: 'Above the safety parabola (never)',
+  euler: 'Euler: vertices - edges + faces', schlafli: 'Edges vs F p / 2', diedre: 'Angle between faces (degrees)', surSphere: 'All vertices on one sphere',
   chocs: 'Collisions counted (they spell pi)', periodeMode: 'Period of the mode', resteDansLeMode: 'Energy leaking out of the mode',
   relaxation: 'Share of B at the relaxation time', constante: 'Equilibrium constant K = [B]/[A]', seuil: 'Oscillation threshold (Hopf)',
   /* game111 (sciences de la vie) */

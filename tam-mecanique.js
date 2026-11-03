@@ -12,6 +12,7 @@
 //   billardPi    : deux blocs et un mur, chocs elastiques ; nombre de chocs = ceil(pi / theta) - 1, theta = atan(sqrt(m/M)) ; pour
 //                  M/m = 100^k il ecrit les k+1 premiers chiffres de pi.
 //   modesNormaux : une chaine de N masses et ressorts ; pulsations exactes 2 sin(j pi / (2 (N + 1))) ; un mode excite seul le reste.
+//   paraboleTir  : tirs depuis une hauteur h ; meilleur angle atan(1 / sqrt(1 + 2 h)), portee sqrt(1 + 2 h), parabole de surete.
 import { sinD, cosD } from './tam-moteur.js';
 
 const PI = Math.PI;
@@ -27,6 +28,7 @@ function atanD(x) {
   for (let k = 0; k < 30; k++) { s += t / (2 * k + 1); t *= -y2; }
   return 4 * s;
 }
+function atan2D(y, x) { if (x > 0) return atanD(y / x); if (x < 0) return atanD(y / x) + (y >= 0 ? PI : -PI); return y > 0 ? PI / 2 : y < 0 ? -PI / 2 : 0; }
 function decouper(n, images) { const d = []; for (let k = 0; k < images; k++) d.push(Math.floor(k * n / images)); return d; }
 function filmDe(debuts, n) {
   const tailles = debuts.map((d, k) => (k + 1 < debuts.length ? debuts[k + 1] : n) - d);
@@ -103,9 +105,41 @@ function modesNormaux(P, n) {
     energie: { debut: E0, fin: energieTot(x, vit), derive: Math.abs(energieTot(x, vit) - E0), note: 'total energy (Verlet keeps it within a small bounded wobble)' } } };
 }
 
+// ---------- 3 : le tir parabolique (et la parabole de surete) ----------
+// Projectiles lances a la vitesse v = 1 (g = 1) depuis la hauteur h, sous des angles de 0 a 90 degres. Integration de Verlet au pas 0.001
+//   (exacte pour un champ uniforme : l acceleration est constante), passage au sol interpole.
+// Exact (derive ici) : portee R(theta) = cos theta (sin theta + sqrt(sin^2 theta + 2 h)) ; son maximum est atteint pour
+//   tan theta* = 1 / sqrt(1 + 2 h) (45 degres seulement si h = 0) et vaut R* = sqrt(1 + 2 h). Toutes les trajectoires restent sous la
+//   parabole de surete y = h + 1/2 - x^2 / 2 et la touchent chacune en un point (enveloppe de la famille).
+// Mesures : angle et portee maximaux sur un balayage de 2001 angles (resolution 0.045 degre) ; plus grand depassement de l enveloppe par
+//   un point de trajectoire (doit etre <= 0 a l arrondi pres) et plus petit ecart (le contact).
+// Dessin : un eventail de trajectoires (une sur dix des angles dessines) et l enveloppe (3e colonne 0) ; 3e colonne : angle en degres.
+function paraboleTir(P, n) {
+  const h = P.hauteur, A = P.angles, dt = 0.001, env = (x) => h + 0.5 - x * x / 2;
+  const portee = (th) => { let x = 0, y = h, vx = cosD(th), vy = sinD(th), pts = []; for (let s = 0; s < 200000; s++) { pts.push([x, y]); const vy2 = vy - dt; const y2 = y + dt * (vy + vy2) / 2, x2 = x + dt * vx; if (y2 < 0) { const f = y / (y - y2); pts.push([x + f * (x2 - x), 0]); return { R: x + f * (x2 - x), pts }; } x = x2; y = y2; vy = vy2; } return { R: NaN, pts }; };
+  let best = -1, thBest = NaN;
+  for (let i = 0; i <= 2000; i++) { const th = i * (PI / 2) / 2000, r = portee(th).R; if (r > best) { best = r; thBest = th; } }
+  const trajs = []; let depasse = -Infinity, contactMin = Infinity;
+  for (let a = 0; a < A; a++) { const th = (a + 0.5) * (PI / 2) / A, t = portee(th); trajs.push({ th, pts: t.pts });
+    let cMin = Infinity; for (const [x, y] of t.pts) { const d = y - env(x); if (d > depasse) depasse = d; if (-d < cMin) cMin = -d; } contactMin = Math.min(contactMin, cMin); }
+  const thTh = atanD(1 / Math.sqrt(1 + 2 * h)), RTh = Math.sqrt(1 + 2 * h);
+  /* dessin : l enveloppe (100 points) puis les trajectoires */
+  const brut = new Float64Array(n * 3), nEnv = Math.min(100, Math.floor(n / 4)); let l = 0;
+  for (let q = 0; q < nEnv; q++) { const x = q * RTh / (nEnv - 1 || 1), o = 3 * l++; brut[o] = x; brut[o + 1] = env(x); brut[o + 2] = 0; }
+  const par = Math.max(2, Math.floor((n - nEnv) / trajs.length));
+  for (let a = 0; a < trajs.length && l < n; a++) { const pts = trajs[a].pts, nb = a === trajs.length - 1 ? n - l : par;
+    for (let q = 0; q < nb && l < n; q++) { const p = pts[nb === 1 ? 0 : Math.round(q * (pts.length - 1) / (nb - 1))], o = 3 * l++; brut[o] = p[0]; brut[o + 1] = p[1]; brut[o + 2] = trajs[a].th * 180 / PI; } }
+  const deg = 180 / PI;
+  return { D: 3, brut, nuage: true, unite: 'sans objet (champ uniforme)', invariants: {
+    angleOptimal: { mesure: thBest * deg, formule: thTh * deg, resolution: 90 / 2000, hauteurTir: h, note: 'angle (degrees) of the longest throw on a scan of 2001 angles against atan(1 / sqrt(1 + 2 h)) : 45 only when thrown from the ground' },
+    porteeMax: { mesure: best, formule: RTh, note: 'longest range against sqrt(1 + 2 h) (v = g = 1)' },
+    enveloppe: { mesure: Math.max(0, depasse), formule: 0, contact: contactMin, note: 'largest amount by which any trajectory point rises above the safety parabola y = h + 1/2 - x^2/2 (none: every throw stays under it and touches it once)' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
+  paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
 export const SYSTEMES = Object.freeze([
@@ -115,9 +149,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'modesNormaux', nom: 'Normal modes of a chain of springs', science: 'Classical mechanics', D: 3, params: { masses: 6, mode: 2 },
     bornes: { masses: [2, 16], mode: [1, 16] },
     phrase: 'A visualisation of a chain of masses joined by springs, started in one of its normal modes: every mass swings in step, frame by frame over one period, and the chain stays in that mode. The period is compared with the exact 2 pi / omega_j, omega_j = 2 sin(j pi / (2 (N + 1))): higher modes, more nodes, faster.' },
+  { id: 'paraboleTir', nom: 'The best angle to throw (projectiles and the safety parabola)', science: 'Classical mechanics', D: 3, nuage: true, params: { hauteur: 0, angles: 18 },
+    bornes: { hauteur: [0, 2], angles: [5, 40] },
+    phrase: 'A visualisation of stones thrown at the same speed under every angle from a height h. From the ground the longest throw is at 45 degrees; from higher up it is flatter, exactly atan(1 / sqrt(1 + 2 h)), and reaches sqrt(1 + 2 h). Every path stays under one parabola, the safety parabola, and touches it once.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'] };
-const FONCTIONS = { billardPi, modesNormaux };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

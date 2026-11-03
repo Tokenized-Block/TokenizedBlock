@@ -918,6 +918,21 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game124 */
+  paraboleTir: {
+    titre: 'The best angle to throw (projectiles and the safety parabola)',
+    enUnePhrase: 'Stones thrown at the same speed under every angle from a height h, and the parabola that bounds them all.',
+    colonnes: ['distance x', 'height y', 'launch angle in degrees (a label; 0 = the safety parabola)'],
+    aRegarder: ['From the ground the longest throw is at 45 degrees.', 'From higher up the best angle is flatter: atan(1 / sqrt(1 + 2 h)).', 'No path crosses the safety parabola; each touches it once.'],
+    fin: null,
+  },
+  solidesPlatoniques: {
+    titre: 'The five Platonic solids',
+    enUnePhrase: 'One of the five regular solids, drawn by its edges in 3-D.',
+    colonnes: ['x', 'y', 'z'],
+    aRegarder: ['Count them: vertices - edges + faces = 2, for every solid (Euler).', 'The cube and the octahedron swap faces and vertices; so do the dodecahedron and the icosahedron.', 'The angle between two faces is exact: sin(theta / 2) = cos(pi / q) / sin(pi / p).'],
+    fin: null,
+  },
   /* game123 : mecanique (tam-mecanique.js) */
   billardPi: {
     titre: 'Colliding blocks that count pi',

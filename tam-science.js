@@ -237,6 +237,8 @@ export const ECHELLE_PROPRE = {
   lignesChamp: [2], circuitRC: [0, 2], pascalSierpinski: [2],
   /* game123 : numero du choc ; numero de masse et temps */
   billardPi: [2], modesNormaux: [0, 2],
+  /* game124 : angle de tir (etiquette) ; solides : x, y, z de meme nature */
+  paraboleTir: [2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

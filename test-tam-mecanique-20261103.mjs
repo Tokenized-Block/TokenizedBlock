@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -63,6 +63,15 @@ function suite(T, bavard = false) {
         if (i === 0 || i === N + 1) { assert.equal(b[o + 1], 0); continue; } if (Math.abs(fo) > 0.2) { const q = b[o + 1] / fo; if (ratio === null) ratio = q; else assert.ok(Math.abs(q - ratio) < 1e-9, 'forme du mode, image ' + f); } } }
     return 'ecart physique ' + (I.periodeMode.mesure / (2 * Math.PI / om) - 1).toExponential(1) + ', Verlet ' + (I.periodeMode.mesure / (2 * Math.PI / Om) - 1).toExponential(1);
   });
+  /* game124 : tir — references : Math.atan(1 / sqrt(1 + 2 h)), sqrt(1 + 2 h), enveloppe h + 1/2 - x^2/2 */
+  for (const p of [...extremes(sys('paraboleTir')), { hauteur: 0.5 }, { hauteur: 1 }]) ok(`paraboleTir ${JSON.stringify(p)} : meilleur angle atan(1/sqrt(1+2h)), portee sqrt(1+2h), tout sous la parabole de surete`, () => {
+    const R = S('paraboleTir', p), h = R.params.hauteur, I = R.invariants, b = R.brut, th = Math.atan(1 / Math.sqrt(1 + 2 * h)) * 180 / Math.PI, Rm = Math.sqrt(1 + 2 * h);
+    assert.ok(Math.abs(I.angleOptimal.formule - th) < 1e-9 && Math.abs(I.angleOptimal.mesure - th) <= 0.05, 'angle ' + I.angleOptimal.mesure + ' ' + th);
+    assert.ok(Math.abs(I.porteeMax.formule - Rm) < 1e-12 && Math.abs(I.porteeMax.mesure - Rm) < 1e-5, 'portee ' + I.porteeMax.mesure);
+    assert.equal(I.enveloppe.mesure, 0); assert.ok(I.enveloppe.contact < 1e-6, 'contact ' + I.enveloppe.contact);
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, x = b[o], y = b[o + 1]; assert.ok(y >= -1e-9 && y <= h + 0.5 - x * x / 2 + 1e-9, 'sous l enveloppe ' + i); }
+    return 'angle ' + I.angleOptimal.mesure.toFixed(3) + ' / ' + th.toFixed(3);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -83,6 +92,9 @@ const MUTANTS = [
   ['modes : pulsation avec 2 N au lieu de 2 (N + 1)', 'om = 2 * sinD(j * PI / (2 * (N + 1)))', 'om = 2 * sinD(j * PI / (2 * N))'],
   ['modes : ressort central a 2.01', '- 2 * xi + (i > 0 ? xx[i - 1] : 0)', '- 2.01 * xi + (i > 0 ? xx[i - 1] : 0)'],
   ['modes : forme du mode sur N au lieu de N + 1', 'sinD((i + 1) * j * PI / (N + 1))', 'sinD((i + 1) * j * PI / N)'],
+  ['tir : gravite 1.01 g', 'const vy2 = vy - dt;', 'const vy2 = vy - 1.01 * dt;'],
+  ['tir : angle optimal atan(1 / sqrt(1 + h))', 'atanD(1 / Math.sqrt(1 + 2 * h))', 'atanD(1 / Math.sqrt(1 + h))'],
+  ['tir : enveloppe x^2 / 2.1', 'env = (x) => h + 0.5 - x * x / 2;', 'env = (x) => h + 0.5 - x * x / 2.1;'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
