@@ -343,6 +343,8 @@ export const CLES_EN_MODULES = Object.freeze({
   descendants: 'offspring', dominantsDeux: 'A_B_', dominantA: 'A_bb', dominantB: 'aaB_', recessifsDeux: 'aabb', impulsions: 'spikes', courant: 'current I',
   courants: 'currents', compares: 'compared',
   /* game115 */
+  /* game118 */
+  parents: 'Aa parents', borneEcart: 'bound on the gap', genoAA: 'AA', genoAa: 'Aa', genoaa: 'aa', temperature: 'temperature T',
   marcheurs: 'walkers', aiguilles: 'needles', groupes: 'groups', personnes: 'people', jours: 'days', jusqua: 'up to N', courantSeuil: 'threshold current', courantsMuets: 'silent currents', impulsionsSousSeuil: 'spikes below threshold',
 });
 
@@ -363,6 +365,9 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game115 (mathematiques) */
   carreDistance: 'Mean squared distance', croisements: 'Needles crossing a line', piLu: 'Pi read back from the needles', partage: 'Groups with a shared birthday',
   paires: 'Pairs born the same day', compteLi: 'Primes up to N vs Li(N)', compteLn: 'Primes up to N vs N / ln N', ecartMoyen: 'Mean gap between primes',
+  /* game118 */
+  pressionEchantillon: 'Pressure vs these molecules', gazParfait: 'Ideal gas law P A = N T',
+  heterozygotesHW: 'Share of Aa children (2pq)', homozygotesAA: 'Share of AA children (p^2)', genotypes: 'Three genotypes (chi-square)',
   relaxation: 'Share of B at the relaxation time', constante: 'Equilibrium constant K = [B]/[A]', seuil: 'Oscillation threshold (Hopf)',
   /* game111 (sciences de la vie) */
   differences: 'Sites that differ from the ancestor', distance: 'Evolutionary distance read back', substitutions: 'Real base changes per site', composition: 'Base composition (chi-square)',

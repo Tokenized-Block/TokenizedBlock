@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-chimie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator'];
+const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const aRef = (k1, t) => Math.exp(-k1 * t);
@@ -122,9 +122,20 @@ function suite(T, bavard = false) {
     }
     return `taux ${Number.isFinite(I.amortissement.mesure) ? I.amortissement.mesure.toFixed(4) : '-'} / ref ${ref.re.toFixed(4)}, periode ${Number.isFinite(I.periode.mesure) ? I.periode.mesure.toFixed(4) : '-'}, amplitude ${I.seuil.amplitude.toPrecision(3)}`;
   });
-  ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation)', () => {
-    const zs = { picB: [], partB: [], relaxation: [] };
-    for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation)); }
+  // game118 : gaz parfait
+  for (const p of extremes(sys('gazParfait'))) ok(`gazParfait ${JSON.stringify(p)} : pression comptee choc par choc sous sa borne, P A = N T, vitesse moyenne sqrt(pi T / 2), molecules dans la boite`, () => {
+    const R = S('gazParfait', p), P = R.params, I = R.invariants, b = R.brut, L = 10, Pe = I.pressionEchantillon;
+    assert.ok(Math.abs(Pe.mesure - Pe.formule) <= Pe.borneEcart + 1e-12, 'ecart ' + Math.abs(Pe.mesure - Pe.formule) + ' borne ' + Pe.borneEcart);
+    assert.ok(rel(I.gazParfait.formule, P.molecules * P.temperature / (L * L)) < 1e-12 && rel(I.gazParfait.sigma, Math.sqrt(2 * P.molecules) * P.temperature / (L * L)) < 1e-12 && Math.abs(z(I.gazParfait)) < 5, 'gaz z ' + z(I.gazParfait));
+    assert.ok(rel(I.vitesseMoyenne.formule, Math.sqrt(Math.PI * P.temperature / 2)) < 1e-12 && Math.abs(z(I.vitesseMoyenne)) < 5, 'v z ' + z(I.vitesseMoyenne));
+    for (let i = 0; i < R.n; i++) { const o = 3 * i; assert.ok(b[o] >= -1e-9 && b[o] <= L + 1e-9 && b[o + 1] >= -1e-9 && b[o + 1] <= L + 1e-9 && b[o + 2] >= 0, 'dans la boite'); }
+    return `P ${Pe.mesure.toFixed(4)} / gaz ${I.gazParfait.formule.toFixed(4)} z ${z(I.gazParfait).toFixed(2)}, ecart ${Math.abs(Pe.mesure - Pe.formule).toExponential(1)} <= ${Pe.borneEcart.toExponential(1)}`;
+  });
+  ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation, gaz, vitesse moyenne)', () => {
+    const zs = { picB: [], partB: [], relaxation: [], gaz: [], vitesse: [] };
+    for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation));
+      /* game118 : un biais de 10 % sur les vitesses ne fait que ~2 sigma sur UN tirage : la moyenne des z sur 20 graines le voit */
+      const gz = T.simuler('gazParfait', { graine: g }).invariants; zs.gaz.push(z(gz.gazParfait)); zs.vitesse.push(z(gz.vitesseMoyenne)); }
     const out = []; for (const [k, v] of Object.entries(zs)) { const m = v.reduce((a, x) => a + x, 0) / v.length, sd = Math.sqrt(v.reduce((a, x) => a + (x - m) ** 2, 0) / (v.length - 1)); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, k + ' ' + m + ' ' + sd); out.push(`${k} ${m.toFixed(2)}/${sd.toFixed(2)}`); }
     return out.join(', ');
   });
@@ -159,6 +170,8 @@ const MUTANTS = [
   ['brusselator : seuil A^2 au lieu de 1 + A^2', 'Bc = 1 + A * A;', 'Bc = A * A;'],
   ['brusselator : y consomme a 1.01 x^2 y', 'B * x - x * x * y]', 'B * x - 1.01 * x * x * y]'],
   ['brusselator : taux = trace au lieu de trace / 2', 'const reLam = complexes ? tr / 2 :', 'const reLam = complexes ? tr :'],
+  ['gaz : un choc ne transmet que |vx|', 'impulsion += 2 * Math.abs(vx[i]) * chocs;', 'impulsion += Math.abs(vx[i]) * chocs;'],
+  ['gaz : vitesses tirees trop larges (Box-Muller a -2.4 ln u)', 'Math.sqrt(-2 * lnD(u))', 'Math.sqrt(-2.4 * lnD(u))'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (chaine)', 'rng = mulberry32(P.graine), T = 5', 'rng = Math.random, T = 5'],
 ];

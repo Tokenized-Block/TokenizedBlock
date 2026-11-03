@@ -349,6 +349,29 @@ function neurone(P, n) {
     ...(muets.length ? { repos: { courantsMuets: muets.length, impulsionsSousSeuil: muetsQuiTirent, pireEcart: pireRepos, note: 'below the threshold current the potential settles at v = I without firing (worst gap at the end of the run)' } } : {}) } };
 }
 
+// ---------- 7 : Hardy-Weinberg ----------
+// Parents : une part p de AA et 1 - p de aa, AUCUN heterozygote (loin de l equilibre). Chaque enfant : deux parents tires au hasard
+//   (avec remise), chacun donne un de ses deux alleles au hasard. Exact (derive ici) : chaque allele transmis est A avec la probabilite
+//   p (la part de A dans les parents), independamment : AA : Aa : aa = p^2 : 2 p q : q^2 des la PREMIERE generation (q = 1 - p).
+//   N enfants independants : parts binomiales, sigma exact ; chi2 a 2 ddl (3 classes, rien d estime).
+// Dessin : chaque individu en (copies de A, generation) : parents en bas (0 ou 2 copies), enfants en haut (0, 1 ou 2) ; etalement dessine.
+function hardyWeinberg(P, n) {
+  const N = P.individus, p = P.partA, rng = mulberry32(P.graine), q = 1 - p, nAA = Math.round(p * N), pe = nAA / N, qe = 1 - pe;
+  const parent = (i) => (i < nAA ? 2 : 0);
+  const enfants = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { const a = parent(Math.floor(rng() * N)), b = parent(Math.floor(rng() * N)); enfants[i] = (a === 2 ? 1 : 0) + (b === 2 ? 1 : 0); }
+  const c = [0, 0, 0]; for (let i = 0; i < N; i++) c[enfants[i]]++;
+  const att = [qe * qe, 2 * pe * qe, pe * pe];
+  let chi2 = 0; for (let k = 0; k < 3; k++) chi2 += (c[k] - N * att[k]) * (c[k] - N * att[k]) / (N * att[k]);
+  const bin = (x) => Math.sqrt(x * (1 - x) / N), brut = new Float64Array(n * 3), place = mulberry32(P.graine ^ 0x1b873593), moitie = Math.floor(n / 2);
+  for (let l = 0; l < n; l++) { const gen = l < moitie ? 0 : 1, j = gen ? Math.floor((l - moitie) * N / (n - moitie)) : Math.floor(l * N / Math.max(1, moitie)), g = gen ? enfants[j] : parent(j), o = 3 * l;
+    brut[o] = g + 0.6 * (place() - 0.5); brut[o + 1] = gen + 0.35 * (place() - 0.5); brut[o + 2] = gen ? j + 1 : -(j + 1); }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (genetique, aleatoire)', invariants: {
+    heterozygotesHW: { mesure: c[1] / N, formule: 2 * pe * qe, sigma: bin(2 * pe * qe), parents: 0, note: 'share of Aa children against 2 p q, although the parents had NONE (Hardy-Weinberg, exact after one generation)' },
+    homozygotesAA: { mesure: c[2] / N, formule: pe * pe, sigma: bin(pe * pe), note: 'share of AA children against p^2' },
+    genotypes: { mesure: chi2, formule: 2, sigma: 2, genoAA: c[2], genoAa: c[1], genoaa: c[0], note: 'chi-square of the three genotype counts against p^2 : 2pq : q^2 (2 degrees of freedom : mean 2, sigma 2)' } } };
+}
+
 // ---------- colonnes de brut ----------
 export const COLONNES = Object.freeze({
   adnMutations: { colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base (0 = A, 1 = C, 2 = G, 3 = T)', 'time t'], memeLongueur: [[0, 1, 2]], autres: [3, 4] },
@@ -356,6 +379,7 @@ export const COLONNES = Object.freeze({
   deriveGenetique: { colonnes: ['generation', 'share of the variant in the population (0..1)', 'population number (label)'], memeLongueur: [], autres: [0, 1, 2] },
   enzyme: { colonnes: ['time t', 'share: substrate left S/S0, product made P/S0, enzyme busy C/E0', 'which curve (0 = substrate, 1 = product, 2 = busy enzyme)'], memeLongueur: [], autres: [0, 1, 2] },
   mendel: { colonnes: ['copies of the dominant allele A (0, 1, 2; spread inside its cell is drawn)', 'copies of the dominant allele B (same)', 'offspring number (label)'], memeLongueur: [[0, 1]], autres: [2] },
+  hardyWeinberg: { colonnes: ['copies of allele A (0, 1, 2; spread drawn)', 'generation (0 = parents, 1 = children; spread drawn)', 'individual number (label; parents negative)'], memeLongueur: [], autres: [0, 1, 2] },
   neurone: { colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of this frame (label)'], memeLongueur: [], autres: [0, 1, 2] },
 });
 
@@ -379,9 +403,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'neurone', nom: 'A neuron that fires (integrate-and-fire)', science: 'Neuroscience', D: 3, params: { courant: 1.5, tau: 1, refractaire: 0.2 },
     bornes: { courant: [0.5, 4], tau: [0.5, 3], refractaire: [0, 2] },
     phrase: 'A visualisation of the integrate-and-fire neuron, one frame per input current from 0.4 to 1.6 times the one chosen: the membrane potential charges up, fires at the threshold, resets and stays silent for a refractory time. Above the threshold current the time between spikes is compared with the exact t_ref + tau ln(I / (I - 1)); below it the neuron never fires and settles at v = I.' },
+  { id: 'hardyWeinberg', nom: 'Hardy-Weinberg (one generation of random mating)', science: 'Population genetics', D: 3, nuage: true, params: { individus: 1000, partA: 0.3, graine: 1 },
+    bornes: { individus: [100, 5000], partA: [0.05, 0.95], graine: [1, 1000000] },
+    phrase: 'A visualisation of the Hardy-Weinberg law: parents that are all AA or aa (no mixed Aa at all) mate at random once. Their children come out AA : Aa : aa in the exact proportions p^2 : 2 p q : q^2 in a single generation, mixed carriers included. Parents drawn below, children above; a finite number of children, so the agreement is statistical.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [] };
-const FONCTIONS = { adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone };
+export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [], hardyWeinberg: ['individus', 'graine'] };
+const FONCTIONS = { adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone, hardyWeinberg };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */

@@ -222,6 +222,8 @@ export const ECHELLE_PROPRE = {
   mendel: [2], neurone: [0, 1, 2],
   /* game115 : numero de pas ; croise ou non ; numero de groupe ; le premier lui-meme */
   marcheAleatoire: [2], aiguilleBuffon: [2], anniversaires: [2], spiraleUlam: [2],
+  /* game118 : vitesse (etiquette) ; copies, generation et numero (3 grandeurs) */
+  gazParfait: [2], hardyWeinberg: [0, 1, 2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

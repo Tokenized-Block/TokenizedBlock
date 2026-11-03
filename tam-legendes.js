@@ -62,6 +62,8 @@ const FILMS_DU_MODULE = {
   /* game113 : chaque image = les memes molecules a un instant plus tard */
   equilibreChimique: { colonneTemps: 2 },
   /* game114 */
+  /* game118 */
+  gazParfait: { colonneTemps: null, note: 'each frame is the same gas a little later (positions are exact, folded off the walls)' },
   /* game115 */
   marcheAleatoire: { colonneTemps: 2, note: 'each frame is one walker, followed step by step' },
   neurone: { colonneTemps: 0, note: 'each frame is one input current, from 0.4 to 1.6 times the one chosen; frames are not instants' },
@@ -910,6 +912,21 @@ const L = {
     enUnePhrase: 'The membrane potential of a model neuron for seven input currents, one per frame: it charges, fires at 1, resets.',
     colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of the frame'],
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
+    fin: null,
+  },
+  /* game118 */
+  gazParfait: {
+    titre: 'An ideal gas (molecules in a box)',
+    enUnePhrase: 'Molecules flying in a square box and bouncing off its walls, frame by frame.',
+    colonnes: ['x in the box', 'y in the box', 'speed of the molecule (a label)'],
+    aRegarder: ['Each hit on the right wall is counted; the push per unit length is the pressure.', 'It follows the ideal gas law P A = N T: double the temperature, double the pressure.', 'Speeds spread out as Maxwell predicts; their mean is exactly sqrt(pi T / 2).'],
+    fin: null,
+  },
+  hardyWeinberg: {
+    titre: 'Hardy-Weinberg (one generation of random mating)',
+    enUnePhrase: 'Parents (below) that are all AA or aa, and their children (above) after one round of random mating.',
+    colonnes: ['copies of allele A (0, 1, 2)', 'generation (0 = parents, 1 = children)', 'individual number (a label)'],
+    aRegarder: ['The parents have no Aa at all, yet the children have a share 2 p q of them.', 'One generation is enough: AA : Aa : aa = p^2 : 2 p q : q^2, exactly.', 'A finite number of children: the match is statistical.'],
     fin: null,
   },
   /* game115 : mathematiques (tam-maths.js) */

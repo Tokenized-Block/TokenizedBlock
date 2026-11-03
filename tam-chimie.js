@@ -13,6 +13,7 @@
 //   equilibreChimique : A <-> B, molecule par molecule ; part de B = pi (1 - e^(-(kf + kb) t)), pi = kf / (kf + kb), binomiale exacte.
 //   brusselator  : l horloge chimique ; point fixe (A, B/A), seuil d oscillation B = 1 + A^2, taux d amortissement et periode exacts
 //     de la linearisation (lus en fin de course, ou l ecart est petit).
+//   gazParfait   : molecules dans une boite, chocs comptes un par un ; P A = N T, vitesse moyenne sqrt(pi T / 2) (Maxwell 2-D).
 import { sinD, cosD, lnD } from './tam-moteur.js';
 
 const DEUX_PI = 2 * Math.PI;
@@ -159,10 +160,51 @@ function brusselator(P, n) {
       note: 'time between two crossings of y = B/A upward, against 2 pi / omega of the linearised reaction (2 pi / A on the cycle near threshold)' } } };
 }
 
+// ---------- 4 : un gaz parfait, des molecules dans une boite ----------
+// N molecules ponctuelles sans interaction dans une boite carree de cote L = 10 (2-D, k = m = 1), rebonds elastiques sur les parois.
+//   Vitesses tirees de Maxwell a la temperature T : vx, vy ~ normale(0, T) (Box-Muller, ln et cos du moteur).
+//   Trajectoire EXACTE sans integration : la coordonnee depliee u = x0 + vx t est repliee dans [0, L] (miroir de periode 2L) ;
+//   chaque passage de u par L + 2 j L est un choc sur la paroi droite, qui recoit 2 |vx|.
+// Pression (2-D : force par longueur) mesuree = impulsion totale recue par la paroi droite / (duree x L).
+//   Exact a la limite des temps longs pour CET echantillon : P = sum vx^2 / L^2 (chaque molecule frappe la paroi tous les 2L/|vx| :
+//   force moyenne vx^2 / L) ; l ecart vient des periodes incompletes (APPROCHE, borne ~ 2L / (|vx| duree) par molecule).
+//   Gaz parfait : P A = N T (A = L^2) en moyenne sur les tirages : sigma de sum vx^2 / A = sqrt(2 N) T / A (vx^2 / T est un chi2 a 1 ddl).
+// Vitesses : |v| suit la loi de Rayleigh v/T e^(-v^2/2T) (Maxwell 2-D) ; vitesse moyenne exacte sqrt(pi T / 2), sigma
+//   sqrt((2 - pi/2) T / N).
+// Dessin : un film de 8 instants ; chaque molecule a sa place (x, y) ; 3e colonne : sa vitesse (une etiquette).
+const GAZ_L = 10, GAZ_IMAGES = 8;
+function gazParfait(P, n) {
+  const N = P.molecules, T = P.temperature, rng = mulberry32(P.graine), L = GAZ_L, duree = 400 * L / Math.sqrt(T);
+  const x0 = new Float64Array(N), y0 = new Float64Array(N), vx = new Float64Array(N), vy = new Float64Array(N);
+  const gauss = () => { const u = 1 - rng(), v = rng(); return Math.sqrt(-2 * lnD(u)) * cosD(2 * Math.PI * v); };
+  for (let i = 0; i < N; i++) { x0[i] = rng() * L; y0[i] = rng() * L; vx[i] = Math.sqrt(T) * gauss(); vy[i] = Math.sqrt(T) * gauss(); }
+  const replier = (u) => { const m = u - 2 * L * Math.floor(u / (2 * L)); return m <= L ? m : 2 * L - m; };
+  let impulsion = 0, s2 = 0, sv = 0, borne = 0;
+  for (let i = 0; i < N; i++) {
+    const u1 = x0[i] + vx[i] * duree, a = Math.min(x0[i], u1), b = Math.max(x0[i], u1);
+    /* chocs a droite : u = L + 2 j L dans ]a, b] */
+    const chocs = Math.max(0, Math.floor((b - L) / (2 * L)) - Math.ceil((a - L) / (2 * L)) + 1);
+    impulsion += 2 * Math.abs(vx[i]) * chocs; s2 += vx[i] * vx[i]; borne += 2 * Math.abs(vx[i]); sv += Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]);
+  }
+  const Pm = impulsion / (duree * L), Pech = s2 / (L * L), Pgaz = N * T / (L * L), vm = sv / N;
+  const images = Math.min(GAZ_IMAGES, n), film = filmDe(decouper(n, images), n), brut = new Float64Array(n * 3), tFilm = 4 * L; /* banc du 03/11 : 4 L / sqrt(T) rendait le curseur « temperature » MUET (positions identiques : invariance d echelle) ; film fixe sur T = 1 : un gaz chaud va plus loin entre deux images */
+  for (let f = 0; f < images; f++) { const d0 = film.debuts[f], c = film.tailles[f], t = images === 1 ? 0 : f * tFilm / (images - 1);
+    for (let r = 0; r < c; r++) { const i = Math.floor(r * N / c) % N, o = 3 * (d0 + r); brut[o] = replier(x0[i] + vx[i] * t); brut[o + 1] = replier(y0[i] + vy[i] * t); brut[o + 2] = Math.sqrt(vx[i] * vx[i] + vy[i] * vy[i]); } }
+  return { D: 3, brut, film, nuage: true, unite: 'sans objet (gaz parfait, non chaotique)', invariants: {
+    pressionEchantillon: { mesure: Pm, formule: Pech, borneEcart: borne / (duree * L), approchee: 'molecules that have not finished a last round trip make the gap; it shrinks as the run gets longer',
+      note: 'push on the right wall per unit length (counted hit by hit) against sum vx^2 / L^2 for these very molecules' },
+    gazParfait: { mesure: Pm, formule: Pgaz, sigma: Math.sqrt(2 * N) * T / (L * L), molecules: N, temperature: T,
+      note: 'pressure against the ideal gas law P A = N T (k = 1) ; sigma from drawing the speeds at random' },
+    vitesseMoyenne: { mesure: vm, formule: Math.sqrt(Math.PI * T / 2), sigma: Math.sqrt((2 - Math.PI / 2) * T / N),
+      note: 'mean speed against sqrt(pi T / 2) (Maxwell in 2-D, a Rayleigh law)' } } };
+}
+
+
 export const COLONNES = Object.freeze({
   reactionsChaine: { colonnes: ['time t', 'share of the molecules (0..1)', 'which species (0 = A, 1 = B, 2 = C)'], memeLongueur: [], autres: [0, 1, 2] },
   equilibreChimique: { colonnes: ['x: well A on the left, well B on the right (placement inside a well is drawn)', 'y (drawn)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   brusselator: { colonnes: ['concentration x', 'concentration y', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
+  gazParfait: { colonnes: ['x in the box', 'y in the box', 'speed of the molecule (label)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
 export const SYSTEMES = Object.freeze([
@@ -175,9 +217,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'brusselator', nom: 'A chemical clock (the Brusselator)', science: 'Chemical kinetics', D: 3, params: { A: 1, ecartSeuil: -0.5 },
     bornes: { A: [0.5, 2.5], ecartSeuil: [-1, 3] },
     phrase: 'A visualisation of the Brusselator, a model of an oscillating reaction: two concentrations integrated step by step. Below the exact threshold B = 1 + A^2 the reaction settles on the fixed point (A, B/A), spiralling in at the exact rate of its linearisation; above it, it never settles and ticks like a clock on a limit cycle, with a period near 2 pi / A close to the threshold.' },
+  { id: 'gazParfait', nom: 'An ideal gas (molecules in a box)', science: 'Thermodynamics', D: 3, nuage: true, params: { molecules: 100, temperature: 1, graine: 1 },
+    bornes: { molecules: [20, 400], temperature: [0.2, 5], graine: [1, 1000000] },
+    phrase: 'A visualisation of an ideal gas: molecules flying freely in a box and bouncing off its walls, frame by frame, with speeds drawn from Maxwell\'s law at temperature T. Every hit on a wall is counted: the push per unit length is the pressure, and it obeys the ideal gas law P A = N T; the mean speed is the exact sqrt(pi T / 2). Paths are exact (no step-by-step integration); a finite number of molecules, so the agreement with the gas law is statistical.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [] };
-const FONCTIONS = { reactionsChaine, equilibreChimique, brusselator };
+export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'] };
+const FONCTIONS = { reactionsChaine, equilibreChimique, brusselator, gazParfait };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -454,6 +454,9 @@ const DECORS = {
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   /* game116 : colonnes t, part, courbe ; mi-parcours (S = S0/2), la ou la loi de vitesse est comparee */
   enzyme: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Half the substrate used: the rate is checked here')],
+  /* game118 : la boite du gaz (cote 10) ; la frontiere entre parents et enfants */
+  gazParfait: (P, o, B) => [hyper(B, 0, 10, C.repere, 'The right wall (its hits make the pressure)')],
+  hardyWeinberg: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Parents below, children above')],
   /* ---------- game115 : tam-maths.js ---------- */
   marcheAleatoire: (P, o, B) => [pt([0, 0, B.lo[2]], C.repere, 'Start (every walker begins here)')],
   aiguilleBuffon: (P, o, B) => [hyper(B, 1, 5, C.repere, 'A floor line (y = 5; one every unit)')],

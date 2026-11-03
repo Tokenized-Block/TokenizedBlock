@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-biologie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone'];
+const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg'];
 
 // ---------- references independantes (Math autorise ici) ----------
 /* game114 : Mendel par ENUMERATION des 16 paires de gametes (AB, ab : (1-r)/2 ; Ab, aB : r/2), sans les formules du module */
@@ -178,6 +178,15 @@ function suite(T, bavard = false) {
       for (let q = 0; q < c; q++) { const o = 3 * (d0 + q); assert.ok(b[o + 1] >= 0 && b[o + 1] < 1 && Math.abs(b[o + 2] - Ik) < 1e-12 && (q === 0 || b[o] >= b[o - 3])); } }
     return `periode ${Number.isFinite(Pe.mesure) ? (Pe.mesure / Tth - 1).toExponential(1) : 'muet'}, f-I pire ${I.courbeFI.pireEcartRelatif.toExponential(1)} sur ${I.courbeFI.compares}`;
   });
+  // 3f. Hardy-Weinberg (game118)
+  for (const p of extremes(sys('hardyWeinberg'))) ok(`hardyWeinberg ${JSON.stringify(p)} : p^2 : 2pq : q^2 en une generation, parents sans Aa, enfants 0..2`, () => {
+    const R = S('hardyWeinberg', p), P = R.params, I = R.invariants, b = R.brut, N = P.individus, pe = Math.round(P.partA * N) / N, qe = 1 - pe;
+    assert.ok(Math.abs(I.heterozygotesHW.formule - 2 * pe * qe) < 1e-15 && Math.abs(I.homozygotesAA.formule - pe * pe) < 1e-15);
+    for (const k of ['heterozygotesHW', 'homozygotesAA', 'genotypes']) assert.ok(Math.abs(z(I[k])) < 5, k + ' z ' + z(I[k]));
+    const G = I.genotypes; assert.equal(G.genoAA + G.genoAa + G.genoaa, N);
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, c = Math.round(b[o]), gen = Math.round(b[o + 1]); assert.ok(Math.abs(b[o] - c) <= 0.3 && Math.abs(b[o + 1] - gen) <= 0.175 && (gen === 0 ? (c === 0 || c === 2) && b[o + 2] < 0 : gen === 1 && c >= 0 && c <= 2 && b[o + 2] > 0), 'ligne ' + i); }
+    return `Aa ${I.heterozygotesHW.mesure.toFixed(4)}/${(2 * pe * qe).toFixed(4)}, chi2 ${G.mesure.toFixed(2)}`;
+  });
   // 4. etalonnage des sigmas : sur 20 graines, les z ont un ecart-type ~ 1 (un sigma faux d un facteur 2 en sort)
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (differences, substitutions, Fano proteine, covariance, derive : moyenne et heterozygotie)', () => {
     const zs = { differences: [], substitutions: [], bruitProteine: [], covariance: [], frequenceMoyenne: [], heterozygotie: [] };
@@ -236,6 +245,8 @@ const MUTANTS = [
   ['mendel : gametes recombines trop frequents', "u < 1 - r / 2 ? [1, 0] : [0, 1]", "u < 1 - r / 4 ? [1, 0] : [0, 1]"],
   ['neurone : periode avec I - 0.9', 'lnD(I / (I - 1))', 'lnD(I / (I - 0.9))'],
   ['neurone : temps perdu apres une impulsion (bug du 03/11)', 'muet = tref; reste -= u;', 'muet = tref; reste = 0;'],
+  ['hardy-weinberg : enfants toujours homozygotes', 'enfants[i] = (a === 2 ? 1 : 0) + (b === 2 ? 1 : 0);', 'enfants[i] = (a === 2 ? 2 : 0);'],
+  ['hardy-weinberg : Aa attendu p q au lieu de 2 p q', 'const att = [qe * qe, 2 * pe * qe, pe * pe];', 'const att = [qe * qe, pe * qe, pe * pe];'],
   ['Math.random injecte (ADN)', 'lam = 4 * mu / 3, rng = mulberry32(P.graine)', 'lam = 4 * mu / 3, rng = Math.random'],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
