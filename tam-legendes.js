@@ -916,6 +916,28 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game122 : electricite (tam-electricite.js) et Pascal */
+  lignesChamp: {
+    titre: 'Field lines of two charges',
+    enUnePhrase: 'Electric field lines leaving a positive charge (left) and landing on a negative one (right), or escaping.',
+    colonnes: ['x (charges at -1 and +1)', 'y', 'field line number (a label)'],
+    aRegarder: ['Each line lands at the angle set by the flux: q1 theta = |q2| phi, exactly.', 'Make the negative charge weaker: lines run out of room on it and escape to infinity.', 'Equal and opposite charges: in 2-D every line is a circle through both.'],
+    fin: null,
+  },
+  circuitRC: {
+    titre: 'Charging a capacitor (RC circuit)',
+    enUnePhrase: 'Two curves: the capacitor voltage and the current, while it charges (t < 6) then discharges.',
+    colonnes: ['time t (charge until 6, then discharge)', 'voltage V (curve 0) or R times current (curve 1)', 'which curve (0 = voltage, 1 = current)'],
+    aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
+    fin: null,
+  },
+  pascalSierpinski: {
+    titre: 'The triangle of Pascal, odd numbers only (Sierpinski)',
+    enUnePhrase: 'The odd numbers of the triangle of Pascal, row by row from the top: the Sierpinski triangle.',
+    colonnes: ['position in the row', 'row (from the top)', 'row number n (a label)'],
+    aRegarder: ['Row n has exactly 2^(number of 1s in n in binary) odd numbers.', 'The first 2^m rows hold exactly 3^m of them.', 'The pattern repeats itself at every scale: a fractal.'],
+    fin: null,
+  },
   /* game120 : ondes (tam-ondes.js) */
   arcEnCiel: {
     titre: 'Why a rainbow (rays in a raindrop)',

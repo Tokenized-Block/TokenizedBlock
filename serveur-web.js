@@ -5807,6 +5807,8 @@ const SERVIS = [
   'tam-maths.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
+  /* game122 : electricite */
+  'tam-electricite.js',
   /* game94 : les noms et cles des mesures en anglais */
   'tam-cles-en.js',
   'abi.json', 'known-bad.json', 'A-SIGNER-mainnet.json', 'brain-agent.json',
