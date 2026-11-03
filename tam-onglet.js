@@ -183,7 +183,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   /* game118 */
   partA: 'share of AA parents (p)',
   /* game120 */
-  indice: 'refractive index n', pince: 'where it is plucked (a, from one end)', mach: 'source speed (Mach number M = v / c)' };
+  indice: 'refractive index n', cellules: 'grid cells', pince: 'where it is plucked (a, from one end)', mach: 'source speed (Mach number M = v / c)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */

@@ -287,6 +287,15 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/#v-tam \.tamVars\.replie > :not\(b\)\{display:none\}/.test(onglet) && /varsScene\.classList\.toggle\('replie', !S\.varsOuvert\)/.test(onglet)
     && (onglet.match(/titreVars\(/g) || []).length === 2 && /role: 'button', tabindex: '0', 'aria-expanded'/.test(onglet) && /e\.key === 'Enter' \|\| e\.key === ' '/.test(onglet),
     'game117 : le bloc sur la scene est replie par defaut (titre cliquable, clavier, aria-expanded)');
+  /* game121 (vu a l ecran : le curseur « cellules » s affichait en francais ; aucun banc ne regardait les NOMS de curseurs) : chaque cle de
+   *   curseur des sciences a un nom anglais dans NOMS_PARAMS_EN, sauf les symboles et mots deja anglais de la liste figee ci-dessous
+   *   (relevee le 03/11 : 94 cles, toutes des symboles ou des mots anglais) — une NOUVELLE cle francaise sans nom passe au rouge */
+  { const i = onglet.indexOf('const NOMS_PARAMS_EN = {'), j = onglet.indexOf('};', i), bloc = onglet.slice(i, j).replace(/\/\*[\s\S]*?\*\//g, '');
+    const nommees = new Set([...bloc.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:\s*['"]/g)].map((m) => m[1]));
+    const SYMBOLES = new Set('L r0 B0 q theta1 theta2 u0 uz n l m cx cy delta rabi x0 omega d a lambda k G1 G2 G3 G4 eps y0 gamma B z0 rg a0 e0 m1 m2 z b1 b2 b3 b4 b0 l0 rho0 rs rmax H0 Om nu rext cycles M rmin v k0 V0 L0 pitch D kT sigma q0 phase K hbar theta gradient chi1 chi2 w R0 T latitude g Phi log10a log10Qmin log10Qmax Z r omega0 mu c i0 beta rho N E bMax rMin rMax points X Y temperature'.split(' '));
+    const { SYSTEMES: SY } = await import('./tam-science.js'), sans = [];
+    for (const s of SY) for (const k of Object.keys(s.params)) if (!nommees.has(k) && !SYMBOLES.has(k)) sans.push(s.id + '.' + k);
+    ok(sans.length === 0, 'game121 : chaque curseur a un nom anglais (ou est un symbole de la liste figee) : ' + (sans.join(', ') || 'tous')); }
   /* game119 : de face et camera non tournee, profondeur aplatie pour les donnees ET le decor (un graphique n a pas de perspective) */
   ok(/const aplati = \(\) => !!\(S\.science && DE_FACE\.has\(S\.science\.s\.id\) && !S\.cam\);/.test(onglet) && /if \(!aplati\(\)\) return v;/.test(onglet)
     && /projeter\(p\[0\] \* sc, -p\[1\] \* sc, aplati\(\) \? 0 : p\[2\] \* sc\)/.test(onglet), 'game119 : graphiques de face sans perspective (donnees et decor)');

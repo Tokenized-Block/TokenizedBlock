@@ -44,7 +44,8 @@ function filmDe(debuts, n) {
 // Exact (Descartes, derive ici) : avec k reflexions internes, D(i) = pi k + 2 i - 2 (k + 1) r (sin i = n sin r) ; dD/di = 0 donne
 //   cos^2 i* = (n^2 - 1) / (k (k + 2)), soit (n^2 - 1)/3 pour l arc primaire (k = 1) et (n^2 - 1)/8 pour le secondaire (k = 2).
 //   Mesure : minimum de la deviation tracee sur 4000 rayons (le minimum est plat : erreur quadratique du pas).
-// Dessin : 41 rayons (k = 1), chacun echantillonne le long de son chemin (entree, reflexion, sortie, puis 1.2 au-dela) : un nuage.
+// Dessin : le contour de la goutte puis 15 rayons (k = 1), chacun echantillonne le long de son chemin (entree, reflexion, sortie, puis
+//   1.2 au-dela) : un nuage.
 function tracer(b, nIdx, k) {
   /* entree au point (-sqrt(1 - b^2), b), direction d = (1, 0) */
   let p = [-Math.sqrt(1 - b * b), b], d = [1, 0];
@@ -72,7 +73,10 @@ function arcEnCiel(P, n) {
     const ci = Math.sqrt((nIdx * nIdx - 1) / (k * (k + 2))), si = Math.sqrt(1 - ci * ci), i = atan2D(si, ci), r = asinD(si / nIdx);
     mins[k] = { mesure: best, formule: PI * k + 2 * i - 2 * (k + 1) * r, bMin: bBest };
   }
-  const R = 41, chemins = []; for (let j = 0; j < R; j++) { const t = tracer((j + 0.5) / R, nIdx, 1); if (t) chemins.push(t.chemin); }
+  /* game121 (vu a l ecran : 41 rayons x ~36 points, l oeil reliait les rayons VOISINS — des colonnes en travers) : 15 rayons denses, et
+   *   le contour de la goutte (premier « chemin », 3e colonne 0) */
+  const R = 15, chemins = [Array.from({ length: 73 }, (_, q) => [cosD(2 * PI * q / 72), sinD(2 * PI * q / 72)])];
+  for (let j = 0; j < R; j++) { const t = tracer((j + 0.5) / R, nIdx, 1); if (t) chemins.push(t.chemin); }
   /* echantillonnage regulier le long de chaque chemin ; 3e colonne = hauteur d entree b (etiquette) */
   const parRayon = Math.max(2, Math.floor(n / chemins.length));
   let l = 0;
@@ -81,7 +85,7 @@ function arcEnCiel(P, n) {
     const nb = c === chemins.length - 1 ? n - l : parRayon;
     for (let q = 0; q < nb && l < n; q++) { const u = nb === 1 ? 0 : q * L / (nb - 1); let s = 0; while (s < seg.length - 1 && tot[s] < u) s++;
       const u0 = s ? tot[s - 1] : 0, f = seg[s] > 0 ? (u - u0) / seg[s] : 0, a = ch[s], b2 = ch[s + 1], o = 3 * l;
-      brut[o] = a[0] + f * (b2[0] - a[0]); brut[o + 1] = a[1] + f * (b2[1] - a[1]); brut[o + 2] = ch[0][1]; l++; } }
+      brut[o] = a[0] + f * (b2[0] - a[0]); brut[o + 1] = a[1] + f * (b2[1] - a[1]); brut[o + 2] = c === 0 ? 0 : ch[0][1]; l++; } }
   const deg = 180 / PI;
   return { D: 3, brut, nuage: true, unite: 'sans objet (optique geometrique)', invariants: {
     arcPrimaire: { mesure: mins[1].mesure * deg, formule: mins[1].formule * deg, hauteur: mins[1].bMin, indice: nIdx, rayons: M,
@@ -159,7 +163,7 @@ function effetDoppler(P, n) {
 }
 
 export const COLONNES = Object.freeze({
-  arcEnCiel: { colonnes: ['x (drop of radius 1 at the centre)', 'y (same)', 'height b at which the ray came in (label)'], memeLongueur: [[0, 1]], autres: [2] },
+  arcEnCiel: { colonnes: ['x (drop of radius 1 at the centre)', 'y (same)', 'height b at which the ray came in (label; 0 = the drop outline)'], memeLongueur: [[0, 1]], autres: [2] },
   cordeVibrante: { colonnes: ['position along the string (0 to 1)', 'displacement u', 'time (in units of L / c)'], memeLongueur: [], autres: [0, 1, 2] },
   effetDoppler: { colonnes: ['x (wavelengths)', 'y (wavelengths)', 'time the front was sent (label)'], memeLongueur: [[0, 1]], autres: [2] },
 });
