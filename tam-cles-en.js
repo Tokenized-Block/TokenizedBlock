@@ -351,6 +351,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game123 */
   /* game124 */
   /* game125 */
+  /* game126 */
+  petitesOscillations: 'small-swing period 2 pi', amplitudeDegres: 'release angle (degrees)', amplitudes: 'amplitudes drawn', phaseDegres: 'phase angle (degrees)',
   parties: 'games', portes: 'doors', virtuelle: 'virtual (1 = yes)',
   resolution: 'scan step (degrees)', hauteurTir: 'launch height h', contact: 'closest approach to the parabola', sommets: 'vertices', aretes: 'edges', faces: 'faces', cotesParFace: 'sides per face p', aretesParSommet: 'edges per vertex q',
   rapportMasses: 'mass ratio M/m', mode: 'mode j', pulsation: 'omega_j',
@@ -388,6 +390,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game123 */
   /* game124 */
   /* game125 */
+  /* game126 */
+  periodesFilm: 'Periods of every amplitude drawn', partEclairee: 'Lit share of the disc',
   travail: 'Work of one cycle (area)', changer: 'Won by switching', garder: 'Won by sticking', image: 'Where the image forms (di)', grandissement: 'Magnification', convergence: 'Rays through one point (worst gap)',
   angleOptimal: 'Best throwing angle (degrees)', porteeMax: 'Longest throw', enveloppe: 'Above the safety parabola (never)',
   euler: 'Euler: vertices - edges + faces', schlafli: 'Edges vs F p / 2', diedre: 'Angle between faces (degrees)', surSphere: 'All vertices on one sphere',

@@ -66,6 +66,9 @@ const FILMS_DU_MODULE = {
   cordeVibrante: { colonneTemps: 2 },
   /* game123 */
   modesNormaux: { colonneTemps: 2 },
+  /* game126 */
+  penduleAmplitude: { colonneTemps: 2, note: 'each frame is one release angle, from theta0/6 to theta0' },
+  phasesLune: { colonneTemps: null, note: 'each frame is one phase, from full Moon (0) to the phase chosen' },
   /* game118 */
   gazParfait: { colonneTemps: null, note: 'each frame is the same gas a little later (positions are exact, folded off the walls)' },
   /* game115 */
@@ -916,6 +919,21 @@ const L = {
     enUnePhrase: 'The membrane potential of a model neuron for seven input currents, one per frame: it charges, fires at 1, resets.',
     colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of the frame'],
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
+    fin: null,
+  },
+  /* game126 */
+  penduleAmplitude: {
+    titre: 'A pendulum swinging high (the exact period)',
+    enUnePhrase: 'Loops of angle against speed for a pendulum released from six angles, the largest one chosen.',
+    colonnes: ['angle theta (radians)', 'angular speed', 'time t'],
+    aRegarder: ['Small swings are ellipses and take 2 pi; wide swings flatten at the ends and take longer.', 'The period is exactly 2 pi / AGM(1, cos(theta0/2)), the arithmetic-geometric mean of Gauss.', 'Close to 180 degrees the pendulum lingers at the top and the period grows without bound.'],
+    fin: null,
+  },
+  phasesLune: {
+    titre: 'The phases of the Moon',
+    enUnePhrase: 'The lit part of the Moon as seen from the Earth, frame by frame from full Moon.',
+    colonnes: ['x on the disc', 'y on the disc', 'phase angle in degrees (0 = full Moon)'],
+    aRegarder: ['The edge between light and dark is half an ellipse: the Moon is a ball lit from one side.', 'The lit share is exactly (1 + cos phi) / 2: half at the quarters.', 'Nothing hides the Moon: the phases are only the angle between the Sun and us.'],
     fin: null,
   },
   /* game125 */

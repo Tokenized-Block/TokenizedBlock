@@ -136,9 +136,70 @@ function paraboleTir(P, n) {
     enveloppe: { mesure: Math.max(0, depasse), formule: 0, contact: contactMin, note: 'largest amount by which any trajectory point rises above the safety parabola y = h + 1/2 - x^2/2 (none: every throw stays under it and touches it once)' } } };
 }
 
+// ---------- 4 : le pendule a grande amplitude ----------
+// theta'' = -sin(theta) (g / L = 1), lache au repos a theta0. RK4 au pas 0.001 ; periode lue aux passages descendants de theta par 0.
+// Exact (Gauss, derive de l integrale elliptique complete K) : T = 2 pi / AGM(1, cos(theta0 / 2)), AGM = moyenne arithmetico-geometrique
+//   (a, b) -> ((a + b)/2, sqrt(a b)) jusqu a egalite : racines carrees seulement, deterministe. Petites oscillations : 2 pi (APPROCHE,
+//   affichee a cote : l ecart grandit avec l amplitude et diverge vers 180 degres).
+// Dessin : un film de 6 amplitudes (theta0 / 6 ... theta0) : la courbe de phase (theta, theta') de chacune, emboitees ; 3e colonne : temps.
+const PENDULE_IMAGES = 6;
+function agm(a, b) { for (let i = 0; i < 60 && Math.abs(a - b) > 1e-16 * a; i++) { const m = (a + b) / 2; b = Math.sqrt(a * b); a = m; } return (a + b) / 2; }
+function penduleAmplitude(P, n) {
+  const th0 = P.lacher * PI / 180, h = 0.001, images = Math.min(PENDULE_IMAGES, n), film = filmDe(decouper(n, images), n), brut = new Float64Array(n * 3);
+  const res = [];
+  for (let f = 0; f < images; f++) {
+    const a0 = images === 1 ? th0 : th0 * (f + 1) / images, Tth = 2 * PI / agm(1, cosD(a0 / 2)), tot = 3 * Tth, pas = Math.round(tot / h);
+    /* banc du 03/11 : un mutant (AGM de cos theta0) donnait a 90 degres une periode de 1e19 et 1e22 pas (le banc a tourne sans fin) : une
+     *   periode non finie ou au-dela de 500 n est pas integree, elle est rendue non mesuree */
+    if (!(Number.isFinite(Tth) && Tth > 0 && Tth < 500)) { const d0 = film.debuts[f], c = film.tailles[f]; for (let r = 0; r < c; r++) { const o = 3 * (d0 + r); brut[o] = a0; brut[o + 1] = 0; brut[o + 2] = 0; } res.push({ a0, Tth, Tm: NaN, Emax: 0 }); continue; }
+    let th = a0, w = 0, avant = th, passages = [], Emax = 0; const E0 = -cosD(a0);
+    const d0 = film.debuts[f], c = film.tailles[f]; let ligne = 0;
+    const ecrire = (st) => { while (ligne < c && Math.round(ligne * Math.round(Tth / h) / (c - 1 || 1)) === st) { const o = 3 * (d0 + ligne); brut[o] = th; brut[o + 1] = w; brut[o + 2] = st * h; ligne++; } };
+    ecrire(0);
+    for (let st = 1; st <= pas; st++) {
+      const k1t = w, k1w = -sinD(th), k2t = w + h / 2 * k1w, k2w = -sinD(th + h / 2 * k1t), k3t = w + h / 2 * k2w, k3w = -sinD(th + h / 2 * k2t), k4t = w + h * k3w, k4w = -sinD(th + h * k3t);
+      th += h / 6 * (k1t + 2 * k2t + 2 * k3t + k4t); w += h / 6 * (k1w + 2 * k2w + 2 * k3w + k4w);
+      if (avant > 0 && th <= 0) passages.push((st - 1 + avant / (avant - th)) * h); avant = th;
+      Emax = Math.max(Emax, Math.abs(w * w / 2 - cosD(th) - E0));
+      ecrire(st);
+    }
+    while (ligne < c) { const o = 3 * (d0 + ligne); brut[o] = th; brut[o + 1] = w; brut[o + 2] = pas * h; ligne++; }
+    const Tm = passages.length >= 2 ? (passages[passages.length - 1] - passages[0]) / (passages.length - 1) : NaN;
+    res.push({ a0, Tth, Tm, Emax });
+  }
+  const m = res[res.length - 1]; let pire = 0; for (const r of res) pire = Math.max(pire, Math.abs(r.Tm / r.Tth - 1));
+  return { D: 3, brut, film, unite: 'sans objet (pendule non lineaire)', invariants: {
+    periode: { mesure: m.Tm, formule: m.Tth, petitesOscillations: 2 * PI, amplitudeDegres: P.lacher, note: 'period at theta0 measured on the swings against 2 pi / AGM(1, cos(theta0/2)) (exact, Gauss) ; the small-swing value 2 pi is shown beside it' },
+    periodesFilm: { pireEcartRelatif: pire, amplitudes: res.length, note: 'worst relative gap over the ' + res.length + ' amplitudes drawn (theta0/6 ... theta0)' },
+    energie: { debut: -cosD(th0), fin: -cosD(th0), derive: m.Emax, note: 'energy theta\'^2/2 - cos(theta), the same along the swing (witness ; RK4 drift)' } } };
+}
+
+// ---------- 5 : les phases de la Lune ----------
+// Une sphere vue depuis la Terre (direction e = (0, 0, 1)), eclairee par le Soleil dans la direction s = (sin phi, 0, cos phi) : phi = angle
+//   de phase (0 = pleine lune, 180 = nouvelle lune). Un point n de la sphere est VU si n.e > 0 et ECLAIRE si n.s > 0 (geometrie seule).
+// Exact (derive ici) : la part eclairee du disque vu vaut (1 + cos phi) / 2 (aire projetee entre le limbe et le terminateur, une demi-ellipse).
+// Mesure : on compte les points d une grille fine du disque (1001 x 1001) dont le point de sphere est eclaire, sur ceux du disque.
+// Dessin : un film de 8 phases (phi de 0 a 180 degres, ou jusqu a phi) : les points ECLAIRES du disque ; 3e colonne : la phase en degres.
+const LUNE_IMAGES = 8;
+function phasesLune(P, n) {
+  const phiMax = P.anglePhase * PI / 180, images = Math.min(LUNE_IMAGES, n), film = filmDe(decouper(n, images), n), brut = new Float64Array(n * 3);
+  const part = (phi) => { const sx = sinD(phi), sz = cosD(phi), G = 1001; let tot = 0, lit = 0;
+    for (let i = 0; i < G; i++) for (let j = 0; j < G; j++) { const x = -1 + 2 * (i + 0.5) / G, y = -1 + 2 * (j + 0.5) / G, r2 = x * x + y * y; if (r2 >= 1) continue; tot++; if (x * sx + Math.sqrt(1 - r2) * sz > 0) lit++; }
+    return lit / tot; };
+  const mesure = part(phiMax), formule = Math.max(0, (1 + cosD(phiMax)) / 2); /* cos 180 = -1 + arrondi : jamais une part negative */
+  for (let f = 0; f < images; f++) { const phi = images === 1 ? phiMax : f * phiMax / (images - 1), /* banc du 03/11 : les images allaient TOUJOURS de 0 a 180 (curseur muet) : de la pleine lune a la phase choisie */ sx = sinD(phi), sz = cosD(phi), d0 = film.debuts[f], c = film.tailles[f];
+    /* points eclaires : on parcourt une spirale reguliere du disque et on garde les eclaires ; si trop peu, on les repete */
+    const pts = []; const M = 4000; for (let q = 0; q < M; q++) { const r = Math.sqrt((q + 0.5) / M), a = q * 2.399963229728653, x = r * cosD(a), y = r * sinD(a); if (x * sx + Math.sqrt(Math.max(0, 1 - r * r)) * sz > 0) pts.push([x, y]); }
+    for (let r = 0; r < c; r++) { const p = pts.length ? pts[Math.floor(r * pts.length / c)] : [0, 0], o = 3 * (d0 + r); brut[o] = p[0]; brut[o + 1] = p[1]; brut[o + 2] = phi * 180 / PI; } }
+  return { D: 3, brut, film, nuage: true, unite: 'sans objet (geometrie)', invariants: {
+    partEclairee: { mesure, formule, phaseDegres: P.anglePhase, note: 'share of the visible disc that is lit, counted on a 1001 x 1001 grid from 3-D geometry (seen if n.e > 0, lit if n.s > 0), against (1 + cos phi) / 2 ; the grid adds a gap of about 1e-3' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
+  penduleAmplitude: { colonnes: ['angle theta (radians)', 'angular speed', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
+  phasesLune: { colonnes: ['x on the Moon\'s disc', 'y on the Moon\'s disc', 'phase angle in degrees (0 = full Moon)'], memeLongueur: [[0, 1]], autres: [2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -152,9 +213,15 @@ export const SYSTEMES = Object.freeze([
   { id: 'paraboleTir', nom: 'The best angle to throw (projectiles and the safety parabola)', science: 'Classical mechanics', D: 3, nuage: true, params: { hauteur: 0, angles: 18 },
     bornes: { hauteur: [0, 2], angles: [5, 40] },
     phrase: 'A visualisation of stones thrown at the same speed under every angle from a height h. From the ground the longest throw is at 45 degrees; from higher up it is flatter, exactly atan(1 / sqrt(1 + 2 h)), and reaches sqrt(1 + 2 h). Every path stays under one parabola, the safety parabola, and touches it once.' },
+  { id: 'penduleAmplitude', nom: 'A pendulum swinging high (the exact period)', science: 'Classical mechanics', D: 3, params: { lacher: 120 },
+    bornes: { lacher: [5, 175] },
+    phrase: 'A visualisation of a pendulum released from ever larger angles, drawn as nested loops of angle against speed. Its period is not 2 pi once the swing is wide: it is exactly 2 pi / AGM(1, cos(theta0 / 2)), the arithmetic-geometric mean of Gauss, and it grows without bound towards 180 degrees.' },
+  { id: 'phasesLune', nom: 'The phases of the Moon', science: 'Astronomy', D: 3, nuage: true, params: { anglePhase: 180 },
+    bornes: { anglePhase: [10, 180] },
+    phrase: 'A visualisation of the Moon\'s phases from full to new: a sphere lit by the Sun, seen from the Earth, frame by frame. Which part looks lit comes from 3-D geometry alone (a point is seen if it faces us, lit if it faces the Sun); counted on a fine grid, the lit share is (1 + cos phi) / 2.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

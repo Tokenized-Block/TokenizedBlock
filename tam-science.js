@@ -241,6 +241,8 @@ export const ECHELLE_PROPRE = {
   paraboleTir: [2],
   /* game125 : volume, pression, branche (3 grandeurs) ; parties et strategie ; numero de rayon */
   carnot: [0, 1, 2], montyHall: [0, 2], lentilleMince: [2],
+  /* game126 : angle, vitesse, temps (3 grandeurs) ; phase (etiquette) */
+  penduleAmplitude: [0, 1, 2], phasesLune: [2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

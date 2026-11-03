@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -25,7 +25,10 @@ function standardiser(b, n, D, groupes = []) {
 }
 const ecartDessin = (a, b) => { let t = 0; for (let i = 0; i < a.length; i++) t += Math.abs(a[i] - b[i]); return t / a.length; };
 
-function suite(T, bavard = false) {
+/* game126 (le banc depassait 25 min : chaque mutant relancait les 5 systemes) : un mutant ne relance que les tests de SON systeme
+ *   (seul = liste d ids ; null = tout) — le bornage et la forme restent toujours verifies */
+function suite(T, bavard = false, seul = null) {
+  const vise = (id) => !seul || seul.includes(id);
   const res = [];
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
@@ -35,6 +38,7 @@ function suite(T, bavard = false) {
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
   for (const s of T.SYSTEMES) {
+    if (!vise(s.id)) continue;
     ok(`${s.id} : bornee, brut fini, phrase anglaise sans accent`, () => { const r = S(s.id); assert.equal(r.bornee, true, r.raison); assert.equal(r.brut.length, 1500 * s.D); assert.ok(/^A visualisation of /.test(s.phrase) && !/[^\x20-\x7e]/.test(s.phrase + s.nom)); });
     ok(`${s.id} : determinisme`, () => { const a = T.simuler(s.id, {}), b = T.simuler(s.id, {}); assert.ok(octets(a.brut).equals(octets(b.brut))); assert.equal(JSON.stringify(a.invariants), JSON.stringify(b.invariants)); });
     ok(`${s.id} : petits n (2 et 7)`, () => { for (const n of [2, 7]) { const r = T.simuler(s.id, {}, { n }); assert.ok(r.bornee && r.brut.length === n * s.D); } });
@@ -43,7 +47,7 @@ function suite(T, bavard = false) {
       for (const k of Object.keys(s.params)) for (const v of s.bornes[k]) { if (v === s.params[k]) continue; const r = S(s.id, { [k]: v }), e = ecartDessin(z0, standardiser(r.brut, r.n, r.D, C.memeLongueur)); assert.ok(e > 1e-3, k + '=' + v + ' : ' + e); out.push(k + ' ' + e.toFixed(2)); }
       return out.join(' ; '); });
   }
-  for (let k = 0; k <= 5; k++) ok(`billardPi chiffres = ${k} : le nombre de chocs ecrit les ${k + 1} premiers chiffres de pi, etats sur le cercle de l energie`, () => {
+  if (vise('billardPi')) for (let k = 0; k <= 5; k++) ok(`billardPi chiffres = ${k} : le nombre de chocs ecrit les ${k + 1} premiers chiffres de pi, etats sur le cercle de l energie`, () => {
     const R = S('billardPi', { chiffres: k }), I = R.invariants, b = R.brut, M = 100 ** k;
     assert.equal(I.chocs.mesure, Math.floor(Math.PI * 10 ** k), 'chocs ' + I.chocs.mesure);
     assert.equal(I.chocs.formule, Math.ceil(Math.PI / Math.atan(Math.sqrt(1 / M))) - 1);
@@ -51,7 +55,7 @@ function suite(T, bavard = false) {
     for (let i = 0; i < R.n; i++) { const o = 3 * i; assert.ok(Math.abs(Math.hypot(b[o], b[o + 1]) - Math.sqrt(M)) < 1e-6 * Math.sqrt(M), 'sur le cercle ' + i); if (i) assert.ok(b[o + 2] >= b[o - 1]); }
     return I.chocs.mesure + ' chocs';
   });
-  for (const p of [...extremes(sys('modesNormaux')), { masses: 3, mode: 2 }, { masses: 10, mode: 7 }]) ok(`modesNormaux ${JSON.stringify(p)} : periode = 2 pi / omega_j (et la frequence exacte de Verlet), la chaine garde la forme du mode`, () => {
+  if (vise('modesNormaux')) for (const p of [...extremes(sys('modesNormaux')), { masses: 3, mode: 2 }, { masses: 10, mode: 7 }]) ok(`modesNormaux ${JSON.stringify(p)} : periode = 2 pi / omega_j (et la frequence exacte de Verlet), la chaine garde la forme du mode`, () => {
     const R = S('modesNormaux', p), N = R.params.masses, j = Math.min(R.params.mode, N), I = R.invariants, b = R.brut, h = 0.01;
     const om = 2 * Math.sin(j * Math.PI / (2 * (N + 1))), Om = 2 / h * Math.asin(om * h / 2);
     assert.ok(Math.abs(I.periodeMode.formule - 2 * Math.PI / om) < 1e-12 * I.periodeMode.formule, 'formule');
@@ -64,13 +68,29 @@ function suite(T, bavard = false) {
     return 'ecart physique ' + (I.periodeMode.mesure / (2 * Math.PI / om) - 1).toExponential(1) + ', Verlet ' + (I.periodeMode.mesure / (2 * Math.PI / Om) - 1).toExponential(1);
   });
   /* game124 : tir — references : Math.atan(1 / sqrt(1 + 2 h)), sqrt(1 + 2 h), enveloppe h + 1/2 - x^2/2 */
-  for (const p of [...extremes(sys('paraboleTir')), { hauteur: 0.5 }, { hauteur: 1 }]) ok(`paraboleTir ${JSON.stringify(p)} : meilleur angle atan(1/sqrt(1+2h)), portee sqrt(1+2h), tout sous la parabole de surete`, () => {
+  if (vise('paraboleTir')) for (const p of [...extremes(sys('paraboleTir')), { hauteur: 0.5 }, { hauteur: 1 }]) ok(`paraboleTir ${JSON.stringify(p)} : meilleur angle atan(1/sqrt(1+2h)), portee sqrt(1+2h), tout sous la parabole de surete`, () => {
     const R = S('paraboleTir', p), h = R.params.hauteur, I = R.invariants, b = R.brut, th = Math.atan(1 / Math.sqrt(1 + 2 * h)) * 180 / Math.PI, Rm = Math.sqrt(1 + 2 * h);
     assert.ok(Math.abs(I.angleOptimal.formule - th) < 1e-9 && Math.abs(I.angleOptimal.mesure - th) <= 0.05, 'angle ' + I.angleOptimal.mesure + ' ' + th);
     assert.ok(Math.abs(I.porteeMax.formule - Rm) < 1e-12 && Math.abs(I.porteeMax.mesure - Rm) < 1e-5, 'portee ' + I.porteeMax.mesure);
     assert.equal(I.enveloppe.mesure, 0); assert.ok(I.enveloppe.contact < 1e-6, 'contact ' + I.enveloppe.contact);
     for (let i = 0; i < R.n; i++) { const o = 3 * i, x = b[o], y = b[o + 1]; assert.ok(y >= -1e-9 && y <= h + 0.5 - x * x / 2 + 1e-9, 'sous l enveloppe ' + i); }
     return 'angle ' + I.angleOptimal.mesure.toFixed(3) + ' / ' + th.toFixed(3);
+  });
+  /* game126 : pendule — reference INDEPENDANTE de l AGM : T = 4 K(k), k = sin(theta0/2), K par Simpson de 1/sqrt(1 - k^2 sin^2 phi) (Math.sin) */
+  const periodeK = (a0) => { const k = Math.sin(a0 / 2), M = 20000, hh = Math.PI / 2 / M, g = (ph) => 1 / Math.sqrt(1 - k * k * Math.sin(ph) ** 2); let t = g(0) + g(Math.PI / 2); for (let i = 1; i < M; i++) t += (i % 2 ? 4 : 2) * g(i * hh); return 4 * t * hh / 3; };
+  if (vise('penduleAmplitude')) for (const p of [...extremes(sys('penduleAmplitude')), { lacher: 90 }, { lacher: 170 }]) ok(`penduleAmplitude ${JSON.stringify(p)} : periode = 4 K(sin(theta0/2)) (integrale elliptique), energie de chaque point dessine`, () => {
+    const R = S('penduleAmplitude', p), a = R.params.lacher * Math.PI / 180, I = R.invariants, b = R.brut, Tk = periodeK(a);
+    assert.ok(Math.abs(I.periode.formule / Tk - 1) < 1e-9, 'AGM vs K ' + I.periode.formule + ' ' + Tk); assert.ok(Math.abs(I.periode.mesure / Tk - 1) < 1e-9, 'mesure ' + I.periode.mesure);
+    assert.ok(I.periodesFilm.pireEcartRelatif < 1e-9 && I.energie.derive < 1e-10);
+    for (let f = 0; f < R.film.images; f++) { const a0 = a * (f + 1) / R.film.images, d0 = R.film.debuts[f], c = R.film.tailles[f]; for (let r = 0; r < c; r++) { const o = 3 * (d0 + r); assert.ok(Math.abs(b[o + 1] ** 2 / 2 - Math.cos(b[o]) + Math.cos(a0)) < 1e-9, 'energie image ' + f); } }
+    return 'T ' + I.periode.mesure.toFixed(6) + ' (petites oscillations 6.283185)';
+  });
+  /* game126 : Lune — (1 + cos phi)/2 par Math.cos ; chaque point dessine est eclaire (x sin phi + sqrt(1 - r^2) cos phi > 0) */
+  if (vise('phasesLune')) for (const p of [...extremes(sys('phasesLune')), { anglePhase: 90 }, { anglePhase: 45 }]) ok(`phasesLune ${JSON.stringify(p)} : part eclairee (1 + cos phi)/2, chaque point dessine eclaire`, () => {
+    const R = S('phasesLune', p), ph = R.params.anglePhase * Math.PI / 180, I = R.invariants, b = R.brut, att = Math.max(0, (1 + Math.cos(ph)) / 2);
+    assert.ok(Math.abs(I.partEclairee.formule - att) < 1e-12 && Math.abs(I.partEclairee.mesure - att) < 2e-3, 'part ' + I.partEclairee.mesure + ' ' + att);
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, x = b[o], y = b[o + 1], r2 = x * x + y * y, phi = b[o + 2] * Math.PI / 180; if (phi > Math.PI - 1e-9) continue; assert.ok(r2 <= 1 + 1e-12 && x * Math.sin(phi) + Math.sqrt(Math.max(0, 1 - r2)) * Math.cos(phi) > -1e-12, 'point ' + i); }
+    return 'part ' + I.partEclairee.mesure.toFixed(5) + ' / ' + att.toFixed(5);
   });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
@@ -95,6 +115,10 @@ const MUTANTS = [
   ['tir : gravite 1.01 g', 'const vy2 = vy - dt;', 'const vy2 = vy - 1.01 * dt;'],
   ['tir : angle optimal atan(1 / sqrt(1 + h))', 'atanD(1 / Math.sqrt(1 + 2 * h))', 'atanD(1 / Math.sqrt(1 + h))'],
   ['tir : enveloppe x^2 / 2.1', 'env = (x) => h + 0.5 - x * x / 2;', 'env = (x) => h + 0.5 - x * x / 2.1;'],
+  ['pendule : AGM de cos(theta0) au lieu de cos(theta0/2)', 'agm(1, cosD(a0 / 2))', 'agm(1, cosD(a0))'],
+  ['pendule : RK4 qui pese 2.01 le 2e etage', 'th += h / 6 * (k1t + 2 * k2t + 2 * k3t + k4t);', 'th += h / 6 * (k1t + 2.01 * k2t + 2 * k3t + k4t);'],
+  ['lune : eclaire seulement au-dela de 0.05', 'if (x * sx + Math.sqrt(1 - r2) * sz > 0) lit++;', 'if (x * sx + Math.sqrt(1 - r2) * sz > 0.05) lit++;'],
+  ['lune : formule (1 + cos phi) / 2.02', 'Math.max(0, (1 + cosD(phiMax)) / 2)', 'Math.max(0, (1 + cosD(phiMax)) / 2.02)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -107,7 +131,9 @@ try {
     if (k !== 1) { console.log(`  M${i + 1} ${nom} : NON APPLIQUE (motif trouve ${k} fois) -> SURVIVANT`); continue; }
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
-    let r; try { r = suite(await import(pathToFileURL(f).href)); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
+    /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'] }[nom.split(' ')[0]] || null;
+    let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);
   }
