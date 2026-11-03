@@ -128,7 +128,7 @@ function dogmeCentral(P, n) {
   const DOGME_DUREE = Math.max(DOGME_DUREE_MIN, 200 / gp), rodage = 20 / Math.min(1, gp), T = rodage + DOGME_DUREE, Tb = DOGME_DUREE / DOGME_BLOCS;
   /* sommes par bloc : temps, m, m^2, p, p^2, m p */
   const S = Array.from({ length: DOGME_BLOCS }, () => new Float64Array(6));
-  const t0dessin = T - DOGME_FENETRE, brut = new Float64Array(n * 3);
+  const t0dessin = T - DOGME_FENETRE, mT = new Float64Array(n), pT = new Float64Array(n);
   let m = Math.round(k), p = Math.round(k * kp / gp), t = 0, ligne = 0, evenements = 0;
   const accumuler = (a, b) => { /* l etat (m, p) tient de a a b */
     if (b <= rodage) return;
@@ -141,7 +141,7 @@ function dogmeCentral(P, n) {
   };
   /* ligne l du dessin = etat a l instant t0dessin + l W/(n-1) ; l etat courant vaut sur [a, b) */
   const tl = (l) => l * DOGME_FENETRE / (n - 1);
-  const dessiner = (b) => { while (ligne < n && t0dessin + tl(ligne) < b) { const o = 3 * ligne; brut[o] = tl(ligne); brut[o + 1] = m; brut[o + 2] = p; ligne++; } };
+  const dessiner = (b) => { while (ligne < n && t0dessin + tl(ligne) < b) { mT[ligne] = m; pT[ligne] = p; ligne++; } };
   while (t < T) {
     const a1 = k, a2 = m, a3 = kp * m, a4 = gp * p, a0 = a1 + a2 + a3 + a4;
     const tn = Math.min(T, t + attente(rng, a0));
@@ -151,7 +151,13 @@ function dogmeCentral(P, n) {
     if (u < a1) m++; else if (u < a1 + a2) m--; else if (u < a1 + a2 + a3) p++; else p--;
     evenements++;
   }
-  while (ligne < n) { const o = 3 * ligne; brut[o] = tl(ligne); brut[o + 1] = m; brut[o + 2] = p; ligne++; }
+  while (ligne < n) { mT[ligne] = m; pT[ligne] = p; ligne++; }
+  /* game116 (Phil : « pour biologie et chimie on comprend mal les exemples ») : trois grandeurs en 3-D faisaient un gribouillis ; DEUX courbes
+   *   sur un meme graphique, chaque compte divise par sa moyenne EXACTE (k et k kp / gp) : les deux tremblent autour de 1, et on voit
+   *   que la proteine, plus nombreuse, tremble relativement moins. Image 1 = ARN messager, image 2 = proteine (vue de face). */
+  const images = Math.min(2, n), film = filmDe(decouper(n, images), n), brut = new Float64Array(n * 3), moy = [k, k * kp / gp];
+  for (let f = 0; f < images; f++) { const d0 = film.debuts[f], c = film.tailles[f], src = f ? pT : mT;
+    for (let r = 0; r < c; r++) { const l = c === 1 ? n - 1 : Math.round(r * (n - 1) / (c - 1)), o = 3 * (d0 + r); brut[o] = tl(l); brut[o + 1] = src[l] / moy[f]; brut[o + 2] = f; } }
   /* estimateurs sur un ensemble de blocs (masque = bloc retire, -1 = aucun) */
   const est = (sauf) => {
     const z = new Float64Array(6); for (let b = 0; b < DOGME_BLOCS; b++) if (b !== sauf) for (let j = 0; j < 6; j++) z[j] += S[b][j];
@@ -162,7 +168,8 @@ function dogmeCentral(P, n) {
   const sig = (j) => { let mo = 0; for (const x of jk) mo += x[j]; mo /= DOGME_BLOCS; let s = 0; for (const x of jk) s += (x[j] - mo) * (x[j] - mo); return Math.sqrt(s * (DOGME_BLOCS - 1) / DOGME_BLOCS); };
   const cov = kp * k / (1 + gp);
   const note = 'time-weighted average after ' + rodage + ' time units of warm-up ; sigma from a jackknife over ' + DOGME_BLOCS + ' time blocks (measured, not assumed)';
-  return { D: 3, brut, unite: 'sans objet (processus aleatoire, non chaotique)', invariants: {
+  /* game116 : PAS un film (une image a la fois) : les courbes se comparent ENSEMBLE ; nuage de points, chaque courbe = ses lignes dans courbes */
+  return { D: 3, brut, courbes: film, nuage: true, unite: 'sans objet (processus aleatoire, non chaotique)', invariants: {
     arnMoyen: { mesure: tout[0], formule: k, sigma: sig(0), note: 'mean number of mRNA against k (transcription rate / decay rate) ; ' + note },
     bruitArn: { mesure: tout[1], formule: 1, sigma: sig(1), note: 'Fano factor of mRNA (variance / mean) against 1 : mRNA counts are exactly Poisson ; ' + note },
     proteineMoyenne: { mesure: tout[2], formule: k * kp / gp, sigma: sig(2), note: 'mean number of proteins against k kp / gp ; ' + note },
@@ -224,13 +231,15 @@ function deriveGenetique(P, n) {
 // Duree : T = (S0 + 5 Km) / Vmax (S consomme presque entierement) ; pas h = min(0.5 / (k1 (S0 + E0) + k-1 + kcat), T / 2000).
 function enzyme(P, n) {
   const S0 = P.substrat, E0 = P.enzyme, km1 = P.dissociation, k2 = P.catalyse, k1 = 1;
-  const Km = (km1 + k2) / k1, Vmax = k2 * E0, T = (S0 + 5 * Km) / Vmax, h0 = Math.min(0.5 / (k1 * (S0 + E0) + km1 + k2), T / 2000);
+  /* game116 : T fixe sur l enzyme de REFERENCE 0.1 (pas sur E0) : en parts contre le temps standardise, une duree proportionnelle a 1/E0
+   *   rendait le curseur « enzyme » invisible (banc : 0.0009) ; ainsi peu d enzyme = reaction encore en cours a la fin, beaucoup = finie tot */
+  const Km = (km1 + k2) / k1, Vmax = k2 * E0, T = (S0 + 5 * Km) / (k2 * 0.1), h0 = Math.min(0.5 / (k1 * (S0 + E0) + km1 + k2), T / 2000);
   const pas = Math.ceil(T / h0), h = T / pas;
   const f = (y, d) => { const [S, E, C] = y, a = k1 * E * S, b = km1 * C, c = k2 * C; d[0] = -a + b; d[1] = -a + b + c; d[2] = a - b - c; d[3] = c; };
   let y = [S0, E0, 0, 0];
-  const k = [0, 1, 2, 3].map(() => new Float64Array(4)), tmp = new Float64Array(4), brut = new Float64Array(n * 3);
+  const k = [0, 1, 2, 3].map(() => new Float64Array(4)), tmp = new Float64Array(4), sT = new Float64Array(n), pT = new Float64Array(n), cT = new Float64Array(n), tT = new Float64Array(n);
   let pireE = 0, pireS = 0, ligne = 0, vMi = NaN, sMi = NaN;
-  const ecrire = (st) => { while (ligne < n && Math.round(ligne * pas / (n - 1)) === st) { const o = 3 * ligne; brut[o] = y[0]; brut[o + 1] = y[3]; brut[o + 2] = y[2]; ligne++; } };
+  const ecrire = (st) => { while (ligne < n && Math.round(ligne * pas / (n - 1)) === st) { tT[ligne] = st * h; sT[ligne] = y[0]; pT[ligne] = y[3]; cT[ligne] = y[2]; ligne++; } };
   ecrire(0);
   for (let st = 1; st <= pas; st++) {
     const avant = y[0];
@@ -243,7 +252,14 @@ function enzyme(P, n) {
     ecrire(st);
   }
   const eps = E0 / (S0 + Km), vF = Vmax * sMi / (Km + sMi);
-  return { D: 3, brut, unite: 'sans objet (cinetique chimique, non chaotique)', invariants: {
+  /* game116 (Phil : « pour biologie et chimie on comprend mal les exemples ») : un chemin en 3-D (S, P, C) se lisait mal ; TROIS courbes de PARTS
+   *   sur un meme graphique : S / S0 (le substrat qui reste), P / S0 (le produit fait), C / E0 (la part de l enzyme occupee) — toutes
+   *   entre 0 et 1, donc lisibles ensemble (C est E0 / S0 fois plus petit que S et P en quantite). Vue de face. */
+  const images = Math.min(3, n), film = filmDe(decouper(n, images), n), brut = new Float64Array(n * 3);
+  for (let f = 0; f < images; f++) { const d0 = film.debuts[f], c = film.tailles[f], src = [sT, pT, cT][f], ech = f === 2 ? E0 : S0;
+    for (let r = 0; r < c; r++) { const l = c === 1 ? n - 1 : Math.round(r * (n - 1) / (c - 1)), o = 3 * (d0 + r); brut[o] = tT[l]; brut[o + 1] = src[l] / ech; brut[o + 2] = f; } }
+  /* game116 : PAS un film (une image a la fois) : les courbes se comparent ENSEMBLE ; nuage de points, chaque courbe = ses lignes dans courbes */
+  return { D: 3, brut, courbes: film, nuage: true, unite: 'sans objet (cinetique chimique, non chaotique)', invariants: {
     enzymeTotale: { debut: E0, fin: y[1] + y[2], derive: pireE, note: 'free enzyme + bound enzyme = E0 at every step (witness : all four species are integrated)' },
     matiereTotale: { debut: S0, fin: y[0] + y[2] + y[3], derive: pireS, note: 'substrate + complex + product = S0 at every step (witness)' },
     vitesseReaction: { mesure: vMi, formule: vF, eps, Km, Vmax, substratMi: sMi,
@@ -336,9 +352,9 @@ function neurone(P, n) {
 // ---------- colonnes de brut ----------
 export const COLONNES = Object.freeze({
   adnMutations: { colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base (0 = A, 1 = C, 2 = G, 3 = T)', 'time t'], memeLongueur: [[0, 1, 2]], autres: [3, 4] },
-  dogmeCentral: { colonnes: ['time t (mRNA lifetimes, last 30)', 'number of mRNA molecules', 'number of protein molecules'], memeLongueur: [], autres: [0, 1, 2] },
+  dogmeCentral: { colonnes: ['time t (mRNA lifetimes, last 30)', 'count divided by its exact mean (1 = the mean)', 'which molecule (0 = mRNA, 1 = protein)'], memeLongueur: [], autres: [0, 1, 2] },
   deriveGenetique: { colonnes: ['generation', 'share of the variant in the population (0..1)', 'population number (label)'], memeLongueur: [], autres: [0, 1, 2] },
-  enzyme: { colonnes: ['substrate S', 'product P (same units)', 'enzyme-substrate complex C'], memeLongueur: [[0, 1]], autres: [2] },
+  enzyme: { colonnes: ['time t', 'share: substrate left S/S0, product made P/S0, enzyme busy C/E0', 'which curve (0 = substrate, 1 = product, 2 = busy enzyme)'], memeLongueur: [], autres: [0, 1, 2] },
   mendel: { colonnes: ['copies of the dominant allele A (0, 1, 2; spread inside its cell is drawn)', 'copies of the dominant allele B (same)', 'offspring number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   neurone: { colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of this frame (label)'], memeLongueur: [], autres: [0, 1, 2] },
 });
@@ -394,5 +410,6 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   const o = { params: P, D: r.D, n, bornee: true, brut: r.brut, lyapunov: null, uniteLyapunov: r.unite, points: null, invariants: r.invariants };
   if (s.nuage || r.nuage) o.nuage = true;
   if (r.film) o.film = r.film;
+  if (r.courbes) o.courbes = r.courbes;
   return o;
 }

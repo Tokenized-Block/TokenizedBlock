@@ -86,9 +86,11 @@ function suite(T, bavard = false) {
     assert.ok(rel(Pk.sigma, Math.sqrt(Pk.formule * (1 - Pk.formule) / N)) < 1e-12);
     assert.ok(rel(I.resteA.formule, Math.exp(-1)) < 1e-12 && rel(I.partA.formule, aRef(k1, ts)) < 1e-12);
     for (const k of ['picB', 'resteA', 'partA']) assert.ok(Math.abs(z(I[k])) < 5, k + ' z ' + z(I[k]));
-    const Tf = 5 * (1 / k1 + 1 / k2);
-    for (let i = 0; i < R.n; i++) { const o = 4 * i; assert.ok(Math.abs(b[o + 1] + b[o + 2] + b[o + 3] - 1) < 1e-12); if (i) assert.ok(b[o] > b[o - 4] && b[o + 1] <= b[o - 3] && b[o + 3] >= b[o - 1], 'A decroit, C croit'); }
-    assert.equal(b[0], 0); assert.ok(rel(b[4 * (R.n - 1)], Tf) < 1e-12); assert.equal(b[1], 1);
+    const Tf = 5 * (1 / k1 + 1 / k2); assert.equal(R.courbes.images, 3);
+    /* game116 : trois courbes (A, B, C) ; A part de 1 et descend, C part de 0 et monte, chacune de t = 0 a T */
+    for (let f = 0; f < 3; f++) { const d0 = R.courbes.debuts[f], c = R.courbes.tailles[f]; assert.equal(b[3 * d0], 0); assert.ok(rel(b[3 * (d0 + c - 1)], Tf) < 1e-12); assert.equal(b[3 * d0 + 1], f === 0 ? 1 : 0);
+      for (let q = 0; q < c; q++) { const o = 3 * (d0 + q); assert.ok(b[o + 1] >= 0 && b[o + 1] <= 1 && b[o + 2] === f && Math.abs(b[o + 1] * N - Math.round(b[o + 1] * N)) < 1e-9); if (q) { assert.ok(b[o] > b[o - 3]); if (f === 0) assert.ok(b[o + 1] <= b[o - 2], 'A decroit'); if (f === 2) assert.ok(b[o + 1] >= b[o - 2], 'C croit'); } } }
+
     return `picB ${Pk.mesure.toFixed(4)}/${Pk.formule.toFixed(4)} z ${z(Pk).toFixed(2)}, t* ${ts.toFixed(3)}`;
   });
   for (const p of extremes(sys('equilibreChimique'))) ok(`equilibreChimique ${JSON.stringify(p)} : pi (1 - e^(-(kf+kb)t)), relaxation, K = kf/kb, puits`, () => {

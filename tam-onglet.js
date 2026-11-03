@@ -998,7 +998,11 @@ export function monter(racine, ctx = {}) {
   const CAM0 = { yaw: 0.6, pitch: 0.35, dist: 4, ox: 0, oy: 0 };
   /* game97 : les systemes dont la figure CLASSIQUE est plate (colonne 0 a l horizontale, colonne 1 a la verticale) partent de FACE —
    *   yaw = pitch = 0 ; la colonne 2 reste en profondeur et on tourne toujours a la main. Bifurcation (r, x), planche (x, hauteur), pistes (x, y). */
-  const DE_FACE = new Set(['logistique', 'galton', 'brachistochrone']);
+  /* game116 (Phil : « pour biologie et chimie on comprend mal les exemples ») : les courbes du temps et les plans se lisent DE FACE, comme un
+   *   graphique : x = colonne 0, y = colonne 1 (l helice d ADN reste en 3-D) */
+  const DE_FACE = new Set(['logistique', 'galton', 'brachistochrone',
+    'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'reactionsChaine', 'equilibreChimique', 'brusselator',
+    'marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam']);
   /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
   const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;

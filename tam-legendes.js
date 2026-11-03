@@ -877,8 +877,8 @@ const L = {
   },
   dogmeCentral: {
     titre: 'Gene to RNA to protein (the central dogma, one molecule at a time)',
-    enUnePhrase: 'The numbers of messenger RNA and protein molecules made from one gene, reaction by reaction, over the last 30 mRNA lifetimes.',
-    colonnes: ['time t (mRNA lifetimes, the last 30)', 'number of mRNA molecules', 'number of protein molecules'],
+    enUnePhrase: 'Two curves over the last 30 mRNA lifetimes: how many mRNA and how many protein molecules the cell holds, each divided by its exact mean, so 1 is the average.',
+    colonnes: ['time t (mRNA lifetimes, the last 30)', 'count divided by its exact mean (1 = the mean)', 'which molecule (0 = mRNA, 1 = protein)'],
     aRegarder: ['The mRNA count jumps one by one around k: Poisson noise, variance equal to the mean.', 'Proteins come in bursts from each mRNA, so their noise is larger: Fano factor 1 + kp / (1 + gp).', 'The means, the noises and the mRNA-protein covariance are compared with exact formulas, with uncertainties measured on the run.'],
     fin: null,
   },
@@ -892,8 +892,8 @@ const L = {
   },
   enzyme: {
     titre: 'An enzyme at work (Michaelis-Menten kinetics)',
-    enUnePhrase: 'Substrate turned into product by an enzyme: the path of substrate, product and bound enzyme over the whole reaction.',
-    colonnes: ['substrate S', 'product P (same units)', 'enzyme-substrate complex C'],
+    enUnePhrase: 'Three curves over the whole reaction: the substrate left, the product made, and the share of the enzyme that is busy.',
+    colonnes: ['time t', 'share: substrate left S/S0, product made P/S0, enzyme busy C/E0', 'which curve (0 = substrate, 1 = product, 2 = busy enzyme)'],
     aRegarder: ['Total enzyme and total matter stay constant at every step.', 'The rate follows Vmax S / (Km + S) only when there is little enzyme: the error scale E0 / (S0 + Km) is shown.', 'Raise the enzyme and the complex takes up substrate before the law can hold: the formula visibly fails.'],
     fin: null,
   },
@@ -944,8 +944,8 @@ const L = {
   /* game113 : chimie (tam-chimie.js) */
   reactionsChaine: {
     titre: 'A chain of reactions A to B to C (Bateman)',
-    enUnePhrase: 'The shares of A, B and C over time as each molecule turns A into B, then B into C, after random waits.',
-    colonnes: ['time t', 'share of A', 'share of B', 'share of C'],
+    enUnePhrase: 'Three curves over time: the share of molecules that are still A, that are B in between, and that have become C.',
+    colonnes: ['time t', 'share of the molecules (0..1)', 'which species (0 = A, 1 = B, 2 = C)'],
     aRegarder: ['A falls as e^(-k1 t); C rises to take everything in the end.', 'The intermediate B rises then falls, peaking at the exact time t* = ln(k1/k2)/(k1 - k2).', 'A finite number of molecules: the match is statistical, and a new seed gives another run.'],
     fin: null,
   },

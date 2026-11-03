@@ -43,7 +43,7 @@ function filmDe(debuts, n) {
 //   b(t) = k1/(k2 - k1) (e^(-k1 t) - e^(-k2 t)) (k1 != k2), b(t) = k t e^(-k t) (k1 = k2) ; c = 1 - a - b.
 //   Pic de B : db/dt = 0 en t* = ln(k1/k2)/(k1 - k2) (1/k si k1 = k2), b(t*) = (k1/k2)^(k2/(k1 - k2)) ... calcule ici par b(t*).
 //   Les N molecules sont independantes : le compte de B a t est EXACTEMENT binomial(N, b(t)), sigma sqrt(b(1-b)/N).
-// Dessin : parts de A, B, C au fil du temps (une ligne par instant), de 0 a T = 5 (1/k1 + 1/k2).
+// Dessin : un film de 3 courbes (A, puis B, puis C) au fil du temps, de 0 a T = 5 (1/k1 + 1/k2) ; vue de face.
 function reactionsChaine(P, n) {
   const N = P.molecules, k1 = P.k1, k2 = P.k2, rng = mulberry32(P.graine), T = 5 * (1 / k1 + 1 / k2);
   const t1 = new Float64Array(N), t2 = new Float64Array(N);
@@ -53,12 +53,15 @@ function reactionsChaine(P, n) {
   const bDe = (t) => (egal ? k1 * t * expNegD(k1 * t) : k1 / (k2 - k1) * (expNegD(k1 * t) - expNegD(k2 * t)));
   const tStar = egal ? 1 / k1 : (lnD(k1) - lnD(k2)) / (k1 - k2);
   const compter = (t) => { let a = 0, b = 0; for (let i = 0; i < N; i++) { if (t < t1[i]) a++; else if (t < t2[i]) b++; } return [a, b, N - a - b]; };
-  const brut = new Float64Array(n * 4);
-  /* tri des instants : comptes incrementaux (n lignes, N molecules) */
-  for (let l = 0; l < n; l++) { const t = n === 1 ? T : l * T / (n - 1), [a, b, c] = compter(t), o = 4 * l; brut[o] = t; brut[o + 1] = a / N; brut[o + 2] = b / N; brut[o + 3] = c / N; }
+  /* game116 (Phil : « pour biologie et chimie on comprend mal les exemples ») : une seule courbe en 4-D se lisait mal ; TROIS courbes sur un meme graphique :
+   *   image 1 = part de A, 2 = part de B, 3 = part de C, chacune sur toute la duree (vue de face : temps en x, part en y) */
+  const images = Math.min(3, n), film = filmDe(decouper(n, images), n), brut = new Float64Array(n * 3);
+  for (let f = 0; f < images; f++) { const d0 = film.debuts[f], c = film.tailles[f];
+    for (let r = 0; r < c; r++) { const t = c === 1 ? T : r * T / (c - 1), o = 3 * (d0 + r); brut[o] = t; brut[o + 1] = compter(t)[f] / N; brut[o + 2] = f; } }
   const [aS, bS] = compter(tStar), bStar = bDe(tStar), aStar = aDe(tStar);
   const tm = 1 / k1, [aM] = compter(tm), am = aDe(tm);
-  return { D: 4, brut, unite: 'sans objet (processus aleatoire, non chaotique)', invariants: {
+  /* game116 : PAS un film (une image a la fois) : les courbes se comparent ENSEMBLE ; nuage de points, chaque courbe = ses lignes dans courbes */
+  return { D: 3, brut, courbes: film, nuage: true, unite: 'sans objet (processus aleatoire, non chaotique)', invariants: {
     picB: { mesure: bS / N, formule: bStar, sigma: Math.sqrt(bStar * (1 - bStar) / N), tPic: tStar, molecules: N,
       note: 'share of B at its peak time t* = ln(k1/k2)/(k1 - k2) against the exact b(t*) of the chain (Bateman) ; binomial sigma (molecules are independent)' },
     resteA: { mesure: aM / N, formule: am, sigma: Math.sqrt(am * (1 - am) / N), t: tm, note: 'share of A left at t = 1/k1 against e^(-1)' },
@@ -157,13 +160,13 @@ function brusselator(P, n) {
 }
 
 export const COLONNES = Object.freeze({
-  reactionsChaine: { colonnes: ['time t', 'share of A', 'share of B', 'share of C'], memeLongueur: [[1, 2, 3]], autres: [0] },
+  reactionsChaine: { colonnes: ['time t', 'share of the molecules (0..1)', 'which species (0 = A, 1 = B, 2 = C)'], memeLongueur: [], autres: [0, 1, 2] },
   equilibreChimique: { colonnes: ['x: well A on the left, well B on the right (placement inside a well is drawn)', 'y (drawn)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   brusselator: { colonnes: ['concentration x', 'concentration y', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
 export const SYSTEMES = Object.freeze([
-  { id: 'reactionsChaine', nom: 'A chain of reactions A to B to C (Bateman)', science: 'Chemical kinetics', D: 4, params: { molecules: 1000, k1: 1, k2: 0.5, graine: 1 },
+  { id: 'reactionsChaine', nom: 'A chain of reactions A to B to C (Bateman)', science: 'Chemical kinetics', D: 3, params: { molecules: 1000, k1: 1, k2: 0.5, graine: 1 },
     bornes: { molecules: [100, 5000], k1: [0.2, 5], k2: [0.2, 5], graine: [1, 1000000] },
     phrase: 'A visualisation of two reactions in a row, A -> B -> C, molecule by molecule: each A turns into B after a random wait, then B into C. The shares of A, B and C are compared with the exact Bateman solution, and the intermediate B peaks at the exact time t* = ln(k1/k2)/(k1 - k2). A finite number of molecules, so the agreement is statistical.' },
   { id: 'equilibreChimique', nom: 'A reaction going both ways (chemical equilibrium A <-> B)', science: 'Chemical equilibrium', D: 3, nuage: true, params: { molecules: 600, kf: 1, kb: 0.5, graine: 1 },
@@ -202,5 +205,6 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   const o = { params: P, D: r.D, n, bornee: true, brut: r.brut, lyapunov: null, uniteLyapunov: r.unite, points: null, invariants: r.invariants };
   if (s.nuage || r.nuage) o.nuage = true;
   if (r.film) o.film = r.film;
+  if (r.courbes) o.courbes = r.courbes;
   return o;
 }

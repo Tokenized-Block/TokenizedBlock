@@ -447,12 +447,13 @@ const DECORS = {
   adnMutations: (P, o, B) => [seg([0, 0, B.lo[2], B.centre[3], B.centre[4]], [0, 0, B.hi[2], B.centre[3], B.centre[4]], C.repere, 'Axis of the double helix')],
   /* colonnes : t, ARN, proteine ; les moyennes EXACTES que le module compare (lues dans ses invariants) */
   dogmeCentral: (P, o, B) => { const a = o.invariants.arnMoyen.formule, p = o.invariants.proteineMoyenne.formule, r = (x) => Math.round(x * 100) / 100;
-    return [hyper(B, 1, a, C.repere, 'Exact mean mRNA count (k = ' + r(a) + ')'), hyper(B, 2, p, C.zone, 'Exact mean protein count (k kp / gp = ' + r(p) + ')')]; },
+    return [hyper(B, 1, 1, C.repere, 'Exact mean (1 = k = ' + r(a) + ' mRNA, k kp / gp = ' + r(p) + ' proteins)')]; },
   /* colonnes : generation, part, numero ; la moyenne attendue reste p0 (lue dans les invariants) */
   deriveGenetique: (P, o, B) => { const p = o.invariants.frequenceMoyenne.formule;
     return [hyper(B, 1, p, C.repere, 'Starting share p0 = ' + Math.round(p * 1000) / 1000 + ' (the expected mean, forever)')]; },
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
-  enzyme: (P, o, B) => { const s0 = P.substrat; return [seg([s0, 0, B.lo[2]], [0, s0, B.lo[2]], C.repere, 'S + P = S0 (all matter, when the complex is empty)')]; },
+  /* game116 : colonnes t, part, courbe ; mi-parcours (S = S0/2), la ou la loi de vitesse est comparee */
+  enzyme: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Half the substrate used: the rate is checked here')],
   /* ---------- game115 : tam-maths.js ---------- */
   marcheAleatoire: (P, o, B) => [pt([0, 0, B.lo[2]], C.repere, 'Start (every walker begins here)')],
   aiguilleBuffon: (P, o, B) => [hyper(B, 1, 5, C.repere, 'A floor line (y = 5; one every unit)')],
@@ -464,8 +465,9 @@ const DECORS = {
   neurone: (P, o, B) => [hyper(B, 1, 1, C.zone, 'Firing threshold v = 1')],
   /* ---------- game113 : tam-chimie.js ---------- */
   /* colonnes : t, a, b, c ; le pic EXACT de B (lu dans les invariants) */
+  /* game116 : colonnes t, part, espece ; le pic EXACT pose SUR la courbe de B (espece 1) */
   reactionsChaine: (P, o, B) => { const t = o.invariants.picB.tPic, b = o.invariants.picB.formule;
-    return [pt([t, B.centre[1], b, B.centre[3]], C.zone, 'Exact peak of B (t* = ' + Math.round(t * 100) / 100 + ')')]; },
+    return [pt([t, b, 1], C.zone, 'Exact peak of B (t* = ' + Math.round(t * 100) / 100 + ')')]; },
   /* colonnes : x, y, t ; les deux puits */
   equilibreChimique: (P, o, B) => [pt([-1.5, 0, B.centre[2]], C.repere, 'Well A'), pt([1.5, 0, B.centre[2]], C.repere, 'Well B')],
   /* colonnes : x, y, t ; le point fixe EXACT (A, B/A) tout au long du temps */

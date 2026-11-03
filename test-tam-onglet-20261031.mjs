@@ -516,7 +516,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     { const cq = (await import('./tam-champs-quantiques.js')).SYSTEMES.map((s) => s.id); ok(cq.every((id) => onglet.includes("'" + id + "'")) && /\['champs', 'Quantum fields, the vacuum, atoms & quarks'\]/.test(onglet), 'game81 : les ' + cq.length + ' champs quantiques ont leur groupe'); }
     ok(serveur.includes("'tam-legendes.js'"), 'tam-legendes.js est dans la liste servie');
     /* game97 : les figures classiques plates partent de face ; la scene ET les gestes partent de la meme base */
-    ok(/const DE_FACE = new Set\(\['logistique', 'galton', 'brachistochrone'\]\)/.test(onglet) && /const cam = S\.cam \|\| camBase\(\), pos = positions\(\)/.test(onglet)
+    ok(/const DE_FACE = new Set\(\['logistique', 'galton', 'brachistochrone',/.test(onglet) && /'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'reactionsChaine'/.test(onglet) && /const cam = S\.cam \|\| camBase\(\), pos = positions\(\)/.test(onglet)
       && !/navGesture\(S\.cam, CAM0,/.test(onglet), 'game97 : vue de face pour bifurcation, Galton, brachistochrone (scene et gestes)');
     /* game98 : recadrage — une SEULE projection dans la scene (donnees, corps central, decor, echelle) ; on ne fait que reduire */
     ok((onglet.match(/projectCam\(/g) || []).length === 2 && /const ecran = \(p\) => projeter\(/.test(onglet) && /S\.ajuste = m > 0 \? Math\.min\(4, 1 \/ m\) : 1;/.test(onglet)

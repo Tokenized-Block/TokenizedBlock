@@ -215,15 +215,15 @@ export const ECHELLE_PROPRE = {
   /* game96 : tam-theories-3.js#COLONNES (b et temps, r, x et temps, temps, temps, indice de bille) */
   rutherford: [2, 3], logistique: [0], chaleur: [1, 2], oscillateurForce: [2], brachistochrone: [2], galton: [2],
   /* game111 : tam-biologie.js#COLONNES (base et temps ; temps, ARN, proteine : trois grandeurs differentes) */
-  adnMutations: [3, 4], dogmeCentral: [0, 1, 2],
+  adnMutations: [3, 4], dogmeCentral: [0, 2], /* game116 : dogme = (t, compte / moyenne, molecule) */
   /* game112 : generation, part, numero (3 grandeurs) ; complexe C (bien plus petit que S et P) */
-  deriveGenetique: [0, 1, 2], enzyme: [2],
+  deriveGenetique: [0, 1, 2], enzyme: [0, 2], /* game116 : enzyme = (t, part, courbe) */
   /* game114 : numero de descendant ; temps, potentiel, courant (3 grandeurs) */
   mendel: [2], neurone: [0, 1, 2],
   /* game115 : numero de pas ; croise ou non ; numero de groupe ; le premier lui-meme */
   marcheAleatoire: [2], aiguilleBuffon: [2], anniversaires: [2], spiraleUlam: [2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
-  reactionsChaine: [0], equilibreChimique: [2], brusselator: [2],
+  reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {

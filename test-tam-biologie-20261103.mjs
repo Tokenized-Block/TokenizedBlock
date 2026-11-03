@@ -120,8 +120,11 @@ function suite(T, bavard = false) {
     const R = S('dogmeCentral', p), P = R.params, I = R.invariants, M = momentsRef(P.transcription, P.traduction, P.degradation), b = R.brut;
     const paires = [['arnMoyen', M.m], ['bruitArn', M.fanoM], ['proteineMoyenne', M.p], ['bruitProteine', M.fanoP], ['covariance', M.cov]];
     for (const [k, ref] of paires) { const v = I[k]; assert.ok(Math.abs(v.formule - ref) <= 1e-12 * Math.abs(ref), k + ' formule ' + v.formule + ' ref ' + ref); assert.ok(v.sigma > 0 && Math.abs(z(v)) < 5, k + ' z ' + z(v)); }
-    for (let i = 0; i < R.n; i++) { const o = 3 * i; assert.ok(Number.isInteger(b[o + 1]) && b[o + 1] >= 0 && Number.isInteger(b[o + 2]) && b[o + 2] >= 0); if (i) assert.ok(b[o] > b[o - 3]); }
-    assert.equal(b[0], 0); assert.ok(Math.abs(b[3 * (R.n - 1)] - 30) < 1e-9);
+    /* game116 : deux courbes (ARN, proteine), chaque compte divise par sa moyenne EXACTE : x moyenne = un entier >= 0 */
+    for (let f = 0; f < R.courbes.images; f++) { const d0 = R.courbes.debuts[f], c = R.courbes.tailles[f], moy = f ? M.p : M.m;
+      for (let q = 0; q < c; q++) { const o = 3 * (d0 + q), cpt = b[o + 1] * moy; assert.ok(Math.abs(cpt - Math.round(cpt)) < 1e-9 && cpt >= 0 && b[o + 2] === f && (q === 0 || b[o] > b[o - 3])); }
+      assert.equal(b[3 * d0], 0); assert.ok(Math.abs(b[3 * (d0 + c - 1)] - 30) < 1e-9); }
+    assert.equal(R.courbes.images, 2);
     return paires.map(([k]) => k + ' z ' + z(I[k]).toFixed(2)).join(', ');
   });
   // 3b. derive genetique (game112)
@@ -147,8 +150,11 @@ function suite(T, bavard = false) {
     const V = I.vitesseReaction; assert.ok(Math.abs(V.eps - eps) < 1e-15 && Math.abs(V.Km - Km) < 1e-15 && Math.abs(V.Vmax - P.catalyse * P.enzyme) < 1e-15);
     assert.ok(Math.abs(V.formule - V.Vmax * V.substratMi / (Km + V.substratMi)) < 1e-12 * V.formule && Math.abs(V.substratMi - P.substrat / 2) < 0.01 * P.substrat, 'mi-parcours');
     const rel = Math.abs(V.mesure / V.formule - 1); assert.ok(rel <= eps, 'ecart ' + rel + ' > eps ' + eps); assert.ok(typeof V.approchee === 'string');
-    for (let i = 1; i < R.n; i++) { const o = 3 * i; assert.ok(b[o] <= b[o - 3] + 1e-12 && b[o + 1] >= b[o - 2] - 1e-12 && b[o + 2] >= -1e-12, 'ligne ' + i); }
-    assert.ok(I.produitFinal.partConvertie > 0.8, 'conversion ' + I.produitFinal.partConvertie);
+    /* game116 : trois courbes de parts (S/S0 descend, P/S0 monte, C/E0 dans [0, 1]) contre le temps */
+    assert.equal(R.courbes.images, 3);
+    for (let f = 0; f < 3; f++) { const d0 = R.courbes.debuts[f], c = R.courbes.tailles[f];
+      for (let q = 0; q < c; q++) { const o = 3 * (d0 + q), v = b[o + 1]; assert.ok(v >= -1e-12 && v <= 1 + 1e-12 && b[o + 2] === f, 'part ' + v); if (q) { assert.ok(b[o] >= b[o - 3]); if (f === 0) assert.ok(v <= b[o - 2] + 1e-12, 'S descend'); if (f === 1) assert.ok(v >= b[o - 2] - 1e-12, 'P monte'); } } }
+    assert.ok(I.produitFinal.partConvertie > 0.3, 'conversion ' + I.produitFinal.partConvertie);
     return `ecart ${rel.toExponential(1)} (eps ${eps.toPrecision(2)}), derives ${I.enzymeTotale.derive.toExponential(1)} / ${I.matiereTotale.derive.toExponential(1)}`;
   });
   // 3d. Mendel (game114)

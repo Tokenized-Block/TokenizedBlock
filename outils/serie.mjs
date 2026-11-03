@@ -30,7 +30,7 @@ async function un(f) {
     p.stdout.on('data', (d) => { sortie += d; }); p.stderr.on('data', (d) => { sortie += d; });
     p.on('close', (code) => {
       clearTimeout(garde); faits += 1;
-      if (code !== 0) rouges.push({ f, code: tue ? 'DELAI ' + delaiS + ' s' + (declare ? ', declare' : reseau ? ', reseau' : '') : code, ko: sortie.split('\n').filter((l) => /^\s*KO|✗|Error|ERR_/.test(l)).slice(0, 6).map((l) => l.slice(0, 240)) });
+      if (code !== 0) rouges.push({ f, code: tue ? 'DELAI ' + delaiS + ' s' + (declare ? ', declare' : reseau ? ', reseau' : '') : code, ko: sortie.split('\n').filter((l) => /^\s*KO|^ECHEC|✗|Error|ERR_/.test(l)).slice(0, 6).map((l) => l.slice(0, 240)) });
       ok();
     });
   });
