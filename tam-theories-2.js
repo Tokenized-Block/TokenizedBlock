@@ -221,7 +221,13 @@ function tailleFinaleSIR(R0, s0, r0, i0) {
   for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2; if (f(m) < 0) lo = m; else hi = m; }
   return (lo + hi) / 2;
 }
+// game109 (Phil : « d autres variables ») : l immunite S ESTOMPE, taux xi (par periode infectieuse) : dr/dt = i - xi r, ds/dt = -R0 s i + xi r
+//   (SIRS). L epidemie ne finit plus : elle s installe. Equilibre endemique EXACT (R0 > 1) : s* = 1/R0, et s + i + r = 1 avec r* = i*/xi
+//   donne i* = (1 - 1/R0) xi / (1 + xi). Lineaire autour (s, i ; r = 1 - s - i) : trace -(R0 i* + xi), determinant R0 i* (1 + xi) :
+//   approche amortie au taux (R0 i* + xi)/2 (approche, vraie pres de l equilibre). Le pic de la 1re vague garde la formule SIR, approchee
+//   (elle ignore les gueris qui redeviennent sensibles pendant la vague). xi = 0 : exactement le modele d avant (meme pas, memes octets).
 function epidemieSIR(P, n) {
+  if (P.perteImmunite > 0) return epidemieSIRS(P, n);
   const R0 = P.R0, i0 = P.i0, r0 = P.r0, s0 = 1 - i0 - r0, h = 0.02, CAP = 100000;
   const S = new Float64Array(CAP + 1), I = new Float64Array(CAP + 1), Rr = new Float64Array(CAP + 1);
   S[0] = s0; I[0] = i0; Rr[0] = r0;
@@ -253,6 +259,48 @@ function epidemieSIR(P, n) {
   inv.pic = { mesure: picMes, formule: pic, ecart: Math.abs(picMes - pic), tPic: kPic * h, sPic: S[kPic], sPicFormule: R0 * s0 > 1 ? 1 / R0 : s0,
     note: 'peak of I against I_max = i0 + s0 - (1 + ln(R0 s0))/R0, reached when s = 1/R0 (no outbreak when R0 s0 <= 1)' };
   inv.depart = { s0, i0, r0, R0, R0s0: R0 * s0 };
+  return { D: 4, brut, invariants: inv, unite: 'sans objet (equations deterministes, non chaotiques)' };
+}
+/* SIRS : pas 0.1 (echelle de temps 1 = periode infectieuse ; RK4), jusqu a l equilibre (distance < 1e-9) ou t = 10 000 */
+function epidemieSIRS(P, n) {
+  const R0 = P.R0, xi = P.perteImmunite, i0 = P.i0, r0 = P.r0, s0 = 1 - i0 - r0, h = 0.1, CAP = 100000;
+  const sE = 1 / R0, iE = (1 - 1 / R0) * xi / (1 + xi), rE = iE / xi;
+  const S = new Float64Array(CAP + 1), I = new Float64Array(CAP + 1), Rr = new Float64Array(CAP + 1);
+  S[0] = s0; I[0] = i0; Rr[0] = r0;
+  /* r est porte explicitement (r' = i - xi r) et s + i + r = 1 sert de TEMOIN (pas d elimination) */
+  const f = (s, i, r) => [-R0 * s * i + xi * r, R0 * s * i - i, i - xi * r];
+  /* pas d hypot (non garanti identique d un moteur a l autre ; garde du banc) : sqrt d une somme, exact IEEE */
+  const suivi = suiveur(), dist = (k) => { const a = S[k] - sE, b = I[k] - iE, c = Rr[k] - rE; return Math.sqrt(a * a + b * b + c * c); };
+  let st = 0, kPic = 0, premiereVague = true;
+  suivi.noter({ somme: s0 + i0 + r0 });
+  while (st < CAP) {
+    const s = S[st], i = I[st], r = Rr[st];
+    const [a1, b1, c1] = f(s, i, r), [a2, b2, c2] = f(s + h / 2 * a1, i + h / 2 * b1, r + h / 2 * c1);
+    const [a3, b3, c3] = f(s + h / 2 * a2, i + h / 2 * b2, r + h / 2 * c2), [a4, b4, c4] = f(s + h * a3, i + h * b3, r + h * c3);
+    S[st + 1] = s + h / 6 * (a1 + 2 * a2 + 2 * a3 + a4); I[st + 1] = i + h / 6 * (b1 + 2 * b2 + 2 * b3 + b4); Rr[st + 1] = r + h / 6 * (c1 + 2 * c2 + 2 * c3 + c4); st++;
+    /* le pic de la PREMIERE vague : le premier maximum local de i */
+    if (premiereVague) { if (I[st] > I[kPic]) kPic = st; else if (I[st] < I[kPic]) premiereVague = false; }
+    if (st % 25 === 0) suivi.noter({ somme: S[st] + I[st] + Rr[st] });
+    if (dist(st) < 1e-9) break;
+  }
+  let picMes = I[kPic];
+  if (kPic > 0 && kPic < st) { const y0 = I[kPic - 1], y1 = I[kPic], y2 = I[kPic + 1], q = y0 - 2 * y1 + y2; if (q < 0) picMes = y1 - (y2 - y0) * (y2 - y0) / (8 * q); }
+  /* dessin : jusqu a ce que la distance a l equilibre tombe sous 1e-3 de la distance de depart (ou toute la course) */
+  let fin = st; const d0 = dist(0); for (let k = 0; k <= st; k++) if (dist(k) < 1e-3 * d0) { fin = k; break; }
+  fin = Math.max(fin, 2);
+  const brut = new Float64Array(n * 4);
+  for (let l = 0; l < n; l++) { const k = pasDeLigne(l, n, fin), o = 4 * l; brut[o] = S[k]; brut[o + 1] = I[k]; brut[o + 2] = Rr[k]; brut[o + 3] = k * h; }
+  const inv = suivi.fini(), dFin = dist(st), pose = dFin < 1e-6, tr = R0 * iE + xi;
+  inv.somme.note = 's + i + r = 1 (exact ; r is integrated on its own, the sum is a witness)';
+  inv.equilibre = { mesure: I[st], formule: iE, comparable: pose, ...(pose ? {} : { pasCompare: 'not settled yet when the run stops at t = ' + Math.round(st * h) }), sMesure: S[st], sFormule: sE, rMesure: Rr[st], rFormule: rE, distanceFinale: dFin, tFin: st * h,
+    note: 'endemic level: i* = (1 - 1/R0) xi / (1 + xi), s* = 1/R0, r* = i*/xi (exact) ; compared once the run has settled (distance < 1e-6)' };
+  /* taux d approche : pente de ln(distance) sur la seconde moitie de la descente au-dessus de 1e-7 */
+  let kA = -1, kB = -1; for (let k = 0; k <= st; k++) { const d = dist(k); if (kA < 0 && d < 1e-3) kA = k; if (d < 1e-7) { kB = k; break; } }
+  inv.approche = { mesure: kA >= 0 && kB > kA ? lnD(dist(kA) / dist(kB)) / ((kB - kA) * h) : NaN, formule: tr / 2,
+    ...(kA >= 0 && kB > kA ? {} : { absente: 'the run never got within 1e-7 of the endemic point' }),
+    approchee: 'linearised near the endemic point; measured as the mean slope of ln(distance) from 1e-3 to 1e-7', unite: 'par unite de temps' };
+  inv.pic = { mesure: picMes, formule: piqueSIR(R0, s0, i0), tPic: kPic * h, approchee: 'it is the no-waning formula and ignores people losing immunity during the first wave' };
+  inv.depart = { s0, i0, r0, R0, xi, R0s0: R0 * s0 };
   return { D: 4, brut, invariants: inv, unite: 'sans objet (equations deterministes, non chaotiques)' };
 }
 
@@ -472,9 +520,9 @@ export const SYSTEMES = Object.freeze([
   { id: 'lotkaVolterra', nom: 'Predators and prey (Lotka-Volterra)', science: 'Population dynamics', D: 3, params: { c: 1, amplitude: 1, periodes: 4, saturation: 0 },
     bornes: { c: [0.25, 4], amplitude: [0.05, 3], periodes: [2, 12], saturation: [0, 0.2] },
     phrase: 'A visualisation of the Lotka-Volterra equations (a = b = d = 1 fix the units, c is the predator death rate): the populations cycle forever around the fixed point (c, 1), the quantity H = x - c ln x + y - ln y stays constant, the time averages over a cycle equal the fixed point exactly, and near it the period is 2 pi / sqrt(c). Give the prey a limited space (crowding s = 1/K) and the cycle becomes a spiral that winds into the rest point (c, 1 - s c): H then goes down by exactly s times the integral of (x - c)^2. A deterministic model with no noise.' },
-  { id: 'epidemieSIR', nom: 'An epidemic wave (SIR model)', science: 'Epidemiology', D: 4, params: { R0: 2.5, i0: 0.01, r0: 0 },
-    bornes: { R0: [1.2, 6], i0: [0.001, 0.1], r0: [0, 0.6] },
-    phrase: 'A visualisation of the SIR model (fractions of a well-mixed population, time in units of the infectious period): the susceptible, infected and recovered fractions over one epidemic wave, with the final size against the exact equation r = 1 - s0 exp(-R0 (r - r0)) and the peak against I_max = i0 + s0 - (1 + ln(R0 s0))/R0. No contacts structure, no births, no reinfection.' },
+  { id: 'epidemieSIR', nom: 'An epidemic wave (SIR model)', science: 'Epidemiology', D: 4, params: { R0: 2.5, i0: 0.01, r0: 0, perteImmunite: 0 },
+    bornes: { R0: [1.2, 6], i0: [0.001, 0.1], r0: [0, 0.6], perteImmunite: [0, 0.2] },
+    phrase: 'A visualisation of the SIR model (fractions of a well-mixed population, time in units of the infectious period): the susceptible, infected and recovered fractions over one epidemic wave, with the final size against the exact equation r = 1 - s0 exp(-R0 (r - r0)) and the peak against I_max = i0 + s0 - (1 + ln(R0 s0))/R0. Let immunity fade (rate xi) and the disease never leaves: after damped waves it settles at the exact endemic level i* = (1 - 1/R0) xi / (1 + xi). No contacts structure, no births.' },
   { id: 'lentilleGravitationnelle', nom: 'Gravitational lens (point mass)', science: 'General relativity', D: 4, nuage: true, params: { beta: 0.6, rho: 0.2 },
     bornes: { beta: [0, 2], rho: [0.05, 0.5] },
     phrase: 'A visualisation of the point-mass lens equation beta = theta - theta/|theta|^2 in Einstein-radius units: light rays shot back from the image plane that land on a uniform round source show its two stretched images (an Einstein ring when the source is on the axis); image positions and the magnification are compared with the exact formulas. Thin lens, weak field, no other mass.' },

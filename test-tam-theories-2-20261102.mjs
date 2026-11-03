@@ -187,6 +187,24 @@ function suite(T, bavard = false) {
     if (P.amplitude <= 0.05) assert.ok(Math.abs(A.mesure / A.formule - 1) < 0.02, `amortissement petite amplitude ${A.mesure} vs ${A.formule}`);
     return `bilan ${(Math.abs(D.mesure - D.formule) / D.formule).toExponential(1)}, <y> ${I.moyennes.y.toFixed(6)}, amort ${A.mesure.toFixed(5)}/${A.formule}`;
   });
+  /* game109 : immunite qui s estompe (SIRS). Equilibre exact recalcule ici ; s + i + r = 1 sert de temoin (r integre a part) */
+  for (const p of [{ perteImmunite: 0.05 }, { perteImmunite: 0.2, R0: 6, i0: 0.1 }, { perteImmunite: 0.01, R0: 1.2, i0: 0.001 }, { perteImmunite: 0.2, R0: 1.2, r0: 0.6 }]) ok(`epidemieSIRS ${JSON.stringify(p)} : equilibre endemique exact i* = (1 - 1/R0) xi/(1 + xi), s* = 1/R0 ; s + i + r = 1 ; approche et pic approches`, () => {
+    const R = S('epidemieSIR', p), P = R.params, I = R.invariants, b = R.brut, xi = P.perteImmunite, R0 = P.R0;
+    const iE = (1 - 1 / R0) * xi / (1 + xi), E = I.equilibre;
+    assert.ok(Math.abs(E.formule - iE) < 1e-15 && Math.abs(E.sFormule - 1 / R0) < 1e-15 && Math.abs(E.rFormule - iE / xi) < 1e-14, 'formules');
+    assert.ok(E.comparable === true && E.distanceFinale < 1e-6 && Math.abs(E.mesure - iE) < 1e-8 && Math.abs(E.sMesure - 1 / R0) < 1e-8, `equilibre ${E.mesure} vs ${iE}`);
+    assert.ok(I.somme.derive < 1e-13, 'somme ' + I.somme.derive);
+    assert.ok(!('tailleFinale' in I) && !('premiereIntegrale' in I), 'pas de taille finale ni de premiere integrale : l epidemie ne finit pas');
+    const A = I.approche, tr = R0 * iE + xi; assert.ok(A.formule === tr / 2 && typeof A.approchee === 'string' && Math.abs(A.mesure / A.formule - 1) < 0.15, `approche ${A.mesure} vs ${A.formule}`);
+    assert.ok(typeof I.pic.approchee === 'string' && I.pic.mesure >= I.pic.formule - 1e-6, 'pic : la formule sans perte d immunite, jamais au-dessus de la mesure');
+    for (let l = 0; l < R.n; l++) { const o = 4 * l; assert.ok(Math.abs(b[o] + b[o + 1] + b[o + 2] - 1) < 1e-12 && b[o] >= 0 && b[o + 1] >= 0 && b[o + 2] >= 0, 'point ' + l); if (l) assert.ok(b[o + 3] >= b[o - 1]); }
+    return `i* ${E.mesure.toPrecision(8)}/${iE.toPrecision(8)}, approche ${A.mesure.toFixed(5)}/${A.formule.toFixed(5)}, t ${E.tFin}`;
+  });
+  ok('epidemieSIRS : xi minuscule = course trop courte — l equilibre le DIT (pas « formule hors domaine »), l approche dit pourquoi elle manque', () => {
+    const I = S('epidemieSIR', { perteImmunite: 0.001, R0: 1.2 }).invariants;
+    assert.ok(I.equilibre.comparable === false && /not settled yet/.test(I.equilibre.pasCompare), JSON.stringify(I.equilibre.pasCompare));
+    assert.ok(!Number.isFinite(I.approche.mesure) && /never got within/.test(I.approche.absente));
+  });
   // 4. epidemieSIR
   for (const p of [{}, { R0: 6, i0: 0.1, r0: 0.3 }, { R0: 1.2, i0: 0.001 }, { R0: 1.2, i0: 0.001, r0: 0.6 }, { R0: 2.5, i0: 0.001, r0: 0.6 }]) ok(`epidemieSIR ${JSON.stringify(p)} : taille finale (Newton) et pic (formule) mesures, s + i + r = 1, courbe = integration independante`, () => {
     const R = S('epidemieSIR', p), P = R.params, I = R.invariants, b = R.brut, s0 = 1 - P.i0 - P.r0;
@@ -257,7 +275,8 @@ function suite(T, bavard = false) {
     assert.deepEqual(sim('ising2D', { T: 9, L: 30.6, balayages: 'x', graine: 0 }, { n: 50 }).params, { T: 3.5, L: 31, balayages: 200, graine: 1 });
     assert.deepEqual(sim('kuramoto', { K: -1, N: 99999.4, graine: NaN }, { n: 50 }).params, { K: 0.5, N: 1000, graine: 1 });
     assert.deepEqual(sim('gibbsFourier', { N: 7.5, fenetre: Infinity }, { n: 50 }).params, { N: 8, fenetre: 3.1 });
-    assert.deepEqual(sim('epidemieSIR', { R0: 100, i0: 0, r0: -1 }, { n: 50 }).params, { R0: 6, i0: 0.001, r0: 0 });
+    assert.deepEqual(sim('epidemieSIR', { R0: 100, i0: 0, r0: -1 }, { n: 50 }).params, { R0: 6, i0: 0.001, r0: 0, perteImmunite: 0 });
+    assert.equal(sim('epidemieSIR', { perteImmunite: 5 }, { n: 50 }).params.perteImmunite, 0.2);
     assert.deepEqual(sim('lentilleGravitationnelle', { beta: 5, rho: null }, { n: 50 }).params, { beta: 2, rho: 0.05 });
   });
   ok('reglagesPhysique : forme, valeur bornee', () => {
@@ -312,6 +331,9 @@ const MUTANTS = [
   ['Lotka-Volterra : <y> sans la correction dln x / T', 'ys - (lnD(Xe[k]) - lnD(Xe[0])) / evts[k]', 'ys'],
   ['Lotka-Volterra : RK4 mal pondere sur x', 'u[0] += h / 6 * (k1x + 2 * k2x + 2 * k3x + k4x)', 'u[0] += h / 6 * (k1x + k2x + 3 * k3x + k4x)'],
   ['Lotka-Volterra : T0 = 2 pi / (a c)', 'T0 = DEUX_PI / Math.sqrt(a * c)', 'T0 = DEUX_PI / (a * c)'],
+  ['SIRS : i* sans le facteur 1/(1 + xi)', 'iE = (1 - 1 / R0) * xi / (1 + xi)', 'iE = (1 - 1 / R0) * xi'],
+  ['SIRS : les gueris ne redeviennent pas sensibles', 'const f = (s, i, r) => [-R0 * s * i + xi * r,', 'const f = (s, i, r) => [-R0 * s * i,'],
+  ['SIRS : approche sans xi dans la trace', 'tr = R0 * iE + xi;', 'tr = R0 * iE;'],
   ['SIR : pic avec 1 - ln(R0 s0)', '(1 + lnD(R0 * s0)) / R0', '(1 - lnD(R0 * s0)) / R0'],
   ['SIR : taille finale sans r0 dans l exposant', 'const f = (r) => r - 1 + s0 * expD(-R0 * (r - r0));', 'const f = (r) => r - 1 + s0 * expD(-R0 * r);'],
   ['SIR : guerison 1.1 gamma', 'const f = (s, i) => [-R0 * s * i, R0 * s * i - i];', 'const f = (s, i) => [-R0 * s * i, R0 * s * i - 1.1 * i];'],

@@ -159,7 +159,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   /* game105 (sonde : tous les noms de curseurs contre cette table — 3 mots francais a l ecran depuis game96) */
   billes: 'balls', rangees: 'rows of pegs', rayons: 'paths', penchant: 'tilt (chance to bounce right)',
   /* game106 */
-  attirant: 'opposite charges (1 = attract)', saturation: 'prey crowding (1 / room for prey)' };
+  attirant: 'opposite charges (1 = attract)', saturation: 'prey crowding (1 / room for prey)', perteImmunite: 'immunity fading (per infectious period)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
@@ -181,7 +181,8 @@ function ligneInvariant(k0, v) {
     /* game103 (sonde aux bouts des curseurs : 12 lignes « measured NaN vs formula 5.177 » — se lisaient comme une panne) : une mesure
      *   qui n existe pas dans CE run (0 orbite complete, capture, pas de passage) le dit, avec la formule a cote */
     if ('mesure' in v && !(typeof v.mesure === 'number' && Number.isFinite(v.mesure))) {
-      const pourquoi = v.orbites === 0 ? 'no full orbit in this run' : typeof v.passages === 'number' && v.passages < 2 ? 'no full oscillation in this run' : 'not defined with these settings';
+      /* game109 : un module peut dire SA raison (`absente`) — « not defined » etait faux pour une course trop courte */
+      const pourquoi = typeof v.absente === 'string' ? v.absente : v.orbites === 0 ? 'no full orbit in this run' : typeof v.passages === 'number' && v.passages < 2 ? 'no full oscillation in this run' : 'not defined with these settings';
       const f = typeof v.exacte === 'number' && Number.isFinite(v.exacte) ? v.exacte : v.formule;
       return k + ': not measured (' + pourquoi + ')' + (typeof f === 'number' && Number.isFinite(f) ? ', formula ' + nb4(f) : '');
     }
@@ -190,7 +191,8 @@ function ligneInvariant(k0, v) {
     /* game104 (sonde aux bouts : effet tunnel, barriere de largeur 4, « measured 0.0089 vs formula 0.0069 » = 29 %) : un paquet n a pas UNE
      *   energie ; le module calcule T(E) moyenne sur son propre spectre (a <= 1.8 % de la mesure sur tous les bouts) — c est elle la reference */
     if (typeof v.paquet === 'number' && Number.isFinite(v.paquet) && 'mesure' in v) return k + ': measured ' + nb4(v.mesure) + ' vs ' + nb4(v.paquet) + ' averaged over the packet\'s energies (single-energy formula ' + nb4(v.formule) + ')';
-    if (v.comparable === false && 'mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' — not compared at these settings (the formula, ' + nb4(v.formule) + ', is outside its range here)';
+    if (v.comparable === false && 'mesure' in v && 'formule' in v) return k + ': measured ' + nb4(v.mesure) + ' — not compared at these settings ('
+      + (typeof v.pasCompare === 'string' ? v.pasCompare + '; formula ' + nb4(v.formule) : 'the formula, ' + nb4(v.formule) + ', is outside its range here') + ')';
     /* « formule » = la formule approchee du module (ex. precession en champ faible), « theorie » = la valeur exacte */
     /* game100 : la precession de Schwarzschild porte aussi la valeur EXACTE (integrale elliptique) — c est elle qu on compare */
     if (k0 === 'precession' && typeof v.exacte === 'number' && 'mesure' in v) return k + ': measured ' + nb4(v.mesure) + ' vs exact GR ' + nb4(v.exacte) + ' (weak-field formula ' + nb4(v.formule) + ')';

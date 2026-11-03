@@ -267,6 +267,11 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     const Lg =ligne('binomiale', run('galton', { billes: 100 }).binomiale);
     ok(/statistical, ± 0\.04\d/.test(Lg), 'Galton 100 billes : le sigma binomial exact est dit : ' + Lg);
     ok(/approximate formula: the 1 - \(T\/Tc\)\^3 law/.test(ligne('fractionCondensat', run('zeroAbsolu', { atomes: 1000 }).fractionCondensat)), 'BEC : la loi en T^3 est dite limite N infini');
+    /* game109 : le module dit SA raison — course trop courte, jamais « formule hors domaine » ni « not defined » */
+    const Ise = run('epidemieSIR', { perteImmunite: 0.001, R0: 1.2 }), Leq = ligne('equilibre', Ise.equilibre), Lap = ligne('approche', Ise.approche);
+    ok(/not compared at these settings \(not settled yet when the run stops at t = 10000; formula /.test(Leq) && !/outside its range/.test(Leq), 'SIRS lent : ' + Leq);
+    ok(/not measured \(the run never got within 1e-7 of the endemic point\)/.test(Lap) && !/not defined/.test(Lap), 'SIRS lent : ' + Lap);
+    ok(/measured 0\.\d+ vs formula 0\.\d+$/.test(ligne('equilibre', run('epidemieSIR', { perteImmunite: 0.1 }).equilibre)), 'temoin : SIRS pose = compare');
     ok(/measured \d+\.\d+ vs exact GR/.test(ligne('precession', run('schwarzschild', {}).precession)), 'temoin : un run normal garde sa mesure');
   }
   /* game82 (Phil : « mets les variables au dessus ») : dans la page montee, les curseurs viennent AVANT la scene */
@@ -339,7 +344,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
        *   module qui en oublie une fait rougir le banc */
       { const CE = await import('./tam-cles-en.js'), dC = onglet.indexOf('const CLES_EN = {'), fC = onglet.indexOf('};', dC) + 2;
         const CLES = { ...new Function(onglet.slice(dC, fC) + '\nreturn CLES_EN;')(), ...CE.CLES_EN_MODULES }, sansNom = new Set(), sansCle = new Set();
-        for (const s of TSq.SYSTEMES) { const o = s.mod.simuler(s.id, TSq.paramsScience(s.id).params);
+        /* game109 : aussi les variables de la nuit du 02-03/11 au MAX — leurs mesures n existent qu avec elles (aux defauts, rien a voir) */
+        const VARIANTES = { galton: { penchant: 0.9 }, rutherford: { attirant: 1 }, lotkaVolterra: { saturation: 0.2 }, epidemieSIR: { perteImmunite: 0.2 } };
+        for (const s of TSq.SYSTEMES) for (const extra of [{}, VARIANTES[s.id]].filter(Boolean)) { const o = s.mod.simuler(s.id, { ...TSq.paramsScience(s.id).params, ...extra });
           for (const [k, v] of Object.entries(o.invariants || {})) { if (!CE.NOMS_MESURES_EN[k]) sansNom.add(k);
             if (v && typeof v === 'object' && !('mesure' in v && ('formule' in v || 'theorie' in v)) && !('derive' in v)) for (const [a, x] of Object.entries(v)) if (typeof x === 'number' && !CLES[a]) sansCle.add(a); } }
         ok(sansNom.size === 0 && sansCle.size === 0, 'toutes les mesures des ' + TSq.SYSTEMES.length + ' systemes ont leur nom et leurs cles en anglais' + (sansNom.size + sansCle.size ? ' — MANQUENT : ' + [...sansNom, ...sansCle].join(', ') : ''));

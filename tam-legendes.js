@@ -790,7 +790,7 @@ const L = {
     titre: 'How an epidemic runs (SIR model)',
     enUnePhrase: 'A population split into susceptible, infected and recovered people: an outbreak grows, peaks and fades, and never reaches everyone.',
     colonnes: ['susceptible fraction s (population fraction)', 'infected fraction i (same units)', 'recovered fraction r (same units)', 'time (in units of the average time to recover)'],
-    aRegarder: ['The outbreak only takes off if R0 times the susceptible fraction is above 1; the infected curve peaks exactly when s falls to 1 / R0.', 'The peak height and the share never infected both follow exact formulas, checked against the simulation.', 'Everyone mixes with everyone, no vaccines or behaviour changes: a simplified model.'],
+    aRegarder: ['The outbreak only takes off if R0 times the susceptible fraction is above 1; the infected curve peaks exactly when s falls to 1 / R0.', 'The peak height and the share never infected both follow exact formulas, checked against the simulation.', 'Turn up "immunity fading" and recovered people slowly become susceptible again: the disease comes back in smaller waves and settles at an exact endemic level. Everyone mixes with everyone, no vaccines: a simplified model.'],
     fin: null,
   },
   lentilleGravitationnelle: {

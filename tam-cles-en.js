@@ -328,6 +328,8 @@ export const CLES_EN_MODULES = Object.freeze({
   phiB: 'end angle phiB', gainSurDroite: 'time saved on the line', chemins: 'paths drawn', billes: 'balls', pileMax: 'tallest pile',
   /* game107 */
   pointFixe: 'rest point', retours: 'returns used', s: 'crowding s',
+  /* game109 */
+  xi: 'immunity loss xi',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
@@ -335,6 +337,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   H: 'Conserved H',
   /* game107 (proies a place limitee) */
   Hdecroit: 'H (can only go down)', dissipation: 'H lost vs crowding integral', amortissement: 'Damping rate',
+  /* game109 (immunite qui s estompe) */
+  equilibre: 'Endemic level of infected', approche: 'Approach rate to the endemic level',
   L: 'Angular momentum L',
   L1: 'L1',
   L2: 'L2',

@@ -417,7 +417,11 @@ const DECORS = {
     ? seg([P.c, 1 - P.saturation * P.c, B.lo[2]], [P.c, 1 - P.saturation * P.c, B.hi[2]], C.zone, 'Balance point (x = c, y = 1 - s c): the spiral winds into it')
     : seg([P.c, 1, B.lo[2]], [P.c, 1, B.hi[2]], C.zone, 'Balance point (x = c, y = 1): the cycles turn round it')],
   /* colonnes : s, i, r, t ; di/dt = (R0 s - 1) i : les infectes culminent EXACTEMENT quand s = 1 / R0 (seuil d immunite collective) */
-  epidemieSIR: (P, o, B) => [hyper(B, 0, 1 / P.R0, C.zone, 'Herd-immunity threshold s = 1 / R0: the infected curve peaks here')],
+  /* game109 : avec l immunite qui s estompe, l equilibre endemique EXACT (lu dans le module) sur toute la duree */
+  epidemieSIR: (P, o, B) => P.perteImmunite > 0
+    ? [hyper(B, 0, 1 / P.R0, C.zone, 'Herd-immunity threshold s = 1 / R0: each wave peaks here'),
+      (({ sFormule: s, formule: i, rFormule: r }) => seg([s, i, r, B.lo[3]], [s, i, r, B.hi[3]], C.repere, 'Endemic level (exact): the disease settles here and never leaves'))(o.invariants.equilibre)]
+    : [hyper(B, 0, 1 / P.R0, C.zone, 'Herd-immunity threshold s = 1 / R0: the infected curve peaks here')],
   /* colonnes : x, S_N, erreur, N ; l onde carree vaut +1 sur (0, pi) */
   gibbsFourier: (P, o, B) => [seg([Math.max(0, B.lo[0]), 1, 0, B.lo[3]], [B.hi[0], 1, 0, B.lo[3]], C.repere, 'Square wave level +1 (the sums overshoot it next to the jump)')],
   /* ---------- game96 : tam-theories-3.js ---------- */

@@ -159,6 +159,10 @@ const PHYS = [
     ok(/pulls/.test(parLib(D.decorDe('rutherford', r1.params, r1), /^Nucleus/).libelle) && !/repels/.test(parLib(D.decorDe('rutherford', r1.params, r1), /^Nucleus/).libelle), 'attire avec les charges opposees');
     const l1 = sim('lotkaVolterra', { saturation: 0.2, c: 2 }), seg1 = parLib(D.decorDe('lotkaVolterra', l1.params, l1), /^Balance point/);
     proche(seg1.a[1], 1 - 0.2 * 2, 1e-12, 'LV : point d equilibre a y = 1 - s c');
+    /* game109 : SIRS — l equilibre endemique exact, recalcule ici */
+    const e1 = sim('epidemieSIR', { perteImmunite: 0.1, R0: 3 }), sE = parLib(D.decorDe('epidemieSIR', e1.params, e1), /^Endemic level/), iE = (1 - 1 / 3) * 0.1 / 1.1;
+    proche(sE.a[0], 1 / 3, 1e-12, 'SIRS s*'); proche(sE.a[1], iE, 1e-12, 'SIRS i*'); proche(sE.a[2], iE / 0.1, 1e-12, 'SIRS r*');
+    const e0 = sim('epidemieSIR'); ok(!D.decorDe('epidemieSIR', e0.params, e0).some((q) => /^Endemic/.test(q.libelle)), 'SIR : pas d equilibre endemique dessine');
   }],
   ['etoileS2 : horizon de Sgr A* = 2GM/c^2 (recalcule), S2 passe loin au-dessus', (D) => {
     const o = sim('etoileS2'), d = D.decorDe('etoileS2', o.params, o), h = parLib(d, /^Event horizon/).rayon;
