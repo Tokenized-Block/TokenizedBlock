@@ -921,6 +921,21 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game127 */
+  dureeJour: {
+    titre: 'How long the day lasts through the year',
+    enUnePhrase: 'Hours of daylight on each day of the year at the latitude chosen, counted and computed.',
+    colonnes: ['day of the year (0 = equinox)', 'hours of daylight', 'curve (0 = counted, 1 = formula)'],
+    aRegarder: ['At the equator every day lasts 12 hours, whatever the tilt.', 'Further from the equator the swing grows; past the polar circle the curve touches 24 hours (midnight sun) and 0 (polar night).', 'The two curves lie on top of each other: counting minute by minute and the formula cos H0 = -tan(latitude) tan(declination) agree.'],
+    fin: null,
+  },
+  courseRoulante: {
+    titre: 'The rolling race (sphere, cylinder, ring)',
+    enUnePhrase: 'Distance down a slope against time for a block, a sphere, a cylinder and a ring let go together.',
+    colonnes: ['time t', 'distance down the slope', 'body (0 block, 1 sphere, 2 cylinder, 3 ring)'],
+    aRegarder: ['The sphere always beats the cylinder, which beats the ring: spinning takes a share of the energy (k = 2/5, 1/2, 1).', 'Without friction nothing rolls: all four slide and arrive together.', 'Below the friction k/(1 + k) tan theta a body slides instead of rolling and part of the energy becomes heat.'],
+    fin: null,
+  },
   /* game126 */
   penduleAmplitude: {
     titre: 'A pendulum swinging high (the exact period)',

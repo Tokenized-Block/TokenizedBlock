@@ -29,6 +29,7 @@ function atanD(x) {
   return 4 * s;
 }
 function atan2D(y, x) { if (x > 0) return atanD(y / x); if (x < 0) return atanD(y / x) + (y >= 0 ? PI : -PI); return y > 0 ? PI / 2 : y < 0 ? -PI / 2 : 0; }
+const acosD = (x) => PI / 2 - atanD(x / Math.sqrt(Math.max(1e-300, 1 - x * x)));
 function decouper(n, images) { const d = []; for (let k = 0; k < images; k++) d.push(Math.floor(k * n / images)); return d; }
 function filmDe(debuts, n) {
   const tailles = debuts.map((d, k) => (k + 1 < debuts.length ? debuts[k + 1] : n) - d);
@@ -195,11 +196,82 @@ function phasesLune(P, n) {
     partEclairee: { mesure, formule, phaseDegres: P.anglePhase, note: 'share of the visible disc that is lit, counted on a 1001 x 1001 grid from 3-D geometry (seen if n.e > 0, lit if n.s > 0), against (1 + cos phi) / 2 ; the grid adds a gap of about 1e-3' } } };
 }
 
+// ---------- 6 : la duree du jour au fil de l annee ----------
+// Une planete a orbite circulaire, axe incline de epsilon (curseur), observateur a la latitude phi (curseur) ; jour 0 = equinoxe.
+//   Declinaison du Soleil le jour d : sin delta = sin epsilon sin(2 pi d / 365) (orbite circulaire, mouvement uniforme).
+// Mesure (geometrie seule) : chaque jour, la verticale du lieu tourne en 24 h ; on compte les minutes ou elle fait un angle aigu avec la
+//   direction du Soleil (Soleil ponctuel, sans refraction), 1440 pas par jour.
+// Exact (derive ici) : le Soleil est au-dessus de l horizon tant que l angle horaire |H| < H0 avec cos H0 = -tan phi tan delta ; duree
+//   = 24 H0 / pi heures ; si -tan phi tan delta < -1 : jour polaire (24 h), > 1 : nuit polaire (0 h). Aux equinoxes : 12 h partout.
+// Dessin : la duree du jour sur l annee (vue de face) ; 3e colonne : 0 = mesure, 1 = formule (deux courbes superposees).
+function dureeJour(P, n) {
+  const phi = P.latitude * PI / 180, eps = P.inclinaison * PI / 180, J = 365, M = 1440;
+  const se = sinD(eps), cp = cosD(phi), sp = sinD(phi);
+  const jours = []; let pire = 0;
+  for (let d = 0; d < J; d++) {
+    const sd = se * sinD(2 * PI * d / J), cd = Math.sqrt(1 - sd * sd);
+    let n0 = 0; for (let m = 0; m < M; m++) { const h = 2 * PI * (m + 0.5) / M; if (cp * cosD(h) * cd + sp * sd > 0) n0++; }
+    const mes = 24 * n0 / M, x = -(sp / cp) * (sd / cd), th = x <= -1 ? 24 : x >= 1 ? 0 : 24 * acosD(x) / PI;
+    pire = Math.max(pire, Math.abs(mes - th)); jours.push([d, mes, th]);
+  }
+  const brut = new Float64Array(n * 3), moitie = Math.floor(n / 2);
+  for (let l = 0; l < n; l++) { const c = l < moitie ? 0 : 1, k = c ? l - moitie : l, m = c ? n - moitie : moitie, j = jours[m === 1 ? 0 : Math.round(k * (J - 1) / (m - 1))], o = 3 * l; brut[o] = j[0]; brut[o + 1] = c ? j[2] : j[1]; brut[o + 2] = c; }
+  const solstice = jours[Math.round(J / 4)], equinoxe = jours[0];
+  return { D: 3, brut, nuage: true, unite: 'sans objet (geometrie du ciel)', invariants: {
+    dureeJours: { mesure: pire * 60, formule: 0, pasMinutes: 1440 / M, jours: J, note: 'worst gap in minutes, over the year, between the daylight counted minute by minute and 24 H0 / pi with cos H0 = -tan(latitude) tan(declination) ; the count has a 1-minute step' },
+    equinoxe: { mesure: equinoxe[1], formule: 12, note: 'daylight at the equinox (hours) against 12, at every latitude' },
+    solstice: { mesure: solstice[1], formule: solstice[2], note: 'longest daylight (hours) at the June solstice against the formula (24 = midnight sun, 0 = polar night)' } } };
+}
+
+// ---------- 7 : la course des objets qui roulent ----------
+// Plan incline d angle theta (curseur), longueur 10, g = 1 ; quatre objets lacher ensemble : un bloc (sans rotation, k = 0), une sphere
+//   pleine (k = I / (m r^2) = 2/5), un cylindre plein (1/2), un anneau (1). Frottement mu (curseur).
+// Dynamique (decidee a chaque pas, pas de formule finale dans la simulation) : pour rouler sans glisser il faut une force de frottement
+//   k/(1+k) m g sin theta ; si mu m g cos theta la fournit, l objet roule (a = g sin theta / (1 + k)) ; sinon il glisse
+//   (a = g (sin theta - mu cos theta), sa rotation accelere a part). Le bloc glisse toujours (avec frottement s il y en a).
+// Exact (derive ici) : en roulement, temps d arrivee sqrt(2 L (1 + k) / (g sin theta)) : l ordre sphere, cylindre, anneau ne depend ni
+//   de la masse, ni du rayon, ni de l angle ; seuil de roulement mu_min = k/(1 + k) tan theta. Energie : la hauteur perdue = energie de
+//   translation + de rotation + chaleur de glissement (temoin).
+// Dessin : distance parcourue contre le temps, quatre courbes (vue de face) ; 3e colonne : 0 bloc, 1 sphere, 2 cylindre, 3 anneau.
+const ROULANTS = [['block', 0], ['sphere', 0.4], ['cylinder', 0.5], ['ring', 1]];
+function courseRoulante(P, n) {
+  const th = P.pente * PI / 180, mu = P.frottement, L = 10, g = 1, h = 0.0005, st = sinD(th), ct = cosD(th);
+  const res = ROULANTS.map(([nom, k]) => {
+    let x = 0, v = 0, w = 0, t = 0, chaleur = 0; const traj = [[0, 0]];
+    while (x < L && t < 1000) {
+      let a, alpha;
+      const fReq = k / (1 + k) * g * st, fMax = mu * g * ct;
+      if (k > 0 && fReq <= fMax + 1e-15) { a = g * st / (1 + k); alpha = a; }
+      else { a = g * st - (mu > 0 ? mu * g * ct : 0); if (a < 0) a = 0; alpha = k > 0 ? mu * g * ct / k : 0; }
+      if (a <= 0 && v <= 0) break; /* le frottement retient l objet : il ne part pas */
+      const v2 = v + a * h, x2 = x + h * (v + v2) / 2;
+      /* chaleur de glissement : force mu g cos theta fois la vitesse de glissement v - w, au point milieu du pas (exacte : v - w lineaire) */
+      const glisse = a !== alpha || k === 0, chauffe = (dt) => { if (glisse && mu > 0) chaleur += mu * g * ct * Math.abs(v + a * dt / 2 - (w + alpha * dt / 2)) * dt; };
+      if (x2 >= L) { const dt = h * (L - x) / (x2 - x); chauffe(dt); v += a * dt; w += alpha * dt; t += dt; x = L; traj.push([t, L]); break; }
+      chauffe(h); x = x2; v = v2; w += alpha * h; t += h; if (traj.length < 4000 && Math.round(t / h) % 20 === 0) traj.push([t, x]);
+    }
+    const Tr = Math.sqrt(2 * L * (1 + k) / (g * st)), aG = g * st - mu * g * ct, Tg = aG > 0 ? Math.sqrt(2 * L / aG) : Infinity;
+    const muMin = k / (1 + k) * st / ct, formule = k > 0 && mu >= muMin ? Tr : Tg;
+    const E = 0.5 * v * v + 0.5 * k * w * w + chaleur, Epot = g * x * st;
+    return { nom, k, T: x >= L ? t : NaN, formule, roule: k > 0 && mu >= muMin, muMin, ecartEnergie: Math.abs(E - Epot), traj };
+  });
+  const brut = new Float64Array(n * 3), par = Math.floor(n / 4); let l = 0;
+  for (let b = 0; b < 4; b++) { const tr = res[b].traj, nb = b === 3 ? n - l : par; for (let q = 0; q < nb && l < n; q++) { const p = tr[nb === 1 ? 0 : Math.round(q * (tr.length - 1) / (nb - 1))], o = 3 * l++; brut[o] = p[0]; brut[o + 1] = p[1]; brut[o + 2] = b; } }
+  const inv = {};
+  for (const r of res) inv['arrivee' + r.nom[0].toUpperCase() + r.nom.slice(1)] = { mesure: r.T, formule: r.formule, ...(Number.isFinite(r.formule) ? {} : { absente: 'friction holds it: it does not start' }),
+    regime: r.roule ? 1 : 0, seuilRoulement: r.muMin, note: r.nom + ' : arrival time against ' + (r.roule ? 'sqrt(2 L (1 + k) / (g sin theta)), rolling (k = ' + r.k + ')' : 'sqrt(2 L / (g (sin theta - mu cos theta))), sliding') };
+  let pireE = 0; for (const r of res) pireE = Math.max(pireE, r.ecartEnergie);
+  inv.energieRoulants = { debut: g * L * st, fin: g * L * st, derive: pireE, note: 'height lost = kinetic energy (moving + spinning) + heat from sliding, for every body (witness)' };
+  return { D: 3, brut, nuage: true, unite: 'sans objet (mecanique du solide)', invariants: inv };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   penduleAmplitude: { colonnes: ['angle theta (radians)', 'angular speed', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   phasesLune: { colonnes: ['x on the Moon\'s disc', 'y on the Moon\'s disc', 'phase angle in degrees (0 = full Moon)'], memeLongueur: [[0, 1]], autres: [2] },
+  dureeJour: { colonnes: ['day of the year (0 = equinox)', 'hours of daylight', 'curve (0 = counted minute by minute, 1 = formula)'], memeLongueur: [], autres: [0, 1, 2] },
+  courseRoulante: { colonnes: ['time t', 'distance down the slope', 'body (0 block, 1 sphere, 2 cylinder, 3 ring)'], memeLongueur: [], autres: [0, 1, 2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -219,9 +291,15 @@ export const SYSTEMES = Object.freeze([
   { id: 'phasesLune', nom: 'The phases of the Moon', science: 'Astronomy', D: 3, nuage: true, params: { anglePhase: 180 },
     bornes: { anglePhase: [10, 180] },
     phrase: 'A visualisation of the Moon\'s phases from full to new: a sphere lit by the Sun, seen from the Earth, frame by frame. Which part looks lit comes from 3-D geometry alone (a point is seen if it faces us, lit if it faces the Sun); counted on a fine grid, the lit share is (1 + cos phi) / 2.' },
+  { id: 'dureeJour', nom: 'How long the day lasts through the year', science: 'Astronomy', D: 3, nuage: true, params: { latitude: 50, inclinaison: 25 },
+    bornes: { latitude: [-89, 89], inclinaison: [0, 45] },
+    phrase: 'A visualisation of the length of daylight through a year on a tilted planet, at the latitude chosen: counted minute by minute from geometry, and drawn with the exact formula cos H0 = -tan(latitude) tan(declination) on top. Twelve hours everywhere at the equinoxes; beyond the polar circle, midnight sun and polar night.' },
+  { id: 'courseRoulante', nom: 'The rolling race (sphere, cylinder, ring)', science: 'Classical mechanics', D: 3, nuage: true, params: { pente: 20, frottement: 0.15 },
+    bornes: { pente: [5, 60], frottement: [0, 1] },
+    phrase: 'A visualisation of four bodies let go together down a slope: a block, a solid sphere, a solid cylinder and a ring. Rolling, they arrive in the exact times sqrt(2 L (1 + k) / (g sin theta)): the sphere beats the cylinder, which beats the ring, whatever their mass or size. Lower the friction below k/(1 + k) tan theta and a body starts to slide instead.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -33,7 +33,7 @@ function suite(T, bavard = false, seul = null) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 2 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 7 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -92,6 +92,28 @@ function suite(T, bavard = false, seul = null) {
     for (let i = 0; i < R.n; i++) { const o = 3 * i, x = b[o], y = b[o + 1], r2 = x * x + y * y, phi = b[o + 2] * Math.PI / 180; if (phi > Math.PI - 1e-9) continue; assert.ok(r2 <= 1 + 1e-12 && x * Math.sin(phi) + Math.sqrt(Math.max(0, 1 - r2)) * Math.cos(phi) > -1e-12, 'point ' + i); }
     return 'part ' + I.partEclairee.mesure.toFixed(5) + ' / ' + att.toFixed(5);
   });
+  /* game127 : duree du jour — reference INDEPENDANTE par Math.acos / Math.tan / Math.asin ; le compte minute par minute s ecarte d au plus 1 minute */
+  const jourRef = (lat, eps, d) => { const dl = Math.asin(Math.sin(eps * Math.PI / 180) * Math.sin(2 * Math.PI * d / 365)), x = -Math.tan(lat * Math.PI / 180) * Math.tan(dl); return x <= -1 ? 24 : x >= 1 ? 0 : 24 * Math.acos(x) / Math.PI; };
+  if (vise('dureeJour')) for (const p of [...extremes(sys('dureeJour')), { latitude: 0 }, { latitude: 66 }, { latitude: 75 }, { latitude: -40 }]) ok(`dureeJour ${JSON.stringify(p)} : chaque point dessine contre acos(-tan(lat) tan(decl)), compte a 1 minute pres, 12 h a l equinoxe`, () => {
+    const R = S('dureeJour', p), b = R.brut, I = R.invariants, lat = R.params.latitude, eps = R.params.inclinaison; let pire = 0;
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, ref = jourRef(lat, eps, b[o]), e = Math.abs(b[o + 1] - ref); if (b[o + 2] === 1) assert.ok(e < 1e-9, 'formule jour ' + b[o]); else { assert.ok(e <= 1 / 60 + 1e-9, 'compte jour ' + b[o] + ' : ' + e * 60 + ' min'); pire = Math.max(pire, e); } }
+    assert.ok(I.dureeJours.mesure <= 1 + 1e-9 && Math.abs(I.equinoxe.mesure - 12) <= 1 / 60 + 1e-12);
+    assert.ok(Math.abs(I.solstice.formule - jourRef(lat, eps, Math.round(365 / 4))) < 1e-9);
+    return 'pire ' + (pire * 60).toFixed(2) + ' min, solstice ' + I.solstice.mesure.toFixed(3) + ' h';
+  });
+  /* game127 : course roulante — temps exacts par Math.sqrt, regime par Math.tan, chaque point x = a t^2 / 2 ; ordre sphere < cylindre < anneau en roulement */
+  if (vise('courseRoulante')) for (const p of [...extremes(sys('courseRoulante')), { frottement: 0 }, { frottement: 0.15 }, { pente: 45, frottement: 0.3 }, { pente: 30, frottement: 0.2 }]) ok(`courseRoulante ${JSON.stringify(p)} : arrivees sqrt(2L(1+k)/(g sin)) ou glissement, regime au seuil k/(1+k) tan, energie conservee`, () => {
+    const R = S('courseRoulante', p), I = R.invariants, th = R.params.pente * Math.PI / 180, mu = R.params.frottement, b = R.brut, out = [];
+    const corps = [['Block', 0], ['Sphere', 0.4], ['Cylinder', 0.5], ['Ring', 1]], acc = [];
+    for (const [nom, k] of corps) { const v = I['arrivee' + nom], roule = k > 0 && mu >= k / (1 + k) * Math.tan(th), a = roule ? Math.sin(th) / (1 + k) : Math.sin(th) - mu * Math.cos(th); acc.push(a);
+      assert.equal(v.regime, roule ? 1 : 0, nom + ' regime');
+      if (a <= 0) { assert.ok(!Number.isFinite(v.mesure) && !Number.isFinite(v.formule) && v.absente, nom + ' retenu'); out.push(nom + ' -'); continue; }
+      const T = Math.sqrt(20 / a); assert.ok(Math.abs(v.formule / T - 1) < 1e-12 && Math.abs(v.mesure / T - 1) < 1e-6, nom + ' ' + v.mesure + ' ' + T); out.push(nom + ' ' + v.mesure.toFixed(4)); }
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, a = acc[b[o + 2]]; if (a > 0) assert.ok(Math.abs(b[o + 1] - Math.min(10, a * b[o] * b[o] / 2)) < 1e-6, 'point ' + i); else assert.ok(b[o + 1] === 0, 'immobile ' + i); }
+    if (I.arriveeSphere.regime && I.arriveeCylinder.regime && I.arriveeRing.regime) assert.ok(I.arriveeSphere.mesure < I.arriveeCylinder.mesure && I.arriveeCylinder.mesure < I.arriveeRing.mesure);
+    assert.ok(I.energieRoulants.derive < 1e-6 * I.energieRoulants.debut, 'energie ' + I.energieRoulants.derive);
+    return out.join(' ');
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -119,6 +141,11 @@ const MUTANTS = [
   ['pendule : RK4 qui pese 2.01 le 2e etage', 'th += h / 6 * (k1t + 2 * k2t + 2 * k3t + k4t);', 'th += h / 6 * (k1t + 2.01 * k2t + 2 * k3t + k4t);'],
   ['lune : eclaire seulement au-dela de 0.05', 'if (x * sx + Math.sqrt(1 - r2) * sz > 0) lit++;', 'if (x * sx + Math.sqrt(1 - r2) * sz > 0.05) lit++;'],
   ['lune : formule (1 + cos phi) / 2.02', 'Math.max(0, (1 + cosD(phiMax)) / 2)', 'Math.max(0, (1 + cosD(phiMax)) / 2.02)'],
+  ['jour : soleil compte au-dessus de 0.01 au lieu de 0', 'if (cp * cosD(h) * cd + sp * sd > 0) n0++;', 'if (cp * cosD(h) * cd + sp * sd > 0.01) n0++;'],
+  ['jour : formule 24.1 H0 / pi', 'th = x <= -1 ? 24 : x >= 1 ? 0 : 24 * acosD(x) / PI;', 'th = x <= -1 ? 24 : x >= 1 ? 0 : 24.1 * acosD(x) / PI;'],
+  ['course : roulement g sin / (1 + 1.01 k)', 'a = g * st / (1 + k); alpha = a;', 'a = g * st / (1 + 1.01 * k); alpha = a;'],
+  ['course : seuil de roulement avec 1.2 mu', 'if (k > 0 && fReq <= fMax + 1e-15)', 'if (k > 0 && fReq <= 1.2 * fMax + 1e-15)'],
+  ['course : chaleur comptee a 90 %', 'if (glisse && mu > 0) chaleur += mu * g * ct', 'if (glisse && mu > 0) chaleur += 0.9 * mu * g * ct'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -132,7 +159,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

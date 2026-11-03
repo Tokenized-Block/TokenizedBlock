@@ -243,6 +243,8 @@ export const ECHELLE_PROPRE = {
   carnot: [0, 1, 2], montyHall: [0, 2], lentilleMince: [2],
   /* game126 : angle, vitesse, temps (3 grandeurs) ; phase (etiquette) */
   penduleAmplitude: [0, 1, 2], phasesLune: [2],
+  /* game127 : jour, heures (2 grandeurs) + etiquette ; temps, distance + etiquette */
+  dureeJour: [0, 1, 2], courseRoulante: [0, 1, 2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

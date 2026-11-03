@@ -454,6 +454,9 @@ const DECORS = {
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   /* game116 : colonnes t, part, courbe ; mi-parcours (S = S0/2), la ou la loi de vitesse est comparee */
   enzyme: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Half the substrate used: the rate is checked here')],
+  /* ---------- game127 ---------- */
+  dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
+  courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
   /* ---------- game126 ---------- */
   penduleAmplitude: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Hanging at rest')],
   phasesLune: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Centre of the Moon\'s disc')],

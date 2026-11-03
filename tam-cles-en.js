@@ -351,6 +351,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game123 */
   /* game124 */
   /* game125 */
+  /* game127 */
+  pasMinutes: 'counting step (minutes)', regime: 'regime (1 = rolling, 0 = sliding)', seuilRoulement: 'friction needed to roll',
   /* game126 */
   petitesOscillations: 'small-swing period 2 pi', amplitudeDegres: 'release angle (degrees)', amplitudes: 'amplitudes drawn', phaseDegres: 'phase angle (degrees)',
   parties: 'games', portes: 'doors', virtuelle: 'virtual (1 = yes)',
@@ -390,6 +392,9 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game123 */
   /* game124 */
   /* game125 */
+  /* game127 */
+  dureeJours: 'Daylight through the year (worst gap, minutes)', equinoxe: 'Daylight at the equinox', solstice: 'Daylight at the solstice',
+  arriveeBlock: 'Arrival of the block', arriveeSphere: 'Arrival of the sphere', arriveeCylinder: 'Arrival of the cylinder', arriveeRing: 'Arrival of the ring', energieRoulants: 'Energy of the rolling bodies',
   /* game126 */
   periodesFilm: 'Periods of every amplitude drawn', partEclairee: 'Lit share of the disc',
   travail: 'Work of one cycle (area)', changer: 'Won by switching', garder: 'Won by sticking', image: 'Where the image forms (di)', grandissement: 'Magnification', convergence: 'Rays through one point (worst gap)',
