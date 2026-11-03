@@ -146,6 +146,20 @@ const PHYS = [
     const pro = sim('kerr', { a: 0.9, inclinaison: 10 }).invariants.isco.formule, retro = sim('kerr', { a: 0.9, r0: 20, inclinaison: 170 }).invariants.isco.formule;
     ok(retro > pro, 'ISCO retrograde > prograde');
   }],
+  /* game107 (balayage a l ecran : deux libelles restes FAUX apres les variables de game105/106 — aucun banc ne lisait le decor sous
+   *   ces reglages) : le decor suit le penchant de Galton et le signe de la charge de Rutherford */
+  ['galton : le plan de la moyenne suit le penchant (L (q - 1/2)) ; rutherford : le noyau attire quand les charges sont opposees', (D) => {
+    for (const q of [0.5, 0.1, 0.9]) {
+      const o = sim('galton', { penchant: q }), d = D.decorDe('galton', o.params, o), p = parLib(d, /mean landing position/i), L = o.params.rangees;
+      proche(p.centre[0], L * (q - 0.5), 1e-12, 'plan de la moyenne a q = ' + q);
+      ok(q === 0.5 ? /x = 0\)/.test(p.libelle) : p.libelle.includes(String(Math.round(L * (q - 0.5) * 1000) / 1000)), 'libelle a q = ' + q + ' : ' + p.libelle);
+    }
+    const r0 = sim('rutherford'), r1 = sim('rutherford', { attirant: 1 });
+    ok(/repels/.test(parLib(D.decorDe('rutherford', r0.params, r0), /^Nucleus/).libelle), 'repousse par defaut');
+    ok(/pulls/.test(parLib(D.decorDe('rutherford', r1.params, r1), /^Nucleus/).libelle) && !/repels/.test(parLib(D.decorDe('rutherford', r1.params, r1), /^Nucleus/).libelle), 'attire avec les charges opposees');
+    const l1 = sim('lotkaVolterra', { saturation: 0.2, c: 2 }), seg1 = parLib(D.decorDe('lotkaVolterra', l1.params, l1), /^Balance point/);
+    proche(seg1.a[1], 1 - 0.2 * 2, 1e-12, 'LV : point d equilibre a y = 1 - s c');
+  }],
   ['etoileS2 : horizon de Sgr A* = 2GM/c^2 (recalcule), S2 passe loin au-dessus', (D) => {
     const o = sim('etoileS2'), d = D.decorDe('etoileS2', o.params, o), h = parLib(d, /^Event horizon/).rayon;
     const c = 299792.458 * 31557600 / 149597870.7, rs = 2 * 4 * Math.PI * Math.PI * 4.261e6 / (c * c);

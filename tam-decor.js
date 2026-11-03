@@ -422,7 +422,8 @@ const DECORS = {
   gibbsFourier: (P, o, B) => [seg([Math.max(0, B.lo[0]), 1, 0, B.lo[3]], [B.hi[0], 1, 0, B.lo[3]], C.repere, 'Square wave level +1 (the sums overshoot it next to the jump)')],
   /* ---------- game96 : tam-theories-3.js ---------- */
   /* colonnes : x, y, b, t (k = m = 1) ; le noyau fixe a l origine pour toutes les trajectoires */
-  rutherford: (P, o, B) => [pt([0, 0, B.centre[2], B.centre[3]], C.noyau, 'Nucleus (fixed, repels the particles)')],
+  /* game107 (balayage a l ecran : « repels » restait ecrit avec les charges opposees de game106) */
+  rutherford: (P, o, B) => [pt([0, 0, B.centre[2], B.centre[3]], C.noyau, P.attirant ? 'Nucleus (fixed, pulls the particles round it)' : 'Nucleus (fixed, repels the particles)')],
   /* colonnes : r, x_n, x_n+1 ; les deux premiers doublements MESURES par le module (formules r = 3 et 1 + sqrt 6) */
   logistique: (P, o, B) => [hyper(B, 0, o.invariants.doublement1.mesure, C.zone, 'First doubling (r = 3): one value becomes two'),
     hyper(B, 0, o.invariants.doublement2.mesure, C.zone, 'Second doubling (r = 1 + sqrt 6): two become four')],
@@ -433,8 +434,10 @@ const DECORS = {
   /* colonnes : x, y, t ; depart A (0, 0) a t = 0, arrivee B lue dans le module */
   brachistochrone: (P, o, B) => { const [bx, by] = o.invariants.extremites.B;
     return [pt([0, 0, 0], C.repere, 'Start A (all three beads released here)'), seg([bx, by, B.lo[2]], [bx, by, B.hi[2]], C.zone, 'End B (each bead arrives at its own time)')]; },
-  /* colonnes : x, hauteur, indice ; moyenne exacte 0 */
-  galton: (P, o, B) => [hyper(B, 0, 0, C.repere, 'Mean landing position (x = 0)')],
+  /* colonnes : x, hauteur, indice ; moyenne exacte L (q - 1/2) — game107 (balayage a l ecran : « x = 0 » restait avec le penchant de
+   *   game105 ; la formule est celle que le module compare, lue dans ses invariants) */
+  galton: (P, o, B) => { const m = o.invariants.moyenne.formule;
+    return [hyper(B, 0, m, C.repere, m === 0 ? 'Mean landing position (x = 0)' : 'Expected mean landing position (x = L (q - 1/2) = ' + Math.round(m * 1000) / 1000 + ')')]; },
 };
 
 /** les systemes sans decor, et pourquoi (le module n expose pas d objet de contexte vrai dans ses coordonnees) */
