@@ -348,6 +348,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game120 */
   /* game122 */
   lignesArrivees: 'lines landing', partContinue: 'share for a continuous fan', nonConclues: 'lines not settled', gardee: 'energy kept', puissance: 'm', impairs: 'odd numbers drawn from',
+  /* game123 */
+  rapportMasses: 'mass ratio M/m', mode: 'mode j', pulsation: 'omega_j',
   hauteur: 'entry height b', indice: 'index n', pireEcart6: 'worst gap, 6 harmonics', rang: 'harmonic', mach: 'Mach', fronts: 'wavefronts', angleDegres: 'half-angle (degrees)',
   marcheurs: 'walkers', aiguilles: 'needles', groupes: 'groups', personnes: 'people', jours: 'days', jusqua: 'up to N', courantSeuil: 'threshold current', courantsMuets: 'silent currents', impulsionsSousSeuil: 'spikes below threshold',
 });
@@ -379,6 +381,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game122 */
   angleArrivee: 'Arrival angle vs flux (worst gap, degrees)', echappees: 'Lines escaping to infinity', tensionTau: 'Voltage after one tau', demiCharge: 'Half-charge time (units of tau)',
   energieFournie: 'Energy given by the battery', energiePerdue: 'Energy lost as heat', impairsParLigne: 'Odd numbers per row vs 2^(1s of n) (worst gap)', impairsTotal: 'Odd numbers in the first 2^m rows',
+  /* game123 */
+  chocs: 'Collisions counted (they spell pi)', periodeMode: 'Period of the mode', resteDansLeMode: 'Energy leaking out of the mode',
   relaxation: 'Share of B at the relaxation time', constante: 'Equilibrium constant K = [B]/[A]', seuil: 'Oscillation threshold (Hopf)',
   /* game111 (sciences de la vie) */
   differences: 'Sites that differ from the ancestor', distance: 'Evolutionary distance read back', substitutions: 'Real base changes per site', composition: 'Base composition (chi-square)',

@@ -64,6 +64,8 @@ const FILMS_DU_MODULE = {
   /* game114 */
   /* game120 */
   cordeVibrante: { colonneTemps: 2 },
+  /* game123 */
+  modesNormaux: { colonneTemps: 2 },
   /* game118 */
   gazParfait: { colonneTemps: null, note: 'each frame is the same gas a little later (positions are exact, folded off the walls)' },
   /* game115 */
@@ -914,6 +916,21 @@ const L = {
     enUnePhrase: 'The membrane potential of a model neuron for seven input currents, one per frame: it charges, fires at 1, resets.',
     colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of the frame'],
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
+    fin: null,
+  },
+  /* game123 : mecanique (tam-mecanique.js) */
+  billardPi: {
+    titre: 'Colliding blocks that count pi',
+    enUnePhrase: 'The state of two blocks after each collision, drawn in a plane where kinetic energy is a circle.',
+    colonnes: ['sqrt(M) times the big block speed', 'sqrt(m) times the small block speed', 'collision number (a label)'],
+    aRegarder: ['Every state sits on one circle: the energy never changes.', 'Each pair of collisions turns the state by the same small angle 2 theta.', 'Count the collisions: 3, 31, 314, 3141... the digits of pi.'],
+    fin: null,
+  },
+  modesNormaux: {
+    titre: 'Normal modes of a chain of springs',
+    enUnePhrase: 'A chain of masses on springs swinging in one of its normal modes, frame by frame over one period.',
+    colonnes: ['mass number along the chain (the ends are fixed)', 'displacement', 'time t'],
+    aRegarder: ['Every mass swings in step: the shape keeps its nodes and only grows and shrinks.', 'The period is exactly 2 pi / omega_j with omega_j = 2 sin(j pi / (2 (N + 1))).', 'Higher modes have more nodes and swing faster.'],
     fin: null,
   },
   /* game122 : electricite (tam-electricite.js) et Pascal */

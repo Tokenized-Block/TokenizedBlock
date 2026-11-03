@@ -15,7 +15,7 @@ const ids = TS.SYSTEMES.map((s) => s.id);
 /* game80 : + les 16 grandes questions (tam-grandes-questions.js : 9, tam-grandes-questions-2.js : 7) */
 /* game81 : + les 9 champs quantiques (tam-champs-quantiques.js) */
 /* game88 : + les 4 principes du vide (tam-vide-quantique.js) */
-ok(ids.length === 120, '120 systemes attendus, ' + ids.length + ' trouves'); /* game93 : + 6 theories classiques (tam-theories-2.js) ; game96 : + 6 (tam-theories-3.js) ; game111 : + 2 (tam-biologie.js) ; game112 : + 2 ; game113 : + 3 (tam-chimie.js) ; game114 : + 2 ; game115 : + 4 (tam-maths.js) ; game118 : + 2 ; game120 : + 3 (tam-ondes.js) ; game122 : + 3 */
+ok(ids.length === 122, '122 systemes attendus, ' + ids.length + ' trouves'); /* game93 : + 6 theories classiques (tam-theories-2.js) ; game96 : + 6 (tam-theories-3.js) ; game111 : + 2 (tam-biologie.js) ; game112 : + 2 ; game113 : + 3 (tam-chimie.js) ; game114 : + 2 ; game115 : + 4 (tam-maths.js) ; game118 : + 2 ; game120 : + 3 (tam-ondes.js) ; game122 : + 3 ; game123 : + 2 */
 ok(['videComprime', 'casimirDynamique', 'higgsVide', 'emissionSpontanee'].every((id) => ids.includes(id) && TS.systeme(id).mod.SOURCES), 'les 4 principes du vide sont dans tam-science.js#SYSTEMES');
 const CHQ_IDS = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'effetUnruh', 'couplageCourant', 'comptonKleinNishina', 'atomes', 'quarks'];
 ok(CHQ_IDS.every((id) => ids.includes(id) && TS.systeme(id).mod.SOURCES), 'les 9 champs quantiques sont dans tam-science.js#SYSTEMES');
@@ -64,7 +64,7 @@ for (const id of ids) {
     ok(F.colonneTemps === null || (Number.isInteger(F.colonneTemps) && F.colonneTemps < o.D), id + ' : colonneTemps');
   }
 }
-ok(Object.keys(LEGENDES).length === 122 && LEGENDES.__attracteur && LEGENDES.__formule, '120 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
+ok(Object.keys(LEGENDES).length === 124 && LEGENDES.__attracteur && LEGENDES.__formule, '122 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
 ok(Object.keys(LEGENDES).every((id) => id.startsWith('__') || ids.includes(id)), 'aucune legende orpheline');
 ok(legende('__attracteur', { D: 5 }).colonnes.length === 5 && LEGENDES.__attracteur.colonnes.length === 3, 'attracteur : une colonne par variable');
 ok(LEGENDES.__formule.colonnes.length === 3 && legende('inconnu') === null, 'formule x y z ; id inconnu -> null');
@@ -93,8 +93,10 @@ const FILMS = ['supernova', 'supernovaHydro', 'effetTunnel', 'superpositionQuant
   /* game118 : le meme gaz un peu plus tard */
   'gazParfait',
   /* game120 : la corde a 8 instants */
-  'cordeVibrante'];
-ok(FILMS.every((id) => films.includes(id)) && films.length === 29, 'les 29 films : ' + films.join(','));
+  'cordeVibrante',
+  /* game123 : la chaine de ressorts sur une periode */
+  'modesNormaux'];
+ok(FILMS.every((id) => films.includes(id)) && films.length === 30, 'les 30 films : ' + films.join(','));
 function blocsExacts(id, o, F) {
   const c = F.colonneTemps, D = o.D, b = o.brut;
   for (let k = 0; k < F.images; k++) {
