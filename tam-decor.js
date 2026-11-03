@@ -448,6 +448,11 @@ const DECORS = {
   /* colonnes : t, ARN, proteine ; les moyennes EXACTES que le module compare (lues dans ses invariants) */
   dogmeCentral: (P, o, B) => { const a = o.invariants.arnMoyen.formule, p = o.invariants.proteineMoyenne.formule, r = (x) => Math.round(x * 100) / 100;
     return [hyper(B, 1, a, C.repere, 'Exact mean mRNA count (k = ' + r(a) + ')'), hyper(B, 2, p, C.zone, 'Exact mean protein count (k kp / gp = ' + r(p) + ')')]; },
+  /* colonnes : generation, part, numero ; la moyenne attendue reste p0 (lue dans les invariants) */
+  deriveGenetique: (P, o, B) => { const p = o.invariants.frequenceMoyenne.formule;
+    return [hyper(B, 1, p, C.repere, 'Starting share p0 = ' + Math.round(p * 1000) / 1000 + ' (the expected mean, forever)')]; },
+  /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
+  enzyme: (P, o, B) => { const s0 = P.substrat; return [seg([s0, 0, B.lo[2]], [0, s0, B.lo[2]], C.repere, 'S + P = S0 (all matter, when the complex is empty)')]; },
 };
 
 /** les systemes sans decor, et pourquoi (le module n expose pas d objet de contexte vrai dans ses coordonnees) */

@@ -57,6 +57,8 @@ const FILMS_DU_MODULE = {
   brachistochrone: { colonneTemps: 2, note: 'frame 1 is the cycloid, 2 the straight line, 3 the circular arc; the same start and end' },
   /* game111 : tam-biologie.js — chaque image = la meme sequence a un instant plus tard */
   adnMutations: { colonneTemps: 4 },
+  /* game112 */
+  deriveGenetique: { colonneTemps: 0, note: 'each frame is one population, followed over all its generations' },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
 /* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
@@ -872,6 +874,21 @@ const L = {
     enUnePhrase: 'The numbers of messenger RNA and protein molecules made from one gene, reaction by reaction, over the last 30 mRNA lifetimes.',
     colonnes: ['time t (mRNA lifetimes, the last 30)', 'number of mRNA molecules', 'number of protein molecules'],
     aRegarder: ['The mRNA count jumps one by one around k: Poisson noise, variance equal to the mean.', 'Proteins come in bursts from each mRNA, so their noise is larger: Fano factor 1 + kp / (1 + gp).', 'The means, the noises and the mRNA-protein covariance are compared with exact formulas, with uncertainties measured on the run.'],
+    fin: null,
+  },
+  /* game112 */
+  deriveGenetique: {
+    titre: 'Genes drifting by chance (Wright-Fisher genetic drift)',
+    enUnePhrase: 'The share of one gene variant in small populations, generation after generation, one population per frame.',
+    colonnes: ['generation', 'share of the variant (0 = lost, 1 = fixed)', 'population number (a label)'],
+    aRegarder: ['Each population wanders by pure chance until the variant is lost or fixed; smaller populations decide faster.', 'On average nothing moves: the mean share stays p0, while the variety 2p(1 - p) fades exactly as (1 - 1/2N)^t.', 'A variant ends up winning in a share p0 of the populations.'],
+    fin: null,
+  },
+  enzyme: {
+    titre: 'An enzyme at work (Michaelis-Menten kinetics)',
+    enUnePhrase: 'Substrate turned into product by an enzyme: the path of substrate, product and bound enzyme over the whole reaction.',
+    colonnes: ['substrate S', 'product P (same units)', 'enzyme-substrate complex C'],
+    aRegarder: ['Total enzyme and total matter stay constant at every step.', 'The rate follows Vmax S / (Km + S) only when there is little enzyme: the error scale E0 / (S0 + Km) is shown.', 'Raise the enzyme and the complex takes up substrate before the law can hold: the formula visibly fails.'],
     fin: null,
   },
   /* ---------- familles hors science ---------- */

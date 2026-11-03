@@ -13,6 +13,8 @@
 // Les systemes :
 //   adnMutations : une sequence d ADN qui mute au hasard (modele de Jukes-Cantor), fraction de sites differents 3/4 (1 - e^(-4 mu t / 3)).
 //   dogmeCentral : gene -> ARN messager -> proteine, une molecule a la fois (Gillespie) ; moyennes, bruits (Fano) et covariance exacts.
+//   deriveGenetique : derive genetique (Wright-Fisher) ; moyenne conservee, heterozygotie H0 (1 - 1/2N)^t exacte, fixation p0.
+//   enzyme       : cinetique de Michaelis-Menten (4 especes integrees) ; conservations temoins, loi de vitesse APPROCHEE.
 import { sinD, cosD, lnD } from './tam-moteur.js';
 
 const DEUX_PI = 2 * Math.PI;
@@ -168,10 +170,92 @@ function dogmeCentral(P, n) {
       note: 'exact stochastic simulation (Gillespie), one reaction at a time ; the drawing is the last ' + DOGME_FENETRE + ' time units' } } };
 }
 
+// ---------- 3 : derive genetique (Wright-Fisher) ----------
+// R populations independantes de N individus diploides (2N copies d un gene, deux variantes). Chaque generation tire ses 2N copies
+//   au hasard parmi celles de la generation d avant : compte' ~ Binomiale(2N, p), p = compte / 2N (tirage copie par copie).
+// Exact, derive ici : E[p'] = p (martingale), donc E[p_t] = p0 ;
+//   E[2 p'(1 - p')] = 2 (p - E[p'^2]) = 2 (p - p^2 - p(1 - p)/(2N)) = (1 - 1/(2N)) 2 p (1 - p) : l heterozygotie attendue decroit
+//   EXACTEMENT comme H_t = H0 (1 - 1/(2N))^t ; et Var p_t = p0 (1 - p0) - E[p(1-p)] = p0 (1 - p0) (1 - (1 - 1/(2N))^t).
+// Mesures sur les R populations : moyenne de p (sigma exact sqrt(Var p_t / R)), moyenne de 2p(1-p) (sigma = ecart-type mesure / sqrt R).
+// Fixation : une population finit toujours fixee (p = 0 ou 1) ; P(fixee a 1, un jour) = p0 (martingale bornee). A la generation G
+//   seules les populations deja fixees comptent : compare seulement quand >= 99 % le sont (sinon on le DIT).
+// Dessin : un film, une image par population (les 12 premieres), frequence de la variante au fil des generations.
+const WF_DESSINEES = 12;
+function deriveGenetique(P, n) {
+  const N2 = 2 * P.individus, p0 = P.partDepart, G = P.generations, R = P.populations, rng = mulberry32(P.graine);
+  const K = Math.min(WF_DESSINEES, R, n), traj = Array.from({ length: K }, () => new Float64Array(G + 1));
+  const c = new Int32Array(R), c0 = Math.round(p0 * N2), p0e = c0 / N2;
+  c.fill(c0); for (let k = 0; k < K; k++) traj[k][0] = p0e;
+  for (let g = 1; g <= G; g++) {
+    for (let r = 0; r < R; r++) {
+      const q = c[r] / N2; if (q === 0 || q === 1) continue;
+      let x = 0; for (let j = 0; j < N2; j++) if (rng() < q) x++;
+      c[r] = x;
+    }
+    for (let k = 0; k < K; k++) traj[k][g] = c[k] / N2;
+  }
+  let sp = 0, sh = 0, sh2 = 0, a1 = 0, a0 = 0;
+  for (let r = 0; r < R; r++) { const q = c[r] / N2, h = 2 * q * (1 - q); sp += q; sh += h; sh2 += h * h; if (q === 1) a1++; if (q === 0) a0++; }
+  const mp = sp / R, mh = sh / R, sdh = Math.sqrt(Math.max(0, sh2 / R - mh * mh) * R / (R - 1));
+  const lam = 1 - 1 / N2, lG = lam ** G, H0 = 2 * p0e * (1 - p0e), fix = (a0 + a1) / R;
+  const debuts = decouper(n, K), film = filmDe(debuts, n), brut = new Float64Array(n * 3);
+  for (let f = 0; f < K; f++) { const d0 = film.debuts[f], t = film.tailles[f];
+    for (let r = 0; r < t; r++) { const g = t === 1 ? G : Math.round(r * G / (t - 1)), o = 3 * (d0 + r); brut[o] = g; brut[o + 1] = traj[f][g]; brut[o + 2] = f + 1; } }
+  return { D: 3, brut, film, unite: 'sans objet (processus aleatoire, non chaotique)', invariants: {
+    frequenceMoyenne: { mesure: mp, formule: p0e, sigma: Math.sqrt(p0e * (1 - p0e) * (1 - lG) / R), populations: R,
+      note: 'mean variant frequency over the populations against its start p0 : drift has no direction (exact), sigma from the exact variance p0 (1 - p0)(1 - (1 - 1/2N)^t)' },
+    /* sonde du 03/11 : toutes les populations fixees -> ecart-type mesure 0 -> z infini ; pas de sigma alors (mesure 0 exacte) */
+    heterozygotie: { mesure: mh, formule: H0 * lG, ...(sdh > 0 ? { sigma: sdh / Math.sqrt(R) } : {}), debut: H0, generations: G,
+      note: 'mean heterozygosity 2p(1-p) against H0 (1 - 1/2N)^t (exact) ; sigma = measured spread / sqrt(populations)' },
+    fixation: { mesure: (a0 + a1) ? a1 / (a0 + a1) : NaN, formule: p0e, sigma: (a0 + a1) ? Math.sqrt(p0e * (1 - p0e) / (a0 + a1)) : NaN, fixees: fix,
+      ...((a0 + a1) === 0 ? { absente: 'no population has fixed yet' } : fix < 0.99 ? { comparable: false, pasCompare: 'only ' + Math.round(fix * 100) + ' % of the populations have fixed; the others may still go either way' } : {}),
+      note: 'share of fixed populations where the variant won, against p0 (the chance a variant eventually wins equals its start frequency)' } } };
+}
+
+// ---------- 4 : une enzyme au travail (Michaelis-Menten) ----------
+// E + S <-> C -> E + P, taux k1 = 1 (fixe : unite de temps), k-1 et kcat reglables. Les QUATRE especes sont integrees (RK4) sans
+//   eliminer d equation : E + C = E0 et S + C + P = S0 sont alors des TEMOINS (RK4 conserve exactement les invariants lineaires,
+//   derive = arrondi).
+// Loi de vitesse (APPROCHEE, etat quasi stationnaire) : dP/dt = Vmax S / (Km + S), Vmax = kcat E0, Km = (k-1 + kcat)/k1.
+//   Elle vaut quand eps = E0 / (S0 + Km) << 1 (le complexe s equilibre vite) ; comparee a mi-parcours (S = S0/2), eps est affiche.
+// (sonde du 03/11 : 636 ms au coin S0 50, E0 0.05, kcat 0.2 -> kcat borne a 0.5 et pas 0.5 / taux le plus rapide)
+// Duree : T = (S0 + 5 Km) / Vmax (S consomme presque entierement) ; pas h = min(0.5 / (k1 (S0 + E0) + k-1 + kcat), T / 2000).
+function enzyme(P, n) {
+  const S0 = P.substrat, E0 = P.enzyme, km1 = P.dissociation, k2 = P.catalyse, k1 = 1;
+  const Km = (km1 + k2) / k1, Vmax = k2 * E0, T = (S0 + 5 * Km) / Vmax, h0 = Math.min(0.5 / (k1 * (S0 + E0) + km1 + k2), T / 2000);
+  const pas = Math.ceil(T / h0), h = T / pas;
+  const f = (y, d) => { const [S, E, C] = y, a = k1 * E * S, b = km1 * C, c = k2 * C; d[0] = -a + b; d[1] = -a + b + c; d[2] = a - b - c; d[3] = c; };
+  let y = [S0, E0, 0, 0];
+  const k = [0, 1, 2, 3].map(() => new Float64Array(4)), tmp = new Float64Array(4), brut = new Float64Array(n * 3);
+  let pireE = 0, pireS = 0, ligne = 0, vMi = NaN, sMi = NaN;
+  const ecrire = (st) => { while (ligne < n && Math.round(ligne * pas / (n - 1)) === st) { const o = 3 * ligne; brut[o] = y[0]; brut[o + 1] = y[3]; brut[o + 2] = y[2]; ligne++; } };
+  ecrire(0);
+  for (let st = 1; st <= pas; st++) {
+    const avant = y[0];
+    f(y, k[0]); for (let i = 0; i < 4; i++) tmp[i] = y[i] + h / 2 * k[0][i];
+    f(tmp, k[1]); for (let i = 0; i < 4; i++) tmp[i] = y[i] + h / 2 * k[1][i];
+    f(tmp, k[2]); for (let i = 0; i < 4; i++) tmp[i] = y[i] + h * k[2][i];
+    f(tmp, k[3]); y = y.map((v, i) => v + h / 6 * (k[0][i] + 2 * k[1][i] + 2 * k[2][i] + k[3][i]));
+    pireE = Math.max(pireE, Math.abs(y[1] + y[2] - E0)); pireS = Math.max(pireS, Math.abs(y[0] + y[2] + y[3] - S0)); /* derives ABSOLUES : l ecran les rapporte a debut */
+    if (avant > S0 / 2 && y[0] <= S0 / 2) { sMi = y[0]; vMi = k2 * y[2]; }
+    ecrire(st);
+  }
+  const eps = E0 / (S0 + Km), vF = Vmax * sMi / (Km + sMi);
+  return { D: 3, brut, unite: 'sans objet (cinetique chimique, non chaotique)', invariants: {
+    enzymeTotale: { debut: E0, fin: y[1] + y[2], derive: pireE, note: 'free enzyme + bound enzyme = E0 at every step (witness : all four species are integrated)' },
+    matiereTotale: { debut: S0, fin: y[0] + y[2] + y[3], derive: pireS, note: 'substrate + complex + product = S0 at every step (witness)' },
+    vitesseReaction: { mesure: vMi, formule: vF, eps, Km, Vmax, substratMi: sMi,
+      approchee: 'Michaelis-Menten assumes the enzyme-substrate complex settles at once; its error scale here is E0 / (S0 + Km) = ' + eps.toPrecision(2),
+      note: 'rate of product formation when half the substrate is used, against Vmax S / (Km + S)' },
+    produitFinal: { partConvertie: y[3] / S0, tFin: T, note: 'share of the substrate turned into product by the end of the run ; measured only' } } };
+}
+
 // ---------- colonnes de brut ----------
 export const COLONNES = Object.freeze({
   adnMutations: { colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base (0 = A, 1 = C, 2 = G, 3 = T)', 'time t'], memeLongueur: [[0, 1, 2]], autres: [3, 4] },
   dogmeCentral: { colonnes: ['time t (mRNA lifetimes, last 30)', 'number of mRNA molecules', 'number of protein molecules'], memeLongueur: [], autres: [0, 1, 2] },
+  deriveGenetique: { colonnes: ['generation', 'share of the variant in the population (0..1)', 'population number (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  enzyme: { colonnes: ['substrate S', 'product P (same units)', 'enzyme-substrate complex C'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
 // ---------- catalogue ----------
@@ -182,9 +266,15 @@ export const SYSTEMES = Object.freeze([
   { id: 'dogmeCentral', nom: 'Gene to RNA to protein (the central dogma, one molecule at a time)', science: 'Molecular biology', D: 3, params: { transcription: 4, traduction: 5, degradation: 0.2, graine: 1 },
     bornes: { transcription: [0.5, 20], traduction: [0.5, 20], degradation: [0.05, 1], graine: [1, 1000000] },
     phrase: 'A visualisation of gene expression molecule by molecule (exact Gillespie simulation, time in mRNA lifetimes): a gene is copied into messenger RNA at rate k, each mRNA is translated into proteins at rate kp and both are broken down. The mean counts k and k kp / gp, the Poisson noise of the mRNA (Fano factor 1), the burst noise of the protein (Fano 1 + kp / (1 + gp)) and their covariance are compared with exact formulas, with uncertainties measured on the run itself.' },
+  { id: 'deriveGenetique', nom: 'Genes drifting by chance (Wright-Fisher genetic drift)', science: 'Population genetics', D: 3, params: { individus: 50, partDepart: 0.5, generations: 100, populations: 100, graine: 1 },
+    bornes: { individus: [10, 200], partDepart: [0.05, 0.95], generations: [10, 400], populations: [20, 200], graine: [1, 1000000] },
+    phrase: 'A visualisation of genetic drift (the Wright-Fisher model): many small populations, each generation copying its genes at random from the one before, one frame per population. Variants wander up and down by pure chance until one is lost and the other fixed; on average nothing moves (the mean share stays p0, exact), the variety 2p(1 - p) fades exactly as H0 (1 - 1/2N)^t, and a variant ends up winning with probability p0. A finite number of populations, so the agreement is statistical.' },
+  { id: 'enzyme', nom: 'An enzyme at work (Michaelis-Menten kinetics)', science: 'Biochemistry', D: 3, params: { substrat: 10, enzyme: 0.1, dissociation: 1, catalyse: 1 },
+    bornes: { substrat: [1, 50], enzyme: [0.05, 1], dissociation: [0.1, 5], catalyse: [0.5, 5] },
+    phrase: 'A visualisation of an enzyme turning substrate into product, E + S <-> C -> E + P, integrated step by step with all four species: total enzyme and total matter stay constant (witnesses). The rate of product formation is compared with the Michaelis-Menten law Vmax S / (Km + S), an approximation whose error scale E0 / (S0 + Km) is shown: add a lot of enzyme and the law visibly fails.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'] };
-const FONCTIONS = { adnMutations, dogmeCentral };
+export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [] };
+const FONCTIONS = { adnMutations, dogmeCentral, deriveGenetique, enzyme };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */

@@ -334,6 +334,8 @@ export const CLES_EN_MODULES = Object.freeze({
   schema: 'scheme value', ecartSchema: 'gap to the scheme', borneDiscret: 'step-size gap', kPerte: 'loss rate k',
   /* game111 */
   sites: 'sites', evenements: 'reactions simulated', rodage: 'warm-up time', blocs: 'time blocks', baseA: 'share of A', baseC: 'share of C', baseG: 'share of G', baseT: 'share of T',
+  /* game112 */
+  fixees: 'share of populations fixed', eps: 'error scale E0/(S0+Km)', Km: 'Km', Vmax: 'Vmax', substratMi: 'substrate at half-way', partConvertie: 'share converted', tFin: 'end time',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
@@ -348,6 +350,9 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game111 (sciences de la vie) */
   differences: 'Sites that differ from the ancestor', distance: 'Evolutionary distance read back', substitutions: 'Real base changes per site', composition: 'Base composition (chi-square)',
   arnMoyen: 'Mean mRNA count', bruitArn: 'mRNA noise (Fano factor)', proteineMoyenne: 'Mean protein count', bruitProteine: 'Protein noise (Fano factor)', covariance: 'mRNA-protein covariance', simulation: 'Simulation',
+  /* game112 */
+  frequenceMoyenne: 'Mean share of the variant', heterozygotie: 'Heterozygosity (variety left)', fixation: 'Variant won, among fixed populations',
+  enzymeTotale: 'Total enzyme (free + bound)', matiereTotale: 'Total matter (S + C + P)', vitesseReaction: 'Rate of product formation', produitFinal: 'Product at the end',
   L: 'Angular momentum L',
   L1: 'L1',
   L2: 'L2',

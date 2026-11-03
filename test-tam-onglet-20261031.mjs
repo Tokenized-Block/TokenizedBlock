@@ -539,7 +539,12 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     /* chaque systeme est dans un groupe du menu (aucun orphelin) */
     ok(/const groupeDe = \(s\) => THEMES\.biologie\.includes\(s\.id\) \? 'biologie' : THEMES\.theories\.includes\(s\.id\) \? 'theories' : THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet)
       && /\['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet)
-      && /\['biologie', 'Life sciences: DNA, RNA, genes'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+      && /\['biologie', 'Life sciences: DNA, RNA, genes, enzymes'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+    /* game112 (vu a l ecran : « Speed: measured 0.0715 » — ma cle vitesse etait redefinie plus bas dans la MEME table, la derniere
+     *   gagne en silence ; game111 : « A » et « k » deja pris) : aucune cle en double dans les tables de noms anglais */
+    { const t = readFileSync(new URL('./tam-cles-en.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''), doublons = [];
+      for (const bloc of t.split('export const').slice(1)) { const vus = new Set(); for (const m of bloc.matchAll(/(?:^|[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:\s*['"]/gm)) { if (vus.has(m[1])) doublons.push(bloc.trim().split(/\s/)[0] + '.' + m[1]); vus.add(m[1]); } }
+      ok(doublons.length === 0, 'game112 : aucune cle en double dans tam-cles-en.js (la derniere ecraserait la premiere en silence) : ' + (doublons.join(', ') || 'aucune')); }
     /* game80 : aucun systeme orphelin — chaque id des grandes questions est range dans son groupe */
     { const gq = [...(await import('./tam-grandes-questions.js')).SYSTEMES, ...(await import('./tam-grandes-questions-2.js')).SYSTEMES].map((s) => s.id);
       ok(gq.every((id) => onglet.includes("'" + id + "'")), 'les ' + gq.length + ' grandes questions sont toutes dans THEMES.questions'); }

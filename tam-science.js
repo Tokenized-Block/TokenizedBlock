@@ -38,7 +38,7 @@ import * as T2 from './tam-theories-2.js';
  *   oscillateur force (amplitude exacte), brachistochrone (sqrt(a/g) theta), Galton (binomiale) — SOURCES vide */
 import * as T3 from './tam-theories-3.js';
 /* game111 (Phil : « ajoute tout ce qui est relie a l ADN, l ARN et le reste ») : sciences de la vie — mutations de l ADN (Jukes-Cantor),
- *   gene -> ARN -> proteine (Gillespie, moments exacts) — SOURCES vide */
+ *   gene -> ARN -> proteine (Gillespie, moments exacts) — SOURCES vide ; game112 : derive genetique (Wright-Fisher), enzyme (Michaelis-Menten) */
 import * as BIO from './tam-biologie.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
@@ -210,6 +210,8 @@ export const ECHELLE_PROPRE = {
   rutherford: [2, 3], logistique: [0], chaleur: [1, 2], oscillateurForce: [2], brachistochrone: [2], galton: [2],
   /* game111 : tam-biologie.js#COLONNES (base et temps ; temps, ARN, proteine : trois grandeurs differentes) */
   adnMutations: [3, 4], dogmeCentral: [0, 1, 2],
+  /* game112 : generation, part, numero (3 grandeurs) ; complexe C (bien plus petit que S et P) */
+  deriveGenetique: [0, 1, 2], enzyme: [2],
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {

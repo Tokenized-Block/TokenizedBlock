@@ -18,10 +18,20 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-biologie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['adnMutations', 'dogmeCentral'];
+const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const pJC = (mu, t) => 0.75 * (1 - Math.exp(-4 * mu * t / 3));
+/* game112 : esperance EXACTE de l heterozygotie par la chaine de Markov de Wright-Fisher (matrice binomiale), sans la formule :
+ *   distribution du compte apres t generations, puis E[2 p (1 - p)] */
+function hetMarkov(N2, c0, t) {
+  const binom = (n, k) => { let c = 1; for (let j = 1; j <= k; j++) c *= (n - k + j) / j; return c; };
+  let d = new Float64Array(N2 + 1); d[c0] = 1;
+  for (let g = 0; g < t; g++) { const e = new Float64Array(N2 + 1);
+    for (let i = 0; i <= N2; i++) { if (!d[i]) continue; const q = i / N2; for (let j = 0; j <= N2; j++) e[j] += d[i] * binom(N2, j) * Math.pow(q, j) * Math.pow(1 - q, N2 - j); }
+    d = e; }
+  let h = 0; for (let i = 0; i <= N2; i++) h += d[i] * 2 * (i / N2) * (1 - i / N2); return h;
+}
 /* moments stationnaires du reseau gene -> ARN -> proteine (gamma = 1), derives des propensites :
  *   m+ : k, m- : m, p+ : kp m, p- : gp p. d<f>/dt = sum_r a_r (f(x + v_r) - f(x)).
  *   f = m      : k - <m> = 0
@@ -107,11 +117,39 @@ function suite(T, bavard = false) {
     assert.equal(b[0], 0); assert.ok(Math.abs(b[3 * (R.n - 1)] - 30) < 1e-9);
     return paires.map(([k]) => k + ' z ' + z(I[k]).toFixed(2)).join(', ');
   });
+  // 3b. derive genetique (game112)
+  ok('deriveGenetique : la loi H_t = H0 (1 - 1/2N)^t du module = esperance EXACTE de la chaine de Markov (2N = 4..10, t = 1..15)', () => {
+    let pire = 0; for (const N2 of [4, 6, 10]) for (const c0 of [1, Math.floor(N2 / 2)]) for (let t = 1; t <= 15; t++) { const H0 = 2 * (c0 / N2) * (1 - c0 / N2), f = H0 * Math.pow(1 - 1 / N2, t), m = hetMarkov(N2, c0, t); pire = Math.max(pire, Math.abs(m - f)); }
+    assert.ok(pire < 1e-12, 'pire ' + pire); return 'pire ecart ' + pire.toExponential(1);
+  });
+  for (const p of extremes(sys('deriveGenetique'))) ok(`deriveGenetique ${JSON.stringify(p)} : moyenne p0, heterozygotie H0 (1-1/2N)^t, fixation, trajectoires absorbees`, () => {
+    const R = S('deriveGenetique', p), P = R.params, I = R.invariants, N2 = 2 * P.individus, p0 = Math.round(P.partDepart * N2) / N2, lt = Math.pow(1 - 1 / N2, P.generations), b = R.brut;
+    const F = I.frequenceMoyenne; assert.ok(Math.abs(F.formule - p0) < 1e-15 && Math.abs(F.sigma - Math.sqrt(p0 * (1 - p0) * (1 - lt) / P.populations)) < 1e-12 * F.sigma && Math.abs(z(F)) < 5, 'moyenne z ' + z(F));
+    const H = I.heterozygotie; assert.ok(Math.abs(H.formule - 2 * p0 * (1 - p0) * lt) <= 1e-12 * H.formule + 1e-300, 'H formule');
+    if ('sigma' in H) assert.ok(Math.abs(z(H)) < 5, 'H z ' + z(H)); else assert.equal(H.mesure, 0, 'sans sigma : toutes fixees, H mesure 0');
+    const X = I.fixation; if (X.fixees === 0) assert.ok(Number.isNaN(X.mesure) && typeof X.absente === 'string'); else if (X.fixees < 0.99) assert.equal(X.comparable, false); else assert.ok(Math.abs(z(X)) < 5, 'fixation z ' + z(X));
+    for (let f = 0; f < R.film.images; f++) { const d0 = R.film.debuts[f], c = R.film.tailles[f]; let fixe = null;
+      for (let r = 0; r < c; r++) { const o = 3 * (d0 + r), q = b[o + 1]; assert.ok(Number.isInteger(b[o]) && b[o] >= 0 && b[o] <= P.generations && b[o + 2] === f + 1 && Number.isInteger(Math.round(q * N2)) && Math.abs(q * N2 - Math.round(q * N2)) < 1e-9 && q >= 0 && q <= 1);
+        if (fixe !== null) assert.equal(q, fixe, 'une population fixee le reste'); if (q === 0 || q === 1) fixe = q; } }
+    return `p ${F.mesure.toFixed(4)} (z ${z(F).toFixed(2)}), H ${H.mesure.toFixed(4)}/${H.formule.toFixed(4)}${'sigma' in H ? ' (z ' + z(H).toFixed(2) + ')' : ''}, fixees ${X.fixees}`;
+  });
+  // 3c. enzyme (game112)
+  for (const p of extremes(sys('enzyme'))) ok(`enzyme ${JSON.stringify(p)} : E + C = E0 et S + C + P = S0 (temoins), loi de vitesse a moins de eps, chemin monotone`, () => {
+    const R = S('enzyme', p), P = R.params, I = R.invariants, b = R.brut, Km = P.dissociation + P.catalyse, eps = P.enzyme / (P.substrat + Km);
+    assert.ok(I.enzymeTotale.derive < 1e-13 * P.enzyme + 1e-15, 'E ' + I.enzymeTotale.derive); assert.ok(I.matiereTotale.derive < 1e-12 * P.substrat, 'S ' + I.matiereTotale.derive);
+    const V = I.vitesseReaction; assert.ok(Math.abs(V.eps - eps) < 1e-15 && Math.abs(V.Km - Km) < 1e-15 && Math.abs(V.Vmax - P.catalyse * P.enzyme) < 1e-15);
+    assert.ok(Math.abs(V.formule - V.Vmax * V.substratMi / (Km + V.substratMi)) < 1e-12 * V.formule && Math.abs(V.substratMi - P.substrat / 2) < 0.01 * P.substrat, 'mi-parcours');
+    const rel = Math.abs(V.mesure / V.formule - 1); assert.ok(rel <= eps, 'ecart ' + rel + ' > eps ' + eps); assert.ok(typeof V.approchee === 'string');
+    for (let i = 1; i < R.n; i++) { const o = 3 * i; assert.ok(b[o] <= b[o - 3] + 1e-12 && b[o + 1] >= b[o - 2] - 1e-12 && b[o + 2] >= -1e-12, 'ligne ' + i); }
+    assert.ok(I.produitFinal.partConvertie > 0.8, 'conversion ' + I.produitFinal.partConvertie);
+    return `ecart ${rel.toExponential(1)} (eps ${eps.toPrecision(2)}), derives ${I.enzymeTotale.derive.toExponential(1)} / ${I.matiereTotale.derive.toExponential(1)}`;
+  });
   // 4. etalonnage des sigmas : sur 20 graines, les z ont un ecart-type ~ 1 (un sigma faux d un facteur 2 en sort)
-  ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (differences, substitutions, Fano proteine, covariance)', () => {
-    const zs = { differences: [], substitutions: [], bruitProteine: [], covariance: [] };
+  ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (differences, substitutions, Fano proteine, covariance, derive : moyenne et heterozygotie)', () => {
+    const zs = { differences: [], substitutions: [], bruitProteine: [], covariance: [], frequenceMoyenne: [], heterozygotie: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('adnMutations', { graine: g }).invariants, d = T.simuler('dogmeCentral', { graine: g }).invariants;
-      zs.differences.push(z(a.differences)); zs.substitutions.push(z(a.substitutions)); zs.bruitProteine.push(z(d.bruitProteine)); zs.covariance.push(z(d.covariance)); }
+      zs.differences.push(z(a.differences)); zs.substitutions.push(z(a.substitutions)); zs.bruitProteine.push(z(d.bruitProteine)); zs.covariance.push(z(d.covariance));
+      const w = T.simuler('deriveGenetique', { graine: g }).invariants; zs.frequenceMoyenne.push(z(w.frequenceMoyenne)); zs.heterozygotie.push(z(w.heterozygotie)); }
     const out = [];
     for (const [k, v] of Object.entries(zs)) { const m = v.reduce((a, x) => a + x, 0) / v.length, sd = Math.sqrt(v.reduce((a, x) => a + (x - m) ** 2, 0) / (v.length - 1));
       assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, k + ' moy ' + m + ' sd ' + sd); out.push(`${k} ${m.toFixed(2)}/${sd.toFixed(2)}`); }
@@ -155,6 +193,11 @@ const MUTANTS = [
   ['dogme : jackknife sans le facteur (B - 1)', 'Math.sqrt(s * (DOGME_BLOCS - 1) / DOGME_BLOCS)', 'Math.sqrt(s / DOGME_BLOCS)'],
   ['dogme : traduction a kp sans l ARN (propensite fausse)', 'a3 = kp * m,', 'a3 = kp,'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
+  ['derive : 1 - 1/N au lieu de 1 - 1/(2N)', 'lam = 1 - 1 / N2, lG', 'lam = 1 - 1 / P.individus, lG'],
+  ['derive : tirage biaise (+0.01)', 'for (let j = 0; j < N2; j++) if (rng() < q) x++;', 'for (let j = 0; j < N2; j++) if (rng() < q + 0.01) x++;'],
+  ['derive : sigma de la moyenne 3 fois trop petit', 'sigma: Math.sqrt(p0e * (1 - p0e) * (1 - lG) / R)', 'sigma: Math.sqrt(p0e * (1 - p0e) * (1 - lG) / R) / 3'],
+  ['enzyme : produit forme a 0.99 kcat C (matiere perdue)', 'd[3] = c; };', 'd[3] = 0.99 * c; };'],
+  ['enzyme : Km sans kcat', 'Km = (km1 + k2) / k1,', 'Km = km1 / k1,'],
   ['Math.random injecte (ADN)', 'lam = 4 * mu / 3, rng = mulberry32(P.graine)', 'lam = 4 * mu / 3, rng = Math.random'],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
