@@ -783,7 +783,7 @@ const L = {
     titre: 'Predators and prey (Lotka-Volterra)',
     enUnePhrase: 'Prey and predators in a closed loop: more prey feed more predators, more predators eat the prey, and both numbers cycle for ever.',
     colonnes: ['prey density x', 'predator density y (same units)', 'time t'],
-    aRegarder: ['The path is a closed loop: the cycle repeats exactly, because H = d x - c ln x + b y - a ln y never changes.', 'Averaged over whole cycles the populations sit exactly at the balance point.', 'Small cycles last 2 pi / sqrt(a c); bigger swings last longer. No age, no space, no chance: a simplified model.'],
+    aRegarder: ['The path is a closed loop: the cycle repeats exactly, because H = d x - c ln x + b y - a ln y never changes.', 'Averaged over whole cycles the populations sit exactly at the balance point.', 'Small cycles last 2 pi / sqrt(a c); bigger swings last longer. Turn up "prey crowding" (limited room for prey) and the loop becomes a spiral that winds into the balance point. No age, no chance: a simplified model.'],
     fin: null,
   },
   epidemieSIR: {

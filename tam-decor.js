@@ -412,7 +412,10 @@ const DECORS = {
   lentilleGravitationnelle: () => [cer([0, 0, 0, 0], 1, [0, 0, 1, 0], C.photons, 'Einstein ring |theta| = 1 (a source exactly behind would fill it)'),
     pt([0, 0, 0, 0], C.trouNoir, 'Lens (a point mass)')],
   /* colonnes : x (proies), y (predateurs), t ; a = b = d = 1 : equilibre (c, 1), le centre des boucles a tout instant */
-  lotkaVolterra: (P, o, B) => [seg([P.c, 1, B.lo[2]], [P.c, 1, B.hi[2]], C.zone, 'Balance point (x = c, y = 1): the cycles turn round it')],
+  /* game107 : avec des proies a place limitee (s > 0) le point d equilibre descend a y = 1 - s c et la courbe s y enroule */
+  lotkaVolterra: (P, o, B) => [P.saturation > 0
+    ? seg([P.c, 1 - P.saturation * P.c, B.lo[2]], [P.c, 1 - P.saturation * P.c, B.hi[2]], C.zone, 'Balance point (x = c, y = 1 - s c): the spiral winds into it')
+    : seg([P.c, 1, B.lo[2]], [P.c, 1, B.hi[2]], C.zone, 'Balance point (x = c, y = 1): the cycles turn round it')],
   /* colonnes : s, i, r, t ; di/dt = (R0 s - 1) i : les infectes culminent EXACTEMENT quand s = 1 / R0 (seuil d immunite collective) */
   epidemieSIR: (P, o, B) => [hyper(B, 0, 1 / P.R0, C.zone, 'Herd-immunity threshold s = 1 / R0: the infected curve peaks here')],
   /* colonnes : x, S_N, erreur, N ; l onde carree vaut +1 sur (0, pi) */

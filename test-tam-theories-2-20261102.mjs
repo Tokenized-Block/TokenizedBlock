@@ -169,6 +169,24 @@ function suite(T, bavard = false) {
     const e1 = S('lotkaVolterra', { amplitude: 0.05 }).invariants.periode.ecart, e2 = S('lotkaVolterra', { amplitude: 0.1 }).invariants.periode.ecart;
     assert.ok(e1 < 1e-3 && e2 / e1 > 3.5 && e2 / e1 < 4.5, `${e1} ${e2}`); return `ecart ${e1.toExponential(3)} (0.05), ${e2.toExponential(3)} (0.1), rapport ${(e2 / e1).toFixed(3)}`;
   });
+  /* game107 : proies a place limitee (saturation s). Reference independante : H en Math.log sur les points DESSINES */
+  for (const p of [{ saturation: 0.1 }, { saturation: 0.2, c: 4, amplitude: 3, periodes: 12 }, { saturation: 0.02, c: 0.25, amplitude: 0.05, periodes: 12 }, { saturation: 0.2, c: 1, amplitude: 0.05, periodes: 12 }]) ok(`lotkaVolterra ${JSON.stringify(p)} : H ne fait que baisser, bilan H(0) - H(T) = s integrale (x - c)^2, <x> = c et <y> = y* - dln x/T exacts, spirale vers (c, 1 - s c)`, () => {
+    const R = S('lotkaVolterra', p), P = R.params, I = R.invariants, b = R.brut, s = P.saturation, c = P.c, ys = 1 - s * c;
+    const Hs = (x, y) => x - c * Math.log(x) + y - ys * Math.log(y);
+    assert.ok(!('H' in I) && I.Hdecroit && !('min' in I.Hdecroit) && I.Hdecroit.debut > I.Hdecroit.fin, 'H change de cle, dite debut -> fin (jamais « from min to max »)');
+    assert.ok(b[0] === c * (1 + P.amplitude) && b[1] === ys && b[2] === 0, 'depart sur y = y*');
+    let pire = 0; for (let i = 1; i < R.n; i++) pire = Math.max(pire, Hs(b[3 * i], b[3 * i + 1]) - Hs(b[3 * i - 3], b[3 * i - 2]));
+    assert.ok(pire < 1e-9, 'H ne remonte jamais (pire hausse ' + pire + ')');
+    const D = I.dissipation, nF = R.n - 1, perte = Hs(b[0], b[1]) - Hs(b[3 * nF], b[3 * nF + 1]);
+    assert.ok(Math.abs(D.mesure - perte) < 1e-9 * Math.max(1, perte), `perte ${D.mesure} vs ${perte}`);
+    assert.ok(D.mesure > 0 && Math.abs(D.mesure - D.formule) < 2e-5 * D.formule, `bilan ${D.mesure} vs ${D.formule}`);
+    assert.ok(Math.abs(I.moyennes.x / c - 1) < 2e-6 && I.moyennes.xFormule === c && Math.abs(I.moyennes.y - I.moyennes.yFormule) < 1e-6, JSON.stringify(I.moyennes));
+    const dFin = Math.hypot(b[3 * nF] - c, b[3 * nF + 1] - ys), dDeb = Math.hypot(b[0] - c, b[1] - ys);
+    assert.ok(dFin < dDeb * Math.exp(-0.5 * s * c * b[3 * nF + 2] * 0.5), `spirale : ${dDeb} -> ${dFin}`);
+    const A = I.amortissement; assert.ok(A.formule === s * c / 2 && typeof A.approchee === 'string');
+    if (P.amplitude <= 0.05) assert.ok(Math.abs(A.mesure / A.formule - 1) < 0.02, `amortissement petite amplitude ${A.mesure} vs ${A.formule}`);
+    return `bilan ${(Math.abs(D.mesure - D.formule) / D.formule).toExponential(1)}, <y> ${I.moyennes.y.toFixed(6)}, amort ${A.mesure.toFixed(5)}/${A.formule}`;
+  });
   // 4. epidemieSIR
   for (const p of [{}, { R0: 6, i0: 0.1, r0: 0.3 }, { R0: 1.2, i0: 0.001 }, { R0: 1.2, i0: 0.001, r0: 0.6 }, { R0: 2.5, i0: 0.001, r0: 0.6 }]) ok(`epidemieSIR ${JSON.stringify(p)} : taille finale (Newton) et pic (formule) mesures, s + i + r = 1, courbe = integration independante`, () => {
     const R = S('epidemieSIR', p), P = R.params, I = R.invariants, b = R.brut, s0 = 1 - P.i0 - P.r0;
@@ -244,7 +262,7 @@ function suite(T, bavard = false) {
   });
   ok('reglagesPhysique : forme, valeur bornee', () => {
     const r = T.reglagesPhysique('lotkaVolterra', { c: 99 });
-    assert.deepEqual(r.map((x) => x.chemin), ['params.c', 'params.amplitude', 'params.periodes']);
+    assert.deepEqual(r.map((x) => x.chemin), ['params.c', 'params.amplitude', 'params.periodes', 'params.saturation']);
     assert.deepEqual(r[0], { chemin: 'params.c', nom: 'c', min: 0.25, max: 4, valeur: 4 });
   });
   return res;
@@ -288,7 +306,10 @@ const MUTANTS = [
   ['Ising : poids de Metropolis e^{-6/T} pour dE = 8', 'w8 = expD(-8 / T)', 'w8 = expD(-6 / T)'],
   ['Ising : exposant 1/4 au lieu de 1/8', 'return x > 0 ? Math.sqrt(Math.sqrt(Math.sqrt(x))) : 0;', 'return x > 0 ? Math.sqrt(Math.sqrt(x)) : 0;'],
   ['Ising : energie d Onsager sans le facteur 2 de tanh^2', '(2 / PI) * (2 * th * th - 1)', '(2 / PI) * (th * th - 1)'],
-  ['Lotka-Volterra : H avec c ln y', 'const H = (x, y) => d * x - c * lnD(x) + b * y - a * lnD(y);', 'const H = (x, y) => d * x - c * lnD(x) + b * y - c * lnD(y);'],
+  ['Lotka-Volterra : H avec c ln y', 'const H = (x, y) => d * x - c * lnD(x) + b * y - a * (s ? ys : 1) * lnD(y);', 'const H = (x, y) => d * x - c * lnD(x) + b * y - c * (s ? ys : 1) * lnD(y);'],
+  ['Lotka-Volterra : saturation ignoree dans les equations', 'a * x * (1 - s * x) - b * x * y', 'a * x - b * x * y'],
+  ['Lotka-Volterra : bilan sans le facteur s', 'formule: s * idiss,', 'formule: idiss,'],
+  ['Lotka-Volterra : <y> sans la correction dln x / T', 'ys - (lnD(Xe[k]) - lnD(Xe[0])) / evts[k]', 'ys'],
   ['Lotka-Volterra : RK4 mal pondere sur x', 'u[0] += h / 6 * (k1x + 2 * k2x + 2 * k3x + k4x)', 'u[0] += h / 6 * (k1x + k2x + 3 * k3x + k4x)'],
   ['Lotka-Volterra : T0 = 2 pi / (a c)', 'T0 = DEUX_PI / Math.sqrt(a * c)', 'T0 = DEUX_PI / (a * c)'],
   ['SIR : pic avec 1 - ln(R0 s0)', '(1 + lnD(R0 * s0)) / R0', '(1 - lnD(R0 * s0)) / R0'],

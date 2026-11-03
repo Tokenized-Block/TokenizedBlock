@@ -142,11 +142,19 @@ function ising2D(P, n) {
 // Moyennes EXACTES sur une periode (toute amplitude) : d(ln y)/dt = d x - c, integree sur une periode -> <x> = c/d ; de meme <y> = a/b.
 // Periode : pres du point fixe la linearisation donne omega = sqrt(a c), T0 = 2 pi / sqrt(a c) ; elle s allonge avec l amplitude
 //   (pas de formule fermee, comparee seulement aux petites amplitudes). Depart (x*(1 + amplitude), y*), sur la droite y = y*.
+// game107 (Phil : « d autres variables ») : SATURATION des proies s = 1/K (place limitee), dx/dt = a x (1 - s x) - b x y.
+//   Point fixe (c/d, (a/b)(1 - s c/d)) ; s <= 0.2 et c <= 4 gardent y* > 0 (les predateurs survivent). Avec a = b = d = 1,
+//   H = x - c ln x + y - y* ln y n est plus conservee :
+//   dH/dt = (x - c)(1 - s x - y) + (y - y*)(x - c) = (x - c)(1 - y* - s x) = -s (x - c)^2 EXACTEMENT (1 - y* = s c).
+//   Bilan exact : H(0) - H(T) = s * integrale (x - c)^2 dt (mesure contre trapezes). Moyennes sur des cycles ENTIERS (entre deux
+//   passages montants en y = y*) : <x> = c exactement (d ln y/dt = x - c), <y> = y* - (ln x(fin) - ln x(debut))/T exactement
+//   (d ln x/dt = 1 - s x - y). Lineaire : trace -s c, determinant c (1 - s c) : spirale amortie au taux s c / 2, pulsation
+//   sqrt(c (1 - s c) - (s c)^2 / 4) — approchees (vraies pres du point fixe). s = 0 : tout est exactement le modele d avant.
 function lotkaVolterra(P, n) {
-  const a = 1, b = 1, d = 1, c = P.c, xs = c / d, ys = a / b, T0 = DEUX_PI / Math.sqrt(a * c), h = T0 / 2000;
-  const H = (x, y) => d * x - c * lnD(x) + b * y - a * lnD(y);
+  const a = 1, b = 1, d = 1, c = P.c, s = P.saturation, xs = c / d, ys = (a / b) * (1 - s * xs), T0 = DEUX_PI / Math.sqrt(a * c), h = T0 / 2000;
+  const H = (x, y) => d * x - c * lnD(x) + b * y - a * (s ? ys : 1) * lnD(y);
   const pas = (u) => {
-    const f = (x, y) => [a * x - b * x * y, d * x * y - c * y];
+    const f = s ? (x, y) => [a * x * (1 - s * x) - b * x * y, d * x * y - c * y] : (x, y) => [a * x - b * x * y, d * x * y - c * y];
     const [k1x, k1y] = f(u[0], u[1]), [k2x, k2y] = f(u[0] + h / 2 * k1x, u[1] + h / 2 * k1y);
     const [k3x, k3y] = f(u[0] + h / 2 * k2x, u[1] + h / 2 * k2y), [k4x, k4y] = f(u[0] + h * k3x, u[1] + h * k3y);
     u[0] += h / 6 * (k1x + 2 * k2x + 2 * k3x + k4x); u[1] += h / 6 * (k1y + 2 * k2y + 2 * k3y + k4y);
@@ -155,28 +163,49 @@ function lotkaVolterra(P, n) {
   /* passe 1 : periode reelle (premier retour sur y = y* en montant) */
   let u = depart(), st = 0, Tr = NaN;
   while (st < 200000) { const y0 = u[1]; pas(u); st++; if (y0 < ys && u[1] >= ys) { Tr = (st - 1 + (ys - y0) / (u[1] - y0)) * h; break; } }
-  const S = Math.ceil(P.periodes * Tr / h);
+  /* game107 : amortie, la spirale revient toujours (pulsation reelle sur tout le domaine : s c <= 0.8) ; garde-fou si jamais non */
+  const S = Math.ceil(P.periodes * (Number.isFinite(Tr) ? Tr : T0) / h);
   /* passe 2 : trajectoire dessinee, evenements, integrales de x et y (trapezes) */
   u = depart();
-  const brut = new Float64Array(n * 3), suivi = suiveur(), H0 = H(u[0], u[1]), evts = [0], Ix = [0], Iy = [0];
-  let ix = 0, iy = 0, ligne = 0;
+  const brut = new Float64Array(n * 3), suivi = suiveur(), H0 = H(u[0], u[1]), evts = [0], Ix = [0], Iy = [0], Xe = [u[0]];
+  let ix = 0, iy = 0, idiss = 0, ligne = 0;
   const ecrire = (s) => { while (ligne < n && pasDeLigne(ligne, n, S) === s) { const o = 3 * ligne; brut[o] = u[0]; brut[o + 1] = u[1]; brut[o + 2] = s * h; ligne++; } };
   ecrire(0);
-  for (let s = 1; s <= S; s++) {
+  for (let st = 1; st <= S; st++) {
     const x0 = u[0], y0 = u[1]; pas(u);
-    if (y0 < ys && u[1] >= ys) { const f = (ys - y0) / (u[1] - y0); evts.push((s - 1 + f) * h); Ix.push(ix + h * f * (x0 + (x0 + f * (u[0] - x0))) / 2); Iy.push(iy + h * f * (y0 + ys) / 2); }
+    if (y0 < ys && u[1] >= ys) { const f = (ys - y0) / (u[1] - y0); evts.push((st - 1 + f) * h); Ix.push(ix + h * f * (x0 + (x0 + f * (u[0] - x0))) / 2); Iy.push(iy + h * f * (y0 + ys) / 2); Xe.push(x0 + f * (u[0] - x0)); }
     ix += h * (x0 + u[0]) / 2; iy += h * (y0 + u[1]) / 2;
-    if (s % 20 === 0 || s === S) suivi.noter({ H: H(u[0], u[1]) });
-    ecrire(s);
+    if (s) idiss += h * ((x0 - xs) * (x0 - xs) + (u[0] - xs) * (u[0] - xs)) / 2;
+    if (st % 20 === 0 || st === S) suivi.noter({ H: H(u[0], u[1]) });
+    ecrire(st);
   }
   const k = evts.length - 1, Tm = k > 0 ? evts[k] / k : NaN, inv = suivi.fini();
-  inv.H.note = 'H = d x - c ln x + b y - a ln y, conserved exactly by the equations ; drift = integration error';
-  inv.periode = { mesure: Tm, formulePetiteAmplitude: T0, ecart: Math.abs(Tm - T0) / T0, cycles: k, amplitude: P.amplitude,
-    note: 'period from returns to y = y* ; 2 pi / sqrt(a c) is exact only near the fixed point, the period grows with the amplitude' };
-  inv.moyennes = { x: k > 0 ? Ix[k] / evts[k] : NaN, xFormule: xs, y: k > 0 ? Iy[k] / evts[k] : NaN, yFormule: ys,
-    note: 'time averages over whole cycles equal the fixed point (c/d, a/b) exactly, at any amplitude' };
-  inv.constantes = { a, b, d, c, H0 };
-  return { D: 3, brut, invariants: inv, unite: 'sans objet (cycle conservatif, non chaotique)' };
+  if (!s) {
+    inv.H.note = 'H = d x - c ln x + b y - a ln y, conserved exactly by the equations ; drift = integration error';
+    inv.periode = { mesure: Tm, formulePetiteAmplitude: T0, ecart: Math.abs(Tm - T0) / T0, cycles: k, amplitude: P.amplitude,
+      note: 'period from returns to y = y* ; 2 pi / sqrt(a c) is exact only near the fixed point, the period grows with the amplitude' };
+    inv.moyennes = { x: k > 0 ? Ix[k] / evts[k] : NaN, xFormule: xs, y: k > 0 ? Iy[k] / evts[k] : NaN, yFormule: ys,
+      note: 'time averages over whole cycles equal the fixed point (c/d, a/b) exactly, at any amplitude' };
+  } else {
+    const tr = s * c, det = c * (1 - s * c), w2 = det - tr * tr / 4, Td = w2 > 0 ? DEUX_PI / Math.sqrt(w2) : NaN;
+    /* son nom a l ecran etait « Conserved H » : elle ne l est plus, elle change de cle. Vu a l ecran : la ligne generique d une
+     *   derive ecrit « from min to max » = « from 1.98 to 2.27 », une HAUSSE a la lecture — on donne debut puis fin, dans l ordre */
+    delete inv.H;
+    inv.Hdecroit = { debut: H0, fin: H(u[0], u[1]), note: 'H = x - c ln x + y - y* ln y : no longer conserved, it can only go down (dH/dt = -s (x - c)^2)' };
+    inv.dissipation = { mesure: H0 - H(u[0], u[1]), formule: s * idiss,
+      note: 'how much H has gone down, against s times the integral of (x - c)^2 over the run (exact balance, trapezoid integral)' };
+    inv.moyennes = { x: k > 0 ? Ix[k] / evts[k] : NaN, xFormule: xs, y: k > 0 ? Iy[k] / evts[k] : NaN, yFormule: k > 0 ? ys - (lnD(Xe[k]) - lnD(Xe[0])) / evts[k] : NaN,
+      note: 'over whole cycles (returns to y = y*) the prey average is exactly c and the predator average exactly y* - (ln x_end - ln x_start)/T, even while the spiral shrinks' };
+    /* l amortissement : distances au point fixe a deux retours successifs, contre le taux lineaire s c / 2 (approche).
+     *   Sonde (s 0.2, c 4, amplitude 3 : / 25 par cycle) : apres 10 cycles la distance touche l arrondi (1e-12) et le taux lu devenait
+     *   du bruit (0.337 pour 0.4) — on prend les deux DERNIERS retours encore a plus de 1e-6 x* du point fixe */
+    let j = k; while (j >= 2 && !(Math.abs(Xe[j] - xs) > 1e-6 * xs)) j--;
+    const taux = j >= 2 ? lnD(Math.abs(Xe[j - 1] - xs) / Math.abs(Xe[j] - xs)) / (evts[j] - evts[j - 1]) : NaN;
+    inv.amortissement = { mesure: taux, formule: tr / 2, approchee: 'linearised near the rest point; measured on the last two returns still clear of rounding', retours: [j - 1, j], unite: 'par unite de temps' };
+    inv.periode = { mesure: j >= 2 ? evts[j] - evts[j - 1] : NaN, formule: Td, approchee: 'linearised damped period, exact only close to the rest point', cycles: k };
+  }
+  inv.constantes = s ? { a, b, d, c, s, H0, pointFixe: [xs, ys] } : { a, b, d, c, H0 };
+  return { D: 3, brut, invariants: inv, unite: s ? 'sans objet (spirale amortie vers le point fixe, non chaotique)' : 'sans objet (cycle conservatif, non chaotique)' };
 }
 
 // ---------- 3 : epidemie SIR, fractions s + i + r = 1, temps en unites de 1/gamma ----------
@@ -440,9 +469,9 @@ export const SYSTEMES = Object.freeze([
   { id: 'ising2D', nom: 'Magnet on a lattice (2D Ising model)', science: 'Statistical physics', D: 4, nuage: true, params: { T: 2.0, L: 48, balayages: 200, graine: 1 },
     bornes: { T: [1.2, 3.5], L: [24, 64], balayages: [20, 400], graine: [1, 1000000] },
     phrase: 'A visualisation of the 2D Ising model (J = k = 1, periodic L x L lattice): spins quenched from total disorder by Metropolis Monte Carlo at temperature T form domains, drawn with their local magnetisation; a separate run from the ordered state measures |magnetisation| and energy against Onsager\'s exact formulas, with Tc = 2/ln(1 + sqrt 2) computed. A finite lattice and finite run, so close to Tc no comparison is claimed.' },
-  { id: 'lotkaVolterra', nom: 'Predators and prey (Lotka-Volterra)', science: 'Population dynamics', D: 3, params: { c: 1, amplitude: 1, periodes: 4 },
-    bornes: { c: [0.25, 4], amplitude: [0.05, 3], periodes: [2, 12] },
-    phrase: 'A visualisation of the Lotka-Volterra equations (a = b = d = 1 fix the units, c is the predator death rate): the populations cycle forever around the fixed point (c, 1), the quantity H = x - c ln x + y - ln y stays constant, the time averages over a cycle equal the fixed point exactly, and near it the period is 2 pi / sqrt(c). A deterministic model with no noise or crowding.' },
+  { id: 'lotkaVolterra', nom: 'Predators and prey (Lotka-Volterra)', science: 'Population dynamics', D: 3, params: { c: 1, amplitude: 1, periodes: 4, saturation: 0 },
+    bornes: { c: [0.25, 4], amplitude: [0.05, 3], periodes: [2, 12], saturation: [0, 0.2] },
+    phrase: 'A visualisation of the Lotka-Volterra equations (a = b = d = 1 fix the units, c is the predator death rate): the populations cycle forever around the fixed point (c, 1), the quantity H = x - c ln x + y - ln y stays constant, the time averages over a cycle equal the fixed point exactly, and near it the period is 2 pi / sqrt(c). Give the prey a limited space (crowding s = 1/K) and the cycle becomes a spiral that winds into the rest point (c, 1 - s c): H then goes down by exactly s times the integral of (x - c)^2. A deterministic model with no noise.' },
   { id: 'epidemieSIR', nom: 'An epidemic wave (SIR model)', science: 'Epidemiology', D: 4, params: { R0: 2.5, i0: 0.01, r0: 0 },
     bornes: { R0: [1.2, 6], i0: [0.001, 0.1], r0: [0, 0.6] },
     phrase: 'A visualisation of the SIR model (fractions of a well-mixed population, time in units of the infectious period): the susceptible, infected and recovered fractions over one epidemic wave, with the final size against the exact equation r = 1 - s0 exp(-R0 (r - r0)) and the peak against I_max = i0 + s0 - (1 + ln(R0 s0))/R0. No contacts structure, no births, no reinfection.' },

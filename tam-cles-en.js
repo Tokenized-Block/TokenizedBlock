@@ -326,11 +326,15 @@ export const CLES_EN_MODULES = Object.freeze({
   mesureSin: 'measured sin part', formuleSin: 'formula sin part', omega: 'omega', F0: 'force F0', x0: 'start x0',
   periodesTransitoire: 'transient periods', periodesDessinees: 'drawn periods', pasParPeriode: 'steps per period',
   phiB: 'end angle phiB', gainSurDroite: 'time saved on the line', chemins: 'paths drawn', billes: 'balls', pileMax: 'tallest pile',
+  /* game107 */
+  pointFixe: 'rest point', retours: 'returns used', s: 'crowding s',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
   E: 'Energy E',
   H: 'Conserved H',
+  /* game107 (proies a place limitee) */
+  Hdecroit: 'H (can only go down)', dissipation: 'H lost vs crowding integral', amortissement: 'Damping rate',
   L: 'Angular momentum L',
   L1: 'L1',
   L2: 'L2',

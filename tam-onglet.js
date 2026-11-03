@@ -159,7 +159,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   /* game105 (sonde : tous les noms de curseurs contre cette table — 3 mots francais a l ecran depuis game96) */
   billes: 'balls', rangees: 'rows of pegs', rayons: 'paths', penchant: 'tilt (chance to bounce right)',
   /* game106 */
-  attirant: 'opposite charges (1 = attract)' };
+  attirant: 'opposite charges (1 = attract)', saturation: 'prey crowding (1 / room for prey)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
