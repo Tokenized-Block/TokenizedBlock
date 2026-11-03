@@ -339,6 +339,9 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game113 */
   tPic: 'peak time', molecules: 'molecules', bValeur: 'B', seuilHopf: 'threshold B = 1 + A^2', oscille: 'oscillates (1 = yes)', ecartFinal: 'final distance to the fixed point',
   ecartSeuil: 'distance to the threshold', xFixe: 'fixed point x = A', yFixe: 'fixed point y = B/A',
+  /* game114 */
+  descendants: 'offspring', dominantsDeux: 'A_B_', dominantA: 'A_bb', dominantB: 'aaB_', recessifsDeux: 'aabb', impulsions: 'spikes', courant: 'current I',
+  courants: 'currents', compares: 'compared', courantSeuil: 'threshold current', courantsMuets: 'silent currents', impulsionsSousSeuil: 'spikes below threshold',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
@@ -352,6 +355,9 @@ export const NOMS_MESURES_EN = Object.freeze({
   refroidissement: 'Total heat (fading to the air)',
   /* game113 (chimie) */
   picB: 'Share of B at its peak', resteA: 'Share of A left at t = 1/k1', partA: 'Share of A at the peak time', partB: 'Share of B at the end',
+  /* game114 (Mendel, neurone) */
+  dominants: 'Both dominant traits (A_B_)', recessifs: 'Both recessive traits (aabb)', heterozygotes: 'Share of Aa (1 : 2 : 1)', phenotypes: 'Four traits (chi-square)',
+  recombinaisonLue: 'Recombination rate read back', courbeFI: 'Firing rate vs current (frames)', repos: 'Silent currents (below threshold)',
   relaxation: 'Share of B at the relaxation time', constante: 'Equilibrium constant K = [B]/[A]', seuil: 'Oscillation threshold (Hopf)',
   /* game111 (sciences de la vie) */
   differences: 'Sites that differ from the ancestor', distance: 'Evolutionary distance read back', substitutions: 'Real base changes per site', composition: 'Base composition (chi-square)',

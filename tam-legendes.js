@@ -61,6 +61,8 @@ const FILMS_DU_MODULE = {
   deriveGenetique: { colonneTemps: 0, note: 'each frame is one population, followed over all its generations' },
   /* game113 : chaque image = les memes molecules a un instant plus tard */
   equilibreChimique: { colonneTemps: 2 },
+  /* game114 */
+  neurone: { colonneTemps: 0, note: 'each frame is one input current, from 0.4 to 1.6 times the one chosen; frames are not instants' },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
 /* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
@@ -891,6 +893,21 @@ const L = {
     enUnePhrase: 'Substrate turned into product by an enzyme: the path of substrate, product and bound enzyme over the whole reaction.',
     colonnes: ['substrate S', 'product P (same units)', 'enzyme-substrate complex C'],
     aRegarder: ['Total enzyme and total matter stay constant at every step.', 'The rate follows Vmax S / (Km + S) only when there is little enzyme: the error scale E0 / (S0 + Km) is shown.', 'Raise the enzyme and the complex takes up substrate before the law can hold: the formula visibly fails.'],
+    fin: null,
+  },
+  /* game114 */
+  mendel: {
+    titre: 'The laws of Mendel (a cross of two double hybrids)',
+    enUnePhrase: 'Each offspring of two AaBb parents placed on the grid of its genotype: copies of A across, copies of B up.',
+    colonnes: ['copies of the dominant allele A (0, 1, 2)', 'copies of the dominant allele B (0, 1, 2)', 'offspring number (a label)'],
+    aRegarder: ['The middle cell (AaBb, like the parents) holds a quarter of the offspring; each gene splits 1 : 2 : 1.', 'Counted by traits, independent genes give 9 : 3 : 3 : 1.', 'Lower the recombination rate: the genes travel together and the corner cells AAbb, aaBB empty out.'],
+    fin: null,
+  },
+  neurone: {
+    titre: 'A neuron that fires (integrate-and-fire)',
+    enUnePhrase: 'The membrane potential of a model neuron for seven input currents, one per frame: it charges, fires at 1, resets.',
+    colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of the frame'],
+    aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
   /* game113 : chimie (tam-chimie.js) */

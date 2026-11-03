@@ -453,6 +453,10 @@ const DECORS = {
     return [hyper(B, 1, p, C.repere, 'Starting share p0 = ' + Math.round(p * 1000) / 1000 + ' (the expected mean, forever)')]; },
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   enzyme: (P, o, B) => { const s0 = P.substrat; return [seg([s0, 0, B.lo[2]], [0, s0, B.lo[2]], C.repere, 'S + P = S0 (all matter, when the complex is empty)')]; },
+  /* game114 : colonnes copies de A, copies de B, numero ; la case des parents (AaBb) */
+  mendel: (P, o, B) => [pt([1, 1, B.centre[2]], C.repere, 'AaBb, like both parents (a quarter of the offspring)')],
+  /* colonnes t, v, I ; le seuil v = 1 */
+  neurone: (P, o, B) => [hyper(B, 1, 1, C.zone, 'Firing threshold v = 1')],
   /* ---------- game113 : tam-chimie.js ---------- */
   /* colonnes : t, a, b, c ; le pic EXACT de B (lu dans les invariants) */
   reactionsChaine: (P, o, B) => { const t = o.invariants.picB.tPic, b = o.invariants.picB.formule;

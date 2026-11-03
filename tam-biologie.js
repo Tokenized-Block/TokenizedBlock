@@ -15,6 +15,8 @@
 //   dogmeCentral : gene -> ARN messager -> proteine, une molecule a la fois (Gillespie) ; moyennes, bruits (Fano) et covariance exacts.
 //   deriveGenetique : derive genetique (Wright-Fisher) ; moyenne conservee, heterozygotie H0 (1 - 1/2N)^t exacte, fixation p0.
 //   enzyme       : cinetique de Michaelis-Menten (4 especes integrees) ; conservations temoins, loi de vitesse APPROCHEE.
+//   mendel       : croisement de deux doubles heterozygotes ; 9:3:3:1, 1:2:1 exacts, liaison par le taux de recombinaison r.
+//   neurone      : neurone integre-et-tire ; periode t_ref + tau ln(I/(I - 1)) exacte, muet sous le courant seuil 1.
 import { sinD, cosD, lnD } from './tam-moteur.js';
 
 const DEUX_PI = 2 * Math.PI;
@@ -250,12 +252,95 @@ function enzyme(P, n) {
     produitFinal: { partConvertie: y[3] / S0, tFin: T, note: 'share of the substrate turned into product by the end of the run ; measured only' } } };
 }
 
+// ---------- 5 : les lois de Mendel (croisement de deux doubles heterozygotes AB/ab x AB/ab) ----------
+// Chaque parent donne un gamete : AB ou ab avec la probabilite (1 - r)/2 chacun, Ab ou aB avec r/2 (r = taux de recombinaison entre
+//   les deux genes ; r = 1/2 : genes independants). Un descendant = deux gametes tires independamment. Exact (derive ici) :
+//   genotype du gene A : AA : Aa : aa = 1/4 : 1/2 : 1/4 (chaque parent donne A une fois sur deux, quel que soit r) ;
+//   P(aabb) = ((1 - r)/2)^2 = (1 - r)^2 / 4 ; P(A_bb) = P(aaB_) = P(bb) - P(aabb) = 1/4 - (1 - r)^2/4 ;
+//   P(A_B_) = 1 - 2 P(A_bb) - P(aabb) = (2 + (1 - r)^2)/4. A r = 1/2 : 9 : 3 : 3 : 1 (sur 16).
+//   Les N descendants sont independants : comptes multinomiaux, part de chaque phenotype binomiale (sigma exact), chi2 a 3 ddl.
+//   r relu depuis la part aabb : r = 1 - 2 sqrt(p) (sigma par la methode delta, APPROCHEE).
+// Dessin : chaque descendant est un point de la grille de ses genotypes (copies de A, copies de B), etale dans sa case (dessine).
+function mendel(P, n) {
+  const N = P.descendants, r = P.recombinaison, rng = mulberry32(P.graine);
+  const gamete = () => { const u = rng(); return u < (1 - r) / 2 ? [1, 1] : u < 1 - r ? [0, 0] : u < 1 - r / 2 ? [1, 0] : [0, 1]; };
+  const gA = new Uint8Array(N), gB = new Uint8Array(N);
+  for (let i = 0; i < N; i++) { const g1 = gamete(), g2 = gamete(); gA[i] = g1[0] + g2[0]; gB[i] = g1[1] + g2[1]; }
+  let AB = 0, Abb = 0, aaB = 0, aabb = 0, Aa = 0;
+  for (let i = 0; i < N; i++) { const a = gA[i] > 0, b = gB[i] > 0; if (a && b) AB++; else if (a) Abb++; else if (b) aaB++; else aabb++; if (gA[i] === 1) Aa++; }
+  const q = (1 - r) * (1 - r) / 4, pAB = (2 + (1 - r) * (1 - r)) / 4, pAbb = 0.25 - q, att = [pAB, pAbb, pAbb, q], obs = [AB, Abb, aaB, aabb];
+  let chi2 = 0, ddl = 0; for (let k = 0; k < 4; k++) if (att[k] > 0) { chi2 += (obs[k] - N * att[k]) * (obs[k] - N * att[k]) / (N * att[k]); ddl++; }
+  ddl -= 1;
+  const bin = (p) => Math.sqrt(p * (1 - p) / N), pa = aabb / N, rLu = 1 - 2 * Math.sqrt(pa), sR = q > 0 ? bin(q) / Math.sqrt(q) : NaN;
+  const brut = new Float64Array(n * 3), place = mulberry32(P.graine ^ 0x27d4eb2d);
+  for (let l = 0; l < n; l++) { const i = Math.floor(l * N / n), o = 3 * l; brut[o] = gA[i] + 0.7 * (place() - 0.5); brut[o + 1] = gB[i] + 0.7 * (place() - 0.5); brut[o + 2] = i + 1; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (genetique, aleatoire)', invariants: {
+    dominants: { mesure: AB / N, formule: pAB, sigma: bin(pAB), descendants: N, note: 'share showing both dominant traits (A_B_) against (2 + (1 - r)^2)/4 : 9/16 for independent genes ; binomial sigma' },
+    recessifs: { mesure: pa, formule: q, sigma: bin(q), note: 'share with both recessive traits (aabb) against (1 - r)^2 / 4 : 1/16 for independent genes' },
+    heterozygotes: { mesure: Aa / N, formule: 0.5, sigma: bin(0.5), note: 'share of Aa among the offspring against 1/2 (the 1 : 2 : 1 law), whatever the linkage' },
+    /* r = 0 : A_bb et aaB_ sont impossibles (probabilite 0) : 1 degre de liberte seulement, moyenne ddl, sigma sqrt(2 ddl) */
+    phenotypes: { mesure: chi2, formule: ddl, sigma: Math.sqrt(2 * ddl), dominantsDeux: AB, dominantA: Abb, dominantB: aaB, recessifsDeux: aabb,
+      note: 'chi-square of the four trait counts against the exact proportions (' + ddl + ' degrees of freedom : mean ' + ddl + ')' },
+    recombinaisonLue: { mesure: aabb ? rLu : NaN, formule: r, sigma: sR, ...(aabb ? {} : { absente: 'no aabb offspring in this cross' }),
+      approchee: 'read back from the aabb share, r = 1 - 2 sqrt(p), first-order sigma', note: 'recombination rate read back from the offspring against the one set' } } };
+}
+
+// ---------- 6 : un neurone qui s allume (integre-et-tire) ----------
+// tau dv/dt = -v + I (potentiel sans dimension, repos 0, seuil 1). A v = 1 : une impulsion, v revient a 0 et reste muet t_ref.
+//   Exact : si I <= 1, v -> I sans jamais atteindre le seuil (aucune impulsion) ; si I > 1, de 0 a 1 en tau ln(I / (I - 1)), donc
+//   periode T = t_ref + tau ln(I / (I - 1)), frequence 1/T (la courbe frequence-courant du neurone).
+// Simulation : RK4 au pas tau/400, passage du seuil interpole lineairement dans le pas (erreur O(h^2)).
+// Dessin : un film de 7 courants I_k = I (0.4 + 0.2 k) (le courant choisi = l image 4) : la trace v(t) de chacun.
+const LIF_COURANTS = 7;
+function neurone(P, n) {
+  const I0 = P.courant, tau = P.tau, tref = P.refractaire, h = tau / 400, Tsim = 8 * (tref + tau) + 4 * tau;
+  const images = Math.min(LIF_COURANTS, n), Ik = Array.from({ length: images }, (_, k) => (images === 1 ? I0 : I0 * (0.4 + 1.2 * k / (images - 1))));
+  const debuts = decouper(n, images), film = filmDe(debuts, n), brut = new Float64Array(n * 3);
+  const res = Ik.map((I, f) => {
+    const pas = Math.round(Tsim / h), d0 = film.debuts[f], c = film.tailles[f], tirs = [];
+    let v = 0, muet = 0, ligne = 0;
+    const g = (x) => (-x + I) / tau;
+    const ecrire = (st) => { while (ligne < c && Math.round(ligne * pas / (c - 1 || 1)) === st) { const o = 3 * (d0 + ligne); brut[o] = st * h; brut[o + 1] = v; brut[o + 2] = I; ligne++; } };
+    ecrire(0);
+    /* sonde du 03/11 : la 1re version arrondissait la fin du refractaire au pas et perdait le temps apres une impulsion (periodes
+     *   = multiples de h, 1.3 contre 1.2986) : chaque pas est maintenant un BUDGET de temps, refractaire et impulsion tombent ou ils tombent */
+    let tc0 = 0;
+    for (let st = 1; st <= pas; st++) {
+      let reste = h, t = (st - 1) * h;
+      while (reste > 0) {
+        if (muet > 0) { const u = Math.min(muet, reste); muet -= u; reste -= u; t += u; continue; }
+        const k1 = g(v), k2 = g(v + reste / 2 * k1), k3 = g(v + reste / 2 * k2), k4 = g(v + reste * k3), vn = v + reste / 6 * (k1 + 2 * k2 + 2 * k3 + k4);
+        if (vn >= 1) { const u = reste * (1 - v) / (vn - v); tc0 = t + u; tirs.push(tc0); v = 0; muet = tref; reste -= u; t = tc0; if (tref === 0 && reste < 1e-12 * h) reste = 0; }
+        else { v = vn; reste = 0; }
+      }
+      ecrire(st);
+    }
+    while (ligne < c) { const o = 3 * (d0 + ligne); brut[o] = Tsim; brut[o + 1] = v; brut[o + 2] = I; ligne++; }
+    const Tth = I > 1 ? tref + tau * lnD(I / (I - 1)) : NaN;
+    const Tm = tirs.length >= 2 ? (tirs[tirs.length - 1] - tirs[0]) / (tirs.length - 1) : NaN;
+    return { I, Tth, Tm, tirs: tirs.length, vFin: v };
+  });
+  const k0 = images === 1 ? 0 : Math.round(0.5 * (images - 1)), m = res[k0];
+  let pire = 0, compares = 0; for (const x of res) if (Number.isFinite(x.Tm) && Number.isFinite(x.Tth)) { pire = Math.max(pire, Math.abs(x.Tm / x.Tth - 1)); compares++; }
+  const muets = res.filter((x) => x.I <= 1);
+  let pireRepos = 0, muetsQuiTirent = 0; for (const x of muets) { pireRepos = Math.max(pireRepos, Math.abs(x.vFin - x.I)); muetsQuiTirent += x.tirs; }
+  return { D: 3, brut, film, unite: 'sans objet (neurone modele, non chaotique)', invariants: {
+    periode: { mesure: m.Tm, formule: m.Tth, impulsions: m.tirs, courant: m.I,
+      ...(m.I > 1 ? (Number.isFinite(m.Tm) ? {} : { absente: 'fewer than 2 spikes in the run' }) : { absente: 'the current is below the threshold current 1: the neuron never fires' }),
+      note: 'time between spikes against t_ref + tau ln(I / (I - 1)) (exact for this model)' },
+    courbeFI: { courants: images, compares, pireEcartRelatif: pire, courantSeuil: 1,
+      note: 'the ' + images + ' frames sweep the current from 0.4 I to 1.6 I ; every firing one is compared with the exact period (worst relative gap shown) ; below I = 1 none fires' },
+    ...(muets.length ? { repos: { courantsMuets: muets.length, impulsionsSousSeuil: muetsQuiTirent, pireEcart: pireRepos, note: 'below the threshold current the potential settles at v = I without firing (worst gap at the end of the run)' } } : {}) } };
+}
+
 // ---------- colonnes de brut ----------
 export const COLONNES = Object.freeze({
   adnMutations: { colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base (0 = A, 1 = C, 2 = G, 3 = T)', 'time t'], memeLongueur: [[0, 1, 2]], autres: [3, 4] },
   dogmeCentral: { colonnes: ['time t (mRNA lifetimes, last 30)', 'number of mRNA molecules', 'number of protein molecules'], memeLongueur: [], autres: [0, 1, 2] },
   deriveGenetique: { colonnes: ['generation', 'share of the variant in the population (0..1)', 'population number (label)'], memeLongueur: [], autres: [0, 1, 2] },
   enzyme: { colonnes: ['substrate S', 'product P (same units)', 'enzyme-substrate complex C'], memeLongueur: [[0, 1]], autres: [2] },
+  mendel: { colonnes: ['copies of the dominant allele A (0, 1, 2; spread inside its cell is drawn)', 'copies of the dominant allele B (same)', 'offspring number (label)'], memeLongueur: [[0, 1]], autres: [2] },
+  neurone: { colonnes: ['time t', 'membrane potential v (rest 0, threshold 1)', 'input current I of this frame (label)'], memeLongueur: [], autres: [0, 1, 2] },
 });
 
 // ---------- catalogue ----------
@@ -272,9 +357,15 @@ export const SYSTEMES = Object.freeze([
   { id: 'enzyme', nom: 'An enzyme at work (Michaelis-Menten kinetics)', science: 'Biochemistry', D: 3, params: { substrat: 10, enzyme: 0.1, dissociation: 1, catalyse: 1 },
     bornes: { substrat: [1, 50], enzyme: [0.05, 1], dissociation: [0.1, 5], catalyse: [0.5, 5] },
     phrase: 'A visualisation of an enzyme turning substrate into product, E + S <-> C -> E + P, integrated step by step with all four species: total enzyme and total matter stay constant (witnesses). The rate of product formation is compared with the Michaelis-Menten law Vmax S / (Km + S), an approximation whose error scale E0 / (S0 + Km) is shown: add a lot of enzyme and the law visibly fails.' },
+  { id: 'mendel', nom: 'The laws of Mendel (a cross of two double hybrids)', science: 'Genetics', D: 3, nuage: true, params: { descendants: 1600, recombinaison: 0.5, graine: 1 },
+    bornes: { descendants: [100, 5000], recombinaison: [0, 0.5], graine: [1, 1000000] },
+    phrase: 'A visualisation of the laws of Mendel: two parents carrying both forms of two genes have offspring, each a random pair of gametes, drawn on the grid of their genotypes. With independent genes the traits come out 9 : 3 : 3 : 1 and each gene 1 : 2 : 1 (exact); bring the genes closer on the chromosome (recombination rate r below 1/2) and the double-recessive share becomes (1 - r)^2 / 4. A finite number of offspring, so the agreement is statistical.' },
+  { id: 'neurone', nom: 'A neuron that fires (integrate-and-fire)', science: 'Neuroscience', D: 3, params: { courant: 1.5, tau: 1, refractaire: 0.2 },
+    bornes: { courant: [0.5, 4], tau: [0.5, 3], refractaire: [0, 2] },
+    phrase: 'A visualisation of the integrate-and-fire neuron, one frame per input current from 0.4 to 1.6 times the one chosen: the membrane potential charges up, fires at the threshold, resets and stays silent for a refractory time. Above the threshold current the time between spikes is compared with the exact t_ref + tau ln(I / (I - 1)); below it the neuron never fires and settles at v = I.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [] };
-const FONCTIONS = { adnMutations, dogmeCentral, deriveGenetique, enzyme };
+export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [] };
+const FONCTIONS = { adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */

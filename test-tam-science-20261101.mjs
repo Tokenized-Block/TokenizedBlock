@@ -18,7 +18,7 @@ const ICI = path.dirname(fileURLToPath(import.meta.url));
 const MOI = '0x' + 'ab'.repeat(20);
 
 /* 1. TOUTES les sciences (game78 : 7 modules — physique, sciences, fluides, astres, cosmos, invisible, quantique) : rejeu, en-tete, decodage, tailles */
-{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1], ['tam-grandes-questions.js', 9], ['tam-grandes-questions-2.js', 7], ['tam-champs-quantiques.js', 9], ['tam-vide-quantique.js', 4], ['tam-theories-2.js', 6], ['tam-theories-3.js', 6], ['tam-biologie.js', 4], ['tam-chimie.js', 3]];
+{ const parModule = [['tam-physique.js', 7], ['tam-sciences.js', 9], ['tam-fluides.js', 4], ['tam-astro.js', 6], ['tam-cosmos.js', 11], ['tam-invisible.js', 10], ['tam-quantique.js', 8], ['tam-fusion.js', 1], ['tam-grandes-questions.js', 9], ['tam-grandes-questions-2.js', 7], ['tam-champs-quantiques.js', 9], ['tam-vide-quantique.js', 4], ['tam-theories-2.js', 6], ['tam-theories-3.js', 6], ['tam-biologie.js', 6], ['tam-chimie.js', 3]];
   let attendu = 0; for (const [f, min] of parModule) { const m = await import('./' + f); ok(m.SYSTEMES.length >= min, f + ' : au moins ' + min + ' systemes (' + m.SYSTEMES.length + ')'); attendu += m.SYSTEMES.length; }
   ok(T.SYSTEMES.length === attendu && new Set(T.SYSTEMES.map((s) => s.id)).size === attendu, 'tam-science rassemble les ' + attendu + ' systemes, sans doublon d id'); }
 for (const s of T.SYSTEMES) {
@@ -145,6 +145,12 @@ for (const [nom, muter] of MUTANTS) {
   console.log('  ' + nom + ' : ' + (tue ? 'TUE' : 'SURVIT')); if (tue) tues++;
 }
 fs.rmSync(TMP, { recursive: true, force: true });
+/* game114 : la note du cerveau (ecrite on-chain) de CHAQUE systeme, pas seulement de 24 graines : sous NOTE_MAX, avec sa conclusion
+ *   (fluctuationsVide recopiait un tableau de 40 variances et perdait la fin) */
+{ const mauvais = [];
+  for (const s of T.SYSTEMES) { const P = T.paramsScience(s.id), note = T.noteCerveau(P, { nomCerveau: 'UNIT', humeur: 'calm', ressenti: 'steady', battement: 24 });
+    if (!(note.length <= T.NOTE_MAX && /Conclusion: /.test(note) && !/\d,\d/.test(note))) mauvais.push(s.id + ' (' + note.length + ')'); }
+  ok(mauvais.length === 0, 'game114 : chaque systeme a une note complete (conclusion, <= NOTE_MAX, aucun tableau recopie) : ' + (mauvais.join(', ') || T.SYSTEMES.length + ' notes')); }
 ok(tues === MUTANTS.length, 'MUTANTS : ' + tues + '/' + MUTANTS.length);
 console.log('MUTANTS : ' + tues + '/' + MUTANTS.length + ' tues');
 console.log('test-tam-science-20261101 : ' + n + ' assertions OK');

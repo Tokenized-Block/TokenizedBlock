@@ -18,9 +18,16 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-biologie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme'];
+const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone'];
 
 // ---------- references independantes (Math autorise ici) ----------
+/* game114 : Mendel par ENUMERATION des 16 paires de gametes (AB, ab : (1-r)/2 ; Ab, aB : r/2), sans les formules du module */
+function mendelRef(r) {
+  const g = [[1, 1, (1 - r) / 2], [0, 0, (1 - r) / 2], [1, 0, r / 2], [0, 1, r / 2]], ph = { AB: 0, Abb: 0, aaB: 0, aabb: 0 }; let Aa = 0;
+  for (const x of g) for (const y of g) { const p = x[2] * y[2], a = x[0] + y[0], b = x[1] + y[1]; if (a && b) ph.AB += p; else if (a) ph.Abb += p; else if (b) ph.aaB += p; else ph.aabb += p; if (a === 1) Aa += p; }
+  return { ...ph, Aa };
+}
+const periodeRef = (I, tau, tref) => (I > 1 ? tref + tau * Math.log(I / (I - 1)) : NaN);
 const pJC = (mu, t) => 0.75 * (1 - Math.exp(-4 * mu * t / 3));
 /* game112 : esperance EXACTE de l heterozygotie par la chaine de Markov de Wright-Fisher (matrice binomiale), sans la formule :
  *   distribution du compte apres t generations, puis E[2 p (1 - p)] */
@@ -144,6 +151,27 @@ function suite(T, bavard = false) {
     assert.ok(I.produitFinal.partConvertie > 0.8, 'conversion ' + I.produitFinal.partConvertie);
     return `ecart ${rel.toExponential(1)} (eps ${eps.toPrecision(2)}), derives ${I.enzymeTotale.derive.toExponential(1)} / ${I.matiereTotale.derive.toExponential(1)}`;
   });
+  // 3d. Mendel (game114)
+  for (const p of extremes(sys('mendel'))) ok(`mendel ${JSON.stringify(p)} : 9:3:3:1 et 1:2:1 = enumeration des gametes, binomiales, chi2, grille des genotypes`, () => {
+    const R = S('mendel', p), P = R.params, I = R.invariants, M = mendelRef(P.recombinaison), N = P.descendants, b = R.brut;
+    assert.ok(Math.abs(I.dominants.formule - M.AB) < 1e-15 && Math.abs(I.recessifs.formule - M.aabb) < 1e-15 && Math.abs(I.heterozygotes.formule - M.Aa) < 1e-15, 'formules = enumeration');
+    for (const k of ['dominants', 'recessifs', 'heterozygotes']) { const v = I[k]; assert.ok(Math.abs(v.sigma - Math.sqrt(v.formule * (1 - v.formule) / N)) < 1e-15); if (v.sigma > 0) assert.ok(Math.abs(z(v)) < 5, k + ' z ' + z(v)); else assert.equal(v.mesure, v.formule, k + ' sans sigma : exact'); }
+    const Ph = I.phenotypes; assert.equal(Ph.dominantsDeux + Ph.dominantA + Ph.dominantB + Ph.recessifsDeux, N); assert.ok(Math.abs(z(Ph)) < 5, 'chi2 z ' + z(Ph));
+    if (P.recombinaison === 0) assert.ok(Ph.dominantA === 0 && Ph.dominantB === 0 && Ph.formule === 1, 'genes lies : A_bb et aaB_ impossibles, 1 ddl');
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, a = Math.round(b[o]), c = Math.round(b[o + 1]); assert.ok(a >= 0 && a <= 2 && c >= 0 && c <= 2 && Math.abs(b[o] - a) <= 0.35 && Math.abs(b[o + 1] - c) <= 0.35 && Number.isInteger(b[o + 2]) && b[o + 2] >= 1 && b[o + 2] <= N); }
+    return `A_B_ ${I.dominants.mesure.toFixed(4)}/${M.AB.toFixed(4)}, aabb ${I.recessifs.mesure.toFixed(4)}/${M.aabb.toFixed(4)}, chi2 ${Ph.mesure.toFixed(2)} (${Ph.formule} ddl)`;
+  });
+  // 3e. neurone (game114)
+  for (const p of extremes(sys('neurone'))) ok(`neurone ${JSON.stringify(p)} : periode t_ref + tau ln(I/(I-1)) a 1e-5 sur chaque image, muet sous le seuil, v dans [0, 1]`, () => {
+    const R = S('neurone', p), P = R.params, I = R.invariants, b = R.brut, Pe = I.periode, Tth = periodeRef(P.courant, P.tau, P.refractaire);
+    if (P.courant > 1) { assert.ok(Math.abs(Pe.formule - Tth) < 1e-12 * Tth, 'formule'); assert.ok(Math.abs(Pe.mesure / Tth - 1) < 1e-5, 'periode ' + Pe.mesure + ' ref ' + Tth); }
+    else assert.ok(Number.isNaN(Pe.mesure) && typeof Pe.absente === 'string');
+    assert.ok(I.courbeFI.pireEcartRelatif < 1e-5, 'courbe f-I ' + I.courbeFI.pireEcartRelatif);
+    if (I.repos) { assert.equal(I.repos.impulsionsSousSeuil, 0, 'aucune impulsion sous le seuil'); assert.ok(I.repos.pireEcart < 1e-4, 'repos ' + I.repos.pireEcart); }
+    for (let f = 0; f < R.film.images; f++) { const d0 = R.film.debuts[f], c = R.film.tailles[f], Ik = P.courant * (0.4 + 1.2 * f / (R.film.images - 1));
+      for (let q = 0; q < c; q++) { const o = 3 * (d0 + q); assert.ok(b[o + 1] >= 0 && b[o + 1] < 1 && Math.abs(b[o + 2] - Ik) < 1e-12 && (q === 0 || b[o] >= b[o - 3])); } }
+    return `periode ${Number.isFinite(Pe.mesure) ? (Pe.mesure / Tth - 1).toExponential(1) : 'muet'}, f-I pire ${I.courbeFI.pireEcartRelatif.toExponential(1)} sur ${I.courbeFI.compares}`;
+  });
   // 4. etalonnage des sigmas : sur 20 graines, les z ont un ecart-type ~ 1 (un sigma faux d un facteur 2 en sort)
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (differences, substitutions, Fano proteine, covariance, derive : moyenne et heterozygotie)', () => {
     const zs = { differences: [], substitutions: [], bruitProteine: [], covariance: [], frequenceMoyenne: [], heterozygotie: [] };
@@ -198,6 +226,10 @@ const MUTANTS = [
   ['derive : sigma de la moyenne 3 fois trop petit', 'sigma: Math.sqrt(p0e * (1 - p0e) * (1 - lG) / R)', 'sigma: Math.sqrt(p0e * (1 - p0e) * (1 - lG) / R) / 3'],
   ['enzyme : produit forme a 0.99 kcat C (matiere perdue)', 'd[3] = c; };', 'd[3] = 0.99 * c; };'],
   ['enzyme : Km sans kcat', 'Km = (km1 + k2) / k1,', 'Km = km1 / k1,'],
+  ['mendel : P(aabb) = (1 - r) / 4', 'const q = (1 - r) * (1 - r) / 4,', 'const q = (1 - r) / 4,'],
+  ['mendel : gametes recombines trop frequents', "u < 1 - r / 2 ? [1, 0] : [0, 1]", "u < 1 - r / 4 ? [1, 0] : [0, 1]"],
+  ['neurone : periode avec I - 0.9', 'lnD(I / (I - 1))', 'lnD(I / (I - 0.9))'],
+  ['neurone : temps perdu apres une impulsion (bug du 03/11)', 'muet = tref; reste -= u;', 'muet = tref; reste = 0;'],
   ['Math.random injecte (ADN)', 'lam = 4 * mu / 3, rng = mulberry32(P.graine)', 'lam = 4 * mu / 3, rng = Math.random'],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;

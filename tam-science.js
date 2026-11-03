@@ -215,6 +215,8 @@ export const ECHELLE_PROPRE = {
   adnMutations: [3, 4], dogmeCentral: [0, 1, 2],
   /* game112 : generation, part, numero (3 grandeurs) ; complexe C (bien plus petit que S et P) */
   deriveGenetique: [0, 1, 2], enzyme: [2],
+  /* game114 : numero de descendant ; temps, potentiel, courant (3 grandeurs) */
+  mendel: [2], neurone: [0, 1, 2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0], equilibreChimique: [2], brusselator: [2],
 };
@@ -330,7 +332,11 @@ export function noteCerveau(P, { nomCerveau = null, humeur = null, ressenti = nu
   if (P.melange) morceaux.push('Blended with ' + [P.melange.motif.famille, P.melange.motif.variante].filter(Boolean).join(' ') + ' (' + [P.melange.operateur, 'w=' + court(P.melange.w)].join(', ') + ').');
   let conserve = 0, varie = 0, compare = null;
   for (const [k, v] of Object.entries(o.invariants || {})) {
-    if (v && typeof v === 'object' && 'mesure' in v && ('formule' in v || 'theorie' in v)) { const ref = 'formule' in v ? v.formule : v.theorie; if (!compare) compare = k + ' measured ' + court(v.mesure) + ' vs ' + court(ref); }
+    /* game114 (banc : la graine 20 tombait sur fluctuationsVide, dont la 1re mesure est un TABLEAU de 40 variances : la note le recopiait
+     *   en entier, depassait 700 caracteres et perdait sa « Conclusion » — note ecrite on-chain) : seule une mesure et une reference
+     *   NUMERIQUES finies sont citees */
+    if (v && typeof v === 'object' && 'mesure' in v && ('formule' in v || 'theorie' in v)) { const ref = 'formule' in v ? v.formule : v.theorie;
+      if (!compare && typeof v.mesure === 'number' && Number.isFinite(v.mesure) && typeof ref === 'number' && Number.isFinite(ref)) compare = k + ' measured ' + court(v.mesure) + ' vs ' + court(ref); }
     else if (v && typeof v === 'object' && 'derive' in v) { const ref = Math.abs(v.debut ?? 0), rel = ref > 1e-12 ? Math.abs(v.derive) / ref : Math.abs(v.derive); if (rel <= 1e-3) conserve++; else varie++; }
   }
   if (compare) morceaux.push('Check: ' + compare + '.');
