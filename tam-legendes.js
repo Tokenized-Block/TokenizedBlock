@@ -918,6 +918,28 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game125 */
+  carnot: {
+    titre: 'The Carnot cycle (the best possible engine)',
+    enUnePhrase: 'One Carnot cycle of an ideal gas drawn in the (volume, pressure) plane.',
+    colonnes: ['volume V', 'pressure P', 'leg of the cycle (0 hot expansion, 1 cooling, 2 cold compression, 3 heating)'],
+    aRegarder: ['The area inside the loop is the work the engine gives in one cycle.', 'Work divided by the heat taken in is exactly 1 - Tc/Th.', 'Change the gas (degrees of freedom): the loop changes shape, the efficiency does not.'],
+    fin: null,
+  },
+  montyHall: {
+    titre: 'The Monty Hall problem',
+    enUnePhrase: 'Two curves: the share of games won so far by sticking with the first door, and by switching.',
+    colonnes: ['games played', 'share of games won so far', 'strategy (0 = stick, 1 = switch)'],
+    aRegarder: ['With three doors, switching wins two games in three; sticking, one in three.', 'With n doors: switching (n - 1)/(n (n - 2)), sticking 1/n; switching always wins more.', 'Early on the curves wander; they settle as the games add up.'],
+    fin: null,
+  },
+  lentilleMince: {
+    titre: 'A thin lens forms an image',
+    enUnePhrase: 'Nine rays from one point of an object, through a lens of focal length 1, meeting again at the image.',
+    colonnes: ['x along the axis (lens at 0)', 'height y', 'ray number (a label)'],
+    aRegarder: ['All rays meet at one point, at 1/do + 1/di = 1/f.', 'The image is upside down, magnified by -di/do.', 'Inside the focal length the rays spread: a virtual image appears in front of the lens (a magnifying glass).'],
+    fin: null,
+  },
   /* game124 */
   paraboleTir: {
     titre: 'The best angle to throw (projectiles and the safety parabola)',

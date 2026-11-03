@@ -350,6 +350,8 @@ export const CLES_EN_MODULES = Object.freeze({
   lignesArrivees: 'lines landing', partContinue: 'share for a continuous fan', nonConclues: 'lines not settled', gardee: 'energy kept', puissance: 'm', impairs: 'odd numbers drawn from',
   /* game123 */
   /* game124 */
+  /* game125 */
+  parties: 'games', portes: 'doors', virtuelle: 'virtual (1 = yes)',
   resolution: 'scan step (degrees)', hauteurTir: 'launch height h', contact: 'closest approach to the parabola', sommets: 'vertices', aretes: 'edges', faces: 'faces', cotesParFace: 'sides per face p', aretesParSommet: 'edges per vertex q',
   rapportMasses: 'mass ratio M/m', mode: 'mode j', pulsation: 'omega_j',
   hauteur: 'entry height b', indice: 'index n', pireEcart6: 'worst gap, 6 harmonics', rang: 'harmonic', mach: 'Mach', fronts: 'wavefronts', angleDegres: 'half-angle (degrees)',
@@ -385,6 +387,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   energieFournie: 'Energy given by the battery', energiePerdue: 'Energy lost as heat', impairsParLigne: 'Odd numbers per row vs 2^(1s of n) (worst gap)', impairsTotal: 'Odd numbers in the first 2^m rows',
   /* game123 */
   /* game124 */
+  /* game125 */
+  travail: 'Work of one cycle (area)', changer: 'Won by switching', garder: 'Won by sticking', image: 'Where the image forms (di)', grandissement: 'Magnification', convergence: 'Rays through one point (worst gap)',
   angleOptimal: 'Best throwing angle (degrees)', porteeMax: 'Longest throw', enveloppe: 'Above the safety parabola (never)',
   euler: 'Euler: vertices - edges + faces', schlafli: 'Edges vs F p / 2', diedre: 'Angle between faces (degrees)', surSphere: 'All vertices on one sphere',
   chocs: 'Collisions counted (they spell pi)', periodeMode: 'Period of the mode', resteDansLeMode: 'Energy leaking out of the mode',

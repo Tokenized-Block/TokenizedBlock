@@ -454,6 +454,10 @@ const DECORS = {
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   /* game116 : colonnes t, part, courbe ; mi-parcours (S = S0/2), la ou la loi de vitesse est comparee */
   enzyme: (P, o, B) => [hyper(B, 1, 0.5, C.repere, 'Half the substrate used: the rate is checked here')],
+  /* ---------- game125 ---------- */
+  carnot: (P, o, B) => [pt([1, P.chaude, 0], C.repere, 'A: start of the hot expansion')],
+  montyHall: (P, o, B) => [hyper(B, 1, (P.portes - 1) / (P.portes * (P.portes - 2)), C.zone, 'Switching wins (n - 1)/(n (n - 2))'), hyper(B, 1, 1 / P.portes, C.repere, 'Sticking wins 1/n')],
+  lentilleMince: (P, o, B) => [seg([0, -1.2, B.centre[2]], [0, 1.2, B.centre[2]], C.repere, 'The lens (focal length 1)'), pt([-P.distance, 1, B.centre[2]], C.zone, 'The object point')],
   /* ---------- game124 ---------- */
   paraboleTir: (P, o, B) => [hyper(B, 1, 0, C.repere, 'The ground')],
   solidesPlatoniques: (P, o, B) => [pt([0, 0, 0], C.repere, 'Centre (every vertex at the same distance)')],

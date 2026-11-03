@@ -162,9 +162,41 @@ function effetDoppler(P, n) {
   return { D: 3, brut, nuage: true, unite: 'sans objet (ondes, non chaotique)', invariants: inv };
 }
 
+// ---------- 4 : une lentille mince ----------
+// Lentille mince de focale f = 1 en x = 0 ; objet ponctuel a la distance do (curseur) et a la hauteur 1, a gauche. 9 rayons partent de
+//   l objet vers des hauteurs de -1 a 1 sur la lentille ; regle de la lentille (paraxiale) : la pente change de -y/f a la traversee.
+// Exact (derive ici) : tous les rayons repassent par un meme point, l image, a di = 1 / (1/f - 1/do) (relation de conjugaison), hauteur
+//   -di/do (grandissement). Si do < f, di < 0 : les rayons divergent, leurs prolongements se coupent DEVANT la lentille (image virtuelle).
+// Mesures : point de croisement des rayons par moindres carres (aucune formule dedans) ; plus grand ecart d un rayon a ce point.
+// Dessin : les rayons (points le long de chacun) et leurs prolongements en arriere si l image est virtuelle ; 3e colonne : numero du rayon.
+function lentilleMince(P, n) {
+  const f = 1, dO = P.distance, x0 = -dO, y0 = 1, R = 9, rayons = [];
+  for (let k = 0; k < R; k++) { const yl = -1 + 2 * k / (R - 1), s1 = (yl - y0) / dO, s2 = s1 - yl / f; rayons.push({ yl, s1, s2 }); }
+  /* point commun : minimise sum (y - yl - s2 x)^2 sur (x, y) : droites y = yl + s2 x apres la lentille (prolongees si besoin) */
+  let a11 = 0, a12 = 0, a22 = 0, b1 = 0, b2 = 0;
+  for (const r of rayons) { const nn = Math.sqrt(1 + r.s2 * r.s2), nx = -r.s2 / nn, ny = 1 / nn, c = r.yl / nn; a11 += nx * nx; a12 += nx * ny; a22 += ny * ny; b1 += nx * c; b2 += ny * c; }
+  const det = a11 * a22 - a12 * a12, xi = (b1 * a22 - b2 * a12) / det, yi = (a11 * b2 - a12 * b1) / det;
+  let pire = 0; for (const r of rayons) pire = Math.max(pire, Math.abs(yi - r.yl - r.s2 * xi) / Math.sqrt(1 + r.s2 * r.s2));
+  /* sonde du 03/11 : objet AU foyer (do = f, dans la plage du curseur) : image a l infini, le run sortait en NaN ; tout pres, image a 1e6
+   *   (dessin ecrase, moindres carres imprecis) -> au-dela de |di| = 20, l image est dite tres lointaine, et le dessin s arrete a x = 8 */
+  const inv = 1 / f - 1 / dO, loin = Math.abs(inv) < 0.05, di = loin ? NaN : 1 / inv, virtuelle = !loin && di < 0, xFin = virtuelle || loin ? 3 : Math.min(8, Math.max(3, di + 1));
+  const brut = new Float64Array(n * 3), par = Math.max(4, Math.floor(n / R)); let l = 0;
+  for (let k = 0; k < R && l < n; k++) { const r = rayons[k], nb = k === R - 1 ? n - l : par;
+    for (let q = 0; q < nb && l < n; q++) { const u = q / (nb - 1 || 1); let x, y;
+      if (virtuelle && u > 0.75) { x = xi + (0 - xi) * (u - 0.75) / 0.25; y = r.yl + r.s2 * x; } /* prolongement en arriere jusqu a l image virtuelle */
+      else { const w = virtuelle ? u / 0.75 : u, x1 = x0 + (xFin - x0) * w; x = x1; y = x1 <= 0 ? y0 + r.s1 * (x1 - x0) : r.yl + r.s2 * x1; }
+      const o = 3 * l++; brut[o] = x; brut[o + 1] = y; brut[o + 2] = k + 1; } }
+  const tropLoin = loin ? { absente: 'the object is at (or very near) the focal point: the rays leave almost parallel and meet very far away (|di| > 20)' } : {};
+  return { D: 3, brut, nuage: true, unite: 'sans objet (optique paraxiale)', invariants: {
+    image: { mesure: loin ? NaN : xi, formule: di, ...tropLoin, virtuelle: virtuelle ? 1 : 0, note: 'where the rays (or their backward extensions) meet, found by least squares, against 1 / (1/f - 1/do)' },
+    grandissement: { mesure: loin ? NaN : yi / y0, formule: -di / dO, ...tropLoin, note: 'image height over object height against -di / do' },
+    convergence: { mesure: loin ? NaN : pire, formule: 0, ...tropLoin, note: 'largest distance from a ray to the common point (they all pass through it)' } } };
+}
+
 export const COLONNES = Object.freeze({
   arcEnCiel: { colonnes: ['x (drop of radius 1 at the centre)', 'y (same)', 'height b at which the ray came in (label; 0 = the drop outline)'], memeLongueur: [[0, 1]], autres: [2] },
   cordeVibrante: { colonnes: ['position along the string (0 to 1)', 'displacement u', 'time (in units of L / c)'], memeLongueur: [], autres: [0, 1, 2] },
+  lentilleMince: { colonnes: ['x along the axis (lens at 0, focal length 1)', 'height y', 'ray number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   effetDoppler: { colonnes: ['x (wavelengths)', 'y (wavelengths)', 'time the front was sent (label)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -178,9 +210,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'effetDoppler', nom: 'The Doppler effect and the sonic boom', science: 'Waves', D: 3, nuage: true, params: { mach: 0.5 },
     bornes: { mach: [0, 2] },
     phrase: 'A visualisation of the wavefronts sent by a moving source, one per period. Ahead of it they bunch up to (c - v) T, behind they spread to (c + v) T: a higher pitch coming, a lower one going. Faster than the waves (Mach M > 1) the source outruns its own fronts and they gather on a cone with sin(theta) = 1/M: the sonic boom.' },
+  { id: 'lentilleMince', nom: 'A thin lens forms an image', science: 'Geometric optics', D: 3, nuage: true, params: { distance: 3 },
+    bornes: { distance: [0.3, 6] },
+    phrase: 'A visualisation of nine rays leaving a point of an object, crossing a thin lens of focal length 1 and meeting again at the image, exactly where 1/do + 1/di = 1/f puts it, magnified by -di/do. Bring the object inside the focal length and the rays spread out: their backward extensions meet in front of the lens, a virtual image (the magnifying glass).' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { arcEnCiel: [], cordeVibrante: ['cellules'], effetDoppler: [] };
-const FONCTIONS = { arcEnCiel, cordeVibrante, effetDoppler };
+export const ENTIERS = { arcEnCiel: [], cordeVibrante: ['cellules'], effetDoppler: [], lentilleMince: [] };
+const FONCTIONS = { arcEnCiel, cordeVibrante, effetDoppler, lentilleMince };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

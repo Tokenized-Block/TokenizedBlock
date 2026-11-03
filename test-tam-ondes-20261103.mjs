@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-ondes.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['arcEnCiel', 'cordeVibrante', 'effetDoppler'];
+const IDS = ['arcEnCiel', 'cordeVibrante', 'effetDoppler', 'lentilleMince'];
 const deg = 180 / Math.PI;
 
 const descartes = (n, k) => { const ci = Math.sqrt((n * n - 1) / (k * (k + 2))), i = Math.acos(ci), r = Math.asin(Math.sin(i) / n); return (Math.PI * k + 2 * i - 2 * (k + 1) * r) * deg; };
@@ -34,7 +34,7 @@ function suite(T, bavard = false) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 3 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 4 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -78,6 +78,15 @@ function suite(T, bavard = false) {
     for (let i = 0; i < R.n; i++) { const o = 3 * i, tk = b[o + 2]; assert.ok(Number.isInteger(tk) && tk >= 0 && tk < 16); assert.ok(Math.abs(Math.hypot(b[o] - M * tk, b[o + 1]) - (16 - tk)) < 1e-9, 'point ' + i); }
     return M < 1 ? `devant ${I.devant.mesure.toFixed(3)}, derriere ${I.derriere.mesure.toFixed(3)}` : `sin theta ${I.cone.mesure.toFixed(4)} (${I.cone.angleDegres.toFixed(2)} degres)`;
   });
+  /* game125 : lentille — di = 1 / (1 - 1/do), grandissement -di/do ; au foyer (|di| > 20) dit « tres loin » ; chaque rayon part de l objet */
+  for (const p of [...extremes(sys('lentilleMince')), { distance: 1 }, { distance: 1.04 }, { distance: 0.5 }, { distance: 1.5 }]) ok(`lentilleMince ${JSON.stringify(p)} : conjugaison, grandissement, image virtuelle, au foyer`, () => {
+    const R = S('lentilleMince', p), d = R.params.distance, I = R.invariants, b = R.brut, inv = 1 - 1 / d;
+    if (Math.abs(inv) < 0.05) { assert.ok(Number.isNaN(I.image.mesure) && typeof I.image.absente === 'string'); }
+    else { const di = 1 / inv; assert.ok(Math.abs(I.image.formule - di) < 1e-12 * Math.abs(di) && Math.abs(I.image.mesure - di) < 1e-9 * Math.max(1, Math.abs(di)), 'image ' + I.image.mesure + ' ' + di);
+      assert.ok(Math.abs(I.grandissement.mesure + di / d) < 1e-9 * Math.max(1, Math.abs(di / d)) && I.convergence.mesure < 1e-12, 'grandissement'); assert.equal(I.image.virtuelle, di < 0 ? 1 : 0); }
+    let departs = 0; for (let i = 0; i < R.n; i++) { const o = 3 * i; if (Math.abs(b[o] + d) < 1e-12 && Math.abs(b[o + 1] - 1) < 1e-12) departs++; } assert.ok(departs >= 9, 'les 9 rayons partent de l objet : ' + departs);
+    return Math.abs(inv) < 0.05 ? 'image tres loin (dit)' : 'image ' + I.image.mesure.toFixed(4);
+  });
   ok('bornage : hors bornes ramene, NaN -> defaut, entiers arrondis', () => {
     assert.deepEqual(T.simuler('cordeVibrante', { pince: 9, cellules: 10.6 }, { n: 20 }).params, { pince: 0.5, cellules: 40 });
     assert.deepEqual(T.simuler('arcEnCiel', { indice: NaN }, { n: 20 }).params, { indice: 1.33 });
@@ -106,6 +115,8 @@ const MUTANTS = [
   ['corde : harmonique en 1/n au lieu de 1/n^2', '(m * m * PI * PI * aa * (1 - aa))', '(m * PI * PI * aa * (1 - aa))'],
   ['doppler : source a 0.9 v', 'xk = v * tk,', 'xk = 0.9 * v * tk,'],
   ['doppler : cone en 1 / M^2', "inv.cone = { mesure: m, formule: 1 / M,", "inv.cone = { mesure: m, formule: 1 / (M * M),"],
+  ['lentille : la lentille ne devie que de 0.9 y / f', 's2 = s1 - yl / f;', 's2 = s1 - 0.9 * yl / f;'],
+  ['lentille : formule de conjugaison a 1.01', 'loin ? NaN : 1 / inv', 'loin ? NaN : 1.01 / inv'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;

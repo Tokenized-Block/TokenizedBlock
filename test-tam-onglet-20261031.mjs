@@ -362,7 +362,7 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
       { const CE = await import('./tam-cles-en.js'), dC = onglet.indexOf('const CLES_EN = {'), fC = onglet.indexOf('};', dC) + 2;
         const CLES = { ...new Function(onglet.slice(dC, fC) + '\nreturn CLES_EN;')(), ...CE.CLES_EN_MODULES }, sansNom = new Set(), sansCle = new Set();
         /* game109 : aussi les variables de la nuit du 02-03/11 au MAX — leurs mesures n existent qu avec elles (aux defauts, rien a voir) */
-        const VARIANTES = { galton: { penchant: 0.9 }, rutherford: { attirant: 1 }, lotkaVolterra: { saturation: 0.2 }, epidemieSIR: { perteImmunite: 0.2 }, chaleur: { perte: 2 }, brusselator: { ecartSeuil: 3 }, mendel: { recombinaison: 0 }, neurone: { courant: 0.5 }, aiguilleBuffon: { aiguilles: 100 }, effetDoppler: { mach: 2 }, lignesChamp: { charge: -0.25 }, circuitRC: { tau: 5 }, billardPi: { chiffres: 4 }, paraboleTir: { hauteur: 2 }, solidesPlatoniques: { solide: 0 }, modesNormaux: { masses: 16, mode: 16 }, cordeVibrante: { pince: 0.5 }, anniversaires: { personnes: 80, jours: 50 }, equilibreChimique: { kf: 5, kb: 0.1 } };
+        const VARIANTES = { galton: { penchant: 0.9 }, rutherford: { attirant: 1 }, lotkaVolterra: { saturation: 0.2 }, epidemieSIR: { perteImmunite: 0.2 }, chaleur: { perte: 2 }, brusselator: { ecartSeuil: 3 }, mendel: { recombinaison: 0 }, neurone: { courant: 0.5 }, aiguilleBuffon: { aiguilles: 100 }, effetDoppler: { mach: 2 }, lignesChamp: { charge: -0.25 }, circuitRC: { tau: 5 }, billardPi: { chiffres: 4 }, paraboleTir: { hauteur: 2 }, carnot: { liberte: 7, chaude: 5 }, montyHall: { portes: 10 }, lentilleMince: { distance: 0.3 }, solidesPlatoniques: { solide: 0 }, modesNormaux: { masses: 16, mode: 16 }, cordeVibrante: { pince: 0.5 }, anniversaires: { personnes: 80, jours: 50 }, equilibreChimique: { kf: 5, kb: 0.1 } };
         for (const s of TSq.SYSTEMES) for (const extra of [{}, VARIANTES[s.id]].filter(Boolean)) { const o = s.mod.simuler(s.id, { ...TSq.paramsScience(s.id).params, ...extra });
           for (const [k, v] of Object.entries(o.invariants || {})) { if (!CE.NOMS_MESURES_EN[k]) sansNom.add(k);
             if (v && typeof v === 'object' && !('mesure' in v && ('formule' in v || 'theorie' in v)) && !('derive' in v)) for (const [a, x] of Object.entries(v)) if (typeof x === 'number' && !CLES[a]) sansCle.add(a); } }
@@ -561,7 +561,12 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
      *   gagne en silence ; game111 : « A » et « k » deja pris) : aucune cle en double dans les tables de noms anglais */
     { const t = readFileSync(new URL('./tam-cles-en.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''), doublons = [];
       for (const bloc of t.split('export const').slice(1)) { const vus = new Set(); for (const m of bloc.matchAll(/(?:^|[{,]\s*)([A-Za-z_][A-Za-z0-9_]*)\s*:\s*['"]/gm)) { if (vus.has(m[1])) doublons.push(bloc.trim().split(/\s/)[0] + '.' + m[1]); vus.add(m[1]); } }
-      ok(doublons.length === 0, 'game112 : aucune cle en double dans tam-cles-en.js (la derniere ecraserait la premiere en silence) : ' + (doublons.join(', ') || 'aucune')); }
+      ok(doublons.length === 0, 'game112 : aucune cle en double dans tam-cles-en.js (la derniere ecraserait la premiere en silence) : ' + (doublons.join(', ') || 'aucune'));
+      /* game125 (sonde : la cle « tau » definie DEUX fois dans NOMS_PARAMS_EN, le curseur du neurone disait « ... = R C ») : meme garde pour
+       *   la table des noms de curseurs */
+      const i2 = onglet.indexOf('const NOMS_PARAMS_EN = {'), j2 = onglet.indexOf('};', i2), bloc2 = onglet.slice(i2, j2).replace(/\/\*[\s\S]*?\*\//g, ''), vus2 = new Set(), doublons2 = [];
+      for (const m of bloc2.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:\s*['"]/g)) { if (vus2.has(m[1])) doublons2.push(m[1]); vus2.add(m[1]); }
+      ok(doublons2.length === 0, 'game125 : aucune cle en double dans NOMS_PARAMS_EN : ' + (doublons2.join(', ') || 'aucune')); }
     /* game80 : aucun systeme orphelin — chaque id des grandes questions est range dans son groupe */
     { const gq = [...(await import('./tam-grandes-questions.js')).SYSTEMES, ...(await import('./tam-grandes-questions-2.js')).SYSTEMES].map((s) => s.id);
       ok(gq.every((id) => onglet.includes("'" + id + "'")), 'les ' + gq.length + ' grandes questions sont toutes dans THEMES.questions'); }

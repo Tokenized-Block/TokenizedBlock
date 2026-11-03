@@ -200,10 +200,35 @@ function gazParfait(P, n) {
 }
 
 
+// ---------- 5 : le cycle de Carnot ----------
+// Gaz parfait (n R = 1) a f degres de liberte (gamma = 1 + 2/f, f curseur entier 3..7). Source chaude Th (curseur), froide Tc = 1.
+//   A -> B : detente isotherme a Th de V1 = 1 a V2 = r ; B -> C : detente adiabatique jusqu a Tc ; C -> D : compression isotherme ;
+//   D -> A : compression adiabatique. Sur une adiabatique T V^(gamma - 1) = const, donc V = V0 (T0/T)^(f/2) (puissances entieres et une
+//   racine : deterministe) ; P = T / V partout.
+// Exact (derive ici) : chaleur recue Qh = Th ln r ; travail du cycle W = (Th - Tc) ln r ; rendement W / Qh = 1 - Tc/Th, QUEL QUE SOIT f.
+// Mesures : W par la methode des trapezes sur le contour echantillonne (4000 points par branche), contre (Th - Tc) ln r ; rendement W/Qh.
+// Dessin : le cycle dans le plan (V, P) ; 3e colonne : la branche (0 A->B, 1 B->C, 2 C->D, 3 D->A). Vue de face.
+function carnot(P, n) {
+  const Th = P.chaude, Tc = 1, f = P.liberte, r = P.detente, K = 4000;
+  const puiss = (x) => { let y = 1; for (let i = 0; i < Math.floor(f / 2); i++) y *= x; return f % 2 ? y * Math.sqrt(x) : y; }; /* x^(f/2) */
+  const V3 = r * puiss(Th / Tc), V4 = 1 * puiss(Th / Tc), pts = [];
+  for (let i = 0; i < K; i++) { const V = 1 + (r - 1) * i / K; pts.push([V, Th / V, 0]); }
+  for (let i = 0; i < K; i++) { const T = Th + (Tc - Th) * i / K, V = r * puiss(Th / T); pts.push([V, T / V, 1]); }
+  for (let i = 0; i < K; i++) { const V = V3 + (V4 - V3) * i / K; pts.push([V, Tc / V, 2]); }
+  for (let i = 0; i <= K; i++) { const T = Tc + (Th - Tc) * i / K, V = V4 * puiss(Tc / T); pts.push([V, T / V, 3]); }
+  let W = 0; for (let i = 1; i < pts.length; i++) W += (pts[i][0] - pts[i - 1][0]) * (pts[i][1] + pts[i - 1][1]) / 2;
+  const lr = lnD(r), Qh = Th * lr, Wth = (Th - Tc) * lr;
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const q = pts[Math.floor(l * pts.length / n)], o = 3 * l; brut[o] = q[0]; brut[o + 1] = q[1]; brut[o + 2] = q[2]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (thermodynamique)', invariants: {
+    rendement: { mesure: W / Qh, formule: 1 - Tc / Th, gamma: 1 + 2 / f, note: 'work out / heat in against 1 - Tc/Th : the same for any gas (any number of degrees of freedom f)' },
+    travail: { mesure: W, formule: Wth, note: 'area of the cycle in the (V, P) plane (trapezoids) against (Th - Tc) ln r' } } };
+}
+
 export const COLONNES = Object.freeze({
   reactionsChaine: { colonnes: ['time t', 'share of the molecules (0..1)', 'which species (0 = A, 1 = B, 2 = C)'], memeLongueur: [], autres: [0, 1, 2] },
   equilibreChimique: { colonnes: ['x: well A on the left, well B on the right (placement inside a well is drawn)', 'y (drawn)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   brusselator: { colonnes: ['concentration x', 'concentration y', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
+  carnot: { colonnes: ['volume V', 'pressure P', 'leg of the cycle (0 hot expansion, 1 cooling, 2 cold compression, 3 heating)'], memeLongueur: [], autres: [0, 1, 2] },
   gazParfait: { colonnes: ['x in the box', 'y in the box', 'speed of the molecule (label)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -220,9 +245,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'gazParfait', nom: 'An ideal gas (molecules in a box)', science: 'Thermodynamics', D: 3, nuage: true, params: { molecules: 100, temperature: 1, graine: 1 },
     bornes: { molecules: [20, 400], temperature: [0.2, 5], graine: [1, 1000000] },
     phrase: 'A visualisation of an ideal gas: molecules flying freely in a box and bouncing off its walls, frame by frame, with speeds drawn from Maxwell\'s law at temperature T. Every hit on a wall is counted: the push per unit length is the pressure, and it obeys the ideal gas law P A = N T; the mean speed is the exact sqrt(pi T / 2). Paths are exact (no step-by-step integration); a finite number of molecules, so the agreement with the gas law is statistical.' },
+  { id: 'carnot', nom: 'The Carnot cycle (the best possible engine)', science: 'Thermodynamics', D: 3, nuage: true, params: { chaude: 2, liberte: 3, detente: 2 },
+    bornes: { chaude: [1.2, 5], liberte: [3, 7], detente: [1.5, 4] },
+    phrase: 'A visualisation of the Carnot cycle of an ideal gas in the (V, P) plane: a hot expansion at Th, an expansion without heat down to Tc, a cold compression and a compression back. The area inside is the work; divided by the heat taken in, it is exactly 1 - Tc/Th, whatever the gas.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'] };
-const FONCTIONS = { reactionsChaine, equilibreChimique, brusselator, gazParfait };
+export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'] };
+const FONCTIONS = { reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -49,7 +49,7 @@ THEMES.theories = ['ising2D', 'lotkaVolterra', 'epidemieSIR', 'lentilleGravitati
 /* game111 : les sciences de la vie ont leur groupe (tam-biologie.js) */
 THEMES.biologie = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg'];
 /* game113 : la chimie a son groupe (tam-chimie.js) */
-THEMES.chimie = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait'];
+THEMES.chimie = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot'];
 /* game115 : les mathematiques du hasard et des nombres ont leur groupe (tam-maths.js) */
 THEMES.maths = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam'];
 /* game120 : ondes, lumiere et son (tam-ondes.js) */
@@ -59,6 +59,9 @@ THEMES.electricite = ['lignesChamp', 'circuitRC'];
 THEMES.maths.push('pascalSierpinski');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
+/* game125 */
+THEMES.maths.push('montyHall');
+THEMES.ondes.push('lentilleMince');
 const groupeDe = (s) => THEMES.electricite.includes(s.id) ? 'electricite' : THEMES.ondes.includes(s.id) ? 'ondes' : THEMES.maths.includes(s.id) ? 'maths' : THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -182,13 +185,13 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   molecules: 'molecules', k1: 'first rate k1 (A to B)', k2: 'second rate k2 (B to C)', kf: 'forward rate kf (A to B)', kb: 'backward rate kb (B to A)',
   A: 'feed A', ecartSeuil: 'distance to the clock threshold (B - 1 - A^2)',
   /* game114 */
-  descendants: 'offspring', recombinaison: 'recombination rate r (1/2 = independent genes)', courant: 'input current I (threshold 1)', tau: 'membrane time constant tau', refractaire: 'refractory time',
+  descendants: 'offspring', recombinaison: 'recombination rate r (1/2 = independent genes)', courant: 'input current I (threshold 1)', tau: 'time constant tau' /* game125 : partage par le neurone (membrane) et le circuit RC (R C) — game122 l avait redefini plus bas en « ... = R C », faux pour le neurone */, refractaire: 'refractory time',
   /* game115 */
   marcheurs: 'walkers', aiguilles: 'needles', personnes: 'people per group', groupes: 'groups',
   /* game118 */
   partA: 'share of AA parents (p)',
   /* game120 */
-  indice: 'refractive index n', cellules: 'grid cells', charge: 'second charge q2 (the first is +1)', tau: 'time constant tau = R C', lignes: 'rows', chiffres: 'mass ratio 100^k (k)', mode: 'mode excited (j)', angles: 'throws drawn', solide: 'solid (0 tetra, 1 cube, 2 octa, 3 dodeca, 4 icosa)', pince: 'where it is plucked (a, from one end)', mach: 'source speed (Mach number M = v / c)' };
+  indice: 'refractive index n', cellules: 'grid cells', charge: 'second charge q2 (the first is +1)', lignes: 'rows', chiffres: 'mass ratio 100^k (k)', mode: 'mode excited (j)', angles: 'throws drawn', chaude: 'hot temperature Th (cold = 1)', liberte: 'degrees of freedom f of the gas', detente: 'expansion ratio r', portes: 'doors', parties: 'games played', solide: 'solid (0 tetra, 1 cube, 2 octa, 3 dodeca, 4 icosa)', pince: 'where it is plucked (a, from one end)', mach: 'source speed (Mach number M = v / c)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */
@@ -1032,7 +1035,9 @@ export function monter(racine, ctx = {}) {
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */
-    'paraboleTir']);
+    'paraboleTir',
+    /* game125 */
+    'carnot', 'montyHall', 'lentilleMince']);
   /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
   const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;

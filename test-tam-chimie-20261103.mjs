@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-chimie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait'];
+const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const aRef = (k1, t) => Math.exp(-k1 * t);
@@ -131,6 +131,14 @@ function suite(T, bavard = false) {
     for (let i = 0; i < R.n; i++) { const o = 3 * i; assert.ok(b[o] >= -1e-9 && b[o] <= L + 1e-9 && b[o + 1] >= -1e-9 && b[o + 1] <= L + 1e-9 && b[o + 2] >= 0, 'dans la boite'); }
     return `P ${Pe.mesure.toFixed(4)} / gaz ${I.gazParfait.formule.toFixed(4)} z ${z(I.gazParfait).toFixed(2)}, ecart ${Math.abs(Pe.mesure - Pe.formule).toExponential(1)} <= ${Pe.borneEcart.toExponential(1)}`;
   });
+  /* game125 : Carnot — references : 1 - 1/Th et (Th - 1) ln r par Math.log ; chaque point du cycle a P V = T entre 1 et Th */
+  for (const p of [...extremes(sys('carnot')), { liberte: 5 }, { liberte: 4, chaude: 3, detente: 3 }]) ok(`carnot ${JSON.stringify(p)} : rendement 1 - Tc/Th quel que soit f, travail (Th - Tc) ln r, P V = T`, () => {
+    const R = S('carnot', p), P = R.params, I = R.invariants, b = R.brut;
+    assert.ok(Math.abs(I.rendement.formule - (1 - 1 / P.chaude)) < 1e-12 && Math.abs(I.rendement.mesure / I.rendement.formule - 1) < 1e-6, 'rendement ' + I.rendement.mesure);
+    assert.ok(Math.abs(I.travail.formule - (P.chaude - 1) * Math.log(P.detente)) < 1e-12 && Math.abs(I.travail.mesure / I.travail.formule - 1) < 1e-6, 'travail ' + I.travail.mesure);
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, T = b[o] * b[o + 1]; assert.ok(T >= 1 - 1e-9 && T <= P.chaude + 1e-9 && [0, 1, 2, 3].includes(b[o + 2]), 'point ' + i); }
+    return 'rendement ' + I.rendement.mesure.toFixed(8);
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation, gaz, vitesse moyenne)', () => {
     const zs = { picB: [], partB: [], relaxation: [], gaz: [], vitesse: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation));
@@ -172,6 +180,8 @@ const MUTANTS = [
   ['brusselator : taux = trace au lieu de trace / 2', 'const reLam = complexes ? tr / 2 :', 'const reLam = complexes ? tr :'],
   ['gaz : un choc ne transmet que |vx|', 'impulsion += 2 * Math.abs(vx[i]) * chocs;', 'impulsion += Math.abs(vx[i]) * chocs;'],
   ['gaz : vitesses tirees trop larges (Box-Muller a -2.4 ln u)', 'Math.sqrt(-2 * lnD(u))', 'Math.sqrt(-2.4 * lnD(u))'],
+  ['carnot : cycle mal ferme (V4 x 1.1)', 'V4 = 1 * puiss(Th / Tc)', 'V4 = 1.1 * puiss(Th / Tc)'],
+  ['carnot : chaleur recue a Th + 0.01', 'Qh = Th * lr', 'Qh = (Th + 0.01) * lr'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (chaine)', 'rng = mulberry32(P.graine), T = 5', 'rng = Math.random, T = 5'],
 ];
