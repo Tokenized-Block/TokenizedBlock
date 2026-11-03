@@ -48,7 +48,9 @@ THEMES.theories = ['ising2D', 'lotkaVolterra', 'epidemieSIR', 'lentilleGravitati
   'rutherford', 'logistique', 'chaleur', 'oscillateurForce', 'brachistochrone', 'galton'];
 /* game111 : les sciences de la vie ont leur groupe (tam-biologie.js) */
 THEMES.biologie = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme'];
-const groupeDe = (s) => THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
+/* game113 : la chimie a son groupe (tam-chimie.js) */
+THEMES.chimie = ['reactionsChaine', 'equilibreChimique', 'brusselator'];
+const groupeDe = (s) => THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
 /* game79 : la formule de la personne (ou du cerveau) passe par la MEME scene : un « systeme » adapte, vue seule (pas de mint) */
@@ -57,7 +59,7 @@ const SYS_FORMULE = Object.freeze({ id: 'formule', nom: 'Your formula', science:
     simuler: (_id, p = {}) => { const { a, b, c, d, ...spec } = p; return F.simulerFormule({ ...spec, vars: { ...(spec.vars || {}), ...(a !== undefined ? { a } : {}), ...(b !== undefined ? { b } : {}), ...(c !== undefined ? { c } : {}), ...(d !== undefined ? { d } : {}) } }); },
     reglagesPhysique: (_id, p = {}) => ['a', 'b', 'c', 'd'].map((k) => ({ chemin: 'params.' + k, nom: k, min: -10, max: 10, valeur: (p.vars && typeof p.vars[k] === 'number' ? p.vars[k] : (typeof p[k] === 'number' ? p[k] : 1)) })),
   } });
-const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'], ['biologie', 'Life sciences: DNA, RNA, genes, enzymes'], ['champs', 'Quantum fields, the vacuum, atoms & quarks'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
+const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'], ['biologie', 'Life sciences: DNA, RNA, genes, enzymes'], ['chimie', 'Chemistry: reactions, equilibrium, chemical clocks'], ['champs', 'Quantum fields, the vacuum, atoms & quarks'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
   ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics']];
 /* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
  *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */
@@ -166,7 +168,10 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   bases: 'bases in the sequence', transcription: 'transcription rate k (mRNA made per mRNA lifetime)', traduction: 'translation rate kp (proteins per mRNA per lifetime)', degradation: 'protein decay rate gp (per mRNA lifetime)',
   /* game112 */
   individus: 'individuals per population (N)', partDepart: 'starting share of the variant (p0)', generations: 'generations', populations: 'populations',
-  substrat: 'substrate at the start (S0)', enzyme: 'enzyme (E0)', dissociation: 'complex falling apart (k-1)', catalyse: 'turnover rate (kcat)' };
+  substrat: 'substrate at the start (S0)', enzyme: 'enzyme (E0)', dissociation: 'complex falling apart (k-1)', catalyse: 'turnover rate (kcat)',
+  /* game113 */
+  molecules: 'molecules', k1: 'first rate k1 (A to B)', k2: 'second rate k2 (B to C)', kf: 'forward rate kf (A to B)', kb: 'backward rate kb (B to A)',
+  A: 'feed A', ecartSeuil: 'distance to the clock threshold (B - 1 - A^2)' };
 const nb4 = (x) => (typeof x === 'number' && Number.isFinite(x) ? x === 0 ? '0' : (Math.abs(x) >= 1e-3 && Math.abs(x) < 1e5 ? String(Math.round(x * 1e4) / 1e4) : x.toExponential(2)) : String(x));
 /* un invariant, en une ligne : derive (debut -> fin), ou mesure contre la theorie */
 /* les unites des modules sont ecrites en francais (convention du depot) : l ecran les dit en anglais */

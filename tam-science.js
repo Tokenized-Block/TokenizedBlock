@@ -40,6 +40,9 @@ import * as T3 from './tam-theories-3.js';
 /* game111 (Phil : « ajoute tout ce qui est relie a l ADN, l ARN et le reste ») : sciences de la vie — mutations de l ADN (Jukes-Cantor),
  *   gene -> ARN -> proteine (Gillespie, moments exacts) — SOURCES vide ; game112 : derive genetique (Wright-Fisher), enzyme (Michaelis-Menten) */
 import * as BIO from './tam-biologie.js';
+/* game113 (Phil : « ajoute aussi une categorie science chimique ») : reactions en chaine (Bateman), equilibre A <-> B, brusselator
+ *   (seuil de Hopf exact) — SOURCES vide (pas de pH : la constante de l eau est une valeur publiee non lue) */
+import * as CHI from './tam-chimie.js';
 import { BORNES, motifDefaut, melangerVue, lnD } from './tam-moteur.js';
 import { projeterND, encoder, signature, distance, canon, SEUIL_DISTINCT } from './tam-moteur.js';
 import { keccak256Hex } from './keccak.js';
@@ -86,7 +89,7 @@ const H32 = /^0x[0-9a-f]{64}$/;
 export const MOTIFS_MELANGE = Object.freeze([['ifs', 'fougere'], ['ifs', 'sierpinski'], ['ifs', 'dragon'], ['julia', null], ['phyllotaxie', null], ['epicycles', null],
   ['lsysteme', 'koch'], ['lsysteme', 'dragon'], ['lsysteme', 'plante']]);
 
-export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3, BIO].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
+export const SYSTEMES = Object.freeze([PHY, SCI, FLU, AST, COS, INV, QUA, FUS, GQ1, GQ2, CHQ, VQ, T2, T3, BIO, CHI].flatMap((mod) => mod.SYSTEMES.map((s) => Object.freeze({ ...s, mod }))));
 export const systeme = (id) => SYSTEMES.find((s) => s.id === id) || null;
 /** game82 (audit : le curseur « groupe » glissait par 1/400 et le module l arrondissait) : un parametre ENTIER selon le module lui-meme */
 export const paramEntier = (id, k) => { const s = systeme(id); return !!(s && s.mod.ENTIERS && (s.mod.ENTIERS[id] || []).includes(k)); };
@@ -212,6 +215,8 @@ export const ECHELLE_PROPRE = {
   adnMutations: [3, 4], dogmeCentral: [0, 1, 2],
   /* game112 : generation, part, numero (3 grandeurs) ; complexe C (bien plus petit que S et P) */
   deriveGenetique: [0, 1, 2], enzyme: [2],
+  /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
+  reactionsChaine: [0], equilibreChimique: [2], brusselator: [2],
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {

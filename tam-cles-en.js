@@ -336,6 +336,9 @@ export const CLES_EN_MODULES = Object.freeze({
   sites: 'sites', evenements: 'reactions simulated', rodage: 'warm-up time', blocs: 'time blocks', baseA: 'share of A', baseC: 'share of C', baseG: 'share of G', baseT: 'share of T',
   /* game112 */
   fixees: 'share of populations fixed', eps: 'error scale E0/(S0+Km)', Km: 'Km', Vmax: 'Vmax', substratMi: 'substrate at half-way', partConvertie: 'share converted', tFin: 'end time',
+  /* game113 */
+  tPic: 'peak time', molecules: 'molecules', bValeur: 'B', seuilHopf: 'threshold B = 1 + A^2', oscille: 'oscillates (1 = yes)', ecartFinal: 'final distance to the fixed point',
+  ecartSeuil: 'distance to the threshold', xFixe: 'fixed point x = A', yFixe: 'fixed point y = B/A',
 });
 
 export const NOMS_MESURES_EN = Object.freeze({
@@ -347,6 +350,9 @@ export const NOMS_MESURES_EN = Object.freeze({
   equilibre: 'Endemic level of infected', approche: 'Approach rate to the endemic level',
   /* game110 (perte de chaleur vers l air) */
   refroidissement: 'Total heat (fading to the air)',
+  /* game113 (chimie) */
+  picB: 'Share of B at its peak', resteA: 'Share of A left at t = 1/k1', partA: 'Share of A at the peak time', partB: 'Share of B at the end',
+  relaxation: 'Share of B at the relaxation time', constante: 'Equilibrium constant K = [B]/[A]', seuil: 'Oscillation threshold (Hopf)',
   /* game111 (sciences de la vie) */
   differences: 'Sites that differ from the ancestor', distance: 'Evolutionary distance read back', substitutions: 'Real base changes per site', composition: 'Base composition (chi-square)',
   arnMoyen: 'Mean mRNA count', bruitArn: 'mRNA noise (Fano factor)', proteineMoyenne: 'Mean protein count', bruitProteine: 'Protein noise (Fano factor)', covariance: 'mRNA-protein covariance', simulation: 'Simulation',

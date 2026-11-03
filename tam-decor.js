@@ -453,6 +453,15 @@ const DECORS = {
     return [hyper(B, 1, p, C.repere, 'Starting share p0 = ' + Math.round(p * 1000) / 1000 + ' (the expected mean, forever)')]; },
   /* colonnes : S, P, C ; tout le substrat finit en produit : la droite S + P = S0 (C ~ 0) */
   enzyme: (P, o, B) => { const s0 = P.substrat; return [seg([s0, 0, B.lo[2]], [0, s0, B.lo[2]], C.repere, 'S + P = S0 (all matter, when the complex is empty)')]; },
+  /* ---------- game113 : tam-chimie.js ---------- */
+  /* colonnes : t, a, b, c ; le pic EXACT de B (lu dans les invariants) */
+  reactionsChaine: (P, o, B) => { const t = o.invariants.picB.tPic, b = o.invariants.picB.formule;
+    return [pt([t, B.centre[1], b, B.centre[3]], C.zone, 'Exact peak of B (t* = ' + Math.round(t * 100) / 100 + ')')]; },
+  /* colonnes : x, y, t ; les deux puits */
+  equilibreChimique: (P, o, B) => [pt([-1.5, 0, B.centre[2]], C.repere, 'Well A'), pt([1.5, 0, B.centre[2]], C.repere, 'Well B')],
+  /* colonnes : x, y, t ; le point fixe EXACT (A, B/A) tout au long du temps */
+  brusselator: (P, o, B) => { const s = o.invariants.seuil;
+    return [seg([o.invariants.pointFixe.xFixe, o.invariants.pointFixe.yFixe, B.lo[2]], [o.invariants.pointFixe.xFixe, o.invariants.pointFixe.yFixe, B.hi[2]], C.repere, s.oscille ? 'Balance point (A, B/A): the clock circles round it' : 'Balance point (A, B/A): the reaction settles here')]; },
 };
 
 /** les systemes sans decor, et pourquoi (le module n expose pas d objet de contexte vrai dans ses coordonnees) */

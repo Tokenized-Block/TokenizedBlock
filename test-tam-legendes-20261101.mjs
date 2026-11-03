@@ -15,7 +15,7 @@ const ids = TS.SYSTEMES.map((s) => s.id);
 /* game80 : + les 16 grandes questions (tam-grandes-questions.js : 9, tam-grandes-questions-2.js : 7) */
 /* game81 : + les 9 champs quantiques (tam-champs-quantiques.js) */
 /* game88 : + les 4 principes du vide (tam-vide-quantique.js) */
-ok(ids.length === 103, '103 systemes attendus, ' + ids.length + ' trouves'); /* game93 : + 6 theories classiques (tam-theories-2.js) ; game96 : + 6 (tam-theories-3.js) ; game111 : + 2 (tam-biologie.js) ; game112 : + 2 */
+ok(ids.length === 106, '106 systemes attendus, ' + ids.length + ' trouves'); /* game93 : + 6 theories classiques (tam-theories-2.js) ; game96 : + 6 (tam-theories-3.js) ; game111 : + 2 (tam-biologie.js) ; game112 : + 2 ; game113 : + 3 (tam-chimie.js) */
 ok(['videComprime', 'casimirDynamique', 'higgsVide', 'emissionSpontanee'].every((id) => ids.includes(id) && TS.systeme(id).mod.SOURCES), 'les 4 principes du vide sont dans tam-science.js#SYSTEMES');
 const CHQ_IDS = ['champLibre', 'fluctuationsVide', 'interactionChamps', 'paireSchwinger', 'effetUnruh', 'couplageCourant', 'comptonKleinNishina', 'atomes', 'quarks'];
 ok(CHQ_IDS.every((id) => ids.includes(id) && TS.systeme(id).mod.SOURCES), 'les 9 champs quantiques sont dans tam-science.js#SYSTEMES');
@@ -64,7 +64,7 @@ for (const id of ids) {
     ok(F.colonneTemps === null || (Number.isInteger(F.colonneTemps) && F.colonneTemps < o.D), id + ' : colonneTemps');
   }
 }
-ok(Object.keys(LEGENDES).length === 105 && LEGENDES.__attracteur && LEGENDES.__formule, '103 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
+ok(Object.keys(LEGENDES).length === 108 && LEGENDES.__attracteur && LEGENDES.__formule, '106 + __attracteur + __formule : ' + Object.keys(LEGENDES).length);
 ok(Object.keys(LEGENDES).every((id) => id.startsWith('__') || ids.includes(id)), 'aucune legende orpheline');
 ok(legende('__attracteur', { D: 5 }).colonnes.length === 5 && LEGENDES.__attracteur.colonnes.length === 3, 'attracteur : une colonne par variable');
 ok(LEGENDES.__formule.colonnes.length === 3 && legende('inconnu') === null, 'formule x y z ; id inconnu -> null');
@@ -83,8 +83,10 @@ const FILMS = ['supernova', 'supernovaHydro', 'effetTunnel', 'superpositionQuant
   /* game111 : 8 instants de la meme sequence d ADN */
   'adnMutations',
   /* game112 : une population par image */
-  'deriveGenetique'];
-ok(FILMS.every((id) => films.includes(id)) && films.length === 24, 'les 24 films : ' + films.join(','));
+  'deriveGenetique',
+  /* game113 : 8 instants des memes molecules */
+  'equilibreChimique'];
+ok(FILMS.every((id) => films.includes(id)) && films.length === 25, 'les 25 films : ' + films.join(','));
 function blocsExacts(id, o, F) {
   const c = F.colonneTemps, D = o.D, b = o.brut;
   for (let k = 0; k < F.images; k++) {

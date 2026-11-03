@@ -59,6 +59,8 @@ const FILMS_DU_MODULE = {
   adnMutations: { colonneTemps: 4 },
   /* game112 */
   deriveGenetique: { colonneTemps: 0, note: 'each frame is one population, followed over all its generations' },
+  /* game113 : chaque image = les memes molecules a un instant plus tard */
+  equilibreChimique: { colonneTemps: 2 },
 };
 const COUPLAGES = ['Electromagnetic coupling (1/alpha)', 'Strong coupling (1/alpha_s)'];
 /* atomes : les sous-couches remplies, lues dans la configuration que le module rend (ex. « 1s2 2s2 2p6 ... ») */
@@ -889,6 +891,28 @@ const L = {
     enUnePhrase: 'Substrate turned into product by an enzyme: the path of substrate, product and bound enzyme over the whole reaction.',
     colonnes: ['substrate S', 'product P (same units)', 'enzyme-substrate complex C'],
     aRegarder: ['Total enzyme and total matter stay constant at every step.', 'The rate follows Vmax S / (Km + S) only when there is little enzyme: the error scale E0 / (S0 + Km) is shown.', 'Raise the enzyme and the complex takes up substrate before the law can hold: the formula visibly fails.'],
+    fin: null,
+  },
+  /* game113 : chimie (tam-chimie.js) */
+  reactionsChaine: {
+    titre: 'A chain of reactions A to B to C (Bateman)',
+    enUnePhrase: 'The shares of A, B and C over time as each molecule turns A into B, then B into C, after random waits.',
+    colonnes: ['time t', 'share of A', 'share of B', 'share of C'],
+    aRegarder: ['A falls as e^(-k1 t); C rises to take everything in the end.', 'The intermediate B rises then falls, peaking at the exact time t* = ln(k1/k2)/(k1 - k2).', 'A finite number of molecules: the match is statistical, and a new seed gives another run.'],
+    fin: null,
+  },
+  equilibreChimique: {
+    titre: 'A reaction going both ways (chemical equilibrium A <-> B)',
+    enUnePhrase: 'Molecules hopping between two wells, A on the left and B on the right, frame by frame from an all-A start.',
+    colonnes: ['x: well A on the left, well B on the right (the place inside a well is drawn)', 'y (drawn)', 'time t'],
+    aRegarder: ['The share of B rises as pi (1 - e^(-(kf + kb) t)) with pi = kf / (kf + kb).', 'Molecules never stop hopping, but the flows balance: [B]/[A] settles at K = kf / kb.', 'A finite number of molecules: the match is statistical.'],
+    fin: null,
+  },
+  brusselator: {
+    titre: 'A chemical clock (the Brusselator)',
+    enUnePhrase: 'Two concentrations of an oscillating reaction over time, from a start next to the balance point (A, B/A).',
+    colonnes: ['concentration x', 'concentration y', 'time t'],
+    aRegarder: ['Below the exact threshold B = 1 + A^2 the reaction spirals into its balance point at the exact linear rate.', 'Above it the reaction never settles: it ticks on a closed loop like a clock.', 'Near the threshold the period is close to 2 pi / A; further away it is measured only.'],
     fin: null,
   },
   /* ---------- familles hors science ---------- */
