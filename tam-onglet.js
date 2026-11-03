@@ -261,7 +261,10 @@ const CSS = `
 #v-tam .tamScene canvas{width:100%;height:100%;display:block}
 #v-tam .tamInfo{position:absolute;left:8px;top:6px;font-size:.78rem;color:var(--tam-doux);pointer-events:none}
 #v-tam .tamVars{position:absolute;left:8px;bottom:6px;right:8px;display:flex;flex-wrap:wrap;gap:2px 10px;max-height:40%;overflow:hidden;font:11px/1.35 ui-monospace,Consolas,monospace;color:#cfd6ff;opacity:.85;pointer-events:none;text-shadow:0 0 4px #0b0d17}
-#v-tam .tamVars b{width:100%;font-weight:600;color:#fff}
+#v-tam .tamVars b{width:100%;font-weight:600;color:#fff;pointer-events:auto;cursor:pointer}
+/* game116+ (Phil : « on comprend mal les exemples » ; vu a l ecran : ce bloc couvrait jusqu a 40 % du bas des graphiques) : replie par
+   defaut sur son titre ; tout son contenu est deja sur les curseurs et dans les verifications sous la scene */
+#v-tam .tamVars.replie > :not(b){display:none}
 #v-tam .tamPayListe{margin:.3rem 0;padding-left:1.1rem;font-size:.82rem;color:var(--tam-doux);max-height:220px;overflow:auto}
 #v-tam .tamBulle{position:absolute;z-index:3;pointer-events:none;max-width:260px;background:rgba(11,13,23,.94);border:1px solid var(--tam-acc);border-radius:10px;padding:6px 9px;font:11px/1.45 ui-monospace,Consolas,monospace;color:#e8ecf5;box-shadow:0 0 14px rgba(127,209,255,.35)}
 #v-tam .tamBulle b{color:#fff}
@@ -666,14 +669,20 @@ export function monter(racine, ctx = {}) {
   });
   selSys.addEventListener('change', () => chargerScience(selSys.value));
   /* les variables sur la scene : la combinaison, chaque parametre a sa valeur, la dimension, le nombre de points, la graine */
+  /* le titre du bloc sur la scene le deplie / replie (clic, Entree, Espace) ; replie par defaut */
+  const titreVars = (t) => el('b', { text: t + (S.varsOuvert ? '  ▴ hide' : '  ▾ details'), role: 'button', tabindex: '0', 'aria-expanded': String(!!S.varsOuvert) });
+  const basculerVars = () => { S.varsOuvert = !S.varsOuvert; peindreVarsScene(); };
+  varsScene.addEventListener('click', (e) => { if (e.target && e.target.tagName === 'B') basculerVars(); });
+  varsScene.addEventListener('keydown', (e) => { if (e.target && e.target.tagName === 'B' && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); basculerVars(); } });
   function peindreVarsScene() {
+    varsScene.classList.toggle('replie', !S.varsOuvert);
     if (!S.P) { varsScene.replaceChildren(); return; }
     if (S.science) {
       const { s, o } = S.science, m = o ? mesureResolution() : null;
       if (m) resTxt.textContent = '1/' + m.cote;
       const lam = o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? 'λ = ' + o.lyapunov.toFixed(3) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' (measured over this run)' : null;
       varsScene.replaceChildren(
-        el('b', { text: s.nom + ' — ' + s.science + ' · live simulation' }),
+        titreVars(s.nom + ' — ' + s.science + ' · live simulation'),
         ...s.mod.reglagesPhysique(s.id, S.P.params).map((r) => el('span', { text: (NOMS_PARAMS_EN[r.nom] || r.nom) + ' = ' + nb4(r.valeur) })),
         el('span', { text: S.D + '-D · ' + S.n + (o && o.nuage ? ' samples (a cloud, not a path)' : ' points') }),
         ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).slice(0, 4).map(([k, v]) => el('span', { class: 'tamMesure', text: ligneInvariant(k, v) })),
@@ -689,7 +698,7 @@ export function monter(racine, ctx = {}) {
     const res = m ? 'resolution 1/' + m.cote + ' on the drawn view (' + (m.dense ? 'the 2-D map, ' + m.points.toLocaleString('en-US') + ' points' : m.vis + ' layers') + '): ' + m.N + ' boxes hold the shape · local dimension ≈ ' + (Number.isFinite(m.dim) ? m.dim.toFixed(2) : '—')
       + (m.sature ? ' (too fine for ' + m.points.toLocaleString('en-US') + ' points: read it as a lower bound)' : '') : null;
     varsScene.replaceChildren(
-      el('b', { text: V.combinaison(S.P) }),
+      titreVars(V.combinaison(S.P)),
       ...R.map((r) => el('span', { text: r.nom + ' = ' + r.valeur.toFixed(4) })),
       el('span', { text: S.D + '-D · ' + S.n + ' points' + (graine ? ' · seed ' + graine.slice(0, 10) + '…' : '') }),
       ...(lam ? [el('span', { class: 'tamMesure', text: lam })] : []),

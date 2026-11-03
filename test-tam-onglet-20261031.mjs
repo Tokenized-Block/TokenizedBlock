@@ -282,6 +282,11 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     && /TS\.paramEntier\(S\.science\.s\.id, cle\) \? '1'/.test(onglet), 'les pas entiers viennent de la declaration ENTIERS des modules');
   /* vu a l ecran : la 1re version reprenait la classe .tamVars (panneau EN ABSOLU sur la scene) -> rendu hors de la carte */
   ok(/el\('details', \{ class: 'tamReglagesHaut'/.test(onglet) && !/\.tamReglagesHaut\{[^}]*position:/.test(onglet) && (onglet.match(/class: 'tamVars'/g) || []).length === 1, 'le bloc des variables du haut a sa propre classe, en flux');
+  /* game117 (vu a l ecran : le bloc sur la scene couvrait jusqu a 40 % du bas des graphiques) : replie par defaut, titre cliquable et
+   *   atteignable au clavier, dans les DEUX branches (science et attracteur) */
+  ok(/#v-tam \.tamVars\.replie > :not\(b\)\{display:none\}/.test(onglet) && /varsScene\.classList\.toggle\('replie', !S\.varsOuvert\)/.test(onglet)
+    && (onglet.match(/titreVars\(/g) || []).length === 2 && /role: 'button', tabindex: '0', 'aria-expanded'/.test(onglet) && /e\.key === 'Enter' \|\| e\.key === ' '/.test(onglet),
+    'game117 : le bloc sur la scene est replie par defaut (titre cliquable, clavier, aria-expanded)');
   /* game89 (Phil, Unruh : deux libelles ecrits l un SUR l autre) : le VRAI placeur du source, sur un faux canvas — deux textes au meme
    *   point ne se chevauchent plus ; et toute ecriture de la scene passe par lui (un seul fillText nu : le sien) */
   {
