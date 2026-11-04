@@ -714,7 +714,54 @@ function dzhanibekov(P, n) {
     axesStables: { axe1: t1.pireEcart, axe3: t3.pireEcart, retournements: zeros.length, note: 'witness: thrown the same way about the axis of least and of greatest inertia, the largest wobble over the same time, in units of eps (stays small) ; and the turn-overs of the middle axis counted' } } };
 }
 
+// ---------- 19 : la toupie pesante (nutation et precession) ----------
+// Toupie symetrique sur sa pointe : I1 = I3 = 1 (autour de la pointe), M g l = 1. Axe n incline de theta0 (curseur) sur la verticale,
+//   tournant sur lui-meme a omega3 (curseur), LACHE sans autre mouvement.
+// Mesure : rien que les vecteurs, sans angles d Euler : dn/dt = (L x n) / I1, dL/dt = -M g l (n x z), RK4 (pas 0.001) ; les points hauts
+//   et bas de l axe (extrema de n_z, interpoles par parabole), l angle de precession phi = atan2(n_y, n_x) deroule. Temoin : la meme
+//   toupie lancee en precession STATIONNAIRE (Omega lent exact) ne nute pas.
+// Exact (derive ici, Goldstein) : u = cos theta, a = I3 omega3 / I1, beta = 2 M g l / I1 ; lachee, u'^2 = beta (u0 - u)(u - u1)(u2 - u)
+//   avec u1 u2 = c u0 - 1, u1 + u2 = c, c = a^2 / beta : la pointe descend jusqu a u1 et remonte ; periode de nutation
+//   4 K(m) / sqrt(beta (u2 - u1)), m = (u0 - u1) / (u2 - u1) (K par l AGM) ; precession par nutation
+//   2 integrale de a (u0 - u) / (1 - u^2) du / sqrt(u'^2) (u = u1 + (u0 - u1) sin^2 chi, Simpson, sans singularite). Stationnaire :
+//   Omega^2 u0 - a Omega + beta / 2 = 0, racine lente beta / (a + sqrt(a^2 - 2 beta u0)). Toupie rapide : precession moyenne ~ M g l / (I3 omega3).
+// Dessin (game144 : en x, y, z de la pointe la hauteur ne bougeait que de 0.12 sur 3.3, les cuspides ecrasees) : l angle tourne autour de la
+//   verticale phi, l inclinaison theta (degres) et le temps : les cuspides de la course lachee, puis la droite de la precession stationnaire.
+const TP_H = 0.001;
+function toupie(P, n) {
+  const I1 = 1, I3 = 1, Mgl = 1, w3 = P.rotation, th0 = P.angleAxe * PI / 180, u0 = cosD(th0), a = I3 * w3 / I1, beta = 2 * Mgl / I1, c = a * a / beta;
+  const cr = (x, y) => [x[1] * y[2] - x[2] * y[1], x[2] * y[0] - x[0] * y[2], x[0] * y[1] - x[1] * y[0]];
+  const der = (s) => { const nn = s.slice(0, 3), L = s.slice(3), dn = cr(L, nn), t = cr(nn, [0, 0, 1]); return [dn[0] / I1, dn[1] / I1, dn[2] / I1, -Mgl * t[0], -Mgl * t[1], -Mgl * t[2]]; };
+  const pas = (s) => { const k1 = der(s), k2 = der(s.map((x, i) => x + TP_H / 2 * k1[i])), k3 = der(s.map((x, i) => x + TP_H / 2 * k2[i])), k4 = der(s.map((x, i) => x + TP_H * k3[i])); return s.map((x, i) => x + TP_H / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); };
+  /* exact : racines (u1 par le produit, sans annulation), periode, precession par nutation */
+  const u2 = (c + Math.sqrt(c * c + 4 * (1 - c * u0))) / 2, u1 = (c * u0 - 1) / u2, m = (u0 - u1) / (u2 - u1);
+  const Tex = 4 * (PI / (2 * agm(1, Math.sqrt(1 - m)))) / Math.sqrt(beta * (u2 - u1));
+  let simp = 0; const M = 2000; for (let i = 0; i <= M; i++) { const ch = (PI / 2) * i / M, s2 = sinD(ch) ** 2, u = u1 + (u0 - u1) * s2; simp += (i === 0 || i === M ? 1 : i % 2 ? 4 : 2) * a * (u0 - u) / (1 - u * u) * 2 / Math.sqrt(beta * (u2 - u)); }
+  const dPhiEx = 2 * simp * (PI / 2) / M / 3, Om = beta / (a + Math.sqrt(a * a - 2 * beta * u0));
+  /* course lachee : 8 nutations */
+  const n0 = [sinD(th0), 0, u0]; let s = [...n0, ...n0.map((x) => I3 * w3 * x)];
+  const N = Math.ceil(8.5 * Tex / TP_H), z = [u0], phi = [0], trace = [[0, P.angleAxe, 0]]; let pireL3 = 0;
+  for (let i = 1; i <= N; i++) { s = pas(s); z.push(s[2]); let f = atan2D(s[1], s[0]); const p0 = phi[i - 1]; while (f - p0 > PI) f -= 2 * PI; while (f - p0 < -PI) f += 2 * PI; phi.push(f);
+    pireL3 = Math.max(pireL3, Math.abs((s[0] * s[3] + s[1] * s[4] + s[2] * s[5]) / (I3 * w3) - 1)); if (i % 5 === 0) trace.push([f, acosD(s[2]) * 180 / PI, i * TP_H]); }
+  const hauts = [0], bas = [];
+  for (let i = 1; i < z.length - 1; i++) { const A = z[i - 1], B = z[i], C = z[i + 1], d2 = A - 2 * B + C; if (d2 === 0) continue; const dx = (A - C) / (2 * d2), v = B - (A - C) * dx / 4;
+    if (B > A && B >= C) hauts.push((i + dx) * TP_H); else if (B < A && B <= C) bas.push(v); }
+  const k = hauts.length - 1, Tm = k > 0 ? hauts[k] / k : NaN, iK = Math.floor(hauts[k] / TP_H), fK = hauts[k] / TP_H - iK, dPhiM = k > 0 ? (phi[iK] + fK * (phi[iK + 1] - phi[iK])) / k : NaN;
+  let uBas = 0; for (const v of bas) uBas += v; uBas /= Math.max(1, bas.length);
+  /* temoin : precession stationnaire, meme duree */
+  let st = [...n0, ...[0, 1, 2].map((j) => I1 * Om * ([0, 0, 1][j] - u0 * n0[j]) + I3 * w3 * n0[j])], zMin = u0, zMax = u0, pf = 0; const cercle = [[0, P.angleAxe, 0]];
+  for (let i = 1; i <= N; i++) { st = pas(st); zMin = Math.min(zMin, st[2]); zMax = Math.max(zMax, st[2]); let f = atan2D(st[1], st[0]); while (f - pf > PI) f -= 2 * PI; while (f - pf < -PI) f += 2 * PI; pf = f; if (i % 20 === 0) cercle.push([f, acosD(st[2]) * 180 / PI, i * TP_H]); }
+  const brut = new Float64Array(n * 3), nA = Math.floor(n * 2 / 3), poser = (tr, debut, m2) => { for (let q = 0; q < m2; q++) { const j = m2 <= 1 ? 0 : Math.round(q * (tr.length - 1) / (m2 - 1)), o = 3 * (debut + q); brut[o + 2] = tr[j][2]; brut[o] = tr[j][0]; brut[o + 1] = tr[j][1]; } };
+  poser(trace, 0, nA); poser(cercle, nA, n - nA);
+  return { D: 3, brut, nuage: true, unite: 'sans objet (I1 = I3 = 1, M g l = 1)', invariants: {
+    periodeNutation: { mesure: Tm, formule: Tex, note: 'time between two highest points of the axis (interpolated), against 4 K(m) / sqrt(beta (u2 - u1)) (K by the AGM)' },
+    angleBas: { mesure: acosD(uBas) * 180 / PI, formule: acosD(u1) * 180 / PI, note: 'lowest the axis gets (degrees from the vertical, mean of the turning points found), against acos(u1), the smaller root of the cubic' },
+    precessionNutation: { mesure: dPhiM, formule: dPhiEx, approxRapide: Mgl / (I3 * w3) * Tex, note: 'turn of the axis around the vertical during one nutation (radians), against the exact integral ; beside it the fast-top guess M g l / (I3 omega3) times the period (an approximation)' },
+    stationnaire: { ecartHauteur: zMax - zMin, vitesse: pf / (N * TP_H), omegaLent: Om, spinConserve: pireL3, note: 'witness: launched in steady precession at the exact slow rate, the axis keeps its height (range of n_z) and turns at that rate ; and the spin L . n / (I3 omega3) kept along the free run' } } };
+}
+
 export const COLONNES = Object.freeze({
+  toupie: { colonnes: ['angle turned around the vertical phi (radians)', 'tilt of the axis theta (degrees)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   dzhanibekov: { colonnes: ['spin about axis 1 (least inertia)', 'spin about axis 2 (the middle one)', 'spin about axis 3 (most inertia)'], memeLongueur: [[0, 1, 2]], autres: [] },
   perleCerceau: { colonnes: ['spin omega (units of sqrt(g / R))', 'angle theta of the bead from the bottom (radians)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   echelleGlisse: { colonnes: ['x (the wall is x = 0)', 'height y (the floor is y = 0)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
@@ -790,9 +837,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'dzhanibekov', nom: 'The tumbling racket (Dzhanibekov effect)', science: 'Classical mechanics', D: 3, nuage: true, params: { milieu: 2, ecartPuissance: 6 },
     bornes: { milieu: [1.3, 2.7], ecartPuissance: [4, 6] },
     phrase: 'A visualisation of a free body spun about the middle of its three axes, with nothing but the equations of Euler. A wobble too small to see grows, and the body turns over, again and again, at the time given by the exact Jacobi solution. Spun about the axis of least or of greatest inertia, the same wobble stays tiny: those two spins are stable, the middle one is not. Drawn is the spin vector seen from the body.' },
+  { id: 'toupie', nom: 'A spinning top (nutation and precession)', science: 'Classical mechanics', D: 3, nuage: true, params: { rotation: 6, angleAxe: 40 },
+    bornes: { rotation: [3, 20], angleAxe: [10, 80] },
+    phrase: 'A visualisation of a spinning top let go with its axis tilted: the tip of the axis dips, comes back up and creeps around the vertical, tracing cusped loops. Only the spin and the pull of gravity are simulated; the time of each dip, how low the axis gets and how far it turns each time match the exact solution of Lagrange. Launched instead at the exact steady rate, the same top turns smoothly without dipping.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'], toupie: [] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov, toupie };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game144 ---------- */
+  toupie: (P, o, B) => [pt([0, o.invariants.angleBas.formule, B.centre[2]], C.repere, 'Lowest tilt of the axis (exact)')],
   /* ---------- game143 ---------- */
   dzhanibekov: (P, o, B) => [pt([0, 1, 0], C.repere, 'Spin about the middle axis (unstable)')],
   /* ---------- game142 ---------- */

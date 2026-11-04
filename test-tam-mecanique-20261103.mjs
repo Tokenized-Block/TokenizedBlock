@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov', 'toupie'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -292,6 +292,25 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(pireC < 1e-11 && w2min < -0.99 && pireT < 10, 'dessin ' + pireC + ' w2min ' + w2min + ' temoins ' + pireT);
     return 'retournement ' + I.retournement.mesure.toFixed(4) + ' / ' + demi.toFixed(4) + ', taux ' + I.tauxEcart.mesure.toFixed(5) + ' / ' + lam.toFixed(5) + ', temoins ' + pireT.toFixed(2) + ' eps';
   });
+  /* game144 : toupie — references INDEPENDANTES : u1 par DICHOTOMIE sur la cubique (pas la formule des racines) ; periode et precession
+   *   par quadrature directe en u (substitution u = u0 - (u0 - u1) s^2 ... ici theta = u1 + (u0 - u1)(1 - cos t)/2, points milieux, Math) ;
+   *   Omega lent par la formule du second degre ecrite autrement ; chaque point dessine sur la sphere unite, le cercle a hauteur u0 */
+  if (vise('toupie')) for (const p of [...extremes(sys('toupie')), { rotation: 9, angleAxe: 55 }]) ok(`toupie ${JSON.stringify(p)} : periode de nutation, angle bas, precession par nutation, precession stationnaire`, () => {
+    const R = S('toupie', p), I = R.invariants, b = R.brut, a = R.params.rotation, u0 = Math.cos(R.params.angleAxe * Math.PI / 180), beta = 2;
+    const f = (u) => (1 - u * u) * beta * (u0 - u) - (a * (u0 - u)) ** 2; /* u'^2 lachee (b = a u0, alpha = beta u0) */
+    let lo = -1, hi = u0 - 1e-15; for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2; if (f(m) < 0) lo = m; else hi = m; } const u1 = (lo + hi) / 2;
+    const M = 200000; let T = 0, dP = 0; for (let i = 0; i < M; i++) { const t = (i + 0.5) * Math.PI / M, u = u1 + (u0 - u1) * (1 - Math.cos(t)) / 2, du = (u0 - u1) * Math.sin(t) / 2 * Math.PI / M, r = Math.sqrt(f(u)); T += 2 * du / r; dP += 2 * a * (u0 - u) / (1 - u * u) * du / r; }
+    assert.ok(Math.abs(I.periodeNutation.formule / T - 1) < 1e-6 && Math.abs(I.periodeNutation.mesure / T - 1) < 1e-6, 'periode ' + I.periodeNutation.mesure + ' ' + I.periodeNutation.formule + ' ' + T);
+    const bas = Math.acos(u1) * 180 / Math.PI; assert.ok(Math.abs(I.angleBas.formule - bas) < 1e-6 && Math.abs(I.angleBas.mesure - bas) < 1e-5, 'bas ' + I.angleBas.mesure + ' ' + bas);
+    assert.ok(Math.abs(I.precessionNutation.formule / dP - 1) < 1e-6 && Math.abs(I.precessionNutation.mesure / dP - 1) < 1e-6, 'precession ' + I.precessionNutation.mesure + ' ' + dP);
+    const Om = (a - Math.sqrt(a * a - 4 * u0 * beta / 2)) / (2 * u0), St = I.stationnaire;
+    assert.ok(Math.abs(St.omegaLent / Om - 1) < 1e-9 && Math.abs(St.vitesse / Om - 1) < 1e-8 && St.ecartHauteur < 1e-9 && St.spinConserve < 1e-10, 'stationnaire ' + JSON.stringify(St) + ' ' + Om);
+    /* dessin (phi, theta en degres, t) : la course lachee reste entre theta0 et l angle bas ; la stationnaire a theta0, phi = Omega t */
+    const nA = Math.floor(R.n * 2 / 3), th0 = R.params.angleAxe; let pireS = 0, pireC = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q;
+      if (q < nA) pireS = Math.max(pireS, th0 - 1e-7 - b[o + 1], b[o + 1] - bas - 1e-4); else pireC = Math.max(pireC, Math.abs(b[o + 1] - th0), Math.abs(b[o] - Om * b[o + 2])); }
+    assert.ok(pireS <= 0 && pireC < 1e-7, 'dessin ' + pireS + ' ' + pireC);
+    return 'periode ' + I.periodeNutation.mesure.toFixed(7) + ' / ' + T.toFixed(7) + ', bas ' + I.angleBas.mesure.toFixed(4) + ' deg, precession ' + I.precessionNutation.mesure.toFixed(6) + ' (rapide ' + I.precessionNutation.approxRapide.toFixed(6) + ')';
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -399,6 +418,17 @@ const MUTANTS = [
   ['dzhan : w1 seconde decentree', 'const a2 = (u[0] - 2 * w[0] + avant) / (DZ_H * DZ_H); sAw += a2 * w[0];', 'const a2 = (u[0] - 2 * w[0] + avant) / (DZ_H * DZ_H); sAw += a2 * u[0];'],
   ['dzhan : temoin 1 lance sur l axe du milieu', 'ax === 0 ? [1, eps, eps]', 'ax === 0 ? [eps, 1, eps]'],
   ['dzhan : w3 dessine 1 % trop grand', 'brut[o + 2] = tr[j][2]; } };', 'brut[o + 2] = tr[j][2] * 1.01; } };'],
+  ['toupie : couple de pesanteur a l envers', '-Mgl * t[0], -Mgl * t[1], -Mgl * t[2]', 'Mgl * t[0], Mgl * t[1], Mgl * t[2]'],
+  ['toupie : I1 1 % trop grand dans dn/dt', 'dn[0] / I1, dn[1] / I1, dn[2] / I1', 'dn[0] / (1.01 * I1), dn[1] / (1.01 * I1), dn[2] / (1.01 * I1)'],
+  ['toupie : produit des racines faux', 'u1 = (c * u0 - 1) / u2', 'u1 = (c * u0 - 1.01) / u2'],
+  ['toupie : module elliptique 1 % trop grand', 'agm(1, Math.sqrt(1 - m))', 'agm(1, Math.sqrt(1 - 1.01 * m))'],
+  ['toupie : integrande de precession faux', 'a * (u0 - u) / (1 - u * u)', 'a * (u0 - u) / (1 - 1.01 * u * u)'],
+  ['toupie : Omega lent faux', 'Math.sqrt(a * a - 2 * beta * u0))', 'Math.sqrt(a * a - 2.2 * beta * u0))'],
+  ['toupie : point haut non interpole', 'hauts.push((i + dx) * TP_H)', 'hauts.push(i * TP_H)'],
+  /* (retire : « phi non interpole au dernier point haut » — EQUIVALENT : lachee sans precession, la toupie a phi' = 0 aux points hauts
+   *   (les cuspides), l interpolation n y change rien) */
+  ['toupie : phi non deroule', 'while (f - p0 > PI) f -= 2 * PI; while (f - p0 < -PI) f += 2 * PI; phi.push(f);', 'phi.push(f);'],
+  ['toupie : temps dessine 1 % trop long', 'brut[o + 2] = tr[j][2]; brut[o] = tr[j][0];', 'brut[o + 2] = tr[j][2] * 1.01; brut[o] = tr[j][0];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -412,7 +442,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'], toupie: ['toupie'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

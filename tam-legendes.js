@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game144 */
+  toupie: {
+    titre: 'A spinning top (nutation and precession)',
+    enUnePhrase: 'How far the axis of a spinning top has turned around the vertical and how tilted it is, over time: let go tilted, then launched in steady precession.',
+    colonnes: ['angle turned around the vertical phi (radians)', 'tilt of the axis theta (degrees)', 'time t'],
+    aRegarder: ['Let go from rest, the axis first falls, then the spin swings it sideways: the curve makes a cusp each time it comes back up, where it stops turning for an instant.', 'Spin faster: the dips get smaller and quicker, and the slow turn around the vertical gets slower, about M g l / (I3 omega3).', 'The straight line is the same top launched at the exact steady rate: no dip at all, the tilt stays put.'],
+    fin: null,
+  },
   /* game143 */
   dzhanibekov: {
     titre: 'The tumbling racket (Dzhanibekov effect)',

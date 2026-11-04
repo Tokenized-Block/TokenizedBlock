@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game144 */
+  approxRapide: 'fast-top guess (approximation)', ecartHauteur: 'change of height of the axis', vitesse: 'turning rate', omegaLent: 'exact slow steady rate', spinConserve: 'drift of the spin',
   /* game143 */
   moment: 'squared angular momentum', axe1: 'about axis 1 (least inertia), in eps', axe3: 'about axis 3 (most inertia), in eps', retournements: 'turn-overs of the middle axis',
   /* game142 */
@@ -407,6 +409,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game144 */
+  periodeNutation: 'Time of one dip of the axis (nutation)', angleBas: 'Lowest angle of the axis (degrees)', precessionNutation: 'Turn around the vertical per dip (radians)', stationnaire: 'Witness: steady precession',
   /* game143 */
   retournement: 'Time between two turn-overs vs the Jacobi solution', tauxEcart: 'Growth rate of a tiny wobble', conservation: 'Drift of energy and angular momentum', axesStables: 'Witness: wobble about the stable axes',
   /* game142 */
