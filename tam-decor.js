@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game138 ---------- */
+  pendulesCouples: (P, o, B) => [pt([o.invariants.tempsEchange.formule, 0, B.centre[2]], C.repere, 'Swing handed over (pi / (omega2 - omega1))')],
   /* ---------- game137 ---------- */
   anneauxNewton: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Where the lens touches the glass')],
   /* ---------- game136 ---------- */

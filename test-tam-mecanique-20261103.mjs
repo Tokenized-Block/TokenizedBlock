@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -33,7 +33,7 @@ function suite(T, bavard = false, seul = null) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 12 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 13 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -191,6 +191,17 @@ function suite(T, bavard = false, seul = null) {
     if (attendus > 1) assert.ok(Math.abs(I.penteCarres.mesure / (lam * Rl * 1e6) - 1) < 2e-4 && Math.abs(I.penteCarres.formule / (lam * Rl * 1e6) - 1) < 1e-12, 'pente ' + I.penteCarres.mesure);
     return attendus + ' anneaux, rayons ' + I.rayonsAnneaux.mesure.toExponential(1) + ', pente ' + I.penteCarres.mesure.toFixed(6) + ' / ' + (lam * Rl * 1e6).toFixed(6);
   });
+  /* game138 : pendules couples — references INDEPENDANTES : periodes exactes de Verlet (2/h) asin(w h / 2) par Math.asin, physiques par
+   *   Math.sqrt ; chaque point dessine contre la solution ANALYTIQUE ((1 + d) cos t +- (1 - d) cos w2 t) / 2 (ecart de phase de Verlet ~ w^2 h^2 t / 24) */
+  if (vise('pendulesCouples')) for (const p of [...extremes(sys('pendulesCouples')), { couplage: 0.3, depart: -0.4 }]) ok(`pendulesCouples ${JSON.stringify(p)} : periodes 2 pi et 2 pi / sqrt(1 + 2k) (et Verlet), echange pi / (w2 - 1), courbes analytiques`, () => {
+    const R = S('pendulesCouples', p), I = R.invariants, b = R.brut, k = R.params.couplage, d = R.params.depart, h = 0.005, w2 = Math.sqrt(1 + 2 * k), V = (w) => 2 / h * Math.asin(w * h / 2);
+    assert.ok(Math.abs(I.modeLent.mesure / (2 * Math.PI / V(1)) - 1) < 1e-9 && Math.abs(I.modeRapide.mesure / (2 * Math.PI / V(w2)) - 1) < 1e-9, 'Verlet ' + I.modeLent.mesure + ' ' + I.modeRapide.mesure);
+    assert.ok(Math.abs(I.modeLent.mesure / (2 * Math.PI) - 1) < 1e-5 && Math.abs(I.modeRapide.mesure / (2 * Math.PI / w2) - 1) < 1e-5, 'physique');
+    assert.ok(Math.abs(I.tempsEchange.formule - Math.PI / (w2 - 1)) < 1e-9 * I.tempsEchange.formule && Math.abs(I.tempsEchange.mesure / I.tempsEchange.formule - 1) < 1e-4, 'echange ' + I.tempsEchange.mesure);
+    assert.ok(I.energieCouples.derive < 1e-4 * I.energieCouples.debut, 'energie ' + I.energieCouples.derive);
+    let pire = 0; for (let i = 0; i < R.n; i++) { const o = 3 * i, t = b[o], c = b[o + 2], ref = ((1 + d) * Math.cos(t) + (c ? -1 : 1) * (1 - d) * Math.cos(w2 * t)) / 2; pire = Math.max(pire, Math.abs(b[o + 1] - ref)); assert.ok(Math.abs(b[o + 1] - ref) < 3e-3, 'point ' + i + ' t ' + t + ' : ' + b[o + 1] + ' ' + ref); }
+    return 'echange ' + I.tempsEchange.mesure.toFixed(4) + ' / ' + I.tempsEchange.formule.toFixed(4) + ', ecart aux courbes ' + pire.toExponential(1);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -249,6 +260,11 @@ const MUTANTS = [
   ['newton : fleche paraxiale', 'const fleche = (r) => r * r / (R + Math.sqrt(R * R - r * r));', 'const fleche = (r) => r * r / (2 * R);'],
   ['newton : section doree qui monte', 'if (I(x) < I(y)) v = y; else u = x;', 'if (I(x) > I(y)) v = y; else u = x;'],
   ['newton : formule sans la lame d air', 'const e = m * lam / 2 - d0; if (e < 0) continue;', 'const e = m * lam / 2; if (e < 0) continue;'],
+  ['couples : ressort qui pousse le second a l envers', 'by = -y - k * (y - x); u += PC_H / 2', 'by = -y + k * (y - x); u += PC_H / 2'],
+  ['couples : passage par zero non interpole', 'zeros.push(tp + PC_H * (-xp) / (x - xp));', 'zeros.push(tp + PC_H * 0.5);'],
+  ['couples : Verlet qui pese 2.02', 'u += PC_H / 2 * (ax + bx); v += PC_H / 2 * (ay + by);', 'u += PC_H / 2.02 * (ax + bx); v += PC_H / 2.02 * (ay + by);'],
+  ['couples : omega2 = sqrt(1 + k)', 'w2 = Math.sqrt(1 + 2 * k);', 'w2 = Math.sqrt(1 + k);'],
+  ['couples : courbes echangees', 'brut[o + 1] = traj[j][1 + c];', 'brut[o + 1] = traj[j][2 - c];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -262,7 +278,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

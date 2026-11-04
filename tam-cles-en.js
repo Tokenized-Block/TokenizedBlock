@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game138 */
+  verlet: 'exact period of the Verlet scheme',
   /* game136 */
   ecartSigma: 'gap in standard deviations',
   /* game134 */
@@ -399,6 +401,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game138 */
+  modeLent: 'Period, swinging together (timed)', modeRapide: 'Period, swinging against each other (timed)', tempsEchange: 'Time for the swing to pass across', energieCouples: 'Energy of the two pendulums and the spring',
   /* game137 */
   anneauxSombres: 'Dark rings found inside 3 mm', rayonsAnneaux: 'Ring radii vs the exact lens sag (worst relative gap)', penteCarres: 'Squared radii step vs lambda R (mm^2)',
   /* game136 */

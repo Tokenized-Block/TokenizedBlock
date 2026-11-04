@@ -440,6 +440,42 @@ function anneauxNewton(P, n) {
     penteCarres: { mesure: pente * 1e6, formule: lam * R * 1e6, note: 'slope of r^2 (mm^2) against m on the rings found, against lambda R (paraxial law: the squares of the radii step by lambda R)' } } };
 }
 
+// ---------- 13 : deux pendules couples par un ressort ----------
+// Petites oscillations, sans dimension : x1'' = -x1 - k (x1 - x2), x2'' = -x2 - k (x2 - x1) ; k = couplage (curseur). Depart x1 = 1,
+//   x2 = d (curseur), vitesses nulles. Integration de Verlet (pas h = 0.005), rien d autre.
+// Mesure : les deux MODES propres sont lances seuls (x1 = x2 = 1, puis x1 = -x2 = 1) et leur periode est CHRONOMETREE sur les passages
+//   par zero (interpoles), moyennee sur plusieurs periodes ; le temps d echange s en deduit, pi / (omega2 - omega1).
+// Exact (derive ici) : modes s = x1 + x2 (omega1 = 1) et d = x1 - x2 (omega2 = sqrt(1 + 2 k)) ; x1 = ((1 + d) cos t + (1 - d) cos omega2 t) / 2 :
+//   l energie passe du premier pendule au second en pi / (omega2 - omega1) puis revient ; avec d = 0 l echange est total, avec d = 1 nul.
+//   Le schema de Verlet a sa propre pulsation exacte (2 / h) asin(omega h / 2) : temoin.
+// Dessin : x1 (0) et x2 (1) contre le temps sur un battement complet (vue de face).
+const PC_H = 0.005;
+function verletDeux(k, x, y, pas, chaque) {
+  let u = 0, v = 0, ax = -x - k * (x - y), ay = -y - k * (y - x);
+  for (let i = 1; i <= pas; i++) { x += PC_H * u + PC_H * PC_H / 2 * ax; y += PC_H * v + PC_H * PC_H / 2 * ay; const bx = -x - k * (x - y), by = -y - k * (y - x); u += PC_H / 2 * (ax + bx); v += PC_H / 2 * (ay + by); ax = bx; ay = by; if (chaque) chaque(i * PC_H, x, y, u, v); }
+}
+function periodeMesuree(k, x0, y0, periodes) {
+  /* passages par zero montants de x1 (interpoles lineairement) ; periode = ecart moyen entre le 1er et le dernier */
+  const T = 2 * PI / Math.sqrt(Math.min(1, 1 + 2 * k)), zeros = []; let tp = 0, xp = x0;
+  verletDeux(k, x0, y0, Math.ceil((periodes + 1.5) * T / PC_H), (t, x) => { if (xp < 0 && x >= 0) zeros.push(tp + PC_H * (-xp) / (x - xp)); tp = t; xp = x; });
+  return (zeros[zeros.length - 1] - zeros[0]) / (zeros.length - 1);
+}
+function pendulesCouples(P, n) {
+  const k = P.couplage, d = P.depart, w2 = Math.sqrt(1 + 2 * k);
+  const T1 = periodeMesuree(k, 1, 1, 20), T2 = periodeMesuree(k, 1, -1, 20), w1m = 2 * PI / T1, w2m = 2 * PI / T2;
+  const verlet = (w) => 2 / PC_H * atanD((w * PC_H / 2) / Math.sqrt(1 - (w * PC_H / 2) ** 2));
+  const tDessin = 2 * PI / (w2 - 1), pas = Math.ceil(tDessin / PC_H), traj = [[0, 1, d]]; let E0 = NaN, pireE = 0;
+  const energie = (x, y, u, v) => (u * u + v * v + x * x + y * y + k * (x - y) ** 2) / 2; E0 = energie(1, d, 0, 0);
+  verletDeux(k, 1, d, pas, (t, x, y, u, v) => { traj.push([t, x, y]); pireE = Math.max(pireE, Math.abs(energie(x, y, u, v) - E0)); });
+  const brut = new Float64Array(n * 3), moitie = Math.floor(n / 2);
+  for (let l = 0; l < n; l++) { const c = l < moitie ? 0 : 1, q = c ? l - moitie : l, m = c ? n - moitie : moitie, j = m <= 1 ? 0 : Math.round(q * (traj.length - 1) / (m - 1)), o = 3 * l; brut[o] = traj[j][0]; brut[o + 1] = traj[j][1 + c]; brut[o + 2] = c; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (oscillateurs couples)', invariants: {
+    modeLent: { mesure: T1, formule: 2 * PI, verlet: 2 * PI / verlet(1), note: 'period timed on zero crossings, both pendulums swinging together, against 2 pi (and the exact period of the Verlet scheme)' },
+    modeRapide: { mesure: T2, formule: 2 * PI / w2, verlet: 2 * PI / verlet(w2), note: 'period timed, pendulums swinging against each other, against 2 pi / sqrt(1 + 2 k)' },
+    tempsEchange: { mesure: PI / (w2m - w1m), formule: PI / (w2 - 1), note: 'time for the energy to pass from one pendulum to the other, from the two timed periods, against pi / (sqrt(1 + 2 k) - 1)' },
+    energieCouples: { debut: E0, fin: E0, derive: pireE, note: 'energy of both pendulums and the spring along the drawn run (Verlet keeps it bounded)' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -452,6 +488,7 @@ export const COLONNES = Object.freeze({
   refractionSnell: { colonnes: ['x (the surface is y = 0)', 'height y (water below, air above)', 'ray number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   desintegration: { colonnes: ['time (steps)', 'atoms left', 'curve (0 = counted, 1 = N0 2^(-t/T))'], memeLongueur: [], autres: [0, 1, 2] },
   anneauxNewton: { colonnes: ['x (mm)', 'y (mm)', 'reflected intensity (0 dark, 1 bright)'], memeLongueur: [[0, 1]], autres: [2] },
+  pendulesCouples: { colonnes: ['time t', 'swing x', 'pendulum (0 = first, 1 = second)'], memeLongueur: [], autres: [0, 1, 2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -492,9 +529,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'anneauxNewton', nom: 'Newton\'s rings', science: 'Waves', D: 3, nuage: true, params: { lambda: 550, rayonLentille: 1, ecartAir: 0 },
     bornes: { lambda: [380, 750], rayonLentille: [0.5, 5], ecartAir: [0, 300] },
     phrase: 'A visualisation of the light reflected by a curved lens resting on flat glass: at each point the wave reflected by the lens and the one reflected by the glass below are summed. Dark rings appear wherever the air gap is a whole number of half-wavelengths; searched on the summed light, they sit exactly at sqrt(R^2 - (R - (m lambda / 2 - d0))^2), and their squared radii step by lambda R: redder light, wider rings.' },
+  { id: 'pendulesCouples', nom: 'Two pendulums joined by a spring', science: 'Classical mechanics', D: 3, nuage: true, params: { couplage: 0.1, depart: 0 },
+    bornes: { couplage: [0.02, 0.5], depart: [-1, 1] },
+    phrase: 'A visualisation of two pendulums joined by a weak spring: start one, and its swing slowly passes to the other, then comes back. The two ways they can swing together are timed on their own: periods 2 pi and 2 pi / sqrt(1 + 2 k). The exchange takes exactly pi / (sqrt(1 + 2 k) - 1): the weaker the spring, the slower and the more complete the hand-over.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -272,6 +272,8 @@ export const ECHELLE_PROPRE = {
   desintegration: [0, 1, 2],
   /* game137 : x et y en mm (meme grandeur) ; intensite (autre grandeur) */
   anneauxNewton: [2],
+  /* game138 : temps, ecart (2 grandeurs) + etiquette */
+  pendulesCouples: [0, 1, 2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game138 */
+  pendulesCouples: {
+    titre: 'Two pendulums joined by a spring',
+    enUnePhrase: 'The swing of two pendulums joined by a spring: the first one started, the motion passes to the second and back.',
+    colonnes: ['time t', 'swing x', 'pendulum (0 = first, 1 = second)'],
+    aRegarder: ['One pendulum slows to a stop while the other one swings fully, then the other way round: the energy is handed over.', 'The hand-over takes pi / (sqrt(1 + 2 k) - 1): weaken the spring and it takes longer.', 'Start the second one at the same swing (start = 1): nothing passes across, they swing together for ever.'],
+    fin: null,
+  },
   /* game137 */
   anneauxNewton: {
     titre: 'Newton\'s rings',
