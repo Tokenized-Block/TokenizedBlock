@@ -135,7 +135,8 @@ const T0 = await import(pathToFileURL(SOURCE).href);
 const r0 = suite(T0, true), ech = r0.filter((x) => !x.ok);
 let assertions = r0.length;
 
-const src = readFileSync(SOURCE, 'utf8');
+/* 2026-11-04 : un checkout neuf est en CRLF (core.autocrlf) ; 5 motifs de mutants sur plusieurs lignes y etaient « NON APPLIQUE » */
+const src = readFileSync(SOURCE, 'utf8').replace(/\r\n/g, '\n');
 const MUTANTS = [
   ['somme : poids inverse', 'out[i] = (1 - w) * proj[i] + w * B[i];', 'out[i] = w * proj[i] + (1 - w) * B[i];'],
   ['composition : indice sans frac (u = x)', 'u = x - Math.floor(x), j =', 'u = x / 97, j ='],

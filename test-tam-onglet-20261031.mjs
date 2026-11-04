@@ -51,7 +51,8 @@ ok(V.mintVisible({ ...DEP, bloc: null }) === false, 'adresse sans bloc : pas de 
 ok(V.mintVisible({ ...DEP, adresse: '0x' + '00'.repeat(20) }) === false, 'adresse zero : pas de bouton');
 ok(V.mintVisible({ ...DEP, adresse: '0x1234' }) === false, 'adresse tronquee : pas de bouton');
 ok(V.mintVisible(null) === false && V.mintVisible(undefined) === false, 'pas de fiche : pas de bouton');
-const onglet = readFileSync(new URL('./tam-onglet.js', import.meta.url), 'utf8');
+/* 2026-11-04 : un checkout neuf est en CRLF (core.autocrlf) ; les motifs ci-dessous contiennent \n -> le source est relu en LF */
+const onglet = readFileSync(new URL('./tam-onglet.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 ok(/const visible = V\.mintVisible\(TAMART_DEPLOIEMENT\) && /.test(onglet) && /zMint\.hidden = !visible/.test(onglet), 'l onglet cache la zone Mint par CETTE regle');
 ok(/if \(!visible\) \{ zMint\.replaceChildren\(\); return; \}/.test(onglet), 'sans adresse, la zone Mint est VIDEE (aucun bouton construit)');
 
@@ -634,7 +635,7 @@ console.log('test-tam-onglet-20261031 : ' + n + ' assertions OK');
 /* ── MUTANTS sur COPIES (2026-11-01) : chaque defaut nomme par le lead doit faire ROUGIR ce banc. Copie de la racine dans D:\tmp\tam-mut,
  *   mutation dans la COPIE, ce banc relance sur la copie (TAM_MUTANT=1 : pas de recursion). Jamais le depot. ── */
 if (!process.env.TAM_MUTANT) {
-  const { cpSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync: ecrire } = await import('node:fs');
+  const { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync: ecrire } = await import('node:fs');
   const { spawnSync } = await import('node:child_process');
   const { join } = await import('node:path');
   const ICI = new URL('.', import.meta.url), racine = decodeURIComponent(ICI.pathname.replace(/^\/([A-Za-z]:)/, '$1'));
@@ -652,7 +653,9 @@ if (!process.env.TAM_MUTANT) {
     ['garde CPU : budget par IP retire', 'tam-serveur.js', 'if (n > TAM_BUDGET_IP_MINUTE) return', 'if (false) return'],
     ['garde CPU : un cache touche compte dans le budget', 'tam-serveur.js', 'if (parReglage.has(cle)) return parReglage.get(cle);', 'if (parReglage.has(cle)) { const a = admettre(ip); if (a) return a; garde.enCours--; return parReglage.get(cle); }'],
   ];
-  const base = 'D:\\tmp\\tam-mut';
+  /* 2026-11-04 : le dossier etait FIXE (D:\tmp\tam-mut) — deux copies de travail testees en meme temps s ecrasaient leurs mutants
+   *   (rouges « pre-existants » vus par un agent sur sa branche). Un dossier unique par execution, sur D: (C: plein), retire a la fin. */
+  const base = mkdtempSync(join(process.env.TAM_TMP || 'D:\\tmp', 'tam-mut-'));
   let tues = 0;
   console.log('MUTANTS (copies dans ' + base + ') :');
   for (const [i, [nom, fichier, de, vers]] of MUTANTS.entries()) {
@@ -674,6 +677,7 @@ if (!process.env.TAM_MUTANT) {
     console.log('  M' + (i + 1) + ' ' + nom + ' : ' + (tue ? 'TUE' : 'SURVIT') + (msg ? ' (' + msg + ')' : ''));
     rmSync(dir, { recursive: true, force: true });
   }
+  rmSync(base, { recursive: true, force: true });
   console.log('MUTANTS : ' + tues + '/' + MUTANTS.length + ' tues');
   if (tues !== MUTANTS.length) process.exit(1);
 }

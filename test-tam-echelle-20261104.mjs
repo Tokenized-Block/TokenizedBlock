@@ -38,7 +38,7 @@ function suite(T, bavard = false) {
 const T0 = await import(pathToFileURL(SOURCE).href);
 const r0 = suite(T0, true), ech = r0.filter((x) => !x.ok);
 let assertions = r0.length;
-const src = readFileSync(SOURCE, 'utf8');
+const src = readFileSync(SOURCE, 'utf8').replace(/\r\n/g, '\n'); /* un checkout neuf est en CRLF (core.autocrlf) */
 /* (retire : « colonne etendue comptee dans sMax » — mutant EQUIVALENT aujourd hui : dans les deux systemes de la table, la colonne a
  *   l etendue est la seule colonne non propre, sMax n y sert a rien d autre ; il redeviendra observable si la table s etend) */
 const MUTANTS = [

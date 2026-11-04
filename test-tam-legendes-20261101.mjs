@@ -1,8 +1,9 @@
 /* test-tam-legendes-20261101.mjs — les legendes de tam-legendes.js contre la VRAIE sortie des modules (simuler lance ici).
  *   colonnes = D reel, noms = nombre de corps reel, films = blocs d images reellement successifs, chaines en anglais ASCII,
  *   et les chiffres annonces dans les legendes relus dans les invariants des modules. */
-import { pathToFileURL } from 'node:url';
-const ici = (f) => pathToFileURL('D:/tmp/wt-tam/' + f).href;
+/* 2026-11-04 : le chemin etait ecrit en dur ('D:/tmp/wt-tam/') — depuis toute AUTRE copie de travail, ce test lisait les modules de
+ *   wt-tam (un agent a vu « 135 attendus, 136 puis 137 trouves » au rythme de mes ajouts). Il lit maintenant les modules A COTE de lui. */
+const ici = (f) => new URL('./' + f, import.meta.url).href;
 const TS = await import(ici('tam-science.js'));
 const { LEGENDES, legende, nomsDe } = await import(ici('tam-legendes.js'));
 
