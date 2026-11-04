@@ -419,13 +419,15 @@ export function monter(racine, ctx = {}) {
 
   /* ── 2026-11-01 : les VARIABLES (Phil 31/10) — familles, operateur, dimension (jusqu a 12), chaque parametre ; le cerveau peut les bouger.
    *   Un espace vaste, pas infini : chaque curseur est borne (tam-moteur.js#BORNES) et chaque reglage passe les MEMES certificats. */
-  const OPS_EN = { seul: 'alone', somme: 'blended with a pattern', composition: 'driving a pattern', couplage: 'coupled copies' };
+  const OPS_EN = { seul: 'alone', somme: 'blended with a pattern or a system', composition: 'driving a pattern or a system', couplage: 'coupled copies' };
   const MOTIFS_UI = [['ifs:fougere', 'fern (IFS)'], ['ifs:sierpinski', 'Sierpinski (IFS)'], ['ifs:dragon', 'dragon (IFS)'], ['julia', 'Julia set'], ['phyllotaxie', 'golden-angle phyllotaxis'],
     ['epicycles', 'epicycles'], ['lsysteme:koch', 'Koch (L-system)'], ['lsysteme:dragon', 'dragon (L-system)'], ['lsysteme:plante', 'plant (L-system)']];
   const selOp = el('select', { 'aria-label': 'Operator', id: 'tamOperateur' }, ...M.OPERATEURS.map((o) => el('option', { value: o, text: OPS_EN[o] })));
-  const selMotif = el('select', { 'aria-label': 'Pattern', id: 'tamMotif' }, ...MOTIFS_UI.map(([v, t]) => el('option', { value: v, text: t })));
+  let grpSci = null;
+  /* game128 (Phil 04/11 : « tu es limite, fais des variantes avec les systemes de science ») : le partenaire peut etre une AUTRE science */
+  const selMotif = el('select', { 'aria-label': 'Pattern', id: 'tamMotif' }, el('optgroup', { label: 'Mathematical patterns' }, ...MOTIFS_UI.map(([v, t]) => el('option', { value: v, text: t }))),
+    (grpSci = el('optgroup', { label: 'Another science system (its default settings)' }, ...TS.PARTENAIRES.map((id) => el('option', { value: 'sci:' + id, text: TS.systeme(id).nom })))));
   const curseurs = el('div', { id: 'tamCurseurs' });
-  const bPouce = el('button', { type: 'button', id: 'tamPouce', text: 'Let the brain nudge it' });
   /* game87 (audit : Mandelbrot a zoom 10 000 = une image PLATE — la fenetre de 3e-4 ne contenait aucun point de l ensemble) : le centre
    *   pose SUR la frontiere, calcule ici (jamais des coordonnees « celebres » tapees de memoire). Le module ne change pas : seuls cx, cy. */
   const bBord = el('button', { type: 'button', id: 'tamBord', hidden: true, text: 'Snap the centre to the boundary' });
@@ -482,7 +484,7 @@ export function monter(racine, ctx = {}) {
       el('details', { class: 'tamReglagesHaut', id: 'tamReglagesHaut', open: '' },
         el('summary', { text: 'Variables — every setting of this work' }),
         el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
-        el('div', { class: 'tamRang' }, selOp, selMotif, bPouce, bBord),
+        el('div', { class: 'tamRang' }, selOp, selMotif, bBord),
         el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
         curseurs, verdictTxt)),
     el('div', { class: 'tamCarte' },
@@ -668,11 +670,11 @@ export function monter(racine, ctx = {}) {
     const g = selGroupe.value, sci = g !== 'attracteurs';
     carteFormule.hidden = g !== 'formule';
     /* revue game79 : dans « Your formula », operateur et motif n ont pas d effet — caches */
-    if (g === 'formule') { for (const x of [selFam, selDim, selSys, selOp, selMotif]) x.hidden = true; bPouce.hidden = true; return; }
+    if (g === 'formule') { for (const x of [selFam, selDim, selSys, selOp, selMotif]) x.hidden = true; return; }
     /* game79 : « Let the brain choose » reste visible PARTOUT — le cerveau tire parmi tous les genres (attracteurs et sciences) */
     for (const x of [selFam, selDim]) x.hidden = sci;
     peindreSource();
-    selSys.hidden = !sci; bPouce.hidden = sci;
+    selSys.hidden = !sci;
     /* une science se MELANGE aussi a un motif (somme / composition), sauf un systeme a plusieurs corps */
     const coupl = selOp.querySelector('option[value="couplage"]'); if (coupl) coupl.hidden = sci;
     if (sci) selSys.replaceChildren(...SYSTEMES_SCI.filter((s) => groupeDe(s) === g).map((s) => el('option', { value: s.id, text: s.nom + ' · ' + s.science })));
@@ -730,7 +732,10 @@ export function monter(racine, ctx = {}) {
     selDim.replaceChildren(...o.map(([v, t]) => el('option', { value: v, text: t })));
   }
   const compte = () => { const c = ctx.compte && ctx.compte(); return c && /^0x[0-9a-fA-F]{40}$/.test(String(c)) ? String(c).toLowerCase() : null; };
-  const motifChoisi = () => { const [famille, variante] = selMotif.value.split(':'); return { famille, variante }; };
+  /* game128 : hors science (attracteurs), les partenaires science sont fermes ; un choix science retombe sur le premier motif */
+  const motifChoisi = () => { if (selMotif.value.startsWith('sci:')) selMotif.value = MOTIFS_UI[0][0];
+    return motifChoisiBrut(); };
+  const motifChoisiBrut = () => { const [famille, variante] = selMotif.value.split(':'); return { famille, variante }; };
   /* la STRUCTURE (famille, operateur, dimension, motif) : des params complets, reglables ; le dimension 1/2/3/4 copies = 3..12-D */
   function depuisExplorateur(source = '') {
     const f = selFam.value, d = Number(selDim.value) || 1, coupl = M.PORTEUSES_3D.includes(f);
@@ -758,8 +763,10 @@ export function monter(racine, ctx = {}) {
   function melangeScience() {
     const op = selOp.value;
     if (op !== 'somme' && op !== 'composition') return null;
+    const w = (S.P && S.P.melange && S.P.melange.w) || 0.25;
+    if (selMotif.value.startsWith('sci:')) { const sid = selMotif.value.slice(4); if (S.science && sid === S.science.s.id) return null; return { operateur: op, science: sid, w }; }
     const { famille, variante } = motifChoisi();
-    return { operateur: op, motif: M.motifDefaut(famille, variante), w: (S.P && S.P.melange && S.P.melange.w) || 0.25 };
+    return { operateur: op, motif: M.motifDefaut(famille, variante), w };
   }
   selOp.addEventListener('change', () => { if (S.science) { selMotif.hidden = !(selOp.value === 'somme' || selOp.value === 'composition'); chargerScience(S.science.s.id, S.P.params, { melange: melangeScience() }); } else depuisExplorateur('op'); });
   selMotif.addEventListener('change', () => { if (S.science) chargerScience(S.science.s.id, S.P.params, { melange: melangeScience() }); else depuisExplorateur('motif'); });
@@ -770,8 +777,8 @@ export function monter(racine, ctx = {}) {
     if (S.science) {
       /* game79 : le melange de la science (operateur + motif) se lit et se regle ici aussi */
       selOp.hidden = !!TS.CORPS[S.science.s.id]; selOp.value = S.P.melange ? S.P.melange.operateur : 'seul';
-      selMotif.hidden = !S.P.melange;
-      if (S.P.melange) { const v = S.P.melange.motif.famille + (S.P.melange.motif.variante ? ':' + S.P.melange.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
+      selMotif.hidden = !S.P.melange; grpSci.disabled = false;
+      if (S.P.melange) { const v = S.P.melange.science ? 'sci:' + S.P.melange.science : S.P.melange.motif.famille + (S.P.melange.motif.variante ? ':' + S.P.melange.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
       const R = reglagesVivants(S.science.s, S.P.params), cles = 'sci:' + S.science.s.id + ':' + R.map((r) => r.chemin + r.min + r.max).join('|');
       if (cles !== cheminsPeints) {
         cheminsPeints = cles;
@@ -797,7 +804,7 @@ export function monter(racine, ctx = {}) {
       verdictTxt.textContent = S.c && S.c.ok ? 'Mintable for 5 USDC once the server checks it is distinct from every minted work.' : 'Not mintable: ' + ((S.c && S.c.raisons || []).join('; ') || 'the simulation left its valid domain') + '.';
       return;
     }
-    selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
+    grpSci.disabled = true; selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
     if (S.P.motif) { const v = S.P.motif.famille + (S.P.motif.variante ? ':' + S.P.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
     const R = M.reglagesDe(S.P), cles = R.map((r) => r.chemin).join('|');
     if (cles !== cheminsPeints) {
@@ -885,13 +892,6 @@ export function monter(racine, ctx = {}) {
     return { cote: 1 << r, N, dim: N0 > 0 ? Math.log2(N / N0) : NaN, sature: N > m / 3, vis: V.dimsVisibles(S.couches).length, points: m, dense: dim === 2 };
   }
   curRes.addEventListener('input', () => peindreVarsScene());
-  bPouce.addEventListener('click', () => {
-    if (!S.P) return;
-    if (!S.cerveauEtat) { verdictTxt.textContent = 'Ask the brain first (Let the brain choose): its state is what moves the variables.'; return; }
-    const r = M.coupDePouce(S.P, S.cerveauEtat);
-    regler(r.params);
-    verdictTxt.textContent = V.phraseMouvements(r.mouvements) + ' ' + verdictTxt.textContent;
-  });
   const court = (a) => displayShort(a); /* le raccourci qui masque le fee wallet (test-no-fee-address-shown) */
   const blocVu = () => { const a = ctx.blocCerveau && ctx.blocCerveau(); return a && /^0x[0-9a-fA-F]{40}$/.test(String(a)) ? String(a).toLowerCase() : null; };
   /* game79 : le cerveau qui dessine = le block CHOISI dans le selecteur ('' = UNIT, le cerveau par defaut du serveur) */
@@ -1090,7 +1090,7 @@ export function monter(racine, ctx = {}) {
   }
   function positionsBrutes() {
     if (S.science && S.corps) return S.corps.vue; /* game78 : la vue « corps » (les couches n y melangent rien) */
-    if (S.science && S.P.melange) return M.melangerVue(V.projeterVivant({ z: S.z, n: S.n, D: S.D, actives: S.couches.actives, angles: S.P.angles, t: S.t }), S.n, S.P.melange);
+    if (S.science && S.P.melange) return TS.vueMelangee(V.projeterVivant({ z: S.z, n: S.n, D: S.D, actives: S.couches.actives, angles: S.P.angles, t: S.t }), S.n, S.P.melange);
     const tous = S.couches.actives.every(Boolean);
     /* game77 : un NUAGE stocke est trie (Morton) — ses index ne sont plus le temps : couleurs et survol visaient d autres points.
      *   Pour un nuage on dessine la projection dans l ordre du temps (la meme geometrie). */
@@ -1597,7 +1597,7 @@ export function monter(racine, ctx = {}) {
         /* game79 : ce que le CERVEAU a ecrit — dans les params, donc sur Base avec l oeuvre au moment du mint (signe par celui qui minte) */
         ...(S.P && S.P.note ? [{ k: 'The brain\'s note (stored on Base with the work when it is minted)', v: S.P.note }] : []),
         /* (l operateur MATHEMATIQUE du melange — somme / composition — dit par un tableau joint : jamais concatene comme un nom de wallet) */
-        ...(S.P && S.P.melange ? [{ k: 'Blended with', v: [S.P.melange.motif.famille, S.P.melange.motif.variante, S.P.melange.operateur, 'weight ' + nb4(S.P.melange.w)].filter(Boolean).join(' · ') }] : []),
+        ...(S.P && S.P.melange ? [{ k: 'Blended with', v: [...(S.P.melange.science ? [TS.systeme(S.P.melange.science).nom] : [S.P.melange.motif.famille, S.P.melange.motif.variante]), OPS_EN[S.P.melange.operateur] || S.P.melange.operateur, 'weight ' + nb4(S.P.melange.w)].filter(Boolean).join(' · ') }] : []),
         ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).map(([k, v]) => { const nom = NOMS_MESURES[k] || k; return { k: 'Check: ' + nom, v: ligneInvariant(k, v).slice(nom.length + 2) }; }),
         { k: 'Chaos (λ)', v: o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? nb4(o.lyapunov) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' — finite-run estimate' : 'not defined for this system' },
         { k: 'Mint', v: '5 USDC, stored on Base like every work (same contract). Anyone can replay these parameters to the same bytes.' }];

@@ -152,6 +152,13 @@ function validerInterne(P, sortie) {
   if (P.melange !== undefined) {
     const m = P.melange;
     if (CORPS[P.science]) return non('melange : pas sur un systeme a plusieurs corps');
+    if (m && typeof m === 'object' && Object.keys(m).sort().join() === 'operateur,science,w') {
+      /* game128 : le partenaire est une science a ses reglages PAR DEFAUT (une oeuvre = un JSON court, rejouable) */
+      if (m.operateur !== 'somme' && m.operateur !== 'composition') return non('melange : operateur');
+      if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');
+      if (!PARTENAIRES.includes(m.science) || m.science === P.science) return non('melange : science partenaire');
+      return { ok: true, code: 'DANS_LES_BORNES', raison: null };
+    }
     if (!m || typeof m !== 'object' || Object.keys(m).sort().join() !== 'motif,operateur,w') return non('melange');
     if (m.operateur !== 'somme' && m.operateur !== 'composition') return non('melange : operateur');
     if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');
@@ -167,7 +174,7 @@ function validerInterne(P, sortie) {
 export const CORPS = Object.freeze({ troisCorps: 3, systemeSolaire: 3, amasEtoiles: 3, lumiereTrouNoir: 3, expansionUnivers: 3, cometeHalley: 3,
   trouDeVer: 3, pulsarHulseTaylor: 3, tourbillonsPonctuels: 2, trappist1: 2 });
 /** un nuage (points tires, pas un chemin) : la science elle-meme, ou une COMPOSITION avec un IFS / Julia (comme les attracteurs) */
-export const estNuage = (P, o) => !!(o && o.nuage) || !!(P && P.melange && P.melange.operateur === 'composition' && (P.melange.motif.famille === 'ifs' || P.melange.motif.famille === 'julia'));
+export const estNuage = (P, o) => !!(o && o.nuage) || !!(P && P.melange && P.melange.operateur === 'composition' && (P.melange.science || P.melange.motif.famille === 'ifs' || P.melange.motif.famille === 'julia'));
 /** game79 : le NOM de chaque corps (la bulle de survol dit « Earth », pas « body 3 ») ; null = « body k » */
 export function nomsCorps(id, params = {}) {
   if (id === 'systemeSolaire') return Number(params.groupe) === 1 ? ['Jupiter', 'Saturn', 'Uranus', 'Neptune'] : ['Mercury', 'Venus', 'Earth', 'Mars'];
@@ -281,7 +288,7 @@ function genererDepuis(P, oPre) {
   const n = o.n, D = o.D, M = (1 << P.q) - 1, ordre = estNuage(P, o) ? 1 : 0;
   let fin = CORPS[P.science] ? vueCorps(o, CORPS[P.science]).vue : projeterND(standardiserIso(o.brut, n, D, P.science), n, D, P.angles);
   /* game79 : une science MELANGEE a un motif (somme ou composition, comme les attracteurs) */
-  if (P.melange) fin = melangerVue(fin, n, P.melange);
+  if (P.melange) fin = vueMelangee(fin, n, P.melange);
   let pts = new Int32Array(n * 3);
   for (let i = 0; i < 3 * n; i++) { const v = Math.round((fin[i] + 1) / 2 * M); pts[i] = v < 0 ? 0 : v > M ? M : v; }
   if (ordre === 1) {
@@ -290,6 +297,37 @@ function genererDepuis(P, oPre) {
     const t = new Int32Array(n * 3); idx.forEach((src, d) => { t[3 * d] = pts[3 * src]; t[3 * d + 1] = pts[3 * src + 1]; t[3 * d + 2] = pts[3 * src + 2]; }); pts = t;
   }
   return { ...o, points: pts, q: P.q, ordre };
+}
+/* ---------- game128 : science x science ----------
+ * Le partenaire d un melange peut etre une autre science (a ses reglages par defaut), plus seulement un motif fractal.
+ *   somme       : (1 - w) A + w B, point a point (les deux vues normalisees, memes n)
+ *   composition : A PILOTE B — le point i prend le point de B d indice floor(u_i n), u_i = frac(97 (x_A + 1) / 2) (comme les motifs),
+ *                 et z = (1 - w) z_B + w z_A ; un nuage (l ordre des points n est plus le temps).
+ * Exclus : les systemes a plusieurs corps (dessines seuls) et les non-mintables (trop chers a certifier). */
+export const PARTENAIRES = Object.freeze(SYSTEMES.map((s) => s.id).filter((id) => !CORPS[id] && !NON_MINTABLES.has(id)));
+const vuesPartenaires = new Map();
+export function vuePartenaire(id, n) {
+  const k = id + ':' + n; if (vuesPartenaires.has(k)) return vuesPartenaires.get(k);
+  const s = systeme(id), o = s.mod.simuler(id, {}, { n });
+  const v = o.bornee && o.brut ? normaliser3(projeterND(standardiserIso(o.brut, n, o.D, id), n, o.D, anglesDefaut(o.D))) : null;
+  if (vuesPartenaires.size > 64) vuesPartenaires.clear();
+  vuesPartenaires.set(k, v); return v;
+}
+function normaliser3(a) { // centre milieu, echelle commune -> [-1, 1] (la MEME regle que tam-moteur.js#normaliser)
+  const n = a.length / 3, lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) { const v = a[3 * i + c]; if (v < lo[c]) lo[c] = v; if (v > hi[c]) hi[c] = v; }
+  const r = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2, s = r > 0 ? 1 / r : 0;
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) a[3 * i + c] = (a[3 * i + c] - (lo[c] + hi[c]) / 2) * s;
+  return a;
+}
+/** la vue melangee : un motif (tam-moteur) ou une science partenaire ; proj = vue n x 3 de la science porteuse */
+export function vueMelangee(proj, n, m) {
+  if (!m.science) return melangerVue(proj, n, m);
+  const B = vuePartenaire(m.science, n), out = new Float64Array(n * 3), w = m.w;
+  if (!B) return Float64Array.from(proj);
+  if (m.operateur === 'somme') for (let i = 0; i < 3 * n; i++) out[i] = (1 - w) * proj[i] + w * B[i];
+  else for (let i = 0; i < n; i++) { const x = (proj[3 * i] + 1) * 0.5 * 97, u = x - Math.floor(x), j = Math.min(n - 1, Math.floor(u * n)); out[3 * i] = B[3 * j]; out[3 * i + 1] = B[3 * j + 1]; out[3 * i + 2] = (1 - w) * B[3 * j + 2] + w * proj[3 * i + 2]; }
+  return normaliser3(out);
 }
 /** n importe qui, avec les params publics, recalcule les memes octets */
 export function rejouerScience(P) {
@@ -333,8 +371,11 @@ export function choisirScience({ graine, etatCerveau = null, existantes = [], mi
     try { P = paramsScience(id, tirerParams(id, alea), { minteur }); } catch (_) { rejets.push({ essai: e, id, raison: 'module' }); continue; }
     /* revue game79 (high) : JAMAIS de melange sur un systeme a plusieurs corps (la page dessine les corps seuls : octets differents) */
     if (!CORPS[id] && alea() < 1 / 3) {
-      const [f, v] = MOTIFS_MELANGE[Math.floor(alea() * MOTIFS_MELANGE.length) % MOTIFS_MELANGE.length];
-      P.melange = { operateur: alea() < 0.5 ? 'somme' : 'composition', motif: motifDefaut(f, v), w: Math.round((BORNES.w[0] + alea() * (BORNES.w[1] - BORNES.w[0])) * 1e6) / 1e6 };
+      /* game128 : le partenaire est un motif OU une autre science (meme tirage : un indice dans motifs + sciences, la science elle-meme exclue) */
+      const autres = PARTENAIRES.filter((x) => x !== id), k = Math.floor(alea() * (MOTIFS_MELANGE.length + autres.length)) % (MOTIFS_MELANGE.length + autres.length);
+      const operateur = alea() < 0.5 ? 'somme' : 'composition', w = Math.round((BORNES.w[0] + alea() * (BORNES.w[1] - BORNES.w[0])) * 1e6) / 1e6;
+      if (k < MOTIFS_MELANGE.length) { const [f, v] = MOTIFS_MELANGE[k]; P.melange = { operateur, motif: motifDefaut(f, v), w }; }
+      else P.melange = { operateur, science: autres[k - MOTIFS_MELANGE.length], w };
     }
     P.graine = String(graine).toLowerCase();
     const c = certifierScience(P, existantes);
@@ -357,7 +398,7 @@ export function noteCerveau(P, { nomCerveau = null, humeur = null, ressenti = nu
   const vars = Object.entries(P.params).slice(0, 6).map(([k, v]) => k + '=' + court(v)).join(' ');
   if (vars) morceaux.push('Variables: ' + vars + '.');
   /* (l operateur MATHEMATIQUE du melange, joint par un tableau — jamais concatene comme un nom de wallet, cf. test-no-fee-address-shown) */
-  if (P.melange) morceaux.push('Blended with ' + [P.melange.motif.famille, P.melange.motif.variante].filter(Boolean).join(' ') + ' (' + [P.melange.operateur, 'w=' + court(P.melange.w)].join(', ') + ').');
+  if (P.melange) morceaux.push('Blended with ' + (P.melange.science ? 'the system ' + P.melange.science : [P.melange.motif.famille, P.melange.motif.variante].filter(Boolean).join(' ')) + ' (' + [P.melange.operateur, 'w=' + court(P.melange.w)].join(', ') + ').');
   let conserve = 0, varie = 0, compare = null;
   for (const [k, v] of Object.entries(o.invariants || {})) {
     /* game114 (banc : la graine 20 tombait sur fluctuationsVide, dont la 1re mesure est un TABLEAU de 40 variances : la note le recopiait
