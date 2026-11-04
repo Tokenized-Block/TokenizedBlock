@@ -25,8 +25,9 @@ const base = { account: USER, spender: AGENT, token: USDC, allowance: 5_000_000n
   ok(d.ok === true && d.etat === 'A_SIGNER_PAR_L_UTILISATEUR', 'A1 demande de reference acceptee, a signer par l utilisateur');
   ok(d.permission.allowance === 5_000_000n && d.permission.period === 86400n && d.permission.salt === 0n, 'A2 champs normalises en BigInt');
   const cas = [
-    [{ end: T0 + 7 * 86400 + 1 }, 'longer than'],
+    [{ end: T0 + 30 * 86400 + 1 }, 'longer than 2592000'],
     [{ periodSec: 3599 }, 'shorter than'],
+    [{ periodSec: 86399 }, 'shorter than 86400'],
     [{ periodSec: 86401 }, 'longer than 86400'],
     [{ allowance: 0n }, 'positive uint160'],
     [{ allowance: 1n << 160n }, 'positive uint160'],
@@ -57,6 +58,10 @@ const base = { account: USER, spender: AGENT, token: USDC, allowance: 5_000_000n
   const vide = A.appelRevocation({ ...p, extraData: '0x' });
   ok(vide.ok && vide.data.slice(10).length === 11 * 64 && BigInt('0x' + vide.data.slice(10 + 10 * 64)) === 0n, 'B8 extraData vide : 11 mots, longueur 0');
   ok(A.appelRevocation({ ...p, account: 'x' }).ok === false, 'B9 permission invalide -> pas de calldata');
+  const s = A.appelRevocationCommeSpender(p);
+  ok(s.ok && s.from === AGENT && s.to === A.SPEND_PERMISSION_MANAGER && s.data.startsWith('0x' + selecteur(A.SIG_REVOKE_AS_SPENDER))
+    && s.data.slice(10) === r.data.slice(10) && s.data.slice(0, 10) !== r.data.slice(0, 10),
+    'B10 revokeAsSpender : from = le spender (sub account), meme tuple, autre selecteur');
 }
 
 /* ── C ── */

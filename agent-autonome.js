@@ -14,7 +14,10 @@
  *   - adresse SpendPermissionManager (README du meme depot), code present sur Base mainnet (eth_getCode lu le 2026-11-04).
  *   - NATIVE_TOKEN (ERC-7528) : constante du meme fichier source.
  * ⛔ BORNE : une SpendPermission ne borne QUE le montant tire par periode. Elle ne choisit PAS les contrats appeles ensuite :
- *   cette liste blanche vit dans `verdictAutonome` (et, cote Coinbase, dans une politique `evmAddress in` du Policy Engine). */
+ *   cette liste blanche vit dans `verdictAutonome`.
+ * DECISION DE PHIL (2026-11-04) : le `spender` est le SUB ACCOUNT Coinbase de l utilisateur, dont la cle est une CryptoKey
+ *   non extractible dans SON navigateur (agent-sous-compte.js). La voie « Server Wallet » (cle chez nous + Policy Engine) est
+ *   PARQUEE : TokenizedBlock ne tient ni cle ni fonds. Bornes : au plus 1 jour par periode, au plus 30 jours de vie. */
 import { selecteur } from './pool.js';
 
 export const SPEND_PERMISSION_MANAGER = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad';
@@ -22,13 +25,17 @@ export const NATIVE_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
 const ADR = /^0x[0-9a-fA-F]{40}$/;
 const TUPLE = '(address,address,address,uint160,uint48,uint48,uint48,uint256,bytes)';
 export const SIG_REVOKE = 'revoke(' + TUPLE + ')';
+/* Signatures lues dans src/SpendPermissionManager.sol (github.com/coinbase/spend-permissions, branche main, 2026-11-04). */
+export const SIG_REVOKE_AS_SPENDER = 'revokeAsSpender(' + TUPLE + ')';
+export const SIG_SPEND = 'spend(' + TUPLE + ',uint160)';
+export const SIG_APPROVE_WITH_SIGNATURE = 'approveWithSignature(' + TUPLE + ',bytes)';
 const U48 = (1n << 48n) - 1n, U160 = (1n << 160n) - 1n, U256 = (1n << 256n) - 1n;
 
-/* Bornes par DEFAUT du prototype — ce sont des PROPOSITIONS, Phil les fixe (rien n est mesure ici). */
+/* Bornes du mode autonome — decision de Phil du 2026-11-04 : au plus 30 jours ; la periode est le JOUR (plafond par jour ON-CHAIN). */
 export const BORNES_DEFAUT = Object.freeze({
-  dureeMaxSec: 7 * 86400,      // une autorisation ne vit pas plus de 7 jours
-  periodeMinSec: 3600,         // periode de remise a zero : au moins 1 h
-  periodeMaxSec: 86400,        // au plus 1 jour (le plafond « par jour » est donc ON-CHAIN)
+  dureeMaxSec: 30 * 86400,     // une autorisation ne vit pas plus de 30 jours
+  periodeMinSec: 86400,        // periode de remise a zero : exactement 1 jour
+  periodeMaxSec: 86400,
 });
 
 const big = (x) => { try { return BigInt(x); } catch (_) { return null; } };
@@ -57,7 +64,12 @@ export function demandeAutorisation({ account, spender, token, allowance, period
 }
 
 /** L appel NON SIGNE de revocation : `to` = SpendPermissionManager, envoye par le wallet de l utilisateur (msg.sender == account). */
-export function appelRevocation(permission) {
+export function appelRevocation(permission) { return revocationEncodee(permission, SIG_REVOKE, 'account'); }
+
+/** Variante : `revokeAsSpender(SpendPermission)` envoye DEPUIS le sub account (msg.sender == spender), sur un geste de l utilisateur. */
+export function appelRevocationCommeSpender(permission) { return revocationEncodee(permission, SIG_REVOKE_AS_SPENDER, 'spender'); }
+
+function revocationEncodee(permission, sig, qui) {
   const p = permission || {};
   const d = demandeAutorisation({ ...p, periodSec: p.period }, { dureeMaxSec: Number(U48), periodeMinSec: 1, periodeMaxSec: Number(U48) });
   if (!d.ok) return { ok: false, etat: 'REFUSE', pourquoi: 'not a valid permission: ' + d.pourquoi };
@@ -65,13 +77,13 @@ export function appelRevocation(permission) {
   const donnees = q.extraData.slice(2);
   const longueur = donnees.length / 2;
   const rembourre = donnees.padEnd(Math.ceil(donnees.length / 64) * 64, '0');
-  const corps = '0x' + selecteur(SIG_REVOKE)
+  const corps = '0x' + selecteur(sig)
     + mot(0x20)                                    // offset du tuple (dynamique a cause de bytes)
     + adrMot(q.account) + adrMot(q.spender) + adrMot(q.token)
     + mot(q.allowance) + mot(q.period) + mot(q.start) + mot(q.end) + mot(q.salt)
     + mot(9 * 32)                                  // offset de extraData dans le tuple
     + mot(longueur) + rembourre;
-  return { ok: true, etat: 'A_SIGNER_PAR_L_UTILISATEUR', from: q.account, to: SPEND_PERMISSION_MANAGER, value: '0x0', data: corps };
+  return { ok: true, etat: 'A_SIGNER_PAR_L_UTILISATEUR', from: q[qui], to: SPEND_PERMISSION_MANAGER, value: '0x0', data: corps };
 }
 
 /**
