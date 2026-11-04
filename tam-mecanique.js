@@ -308,6 +308,36 @@ function corpsNoir(P, n) {
     puissanceChaude: { mesure: chaud.aire / froid.aire, formule: (chaud.T / froid.T) ** 4, note: 'power of the hottest body over the coolest, against the ratio of temperatures to the fourth power' } } };
 }
 
+// ---------- 9 : le reseau de N fentes ----------
+// N fentes fines, espacees de d (curseur d / lambda), eclairees de face ; on regarde au loin dans la direction theta (s = sin theta).
+// Mesure (pas de formule) : l onde recue est la SOMME des N ondes, fente par fente (phaseurs cos + i sin du dephasage j phi,
+//   phi = 2 pi (d / lambda) s) ; intensite |somme|^2 / N^2. Sur une grille fine de phi entre deux ordres (0 < phi < 2 pi), on COMPTE
+//   les creux et les bosses de la courbe sommee.
+// Exact (derive ici) : la somme geometrique donne I / N^2 = sin^2(N phi / 2) / (N^2 sin^2(phi / 2)) ; maxima principaux (= 1) quand
+//   d sin theta = m lambda ; entre deux, N - 1 zeros (phi = 2 pi q / N) et N - 2 maxima secondaires.
+// Dessin : I / N^2 contre sin theta pour 2 fentes (Young), un nombre moyen et N fentes (vue de face) ; 3e colonne : le nombre de fentes.
+function reseauFentes(P, n) {
+  const N = P.fentes, r = P.espacement, G = 20000;
+  const Ns = [...new Set([2, Math.round((2 + N) / 2), N])];
+  const somme = (k, s) => { const ph = 2 * PI * r * s; let re = 0, im = 0; for (let j = 0; j < k; j++) { re += cosD(j * ph); im += sinD(j * ph); } return (re * re + im * im) / (k * k); };
+  const formule = (k, s) => { const ph = 2 * PI * r * s, d = sinD(ph / 2); if (Math.abs(d) < 1e-6) return 1; const u = sinD(k * ph / 2) / (k * d); return u * u; };
+  const comptes = Ns.map((k) => {
+    let creux = 0, bosses = 0, a = somme(k, 1 / (G * r)), b = somme(k, 2 / (G * r));
+    for (let i = 3; i < G; i++) { const c = somme(k, i / (G * r)); if (b < a && b < c) creux++; if (b > a && b > c) bosses++; a = b; b = c; }
+    return { k, creux, bosses };
+  });
+  const brut = new Float64Array(n * 3), par = Math.floor(n / Ns.length); let l = 0, pireC = 0;
+  for (let c = 0; c < Ns.length; c++) { const k = Ns[c], nb = c === Ns.length - 1 ? n - l : par; for (let q = 0; q < nb && l < n; q++) { const s = nb === 1 ? 0 : -1 + 2 * q / (nb - 1), o = 3 * l++, v = somme(k, s); brut[o] = s; brut[o + 1] = v; brut[o + 2] = k; pireC = Math.max(pireC, Math.abs(v - formule(k, s))); } }
+  let pireM = 0, ordres = 0; for (let m = -Math.floor(r); m <= Math.floor(r); m++) { ordres++; for (const k of Ns) pireM = Math.max(pireM, Math.abs(somme(k, m / r) - 1)); }
+  const cN = comptes[comptes.length - 1]; let pireN = 0; for (const c of comptes) pireN = Math.max(pireN, Math.abs(c.creux - (c.k - 1)), Math.abs(c.bosses - (c.k - 2)));
+  return { D: 3, brut, nuage: true, unite: 'sans objet (optique ondulatoire)', invariants: {
+    courbeFentes: { mesure: pireC, formule: 0, note: 'worst gap, over every point drawn, between the wave summed slit by slit and sin^2(N phi / 2) / (N^2 sin^2(phi / 2))' },
+    maximaPrincipaux: { mesure: pireM, formule: 0, ordres, note: 'worst gap from 1 of the summed intensity where d sin theta = m lambda, for every order m seen and every curve' },
+    minimaEntre: { mesure: cN.creux, formule: N - 1, note: 'dark fringes counted between two orders on the summed curve, N slits, against N - 1' },
+    secondaires: { mesure: cN.bosses, formule: N - 2, note: 'small bright fringes counted between two orders on the summed curve, N slits, against N - 2' },
+    comptesCourbes: { mesure: pireN, formule: 0, note: 'worst miscount (dark or small bright fringes) over the three curves drawn' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -316,6 +346,7 @@ export const COLONNES = Object.freeze({
   dureeJour: { colonnes: ['day of the year (0 = equinox)', 'hours of daylight', 'curve (0 = counted minute by minute, 1 = formula)'], memeLongueur: [], autres: [0, 1, 2] },
   courseRoulante: { colonnes: ['time t', 'distance down the slope', 'body (0 block, 1 sphere, 2 cylinder, 3 ring)'], memeLongueur: [], autres: [0, 1, 2] },
   corpsNoir: { colonnes: ['wavelength lambda (units of h c / (k T0))', 'spectral radiance B (Planck)', 'curve (0 = coolest, T = 1)'], memeLongueur: [], autres: [0, 1, 2] },
+  reseauFentes: { colonnes: ['sin theta (direction seen)', 'intensity I / N^2', 'number of slits N (label)'], memeLongueur: [], autres: [0, 1, 2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -344,9 +375,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'corpsNoir', nom: 'The glow of hot bodies (Planck\'s law)', science: 'Thermal physics', D: 3, nuage: true, params: { courbes: 5, rapport: 2 },
     bornes: { courbes: [2, 8], rapport: [1.2, 3] },
     phrase: 'A visualisation of the light given off by a body at several temperatures, Planck\'s law drawn curve by curve. Searched on each curve, the peak always sits at lambda_max T = 1 / x5 with x5 the root of x = 5 (1 - e^-x) (Wien): hotter glows bluer. Integrated, the area under each curve is T^4 pi^4 / 15 (Stefan-Boltzmann): twice as hot, sixteen times the power.' },
+  { id: 'reseauFentes', nom: 'Light through many slits (a diffraction grating)', science: 'Waves', D: 3, nuage: true, params: { fentes: 6, espacement: 2.5 },
+    bornes: { fentes: [3, 12], espacement: [1, 5] },
+    phrase: 'A visualisation of light through 2 slits, then more, then N: the wave arriving in each direction is summed slit by slit. The bright orders stay where d sin theta = m lambda but grow sharper as slits are added; between two of them the summed curve has exactly N - 1 dark fringes and N - 2 small bright ones, as sin^2(N phi / 2) / (N^2 sin^2(phi / 2)) says.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

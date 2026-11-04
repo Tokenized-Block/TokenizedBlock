@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game134 */
+  ordres: 'orders m seen',
   /* game133 */
   x5: 'x5, root of x = 5 (1 - e^-x)', hauteurPic: 'height of the peak',
   pasMinutes: 'counting step (minutes)', regime: 'regime (1 = rolling, 0 = sliding)', seuilRoulement: 'friction needed to roll',
@@ -395,6 +397,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game134 */
+  courbeFentes: 'Summed waves vs sin^2(N phi/2) / (N^2 sin^2(phi/2)) (worst gap)', maximaPrincipaux: 'Bright orders d sin theta = m lambda (worst gap from 1)', minimaEntre: 'Dark fringes between two orders', secondaires: 'Small bright fringes between two orders', comptesCourbes: 'Fringes miscounted, every curve',
   /* game133 */
   picWien: 'Peak of every curve vs Wien (worst relative gap)', picFroid: 'Peak wavelength of the coolest body', aireStefan: 'Area of every curve vs Stefan-Boltzmann (worst relative gap)', puissanceChaude: 'Power, hottest over coolest',
   dureeJours: 'Daylight through the year (worst gap, minutes)', equinoxe: 'Daylight at the equinox', solstice: 'Daylight at the solstice',

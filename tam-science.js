@@ -264,6 +264,8 @@ export const ECHELLE_PROPRE = {
   dureeJour: [0, 1, 2], courseRoulante: [0, 1, 2],
   /* game133 : longueur d onde + etiquette (la luminance est dans ECHELLE_ETENDUE) */
   corpsNoir: [0, 2],
+  /* game134 : direction, intensite (2 grandeurs) + etiquette */
+  reseauFentes: [0, 1, 2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

@@ -68,6 +68,8 @@ THEMES.astres.push('phasesLune');
 THEMES.astres.push('dureeJour');
 /* game133 : le corps noir rejoint la lumiere et les ondes */
 THEMES.ondes.push('corpsNoir');
+/* game134 */
+THEMES.ondes.push('reseauFentes');
 const groupeDe = (s) => THEMES.electricite.includes(s.id) ? 'electricite' : THEMES.ondes.includes(s.id) ? 'ondes' : THEMES.maths.includes(s.id) ? 'maths' : THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -167,7 +169,9 @@ const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecisio
 const NOMS_PARAMS_SYS = { 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
   'binaireFusion.distance': 'luminosity distance (Mpc)', 'fusionTrousNoirs.distance': 'luminosity distance (Mpc)',
   /* game133 */
-  'corpsNoir.courbes': 'temperatures drawn', 'corpsNoir.rapport': 'hottest over coolest temperature' };
+  'corpsNoir.courbes': 'temperatures drawn', 'corpsNoir.rapport': 'hottest over coolest temperature',
+  /* game134 (« espacement » existe deja : mode spacing, vide quantique) */
+  'reseauFentes.espacement': 'slit spacing d / lambda' };
 const nomParam = (sid, cle) => NOMS_PARAMS_SYS[sid + '.' + cle] || NOMS_PARAMS_EN[cle];
 const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
@@ -176,7 +180,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   jusqua: 'up to', largeur: 'width', longueur: 'length', longueursOnde: 'wavelengths', masse: 'mass', masseEjecta: 'ejecta mass',
   masseTrouNoir: 'black-hole mass', modes: 'modes', monde: 'world', nombre: 'count', orbite: 'orbit', paires: 'pairs', particules: 'particles',
   pas: 'steps', periode: 'period', periodes: 'periods', poussee: 'thrust', premiere: 'first', profondeur: 'depth', puissance: 'power',
-  rapport: 'ratio', courbes: 'curves', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
+  rapport: 'ratio', courbes: 'curves', fentes: 'slits', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
   tours: 'turns', traversees: 'crossings', uniforme: 'uniform', vitesse: 'speed', viriel: 'virial ratio', ageUnivers: 'age of the universe',
   aCible: 'target orbit (AU)', finGa: 'end (Gyr)', log10Masse: 'log10 mass', Mbulbe: 'bulge mass', Mdisque: 'disk mass', cmb: 'CMB frame',
   fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom',
@@ -1106,7 +1110,9 @@ export function monter(racine, ctx = {}) {
     /* game127 */
     'dureeJour', 'courseRoulante',
     /* game133 */
-    'corpsNoir']);
+    'corpsNoir',
+    /* game134 */
+    'reseauFentes']);
   /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
   const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;

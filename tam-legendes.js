@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game134 */
+  reseauFentes: {
+    titre: 'Light through many slits (a diffraction grating)',
+    enUnePhrase: 'Brightness seen in each direction behind 2 slits, a middle number, and N slits, the waves summed slit by slit.',
+    colonnes: ['sin theta (direction seen)', 'intensity I / N^2', 'number of slits N'],
+    aRegarder: ['The bright orders do not move when slits are added: they stay where d sin theta = m lambda.', 'More slits, sharper orders: that is why a grating splits colours so finely.', 'Between two orders, count the dark fringes: N - 1; and the small bumps: N - 2.'],
+    fin: null,
+  },
   /* game133 */
   corpsNoir: {
     titre: 'The glow of hot bodies (Planck\'s law)',

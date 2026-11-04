@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -33,7 +33,7 @@ function suite(T, bavard = false, seul = null) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 8 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 9 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -129,6 +129,16 @@ function suite(T, bavard = false, seul = null) {
       assert.ok(Number.isInteger(j) && j >= 0 && j < C && l >= 0.01 - 1e-12 && l <= 1 + 1e-12, 'colonnes ' + i); assert.ok(Math.abs(b[o + 1] - ref) <= 1e-9 * ref + 1e-300, 'Planck point ' + i + ' : ' + b[o + 1] + ' ' + ref); }
     return 'wien ' + I.picWien.mesure.toExponential(1) + ', stefan ' + I.aireStefan.mesure.toExponential(1) + ', puissance ' + I.puissanceChaude.mesure.toFixed(4);
   });
+  /* game134 : reseau — reference INDEPENDANTE par Math.sin (forme fermee) ; zeros attendus EXACTEMENT a phi = 2 pi q / N ; labels {2, round((2+N)/2), N} */
+  if (vise('reseauFentes')) for (const p of [...extremes(sys('reseauFentes')), { fentes: 7, espacement: 3.3 }]) ok(`reseauFentes ${JSON.stringify(p)} : chaque point = sin^2(N phi/2)/(N^2 sin^2(phi/2)), ordres a 1, N-1 creux et N-2 bosses`, () => {
+    const R = S('reseauFentes', p), I = R.invariants, b = R.brut, N = R.params.fentes, r = R.params.espacement, labels = new Set([2, Math.round((2 + N) / 2), N]);
+    const ref = (k, s) => { const ph = 2 * Math.PI * r * s, d = Math.sin(ph / 2); if (Math.abs(d) < 1e-6) return 1; return (Math.sin(k * ph / 2) / (k * d)) ** 2; };
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, k = b[o + 2]; assert.ok(labels.has(k) && b[o] >= -1 - 1e-12 && b[o] <= 1 + 1e-12, 'colonnes ' + i); assert.ok(Math.abs(b[o + 1] - ref(k, b[o])) < 1e-9, 'point ' + i + ' ' + b[o + 1] + ' ' + ref(k, b[o])); }
+    assert.equal(I.minimaEntre.mesure, N - 1); assert.equal(I.secondaires.mesure, N - 2); assert.equal(I.comptesCourbes.mesure, 0);
+    assert.equal(I.maximaPrincipaux.ordres, 2 * Math.floor(r) + 1); assert.ok(I.maximaPrincipaux.mesure < 1e-12 && I.courbeFentes.mesure < 1e-9);
+    for (let q = 1; q < N; q++) assert.ok(ref(N, q / (N * r)) < 1e-20, 'zero q = ' + q);
+    return N + ' fentes : ' + I.minimaEntre.mesure + ' creux, ' + I.secondaires.mesure + ' bosses, ' + I.maximaPrincipaux.ordres + ' ordres';
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -167,6 +177,11 @@ const MUTANTS = [
   ['corps : Simpson qui pese 3.9', 'aire += (i === 0 || i === M ? 1 : i % 2 ? 4 : 2) * f * l;', 'aire += (i === 0 || i === M ? 1 : i % 2 ? 3.9 : 2) * f * l;'],
   ['corps : section doree qui descend', 'if (planck(c, T) > planck(d, T)) b = d; else a = c;', 'if (planck(c, T) < planck(d, T)) b = d; else a = c;'],
   ['corps : temperatures espacees sur C au lieu de C - 1', 'temps.push(expD(j / (C - 1) * lnD(P.rapport)));', 'temps.push(expD(j / C * lnD(P.rapport)));'],
+  ['reseau : phaseur sin avec 1.01 j phi', 'im += sinD(j * ph); }', 'im += sinD(1.01 * j * ph); }'],
+  ['reseau : normalise par k (k + 1)', 'return (re * re + im * im) / (k * k); };', 'return (re * re + im * im) / (k * (k + 1)); };'],
+  ['reseau : creux compte au sens large', 'if (b < a && b < c) creux++;', 'if (b <= a || b < c) creux++;'],
+  ['reseau : dephasage sur pi au lieu de 2 pi', 'const ph = 2 * PI * r * s; let re = 0', 'const ph = PI * r * s; let re = 0'],
+  ['reseau : courbe du milieu decalee', 'Math.round((2 + N) / 2)', 'Math.round((3 + N) / 2)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -180,7 +195,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);
