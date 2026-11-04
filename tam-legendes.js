@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game139 */
+  tautochrone: {
+    titre: 'The cycloid where every ball arrives together (tautochrone)',
+    enUnePhrase: 'Balls let go at the same moment from different heights on an upside-down cycloid: how far each one is from the bottom, along the curve, as time goes on.',
+    colonnes: ['time t', 'distance s along the curve from the bottom', 'ball (1 = released lowest)'],
+    aRegarder: ['Every curve crosses zero at the same instant: low or high, every ball reaches the bottom together, at t = pi.', 'The curves are pure sine waves of one period, 4 pi: along the cycloid the swing is exactly harmonic.', 'Raise the highest release towards 170 degrees: the balls still arrive together, while a pendulum on a circle released as high (the witness) falls behind.'],
+    fin: null,
+  },
   /* game138 */
   pendulesCouples: {
     titre: 'Two pendulums joined by a spring',

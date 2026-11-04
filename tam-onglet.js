@@ -184,7 +184,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   jusqua: 'up to', largeur: 'width', longueur: 'length', longueursOnde: 'wavelengths', masse: 'mass', masseEjecta: 'ejecta mass',
   masseTrouNoir: 'black-hole mass', modes: 'modes', monde: 'world', nombre: 'count', orbite: 'orbit', paires: 'pairs', particules: 'particles',
   pas: 'steps', periode: 'period', periodes: 'periods', poussee: 'thrust', premiere: 'first', profondeur: 'depth', puissance: 'power',
-  rapport: 'ratio', courbes: 'curves', fentes: 'slits', demiVie: 'half-life T (steps)', couplage: 'spring coupling k', depart: 'start of the second pendulum (x2 / x1)', lambda: 'wavelength (nm)', rayonLentille: 'lens radius of curvature R (m)', ecartAir: 'air gap at the centre (nm)', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
+  rapport: 'ratio', courbes: 'curves', fentes: 'slits', demiVie: 'half-life T (steps)', couplage: 'spring coupling k', lacherHaut: 'highest release angle (degrees)', depart: 'start of the second pendulum (x2 / x1)', lambda: 'wavelength (nm)', rayonLentille: 'lens radius of curvature R (m)', ecartAir: 'air gap at the centre (nm)', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
   tours: 'turns', traversees: 'crossings', uniforme: 'uniform', vitesse: 'speed', viriel: 'virial ratio', ageUnivers: 'age of the universe',
   aCible: 'target orbit (AU)', finGa: 'end (Gyr)', log10Masse: 'log10 mass', Mbulbe: 'bulge mass', Mdisque: 'disk mass', cmb: 'CMB frame',
   fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom',
@@ -1119,6 +1119,8 @@ export function monter(racine, ctx = {}) {
     'reseauFentes',
     /* game138 */
     'pendulesCouples',
+    /* game139 */
+    'tautochrone',
     /* game135 */
     'refractionSnell',
     /* game136 */

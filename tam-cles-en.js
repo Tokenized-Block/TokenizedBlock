@@ -401,6 +401,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game139 */
+  periodeIsochrone: 'Period of the ball released highest (timed)', etaleBilles: 'Spread of the periods of all the balls (over 4 pi)', arriveeEnBas: 'Time to reach the bottom vs pi (worst gap)', cercleTemoin: 'Witness: period on a circle released as high',
   /* game138 */
   modeLent: 'Period, swinging together (timed)', modeRapide: 'Period, swinging against each other (timed)', tempsEchange: 'Time for the swing to pass across', energieCouples: 'Energy of the two pendulums and the spring',
   /* game137 */

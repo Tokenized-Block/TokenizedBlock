@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -202,6 +202,20 @@ function suite(T, bavard = false, seul = null) {
     let pire = 0; for (let i = 0; i < R.n; i++) { const o = 3 * i, t = b[o], c = b[o + 2], ref = ((1 + d) * Math.cos(t) + (c ? -1 : 1) * (1 - d) * Math.cos(w2 * t)) / 2; pire = Math.max(pire, Math.abs(b[o + 1] - ref)); assert.ok(Math.abs(b[o + 1] - ref) < 3e-3, 'point ' + i + ' t ' + t + ' : ' + b[o + 1] + ' ' + ref); }
     return 'echange ' + I.tempsEchange.mesure.toFixed(4) + ' / ' + I.tempsEchange.formule.toFixed(4) + ', ecart aux courbes ' + pire.toExponential(1);
   });
+  /* game139 : tautochrone — references INDEPENDANTES : chaque point dessine contre s0 cos(t / 2), s0 = 4 sin(th0 / 2) (Math.sin, th0 relu
+   *   des curseurs et de l etiquette) ; periode contre 4 Math.PI ; le cercle temoin contre une AGM recalculee ici (Math.cos, Math.acos) */
+  if (vise('tautochrone')) for (const p of [...extremes(sys('tautochrone')), { billes: 3, lacherHaut: 100 }]) ok(`tautochrone ${JSON.stringify(p)} : periode 4 pi pour toutes les hauteurs, fond atteint en pi, courbes s0 cos(t / 2), cercle temoin plus lent`, () => {
+    const R = S('tautochrone', p), I = R.invariants, b = R.brut, Bn = R.params.billes, haut = R.params.lacherHaut * Math.PI / 180;
+    assert.ok(Math.abs(I.periodeIsochrone.mesure / (4 * Math.PI) - 1) < 1e-9 && Math.abs(I.periodeIsochrone.formule - 4 * Math.PI) < 1e-12, 'periode ' + I.periodeIsochrone.mesure);
+    assert.ok(I.etaleBilles.mesure < 1e-10 && I.arriveeEnBas.mesure < 1e-9, 'etale ' + I.etaleBilles.mesure + ' arrivee ' + I.arriveeEnBas.mesure);
+    let a = 1, g = Math.cos(Math.acos(1 - (1 - Math.cos(haut)) / 4) / 2); for (let k = 0; k < 60; k++) [a, g] = [(a + g) / 2, Math.sqrt(a * g)];
+    assert.ok(Math.abs(I.cercleTemoin.formule / (4 * Math.PI / a) - 1) < 1e-12 && Math.abs(I.cercleTemoin.mesure / I.cercleTemoin.formule - 1) < 1e-9, 'cercle ' + I.cercleTemoin.mesure + ' ' + I.cercleTemoin.formule);
+    /* temoin negatif : le cercle, lui, depend de la hauteur (sinon le chronometre ne verrait rien) */
+    assert.ok(I.cercleTemoin.mesure > 4 * Math.PI * (1 + 1e-3), 'le cercle doit etre plus lent : ' + I.cercleTemoin.mesure);
+    let pire = 0, vus = new Set(); for (let i = 0; i < R.n; i++) { const o = 3 * i, c = b[o + 2], ref = 4 * Math.sin(haut * c / Bn / 2) * Math.cos(b[o] / 2); vus.add(c); pire = Math.max(pire, Math.abs(b[o + 1] - ref)); }
+    assert.ok(pire < 1e-8 && vus.size === Bn, 'courbes ' + pire + ', billes vues ' + vus.size);
+    return 'periode ' + I.periodeIsochrone.mesure.toFixed(10) + ', cercle ' + (I.cercleTemoin.mesure / (4 * Math.PI)).toFixed(4) + ' x 4 pi, ecart aux courbes ' + pire.toExponential(1);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -209,7 +223,7 @@ function suite(T, bavard = false, seul = null) {
 const T = await import(pathToFileURL(SOURCE).href);
 const res = suite(T, true), ech = res.filter((x) => !x.ok);
 let assertions = res.length;
-const src = readFileSync(SOURCE, 'utf8');
+const src = readFileSync(SOURCE, 'utf8').replace(/\r\n/g, '\n'); /* un checkout neuf est en CRLF (core.autocrlf) */
 const interdits = src.match(/Math\.(sin|cos|tan|exp|log|pow|atan2?|asin|acos|hypot|sinh|cosh|tanh|asinh|acosh|cbrt|expm1|log1p|log2|log10|random)\b/g);
 assertions++; if (interdits) ech.push({ nom: 'source sans Math transcendante', det: interdits.join(',') });
 console.log(`${interdits ? 'ECHEC ' : 'OK    '}source : aucune Math transcendante ni Math.random`);
@@ -265,6 +279,14 @@ const MUTANTS = [
   ['couples : Verlet qui pese 2.02', 'u += PC_H / 2 * (ax + bx); v += PC_H / 2 * (ay + by);', 'u += PC_H / 2.02 * (ax + bx); v += PC_H / 2.02 * (ay + by);'],
   ['couples : omega2 = sqrt(1 + k)', 'w2 = Math.sqrt(1 + 2 * k);', 'w2 = Math.sqrt(1 + k);'],
   ['couples : courbes echangees', 'brut[o + 1] = traj[j][1 + c];', 'brut[o + 1] = traj[j][2 - c];'],
+  ['tauto : RK4 qui pese 2.01 le 2e etage', 'v += TC_H / 6 * (k1 + 2 * k2 + 2 * k3 + k4); chaque', 'v += TC_H / 6 * (k1 + 2.01 * k2 + 2 * k3 + k4); chaque'],
+  ['tauto : masse de la cycloide 2 (1.01 + cos)', '(v * v - 1) / (2 * (1 + cosD(q)))', '(v * v - 1) / (2 * (1.01 + cosD(q)))'],
+  ['tauto : passage par le fond non interpole', 'zeros.push(tp + TC_H * qp / (qp - q));', 'zeros.push(tp + TC_H * 0.5);'],
+  ['tauto : cercle de rayon 4.04', 'accCercle = (q) => -sinD(q) / 4;', 'accCercle = (q) => -sinD(q) / 4.04;'],
+  ['tauto : distance dessinee sur th / 2.02', 'pts.push([t, 4 * sinD(q / 2)])', 'pts.push([t, 4 * sinD(q / 2.02)])'],
+  ['tauto : arrivee au 2e passage', 'return { arrivee: zeros[0],', 'return { arrivee: zeros[1],'],
+  ['tauto : hauteurs sur B + 1', 'const th0 = haut * i / B;', 'const th0 = haut * i / (B + 1);'],
+  ['tauto : etiquettes decalees', 'brut[o + 2] = c + 1; }', 'brut[o + 2] = c + 2; }'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -278,7 +300,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

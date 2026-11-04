@@ -476,7 +476,52 @@ function pendulesCouples(P, n) {
     energieCouples: { debut: E0, fin: E0, derive: pireE, note: 'energy of both pendulums and the spring along the drawn run (Verlet keeps it bounded)' } } };
 }
 
+// ---------- 14 : la cycloide tautochrone ----------
+// Une bille glisse sans frottement sur une cycloide renversee x = a (th + sin th), y = a (1 - cos th) (fond en th = 0), a = g = 1.
+//   B billes (curseur) lachees au repos de th0 = lacherHaut i / B (degres), de plus en plus haut.
+// Mesure : rien que l equation de Lagrange en th, avec m(th) = (ds/dth)^2 = 2 (1 + cos th) et V = 1 - cos th :
+//   th'' = sin th (th'^2 - 1) / (2 (1 + cos th)), integree en RK4 (pas 0.002) ; la periode est CHRONOMETREE sur les passages par le fond
+//   (interpoles), l arrivee au fond aussi. Temoin : un pendule sur un CERCLE de rayon 4 (meme courbure au fond) lache de la meme hauteur,
+//   meme integrateur.
+// Exact (derive ici) : l abscisse curviligne s = 4 sin(th / 2) donne y = s^2 / 8, donc s'' = -s / 4 : oscillation harmonique de periode
+//   4 pi QUELLE QUE SOIT la hauteur, et le fond est atteint en pi depuis n importe quel point (Huygens). Le cercle, lui, a la periode
+//   4 pi / AGM(1, cos(alpha0 / 2)), cos alpha0 = 1 - h / 4, qui grandit avec la hauteur.
+// Dessin : s (distance le long de la courbe depuis le fond) contre le temps, une courbe par bille, sur deux periodes.
+const TC_H = 0.002;
+function rk4Courbe(acc, q0, duree, chaque) {
+  let q = q0, v = 0;
+  for (let i = 1, N = Math.ceil(duree / TC_H); i <= N; i++) {
+    const k1 = acc(q, v), k2 = acc(q + TC_H / 2 * v, v + TC_H / 2 * k1), k3 = acc(q + TC_H / 2 * (v + TC_H / 2 * k1), v + TC_H / 2 * k2), k4 = acc(q + TC_H * (v + TC_H / 2 * k2), v + TC_H * k3);
+    q += TC_H * (v + TC_H / 6 * (k1 + k2 + k3)); v += TC_H / 6 * (k1 + 2 * k2 + 2 * k3 + k4); chaque(i * TC_H, q, v);
+  }
+}
+/* periode = ecart moyen entre passages par le fond (un sur deux = meme sens) ; arrivee = premier passage (interpoles lineairement) */
+function chronometrer(acc, q0, periodes, duree) {
+  const zeros = []; let tp = 0, qp = q0;
+  rk4Courbe(acc, q0, duree, (t, q) => { if ((qp > 0) !== (q > 0)) zeros.push(tp + TC_H * qp / (qp - q)); tp = t; qp = q; });
+  const m = Math.min(2 * periodes, zeros.length - 1 - ((zeros.length - 1) % 2));
+  return { arrivee: zeros[0], periode: (zeros[m] - zeros[0]) / (m / 2) };
+}
+const accCycloide = (q, v) => sinD(q) * (v * v - 1) / (2 * (1 + cosD(q))), accCercle = (q) => -sinD(q) / 4;
+function tautochrone(P, n) {
+  const B = P.billes, haut = P.lacherHaut * PI / 180, T = 4 * PI, billes = [];
+  for (let i = 1; i <= B; i++) { const th0 = haut * i / B; billes.push({ th0, ...chronometrer(accCycloide, th0, 5, 5.5 * T) }); }
+  const hMax = 1 - cosD(haut), alpha0 = acosD(1 - hMax / 4), cercleF = 4 * PI / agm(1, cosD(alpha0 / 2)), cercle = chronometrer(accCercle, alpha0, 5, 5.5 * cercleF);
+  let lo = 1 / 0, hi = -1 / 0, pireBas = 0; for (const b of billes) { lo = Math.min(lo, b.periode); hi = Math.max(hi, b.periode); pireBas = Math.max(pireBas, Math.abs(b.arrivee - PI)); }
+  const brut = new Float64Array(n * 3), par = Math.floor(n / B);
+  for (let c = 0; c < B; c++) {
+    const m = c + 1 < B ? par : n - par * (B - 1), pts = [[0, 4 * sinD(billes[c].th0 / 2)]]; rk4Courbe(accCycloide, billes[c].th0, 2 * T, (t, q) => pts.push([t, 4 * sinD(q / 2)]));
+    for (let q = 0; q < m; q++) { const j = m <= 1 ? 0 : Math.round(q * (pts.length - 1) / (m - 1)), o = 3 * (c * par + q); brut[o] = pts[j][0]; brut[o + 1] = pts[j][1]; brut[o + 2] = c + 1; }
+  }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (a = g = 1)', invariants: {
+    periodeIsochrone: { mesure: billes[B - 1].periode, formule: T, note: 'period timed on the bottom crossings for the ball released highest, against 4 pi (the same for every height)' },
+    etaleBilles: { mesure: (hi - lo) / T, formule: 0, note: 'spread of the timed periods of all the balls, divided by 4 pi: the cycloid does not care where you let go' },
+    arriveeEnBas: { mesure: pireBas, formule: 0, note: 'worst gap between the time each ball takes to first reach the bottom and pi (Huygens: the same from anywhere)' },
+    cercleTemoin: { mesure: cercle.periode, formule: cercleF, note: 'witness: a pendulum on a circle of radius 4 (same curvature at the bottom), released from the same height, same integrator: its period grows, 4 pi / AGM(1, cos(alpha0 / 2))' } } };
+}
+
 export const COLONNES = Object.freeze({
+  tautochrone: { colonnes: ['time t', 'distance s along the curve from the bottom', 'ball (label, 1 = released lowest)'], memeLongueur: [], autres: [0, 1, 2] },
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   penduleAmplitude: { colonnes: ['angle theta (radians)', 'angular speed', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -532,9 +577,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'pendulesCouples', nom: 'Two pendulums joined by a spring', science: 'Classical mechanics', D: 3, nuage: true, params: { couplage: 0.1, depart: 0 },
     bornes: { couplage: [0.02, 0.5], depart: [-1, 1] },
     phrase: 'A visualisation of two pendulums joined by a weak spring: start one, and its swing slowly passes to the other, then comes back. The two ways they can swing together are timed on their own: periods 2 pi and 2 pi / sqrt(1 + 2 k). The exchange takes exactly pi / (sqrt(1 + 2 k) - 1): the weaker the spring, the slower and the more complete the hand-over.' },
+  { id: 'tautochrone', nom: 'The cycloid where every ball arrives together (tautochrone)', science: 'Classical mechanics', D: 3, nuage: true, params: { billes: 5, lacherHaut: 150 },
+    bornes: { billes: [2, 8], lacherHaut: [30, 170] },
+    phrase: 'A visualisation of balls let go together from different heights on an upside-down cycloid, with nothing but the equation of motion on that curve. Low or high, every ball reaches the bottom at the same moment, t = pi, and swings with the same period 4 pi (Huygens): along the curve the motion is exactly harmonic. A pendulum on a circle of the same bottom curvature, released as high, is timed beside it and falls behind.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
