@@ -399,6 +399,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game137 */
+  anneauxSombres: 'Dark rings found inside 3 mm', rayonsAnneaux: 'Ring radii vs the exact lens sag (worst relative gap)', penteCarres: 'Squared radii step vs lambda R (mm^2)',
   /* game136 */
   demiVieMesuree: 'Half-life counted (steps)', vieMoyenne: 'Mean lifetime counted (steps)', resteCinq: 'Share left after five half-lives',
   /* game135 */

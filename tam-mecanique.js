@@ -408,6 +408,38 @@ function desintegration(P, n) {
     resteCinq: { mesure: restants[tFin] / N0, formule: 1 / 32, note: 'share left after five half-lives against 2^-5 = 1/32 (statistical)' } } };
 }
 
+// ---------- 12 : les anneaux de Newton ----------
+// Une lentille de rayon de courbure R (curseur, metres) posee sur une plaque de verre, lumiere de longueur d onde lambda (curseur, nm),
+//   lame d air d0 au centre (curseur, nm). Unites seules (nm, mm, m) : aucune constante publiee.
+// Mesure : en chaque point, l onde reflechie par le dessous de la lentille et celle reflechie par la plaque (dephasee de pi a la reflexion
+//   sur le verre, et de 2 pi 2 e / lambda par l aller-retour dans la lame d epaisseur e) sont SOMMEES ; e = d0 + la fleche EXACTE de la
+//   lentille, R - sqrt(R^2 - r^2). Les anneaux sombres sont CHERCHES sur la courbe (grille fine puis section doree).
+// Exact (derive ici) : sombre quand 2 e = m lambda, soit r_m = sqrt(R^2 - (R - (m lambda / 2 - d0))^2) ; pres de l axe (approximation
+//   paraxiale) r_m^2 = R (m lambda - 2 d0) : les carres des rayons sont en progression ARITHMETIQUE de pas lambda R.
+// Dessin : l intensite reflechie (hauteur) sur le disque de rayon 3 mm (vue de dessus : les anneaux) ; x, y en mm.
+const NW_RMAX = 3e-3;
+function anneauxNewton(P, n) {
+  const R = P.rayonLentille, lam = P.lambda * 1e-9, d0 = P.ecartAir * 1e-9, G = 40000;
+  const fleche = (r) => r * r / (R + Math.sqrt(R * R - r * r));
+  const I = (r) => { const de = 2 * PI * 2 * (d0 + fleche(r)) / lam, re = 1 - cosD(de), im = -sinD(de); return (re * re + im * im) / 4; };
+  const mesures = []; const g = (Math.sqrt(5) - 1) / 2, h = NW_RMAX / G;
+  let a = I(h), b = I(2 * h);
+  /* game137 (rouge du banc a 750 nm : l anneau m = 12 tombe a 2.999997 mm, dans la DERNIERE case de la grille, sans point au-dela pour
+   *   le voir comme un creux) : le balayage deborde de deux pas, seuls les creux a <= 3 mm sont gardes */
+  for (let i = 3; i <= G + 2; i++) { const c = I(i * h); if (b < a && b <= c) { let u = (i - 2) * h, v = i * h; for (let k = 0; k < 200 && v - u > 1e-15; k++) { const x = v - g * (v - u), y = u + g * (v - u); if (I(x) < I(y)) v = y; else u = x; } if ((u + v) / 2 <= NW_RMAX) mesures.push((u + v) / 2); } a = b; b = c; }
+  const formules = []; for (let m = Math.max(0, Math.ceil(2 * d0 / lam)); ; m++) { const e = m * lam / 2 - d0; if (e < 0) continue; const r = Math.sqrt(Math.max(0, R * R - (R - e) * (R - e))); if (r > NW_RMAX) break; if (r > 2 * h) formules.push({ m, r }); }
+  let pire = 0; const k = Math.min(mesures.length, formules.length); for (let j = 0; j < k; j++) pire = Math.max(pire, Math.abs(mesures[j] - formules[j].r) / formules[j].r);
+  /* pente de r^2 contre m (moindres carres sur les anneaux mesures) contre lambda R */
+  let sx = 0, sy = 0, sxx = 0, sxy = 0; for (let j = 0; j < k; j++) { const x = formules[j].m, y = mesures[j] ** 2; sx += x; sy += y; sxx += x * x; sxy += x * y; }
+  const pente = k > 1 ? (k * sxy - sx * sy) / (k * sxx - sx * sx) : NaN;
+  const brut = new Float64Array(n * 3), dor = PI * (3 - Math.sqrt(5));
+  for (let i = 0; i < n; i++) { const r = NW_RMAX * Math.sqrt((i + 0.5) / n), t = i * dor, o = 3 * i; brut[o] = 1e3 * r * cosD(t); brut[o + 1] = 1e3 * r * sinD(t); brut[o + 2] = I(r); }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (interferences)', invariants: {
+    anneauxSombres: { mesure: mesures.length, formule: formules.length, note: 'dark rings found on the summed intensity inside 3 mm, against the count of m with 2 e = m lambda' },
+    rayonsAnneaux: { mesure: pire, formule: 0, note: 'worst relative gap between each dark ring found and r_m = sqrt(R^2 - (R - (m lambda / 2 - d0))^2) (exact sag of the lens)' },
+    penteCarres: { mesure: pente * 1e6, formule: lam * R * 1e6, note: 'slope of r^2 (mm^2) against m on the rings found, against lambda R (paraxial law: the squares of the radii step by lambda R)' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -419,6 +451,7 @@ export const COLONNES = Object.freeze({
   reseauFentes: { colonnes: ['sin theta (direction seen)', 'intensity I / N^2', 'number of slits N (label)'], memeLongueur: [], autres: [0, 1, 2] },
   refractionSnell: { colonnes: ['x (the surface is y = 0)', 'height y (water below, air above)', 'ray number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   desintegration: { colonnes: ['time (steps)', 'atoms left', 'curve (0 = counted, 1 = N0 2^(-t/T))'], memeLongueur: [], autres: [0, 1, 2] },
+  anneauxNewton: { colonnes: ['x (mm)', 'y (mm)', 'reflected intensity (0 dark, 1 bright)'], memeLongueur: [[0, 1]], autres: [2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -456,9 +489,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'desintegration', nom: 'Radioactive decay, atom by atom', science: 'Nuclear physics', D: 3, nuage: true, params: { atomes: 1000, demiVie: 20, graine: 1 },
     bornes: { atomes: [200, 5000], demiVie: [5, 50], graine: [0, 99] },
     phrase: 'A visualisation of radioactive decay with nothing but chance: at each step every atom left draws lots and decays with the same small probability. Counted, half the atoms are gone after one half-life, a quarter remain after two: the exponential law appears by itself. The half-life and the mean lifetime measured are compared with the exact values, the gap given in standard deviations because the atoms are finite in number.' },
+  { id: 'anneauxNewton', nom: 'Newton\'s rings', science: 'Waves', D: 3, nuage: true, params: { lambda: 550, rayonLentille: 1, ecartAir: 0 },
+    bornes: { lambda: [380, 750], rayonLentille: [0.5, 5], ecartAir: [0, 300] },
+    phrase: 'A visualisation of the light reflected by a curved lens resting on flat glass: at each point the wave reflected by the lens and the one reflected by the glass below are summed. Dark rings appear wherever the air gap is a whole number of half-wavelengths; searched on the summed light, they sit exactly at sqrt(R^2 - (R - (m lambda / 2 - d0))^2), and their squared radii step by lambda R: redder light, wider rings.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

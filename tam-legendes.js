@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game137 */
+  anneauxNewton: {
+    titre: 'Newton\'s rings',
+    enUnePhrase: 'Light reflected by a curved lens lying on flat glass, seen from above: bright and dark rings.',
+    colonnes: ['x (mm)', 'y (mm)', 'reflected intensity (0 dark, 1 bright)'],
+    aRegarder: ['The centre is dark where the lens touches the glass: one of the two reflections flips the wave.', 'The rings crowd together outwards: their squared radii grow by the same step, lambda R.', 'Move the wavelength from blue to red: the rings widen. Lift the lens a little: the rings slide inwards and disappear at the centre.'],
+    fin: null,
+  },
   /* game136 */
   desintegration: {
     titre: 'Radioactive decay, atom by atom',

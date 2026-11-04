@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -33,7 +33,7 @@ function suite(T, bavard = false, seul = null) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 11 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 12 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -180,6 +180,17 @@ function suite(T, bavard = false, seul = null) {
       out.push(cle + ' moyenne ' + m.toFixed(2) + ', dispersion ' + sd.toFixed(2)); }
     return out.join(' ; ');
   });
+  /* game137 : anneaux de Newton — reference INDEPENDANTE : chaque point dessine = sin^2(2 pi e / lambda) (Math.sin, forme fermee de la somme),
+   *   e = d0 + R - sqrt(R^2 - r^2) ; anneaux sombres attendus par Math.sqrt ; nombre par comptage direct des m */
+  if (vise('anneauxNewton')) for (const p of [...extremes(sys('anneauxNewton')), { lambda: 450, rayonLentille: 2, ecartAir: 137 }]) ok(`anneauxNewton ${JSON.stringify(p)} : intensite sin^2(2 pi e / lambda), anneaux sombres a sqrt(R^2 - (R - (m lambda/2 - d0))^2), pas lambda R`, () => {
+    const R = S('anneauxNewton', p), I = R.invariants, b = R.brut, Rl = R.params.rayonLentille, lam = R.params.lambda * 1e-9, d0 = R.params.ecartAir * 1e-9;
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, r = Math.hypot(b[o], b[o + 1]) / 1e3, e = d0 + Rl - Math.sqrt(Rl * Rl - r * r); assert.ok(r <= 3e-3 + 1e-12, 'disque ' + i); assert.ok(Math.abs(b[o + 2] - Math.sin(2 * Math.PI * e / lam) ** 2) < 1e-6, 'intensite ' + i + ' ' + b[o + 2]); }
+    let attendus = 0; for (let m = 0; m < 1e5; m++) { const e = m * lam / 2 - d0; if (e < 0) continue; const r = Math.sqrt(Rl * Rl - (Rl - e) ** 2); if (r > 3e-3) break; if (r > 2 * 3e-3 / 40000) attendus++; }
+    assert.equal(I.anneauxSombres.formule, attendus); assert.equal(I.anneauxSombres.mesure, attendus);
+    assert.ok(I.rayonsAnneaux.mesure < 1e-8, 'rayons ' + I.rayonsAnneaux.mesure);
+    if (attendus > 1) assert.ok(Math.abs(I.penteCarres.mesure / (lam * Rl * 1e6) - 1) < 2e-4 && Math.abs(I.penteCarres.formule / (lam * Rl * 1e6) - 1) < 1e-12, 'pente ' + I.penteCarres.mesure);
+    return attendus + ' anneaux, rayons ' + I.rayonsAnneaux.mesure.toExponential(1) + ', pente ' + I.penteCarres.mesure.toFixed(6) + ' / ' + (lam * Rl * 1e6).toFixed(6);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -233,6 +244,11 @@ const MUTANTS = [
   ['desint : demi-vie lue au pas d apres', 'tDemi = j - 1 + (restants[j - 1] - N0 / 2) / (restants[j - 1] - restants[j]);', 'tDemi = j + (restants[j - 1] - N0 / 2) / (restants[j - 1] - restants[j]);'],
   ['desint : sigma de la demi-vie deux fois trop large', 'sD = T / (LN2 * Math.sqrt(N0))', 'sD = 2 * T / (LN2 * Math.sqrt(N0))'],
   ['desint : vie moyenne exacte 1 / p + 1', 'vieMoyenne: { mesure: vie, formule: 1 / p,', 'vieMoyenne: { mesure: vie, formule: 1 / p + 1,'],
+  ['newton : sans le dephasage de reflexion', 'const de = 2 * PI * 2 * (d0 + fleche(r)) / lam, re = 1 - cosD(de), im = -sinD(de);', 'const de = 2 * PI * 2 * (d0 + fleche(r)) / lam, re = 1 + cosD(de), im = sinD(de);'],
+  ['newton : aller simple dans la lame', 'const de = 2 * PI * 2 * (d0 + fleche(r)) / lam,', 'const de = 2 * PI * (d0 + fleche(r)) / lam,'],
+  ['newton : fleche paraxiale', 'const fleche = (r) => r * r / (R + Math.sqrt(R * R - r * r));', 'const fleche = (r) => r * r / (2 * R);'],
+  ['newton : section doree qui monte', 'if (I(x) < I(y)) v = y; else u = x;', 'if (I(x) > I(y)) v = y; else u = x;'],
+  ['newton : formule sans la lame d air', 'const e = m * lam / 2 - d0; if (e < 0) continue;', 'const e = m * lam / 2; if (e < 0) continue;'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -246,7 +262,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game137 ---------- */
+  anneauxNewton: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Where the lens touches the glass')],
   /* ---------- game136 ---------- */
   desintegration: (P, o, B) => [pt([o.params.demiVie, o.params.atomes / 2, B.centre[2]], C.repere, 'Half the atoms left (one half-life)')],
   /* ---------- game135 ---------- */

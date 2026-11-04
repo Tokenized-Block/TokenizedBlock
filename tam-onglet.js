@@ -72,6 +72,8 @@ THEMES.ondes.push('corpsNoir');
 THEMES.ondes.push('reseauFentes');
 /* game135 */
 THEMES.ondes.push('refractionSnell');
+/* game137 */
+THEMES.ondes.push('anneauxNewton');
 const groupeDe = (s) => THEMES.electricite.includes(s.id) ? 'electricite' : THEMES.ondes.includes(s.id) ? 'ondes' : THEMES.maths.includes(s.id) ? 'maths' : THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -182,7 +184,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   jusqua: 'up to', largeur: 'width', longueur: 'length', longueursOnde: 'wavelengths', masse: 'mass', masseEjecta: 'ejecta mass',
   masseTrouNoir: 'black-hole mass', modes: 'modes', monde: 'world', nombre: 'count', orbite: 'orbit', paires: 'pairs', particules: 'particles',
   pas: 'steps', periode: 'period', periodes: 'periods', poussee: 'thrust', premiere: 'first', profondeur: 'depth', puissance: 'power',
-  rapport: 'ratio', courbes: 'curves', fentes: 'slits', demiVie: 'half-life T (steps)', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
+  rapport: 'ratio', courbes: 'curves', fentes: 'slits', demiVie: 'half-life T (steps)', lambda: 'wavelength (nm)', rayonLentille: 'lens radius of curvature R (m)', ecartAir: 'air gap at the centre (nm)', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
   tours: 'turns', traversees: 'crossings', uniforme: 'uniform', vitesse: 'speed', viriel: 'virial ratio', ageUnivers: 'age of the universe',
   aCible: 'target orbit (AU)', finGa: 'end (Gyr)', log10Masse: 'log10 mass', Mbulbe: 'bulge mass', Mdisque: 'disk mass', cmb: 'CMB frame',
   fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom',
