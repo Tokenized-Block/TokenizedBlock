@@ -13,9 +13,9 @@
 //                  M/m = 100^k il ecrit les k+1 premiers chiffres de pi.
 //   modesNormaux : une chaine de N masses et ressorts ; pulsations exactes 2 sin(j pi / (2 (N + 1))) ; un mode excite seul le reste.
 //   paraboleTir  : tirs depuis une hauteur h ; meilleur angle atan(1 / sqrt(1 + 2 h)), portee sqrt(1 + 2 h), parabole de surete.
-import { sinD, cosD } from './tam-moteur.js';
+import { sinD, cosD, lnD } from './tam-moteur.js';
 
-const PI = Math.PI;
+const PI = Math.PI, LN2 = lnD(2);
 
 export const SOURCES = Object.freeze({});
 
@@ -265,6 +265,49 @@ function courseRoulante(P, n) {
   return { D: 3, brut, nuage: true, unite: 'sans objet (mecanique du solide)', invariants: inv };
 }
 
+// ---------- 8 : le corps noir (loi de Planck) ----------
+// Sans dimension : longueur d onde lambda en unites de h c / (k T0), temperature T en unites de T0 ; aucune constante publiee.
+// Loi de Planck (la courbe elle-meme) : B(lambda, T) = 1 / (lambda^5 (e^(1 / (lambda T)) - 1)), a un facteur 2 h c^2 pres.
+// Mesure (pas de formule finale) : pour chaque temperature, le sommet de la courbe est CHERCHE (grille logarithmique puis section
+//   doree) et l aire sous la courbe est INTEGREE (Simpson sur ln lambda, de 1e-3 a 1e3).
+// Exact (derive ici) : en posant x = 1 / (lambda T), l aire vaut T^4 integrale x^3 / (e^x - 1) dx = T^4 pi^4 / 15 (Stefan-Boltzmann) ;
+//   le sommet annule d/dlambda : x = 5 (1 - e^-x), resolu par Newton, d ou lambda_max T = 1 / x5 (Wien), le meme pour tous.
+// Dessin : B contre lambda pour chaque temperature (vue de face) ; 3e colonne : numero de la courbe (0 = la plus froide).
+const CN_LMIN = 0.01, CN_LMAX = 1;
+function expD(x) { /* e^x avec + - * / seulement (copie de tam-physique.js) */
+  if (x === -Infinity) return 0;
+  if (!(x - x === 0)) return NaN;
+  const k = Math.round(x / LN2), r = x - k * LN2; let t = 1, s = 1;
+  for (let i = 1; i <= 22; i++) { t *= r / i; s += t; }
+  return k < -1070 ? 0 : s * 2 ** k;
+}
+const planck = (l, T) => { const x = 1 / (l * T); return x > 700 ? 0 : 1 / (l ** 5 * (expD(x) - 1)); };
+function corpsNoir(P, n) {
+  const C = P.courbes, temps = [];
+  for (let j = 0; j < C; j++) temps.push(expD(j / (C - 1) * lnD(P.rapport)));
+  /* Wien : Newton sur F(x) = x - 5 + 5 e^-x depuis 5 */
+  let x5 = 5; for (let i = 0; i < 60; i++) { const e = expD(-x5), d = (x5 - 5 + 5 * e) / (1 - 5 * e); x5 -= d; if (Math.abs(d) < 1e-16) break; }
+  const stefan = PI ** 4 / 15, M = 6000, s0 = lnD(1e-3), s1 = lnD(1e3), hs = (s1 - s0) / M;
+  const res = temps.map((T) => {
+    let aire = 0, iMax = 0, fMax = -1;
+    for (let i = 0; i <= M; i++) { const l = expD(s0 + i * hs), f = planck(l, T); aire += (i === 0 || i === M ? 1 : i % 2 ? 4 : 2) * f * l; if (f > fMax) { fMax = f; iMax = i; } }
+    aire *= hs / 3;
+    let a = expD(s0 + (iMax - 1) * hs), b = expD(s0 + (iMax + 1) * hs); const g = (Math.sqrt(5) - 1) / 2;
+    for (let k = 0; k < 200 && b - a > 1e-15 * b; k++) { const c = b - g * (b - a), d = a + g * (b - a); if (planck(c, T) > planck(d, T)) b = d; else a = c; }
+    const lm = (a + b) / 2;
+    return { T, aire, lm, pic: planck(lm, T) };
+  });
+  const brut = new Float64Array(n * 3), par = Math.floor(n / C); let l = 0;
+  for (let j = 0; j < C; j++) { const nb = j === C - 1 ? n - l : par; for (let q = 0; q < nb && l < n; q++) { const la = nb === 1 ? CN_LMIN : CN_LMIN + q * (CN_LMAX - CN_LMIN) / (nb - 1), o = 3 * l++; brut[o] = la; brut[o + 1] = planck(la, temps[j]); brut[o + 2] = j; } }
+  let pireW = 0, pireS = 0; for (const r of res) { pireW = Math.max(pireW, Math.abs(r.lm * r.T * x5 - 1)); pireS = Math.max(pireS, Math.abs(r.aire / (r.T ** 4 * stefan) - 1)); }
+  const froid = res[0], chaud = res[C - 1];
+  return { D: 3, brut, nuage: true, unite: 'sans objet (rayonnement thermique)', invariants: {
+    picWien: { mesure: pireW, formule: 0, x5, note: 'worst relative gap, over every temperature, between the peak searched on the curve (lambda_max T) and 1 / x5, x5 the root of x = 5 (1 - e^-x)' },
+    picFroid: { mesure: froid.lm, formule: 1 / x5, hauteurPic: froid.pic, note: 'peak wavelength of the coolest body (T = 1) against 1 / x5 (Wien)' },
+    aireStefan: { mesure: pireS, formule: 0, note: 'worst relative gap, over every temperature, between the area integrated under the curve and T^4 pi^4 / 15 (Stefan-Boltzmann)' },
+    puissanceChaude: { mesure: chaud.aire / froid.aire, formule: (chaud.T / froid.T) ** 4, note: 'power of the hottest body over the coolest, against the ratio of temperatures to the fourth power' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -272,6 +315,7 @@ export const COLONNES = Object.freeze({
   phasesLune: { colonnes: ['x on the Moon\'s disc', 'y on the Moon\'s disc', 'phase angle in degrees (0 = full Moon)'], memeLongueur: [[0, 1]], autres: [2] },
   dureeJour: { colonnes: ['day of the year (0 = equinox)', 'hours of daylight', 'curve (0 = counted minute by minute, 1 = formula)'], memeLongueur: [], autres: [0, 1, 2] },
   courseRoulante: { colonnes: ['time t', 'distance down the slope', 'body (0 block, 1 sphere, 2 cylinder, 3 ring)'], memeLongueur: [], autres: [0, 1, 2] },
+  corpsNoir: { colonnes: ['wavelength lambda (units of h c / (k T0))', 'spectral radiance B (Planck)', 'curve (0 = coolest, T = 1)'], memeLongueur: [], autres: [0, 1, 2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -297,9 +341,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'courseRoulante', nom: 'The rolling race (sphere, cylinder, ring)', science: 'Classical mechanics', D: 3, nuage: true, params: { pente: 20, frottement: 0.15 },
     bornes: { pente: [5, 60], frottement: [0, 1] },
     phrase: 'A visualisation of four bodies let go together down a slope: a block, a solid sphere, a solid cylinder and a ring. Rolling, they arrive in the exact times sqrt(2 L (1 + k) / (g sin theta)): the sphere beats the cylinder, which beats the ring, whatever their mass or size. Lower the friction below k/(1 + k) tan theta and a body starts to slide instead.' },
+  { id: 'corpsNoir', nom: 'The glow of hot bodies (Planck\'s law)', science: 'Thermal physics', D: 3, nuage: true, params: { courbes: 5, rapport: 2 },
+    bornes: { courbes: [2, 8], rapport: [1.2, 3] },
+    phrase: 'A visualisation of the light given off by a body at several temperatures, Planck\'s law drawn curve by curve. Searched on each curve, the peak always sits at lambda_max T = 1 / x5 with x5 the root of x = 5 (1 - e^-x) (Wien): hotter glows bluer. Integrated, the area under each curve is T^4 pi^4 / 15 (Stefan-Boltzmann): twice as hot, sixteen times the power.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

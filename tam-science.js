@@ -216,7 +216,8 @@ export function vueCorps(o, k) {
  *   charge qui sature) couvre 6.5 ecarts-types quand le temps uniforme en couvre sqrt(12) = 3.46 : divisee par son ecart-type, elle
  *   etire le graphe. Ces colonnes-la sont mises a l echelle par leur ETENDUE (ramenee a celle d une colonne uniforme), les autres
  *   gardent la regle commune. Mesure : dogme 3.46 x 6.49 -> 3.46 x 3.46 ; RC 3.46 x 4.59 -> 3.46 x 3.46. */
-export const ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1] });
+/* game133 : la luminance de Planck (le pic chaud T^5 fois plus haut, le reste pres de 0) : 3.46 x 7.05 a l ecran -> 3.46 x 3.46 */
+export const ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1], corpsNoir: [1] });
 export const ECHELLE_PROPRE = {
   supernova: [3], supernovaHydro: [3, 4], versMars: [2], fusionTrousNoirs: [0, 3], binaireFusion: [0, 3],
   mandelbrot: [2], karman: [2], evaporationTrouNoir: [0, 1, 2, 3],
@@ -261,6 +262,8 @@ export const ECHELLE_PROPRE = {
   penduleAmplitude: [0, 1, 2], phasesLune: [2],
   /* game127 : jour, heures (2 grandeurs) + etiquette ; temps, distance + etiquette */
   dureeJour: [0, 1, 2], courseRoulante: [0, 1, 2],
+  /* game133 : longueur d onde + etiquette (la luminance est dans ECHELLE_ETENDUE) */
+  corpsNoir: [0, 2],
   /* game113 : tam-chimie.js#COLONNES (temps ; temps ; temps) */
   reactionsChaine: [0, 2], equilibreChimique: [2], brusselator: [2], /* game116 : chaine = (t, part, espece) */
 };

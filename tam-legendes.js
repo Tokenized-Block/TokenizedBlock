@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game133 */
+  corpsNoir: {
+    titre: 'The glow of hot bodies (Planck\'s law)',
+    enUnePhrase: 'How much light a body gives off at each wavelength, one curve per temperature (Planck\'s law).',
+    colonnes: ['wavelength lambda (units of h c / (k T0))', 'spectral radiance B', 'curve (0 = coolest, T = 1)'],
+    aRegarder: ['Hotter bodies peak at shorter wavelengths: lambda_max T is the same for every curve (Wien).', 'The area under a curve grows as T to the fourth power: the hottest curve dwarfs the others (Stefan-Boltzmann).', 'At long wavelengths every curve falls slowly; at short ones it drops to nothing: no ultraviolet catastrophe.'],
+    fin: null,
+  },
   /* game127 */
   dureeJour: {
     titre: 'How long the day lasts through the year',

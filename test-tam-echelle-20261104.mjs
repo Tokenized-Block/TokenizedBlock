@@ -16,8 +16,9 @@ const etendueCol = (z, n, D, c) => { let lo = 1 / 0, hi = -1 / 0; for (let i = 0
 function suite(T, bavard = false) {
   const res = [];
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
-  ok('table : dogmeCentral et circuitRC, colonne 1', () => { assert.deepEqual(JSON.parse(JSON.stringify(T.ECHELLE_ETENDUE)), { dogmeCentral: [1], circuitRC: [1] }); });
-  for (const [id, essais] of [['dogmeCentral', [{}, { transcription: 0.5 }, { transcription: 20, traduction: 20 }, { graine: 7 }]], ['circuitRC', [{}, { tau: 0.5 }, { tau: 5 }]]]) for (const p of essais) ok(`${id} ${JSON.stringify(p)} : la colonne 1 couvre sqrt(12), le dessin n est plus etire`, () => {
+  ok('table : dogmeCentral, circuitRC et corpsNoir, colonne 1', () => { assert.deepEqual(JSON.parse(JSON.stringify(T.ECHELLE_ETENDUE)), { dogmeCentral: [1], circuitRC: [1], corpsNoir: [1] }); });
+  for (const [id, essais] of [['dogmeCentral', [{}, { transcription: 0.5 }, { transcription: 20, traduction: 20 }, { graine: 7 }]], ['circuitRC', [{}, { tau: 0.5 }, { tau: 5 }]],
+    /* game133 */ ['corpsNoir', [{}, { rapport: 3 }, { courbes: 2, rapport: 1.2 }]]]) for (const p of essais) ok(`${id} ${JSON.stringify(p)} : la colonne 1 couvre sqrt(12), le dessin n est plus etire`, () => {
     const s = T.systeme(id), o = s.mod.simuler(id, p), z = T.standardiserIso(o.brut, o.n, o.D, id), e = etendueCol(z, o.n, o.D, 1);
     assert.ok(Math.abs(e - Math.sqrt(12)) < 1e-9, 'etendue ' + e);
     /* temoin : par l ecart-type, la meme colonne serait plus haute que le temps n est large (le defaut d avant) */
@@ -41,7 +42,8 @@ const src = readFileSync(SOURCE, 'utf8');
 /* (retire : « colonne etendue comptee dans sMax » — mutant EQUIVALENT aujourd hui : dans les deux systemes de la table, la colonne a
  *   l etendue est la seule colonne non propre, sMax n y sert a rien d autre ; il redeviendra observable si la table s etend) */
 const MUTANTS = [
-  ['table vide', 'ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1] });', 'ECHELLE_ETENDUE = Object.freeze({});'],
+  ['table vide', 'ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1], corpsNoir: [1] });', 'ECHELLE_ETENDUE = Object.freeze({});'],
+  ['corps noir retire de la table', ', corpsNoir: [1] });', ' });'],
   ['etendue ramenee a 3', 'k[j] = hi > lo ? Math.sqrt(12) / (hi - lo) : 0; continue;', 'k[j] = hi > lo ? 3 / (hi - lo) : 0; continue;'],
 ];
 const prefixe = pathToFileURL(ICI).href + '/';

@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game133 */
+  x5: 'x5, root of x = 5 (1 - e^-x)', hauteurPic: 'height of the peak',
   pasMinutes: 'counting step (minutes)', regime: 'regime (1 = rolling, 0 = sliding)', seuilRoulement: 'friction needed to roll',
   /* game126 */
   petitesOscillations: 'small-swing period 2 pi', amplitudeDegres: 'release angle (degrees)', amplitudes: 'amplitudes drawn', phaseDegres: 'phase angle (degrees)',
@@ -393,6 +395,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game133 */
+  picWien: 'Peak of every curve vs Wien (worst relative gap)', picFroid: 'Peak wavelength of the coolest body', aireStefan: 'Area of every curve vs Stefan-Boltzmann (worst relative gap)', puissanceChaude: 'Power, hottest over coolest',
   dureeJours: 'Daylight through the year (worst gap, minutes)', equinoxe: 'Daylight at the equinox', solstice: 'Daylight at the solstice',
   arriveeBlock: 'Arrival of the block', arriveeSphere: 'Arrival of the sphere', arriveeCylinder: 'Arrival of the cylinder', arriveeRing: 'Arrival of the ring', energieRoulants: 'Energy of the rolling bodies',
   /* game126 */

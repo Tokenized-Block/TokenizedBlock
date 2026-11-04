@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -33,7 +33,7 @@ function suite(T, bavard = false, seul = null) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 7 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 8 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -114,6 +114,21 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(I.energieRoulants.derive < 1e-6 * I.energieRoulants.debut, 'energie ' + I.energieRoulants.derive);
     return out.join(' ');
   });
+  /* game133 : corps noir — references INDEPENDANTES : x5 par DICHOTOMIE (Math.exp), aire par Simpson sur x = 1/(lambda T) (autre variable
+   *   que le module), chaque point dessine par Math.exp / Math.pow, T_j = rapport^(j/(C-1)) par Math.pow */
+  const x5Ref = (() => { let a = 4, b = 6; for (let i = 0; i < 200; i++) { const m = (a + b) / 2; if (m - 5 * (1 - Math.exp(-m)) > 0) b = m; else a = m; } return (a + b) / 2; })();
+  const aireX = (() => { const M = 40000, X = 60, h = X / M, f = (x) => (x === 0 ? 0 : x ** 3 / Math.expm1(x)); let t = f(0) + f(X); for (let i = 1; i < M; i++) t += (i % 2 ? 4 : 2) * f(i * h); return t * h / 3; })();
+  if (vise('corpsNoir')) for (const p of [...extremes(sys('corpsNoir')), { courbes: 3, rapport: 2.5 }]) ok(`corpsNoir ${JSON.stringify(p)} : chaque point = Planck, pic lambda_max T = 1/x5 (Wien), aire T^4 pi^4/15 (Stefan), puissance (Tc/Tf)^4`, () => {
+    const R = S('corpsNoir', p), I = R.invariants, b = R.brut, C = R.params.courbes, r = R.params.rapport;
+    assert.ok(Math.abs(I.picWien.x5 - x5Ref) < 1e-12, 'x5 ' + I.picWien.x5 + ' ' + x5Ref);
+    assert.ok(Math.abs(Math.PI ** 4 / 15 - aireX) < 1e-10, 'reference de l aire ' + aireX);
+    assert.ok(I.picWien.mesure < 1e-7 && I.aireStefan.mesure < 1e-9, 'wien ' + I.picWien.mesure + ' stefan ' + I.aireStefan.mesure);
+    assert.ok(Math.abs(I.picFroid.mesure * x5Ref - 1) < 1e-7 && Math.abs(I.picFroid.formule * x5Ref - 1) < 1e-12, 'pic froid ' + I.picFroid.mesure);
+    assert.ok(Math.abs(I.puissanceChaude.mesure / r ** 4 - 1) < 1e-9 && Math.abs(I.puissanceChaude.formule / r ** 4 - 1) < 1e-12, 'puissance ' + I.puissanceChaude.mesure);
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, j = b[o + 2], T = Math.pow(r, j / (C - 1)), l = b[o], ref = 1 / (l ** 5 * Math.expm1(1 / (l * T)));
+      assert.ok(Number.isInteger(j) && j >= 0 && j < C && l >= 0.01 - 1e-12 && l <= 1 + 1e-12, 'colonnes ' + i); assert.ok(Math.abs(b[o + 1] - ref) <= 1e-9 * ref + 1e-300, 'Planck point ' + i + ' : ' + b[o + 1] + ' ' + ref); }
+    return 'wien ' + I.picWien.mesure.toExponential(1) + ', stefan ' + I.aireStefan.mesure.toExponential(1) + ', puissance ' + I.puissanceChaude.mesure.toFixed(4);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -146,6 +161,12 @@ const MUTANTS = [
   ['course : roulement g sin / (1 + 1.01 k)', 'a = g * st / (1 + k); alpha = a;', 'a = g * st / (1 + 1.01 * k); alpha = a;'],
   ['course : seuil de roulement avec 1.2 mu', 'if (k > 0 && fReq <= fMax + 1e-15)', 'if (k > 0 && fReq <= 1.2 * fMax + 1e-15)'],
   ['course : chaleur comptee a 90 %', 'if (glisse && mu > 0) chaleur += mu * g * ct', 'if (glisse && mu > 0) chaleur += 0.9 * mu * g * ct'],
+  ['corps : Planck en lambda^4.9', 'return x > 700 ? 0 : 1 / (l ** 5 * (expD(x) - 1));', 'return x > 700 ? 0 : 1 / (l ** 4.9 * (expD(x) - 1));'],
+  ['corps : Wien x = 4.9 (1 - e^-x)', 'const e = expD(-x5), d = (x5 - 5 + 5 * e) / (1 - 5 * e);', 'const e = expD(-x5), d = (x5 - 4.9 + 4.9 * e) / (1 - 4.9 * e);'],
+  ['corps : Stefan pi^4 / 15.1', 'const stefan = PI ** 4 / 15,', 'const stefan = PI ** 4 / 15.1,'],
+  ['corps : Simpson qui pese 3.9', 'aire += (i === 0 || i === M ? 1 : i % 2 ? 4 : 2) * f * l;', 'aire += (i === 0 || i === M ? 1 : i % 2 ? 3.9 : 2) * f * l;'],
+  ['corps : section doree qui descend', 'if (planck(c, T) > planck(d, T)) b = d; else a = c;', 'if (planck(c, T) < planck(d, T)) b = d; else a = c;'],
+  ['corps : temperatures espacees sur C au lieu de C - 1', 'temps.push(expD(j / (C - 1) * lnD(P.rapport)));', 'temps.push(expD(j / C * lnD(P.rapport)));'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -159,7 +180,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

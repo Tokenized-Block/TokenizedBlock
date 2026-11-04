@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game133 ---------- */
+  corpsNoir: (P, o, B) => [pt([o.invariants.picFroid.mesure, o.invariants.picFroid.hauteurPic, B.centre[2]], C.repere, 'Wien peak of the coolest body')],
   /* ---------- game126 ---------- */
   penduleAmplitude: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Hanging at rest')],
   phasesLune: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Centre of the Moon\'s disc')],
