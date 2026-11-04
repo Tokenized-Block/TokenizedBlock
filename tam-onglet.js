@@ -437,6 +437,31 @@ export function monter(racine, ctx = {}) {
   const curPoids = el('input', { type: 'range', id: 'tamPoids', min: String(M.BORNES.w[0]), max: String(M.BORNES.w[1]), step: '0.005', value: '0.25', 'aria-label': 'Blend weight w' });
   const rangPoids = el('div', { class: 'tamReglage', hidden: true, title: 'parameter melange.w' }, (libPoids = el('label', { for: 'tamPoids', class: 'tamDoux', text: 'blend weight w: ' })), sortiePoids, curPoids);
   let minuteurPoids = null;
+  /* game130 : les reglages de la science PARTENAIRE (bornes de son module) ; aux defauts, params est omis (une oeuvre = un seul JSON) */
+  const curseursPartenaire = el('div', { id: 'tamCurseursPartenaire' });
+  const voletPartenaire = el('details', { hidden: true, id: 'tamVoletPartenaire' }, el('summary', { text: 'Partner settings' }), curseursPartenaire);
+  let partenairePeint = '', minuteurPartenaire = null;
+  function peindrePartenaire() {
+    const m = S.science && S.P && S.P.melange && S.P.melange.science ? S.P.melange : null;
+    voletPartenaire.hidden = !m; if (!m) { partenairePeint = ''; return; }
+    const sp = TS.systeme(m.science), R = sp.mod.reglagesPhysique(m.science, m.params || {}), cle = m.science + ':' + R.map((r) => r.nom + r.min + r.max).join('|');
+    if (cle === partenairePeint) { for (const r of R) { const i = curseursPartenaire.querySelector('input[data-cle="' + r.nom + '"]'), o = curseursPartenaire.querySelector('output[data-cle="' + r.nom + '"]'); if (i && document.activeElement !== i) i.value = String(r.valeur); if (o) o.textContent = nb4(r.valeur); } return; }
+    partenairePeint = cle;
+    curseursPartenaire.replaceChildren(...R.map((r) => { const id = 'tamP-' + r.nom, pas = entierReglage(r) || TS.paramEntier(m.science, r.nom) ? '1' : String((r.max - r.min) / 400);
+      return el('div', { class: 'tamReglage', title: 'partner parameter ' + r.nom }, el('label', { for: id, class: 'tamDoux', text: (nomParam(m.science, r.nom) || r.nom) + ': ' }), el('output', { for: id, 'data-cle': r.nom, text: nb4(r.valeur) }),
+        el('input', { type: 'range', id, 'data-cle': r.nom, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': 'partner ' + (nomParam(m.science, r.nom) || r.nom) })); }));
+  }
+  curseursPartenaire.addEventListener('input', (e) => {
+    const inp = e.target.closest('input[data-cle]'); if (!inp || !S.science || !S.P || !S.P.melange || !S.P.melange.science) return;
+    const m = S.P.melange, sp = TS.systeme(m.science), voulu = { ...(m.params || sp.params), [inp.dataset.cle]: Number(inp.value) };
+    /* les valeurs que le module GARDE (bornes, entiers) : ce sont elles qui sont certifiees */
+    const borne = Object.fromEntries(sp.mod.reglagesPhysique(m.science, voulu).map((r) => [r.nom, r.valeur]));
+    const mel = { operateur: m.operateur, science: m.science, w: m.w }; if (JSON.stringify(borne) !== JSON.stringify(Object.fromEntries(Object.keys(sp.params).map((k) => [k, sp.params[k]])))) mel.params = borne;
+    const o = curseursPartenaire.querySelector('output[data-cle="' + inp.dataset.cle + '"]'); if (o) o.textContent = nb4(borne[inp.dataset.cle]);
+    clearTimeout(minuteurPartenaire);
+    const id = S.science.s.id, base = { ...S.P.params }, ori = (S.choix && S.choix.cerveau) || S.origine || null;
+    minuteurPartenaire = setTimeout(() => chargerScience(id, base, { melange: mel, origine: ori }), 120);
+  });
   curPoids.addEventListener('input', () => {
     if (!S.science || !S.P || !S.P.melange) return;
     const w = Math.min(M.BORNES.w[1], Math.max(M.BORNES.w[0], Math.round(Number(curPoids.value) * 1e6) / 1e6));
@@ -503,6 +528,7 @@ export function monter(racine, ctx = {}) {
         el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
         el('div', { class: 'tamRang' }, selOp, selMotif, bBord),
         rangPoids,
+        voletPartenaire,
         el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
         curseurs, verdictTxt)),
     el('div', { class: 'tamCarte' },
@@ -782,7 +808,7 @@ export function monter(racine, ctx = {}) {
     const op = selOp.value;
     if (op !== 'somme' && op !== 'composition') return null;
     const w = (S.P && S.P.melange && S.P.melange.w) || 0.25;
-    if (selMotif.value.startsWith('sci:')) { const sid = selMotif.value.slice(4); if (S.science && sid === S.science.s.id) return null; return { operateur: op, science: sid, w }; }
+    if (selMotif.value.startsWith('sci:')) { const sid = selMotif.value.slice(4); if (S.science && sid === S.science.s.id) return null; const av = S.P && S.P.melange; return av && av.science === sid && av.params ? { operateur: op, science: sid, w, params: av.params } : { operateur: op, science: sid, w }; }
     const { famille, variante } = motifChoisi();
     return { operateur: op, motif: M.motifDefaut(famille, variante), w };
   }
@@ -796,7 +822,7 @@ export function monter(racine, ctx = {}) {
       /* game79 : le melange de la science (operateur + motif) se lit et se regle ici aussi */
       selOp.hidden = !!TS.CORPS[S.science.s.id]; selOp.value = S.P.melange ? S.P.melange.operateur : 'seul';
       selMotif.hidden = !S.P.melange; grpSci.disabled = false;
-      rangPoids.hidden = !S.P.melange;
+      rangPoids.hidden = !S.P.melange; peindrePartenaire();
       if (S.P.melange) { if (document.activeElement !== curPoids) curPoids.value = String(S.P.melange.w); sortiePoids.textContent = nb4(S.P.melange.w);
         /* (l operateur MATHEMATIQUE du melange : compare a part, jamais place sur la ligne d affichage — cf. test-no-fee-address-shown) */
         const estSomme = S.P.melange.operateur === 'somme';
@@ -827,7 +853,7 @@ export function monter(racine, ctx = {}) {
       verdictTxt.textContent = S.c && S.c.ok ? 'Mintable for 5 USDC once the server checks it is distinct from every minted work.' : 'Not mintable: ' + ((S.c && S.c.raisons || []).join('; ') || 'the simulation left its valid domain') + '.';
       return;
     }
-    grpSci.disabled = true; rangPoids.hidden = true; selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
+    grpSci.disabled = true; rangPoids.hidden = true; voletPartenaire.hidden = true; selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
     if (S.P.motif) { const v = S.P.motif.famille + (S.P.motif.variante ? ':' + S.P.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
     const R = M.reglagesDe(S.P), cles = R.map((r) => r.chemin).join('|');
     if (cles !== cheminsPeints) {
@@ -1620,7 +1646,7 @@ export function monter(racine, ctx = {}) {
         /* game79 : ce que le CERVEAU a ecrit — dans les params, donc sur Base avec l oeuvre au moment du mint (signe par celui qui minte) */
         ...(S.P && S.P.note ? [{ k: 'The brain\'s note (stored on Base with the work when it is minted)', v: S.P.note }] : []),
         /* (l operateur MATHEMATIQUE du melange — somme / composition — dit par un tableau joint : jamais concatene comme un nom de wallet) */
-        ...(S.P && S.P.melange ? [{ k: 'Blended with', v: [...(S.P.melange.science ? [TS.systeme(S.P.melange.science).nom] : [S.P.melange.motif.famille, S.P.melange.motif.variante]), OPS_EN[S.P.melange.operateur] || S.P.melange.operateur, 'weight ' + nb4(S.P.melange.w)].filter(Boolean).join(' · ') }] : []),
+        ...(S.P && S.P.melange ? [{ k: 'Blended with', v: [...(S.P.melange.science ? [TS.systeme(S.P.melange.science).nom + (S.P.melange.params ? ' (own settings)' : '')] : [S.P.melange.motif.famille, S.P.melange.motif.variante]), OPS_EN[S.P.melange.operateur] || S.P.melange.operateur, 'weight ' + nb4(S.P.melange.w)].filter(Boolean).join(' · ') }] : []),
         ...Object.entries((o && o.invariants) || {}).filter(([k]) => !INVARIANT_MUET.has(k)).map(([k, v]) => { const nom = NOMS_MESURES[k] || k; return { k: 'Check: ' + nom, v: ligneInvariant(k, v).slice(nom.length + 2) }; }),
         { k: 'Chaos (λ)', v: o && typeof o.lyapunov === 'number' && Number.isFinite(o.lyapunov) ? nb4(o.lyapunov) + (o.uniteLyapunov ? ' ' + uniteEn(o.uniteLyapunov) : '') + ' — finite-run estimate' : 'not defined for this system' },
         { k: 'Mint', v: '5 USDC, stored on Base like every work (same contract). Anyone can replay these parameters to the same bytes.' }];

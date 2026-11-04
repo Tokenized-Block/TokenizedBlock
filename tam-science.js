@@ -152,11 +152,14 @@ function validerInterne(P, sortie) {
   if (P.melange !== undefined) {
     const m = P.melange;
     if (CORPS[P.science]) return non('melange : pas sur un systeme a plusieurs corps');
-    if (m && typeof m === 'object' && Object.keys(m).sort().join() === 'operateur,science,w') {
-      /* game128 : le partenaire est une science a ses reglages PAR DEFAUT (une oeuvre = un JSON court, rejouable) */
+    const cles = m && typeof m === 'object' ? Object.keys(m).sort().join() : '';
+    if (cles === 'operateur,science,w' || cles === 'operateur,params,science,w') {
+      /* game128 : le partenaire est une science, a ses reglages par defaut ; game130 : ou a des reglages DONNES (params), complets et deja
+       *   bornes par son module, jamais egaux aux defauts (sinon deux JSON pour la meme oeuvre), et soumis aux MEMES gardes de cout */
       if (m.operateur !== 'somme' && m.operateur !== 'composition') return non('melange : operateur');
       if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');
       if (!PARTENAIRES.includes(m.science) || m.science === P.science) return non('melange : science partenaire');
+      if (m.params !== undefined) { const r = reglagesPartenaireValides(m.science, m.params); if (r) return non('melange : ' + r); }
       return { ok: true, code: 'DANS_LES_BORNES', raison: null };
     }
     if (!m || typeof m !== 'object' || Object.keys(m).sort().join() !== 'motif,operateur,w') return non('melange');
@@ -305,10 +308,23 @@ function genererDepuis(P, oPre) {
  *                 et z = (1 - w) z_B + w z_A ; un nuage (l ordre des points n est plus le temps).
  * Exclus : les systemes a plusieurs corps (dessines seuls) et les non-mintables (trop chers a certifier). */
 export const PARTENAIRES = Object.freeze(SYSTEMES.map((s) => s.id).filter((id) => !CORPS[id] && !NON_MINTABLES.has(id)));
+/** game130 : null si les reglages du partenaire sont acceptables, sinon la raison. Complets, deja bornes (le module ne les ramene pas),
+ *   differents des defauts, et passes par les gardes de cout du systeme (la route publique ne commande pas de calcul cher). */
+export function reglagesPartenaireValides(id, params) {
+  const s = systeme(id); if (!s) return 'science partenaire';
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return 'reglages du partenaire';
+  if (Object.keys(params).sort().join() !== Object.keys(s.params).sort().join()) return 'reglages du partenaire incomplets';
+  if (GARDES_COUT[id]) { const g = GARDES_COUT[id](params); if (g) return g; }
+  if (id === 'fusionTrousNoirs' && !(coutFusion(params) >= FUSION_PRODUIT_MIN)) return 'partner too costly to certify here';
+  if (canon(params) === canon(s.params)) return 'reglages du partenaire = ses defauts (omettre params)';
+  let o; try { o = s.mod.simuler(id, params, { n: 2 }); } catch (_) { return 'reglages du partenaire refuses par le module'; }
+  if (canon(o.params) !== canon(params)) return 'reglages du partenaire hors bornes (le module les ramene)';
+  return null;
+}
 const vuesPartenaires = new Map();
-export function vuePartenaire(id, n) {
-  const k = id + ':' + n; if (vuesPartenaires.has(k)) return vuesPartenaires.get(k);
-  const s = systeme(id), o = s.mod.simuler(id, {}, { n });
+export function vuePartenaire(id, n, params = null) {
+  const k = id + ':' + n + ':' + (params ? canon(params) : ''); if (vuesPartenaires.has(k)) return vuesPartenaires.get(k);
+  const s = systeme(id), o = s.mod.simuler(id, params || {}, { n });
   const v = o.bornee && o.brut ? normaliser3(projeterND(standardiserIso(o.brut, n, o.D, id), n, o.D, anglesDefaut(o.D))) : null;
   if (vuesPartenaires.size > 64) vuesPartenaires.clear();
   vuesPartenaires.set(k, v); return v;
@@ -323,7 +339,7 @@ function normaliser3(a) { // centre milieu, echelle commune -> [-1, 1] (la MEME 
 /** la vue melangee : un motif (tam-moteur) ou une science partenaire ; proj = vue n x 3 de la science porteuse */
 export function vueMelangee(proj, n, m) {
   if (!m.science) return melangerVue(proj, n, m);
-  const B = vuePartenaire(m.science, n), out = new Float64Array(n * 3), w = m.w;
+  const B = vuePartenaire(m.science, n, m.params || null), out = new Float64Array(n * 3), w = m.w;
   if (!B) return Float64Array.from(proj);
   if (m.operateur === 'somme') for (let i = 0; i < 3 * n; i++) out[i] = (1 - w) * proj[i] + w * B[i];
   else for (let i = 0; i < n; i++) { const x = (proj[3 * i] + 1) * 0.5 * 97, u = x - Math.floor(x), j = Math.min(n - 1, Math.floor(u * n)); out[3 * i] = B[3 * j]; out[3 * i + 1] = B[3 * j + 1]; out[3 * i + 2] = (1 - w) * B[3 * j + 2] + w * proj[3 * i + 2]; }

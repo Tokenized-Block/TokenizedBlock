@@ -89,6 +89,34 @@ function suite(T, bavard = false, rapide = false) {
     assert.ok(sci > 0, 'aucun partenaire science tire');
     return sci + ' melanges science, ' + mot + ' motifs, sur 60';
   });
+  /* game130 : les reglages du partenaire */
+  ok('reglages du partenaire : acceptes s ils sont complets, bornes et differents des defauts ; chaque refus a sa raison', () => {
+    const def = T.systeme('courseRoulante').params, m = (params) => avec({ operateur: 'somme', science: 'courseRoulante', w: 0.4, params });
+    assert.ok(T.certifierScience(m({ pente: 40, frottement: 0.05 }), []).ok);
+    for (const p of [{ ...def }, { pente: 90, frottement: 0.05 }, { pente: 40 }, { pente: 40, frottement: 0.1, x: 1 }, { pente: '40', frottement: 0.1 }, [], null]) assert.equal(T.certifierScience(m(p), []).ok, false, JSON.stringify(p));
+    const fp = T.systeme('fusionTrousNoirs').params;
+    assert.equal(T.certifierScience(avec({ operateur: 'somme', science: 'fusionTrousNoirs', w: 0.4, params: { ...fp, m1: 5, m2: 5, z: 0, fDepart: 10 } }), []).ok, false, 'garde de cout');
+  });
+  ok('reglages du partenaire : la vue suit SES reglages (reconstruite independamment) et change les octets', () => {
+    const p = { pente: 40, frottement: 0.05 }, o = T.systeme('courseRoulante').mod.simuler('courseRoulante', p, { n: N }), ref = normaliserRef(M.projeterND(T.standardiserIso(o.brut, N, o.D, 'courseRoulante'), N, o.D, T.anglesDefaut(o.D)));
+    const B = T.vuePartenaire('courseRoulante', N, p); let pire = 0; for (let k = 0; k < ref.length; k++) pire = Math.max(pire, Math.abs(B[k] - ref[k])); assert.ok(pire < 1e-12, 'ecart ' + pire);
+    const a = T.rejouerScience(avec({ operateur: 'somme', science: 'courseRoulante', w: 0.4 })), b = T.rejouerScience(avec({ operateur: 'somme', science: 'courseRoulante', w: 0.4, params: p }));
+    assert.ok(a.ok && b.ok && a.hash !== b.hash);
+  });
+  if (!rapide) ok('reglages du partenaire : chaque partenaire, a TOUTES ses bornes basses puis hautes (les valeurs que garde son module), certifie ou refuse avec une raison ; cout mesure', () => {
+    let acc = 0, ref = 0, pire = 0, pid = ''; const raisons = new Set();
+    for (const sid of T.PARTENAIRES) { if (sid === PORTEUR) continue; const sp = T.systeme(sid);
+      for (const bout of [0, 1]) {
+        const voulu = Object.fromEntries(Object.keys(sp.params).map((k) => [k, sp.bornes[k] ? sp.bornes[k][bout] : sp.params[k]]));
+        const p = Object.fromEntries(sp.mod.reglagesPhysique(sid, voulu).map((r) => [r.nom, r.valeur]));
+        if (JSON.stringify(p) === JSON.stringify(sp.params)) continue;
+        const t0 = Date.now(), c = T.certifierScience(avec({ operateur: 'somme', science: sid, w: 0.5, params: p }), []), dt = Date.now() - t0;
+        if (dt > pire) { pire = dt; pid = sid + (bout ? ' haut' : ' bas'); }
+        if (c.ok) acc++; else { ref++; const r = (c.raisons || []).join('|'); assert.ok(r.length > 0, sid); raisons.add(r.slice(0, 60)); }
+      } }
+    assert.ok(acc > 150, 'acceptes ' + acc);
+    return acc + ' acceptes, ' + ref + ' refuses ; certification la plus lente ' + pire + ' ms (' + pid + ') ; raisons : ' + [...raisons].slice(0, 4).join(' / ');
+  });
   if (!rapide) ok(`chaque partenaire certifie sur le porteur ${PORTEUR} (somme, w = 0.5)`, () => {
     const ko = []; let n = 0;
     for (const sid of T.PARTENAIRES) { if (sid === PORTEUR) continue; n++; const c = T.certifierScience(avec({ operateur: 'somme', science: sid, w: 0.5 }), []); if (!c.ok) ko.push(sid + ': ' + (c.raisons || []).join('|')); }
@@ -111,7 +139,11 @@ const MUTANTS = [
   ['partenaires : corps inclus', 'filter((id) => !CORPS[id] && !NON_MINTABLES.has(id))', 'filter((id) => !NON_MINTABLES.has(id))'],
   ['validation : poids non borne', "if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');\n      if (!PARTENAIRES", "if (!(typeof m.w === 'number')) return non('melange : poids');\n      if (!PARTENAIRES"],
   ['cerveau : jamais de partenaire science', 'else P.melange = { operateur, science: autres[k - MOTIFS_MELANGE.length], w };', 'else { const [f, v] = MOTIFS_MELANGE[0]; P.melange = { operateur, motif: motifDefaut(f, v), w }; }'],
-  ['vue partenaire : reglages tires, pas par defaut', 'o = s.mod.simuler(id, {}, { n });', 'o = s.mod.simuler(id, { graine: 7, seed: 7 }, { n: n + 1 });'],
+  ['reglages partenaire : defauts acceptes en params', "  if (canon(params) === canon(s.params)) return 'reglages du partenaire = ses defauts (omettre params)';\n", ''],
+  ['reglages partenaire : hors bornes acceptes', "  if (canon(o.params) !== canon(params)) return 'reglages du partenaire hors bornes (le module les ramene)';\n", ''],
+  ['reglages partenaire : garde de cout sautee', "  if (id === 'fusionTrousNoirs' && !(coutFusion(params) >= FUSION_PRODUIT_MIN)) return 'partner too costly to certify here';\n", ''],
+  ['reglages partenaire : vue aux defauts', "const B = vuePartenaire(m.science, n, m.params || null), out", "const B = vuePartenaire(m.science, n, null), out"],
+  ['vue partenaire : reglages tires, pas par defaut', 'o = s.mod.simuler(id, params || {}, { n });', 'o = s.mod.simuler(id, { graine: 7, seed: 7 }, { n: n + 1 });'],
 ];
 const prefixe = pathToFileURL(ICI).href + '/';
 const dossier = mkdtempSync(join(process.env.TAM_TMP || tmpdir(), 'tam-melange-mutants-'));
