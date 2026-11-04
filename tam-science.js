@@ -212,6 +212,11 @@ export function vueCorps(o, k) {
  *   supernova : temps 10 500 ans contre 5 pc -> une ligne [2, 0.003, 0.003] ; versMars, fusion, karman, Mandelbrot zoome idem.
  *   Ces colonnes (indices lus dans tam-legendes.js) ont leur PROPRE echelle et sortent du sMax ; les axes de meme grandeur
  *   gardent leurs proportions (le correctif game77 tient). */
+/* game132 (vu a l ecran depuis game116 : le dogme central plus haut que large) : une colonne a QUEUE LOURDE (rafales de proteines,
+ *   charge qui sature) couvre 6.5 ecarts-types quand le temps uniforme en couvre sqrt(12) = 3.46 : divisee par son ecart-type, elle
+ *   etire le graphe. Ces colonnes-la sont mises a l echelle par leur ETENDUE (ramenee a celle d une colonne uniforme), les autres
+ *   gardent la regle commune. Mesure : dogme 3.46 x 6.49 -> 3.46 x 3.46 ; RC 3.46 x 4.59 -> 3.46 x 3.46. */
+export const ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1] });
 export const ECHELLE_PROPRE = {
   supernova: [3], supernovaHydro: [3, 4], versMars: [2], fusionTrousNoirs: [0, 3], binaireFusion: [0, 3],
   mandelbrot: [2], karman: [2], evaporationTrouNoir: [0, 1, 2, 3],
@@ -261,14 +266,17 @@ export const ECHELLE_PROPRE = {
 };
 /** les moyennes et le facteur de chaque colonne : z = (x - m) x k — la vue, les octets mintes et le decor en partent tous */
 export function echelleIso(brut, n, D, id) {
-  const m = new Float64Array(D), s = new Float64Array(D), k = new Float64Array(D), propre = new Set(ECHELLE_PROPRE[id] || []);
+  const m = new Float64Array(D), s = new Float64Array(D), k = new Float64Array(D), propre = new Set(ECHELLE_PROPRE[id] || []), etendue = new Set(ECHELLE_ETENDUE[id] || []);
   let sMax = 0;
   for (let j = 0; j < D; j++) {
     let a = 0; for (let i = 0; i < n; i++) a += brut[i * D + j]; m[j] = a / n;
     let v = 0; for (let i = 0; i < n; i++) { const w = brut[i * D + j] - m[j]; v += w * w; }
-    s[j] = Math.sqrt(v / n); if (!propre.has(j) && s[j] > sMax) sMax = s[j];
+    s[j] = Math.sqrt(v / n); if (!propre.has(j) && !etendue.has(j) && s[j] > sMax) sMax = s[j];
   }
-  for (let j = 0; j < D; j++) { const d = propre.has(j) ? s[j] : sMax; k[j] = d > 0 ? 1 / d : 0; }
+  for (let j = 0; j < D; j++) {
+    if (etendue.has(j)) { let lo = Infinity, hi = -Infinity; for (let i = 0; i < n; i++) { const x = brut[i * D + j]; if (x < lo) lo = x; if (x > hi) hi = x; } k[j] = hi > lo ? Math.sqrt(12) / (hi - lo) : 0; continue; }
+    const d = propre.has(j) ? s[j] : sMax; k[j] = d > 0 ? 1 / d : 0;
+  }
   return { m, k };
 }
 export function standardiserIso(brut, n, D, id) {
