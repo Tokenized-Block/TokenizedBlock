@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -240,6 +240,23 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(pire < 3e-7 && pireC < 1e-10, 'dessin ' + pire + ' ' + pireC);
     return 'forme ' + I.formeMaillons.mesure.toExponential(1) + ', ' + I.recherche.descentes + ' pas ; fleche ' + fl.toFixed(5) + ' / chainette ' + I.limiteContinue.chainette.toFixed(5) + ' / parabole ' + kp.toFixed(5);
   });
+  /* game141 : echelle — references INDEPENDANTES : le temps t(theta) par une AUTRE quadrature (theta = theta0 + w^2, points milieux,
+   *   Math.cos) ; chaque point de la trace du milieu (x^2 + y^2 = 1/4) date contre ce t(theta) : la dynamique simulee est verifiee
+   *   point par point ; chaque image de l echelle a ses bouts sur le mur et le sol, longueur 1 */
+  if (vise('echelleGlisse')) for (const p of [...extremes(sys('echelleGlisse')), { depart: 33, images: 6 }]) ok(`echelleGlisse ${JSON.stringify(p)} : decollage aux 2/3, temps exact, poussee tenue negative, trace du milieu datee`, () => {
+    const R = S('echelleGlisse', p), I = R.invariants, b = R.brut, th0 = R.params.depart * Math.PI / 180, c0 = Math.cos(th0), K = R.params.images;
+    const tDe = (th) => { const W = Math.sqrt(th - th0), M = 20000; let s = 0; for (let i = 0; i < M; i++) { const w = (i + 0.5) * W / M; s += 2 * w / Math.sqrt(3 * (c0 - Math.cos(th0 + w * w))); } return s * W / M; };
+    assert.ok(Math.abs(I.hauteurDecollage.mesure / (2 / 3) - 1) < 3e-6 && I.hauteurDecollage.formule === 2 / 3, 'hauteur ' + I.hauteurDecollage.mesure);
+    const tRef = tDe(Math.acos(2 * c0 / 3));
+    assert.ok(Math.abs(I.tempsDecollage.formule / tRef - 1) < 1e-7 && Math.abs(I.tempsDecollage.mesure / tRef - 1) < 3e-6, 'temps ' + I.tempsDecollage.mesure + ' ' + I.tempsDecollage.formule + ' ' + tRef);
+    const fFin = 0.75 * Math.sin(89.9 * Math.PI / 180) * (3 * Math.cos(89.9 * Math.PI / 180) - 2 * c0);
+    assert.ok(I.murTenu.mesure < -0.1 && Math.abs(I.murTenu.mesure / I.murTenu.formule - 1) < 1e-5 && Math.abs(I.murTenu.formule - fFin) < 1e-2, 'mur tenu ' + I.murTenu.mesure + ' ' + I.murTenu.formule + ' ' + fFin);
+    const nE = Math.floor(R.n * 2 / 3), parI = Math.floor(nE / K); let pireT = 0, pireL = 0, tMax = 0;
+    for (let k = 0; k < K; k++) { const a = 3 * (k * parI), m = k + 1 < K ? parI : nE - parI * (K - 1), z = 3 * (k * parI + m - 1); pireL = Math.max(pireL, Math.abs(b[a]), Math.abs(b[z + 1]), Math.abs(b[z] ** 2 + b[a + 1] ** 2 - 1)); tMax = Math.max(tMax, b[a + 2]); }
+    for (let q = nE; q < R.n; q += 37) { const o = 3 * q, x = b[o], y = b[o + 1]; pireL = Math.max(pireL, Math.abs(x * x + y * y - 0.25)); const th = Math.atan2(x, y); if (th - th0 > 1e-3) pireT = Math.max(pireT, Math.abs(b[o + 2] - tDe(th))); }
+    assert.ok(pireL < 1e-12 && pireT < 2e-5 && tMax <= I.tempsDecollage.mesure + 1e-3, 'dessin ' + pireL + ' ' + pireT + ' ' + tMax);
+    return 'hauteur ' + I.hauteurDecollage.mesure.toFixed(8) + ', temps ' + I.tempsDecollage.mesure.toFixed(6) + ' / ' + tRef.toFixed(6) + ', mur tenu ' + I.murTenu.mesure.toFixed(4) + ', trace ' + pireT.toExponential(1);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -321,6 +338,15 @@ const MUTANTS = [
   /* (retire : « fleche du milieu impair sur un seul joint » — EQUIVALENT : N impair, le maillon du milieu est horizontal, y[h] = y[h + 1]) */
   ['chaine : fleche paire lue un joint trop tot', 'const fleche = N % 2 ? -(y[h] + y[h + 1]) / 2 : -y[h],', 'const fleche = N % 2 ? -(y[h] + y[h + 1]) / 2 : -y[h - 1],'],
   ['chaine : pente lue sur l au lieu de dx', 's1 += kk(i) * dy[i] / dx[i];', 's1 += kk(i) * dy[i] / l;'],
+  ['echelle : gravite 1.51 / 1.5', 'const acc = (x) => 1.5 * sinD(x),', 'const acc = (x) => 1.51 * sinD(x),'],
+  ['echelle : differences finies sur 1.01 h^2', '/ (EC_H * EC_H);', '/ (EC_H * EC_H * 1.01);'],
+  ['echelle : centre decale', 'th.map((a) => sinD(a) / 2)', 'th.map((a) => sinD(a) / 2 + 0.01 * cosD(a))'],
+  ['echelle : decollage non interpole', 'const s = fp / (fp - f);', 'const s = 0;'],
+  ['echelle : integrande du temps sans le carre', 'Math.sqrt(1 - (c0 - u * u) ** 2)', 'Math.sqrt(1 - (c0 - u * u))'],
+  ['echelle : borne du temps sur 2.9', 'const us = Math.sqrt(c0 / 3),', 'const us = Math.sqrt(c0 / 2.9),'],
+  ['echelle : poussee exacte avec 2.02 cos theta0', '(3 * cosD(a) - 2 * c0)', '(3 * cosD(a) - 2.02 * c0)'],
+  ['echelle : trace du milieu sur 2.02', 'brut[o + 1] = cosD(th[j]) / 2;', 'brut[o + 1] = cosD(th[j]) / 2.02;'],
+  ['echelle : images au-dela du decollage', 'Math.floor(tDec / EC_H)', 'Math.floor(1.2 * tDec / EC_H)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -334,7 +360,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

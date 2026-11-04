@@ -581,7 +581,46 @@ function chainette(P, n) {
     recherche: { descentes: iter, forceRestante: gNorme, note: 'steps of the energy descent and the largest force left along the chain at the end' } } };
 }
 
+// ---------- 16 : l echelle qui glisse contre un mur ----------
+// Une echelle (barre homogene, longueur 1, masse 1, g = 1) appuyee contre un mur, sans frottement au mur ni au sol, lachee au repos a
+//   l angle theta0 du mur (curseur, degres). Tant qu elle touche les deux, theta suffit : T = theta'^2 / 6, V = cos theta / 2, d ou
+//   theta'' = (3 / 2) sin theta, integre en RK4 (pas 0.001).
+// Mesure : la poussee du mur est la SEULE force horizontale, donc elle vaut la derivee seconde de x du centre, x = sin(theta) / 2 :
+//   elle est lue par DIFFERENCES FINIES sur les positions simulees ; le haut quitte le mur quand elle s annule (passage interpole).
+// Exact (derive ici) : x'' = (3 / 4) sin theta (3 cos theta - 2 cos theta0), nul pour cos theta = (2 / 3) cos theta0 : le haut quitte le mur
+//   aux DEUX TIERS de sa hauteur de depart, quel que soit l angle. Temps : theta'^2 = 3 (cos theta0 - cos theta), et avec
+//   cos theta = cos theta0 - u^2, t = integrale de 2 du / (sqrt(3) sin theta) de 0 a sqrt(cos theta0 / 3) (Simpson, sans singularite).
+// Temoin : si le haut etait TENU au mur jusqu au sol, la poussee deviendrait une traction (negative) ; son minimum est mesure pareil.
+// Dessin : l echelle a K instants entre le lacher et le decollage (x, y, temps), et la trace de son milieu (un quart de cercle).
+const EC_H = 0.001;
+function echelleGlisse(P, n) {
+  const th0 = P.depart * PI / 180, c0 = cosD(th0), K = P.images;
+  /* RK4 sur theta jusqu a theta = 89.9 degres (le haut tenu au mur au-dela du decollage : le temoin) */
+  const ts = [0], th = [th0]; let q = th0, v = 0; const acc = (x) => 1.5 * sinD(x), fin = 89.9 * PI / 180;
+  for (let i = 1; q < fin && i < 2e6; i++) { const k1 = acc(q), k2 = acc(q + EC_H / 2 * v), k3 = acc(q + EC_H / 2 * (v + EC_H / 2 * k1)), k4 = acc(q + EC_H * (v + EC_H / 2 * k2));
+    q += EC_H * (v + EC_H / 6 * (k1 + k2 + k3)); v += EC_H / 6 * (k1 + 2 * k2 + 2 * k3 + k4); ts.push(i * EC_H); th.push(q); }
+  /* poussee du mur = x'' par differences centrees ; decollage au premier passage par zero */
+  const X = th.map((a) => sinD(a) / 2), F = (i) => (X[i + 1] - 2 * X[i] + X[i - 1]) / (EC_H * EC_H);
+  let tDec = NaN, thDec = NaN, mini = Infinity, fp = F(1);
+  for (let i = 2; i < X.length - 1; i++) { const f = F(i); mini = Math.min(mini, f); if (Number.isNaN(tDec) && fp > 0 && f <= 0) { const s = fp / (fp - f); tDec = ts[i - 1] + s * EC_H; thDec = th[i - 1] + s * (th[i] - th[i - 1]); } fp = f; }
+  /* exact : temps par Simpson en u, minimum de la poussee tenue par grille fine puis section doree */
+  const us = Math.sqrt(c0 / 3), M = 2000, g = (u) => 2 / (Math.sqrt(3) * Math.sqrt(1 - (c0 - u * u) ** 2));
+  let simp = 0; for (let i = 0; i <= M; i++) simp += (i === 0 || i === M ? 1 : i % 2 ? 4 : 2) * g(us * i / M); const tEx = simp * us / M / 3;
+  /* la poussee exacte aux MEMES angles simules (son minimum est au bout, vers 90 degres : comparer au meme theta) */
+  const pousse = (a) => 0.75 * sinD(a) * (3 * cosD(a) - 2 * c0); let fm = Infinity; for (let i = 2; i < X.length - 1; i++) fm = Math.min(fm, pousse(th[i]));
+  /* dessin : K images de l echelle avant le decollage, puis la trace du milieu */
+  const brut = new Float64Array(n * 3), nE = Math.floor(n * 2 / 3), parI = Math.floor(nE / K), iDec = Math.min(th.length - 1, Math.floor(tDec / EC_H));
+  for (let k = 0; k < K; k++) { const j = Math.round(k * iDec / (K - 1)), a = th[j], m = k + 1 < K ? parI : nE - parI * (K - 1);
+    for (let p = 0; p < m; p++) { const s = m <= 1 ? 0 : p / (m - 1), o = 3 * (k * parI + p); brut[o] = s * sinD(a); brut[o + 1] = (1 - s) * cosD(a); brut[o + 2] = ts[j]; } }
+  for (let p = 0; p < n - nE; p++) { const j = Math.round(p * iDec / Math.max(1, n - nE - 1)), o = 3 * (nE + p); brut[o] = sinD(th[j]) / 2; brut[o + 1] = cosD(th[j]) / 2; brut[o + 2] = ts[j]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (longueur 1, g = 1)', invariants: {
+    hauteurDecollage: { mesure: cosD(thDec) / c0, formule: 2 / 3, note: 'height of the top when the wall push, read from the simulated positions, falls to zero, as a share of its starting height, against 2/3' },
+    tempsDecollage: { mesure: tDec, formule: tEx, note: 'time from release until the top leaves the wall, against the integral of d theta / sqrt(3 (cos theta0 - cos theta))' },
+    murTenu: { mesure: mini, formule: fm, note: 'witness: if the top were held on the wall all the way down, the smallest wall force read the same way, against (3/4) sin theta (3 cos theta - 2 cos theta0) at its minimum: negative, a pull the wall cannot give' } } };
+}
+
 export const COLONNES = Object.freeze({
+  echelleGlisse: { colonnes: ['x (the wall is x = 0)', 'height y (the floor is y = 0)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   chainette: { colonnes: ['x (the chain hangs from -1 to 1)', 'height y', 'curve (0 = links found, 1 = continuous catenary)'], memeLongueur: [[0, 1]], autres: [2] },
   tautochrone: { colonnes: ['time t', 'distance s along the curve from the bottom', 'ball (label, 1 = released lowest)'], memeLongueur: [], autres: [0, 1, 2] },
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -645,9 +684,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'chainette', nom: 'A hanging chain (the catenary)', science: 'Classical mechanics', D: 3, nuage: true, params: { maillons: 12, rapport: 1.4 },
     bornes: { maillons: [4, 30], rapport: [1.05, 2] },
     phrase: 'A visualisation of a chain of rigid links hanging from two hooks. Its shape is not assumed: it is searched by letting the chain lower its weight as far as the links allow. Found that way, the slopes of the links step up evenly from one link to the next, because each joint adds the same weight to the pull; with more links the chain closes in on the catenary a cosh(x / a), drawn beside it, not on a parabola.' },
+  { id: 'echelleGlisse', nom: 'A ladder sliding down a wall', science: 'Classical mechanics', D: 3, nuage: true, params: { depart: 20, images: 8 },
+    bornes: { depart: [5, 80], images: [4, 20] },
+    phrase: 'A visualisation of a ladder let go against a smooth wall on a smooth floor, drawn at several instants. The push of the wall is read from the motion itself, as the acceleration of the middle of the ladder: it fades, and when it reaches zero the top leaves the wall, always at two thirds of its starting height, whatever the starting angle. Held on the wall any longer, the wall would have to pull.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

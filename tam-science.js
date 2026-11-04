@@ -272,6 +272,8 @@ export const ECHELLE_PROPRE = {
   desintegration: [0, 1, 2],
   /* game137 : x et y en mm (meme grandeur) ; intensite (autre grandeur) */
   anneauxNewton: [2],
+  /* game141 : x et y de meme nature ; temps (autre grandeur) */
+  echelleGlisse: [2],
   /* game140 : x et y de meme nature ; courbe (etiquette) */
   chainette: [2],
   /* game139 : temps, distance le long de la courbe (2 grandeurs) + etiquette */

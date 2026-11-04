@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game141 */
+  echelleGlisse: {
+    titre: 'A ladder sliding down a wall',
+    enUnePhrase: 'A ladder let go against a smooth wall, drawn at several instants until its top leaves the wall, with the path of its middle.',
+    colonnes: ['x (the wall is x = 0)', 'height y (the floor is y = 0)', 'time t'],
+    aRegarder: ['The middle of the ladder moves on a quarter circle around the corner while both ends touch.', 'The top leaves the wall at two thirds of its starting height, whether the ladder started nearly upright or already low.', 'The push of the wall is never put in: it is read from how the middle speeds up sideways, and it fades to zero exactly there.'],
+    fin: null,
+  },
   /* game140 */
   chainette: {
     titre: 'A hanging chain (the catenary)',

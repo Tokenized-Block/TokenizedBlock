@@ -403,6 +403,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game141 */
+  hauteurDecollage: 'Height where the top leaves the wall (share of the start)', tempsDecollage: 'Time until the top leaves the wall', murTenu: 'Witness: smallest wall force if the top were held (a pull)',
   /* game140 */
   formeMaillons: 'Joints found vs the exact chain (worst gap)', pentesEgales: 'Even step between link slopes (fitted)', flecheChaine: 'Sag at the middle', limiteContinue: 'Sag: links, catenary, parabola', recherche: 'Energy descent',
   /* game139 */

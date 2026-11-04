@@ -170,7 +170,7 @@ const CURSEURS_SANS_FORME = {
 const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
 const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
 /* les parametres des modules nommes en francais -> l ecran ; les symboles (L, M, omega, a...) restent des symboles */
-const NOMS_PARAMS_SYS = { 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
+const NOMS_PARAMS_SYS = { 'echelleGlisse.depart': 'starting angle from the wall (degrees)', 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
   'binaireFusion.distance': 'luminosity distance (Mpc)', 'fusionTrousNoirs.distance': 'luminosity distance (Mpc)',
   /* game133 */
   'corpsNoir.courbes': 'temperatures drawn', 'corpsNoir.rapport': 'hottest over coolest temperature',

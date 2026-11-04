@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game141 ---------- */
+  echelleGlisse: (P, o, B) => [pt([0, o.invariants.hauteurDecollage.formule * Math.cos(o.params.depart * PI / 180), o.invariants.tempsDecollage.formule], C.repere, 'Top leaves the wall (2/3 of the start)')],
   /* ---------- game140 ---------- */
   chainette: (P, o, B) => [pt([0, -o.invariants.flecheChaine.formule, B.centre[2]], C.repere, 'Lowest point of the chain')],
   /* ---------- game139 ---------- */
