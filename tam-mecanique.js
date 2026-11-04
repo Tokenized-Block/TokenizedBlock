@@ -338,6 +338,49 @@ function reseauFentes(P, n) {
     comptesCourbes: { mesure: pireN, formule: 0, note: 'worst miscount (dark or small bright fringes) over the three curves drawn' } } };
 }
 
+// ---------- 10 : la refraction par le chemin le plus rapide (Fermat) et la fenetre de Snell ----------
+// Une source S sous l eau (indice n, curseur) a la profondeur 1 ; la surface est y = 0 ; des cibles T dans l air sur un demi-cercle de
+//   rayon 3 (vitesse 1 dans l air, 1/n dans l eau).
+// Mesure (la loi de Snell n est ecrite nulle part dans le calcul) : pour chaque cible, le point de passage P sur la surface est CHERCHE
+//   par section doree comme celui qui rend le trajet S -> P -> T le plus COURT EN TEMPS (principe de Fermat) ; le temps dans l air est
+//   recrit sans perte, sqrt(u^2 + h^2) = u + h^2 / (sqrt(u^2 + h^2) + u), pour qu une cible tres lointaine reste mesurable.
+// Exact (derive ici) : le temps est minimal quand n sin(theta eau) = sin(theta air) (Snell) ; une cible a l horizon (theta air -> 90 degres)
+//   est vue sous theta eau -> asin(1 / n) : tout le ciel tient dans ce cone, la fenetre de Snell ; au-dela, aucun chemin ne sort, la
+//   lumiere est reflechie en entier (les 4 rayons reflechis sont dessines par symetrie, pas mesures).
+// Dessin : chaque rayon S -> P -> T (vue de face) ; 3e colonne : numero du rayon (les reflechis apres les sortants).
+const SN_R = 3, SN_REFLECHIS = 4;
+function passageFermat(n, X, h) {
+  /* X >= 0 : P dans [0, X] ; temps reduit (la constante X retiree) */
+  const t = (p) => { const u = X - p; return n * Math.sqrt(p * p + 1) - p + h * h / (Math.sqrt(u * u + h * h) + u); };
+  let a = 0, b = X; const g = (Math.sqrt(5) - 1) / 2;
+  for (let k = 0; k < 400 && b - a > 1e-15 * (1 + a); k++) { const c = b - g * (b - a), d = a + g * (b - a); if (t(c) < t(d)) b = d; else a = c; }
+  return (a + b) / 2;
+}
+function refractionSnell(P, n) {
+  const N = P.indice, K = P.rayons, rayons = [];
+  let pireSnell = 0, maxEau = 0;
+  for (let k = 0; k < K; k++) {
+    const al = (-85 + 170 * k / (K - 1)) * PI / 180, X = SN_R * sinD(al), h = SN_R * cosD(al), sg = X < 0 ? -1 : 1, p = sg * passageFermat(N, sg * X, h);
+    const sinEau = p / Math.sqrt(p * p + 1), u = X - p, sinAir = u / Math.sqrt(u * u + h * h);
+    pireSnell = Math.max(pireSnell, Math.abs(N * sinEau - sinAir)); maxEau = Math.max(maxEau, Math.abs(atanD(p)));
+    rayons.push([[0, -1], [p, 0], [X, h]]);
+  }
+  /* la cible a l horizon : a 1e6 de distance, hauteur 1 */
+  const pH = passageFermat(N, 1e6, 1), fenetre = atanD(pH) * 180 / PI, crit = atanD(1 / Math.sqrt(N * N - 1));
+  /* game135 (mesure de l echelle : pres de l angle critique un reflechi touche la surface a x = tan theta, jusqu a 16 pour n = 1.05, et
+   *   ecrasait le dessin 6.8 x 2.1) : les reflechis, alternes gauche / droite, sont dessines dans le cadre |x| <= SN_R, y = -|x - q| / q */
+  for (let j = 0; j < SN_REFLECHIS; j++) { const th = crit + (PI / 2 - crit) * (j + 1) / (SN_REFLECHIS + 1) * 0.9, q = sinD(th) / cosD(th); rayons.push({ q, sg: j % 2 ? -1 : 1 }); }
+  const brut = new Float64Array(n * 3), R = rayons.length, par = Math.floor(n / R); let l = 0;
+  for (let r = 0; r < R && l < n; r++) { const ray = rayons[r], m = r === R - 1 ? n - l : par, m1 = Math.floor(m / 2);
+    if (!Array.isArray(ray)) { const xMax = Math.min(2 * ray.q, SN_R); for (let q = 0; q < m && l < n; q++) { const o = 3 * l++, x = m <= 1 ? 0 : xMax * q / (m - 1); brut[o] = ray.sg * x; brut[o + 1] = -Math.abs(x - ray.q) / ray.q; brut[o + 2] = r; } continue; }
+    const [A, B, C] = ray;
+    for (let q = 0; q < m && l < n; q++) { const o = 3 * l++, [U, V, f] = q < m1 ? [A, B, m1 <= 0 ? 0 : q / m1] : [B, C, m - m1 <= 1 ? 1 : (q - m1) / (m - m1 - 1)]; brut[o] = U[0] + f * (V[0] - U[0]); brut[o + 1] = U[1] + f * (V[1] - U[1]); brut[o + 2] = r; } }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (optique geometrique)', invariants: {
+    snellFermat: { mesure: pireSnell, formule: 0, rayons: K, note: 'worst gap, over every ray, between n sin(angle in water) and sin(angle in air) for the crossing point found as the FASTEST path (Fermat)' },
+    fenetreSnell: { mesure: fenetre, formule: crit * 180 / PI, note: 'angle in water (degrees) of the fastest path to a target on the horizon (1e6 away) against asin(1 / n): the whole sky fits in this cone' },
+    angleMaxEau: { mesure: maxEau * 180 / PI, formule: crit * 180 / PI, note: 'largest angle in water (degrees) among the rays drawn: always inside the window (below asin(1 / n))' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -347,6 +390,7 @@ export const COLONNES = Object.freeze({
   courseRoulante: { colonnes: ['time t', 'distance down the slope', 'body (0 block, 1 sphere, 2 cylinder, 3 ring)'], memeLongueur: [], autres: [0, 1, 2] },
   corpsNoir: { colonnes: ['wavelength lambda (units of h c / (k T0))', 'spectral radiance B (Planck)', 'curve (0 = coolest, T = 1)'], memeLongueur: [], autres: [0, 1, 2] },
   reseauFentes: { colonnes: ['sin theta (direction seen)', 'intensity I / N^2', 'number of slits N (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  refractionSnell: { colonnes: ['x (the surface is y = 0)', 'height y (water below, air above)', 'ray number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -378,9 +422,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'reseauFentes', nom: 'Light through many slits (a diffraction grating)', science: 'Waves', D: 3, nuage: true, params: { fentes: 6, espacement: 2.5 },
     bornes: { fentes: [3, 12], espacement: [1, 5] },
     phrase: 'A visualisation of light through 2 slits, then more, then N: the wave arriving in each direction is summed slit by slit. The bright orders stay where d sin theta = m lambda but grow sharper as slits are added; between two of them the summed curve has exactly N - 1 dark fringes and N - 2 small bright ones, as sin^2(N phi / 2) / (N^2 sin^2(phi / 2)) says.' },
+  { id: 'refractionSnell', nom: 'Light bending into water (Fermat and the Snell window)', science: 'Geometric optics', D: 3, nuage: true, params: { indice: 1.33, rayons: 13 },
+    bornes: { indice: [1.05, 2.5], rayons: [5, 25] },
+    phrase: 'A visualisation of light from a point under water reaching targets in the air. No law of refraction is used: for every target the crossing point is searched as the one giving the FASTEST path (Fermat), and the bend comes out as n sin(water angle) = sin(air angle). Aimed at the horizon, the fastest path leaves at asin(1 / n): the whole sky fits in that cone, the Snell window; steeper rays never get out and are reflected.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -33,7 +33,7 @@ function suite(T, bavard = false, seul = null) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 9 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 10 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -139,6 +139,25 @@ function suite(T, bavard = false, seul = null) {
     for (let q = 1; q < N; q++) assert.ok(ref(N, q / (N * r)) < 1e-20, 'zero q = ' + q);
     return N + ' fentes : ' + I.minimaEntre.mesure + ' creux, ' + I.secondaires.mesure + ' bosses, ' + I.maximaPrincipaux.ordres + ' ordres';
   });
+  /* game135 : refraction — reference INDEPENDANTE : chaque rayon dessine relu (S, le point sur la surface, la cible), angles par Math.atan2,
+   *   Snell par Math.sin ; la fenetre contre Math.asin(1/n) ; les reflechis : angle d incidence au-dela de asin(1/n), symetriques */
+  if (vise('refractionSnell')) for (const p of [...extremes(sys('refractionSnell')), { indice: 1.5 }, { indice: 2, rayons: 9 }]) ok(`refractionSnell ${JSON.stringify(p)} : chaque rayon dessine obeit a n sin = sin (relu), fenetre asin(1/n), reflechis au-dela`, () => {
+    const R = S('refractionSnell', p), I = R.invariants, b = R.brut, n = R.params.indice, K = R.params.rayons, crit = Math.asin(1 / n), par = new Map();
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, r = b[o + 2]; if (!par.has(r)) par.set(r, []); par.get(r).push([b[o], b[o + 1]]); }
+    assert.equal(par.size, K + 4, 'rayons ' + par.size); let pire = 0;
+    for (const [r, pts] of par) { const S0 = pts[0], P = pts.find((q) => Math.abs(q[1]) < 1e-12), T = pts[pts.length - 1];
+      assert.ok(Math.abs(S0[0]) < 1e-12 && Math.abs(S0[1] + 1) < 1e-12, 'rayon ' + r + ' : source');
+      /* reflechi : pente du 1er pas -> q = tan(incidence) ; chaque point sur y = -|x| ... -|x - q| / q, dans le cadre |x| <= 3 */
+      if (r >= K) { const q = Math.abs(pts[1][0]) / (pts[1][1] + 1); assert.ok(Math.atan(q) > crit, 'reflechi au-dela de l angle critique ' + r);
+        for (const [x, y] of pts) assert.ok(Math.abs(x) <= 3 + 1e-12 && Math.abs(y + Math.abs(Math.abs(x) - q) / q) < 1e-9, 'reflechi ' + r + ' point ' + x + ',' + y); continue; }
+      assert.ok(P, 'rayon ' + r + ' : surface');
+      const thE = Math.atan2(Math.abs(P[0] - S0[0]), 1);
+      if (r < K) { assert.ok(Math.abs(Math.hypot(T[0], T[1]) - 3) < 1e-9 && T[1] > 0, 'cible sur le demi-cercle ' + r); const thA = Math.atan2(Math.abs(T[0] - P[0]), T[1]); const e = Math.abs(n * Math.sin(thE) - Math.sin(thA)); pire = Math.max(pire, e); assert.ok(e < 1e-6, 'Snell rayon ' + r + ' : ' + e); assert.ok(thE < crit, 'dans la fenetre ' + r); }
+      else { assert.ok(thE > crit && Math.abs(T[1] + 1) < 1e-12 && Math.abs(T[0] - 2 * P[0]) < 1e-9, 'reflechi ' + r); } }
+    assert.ok(Math.abs(I.fenetreSnell.formule - crit * 180 / Math.PI) < 1e-9 && Math.abs(I.fenetreSnell.mesure - crit * 180 / Math.PI) < 1e-5, 'fenetre ' + I.fenetreSnell.mesure + ' ' + crit * 180 / Math.PI);
+    assert.ok(I.snellFermat.mesure < 1e-6 && I.angleMaxEau.mesure < I.angleMaxEau.formule);
+    return 'Snell ' + pire.toExponential(1) + ', fenetre ' + I.fenetreSnell.mesure.toFixed(5) + ' / ' + (crit * 180 / Math.PI).toFixed(5);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -182,6 +201,11 @@ const MUTANTS = [
   ['reseau : creux compte au sens large', 'if (b < a && b < c) creux++;', 'if (b <= a || b < c) creux++;'],
   ['reseau : dephasage sur pi au lieu de 2 pi', 'const ph = 2 * PI * r * s; let re = 0', 'const ph = PI * r * s; let re = 0'],
   ['reseau : courbe du milieu decalee', 'Math.round((2 + N) / 2)', 'Math.round((3 + N) / 2)'],
+  ['snell : eau 1.01 fois plus lente', 'return n * Math.sqrt(p * p + 1) - p + h * h', 'return 1.01 * n * Math.sqrt(p * p + 1) - p + h * h'],
+  ['snell : reecriture du temps fausse (h au lieu de h^2)', '- p + h * h / (Math.sqrt(u * u + h * h) + u); };', '- p + h / (Math.sqrt(u * u + h * h) + u); };'],
+  ['snell : section doree qui monte', 'if (t(c) < t(d)) b = d; else a = c;', 'if (t(c) > t(d)) b = d; else a = c;'],
+  ['snell : horizon a 100 au lieu de 1e6', 'passageFermat(N, 1e6, 1)', 'passageFermat(N, 1e2, 1)'],
+  ['snell : angle critique asin(1 / 1.01 n)', 'crit = atanD(1 / Math.sqrt(N * N - 1));', 'crit = atanD(1 / Math.sqrt(1.0201 * N * N - 1));'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -195,7 +219,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

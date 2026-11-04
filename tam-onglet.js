@@ -70,6 +70,8 @@ THEMES.astres.push('dureeJour');
 THEMES.ondes.push('corpsNoir');
 /* game134 */
 THEMES.ondes.push('reseauFentes');
+/* game135 */
+THEMES.ondes.push('refractionSnell');
 const groupeDe = (s) => THEMES.electricite.includes(s.id) ? 'electricite' : THEMES.ondes.includes(s.id) ? 'ondes' : THEMES.maths.includes(s.id) ? 'maths' : THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -1112,7 +1114,9 @@ export function monter(racine, ctx = {}) {
     /* game133 */
     'corpsNoir',
     /* game134 */
-    'reseauFentes']);
+    'reseauFentes',
+    /* game135 */
+    'refractionSnell']);
   /* de face, la colonne 2 est TOUTE en profondeur (a l ancienne dist 1.7 la pile de Galton sortait par le bas) : meme dist que CAM0 */
   const CAM_FACE = { ...CAM0, yaw: 0, pitch: 0 };
   const camBase = () => S.science && DE_FACE.has(S.science.s.id) ? CAM_FACE : CAM0;

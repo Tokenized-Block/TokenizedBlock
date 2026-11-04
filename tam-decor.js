@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game135 ---------- */
+  refractionSnell: (P, o, B) => [pt([0, -1, B.centre[2]], C.repere, 'Light source under water'), pt([0, 0, B.centre[2]], C.repere, 'Surface')],
   /* ---------- game134 ---------- */
   reseauFentes: (P, o, B) => [pt([0, 1, B.centre[2]], C.repere, 'Central bright order (m = 0)')],
   /* ---------- game133 ---------- */

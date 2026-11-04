@@ -397,6 +397,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game135 */
+  snellFermat: 'Fastest paths vs Snell (worst gap)', fenetreSnell: 'Snell window: angle to the horizon (degrees)', angleMaxEau: 'Largest angle in water (degrees)',
   /* game134 */
   courbeFentes: 'Summed waves vs sin^2(N phi/2) / (N^2 sin^2(phi/2)) (worst gap)', maximaPrincipaux: 'Bright orders d sin theta = m lambda (worst gap from 1)', minimaEntre: 'Dark fringes between two orders', secondaires: 'Small bright fringes between two orders', comptesCourbes: 'Fringes miscounted, every curve',
   /* game133 */

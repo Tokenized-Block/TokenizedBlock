@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game135 */
+  refractionSnell: {
+    titre: 'Light bending into water (Fermat and the Snell window)',
+    enUnePhrase: 'Rays from a point under water to targets in the air, each one the fastest path; steeper rays reflected back.',
+    colonnes: ['x (the surface is y = 0)', 'height y (water below, air above)', 'ray number'],
+    aRegarder: ['Each ray bends at the surface: it is the path that takes the least TIME, light being slower in water.', 'Under water the rays crowd into a cone of half-angle asin(1 / n): the whole sky seen through a window (48.8 degrees for n = 1.33 by the formula).', 'Rays steeper than that never get out: they are reflected back down.'],
+    fin: null,
+  },
   /* game134 */
   reseauFentes: {
     titre: 'Light through many slits (a diffraction grating)',
