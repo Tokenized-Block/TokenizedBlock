@@ -66,6 +66,8 @@ const postsLus = new Map();
 import { signerJwtCdp } from './cdp-jwt.js';
 /* 2026-10-26 : le second rail fiat (MoonPay) pour les pays que Coinbase ne sert pas ; cache sans les deux cles */
 import { lireCatalogueMoonpay, corpsPaysMoonpay, corpsSessionMoonpay } from './moonpay-rail.js';
+/* 2026-11-04 : paiement USDC sur une boutique Shopify -> droits HORS CHAINE (aucune signature, aucun fonds ici) ; cache sans config */
+import { traiterWebhook, corpsDroits, corpsEtat, creerMagasin, CORPS_MAX as SHOPIFY_CORPS_MAX } from './shopify-usdc.js';
 /* Catalogue PUBLIC MoonPay : une lecture par heure au plus, un echec retenu 60 s (une absence ne doit pas etre repayee a
  * chaque ouverture de fiche), une seule lecture en vol. Echec = null = rail cache, jamais « tous les pays ». */
 /* game81 (reste connu depuis le 31/10) : l IP du visiteur pour les budgets par IP (/api/jeu/roll, TAM, recherche…). Avant : le PREMIER
@@ -471,6 +473,12 @@ const SEL_GET_LIQUIDITE = selecteurSrv('getLiquidity(bytes32)');
  *     recoit `ageFaitsMs` et peut en tirer ses conclusions. */
 const FICHIER_FAITS_POOL = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'faits-pool.json') : null;
+/* Droits Shopify (2026-11-04) : sur le volume s il existe, sinon en memoire ; ouvert a la premiere demande, un fichier
+ * illisible fait rendre 503 (Shopify relivre) au lieu d etre ecrase. */
+const FICHIER_DROITS_SHOPIFY = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'droits-shopify.json') : null;
+let magasinShopifyOuvert = null;
+function magasinShopify() { if (!magasinShopifyOuvert) magasinShopifyOuvert = creerMagasin({ fichier: FICHIER_DROITS_SHOPIFY }); return magasinShopifyOuvert; }
 const faitsPersistes = new Map();  /* jeton -> { glissementBps, famille, pool, tickSpacing, t } */
 (function chargerFaitsPersistes() {
   /* ⛔⛔ LE JOURNAL DIT SI LA PERSISTANCE EXISTE. Sans volume monte, `FICHIER_FAITS_POOL` vaut
@@ -7432,6 +7440,34 @@ function traiterRequete(req, res) {
         pays: q.get('pays'), lireCatalogue: catalogueMoonpay });
     travail.then((r) => rendreMp(r.statut, r.corps))
       .catch(() => rendreMp(200, { ok: false, pret: true, etat: 'NON_MESURE', pourquoi: 'MoonPay rail failed' }));
+    return;
+  }
+  /* ══ SHOPIFY USDC (2026-11-04, PROTOTYPE) ══ shopify-usdc.js porte les corps ; ici on ne fait que cabler.
+   * Sans SHOPIFY_API_SECRET + SHOPIFY_SHOP_DOMAIN + SHOPIFY_STORE_URL : le webhook rend 404 et l app ne montre rien.
+   * Le corps du webhook est lu en OCTETS BRUTS (le HMAC porte sur eux, doc Shopify) ; aucune signature, aucun fonds ici. */
+  if (chemin === '/api/shopify/etat' || chemin === '/api/shopify/droits' || chemin === '/api/shopify/webhook') {
+    const rendreSh = (statut, corps) => {
+      res.writeHead(statut, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(corps));
+    };
+    let magasinSh;
+    try { magasinSh = magasinShopify(); } catch (_) { rendreSh(503, { ok: false, pourquoi: 'entitlement store unreadable' }); return; }
+    if (chemin === '/api/shopify/etat') { rendreSh(200, corpsEtat(process.env)); return; }
+    if (chemin === '/api/shopify/droits') {
+      if (req.method !== 'GET') { rendreSh(405, { ok: false, pourquoi: 'GET only' }); return; }
+      const r = corpsDroits({ env: process.env, magasin: magasinSh, adresse: new URL(req.url, 'http://x').searchParams.get('adresse') });
+      rendreSh(r.statut, r.corps); return;
+    }
+    if (req.method !== 'POST') { rendreSh(405, { ok: false, pourquoi: 'POST only' }); return; }
+    const morceaux = []; let tailleSh = 0; let tropSh = false;
+    req.on('data', (c) => { if (tropSh) return; tailleSh += c.length; if (tailleSh > SHOPIFY_CORPS_MAX) { tropSh = true; rendreSh(413, { ok: false, pourquoi: 'request too large' }); req.destroy(); return; } morceaux.push(c); });
+    req.on('end', () => {
+      if (tropSh) return;
+      let r;
+      try { r = traiterWebhook({ env: process.env, entetes: req.headers, corpsBrut: Buffer.concat(morceaux), magasin: magasinSh }); }
+      catch (_) { r = { statut: 503, corps: { ok: false, pourquoi: 'entitlement not saved' } }; } /* non-2xx : Shopify relivre */
+      rendreSh(r.statut, r.corps);
+    });
     return;
   }
 

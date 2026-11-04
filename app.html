@@ -4418,7 +4418,11 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button type="button" class="bouton" id="skinMint">Mint a skin · <span class="skinPrix"></span></button>
         <!-- 2026-10-23 (Phil : « je ne vois pas de market ») : le marche entier vit dans l onglet Market, section Skins -->
         <button type="button" class="bouton sec" id="skinOuvrirMarche">Open the skin market</button>
+        <!-- 2026-11-04 PROTOTYPE : une boutique Shopify payee en USDC. CACHE tant que /api/shopify/etat ne dit pas pret.
+             Le lien n ouvre que l URL rendue par NOTRE serveur ; rien n est signe ici. -->
+        <a class="bouton sec" id="skinShopify" target="_blank" rel="noopener noreferrer" hidden>Pay with USDC on Shopify</a>
       </div>
+      <p class="note" id="skinShopifyNote" hidden>Write your Base wallet in the order (field "wallet"): the order opens a skin credit for that wallet, off chain. It is not an on-chain skin until it is delivered.</p>
     </div>
     <!-- EARN (Phil 19:40 : « ajoute la partie earn ») : ce que ce wallet a GAGNE, lu — part de createur due (registre), tirages gagnes (hier),
          missions reclamees (le contrat, quand il existe). Rien d invente : chaque ligne dit sa source. -->
@@ -28987,6 +28991,24 @@ function cablerFundActifs(sel) {
 }
 
 
+
+/* ── SHOPIFY USDC (2026-11-04, PROTOTYPE) ── le lien « Pay with USDC on Shopify » n apparait que si NOTRE serveur dit `pret`
+ * et rend une URL https ; aucune URL n est fabriquee ici, aucun appel de wallet, aucune signature. Reseau coupe = rien montre. */
+async function montrerBoutiqueShopify() {
+  const a = document.getElementById('skinShopify');
+  const note = document.getElementById('skinShopifyNote');
+  if (!a) return;
+  try {
+    const j = await fetch('/api/shopify/etat', { cache: 'no-store' }).then((r) => r.json());
+    let u = null;
+    try { u = j && j.pret === true && typeof j.url === 'string' ? new URL(j.url) : null; } catch (_) { u = null; }
+    if (!u || u.protocol !== 'https:') return;
+    a.href = u.href;
+    a.hidden = false;
+    if (note) note.hidden = false;
+  } catch (_) { /* rien montre : le comportement d avant */ }
+}
+void montrerBoutiqueShopify();
 
 /* ── LE RAIL FIAT -> BASE (tip 20260923-onramp-fail-closed) ──────────────────────────────────────
  * Phil, 2026-09-23 : « la raison est le bridge fiat to block, les fonds via Visa Coinbase Onramp ».
