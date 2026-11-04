@@ -491,6 +491,8 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
   ok(/V\.peutMinter\(\{ dep: TAMART_DEPLOIEMENT, local: c0, serveur, octets: oct, P: P0, compte: c \}\)/.test(onglet) && /if \(!porte\.ok\) \{ dit\.textContent = 'Not ready: '/.test(onglet), 'preparerMint passe par V.peutMinter avant toute lecture du contrat');
   ok(/const vb = S\.P\.regle \? M\.validerReglage\(S\.P\)/.test(onglet) && /S\.c && S\.c\.ok\);/.test(onglet), 'une oeuvre reglee : bornes puis certificats ; pas de zone Mint sans certificat local');
   /* game128 (Phil 04/11 : « retire Let the brain nudge it, il y a deja un bouton pour le cerveau ») : le bouton n existe plus ; M.coupDePouce reste prouve plus haut */
+  /* game129 : le poids d un melange de science a son curseur, aux bornes du moteur, et il repasse par chargerScience (donc les certificats) */
+  ok(/id: 'tamPoids', min: String\(M\.BORNES\.w\[0\]\), max: String\(M\.BORNES\.w\[1\]\)/.test(onglet) && /melange: mel, origine: ori \}\), 90\);\n  \}\);/.test(onglet) && /rangPoids\.hidden = !S\.P\.melange;/.test(onglet), 'game129 : curseur du poids de melange (bornes BORNES.w, recharge certifiee, cache sans melange)');
   ok(/V\.oeuvreReglee\(/.test(onglet) && !/tamPouce|Let the brain nudge it|bPouce/.test(onglet) && /data-chemin/.test(onglet), 'curseurs -> V.oeuvreReglee ; plus de bouton « nudge » (le cerveau choisit par son propre bouton)');
   ok(/'\/api\/tam\/choix\?draw=' \+ tirage \+ \(c \? '&minter=' \+ c : ''\)/.test(onglet) && /q\.get\('minter'\), ipT, q\.get\('draw'\)/.test(serveur) && /crypto\.getRandomValues\(new Uint8Array\(8\)\)/.test(onglet) && /chemin === '\/api\/tam\/certifier'/.test(serveur), 'le wallet est transmis au choix ; la route /api/tam/certifier existe');
   /* 2026-11-01 : le cerveau du block de l onglet Brain choisit (bascule vers UNIT), passe au serveur par &block= */
@@ -567,7 +569,11 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
        *   la table des noms de curseurs */
       const i2 = onglet.indexOf('const NOMS_PARAMS_EN = {'), j2 = onglet.indexOf('};', i2), bloc2 = onglet.slice(i2, j2).replace(/\/\*[\s\S]*?\*\//g, ''), vus2 = new Set(), doublons2 = [];
       for (const m of bloc2.matchAll(/([A-Za-z_][A-Za-z0-9_]*)\s*:\s*['"]/g)) { if (vus2.has(m[1])) doublons2.push(m[1]); vus2.add(m[1]); }
-      ok(doublons2.length === 0, 'game125 : aucune cle en double dans NOMS_PARAMS_EN : ' + (doublons2.join(', ') || 'aucune')); }
+      ok(doublons2.length === 0, 'game125 : aucune cle en double dans NOMS_PARAMS_EN : ' + (doublons2.join(', ') || 'aucune'));
+      /* game129 : chaque nom de curseur PROPRE a un systeme vise un systeme et un parametre qui existent (une faute de frappe y serait muette) */
+      const i3 = onglet.indexOf('const NOMS_PARAMS_SYS = {'), j3 = onglet.indexOf('};', i3), TSx = await import('./tam-science.js'), faux = [];
+      for (const m of onglet.slice(i3, j3).matchAll(/'([A-Za-z0-9]+)\.([A-Za-z0-9]+)'\s*:/g)) { const sy = TSx.systeme(m[1]); if (!sy || !(m[2] in sy.params)) faux.push(m[1] + '.' + m[2]); }
+      ok(i3 > 0 && faux.length === 0 && /nomParam\(S\.science\.s\.id, cle\) \|\| r\.nom\) \+ ': '/.test(onglet), 'game129 : noms de curseur par systeme valides et branches : ' + (faux.join(', ') || 'aucun faux')); }
     /* game80 : aucun systeme orphelin — chaque id des grandes questions est range dans son groupe */
     { const gq = [...(await import('./tam-grandes-questions.js')).SYSTEMES, ...(await import('./tam-grandes-questions-2.js')).SYSTEMES].map((s) => s.id);
       ok(gq.every((id) => onglet.includes("'" + id + "'")), 'les ' + gq.length + ' grandes questions sont toutes dans THEMES.questions'); }

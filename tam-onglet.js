@@ -162,6 +162,9 @@ const CURSEURS_SANS_FORME = {
 const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
 const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
 /* les parametres des modules nommes en francais -> l ecran ; les symboles (L, M, omega, a...) restent des symboles */
+const NOMS_PARAMS_SYS = { 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
+  'binaireFusion.distance': 'luminosity distance (Mpc)', 'fusionTrousNoirs.distance': 'luminosity distance (Mpc)' };
+const nomParam = (sid, cle) => NOMS_PARAMS_SYS[sid + '.' + cle] || NOMS_PARAMS_EN[cle];
 const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
   excentricite: 'eccentricity', frequence: 'frequency', graine: 'seed', grille: 'grid', groupe: 'group', hauteur: 'height', heures: 'hours',
@@ -428,6 +431,20 @@ export function monter(racine, ctx = {}) {
   const selMotif = el('select', { 'aria-label': 'Pattern', id: 'tamMotif' }, el('optgroup', { label: 'Mathematical patterns' }, ...MOTIFS_UI.map(([v, t]) => el('option', { value: v, text: t }))),
     (grpSci = el('optgroup', { label: 'Another science system (its default settings)' }, ...TS.PARTENAIRES.map((id) => el('option', { value: 'sci:' + id, text: TS.systeme(id).nom })))));
   const curseurs = el('div', { id: 'tamCurseurs' });
+  /* game129 : le poids d un melange de science (bornes du moteur, BORNES.w), arrondi au millionieme comme le cerveau */
+  let libPoids = null;
+  const sortiePoids = el('output', { for: 'tamPoids', text: '' });
+  const curPoids = el('input', { type: 'range', id: 'tamPoids', min: String(M.BORNES.w[0]), max: String(M.BORNES.w[1]), step: '0.005', value: '0.25', 'aria-label': 'Blend weight w' });
+  const rangPoids = el('div', { class: 'tamReglage', hidden: true, title: 'parameter melange.w' }, (libPoids = el('label', { for: 'tamPoids', class: 'tamDoux', text: 'blend weight w: ' })), sortiePoids, curPoids);
+  let minuteurPoids = null;
+  curPoids.addEventListener('input', () => {
+    if (!S.science || !S.P || !S.P.melange) return;
+    const w = Math.min(M.BORNES.w[1], Math.max(M.BORNES.w[0], Math.round(Number(curPoids.value) * 1e6) / 1e6));
+    sortiePoids.textContent = nb4(w);
+    clearTimeout(minuteurPoids);
+    const id = S.science.s.id, base = { ...S.P.params }, mel = { ...S.P.melange, w }, ori = (S.choix && S.choix.cerveau) || S.origine || null;
+    minuteurPoids = setTimeout(() => chargerScience(id, base, { melange: mel, origine: ori }), 90);
+  });
   /* game87 (audit : Mandelbrot a zoom 10 000 = une image PLATE — la fenetre de 3e-4 ne contenait aucun point de l ensemble) : le centre
    *   pose SUR la frontiere, calcule ici (jamais des coordonnees « celebres » tapees de memoire). Le module ne change pas : seuls cx, cy. */
   const bBord = el('button', { type: 'button', id: 'tamBord', hidden: true, text: 'Snap the centre to the boundary' });
@@ -485,6 +502,7 @@ export function monter(racine, ctx = {}) {
         el('summary', { text: 'Variables — every setting of this work' }),
         el('p', { class: 'tamDoux', text: 'Change the family, the operator, the dimensions and every parameter. The space is vast, not infinite: each slider has limits, and every setting must pass the same checks before it can be minted.' }),
         el('div', { class: 'tamRang' }, selOp, selMotif, bBord),
+        rangPoids,
         el('div', { class: 'tamRang' }, el('label', { class: 'tamDoux', for: 'tamChaos', text: 'Chaos' }), curChaos, chaosTxt, bChaos),
         curseurs, verdictTxt)),
     el('div', { class: 'tamCarte' },
@@ -778,6 +796,11 @@ export function monter(racine, ctx = {}) {
       /* game79 : le melange de la science (operateur + motif) se lit et se regle ici aussi */
       selOp.hidden = !!TS.CORPS[S.science.s.id]; selOp.value = S.P.melange ? S.P.melange.operateur : 'seul';
       selMotif.hidden = !S.P.melange; grpSci.disabled = false;
+      rangPoids.hidden = !S.P.melange;
+      if (S.P.melange) { if (document.activeElement !== curPoids) curPoids.value = String(S.P.melange.w); sortiePoids.textContent = nb4(S.P.melange.w);
+        /* (l operateur MATHEMATIQUE du melange : compare a part, jamais place sur la ligne d affichage — cf. test-no-fee-address-shown) */
+        const estSomme = S.P.melange.operateur === 'somme';
+        libPoids.textContent = estSomme ? 'blend weight w (share of the partner): ' : 'blend weight w (share of this system in the depth): '; }
       if (S.P.melange) { const v = S.P.melange.science ? 'sci:' + S.P.melange.science : S.P.melange.motif.famille + (S.P.melange.motif.variante ? ':' + S.P.melange.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
       const R = reglagesVivants(S.science.s, S.P.params), cles = 'sci:' + S.science.s.id + ':' + R.map((r) => r.chemin + r.min + r.max).join('|');
       if (cles !== cheminsPeints) {
@@ -790,9 +813,9 @@ export function monter(racine, ctx = {}) {
           /* game92 : un curseur dont la FORME ne change pas le dit (auto-similarite, ou seuls les « Check » bougent) — mesure au banc */
           const note = CURSEURS_SANS_FORME[S.science.s.id + '.' + cle];
           return el('div', { class: 'tamReglage', title: 'parameter ' + cle },
-            el('label', { for: id, class: 'tamDoux', text: (NOMS_PARAMS_EN[cle] || r.nom) + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
+            el('label', { for: id, class: 'tamDoux', text: (nomParam(S.science.s.id, cle) || r.nom) + ': ' }), el('output', { for: id, 'data-sortie': r.chemin, text: nb4(r.valeur) }),
             ...(note ? [el('span', { class: 'tamDoux tamNoteCurseur', text: ' — ' + (note === 'echelle' ? 'sets the scale only: the shape stays the same (see the scale bar and the checks)' : 'changes the checks below, not the drawing') })] : []),
-            el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': NOMS_PARAMS_EN[cle] || r.nom }));
+            el('input', { type: 'range', id, 'data-chemin': r.chemin, min: String(r.min), max: String(r.max), step: pas, value: String(r.valeur), 'aria-label': nomParam(S.science.s.id, cle) || r.nom }));
         }));
       } else for (const r of R) {
         /* game77 : apres Chaos (ou un parametre ramene par le module), curseurs et etiquettes disent la valeur REELLE */
@@ -804,7 +827,7 @@ export function monter(racine, ctx = {}) {
       verdictTxt.textContent = S.c && S.c.ok ? 'Mintable for 5 USDC once the server checks it is distinct from every minted work.' : 'Not mintable: ' + ((S.c && S.c.raisons || []).join('; ') || 'the simulation left its valid domain') + '.';
       return;
     }
-    grpSci.disabled = true; selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
+    grpSci.disabled = true; rangPoids.hidden = true; selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
     if (S.P.motif) { const v = S.P.motif.famille + (S.P.motif.variante ? ':' + S.P.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
     const R = M.reglagesDe(S.P), cles = R.map((r) => r.chemin).join('|');
     if (cles !== cheminsPeints) {
