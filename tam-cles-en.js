@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game136 */
+  ecartSigma: 'gap in standard deviations',
   /* game134 */
   ordres: 'orders m seen',
   /* game133 */
@@ -397,6 +399,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game136 */
+  demiVieMesuree: 'Half-life counted (steps)', vieMoyenne: 'Mean lifetime counted (steps)', resteCinq: 'Share left after five half-lives',
   /* game135 */
   snellFermat: 'Fastest paths vs Snell (worst gap)', fenetreSnell: 'Snell window: angle to the horizon (degrees)', angleMaxEau: 'Largest angle in water (degrees)',
   /* game134 */

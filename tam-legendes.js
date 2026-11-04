@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game136 */
+  desintegration: {
+    titre: 'Radioactive decay, atom by atom',
+    enUnePhrase: 'How many atoms are left at each step when every one of them decays by chance, counted and compared with N0 2^(-t/T).',
+    colonnes: ['time (steps)', 'atoms left', 'curve (0 = counted, 1 = formula)'],
+    aRegarder: ['No atom knows when it will decay, yet the count halves every half-life: the exponential comes out of chance alone.', 'The counted curve is a staircase that wanders a little around the smooth formula: fewer atoms, bigger wanderings.', 'Change the seed: the staircase changes, the half-life measured stays within a few standard deviations of T.'],
+    fin: null,
+  },
   /* game135 */
   refractionSnell: {
     titre: 'Light bending into water (Fermat and the Snell window)',

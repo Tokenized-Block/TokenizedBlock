@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -33,7 +33,7 @@ function suite(T, bavard = false, seul = null) {
   const ok = (nom, f) => { let c = false, det = ''; try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; } res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : '')); };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 10 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
+  ok('SYSTEMES gele, 11 systemes, SOURCES vide, COLONNES couvre chaque colonne', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]); }
   });
@@ -158,6 +158,28 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(I.snellFermat.mesure < 1e-6 && I.angleMaxEau.mesure < I.angleMaxEau.formule);
     return 'Snell ' + pire.toExponential(1) + ', fenetre ' + I.fenetreSnell.mesure.toFixed(5) + ' / ' + (crit * 180 / Math.PI).toFixed(5);
   });
+  /* game136 : desintegration — formules par Math.pow ; courbe comptee : escalier d entiers qui ne remonte jamais ; SANS BIAIS sur 40 graines :
+   *   moyenne des ecarts en sigma dans +-4/sqrt(100) sur les 100 graines du curseur, dispersion entre 0.6 et 1.5, aucun ecart au-dela de 5 sigma.
+   *   (Mesure du 2026-11-04 : sur les graines 0..39 la demi-vie de {400, 8} sortait a +0.61 sigma de moyenne, 3.9 erreurs-types ; hors module,
+   *   le MEME generateur sur 20 000 graines donne +0.025 +- 0.007, l estimateur seul +0.040 +- 0.007 : un tirage malchanceux, pas un biais ;
+   *   les 100 graines donnent +0.29 +- 0.10. Seuil fixe a 4 erreurs-types, sur toutes les graines atteignables.) */
+  if (vise('desintegration')) for (const p of [...extremes(sys('desintegration')), { atomes: 3000, demiVie: 12 }]) ok(`desintegration ${JSON.stringify(p)} : escalier compte, formule N0 2^(-t/T), demi-vie et vie moyenne a moins de 5 sigma`, () => {
+    const R = S('desintegration', p), I = R.invariants, b = R.brut, N0 = R.params.atomes, T = R.params.demiVie, q = 1 - Math.pow(2, -1 / T); let prec = Infinity;
+    for (let i = 0; i < R.n; i++) { const o = 3 * i, t = b[o], v = b[o + 1]; assert.ok(t >= 0 && t <= 5 * T + 1e-9, 't ' + i);
+      if (b[o + 2] === 1) assert.ok(Math.abs(v - N0 * Math.pow(2, -t / T)) < 1e-9 * N0, 'formule ' + i); else { assert.ok(Number.isInteger(v) && v >= 0 && v <= N0 && v <= prec, 'escalier ' + i); prec = v; if (t === 0) assert.equal(v, N0); } }
+    assert.ok(Math.abs(I.vieMoyenne.formule - 1 / q) < 1e-9 * I.vieMoyenne.formule && I.demiVieMesuree.formule === T, 'formules');
+    assert.ok(Math.abs(I.demiVieMesuree.sigma - T / (Math.LN2 * Math.sqrt(N0))) < 1e-12 * T && Math.abs(I.vieMoyenne.sigma - Math.sqrt(1 - q) / (q * Math.sqrt(N0))) < 1e-9 * I.vieMoyenne.sigma, 'sigmas');
+    assert.ok(Math.abs(I.demiVieMesuree.ecartSigma) < 5 && Math.abs(I.vieMoyenne.ecartSigma) < 5, 'ecarts ' + I.demiVieMesuree.ecartSigma + ' ' + I.vieMoyenne.ecartSigma);
+    return 'demi-vie ' + I.demiVieMesuree.ecartSigma.toFixed(2) + ' sigma, vie moyenne ' + I.vieMoyenne.ecartSigma.toFixed(2) + ' sigma';
+  });
+  if (vise('desintegration')) for (const base of [{ atomes: 1000, demiVie: 20 }, { atomes: 400, demiVie: 8 }]) ok(`desintegration ${JSON.stringify(base)} : sans biais sur les 100 graines (moyenne et dispersion des ecarts en sigma)`, () => {
+    const out = [];
+    for (const cle of ['demiVieMesuree', 'vieMoyenne']) { const z = []; for (let g = 0; g < 100; g++) z.push(T.simuler('desintegration', { ...base, graine: g }, { n: 20 }).invariants[cle].ecartSigma);
+      const m = z.reduce((a, x) => a + x, 0) / z.length, sd = Math.sqrt(z.reduce((a, x) => a + (x - m) ** 2, 0) / (z.length - 1));
+      assert.ok(Math.abs(m) < 4 / Math.sqrt(100), cle + ' moyenne ' + m); assert.ok(sd > 0.6 && sd < 1.5, cle + ' dispersion ' + sd); assert.ok(z.every((x) => Math.abs(x) < 5), cle + ' au-dela de 5 sigma');
+      out.push(cle + ' moyenne ' + m.toFixed(2) + ', dispersion ' + sd.toFixed(2)); }
+    return out.join(' ; ');
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -206,6 +228,11 @@ const MUTANTS = [
   ['snell : section doree qui monte', 'if (t(c) < t(d)) b = d; else a = c;', 'if (t(c) > t(d)) b = d; else a = c;'],
   ['snell : horizon a 100 au lieu de 1e6', 'passageFermat(N, 1e6, 1)', 'passageFermat(N, 1e2, 1)'],
   ['snell : angle critique asin(1 / 1.01 n)', 'crit = atanD(1 / Math.sqrt(N * N - 1));', 'crit = atanD(1 / Math.sqrt(1.0201 * N * N - 1));'],
+  ['desint : probabilite 5 % trop forte', 'if (alea() < p) d++;', 'if (alea() < 1.05 * p) d++;'],
+  ['desint : vie comptee un pas trop tot', 'somme += d * k;', 'somme += d * (k - 1);'],
+  ['desint : demi-vie lue au pas d apres', 'tDemi = j - 1 + (restants[j - 1] - N0 / 2) / (restants[j - 1] - restants[j]);', 'tDemi = j + (restants[j - 1] - N0 / 2) / (restants[j - 1] - restants[j]);'],
+  ['desint : sigma de la demi-vie deux fois trop large', 'sD = T / (LN2 * Math.sqrt(N0))', 'sD = 2 * T / (LN2 * Math.sqrt(N0))'],
+  ['desint : vie moyenne exacte 1 / p + 1', 'vieMoyenne: { mesure: vie, formule: 1 / p,', 'vieMoyenne: { mesure: vie, formule: 1 / p + 1,'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -219,7 +246,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

@@ -381,6 +381,33 @@ function refractionSnell(P, n) {
     angleMaxEau: { mesure: maxEau * 180 / PI, formule: crit * 180 / PI, note: 'largest angle in water (degrees) among the rays drawn: always inside the window (below asin(1 / n))' } } };
 }
 
+// ---------- 11 : la desintegration radioactive, atome par atome ----------
+// N0 atomes (curseur) ; a chaque pas, CHAQUE atome encore la tire au sort (generateur mulberry32, graine curseur) et se desintegre avec
+//   la probabilite p = 1 - 2^(-1 / T) (T = demi-vie en pas, curseur). Rien d autre : pas de loi exponentielle dans la simulation.
+// Mesure : le pas ou il reste la moitie des atomes (interpole entre deux pas), et la vie moyenne des atomes (pas de leur desintegration).
+// Exact (derive ici) : chaque atome survit a k pas avec la probabilite (1 - p)^k = 2^(-k / T) ; la moitie reste a T ; la duree de vie
+//   suit une loi geometrique de moyenne 1 / p. Ecarts STATISTIQUES (un nombre fini d atomes) : sigma(demi-vie) = T / (ln 2 sqrt(N0)),
+//   sigma(vie moyenne) = sqrt(1 - p) / (p sqrt(N0)) — les ecarts sont donnes en sigma.
+// Dessin : atomes restants contre le temps, comptes (0) et N0 2^(-t / T) (1) (vue de face), jusqu a 5 demi-vies.
+function mulberry32(a) {
+  return () => { a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+function desintegration(P, n) {
+  const N0 = P.atomes, T = P.demiVie, p = 1 - expD(-LN2 / T), alea = mulberry32(0x5eed + 7919 * P.graine), tFin = 5 * T;
+  const restants = [N0]; let vivants = N0, somme = 0, k = 0;
+  while (vivants > 0 && k < 200 * T) { k++; let d = 0; for (let i = 0; i < vivants; i++) if (alea() < p) d++; vivants -= d; somme += d * k; if (k <= tFin) restants.push(vivants); }
+  while (restants.length <= tFin) restants.push(vivants);
+  let tDemi = NaN; for (let j = 1; j < restants.length; j++) if (restants[j] <= N0 / 2) { tDemi = j - 1 + (restants[j - 1] - N0 / 2) / (restants[j - 1] - restants[j]); break; }
+  const vie = somme / (N0 - vivants), sD = T / (LN2 * Math.sqrt(N0)), sV = Math.sqrt(1 - p) / (p * Math.sqrt(N0));
+  const brut = new Float64Array(n * 3), moitie = Math.floor(n / 2);
+  for (let l = 0; l < n; l++) { const c = l < moitie ? 0 : 1, q = c ? l - moitie : l, m = c ? n - moitie : moitie, t = m <= 1 ? 0 : tFin * q / (m - 1), o = 3 * l;
+    brut[o] = t; brut[o + 1] = c ? N0 * expD(-LN2 * t / T) : restants[Math.floor(t + 1e-9)]; brut[o + 2] = c; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (desintegration, au hasard)', invariants: {
+    demiVieMesuree: { mesure: tDemi, formule: T, sigma: sD, ecartSigma: (tDemi - T) / sD, note: 'step at which half the atoms are left (counted, interpolated) against T ; statistical, so the gap is also given in sigma = T / (ln 2 sqrt(N0))' },
+    vieMoyenne: { mesure: vie, formule: 1 / p, sigma: sV, ecartSigma: (vie - 1 / p) / sV, note: 'mean number of steps an atom lives (counted) against 1 / p, p = 1 - 2^(-1/T) ; sigma = sqrt(1 - p) / (p sqrt(N0))' },
+    resteCinq: { mesure: restants[tFin] / N0, formule: 1 / 32, note: 'share left after five half-lives against 2^-5 = 1/32 (statistical)' } } };
+}
+
 export const COLONNES = Object.freeze({
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -391,6 +418,7 @@ export const COLONNES = Object.freeze({
   corpsNoir: { colonnes: ['wavelength lambda (units of h c / (k T0))', 'spectral radiance B (Planck)', 'curve (0 = coolest, T = 1)'], memeLongueur: [], autres: [0, 1, 2] },
   reseauFentes: { colonnes: ['sin theta (direction seen)', 'intensity I / N^2', 'number of slits N (label)'], memeLongueur: [], autres: [0, 1, 2] },
   refractionSnell: { colonnes: ['x (the surface is y = 0)', 'height y (water below, air above)', 'ray number (label)'], memeLongueur: [[0, 1]], autres: [2] },
+  desintegration: { colonnes: ['time (steps)', 'atoms left', 'curve (0 = counted, 1 = N0 2^(-t/T))'], memeLongueur: [], autres: [0, 1, 2] },
   paraboleTir: { colonnes: ['distance x', 'height y', 'launch angle in degrees (label ; 0 = the safety parabola)'], memeLongueur: [[0, 1]], autres: [2] },
 });
 
@@ -425,9 +453,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'refractionSnell', nom: 'Light bending into water (Fermat and the Snell window)', science: 'Geometric optics', D: 3, nuage: true, params: { indice: 1.33, rayons: 13 },
     bornes: { indice: [1.05, 2.5], rayons: [5, 25] },
     phrase: 'A visualisation of light from a point under water reaching targets in the air. No law of refraction is used: for every target the crossing point is searched as the one giving the FASTEST path (Fermat), and the bend comes out as n sin(water angle) = sin(air angle). Aimed at the horizon, the fastest path leaves at asin(1 / n): the whole sky fits in that cone, the Snell window; steeper rays never get out and are reflected.' },
+  { id: 'desintegration', nom: 'Radioactive decay, atom by atom', science: 'Nuclear physics', D: 3, nuage: true, params: { atomes: 1000, demiVie: 20, graine: 1 },
+    bornes: { atomes: [200, 5000], demiVie: [5, 50], graine: [0, 99] },
+    phrase: 'A visualisation of radioactive decay with nothing but chance: at each step every atom left draws lots and decays with the same small probability. Counted, half the atoms are gone after one half-life, a quarter remain after two: the exponential law appears by itself. The half-life and the mean lifetime measured are compared with the exact values, the gap given in standard deviations because the atoms are finite in number.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
