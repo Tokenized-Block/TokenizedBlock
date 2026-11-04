@@ -22,6 +22,8 @@ import { PHOTO_MAX } from './photo.js';
 import { LIEN_MAX as TWEET_MAX } from './tweet-grave.js';
 import { chaineA } from './index-blocks.js';
 import { ORBITES, FACETTES, MATIERES, ORNEMENTS } from './apparence.js';
+/* 2026-11-04 « block marchand » : la boutique Shopify gravee, RE-VALIDEE a la lecture (un contractURI s ecrit par d autres chemins) */
+import { boutiqueDepuisMeta } from './boutique-block.js';
 
 /* ⛔⛔ CATALOGUE DE CREATE ELARGI (Phil, 2026-09-13 : « personnalisation pousse au max »), SANS TOUCHER
  *    AU TIRAGE. Les listes d `apparence.js` restent GELEES : elles derivent la face de chaque block qui
@@ -252,7 +254,8 @@ export function faceDepuisUri(uri) {
   if (v.etat !== 'OK') return { etat: 'INVALIDE', pourquoi: v.pourquoi };
   /* ⛔ ROLE (optional, Create 2026-09-15): engraved cle if it matches a known metier; ignored otherwise. */
   const role = typeof doc.role === 'string' && /^[A-Z_]{3,24}$/.test(doc.role) ? doc.role : null;
-  return { etat: 'LU', face: v.face, role };
+  const b = boutiqueDepuisMeta(doc);
+  return { etat: 'LU', face: v.face, role, boutique: b ? { url: b.url, myshopify: b.myshopify } : null };
 }
 
 /**

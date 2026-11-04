@@ -49,7 +49,8 @@ export const OUTILS = Object.freeze([
       symbol: { type: 'string', minLength: 1, maxLength: 32, description: 'Ticker (at most 32 bytes); stored upper-case.' },
       account: { ...ADRESSE, description: 'The wallet that will sign; it receives the whole supply and becomes the creator.' },
       pair: { ...JETON, description: 'ETH (default) or the address of a currency from tblock_pairs.' },
-      salt: { type: 'string', maxLength: 64, description: 'Optional free text that fixes the block address. Generated when absent; send it again to get the same plan.' } } },
+      salt: { type: 'string', maxLength: 64, description: 'Optional free text that fixes the block address. Generated when absent; send it again to get the same plan.' },
+      shopifyStore: { type: 'string', maxLength: 200, description: 'Optional https URL of the creator’s Shopify store (one that accepts USDC), engraved in the block metadata as shopify_store: a declaration by the creator, not checked.' } } },
     annotations: { readOnlyHint: true, openWorldHint: true } },
   { name: 'tblock_plan_swap', title: 'Plan a swap on TokenizedBlock rails',
     description: 'Returns the unsigned calls for a swap routed by TokenizedBlock: a block against its quote token, block to block, block to a tokenized stock, '

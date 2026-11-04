@@ -173,6 +173,8 @@ const MUTANTS = [
 ];
 const tmp = mkdtempSync(path.join(tmpdir(), 'mut-shopify-'));
 try {
+  /* les imports du module (bons de skin, 2026-11-04) voyagent avec la copie */
+  for (const dep of ['keccak.js', 'signeur-secp256k1.js']) writeFileSync(path.join(tmp, dep), readFileSync(new URL('./' + dep, ICI), 'utf8'));
   let k = 0;
   for (const [nom, de, vers] of MUTANTS) {
     assert.ok(SRC.includes(de), 'mutant « ' + nom + ' » : motif introuvable dans shopify-usdc.js');

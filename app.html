@@ -2284,6 +2284,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         Give it a brain — 128 neurons that move it on the map and react to its market. Signs nothing.</label>
       <label class="champ" style="margin-top:10px">Its role<select id="cRole"></select></label>
       <p class="note" id="cRoleNote">You can change it later on its profile.</p>
+      <!-- 2026-11-04 « block marchand » : FACULTATIF. Grave pour toujours dans les metadonnees du block (shopify_store) ;
+           https seulement, valide ici et relu-valide sur la page du block. Rien n est signe de plus : la meme naissance. -->
+      <label class="champ" style="margin-top:10px">Your Shopify store (optional)<input id="cBoutique" type="url" inputmode="url" maxlength="200" placeholder="https://your-shop.myshopify.com" autocomplete="off" spellcheck="false"></label>
+      <p class="note" id="cBoutiqueNote">A store that accepts USDC. Engraved forever with the block, shown on its page as declared by you.</p>
     </div>
 
     <!-- ⛔ PAIRER = CHOISIR LA DEVISE DE LA POOL. Le choix est grave dans les metadonnees a la
@@ -3721,6 +3725,8 @@ details[open] > summary::before{transform:rotate(90deg)}
                  verifie qu il existe, ni qu il appartient a celui qui a grave le block. Montrer
                  le lien sans le dire fabriquerait une association qu on n a pas mesuree. -->
           <div id="pTweet" hidden></div>
+          <!-- 2026-11-04 : la boutique Shopify GRAVEE par le createur, re-validee avant d etre cliquable ; cachee sinon -->
+          <div id="pBoutique" hidden></div>
         </div>
         <button class="puce pFermer" id="pFermer" type="button" aria-label="Close profile">✕</button>
       </div>
@@ -4846,6 +4852,8 @@ import { cube3dHtml, CUBE3D_CSS } from './cube3d.js';
 /* la feuille du cube 3D, posee une fois */
 (() => { try { const st = document.createElement('style'); st.textContent = CUBE3D_CSS; document.head.appendChild(st); } catch (_) {} })();
 import { apparenceDepuisAdresse } from './apparence.js';
+/* 2026-11-04 « block marchand » : la boutique Shopify gravee a la naissance (validee a l ecriture ET a la lecture) */
+import { champBoutique, validerUrlBoutique, TEXTE_LIEN_BOUTIQUE, NOTE_LIEN_BOUTIQUE } from './boutique-block.js';
 import { faceRevelee, scoreFaces } from './face-du-jour.js';
 import { planReclamer, planPoster } from './missions-plan.js';
 /* 2026-10-18 : BlockRolls — roll paye / day pass, SEULEMENT quand /api/tirage sert rolls.contrat (fiche signee par Phil) ; sinon practice */
@@ -15192,6 +15200,34 @@ async function lireProfil(adr, sym, perime, opts) {
    *     ⛔ ET LA RESERVE EST DITE AVEC LE LIEN, jamais separee : on n a pas ouvert ce post, rien
    *       ne prouve qu il existe ni qu il appartient a qui a grave le block. Le montrer sans ca
    *       fabriquerait une association qu on n a pas mesuree. */
+  /* 2026-11-04 « block marchand » : la boutique GRAVEE (lue par /api/face, cache serveur), RE-VALIDEE ici, la ou le lien
+   * devient cliquable ; la reserve voyage avec le lien. Une lecture ratee ne montre rien et ne conclut rien. */
+  const elBoutique = $('#pBoutique');
+  if (elBoutique) {
+    elBoutique.replaceChildren();
+    elBoutique.hidden = true;
+    void (async () => {
+      try {
+        const j = await fetch('/api/face/' + String(adr).toLowerCase(), { cache: 'no-store' }).then((r) => r.json());
+        if (perime()) return;
+        const v = j && j.boutique && typeof j.boutique.url === 'string' ? validerUrlBoutique(j.boutique.url) : null;
+        if (!v || !v.ok) return;
+        const boite = document.createElement('div');
+        boite.className = 'partage';
+        const a = document.createElement('a');
+        a.href = v.url;
+        a.target = '_blank';
+        a.rel = 'noopener noreferrer nofollow';
+        a.textContent = TEXTE_LIEN_BOUTIQUE;
+        const note = document.createElement('p');
+        note.className = 'note';
+        note.textContent = NOTE_LIEN_BOUTIQUE + ' ' + v.hote;
+        boite.append(a, note);
+        elBoutique.append(boite);
+        elBoutique.hidden = false;
+      } catch (_) { /* non lue : rien montre */ }
+    })();
+  }
   const elTweet = $('#pTweet');
   if (elTweet) {
     elTweet.innerHTML = '';
@@ -23379,6 +23415,9 @@ function uriCreation() {
     /* ⛔ LA PAIRE EST GRAVEE AVEC SON STATUT : « unverified » voyage avec l adresse, pour toujours. */
     pair: paireChoisie ? { address: paireChoisie.adr, symbol: paireChoisie.symbole,
       kind: paireChoisie.type, verified: !!paireChoisie.verifiee } : null,
+    /* 2026-11-04 « block marchand » : EN DERNIER (le marqueur `"face":{` que le hook relit ne bouge pas) ; champ vide = la meme
+     * URI qu avant ; URL refusee = ce jet, attrape par les appelants comme celui du plafond. */
+    ...champBoutique($('#cBoutique') ? $('#cBoutique').value : ''),
   };
   const uri = 'data:application/json,' + encodeURIComponent(JSON.stringify(meta));
   /* ⛔⛔ PLAFOND CORRIGE LE 2026-09-20 (audit front-end). Il valait 12 000 octets, « plafond factory »

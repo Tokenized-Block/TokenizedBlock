@@ -66,8 +66,9 @@ const postsLus = new Map();
 import { signerJwtCdp } from './cdp-jwt.js';
 /* 2026-10-26 : le second rail fiat (MoonPay) pour les pays que Coinbase ne sert pas ; cache sans les deux cles */
 import { lireCatalogueMoonpay, corpsPaysMoonpay, corpsSessionMoonpay } from './moonpay-rail.js';
-/* 2026-11-04 : paiement USDC sur une boutique Shopify -> droits HORS CHAINE (aucune signature, aucun fonds ici) ; cache sans config */
-import { traiterWebhook, corpsDroits, corpsEtat, creerMagasin, CORPS_MAX as SHOPIFY_CORPS_MAX } from './shopify-usdc.js';
+/* 2026-11-04 : paiement USDC sur une boutique Shopify -> droits HORS CHAINE, bons de skin EIP-712 (cle dediee, mint seul) ;
+ * aucune transaction signee ni envoyee ici, aucun fonds ; cache sans config */
+import { traiterWebhook, corpsDroits, corpsEtat, corpsBon, creerMagasin, CORPS_MAX as SHOPIFY_CORPS_MAX } from './shopify-usdc.js';
 /* Catalogue PUBLIC MoonPay : une lecture par heure au plus, un echec retenu 60 s (une absence ne doit pas etre repayee a
  * chaque ouverture de fiche), une seule lecture en vol. Echec = null = rail cache, jamais « tous les pays ». */
 /* game81 (reste connu depuis le 31/10) : l IP du visiteur pour les budgets par IP (/api/jeu/roll, TAM, recherche…). Avant : le PREMIER
@@ -2006,6 +2007,7 @@ async function resoudreFace(token) {
   if (facesLues.has(t)) return facesLues.get(t);
   const r = await faceDuBlock({ rpc: rpcServeur, jeton: t });
   const rep = { ok: true, etat: r.etat, face: r.face || null, role: r.role || null,
+    boutique: r.boutique || null, /* 2026-11-04 : la boutique Shopify gravee, deja re-validee par face.js */
     pourquoi: r.pourquoi || null };
   /* ⛔ TOUT CE QUI DECOULE DES METADONNEES EST IMMUABLE, donc cachable : LU, AUCUNE (aucun URI),
    * AUTRE_SOURCE (URI hebergee ailleurs — mesure du 2026-09-18 : un de nos blocks de genese est dans
@@ -5573,6 +5575,9 @@ const SERVIS = [
    *   tuerait TOUTE la page — et c est `test-imports-servis.mjs` qui l a crie, pas ma relecture :
    *   troisieme fois que cette garde paie. */
   'texte-onchain.js',
+  /* 2026-11-04 « block marchand » : la boutique Shopify gravee a la naissance, validee a l ecriture ET a la lecture (importe
+   *   texte-onchain.js, servi juste au-dessus). */
+  'boutique-block.js',
   /* ⛔ `blocks-a-lancer.js` decide si un block deja cree bloque encore la creation suivante.
    *   L oublier ici tuerait TOUTE la page — un import 404 arrete le module entier. */
   'blocks-a-lancer.js',
@@ -7150,7 +7155,7 @@ function traiterRequete(req, res) {
     if (chemin === '/api/naissance/plan') {
       if (req.method !== 'GET') { rendreN(405, { ok: false, pourquoi: 'GET only' }); return; }
       const d = { nom: String(qN.get('nom') || ''), symbole: String(qN.get('symbole') || ''), compte: String(qN.get('compte') || ''),
-        paire: String(qN.get('paire') || 'ETH'), sel: String(qN.get('sel') || '') };
+        paire: String(qN.get('paire') || 'ETH'), sel: String(qN.get('sel') || ''), boutique: qN.get('boutique') };
       if (!d.nom.trim() || !d.symbole.trim() || !/^0x[0-9a-f]{40}$/i.test(d.compte) || !/^(eth|0x[0-9a-f]{40})$/i.test(d.paire) || d.sel.length > 64) {
         rendreN(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/naissance/plan?nom=<block name>&symbole=<ticker>&compte=<the wallet that will sign>'
           + '[&paire=<ETH or a currency address from /api/naissance/paires>][&sel=<free text that fixes the address>]' });
@@ -7193,7 +7198,7 @@ function traiterRequete(req, res) {
       try {
         const rep = await traiterMcp(msg, { version: buildServi(), widget: () => widgetHtml, outils: {
           tblock_pairs: async () => pairesPourAgent(),
-          tblock_plan_birth: avecBudget((a) => faireNaissance({ nom: a.name, symbole: a.symbol, compte: a.account, paire: a.pair || 'ETH', sel: a.salt || '' }, { sonde: sondeN })),
+          tblock_plan_birth: avecBudget((a) => faireNaissance({ nom: a.name, symbole: a.symbol, compte: a.account, paire: a.pair || 'ETH', sel: a.salt || '', boutique: a.shopifyStore || null }, { sonde: sondeN })),
           tblock_plan_swap: avecBudget((a) => faireRail({ de: a.from, vers: a.to, montant: a.amount, compte: a.account })),
           tblock_creator_minimum: avecBudget((a) => faireCaution({ block: a.block, pair: a.pair || 'ETH', account: a.account || '' })),
           /* la telecommande : des PROPOSITIONS pour un panneau ouvert par l humain — aucune lecture de chaine, aucun envoi */
@@ -7445,7 +7450,7 @@ function traiterRequete(req, res) {
   /* ══ SHOPIFY USDC (2026-11-04, PROTOTYPE) ══ shopify-usdc.js porte les corps ; ici on ne fait que cabler.
    * Sans SHOPIFY_API_SECRET + SHOPIFY_SHOP_DOMAIN + SHOPIFY_STORE_URL : le webhook rend 404 et l app ne montre rien.
    * Le corps du webhook est lu en OCTETS BRUTS (le HMAC porte sur eux, doc Shopify) ; aucune signature, aucun fonds ici. */
-  if (chemin === '/api/shopify/etat' || chemin === '/api/shopify/droits' || chemin === '/api/shopify/webhook') {
+  if (chemin === '/api/shopify/etat' || chemin === '/api/shopify/droits' || chemin === '/api/shopify/webhook' || chemin === '/api/shopify/bon') {
     const rendreSh = (statut, corps) => {
       res.writeHead(statut, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
       res.end(JSON.stringify(corps));
@@ -7456,6 +7461,16 @@ function traiterRequete(req, res) {
     if (chemin === '/api/shopify/droits') {
       if (req.method !== 'GET') { rendreSh(405, { ok: false, pourquoi: 'GET only' }); return; }
       const r = corpsDroits({ env: process.env, magasin: magasinSh, adresse: new URL(req.url, 'http://x').searchParams.get('adresse') });
+      rendreSh(r.statut, r.corps); return;
+    }
+    /* le BON d un skin : signe par la cle dediee (pouvoir de mint seul), rendu au wallet ECRIT dans la commande ; le wallet de
+     * l acheteur envoie lui-meme claim() — ce serveur n envoie aucune transaction */
+    if (chemin === '/api/shopify/bon') {
+      if (req.method !== 'GET') { rendreSh(405, { ok: false, pourquoi: 'GET only' }); return; }
+      const q = new URL(req.url, 'http://x').searchParams;
+      let r;
+      try { r = corpsBon({ env: process.env, magasin: magasinSh, commande: q.get('commande'), adresse: q.get('adresse'), block: q.get('block'), recipe: q.get('recipe'), unite: Number(q.get('unite') || 1) }); }
+      catch (_) { r = { statut: 500, corps: { ok: false, pret: true, pourquoi: 'voucher failed' } }; }
       rendreSh(r.statut, r.corps); return;
     }
     if (req.method !== 'POST') { rendreSh(405, { ok: false, pourquoi: 'POST only' }); return; }

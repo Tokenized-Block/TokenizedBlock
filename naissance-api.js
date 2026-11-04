@@ -28,6 +28,7 @@ import { planLancement, mintLancementRecevable, simulerSequenceLancement, PERMIT
 import { completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { rpcAvecBlockPrevu } from './groupe-wallet.js';
 import { CREATE_ROUTER, FRAIS_OUVERTURE_WEI, CREATE_FEE_WEI_FLOOR, FEE_WALLET, USDC_BASE } from './frais-creation.js';
+import { champBoutique, validerUrlBoutique } from './boutique-block.js';
 
 const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -61,7 +62,7 @@ export function pairesDeNaissance(chaine = 8453) {
 }
 
 /** L URI gravee avec le block — la MEME forme que l ecran (uriCreation) : la face est ce que le hook relit (son marqueur). */
-export function uriNaissance({ nom, symbole, adresse, paire }) {
+export function uriNaissance({ nom, symbole, adresse, paire, boutique = null }) {
   const face = apparenceDepuisAdresse(adresse);
   const svg = logoSvg(paramsLogoDepuisApparence(face, symbole));
   const meta = {
@@ -69,6 +70,9 @@ export function uriNaissance({ nom, symbole, adresse, paire }) {
     image: 'https://tokenizedblock.space/face/' + bas(adresse) + '.png',
     image_data: 'data:image/svg+xml,' + encodeURIComponent(svg),
     pair: paire && bas(paire.adr) !== ETH ? { address: paire.adr, symbol: paire.symbole, kind: paire.type, verified: true } : null,
+    /* 2026-11-04 « block marchand » : la boutique Shopify DECLAREE par le createur, en DERNIER (le debut de l URI, que le hook
+     * relit comme marqueur, ne bouge pas) ; absente = la meme URI qu avant, octet pour octet. Jette si l URL est refusee. */
+    ...champBoutique(boutique),
   };
   return 'data:application/json,' + encodeURIComponent(JSON.stringify(meta));
 }
@@ -102,13 +106,15 @@ export async function planNaissance(q, deps) {
   if (!selTexte) return refus('a salt is required: it is what fixes the block address');
   if (octets(selTexte) > 64) return refus('the salt is over 64 bytes');
   const devise = adrPaire === ETH ? null : adrPaire;
+  const boutique = q && q.boutique !== undefined && q.boutique !== null && String(q.boutique).trim() !== '' ? String(q.boutique) : null;
+  if (boutique) { const vb = validerUrlBoutique(boutique); if (!vb.ok) return refus('the Shopify store URL is refused: ' + vb.pourquoi); }
 
   try {
     /* ── l adresse : le sel fixe tout. On encode une 1re fois pour LIRE le sel (mot de hash), d ou l adresse, d ou la face. ── */
     const params = paramsAsset({ nom, symbole, admin: compte, decimales: DECIMALES_FIXES });
     const sel = selDeCreatePaid(encodeCreatePaid({ variant: 0, saltTexte: selTexte, params, initCalls: [], creator: compte }));
     const adresse = adresseNeeDuRouteur(sel);
-    const uri = uriNaissance({ nom, symbole, adresse, paire });
+    const uri = uriNaissance({ nom, symbole, adresse, paire, boutique });
     if (octets(uri) > URI_MAX_OCTETS) return refus('the engraved metadata is too big — shorten the name or the symbol');
     const dataCreate = encodeCreatePaid({ variant: 0, saltTexte: selTexte, params, initCalls: [encodeUpdateContractURI(uri)], creator: compte });
     if (selDeCreatePaid(dataCreate) !== sel) return nonMesure('the salt did not encode the same way twice');
