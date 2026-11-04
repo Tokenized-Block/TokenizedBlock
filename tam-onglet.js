@@ -422,10 +422,12 @@ export function monter(racine, ctx = {}) {
 
   /* ── 2026-11-01 : les VARIABLES (Phil 31/10) — familles, operateur, dimension (jusqu a 12), chaque parametre ; le cerveau peut les bouger.
    *   Un espace vaste, pas infini : chaque curseur est borne (tam-moteur.js#BORNES) et chaque reglage passe les MEMES certificats. */
-  const OPS_EN = { seul: 'alone', somme: 'blended with a pattern or a system', composition: 'driving a pattern or a system', couplage: 'coupled copies' };
+  const OPS_EN = { seul: 'alone', somme: 'blended with a pattern or a system', composition: 'driving a pattern or a system', couplage: 'coupled copies', croise: 'crossed with a system (one against the other)' };
   const MOTIFS_UI = [['ifs:fougere', 'fern (IFS)'], ['ifs:sierpinski', 'Sierpinski (IFS)'], ['ifs:dragon', 'dragon (IFS)'], ['julia', 'Julia set'], ['phyllotaxie', 'golden-angle phyllotaxis'],
     ['epicycles', 'epicycles'], ['lsysteme:koch', 'Koch (L-system)'], ['lsysteme:dragon', 'dragon (L-system)'], ['lsysteme:plante', 'plant (L-system)']];
-  const selOp = el('select', { 'aria-label': 'Operator', id: 'tamOperateur' }, ...M.OPERATEURS.map((o) => el('option', { value: o, text: OPS_EN[o] })));
+  /* game131 : « croise » n existe qu en science (partenaire science) : une option a part, fermee hors science */
+  const optCroise = el('option', { value: 'croise', text: OPS_EN.croise });
+  const selOp = el('select', { 'aria-label': 'Operator', id: 'tamOperateur' }, ...M.OPERATEURS.map((o) => el('option', { value: o, text: OPS_EN[o] })), optCroise);
   let grpSci = null;
   /* game128 (Phil 04/11 : « tu es limite, fais des variantes avec les systemes de science ») : le partenaire peut etre une AUTRE science */
   const selMotif = el('select', { 'aria-label': 'Pattern', id: 'tamMotif' }, el('optgroup', { label: 'Mathematical patterns' }, ...MOTIFS_UI.map(([v, t]) => el('option', { value: v, text: t }))),
@@ -783,7 +785,7 @@ export function monter(racine, ctx = {}) {
   /* la STRUCTURE (famille, operateur, dimension, motif) : des params complets, reglables ; le dimension 1/2/3/4 copies = 3..12-D */
   function depuisExplorateur(source = '') {
     const f = selFam.value, d = Number(selDim.value) || 1, coupl = M.PORTEUSES_3D.includes(f);
-    let op = selOp.value;
+    let op = selOp.value; if (op === 'croise') op = 'seul';
     if (source === 'dims' && coupl) op = d > 1 ? 'couplage' : op === 'couplage' ? 'seul' : op;
     if (op === 'couplage' && !coupl) op = 'seul';
     if (op === 'couplage' && d < 2) selDim.value = '2';
@@ -806,13 +808,15 @@ export function monter(racine, ctx = {}) {
   /* game79 : dans une science, operateur + motif = un MELANGE de types differents (science x fractale / angle d or) */
   function melangeScience() {
     const op = selOp.value;
-    if (op !== 'somme' && op !== 'composition') return null;
+    if (op !== 'somme' && op !== 'composition' && op !== 'croise') return null;
     const w = (S.P && S.P.melange && S.P.melange.w) || 0.25;
+    /* croise : il faut une science partenaire ; sans elle, la premiere qui n est pas ce systeme */
+    if (op === 'croise' && !selMotif.value.startsWith('sci:')) { const sid = TS.PARTENAIRES.find((x) => !S.science || x !== S.science.s.id); selMotif.value = 'sci:' + sid; }
     if (selMotif.value.startsWith('sci:')) { const sid = selMotif.value.slice(4); if (S.science && sid === S.science.s.id) return null; const av = S.P && S.P.melange; return av && av.science === sid && av.params ? { operateur: op, science: sid, w, params: av.params } : { operateur: op, science: sid, w }; }
     const { famille, variante } = motifChoisi();
     return { operateur: op, motif: M.motifDefaut(famille, variante), w };
   }
-  selOp.addEventListener('change', () => { if (S.science) { selMotif.hidden = !(selOp.value === 'somme' || selOp.value === 'composition'); chargerScience(S.science.s.id, S.P.params, { melange: melangeScience() }); } else depuisExplorateur('op'); });
+  selOp.addEventListener('change', () => { if (S.science) { selMotif.hidden = !(selOp.value === 'somme' || selOp.value === 'composition' || selOp.value === 'croise'); chargerScience(S.science.s.id, S.P.params, { melange: melangeScience() }); } else depuisExplorateur('op'); });
   selMotif.addEventListener('change', () => { if (S.science) chargerScience(S.science.s.id, S.P.params, { melange: melangeScience() }); else depuisExplorateur('motif'); });
   /* les curseurs : un par variable de reglagesDe ; rebatis seulement si la LISTE change (un glissement en cours n est pas casse) */
   let cheminsPeints = '';
@@ -823,10 +827,11 @@ export function monter(racine, ctx = {}) {
       selOp.hidden = !!TS.CORPS[S.science.s.id]; selOp.value = S.P.melange ? S.P.melange.operateur : 'seul';
       selMotif.hidden = !S.P.melange; grpSci.disabled = false;
       rangPoids.hidden = !S.P.melange; peindrePartenaire();
+      optCroise.disabled = false; for (const g of selMotif.querySelectorAll('optgroup')) if (g !== grpSci) g.disabled = !!(S.P.melange && S.P.melange.science && S.P.melange.operateur === 'croise');
       if (S.P.melange) { if (document.activeElement !== curPoids) curPoids.value = String(S.P.melange.w); sortiePoids.textContent = nb4(S.P.melange.w);
         /* (l operateur MATHEMATIQUE du melange : compare a part, jamais place sur la ligne d affichage — cf. test-no-fee-address-shown) */
-        const estSomme = S.P.melange.operateur === 'somme';
-        libPoids.textContent = estSomme ? 'blend weight w (share of the partner): ' : 'blend weight w (share of this system in the depth): '; }
+        const estSomme = S.P.melange.operateur === 'somme', estCroise = S.P.melange.operateur === 'croise';
+        libPoids.textContent = estSomme ? 'blend weight w (share of the partner): ' : estCroise ? 'blend weight w (share of the partner in the depth): ' : 'blend weight w (share of this system in the depth): '; }
       if (S.P.melange) { const v = S.P.melange.science ? 'sci:' + S.P.melange.science : S.P.melange.motif.famille + (S.P.melange.motif.variante ? ':' + S.P.melange.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
       const R = reglagesVivants(S.science.s, S.P.params), cles = 'sci:' + S.science.s.id + ':' + R.map((r) => r.chemin + r.min + r.max).join('|');
       if (cles !== cheminsPeints) {
@@ -853,7 +858,8 @@ export function monter(racine, ctx = {}) {
       verdictTxt.textContent = S.c && S.c.ok ? 'Mintable for 5 USDC once the server checks it is distinct from every minted work.' : 'Not mintable: ' + ((S.c && S.c.raisons || []).join('; ') || 'the simulation left its valid domain') + '.';
       return;
     }
-    grpSci.disabled = true; rangPoids.hidden = true; voletPartenaire.hidden = true; selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
+    grpSci.disabled = true; rangPoids.hidden = true; voletPartenaire.hidden = true; optCroise.disabled = true;
+    for (const g of selMotif.querySelectorAll('optgroup')) if (g !== grpSci) g.disabled = false; selOp.value = S.P.operateur; selMotif.hidden = !(S.P.operateur === 'somme' || S.P.operateur === 'composition');
     if (S.P.motif) { const v = S.P.motif.famille + (S.P.motif.variante ? ':' + S.P.motif.variante : ''); if ([...selMotif.options].some((o) => o.value === v)) selMotif.value = v; }
     const R = M.reglagesDe(S.P), cles = R.map((r) => r.chemin).join('|');
     if (cles !== cheminsPeints) {

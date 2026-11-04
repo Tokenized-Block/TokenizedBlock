@@ -42,13 +42,18 @@ function suite(T, bavard = false, rapide = false) {
       { operateur: 'couplage', science: 'phasesLune', w: 0.4 }, { operateur: 'somme', science: 'phasesLune', w: 0.05 }, { operateur: 'somme', science: 'phasesLune', w: 0.7 },
       { operateur: 'somme', science: 'phasesLune', w: '0.4' }, { operateur: 'somme', science: 'phasesLune', w: 0.4, motif: null }];
     for (const m of refus) assert.equal(T.certifierScience(avec(m), []).ok, false, JSON.stringify(m));
+    /* game131 : croise avec une science, oui ; avec un motif mathematique, non (croise = deux systemes au meme instant) */
+    assert.ok(T.certifierScience(avec({ operateur: 'croise', science: 'cordeVibrante', w: 0.3 }), []).ok);
+    assert.ok(T.certifierScience(avec({ operateur: 'somme', motif: M.motifDefaut('julia'), w: 0.3 }), []).ok, 'temoin : le meme motif en somme passe');
+    assert.equal(T.certifierScience(avec({ operateur: 'croise', motif: M.motifDefaut('julia'), w: 0.3 }), []).ok, false);
     /* un systeme a plusieurs corps ne PORTE pas de melange non plus */
     assert.equal(T.certifierScience({ ...T.paramsScience('troisCorps', {}), melange: { operateur: 'somme', science: 'phasesLune', w: 0.4 } }, []).ok, false);
   });
-  for (const op of ['somme', 'composition']) for (const [sid, w] of [['phasesLune', 0.1], ['courseRoulante', 0.6], ['dureeJour', 0.35]]) ok(`vue ${op} avec ${sid} (w = ${w}) : egale la reference`, () => {
+  for (const op of ['somme', 'composition', 'croise']) for (const [sid, w] of [['phasesLune', 0.1], ['courseRoulante', 0.6], ['dureeJour', 0.35]]) ok(`vue ${op} avec ${sid} (w = ${w}) : egale la reference`, () => {
     const A = T.vuePartenaire(PORTEUR, N), B = T.vuePartenaire(sid, N), out = new Float64Array(3 * N);
     for (let i = 0; i < N; i++) {
       if (op === 'somme') for (let c = 0; c < 3; c++) out[3 * i + c] = (1 - w) * A[3 * i + c] + w * B[3 * i + c];
+      else if (op === 'croise') { out[3 * i] = A[3 * i]; out[3 * i + 1] = B[3 * i]; out[3 * i + 2] = (1 - w) * A[3 * i + 2] + w * B[3 * i + 2]; }
       else { const x = (A[3 * i] + 1) * 0.5 * 97, j = Math.min(N - 1, Math.floor((x - Math.floor(x)) * N)); out[3 * i] = B[3 * j]; out[3 * i + 1] = B[3 * j + 1]; out[3 * i + 2] = (1 - w) * B[3 * j + 2] + w * A[3 * i + 2]; }
     }
     const ref = normaliserRef(out), v = T.vueMelangee(Float64Array.from(A), N, { operateur: op, science: sid, w });
@@ -139,6 +144,8 @@ const MUTANTS = [
   ['partenaires : corps inclus', 'filter((id) => !CORPS[id] && !NON_MINTABLES.has(id))', 'filter((id) => !NON_MINTABLES.has(id))'],
   ['validation : poids non borne', "if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');\n      if (!PARTENAIRES", "if (!(typeof m.w === 'number')) return non('melange : poids');\n      if (!PARTENAIRES"],
   ['cerveau : jamais de partenaire science', 'else P.melange = { operateur, science: autres[k - MOTIFS_MELANGE.length], w };', 'else { const [f, v] = MOTIFS_MELANGE[0]; P.melange = { operateur, motif: motifDefaut(f, v), w }; }'],
+  ['croise : y = y du partenaire au lieu de son x', 'out[3 * i + 1] = B[3 * i]; out[3 * i + 2] = (1 - w)', 'out[3 * i + 1] = B[3 * i + 1]; out[3 * i + 2] = (1 - w)'],
+  ['croise : accepte avec un motif', "    if (m.operateur !== 'somme' && m.operateur !== 'composition') return non('melange : operateur');\n    if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');\n    const ok = MOTIFS", "    if (m.operateur !== 'somme' && m.operateur !== 'composition' && m.operateur !== 'croise') return non('melange : operateur');\n    if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');\n    const ok = MOTIFS"],
   ['reglages partenaire : defauts acceptes en params', "  if (canon(params) === canon(s.params)) return 'reglages du partenaire = ses defauts (omettre params)';\n", ''],
   ['reglages partenaire : hors bornes acceptes', "  if (canon(o.params) !== canon(params)) return 'reglages du partenaire hors bornes (le module les ramene)';\n", ''],
   ['reglages partenaire : garde de cout sautee', "  if (id === 'fusionTrousNoirs' && !(coutFusion(params) >= FUSION_PRODUIT_MIN)) return 'partner too costly to certify here';\n", ''],

@@ -156,7 +156,8 @@ function validerInterne(P, sortie) {
     if (cles === 'operateur,science,w' || cles === 'operateur,params,science,w') {
       /* game128 : le partenaire est une science, a ses reglages par defaut ; game130 : ou a des reglages DONNES (params), complets et deja
        *   bornes par son module, jamais egaux aux defauts (sinon deux JSON pour la meme oeuvre), et soumis aux MEMES gardes de cout */
-      if (m.operateur !== 'somme' && m.operateur !== 'composition') return non('melange : operateur');
+      /* game131 : + croise (un systeme CONTRE l autre), reserve aux partenaires science */
+      if (m.operateur !== 'somme' && m.operateur !== 'composition' && m.operateur !== 'croise') return non('melange : operateur');
       if (!(typeof m.w === 'number' && m.w >= BORNES.w[0] && m.w <= BORNES.w[1])) return non('melange : poids');
       if (!PARTENAIRES.includes(m.science) || m.science === P.science) return non('melange : science partenaire');
       if (m.params !== undefined) { const r = reglagesPartenaireValides(m.science, m.params); if (r) return non('melange : ' + r); }
@@ -304,6 +305,8 @@ function genererDepuis(P, oPre) {
 /* ---------- game128 : science x science ----------
  * Le partenaire d un melange peut etre une autre science (a ses reglages par defaut), plus seulement un motif fractal.
  *   somme       : (1 - w) A + w B, point a point (les deux vues normalisees, memes n)
+ *   croise      : (game131) A CONTRE B — x = x_A, y = x_B (le premier axe de chacun, au meme instant i), z = (1 - w) z_A + w z_B ;
+ *                 deux systemes rythmes ensemble dessinent une figure de Lissajous ; l ordre reste le temps des deux.
  *   composition : A PILOTE B — le point i prend le point de B d indice floor(u_i n), u_i = frac(97 (x_A + 1) / 2) (comme les motifs),
  *                 et z = (1 - w) z_B + w z_A ; un nuage (l ordre des points n est plus le temps).
  * Exclus : les systemes a plusieurs corps (dessines seuls) et les non-mintables (trop chers a certifier). */
@@ -342,6 +345,7 @@ export function vueMelangee(proj, n, m) {
   const B = vuePartenaire(m.science, n, m.params || null), out = new Float64Array(n * 3), w = m.w;
   if (!B) return Float64Array.from(proj);
   if (m.operateur === 'somme') for (let i = 0; i < 3 * n; i++) out[i] = (1 - w) * proj[i] + w * B[i];
+  else if (m.operateur === 'croise') for (let i = 0; i < n; i++) { out[3 * i] = proj[3 * i]; out[3 * i + 1] = B[3 * i]; out[3 * i + 2] = (1 - w) * proj[3 * i + 2] + w * B[3 * i + 2]; }
   else for (let i = 0; i < n; i++) { const x = (proj[3 * i] + 1) * 0.5 * 97, u = x - Math.floor(x), j = Math.min(n - 1, Math.floor(u * n)); out[3 * i] = B[3 * j]; out[3 * i + 1] = B[3 * j + 1]; out[3 * i + 2] = (1 - w) * B[3 * j + 2] + w * proj[3 * i + 2]; }
   return normaliser3(out);
 }
@@ -389,7 +393,8 @@ export function choisirScience({ graine, etatCerveau = null, existantes = [], mi
     if (!CORPS[id] && alea() < 1 / 3) {
       /* game128 : le partenaire est un motif OU une autre science (meme tirage : un indice dans motifs + sciences, la science elle-meme exclue) */
       const autres = PARTENAIRES.filter((x) => x !== id), k = Math.floor(alea() * (MOTIFS_MELANGE.length + autres.length)) % (MOTIFS_MELANGE.length + autres.length);
-      const operateur = alea() < 0.5 ? 'somme' : 'composition', w = Math.round((BORNES.w[0] + alea() * (BORNES.w[1] - BORNES.w[0])) * 1e6) / 1e6;
+      /* game131 : avec une science partenaire, trois operateurs (croise compris) ; avec un motif, les deux d avant */
+      const u = alea(), operateur = k >= MOTIFS_MELANGE.length ? (u < 1 / 3 ? 'somme' : u < 2 / 3 ? 'composition' : 'croise') : u < 0.5 ? 'somme' : 'composition', w = Math.round((BORNES.w[0] + alea() * (BORNES.w[1] - BORNES.w[0])) * 1e6) / 1e6;
       if (k < MOTIFS_MELANGE.length) { const [f, v] = MOTIFS_MELANGE[k]; P.melange = { operateur, motif: motifDefaut(f, v), w }; }
       else P.melange = { operateur, science: autres[k - MOTIFS_MELANGE.length], w };
     }
