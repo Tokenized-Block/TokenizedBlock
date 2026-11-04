@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game140 */
+  maillons: 'chain of links', chainette: 'continuous catenary', parabole: 'parabola of the same length', descentes: 'descent steps', forceRestante: 'largest force left',
   /* game138 */
   verlet: 'exact period of the Verlet scheme',
   /* game136 */
@@ -401,6 +403,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game140 */
+  formeMaillons: 'Joints found vs the exact chain (worst gap)', pentesEgales: 'Even step between link slopes (fitted)', flecheChaine: 'Sag at the middle', limiteContinue: 'Sag: links, catenary, parabola', recherche: 'Energy descent',
   /* game139 */
   periodeIsochrone: 'Period of the ball released highest (timed)', etaleBilles: 'Spread of the periods of all the balls (over 4 pi)', arriveeEnBas: 'Time to reach the bottom vs pi (worst gap)', cercleTemoin: 'Witness: period on a circle released as high',
   /* game138 */

@@ -520,7 +520,69 @@ function tautochrone(P, n) {
     cercleTemoin: { mesure: cercle.periode, formule: cercleF, note: 'witness: a pendulum on a circle of radius 4 (same curvature at the bottom), released from the same height, same integrator: its period grows, 4 pi / AGM(1, cos(alpha0 / 2))' } } };
 }
 
+// ---------- 15 : la chainette (une chaine de maillons pendue) ----------
+// N maillons rigides de longueur l, un poids egal a chaque joint, accroches en (-1, 0) et (1, 0) ; longueur totale = rapport x portee.
+// Mesure : la forme est CHERCHEE en descendant l energie potentielle (somme des hauteurs des joints) le long des contraintes de longueur :
+//   pas de gradient projete sur l espace tangent (multiplicateurs par un systeme tridiagonal), puis correction de Newton qui remet chaque
+//   maillon a sa longueur ; pas adaptatif (accepte si l energie baisse). Aucune forme supposee : depart en V.
+// Exact (derive ici) : la tension horizontale H est la meme partout et chaque joint ajoute le meme poids w a la tension verticale, donc
+//   les pentes des maillons sont en progression ARITHMETIQUE : tan phi_i = c (i - (N + 1) / 2), c = w / H, c fixe par sum l cos phi_i = 2.
+//   Quand N grandit la chaine tend vers la chainette y = a cosh(x / a) - a cosh(1 / a), 2 a sinh(1 / a) = longueur (pas la parabole).
+// Dessin : les maillons trouves (0) et la chainette continue (1), x et y a la meme echelle.
+function chainette(P, n) {
+  const N = P.maillons, Lt = 2 * P.rapport, l = Lt / N, M = N - 1;
+  /* depart en V (milieu horizontal si N impair), deja a la bonne longueur */
+  const x = new Float64Array(N + 1), y = new Float64Array(N + 1), h = Math.floor(N / 2);
+  { const ca = N % 2 ? (2 / l - 1) / (N - 1) : 2 / (N * l), sa = Math.sqrt(1 - ca * ca); x[0] = -1;
+    for (let i = 1; i <= N; i++) { const s = i <= h ? -1 : i > N - h ? 1 : 0; x[i] = x[i - 1] + (s ? l * ca : l); y[i] = y[i - 1] + s * l * sa; } x[N] = 1; y[N] = 0; }
+  const dx = new Float64Array(N + 1), dy = new Float64Array(N + 1), a = new Float64Array(N + 1), b = new Float64Array(N + 1), r = new Float64Array(N + 1), mu = new Float64Array(N + 1);
+  const liens = () => { for (let i = 1; i <= N; i++) { dx[i] = x[i] - x[i - 1]; dy[i] = y[i] - y[i - 1]; } };
+  /* (J J^T) mu = r, tridiagonale : diag 4 |d_i|^2 (x 2 si les deux bouts bougent), hors diag -4 d_i . d_(i+1) */
+  const resoudre = () => { for (let i = 1; i <= N; i++) { a[i] = 4 * (dx[i] * dx[i] + dy[i] * dy[i]) * ((i > 1) + (i < N)); b[i] = i < N ? -4 * (dx[i] * dx[i + 1] + dy[i] * dy[i + 1]) : 0; }
+    const c = new Float64Array(N + 1), e = new Float64Array(N + 1); for (let i = 1; i <= N; i++) { const m = a[i] - (i > 1 ? b[i - 1] * c[i - 1] : 0); c[i] = b[i] / m; e[i] = (r[i] - (i > 1 ? b[i - 1] * e[i - 1] : 0)) / m; }
+    for (let i = N; i >= 1; i--) mu[i] = e[i] - (i < N ? c[i] * mu[i + 1] : 0); };
+  /* J^T mu sur le joint j (1..N-1) : 2 d_j mu_j - 2 d_(j+1) mu_(j+1) */
+  const corriger = () => { for (let k = 0; k < 30; k++) { liens(); let pire = 0; for (let i = 1; i <= N; i++) { r[i] = dx[i] * dx[i] + dy[i] * dy[i] - l * l; pire = Math.max(pire, Math.abs(r[i])); } if (pire < 1e-15) return true; resoudre();
+    for (let j = 1; j < N; j++) { x[j] -= 2 * (dx[j] * mu[j] - dx[j + 1] * mu[j + 1]); y[j] -= 2 * (dy[j] * mu[j] - dy[j + 1] * mu[j + 1]); } } return false; };
+  const energie = () => { let s = 0; for (let j = 1; j < N; j++) s += y[j]; return s; };
+  const gx = new Float64Array(N + 1), gy = new Float64Array(N + 1), sx = new Float64Array(N + 1), sy = new Float64Array(N + 1);
+  let pas = 0.1 * l, U = energie(), iter = 0, gNorme = Infinity;
+  for (; iter < 200000; iter++) {
+    liens(); for (let i = 1; i <= N; i++) r[i] = 2 * dy[i] * ((i < N) - (i > 1)); resoudre();
+    gNorme = 0; for (let j = 1; j < N; j++) { gx[j] = -2 * (dx[j] * mu[j] - dx[j + 1] * mu[j + 1]); gy[j] = 1 - 2 * (dy[j] * mu[j] - dy[j + 1] * mu[j + 1]); gNorme = Math.max(gNorme, Math.abs(gx[j]), Math.abs(gy[j])); }
+    if (gNorme < 1e-13) break;
+    sx.set(x); sy.set(y); for (let j = 1; j < N; j++) { x[j] -= pas * gx[j]; y[j] -= pas * gy[j]; }
+    if (corriger() && energie() < U) { U = energie(); pas *= 1.3; } else { x.set(sx); y.set(sy); pas /= 2; if (pas < 1e-18) break; }
+  }
+  /* exact discret : c par dichotomie sur sum cos phi_i = 2 / l */
+  const kk = (i) => i - (N + 1) / 2, somme = (c) => { let s = 0; for (let i = 1; i <= N; i++) s += 1 / Math.sqrt(1 + c * c * kk(i) * kk(i)); return s; };
+  let lo = 0, hi = 1; while (somme(hi) > 2 / l) hi *= 2; for (let k = 0; k < 200; k++) { const m = (lo + hi) / 2; if (somme(m) > 2 / l) lo = m; else hi = m; }
+  const c = (lo + hi) / 2, ex = [-1], ey = [0]; for (let i = 1; i <= N; i++) { const q = 1 / Math.sqrt(1 + c * c * kk(i) * kk(i)); ex.push(ex[i - 1] + l * q); ey.push(ey[i - 1] + l * c * kk(i) * q); }
+  let pire = 0; for (let j = 0; j <= N; j++) pire = Math.max(pire, Math.abs(x[j] - ex[j]), Math.abs(y[j] - ey[j]));
+  /* pente des maillons trouves contre leur rang (moindres carres) */
+  liens(); let s1 = 0, s2 = 0; for (let i = 1; i <= N; i++) { s1 += kk(i) * dy[i] / dx[i]; s2 += kk(i) * kk(i); }
+  const fleche = N % 2 ? -(y[h] + y[h + 1]) / 2 : -y[h], flecheEx = N % 2 ? -(ey[h] + ey[h + 1]) / 2 : -ey[h];
+  /* chainette continue : 2 a sinh(1 / a) = Lt par dichotomie sur u = 1 / a (sinh u / u croissant) */
+  const sh = (u) => (expD(u) - expD(-u)) / 2, ch = (u) => (expD(u) + expD(-u)) / 2;
+  let ul = 1e-9, uh = 1; while (sh(uh) / uh < Lt / 2) uh *= 2; for (let k = 0; k < 200; k++) { const m = (ul + uh) / 2; if (sh(m) / m < Lt / 2) ul = m; else uh = m; }
+  const A = 2 / (ul + uh), flecheCont = A * ch(1 / A) - A;
+  /* temoin : la parabole y = k (x^2 - 1) de meme longueur, sqrt(1 + 4 k^2) + asinh(2 k) / (2 k) = longueur (k par dichotomie) */
+  const longParab = (k) => Math.sqrt(1 + 4 * k * k) + lnD(2 * k + Math.sqrt(4 * k * k + 1)) / (2 * k);
+  let kl = 1e-9, kh = 1; while (longParab(kh) < Lt) kh *= 2; for (let k = 0; k < 200; k++) { const m = (kl + kh) / 2; if (longParab(m) < Lt) kl = m; else kh = m; }
+  const flecheParab = (kl + kh) / 2;
+  const brut = new Float64Array(n * 3), moitie = Math.floor(n / 2);
+  for (let q = 0; q < moitie; q++) { const s = moitie <= 1 ? 0 : q * N / (moitie - 1), i = Math.min(N - 1, Math.floor(s)), f = s - i, o = 3 * q; brut[o] = x[i] + f * (x[i + 1] - x[i]); brut[o + 1] = y[i] + f * (y[i + 1] - y[i]); brut[o + 2] = 0; }
+  for (let q = 0; q < n - moitie; q++) { const m = n - moitie, X = m <= 1 ? 0 : -1 + 2 * q / (m - 1), o = 3 * (moitie + q); brut[o] = X; brut[o + 1] = A * ch(X / A) - A * ch(1 / A); brut[o + 2] = 1; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (portee 2)', invariants: {
+    formeMaillons: { mesure: pire, formule: 0, note: 'worst gap between each joint found by lowering the energy and the exact chain whose link slopes step evenly, tan phi_i = c (i - (N + 1) / 2)' },
+    pentesEgales: { mesure: s1 / s2, formule: c, note: 'step c between the slopes of neighbouring links, fitted on the links found, against the c that makes the links span 2' },
+    flecheChaine: { mesure: fleche, formule: flecheEx, note: 'sag at the middle of the chain found, against the exact chain of N links' },
+    limiteContinue: { maillons: fleche, chainette: flecheCont, parabole: flecheParab, note: 'sag of the chain of links against the continuous catenary a cosh(x / a) of the same length (closer as links are added), and against a parabola of the same length (the witness)' },
+    recherche: { descentes: iter, forceRestante: gNorme, note: 'steps of the energy descent and the largest force left along the chain at the end' } } };
+}
+
 export const COLONNES = Object.freeze({
+  chainette: { colonnes: ['x (the chain hangs from -1 to 1)', 'height y', 'curve (0 = links found, 1 = continuous catenary)'], memeLongueur: [[0, 1]], autres: [2] },
   tautochrone: { colonnes: ['time t', 'distance s along the curve from the bottom', 'ball (label, 1 = released lowest)'], memeLongueur: [], autres: [0, 1, 2] },
   billardPi: { colonnes: ['sqrt(M) times the big block\'s speed', 'sqrt(m) times the small block\'s speed', 'collision number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   modesNormaux: { colonnes: ['mass number along the chain (0 and N + 1 are the fixed ends)', 'displacement', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -580,9 +642,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'tautochrone', nom: 'The cycloid where every ball arrives together (tautochrone)', science: 'Classical mechanics', D: 3, nuage: true, params: { billes: 5, lacherHaut: 150 },
     bornes: { billes: [2, 8], lacherHaut: [30, 170] },
     phrase: 'A visualisation of balls let go together from different heights on an upside-down cycloid, with nothing but the equation of motion on that curve. Low or high, every ball reaches the bottom at the same moment, t = pi, and swings with the same period 4 pi (Huygens): along the curve the motion is exactly harmonic. A pendulum on a circle of the same bottom curvature, released as high, is timed beside it and falls behind.' },
+  { id: 'chainette', nom: 'A hanging chain (the catenary)', science: 'Classical mechanics', D: 3, nuage: true, params: { maillons: 12, rapport: 1.4 },
+    bornes: { maillons: [4, 30], rapport: [1.05, 2] },
+    phrase: 'A visualisation of a chain of rigid links hanging from two hooks. Its shape is not assumed: it is searched by letting the chain lower its weight as far as the links allow. Found that way, the slopes of the links step up evenly from one link to the next, because each joint adds the same weight to the pull; with more links the chain closes in on the catenary a cosh(x / a), drawn beside it, not on a parabola.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

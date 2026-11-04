@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -216,6 +216,30 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(pire < 1e-8 && vus.size === Bn, 'courbes ' + pire + ', billes vues ' + vus.size);
     return 'periode ' + I.periodeIsochrone.mesure.toFixed(10) + ', cercle ' + (I.cercleTemoin.mesure / (4 * Math.PI)).toFixed(4) + ' x 4 pi, ecart aux courbes ' + pire.toExponential(1);
   });
+  /* game140 : chainette — references INDEPENDANTES : la chaine exacte refaite ici par les ANGLES phi_i = Math.atan(c k_i), c par Newton
+   *   (pas la dichotomie du module) ; chaque point dessine des maillons contre le point de meme abscisse curviligne sur cette chaine ; la
+   *   chainette par Math.cosh / Math.sinh ; la parabole temoin par Math.asinh */
+  if (vise('chainette')) for (const p of [...extremes(sys('chainette')), { maillons: 7, rapport: 1.5 }, { maillons: 25, rapport: 2 }]) ok(`chainette ${JSON.stringify(p)} : joints trouves = chaine exacte, pentes en pas egaux, chainette continue (pas la parabole)`, () => {
+    const R = S('chainette', p), I = R.invariants, b = R.brut, N = R.params.maillons, Lt = 2 * R.params.rapport, l = Lt / N, k = (i) => i - (N + 1) / 2;
+    let c = 0.5; for (let it = 0; it < 100; it++) { let f = -2 / l, df = 0; for (let i = 1; i <= N; i++) { const q = 1 + c * c * k(i) * k(i); f += 1 / Math.sqrt(q); df -= c * k(i) * k(i) / q ** 1.5; } c -= f / df; } c = Math.abs(c); /* Newton peut tomber sur -c (la meme chaine retournee) */
+    const ex = [-1], ey = [0]; for (let i = 1; i <= N; i++) { const ph = Math.atan(c * k(i)); ex.push(ex[i - 1] + l * Math.cos(ph)); ey.push(ey[i - 1] + l * Math.sin(ph)); }
+    assert.ok(Math.abs(ex[N] - 1) < 1e-12 && Math.abs(ey[N]) < 1e-12, 'chaine de reference fermee');
+    assert.ok(I.recherche.forceRestante < 1e-5 && I.formeMaillons.mesure < 2e-7, 'recherche ' + I.recherche.forceRestante + ' forme ' + I.formeMaillons.mesure);
+    assert.ok(Math.abs(I.pentesEgales.formule - c) < 1e-10 && Math.abs(I.pentesEgales.mesure / c - 1) < 1e-6, 'c ' + I.pentesEgales.mesure + ' ' + c);
+    const h = Math.floor(N / 2), fl = N % 2 ? -(ey[h] + ey[h + 1]) / 2 : -ey[h];
+    assert.ok(Math.abs(I.flecheChaine.formule - fl) < 1e-12 && Math.abs(I.flecheChaine.mesure - fl) < 2e-7, 'fleche ' + I.flecheChaine.mesure + ' ' + fl);
+    let u = 1; for (let it = 0; it < 100; it++) u -= (Math.sinh(u) / u - Lt / 2) / ((u * Math.cosh(u) - Math.sinh(u)) / (u * u)); const A = 1 / u;
+    let kp = 0.5; for (let it = 0; it < 200; it++) { const g = (q) => Math.sqrt(1 + 4 * q * q) + Math.asinh(2 * q) / (2 * q) - Lt; kp -= g(kp) / ((g(kp + 1e-7) - g(kp - 1e-7)) / 2e-7); }
+    assert.ok(Math.abs(I.limiteContinue.chainette - (A * Math.cosh(1 / A) - A)) < 1e-10 && Math.abs(I.limiteContinue.parabole - kp) < 1e-8, 'limites ' + I.limiteContinue.chainette + ' ' + I.limiteContinue.parabole + ' ' + kp);
+    /* temoin : la parabole de meme longueur pend PLUS bas que la chainette ; avec beaucoup de maillons la chaine choisit la chainette */
+    assert.ok(I.limiteContinue.parabole > I.limiteContinue.chainette + 1e-4, 'parabole plus basse');
+    if (N >= 20) assert.ok(Math.abs(I.limiteContinue.maillons - I.limiteContinue.chainette) < Math.abs(I.limiteContinue.maillons - I.limiteContinue.parabole) / 3, 'plus pres de la chainette');
+    const moitie = Math.floor(R.n / 2); let pire = 0, pireC = 0;
+    for (let q = 0; q < R.n; q++) { const o = 3 * q; if (b[o + 2] === 0) { const s = moitie <= 1 ? 0 : q * N / (moitie - 1), i = Math.min(N - 1, Math.floor(s)), f = s - i; pire = Math.max(pire, Math.abs(b[o] - (ex[i] + f * (ex[i + 1] - ex[i]))), Math.abs(b[o + 1] - (ey[i] + f * (ey[i + 1] - ey[i])))); }
+      else pireC = Math.max(pireC, Math.abs(b[o + 1] - A * (Math.cosh(b[o] / A) - Math.cosh(1 / A)))); }
+    assert.ok(pire < 3e-7 && pireC < 1e-10, 'dessin ' + pire + ' ' + pireC);
+    return 'forme ' + I.formeMaillons.mesure.toExponential(1) + ', ' + I.recherche.descentes + ' pas ; fleche ' + fl.toFixed(5) + ' / chainette ' + I.limiteContinue.chainette.toFixed(5) + ' / parabole ' + kp.toFixed(5);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -287,6 +311,16 @@ const MUTANTS = [
   ['tauto : arrivee au 2e passage', 'return { arrivee: zeros[0],', 'return { arrivee: zeros[1],'],
   ['tauto : hauteurs sur B + 1', 'const th0 = haut * i / B;', 'const th0 = haut * i / (B + 1);'],
   ['tauto : etiquettes decalees', 'brut[o + 2] = c + 1; }', 'brut[o + 2] = c + 2; }'],
+  ['chaine : diagonale de J J^T toujours x 2', '* ((i > 1) + (i < N)); b[i]', '* 2; b[i]'],
+  ['chaine : premier joint 10 % plus lourd', 'gy[j] = 1 - 2 * (dy[j] * mu[j]', 'gy[j] = (j === 1 ? 1.1 : 1) - 2 * (dy[j] * mu[j]'],
+  ['chaine : dichotomie de c a l envers', 'if (somme(m) > 2 / l) lo = m; else hi = m;', 'if (somme(m) > 2 / l) hi = m; else lo = m;'],
+  ['chaine : rangs centres sur N / 2', 'const kk = (i) => i - (N + 1) / 2,', 'const kk = (i) => i - N / 2,'],
+  ['chaine : chainette dessinee decalee', 'brut[o + 1] = A * ch(X / A) - A * ch(1 / A);', 'brut[o + 1] = A * ch(X / A) - A * ch(1.01 / A);'],
+  ['chaine : longueur de la parabole avec 4 k', 'lnD(2 * k + Math.sqrt(4 * k * k + 1)) / (2 * k);', 'lnD(2 * k + Math.sqrt(4 * k * k + 1)) / (4 * k);'],
+  ['chaine : descente arretee trop tot', 'if (gNorme < 1e-13) break;', 'if (gNorme < 1e-2) break;'],
+  /* (retire : « fleche du milieu impair sur un seul joint » — EQUIVALENT : N impair, le maillon du milieu est horizontal, y[h] = y[h + 1]) */
+  ['chaine : fleche paire lue un joint trop tot', 'const fleche = N % 2 ? -(y[h] + y[h + 1]) / 2 : -y[h],', 'const fleche = N % 2 ? -(y[h] + y[h + 1]) / 2 : -y[h - 1],'],
+  ['chaine : pente lue sur l au lieu de dx', 's1 += kk(i) * dy[i] / dx[i];', 's1 += kk(i) * dy[i] / l;'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -300,7 +334,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

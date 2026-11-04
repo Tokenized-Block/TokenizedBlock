@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game140 */
+  chainette: {
+    titre: 'A hanging chain (the catenary)',
+    enUnePhrase: 'A chain of rigid links hanging from two hooks, its shape found by letting it sink as low as the links allow, drawn beside the continuous catenary.',
+    colonnes: ['x (the chain hangs from -1 to 1)', 'height y', 'curve (0 = links found, 1 = continuous catenary)'],
+    aRegarder: ['The links are steepest at the hooks and flat in the middle: from one link to the next the slope changes by the same step.', 'Add links and the chain closes in on the smooth catenary a cosh(x / a), not on a parabola of the same length.', 'Make the chain longer than the span: it sags deeper, and the catenary and the parabola drift further apart.'],
+    fin: null,
+  },
   /* game139 */
   tautochrone: {
     titre: 'The cycloid where every ball arrives together (tautochrone)',
