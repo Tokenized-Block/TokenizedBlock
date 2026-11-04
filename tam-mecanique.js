@@ -619,7 +619,49 @@ function echelleGlisse(P, n) {
     murTenu: { mesure: mini, formule: fm, note: 'witness: if the top were held on the wall all the way down, the smallest wall force read the same way, against (3/4) sin theta (3 cos theta - 2 cos theta0) at its minimum: negative, a pull the wall cannot give' } } };
 }
 
+// ---------- 17 : la perle sur un cerceau qui tourne ----------
+// Une perle glisse sur un cerceau vertical de rayon R qui tourne autour de son axe vertical a la vitesse omega ; g = R = 1 (omega en
+//   unites de sqrt(g / R)). Angle theta depuis le bas : theta'' = sin theta (omega^2 cos theta - 1) - gamma theta' (gamma = frottement,
+//   curseur). K vitesses de 0 a omegaMax (curseurs) ; pour chacune la perle part de theta = +-0.4 et est integree en RK4 (pas 0.05 ; l equilibre est un point fixe exact du schema, le pas ne le deplace pas)
+//   jusqu a l arret.
+// Mesure : l angle ou la perle S ARRETE, lu a la fin de la simulation. Les vitesses a moins de 0.05 du seuil (|omega^2 - 1| < 0.05) se
+//   posent trop lentement (ralentissement critique) : elles sont dessinees mais pas comptees, et leur nombre est donne.
+// Exact (derive ici) : equilibres sin theta = 0 ou cos theta = 1 / omega^2. Sous omega = 1 le fond est le seul stable ; au-dessus il
+//   devient instable et la perle monte a theta = acos(1 / omega^2), d un cote ou de l autre (bifurcation en fourche).
+// Dessin : theta(t) pour chaque vitesse, en 3-D (omega, theta, t) : les trajectoires se posent sur la fourche.
+const PE_H = 0.05;
+function perleCerceau(P, n) {
+  const K = P.vitesses, W = P.omegaMax, g = P.frottement, res = [];
+  for (let k = 1; k <= K; k++) {
+    const w = W * k / K, w2 = w * w, acc = (q, v) => sinD(q) * (w2 * cosD(q) - 1) - g * v;
+    let q = k % 2 ? 0.4 : -0.4, v = 0, t = 0; const traj = [[0, q]];
+    /* plafond 40000 pas (t = 2000) : seules les vitesses pres du seuil, non comptees, l atteignent */
+    let pose = false;
+    for (let i = 1; i <= 40000; i++) {
+      const k1 = acc(q, v), k2 = acc(q + PE_H / 2 * v, v + PE_H / 2 * k1), k3 = acc(q + PE_H / 2 * (v + PE_H / 2 * k1), v + PE_H / 2 * k2), k4 = acc(q + PE_H * (v + PE_H / 2 * k2), v + PE_H * k3);
+      q += PE_H * (v + PE_H / 6 * (k1 + k2 + k3)); v += PE_H / 6 * (k1 + 2 * k2 + 2 * k3 + k4); t = i * PE_H;
+      if (i % 10 === 0 && t <= 60) traj.push([t, q]);
+      if (Math.abs(v) < 1e-11 && Math.abs(acc(q, 0)) < 1e-11) { pose = true; break; }
+    }
+    res.push({ w, q, t, traj, pose, compte: Math.abs(w2 - 1) >= 0.05 });
+  }
+  let pireHaut = 0, pireBas = 0, nHaut = 0, nBas = 0, sx = 0, sy = 0, sxx = 0, sxy = 0, m = 0;
+  for (const r of res) { if (!r.compte) continue;
+    if (r.w > 1) { const ex = acosD(1 / (r.w * r.w)); pireHaut = Math.max(pireHaut, Math.abs(Math.abs(r.q) - ex)); nHaut++; const X = 1 / (r.w * r.w), Y = cosD(r.q); sx += X; sy += Y; sxx += X * X; sxy += X * Y; m++; }
+    else { pireBas = Math.max(pireBas, Math.abs(r.q)); nBas++; } }
+  const pente = m > 1 ? (m * sxy - sx * sy) / (m * sxx - sx * sx) : NaN;
+  const brut = new Float64Array(n * 3), par = Math.floor(n / K);
+  for (let c = 0; c < K; c++) { const tr = res[c].traj, mm = c + 1 < K ? par : n - par * (K - 1);
+    for (let p = 0; p < mm; p++) { const j = mm <= 1 ? 0 : Math.round(p * (tr.length - 1) / (mm - 1)), o = 3 * (c * par + p); brut[o] = res[c].w; brut[o + 1] = tr[j][1]; brut[o + 2] = tr[j][0]; } }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (g = R = 1)', invariants: {
+    angleMonte: { mesure: pireHaut, formule: 0, note: 'above the threshold: worst gap between the angle where the bead came to rest and acos(1 / omega^2) (radians)' },
+    fondStable: { mesure: pireBas, formule: 0, note: 'below the threshold: largest angle where the bead came to rest (the bottom is the only stable place)' },
+    penteCosinus: { mesure: pente, formule: 1, note: 'slope of cos(rest angle) against 1 / omega^2 over the spins above the threshold: g / R = 1' },
+    vitessesComptees: { auDessus: nHaut, auDessous: nBas, presDuSeuil: res.length - nHaut - nBas, nonPosees: res.filter((r) => r.compte && !r.pose).length, note: 'spins counted above and below the threshold, and those within 0.05 of it in omega^2, drawn but not counted (they settle too slowly) ; counted spins that did not come to rest within t = 2000 (should be 0)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  perleCerceau: { colonnes: ['spin omega (units of sqrt(g / R))', 'angle theta of the bead from the bottom (radians)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   echelleGlisse: { colonnes: ['x (the wall is x = 0)', 'height y (the floor is y = 0)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   chainette: { colonnes: ['x (the chain hangs from -1 to 1)', 'height y', 'curve (0 = links found, 1 = continuous catenary)'], memeLongueur: [[0, 1]], autres: [2] },
   tautochrone: { colonnes: ['time t', 'distance s along the curve from the bottom', 'ball (label, 1 = released lowest)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -687,9 +729,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'echelleGlisse', nom: 'A ladder sliding down a wall', science: 'Classical mechanics', D: 3, nuage: true, params: { depart: 20, images: 8 },
     bornes: { depart: [5, 80], images: [4, 20] },
     phrase: 'A visualisation of a ladder let go against a smooth wall on a smooth floor, drawn at several instants. The push of the wall is read from the motion itself, as the acceleration of the middle of the ladder: it fades, and when it reaches zero the top leaves the wall, always at two thirds of its starting height, whatever the starting angle. Held on the wall any longer, the wall would have to pull.' },
+  { id: 'perleCerceau', nom: 'A bead on a spinning hoop (a pitchfork)', science: 'Classical mechanics', D: 3, nuage: true, params: { omegaMax: 2.5, frottement: 0.3, vitesses: 24 },
+    bornes: { omegaMax: [1.3, 4], frottement: [0.1, 1], vitesses: [10, 40] },
+    phrase: 'A visualisation of a bead sliding on a hoop that spins about its vertical axis, run at many spins and left to settle with a little friction. Spun slowly, the bead always comes back to the bottom. Past one critical spin the bottom stops being stable and the bead climbs, to one side or the other, to the angle where cos theta = g / (omega^2 R): one path splits into two, a pitchfork, and the rest angles found match it.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

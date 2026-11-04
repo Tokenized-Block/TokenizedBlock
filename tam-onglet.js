@@ -170,7 +170,7 @@ const CURSEURS_SANS_FORME = {
 const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
 const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
 /* les parametres des modules nommes en francais -> l ecran ; les symboles (L, M, omega, a...) restent des symboles */
-const NOMS_PARAMS_SYS = { 'echelleGlisse.depart': 'starting angle from the wall (degrees)', 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
+const NOMS_PARAMS_SYS = { 'perleCerceau.frottement': 'friction (damping gamma)', 'echelleGlisse.depart': 'starting angle from the wall (degrees)', 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
   'binaireFusion.distance': 'luminosity distance (Mpc)', 'fusionTrousNoirs.distance': 'luminosity distance (Mpc)',
   /* game133 */
   'corpsNoir.courbes': 'temperatures drawn', 'corpsNoir.rapport': 'hottest over coolest temperature',
@@ -184,7 +184,7 @@ const NOMS_PARAMS_EN = { annees: 'years', atomes: 'atoms', champ: 'field', cote:
   jusqua: 'up to', largeur: 'width', longueur: 'length', longueursOnde: 'wavelengths', masse: 'mass', masseEjecta: 'ejecta mass',
   masseTrouNoir: 'black-hole mass', modes: 'modes', monde: 'world', nombre: 'count', orbite: 'orbit', paires: 'pairs', particules: 'particles',
   pas: 'steps', periode: 'period', periodes: 'periods', poussee: 'thrust', premiere: 'first', profondeur: 'depth', puissance: 'power',
-  rapport: 'ratio', courbes: 'curves', fentes: 'slits', demiVie: 'half-life T (steps)', couplage: 'spring coupling k', lacherHaut: 'highest release angle (degrees)', maillons: 'links', depart: 'start of the second pendulum (x2 / x1)', lambda: 'wavelength (nm)', rayonLentille: 'lens radius of curvature R (m)', ecartAir: 'air gap at the centre (nm)', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
+  rapport: 'ratio', courbes: 'curves', fentes: 'slits', demiVie: 'half-life T (steps)', couplage: 'spring coupling k', lacherHaut: 'highest release angle (degrees)', maillons: 'links', omegaMax: 'fastest spin (units of sqrt(g / R))', vitesses: 'spins tried', depart: 'start of the second pendulum (x2 / x1)', lambda: 'wavelength (nm)', rayonLentille: 'lens radius of curvature R (m)', ecartAir: 'air gap at the centre (nm)', rapportMasses: 'mass ratio', temps: 'time', tempsMa: 'time (Myr)', termesLeibniz: 'Leibniz terms', termesMachin: 'Machin terms',
   tours: 'turns', traversees: 'crossings', uniforme: 'uniform', vitesse: 'speed', viriel: 'virial ratio', ageUnivers: 'age of the universe',
   aCible: 'target orbit (AU)', finGa: 'end (Gyr)', log10Masse: 'log10 mass', Mbulbe: 'bulge mass', Mdisque: 'disk mass', cmb: 'CMB frame',
   fDepart: 'start frequency', vJumeau: 'twin speed', perturbation: 'perturbation', amplitude: 'amplitude', distance: 'distance', zoom: 'zoom',

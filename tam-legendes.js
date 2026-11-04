@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game142 */
+  perleCerceau: {
+    titre: 'A bead on a spinning hoop (a pitchfork)',
+    enUnePhrase: 'How a bead on a spinning hoop moves and where it comes to rest, run at many spins, drawn as spin, angle and time.',
+    colonnes: ['spin omega (units of sqrt(g / R))', 'angle theta of the bead from the bottom (radians)', 'time t'],
+    aRegarder: ['At slow spins every path dies out at angle zero: the bead returns to the bottom.', 'Past the critical spin the paths settle away from zero, half on one side and half on the other: one rest place has split into two.', 'The rest angle follows cos theta = 1 / omega^2 exactly; more friction only makes the bead settle sooner, not elsewhere.'],
+    fin: null,
+  },
   /* game141 */
   echelleGlisse: {
     titre: 'A ladder sliding down a wall',

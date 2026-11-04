@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game142 */
+  auDessus: 'spins above the threshold', auDessous: 'spins below the threshold', presDuSeuil: 'spins too close to the threshold (not counted)', nonPosees: 'counted spins that did not settle',
   /* game140 */
   maillons: 'chain of links', chainette: 'continuous catenary', parabole: 'parabola of the same length', descentes: 'descent steps', forceRestante: 'largest force left',
   /* game138 */
@@ -403,6 +405,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game142 */
+  angleMonte: 'Rest angle above the threshold vs acos(1 / omega^2) (worst gap)', fondStable: 'Rest angle below the threshold (the bottom)', penteCosinus: 'Slope of cos(rest angle) against 1 / omega^2', vitessesComptees: 'Spins counted',
   /* game141 */
   hauteurDecollage: 'Height where the top leaves the wall (share of the start)', tempsDecollage: 'Time until the top leaves the wall', murTenu: 'Witness: smallest wall force if the top were held (a pull)',
   /* game140 */

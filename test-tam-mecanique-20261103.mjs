@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -257,6 +257,24 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(pireL < 1e-12 && pireT < 2e-5 && tMax <= I.tempsDecollage.mesure + 1e-3, 'dessin ' + pireL + ' ' + pireT + ' ' + tMax);
     return 'hauteur ' + I.hauteurDecollage.mesure.toFixed(8) + ', temps ' + I.tempsDecollage.mesure.toFixed(6) + ' / ' + tRef.toFixed(6) + ', mur tenu ' + I.murTenu.mesure.toFixed(4) + ', trace ' + pireT.toExponential(1);
   });
+  /* game142 : perle — references INDEPENDANTES : le classement des vitesses refait ici (omega_k = W k / K) ; trois trajectoires dessinees
+   *   rejouees ici en RK4 a pas 10 fois plus fin avec Math.sin / Math.cos (ecart attendu ~ h^4) ; la fourche par Math.acos dans les invariants */
+  if (vise('perleCerceau')) for (const p of [...extremes(sys('perleCerceau')), { omegaMax: 3, frottement: 0.5, vitesses: 17 }]) ok(`perleCerceau ${JSON.stringify(p)} : repos au fond sous le seuil, a acos(1 / omega^2) au-dessus, trajectoires rejouees`, () => {
+    const R = S('perleCerceau', p), I = R.invariants, b = R.brut, K = R.params.vitesses, W = R.params.omegaMax, g = R.params.frottement;
+    let haut = 0, bas = 0, pres = 0; for (let k = 1; k <= K; k++) { const w2 = (W * k / K) ** 2; if (Math.abs(w2 - 1) < 0.05) pres++; else if (w2 > 1) haut++; else bas++; }
+    const V = I.vitessesComptees; assert.ok(V.auDessus === haut && V.auDessous === bas && V.presDuSeuil === pres && V.nonPosees === 0, 'comptes ' + JSON.stringify(V) + ' ' + haut + '/' + bas + '/' + pres);
+    assert.ok(I.angleMonte.mesure < 1e-9 && I.fondStable.mesure < 1e-9, 'repos ' + I.angleMonte.mesure + ' ' + I.fondStable.mesure);
+    if (haut > 1) assert.ok(Math.abs(I.penteCosinus.mesure - 1) < 1e-8, 'pente ' + I.penteCosinus.mesure);
+    const par = Math.floor(R.n / K); let pire = 0;
+    for (const c of [0, Math.floor(K / 2), K - 1]) { const w = W * (c + 1) / K, a = (q, v) => Math.sin(q) * (w * w * Math.cos(q) - 1) - g * v, h = 0.005, mm = c + 1 < K ? par : R.n - par * (K - 1);
+      assert.ok(Math.abs(b[3 * c * par] - w) < 1e-12, 'etiquette omega');
+      const pts = new Map(); for (let p2 = 0; p2 < mm; p2++) { const o = 3 * (c * par + p2); pts.set(Math.round(b[o + 2] / h), b[o + 1]); }
+      let q = (c + 1) % 2 ? 0.4 : -0.4, v = 0; const fin = Math.max(...pts.keys());
+      for (let i = 0; i <= fin; i++) { if (pts.has(i)) pire = Math.max(pire, Math.abs(pts.get(i) - q));
+        const k1 = a(q, v), k2 = a(q + h / 2 * v, v + h / 2 * k1), k3 = a(q + h / 2 * (v + h / 2 * k1), v + h / 2 * k2), k4 = a(q + h * (v + h / 2 * k2), v + h * k3); q += h * (v + h / 6 * (k1 + k2 + k3)); v += h / 6 * (k1 + 2 * k2 + 2 * k3 + k4); } }
+    assert.ok(pire < 2e-4, 'trajectoires ' + pire);
+    return haut + ' au-dessus, ' + bas + ' au-dessous, ' + pres + ' pres du seuil ; repos ' + Math.max(I.angleMonte.mesure, I.fondStable.mesure).toExponential(1) + ', trajectoires ' + pire.toExponential(1);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -347,6 +365,14 @@ const MUTANTS = [
   ['echelle : poussee exacte avec 2.02 cos theta0', '(3 * cosD(a) - 2 * c0)', '(3 * cosD(a) - 2.02 * c0)'],
   ['echelle : trace du milieu sur 2.02', 'brut[o + 1] = cosD(th[j]) / 2;', 'brut[o + 1] = cosD(th[j]) / 2.02;'],
   ['echelle : images au-dela du decollage', 'Math.floor(tDec / EC_H)', 'Math.floor(1.2 * tDec / EC_H)'],
+  ['perle : seuil a 1.01', 'sinD(q) * (w2 * cosD(q) - 1) - g * v', 'sinD(q) * (w2 * cosD(q) - 1.01) - g * v'],
+  ['perle : fourche en acos(1 / omega)', 'acosD(1 / (r.w * r.w))', 'acosD(1 / r.w)'],
+  ['perle : arret au millieme', 'if (Math.abs(v) < 1e-11 && Math.abs(acc(q, 0)) < 1e-11)', 'if (Math.abs(v) < 1e-3 && Math.abs(acc(q, 0)) < 1e-3)'],
+  ['perle : seuil d exclusion a 0.005', 'compte: Math.abs(w2 - 1) >= 0.05', 'compte: Math.abs(w2 - 1) >= 0.005'],
+  ['perle : cosinus ajuste a 1.01', 'const X = 1 / (r.w * r.w), Y = cosD(r.q);', 'const X = 1 / (r.w * r.w), Y = cosD(r.q) * 1.01;'],
+  ['perle : temps dessine 1 % trop long', 'brut[o + 2] = tr[j][0]; } }', 'brut[o + 2] = tr[j][0] * 1.01; } }'],
+  ['perle : vitesses sur K + 1', 'const w = W * k / K, w2 = w * w', 'const w = W * k / (K + 1), w2 = w * w'],
+  ['perle : frottement oublie', '- 1) - g * v;', '- 1) - 0 * v;'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -360,7 +386,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);
