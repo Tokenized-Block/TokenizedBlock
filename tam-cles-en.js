@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game145 */
+  mathieu: 'Mathieu guess 3 a / 4', partMax: 'largest share moved into the swing', temoin: 'same for the witness at rho = 2.5', duree: 'length of the run',
   /* game144 */
   approxRapide: 'fast-top guess (approximation)', ecartHauteur: 'change of height of the axis', vitesse: 'turning rate', omegaLent: 'exact slow steady rate', spinConserve: 'drift of the spin',
   /* game143 */
@@ -409,6 +411,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game145 */
+  periodeRebond: 'Bounce period (no sideways push)', traceFloquet: 'Floquet trace of one bounce (|tr| > 2: the swing grows)', tauxBalancement: 'Growth rate of the swing', partBalancement: 'Energy moved into the swing',
   /* game144 */
   periodeNutation: 'Time of one dip of the axis (nutation)', angleBas: 'Lowest angle of the axis (degrees)', precessionNutation: 'Turn around the vertical per dip (radians)', stationnaire: 'Witness: steady precession',
   /* game143 */

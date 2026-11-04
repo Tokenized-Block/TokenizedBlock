@@ -272,6 +272,8 @@ export const ECHELLE_PROPRE = {
   desintegration: [0, 1, 2],
   /* game137 : x et y en mm (meme grandeur) ; intensite (autre grandeur) */
   anneauxNewton: [2],
+  /* game145 : x et y de meme nature ; temps */
+  penduleRessort: [2],
   /* game144 : angle, inclinaison, temps (3 grandeurs) */
   toupie: [0, 1, 2],
   /* game142 : vitesse, angle, temps (3 grandeurs) */

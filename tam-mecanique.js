@@ -760,7 +760,54 @@ function toupie(P, n) {
     stationnaire: { ecartHauteur: zMax - zMin, vitesse: pf / (N * TP_H), omegaLent: Om, spinConserve: pireL3, note: 'witness: launched in steady precession at the exact slow rate, the axis keeps its height (range of n_z) and turns at that rate ; and the spin L . n / (I3 omega3) kept along the free run' } } };
 }
 
+// ---------- 20 : le pendule a ressort (resonance 2 : 1) ----------
+// Une masse au bout d un ressort, pivot fixe, g = 1, longueur d equilibre 1 : balancement omega_p = 1, rebond omega_s = rho (curseur),
+//   raideur k = rho^2, longueur a vide 1 - 1 / k. Lachee etiree de a (curseur) a la verticale, poussee de cote de 1e-6 seulement.
+//   Rien que x'' = -k (r - l0) x / r, y'' = -k (r - l0) y / r - 1, en RK4 (pas = periode du rebond / 200).
+// Mesures : (1) sans poussee de cote le rebond est exactement harmonique : periode chronometree contre 2 pi / rho ; (2) tant que |x| <= 1e-4 (game145, MESURE : jusqu a 0.01
+//   le balancement deformait deja le rebond, tr faux de 1.3e-4 et le taux de 2.6 % ; a a = 0.005 l instabilite passait pour stable),
+//   x echantillonne a chaque periode du rebond verifie s(n+1) + s(n-1) = tr s(n) (Cayley-Hamilton, le Wronskien de l equation de Hill
+//   vaut 1) : tr est AJUSTE par moindres carres, juste quel que soit le melange des deux modes ; (3) la part de l energie passee au
+//   balancement (x'^2 + x^2) / (k a^2), au plus haut. Temoin : le meme pendule a rho = 2.5 (hors de la langue d instabilite).
+// Exact (derive ici) : x lineaire suit l equation de Hill x'' + k (1 - l0 / (1 + a cos rho t)) x = 0 ; sa trace de Floquet est calculee
+//   A PART (matrice de la periode, RK4 dix fois plus fin) : |tr| > 2 = le balancement s emballe (resonance pres de rho = 2), taux
+//   acosh(|tr| / 2) / P ; |tr| < 2 = stable. Approximation de Mathieu a rho = 2 : taux ~ 3 a / 4.
+// Dessin : la trajectoire de la masse (x, y, temps) : le rebond se change en balancement, et retour.
+function penduleRessort(P, n) {
+  const rho = P.rapport, a = P.rebond, k = rho * rho, l0 = 1 - 1 / k, Pe = 2 * PI / rho, h = Pe / 200;
+  const acc = (s) => { const r = Math.sqrt(s[0] * s[0] + s[1] * s[1]), f = -k * (r - l0) / r; return [s[2], s[3], f * s[0], f * s[1] - 1]; };
+  const pas = (s, H) => { const k1 = acc(s), k2 = acc(s.map((x, i) => x + H / 2 * k1[i])), k3 = acc(s.map((x, i) => x + H / 2 * k2[i])), k4 = acc(s.map((x, i) => x + H * k3[i])); return s.map((x, i) => x + H / 6 * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i])); };
+  /* exact : trace de Floquet de l equation de Hill, une periode */
+  const acoshD = (x) => lnD(x + Math.sqrt(x * x - 1));
+  const hill = (r2, ll, aa, pp) => { const H = pp / 4000, w = 2 * PI / pp, c = (t) => -r2 * (1 - ll / (1 + aa * cosD(w * t))); let A = [1, 0], Bv = [0, 1];
+    const st = (u, t) => { const f = (tt, z) => [z[1], c(tt) * z[0]], k1 = f(t, u), k2 = f(t + H / 2, [u[0] + H / 2 * k1[0], u[1] + H / 2 * k1[1]]), k3 = f(t + H / 2, [u[0] + H / 2 * k2[0], u[1] + H / 2 * k2[1]]), k4 = f(t + H, [u[0] + H * k3[0], u[1] + H * k3[1]]); return [u[0] + H / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]), u[1] + H / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1])]; };
+    for (let i = 0; i < 4000; i++) { A = st(A, i * H); Bv = st(Bv, i * H); } return A[0] + Bv[1]; };
+  const trEx = hill(k, l0, a, Pe), tauxEx = Math.abs(trEx) > 2 ? acoshD(Math.abs(trEx) / 2) / Pe : 0;
+  /* duree : si instable, le temps de passer de 1e-6 a toute l energie (x 1.6) ; sinon assez de periodes pour ajuster tr */
+  const duree = tauxEx > 0 ? Math.min(1500, 1.6 * lnD(a / 1e-6) / tauxEx) : 100 * Pe;
+  /* (1) rebond seul */
+  let s = [0, -(1 + a), 0, 0]; const zs = [];
+  for (let i = 1, M = Math.ceil(20 * Pe / h); i <= M; i++) { const u = pas(s, h); if ((s[1] + 1 > 0) !== (u[1] + 1 > 0)) zs.push((i - 1) * h + h * (s[1] + 1) / (s[1] - u[1])); s = u; }
+  const perRebond = zs.length > 2 ? 2 * (zs[zs.length - 1] - zs[0]) / (zs.length - 1) : NaN;
+  /* (2) et (3) course principale */
+  const course = (rr) => { const kk = rr * rr, ll = 1 - 1 / kk, hh = 2 * PI / rr / 200, NN = Math.ceil(duree / hh);
+    const ac = (q) => { const r = Math.sqrt(q[0] * q[0] + q[1] * q[1]), f = -kk * (r - ll) / r; return [q[2], q[3], f * q[0], f * q[1] - 1]; };
+    let q = [1e-6, -Math.sqrt((1 + a) ** 2 - 1e-12), 0, 0], part = 0, sTr = 0, sNn = 0; const strobe = [q[0]], tr = [[q[0], q[1], 0]];
+    for (let i = 1; i <= NN; i++) { const k1 = ac(q), k2 = ac(q.map((x, j) => x + hh / 2 * k1[j])), k3 = ac(q.map((x, j) => x + hh / 2 * k2[j])), k4 = ac(q.map((x, j) => x + hh * k3[j])); q = q.map((x, j) => x + hh / 6 * (k1[j] + 2 * k2[j] + 2 * k3[j] + k4[j]));
+      part = Math.max(part, (q[2] * q[2] + q[0] * q[0]) / (kk * a * a)); if (i % 200 === 0) strobe.push(q[0]); if (i % 25 === 0) tr.push([q[0], q[1], i * hh]); }
+    for (let j = 1; j + 1 < strobe.length; j++) { if (Math.max(Math.abs(strobe[j - 1]), Math.abs(strobe[j]), Math.abs(strobe[j + 1])) > 1e-4) break; sTr += strobe[j] * (strobe[j + 1] + strobe[j - 1]); sNn += strobe[j] * strobe[j]; }
+    return { part, trM: sNn > 0 ? sTr / sNn : NaN, tr }; };
+  const R = course(rho), W = course(2.5);
+  const brut = new Float64Array(n * 3); for (let q = 0; q < n; q++) { const j = n <= 1 ? 0 : Math.round(q * (R.tr.length - 1) / (n - 1)), o = 3 * q; brut[o] = R.tr[j][0]; brut[o + 1] = R.tr[j][1]; brut[o + 2] = R.tr[j][2]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (g = 1, longueur d equilibre 1)', invariants: {
+    periodeRebond: { mesure: perRebond, formule: 2 * PI / rho, note: 'bounce period with no sideways push, timed on the crossings of the rest length, against 2 pi / rho' },
+    traceFloquet: { mesure: R.trM, formule: trEx, note: 'fitted from the sideways position sampled once per bounce, s(n+1) + s(n-1) = tr s(n), against the trace of the one-bounce map of the Hill equation computed apart: |tr| > 2 means the swing grows' },
+    tauxBalancement: { mesure: Math.abs(R.trM) > 2 ? acoshD(Math.abs(R.trM) / 2) / Pe : 0, formule: tauxEx, mathieu: 0.75 * a, note: 'growth rate of the swing, acosh(|tr| / 2) / period (0 when stable) ; beside it the Mathieu guess 3 a / 4 at rho = 2' },
+    partBalancement: { partMax: R.part, temoin: W.part, duree, note: 'largest share of the energy moved into the swing over the run, and the same for the witness spring at rho = 2.5' } } };
+}
+
 export const COLONNES = Object.freeze({
+  penduleRessort: { colonnes: ['x (sideways)', 'height y (the pivot is at 0)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   toupie: { colonnes: ['angle turned around the vertical phi (radians)', 'tilt of the axis theta (degrees)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   dzhanibekov: { colonnes: ['spin about axis 1 (least inertia)', 'spin about axis 2 (the middle one)', 'spin about axis 3 (most inertia)'], memeLongueur: [[0, 1, 2]], autres: [] },
   perleCerceau: { colonnes: ['spin omega (units of sqrt(g / R))', 'angle theta of the bead from the bottom (radians)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -840,9 +887,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'toupie', nom: 'A spinning top (nutation and precession)', science: 'Classical mechanics', D: 3, nuage: true, params: { rotation: 6, angleAxe: 40 },
     bornes: { rotation: [3, 20], angleAxe: [10, 80] },
     phrase: 'A visualisation of a spinning top let go with its axis tilted: the tip of the axis dips, comes back up and creeps around the vertical, tracing cusped loops. Only the spin and the pull of gravity are simulated; the time of each dip, how low the axis gets and how far it turns each time match the exact solution of Lagrange. Launched instead at the exact steady rate, the same top turns smoothly without dipping.' },
+  { id: 'penduleRessort', nom: 'A pendulum on a spring (the 2 : 1 resonance)', science: 'Classical mechanics', D: 3, nuage: true, params: { rapport: 2, rebond: 0.03 },
+    bornes: { rapport: [1.5, 3], rebond: [0.015, 0.05] },
+    phrase: 'A visualisation of a weight on a spring, let go stretched straight down with the faintest push sideways. When the spring bounces exactly twice for each swing, the bounce feeds the swing: the push grows until the weight swings instead of bouncing, then gives it back. How fast it grows is measured from the motion and matches the exact Floquet growth of the swing; tuned away from 2 : 1, the same push dies out.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'], toupie: [] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov, toupie };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'], toupie: [], penduleRessort: [] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov, toupie, penduleRessort };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

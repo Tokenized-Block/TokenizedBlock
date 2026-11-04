@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game145 */
+  penduleRessort: {
+    titre: 'A pendulum on a spring (the 2 : 1 resonance)',
+    enUnePhrase: 'Where a weight on a spring goes when it is let go stretched straight down, with the faintest push sideways.',
+    colonnes: ['x (sideways)', 'height y (the pivot is at 0)', 'time t'],
+    aRegarder: ['At first the weight only bounces up and down: the sideways push is a millionth of the bounce.', 'When the bounce is exactly twice as fast as the swing, the push grows every bounce until the weight swings instead of bouncing, then hands the energy back.', 'Move the ratio away from 2 (try 2.5): the push never grows and the weight bounces for ever.'],
+    fin: null,
+  },
   /* game144 */
   toupie: {
     titre: 'A spinning top (nutation and precession)',

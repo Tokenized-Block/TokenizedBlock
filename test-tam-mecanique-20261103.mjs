@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov', 'toupie'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov', 'toupie', 'penduleRessort'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -311,6 +311,22 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(pireS <= 0 && pireC < 1e-7, 'dessin ' + pireS + ' ' + pireC);
     return 'periode ' + I.periodeNutation.mesure.toFixed(7) + ' / ' + T.toFixed(7) + ', bas ' + I.angleBas.mesure.toFixed(4) + ' deg, precession ' + I.precessionNutation.mesure.toFixed(6) + ' (rapide ' + I.precessionNutation.approxRapide.toFixed(6) + ')';
   });
+  /* game145 : pendule a ressort — references INDEPENDANTES : la trace de Floquet refaite ici par la methode du POINT MILIEU (pas RK4),
+   *   20000 pas, Math.cos ; le taux par Math.acosh ; periode du rebond contre 2 Math.PI / rho */
+  if (vise('penduleRessort')) for (const p of [...extremes(sys('penduleRessort')), { rapport: 2.02, rebond: 0.04 }, { rapport: 2.5 }]) ok(`penduleRessort ${JSON.stringify(p)} : rebond harmonique, trace de Floquet ajustee, taux, transfert 2:1 et temoin`, () => {
+    const R = S('penduleRessort', p), I = R.invariants, b = R.brut, rho = R.params.rapport, a = R.params.rebond, k = rho * rho, l0 = 1 - 1 / k, Pe = 2 * Math.PI / rho;
+    const M = 20000, H = Pe / M, c = (t) => -k * (1 - l0 / (1 + a * Math.cos(rho * t))); let u = [1, 0], v = [0, 1];
+    const mil = (z, t) => { const zm = [z[0] + H / 2 * z[1], z[1] + H / 2 * c(t) * z[0]]; return [z[0] + H * zm[1], z[1] + H * c(t + H / 2) * zm[0]]; };
+    for (let i = 0; i < M; i++) { u = mil(u, i * H); v = mil(v, i * H); } const tr = u[0] + v[1], taux = Math.abs(tr) > 2 ? Math.acosh(Math.abs(tr) / 2) / Pe : 0;
+    assert.ok(Math.abs(I.periodeRebond.mesure / Pe - 1) < 1e-7 && /* erreur de phase du RK4 a 200 pas par periode : 8e-9 mesure */ Math.abs(I.periodeRebond.formule - Pe) < 1e-14, 'rebond ' + I.periodeRebond.mesure);
+    assert.ok(Math.abs(I.traceFloquet.formule - tr) < 1e-6 && Math.abs(I.traceFloquet.mesure - tr) < 1e-5, 'trace ' + I.traceFloquet.mesure + ' ' + I.traceFloquet.formule + ' ' + tr);
+    assert.ok(Math.abs(I.tauxBalancement.formule - taux) < 1e-5 && Math.abs(I.tauxBalancement.mesure - taux) < 2e-5, 'taux ' + I.tauxBalancement.mesure + ' ' + taux);
+    const Pb = I.partBalancement; assert.ok(Pb.temoin < 1e-6, 'temoin ' + Pb.temoin);
+    if (taux > 0.015) assert.ok(Pb.partMax > 0.7, 'transfert ' + Pb.partMax); if (taux === 0) assert.ok(Pb.partMax < 1e-6, 'stable ' + Pb.partMax);
+    let tMax = 0, pire = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q; tMax = Math.max(tMax, b[o + 2]); pire = Math.max(pire, Math.hypot(b[o], b[o + 1]) - (1 + a) - 0.06); }
+    assert.ok(Math.abs(b[0] - 1e-6) < 1e-12 && Math.abs(b[1] + Math.sqrt((1 + a) ** 2 - 1e-12)) < 1e-12 && b[2] === 0 && tMax <= Pb.duree + 1e-9 && tMax > Pb.duree - 1 && pire <= 0, 'dessin ' + tMax + ' ' + Pb.duree + ' ' + pire);
+    return 'trace ' + I.traceFloquet.mesure.toFixed(7) + ' / ' + tr.toFixed(7) + ', taux ' + I.tauxBalancement.mesure.toExponential(4) + ', transfert ' + Pb.partMax.toPrecision(3) + ', temoin ' + Pb.temoin.toExponential(1);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -429,6 +445,17 @@ const MUTANTS = [
    *   (les cuspides), l interpolation n y change rien) */
   ['toupie : phi non deroule', 'while (f - p0 > PI) f -= 2 * PI; while (f - p0 < -PI) f += 2 * PI; phi.push(f);', 'phi.push(f);'],
   ['toupie : temps dessine 1 % trop long', 'brut[o + 2] = tr[j][2]; brut[o] = tr[j][0];', 'brut[o + 2] = tr[j][2] * 1.01; brut[o] = tr[j][0];'],
+  ['ressort : longueur a vide 1 % trop longue', 'f = -kk * (r - ll) / r;', 'f = -kk * (r - 1.01 * ll) / r;'],
+  ['ressort : equation de Hill avec 1.1 a', '-r2 * (1 - ll / (1 + aa * cosD(w * t)))', '-r2 * (1 - ll / (1 + 1.1 * aa * cosD(w * t)))'],
+  ['ressort : trace avec le mauvais terme', 'return A[0] + Bv[1]; };', 'return A[0] + Bv[0]; };'],
+  ['ressort : ajuste jusqu a |x| = 0.1', 'Math.abs(strobe[j + 1])) > 1e-4) break;', 'Math.abs(strobe[j + 1])) > 1e-1) break;'],
+  ['ressort : Cayley-Hamilton desequilibre', 'sTr += strobe[j] * (strobe[j + 1] + strobe[j - 1]);', 'sTr += strobe[j] * (strobe[j + 1] + 1.01 * strobe[j - 1]);'],
+  ['ressort : taux sur deux periodes', 'acoshD(Math.abs(R.trM) / 2) / Pe', 'acoshD(Math.abs(R.trM) / 2) / (2 * Pe)'],
+  /* (retire : « passage du rebond non interpole » — presque EQUIVALENT par construction : le pas vaut periode / 200, chaque passage tombe a la
+   *   meme fraction de pas et l erreur s annule entre le premier et le dernier) */
+  ['ressort : demi-periodes mal comptees', '2 * (zs[zs.length - 1] - zs[0]) / (zs.length - 1)', '2 * (zs[zs.length - 1] - zs[0]) / zs.length'],
+  ['ressort : temoin au meme rapport', 'W = course(2.5);', 'W = course(rho);'],
+  ['ressort : temps dessine 1 % trop long', 'tr.push([q[0], q[1], i * hh]);', 'tr.push([q[0], q[1], i * hh * 1.01]);'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -442,7 +469,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'], toupie: ['toupie'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'], toupie: ['toupie'], ressort: ['penduleRessort'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);
