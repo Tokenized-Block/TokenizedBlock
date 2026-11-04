@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game143 */
+  moment: 'squared angular momentum', axe1: 'about axis 1 (least inertia), in eps', axe3: 'about axis 3 (most inertia), in eps', retournements: 'turn-overs of the middle axis',
   /* game142 */
   auDessus: 'spins above the threshold', auDessous: 'spins below the threshold', presDuSeuil: 'spins too close to the threshold (not counted)', nonPosees: 'counted spins that did not settle',
   /* game140 */
@@ -405,6 +407,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game143 */
+  retournement: 'Time between two turn-overs vs the Jacobi solution', tauxEcart: 'Growth rate of a tiny wobble', conservation: 'Drift of energy and angular momentum', axesStables: 'Witness: wobble about the stable axes',
   /* game142 */
   angleMonte: 'Rest angle above the threshold vs acos(1 / omega^2) (worst gap)', fondStable: 'Rest angle below the threshold (the bottom)', penteCosinus: 'Slope of cos(rest angle) against 1 / omega^2', vitessesComptees: 'Spins counted',
   /* game141 */

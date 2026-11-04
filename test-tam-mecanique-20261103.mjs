@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -275,6 +275,23 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(pire < 2e-4, 'trajectoires ' + pire);
     return haut + ' au-dessus, ' + bas + ' au-dessous, ' + pres + ' pres du seuil ; repos ' + Math.max(I.angleMonte.mesure, I.fondStable.mesure).toExponential(1) + ', trajectoires ' + pire.toExponential(1);
   });
+  /* game143 : Dzhanibekov — references INDEPENDANTES : K(k) refait ici (AGM ecrite a part, Math.sqrt), la distance a la separatrice
+   *   par les composantes ; chaque point dessine de la grande boucle garde E et L^2 (Math) ; le retournement doit se VOIR (w2 de +1 a -1) */
+  if (vise('dzhanibekov')) for (const p of [...extremes(sys('dzhanibekov')), { milieu: 2.2, ecartPuissance: 5 }]) ok(`dzhanibekov ${JSON.stringify(p)} : retournements au temps de Jacobi, ecart en e^(lambda t), axes 1 et 3 stables`, () => {
+    const R = S('dzhanibekov', p), I = R.invariants, b = R.brut, I2 = R.params.milieu, eps = 10 ** -R.params.ecartPuissance, J = [1, I2, 3], w0 = [eps, 1, eps];
+    const e = J.reduce((a, j, i) => a + j * w0[i] ** 2, 0), l = J.reduce((a, j, i) => a + (j * w0[i]) ** 2, 0), d2 = J.reduce((a, j, i) => a + j * (j - I2) * w0[i] ** 2, 0);
+    const s = d2 > 0 ? Math.sqrt((3 - I2) * (l - e) / (3 * I2)) : Math.sqrt((I2 - 1) * (3 * e - l) / (3 * I2)), kp2 = d2 > 0 ? 2 * d2 / ((3 - I2) * (l - e)) : -2 * d2 / ((I2 - 1) * (3 * e - l));
+    let a = 1, g = Math.sqrt(kp2); for (let i = 0; i < 80; i++) [a, g] = [(a + g) / 2, Math.sqrt(a * g)]; const demi = Math.PI / a / s, lam = Math.sqrt((I2 - 1) * (3 - I2) / 3);
+    assert.ok(Math.abs(I.retournement.formule / demi - 1) < 1e-10 && Math.abs(I.retournement.mesure / demi - 1) < 1e-4, 'retournement ' + I.retournement.mesure + ' ' + demi);
+    assert.ok(Math.abs(I.tauxEcart.formule - lam) < 1e-14 && Math.abs(I.tauxEcart.mesure / lam - 1) < 3e-4, 'taux ' + I.tauxEcart.mesure + ' ' + lam);
+    assert.ok(I.conservation.energie < 1e-11 && I.conservation.moment < 1e-11, 'conservation');
+    assert.ok(I.axesStables.axe1 < 10 && I.axesStables.axe3 < 10 && I.axesStables.retournements >= 3, 'axes ' + JSON.stringify(I.axesStables));
+    const nP = Math.floor(R.n * 2 / 3); let pireC = 0, w2min = 1, pireT = 0;
+    for (let q = 0; q < nP; q++) { const o = 3 * q, w = [b[o], b[o + 1], b[o + 2]]; pireC = Math.max(pireC, Math.abs(J.reduce((x, j, i) => x + j * w[i] ** 2, 0) / e - 1), Math.abs(J.reduce((x, j, i) => x + (j * w[i]) ** 2, 0) / l - 1)); w2min = Math.min(w2min, w[1]); }
+    for (let q = nP; q < R.n; q++) { const o = 3 * q, ax = q < nP + Math.floor((R.n - nP) / 2) ? 0 : 2; pireT = Math.max(pireT, Math.hypot(...[b[o], b[o + 1], b[o + 2]].filter((_, j) => j !== ax)) / eps); }
+    assert.ok(pireC < 1e-11 && w2min < -0.99 && pireT < 10, 'dessin ' + pireC + ' w2min ' + w2min + ' temoins ' + pireT);
+    return 'retournement ' + I.retournement.mesure.toFixed(4) + ' / ' + demi.toFixed(4) + ', taux ' + I.tauxEcart.mesure.toFixed(5) + ' / ' + lam.toFixed(5) + ', temoins ' + pireT.toFixed(2) + ' eps';
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -373,6 +390,15 @@ const MUTANTS = [
   ['perle : temps dessine 1 % trop long', 'brut[o + 2] = tr[j][0]; } }', 'brut[o + 2] = tr[j][0] * 1.01; } }'],
   ['perle : vitesses sur K + 1', 'const w = W * k / K, w2 = w * w', 'const w = W * k / (K + 1), w2 = w * w'],
   ['perle : frottement oublie', '- 1) - g * v;', '- 1) - 0 * v;'],
+  ['dzhan : equation d Euler 1 de signe inverse', '(I[1] - I[2]) * w[1] * w[2] / I[0]', '(I[2] - I[1]) * w[1] * w[2] / I[0]'],
+  ['dzhan : RK4 qui pese 2.01 le 2e etage', 'DZ_H / 6 * (a[i] + 2 * b[i] + 2 * c[i] + d[i])', 'DZ_H / 6 * (a[i] + 2.01 * b[i] + 2 * c[i] + d[i])'],
+  ['dzhan : module complementaire avec I3 - I2', '(I3 - I1) * d2 / ((I3 - I2) * (l - e * I1))', '(I3 - I2) * d2 / ((I3 - I2) * (l - e * I1))'],
+  ['dzhan : taux sur I1 I2', 'Math.sqrt((I2 - I1) * (I3 - I2) / (I1 * I3))', 'Math.sqrt((I2 - I1) * (I3 - I2) / (I1 * I2))'],
+  ['dzhan : demi-periode sur n zeros au lieu de n - 1', 'demi = (zeros[zeros.length - 1] - zeros[0]) / (zeros.length - 1);', 'demi = (zeros[zeros.length - 1] - zeros[0]) / zeros.length;'],
+  ['dzhan : taux lu jusqu a |w1| = 0.5', 'Math.abs(u[0]) <= 0.01 && zeros.length === 0', 'Math.abs(u[0]) <= 0.5 && zeros.length === 0'],
+  ['dzhan : w1 seconde decentree', 'const a2 = (u[0] - 2 * w[0] + avant) / (DZ_H * DZ_H); sAw += a2 * w[0];', 'const a2 = (u[0] - 2 * w[0] + avant) / (DZ_H * DZ_H); sAw += a2 * u[0];'],
+  ['dzhan : temoin 1 lance sur l axe du milieu', 'ax === 0 ? [1, eps, eps]', 'ax === 0 ? [eps, 1, eps]'],
+  ['dzhan : w3 dessine 1 % trop grand', 'brut[o + 2] = tr[j][2]; } };', 'brut[o + 2] = tr[j][2] * 1.01; } };'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -386,7 +412,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

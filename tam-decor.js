@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game143 ---------- */
+  dzhanibekov: (P, o, B) => [pt([0, 1, 0], C.repere, 'Spin about the middle axis (unstable)')],
   /* ---------- game142 ---------- */
   perleCerceau: (P, o, B) => [pt([1, 0, B.centre[2]], C.repere, 'Critical spin (omega = sqrt(g / R))')],
   /* ---------- game141 ---------- */

@@ -660,7 +660,62 @@ function perleCerceau(P, n) {
     vitessesComptees: { auDessus: nHaut, auDessous: nBas, presDuSeuil: res.length - nHaut - nBas, nonPosees: res.filter((r) => r.compte && !r.pose).length, note: 'spins counted above and below the threshold, and those within 0.05 of it in omega^2, drawn but not counted (they settle too slowly) ; counted spins that did not come to rest within t = 2000 (should be 0)' } } };
 }
 
+// ---------- 18 : l effet Dzhanibekov (la raquette qui se retourne) ----------
+// Un solide libre, moments d inertie I1 = 1 < I2 (curseur) < I3 = 3, lance autour de l axe du MILIEU : omega = (eps, 1, eps),
+//   eps = 10^-p (curseur, p de 4 a 6 : MESURE le 2026-11-04, a p = 9 la demi-periode sortait 63.5 au lieu de 75.4 — pres de la
+//   separatrice le temps depend de ln(distance), eps^2 = 1e-18 y est noye par la derive propre du RK4, ~4e-13 : c est le schema qui
+//   decidait du retournement, plus le lancer). Rien que les equations d Euler, I1 w1' = (I2 - I3) w2 w3 (et permutations), en RK4 (pas 0.005).
+// Mesures : (1) les passages par zero de w2 (le solide se RETOURNE) chronometres, demi-periode moyenne ; (2) au debut, tant que
+//   |w1| <= 0.01, le rapport w1'' / w1 (differences finies, moindres carres) : le CARRE du taux d ecartement — juste quel que soit le
+//   melange des deux modes e^(+-lambda t) (game143 : la pente de ln |w1| restait polluee par le mode qui decroit, 5e-3 a I2 = 1.3) ; (3) energie et moment cinetique conserves ;
+//   (4) temoins : lances pareil autour des axes 1 et 3, l ecart ne grandit pas.
+// Exact (derive ici, solution de Jacobi) : avec 2E = sum I w^2, L^2 = sum I^2 w^2, w2 suit un sn de Jacobi : demi-periode 2 K(k) / s,
+//   si L^2 > 2 E I2 : s = sqrt((I3 - I2)(L^2 - 2 E I1) / (I1 I2 I3)), k^2 = (I2 - I1)(2 E I3 - L^2) / ((I3 - I2)(L^2 - 2 E I1)) ; sinon
+//   les roles de I1 et I3 s echangent. K(k) = pi / (2 AGM(1, sqrt(1 - k^2))). Linearise pres de l axe 2 :
+//   lambda = w2 sqrt((I2 - I1)(I3 - I2) / (I1 I3)) ; pres des axes 1 et 3 la meme formule donne un carre negatif : oscillation, stable.
+// Dessin : le vecteur rotation dans le repere du solide (w1, w2, w3) sur une periode (il fait le tour de l axe du milieu en passant par
+//   les deux poles), puis les deux petites boucles stables autour des axes 1 et 3.
+const DZ_H = 0.005;
+function dzhanibekov(P, n) {
+  const I = [1, P.milieu, 3], eps = expD(-P.ecartPuissance * lnD(10));
+  const f = (w) => [(I[1] - I[2]) * w[1] * w[2] / I[0], (I[2] - I[0]) * w[2] * w[0] / I[1], (I[0] - I[1]) * w[0] * w[1] / I[2]];
+  const pas = (w) => { const a = f(w), b = f(w.map((x, i) => x + DZ_H / 2 * a[i])), c = f(w.map((x, i) => x + DZ_H / 2 * b[i])), d = f(w.map((x, i) => x + DZ_H * c[i])); return w.map((x, i) => x + DZ_H / 6 * (a[i] + 2 * b[i] + 2 * c[i] + d[i])); };
+  const E2 = (w) => I[0] * w[0] ** 2 + I[1] * w[1] ** 2 + I[2] * w[2] ** 2, L2 = (w) => (I[0] * w[0]) ** 2 + (I[1] * w[1]) ** 2 + (I[2] * w[2]) ** 2;
+  const w0 = [eps, 1, eps], e = E2(w0), l = L2(w0), [I1, I2, I3] = I;
+  /* game143 (eps = 1e-9 : 1 - k^2 ~ eps^2 se perdait dans la soustraction, K infini, boucle sans fin) : k'^2 = 1 - k^2 ecrit EXACTEMENT,
+   *   (I3 - I1)(L^2 - 2 E I2) / ((I3 - I2)(L^2 - 2 E I1)) [et symetrique], avec L^2 - 2 E I2 = sum I_i (I_i - I2) w_i^2, sans annulation */
+  const d2 = I1 * (I1 - I2) * w0[0] ** 2 + I3 * (I3 - I2) * w0[2] ** 2, haut = d2 > 0;
+  const s = haut ? Math.sqrt((I3 - I2) * (l - e * I1) / (I1 * I2 * I3)) : Math.sqrt((I2 - I1) * (e * I3 - l) / (I1 * I2 * I3));
+  const kp2 = haut ? (I3 - I1) * d2 / ((I3 - I2) * (l - e * I1)) : (I3 - I1) * -d2 / ((I2 - I1) * (e * I3 - l));
+  const demiEx = 2 * (PI / (2 * agm(1, Math.sqrt(kp2)))) / s, lam = Math.sqrt((I2 - I1) * (I3 - I2) / (I1 * I3));
+  if (!(demiEx > 0 && demiEx < 1e4)) throw new Error('dzhanibekov : demi-periode hors bornes ' + demiEx);
+  /* course principale : 3 demi-periodes et un peu */
+  let w = w0, t = 0, pire = { E: 0, L: 0 }, avant = NaN, sAw = 0, sWw = 0; const zeros = [], traj = [w0];
+  for (let i = 1, N = Math.ceil(3.3 * demiEx / DZ_H); i <= N; i++) {
+    const u = pas(w); t = i * DZ_H;
+    if ((w[1] > 0) !== (u[1] > 0)) zeros.push(t - DZ_H + DZ_H * w[1] / (w[1] - u[1]));
+    /* w1'' au point w (centre), tant que |w1| <= 0.01 : moindres carres de w1'' = lambda^2 w1 */
+    if (i >= 2 && Math.abs(u[0]) <= 0.01 && zeros.length === 0) { const a2 = (u[0] - 2 * w[0] + avant) / (DZ_H * DZ_H); sAw += a2 * w[0]; sWw += w[0] * w[0]; }
+    pire.E = Math.max(pire.E, Math.abs(E2(u) / e - 1)); pire.L = Math.max(pire.L, Math.abs(L2(u) / l - 1));
+    if (t <= 2 * demiEx) traj.push(u); avant = w[0]; w = u;
+  }
+  let demi = NaN; if (zeros.length > 1) demi = (zeros[zeros.length - 1] - zeros[0]) / (zeros.length - 1);
+  const pente = sWw > 0 && sAw > 0 ? Math.sqrt(sAw / sWw) : NaN;
+  /* temoins : autour des axes 1 et 3, meme ecart, meme duree que la course principale */
+  const temoin = (ax) => { let v = ax === 0 ? [1, eps, eps] : [eps, eps, 1], pireEcart = 0; const tr = [v];
+    for (let i = 1, N = Math.ceil(3.3 * demiEx / DZ_H); i <= N; i++) { v = pas(v); pireEcart = Math.max(pireEcart, Math.sqrt(v.reduce((a, x, j) => a + (j === ax ? 0 : x * x), 0)) / eps); if (i % 20 === 0 && tr.length < 400) tr.push(v); } return { pireEcart, tr }; };
+  const t1 = temoin(0), t3 = temoin(2);
+  const brut = new Float64Array(n * 3), nP = Math.floor(n * 2 / 3), nT = Math.floor((n - nP) / 2), poser = (tr, debut, m2) => { for (let q = 0; q < m2; q++) { const j = m2 <= 1 ? 0 : Math.round(q * (tr.length - 1) / (m2 - 1)), o = 3 * (debut + q); brut[o] = tr[j][0]; brut[o + 1] = tr[j][1]; brut[o + 2] = tr[j][2]; } };
+  poser(traj, 0, nP); poser(t1.tr, nP, nT); poser(t3.tr, nP + nT, n - nP - nT);
+  return { D: 3, brut, nuage: true, unite: 'sans objet (I1 = 1, I3 = 3)', invariants: {
+    retournement: { mesure: demi, formule: demiEx, note: 'mean time between two turn-overs (sign changes of w2, interpolated), against 2 K(k) / s from the Jacobi solution (K by the AGM)' },
+    tauxEcart: { mesure: pente, formule: lam, note: 'growth rate read at the start as sqrt(w1\'\' / w1) (finite differences, least squares while |w1| <= 0.01), against sqrt((I2 - I1)(I3 - I2) / (I1 I3)): how fast a tiny wobble grows' },
+    conservation: { energie: pire.E, moment: pire.L, note: 'largest relative drift of the energy and of the squared angular momentum along the run (RK4)' },
+    axesStables: { axe1: t1.pireEcart, axe3: t3.pireEcart, retournements: zeros.length, note: 'witness: thrown the same way about the axis of least and of greatest inertia, the largest wobble over the same time, in units of eps (stays small) ; and the turn-overs of the middle axis counted' } } };
+}
+
 export const COLONNES = Object.freeze({
+  dzhanibekov: { colonnes: ['spin about axis 1 (least inertia)', 'spin about axis 2 (the middle one)', 'spin about axis 3 (most inertia)'], memeLongueur: [[0, 1, 2]], autres: [] },
   perleCerceau: { colonnes: ['spin omega (units of sqrt(g / R))', 'angle theta of the bead from the bottom (radians)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   echelleGlisse: { colonnes: ['x (the wall is x = 0)', 'height y (the floor is y = 0)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   chainette: { colonnes: ['x (the chain hangs from -1 to 1)', 'height y', 'curve (0 = links found, 1 = continuous catenary)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -732,9 +787,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'perleCerceau', nom: 'A bead on a spinning hoop (a pitchfork)', science: 'Classical mechanics', D: 3, nuage: true, params: { omegaMax: 2.5, frottement: 0.3, vitesses: 24 },
     bornes: { omegaMax: [1.3, 4], frottement: [0.1, 1], vitesses: [10, 40] },
     phrase: 'A visualisation of a bead sliding on a hoop that spins about its vertical axis, run at many spins and left to settle with a little friction. Spun slowly, the bead always comes back to the bottom. Past one critical spin the bottom stops being stable and the bead climbs, to one side or the other, to the angle where cos theta = g / (omega^2 R): one path splits into two, a pitchfork, and the rest angles found match it.' },
+  { id: 'dzhanibekov', nom: 'The tumbling racket (Dzhanibekov effect)', science: 'Classical mechanics', D: 3, nuage: true, params: { milieu: 2, ecartPuissance: 6 },
+    bornes: { milieu: [1.3, 2.7], ecartPuissance: [4, 6] },
+    phrase: 'A visualisation of a free body spun about the middle of its three axes, with nothing but the equations of Euler. A wobble too small to see grows, and the body turns over, again and again, at the time given by the exact Jacobi solution. Spun about the axis of least or of greatest inertia, the same wobble stays tiny: those two spins are stable, the middle one is not. Drawn is the spin vector seen from the body.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

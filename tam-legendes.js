@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game143 */
+  dzhanibekov: {
+    titre: 'The tumbling racket (Dzhanibekov effect)',
+    enUnePhrase: 'The spin of a free body, seen from the body itself, thrown about the middle one of its three axes, then about the other two.',
+    colonnes: ['spin about axis 1 (least inertia)', 'spin about axis 2 (the middle one)', 'spin about axis 3 (most inertia)'],
+    aRegarder: ['The big loop is the middle-axis spin: it runs from one pole to the opposite one and back, the body turning over each time.', 'The two small loops are spins about the other two axes, thrown with the same tiny wobble: it never grows.', 'Make the wobble ten times smaller: the turn-over comes later, but only by a fixed step, the logarithm of the wobble.'],
+    fin: null,
+  },
   /* game142 */
   perleCerceau: {
     titre: 'A bead on a spinning hoop (a pitchfork)',
