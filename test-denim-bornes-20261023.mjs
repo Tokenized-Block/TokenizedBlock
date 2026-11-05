@@ -35,8 +35,10 @@ function noeud({ tete, pas, ms = false, basIllisible = false }) {
 
 /* 1. la mesure du serveur et la marge des scans (tranche executee) */
 const srcMesure = tranche(SRV, 'const ROLLS_MARGE_S', 'const horodatagesBlocsRolls');
-const monterMesure = (rpcServeur) => new Function('rpcServeur', 'process', 'blocsPour', 'sParBlocMesure', 'enteteVersMesure', 'RECUL_MESURE_BLOCS',
-  srcMesure + '\nreturn { margeBlocsRolls, sParBlocSrv, tempsDeBlocJson, tempsDeBlocSrv };')(rpcServeur, { env: { TB_SONDES: '0' } }, blocsPour, sParBlocMesure, enteteVersMesure, RECUL_MESURE_BLOCS);
+/* 2026-11-05 : margeBlocsRolls suit le temps SERVI (sParBlocServi, defini plus bas dans le serveur) : ici la mesure longue seule (pas de
+ *   mesure courte simulee) — le cas « courte plus rapide que la longue » est dans test-denim-serveur-20261105.mjs */
+const monterMesure = (rpcServeur) => { let m = null; m = new Function('rpcServeur', 'process', 'blocsPour', 'sParBlocMesure', 'enteteVersMesure', 'RECUL_MESURE_BLOCS', 'sParBlocServi',
+  srcMesure + '\nreturn { margeBlocsRolls, sParBlocSrv, tempsDeBlocJson, tempsDeBlocSrv };')(rpcServeur, { env: { TB_SONDES: '0' } }, blocsPour, sParBlocMesure, enteteVersMesure, RECUL_MESURE_BLOCS, () => m.tempsDeBlocSrv.sParBloc); return m; };
 {
   const m = monterMesure(noeud({ tete: 53000000, pas: 2 }).rpcServeur);
   vu(m.margeBlocsRolls() === 3, 'non mesure : marge 3 blocs (inchangee)');
@@ -111,7 +113,7 @@ vu(!/ROLLS_MARGE_BLOCS/.test(SRV_CODE) && (SRV.match(/const sur = tete - margeBl
 /* 2026-10-24 (revue v2 n°2) : /api/tirage sert le temps de bloc PRUDENT (longue + courte, tempsDeBlocServiJson = tempsDeBlocJson + sParBloc
  *   prudent) ; execute par test-temps-de-bloc-bascule-20261024.mjs */
 vu(/tempsDeBloc: tempsDeBlocServiJson\(\)/.test(tranche(SRV, 'function corpsTirage()', "/* ══ LE NIVEAU D UN WALLET")) && /return \{ \.\.\.tempsDeBlocJson\(\), sParBloc: sParBlocServi\(\),/.test(SRV), '/api/tirage sert tempsDeBloc (prudent)');
-vu(/fenetreBlocs: balaye, sParBloc: tempsDeBlocSrv\.sParBloc/.test(SRV), '/api/activite sert sParBloc');
+vu(/fenetreBlocs: balaye, sParBloc: sParBlocServi\(\)/.test(SRV), '/api/activite sert sParBloc (le temps SERVI, 2026-11-05)');
 vu(/premierBlocApres\(rpcServeur, [^\n]*\{ sParBloc: tempsDeBlocSrv\.sParBloc \?\? undefined \}\)/.test(SRV), 'bloc E : le temps mesure passe a la recherche');
 
 /* 4. l app : durees au temps mesure, rythme du Game derive de la fenetre */

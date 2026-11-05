@@ -3063,8 +3063,9 @@ async function lireActiviteServeur(token) {
       /* les pools de ce jeton que NOUS connaissons : le PoolManager v4, et sa pool Aerodrome mesuree s il en a une. Le client dit
        *   « bought » / « sold » par rapport a elles ; un mouvement qui ne touche aucune d elles reste « moved ». */
       const aero = POOLS_ACTIONS_AERODROME.get(token);
-      /* 2026-10-23 DENIM : sParBloc = temps de bloc MESURE (null si non mesure) — l app en tire « N min », jamais blocs * 2 */
-      const r = { ok: true, block: token, tete, fenetreBlocs: balaye, sParBloc: tempsDeBlocSrv.sParBloc, pools: [PM_V4.toLowerCase(), ...(aero ? [String(aero.pool).toLowerCase()] : [])],
+      /* 2026-10-23 DENIM : sParBloc = temps de bloc MESURE (null si non mesure) — l app en tire « N min », jamais blocs * 2.
+       *   2026-11-05 : le temps SERVI (sParBlocServi), pas la mesure longue seule (2 s gardees ~10 min apres la bascule) */
+      const r = { ok: true, block: token, tete, fenetreBlocs: balaye, sParBloc: sParBlocServi(), pools: [PM_V4.toLowerCase(), ...(aero ? [String(aero.pool).toLowerCase()] : [])],
         transactions: txs, lu: new Date().toISOString() };
       if (activitesServeur.size >= 200) activitesServeur.delete(activitesServeur.keys().next().value);
       activitesServeur.set(token, { t: Date.now(), r });
@@ -4940,7 +4941,10 @@ setInterval(() => { void crediterDetenteursSkins(); }, 600000).unref?.();
 /* ⛔ DENIM (2026-10-23) : la marge est une duree (un noeud en retard de quelques SECONDES), pas un nombre de blocs. 3 blocs = 6 s a 2 s/bloc,
  *   0,6 s a 200 ms. Elle vaut donc ROLLS_MARGE_S au temps de bloc mesure, jamais moins de 3 blocs (inchangee avant Denim). */
 const ROLLS_MARGE_S = 6;
-const margeBlocsRolls = () => Math.max(3, blocsPour(ROLLS_MARGE_S, tempsDeBlocSrv.sParBloc) ?? 3);
+/* ⛔ DENIM (2026-11-05) : au temps SERVI (sParBlocServi : la mesure courte l emporte des que les blocs accelerent), pas a la mesure longue
+ *   seule — relue toutes les 10 min, elle garderait 2 s (3 blocs = 0,6 s de marge) jusqu a ~10 min apres la bascule. Plus de blocs de
+ *   marge = plus prudent. sParBlocServi est une fonction hissee (definie plus bas) ; appelee seulement au scan, jamais a l import. */
+const margeBlocsRolls = () => Math.max(3, blocsPour(ROLLS_MARGE_S, sParBlocServi()) ?? 3);
 /* ══ LE TEMPS DE BLOC MESURE (2026-10-23, Denim : Base passe de 2 s a 200 ms/bloc, mainnet vise novembre 2026 — docs.base.org/upgrades/denim).
  *   Deux en-tetes (la tete et RECUL_MESURE_BLOCS plus bas, servis par les noeuds publics a cette profondeur), relus au plus toutes les
  *   10 min ; timestampMs si les deux en ont (champ optionnel de Denim), sinon les secondes. Non mesure -> null : les reculs exprimes en temps
@@ -7760,6 +7764,14 @@ function traiterRequete(req, res) {
 
   /* ══ TIRAGE DE SAISON (2026-10-17, v1 BLANCHE) — public et rejouable : la saison, le seuil, chaque wallet avec ses frais verifies et
    *   leurs hashes, les tickets, leur racine merkle. ⛔ Aucun pot en v1 : la reponse le dit. Le gagnant viendra d un bloc fixe a la cloture. */
+  /* DENIM (2026-11-05) : le temps de bloc SERVI seul (le meme objet que /api/tirage.tempsDeBloc), pour les pages qui n ont besoin que de
+   *   lui (index.html : l age des vignettes ; pot.html : les durees des periodes) — sans le corps du tirage. null = non mesure. */
+  if (chemin === '/api/temps-de-bloc') {
+    void sParBlocSrv();
+    res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ ok: true, tempsDeBloc: tempsDeBlocServiJson() }));
+    return;
+  }
   if (chemin === '/api/tirage') {
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' });
     res.end(JSON.stringify(corpsTirage()));

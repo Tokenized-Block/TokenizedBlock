@@ -44,9 +44,11 @@ function monter({ tete, tsIllisible = null }) {
     'passesAchetes', 'crediterPassSemaine',
     /* 2026-10-23 : le temps de bloc mesure (temps-de-bloc.js) — TB_SONDES=0 : pas de minuteur de mesure dans ce test */
     'blocsPour', 'sParBlocMesure', 'enteteVersMesure', 'RECUL_MESURE_BLOCS',
+    /* 2026-11-05 : la marge suit le temps SERVI (sParBlocServi, defini apres cette tranche) ; non mesure ici -> 3 blocs */
+    'sParBlocServi',
     src + '\nreturn crediterVolumeRolls;');
   const crediterVolumeRolls = f({ adresse: C, bloc: 100 }, rpcServeur, revenu, false, () => new Set(), '0x' + '00'.repeat(20), { env: { TB_SONDES: '0' } }, crediter, jourDe, depensesJeu, TOPIC_ROLLED, TOPIC_PASS, () => null, async () => null, () => '0x',
-    passesAchetes, crediterPassSemaine, blocsPour, sParBlocMesure, enteteVersMesure, RECUL_MESURE_BLOCS);
+    passesAchetes, crediterPassSemaine, blocsPour, sParBlocMesure, enteteVersMesure, RECUL_MESURE_BLOCS, () => null);
   return { crediterVolumeRolls, revenu, lus };
 }
 /* (1) (2) */
