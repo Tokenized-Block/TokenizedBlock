@@ -19,6 +19,7 @@
  *   non extractible dans SON navigateur (agent-sous-compte.js). La voie « Server Wallet » (cle chez nous + Policy Engine) est
  *   PARQUEE : TokenizedBlock ne tient ni cle ni fonds. Bornes : au plus 1 jour par periode, au plus 30 jours de vie. */
 import { selecteur } from './pool.js';
+import { keccak256Hex } from './keccak.js';
 
 export const SPEND_PERMISSION_MANAGER = '0xf85210B21cC50302F477BA56686d2019dC9b67Ad';
 export const NATIVE_TOKEN = '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE';
@@ -69,21 +70,107 @@ export function appelRevocation(permission) { return revocationEncodee(permissio
 /** Variante : `revokeAsSpender(SpendPermission)` envoye DEPUIS le sub account (msg.sender == spender), sur un geste de l utilisateur. */
 export function appelRevocationCommeSpender(permission) { return revocationEncodee(permission, SIG_REVOKE_AS_SPENDER, 'spender'); }
 
-function revocationEncodee(permission, sig, qui) {
+/* la permission relue SANS les bornes du mode autonome (une permission existante peut etre plus large : on l encode telle quelle) */
+const permissionLue = (permission) => {
   const p = permission || {};
-  const d = demandeAutorisation({ ...p, periodSec: p.period }, { dureeMaxSec: Number(U48), periodeMinSec: 1, periodeMaxSec: Number(U48) });
+  return demandeAutorisation({ ...p, periodSec: p.period }, { dureeMaxSec: Number(U48), periodeMinSec: 1, periodeMaxSec: Number(U48) });
+};
+const octetsRembourres = (hex) => { const d = String(hex).slice(2); return mot(d.length / 2) + d.padEnd(Math.ceil(d.length / 64) * 64, '0'); };
+/* le CORPS du tuple SpendPermission (dynamique a cause de extraData) : 9 tetes + longueur + donnees rembourrees */
+const corpsTuple = (q) => adrMot(q.account) + adrMot(q.spender) + adrMot(q.token)
+  + mot(q.allowance) + mot(q.period) + mot(q.start) + mot(q.end) + mot(q.salt)
+  + mot(9 * 32)                                    // offset de extraData dans le tuple
+  + octetsRembourres(q.extraData);
+
+function revocationEncodee(permission, sig, qui) {
+  const d = permissionLue(permission);
   if (!d.ok) return { ok: false, etat: 'REFUSE', pourquoi: 'not a valid permission: ' + d.pourquoi };
   const q = d.permission;
-  const donnees = q.extraData.slice(2);
-  const longueur = donnees.length / 2;
-  const rembourre = donnees.padEnd(Math.ceil(donnees.length / 64) * 64, '0');
-  const corps = '0x' + selecteur(sig)
-    + mot(0x20)                                    // offset du tuple (dynamique a cause de bytes)
-    + adrMot(q.account) + adrMot(q.spender) + adrMot(q.token)
-    + mot(q.allowance) + mot(q.period) + mot(q.start) + mot(q.end) + mot(q.salt)
-    + mot(9 * 32)                                  // offset de extraData dans le tuple
-    + mot(longueur) + rembourre;
+  const corps = '0x' + selecteur(sig) + mot(0x20) + corpsTuple(q);   // 0x20 = offset du tuple
   return { ok: true, etat: 'A_SIGNER_PAR_L_UTILISATEUR', from: q[qui], to: SPEND_PERMISSION_MANAGER, value: '0x0', data: corps };
+}
+
+/* ═══ Ajout 2026-11-05 — encodeurs prouves contre le VRAI SpendPermissionManager sur un fork de Base (banc-agent-spend-permission-fork-20261105.mjs).
+ * Source relue le 2026-11-05 : github.com/coinbase/spend-permissions, src/SpendPermissionManager.sol (branche main) :
+ *   - approve(SpendPermission) exige msg.sender == account ; approveWithSignature(SpendPermission, bytes) : n importe qui l envoie,
+ *     la signature est validee par PublicERC6492Validator.isValidSignatureNowAllowSideEffects(account, getHash(p), sig) ;
+ *   - spend(SpendPermission, uint160) exige msg.sender == spender, puis _transferFrom appelle CoinbaseSmartWallet(account).execute(...) :
+ *     ⛔ un `account` EOA n a pas de execute -> spend REVERT. L account doit etre un smart wallet (Base Account) dont le
+ *     SpendPermissionManager est OWNER (le banc le prouve, temoin EOA compris) ;
+ *   - getHash = EIP-712, domaine (name "Spend Permission Manager", version "1", chainId, verifyingContract = ce contrat),
+ *     type SpendPermission(address account,address spender,address token,uint160 allowance,uint48 period,uint48 start,uint48 end,uint256 salt,bytes extraData). */
+export const SIG_APPROVE = 'approve(' + TUPLE + ')';
+export const TYPE_PERMISSION = 'SpendPermission(address account,address spender,address token,uint160 allowance,uint48 period,uint48 start,uint48 end,uint256 salt,bytes extraData)';
+export const NOM_DOMAINE_SPM = 'Spend Permission Manager';
+export const VERSION_DOMAINE_SPM = '1';
+const LECTURES = Object.freeze({ isApproved: 'isApproved', isRevoked: 'isRevoked', isValid: 'isValid', getCurrentPeriod: 'getCurrentPeriod', getHash: 'getHash' });
+const HEX_OCTETS = /^0x([0-9a-fA-F]{2})*$/;
+const k = (octets) => keccak256Hex(octets);
+const octetsDe = (hex) => Uint8Array.from((String(hex).slice(2).match(/../g) || []).map((x) => parseInt(x, 16)));
+const kTexte = (s) => k(new TextEncoder().encode(s)).slice(2);
+
+/** Les donnees EIP-712 que le wallet de l utilisateur signe (eth_signTypedData_v4). Ne signe rien. */
+export function donneesAutorisation(permission, chainId) {
+  const d = permissionLue(permission);
+  if (!d.ok) return { ok: false, etat: 'REFUSE', pourquoi: 'not a valid permission: ' + d.pourquoi };
+  const q = d.permission;
+  return { ok: true, typedData: {
+    domain: { name: NOM_DOMAINE_SPM, version: VERSION_DOMAINE_SPM, chainId: Number(chainId), verifyingContract: SPEND_PERMISSION_MANAGER },
+    primaryType: 'SpendPermission',
+    types: { SpendPermission: [{ name: 'account', type: 'address' }, { name: 'spender', type: 'address' }, { name: 'token', type: 'address' },
+      { name: 'allowance', type: 'uint160' }, { name: 'period', type: 'uint48' }, { name: 'start', type: 'uint48' }, { name: 'end', type: 'uint48' },
+      { name: 'salt', type: 'uint256' }, { name: 'extraData', type: 'bytes' }] },
+    message: { account: q.account, spender: q.spender, token: q.token, allowance: String(q.allowance), period: String(q.period),
+      start: String(q.start), end: String(q.end), salt: String(q.salt), extraData: q.extraData },
+  } };
+}
+
+/** = SpendPermissionManager.getHash(p) sur la chaine `chainId` (compare au contrat reel par le banc fork). */
+export function hashAutorisation(permission, chainId) {
+  const d = permissionLue(permission);
+  if (!d.ok) return null;
+  const q = d.permission;
+  const dom = k(octetsDe('0x' + kTexte('EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)')
+    + kTexte(NOM_DOMAINE_SPM) + kTexte(VERSION_DOMAINE_SPM) + mot(chainId) + adrMot(SPEND_PERMISSION_MANAGER)));
+  const st = k(octetsDe('0x' + kTexte(TYPE_PERMISSION) + adrMot(q.account) + adrMot(q.spender) + adrMot(q.token)
+    + mot(q.allowance) + mot(q.period) + mot(q.start) + mot(q.end) + mot(q.salt) + k(octetsDe(q.extraData)).slice(2)));
+  return k(octetsDe('0x1901' + dom.slice(2) + st.slice(2)));
+}
+
+/** approve(p) : NON SIGNE, `from` = l account (pour un smart wallet : appel interne via execute). */
+export function appelApprobation(permission) {
+  const d = permissionLue(permission);
+  if (!d.ok) return { ok: false, etat: 'REFUSE', pourquoi: 'not a valid permission: ' + d.pourquoi };
+  return { ok: true, etat: 'A_SIGNER_PAR_L_UTILISATEUR', from: d.permission.account, to: SPEND_PERMISSION_MANAGER, value: '0x0',
+    data: '0x' + selecteur(SIG_APPROVE) + mot(0x20) + corpsTuple(d.permission) };
+}
+
+/** approveWithSignature(p, signature) : la signature vient du wallet de l utilisateur ; n importe qui peut poser l appel. */
+export function appelApprobationAvecSignature(permission, signature) {
+  const d = permissionLue(permission);
+  if (!d.ok) return { ok: false, etat: 'REFUSE', pourquoi: 'not a valid permission: ' + d.pourquoi };
+  if (!HEX_OCTETS.test(String(signature || '')) || String(signature).length <= 2) return { ok: false, etat: 'REFUSE', pourquoi: 'signature is not hex bytes' };
+  const t = corpsTuple(d.permission);
+  return { ok: true, etat: 'A_ENVOYER', to: SPEND_PERMISSION_MANAGER, value: '0x0',
+    data: '0x' + selecteur(SIG_APPROVE_WITH_SIGNATURE) + mot(0x40) + mot(0x40 + t.length / 2) + t + octetsRembourres(signature) };
+}
+
+/** spend(p, valeur) : NON SIGNE, `from` = le spender (le sub account). Le plafond par periode est verifie PAR LE CONTRAT. */
+export function appelDepense(permission, valeur) {
+  const d = permissionLue(permission);
+  if (!d.ok) return { ok: false, etat: 'REFUSE', pourquoi: 'not a valid permission: ' + d.pourquoi };
+  const v = big(valeur);
+  if (v === null || v <= 0n || v > U160) return { ok: false, etat: 'REFUSE', pourquoi: 'value must be a positive uint160' };
+  return { ok: true, etat: 'A_SIGNER_PAR_LE_SPENDER', from: d.permission.spender, to: SPEND_PERMISSION_MANAGER, value: '0x0',
+    data: '0x' + selecteur(SIG_SPEND) + mot(0x40) + mot(v) + corpsTuple(d.permission) };
+}
+
+/** eth_call de lecture (isApproved | isRevoked | isValid | getCurrentPeriod | getHash) : de quoi remplir `grant` de verdictAutonome. */
+export function appelLecture(nom, permission) {
+  if (!Object.prototype.hasOwnProperty.call(LECTURES, nom)) return { ok: false, pourquoi: 'unknown read ' + nom };
+  const d = permissionLue(permission);
+  if (!d.ok) return { ok: false, pourquoi: 'not a valid permission: ' + d.pourquoi };
+  return { ok: true, to: SPEND_PERMISSION_MANAGER, data: '0x' + selecteur(LECTURES[nom] + '(' + TUPLE + ')') + mot(0x20) + corpsTuple(d.permission) };
 }
 
 /**
