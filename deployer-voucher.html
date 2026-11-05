@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Shopify skin vouchers — TokenizedBlock</title>
+<style>
+:root{color-scheme:dark;--fond:#060f14;--carte:#0c1c24;--bord:#1d3a44;--texte:#e8f4f6;--doux:#9db4ba;--cyan:#2fd0c8;--or:#f6c76e;--rose:#ff7eb6;--vert:#6fe3a5}
+body{margin:0;background:radial-gradient(1200px 600px at 20% -10%,#123a44 0%,transparent 60%),radial-gradient(900px 500px at 110% 10%,#3a1838 0%,transparent 55%),var(--fond);color:var(--texte);font:16px/1.55 system-ui,-apple-system,Segoe UI,sans-serif;min-height:100vh}
+main{max-width:760px;margin:0 auto;padding:28px 16px 72px}
+.kicker{display:inline-block;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--or);border:1px solid #5a4a26;border-radius:999px;padding:3px 10px}
+h1{font-size:34px;line-height:1.1;margin:12px 0 6px;background:linear-gradient(90deg,#7ff3ea,#f6c76e 55%,#ff7eb6);-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-size:15px;margin:30px 0 10px;color:#9fd6dd;letter-spacing:.02em}
+p{margin:8px 0}
+.note{color:var(--doux);font-size:14px}
+.grille{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.tuile{border:1px solid var(--bord);border-radius:16px;padding:16px;background:linear-gradient(180deg,#0f2530,#0a1820);position:relative;overflow:hidden}
+.tuile::before{content:"";position:absolute;inset:-1px -1px auto -1px;height:3px;background:var(--c,var(--cyan))}
+.tuile .num{font-size:12px;color:var(--c,var(--cyan));font-weight:800;letter-spacing:.12em}
+.tuile h3{margin:6px 0 6px;font-size:17px}
+.tuile p{font-size:14px;color:#c9dde1;margin:0}
+.carte{border:1px solid var(--bord);border-radius:16px;padding:16px;margin:12px 0;background:var(--carte)}
+.sur li{margin:6px 0}
+details summary{cursor:pointer;color:#9fd6dd;font-weight:700}
+dl{display:grid;grid-template-columns:max-content 1fr;gap:6px 14px;margin:12px 0 0;font-size:13px}
+dt{color:var(--doux)}
+dd{margin:0;overflow-wrap:anywhere;font-family:ui-monospace,Consolas,monospace}
+label{display:block;font-size:14px;color:#c9dde1;margin:0 0 6px}
+input{box-sizing:border-box;width:100%;border:1px solid #2a4a55;border-radius:10px;background:#071319;color:var(--texte);font:14px ui-monospace,Consolas,monospace;padding:11px 12px}
+input:disabled{opacity:.6}
+pre{margin:10px 0 0;padding:12px;border:1px solid var(--bord);border-radius:10px;background:#071319;font:13px/1.5 ui-monospace,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+button{appearance:none;border:0;border-radius:12px;padding:13px 20px;font:inherit;font-weight:800;cursor:pointer;background:linear-gradient(90deg,#2fd0c8,#7ff3ea);color:#04262a;box-shadow:0 6px 24px rgba(47,208,200,.25)}
+button.sec{background:transparent;color:var(--texte);border:1px solid #2a4a55;box-shadow:none}
+button:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
+.ok{color:var(--vert)}.ko{color:#ff8f8f}
+ul{padding-left:20px;margin:8px 0}
+[hidden]{display:none!important}
+@media (max-width:420px){h1{font-size:28px}dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<main>
+  <span class="kicker">TokenizedBlock · Shopify skins</span>
+  <h1>Skins bought on Shopify, claimed on Base.</h1>
+  <p class="note">A skin paid in USDC on the Shopify store opens a voucher. The buyer's own wallet sends the claim, and this contract mints the skin. Nothing is paid to this contract, ever. One signature from your wallet deploys it, and that wallet becomes its owner. This page sends nothing by itself.</p>
+
+  <h2>How it works</h2>
+  <div class="grille">
+    <div class="tuile" style="--c:var(--cyan)"><div class="num">01 · THE ORDER</div><h3>Paid on Shopify</h3><p>A paid order (orders/paid, checked by its HMAC) opens one voucher per skin, for the wallet the buyer wrote in the order. A test order or a refunded order opens none.</p></div>
+    <div class="tuile" style="--c:var(--or)"><div class="num">02 · THE VOUCHER</div><h3>Signed by a server key</h3><p>The server signs an EIP-712 voucher with a dedicated key. That key can only make vouchers: it holds no funds and never sends a transaction.</p></div>
+    <div class="tuile" style="--c:var(--rose)"><div class="num">03 · THE CLAIM</div><h3>The buyer's wallet mints</h3><p>The claim must come from the wallet named in the voucher, before its deadline, once per order unit. The skin is then the buyer's token.</p></div>
+  </div>
+
+  <h2>What is fixed, and what is not</h2>
+  <div class="carte sur">
+    <ul>
+      <li>The wallet that deploys becomes the owner. The owner can only change the signer address (a leaked key is cut at once), cancel an order that was never claimed (a refunded order), and hand ownership over in two steps.</li>
+      <li>The owner cannot mint, cannot move anyone's token, and holds no funds. The contract takes no USDC and no ETH; there is no fee on resale and no royalty.</li>
+      <li>Not upgradeable, no pause.</li>
+      <li>The trust point, said plainly: whoever holds the signer key can make vouchers, so free skins, for any wallet that then claims. It moves nobody's money, because this contract holds none.</li>
+    </ul>
+  </div>
+
+  <h2>The signer</h2>
+  <div class="carte">
+    <label for="iSigner">Paste the address of the server's voucher key (the address of SHOPIFY_VOUCHER_SIGNER_KEY). Never paste the key itself.</label>
+    <input id="iSigner" type="text" inputmode="text" autocomplete="off" spellcheck="false" placeholder="0x… (40 hex characters)">
+    <p id="dSigner" class="note">Nothing pasted yet.</p>
+  </div>
+
+  <h2>What you sign</h2>
+  <div class="carte">
+    <details>
+      <summary>The values built into the contract</summary>
+      <dl id="dParams"></dl>
+    </details>
+    <p class="note" id="dVerif">Checking the fingerprint…</p>
+  </div>
+
+  <h2>Deploy the voucher contract</h2>
+  <div class="carte">
+    <p id="dCompte" class="note">No wallet connected.</p>
+    <p>
+      <button type="button" id="bConnecter" class="sec">Connect wallet</button>
+      <button type="button" id="bDeployer" disabled>Deploy the voucher contract</button>
+      <button type="button" id="bRevoir" class="sec" hidden>Check again</button>
+      <button type="button" id="bLiberer" class="sec" hidden>Nothing was sent</button>
+    </p>
+    <p id="dEtat" class="note"></p>
+    <dl id="dResultat" hidden>
+      <dt>Transaction</dt><dd id="rTx">—</dd>
+      <dt>Voucher contract</dt><dd id="rAdr">—</dd>
+      <dt>Reads back</dt><dd id="rLu">—</dd>
+    </dl>
+    <div id="dEnv" hidden>
+      <p class="note ok">Set these on the server (the address is the one read from the receipt):</p>
+      <pre id="rEnv"></pre>
+    </div>
+  </div>
+
+  <h2>What comes next</h2>
+  <div class="carte sur">
+    <ul>
+      <li>No second signature on BlockSkins: this contract is its own collection and mints its own tokens. BlockSkins has no minter role to grant (its mint is paid by whoever calls it), and this contract never calls it.</li>
+      <li>Set the server variables above, plus the Shopify ones (SHOPIFY_API_SECRET, SHOPIFY_SHOP_DOMAIN, SHOPIFY_STORE_URL), and subscribe the store's webhooks orders/paid and refunds/create.</li>
+      <li>Send the transaction hash to the team, so the deployment is recorded.</li>
+      <li>Not done yet: the app shows skins from BlockSkins only. A skin claimed here is a token on this contract; the app does not display it yet.</li>
+    </ul>
+  </div>
+</main>
+<script type="module">
+/* deployer-voucher.html — propose AU WALLET CONNECTE la creation de BlockSkinsVoucher : le code FIGE dans voucher-deploiement.js
+ * (genere par contracts/preparer-deploiement-voucher.mjs) + abi.encode(signer), le signataire etant l adresse que Phil COLLE.
+ * Meme regle que deployer-slots.html : ⛔ rien n est envoye sans un appui ET la signature du wallet ; aucune cle ; UNE creation au plus
+ *   (envoi-creation.js : eth_chainId relu apres un changement de reseau, hash garde, « Check again »).
+ * ⛔ la donnee envoyee vient de voucher-config.js creationAvec — la MEME fonction que le banc fork (banc-deployer-voucher-fork-20261105.mjs) ;
+ *   l empreinte du code est recalculee dans ce navigateur. Apres le recu : eth_getCode (keccak = runtime compile), signer(), owner()
+ *   (= ce wallet), pendingOwner() (= 0), totalSupply() (= 0), domainSeparator() (recalcule) sont RELUS et compares. */
+import { VOUCHER_DEPLOIEMENT as D } from './voucher-deploiement.js';
+import { validerSignataire, creationAvec, verifierFiche, verifierRelecture, variablesEnv, LECTURES } from './voucher-config.js';
+import { maskFeeAddresses } from './frais-creation.js';
+import { creerEnvoiCreation, phraseEnvoi } from './envoi-creation.js';
+const $ = (s) => document.querySelector(s);
+const eth = () => window.ethereum;
+const CHAINE_HEX = '0x' + D.chaine.toString(16);
+const CLE = 'tb.deploy.' + D.contrat + '.' + D.sha256Code;
+const stockage = (() => { try { return window.localStorage; } catch (_) { return null; } })();
+const lireStock = (k) => { try { return stockage ? stockage.getItem(k) : null; } catch (_) { return null; } };
+const ecrireStock = (k, v) => { try { if (stockage) stockage.setItem(k, v); } catch (_) { /* stockage refuse : la page ouverte suffit */ } };
+let compte = null, intacte = false, envoi = false, adresse = D.adresse || null, signataire = null;
+/* l envoi : recree avec la donnee du signataire valide ; le stockage (cle commune) garde le hash d un envoi d un autre onglet ou d avant */
+const envoiPour = (creation) => creerEnvoiCreation({ eth, chaineHex: CHAINE_HEX, creation, cle: CLE, stockage });
+let E = envoiPour(null);
+const dire = (t, cls = 'note') => { const e = $('#dEtat'); e.className = cls; e.textContent = t; };
+$('#dParams').innerHTML = '<dt>Network</dt><dd>Base (8453)</dd>'
+  + '<dt>Signer</dt><dd id="pSigner">— paste it above —</dd>'
+  + '<dt>Owner</dt><dd>the wallet that deploys</dd>'
+  + '<dt>Compiler</dt><dd>solc ' + D.compilateur + ' · optimizer ' + (D.optimiseur && D.optimiseur.enabled ? D.optimiseur.runs + ' runs' : 'off') + ' · ' + D.evm + '</dd>'
+  + '<dt>Fingerprint</dt><dd>sha256 ' + D.sha256Code + ' · ' + D.octetsCode + ' bytes of code, then 32 bytes of signer</dd>'
+  + '<dt>Runtime</dt><dd>keccak ' + D.keccakRuntime + ' · ' + D.octetsRuntime + ' bytes</dd>';
+(async () => {
+  try {
+    const octets = new Uint8Array(D.code.slice(2).match(/../g).map((x) => parseInt(x, 16)));
+    const h = [...new Uint8Array(await crypto.subtle.digest('SHA-256', octets))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const v = verifierFiche(D, h);
+    intacte = v.intacte;
+    $('#dVerif').className = intacte ? 'note ok' : 'note ko';
+    $('#dVerif').textContent = intacte ? 'Fingerprint recomputed in this browser: it matches.' : 'Nothing can be deployed from this page: ' + v.pourquoi.join('; ') + '.';
+  } catch (_) { intacte = false; $('#dVerif').className = 'note ko'; $('#dVerif').textContent = 'The fingerprint could not be computed here. Nothing can be deployed from this page.'; }
+  peindre();
+})();
+function lireSignataire() {
+  const v = validerSignataire($('#iSigner').value, { deployeur: compte });
+  signataire = v.ok ? v.adresse : null;
+  $('#dSigner').className = v.ok ? 'note ok' : 'note' + ($('#iSigner').value.trim() ? ' ko' : '');
+  $('#dSigner').textContent = v.ok ? 'Signer ' + v.adresse + '. Check it against the server key: the contract will accept vouchers from this address only.' : v.pourquoi.charAt(0).toUpperCase() + v.pourquoi.slice(1) + '.';
+  $('#pSigner').textContent = signataire || '— paste it above —';
+}
+function peindre() {
+  $('#dCompte').textContent = compte ? 'Connected: ' + maskFeeAddresses(compte) + ' — this wallet pays the gas and becomes the owner.' : (eth() ? 'No wallet connected.' : 'No wallet found in this browser.');
+  $('#bConnecter').hidden = !!compte;
+  const st = E.etat(), tx = st.tx, bloque = !tx && (st.attente || st.incertain);
+  $('#iSigner').disabled = envoi || !!tx || !!adresse;
+  $('#bDeployer').disabled = !compte || !intacte || !signataire || envoi || !!adresse || !E.peutEnvoyer();
+  $('#bRevoir').hidden = !(tx || bloque) || !!adresse; $('#bRevoir').disabled = envoi;
+  $('#bLiberer').hidden = !bloque || !!adresse; $('#bLiberer').disabled = envoi;
+  if (tx) { $('#dResultat').hidden = false; $('#rTx').textContent = tx; }
+  if (D.adresse) dire('Already deployed at ' + D.adresse + '. Deploying again would create a second contract.', 'note ok');
+}
+{ const s = lireStock(CLE + '.signer'); if (s) $('#iSigner').value = s; }
+lireSignataire();
+$('#iSigner').addEventListener('input', () => { lireSignataire(); peindre(); });
+$('#bConnecter').addEventListener('click', async () => {
+  if (!eth()) { dire('No wallet found in this browser.', 'note ko'); return; }
+  try { const a = await eth().request({ method: 'eth_requestAccounts' }); compte = a && a[0] ? String(a[0]) : null; dire(''); annoncer(); }
+  catch (e) { dire('The wallet did not connect: ' + String((e && e.message) || e).slice(0, 120), 'note ko'); }
+  lireSignataire(); peindre();
+});
+/* la suite d un envoi ou d un « Check again » : ce que dit le recu, puis le contrat RELU */
+async function suite(r) {
+  if (r.etat === 'PAS_BASE') { dire('Your wallet is not on Base. Switch it to Base, then try again. Nothing was sent.', 'note ko'); return; }
+  if (r.etat === 'DECLINE') { dire('You declined in your wallet. Nothing was sent.', 'note ko'); return; }
+  if (['INCERTAIN', 'ATTENTE', 'HORS_BASE', 'DEJA_ENVOYE'].includes(r.etat)) { dire(phraseEnvoi(r), 'note ko'); return; }
+  if (r.etat === 'NON_CONFIRME') { dire('Not confirmed yet. Deploy stays off so nothing is sent twice: press Check again, or look up the transaction hash above on a block explorer.', 'note ko'); return; }
+  if (r.etat === 'ECHOUE') { dire('The transaction was confirmed but failed: no contract was created. You can deploy again.', 'note ko'); return; }
+  if (r.etat !== 'CONFIRME') return;
+  const a = String(r.recu.contractAddress).toLowerCase();
+  $('#rAdr').textContent = a + ' (block ' + parseInt(r.recu.blockNumber, 16) + ')';
+  const code = String(await eth().request({ method: 'eth_getCode', params: [a, 'latest'] }));
+  const lu = {};
+  for (const [nom, data] of LECTURES) lu[nom] = String(await eth().request({ method: 'eth_call', params: [{ to: a, data }, 'latest'] }));
+  const v = verifierRelecture(D, { adresse: a, code, lu, signataire, deployeur: compte });
+  $('#rLu').textContent = maskFeeAddresses('signer 0x' + lu['signer()'].slice(-40) + ' · owner 0x' + lu['owner()'].slice(-40) + ' · supply ' + BigInt(lu['totalSupply()']) + ' · code ' + ((code.length - 2) / 2) + ' bytes'
+    + (v.bon ? ' — all as signed' : ' — ' + v.ecarts.join('; ')));
+  if (v.bon) {
+    adresse = a;
+    $('#rEnv').textContent = variablesEnv(a, signataire).join('\n');
+    $('#dEnv').hidden = false;
+  }
+  dire(v.bon ? 'Deployed: the code is the compiled contract and it reads back exactly what was signed. Set the server variables below, then send the transaction hash to the team.'
+    : 'Deployed, but what the contract reads back differs from what was signed (' + v.ecarts.join('; ') + '). Do not use it.', v.bon ? 'note ok' : 'note ko');
+}
+$('#bDeployer').addEventListener('click', async () => {
+  lireSignataire();
+  if (compte && intacte && signataire && !envoi && !adresse && !E.peutEnvoyer()) { peindre(); annoncer(); return; }
+  if (!compte || !intacte || !signataire || envoi || adresse || !E.peutEnvoyer()) return;
+  envoi = true; peindre();
+  try {
+    E = envoiPour(creationAvec(D, signataire));
+    ecrireStock(CLE + '.signer', signataire);
+    await suite(await E.envoyer(compte, { avant: () => dire('Confirm in your wallet…'), envoye: (tx) => { $('#dResultat').hidden = false; $('#rTx').textContent = tx; dire('Sent. Waiting for Base to confirm…'); } }));
+  } catch (e) {
+    dire('Sent, but the contract could not be read back: ' + String((e && e.message) || e).slice(0, 160) + '. Press Check again.', 'note ko');
+  } finally { envoi = false; peindre(); }
+});
+$('#bRevoir').addEventListener('click', async () => {
+  if (envoi || adresse) return;
+  { const st = E.etat(); if (!st.tx && !st.attente && !st.incertain) return; }
+  lireSignataire();
+  envoi = true; peindre();
+  try { dire('Checking the transaction again…'); await suite(await E.verifier()); }
+  catch (e) { dire('The contract could not be read back: ' + String((e && e.message) || e).slice(0, 160) + '. Press Check again.', 'note ko'); }
+  finally { envoi = false; peindre(); }
+});
+$('#bLiberer').addEventListener('click', () => {
+  if (envoi || adresse) return;
+  if (E.liberer()) dire('Deploy is on again. Press it only if your wallet history shows that no deployment was sent from this page.');
+  peindre();
+});
+try { window.addEventListener('storage', () => { if (!envoi) { peindre(); annoncer(); } }); } catch (_) {}
+function annoncer() { if (adresse || D.adresse) return; const st = E.etat(); const etat = st.tx ? 'DEJA_ENVOYE' : st.incertain ? 'INCERTAIN' : st.attente ? 'ATTENTE' : null; if (etat) dire(phraseEnvoi({ etat }), 'note ko'); }
+try { if (eth() && eth().on) eth().on('accountsChanged', (a) => { compte = a && a[0] ? String(a[0]) : null; lireSignataire(); peindre(); }); } catch (_) {}
+peindre();
+annoncer();
+</script>
+</body>
+</html>

@@ -5720,6 +5720,9 @@ const SERVIS = [
   /* 2026-10-23 (Phil) : BlockSlots (3 faces de bloc, points, prix fixes) — page de deploiement (noindex, aucun lien), fiche, encodeur,
    *   appels non signes ; slots-plan.js est importe par app.html. ⛔ absent d ici = 404 = page morte. */
   'deployer-slots.html', 'slots-deploiement.js', 'slots-config.js', 'slots-plan.js',
+  /* 2026-11-05 : BlockSkinsVoucher (skins Shopify reclames avec un bon) — page de deploiement (noindex, aucun lien) ; Phil y COLLE l adresse
+   *   du signataire, son wallet signe et devient owner. Fiche (code sans argument) + verifications pures. ⛔ absent d ici = 404 = page morte. */
+  'deployer-voucher.html', 'voucher-deploiement.js', 'voucher-config.js',
   /* 2026-10-24 : les rouleaux de la carte Draws (pur), importes par app.html : absent d ici = 404 = page morte */
   'rouleaux.js',
   /* 2026-10-11 : la page qui propose AU WALLET PROPRIETAIRE setCurrency(action, true) pour les 9 actions choisies par Phil ; noindex,
