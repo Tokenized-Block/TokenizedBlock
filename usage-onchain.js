@@ -38,7 +38,32 @@ export const POOL_MANAGER = '0x498581ff718922c3f8e6a244956af099b2652b2b'; /* mul
 export const STATE_VIEW = '0xa3c0c9b65bad0b08107aa264b0f3db444b867a71'; /* multipool.js ADRESSES.STATE_VIEW */
 /** First block worth reading: the birth of Block 0 (serveur-web.js HOOKS_FRAIS floor). */
 export const BLOC_DEPART = 50861088;
+/** ⛔ HISTORICAL (pre-Denim, 2 s blocks): kept ONLY for the measuring scripts of 2026-10-27 (mesures/), which read blocks of that time.
+ *  The live engine (moteurUsage) no longer uses it: since Base Denim (200 ms blocks) a block number times 2 s is 10x wrong — every row
+ *  and the window end take the REAL block timestamp (horodatageDuRecu / the block header). */
 export const SECONDES_PAR_BLOC = 2;
+
+const entierHex = (v) => { const s = String(v ?? ''); if (!/^0x[0-9a-f]+$/i.test(s)) return null; const x = parseInt(s, 16); return Number.isSafeInteger(x) ? x : null; };
+/**
+ * The block timestamp (s) carried by a receipt's logs, or null. Measured 2026-11-05 on base-rpc.publicnode.com and mainnet.base.org:
+ * receipts have NO top-level blockTimestamp, but every log in them (and every eth_getLogs entry) carries `blockTimestamp` (hex seconds).
+ * ⛔ Only accepted if every log that has one agrees, and the log's blockNumber is the receipt's: a disagreement -> null (the caller reads
+ *    the header instead), never a guess.
+ */
+export function horodatageDuRecu(recu) {
+  if (!recu || !Array.isArray(recu.logs)) return null;
+  const bloc = entierHex(recu.blockNumber);
+  let ts = null;
+  for (const l of recu.logs) {
+    if (!l || l.blockTimestamp === undefined || l.blockTimestamp === null) continue;
+    const t = entierHex(l.blockTimestamp);
+    if (t === null || t <= 0) return null;
+    if (l.blockNumber !== undefined && entierHex(l.blockNumber) !== bloc) return null;
+    if (ts !== null && t !== ts) return null;
+    ts = t;
+  }
+  return ts;
+}
 
 /** Our contracts, each copied from its deployment record (never from memory). `jeu` = a contract users pay INTO. */
 export const CONTRATS = Object.freeze([
@@ -285,10 +310,20 @@ export function moteurUsage({ rpc, graine, prixEth = async () => null, fenetre =
     if (!tx || !recu) throw new Error('tx not read yet: ' + h);
     return { tx, recu };
   }
+  /* DENIM (2026-11-05) : the REAL timestamp of a block (header), cached; unreadable -> throw (the window is not committed, retried) */
+  const tsBlocs = new Map();
+  async function tsDuBloc(b) {
+    if (tsBlocs.has(b)) return tsBlocs.get(b);
+    const h = await rpc('eth_getBlockByNumber', ['0x' + b.toString(16), false]);
+    const ts = h ? entierHex(h.timestamp) : null;
+    if (ts === null || ts <= 0) throw new Error('block timestamp not read: ' + b);
+    tsBlocs.set(b, ts);
+    if (tsBlocs.size > 2000) tsBlocs.delete(tsBlocs.keys().next().value);
+    return ts;
+  }
   async function pas() {
     const tete = parseInt(await rpc('eth_blockNumber', []), 16) - 5;
-    const bt = await rpc('eth_getBlockByNumber', ['0x' + tete.toString(16), false]);
-    const tsTete = parseInt(bt.timestamp, 16);
+    if (!Number.isSafeInteger(tete) || tete <= 0) throw new Error('head not read');
     etat.tete = tete;
     let n = 0;
     while (etat.fin < tete && n < maxFenetres) {
@@ -301,16 +336,21 @@ export function moteurUsage({ rpc, graine, prixEth = async () => null, fenetre =
         if (etat.lignes.has(h)) continue;
         const { tx, recu } = await lireTx(h);
         if (usd === null) usd = await prixEth();
-        const ts = tsTete - (tete - parseInt(recu.blockNumber, 16)) * SECONDES_PAR_BLOC;
+        /* DENIM : the tx's own block timestamp (its logs carry it; else its header) — never head - blocks x 2 s */
+        const bRecu = entierHex(recu.blockNumber);
+        if (bRecu === null) throw new Error('receipt block not read: ' + h);
+        const ts = horodatageDuRecu(recu) ?? await tsDuBloc(bRecu);
         const l = ligneDeTx({ tx, recu, pools, ethUsd: usd, ts });
         if (!l.refus) nouvelles.push(l);
       }
       /* the window is committed only now, whole */
+      /* DENIM : the window end's REAL timestamp, read BEFORE anything is committed (unreadable -> nothing committed, retried) */
+      const finTs = await tsDuBloc(a);
       etat.pools = pools;
       for (const l of nouvelles) etat.lignes.set(l.h, l);
       etat.nonLus.push(...r.nonLus);
       etat.fin = a;
-      etat.finTs = tsTete - (tete - a) * SECONDES_PAR_BLOC;
+      etat.finTs = finTs;
       n += 1;
     }
   }
