@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -610,6 +610,30 @@ function suite(T, bavard = false, seul = null) {
   ok('jeuDeLaVie : temoin — le planeur sur GRILLE ne revient pas, et apres 4 il est decale de (1,1)', () => {
     const e = vieGrille([[1, 0], [2, 1], [0, 2], [1, 2], [2, 2]], 12); assert.ok(!e.slice(1).includes(e[0]));
     const lignes = (s) => s.split('/'), a = lignes(e[0]), b = lignes(e[4]); assert.ok(a.slice(0, -1).every((r, y) => '0' + r.slice(0, -1) === b[y + 1]), 'decalage (1,1)'); return 'ok'; });
+  /* game171 : marches auto-evitantes — reference INDEPENDANTE : comptage ITERATIF par niveaux (chaque marche = une liste de points dans un
+   *   Set de chaines, prolongee d un pas), jusqu a n = 9 ; au-dela, symetrie : c(n) = 4 x (marches dont le 1er pas va a droite) ;
+   *   valeurs de Grok Bot (A001411, n = 0..12) */
+  const sawNiveaux = (N) => { let niv = [[[0, 0]]]; const c = [1];
+    for (let k = 1; k <= N; k++) { const suiv = []; for (const m of niv) { const vus = new Set(m.map((p) => p.join(','))), [x, y] = m[m.length - 1];
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!vus.has((x + dx) + ',' + (y + dy))) suiv.push([...m, [x + dx, y + dy]]); } niv = suiv; c.push(niv.length); }
+    return c; };
+  const sawDroite = (N) => { let n = 0; const vus = new Set(['0,0', '1,0']); const go = (x, y, k) => { if (k === N) { n++; return; } for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const q = (x + dx) + ',' + (y + dy); if (!vus.has(q)) { vus.add(q); go(x + dx, y + dy, k + 1); vus.delete(q); } } }; go(1, 0, 1); return 4 * n; };
+  ok('marcheAutoEvitante : comptage par niveaux (n <= 9) et par symetrie (n = 10..12) = valeurs de Grok Bot (A001411)', () => {
+    assert.deepEqual(sawNiveaux(9), [1, 4, 12, 36, 100, 284, 780, 2172, 5916, 16268]); assert.deepEqual([10, 11, 12].map(sawDroite), [44100, 120292, 324932]); return 'ok'; });
+  for (const p of [...extremes(sys('marcheAutoEvitante')), { etapes: 7, graine: 4242 }, { etapes: 11, graine: 99 }]) ok(`marcheAutoEvitante ${JSON.stringify(p)} : comptes, sous-multiplicativite, temoin, la marche dessinee est auto-evitante`, () => {
+    const R = S('marcheAutoEvitante', p), I = R.invariants, N = R.params.etapes, A = [1, 4, 12, 36, 100, 284, 780, 2172, 5916, 16268, 44100, 120292, 324932];
+    assert.ok(I.comptes.mesure === 0 && I.comptes.cn === A[N] && I.sousMult.mesure === 0 && I.comptes.marche >= 1 && I.comptes.marche <= A[N], JSON.stringify(I));
+    if (N >= 4) assert.ok(I.temoin.mesure === 4 && I.temoin.nonRetour === 108, 'temoin ' + JSON.stringify(I.temoin)); else assert.ok(Number.isNaN(I.temoin.mesure));
+    /* la marche publiee : N + 1 points entiers, depart a l origine, pas UNITAIRES, aucun point deux fois ; chaque point dessine sur le
+     *   segment de SON numero de pas (etiquette) ; tous les pas dessines */
+    const ch = JSON.parse(I.comptes.chemin); let mal = 0;
+    assert.ok(ch.length === N + 1 && ch[0][0] === 0 && ch[0][1] === 0 && new Set(ch.map((p) => p.join(','))).size === N + 1, 'chemin ' + I.comptes.chemin);
+    for (let s = 0; s < N; s++) if (Math.abs(ch[s + 1][0] - ch[s][0]) + Math.abs(ch[s + 1][1] - ch[s][1]) !== 1) mal++;
+    const pasVus = new Set(); for (let q = 0; q < R.n; q++) { const o = 3 * q, x = R.brut[o], y = R.brut[o + 1], s = R.brut[o + 2]; pasVus.add(s);
+      if (!Number.isInteger(s) || s < 0 || s >= N) { mal++; continue; } const A = ch[s], B = ch[s + 1];
+      if (!(Math.min(A[0], B[0]) - 1e-9 <= x && x <= Math.max(A[0], B[0]) + 1e-9 && Math.min(A[1], B[1]) - 1e-9 <= y && y <= Math.max(A[1], B[1]) + 1e-9)) mal++; }
+    assert.ok(mal === 0 && pasVus.size === N, mal + ' defauts, ' + pasVus.size + ' pas dessines'); return 'c(' + N + ') = ' + I.comptes.cn + ', marche ' + I.comptes.marche;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -784,6 +808,11 @@ const MUTANTS = [
   ['vie : periode = premiere phase de meme TAILLE', 'if (vieEgal(S, S0)) p = t; else phases.push(S);', 'if (S.size === S0.size) p = t; else phases.push(S);'],
   ['vie : voisinage sans les diagonales', 'if (dx || dy) { const c = vieCle(x + dx, y + dy);', 'if ((dx || dy) && !(dx && dy)) { const c = vieCle(x + dx, y + dy);'],
   ['vie : pentadecathlon a 13 cellules', "['pentadecathlon', '2bo4bo$2ob4ob2o$2bo4bo!', 15]", "['pentadecathlon', '2bo4bo$2ob4ob2o$2bo3bo!', 15]"],
+  ['saw : demi-tour permis', 'if (!vu[q]) { vu[q] = 1; dfs(q, k + 1); vu[q] = 0; }', 'if (!vu[q] || q === chemin[chemin.length - 2]) { const w = vu[q]; vu[q] = 1; dfs(q, k + 1); vu[q] = w; }'],
+  ['saw : la reference A001411 faussee', 'const SAW_A001411 = [1, 4, 12, 36, 100, 284, 780, 2172, 5916, 16268, 44100, 120292, 324932];', 'const SAW_A001411 = [1, 4, 12, 36, 100, 284, 780, 2172, 5916, 16268, 44100, 120292, 324933];'],
+  ['saw : sous-multiplicativite inversee', 'if (c[m + k] > c[m] * c[k]) violations++;', 'if (c[m + k] < c[m] * c[k]) violations++;'],
+  ['saw : temoin 4^k', 'if (4 * 3 ** (k - 1) !== c[k]) premier = k;', 'if (4 ** k !== c[k]) premier = k;'],
+  ['saw : marche dessinee = la premiere', 'cible = Math.floor(rng() * total)', 'cible = 0 * Math.floor(rng() * total)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -798,7 +827,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

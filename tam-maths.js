@@ -1054,7 +1054,34 @@ function jeuDeLaVie(P, n) {
     temoin: { mesure: retour === null && vieEgal(G4, decale) ? 'never returns ; after 4 = itself moved (1,1)' : 'returns or does not move', formule: 'never returns ; after 4 = itself moved (1,1)', note: 'witness: the glider never comes back to the same place (60 generations) : after 4 it is itself, one cell down and right — it travels' } } };
 }
 
+// ---------- 29 : les marches auto-evitantes (idee et valeurs : codex Grok Bot ; OEIS A001411, lu par Grok) ----------
+// Une marche de n pas sur le quadrillage, partant de l origine, qui ne repasse JAMAIS par un point deja visite. Combien y en a-t-il ?
+//   Aucune formule fermee n est connue : on les COMPTE, toutes, par un parcours en profondeur (c(12) = 324 932).
+// Exact ici : c(1..n) contre la suite A001411 relevee par Grok (n <= 12) ; et une loi derivee : couper une marche de m + k pas en deux donne
+//   deux marches auto-evitantes, donc c(m + k) <= c(m) c(k) pour tout m + k <= n (sous-multiplicativite), verifiee sur toutes les paires.
+// Temoin : « ne jamais revenir en arriere » n est pas « ne jamais se recroiser » : 4 x 3^(k-1) marches sans demi-tour, egal a c(k) pour
+//   k <= 3, plus grand des k = 4 (108 contre 100 : le petit carre referme).
+// Dessin (vue de face) : la marche numero j (graine) parmi les c(n), dans l ordre du parcours ; etiquette = le numero du pas.
+const SAW_A001411 = [1, 4, 12, 36, 100, 284, 780, 2172, 5916, 16268, 44100, 120292, 324932];
+function sawParcours(N, cible) { const T = 2 * N + 3, vu = new Uint8Array(T * T), c = new Array(N + 1).fill(0), DIR = [1, -1, T, -T], chemin = [];
+  let trouve = null, rang = 0; const o = (N + 1) * T + N + 1;
+  const dfs = (p, k) => { c[k]++; chemin.push(p); if (k === N) { if (rang === cible) trouve = chemin.slice(); rang++; } else for (const d of DIR) { const q = p + d; if (!vu[q]) { vu[q] = 1; dfs(q, k + 1); vu[q] = 0; } } chemin.pop(); };
+  vu[o] = 1; dfs(o, 0); return { c, trouve: trouve && trouve.map((p) => [(p % T) - (N + 1), Math.floor(p / T) - (N + 1)]) }; }
+function marcheAutoEvitante(P, n) {
+  const N = P.etapes, rng = mulberry32(P.graine), total = SAW_A001411[N], cible = Math.floor(rng() * total), R = sawParcours(N, cible), c = R.c;
+  let ecarts = 0; for (let k = 0; k <= N; k++) if (c[k] !== SAW_A001411[k]) ecarts++;
+  let violations = 0; for (let m = 1; m < N; m++) for (let k = 1; m + k <= N; k++) if (c[m + k] > c[m] * c[k]) violations++;
+  let premier = null; for (let k = 1; k <= N && premier === null; k++) if (4 * 3 ** (k - 1) !== c[k]) premier = k;
+  const pts = R.trouve, brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const t = l * N / n, s = Math.floor(t), u = t - s, de = pts[s], vers = pts[s + 1], o = 3 * l; brut[o] = de[0] + u * (vers[0] - de[0]); brut[o + 1] = de[1] + u * (vers[1] - de[1]); brut[o + 2] = s; }
+  return { D: 3, brut, nuage: true, unite: 'pas du quadrillage', invariants: {
+    comptes: { mesure: ecarts, formule: 0, cn: c[N], marche: cible + 1, chemin: JSON.stringify(pts), note: 'lengths k = 0..n where the walks counted one by one disagree with OEIS A001411 ; cn = c(n) ; marche = which walk is drawn' },
+    sousMult: { mesure: violations, formule: 0, note: 'pairs (m, k) with m + k <= n where c(m + k) > c(m) c(k) (cutting a walk in two must give two self-avoiding walks)' },
+    temoin: { mesure: premier === null ? NaN : premier, formule: 4, absente: 'n too small for the first closed square', nonRetour: N >= 4 ? 4 * 27 : null, note: 'witness: first length where the 4 x 3^(k-1) walks that never step straight back outnumber the self-avoiding ones (k = 4 : 108 vs 100)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  marcheAutoEvitante: { colonnes: ['x (lattice)', 'y (lattice)', 'step number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   jeuDeLaVie: { colonnes: ['x (cells)', 'y (cells)', 'generation within the period (label)'], memeLongueur: [[0, 1]], autres: [2] },
   feuerbach: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = nine-point circle, 2 = incircle, 3 = excircles)'], memeLongueur: [[0, 1]], autres: [2] },
   billardElliptique: { colonnes: ['x', 'y', 'what (label; 0 = the table, 1 = the path, 2 = the caustic)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1170,9 +1197,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'jeuDeLaVie', nom: 'Game of Life oscillators', science: 'Computation', D: 3, nuage: true, params: { oscillateur: 1 },
     bornes: { oscillateur: [0, 2] },
     phrase: 'A visualisation of three oscillators of Conway\'s Game of Life: the blinker, the pulsar and the pentadecathlon. Each is run on an unbounded grid until its set of live cells equals the start exactly, which gives its period: 2, 3 and 15. A glider, which travels instead of returning, is the witness.' },
+  { id: 'marcheAutoEvitante', nom: 'Self-avoiding walks', science: 'Combinatorics', D: 3, nuage: true, params: { etapes: 10, graine: 1 },
+    bornes: { etapes: [2, 12], graine: [1, 1000000] },
+    phrase: 'A visualisation of self-avoiding walks: paths on a grid that never visit the same point twice. No formula is known for how many there are, so every walk of up to 12 steps is counted one by one and matched against the published sequence (324 932 for 12 steps). Walks that only avoid stepping straight back are the witness: from 4 steps on they are more numerous.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'] };
-const FONCTIONS = { jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'] };
+const FONCTIONS = { marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

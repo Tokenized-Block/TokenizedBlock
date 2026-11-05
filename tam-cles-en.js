@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game171 */
+  cn: 'c(n)', marche: 'walk drawn (number)', chemin: 'the walk drawn (points)', nonRetour: 'walks without stepping back (k = 4)',
   /* game170 */
   motif: 'pattern', vivantes: 'live cells at the start',
   /* game169 */
@@ -449,6 +451,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game171 */
+  comptes: 'Walks counted vs OEIS A001411 (lengths that disagree)', sousMult: 'c(m + k) > c(m) c(k) (pairs breaking it)',
   /* game170 */
   retour: 'Generations until the exact same cells come back',
   /* game169 */

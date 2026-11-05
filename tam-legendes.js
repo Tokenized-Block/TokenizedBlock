@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game171 (idee : codex Grok Bot) */
+  marcheAutoEvitante: {
+    titre: 'Self-avoiding walks (paths that never cross themselves)',
+    enUnePhrase: 'Walk on a grid without ever stepping on a point you have already visited: how many such walks are there?',
+    colonnes: ['across', 'up', 'which step'],
+    aRegarder: ['Nobody knows a formula for the number of these walks: here every one of them is counted.', 'Change the seed to draw another of the walks, chosen among all of them.', 'Just refusing to step straight back is not enough: from 4 steps on, such walks can close a little square.'],
+    fin: null,
+  },
   /* game170 (idee : codex Grok Bot) */
   jeuDeLaVie: {
     titre: 'Game of Life oscillators (patterns that blink forever)',
