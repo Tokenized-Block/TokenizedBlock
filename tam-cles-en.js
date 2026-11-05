@@ -425,6 +425,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game157 */
+  pavages: 'Tilings counted vs Kasteleyn\'s product', coin: 'Corner cell lying, uniform draws vs exact probability', fibonacci: 'Witness: 2 x L gives Fibonacci', impair: 'Witness: odd area gives 0',
   /* game155 */
   bandes: 'Edges found vs the spectrum |P| <= 4 (bands or gaps that fail)', gaps: 'Fractions whose open gaps are not q - 1 (odd q) or q - 2 (even q)', centreFerme: 'Even q: central edges vs E = 0', tiers: 'Edges for 1/3 vs the exact radicals', miroirE: 'Spectrum symmetric under E -> -E (largest gap)',
   /* game154 */

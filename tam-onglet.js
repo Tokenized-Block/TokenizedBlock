@@ -71,6 +71,8 @@ THEMES.maths.push('fermatSteiner');
 THEMES.maths.push('causticTasse');
 /* game155 : le papillon de Hofstadter (idee : codex Grok Bot) */
 THEMES.maths.push('papillonHofstadter');
+/* game157 : les pavages par dominos (idee : codex Grok Bot) */
+THEMES.maths.push('dominosKasteleyn');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1135,6 +1137,8 @@ export function monter(racine, ctx = {}) {
     'causticTasse',
     /* game155 */
     'papillonHofstadter',
+    /* game157 */
+    'dominosKasteleyn',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

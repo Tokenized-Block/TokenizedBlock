@@ -533,7 +533,46 @@ function papillonHofstadter(P, n) {
     temoin: { mesure: b25, formule: 5, note: 'witness: 2/5 has 5 bands, not 4 (the claim « q - 1 bands » is false ; q - 1 is the number of GAPS for odd q)' } } };
 }
 
+// ---------- 15 : les pavages par dominos (idee : codex Grok Bot 2026-11-05 ; Kasteleyn, Physica 27 (1961) 1209, reference du codex) ----------
+// Un rectangle de m x L cases (curseurs) couvert de dominos 1 x 2. On COMPTE tous les pavages, colonne par colonne : l etat est l ensemble des
+//   cases de la colonne deja couvertes par un domino couche qui depasse de la colonne precedente (2^m etats, entiers exacts BigInt).
+// Exact : produit de Kasteleyn (et Temperley-Fisher), m et L pairs : prod_{j <= m/2} prod_{k <= L/2} (4 cos^2(pi j/(m+1)) + 4 cos^2(pi k/(L+1))).
+//   Derive ici : m = 2 donne la suite de Fibonacci (une colonne debout, ou deux dominos couches) ; m L impair : 0 pavage (chaque domino
+//   couvre 2 cases).
+// Tirage UNIFORME d un pavage : les memes comptes, lus a l envers (chaque choix de colonne pris avec la probabilite nombre de fins / total).
+//   Mesure : sur 2000 pavages tires, la part ou la case du coin (0, 0) est couverte par un domino couche, contre sa probabilite EXACTE
+//   (pavages qui commencent ainsi / total) ; sigma binomial.
+// Dessin (vue de face) : UN pavage tire au hasard (curseur graine), chaque domino trace entre ses deux cases (etiquette 0 couche, 1 debout).
+function dominoTransitions(m) { const T = Array.from({ length: 1 << m }, () => []);
+  for (let e = 0; e < 1 << m; e++) { const rec = (i, s, ch) => { if (i === m) { T[e].push({ sortie: s, choix: ch.slice() }); return; } if (e >> i & 1) return rec(i + 1, s, ch);
+      ch.push([0, i]); rec(i + 1, s | 1 << i, ch); ch.pop(); if (i + 1 < m && !(e >> (i + 1) & 1)) { ch.push([1, i]); rec(i + 2, s, ch); ch.pop(); } }; rec(0, 0, []); }
+  return T; }
+function dominosKasteleyn(P, n) {
+  const m = P.hauteur, L = P.largeur, T = dominoTransitions(m), R = [new Array(1 << m).fill(0n)]; R[0][0] = 1n;
+  for (let k = 1; k <= L; k++) { const r = new Array(1 << m).fill(0n); for (let e = 0; e < 1 << m; e++) for (const t of T[e]) r[e] += R[k - 1][t.sortie]; R.push(r); }
+  const total = R[L][0];
+  let kast = null; if (m % 2 === 0 && L % 2 === 0) { kast = 1; for (let j = 1; j <= m / 2; j++) for (let k = 1; k <= L / 2; k++) kast *= 4 * cosD(PI * j / (m + 1)) ** 2 + 4 * cosD(PI * k / (L + 1)) ** 2; }
+  /* Fibonacci : le meme comptage sur 2 x L */
+  const T2 = dominoTransitions(2); let v = [1n, 0n, 0n, 0n]; for (let c = 0; c < L; c++) { const w = [0n, 0n, 0n, 0n]; for (let e = 0; e < 4; e++) if (v[e]) for (const t of T2[e]) w[t.sortie] += v[e]; v = w; }
+  let fa = 1n, fb = 1n; for (let i = 1; i < L; i++) [fa, fb] = [fb, fa + fb];
+  const rng = mulberry32(P.graine), entier = (tot) => { let u = 0n; for (let i = 0; i < 4; i++) u = (u << 30n) + BigInt(Math.floor(rng() * 1073741824)); return u % tot; };
+  const tirer = () => { let e = 0; const cols = []; for (let c = 0; c < L; c++) { let u = entier(R[L - c][e]); for (const t of T[e]) { const w = R[L - c - 1][t.sortie]; if (u < w) { cols.push(t.choix); e = t.sortie; break; } u -= w; } } return cols; };
+  let pCoin = 0, mesCoin = 0; const TIRAGES = 2000;
+  if (total > 0n) { let h = 0n; for (const t of T[0]) if (t.choix.some(([k, i]) => k === 0 && i === 0)) h += R[L - 1][t.sortie]; pCoin = Number(h) / Number(total);
+    for (let s = 0; s < TIRAGES; s++) if (tirer()[0].some(([k, i]) => k === 0 && i === 0)) mesCoin++; }
+  const brut = new Float64Array(n * 3);
+  if (total > 0n) { const cols = tirer(), doms = []; cols.forEach((ch, c) => ch.forEach(([k, i]) => doms.push(k === 0 ? [c, i, c + 1, i, 0] : [c, i, c, i + 1, 1])));
+    for (let l = 0; l < n; l++) { const d = doms[Math.floor(l * doms.length / n)], f = (l * doms.length / n) % 1, o = 3 * l; brut[o] = d[0] + 0.5 + (d[2] - d[0]) * f; brut[o + 1] = d[1] + 0.5 + (d[3] - d[1]) * f; brut[o + 2] = d[4]; } }
+  else for (let l = 0; l < n; l++) { const c = l % (m * L), o = 3 * l; brut[o] = Math.floor(c / m) + 0.5; brut[o + 1] = c % m + 0.5; brut[o + 2] = 2; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (cases)', invariants: {
+    pavages: { mesure: String(total), formule: kast === null ? null : String(kast), ecartRelatif: kast === null ? null : Math.abs(Number(total) - kast) / Math.max(1, kast), note: 'tilings COUNTED column by column in exact integers, against Kasteleyn\'s product of 4 cos^2 + 4 cos^2 (m and L even ; null otherwise)' },
+    coin: { mesure: total > 0n ? mesCoin / TIRAGES : null, formule: total > 0n ? pCoin : null, sigma: total > 0n ? Math.sqrt(pCoin * (1 - pCoin) / TIRAGES) : null, tirages: TIRAGES, note: 'share of 2000 uniform tilings where the corner cell is covered by a lying domino, against its exact probability' },
+    fibonacci: { mesure: String(v[0]), formule: String(fb), note: 'witness: the same counting on 2 x L gives the Fibonacci number F(L + 1)' },
+    impair: { mesure: m * L % 2 === 1 ? String(total) : null, formule: m * L % 2 === 1 ? '0' : null, note: 'an odd number of cells cannot be tiled : 0 (null when the area is even)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  dominosKasteleyn: { colonnes: ['x (cells)', 'y (cells)', 'domino (label; 0 = lying, 1 = standing, 2 = cannot be tiled)'], memeLongueur: [[0, 1]], autres: [2] },
   papillonHofstadter: { colonnes: ['flux alpha = p/q', 'energy E', 'denominator q (label)'], memeLongueur: [], autres: [0, 1, 2] },
   causticTasse: { colonnes: ['x', 'y', 'what (label; 0 = the bright line found, 1 = the cup, 2 = reflected rays)'], memeLongueur: [[0, 1]], autres: [2] },
   fermatSteiner: { colonnes: ['x', 'y', 'network (label; 0 = shortest, 1 = the other shape)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -593,9 +632,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'papillonHofstadter', nom: 'Hofstadter\'s butterfly', science: 'Quantum physics', D: 3, nuage: true, params: { qmax: 16 },
     bornes: { qmax: [6, 20] },
     phrase: 'A visualisation of Hofstadter\'s butterfly: the allowed energies of an electron on a square grid in a magnetic field of p/q flux quanta per square, for every fraction up to q. Each spectrum is q bands, whose edges are found exactly as eigenvalues; between them the gaps are all open, except the middle one when q is even, where the two central bands touch at zero.' },
+  { id: 'dominosKasteleyn', nom: 'Domino tilings (Kasteleyn)', science: 'Combinatorics', D: 3, nuage: true, params: { hauteur: 6, largeur: 12, graine: 1 },
+    bornes: { hauteur: [2, 8], largeur: [2, 20], graine: [1, 1000000] },
+    phrase: 'A visualisation of domino tilings: every way of covering an m x L rectangle with 1 x 2 dominoes is counted exactly, column by column, and matches Kasteleyn\'s product formula (12 988 816 for a chessboard). The picture is one tiling drawn uniformly at random among them all, and the corner statistics of many such draws match their exact probability.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'] };
-const FONCTIONS = { papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'] };
+const FONCTIONS = { dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

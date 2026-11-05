@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -37,6 +37,8 @@ const detValeursPropres = (c) => { let p = 1; for (let i = 1; i <= c; i++) for (
 const ORBITES = [orbiteRef(2), orbiteRef(3)];
 /* verger : references INDEPENDANTES. Visible = aucun diviseur commun > 1 trouve par ESSAI (pas Euclide) ; phi(k) et mu(k) par
  *   factorisation par essai (pas de crible) ; 6/pi^2 par Math.PI */
+/* tous les points dessines dans le rectangle [0, L] x [0, m] */
+const x0ok = (b, n, L, m) => { for (let q = 0; q < n; q++) { const o = 3 * q; if (b[o] < 0 || b[o] > L || b[o + 1] < 0 || b[o + 1] > m) return false; } return true; };
 const vergerRef = (N) => { let V = 0; for (let a = 1; a <= N; a++) for (let b = 1; b <= N; b++) { let ok = true; for (let d = 2; d <= Math.min(a, b) && ok; d++) if (a % d === 0 && b % d === 0) ok = false; if (ok) V++; } return V; };
 const facteurs = (k) => { const f = []; for (let p = 2; p * p <= k; p++) if (k % p === 0) { let e = 0; while (k % p === 0) { k /= p; e++; } f.push([p, e]); } if (k > 1) f.push([k, 1]); return f; };
 /* Ford : F_n par l algorithme des MEDIANTS (terme suivant (a, b, c, d) -> (c, d, k c - a, k d - b), k = floor((n + b)/d)), pas par
@@ -293,6 +295,32 @@ function suite(T, bavard = false) {
     const R = S('papillonHofstadter', { qmax: 6 }), b = R.brut, ys = []; for (let q = 0; q < R.n; q++) if (Math.abs(b[3 * q] - 0.4) < 1e-12) ys.push(b[3 * q + 1]);
     assert.ok(Math.abs(Math.max(...ys) - 2.618033988750) < 1e-11 && Math.abs(Math.min(...ys) + 2.618033988750) < 1e-11, 'bords 2/5 ' + Math.min(...ys) + ' ' + Math.max(...ys)); return '2/5 : ' + Math.max(...ys).toFixed(12);
   });
+  /* game157 : dominos — references INDEPENDANTES : compte par RETOUR ARRIERE (premiere case vide, couche ou debout) pour les petites aires,
+   *   Kasteleyn par Math.cos ; probabilite du coin recomptee par retour arriere ; le pavage dessine verifie (chaque case couverte une fois) */
+  const pavagesRef = (m, L, coinCouche = null) => { const g = new Uint8Array(m * L); let tot = 0;
+    const rec = () => { const i = g.indexOf(0); if (i < 0) { tot++; return; } const x = Math.floor(i / m), y = i % m;
+      if (x + 1 < L && !g[i + m]) { if (!(coinCouche === false && i === 0)) { g[i] = g[i + m] = 1; rec(); g[i] = g[i + m] = 0; } }
+      if (y + 1 < m && !g[i + 1]) { if (!(coinCouche === true && i === 0)) { g[i] = g[i + 1] = 1; rec(); g[i] = g[i + 1] = 0; } } }; rec(); return tot; };
+  for (const p of [...extremes(sys('dominosKasteleyn')), { hauteur: 4, largeur: 5 }, { hauteur: 3, largeur: 7 }, { hauteur: 6, largeur: 6, graine: 9 }]) ok(`dominosKasteleyn ${JSON.stringify(p)} : compte exact = Kasteleyn, coin, Fibonacci, aire impaire, pavage dessine valide`, () => {
+    const R = S('dominosKasteleyn', p), I = R.invariants, b = R.brut, m = R.params.hauteur, L = R.params.largeur;
+    if (m * L <= 36) assert.equal(I.pavages.mesure, String(pavagesRef(m, L)));
+    if (m % 2 === 0 && L % 2 === 0) { let k = 1; for (let j = 1; j <= m / 2; j++) for (let q = 1; q <= L / 2; q++) k *= 4 * Math.cos(Math.PI * j / (m + 1)) ** 2 + 4 * Math.cos(Math.PI * q / (L + 1)) ** 2; assert.ok(Math.abs(Number(I.pavages.mesure) - k) / k < 1e-12 && I.pavages.ecartRelatif < 1e-12, 'kasteleyn ' + I.pavages.mesure + ' ' + k); } else assert.equal(I.pavages.formule, null);
+    let fa = 1, fb = 1; for (let i = 1; i < L; i++) [fa, fb] = [fb, fa + fb]; assert.equal(I.fibonacci.mesure, String(fb)); assert.equal(I.fibonacci.formule, String(fb)); /* banc game157 : la formule aussi (mutant F(L) survivait) */
+    if (m * L % 2) { assert.ok(I.pavages.mesure === '0' && I.impair.mesure === '0' && I.coin.mesure === null, 'impair'); return 'aire impaire : 0 pavage'; }
+    if (m * L <= 36) { const pc = pavagesRef(m, L, true) / pavagesRef(m, L); assert.ok(Math.abs(I.coin.formule - pc) < 1e-12, 'coin exact ' + I.coin.formule + ' ' + pc); }
+    assert.ok(Math.abs(z(I.coin)) < 5, 'coin z ' + z(I.coin));
+    /* le pavage dessine : chaque point est au milieu d une case ou entre deux cases voisines, et TOUTES les cases sont atteintes */
+    const vues = new Set(); let mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o] - 0.5, y = b[o + 1] - 0.5, lab = b[o + 2]; if (!(lab === 0 || lab === 1)) mal++;
+      if (lab === 0 && Math.abs(y - Math.round(y)) > 1e-12) mal++; if (lab === 1 && Math.abs(x - Math.round(x)) > 1e-12) mal++; if (Number.isInteger(x) && Number.isInteger(y)) vues.add(x * 100 + y); }
+    assert.ok(mal === 0 && x0ok(b, R.n, L, m), 'dessin ' + mal);
+    return m + ' x ' + L + ' : ' + I.pavages.mesure + ' pavages, coin ' + I.coin.mesure.toFixed(3) + ' / ' + I.coin.formule.toFixed(3);
+  });
+  ok('dominosKasteleyn : valeurs de controle de Grok Bot (2x2 : 2, 2x3 : 3, 4x4 : 36, 6x6 : 6728, 8x8 : 12988816)', () => {
+    const v = [[2, 2], [2, 3], [4, 4], [6, 6], [8, 8]].map(([h, l]) => S('dominosKasteleyn', { hauteur: h, largeur: l }).invariants.pavages.mesure); assert.deepEqual(v, ['2', '3', '36', '6728', '12988816']);
+    /* lot 4 de Grok Bot : 6 x 8 -> 167089 pavages, coin couche avec la probabilite EXACTE 81430/167089 (deux DP independantes chez lui) */
+    const I = S('dominosKasteleyn', { hauteur: 6, largeur: 8 }).invariants; assert.ok(I.pavages.mesure === '167089' && Math.abs(I.coin.formule - 81430 / 167089) < 1e-15, 'lot4 ' + I.coin.formule);
+    return v.join(' ') + ' ; 6x8 coin 81430/167089';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -393,6 +421,12 @@ const MUTANTS = [
   ['hofstadter : Jacobi arrete trop tot', 'if (off < 1e-30) break;\n    for (let p = 0; p < n; p++)', 'if (off < 1e-2) break;\n    for (let p = 0; p < n; p++)'],
   ['hofstadter : 1/3 avec sqrt 2', 'const r3 = Math.sqrt(3), ex13', 'const r3 = Math.sqrt(2), ex13'],
   ['hofstadter : dessin decale en energie', 'brut[3 * o + 1] = m === 1 ? (lo + hi) / 2 : lo + (hi - lo) * j / (m - 1);', 'brut[3 * o + 1] = 0.01 + (m === 1 ? (lo + hi) / 2 : lo + (hi - lo) * j / (m - 1));'],
+  ['dominos : domino debout sur la case occupee', "if (i + 1 < m && !(e >> (i + 1) & 1)) { ch.push([1, i]);", "if (i + 1 < m) { ch.push([1, i]);"],
+  ['dominos : Kasteleyn avec 2 cos^2', 'kast *= 4 * cosD(PI * j / (m + 1)) ** 2 + 4 * cosD(PI * k / (L + 1)) ** 2;', 'kast *= 2 * cosD(PI * j / (m + 1)) ** 2 + 4 * cosD(PI * k / (L + 1)) ** 2;'],
+  ['dominos : tirage biaise (premier choix toujours)', 'if (u < w) { cols.push(t.choix); e = t.sortie; break; } u -= w;', 'if (u < w || true) { cols.push(t.choix); e = t.sortie; break; } u -= w;'],
+  ['dominos : probabilite du coin avec le mauvais reste', 'h += R[L - 1][t.sortie];', 'h += R[L - 1][0];'],
+  ['dominos : Fibonacci F(L)', 'for (let i = 1; i < L; i++) [fa, fb] = [fb, fa + fb];', 'for (let i = 2; i < L; i++) [fa, fb] = [fb, fa + fb];'],
+  ['dominos : dessin d un domino couche vers le haut', 'doms.push(k === 0 ? [c, i, c + 1, i, 0] : [c, i, c, i + 1, 1])', 'doms.push(k === 0 ? [c, i, c + 1, i + 1, 0] : [c, i, c, i + 1, 1])'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

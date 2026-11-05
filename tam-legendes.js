@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game157 (idee : codex Grok Bot) */
+  dominosKasteleyn: {
+    titre: 'Domino tilings (every way to cover a rectangle)',
+    enUnePhrase: 'All the ways to cover a rectangle with dominoes are counted exactly; the picture is one of them, drawn uniformly at random.',
+    colonnes: ['across', 'up', 'domino (0 = lying, 1 = standing)'],
+    aRegarder: ['Change the seed: another tiling, equally likely, from the same huge list.', 'An 8 x 8 board has 12 988 816 tilings, exactly the number Kasteleyn\'s formula gives.', 'Make the area odd: no tiling exists at all.'],
+    fin: null,
+  },
   /* game155 (idee : codex Grok Bot) */
   papillonHofstadter: {
     titre: 'Hofstadter\'s butterfly (an electron in a magnetic field)',

@@ -479,6 +479,9 @@ const FICHIER_FAITS_POOL = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync
 const FICHIER_DROITS_SHOPIFY = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'droits-shopify.json') : null;
 let magasinShopifyOuvert = null;
+/* 2026-11-05 : le DERNIER webhook recu, servi par /api/shopify/etat — heure, sujet, domaine annonce, statut rendu et raison d un refus
+ *   (texte de CE serveur). Aucune donnee de commande ni de client. Sans lui, un refus de signature ou de domaine etait invisible. */
+let dernierWebhookSh = null;
 function magasinShopify() { if (!magasinShopifyOuvert) magasinShopifyOuvert = creerMagasin({ fichier: FICHIER_DROITS_SHOPIFY }); return magasinShopifyOuvert; }
 const faitsPersistes = new Map();  /* jeton -> { glissementBps, famille, pool, tickSpacing, t } */
 (function chargerFaitsPersistes() {
@@ -7486,7 +7489,7 @@ function traiterRequete(req, res) {
     };
     let magasinSh;
     try { magasinSh = magasinShopify(); } catch (_) { rendreSh(503, { ok: false, pourquoi: 'entitlement store unreadable' }); return; }
-    if (chemin === '/api/shopify/etat') { rendreSh(200, corpsEtat(process.env)); return; }
+    if (chemin === '/api/shopify/etat') { rendreSh(200, { ...corpsEtat(process.env), dernierWebhook: dernierWebhookSh }); return; }
     if (chemin === '/api/shopify/droits') {
       if (req.method !== 'GET') { rendreSh(405, { ok: false, pourquoi: 'GET only' }); return; }
       const r = corpsDroits({ env: process.env, magasin: magasinSh, adresse: new URL(req.url, 'http://x').searchParams.get('adresse') });
@@ -7510,6 +7513,9 @@ function traiterRequete(req, res) {
       let r;
       try { r = traiterWebhook({ env: process.env, entetes: req.headers, corpsBrut: Buffer.concat(morceaux), magasin: magasinSh }); }
       catch (_) { r = { statut: 503, corps: { ok: false, pourquoi: 'entitlement not saved' } }; } /* non-2xx : Shopify relivre */
+      const en = (n) => { const v = req.headers[n]; return typeof v === 'string' ? v.slice(0, 80) : null; };
+      dernierWebhookSh = { lu: new Date().toISOString(), sujet: en('x-shopify-topic'), domaine: en('x-shopify-shop-domain'), statut: r.statut,
+        pourquoi: r.corps && typeof r.corps.pourquoi === 'string' ? r.corps.pourquoi.slice(0, 120) : null };
       rendreSh(r.statut, r.corps);
     });
     return;
