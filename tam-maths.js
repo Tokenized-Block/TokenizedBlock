@@ -978,7 +978,53 @@ function billardElliptique(P, n) {
     temoin: { mesure: F.derive, note: 'witness: reflecting on the radial normal (the circle s) instead of the true one : L drifts' } } };
 }
 
+// ---------- 27 : le theoreme de Feuerbach (idee et valeurs : codex Grok Bot ; Scheer, Forum Geometricorum 11 (2011), theoreme 5, lu par Grok) ----------
+// Le cercle des neuf points (centre N, rayon R/2) touche le cercle inscrit de l INTERIEUR (NI = R/2 - r) et les trois cercles exinscrits de
+//   l EXTERIEUR (N I_a = R/2 + r_a, ...).
+// Exact ici : triangles a sommets ENTIERS et cotes ENTIERS (A = (0,0), B = (p,0), C = (x,y), |AC| et |BC| entiers), tires (graine) parmi ceux
+//   de la grille du curseur : R = abc/4K, r = K/s, r_a = K/(s - a), O, H = A + B + C - 2O, N = (O + H)/2, I et les excentres (barycentres
+//   ponderes par +-a, b, c) sont tous RATIONNELS ; les quatre tangences sont comparees au carre, en fractions BigInt, A L IDENTIQUE.
+// Temoin : le cercle CIRCONSCRIT n est pas tangent au cercle inscrit : OI^2 = R^2 - 2Rr (Euler), pas (R - r)^2.
+// Dessin (vue de face) : le triangle (0), le cercle des neuf points (1), le cercle inscrit (2), les trois cercles exinscrits (3).
+const feuG = (a, b) => { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) [a, b] = [b, a % b]; return a; };
+const feuF = (n, d = 1n) => { if (d < 0n) { n = -n; d = -d; } const k = feuG(n, d) || 1n; return [n / k, d / k]; };
+const feuAdd = (x, y) => feuF(x[0] * y[1] + y[0] * x[1], x[1] * y[1]), feuSub = (x, y) => feuAdd(x, [-y[0], y[1]]);
+const feuMul = (x, y) => feuF(x[0] * y[0], x[1] * y[1]), feuDiv = (x, y) => feuF(x[0] * y[1], x[1] * y[0]);
+const feuEq = (x, y) => x[0] === y[0] && x[1] === y[1], feuE = (n) => [BigInt(n), 1n], feuNb = (x) => Number(x[0]) / Number(x[1]);
+const feuTexte = (x) => x[0] + (x[1] === 1n ? '' : '/' + x[1]);
+function feuTriangles(L) { const T = [], rc = (n) => { const r = Math.round(Math.sqrt(n)); return r * r === n ? r : -1; };
+  for (let p = 1; p <= L; p++) for (let x = -L; x <= 2 * L; x++) for (let y = 1; y <= L; y++) { const b = rc(x * x + y * y), a = rc((p - x) ** 2 + y * y); if (b > 0 && a > 0 && !(a === b && b === p)) T.push([p, x, y, a, b]); }
+  return T; }
+function feuCalcul([p, x, y, a, b]) {
+  const c = p, A = [feuE(0), feuE(0)], B = [feuE(p), feuE(0)], C = [feuE(x), feuE(y)], K = feuDiv(feuE(p * y), feuE(2)), s = feuDiv(feuE(a + b + c), feuE(2));
+  const R = feuDiv(feuE(a * b * c), feuMul(feuE(4), K)), r = feuDiv(K, s), ra = feuDiv(K, feuSub(s, feuE(a))), rb = feuDiv(K, feuSub(s, feuE(b))), rcx = feuDiv(K, feuSub(s, feuE(c)));
+  const O = [feuF(BigInt(p), 2n), feuDiv(feuSub(feuE(x * x + y * y), feuE(p * x)), feuE(2 * y))];
+  const H = [feuSub(feuAdd(feuAdd(A[0], B[0]), C[0]), feuMul(feuE(2), O[0])), feuSub(feuAdd(feuAdd(A[1], B[1]), C[1]), feuMul(feuE(2), O[1]))];
+  const N = [feuDiv(feuAdd(O[0], H[0]), feuE(2)), feuDiv(feuAdd(O[1], H[1]), feuE(2))];
+  const bar = (wa, wb, wc) => { const S = feuE(wa + wb + wc); return [feuDiv(feuAdd(feuAdd(feuMul(feuE(wa), A[0]), feuMul(feuE(wb), B[0])), feuMul(feuE(wc), C[0])), S), feuDiv(feuAdd(feuAdd(feuMul(feuE(wa), A[1]), feuMul(feuE(wb), B[1])), feuMul(feuE(wc), C[1])), S)]; };
+  const I = bar(a, b, c), Ia = bar(-a, b, c), Ib = bar(a, -b, c), Ic = bar(a, b, -c);
+  const d2 = (U, V) => feuAdd(feuMul(feuSub(U[0], V[0]), feuSub(U[0], V[0])), feuMul(feuSub(U[1], V[1]), feuSub(U[1], V[1]))), carre = (z) => feuMul(z, z), R2 = feuDiv(R, feuE(2));
+  return { R, r, ra, rb, rcx, O, N, I, Ia, Ib, Ic, R2, interne: feuEq(d2(N, I), carre(feuSub(R2, r))),
+    externes: [[Ia, ra], [Ib, rb], [Ic, rcx]].filter(([P, q]) => !feuEq(d2(N, P), carre(feuAdd(R2, q)))).length,
+    neuf: feuEq(d2(N, [feuF(BigInt(p), 2n), feuE(0)]), carre(R2)), oi2: d2(O, I), rMoinsR2: carre(feuSub(R, r)), euler: feuSub(carre(R), feuMul(feuE(2), feuMul(R, r))) };
+}
+function feuerbach(P, n) {
+  const T = feuTriangles(P.taille), rng = mulberry32(P.graine), t = T[Math.floor(rng() * T.length)], F = feuCalcul(t), [p, x, y] = t;
+  const cercles = [[F.N, F.R2, 1], [F.I, F.r, 2], [F.Ia, F.ra, 3], [F.Ib, F.rb, 3], [F.Ic, F.rcx, 3]], brut = new Float64Array(n * 3), S = [[0, 0], [p, 0], [x, y]];
+  const n0 = Math.floor(n / 5), parC = Math.max(1, Math.floor((n - n0) / 5)); /* petit n : jamais 0/0 */
+  for (let l = 0; l < n; l++) { const o = 3 * l;
+    if (l < n0) { const u = 3 * l / n0, k = Math.floor(u), v = u - k, P0 = S[k], P1 = S[(k + 1) % 3]; brut[o] = P0[0] + v * (P1[0] - P0[0]); brut[o + 1] = P0[1] + v * (P1[1] - P0[1]); brut[o + 2] = 0; continue; }
+    const j = Math.min(4, Math.floor((l - n0) / parC)), q = (l - n0 - j * parC) / parC, [Cc, rr, e] = cercles[j], ang = 2 * PI * q;
+    brut[o] = feuNb(Cc[0]) + feuNb(rr) * cosD(ang); brut[o + 1] = feuNb(Cc[1]) + feuNb(rr) * sinD(ang); brut[o + 2] = e; }
+  return { D: 3, brut, nuage: true, unite: 'cases de la grille', invariants: {
+    interne: { mesure: F.interne ? 0 : 1, formule: 0, triangle: JSON.stringify(S), note: 'nine-point circle and incircle : NI^2 = (R/2 - r)^2 compared exactly in fractions (0 = they touch from inside)' },
+    externes: { mesure: F.externes, formule: 0, rayons: [F.R, F.r, F.ra, F.rb, F.rcx].map(feuTexte).join(', '), note: 'excircles NOT touching the nine-point circle from outside (N I_a = R/2 + r_a, exact) ; rayons = R, r, r_a, r_b, r_c' },
+    neufPoints: { mesure: F.neuf ? 0 : 1, formule: 0, note: 'the circle centred at N = (O + H)/2 with radius R/2 passes through the midpoint of AB (exact)' },
+    temoin: { mesure: feuTexte(F.oi2), formule: feuTexte(F.euler), carreRmoinsr: feuTexte(F.rMoinsR2), note: 'witness: the CIRCUMcircle does not touch the incircle : OI^2 = R^2 - 2Rr (Euler), not (R - r)^2' } } };
+}
+
 export const COLONNES = Object.freeze({
+  feuerbach: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = nine-point circle, 2 = incircle, 3 = excircles)'], memeLongueur: [[0, 1]], autres: [2] },
   billardElliptique: { colonnes: ['x', 'y', 'what (label; 0 = the table, 1 = the path, 2 = the caustic)'], memeLongueur: [[0, 1]], autres: [2] },
   napoleon: { colonnes: ['x', 'y', 'what (label; 0 = the triangle, 1 = equilateral triangles on its sides, 2 = Napoleon triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   percolationLiens: { colonnes: ['x (lattice)', 'y (lattice)', 'cluster (label; 2 = crosses, 1 = touches the left side, 0 = other)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1086,9 +1132,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'billardElliptique', nom: 'The elliptic billiard and its caustic', science: 'Geometry', D: 3, nuage: true, params: { petitAxe: 0.6, lancer: 20, tir: 70, rebonds: 400 },
     bornes: { petitAxe: [0.3, 0.95], lancer: [0, 359], tir: [5, 175], rebonds: [10, 2000] },
     phrase: 'A visualisation of a billiard ball bouncing inside an ellipse: every straight run stays tangent to one same confocal curve, an ellipse or a hyperbola, called the caustic. The confocal parameter of every chord is computed and stays constant to round-off over hundreds of bounces; bouncing on a wrong normal makes it drift.' },
+  { id: 'feuerbach', nom: 'Feuerbach\'s theorem (the nine-point circle)', science: 'Geometry', D: 3, nuage: true, params: { taille: 20, graine: 1 },
+    bornes: { taille: [5, 40], graine: [1, 1000000] },
+    phrase: 'A visualisation of Feuerbach\'s theorem: the nine-point circle of a triangle touches its inscribed circle from inside and its three escribed circles from outside. The triangles have whole-number corners and sides, so every centre and radius is a fraction and the four tangencies are checked exactly; the circumscribed circle, which does not touch, is shown as a witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'] };
-const FONCTIONS = { billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'] };
+const FONCTIONS = { feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game169 (idee : codex Grok Bot) */
+  feuerbach: {
+    titre: 'Feuerbach\'s theorem (the circle that touches four circles)',
+    enUnePhrase: 'Every triangle has a special circle through nine points that touches its inner circle and its three outer circles.',
+    colonnes: ['across', 'up', 'triangle or which circle'],
+    aRegarder: ['The nine-point circle kisses the small inner circle from inside and each of the three big outer circles from outside.', 'Change the seed: another triangle with whole-number sides, and the four touches are checked as exact fractions.', 'The circle through the three corners does not touch the inner circle: that is the witness.'],
+    fin: null,
+  },
   /* game168 (idee : codex Grok Bot) */
   billardElliptique: {
     titre: 'The elliptic billiard (a ball that never forgets its caustic)',

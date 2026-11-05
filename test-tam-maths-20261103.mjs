@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -553,6 +553,40 @@ function suite(T, bavard = false, seul = null) {
       if (e === 2) { deux++; if (Math.abs(x * x / (1 - L) + y * y / (b2 - L) - 1) > 1e-9) mal++; } if (![0, 1, 2].includes(e)) mal++; }
     assert.ok(mal === 0 && deux > 0, mal + ' points faux, ' + deux + ' sur la caustique'); return I.caustique.typeCaustique.split(' ')[0] + ', L = ' + L.toFixed(6) + ', derive ' + I.caustique.mesure.toExponential(1);
   });
+  /* game169 : Feuerbach — reference INDEPENDANTE en flottants, par d AUTRES constructions : N = centre du cercle des TROIS MILIEUX
+   *   (la definition du cercle des neuf points, pas (O + H)/2), I et excentres par INTERSECTION DES BISSECTRICES (vecteurs unitaires) ;
+   *   valeurs de Grok Bot pour 6-8-10 : R = 5, r = 2, exinscrits {4, 6, 12}, d(N,I) = 1/2, d(N,I_x) = 13/2, 17/2, 29/2 */
+  const feuRef = (S) => { const [A, B, C] = S, mil = (U, V) => [(U[0] + V[0]) / 2, (U[1] + V[1]) / 2], M = [mil(B, C), mil(C, A), mil(A, B)];
+    const cc = (P, Q, R) => { const d = 2 * (P[0] * (Q[1] - R[1]) + Q[0] * (R[1] - P[1]) + R[0] * (P[1] - Q[1])), n2 = (U) => U[0] ** 2 + U[1] ** 2;
+      return [(n2(P) * (Q[1] - R[1]) + n2(Q) * (R[1] - P[1]) + n2(R) * (P[1] - Q[1])) / d, (n2(P) * (R[0] - Q[0]) + n2(Q) * (P[0] - R[0]) + n2(R) * (Q[0] - P[0])) / d]; };
+    const N = cc(...M), rho = Math.hypot(N[0] - M[0][0], N[1] - M[0][1]);
+    const u = (P, Q) => { const d = [Q[0] - P[0], Q[1] - P[1]], l = Math.hypot(...d); return [d[0] / l, d[1] / l]; };
+    const inter = (P, dP, Q, dQ) => { const den = dP[0] * dQ[1] - dP[1] * dQ[0], t = ((Q[0] - P[0]) * dQ[1] - (Q[1] - P[1]) * dQ[0]) / den; return [P[0] + t * dP[0], P[1] + t * dP[1]]; };
+    const bisInt = (P, Q, R) => { const a = u(P, Q), b = u(P, R); return [a[0] + b[0], a[1] + b[1]]; }, bisExt = (P, Q, R) => { const a = u(P, Q), b = u(P, R); return [a[0] - b[0], a[1] - b[1]]; };
+    const distDroite = (P, U, V) => Math.abs((V[0] - U[0]) * (U[1] - P[1]) - (U[0] - P[0]) * (V[1] - U[1])) / Math.hypot(V[0] - U[0], V[1] - U[1]);
+    const I = inter(A, bisInt(A, B, C), B, bisInt(B, C, A)), r = distDroite(I, A, B);
+    const Ia = inter(B, bisExt(B, C, A), C, bisExt(C, A, B)), Ib = inter(C, bisExt(C, A, B), A, bisExt(A, B, C)), Ic = inter(A, bisExt(A, B, C), B, bisExt(B, C, A));
+    const ex = [Ia, Ib, Ic].map((P) => ({ P, r: distDroite(P, B, C) }));
+    const d = (P) => Math.hypot(P[0] - N[0], P[1] - N[1]); return { N, rho, I, r, ex, dI: d(I), dEx: ex.map((e) => d(e.P)) }; };
+  ok('feuerbach : valeurs de Grok Bot sur 6-8-10 (C = (0,0), B = (6,0), A = (0,8)) retrouvees par la reference', () => {
+    const f = feuRef([[0, 8], [6, 0], [0, 0]]); assert.ok(Math.abs(f.rho - 2.5) < 1e-12 && Math.abs(f.r - 2) < 1e-12 && Math.abs(f.dI - 0.5) < 1e-12, JSON.stringify(f));
+    assert.deepEqual(f.ex.map((e) => Math.round(e.r * 1e9) / 1e9).sort((x, y) => x - y), [4, 6, 12]); assert.deepEqual(f.dEx.map((v) => Math.round(v * 1e9) / 1e9).sort((x, y) => x - y), [6.5, 8.5, 14.5]); return 'ok'; });
+  for (const p of [...extremes(sys('feuerbach')), { taille: 33, graine: 4242 }, { taille: 12, graine: 77 }]) ok(`feuerbach ${JSON.stringify(p)} : quatre tangences exactes ET par bissectrices, rayons, temoin d Euler, dessin`, () => {
+    const R = S('feuerbach', p), I = R.invariants, b = R.brut, T = JSON.parse(I.interne.triangle), f = feuRef(T);
+    assert.ok(I.interne.mesure === 0 && I.externes.mesure === 0 && I.neufPoints.mesure === 0, JSON.stringify(I));
+    const tol = 1e-9 * (1 + f.rho);
+    assert.ok(Math.abs(f.dI - Math.abs(f.rho - f.r)) < tol && f.dEx.every((dv, i) => Math.abs(dv - (f.rho + f.ex[i].r)) < tol * 10), 'reference ' + JSON.stringify(f));
+    const fr = I.externes.rayons.split(', ').map((t) => { const [u, v] = t.split('/'); return Number(u) / (v ? Number(v) : 1); });
+    assert.ok(Math.abs(fr[0] / 2 - f.rho) < tol && Math.abs(fr[1] - f.r) < tol && fr.slice(2).every((q, i) => Math.abs(q - f.ex[i].r) < tol * 10), 'rayons ' + I.externes.rayons);
+    /* temoin d Euler : OI^2 = R^2 - 2Rr, et ce n est pas (R - r)^2 */
+    const val = (t) => { const [u, v] = String(t).split('/'); return Number(u) / (v ? Number(v) : 1); };
+    assert.ok(I.temoin.mesure === I.temoin.formule && Math.abs(val(I.temoin.mesure) - (fr[0] ** 2 - 2 * fr[0] * fr[1])) < 1e-9 * (1 + fr[0] ** 2) && val(I.temoin.carreRmoinsr) > val(I.temoin.mesure), 'temoin ' + JSON.stringify(I.temoin));
+    /* dessin : etiquette 1 sur le cercle des neuf points de la reference, 2 sur l inscrit */
+    let mal = 0, un = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1], e = b[o + 2];
+      if (e === 1) { un++; if (Math.abs(Math.hypot(x - f.N[0], y - f.N[1]) - f.rho) > tol * 10) mal++; }
+      if (e === 2 && Math.abs(Math.hypot(x - f.I[0], y - f.I[1]) - f.r) > tol * 10) mal++; if (![0, 1, 2, 3].includes(e)) mal++; }
+    assert.ok(mal === 0 && un > 0, mal + ' points hors de leur cercle'); return 'rayons ' + I.externes.rayons;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -716,6 +750,12 @@ const MUTANTS = [
   ['billard : foyers a 1 - b', 'const c = Math.sqrt(1 - b2);', 'const c = 1 - b;'],
   ['billard : caustique hyperbole prise pour ellipse', 'L0 = R.L0, ellipse = L0 < b2;', 'L0 = R.L0, ellipse = true;'],
   ['billard : trajectoire hors de la table', 'brut[o] = x; brut[o + 1] = y; brut[o + 2] = e; }', 'brut[o] = e === 1 ? 1.2 * x : x; brut[o + 1] = y; brut[o + 2] = e; }'],
+  ['feuerbach : excentre au mauvais signe', 'Ia = bar(-a, b, c)', 'Ia = bar(a, -b, c)'],
+  ['feuerbach : R = abc / 2K', 'const R = feuDiv(feuE(a * b * c), feuMul(feuE(4), K))', 'const R = feuDiv(feuE(a * b * c), feuMul(feuE(2), K))'],
+  ['feuerbach : N = O', 'const N = [feuDiv(feuAdd(O[0], H[0]), feuE(2)), feuDiv(feuAdd(O[1], H[1]), feuE(2))];', 'const N = O;'],
+  ['feuerbach : inscrit tangent de l exterieur', 'interne: feuEq(d2(N, I), carre(feuSub(R2, r)))', 'interne: feuEq(d2(N, I), carre(feuAdd(R2, r)))'],
+  ['feuerbach : temoin (R - r)^2', 'temoin: { mesure: feuTexte(F.oi2), formule: feuTexte(F.euler)', 'temoin: { mesure: feuTexte(F.oi2), formule: feuTexte(F.rMoinsR2)'],
+  ['feuerbach : cercle inscrit decale', 'brut[o] = feuNb(Cc[0]) + feuNb(rr) * cosD(ang);', 'brut[o] = feuNb(Cc[0]) + (e === 2 ? 0.3 : 0) + feuNb(rr) * cosD(ang);'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -730,7 +770,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

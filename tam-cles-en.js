@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game169 */
+  carreRmoinsr: '(R - r)^2',
   /* game168 */
   lambda0: 'confocal parameter L', typeCaustique: 'caustic',
   /* game167 */
@@ -445,6 +447,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game169 */
+  interne: 'Nine-point circle vs incircle: touch from inside (exact)', externes: 'Excircles not touching from outside (exact)', neufPoints: 'Nine-point circle through a side midpoint (exact)',
   /* game168 */
   caustique: 'Confocal parameter of the chords: largest change', foyers: 'Sum of distances to the foci vs 2 (largest gap)',
   /* game167 */
