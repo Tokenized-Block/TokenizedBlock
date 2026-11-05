@@ -415,7 +415,39 @@ function cerclesFord(P, n) {
     temoin: { mesure: temoin, note: 'witness: 1/3 and 2/3 are not neighbours (|ps - qr| = 3) : gap between their circles, above 0' } } };
 }
 
+// ---------- 12 : l arbre de Steiner des quatre coins (idee : codex Grok Bot 2026-11-05) ----------
+// Relier les quatre coins d un rectangle L x 1 (curseur L) par le reseau de routes le plus COURT, en ajoutant deux carrefours libres S et T.
+// Mesure : pour chacune des deux formes possibles (pont horizontal : S relie les coins de gauche, T ceux de droite ; pont vertical : S ceux
+//   du bas, T ceux du haut), S et T sont CHERCHES : chacun est replace au point de Fermat de ses trois voisins (iteration de Weiszfeld,
+//   moyenne ponderee par 1/distance), tour a tour, 2000 fois. On garde la forme la plus courte.
+// Exact (derive ici) : au carrefour les trois routes font 120 degres. Pont horizontal : les bras vers (0, 0) et (0, 1) font 60 degres avec
+//   l horizontale, S = (1/(2 sqrt 3), 1/2), chaque bras mesure 1/sqrt 3, le pont L - 1/sqrt 3 : total L + sqrt 3 (valable pour
+//   L >= 1/sqrt 3). Pont vertical, par symetrie : 1 + sqrt(3) L. Le plus court : min(L + sqrt 3, 1 + sqrt(3) L) ; pour le carre, 1 + sqrt 3.
+// Temoins : l arbre couvrant minimal sans carrefour (2 min(L, 1) + max(L, 1)) et la croix des diagonales (2 sqrt(1 + L^2)), plus longs.
+// Dessin (vue de face) : le reseau le plus court (etiquette 0) et l autre forme (etiquette 1, plus longue).
+function fermatSteiner(P, n) {
+  const L = P.largeur, A = [0, 0], B = [L, 0], C = [L, 1], Dd = [0, 1], dist = (a, b) => Math.sqrt((a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2);
+  const fermat = (Q, a, b, c) => { const wa = 1 / Math.max(dist(Q, a), 1e-300), wb = 1 / Math.max(dist(Q, b), 1e-300), wc = 1 / Math.max(dist(Q, c), 1e-300), w = wa + wb + wc; return [(a[0] * wa + b[0] * wb + c[0] * wc) / w, (a[1] * wa + b[1] * wb + c[1] * wc) / w]; };
+  const cosA = (Q, u, v) => ((u[0] - Q[0]) * (v[0] - Q[0]) + (u[1] - Q[1]) * (v[1] - Q[1])) / (dist(Q, u) * dist(Q, v));
+  const forme = (vertical) => { const [s1, s2, t1, t2] = vertical ? [A, B, Dd, C] : [A, Dd, B, C]; let S = vertical ? [L / 2, 0.3] : [0.3, 0.5], T = vertical ? [L / 2, 0.7] : [L - 0.3, 0.5];
+    for (let k = 0; k < 2000; k++) { S = fermat(S, s1, s2, T); T = fermat(T, t1, t2, S); }
+    const segs = [[S, s1], [S, s2], [S, T], [T, t1], [T, t2]], long = segs.reduce((u, [a, b]) => u + dist(a, b), 0);
+    const ecart = Math.max(...[[S, s1, s2], [S, s1, T], [S, s2, T], [T, t1, t2], [T, t1, S], [T, t2, S]].map(([Q, u, v]) => Math.abs(cosA(Q, u, v) + 0.5)));
+    return { long, S, T, segs, ecart, vertical }; };
+  const h = forme(false), v = forme(true), best = h.long <= v.long ? h : v, autre = best === h ? v : h, r3 = Math.sqrt(3);
+  const brut = new Float64Array(n * 3), moitie = Math.ceil(n * 0.7);
+  const tracer = (f, de, a, lab) => { const tot = f.segs.reduce((u, [p, q]) => u + dist(p, q), 0); for (let l = de; l < a; l++) { let t = (l - de + 0.5) / (a - de) * tot, i = 0; while (i < 4 && t > dist(...f.segs[i])) { t -= dist(...f.segs[i]); i++; } const [p, q] = f.segs[i], u = Math.min(1, t / dist(p, q)), o = 3 * l; brut[o] = p[0] + u * (q[0] - p[0]); brut[o + 1] = p[1] + u * (q[1] - p[1]); brut[o + 2] = lab; } };
+  tracer(best, 0, moitie, 0); tracer(autre, moitie, n, 1);
+  const ex = Math.min(L + r3, 1 + r3 * L), sEx = best.vertical ? null : [1 / (2 * r3), 0.5];
+  return { D: 3, brut, nuage: true, unite: 'sans objet (rectangle L x 1)', invariants: {
+    longueur: { mesure: best.long, formule: ex, pont: best.vertical ? 'vertical' : 'horizontal', note: 'length of the shortest network FOUND (two free crossroads moved to the Fermat point of their neighbours, Weiszfeld) against min(L + sqrt 3, 1 + sqrt(3) L) ; 1 + sqrt 3 for the square' },
+    angles: { mesure: best.ecart, formule: 0, note: 'largest |cos + 1/2| between two roads at a crossroad : 0 means exactly 120 degrees everywhere' },
+    carrefour: { mesure: sEx ? Math.max(Math.abs(best.S[0] - sEx[0]), Math.abs(best.S[1] - sEx[1])) : Math.max(Math.abs(best.S[0] - L / 2), Math.abs(best.S[1] - L / (2 * r3))), formule: 0, note: 'distance of the first crossroad found from (1/(2 sqrt 3), 1/2) (or (L/2, L/(2 sqrt 3)) for the vertical bridge : its arms start from the two bottom towns, L apart)' },
+    plusLongs: { autreForme: autre.long, arbreSansCarrefour: 2 * Math.min(L, 1) + Math.max(L, 1), croix: 2 * Math.sqrt(1 + L * L), note: 'witnesses, all longer : the other shape, the shortest network without crossroads, the cross of the diagonals' } } };
+}
+
 export const COLONNES = Object.freeze({
+  fermatSteiner: { colonnes: ['x', 'y', 'network (label; 0 = shortest, 1 = the other shape)'], memeLongueur: [[0, 1]], autres: [2] },
   cerclesFord: { colonnes: ['x (the fraction p/q on the line)', 'y (height above the line)', 'denominator q (label)'], memeLongueur: [[0, 1]], autres: [2] },
   vergerEuclide: { colonnes: ['a (trees across)', 'b (trees up)', 'row max(a, b) (label)'], memeLongueur: [[0, 1]], autres: [2] },
   tasDeSable: { colonnes: ['x (cell)', 'y (cell)', 'grains on the cell (label, 0 to 3)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -463,9 +495,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'cerclesFord', nom: 'Ford circles (fractions that touch)', science: 'Number theory', D: 3, nuage: true, params: { ordre: 12 },
     bornes: { ordre: [3, 60] },
     phrase: 'A visualisation of Ford circles: on every fraction p/q between 0 and 1 sits a circle of radius 1/(2 q^2). They never overlap, and two circles touch exactly when |ps - qr| = 1, which is true of any two neighbours in the Farey sequence. Each fraction is listed, the touching is measured, and their number matches 1 + phi(1) + ... + phi(n).' },
+  { id: 'fermatSteiner', nom: 'The shortest roads between four towns (Steiner)', science: 'Geometry', D: 3, nuage: true, params: { largeur: 1.3 },
+    bornes: { largeur: [0.6, 1.7] },
+    phrase: 'A visualisation of the Steiner problem: join the four corners of a rectangle with the shortest possible roads, allowing two extra crossroads. The crossroads are found by moving each to the point that is nearest in total to its three neighbours. Every crossroad ends with three roads at exactly 120 degrees, and the total matches min(L + sqrt 3, 1 + sqrt(3) L): 1 + sqrt 3 for a square, shorter than both the cross of the diagonals and any network without crossroads.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'] };
-const FONCTIONS = { cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [] };
+const FONCTIONS = { fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

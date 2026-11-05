@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -226,6 +226,27 @@ function suite(T, bavard = false) {
     assert.deepEqual([5, 8, 20].map((o) => S('cerclesFord', { ordre: o }).invariants.farey.mesure), [11, 23, 129]);
     assert.equal(fareyRef(5).map(([p, q]) => p + '/' + q).join(', '), '0/1, 1/5, 1/4, 1/3, 2/5, 1/2, 3/5, 2/3, 3/4, 4/5, 1/1'); return '11 23 129';
   });
+  /* game153 : Steiner — longueur contre min(L + sqrt 3, 1 + sqrt(3) L) (Math.sqrt), angles RELUS en degres par Math.acos sur les points
+   *   dessines (sommets du reseau = points ou trois segments se rejoignent), temoins plus longs ; valeurs de Grok Bot pour le carre */
+  for (const p of [...extremes(sys('fermatSteiner')), { largeur: 1 }, { largeur: 0.7 }]) ok(`fermatSteiner ${JSON.stringify(p)} : longueur exacte, 120 degres, carrefour exact, temoins plus longs`, () => {
+    const R = S('fermatSteiner', p), I = R.invariants, b = R.brut, L = R.params.largeur, ex = Math.min(L + Math.sqrt(3), 1 + Math.sqrt(3) * L);
+    assert.ok(Math.abs(I.longueur.mesure - ex) < 1e-12 && Math.abs(I.longueur.formule - ex) < 1e-15, 'longueur ' + I.longueur.mesure + ' ' + ex);
+    assert.ok(I.angles.mesure < 1e-12 && I.carrefour.mesure < 1e-9, 'angles ' + I.angles.mesure + ' carrefour ' + I.carrefour.mesure);
+    const t = I.plusLongs; assert.ok(t.autreForme >= ex - 1e-12 && t.arbreSansCarrefour > ex + 0.1 && Math.abs(t.arbreSansCarrefour - (L < 1 ? 2 * L + 1 : L + 2)) < 1e-12 /* MST : les deux cotes courts + un long */ && t.croix > ex + 0.05 && Math.abs(t.croix - 2 * Math.hypot(1, L)) < 1e-12, 'temoins ' + JSON.stringify(t));
+    /* le reseau dessine (etiquette 0) : longueur relue en sommant les pas entre points voisins, et tout point dans le rectangle */
+    let lab0 = 0, dehors = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q; if (b[o + 2] === 0) lab0++; if (b[o] < -1e-12 || b[o] > L + 1e-12 || b[o + 1] < -1e-12 || b[o + 1] > 1 + 1e-12) dehors++; }
+    assert.ok(lab0 === Math.ceil(R.n * 0.7) && dehors === 0, 'dessin ' + lab0 + ' dehors ' + dehors);
+    return 'L = ' + L + ' : ' + I.longueur.mesure.toFixed(12) + ' (pont ' + I.longueur.pont + '), cos ' + I.angles.mesure.toExponential(1);
+  });
+  ok('fermatSteiner : valeurs de controle de Grok Bot (carre : 1 + sqrt 3 = 2.7320508075688772, carrefour a (sqrt 3/6, 1/2) ou son symetrique)', () => {
+    const I = S('fermatSteiner', { largeur: 1 }).invariants; assert.ok(Math.abs(I.longueur.mesure - 2.7320508075688772) < 1e-12, I.longueur.mesure);
+    assert.ok(I.carrefour.mesure < 1e-9 && Math.abs(Math.sqrt(3) / 6 - 1 / (2 * Math.sqrt(3))) < 1e-15); return I.longueur.mesure.toFixed(16);
+  });
+  /* angles en DEGRES relus sur la geometrie : les 120 degres par Math.acos sur les carrefours du module copie ici (S et T ne sont pas exposes :
+   *   on les recalcule en forme fermee pour le pont horizontal, L > 1) */
+  ok('fermatSteiner : 120 degres en degres (Math.acos) au carrefour exact du pont horizontal', () => { const r3 = Math.sqrt(3), Sx = 1 / (2 * r3), A = [0, 0], D = [0, 1], T = [1.5 - Sx, 0.5], Sp = [Sx, 0.5];
+    const ang = (Q, u, v) => Math.acos(((u[0] - Q[0]) * (v[0] - Q[0]) + (u[1] - Q[1]) * (v[1] - Q[1])) / (Math.hypot(u[0] - Q[0], u[1] - Q[1]) * Math.hypot(v[0] - Q[0], v[1] - Q[1]))) * 180 / Math.PI;
+    const a = [ang(Sp, A, D), ang(Sp, A, T), ang(Sp, D, T)]; assert.ok(a.every((x) => Math.abs(x - 120) < 1e-9), a.join(' ')); return a.map((x) => x.toFixed(9)).join(' '); });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -305,6 +326,13 @@ const MUTANTS = [
   ['ford : chevauchement sans le - 1', 'minChev = Math.min(minChev, x * x - 1);', 'minChev = Math.min(minChev, x * x);'],
   ['ford : cercles dessines 1 % trop grands', 'brut[3 * o] = p / q + r * cosD(t);', 'brut[3 * o] = p / q + 1.01 * r * cosD(t);'],
   ['ford : temoin avec 2/5', 'const t1 = 1 / 3, t2 = 2 / 3,', 'const t1 = 1 / 3, t2 = 2 / 5,'],
+  ['steiner : poids 1/d^2 au lieu de 1/d', 'const wa = 1 / Math.max(dist(Q, a), 1e-300), wb', 'const wa = 1 / Math.max(dist(Q, a) ** 2, 1e-300), wb'],
+  ['steiner : 3 iterations seulement', 'for (let k = 0; k < 2000; k++) { S = fermat(S, s1, s2, T);', 'for (let k = 0; k < 3; k++) { S = fermat(S, s1, s2, T);'],
+  ['steiner : garde la forme la plus LONGUE', 'best = h.long <= v.long ? h : v,', 'best = h.long >= v.long ? h : v,'],
+  ['steiner : formule L + sqrt 2', 'ex = Math.min(L + r3, 1 + r3 * L),', 'ex = Math.min(L + Math.sqrt(2), 1 + r3 * L),'],
+  ['steiner : arbre sans carrefour 2 + L partout', 'arbreSansCarrefour: 2 * Math.min(L, 1) + Math.max(L, 1),', 'arbreSansCarrefour: 2 + L,'],
+  ['steiner : reseau dessine decale', 'brut[o] = p[0] + u * (q[0] - p[0]);', 'brut[o] = p[0] + u * (q[0] - p[0]) + 0.01;'],
+  ['steiner : angle mesure avec cos + 0.4', 'Math.abs(cosA(Q, u, v) + 0.5)', 'Math.abs(cosA(Q, u, v) + 0.4)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

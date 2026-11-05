@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game153 (idee : codex Grok Bot) */
+  fermatSteiner: {
+    titre: 'The shortest roads between four towns (Steiner tree)',
+    enUnePhrase: 'Four towns at the corners of a rectangle, joined by the shortest roads when two extra crossroads are allowed.',
+    colonnes: ['across', 'up', 'network (0 = shortest, 1 = the other shape)'],
+    aRegarder: ['At each crossroad the three roads meet at exactly 120 degrees, like soap films between pins.', 'The other shape (label 1) uses the same rule but is longer: the bridge goes the short way.', 'Make the rectangle a square: both shapes tie at 1 + sqrt 3, about 2.732.'],
+    fin: null,
+  },
   /* game152 (idee : codex Grok Bot) */
   cerclesFord: {
     titre: 'Ford circles (every fraction gets a circle)',
