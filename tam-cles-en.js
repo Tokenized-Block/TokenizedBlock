@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game149 */
+  largeurCase: 'bin width (degrees)', rayonsGardes: 'rays through the 60 degree path',
   /* game148 */
   cercles: 'circles found', ecartEntier: 'largest distance of a curvature to a whole number', sansFacteur2: 'circles missed by the formula without the factor 2', comparables: 'circles where that formula differs at all',
   /* game146 */
@@ -415,6 +417,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game149 */
+  deviationMin: 'Smallest turn of the light, searched (degrees)', picDuHalo: 'Most frequent turn of the rays thrown (degrees)', temoin90: 'Witness: faces 90 degrees apart (the 46 degree halo)',
   /* game148 */
   courbures: 'Curvatures found vs Descartes (worst relative gap)', centresComplexes: 'Centres found vs complex Descartes (worst residual)', cerclesParGeneration: 'Circles found per generation', entiers: 'Witnesses: whole curvatures, formula without the factor 2',
   /* game146 */

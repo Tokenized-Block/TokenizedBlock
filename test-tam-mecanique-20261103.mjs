@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov', 'toupie', 'penduleRessort', 'kapitza'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov', 'toupie', 'penduleRessort', 'kapitza', 'haloGlace'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -343,6 +343,17 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(Math.abs(b[0] - R.params.depart) < 1e-12 && b[1] === 0 && b[2] === 0 && pire <= 0 && tMax > 3 * 2 * Math.PI / nu, 'dessin ' + pire + ' ' + tMax);
     return 'trace ' + I.traceKapitza.mesure.toFixed(7) + ' / ' + tr.toFixed(7) + ', nu ' + I.frequenceLente.mesure.toFixed(5) + ' (Kapitza ' + I.frequenceLente.kapitza.toFixed(4) + '), grande amplitude ' + (G.ecartRelatif / th0 / th0).toFixed(3) + ' theta0^2';
   });
+  /* game149 : halo (idee : codex Grok Bot) — references INDEPENDANTES : D_min par Math.asin ; AUCUN rayon dessine sous le minimum
+   *   (rayon dans le ciel >= D_min) ; le pic dans la case qui touche le minimum */
+  if (vise('haloGlace')) for (const p of [...extremes(sys('haloGlace')), { indice: 1.33, rayons: 7000, graine: 42 }]) ok(`haloGlace ${JSON.stringify(p)} : deviation minimale cherchee, pic au bord interieur, temoin 90 degres, rien sous le minimum`, () => {
+    const R = S('haloGlace', p), I = R.invariants, b = R.brut, n = R.params.indice, ex = (A) => 2 * Math.asin(n * Math.sin(A / 2 * Math.PI / 180)) * 180 / Math.PI - A, e60 = ex(60), e90 = ex(90);
+    assert.ok(Math.abs(I.deviationMin.formule - e60) < 1e-9 && Math.abs(I.deviationMin.mesure - e60) < 1e-7, 'min ' + I.deviationMin.mesure + ' ' + e60);
+    assert.ok(Math.abs(I.temoin90.formule - e90) < 1e-9 && Math.abs(I.temoin90.mesure - e90) < 1e-7 && e90 > e60 + 5, 'temoin ' + I.temoin90.mesure + ' ' + e90);
+    assert.ok(I.picDuHalo.mesure >= e60 - 0.125 && I.picDuHalo.mesure <= e60 + 0.375 && I.picDuHalo.rayonsGardes > 0.1 * R.params.rayons, 'pic ' + I.picDuHalo.mesure + ' ' + e60 + ' gardes ' + I.picDuHalo.rayonsGardes);
+    let sous = 0, n1 = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, r = Math.hypot(b[o], b[o + 1]), c = b[o + 2]; if (r < (c ? e90 : e60) - 1e-6) sous++; if (c === 1) n1++; else assert.equal(c, 0); }
+    assert.ok(sous === 0 && n1 > 0.2 * R.n, 'rayons sous leur minimum ' + sous + ', temoin dessine ' + n1);
+    return 'min ' + I.deviationMin.mesure.toFixed(7) + ' / ' + e60.toFixed(7) + ', pic ' + I.picDuHalo.mesure + ', temoin ' + I.temoin90.mesure.toFixed(5);
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -481,6 +492,16 @@ const MUTANTS = [
   ['kapitza : grande amplitude comptee double', 'PI * (z.length - 1) / (z[z.length - 1] - z[0])', '2 * PI * (z.length - 1) / (z[z.length - 1] - z[0])'],
   ['kapitza : temoin fort dans la bande stable', 'forte = course(0.5, 0.01, 300, false);', 'forte = course(0.3, 0.01, 300, false);'],
   ['kapitza : angle dessine en radians', 'brut[o] = G.tr[j][0] * 180 / PI;', 'brut[o] = G.tr[j][0];'],
+  ['halo : entree avec eta inverse', 'const d = refr([1, 0], n1, 1 / n);', 'const d = refr([1, 0], n1, n);'],
+  ['halo : sortie avec 1.01 n', 'o = refr(d, [-n2[0], -n2[1]], n);', 'o = refr(d, [-n2[0], -n2[1]], 1.01 * n);'],
+  ['halo : formule sur A / 2.02', 'sinD(A / 2 * PI / 180)', 'sinD(A / 2.02 * PI / 180)'],
+  ['halo : faces voisines au lieu de 60 degres', 'd60 = minDeviation(6, 2, ni)', 'd60 = minDeviation(6, 1, ni)'],
+  ['halo : case du pic decalee', 'const pic = (bm + 0.5) / 4;', 'const pic = (bm + 2.5) / 4;'],
+  ['halo : section doree qui monte', 'if (f(x1) < f(x2)) b = x2; else a = x1; } return Math.min(best, f((a + b) / 2));', 'if (f(x1) > f(x2)) b = x2; else a = x1; } return Math.min(best, f((a + b) / 2));'],
+  ['halo : demi-angle inverse', 'Math.sqrt(Math.max(0, 1 - o[0] / no)) / Math.sqrt(1 + o[0] / no)', 'Math.sqrt(1 + o[0] / no) / Math.sqrt(Math.max(1e-300, 1 - o[0] / no))'],
+  ['halo : temoin par faces paralleles', 'd90 = minDeviation(4, 1, ni)', 'd90 = minDeviation(4, 2, ni)'],
+  ['halo : ciel dessine 10 % trop pres du Soleil', 'brut[o] = v * cosD(phi); brut[o + 1] = v * sinD(phi); brut[o + 2] = c;', 'brut[o] = 0.9 * v * cosD(phi); brut[o + 1] = 0.9 * v * sinD(phi); brut[o + 2] = c;'],
+  ['halo : anneau temoin trace par le mauvais prisme', 'prismeDeviation(4, ni, rng() * 2 * PI, Math.floor(rng() * 4), 1)', 'prismeDeviation(6, ni, rng() * 2 * PI, Math.floor(rng() * 6), 2)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -494,7 +515,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'], toupie: ['toupie'], ressort: ['penduleRessort'], kapitza: ['kapitza'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'], toupie: ['toupie'], ressort: ['penduleRessort'], kapitza: ['kapitza'], halo: ['haloGlace'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

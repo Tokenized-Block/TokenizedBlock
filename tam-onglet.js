@@ -76,6 +76,8 @@ THEMES.ondes.push('reseauFentes');
 THEMES.ondes.push('refractionSnell');
 /* game137 */
 THEMES.ondes.push('anneauxNewton');
+/* game149 : le halo de 22 degres (idee : codex Grok Bot) */
+THEMES.ondes.push('haloGlace');
 const groupeDe = (s) => THEMES.electricite.includes(s.id) ? 'electricite' : THEMES.ondes.includes(s.id) ? 'ondes' : THEMES.maths.includes(s.id) ? 'maths' : THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
@@ -1107,6 +1109,8 @@ export function monter(racine, ctx = {}) {
     'lignesChamp', 'circuitRC', 'pascalSierpinski',
     /* game148 */
     'apollonius',
+    /* game149 */
+    'haloGlace',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

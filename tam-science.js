@@ -274,6 +274,8 @@ export const ECHELLE_PROPRE = {
   desintegration: [0, 1, 2],
   /* game137 : x et y en mm (meme grandeur) ; intensite (autre grandeur) */
   anneauxNewton: [2],
+  /* game149 : deux angles du ciel (meme grandeur) ; chemin (etiquette) */
+  haloGlace: [2],
   /* game146 : angle, vitesse, temps (3 grandeurs) */
   kapitza: [0, 1, 2],
   /* game145 : x et y de meme nature ; temps */

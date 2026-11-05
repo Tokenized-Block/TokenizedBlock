@@ -851,7 +851,57 @@ function kapitza(P, n) {
     temoins: { tombeFaible: faible.tomb ? 1 : 0, tombeForte: forte.tomb ? 1 : 0, traceForte: hillTrace(0.5), kapitzaForte: Math.sqrt(0.25 * W * W / 2 - 1), note: 'witnesses: shaken too weakly (A = 0.05) and too strongly (A = 0.5) the pendulum falls (1 = fell) ; at A = 0.5 Hill gives |tr| > 2 while Kapitza still predicts a slow frequency' } } };
 }
 
+// ---------- 22 : le halo de 22 degres (idee : codex Grok Bot 2026-11-05) ----------
+// Des cristaux en prisme regulier (section a 6 cotes), d indice n (curseur), orientes au hasard dans le plan de la section ; la lumiere
+//   du Soleil arrive selon x. Trace en 2-D : refraction de Snell en forme vectorielle a l entree, propagation, refraction a la sortie
+//   (un rayon en reflexion totale est ecarte). Seuls comptent les rayons qui entrent par une face et sortent par la face a 60 degres
+//   d elle (une face sautee), le chemin du halo.
+// Mesures : (1) la deviation MINIMALE : pour une orientation donnee la deviation ne depend pas du point d entree (faces planes) ; elle est
+//   CHERCHEE par section doree sur l orientation ; (2) le halo du dessin : R rayons (curseur) lances au hasard (mulberry32), et la
+//   deviation la plus frequente (cases de 0.25 degre) doit tomber au bord interieur, sur le minimum. Temoin : le prisme a section
+//   carree, faces a 90 degres.
+// Exact (derive ici : au minimum le rayon traverse symetriquement, n sin(A/2) = sin((D + A)/2)) : D_min = 2 asin(n sin(A/2)) - A ;
+//   A = 60 degres pour l hexagone (le halo de 22 degres quand n est celui de la glace), A = 90 pour le temoin (le halo de 46 degres).
+// Dessin (vue de face) : le ciel autour du Soleil, chaque rayon garde pose a sa deviation (degres) dans une direction au hasard (les
+//   cristaux tournent aussi autour de la ligne de visee) : un anneau net au bord interieur, diffus vers l exterieur.
+const asinD = (x) => atanD(x / Math.sqrt(Math.max(1e-300, 1 - x * x)));
+function prismeDeviation(N, n, rot, entreeFace, sortieSaut) {
+  /* section a N cotes, sommets a l angle rot ; rayon d0 = (1, 0) entrant par la face entreeFace, sortant par la face entreeFace + saut */
+  const V = (i) => { const a = rot + 2 * PI * i / N; return [cosD(a), sinD(a)]; }, normaleExt = (i) => { const a = V(i), b = V((i + 1) % N), tx = b[0] - a[0], ty = b[1] - a[1], L = Math.sqrt(tx * tx + ty * ty); return [ty / L, -tx / L]; };
+  const refr = (d, nr, eta) => { const c = -(d[0] * nr[0] + d[1] * nr[1]), k = 1 - eta * eta * (1 - c * c); if (k < 0) return null; const f = eta * c - Math.sqrt(k); return [eta * d[0] + f * nr[0], eta * d[1] + f * nr[1]]; };
+  const n1 = normaleExt(entreeFace); if (n1[0] >= 0) return null; /* face non eclairee */
+  const d = refr([1, 0], n1, 1 / n); if (!d) return null; const n2 = normaleExt((entreeFace + sortieSaut) % N), o = refr(d, [-n2[0], -n2[1]], n); if (!o) return null;
+  if (d[0] * n2[0] + d[1] * n2[1] <= 0) return null; /* le rayon ne va pas vers cette face */
+  const no = Math.sqrt(o[0] * o[0] + o[1] * o[1]); return 2 * atanD(Math.sqrt(Math.max(0, 1 - o[0] / no)) / Math.sqrt(1 + o[0] / no)) * 180 / PI;
+}
+function minDeviation(N, saut, n) {
+  /* balayage de l orientation puis section doree autour du meilleur ; la face d entree 0 suffit (symetrie de rotation) */
+  const f = (rot) => { const v = prismeDeviation(N, n, rot, 0, saut); return v === null ? Infinity : v; }; let best = Infinity, bx = 0;
+  for (let i = 0; i <= 2000; i++) { const r = 2 * PI * i / 2000, v = f(r); if (v < best) { best = v; bx = r; } }
+  const g = (Math.sqrt(5) - 1) / 2; let a = bx - 2 * PI / 2000, b = bx + 2 * PI / 2000;
+  for (let k = 0; k < 100; k++) { const x1 = b - g * (b - a), x2 = a + g * (b - a); if (f(x1) < f(x2)) b = x2; else a = x1; } return Math.min(best, f((a + b) / 2));
+}
+function haloGlace(P, n) {
+  const ni = P.indice, R = P.rayons, rng = mulberry32(P.graine), exact = (A) => 2 * asinD(ni * sinD(A / 2 * PI / 180)) * 180 / PI - A;
+  const d60 = minDeviation(6, 2, ni), d90 = minDeviation(4, 1, ni), e60 = exact(60), e90 = exact(90);
+  /* rayons au hasard : orientation, face d entree eclairee ; on garde le chemin a 60 degres */
+  const devs = [], H = new Float64Array(400);
+  for (let r = 0; r < R; r++) { const rot = rng() * 2 * PI, face = Math.floor(rng() * 6), v = prismeDeviation(6, ni, rot, face, 2); rng(); if (v === null) continue; devs.push(v); const b = Math.floor(v * 4); if (b >= 0 && b < 400) H[b]++; }
+  let bm = 0; for (let b = 1; b < 400; b++) if (H[b] > H[bm]) bm = b; const pic = (bm + 0.5) / 4;
+  /* game149 (garde « colonne ecrasee » : l etiquette valait toujours 0) : le temoin est AUSSI dessine, des rayons au hasard a travers le
+   *   prisme carre (faces a 90 degrees), etiquette 1 : le ciel montre les deux anneaux, 22 et 46 degres */
+  const devs90 = []; for (let r = 0; r < R; r++) { const v = prismeDeviation(4, ni, rng() * 2 * PI, Math.floor(rng() * 4), 1); if (v !== null) devs90.push(v); }
+  const brut = new Float64Array(n * 3), rngA = mulberry32(P.graine + 1), n60 = Math.ceil(n * 2 / 3);
+  for (let q = 0; q < n; q++) { const o = 3 * q, c = q < n60 ? 0 : 1, L = c ? devs90 : devs; if (!L.length) continue; const k = c ? q - n60 : q, m = c ? n - n60 : n60, v = L[Math.floor(k * L.length / m)], phi = rngA() * 2 * PI;
+    brut[o] = v * cosD(phi); brut[o + 1] = v * sinD(phi); brut[o + 2] = c; }
+  return { D: 3, brut, nuage: true, unite: 'degres (deviation depuis la direction du Soleil)', invariants: {
+    deviationMin: { mesure: d60, formule: e60, note: 'smallest turn of the light through faces 60 degrees apart, SEARCHED over the orientation of the crystal, against 2 asin(n sin 30) - 60' },
+    picDuHalo: { mesure: pic, formule: e60, largeurCase: 0.25, rayonsGardes: devs.length, note: 'most frequent turn among the rays thrown at random (bins of 0.25 degree): the light piles up at the inner edge, on the minimum' },
+    temoin90: { mesure: d90, formule: e90, note: 'witness: a crystal with faces 90 degrees apart, same search, against 2 asin(n sin 45) - 90 (the 46 degree halo)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  haloGlace: { colonnes: ['degrees from the Sun, across', 'degrees from the Sun, up', 'path (0 = faces 60 degrees apart, 1 = faces 90 degrees apart, the witness)'], memeLongueur: [[0, 1]], autres: [2] },
   kapitza: { colonnes: ['tilt from the upright theta (degrees)', 'angular speed', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   penduleRessort: { colonnes: ['x (sideways)', 'height y (the pivot is at 0)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   toupie: { colonnes: ['angle turned around the vertical phi (radians)', 'tilt of the axis theta (degrees)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
@@ -939,9 +989,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'kapitza', nom: 'The pendulum of Kapitza (standing upside down)', science: 'Classical mechanics', D: 3, nuage: true, params: { secousse: 0.15, depart: 10 },
     bornes: { secousse: [0.09, 0.35], depart: [1, 20] },
     phrase: 'A visualisation of a pendulum turned upside down whose pivot is shaken up and down very fast: it does not fall, it rocks slowly around the top, trembling at every shake. The slow rocking is measured from the motion and matches the linear Floquet theory computed by the determinant of Hill. Shaken too weakly it falls, and shaken too strongly it falls again, where the classical Kapitza formula still says it should stand.' },
+  { id: 'haloGlace', nom: 'The 22 degree halo (light through ice prisms)', science: 'Geometric optics', D: 3, nuage: true, params: { indice: 1.31, rayons: 20000, graine: 1 },
+    bornes: { indice: [1.2, 1.4], rayons: [2000, 40000], graine: [1, 1000000] }, /* game149 (MESURE : a n = 1.5 le chemin a 90 degres est tout en reflexion totale, n sin 45 > 1 : plus de halo de 46 degres, le temoin perdait son sens) : n <= 1.4 < sqrt(2) */
+    phrase: 'A visualisation of the ring seen around the Sun on hazy days: sunlight bent through tiny six-sided prisms of ice turned every which way. Rays are traced through the crystals one by one; none is turned by less than a minimum angle, so the light piles up at the inner edge of a ring. That smallest turn, searched over every orientation, is exactly 2 asin(n sin 30) - 60 degrees; prisms with faces 90 degrees apart give the wider 46 degree halo.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'], toupie: [], penduleRessort: [], kapitza: [] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov, toupie, penduleRessort, kapitza };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'], toupie: [], penduleRessort: [], kapitza: [], haloGlace: ['rayons', 'graine'] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov, toupie, penduleRessort, kapitza, haloGlace };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

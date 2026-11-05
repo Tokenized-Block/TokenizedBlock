@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game149 (idee : codex Grok Bot) */
+  haloGlace: {
+    titre: 'The 22 degree halo (light through ice prisms)',
+    enUnePhrase: 'The sky around the Sun as seen through tiny six-sided ice prisms: each ray traced through a crystal is placed at the angle it was turned by.',
+    colonnes: ['degrees from the Sun, across', 'degrees from the Sun, up', 'path (0 = faces 60 degrees apart, 1 = faces 90 degrees apart, the witness)'],
+    aRegarder: ['No ray lands inside the ring: no crystal can turn the light by less than a minimum angle.', 'The ring is sharp on its inner edge and fades outwards: crystals near the best orientation all send their light to the same place.', 'The wider, fainter ring is the witness: crystals with faces 90 degrees apart make the 46 degree halo. Raise the index n and both rings widen.'],
+    fin: null,
+  },
   /* game148 (idee : codex Grok Bot) */
   apollonius: {
     titre: 'Circles inside circles (the gasket of Apollonius)',
