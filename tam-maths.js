@@ -669,7 +669,66 @@ function aztecDiamond(P, n) {
     arctique: { mesure: out ? outG / out : null, dedans: ins ? insG / ins : null, rayon: R, note: 'share of FROZEN dominoes (arrow towards their own corner) outside 1.1 n/sqrt 2, and inside 0.9 n/sqrt 2 ; the arctic circle n/sqrt 2 is a LIMIT for large n' } } };
 }
 
+// ---------- 18 : le collectionneur de vignettes (idee et valeurs : codex Grok Bot ; Feller, vol. I, 3e ed., ch. IX §3 ex. (d), p. 224-225) ----------
+// n vignettes equiprobables (curseur) ; on tire avec remise jusqu a les avoir toutes. T = nombre de tirages.
+// Exact (derive ici) : quand j vignettes sont deja la, la suivante arrive apres un temps geometrique de parametre (n - j)/n ;
+//   T est la somme de ces n temps : E[T] = n (1 + 1/2 + ... + 1/n) = n H_n ; Var[T] = n^2 (1 + 1/4 + ... + 1/n^2) - n H_n.
+//   Calcules en FRACTIONS exactes (BigInt). Et apres t tirages, le nombre moyen de vignettes distinctes est n (1 - (1 - 1/n)^t)
+//   (chaque vignette manque avec la probabilite (1 - 1/n)^t).
+// Mesure : 3000 collections simulees : moyenne et variance de T ; nombre moyen de distinctes a chaque tirage, contre la courbe exacte.
+// Dessin : les courbes « distinctes apres t tirages » de quelques collections (etiquette = la collection) et la courbe exacte (etiquette 0).
+function fracAdd(a, b) { const p = a[0] * b[1] + b[0] * a[1], q = a[1] * b[1]; let x = p < 0n ? -p : p, y = q; while (y) [x, y] = [y, x % y]; return [p / x, q / x]; }
+function collectionneur(P, n) {
+  const N = P.vignettes, K = 3000, DESSINEES = 6, rng = mulberry32(P.graine);
+  let H = [0n, 1n], H2 = [0n, 1n]; for (let k = 1n; k <= BigInt(N); k++) { H = fracAdd(H, [1n, k]); H2 = fracAdd(H2, [1n, k * k]); }
+  const Nb = BigInt(N), E = fracAdd([Nb * H[0], H[1]], [0n, 1n]), V = fracAdd([Nb * Nb * H2[0], H2[1]], [-E[0], E[1]]);
+  const Ef = Number(E[0]) / Number(E[1]), Vf = Number(V[0]) / Number(V[1]);
+  const tMax = Math.ceil(3 * Ef), somme = new Float64Array(tMax + 1), courbes = [];
+  let s = 0, s2 = 0;
+  for (let r = 0; r < K; r++) { const vu = new Uint8Array(N); let d = 0, t = 0; const c = r < DESSINEES ? [0] : null;
+    while (d < N || t < tMax) { t++; const v = Math.floor(rng() * N); if (!vu[v]) { vu[v] = 1; d++; if (d === N) { s += t; s2 += t * t; } } if (t <= tMax) somme[t] += d; if (c && t <= tMax) c.push(d); if (d === N && t >= tMax) break; }
+    if (c) courbes.push(c); }
+  const moy = s / K, varia = (s2 - K * moy * moy) / (K - 1);
+  let pireCourbe = 0; for (let t = 1; t <= tMax; t++) { const ex = N * (1 - (1 - 1 / N) ** t); pireCourbe = Math.max(pireCourbe, Math.abs(somme[t] / K - ex)); }
+  /* banc game160 (n = 2 points : part = 0, division par zero, NaN) : au plus n - 1 collections dessinees, part >= 1 */
+  const Dn = Math.min(DESSINEES, Math.max(0, n - 1)), brut = new Float64Array(n * 3), part = Math.max(1, Math.floor(n / (Dn + 1)));
+  for (let l = 0; l < n; l++) { const g = Math.min(Dn, Math.floor(l / part)), j = l - g * part, m = g === Dn ? n - Dn * part : part, t = Math.round(1 + j * (tMax - 1) / Math.max(1, m - 1)), o = 3 * l;
+    brut[o] = t; brut[o + 1] = g < Dn ? courbes[g][t] : N * (1 - (1 - 1 / N) ** t); brut[o + 2] = g < Dn ? g + 1 : 0; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (tirages)', invariants: {
+    tirageMoyen: { mesure: moy, formule: Ef, sigma: Math.sqrt(Vf / K), exacte: E[0] + '/' + E[1], note: 'mean number of draws to complete the set, over 3000 simulated collections, against n H_n (exact fraction given)' },
+    variance: { mesure: varia, formule: Vf, exacte: V[0] + '/' + V[1], note: 'variance of the number of draws against n^2 (1 + 1/4 + ... + 1/n^2) - n H_n (exact fraction given)' },
+    courbeDistinctes: { mesure: pireCourbe, sigmaMax: Math.sqrt(N / 4 / K) * 1, note: 'largest gap between the mean number of distinct coupons after t draws and n (1 - (1 - 1/n)^t)' } } };
+}
+
+// ---------- 19 : la ruine du joueur (idee et valeurs : codex Grok Bot ; Feller, vol. I, 3e ed., ch. XIV §2, p. 344-345, lu par Grok) ----------
+// Un joueur part de z euros, gagne 1 avec la probabilite p, perd 1 sinon, et s arrete a 0 (ruine) ou a a (objectif). Curseurs p, z, a.
+// Exact (Feller (2.4), (2.5)) : avec r = q/p, la probabilite de ruine est q_z = (r^a - r^z)/(r^a - 1) si p != 1/2, et 1 - z/a si p = 1/2.
+//   Duree moyenne du jeu : z (a - z) si p = 1/2 ; sinon z/(q - p) - (a/(q - p)) (1 - r^z)/(1 - r^a).
+//   Derive ici : q_z verifie q_z = p q_(z+1) + q q_(z-1), q_0 = 1, q_a = 0 ; la duree D_z = 1 + p D_(z+1) + q D_(z-1), D_0 = D_a = 0.
+// Mesure : 20 000 parties simulees : part des ruines, duree moyenne (barre d erreur par l ecart-type des durees).
+// Temoin : a p = 1/2 la ruine est exactement lineaire en z (1 - z/a) ; un petit avantage (p = 0.55) l ecrase.
+// Dessin : la fortune de 12 parties au fil des coups (etiquette = la partie), et les deux murs 0 et a (etiquette 0).
+function ruineJoueur(P, n) {
+  const p = P.gain, a = P.objectif, z = Math.min(P.depart, a - 1), q = 1 - p, rng = mulberry32(P.graine), T = 20000, DESSINEES = 12;
+  const r = q / p, egal = Math.abs(p - 0.5) < 1e-12;
+  const qz = egal ? 1 - z / a : (r ** a - r ** z) / (r ** a - 1), dz = egal ? z * (a - z) : z / (q - p) - (a / (q - p)) * (1 - r ** z) / (1 - r ** a);
+  let ruines = 0, sd = 0, sd2 = 0; const traces = [];
+  for (let k = 0; k < T; k++) { let x = z, d = 0; const tr = k < DESSINEES ? [x] : null; while (x > 0 && x < a) { x += rng() < p ? 1 : -1; d++; if (tr && tr.length < 4000) tr.push(x); } if (x === 0) ruines++; sd += d; sd2 += d * d; if (tr) traces.push(tr); }
+  const md = sd / T, vd = (sd2 - T * md * md) / (T - 1);
+  /* banc game161 (n = 2 ou 7 points : parTrace = 0, trace inexistante) : parTrace >= 1 */
+  const brut = new Float64Array(n * 3), murs = Math.floor(n * 0.1), parTrace = Math.max(1, Math.floor((n - murs) / DESSINEES)), longMax = Math.max(...traces.map((t) => t.length));
+  for (let l = 0; l < n; l++) { const o = 3 * l;
+    if (l < murs) { const u = l / Math.max(1, murs - 1); brut[o] = u * (longMax - 1); brut[o + 1] = l % 2 ? a : 0; brut[o + 2] = 0; continue; }
+    const g = Math.min(DESSINEES - 1, Math.floor((l - murs) / parTrace)), j = (l - murs) - g * parTrace, tr = traces[g], t = Math.min(tr.length - 1, Math.round(j * (tr.length - 1) / Math.max(1, parTrace - 1)));
+    brut[o] = t; brut[o + 1] = tr[t]; brut[o + 2] = g + 1; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (euros, coups)', invariants: {
+    ruine: { mesure: ruines / T, formule: qz, sigma: Math.sqrt(qz * (1 - qz) / T), depart: z, note: 'share of 20 000 games ending at 0, against (r^a - r^z)/(r^a - 1), r = q/p (1 - z/a when p = 1/2) — Feller XIV (2.4), (2.5)' },
+    duree: { mesure: md, formule: dz, sigma: Math.sqrt(vd / T), note: 'mean length of a game against z (a - z) at p = 1/2, or z/(q - p) - (a/(q - p)) (1 - r^z)/(1 - r^a)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  ruineJoueur: { colonnes: ['bets played', 'fortune', 'game (label; 0 = the walls 0 and a)'], memeLongueur: [], autres: [0, 1, 2] },
+  collectionneur: { colonnes: ['draws so far', 'different coupons owned', 'collection (label; 0 = the exact mean curve)'], memeLongueur: [], autres: [0, 1, 2] },
   aztecDiamond: { colonnes: ['x (cells)', 'y (cells)', 'arrow of the domino (label; 0 N, 1 S, 2 E, 3 W)'], memeLongueur: [[0, 1]], autres: [2] },
   ising: { colonnes: ['x (spin)', 'y (spin)', 'spin (label; +1 or -1)'], memeLongueur: [[0, 1]], autres: [2] },
   dominosKasteleyn: { colonnes: ['x (cells)', 'y (cells)', 'domino (label; 0 = lying, 1 = standing, 2 = cannot be tiled)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -741,9 +800,15 @@ export const SYSTEMES = Object.freeze([
   { id: 'aztecDiamond', nom: 'The Aztec diamond and its arctic circle', science: 'Combinatorics', D: 3, nuage: true, params: { ordre: 36, graine: 1 },
     bornes: { ordre: [4, 60], graine: [1, 1000000] },
     phrase: 'A visualisation of a random domino tiling of the Aztec diamond, drawn uniformly by domino shuffling. Near the four corners the dominoes freeze into brick walls; inside a circle they mix freely. The count of tilings, 2^(n(n+1)/2), is checked on small diamonds, the shuffling is tested for uniformity, and the frozen corners are measured against the arctic circle of radius n/sqrt 2, which is a limit for large diamonds.' },
+  { id: 'collectionneur', nom: 'The coupon collector', science: 'Probability', D: 3, nuage: true, params: { vignettes: 50, graine: 1 },
+    bornes: { vignettes: [5, 200], graine: [1, 1000000] },
+    phrase: 'A visualisation of the coupon collector: draw coupons at random, with repeats, until you own all n. The last ones are slow to come. Over thousands of simulated collections the mean number of draws matches n (1 + 1/2 + ... + 1/n) and its variance matches the exact formula, both computed as exact fractions; the mean number of different coupons after t draws follows n (1 - (1 - 1/n)^t).' },
+  { id: 'ruineJoueur', nom: 'Gambler\'s ruin', science: 'Probability', D: 3, nuage: true, params: { gain: 0.5, depart: 10, objectif: 20, graine: 1 },
+    bornes: { gain: [0.3, 0.7], depart: [1, 39], objectif: [4, 40], graine: [1, 1000000] },
+    phrase: 'A visualisation of the gambler\'s ruin: start with z, win or lose one each bet, and stop at zero or at the target a. Over 20 000 simulated games the share that ends in ruin matches Feller\'s exact formula, linear in z for a fair game, and the mean length of a game matches its exact value too. A small edge changes everything.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'] };
-const FONCTIONS = { aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'] };
+const FONCTIONS = { ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

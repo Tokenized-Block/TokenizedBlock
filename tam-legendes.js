@@ -1130,6 +1130,22 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game161 (idee : codex Grok Bot) */
+  ruineJoueur: {
+    titre: 'Gambler\'s ruin (how likely is a player to go broke)',
+    enUnePhrase: 'A player bets one at a time until ruined or rich enough: the odds of ruin follow an exact formula.',
+    colonnes: ['bets played', 'fortune', 'game'],
+    aRegarder: ['In a fair game, starting halfway to the target gives exactly a 50 percent chance of ruin.', 'Give the player a small edge (win 55 percent): ruin becomes rare.', 'Games can last a long time: the mean length is z (a - z) in a fair game.'],
+    fin: null,
+  },
+  /* game160 (idee : codex Grok Bot) */
+  collectionneur: {
+    titre: 'The coupon collector (how long to complete the set)',
+    enUnePhrase: 'Draw coupons at random until you own every one: the first come fast, the last ones take forever.',
+    colonnes: ['draws so far', 'different coupons owned', 'collection (0 = exact mean)'],
+    aRegarder: ['Every curve rises fast, then crawls: the last missing coupon is the hardest to get.', 'The smooth curve is the exact mean; real collections wander around it.', 'With 50 coupons you need about 225 draws on average, n (1 + 1/2 + ... + 1/n).'],
+    fin: null,
+  },
   /* game159 (idee : codex Grok Bot) */
   aztecDiamond: {
     titre: 'The Aztec diamond (a random tiling and its arctic circle)',

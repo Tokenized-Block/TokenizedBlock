@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game160 */
+  exacte: 'exact fraction', sigmaMax: 'largest sigma of one point',
   /* game159 */
   dominos: 'dominoes', rayon: 'arctic radius n/sqrt 2',
   /* game158 */
@@ -429,6 +431,10 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game161 */
+  ruine: 'Share of games ruined vs Feller\'s exact formula', duree: 'Mean length of a game vs the exact value',
+  /* game160 */
+  tirageMoyen: 'Mean draws to complete vs n H_n', courbeDistinctes: 'Distinct coupons after t draws vs n (1 - (1 - 1/n)^t)',
   /* game159 */
   pavageValide: 'Cells covered wrongly in the tiling drawn', petitsDiamants: 'Tilings counted (orders 1-4) vs 2^(k(k+1)/2)', uniformite: 'Chi-square of shuffled tilings (order 2)', caseCentre: 'Centre cell lying, shuffles vs exact (order 4)', arctique: 'Frozen dominoes outside the arctic circle',
   /* game158 */

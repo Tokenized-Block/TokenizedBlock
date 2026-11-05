@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -64,9 +64,14 @@ const z = (v) => (v.mesure - v.formule) / v.sigma;
 const rel = (a, b) => Math.abs(a - b) / Math.abs(b);
 const SPIRALE = spiraleRef(40000);
 
-function suite(T, bavard = false) {
+/* 2026-11-05 (le banc depassait 300 s, 294 s seul : chaque mutant relancait les 19 systemes) : un mutant ne relance que les tests de SON
+ *   systeme (seul = liste d ids ; null = tout), comme test-tam-mecanique (game126). Un test est rattache a un systeme par le premier mot
+ *   de son nom ; « etalonnage » couvre marche, Buffon, anniversaires ; tout autre premier mot (SYSTEMES, bornage...) tourne toujours. */
+const RATTACHE = { marche: ['marcheAleatoire'], etalonnage: ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires'] };
+function suite(T, bavard = false, seul = null) {
   const res = [];
   const ok = (nom, f) => {
+    if (seul) { const tete = String(nom).split(/[\s:]/)[0], ids = T.SYSTEMES.some((s) => s.id === tete) ? [tete] : RATTACHE[tete] || null; if (ids && !ids.some((i) => seul.includes(i))) return; }
     let c = false, det = '';
     try { const r = f(); c = r !== false; if (typeof r === 'string') det = r; } catch (e) { det = e.message.split('\n')[0]; }
     res.push({ nom, ok: c, det }); if (bavard) console.log((c ? 'OK    ' : 'ECHEC ') + nom + (det ? '  ' + det : ''));
@@ -353,6 +358,40 @@ function suite(T, bavard = false) {
     return 'n = ' + n + ' : geles dehors ' + (I.arctique.mesure === null ? '-' : I.arctique.mesure.toFixed(3)) + ', khi2 ' + I.uniformite.mesure.toFixed(1) + ', centre ' + I.caseCentre.mesure.toFixed(3);
   });
   ok('aztecDiamond : valeurs de controle de Grok Bot (AD(1..4) = 2 8 64 1024 ; ordre 4, case du centre couchee 1/2 exactement)', () => { const I = S('aztecDiamond', {}).invariants; assert.ok(I.petitsDiamants.mesure === '2 8 64 1024' && I.caseCentre.formule === 0.5); return 'ok'; });
+  /* game160 : collectionneur — references INDEPENDANTES : E et Var par la somme des geometriques en flottants ; valeurs EXACTES de
+   *   Grok Bot (lot 5) pour n = 10 et 50 ; courbe exacte relue sur les points d etiquette 0 */
+  for (const p of [...extremes(sys('collectionneur')), { vignettes: 10 }, { vignettes: 50, graine: 3 }]) ok(`collectionneur ${JSON.stringify(p)} : moyenne n H_n, variance exacte, courbe des distinctes`, () => {
+    const R = S('collectionneur', p), I = R.invariants, b = R.brut, N = R.params.vignettes;
+    let E = 0, V = 0; for (let j = 0; j < N; j++) { const q = (N - j) / N; E += 1 / q; V += (1 - q) / (q * q); }
+    assert.ok(Math.abs(I.tirageMoyen.formule - E) / E < 1e-12 && Math.abs(I.variance.formule - V) / V < 1e-9, 'formules ' + I.tirageMoyen.formule + ' ' + E + ' ' + I.variance.formule + ' ' + V);
+    assert.ok(Math.abs(z(I.tirageMoyen)) < 5 && Math.abs(I.variance.mesure - V) / V < 0.15, 'mesures ' + z(I.tirageMoyen) + ' ' + I.variance.mesure + ' ' + V);
+    assert.ok(I.courbeDistinctes.mesure < 0.5 + 5 * Math.sqrt(N) / Math.sqrt(3000), 'courbe ' + I.courbeDistinctes.mesure);
+    let mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q; if (b[o + 2] === 0 && Math.abs(b[o + 1] - N * (1 - Math.pow(1 - 1 / N, b[o]))) > 1e-9) mal++; if (b[o + 1] > N || b[o + 1] < 0) mal++; } assert.equal(mal, 0);
+    return 'n = ' + N + ' : moyenne ' + I.tirageMoyen.mesure.toFixed(2) + ' / ' + I.tirageMoyen.formule.toFixed(2) + ', variance ' + I.variance.mesure.toFixed(0) + ' / ' + I.variance.formule.toFixed(0);
+  });
+  ok('collectionneur : fractions exactes de Grok Bot (n = 10 : E = 7381/252, Var = 7981633/63504 ; n = 50 : E = 13943237577224054960759/61980890084919934128)', () => {
+    const a = S('collectionneur', { vignettes: 10 }).invariants, b = S('collectionneur', { vignettes: 50 }).invariants;
+    assert.ok(a.tirageMoyen.exacte === '7381/252' && a.variance.exacte === '7981633/63504' && b.tirageMoyen.exacte === '13943237577224054960759/61980890084919934128', a.tirageMoyen.exacte + ' ' + a.variance.exacte + ' ' + b.tirageMoyen.exacte);
+    assert.equal(b.variance.exacte, '14743685372056613919882499348303425143425393/3841630735718926199201023052303859120384'); return a.tirageMoyen.exacte + ', ' + a.variance.exacte;
+  });
+  /* game161 : ruine — reference INDEPENDANTE : le systeme lineaire q_z = p q_(z+1) + q q_(z-1) resolu par Gauss (et la duree de meme) ;
+   *   valeurs de Grok Bot (Feller XIV §2) : 7/10, 1/9, 76/211 */
+  const ruineRef = (p, z, a) => { const n = a - 1, A = Array.from({ length: n }, () => new Array(n + 2).fill(0)); /* inconnues q_1..q_(a-1), colonnes : q puis D */
+    for (let i = 1; i <= n; i++) { const r = A[i - 1]; r[i - 1] = 1; if (i + 1 <= n) r[i] = -p; if (i - 1 >= 1) r[i - 2] = -(1 - p); r[n] = i === 1 ? (1 - p) : 0; r[n + 1] = 1; }
+    for (let c = 0; c < n; c++) { for (let i = c + 1; i < n; i++) { const f = A[i][c] / A[c][c]; for (let j = c; j < n + 2; j++) A[i][j] -= f * A[c][j]; } }
+    const x = new Array(n).fill(0), y = new Array(n).fill(0); for (let i = n - 1; i >= 0; i--) { let s = A[i][n], t = A[i][n + 1]; for (let j = i + 1; j < n; j++) { s -= A[i][j] * x[j]; t -= A[i][j] * y[j]; } x[i] = s / A[i][i]; y[i] = t / A[i][i]; }
+    return { q: x[z - 1], d: y[z - 1] }; };
+  for (const p of [...extremes(sys('ruineJoueur')), { gain: 0.5, depart: 3, objectif: 10 }, { gain: 0.55, depart: 5, objectif: 30 }]) ok(`ruineJoueur ${JSON.stringify(p)} : ruine et duree contre le systeme lineaire, simulation`, () => {
+    const R = S('ruineJoueur', p), I = R.invariants, b = R.brut, a = R.params.objectif, z0 = Math.min(R.params.depart, a - 1), ref = ruineRef(R.params.gain, z0, a);
+    assert.ok(I.ruine.depart === z0 &&Math.abs(I.ruine.formule - ref.q) < 1e-9 && Math.abs(I.duree.formule - ref.d) / Math.max(1, ref.d) < 1e-9, 'formules ' + JSON.stringify([I.ruine.formule, ref.q, I.duree.formule, ref.d]));
+    assert.ok(Math.abs(z(I.ruine)) < 5 && Math.abs(z(I.duree)) < 5, 'z ' + z(I.ruine) + ' ' + z(I.duree));
+    let mal = 0; for (let k = 0; k < R.n; k++) { const v = b[3 * k + 1]; if (v < 0 || v > a || !Number.isInteger(v)) mal++; } assert.equal(mal, 0);
+    return 'p = ' + R.params.gain + ', z = ' + z0 + ', a = ' + a + ' : ruine ' + I.ruine.mesure.toFixed(4) + ' / ' + I.ruine.formule.toFixed(4) + ', duree ' + I.duree.mesure.toFixed(1) + ' / ' + I.duree.formule.toFixed(1);
+  });
+  ok('ruineJoueur : valeurs de controle de Grok Bot (p = 1/2, z = 3, a = 10 : 7/10 ; p = 2/3, 3, 6 : 1/9 ; p = 3/5, 2, 5 : 76/211)', () => {
+    const v = [[0.5, 3, 10, 7 / 10], [2 / 3, 3, 6, 1 / 9], [0.6, 2, 5, 76 / 211]].map(([g, d, o, x]) => Math.abs(S('ruineJoueur', { gain: g, depart: d, objectif: o }).invariants.ruine.formule - x));
+    assert.ok(v.every((e) => e < 1e-12), v.join(' ')); return '7/10, 1/9, 76/211';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -470,6 +509,16 @@ const MUTANTS = [
   ['azteque : formule 2^(k^2/2)', 'formules = [1, 2, 3, 4].map((k) => 2 ** (k * (k + 1) / 2))', 'formules = [1, 2, 3, 4].map((k) => 2 ** (k * k / 2))'],
   ['azteque : rayon n/2', 'const R = N / Math.SQRT2;', 'const R = N / 2;'],
   ['azteque : dessin decale', 'brut[o] = q.x + 0.5 + (q.h ? u : 0);', 'brut[o] = q.x + 1.5 + (q.h ? u : 0);'],
+  ['coupons : H_n sans le dernier terme', 'for (let k = 1n; k <= BigInt(N); k++) { H = fracAdd(H, [1n, k]);', 'for (let k = 1n; k < BigInt(N); k++) { H = fracAdd(H, [1n, k]);'],
+  ['coupons : variance sans le - n H_n', 'V = fracAdd([Nb * Nb * H2[0], H2[1]], [-E[0], E[1]]);', 'V = fracAdd([Nb * Nb * H2[0], H2[1]], [0n, 1n]);'],
+  ['coupons : tirage biaise vers les petites vignettes (se termine toujours ; n - 1 vignettes bouclait sans fin le 2026-11-05)', 'const v = Math.floor(rng() * N);', 'const v = Math.floor(rng() * rng() * N);'],
+  ['coupons : courbe exacte (1 - 1/n)^(t+1)', 'const ex = N * (1 - (1 - 1 / N) ** t);', 'const ex = N * (1 - (1 - 1 / N) ** (t + 1));'],
+  ['coupons : courbe dessinee decalee', "brut[o + 1] = g < Dn ? courbes[g][t] : N * (1 - (1 - 1 / N) ** t);", "brut[o + 1] = g < Dn ? courbes[g][t] : N * (1 - (1 - 1 / N) ** (t + 1));"],
+  ['ruine : r = p/q', 'r = q / p, egal =', 'r = p / q, egal ='],
+  ['ruine : 1 - z/a remplace par z/a', 'const qz = egal ? 1 - z / a :', 'const qz = egal ? z / a :'],
+  ['ruine : duree z (a + z)', ', dz = egal ? z * (a - z) :', ', dz = egal ? z * (a + z) :'],
+  ['ruine : gain avec <= au lieu de <', 'x += rng() < p ? 1 : -1;', 'x += rng() < p + 0.02 ? 1 : -1;'],
+  ['ruine : arret a 1 au lieu de 0', 'while (x > 0 && x < a) {', 'while (x > 1 && x < a) {'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -483,7 +532,10 @@ try {
     if (k !== 1) { console.log(`  M${i + 1} ${nom} : NON APPLIQUE (motif trouve ${k} fois) -> SURVIVANT`); continue; }
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
-    let r; try { r = suite(await import(pathToFileURL(f).href)); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
+    /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
+    const CIBLES = { marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const cible = CIBLES[nom.split(' ')[0]] || null;
+    let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);
     if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);
