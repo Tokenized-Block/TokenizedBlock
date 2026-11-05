@@ -3745,16 +3745,21 @@ async function relireNonResolus() {
 let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
 /* ⛔⛔ 2026-10-25 (revue adverse de 2855ce8 : les blocks servis par /api/blocks-de n avaient ni symbole ni bloc -> « ? » a la Wallet,
  *   ordre change) — LES FAITS DE CHAQUE CREATION LUE PAR UN SCAN DE LA FACTORY : jeton -> { bloc, symbole } (le log de creation les
- *   porte). Gardes sur FAITS_PROFONDEUR blocs sous la tete (la fenetre du navigateur en fait 43 200), persistes avec le trending.
+ *   porte). Gardes 3 jours (faitsProfondeur, en blocs au temps mesure) sous la tete (la fenetre du navigateur fait 43 200 blocs), persistes avec le trending.
  *   `faitsDepuis` = le premier bloc a partir duquel CHAQUE creation lue est notee (pose au premier scan vers l avant qui avance) :
  *   en dessous, le navigateur relit lui-meme (creations-index.js). Sert aussi la Map (/api/creations-recentes). */
 const faitsCreation = new Map();
 let faitsDepuis = null;
-const FAITS_PROFONDEUR = 3 * 43200;
+/* ⛔ DENIM (2026-11-05, 0,2 s/bloc mesure par nous ET par Grok) : 3 x 43 200 blocs faisaient 3 jours a 2 s, 7,2 h a 0,2 s — passe ce
+ *   delai, la Wallet et la Map retombaient sur « ? ». La garde est en SECONDES (3 jours) au temps SERVI (sParBlocServi : la mesure courte
+ *   l emporte des que les blocs accelerent -> plus de blocs, jamais moins de 3 jours) ; sans mesure, 0,2 s. Ne coute aucune requete :
+ *   elle ne fait qu elaguer une table en memoire (le scan vers l avant ne depend pas d elle). */
+const FAITS_PROFONDEUR_S = 3 * 86400, FAITS_PROFONDEUR_SANS_MESURE = 3 * 432000;
+const faitsProfondeur = () => blocsPour(FAITS_PROFONDEUR_S, sParBlocServi()) ?? FAITS_PROFONDEUR_SANS_MESURE;
 function noterFaits(creations, tete) {
   noterFaitsCreations(faitsCreation, creations);
   if (!Number.isSafeInteger(tete)) return;
-  const coupe = tete - FAITS_PROFONDEUR;
+  const coupe = tete - faitsProfondeur();
   for (const [j, f] of faitsCreation) if (f.bloc < coupe) faitsCreation.delete(j);
   if (faitsDepuis !== null && faitsDepuis < coupe) faitsDepuis = coupe;
 }

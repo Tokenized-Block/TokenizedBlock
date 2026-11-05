@@ -41,15 +41,17 @@ const C = {
   BAS: { jeton: J('a4'), bloc: T - 30000, sym: 'BAS', tx: TX('a4') }, /* sous faitsDepuis du laboratoire : createur connu, faits non */
   NR: { jeton: J('a5'), bloc: T - 15000, sym: 'NRS', tx: TX('a5') },  /* createur non resolu (sa tx ne se lit pas) */
   VIEUX: { jeton: J('a6'), bloc: T - 95000, sym: 'VIX', tx: TX('a6') }, /* dans le trou du RATTRAPAGE : lu seulement par sa relecture */
+  /* DENIM (2026-11-05) : 200 000 blocs = ~11 h a 0,2 s, au-dela des 3 x 43 200 (7,2 h a 0,2 s) que gardait l ancienne profondeur des faits */
+  OLD: { jeton: J('a7'), bloc: T - 200000, sym: 'OLD', tx: TX('a7') },
 };
 const TROU_AVANT = { de: T - 12500, a: T - 11500 }, TROU_RATTRAPAGE = { de: T - 100000, a: T - 90000 };
 const FAITS_DEPUIS = T - 20000;
-const GRAINE = { ver: 'quote-v5', a: 0, corps: '', blocsLusJusqua: S, adrs: [C.MID.jeton, C.BAS.jeton], createurs: [[C.MID.jeton, CRE], [C.BAS.jeton, CRE]],
+const GRAINE = { ver: 'quote-v5', a: 0, corps: '', blocsLusJusqua: S, adrs: [C.MID.jeton, C.BAS.jeton, C.OLD.jeton], createurs: [[C.MID.jeton, CRE], [C.BAS.jeton, CRE], [C.OLD.jeton, CRE]],
   createursRelecture20261009: true, createursRelecture20261010: true, trouSeme20261009: true, rattrapageDepuis: PREMIER,
   trousCreations: [{ ...TROU_AVANT, fenetres: 1, t: '2026-10-25T00:00:00Z' }], trousRelus: [], createursNonResolus: [{ jeton: C.NR.jeton, tx: C.NR.tx }],
   createursNonResolusJetes: 0, trousRattrapage: [{ ...TROU_RATTRAPAGE, pages: 1 }], trousRattrapageRelus: [],
   /* coherent avec le vrai serveur : un scan note les faits de TOUTE creation lue, createur resolu ou non (NR compris) */
-  faitsCreations: [[C.MID.jeton, C.MID.bloc, C.MID.sym], [C.NR.jeton, C.NR.bloc, C.NR.sym]], faitsDepuis: FAITS_DEPUIS };
+  faitsCreations: [[C.MID.jeton, C.MID.bloc, C.MID.sym], [C.NR.jeton, C.NR.bloc, C.NR.sym], [C.OLD.jeton, C.OLD.bloc, C.OLD.sym]], faitsDepuis: FAITS_DEPUIS };
 /* la verite du laboratoire : ce que le fichier declare lu (jusqu a S, hors ses trous) */
 const luParLaGraine = (b) => b >= PREMIER && b <= S && !(b >= TROU_AVANT.de && b <= TROU_AVANT.a) && !(b >= TROU_RATTRAPAGE.de && b <= TROU_RATTRAPAGE.a);
 
@@ -198,10 +200,16 @@ function verifier({ bd, cr, cr2, disque, refus, servies }, archive = false) {
   /* (D) les blocks du createur et leurs faits */
   v('D1 les blocks du createur portent bloc et symbole (NEW lu par le scan, MID par le laboratoire)',
     ['NEW', 'MID'].every((k) => bd.blocks.includes(C[k].jeton) && bd.faits && bd.faits[C[k].jeton] && bd.faits[C[k].jeton].bloc === C[k].bloc && bd.faits[C[k].jeton].symbole === C[k].sym));
+  /* (DENIM) la profondeur des faits est en TEMPS (3 jours) : sans mesure du temps de bloc (le RPC fictif ne sert aucun en-tete), 0,2 s */
+  v('D2 un block cree il y a ~11 h a 0,2 s/bloc (200 000 blocs) garde bloc et symbole apres le scan', bd.blocks.includes(C.OLD.jeton)
+    && bd.faits && bd.faits[C.OLD.jeton] && bd.faits[C.OLD.jeton].bloc === C.OLD.bloc && bd.faits[C.OLD.jeton].symbole === C.OLD.sym);
   return rouges;
 }
 
 const MUTANTS = [
+  { nom: 'm11 (DENIM) profondeur des faits en BLOCS a 2 s (3 x 43 200 = 7,2 h a 0,2 s)',
+    edits: [['serveur-web.js', 'const faitsProfondeur = () => blocsPour(FAITS_PROFONDEUR_S, sParBlocServi()) ?? FAITS_PROFONDEUR_SANS_MESURE;', 'const faitsProfondeur = () => 3 * 43200;']],
+    casse: [/^D2 /] },
   { nom: 'm1 (revue) les trous du scan vers l avant et les non resolus ne partent plus',
     edits: [['serveur-web.js', 'trous: [...trousCreations, ...trousRattrapage], nonResolus: createursNonResolus, faitsDepuis });', 'trous: [...trousRattrapage], nonResolus: [], faitsDepuis });']],
     casse: [/^A1 /, /^A3 /, /^C1 /] },
