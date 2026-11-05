@@ -480,7 +480,61 @@ function causticTasse(P, n) {
     temoin60: { mesure: x60, formule: R, note: 'witness: a round mirror is not a parabola : the ray entering 60 degrees from the axis crosses it at R/(2 cos 60) = R, not at R/2' } } };
 }
 
+// ---------- 14 : le papillon de Hofstadter (idee : codex Grok Bot 2026-11-05) ----------
+// Un electron sur un reseau carre dans un champ magnetique de flux alpha = p/q par maille (operateur de Harper, lambda = 1) :
+//   (H psi)_n = psi_(n+1) + psi_(n-1) + 2 cos(2 pi alpha n + theta) psi_n. Pour chaque p/q (q <= curseur), son spectre en energie E ;
+//   l ensemble des spectres, alpha en abscisse, dessine le papillon.
+// Derive ici (relation de Chambers) : avec T(E, theta) le produit des q matrices de transfert [[E - V_n, -1], [1, 0]], le polynome
+//   P(E) = tr T(E, theta) + 2 cos(q theta) ne depend pas de theta, et det(E - H(theta, k)) = tr T - 2 cos(q k). Le spectre est
+//   { E : |P(E)| <= 4 }. Ses 2q BORDS sont donc les valeurs propres de deux matrices reelles symetriques q x q : P = +4 <=> H a theta = 0,
+//   periodique (coin +1) ; P = -4 <=> H a theta = pi/q, antiperiodique (coin -1). Valeurs propres par la methode de Jacobi.
+// Mesure : pour chaque p/q, |P| <= 4 au milieu de chaque bande et |P| > 4 au milieu de chaque gap ouvert (gap > 1e-9).
+// Exact (source lue par Grok Bot, citation : Krasovsky, arXiv:1602.08624, introduction, qui cite van Mouche 1989 et Choi, Elliott, Yui
+//   1990) : pour alpha = p/q le spectre est fait de q bandes separees par des gaps tous ouverts, SAUF le gap central quand q est pair
+//   (les deux bandes centrales se touchent en E = 0). Donc q - 1 gaps ouverts si q est impair, q - 2 s il est pair.
+//   Pour 1/3 (derive : P(E) = E^3 - 6E) les bords sont -1 - sqrt 3, -2, 1 - sqrt 3, sqrt 3 - 1, 2, 1 + sqrt 3 (valeurs de Grok Bot).
+// Borne MESUREE : jusqu a q = 20 chaque gap ouvert depasse 1e-9 ; a q = 21 (p = 2) certains gaps, ouverts en theorie, tombent sous la
+//   precision des nombres flottants : le curseur s arrete a 20.
+// Temoin : « q - 1 bandes » (un enonce faux rencontre) : 2/5 a bien 5 bandes.
+// Dessin (vue de face) : chaque bande (alpha, E) et son denominateur q (etiquette).
+function jacobiSym(A) { const n = A.length; A = A.map((r) => r.slice());
+  for (let s = 0; s < 100; s++) { let off = 0; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) off += A[i][j] * A[i][j]; if (off < 1e-30) break;
+    for (let p = 0; p < n; p++) for (let q = p + 1; q < n; q++) { if (Math.abs(A[p][q]) < 1e-300) continue; const th = (A[q][q] - A[p][p]) / (2 * A[p][q]), t = (th < 0 ? -1 : 1) / (Math.abs(th) + Math.sqrt(th * th + 1)), c = 1 / Math.sqrt(t * t + 1), sn = t * c;
+      for (let k = 0; k < n; k++) { const a = A[k][p], b = A[k][q]; A[k][p] = c * a - sn * b; A[k][q] = sn * a + c * b; }
+      for (let k = 0; k < n; k++) { const a = A[p][k], b = A[q][k]; A[p][k] = c * a - sn * b; A[q][k] = sn * a + c * b; } } }
+  return A.map((r, i) => r[i]); }
+function harperP(E, p, q) { const th = PI / (2 * q); let a = 1, b = 0, c = 0, d = 1; for (let n = 0; n < q; n++) { const v = E - 2 * cosD(2 * PI * p * n / q + th), na = v * a - c, nb = v * b - d; c = a; d = b; a = na; b = nb; } return a + d; }
+function harperMat(p, q, th, coin) { const A = Array.from({ length: q }, () => new Array(q).fill(0)); for (let n = 0; n < q; n++) A[n][n] = 2 * cosD(2 * PI * p * n / q + th);
+  if (q === 1) { A[0][0] += 2 * coin; return A; } for (let n = 0; n + 1 < q; n++) { A[n][n + 1] += 1; A[n + 1][n] += 1; } A[0][q - 1] += coin; A[q - 1][0] += coin; return A; }
+function harperBords(p, q) { return [...jacobiSym(harperMat(p, q, 0, 1)), ...jacobiSym(harperMat(p, q, PI / q, -1))].sort((u, v) => u - v); }
+function papillonHofstadter(P, n) {
+  const Q = P.qmax, fr = []; /* (boucle ecrite autrement que celle de Ford, sinon le mutant de Ford trouve son motif deux fois) */ for (let q = 1; q <= Q; q++) for (let p = q; p >= 0; p--) if (pgcd(p, q) === 1) fr.push([p, q]);
+  let malBandes = 0, malGaps = 0, centre = 0, sym = 0; const bandes = [];
+  for (const [p, q] of fr) { const e = harperBords(p, q); let ouverts = 0;
+    for (let b = 0; b < q; b++) { const lo = e[2 * b], hi = e[2 * b + 1]; if (Math.abs(harperP((lo + hi) / 2, p, q)) > 4 + 1e-9) malBandes++; bandes.push([p / q, lo, hi, q]);
+      if (b + 1 < q && e[2 * b + 2] - hi > 1e-9) { ouverts++; if (Math.abs(harperP((hi + e[2 * b + 2]) / 2, p, q)) <= 4) malBandes++; } }
+    if (ouverts !== (q % 2 ? q - 1 : q - 2)) malGaps++;
+    if (q % 2 === 0) centre = Math.max(centre, Math.abs(e[q - 1]), Math.abs(e[q]));
+    for (let i = 0; i < 2 * q; i++) sym = Math.max(sym, Math.abs(e[i] + e[2 * q - 1 - i])); }
+  const r3 = Math.sqrt(3), ex13 = [-1 - r3, -2, 1 - r3, r3 - 1, 2, 1 + r3], e13 = harperBords(1, 3); let ecart13 = 0; for (let i = 0; i < 6; i++) ecart13 = Math.max(ecart13, Math.abs(e13[i] - ex13[i]));
+  const b25 = harperBords(2, 5).length / 2;
+  /* dessin : n points sur les bandes, au moins un par bande si possible, le reste au prorata de la largeur */
+  const larg = bandes.map((b) => b[2] - b[1]), tot = larg.reduce((u, v) => u + v, 0), brut = new Float64Array(n * 3); let o = 0;
+  const base = n >= bandes.length ? 1 : 0, reste = n - base * bandes.length;
+  for (let i = 0; i < bandes.length && o < n; i++) { const [x, lo, hi, q] = bandes[i], m = Math.min(n - o, base + Math.floor(reste * larg[i] / tot));
+    for (let j = 0; j < m; j++, o++) { brut[3 * o] = x; brut[3 * o + 1] = m === 1 ? (lo + hi) / 2 : lo + (hi - lo) * j / (m - 1); brut[3 * o + 2] = q; } }
+  for (; o < n; o++) { const b = bandes[o % bandes.length]; brut[3 * o] = b[0]; brut[3 * o + 1] = (b[1] + b[2]) / 2; brut[3 * o + 2] = b[3]; }
+  return { D: 3, brut, nuage: true, unite: 'energie (unites du saut entre sites)', invariants: {
+    bandes: { mesure: malBandes, formule: 0, fractions: fr.length, bandes: bandes.length, note: 'bands where |P| > 4 at the middle, or open gaps where |P| <= 4 at the middle : the edges found really bound the spectrum' },
+    gaps: { mesure: malGaps, formule: 0, note: 'fractions p/q whose number of open gaps is not q - 1 (q odd) or q - 2 (q even : the central gap closes) — van Mouche ; Choi, Elliott, Yui (cited by Krasovsky 2016)' },
+    centreFerme: { mesure: centre, formule: 0, note: 'for even q, distance from E = 0 of the two central edges : the middle bands touch exactly at 0' },
+    tiers: { mesure: ecart13, formule: 0, note: 'edges for 1/3 against -1 - sqrt 3, -2, 1 - sqrt 3, sqrt 3 - 1, 2, 1 + sqrt 3 (P(E) = E^3 - 6E)' },
+    miroirE: { mesure: sym, formule: 0, note: 'largest |E + E\'| between mirror edges : the spectrum is symmetric under E -> -E' },
+    temoin: { mesure: b25, formule: 5, note: 'witness: 2/5 has 5 bands, not 4 (the claim « q - 1 bands » is false ; q - 1 is the number of GAPS for odd q)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  papillonHofstadter: { colonnes: ['flux alpha = p/q', 'energy E', 'denominator q (label)'], memeLongueur: [], autres: [0, 1, 2] },
   causticTasse: { colonnes: ['x', 'y', 'what (label; 0 = the bright line found, 1 = the cup, 2 = reflected rays)'], memeLongueur: [[0, 1]], autres: [2] },
   fermatSteiner: { colonnes: ['x', 'y', 'network (label; 0 = shortest, 1 = the other shape)'], memeLongueur: [[0, 1]], autres: [2] },
   cerclesFord: { colonnes: ['x (the fraction p/q on the line)', 'y (height above the line)', 'denominator q (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -536,9 +590,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'causticTasse', nom: 'The bright curve in a cup of coffee (caustic)', science: 'Optics', D: 3, nuage: true, params: { rayons: 600 },
     bornes: { rayons: [100, 3000] },
     phrase: 'A visualisation of the caustic in a cup: parallel sunlight reflected by the round wall piles up along a bright curve. Each pair of neighbouring reflected rays is crossed, and the crossings land on the nephroid ((3 cos t - cos 3t)/4, (3 sin t - sin 3t)/4), with its sharp point at half the radius. The gap shrinks as one over the number of rays squared, and is shown.' },
+  { id: 'papillonHofstadter', nom: 'Hofstadter\'s butterfly', science: 'Quantum physics', D: 3, nuage: true, params: { qmax: 16 },
+    bornes: { qmax: [6, 20] },
+    phrase: 'A visualisation of Hofstadter\'s butterfly: the allowed energies of an electron on a square grid in a magnetic field of p/q flux quanta per square, for every fraction up to q. Each spectrum is q bands, whose edges are found exactly as eigenvalues; between them the gaps are all open, except the middle one when q is even, where the two central bands touch at zero.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'] };
-const FONCTIONS = { causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'] };
+const FONCTIONS = { papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

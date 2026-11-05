@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game155 (idee : codex Grok Bot) */
+  papillonHofstadter: {
+    titre: 'Hofstadter\'s butterfly (an electron in a magnetic field)',
+    enUnePhrase: 'For every magnetic flux p/q, the energies an electron may have on a square grid: together they draw a butterfly that repeats itself inside its own wings.',
+    colonnes: ['flux p/q', 'energy', 'denominator q'],
+    aRegarder: ['Each column at p/q holds exactly q bands of allowed energy.', 'At even q, look at zero energy: the two middle bands touch there.', 'Small copies of the whole butterfly sit inside the wings: the pattern is self-similar.'],
+    fin: null,
+  },
   /* game154 (idee : codex Grok Bot) */
   causticTasse: {
     titre: 'The bright curve in a cup (a caustic)',

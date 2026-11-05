@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -262,6 +262,37 @@ function suite(T, bavard = false) {
     return 'N = ' + N + ' : ecart ' + I.nephroide.mesure.toExponential(1) + ', pointe ' + I.pointe.mesure.toExponential(1) + ', longueur ' + I.longueur.mesure.toFixed(5);
   });
   ok('causticTasse : valeur de controle de Grok Bot (pointe a R/2, nephroide de Huygens)', () => { const I = S('causticTasse', { rayons: 3000 }).invariants; assert.ok(I.pointe.mesure < 1e-6); return 'pointe a ' + I.pointe.mesure.toExponential(1) + ' de R/2'; });
+  /* game155 : Hofstadter — references INDEPENDANTES : le spectre par DIAGONALISATION de la matrice de Bloch COMPLEXE q x q (forme hermitienne
+   *   reelle 2q x 2q, Jacobi du banc) sur une grille de (theta, k) : chaque valeur propre tombe dans une bande dessinee, et chaque bord est
+   *   atteint a 1e-6 ; valeurs de Grok Bot pour 1/3 et 2/5 */
+  const blochValeurs = (p, q, th, k) => { /* H(theta, k) hermitienne : diagonale 2 cos(2 pi p n/q + theta), sauts 1, coin e^{i q k} ; en reel : [[Re, -Im], [Im, Re]] */
+    const n2 = 2 * q, A = Array.from({ length: n2 }, () => new Array(n2).fill(0)), set = (i, j, re, im) => { A[i][j] += re; A[i + q][j + q] += re; A[i][j + q] -= im; A[i + q][j] += im; };
+    for (let n = 0; n < q; n++) set(n, n, 2 * Math.cos(2 * Math.PI * p * n / q + th), 0);
+    if (q === 1) set(0, 0, 2 * Math.cos(q * k), 0); else { for (let n = 0; n + 1 < q; n++) { set(n, n + 1, 1, 0); set(n + 1, n, 1, 0); } set(0, q - 1, Math.cos(q * k), -Math.sin(q * k)); set(q - 1, 0, Math.cos(q * k), Math.sin(q * k)); }
+    for (let s = 0; s < 60; s++) { let off = 0; for (let i = 0; i < n2; i++) for (let j = i + 1; j < n2; j++) off += A[i][j] ** 2; if (off < 1e-26) break;
+      for (let a = 0; a < n2; a++) for (let b = a + 1; b < n2; b++) { if (Math.abs(A[a][b]) < 1e-300) continue; const t0 = (A[b][b] - A[a][a]) / (2 * A[a][b]), t = Math.sign(t0 || 1) / (Math.abs(t0) + Math.hypot(t0, 1)), c = 1 / Math.hypot(t, 1), sn = t * c;
+        for (let m = 0; m < n2; m++) { const x = A[m][a], y = A[m][b]; A[m][a] = c * x - sn * y; A[m][b] = sn * x + c * y; } for (let m = 0; m < n2; m++) { const x = A[a][m], y = A[b][m]; A[a][m] = c * x - sn * y; A[b][m] = sn * x + c * y; } } }
+    return A.map((r, i) => r[i]); };
+  for (const p of [...extremes(sys('papillonHofstadter')), { qmax: 9 }]) ok(`papillonHofstadter ${JSON.stringify(p)} : bandes reelles, gaps de van Mouche, centre ferme, 1/3 exact, symetrie, temoin 2/5`, () => {
+    const R = S('papillonHofstadter', p), I = R.invariants, b = R.brut, Q = R.params.qmax;
+    let nf = 0; for (let q = 1; q <= Q; q++) for (let pp = 0; pp <= q; pp++) { let a = pp, c = q; while (c) [a, c] = [c, a % c]; if (a === 1) nf++; }
+    assert.ok(I.bandes.mesure === 0 && I.bandes.fractions === nf && I.gaps.mesure === 0, 'bandes ' + JSON.stringify([I.bandes, I.gaps.mesure, nf]));
+    assert.ok(I.centreFerme.mesure < 1e-9 && I.tiers.mesure < 1e-12 && I.miroirE.mesure < 1e-9 && I.temoin.mesure === 5, 'exacts ' + JSON.stringify([I.centreFerme.mesure, I.tiers.mesure, I.miroirE.mesure, I.temoin.mesure]));
+    /* (banc corrige game155 : comparer a l ETENDUE des points dessines etait faux — une bande etroite a un seul point est dessinee en son
+     *   milieu.) Spectre = { |P| <= 4 }, P recalcule ICI par matrices de transfert (Math.cos) : (a) chaque valeur propre de Bloch (diagonalisation
+     *   independante) y tombe ; (b) chaque point dessine aussi. Tolerance : |P| <= 4 + 1e-7 (1 + |P'|), P' par difference centree. */
+    const PRef = (E, pp, q) => { const th = 0.37; let a = 1, bb = 0, c = 0, d = 1; for (let m = 0; m < q; m++) { const v = E - 2 * Math.cos(2 * Math.PI * pp * m / q + th), na = v * a - c, nb = v * bb - d; c = a; d = bb; a = na; bb = nb; } return a + d + 2 * Math.cos(q * th); };
+    const dans = (E, pp, q) => { const h = 1e-7, d = (PRef(E + h, pp, q) - PRef(E - h, pp, q)) / (2 * h); return Math.abs(PRef(E, pp, q)) <= 4 + 1e-7 * (1 + Math.abs(d)); };
+    let horsBande = 0; for (const [pp, q] of [[1, 3], [2, 5], [1, 4], [3, 7], [5, 13]].filter(([, q]) => q <= Q))
+      for (let i = 0; i < 6; i++) for (let j = 0; j < 6; j++) for (const E of blochValeurs(pp, q, 2 * Math.PI * i / 6, 2 * Math.PI * j / (6 * q))) if (!dans(E, pp, q)) horsBande++;
+    let dessinHors = 0; for (let k = 0; k < R.n; k++) { const o = 3 * k, q = b[o + 2], pp = Math.round(b[o] * q); if (!dans(b[o + 1], pp, q)) dessinHors++; }
+    assert.ok(horsBande === 0 && dessinHors === 0, 'hors du spectre : valeurs de Bloch ' + horsBande + ', points dessines ' + dessinHors);
+    return I.bandes.fractions + ' fractions, ' + I.bandes.bandes + ' bandes, centre ' + I.centreFerme.mesure.toExponential(1);
+  });
+  ok('papillonHofstadter : valeurs de controle de Grok Bot (1/3 : -2.732050807569 -2 -0.732050807569 0.732050807569 2 2.732050807569 ; 2/5 : 5 bandes, bord 2.618033988750)', () => {
+    const R = S('papillonHofstadter', { qmax: 6 }), b = R.brut, ys = []; for (let q = 0; q < R.n; q++) if (Math.abs(b[3 * q] - 0.4) < 1e-12) ys.push(b[3 * q + 1]);
+    assert.ok(Math.abs(Math.max(...ys) - 2.618033988750) < 1e-11 && Math.abs(Math.min(...ys) + 2.618033988750) < 1e-11, 'bords 2/5 ' + Math.min(...ys) + ' ' + Math.max(...ys)); return '2/5 : ' + Math.max(...ys).toFixed(12);
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -355,6 +386,13 @@ const MUTANTS = [
   ['caustique : temoin a 45 degres', 'const r60 = ray(PI / 3),', 'const r60 = ray(PI / 4),'],
   ['caustique : paroi dessinee 1 % trop grande', 'brut[o] = R * cosD(t); brut[o + 1] = R * sinD(t); brut[o + 2] = 1;', 'brut[o] = 1.01 * R * cosD(t); brut[o + 1] = R * sinD(t); brut[o + 2] = 1;'],
   ['caustique : croisement de rayons non voisins', 'b = a + PI / N, X = croise(ray(a), ray(b));', 'b = a + 5 * PI / N, X = croise(ray(a), ray(b));'],
+  ['hofstadter : phase sans p', 'A[n][n] = 2 * cosD(2 * PI * p * n / q + th);', 'A[n][n] = 2 * cosD(2 * PI * n / q + th);'],
+  ['hofstadter : coin antiperiodique +1', '...jacobiSym(harperMat(p, q, PI / q, -1))', '...jacobiSym(harperMat(p, q, PI / q, 1))'],
+  ['hofstadter : seuil |P| <= 2', 'if (Math.abs(harperP((lo + hi) / 2, p, q)) > 4 + 1e-9) malBandes++;', 'if (Math.abs(harperP((lo + hi) / 2, p, q)) > 2 + 1e-9) malBandes++;'],
+  ['hofstadter : gaps attendus q - 1 toujours', 'if (ouverts !== (q % 2 ? q - 1 : q - 2)) malGaps++;', 'if (ouverts !== q - 1) malGaps++;'],
+  ['hofstadter : Jacobi arrete trop tot', 'if (off < 1e-30) break;\n    for (let p = 0; p < n; p++)', 'if (off < 1e-2) break;\n    for (let p = 0; p < n; p++)'],
+  ['hofstadter : 1/3 avec sqrt 2', 'const r3 = Math.sqrt(3), ex13', 'const r3 = Math.sqrt(2), ex13'],
+  ['hofstadter : dessin decale en energie', 'brut[3 * o + 1] = m === 1 ? (lo + hi) / 2 : lo + (hi - lo) * j / (m - 1);', 'brut[3 * o + 1] = 0.01 + (m === 1 ? (lo + hi) / 2 : lo + (hi - lo) * j / (m - 1));'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

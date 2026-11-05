@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game155 */
+  fractions: 'fractions p/q', bandes: 'bands',
   /* game153 */
   pont: 'bridge', autreForme: 'the other shape', arbreSansCarrefour: 'shortest network without crossroads', croix: 'cross of the diagonals',
   /* game151 */
@@ -423,6 +425,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game155 */
+  bandes: 'Edges found vs the spectrum |P| <= 4 (bands or gaps that fail)', gaps: 'Fractions whose open gaps are not q - 1 (odd q) or q - 2 (even q)', centreFerme: 'Even q: central edges vs E = 0', tiers: 'Edges for 1/3 vs the exact radicals', miroirE: 'Spectrum symmetric under E -> -E (largest gap)',
   /* game154 */
   nephroide: 'Bright line found vs the nephroid (largest gap)', pointe: 'Sharp point vs R/2', temoin60: 'Witness: ray at 60 degrees crosses the axis at R',
   /* game153 */
