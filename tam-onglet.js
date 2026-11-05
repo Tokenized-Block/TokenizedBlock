@@ -63,6 +63,8 @@ THEMES.maths.push('apollonius');
 THEMES.maths.push('tasDeSable');
 /* game151 : le verger d Euclide (idee : codex Grok Bot) */
 THEMES.maths.push('vergerEuclide');
+/* game152 : les cercles de Ford (idee : codex Grok Bot) */
+THEMES.maths.push('cerclesFord');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1119,6 +1121,8 @@ export function monter(racine, ctx = {}) {
     'tasDeSable',
     /* game151 */
     'vergerEuclide',
+    /* game152 */
+    'cerclesFord',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game152 (idee : codex Grok Bot) */
+  cerclesFord: {
+    titre: 'Ford circles (every fraction gets a circle)',
+    enUnePhrase: 'On each fraction p/q between 0 and 1 sits a circle of radius 1/(2 q^2): the circles never overlap, and neighbouring fractions touch.',
+    colonnes: ['the fraction p/q on the line', 'height above the line', 'denominator q'],
+    aRegarder: ['The two big circles stand on 0 and 1, the next on 1/2, then 1/3 and 2/3: each new circle fits exactly in a gap.', 'Between two touching circles p/q and r/s, the next one to appear is the mediant (p + r)/(q + s).', 'Raise the order: the gaps fill with smaller and smaller circles, but none ever overlaps another.'],
+    fin: null,
+  },
   /* game151 (idee : codex Grok Bot) */
   vergerEuclide: {
     titre: 'Euclid\'s orchard (the trees you can see from the corner)',

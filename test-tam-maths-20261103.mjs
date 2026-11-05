@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -38,6 +38,9 @@ const ORBITES = [orbiteRef(2), orbiteRef(3)];
  *   factorisation par essai (pas de crible) ; 6/pi^2 par Math.PI */
 const vergerRef = (N) => { let V = 0; for (let a = 1; a <= N; a++) for (let b = 1; b <= N; b++) { let ok = true; for (let d = 2; d <= Math.min(a, b) && ok; d++) if (a % d === 0 && b % d === 0) ok = false; if (ok) V++; } return V; };
 const facteurs = (k) => { const f = []; for (let p = 2; p * p <= k; p++) if (k % p === 0) { let e = 0; while (k % p === 0) { k /= p; e++; } f.push([p, e]); } if (k > 1) f.push([k, 1]); return f; };
+/* Ford : F_n par l algorithme des MEDIANTS (terme suivant (a, b, c, d) -> (c, d, k c - a, k d - b), k = floor((n + b)/d)), pas par
+ *   enumeration ; meme methode que les valeurs de controle de Grok Bot (|F_5| = 11, |F_8| = 23, |F_20| = 129) */
+const fareyRef = (n) => { const out = [[0, 1]]; let a = 0, b = 1, c = 1, d = n; while (c <= n) { out.push([c, d]); const k = Math.floor((n + b) / d); [a, b, c, d] = [c, d, k * c - a, k * d - b]; } return out; };
 const phiRef = (k) => facteurs(k).reduce((r, [p, e]) => r * (p - 1) * p ** (e - 1), 1), muRef = (k) => { const f = facteurs(k); return f.some(([, e]) => e > 1) ? 0 : (f.length % 2 ? -1 : 1); };
 function identiteRef(c) { const N = c * c, s = stabRef(new Int32Array(N).fill(6), c), e = new Int32Array(N); for (let i = 0; i < N; i++) e[i] = 6 - s[i]; return stabRef(e, c); }
 function standardiser(b, n, D, groupes = []) {
@@ -206,6 +209,23 @@ function suite(T, bavard = false) {
     const a = S('vergerEuclide', { cote: 10 }).invariants.visibles, b = S('vergerEuclide', { cote: 100 }).invariants.visibles;
     assert.deepEqual([a.mesure, a.sommePhi, b.mesure, b.sommePhi], [63, 32, 6087, 3044]); return '63 / 32, 6087 / 3044';
   });
+  /* game152 : Ford — F_n par les mediants ; chaque point dessine sur le cercle de SA fraction (distance au centre = rayon a 1e-12) ;
+   *   la tangence verifiee ici en ENTIERS (|ps - qr| = 1) sur la liste des mediants ; aucun chevauchement en entiers sur toutes les paires */
+  for (const p of [...extremes(sys('cerclesFord')), { ordre: 5 }, { ordre: 8 }, { ordre: 20 }]) ok(`cerclesFord ${JSON.stringify(p)} : |F_n| = 1 + sum phi = mediants, voisins tangents, aucun chevauchement, temoin 1/3 2/3`, () => {
+    const R = S('cerclesFord', p), I = R.invariants, b = R.brut, N = R.params.ordre, F = fareyRef(N);
+    assert.ok(I.farey.mesure === F.length && I.farey.formule === F.length, 'farey ' + JSON.stringify(I.farey) + ' ' + F.length);
+    for (let i = 0; i + 1 < F.length; i++) assert.equal(Math.abs(F[i][0] * F[i + 1][1] - F[i][1] * F[i + 1][0]), 1);
+    assert.ok(I.voisins.mesure === 0 && I.voisins.paires === F.length - 1 && I.tangence.mesure < 1e-12 && I.chevauchement.mesure === 0, 'tangence ' + JSON.stringify([I.voisins, I.tangence.mesure, I.chevauchement.mesure]));
+    assert.ok(Math.abs(I.temoin.mesure - (1 / 3 - 1 / 9)) < 1e-12, 'temoin ' + I.temoin.mesure);
+    let mal = 0; const qs = new Set(); for (let k = 0; k < R.n; k++) { const o = 3 * k, q = b[o + 2]; qs.add(q); const r = 1 / (2 * q * q); let ok = false;
+      for (const [pp, qq] of F) if (qq === q && Math.abs(Math.hypot(b[o] - pp / qq, b[o + 1] - r) - r) < 1e-12) { ok = true; break; } if (!ok) mal++; }
+    assert.ok(mal === 0 && qs.size === Math.min(N, R.n), 'dessin ' + mal + ' denominateurs ' + qs.size);
+    return '|F_' + N + '| = ' + F.length + ', tangence ' + I.tangence.mesure.toExponential(1);
+  });
+  ok('cerclesFord : valeurs de controle de Grok Bot (|F_5| = 11, |F_8| = 23, |F_20| = 129, F_5 en entier)', () => {
+    assert.deepEqual([5, 8, 20].map((o) => S('cerclesFord', { ordre: o }).invariants.farey.mesure), [11, 23, 129]);
+    assert.equal(fareyRef(5).map(([p, q]) => p + '/' + q).join(', '), '0/1, 1/5, 1/4, 1/3, 2/5, 1/2, 3/5, 2/3, 3/4, 4/5, 1/1'); return '11 23 129';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -278,6 +298,13 @@ const MUTANTS = [
   ['verger : borne sans le ln', 'borne = (3 + 2 * lnD(N)) / N;', 'borne = 3 / N;'],
   ['verger : diagonale qui compte aussi b = 2a', 'if (a === b) diag++;', 'if (a === b || b === 2 * a) diag++;'],
   ['verger : dessin decale d un arbre', 'brut[o] = vis[2 * i]; brut[o + 1] = vis[2 * i + 1];', 'brut[o] = vis[2 * i] + 1; brut[o + 1] = vis[2 * i + 1];'],
+  ['ford : tri par numerateur seul', 'F.sort((u, v) => u[0] * v[1] - v[0] * u[1]);', 'F.sort((u, v) => u[0] - v[0] || u[1] - v[1]);'],
+  ['ford : rayon 1/q^2', 'const R = (q) => 1 / (2 * q * q);', 'const R = (q) => 1 / (q * q);'],
+  ['ford : 1 + sum phi sans le 1', 'formule: 1 + sPhi, note', 'formule: sPhi, note'],
+  ['ford : p = q oublie (1/1 manque)', 'for (let p = 0; p <= q; p++) if (pgcd(p, q) === 1)', 'for (let p = 0; p < q; p++) if (pgcd(p, q) === 1)'],
+  ['ford : chevauchement sans le - 1', 'minChev = Math.min(minChev, x * x - 1);', 'minChev = Math.min(minChev, x * x);'],
+  ['ford : cercles dessines 1 % trop grands', 'brut[3 * o] = p / q + r * cosD(t);', 'brut[3 * o] = p / q + 1.01 * r * cosD(t);'],
+  ['ford : temoin avec 2/5', 'const t1 = 1 / 3, t2 = 2 / 3,', 'const t1 = 1 / 3, t2 = 2 / 5,'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

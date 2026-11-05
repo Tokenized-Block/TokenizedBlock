@@ -381,7 +381,42 @@ function vergerEuclide(P, n) {
     diagonale: { mesure: diag, formule: 1, note: 'witness: on the diagonal only (1, 1) is seen, every (k, k) hides behind it' } } };
 }
 
+// ---------- 11 : les cercles de Ford (idee : codex Grok Bot 2026-11-05 ; Ford, Amer. Math. Monthly 45 (1938) 586, reference du codex) ----------
+// Sur chaque fraction p/q irreductible de [0, 1] avec q <= n (la suite de Farey F_n), le cercle pose sur l axe : centre (p/q, 1/(2 q^2)),
+//   rayon 1/(2 q^2). F_n est construite par ENUMERATION de tous les p/q (pgcd 1), triee par produits croises (aucune division).
+// Exact (derive ici) : deux cercles p/q et r/s : distance^2 - (r1 + r2)^2 = (ps - qr)^2/(q s)^2 + (r1 - r2)^2 - (r1 + r2)^2
+//   = ((ps - qr)^2 - 1)/(q s)^2. Donc ils se TOUCHENT si |ps - qr| = 1 et ne se chevauchent JAMAIS (ps - qr entier non nul).
+//   Deux voisins de F_n ont |ps - qr| = 1 (propriete de Farey) : ils se touchent tous. Et |F_n| = 1 + phi(1) + ... + phi(n) (phi par crible).
+// Mesure : |ps - qr| pour chaque paire de voisins (entiers), et sur TOUTES les paires le plus petit (ps - qr)^2 - 1 (jamais negatif) ;
+//   l ecart de tangence en nombres flottants, distance des centres contre somme des rayons.
+// Temoin : 1/3 et 2/3 ne sont pas voisins (|ps - qr| = 3) : leurs cercles ne se touchent pas.
+// Dessin (vue de face) : des points sur chaque cercle (x, y) et le denominateur q (etiquette).
+function cerclesFord(P, n) {
+  const N = P.ordre, F = [];
+  for (let q = 1; q <= N; q++) for (let p = 0; p <= q; p++) if (pgcd(p, q) === 1) F.push([p, q]);
+  F.sort((u, v) => u[0] * v[1] - v[0] * u[1]);
+  const phi = new Int32Array(N + 1); for (let k = 0; k <= N; k++) phi[k] = k; for (let p = 2; p <= N; p++) if (phi[p] === p) for (let m = p; m <= N; m += p) phi[m] = phi[m] / p * (p - 1);
+  let sPhi = 0; for (let k = 1; k <= N; k++) sPhi += phi[k];
+  const R = (q) => 1 / (2 * q * q);
+  let voisinsMal = 0, pireTangence = 0;
+  for (let i = 0; i + 1 < F.length; i++) { const [p, q] = F[i], [r, s] = F[i + 1]; if (Math.abs(p * s - q * r) !== 1) voisinsMal++;
+    const dx = r / s - p / q, dy = R(s) - R(q), d = Math.sqrt(dx * dx + dy * dy); pireTangence = Math.max(pireTangence, Math.abs(d - R(q) - R(s)) / (R(q) + R(s))); }
+  let minChev = Infinity; for (let i = 0; i < F.length; i++) for (let j = i + 1; j < F.length; j++) { const x = F[i][0] * F[j][1] - F[i][1] * F[j][0]; minChev = Math.min(minChev, x * x - 1); }
+  const t1 = 1 / 3, t2 = 2 / 3, rt = R(3), temoin = Math.abs(t2 - t1) - 2 * rt;
+  const poids = F.map(([, q]) => Math.sqrt(R(q))), total = poids.reduce((u, v) => u + v, 0), brut = new Float64Array(n * 3); let o = 0;
+  for (let i = 0; i < F.length && o < n; i++) { const [p, q] = F[i], m = i === F.length - 1 ? n - o : Math.max(1, Math.min(n - o, Math.round(n * poids[i] / total))), r = R(q);
+    for (let j = 0; j < m && o < n; j++, o++) { const t = 2 * PI * j / m; brut[3 * o] = p / q + r * cosD(t); brut[3 * o + 1] = r + r * sinD(t); brut[3 * o + 2] = q; } }
+  for (; o < n; o++) { brut[3 * o] = 1; brut[3 * o + 1] = 0; brut[3 * o + 2] = 1; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (axe de longueur 1)', invariants: {
+    farey: { mesure: F.length, formule: 1 + sPhi, note: 'fractions p/q in [0, 1] with q <= n, ENUMERATED, against 1 + phi(1) + ... + phi(n) (phi from a sieve)' },
+    voisins: { mesure: voisinsMal, formule: 0, paires: F.length - 1, note: 'neighbours p/q, r/s of the Farey sequence with |ps - qr| other than 1 (none: every two neighbours touch)' },
+    tangence: { mesure: pireTangence, formule: 0, note: 'worst relative gap between the distance of two neighbouring centres and the sum of their radii' },
+    chevauchement: { mesure: minChev, formule: 0, note: 'smallest (ps - qr)^2 - 1 over ALL pairs of circles : never below 0, so no two circles ever overlap' },
+    temoin: { mesure: temoin, note: 'witness: 1/3 and 2/3 are not neighbours (|ps - qr| = 3) : gap between their circles, above 0' } } };
+}
+
 export const COLONNES = Object.freeze({
+  cerclesFord: { colonnes: ['x (the fraction p/q on the line)', 'y (height above the line)', 'denominator q (label)'], memeLongueur: [[0, 1]], autres: [2] },
   vergerEuclide: { colonnes: ['a (trees across)', 'b (trees up)', 'row max(a, b) (label)'], memeLongueur: [[0, 1]], autres: [2] },
   tasDeSable: { colonnes: ['x (cell)', 'y (cell)', 'grains on the cell (label, 0 to 3)'], memeLongueur: [[0, 1]], autres: [2] },
   apollonius: { colonnes: ['x', 'y', 'generation (label; -1 = the three starting circles)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -425,9 +460,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'vergerEuclide', nom: 'Euclid\'s orchard (which trees can you see?)', science: 'Number theory', D: 3, nuage: true, params: { cote: 60 },
     bornes: { cote: [10, 200] },
     phrase: 'A visualisation of Euclid\'s orchard: a tree at every whole point (a, b), and you stand at the corner. You see a tree only when no other tree stands in front of it, which happens exactly when a and b share no factor. The trees seen are counted one by one and match two exact formulas, with Euler\'s phi and with Mobius; their share tends to 6/pi^2, about 61 percent, but only as a limit, and the gap is shown.' },
+  { id: 'cerclesFord', nom: 'Ford circles (fractions that touch)', science: 'Number theory', D: 3, nuage: true, params: { ordre: 12 },
+    bornes: { ordre: [3, 60] },
+    phrase: 'A visualisation of Ford circles: on every fraction p/q between 0 and 1 sits a circle of radius 1/(2 q^2). They never overlap, and two circles touch exactly when |ps - qr| = 1, which is true of any two neighbours in the Farey sequence. Each fraction is listed, the touching is measured, and their number matches 1 + phi(1) + ... + phi(n).' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'] };
-const FONCTIONS = { vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'] };
+const FONCTIONS = { cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

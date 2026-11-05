@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game152 */
+  paires: 'pairs of neighbours',
   /* game151 */
   sommePhi: 'phi(1) + ... + phi(N)', borne: 'derived bound (3 + 2 ln N)/N',
   /* game150 */
@@ -421,6 +423,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game152 */
+  farey: 'Fractions listed vs 1 + sum phi', voisins: 'Neighbours that fail |ps - qr| = 1', tangence: 'Touching neighbours (worst relative gap)', chevauchement: 'Smallest (ps - qr)^2 - 1 over all pairs', temoin: 'Witness: gap between the circles of 1/3 and 2/3',
   /* game151 */
   visibles: 'Trees seen, counted vs 2 sum phi - 1', mobius: 'Trees seen vs the Mobius sum', limite: 'Share seen vs its limit 6/pi^2', diagonale: 'Witness: trees seen on the diagonal',
   /* game150 */
