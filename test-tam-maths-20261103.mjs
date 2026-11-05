@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -34,6 +34,11 @@ function orbiteRef(c) { const N = c * c, vu = new Uint8Array(4 ** N), cle = (h) 
   const file = [cle(new Int32Array(N).fill(3))]; vu[file[0]] = 1; for (let q = 0; q < file.length; q++) for (let i = 0; i < N; i++) { const h = de(file[q]); h[i]++; const k = cle(stabRef(h, c)); if (!vu[k]) { vu[k] = 1; file.push(k); } } return file.length; }
 const detValeursPropres = (c) => { let p = 1; for (let i = 1; i <= c; i++) for (let j = 1; j <= c; j++) p *= 4 - 2 * Math.cos(i * Math.PI / (c + 1)) - 2 * Math.cos(j * Math.PI / (c + 1)); return Math.round(p); };
 const ORBITES = [orbiteRef(2), orbiteRef(3)];
+/* verger : references INDEPENDANTES. Visible = aucun diviseur commun > 1 trouve par ESSAI (pas Euclide) ; phi(k) et mu(k) par
+ *   factorisation par essai (pas de crible) ; 6/pi^2 par Math.PI */
+const vergerRef = (N) => { let V = 0; for (let a = 1; a <= N; a++) for (let b = 1; b <= N; b++) { let ok = true; for (let d = 2; d <= Math.min(a, b) && ok; d++) if (a % d === 0 && b % d === 0) ok = false; if (ok) V++; } return V; };
+const facteurs = (k) => { const f = []; for (let p = 2; p * p <= k; p++) if (k % p === 0) { let e = 0; while (k % p === 0) { k /= p; e++; } f.push([p, e]); } if (k > 1) f.push([k, 1]); return f; };
+const phiRef = (k) => facteurs(k).reduce((r, [p, e]) => r * (p - 1) * p ** (e - 1), 1), muRef = (k) => { const f = facteurs(k); return f.some(([, e]) => e > 1) ? 0 : (f.length % 2 ? -1 : 1); };
 function identiteRef(c) { const N = c * c, s = stabRef(new Int32Array(N).fill(6), c), e = new Int32Array(N); for (let i = 0; i < N; i++) e[i] = 6 - s[i]; return stabRef(e, c); }
 function standardiser(b, n, D, groupes = []) {
   const z = new Float64Array(n * D), moy = [], et = [];
@@ -184,6 +189,23 @@ function suite(T, bavard = false) {
     assert.ok(I.abelien.mesure === 0 && I.abelien.tasDifferents === 0 && I.abelien.eboulementsDifferents === 0 && I.abelien.eboulements > N, 'abelien ' + JSON.stringify(I.abelien));
     return 'recurrentes ' + I.recurrentes.mesure + ', identite ' + c + 'x' + c + ' redessinee, ' + I.abelien.eboulements + ' eboulements';
   });
+  /* game151 : verger d Euclide — compte par ESSAI de diviseurs, sommes phi et mu par factorisation, borne derivee, chaque arbre dessine visible */
+  for (const p of [...extremes(sys('vergerEuclide')), { cote: 97 }]) ok(`vergerEuclide ${JSON.stringify(p)} : visibles = 2 sum phi - 1 = Mobius, limite 6/pi^2 sous la borne, diagonale 1`, () => {
+    const R = S('vergerEuclide', p), I = R.invariants, b = R.brut, N = R.params.cote, V = vergerRef(N);
+    let sp = 0, sm = 0; for (let k = 1; k <= N; k++) { sp += phiRef(k); sm += muRef(k) * Math.floor(N / k) ** 2; }
+    assert.ok(I.visibles.mesure === V && I.visibles.formule === 2 * sp - 1 && I.visibles.sommePhi === sp && I.mobius.formule === sm && sm === V, 'compte ' + JSON.stringify([I.visibles, I.mobius.formule, V, sp, sm]));
+    const lim = 6 / Math.PI ** 2, bor = (3 + 2 * Math.log(N)) / N; assert.ok(Math.abs(I.limite.formule - lim) < 1e-15 && Math.abs(I.limite.borne - bor) < 1e-12 && Math.abs(I.limite.mesure - V / (N * N)) < 1e-15 && I.limite.ecart <= bor && I.limite.ecart > 0, 'limite ' + JSON.stringify(I.limite));
+    assert.ok(I.diagonale.mesure === 1, 'diagonale ' + I.diagonale.mesure);
+    let mal = 0; const vus = new Set(); for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1]; vus.add(x * 1000 + y); let cache = false; for (let d = 2; d <= Math.min(x, y); d++) if (x % d === 0 && y % d === 0) cache = true; if (cache || x < 1 || y < 1 || x > N || y > N || b[o + 2] !== Math.max(x, y)) mal++; }
+    assert.ok(mal === 0 && vus.size === Math.min(V, R.n), 'dessin ' + mal + ' distincts ' + vus.size);
+    return V + ' visibles sur ' + N * N + ', part ' + I.limite.mesure.toFixed(5) + ' / 6/pi^2 ' + lim.toFixed(5) + ' (ecart ' + I.limite.ecart.toExponential(1) + ' < ' + bor.toFixed(3) + ')';
+  });
+  /* valeurs de controle de Grok Bot (TAM-CODEX-grok-2026-11-05-suite.md, calculees par son script Python) : N = 10 -> 63, N = 100 -> 6087,
+   *   sum phi = 32 et 3044 */
+  ok('vergerEuclide : valeurs de controle de Grok Bot (N = 10 : 63, sum phi 32 ; N = 100 : 6087, sum phi 3044)', () => {
+    const a = S('vergerEuclide', { cote: 10 }).invariants.visibles, b = S('vergerEuclide', { cote: 100 }).invariants.visibles;
+    assert.deepEqual([a.mesure, a.sommePhi, b.mesure, b.sommePhi], [63, 32, 6087, 3044]); return '63 / 32, 6087 / 3044';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -248,6 +270,14 @@ const MUTANTS = [
   ['sable : Laplacien de u avec 3', 'let lap = 4 * u1[i];', 'let lap = 3 * u1[i];'],
   ['sable : dessine (6)° au lieu de e', 'brut[o + 2] = e[i];', 'brut[o + 2] = s[i];'],
   ['sable : dessin decale d une case', 'brut[o] = i % c;', 'brut[o] = (i + 1) % c;'],
+  ['verger : pgcd qui s arrete un pas trop tot', 'function pgcd(a, b) { while (b) {', 'function pgcd(a, b) { while (b > 1) {'],
+  ['verger : formule sans le - 1', 'formule: 2 * sPhi - 1, sommePhi', 'formule: 2 * sPhi, sommePhi'],
+  ['verger : crible phi qui oublie p', 'phi[m] -= phi[m] / p;', 'if (m > p) phi[m] -= phi[m] / p;'],
+  ['verger : mu sans les carres', 'for (let m = p * p; m <= N; m += p * p) mu[m] = 0;', ''],
+  ['verger : limite 6/pi', 'limite = 6 / (PI * PI),', 'limite = 6 / (PI * 3.2),'],
+  ['verger : borne sans le ln', 'borne = (3 + 2 * lnD(N)) / N;', 'borne = 3 / N;'],
+  ['verger : diagonale qui compte aussi b = 2a', 'if (a === b) diag++;', 'if (a === b || b === 2 * a) diag++;'],
+  ['verger : dessin decale d un arbre', 'brut[o] = vis[2 * i]; brut[o + 1] = vis[2 * i + 1];', 'brut[o] = vis[2 * i] + 1; brut[o + 1] = vis[2 * i + 1];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

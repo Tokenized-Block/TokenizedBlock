@@ -353,7 +353,36 @@ function tasDeSable(P, n) {
     abelien: { mesure: residu, formule: 0, tasDifferents: dH, eboulementsDifferents: dU, eboulements: ebs, note: 'a random pile toppled twice, as a stack and as a queue : cells where the final piles differ, cells where the topple counts differ (both 0) ; and the largest gap in start - end = Delta u, exact in whole numbers' } } };
 }
 
+// ---------- 10 : le verger d Euclide (idee : codex Grok Bot 2026-11-05) ----------
+// Un arbre a chaque point entier (a, b), 1 <= a, b <= N ; debout a l origine, on voit l arbre (a, b) si aucun autre n est devant lui sur la
+//   meme droite, c est-a-dire si pgcd(a, b) = 1. On COMPTE les arbres visibles un par un (algorithme d Euclide).
+// Exact (derive ici) : (1) pour a < b, (a, b) est visible ssi pgcd(a, b) = 1 : phi(b) choix de a ; meme chose pour b < a ; et (1, 1) est le
+//   seul visible de la diagonale. Donc V(N) = 2 sum_{k <= N} phi(k) - 1 (phi par un crible, sans pgcd).
+//   (2) Mobius : le nombre de paires dont d divise les deux est floor(N/d)^2, donc V(N) = sum_d mu(d) floor(N/d)^2 (mu par un crible).
+//   (3) LIMITE, pas egalite : V(N)/N^2 tend vers 6/pi^2. Borne derivee de (2) : floor(N/d)^2 differe de N^2/d^2 de moins de 2N/d,
+//   sum_{d <= N} 1/d <= 1 + ln N, et |sum_{d > N} mu(d)/d^2| <= 1/N ; donc |V/N^2 - 6/pi^2| <= (3 + 2 ln N)/N, ecrite et comparee.
+// Temoin : sur la diagonale, un seul arbre visible, (1, 1).
+// Dessin (vue de face) : les arbres visibles (a, b) et leur rangee max(a, b) (etiquette).
+function pgcd(a, b) { while (b) { const t = a % b; a = b; b = t; } return a; }
+function vergerEuclide(P, n) {
+  const N = P.cote, vis = []; let diag = 0;
+  for (let b = 1; b <= N; b++) for (let a = 1; a <= N; a++) if (pgcd(a, b) === 1) { vis.push(a, b); if (a === b) diag++; }
+  const V = vis.length / 2;
+  /* phi et mu par crible (aucun pgcd) */
+  const phi = new Int32Array(N + 1), mu = new Int32Array(N + 1).fill(1), comp = new Uint8Array(N + 1); for (let k = 0; k <= N; k++) phi[k] = k;
+  for (let p = 2; p <= N; p++) if (!comp[p]) { for (let m = p; m <= N; m += p) { if (m > p) comp[m] = 1; phi[m] -= phi[m] / p; mu[m] = -mu[m]; } for (let m = p * p; m <= N; m += p * p) mu[m] = 0; }
+  let sPhi = 0, sMu = 0; for (let k = 1; k <= N; k++) { sPhi += phi[k]; const q = Math.floor(N / k); sMu += mu[k] * q * q; }
+  const part = V / (N * N), limite = 6 / (PI * PI), borne = (3 + 2 * lnD(N)) / N;
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const i = Math.floor(l * V / n), o = 3 * l; brut[o] = vis[2 * i]; brut[o + 1] = vis[2 * i + 1]; brut[o + 2] = Math.max(vis[2 * i], vis[2 * i + 1]); }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (arbres)', invariants: {
+    visibles: { mesure: V, formule: 2 * sPhi - 1, sommePhi: sPhi, note: 'trees seen from the corner, COUNTED one by one with Euclid\'s algorithm, against 2 (phi(1) + ... + phi(N)) - 1 with phi from a sieve (no gcd)' },
+    mobius: { mesure: V, formule: sMu, note: 'the same count against the sum over d of mu(d) floor(N/d)^2 (Mobius, mu from a sieve)' },
+    limite: { mesure: part, formule: limite, ecart: Math.abs(part - limite), borne, note: 'share of trees seen, against its LIMIT 6/pi^2 for an endless orchard (not an equality) ; the gap stays under the derived bound (3 + 2 ln N)/N' },
+    diagonale: { mesure: diag, formule: 1, note: 'witness: on the diagonal only (1, 1) is seen, every (k, k) hides behind it' } } };
+}
+
 export const COLONNES = Object.freeze({
+  vergerEuclide: { colonnes: ['a (trees across)', 'b (trees up)', 'row max(a, b) (label)'], memeLongueur: [[0, 1]], autres: [2] },
   tasDeSable: { colonnes: ['x (cell)', 'y (cell)', 'grains on the cell (label, 0 to 3)'], memeLongueur: [[0, 1]], autres: [2] },
   apollonius: { colonnes: ['x', 'y', 'generation (label; -1 = the three starting circles)'], memeLongueur: [[0, 1]], autres: [2] },
   marcheAleatoire: { colonnes: ['x (grid steps)', 'y (grid steps)', 'step number'], memeLongueur: [[0, 1]], autres: [2] },
@@ -393,9 +422,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'tasDeSable', nom: 'The abelian sandpile (and its identity)', science: 'Combinatorics', D: 3, nuage: true, params: { cote: 32 },
     bornes: { cote: [8, 40] }, /* MESURE game150 : 205 ms a 48, 110 ms a 40 (n = 1500) */
     phrase: 'A visualisation of the abelian sandpile: a cell holding four grains topples and gives one to each neighbour, grains falling off the edge are lost. The order of the topples never matters. The picture is the identity of the sandpile group on the grid. The stable piles that come back again and again are counted one by one on small grids (192 on 2 x 2, 100352 on 3 x 3) and match the determinant of the grid Laplacian, the number of spanning trees.' },
+  { id: 'vergerEuclide', nom: 'Euclid\'s orchard (which trees can you see?)', science: 'Number theory', D: 3, nuage: true, params: { cote: 60 },
+    bornes: { cote: [10, 200] },
+    phrase: 'A visualisation of Euclid\'s orchard: a tree at every whole point (a, b), and you stand at the corner. You see a tree only when no other tree stands in front of it, which happens exactly when a and b share no factor. The trees seen are counted one by one and match two exact formulas, with Euler\'s phi and with Mobius; their share tends to 6/pi^2, about 61 percent, but only as a limit, and the gap is shown.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'] };
-const FONCTIONS = { tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'] };
+const FONCTIONS = { vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

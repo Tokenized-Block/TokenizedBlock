@@ -61,6 +61,8 @@ THEMES.maths.push('pascalSierpinski');
 THEMES.maths.push('apollonius');
 /* game150 : le tas de sable abelien (idee : codex Grok Bot) */
 THEMES.maths.push('tasDeSable');
+/* game151 : le verger d Euclide (idee : codex Grok Bot) */
+THEMES.maths.push('vergerEuclide');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1115,6 +1117,8 @@ export function monter(racine, ctx = {}) {
     'haloGlace',
     /* game150 */
     'tasDeSable',
+    /* game151 */
+    'vergerEuclide',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

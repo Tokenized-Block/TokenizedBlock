@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game151 (idee : codex Grok Bot) */
+  vergerEuclide: {
+    titre: 'Euclid\'s orchard (the trees you can see from the corner)',
+    enUnePhrase: 'A tree at every whole point; standing at the corner you see only the trees with nothing in front of them, the points (a, b) with no common factor.',
+    colonnes: ['trees across (a)', 'trees up (b)', 'row max(a, b)'],
+    aRegarder: ['Gaps line up along every line through the corner with a simple slope like 1, 1/2 or 2/3: the trees behind the first one are hidden.', 'The diagonal is empty except for its very first tree.', 'Make the orchard bigger: the share seen settles near 61 percent, 6/pi^2, but never lands on it exactly.'],
+    fin: null,
+  },
   /* game150 (idee : codex Grok Bot) */
   tasDeSable: {
     titre: 'The abelian sandpile (the identity of the sandpile group)',
