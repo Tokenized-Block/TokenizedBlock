@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game167 */
+  cote2: 'side squared', triangle: 'the triangle', exact: 'exact value',
   /* game166 */
   n1: 'crossings, 2 x 1 rectangle', n2: 'crossings, 3 x 2 rectangle',
   /* game165 */
@@ -441,6 +443,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game167 */
+  equilateral: 'Outer Napoleon triangle: sides that differ (exact)', interieur: 'Inner Napoleon triangle: sides that differ (exact)', aires: 'Outer minus inner area minus the triangle (exact)',
   /* game166 */
   dualite: 'Crossing probability vs 1/2, every configuration (gap)', simulee: 'Random rectangles crossed vs 1/2',
   /* game165 */

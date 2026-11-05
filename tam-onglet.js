@@ -91,6 +91,8 @@ THEMES.maths.push('courbeDragon');
 THEMES.maths.push('theoremePick');
 /* game166 : percolation de liens (idee : codex Grok Bot) */
 THEMES.maths.push('percolationLiens');
+/* game167 : le theoreme de Napoleon (idee : codex Grok Bot) */
+THEMES.maths.push('napoleon');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -206,14 +208,14 @@ const CURSEURS_SANS_FORME = {
 const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
 const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
 /* les parametres des modules nommes en francais -> l ecran ; les symboles (L, M, omega, a...) restent des symboles */
-const NOMS_PARAMS_SYS = { 'percolationLiens.cote': 'height n (the rectangle is n + 1 wide)', 'catalanDyck.demi': 'half-length n of the paths', 'ruineJoueur.gain': 'chance p of winning one bet', 'ruineJoueur.depart': 'starting fortune z', 'ruineJoueur.objectif': 'target a', 'papillonHofstadter.qmax': 'largest denominator q of the flux p/q', 'fermatSteiner.largeur': 'width L of the rectangle (height 1)', 'kapitza.depart': 'starting tilt from the upright (degrees)', 'penduleRessort.rapport': 'bounce / swing frequency ratio', 'perleCerceau.frottement': 'friction (damping gamma)', 'echelleGlisse.depart': 'starting angle from the wall (degrees)', 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
+const NOMS_PARAMS_SYS = { 'napoleon.taille': 'size of the grid the corners are drawn from', 'percolationLiens.cote': 'height n (the rectangle is n + 1 wide)', 'catalanDyck.demi': 'half-length n of the paths', 'ruineJoueur.gain': 'chance p of winning one bet', 'ruineJoueur.depart': 'starting fortune z', 'ruineJoueur.objectif': 'target a', 'papillonHofstadter.qmax': 'largest denominator q of the flux p/q', 'fermatSteiner.largeur': 'width L of the rectangle (height 1)', 'kapitza.depart': 'starting tilt from the upright (degrees)', 'penduleRessort.rapport': 'bounce / swing frequency ratio', 'perleCerceau.frottement': 'friction (damping gamma)', 'echelleGlisse.depart': 'starting angle from the wall (degrees)', 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
   'binaireFusion.distance': 'luminosity distance (Mpc)', 'fusionTrousNoirs.distance': 'luminosity distance (Mpc)',
   /* game133 */
   'corpsNoir.courbes': 'temperatures drawn', 'corpsNoir.rapport': 'hottest over coolest temperature',
   /* game134 (« espacement » existe deja : mode spacing, vide quantique) */
   'reseauFentes.espacement': 'slit spacing d / lambda' };
 const nomParam = (sid, cle) => NOMS_PARAMS_SYS[sid + '.' + cle] || NOMS_PARAMS_EN[cle];
-const NOMS_PARAMS_EN = { qmax: 'largest denominator q', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
+const NOMS_PARAMS_EN = { qmax: 'largest denominator q', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
   excentricite: 'eccentricity', frequence: 'frequency', graine: 'seed', grille: 'grid', groupe: 'group', hauteur: 'height', heures: 'hours',
   horloges: 'clocks', images: 'frames', inclinaison: 'inclination', inclinaison1: 'inclination 1', inclinaison2: 'inclination 2', jours: 'days',
@@ -1175,6 +1177,8 @@ export function monter(racine, ctx = {}) {
     'theoremePick',
     /* game166 */
     'percolationLiens',
+    /* game167 */
+    'napoleon',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

@@ -884,7 +884,57 @@ function percolationLiens(P, n) {
     temoin: { mesure: carre.t + '/' + carre.total, formule: '2752/4096', note: 'witness: the 2 x 2 SQUARE is not self-dual : crossed in 2752 of 4096 configurations, not half' } } };
 }
 
+// ---------- 25 : le theoreme de Napoleon (idee et valeurs : codex Grok Bot) ----------
+// Sur chaque cote d un triangle, un triangle equilateral pose vers l EXTERIEUR : leurs trois centres forment un triangle equilateral.
+// Exact ici : tout est calcule dans Q(sqrt 3) (nombres a + b sqrt 3, a et b fractions BigInt) : la rotation de 60 degres n a besoin
+//   que de 1/2 et sqrt(3)/2 ; les trois cotes au carre du triangle des centres sont compares A L IDENTIQUE, sans arrondi.
+// Aussi exact : avec les equilateraux vers l INTERIEUR, encore un triangle equilateral, et (aire exterieure) - (aire interieure) = aire du triangle.
+// Triangle : sommets entiers tires (graine) dans une grille de la taille du curseur, sens direct, jamais plat.
+// Temoin : des CARRES a la place des equilateraux (triangle (0,0) (6,0) (0,8) de Grok) : centres a 116, 130, 98 au carre — pas equilateral.
+// Dessin (vue de face) : le triangle, les trois equilateraux exterieurs, le triangle de Napoleon ; etiquette 0, 1, 2.
+const napG = (a, b) => { a = a < 0n ? -a : a; b = b < 0n ? -b : b; while (b) [a, b] = [b, a % b]; return a; };
+const napF = (n, d = 1n) => { if (d < 0n) { n = -n; d = -d; } const k = napG(n, d) || 1n; return [n / k, d / k]; };
+const napFA = (x, y) => napF(x[0] * y[1] + y[0] * x[1], x[1] * y[1]), napFM = (x, y) => napF(x[0] * y[0], x[1] * y[1]);
+const napQA = (x, y) => [napFA(x[0], y[0]), napFA(x[1], y[1])], napQN = (x) => [[-x[0][0], x[0][1]], [-x[1][0], x[1][1]]], napQS = (x, y) => napQA(x, napQN(y));
+const napQM = (x, y) => [napFA(napFM(x[0], y[0]), napFM(napFM(x[1], y[1]), [3n, 1n])), napFA(napFM(x[0], y[1]), napFM(x[1], y[0]))];
+const napEgal = (x, y) => x[0][0] === y[0][0] && x[0][1] === y[0][1] && x[1][0] === y[1][0] && x[1][1] === y[1][1];
+const napTexte = (x) => x[0][0] + (x[0][1] === 1n ? '' : '/' + x[0][1]) + ' + ' + x[1][0] + (x[1][1] === 1n ? '' : '/' + x[1][1]) + ' sqrt3';
+const napReel = (x) => Number(x[0][0]) / Number(x[0][1]) + (Number(x[1][0]) / Number(x[1][1])) * 1.7320508075688772;
+const NAP_DEMI = [[1n, 2n], [0n, 1n]], NAP_R = [[0n, 1n], [1n, 2n]], NAP_TIERS = [[1n, 3n], [0n, 1n]];
+/* 3e sommet : rotation de -60 degres de (Q - P) autour de P (exterieur pour un triangle direct) */
+function napSommet(P, Q) { const dx = napQS(Q[0], P[0]), dy = napQS(Q[1], P[1]);
+  return [napQA(P[0], napQA(napQM(dx, NAP_DEMI), napQM(dy, NAP_R))), napQA(P[1], napQA(napQN(napQM(dx, NAP_R)), napQM(dy, NAP_DEMI)))]; }
+const napCentre = (A, B, C) => [napQM(napQA(napQA(A[0], B[0]), C[0]), NAP_TIERS), napQM(napQA(napQA(A[1], B[1]), C[1]), NAP_TIERS)];
+const napD2 = (U, V) => { const dx = napQS(U[0], V[0]), dy = napQS(U[1], V[1]); return napQA(napQM(dx, dx), napQM(dy, dy)); };
+function napTriangle(S, exterieur) { const ext = (P, Q) => exterieur ? napSommet(P, Q) : napSommet(Q, P), [A, B, C] = S;
+  const E = [ext(A, B), ext(B, C), ext(C, A)], G = [napCentre(A, B, E[0]), napCentre(B, C, E[1]), napCentre(C, A, E[2])];
+  return { E, G, c2: [napD2(G[0], G[1]), napD2(G[1], G[2]), napD2(G[2], G[0])] }; }
+function napoleon(P, n) {
+  const L = P.taille, rng = mulberry32(P.graine); let T = null;
+  while (!T) { const t = [0, 1, 2].map(() => [Math.floor(rng() * (L + 1)), Math.floor(rng() * (L + 1))]), cr = (t[1][0] - t[0][0]) * (t[2][1] - t[0][1]) - (t[1][1] - t[0][1]) * (t[2][0] - t[0][0]);
+    if (cr > 0) T = t; else if (cr < 0) T = [t[0], t[2], t[1]]; }
+  const S = T.map(([x, y]) => [[[BigInt(x), 1n], [0n, 1n]], [[BigInt(y), 1n], [0n, 1n]]]), X = napTriangle(S, true), I = napTriangle(S, false);
+  const egaux = (c) => (napEgal(c[0], c[1]) ? 0 : 1) + (napEgal(c[1], c[2]) ? 0 : 1);
+  /* aire d un equilateral de cote^2 = s : (sqrt3 / 4) s ; difference exterieur - interieur contre l aire du triangle (rationnelle) */
+  const aire2 = (T[1][0] - T[0][0]) * (T[2][1] - T[0][1]) - (T[1][1] - T[0][1]) * (T[2][0] - T[0][0]), R34 = [[0n, 1n], [1n, 4n]];
+  const ecartAires = napQS(napQM(napQS(X.c2[0], I.c2[0]), R34), [[BigInt(aire2), 2n], [0n, 1n]]);
+  const tc = [[0, 0], [6, 0], [0, 8]], cc = (p, q) => [p[0] + q[0] + (q[1] - p[1]), p[1] + q[1] - (q[0] - p[0])], Gc = [cc(tc[0], tc[1]), cc(tc[1], tc[2]), cc(tc[2], tc[0])];
+  const dc = (u, v) => ((u[0] - v[0]) ** 2 + (u[1] - v[1]) ** 2) / 4, carres = [dc(Gc[0], Gc[1]), dc(Gc[1], Gc[2]), dc(Gc[2], Gc[0])];
+  const segs = []; const pt = (q) => [napReel(q[0]), napReel(q[1])];
+  for (let i = 0; i < 3; i++) segs.push([pt(S[i]), pt(S[(i + 1) % 3]), 0]);
+  for (let i = 0; i < 3; i++) { segs.push([pt(S[i]), pt(X.E[i]), 1]); segs.push([pt(X.E[i]), pt(S[(i + 1) % 3]), 1]); }
+  for (let i = 0; i < 3; i++) segs.push([pt(X.G[i]), pt(X.G[(i + 1) % 3]), 2]);
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const o = 3 * l, t = l * segs.length / n, s = Math.floor(t), u = t - s, sg = segs[s];
+    brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (cases de la grille)', invariants: {
+    equilateral: { mesure: egaux(X.c2), formule: 0, cote2: napTexte(X.c2[0]), triangle: JSON.stringify(T), note: 'pairs of sides of the outer Napoleon triangle whose squares differ, compared exactly in Q(sqrt 3)' },
+    interieur: { mesure: egaux(I.c2), formule: 0, cote2: napTexte(I.c2[0]), note: 'same with the equilateral triangles turned inwards : still equilateral' },
+    aires: { mesure: napReel(ecartAires), formule: 0, exact: napTexte(ecartAires), note: 'area of the outer Napoleon triangle minus the inner one, minus the area of the triangle : exactly 0' },
+    temoin: { mesure: carres.join(', '), formule: '116, 130, 98', note: 'witness: squares instead of equilateral triangles on (0,0) (6,0) (0,8) : the centres are 116, 130, 98 apart (squared), not equilateral' } } };
+}
+
 export const COLONNES = Object.freeze({
+  napoleon: { colonnes: ['x', 'y', 'what (label; 0 = the triangle, 1 = equilateral triangles on its sides, 2 = Napoleon triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   percolationLiens: { colonnes: ['x (lattice)', 'y (lattice)', 'cluster (label; 2 = crosses, 1 = touches the left side, 0 = other)'], memeLongueur: [[0, 1]], autres: [2] },
   theoremePick: { colonnes: ['x', 'y', 'what (label; 0 = the outline, 1 = whole point inside, 2 = whole point on the boundary)'], memeLongueur: [[0, 1]], autres: [2] },
   courbeDragon: { colonnes: ['x', 'y', 'fold that made the segment (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -984,9 +1034,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'percolationLiens', nom: 'Bond percolation: crossing at p = 1/2', science: 'Probability', D: 3, nuage: true, params: { cote: 12, graine: 1 },
     bornes: { cote: [2, 40], graine: [1, 1000000] },
     phrase: 'A visualisation of bond percolation: every link of a grid is open with probability one half. A rectangle n + 1 wide and n high is crossed from left to right with probability exactly 1/2, by duality. Every configuration of the two smallest cases is enumerated, random rectangles are drawn, and a square that misses the symmetry is shown as a witness.' },
+  { id: 'napoleon', nom: 'Napoleon\'s theorem', science: 'Geometry', D: 3, nuage: true, params: { taille: 12, graine: 1 },
+    bornes: { taille: [3, 40], graine: [1, 1000000] },
+    phrase: 'A visualisation of Napoleon\'s theorem: put an equilateral triangle on each side of any triangle, and their three centres always form an equilateral triangle. Everything is computed exactly with numbers a + b sqrt 3, so the three sides are compared as identical, not just close; squares in place of the triangles show the rule breaking.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'] };
-const FONCTIONS = { percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'] };
+const FONCTIONS = { napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

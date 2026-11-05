@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game167 (idee : codex Grok Bot) */
+  napoleon: {
+    titre: 'Napoleon\'s theorem (three centres always make an equilateral triangle)',
+    enUnePhrase: 'Stick an equilateral triangle on each side of any triangle: the three centres always form an equilateral triangle.',
+    colonnes: ['across', 'up', 'triangle, added triangles, or Napoleon triangle'],
+    aRegarder: ['Change the seed: any triangle, thin or wide, gives an equilateral one in the middle.', 'The sides are compared as exact numbers a + b sqrt 3, not as decimals that happen to be close.', 'With squares instead of triangles the centres no longer make an equilateral triangle.'],
+    fin: null,
+  },
   /* game166 (idee : codex Grok Bot) */
   percolationLiens: {
     titre: 'Bond percolation (a fair coin for every link)',

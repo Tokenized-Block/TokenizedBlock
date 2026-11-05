@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -498,6 +498,31 @@ function suite(T, bavard = false, seul = null) {
     if (trav) assert.ok(deux > 0, 'le reseau dessine traverse mais aucun point etiquete 2');
     return 'n = ' + N + ' : ' + I.simulee.mesure + ' traverses (z = ' + ((I.simulee.mesure - 0.5) / I.simulee.sigma).toFixed(2) + ')';
   });
+  /* game167 : Napoleon — reference INDEPENDANTE en flottants par NOMBRES COMPLEXES (rotation par e^(i pi/3), pas de Q(sqrt 3)) ;
+   *   centres de Grok Bot pour (0,0) (6,0) (0,8) : (3, -sqrt3), (3 + 4 sqrt3/3, 4 + sqrt3), (-4 sqrt3/3, 4) */
+  const napRef = (T, sens) => { const z = T.map(([x, y]) => [x, y]), w = [0.5, sens * Math.sqrt(3) / 2], mul = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+    /* sommet exterieur sur PQ (sens direct) : P + (Q - P) e^(-i pi/3) */
+    const G = [0, 1, 2].map((i) => { const P = z[i], Q = z[(i + 1) % 3], d = mul([Q[0] - P[0], Q[1] - P[1]], w), E = [P[0] + d[0], P[1] + d[1]]; return [(P[0] + Q[0] + E[0]) / 3, (P[1] + Q[1] + E[1]) / 3]; });
+    const L = [0, 1, 2].map((i) => Math.hypot(G[i][0] - G[(i + 1) % 3][0], G[i][1] - G[(i + 1) % 3][1])); return { G, L }; };
+  ok('napoleon : centres de Grok Bot retrouves (triangle (0,0) (6,0) (0,8)) ; cote^2 = 100/3 + 16 sqrt3 = (a^2 + b^2 + c^2 + 4 sqrt3 aire)/6', () => {
+    const r = napRef([[0, 0], [6, 0], [0, 8]], -1), s3 = Math.sqrt(3), at = [[3, -s3], [3 + 4 * s3 / 3, 4 + s3], [-4 * s3 / 3, 4]];
+    for (let i = 0; i < 3; i++) assert.ok(Math.abs(r.G[i][0] - at[i][0]) < 1e-12 && Math.abs(r.G[i][1] - at[i][1]) < 1e-12, 'centre ' + i + ' ' + r.G[i]);
+    assert.ok(Math.abs(r.L[0] ** 2 - (100 / 3 + 16 * s3)) < 1e-11 && Math.abs((200 + 4 * s3 * 24) / 6 - (100 / 3 + 16 * s3)) < 1e-12); return 'cote = ' + r.L[0].toFixed(12); });
+  for (const p of [...extremes(sys('napoleon')), { taille: 23, graine: 4242 }]) ok(`napoleon ${JSON.stringify(p)} : exterieur et interieur equilateraux (exact ET en complexes), aires, dessin`, () => {
+    const R = S('napoleon', p), I = R.invariants, b = R.brut, T = JSON.parse(I.equilateral.triangle), X = napRef(T, -1), Y = napRef(T, 1);
+    assert.ok(I.equilateral.mesure === 0 && I.interieur.mesure === 0 && I.aires.mesure === 0 && /^0 \+ 0 sqrt3$/.test(I.aires.exact), JSON.stringify(I));
+    const tol = 1e-9 * (1 + X.L[0]); assert.ok(Math.abs(X.L[0] - X.L[1]) < tol && Math.abs(X.L[1] - X.L[2]) < tol && Math.abs(Y.L[0] - Y.L[1]) < tol, 'reference ' + X.L + ' ' + Y.L);
+    const [a, c, s] = I.equilateral.cote2.split(/ \+ | sqrt3/).map((t) => { const [u, v] = t.split('/'); return Number(u) / (v ? Number(v) : 1); });
+    assert.ok(Math.abs(a + c * Math.sqrt(3) - X.L[0] ** 2) < 1e-9 * (1 + X.L[0] ** 2), 'cote2 exact ' + I.equilateral.cote2 + ' vs ' + X.L[0] ** 2);
+    const aire = Math.abs((T[1][0] - T[0][0]) * (T[2][1] - T[0][1]) - (T[1][1] - T[0][1]) * (T[2][0] - T[0][0])) / 2;
+    assert.ok(aire > 0 && Math.abs(Math.sqrt(3) / 4 * (X.L[0] ** 2 - Y.L[0] ** 2) - aire) < 1e-9 * (1 + aire), 'aires en complexes');
+    assert.equal(I.temoin.mesure, '116, 130, 98');
+    /* dessin : etiquette 2 sur le triangle des centres de la reference, 0 sur le triangle */
+    const surSeg = (P, A, B) => { const ab = [B[0] - A[0], B[1] - A[1]], l = Math.hypot(...ab), cr = (P[0] - A[0]) * ab[1] - (P[1] - A[1]) * ab[0], d = ((P[0] - A[0]) * ab[0] + (P[1] - A[1]) * ab[1]) / l; return Math.abs(cr / l) < 1e-9 && d >= -1e-9 && d <= l + 1e-9; };
+    let mal = 0, deux = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, P = [b[o], b[o + 1]], e = b[o + 2], tri = e === 2 ? X.G : T;
+      if (e === 1) continue; if (e === 2) deux++; if (![0, 1, 2].some((i) => surSeg(P, tri[i], tri[(i + 1) % 3]))) mal++; }
+    assert.ok(mal === 0 && deux > 0, mal + ' points hors de leur triangle'); return 'cote^2 = ' + I.equilateral.cote2;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -651,6 +676,11 @@ const MUTANTS = [
   ['percolation : ouverture 0.6', 'ouvert[k] = rng() < 0.5 ? 1 : 0; if (percoAmas', 'ouvert[k] = rng() < 0.6 ? 1 : 0; if (percoAmas'],
   ['percolation : valeur absolue oubliee', 'mesure: Math.abs(e1.t / e1.total - 0.5) + Math.abs(e2.t / e2.total - 0.5)', 'mesure: (e1.t / e1.total - 0.5) + (e2.t / e2.total - 0.75)'],
   ['percolation : dessin decale', "brut[o] = li[0] + (li[2] === 0 ? u : 0);", "brut[o] = li[0] + 0.5 + (li[2] === 0 ? u : 0);"],
+  ['napoleon : rotation de 90 au lieu de 60', 'const NAP_DEMI = [[1n, 2n], [0n, 1n]], NAP_R = [[0n, 1n], [1n, 2n]]', 'const NAP_DEMI = [[0n, 1n], [0n, 1n]], NAP_R = [[1n, 1n], [0n, 1n]]'],
+  ['napoleon : centre = milieu de deux sommets', 'NAP_TIERS = [[1n, 3n], [0n, 1n]];', 'NAP_TIERS = [[1n, 2n], [0n, 1n]];'],
+  ['napoleon : sqrt3^2 = 2', 'napFM(napFM(x[1], y[1]), [3n, 1n])', 'napFM(napFM(x[1], y[1]), [2n, 1n])'],
+  ['napoleon : interieur = exterieur', 'const ext = (P, Q) => exterieur ? napSommet(P, Q) : napSommet(Q, P)', 'const ext = (P, Q) => napSommet(P, Q)'],
+  ['napoleon : triangle non reoriente', 'else if (cr < 0) T = [t[0], t[2], t[1]]; }', 'else if (cr < 0) T = t; }'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -665,7 +695,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);
