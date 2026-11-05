@@ -3679,9 +3679,14 @@ function selectionnerGalerie(adr, btn) {
  * c est une constante du reseau, pas une estimation de notre part. On arrondit vers le bas et on
  * ne descend jamais sous « <1 min » — pretendre « il y a 37 s » sur un ecart de blocs donnerait
  * une precision que le numero de bloc ne porte pas. */
-function ageDepuisBlocs(ecart) {
+/* ⛔⛔ DENIM (2026-11-05) : « le temps de bloc de Base est de 2 s » n est PLUS vrai — Base passe a 200 ms/bloc, et `ecart * 2`
+ *     aurait dit « 5 h » pour 30 min. L age se dit au temps de bloc MESURE (`sParBloc`, servi par le serveur : /api/temps-de-bloc) ;
+ *     sans lui, en BLOCS (« 9,000 blocks »), jamais a 2 s supposees. Cette page est redirigee (/#creer, 301 cote serveur) : elle ne lit
+ *     donc pas le serveur, et dit les blocs. */
+function ageDepuisBlocs(ecart, sParBloc = null) {
   if (!Number.isFinite(ecart) || ecart < 0) return null;
-  const s = ecart * 2;
+  if (!(typeof sParBloc === 'number' && sParBloc >= 0.05 && sParBloc <= 30)) return Math.round(ecart).toLocaleString('en-US') + ' block' + (ecart === 1 ? '' : 's');
+  const s = ecart * sParBloc;
   if (s < 60) return '<1 min';
   if (s < 3600) return Math.floor(s / 60) + ' min';
   if (s < 86400) return Math.floor(s / 3600) + ' h';
