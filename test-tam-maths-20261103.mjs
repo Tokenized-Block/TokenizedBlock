@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -654,6 +654,28 @@ function suite(T, bavard = false, seul = null) {
     let hors = 0; for (const q of pts) { let sur = false; for (let i = 0; i < som.length && !sur; i++) for (let j = i + 1; j < som.length && !sur; j++) { const a = som[i], c = som[j]; if (Math.abs(Math.hypot(...a.map((x, t) => x - c[t])) - m) > 1e-7 * m) continue; sur = Math.abs(Math.hypot(...a.map((x, t) => x - q[t])) + Math.hypot(...c.map((x, t) => x - q[t])) - m) < 1e-9 * m; } if (!sur) hors++; }
     assert.equal(hors, 0, 'points hors des aretes'); assert.deepEqual([ref.V, ref.E, ref.F], att, 'force brute sur le dessin ' + JSON.stringify(ref));
     return att.join(' / ') + ' -> ' + (att[0] - att[1] + att[2]); });
+  /* game174 : Morley — reference INDEPENDANTE en NOMBRES COMPLEXES (rotation par e^(i theta), triangle place par ses COTES a, b, c, pas
+   *   sur le cercle unite) ; valeurs de Grok Bot : cote 1.24367901813 (6-7-8), 0.96230357220 (5-5-6), 0.64751768838 (3-4-5) */
+  const morleyRef = (a, b, c) => { const A = [0, 0], B = [c, 0], x = (b * b + c * c - a * a) / (2 * c), C = [x, Math.sqrt(b * b - x * x)];
+    const angle = (U, V, W) => Math.acos(((V[0] - U[0]) * (W[0] - U[0]) + (V[1] - U[1]) * (W[1] - U[1])) / (Math.hypot(V[0] - U[0], V[1] - U[1]) * Math.hypot(W[0] - U[0], W[1] - U[1])));
+    const al = [angle(A, B, C), angle(B, C, A), angle(C, A, B)], S = [A, B, C], mul = (z, w) => [z[0] * w[0] - z[1] * w[1], z[0] * w[1] + z[1] * w[0]], e = (t) => [Math.cos(t), Math.sin(t)];
+    const M = [0, 1, 2].map((i) => { const U = S[i], V = S[(i + 1) % 3], d1 = mul([V[0] - U[0], V[1] - U[1]], e(al[i] / 3)), d2 = mul([U[0] - V[0], U[1] - V[1]], e(-al[(i + 1) % 3] / 3));
+      const den = d1[0] * d2[1] - d1[1] * d2[0], t = ((V[0] - U[0]) * d2[1] - (V[1] - U[1]) * d2[0]) / den; return [U[0] + t * d1[0], U[1] + t * d1[1]]; });
+    const K = Math.abs(c * C[1]) / 2, R = a * b * c / (4 * K); return { al, cotes: [0, 1, 2].map((i) => Math.hypot(M[i][0] - M[(i + 1) % 3][0], M[i][1] - M[(i + 1) % 3][1])), R }; };
+  ok('morley : valeurs de Grok Bot retrouvees par la reference (6-7-8, 5-5-6, 3-4-5)', () => {
+    for (const [cotes, s] of [[[6, 7, 8], 1.24367901813], [[5, 5, 6], 0.96230357220], [[3, 4, 5], 0.64751768838]]) { const r = morleyRef(...cotes); for (const c of r.cotes) assert.ok(Math.abs(c - s) < 2e-11, cotes + ' : ' + r.cotes); }
+    return 'ok'; });
+  for (const p of [...extremes(sys('morley')), { angleA: 100, angleB: 20 }, { angleA: 37.5, angleB: 52.25 }]) ok(`morley ${JSON.stringify(p)} : cotes = Webster, reference complexe a la meme forme, angles, temoin, dessin`, () => {
+    const R = S('morley', p), I = R.invariants, b = R.brut, A = p.angleA ?? 70, B2 = p.angleB ?? 45, C = 180 - A - B2;
+    assert.ok(I.webster.mesure < 1e-12 && I.webster.formule === 0, 'webster ' + JSON.stringify(I.webster));
+    const ang = I.webster.troisAngles.split(', ').map(Number).sort((x, y) => x - y), att = [A, B2, C].sort((x, y) => x - y); assert.ok(ang.every((x, i) => Math.abs(x - att[i]) < 1e-7), 'angles ' + I.webster.troisAngles);
+    /* meme forme par la reference : cotes par la loi des sinus (R = 1 : a = 2 sin A), cote de Morley mis a l echelle */
+    const rad = (x) => x * Math.PI / 180, r = morleyRef(2 * Math.sin(rad(A)), 2 * Math.sin(rad(B2)), 2 * Math.sin(rad(C)));
+    for (const c of r.cotes) assert.ok(Math.abs(c / r.R - I.webster.cote) < 1e-10, 'reference ' + r.cotes + ' R ' + r.R + ' vs ' + I.webster.cote);
+    assert.ok(I.temoin.mesure > 1e-4, 'temoin ' + I.temoin.mesure);
+    let mal = 0, deux = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1], e = b[o + 2]; if (e === 0 && Math.abs(Math.hypot(x, y) - 1) > 1.0 && false) mal++; if (e === 2) deux++; if (![0, 1, 2].includes(e) || !Number.isFinite(x) || !Number.isFinite(y) || Math.hypot(x, y) > 1 + 1e-9) mal++; }
+    assert.ok(mal === 0 && deux > 0, mal + ' points faux'); return 'cote ' + I.webster.cote.toFixed(12);
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -839,6 +861,10 @@ const MUTANTS = [
   ['euler : cuboctaedre en (1,1,1)', 'if (k === 2) return eulUniq(eulPerms([1, 1, 0]).flatMap(eulSignes));', 'if (k === 2) return eulUniq(eulPerms([1, 1, 1]).flatMap(eulSignes));'],
   ['euler : plan d appui coupant accepte', 'if (pos > 0 && neg > 0) continue; const sg = pos ? -1 : 1, cle', 'if (pos > 1 && neg > 0) continue; const sg = pos ? -1 : 1, cle'],
   ['euler : tore ferme en sphere', 'return { D: 3, brut, nuage: true, unite: \'longueur d arete\', invariants: {', 'faces.length = 6; return { D: 3, brut, nuage: true, unite: \'longueur d arete\', invariants: {'],
+  ['morley : trisectrices sans le sens du triangle', 'const X = inter(U, rot(du, sens * al[i] / k), V, rot(dv, -sens * al[(i + 1) % 3] / k));', 'const X = inter(U, rot(du, al[i] / k), V, rot(dv, al[(i + 1) % 3] / k));'],
+  ['morley : Webster avec 4 R', 'const s = 8 * sinD(T.al[0] / 3)', 'const s = 4 * sinD(T.al[0] / 3)'],
+  ['morley : angle voisin mal choisi', 'rot(dv, -sens * al[(i + 1) % 3] / k)', 'rot(dv, -sens * al[(i + 2) % 3] / k)'],
+  ['morley : temoin en trois', 'Q = morleyPoints(A, B, 4)', 'Q = morleyPoints(A, B, 3)'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -853,7 +879,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game174 */
+  cote: 'side by Webster s formula', troisAngles: 'angles A, B, C (degrees, measured)',
   /* game172 */
   points: 'the vertices (coordinates)',
   /* game171 */
@@ -453,6 +455,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game174 */
+  webster: 'Morley sides vs 8 R sin(A/3) sin(B/3) sin(C/3) (largest relative gap)',
   /* game172 */
   poignees: 'Corners of all faces minus 2E (every edge borders two faces)',
   /* game171 */

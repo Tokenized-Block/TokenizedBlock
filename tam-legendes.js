@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game174 (idee : codex Grok Bot) */
+  morley: {
+    titre: 'Morley\'s theorem (cut every angle in three)',
+    enUnePhrase: 'Split each corner of any triangle into three equal angles: the lines meet in a perfect equilateral triangle.',
+    colonnes: ['across', 'up', 'triangle, trisectors, or Morley triangle'],
+    aRegarder: ['Move the two angle sliders: however lopsided the triangle, the middle one stays equilateral.', 'Its side is 8 R sin(A/3) sin(B/3) sin(C/3), and the three measured sides match it.', 'Cutting the angles in four gives a triangle that is not equilateral.'],
+    fin: null,
+  },
   /* game172 (idee : codex Grok Bot) */
   eulerSolides: {
     titre: 'Euler\'s formula on five more solids',

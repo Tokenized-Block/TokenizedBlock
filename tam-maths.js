@@ -1131,7 +1131,42 @@ function eulerSolides(P, n) {
     temoin: { mesure: Vt - Et + faces.length, formule: 0, note: 'witness: a square picture frame (a polyhedral torus, 16 four-sided faces) : V - E + F = 0, not 2' } } };
 }
 
+// ---------- 31 : le theoreme de Morley (idee et valeurs : codex Grok Bot ; Webster, Mathematics Magazine 43 (1970) 209-210, lu par Grok) ----------
+// Couper chaque angle d un triangle en TROIS : les trisectrices voisines d un meme cote se coupent en trois points qui forment TOUJOURS un
+//   triangle equilateral, de cote 8 R sin(A/3) sin(B/3) sin(C/3) (Webster), R rayon du cercle circonscrit.
+// Mesure : triangle inscrit dans le cercle de rayon 1 (angles A et B au curseur, C = 180 - A - B) ; chaque sommet de Morley = intersection
+//   des deux droites issues des extremites d un cote, tournees de A/3 (resp. B/3) vers l interieur ; les trois cotes mesures contre Webster.
+// Temoin : avec les QUADRISECTRICES (angles coupes en 4) la meme construction donne un triangle qui n est pas equilateral.
+// Dessin (vue de face) : le triangle (0), les trisectrices jusqu a leur point (1), le triangle de Morley (2).
+function morleyPoints(A, B, k) {
+  const C = PI - A - B, P = [[cosD(PI / 2 + 2 * C), sinD(PI / 2 + 2 * C)], [cosD(PI / 2 + 2 * C + 2 * A), sinD(PI / 2 + 2 * C + 2 * A)], [cosD(PI / 2 + 2 * C + 2 * A + 2 * B), sinD(PI / 2 + 2 * C + 2 * A + 2 * B)]];
+  /* sommets sur le cercle unite : l arc oppose a un angle vaut deux fois l angle ; P[0], P[1], P[2] portent les angles B, C, A dans cet ordre
+   *   (on les renomme par leurs angles reels plus bas, mesures) */
+  const ang = (U, V, W) => { const a = [V[0] - U[0], V[1] - U[1]], b = [W[0] - U[0], W[1] - U[1]], c = (a[0] * b[0] + a[1] * b[1]) / Math.sqrt((a[0] ** 2 + a[1] ** 2) * (b[0] ** 2 + b[1] ** 2)); return atan2D(Math.sqrt(Math.max(0, 1 - c * c)), c); };
+  const al = [ang(P[0], P[1], P[2]), ang(P[1], P[2], P[0]), ang(P[2], P[0], P[1])];
+  const rot = (v, t) => [v[0] * cosD(t) - v[1] * sinD(t), v[0] * sinD(t) + v[1] * cosD(t)];
+  const inter = (U, d1, V, d2) => { const den = d1[0] * d2[1] - d1[1] * d2[0], t = ((V[0] - U[0]) * d2[1] - (V[1] - U[1]) * d2[0]) / den; return [U[0] + t * d1[0], U[1] + t * d1[1]]; };
+  const sens = Math.sign((P[1][0] - P[0][0]) * (P[2][1] - P[0][1]) - (P[1][1] - P[0][1]) * (P[2][0] - P[0][0]));
+  const M = [], traits = [];
+  for (let i = 0; i < 3; i++) { const U = P[i], V = P[(i + 1) % 3], du = [V[0] - U[0], V[1] - U[1]], dv = [U[0] - V[0], U[1] - V[1]];
+    const X = inter(U, rot(du, sens * al[i] / k), V, rot(dv, -sens * al[(i + 1) % 3] / k)); M.push(X); traits.push([U, X], [V, X]); }
+  return { P, al, M };
+}
+function morley(P0, n) {
+  const A = P0.angleA * PI / 180, B = P0.angleB * PI / 180, T = morleyPoints(A, B, 3), Q = morleyPoints(A, B, 4);
+  const d = (U, V) => Math.sqrt((U[0] - V[0]) ** 2 + (U[1] - V[1]) ** 2), cotes = [0, 1, 2].map((i) => d(T.M[i], T.M[(i + 1) % 3])), qc = [0, 1, 2].map((i) => d(Q.M[i], Q.M[(i + 1) % 3]));
+  const s = 8 * sinD(T.al[0] / 3) * sinD(T.al[1] / 3) * sinD(T.al[2] / 3); /* R = 1 */
+  const segs = []; for (let i = 0; i < 3; i++) { segs.push([T.P[i], T.P[(i + 1) % 3], 0]); segs.push([T.P[i], T.M[i], 1], [T.P[(i + 1) % 3], T.M[i], 1]); segs.push([T.M[i], T.M[(i + 1) % 3], 2]); }
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const t = l * segs.length / n, j = Math.floor(t), u = t - j, sg = segs[j], o = 3 * l;
+    brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
+  const ecartMax = Math.max(...cotes.map((c) => Math.abs(c - s))) / s, spreadQ = (Math.max(...qc) - Math.min(...qc)) / Math.max(...qc);
+  return { D: 3, brut, nuage: true, unite: 'rayon du cercle circonscrit = 1', invariants: {
+    webster: { mesure: ecartMax, formule: 0, cote: s, troisAngles: T.al.map((a) => a * 180 / PI).map((x) => x.toFixed(9)).join(', '), note: 'largest relative gap between the three measured sides of the Morley triangle and 8 R sin(A/3) sin(B/3) sin(C/3) (R = 1)' },
+    temoin: { mesure: spreadQ, note: 'witness: cutting the angles in FOUR instead of three : relative spread of the three sides (not 0 : not equilateral)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  morley: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = trisectors, 2 = Morley triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   eulerSolides: { colonnes: ['x', 'y', 'z (the edges of the solid)'], memeLongueur: [[0, 1, 2]], autres: [] },
   marcheAutoEvitante: { colonnes: ['x (lattice)', 'y (lattice)', 'step number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   jeuDeLaVie: { colonnes: ['x (cells)', 'y (cells)', 'generation within the period (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1255,9 +1290,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'eulerSolides', nom: 'Euler\'s formula beyond the Platonic solids', science: 'Geometry', D: 3, nuage: true, params: { solide: 3 },
     bornes: { solide: [0, 5] },
     phrase: 'A visualisation of Euler\'s formula V - E + F = 2 on six more solids (0 triangular prism, 1 square antiprism, 2 cuboctahedron, 3 truncated icosahedron, 4 rhombicuboctahedron, 5 snub dodecahedron). Vertices, edges and faces are each counted from the coordinates alone; a square picture frame, a solid with a hole, gives 0 instead of 2.' },
+  { id: 'morley', nom: 'Morley\'s trisector theorem', science: 'Geometry', D: 3, nuage: true, params: { angleA: 70, angleB: 45 },
+    bornes: { angleA: [15, 120], angleB: [15, 55] },
+    phrase: 'A visualisation of Morley\'s theorem: cut each angle of any triangle into three equal parts, and the trisectors next to each side meet in three points that always form an equilateral triangle, of side 8 R sin(A/3) sin(B/3) sin(C/3). Cutting the angles in four instead breaks it.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'] };
-const FONCTIONS = { eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [] };
+const FONCTIONS = { morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
