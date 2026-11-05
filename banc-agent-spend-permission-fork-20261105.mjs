@@ -105,7 +105,9 @@ for (const [nom, a] of [['SpendPermissionManager', SPM], ['CoinbaseSmartWalletFa
 }
 
 /* ── 1. le smart wallet : la VRAIE factory, owner = compte anvil #0 ── */
-const owners = mot(0x40) + mot(0) + mot(1) + mot(0x20) + mot(32) + adrMot(OWNER); // (bytes[] [abi.encode(OWNER)], nonce 0)
+/* nonce TIRE au hasard : un smart wallet NEUF a chaque passage, le banc se rejoue sur le meme fork */
+const NONCE = BigInt('0x' + [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join(''));
+const owners = mot(0x40) + mot(NONCE) + mot(1) + mot(0x20) + mot(32) + adrMot(OWNER); // (bytes[] [abi.encode(OWNER)], NONCE)
 const WALLET = ('0x' + String(await lire(FACTORY, '0x' + sel('getAddress(bytes[],uint256)') + owners)).slice(26)).toLowerCase();
 const cw = await envoyer(OWNER, FACTORY, '0x' + sel('createAccount(bytes[],uint256)') + owners);
 ok(cw.status === '0x1' && (await rpc('eth_getCode', [WALLET, 'latest'])).length > 2, 'smart wallet cree par la factory : ' + WALLET);
