@@ -61,7 +61,8 @@ const M = [
   ['garde : destination inconnue admise', "throw new Error('keeper: refused, the destination is not a keeper contract');", 'return 1;'],
   ['etat() publie la cle', '        etat: st.etat, adresse: st.adresse,', '        etat: st.etat, cle, adresse: st.adresse,'],
   ['intervalle sans borne haute', 'return Math.max(bornes.intervalleMinMs, Math.min(bornes.intervalleMaxMs, v));', 'return Math.max(bornes.intervalleMinMs, v);'],
-  ['intervalle sur la fenetre entiere', 'const v = Math.floor((Slots.secondesFenetre(msParBloc) * 1000) / 5);', 'const v = Math.floor(Slots.secondesFenetre(msParBloc) * 1000);'],
+  /* DENIM 2026-11-05 : l intervalle est 1/toursParFenetre de la fenetre, au pire cas 200 ms sans mesure (ancre suivie) */
+  ['intervalle sur la fenetre entiere', 'const v = Math.floor((Slots.secondesFenetre(ms) * 1000) / (Number(bornes.toursParFenetre) > 0 ? Number(bornes.toursParFenetre) : 10));', 'const v = Math.floor(Slots.secondesFenetre(ms) * 1000);'],
   /* ---- 2026-10-24 : les correctifs des audits */
   ['V1 : une panne RPC d eth_estimateGas compte comme un echec (0f9d8ec)', "st.compteurs.simulationsNonLues += 1; erreur('simulation not run", "echec('simulation refused: ' + e.message, 'simulationsNonLues'); erreur('simulation not run"],
   ['V1 : une panne RPC traitee comme un revert', 'if (!estRevert(e)) throw new Passagere(msg(e));', 'if (false) throw new Passagere(msg(e));'],
