@@ -53,7 +53,7 @@ b[data-k]{color:var(--or)}
   <div class="carte sur">
     <ul>
       <li>No owner, no withdrawal, no upgrade, no fee change. Stakes leave only through a settled duel, a cancelled open duel (its creator), or a refund.</li>
-      <li>No funds can stay stuck. A joined duel not settled within <b data-k="window">…</b> blocks after its target block is refunded in full to both sides, by anyone: about 8.5 minutes today, about 51 seconds once Base moves to 200 ms blocks (Denim). So the winner, the app or anyone must settle in time, or the duel becomes a refund. A duel nobody joined is refunded to its creator once it expires.</li>
+      <li>No funds can stay stuck. A joined duel not settled within <b data-k="window">…</b> blocks after its target block is refunded in full to both sides, by anyone: about 51 seconds at Base's 200 ms blocks (Denim, mainnet targeted for 2026-11-05 18:00 UTC; it was about 8.5 minutes at the earlier 2-second blocks). So the winner, the app or anyone must settle in time, or the duel becomes a refund. A duel nobody joined is refunded to its creator once it expires.</li>
       <li>The guardian can only admit or remove a token for new duels. It cannot touch any stake, and removing a token never blocks settling, cancelling or refunding a duel that already uses it. USDC is admitted for good.</li>
       <li>If a token refuses a payment to one address, the others are still paid; the refused amount stays owed to that address, which can claim it to another address.</li>
       <li>The face comes from the hash of a Base block, computed on chain exactly like Block Rolls and the app compute it. No player, no server and no guardian chooses it; the Base sequencer, which builds the blocks, is the one party that could.</li>

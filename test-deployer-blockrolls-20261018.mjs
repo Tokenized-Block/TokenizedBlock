@@ -105,7 +105,7 @@ ok(!/0\.50 USDC|5 USDC for 5|10 USDC a pass/.test(page.replace(/<script[\s\S]*<\
 /* 2026-10-24 (audit rolls-duels) : « Nobody can take the pots » / « The creator cannot touch the pots » etaient FAUX (setRules puis roll) :
  *   la page dit la structure — pas de fonction de retrait, et le createur de UNIT peut monter les gains puis jouer */
 ok(/No owner and no withdraw function/.test(page) && !/Nobody can take the pots|cannot touch the pots|no way back out of the pot/i.test(page)
-  && /nothing stops that wallet from raising the prizes and then rolling itself, so the roll pot is not out of its reach/.test(page) && /No refund\./.test(page) && /about 8\.5 minutes today, about 51 seconds once Base moves to 200 ms blocks \(Denim\)/.test(page)
+  && /nothing stops that wallet from raising the prizes and then rolling itself, so the roll pot is not out of its reach/.test(page) && /No refund\./.test(page) && /about 51 seconds at Base's 200 ms blocks \(Denim, mainnet targeted for 2026-11-05 18:00 UTC; it was about 8\.5 minutes at the earlier 2-second blocks\)/.test(page) && !/8\.5 minutes today/.test(page)
   && /the Base sequencer, which builds the blocks, is the one party that could/.test(page) && /only by the creator of UNIT as the TokenizedBlock hook names it/.test(page) && /at most 1000 USDC a prize, a higher tier never pays less than a lower one, minimum score 2 to 5/.test(page),
   'C le texte dit : pas d owner ni de retrait, ce que peut le createur de UNIT (monter les gains puis jouer), pas de remboursement, 256 blocs (8,5 min / 51 s Denim), le sequenceur, ses bornes');
 const sol = lire('contracts/src/BlockRolls.sol');
