@@ -807,7 +807,47 @@ function courbeDragon(P, n) {
     bouts: { mesure: x * x + y * y, formule: 2 ** N, note: 'squared distance between the two ends against 2^n : each fold multiplies the chord by sqrt 2' } } };
 }
 
+// ---------- 23 : le theoreme de Pick (idee : codex Grok Bot ; Pick 1899) ----------
+// Un polygone SIMPLE dont les sommets sont des points entiers : aire A = I + B/2 - 1, I = points entiers dedans, B = points entiers sur le bord.
+// Ici les trois nombres viennent de trois chemins differents : A par la formule du lacet (somme de produits croises, exacte en entiers),
+//   I et B COMPTES point par point (test exact en entiers, sans division), et B recompte une 2e fois par la somme des pgcd des cotes.
+// Polygone : k sommets tires au hasard (graine) dans k secteurs d angle, arrondis aux entiers ; on retire tant qu il n est pas simple
+//   (cotes qui se touchent, sommet double, demi-tour) — mesure : 1 512 polygones (k 3..30, rayon 8..40), pire cas 3 tirages ; repli triangle.
+// Temoin : le noeud papillon (0,0) (4,4) (4,0) (0,4) n est pas simple : le lacet donne 0, 2I + B - 2 donne 17 — Pick ne vaut que pour un polygone simple.
+// Dessin (vue de face) : le contour, puis les points entiers, etiquette 0 = contour, 1 = dedans, 2 = sur le bord.
+const pickOrient = (p, q, r) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]));
+const pickSurSeg = (p, q, r) => pickOrient(p, q, r) === 0 && Math.min(p[0], q[0]) <= r[0] && r[0] <= Math.max(p[0], q[0]) && Math.min(p[1], q[1]) <= r[1] && r[1] <= Math.max(p[1], q[1]);
+function pickSimple(Q) { const k = Q.length, touche = (a, b, c, d) => (pickOrient(a, b, c) * pickOrient(a, b, d) < 0 && pickOrient(c, d, a) * pickOrient(c, d, b) < 0) || pickSurSeg(a, b, c) || pickSurSeg(a, b, d) || pickSurSeg(c, d, a) || pickSurSeg(c, d, b);
+  for (let i = 0; i < k; i++) { const a = Q[i], b = Q[(i + 1) % k], c = Q[(i + 2) % k]; if (a[0] === b[0] && a[1] === b[1]) return false;
+    if (pickOrient(a, b, c) === 0 && (c[0] - b[0]) * (b[0] - a[0]) + (c[1] - b[1]) * (b[1] - a[1]) < 0) return false;
+    for (let j = i + 2; j < k; j++) { if (i === 0 && j === k - 1) continue; if (touche(a, b, Q[j], Q[(j + 1) % k])) return false; } }
+  return true; }
+function pickCompte(Q) { const k = Q.length, xs = Q.map((p) => p[0]), ys = Q.map((p) => p[1]), pts = []; let I = 0, B = 0;
+  for (let x = Math.min(...xs); x <= Math.max(...xs); x++) for (let y = Math.min(...ys); y <= Math.max(...ys); y++) {
+    let bord = false; for (let i = 0; i < k; i++) if (pickSurSeg(Q[i], Q[(i + 1) % k], [x, y])) { bord = true; break; }
+    if (bord) { B++; pts.push([x, y, 2]); continue; }
+    let c = false; for (let i = 0, j = k - 1; i < k; j = i++) { const [xi, yi] = Q[i], [xj, yj] = Q[j]; if ((yi > y) !== (yj > y)) { const g = (x - xi) * (yj - yi) - (xj - xi) * (y - yi); if (yj > yi ? g < 0 : g > 0) c = !c; } }
+    if (c) { I++; pts.push([x, y, 1]); } }
+  return { I, B, pts }; }
+const pickLacet2 = (Q) => { let s = 0; for (let i = 0; i < Q.length; i++) { const [x1, y1] = Q[i], [x2, y2] = Q[(i + 1) % Q.length]; s += x1 * y2 - x2 * y1; } return Math.abs(s); };
+function theoremePick(P, n) {
+  const k = P.sommets, R = P.rayon, rng = mulberry32(P.graine); let Q = null;
+  for (let essai = 0; essai < 200 && !Q; essai++) { const T = []; for (let i = 0; i < k; i++) { const a = 2 * PI * (i + 0.15 + 0.7 * rng()) / k, r = R * (0.4 + 0.6 * rng()); T.push([Math.round(r * cosD(a)), Math.round(r * sinD(a))]); } if (pickSimple(T)) Q = T; }
+  if (!Q) Q = [[0, 0], [R, 0], [0, R]];
+  const { I, B, pts } = pickCompte(Q), a2 = pickLacet2(Q); let sg = 0;
+  for (let i = 0; i < Q.length; i++) { const a = Q[i], b = Q[(i + 1) % Q.length]; sg += pgcd(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1])); }
+  const papillon = [[0, 0], [4, 4], [4, 0], [0, 4]], tp = pickCompte(papillon);
+  const brut = new Float64Array(n * 3), m = Math.floor(n / 2), kq = Q.length;
+  for (let l = 0; l < n; l++) { const o = 3 * l; if (l < m) { const t = l * kq / m, s = Math.floor(t), u = t - s, s0 = Q[s], s1 = Q[(s + 1) % kq]; brut[o] = s0[0] + u * (s1[0] - s0[0]); brut[o + 1] = s0[1] + u * (s1[1] - s0[1]); brut[o + 2] = 0; }
+    else { const pe = pts[Math.floor((l - m) * pts.length / (n - m))]; brut[o] = pe[0]; brut[o + 1] = pe[1]; brut[o + 2] = pe[2]; } }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (points entiers)', invariants: {
+    pick: { mesure: a2 - (2 * I + B - 2), formule: 0, aire: a2 / 2, interieurs: I, pointsBord: B, note: 'twice the shoelace area minus (2I + B - 2), I and B counted point by point : Pick says A = I + B/2 - 1' },
+    bordPgcd: { mesure: B - sg, formule: 0, polygone: JSON.stringify(Q), note: 'boundary points counted minus the sum over the sides of gcd(|dx|, |dy|)' },
+    temoin: { mesure: 2 * tp.I + tp.B - 2, formule: 17, lacet: pickLacet2(papillon), note: 'witness: the bow tie (0,0) (4,4) (4,0) (0,4) crosses itself : the shoelace gives 0, Pick would give 17/2 — Pick needs a simple polygon' } } };
+}
+
 export const COLONNES = Object.freeze({
+  theoremePick: { colonnes: ['x', 'y', 'what (label; 0 = the outline, 1 = whole point inside, 2 = whole point on the boundary)'], memeLongueur: [[0, 1]], autres: [2] },
   courbeDragon: { colonnes: ['x', 'y', 'fold that made the segment (label)'], memeLongueur: [[0, 1]], autres: [2] },
   partitionEuler: { colonnes: ['column', 'row (downwards)', 'row number (label)'], memeLongueur: [[0, 1]], autres: [2] },
   catalanDyck: { colonnes: ['step', 'height', 'path (label)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -899,9 +939,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'courbeDragon', nom: 'The dragon curve (folding paper)', science: 'Geometry', D: 3, nuage: true, params: { plis: 12 },
     bornes: { plis: [3, 15] },
     phrase: 'A visualisation of the Heighway dragon: fold a strip of paper in half n times, unfold every crease to a right angle, and the strip draws a dragon. Its turns are built two independent ways that agree turn by turn; it has exactly 2^n segments, never runs over itself, and its two ends are exactly 2^(n/2) apart.' },
+  { id: 'theoremePick', nom: 'Pick\'s theorem (area by counting points)', science: 'Geometry', D: 3, nuage: true, params: { sommets: 12, rayon: 20, graine: 1 },
+    bornes: { sommets: [3, 30], rayon: [8, 40], graine: [1, 1000000] },
+    phrase: 'A visualisation of Pick\'s theorem: a random polygon whose corners sit on whole-number points. Its area from the shoelace formula equals I + B/2 - 1, where I and B are the whole points inside and on the boundary, counted one by one. A bow tie that crosses itself shows why the polygon must be simple.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'] };
-const FONCTIONS = { courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'] };
+const FONCTIONS = { theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

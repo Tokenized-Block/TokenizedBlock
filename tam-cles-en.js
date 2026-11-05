@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game165 */
+  interieurs: 'whole points inside I', pointsBord: 'whole points on the boundary B', polygone: 'the polygon (corners)', lacet: 'shoelace area x2',
   /* game164 */
   recouvrements: 'segments travelled twice', debut: 'first turns',
   /* game163 */
@@ -437,6 +439,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game165 */
+  pick: 'Pick: twice the area vs 2I + B - 2 (gap)', bordPgcd: 'Boundary points vs the sum of gcds (gap)',
   /* game164 */
   virages: 'Turns: recurrence vs bit rule (disagreements)', segments: 'Unit segments drawn vs 2^n', bouts: 'Squared distance between the ends vs 2^n',
   /* game163 */

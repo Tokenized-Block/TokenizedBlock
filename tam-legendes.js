@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game165 (idee : codex Grok Bot) */
+  theoremePick: {
+    titre: 'Pick\'s theorem (the area of a polygon by counting dots)',
+    enUnePhrase: 'Put a polygon on a grid of dots, corners on dots: count the dots inside and on the edge, and you know its area.',
+    colonnes: ['across', 'up', 'outline, dot inside, or dot on the edge'],
+    aRegarder: ['Every dot inside counts 1, every dot on the edge counts one half, and one is taken away: that is the area exactly.', 'Change the seed: a new polygon, and the count still gives the shoelace area.', 'A bow tie that crosses itself breaks the rule: the polygon must not cross itself.'],
+    fin: null,
+  },
   /* game164 (idee : codex Grok Bot) */
   courbeDragon: {
     titre: 'The dragon curve (a strip of paper folded n times)',

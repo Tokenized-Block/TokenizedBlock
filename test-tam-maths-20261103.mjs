@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -440,6 +440,36 @@ function suite(T, bavard = false, seul = null) {
     assert.equal(mal, 0); return 'n = ' + N + ' : ' + I.segments.mesure + ' segments, bouts^2 = ' + I.bouts.mesure;
   });
   ok('courbeDragon : valeurs de controle de Grok Bot (R ; RRL ; RRLRRLL ; RRLRRLLRRRLLRLL)', () => { assert.deepEqual([1, 2, 3, 4].map(pliage), ['R', 'RRL', 'RRLRRLL', 'RRLRRLLRRRLLRLL']); assert.equal(S('courbeDragon', { plis: 4 }).invariants.virages.debut, 'RRLRRLLRRRLLRLL'); return 'ok'; });
+  /* game165 : Pick — reference INDEPENDANTE : B par enumeration des points de chaque cote (pas (dx/g, dy/g)), I par BALAYAGE de lignes
+   *   (croisements des cotes avec chaque ligne y, regle demi-ouverte) ; simplicite revérifiee ici par force brute ; aire par triangles depuis le sommet 0 */
+  const refPick = (Q) => { const k = Q.length, bord = new Set();
+    for (let i = 0; i < k; i++) { const [ax, ay] = Q[i], [bx, by] = Q[(i + 1) % k], dx = bx - ax, dy = by - ay; let g = Math.abs(dx), h = Math.abs(dy); while (h) [g, h] = [h, g % h];
+      for (let s = 0; s < g; s++) bord.add((ax + s * dx / g) + ',' + (ay + s * dy / g)); }
+    let I = 0; const ys = Q.map((p) => p[1]);
+    for (let y = Math.min(...ys); y <= Math.max(...ys); y++) { const xs = [];
+      for (let i = 0; i < k; i++) { const [ax, ay] = Q[i], [bx, by] = Q[(i + 1) % k]; if (ay !== by && Math.min(ay, by) <= y && y < Math.max(ay, by)) xs.push(ax + (y - ay) * (bx - ax) / (by - ay)); }
+      xs.sort((u, v) => u - v); for (let j = 0; j + 1 < xs.length; j += 2) for (let x = Math.ceil(xs[j] - 1e-9); x <= Math.floor(xs[j + 1] + 1e-9); x++) if (!bord.has(x + ',' + y)) I++; }
+    let a2 = 0; for (let i = 1; i + 1 < k; i++) a2 += (Q[i][0] - Q[0][0]) * (Q[i + 1][1] - Q[0][1]) - (Q[i + 1][0] - Q[0][0]) * (Q[i][1] - Q[0][1]);
+    const cr = (p, q, r) => (q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]); let croise = 0;
+    for (let i = 0; i < k; i++) for (let j = i + 1; j < k; j++) { const a = Q[i], b = Q[(i + 1) % k], c = Q[j], d = Q[(j + 1) % k]; if (j === i + 1 || (i === 0 && j === k - 1)) continue;
+      const s1 = cr(a, b, c), s2 = cr(a, b, d), s3 = cr(c, d, a), s4 = cr(c, d, b), dans = (p, q, r) => Math.min(p[0], q[0]) <= r[0] && r[0] <= Math.max(p[0], q[0]) && Math.min(p[1], q[1]) <= r[1] && r[1] <= Math.max(p[1], q[1]);
+      if ((s1 * s2 < 0 && s3 * s4 < 0) || (s1 === 0 && dans(a, b, c)) || (s2 === 0 && dans(a, b, d)) || (s3 === 0 && dans(c, d, a)) || (s4 === 0 && dans(c, d, b))) croise++; }
+    return { I, B: bord.size, a2: Math.abs(a2), bord, croise }; };
+  for (const p of [...extremes(sys('theoremePick')), { sommets: 17, rayon: 23, graine: 4242 }, { sommets: 30, rayon: 8, graine: 7 }]) ok(`theoremePick ${JSON.stringify(p)} : I et B recomptes par balayage, aire par triangles, Pick exact, polygone simple`, () => {
+    const R = S('theoremePick', p), I = R.invariants, b = R.brut, Q = JSON.parse(I.bordPgcd.polygone), F = refPick(Q);
+    assert.ok(F.croise === 0 && Q.length >= 3, 'polygone non simple : ' + I.bordPgcd.polygone);
+    assert.ok(I.pick.interieurs === F.I && I.pick.pointsBord === F.B && I.pick.aire === F.a2 / 2, 'comptes ' + JSON.stringify([I.pick, F.I, F.B, F.a2]));
+    assert.ok(F.a2 === 2 * F.I + F.B - 2 && I.pick.mesure === 0 && I.pick.formule === 0 && I.bordPgcd.mesure === 0, 'Pick ' + JSON.stringify(I.pick));
+    assert.ok(I.temoin.mesure === 17 && I.temoin.formule === 17 && I.temoin.lacet === 0, 'temoin ' + JSON.stringify(I.temoin));
+    let mal = 0, interieurs = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1], e = b[o + 2], cle = x + ',' + y;
+      if (e === 0) { let sur = false; for (let i = 0; i < Q.length && !sur; i++) { const a = Q[i], c = Q[(i + 1) % Q.length]; sur = Math.abs((c[0] - a[0]) * (y - a[1]) - (c[1] - a[1]) * (x - a[0])) < 1e-6 && Math.min(a[0], c[0]) - 1e-9 <= x && x <= Math.max(a[0], c[0]) + 1e-9 && Math.min(a[1], c[1]) - 1e-9 <= y && y <= Math.max(a[1], c[1]) + 1e-9; } if (!sur) mal++; }
+      else if (e === 2) { if (!F.bord.has(cle)) mal++; } else if (e === 1) { interieurs++; if (F.bord.has(cle) || !Number.isInteger(x) || !Number.isInteger(y)) mal++; } else mal++; }
+    assert.ok(mal === 0 && (F.I === 0 || interieurs > 0), 'dessin ' + mal + ' points faux');
+    return Q.length + ' sommets : A = ' + I.pick.aire + ' = ' + F.I + ' + ' + F.B + '/2 - 1';
+  });
+  ok('theoremePick : valeurs de controle (carre 0..4 : I = 9, B = 16, A = 16 ; triangle (0,0) (4,0) (0,3) : I = 3, B = 8, A = 6)', () => {
+    const c = refPick([[0, 0], [4, 0], [4, 4], [0, 4]]), t = refPick([[0, 0], [4, 0], [0, 3]]);
+    assert.deepEqual([c.I, c.B, c.a2, t.I, t.B, t.a2], [9, 16, 32, 3, 8, 12]); return 'ok'; });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -581,6 +611,13 @@ const MUTANTS = [
   ['dragon : virage R tourne a gauche', "const ndx = c === 'R' ? dy : -dy, ndy = c === 'R' ? -dx : dx;", "const ndx = c === 'R' ? -dy : -dy, ndy = c === 'R' ? dx : dx;"],
   ['dragon : formule 2^(n+1)', 'formule: 2 ** N, recouvrements', 'formule: 2 ** (N + 1), recouvrements'],
   ['dragon : dessin decale', 'brut[o] = a[0] + u * (b[0] - a[0]);', 'brut[o] = a[0] + 0.3 + u * (b[0] - a[0]);'],
+  ['pick : formule 2I + B - 1', 'pick: { mesure: a2 - (2 * I + B - 2)', 'pick: { mesure: a2 - (2 * I + B - 1)'],
+  ['pick : pgcd remplace par 1', 'sg += pgcd(Math.abs(b[0] - a[0]), Math.abs(b[1] - a[1]));', 'sg += 1;'],
+  /* « croisements comptes a gauche au lieu de droite » serait EQUIVALENT (la parite ne change pas) : on mute la decision elle-meme */
+  ['pick : dedans compte a l envers', 'if (c) { I++; pts.push([x, y, 1]); }', 'if (!c) { I++; pts.push([x, y, 1]); }'],
+  ['pick : bord sans les extremites', 'r[0] <= Math.max(p[0], q[0]) && Math.min(p[1], q[1]) <= r[1] && r[1] <= Math.max(p[1], q[1]);', 'r[0] < Math.max(p[0], q[0]) && Math.min(p[1], q[1]) <= r[1] && r[1] <= Math.max(p[1], q[1]);'],
+  ['pick : temoin carre', 'papillon = [[0, 0], [4, 4], [4, 0], [0, 4]]', 'papillon = [[0, 0], [4, 0], [4, 4], [0, 4]]'],
+  ['pick : points interieurs decales', 'brut[o] = pe[0]; brut[o + 1] = pe[1];', 'brut[o] = pe[0] + 1; brut[o + 1] = pe[1];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -595,7 +632,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);
