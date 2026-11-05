@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -634,6 +634,26 @@ function suite(T, bavard = false, seul = null) {
       if (!(Math.min(A[0], B[0]) - 1e-9 <= x && x <= Math.max(A[0], B[0]) + 1e-9 && Math.min(A[1], B[1]) - 1e-9 <= y && y <= Math.max(A[1], B[1]) + 1e-9)) mal++; }
     assert.ok(mal === 0 && pasVus.size === N, mal + ' defauts, ' + pasVus.size + ' pas dessines'); return 'c(' + N + ') = ' + I.comptes.cn + ', marche ' + I.comptes.marche;
   });
+  /* game172 : Euler — reference INDEPENDANTE : les faces cherchees par FORCE BRUTE sur tous les triplets de sommets (pas seulement deux aretes
+   *   qui se suivent), sur les sommets PUBLIES ; chaque point dessine sur une arete (paire a la distance minimale) ; valeurs de Grok Bot
+   *   (prisme 6/9/5, antiprisme 8/16/10, cuboctaedre 12/24/14, icosaedre tronque 60/90/32) ; rhombicuboctaedre 24/48/26 (Grok : Wikipedia « Rhombicuboctahedron » + Maeder n. 10) */
+  const eulRef = (pts) => { const V = pts.length, d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); let m = Infinity; for (let i = 0; i < V; i++) for (let j = i + 1; j < V; j++) m = Math.min(m, d(pts[i], pts[j]));
+    let E = 0; for (let i = 0; i < V; i++) for (let j = i + 1; j < V; j++) if (Math.abs(d(pts[i], pts[j]) - m) < 1e-7 * m) E++;
+    const plans = []; for (let i = 0; i < V; i++) for (let j = i + 1; j < V; j++) for (let k = j + 1; k < V; k++) {
+      const u = pts[j].map((x, t) => x - pts[i][t]), w = pts[k].map((x, t) => x - pts[i][t]), n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]], l = Math.hypot(...n); if (l < 1e-9) continue;
+      const nn = n.map((x) => x / l), c = nn[0] * pts[i][0] + nn[1] * pts[i][1] + nn[2] * pts[i][2]; let pos = 0, neg = 0; for (const p of pts) { const s = nn[0] * p[0] + nn[1] * p[1] + nn[2] * p[2] - c; if (s > 1e-7) pos++; else if (s < -1e-7) neg++; }
+      if (pos && neg) continue; const sg = pos ? -1 : 1, key = nn.map((x) => x * sg); if (!plans.some((q) => Math.hypot(q[0] - key[0], q[1] - key[1], q[2] - key[2]) < 1e-6)) plans.push(key); }
+    return { V, E, F: plans.length }; };
+  for (const p of [0, 1, 2, 3, 4].map((s) => ({ solide: s }))) ok(`eulerSolides ${JSON.stringify(p)} : V, E, F relus par force brute, valeurs de Grok, 2E = coins des faces, temoin du tore`, () => {
+    const R = S('eulerSolides', p), I = R.invariants, b = R.brut, pts = []; for (let q = 0; q < R.n; q++) pts.push([b[3 * q], b[3 * q + 1], b[3 * q + 2]]);
+    const att = [[6, 9, 5], [8, 16, 10], [12, 24, 14], [60, 90, 32], [24, 48, 26]][p.solide];
+    assert.ok(I.euler.mesure === 2 && I.euler.formule === 2 && [I.euler.sommets, I.euler.aretes, I.euler.faces].join() === att.join() && I.poignees.mesure === 0 && I.temoin.mesure === 0, JSON.stringify(I));
+    const som = JSON.parse(I.euler.points), ref = eulRef(som);
+    /* chaque point dessine sur un segment entre deux sommets a la distance minimale */
+    let m = Infinity; for (let i = 0; i < som.length; i++) for (let j = i + 1; j < som.length; j++) m = Math.min(m, Math.hypot(...som[i].map((x, t) => x - som[j][t])));
+    let hors = 0; for (const q of pts) { let sur = false; for (let i = 0; i < som.length && !sur; i++) for (let j = i + 1; j < som.length && !sur; j++) { const a = som[i], c = som[j]; if (Math.abs(Math.hypot(...a.map((x, t) => x - c[t])) - m) > 1e-7 * m) continue; sur = Math.abs(Math.hypot(...a.map((x, t) => x - q[t])) + Math.hypot(...c.map((x, t) => x - q[t])) - m) < 1e-9 * m; } if (!sur) hors++; }
+    assert.equal(hors, 0, 'points hors des aretes'); assert.deepEqual([ref.V, ref.E, ref.F], att, 'force brute sur le dessin ' + JSON.stringify(ref));
+    return att.join(' / ') + ' -> ' + (att[0] - att[1] + att[2]); });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -813,6 +833,11 @@ const MUTANTS = [
   ['saw : sous-multiplicativite inversee', 'if (c[m + k] > c[m] * c[k]) violations++;', 'if (c[m + k] < c[m] * c[k]) violations++;'],
   ['saw : temoin 4^k', 'if (4 * 3 ** (k - 1) !== c[k]) premier = k;', 'if (4 ** k !== c[k]) premier = k;'],
   ['saw : marche dessinee = la premiere', 'cible = Math.floor(rng() * total)', 'cible = 0 * Math.floor(rng() * total)'],
+  ['euler : aretes = paires a 1.5 fois le minimum', 'if (Math.abs(eulDist(P[i], P[j]) - m) < 1e-9 * m) { aretes.push', 'if (eulDist(P[i], P[j]) < 1.5 * m) { aretes.push'],
+  ['euler : plans non dedoublonnes', 'if (!plans.some((q) => eulDist(q, cle) < 1e-9)) { plans.push(cle); sommetsFaces += sur; }', '{ plans.push(cle); sommetsFaces += sur; }'],
+  ['euler : cuboctaedre en (1,1,1)', 'if (k === 2) return eulUniq(eulPerms([1, 1, 0]).flatMap(eulSignes));', 'if (k === 2) return eulUniq(eulPerms([1, 1, 1]).flatMap(eulSignes));'],
+  ['euler : plan d appui coupant accepte', 'if (pos > 0 && neg > 0) continue; const sg = pos ? -1 : 1, cle', 'if (pos > 1 && neg > 0) continue; const sg = pos ? -1 : 1, cle'],
+  ['euler : tore ferme en sphere', 'return { D: 3, brut, nuage: true, unite: \'longueur d arete\', invariants: {', 'faces.length = 6; return { D: 3, brut, nuage: true, unite: \'longueur d arete\', invariants: {'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -827,7 +852,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

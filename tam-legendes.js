@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game172 (idee : codex Grok Bot) */
+  eulerSolides: {
+    titre: 'Euler\'s formula on five more solids',
+    enUnePhrase: 'Count the corners, take away the edges, add the faces: for any solid without a hole you always get 2.',
+    colonnes: ['x', 'y', 'z'],
+    aRegarder: ['Pick another solid: the football has 60 corners, 90 edges and 32 faces, and 60 - 90 + 32 = 2.', 'The three numbers are counted from the shape itself, none is worked out from the other two.', 'A frame with a hole in the middle gives 0, not 2.'],
+    fin: null,
+  },
   /* game171 (idee : codex Grok Bot) */
   marcheAutoEvitante: {
     titre: 'Self-avoiding walks (paths that never cross themselves)',
