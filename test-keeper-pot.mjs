@@ -21,7 +21,9 @@ const bonSnapshot = { complet: true, racine: RACINE, graine: GRAINE, total: 100n
 
 // ══ 1. RIEN EN COURS : on ouvre, avec une MARGE et une DATE LIMITE ═══════════════════════════════
 {
-  const r = prochaineAction({ periodes: [], blocCourant: BLOC });
+  /* DENIM 2026-11-05 : la marge et la duree sont des TEMPS convertis au temps de bloc mesure ; 2 s ici (= 300 blocs, comme avant). Le cas
+   *   0,2 s et le cas « non mesure » : test-denim-pot-20261105.mjs */
+  const r = prochaineAction({ periodes: [], blocCourant: BLOC, sParBloc: 2 });
   eq(r.action, 'OUVRIR', 'aucune periode : on en ouvre une');
   ok(r.debut > BLOC, 'le debut est dans le FUTUR — le contrat refuse le contraire');
   eq(r.debut, BLOC + MARGE_SIGNATURE, 'et il laisse la marge de signature');
@@ -29,7 +31,7 @@ const bonSnapshot = { complet: true, racine: RACINE, graine: GRAINE, total: 100n
   ok(r.calldata.startsWith(SELECTEURS.ouvrirPeriode), 'le calldata porte le bon selecteur');
   eq(r.calldata.length, 10 + 128, 'selecteur + deux mots de 32 octets');
   // ⛔ TEMOIN : sans marge, le debut serait le bloc courant lui-meme — donc du passe des la tx suivante.
-  const sansMarge = prochaineAction({ periodes: [], blocCourant: BLOC, config: { marge: 0 } });
+  const sansMarge = prochaineAction({ periodes: [], blocCourant: BLOC, config: { marge: 0 }, sParBloc: 2 });
   eq(sansMarge.debut, BLOC, 'marge 0 : le debut est le bloc courant');
   ok(sansMarge.valideJusqua === BLOC, 'et la date limite est immediate — le keeper le DIT');
 }

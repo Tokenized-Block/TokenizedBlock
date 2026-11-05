@@ -74,7 +74,8 @@ function chaine({ tete, periodes, logs, supply, depose, mixHash = GRAINE }) {
 // ══ 2. AUCUNE PERIODE : la boucle propose d en OUVRIR une ═══════════════════════════════════════
 {
   const rpc = chaine({ tete: 5000, periodes: [], logs: [], supply: 1000n, depose: 0n });
-  const r = await tour({ rpc, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER });
+  /* DENIM 2026-11-05 : le temps de bloc mesure fixe la duree et la marge (keeper-pot.js) ; 2 s ici. 0,2 s / non mesure : test-denim-pot-20261105.mjs */
+  const r = await tour({ rpc, pot: POT, jetonHolders: JETON, jetonRecompense: JETON, plancher: PLANCHER, sParBloc: 2 });
   eq(r.action, 'OUVRIR', 'rien n existe : on ouvre');
   eq(r.aSigner.to, POT, 'la transaction vise le pot');
   eq(r.aSigner.value, '0x0', 'et n envoie aucune valeur');

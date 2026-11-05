@@ -113,6 +113,7 @@ import { tour, prepararAlimentation } from './boucle-pot.js';
 import { encodeApprove } from './pool.js';
 import { envoyerDepuisWallet } from './envoi.js';
 import { displayShort, feeAddressLabel } from './frais-creation.js';
+import { secondesPour, dureeTexte } from './temps-de-bloc.js';
 
 const $ = (s) => document.querySelector(s);
 const RPC = 'https://mainnet.base.org';
@@ -146,16 +147,34 @@ const txt = (v) => String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</
 
 let courant = null, compte = null, soldeWallet = null;
 
+/* ⛔⛔ DENIM (2026-11-05) : Base passe de 2 s a 200 ms/bloc. Les durees se disent au temps de bloc MESURE, servi par le serveur
+ *     (/api/temps-de-bloc) ; sans lui, en blocs — jamais `blocs * 2`. Le keeper (keeper-pot.js) en tire aussi la duree (24 h) et la
+ *     marge (10 min) d une periode a ouvrir ; non mesure -> il refuse d ouvrir. */
+let sParBlocPot = null;
+async function lireTempsDeBloc() {
+  try {
+    const j = await fetch('/api/temps-de-bloc', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((r) => r.json());
+    const s = j && j.ok === true && j.tempsDeBloc ? Number(j.tempsDeBloc.sParBloc) : NaN;
+    sParBlocPot = Number.isFinite(s) && s > 0 ? s : null;
+  } catch (_) { sParBlocPot = null; }
+  return sParBlocPot;
+}
+/** « about 3 h » au temps mesure ; sinon « 4,320 blocks » */
+const dureeBlocs = (blocs) => {
+  const d = dureeTexte(secondesPour(blocs, sParBlocPot));
+  return d ? 'about ' + d.replace(/^~/, '') : Number(blocs).toLocaleString('en-US') + ' blocks';
+};
+
 /** Traduit l etat du keeper en une phrase pour l ecran. Les chiffres viennent de lui, pas d ici. */
 function enClair(t) {
   if (t.action === 'ATTENDRE') {
-    const h = Math.round((t.blocsRestants || 0) * 2 / 3600);
     return 'Round ' + t.periode + ' is running until block ' + (t.blocCourant + t.blocsRestants)
-      + ' — about ' + h + ' h left. Fill it while it runs; nothing to sign to let it run.';
+      + ' — ' + dureeBlocs(t.blocsRestants || 0) + ' left. Fill it while it runs; nothing to sign to let it run.';
   }
   if (t.action === 'OUVRIR') {
     return 'No round is open. This opens one from block ' + t.debut + ' to ' + t.fin
-      + ' (about 24 h). It must be signed before block ' + t.valideJusqua + '.';
+      + ' (' + dureeBlocs(t.fin - t.debut) + '). It must be signed before block ' + t.valideJusqua
+      + ' (' + dureeBlocs(t.valideJusqua - t.blocCourant) + ' from now).';
   }
   if (t.action === 'ANCRER') {
     return 'Round ' + t.periode + ' has ended. This writes down who gets paid, from the balances at the drawn block.';
@@ -171,7 +190,8 @@ async function lire() {
   $('#titreAction').textContent = 'Reading the chain…';
   $('#detail').innerHTML = '';
   let t = null;
-  try { t = await tour({ rpc, pot: POT, jetonHolders: JETON_HOLDERS, jetonRecompense: JETON_RECOMPENSE, plancher: PLANCHER }); }
+  await lireTempsDeBloc();
+  try { t = await tour({ rpc, pot: POT, jetonHolders: JETON_HOLDERS, jetonRecompense: JETON_RECOMPENSE, plancher: PLANCHER, sParBloc: sParBlocPot }); }
   catch (e) { $('#titreAction').textContent = 'Could not read Base'; $('#etat').textContent = e.message || String(e); marque('#c1', false); return; }
   courant = t;
   marque('#c1', true);

@@ -27,9 +27,17 @@ export const SELECTEURS = Object.freeze({
   rouler: '0x91dd7f72',        // rouler(uint256,uint256,address)
 });
 
-/** ~2 s par bloc sur Base : 300 blocs ≈ 10 minutes pour signer sans que le debut devienne du passe. */
+/* ⛔⛔ DENIM (2026-11-05) : Base passe de 2 s a 200 ms/bloc. 300 blocs ne font plus 10 min mais 1 min ; 43 200 blocs plus 24 h mais 2,4 h.
+ *     La marge et la duree sont donc des DUREES, converties au temps de bloc MESURE (`sParBloc`, servi par le serveur — temps-de-bloc.js
+ *     blocsPour). Non mesure et pas de `config` explicite -> OUVRIR est REFUSE (aucune periode ouverte a 2 s supposees). ANCRER et ATTENDRE
+ *     ne dependent pas du temps et restent possibles. */
+import { blocsPour, secondesPour, dureeTexte } from './temps-de-bloc.js';
+/** Le temps laisse pour signer avant que le debut devienne du passe : 10 minutes. */
+export const MARGE_SIGNATURE_S = 600;
+/** Duree d une periode : 24 h. */
+export const DUREE_PERIODE_S = 86400;
+/** ⛔ HISTORIQUE (2 s/bloc) : 300 blocs = 10 min et 43 200 = 24 h AVANT Denim. Plus utilises par defaut ; gardes pour les lecteurs anciens. */
 export const MARGE_SIGNATURE = 300;
-/** Duree d une periode, en blocs. 43 200 ≈ 24 h sur Base. */
 export const DUREE_PERIODE = 43200;
 
 const mot = (v) => BigInt(v).toString(16).padStart(64, '0');
@@ -73,11 +81,12 @@ export function calldataAlimenterEth({ id }) {
  * @param {Array<{id:number, debut:number, fin:number, ancreeLe:number}>} e.periodes
  * @param {number} e.blocCourant
  * @param {object} [e.snapshot]  pour la periode a ancrer : {complet, pourquoi, racine, total, depose, graine, jeton}
- * @param {object} [e.config]    {duree, marge}
+ * @param {object} [e.config]    {duree, marge} en BLOCS, explicites (sinon : 24 h et 10 min au temps de bloc mesure)
+ * @param {number|null} [e.sParBloc] le temps de bloc MESURE (s) ; null = non mesure
  */
-export function prochaineAction({ periodes, blocCourant, snapshot = null, config = {} }) {
-  const duree = Number.isInteger(config.duree) ? config.duree : DUREE_PERIODE;
-  const marge = Number.isInteger(config.marge) ? config.marge : MARGE_SIGNATURE;
+export function prochaineAction({ periodes, blocCourant, snapshot = null, config = {}, sParBloc = null }) {
+  const duree = Number.isInteger(config.duree) ? config.duree : blocsPour(DUREE_PERIODE_S, sParBloc);
+  const marge = Number.isInteger(config.marge) ? config.marge : blocsPour(MARGE_SIGNATURE_S, sParBloc);
   if (!Number.isInteger(blocCourant) || blocCourant < 0) {
     return { action: 'REFUS', pourquoi: 'bloc courant inconnu — on ne devine pas la tete de chaine' };
   }
@@ -137,8 +146,13 @@ export function prochaineAction({ periodes, blocCourant, snapshot = null, config
   }
 
   /* ── 3. RIEN EN COURS : on en ouvre une ──────────────────────────────────────────────────────── */
+  /* ⛔ DENIM : sans temps de bloc mesure (et sans config explicite), on ne devine pas combien de blocs font 24 h ou 10 min */
+  if (duree === null || marge === null) {
+    return { action: 'REFUS', pourquoi: 'block time not measured — a round is not opened on an assumed 2 s per block (duration and signing margin are times)' };
+  }
   const debut = blocCourant + marge;
   const fin = debut + duree;
+  const margeTexte = dureeTexte(secondesPour(marge, sParBloc));
   return {
     action: 'OUVRIR',
     calldata: calldataOuvrir({ debut, fin }),
@@ -148,6 +162,6 @@ export function prochaineAction({ periodes, blocCourant, snapshot = null, config
      *    transaction reverterait sur DebutDansLePasse — apres que l humain ait paye le gas. */
     valideJusqua: debut,
     resume: 'ouvre une periode de ' + duree + ' blocs, du ' + debut + ' au ' + fin
-      + ' · A SIGNER AVANT LE BLOC ' + debut + ' (environ ' + Math.round((marge * 2) / 60) + ' min)',
+      + ' · A SIGNER AVANT LE BLOC ' + debut + ' (' + (margeTexte ? 'environ ' + margeTexte.replace(/^~/, '') + ' au temps de bloc mesure' : marge + ' blocs') + ')',
   };
 }

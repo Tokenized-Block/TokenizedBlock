@@ -220,7 +220,9 @@ export async function arbreDUnePeriodeAncree({ rpc, pot, periode, jetonHolders, 
  * Que faut-il faire maintenant ?
  * ⛔ AUCUN ENVOI. `aSigner` est une description, pas un geste.
  */
-export async function tour({ rpc, pot, jetonHolders, jetonRecompense, plancher, config = {} }) {
+/* DENIM (2026-11-05) : `sParBloc` = le temps de bloc MESURE (servi par le serveur) ; il fixe la duree (24 h) et la marge (10 min) en blocs
+ *   d une periode a ouvrir (keeper-pot.js). null -> OUVRIR est refuse ; ANCRER / ATTENDRE inchanges. */
+export async function tour({ rpc, pot, jetonHolders, jetonRecompense, plancher, config = {}, sParBloc = null }) {
   const teteHex = await rpc('eth_blockNumber', []);
   const blocCourant = typeof teteHex === 'string' ? Number(BigInt(teteHex)) : null;
   const periodes = await lirePeriodes({ rpc, pot });
@@ -238,7 +240,7 @@ export async function tour({ rpc, pot, jetonHolders, jetonRecompense, plancher, 
       total: prep.total, graine: prep.graine };
   }
 
-  const d = prochaineAction({ periodes, blocCourant, snapshot, config });
+  const d = prochaineAction({ periodes, blocCourant, snapshot, config, sParBloc });
   const sortie = { ...d, blocCourant, periodes: periodes.length };
   if (d.calldata) sortie.aSigner = { to: pot, data: d.calldata, value: '0x0' };
   if (d.action === 'ANCRER' && snapshot && snapshot.complet) {
