@@ -34,6 +34,9 @@
 //    pourrait recalculer ce qu il a decide — ce qui casserait la regle n°2 de Phil (2026-09-13) :
 //    le cerveau est une fonction PURE, verifiable par n importe qui.
 
+/* DENIM (2026-11-05) : la conversion blocs -> heures passe par le temps de bloc MESURE (module pur, aucun reseau) */
+import { secondesPour } from './temps-de-bloc.js';
+
 /** La borne mesuree : aucun marche liste n etait muet depuis plus que ca. */
 export const SILENCE_MAX_MESURE_H = 23.2;
 
@@ -152,11 +155,23 @@ const arr = (x) => Math.round(x * 10) / 10;
  *    deux nombres viennent de lectures differentes, donc qu on ne sait pas. Un silence negatif
  *    passerait pour « tres recent » et endormirait le block exactement quand il ne faut pas.
  */
-export function silenceDepuisBlocs({ dernierBloc, blocFin, blocsParJour = 43200 }) {
+/* ⛔⛔ DENIM (2026-11-05) : le defaut etait `blocsParJour = 43200` (2 s/bloc). Base passe a 200 ms/bloc : 43 200 blocs = 2,4 h, et le
+ *     block aurait dit « quiet for 24 hours » apres 2,4 h de silence — puis reclame un echange a tort. Il n y a PLUS de defaut :
+ *     la conversion passe par le temps de bloc MESURE (`sParBloc`, servi par le serveur, temps-de-bloc.js), ou par un
+ *     `blocsParJour` donne EXPLICITEMENT par l appelant. Ni l un ni l autre -> `NaN` (pas `null`) : `decisionEchange` refuse NaN
+ *     explicitement et rend NON_MESURE (ne reclame rien), alors que `null` y veut dire « aucun mouvement dans la fenetre ».
+ *     Seule la conversion change ; les bornes et les etats du decideur sont intacts.
+ * ⚠️ BORNE CONNUE : un silence qui chevauche la bascule (blocs de 2 s puis de 200 ms) est converti au temps ACTUEL — il est
+ *    SOUS-estime (le block reclame plus tard, jamais plus tot). */
+export function silenceDepuisBlocs({ dernierBloc, blocFin, sParBloc = null, blocsParJour = null }) {
   if (!Number.isFinite(dernierBloc) || !Number.isFinite(blocFin)) return null;
-  if (!Number.isFinite(blocsParJour) || blocsParJour <= 0) return null;
   if (dernierBloc > blocFin) return null;
-  return ((blocFin - dernierBloc) * 24) / blocsParJour;
+  if (blocsParJour !== null && blocsParJour !== undefined) {
+    if (!Number.isFinite(blocsParJour) || blocsParJour <= 0) return null;
+    return ((blocFin - dernierBloc) * 24) / blocsParJour;
+  }
+  const s = secondesPour(blocFin - dernierBloc, sParBloc);
+  return s === null ? NaN : s / 3600;
 }
 
 /** ⛔ CHAQUE SORTIE PORTE `signeParUtilisateur: true`, comme tout ce que le cerveau propose. Ce

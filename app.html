@@ -25473,8 +25473,18 @@ function ecrireJournal(adr, vu, h) {
     const t = Number(localStorage.getItem(cleR));
     if (Number.isFinite(t) && t > 0) depuisRappelH = (Date.now() - t) / 3600000;
   } catch (e) { depuisRappelH = null; }
+  /* DENIM 2026-11-05 : le Brain peut battre sans que l onglet Game ait lu /api/tirage — sans temps de bloc, la demande d echange reste
+   *   NON_MESURE. Une lecture au plus par minute pose sParBlocApp (le battement SUIVANT l utilise) ; jamais une valeur supposee. */
+  if (sParBlocApp === null && Date.now() - (ecrireJournal.tempsLu || 0) > 60000) {
+    ecrireJournal.tempsLu = Date.now();
+    fetch('/api/tirage', { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((r) => r.json()).then((t) => {
+      if (sParBlocApp === null && t && t.ok === true && t.tempsDeBloc) { const s = Number(t.tempsDeBloc.sParBloc); if (Number.isFinite(s) && s > 0) sParBlocApp = s; }
+    }).catch(() => { /* relu dans une minute */ });
+  }
   const nouvelles = pensees({ phase: vu.phase, vie: h ? h.vie : null, etatVie: h ? h.etatVie : null, nourriture: nourr,
-    memoire: vu.memoire, spikes: vu.spikes, symbole: h ? h.sym : null, depuisRappelH });
+    memoire: vu.memoire, spikes: vu.spikes, symbole: h ? h.sym : null, depuisRappelH,
+    /* DENIM 2026-11-05 : le temps de bloc MESURE servi par /api/tirage ; null -> la demande d echange dit NON_MESURE (rien reclame) */
+    sParBloc: sParBlocApp });
   /* ⛔ LE SOUVENIR NE S ECRIT QUE SI LA DEMANDE A VRAIMENT ETE PRODUITE. L ecrire a chaque
    *    battement ferait taire le block pour 24 h sans qu il ait rien demande — une garde qui
    *    empeche exactement ce qu elle doit permettre. */

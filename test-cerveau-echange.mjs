@@ -192,7 +192,9 @@ eq(d({ silenceH: 30, depuisRappelH: null }).etat, 'DEJA_PERDU',
 {
   const bloc = (o) => ({ etat: 'LUE', gm: 5, messages: 1, detenteurs: 3, mort: false,
     dernierBloc: 1000, blocFin: 1000, transfertsTotal: 40, ...o });
-  const commun = { phase: 'EVEILLE', vie: 1, etatVie: 'LUE', memoire: 0.1, spikes: 3, symbole: 'TST' };
+  /* DENIM 2026-11-05 : plus de 43 200 blocs/jour par defaut — le journal recoit le temps de bloc MESURE ; 2 s ici (les blocs de ces cas
+   *   sont comptes a 43 200/jour). Le cas 0,2 s et le cas « non mesure » vivent dans test-denim-cerveau-20261105.mjs. */
+  const commun = { phase: 'EVEILLE', vie: 1, etatVie: 'LUE', memoire: 0.1, spikes: 3, symbole: 'TST', sParBloc: 2 };
 
   const muet = pensees({ ...commun, nourriture: bloc({ dernierBloc: 1000, blocFin: 1000 + 43200 * 4 }) });
   const ligne = muet.find((p) => /quiet for/i.test(p.texte));

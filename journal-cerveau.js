@@ -47,7 +47,9 @@ export function entreeBotAction(p) {
  * @param {string|null} o.symbole
  * @returns {{genre:string, texte:string, parce_que:string}[]}
  */
-export function pensees({ phase, vie = null, etatVie = null, nourriture = null, memoire = 0, spikes = 0, symbole = null, depuisRappelH = null }) {
+/* DENIM (2026-11-05) : `sParBloc` = le temps de bloc MESURE (s), servi par le serveur ; null -> le silence n est pas converti et la
+ *   demande d echange rend NON_MESURE (rien n est reclame). Il n y a plus de 43 200 blocs/jour par defaut (cerveau-echange.js). */
+export function pensees({ phase, vie = null, etatVie = null, nourriture = null, memoire = 0, spikes = 0, symbole = null, depuisRappelH = null, sParBloc = null }) {
   const nom = symbole || 'this block';
   const out = [];
   const n = nourriture && nourriture.etat === 'LUE' ? nourriture : null;
@@ -103,7 +105,7 @@ export function pensees({ phase, vie = null, etatVie = null, nourriture = null, 
    *    dire au block qu il est muet alors que la regle le voit actif. */
   if (n) {
     const d = decisionEchange({
-      silenceH: silenceDepuisBlocs({ dernierBloc: n.dernierBloc, blocFin: n.blocFin }),
+      silenceH: silenceDepuisBlocs({ dernierBloc: n.dernierBloc, blocFin: n.blocFin, sParBloc }),
       transferts: n.transfertsTotal,
       depuisRappelH,
     });
