@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game168 */
+  lambda0: 'confocal parameter L', typeCaustique: 'caustic',
   /* game167 */
   cote2: 'side squared', triangle: 'the triangle', exact: 'exact value',
   /* game166 */
@@ -443,6 +445,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game168 */
+  caustique: 'Confocal parameter of the chords: largest change', foyers: 'Sum of distances to the foci vs 2 (largest gap)',
   /* game167 */
   equilateral: 'Outer Napoleon triangle: sides that differ (exact)', interieur: 'Inner Napoleon triangle: sides that differ (exact)', aires: 'Outer minus inner area minus the triangle (exact)',
   /* game166 */

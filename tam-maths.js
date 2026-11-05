@@ -933,7 +933,53 @@ function napoleon(P, n) {
     temoin: { mesure: carres.join(', '), formule: '116, 130, 98', note: 'witness: squares instead of equilateral triangles on (0,0) (6,0) (0,8) : the centres are 116, 130, 98 apart (squared), not equilateral' } } };
 }
 
+// ---------- 26 : le billard elliptique et sa caustique (idee et valeurs : codex Grok Bot ; « Ivory revisited », Integrable Systems 2017, lu par Grok) ----------
+// Une bille rebondit dans l ellipse x^2 + y^2/b^2 = 1 (angle d incidence = angle de reflexion). Chaque corde reste tangente a UNE MEME conique
+//   confocale x^2/(1 - L) + y^2/(b^2 - L) = 1 : une ellipse (L < b^2) si la bille ne passe jamais entre les foyers, une hyperbole sinon.
+// Mesure : pour chaque corde, de normale unitaire n et de distance d au centre, L = n1^2 + b^2 n2^2 - d^2 (condition de tangence, derivee :
+//   une droite n.x = d touche x^2/A + y^2/B = 1 ssi A n1^2 + B n2^2 = d^2) ; on suit son ecart au premier L sur tous les rebonds.
+// Aussi : chaque point d impact verifie |PF1| + |PF2| = 2 (foyers a +- sqrt(1 - b^2)).
+// Temoin : meme bille, mais reflechie sur la normale RADIALE (celle du cercle) au lieu de la vraie normale : L derive.
+// Dessin (vue de face) : l ellipse (0), la trajectoire (1), la caustique (2).
+function billardTrace(b, t0, tir, N, radiale) {
+  const b2 = b * b; let p = [cosD(t0), b * sinD(t0)], v = [cosD(tir), sinD(tir)];
+  if (v[0] * p[0] + v[1] * p[1] / b2 > 0) v = [-v[0], -v[1]]; /* vers l interieur */
+  const L = [], pts = [p]; let foyers = 0; const c = Math.sqrt(1 - b2);
+  for (let k = 0; k < N; k++) {
+    const A = v[0] * v[0] + v[1] * v[1] / b2, B = 2 * (p[0] * v[0] + p[1] * v[1] / b2), C = p[0] * p[0] + p[1] * p[1] / b2 - 1;
+    const t = (-B + Math.sqrt(Math.max(0, B * B - 4 * A * C))) / (2 * A), q = [p[0] + t * v[0], p[1] + t * v[1]];
+    const n = [-v[1], v[0]], d = n[0] * p[0] + n[1] * p[1]; L.push(n[0] * n[0] + b2 * n[1] * n[1] - d * d);
+    let g = radiale ? [q[0], q[1]] : [q[0], q[1] / b2]; const gl = Math.sqrt(g[0] * g[0] + g[1] * g[1]); g = [g[0] / gl, g[1] / gl];
+    const vg = v[0] * g[0] + v[1] * g[1]; v = [v[0] - 2 * vg * g[0], v[1] - 2 * vg * g[1]];
+    const s = Math.sqrt(q[0] * q[0] + q[1] * q[1] / b2); p = [q[0] / s, q[1] / s]; pts.push(p);
+    foyers = Math.max(foyers, Math.abs(Math.sqrt((p[0] - c) ** 2 + p[1] ** 2) + Math.sqrt((p[0] + c) ** 2 + p[1] ** 2) - 2));
+  }
+  let derive = 0; for (const l of L) derive = Math.max(derive, Math.abs(l - L[0]));
+  return { L0: L[0], derive, foyers, pts };
+}
+function billardElliptique(P, n) {
+  const b = P.petitAxe, b2 = b * b, t0 = P.lancer * PI / 180, tir = P.tir * PI / 180, N = P.rebonds;
+  const R = billardTrace(b, t0, tir, N, false), F = billardTrace(b, t0, tir, N, true), L0 = R.L0, ellipse = L0 < b2;
+  const segs = [], DESSINES = N;
+  for (let k = 0; k < DESSINES; k++) segs.push([R.pts[k], R.pts[k + 1], 1]);
+  const bord = [], caus = [], M = 120;
+  for (let i = 0; i < M; i++) { const a = 2 * PI * i / M; bord.push([cosD(a), b * sinD(a)]); }
+  if (ellipse) for (let i = 0; i < M; i++) { const a = 2 * PI * i / M; caus.push([Math.sqrt(1 - L0) * cosD(a), Math.sqrt(b2 - L0) * sinD(a)]); }
+  else for (let i = 0; i <= M; i++) { const y = -b + 2 * b * i / M, x = Math.sqrt(1 - L0) * Math.sqrt(1 + y * y / (L0 - b2)); for (const sx of [x, -x]) if (sx * sx + y * y / b2 <= 1) caus.push([sx, y]); }
+  const brut = new Float64Array(n * 3), n0 = Math.floor(n / 6), n2 = caus.length ? Math.floor(n / 6) : 0, n1 = n - n0 - n2;
+  for (let l = 0; l < n; l++) { const o = 3 * l; let x, y, e;
+    if (l < n0) { const q = bord[Math.floor(l * M / n0)]; x = q[0]; y = q[1]; e = 0; }
+    else if (l < n0 + n2) { const q = caus[Math.floor((l - n0) * caus.length / n2)]; x = q[0]; y = q[1]; e = 2; }
+    else { const t = (l - n0 - n2) * segs.length / n1, s = Math.floor(t), u = t - s, sg = segs[s]; x = sg[0][0] + u * (sg[1][0] - sg[0][0]); y = sg[0][1] + u * (sg[1][1] - sg[0][1]); e = 1; }
+    brut[o] = x; brut[o + 1] = y; brut[o + 2] = e; }
+  return { D: 3, brut, nuage: true, unite: 'demi-grand axe = 1', invariants: {
+    caustique: { mesure: R.derive, formule: 0, lambda0: L0, typeCaustique: ellipse ? 'ellipse (never between the foci)' : 'hyperbola (crosses between the foci)', rebonds: N, note: 'largest change of the confocal parameter L of the chords over all bounces (every chord touches the same confocal conic)' },
+    foyers: { mesure: R.foyers, formule: 0, note: 'largest | |PF1| + |PF2| - 2 | over the bounce points' },
+    temoin: { mesure: F.derive, note: 'witness: reflecting on the radial normal (the circle s) instead of the true one : L drifts' } } };
+}
+
 export const COLONNES = Object.freeze({
+  billardElliptique: { colonnes: ['x', 'y', 'what (label; 0 = the table, 1 = the path, 2 = the caustic)'], memeLongueur: [[0, 1]], autres: [2] },
   napoleon: { colonnes: ['x', 'y', 'what (label; 0 = the triangle, 1 = equilateral triangles on its sides, 2 = Napoleon triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   percolationLiens: { colonnes: ['x (lattice)', 'y (lattice)', 'cluster (label; 2 = crosses, 1 = touches the left side, 0 = other)'], memeLongueur: [[0, 1]], autres: [2] },
   theoremePick: { colonnes: ['x', 'y', 'what (label; 0 = the outline, 1 = whole point inside, 2 = whole point on the boundary)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1037,9 +1083,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'napoleon', nom: 'Napoleon\'s theorem', science: 'Geometry', D: 3, nuage: true, params: { taille: 12, graine: 1 },
     bornes: { taille: [3, 40], graine: [1, 1000000] },
     phrase: 'A visualisation of Napoleon\'s theorem: put an equilateral triangle on each side of any triangle, and their three centres always form an equilateral triangle. Everything is computed exactly with numbers a + b sqrt 3, so the three sides are compared as identical, not just close; squares in place of the triangles show the rule breaking.' },
+  { id: 'billardElliptique', nom: 'The elliptic billiard and its caustic', science: 'Geometry', D: 3, nuage: true, params: { petitAxe: 0.6, lancer: 20, tir: 70, rebonds: 400 },
+    bornes: { petitAxe: [0.3, 0.95], lancer: [0, 359], tir: [5, 175], rebonds: [10, 2000] },
+    phrase: 'A visualisation of a billiard ball bouncing inside an ellipse: every straight run stays tangent to one same confocal curve, an ellipse or a hyperbola, called the caustic. The confocal parameter of every chord is computed and stays constant to round-off over hundreds of bounces; bouncing on a wrong normal makes it drift.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'] };
-const FONCTIONS = { napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'] };
+const FONCTIONS = { billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

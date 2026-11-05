@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -523,6 +523,36 @@ function suite(T, bavard = false, seul = null) {
       if (e === 1) continue; if (e === 2) deux++; if (![0, 1, 2].some((i) => surSeg(P, tri[i], tri[(i + 1) % 3]))) mal++; }
     assert.ok(mal === 0 && deux > 0, mal + ' points hors de leur triangle'); return 'cote^2 = ' + I.equilateral.cote2;
   });
+  /* game168 : billard — reference INDEPENDANTE : pour chaque corde, L par le PRODUIT DES DISTANCES SIGNEES DES FOYERS a la droite
+   *   (d1 d2 = b^2 - L pour toute tangente a la confocale de parametre L), avec sa propre reflexion (bissectrice des rayons focaux, pas
+   *   le gradient). ⛔ 1re version : le discriminant corde / conique de Grok — MAL CONDITIONNE pour une caustique hyperbole (7e-7 pour
+   *   une derive reelle de 2e-14, corde presque parallele a une asymptote) : le banc accusait le module a tort ;
+   *   controle de Grok : a = 2, b = 1, caustique a' = 1.8 -> L = a^2 - a'^2 = 0.76 */
+  const billardRef = (b, t0, tir, N, L) => { const b2 = b * b, c = Math.sqrt(1 - b2); let p = [Math.cos(t0), b * Math.sin(t0)], v = [Math.cos(tir), Math.sin(tir)];
+    if (v[0] * p[0] + v[1] * p[1] / b2 > 0) v = [-v[0], -v[1]]; let pire = 0;
+    for (let k = 0; k < N; k++) {
+      /* produit des distances signees des foyers (+-c, 0) a la droite n.x = d : b^2 - d1 d2 doit valoir L */
+      const n = [-v[1], v[0]], dd = n[0] * p[0] + n[1] * p[1], d1 = n[0] * c - dd, d2 = -n[0] * c - dd;
+      pire = Math.max(pire, Math.abs(b2 - d1 * d2 - L));
+      const a = v[0] ** 2 + v[1] ** 2 / b2, bb = 2 * (p[0] * v[0] + p[1] * v[1] / b2), cc = p[0] ** 2 + p[1] ** 2 / b2 - 1, s = (-bb + Math.sqrt(Math.max(0, bb * bb - 4 * a * cc))) / (2 * a);
+      const q = [p[0] + s * v[0], p[1] + s * v[1]], u1 = [c - q[0], -q[1]], u2 = [-c - q[0], -q[1]], l1 = Math.hypot(...u1), l2 = Math.hypot(...u2);
+      let g = [u1[0] / l1 + u2[0] / l2, u1[1] / l1 + u2[1] / l2]; const gl = Math.hypot(...g); g = [g[0] / gl, g[1] / gl]; /* bissectrice des rayons focaux = normale */
+      const vg = v[0] * g[0] + v[1] * g[1]; v = [v[0] - 2 * vg * g[0], v[1] - 2 * vg * g[1]]; const r = Math.sqrt(q[0] ** 2 + q[1] ** 2 / b2); p = [q[0] / r, q[1] / r]; }
+    return pire; };
+  ok('billardElliptique : controle de Grok Bot (a = 2, b = 1, caustique a\' = 1.8 : la corde tangente en theta = 0.7 donne L = 0.76)', () => {
+    const ap = 1.8, bp = Math.sqrt(ap * ap - 3), th = 0.7, T = [ap * Math.cos(th), bp * Math.sin(th)], n = [Math.cos(th) / ap, Math.sin(th) / bp], nl = Math.hypot(...n), nu = [n[0] / nl, n[1] / nl], d = nu[0] * T[0] + nu[1] * T[1];
+    assert.ok(Math.abs(4 * nu[0] ** 2 + nu[1] ** 2 - d * d - 0.76) < 1e-14); return 'L = 0.76'; });
+  for (const p of [...extremes(sys('billardElliptique')), { petitAxe: 0.5, lancer: 17, tir: 10, rebonds: 900 }, { petitAxe: 0.8, lancer: 200, tir: 95, rebonds: 1500 }]) ok(`billardElliptique ${JSON.stringify(p)} : chaque corde tangente a la conique du premier L (produit des foyers), foyers, temoin, dessin`, () => {
+    const R = S('billardElliptique', p), I = R.invariants, b = R.brut, P2 = R.params, L = I.caustique.lambda0, b2 = P2.petitAxe ** 2;
+    assert.ok(I.caustique.formule === 0 && I.caustique.mesure < 1e-10 && I.foyers.mesure < 1e-12 && I.caustique.rebonds === P2.rebonds, JSON.stringify(I));
+    assert.ok(L > 0 && L < 1 && Math.abs(L - b2) > 1e-9 && (L < b2) === /^ellipse/.test(I.caustique.typeCaustique), 'L ' + L);
+    const ecartF = billardRef(P2.petitAxe, P2.lancer * Math.PI / 180, P2.tir * Math.PI / 180, P2.rebonds, L); assert.ok(ecartF < 1e-11, 'produit des foyers : ecart ' + ecartF);
+    assert.ok(I.temoin.mesure > 1e-4, 'temoin ' + I.temoin.mesure);
+    let mal = 0, deux = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1], e = b[o + 2], f = x * x + y * y / b2;
+      if (e === 0 && Math.abs(f - 1) > 1e-9) mal++; if (e === 1 && f > 1 + 1e-9) mal++;
+      if (e === 2) { deux++; if (Math.abs(x * x / (1 - L) + y * y / (b2 - L) - 1) > 1e-9) mal++; } if (![0, 1, 2].includes(e)) mal++; }
+    assert.ok(mal === 0 && deux > 0, mal + ' points faux, ' + deux + ' sur la caustique'); return I.caustique.typeCaustique.split(' ')[0] + ', L = ' + L.toFixed(6) + ', derive ' + I.caustique.mesure.toExponential(1);
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -681,6 +711,11 @@ const MUTANTS = [
   ['napoleon : sqrt3^2 = 2', 'napFM(napFM(x[1], y[1]), [3n, 1n])', 'napFM(napFM(x[1], y[1]), [2n, 1n])'],
   ['napoleon : interieur = exterieur', 'const ext = (P, Q) => exterieur ? napSommet(P, Q) : napSommet(Q, P)', 'const ext = (P, Q) => napSommet(P, Q)'],
   ['napoleon : triangle non reoriente', 'else if (cr < 0) T = [t[0], t[2], t[1]]; }', 'else if (cr < 0) T = t; }'],
+  ['billard : normale radiale', 'let g = radiale ? [q[0], q[1]] : [q[0], q[1] / b2];', 'let g = [q[0], q[1]];'],
+  ['billard : L sans b^2', 'L.push(n[0] * n[0] + b2 * n[1] * n[1] - d * d);', 'L.push(n[0] * n[0] + n[1] * n[1] - d * d);'],
+  ['billard : foyers a 1 - b', 'const c = Math.sqrt(1 - b2);', 'const c = 1 - b;'],
+  ['billard : caustique hyperbole prise pour ellipse', 'L0 = R.L0, ellipse = L0 < b2;', 'L0 = R.L0, ellipse = true;'],
+  ['billard : trajectoire hors de la table', 'brut[o] = x; brut[o + 1] = y; brut[o + 2] = e; }', 'brut[o] = e === 1 ? 1.2 * x : x; brut[o + 1] = y; brut[o + 2] = e; }'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -695,7 +730,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

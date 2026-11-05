@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game168 (idee : codex Grok Bot) */
+  billardElliptique: {
+    titre: 'The elliptic billiard (a ball that never forgets its caustic)',
+    enUnePhrase: 'A ball bounces inside an oval table: every straight run touches one same hidden curve.',
+    colonnes: ['across', 'up', 'table, path, or caustic'],
+    aRegarder: ['The runs wrap around an inner oval, or cross between the two foci and wrap around a hyperbola.', 'Change the shot angle: the hidden curve changes, but it stays the same for the whole game.', 'Bouncing off the table as if it were round breaks the rule.'],
+    fin: null,
+  },
   /* game167 (idee : codex Grok Bot) */
   napoleon: {
     titre: 'Napoleon\'s theorem (three centres always make an equilateral triangle)',
