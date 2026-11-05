@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -587,6 +587,29 @@ function suite(T, bavard = false, seul = null) {
       if (e === 2 && Math.abs(Math.hypot(x - f.I[0], y - f.I[1]) - f.r) > tol * 10) mal++; if (![0, 1, 2, 3].includes(e)) mal++; }
     assert.ok(mal === 0 && un > 0, mal + ' points hors de leur cercle'); return 'rayons ' + I.externes.rayons;
   });
+  /* game170 : jeu de la vie — reference INDEPENDANTE sur une GRILLE (tableau 2D avec une marge assez large pour que rien n atteigne le bord),
+   *   pas d ensemble de chaines ; motifs recopies des RLE de LifeWiki ; valeurs de Grok Bot (2, 3, 15 ; 3, 48, 12 cellules) */
+  const vieGrille = (cells, gens) => { const xs = cells.map((c) => c[0]), ys = cells.map((c) => c[1]), M = 2 * gens + 4, W = Math.max(...xs) - Math.min(...xs) + 1 + 2 * M, H = Math.max(...ys) - Math.min(...ys) + 1 + 2 * M;
+    let g = Array.from({ length: H }, () => new Uint8Array(W)); for (const [x, y] of cells) g[y - Math.min(...ys) + M][x - Math.min(...xs) + M] = 1;
+    const etats = [g.map((r) => r.join('')).join('/')];
+    for (let t = 0; t < gens; t++) { const h = Array.from({ length: H }, () => new Uint8Array(W));
+      for (let y = 1; y < H - 1; y++) for (let x = 1; x < W - 1; x++) { let v = 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (dx || dy) v += g[y + dy][x + dx]; h[y][x] = v === 3 || (v === 2 && g[y][x]) ? 1 : 0; }
+      g = h; etats.push(g.map((r) => r.join('')).join('/')); }
+    return etats; };
+  const vieCellules = { 0: [[0, 0], [1, 0], [2, 0]], 2: [[2, 0], [7, 0], [0, 1], [1, 1], [3, 1], [4, 1], [5, 1], [6, 1], [8, 1], [9, 1], [2, 2], [7, 2]],
+    1: (() => { const c = [], L = [2, 3, 4, 8, 9, 10]; for (const y of [0, 5, 7, 12]) for (const x of L) c.push([x, y]); for (const y of [2, 3, 4, 8, 9, 10]) for (const x of [0, 5, 7, 12]) c.push([x, y]); return c; })() };
+  for (const p of [{ oscillateur: 0 }, { oscillateur: 1 }, { oscillateur: 2 }]) ok(`jeuDeLaVie ${JSON.stringify(p)} : periode = premier retour sur GRILLE, valeurs de Grok, dessin = les phases`, () => {
+    const R = S('jeuDeLaVie', p), I = R.invariants, k = p.oscillateur, cells = vieCellules[k], attendu = [2, 3, 15][k];
+    const e = vieGrille(cells, attendu); const premier = e.findIndex((s, i) => i > 0 && s === e[0]);
+    assert.ok(premier === attendu && cells.length === [3, 48, 12][k], 'reference ' + premier + ' / ' + cells.length);
+    assert.ok(I.retour.mesure === attendu && I.retour.formule === attendu && I.retour.vivantes === cells.length, JSON.stringify(I.retour));
+    assert.equal(I.temoin.mesure, I.temoin.formule);
+    const gens = new Set(); let mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = R.brut[o], y = R.brut[o + 1], g = R.brut[o + 2]; if (!Number.isInteger(x) || !Number.isInteger(y) || !Number.isInteger(g) || g < 0 || g >= attendu) mal++; gens.add(g); }
+    assert.ok(mal === 0 && gens.size === attendu, mal + ' points faux, ' + gens.size + ' generations dessinees'); return I.retour.motif + ' : periode ' + attendu;
+  });
+  ok('jeuDeLaVie : temoin — le planeur sur GRILLE ne revient pas, et apres 4 il est decale de (1,1)', () => {
+    const e = vieGrille([[1, 0], [2, 1], [0, 2], [1, 2], [2, 2]], 12); assert.ok(!e.slice(1).includes(e[0]));
+    const lignes = (s) => s.split('/'), a = lignes(e[0]), b = lignes(e[4]); assert.ok(a.slice(0, -1).every((r, y) => '0' + r.slice(0, -1) === b[y + 1]), 'decalage (1,1)'); return 'ok'; });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -756,6 +779,11 @@ const MUTANTS = [
   ['feuerbach : inscrit tangent de l exterieur', 'interne: feuEq(d2(N, I), carre(feuSub(R2, r)))', 'interne: feuEq(d2(N, I), carre(feuAdd(R2, r)))'],
   ['feuerbach : temoin (R - r)^2', 'temoin: { mesure: feuTexte(F.oi2), formule: feuTexte(F.euler)', 'temoin: { mesure: feuTexte(F.oi2), formule: feuTexte(F.rMoinsR2)'],
   ['feuerbach : cercle inscrit decale', 'brut[o] = feuNb(Cc[0]) + feuNb(rr) * cosD(ang);', 'brut[o] = feuNb(Cc[0]) + (e === 2 ? 0.3 : 0) + feuNb(rr) * cosD(ang);'],
+  ['vie : survie a 2 seulement', 'if (v === 3 || (v === 2 && S.has(c))) T.add(c);', 'if ((v === 3 && !S.has(c)) || (v === 2 && S.has(c))) T.add(c);'],
+  ['vie : naissance a 2', 'if (v === 3 || (v === 2 && S.has(c))) T.add(c);', 'if (v === 3 || v === 2) T.add(c);'],
+  ['vie : periode = premiere phase de meme TAILLE', 'if (vieEgal(S, S0)) p = t; else phases.push(S);', 'if (S.size === S0.size) p = t; else phases.push(S);'],
+  ['vie : voisinage sans les diagonales', 'if (dx || dy) { const c = vieCle(x + dx, y + dy);', 'if ((dx || dy) && !(dx && dy)) { const c = vieCle(x + dx, y + dy);'],
+  ['vie : pentadecathlon a 13 cellules', "['pentadecathlon', '2bo4bo$2ob4ob2o$2bo4bo!', 15]", "['pentadecathlon', '2bo4bo$2ob4ob2o$2bo3bo!', 15]"],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -770,7 +798,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game170 */
+  motif: 'pattern', vivantes: 'live cells at the start',
   /* game169 */
   carreRmoinsr: '(R - r)^2',
   /* game168 */
@@ -447,6 +449,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game170 */
+  retour: 'Generations until the exact same cells come back',
   /* game169 */
   interne: 'Nine-point circle vs incircle: touch from inside (exact)', externes: 'Excircles not touching from outside (exact)', neufPoints: 'Nine-point circle through a side midpoint (exact)',
   /* game168 */

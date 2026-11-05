@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game170 (idee : codex Grok Bot) */
+  jeuDeLaVie: {
+    titre: 'Game of Life oscillators (patterns that blink forever)',
+    enUnePhrase: 'Cells live or die by counting their neighbours, and some shapes come back to themselves again and again.',
+    colonnes: ['across', 'up', 'which generation'],
+    aRegarder: ['Every colour is one generation; together they show the whole cycle of the shape.', 'The blinker repeats every 2 steps, the pulsar every 3, the pentadecathlon every 15.', 'A glider never comes back to the same place: it walks away diagonally.'],
+    fin: null,
+  },
   /* game169 (idee : codex Grok Bot) */
   feuerbach: {
     titre: 'Feuerbach\'s theorem (the circle that touches four circles)',

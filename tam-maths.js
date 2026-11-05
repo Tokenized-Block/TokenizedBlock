@@ -1023,7 +1023,39 @@ function feuerbach(P, n) {
     temoin: { mesure: feuTexte(F.oi2), formule: feuTexte(F.euler), carreRmoinsr: feuTexte(F.rMoinsR2), note: 'witness: the CIRCUMcircle does not touch the incircle : OI^2 = R^2 - 2Rr (Euler), not (R - r)^2' } } };
 }
 
+// ---------- 28 : le jeu de la vie, trois oscillateurs (idee et valeurs : codex Grok Bot ; LifeWiki « Blinker », « Pulsar », « Pentadecathlon », lus par Grok) ----------
+// Regle de Conway B3/S23 sur le plan ENTIER (un ensemble de cellules, aucun bord, aucun tore) : une case nait avec exactement 3 voisines,
+//   survit avec 2 ou 3. Un oscillateur revient a SA forme, au meme endroit, apres p generations.
+// Exact ici : on fait evoluer le motif et on compare l ensemble des cellules a celui du depart, case par case : la PREMIERE egalite donne
+//   la periode minimale. Clignotant 3 cellules -> 2 ; pulsar 48 -> 3 ; pentadecathlon 12 -> 15.
+// Temoin : le PLANEUR ne revient jamais sur lui-meme (4 fois la plus grande periode essayee), mais apres 4 generations il est exactement
+//   lui-meme decale d une case en diagonale : il voyage, il n oscille pas.
+// Dessin (vue de face) : toutes les phases d une periode, etiquette = la generation (0 .. p - 1).
+const vieCle = (x, y) => x + ',' + y;
+function viePas(S) { const n = new Map();
+  for (const k of S) { const i = k.indexOf(','), x = +k.slice(0, i), y = +k.slice(i + 1); for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) if (dx || dy) { const c = vieCle(x + dx, y + dy); n.set(c, (n.get(c) || 0) + 1); } }
+  const T = new Set(); for (const [c, v] of n) if (v === 3 || (v === 2 && S.has(c))) T.add(c); return T; }
+const vieEgal = (A, B) => A.size === B.size && [...A].every((k) => B.has(k));
+function vieRle(s) { const S = new Set(); let x = 0, y = 0, n = '';
+  for (const ch of s) { if (ch >= '0' && ch <= '9') { n += ch; continue; } const k = n ? +n : 1; n = '';
+    if (ch === 'b') x += k; else if (ch === 'o') { for (let i = 0; i < k; i++) S.add(vieCle(x + i, y)); x += k; } else if (ch === '$') { y += k; x = 0; } else if (ch === '!') break; }
+  return S; }
+const VIE_MOTIFS = [['blinker', '3o!', 2], ['pulsar', '2b3o3b3o2$o4bobo4bo$o4bobo4bo$o4bobo4bo$2b3o3b3o2$2b3o3b3o$o4bobo4bo$o4bobo4bo$o4bobo4bo2$2b3o3b3o!', 3], ['pentadecathlon', '2bo4bo$2ob4ob2o$2bo4bo!', 15]];
+function jeuDeLaVie(P, n) {
+  const [nom, rle, attendue] = VIE_MOTIFS[P.oscillateur], S0 = vieRle(rle), MAX = 60, phases = [S0]; let S = S0, p = null;
+  for (let t = 1; t <= MAX && p === null; t++) { S = viePas(S); if (vieEgal(S, S0)) p = t; else phases.push(S); }
+  const planeur = vieRle('bo$2bo$3o!'); let G = planeur, retour = null; for (let t = 1; t <= 60 && retour === null; t++) { G = viePas(G); if (vieEgal(G, planeur)) retour = t; }
+  let G4 = planeur; for (let t = 0; t < 4; t++) G4 = viePas(G4);
+  const decale = new Set([...planeur].map((k) => { const i = k.indexOf(','); return vieCle(+k.slice(0, i) + 1, +k.slice(i + 1) + 1); }));
+  const points = []; phases.forEach((Ph, t) => { for (const k of Ph) { const i = k.indexOf(','); points.push([+k.slice(0, i), -(+k.slice(i + 1)), t]); } });
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const ce = points[Math.floor(l * points.length / n)], o = 3 * l; brut[o] = ce[0]; brut[o + 1] = ce[1]; brut[o + 2] = ce[2]; }
+  return { D: 3, brut, nuage: true, unite: 'cases', invariants: {
+    retour: { mesure: p === null ? NaN : p, formule: attendue, motif: nom, vivantes: S0.size, absente: 'no return within ' + MAX + ' generations', note: 'first generation where the whole set of live cells equals the starting set, cell by cell (= the smallest period)' },
+    temoin: { mesure: retour === null && vieEgal(G4, decale) ? 'never returns ; after 4 = itself moved (1,1)' : 'returns or does not move', formule: 'never returns ; after 4 = itself moved (1,1)', note: 'witness: the glider never comes back to the same place (60 generations) : after 4 it is itself, one cell down and right — it travels' } } };
+}
+
 export const COLONNES = Object.freeze({
+  jeuDeLaVie: { colonnes: ['x (cells)', 'y (cells)', 'generation within the period (label)'], memeLongueur: [[0, 1]], autres: [2] },
   feuerbach: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = nine-point circle, 2 = incircle, 3 = excircles)'], memeLongueur: [[0, 1]], autres: [2] },
   billardElliptique: { colonnes: ['x', 'y', 'what (label; 0 = the table, 1 = the path, 2 = the caustic)'], memeLongueur: [[0, 1]], autres: [2] },
   napoleon: { colonnes: ['x', 'y', 'what (label; 0 = the triangle, 1 = equilateral triangles on its sides, 2 = Napoleon triangle)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1135,9 +1167,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'feuerbach', nom: 'Feuerbach\'s theorem (the nine-point circle)', science: 'Geometry', D: 3, nuage: true, params: { taille: 20, graine: 1 },
     bornes: { taille: [5, 40], graine: [1, 1000000] },
     phrase: 'A visualisation of Feuerbach\'s theorem: the nine-point circle of a triangle touches its inscribed circle from inside and its three escribed circles from outside. The triangles have whole-number corners and sides, so every centre and radius is a fraction and the four tangencies are checked exactly; the circumscribed circle, which does not touch, is shown as a witness.' },
+  { id: 'jeuDeLaVie', nom: 'Game of Life oscillators', science: 'Computation', D: 3, nuage: true, params: { oscillateur: 1 },
+    bornes: { oscillateur: [0, 2] },
+    phrase: 'A visualisation of three oscillators of Conway\'s Game of Life: the blinker, the pulsar and the pentadecathlon. Each is run on an unbounded grid until its set of live cells equals the start exactly, which gives its period: 2, 3 and 15. A glider, which travels instead of returning, is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'] };
-const FONCTIONS = { feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'] };
+const FONCTIONS = { jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
