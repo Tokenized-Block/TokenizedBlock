@@ -1135,7 +1135,7 @@ const L = {
     titre: 'Euler\'s formula on five more solids',
     enUnePhrase: 'Count the corners, take away the edges, add the faces: for any solid without a hole you always get 2.',
     colonnes: ['x', 'y', 'z'],
-    aRegarder: ['Pick another solid: the football has 60 corners, 90 edges and 32 faces, and 60 - 90 + 32 = 2.', 'The three numbers are counted from the shape itself, none is worked out from the other two.', 'A frame with a hole in the middle gives 0, not 2.'],
+    aRegarder: ['Pick another solid: the football has 60 corners, 90 edges and 32 faces, and 60 - 90 + 32 = 2 ; the snub dodecahedron 60, 150 and 92.', 'The three numbers are counted from the shape itself, none is worked out from the other two.', 'A frame with a hole in the middle gives 0, not 2.'],
     fin: null,
   },
   /* game171 (idee : codex Grok Bot) */

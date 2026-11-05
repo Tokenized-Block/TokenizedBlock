@@ -1085,8 +1085,9 @@ function marcheAutoEvitante(P, n) {
 //   V = les points ; E = les paires de points a la plus petite distance (tous ces solides ont des aretes egales) ; F = les plans d appui
 //   distincts (passant par deux aretes qui se suivent, tous les autres sommets du meme cote). Aucun des trois n est deduit des deux autres.
 // Aussi : chaque arete borde deux faces, donc la somme des sommets de chaque face vaut 2E (verifie face par face).
-// Solides : 0 prisme triangulaire, 1 antiprisme carre, 2 cuboctaedre, 3 icosaedre tronque (ballon de football), 4 rhombicuboctaedre.
-//   (Le dodecaedre adouci du codex est ecarte : ses coordonnees n ont pas ete lues dans une source, et celles essayees donnaient des aretes inegales.)
+// Solides : 0 prisme triangulaire, 1 antiprisme carre, 2 cuboctaedre, 3 icosaedre tronque (ballon de football), 4 rhombicuboctaedre,
+//   5 dodecaedre adouci (game173 : orbite du point p sous les rotations M1, M2, xi racine reelle de xi^3 + 2 xi^2 = phi^2 — Wikipedia
+//   « Snub dodecahedron », lu par Grok ; aretes de longueur 2 xi sqrt(1 - xi)).
 // Temoin : un cadre carre (tore polyedrique, 16 faces quadrilateres) : V - E + F = 0, pas 2 — la formule vaut pour la sphere, pas pour un trou.
 // Dessin (3-D) : les aretes du solide.
 const EUL_PHI = (1 + Math.sqrt(5)) / 2, EUL_R2 = 1 + Math.SQRT2;
@@ -1098,6 +1099,11 @@ function eulSolide(k) {
   if (k === 0) { const r = []; for (let i = 0; i < 3; i++) { const a = 2 * PI * i / 3; for (const z of [-0.5, 0.5]) r.push([cosD(a) / Math.sqrt(3), sinD(a) / Math.sqrt(3), z]); } return r; }
   if (k === 1) { const r = [], R = 1 / Math.SQRT2, h = Math.sqrt(1 - 2 * R * R * (1 - cosD(PI / 4))) / 2; for (let i = 0; i < 4; i++) { const a = PI * i / 2; r.push([R * cosD(a), R * sinD(a), h]); r.push([R * cosD(a + PI / 4), R * sinD(a + PI / 4), -h]); } return r; }
   if (k === 2) return eulUniq(eulPerms([1, 1, 0]).flatMap(eulSignes));
+  if (k === 5) { let x = 0.9; for (let i = 0; i < 60; i++) x -= (x ** 3 + 2 * x ** 2 - EUL_PHI ** 2) / (3 * x * x + 4 * x);
+    const f = EUL_PHI, p = [f * f - f * f * x, -(f ** 3) + f * x + 2 * f * x * x, x], M1 = [[1 / (2 * f), -f / 2, 1 / 2], [f / 2, 1 / 2, 1 / (2 * f)], [-1 / 2, 1 / (2 * f), f / 2]], M2 = [[0, 0, 1], [1, 0, 0], [0, 1, 0]];
+    const ap = (M, v) => M.map((r) => r[0] * v[0] + r[1] * v[1] + r[2] * v[2]), pts = [p];
+    for (let i = 0; i < pts.length; i++) for (const M of [M1, M2]) { const q = ap(M, pts[i]); if (!pts.some((r) => eulDist(r, q) < 1e-9)) pts.push(q); }
+    return pts; }
   if (k === 3) return eulUniq([[0, 1, 3 * EUL_PHI], [1, 2 + EUL_PHI, 2 * EUL_PHI], [EUL_PHI, 2, 2 * EUL_PHI + 1]].flatMap((v) => eulPerms(v, true)).flatMap(eulSignes));
   return eulUniq(eulPerms([1, 1, EUL_R2], true).flatMap(eulSignes)); }
 function eulMesure(P) {
@@ -1247,8 +1253,8 @@ export const SYSTEMES = Object.freeze([
     bornes: { etapes: [2, 12], graine: [1, 1000000] },
     phrase: 'A visualisation of self-avoiding walks: paths on a grid that never visit the same point twice. No formula is known for how many there are, so every walk of up to 12 steps is counted one by one and matched against the published sequence (324 932 for 12 steps). Walks that only avoid stepping straight back are the witness: from 4 steps on they are more numerous.' },
   { id: 'eulerSolides', nom: 'Euler\'s formula beyond the Platonic solids', science: 'Geometry', D: 3, nuage: true, params: { solide: 3 },
-    bornes: { solide: [0, 4] },
-    phrase: 'A visualisation of Euler\'s formula V - E + F = 2 on five more solids (0 triangular prism, 1 square antiprism, 2 cuboctahedron, 3 truncated icosahedron, 4 rhombicuboctahedron). Vertices, edges and faces are each counted from the coordinates alone; a square picture frame, a solid with a hole, gives 0 instead of 2.' },
+    bornes: { solide: [0, 5] },
+    phrase: 'A visualisation of Euler\'s formula V - E + F = 2 on six more solids (0 triangular prism, 1 square antiprism, 2 cuboctahedron, 3 truncated icosahedron, 4 rhombicuboctahedron, 5 snub dodecahedron). Vertices, edges and faces are each counted from the coordinates alone; a square picture frame, a solid with a hole, gives 0 instead of 2.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
 export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'] };
 const FONCTIONS = { eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };

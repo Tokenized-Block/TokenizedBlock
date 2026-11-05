@@ -636,7 +636,7 @@ function suite(T, bavard = false, seul = null) {
   });
   /* game172 : Euler — reference INDEPENDANTE : les faces cherchees par FORCE BRUTE sur tous les triplets de sommets (pas seulement deux aretes
    *   qui se suivent), sur les sommets PUBLIES ; chaque point dessine sur une arete (paire a la distance minimale) ; valeurs de Grok Bot
-   *   (prisme 6/9/5, antiprisme 8/16/10, cuboctaedre 12/24/14, icosaedre tronque 60/90/32) ; rhombicuboctaedre 24/48/26 (Grok : Wikipedia « Rhombicuboctahedron » + Maeder n. 10) */
+   *   (prisme 6/9/5, antiprisme 8/16/10, cuboctaedre 12/24/14, icosaedre tronque 60/90/32) ; rhombicuboctaedre 24/48/26 (Grok : Wikipedia « Rhombicuboctahedron » + Maeder n. 10) ; adouci 60/150/92 (Grok : Wikipedia + MathWorld) */
   const eulRef = (pts) => { const V = pts.length, d = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); let m = Infinity; for (let i = 0; i < V; i++) for (let j = i + 1; j < V; j++) m = Math.min(m, d(pts[i], pts[j]));
     let E = 0; for (let i = 0; i < V; i++) for (let j = i + 1; j < V; j++) if (Math.abs(d(pts[i], pts[j]) - m) < 1e-7 * m) E++;
     const plans = []; for (let i = 0; i < V; i++) for (let j = i + 1; j < V; j++) for (let k = j + 1; k < V; k++) {
@@ -644,9 +644,9 @@ function suite(T, bavard = false, seul = null) {
       const nn = n.map((x) => x / l), c = nn[0] * pts[i][0] + nn[1] * pts[i][1] + nn[2] * pts[i][2]; let pos = 0, neg = 0; for (const p of pts) { const s = nn[0] * p[0] + nn[1] * p[1] + nn[2] * p[2] - c; if (s > 1e-7) pos++; else if (s < -1e-7) neg++; }
       if (pos && neg) continue; const sg = pos ? -1 : 1, key = nn.map((x) => x * sg); if (!plans.some((q) => Math.hypot(q[0] - key[0], q[1] - key[1], q[2] - key[2]) < 1e-6)) plans.push(key); }
     return { V, E, F: plans.length }; };
-  for (const p of [0, 1, 2, 3, 4].map((s) => ({ solide: s }))) ok(`eulerSolides ${JSON.stringify(p)} : V, E, F relus par force brute, valeurs de Grok, 2E = coins des faces, temoin du tore`, () => {
+  for (const p of [0, 1, 2, 3, 4, 5].map((s) => ({ solide: s }))) ok(`eulerSolides ${JSON.stringify(p)} : V, E, F relus par force brute, valeurs de Grok, 2E = coins des faces, temoin du tore`, () => {
     const R = S('eulerSolides', p), I = R.invariants, b = R.brut, pts = []; for (let q = 0; q < R.n; q++) pts.push([b[3 * q], b[3 * q + 1], b[3 * q + 2]]);
-    const att = [[6, 9, 5], [8, 16, 10], [12, 24, 14], [60, 90, 32], [24, 48, 26]][p.solide];
+    const att = [[6, 9, 5], [8, 16, 10], [12, 24, 14], [60, 90, 32], [24, 48, 26], [60, 150, 92]][p.solide];
     assert.ok(I.euler.mesure === 2 && I.euler.formule === 2 && [I.euler.sommets, I.euler.aretes, I.euler.faces].join() === att.join() && I.poignees.mesure === 0 && I.temoin.mesure === 0, JSON.stringify(I));
     const som = JSON.parse(I.euler.points), ref = eulRef(som);
     /* chaque point dessine sur un segment entre deux sommets a la distance minimale */
@@ -833,6 +833,7 @@ const MUTANTS = [
   ['saw : sous-multiplicativite inversee', 'if (c[m + k] > c[m] * c[k]) violations++;', 'if (c[m + k] < c[m] * c[k]) violations++;'],
   ['saw : temoin 4^k', 'if (4 * 3 ** (k - 1) !== c[k]) premier = k;', 'if (4 ** k !== c[k]) premier = k;'],
   ['saw : marche dessinee = la premiere', 'cible = Math.floor(rng() * total)', 'cible = 0 * Math.floor(rng() * total)'],
+  ['euler : adouci, xi racine de xi^3 + 2 xi^2 = phi', 'x -= (x ** 3 + 2 * x ** 2 - EUL_PHI ** 2) / (3 * x * x + 4 * x);', 'x -= (x ** 3 + 2 * x ** 2 - EUL_PHI) / (3 * x * x + 4 * x);'],
   ['euler : aretes = paires a 1.5 fois le minimum', 'if (Math.abs(eulDist(P[i], P[j]) - m) < 1e-9 * m) { aretes.push', 'if (eulDist(P[i], P[j]) < 1.5 * m) { aretes.push'],
   ['euler : plans non dedoublonnes', 'if (!plans.some((q) => eulDist(q, cle) < 1e-9)) { plans.push(cle); sommetsFaces += sur; }', '{ plans.push(cle); sommetsFaces += sur; }'],
   ['euler : cuboctaedre en (1,1,1)', 'if (k === 2) return eulUniq(eulPerms([1, 1, 0]).flatMap(eulSignes));', 'if (k === 2) return eulUniq(eulPerms([1, 1, 1]).flatMap(eulSignes));'],
