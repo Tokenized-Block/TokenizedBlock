@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game159 (idee : codex Grok Bot) */
+  aztecDiamond: {
+    titre: 'The Aztec diamond (a random tiling and its arctic circle)',
+    enUnePhrase: 'A diamond tiled by dominoes, chosen uniformly at random among all its tilings: the corners freeze, the middle stays wild.',
+    colonnes: ['across', 'up', 'arrow of the domino (N, S, E, W)'],
+    aRegarder: ['Each corner is one solid colour: there the dominoes all line up like bricks.', 'The wild middle is round: its edge hugs a circle of radius n/sqrt 2.', 'Change the seed: the inside changes completely, the circle stays.'],
+    fin: null,
+  },
   /* game158 (idee : codex Grok Bot) */
   ising: {
     titre: 'The Ising model (tiny magnets that like to agree)',

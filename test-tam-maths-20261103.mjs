@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -338,6 +338,21 @@ function suite(T, bavard = false) {
   });
   ok('ising : valeurs de controle de Grok Bot (tore 4 x 4, beta = 0.4 : Z = 2107668.7226362286)', () => { const I = S('ising', { beta: 0.4 }).invariants; assert.ok(Math.abs(I.partition.mesure - 2107668.7226362286) / 2107668.7226362286 < 1e-12, I.partition.mesure); return String(I.partition.mesure); });
   ok('ising : etalonnage sur 12 graines a beta = 0.44 (ecart-type des z dans [0.4, 1.8])', () => { const zs = []; for (let g = 1; g <= 12; g++) zs.push(z(S('ising', { beta: 0.44, graine: g }).invariants.energie)); const m = zs.reduce((a, x) => a + x, 0) / zs.length, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / (zs.length - 1)); assert.ok(sd >= 0.4 && sd <= 1.8 && Math.abs(m) < 1.5, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
+  /* game159 : diamant azteque — references INDEPENDANTES : 2^(k(k+1)/2) ; le pavage DESSINE reconstruit en cases (chaque case du diamant
+   *   couverte exactement une fois) ; khi-deux et case du centre en z ; valeurs de Grok Bot (AD(4) = 1024 ; centre 1/2) */
+  for (const p of [...extremes(sys('aztecDiamond')), { ordre: 20, graine: 7 }]) ok(`aztecDiamond ${JSON.stringify(p)} : pavage valide, petits diamants comptes, uniformite, centre, arctique`, () => {
+    const R = S('aztecDiamond', p), I = R.invariants, b = R.brut, n = R.params.ordre;
+    assert.ok(I.pavageValide.mesure === 0 && I.pavageValide.dominos === n * (n + 1), 'valide ' + JSON.stringify(I.pavageValide));
+    assert.equal(I.petitsDiamants.mesure, '2 8 64 1024'); assert.equal(I.petitsDiamants.formule, [1, 2, 3, 4].map((k) => Math.pow(2, k * (k + 1) / 2)).join(' '));
+    assert.ok(Math.abs(z(I.uniformite)) < 5 && Math.abs(z(I.caseCentre)) < 5 && Math.abs(I.caseCentre.formule - 0.5) < 1e-15, 'stats ' + z(I.uniformite) + ' ' + z(I.caseCentre) + ' ' + I.caseCentre.formule);
+    assert.ok(Math.abs(I.arctique.rayon - n / Math.SQRT2) < 1e-12, 'rayon');
+    /* le cercle arctique est une LIMITE : exige seulement des l ordre 12 (mesure 2026-11-05 : 1.000 dehors, ~0.4 dedans a n = 20..60) */
+    if (n >= 12) assert.ok(I.arctique.mesure >= 0.99 && I.arctique.dedans < 0.6, 'arctique ' + JSON.stringify(I.arctique));
+    let dehors = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = Math.floor(b[o] - 1e-9), y = Math.floor(b[o + 1] - 1e-9); if (Math.abs(x + 0.5) + Math.abs(y + 0.5) > n) dehors++; if (![0, 1, 2, 3].includes(b[o + 2])) dehors++; }
+    assert.equal(dehors, 0);
+    return 'n = ' + n + ' : geles dehors ' + (I.arctique.mesure === null ? '-' : I.arctique.mesure.toFixed(3)) + ', khi2 ' + I.uniformite.mesure.toFixed(1) + ', centre ' + I.caseCentre.mesure.toFixed(3);
+  });
+  ok('aztecDiamond : valeurs de controle de Grok Bot (AD(1..4) = 2 8 64 1024 ; ordre 4, case du centre couchee 1/2 exactement)', () => { const I = S('aztecDiamond', {}).invariants; assert.ok(I.petitsDiamants.mesure === '2 8 64 1024' && I.caseCentre.formule === 0.5); return 'ok'; });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -449,6 +464,12 @@ const MUTANTS = [
   ['ising : aimantation signee', 'ZM += Math.abs(M) / N * w;', 'ZM += M / N * w;'],
   ['ising : beta_c avec sqrt 3', 'const betaC = lnD(1 + Math.sqrt(2)) / 2;', 'const betaC = lnD(1 + Math.sqrt(3)) / 2;'],
   ['ising : un seul lot (sigma faux)', 'for (let b = 0; b < 20; b++) { let sE = 0', 'for (let b = 0; b < 2; b++) { let sE = 0'],
+  ['azteque : convention de couleur inverse', 'const c = (d.x + d.y + k + 1) & 1;', 'const c = (d.x + d.y + k) & 1;'],
+  ['azteque : destruction oubliee (N contre S)', 'if (j !== undefined && fl[j] === 1) mort[i] = mort[j] = 1;', 'if (j !== undefined && fl[j] === 1 && false) mort[i] = mort[j] = 1;'],
+  ['azteque : creation biaisee (70 % couches)', 'if (rng() < 0.5) nouv.push({ x, y, h: 1 }', 'if (rng() < 0.7) nouv.push({ x, y, h: 1 }'],
+  ['azteque : formule 2^(k^2/2)', 'formules = [1, 2, 3, 4].map((k) => 2 ** (k * (k + 1) / 2))', 'formules = [1, 2, 3, 4].map((k) => 2 ** (k * k / 2))'],
+  ['azteque : rayon n/2', 'const R = N / Math.SQRT2;', 'const R = N / 2;'],
+  ['azteque : dessin decale', 'brut[o] = q.x + 0.5 + (q.h ? u : 0);', 'brut[o] = q.x + 1.5 + (q.h ? u : 0);'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

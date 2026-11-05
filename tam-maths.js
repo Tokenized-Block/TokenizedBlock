@@ -608,7 +608,69 @@ function ising(P, n) {
     partition: { mesure: ex.Z, betaCritique: betaC, note: 'exact partition function Z of the 4 x 4 torus at this beta ; beta_c = ln(1 + sqrt 2)/2 is the LIMIT of an endless grid (Onsager), shown, not compared' } } };
 }
 
+// ---------- 17 : le diamant azteque et son cercle arctique (idee, algorithme et valeurs : codex Grok Bot 2026-11-05) ----------
+// Le diamant azteque d ordre n : les cases (x, y) avec |x + 1/2| + |y + 1/2| <= n, pavees par des dominos. Un pavage tire UNIFORMEMENT par
+//   le « domino shuffling » (Elkies, Kuperberg, Larsen, Propp 1992 ; enonce lu par Grok dans Jockusch, Propp, Shor, arXiv:math/9801068) :
+//   d un ordre au suivant, chaque domino a une fleche (N, S, E, O) donnee par la couleur de sa case ; les paires qui se font face sont
+//   detruites, les autres glissent d une case, et les trous 2 x 2 recoivent deux dominos couches ou deux debout, a pile ou face.
+// Exact : AD(k) = 2^(k(k+1)/2) pavages (EKLP) ; ici COMPTES par retour arriere pour k = 1..4 (2, 8, 64, 1024). Pour l ordre 4, la
+//   probabilite exacte qu une case du centre soit couverte par un domino couche est comptee sur les 1024 pavages (1/2, valeur de Grok).
+// Mesure : uniformite du tirage (8000 tirages de l ordre 2, khi-deux a 7 degres de liberte) ; frequence de la case du centre a l ordre 4
+//   sur 4000 tirages ; part des dominos « geles » (fleche vers le coin de leur region) hors du cercle de rayon n/sqrt 2 et dedans.
+// LIMITE (Jockusch, Propp, Shor, theoreme 1, lu par Grok) : quand n grandit, la frontiere du desordre tend vers le cercle inscrit de
+//   rayon n/sqrt 2 ; mesuree ici en taille finie, pas une egalite.
+// Dessin (vue de face) : un pavage de l ordre n (curseur), chaque domino trace selon sa fleche (etiquette 0 N, 1 S, 2 E, 3 O).
+const AZ_DANS = (x, y, k) => Math.abs(x + 0.5) + Math.abs(y + 0.5) <= k;
+const azFleche = (d, k) => { const c = (d.x + d.y + k + 1) & 1; return d.h ? (c ? 0 : 1) : (c ? 2 : 3); };
+function azShuffle(n, rng) {
+  let doms = [];
+  for (let k = 1; k <= n; k++) {
+    const fl = doms.map((d) => azFleche(d, k - 1)), cle = new Map(); doms.forEach((d, i) => cle.set(d.x + ',' + d.y + ',' + d.h, i));
+    const mort = new Uint8Array(doms.length);
+    doms.forEach((d, i) => { if (mort[i]) return;
+      if (fl[i] === 0) { const j = cle.get(d.x + ',' + (d.y + 1) + ',1'); if (j !== undefined && fl[j] === 1) mort[i] = mort[j] = 1; }
+      if (fl[i] === 2) { const j = cle.get((d.x + 1) + ',' + d.y + ',0'); if (j !== undefined && fl[j] === 3) mort[i] = mort[j] = 1; } });
+    const nouv = []; doms.forEach((d, i) => { if (mort[i]) return; const v = fl[i]; nouv.push({ x: d.x + (v === 2) - (v === 3), y: d.y + (v === 0) - (v === 1), h: d.h }); });
+    const occ = new Set(); for (const d of nouv) { occ.add(d.x + ',' + d.y); occ.add(d.h ? (d.x + 1) + ',' + d.y : d.x + ',' + (d.y + 1)); }
+    for (let y = -k; y < k; y++) for (let x = -k; x < k; x++) { if (!AZ_DANS(x, y, k) || occ.has(x + ',' + y)) continue;
+      if (rng() < 0.5) nouv.push({ x, y, h: 1 }, { x, y: y + 1, h: 1 }); else nouv.push({ x, y, h: 0 }, { x: x + 1, y, h: 0 });
+      for (const [a, b] of [[x, y], [x + 1, y], [x, y + 1], [x + 1, y + 1]]) occ.add(a + ',' + b); }
+    doms = nouv;
+  }
+  return doms;
+}
+function azDefauts(doms, n) { const occ = new Set(); let mal = 0; for (const d of doms) for (const [a, b] of [[d.x, d.y], d.h ? [d.x + 1, d.y] : [d.x, d.y + 1]]) { const k = a + ',' + b; if (!AZ_DANS(a, b, n) || occ.has(k)) mal++; occ.add(k); } return mal + Math.abs(occ.size - 2 * n * (n + 1)); }
+function azEnumerer(k, surCentre) { const cases = []; for (let y = -k; y < k; y++) for (let x = -k; x < k; x++) if (AZ_DANS(x, y, k)) cases.push([x, y]);
+  const pris = new Set(); let tot = 0, couche = 0, centreCouche = false;
+  const rec = (i) => { while (i < cases.length && pris.has(cases[i][0] + ',' + cases[i][1])) i++; if (i === cases.length) { tot++; if (centreCouche) couche++; return; }
+    const [x, y] = cases[i], c0 = x + ',' + y;
+    for (const [a, b, h] of [[x + 1, y, 1], [x, y + 1, 0]]) { const c1 = a + ',' + b; if (!AZ_DANS(a, b, k) || pris.has(c1)) continue;
+      const garde = centreCouche; if (surCentre && h === 1 && ((x === 0 && y === 0) || (a === 0 && b === 0))) centreCouche = true;
+      pris.add(c0); pris.add(c1); rec(i + 1); pris.delete(c0); pris.delete(c1); centreCouche = garde; } };
+  rec(0); return { tot, couche }; }
+function aztecDiamond(P, n) {
+  const N = P.ordre, rng = mulberry32(P.graine), doms = azShuffle(N, rng), defauts = azDefauts(doms, N);
+  const exC = azEnumerer(4, true), pC = exC.couche / exC.tot, petits = [...[1, 2, 3].map((k) => azEnumerer(k, false).tot), exC.tot], /* ordre 4 enumere UNE fois (MESURE : 362 ms -> voir banc) */ formules = [1, 2, 3, 4].map((k) => 2 ** (k * (k + 1) / 2));
+  const freq = new Map(), T = 4000; /* MESURE : 8000 + 4000 tirages = 240 ms ; moitie */ for (let t = 0; t < T; t++) { const k = azShuffle(2, rng).map((q) => q.x + ',' + q.y + ',' + q.h).sort().join(';'); freq.set(k, (freq.get(k) || 0) + 1); }
+  const att = T / 8; let khi2 = (8 - freq.size) * att; for (const v of freq.values()) khi2 += (v - att) ** 2 / att;
+  let mesC = 0; const TC = 2000;
+  for (let t = 0; t < TC; t++) if (azShuffle(4, rng).some((q) => q.h === 1 && q.y === 0 && (q.x === 0 || q.x === -1))) mesC++;
+  const R = N / Math.SQRT2; let out = 0, outG = 0, ins = 0, insG = 0;
+  for (const q of doms) { const cx = q.x + (q.h ? 1 : 0.5), cy = q.y + (q.h ? 0.5 : 1), r = Math.sqrt(cx * cx + cy * cy), f = azFleche(q, N), pole = Math.abs(cy) > Math.abs(cx) ? (cy > 0 ? 0 : 1) : (cx > 0 ? 2 : 3);
+    if (r > 1.1 * R) { out++; if (f === pole) outG++; } else if (r < 0.9 * R) { ins++; if (f === pole) insG++; } }
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const q = doms[Math.floor(l * doms.length / n)], u = (l * doms.length / n) % 1, o = 3 * l;
+    brut[o] = q.x + 0.5 + (q.h ? u : 0); brut[o + 1] = q.y + 0.5 + (q.h ? 0 : u); brut[o + 2] = azFleche(q, N); }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (cases)', invariants: {
+    pavageValide: { mesure: defauts, formule: 0, dominos: doms.length, note: 'cells covered zero or twice, or outside the diamond, in the tiling drawn (n (n + 1) dominoes expected)' },
+    petitsDiamants: { mesure: petits.join(' '), formule: formules.join(' '), note: 'tilings of the diamonds of order 1 to 4 COUNTED by backtracking, against 2^(k (k + 1)/2) (Elkies, Kuperberg, Larsen, Propp)' },
+    uniformite: { mesure: khi2, formule: 7, sigma: Math.sqrt(14), tirages: T, note: 'chi-square of 4000 shuffled tilings of order 2 over its 8 tilings (7 degrees of freedom : mean 7, spread sqrt 14)' },
+    caseCentre: { mesure: mesC / TC, formule: pC, sigma: Math.sqrt(pC * (1 - pC) / TC), note: 'order 4 : share of shuffled tilings where the centre cell is covered by a lying domino, against its exact probability counted over the 1024 tilings' },
+    arctique: { mesure: out ? outG / out : null, dedans: ins ? insG / ins : null, rayon: R, note: 'share of FROZEN dominoes (arrow towards their own corner) outside 1.1 n/sqrt 2, and inside 0.9 n/sqrt 2 ; the arctic circle n/sqrt 2 is a LIMIT for large n' } } };
+}
+
 export const COLONNES = Object.freeze({
+  aztecDiamond: { colonnes: ['x (cells)', 'y (cells)', 'arrow of the domino (label; 0 N, 1 S, 2 E, 3 W)'], memeLongueur: [[0, 1]], autres: [2] },
   ising: { colonnes: ['x (spin)', 'y (spin)', 'spin (label; +1 or -1)'], memeLongueur: [[0, 1]], autres: [2] },
   dominosKasteleyn: { colonnes: ['x (cells)', 'y (cells)', 'domino (label; 0 = lying, 1 = standing, 2 = cannot be tiled)'], memeLongueur: [[0, 1]], autres: [2] },
   papillonHofstadter: { colonnes: ['flux alpha = p/q', 'energy E', 'denominator q (label)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -676,9 +738,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'ising', nom: 'The Ising model (magnets that agree)', science: 'Statistical physics', D: 3, nuage: true, params: { beta: 0.4, graine: 1 },
     bornes: { beta: [0.1, 0.8], graine: [1, 1000000] },
     phrase: 'A visualisation of the Ising model: tiny magnets on a grid, each preferring to point like its neighbours, at an inverse temperature beta. The picture is a large grid simulated by the Metropolis rule. On a small 4 x 4 torus every one of the 65 536 states is counted exactly, and the simulated mean bond sum (minus the energy) and magnetisation match those exact values within their error bars. The sharp transition of an endless grid, at beta = ln(1 + sqrt 2)/2, is shown as a limit only.' },
+  { id: 'aztecDiamond', nom: 'The Aztec diamond and its arctic circle', science: 'Combinatorics', D: 3, nuage: true, params: { ordre: 36, graine: 1 },
+    bornes: { ordre: [4, 60], graine: [1, 1000000] },
+    phrase: 'A visualisation of a random domino tiling of the Aztec diamond, drawn uniformly by domino shuffling. Near the four corners the dominoes freeze into brick walls; inside a circle they mix freely. The count of tilings, 2^(n(n+1)/2), is checked on small diamonds, the shuffling is tested for uniformity, and the frozen corners are measured against the arctic circle of radius n/sqrt 2, which is a limit for large diamonds.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'] };
-const FONCTIONS = { ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'] };
+const FONCTIONS = { aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

@@ -75,6 +75,8 @@ THEMES.maths.push('papillonHofstadter');
 THEMES.maths.push('dominosKasteleyn');
 /* game158 : le modele d Ising (idee : codex Grok Bot) */
 THEMES.maths.push('ising');
+/* game159 : le diamant azteque (idee : codex Grok Bot) */
+THEMES.maths.push('aztecDiamond');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1143,6 +1145,8 @@ export function monter(racine, ctx = {}) {
     'dominosKasteleyn',
     /* game158 */
     'ising',
+    /* game159 */
+    'aztecDiamond',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

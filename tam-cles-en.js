@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game159 */
+  dominos: 'dominoes', rayon: 'arctic radius n/sqrt 2',
   /* game158 */
   betaCritique: 'beta_c of an endless grid (Onsager, a limit)',
   /* game155 */
@@ -427,6 +429,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game159 */
+  pavageValide: 'Cells covered wrongly in the tiling drawn', petitsDiamants: 'Tilings counted (orders 1-4) vs 2^(k(k+1)/2)', uniformite: 'Chi-square of shuffled tilings (order 2)', caseCentre: 'Centre cell lying, shuffles vs exact (order 4)', arctique: 'Frozen dominoes outside the arctic circle',
   /* game158 */
   aimantationAbs: 'Mean |magnetisation|, Metropolis vs exact enumeration', partition: 'Exact partition function Z (4 x 4 torus)',
   /* game157 */
