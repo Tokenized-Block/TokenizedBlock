@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game154 (idee : codex Grok Bot) */
+  causticTasse: {
+    titre: 'The bright curve in a cup (a caustic)',
+    enUnePhrase: 'Sunlight reflected inside a round cup crowds along one bright curve: here each pair of neighbouring rays is crossed to find it.',
+    colonnes: ['across', 'up', 'what (0 = bright line found, 1 = the cup, 2 = reflected rays)'],
+    aRegarder: ['The curve has a sharp point exactly halfway between the centre and the wall.', 'Follow a reflected ray: it touches the bright curve once, then carries on; the curve is where the rays crowd.', 'Add rays: the crossings settle on the nephroid, the curve Huygens described in 1690.'],
+    fin: null,
+  },
   /* game153 (idee : codex Grok Bot) */
   fermatSteiner: {
     titre: 'The shortest roads between four towns (Steiner tree)',

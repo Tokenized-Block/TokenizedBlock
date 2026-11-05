@@ -446,7 +446,42 @@ function fermatSteiner(P, n) {
     plusLongs: { autreForme: autre.long, arbreSansCarrefour: 2 * Math.min(L, 1) + Math.max(L, 1), croix: 2 * Math.sqrt(1 + L * L), note: 'witnesses, all longer : the other shape, the shortest network without crossroads, the cross of the diagonals' } } };
 }
 
+// ---------- 13 : la caustique de la tasse (idee : codex Grok Bot 2026-11-05) ----------
+// Des rayons paralleles (le Soleil) entrent dans une tasse ronde de rayon R = 1 et se reflechissent sur sa paroi. La ligne brillante au fond
+//   de la tasse est l ENVELOPPE des rayons reflechis. Mesure : N rayons (curseur), chaque rayon reflechi est coupe par son voisin ; le point
+//   de croisement est un point de la caustique (aucune formule de la courbe n est utilisee pour le trouver).
+// Exact (derive ici) : le rayon qui touche la paroi en P = (cos t, sin t) repart dans la direction d = (-cos 2t, -sin 2t) (miroir : i - 2 (i.n) n).
+//   L enveloppe de la famille P + s d est atteinte pour s = cos(t)/2, soit le point ((3 cos t - cos 3t)/4, (3 sin t - sin 3t)/4) : la
+//   NEPHROIDE de parametre R/4 (Huygens ; Lockwood, A Book of Curves, ch. 7 — references du codex de Grok). Sa pointe est a R/2 du centre,
+//   et la demi-nephroide dessinee dans la tasse (t de -90 a 90 degres) mesure 3R.
+//   Erreurs du croisement de deux voisins (mesurees le 2026-11-05 a N = 200, 2000, 20000) : point a 3.7/N^2 de la courbe, pointe a 0.62/N^2,
+//   longueur de la ligne brisee 3R - 9.4/N (toujours plus courte : cordes inscrites, extremites coupees).
+// Temoin : un miroir rond n est PAS une parabole : le rayon entre a 60 degres recoupe l axe en x = R/(2 cos t) = R, pas en R/2.
+// Dessin (vue de face) : la caustique trouvee (etiquette 0), la paroi de la tasse (1), quelques rayons reflechis (2).
+function causticTasse(P, n) {
+  const N = P.rayons, R = 1, ray = (t) => ({ P: [R * cosD(t), R * sinD(t)], d: [-cosD(2 * t), -sinD(2 * t)] });
+  const croise = (r1, r2) => { const det = r1.d[0] * -r2.d[1] - r1.d[1] * -r2.d[0]; if (Math.abs(det) < 1e-300) return null; const dx = r2.P[0] - r1.P[0], dy = r2.P[1] - r1.P[1], s = (dx * -r2.d[1] - dy * -r2.d[0]) / det; return [r1.P[0] + s * r1.d[0], r1.P[1] + s * r1.d[1]]; };
+  const pts = []; let pire = 0, pointe = Infinity, long = 0;
+  for (let k = 0; k + 1 < N; k++) { const a = -PI / 2 + PI * (k + 0.5) / N, b = a + PI / N, X = croise(ray(a), ray(b)); if (!X) continue;
+    const m = (a + b) / 2, ex = [R * (3 * cosD(m) - cosD(3 * m)) / 4, R * (3 * sinD(m) - sinD(3 * m)) / 4];
+    pire = Math.max(pire, Math.sqrt((X[0] - ex[0]) ** 2 + (X[1] - ex[1]) ** 2)); pointe = Math.min(pointe, Math.sqrt((X[0] - R / 2) ** 2 + X[1] ** 2));
+    if (pts.length) { const q = pts[pts.length - 1]; long += Math.sqrt((X[0] - q[0]) ** 2 + (X[1] - q[1]) ** 2); } pts.push(X); }
+  /* temoin : le rayon entre a 60 degres recoupe l axe y = 0 */
+  const r60 = ray(PI / 3), s60 = -r60.P[1] / r60.d[1], x60 = r60.P[0] + s60 * r60.d[0];
+  const brut = new Float64Array(n * 3), nC = Math.floor(n * 0.5), nP = Math.floor(n * 0.2), nR = n - nC - nP, RAYONS_DESSINES = Math.max(6, Math.round(N / 25)); /* banc game154 : 12 rayons fixes, le curseur ne changeait presque pas le dessin (les croisements restent sur la meme courbe) */
+  for (let l = 0; l < nC; l++) { const X = pts[Math.floor(l * pts.length / nC)], o = 3 * l; brut[o] = X[0]; brut[o + 1] = X[1]; brut[o + 2] = 0; }
+  for (let l = 0; l < nP; l++) { const t = 2 * PI * l / nP, o = 3 * (nC + l); brut[o] = R * cosD(t); brut[o + 1] = R * sinD(t); brut[o + 2] = 1; }
+  for (let l = 0; l < nR; l++) { const j = Math.floor(l * RAYONS_DESSINES / nR), u = (l - Math.ceil(j * nR / RAYONS_DESSINES)) / Math.max(1, Math.ceil(nR / RAYONS_DESSINES)), t = -PI / 2 + PI * (j + 0.5) / RAYONS_DESSINES, r = ray(t), corde = 2 * R * cosD(t), o = 3 * (nC + nP + l);
+    brut[o] = r.P[0] + Math.max(0, Math.min(1, u)) * corde * r.d[0]; brut[o + 1] = r.P[1] + Math.max(0, Math.min(1, u)) * corde * r.d[1]; brut[o + 2] = 2; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (tasse de rayon 1)', invariants: {
+    nephroide: { mesure: pire, formule: 0, points: pts.length, note: 'largest distance between the crossing of two neighbouring reflected rays and the nephroid ((3 cos t - cos 3t)/4, (3 sin t - sin 3t)/4) ; shrinks as 1/N^2' },
+    pointe: { mesure: pointe, formule: 0, note: 'distance of the closest crossing to the point R/2 on the axis, where the nephroid has its cusp' },
+    longueur: { mesure: long, formule: 3 * R, note: 'length of the bright line found (chords between crossings) against 3R for half a nephroid ; always a little shorter' },
+    temoin60: { mesure: x60, formule: R, note: 'witness: a round mirror is not a parabola : the ray entering 60 degrees from the axis crosses it at R/(2 cos 60) = R, not at R/2' } } };
+}
+
 export const COLONNES = Object.freeze({
+  causticTasse: { colonnes: ['x', 'y', 'what (label; 0 = the bright line found, 1 = the cup, 2 = reflected rays)'], memeLongueur: [[0, 1]], autres: [2] },
   fermatSteiner: { colonnes: ['x', 'y', 'network (label; 0 = shortest, 1 = the other shape)'], memeLongueur: [[0, 1]], autres: [2] },
   cerclesFord: { colonnes: ['x (the fraction p/q on the line)', 'y (height above the line)', 'denominator q (label)'], memeLongueur: [[0, 1]], autres: [2] },
   vergerEuclide: { colonnes: ['a (trees across)', 'b (trees up)', 'row max(a, b) (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -498,9 +533,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'fermatSteiner', nom: 'The shortest roads between four towns (Steiner)', science: 'Geometry', D: 3, nuage: true, params: { largeur: 1.3 },
     bornes: { largeur: [0.6, 1.7] },
     phrase: 'A visualisation of the Steiner problem: join the four corners of a rectangle with the shortest possible roads, allowing two extra crossroads. The crossroads are found by moving each to the point that is nearest in total to its three neighbours. Every crossroad ends with three roads at exactly 120 degrees, and the total matches min(L + sqrt 3, 1 + sqrt(3) L): 1 + sqrt 3 for a square, shorter than both the cross of the diagonals and any network without crossroads.' },
+  { id: 'causticTasse', nom: 'The bright curve in a cup of coffee (caustic)', science: 'Optics', D: 3, nuage: true, params: { rayons: 600 },
+    bornes: { rayons: [100, 3000] },
+    phrase: 'A visualisation of the caustic in a cup: parallel sunlight reflected by the round wall piles up along a bright curve. Each pair of neighbouring reflected rays is crossed, and the crossings land on the nephroid ((3 cos t - cos 3t)/4, (3 sin t - sin 3t)/4), with its sharp point at half the radius. The gap shrinks as one over the number of rays squared, and is shown.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [] };
-const FONCTIONS = { fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'] };
+const FONCTIONS = { causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

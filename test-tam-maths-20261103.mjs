@@ -1,5 +1,6 @@
 // test-tam-maths-20261103.mjs -- banc de tam-maths.js (mathematiques du hasard et des nombres, vue non frappable) + mutants sur COPIES.
 // Lancer : node test-tam-maths-20261103.mjs
+// serie-delai-s: 900 — MESURE 2026-11-05 : 294 s SEUL (13 systemes, 66 mutants rejouant toute la suite), DELAI 300 s sous la charge d une serie a 3.
 // Le banc a le droit a Math.exp/log/sin/cos : ses references sont calculees independamment du module :
 //   marche : E[r^2] et E[r^4] par ENUMERATION des 4^n chemins (n = 1..7) ; Buffon : 2 l / pi par quadrature de Simpson de (l/pi) sin ;
 //   anniversaires : le produit par exp(sum ln) ; Ulam : pi(N) par DIVISION D ESSAI, Li(N) en u = ln t (200 000 points), la spirale
@@ -14,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -247,6 +248,20 @@ function suite(T, bavard = false) {
   ok('fermatSteiner : 120 degres en degres (Math.acos) au carrefour exact du pont horizontal', () => { const r3 = Math.sqrt(3), Sx = 1 / (2 * r3), A = [0, 0], D = [0, 1], T = [1.5 - Sx, 0.5], Sp = [Sx, 0.5];
     const ang = (Q, u, v) => Math.acos(((u[0] - Q[0]) * (v[0] - Q[0]) + (u[1] - Q[1]) * (v[1] - Q[1])) / (Math.hypot(u[0] - Q[0], u[1] - Q[1]) * Math.hypot(v[0] - Q[0], v[1] - Q[1]))) * 180 / Math.PI;
     const a = [ang(Sp, A, D), ang(Sp, A, T), ang(Sp, D, T)]; assert.ok(a.every((x) => Math.abs(x - 120) < 1e-9), a.join(' ')); return a.map((x) => x.toFixed(9)).join(' '); });
+  /* game154 : caustique — references INDEPENDANTES : la nephroide recalculee ici (Math.cos/sin), la distance de CHAQUE point dessine
+   *   (etiquette 0) a la courbe par recherche fine sur t ; bornes 4/N^2, 1/N^2, 10/N (constantes MESUREES 3.7, 0.62, 9.4, ecrites dans le module) */
+  const nephro = (t) => [(3 * Math.cos(t) - Math.cos(3 * t)) / 4, (3 * Math.sin(t) - Math.sin(3 * t)) / 4];
+  for (const p of [...extremes(sys('causticTasse')), { rayons: 1000 }]) ok(`causticTasse ${JSON.stringify(p)} : croisements sur la nephroide, pointe a R/2, longueur 3R, temoin 60 degres`, () => {
+    const R = S('causticTasse', p), I = R.invariants, b = R.brut, N = R.params.rayons;
+    assert.ok(I.nephroide.mesure < 4 / N ** 2 && I.nephroide.points === N - 1, 'nephroide ' + I.nephroide.mesure + ' points ' + I.nephroide.points);
+    assert.ok(I.pointe.mesure < 1 / N ** 2, 'pointe ' + I.pointe.mesure);
+    assert.ok(I.longueur.formule === 3 && I.longueur.mesure < 3 && 3 - I.longueur.mesure < 10 / N, 'longueur ' + I.longueur.mesure);
+    assert.ok(Math.abs(I.temoin60.mesure - 1) < 1e-12 && I.temoin60.formule === 1, 'temoin ' + I.temoin60.mesure);
+    let pire = 0, paroi = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q; if (b[o + 2] === 0) { let m = Infinity; for (let k = 0; k <= 4000; k++) { const e = nephro(-Math.PI / 2 + Math.PI * k / 4000); m = Math.min(m, Math.hypot(b[o] - e[0], b[o + 1] - e[1])); } pire = Math.max(pire, m); } if (b[o + 2] === 1) paroi = Math.max(paroi, Math.abs(Math.hypot(b[o], b[o + 1]) - 1)); }
+    assert.ok(pire < 1e-3 && paroi < 1e-12, 'dessin ' + pire + ' paroi ' + paroi);
+    return 'N = ' + N + ' : ecart ' + I.nephroide.mesure.toExponential(1) + ', pointe ' + I.pointe.mesure.toExponential(1) + ', longueur ' + I.longueur.mesure.toFixed(5);
+  });
+  ok('causticTasse : valeur de controle de Grok Bot (pointe a R/2, nephroide de Huygens)', () => { const I = S('causticTasse', { rayons: 3000 }).invariants; assert.ok(I.pointe.mesure < 1e-6); return 'pointe a ' + I.pointe.mesure.toExponential(1) + ' de R/2'; });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -333,6 +348,13 @@ const MUTANTS = [
   ['steiner : arbre sans carrefour 2 + L partout', 'arbreSansCarrefour: 2 * Math.min(L, 1) + Math.max(L, 1),', 'arbreSansCarrefour: 2 + L,'],
   ['steiner : reseau dessine decale', 'brut[o] = p[0] + u * (q[0] - p[0]);', 'brut[o] = p[0] + u * (q[0] - p[0]) + 0.01;'],
   ['steiner : angle mesure avec cos + 0.4', 'Math.abs(cosA(Q, u, v) + 0.5)', 'Math.abs(cosA(Q, u, v) + 0.4)'],
+  ['caustique : reflexion d = (-cos t, -sin t)', 'd: [-cosD(2 * t), -sinD(2 * t)]', 'd: [-cosD(t), -sinD(t)]'],
+  ['caustique : nephroide avec cos 2t', 'ex = [R * (3 * cosD(m) - cosD(3 * m)) / 4,', 'ex = [R * (3 * cosD(m) - cosD(2 * m)) / 4,'],
+  ['caustique : longueur 2R', 'formule: 3 * R, note', 'formule: 2 * R, note'],
+  ['caustique : pointe cherchee en R/3', 'pointe = Math.min(pointe, Math.sqrt((X[0] - R / 2) ** 2', 'pointe = Math.min(pointe, Math.sqrt((X[0] - R / 3) ** 2'],
+  ['caustique : temoin a 45 degres', 'const r60 = ray(PI / 3),', 'const r60 = ray(PI / 4),'],
+  ['caustique : paroi dessinee 1 % trop grande', 'brut[o] = R * cosD(t); brut[o + 1] = R * sinD(t); brut[o + 2] = 1;', 'brut[o] = 1.01 * R * cosD(t); brut[o + 1] = R * sinD(t); brut[o + 2] = 1;'],
+  ['caustique : croisement de rayons non voisins', 'b = a + PI / N, X = croise(ray(a), ray(b));', 'b = a + 5 * PI / N, X = croise(ray(a), ray(b));'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

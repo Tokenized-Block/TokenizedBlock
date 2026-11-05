@@ -67,6 +67,8 @@ THEMES.maths.push('vergerEuclide');
 THEMES.maths.push('cerclesFord');
 /* game153 : l arbre de Steiner (idee : codex Grok Bot) */
 THEMES.maths.push('fermatSteiner');
+/* game154 : la caustique de la tasse (idee : codex Grok Bot) */
+THEMES.maths.push('causticTasse');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1127,6 +1129,8 @@ export function monter(racine, ctx = {}) {
     'cerclesFord',
     /* game153 */
     'fermatSteiner',
+    /* game154 */
+    'causticTasse',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

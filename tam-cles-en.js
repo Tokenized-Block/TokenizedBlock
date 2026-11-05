@@ -423,6 +423,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game154 */
+  nephroide: 'Bright line found vs the nephroid (largest gap)', pointe: 'Sharp point vs R/2', temoin60: 'Witness: ray at 60 degrees crosses the axis at R',
   /* game153 */
   longueur: 'Shortest network found vs min(L + sqrt 3, 1 + sqrt(3) L)', angles: 'Roads at 120 degrees (largest |cos + 1/2|)', carrefour: 'Crossroad found vs its exact place', plusLongs: 'Witnesses: longer networks',
   /* game152 */
