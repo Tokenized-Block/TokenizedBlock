@@ -168,7 +168,7 @@ async function suite(M) {
     R['S2 hash local != getHash -> arret, aucune signature demandee'] = !r['3a'].ok && !w.journal.some((j) => j.method === 'eth_signTypedData_v4'); }
   /* S3 : SPM pas owner -> spend refuse en simulation, rien envoye */
   { const w = monde({ spmOwner: false }); const r = await jusquA(M, w, 4);
-    R['S3 SPM pas owner -> stop en simulation, un seul envoi (approve)'] = r['3c'].ok && !r[4].ok && /simulation spend/.test(r[4].pourquoi) && envoisDe(w).length === 1 && w.st.solde[U] === 5_000_000n; }
+    R['S3 SPM pas owner -> stop en simulation, un seul envoi (approve)'] = r['3c'].ok && !r[4].ok && /spend simulation/.test(r[4].pourquoi) && envoisDe(w).length === 1 && w.st.solde[U] === 5_000_000n; }
   /* S4-S6 : arrets de l etape 1 */
   { R['S4 delegation 7702 -> arret'] = !(await jusquA(M, monde({ code: '0xef0100' + '56'.repeat(20) }), 1))[1].ok;
     R['S5 code vide -> arret'] = !(await jusquA(M, monde({ code: '0x' }), 1))[1].ok;
@@ -178,15 +178,15 @@ async function suite(M) {
     const r7a = await jusquA(M, monde({ ment: ap }), 3);
     R['S7a approve « 200 » sans effet -> la page relit et refuse'] = !r7a['3c'].ok;
     const r7b = await jusquA(M, monde({ ment: sp }), 4);
-    R['S7b spend « 200 » sans effet -> ECART'] = !r7b[4].ok && /ECART/.test(r7b[4].pourquoi);
+    R['S7b spend « 200 » sans effet -> ECART'] = !r7b[4].ok && /MISMATCH/.test(r7b[4].pourquoi);
     const r7c = await jusquA(M, monde({ ment: rv }), 6);
     R['S7c revoke « 200 » sans effet -> la page relit et refuse'] = !r7c[6].ok; }
   /* S8 : apres revoke, le depassement est refuse pour une AUTRE raison : la page ne doit pas crier victoire */
   { const w = monde(); const r = await jusquA(M, w, 6); const d = await r.e.depasser();
-    R['S8 depasser apres revoke -> Unauthorized, pas « OK depassement »'] = !d.ok && /pas pour depassement/.test(d.pourquoi); }
+    R['S8 depasser apres revoke -> Unauthorized, pas « OK depassement »'] = !d.ok && /not for exceeding the cap/.test(d.pourquoi); }
   /* S10 : le wallet dit 200 sans hash de tx : aucun recu a relire -> l etape ne se declare pas reussie */
   { const r = await jusquA(M, monde({ sansHash: true }), 3);
-    R['S10 statut 200 sans transactionHash -> pas de succes (recu non relu)'] = r['3b'].ok && !r['3c'].ok && /statut 200/.test(r['3c'].pourquoi); }
+    R['S10 statut 200 sans transactionHash -> pas de succes (recu non relu)'] = r['3b'].ok && !r['3c'].ok && /status 200/.test(r['3c'].pourquoi); }
   /* S9 : fonctions pures */
   {
     const p = M.permissionEssai({ universel: U, sousCompte: SUB, maintenant: 1_800_000_000, salt: 3n }).permission;
@@ -208,7 +208,7 @@ async function suite(M) {
     R['S9.8 decoderErreur / donneesRevert'] = M.decoderErreur(M.donneesRevert({ data: ERR.depasse + mot(5) + mot(4) })).nom === 'ExceededSpendPermission'
       && M.decoderErreur(M.donneesRevert({ data: { data: ERR.nonAut } })).nom === 'UnauthorizedSpendPermission'
       && M.decoderErreur(M.donneesRevert({ message: 'reverted with ' + ERR.wallet })).nom.startsWith('Unauthorized (')
-      && M.decoderErreur(null).nom === 'revert sans donnees';
+      && M.decoderErreur(null).nom === 'revert without data';
     R['S9.9 usdcTexte'] = M.usdcTexte(10_000n) === '0.01' && M.usdcTexte(1_000_000n) === '1' && M.usdcTexte(-10_000n) === '-0.01' && M.usdcTexte(990_001n) === '0.990001';
     const j = M.permissionVersJson(p);
     R['S9.10 stockage : aller-retour exact, JSON trafique (allowance x2) refuse'] = JSON.stringify(M.permissionDeJson(j), (k, v) => (typeof v === 'bigint' ? String(v) : v)) === j
@@ -233,7 +233,7 @@ const MUTANTS = [
   ['revoke depuis le sub account', 'return a.ok ? requeteEnvoi(p.account, a) : null;', 'return a.ok ? requeteEnvoi(p.spender, a) : null;'],
   ['hash non compare', 'if (hLocal !== hChaine)', 'if (false)'],
   ['ecart de solde ignore', 'if (!exact) return stop(4', 'if (false) return stop(4'],
-  ['spend sans simulation', "if (!s.ok) return stop(4, 'simulation spend", "if (false) return stop(4, 'simulation spend"],
+  ['spend sans simulation', "if (!s.ok) return stop(4, 'spend simulation", "if (false) return stop(4, 'spend simulation"],
   ['7702 accepte', "if (type === 'DELEGATION_7702') return stop", "if (false) return stop"],
   ['code vide accepte', "if (type === 'VIDE') return stop", "if (false) return stop"],
   ['chaine ignoree', "if (min(ch) !== CHAINE_BASE_HEX) return stop", "if (false) return stop"],

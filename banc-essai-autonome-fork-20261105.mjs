@@ -188,7 +188,7 @@ if (PORT_SERVI) {
 async function scenarios() {
   const rapide = { pause: async () => {}, pasMs: 1, attenteMaxMs: 50, tirerSalt: aleaNonce };
   const journalPage = [];
-  const entrees = (etape) => journalPage.filter((x) => x.etape === etape);
+  const entrees = (etape) => journalPage.filter((x) => x.step === etape);
 
   /* ── PRINCIPAL : etapes 1 a 6 ── */
   const U = await universelNeuf();
@@ -224,7 +224,7 @@ async function scenarios() {
   const attenduSp = E.requeteDepense(p).params[0].calls[0];
   ok(r4.ok && txSp.input === execWallet(attenduSp.to, attenduSp.data) && envSp.from === SUB, '4a spend envoye depuis le sub account avec EXACTEMENT requeteDepense(p)');
   ok(u0 - (await soldeUsdc(U)) === 10_000n && (await soldeUsdc(SUB)) - s0 === 10_000n, '4b soldes relus par le banc : universel -0.01, sub account +0.01 USDC');
-  ok(entrees(4).some((x) => x.quoi === 'simulation OK (eth_call depuis ' + SUB + ')'), '4c la page a simule le spend depuis le sub account avant envoi');
+  ok(entrees(4).some((x) => x.what === 'simulation OK (eth_call from ' + SUB + ')'), '4c la page a simule le spend depuis le sub account avant envoi');
 
   const nEnvois5 = f.journal.filter((j) => j.method === 'wallet_sendCalls').length;
   const r5 = await essai.depasser();
@@ -252,7 +252,7 @@ async function scenarios() {
     const avant = f1.journal.filter((j) => j.method === 'wallet_sendCalls').length;
     const b0 = await soldeUsdc(U1);
     const d1 = await e1.depenser();
-    ok(c.spmOwner === false && ap1.ok && !d1.ok && /simulation spend/.test(d1.pourquoi) && f1.journal.filter((j) => j.method === 'wallet_sendCalls').length === avant && (await soldeUsdc(U1)) === b0,
+    ok(c.spmOwner === false && ap1.ok && !d1.ok && /spend simulation/.test(d1.pourquoi) && f1.journal.filter((j) => j.method === 'wallet_sendCalls').length === avant && (await soldeUsdc(U1)) === b0,
       'T1 SpendPermissionManager pas owner : connecter le dit (false), spend refuse EN SIMULATION, aucun envoi (' + d1.pourquoi + ')');
     const rv = await e1.revoquer();
     ok(rv.ok, 'T1 la revocation marche quand meme (nettoyage)');
@@ -262,7 +262,7 @@ async function scenarios() {
     const vide = '0x' + '12'.repeat(20);
     const e2 = E.creerEssai({ provider: fournisseurFork({ universel: vide }), ...rapide });
     const r = await e2.connecter();
-    ok(!r.ok && /eth_getCode est vide/.test(r.pourquoi), 'T2 adresse sans code -> arret (' + r.pourquoi.slice(0, 40) + '…)');
+    ok(!r.ok && /eth_getCode is empty/.test(r.pourquoi), 'T2 adresse sans code -> arret (' + r.pourquoi.slice(0, 40) + '…)');
     const d7702 = '0x' + '34'.repeat(20);
     await rpc('anvil_setCode', [d7702, '0xef0100' + '56'.repeat(20)]);
     const r3x = await E.creerEssai({ provider: fournisseurFork({ universel: d7702 }), ...rapide }).connecter();
@@ -272,7 +272,7 @@ async function scenarios() {
   {
     const U4 = await universelNeuf();
     const r4x = await E.creerEssai({ provider: fournisseurFork({ universel: U4, chainIdForce: '0x1' }), ...rapide }).connecter();
-    ok(!r4x.ok && /pas sur Base/.test(r4x.pourquoi), 'T4 wallet sur la chaine 1 -> arret');
+    ok(!r4x.ok && /not on Base/.test(r4x.pourquoi), 'T4 wallet sur la chaine 1 -> arret');
     const f5 = fournisseurFork({ universel: U4, refus4100: true });
     const e5 = E.creerEssai({ provider: f5, ...rapide });
     await e5.connecter();
@@ -300,7 +300,7 @@ async function scenarios() {
     const e7b = E.creerEssai({ provider: { request: faux }, ...rapide });
     Object.assign(e7b.etat, e7.etat);
     const d7 = await e7b.depenser();
-    ok(!d7.ok && /ECART/.test(d7.pourquoi), 'T7 le wallet dit « 200 » sans que rien ne bouge on-chain -> la page dit ECART (relu, pas cru)');
+    ok(!d7.ok && /MISMATCH/.test(d7.pourquoi), 'T7 le wallet dit « 200 » sans que rien ne bouge on-chain -> la page dit MISMATCH (relu, pas cru)');
     await e7.revoquer();
   }
 

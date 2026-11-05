@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="fr">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <link rel="icon" href="icon.png" type="image/png">
-<title>Essai mode autonome</title>
+<title>Autonomous mode trial</title>
 <!-- essai-autonome.html — PAGE D ESSAI SEPAREE (2026-11-05). Non liee depuis l app. Ne lit ni ne change MODE_AUTONOME_DRAPEAU.
      Le wallet de l utilisateur signe ; la page ne signe rien et ne tient aucune cle. Montants en dur : 1 USDC/jour, 1 jour,
      une depense de 0,01 USDC de SON Base Account vers SON sub account. Toute la logique : essai-autonome.js (bancs a l appui). -->
@@ -29,75 +29,75 @@
 </head>
 <body>
 <main>
-  <h1>Essai du mode autonome — avec ton propre Base Account</h1>
-  <p class="doux">Page d essai, non liee depuis l app. Le mode autonome reste <b>eteint</b> dans l app.</p>
+  <h1>Autonomous mode trial — with your own Base Account</h1>
+  <p class="doux">Trial page, not linked from the app. Autonomous mode stays <b>off</b> in the app.</p>
   <div class="carte">
-    <b>Bornes en dur (la page refuse toute autre valeur)</b>
+    <b>Fixed limits (the page refuses any other value)</b>
     <ul>
-      <li>Plafond : <b>1 USDC par jour</b>, pendant <b>1 jour</b>.</li>
-      <li>Une seule depense de test : <b>0,01 USDC</b>, de ton Base Account vers <b>ton</b> sub account. Rien ne sort de chez toi.</li>
-      <li>Chaque envoi est <b>simule</b> d abord ; un refus du contrat = rien n est propose a ton wallet.</li>
-      <li>Chaque resultat est <b>relu on-chain</b> et ecrit dans le journal en bas.</li>
-      <li>Il te faut : au moins 0,01 USDC sur ton Base Account (Base), et un peu d ETH pour le gas si ton wallet ne le sponsorise pas.</li>
+      <li>Cap: <b>1 USDC per day</b>, for <b>1 day</b>.</li>
+      <li>One test spend only: <b>0.01 USDC</b>, from your Base Account to <b>your</b> sub account. Nothing leaves your hands.</li>
+      <li>Every send is <b>simulated</b> first; if the contract refuses, nothing is offered to your wallet.</li>
+      <li>Every result is <b>read back on-chain</b> and written to the log below.</li>
+      <li>You need: at least 0.01 USDC on your Base Account (Base), and a little ETH for gas if your wallet does not sponsor it.</li>
     </ul>
-    <p class="doux" id="source">Provider : pas encore charge.</p>
+    <p class="doux" id="source">Provider: not loaded yet.</p>
   </div>
 
   <section class="carte" id="e1">
-    <h2>1. Connecter ton Base Account</h2>
+    <h2>1. Connect your Base Account</h2>
     <p class="clair" data-texte="1"></p>
-    <button id="b1" type="button">Connecter mon Base Account</button>
+    <button id="b1" type="button">Connect my Base Account</button>
     <p class="statut" id="s1"></p>
   </section>
 
   <section class="carte" id="e2">
-    <h2>2. Ton sub account</h2>
+    <h2>2. Your sub account</h2>
     <p class="clair" data-texte="2"></p>
-    <button id="b2" type="button" hidden>Chercher mon sub account</button>
-    <button id="b2c" type="button" hidden>Creer mon sub account</button>
+    <button id="b2" type="button" hidden>Find my sub account</button>
+    <button id="b2c" type="button" hidden>Create my sub account</button>
     <p class="statut" id="s2"></p>
   </section>
 
   <section class="carte" id="e3">
-    <h2>3. Accorder la SpendPermission (1 USDC/jour, 1 jour)</h2>
-    <p class="clair" id="t3">Disponible apres l etape 2.</p>
-    <button id="b3" type="button" hidden>Preparer la permission</button>
-    <details id="d3" hidden><summary>Ce que ton wallet va afficher (EIP-712)</summary><pre id="td3"></pre></details>
-    <button id="b3s" type="button" hidden>Signer la permission</button>
-    <button id="b3e" type="button" hidden>L enregistrer on-chain (envoye par le sub account)</button>
-    <button id="b3u" type="button" class="sec" hidden>L enregistrer depuis mon Base Account a la place</button>
+    <h2>3. Grant the SpendPermission (1 USDC/day, 1 day)</h2>
+    <p class="clair" id="t3">Available after step 2.</p>
+    <button id="b3" type="button" hidden>Prepare the permission</button>
+    <details id="d3" hidden><summary>What your wallet will show (EIP-712)</summary><pre id="td3"></pre></details>
+    <button id="b3s" type="button" hidden>Sign the permission</button>
+    <button id="b3e" type="button" hidden>Record it on-chain (sent by the sub account)</button>
+    <button id="b3u" type="button" class="sec" hidden>Record it from my Base Account instead</button>
     <p class="statut" id="s3"></p>
   </section>
 
   <section class="carte" id="e4">
-    <h2>4. Une depense de 0,01 USDC</h2>
+    <h2>4. One 0.01 USDC spend</h2>
     <p class="clair" data-texte="4"></p>
-    <button id="b4" type="button" hidden>Depenser 0,01 USDC (sub account)</button>
+    <button id="b4" type="button" hidden>Spend 0.01 USDC (sub account)</button>
     <p class="statut" id="s4"></p>
   </section>
 
   <section class="carte" id="e5">
-    <h2>5. Au-dela du plafond : doit etre refuse</h2>
+    <h2>5. Above the cap: must be refused</h2>
     <p class="clair" data-texte="5"></p>
-    <button id="b5" type="button" hidden>Simuler un depassement</button>
+    <button id="b5" type="button" hidden>Simulate going over the cap</button>
     <p class="statut" id="s5"></p>
   </section>
 
   <section class="carte" id="e6">
-    <h2>6. Revoquer</h2>
+    <h2>6. Revoke</h2>
     <p class="clair" data-texte="6"></p>
-    <button id="b6" type="button" hidden>Revoquer la permission</button>
+    <button id="b6" type="button" hidden>Revoke the permission</button>
     <p class="statut" id="s6"></p>
   </section>
 
   <section class="carte">
-    <h2>Journal</h2>
-    <button id="copier" type="button" class="sec">Copier le journal</button>
+    <h2>Log</h2>
+    <button id="copier" type="button" class="sec">Copy the log</button>
     <pre id="journal"></pre>
   </section>
 </main>
 <script type="module">
-import { creerEssai, texteEtape, permissionVersJson, permissionDeJson, usdcTexte, SDK_SUB_ACCOUNTS } from './essai-autonome.js';
+import { creerEssai, texteEtape, permissionVersJson, permissionDeJson, usdcTexte, SDK_SUB_ACCOUNTS, CODE_EN } from './essai-autonome.js';
 import { donneesAutorisation } from './agent-autonome.js';
 
 const $ = (s) => document.querySelector(s);
@@ -107,9 +107,9 @@ const ecrire = (o) => {
   $('#journal').textContent = lignes.join('\n');
 };
 $('#copier').addEventListener('click', async () => {
-  try { await navigator.clipboard.writeText(lignes.join('\n')); $('#copier').textContent = 'Copie'; }
-  catch (_) { const r = document.createRange(); r.selectNodeContents($('#journal')); getSelection().removeAllRanges(); getSelection().addRange(r); $('#copier').textContent = 'Selectionne : Ctrl+C'; }
-  setTimeout(() => { $('#copier').textContent = 'Copier le journal'; }, 2500);
+  try { await navigator.clipboard.writeText(lignes.join('\n')); $('#copier').textContent = 'Copied'; }
+  catch (_) { const r = document.createRange(); r.selectNodeContents($('#journal')); getSelection().removeAllRanges(); getSelection().addRange(r); $('#copier').textContent = 'Selected: press Ctrl+C'; }
+  setTimeout(() => { $('#copier').textContent = 'Copy the log'; }, 2500);
 });
 for (const p of document.querySelectorAll('[data-texte]')) p.textContent = texteEtape(Number(p.dataset.texte)) || '';
 
@@ -127,8 +127,8 @@ function chargerBaseAccount() {
     const s = document.createElement('script');
     s.src = BASE_ACCOUNT_SRC; s.async = true;
     s.onload = () => (typeof window.createBaseAccountSDK === 'function' ? ok(window.createBaseAccountSDK)
-      : ko(new Error('le SDK a ete charge mais n a pas publie createBaseAccountSDK')));
-    s.onerror = () => ko(new Error('le SDK ne se charge pas depuis ' + BASE_ACCOUNT_SRC));
+      : ko(new Error('the SDK loaded but did not publish createBaseAccountSDK')));
+    s.onerror = () => ko(new Error('the SDK does not load from ' + BASE_ACCOUNT_SRC));
     document.head.appendChild(s);
   });
   charge.catch(() => { charge = null; });
@@ -140,7 +140,7 @@ async function obtenirProvider() {
   if (fournisseur) return fournisseur;
   if (LOCAL && window.__fournisseurEssai) {
     fournisseur = window.__fournisseurEssai;
-    $('#source').textContent = 'Provider : FOURNISSEUR DE TEST (fork local) — rien ne part sur Base.';
+    $('#source').textContent = 'Provider: TEST PROVIDER (local fork) — nothing goes to Base.';
     return fournisseur;
   }
   const creer = await chargerBaseAccount();
@@ -148,7 +148,7 @@ async function obtenirProvider() {
     appChainIds: [8453], subAccounts: { ...SDK_SUB_ACCOUNTS } });
   fournisseur = sdk.getProvider();
   if (!window.ethereum) Object.defineProperty(window, 'ethereum', { value: fournisseur, configurable: true, writable: true });
-  $('#source').textContent = 'Provider : Base Account SDK 2.5.13' + (fournisseur.isBaseAccount === true ? ' (isBaseAccount = true)' : ' — ATTENTION : provider injecte Coinbase, isBaseAccount absent');
+  $('#source').textContent = 'Provider: Base Account SDK 2.5.13' + (fournisseur.isBaseAccount === true ? ' (isBaseAccount = true)' : ' — WARNING: injected Coinbase provider, isBaseAccount missing');
   return fournisseur;
 }
 
@@ -174,7 +174,7 @@ function rafraichir() {
   montrer('#b4', active && !ui.depense);
   montrer('#b5', active);
   montrer('#b6', active);
-  $('#t3').textContent = p ? texteEtape(3, { permission: p }) : (e.sousCompte ? 'La page construit la permission a partir du bloc courant.' : 'Disponible apres l etape 2.');
+  $('#t3').textContent = p ? texteEtape(3, { permission: p }) : (e.sousCompte ? 'The page builds the permission from the current block.' : 'Available after step 2.');
   if (p && !ui.approuve) {
     const td = donneesAutorisation(p, 8453);
     $('#td3').textContent = td.ok ? JSON.stringify(td.typedData, null, 2) : '';
@@ -186,11 +186,11 @@ function geste(id, n, fn) {
   $(id).addEventListener('click', async () => {
     const b = $(id);
     b.hidden = true;
-    dire(n, 'En cours… regarde la fenetre de ton wallet si elle s ouvre.', 'doux');
+    dire(n, 'Working… check your wallet window if one opens.', 'doux');
     let fini = false;
-    const filet = setTimeout(() => { if (!fini) { b.hidden = false; dire(n, 'Toujours en attente. Si aucune fenetre ne s est ouverte, ton navigateur l a bloquee : autorise les pop-ups et reclique.', 'alerte'); } }, 12000);
+    const filet = setTimeout(() => { if (!fini) { b.hidden = false; dire(n, 'Still waiting. If no window opened, your browser blocked it: allow pop-ups and click again.', 'alerte'); } }, 12000);
     try { await fn(); }
-    catch (e) { dire(n, 'Erreur : ' + String((e && e.message) || e), 'ko'); ecrire({ t: new Date().toISOString(), etape: n, quoi: 'exception', message: String((e && e.message) || e) }); }
+    catch (e) { dire(n, 'Error: ' + String((e && e.message) || e), 'ko'); ecrire({ t: new Date().toISOString(), step: n, what: 'exception', message: String((e && e.message) || e) }); }
     finally { fini = true; clearTimeout(filet); rafraichir(); if (id === '#b1') $('#b1').hidden = false; }
   });
 }
@@ -202,8 +202,8 @@ geste('#b1', 1, async () => {
   Object.assign(ui, { aCreer: false, approuve: false, repliUniversel: false, depense: false });
   const r = await essai.connecter();
   if (!r.ok) return dire(1, r.pourquoi, 'ko');
-  dire(1, 'Connecte : ' + r.universel + ' · ' + (r.usdc === null ? '?' : usdcTexte(r.usdc)) + ' USDC · SpendPermissionManager owner de ton compte : '
-    + (r.spmOwner === true ? 'oui' : r.spmOwner === false ? 'NON (le spend de l etape 4 sera refuse en simulation tant que ce n est pas le cas)' : 'illisible'), r.spmOwner === true ? 'ok' : 'alerte');
+  dire(1, 'Connected: ' + r.universel + ' · ' + (r.usdc === null ? '?' : usdcTexte(r.usdc)) + ' USDC · SpendPermissionManager is an owner of your account: '
+    + (r.spmOwner === true ? 'yes' : r.spmOwner === false ? 'NO (the step 4 spend will be refused in simulation until it is)' : 'unreadable'), r.spmOwner === true ? 'ok' : 'alerte');
   /* une permission d essai deja creee pour ce compte (rechargement de page) : on la relit, pour pouvoir la REVOQUER */
   let gardee = null;
   try { gardee = permissionDeJson(localStorage.getItem(cle(r.universel)) || ''); } catch (_) {}
@@ -212,38 +212,38 @@ geste('#b1', 1, async () => {
     const l = await essai.relirePermission();
     ui.approuve = l.isApproved === true;
     if (essai.etat.revoque || !ui.approuve) { oublier(); if (essai.etat.revoque) essai.etat.permission = null; }
-    dire(2, 'Sub account (permission precedente) : ' + gardee.spender, 'ok');
+    dire(2, 'Sub account (earlier permission): ' + gardee.spender, 'ok');
   }
 });
 geste('#b2', 2, async () => {
   const r = await essai.trouverSousCompte();
   if (!r.ok) return dire(2, r.pourquoi, 'ko');
-  if (r.aCreer) { ui.aCreer = true; return dire(2, 'Aucun sub account pour ' + location.origin + '. Tu peux le creer.', 'doux'); }
-  dire(2, 'Sub account : ' + r.sousCompte + ' (' + r.code + ')', 'ok');
+  if (r.aCreer) { ui.aCreer = true; return dire(2, 'No sub account for ' + location.origin + '. You can create one.', 'doux'); }
+  dire(2, 'Sub account: ' + r.sousCompte + ' (' + CODE_EN[r.code] + ')', 'ok');
 });
 geste('#b2c', 2, async () => {
   const r = await essai.creerSousCompte();
   if (!r.ok) return dire(2, r.pourquoi, 'ko');
   ui.aCreer = false;
-  dire(2, 'Sub account cree : ' + r.sousCompte + ' (' + r.code + ')', 'ok');
+  dire(2, 'Sub account created: ' + r.sousCompte + ' (' + CODE_EN[r.code] + ')', 'ok');
 });
 geste('#b3', 3, async () => {
   ui.repliUniversel = false; ui.depense = false; ui.approuve = false;
   const r = await essai.construirePermission();
   if (!r.ok) return dire(3, r.pourquoi, 'ko');
   garder();
-  dire(3, 'Permission construite ; son hash = getHash on-chain (' + r.hash.slice(0, 18) + '…). Relis ce qui suit, puis signe.', 'ok');
+  dire(3, 'Permission built; its hash = on-chain getHash (' + r.hash.slice(0, 18) + '…). Read what follows, then sign.', 'ok');
 });
 geste('#b3s', 3, async () => {
   const r = await essai.signer();
   if (!r.ok) return dire(3, r.pourquoi, 'ko');
-  dire(3, 'Signe (' + ((r.signature.length - 2) / 2) + ' octets). Rien n est encore on-chain.', 'ok');
+  dire(3, 'Signed (' + ((r.signature.length - 2) / 2) + ' bytes). Nothing is on-chain yet.', 'ok');
 });
 const enregistrer = (depuis) => async () => {
   const r = await essai.enregistrer(depuis);
   if (!r.ok) { if (depuis === 'sous-compte') ui.repliUniversel = true; return dire(3, r.pourquoi, 'ko'); }
   ui.approuve = true;
-  dire(3, 'Relu on-chain : isApproved = ' + r.isApproved + ', isValid = ' + r.isValid + ' · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
+  dire(3, 'Read on-chain: isApproved = ' + r.isApproved + ', isValid = ' + r.isValid + ' · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
 };
 geste('#b3e', 3, enregistrer('sous-compte'));
 geste('#b3u', 3, enregistrer('universel'));
@@ -251,19 +251,19 @@ geste('#b4', 4, async () => {
   const r = await essai.depenser();
   if (!r.ok) return dire(4, r.pourquoi, 'ko');
   ui.depense = true;
-  dire(4, 'Relu on-chain : Base Account ' + usdcTexte(r.ecarts.universel) + ' USDC, sub account +' + usdcTexte(r.ecarts.sousCompte)
-    + ' USDC, depense du jour ' + usdcTexte(r.apres.periode.spend) + ' / 1 USDC · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
+  dire(4, 'Read on-chain: Base Account ' + usdcTexte(r.ecarts.universel) + ' USDC, sub account +' + usdcTexte(r.ecarts.sousCompte)
+    + ' USDC, spent today ' + usdcTexte(r.apres.periode.spend) + ' / 1 USDC · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
 });
 geste('#b5', 5, async () => {
   const r = await essai.depasser();
   if (!r.ok) return dire(5, r.pourquoi, 'ko');
-  dire(5, 'Refuse par le contrat : spend de ' + usdcTexte(r.valeur) + ' USDC -> ' + r.erreur.nom + ' (simulation, rien envoye).', 'ok');
+  dire(5, 'Refused by the contract: a spend of ' + usdcTexte(r.valeur) + ' USDC -> ' + r.erreur.nom + ' (simulation, nothing sent).', 'ok');
 });
 geste('#b6', 6, async () => {
   const r = await essai.revoquer();
   if (!r.ok) return dire(6, r.pourquoi, 'ko');
   oublier();
-  dire(6, 'Relu on-chain : isRevoked = ' + r.isRevoked + ', isValid = ' + r.isValid + ', un spend de 1 unite -> ' + r.spendApres + ' · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
+  dire(6, 'Read on-chain: isRevoked = ' + r.isRevoked + ', isValid = ' + r.isValid + ', a spend of 1 unit -> ' + r.spendApres + ' · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
 });
 rafraichir();
 </script>
