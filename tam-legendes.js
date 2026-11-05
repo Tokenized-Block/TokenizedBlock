@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game158 (idee : codex Grok Bot) */
+  ising: {
+    titre: 'The Ising model (tiny magnets that like to agree)',
+    enUnePhrase: 'Magnets on a grid, each preferring to point like its neighbours: hot, they are a noisy mess; cold, large patches line up.',
+    colonnes: ['across', 'up', 'spin (+1 or -1)'],
+    aRegarder: ['Raise beta (colder): the patches grow until one direction wins.', 'Lower beta (hotter): the grid looks like noise, no direction lasts.', 'Near beta = 0.44 the patches come in every size: the edge of the transition of an endless grid.'],
+    fin: null,
+  },
   /* game157 (idee : codex Grok Bot) */
   dominosKasteleyn: {
     titre: 'Domino tilings (every way to cover a rectangle)',

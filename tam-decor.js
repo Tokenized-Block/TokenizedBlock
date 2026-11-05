@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game158 */
+  ising: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Corner of the grid')],
   /* game157 */
   dominosKasteleyn: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Corner cell (0, 0)')],
   /* game155 */

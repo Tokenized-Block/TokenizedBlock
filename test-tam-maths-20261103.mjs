@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -321,6 +321,23 @@ function suite(T, bavard = false) {
     const I = S('dominosKasteleyn', { hauteur: 6, largeur: 8 }).invariants; assert.ok(I.pavages.mesure === '167089' && Math.abs(I.coin.formule - 81430 / 167089) < 1e-15, 'lot4 ' + I.coin.formule);
     return v.join(' ') + ' ; 6x8 coin 81430/167089';
   });
+  /* game158 : Ising — enumeration INDEPENDANTE (Math.exp, Gray code : un spin bascule a la fois, E mis a jour localement) ; |z| < 5 ;
+   *   chaque point dessine porte un spin +1 / -1 ; valeurs de Grok Bot pour le tore 4 x 4 (Z a beta = 0.4) */
+  const isingRef = (L, beta) => { const N = L * L, s = new Int8Array(N).fill(-1); let E = 0, M = -N; for (let i = 0; i < N; i++) { const x = i % L, y = (i - x) / L; E += s[i] * s[y * L + (x + 1) % L] + s[i] * s[((y + 1) % L) * L + x]; }
+    let Z = Math.exp(beta * E), ZE = E * Z, ZM = Math.abs(M) / N * Z;
+    for (let k = 1; k < 1 << N; k++) { const i = 31 - Math.clz32(k & -k), x = i % L, y = (i - x) / L, h = s[y * L + (x + 1) % L] + s[y * L + (x - 1 + L) % L] + s[((y + 1) % L) * L + x] + s[((y - 1 + L) % L) * L + x];
+      E -= 2 * s[i] * h; M -= 2 * s[i]; s[i] = -s[i]; const w = Math.exp(beta * E); Z += w; ZE += E * w; ZM += Math.abs(M) / N * w; }
+    return { Z, E: ZE / Z, m: ZM / Z }; };
+  for (const p of [...extremes(sys('ising')), { beta: 0.44 }]) ok(`ising ${JSON.stringify(p)} : Metropolis contre l enumeration exacte (energie, aimantation), Z, dessin en spins`, () => {
+    const R = S('ising', p), I = R.invariants, b = R.brut, ref = isingRef(4, R.params.beta);
+    assert.ok(Math.abs(I.partition.mesure - ref.Z) / ref.Z < 1e-12 && Math.abs(I.energie.formule - ref.E) < 1e-9 && Math.abs(I.aimantationAbs.formule - ref.m) < 1e-12, 'exact ' + JSON.stringify([I.partition.mesure, ref.Z, I.energie.formule, ref.E]));
+    assert.ok(Math.abs(z(I.energie)) < 5 && Math.abs(z(I.aimantationAbs)) < 5, 'z ' + z(I.energie) + ' ' + z(I.aimantationAbs));
+    assert.ok(Math.abs(I.partition.betaCritique - Math.log(1 + Math.SQRT2) / 2) < 1e-12, 'betaC');
+    let mal = 0; for (let q = 0; q < R.n; q++) { const v = b[3 * q + 2]; if (v !== 1 && v !== -1) mal++; } assert.equal(mal, 0);
+    return 'beta ' + R.params.beta + ' : <E> ' + I.energie.mesure.toFixed(3) + ' / ' + I.energie.formule.toFixed(3) + ', <|m|> ' + I.aimantationAbs.mesure.toFixed(4) + ' / ' + I.aimantationAbs.formule.toFixed(4);
+  });
+  ok('ising : valeurs de controle de Grok Bot (tore 4 x 4, beta = 0.4 : Z = 2107668.7226362286)', () => { const I = S('ising', { beta: 0.4 }).invariants; assert.ok(Math.abs(I.partition.mesure - 2107668.7226362286) / 2107668.7226362286 < 1e-12, I.partition.mesure); return String(I.partition.mesure); });
+  ok('ising : etalonnage sur 12 graines a beta = 0.44 (ecart-type des z dans [0.4, 1.8])', () => { const zs = []; for (let g = 1; g <= 12; g++) zs.push(z(S('ising', { beta: 0.44, graine: g }).invariants.energie)); const m = zs.reduce((a, x) => a + x, 0) / zs.length, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / (zs.length - 1)); assert.ok(sd >= 0.4 && sd <= 1.8 && Math.abs(m) < 1.5, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -427,6 +444,11 @@ const MUTANTS = [
   ['dominos : probabilite du coin avec le mauvais reste', 'h += R[L - 1][t.sortie];', 'h += R[L - 1][0];'],
   ['dominos : Fibonacci F(L)', 'for (let i = 1; i < L; i++) [fa, fb] = [fb, fa + fb];', 'for (let i = 2; i < L; i++) [fa, fb] = [fb, fa + fb];'],
   ['dominos : dessin d un domino couche vers le haut', 'doms.push(k === 0 ? [c, i, c + 1, i, 0] : [c, i, c, i + 1, 1])', 'doms.push(k === 0 ? [c, i, c + 1, i + 1, 0] : [c, i, c, i + 1, 1])'],
+  ['ising : energie sans le voisin du bas (exact)', 'E += s * (((c >> (y * L + (x + 1) % L)) & 1) ? 1 : -1) + s * (((c >> (((y + 1) % L) * L + x)) & 1) ? 1 : -1);', 'E += s * (((c >> (y * L + (x + 1) % L)) & 1) ? 1 : -1);'],
+  ['ising : Metropolis accepte avec e^(-beta k)', 'acc.push(expD(-beta * 2 * k));', 'acc.push(expD(-beta * k));'],
+  ['ising : aimantation signee', 'ZM += Math.abs(M) / N * w;', 'ZM += M / N * w;'],
+  ['ising : beta_c avec sqrt 3', 'const betaC = lnD(1 + Math.sqrt(2)) / 2;', 'const betaC = lnD(1 + Math.sqrt(3)) / 2;'],
+  ['ising : un seul lot (sigma faux)', 'for (let b = 0; b < 20; b++) { let sE = 0', 'for (let b = 0; b < 2; b++) { let sE = 0'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];

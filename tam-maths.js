@@ -571,7 +571,44 @@ function dominosKasteleyn(P, n) {
     impair: { mesure: m * L % 2 === 1 ? String(total) : null, formule: m * L % 2 === 1 ? '0' : null, note: 'an odd number of cells cannot be tiled : 0 (null when the area is even)' } } };
 }
 
+// ---------- 16 : le modele d Ising (idee et valeurs : codex Grok Bot 2026-11-05) ----------
+// Des aimants elementaires (spins +1 / -1) sur une grille refermee sur elle-meme (tore) ; chaque paire de voisins prefere etre alignee.
+//   Poids d un etat : e^(beta E), E = somme sur les paires voisines de s_i s_j (beta = curseur, l inverse de la temperature).
+// Exact : sur le tore 4 x 4, les 2^16 = 65 536 etats sont ENUMERES : la fonction de partition Z, l energie moyenne <E> et l aimantation
+//   absolue moyenne <|m|> sont des sommes finies, calculees exactement (exp par +, -, *, / seulement).
+// Mesure : une simulation de Metropolis sur le meme tore 4 x 4 (un spin tire au hasard bascule si l energie monte, sinon avec la
+//   probabilite e^(beta dE)), 20 lots de 1 500 balayages : <E> et <|m|> estimes, barre d erreur par les moyennes de lots.
+// LIMITE (pas comparee) : sur une grille infinie la transition a lieu a beta_c = ln(1 + sqrt 2)/2 (Onsager, Phys. Rev. 65 (1944) 117,
+//   reference du codex) ; un tore 4 x 4 n a pas de vraie transition, la valeur est donnee pour reperer le curseur.
+// Dessin (vue de face) : un instantane de Metropolis sur une grande grille 48 x 48 au meme beta, chaque case avec son spin (etiquette).
+function expD(u) { return u >= 0 ? expPosD(u) : 1 / expPosD(-u); }
+function isingMetropolis(L, beta, s, rng, balayages) { const N = L * L, acc = []; for (let k = 0; k <= 8; k++) acc.push(expD(-beta * 2 * k));
+  for (let t = 0; t < balayages; t++) for (let q = 0; q < N; q++) { const i = Math.floor(rng() * N), x = i % L, y = (i - x) / L;
+    const h = s[y * L + (x + 1) % L] + s[y * L + (x - 1 + L) % L] + s[((y + 1) % L) * L + x] + s[((y - 1 + L) % L) * L + x], d = s[i] * h; /* basculer change E de -2 d */
+    if (d <= 0 || rng() < acc[d]) s[i] = -s[i]; } }
+function isingMesures(L, s) { let E = 0, M = 0; for (let i = 0; i < L * L; i++) { const x = i % L, y = (i - x) / L; E += s[i] * (s[y * L + (x + 1) % L] + s[((y + 1) % L) * L + x]); M += s[i]; } return { E, m: Math.abs(M) / (L * L) }; }
+function isingExact(L, beta) { const N = L * L; let Z = 0, ZE = 0, ZM = 0;
+  for (let c = 0; c < 1 << N; c++) { let E = 0, M = 0; for (let i = 0; i < N; i++) { const s = (c >> i & 1) ? 1 : -1, x = i % L, y = (i - x) / L;
+      E += s * (((c >> (y * L + (x + 1) % L)) & 1) ? 1 : -1) + s * (((c >> (((y + 1) % L) * L + x)) & 1) ? 1 : -1); M += s; }
+    const w = expD(beta * E); Z += w; ZE += E * w; ZM += Math.abs(M) / N * w; }
+  return { Z, E: ZE / Z, m: ZM / Z }; }
+function ising(P, n) {
+  const beta = P.beta, rng = mulberry32(P.graine), ex = isingExact(4, beta);
+  const s4 = new Int8Array(16).fill(1); isingMetropolis(4, beta, s4, rng, 500);
+  const bE = [], bM = []; for (let b = 0; b < 20; b++) { let sE = 0, sM = 0; for (let t = 0; t < 1500; t++) { isingMetropolis(4, beta, s4, rng, 1); const v = isingMesures(4, s4); sE += v.E; sM += v.m; } bE.push(sE / 1500); bM.push(sM / 1500); }
+  const st = (v) => { const m = v.reduce((a, b) => a + b, 0) / v.length; return { m, sigma: Math.sqrt(v.reduce((a, b) => a + (b - m) ** 2, 0) / (v.length - 1) / v.length) }; };
+  const e = st(bE), a = st(bM);
+  const G = 48, sg = new Int8Array(G * G); for (let i = 0; i < G * G; i++) sg[i] = rng() < 0.5 ? 1 : -1; isingMetropolis(G, beta, sg, rng, 300);
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const i = Math.floor(l * G * G / n), o = 3 * l; brut[o] = i % G; brut[o + 1] = (i - i % G) / G; brut[o + 2] = sg[i]; }
+  const betaC = lnD(1 + Math.sqrt(2)) / 2;
+  return { D: 3, brut, nuage: true, unite: 'sans objet (spins)', invariants: {
+    energie: { mesure: e.m, formule: ex.E, sigma: e.sigma, note: 'mean energy sum s_i s_j on the 4 x 4 torus, Metropolis (20 batches) against the exact sum over all 65 536 states' },
+    aimantationAbs: { mesure: a.m, formule: ex.m, sigma: a.sigma, note: 'mean absolute magnetisation per spin, Metropolis against the exact enumeration' },
+    partition: { mesure: ex.Z, betaCritique: betaC, note: 'exact partition function Z of the 4 x 4 torus at this beta ; beta_c = ln(1 + sqrt 2)/2 is the LIMIT of an endless grid (Onsager), shown, not compared' } } };
+}
+
 export const COLONNES = Object.freeze({
+  ising: { colonnes: ['x (spin)', 'y (spin)', 'spin (label; +1 or -1)'], memeLongueur: [[0, 1]], autres: [2] },
   dominosKasteleyn: { colonnes: ['x (cells)', 'y (cells)', 'domino (label; 0 = lying, 1 = standing, 2 = cannot be tiled)'], memeLongueur: [[0, 1]], autres: [2] },
   papillonHofstadter: { colonnes: ['flux alpha = p/q', 'energy E', 'denominator q (label)'], memeLongueur: [], autres: [0, 1, 2] },
   causticTasse: { colonnes: ['x', 'y', 'what (label; 0 = the bright line found, 1 = the cup, 2 = reflected rays)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -635,9 +672,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'dominosKasteleyn', nom: 'Domino tilings (Kasteleyn)', science: 'Combinatorics', D: 3, nuage: true, params: { hauteur: 6, largeur: 12, graine: 1 },
     bornes: { hauteur: [2, 8], largeur: [2, 20], graine: [1, 1000000] },
     phrase: 'A visualisation of domino tilings: every way of covering an m x L rectangle with 1 x 2 dominoes is counted exactly, column by column, and matches Kasteleyn\'s product formula (12 988 816 for a chessboard). The picture is one tiling drawn uniformly at random among them all, and the corner statistics of many such draws match their exact probability.' },
+  { id: 'ising', nom: 'The Ising model (magnets that agree)', science: 'Statistical physics', D: 3, nuage: true, params: { beta: 0.4, graine: 1 },
+    bornes: { beta: [0.1, 0.8], graine: [1, 1000000] },
+    phrase: 'A visualisation of the Ising model: tiny magnets on a grid, each preferring to point like its neighbours, at an inverse temperature beta. The picture is a large grid simulated by the Metropolis rule. On a small 4 x 4 torus every one of the 65 536 states is counted exactly, and the simulated mean energy and magnetisation match those exact values within their error bars. The sharp transition of an endless grid, at beta = ln(1 + sqrt 2)/2, is shown as a limit only.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'] };
-const FONCTIONS = { dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'] };
+const FONCTIONS = { ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

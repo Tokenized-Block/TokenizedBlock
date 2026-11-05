@@ -73,6 +73,8 @@ THEMES.maths.push('causticTasse');
 THEMES.maths.push('papillonHofstadter');
 /* game157 : les pavages par dominos (idee : codex Grok Bot) */
 THEMES.maths.push('dominosKasteleyn');
+/* game158 : le modele d Ising (idee : codex Grok Bot) */
+THEMES.maths.push('ising');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1139,6 +1141,8 @@ export function monter(racine, ctx = {}) {
     'papillonHofstadter',
     /* game157 */
     'dominosKasteleyn',
+    /* game158 */
+    'ising',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

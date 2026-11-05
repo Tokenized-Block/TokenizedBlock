@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game158 */
+  betaCritique: 'beta_c of an endless grid (Onsager, a limit)',
   /* game155 */
   fractions: 'fractions p/q', bandes: 'bands',
   /* game153 */
@@ -425,6 +427,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game158 */
+  aimantationAbs: 'Mean |magnetisation|, Metropolis vs exact enumeration', partition: 'Exact partition function Z (4 x 4 torus)',
   /* game157 */
   pavages: 'Tilings counted vs Kasteleyn\'s product', coin: 'Corner cell lying, uniform draws vs exact probability', fibonacci: 'Witness: 2 x L gives Fibonacci', impair: 'Witness: odd area gives 0',
   /* game155 */
