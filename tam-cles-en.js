@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game166 */
+  n1: 'crossings, 2 x 1 rectangle', n2: 'crossings, 3 x 2 rectangle',
   /* game165 */
   interieurs: 'whole points inside I', pointsBord: 'whole points on the boundary B', polygone: 'the polygon (corners)', lacet: 'shoelace area x2',
   /* game164 */
@@ -439,6 +441,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game166 */
+  dualite: 'Crossing probability vs 1/2, every configuration (gap)', simulee: 'Random rectangles crossed vs 1/2',
   /* game165 */
   pick: 'Pick: twice the area vs 2I + B - 2 (gap)', bordPgcd: 'Boundary points vs the sum of gcds (gap)',
   /* game164 */
@@ -464,7 +468,7 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game153 */
   longueur: 'Shortest network found vs min(L + sqrt 3, 1 + sqrt(3) L)', angles: 'Roads at 120 degrees (largest |cos + 1/2|)', carrefour: 'Crossroad found vs its exact place', plusLongs: 'Witnesses: longer networks',
   /* game152 */
-  farey: 'Fractions listed vs 1 + sum phi', voisins: 'Neighbours that fail |ps - qr| = 1', tangence: 'Touching neighbours (worst relative gap)', chevauchement: 'Smallest (ps - qr)^2 - 1 over all pairs', temoin: 'Witness: gap between the circles of 1/3 and 2/3',
+  farey: 'Fractions listed vs 1 + sum phi', voisins: 'Neighbours that fail |ps - qr| = 1', tangence: 'Touching neighbours (worst relative gap)', chevauchement: 'Smallest (ps - qr)^2 - 1 over all pairs', temoin: 'Witness: a case where the rule breaks',
   /* game151 */
   visibles: 'Trees seen, counted vs 2 sum phi - 1', mobius: 'Trees seen vs the Mobius sum', limite: 'Share seen vs its limit 6/pi^2', diagonale: 'Witness: trees seen on the diagonal',
   /* game150 */

@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -470,6 +470,34 @@ function suite(T, bavard = false, seul = null) {
   ok('theoremePick : valeurs de controle (carre 0..4 : I = 9, B = 16, A = 16 ; triangle (0,0) (4,0) (0,3) : I = 3, B = 8, A = 6)', () => {
     const c = refPick([[0, 0], [4, 0], [4, 4], [0, 4]]), t = refPick([[0, 0], [4, 0], [0, 3]]);
     assert.deepEqual([c.I, c.B, c.a2, t.I, t.B, t.a2], [9, 16, 32, 3, 8, 12]); return 'ok'; });
+  /* game166 : percolation — reference INDEPENDANTE : parcours en LARGEUR depuis le bord gauche (pas d union-find), liens dans un autre ordre ;
+   *   enumeration des petits cas refaite ici ; valeurs de Grok Bot (64/128, 65536/131072) ; le dessin relu lien par lien */
+  const percoRef = (W, H, ouvertH, ouvertV) => { const vu = new Set(), file = []; for (let y = 0; y <= H; y++) { vu.add('0,' + y); file.push([0, y]); }
+    while (file.length) { const [x, y] = file.pop(); if (x === W) return true;
+      for (const [nx, ny, o] of [[x + 1, y, x < W && ouvertH(x, y)], [x - 1, y, x > 0 && ouvertH(x - 1, y)], [x, y + 1, y < H && ouvertV(x, y)], [x, y - 1, y > 0 && ouvertV(x, y - 1)]])
+        if (o && !vu.has(nx + ',' + ny)) { vu.add(nx + ',' + ny); file.push([nx, ny]); } }
+    return false; };
+  const percoEnum = (W, H) => { const nh = W * (H + 1), nv = (W + 1) * H; let t = 0;
+    for (let c = 0; c < 2 ** (nh + nv); c++) if (percoRef(W, H, (x, y) => (c >> (y * W + x)) & 1, (x, y) => (c >> (nh + y * (W + 1) + x)) & 1)) t++; return t + '/' + 2 ** (nh + nv); };
+  ok('percolationLiens : enumeration refaite (largeur) = valeurs de Grok Bot ; carre 2x2 = 2752/4096 ; couche 1x2 = 112/128', () => {
+    assert.deepEqual([percoEnum(2, 1), percoEnum(3, 2), percoEnum(2, 2), percoEnum(1, 2)], ['64/128', '65536/131072', '2752/4096', '112/128']);
+    const I = S('percolationLiens', { cote: 5 }).invariants; assert.ok(I.dualite.mesure === 0 && I.dualite.n1 === '64/128' && I.dualite.n2 === '65536/131072' && I.temoin.mesure === '2752/4096' && I.temoin.formule === '2752/4096', JSON.stringify(I));
+    return 'ok'; });
+  for (const p of [...extremes(sys('percolationLiens')), { cote: 17, graine: 4242 }]) ok(`percolationLiens ${JSON.stringify(p)} : 400 rectangles a 4 sigma de 1/2, dessin sur des liens, etiquettes relues`, () => {
+    const R = S('percolationLiens', p), I = R.invariants, b = R.brut, N = R.params.cote, W = N + 1, H = N;
+    assert.ok(I.simulee.formule === 0.5 && I.simulee.parties === 400 && Math.abs(I.simulee.sigma - 0.025) < 1e-15 && Math.abs(I.simulee.mesure - 0.5) <= 4 * I.simulee.sigma, 'simulee ' + JSON.stringify(I.simulee));
+    /* le dessin : chaque point sur un lien du rectangle ; les liens dessines sont ouverts -> on reconstruit le reseau ouvert DEPUIS le dessin,
+     *   et l etiquette 2 (amas qui traverse) doit etre presente ssi ce reseau traverse (parcours en largeur) */
+    const H1 = new Set(), V1 = new Set(); let mal = 0, deux = 0;
+    for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1], e = b[o + 2], xi = Math.floor(x + 1e-12), yi = Math.floor(y + 1e-12), ent = (v) => Math.abs(v - Math.round(v)) < 1e-9;
+      if (![0, 1, 2].includes(e)) mal++; if (e === 2) deux++;
+      if (ent(y) && x >= 0 && x <= W && y >= 0 && y <= H) { if (!ent(x)) H1.add(xi + ',' + Math.round(y)); }
+      else if (ent(x) && x >= 0 && x <= W && y >= 0 && y <= H) V1.add(Math.round(x) + ',' + yi); else mal++; }
+    assert.equal(mal, 0, 'points hors des liens');
+    const trav = percoRef(W, H, (x, y) => H1.has(x + ',' + y), (x, y) => V1.has(x + ',' + y));
+    if (trav) assert.ok(deux > 0, 'le reseau dessine traverse mais aucun point etiquete 2');
+    return 'n = ' + N + ' : ' + I.simulee.mesure + ' traverses (z = ' + ((I.simulee.mesure - 0.5) / I.simulee.sigma).toFixed(2) + ')';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -618,6 +646,11 @@ const MUTANTS = [
   ['pick : bord sans les extremites', 'r[0] <= Math.max(p[0], q[0]) && Math.min(p[1], q[1]) <= r[1] && r[1] <= Math.max(p[1], q[1]);', 'r[0] < Math.max(p[0], q[0]) && Math.min(p[1], q[1]) <= r[1] && r[1] <= Math.max(p[1], q[1]);'],
   ['pick : temoin carre', 'papillon = [[0, 0], [4, 4], [4, 0], [0, 4]]', 'papillon = [[0, 0], [4, 0], [4, 4], [0, 4]]'],
   ['pick : points interieurs decales', 'brut[o] = pe[0]; brut[o + 1] = pe[1];', 'brut[o] = pe[0] + 1; brut[o + 1] = pe[1];'],
+  ['percolation : bord droit oublie', 'bord[f(y * (W + 1) + W)] |= 2;', 'bord[f(y * (W + 1))] |= 2;'],
+  ['percolation : liens verticaux decales', 'E.push([id(x, y), id(x, y + 1), x, y, 1]);', 'E.push([id(x, y), id(Math.min(W, x + 1), y + 1), x, y, 1]);'],
+  ['percolation : ouverture 0.6', 'ouvert[k] = rng() < 0.5 ? 1 : 0; if (percoAmas', 'ouvert[k] = rng() < 0.6 ? 1 : 0; if (percoAmas'],
+  ['percolation : valeur absolue oubliee', 'mesure: Math.abs(e1.t / e1.total - 0.5) + Math.abs(e2.t / e2.total - 0.5)', 'mesure: (e1.t / e1.total - 0.5) + (e2.t / e2.total - 0.75)'],
+  ['percolation : dessin decale', "brut[o] = li[0] + (li[2] === 0 ? u : 0);", "brut[o] = li[0] + 0.5 + (li[2] === 0 ? u : 0);"],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -632,7 +665,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

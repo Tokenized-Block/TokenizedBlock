@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game166 (idee : codex Grok Bot) */
+  percolationLiens: {
+    titre: 'Bond percolation (a fair coin for every link)',
+    enUnePhrase: 'Toss a coin for every link of a grid: is there an open road from the left side to the right side?',
+    colonnes: ['across', 'up', 'which cluster'],
+    aRegarder: ['A rectangle one cell wider than high is crossed exactly half of the time, however big it is.', 'The clusters that touch the left side are coloured; the one that reaches the right side crosses.', 'A square is not a fair coin: it is crossed more often than half.'],
+    fin: null,
+  },
   /* game165 (idee : codex Grok Bot) */
   theoremePick: {
     titre: 'Pick\'s theorem (the area of a polygon by counting dots)',

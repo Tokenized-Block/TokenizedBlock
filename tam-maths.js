@@ -846,7 +846,46 @@ function theoremePick(P, n) {
     temoin: { mesure: 2 * tp.I + tp.B - 2, formule: 17, lacet: pickLacet2(papillon), note: 'witness: the bow tie (0,0) (4,4) (4,0) (0,4) crosses itself : the shoelace gives 0, Pick would give 17/2 — Pick needs a simple polygon' } } };
 }
 
+// ---------- 24 : percolation de liens, la traversee a p = 1/2 (idee et valeurs : codex Grok Bot ; Bollobas et Riordan 2006, corollaire 5, lu par Grok ; Kesten 1980) ----------
+// Reseau carre ; chaque lien est ouvert avec la probabilite 1/2. Rectangle de n+1 cases de large et n de haut : un chemin de liens ouverts
+//   relie-t-il le bord gauche au bord droit ? Par dualite (le rectangle dual est le meme tourne d un quart), la reponse est OUI avec la
+//   probabilite EXACTEMENT 1/2, quel que soit n.
+// Exact ici : les 2^7 et 2^17 configurations des rectangles 2x1 et 3x2 enumerees une par une (64/128, 65 536/131 072 : valeurs de Grok, recomptees).
+// Mesure : 400 rectangles tires (graine) a la taille du curseur, fraction traversee contre 1/2 (statistique, sigma = 1/40).
+// Temoin : le CARRE 2x2 n a pas cette symetrie : 2 752/4 096, pas 1/2.
+// Dessin (vue de face) : un rectangle tire ; des points le long des liens ouverts, etiquette 2 = amas qui traverse, 1 = amas touchant le bord gauche, 0 = autres.
+function percoAretes(W, H) { const E = [], id = (x, y) => y * (W + 1) + x;
+  for (let y = 0; y <= H; y++) for (let x = 0; x < W; x++) E.push([id(x, y), id(x + 1, y), x, y, 0]);
+  for (let y = 0; y < H; y++) for (let x = 0; x <= W; x++) E.push([id(x, y), id(x, y + 1), x, y, 1]); return E; }
+function percoAmas(W, H, E, ouvert) { const p = new Int32Array((W + 1) * (H + 1)); for (let i = 0; i < p.length; i++) p[i] = i;
+  const f = (a) => { while (p[a] !== a) { p[a] = p[p[a]]; a = p[a]; } return a; };
+  for (let k = 0; k < E.length; k++) if (ouvert[k]) p[f(E[k][0])] = f(E[k][1]);
+  const bord = new Uint8Array(p.length); for (let y = 0; y <= H; y++) { bord[f(y * (W + 1))] |= 1; bord[f(y * (W + 1) + W)] |= 2; }
+  let traverse = false; for (let i = 0; i < p.length; i++) if (bord[i] === 3) traverse = true;
+  return { f, bord, traverse }; }
+const PERCO_EXACT = new Map();
+function percoExact(W, H) { const cle = W + 'x' + H; if (PERCO_EXACT.has(cle)) return PERCO_EXACT.get(cle);
+  const E = percoAretes(W, H), m = E.length, ouvert = new Uint8Array(m); let t = 0;
+  for (let c = 0; c < 2 ** m; c++) { for (let k = 0; k < m; k++) ouvert[k] = (c >> k) & 1; if (percoAmas(W, H, E, ouvert).traverse) t++; }
+  const r = { t, total: 2 ** m }; PERCO_EXACT.set(cle, r); return r; }
+function percolationLiens(P, n) {
+  const N = P.cote, W = N + 1, H = N, rng = mulberry32(P.graine), E = percoAretes(W, H), m = E.length, PARTIES = 400;
+  const e1 = percoExact(2, 1), e2 = percoExact(3, 2), carre = percoExact(2, 2), ouvert = new Uint8Array(m); let ok = 0;
+  for (let j = 0; j < PARTIES; j++) { for (let k = 0; k < m; k++) ouvert[k] = rng() < 0.5 ? 1 : 0; if (percoAmas(W, H, E, ouvert).traverse) ok++; }
+  for (let k = 0; k < m; k++) ouvert[k] = rng() < 0.5 ? 1 : 0;
+  const A = percoAmas(W, H, E, ouvert), liens = [];
+  for (let k = 0; k < m; k++) if (ouvert[k]) { const b = A.bord[A.f(E[k][0])]; liens.push([E[k][2], E[k][3], E[k][4], b === 3 ? 2 : b & 1 ? 1 : 0]); }
+  if (!liens.length) liens.push([0, 0, 0, 0]);
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const o = 3 * l, t = l * liens.length / n, s = Math.floor(t), u = t - s, li = liens[s]; brut[o] = li[0] + (li[2] === 0 ? u : 0); brut[o + 1] = li[1] + (li[2] === 1 ? u : 0); brut[o + 2] = li[3]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (liens du reseau)', invariants: {
+    dualite: { mesure: Math.abs(e1.t / e1.total - 0.5) + Math.abs(e2.t / e2.total - 0.5), formule: 0, n1: e1.t + '/' + e1.total, n2: e2.t + '/' + e2.total, note: 'every configuration of the 2 x 1 and 3 x 2 rectangles enumerated : distance of the crossing probability from 1/2, added for both (duality says 0 for every n)' },
+    simulee: { mesure: ok / PARTIES, formule: 0.5, sigma: Math.sqrt(0.25 / PARTIES), parties: PARTIES, note: 'share of 400 random (n+1) x n rectangles crossed left to right, against 1/2 (statistical)' },
+    temoin: { mesure: carre.t + '/' + carre.total, formule: '2752/4096', note: 'witness: the 2 x 2 SQUARE is not self-dual : crossed in 2752 of 4096 configurations, not half' } } };
+}
+
 export const COLONNES = Object.freeze({
+  percolationLiens: { colonnes: ['x (lattice)', 'y (lattice)', 'cluster (label; 2 = crosses, 1 = touches the left side, 0 = other)'], memeLongueur: [[0, 1]], autres: [2] },
   theoremePick: { colonnes: ['x', 'y', 'what (label; 0 = the outline, 1 = whole point inside, 2 = whole point on the boundary)'], memeLongueur: [[0, 1]], autres: [2] },
   courbeDragon: { colonnes: ['x', 'y', 'fold that made the segment (label)'], memeLongueur: [[0, 1]], autres: [2] },
   partitionEuler: { colonnes: ['column', 'row (downwards)', 'row number (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -942,9 +981,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'theoremePick', nom: 'Pick\'s theorem (area by counting points)', science: 'Geometry', D: 3, nuage: true, params: { sommets: 12, rayon: 20, graine: 1 },
     bornes: { sommets: [3, 30], rayon: [8, 40], graine: [1, 1000000] },
     phrase: 'A visualisation of Pick\'s theorem: a random polygon whose corners sit on whole-number points. Its area from the shoelace formula equals I + B/2 - 1, where I and B are the whole points inside and on the boundary, counted one by one. A bow tie that crosses itself shows why the polygon must be simple.' },
+  { id: 'percolationLiens', nom: 'Bond percolation: crossing at p = 1/2', science: 'Probability', D: 3, nuage: true, params: { cote: 12, graine: 1 },
+    bornes: { cote: [2, 40], graine: [1, 1000000] },
+    phrase: 'A visualisation of bond percolation: every link of a grid is open with probability one half. A rectangle n + 1 wide and n high is crossed from left to right with probability exactly 1/2, by duality. Every configuration of the two smallest cases is enumerated, random rectangles are drawn, and a square that misses the symmetry is shown as a witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'] };
-const FONCTIONS = { theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'] };
+const FONCTIONS = { percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
