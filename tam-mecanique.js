@@ -806,7 +806,53 @@ function penduleRessort(P, n) {
     partBalancement: { partMax: R.part, temoin: W.part, duree, note: 'largest share of the energy moved into the swing over the run, and the same for the witness spring at rho = 2.5' } } };
 }
 
+// ---------- 21 : le pendule de Kapitza (tenu debout par une secousse) ----------
+// Pendule rigide, g = L = 1, pivot secoue verticalement y = A cos(W t), W = 20 (fixe), A curseur. Angle theta depuis la verticale HAUTE :
+//   dans le repere du pivot la pesanteur effective est g + y'' = 1 - A W^2 cos(W t), d ou theta'' = (1 - A W^2 cos W t) sin theta, RK4
+//   (50 pas par secousse). Rien d autre.
+// Revue (agent sceptique, 2026-11-05, chiffres mesures par lui puis ici) : la reference n est pas « exacte » au sens d une formule fermee,
+//   c est la theorie de Floquet LINEAIRE ; calculee par le DETERMINANT DE HILL (domaine des frequences), pas par un second RK4.
+// Mesures : (1) theta0 = 0.001 rad (MESURE : a 0.01 l ecart de tr a Hill etait 2 a 7e-5, en theta0^2 ;
+//   a 0.001 il tombe a 3e-7 .. 6e-6, ~20 fois et non 100 : le reste vient du pas RK4, plus de l amplitude), theta echantillonne une fois par secousse : s(n+1) + s(n-1) = tr s(n) (lineaire, det = 1), tr AJUSTE par
+//   moindres carres -> frequence lente nu = acos(tr / 2) / T ; (2) lache de theta0 = depart (curseur, degres) : frequence lente
+//   chronometree sur les passages par zero des echantillons, plus basse d environ 0.2-0.4 theta0^2 (non lineaire, montre tel quel) ;
+//   (3) temoins : A = 0.05 (trop faible) et A = 0.5 (trop forte : au-dela de la borne HAUTE, alors que Kapitza le dit stable) tombent.
+// Reference (derivee ici) : tau = W t / 2 donne Mathieu theta'' + (a - 2 q cos 2 tau) theta = 0, a = -4 / W^2, q = -2 A. Hill :
+//   tr = 2 + 4 Delta(0) sinh^2(pi sqrt(-a) / 2), Delta(0) = determinant tridiagonal infini (1 sur la diagonale, xi_n = q / (4 n^2 - a) de
+//   part et d autre), tronque a |n| <= 4000 (reste ~ 1 / N^3). Stable si |tr| < 2. Kapitza (approche) : nu ~ sqrt(A^2 W^2 / 2 - 1).
+// Dessin : theta (degres), theta' et le temps pour la course lachee de depart : une ellipse lente parcourue de petits frissons.
+const KZ_W = 20, KZ_PAS = 50;
+function kapitza(P, n) {
+  const A = P.secousse, W = KZ_W, T = 2 * PI / W, h = T / KZ_PAS;
+  const sinhD = (x) => (expD(x) - expD(-x)) / 2;
+  /* determinant tridiagonal par recurrence : f_k = f_(k-1) - xi_(k-1) xi_k f_(k-2), de n = -N a N (a < 0 : 4 n^2 - a ne s annule pas) */
+  const hillTrace = (AA) => { const a = -4 / (W * W), q = -2 * AA, N = 4000, xi = (k) => q / (4 * k * k - a); let fpp = 1, fp = 1;
+    for (let k = -N + 1; k <= N; k++) { const f = fp - xi(k - 1) * xi(k) * fpp; fpp = fp; fp = f; } return 2 + 4 * fp * sinhD(PI * Math.sqrt(-a) / 2) ** 2; };
+  /* une course : theta0, nombre de secousses ; rend les echantillons (1 par secousse) et, si demande, la trace pour le dessin */
+  const course = (AA, th0, secousses, dessin) => { let q = th0, v = 0, tomb = false; const ech = [q], tr = dessin ? [[th0, 0, 0]] : null, acc = (t, x) => (1 - AA * W * W * cosD(W * t)) * sinD(x);
+    for (let i = 0; i < secousses * KZ_PAS; i++) { const t = i * h, k1 = acc(t, q), k2 = acc(t + h / 2, q + h / 2 * v), k3 = acc(t + h / 2, q + h / 2 * (v + h / 2 * k1)), k4 = acc(t + h, q + h * (v + h / 2 * k2));
+      q += h * (v + h / 6 * (k1 + k2 + k3)); v += h / 6 * (k1 + 2 * k2 + 2 * k3 + k4); if ((i + 1) % KZ_PAS === 0) ech.push(q); if (dessin && (i + 1) % 5 === 0) tr.push([q, v, (i + 1) * h]); if (Math.abs(q) > PI / 2) { tomb = true; break; } }
+    return { ech, tr, tomb }; };
+  const trEx = hillTrace(A), nuEx = Math.abs(trEx) < 2 ? acosD(trEx / 2) / T : NaN, nuK = A * A * W * W / 2 > 1 ? Math.sqrt(A * A * W * W / 2 - 1) : NaN;
+  /* (1) petite amplitude : trace ajustee */
+  const R = course(A, 0.001, 200, false); let sN = 0, sD = 0; for (let j = 1; j + 1 < R.ech.length; j++) { sN += R.ech[j] * (R.ech[j + 1] + R.ech[j - 1]); sD += R.ech[j] * R.ech[j]; }
+  const trM = sN / sD, nuM = Math.abs(trM) < 2 ? acosD(trM / 2) / T : NaN;
+  /* (2) grande amplitude : passages par zero des echantillons, sur ~ 3 periodes lentes */
+  const th0 = P.depart * PI / 180, nS = Math.ceil(3.2 * (2 * PI / nuEx) / T), G = course(A, th0, nS, true), z = [];
+  for (let j = 1; j < G.ech.length; j++) { const a0 = G.ech[j - 1], a1 = G.ech[j]; if ((a0 > 0) !== (a1 > 0)) z.push((j - 1 + a0 / (a0 - a1)) * T); }
+  const nuG = z.length > 2 ? PI * (z.length - 1) / (z[z.length - 1] - z[0]) : NaN;
+  /* (3) temoins */
+  const faible = course(0.05, 0.01, 300, false), forte = course(0.5, 0.01, 300, false);
+  const brut = new Float64Array(n * 3); for (let k = 0; k < n; k++) { const j = n <= 1 ? 0 : Math.round(k * (G.tr.length - 1) / (n - 1)), o = 3 * k; brut[o] = G.tr[j][0] * 180 / PI; brut[o + 1] = G.tr[j][1]; brut[o + 2] = G.tr[j][2]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (g = L = 1, W = 20)', invariants: {
+    traceKapitza: { mesure: trM, formule: trEx, note: 'Floquet trace of one shake, fitted from the angle sampled once per shake (theta0 = 0.001 rad), against the linear Floquet theory by Hill\'s determinant: |tr| < 2 means it stands' },
+    frequenceLente: { mesure: nuM, formule: nuEx, kapitza: nuK, note: 'slow rocking frequency around the top, acos(tr / 2) / T, measured against Hill ; beside it Kapitza\'s approximation sqrt(A^2 W^2 / 2 - 1)' },
+    grandeAmplitude: { nu: nuG, nuLineaire: nuEx, ecartRelatif: nuG / nuEx - 1, depart: P.depart, note: 'let go from the chosen tilt: slow frequency timed on the zero crossings ; lower than the linear one by about 0.2 to 0.4 theta0^2 (shown as it is)' },
+    temoins: { tombeFaible: faible.tomb ? 1 : 0, tombeForte: forte.tomb ? 1 : 0, traceForte: hillTrace(0.5), kapitzaForte: Math.sqrt(0.25 * W * W / 2 - 1), note: 'witnesses: shaken too weakly (A = 0.05) and too strongly (A = 0.5) the pendulum falls (1 = fell) ; at A = 0.5 Hill gives |tr| > 2 while Kapitza still predicts a slow frequency' } } };
+}
+
 export const COLONNES = Object.freeze({
+  kapitza: { colonnes: ['tilt from the upright theta (degrees)', 'angular speed', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   penduleRessort: { colonnes: ['x (sideways)', 'height y (the pivot is at 0)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   toupie: { colonnes: ['angle turned around the vertical phi (radians)', 'tilt of the axis theta (degrees)', 'time t'], memeLongueur: [], autres: [0, 1, 2] },
   dzhanibekov: { colonnes: ['spin about axis 1 (least inertia)', 'spin about axis 2 (the middle one)', 'spin about axis 3 (most inertia)'], memeLongueur: [[0, 1, 2]], autres: [] },
@@ -890,9 +936,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'penduleRessort', nom: 'A pendulum on a spring (the 2 : 1 resonance)', science: 'Classical mechanics', D: 3, nuage: true, params: { rapport: 2, rebond: 0.03 },
     bornes: { rapport: [1.5, 3], rebond: [0.015, 0.05] },
     phrase: 'A visualisation of a weight on a spring, let go stretched straight down with the faintest push sideways. When the spring bounces exactly twice for each swing, the bounce feeds the swing: the push grows until the weight swings instead of bouncing, then gives it back. How fast it grows is measured from the motion and matches the exact Floquet growth of the swing; tuned away from 2 : 1, the same push dies out.' },
+  { id: 'kapitza', nom: 'The pendulum of Kapitza (standing upside down)', science: 'Classical mechanics', D: 3, nuage: true, params: { secousse: 0.15, depart: 10 },
+    bornes: { secousse: [0.09, 0.35], depart: [1, 20] },
+    phrase: 'A visualisation of a pendulum turned upside down whose pivot is shaken up and down very fast: it does not fall, it rocks slowly around the top, trembling at every shake. The slow rocking is measured from the motion and matches the linear Floquet theory computed by the determinant of Hill. Shaken too weakly it falls, and shaken too strongly it falls again, where the classical Kapitza formula still says it should stand.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'], toupie: [], penduleRessort: [] };
-const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov, toupie, penduleRessort };
+export const ENTIERS = { billardPi: ['chiffres'], modesNormaux: ['masses', 'mode'], paraboleTir: ['angles'], penduleAmplitude: [], phasesLune: [], dureeJour: [], courseRoulante: [], corpsNoir: ['courbes'], reseauFentes: ['fentes'], refractionSnell: ['rayons'], desintegration: ['atomes', 'demiVie', 'graine'], anneauxNewton: [], pendulesCouples: [], tautochrone: ['billes'], chainette: ['maillons'], echelleGlisse: ['images'], perleCerceau: ['vitesses'], dzhanibekov: ['ecartPuissance'], toupie: [], penduleRessort: [], kapitza: [] };
+const FONCTIONS = { billardPi, modesNormaux, paraboleTir, penduleAmplitude, phasesLune, dureeJour, courseRoulante, corpsNoir, reseauFentes, refractionSnell, desintegration, anneauxNewton, pendulesCouples, tautochrone, chainette, echelleGlisse, perleCerceau, dzhanibekov, toupie, penduleRessort, kapitza };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

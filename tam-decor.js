@@ -457,6 +457,8 @@ const DECORS = {
   /* ---------- game127 ---------- */
   dureeJour: (P, o, B) => [pt([0, 12, B.centre[2]], C.repere, '12 hours (equinox)')],
   courseRoulante: (P, o, B) => [pt([0, 10, B.centre[2]], C.repere, 'Bottom of the slope')],
+  /* ---------- game146 ---------- */
+  kapitza: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Upright (the top)')],
   /* ---------- game145 ---------- */
   penduleRessort: (P, o, B) => [pt([0, -1, B.centre[2]], C.repere, 'Rest position (spring stretched by its weight)')],
   /* ---------- game144 ---------- */

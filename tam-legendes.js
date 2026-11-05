@@ -921,6 +921,14 @@ const L = {
     aRegarder: ['Below the threshold current 1 the potential creeps up to v = I and never fires.', 'Above it the neuron fires every t_ref + tau ln(I / (I - 1)): exact, compared frame by frame.', 'More current, faster firing, but never faster than one spike per refractory time.'],
     fin: null,
   },
+  /* game146 */
+  kapitza: {
+    titre: 'The pendulum of Kapitza (standing upside down)',
+    enUnePhrase: 'A pendulum turned upside down on a pivot shaken up and down twenty times a second: its tilt, its speed and the time.',
+    colonnes: ['tilt from the upright theta (degrees)', 'angular speed', 'time t'],
+    aRegarder: ['It does not fall: the tilt rocks slowly from side to side around the top, and every shake adds a small shiver.', 'Shake harder and it rocks faster; the slow rhythm matches the linear Floquet theory, and the classical Kapitza formula falls behind as the shaking grows.', 'Too weak a shake and it falls; too strong a shake and it falls again, although the Kapitza formula still says it should stand.'],
+    fin: null,
+  },
   /* game145 */
   penduleRessort: {
     titre: 'A pendulum on a spring (the 2 : 1 resonance)',

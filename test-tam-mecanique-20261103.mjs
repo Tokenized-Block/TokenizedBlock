@@ -13,7 +13,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-mecanique.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov', 'toupie', 'penduleRessort'];
+const IDS = ['billardPi', 'modesNormaux', 'paraboleTir', 'penduleAmplitude', 'phasesLune', 'dureeJour', 'courseRoulante', 'corpsNoir', 'reseauFentes', 'refractionSnell', 'desintegration', 'anneauxNewton', 'pendulesCouples', 'tautochrone', 'chainette', 'echelleGlisse', 'perleCerceau', 'dzhanibekov', 'toupie', 'penduleRessort', 'kapitza'];
 
 function extremes(s) { const ks = Object.keys(s.params), cs = [{}]; for (const k of ks) { cs.push({ [k]: s.bornes[k][0] }); cs.push({ [k]: s.bornes[k][1] }); } cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]]))); return cs; }
 function standardiser(b, n, D, groupes = []) {
@@ -327,6 +327,22 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(Math.abs(b[0] - 1e-6) < 1e-12 && Math.abs(b[1] + Math.sqrt((1 + a) ** 2 - 1e-12)) < 1e-12 && b[2] === 0 && tMax <= Pb.duree + 1e-9 && tMax > Pb.duree - 1 && pire <= 0, 'dessin ' + tMax + ' ' + Pb.duree + ' ' + pire);
     return 'trace ' + I.traceFloquet.mesure.toFixed(7) + ' / ' + tr.toFixed(7) + ', taux ' + I.tauxBalancement.mesure.toExponential(4) + ', transfert ' + Pb.partMax.toPrecision(3) + ', temoin ' + Pb.temoin.toExponential(1);
   });
+  /* game146 : Kapitza — references INDEPENDANTES : la trace par la MATRICE DE MONODROMIE (point milieu, 20000 pas, Math.cos), pas le
+   *   determinant de Hill du module ; nu par Math.acos ; Kapitza par Math.sqrt ; temoins : la meme monodromie a A = 0.05 et 0.5 */
+  if (vise('kapitza')) for (const p of [...extremes(sys('kapitza')), { secousse: 0.22, depart: 6 }]) ok(`kapitza ${JSON.stringify(p)} : trace de Floquet, frequence lente, grande amplitude, temoins qui tombent`, () => {
+    const R = S('kapitza', p), I = R.invariants, b = R.brut, A = R.params.secousse, W = 20, T = 2 * Math.PI / W, th0 = R.params.depart * Math.PI / 180;
+    const mono = (AA) => { const M = 20000, H = T / M, c = (t) => 1 - AA * W * W * Math.cos(W * t); let u = [1, 0], v = [0, 1];
+      const mil = (z, t) => { const zm = [z[0] + H / 2 * z[1], z[1] + H / 2 * c(t) * z[0]]; return [z[0] + H * zm[1], z[1] + H * c(t + H / 2) * zm[0]]; };
+      for (let i = 0; i < M; i++) { u = mil(u, i * H); v = mil(v, i * H); } return u[0] + v[1]; };
+    const tr = mono(A), nu = Math.acos(tr / 2) / T;
+    assert.ok(Math.abs(I.traceKapitza.formule - tr) < 1e-7 && Math.abs(I.traceKapitza.mesure - tr) < 1e-5, 'trace ' + I.traceKapitza.mesure + ' ' + I.traceKapitza.formule + ' ' + tr);
+    assert.ok(Math.abs(I.frequenceLente.formule / nu - 1) < 1e-7 && Math.abs(I.frequenceLente.mesure / nu - 1) < 1e-5 && Math.abs(I.frequenceLente.kapitza - Math.sqrt(A * A * W * W / 2 - 1)) < 1e-12, 'nu ' + I.frequenceLente.mesure + ' ' + nu);
+    const G = I.grandeAmplitude; assert.ok(G.nuLineaire === I.frequenceLente.formule && G.ecartRelatif < 0 && Math.abs(G.ecartRelatif) < 0.6 * th0 * th0 && Math.abs(G.ecartRelatif) > 0.08 * th0 * th0, 'grande amplitude ' + G.ecartRelatif + ' / theta0^2 ' + (G.ecartRelatif / th0 / th0).toFixed(3));
+    const Tm = I.temoins; assert.ok(Tm.tombeFaible === 1 && Tm.tombeForte === 1 && Math.abs(Tm.traceForte - mono(0.5)) < 1e-6 && Math.abs(mono(0.05)) > 2 && Math.abs(Tm.traceForte) > 2 && Tm.kapitzaForte === 7, 'temoins ' + JSON.stringify(Tm));
+    let pire = 0, tMax = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q; pire = Math.max(pire, Math.abs(b[o]) - 1.5 * R.params.depart); tMax = Math.max(tMax, b[o + 2]); }
+    assert.ok(Math.abs(b[0] - R.params.depart) < 1e-12 && b[1] === 0 && b[2] === 0 && pire <= 0 && tMax > 3 * 2 * Math.PI / nu, 'dessin ' + pire + ' ' + tMax);
+    return 'trace ' + I.traceKapitza.mesure.toFixed(7) + ' / ' + tr.toFixed(7) + ', nu ' + I.frequenceLente.mesure.toFixed(5) + ' (Kapitza ' + I.frequenceLente.kapitza.toFixed(4) + '), grande amplitude ' + (G.ecartRelatif / th0 / th0).toFixed(3) + ' theta0^2';
+  });
   ok('bornage : hors bornes ramene, entiers arrondis', () => { assert.deepEqual(T.simuler('billardPi', { chiffres: 9 }, { n: 20 }).params, { chiffres: 5 }); assert.deepEqual(T.simuler('modesNormaux', { masses: 2.6, mode: NaN }, { n: 20 }).params, { masses: 3, mode: 2 }); });
   return res;
 }
@@ -456,6 +472,15 @@ const MUTANTS = [
   ['ressort : demi-periodes mal comptees', '2 * (zs[zs.length - 1] - zs[0]) / (zs.length - 1)', '2 * (zs[zs.length - 1] - zs[0]) / zs.length'],
   ['ressort : temoin au meme rapport', 'W = course(2.5);', 'W = course(rho);'],
   ['ressort : temps dessine 1 % trop long', 'tr.push([q[0], q[1], i * hh]);', 'tr.push([q[0], q[1], i * hh * 1.01]);'],
+  ['kapitza : pesanteur 2 % trop forte', '(1 - AA * W * W * cosD(W * t)) * sinD(x)', '(1.02 - AA * W * W * cosD(W * t)) * sinD(x)'],
+  ['kapitza : q de Mathieu 2 % trop grand', 'const a = -4 / (W * W), q = -2 * AA,', 'const a = -4 / (W * W), q = -2.04 * AA,'],
+  ['kapitza : recurrence de Hill faussee', 'const f = fp - xi(k - 1) * xi(k) * fpp;', 'const f = fp - 1.01 * xi(k - 1) * xi(k) * fpp;'],
+  ['kapitza : sinh sur 2.02', 'sinhD(PI * Math.sqrt(-a) / 2) ** 2', 'sinhD(PI * Math.sqrt(-a) / 2.02) ** 2'],
+  ['kapitza : ajustement de la trace desequilibre', 'sN += R.ech[j] * (R.ech[j + 1] + R.ech[j - 1]);', 'sN += R.ech[j] * (R.ech[j + 1] + 1.001 * R.ech[j - 1]);'],
+  ['kapitza : nu sur deux secousses', 'nuM = Math.abs(trM) < 2 ? acosD(trM / 2) / T : NaN;', 'nuM = Math.abs(trM) < 2 ? acosD(trM / 2) / (2 * T) : NaN;'],
+  ['kapitza : grande amplitude comptee double', 'PI * (z.length - 1) / (z[z.length - 1] - z[0])', '2 * PI * (z.length - 1) / (z[z.length - 1] - z[0])'],
+  ['kapitza : temoin fort dans la bande stable', 'forte = course(0.5, 0.01, 300, false);', 'forte = course(0.3, 0.01, 300, false);'],
+  ['kapitza : angle dessine en radians', 'brut[o] = G.tr[j][0] * 180 / PI;', 'brut[o] = G.tr[j][0];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
 ];
 const moteur = pathToFileURL(join(ICI, 'tam-moteur.js')).href;
@@ -469,7 +494,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres son nom ; « bornage » et le reste : tout */
-    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'], toupie: ['toupie'], ressort: ['penduleRessort'] }[nom.split(' ')[0]] || null;
+    const cible = { billard: ['billardPi'], modes: ['modesNormaux'], tir: ['paraboleTir'], pendule: ['penduleAmplitude'], lune: ['phasesLune'], jour: ['dureeJour'], course: ['courseRoulante'], corps: ['corpsNoir'], reseau: ['reseauFentes'], snell: ['refractionSnell'], desint: ['desintegration'], newton: ['anneauxNewton'], couples: ['pendulesCouples'], tauto: ['tautochrone'], chaine: ['chainette'], echelle: ['echelleGlisse'], perle: ['perleCerceau'], dzhan: ['dzhanibekov'], toupie: ['toupie'], ressort: ['penduleRessort'], kapitza: ['kapitza'] }[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok); if (rouges.length) tues++;
     console.log(`  M${i + 1} ${nom} : ${rouges.length ? 'TUE' : 'SURVIT'} (${rouges.length} rouges${rouges.length ? ', ex: ' + rouges.slice(0, 2).map((x) => x.nom).join(' | ') : ''})`);

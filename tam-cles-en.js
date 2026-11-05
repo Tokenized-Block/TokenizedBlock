@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game146 */
+  kapitza: 'Kapitza approximation', nu: 'slow frequency timed', nuLineaire: 'linear slow frequency (Hill)', ecartRelatif: 'relative gap', tombeFaible: 'falls when shaken too weakly (1 = yes)', tombeForte: 'falls when shaken too strongly (1 = yes)', traceForte: 'Hill trace at the strong shake', kapitzaForte: 'Kapitza slow frequency at the strong shake (wrong)',
   /* game145 */
   mathieu: 'Mathieu guess 3 a / 4', partMax: 'largest share moved into the swing', temoin: 'same for the witness at rho = 2.5', duree: 'length of the run',
   /* game144 */
@@ -411,6 +413,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game146 */
+  traceKapitza: 'Floquet trace of one shake (|tr| < 2: it stands)', frequenceLente: 'Slow rocking frequency around the top', grandeAmplitude: 'Slow frequency at a large tilt', temoins: 'Witnesses: shaken too weakly, too strongly',
   /* game145 */
   periodeRebond: 'Bounce period (no sideways push)', traceFloquet: 'Floquet trace of one bounce (|tr| > 2: the swing grows)', tauxBalancement: 'Growth rate of the swing', partBalancement: 'Energy moved into the swing',
   /* game144 */
