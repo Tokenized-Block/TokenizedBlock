@@ -83,7 +83,7 @@ const mutants = [
 ];
 let tues = 0;
 for (const [nom, de, vers] of mutants) {
-  const deN = de.replace(/\n/g, src.includes('\r\n') ? '\r\n' : '\n'), versN = vers.replace(/\n/g, src.includes('\r\n') ? '\r\n' : '\n');
+  const eol = (src.match(/\r?\n/) || ['\n'])[0], deN = de.replace(/\n/g, eol), versN = vers.replace(/\n/g, eol);
   assert.ok(src.includes(deN), 'ancre : ' + nom);
   const f = path.join(ICI, '.mutant-denim-regleur-' + tues + '-' + process.pid + '.js');
   writeFileSync(f, src.replace(deN, versN));

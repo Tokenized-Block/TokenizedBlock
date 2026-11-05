@@ -11,7 +11,7 @@ const HTML = readFileSync(new URL('./index.html', import.meta.url), 'utf8').repl
 function banc(html) {
   const rates = [];
   const ok = (c, m) => { if (!c) rates.push(m); };
-  const i = html.indexOf('function ageDepuisBlocs('), j = html.indexOf('\n}\n', i);
+  const i = html.indexOf('function ageDepuisBlocs('), m = i > 0 ? /\r?\n\}\r?\n/.exec(html.slice(i)) : null, j = m ? i + m.index : -1;
   if (!(i > 0 && j > i)) return ['ageDepuisBlocs introuvable'];
   const age = new Function(html.slice(i, j + 2) + '\nreturn ageDepuisBlocs;')();
   ok(age(9000, 2) === '5 h', '2 s : 9 000 blocs = 5 h (lu ' + age(9000, 2) + ')');
