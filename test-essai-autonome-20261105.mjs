@@ -28,7 +28,7 @@ const S = (sig) => '0x' + selecteur(sig);
 const SPM = A.SPEND_PERMISSION_MANAGER.toLowerCase(), USDC = USDC_BASE.toLowerCase();
 const U = '0x' + 'a1'.repeat(20), SUB = '0x' + 'b2'.repeat(20), TIERS = '0x' + 'c3'.repeat(20);
 const mot = (x) => BigInt(x).toString(16).padStart(64, '0');
-const revert = (data) => Object.assign(new Error('execution reverted'), { code: 3, data });
+const revert = (data) => Object.assign(new Error('execution reverted'), { code: 3, data, revert: true });
 const ERR = { depasse: S('ExceededSpendPermission(uint256,uint256)'), nonAut: S('UnauthorizedSpendPermission()'), sender: S('InvalidSender(address,address)'),
   sig: S('InvalidSignature()'), wallet: S('Unauthorized()') };
 const TUPLE = '((address,address,address,uint160,uint48,uint48,uint48,uint256,bytes))';
@@ -123,11 +123,25 @@ function monde({ code = '0x6001', chainId = '0x2105', spmOwner = true, hashFaux 
   };
   return { request, journal, st };
 }
+const WALLET = ['eth_requestAccounts', 'eth_accounts', 'eth_chainId', 'wallet_switchEthereumChain', 'wallet_addSubAccount', 'wallet_getSubAccounts',
+  'eth_signTypedData_v4', 'wallet_sendCalls', 'wallet_getCallsStatus'];
 const rapide = { pause: async () => {}, pasMs: 1, attenteMaxMs: 5, domaine: 'https://exemple.test' };
 const envoisDe = (w) => w.journal.filter((j) => j.method === 'wallet_sendCalls');
-async function jusquA(M, w, n) {
-  const e = M.creerEssai({ provider: w, ...rapide, tirerSalt: () => 7n });
-  const r = { e };
+/* le wallet tel que le SDK se comporte en prod chez Phil : -32603 sur toute methode qui n est pas un geste (et sur `panne`) */
+function walletSeul(w, { panne = [], chainId = null } = {}) {
+  const recues = [];
+  const request = async (a) => {
+    recues.push(a.method);
+    if (!WALLET.includes(a.method) || panne.includes(a.method)) throw Object.assign(new Error('failed to fetch rpc request'), { code: -32603 });
+    if (chainId && a.method === 'eth_chainId') return chainId;
+    return w.request(a);
+  };
+  return { request, recues };
+}
+async function jusquA(M, w, n, provider = walletSeul(w)) {
+  const log = [];
+  const e = M.creerEssai({ provider, lecteur: (m, p) => w.request({ method: m, params: p }), journal: (x) => log.push(x), ...rapide, tirerSalt: () => 7n });
+  const r = { e, log, provider };
   r[1] = await e.connecter(); if (n === 1) return r;
   r['2a'] = await e.trouverSousCompte(); r['2b'] = await e.creerSousCompte(); if (n === 2) return r;
   r['3a'] = await e.construirePermission(); r['3b'] = await e.signer(); r['3c'] = await e.enregistrer(); if (n === 3) return r;
@@ -163,6 +177,52 @@ async function suite(M) {
       return pr && pr.method === 'eth_call' && pr.params[0].from === x.params[0].from && pr.params[0].data === x.params[0].calls[0].data;
     });
   }
+  /* S11 : le wallet ne recoit QUE des gestes (les lectures vont a nos noeuds) */
+  { const w = monde(); const r = await jusquA(M, w, 6);
+    R['S11 le provider ne recoit que des methodes wallet'] = r[6].ok && r.provider.recues.length > 0 && r.provider.recues.every((m) => WALLET.includes(m))
+      && !r.provider.recues.includes('eth_call') && !r.provider.recues.includes('eth_getCode'); }
+  /* S12 : comme en prod chez Phil : -32603 sur les lectures ET sur wallet_getCallsStatus / wallet_getSubAccounts -> tout passe quand meme */
+  { const w = monde(); const r = await jusquA(M, w, 6, walletSeul(w, { panne: ['wallet_getCallsStatus', 'wallet_getSubAccounts'] }));
+    const errs = r.log.filter((x) => x.what === 'wallet error');
+    R['S12.1 -32603 partout hors gestes : les 6 etapes passent'] = r[1].ok && r['2b'].ok && r['3c'].ok && r[4].ok && r[5].ok && r[6].ok && w.st.solde[SUB] === 10_000n;
+    R['S12.2 getSubAccounts en panne : creation proposee, cause dite'] = r['2a'].ok && r['2a'].aCreer === true && /wallet_getSubAccounts: -32603 failed to fetch/.test(r['2a'].nonListe);
+    R['S12.3 confirmation par EFFET lu on-chain, recu non lu dit'] = r['3c'].recus.length === 0 && r.log.filter((x) => x.what === 'no receipt from the wallet; the effect was read on-chain').length === 3;
+    R['S12.4 chaque erreur wallet au journal : etape, methode, code, message'] = errs.some((x) => x.step === 2 && x.method === 'wallet_getSubAccounts' && x.code === -32603 && x.message === 'failed to fetch rpc request')
+      && errs.some((x) => x.step === 3 && x.method === 'wallet_getCallsStatus' && x.code === -32603); }
+  /* S12b : getCallsStatus en panne ET le wallet n a rien fait : pas d effet lu -> echec */
+  { const w = monde({ ment: (c) => c.calls[0].data.startsWith(SEL.approveSig) });
+    const r = await jusquA(M, w, 3, walletSeul(w, { panne: ['wallet_getCallsStatus'] }));
+    R['S12b statut en panne, aucun effet -> pas de succes'] = !r['3c'].ok && /no effect read on-chain/.test(r['3c'].pourquoi) && /-32603/.test(r['3c'].pourquoi); }
+  /* S12c : un geste refuse par le wallet est dit avec SA methode */
+  { const w = monde(); const r = await jusquA(M, w, 3, walletSeul(w, { panne: ['eth_signTypedData_v4'] }));
+    R['S12c erreur de signature : methode + code dans la raison et le journal'] = !r['3b'].ok && r['3b'].pourquoi === 'wallet error on eth_signTypedData_v4: -32603 failed to fetch rpc request'
+      && r.log.some((x) => x.what === 'wallet error' && x.method === 'eth_signTypedData_v4' && x.step === 3); }
+  /* S13 : lecteurRpc, repli de noeud en noeud, revert = reponse, echec total = toutes les causes */
+  {
+    const appels = [];
+    const rep = (corps, status = 200) => ({ ok: status === 200, status, json: async () => corps });
+    const faux = (plan) => async (url, init) => { appels.push(url); return plan[url](JSON.parse(init.body), init); };
+    const l1 = M.lecteurRpc(['a', 'b', 'c'], { fetchImpl: faux({ a: () => { throw new TypeError('Failed to fetch'); }, b: () => rep({}, 429), c: (q) => rep({ jsonrpc: '2.0', id: q.id, result: '0x2105' }) }) });
+    const v1 = await l1('eth_chainId', []);
+    const n1 = appels.splice(0).join(',');
+    const l2 = M.lecteurRpc(['a', 'b'], { fetchImpl: faux({ a: () => rep({ error: { code: 3, message: 'execution reverted', data: ERR.depasse + mot(2) + mot(1) } }), b: () => rep({ result: '0x' }) }) });
+    let e2 = null; try { await l2('eth_call', [{}]); } catch (e) { e2 = e; }
+    const n2 = appels.splice(0).join(',');
+    const l3 = M.lecteurRpc(['a', 'b'], { fetchImpl: faux({ a: () => rep({ error: { code: -32005, message: 'limit exceeded' } }), b: () => rep({}, 503) }) });
+    let e3 = null; try { await l3('eth_getCode', []); } catch (e) { e3 = e; }
+    const l4 = M.lecteurRpc(['a', 'b'], { timeoutMs: 20, fetchImpl: faux({ a: (q, init) => new Promise((_, ko) => init.signal.addEventListener('abort', () => ko(Object.assign(new Error('aborted'), { name: 'AbortError' })))), b: () => rep({ result: '0x1' }) }) });
+    const v4 = await l4('eth_blockNumber', []);
+    R['S13.1 reseau KO puis 429 -> 3e noeud'] = v1 === '0x2105' && n1 === 'a,b,c';
+    R['S13.2 revert = reponse : pas de noeud suivant, donnees gardees'] = !!e2 && e2.revert === true && n2 === 'a' && M.decoderErreur(M.donneesRevert(e2)).nom === 'ExceededSpendPermission';
+    R['S13.3 tout echoue -> erreur EXACTE de chaque noeud'] = !!e3 && e3.code === 'RPC_UNREACHABLE' && /a -32005 limit exceeded/.test(e3.message) && /b HTTP 503/.test(e3.message);
+    R['S13.4 timeout -> noeud suivant'] = v4 === '0x1';
+  }
+  /* S14 : les noeuds sont CEUX de l app (RESEAUX[8453] : rpc puis secours, lus dans app.html) */
+  { const app = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8');
+    const i = app.indexOf('8453: { nom:');
+    const bloc = app.slice(i, i + 6000);
+    const rpc = (/rpc: '([^']+)'/.exec(bloc) || [])[1], secours = ((/secours: \[([^\]]*)\]/.exec(bloc) || [])[1] || '').match(/'[^']+'/g) || [];
+    R['S14 NOEUDS_BASE = RESEAUX[8453] d app.html'] = i > 0 && !!rpc && JSON.stringify(M.NOEUDS_BASE) === JSON.stringify([rpc, ...secours.map((x) => x.slice(1, -1))]); }
   /* S2 : getHash on-chain different -> rien a signer */
   { const w = monde({ hashFaux: true }); const r = await jusquA(M, w, 3);
     R['S2 hash local != getHash -> arret, aucune signature demandee'] = !r['3a'].ok && !w.journal.some((j) => j.method === 'eth_signTypedData_v4'); }
@@ -172,7 +232,10 @@ async function suite(M) {
   /* S4-S6 : arrets de l etape 1 */
   { R['S4 delegation 7702 -> arret'] = !(await jusquA(M, monde({ code: '0xef0100' + '56'.repeat(20) }), 1))[1].ok;
     R['S5 code vide -> arret'] = !(await jusquA(M, monde({ code: '0x' }), 1))[1].ok;
-    R['S6 chaine 0x1 -> arret'] = !(await jusquA(M, monde({ chainId: '0x1' }), 1))[1].ok; }
+    { const w = monde(); const r = await jusquA(M, w, 1, walletSeul(w, { chainId: '0x1' }));
+      R['S6 wallet sur la chaine 0x1 -> arret'] = !r[1].ok && /wallet is not on Base/.test(r[1].pourquoi); }
+    { const w = monde({ chainId: '0x1' }); const r = await jusquA(M, w, 1, walletSeul(w, { chainId: '0x2105' }));
+      R['S6b noeud de lecture pas sur Base -> arret'] = !r[1].ok && /read node is not Base/.test(r[1].pourquoi); } }
   /* S7 : le wallet ment (200 sans rien faire) sur approve, spend, revoke */
   { const sp = (c) => c.calls[0].data.startsWith(SEL.spend), ap = (c) => c.calls[0].data.startsWith(SEL.approveSig), rv = (c) => c.calls[0].data.startsWith(SEL.revoke);
     const r7a = await jusquA(M, monde({ ment: ap }), 3);
@@ -246,13 +309,28 @@ const MUTANTS = [
   ['approve depuis n importe qui', 'if (min(from) !== min(p.spender) && min(from) !== min(p.account)) return null;', ''],
   ['depassement = reste (pas +1)', '- BigInt(depenseDansPeriode) + 1n;', '- BigInt(depenseDansPeriode);'],
   ['funding auto', "funding: 'manual'", "funding: 'spend-permissions'"],
+  ['eth_getCode par le wallet', "const code = await lire('eth_getCode', [u, 'latest']);", "const code = await req({ method: 'eth_getCode', params: [u, 'latest'] });"],
+  ['garde retiree + eth_call par le wallet', ['    if (!METHODES_WALLET.includes(r.method)) throw', '    if (false) throw'],
+    ["const ethCall = (to, data, from) => lire('eth_call', [from ? { from, to, data } : { to, data }, 'latest']);", "const ethCall = (to, data, from) => req({ method: 'eth_call', params: [from ? { from, to, data } : { to, data }, 'latest'] });"]],
+  ['garde retiree + bloc par le wallet', ['    if (!METHODES_WALLET.includes(r.method)) throw', '    if (false) throw'],
+    ["const bloc = await lire('eth_getBlockByNumber', ['latest', false]);", "const bloc = await req({ method: 'eth_getBlockByNumber', params: ['latest', false] });"]],
+  ['garde retiree + simulation par le wallet', ['    if (!METHODES_WALLET.includes(r.method)) throw', '    if (false) throw'], ['try { await lire(s.method, s.params);', 'try { await req(s);']],
+  ['effet ignore', 'if (vu) { parEffet = true; break; }', 'if (false) { parEffet = true; break; }'],
+  ['effet toujours vrai', 'try { vu = (await effet()) === true; }', 'try { vu = true; }'],
+  ['getSubAccounts en panne = arret', 'return { ok: true, sousCompte: null, aCreer: true, nonListe:', 'return { ok: false, sousCompte: null, aCreer: true, nonListe:'],
+  ['erreur wallet non journalisee', "catch (e) { log(etapeCourante, 'wallet error',", 'catch (e) { ((...a) => a)(etapeCourante, 0,'],
+  ['lecteur sans repli', 'for (const url of urls) {', 'for (const url of urls.slice(0, 1)) {'],
+  ['revert fait tourner les noeuds', 'if (estRevert(j.error)) throw', 'if (false) throw'],
+  ['noeud non Base accepte', "if (min(chLu) !== CHAINE_BASE_HEX) return stop", 'if (false) return stop'],
 ];
 let tues = 0;
-for (const [nom, de, vers] of MUTANTS) {
-  const occ = SRC.split(de).length - 1;
-  if (occ !== 1) { ok(false, 'mutant « ' + nom + ' » : motif trouve ' + occ + ' fois (attendu 1)'); continue; }
+for (const [nom, ...paires] of MUTANTS) {
+  const lot = Array.isArray(paires[0]) ? paires : [paires];
+  let src = SRC, mauvais = null;
+  for (const [de, vers] of lot) { const occ = src.split(de).length - 1; if (occ !== 1) { mauvais = occ; break; } src = src.replace(de, vers); }
+  if (mauvais !== null) { ok(false, 'mutant « ' + nom + ' » : motif trouve ' + mauvais + ' fois (attendu 1)'); continue; }
   let R;
-  try { R = await suite(await charger(SRC.replace(de, vers))); } catch (e) { R = { ['exception ' + e.message]: false }; }
+  try { R = await suite(await charger(src)); } catch (e) { R = { ['exception ' + e.message]: false }; }
   const rouges = Object.entries(R).filter(([, v]) => v !== true).map(([k]) => k.split(' ')[0]);
   if (rouges.length) tues += 1;
   ok(rouges.length > 0, 'mutant ' + (rouges.length ? 'tue' : 'VIVANT') + ' : ' + nom + (rouges.length ? ' (' + rouges.join(', ') + ')' : ''));

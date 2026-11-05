@@ -100,7 +100,7 @@ async function universelNeuf({ sansSpm = false } = {}) {
 }
 
 /* ── LE PROVIDER DE TEST ── */
-function fournisseurFork({ universel, chainIdForce = null, refus4100 = false, refuseSignature = false }) {
+function fournisseurFork({ universel, chainIdForce = null, refus4100 = false, refuseSignature = false, panne = [] }) {
   const journal = [];          // toutes les requetes recues, telles quelles
   const envois = new Map();    // id -> { hash, from, to, data }
   let sousCompte = null;
@@ -108,6 +108,7 @@ function fournisseurFork({ universel, chainIdForce = null, refus4100 = false, re
   const erreur = (code, message) => Object.assign(new Error(message), { code });
   const request = async ({ method, params = [] }) => {
     journal.push({ method, params: JSON.parse(JSON.stringify(params)) });
+    if (panne.includes(method)) throw erreur(-32603, 'failed to fetch rpc request');
     switch (method) {
       case 'eth_requestAccounts': case 'eth_accounts': return [universel];
       case 'eth_chainId': return chainIdForce || rpc('eth_chainId');
@@ -153,7 +154,8 @@ function fournisseurFork({ universel, chainIdForce = null, refus4100 = false, re
         return { version: '2.0', id: params[0], chainId: '0x2105', atomic: true, status: r.status === '0x1' ? 200 : 500,
           receipts: [{ transactionHash: h, status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed, logs: [] }] };
       }
-      default: return rpc(method, params);
+      /* ⛔ comme le SDK en prod chez Phil (2026-11-05) : une LECTURE demandee au wallet echoue. La page doit lire par ses noeuds. */
+      default: throw erreur(-32603, 'failed to fetch rpc request');
     }
   };
   return { request, journal, envois, sousCompte: () => sousCompte };
@@ -165,9 +167,14 @@ if (PORT_SERVI) {
   const f = fournisseurFork({ universel: u });
   const SERVIS = { '/essai-autonome.html': 'text/html', '/essai-autonome.js': 'text/javascript', '/agent-autonome.js': 'text/javascript',
     '/agent-sous-compte.js': 'text/javascript', '/frais-creation.js': 'text/javascript', '/pool.js': 'text/javascript', '/keccak.js': 'text/javascript', '/icon.png': 'image/png' };
-  const relais = '<script>window.__fournisseurEssai={isTest:true,request:(a)=>fetch("/__rpc-essai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(a)}).then((r)=>r.json()).then((r)=>{if(r.error)throw r.error;return r.result;})};</script>';
+  const relais = '<script>window.__rpcEssai="/__rpc-lecture";window.__fournisseurEssai={isTest:true,request:(a)=>fetch("/__rpc-essai",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(a)}).then((r)=>r.json()).then((r)=>{if(r.error)throw r.error;return r.result;})};</script>';
   http.createServer(async (req, res) => {
     const u2 = new URL(req.url, 'http://x');
+    if (req.method === 'POST' && u2.pathname === '/__rpc-lecture') {   // les LECTURES de la page : JSON-RPC brut vers le fork
+      let corps = ''; for await (const c of req) corps += c;
+      const r = await fetch(URL_FORK, { method: 'POST', headers: { 'content-type': 'application/json' }, body: corps });
+      res.writeHead(r.status, { 'content-type': 'application/json' }); res.end(await r.text()); return;
+    }
     if (req.method === 'POST' && u2.pathname === '/__rpc-essai') {
       let corps = ''; for await (const c of req) corps += c;
       let sortie;
@@ -186,7 +193,7 @@ if (PORT_SERVI) {
 }
 
 async function scenarios() {
-  const rapide = { pause: async () => {}, pasMs: 1, attenteMaxMs: 50, tirerSalt: aleaNonce };
+  const rapide = { pause: async () => {}, pasMs: 1, attenteMaxMs: 50, tirerSalt: aleaNonce, lecteur: E.lecteurRpc([URL_FORK]) };
   const journalPage = [];
   const entrees = (etape) => journalPage.filter((x) => x.step === etape);
 
@@ -302,6 +309,24 @@ async function scenarios() {
     const d7 = await e7b.depenser();
     ok(!d7.ok && /MISMATCH/.test(d7.pourquoi), 'T7 le wallet dit « 200 » sans que rien ne bouge on-chain -> la page dit MISMATCH (relu, pas cru)');
     await e7.revoquer();
+  }
+
+  /* T8 : comme chez Phil en prod : wallet_getCallsStatus et wallet_getSubAccounts repondent -32603 -> la page passe par l EFFET lu */
+  {
+    const U8 = await universelNeuf();
+    const f8 = fournisseurFork({ universel: U8, panne: ['wallet_getCallsStatus', 'wallet_getSubAccounts'] });
+    const j8 = [];
+    const e8 = E.creerEssai({ provider: f8, journal: (x) => j8.push(x), domaine: 'x', ...rapide, attenteMaxMs: 3000, pasMs: 50 });
+    const a = await e8.connecter(), b = await e8.trouverSousCompte(), c = await e8.creerSousCompte();
+    await e8.construirePermission(); await e8.signer();
+    const d = await e8.enregistrer('sous-compte'), s8 = await e8.depenser(), x8 = await e8.depasser(), r8 = await e8.revoquer();
+    ok(a.ok && b.ok && b.aCreer && /wallet_getSubAccounts: -32603/.test(b.nonListe) && c.ok, 'T8a getSubAccounts -32603 : la page propose la creation et dit la cause');
+    ok(d.ok && s8.ok && x8.ok && r8.ok && d.recus.length === 0 && j8.filter((x) => x.what === 'no receipt from the wallet; the effect was read on-chain').length === 3,
+      'T8b getCallsStatus -32603 : approve, spend, revoke confirmes par l EFFET lu sur le fork (aucun recu invente)');
+    ok(j8.some((x) => x.what === 'wallet error' && x.method === 'wallet_getCallsStatus' && x.code === -32603 && x.step === 3)
+      && j8.some((x) => x.what === 'wallet error' && x.method === 'wallet_getSubAccounts' && x.step === 2), 'T8c le journal nomme etape, methode et code de chaque erreur wallet');
+    ok(!f8.journal.some((j) => !['eth_requestAccounts', 'eth_chainId', 'wallet_getSubAccounts', 'wallet_addSubAccount', 'eth_signTypedData_v4', 'wallet_sendCalls', 'wallet_getCallsStatus'].includes(j.method)),
+      'T8d le provider n a recu QUE des gestes wallet');
   }
 
   await rpc('anvil_stopImpersonatingAccount', [source]);

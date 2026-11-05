@@ -1,7 +1,7 @@
 /* essai-autonome.js — la page d ESSAI du mode autonome (essai-autonome.html), pour que Phil le teste LUI-MEME avec SON Base Account.
  *
- * ⛔ CE MODULE NE SIGNE RIEN, NE TIENT AUCUNE CLE. Tout passe par `provider.request` : le provider du Base Account SDK dans la
- *   page (le wallet de l utilisateur signe, dans SA fenetre), un provider de test relaye vers un fork anvil dans les bancs.
+ * ⛔ CE MODULE NE SIGNE RIEN, NE TIENT AUCUNE CLE. Les GESTES passent par `provider.request` (le provider du Base Account SDK dans
+ *   la page, un provider de test dans les bancs) ; les LECTURES passent par nos noeuds (`lecteurRpc`, voir plus bas), jamais par le wallet.
  * ⛔ MODE_AUTONOME_DRAPEAU (agent-sous-compte.js) N EST NI LU NI CHANGE ICI : cette page est separee, non liee depuis l app.
  * ⛔ MONTANTS EN DUR, refuses s ils bougent : plafond 1 USDC par jour, duree 1 jour, UNE depense de 0,01 USDC. La depense va du
  *   Base Account de l utilisateur vers SON sub account : aucun fonds ne sort de chez lui.
@@ -26,7 +26,7 @@
 import { demandeAutorisation, donneesAutorisation, hashAutorisation, appelApprobationAvecSignature, appelDepense,
   appelRevocation, appelLecture, SPEND_PERMISSION_MANAGER } from './agent-autonome.js';
 import { USDC_BASE } from './frais-creation.js';
-import { CHAINE_BASE, CHAINE_BASE_HEX, sousCompteExistant } from './agent-sous-compte.js';
+import { CHAINE_BASE, CHAINE_BASE_HEX } from './agent-sous-compte.js';
 import { selecteur } from './pool.js';
 
 /* ── LES BORNES DE L ESSAI, EN DUR ── */
@@ -228,13 +228,70 @@ export function texteEtape(n, ctx = {}) {
   }
 }
 
+/* ══ LES LECTURES NE PASSENT PAS PAR LE WALLET (retour de Phil en prod, 2026-11-05 : « wallet error -32603 failed to fetch rpc
+ *   request »). Lu dans le bundle 2.5.13 : toute methode qui n est pas un geste wallet tombe dans `nI(e, this.chain.rpcUrl)`, un
+ *   fetch avec des en-tetes `X-Cbw-Sdk-Version` / `X-Cbw-Sdk-Platform` ; `wallet_getCallsStatus` aussi, et `wallet_getSubAccounts`
+ *   quand le SDK ne l a pas en memoire. Mesure le 2026-11-05 (preflight OPTIONS, Origin tokenizedblock.space) : mainnet.base.org
+ *   n autorise que `Content-Type,Authorization,User-Agent` -> le navigateur bloque -> « Failed to fetch » ; publicnode et drpc
+ *   autorisent ces en-tetes. (Quelle URL le SDK utilise chez Phil : NON mesure.)
+ *   => La page LIT par ses propres noeuds, les MEMES que l app : RESEAUX[8453] d app.html, `rpc` puis `secours` (recopies ici,
+ *   compares a app.html par test-essai-autonome). Le wallet ne recoit que les gestes wallet (METHODES_WALLET). */
+export const NOEUDS_BASE = Object.freeze(['https://base-rpc.publicnode.com', 'https://mainnet.base.org', 'https://base.drpc.org']);
+export const METHODES_WALLET = Object.freeze(['eth_requestAccounts', 'eth_accounts', 'eth_chainId', 'wallet_switchEthereumChain',
+  'wallet_addSubAccount', 'wallet_getSubAccounts', 'eth_signTypedData_v4', 'wallet_sendCalls', 'wallet_getCallsStatus']);
+
+/** Un revert est une REPONSE du noeud (on ne change pas de noeud pour lui) ; le reste (reseau, 429, 5xx, timeout) fait passer au suivant. */
+const estRevert = (err) => !!err && (err.code === 3 || (typeof err.data === 'string' && /^0x[0-9a-fA-F]*$/.test(err.data) && err.data.length > 2)
+  || /revert/i.test(String(err.message || '')));
+
+/** Lecteur JSON-RPC direct, avec repli sur le noeud suivant. Toutes les erreurs de tous les noeuds sont rendues si rien ne repond. */
+export function lecteurRpc(urls, { fetchImpl = (...a) => fetch(...a), timeoutMs = 8000 } = {}) {
+  let id = 0;
+  return async function lire(method, params = []) {
+    const echecs = [];
+    for (const url of urls) {
+      const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+      const minuteur = ctl ? setTimeout(() => ctl.abort(), timeoutMs) : null;
+      try {
+        const r = await fetchImpl(url, { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', id: ++id, method, params }), signal: ctl ? ctl.signal : undefined });
+        if (!r.ok) { echecs.push(url + ' HTTP ' + r.status); continue; }
+        const j = await r.json();
+        if (j && j.error) {
+          if (estRevert(j.error)) throw Object.assign(new Error(j.error.message || 'execution reverted'), { code: j.error.code, data: j.error.data, revert: true });
+          echecs.push(url + ' ' + j.error.code + ' ' + j.error.message); continue;
+        }
+        if (!j || !('result' in j)) { echecs.push(url + ' no result'); continue; }
+        return j.result;
+      } catch (e) {
+        if (e && e.revert) throw e;
+        echecs.push(url + ' ' + (e && e.name === 'AbortError' ? 'timeout ' + timeoutMs + ' ms' : String((e && e.message) || e)));
+      } finally { if (minuteur) clearTimeout(minuteur); }
+    }
+    throw Object.assign(new Error('every RPC node failed for ' + method + ': ' + echecs.join(' | ')), { code: 'RPC_UNREACHABLE', echecs });
+  };
+}
+
 /* ══ LE DEROULE — partage par la page et par le banc fork : les MEMES requetes, construites par les fonctions ci-dessus. ══ */
-export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms) => new Promise((o) => setTimeout(o, ms)),
+export function creerEssai({ provider, lecteur, journal = () => {}, domaine, pause = (ms) => new Promise((o) => setTimeout(o, ms)),
   attenteMaxMs = 120000, pasMs = 1500, tirerSalt } = {}) {
   const etat = { universel: null, sousCompte: null, permission: null, signature: null, revoque: false, depenseFaite: false };
-  const req = (r) => provider.request(r);
   const log = (etape, quoi, d) => journal({ t: new Date().toISOString(), step: etape, what: quoi, ...(d || {}) });
-  const ethCall = (to, data, from) => req({ method: 'eth_call', params: [from ? { from, to, data } : { to, data }, 'latest'] });
+  let etapeCourante = 0;
+  const texteErreur = (methode, e) => 'wallet error on ' + methode + ': ' + ((e && e.code) != null ? e.code + ' ' : '') + String((e && e.message) || e);
+  /* `req` : les GESTES wallet seulement. Une lecture qui passerait ici est une faute : on refuse, on ne la relaie pas. */
+  const req = async (r) => {
+    if (!METHODES_WALLET.includes(r.method)) throw Object.assign(new Error('read ' + r.method + ' must not go through the wallet'), { code: 'NOT_A_WALLET_METHOD' });
+    try { return await provider.request(r); }
+    catch (e) { log(etapeCourante, 'wallet error', { method: r.method, code: (e && e.code) != null ? e.code : null, message: String((e && e.message) || e) }); throw e; }
+  };
+  const lecture = lecteur || lecteurRpc(NOEUDS_BASE);
+  /* `lire` : tout le reste, par nos noeuds. Un echec qui n est pas un revert est ecrit au journal avec la methode. */
+  const lire = async (method, params) => {
+    try { return await lecture(method, params); }
+    catch (e) { if (!(e && e.revert)) log(etapeCourante, 'rpc error', { method, code: (e && e.code) != null ? e.code : null, message: String((e && e.message) || e) }); throw e; }
+  };
+  const ethCall = (to, data, from) => lire('eth_call', [from ? { from, to, data } : { to, data }, 'latest']);
   const lireBool = async (nom, p) => { const a = appelLecture(nom, p); return decoderBool(await ethCall(a.to, a.data)); };
   const lirePeriode = async (p) => { const a = appelLecture('getCurrentPeriod', p); return decoderPeriode(await ethCall(a.to, a.data)); };
   const lireUsdc = async (q) => { const a = lectureSoldeUsdc(q); return decoderUint(await ethCall(a.to, a.data)); };
@@ -243,42 +300,58 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
 
   async function simuler(etape, requete) {
     const s = simulationDe(requete);
-    try { await req(s); log(etape, 'simulation OK (eth_call from ' + s.params[0].from + ')'); return { ok: true }; }
+    try { await lire(s.method, s.params); log(etape, 'simulation OK (eth_call from ' + s.params[0].from + ')'); return { ok: true }; }
     catch (e) { const err = decoderErreur(donneesRevert(e)); return { ok: false, erreur: err, message: String((e && e.message) || e) }; }
   }
-  /* envoie, attend la confirmation, RELIT chaque recu on-chain */
-  async function envoyer(etape, requete) {
+  /* envoie, attend la confirmation, RELIT chaque recu on-chain.
+   * ⛔ `wallet_getCallsStatus` passe lui aussi par le RPC du SDK (bundle) : s il echoue, on n invente pas de recu. On attend
+   *   l EFFET lu on-chain par nos noeuds (`effet()` : isApproved, depense de la periode, isRevoked) ; le journal dit qu aucun recu
+   *   n a ete lu. Sans effet lu, l etape echoue. */
+  async function envoyer(etape, requete, effet = async () => false) {
     let res;
     try { res = await req(requete); }
-    catch (e) { return { ok: false, pourquoi: e && e.code === 4001 ? 'rejected in the wallet (4001)' : 'wallet error ' + ((e && e.code) || '') + ' ' + String((e && e.message) || '') }; }
+    catch (e) { return { ok: false, pourquoi: e && e.code === 4001 ? 'rejected in the wallet (4001)' : texteErreur(requete.method, e) }; }
     const id = idAppels(res);
     log(etape, 'wallet_sendCalls accepted', { id });
     if (!id) return { ok: false, pourquoi: 'unreadable wallet answer' };
-    let fin = null;
+    let fin = null, erreurStatut = null, parEffet = false;
     for (let t = 0; t <= attenteMaxMs; t += pasMs) {
       let st = null;
-      try { st = await req({ method: 'wallet_getCallsStatus', params: [id] }); } catch (_) { st = null; }
+      try { st = await provider.request({ method: 'wallet_getCallsStatus', params: [id] }); }
+      catch (e) {
+        if (!erreurStatut) log(etape, 'wallet error', { method: 'wallet_getCallsStatus', code: (e && e.code) != null ? e.code : null, message: String((e && e.message) || e) });
+        erreurStatut = e; st = null;
+      }
       const e = etatAppels(st);
       if (e.fini) { fin = e; break; }
+      let vu = false;
+      try { vu = (await effet()) === true; } catch (_) { vu = false; }
+      if (vu) { parEffet = true; break; }
       await pause(pasMs);
     }
-    if (!fin) return { ok: false, id, pourquoi: 'no confirmation within ' + Math.round(attenteMaxMs / 1000) + ' s (read it again later with the id)' };
+    if (parEffet) {
+      log(etape, 'no receipt from the wallet; the effect was read on-chain', { id, walletStatusError: erreurStatut ? texteErreur('wallet_getCallsStatus', erreurStatut) : null });
+      return { ok: true, id, recus: [], recuLu: false };
+    }
+    if (!fin) return { ok: false, id, pourquoi: 'no confirmation and no effect read on-chain within ' + Math.round(attenteMaxMs / 1000) + ' s'
+      + (erreurStatut ? ' (' + texteErreur('wallet_getCallsStatus', erreurStatut) + ')' : '') + ' — read it again later with the id' };
     const recus = [];
     for (const h of fin.hashes) {
       let r = null;
-      try { r = await req({ method: 'eth_getTransactionReceipt', params: [h] }); } catch (_) { r = null; }
+      try { r = await lire('eth_getTransactionReceipt', [h]); } catch (_) { r = null; }
       recus.push({ hash: h, status: r ? r.status : null, bloc: r ? parseInt(r.blockNumber, 16) : null });
     }
     log(etape, 'receipts read on-chain', { id, recus });
     const ok = fin.ok && recus.length > 0 && recus.every((r) => r.status === '0x1');
-    return ok ? { ok: true, id, recus } : { ok: false, id, recus, pourquoi: 'status ' + fin.statut + ' / receipt ' + recus.map((r) => r.status).join(',') };
+    return ok ? { ok: true, id, recus, recuLu: true } : { ok: false, id, recus, pourquoi: 'status ' + fin.statut + ' / receipt ' + recus.map((r) => r.status).join(',') };
   }
 
   /* 1. connecter : chaine 8453, smart wallet (code non vide, pas une delegation 7702, isOwnerAddress lisible) */
   async function connecter() {
+    etapeCourante = 1;
     let comptes;
     try { comptes = await req({ method: 'eth_requestAccounts' }); }
-    catch (e) { return stop(1, e && e.code === 4001 ? 'connection rejected (4001)' : 'cannot connect: ' + String((e && e.message) || e)); }
+    catch (e) { return stop(1, e && e.code === 4001 ? 'connection rejected (4001)' : 'cannot connect: ' + texteErreur('eth_requestAccounts', e)); }
     const u = Array.isArray(comptes) ? comptes.find((x) => ADR.test(String(x || ''))) : null;
     if (!u) return stop(1, 'the wallet returned no address');
     let ch = await req({ method: 'eth_chainId' });
@@ -287,7 +360,10 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
       ch = await req({ method: 'eth_chainId' });
     }
     if (min(ch) !== CHAINE_BASE_HEX) return stop(1, 'the wallet is not on Base (chainId ' + ch + ', expected 0x2105)');
-    const code = await req({ method: 'eth_getCode', params: [u, 'latest'] });
+    let chLu;
+    try { chLu = await lire('eth_chainId', []); } catch (e) { return stop(1, 'cannot read Base: ' + String((e && e.message) || e)); }
+    if (min(chLu) !== CHAINE_BASE_HEX) return stop(1, 'the read node is not Base (chainId ' + chLu + ')');
+    const code = await lire('eth_getCode', [u, 'latest']);
     const type = typeDeCode(code);
     log(1, 'account read', { account: u, chainId: ch, code: CODE_EN[type], codeBytes: (String(code).length - 2) / 2 });
     if (type === 'VIDE') return stop(1, 'eth_getCode is empty: not a deployed smart wallet (a Base Account that never sent a transaction is not deployed yet; '
@@ -297,7 +373,7 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
     if (ownerDeLuiMeme === null) return stop(1, 'isOwnerAddress unreadable: this contract is not a Coinbase smart wallet', { universel: u });
     const spmOwner = await lireOwner(u, SPEND_PERMISSION_MANAGER);
     const usdc = await lireUsdc(u);
-    const eth = BigInt(await req({ method: 'eth_getBalance', params: [u, 'latest'] }));
+    const eth = BigInt(await lire('eth_getBalance', [u, 'latest']));
     etat.universel = u;
     log(1, 'Base Account OK', { spendPermissionManagerOwner: spmOwner, usdc: usdc === null ? null : usdcTexte(usdc), ethWei: String(eth) });
     return { ok: true, universel: u, spmOwner, usdc, eth };
@@ -305,18 +381,28 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
 
   /* 2. sub account : wallet_getSubAccounts, sinon (geste) wallet_addSubAccount */
   async function trouverSousCompte() {
+    etapeCourante = 2;
     if (!etat.universel) return stop(2, 'do step 1 first');
-    const r = await sousCompteExistant({ provider, universel: etat.universel, domaine });
-    if (!r.ok) return stop(2, r.pourquoi === 'wallet does not support sub accounts' ? 'the wallet answers 4100: no sub accounts here. Stopped.' : r.pourquoi);
-    log(2, 'wallet_getSubAccounts', { domain: domaine, subAccount: r.sousCompte });
-    if (r.sousCompte) return relireSousCompte(r.sousCompte);
+    let res;
+    try { res = await req({ method: 'wallet_getSubAccounts', params: [{ account: etat.universel, domain: String(domaine) }] }); }
+    catch (e) {
+      if (e && e.code === 4100) return stop(2, 'the wallet answers 4100: no sub accounts here. Stopped.');
+      /* le SDK relaie wallet_getSubAccounts a son RPC quand il ne l a pas en memoire (bundle) : un echec ici ne dit PAS qu il n y en a pas */
+      return { ok: true, sousCompte: null, aCreer: true, nonListe: texteErreur('wallet_getSubAccounts', e) };
+    }
+    const liste = res && Array.isArray(res.subAccounts) ? res.subAccounts : null;
+    if (!liste) return stop(2, 'unreadable wallet_getSubAccounts answer');
+    const trouve = liste.map((x) => x && x.address).find((x) => ADR.test(String(x || ''))) || null;
+    log(2, 'wallet_getSubAccounts', { domain: domaine, subAccount: trouve });
+    if (trouve) return relireSousCompte(trouve);
     return { ok: true, sousCompte: null, aCreer: true };
   }
   async function creerSousCompte() {
+    etapeCourante = 2;
     if (!etat.universel) return stop(2, 'do step 1 first');
     let res;
     try { res = await req({ method: 'wallet_addSubAccount', params: [{ version: '1', account: { type: 'create' } }] }); }
-    catch (e) { return stop(2, e && e.code === 4100 ? 'the wallet answers 4100: no sub accounts here. Stopped.' : e && e.code === 4001 ? 'creation rejected (4001)' : 'wallet error ' + ((e && e.code) || '') + ' ' + String((e && e.message) || '')); }
+    catch (e) { return stop(2, e && e.code === 4100 ? 'the wallet answers 4100: no sub accounts here. Stopped.' : e && e.code === 4001 ? 'creation rejected (4001)' : texteErreur('wallet_addSubAccount', e)); }
     const a = res && res.address;
     if (!ADR.test(String(a || ''))) return stop(2, 'unreadable wallet_addSubAccount answer');
     log(2, 'wallet_addSubAccount', { subAccount: a });
@@ -324,7 +410,7 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
   }
   async function relireSousCompte(a) {
     if (min(a) === min(etat.universel)) return stop(2, 'the returned sub account is the main account itself');
-    const type = typeDeCode(await req({ method: 'eth_getCode', params: [a, 'latest'] }));
+    const type = typeDeCode(await lire('eth_getCode', [a, 'latest']));
     const universelOwner = type === 'CONTRAT' ? await lireOwner(a, etat.universel) : null;
     etat.sousCompte = a;
     log(2, 'sub account read', { subAccount: a, code: type === 'VIDE' ? 'EMPTY (not deployed yet: it will be on its first send)' : CODE_EN[type], mainAccountIsOwner: universelOwner });
@@ -333,8 +419,9 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
 
   /* 3a. construire + signer la SpendPermission */
   async function construirePermission() {
+    etapeCourante = 3;
     if (!etat.universel || !etat.sousCompte) return stop(3, 'do steps 1 and 2 first');
-    const bloc = await req({ method: 'eth_getBlockByNumber', params: ['latest', false] });
+    const bloc = await lire('eth_getBlockByNumber', ['latest', false]);
     const t = Number(BigInt(bloc.timestamp));
     const salt = typeof tirerSalt === 'function' ? tirerSalt() : 0n;
     const r = permissionEssai({ universel: etat.universel, sousCompte: etat.sousCompte, maintenant: t, salt });
@@ -348,18 +435,20 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
     return { ok: true, permission: r.permission, hash: hLocal };
   }
   async function signer() {
+    etapeCourante = 3;
     const p = etat.permission;
     const r = requeteSignature(p);
     if (!r) return stop(3, 'no trial permission to sign');
     let sig;
     try { sig = await req(r); }
-    catch (e) { return stop(3, e && e.code === 4001 ? 'signature rejected (4001)' : 'wallet error ' + ((e && e.code) || '') + ' ' + String((e && e.message) || '')); }
+    catch (e) { return stop(3, e && e.code === 4001 ? 'signature rejected (4001)' : texteErreur('eth_signTypedData_v4', e)); }
     if (!HEX.test(String(sig || '')) || String(sig).length <= 2) return stop(3, 'unreadable signature');
     etat.signature = sig;
     log(3, 'eth_signTypedData_v4 signed', { bytes: (sig.length - 2) / 2, erc6492: min(sig).endsWith('6492649264926492649264926492649264926492649264926492649264926492'), signature: sig });
     return { ok: true, signature: sig };
   }
   async function enregistrer(depuis = 'sous-compte') {
+    etapeCourante = 3;
     const p = etat.permission;
     if (!p || !etat.signature) return stop(3, 'sign first');
     const from = depuis === 'universel' ? p.account : p.spender;
@@ -367,7 +456,7 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
     if (!r) return stop(3, 'approveWithSignature request refused');
     const s = await simuler(3, r);
     if (!s.ok) return stop(3, 'approveWithSignature simulation: revert ' + s.erreur.nom + ' — nothing sent', { erreur: s.erreur });
-    const e = await envoyer(3, r);
+    const e = await envoyer(3, r, async () => (await lireBool('isApproved', p)) === true);
     const approuve = await lireBool('isApproved', p), valide = await lireBool('isValid', p);
     const spmOwner = await lireOwner(p.account, SPEND_PERMISSION_MANAGER);
     log(3, 'read on-chain', { isApproved: approuve, isValid: valide, spendPermissionManagerOwner: spmOwner });
@@ -378,6 +467,7 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
 
   /* 4. une depense de 0,01 USDC, soldes et periode relus avant/apres */
   async function depenser() {
+    etapeCourante = 4;
     const p = etat.permission;
     const r = requeteDepense(p);
     if (!r) return stop(4, 'no trial permission');
@@ -387,7 +477,7 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
     const s = await simuler(4, r);
     if (!s.ok) return stop(4, 'spend simulation: revert ' + s.erreur.nom + ' — nothing sent'
       + (s.erreur.nom === 'unknown error' || s.erreur.nom === 'revert without data' ? ' (likely cause: the SpendPermissionManager is not an owner of your Base Account)' : ''), { erreur: s.erreur });
-    const e = await envoyer(4, r);
+    const e = await envoyer(4, r, async () => (await lirePeriode(p)).spend >= avant.periode.spend + ESSAI.depenseBrut);
     const apres = { universel: await lireUsdc(p.account), sousCompte: await lireUsdc(p.spender), periode: await lirePeriode(p) };
     const d = { universel: apres.universel - avant.universel, sousCompte: apres.sousCompte - avant.sousCompte, periode: apres.periode.spend - avant.periode.spend };
     log(4, 'after (read on-chain)', { mainAccount: usdcTexte(apres.universel), subAccount: usdcTexte(apres.sousCompte), spentToday: usdcTexte(apres.periode.spend),
@@ -401,13 +491,14 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
 
   /* 5. depassement : eth_call seulement */
   async function depasser() {
+    etapeCourante = 5;
     const p = etat.permission;
     if (!p) return stop(5, 'no trial permission');
     const per = await lirePeriode(p);
     const x = requeteDepassement(p, per.spend);
     if (!x) return stop(5, 'request refused');
     try {
-      await req(x.requete);
+      await lire(x.requete.method, x.requete.params);
       return stop(5, 'ALERT: the spend of ' + usdcTexte(x.valeur) + ' USDC above the cap PASSES in simulation', { valeur: x.valeur });
     } catch (e) {
       const err = decoderErreur(donneesRevert(e));
@@ -419,12 +510,13 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
 
   /* 6. revoke depuis le Base Account */
   async function revoquer() {
+    etapeCourante = 6;
     const p = etat.permission;
     const r = requeteRevocation(p);
     if (!r) return stop(6, 'no trial permission');
     const s = await simuler(6, r);
     if (!s.ok) return stop(6, 'revoke simulation: revert ' + s.erreur.nom + ' — nothing sent', { erreur: s.erreur });
-    const e = await envoyer(6, r);
+    const e = await envoyer(6, r, async () => (await lireBool('isRevoked', p)) === true);
     const revoque = await lireBool('isRevoked', p), valide = await lireBool('isValid', p);
     let apres = null;
     try { const a = appelDepense(p, 1n); await ethCall(a.to, a.data, p.spender); apres = 'PASSE'; }
@@ -438,6 +530,7 @@ export function creerEssai({ provider, journal = () => {}, domaine, pause = (ms)
 
   /* relire l etat d une permission retrouvee (stockage local) */
   async function relirePermission() {
+    etapeCourante = 0;
     const p = etat.permission;
     if (!p) return { ok: false };
     const lu = { isApproved: await lireBool('isApproved', p), isRevoked: await lireBool('isRevoked', p), isValid: await lireBool('isValid', p), periode: await lirePeriode(p) };

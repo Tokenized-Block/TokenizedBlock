@@ -97,7 +97,7 @@
   </section>
 </main>
 <script type="module">
-import { creerEssai, texteEtape, permissionVersJson, permissionDeJson, usdcTexte, SDK_SUB_ACCOUNTS, CODE_EN } from './essai-autonome.js';
+import { creerEssai, texteEtape, permissionVersJson, permissionDeJson, usdcTexte, SDK_SUB_ACCOUNTS, CODE_EN, lecteurRpc, NOEUDS_BASE } from './essai-autonome.js';
 import { donneesAutorisation } from './agent-autonome.js';
 
 const $ = (s) => document.querySelector(s);
@@ -152,6 +152,12 @@ async function obtenirProvider() {
   return fournisseur;
 }
 
+/* ⛔ LES LECTURES : nos noeuds (les memes que l app), jamais le RPC du SDK. En local avec le provider de TEST, le noeud du fork. */
+function lecteurPage() {
+  if (LOCAL && window.__fournisseurEssai && window.__rpcEssai) return { lire: lecteurRpc([new URL(window.__rpcEssai, location.href).href]), noeuds: 'local fork' };
+  return { lire: lecteurRpc(NOEUDS_BASE), noeuds: NOEUDS_BASE.join(', ') };
+}
+
 let essai = null;
 const ui = { aCreer: false, approuve: false, repliUniversel: false, depense: false };
 const cle = (u) => 'essai-autonome:' + String(u).toLowerCase();
@@ -197,7 +203,9 @@ function geste(id, n, fn) {
 
 geste('#b1', 1, async () => {
   const provider = await obtenirProvider();
-  essai = creerEssai({ provider, journal: ecrire, domaine: location.origin,
+  const lecteur = lecteurPage();
+  if (!$('#source').textContent.includes(' · Reads: ')) $('#source').textContent += ' · Reads: ' + lecteur.noeuds;
+  essai = creerEssai({ provider, lecteur: lecteur.lire, journal: ecrire, domaine: location.origin,
     tirerSalt: () => BigInt('0x' + [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join('')) });
   Object.assign(ui, { aCreer: false, approuve: false, repliUniversel: false, depense: false });
   const r = await essai.connecter();
@@ -218,6 +226,7 @@ geste('#b1', 1, async () => {
 geste('#b2', 2, async () => {
   const r = await essai.trouverSousCompte();
   if (!r.ok) return dire(2, r.pourquoi, 'ko');
+  if (r.aCreer && r.nonListe) { ui.aCreer = true; return dire(2, 'Your wallet could not list sub accounts (' + r.nonListe + '). You can still create one; your wallet decides whether it returns an existing one.', 'alerte'); }
   if (r.aCreer) { ui.aCreer = true; return dire(2, 'No sub account for ' + location.origin + '. You can create one.', 'doux'); }
   dire(2, 'Sub account: ' + r.sousCompte + ' (' + CODE_EN[r.code] + ')', 'ok');
 });
