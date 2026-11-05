@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game148 */
+  cercles: 'circles found', ecartEntier: 'largest distance of a curvature to a whole number', sansFacteur2: 'circles missed by the formula without the factor 2', comparables: 'circles where that formula differs at all',
   /* game146 */
   kapitza: 'Kapitza approximation', nu: 'slow frequency timed', nuLineaire: 'linear slow frequency (Hill)', ecartRelatif: 'relative gap', tombeFaible: 'falls when shaken too weakly (1 = yes)', tombeForte: 'falls when shaken too strongly (1 = yes)', traceForte: 'Hill trace at the strong shake', kapitzaForte: 'Kapitza slow frequency at the strong shake (wrong)',
   /* game145 */
@@ -413,6 +415,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game148 */
+  courbures: 'Curvatures found vs Descartes (worst relative gap)', centresComplexes: 'Centres found vs complex Descartes (worst residual)', cerclesParGeneration: 'Circles found per generation', entiers: 'Witnesses: whole curvatures, formula without the factor 2',
   /* game146 */
   traceKapitza: 'Floquet trace of one shake (|tr| < 2: it stands)', frequenceLente: 'Slow rocking frequency around the top', grandeAmplitude: 'Slow frequency at a large tilt', temoins: 'Witnesses: shaken too weakly, too strongly',
   /* game145 */

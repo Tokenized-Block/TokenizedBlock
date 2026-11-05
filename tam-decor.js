@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game148 */
+  apollonius: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Centre of the big circle (curvature -1)')],
   pascalSierpinski: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'Row 0: the 1 at the top')],
   /* ---------- game120 : tam-ondes.js ---------- */
   arcEnCiel: (P, o, B) => [pt([0, 0, B.centre[2]], C.repere, 'The drop (radius 1)')],

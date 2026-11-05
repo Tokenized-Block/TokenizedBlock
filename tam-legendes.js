@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game148 (idee : codex Grok Bot) */
+  apollonius: {
+    titre: 'Circles inside circles (the gasket of Apollonius)',
+    enUnePhrase: 'Circles packed into a circle: every gap between three touching circles receives the circle that touches all three, generation after generation.',
+    colonnes: ['x', 'y', 'generation (label; -1 = the three starting circles)'],
+    aRegarder: ['Each circle is found by geometry alone, then checked: its curvature obeys the theorem of Descartes to the last digits.', 'Every generation triples the number of gaps: 2, 6, 18, 54, 162... circles, and the gaps never fill up.', 'Start with two equal circles: every curvature is then a whole number (2, 3, 6, 11, 14, 15...); start unequal and they are not.'],
+    fin: null,
+  },
   pascalSierpinski: {
     titre: 'The triangle of Pascal, odd numbers only (Sierpinski)',
     enUnePhrase: 'The odd numbers of the triangle of Pascal, row by row from the top: the Sierpinski triangle.',
