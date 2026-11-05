@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<link rel="icon" href="icon.png" type="image/png">
+<title>Essai mode autonome</title>
+<!-- essai-autonome.html — PAGE D ESSAI SEPAREE (2026-11-05). Non liee depuis l app. Ne lit ni ne change MODE_AUTONOME_DRAPEAU.
+     Le wallet de l utilisateur signe ; la page ne signe rien et ne tient aucune cle. Montants en dur : 1 USDC/jour, 1 jour,
+     une depense de 0,01 USDC de SON Base Account vers SON sub account. Toute la logique : essai-autonome.js (bancs a l appui). -->
+<style>
+  :root{--fond:#04090c;--carte:#0b1c22;--ligne:#16323c;--texte:#f2fbff;--doux:#9cc3cf;--accent:#35d3f0;--ok:#3ddc97;--ko:#ff6b6b;--alerte:#ffd166}
+  @media (prefers-color-scheme: light){:root:not([data-theme="dark"]){--fond:#f4f8fa;--carte:#ffffff;--ligne:#d3e2e8;--texte:#0b1c22;--doux:#3d6170;--accent:#0b8fb0;--ok:#11875a;--ko:#c0392b;--alerte:#9a6b00}}
+  body{margin:0;background:var(--fond);color:var(--texte);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+  main{max-width:720px;margin:0 auto;padding:24px 16px}
+  h1{font-size:20px;margin:0 0 6px}
+  h2{font-size:15px;margin:0 0 6px}
+  .carte{background:var(--carte);border:1px solid var(--ligne);border-radius:14px;padding:16px;margin:14px 0}
+  .clair{margin:4px 0 10px}
+  code,pre{font-size:12.5px;word-break:break-all;white-space:pre-wrap;color:var(--doux)}
+  pre#journal{max-height:420px;overflow:auto;background:var(--fond);border:1px solid var(--ligne);border-radius:10px;padding:10px}
+  button{font:inherit;font-weight:700;padding:12px 18px;border-radius:12px;border:0;cursor:pointer;background:var(--accent);color:#012;margin:4px 8px 4px 0}
+  button.sec{background:transparent;color:var(--accent);border:1px solid var(--accent)}
+  .ok{color:var(--ok)} .ko{color:var(--ko)} .doux{color:var(--doux)} .alerte{color:var(--alerte)}
+  ul{margin:6px 0 0;padding-left:18px} li{margin:4px 0}
+  details summary{cursor:pointer;color:var(--doux)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Essai du mode autonome — avec ton propre Base Account</h1>
+  <p class="doux">Page d essai, non liee depuis l app. Le mode autonome reste <b>eteint</b> dans l app.</p>
+  <div class="carte">
+    <b>Bornes en dur (la page refuse toute autre valeur)</b>
+    <ul>
+      <li>Plafond : <b>1 USDC par jour</b>, pendant <b>1 jour</b>.</li>
+      <li>Une seule depense de test : <b>0,01 USDC</b>, de ton Base Account vers <b>ton</b> sub account. Rien ne sort de chez toi.</li>
+      <li>Chaque envoi est <b>simule</b> d abord ; un refus du contrat = rien n est propose a ton wallet.</li>
+      <li>Chaque resultat est <b>relu on-chain</b> et ecrit dans le journal en bas.</li>
+      <li>Il te faut : au moins 0,01 USDC sur ton Base Account (Base), et un peu d ETH pour le gas si ton wallet ne le sponsorise pas.</li>
+    </ul>
+    <p class="doux" id="source">Provider : pas encore charge.</p>
+  </div>
+
+  <section class="carte" id="e1">
+    <h2>1. Connecter ton Base Account</h2>
+    <p class="clair" data-texte="1"></p>
+    <button id="b1" type="button">Connecter mon Base Account</button>
+    <p class="statut" id="s1"></p>
+  </section>
+
+  <section class="carte" id="e2">
+    <h2>2. Ton sub account</h2>
+    <p class="clair" data-texte="2"></p>
+    <button id="b2" type="button" hidden>Chercher mon sub account</button>
+    <button id="b2c" type="button" hidden>Creer mon sub account</button>
+    <p class="statut" id="s2"></p>
+  </section>
+
+  <section class="carte" id="e3">
+    <h2>3. Accorder la SpendPermission (1 USDC/jour, 1 jour)</h2>
+    <p class="clair" id="t3">Disponible apres l etape 2.</p>
+    <button id="b3" type="button" hidden>Preparer la permission</button>
+    <details id="d3" hidden><summary>Ce que ton wallet va afficher (EIP-712)</summary><pre id="td3"></pre></details>
+    <button id="b3s" type="button" hidden>Signer la permission</button>
+    <button id="b3e" type="button" hidden>L enregistrer on-chain (envoye par le sub account)</button>
+    <button id="b3u" type="button" class="sec" hidden>L enregistrer depuis mon Base Account a la place</button>
+    <p class="statut" id="s3"></p>
+  </section>
+
+  <section class="carte" id="e4">
+    <h2>4. Une depense de 0,01 USDC</h2>
+    <p class="clair" data-texte="4"></p>
+    <button id="b4" type="button" hidden>Depenser 0,01 USDC (sub account)</button>
+    <p class="statut" id="s4"></p>
+  </section>
+
+  <section class="carte" id="e5">
+    <h2>5. Au-dela du plafond : doit etre refuse</h2>
+    <p class="clair" data-texte="5"></p>
+    <button id="b5" type="button" hidden>Simuler un depassement</button>
+    <p class="statut" id="s5"></p>
+  </section>
+
+  <section class="carte" id="e6">
+    <h2>6. Revoquer</h2>
+    <p class="clair" data-texte="6"></p>
+    <button id="b6" type="button" hidden>Revoquer la permission</button>
+    <p class="statut" id="s6"></p>
+  </section>
+
+  <section class="carte">
+    <h2>Journal</h2>
+    <button id="copier" type="button" class="sec">Copier le journal</button>
+    <pre id="journal"></pre>
+  </section>
+</main>
+<script type="module">
+import { creerEssai, texteEtape, permissionVersJson, permissionDeJson, usdcTexte, SDK_SUB_ACCOUNTS } from './essai-autonome.js';
+import { donneesAutorisation } from './agent-autonome.js';
+
+const $ = (s) => document.querySelector(s);
+const lignes = [];
+const ecrire = (o) => {
+  lignes.push(JSON.stringify(o, (k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+  $('#journal').textContent = lignes.join('\n');
+};
+$('#copier').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(lignes.join('\n')); $('#copier').textContent = 'Copie'; }
+  catch (_) { const r = document.createRange(); r.selectNodeContents($('#journal')); getSelection().removeAllRanges(); getSelection().addRange(r); $('#copier').textContent = 'Selectionne : Ctrl+C'; }
+  setTimeout(() => { $('#copier').textContent = 'Copier le journal'; }, 2500);
+});
+for (const p of document.querySelectorAll('[data-texte]')) p.textContent = texteEtape(Number(p.dataset.texte)) || '';
+
+/* ══ LE PROVIDER : LE MEME SDK QUE L APP (vendorise, empreinte verifiee au demarrage du serveur), charge pareil. ══
+ * Une seule difference, voulue : `subAccounts.funding = 'manual'`. Avec le defaut du SDK ('spend-permissions'), un envoi depuis le
+ * sub account sans permission en memoire lance le flux de permission AUTOMATIQUE du SDK (popup aux bornes inconnues) ; ici, la
+ * seule permission est celle de l etape 3, bornee en dur.
+ * ⛔ On utilise CE provider, pas `window.ethereum` : une extension (MetaMask...) ne fait pas de sub accounts.
+ * ⛔ Provider de TEST (fork local) accepte UNIQUEMENT sur 127.0.0.1 / localhost : sur le vrai site, cette branche est morte. */
+const BASE_ACCOUNT_SRC = '/npm/@base-org/account@2.5.13/dist/base-account.min.js';
+let charge = null;
+function chargerBaseAccount() {
+  if (charge) return charge;
+  charge = new Promise((ok, ko) => {
+    const s = document.createElement('script');
+    s.src = BASE_ACCOUNT_SRC; s.async = true;
+    s.onload = () => (typeof window.createBaseAccountSDK === 'function' ? ok(window.createBaseAccountSDK)
+      : ko(new Error('le SDK a ete charge mais n a pas publie createBaseAccountSDK')));
+    s.onerror = () => ko(new Error('le SDK ne se charge pas depuis ' + BASE_ACCOUNT_SRC));
+    document.head.appendChild(s);
+  });
+  charge.catch(() => { charge = null; });
+  return charge;
+}
+const LOCAL = ['127.0.0.1', 'localhost'].includes(location.hostname);
+let fournisseur = null;
+async function obtenirProvider() {
+  if (fournisseur) return fournisseur;
+  if (LOCAL && window.__fournisseurEssai) {
+    fournisseur = window.__fournisseurEssai;
+    $('#source').textContent = 'Provider : FOURNISSEUR DE TEST (fork local) — rien ne part sur Base.';
+    return fournisseur;
+  }
+  const creer = await chargerBaseAccount();
+  const sdk = creer({ appName: 'TokenizedBlock', appLogoUrl: new URL(($('link[rel="icon"]') && $('link[rel="icon"]').getAttribute('href')) || 'icon.png', location.origin).href,
+    appChainIds: [8453], subAccounts: { ...SDK_SUB_ACCOUNTS } });
+  fournisseur = sdk.getProvider();
+  if (!window.ethereum) Object.defineProperty(window, 'ethereum', { value: fournisseur, configurable: true, writable: true });
+  $('#source').textContent = 'Provider : Base Account SDK 2.5.13' + (fournisseur.isBaseAccount === true ? ' (isBaseAccount = true)' : ' — ATTENTION : provider injecte Coinbase, isBaseAccount absent');
+  return fournisseur;
+}
+
+let essai = null;
+const ui = { aCreer: false, approuve: false, repliUniversel: false, depense: false };
+const cle = (u) => 'essai-autonome:' + String(u).toLowerCase();
+const garder = () => { try { if (essai.etat.permission) localStorage.setItem(cle(essai.etat.universel), permissionVersJson(essai.etat.permission)); } catch (_) {} };
+const oublier = () => { try { localStorage.removeItem(cle(essai.etat.universel)); } catch (_) {} };
+const dire = (n, txt, classe = '') => { const s = $('#s' + n); s.textContent = txt; s.className = 'statut ' + classe; };
+const montrer = (id, v) => { $(id).hidden = !v; };
+
+function rafraichir() {
+  const e = essai ? essai.etat : {};
+  const p = e.permission;
+  montrer('#b2', !!e.universel && !e.sousCompte);
+  montrer('#b2c', !!e.universel && !e.sousCompte && ui.aCreer);
+  const active = !!p && ui.approuve && !e.revoque;
+  montrer('#b3', !!e.sousCompte && !active && !(p && !ui.approuve && !e.revoque));
+  montrer('#d3', !!p && !ui.approuve && !e.revoque);
+  montrer('#b3s', !!p && !e.signature && !ui.approuve && !e.revoque);
+  montrer('#b3e', !!p && !!e.signature && !ui.approuve && !e.revoque);
+  montrer('#b3u', !!p && !!e.signature && !ui.approuve && !e.revoque && ui.repliUniversel);
+  montrer('#b4', active && !ui.depense);
+  montrer('#b5', active);
+  montrer('#b6', active);
+  $('#t3').textContent = p ? texteEtape(3, { permission: p }) : (e.sousCompte ? 'La page construit la permission a partir du bloc courant.' : 'Disponible apres l etape 2.');
+  if (p && !ui.approuve) {
+    const td = donneesAutorisation(p, 8453);
+    $('#td3').textContent = td.ok ? JSON.stringify(td.typedData, null, 2) : '';
+  }
+}
+
+/* un geste : le bouton disparait pendant la requete et REVIENT au bout de 12 s si rien ne repond (fenetre de wallet bloquee) */
+function geste(id, n, fn) {
+  $(id).addEventListener('click', async () => {
+    const b = $(id);
+    b.hidden = true;
+    dire(n, 'En cours… regarde la fenetre de ton wallet si elle s ouvre.', 'doux');
+    let fini = false;
+    const filet = setTimeout(() => { if (!fini) { b.hidden = false; dire(n, 'Toujours en attente. Si aucune fenetre ne s est ouverte, ton navigateur l a bloquee : autorise les pop-ups et reclique.', 'alerte'); } }, 12000);
+    try { await fn(); }
+    catch (e) { dire(n, 'Erreur : ' + String((e && e.message) || e), 'ko'); ecrire({ t: new Date().toISOString(), etape: n, quoi: 'exception', message: String((e && e.message) || e) }); }
+    finally { fini = true; clearTimeout(filet); rafraichir(); if (id === '#b1') $('#b1').hidden = false; }
+  });
+}
+
+geste('#b1', 1, async () => {
+  const provider = await obtenirProvider();
+  essai = creerEssai({ provider, journal: ecrire, domaine: location.origin,
+    tirerSalt: () => BigInt('0x' + [...crypto.getRandomValues(new Uint8Array(8))].map((x) => x.toString(16).padStart(2, '0')).join('')) });
+  Object.assign(ui, { aCreer: false, approuve: false, repliUniversel: false, depense: false });
+  const r = await essai.connecter();
+  if (!r.ok) return dire(1, r.pourquoi, 'ko');
+  dire(1, 'Connecte : ' + r.universel + ' · ' + (r.usdc === null ? '?' : usdcTexte(r.usdc)) + ' USDC · SpendPermissionManager owner de ton compte : '
+    + (r.spmOwner === true ? 'oui' : r.spmOwner === false ? 'NON (le spend de l etape 4 sera refuse en simulation tant que ce n est pas le cas)' : 'illisible'), r.spmOwner === true ? 'ok' : 'alerte');
+  /* une permission d essai deja creee pour ce compte (rechargement de page) : on la relit, pour pouvoir la REVOQUER */
+  let gardee = null;
+  try { gardee = permissionDeJson(localStorage.getItem(cle(r.universel)) || ''); } catch (_) {}
+  if (gardee && gardee.account.toLowerCase() === r.universel.toLowerCase()) {
+    essai.etat.permission = gardee; essai.etat.sousCompte = gardee.spender;
+    const l = await essai.relirePermission();
+    ui.approuve = l.isApproved === true;
+    if (essai.etat.revoque || !ui.approuve) { oublier(); if (essai.etat.revoque) essai.etat.permission = null; }
+    dire(2, 'Sub account (permission precedente) : ' + gardee.spender, 'ok');
+  }
+});
+geste('#b2', 2, async () => {
+  const r = await essai.trouverSousCompte();
+  if (!r.ok) return dire(2, r.pourquoi, 'ko');
+  if (r.aCreer) { ui.aCreer = true; return dire(2, 'Aucun sub account pour ' + location.origin + '. Tu peux le creer.', 'doux'); }
+  dire(2, 'Sub account : ' + r.sousCompte + ' (' + r.code + ')', 'ok');
+});
+geste('#b2c', 2, async () => {
+  const r = await essai.creerSousCompte();
+  if (!r.ok) return dire(2, r.pourquoi, 'ko');
+  ui.aCreer = false;
+  dire(2, 'Sub account cree : ' + r.sousCompte + ' (' + r.code + ')', 'ok');
+});
+geste('#b3', 3, async () => {
+  ui.repliUniversel = false; ui.depense = false; ui.approuve = false;
+  const r = await essai.construirePermission();
+  if (!r.ok) return dire(3, r.pourquoi, 'ko');
+  garder();
+  dire(3, 'Permission construite ; son hash = getHash on-chain (' + r.hash.slice(0, 18) + '…). Relis ce qui suit, puis signe.', 'ok');
+});
+geste('#b3s', 3, async () => {
+  const r = await essai.signer();
+  if (!r.ok) return dire(3, r.pourquoi, 'ko');
+  dire(3, 'Signe (' + ((r.signature.length - 2) / 2) + ' octets). Rien n est encore on-chain.', 'ok');
+});
+const enregistrer = (depuis) => async () => {
+  const r = await essai.enregistrer(depuis);
+  if (!r.ok) { if (depuis === 'sous-compte') ui.repliUniversel = true; return dire(3, r.pourquoi, 'ko'); }
+  ui.approuve = true;
+  dire(3, 'Relu on-chain : isApproved = ' + r.isApproved + ', isValid = ' + r.isValid + ' · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
+};
+geste('#b3e', 3, enregistrer('sous-compte'));
+geste('#b3u', 3, enregistrer('universel'));
+geste('#b4', 4, async () => {
+  const r = await essai.depenser();
+  if (!r.ok) return dire(4, r.pourquoi, 'ko');
+  ui.depense = true;
+  dire(4, 'Relu on-chain : Base Account ' + usdcTexte(r.ecarts.universel) + ' USDC, sub account +' + usdcTexte(r.ecarts.sousCompte)
+    + ' USDC, depense du jour ' + usdcTexte(r.apres.periode.spend) + ' / 1 USDC · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
+});
+geste('#b5', 5, async () => {
+  const r = await essai.depasser();
+  if (!r.ok) return dire(5, r.pourquoi, 'ko');
+  dire(5, 'Refuse par le contrat : spend de ' + usdcTexte(r.valeur) + ' USDC -> ' + r.erreur.nom + ' (simulation, rien envoye).', 'ok');
+});
+geste('#b6', 6, async () => {
+  const r = await essai.revoquer();
+  if (!r.ok) return dire(6, r.pourquoi, 'ko');
+  oublier();
+  dire(6, 'Relu on-chain : isRevoked = ' + r.isRevoked + ', isValid = ' + r.isValid + ', un spend de 1 unite -> ' + r.spendApres + ' · tx ' + r.recus.map((x) => x.hash).join(', '), 'ok');
+});
+rafraichir();
+</script>
+</body>
+</html>

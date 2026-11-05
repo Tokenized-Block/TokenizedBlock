@@ -5575,6 +5575,9 @@ const SERVIS = [
    *   donc rien d autre a declarer — mais l oublier ici rendrait la page MORTE, et c est bien la
    *   garde ci-dessous qui l a crie avant ce deploiement, pas ma relecture. */
   'routage.js',
+  /* 2026-11-05 : la page d ESSAI du mode autonome (Phil la teste avec SON Base Account). NON liee depuis l app ; le drapeau
+   *   MODE_AUTONOME_DRAPEAU reste false. Ses imports (agent-autonome.js, agent-sous-compte.js) n etaient servis par personne. */
+  'essai-autonome.html', 'essai-autonome.js', 'agent-autonome.js', 'agent-sous-compte.js',
   /* ⛔⛔ `actions-emetteur.js` PORTE LE LIBELLE « issued by Coinbase » DE LA PAGE, et il est importe
    *     PAR LE SERVEUR AUSSI (qui lit la liste des 40 et marque chaque ligne de trending). Le
    *     libelle est ecrit UNE fois et importe des deux cotes : deux copies d une phrase visible
