@@ -69,8 +69,9 @@ async function banc(M) {
 const r0 = await banc(await import(pathToFileURL(SOURCE).href));
 vu(r0.length === 0, 'vert : ' + r0.join(' | '));
 const src = readFileSync(SOURCE, 'utf8');
-/* la garde des envois n a pas change (meme corps que HEAD~ : lu, pas execute ici — execute par test-slots-regleur) */
-vu(/export function verifierEnvoi\(tx, \{ contrat, chainId, bornes = BORNES_DEFAUT, duels = null, rolls = null \}\) \{/.test(src), 'verifierEnvoi : signature inchangee');
+/* la garde des envois : sa signature (lue, pas executee ici — executee par test-slots-regleur et test-keeper-denim-v2-rolls).
+ *   2026-11-05 (keeper Denim, extension) : un parametre de plus, duelsV2 (BlockDuelsV2) — CHANGEMENT VOULU, l ancienne ligne ne vaut plus */
+vu(/export function verifierEnvoi\(tx, \{ contrat, chainId, bornes = BORNES_DEFAUT, duels = null, rolls = null, duelsV2 = null \}\) \{/.test(src), 'verifierEnvoi : signature attendue (duelsV2 en plus, 2026-11-05)');
 
 const lancerSuite = (copie) => { try { execFileSync(process.execPath, [path.join(ICI, 'test-slots-regleur-20261023.mjs')], { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, REGLEUR_MODULE: copie, TOUT_COMPTER: '' } }); return true; } catch (_) { return false; } };
 /* temoin : la suite passe sur le VRAI module charge par REGLEUR_MODULE (sinon un mutant « tue » par la suite ne prouverait rien) */

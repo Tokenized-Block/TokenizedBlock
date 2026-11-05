@@ -5284,6 +5284,17 @@ const contratSlotsFiche = /^0x[0-9a-f]{40}$/i.test(String(SLOTS_DEPLOIEMENT.adre
 /* integration 2026-10-24 : nom distinct de contratRollsFiche (lecture des regles, plus haut) -- les deux branches l avaient declare */
 const contratRollsKeeper = /^0x[0-9a-f]{40}$/i.test(String(BLOCKROLLS_DEPLOIEMENT.adresse || '')) && BLOCKROLLS_DEPLOIEMENT.chaine === SLOTS_DEPLOIEMENT.chaine ? String(BLOCKROLLS_DEPLOIEMENT.adresse).toLowerCase() : null;
 const contratDuelsKeeper = () => (DUELS_DEPLOIEMENT && DUELS_DEPLOIEMENT.chaine === SLOTS_DEPLOIEMENT.chaine ? contratDuels() : null);
+/* DENIM 2026-11-05 : BlockDuelsV2 pour le regleur — la fiche v2 (adresse ET bloc, chaine 8453 : contratDeFicheV2), sur la chaine des slots */
+const contratDuelsV2Keeper = () => (DUELS_V2_DEPLOIEMENT && DUELS_V2_DEPLOIEMENT.chaine === SLOTS_DEPLOIEMENT.chaine ? contratDeFicheV2(DUELS_V2_DEPLOIEMENT) : null);
+/* la liste par l ETAT du lecteur v2 (duels-v2-serveur.js, minuteur de 30 s) : les duels REJOINTS non finaux, avec leur cible.
+ *   ⛔ elle JETTE si le lecteur n est pas celui de ce contrat ou si sa tete servie a plus de DUELS_ETAT_FRAIS_MS (90 s) : une liste perimee
+ *   n est jamais prise pour « aucun duel rejoint » (le regleur relit de toute facon duels(id) on chain avant tout envoi). */
+function duelsV2JointsKeeper(c) {
+  const l = c ? duelsV2() : null, s = l ? l.etat() : null;
+  if (!s || s.contrat !== c) throw new Error('duels v2 state list not read for this contract');
+  if (!s.luTete || Date.now() - s.luTete > DUELS_ETAT_FRAIS_MS) throw new Error('duels v2 state list stale (last head read ' + (s.luTete ? Math.round((Date.now() - s.luTete) / 1000) + ' s ago' : 'never') + ')');
+  return [...s.cache.values()].filter((e) => !e.final && e.duel.joiner && Number.isSafeInteger(e.duel.targetBlock)).map((e) => ({ id: e.duel.id, targetBlock: e.duel.targetBlock }));
+}
 const regleurSlots = ESSAI_SRV.actif
   ? creerRegleur({ desactive: 'trial mode (ESSAI): the keeper never runs against a trial node' })
   : creerRegleur({ cle: process.env.SLOTS_KEEPER_KEY || null, contrat: contratSlotsFiche, chainId: SLOTS_DEPLOIEMENT.chaine, table: SLOTS_DEPLOIEMENT.constructeur.prizes,
@@ -5292,7 +5303,15 @@ const regleurSlots = ESSAI_SRV.actif
       /* 2026-10-24 : les duels REJOINTS lus par l ETAT (le cache de lireDuelsSrv) — un Joined dont le log n a pas ete lu n est plus perdu ;
        *   revue fix2 : avec guesses et mise (classes sans lecture), et la liste JETTE si le cache n est pas frais (duelsJointsKeeper) */
       joints: () => duelsJointsKeeper(contratDuelsKeeper()), connu: (id) => duelConnuKeeper(contratDuelsKeeper(), id) },
-    rolls: { contrat: contratRollsKeeper } });
+    rolls: { contrat: contratRollsKeeper },
+    /* DENIM 2026-11-05 (Phil : OUI) : a 200 ms/bloc la fenetre de 256 blocs dure ~51 s. La MEME cle regle aussi :
+     *   - BlockDuelsV2 (fiche duels-v2-deploiement.js, relue a chaque tour) : settle(id) d un duel que le REJOIGNANT gagne, pres de la fin
+     *     de sa fenetre (sinon settleDefault le donne au createur) ; jamais un duel ou le createur gagne, jamais une egalite ;
+     *   - les rolls JOUES de BlockRolls (meme adresse que `rolls`) : settleMany des rolls GAGNANTS dans leur fenetre (sinon ils sont perdus).
+     *   Decouverte : les logs Joined / Rolled d une fenetre bornee ; v2 aussi par la liste de l ETAT du lecteur v2 (duelsV2JointsKeeper). */
+    duelsV2: { contrat: contratDuelsV2Keeper, bloc: () => (DUELS_V2_DEPLOIEMENT && Number.isSafeInteger(DUELS_V2_DEPLOIEMENT.bloc) ? DUELS_V2_DEPLOIEMENT.bloc : 0),
+      joints: () => duelsV2JointsKeeper(contratDuelsV2Keeper()) },
+    rollsJoues: { contrat: contratRollsKeeper, bloc: Number.isSafeInteger(BLOCKROLLS_DEPLOIEMENT.bloc) ? BLOCKROLLS_DEPLOIEMENT.bloc : 0 } });
 if (regleurSlots.demarrer()) console.log('[slots-keeper] on, keeper ' + regleurSlots.etat().adresse);
 else console.log('[slots-keeper] off: ' + regleurSlots.etat().pourquoi);
 

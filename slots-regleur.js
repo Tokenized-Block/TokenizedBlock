@@ -6,7 +6,7 @@
  *
  * ⛔ CE QUE CE MODULE FAIT, ET RIEN D AUTRE :
  *   - SANS la variable SLOTS_KEEPER_KEY (le proprietaire cree et approvisionne ce wallet lui-meme ; personne d autre ne voit la cle) : il
- *     ne fait RIEN et le dit (etat OFF, et pourquoi) ; aucune lecture de chaine. UNE seule cle pour les trois contrats.
+ *     ne fait RIEN et le dit (etat OFF, et pourquoi) ; aucune lecture de chaine. UNE seule cle pour tous les contrats (slots, duels v1 et v2, rolls).
  *   - AVEC : toutes les `intervalleMs` (derive du temps de bloc MESURE — longue et courte, prudent, comme le serveur : un dixieme de la fenetre, borne a [2 s, 10 s] ; sans mesure, le pire cas 200 ms — DENIM 2026-11-05), il lit :
  *       slots  — les Spun d une fenetre BORNEE (<= 300 blocs, puis les seuls blocs nouveaux + 8), les statuts, les hashes, le pot ;
  *                refait le calcul du contrat (slots-plan.js planReglement) -> settleMany(ids) des spins que le pot paie en ENTIER ;
@@ -56,6 +56,9 @@
  *     ecarte jusqu a la fin de sa fenetre ; les autres spins couverts partent.
  *   - ⛔ JAMAIS autre chose que : settleMany(uint256[]) / settle(uint256) vers le contrat des SLOTS ; settle(uint256) vers le contrat des
  *     DUELS ; closeDay(uint32) / drawDay(uint32) vers le contrat des ROLLS (les adresses des fiches) ; value 0 ; la chaine de la fiche.
+ *     DENIM 2026-11-05 : et settleMany(uint256[]) (1..rollsParTx ids) vers le contrat des ROLLS (les rolls joues GAGNANTS dans leur
+ *     fenetre) ; settle(uint256) vers BlockDuelsV2 (un duel que le REJOIGNANT gagne, prouve par un eth_call de settle juste avant).
+ *     Jamais settleDefault, jamais expire, jamais refundExpired.
  *     verifierEnvoi() le controle juste avant CHAQUE signature et jette sinon (rien n est signe).
  *   - ⛔ La cle n est lue que du parametre `cle` (le serveur le prend dans process.env, et nulle part ailleurs) ; elle reste dans la
  *     fermeture ; etat() ne la rend jamais, aucune erreur ne la cite, rien ne la journalise. L ADRESSE du regleur est publique (/sante).
@@ -101,14 +104,29 @@ export const TOPIC_DAY_DRAWN = topic('DayDrawn(uint32,address,bytes32,uint256,ui
 const DUEL_JOINED = 2, DUEL_SETTLED = 3;
 const FENETRE = 256;
 const ROLLS_DELAI_CIBLE = 2; /* BlockRolls.TARGET_DELAY : closeDay arme a bloc + 2 */
-export const CONTRATS = Object.freeze(['slots', 'duels', 'rolls']);
+/* DENIM (2026-11-05) : deux cibles de plus, chacune son plafond et son activite.
+ *   duelsV2    — BlockDuelsV2 : settle(id) d un duel rejoint que le REJOIGNANT gagne (sinon, apres la fenetre, settleDefault le donne au
+ *                createur : le gagnant qui a rejoint perdrait). Jamais un duel ou le createur gagne (le defaut paie la meme chose), jamais
+ *                une egalite (le defaut la donne au createur ; la regler changerait l issue : decision de Phil, pas du regleur).
+ *   rollsJoues — BlockRolls : settleMany(ids) des rolls PAYES par les joueurs, GAGNANTS, dans leur fenetre (un roll non regle dans les 256
+ *                blocs apres sa cible est PERDU). Meme contrat que `rolls` (closeDay / drawDay), un autre selecteur, un autre plafond. */
+export const CONTRATS = Object.freeze(['slots', 'duels', 'rolls', 'duelsV2', 'rollsJoues']);
+export const SEL_ROLLS = selecteur('rolls(uint256)').toLowerCase();
+export const SEL_RULES = selecteur('rules(uint16)').toLowerCase();
+export const SEL_POT = selecteur('pot()').toLowerCase();
+export const TOPIC_ROLLED = topic('Rolled(uint256,address,uint8[5],uint256,bool,uint256,uint256)');
+export const TOPIC_ROLL_SETTLED = topic('Settled(uint256,address,bytes32,uint8[5],uint8,uint256,uint256)');
+/* BlockDuelsV2.Status : ... Joined 2, Settled 3, ..., Defaulted 6 ; BlockRolls.Status : None 0, Pending 1, Settled 2, Expired 3 */
+const ROLL_PENDING = 1;
 
 export const BORNES_DEFAUT = Object.freeze({
   spinsParTx: 10,
   maxFeeWei: 1_000_000_000n, /* 1 gwei : Base tourne d ordinaire bien en dessous ; au-dessus, le regleur attend */
   prioWeiMax: 100_000_000n, /* 0,1 gwei de pourboire au plus */
   /* PAR CONTRAT (un nombre seul = le meme plafond pour chacun) : slots 60, duels 30, rolls 12 tx par heure glissante */
-  txParHeure: Object.freeze({ slots: 60, duels: 30, rolls: 12 }),
+  /* DENIM 2026-11-05 : duelsV2 30 (comme v1), rollsJoues 60 (comme les slots : un lot de 10 rolls par tx) */
+  txParHeure: Object.freeze({ slots: 60, duels: 30, rolls: 12, duelsV2: 30, rollsJoues: 60 }),
+  rollsParTx: 10, /* rollsJoues : au plus 10 rolls par settleMany (la garde le verifie) */
   delaiDuelBlocs: 16, /* un duel ou le createur gagne : regle a partir de cible + 16 (le gagnant en ligne regle d abord) */
   margeFinDuelBlocs: 64, /* un duel ou le rejoignant gagne : regle a partir de cible + 256 - marge (marge >= 3 tours mesures) */
   gasMaxParTx: 3_000_000n,
@@ -215,12 +233,22 @@ export function margeFinDuel(bornes, msParBloc, intervalleMs) {
  * ⛔ LA GARDE AVANT CHAQUE SIGNATURE : jette sauf si la tx est sans valeur, sur la bonne chaine, et ne porte QUE :
  *   vers `contrat` (slots) : settleMany(ids) (1..spinsParTx ids, encodage canonique) ou settle(id) ;
  *   vers `duels`           : settle(id) ;
- *   vers `rolls`           : closeDay(jour) / drawDay(jour) (jour < 2^32, un seul mot).
- * Rend le nombre de spins (slots) ou 1.
+ *   vers `rolls`           : closeDay(jour) / drawDay(jour) (jour < 2^32, un seul mot) ;
+ *                            DENIM 2026-11-05 : et settleMany(ids) (1..rollsParTx ids, encodage canonique) — les rolls joues ;
+ *   vers `duelsV2`         : settle(id) SEUL (jamais settleDefault, jamais refundExpired, rien d autre).
+ * Rend le nombre de spins / rolls (settleMany) ou 1.
  */
-export function verifierEnvoi(tx, { contrat, chainId, bornes = BORNES_DEFAUT, duels = null, rolls = null }) {
-  const cS = adresseOk(contrat), cD = adresseOk(duels), cR = adresseOk(rolls);
-  if (!cS && !cD && !cR) throw new Error('keeper: no keeper contract');
+/* le nombre d ids d un settleMany CANONIQUE (offset 32, longueur, ids) entre 1 et max ; jette sinon */
+function lotCanonique(d, max) {
+  const mots = motsDe('0x' + d.slice(10));
+  const n = mots.length - 2;
+  if ((d.length - 10) % 64 !== 0 || n < 1 || mots[0] !== 32n || mots[1] !== BigInt(n)) throw new Error('keeper: refused, a rolls batch is not canonical');
+  if (n > max) throw new Error('keeper: refused, ' + n + ' rolls in one transaction (max ' + max + ')');
+  return n;
+}
+export function verifierEnvoi(tx, { contrat, chainId, bornes = BORNES_DEFAUT, duels = null, rolls = null, duelsV2 = null }) {
+  const cS = adresseOk(contrat), cD = adresseOk(duels), cR = adresseOk(rolls), cV = adresseOk(duelsV2);
+  if (!cS && !cD && !cR && !cV) throw new Error('keeper: no keeper contract');
   if (BigInt(tx.value ?? 0) !== 0n) throw new Error('keeper: refused, a keeper call carries no value');
   if (BigInt(tx.chainId) !== BigInt(chainId)) throw new Error('keeper: refused, wrong chain');
   const to = bas(tx.to), d = bas(tx.data);
@@ -237,7 +265,12 @@ export function verifierEnvoi(tx, { contrat, chainId, bornes = BORNES_DEFAUT, du
     if (d.startsWith(SEL_SETTLE) && d.length === 10 + 64) return 1;
     throw new Error('keeper: refused, only settle(uint256) is ever sent to the duels contract');
   }
+  if (cV && to === cV) {
+    if (d.length === 10 + 64 && d.startsWith(SEL_SETTLE)) return 1;
+    throw new Error('keeper: refused, only settle(uint256) is ever sent to the duels v2 contract');
+  }
   if (cR && to === cR) {
+    if (d.startsWith(SEL_SETTLE_MANY)) return lotCanonique(d, Number(bornes.rollsParTx) > 0 ? Number(bornes.rollsParTx) : 10);
     if ((d.startsWith(SEL_CLOSE_DAY) || d.startsWith(SEL_DRAW_DAY)) && d.length === 10 + 64 && /^[0-9a-f]{64}$/.test(d.slice(10)) && BigInt('0x' + d.slice(10)) < 2n ** 32n) return 1;
     throw new Error('keeper: refused, only closeDay / drawDay are ever sent to the rolls contract');
   }
@@ -256,7 +289,9 @@ class Passagere extends Error {}
  * la mesure y depend de la vitesse de la machine) — le serveur ne le passe pas.
  */
 export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table = null, blocDeploiement = 0, rpc = null, rpcEnvoi = null,
-  maintenant = () => Date.now(), bornes: bornesIn = {}, journal = () => {}, desactive = null, duels = null, rolls = null, msParBloc: msParBlocFixe = null } = {}) {
+  maintenant = () => Date.now(), bornes: bornesIn = {}, journal = () => {}, desactive = null, duels = null, rolls = null, msParBloc: msParBlocFixe = null,
+  /* DENIM 2026-11-05 : duelsV2 = { contrat, bloc, joints? } (BlockDuelsV2) ; rollsJoues = { contrat, bloc } (BlockRolls : les rolls des joueurs) */
+  duelsV2 = null, rollsJoues = null } = {}) {
   const bornes = { ...BORNES_DEFAUT, ...bornesIn };
   const c = adresseOk(contrat);
   const off = (pourquoi) => ({
@@ -268,7 +303,8 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
   if (desactive) return off(String(desactive));
   if (!cle) return off('SLOTS_KEEPER_KEY is not set: the server settles nothing (anyone can still settle; prizes always go to the player)');
   const duelsCfg = duels && duels.contrat ? duels : null, rollsCfg = rolls && rolls.contrat ? rolls : null;
-  if (!c && !duelsCfg && !rollsCfg) return off('no contract address in the slots, duels or rolls records');
+  const v2Cfg = duelsV2 && duelsV2.contrat ? duelsV2 : null, joueCfg = rollsJoues && rollsJoues.contrat ? rollsJoues : null;
+  if (!c && !duelsCfg && !rollsCfg && !v2Cfg && !joueCfg) return off('no contract address in the slots, duels or rolls records');
   if (typeof rpc !== 'function') return off('no RPC reader');
   if (c && (!Array.isArray(table) || table.length !== Slots.MAX_POINTS + 1)) return off('no prize table in slots-deploiement.js');
   let adresse;
@@ -283,10 +319,10 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     etat: 'ON', adresse, depuis: new Date(maintenant()).toISOString(), msParBloc: fixe, mesureA: 0, intervalleMs: intervalleDepuisBloc(fixe, bornes),
     /* DENIM 2026-11-05 : la mesure longue et la courte (ms), et l instant de la derniere lecture courte */
     msLong: null, msCourt: null, mesureCourteA: -Infinity,
-    scanne: null, enVol: null, envoisHeure: { slots: [], duels: [], rolls: [] }, echecsSuite: 0, dernierEchec: null, dernierTour: null, dernierEnvoi: null, dernierRegle: null, erreurs: [],
+    scanne: null, enVol: null, envoisHeure: { slots: [], duels: [], rolls: [], duelsV2: [], rollsJoues: [] }, echecsSuite: 0, dernierEchec: null, dernierTour: null, dernierEnvoi: null, dernierRegle: null, erreurs: [],
     compteurs: { tours: 0, envois: 0, spinsEnvoyes: 0, spinsRegles: 0, reverts: 0, revertsExpliques: 0, simulationsRefusees: 0, simulationsNonLues: 0, envoisRefuses: 0, envoisRetrouves: 0,
       nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0, duelsEgalites: 0, duelsEvinces: 0, toursTeteGelee: 0 },
-    parContrat: { slots: activite(), duels: activite(), rolls: activite() },
+    parContrat: { slots: activite(), duels: activite(), rolls: activite(), duelsV2: activite(), rollsJoues: activite() },
     arret: null, chaineVue: false,
     /* round 4 : la plus haute tete lue et l instant ou elle l a ete pour la premiere fois ; gelee = { ... } tant qu elle ne bouge plus */
     teteMax: null, teteMaxA: 0, gelee: null,
@@ -309,6 +345,12 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     while (duelsClos.size > bornes.closMax) duelsClos.delete(duelsClos.keys().next().value);
   };
   const jours = { contrat: null, finis: new Set(), acheteurs: new Map(), aujourdhui: null };
+  /* DENIM 2026-11-05 — duelsV2 : suivis id -> { t, gA, gB, joueur (le rejoignant), classe } ; clos id -> t (createur gagnant, egalite,
+   *   final : plus jamais relus jusqu a la fin de leur fenetre) ; lecture = la sante de la lecture, publiee par etat() */
+  const v2 = { contrat: null, scanne: null, suivis: new Map(), clos: new Map(), lecture: { lu: null, erreur: null }, createurs: 0, egalites: 0, rejoignants: 0 };
+  /* rollsJoues : suivis id -> { t, g (emballe, du log Rolled) } ; clos id -> t (perdant, deja regle, joueur = le regleur) ; ecartes id -> t
+   *   (settle seul qui ne se simule pas : paiement refuse) ; regles version -> [p5, p4, p3, p2, minScore] (immuables par version) */
+  const rj = { contrat: null, scanne: null, suivis: new Map(), clos: new Map(), ecartes: new Map(), regles: new Map(), lecture: { lu: null, erreur: null }, perdants: 0 };
   let enCours = false, minuteur = null, echecsCeTour = 0;
 
   const erreur = (quoi) => {
@@ -340,6 +382,12 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       const m = motsDe(await appel(v.to, donnees1(SEL_DUELS, v.ids[0]), tag));
       if (m.length !== 9) throw new Error('duel not read');
       return Number(m[2]) === DUEL_SETTLED ? 'duel #' + v.ids[0] + ' already settled by another transaction' : null;
+    }
+    /* DENIM : BlockDuelsV2, la meme regle — Settled (3) au bloc du recu : un autre (le gagnant lui-meme) l a regle */
+    if (v.cible === 'duelsV2') {
+      const mv = motsDe(await appel(v.to, donnees1(SEL_DUELS, v.ids[0]), tag));
+      if (mv.length !== 9) throw new Error('duel v2 not read');
+      return Number(mv[2]) === 3 ? 'duel v2 #' + v.ids[0] + ' already settled by another transaction' : null;
     }
     if (v.cible === 'rolls') {
       const m = motsDe(await appel(v.to, donnees1(SEL_DAY_POTS, v.ids[0]), tag));
@@ -386,6 +434,7 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
         act.revertsExpliques += 1; st.compteurs.revertsExpliques += 1;
         erreur(nomTx(v) + ': tx ' + v.hash + ' reverted — ' + pourquoi + ' (not counted as a failure)');
         if (v.cible === 'duels') closDuel(String(v.ids[0]), v.avant && Number.isSafeInteger(v.avant.t) ? v.avant.t : null);
+        if (v.cible === 'duelsV2') closV2(String(v.ids[0]));
         return true;
       }
       act.reverts += 1; echec(nomTx(v) + ': tx ' + v.hash + ' reverted', 'reverts', v.cible); return true;
@@ -404,6 +453,15 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       const n = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_DUEL_SETTLED).length;
       act.regles += n; act.dernierInclus = { a, hash: v.hash, duel: v.ids[0], regles: n, bloc };
       closDuel(String(v.ids[0]), v.avant && Number.isSafeInteger(v.avant.t) ? v.avant.t : null);
+    } else if (v.cible === 'duelsV2') {
+      const n = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_DUEL_SETTLED).length;
+      act.regles += n; act.dernierInclus = { a, hash: v.hash, duel: v.ids[0], regles: n, bloc };
+      closV2(String(v.ids[0]));
+    } else if (v.cible === 'rollsJoues') {
+      /* settleMany SAUTE un roll deja regle : ne compte que les Settled de CE contrat dans le recu */
+      const ok = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_ROLL_SETTLED && l.topics[1]).map((l) => String(BigInt(l.topics[1])));
+      act.regles += ok.length; act.dernierInclus = { a, hash: v.hash, ids: v.ids, regles: ok.length, bloc };
+      for (const id of v.ids) closRoll(String(id));
     } else {
       const tir = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_DAY_DRAWN).length;
       const fer = (r.logs || []).filter((l) => bas(l.address) === v.to && bas(l.topics && l.topics[0]) === TOPIC_DAY_CLOSED).length;
@@ -670,7 +728,194 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     return out.sort((x, y) => (x.fin === y.fin ? 0 : x.fin < y.fin ? -1 : 1));
   }
 
-  const donneesDe = (k) => (k.cible === 'slots' ? donneesSettleMany(k.ids) : k.cible === 'duels' ? donnees1(SEL_SETTLE, k.ids[0]) : donnees1(k.quoi === 'drawDay' ? SEL_DRAW_DAY : SEL_CLOSE_DAY, k.ids[0]));
+  /* ================================================================ DENIM 2026-11-05 : BlockDuelsV2 et les rolls joues
+   * Pourquoi : a 200 ms/bloc la fenetre de 256 blocs dure ~51 s. BlockDuelsV2 : un duel rejoint non regle dans sa fenetre est GAGNE PAR
+   *   DEFAUT par le createur (settleDefault) — le joueur qui a rejoint et GAGNE perd. BlockRolls : un roll non regle dans les 256 blocs apres
+   *   sa cible est PERDU (expire). settle (v2) et settleMany (rolls) sont PERMISSIONLESS et paient TOUJOURS le joueur / le gagnant du contrat
+   *   (BlockDuelsV2.settle : winner = le meilleur score ; BlockRolls._settle : _push(r.player)) : le regleur ne paie que son gas. */
+  const closV2 = (id) => {
+    const d = v2.suivis.get(id);
+    v2.suivis.delete(id);
+    v2.clos.set(id, d ? d.t : Number.MAX_SAFE_INTEGER - FENETRE);
+    while (v2.clos.size > bornes.closMax) v2.clos.delete(v2.clos.keys().next().value);
+  };
+  const closRoll = (id) => {
+    const s = rj.suivis.get(id);
+    rj.suivis.delete(id); rj.ecartes.delete(id);
+    rj.clos.set(id, s ? s.t : Number.MAX_SAFE_INTEGER - FENETRE);
+    while (rj.clos.size > bornes.closMax) rj.clos.delete(rj.clos.keys().next().value);
+  };
+  const blocDe = (cfg) => { try { const b = typeof cfg.bloc === 'function' ? cfg.bloc() : cfg.bloc; return Number(b) || 0; } catch (_) { return 0; } };
+  /* hors fenetre : une tx signee a la tete H est minee au mieux en H + 1, et settle exige bloc <= cible + 256 */
+  const dansFenetre = (t, tete) => tete > t && tete + 1 <= t + FENETRE;
+
+  /* ---------------------------------------------------------------- duelsV2 : settle(id) des seuls duels que le REJOIGNANT gagne */
+  function voirV2(id, t, tete, x = {}) {
+    if (!/^\d+$/.test(id) || !Number.isSafeInteger(t) || t <= 0 || tete + 1 > t + FENETRE || v2.clos.has(id)) return;
+    if (!v2.suivis.has(id)) v2.suivis.set(id, { t, gA: null, gB: null, joueur: null, classe: null });
+  }
+  async function candidatsDuelsV2(cV, tete, info) {
+    if (v2.contrat !== cV) Object.assign(v2, { contrat: cV, scanne: null, suivis: new Map(), clos: new Map(), lecture: { lu: null, erreur: null } });
+    try {
+      const out = await lireDuelsV2(cV, tete, info);
+      v2.lecture = { lu: new Date(maintenant()).toISOString(), erreur: null };
+      return out;
+    } catch (e) { v2.lecture.erreur = msg(e); throw e; }
+  }
+  async function lireDuelsV2(cV, tete, info) {
+    for (const [id, d] of v2.suivis) if (d.t + FENETRE < tete + 1) v2.suivis.delete(id);
+    for (const [id, t] of v2.clos) if (t + FENETRE < tete + 1) v2.clos.delete(id);
+    /* la decouverte : les Joined d une fenetre BORNEE (comme v1) ET, si le serveur la donne, la liste par l ETAT (le lecteur v2) */
+    const plancherV2 = Math.max(blocDe(v2Cfg), tete - bornes.reculLogs + 1);
+    const deV2 = v2.scanne === null ? plancherV2 : Math.max(plancherV2, v2.scanne - 7);
+    let refus = null, parEtat = false;
+    if (deV2 <= tete) {
+      try {
+        const logs = await rpc('eth_getLogs', [{ address: cV, topics: [TOPIC_JOINED], fromBlock: '0x' + deV2.toString(16), toBlock: '0x' + tete.toString(16) }]);
+        if (!Array.isArray(logs)) throw new Error('getLogs did not return a list');
+        for (const l of logs) {
+          if (bas(l.address) !== cV || bas(l.topics && l.topics[0]) !== TOPIC_JOINED || !l.topics[1]) continue;
+          const mj = motsDe(l.data);
+          if (mj.length === 6) voirV2(String(BigInt(l.topics[1])), Number(mj[5]), tete);
+        }
+        v2.scanne = tete;
+      } catch (e) { refus = e; }
+    }
+    if (typeof v2Cfg.joints === 'function') {
+      try { for (const j of v2Cfg.joints() || []) voirV2(String(j && j.id), Number(j && j.targetBlock), tete); parEtat = true; } catch (e) { if (refus) refus = new Error(msg(refus) + '; state list: ' + msg(e)); }
+    }
+    if (refus && !parEtat) throw refus;
+    if (refus) { info.sain = false; erreur('duels v2 logs not read (state list used): ' + msg(refus)); }
+    /* CLASSER une fois (le hash de la cible existe : tete >= cible), l echeance la plus proche d abord : UN duels(id) (statut, guesses, le
+     *   rejoignant ; au plus classementsParTour), le hash d un en-tete (cache par bloc). createur gagnant / egalite / final -> clos, jamais relus */
+    let lectures = bornes.classementsParTour;
+    let entetes = Math.min(FENETRE, Math.max(bornes.entetesParTour, Math.ceil((2 * st.intervalleMs) / (st.msParBloc || 200))));
+    for (const [id, d] of [...v2.suivis.entries()].filter(([, x]) => x.classe === null && tete >= x.t).sort((a, b) => a[1].t - b[1].t)) {
+      if (d.joueur === null) {
+        if (lectures <= 0) continue;
+        lectures -= 1;
+        const mv = motsDe(await appel(cV, donnees1(SEL_DUELS, id)));
+        if (mv.length !== 9 || Number(mv[2]) === 0) { info.sain = false; continue; } /* illisible / noeud en retard : relu au tour suivant */
+        if (Number(mv[2]) !== DUEL_JOINED) { closV2(id); continue; }
+        /* la cible LUE sur la chaine fait foi (un log ou une liste ne la decide pas) */
+        Object.assign(d, { t: Number(mv[5]), gA: Number(mv[3]), gB: Number(mv[6]), joueur: '0x' + mv[4].toString(16).padStart(40, '0') });
+      }
+      if (!hashes.has(d.t)) {
+        if (entetes <= 0) continue;
+        entetes -= 1;
+        await hashDe(d.t);
+        if (!hashes.has(d.t)) { info.sain = false; continue; }
+      }
+      const qui = vainqueurDuel(hashes.get(d.t), d.gA, d.gB);
+      if (qui === 'rejoignant') { d.classe = qui; v2.rejoignants += 1; }
+      else if (qui === 'createur') { closV2(id); v2.createurs += 1; } /* settleDefault paie EXACTEMENT la meme chose : rien a proteger */
+      else if (qui === 'egalite') { closV2(id); v2.egalites += 1; } /* regle : mises rendues ; non regle : au createur — la regle de Phil */
+      else info.sain = false;
+    }
+    /* PRETS : rejoignant gagnant, dans sa fenetre, et PRES DE LA FIN (le gagnant en ligne regle d abord ; meme marge que v1) */
+    const margeV2 = margeFinDuel(bornes, st.msParBloc, st.intervalleMs);
+    /* (tri ecrit autrement que celui du classement v1 : muter-keeper-fix3 exige que son ancre soit UNIQUE) */
+    const pretsV2 = [...v2.suivis.entries()].filter(([, x]) => x.classe === 'rejoignant' && dansFenetre(x.t, tete) && tete + 1 >= x.t + FENETRE - margeV2)
+      .sort(([, x], [, y]) => x.t - y.t);
+    const out = [];
+    let relus = bornes.statutsParTour;
+    for (const [id, d] of pretsV2) {
+      if (out.length >= bornes.simulationsParTour || relus <= 0) break;
+      relus -= 1;
+      const mv = motsDe(await appel(cV, donnees1(SEL_DUELS, id)));
+      if (mv.length !== 9 || Number(mv[2]) === 0) { info.sain = false; continue; }
+      if (Number(mv[2]) !== DUEL_JOINED) { closV2(id); continue; }
+      /* ⛔ LA PREUVE PAR LE CONTRAT avant tout envoi : settle(id) EXECUTE (eth_call, depuis l adresse du regleur) doit designer le
+       *   REJOIGNANT lu ci-dessus comme gagnant, et jamais le regleur. Un desaccord avec la prediction : clos, rien n est envoye. */
+      let rendu = null;
+      try { rendu = motsDe(await rpc('eth_call', [{ from: adresse, to: cV, data: donnees1(SEL_SETTLE, id) }, 'latest'])); } catch (e) {
+        if (!estRevert(e)) throw e;
+        info.sain = false; erreur('duel v2 #' + id + ': settle does not execute (' + msg(e) + '), re-read next round'); continue;
+      }
+      const gagnant = rendu.length === 2 ? '0x' + rendu[0].toString(16).padStart(40, '0') : null;
+      const joueur = '0x' + mv[4].toString(16).padStart(40, '0');
+      if (gagnant === null || gagnant !== joueur || gagnant !== d.joueur || gagnant === bas(adresse)) {
+        closV2(id); erreur('duel v2 #' + id + ': the contract names ' + gagnant + ' as winner, not the joiner ' + joueur + ' — never sent'); continue;
+      }
+      out.push({ cible: 'duelsV2', to: cV, ids: [id], fin: d.t + FENETRE, quoi: 'settle', avant: { t: d.t } });
+    }
+    return out;
+  }
+
+  /* ---------------------------------------------------------------- rollsJoues : settleMany(ids) des rolls GAGNANTS dans leur fenetre */
+  async function candidatsRollsJoues(cR, tete, info) {
+    if (rj.contrat !== cR) Object.assign(rj, { contrat: cR, scanne: null, suivis: new Map(), clos: new Map(), ecartes: new Map(), regles: new Map(), lecture: { lu: null, erreur: null } });
+    try {
+      const out = await lireRollsJoues(cR, tete, info);
+      rj.lecture = { lu: new Date(maintenant()).toISOString(), erreur: null };
+      return out;
+    } catch (e) { rj.lecture.erreur = msg(e); throw e; }
+  }
+  async function lireRollsJoues(cR, tete, info) {
+    for (const [id, s] of rj.suivis) if (s.t + FENETRE < tete + 1) { rj.suivis.delete(id); rj.ecartes.delete(id); }
+    for (const [id, t] of rj.clos) if (t + FENETRE < tete + 1) rj.clos.delete(id);
+    for (const [id, t] of rj.ecartes) if (t + FENETRE < tete + 1) rj.ecartes.delete(id);
+    /* les Rolled d une fenetre BORNEE (<= reculLogs blocs, jamais avant le deploiement), puis les seuls blocs nouveaux (+ 8) */
+    const plancherR = Math.max(blocDe(joueCfg), tete - bornes.reculLogs + 1);
+    const deR = rj.scanne === null ? plancherR : Math.max(plancherR, rj.scanne - 7);
+    if (deR <= tete) {
+      const logs = await rpc('eth_getLogs', [{ address: cR, topics: [TOPIC_ROLLED], fromBlock: '0x' + deR.toString(16), toBlock: '0x' + tete.toString(16) }]);
+      if (!Array.isArray(logs)) throw new Error('getLogs did not return a list');
+      for (const l of logs) {
+        if (bas(l.address) !== cR || bas(l.topics && l.topics[0]) !== TOPIC_ROLLED || !l.topics[1]) continue;
+        const mr = motsDe(l.data);
+        if (mr.length !== 9) continue;
+        const id = String(BigInt(l.topics[1])), t = Number(mr[5]);
+        if (!Number.isSafeInteger(t) || t <= 0 || tete + 1 > t + FENETRE || rj.clos.has(id) || rj.suivis.has(id)) continue;
+        rj.suivis.set(id, { t });
+      }
+      rj.scanne = tete;
+    }
+    while (rj.suivis.size > bornes.suivisMax) rj.suivis.delete(rj.suivis.keys().next().value);
+    const aLire = [...rj.suivis.entries()].filter(([id, s]) => dansFenetre(s.t, tete) && !rj.ecartes.has(id)).sort((a, b) => a[1].t - b[1].t).slice(0, bornes.statutsParTour);
+    if (!aLire.length) return [];
+    const gagnants = [];
+    for (const [id, s] of aLire) {
+      /* rolls(id) = (player, targetBlock, status, guess, rulesVersion) : la chaine fait foi, jamais le log */
+      const mr = motsDe(await appel(cR, donnees1(SEL_ROLLS, id)));
+      if (mr.length !== 5 || Number(mr[2]) === 0) { info.sain = false; continue; } /* illisible / noeud en retard : relu au tour suivant */
+      if (Number(mr[2]) !== ROLL_PENDING) { closRoll(id); continue; } /* deja regle (par le joueur) ou expire */
+      const joueur = '0x' + mr[0].toString(16).padStart(40, '0'), t = Number(mr[1]), version = String(mr[4]);
+      if (joueur === bas(adresse)) { closRoll(id); continue; } /* ⛔ jamais un roll dont le joueur est le regleur */
+      s.t = t;
+      if (!dansFenetre(t, tete)) continue;
+      if (!rj.regles.has(version)) {
+        const mg = motsDe(await appel(cR, donnees1(SEL_RULES, version)));
+        if (mg.length !== 5) { info.sain = false; continue; }
+        rj.regles.set(version, mg);
+      }
+      if (!hashes.has(t)) { await hashDe(t); if (!hashes.has(t)) { info.sain = false; continue; } }
+      /* le score et le prix, comme BlockRolls._settle / _prizeFor (la face = faceDuHash = BlockRolls.faceOf) */
+      const face = faceDuHash(hashes.get(t)), g = deballerGuess(Number(mr[3]));
+      const score = g.reduce((n, x, i) => n + (x === face[i] ? 1 : 0), 0);
+      const [p5, p4, p3, p2, minScore] = rj.regles.get(version);
+      const prix = BigInt(score) < minScore ? 0n : score === 5 ? p5 : score === 4 ? p4 : score === 3 ? p3 : score === 2 ? p2 : 0n;
+      if (prix === 0n) { closRoll(id); rj.perdants += 1; continue; } /* un perdant ne touche rien, regle ou non : pas de gas pour lui */
+      gagnants.push({ id, t, prix });
+    }
+    if (!gagnants.length) return [];
+    const pot = Slots.lireUint(await appel(cR, SEL_POT));
+    if (pot === null) throw new Error('rolls pot not read');
+    /* le lot, comme le contrat le paiera (dans l ordre des ids, chacun min(prix, pot restant)) : un roll que le pot paie en ENTIER part des
+     *   qu il est reglable ; un roll que le pot ne paie qu en PARTIE n attend que la fin de sa fenetre (le pot peut remonter) — puis il part
+     *   quand meme : un paiement partiel vaut mieux que la perte du roll entier */
+    const margeR = margeFinDuel(bornes, st.msParBloc, st.intervalleMs);
+    const lot = [];
+    let reste = pot;
+    for (const x of gagnants) {
+      if (lot.length >= (Number(bornes.rollsParTx) > 0 ? Number(bornes.rollsParTx) : 10)) break;
+      if (x.prix <= reste) { lot.push(x); reste -= x.prix; } else if (reste > 0n && tete + 1 >= x.t + FENETRE - margeR) { lot.push(x); reste = 0n; }
+    }
+    if (!lot.length) return [];
+    return [{ cible: 'rollsJoues', to: cR, ids: lot.map((x) => x.id), fin: Math.min(...lot.map((x) => x.t + FENETRE)), quoi: 'settleMany' }];
+  }
+
+  const donneesDe = (k) => (k.cible === 'slots' || k.cible === 'rollsJoues' ? donneesSettleMany(k.ids) : k.cible === 'duels' || k.cible === 'duelsV2' ? donnees1(SEL_SETTLE, k.ids[0]) : donnees1(k.quoi === 'drawDay' ? SEL_DRAW_DAY : SEL_CLOSE_DAY, k.ids[0]));
   const estimer = async (to, data) => BigInt(await rpc('eth_estimateGas', [{ from: adresse, to, data, value: '0x0' }]));
 
   /* la simulation d UN candidat : rend { k, estime } ou null (revert : rien a envoyer pour lui) ; jette Passagere sur une panne RPC.
@@ -683,7 +928,15 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       try { return { k: kk, estime: await estimer(k.to, donneesDe(kk)) }; } catch (e) {
         if (!estRevert(e)) throw new Passagere(msg(e));
         st.compteurs.simulationsRefusees += 1;
-        if (k.cible !== 'slots') { erreur('simulation reverted (' + k.quoi + ' ' + k.cible + ' #' + ids[0] + '): ' + msg(e)); return null; }
+        if (k.cible !== 'slots' && k.cible !== 'rollsJoues') { erreur('simulation reverted (' + k.quoi + ' ' + k.cible + ' #' + ids[0] + '): ' + msg(e)); return null; }
+        /* rollsJoues : settleMany SAUTE un roll non reglable ; il ne revert que si un paiement echoue (liste noire USDC) : coupe en deux, le
+         *   roll fautif ecarte jusqu a la fin de sa fenetre, comme un spin */
+        if (ids.length === 1 && k.cible === 'rollsJoues') {
+          const sr = rj.suivis.get(ids[0]);
+          rj.ecartes.set(ids[0], sr ? sr.t : tete);
+          erreur('roll #' + ids[0] + ': settling it alone reverts (its payout transfer fails?), left out of the batches: ' + msg(e));
+          return null;
+        }
         if (ids.length === 1) {
           const s = suivis.get(ids[0]);
           ecartes.set(ids[0], s ? s.t : tete); st.compteurs.spinsEcartes += 1;
@@ -735,12 +988,15 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       }
       await mesurerBloc(tete);
       const cD = duelsCfg ? resoudre(duelsCfg.contrat) : null, cR = rollsCfg ? resoudre(rollsCfg.contrat) : null;
+      const cV = v2Cfg ? resoudre(v2Cfg.contrat) : null, cJ = joueCfg ? resoudre(joueCfg.contrat) : null;
       const info = { sain: true, courts: 0 };
-      const listes = { slots: [], duels: [], rolls: [] };
+      const listes = { slots: [], duels: [], rolls: [], duelsV2: [], rollsJoues: [] };
       const lire = async (nom, f) => { try { listes[nom] = await f(); } catch (e) { info.sain = false; erreur(nom + ' not read: ' + msg(e)); } };
       if (c) await lire('slots', () => candidatsSlots(tete, info));
       if (cD) await lire('duels', () => candidatsDuels(cD, tete, info));
       if (cR) await lire('rolls', () => candidatsRolls(cR, tete));
+      if (cV) await lire('duelsV2', () => candidatsDuelsV2(cV, tete, info));
+      if (cJ) await lire('rollsJoues', () => candidatsRollsJoues(cJ, tete, info));
       if (!CONTRATS.some((x) => listes[x].length)) {
         /* ⛔ un tour SAIN (tout lu, aucun echec, rien a faire) remet le compte des echecs a zero */
         if (info.sain && echecsCeTour === 0) { st.echecsSuite = 0; st.compteurs.toursSains += 1; }
@@ -757,7 +1013,7 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       /* la plus PRESSEE d abord (le dernier bloc ou elle passe) : chaque contrat garde SON ordre (duels : presses, puis mise), la tete de
        *   chaque liste est comparee ; a echeance egale, l ordre slots, duels, rolls */
       const candidats = [];
-      for (const q = { slots: 0, duels: 0, rolls: 0 }; ;) {
+      for (const q = { slots: 0, duels: 0, rolls: 0, duelsV2: 0, rollsJoues: 0 }; ;) {
         let pris = null;
         for (const x of CONTRATS) { const k = listes[x][q[x]]; if (k && (!pris || k.fin < listes[pris][q[pris]].fin)) pris = x; }
         if (!pris) break;
@@ -789,7 +1045,7 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
       if (gas > bornes.gasMaxParTx) { erreur('gas ' + gas + ' above the per-tx cap'); return { fait: false, pourquoi: 'gas above the per-tx cap' }; }
       const nonce = BigInt(await rpc('eth_getTransactionCount', [adresse, 'pending']));
       const tx = { chainId, nonce, maxPriorityFeePerGas: prio, maxFeePerGas: maxFee, gas, to: k.to, value: 0n, data };
-      verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR }); /* ⛔ jette AVANT la signature si quoi que ce soit n est pas un appel admis */
+      verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR || cJ, duelsV2: cV }); /* ⛔ jette AVANT la signature si quoi que ce soit n est pas un appel admis */
       const signe = signerEip1559(tx, cle);
       if (bas(signe.de) !== bas(adresse)) throw new Error('keeper: the signature does not recover the keeper address');
       try {
@@ -850,6 +1106,12 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
           duels: { contrat: cD, configure: !!duelsCfg, suivis: duelsSuivis.size, clos: duelsClos.size, lu: lectureDuels.lu, erreurLecture: lectureDuels.erreur, lecturesRatees: lectureDuels.ratees,
             envoisDerniereHeure: heure('duels'), plafondHeure: plafondHeure(bornes, 'duels'), ...st.parContrat.duels },
           rolls: { contrat: cR, configure: !!rollsCfg, aujourdhui: jours.aujourdhui, joursClos: [...jours.finis], envoisDerniereHeure: heure('rolls'), plafondHeure: plafondHeure(bornes, 'rolls'), ...st.parContrat.rolls },
+          /* DENIM 2026-11-05 : BlockDuelsV2 (settle des seuls duels que le rejoignant gagne) et les rolls joues (settleMany des gagnants) ;
+           *   lu / erreurLecture : la derniere lecture reussie / ratee, comme les duels v1 */
+          duelsV2: { contrat: v2Cfg ? resoudre(v2Cfg.contrat) : null, configure: !!v2Cfg, suivis: v2.suivis.size, clos: v2.clos.size, rejoignantsGagnants: v2.rejoignants, createursGagnants: v2.createurs, egalites: v2.egalites,
+            lu: v2.lecture.lu, erreurLecture: v2.lecture.erreur, envoisDerniereHeure: heure('duelsV2'), plafondHeure: plafondHeure(bornes, 'duelsV2'), ...st.parContrat.duelsV2 },
+          rollsJoues: { contrat: joueCfg ? resoudre(joueCfg.contrat) : null, configure: !!joueCfg, suivis: rj.suivis.size, clos: rj.clos.size, ecartes: [...rj.ecartes.keys()], perdants: rj.perdants,
+            lu: rj.lecture.lu, erreurLecture: rj.lecture.erreur, envoisDerniereHeure: heure('rollsJoues'), plafondHeure: plafondHeure(bornes, 'rollsJoues'), ...st.parContrat.rollsJoues },
         },
         bornes: { spinsParTx: bornes.spinsParTx, maxFeeWei: String(bornes.maxFeeWei), txParHeure: Object.fromEntries(CONTRATS.map((x) => [x, plafondHeure(bornes, x)])), gasMaxParTx: String(bornes.gasMaxParTx), echecsMax: bornes.echecsMax, simulationsParTour: bornes.simulationsParTour, joursRecul: bornes.joursRecul,
           delaiDuelBlocs: bornes.delaiDuelBlocs, margeFinDuelBlocs: margeFinDuel(bornes, st.msParBloc, st.intervalleMs),

@@ -362,7 +362,8 @@ await cas('8a panne RPC d eth_estimateGas : pas un echec', async () => {
   /* ⚠️ la garde n est jamais declenchee par un tour (le tour ne construit que des settleMany valides) : son APPEL avant la signature est
    *    donc verifie dans le SOURCE (une lecture, pas une execution — dit) ; ses refus, eux, sont executes ci-dessus */
   const corps = SOURCE.slice(SOURCE.indexOf('async function tour()'));
-  const iG = corps.indexOf('verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR });'), iS = corps.indexOf('signerEip1559(tx, cle)');
+  /* 2026-11-05 (keeper Denim) : la garde recoit aussi BlockDuelsV2 et le contrat des rolls joues */
+  const iG = corps.indexOf('verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR || cJ, duelsV2: cV });'), iS = corps.indexOf('signerEip1559(tx, cle)');
   vu(iG > 0 && iS > iG && (SOURCE.match(/signerEip1559\(/g) || []).length === 1, 'source : verifierEnvoi(tx) est appele AVANT la seule signature (un seul appel a signerEip1559)');
 }
 
@@ -754,8 +755,9 @@ await cas('15b famine : un contrat inonde n affame pas les autres (plafond PAR c
   const e = r.etat();
   vu(servis.filter((x) => x === 'duels').length === 4 && e.contrats.duels.sautsHeure >= 1 && e.contrats.duels.envoisDerniereHeure === 4 && e.contrats.duels.plafondHeure === 4, 'duels : 4 tx (son plafond), puis saute (' + e.contrats.duels.sautsHeure + ' fois)');
   vu(spinA !== null && jourA !== null && ch.statut.get('1') === 2, 'le spin et le jour arme passent quand meme (slots a la tete ' + spinA + ', rolls a ' + jourA + ')');
-  vu(JSON.stringify(e.bornes.txParHeure) === '{"slots":5,"duels":4,"rolls":3}', 'etat().bornes dit le plafond de chaque contrat');
-  vu(JSON.stringify(BORNES_DEFAUT.txParHeure) === '{"slots":60,"duels":30,"rolls":12}', 'plafonds par defaut : slots 60, duels 30, rolls 12 par heure');
+  /* 2026-11-05 (keeper Denim) : deux contrats de plus ; absents de l objet passe ici -> plafond 0 (ils n envoient rien : ferme par defaut) */
+  vu(JSON.stringify(e.bornes.txParHeure) === '{"slots":5,"duels":4,"rolls":3,"duelsV2":0,"rollsJoues":0}', 'etat().bornes dit le plafond de chaque contrat');
+  vu(JSON.stringify(BORNES_DEFAUT.txParHeure) === '{"slots":60,"duels":30,"rolls":12,"duelsV2":30,"rollsJoues":60}', 'plafonds par defaut : slots 60, duels 30, rolls 12, duelsV2 30, rollsJoues 60 par heure');
 });
 await cas('15c duels : egalite jamais, rejoignant pres de la fin, createur par mise', async () => {
   const marge = M.margeFinDuel(BORNES_DEFAUT, 200, 10000);

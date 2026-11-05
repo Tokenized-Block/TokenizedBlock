@@ -17,7 +17,8 @@ const original = fs.readFileSync(path.join(ICI, 'slots-regleur.js'), 'utf8');
 const COPIE = path.join(ICI, '.mutant-slots-regleur-' + process.pid + '.js');
 /* revue fix2 (2026-10-24, round 3) : la copie passe aussi par test-keeper-fix3-20261024.mjs (eviction, budgets, fenetre d un duel deja
  *   SUIVI : le mutant « cible + 256 » n est plus tue par test-slots-regleur seul, la decouverte refusant deja un duel hors fenetre) */
-const BANCS = ['test-slots-regleur-20261023.mjs', 'test-keeper-fix3-20261024.mjs'];
+/* 2026-11-05 (keeper Denim) : + test-keeper-denim-v2-rolls-20261105.mjs (BlockDuelsV2, rolls joues, la garde etendue) */
+const BANCS = ['test-slots-regleur-20261023.mjs', 'test-keeper-fix3-20261024.mjs', 'test-keeper-denim-v2-rolls-20261105.mjs'];
 const lancer = () => {
   try { for (const b of BANCS) execFileSync(process.execPath, [path.join(ICI, b)], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, REGLEUR_MODULE: COPIE, TOUT_COMPTER: '' } }); return true; }
   catch (_) { return false; }
@@ -47,8 +48,9 @@ const M = [
   ['statut non relu (deja regle envoye)', '      if (v.status !== 1) { suivis.delete(id); continue; }\n', ''],
   ['simulation ignoree (un revert envoye quand meme)', 'if (!estRevert(e)) throw new Passagere(msg(e));', 'return { k: kk, estime: 200000n };'],
   ['gas sans marge', 'const gas = (choix.estime * 12n) / 10n;', 'const gas = choix.estime;'],
-  ['la garde n est plus appelee', '      verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR });', '      /* garde retiree */'],
-  ['la garde ne connait plus duels / rolls', '      verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR });', '      verifierEnvoi(tx, { contrat: c, chainId, bornes });'],
+  /* 2026-11-05 (keeper Denim) : ancres suivies — la garde recoit aussi duelsV2 et le contrat des rolls joues */
+  ['la garde n est plus appelee', '      verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR || cJ, duelsV2: cV });', '      /* garde retiree */'],
+  ['la garde ne connait plus duels / rolls', '      verifierEnvoi(tx, { contrat: c, chainId, bornes, duels: cD, rolls: cR || cJ, duelsV2: cV });', '      verifierEnvoi(tx, { contrat: c, chainId, bornes });'],
   ['garde : n importe quel selecteur aux slots', "if (!d.startsWith(SEL_SETTLE_MANY)) throw new Error('keeper: refused, only settleMany / settle are ever sent to the slots contract');", ''],
   ['garde : autre adresse admise (traitee en slots)', 'if (cS && to === cS) {', 'if (cS) {'],
   ['garde : valeur admise', "if (BigInt(tx.value ?? 0) !== 0n) throw new Error('keeper: refused, a keeper call carries no value');", ''],
@@ -59,7 +61,8 @@ const M = [
   ['garde : tout selecteur aux rolls', "(d.startsWith(SEL_CLOSE_DAY) || d.startsWith(SEL_DRAW_DAY)) && d.length === 10 + 64", 'd.length === 10 + 64'],
   ['garde : jour >= 2^32 admis', " && BigInt('0x' + d.slice(10)) < 2n ** 32n", ''],
   ['garde : destination inconnue admise', "throw new Error('keeper: refused, the destination is not a keeper contract');", 'return 1;'],
-  ['etat() publie la cle', '        etat: st.etat, adresse: st.adresse,', '        etat: st.etat, cle, adresse: st.adresse,'],
+  /* 2026-11-05 : ancre PERIMEE depuis le round 4 (DEGRADE) — trouvee 0 fois sur 0d8850e (mesure : muter exit 1) ; suivie */
+  ['etat() publie la cle', "'DEGRADE' : st.etat, adresse: st.adresse,", "'DEGRADE' : st.etat, cle, adresse: st.adresse,"],
   ['intervalle sans borne haute', 'return Math.max(bornes.intervalleMinMs, Math.min(bornes.intervalleMaxMs, v));', 'return Math.max(bornes.intervalleMinMs, v);'],
   /* DENIM 2026-11-05 : l intervalle est 1/toursParFenetre de la fenetre, au pire cas 200 ms sans mesure (ancre suivie) */
   ['intervalle sur la fenetre entiere', 'const v = Math.floor((Slots.secondesFenetre(ms) * 1000) / (Number(bornes.toursParFenetre) > 0 ? Number(bornes.toursParFenetre) : 10));', 'const v = Math.floor(Slots.secondesFenetre(ms) * 1000);'],
@@ -107,9 +110,29 @@ const M = [
   ['revue 2 : un duel presse ne passe plus devant', 'prets.sort((a, b) => (Number(b.presse) - Number(a.presse)) || ', 'prets.sort((a, b) => '],
   ['revue 2 : un seul plafond pour les trois contrats (518653b)', 'st.envoisHeure[x].length >= plafondHeure(bornes, x)', 'CONTRATS.reduce((s, y) => s + st.envoisHeure[y].length, 0) >= plafondHeure(bornes, x)'],
   ['revue 3 : la relache d un recu illisible n est pas comptee (518653b)', "echec(nomTx(v) + ': receipt of tx ' + v.hash + ' unreadable for ' + Math.round(bornes.inclusionMaxMs / 1000) + ' s, released (outcome unknown, counted as a failure)', 'recusIlisibles', v.cible);", 'st.compteurs.recusIlisibles += 1;'],
-  ['revue 3 : etat().degrade jamais dit', "degrade: st.etat === 'ON' && st.echecsSuite > 0 ?", 'degrade: false ?'],
+  /* 2026-11-05 : ancre PERIMEE depuis le round 4 (tete gelee) — trouvee 0 fois sur 0d8850e ; suivie */
+  ['revue 3 : etat().degrade jamais dit', "degrade: st.etat === 'ON' && (st.echecsSuite > 0 || st.gelee) ?", 'degrade: false ?'],
   ['revue 4 : buyerCount 0 garde pour toujours (518653b)', '        if (n === 0n && a <= d + 1) continue;\n', ''],
   ['revue 7 : le message d arret ne nomme plus le contrat', "' failures in a row (last, ' + (contrat || 'keeper') + ': '", "' failures in a row (last: '"],
+  /* ---- 2026-11-05 (keeper Denim) : BlockDuelsV2 et les rolls joues — tues par test-keeper-denim-v2-rolls-20261105.mjs */
+  ['v2 : createur gagnant envoye', "else if (qui === 'createur') { closV2(id); v2.createurs += 1; }", "else if (qui === 'createur') { d.classe = 'rejoignant'; }"],
+  ['v2 : egalite envoyee', "else if (qui === 'egalite') { closV2(id); v2.egalites += 1; }", "else if (qui === 'egalite') { d.classe = 'rejoignant'; }"],
+  ['v2 : rejoignant gagnant envoye sans attendre la fin', ' && tete + 1 >= x.t + FENETRE - margeV2)', ')'],
+  ['v2 : la preuve par le contrat ignoree (gain detourne / au regleur)', 'if (gagnant === null || gagnant !== joueur || gagnant !== d.joueur || gagnant === bas(adresse)) {', 'if (false) {'],
+  ['v2 : le regleur peut etre le gagnant', ' || gagnant === bas(adresse)) {', ') {'],
+  ['v2 / rolls : hors fenetre envoye', 'const dansFenetre = (t, tete) => tete > t && tete + 1 <= t + FENETRE;', 'const dansFenetre = (t, tete) => tete > t;'],
+  /* (pas de mutant « v2 : statut non relu avant envoi » : EQUIVALENT — mesure 2026-11-05, il survivait : l eth_call de settle qui suit
+   *   revert NotJoined sur un duel qui n est plus Joined, et rien ne part. La relecture du statut reste une garde de plus, non prouvee seule) */
+  ['v2 : tout revert explique', "return Number(mv[2]) === 3 ? 'duel v2 #'", "return true ? 'duel v2 #'"],
+  ['garde v2 : tout selecteur admis (settleDefault)', "    if (d.length === 10 + 64 && d.startsWith(SEL_SETTLE)) return 1;\n    throw new Error('keeper: refused, only settle(uint256) is ever sent to the duels v2 contract');", '    return 1;'],
+  ['garde rolls : 11 rolls admis', 'if (n > max) throw', 'if (false) throw'],
+  ['garde rolls : lot non canonique admis', "if ((d.length - 10) % 64 !== 0 || n < 1 || mots[0] !== 32n || mots[1] !== BigInt(n)) throw new Error('keeper: refused, a rolls batch is not canonical');", ''],
+  ['rolls joues : perdant envoye', 'if (prix === 0n) { closRoll(id); rj.perdants += 1; continue; }', ''],
+  ['rolls joues : partiel envoye tout de suite', '} else if (reste > 0n && tete + 1 >= x.t + FENETRE - margeR) {', '} else if (reste > 0n) {'],
+  ['rolls joues : roll du regleur envoye', 'if (joueur === bas(adresse)) { closRoll(id); continue; }', ''],
+  ['rolls joues : statut non relu', 'if (Number(mr[2]) !== ROLL_PENDING) { closRoll(id); continue; }', ''],
+  ['rolls joues : plus de borne de 10 par tx', "      if (lot.length >= (Number(bornes.rollsParTx) > 0 ? Number(bornes.rollsParTx) : 10)) break;\n", ''],
+  ['rolls joues : le pot n est plus compte', '{ lot.push(x); reste -= x.prix; }', '{ lot.push(x); }'],
 ];
 let survivants = 0, introuvables = 0, temoin = true;
 try {
