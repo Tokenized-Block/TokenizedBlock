@@ -59,6 +59,8 @@ THEMES.electricite = ['lignesChamp', 'circuitRC'];
 THEMES.maths.push('pascalSierpinski');
 /* game148 : le joint d Apollonius (idee : codex Grok Bot) */
 THEMES.maths.push('apollonius');
+/* game150 : le tas de sable abelien (idee : codex Grok Bot) */
+THEMES.maths.push('tasDeSable');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1111,6 +1113,8 @@ export function monter(racine, ctx = {}) {
     'apollonius',
     /* game149 */
     'haloGlace',
+    /* game150 */
+    'tasDeSable',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

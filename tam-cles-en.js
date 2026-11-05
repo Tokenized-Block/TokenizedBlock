@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game150 */
+  grandes: 'det for the 4 x 4 and 5 x 5 grids', eePlusE: 'cells where (e + e) differs from e', ePlusR: 'cells where (e + r) differs from r', recurrente: 'e passes the burning test', videRecurrent: 'the empty pile passes it (witness)', tasDifferents: 'cells where the two final piles differ', eboulementsDifferents: 'cells where the topple counts differ', eboulements: 'topples',
   /* game149 */
   largeurCase: 'bin width (degrees)', rayonsGardes: 'rays through the 60 degree path',
   /* game148 */
@@ -417,6 +419,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game150 */
+  recurrentes: 'Recurrent piles counted vs det of the Laplacian (2 x 2, 3 x 3)', identite: 'Identity of the sandpile group (checks)', abelien: 'Order of the topples: start - end = Delta u (largest gap)',
   /* game149 */
   deviationMin: 'Smallest turn of the light, searched (degrees)', picDuHalo: 'Most frequent turn of the rays thrown (degrees)', temoin90: 'Witness: faces 90 degrees apart (the 46 degree halo)',
   /* game148 */

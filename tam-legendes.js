@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game150 (idee : codex Grok Bot) */
+  tasDeSable: {
+    titre: 'The abelian sandpile (the identity of the sandpile group)',
+    enUnePhrase: 'Grains on a grid: a cell with four grains topples and gives one to each neighbour. The picture is the one pile that, added to any recurrent pile, gives that pile back.',
+    colonnes: ['cell, across', 'cell, down', 'grains on the cell (0 to 3)'],
+    aRegarder: ['The pattern is not drawn by hand: it comes only from adding grains and letting them topple.', 'Change the side of the grid: the identity changes, but keeps its square symmetry.', 'Whatever order the cells topple in, the end is the same: the count of piles that keep coming back is exactly the determinant of the grid.'],
+    fin: null,
+  },
   /* game149 (idee : codex Grok Bot) */
   haloGlace: {
     titre: 'The 22 degree halo (light through ice prisms)',
