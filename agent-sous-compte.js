@@ -30,8 +30,10 @@ export const MODE_AUTONOME_DRAPEAU = false;          // ⛔ OFF tant que Phil ne
 export const CHAINE_BASE = 8453;
 export const CHAINE_BASE_HEX = '0x2105';
 export const USDC_DECIMALES = 6;
-/* Bornes de Phil (2026-11-04) : ce sont les MAXIMA des curseurs ; l utilisateur choisit dedans. */
-export const PLAFOND_JOUR_MAX_USDC = 100;
+/* Bornes de Phil (2026-11-04) : ce sont les MAXIMA des curseurs ; l utilisateur choisit dedans.
+ * 2026-11-05 (Phil) : plafond du mode porte de 100 a 100 000 USDC par jour. Ce n est qu un MAXIMUM : chaque autorisation est choisie au
+ *   curseur et signee par l utilisateur ; la page d essai (essai-autonome.js) reste a 1 USDC/jour, en dur. */
+export const PLAFOND_JOUR_MAX_USDC = 100000;
 export const DUREE_MAX_JOURS = 30;
 export const CURSEURS = Object.freeze({
   usdcParJour: Object.freeze({ min: 1, max: PLAFOND_JOUR_MAX_USDC, pas: 1 }),
@@ -50,7 +52,7 @@ export function usdcBrut(x) {
   return BigInt(m[1]) * UN_USDC + BigInt((m[2] || '').padEnd(USDC_DECIMALES, '0') || '0');
 }
 
-/** (a) Les plafonds CHOISIS par l utilisateur : 0 < usdcParJour <= 100, jours entier dans 1..30. Fonction pure. */
+/** (a) Les plafonds CHOISIS par l utilisateur : 0 < usdcParJour <= PLAFOND_JOUR_MAX_USDC (100 000), jours entier dans 1..30. Fonction pure. */
 export function validerPlafonds({ usdcParJour, jours } = {}) {
   const r = (pourquoi) => ({ ok: false, etat: 'REFUSE', pourquoi });
   const brut = usdcBrut(usdcParJour);

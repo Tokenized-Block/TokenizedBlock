@@ -1,5 +1,5 @@
 /* test-agent-sous-compte-20261104.mjs — PROTOTYPE mode autonome par Coinbase SUB ACCOUNT (agent-sous-compte.js).
- * A. validerPlafonds / usdcBrut : 0 < x <= 100 USDC par jour, 1..30 jours entiers, pas de flottant.
+ * A. validerPlafonds / usdcBrut : 0 < x <= 100 000 USDC par jour (Phil 2026-11-05, etait 100), 1..30 jours entiers, pas de flottant.
  * B. demandeSousCompte : requete requestSpendPermission (universel -> sub account, USDC, 1 jour, fin = +jours).
  * C. modeAutonomeVisible / sousCompteExistant / creerSousCompte : drapeau OFF par defaut, isBaseAccount, 4100, geste.
  * D. executerDepuisSousCompte : faux provider ; REFUSE n appelle JAMAIS le provider ; lot from = sub account, atomique.
@@ -52,20 +52,20 @@ async function scenarios(src) {
   vrai('A2 7 decimales / exposant / negatif illisibles', () => M.usdcBrut('1.0000001') === null && M.usdcBrut(1e-7) === null && M.usdcBrut('-1') === null && M.usdcBrut('') === null);
   const ref = M.validerPlafonds({ usdcParJour: '25', jours: 7 });
   vrai('A3 reference 25 USDC x 7 j acceptee', () => ref.ok && ref.allowanceBrut === 25_000_000n && ref.plafondJour === 25_000_000n && ref.totalMaxBrut === 175_000_000n);
-  vrai('A4 100 USDC et 30 j pile acceptes (bornes inclusives)', () => M.validerPlafonds({ usdcParJour: 100, jours: 30 }).ok);
-  vrai('A5 100.000001 refuse', () => /above 100/.test(M.validerPlafonds({ usdcParJour: '100.000001', jours: 1 }).pourquoi));
+  vrai('A4 100 000 USDC et 30 j pile acceptes (bornes inclusives)', () => M.validerPlafonds({ usdcParJour: 100000, jours: 30 }).ok);
+  vrai('A5 100000.000001 refuse', () => /above 100000 USDC/.test(M.validerPlafonds({ usdcParJour: '100000.000001', jours: 1 }).pourquoi));
   vrai('A6 0 refuse', () => /above 0/.test(M.validerPlafonds({ usdcParJour: 0, jours: 1 }).pourquoi));
   vrai('A7 31 j refuse', () => /above 30/.test(M.validerPlafonds({ usdcParJour: 1, jours: 31 }).pourquoi));
   vrai('A8 0 j refuse', () => /at least 1/.test(M.validerPlafonds({ usdcParJour: 1, jours: 0 }).pourquoi));
   vrai('A9 1.5 j refuse', () => /whole number/.test(M.validerPlafonds({ usdcParJour: 1, jours: 1.5 }).pourquoi));
-  vrai('A10 curseurs bornes a 100 et 30', () => M.CURSEURS.usdcParJour.max === 100 && M.CURSEURS.jours.max === 30 && M.CURSEURS.usdcParJour.min > 0 && M.CURSEURS.jours.min === 1);
+  vrai('A10 curseurs bornes a 100 000 et 30', () => M.CURSEURS.usdcParJour.max === 100000 && M.CURSEURS.jours.max === 30 && M.CURSEURS.usdcParJour.min > 0 && M.CURSEURS.jours.min === 1);
   /* ── B ── */
   const d = M.demandeSousCompte({ universel: UNIV, sousCompte: SUB, plafonds: { usdcParJour: '25', jours: 7 }, maintenant: T0 });
   vrai('B1 requete : universel -> sub account, USDC Base, chaine 8453, 1 jour', () => d.ok && d.requete.account === UNIV && d.requete.spender === SUB
     && d.requete.token === USDC_BASE && d.requete.chainId === 8453 && d.requete.periodInDays === 1 && d.requete.allowance === 25_000_000n);
   vrai('B2 start / end en Date, fin = +7 j', () => d.requete.start.getTime() === T0 * 1000 && d.requete.end.getTime() === (T0 + 7 * 86400) * 1000);
   vrai('B3 permission miroir (periode 86400 s, end - start = 7 j)', () => d.permission.period === 86400n && d.permission.end - d.permission.start === BigInt(7 * 86400));
-  vrai('B4 plafonds hors bornes -> pas de requete', () => M.demandeSousCompte({ universel: UNIV, sousCompte: SUB, plafonds: { usdcParJour: 101, jours: 7 }, maintenant: T0 }).ok === false);
+  vrai('B4 plafonds hors bornes -> pas de requete', () => M.demandeSousCompte({ universel: UNIV, sousCompte: SUB, plafonds: { usdcParJour: 100001, jours: 7 }, maintenant: T0 }).ok === false);
   vrai('B5 sub account = universel refuse', () => M.demandeSousCompte({ universel: UNIV, sousCompte: UNIV, plafonds: { usdcParJour: 1, jours: 1 }, maintenant: T0 }).ok === false);
   vrai('B6 sans horloge refuse', () => /no clock/.test(M.demandeSousCompte({ universel: UNIV, sousCompte: SUB, plafonds: { usdcParJour: 1, jours: 1 } }).pourquoi));
   /* ── C ── */
@@ -147,7 +147,7 @@ async function scenarios(src) {
     R['E5 texte : sub account, plafonds choisis, aucune cle ni fonds chez nous, revoke'] = /from YOUR sub account/.test(tout) && /25 USDC per day, for 7 days/.test(tout)
       && /holds no key and no funds/.test(tout) && /Revoke/.test(tout) && /not covered/.test(tout);
     R['E6 texte : 12.5 USDC rendu sans flottant'] = (M.texteModeAutonome(M.validerPlafonds({ usdcParJour: '12.5', jours: 1 })) || []).join(' ').includes('12.5 USDC per day, for 1 day.');
-    R['E7 texte refuse des plafonds hors bornes'] = M.texteModeAutonome({ usdcParJour: 500, jours: 1 }) === null;
+    R['E7 texte refuse des plafonds hors bornes'] = M.texteModeAutonome({ usdcParJour: 100001, jours: 1 }) === null;
   }
   return R;
 }
@@ -160,7 +160,7 @@ const remplacer = (s, a, b) => { if (!s.includes(a)) throw new Error('mutant san
 const MUTANTS = [
   ['drapeau ON par defaut', 'export const MODE_AUTONOME_DRAPEAU = false;', 'export const MODE_AUTONOME_DRAPEAU = true;'],
   ['visible pour tout wallet', "provider.isBaseAccount === true;", 'true;'],
-  ['plafond jour 1000', 'export const PLAFOND_JOUR_MAX_USDC = 100;', 'export const PLAFOND_JOUR_MAX_USDC = 1000;'],
+  ['plafond jour 1 000 000', 'export const PLAFOND_JOUR_MAX_USDC = 100000;', 'export const PLAFOND_JOUR_MAX_USDC = 1000000;'],
   ['duree 365 j', 'export const DUREE_MAX_JOURS = 30;', 'export const DUREE_MAX_JOURS = 365;'],
   ['zero accepte', 'if (brut <= 0n)', 'if (brut < 0n)'],
   ['jours non entiers', 'if (!Number.isInteger(jours))', 'if (false)'],
