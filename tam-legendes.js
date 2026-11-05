@@ -1130,6 +1130,30 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game164 (idee : codex Grok Bot) */
+  courbeDragon: {
+    titre: 'The dragon curve (a strip of paper folded n times)',
+    enUnePhrase: 'Fold a strip of paper in half again and again, open every fold to a right angle: the strip draws a dragon.',
+    colonnes: ['across', 'up', 'fold that made the segment'],
+    aRegarder: ['The curve touches itself at corners but never runs over the same segment twice.', 'Add one fold: the dragon doubles and turns by 45 degrees.', 'The colours show which fold made each segment: the first folds are spread all along the curve.'],
+    fin: null,
+  },
+  /* game163 (idee : codex Grok Bot) */
+  partitionEuler: {
+    titre: 'Integer partitions (all the ways to split a number)',
+    enUnePhrase: 'A random way of writing n as a sum, drawn as rows of squares that never get longer going down: a Young diagram.',
+    colonnes: ['column', 'row', 'row number'],
+    aRegarder: ['Each row is a part of the sum; rows never get longer as you go down.', 'There are 190 569 292 partitions of 100, and Euler found a short rule to count them.', 'Large random partitions all take the same curved shape at their edge.'],
+    fin: null,
+  },
+  /* game162 (idee : codex Grok Bot) */
+  catalanDyck: {
+    titre: 'Catalan numbers and Dyck paths (mountains that never sink)',
+    enUnePhrase: 'Mountain ranges made of up and down steps that never dip below the ground: there are exactly C_n of them.',
+    colonnes: ['step', 'height', 'path'],
+    aRegarder: ['Every path starts and ends on the ground and never goes below it.', 'Long random paths look like a rough hill: their height grows like the square root of their length.', 'With 5 ups and 5 downs there are 42 such ranges; without the ground rule there would be 252.'],
+    fin: null,
+  },
   /* game161 (idee : codex Grok Bot) */
   ruineJoueur: {
     titre: 'Gambler\'s ruin (how likely is a player to go broke)',

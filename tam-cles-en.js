@@ -352,6 +352,12 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game164 */
+  recouvrements: 'segments travelled twice', debut: 'first turns',
+  /* game163 */
+  p100: 'p(100)', p200: 'p(200)',
+  /* game162 */
+  sousSol: 'draws below the ground',
   /* game160 */
   exacte: 'exact fraction', sigmaMax: 'largest sigma of one point',
   /* game159 */
@@ -431,6 +437,12 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game164 */
+  virages: 'Turns: recurrence vs bit rule (disagreements)', segments: 'Unit segments drawn vs 2^n', bouts: 'Squared distance between the ends vs 2^n',
+  /* game163 */
+  pentagonal: 'Euler\'s pentagonal recurrence vs an independent count (disagreements)', dessinee: 'Young diagram drawn: parts add up to n',
+  /* game162 */
+  catalans: 'Dyck paths counted vs Catalan numbers',
   /* game161 */
   ruine: 'Share of games ruined vs Feller\'s exact formula', duree: 'Mean length of a game vs the exact value',
   /* game160 */

@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -39,6 +39,8 @@ const ORBITES = [orbiteRef(2), orbiteRef(3)];
  *   factorisation par essai (pas de crible) ; 6/pi^2 par Math.PI */
 /* tous les points dessines dans le rectangle [0, L] x [0, m] */
 const x0ok = (b, n, L, m) => { for (let q = 0; q < n; q++) { const o = 3 * q; if (b[o] < 0 || b[o] > L || b[o + 1] < 0 || b[o + 1] > m) return false; } return true; };
+/* p(n) pour n <= 30, par le comptage par pieces recopie ici (verification croisee de l enumeration) */
+const partPieces30 = (N) => { const p = new Array(N + 1).fill(0); p[0] = 1; for (let k = 1; k <= N; k++) for (let m = k; m <= N; m++) p[m] += p[m - k]; return p[N]; };
 const vergerRef = (N) => { let V = 0; for (let a = 1; a <= N; a++) for (let b = 1; b <= N; b++) { let ok = true; for (let d = 2; d <= Math.min(a, b) && ok; d++) if (a % d === 0 && b % d === 0) ok = false; if (ok) V++; } return V; };
 const facteurs = (k) => { const f = []; for (let p = 2; p * p <= k; p++) if (k % p === 0) { let e = 0; while (k % p === 0) { k /= p; e++; } f.push([p, e]); } if (k > 1) f.push([k, 1]); return f; };
 /* Ford : F_n par l algorithme des MEDIANTS (terme suivant (a, b, c, d) -> (c, d, k c - a, k d - b), k = floor((n + b)/d)), pas par
@@ -392,6 +394,52 @@ function suite(T, bavard = false, seul = null) {
     const v = [[0.5, 3, 10, 7 / 10], [2 / 3, 3, 6, 1 / 9], [0.6, 2, 5, 76 / 211]].map(([g, d, o, x]) => Math.abs(S('ruineJoueur', { gain: g, depart: d, objectif: o }).invariants.ruine.formule - x));
     assert.ok(v.every((e) => e < 1e-12), v.join(' ')); return '7/10, 1/9, 76/211';
   });
+  /* game162 : Catalan — references INDEPENDANTES : la recurrence C_(n+1) = sum C_i C_(n-i) (pas de binome) ; chaque chemin dessine reste
+   *   au-dessus du sol, a la bonne longueur, avec des pas de +-1 ; valeurs de Grok Bot C_0..C_10 */
+  for (const p of [...extremes(sys('catalanDyck')), { demi: 40, graine: 9 }]) ok(`catalanDyck ${JSON.stringify(p)} : chemins comptes = Catalan (recurrence), tirage uniforme, chemins dessines valides`, () => {
+    const R = S('catalanDyck', p), I = R.invariants, b = R.brut, N = R.params.demi;
+    const C = [1]; for (let k = 0; k < 12; k++) { let s = 0; for (let i = 0; i <= k; i++) s += C[i] * C[k - i]; C.push(s); }
+    assert.ok(I.catalans.mesure === C.join(' ') && I.catalans.formule === C.join(' '), 'catalans ' + I.catalans.mesure);
+    assert.ok(Math.abs(z(I.uniformite)) < 5 && I.uniformite.sousSol === 0 && I.temoin.mesure === '252', 'tirage ' + JSON.stringify(I.uniformite));
+    let mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1]; if (y < 0 || x < 0 || x > 2 * N || (x + y) % 2 !== 0 || y > Math.min(x, 2 * N - x)) mal++; if (x === 0 && y !== 0) mal++; if (x === 2 * N && y !== 0) mal++; }
+    assert.equal(mal, 0); return 'n = ' + N + ' : khi2 ' + I.uniformite.mesure.toFixed(1);
+  });
+  ok('catalanDyck : valeurs de controle de Grok Bot (C_0..C_10 = 1 1 2 5 14 42 132 429 1430 4862 16796)', () => { const v = S('catalanDyck', {}).invariants.catalans.mesure.split(' ').slice(0, 11).join(' '); assert.equal(v, '1 1 2 5 14 42 132 429 1430 4862 16796'); return v; });
+  /* game163 : partitions — reference INDEPENDANTE : enumeration directe des partitions (parts decroissantes) pour n <= 30 ; valeurs de
+   *   Grok Bot p(0..20) et p(100) ; le diagramme dessine forme des lignes decroissantes collees a gauche */
+  const partEnum = (n) => { let c = 0; const rec = (m, k) => { if (m === 0) { c++; return; } for (let j = Math.min(m, k); j >= 1; j--) rec(m - j, j); }; rec(n, n); return c; };
+  for (const p of [...extremes(sys('partitionEuler')), { entier: 30, graine: 4 }]) ok(`partitionEuler ${JSON.stringify(p)} : pentagonal = comptage independant, tirage uniforme, diagramme de Young valide`, () => {
+    const R = S('partitionEuler', p), I = R.invariants, b = R.brut, N = R.params.entier;
+    assert.ok(I.pentagonal.mesure === 0 && I.pentagonal.p100 === '190569292', 'pentagonal ' + JSON.stringify(I.pentagonal));
+    assert.ok(Math.abs(z(I.uniformite)) < 5 && I.dessinee.mesure === N, 'tirage ' + JSON.stringify([I.uniformite.mesure, I.dessinee]));
+    /* banc game163 : chaque ligne part de la colonne 0 (un diagramme decale passait : seul le maximum etait regarde) */
+    const lignes = new Map(), debuts = new Map(); for (let q = 0; q < R.n; q++) { const o = 3 * q; const r = -b[o + 1]; lignes.set(r, Math.max(lignes.get(r) ?? -1, b[o])); debuts.set(r, Math.min(debuts.get(r) ?? Infinity, b[o])); assert.equal(b[o + 2], r, 'etiquette de ligne'); }
+    if (R.n >= 1000) for (const [r, x0] of debuts) assert.equal(x0, 0, 'ligne ' + r + ' commence en ' + x0);
+    const longs = [...lignes.keys()].sort((x, y) => x - y).map((r) => lignes.get(r)); for (let i = 1; i < longs.length; i++) assert.ok(longs[i] <= longs[i - 1], 'lignes croissantes ' + longs.join(','));
+    if (N <= 30) assert.equal(partEnum(N), Number(partPieces30(N)));
+    return 'n = ' + N + ' : ' + I.dessinee.parts + ' parts, khi2 ' + I.uniformite.mesure.toFixed(1);
+  });
+  ok('partitionEuler : valeurs de controle de Grok Bot (p(0..20) et p(100) = 190569292)', () => {
+    const v = []; for (let k = 0; k <= 20; k++) v.push(partEnum(k)); assert.equal(v.join(','), '1,1,2,3,5,7,11,15,22,30,42,56,77,101,135,176,231,297,385,490,627');
+    assert.equal(S('partitionEuler', {}).invariants.pentagonal.p100, '190569292'); return v.join(',');
+  });
+  /* game164 : dragon — reference INDEPENDANTE : PLIAGE simule (une bande de 2^n cases pliee n fois, le sens de chaque pli relu au depliage) ;
+   *   chaque point dessine sur un segment unitaire de la grille ; valeurs de Grok Bot (n = 1..4) */
+  const pliage = (n) => { let plis = []; for (let i = 0; i < n; i++) { const r = [...plis].reverse().map((c) => (c === 'R' ? 'L' : 'R')); plis = [...plis, 'R', ...r]; } return plis.join(''); };
+  for (const p of [...extremes(sys('courbeDragon')), { plis: 9 }]) ok(`courbeDragon ${JSON.stringify(p)} : virages identiques, 2^n segments sans recouvrement, bouts a 2^(n/2)`, () => {
+    const R = S('courbeDragon', p), I = R.invariants, b = R.brut, N = R.params.plis;
+    assert.ok(I.virages.mesure === 0 && I.virages.virages === 2 ** N - 1 && I.virages.debut === pliage(N).slice(0, 15), 'virages ' + JSON.stringify(I.virages));
+    assert.ok(I.segments.mesure === 2 ** N && I.segments.formule === 2 ** N && I.segments.recouvrements === 0 && I.bouts.mesure === 2 ** N && I.bouts.formule === 2 ** N, 'segments ' + JSON.stringify([I.segments, I.bouts]));
+    /* le dragon RETRACE ici depuis le pliage simule : chaque point dessine doit tomber sur une de SES aretes (ou un de ses sommets) */
+    const ar = new Set(), so = new Set(['0,0']); { let x = 0, y = 0, dx = 1, dy = 0; const av = () => { ar.add(Math.min(x, x + dx) + ',' + Math.min(y, y + dy) + ',' + (dx ? 'h' : 'v')); x += dx; y += dy; so.add(x + ',' + y); };
+      av(); for (const c of pliage(N)) { [dx, dy] = c === 'R' ? [dy, -dx] : [-dy, dx]; av(); } }
+    const ent = (v) => Math.abs(v - Math.round(v)) < 1e-9;
+    let mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1];
+      const sur = ent(x) && ent(y) ? so.has(Math.round(x) + ',' + Math.round(y)) : ent(y) ? ar.has(Math.floor(x) + ',' + Math.round(y) + ',h') : ent(x) ? ar.has(Math.round(x) + ',' + Math.floor(y) + ',v') : false;
+      if (!sur) mal++; if (b[o + 2] < 0 || b[o + 2] > N) mal++; }
+    assert.equal(mal, 0); return 'n = ' + N + ' : ' + I.segments.mesure + ' segments, bouts^2 = ' + I.bouts.mesure;
+  });
+  ok('courbeDragon : valeurs de controle de Grok Bot (R ; RRL ; RRLRRLL ; RRLRRLLRRRLLRLL)', () => { assert.deepEqual([1, 2, 3, 4].map(pliage), ['R', 'RRL', 'RRLRRLL', 'RRLRRLLRRRLLRLL']); assert.equal(S('courbeDragon', { plis: 4 }).invariants.virages.debut, 'RRLRRLLRRRLLRLL'); return 'ok'; });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -519,6 +567,20 @@ const MUTANTS = [
   ['ruine : duree z (a + z)', ', dz = egal ? z * (a - z) :', ', dz = egal ? z * (a + z) :'],
   ['ruine : gain avec <= au lieu de <', 'x += rng() < p ? 1 : -1;', 'x += rng() < p + 0.02 ? 1 : -1;'],
   ['ruine : arret a 1 au lieu de 0', 'while (x > 0 && x < a) {', 'while (x > 1 && x < a) {'],
+  ['catalan : descente permise sous le sol', 'if (d < u) rec(u, d + 1);', 'if (d <= u) rec(u, d + 1);'],
+  ['catalan : binome sur n au lieu de n + 1', 'formules.push(String(binomB(2 * k, k) / BigInt(k + 1)));', 'formules.push(String(binomB(2 * k, k) / BigInt(k + 2)));'],
+  ['catalan : rotation au dernier minimum', 'if (h < min) { min = h; im = i; }', 'if (h <= min) { min = h; im = i; }'],
+  ['catalan : n descentes seulement', 'for (let i = 0; i <= n; i++) s.push(-1);', 'for (let i = 0; i < n; i++) s.push(-1);'],
+  ['catalan : temoin binom(10, 4)', "mesure: String(binomB(10, 5)), formule: '252'", "mesure: String(binomB(10, 4)), formule: '252'"],
+  ['partitions : signe pentagonal inverse', 'const sg = k % 2 ? 1n : -1n;', 'const sg = k % 2 ? -1n : 1n;'],
+  ['partitions : second pentagonal oublie', 'if (g2 <= n) s += sg * p[n - g2];', ''],
+  ['partitions : tirage avec parts <= k + 1', 'parts.push(j); m -= j; k = j; break;', 'parts.push(j); m -= j; k = j + 1; break;'],
+  ['partitions : diagramme dessine decale', 'brut[o] = q[0]; brut[o + 1] = q[1];', 'brut[o] = q[0] + 1; brut[o + 1] = q[1];'],
+  ['dragon : complement oublie', "c += h[k] === 'R' ? 'L' : 'R';", 'c += h[k];'],
+  ['dragon : regle des bits avec j impair', "h += ((x - 1) / 2) % 2 === 0 ? 'R' : 'L';", "h += ((x - 1) / 2) % 2 === 1 ? 'R' : 'L';"],
+  ['dragon : virage R tourne a gauche', "const ndx = c === 'R' ? dy : -dy, ndy = c === 'R' ? -dx : dx;", "const ndx = c === 'R' ? -dy : -dy, ndy = c === 'R' ? dx : dx;"],
+  ['dragon : formule 2^(n+1)', 'formule: 2 ** N, recouvrements', 'formule: 2 ** (N + 1), recouvrements'],
+  ['dragon : dessin decale', 'brut[o] = a[0] + u * (b[0] - a[0]);', 'brut[o] = a[0] + 0.3 + u * (b[0] - a[0]);'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -533,7 +595,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

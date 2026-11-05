@@ -726,7 +726,91 @@ function ruineJoueur(P, n) {
     duree: { mesure: md, formule: dz, sigma: Math.sqrt(vd / T), note: 'mean length of a game against z (a - z) at p = 1/2, or z/(q - p) - (a/(q - p)) (1 - r^z)/(1 - r^a)' } } };
 }
 
+// ---------- 20 : les nombres de Catalan et les chemins de Dyck (idee et valeurs : codex Grok Bot ; Feller vol. I, ch. III §1 (a), p. 69, lu par Grok) ----------
+// Un chemin de Dyck : n montees et n descentes qui ne passent jamais sous le sol (une chaine de montagnes). C_n = nombre de tels chemins.
+// Exact : C_n = binom(2n, n)/(n + 1) (reflexion d Andre ; lien avec le theoreme du scrutin, Feller III §1). Les chemins sont COMPTES un
+//   par un (retour arriere) pour n = 0..12 et compares au binome en entiers exacts (BigInt).
+// Tirage UNIFORME (lemme cyclique, derive ici) : melanger n montees et n + 1 descentes ; parmi les 2n + 1 rotations, une seule commence
+//   juste apres le PREMIER point le plus bas : elle donne un chemin de Dyck suivi d une descente, et chaque chemin de Dyck provient d exactement
+//   2n + 1 melanges equiprobables -> uniforme.
+// Mesure : 7000 tirages de demi-longueur 4, khi-deux sur les 14 chemins (13 degres de liberte) ; chaque chemin dessine reste au-dessus du sol.
+// Temoin : sans la contrainte du sol, binom(2n, n) chemins (252 pour n = 5, pas 42).
+// Dessin : 4 chemins de Dyck tires au hasard de demi-longueur n (curseur), pas (x) et hauteur (y), etiquette = le chemin.
+function dyckTirage(n, rng) { const s = []; for (let i = 0; i < n; i++) s.push(1); for (let i = 0; i <= n; i++) s.push(-1);
+  for (let i = s.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = s[i]; s[i] = s[j]; s[j] = t; }
+  let h = 0, min = 0, im = -1; for (let i = 0; i < s.length; i++) { h += s[i]; if (h < min) { min = h; im = i; } }
+  return [...s.slice(im + 1), ...s.slice(0, im + 1)].slice(0, 2 * n); }
+function dyckCompte(n) { let c = 0; const rec = (u, d) => { if (u === n && d === n) { c++; return; } if (u < n) rec(u + 1, d); if (d < u) rec(u, d + 1); }; rec(0, 0); return c; }
+function binomB(n, k) { let r = 1n; for (let i = 1n; i <= BigInt(k); i++) r = r * (BigInt(n) - BigInt(k) + i) / i; return r; }
+function catalanDyck(P, n) {
+  const N = P.demi, rng = mulberry32(P.graine), comptes = [], formules = [];
+  for (let k = 0; k <= 12; k++) { comptes.push(dyckCompte(k)); formules.push(String(binomB(2 * k, k) / BigInt(k + 1))); }
+  const f = new Map(), T = 7000; let sousSol = 0;
+  for (let t = 0; t < T; t++) { const p = dyckTirage(4, rng); let h = 0; for (const x of p) { h += x; if (h < 0) sousSol++; } if (h !== 0) sousSol++; const k = p.join(''); f.set(k, (f.get(k) || 0) + 1); }
+  const att = T / 14; let khi2 = (14 - f.size) * att; for (const v of f.values()) khi2 += (v - att) ** 2 / att;
+  const CH = 4, chemins = []; for (let c = 0; c < CH; c++) chemins.push(dyckTirage(N, rng));
+  /* banc game162 (n = 2 points : par = 0, NaN) : par >= 1 */
+  const brut = new Float64Array(n * 3), par = Math.max(1, Math.floor(n / CH));
+  for (let l = 0; l < n; l++) { const c = Math.min(CH - 1, Math.floor(l / par)), j = l - c * par, m = c === CH - 1 ? n - c * par : par, i = Math.round(j * 2 * N / Math.max(1, m - 1));
+    let h = 0; for (let k = 0; k < i; k++) h += chemins[c][k]; const o = 3 * l; brut[o] = i; brut[o + 1] = h; brut[o + 2] = c; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (pas)', invariants: {
+    catalans: { mesure: comptes.join(' '), formule: formules.join(' '), note: 'Dyck paths COUNTED one by one for n = 0..12, against binom(2n, n)/(n + 1) in exact integers' },
+    uniformite: { mesure: khi2, formule: 13, sigma: Math.sqrt(26), tirages: T, sousSol, note: 'chi-square of 7000 cyclic-lemma draws of half-length 4 over its 14 paths (13 degrees of freedom) ; draws that dip below the ground : 0 expected' },
+    temoin: { mesure: String(binomB(10, 5)), formule: '252', note: 'witness: without the ground rule, binom(10, 5) = 252 paths of length 10, not C_5 = 42' } } };
+}
+
+// ---------- 21 : les partitions d entiers et le theoreme pentagonal d Euler (idee et valeurs : codex Grok Bot ; Ahlgren et Ono, Notices AMS 48 (2001) 978, lu par Grok) ----------
+// p(n) = nombre de facons d ecrire n comme somme d entiers positifs sans tenir compte de l ordre (5 = 4+1 = 3+2 = 3+1+1 = ...).
+// Exact (Euler) : p(n) = p(n-1) + p(n-2) - p(n-5) - p(n-7) + p(n-12) + p(n-15) - ... (nombres pentagonaux generalises k(3k -+ 1)/2).
+// Mesure INDEPENDANTE : le meme p(n) par programmation dynamique « par pieces » (ajouter les parts de taille 1, puis 2, ...), entiers exacts.
+// Tirage UNIFORME d une partition (derive ici) : T(n, k) = partitions de n en parts <= k ; la plus grande part j est choisie avec la
+//   probabilite T(n - j, j)/T(n, k), puis on recommence sur n - j avec des parts <= j. Teste : khi-deux sur les 22 partitions de 8.
+// Dessin (vue de face) : le diagramme de Young d une partition tiree au hasard de n (curseur) : une case par unite (etiquette = la ligne).
+function partPentagonal(N) { const p = [1n]; for (let n = 1; n <= N; n++) { let s = 0n; for (let k = 1; ; k++) { const g1 = k * (3 * k - 1) / 2, g2 = k * (3 * k + 1) / 2; if (g1 > n) break; const sg = k % 2 ? 1n : -1n; s += sg * p[n - g1]; if (g2 <= n) s += sg * p[n - g2]; } p.push(s); } return p; }
+function partPieces(N) { const p = new Array(N + 1).fill(0n); p[0] = 1n; for (let k = 1; k <= N; k++) for (let m = k; m <= N; m++) p[m] += p[m - k]; return p; }
+function partTable(N) { const T = Array.from({ length: N + 1 }, () => new Array(N + 1).fill(0n)); for (let k = 0; k <= N; k++) T[0][k] = 1n; for (let m = 1; m <= N; m++) for (let k = 1; k <= N; k++) T[m][k] = T[m][k - 1] + (k <= m ? T[m - k][k] : 0n); return T; }
+function partTirage(N, T, rng) { const parts = []; let m = N, k = N; while (m > 0) { let u = 0n; for (let i = 0; i < 3; i++) u = (u << 30n) + BigInt(Math.floor(rng() * 1073741824)); u %= T[m][k];
+    for (let j = Math.min(k, m); j >= 1; j--) { const w = T[m - j][j]; if (u < w) { parts.push(j); m -= j; k = j; break; } u -= w; } } return parts; }
+function partitionEuler(P, n) {
+  const N = P.entier, rng = mulberry32(P.graine), A = partPentagonal(200), B = partPieces(200);
+  let ecarts = 0; for (let m = 0; m <= 200; m++) if (A[m] !== B[m]) ecarts++;
+  const T8 = partTable(8), f = new Map(), S = 11000; for (let s = 0; s < S; s++) { const key = partTirage(8, T8, rng).join('+'); f.set(key, (f.get(key) || 0) + 1); }
+  const att = S / 22; let khi2 = (22 - f.size) * att; for (const v of f.values()) khi2 += (v - att) ** 2 / att;
+  const parts = partTirage(N, partTable(N), rng), cases = []; parts.forEach((len, r) => { for (let c = 0; c < len; c++) cases.push([c, -r, r]); });
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const q = cases[Math.floor(l * cases.length / n)], o = 3 * l; brut[o] = q[0]; brut[o + 1] = q[1]; brut[o + 2] = q[2]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (cases)', invariants: {
+    pentagonal: { mesure: ecarts, formule: 0, p100: String(A[100]), p200: String(A[200]), note: 'values of n in 0..200 where Euler\'s pentagonal recurrence and the independent coin-by-coin count disagree (exact integers)' },
+    uniformite: { mesure: khi2, formule: 21, sigma: Math.sqrt(42), tirages: S, note: 'chi-square of 11 000 uniform draws over the 22 partitions of 8 (21 degrees of freedom)' },
+    dessinee: { mesure: parts.reduce((x, y) => x + y, 0), formule: N, parts: parts.length, note: 'the Young diagram drawn : its parts add up to n and never increase' } } };
+}
+
+// ---------- 22 : la courbe du dragon (pliage de papier) (idee et valeurs : codex Grok Bot ; Riddle, « Heighway Dragon », citant Davis et Knuth 1970, lu par Grok) ----------
+// Plier une bande de papier en deux n fois (curseur), puis la deplier a angle droit : la suite des virages trace le dragon de Heighway.
+// Exact : H_(n+1) = H_n R (complement inverse de H_n) ; derive ici : le k-ieme virage (k = 2^m (2j + 1)) est R si j est pair, L sinon
+//   (le pli du milieu de chaque morceau) — deux constructions INDEPENDANTES comparees virage par virage.
+// Mesures exactes sur le trace : 2^n segments unitaires, aucun segment parcouru deux fois (la courbe ne se recouvre jamais), et la distance
+//   entre les deux bouts au carre vaut 2^n (chaque pliage multiplie la corde par sqrt 2, derive : rotation de 45 degres et similitude).
+// Dessin (vue de face) : le dragon de n plis, des points le long des segments, etiquette = la generation du segment (le pli qui l a cree).
+function dragonRecurrence(n) { let h = ''; for (let i = 0; i < n; i++) { let c = ''; for (let k = h.length - 1; k >= 0; k--) c += h[k] === 'R' ? 'L' : 'R'; h = h + 'R' + c; } return h; }
+function dragonBits(n) { let h = ''; for (let k = 1; k < 2 ** n; k++) { let x = k; while (x % 2 === 0) x /= 2; h += ((x - 1) / 2) % 2 === 0 ? 'R' : 'L'; } return h; }
+function courbeDragon(P, n) {
+  const N = P.plis, hR = dragonRecurrence(N), hB = dragonBits(N);
+  let differents = 0; for (let k = 0; k < hR.length; k++) if (hR[k] !== hB[k]) differents++;
+  let x = 0, y = 0, dx = 1, dy = 0; const aretes = new Set(), pts = [[0, 0]]; let doublons = 0;
+  const pas = () => { const key = Math.min(x, x + dx) + ',' + Math.min(y, y + dy) + ',' + (dx !== 0 ? 'h' : 'v'); if (aretes.has(key)) doublons++; aretes.add(key); x += dx; y += dy; pts.push([x, y]); };
+  pas(); for (const c of hR) { const ndx = c === 'R' ? dy : -dy, ndy = c === 'R' ? -dx : dx; dx = ndx; dy = ndy; pas(); }
+  const segs = pts.length - 1, gen = (s) => { if (s === 0) return 0; let k = s, m = 0; while (k % 2 === 0) { k /= 2; m++; } return N - m; };
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const t = l * segs / n, s = Math.floor(t), u = t - s, a = pts[s], b = pts[s + 1], o = 3 * l; brut[o] = a[0] + u * (b[0] - a[0]); brut[o + 1] = a[1] + u * (b[1] - a[1]); brut[o + 2] = gen(s); }
+  return { D: 3, brut, nuage: true, unite: 'sans objet (segments unitaires)', invariants: {
+    virages: { mesure: differents, formule: 0, virages: hR.length, debut: hR.slice(0, 15), note: 'turns where the recurrence H R (reverse complement of H) and the bit rule (k = 2^m (2j + 1) : R when j is even) disagree' },
+    segments: { mesure: segs, formule: 2 ** N, recouvrements: doublons, note: 'unit segments drawn against 2^n ; segments travelled twice (none : the dragon never overlaps itself)' },
+    bouts: { mesure: x * x + y * y, formule: 2 ** N, note: 'squared distance between the two ends against 2^n : each fold multiplies the chord by sqrt 2' } } };
+}
+
 export const COLONNES = Object.freeze({
+  courbeDragon: { colonnes: ['x', 'y', 'fold that made the segment (label)'], memeLongueur: [[0, 1]], autres: [2] },
+  partitionEuler: { colonnes: ['column', 'row (downwards)', 'row number (label)'], memeLongueur: [[0, 1]], autres: [2] },
+  catalanDyck: { colonnes: ['step', 'height', 'path (label)'], memeLongueur: [], autres: [0, 1, 2] },
   ruineJoueur: { colonnes: ['bets played', 'fortune', 'game (label; 0 = the walls 0 and a)'], memeLongueur: [], autres: [0, 1, 2] },
   collectionneur: { colonnes: ['draws so far', 'different coupons owned', 'collection (label; 0 = the exact mean curve)'], memeLongueur: [], autres: [0, 1, 2] },
   aztecDiamond: { colonnes: ['x (cells)', 'y (cells)', 'arrow of the domino (label; 0 N, 1 S, 2 E, 3 W)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -806,9 +890,18 @@ export const SYSTEMES = Object.freeze([
   { id: 'ruineJoueur', nom: 'Gambler\'s ruin', science: 'Probability', D: 3, nuage: true, params: { gain: 0.5, depart: 10, objectif: 20, graine: 1 },
     bornes: { gain: [0.3, 0.7], depart: [1, 39], objectif: [4, 40], graine: [1, 1000000] },
     phrase: 'A visualisation of the gambler\'s ruin: start with z, win or lose one each bet, and stop at zero or at the target a. Over 20 000 simulated games the share that ends in ruin matches Feller\'s exact formula, linear in z for a fair game, and the mean length of a game matches its exact value too. A small edge changes everything.' },
+  { id: 'catalanDyck', nom: 'Catalan numbers and Dyck paths', science: 'Combinatorics', D: 3, nuage: true, params: { demi: 120, graine: 1 },
+    bornes: { demi: [5, 400], graine: [1, 1000000] },
+    phrase: 'A visualisation of Dyck paths: mountain ranges of n ups and n downs that never go below the ground. Every such path is counted one by one for small n and matches the Catalan numbers 1, 1, 2, 5, 14, 42, 132... = binom(2n, n)/(n + 1). The pictures are paths drawn uniformly at random by the cycle lemma, a draw that is tested for fairness.' },
+  { id: 'partitionEuler', nom: 'Integer partitions (Euler\'s pentagonal theorem)', science: 'Number theory', D: 3, nuage: true, params: { entier: 100, graine: 1 },
+    bornes: { entier: [5, 200], graine: [1, 1000000] },
+    phrase: 'A visualisation of integer partitions: the ways to write n as a sum of positive whole numbers, drawn as a Young diagram chosen uniformly at random. Their number p(n) is computed by Euler\'s pentagonal recurrence and checked against an independent count for every n up to 200 (p(100) = 190 569 292).' },
+  { id: 'courbeDragon', nom: 'The dragon curve (folding paper)', science: 'Geometry', D: 3, nuage: true, params: { plis: 12 },
+    bornes: { plis: [3, 15] },
+    phrase: 'A visualisation of the Heighway dragon: fold a strip of paper in half n times, unfold every crease to a right angle, and the strip draws a dragon. Its turns are built two independent ways that agree turn by turn; it has exactly 2^n segments, never runs over itself, and its two ends are exactly 2^(n/2) apart.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'] };
-const FONCTIONS = { ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'] };
+const FONCTIONS = { courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
