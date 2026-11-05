@@ -220,7 +220,9 @@ for (let tete0 = await tete(); tete0 + 1 <= finLot; tete0 = await tete()) {
 }
 await r2.tour();
 const { delaiDuelBlocs: delai, margeFinDuelBlocs: marge } = r2.etat().bornes;
-vu(marge === 150 && r2.etat().tempsDeBloc === 'injecte' && r2.etat().intervalleMs === 10000, 'temps de bloc INJECTE (200 ms), pas mesure : marge de fin ' + marge + ' blocs, tours de ' + r2.etat().intervalleMs + ' ms (attendu 150, 10000 : le verdict ne depend plus de la vitesse de la machine)');
+/* DENIM 2026-11-05 : 10 tours par fenetre -> 5 120 ms et marge 77 a 200 ms (avant 10 000 et 150). ⚠️ ligne mise a jour SANS relancer ce banc
+ *   (il demande un fork anvil) : la suite (duels envoyes pres de la fin) est a relire au prochain passage */
+vu(marge === 77 && r2.etat().tempsDeBloc === 'injecte' && r2.etat().intervalleMs === 5120, 'temps de bloc INJECTE (200 ms), pas mesure : marge de fin ' + marge + ' blocs, tours de ' + r2.etat().intervalleMs + ' ms (attendu 77, 5120 : le verdict ne depend plus de la vitesse de la machine)');
 const ap = await soldes();
 const vus = { createur: 0, rejoignant: 0, egalite: 0 }, issues = [];
 for (const d of lot) {

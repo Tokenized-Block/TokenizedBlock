@@ -202,7 +202,9 @@ await cas('B. defaut 1 chemin B (budget) : egalites a cible plus ANCIENNE que la
     classees.push(o3.r.etat().compteurs.duelsEgalites);
     ch3.tete += 1; o3.avancer(10000);
   }
-  vu(parT.every((x) => x <= 100) && classees.join() === '100,200,250', 'en-tetes de cible par tour bornes : ' + parT.join(', ') + ' (<= 100 chacun) ; egalites classees ' + classees.join(', ') + ' (attendu 100, 200, 250)');
+  /* DENIM 2026-11-05 : 10 tours par fenetre (intervalle 5,12 s a 200 ms, pas 10 s) -> max(64, ceil(2 x 5120 / 200) = 52) = 64 en-tetes par
+   *   tour (12,5/s ; avant 100 par 10 s = 10/s) */
+  vu(parT.every((x) => x <= 64) && classees.join() === '64,128,192', 'en-tetes de cible par tour bornes : ' + parT.join(', ') + ' (<= 64 chacun) ; egalites classees ' + classees.join(', ') + ' (attendu 64, 128, 192)');
 });
 
 /* ================================================================ B2. classement : l echeance la plus PROCHE d abord */
@@ -341,11 +343,12 @@ await cas('F. defaut 2 : le temps de bloc INJECTE remplace la mesure (noeud a 20
   const inj = keeper(ch2, { msParBloc: 200 }); await inj.r.tour();
   const ei = inj.r.etat();
   vu(em.msParBlocMesure === 20 && em.bornes.margeFinDuelBlocs === 239, 'temoin : mesure sur ce noeud = ' + em.msParBlocMesure + ' ms, marge ' + em.bornes.margeFinDuelBlocs + ' (la saturation que le banc anvil subissait)');
-  vu(ei.msParBlocMesure === 200 && ei.intervalleMs === 10000 && ei.bornes.margeFinDuelBlocs === 150 && ei.tempsDeBloc === 'injecte', 'injecte 200 ms : marge ' + ei.bornes.margeFinDuelBlocs + ', intervalle ' + ei.intervalleMs + ' ms, tempsDeBloc ' + ei.tempsDeBloc + ' (attendu 150, 10000, injecte)');
+  /* DENIM 2026-11-05 : 10 tours par fenetre -> intervalle 5 120 ms a 200 ms, marge de fin max(64, ceil(3 x 5120 / 200)) = 77 */
+  vu(ei.msParBlocMesure === 200 && ei.intervalleMs === 5120 && ei.bornes.margeFinDuelBlocs === 77 && ei.tempsDeBloc === 'injecte', 'injecte 200 ms : marge ' + ei.bornes.margeFinDuelBlocs + ', intervalle ' + ei.intervalleMs + ' ms, tempsDeBloc ' + ei.tempsDeBloc + ' (attendu 77, 5120, injecte)');
   const mesures = ch2.appels.filter(([m, p]) => m === 'eth_getBlockByNumber' && p[0] !== 'latest').length;
   vu(mesures === 0, 'injecte : aucun en-tete lu pour mesurer (' + mesures + ')');
   const B = lire(process.env.BANC_ANVIL || 'banc-slots-regleur-anvil-20261023.mjs');
-  vu(/duels: \{ contrat: duels, bloc: blocDuels \}, rolls: \{ contrat: rolls \}, msParBloc: 200 \}\)/.test(B) && /marge === 150/.test(B), 'banc anvil : le regleur des duels recoit msParBloc: 200 et le banc exige la marge 150');
+  vu(/duels: \{ contrat: duels, bloc: blocDuels \}, rolls: \{ contrat: rolls \}, msParBloc: 200 \}\)/.test(B) && /marge === 77/.test(B), 'banc anvil : le regleur des duels recoit msParBloc: 200 et le banc exige la marge 77 (DENIM 2026-11-05 : 10 tours par fenetre)');
 });
 
 /* ================================================================ G. defaut 3 : la course relue au bloc du recu */
@@ -438,7 +441,8 @@ await cas('I. porte D1 : regleurLitLesDuels exige une lecture des duels FRAICHE 
   vu(c1 === true && c2 === false && c3 === true, 'sain -> lecture ratee -> sain : ' + c1 + ', ' + c2 + ', ' + c3 + ' (attendu true, false, true)');
   /* fraicheur : 3 intervalles (30 s a 200 ms/bloc) sans lecture -> ferme */
   const iv = vas.etat().intervalleMs;
-  vu(iv === 10000 && couvre(vas.etat(), t.v + 2 * iv) === true && couvre(vas.etat(), t.v + 3 * iv) === false, 'lu il y a 2 intervalles : couvre ; 3 intervalles (' + 3 * iv + ' ms) : ne couvre plus');
+  /* DENIM 2026-11-05 : l intervalle est 5 120 ms a 200 ms/bloc (10 tours par fenetre) */
+  vu(iv === 5120 && couvre(vas.etat(), t.v + 2 * iv) === true && couvre(vas.etat(), t.v + 3 * iv) === false, 'lu il y a 2 intervalles : couvre ; 3 intervalles (' + 3 * iv + ' ms) : ne couvre plus');
 });
 
 /* ================================================================ I2. la vraie tranche de serveur-web.js : /api/duels regleDuels */

@@ -385,15 +385,16 @@ await cas('8a panne RPC d eth_estimateGas : pas un echec', async () => {
 }
 
 /* (6) l intervalle */
-vu(intervalleDepuisBloc(200) === 10000 && intervalleDepuisBloc(2000) === 10000 && intervalleDepuisBloc(50) === 2560 && intervalleDepuisBloc(1) === 2000 && intervalleDepuisBloc(null) === 10000, 'intervalle : 200 ms et 2 s -> 10 s, 50 ms -> 2,56 s, borne basse 2 s, sans mesure 10 s');
+/* DENIM 2026-11-05 : 10 tours par fenetre (pas 5), et sans mesure le pire cas 200 ms (pas la borne haute) — test-denim-regleur-20261105.mjs */
+vu(intervalleDepuisBloc(200) === 5120 && intervalleDepuisBloc(2000) === 10000 && intervalleDepuisBloc(50) === 2000 && intervalleDepuisBloc(1) === 2000 && intervalleDepuisBloc(null) === 5120, 'intervalle : 200 ms -> 5,12 s, 2 s -> 10 s (borne), 50 ms -> 2 s (borne basse), sans mesure 5,12 s (pire cas 200 ms)');
 {
   const ch = chaine(); ch.ts = (b) => 1_700_000_000 + Math.floor(b / 5); /* 5 blocs par seconde : 200 ms */
   const { r } = regleur(ch); await r.tour();
   const e = r.etat();
-  vu(e.msParBlocMesure === 200 && e.intervalleMs === 10000 && Math.abs(e.fenetreSecondes - 51.2) < 1e-9, 'temps de bloc MESURE sur 1000 blocs : 200 ms, fenetre 51,2 s, tour toutes les 10 s');
+  vu(e.msParBlocMesure === 200 && e.intervalleMs === 5120 && Math.abs(e.fenetreSecondes - 51.2) < 1e-9, 'temps de bloc MESURE sur 1000 blocs : 200 ms, fenetre 51,2 s, tour toutes les 5,12 s');
   const ch2 = chaine(); ch2.ts = (b) => 1_700_000_000 + Math.floor(b / 20); /* 50 ms */
   const r2 = regleur(ch2).r; await r2.tour();
-  vu(r2.etat().msParBlocMesure === 50 && r2.etat().intervalleMs === 2560, 'a 50 ms par bloc : un tour toutes les 2,56 s');
+  vu(r2.etat().msParBlocMesure === 50 && r2.etat().intervalleMs === 2000, 'a 50 ms par bloc : un tour toutes les 2 s (borne basse)');
 }
 /* ================================================================ 2026-10-24 : les correctifs des audits (chacun ROUGE sur 0f9d8ec) */
 const ids1 = (data) => { const m = (String(data).slice(10).match(/.{64}/g) || []).map((w) => BigInt('0x' + w)); return m.slice(2).map(String); };
@@ -449,7 +450,9 @@ await cas('9 audit V2 nonce too low', async () => {
 /* (10) l audit keeper V3 : un recu qui jette sans fin — la tx est relachee apres inclusionMaxMs, le regleur repart ;
  *   revue keeper 3 (2026-10-24, ROUGE sur 518653b) : la relache COMPTE (issue inconnue = non incluse) et etat().degrade le dit */
 await cas('10 audit V3 recu illisible', async () => {
-  const ch = chaine(); const vrai = ch.rpc;
+  /* DENIM 2026-11-05 : la borne d inclusion est FENETRE / 3 au temps de bloc, plafonnee a inclusionMaxMs (120 s) : ce cas garde ses 120 s
+   *   sur une chaine a 2 s/bloc ; le cas 200 ms (~17 s) est dans test-denim-regleur-20261105.mjs */
+  const ch = chaine(); ch.ts = (b) => 1_700_000_000 + b * 2; const vrai = ch.rpc;
   let panne = true; ch.rpc = async (m, p) => { if (panne && m === 'eth_getTransactionReceipt') throw new Error('over rate limit'); return vrai(m, p); };
   const { r, avancer } = regleur(ch);
   ch.spin(401, ch.tete - 5, graineDe(401, (p) => p >= 3));
@@ -464,12 +467,27 @@ await cas('10 audit V3 recu illisible', async () => {
   const e2 = r.etat();
   vu(e2.etat === 'ARRETE' && e2.compteurs.recusIlisibles === 3 && /slots/.test(e2.arret.pourquoi) && e2.arret.contrat === 'slots' && e2.degrade === null, '3 relaches de suite (6 min sans aucun recu lisible) : ARRETE, le contrat nomme (' + (e2.arret && e2.arret.pourquoi.slice(0, 90)) + ')');
   /* un recu qui redevient lisible avant 120 s : 0 echec, degrade null */
-  const chB = chaine(); const vraiB = chB.rpc; let pB = true;
+  const chB = chaine(); chB.ts = (b) => 1_700_000_000 + b * 2; /* DENIM : 2 s/bloc, la borne de 120 s (voir le cas 10d a 200 ms) */ const vraiB = chB.rpc; let pB = true;
   chB.rpc = async (m, p) => { if (pB && m === 'eth_getTransactionReceipt') throw new Error('over rate limit'); return vraiB(m, p); };
   const oB = regleur(chB); chB.spin(1, chB.tete - 10, H5);
   /* round 4 : la tete bouge pendant les 60 s (comme le cas du dessus) — figee, ce serait une tete GELEE (degrade, a raison) */
   const tB = await oB.r.tour(); oB.avancer(60000); chB.tete += 5; await oB.r.tour(); pB = false; chB.inclure(tB.hash, tB.ids); await oB.r.tour();
-  vu(oB.r.etat().echecsSuite === 0 && oB.r.etat().degrade === null && oB.r.etat().compteurs.spinsRegles === 1, 'recu illisible 60 s puis lu (0x1) : 0 echec, pas degrade');
+  vu(oB.r.etat().echecsSuite === 0 && oB.r.etat().degrade === null && oB.r.etat().compteurs.spinsRegles === 1 && oB.r.etat().compteurs.recusIlisibles === 0, 'recu illisible 60 s puis lu (0x1) : 0 echec, 0 relache, pas degrade');
+});
+
+/* (10d) DENIM 2026-11-05 : a 200 ms/bloc, une tx en vol est relachee apres FENETRE / 3 (~17 s = 85 blocs), pas apres 120 s (600 blocs, plus
+ *   que la fenetre de 256 : pendant ce temps rien d autre ne partait et les fenetres des autres spins se fermaient) */
+await cas('10d DENIM inclusion a 200 ms', async () => {
+  const ch = chaine(); const vrai = ch.rpc; /* 200 ms/bloc (chaine par defaut) */
+  ch.rpc = async (m, p) => { if (m === 'eth_getTransactionReceipt') throw new Error('over rate limit'); return vrai(m, p); };
+  const { r, avancer } = regleur(ch);
+  ch.spin(501, ch.tete - 5, graineDe(501, (p) => p >= 3));
+  const a = await r.tour();
+  ch.tete += 5; avancer(15000); const t1 = await r.tour();
+  vu(a.fait === true && t1.fait === false && r.etat().enVol && r.etat().compteurs.recusIlisibles === 0, '200 ms : 15 s sans recu lisible : encore en vol, pas d echec');
+  vu(r.etat().bornes.inclusionMaxMs === M.inclusionMaxDepuisBloc(200) && M.inclusionMaxDepuisBloc(200) === 17066, 'etat().bornes : inclusion effective ' + r.etat().bornes.inclusionMaxMs + ' ms (256 x 200 / 3)');
+  ch.tete += 15; avancer(3000); const t2 = await r.tour();
+  vu(r.etat().compteurs.recusIlisibles === 1 && t2.fait === true, '200 ms : relachee a 18 s (> 17,07 s), comptee, la suivante part — pas 120 s');
 });
 
 /* (11) l audit slots-contract : settleMany ne se simule pas (un paiement refuse) — coupe en deux, le fautif ecarte, les autres partent */
@@ -746,10 +764,12 @@ await cas('15c duels : egalite jamais, rejoignant pres de la fin, createur par m
   const ch = chaine(); ch.duel(1, ch.tete - 255, 2, { gagnant: 'egalite' });
   const r = keeper(ch, { contrat: null, rolls: undefined }).r; const t = await r.tour();
   vu(t.fait === false && ch.envoyes.length === 0 && r.etat().contrats.duels.suivis === 0, 'egalite a cible + 255 : rien envoye, plus suivie');
-  /* le rejoignant gagne : rien avant tete + 1 >= cible + 256 - 150, puis settle */
-  const ch2 = chaine(); ch2.duel(2, ch2.tete - 104, 2, { gagnant: 'rejoignant' });
+  /* le rejoignant gagne : rien avant tete + 1 >= cible + 256 - marge, puis settle.
+   *   DENIM 2026-11-05 : la marge suit l intervalle REEL du regleur (10 tours par fenetre : 5,12 s a 200 ms -> marge 77, cible + 178) */
+  const mR = M.margeFinDuel(BORNES_DEFAUT, 200, M.intervalleDepuisBloc(200)), avantR = 255 - mR - 1;
+  const ch2 = chaine(); ch2.duel(2, ch2.tete - avantR, 2, { gagnant: 'rejoignant' });
   const r2 = keeper(ch2, { contrat: null, rolls: undefined }).r; const a = await r2.tour(); ch2.tete += 1; const b = await r2.tour();
-  vu(a.fait === false && b.fait === true && JSON.stringify(b.ids) === '["2"]', 'le rejoignant gagne : rien a cible + 104, settle a cible + 105 (fin - 150 - 1)');
+  vu(mR === 77 && a.fait === false && b.fait === true && JSON.stringify(b.ids) === '["2"]', 'le rejoignant gagne : rien a cible + ' + avantR + ', settle a cible + ' + (avantR + 1) + ' (fin - ' + mR + ' - 1)');
   const lus = ch2.appels.filter(([m, p]) => m === 'eth_call' && p[0].to === D).length;
   vu(lus === 2, 'son duel lu une fois pour le vainqueur, une fois avant l envoi (' + lus + ' lectures)');
   /* le createur gagne : la plus grosse mise d abord ; un duel PRESSE passe avant */

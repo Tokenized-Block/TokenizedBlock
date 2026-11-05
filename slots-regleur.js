@@ -7,7 +7,7 @@
  * ⛔ CE QUE CE MODULE FAIT, ET RIEN D AUTRE :
  *   - SANS la variable SLOTS_KEEPER_KEY (le proprietaire cree et approvisionne ce wallet lui-meme ; personne d autre ne voit la cle) : il
  *     ne fait RIEN et le dit (etat OFF, et pourquoi) ; aucune lecture de chaine. UNE seule cle pour les trois contrats.
- *   - AVEC : toutes les `intervalleMs` (derive du temps de bloc MESURE : un cinquieme de la fenetre, borne a [2 s, 10 s]), il lit :
+ *   - AVEC : toutes les `intervalleMs` (derive du temps de bloc MESURE — longue et courte, prudent, comme le serveur : un dixieme de la fenetre, borne a [2 s, 10 s] ; sans mesure, le pire cas 200 ms — DENIM 2026-11-05), il lit :
  *       slots  — les Spun d une fenetre BORNEE (<= 300 blocs, puis les seuls blocs nouveaux + 8), les statuts, les hashes, le pot ;
  *                refait le calcul du contrat (slots-plan.js planReglement) -> settleMany(ids) des spins que le pot paie en ENTIER ;
  *       duels  — DECOUVERTS par la liste de l ETAT (duels.joints / duels.connu : le cache de /api/duels, nextId + duels(id), sans
@@ -81,6 +81,8 @@ import * as Slots from './slots-plan.js';
 import { selecteur, topic, keccak256 } from './keccak.js';
 import { adresseDe } from './signeur-secp256k1.js';
 import { signerEip1559 } from './tx-eip1559.js';
+/* DENIM (2026-11-05) : la mesure courte et le temps prudent, les MEMES que ceux du serveur (temps-de-bloc.js, pur) */
+import { sParBlocBorneBasse, sParBlocPrudent, enteteVersMesure, RECUL_COURT_BLOCS } from './temps-de-bloc.js';
 
 export const SEL_SETTLE_MANY = selecteur(Slots.SIG_SETTLE_MANY).toLowerCase();
 /* settle(uint256) : le MEME selecteur pour BlockSlots et BlockDuels ; la garde le juge par la DESTINATION */
@@ -122,7 +124,15 @@ export const BORNES_DEFAUT = Object.freeze({
   entetesParTour: 64, /* duels : en-tetes de cible lus par tour, au moins (et au moins 2 tours de blocs au temps de bloc) */
   simulationsParTour: 12, /* la coupe en deux d un lot de 10 avec un spin fautif : 1 + 2 x 4 au plus */
   joursRecul: 7, /* les pots du pass des 7 derniers jours UTC */
+  /* ⛔ DENIM (2026-11-05) : un PLAFOND. La borne effective est FENETRE / 3 au temps de bloc (inclusionMaxDepuisBloc) : 120 s = 600 blocs a
+   *   200 ms, plus que la fenetre de 256 — une tx coincee bloquait tout autre envoi bien apres la fin des fenetres. 2 s/bloc : 120 s (inchange). */
   inclusionMaxMs: 120000,
+  inclusionMinMs: 4000,
+  /* DENIM : tours par fenetre de 256 blocs (intervalleDepuisBloc) — 10 : ~5,1 s a 200 ms (5 seulement avant, a 10 s) ; 2 s/bloc : 10 s (borne) */
+  toursParFenetre: 10,
+  /* DENIM : la mesure COURTE (temps-de-bloc.js, RECUL_COURT_BLOCS), relue au plus toutes les 15 s comme celle du serveur ; le temps retenu est
+   *   sParBlocPrudent(longue, courte) : la mesure longue seule (relue toutes les 10 min) garderait 2 s ~10 min apres la bascule */
+  mesureCourteToutesMs: 15000,
   /* round 4 (tete GELEE, revue keeper round 3) : une tete qui ne depasse pas la plus haute deja lue pendant plus de teteGeleeBlocs temps de
    *   bloc (mesure ou injecte ; 200 ms sans mesure, le pire cas de Base) -> etat DEGRADE, rien n est envoye sur cette tete */
   teteGeleeBlocs: 30,
@@ -130,11 +140,21 @@ export const BORNES_DEFAUT = Object.freeze({
   blocsMesure: Slots.BLOCS_MESURE,
 });
 
-/** l intervalle entre deux tours : un cinquieme de la fenetre au temps de bloc MESURE, borne ; sans mesure, la borne haute (10 s) */
+/** le pire cas de Base apres Denim (200 ms/bloc) : le temps suppose tant qu il n est pas mesure, pour les bornes qui doivent tenir DANS la
+ *  fenetre (jamais 2 s : une borne a 2 s depasserait la fenetre de 10x) */
+const MS_PIRE_CAS = 200;
+/** l intervalle entre deux tours : 1/toursParFenetre de la fenetre au temps de bloc MESURE, borne ; sans mesure, au pire cas (200 ms).
+ *  ⛔ DENIM (2026-11-05) : avant, 1/5 de la fenetre et 10 s sans mesure — ~5 tours par fenetre de 51 s apres Denim. */
 export function intervalleDepuisBloc(msParBloc, bornes = BORNES_DEFAUT) {
-  if (!(Number(msParBloc) > 0)) return bornes.intervalleMaxMs;
-  const v = Math.floor((Slots.secondesFenetre(msParBloc) * 1000) / 5);
+  const ms = Number(msParBloc) > 0 ? Number(msParBloc) : MS_PIRE_CAS;
+  const v = Math.floor((Slots.secondesFenetre(ms) * 1000) / (Number(bornes.toursParFenetre) > 0 ? Number(bornes.toursParFenetre) : 10));
   return Math.max(bornes.intervalleMinMs, Math.min(bornes.intervalleMaxMs, v));
+}
+/** combien de temps une tx envoyee reste « en vol » (rien d autre ne part) avant d etre relachee : FENETRE / 3 au temps de bloc (pire cas
+ *  200 ms sans mesure), borne [inclusionMinMs, inclusionMaxMs]. 200 ms -> ~17 s (85 blocs) ; 2 s -> 120 s (le plafond, inchange). */
+export function inclusionMaxDepuisBloc(msParBloc, bornes = BORNES_DEFAUT) {
+  const ms = Number(msParBloc) > 0 ? Number(msParBloc) : MS_PIRE_CAS;
+  return Math.min(bornes.inclusionMaxMs, Math.max(bornes.inclusionMinMs, Math.floor((FENETRE * ms) / 3)));
 }
 
 const bas = (x) => String(x || '').toLowerCase();
@@ -261,6 +281,8 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
   const fixe = Number(msParBlocFixe) > 0 ? Number(msParBlocFixe) : null;
   const st = {
     etat: 'ON', adresse, depuis: new Date(maintenant()).toISOString(), msParBloc: fixe, mesureA: 0, intervalleMs: intervalleDepuisBloc(fixe, bornes),
+    /* DENIM 2026-11-05 : la mesure longue et la courte (ms), et l instant de la derniere lecture courte */
+    msLong: null, msCourt: null, mesureCourteA: -Infinity,
     scanne: null, enVol: null, envoisHeure: { slots: [], duels: [], rolls: [] }, echecsSuite: 0, dernierEchec: null, dernierTour: null, dernierEnvoi: null, dernierRegle: null, erreurs: [],
     compteurs: { tours: 0, envois: 0, spinsEnvoyes: 0, spinsRegles: 0, reverts: 0, revertsExpliques: 0, simulationsRefusees: 0, simulationsNonLues: 0, envoisRefuses: 0, envoisRetrouves: 0,
       nonInclus: 0, recusIlisibles: 0, sautsGas: 0, sautsHeure: 0, spinsEcartes: 0, toursSains: 0, duelsEgalites: 0, duelsEvinces: 0, toursTeteGelee: 0 },
@@ -331,7 +353,12 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     return null;
   }
 
+  /* DENIM (2026-11-05) : `bornes.inclusionMaxMs` est, DANS suivreInclusion, la borne EFFECTIVE (inclusionMaxDepuisBloc au temps de bloc
+   *   courant, plafonnee par la borne configuree) — le nom est garde pour que chaque garde ci-dessous (et les mutants qui la visent) reste
+   *   la meme ligne */
+  const bornesDeLInclusion = () => ({ ...bornes, inclusionMaxMs: inclusionMaxDepuisBloc(st.msParBloc, bornes) });
   async function suivreInclusion() {
+    const bornes = bornesDeLInclusion();
     const v = st.enVol;
     let r = null;
     try { r = await rpc('eth_getTransactionReceipt', [v.hash]); } catch (e) {
@@ -386,14 +413,28 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
     return true;
   }
 
+  /* ⛔ DENIM (2026-11-05) : DEUX mesures, comme le serveur (serveur-web.js sParBlocServi) — la LONGUE (blocsMesure blocs, toutes les
+   *   mesureToutesMs) et la COURTE (RECUL_COURT_BLOCS blocs, borne basse, toutes les mesureCourteToutesMs) ; le temps retenu est
+   *   sParBlocPrudent(longue, courte) : la courte l emporte des que les blocs accelerent de plus de 10 %. Avant : la longue seule, relue
+   *   toutes les 10 min — 2 s gardees ~10 min apres la bascule (intervalle, marge de fin, inclusion calcules 10x trop longs). */
   async function mesurerBloc(tete) {
     if (fixe !== null) return; /* temps de bloc INJECTE (revue fix2 defaut 2) : jamais mesure */
-    if (maintenant() - st.mesureA < bornes.mesureToutesMs && st.msParBloc !== null) return;
-    st.mesureA = maintenant();
+    const t = maintenant();
+    const long = st.msLong === null || t - st.mesureA >= bornes.mesureToutesMs;
+    const court = t - st.mesureCourteA >= bornes.mesureCourteToutesMs;
+    if (!long && !court) return;
+    if (long) st.mesureA = t;
+    if (court) st.mesureCourteA = t;
     try {
-      const n = Math.min(bornes.blocsMesure, tete);
-      const [a, b] = await Promise.all([rpc('eth_getBlockByNumber', ['0x' + tete.toString(16), false]), rpc('eth_getBlockByNumber', ['0x' + (tete - n).toString(16), false])]);
-      const ms = Slots.msParBlocMesure({ tsTete: entier(a && a.timestamp), tsAvant: entier(b && b.timestamp), n });
+      const n = Math.min(bornes.blocsMesure, tete), nc = Math.min(RECUL_COURT_BLOCS, tete);
+      const [a, b, c] = await Promise.all([rpc('eth_getBlockByNumber', ['0x' + tete.toString(16), false]),
+        long ? rpc('eth_getBlockByNumber', ['0x' + (tete - n).toString(16), false]) : null,
+        court ? rpc('eth_getBlockByNumber', ['0x' + (tete - nc).toString(16), false]) : null]);
+      if (long) { const ms = Slots.msParBlocMesure({ tsTete: entier(a && a.timestamp), tsAvant: entier(b && b.timestamp), n }); if (ms !== null) st.msLong = ms; }
+      if (court) { const s = sParBlocBorneBasse({ haut: enteteVersMesure(a), bas: enteteVersMesure(c) }); if (s !== null) st.msCourt = Math.round(s * 1e6) / 1e3; }
+      const p = sParBlocPrudent(st.msLong === null ? null : st.msLong / 1000, st.msCourt === null ? null : st.msCourt / 1000);
+      /* hors des bornes plausibles de temps-de-bloc.js (ex. une chaine de test a 20 ms) : la longue telle quelle, comme avant */
+      const ms = p !== null ? Math.round(p * 1e6) / 1e3 : st.msLong;
       if (ms !== null) { st.msParBloc = ms; st.intervalleMs = intervalleDepuisBloc(ms, bornes); }
     } catch (e) { erreur('block time not measured: ' + msg(e)); }
   }
@@ -811,7 +852,9 @@ export function creerRegleur({ cle = null, contrat = null, chainId = 8453, table
           rolls: { contrat: cR, configure: !!rollsCfg, aujourdhui: jours.aujourdhui, joursClos: [...jours.finis], envoisDerniereHeure: heure('rolls'), plafondHeure: plafondHeure(bornes, 'rolls'), ...st.parContrat.rolls },
         },
         bornes: { spinsParTx: bornes.spinsParTx, maxFeeWei: String(bornes.maxFeeWei), txParHeure: Object.fromEntries(CONTRATS.map((x) => [x, plafondHeure(bornes, x)])), gasMaxParTx: String(bornes.gasMaxParTx), echecsMax: bornes.echecsMax, simulationsParTour: bornes.simulationsParTour, joursRecul: bornes.joursRecul,
-          delaiDuelBlocs: bornes.delaiDuelBlocs, margeFinDuelBlocs: margeFinDuel(bornes, st.msParBloc, st.intervalleMs) },
+          delaiDuelBlocs: bornes.delaiDuelBlocs, margeFinDuelBlocs: margeFinDuel(bornes, st.msParBloc, st.intervalleMs),
+          /* DENIM 2026-11-05 : la borne d inclusion EFFECTIVE, et les deux mesures dont le temps retenu est tire */
+          inclusionMaxMs: inclusionMaxDepuisBloc(st.msParBloc, bornes), msParBlocLong: st.msLong, msParBlocCourt: st.msCourt },
       };
     },
     tour,
