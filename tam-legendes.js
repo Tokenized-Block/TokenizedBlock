@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game210 (idee : codex Grok Bot) */
+  thueMorse: {
+    titre: 'The Thue-Morse sequence',
+    enUnePhrase: 'Start with 0, then keep gluing on the opposite: 0, 01, 0110, 01101001 ...',
+    colonnes: ['turtle east-west', 'turtle north-south', '0 or 1'],
+    aRegarder: ['The turtle walks on 0 and turns on 1, and the path keeps folding back into the same shapes.', 'No block of digits ever appears three times in a row.', 'Split the numbers by their digit and the sums of their powers match, up to a point.'],
+    fin: null,
+  },
   /* game209 (idee : codex Grok Bot) */
   suitePerrin: {
     titre: 'The Perrin sequence and its pseudoprimes',

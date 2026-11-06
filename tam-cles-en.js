@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game210 */
+  thueMorse: 'Construction mismatches, cubes in the prefix, and unequal power sums below the limit', soixanteQuatre: 'First 64 terms', rangK: 'Largest k checked (2^k terms)',
   /* game209 */
   suitePerrin: 'Primes p that do not divide P(p)', composesDivisent: 'Composites up to the slider that divide P(n)', vingtSix: 'P(0..25)', diviseur: 'Smallest divisor found',
   /* game208 */
