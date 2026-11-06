@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game187 (idee : codex Grok Bot) */
+  parfaitsAmicaux: {
+    titre: 'Perfect and amicable numbers',
+    enUnePhrase: 'A perfect number is the sum of its own divisors; two amicable numbers are each the sum of the other\'s.',
+    colonnes: ['n (as a share of the limit)', 'divisor sum over n', 'perfect, amicable, or ordinary'],
+    aRegarder: ['Only four perfect numbers lie below 10 000: 6, 28, 496 and 8128.', 'Every even perfect number found has the form 2^(p-1) times a Mersenne prime.', 'Nobody knows whether an odd perfect number exists.'],
+    fin: null,
+  },
   /* game186 (idee : codex Grok Bot) */
   fonctionMertens: {
     titre: 'The Mertens function (a walk made of +1, -1 and 0)',

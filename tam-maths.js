@@ -1499,7 +1499,33 @@ function fonctionMertens(P, n) {
     temoin: { mesure: sL, formule: Math.floor(Math.sqrt(N)), note: 'witness: the same sum with Liouville lambda instead of mu gives floor(sqrt n), not 1' } } };
 }
 
+// ---------- 44 : nombres parfaits et amicaux (idee et valeurs : codex Grok Bot ; MathWorld « Perfect Number », « Amicable Pair », OEIS A000396 / A063990, lus par Grok) ----------
+// s(n) = somme des diviseurs de n autres que n. Parfait : s(n) = n (6, 28, 496, 8128). Amicaux : s(m) = n et s(n) = m, m different de n (220 et 284).
+// Exact ici : s(n) par un crible des diviseurs (entiers) jusqu au curseur ; parfaits et paires amicales listes ; chaque parfait PAIR trouve est de la
+//   forme 2^(p-1) (2^p - 1) avec 2^p - 1 premier (Euclide-Euler, verifie). L existence d un parfait IMPAIR est une question ouverte : non affirmee.
+//   Valeurs de Grok : parfaits 6, 28, 496, 8128 ; paires < 10 000 : (220, 284), (1184, 1210), (2620, 2924), (5020, 5564), (6232, 6368).
+// Temoin : p = 11, 2^11 - 1 = 2047 = 23 x 89 n est pas premier : 2^10 x 2047 n est pas parfait (sigma = 4 421 520, pas 2N = 4 192 256).
+// Dessin (vue de face) : (n / limite, s(n) / n), etiquette 2 = parfait, 1 = amical, 0 = autre.
+function aliquoteCrible(N) { const s = new Int32Array(N + 1); for (let d = 1; d <= N / 2; d++) for (let m = 2 * d; m <= N; m += d) s[m] += d; return s; }
+function parfaitsAmicaux(P, n) {
+  const N = P.limite, s = aliquoteCrible(N), parfaits = [], paires = [];
+  for (let k = 2; k <= N; k++) { if (s[k] === k) parfaits.push(k); const t = s[k]; if (t > k && t <= N && s[t] === k) paires.push([k, t]); }
+  /* forme d Euclide : q = 2^(p-1) m avec m = 2^p - 1 PREMIER ; appliquee aux parfaits pairs ET au temoin (qui doit etre refuse) */
+  const euclideOk = (q) => { let a = 0, m = q; while (m % 2 === 0) { m /= 2; a++; } const p = a + 1; let prem = m > 1; for (let d = 2; d * d <= m; d++) if (m % d === 0) prem = false; return m === 2 ** p - 1 && prem; };
+  let horsEuler = 0; for (const q of parfaits) if (q % 2 === 0 && !euclideOk(q)) horsEuler++;
+  const sigma = (2 ** 11 - 1) * (23 + 1) * (89 + 1), deuxN = 2 * 2 ** 10 * 2047;
+  /* la moitie des points sur les nombres remarquables (parfaits, amicaux), l autre moitie sur tous les n */
+  const amic = new Set(paires.flat()), rem = [...parfaits, ...amic], brut = new Float64Array(n * 3), mi = Math.floor(n / 2);
+  for (let l = 0; l < n; l++) { const k = l < mi && rem.length ? rem[l % rem.length] : 2 + Math.floor((l - mi) * (N - 1) / (n - mi)), o = 3 * l; brut[o] = k / N; brut[o + 1] = s[k] / k; brut[o + 2] = s[k] === k ? 2 : amic.has(k) ? 1 : 0; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet', invariants: {
+    parfaits: { mesure: parfaits.length, liste: parfaits.join(', '), note: 'perfect numbers up to the slider (s(n) = n)' },
+    amicaux: { mesure: paires.length, liste: paires.map(([a, b]) => a + '/' + b).join(', '), note: 'amicable pairs with both members up to the slider' },
+    euclideEuler: { mesure: horsEuler, formule: 0, note: 'even perfect numbers found that are NOT 2^(p-1)(2^p - 1) with 2^p - 1 prime' },
+    temoin: { mesure: sigma - deuxN, formeAcceptee: euclideOk(2 ** 10 * 2047) ? 1 : 0, note: 'witness: sigma(2^10 x 2047) - 2 x (2^10 x 2047), with 2047 = 23 x 89 not prime : not 0, not perfect' } } };
+}
+
 export const COLONNES = Object.freeze({
+  parfaitsAmicaux: { colonnes: ['n / limit', 's(n) / n', 'kind (label; 2 perfect, 1 amicable, 0 other)'], memeLongueur: [], autres: [0, 1, 2] },
   fonctionMertens: { colonnes: ['n / limit', 'M(n) / sqrt(limit)', 'mu(n) + 1 (label)'], memeLongueur: [], autres: [0, 1, 2] },
   theoremeWilson: { colonnes: ['n / limit', '((n - 1)! mod n) / n', 'prime (label; 1 prime, 0 composite)'], memeLongueur: [], autres: [0, 1, 2] },
   nombresCarmichael: { colonnes: ['rank of the number found', 'prime factor p of it', 'kind (label; 0 = base-2 pseudoprime only, 1 = Carmichael)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -1675,9 +1701,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'fonctionMertens', nom: 'The Mertens function', science: 'Number theory', D: 3, nuage: true, params: { limite: 1000 },
     bornes: { limite: [50, 3000] },
     phrase: 'A visualisation of the Mertens function: add up the Mobius function mu(1) + ... + mu(n), +1, -1 or 0 for each number, and watch the walk. For every n the exact identity sum of M(n div k) = 1 is checked; the same sum with the Liouville function gives the integer part of the square root instead.' },
+  { id: 'parfaitsAmicaux', nom: 'Perfect and amicable numbers', science: 'Number theory', D: 3, nuage: true, params: { limite: 10000 },
+    bornes: { limite: [300, 20000] },
+    phrase: 'A visualisation of perfect and amicable numbers: n is perfect when its proper divisors add up to n (6 = 1 + 2 + 3), and two numbers are amicable when each one\'s divisors add up to the other (220 and 284). They are found exactly up to the slider, each even perfect number is checked to have Euclid\'s form 2^(p-1)(2^p - 1); 2047 = 23 x 89, which breaks that form, is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'] };
-const FONCTIONS = { fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'], parfaitsAmicaux: ['limite'] };
+const FONCTIONS = { parfaitsAmicaux, fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

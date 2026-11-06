@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game187 */
+  formeAcceptee: 'Euclid s form accepted for 2^10 x 2047 (must be 0)',
   /* game186 */
   mn: 'M(n)', cinquante: 'M(1..50)',
   /* game185 */
@@ -479,6 +481,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game187 */
+  parfaits: 'Perfect numbers found', amicaux: 'Amicable pairs found', euclideEuler: 'Even perfect numbers not of Euclid s form',
   /* game186 */
   identiteMobius: 'n where sum M(n div k) is not 1',
   /* game185 */
