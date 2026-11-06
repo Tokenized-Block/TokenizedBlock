@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-chimie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot'];
+const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const aRef = (k1, t) => Math.exp(-k1 * t);
@@ -57,8 +57,8 @@ function suite(T, bavard = false) {
   };
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
-  ok('SYSTEMES gele, 3 systemes, SOURCES vide, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
-    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.equal(Object.keys(T.SOURCES).length, 0); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+  ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
+    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -139,6 +139,16 @@ function suite(T, bavard = false) {
     for (let i = 0; i < R.n; i++) { const o = 3 * i, T = b[o] * b[o + 1]; assert.ok(T >= 1 - 1e-9 && T <= P.chaude + 1e-9 && [0, 1, 2, 3].includes(b[o + 2]), 'point ' + i); }
     return 'rendement ' + I.rendement.mesure.toFixed(8);
   });
+  /* game214 : titrage - reference INDEPENDANTE : Newton sur h (Math.pow, Math.log autorises ici), pas une dichotomie sur le pH ;
+   *   valeurs de Grok Bot (codex 19) pour Ca = Cb = 0.1, 10 mL : pH 2.880876, 4.756457, 8.727538, 12.301030 (calcul de modele) */
+  const titRef = (Ca, Cb, x) => { const Va = 10, Vb = x * Ca * Va / Cb, Ct = Ca * Va / (Va + Vb), Na = Cb * Vb / (Va + Vb), Ka = Math.pow(10, -4.756), Kw = 1e-14;
+    let h = 1e-7; for (let i = 0; i < 200; i++) { const f = h + Na - Ct * Ka / (Ka + h) - Kw / h, d = 1 + Ct * Ka / ((Ka + h) * (Ka + h)) + Kw / (h * h); let hn = h - f / d; if (hn <= 0) hn = h / 10; h = hn; } return -Math.log10(h); };
+  ok('titrageAcideFaible : Newton = quatre pH de Grok Bot (Ca = Cb = 0.1)', () => { assert.equal([0, 0.5, 1, 1.5].map((x) => titRef(0.1, 0.1, x).toFixed(6)).join(' '), '2.880876 4.756457 8.727538 12.301030'); return 'ok'; });
+  for (const p of [...extremes(sys('titrageAcideFaible')), { acide: 0.02, base: 0.3 }]) ok(`titrageAcideFaible ${JSON.stringify(p)} : charge, monotonie, demi-equivalence, pH de reference, temoin`, () => {
+    const R = S('titrageAcideFaible', p), I = R.invariants, Ca = R.params.acide, Cb = R.params.base;
+    assert.ok(I.titrageAcideFaible.mesure === 0 && I.titrageAcideFaible.quatrePoints === [0, 0.5, 1, 1.5].map((x) => titRef(Ca, Cb, x).toFixed(6)).join(' ') && I.temoin.mesure > 7.5, JSON.stringify(I));
+    return 'equivalence pH ' + I.temoin.mesure.toFixed(4);
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation, gaz, vitesse moyenne)', () => {
     const zs = { picB: [], partB: [], relaxation: [], gaz: [], vitesse: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation));
@@ -182,6 +192,10 @@ const MUTANTS = [
   ['gaz : vitesses tirees trop larges (Box-Muller a -2.4 ln u)', 'Math.sqrt(-2 * lnD(u))', 'Math.sqrt(-2.4 * lnD(u))'],
   ['carnot : cycle mal ferme (V4 x 1.1)', 'V4 = 1 * puiss(Th / Tc)', 'V4 = 1.1 * puiss(Th / Tc)'],
   ['carnot : chaleur recue a Th + 0.01', 'Qh = Th * lr', 'Qh = (Th + 0.01) * lr'],
+  ['titrage : Kw oublie', 'return h + Na - Ct * Ka / (Ka + h) - Kw / h; };', 'return h + Na - Ct * Ka / (Ka + h); };'],
+  ['titrage : Ka = 10^(-pKa) en log decimal oublie', 'Ka = expNegD(SOURCES.pKaAcetique.valeur * lnD(10))', 'Ka = expNegD(SOURCES.pKaAcetique.valeur)'],
+  ['titrage : dichotomie inversee', 'if (f(m) > 0) lo = m; else hi = m; }', 'if (f(m) > 0) hi = m; else lo = m; }'],
+  ['titrage : temoin a mi-equivalence', 'equiv = phDe(Veq).pH,', 'equiv = phDe(Veq / 2).pH,'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (chaine)', 'rng = mulberry32(P.graine), T = 5', 'rng = Math.random, T = 5'],
 ];

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game214 (idee : codex Grok Bot) */
+  titrageAcideFaible: {
+    titre: 'Titrating vinegar acid with lye',
+    enUnePhrase: 'Pour a base into a weak acid drop by drop and watch the pH climb, slowly, then all at once.',
+    colonnes: ['how much base was poured', 'the pH', 'how much acid is still intact'],
+    aRegarder: ['A long flat stretch in the middle: the buffer zone.', 'Halfway through, the pH equals the pKa of the acid.', 'At the exact end point the pH is above 7 (about 8.7 with the starting mixture), never 7.'],
+    fin: null,
+  },
   /* game213 (idee : codex Grok Bot) */
   codeGenetique: {
     titre: 'The genetic code',

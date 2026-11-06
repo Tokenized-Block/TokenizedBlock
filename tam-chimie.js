@@ -5,7 +5,7 @@
 //   lyapunov (null), uniteLyapunov, points: null, invariants, nuage?, film? }.
 // Pur : aucun DOM, aucun reseau, aucune horloge, aucun generateur aleatoire natif (graines : mulberry32).
 // DETERMINISME : aucune fonction transcendante native. sin/cos/ln = ceux du moteur ; e^(-x) par demi-reductions + serie + carres.
-// REGLE DU PROJET : aucune valeur publiee sans source lue. Ici AUCUNE : constantes de vitesse et concentrations sans dimension ;
+// REGLE DU PROJET : aucune valeur publiee sans source lue. game214 : SEULS pKa de l acide acetique et Kw (SOURCES) ; sinon AUCUNE : constantes de vitesse et concentrations sans dimension ;
 //   chaque formule comparee est derivee dans le commentaire de sa section ; SOURCES est vide expres. (Pas de pH : la constante de
 //   l eau est une valeur publiee, pas lue ici.)
 // Les systemes :
@@ -18,7 +18,15 @@ import { sinD, cosD, lnD } from './tam-moteur.js';
 
 const DEUX_PI = 2 * Math.PI;
 
-export const SOURCES = Object.freeze({});
+/* game214 : PREMIERES valeurs publiees du module (codex Grok Bot 19, sources lues par Grok) : pKa de l acide acetique a 25 C et
+ *   constante de l eau Kw a 25 C (valeur de modele). Le banc exige valeur = texte lu, URL https. */
+const S = (valeur, unite, url, lu) => Object.freeze({ valeur, unite, url, lu });
+export const SOURCES = Object.freeze({
+  // https://opentextbc.ca/introductorychemistry/back-matter/appendix-selected-acid-dissociation-constants-at-25c/ : ligne « Acetic acid », pKa 4.756
+  pKaAcetique: S(4.756, '', 'https://opentextbc.ca/introductorychemistry/back-matter/appendix-selected-acid-dissociation-constants-at-25c/', '4.756'),
+  // https://openstax.org/books/chemistry-2e/pages/14-2-ph-and-poh : Kw = 1.0 x 10^-14 a 25 C
+  Kw: S(1.0e-14, '', 'https://openstax.org/books/chemistry-2e/pages/14-2-ph-and-poh', '1.0e-14'),
+});
 
 function expNegD(x) {
   if (!(x >= 0)) return NaN;
@@ -224,7 +232,33 @@ function carnot(P, n) {
     travail: { mesure: W, formule: Wth, note: 'area of the cycle in the (V, P) plane (trapezoids) against (Th - Tc) ln r' } } };
 }
 
+// ---------- game214 : titrage de l acide acetique par la soude (idee et valeurs : codex Grok Bot 19 ; pKa et Kw : SOURCES) ----------
+// 10 mL d acide acetique a Ca, soude a Cb ajoutee de 0 a 2 fois l equivalence. Modele IDEAL (activites = concentrations, volumes additifs,
+//   soude totalement dissociee). Exact ici : a chaque volume le pH est la racine de l equation de charge
+//   h + [Na+] - Ct Ka/(Ka + h) - Kw/h = 0, trouvee par dichotomie sur le pH (80 coupes). Ka = 10^(-pKa) par expNegD(pKa ln 10).
+// MESURE : residu de charge relatif sous 1e-9 a chaque point ; pH croissant ; a mi-equivalence le pH est a moins de 0.05 du pKa.
+//   Pour Ca = Cb = 0.1 : pH a 0, 50, 100 et 150 % = valeurs de Grok (calcul, pas mesure de laboratoire).
+// Temoin : a l equivalence le pH n est PAS 7 (l acetate est une base) : il est mesure ici.
+// Dessin (vue de face) : la courbe (volume / volume d equivalence, pH / 14) ; etiquette = part de l acide encore sous forme HA.
+function titrageAcideFaible(P, n) {
+  const Ca = P.acide, Cb = P.base, Va = 10, Veq = Ca * Va / Cb, Ka = expNegD(SOURCES.pKaAcetique.valeur * lnD(10)), Kw = SOURCES.Kw.valeur;
+  const phDe = (Vb) => { const Ct = Ca * Va / (Va + Vb), Na = Cb * Vb / (Va + Vb), f = (pH) => { const h = expNegD(pH * lnD(10)); return h + Na - Ct * Ka / (Ka + h) - Kw / h; };
+    let lo = 0, hi = 14; for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (f(m) > 0) lo = m; else hi = m; }
+    const pH = (lo + hi) / 2, h = expNegD(pH * lnD(10)), A = Ct * Ka / (Ka + h), residu = Math.abs(h + Na - A - Kw / h) / (h + Na + A + Kw / h);
+    return { pH, residu, partHA: (Ct - A) / Ct }; };
+  const pts = []; let residuMax = 0, nonCroissant = 0;
+  for (let k = 0; k <= 400; k++) { const Vb = 2 * Veq * k / 400, r = phDe(Vb); residuMax = Math.max(residuMax, r.residu); if (k && r.pH < pts[k - 1].pH) nonCroissant++; pts.push({ x: Vb / Veq, ...r }); }
+  const demi = phDe(Veq / 2).pH, equiv = phDe(Veq).pH, quatre = [0, 0.5, 1, 1.5].map((x) => phDe(x * Veq).pH);
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const p = pts[Math.floor(l * pts.length / n)], o = 3 * l; brut[o] = p.x / 2; brut[o + 1] = p.pH / 14; brut[o + 2] = p.partHA; }
+  return { D: 3, brut, nuage: true, unite: 'pH', invariants: {
+    titrageAcideFaible: { mesure: (residuMax < 1e-9 ? 0 : 1) + nonCroissant + (Math.abs(demi - SOURCES.pKaAcetique.valeur) < 0.05 ? 0 : 1), formule: 0, residuMax, demiEquivalence: demi, quatrePoints: quatre.map((x) => x.toFixed(6)).join(' '),
+      note: 'charge balance residual above 1e-9, pH that goes down, or pH at half-equivalence more than 0.05 from pKa (ideal model)' },
+    temoin: { mesure: equiv, formule: 7, note: 'witness: at equivalence the pH is not 7, because acetate is itself a weak base' } } };
+}
+
 export const COLONNES = Object.freeze({
+  titrageAcideFaible: { colonnes: ['base added / base needed (half scale)', 'pH / 14', 'share of acid still as HA (label)'], memeLongueur: [], autres: [0, 1, 2] },
   reactionsChaine: { colonnes: ['time t', 'share of the molecules (0..1)', 'which species (0 = A, 1 = B, 2 = C)'], memeLongueur: [], autres: [0, 1, 2] },
   equilibreChimique: { colonnes: ['x: well A on the left, well B on the right (placement inside a well is drawn)', 'y (drawn)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
   brusselator: { colonnes: ['concentration x', 'concentration y', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
@@ -248,9 +282,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'carnot', nom: 'The Carnot cycle (the best possible engine)', science: 'Thermodynamics', D: 3, nuage: true, params: { chaude: 2, liberte: 3, detente: 2 },
     bornes: { chaude: [1.2, 5], liberte: [3, 7], detente: [1.5, 4] },
     phrase: 'A visualisation of the Carnot cycle of an ideal gas in the (V, P) plane: a hot expansion at Th, an expansion without heat down to Tc, a cold compression and a compression back. The area inside is the work; divided by the heat taken in, it is exactly 1 - Tc/Th, whatever the gas.' },
+  { id: 'titrageAcideFaible', nom: 'Titrating vinegar acid with lye (acetic acid and NaOH)', science: 'Chemistry', D: 3, nuage: true, params: { acide: 0.1, base: 0.1 },
+    bornes: { acide: [0.001, 0.5], base: [0.001, 0.5] },
+    phrase: 'A visualisation of a titration: lye is poured into acetic acid and the pH is solved exactly from the charge balance at every drop (ideal solution, pKa and Kw from published tables). Halfway, the pH sits at the pKa of the acid. At the equivalence point the pH is not 7 but higher, since acetate is a base: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'] };
-const FONCTIONS = { reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
+export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [] };
+const FONCTIONS = { titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

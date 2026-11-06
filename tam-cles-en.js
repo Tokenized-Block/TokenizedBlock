@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game214 */
+  titrageAcideFaible: 'Charge residual too big, pH going down, or half-equivalence pH far from pKa', residuMax: 'Largest charge balance residual (relative)', demiEquivalence: 'pH at half-equivalence', quatrePoints: 'pH at 0, 50, 100 and 150 percent',
   /* game213 */
   codeGenetique: 'Table counts off (21 classes, 3 stops) or synonymous ranking off (third > first > second)', degenerescence: 'Codons per amino acid', synonymesParPosition: 'Synonymous share of point mutations, by codon position', synonymesGlobal: 'Synonymous share of all point mutations',
   /* game212 */
