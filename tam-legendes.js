@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game179 (idee : codex Grok Bot) */
+  ramseyR33: {
+    titre: 'Ramsey number R(3, 3) = 6',
+    enUnePhrase: 'Colour every line between 6 points red or blue: a one-colour triangle always appears.',
+    colonnes: ['across', 'up', 'colour'],
+    aRegarder: ['With 5 points there are exactly 12 ways to avoid it: red and blue each make a five-pointed loop.', 'With 6 points every one of the 32 768 colourings has a one-colour triangle (shown in its own colour).', 'Forbidding only red triangles leaves many colourings: both colours are needed.'],
+    fin: null,
+  },
   /* game178 (idee : codex Grok Bot) */
   triangulations: {
     titre: 'Triangulations of a polygon (Catalan numbers)',

@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game179 */
+  colorations: 'colourings checked',
   /* game178 */
   tn: 'triangulations of the N-gon', tirees: 'diagonals drawn',
   /* game177 */
@@ -463,6 +465,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game179 */
+  sansTriangle: 'Two-colourings with no one-colour triangle', cycles5: 'K5 colour classes that are not a 5-cycle',
   /* game178 */
   catalan: 'Triangulation counts vs binom(2m, m)/(m + 1) (polygons that differ)', diagonales: 'Drawn triangulation: wrong count plus crossings',
   /* game177 */

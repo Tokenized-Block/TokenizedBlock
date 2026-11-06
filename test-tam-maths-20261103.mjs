@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -740,6 +740,20 @@ function suite(T, bavard = false, seul = null) {
     /* recompte des triangles par la formule d Euler du graphe plan : faces internes = aretes - sommets + 1 = (N + N - 3) - N + 1 = N - 2 ; et chaque diagonale relie deux sommets non voisins */
     assert.ok(d.every(([a, b]) => b - a >= 2 && !(a === 0 && b === N - 1)), 'diagonale invalide'); return 'T(' + N + ') = ' + I.catalan.tn;
   });
+  /* game179 : Ramsey — reference INDEPENDANTE : couleurs dans une MATRICE d adjacence, triangles par triple boucle sur les sommets, et
+   *   l argument des tiroirs pour K_6 (un sommet a 3 aretes d une meme couleur) ; valeurs de Grok Bot : K_5 = 12, K_6 = 0 */
+  const ramRef = (n) => { const E = []; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) E.push([i, j]); let bon = 0;
+    for (let m = 0; m < 2 ** E.length; m++) { const C = Array.from({ length: n }, () => new Array(n).fill(-1)); E.forEach(([a, b], k) => { C[a][b] = C[b][a] = (m >> k) & 1; });
+      let mono = false; for (let a = 0; a < n && !mono; a++) for (let b = a + 1; b < n && !mono; b++) for (let c = b + 1; c < n && !mono; c++) if (C[a][b] === C[a][c] && C[a][c] === C[b][c]) mono = true; if (!mono) bon++; } return bon; };
+  ok('ramseyR33 : reference (matrice) = valeurs de Grok Bot (K_5 = 12, K_6 = 0)', () => { assert.deepEqual([ramRef(5), ramRef(6)], [12, 0]); return 'ok'; });
+  for (const p of [3, 4, 5, 6].map((k) => ({ sommetsK: k })).concat([{ sommetsK: 5, graine: 4242 }, { sommetsK: 6, graine: 77 }])) ok(`ramseyR33 ${JSON.stringify(p)} : comptes, 5-cycles, temoin, dessin`, () => {
+    const R = S('ramseyR33', p), I = R.invariants, n = R.params.sommetsK;
+    assert.ok(I.sansTriangle.mesure === ramRef(n) && I.cycles5.mesure === 0 && I.sansTriangle.colorations === 2 ** (n * (n - 1) / 2), JSON.stringify(I));
+    if (n === 5) assert.equal(I.sansTriangle.formule, 12); if (n === 6) assert.ok(I.sansTriangle.formule === 0 && I.temoin.mesure > 0);
+    const deux = [...Array(R.n).keys()].filter((q) => R.brut[3 * q + 2] === 2).length;
+    if (n === 6) assert.ok(deux > 0, 'K_6 : le triangle monochrome doit etre dessine'); else assert.equal(deux, 0, 'une bonne coloration n a pas de triangle monochrome');
+    return 'K_' + n + ' : ' + I.sansTriangle.mesure + ' sans triangle';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -946,6 +960,10 @@ const MUTANTS = [
   ['triangulations : croisement mal detecte', 'return (p < r && r < q && q < s) || (r < p && p < s && s < q); };', 'return (p < r && r < q && q < s); };'],
   ['triangulations : tirage sans la seconde moitie', 'triTirage(i, k, T, rng, diag); triTirage(k, j, T, rng, diag); return; }', 'triTirage(i, k, T, rng, diag); return; }'],
   ['triangulations : temoin sur un hexagone', 'const D5 = [[2, 4], [1, 4], [1, 3], [0, 3], [0, 2]];', 'const D5 = [[2, 5], [1, 4], [1, 3], [0, 3], [0, 2]];'],
+  ['ramsey : triangle a deux aretes', 'if (c === ((m >> t[1]) & 1) && c === ((m >> t[2]) & 1)) { if (mono === null) mono = t;', 'if (c === ((m >> t[1]) & 1)) { if (mono === null) mono = t;'],
+  ['ramsey : cycles sans la connexite', "if (deg.some((d) => d !== 2) || vu.size !== 5) cyclesFaux++; }", "if (deg.some((d) => d !== 3)) cyclesFaux++; }"],
+  ['ramsey : temoin sur le bleu aussi', 'if (c === 0) rouge = true; }', 'rouge = true; }'],
+  ['ramsey : triangle non dessine', 'tri && tri.includes(k) ? 2 : (m >> k) & 1', '(m >> k) & 1'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -960,7 +978,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

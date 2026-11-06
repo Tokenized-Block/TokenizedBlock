@@ -1296,7 +1296,40 @@ function triangulations(P, n) {
     temoin: { mesure: sansCroiser + ' / ' + paires, formule: '5 / 10', note: 'witness: a pentagon has 10 pairs of diagonals, only 5 pairs do not cross (one triangulation each)' } } };
 }
 
+// ---------- 36 : Ramsey R(3, 3) = 6 (idee et valeurs : codex Grok Bot ; MathWorld « Ramsey Number », Greenwood-Gleason 1955, lus par Grok) ----------
+// Colorier chaque arete du graphe complet K_n en rouge ou bleu : a partir de n = 6, il y a FORCEMENT un triangle d une seule couleur.
+// Exact ici : TOUTES les 2^(n(n-1)/2) colorations enumerees (n <= 6) ; K_5 en a 12 sans triangle monochrome, K_6 n en a aucune (Grok).
+//   Et pour K_5 : dans chacune des 12, chaque couleur forme un cycle de 5 aretes (chaque sommet de degre 2, d un seul tenant).
+// Temoin : n interdire que les triangles ROUGES ne suffit pas : K_6 a alors des colorations sans triangle interdit — il faut les deux couleurs.
+// Dessin (vue de face) : une coloration tiree (graine) parmi les bonnes (n <= 5), ou quelconque avec son triangle monochrome (n = 6) ;
+//   etiquette 0 = rouge, 1 = bleu, 2 = le triangle monochrome trouve.
+function ramseyGraphe(n) { const E = []; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) E.push([i, j]);
+  const id = new Map(E.map(([a, b], k) => [a + ',' + b, k])), T = [];
+  for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++) for (let c = b + 1; c < n; c++) T.push([id.get(a + ',' + b), id.get(a + ',' + c), id.get(b + ',' + c)]);
+  return { E, T }; }
+function ramseyR33(P, n) {
+  const N = P.sommetsK, rng = mulberry32(P.graine), { E, T } = ramseyGraphe(N), bonnes = []; let rougeSeul = 0;
+  for (let m = 0; m < 2 ** E.length; m++) { let mono = null, rouge = false;
+    for (const t of T) { const c = (m >> t[0]) & 1; if (c === ((m >> t[1]) & 1) && c === ((m >> t[2]) & 1)) { if (mono === null) mono = t; if (c === 0) rouge = true; } }
+    if (mono === null) bonnes.push(m); if (!rouge) rougeSeul++; }
+  let cyclesFaux = 0; if (N === 5) for (const m of bonnes) for (const coul of [0, 1]) { const deg = new Array(5).fill(0), adj = Array.from({ length: 5 }, () => []);
+    E.forEach(([a, b], k) => { if (((m >> k) & 1) === coul) { deg[a]++; deg[b]++; adj[a].push(b); adj[b].push(a); } });
+    const vu = new Set([0]), pile = [0]; while (pile.length) for (const v of adj[pile.pop()]) if (!vu.has(v)) { vu.add(v); pile.push(v); }
+    if (deg.some((d) => d !== 2) || vu.size !== 5) cyclesFaux++; }
+  const m = bonnes.length ? bonnes[Math.floor(rng() * bonnes.length)] : Math.floor(rng() * 2 ** E.length);
+  let tri = null; for (const t of T) { const c = (m >> t[0]) & 1; if (c === ((m >> t[1]) & 1) && c === ((m >> t[2]) & 1)) { tri = t; break; } }
+  const S = Array.from({ length: N }, (_, k) => [cosD(2 * PI * k / N + PI / 2), sinD(2 * PI * k / N + PI / 2)]);
+  const segs = E.map(([a, b], k) => [S[a], S[b], tri && tri.includes(k) ? 2 : (m >> k) & 1]);
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const t = l * segs.length / n, j = Math.floor(t), u = t - j, sg = segs[j], o = 3 * l;
+    brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
+  return { D: 3, brut, nuage: true, unite: 'rayon 1', invariants: {
+    sansTriangle: { mesure: bonnes.length, formule: N === 5 ? 12 : N === 6 ? 0 : null, colorations: 2 ** E.length, note: 'colourings of the edges of K_n in two colours with no one-colour triangle, all of them enumerated (K_5 : 12, K_6 : 0, so R(3, 3) = 6)' },
+    cycles5: { mesure: cyclesFaux, formule: 0, note: 'K_5 only : good colourings where a colour class is NOT a single 5-cycle (every vertex of degree 2, connected)' },
+    temoin: { mesure: rougeSeul, note: 'witness: forbidding only RED triangles, this many colourings of K_n survive (for K_6 still many) : both colours are needed' } } };
+}
+
 export const COLONNES = Object.freeze({
+  ramseyR33: { colonnes: ['x', 'y', 'colour (label; 0 = red, 1 = blue, 2 = the one-colour triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   triangulations: { colonnes: ['x', 'y', 'what (label; 0 = polygon, 1 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
   distinctesImpaires: { colonnes: ['column', 'row (downwards)', 'which side (label; 0 = distinct parts, 1 = odd parts)'], memeLongueur: [[0, 1]], autres: [2] },
   simsonDroite: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = circle, 2 = perpendiculars, 3 = Simson line)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1440,9 +1473,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'triangulations', nom: 'Triangulations of a polygon (Catalan numbers)', science: 'Combinatorics', D: 3, nuage: true, params: { cotes: 9, graine: 1 },
     bornes: { cotes: [3, 30], graine: [1, 1000000] },
     phrase: 'A visualisation of polygon triangulations: cut a convex polygon into triangles with diagonals that never cross. The number of ways is a Catalan number (1, 2, 5, 14, 42, ...), counted by splitting along one side and checked against binom(2m, m)/(m + 1); a random triangulation is drawn and checked for crossings.' },
+  { id: 'ramseyR33', nom: 'Ramsey number R(3, 3) = 6', science: 'Combinatorics', D: 3, nuage: true, params: { sommetsK: 5, graine: 1 },
+    bornes: { sommetsK: [3, 6], graine: [1, 1000000] },
+    phrase: 'A visualisation of the Ramsey number R(3, 3) = 6: colour every line between n points red or blue. With 5 points you can avoid a triangle of one colour (12 ways, each colour a 5-cycle); with 6 points you never can. Every colouring is checked; forbidding only red triangles is the witness that both colours are needed.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'] };
-const FONCTIONS = { triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'] };
+const FONCTIONS = { ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
