@@ -252,6 +252,8 @@ export const ECHELLE_PROPRE = {
   arcEnCiel: [2], cordeVibrante: [0, 1, 2], effetDoppler: [2],
   /* game122 : numero de ligne ; temps et courbe ; numero de ligne du triangle */
   lignesChamp: [2], circuitRC: [0, 2], pascalSierpinski: [2],
+  /* game212 : x et y de la fourmi de meme nature ; couleur (etiquette) */
+  fourmiLangton: [2],
   /* game211 : rang et ecart de natures differentes ; signe (etiquette) */
   suitePadovan: [2],
   /* game210 : x et y de la tortue de meme nature ; bit (etiquette) */

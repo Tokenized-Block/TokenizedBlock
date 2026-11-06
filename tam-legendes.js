@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game212 (idee : codex Grok Bot) */
+  fourmiLangton: {
+    titre: "Langton's ant",
+    enUnePhrase: 'An ant turns right on white, left on black, flips the square and steps on: chaos, then a straight road.',
+    colonnes: ['ant east-west', 'ant north-south', 'colour of the square it just left'],
+    aRegarder: ['For about ten thousand steps the ant scribbles a messy blob.', 'Then it starts building a diagonal highway that repeats every 104 steps.', 'A simulation this long shows the highway, but cannot prove it goes on forever.'],
+    fin: null,
+  },
   /* game211 (idee : codex Grok Bot) */
   suitePadovan: {
     titre: 'The Padovan sequence',
