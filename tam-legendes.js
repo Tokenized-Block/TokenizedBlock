@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game198 (idee : codex Grok Bot) */
+  routineKaprekar: {
+    titre: 'Kaprekar routine',
+    enUnePhrase: 'Sort the digits big to small, then small to big, subtract, and repeat: where do you end up?',
+    colonnes: ['which start', 'how many steps (relative)', 'how many different digits'],
+    aRegarder: ['Almost every start lands on the same number, and stays there.', 'No start needs more than a handful of steps.', 'Numbers like 1111 fall straight to 0 instead.'],
+    fin: null,
+  },
   /* game197 (idee : codex Grok Bot) */
   suiteCollatz: {
     titre: 'The Collatz sequence (3n + 1)',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game198 */
+  routineKaprekar: 'Starts that do not settle on one single fixed point', pmax: 'Most steps needed', distribution: 'How many starts need each number of steps',
   /* game197 */
   suiteCollatz: 'Starts that do not reach 1, and m where flight(2m) is not flight(m) + 1 (finite check)',
   /* game196 */

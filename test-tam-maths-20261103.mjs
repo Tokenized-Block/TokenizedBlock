@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus', 'zeckendorf', 'theoremeLucas', 'calkinWilf', 'toursHanoi', 'regarderDire', 'derangements', 'nombresHarmoniques', 'suiteCollatz'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus', 'zeckendorf', 'theoremeLucas', 'calkinWilf', 'toursHanoi', 'regarderDire', 'derangements', 'nombresHarmoniques', 'suiteCollatz', 'routineKaprekar'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -971,6 +971,20 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(I.suiteCollatz.mesure === 0 && I.suiteCollatz.vingt === '0, 1, 7, 2, 5, 8, 16, 3, 19, 6, 14, 9, 9, 17, 17, 4, 12, 20, 20, 7' && I.suiteCollatz.record === rec + ' en ' + colVol(rec) + ' pas, altitude ' + alt && I.temoin.mesure === 1, JSON.stringify(I) + ' ref ' + rec + ' ' + alt);
     return I.suiteCollatz.record;
   });
+  /* game198 : Kaprekar - reference INDEPENDANTE : chiffres extraits par division (pas de chaines), tri par comptage ;
+   *   valeurs de Grok Bot (L = 4 : distribution exhaustive, chemin de 1000) */
+  const kRef = (x, L) => { const c = new Array(10).fill(0); for (let i = 0; i < L; i++) { c[x % 10]++; x = Math.floor(x / 10); }
+    let hi = 0, lo = 0; for (let d = 9; d >= 0; d--) for (let j = 0; j < c[d]; j++) hi = hi * 10 + d; for (let d = 0; d <= 9; d++) for (let j = 0; j < c[d]; j++) lo = lo * 10 + d; return hi - lo; };
+  ok('routineKaprekar : reference par division = chemin de 1000 de Grok Bot', () => { const ch = [1000]; while (ch.length < 10 && kRef(ch[ch.length - 1], 4) !== ch[ch.length - 1]) ch.push(kRef(ch[ch.length - 1], 4));
+    assert.deepEqual(ch, [1000, 999, 8991, 8082, 8532, 6174]); return 'ok'; });
+  for (const p of [...extremes(sys('routineKaprekar'))]) ok(`routineKaprekar ${JSON.stringify(p)} : un seul point fixe, distribution, temoin`, () => {
+    const R = S('routineKaprekar', p), I = R.invariants, L = R.params.longueurK;
+    const fx = new Set(), dist = {}; for (let x = 0; x < 10 ** L; x++) { if (new Set(String(x).padStart(L, '0')).size === 1) continue; let y = x, k = 0; while (kRef(y, L) !== y && k < 30) { y = kRef(y, L); k++; } fx.add(y); dist[k] = (dist[k] || 0) + 1; }
+    const dRef = Object.keys(dist).sort((a, b) => a - b).map((k) => k + ':' + dist[k]).join(' ');
+    assert.ok(I.routineKaprekar.mesure === 0 && fx.size === 1 && I.routineKaprekar.pointFixe === [...fx][0] && I.routineKaprekar.distribution === dRef && I.temoin.mesure === 0, JSON.stringify(I) + ' ref ' + dRef);
+    if (L === 4) assert.equal(I.routineKaprekar.distribution, '0:1 1:383 2:576 3:2400 4:1272 5:1518 6:1656 7:2184');
+    return 'point fixe ' + I.routineKaprekar.pointFixe + ', au plus ' + I.routineKaprekar.pmax + ' pas';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -1256,6 +1270,10 @@ const MUTANTS = [
   ['collatz : doublement en + 2', 'if (vols[2 * m] !== vols[m] + 1) doubles++;', 'if (vols[2 * m] !== vols[m] + 2) doubles++;'],
   ['collatz : altitude divisee', 'pas++; alt = Math.max(alt, x); }', 'pas++; alt = Math.max(alt, x / 2); }'],
   ['collatz : temoin en 3n + 1', 't = t % 2 ? 3 * t - 1 : t / 2;', 't = t % 2 ? 3 * t + 1 : t / 2;'],
+  ['kaprekar : zeros en tete perdus', "const kc = String(x).padStart(L, '0').split('')", "const kc = String(x).split('')"],
+  ['kaprekar : croissant moins decroissant', 'return Number(kg.join(\'\')) - Number(kd.join(\'\')); }', 'return Number(kd.join(\'\')) - Number(kg.join(\'\')); }'],
+  ['kaprekar : plafond a 6 pas', 'while (k < 20 && kt[y] !== y)', 'while (k < 6 && kt[y] !== y)'],
+  ['kaprekar : temoin non repete', "const rep = Number('1'.repeat(L)),", "const rep = Number('1'.repeat(L - 1) + '2'),"],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -1270,7 +1288,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { collatz: ['suiteCollatz'], harmoniques: ['nombresHarmoniques'], derangements: ['derangements'], regarder: ['regarderDire'], hanoi: ['toursHanoi'], calkin: ['calkinWilf'], lucas: ['theoremeLucas'], zeckendorf: ['zeckendorf'], josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { kaprekar: ['routineKaprekar'], collatz: ['suiteCollatz'], harmoniques: ['nombresHarmoniques'], derangements: ['derangements'], regarder: ['regarderDire'], hanoi: ['toursHanoi'], calkin: ['calkinWilf'], lucas: ['theoremeLucas'], zeckendorf: ['zeckendorf'], josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

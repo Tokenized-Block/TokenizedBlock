@@ -151,6 +151,8 @@ THEMES.maths.push('derangements');
 THEMES.maths.push('nombresHarmoniques');
 /* game197 : Collatz (idee : codex Grok Bot) */
 THEMES.maths.push('suiteCollatz');
+/* game198 : Kaprekar (idee : codex Grok Bot) */
+THEMES.maths.push('routineKaprekar');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -273,7 +275,7 @@ const NOMS_PARAMS_SYS = { 'equationPell.radical': 'D (not a square ; a square is
   /* game134 (« espacement » existe deja : mode spacing, vide quantique) */
   'reseauFentes.espacement': 'slit spacing d / lambda' };
 const nomParam = (sid, cle) => NOMS_PARAMS_SYS[sid + '.' + cle] || NOMS_PARAMS_EN[cle];
-const NOMS_PARAMS_EN = { qmax: 'largest denominator q', objets: 'objects n', rangs: 'terms', disques: 'disks n', niveaux: 'levels D', baseP: 'prime p (a non-prime goes to the next)', lignesL: 'rows', pasK: 'every k-th one leaves, k', rangB: 'up to B_n, n', limite: 'search up to', radical: 'D under the square root', croise: 'crossed hexagon (0 no, 1 yes)', sommetsK: 'points n of K_n', cotes: 'sides N', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
+const NOMS_PARAMS_EN = { qmax: 'largest denominator q', longueurK: 'digits per number', objets: 'objects n', rangs: 'terms', disques: 'disks n', niveaux: 'levels D', baseP: 'prime p (a non-prime goes to the next)', lignesL: 'rows', pasK: 'every k-th one leaves, k', rangB: 'up to B_n, n', limite: 'search up to', radical: 'D under the square root', croise: 'crossed hexagon (0 no, 1 yes)', sommetsK: 'points n of K_n', cotes: 'sides N', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
   excentricite: 'eccentricity', frequence: 'frequency', graine: 'seed', grille: 'grid', groupe: 'group', hauteur: 'height', heures: 'hours',
   horloges: 'clocks', images: 'frames', inclinaison: 'inclination', inclinaison1: 'inclination 1', inclinaison2: 'inclination 2', jours: 'days',
@@ -1293,6 +1295,8 @@ export function monter(racine, ctx = {}) {
     'nombresHarmoniques',
     /* game197 */
     'suiteCollatz',
+    /* game198 */
+    'routineKaprekar',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */
