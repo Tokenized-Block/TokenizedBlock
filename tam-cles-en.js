@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game219 */
+  atmosphereStandard: 'Points where step-by-step pressure leaves the closed formula', quatreAltitudes: 'T (K) / p (Pa) at 0, 5, 11 and 20 km', pression11: 'Pressure at 11 km (Pa)', Hgeopotentiel: 'Geopotential height of 5 km geometric (m)',
   /* game218 */
   entropieShannon: 'Huffman length outside [H, H + 1), or a long drawn text far from H', entropie: 'Entropy H (bits per letter)', longueurHuffman: 'Huffman average code length (bits)', entropieTexte: 'Entropy of the drawn text (bits per letter)', totalLettres: 'Letters in the published sample',
   /* game217 */

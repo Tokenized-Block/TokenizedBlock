@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game219 (idee : codex Grok Bot) */
+  atmosphereStandard: {
+    titre: 'The standard atmosphere',
+    enUnePhrase: 'Climb into the sky: the air gets colder and thinner, by rules set in 1976 for pilots and engineers.',
+    colonnes: ['how high you are', 'how much air pressure is left', 'the temperature'],
+    aRegarder: ['The pressure halves roughly every 5.5 kilometres at first.', 'Above 11 km the temperature stops falling and stays at 216.65 K.', 'Heights in this model are a little different from heights on a tape measure.'],
+    fin: null,
+  },
   /* game218 (idee : codex Grok Bot) */
   entropieShannon: {
     titre: 'Shannon entropy of English letters',
