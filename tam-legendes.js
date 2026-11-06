@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game189 (idee : codex Grok Bot) */
+  problemeJosephus: {
+    titre: 'The Josephus problem (who is left standing)',
+    enUnePhrase: 'People stand in a circle and every k-th one steps out: which place survives to the end?',
+    colonnes: ['across', 'up', 'when they step out'],
+    aRegarder: ['The colours show the order in which people leave; the brightest is the survivor.', 'With every second person out, the survivor is 2L + 1 when n = 2^a + L.', 'That neat formula does not work when every third person leaves.'],
+    fin: null,
+  },
   /* game188 (idee : codex Grok Bot) */
   nombresBernoulli: {
     titre: 'Bernoulli numbers',

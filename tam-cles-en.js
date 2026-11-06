@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game189 */
+  survivant: 'survivor',
   /* game188 */
   b12: 'B_12',
   /* game187 */
@@ -483,6 +485,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game189 */
+  josephus: 'Simulated survivor vs recurrence (sizes that differ)', formule2L: 'k = 2 : sizes where J differs from 2L + 1',
   /* game188 */
   faulhaber: 'Power sums vs Faulhaber s formula (pairs that differ)', vonStaudt: 'von Staudt-Clausen failures', impairsNuls: 'Odd-index B that are not 0',
   /* game187 */
