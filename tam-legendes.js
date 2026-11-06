@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game195 (idee : codex Grok Bot) */
+  derangements: {
+    titre: 'Derangements (no one gets their own hat back)',
+    enUnePhrase: 'Shuffle the hats so that nobody gets their own: how many ways are there?',
+    colonnes: ['person', 'hat they get', 'how many seats away their hat is'],
+    aRegarder: ['No point lies on the diagonal: nobody keeps their own hat.', 'The count is always the whole number nearest to n! divided by e.', 'Except for zero people, where there is one (empty) way but n!/e rounds to 0.'],
+    fin: null,
+  },
   /* game194 (idee : codex Grok Bot) */
   regarderDire: {
     titre: 'The look-and-say sequence',
