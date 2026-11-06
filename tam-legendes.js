@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game217 (idee : codex Grok Bot) */
+  gammeTemperee: {
+    titre: 'Equal temperament (tuning a piano)',
+    enUnePhrase: 'A piano cuts the octave into 12 equal steps; pure musical intervals do not quite fit.',
+    colonnes: ['which step of the octave', 'how far it is from a pure interval (cents)', 'step number'],
+    aRegarder: ['The fifth is almost perfect, two hundredths of a semitone flat.', 'The major third is clearly sharp, about 14 cents.', 'Try 53 steps: the fifth becomes nearly exact.'],
+    fin: null,
+  },
   /* game216 (idee : codex Grok Bot) */
   pileDaniell: {
     titre: 'A zinc-copper battery running down',

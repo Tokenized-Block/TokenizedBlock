@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game217 */
+  gammeTemperee: 'Step that misses the octave, or fifth and fourth errors that do not cancel', pasRapport: 'Ratio of one step', quinteCents: 'Fifth error (cents)', tierceCents: 'Major third error (cents)', quarteCents: 'Fourth error (cents)', douze: 'The 13 ratios for N = 12', commaFraction: 'Pythagorean comma (exact fraction)',
   /* game216 */
   pileDaniell: 'Discharge steps off the Nernst slope, or voltage going up', E0: 'Standard cell voltage (V)', penteDecade298mV: 'Voltage drop per tenfold Q at 298.15 K (mV)', troisExemples: 'E at 298.15 K for three ion pairs (V)',
   /* game215 */
