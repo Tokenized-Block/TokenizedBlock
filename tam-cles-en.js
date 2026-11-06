@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game227 */
+  electronegativite: 'Steps where electronegativity does not rise along a period, or does not fall down a column', correlationIonisation: 'Correlation with ionization energy (r)', creuxIonisation: 'Where ionization energy drops along a period',
   /* game226 */
   populationMonde: 'Decades without growth, a growth peak not in the 1960s, or growth rates rising again after it', tauxParDecennie: 'Mean growth rate of each decade (percent per year)', decenniePic: 'Decade of fastest growth', expo2020: 'Fitted exponential at 2020 (thousands)',
   /* game225 */

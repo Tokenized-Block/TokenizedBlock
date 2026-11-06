@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game227 (idee : codex 22, sous-agent Claude) */
+  electronegativite: {
+    titre: 'Electronegativity across the periodic table',
+    enUnePhrase: 'How strongly each atom pulls on the electrons it shares: it grows to the right and shrinks downward.',
+    colonnes: ['place in the row', 'how strong the pull is', 'second or third row'],
+    aRegarder: ['Fluorine pulls the hardest of all these atoms.', 'Every step to the right pulls a little more.', 'Switch to ionization energy: the climb has small dips at boron, oxygen, aluminium and sulfur.'],
+    fin: null,
+  },
   /* game226 (idee : codex 22, sous-agent Claude) */
   populationMonde: {
     titre: 'World population since 1950',

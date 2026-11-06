@@ -57,6 +57,12 @@ export const SOURCES = Object.freeze({
   // meme page : T2 = 410 C, k2 = 2.8 x 10^-2 M^-1 s^-1
   T2arrhenius: S(410, 'C', 'https://www.chem.fsu.edu/chemlab/chm1046course/activation.html', '410'),
   k2arrhenius: S(2.8e-2, 'L/(mol s)', 'https://www.chem.fsu.edu/chemlab/chm1046course/activation.html', '2.8e-2'),
+  /* game227 : tableau periodique PubChem (CSV), colonnes Electronegativity (echelle de Pauling) et IonizationEnergy (eV), lues par le
+   *   sous-agent Claude du codex 22 puis RELUES dans le CSV telecharge le 2026-11-07. Ne et Ar : pas de valeur de Pauling (gaz rares). */
+  // https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/CSV : colonne Electronegativity, Z = 3..9 et 11..17
+  electronegativite: S('Li:0.98 Be:1.57 B:2.04 C:2.55 N:3.04 O:3.44 F:3.98 Na:0.93 Mg:1.31 Al:1.61 Si:1.9 P:2.19 S:2.58 Cl:3.16', 'Pauling', 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/CSV', 'Li:0.98 Be:1.57 B:2.04 C:2.55 N:3.04 O:3.44 F:3.98 Na:0.93 Mg:1.31 Al:1.61 Si:1.9 P:2.19 S:2.58 Cl:3.16'),
+  // meme fichier : colonne IonizationEnergy, Z = 3..18
+  ionisation: S('Li:5.392 Be:9.323 B:8.298 C:11.260 N:14.534 O:13.618 F:17.423 Ne:21.565 Na:5.139 Mg:7.646 Al:5.986 Si:8.152 P:10.487 S:10.360 Cl:12.968 Ar:15.760', 'eV', 'https://pubchem.ncbi.nlm.nih.gov/rest/pug/periodictable/CSV', 'Li:5.392 Be:9.323 B:8.298 C:11.260 N:14.534 O:13.618 F:17.423 Ne:21.565 Na:5.139 Mg:7.646 Al:5.986 Si:8.152 P:10.487 S:10.360 Cl:12.968 Ar:15.760'),
 });
 
 function expNegD(x) {
@@ -365,7 +371,31 @@ function arrhenius(P, n) {
     temoin: { mesure: temoin, formule: 2, note: 'witness: the rule that rates double every 10 degrees fails here: going from 326 C to 336 C multiplies k by about 1.69' } } };
 }
 
+// ---------- game227 : l electronegativite le long du tableau periodique (idee : codex 22, sous-agent Claude ; PubChem : SOURCES) ----------
+// Electronegativite de Pauling (attirance d un atome pour les electrons d une liaison) et energie de premiere ionisation (eV) des periodes 2
+//   (Li..Ne) et 3 (Na..Ar). MESURE : l electronegativite MONTE a chaque pas le long des deux periodes (Li -> F, Na -> Cl) et BAISSE en
+//   descendant chaque colonne (Li > Na ... F > Cl) ; correlation avec l energie d ionisation r = 0.9585 (calcul sur le fichier).
+// Temoin : l energie d ionisation, elle, ne monte PAS a chaque pas : elle redescend a B, O, Al et S (4 creux), malgre la forte correlation.
+// Dessin (vue de face) : chaque element (rang dans sa periode / 8, grandeur du curseur rapportee a son maximum) ; etiquette = periode (2 ou 3).
+function electronegativite(P, n) {
+  const lire = (k) => Object.fromEntries(SOURCES[k].valeur.split(' ').map((x) => { const [e, v] = x.split(':'); return [e, Number(v)]; }));
+  const en = lire('electronegativite'), ie = lire('ionisation'), P2 = ['Li', 'Be', 'B', 'C', 'N', 'O', 'F', 'Ne'], P3 = ['Na', 'Mg', 'Al', 'Si', 'P', 'S', 'Cl', 'Ar'];
+  let ecarts = 0; for (const per of [P2, P3]) for (let i = 1; i < 7; i++) if (!(en[per[i]] > en[per[i - 1]])) ecarts++;
+  for (let i = 0; i < 7; i++) if (!(en[P2[i]] > en[P3[i]])) ecarts++;
+  let creux = 0; const lesCreux = []; for (const per of [P2, P3]) for (let i = 1; i < 8; i++) if (ie[per[i]] < ie[per[i - 1]]) { creux++; lesCreux.push(per[i]); }
+  const k = Object.keys(en), x = k.map((e) => en[e]), y = k.map((e) => ie[e]), mx = x.reduce((a, b) => a + b, 0) / k.length, my = y.reduce((a, b) => a + b, 0) / k.length;
+  let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < k.length; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) * (x[i] - mx); syy += (y[i] - my) * (y[i] - my); }
+  const r = sxy / Math.sqrt(sxx * syy), table = P.grandeur === 0 ? en : ie, maxi = Math.max(...Object.values(table)), pts = [];
+  [P2, P3].forEach((per, j) => per.forEach((e, i) => { if (table[e] !== undefined) pts.push([(i + 1) / 8, table[e] / maxi, j + 2]); }));
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const [ra, va, pa] = pts[l % pts.length], o = 3 * l; brut[o] = ra; brut[o + 1] = va; brut[o + 2] = pa; }
+  return { D: 3, brut, nuage: true, unite: 'Pauling', invariants: {
+    electronegativite: { mesure: ecarts, formule: 0, correlationIonisation: r, note: 'steps along periods 2 and 3 where electronegativity does not rise, or columns where it does not fall from period 2 to 3' },
+    temoin: { mesure: creux, formule: 0, creuxIonisation: lesCreux.join(' '), note: 'witness: ionization energy does NOT rise at every step: it dips at B, O, Al and S, although it tracks electronegativity closely overall' } } };
+}
+
 export const COLONNES = Object.freeze({
+  electronegativite: { colonnes: ['place in its period / 8', 'chosen quantity / its largest value', 'period 2 or 3 (label)'], memeLongueur: [], autres: [0, 1, 2] },
   arrhenius: { colonnes: ['time / 3600 s', 'H2 left / H2 at start', 'share turned into HI (label)'], memeLongueur: [], autres: [0, 1, 2] },
   pileDaniell: { colonnes: ['time (steps / 600)', 'cell voltage E / E0', 'log10 of the ratio Q (label)'], memeLongueur: [], autres: [0, 1, 2] },
   geometrieVSEPR: { colonnes: ['x (bond lengths)', 'y (same)', 'z (same)'], memeLongueur: [[0, 1, 2]], autres: [] },
@@ -405,9 +435,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'arrhenius', nom: 'How heat speeds up a reaction (Arrhenius law)', science: 'Chemical kinetics', D: 3, nuage: true, params: { celsius: 380, concH2: 0.1 },
     bornes: { celsius: [300, 450], concH2: [0.01, 1] },
     phrase: 'A visualisation of the Arrhenius law on hydrogen and iodine forming hydrogen iodide: two published rate measurements give the activation energy, and the reaction is run for one hour at the chosen temperature. A little more heat makes it much faster. The classroom rule that rates double every 10 degrees does not hold here: that is the witness.' },
+  { id: 'electronegativite', nom: 'Electronegativity across the periodic table', science: 'Chemistry', D: 3, nuage: true, params: { grandeur: 0 },
+    bornes: { grandeur: [0, 1] },
+    phrase: 'A visualisation of electronegativity (Pauling scale, PubChem) for the second and third rows of the periodic table: it rises at every step from left to right and falls from one row to the next. Ionization energy follows it closely overall, yet it drops at boron, oxygen, aluminium and sulfur: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [], geometrieVSEPR: ['molecule'], pileDaniell: [], arrhenius: [] };
-const FONCTIONS = { arrhenius, pileDaniell, geometrieVSEPR, titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
+export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [], geometrieVSEPR: ['molecule'], pileDaniell: [], arrhenius: [], electronegativite: ['grandeur'] };
+const FONCTIONS = { electronegativite, arrhenius, pileDaniell, geometrieVSEPR, titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

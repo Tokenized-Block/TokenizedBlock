@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-chimie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible', 'geometrieVSEPR', 'pileDaniell', 'arrhenius'];
+const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible', 'geometrieVSEPR', 'pileDaniell', 'arrhenius', 'electronegativite'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const aRef = (k1, t) => Math.exp(-k1 * t);
@@ -58,7 +58,7 @@ function suite(T, bavard = false) {
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
   ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
-    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw', 'angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3', 'NA', 'kB', 'e', 'E0Cu', 'E0Zn', 'T1arrhenius', 'k1arrhenius', 'T2arrhenius', 'k2arrhenius']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw', 'angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3', 'NA', 'kB', 'e', 'E0Cu', 'E0Zn', 'T1arrhenius', 'k1arrhenius', 'T2arrhenius', 'k2arrhenius', 'electronegativite', 'ionisation']); for (const v of Object.values(T.SOURCES)) assert.ok((v.valeur === v.lu || v.valeur === Number(v.lu)) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -183,6 +183,18 @@ function suite(T, bavard = false) {
     const fin = R.brut[3 * (R.n - 1) + 1], tFin = R.brut[3 * (R.n - 1)] * 3600; assert.ok(Math.abs(fin - 1 / (1 + c0 * k * tFin)) < 1e-6, 'fin de courbe ' + fin);
     return 'k = ' + I.arrhenius.kCurseur.toExponential(4);
   });
+  /* game227 : electronegativite - reference : valeurs PubChem (codex 22 + CSV relu) ; correlation refaite ICI ; creux B O Al S */
+  ok('electronegativite : PubChem Li 0.98 F 3.98 Cl 3.16, ionisation F 17.423, correlation 0.9585', () => {
+    const en = T.SOURCES.electronegativite.valeur, ie = T.SOURCES.ionisation.valeur; assert.ok(en.includes('Li:0.98') && en.includes('F:3.98') && en.includes('Cl:3.16') && ie.includes('F:17.423') && !en.includes('Ne:'), en);
+    const e = Object.fromEntries(en.split(' ').map((x) => x.split(':'))), i = Object.fromEntries(ie.split(' ').map((x) => x.split(':'))), k = Object.keys(e), xs = k.map((z) => +e[z]), ys = k.map((z) => +i[z]);
+    const mx = xs.reduce((a, b) => a + b) / k.length, my = ys.reduce((a, b) => a + b) / k.length; let a = 0, b = 0, c = 0; for (let j = 0; j < k.length; j++) { a += (xs[j] - mx) * (ys[j] - my); b += (xs[j] - mx) ** 2; c += (ys[j] - my) ** 2; }
+    assert.equal((a / Math.sqrt(b * c)).toFixed(4), '0.9585'); return 'ok'; });
+  for (const p of [{}, { grandeur: 1 }]) ok(`electronegativite ${JSON.stringify(p)} : periodes, colonnes, correlation, creux, dessin`, () => {
+    const R = S('electronegativite', p), I = R.invariants;
+    assert.ok(I.electronegativite.mesure === 0 && I.electronegativite.correlationIonisation.toFixed(4) === '0.9585' && I.temoin.mesure === 4 && I.temoin.creuxIonisation === 'B O Al S', JSON.stringify(I));
+    const nb = new Set(); for (let q = 0; q < R.n; q++) nb.add(R.brut[3 * q] + '/' + R.brut[3 * q + 2]); assert.equal(nb.size, R.params.grandeur === 0 ? 14 : 16, 'elements dessines');
+    return 'ok';
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation, gaz, vitesse moyenne)', () => {
     const zs = { picB: [], partB: [], relaxation: [], gaz: [], vitesse: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation));
@@ -243,6 +255,11 @@ const MUTANTS = [
   ['arrhenius : Ea sans R', 'const Ea = R * lnD(k2 / k1) / (1 / T1 - 1 / T2),', 'const Ea = lnD(k2 / k1) / (1 / T1 - 1 / T2),'],
   ['arrhenius : ordre 1 au lieu de 2', 'g = (c) => -k * c * c, pts = [];', 'g = (c) => -k * c, pts = [];'],
   ['arrhenius : temoin sur 20 degres', 'const temoin = kDe(T1 + 10) / kDe(T1);', 'const temoin = kDe(T1 + 20) / kDe(T1);'],
+  /* « colonnes non controlees » serait EQUIVALENT (les vraies valeurs respectent la regle) : on mute la grandeur controlee */
+  ['electronegativite : montee controlee sur l ionisation', 'for (let i = 1; i < 7; i++) if (!(en[per[i]] > en[per[i - 1]])) ecarts++;', 'for (let i = 1; i < 7; i++) if (!(ie[per[i]] > ie[per[i - 1]])) ecarts++;'],
+  ['electronegativite : creux comptes en hausse', 'if (ie[per[i]] < ie[per[i - 1]]) { creux++;', 'if (ie[per[i]] > ie[per[i - 1]]) { creux++;'],
+  ['electronegativite : correlation sans racine', 'const r = sxy / Math.sqrt(sxx * syy),', 'const r = sxy / (sxx * syy),'],
+  ['electronegativite : dessin toujours en electronegativite', 'table = P.grandeur === 0 ? en : ie,', 'table = en,'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (chaine)', 'rng = mulberry32(P.graine), T = 5', 'rng = Math.random, T = 5'],
 ];
