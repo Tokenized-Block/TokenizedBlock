@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game175 (idee : codex Grok Bot) */
+  bale: {
+    titre: 'The Basel problem (1 + 1/4 + 1/9 + ... = pi^2/6)',
+    enUnePhrase: 'Add one over every square number: the total creeps up to pi squared over six and never reaches it.',
+    colonnes: ['one over the number of terms', 'value', 'sum, limit, or band'],
+    aRegarder: ['The dots climb towards the line pi^2/6 without ever touching it.', 'The gap is always between 1/(n+1) and 1/n : checked for every n.', 'Without the squares, 1 + 1/2 + 1/3 + ... passes pi^2/6 after three terms and never stops.'],
+    fin: null,
+  },
   /* game174 (idee : codex Grok Bot) */
   morley: {
     titre: 'Morley\'s theorem (cut every angle in three)',

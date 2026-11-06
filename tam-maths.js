@@ -1165,7 +1165,33 @@ function morley(P0, n) {
     temoin: { mesure: spreadQ, note: 'witness: cutting the angles in FOUR instead of three : relative spread of the three sides (not 0 : not equilateral)' } } };
 }
 
+// ---------- 32 : le probleme de Bale, 1 + 1/4 + 1/9 + ... = pi^2/6 (idee et valeurs : codex Grok Bot ; Daners, preuve elementaire, lue par Grok) ----------
+// Les sommes partielles S_n = 1 + 1/4 + ... + 1/n^2 montent vers pi^2/6 sans jamais l atteindre. Exact ici :
+//   S_n en FRACTIONS (BigInt) pour n <= 30 (S_10 = 1968329/1270080, valeurs de Grok) ;
+//   l encadrement du reste 1/(n+1) < pi^2/6 - S_n < 1/n (derive : 1/(k(k+1)) < 1/k^2 < 1/(k(k-1)), sommes telescopiques) verifie pour
+//   CHAQUE n jusqu au curseur (S_n en somme compensee de Kahan).
+// Temoin : la serie des 1/k (sans le carre) depasse pi^2/6 des n = 3 (1 + 1/2 + 1/3 = 11/6) et ne s arrete jamais : elle diverge.
+// Dessin (vue de face) : les points (1/n, S_n) (0), la limite pi^2/6 (1), la bande de l encadrement (2).
+const BALE_PI2_6 = PI * PI / 6;
+function baleFraction(n) { let num = 0n, den = 1n; const g = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
+  for (let k = 1n; k <= BigInt(n); k++) { const d = k * k; num = num * d + den; den = den * d; const q = g(num, den); num /= q; den /= q; } return num + '/' + den; }
+function bale(P, n) {
+  const N = P.termes; let horsBornes = 0; const S = new Float64Array(N + 1);
+  let s = 0, comp = 0; /* somme compensee (Kahan) : erreur de l ordre de l epsilon, pas n x epsilon */
+  for (let m = 1; m <= N; m++) { const y = 1 / (m * m) - comp, t = s + y; comp = (t - s) - y; s = t; S[m] = s; const r = BALE_PI2_6 - s; if (!(1 / (m + 1) < r && r < 1 / m)) horsBornes++; }
+  let h = 0, depasse = null; for (let k = 1; k <= 10 && depasse === null; k++) { h += 1 / k; if (h > BALE_PI2_6) depasse = k; }
+  /* abscisse 1/n (de 1 vers 0) : S_n ~ pi^2/6 - 1/n y est presque une droite, et les deux colonnes restent de la meme taille */
+  const brut = new Float64Array(n * 3), tiers = Math.ceil(n / 3);
+  for (let l = 0; l < n; l++) { const o = 3 * l, j = 1 + Math.floor((l % tiers) * N / tiers), quoi = Math.floor(l / tiers);
+    brut[o] = 1 / j; brut[o + 1] = quoi === 0 ? S[j] : quoi === 1 ? BALE_PI2_6 : BALE_PI2_6 - 1 / j + (l % 2 ? 1 / j - 1 / (j + 1) : 0); brut[o + 2] = quoi; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet', invariants: {
+    encadre: { mesure: horsBornes, formule: 0, termes: N, note: 'values of n from 1 to the slider where 1/(n+1) < pi^2/6 - S_n < 1/n fails' },
+    sommeExacte: { mesure: baleFraction(Math.min(N, 30)), formule: Math.min(N, 30) === 10 ? '1968329/1270080' : null, rangFraction: Math.min(N, 30), note: 'S_n as an exact fraction (n up to 30)' },
+    temoin: { mesure: depasse === null ? NaN : depasse, formule: 3, note: 'witness: without the square, 1 + 1/2 + 1/3 = 11/6 is already above pi^2/6 ; that series grows without end' } } };
+}
+
 export const COLONNES = Object.freeze({
+  bale: { colonnes: ['1/n', 'value', 'what (label; 0 = S_n, 1 = pi^2/6, 2 = the band 1/(n+1) .. 1/n under it)'], memeLongueur: [], autres: [0, 1, 2] },
   morley: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = trisectors, 2 = Morley triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   eulerSolides: { colonnes: ['x', 'y', 'z (the edges of the solid)'], memeLongueur: [[0, 1, 2]], autres: [] },
   marcheAutoEvitante: { colonnes: ['x (lattice)', 'y (lattice)', 'step number (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1293,9 +1319,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'morley', nom: 'Morley\'s trisector theorem', science: 'Geometry', D: 3, nuage: true, params: { angleA: 70, angleB: 45 },
     bornes: { angleA: [15, 120], angleB: [15, 55] },
     phrase: 'A visualisation of Morley\'s theorem: cut each angle of any triangle into three equal parts, and the trisectors next to each side meet in three points that always form an equilateral triangle, of side 8 R sin(A/3) sin(B/3) sin(C/3). Cutting the angles in four instead breaks it.' },
+  { id: 'bale', nom: 'The Basel problem (1 + 1/4 + 1/9 + ... = pi^2/6)', science: 'Number theory', D: 3, nuage: true, params: { termes: 100 },
+    bornes: { termes: [1, 2000] },
+    phrase: 'A visualisation of the Basel problem: the sums 1 + 1/4 + 1/9 + ... + 1/n^2 climb towards pi^2/6. They are computed as exact fractions, and for every n the gap to pi^2/6 is checked to lie strictly between 1/(n+1) and 1/n. The plain sum 1 + 1/2 + 1/3 + ..., which never stops growing, is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [] };
-const FONCTIONS = { morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'] };
+const FONCTIONS = { bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

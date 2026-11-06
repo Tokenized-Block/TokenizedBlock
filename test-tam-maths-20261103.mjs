@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -676,6 +676,19 @@ function suite(T, bavard = false, seul = null) {
     let mal = 0, deux = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, x = b[o], y = b[o + 1], e = b[o + 2]; if (e === 0 && Math.abs(Math.hypot(x, y) - 1) > 1.0 && false) mal++; if (e === 2) deux++; if (![0, 1, 2].includes(e) || !Number.isFinite(x) || !Number.isFinite(y) || Math.hypot(x, y) > 1 + 1e-9) mal++; }
     assert.ok(mal === 0 && deux > 0, mal + ' points faux'); return 'cote ' + I.webster.cote.toFixed(12);
   });
+  /* game175 : Bale — reference INDEPENDANTE : sommes partielles par recurrence en fractions (num/den reduits par un autre pgcd) ;
+   *   valeurs de Grok Bot S_1..S_10 ; encadrement recontrole en flottants sommes dans l autre sens */
+  const baleRef = (n) => { let a = 0n, b = 1n; const out = []; for (let k = 1n; k <= BigInt(n); k++) { a = a * k * k + b; b = b * k * k; let x = a, y = b; while (y) [x, y] = [y, x % y]; a /= x; b /= x; out.push(a + '/' + b); } return out; };
+  ok('bale : S_1..S_10 exacts = valeurs de Grok Bot', () => { assert.deepEqual(baleRef(10), ['1/1', '5/4', '49/36', '205/144', '5269/3600', '5369/3600', '266681/176400', '1077749/705600', '9778141/6350400', '1968329/1270080']); return 'ok'; });
+  for (const p of [...extremes(sys('bale')), { termes: 10 }, { termes: 30 }, { termes: 777 }]) ok(`bale ${JSON.stringify(p)} : encadrement pour chaque n, fraction exacte, temoin`, () => {
+    const R = S('bale', p), I = R.invariants, N = R.params.termes, rg = Math.min(N, 30);
+    assert.ok(I.encadre.mesure === 0 && I.encadre.termes === N, JSON.stringify(I.encadre));
+    assert.equal(I.sommeExacte.mesure.replace(/^(\d+)$/, '$1/1'), baleRef(rg)[rg - 1].replace(/^(\d+)$/, '$1/1'));
+    if (rg === 10) assert.equal(I.sommeExacte.formule, '1968329/1270080');
+    let pire = 0; for (let m = 1; m <= Math.min(N, 300); m++) { let s = 0; for (let k = 1; k <= m; k++) s += 1 / (k * k); const r = Math.PI ** 2 / 6 - s; assert.ok(1 / (m + 1) < r && r < 1 / m, 'n = ' + m); pire = Math.max(pire, m); }
+    assert.ok(I.temoin.mesure === 3 && I.temoin.formule === 3, 'temoin ' + JSON.stringify(I.temoin));
+    return 'S_' + rg + ' = ' + I.sommeExacte.mesure;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -865,6 +878,10 @@ const MUTANTS = [
   ['morley : Webster avec 4 R', 'const s = 8 * sinD(T.al[0] / 3)', 'const s = 4 * sinD(T.al[0] / 3)'],
   ['morley : angle voisin mal choisi', 'rot(dv, -sens * al[(i + 1) % 3] / k)', 'rot(dv, -sens * al[(i + 2) % 3] / k)'],
   ['morley : temoin en trois', 'Q = morleyPoints(A, B, 4)', 'Q = morleyPoints(A, B, 3)'],
+  ['bale : borne basse 1/n', 'if (!(1 / (m + 1) < r && r < 1 / m)) horsBornes++;', 'if (!(1 / m < r && r < 1 / m)) horsBornes++;'],
+  ['bale : fraction sans le carre', 'const d = k * k; num = num * d + den; den = den * d;', 'const d = k; num = num * d + den; den = den * d;'],
+  ['bale : pi^2/8', 'const BALE_PI2_6 = PI * PI / 6;', 'const BALE_PI2_6 = PI * PI / 8;'],
+  ['bale : temoin avec le carre', 'h += 1 / k; if (h > BALE_PI2_6) depasse = k;', 'h += 1 / (k * k); if (h > BALE_PI2_6) depasse = k;'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -879,7 +896,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

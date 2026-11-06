@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game175 */
+  rangFraction: 'n of the exact fraction',
   /* game174 */
   cote: 'side by Webster s formula', troisAngles: 'angles A, B, C (degrees, measured)',
   /* game172 */
@@ -455,6 +457,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game175 */
+  encadre: 'n where 1/(n+1) < pi^2/6 - S_n < 1/n fails', sommeExacte: 'S_n as an exact fraction',
   /* game174 */
   webster: 'Morley sides vs 8 R sin(A/3) sin(B/3) sin(C/3) (largest relative gap)',
   /* game172 */
