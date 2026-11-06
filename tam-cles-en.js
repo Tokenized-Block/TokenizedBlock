@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game199 */
+  stirlingBell: 'Enumerated partitions vs recurrence, and Bell sums vs the Aitken triangle', ligneHuit: 'S(8, k) for k = 1..8', bellOnze: 'Bell(0..10)', partitions: 'Partitions counted by number of blocks',
   /* game198 */
   routineKaprekar: 'Starts that do not settle on one single fixed point', pmax: 'Most steps needed', distribution: 'How many starts need each number of steps',
   /* game197 */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game199 (idee : codex Grok Bot) */
+  stirlingBell: {
+    titre: 'Stirling and Bell numbers',
+    enUnePhrase: 'How many ways can you split a group of friends into teams? Every way is listed and counted here.',
+    colonnes: ['which friend', 'which team they are in', 'how many teams exist so far'],
+    aRegarder: ['Each friend joins an existing team or starts a new one.', 'The counts per number of teams add up to the Bell number.', 'If the teams have names, every split is counted twice.'],
+    fin: null,
+  },
   /* game198 (idee : codex Grok Bot) */
   routineKaprekar: {
     titre: 'Kaprekar routine',
