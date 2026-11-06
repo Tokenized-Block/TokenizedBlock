@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus', 'zeckendorf', 'theoremeLucas', 'calkinWilf', 'toursHanoi'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus', 'zeckendorf', 'theoremeLucas', 'calkinWilf', 'toursHanoi', 'regarderDire'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -928,6 +928,15 @@ function suite(T, bavard = false, seul = null) {
     let mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, i = Math.round(R.brut[o] * I.hanoi.coups) - 1; if (Math.round(R.brut[o + 1] * N) !== it.out[i][0] || R.brut[o + 2] !== it.out[i][1]) mal++; }
     assert.equal(mal, 0, 'dessin vs solution iterative'); return N + ' disques : ' + I.hanoi.coups + ' coups';
   });
+  /* game194 : regarder et dire — reference INDEPENDANTE par EXPRESSION REGULIERE (runs captures par /(\\d)\\1* /g) ; valeurs de Grok Bot (A005341) */
+  const lasRef = (s) => s.replace(/(\d)\1*/g, (m) => m.length + m[0]);
+  ok('regarderDire : expression reguliere = valeurs de Grok Bot (longueurs 1..15, termes 1..7)', () => { const T = ['1']; for (let k = 1; k < 15; k++) T.push(lasRef(T[k - 1]));
+    assert.deepEqual(T.map((t) => t.length), [1, 2, 2, 4, 6, 6, 8, 10, 14, 20, 26, 34, 46, 62, 78]); assert.deepEqual(T.slice(0, 7), ['1', '11', '21', '1211', '111221', '312211', '13112221']); return 'ok'; });
+  for (const p of [...extremes(sys('regarderDire')), { rangs: 25 }]) ok(`regarderDire ${JSON.stringify(p)} : chiffres, 333, longueurs de Grok, temoin`, () => {
+    const R = S('regarderDire', p), I = R.invariants;
+    assert.ok(I.regarderDire.mesure === 0 && I.regarderDire.longueurs === '1, 2, 2, 4, 6, 6, 8, 10, 14, 20, 26, 34, 46, 62, 78' && I.regarderDire.septieme === '13112221' && I.temoin.mesure === '22', JSON.stringify(I));
+    return 'ok';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -1196,6 +1205,10 @@ const MUTANTS = [
   ['hanoi : disque 1 + ctz(m) - 1', 'if (disque !== z + 1 || bits !== 1 || p !== z) horsGray++;', 'if (disque !== z || bits !== 1 || p !== z) horsGray++;'],
   ['hanoi : Gray sans le decalage', 'const x = (m ^ (m >> 1)) ^ ((m - 1) ^ ((m - 1) >> 1));', 'const x = m ^ (m - 1);'],
   ['hanoi : temoin sans multi-bits', 'if (c > 1) binaireMulti++; });', 'if (c > 2) binaireMulti++; });'],
+  ['regarder : chiffre puis compte', 'r.push((j - i) + s[i]); i = j; }', 'r.push(s[i] + (j - i)); i = j; }'],
+  /* « 333 » -> « 3333 » serait EQUIVALENT (aucun des deux n apparait) : on mute la garde des chiffres dans le sens qui DOIT rougir */
+  ['regarder : chiffre 3 compte comme interdit', 'if (/[4-9]/.test(t)) horsChiffres++;', 'if (/[3-9]/.test(t)) horsChiffres++;'],
+  ['regarder : temoin depuis 23', "let g = '22'; for (let k = 0; k < 10; k++) g = lasSuivant(g);", "let g = '23'; for (let k = 0; k < 10; k++) g = lasSuivant(g);"],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -1210,7 +1223,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { hanoi: ['toursHanoi'], calkin: ['calkinWilf'], lucas: ['theoremeLucas'], zeckendorf: ['zeckendorf'], josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { regarder: ['regarderDire'], hanoi: ['toursHanoi'], calkin: ['calkinWilf'], lucas: ['theoremeLucas'], zeckendorf: ['zeckendorf'], josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

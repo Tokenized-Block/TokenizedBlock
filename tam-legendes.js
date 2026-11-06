@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game194 (idee : codex Grok Bot) */
+  regarderDire: {
+    titre: 'The look-and-say sequence',
+    enUnePhrase: 'Read the number aloud to get the next one: 1, one 1, two 1s, one 2 one 1, ...',
+    colonnes: ['which term', 'how long (log scale)', 'how many different digits'],
+    aRegarder: ['The terms keep growing, by about a third each time.', 'Only the digits 1, 2 and 3 ever appear, and never three 3s in a row.', 'Start from 22 instead and nothing ever changes.'],
+    fin: null,
+  },
   /* game193 (idee : codex Grok Bot) */
   toursHanoi: {
     titre: 'Towers of Hanoi (and the Gray code)',

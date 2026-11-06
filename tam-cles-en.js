@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game194 */
+  regarderDire: 'Terms with a digit above 3 or the block 333 (measured)',
   /* game193 */
   hanoi: 'Moves vs 2^n - 1, illegal moves, tower not arrived', gray: 'Moves that do not match the Gray code',
   /* game192 */
