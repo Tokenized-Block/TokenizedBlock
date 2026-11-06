@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game223 */
+  mareeVivesEaux: 'Daily delay, spring-tide period or spring/neap ratio off the M2 + S2 prediction', periodeM2Heures: 'Lunar tide period M2 (h)', retardMinutes: 'Measured daily delay of high water (min)', retardTheoMinutes: 'Predicted daily delay (min)', vivesEauxJours: 'Measured time between spring tides (days)', vivesEauxTheoJours: 'Predicted time between spring tides (days)', rapportVivesMortes: 'Highest high water / lowest high water',
   /* game222 */
   arrhenius: 'Rate off the published points, or integration off the exact second-order curve', Ea: 'Activation energy (J/mol)', A: 'Pre-exponential factor (L/(mol s))', kCurseur: 'Rate constant at the chosen temperature (L/(mol s))',
   /* game221 */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game223 (idee : codex 21, sous-agent Claude) */
+  mareeVivesEaux: {
+    titre: 'Tides: spring and neap',
+    enUnePhrase: 'The Moon and the Sun each pull a tide; when they line up the tides are biggest.',
+    colonnes: ['time', 'height of the water', 'which day'],
+    aRegarder: ['High tide comes back about every 12 hours 25 minutes, not 12 hours.', 'Every two weeks or so the tides grow (spring) then shrink (neap).', 'Turn the solar wave down and the difference between spring and neap fades.'],
+    fin: null,
+  },
   /* game222 (idee : codex Grok Bot) */
   arrhenius: {
     titre: 'How heat speeds up a reaction',
