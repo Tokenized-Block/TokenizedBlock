@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game220 */
+  loiZipf: 'Published counts not strictly decreasing with rank', penteR: 'Fitted slope on the chosen ranks', pente30: 'Fitted slope on ranks 1 to 30', sommeTrente: 'Total count of the 30 words',
   /* game219 */
   atmosphereStandard: 'Points where step-by-step pressure leaves the closed formula', quatreAltitudes: 'T (K) / p (Pa) at 0, 5, 11 and 20 km', pression11: 'Pressure at 11 km (Pa)', Hgeopotentiel: 'Geopotential height of 5 km geometric (m)',
   /* game218 */

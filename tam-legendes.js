@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game220 (idee : codex Grok Bot) */
+  loiZipf: {
+    titre: "Zipf's law on real web text",
+    enUnePhrase: 'The most common word is about twice as common as the second, three times the third... roughly.',
+    colonnes: ['rank of the word (log scale)', 'how often it appears (log scale)', 'how far it sits from the straight line'],
+    aRegarder: ['On log scales the words fall almost on a straight line.', '"the" alone is more than 2 percent of all the words in the corpus.', 'The slope is not exactly -1, and it moves with how many words you keep.'],
+    fin: null,
+  },
   /* game219 (idee : codex Grok Bot) */
   atmosphereStandard: {
     titre: 'The standard atmosphere',
