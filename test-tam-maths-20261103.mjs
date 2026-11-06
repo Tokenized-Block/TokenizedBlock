@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -689,6 +689,26 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(I.temoin.mesure === 3 && I.temoin.formule === 3, 'temoin ' + JSON.stringify(I.temoin));
     return 'S_' + rg + ' = ' + I.sommeExacte.mesure;
   });
+  /* game176 : Simson — reference INDEPENDANTE en flottants (projection orthogonale par produit scalaire, centre par la formule du
+   *   circumcentre), et le controle EXACT de Grok Bot : 3-4-5, P = (9/2, 3/2), pieds (18/5, 3/10), (0, 3/2), (9/2, 0) ; P' = (5, 3/2) -> -33/25 */
+  const simRef = (T, P) => { const pied = (U, V) => { const d = [V[0] - U[0], V[1] - U[1]], t = ((P[0] - U[0]) * d[0] + (P[1] - U[1]) * d[1]) / (d[0] ** 2 + d[1] ** 2); return [U[0] + t * d[0], U[1] + t * d[1]]; };
+    const F = [pied(T[1], T[2]), pied(T[2], T[0]), pied(T[0], T[1])]; return { F, aire2: (F[1][0] - F[0][0]) * (F[2][1] - F[0][1]) - (F[1][1] - F[0][1]) * (F[2][0] - F[0][0]) }; };
+  ok('simsonDroite : controle exact de Grok Bot (3-4-5)', () => {
+    const r = simRef([[0, 0], [4, 0], [0, 3]], [4.5, 1.5]); const att = [[18 / 5, 3 / 10], [0, 1.5], [4.5, 0]];
+    assert.ok(r.F.every((f, i) => Math.abs(f[0] - att[i][0]) < 1e-12 && Math.abs(f[1] - att[i][1]) < 1e-12) && Math.abs(r.aire2) < 1e-12, JSON.stringify(r));
+    assert.ok(Math.abs(simRef([[0, 0], [4, 0], [0, 3]], [5, 1.5]).aire2 + 33 / 25) < 1e-12); return 'ok'; });
+  for (const p of [...extremes(sys('simsonDroite')), { taille: 17, corde: -9, graine: 4242 }]) ok(`simsonDroite ${JSON.stringify(p)} : pieds alignes exactement, P sur le cercle, reference flottante, temoin, dessin`, () => {
+    const R = S('simsonDroite', p), I = R.invariants, T = JSON.parse(I.alignes.triangle), val = (t) => { const [u, v] = t.split('/'); return Number(u) / (v ? Number(v) : 1); };
+    assert.ok(I.alignes.exact === '0' && I.alignes.mesure === 0 && I.surCercle.mesure === 0, JSON.stringify(I));
+    const P = I.alignes.point.split(', ').map(val), r = simRef(T, P), echelle = 1 + Math.max(...T.flat().map(Math.abs)) ** 2; assert.ok(Math.abs(r.aire2) < 1e-9 * echelle, 'reference ' + r.aire2);
+    /* P est bien sur le cercle de la reference (circumcentre par la formule) */
+    const [A, B, C] = T, dd = 2 * (A[0] * (B[1] - C[1]) + B[0] * (C[1] - A[1]) + C[0] * (A[1] - B[1])), n2 = (U) => U[0] ** 2 + U[1] ** 2;
+    const O = [(n2(A) * (B[1] - C[1]) + n2(B) * (C[1] - A[1]) + n2(C) * (A[1] - B[1])) / dd, (n2(A) * (C[0] - B[0]) + n2(B) * (A[0] - C[0]) + n2(C) * (B[0] - A[0])) / dd];
+    assert.ok(Math.abs(Math.hypot(P[0] - O[0], P[1] - O[1]) - Math.hypot(A[0] - O[0], A[1] - O[1])) < 1e-9 * Math.sqrt(echelle), 'P hors du cercle');
+    assert.ok(I.temoin.exact !== '0' && Math.abs(I.temoin.mesure) > 0, 'temoin ' + JSON.stringify(I.temoin));
+    let trois = 0, mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, e = R.brut[o + 2]; if (e === 3) trois++; if (![0, 1, 2, 3].includes(e) || !Number.isFinite(R.brut[o])) mal++; }
+    assert.ok(trois > 0 && mal === 0); return 'P = (' + I.alignes.point + ')';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -882,6 +902,10 @@ const MUTANTS = [
   ['bale : fraction sans le carre', 'const d = k * k; num = num * d + den; den = den * d;', 'const d = k; num = num * d + den; den = den * d;'],
   ['bale : pi^2/8', 'const BALE_PI2_6 = PI * PI / 6;', 'const BALE_PI2_6 = PI * PI / 8;'],
   ['bale : temoin avec le carre', 'h += 1 / k; if (h > BALE_PI2_6) depasse = k;', 'h += 1 / (k * k); if (h > BALE_PI2_6) depasse = k;'],
+  ['simson : pied au milieu du cote', 'pieds.push([feuAdd(U[0], feuMul(t, d[0])), feuAdd(U[1], feuMul(t, d[1]))]); }', 'pieds.push([feuAdd(U[0], feuMul(feuF(1n, 2n), d[0])), feuAdd(U[1], feuMul(feuF(1n, 2n), d[1]))]); }'],
+  ['simson : P pris au centre de la corde', 'if (s[0] !== 0n) P = [feuAdd(A[0], s), feuAdd(A[1], feuMul(s, t))]; }', 'if (s[0] !== 0n) P = [feuAdd(A[0], feuMul(feuF(1n, 2n), s)), feuAdd(A[1], feuMul(feuMul(feuF(1n, 2n), s), t))]; }'],
+  ['simson : temoin sur le cercle', 'Q = [feuAdd(O[0], feuMul(feuF(5n, 4n), feuSub(P[0], O[0]))), feuAdd(O[1], feuMul(feuF(5n, 4n), feuSub(P[1], O[1])))]', 'Q = P'],
+  ['simson : centre faux', 'const det = feuSub(feuMul(a1, b2), feuMul(a2, b1)), O = [feuDiv(feuSub(feuMul(c1, b2), feuMul(c2, b1)), det), feuDiv(feuSub(feuMul(a1, c2), feuMul(a2, c1)), det)];', 'const det = feuSub(feuMul(a1, b2), feuMul(a2, b1)), O = [feuDiv(feuSub(feuMul(c1, b2), feuMul(c2, b1)), det), feuAdd(feuE(1), feuDiv(feuSub(feuMul(a1, c2), feuMul(a2, c1)), det))];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -896,7 +920,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

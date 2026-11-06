@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game176 */
+  point: 'the point P',
   /* game175 */
   rangFraction: 'n of the exact fraction',
   /* game174 */
@@ -457,6 +459,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game176 */
+  alignes: 'Twice the area of the three feet (0 = aligned, exact)', surCercle: 'P on the circumscribed circle: |OP|^2 - R^2 (exact)',
   /* game175 */
   encadre: 'n where 1/(n+1) < pi^2/6 - S_n < 1/n fails', sommeExacte: 'S_n as an exact fraction',
   /* game174 */

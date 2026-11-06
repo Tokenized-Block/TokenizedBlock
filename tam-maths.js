@@ -1190,7 +1190,48 @@ function bale(P, n) {
     temoin: { mesure: depasse === null ? NaN : depasse, formule: 3, note: 'witness: without the square, 1 + 1/2 + 1/3 = 11/6 is already above pi^2/6 ; that series grows without end' } } };
 }
 
+// ---------- 33 : la droite de Simson (idee et valeurs : codex Grok Bot ; MathWorld « Simson Line », Cut-the-Knot (Wallace 1797), lus par Grok) ----------
+// D un point P du cercle circonscrit, on abaisse les perpendiculaires aux trois cotes (aux DROITES, prolongees) : les trois pieds sont ALIGNES.
+//   Hors du cercle, ils ne le sont plus (Wallace : le triangle podaire degenere en droite ssi P est sur le cercle).
+// Exact ici, en fractions BigInt : triangle a sommets entiers (graine) ; P = seconde intersection du cercle avec la corde issue de A de pente
+//   rationnelle corde/7 (le cercle passe par A, point rationnel, donc P l est aussi) ; pieds = projections rationnelles ; alignement = aire
+//   signee des trois pieds, exactement 0. Temoin : P repousse hors du cercle (O + 5/4 (P - O)) -> aire non nulle.
+// Dessin (vue de face) : le triangle (0), le cercle (1), les perpendiculaires (2), la droite de Simson (3).
+function simsonPieds(S, P) { const pieds = [];
+  for (let i = 0; i < 3; i++) { const U = S[(i + 1) % 3], V = S[(i + 2) % 3], d = [feuSub(V[0], U[0]), feuSub(V[1], U[1])], w = [feuSub(P[0], U[0]), feuSub(P[1], U[1])];
+    const t = feuDiv(feuAdd(feuMul(w[0], d[0]), feuMul(w[1], d[1])), feuAdd(feuMul(d[0], d[0]), feuMul(d[1], d[1]))); pieds.push([feuAdd(U[0], feuMul(t, d[0])), feuAdd(U[1], feuMul(t, d[1]))]); }
+  return pieds; }
+const simsonAire2 = (F) => feuSub(feuMul(feuSub(F[1][0], F[0][0]), feuSub(F[2][1], F[0][1])), feuMul(feuSub(F[1][1], F[0][1]), feuSub(F[2][0], F[0][0])));
+function simsonDroite(P0, n) {
+  const L = P0.taille, rng = mulberry32(P0.graine); let T = null;
+  while (!T) { const t = [0, 1, 2].map(() => [Math.floor(rng() * (L + 1)), Math.floor(rng() * (L + 1))]); if ((t[1][0] - t[0][0]) * (t[2][1] - t[0][1]) - (t[1][1] - t[0][1]) * (t[2][0] - t[0][0]) !== 0) T = t; }
+  const S = T.map(([x, y]) => [feuE(x), feuE(y)]), [A, B, C] = S;
+  /* centre O : intersection des mediatrices (systeme 2 x 2 en fractions) */
+  const a1 = feuMul(feuE(2), feuSub(B[0], A[0])), b1 = feuMul(feuE(2), feuSub(B[1], A[1])), c1 = feuSub(feuAdd(feuMul(B[0], B[0]), feuMul(B[1], B[1])), feuAdd(feuMul(A[0], A[0]), feuMul(A[1], A[1])));
+  const a2 = feuMul(feuE(2), feuSub(C[0], A[0])), b2 = feuMul(feuE(2), feuSub(C[1], A[1])), c2 = feuSub(feuAdd(feuMul(C[0], C[0]), feuMul(C[1], C[1])), feuAdd(feuMul(A[0], A[0]), feuMul(A[1], A[1])));
+  const det = feuSub(feuMul(a1, b2), feuMul(a2, b1)), O = [feuDiv(feuSub(feuMul(c1, b2), feuMul(c2, b1)), det), feuDiv(feuSub(feuMul(a1, c2), feuMul(a2, c1)), det)];
+  const d2 = (U, V) => feuAdd(feuMul(feuSub(U[0], V[0]), feuSub(U[0], V[0])), feuMul(feuSub(U[1], V[1]), feuSub(U[1], V[1]))), R2 = d2(O, A);
+  /* P = A + s (1, t), s = -2 (A - O).(1, t) / (1 + t^2) ; si la corde est tangente (s = 0), pente suivante */
+  let k = P0.corde, P = null; for (let essai = 0; essai < 4 && !P; essai++, k++) { const t = feuF(BigInt(k), 7n), dd = feuAdd(feuE(1), feuMul(t, t));
+    const s = feuDiv(feuMul(feuE(-2), feuAdd(feuSub(A[0], O[0]), feuMul(t, feuSub(A[1], O[1])))), dd); if (s[0] !== 0n) P = [feuAdd(A[0], s), feuAdd(A[1], feuMul(s, t))]; }
+  const F = simsonPieds(S, P), aire = simsonAire2(F), Q = [feuAdd(O[0], feuMul(feuF(5n, 4n), feuSub(P[0], O[0]))), feuAdd(O[1], feuMul(feuF(5n, 4n), feuSub(P[1], O[1])))], aireQ = simsonAire2(simsonPieds(S, Q));
+  const nb = (q) => [feuNb(q[0]), feuNb(q[1])], segs = [];
+  for (let i = 0; i < 3; i++) segs.push([T[i], T[(i + 1) % 3], 0]);
+  for (let i = 0; i < 3; i++) segs.push([nb(P), nb(F[i]), 2]);
+  const Fn = F.map(nb); let i0 = 0, i1 = 1, dm = -1; for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) { const dv = (Fn[i][0] - Fn[j][0]) ** 2 + (Fn[i][1] - Fn[j][1]) ** 2; if (dv > dm) { dm = dv; i0 = i; i1 = j; } }
+  segs.push([Fn[i0], Fn[i1], 3]);
+  const r = Math.sqrt(feuNb(R2)), on = nb(O), brut = new Float64Array(n * 3), nc = Math.floor(n / 4);
+  for (let l = 0; l < n; l++) { const o = 3 * l;
+    if (l < nc) { const a = 2 * PI * l / nc; brut[o] = on[0] + r * cosD(a); brut[o + 1] = on[1] + r * sinD(a); brut[o + 2] = 1; continue; }
+    const t = (l - nc) * segs.length / (n - nc), j = Math.floor(t), u = t - j, sg = segs[j]; brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
+  return { D: 3, brut, nuage: true, unite: 'cases de la grille', invariants: {
+    alignes: { mesure: feuNb(aire), formule: 0, exact: feuTexte(aire), triangle: JSON.stringify(T), point: feuTexte(P[0]) + ', ' + feuTexte(P[1]), note: 'twice the signed area of the three feet, exact (0 = on one line)' },
+    surCercle: { mesure: feuNb(feuSub(d2(O, P), R2)), formule: 0, note: '|OP|^2 - R^2 in exact fractions (P is on the circumscribed circle)' },
+    temoin: { mesure: feuNb(aireQ), exact: feuTexte(aireQ), note: 'witness: P pushed outside the circle (O + 5/4 (P - O)) : the three feet are no longer on one line' } } };
+}
+
 export const COLONNES = Object.freeze({
+  simsonDroite: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = circle, 2 = perpendiculars, 3 = Simson line)'], memeLongueur: [[0, 1]], autres: [2] },
   bale: { colonnes: ['1/n', 'value', 'what (label; 0 = S_n, 1 = pi^2/6, 2 = the band 1/(n+1) .. 1/n under it)'], memeLongueur: [], autres: [0, 1, 2] },
   morley: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = trisectors, 2 = Morley triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   eulerSolides: { colonnes: ['x', 'y', 'z (the edges of the solid)'], memeLongueur: [[0, 1, 2]], autres: [] },
@@ -1322,9 +1363,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'bale', nom: 'The Basel problem (1 + 1/4 + 1/9 + ... = pi^2/6)', science: 'Number theory', D: 3, nuage: true, params: { termes: 100 },
     bornes: { termes: [1, 2000] },
     phrase: 'A visualisation of the Basel problem: the sums 1 + 1/4 + 1/9 + ... + 1/n^2 climb towards pi^2/6. They are computed as exact fractions, and for every n the gap to pi^2/6 is checked to lie strictly between 1/(n+1) and 1/n. The plain sum 1 + 1/2 + 1/3 + ..., which never stops growing, is the witness.' },
+  { id: 'simsonDroite', nom: 'The Simson line', science: 'Geometry', D: 3, nuage: true, params: { taille: 12, corde: 3, graine: 1 },
+    bornes: { taille: [4, 30], corde: [-30, 30], graine: [1, 1000000] },
+    phrase: 'A visualisation of the Simson line: from any point on the circle through the corners of a triangle, drop perpendiculars to the three sides; their feet always lie on one straight line. Everything is computed in exact fractions, so the line is checked exactly; a point just outside the circle breaks it.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'] };
-const FONCTIONS = { bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'] };
+const FONCTIONS = { simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
