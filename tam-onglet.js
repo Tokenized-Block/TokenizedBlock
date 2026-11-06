@@ -119,6 +119,8 @@ THEMES.maths.push('ramseyR33');
 THEMES.maths.push('pascalHexagramme');
 /* game181 : le theoreme de Ptolemee (idee : codex Grok Bot) */
 THEMES.maths.push('ptolemee');
+/* game182 : sommes de carres (idee : codex Grok Bot) */
+THEMES.maths.push('sommesCarres');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1229,6 +1231,8 @@ export function monter(racine, ctx = {}) {
     'pascalHexagramme',
     /* game181 */
     'ptolemee',
+    /* game182 */
+    'sommesCarres',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

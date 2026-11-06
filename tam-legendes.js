@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game182 (idee : codex Grok Bot) */
+  sommesCarres: {
+    titre: 'Sums of squares (Jacobi)',
+    enUnePhrase: 'How many ways can a number be written as a sum of four squares? Its divisors tell you exactly.',
+    colonnes: ['a', 'b', 'a squared plus b squared'],
+    aRegarder: ['Each colour is one circle of whole points: the ways to write m as a sum of two squares.', 'Every way to write each number up to n is counted, and matches the divisor formulas.', 'Forgetting the rule about divisors by 4 breaks the count from n = 4.'],
+    fin: null,
+  },
   /* game181 (idee : codex Grok Bot) */
   ptolemee: {
     titre: 'Ptolemy\'s theorem (four points on a circle)',

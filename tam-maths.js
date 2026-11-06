@@ -1386,7 +1386,29 @@ function ptolemee(P, n) {
     temoin: { mesure: W.ecart, note: 'witness: C moved off the circle (x 6/5) : AB.CD + AD.BC - AC.BD, now strictly positive (Ptolemy s inequality)' } } };
 }
 
+// ---------- 39 : sommes de carres, Jacobi (4 carres) et 2 carres (idee et valeurs : codex Grok Bot ; MathWorld « Sum of Squares Function », Wikipedia « Jacobi s four-square theorem », lus par Grok) ----------
+// r4(n) = nombre d ecritures n = a^2 + b^2 + c^2 + d^2 (entiers de signe quelconque, l ordre compte) = 8 x (somme des diviseurs d de n que 4 ne divise pas).
+// r2(n) = nombre d ecritures n = a^2 + b^2 = 4 x (diviseurs = 1 mod 4 moins diviseurs = 3 mod 4).
+// Exact ici : r4 et r2 COMPTES par enumeration de tous les (a, b, c, d) pour chaque m de 1 a n, compares aux deux formules par diviseurs.
+// Temoin : sans la restriction « 4 ne divise pas d », 8 x sigma(n) se trompe des n = 4 (56 contre 24).
+// Dessin (vue de face) : tous les points entiers (a, b) avec a^2 + b^2 <= n, etiquette = a^2 + b^2 (les cercles de rayon racine de m).
+function sommesCarres(P, n) {
+  const N = P.entier, R = Math.floor(Math.sqrt(N)), r4 = new Array(N + 1).fill(0), r2 = new Array(N + 1).fill(0);
+  for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) { const s2 = a * a + b * b; if (s2 > N) continue; r2[s2]++;
+    for (let c = -R; c <= R; c++) { const s3 = s2 + c * c; if (s3 > N) continue; for (let d = -R; d <= R; d++) { const s4 = s3 + d * d; if (s4 <= N) r4[s4]++; } } }
+  let e4 = 0, e2 = 0, premier = null;
+  for (let m = 1; m <= N; m++) { let j = 0, s = 0, d1 = 0, d3 = 0; for (let d = 1; d <= m; d++) if (m % d === 0) { s += d; if (d % 4) j += d; if (d % 4 === 1) d1++; if (d % 4 === 3) d3++; }
+    if (r4[m] !== 8 * j) e4++; if (r2[m] !== 4 * (d1 - d3)) e2++; if (premier === null && r4[m] !== 8 * s) premier = m; }
+  const pts = []; for (let a = -R; a <= R; a++) for (let b = -R; b <= R; b++) if (a * a + b * b <= N) pts.push([a, b, a * a + b * b]);
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const pc = pts[Math.floor(l * pts.length / n)], o = 3 * l; brut[o] = pc[0]; brut[o + 1] = pc[1]; brut[o + 2] = pc[2]; }
+  return { D: 3, brut, nuage: true, unite: 'points entiers', invariants: {
+    jacobiQuatre: { mesure: e4, formule: 0, r4n: r4[N], note: 'values m = 1..n where r4(m) counted one by one differs from 8 x (sum of the divisors of m not divisible by 4)' },
+    deuxCarres: { mesure: e2, formule: 0, r2n: r2[N], note: 'values m = 1..n where r2(m) counted one by one differs from 4 x (divisors = 1 mod 4 minus divisors = 3 mod 4)' },
+    temoin: { mesure: premier === null ? NaN : premier, formule: 4, absente: 'n below 4', note: 'witness: without « 4 does not divide d », 8 x sigma(m) is wrong from m = 4 (56 instead of 24)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  sommesCarres: { colonnes: ['a', 'b', 'a^2 + b^2 (label)'], memeLongueur: [[0, 1]], autres: [2] },
   ptolemee: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = quadrilateral, 2 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
   pascalHexagramme: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = hexagon, 2 = extended sides and the Pascal line)'], memeLongueur: [[0, 1]], autres: [2] },
   ramseyR33: { colonnes: ['x', 'y', 'colour (label; 0 = red, 1 = blue, 2 = the one-colour triangle)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1542,9 +1564,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'ptolemee', nom: 'Ptolemy\'s theorem', science: 'Geometry', D: 3, nuage: true, params: { graine: 1 },
     bornes: { graine: [1, 1000000] },
     phrase: 'A visualisation of Ptolemy\'s theorem: for four points on a circle, the product of the diagonals equals the sum of the products of opposite sides. The points are rational, so the squared lengths are fractions and the identity is checked exactly; a corner pushed off the circle gives a strict inequality.' },
+  { id: 'sommesCarres', nom: 'Sums of squares (Jacobi)', science: 'Number theory', D: 3, nuage: true, params: { entier: 100 },
+    bornes: { entier: [4, 300] },
+    phrase: 'A visualisation of sums of squares: the number of ways to write n as a sum of four squares is 8 times the sum of its divisors not divisible by 4 (Jacobi), and as a sum of two squares it is 4 times the divisors of the form 4k + 1 minus those of the form 4k + 3. Every way is counted one by one up to n; the plain divisor sum is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'] };
-const FONCTIONS = { ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'] };
+const FONCTIONS = { sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

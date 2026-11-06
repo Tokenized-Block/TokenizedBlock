@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game182 */
+  r4n: 'r4(n)', r2n: 'r2(n)',
   /* game181 */
   ecartFlottant: 'same in floating point', quadrilatere: 'the four points',
   /* game180 */
@@ -469,6 +471,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game182 */
+  jacobiQuatre: 'r4 counted vs 8 x divisors not divisible by 4 (values that differ)', deuxCarres: 'r2 counted vs 4 (d1 - d3) (values that differ)',
   /* game181 */
   croise: 'Crossed order wrongly accepted (0 = refused)', ptolemee: 'AC.BD = AB.CD + AD.BC on the squared lengths (exact)',
   /* game180 */
