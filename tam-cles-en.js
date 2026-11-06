@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game218 */
+  entropieShannon: 'Huffman length outside [H, H + 1), or a long drawn text far from H', entropie: 'Entropy H (bits per letter)', longueurHuffman: 'Huffman average code length (bits)', entropieTexte: 'Entropy of the drawn text (bits per letter)', totalLettres: 'Letters in the published sample',
   /* game217 */
   gammeTemperee: 'Step that misses the octave, or fifth and fourth errors that do not cancel', pasRapport: 'Ratio of one step', quinteCents: 'Fifth error (cents)', tierceCents: 'Major third error (cents)', quarteCents: 'Fourth error (cents)', douze: 'The 13 ratios for N = 12', commaFraction: 'Pythagorean comma (exact fraction)',
   /* game216 */

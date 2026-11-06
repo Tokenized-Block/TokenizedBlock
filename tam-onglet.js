@@ -191,6 +191,8 @@ THEMES.chimie.push('geometrieVSEPR');
 THEMES.chimie.push('pileDaniell');
 /* game217 : la gamme temperee rejoint les ondes et le son (idee : codex Grok Bot 20) */
 THEMES.ondes.push('gammeTemperee');
+/* game218 : un groupe neuf, information et langage (idee : codex Grok Bot 20) */
+THEMES.information = ['entropieShannon'];
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -220,7 +222,9 @@ const SYS_FORMULE = Object.freeze({ id: 'formule', nom: 'Your formula', science:
     reglagesPhysique: (_id, p = {}) => ['a', 'b', 'c', 'd'].map((k) => ({ chemin: 'params.' + k, nom: k, min: -10, max: 10, valeur: (p.vars && typeof p.vars[k] === 'number' ? p.vars[k] : (typeof p[k] === 'number' ? p[k] : 1)) })),
   } });
 const GROUPES = [['attracteurs', 'Attractors'], ['questions', 'Big questions: space, quantum, Earth'], ['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'], ['biologie', 'Life sciences: DNA, RNA, genes, enzymes, neurons'], ['chimie', 'Chemistry: reactions, equilibrium, clocks, gases'], ['maths', 'Mathematics: chance, primes, random walks'], ['ondes', 'Waves, light & sound'], ['electricite', 'Electricity: charges, fields, circuits'], ['champs', 'Quantum fields, the vacuum, atoms & quarks'], ['formule', 'Your formula (write your own)'], ['astres', 'Stars & our space'], ['trousNoirs', 'Black holes, gravity waves & relativity'],
-  ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics']];
+  ['physique', 'Physics: fusion, pendulum, fields, light'], ['quantique', 'Quantum'], ['fractales', 'Fractals & golden ratio'], ['fluides', 'Fluid mechanics'],
+  /* game218 (Phil : « autre discipline ») */
+  ['information', 'Information & language: entropy, codes, words']];
 /* game77 (chasse aux bugs : des curseurs « morts » — le module ramene la valeur en silence) : les bornes REELLES du moment.
  *   Hydrogene : l <= n-1 et |m| <= l. Tourbillons : G4 n existe qu avec 4 tourbillons. */
 function reglagesVivants(s, params) {
@@ -313,7 +317,7 @@ const NOMS_PARAMS_SYS = { 'equationPell.radical': 'D (not a square ; a square is
   /* game134 (« espacement » existe deja : mode spacing, vide quantique) */
   'reseauFentes.espacement': 'slit spacing d / lambda' };
 const nomParam = (sid, cle) => NOMS_PARAMS_SYS[sid + '.' + cle] || NOMS_PARAMS_EN[cle];
-const NOMS_PARAMS_EN = { qmax: 'largest denominator q', divisions: 'equal steps per octave', cuivre: 'copper ions at start (mol/L)', zinc: 'zinc ions at start (mol/L)', kelvins: 'temperature (K)', molecule: 'molecule (0 CH4, 1 NH3, 2 H2O, 3 CO2, 4 BF3)', acide: 'acid concentration (mol/L)', base: 'base concentration (mol/L)', pasL: 'steps', rangP: 'terms', rangT: 'terms', perrinMax: 'up to n', rangK: 'terms', rangR: 'steps n', rangN: 'rows n', longueurS: 'size n', pieceMax: 'largest coin', pairMax: 'largest even number', jusquaN: 'up to n', moduleMax: 'largest modulus m', longueurM: 'path length n', elements: 'objects n', longueurK: 'digits per number', objets: 'objects n', rangs: 'terms', disques: 'disks n', niveaux: 'levels D', baseP: 'prime p (a non-prime goes to the next)', lignesL: 'rows', pasK: 'every k-th one leaves, k', rangB: 'up to B_n, n', limite: 'search up to', radical: 'D under the square root', croise: 'crossed hexagon (0 no, 1 yes)', sommetsK: 'points n of K_n', cotes: 'sides N', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
+const NOMS_PARAMS_EN = { qmax: 'largest denominator q', lettres: 'letters drawn', divisions: 'equal steps per octave', cuivre: 'copper ions at start (mol/L)', zinc: 'zinc ions at start (mol/L)', kelvins: 'temperature (K)', molecule: 'molecule (0 CH4, 1 NH3, 2 H2O, 3 CO2, 4 BF3)', acide: 'acid concentration (mol/L)', base: 'base concentration (mol/L)', pasL: 'steps', rangP: 'terms', rangT: 'terms', perrinMax: 'up to n', rangK: 'terms', rangR: 'steps n', rangN: 'rows n', longueurS: 'size n', pieceMax: 'largest coin', pairMax: 'largest even number', jusquaN: 'up to n', moduleMax: 'largest modulus m', longueurM: 'path length n', elements: 'objects n', longueurK: 'digits per number', objets: 'objects n', rangs: 'terms', disques: 'disks n', niveaux: 'levels D', baseP: 'prime p (a non-prime goes to the next)', lignesL: 'rows', pasK: 'every k-th one leaves, k', rangB: 'up to B_n, n', limite: 'search up to', radical: 'D under the square root', croise: 'crossed hexagon (0 no, 1 yes)', sommetsK: 'points n of K_n', cotes: 'sides N', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
   excentricite: 'eccentricity', frequence: 'frequency', graine: 'seed', grille: 'grid', groupe: 'group', hauteur: 'height', heures: 'hours',
   horloges: 'clocks', images: 'frames', inclinaison: 'inclination', inclinaison1: 'inclination 1', inclinaison2: 'inclination 2', jours: 'days',
@@ -1371,6 +1375,8 @@ export function monter(racine, ctx = {}) {
     'pileDaniell',
     /* game217 */
     'gammeTemperee',
+    /* game218 */
+    'entropieShannon',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

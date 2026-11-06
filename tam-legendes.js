@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game218 (idee : codex Grok Bot) */
+  entropieShannon: {
+    titre: 'Shannon entropy of English letters',
+    enUnePhrase: 'How many yes-or-no questions does one English letter take, on average? About 4.18.',
+    colonnes: ['letters from most to least common', 'how surprising each letter is (bits)', 'how long its code is'],
+    aRegarder: ['E is the least surprising letter, Z the most.', 'Common letters get short codes and rare ones long codes.', 'The best code averages just above 4.18 bits, against 5 bits for a code with equal lengths.'],
+    fin: null,
+  },
   /* game217 (idee : codex Grok Bot) */
   gammeTemperee: {
     titre: 'Equal temperament (tuning a piano)',
