@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game207 (idee : codex Grok Bot) */
+  suiteRecaman: {
+    titre: 'The Recaman sequence',
+    enUnePhrase: 'At step n, go back n if you land on a new positive number, otherwise go forward n.',
+    colonnes: ['which step', 'where you land', 'back or forward'],
+    aRegarder: ['The path swings back and forth in growing arcs.', 'Stepping back never lands on an old number, but stepping forward can.', 'Nobody knows whether every number is reached sooner or later.'],
+    fin: null,
+  },
   /* game206 (idee : codex Grok Bot) */
   triangleNarayana: {
     titre: 'The Narayana triangle (mountain paths by peaks)',

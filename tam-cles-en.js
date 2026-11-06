@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game207 */
+  suiteRecaman: 'Jumps that are not n, or that break the step-back rule', premierRepete: 'First repeated value and its two positions', plusPetitAbsent: 'Smallest number not yet reached',
   /* game206 */
   triangleNarayana: 'Rows that miss the formula, the Catalan sum or the symmetry', huitLignes: 'Rows 1 to 8', retoursTrois: 'n = 3 counted by returns to the axis',
   /* game205 */
