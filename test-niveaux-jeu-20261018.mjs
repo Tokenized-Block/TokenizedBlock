@@ -182,7 +182,9 @@ if (demarre) {
   for (let i = 0; i < 90 && logsServis === 0; i += 1) await new Promise((o) => setTimeout(o, 1000));
   ok(logsServis > 0, 'le serveur a lu les logs de BlockRolls (fenetre bornee depuis son bloc de deploiement)');
   let jw = null;
-  for (let i = 0; i < 45; i += 1) { jw = await (await fetch(srv + '/api/jeu/niveau?wallet=' + W.toUpperCase().replace('0X', '0x'))).json(); if (jw && jw.xp === 30) break; await new Promise((o) => setTimeout(o, 2000)); }
+  /* 2026-11-06 : attendre AUSSI le trou des skins — le serveur parcourt rolls -> skins -> missions avec des appels reseau entre les deux ;
+   *   lire des que l XP des rolls est la laissait parfois l assertion de couverture (plus bas) lire AVANT le passage sur les skins (rouge intermittent) */
+  for (let i = 0; i < 45; i += 1) { jw = await (await fetch(srv + '/api/jeu/niveau?wallet=' + W.toUpperCase().replace('0X', '0x'))).json(); if (jw && jw.xp === 30 && jw.couverture && (jw.couverture.trous || []).some((t) => t.source === 'skins')) break; await new Promise((o) => setTimeout(o, 2000)); }
   ok(jw && jw.ok === true && jw.wallet === W && jw.xp === 30 && jw.level === 3 && jw.next === 70 && jw.detail.jour_ticket === 9 && jw.detail.roll === 2 && jw.detail.settle === 1,
     'W : 9 jours (pass futurs exclus) x3 + 2 rolls payes (pas celui sur pass) + 1 settle = 30 XP -> L3, next 70 — lu ' + JSON.stringify(jw && { xp: jw.xp, level: jw.level, detail: jw.detail }));
   ok(jw && jw.perk && jw.perk.entries === 1 && jw.perk.appliesThisWeek === true && jw.perk.practice === true && jw.perk.week === sNow.id, 'W : perk +1, applique cette semaine (practice)');
