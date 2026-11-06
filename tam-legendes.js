@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game200 (idee : codex Grok Bot) */
+  motzkinChemins: {
+    titre: 'Motzkin numbers (paths above the floor)',
+    enUnePhrase: 'Walk up, down or flat, start and end on the ground, never dig below it: how many walks are there?',
+    colonnes: ['which step', 'how high you are', 'up, down or flat'],
+    aRegarder: ['The walk always comes back to the ground at the end.', 'It never dips below the floor.', 'Allow digging and there are more walks: 3 of length 2 instead of 2.'],
+    fin: null,
+  },
   /* game199 (idee : codex Grok Bot) */
   stirlingBell: {
     titre: 'Stirling and Bell numbers',

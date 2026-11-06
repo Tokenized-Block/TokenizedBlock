@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game200 */
+  motzkinChemins: 'Enumerated paths vs M(n), and recurrence vs the Catalan sum', seize: 'First sixteen values',
   /* game199 */
   stirlingBell: 'Enumerated partitions vs recurrence, and Bell sums vs the Aitken triangle', ligneHuit: 'S(8, k) for k = 1..8', bellOnze: 'Bell(0..10)', partitions: 'Partitions counted by number of blocks',
   /* game198 */
