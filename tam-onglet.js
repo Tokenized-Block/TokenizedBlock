@@ -125,6 +125,8 @@ THEMES.maths.push('sommesCarres');
 THEMES.maths.push('equationPell');
 /* game184 : nombres de Carmichael (idee : codex Grok Bot) */
 THEMES.maths.push('nombresCarmichael');
+/* game185 : le theoreme de Wilson (idee : codex Grok Bot) */
+THEMES.maths.push('theoremeWilson');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1241,6 +1243,8 @@ export function monter(racine, ctx = {}) {
     'equationPell',
     /* game184 */
     'nombresCarmichael',
+    /* game185 */
+    'theoremeWilson',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

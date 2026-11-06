@@ -1459,7 +1459,26 @@ function nombresCarmichael(P, n) {
     temoin: { mesure: temoin, note: 'witness: 3^340 mod 341 (not 1 : 341 fools base 2, not base 3)' } } };
 }
 
+// ---------- 42 : le theoreme de Wilson (idee et valeurs : codex Grok Bot ; MathWorld « Wilson s Theorem », lu par Grok) ----------
+// n > 1 est premier si et seulement si (n - 1)! = -1 mod n, c est-a-dire (n - 1)! mod n = n - 1. Pour un compose : 2 si n = 4, 0 au-dela.
+// Exact ici : (n - 1)! mod n par produits modulaires (entiers exacts) pour chaque n de 2 au curseur, compare a la primalite par division d essai ;
+//   valeurs de Grok n = 2..30 : 1, 2, 2, 4, 0, 6, 0, 0, 0, 10, 0, 12, 0, 0, 0, 16, 0, 18, 0, 0, 0, 22, 0, 0, 0, 0, 0, 28, 0.
+// Temoin : n = 4, compose, ou (n - 1)! mod n vaut 2 et non 0 : la regle « compose -> 0 » a UNE exception.
+// Dessin (vue de face) : les points (n / limite, ((n - 1)! mod n) / n) (deux colonnes de meme taille), etiquette 1 = premier (pres de 1), 0 = compose.
+function wilsonReste(k) { let r = 1; for (let i = 2; i < k; i++) r = (r * i) % k; return r % k; }
+function theoremeWilson(P, n) {
+  const N = P.limite, restes = [0, 0]; let ecarts = 0, regle = 0;
+  for (let k = 2; k <= N; k++) { const r = wilsonReste(k); restes.push(r); let premier = true; for (let d = 2; d * d <= k; d++) if (k % d === 0) { premier = false; break; }
+    if ((r === k - 1) !== premier) ecarts++; if (!premier && r !== (k === 4 ? 2 : 0)) regle++; }
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const k = 2 + Math.floor(l * (N - 1) / n), o = 3 * l, r = restes[k]; brut[o] = k / N; brut[o + 1] = r / k; brut[o + 2] = r === k - 1 ? 1 : 0; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet', invariants: {
+    wilson: { mesure: ecarts, formule: 0, trente: restes.slice(2, 31).join(', '), note: 'n from 2 to the slider where « (n - 1)! mod n = n - 1 » and « n is prime » (trial division) disagree' },
+    composes: { mesure: regle, formule: 0, note: 'composite n where (n - 1)! mod n is not 2 (n = 4) or 0 (n > 4)' },
+    temoin: { mesure: restes[4], formule: 2, note: 'witness: n = 4, composite, gives 3! mod 4 = 2, not 0 : the one exception' } } };
+}
+
 export const COLONNES = Object.freeze({
+  theoremeWilson: { colonnes: ['n / limit', '((n - 1)! mod n) / n', 'prime (label; 1 prime, 0 composite)'], memeLongueur: [], autres: [0, 1, 2] },
   nombresCarmichael: { colonnes: ['rank of the number found', 'prime factor p of it', 'kind (label; 0 = base-2 pseudoprime only, 1 = Carmichael)'], memeLongueur: [], autres: [0, 1, 2] },
   equationPell: { colonnes: ['k (convergent number)', 'p_k / q_k', 'sign of p^2 - D q^2 (label; 0 negative, 1 positive, 2 = root D)'], memeLongueur: [], autres: [0, 1, 2] },
   sommesCarres: { colonnes: ['a', 'b', 'a^2 + b^2 (label)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1627,9 +1646,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'nombresCarmichael', nom: 'Carmichael numbers (Fermat liars)', science: 'Number theory', D: 3, nuage: true, params: { limite: 10000 },
     bornes: { limite: [600, 20000] },
     phrase: 'A visualisation of Carmichael numbers: composite numbers that pass Fermat\'s primality test a^(n-1) = 1 mod n for every base a. They are found by Korselt\'s rule (561, 1105, 1729, ...), each one is checked to fool base 2, and 341, which fools base 2 but not base 3, is the witness.' },
+  { id: 'theoremeWilson', nom: 'Wilson\'s theorem', science: 'Number theory', D: 3, nuage: true, params: { limite: 300 },
+    bornes: { limite: [30, 3000] },
+    phrase: 'A visualisation of Wilson\'s theorem: n is prime exactly when (n - 1)! leaves remainder n - 1 when divided by n. Every remainder is computed exactly up to the slider and compared with trial division; n = 4, the one composite with remainder 2 instead of 0, is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'] };
-const FONCTIONS = { nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'] };
+const FONCTIONS = { theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

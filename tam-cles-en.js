@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game185 */
+  trente: '(n - 1)! mod n for n = 2..30',
   /* game184 */
   liste: 'the first ones',
   /* game183 */
@@ -475,6 +477,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game185 */
+  wilson: 'Wilson s test vs trial division (n that disagree)', composes: 'Composites breaking the 2 / 0 rule',
   /* game184 */
   carmichael: 'Carmichael numbers found (Korselt)', pseudo: 'Base-2 pseudoprimes found', inclusion: 'Carmichael numbers that do not fool base 2',
   /* game183 */

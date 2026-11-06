@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game185 (idee : codex Grok Bot) */
+  theoremeWilson: {
+    titre: 'Wilson\'s theorem',
+    enUnePhrase: 'Multiply all the numbers below n and divide by n: the remainder is n - 1 exactly when n is prime.',
+    colonnes: ['n (as a share of the limit)', 'remainder divided by n', 'prime or not'],
+    aRegarder: ['The primes sit near the top line: their remainder is n - 1.', 'The composites fall to the bottom: remainder 0.', 'Except n = 4, where 1 x 2 x 3 = 6 leaves 2.'],
+    fin: null,
+  },
   /* game184 (idee : codex Grok Bot) */
   nombresCarmichael: {
     titre: 'Carmichael numbers (numbers that fool Fermat)',
