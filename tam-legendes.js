@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game205 (idee : codex Grok Bot) */
+  schroderChemins: {
+    titre: 'Large Schroder numbers',
+    enUnePhrase: 'Walk up, down or take a long flat stride, start and end on the ground: how many walks are there?',
+    colonnes: ['how far along', 'how high you are', 'up, down or long flat'],
+    aRegarder: ['The flat strides are two steps long, unlike the Motzkin walks.', 'From size 1 on, the number of walks is always even.', 'Size 0 has exactly one walk, the empty one: an odd count.'],
+    fin: null,
+  },
   /* game204 (idee : codex Grok Bot) */
   frobeniusPieces: {
     titre: 'The coin problem (two coins)',

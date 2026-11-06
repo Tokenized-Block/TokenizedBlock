@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game205 */
+  schroderChemins: 'Enumerated paths vs S(n), two recurrences, and odd counts past 0', treize: 'S(0..12)',
   /* game204 */
   frobeniusPieces: 'Coin pairs that break Sylvester (largest impossible, count, symmetry)', couples: 'Coprime coin pairs checked', grilleSylvester: 'Grid a = 3..9, b = 4..11 (largest impossible / count)',
   /* game203 */
