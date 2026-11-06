@@ -1433,7 +1433,34 @@ function equationPell(P, n) {
     temoin: { mesure: moins3, formule: 0, note: 'witness: x^2 - 3 y^2 = -1 has no solution for y = 1 .. 2000 (and none at all : odd-period rule), while x^2 - 2 y^2 = -1 has (1, 1)' } } };
 }
 
+// ---------- 41 : les nombres de Carmichael (idee et valeurs : codex Grok Bot ; MathWorld « Carmichael Number », « Pseudoprime », OEIS A002997 / A001567, lus par Grok) ----------
+// Le petit theoreme de Fermat (a^(n-1) = 1 mod n pour un n premier) a des menteurs : des nombres COMPOSES qui le verifient.
+//   Pseudo-premier en base 2 : compose avec 2^(n-1) = 1 mod n (341 = 11 x 31 est le premier). Carmichael : compose qui le verifie pour TOUTE
+//   base a premiere avec n — critere de Korselt : sans facteur carre, et p - 1 divise n - 1 pour chaque premier p qui divise n.
+// Exact ici : Carmichael par Korselt jusqu au curseur ; pseudo-premiers base 2 par exponentiation modulaire ; chaque Carmichael impair est aussi
+//   pseudo-premier base 2 (verifie). Valeurs de Grok : < 10 000 -> 561, 1105, 1729, 2465, 2821, 6601, 8911 ; base 2 < 2000 -> 341, 561, 645, 1105, 1387, 1729, 1905.
+// Temoin : 341 trompe la base 2 mais pas la base 3 (3^340 mod 341 n est pas 1) : un pseudo-premier n est pas forcement un Carmichael.
+// Dessin (vue de face) : pour chaque nombre trouve (par rang), ses facteurs premiers (rang, p), etiquette 0 = pseudo-premier base 2 seulement, 1 = Carmichael.
+function carPuiss(a, e, m) { let r = 1, b = a % m; while (e > 0) { if (e & 1) r = (r * b) % m; b = (b * b) % m; e = Math.floor(e / 2); } return r; }
+function carFacteurs(n) { const f = []; let m = n; for (let p = 2; p * p <= m; p++) while (m % p === 0) { f.push(p); m /= p; } if (m > 1) f.push(m); return f; }
+function nombresCarmichael(P, n) {
+  const N = P.limite, carm = [], psp2 = [];
+  for (let k = 3; k <= N; k++) { const f = carFacteurs(k); if (f.length < 2) continue;
+    const sansCarre = new Set(f).size === f.length; if (sansCarre && f.every((p) => (k - 1) % (p - 1) === 0)) carm.push(k);
+    if (k % 2 === 1 && carPuiss(2, k - 1, k) === 1) psp2.push(k); }
+  const pspSet = new Set(psp2), horsInclusion = carm.filter((c) => !pspSet.has(c)).length;
+  const temoin = carPuiss(3, 340, 341);
+  const pts = []; [...new Set([...psp2, ...carm])].sort((a, b) => a - b).forEach((k, rang) => { for (const p of carFacteurs(k)) pts.push([rang + 1, p, carm.includes(k) ? 1 : 0]); });
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const cf = pts[Math.floor(l * pts.length / n)], o = 3 * l; brut[o] = cf[0]; brut[o + 1] = cf[1]; brut[o + 2] = cf[2]; }
+  return { D: 3, brut, nuage: true, unite: 'entiers', invariants: {
+    carmichael: { mesure: carm.length, liste: carm.slice(0, 20).join(', '), formule: N >= 8911 && N < 10585 ? 7 : null, note: 'Carmichael numbers up to the slider (Korselt : squarefree, p - 1 divides n - 1 for every prime p of n)' },
+    pseudo: { mesure: psp2.length, liste: psp2.slice(0, 20).join(', '), note: 'odd composites n up to the slider with 2^(n-1) = 1 mod n (base-2 pseudoprimes)' },
+    inclusion: { mesure: horsInclusion, formule: 0, note: 'Carmichael numbers that are NOT base-2 pseudoprimes (0 : every Carmichael number fools base 2)' },
+    temoin: { mesure: temoin, note: 'witness: 3^340 mod 341 (not 1 : 341 fools base 2, not base 3)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  nombresCarmichael: { colonnes: ['rank of the number found', 'prime factor p of it', 'kind (label; 0 = base-2 pseudoprime only, 1 = Carmichael)'], memeLongueur: [], autres: [0, 1, 2] },
   equationPell: { colonnes: ['k (convergent number)', 'p_k / q_k', 'sign of p^2 - D q^2 (label; 0 negative, 1 positive, 2 = root D)'], memeLongueur: [], autres: [0, 1, 2] },
   sommesCarres: { colonnes: ['a', 'b', 'a^2 + b^2 (label)'], memeLongueur: [[0, 1]], autres: [2] },
   ptolemee: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = quadrilateral, 2 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1597,9 +1624,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'equationPell', nom: 'Pell\'s equation x^2 - D y^2 = 1', science: 'Number theory', D: 3, nuage: true, params: { radical: 13 },
     bornes: { radical: [2, 99] },
     phrase: 'A visualisation of Pell\'s equation: for D not a square, the smallest whole solution of x^2 - D y^2 = 1 hides in the continued fraction of the square root of D (for D = 13 it is 649 and 180). The fractions are computed in whole numbers, the solution is checked exactly and shown to be the smallest; x^2 - 3 y^2 = -1, which has no solution, is the witness.' },
+  { id: 'nombresCarmichael', nom: 'Carmichael numbers (Fermat liars)', science: 'Number theory', D: 3, nuage: true, params: { limite: 10000 },
+    bornes: { limite: [600, 20000] },
+    phrase: 'A visualisation of Carmichael numbers: composite numbers that pass Fermat\'s primality test a^(n-1) = 1 mod n for every base a. They are found by Korselt\'s rule (561, 1105, 1729, ...), each one is checked to fool base 2, and 341, which fools base 2 but not base 3, is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'] };
-const FONCTIONS = { equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'] };
+const FONCTIONS = { nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

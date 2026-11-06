@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game184 */
+  liste: 'the first ones',
   /* game183 */
   x1: 'x1', y1: 'y1', dUtilise: 'D used (squares skipped)',
   /* game182 */
@@ -473,6 +475,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game184 */
+  carmichael: 'Carmichael numbers found (Korselt)', pseudo: 'Base-2 pseudoprimes found', inclusion: 'Carmichael numbers that do not fool base 2',
   /* game183 */
   pell: 'x1^2 - D y1^2 - 1 (exact)', minimale: 'A smaller solution exists (0 = none)',
   /* game182 */

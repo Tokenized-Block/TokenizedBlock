@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game184 (idee : codex Grok Bot) */
+  nombresCarmichael: {
+    titre: 'Carmichael numbers (numbers that fool Fermat)',
+    enUnePhrase: 'Some numbers that are not prime still pass Fermat\'s test for every base: they are the Carmichael numbers.',
+    colonnes: ['which number (in order)', 'one of its prime factors', 'liar for base 2 only, or for every base'],
+    aRegarder: ['561 = 3 x 11 x 17 is the smallest: it fools every base.', 'Below 10 000 there are only seven of them.', '341 fools the base 2 but is caught by the base 3.'],
+    fin: null,
+  },
   /* game183 (idee : codex Grok Bot) */
   equationPell: {
     titre: 'Pell\'s equation x^2 - D y^2 = 1',
