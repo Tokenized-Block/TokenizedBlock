@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game192 */
+  calkinWilf: 'Fractions not reduced, repeated, or off fusc(n)/fusc(n + 1)', complet: 'Reduced fractions missing',
   /* game191 */
   lucas: 'Pascal mod p vs the base-p digit rule (cells that differ)',
   /* game190 */

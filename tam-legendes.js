@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game192 (idee : codex Grok Bot) */
+  calkinWilf: {
+    titre: 'The Calkin-Wilf tree (every fraction exactly once)',
+    enUnePhrase: 'A family tree of fractions where every positive fraction appears once, already in lowest terms.',
+    colonnes: ['place in its row', 'row', 'bigger than 1 or not'],
+    aRegarder: ['Under a/b come a/(a + b) and (a + b)/b: nothing else is needed.', 'Row by row, no fraction ever comes twice and none is missing.', 'Listing fractions along diagonals, as Cantor did, repeats 1/1 as 2/2, 3/3, ...'],
+    fin: null,
+  },
   /* game191 (idee : codex Grok Bot) */
   theoremeLucas: {
     titre: 'Lucas\'s theorem (Pascal\'s triangle modulo a prime)',
