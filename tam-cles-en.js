@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game204 */
+  frobeniusPieces: 'Coin pairs that break Sylvester (largest impossible, count, symmetry)', couples: 'Coprime coin pairs checked', grilleSylvester: 'Grid a = 3..9, b = 4..11 (largest impossible / count)',
   /* game203 */
   goldbachPaires: 'Even numbers from 6 with no split into two odd primes (finite check)', soixante: 'Splits of 4, 6, ..., 60', rapportMod3: 'Mean splits of multiples of 3 over the others (from 30)',
   /* game202 */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game204 (idee : codex Grok Bot) */
+  frobeniusPieces: {
+    titre: 'The coin problem (two coins)',
+    enUnePhrase: 'With only two kinds of coin, some amounts can never be paid: which is the biggest one?',
+    colonnes: ['first coin', 'second coin', 'how many amounts you can never pay'],
+    aRegarder: ['Bigger coins leave more amounts you cannot pay.', 'For coins 3 and 5 you cannot pay 1, 2, 4 or 7, and everything from 8 on works.', 'Coins 6 and 9 share a factor: you can never pay 20, or any amount that is not a multiple of 3.'],
+    fin: null,
+  },
   /* game203 (idee : codex Grok Bot) */
   goldbachPaires: {
     titre: 'Goldbach splits (two odd primes)',
