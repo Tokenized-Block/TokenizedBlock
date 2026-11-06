@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game225 (idee : codex 22, sous-agent Claude) */
+  courbeKeeling: {
+    titre: 'The Keeling curve',
+    enUnePhrase: 'Carbon dioxide in the air, measured on a Hawaiian volcano every year since 1959.',
+    colonnes: ['which year', 'how much CO2 is in the air', 'how much it rose that year'],
+    aRegarder: ['It has gone up every single year since 1959.', 'The yearly rise has roughly tripled.', 'A straight line from the early years falls far below today.'],
+    fin: null,
+  },
   /* game224 (idee : codex 21, sous-agent Claude) */
   energieLiaison: {
     titre: 'Nuclear binding energy',

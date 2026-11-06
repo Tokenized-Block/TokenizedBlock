@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game225 */
+  courbeKeeling: 'Years where CO2 did not rise, or no acceleration over the window', annees: 'Years in the NOAA file', premiere: 'First year and value (ppm)', derniere: 'Last year and value (ppm)', hausseDebut: 'Mean rise over the first years (ppm per year)', hausseFin: 'Mean rise over the last years (ppm per year)',
   /* game224 */
   energieLiaison: 'Light-nucleus fusions that would not release energy, or uranium not below iron', QkeV: 'Energy released by D+D, triple alpha and C12+He4 (keV)', plusLie: 'Most tightly bound nucleus in the list', reactionChoisie: 'Reaction drawn',
   /* game223 */
