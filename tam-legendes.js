@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game221 (idee : codex Grok Bot) */
+  gutenbergRichter: {
+    titre: 'Earthquake sizes',
+    enUnePhrase: 'For every earthquake one magnitude stronger, there are about ten times fewer.',
+    colonnes: ['how strong (magnitude above 4.5)', 'how many quakes are at least that strong (log scale)', 'which half-magnitude class'],
+    aRegarder: ['On a log scale the counts fall along a straight line.', 'The slope b, measured back from the quakes, comes out close to the one set.', 'The real 2024 world list of quakes falls off faster than the Californian slope.'],
+    fin: null,
+  },
   /* game220 (idee : codex Grok Bot) */
   loiZipf: {
     titre: "Zipf's law on real web text",

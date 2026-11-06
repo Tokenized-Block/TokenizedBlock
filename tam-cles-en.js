@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game221 */
+  gutenbergRichter: 'Re-estimated b more than 4 standard errors off, or catalogue counts that do not add up', bEstime: 'b measured back from the drawn quakes (Aki)', totalCatalogue: 'Quakes in the 2024 world catalogue', cumulCatalogue: 'Quakes at least as strong as each class (2024)',
   /* game220 */
   loiZipf: 'Published counts not strictly decreasing with rank', penteR: 'Fitted slope on the chosen ranks', pente30: 'Fitted slope on ranks 1 to 30', sommeTrente: 'Total count of the 30 words',
   /* game219 */
