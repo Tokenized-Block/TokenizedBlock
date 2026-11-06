@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -754,6 +754,22 @@ function suite(T, bavard = false, seul = null) {
     if (n === 6) assert.ok(deux > 0, 'K_6 : le triangle monochrome doit etre dessine'); else assert.equal(deux, 0, 'une bonne coloration n a pas de triangle monochrome');
     return 'K_' + n + ' : ' + I.sansTriangle.mesure + ' sans triangle';
   });
+  /* game180 : Pascal — reference INDEPENDANTE en flottants (intersection par la regle de Cramer) ; controle EXACT de Grok Bot :
+   *   A (-4/5,-3/5) B (-3/5,-4/5) C (0,-1) D (0,1) E (-3/5,4/5) F (-15/17,8/17) -> X (-9/5,2/5), Y (-5/3,-4/9), Z (0,-11), aire 0 ; F' = (2,2) -> 36/31 */
+  const pasRef = (H) => { const it = (p1, p2, p3, p4) => { const a1 = p2[1] - p1[1], b1 = p1[0] - p2[0], c1 = a1 * p1[0] + b1 * p1[1], a2 = p4[1] - p3[1], b2 = p3[0] - p4[0], c2 = a2 * p3[0] + b2 * p3[1], d = a1 * b2 - a2 * b1; return [(c1 * b2 - c2 * b1) / d, (a1 * c2 - a2 * c1) / d]; };
+    const X = it(H[0], H[1], H[3], H[4]), Y = it(H[1], H[2], H[4], H[5]), Z = it(H[2], H[3], H[5], H[0]); return { X, Y, Z, aire2: (Y[0] - X[0]) * (Z[1] - X[1]) - (Y[1] - X[1]) * (Z[0] - X[0]) }; };
+  ok('pascalHexagramme : controle exact de Grok Bot (X, Y, Z ; temoin 36/31)', () => {
+    const G = [[-4 / 5, -3 / 5], [-3 / 5, -4 / 5], [0, -1], [0, 1], [-3 / 5, 4 / 5], [-15 / 17, 8 / 17]], r = pasRef(G);
+    assert.ok(Math.abs(r.X[0] + 9 / 5) < 1e-12 && Math.abs(r.X[1] - 2 / 5) < 1e-12 && Math.abs(r.Y[0] + 5 / 3) < 1e-12 && Math.abs(r.Y[1] + 4 / 9) < 1e-12 && Math.abs(r.Z[0]) < 1e-12 && Math.abs(r.Z[1] + 11) < 1e-11 && Math.abs(r.aire2) < 1e-11, JSON.stringify(r));
+    assert.ok(Math.abs(pasRef([...G.slice(0, 5), [2, 2]]).aire2 - 36 / 31) < 1e-12); return 'ok'; });
+  for (const p of [...extremes(sys('pascalHexagramme')), { croise: 0, graine: 4242 }, { croise: 1, graine: 99 }]) ok(`pascalHexagramme ${JSON.stringify(p)} : alignement exact, points sur le cercle, reference, temoin`, () => {
+    const R = S('pascalHexagramme', p), I = R.invariants, val = (t) => { const [u, v] = t.split('/'); return Number(u) / (v ? Number(v) : 1); };
+    assert.ok(I.pascal.exact === '0' && I.pascal.mesure === 0, JSON.stringify(I.pascal));
+    const H = I.pascal.hexagone.match(/\(([^)]+)\)/g).map((s) => s.slice(1, -1).split(', ').map(val)); assert.equal(H.length, 6);
+    assert.ok(H.every(([x, y]) => Math.abs(x * x + y * y - 1) < 1e-12), 'points hors du cercle');
+    const r = pasRef(H), e = 1 + Math.max(...[r.X, r.Y, r.Z].flat().map(Math.abs)) ** 2; assert.ok(Math.abs(r.aire2) < 1e-9 * e, 'reference ' + r.aire2);
+    assert.ok(Number.isNaN(I.temoin.mesure) || (I.temoin.exact !== '0' && I.temoin.mesure !== 0), 'temoin ' + JSON.stringify(I.temoin)); return I.pascal.hexagone;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -779,6 +795,11 @@ const marque = new RegExp(['de m' + 'emoire', 'from m' + 'emory', 'de t' + 'ete'
 const marques = [src, moi].flatMap((t, i) => t.split(/\r?\n/).map((l, j) => [i ? 'test' : 'module', j + 1, l]).filter(([, , l]) => marque.test(l)));
 assertions++; if (marques.length) ech.push({ nom: 'valeur marquee sans source lue', det: marques.map(([f, j]) => f + ':' + j).join(',') });
 console.log(`${marques.length ? 'ECHEC ' : 'OK    '}aucune valeur marquee sans source lue (module + banc)`);
+/* 2026-11-06 (game180) : CIBLES est un litteral d objet — une cle ecrite DEUX FOIS ecrase la premiere EN SILENCE (« pascal » visait
+ *   pascalSierpinski, et les 3 mutants de l hexagramme relancaient les tests du mauvais systeme : SURVIT x 3). Garde : cles uniques. */
+{ const ligne = moi.split(/\r?\n/).find((l) => /const CIBLES = \{/.test(l)) || '', cles = [...ligne.matchAll(/(\w+): \[/g)].map((m) => m[1]), doubles = cles.filter((c, i) => cles.indexOf(c) !== i);
+  assertions++; if (!cles.length || doubles.length) ech.push({ nom: 'CIBLES : cles en double', det: doubles.join(',') || 'ligne introuvable' });
+  console.log(`${doubles.length || !cles.length ? 'ECHEC ' : 'OK    '}CIBLES : ${cles.length} cles, aucune en double${doubles.length ? ' (' + doubles.join(',') + ')' : ''}`); }
 console.log('\nTEMPS simuler(id) a n = 1500, defauts et chaque extreme de curseur :');
 for (const s of T.SYSTEMES) { let pire = 0, ou = ''; for (const p of extremes(s)) { const a = performance.now(); T.simuler(s.id, p); const t = performance.now() - a; if (t > pire) { pire = t; ou = JSON.stringify(p); } } console.log(`  ${s.id} : pire ${pire.toFixed(0)} ms (${ou})`); }
 
@@ -964,6 +985,9 @@ const MUTANTS = [
   ['ramsey : cycles sans la connexite', "if (deg.some((d) => d !== 2) || vu.size !== 5) cyclesFaux++; }", "if (deg.some((d) => d !== 3)) cyclesFaux++; }"],
   ['ramsey : temoin sur le bleu aussi', 'if (c === 0) rouge = true; }', 'rouge = true; }'],
   ['ramsey : triangle non dessine', 'tri && tri.includes(k) ? 2 : (m >> k) & 1', '(m >> k) & 1'],
+  ['hexagramme : cotes voisins au lieu d opposes', 'const X = pascalInter(H[0], H[1], H[3], H[4]), Y', 'const X = pascalInter(H[0], H[1], H[2], H[3]), Y'],
+  ['hexagramme : point hors du cercle', 'return [feuF(1n - T * T, d), feuF(2n * T, d)]; });', 'return [feuF(1n - T * T, d), feuF(2n * T + 1n, d)]; });'],
+  ['hexagramme : temoin sur le cercle', 'H2 = [...H.slice(0, 5), [feuE(2), feuE(2)]]', 'H2 = [...H.slice(0, 5), H[5]]'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -978,7 +1002,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

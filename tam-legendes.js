@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game180 (idee : codex Grok Bot) */
+  pascalHexagramme: {
+    titre: 'Pascal\'s hexagram (six points on a circle)',
+    enUnePhrase: 'Join six points of a circle into a hexagon: the three pairs of opposite sides meet on one straight line.',
+    colonnes: ['across', 'up', 'circle, hexagon, or the line'],
+    aRegarder: ['Extend each pair of opposite sides until they meet: the three meeting points line up.', 'Turn on the crossing switch: even a star-shaped hexagon that crosses itself obeys the rule.', 'Move one point off the circle and the line breaks.'],
+    fin: null,
+  },
   /* game179 (idee : codex Grok Bot) */
   ramseyR33: {
     titre: 'Ramsey number R(3, 3) = 6',

@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game180 */
+  hexagone: 'the six points',
   /* game179 */
   colorations: 'colourings checked',
   /* game178 */
@@ -465,6 +467,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game180 */
+  pascal: 'Twice the area of the three meeting points (0 = aligned, exact)',
   /* game179 */
   sansTriangle: 'Two-colourings with no one-colour triangle', cycles5: 'K5 colour classes that are not a 5-cycle',
   /* game178 */

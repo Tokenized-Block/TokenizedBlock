@@ -1328,7 +1328,38 @@ function ramseyR33(P, n) {
     temoin: { mesure: rougeSeul, note: 'witness: forbidding only RED triangles, this many colourings of K_n survive (for K_6 still many) : both colours are needed' } } };
 }
 
+// ---------- 37 : l hexagramme de Pascal (idee et valeurs : codex Grok Bot ; MathWorld « Pascal s Theorem », lu par Grok) ----------
+// Six points sur une conique, relies dans l ordre A B C D E F : les cotes opposes (AB et DE, BC et EF, CD et FA) se coupent en trois points
+//   ALIGNES — meme si l hexagone se croise lui-meme.
+// Exact ici : six points RATIONNELS du cercle unite, t -> ((1 - t^2)/(1 + t^2), 2t/(1 + t^2)), t entiers tires (graine) parmi -9..9 ;
+//   les trois intersections en fractions BigInt ; aire signee des trois points, exactement 0.
+// Temoin : F remplace par (2, 2), hors du cercle : l aire n est plus nulle.
+// Dessin (vue de face) : le cercle (0), l hexagone (1), les prolongements des cotes jusqu aux intersections et la droite de Pascal (2).
+function pascalInter(P1, P2, P3, P4) { /* droite P1P2 contre droite P3P4, en fractions ; null si paralleles */
+  const d1 = [feuSub(P2[0], P1[0]), feuSub(P2[1], P1[1])], d2 = [feuSub(P4[0], P3[0]), feuSub(P4[1], P3[1])], den = feuSub(feuMul(d1[0], d2[1]), feuMul(d1[1], d2[0]));
+  if (den[0] === 0n) return null; const t = feuDiv(feuSub(feuMul(feuSub(P3[0], P1[0]), d2[1]), feuMul(feuSub(P3[1], P1[1]), d2[0])), den);
+  return [feuAdd(P1[0], feuMul(t, d1[0])), feuAdd(P1[1], feuMul(t, d1[1]))]; }
+function pascalTrois(H) { const X = pascalInter(H[0], H[1], H[3], H[4]), Y = pascalInter(H[1], H[2], H[4], H[5]), Z = pascalInter(H[2], H[3], H[5], H[0]); return X && Y && Z ? [X, Y, Z] : null; }
+function pascalHexagramme(P, n) {
+  const rng = mulberry32(P.graine); let H = null, I = null;
+  for (let essai = 0; essai < 200 && !I; essai++) { const ts = new Set(); while (ts.size < 6) ts.add(Math.floor(rng() * 19) - 9);
+    H = [...ts].map((t) => { const T = BigInt(t), d = 1n + T * T; return [feuF(1n - T * T, d), feuF(2n * T, d)]; });
+    H.sort((u, v) => atan2D(feuNb(u[1]), feuNb(u[0])) - atan2D(feuNb(v[1]), feuNb(v[0]))); if (P.croise) H = [H[0], H[2], H[4], H[1], H[3], H[5]]; I = pascalTrois(H); }
+  const aire = simsonAire2(I), H2 = [...H.slice(0, 5), [feuE(2), feuE(2)]], I2 = pascalTrois(H2), aireT = I2 ? simsonAire2(I2) : null;
+  const nb = (q) => [feuNb(q[0]), feuNb(q[1])], Hn = H.map(nb), In = I.map(nb), segs = [];
+  for (let k = 0; k < 6; k++) segs.push([Hn[k], Hn[(k + 1) % 6], 1]);
+  const ext = [[0, 1, 0], [3, 4, 0], [1, 2, 1], [4, 5, 1], [2, 3, 2], [5, 0, 2]]; for (const [a, b, x] of ext) segs.push([Hn[a], In[x], 2], [Hn[b], In[x], 2]);
+  let i0 = 0, i1 = 1, dm = -1; for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) { const dv = (In[i][0] - In[j][0]) ** 2 + (In[i][1] - In[j][1]) ** 2; if (dv > dm) { dm = dv; i0 = i; i1 = j; } } segs.push([In[i0], In[i1], 2]);
+  const brut = new Float64Array(n * 3), nc = Math.floor(n / 4);
+  for (let l = 0; l < n; l++) { const o = 3 * l; if (l < nc) { const a = 2 * PI * l / nc; brut[o] = cosD(a); brut[o + 1] = sinD(a); brut[o + 2] = 0; continue; }
+    const t = (l - nc) * segs.length / (n - nc), j = Math.floor(t), u = t - j, sg = segs[j]; brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
+  return { D: 3, brut, nuage: true, unite: 'rayon du cercle = 1', invariants: {
+    pascal: { mesure: feuNb(aire), formule: 0, exact: feuTexte(aire), hexagone: H.map((q) => '(' + feuTexte(q[0]) + ', ' + feuTexte(q[1]) + ')').join(' '), note: 'twice the signed area of the three meeting points of opposite sides, exact (0 = on one line)' },
+    temoin: { mesure: aireT === null ? NaN : feuNb(aireT), exact: aireT === null ? null : feuTexte(aireT), absente: 'two opposite sides parallel', note: 'witness: F moved to (2, 2), off the circle : the three points are no longer on one line' } } };
+}
+
 export const COLONNES = Object.freeze({
+  pascalHexagramme: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = hexagon, 2 = extended sides and the Pascal line)'], memeLongueur: [[0, 1]], autres: [2] },
   ramseyR33: { colonnes: ['x', 'y', 'colour (label; 0 = red, 1 = blue, 2 = the one-colour triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   triangulations: { colonnes: ['x', 'y', 'what (label; 0 = polygon, 1 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
   distinctesImpaires: { colonnes: ['column', 'row (downwards)', 'which side (label; 0 = distinct parts, 1 = odd parts)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1476,9 +1507,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'ramseyR33', nom: 'Ramsey number R(3, 3) = 6', science: 'Combinatorics', D: 3, nuage: true, params: { sommetsK: 5, graine: 1 },
     bornes: { sommetsK: [3, 6], graine: [1, 1000000] },
     phrase: 'A visualisation of the Ramsey number R(3, 3) = 6: colour every line between n points red or blue. With 5 points you can avoid a triangle of one colour (12 ways, each colour a 5-cycle); with 6 points you never can. Every colouring is checked; forbidding only red triangles is the witness that both colours are needed.' },
+  { id: 'pascalHexagramme', nom: 'Pascal\'s hexagram', science: 'Geometry', D: 3, nuage: true, params: { croise: 0, graine: 1 },
+    bornes: { croise: [0, 1], graine: [1, 1000000] },
+    phrase: 'A visualisation of Pascal\'s theorem: take six points on a circle in any order, join them into a hexagon, and the three pairs of opposite sides meet in three points on one straight line. The points are rational, so the line is checked exactly; moving one point off the circle breaks it.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'] };
-const FONCTIONS = { ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'] };
+const FONCTIONS = { pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
