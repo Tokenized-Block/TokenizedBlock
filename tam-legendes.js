@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game211 (idee : codex Grok Bot) */
+  suitePadovan: {
+    titre: 'The Padovan sequence',
+    enUnePhrase: 'Add the terms two and three places back: 1, 0, 0, 1, 0, 1, 1, 1, 2, 2, 3, 4, 5, 7 ...',
+    colonnes: ['how far along', 'how far the ratio is from its limit', 'above or below'],
+    aRegarder: ['The ratio of neighbours swings above and below its limit, closer each time.', 'The limit is the plastic number, about 1.3247.', 'Start from 1, 1, 1 and you get the same numbers, five places later.'],
+    fin: null,
+  },
   /* game210 (idee : codex Grok Bot) */
   thueMorse: {
     titre: 'The Thue-Morse sequence',

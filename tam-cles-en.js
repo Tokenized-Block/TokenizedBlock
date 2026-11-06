@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game211 */
+  suitePadovan: 'Terms that break P(n - 1) + P(n - 5), and ratios far from the plastic number', trenteEtUn: 'P(0..30)', plastique: 'Plastic number (root of x^3 = x + 1, by bisection)',
   /* game210 */
   thueMorse: 'Construction mismatches, cubes in the prefix, and unequal power sums below the limit', soixanteQuatre: 'First 64 terms', rangK: 'Largest k checked (2^k terms)',
   /* game209 */
