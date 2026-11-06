@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game183 (idee : codex Grok Bot) */
+  equationPell: {
+    titre: 'Pell\'s equation x^2 - D y^2 = 1',
+    enUnePhrase: 'Find whole numbers with x squared minus D times y squared equal to one: the square root of D knows the answer.',
+    colonnes: ['which fraction', 'its value', 'above or below'],
+    aRegarder: ['The fractions close in on the square root of D, landing above and below it in turn.', 'For D = 13 the smallest answer is 649 and 180 ; for D = 61 it has ten digits.', 'x^2 - 3 y^2 = -1 never works: not every equation of this kind has a solution.'],
+    fin: null,
+  },
   /* game182 (idee : codex Grok Bot) */
   sommesCarres: {
     titre: 'Sums of squares (Jacobi)',

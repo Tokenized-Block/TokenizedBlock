@@ -1407,7 +1407,34 @@ function sommesCarres(P, n) {
     temoin: { mesure: premier === null ? NaN : premier, formule: 4, absente: 'n below 4', note: 'witness: without « 4 does not divide d », 8 x sigma(m) is wrong from m = 4 (56 instead of 24)' } } };
 }
 
+// ---------- 40 : l equation de Pell x^2 - D y^2 = 1 (idee et valeurs : codex Grok Bot ; MathWorld « Pell Equation », Wikipedia, lus par Grok) ----------
+// Pour D entier non carre, la plus petite solution (x1, y1) avec y > 0 se lit dans la fraction continue de racine de D (les reduites p/q).
+// Exact ici : fraction continue de racine de D en ENTIERS (m, d, a : aucune racine flottante au-dela de a0), reduites en BigInt jusqu a la
+//   premiere qui verifie p^2 - D q^2 = 1, verifie a l identique ; minimalite par recherche exhaustive y = 1 .. y1 - 1 quand y1 <= 100 000.
+//   Valeurs de Grok : D = 13 -> (649, 180), D = 19 -> (170, 39), D = 61 -> (1766319049, 226153980).
+// Temoin : x^2 - 3 y^2 = -1 n a aucune solution (periode paire : les reduites ne donnent que +1 et -2) ; D = 2 en a une, (1, 1).
+// Dessin (vue de face) : les reduites (k, p_k / q_k) qui encadrent racine de D, etiquette = signe de p^2 - D q^2 (0 negatif, 1 positif), et la droite racine de D (2).
+function pellFondamentale(Dd) { const a0 = BigInt(Math.floor(Math.sqrt(Dd))); let a = a0; while ((a + 1n) * (a + 1n) <= BigInt(Dd)) a++; while (a * a > BigInt(Dd)) a--;
+  const A0 = a, red = []; let m = 0n, d = 1n, p0 = 1n, p1 = A0, q0 = 0n, q1 = 1n, periode = 0; red.push([p1, q1]);
+  for (let k = 0; k < 400; k++) { if (p1 * p1 - BigInt(Dd) * q1 * q1 === 1n) return { x: p1, y: q1, red, periode }; m = d * a - m; d = (BigInt(Dd) - m * m) / d; a = (A0 + m) / d; if (a === 2n * A0 && !periode) periode = k + 1;
+    [p0, p1] = [p1, a * p1 + p0]; [q0, q1] = [q1, a * q1 + q0]; red.push([p1, q1]); }
+  return null; }
+function equationPell(P, n) {
+  let Dd = P.radical; while (Number.isInteger(Math.sqrt(Dd))) Dd++;
+  const S = pellFondamentale(Dd), reste = S.x * S.x - BigInt(Dd) * S.y * S.y - 1n;
+  let plusPetite = null; if (S.y <= 100000n) for (let y = 1n; y < S.y && plusPetite === null; y++) { const x2 = 1n + BigInt(Dd) * y * y, x = BigInt(Math.round(Math.sqrt(Number(x2)))); for (const c of [x - 1n, x, x + 1n]) if (c * c === x2) plusPetite = y; }
+  let moins3 = 0; for (let y = 1n; y <= 2000n; y++) { const x2 = 3n * y * y - 1n, x = BigInt(Math.round(Math.sqrt(Number(x2)))); for (const c of [x - 1n, x, x + 1n]) if (c >= 0n && c * c === x2) moins3++; }
+  const rac = Math.sqrt(Dd), pts = S.red.map(([p, q], k) => [k, Number(p) / Number(q), p * p - BigInt(Dd) * q * q > 0n ? 1 : 0]), K = pts.length;
+  const brut = new Float64Array(n * 3), nl = Math.floor(n / 4);
+  for (let l = 0; l < n; l++) { const o = 3 * l; if (l < nl) { brut[o] = (K - 1) * l / nl; brut[o + 1] = rac; brut[o + 2] = 2; continue; } const pr = pts[Math.floor((l - nl) * K / (n - nl))]; brut[o] = pr[0]; brut[o + 1] = pr[1]; brut[o + 2] = pr[2]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet', invariants: {
+    pell: { mesure: Number(reste), formule: 0, x1: String(S.x), y1: String(S.y), dUtilise: Dd, note: 'x1^2 - D y1^2 - 1 for the solution read from the continued fraction of root D, exact in BigInt' },
+    minimale: { mesure: S.y <= 100000n ? (plusPetite === null ? 0 : 1) : NaN, formule: 0, absente: 'y1 above 100 000 : the exhaustive search is not run', note: 'a smaller y > 0 with 1 + D y^2 a perfect square (exhaustive search ; 0 = none, so the solution is the fundamental one)' },
+    temoin: { mesure: moins3, formule: 0, note: 'witness: x^2 - 3 y^2 = -1 has no solution for y = 1 .. 2000 (and none at all : odd-period rule), while x^2 - 2 y^2 = -1 has (1, 1)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  equationPell: { colonnes: ['k (convergent number)', 'p_k / q_k', 'sign of p^2 - D q^2 (label; 0 negative, 1 positive, 2 = root D)'], memeLongueur: [], autres: [0, 1, 2] },
   sommesCarres: { colonnes: ['a', 'b', 'a^2 + b^2 (label)'], memeLongueur: [[0, 1]], autres: [2] },
   ptolemee: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = quadrilateral, 2 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
   pascalHexagramme: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = hexagon, 2 = extended sides and the Pascal line)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1567,9 +1594,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'sommesCarres', nom: 'Sums of squares (Jacobi)', science: 'Number theory', D: 3, nuage: true, params: { entier: 100 },
     bornes: { entier: [4, 300] },
     phrase: 'A visualisation of sums of squares: the number of ways to write n as a sum of four squares is 8 times the sum of its divisors not divisible by 4 (Jacobi), and as a sum of two squares it is 4 times the divisors of the form 4k + 1 minus those of the form 4k + 3. Every way is counted one by one up to n; the plain divisor sum is the witness.' },
+  { id: 'equationPell', nom: 'Pell\'s equation x^2 - D y^2 = 1', science: 'Number theory', D: 3, nuage: true, params: { radical: 13 },
+    bornes: { radical: [2, 99] },
+    phrase: 'A visualisation of Pell\'s equation: for D not a square, the smallest whole solution of x^2 - D y^2 = 1 hides in the continued fraction of the square root of D (for D = 13 it is 649 and 180). The fractions are computed in whole numbers, the solution is checked exactly and shown to be the smallest; x^2 - 3 y^2 = -1, which has no solution, is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'] };
-const FONCTIONS = { sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'] };
+const FONCTIONS = { equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

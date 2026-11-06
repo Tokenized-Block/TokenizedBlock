@@ -121,6 +121,8 @@ THEMES.maths.push('pascalHexagramme');
 THEMES.maths.push('ptolemee');
 /* game182 : sommes de carres (idee : codex Grok Bot) */
 THEMES.maths.push('sommesCarres');
+/* game183 : l equation de Pell (idee : codex Grok Bot) */
+THEMES.maths.push('equationPell');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -236,14 +238,14 @@ const CURSEURS_SANS_FORME = {
 const longueurRonde = (x) => { if (!(x > 0) || !Number.isFinite(x)) return null; const p = 10 ** Math.floor(Math.log10(x)), f = x / p; return (f >= 5 ? 5 : f >= 2 ? 2 : 1) * p; };
 const ecrireLongueur = (L) => (L >= 1e-3 && L < 1e6 ? String(Number(L.toPrecision(1))) : L.toExponential(0).replace('e+', 'e'));
 /* les parametres des modules nommes en francais -> l ecran ; les symboles (L, M, omega, a...) restent des symboles */
-const NOMS_PARAMS_SYS = { 'eulerSolides.solide': 'solid (0 prism, 1 antiprism, 2 cuboctahedron, 3 football, 4 rhombicuboctahedron, 5 snub dodecahedron)', 'feuerbach.taille': 'size of the grid the corners are drawn from', 'napoleon.taille': 'size of the grid the corners are drawn from', 'percolationLiens.cote': 'height n (the rectangle is n + 1 wide)', 'catalanDyck.demi': 'half-length n of the paths', 'ruineJoueur.gain': 'chance p of winning one bet', 'ruineJoueur.depart': 'starting fortune z', 'ruineJoueur.objectif': 'target a', 'papillonHofstadter.qmax': 'largest denominator q of the flux p/q', 'fermatSteiner.largeur': 'width L of the rectangle (height 1)', 'kapitza.depart': 'starting tilt from the upright (degrees)', 'penduleRessort.rapport': 'bounce / swing frequency ratio', 'perleCerceau.frottement': 'friction (damping gamma)', 'echelleGlisse.depart': 'starting angle from the wall (degrees)', 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
+const NOMS_PARAMS_SYS = { 'equationPell.radical': 'D (not a square ; a square is skipped to the next)', 'eulerSolides.solide': 'solid (0 prism, 1 antiprism, 2 cuboctahedron, 3 football, 4 rhombicuboctahedron, 5 snub dodecahedron)', 'feuerbach.taille': 'size of the grid the corners are drawn from', 'napoleon.taille': 'size of the grid the corners are drawn from', 'percolationLiens.cote': 'height n (the rectangle is n + 1 wide)', 'catalanDyck.demi': 'half-length n of the paths', 'ruineJoueur.gain': 'chance p of winning one bet', 'ruineJoueur.depart': 'starting fortune z', 'ruineJoueur.objectif': 'target a', 'papillonHofstadter.qmax': 'largest denominator q of the flux p/q', 'fermatSteiner.largeur': 'width L of the rectangle (height 1)', 'kapitza.depart': 'starting tilt from the upright (degrees)', 'penduleRessort.rapport': 'bounce / swing frequency ratio', 'perleCerceau.frottement': 'friction (damping gamma)', 'echelleGlisse.depart': 'starting angle from the wall (degrees)', 'chainette.rapport': 'chain length / span', 'lentilleMince.distance': 'object distance (in focal lengths)', 'tsunami.distance': 'distance to the shore (km)',
   'binaireFusion.distance': 'luminosity distance (Mpc)', 'fusionTrousNoirs.distance': 'luminosity distance (Mpc)',
   /* game133 */
   'corpsNoir.courbes': 'temperatures drawn', 'corpsNoir.rapport': 'hottest over coolest temperature',
   /* game134 (« espacement » existe deja : mode spacing, vide quantique) */
   'reseauFentes.espacement': 'slit spacing d / lambda' };
 const nomParam = (sid, cle) => NOMS_PARAMS_SYS[sid + '.' + cle] || NOMS_PARAMS_EN[cle];
-const NOMS_PARAMS_EN = { qmax: 'largest denominator q', croise: 'crossed hexagon (0 no, 1 yes)', sommetsK: 'points n of K_n', cotes: 'sides N', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
+const NOMS_PARAMS_EN = { qmax: 'largest denominator q', radical: 'D under the square root', croise: 'crossed hexagon (0 no, 1 yes)', sommetsK: 'points n of K_n', cotes: 'sides N', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
   excentricite: 'eccentricity', frequence: 'frequency', graine: 'seed', grille: 'grid', groupe: 'group', hauteur: 'height', heures: 'hours',
   horloges: 'clocks', images: 'frames', inclinaison: 'inclination', inclinaison1: 'inclination 1', inclinaison2: 'inclination 2', jours: 'days',
@@ -1233,6 +1235,8 @@ export function monter(racine, ctx = {}) {
     'ptolemee',
     /* game182 */
     'sommesCarres',
+    /* game183 */
+    'equationPell',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

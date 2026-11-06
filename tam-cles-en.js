@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game183 */
+  x1: 'x1', y1: 'y1', dUtilise: 'D used (squares skipped)',
   /* game182 */
   r4n: 'r4(n)', r2n: 'r2(n)',
   /* game181 */
@@ -471,6 +473,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game183 */
+  pell: 'x1^2 - D y1^2 - 1 (exact)', minimale: 'A smaller solution exists (0 = none)',
   /* game182 */
   jacobiQuatre: 'r4 counted vs 8 x divisors not divisible by 4 (values that differ)', deuxCarres: 'r2 counted vs 4 (d1 - d3) (values that differ)',
   /* game181 */
