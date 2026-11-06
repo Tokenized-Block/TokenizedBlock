@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game190 */
+  termesZ: 'number of terms for n = 1..30',
   /* game189 */
   survivant: 'survivor',
   /* game188 */
@@ -485,6 +487,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game190 */
+  unicite: 'Greedy writings with neighbours, or not exactly one writing',
   /* game189 */
   josephus: 'Simulated survivor vs recurrence (sizes that differ)', formule2L: 'k = 2 : sizes where J differs from 2L + 1',
   /* game188 */

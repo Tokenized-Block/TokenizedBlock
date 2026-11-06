@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game190 (idee : codex Grok Bot) */
+  zeckendorf: {
+    titre: 'Zeckendorf representation (numbers made of Fibonacci)',
+    enUnePhrase: 'Every whole number is a sum of Fibonacci numbers that are never neighbours, and in only one way.',
+    colonnes: ['which Fibonacci number', 'the number n', 'how many terms'],
+    aRegarder: ['Each row is a number, each dot one Fibonacci number in its sum: no two dots touch.', 'Every possible way is counted: there is always exactly one.', 'Allow neighbours and 3 can be 3 or 2 + 1: the uniqueness is gone.'],
+    fin: null,
+  },
   /* game189 (idee : codex Grok Bot) */
   problemeJosephus: {
     titre: 'The Josephus problem (who is left standing)',

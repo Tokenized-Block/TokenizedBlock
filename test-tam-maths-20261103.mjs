@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus', 'zeckendorf'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -877,6 +877,20 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(I.josephus.mesure === 0 && I.josephus.survivant === josRef(N, K) && I.temoin.mesure === 2, JSON.stringify(I));
     if (K === 2) assert.equal(I.formule2L.mesure, 0); else assert.ok(Number.isNaN(I.formule2L.mesure)); return 'survivant ' + I.josephus.survivant;
   });
+  /* game190 : Zeckendorf — reference INDEPENDANTE : ENUMERATION de tous les sous-ensembles de Fibonacci (masques de bits) jusqu a 30 ;
+   *   valeurs de Grok Bot (A007895) */
+  ok('zeckendorf : enumeration des sous-ensembles = valeurs de Grok Bot (n = 1..30), unicite, et plusieurs ecritures avec voisins', () => {
+    const F = [1, 2, 3, 5, 8, 13, 21], nonV = new Array(31).fill(0), tous = new Array(31).fill(0), nb = new Array(31).fill(0);
+    for (let m = 1; m < 2 ** F.length; m++) { let s = 0, voisins = false, c = 0; for (let i = 0; i < F.length; i++) if (m >> i & 1) { s += F[i]; c++; if (i > 0 && (m >> (i - 1) & 1)) voisins = true; }
+      if (s <= 30) { tous[s]++; if (!voisins) { nonV[s]++; nb[s] = c; } } }
+    assert.ok(nonV.slice(1).every((x) => x === 1), 'unicite'); assert.deepEqual(nb.slice(1), [1, 1, 1, 2, 1, 2, 2, 1, 2, 2, 2, 3, 1, 2, 2, 2, 3, 2, 3, 3, 1, 2, 2, 2, 3, 2, 3, 3, 2, 3]);
+    return tous.slice(1).filter((x) => x > 1).length + ' n <= 30 a plusieurs ecritures avec voisins'; });
+  for (const p of [...extremes(sys('zeckendorf')), { entier: 1000 }]) ok(`zeckendorf ${JSON.stringify(p)} : unicite, termes de Grok, temoin`, () => {
+    const R = S('zeckendorf', p), I = R.invariants;
+    assert.ok(I.unicite.mesure === 0 && I.unicite.termesZ === '1, 1, 1, 2, 1, 2, 2, 1, 2, 2, 2, 3, 1, 2, 2, 2, 3, 2, 3, 3, 1, 2, 2, 2, 3, 2, 3, 3, 2, 3', JSON.stringify(I));
+    const F = [1, 2, 3, 5, 8, 13, 21], tous = new Array(31).fill(0); for (let m = 1; m < 2 ** F.length; m++) { let s = 0; for (let i = 0; i < F.length; i++) if (m >> i & 1) s += F[i]; if (s <= 30) tous[s]++; }
+    assert.equal(I.temoin.mesure, tous.slice(1).filter((x) => x > 1).length); return 'temoin ' + I.temoin.mesure;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -1129,6 +1143,9 @@ const MUTANTS = [
   ['josephus : recurrence sans le + 1', 'if (m > 1) J = ((J + K - 1) % m) + 1;', 'if (m > 1) J = ((J + K - 1) % m);'],
   ['josephus : 2L - 1', 'if (K === 2 && 2 * L + 1 !== J) ecarts2L++; }', 'if (K === 2 && 2 * L - 1 !== J) ecarts2L++; }'],
   ['josephus : temoin avec k = 2', 'J3 = ((J3 + 2) % m) + 1;', 'J3 = ((J3 + 1) % m) + 1;'],
+  ['zeckendorf : glouton qui saute le plus grand', 'for (let i = F.length - 1; i >= 0 && r > 0; i--) if (F[i] <= r) { idx.push(i); r -= F[i]; }', 'for (let i = F.length - 2; i >= 0 && r > 0; i--) if (F[i] <= r) { idx.push(i); r -= F[i]; }'],
+  ['zeckendorf : voisins jamais refuses', 'if (consecutifs || !pris) c += go(r - F[i], i + 1, 1);', 'c += go(r - F[i], i + 1, 1);'],
+  ['zeckendorf : Fibonacci 1, 1, 2', 'function zeckFib(N) { const F = [1, 2];', 'function zeckFib(N) { const F = [1, 1];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -1143,7 +1160,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { zeckendorf: ['zeckendorf'], josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

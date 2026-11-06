@@ -135,6 +135,8 @@ THEMES.maths.push('parfaitsAmicaux');
 THEMES.maths.push('nombresBernoulli');
 /* game189 : le probleme de Josephus (idee : codex Grok Bot) */
 THEMES.maths.push('problemeJosephus');
+/* game190 : Zeckendorf (idee : codex Grok Bot) */
+THEMES.maths.push('zeckendorf');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1261,6 +1263,8 @@ export function monter(racine, ctx = {}) {
     'nombresBernoulli',
     /* game189 */
     'problemeJosephus',
+    /* game190 */
+    'zeckendorf',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */
