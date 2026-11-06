@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game206 */
+  triangleNarayana: 'Rows that miss the formula, the Catalan sum or the symmetry', huitLignes: 'Rows 1 to 8', retoursTrois: 'n = 3 counted by returns to the axis',
   /* game205 */
   schroderChemins: 'Enumerated paths vs S(n), two recurrences, and odd counts past 0', treize: 'S(0..12)',
   /* game204 */

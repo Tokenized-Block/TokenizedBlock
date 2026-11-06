@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game206 (idee : codex Grok Bot) */
+  triangleNarayana: {
+    titre: 'The Narayana triangle (mountain paths by peaks)',
+    enUnePhrase: 'Draw every mountain range of a given width and sort them by how many peaks they have.',
+    colonnes: ['how many peaks (relative)', 'how many ranges have that many', 'which width'],
+    aRegarder: ['Each row reads the same from both ends.', 'Each row adds up to a Catalan number.', 'Sort by returns to the ground instead and the row is lopsided.'],
+    fin: null,
+  },
   /* game205 (idee : codex Grok Bot) */
   schroderChemins: {
     titre: 'Large Schroder numbers',
