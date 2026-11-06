@@ -252,6 +252,8 @@ export const ECHELLE_PROPRE = {
   arcEnCiel: [2], cordeVibrante: [0, 1, 2], effetDoppler: [2],
   /* game122 : numero de ligne ; temps et courbe ; numero de ligne du triangle */
   lignesChamp: [2], circuitRC: [0, 2], pascalSierpinski: [2],
+  /* game201 : module et periode de natures differentes ; zeros (etiquette) */
+  periodePisano: [2],
   /* game200 : pas et hauteur de natures differentes ; sorte de pas (etiquette) */
   motzkinChemins: [2],
   /* game199 : element et bloc de natures differentes ; blocs ouverts (etiquette) */

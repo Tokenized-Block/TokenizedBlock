@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game201 */
+  periodePisano: 'Cycles that do not close, lcm rule broken, odd periods past 2, periods above 6m', sixM: 'Moduli whose period is exactly 6m',
   /* game200 */
   motzkinChemins: 'Enumerated paths vs M(n), and recurrence vs the Catalan sum', seize: 'First sixteen values',
   /* game199 */

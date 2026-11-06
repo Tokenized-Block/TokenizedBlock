@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game201 (idee : codex Grok Bot) */
+  periodePisano: {
+    titre: 'Pisano periods (Fibonacci on a clock)',
+    enUnePhrase: 'Add the last two numbers, but on a clock with m hours: how long until the pattern repeats?',
+    colonnes: ['how many hours on the clock', 'how long the loop is', 'how many times it hits 0 in one loop'],
+    aRegarder: ['Every clock loops back, sooner or later.', 'Two clocks that share no factor: the loop of the big clock is the lcm of their loops.', 'Only the 2-hour clock has an odd loop, 3.'],
+    fin: null,
+  },
   /* game200 (idee : codex Grok Bot) */
   motzkinChemins: {
     titre: 'Motzkin numbers (paths above the floor)',
