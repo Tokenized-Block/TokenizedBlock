@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game196 */
+  nombresHarmoniques: 'n where H(n) leaves its log bounds, is whole, or misses 2^floor(log2 n)',
   /* game195 */
   derangements: 'Enumerated derangements vs D(n), and inclusion-exclusion vs recurrence', arrondiE: 'm where D(m) is not the nearest integer to m!/e',
   /* game194 */

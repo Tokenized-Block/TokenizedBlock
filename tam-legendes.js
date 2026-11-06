@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game196 (idee : codex Grok Bot) */
+  nombresHarmoniques: {
+    titre: 'Harmonic numbers',
+    enUnePhrase: 'Add 1 + 1/2 + 1/3 + ... and keep the exact fraction: it grows forever, but slowly, like a logarithm.',
+    colonnes: ['how far along', 'how far above the logarithm', 'how many 2s in the bottom of the fraction'],
+    aRegarder: ['The gap above the logarithm settles down to a constant.', 'The label climbs by one at every power of 2.', 'After the first step the sum is never a whole number again.'],
+    fin: null,
+  },
   /* game195 (idee : codex Grok Bot) */
   derangements: {
     titre: 'Derangements (no one gets their own hat back)',

@@ -147,6 +147,8 @@ THEMES.maths.push('toursHanoi');
 THEMES.maths.push('regarderDire');
 /* game195 : derangements (idee : codex Grok Bot) */
 THEMES.maths.push('derangements');
+/* game196 : nombres harmoniques (idee : codex Grok Bot) */
+THEMES.maths.push('nombresHarmoniques');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1285,6 +1287,8 @@ export function monter(racine, ctx = {}) {
     'regarderDire',
     /* game195 */
     'derangements',
+    /* game196 */
+    'nombresHarmoniques',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */
