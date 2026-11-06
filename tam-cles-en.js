@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game216 */
+  pileDaniell: 'Discharge steps off the Nernst slope, or voltage going up', E0: 'Standard cell voltage (V)', penteDecade298mV: 'Voltage drop per tenfold Q at 298.15 K (mV)', troisExemples: 'E at 298.15 K for three ion pairs (V)',
   /* game215 */
   geometrieVSEPR: 'Lone-pair-free molecules off their ideal angle, or angles not falling CH4 > NH3 > H2O', angleTetraedre: 'Tetrahedral angle arccos(-1/3), degrees', angleMesure: 'Measured bond angle (NIST), degrees', angleDessine: 'Bond angle read back from the drawing, degrees',
   /* game214 */

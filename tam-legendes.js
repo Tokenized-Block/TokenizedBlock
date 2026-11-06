@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game216 (idee : codex Grok Bot) */
+  pileDaniell: {
+    titre: 'A zinc-copper battery running down',
+    enUnePhrase: 'Zinc gives electrons to copper ions; the voltage slowly drops as the copper runs out.',
+    colonnes: ['time', 'the voltage (1 = standard)', 'how lopsided the ions are'],
+    aRegarder: ['The voltage stays almost flat for most of the run, then falls.', 'Each tenfold change in the ion ratio costs the same small voltage.', 'Equal amounts of both ions give the standard voltage, whatever the amount.'],
+    fin: null,
+  },
   /* game215 (idee : codex Grok Bot) */
   geometrieVSEPR: {
     titre: 'Molecule shapes (VSEPR)',

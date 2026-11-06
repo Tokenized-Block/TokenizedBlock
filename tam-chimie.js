@@ -37,6 +37,18 @@ export const SOURCES = Object.freeze({
   angleCO2: S(180, 'deg', 'https://cccbdb.nist.gov/expgeom2x.asp?casno=124389&charge=0', '180'),
   // https://cccbdb.nist.gov/expgeom2x.asp?casno=7637072&charge=0 : aFBF = 120 (1998Kuc)
   angleBF3: S(120, 'deg', 'https://cccbdb.nist.gov/expgeom2x.asp?casno=7637072&charge=0', '120'),
+  /* game216 : constantes EXACTES du SI (CODATA 2022, NIST) et potentiels standard (OpenStax annexe L), lus par Grok Bot 19.
+   *   R = N_A k_B et F = N_A e sont CALCULES dans le module, jamais tapes. */
+  // https://physics.nist.gov/cgi-bin/cuu/Value?na : 6.022 140 76 x 10^23 mol^-1 (exact)
+  NA: S(6.02214076e23, 'mol^-1', 'https://physics.nist.gov/cgi-bin/cuu/Value?na', '6.02214076e23'),
+  // https://physics.nist.gov/cgi-bin/cuu/Value?k : 1.380 649 x 10^-23 J K^-1 (exact)
+  kB: S(1.380649e-23, 'J/K', 'https://physics.nist.gov/cgi-bin/cuu/Value?k', '1.380649e-23'),
+  // https://physics.nist.gov/cgi-bin/cuu/Value?e : 1.602 176 634 x 10^-19 C (exact)
+  e: S(1.602176634e-19, 'C', 'https://physics.nist.gov/cgi-bin/cuu/Value?e', '1.602176634e-19'),
+  // https://openstax.org/books/chemistry-2e/pages/l-standard-electrode-half-cell-potentials : Cu2+ + 2e- -> Cu, +0.337 V
+  E0Cu: S(0.337, 'V', 'https://openstax.org/books/chemistry-2e/pages/l-standard-electrode-half-cell-potentials', '0.337'),
+  // meme page : Zn2+ + 2e- -> Zn, -0.7618 V
+  E0Zn: S(-0.7618, 'V', 'https://openstax.org/books/chemistry-2e/pages/l-standard-electrode-half-cell-potentials', '-0.7618'),
 });
 
 function expNegD(x) {
@@ -297,7 +309,33 @@ function geometrieVSEPR(P, n) {
     temoin: { mesure: tetra - MOL[2][3], formule: 0, note: 'witness: H2O has 4 electron domains like CH4, yet its measured angle sits about 5 degrees below the tetrahedral ideal: lone pairs push' } } };
 }
 
+// ---------- game216 : la pile Daniell et l equation de Nernst (idee et valeurs : codex Grok Bot 19 ; constantes et E0 : SOURCES) ----------
+// Zn + Cu2+ -> Zn2+ + Cu, n = 2. E0 = E0(Cu) - E0(Zn) ; R = N_A k_B, F = N_A e (calcules) ; E = E0 - (R T / n F) ln Q, Q = [Zn2+]/[Cu2+].
+// Modele IDEAL (activites = concentrations). La pile se DECHARGE dans une charge : a chaque pas la part du Cu2+ restant qui se depose
+//   est une quantite ABSOLUE (0.004 mol/L par pas fois (E/E0)^3, choix de dessin, au plus la moitie du reste), autant de Zn2+ apparait :
+//   plus de cuivre au depart = chute de tension plus tardive ; la forme depend aussi de T. Q ne depasse jamais K = e^(nFE0/RT) (E >= 0).
+// MESURE : a chaque pas, E suit Nernst ; multiplier Q par 10 baisse E de ln(10) R T / (n F) exactement (verifie sur toute la decharge) ;
+//   E decroit. A 298.15 K la pente vaut 29.5797 mV par decade (calcul de Grok).
+// Temoin : Q = 1 avec des concentrations de 0.01 mol/L (loin de 1) : E = E0 quand meme. C est le RAPPORT qui compte.
+// Dessin (vue de face) : (temps en pas / 600, E / E0) ; etiquette = log10 Q.
+function pileDaniell(P, n) {
+  const R = SOURCES.NA.valeur * SOURCES.kB.valeur, F = SOURCES.NA.valeur * SOURCES.e.valeur, E0 = SOURCES.E0Cu.valeur - SOURCES.E0Zn.valeur, T = P.kelvins, ne = 2;
+  const EdeQ = (Q) => E0 - (R * T / (ne * F)) * lnD(Q), pente = lnD(10) * R * T / (ne * F), Keq = 1 / expNegD(ne * F * E0 / (R * T));
+  const pts = []; let cu = P.cuivre, zn = P.zinc, pentesFausses = 0, montees = 0;
+  for (let k = 0; k <= 600; k++) { const Q = zn / cu, E = EdeQ(Q); if (k && E > pts[k - 1].E) montees++;
+    if (Math.abs((EdeQ(Q) - EdeQ(10 * Q)) - pente) > 1e-12) pentesFausses++; pts.push({ x: k / 600, E, lq: lnD(Q) / lnD(10) });
+    const u = Math.max(0, E / E0), d = Math.min(0.004 * u * u * u, cu * 0.5, (Keq * cu - zn) / (Keq + 1)); cu -= d; zn += d; }
+  const a298 = lnD(10) * R * 298.15 / (ne * F) * 1000, temoinE = EdeQ(0.01 / 0.01);
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const p = pts[Math.floor(l * pts.length / n)], o = 3 * l; brut[o] = p.x; brut[o + 1] = p.E / E0; brut[o + 2] = p.lq; }
+  return { D: 3, brut, nuage: true, unite: 'V', invariants: {
+    pileDaniell: { mesure: pentesFausses + montees, formule: 0, E0, R, F, penteDecade298mV: a298, troisExemples: [[0.01, 0.01], [0.01, 0.001], [0.001, 0.01]].map(([z, c]) => (E0 - (R * 298.15 / (ne * F)) * lnD(z / c)).toFixed(9)).join(' '),
+      note: 'discharge steps where multiplying Q by 10 does not lower E by ln(10) R T / n F, or where E goes up (ideal model)' },
+    temoin: { mesure: temoinE, formule: E0, note: 'witness: with both ions at 0.01 mol/L (far from 1), Q = 1 and the cell still gives exactly E0: only the ratio matters' } } };
+}
+
 export const COLONNES = Object.freeze({
+  pileDaniell: { colonnes: ['time (steps / 600)', 'cell voltage E / E0', 'log10 of the ratio Q (label)'], memeLongueur: [], autres: [0, 1, 2] },
   geometrieVSEPR: { colonnes: ['x (bond lengths)', 'y (same)', 'z (same)'], memeLongueur: [[0, 1, 2]], autres: [] },
   titrageAcideFaible: { colonnes: ['base added / base needed (half scale)', 'pH / 14', 'share of acid still as HA (label)'], memeLongueur: [], autres: [0, 1, 2] },
   reactionsChaine: { colonnes: ['time t', 'share of the molecules (0..1)', 'which species (0 = A, 1 = B, 2 = C)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -329,9 +367,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'geometrieVSEPR', nom: 'Molecule shapes (VSEPR) with measured bond angles', science: 'Chemistry', D: 3, nuage: true, params: { molecule: 1 },
     bornes: { molecule: [0, 4] },
     phrase: 'A visualisation of molecule shapes (VSEPR): the electron groups around the central atom push each other as far apart as they can. Five molecules are drawn in 3-D with their bond angles measured by spectroscopy (NIST). Water has four electron groups like methane, yet its angle is about five degrees narrower, because two of the groups are lone pairs: that is the witness.' },
+  { id: 'pileDaniell', nom: 'A zinc-copper battery running down (Nernst equation)', science: 'Electrochemistry', D: 3, nuage: true, params: { cuivre: 1, zinc: 0.01, kelvins: 298.15 },
+    bornes: { cuivre: [0.01, 2], zinc: [0.001, 1], kelvins: [273.15, 373.15] },
+    phrase: 'A visualisation of a Daniell cell (zinc and copper) running down: copper ions plate out, zinc ions pile up, and the voltage follows the Nernst equation at every step, with the gas and Faraday constants built from exact SI values. With both ions at the same low concentration the cell still gives its standard voltage: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [], geometrieVSEPR: ['molecule'] };
-const FONCTIONS = { geometrieVSEPR, titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
+export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [], geometrieVSEPR: ['molecule'], pileDaniell: [] };
+const FONCTIONS = { pileDaniell, geometrieVSEPR, titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

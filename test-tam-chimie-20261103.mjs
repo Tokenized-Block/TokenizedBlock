@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-chimie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible', 'geometrieVSEPR'];
+const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible', 'geometrieVSEPR', 'pileDaniell'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const aRef = (k1, t) => Math.exp(-k1 * t);
@@ -58,7 +58,7 @@ function suite(T, bavard = false) {
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
   ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
-    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw', 'angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw', 'angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3', 'NA', 'kB', 'e', 'E0Cu', 'E0Zn']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -162,6 +162,17 @@ function suite(T, bavard = false) {
     assert.equal(dirs.length, [4, 3, 2, 2, 3][m], 'nombre de liaisons dessinees');
     return I.geometrieVSEPR.molecule + ' ' + lu.toFixed(4);
   });
+  /* game216 : pile Daniell - reference INDEPENDANTE : Math.log, R et F refaits ICI depuis N_A, k_B, e ; valeurs de Grok Bot (codex 19) :
+   *   R = 8.31446261815324, F = 96485.3321233100184, pente 29.5796748424 mV/decade a 298.15 K, E = 1.098800000 / 1.069220325 / 1.128379675 V */
+  ok('pileDaniell : constantes et exemples de Grok Bot', () => { const R = 6.02214076e23 * 1.380649e-23, F = 6.02214076e23 * 1.602176634e-19;
+    assert.ok(Math.abs(R - 8.31446261815324) < 1e-12 && Math.abs(F - 96485.3321233100184) < 1e-8, R + ' ' + F);
+    assert.equal((Math.log(10) * R * 298.15 / (2 * F) * 1000).toFixed(10), '29.5796748424');
+    assert.equal([[0.01, 0.01], [0.01, 0.001], [0.001, 0.01]].map(([z, c]) => (1.0988 - R * 298.15 / (2 * F) * Math.log(z / c)).toFixed(9)).join(' '), '1.098800000 1.069220325 1.128379675'); return 'ok'; });
+  for (const p of [...extremes(sys('pileDaniell')), { cuivre: 0.5, zinc: 0.05, kelvins: 310 }]) ok(`pileDaniell ${JSON.stringify(p)} : Nernst a chaque pas, pente par decade, exemples de Grok, temoin`, () => {
+    const R = S('pileDaniell', p), I = R.invariants;
+    assert.ok(I.pileDaniell.mesure === 0 && Math.abs(I.pileDaniell.E0 - 1.0988) < 1e-12 && I.pileDaniell.penteDecade298mV.toFixed(10) === '29.5796748424' && I.pileDaniell.troisExemples === '1.098800000 1.069220325 1.128379675' && Math.abs(I.temoin.mesure - I.temoin.formule) < 1e-12, JSON.stringify(I));
+    return 'ok';
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation, gaz, vitesse moyenne)', () => {
     const zs = { picB: [], partB: [], relaxation: [], gaz: [], vitesse: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation));
@@ -214,6 +225,10 @@ const MUTANTS = [
   ['vsepr : NH3 avec deux doublets libres', "['NH3', 4, 1, SOURCES.angleNH3.valeur]", "['NH3', 4, 2, SOURCES.angleNH3.valeur]"],
   ['vsepr : pyramide a 120 au lieu de l angle mesure', 'if (ca * ca - 0.5 * sa * sa > c) lo = a; else hi = a; }', 'if (ca * ca - 0.5 * sa * sa > -0.5) lo = a; else hi = a; }'],
   ['vsepr : temoin sur NH3', 'temoin: { mesure: tetra - MOL[2][3], formule: 0,', 'temoin: { mesure: tetra - MOL[1][3], formule: 0,'],
+  ['nernst : n = 1 au lieu de 2', 'T = P.kelvins, ne = 2;', 'T = P.kelvins, ne = 1;'],
+  ['nernst : signe du terme ln Q inverse', 'const EdeQ = (Q) => E0 - (R * T / (ne * F)) * lnD(Q),', 'const EdeQ = (Q) => E0 + (R * T / (ne * F)) * lnD(Q),'],
+  ['nernst : F avec k_B au lieu de e', 'F = SOURCES.NA.valeur * SOURCES.e.valeur,', 'F = SOURCES.NA.valeur * SOURCES.kB.valeur * 1e4,'],
+  ['nernst : temoin a 0.01 et 0.001', 'temoinE = EdeQ(0.01 / 0.01);', 'temoinE = EdeQ(0.01 / 0.001);'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (chaine)', 'rng = mulberry32(P.graine), T = 5', 'rng = Math.random, T = 5'],
 ];
