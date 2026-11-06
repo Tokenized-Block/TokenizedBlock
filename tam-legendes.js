@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game202 (idee : codex Grok Bot) */
+  indicatriceEuler: {
+    titre: 'Euler totient function',
+    enUnePhrase: 'For each number, count the smaller numbers that share no factor with it.',
+    colonnes: ['which number', 'what share of the numbers below it are coprime', 'how many different primes divide it'],
+    aRegarder: ['Primes sit at the top: almost every number below a prime is coprime to it.', 'Numbers with many small primes sit low.', 'Add the counts of all the divisors of n and you get n back, every time.'],
+    fin: null,
+  },
   /* game201 (idee : codex Grok Bot) */
   periodePisano: {
     titre: 'Pisano periods (Fibonacci on a clock)',

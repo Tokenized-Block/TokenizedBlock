@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game202 */
+  indicatriceEuler: 'Divisor sums that miss n, broken multiplicativity, odd phi past 2', quarante: 'phi(1..40)',
   /* game201 */
   periodePisano: 'Cycles that do not close, lcm rule broken, odd periods past 2, periods above 6m', sixM: 'Moduli whose period is exactly 6m',
   /* game200 */
