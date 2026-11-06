@@ -3,7 +3,8 @@
 // Le banc a le droit a Math.exp/log : ses references sont calculees independamment du module
 //   (Jukes-Cantor par Math.exp ; moments du dogme central re-derives ICI des propensites des 4 reactions et resolus pas a pas,
 //   sans lire la formule du module).
-// REFERENCES : aucune valeur publiee ; chaque formule est recalculee ici depuis sa definition.
+// REFERENCES : aucune valeur publiee ; chaque formule est recalculee ici depuis sa definition. game213 : SEULE la table du code genetique
+//   (SOURCES.codeStandard, NCBI, lue par Grok Bot) : le banc exige valeur = texte lu, URL https, et la relit contre le TABLEAU de Grok (degenerescences).
 // Chaque verification tourne aux defauts ET a chaque extreme de curseur (un a un, tous min, tous max).
 // Tolerances annoncees (mesurees le 2026-11-03, sonde de 30 graines par reglage, puis marge) :
 //   formules recalculees a 1e-12 relatif ; ecarts statistiques |z| < 5 a chaque extreme (pire mesure 4.2 sur 270 tirages) ;
@@ -18,7 +19,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-biologie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg'];
+const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg', 'codeGenetique'];
 
 // ---------- references independantes (Math autorise ici) ----------
 /* game114 : Mendel par ENUMERATION des 16 paires de gametes (AB, ab : (1-r)/2 ; Ab, aB : r/2), sans les formules du module */
@@ -76,9 +77,9 @@ function suite(T, bavard = false) {
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
   // 1. forme, bornes, determinisme
-  ok('SYSTEMES gele, 2 systemes, SOURCES vide, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
+  ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.ok(Object.isFrozen(T.SYSTEMES[0].params));
-    assert.equal(Object.keys(T.SOURCES).length, 0); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+    assert.deepEqual(Object.keys(T.SOURCES), ['codeStandard']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === v.lu && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -188,6 +189,19 @@ function suite(T, bavard = false) {
     return `Aa ${I.heterozygotesHW.mesure.toFixed(4)}/${(2 * pe * qe).toFixed(4)}, chi2 ${G.mesure.toFixed(2)}`;
   });
   // 4. etalonnage des sigmas : sur 20 graines, les z ont un ecart-type ~ 1 (un sigma faux d un facteur 2 en sort)
+  /* game213 : code genetique - reference INDEPENDANTE : degenerescences du TABLEAU de Grok Bot (codex 19, NCBI table 1) et mutations
+   *   ponctuelles recomptees ICI par chaines de codons (pas d indices 16a + 4b + c) */
+  ok('codeGenetique : degenerescences = tableau de Grok Bot ; 61 sens + 3 stops', () => {
+    const t = T.SOURCES.codeStandard.valeur, c = {}; for (const x of t) c[x] = (c[x] || 0) + 1;
+    assert.deepEqual(c, { F: 2, L: 6, S: 6, Y: 2, '*': 3, C: 2, W: 1, P: 4, H: 2, Q: 2, R: 6, I: 3, M: 1, T: 4, N: 2, K: 2, V: 4, A: 4, D: 2, E: 2, G: 4 }); return 'ok'; });
+  const cgRef = () => { const B = 'UCAG', t = T.SOURCES.codeStandard.valeur, aa = {}; let i = 0; for (const a of B) for (const b of B) for (const c of B) aa[a + b + c] = t[i++];
+    const syn = [0, 0, 0], tot = [0, 0, 0]; for (const [cod, x] of Object.entries(aa)) { if (x === '*') continue; for (let p = 0; p < 3; p++) for (const v of B) { if (v === cod[p]) continue; const m = cod.slice(0, p) + v + cod.slice(p + 1); tot[p]++; if (aa[m] === x) syn[p]++; } }
+    return syn.map((s, p) => (s / tot[p]).toFixed(4)).join(' '); };
+  for (const p of [...extremes(sys('codeGenetique')), { longueur: 1000, graine: 77 }]) ok(`codeGenetique ${JSON.stringify(p)} : 21 classes, synonymes par position, temoin du decalage`, () => {
+    const R = S('codeGenetique', p), I = R.invariants;
+    assert.ok(I.codeGenetique.mesure === 0 && I.codeGenetique.synonymesParPosition === cgRef() && I.temoin.mesure < I.temoin.formule / 2, JSON.stringify(I));
+    return 'synonymes ' + I.codeGenetique.synonymesParPosition + ', decalage ' + I.temoin.mesure.toFixed(3);
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (differences, substitutions, Fano proteine, covariance, derive : moyenne et heterozygotie)', () => {
     const zs = { differences: [], substitutions: [], bruitProteine: [], covariance: [], frequenceMoyenne: [], heterozygotie: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('adnMutations', { graine: g }).invariants, d = T.simuler('dogmeCentral', { graine: g }).invariants;
@@ -235,6 +249,10 @@ const MUTANTS = [
   ['dogme : covariance kp k / gp', 'const cov = kp * k / (1 + gp);', 'const cov = kp * k / gp;'],
   ['dogme : jackknife sans le facteur (B - 1)', 'Math.sqrt(s * (DOGME_BLOCS - 1) / DOGME_BLOCS)', 'Math.sqrt(s / DOGME_BLOCS)'],
   ['dogme : traduction a kp sans l ARN (propensite fausse)', 'a3 = kp * m,', 'a3 = kp,'],
+  ['code : mutation qui garde la meme base', 'for (let v = 0; v < 4; v++) { if (v === bs[p]) continue; const m = bs.slice();', 'for (let v = 0; v < 4; v++) { const m = bs.slice();'],
+  ['code : classement des positions inverse', '(parPos[2] > parPos[0] && parPos[0] > parPos[1] ? 0 : 1)', '(parPos[0] > parPos[2] && parPos[0] > parPos[1] ? 0 : 1)'],
+  ['code : decalage de deux bases', '=== T[idx(bases[3 * k + 1], bases[3 * k + 2], bases[3 * k + 3])]) memes++;', '=== T[idx(bases[3 * k], bases[3 * k + 1], bases[3 * k + 2])]) memes++;'],
+  ['code : stops comptes comme sens', "for (let i = 0; i < 64; i++) { if (T[i] === '*') continue; const bs", "for (let i = 0; i < 64; i++) { const bs"],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['derive : 1 - 1/N au lieu de 1 - 1/(2N)', 'lam = 1 - 1 / N2, lG', 'lam = 1 - 1 / P.individus, lG'],
   ['derive : tirage biaise (+0.01)', 'for (let j = 0; j < N2; j++) if (rng() < q) x++;', 'for (let j = 0; j < N2; j++) if (rng() < q + 0.01) x++;'],

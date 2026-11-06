@@ -181,6 +181,8 @@ THEMES.maths.push('thueMorse');
 THEMES.maths.push('suitePadovan');
 /* game212 : fourmi de Langton (idee : codex Grok Bot) */
 THEMES.maths.push('fourmiLangton');
+/* game213 : le code genetique rejoint la biologie (idee : codex Grok Bot 19) */
+THEMES.biologie.push('codeGenetique');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1353,6 +1355,8 @@ export function monter(racine, ctx = {}) {
     'suitePadovan',
     /* game212 */
     'fourmiLangton',
+    /* game213 */
+    'codeGenetique',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

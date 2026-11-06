@@ -248,6 +248,8 @@ export const ECHELLE_PROPRE = {
   marcheAleatoire: [2], aiguilleBuffon: [2], anniversaires: [2], spiraleUlam: [2],
   /* game118 : vitesse (etiquette) ; copies, generation et numero (3 grandeurs) */
   gazParfait: [2], hardyWeinberg: [0, 1, 2],
+  /* game213 : rang et part de natures differentes ; acide amine (etiquette) */
+  codeGenetique: [2],
   /* game120 : hauteur d entree (etiquette) ; position, deplacement, temps ; instant d emission (etiquette) */
   arcEnCiel: [2], cordeVibrante: [0, 1, 2], effetDoppler: [2],
   /* game122 : numero de ligne ; temps et courbe ; numero de ligne du triangle */

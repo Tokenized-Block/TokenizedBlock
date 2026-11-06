@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game213 */
+  codeGenetique: 'Table counts off (21 classes, 3 stops) or synonymous ranking off (third > first > second)', degenerescence: 'Codons per amino acid', synonymesParPosition: 'Synonymous share of point mutations, by codon position', synonymesGlobal: 'Synonymous share of all point mutations',
   /* game212 */
   fourmiLangton: 'Transient length off 9976, or steps off the (-2, -2) highway', dernierDesaccord: 'Last step whose turn differs 104 steps later', a10000: 'Position and heading at step 10000', a10104: 'Position and heading at step 10104', noiresFin: 'Black squares at the end', desaccord52: 'Mismatches with period 52', desaccord103: 'Mismatches with period 103',
   /* game211 */

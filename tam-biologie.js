@@ -6,7 +6,7 @@
 // Pur : aucun DOM, aucun reseau, aucune horloge, aucun generateur aleatoire natif (graines : mulberry32).
 // DETERMINISME : aucune fonction transcendante native. sin/cos/ln = ceux du moteur ; e^(-x) ici par demi-reductions + serie + carres
 //   (+ - * / seulement) ; Math.sqrt/round/floor/abs/min/max seulement (IEEE exacts).
-// REGLE DU PROJET : aucune valeur publiee sans source lue. Ici AUCUNE : les taux sont sans dimension (temps en duree de vie d un ARN
+// REGLE DU PROJET : aucune valeur publiee sans source lue. game213 : SEULE la table du code genetique (SOURCES.codeStandard, NCBI) ; sinon AUCUNE : les taux sont sans dimension (temps en duree de vie d un ARN
 //   messager pour le dogme central, en unites arbitraires pour les mutations), chaque formule comparee est derivee dans le commentaire
 //   de sa section ; SOURCES est vide expres. L helice est DESSINEE (10 bases par tour, pas a l echelle) : aucune geometrie publiee n est
 //   affirmee.
@@ -22,7 +22,14 @@ import { sinD, cosD, lnD } from './tam-moteur.js';
 const DEUX_PI = 2 * Math.PI;
 
 // ---------- constantes d entree : aucune (unites sans dimension) ----------
-export const SOURCES = Object.freeze({});
+/* game213 : PREMIERE valeur publiee du module (Phil : « ajoute biologie, chimie... le codex doit etre giga complet ») : la table du code
+ *   genetique standard, lue par Grok Bot (codex 19) sur NCBI, transcrite case par case de son tableau (ordre des bases U, C, A, G ;
+ *   premiere base = paquet de 16, deuxieme = paquet de 4, troisieme = dans le paquet). « * » = stop. Le banc exige valeur = texte lu. */
+const S = (valeur, unite, url, lu) => Object.freeze({ valeur, unite, url, lu });
+export const SOURCES = Object.freeze({
+  // https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi#SG1 : « 1. The Standard Code », ligne AAs (T affiche U ici)
+  codeStandard: S('FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG', 'acides amines (une lettre), * = stop', 'https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi#SG1', 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG'),
+});
 
 // ---------- arithmetique deterministe ----------
 /* e^(-x), x >= 0 : x divise par 2 jusqu a x <= 1/2 (m fois, exact en binaire), serie a 30 termes (reste < 0.5^31/31!), puis m carres */
@@ -373,7 +380,34 @@ function hardyWeinberg(P, n) {
 }
 
 // ---------- colonnes de brut ----------
+// ---------- game213 : le code genetique (idee et table : codex Grok Bot 19 ; NCBI « The Genetic Codes », table 1, lue par Grok) ----------
+// 64 codons -> 20 acides amines + stop (SOURCES.codeStandard). MESURE ici : 61 codons de sens + 3 stops, 21 classes ; pour chaque codon de
+//   sens et chacune de ses 9 mutations ponctuelles, la part qui garde le MEME acide amine (synonyme), par position du codon : la troisieme
+//   position encaisse presque tout, la deuxieme rien (0 exactement).
+// Temoin : un ARN messager tire (graine) lu avec un DECALAGE d une base : presque tous les acides amines changent, bien plus qu avec une
+//   mutation ponctuelle.
+// Dessin (vue de face) : chaque codon du messager tire (rang / L, part de ses 9 mutations qui sont synonymes) ; etiquette = acide amine (0..20).
+function codeGenetique(P, n) {
+  const T = SOURCES.codeStandard.valeur, L = P.longueur, rng = mulberry32(P.graine), idx = (a, b, c) => 16 * a + 4 * b + c;
+  const classes = new Map(); for (const x of T) classes.set(x, (classes.get(x) || 0) + 1);
+  const syn = [0, 0, 0], tot = [0, 0, 0], partSyn = new Array(64).fill(0);
+  for (let i = 0; i < 64; i++) { if (T[i] === '*') continue; const bs = [i >> 4, (i >> 2) & 3, i & 3]; let s = 0;
+    for (let p = 0; p < 3; p++) for (let v = 0; v < 4; v++) { if (v === bs[p]) continue; const m = bs.slice(); m[p] = v; tot[p]++; if (T[idx(m[0], m[1], m[2])] === T[i]) { syn[p]++; s++; } }
+    partSyn[i] = s / 9; }
+  const bases = Array.from({ length: 3 * L + 1 }, () => Math.floor(rng() * 4));
+  let memes = 0; for (let k = 0; k + 1 < L; k++) if (T[idx(bases[3 * k], bases[3 * k + 1], bases[3 * k + 2])] === T[idx(bases[3 * k + 1], bases[3 * k + 2], bases[3 * k + 3])]) memes++;
+  const lettres = [...classes.keys()].sort(), brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const k = Math.floor(l * L / n), c = idx(bases[3 * k], bases[3 * k + 1], bases[3 * k + 2]), o = 3 * l; brut[o] = (k + 1) / L; brut[o + 1] = partSyn[c]; brut[o + 2] = lettres.indexOf(T[c]); }
+  const parPos = syn.map((x, p) => x / tot[p]), global = (syn[0] + syn[1] + syn[2]) / (tot[0] + tot[1] + tot[2]);
+  return { D: 3, brut, nuage: true, unite: 'codons', invariants: {
+    codeGenetique: { mesure: (classes.size === 21 && classes.get('*') === 3 ? 0 : 1) + (parPos[2] > parPos[0] && parPos[0] > parPos[1] ? 0 : 1), formule: 0,
+      degenerescence: lettres.map((x) => x + ':' + classes.get(x)).join(' '), synonymesParPosition: parPos.map((x) => x.toFixed(4)).join(' '), synonymesGlobal: global,
+      note: 'table must give 21 classes with 3 stops, and synonymous point mutations must rank third position > first > second' },
+    temoin: { mesure: memes / (L - 1), formule: global, note: 'witness: reading the same messenger shifted by one base keeps far fewer amino acids than a point mutation does' } } };
+}
+
 export const COLONNES = Object.freeze({
+  codeGenetique: { colonnes: ['codon rank / L', 'share of its 9 point mutations that keep the amino acid', 'amino acid (label, 20 = stop)'], memeLongueur: [], autres: [0, 1, 2] },
   adnMutations: { colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base (0 = A, 1 = C, 2 = G, 3 = T)', 'time t'], memeLongueur: [[0, 1, 2]], autres: [3, 4] },
   dogmeCentral: { colonnes: ['time t (mRNA lifetimes, last 30)', 'count divided by its exact mean (1 = the mean)', 'which molecule (0 = mRNA, 1 = protein)'], memeLongueur: [], autres: [0, 1, 2] },
   deriveGenetique: { colonnes: ['generation', 'share of the variant in the population (0..1)', 'population number (label)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -406,9 +440,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'hardyWeinberg', nom: 'Hardy-Weinberg (one generation of random mating)', science: 'Population genetics', D: 3, nuage: true, params: { individus: 1000, partA: 0.3, graine: 1 },
     bornes: { individus: [100, 5000], partA: [0.05, 0.95], graine: [1, 1000000] },
     phrase: 'A visualisation of the Hardy-Weinberg law: parents that are all AA or aa (no mixed Aa at all) mate at random once. Their children come out AA : Aa : aa in the exact proportions p^2 : 2 p q : q^2 in a single generation, mixed carriers included. Parents drawn below, children above; a finite number of children, so the agreement is statistical.' },
+  { id: 'codeGenetique', nom: 'The genetic code (codons to amino acids)', science: 'Molecular biology', D: 3, nuage: true, params: { longueur: 600, graine: 1 },
+    bornes: { longueur: [100, 3000], graine: [1, 1000000] },
+    phrase: 'A visualisation of the standard genetic code (NCBI table 1): 64 three-letter codons spell 20 amino acids and a stop. For every codon, each of its 9 single-letter mutations is checked: the third letter forgives most of them, the second none at all. Reading a messenger one letter off changes almost every amino acid: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [], hardyWeinberg: ['individus', 'graine'] };
-const FONCTIONS = { adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone, hardyWeinberg };
+export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [], hardyWeinberg: ['individus', 'graine'], codeGenetique: ['longueur', 'graine'] };
+const FONCTIONS = { codeGenetique, adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone, hardyWeinberg };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game213 (idee : codex Grok Bot) */
+  codeGenetique: {
+    titre: 'The genetic code',
+    enUnePhrase: 'Every three letters of RNA name one amino acid, or say stop: 64 words for 21 meanings.',
+    colonnes: ['which word in the message', 'how forgiving that word is to a one-letter typo', 'which amino acid'],
+    aRegarder: ['Many words mean the same amino acid: a typo in the third letter is usually harmless.', 'A typo in the second letter always changes the amino acid.', 'Skip a single letter and almost the whole message changes.'],
+    fin: null,
+  },
   /* game212 (idee : codex Grok Bot) */
   fourmiLangton: {
     titre: "Langton's ant",
