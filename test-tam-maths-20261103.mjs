@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus', 'zeckendorf', 'theoremeLucas', 'calkinWilf'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee', 'sommesCarres', 'equationPell', 'nombresCarmichael', 'theoremeWilson', 'fonctionMertens', 'parfaitsAmicaux', 'nombresBernoulli', 'problemeJosephus', 'zeckendorf', 'theoremeLucas', 'calkinWilf', 'toursHanoi'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -914,6 +914,20 @@ function suite(T, bavard = false, seul = null) {
     assert.ok(I.calkinWilf.mesure === 0 && I.complet.mesure === 0 && I.calkinWilf.trente === CW30 && I.temoin.mesure > 0, JSON.stringify(I));
     const Dn = R.params.niveaux; for (const k of [2 ** Dn - 1, 2 ** (Dn - 1), 1000 % (2 ** Dn - 1) + 1]) assert.ok(cwRef(k).split('/').length === 2); return 'temoin ' + I.temoin.mesure;
   });
+  /* game193 : Hanoi — reference INDEPENDANTE : solution ITERATIVE (le plus petit disque tourne dans un sens fixe, l autre coup est le seul legal),
+   *   rejouee et comparee coup par coup ; valeurs de Grok Bot T(1..10) = 2^n - 1 (A000225) */
+  const hanoiIter = (n) => { const P = [[], [], []]; for (let d = n; d >= 1; d--) P[0].push(d); const sens = n % 2 ? 2 : 1, out = []; let petit = 0;
+    for (let m = 1; m < 2 ** n; m++) { if (m % 2) { const v = (petit + (sens === 2 ? 2 : 1)) % 3; P[v].push(P[petit].pop()); out.push([1, v]); petit = v; }
+      else { const [a, b] = [0, 1, 2].filter((x) => x !== petit), ta = P[a][P[a].length - 1] ?? Infinity, tb = P[b][P[b].length - 1] ?? Infinity; if (ta < tb) { P[b].push(P[a].pop()); out.push([ta, b]); } else { P[a].push(P[b].pop()); out.push([tb, a]); } } }
+    return { out, fini: P[2].length === n }; };
+  ok('toursHanoi : solution iterative, T(1..10) = 2^n - 1 (valeurs de Grok Bot)', () => { assert.deepEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => hanoiIter(n).out.length), [1, 3, 7, 15, 31, 63, 127, 255, 511, 1023]); return 'ok'; });
+  for (const p of [...extremes(sys('toursHanoi')), { disques: 5 }, { disques: 12 }]) ok(`toursHanoi ${JSON.stringify(p)} : 2^n - 1 coups legaux, Gray, coups = solution iterative, temoin`, () => {
+    const R = S('toursHanoi', p), I = R.invariants, N = R.params.disques, it = hanoiIter(N);
+    assert.ok(I.hanoi.mesure === 0 && I.hanoi.coups === 2 ** N - 1 && I.gray.mesure === 0 && I.temoin.mesure === I.temoin.formule && it.fini, JSON.stringify(I));
+    /* le dessin : le disque du coup i = celui de la solution iterative */
+    let mal = 0; for (let q = 0; q < R.n; q++) { const o = 3 * q, i = Math.round(R.brut[o] * I.hanoi.coups) - 1; if (Math.round(R.brut[o + 1] * N) !== it.out[i][0] || R.brut[o + 2] !== it.out[i][1]) mal++; }
+    assert.equal(mal, 0, 'dessin vs solution iterative'); return N + ' disques : ' + I.hanoi.coups + ' coups';
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -1178,6 +1192,10 @@ const MUTANTS = [
   ['calkin : fusc pair = fusc(n) + 1', 'fusc.push(k % 2 ? fusc[(k - 1) / 2] + fusc[(k + 1) / 2] : fusc[k / 2]);', 'fusc.push(k % 2 ? fusc[(k - 1) / 2] + fusc[(k + 1) / 2] : fusc[k / 2] + 1);'],
   ['calkin : completude jusqu a D + 2', 'for (let s = 2; s <= Dn + 1; s++) for (let p = 1; p < s; p++)', 'for (let s = 2; s <= Dn + 2; s++) for (let p = 1; p < s; p++)'],
   ['calkin : temoin reduit', "const q = s - p, d = g(p, q), cle = (p / d) + '/' + (q / d);", "const q = s - p, d = 1, cle = (p / d) + '/' + (q / d);"],
+  ['hanoi : piquet intermediaire inverse', 'bouge(k - 1, de, via, vers); const disque', 'bouge(k - 1, de, vers, via); const disque'],
+  ['hanoi : disque 1 + ctz(m) - 1', 'if (disque !== z + 1 || bits !== 1 || p !== z) horsGray++;', 'if (disque !== z || bits !== 1 || p !== z) horsGray++;'],
+  ['hanoi : Gray sans le decalage', 'const x = (m ^ (m >> 1)) ^ ((m - 1) ^ ((m - 1) >> 1));', 'const x = m ^ (m - 1);'],
+  ['hanoi : temoin sans multi-bits', 'if (c > 1) binaireMulti++; });', 'if (c > 2) binaireMulti++; });'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -1192,7 +1210,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { calkin: ['calkinWilf'], lucas: ['theoremeLucas'], zeckendorf: ['zeckendorf'], josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { hanoi: ['toursHanoi'], calkin: ['calkinWilf'], lucas: ['theoremeLucas'], zeckendorf: ['zeckendorf'], josephus: ['problemeJosephus'], bernoulli: ['nombresBernoulli'], aliquote: ['parfaitsAmicaux'], mertens: ['fonctionMertens'], wilson: ['theoremeWilson'], carmichael: ['nombresCarmichael'], pell: ['equationPell'], carres: ['sommesCarres'], ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

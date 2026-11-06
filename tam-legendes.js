@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game193 (idee : codex Grok Bot) */
+  toursHanoi: {
+    titre: 'Towers of Hanoi (and the Gray code)',
+    enUnePhrase: 'Move a tower of disks, one at a time and never big on small: it takes 2^n - 1 moves, and the Gray code tells which disk.',
+    colonnes: ['time', 'which disk', 'where it goes'],
+    aRegarder: ['The smallest disk moves every second turn; the largest moves once, in the middle.', 'Disk number k moves exactly when the k-th bit of the Gray code flips.', 'Counting in ordinary binary flips several bits at once: it does not match the moves.'],
+    fin: null,
+  },
   /* game192 (idee : codex Grok Bot) */
   calkinWilf: {
     titre: 'The Calkin-Wilf tree (every fraction exactly once)',
