@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game181 */
+  ecartFlottant: 'same in floating point', quadrilatere: 'the four points',
   /* game180 */
   hexagone: 'the six points',
   /* game179 */
@@ -467,6 +469,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game181 */
+  croise: 'Crossed order wrongly accepted (0 = refused)', ptolemee: 'AC.BD = AB.CD + AD.BC on the squared lengths (exact)',
   /* game180 */
   pascal: 'Twice the area of the three meeting points (0 = aligned, exact)',
   /* game179 */

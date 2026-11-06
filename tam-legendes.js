@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game181 (idee : codex Grok Bot) */
+  ptolemee: {
+    titre: 'Ptolemy\'s theorem (four points on a circle)',
+    enUnePhrase: 'For four points on a circle, diagonal times diagonal equals side times opposite side, added twice.',
+    colonnes: ['across', 'up', 'circle, quadrilateral, or diagonals'],
+    aRegarder: ['Change the seed: any four points of the circle obey the same rule.', 'The lengths are square roots, but the rule is checked exactly through their squares.', 'Push one corner off the circle and the sides win: their products add up to more than the diagonals.'],
+    fin: null,
+  },
   /* game180 (idee : codex Grok Bot) */
   pascalHexagramme: {
     titre: 'Pascal\'s hexagram (six points on a circle)',

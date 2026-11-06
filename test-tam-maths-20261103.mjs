@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations', 'ramseyR33', 'pascalHexagramme', 'ptolemee'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -770,6 +770,19 @@ function suite(T, bavard = false, seul = null) {
     const r = pasRef(H), e = 1 + Math.max(...[r.X, r.Y, r.Z].flat().map(Math.abs)) ** 2; assert.ok(Math.abs(r.aire2) < 1e-9 * e, 'reference ' + r.aire2);
     assert.ok(Number.isNaN(I.temoin.mesure) || (I.temoin.exact !== '0' && I.temoin.mesure !== 0), 'temoin ' + JSON.stringify(I.temoin)); return I.pascal.hexagone;
   });
+  /* game181 : Ptolemee — reference INDEPENDANTE en flottants (longueurs par hypot) ; controle exact de Grok Bot : rectangle 6 x 8,
+   *   AC.BD = 100 = 36 + 64 ; temoin C' = (7, 8) : 10 sqrt(113) contre 42 + 8 sqrt(65) */
+  const ptoRef = (A, B, C, Dd) => { const L = (U, V) => Math.hypot(U[0] - V[0], U[1] - V[1]); return L(A, B) * L(C, Dd) + L(A, Dd) * L(B, C) - L(A, C) * L(B, Dd); };
+  ok('ptolemee : controle de Grok Bot (rectangle 6 x 8 ; temoin C\' = (7, 8))', () => {
+    assert.ok(Math.abs(ptoRef([0, 0], [6, 0], [6, 8], [0, 8])) < 1e-12); const w = ptoRef([0, 0], [6, 0], [7, 8], [0, 8]);
+    assert.ok(Math.abs(w - (42 + 8 * Math.sqrt(65) - 10 * Math.sqrt(113))) < 1e-12 && w > 0); return 'temoin ' + w.toFixed(6); });
+  for (const p of [{}, { graine: 1000000 }, { graine: 4242 }, { graine: 7 }, { graine: 99 }]) ok(`ptolemee ${JSON.stringify(p)} : egalite exacte, reference flottante, points sur le cercle, temoin`, () => {
+    const R = S('ptolemee', p), I = R.invariants, val = (t) => { const [u, v] = t.split('/'); return Number(u) / (v ? Number(v) : 1); };
+    const Q = I.ptolemee.quadrilatere.match(/\(([^)]+)\)/g).map((s) => s.slice(1, -1).split(', ').map(val));
+    assert.ok(I.ptolemee.mesure === 0 && Math.abs(I.ptolemee.ecartFlottant) < 1e-12 && I.croise.mesure === 0, JSON.stringify(I));
+    assert.ok(Q.length === 4 && Q.every(([x, y]) => Math.abs(x * x + y * y - 1) < 1e-12) && Math.abs(ptoRef(...Q)) < 1e-12, 'reference');
+    assert.ok(I.temoin.mesure > 1e-9, 'temoin ' + I.temoin.mesure); return I.ptolemee.quadrilatere;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -988,6 +1001,10 @@ const MUTANTS = [
   ['hexagramme : cotes voisins au lieu d opposes', 'const X = pascalInter(H[0], H[1], H[3], H[4]), Y', 'const X = pascalInter(H[0], H[1], H[2], H[3]), Y'],
   ['hexagramme : point hors du cercle', 'return [feuF(1n - T * T, d), feuF(2n * T, d)]; });', 'return [feuF(1n - T * T, d), feuF(2n * T + 1n, d)]; });'],
   ['hexagramme : temoin sur le cercle', 'H2 = [...H.slice(0, 5), [feuE(2), feuE(2)]]', 'H2 = [...H.slice(0, 5), H[5]]'],
+  ['ptolemee : signe de la racine oublie', 'return { egal: g[0] >= 0n && feuEq(feuMul(g, g), droite)', 'return { egal: feuEq(feuMul(g, g), droite) || g[0] < 0n'],
+  ['ptolemee : facteur 2 au lieu de 4', 'droite = feuMul(feuE(4), feuMul(feuMul(ab, cd), feuMul(da, bc)));', 'droite = feuMul(feuE(2), feuMul(feuMul(ab, cd), feuMul(da, bc)));'],
+  ['ptolemee : ordre du cercle perdu', 'Q.sort((u, v) => atan2D(feuNb(u[1]), feuNb(u[0])) - atan2D(feuNb(v[1]), feuNb(v[0])));', 'Q.sort((u, v) => feuNb(u[0]) - feuNb(v[0]));'],
+  ['ptolemee : temoin sur le cercle', 'C2 = [feuMul(feuF(6n, 5n), Q[2][0]), feuMul(feuF(6n, 5n), Q[2][1])]', 'C2 = Q[2]'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -1002,7 +1019,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { ptolemee: ['ptolemee'], hexagramme: ['pascalHexagramme'], ramsey: ['ramseyR33'], triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

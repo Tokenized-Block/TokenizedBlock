@@ -1358,7 +1358,36 @@ function pascalHexagramme(P, n) {
     temoin: { mesure: aireT === null ? NaN : feuNb(aireT), exact: aireT === null ? null : feuTexte(aireT), absente: 'two opposite sides parallel', note: 'witness: F moved to (2, 2), off the circle : the three points are no longer on one line' } } };
 }
 
+// ---------- 38 : le theoreme de Ptolemee (idee et valeurs : codex Grok Bot ; MathWorld, Wikipedia « Ptolemy s theorem », lus par Grok) ----------
+// Pour un quadrilatere ABCD inscrit dans un cercle : AC.BD = AB.CD + AD.BC (produit des diagonales = somme des produits des cotes opposes).
+// Exact ici : quatre points RATIONNELS du cercle unite (parametrage t, graine), pris dans l ordre du cercle ; les longueurs sont des racines,
+//   mais leurs CARRES sont des fractions : l egalite, elevee deux fois au carre, devient (AC2 BD2 - AB2 CD2 - AD2 BC2)^2 = 4 AB2 CD2 AD2 BC2,
+//   verifiee en fractions BigInt A L IDENTIQUE (avec le signe AC2 BD2 - AB2 CD2 - AD2 BC2 >= 0, qui exclut la racine parasite).
+// Aussi : les memes points dans l ordre CROISE A, C, B, D satisfont l identite elevee au carre, mais avec le mauvais signe : refuse (le signe sert).
+// Temoin : C deplace hors du cercle (C x 6/5) : AB.CD + AD.BC > AC.BD strictement (inegalite de Ptolemee).
+// Dessin (vue de face) : le cercle (0), le quadrilatere (1), les deux diagonales (2).
+function ptolemee(P, n) {
+  const rng = mulberry32(P.graine), ts = new Set(); while (ts.size < 4) ts.add(Math.floor(rng() * 25) - 12);
+  const Q = [...ts].map((t) => { const tb = BigInt(t), den = 1n + tb * tb; return [feuF(1n - tb * tb, den), feuF(2n * tb, den)]; });
+  Q.sort((u, v) => atan2D(feuNb(u[1]), feuNb(u[0])) - atan2D(feuNb(v[1]), feuNb(v[0])));
+  const d2 = (U, V) => feuAdd(feuMul(feuSub(U[0], V[0]), feuSub(U[0], V[0])), feuMul(feuSub(U[1], V[1]), feuSub(U[1], V[1])));
+  const verif = (A, B, C, Dd) => { const ab = d2(A, B), bc = d2(B, C), cd = d2(C, Dd), da = d2(Dd, A), ac = d2(A, C), bd = d2(B, Dd);
+    const g = feuSub(feuSub(feuMul(ac, bd), feuMul(ab, cd)), feuMul(da, bc)), droite = feuMul(feuE(4), feuMul(feuMul(ab, cd), feuMul(da, bc)));
+    return { egal: g[0] >= 0n && feuEq(feuMul(g, g), droite), ecart: Math.sqrt(feuNb(ab) * feuNb(cd)) + Math.sqrt(feuNb(da) * feuNb(bc)) - Math.sqrt(feuNb(ac) * feuNb(bd)) }; };
+  const V = verif(...Q), X = verif(Q[0], Q[2], Q[1], Q[3]), C2 = [feuMul(feuF(6n, 5n), Q[2][0]), feuMul(feuF(6n, 5n), Q[2][1])], W = verif(Q[0], Q[1], C2, Q[3]);
+  const nb = (q) => [feuNb(q[0]), feuNb(q[1])], Qn = Q.map(nb), segs = [];
+  for (let k = 0; k < 4; k++) segs.push([Qn[k], Qn[(k + 1) % 4], 1]); segs.push([Qn[0], Qn[2], 2], [Qn[1], Qn[3], 2]);
+  const brut = new Float64Array(n * 3), nc = Math.floor(n / 3);
+  for (let l = 0; l < n; l++) { const o = 3 * l; if (l < nc) { const a = 2 * PI * l / nc; brut[o] = cosD(a); brut[o + 1] = sinD(a); brut[o + 2] = 0; continue; }
+    const t = (l - nc) * segs.length / (n - nc), j = Math.floor(t), u = t - j, sg = segs[j]; brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
+  return { D: 3, brut, nuage: true, unite: 'rayon du cercle = 1', invariants: {
+    ptolemee: { mesure: V.egal ? 0 : 1, formule: 0, ecartFlottant: V.ecart, quadrilatere: Q.map((q) => '(' + feuTexte(q[0]) + ', ' + feuTexte(q[1]) + ')').join(' '), note: 'AC.BD = AB.CD + AD.BC checked exactly on the squared lengths (0 = equal) ; ecartFlottant = the same in floating point' },
+    croise: { mesure: X.egal ? 1 : 0, formule: 0, note: 'the same four points in CROSSED order A, C, B, D : the squared identity still holds but with the wrong sign (the parasitic root) — must be refused (0)' },
+    temoin: { mesure: W.ecart, note: 'witness: C moved off the circle (x 6/5) : AB.CD + AD.BC - AC.BD, now strictly positive (Ptolemy s inequality)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  ptolemee: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = quadrilateral, 2 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
   pascalHexagramme: { colonnes: ['x', 'y', 'what (label; 0 = circle, 1 = hexagon, 2 = extended sides and the Pascal line)'], memeLongueur: [[0, 1]], autres: [2] },
   ramseyR33: { colonnes: ['x', 'y', 'colour (label; 0 = red, 1 = blue, 2 = the one-colour triangle)'], memeLongueur: [[0, 1]], autres: [2] },
   triangulations: { colonnes: ['x', 'y', 'what (label; 0 = polygon, 1 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1510,9 +1539,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'pascalHexagramme', nom: 'Pascal\'s hexagram', science: 'Geometry', D: 3, nuage: true, params: { croise: 0, graine: 1 },
     bornes: { croise: [0, 1], graine: [1, 1000000] },
     phrase: 'A visualisation of Pascal\'s theorem: take six points on a circle in any order, join them into a hexagon, and the three pairs of opposite sides meet in three points on one straight line. The points are rational, so the line is checked exactly; moving one point off the circle breaks it.' },
+  { id: 'ptolemee', nom: 'Ptolemy\'s theorem', science: 'Geometry', D: 3, nuage: true, params: { graine: 1 },
+    bornes: { graine: [1, 1000000] },
+    phrase: 'A visualisation of Ptolemy\'s theorem: for four points on a circle, the product of the diagonals equals the sum of the products of opposite sides. The points are rational, so the squared lengths are fractions and the identity is checked exactly; a corner pushed off the circle gives a strict inequality.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'] };
-const FONCTIONS = { pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'] };
+const FONCTIONS = { ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
