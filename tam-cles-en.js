@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game208 */
+  suiteKolakoski: 'Runs whose length differs from the term they should match', unsSoixante: 'Number of 1s among the first 60 terms', proportionUns: 'Share of 1s up to the slider (measured)',
   /* game207 */
   suiteRecaman: 'Jumps that are not n, or that break the step-back rule', premierRepete: 'First repeated value and its two positions', plusPetitAbsent: 'Smallest number not yet reached',
   /* game206 */
