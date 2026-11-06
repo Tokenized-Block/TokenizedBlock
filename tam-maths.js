@@ -1477,7 +1477,30 @@ function theoremeWilson(P, n) {
     temoin: { mesure: restes[4], formule: 2, note: 'witness: n = 4, composite, gives 3! mod 4 = 2, not 0 : the one exception' } } };
 }
 
+// ---------- 43 : la fonction de Mertens M(n) (idee et valeurs : codex Grok Bot ; MathWorld « Mertens Function », OEIS A002321, lus par Grok) ----------
+// mu(k) = 0 si k a un facteur carre, sinon (-1)^(nombre de facteurs premiers) ; M(n) = mu(1) + ... + mu(n), une marche qui monte et descend.
+// Exact ici : mu par un crible, M par somme d entiers ; et l identite derivee de l inversion de Mobius : somme_{k <= n} M(n div k) = 1, verifiee
+//   pour CHAQUE n jusqu au curseur. M(1..50) = valeurs de Grok (M(7) = -2).
+// Temoin : avec la fonction de Liouville lambda(k) = (-1)^(nombre de facteurs premiers, avec multiplicite) au lieu de mu, la meme somme vaut
+//   partie entiere de racine de n (derive : la somme de lambda sur les diviseurs de m vaut 1 si m est un carre, 0 sinon) — pas 1.
+// Dessin (vue de face) : la marche (n / limite, M(n) / racine de la limite), etiquette = mu(n) + 1 (0, 1 ou 2).
+function mertensCribles(N) { const mu = new Int8Array(N + 1).fill(1), lam = new Int8Array(N + 1).fill(1), est = new Uint8Array(N + 1);
+  for (let p = 2; p <= N; p++) if (!est[p]) { for (let m = p; m <= N; m += p) { est[m] = m !== p ? 1 : est[m]; mu[m] = -mu[m]; } for (let j = p * p; j <= N; j += p * p) mu[j] = 0;
+    for (let q = p; q <= N; q *= p) for (let m = q; m <= N; m += q) lam[m] = -lam[m]; }
+  return { mu, lam }; }
+function fonctionMertens(P, n) {
+  const N = P.limite, { mu, lam } = mertensCribles(N), M = new Int32Array(N + 1), L = new Int32Array(N + 1);
+  for (let k = 1; k <= N; k++) { M[k] = M[k - 1] + mu[k]; L[k] = L[k - 1] + lam[k]; }
+  let horsIdentite = 0; for (let m = 1; m <= N; m++) { let s = 0; for (let k = 1; k <= m; k++) s += M[Math.floor(m / k)]; if (s !== 1) horsIdentite++; }
+  let sL = 0; for (let k = 1; k <= N; k++) sL += L[Math.floor(N / k)];
+  const rac = Math.sqrt(N), brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const k = 1 + Math.floor(l * N / n), o = 3 * l; brut[o] = k / N; brut[o + 1] = M[k] / rac; brut[o + 2] = mu[k] + 1; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet', invariants: {
+    identiteMobius: { mesure: horsIdentite, formule: 0, mn: M[N], cinquante: Array.from(M.slice(1, 51)).join(', '), note: 'n up to the slider where the sum over k of M(n div k) is not 1 (Mobius inversion)' },
+    temoin: { mesure: sL, formule: Math.floor(Math.sqrt(N)), note: 'witness: the same sum with Liouville lambda instead of mu gives floor(sqrt n), not 1' } } };
+}
+
 export const COLONNES = Object.freeze({
+  fonctionMertens: { colonnes: ['n / limit', 'M(n) / sqrt(limit)', 'mu(n) + 1 (label)'], memeLongueur: [], autres: [0, 1, 2] },
   theoremeWilson: { colonnes: ['n / limit', '((n - 1)! mod n) / n', 'prime (label; 1 prime, 0 composite)'], memeLongueur: [], autres: [0, 1, 2] },
   nombresCarmichael: { colonnes: ['rank of the number found', 'prime factor p of it', 'kind (label; 0 = base-2 pseudoprime only, 1 = Carmichael)'], memeLongueur: [], autres: [0, 1, 2] },
   equationPell: { colonnes: ['k (convergent number)', 'p_k / q_k', 'sign of p^2 - D q^2 (label; 0 negative, 1 positive, 2 = root D)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -1649,9 +1672,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'theoremeWilson', nom: 'Wilson\'s theorem', science: 'Number theory', D: 3, nuage: true, params: { limite: 300 },
     bornes: { limite: [30, 3000] },
     phrase: 'A visualisation of Wilson\'s theorem: n is prime exactly when (n - 1)! leaves remainder n - 1 when divided by n. Every remainder is computed exactly up to the slider and compared with trial division; n = 4, the one composite with remainder 2 instead of 0, is the witness.' },
+  { id: 'fonctionMertens', nom: 'The Mertens function', science: 'Number theory', D: 3, nuage: true, params: { limite: 1000 },
+    bornes: { limite: [50, 3000] },
+    phrase: 'A visualisation of the Mertens function: add up the Mobius function mu(1) + ... + mu(n), +1, -1 or 0 for each number, and watch the walk. For every n the exact identity sum of M(n div k) = 1 is checked; the same sum with the Liouville function gives the integer part of the square root instead.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'] };
-const FONCTIONS = { theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'] };
+const FONCTIONS = { fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

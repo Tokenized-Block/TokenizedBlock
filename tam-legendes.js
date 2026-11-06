@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game186 (idee : codex Grok Bot) */
+  fonctionMertens: {
+    titre: 'The Mertens function (a walk made of +1, -1 and 0)',
+    enUnePhrase: 'Each number steps up, down or stays, depending on its prime factors: the walk is the Mertens function.',
+    colonnes: ['n (as a share of the limit)', 'M(n) scaled', 'the step: down, none, up'],
+    aRegarder: ['The walk wanders around zero without drifting away.', 'Adding M(n), M(n/2), M(n/3), ... always gives exactly 1.', 'With the Liouville function the same sum gives the square root of n instead.'],
+    fin: null,
+  },
   /* game185 (idee : codex Grok Bot) */
   theoremeWilson: {
     titre: 'Wilson\'s theorem',

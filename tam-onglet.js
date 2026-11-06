@@ -127,6 +127,8 @@ THEMES.maths.push('equationPell');
 THEMES.maths.push('nombresCarmichael');
 /* game185 : le theoreme de Wilson (idee : codex Grok Bot) */
 THEMES.maths.push('theoremeWilson');
+/* game186 : la fonction de Mertens (idee : codex Grok Bot) */
+THEMES.maths.push('fonctionMertens');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1245,6 +1247,8 @@ export function monter(racine, ctx = {}) {
     'nombresCarmichael',
     /* game185 */
     'theoremeWilson',
+    /* game186 */
+    'fonctionMertens',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */

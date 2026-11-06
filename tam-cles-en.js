@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game186 */
+  mn: 'M(n)', cinquante: 'M(1..50)',
   /* game185 */
   trente: '(n - 1)! mod n for n = 2..30',
   /* game184 */
@@ -477,6 +479,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game186 */
+  identiteMobius: 'n where sum M(n div k) is not 1',
   /* game185 */
   wilson: 'Wilson s test vs trial division (n that disagree)', composes: 'Composites breaking the 2 / 0 rule',
   /* game184 */
