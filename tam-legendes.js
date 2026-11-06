@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game226 (idee : codex 22, sous-agent Claude) */
+  populationMonde: {
+    titre: 'World population since 1950',
+    enUnePhrase: 'How many people live on Earth, counted every ten years by the United Nations.',
+    colonnes: ['which year', 'how many people (8 = 8 billion)', 'real count or fitted curve'],
+    aRegarder: ['The number of people more than tripled between 1950 and 2020.', 'The growth rate was highest in the 1960s and has slowed every decade since.', 'A curve that keeps growing like the early years ends up far too high.'],
+    fin: null,
+  },
   /* game225 (idee : codex 22, sous-agent Claude) */
   courbeKeeling: {
     titre: 'The Keeling curve',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game226 */
+  populationMonde: 'Decades without growth, a growth peak not in the 1960s, or growth rates rising again after it', tauxParDecennie: 'Mean growth rate of each decade (percent per year)', decenniePic: 'Decade of fastest growth', expo2020: 'Fitted exponential at 2020 (thousands)',
   /* game225 */
   courbeKeeling: 'Years where CO2 did not rise, or no acceleration over the window', annees: 'Years in the NOAA file', premiere: 'First year and value (ppm)', derniere: 'Last year and value (ppm)', hausseDebut: 'Mean rise over the first years (ppm per year)', hausseFin: 'Mean rise over the last years (ppm per year)',
   /* game224 */
