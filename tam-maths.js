@@ -1524,7 +1524,37 @@ function parfaitsAmicaux(P, n) {
     temoin: { mesure: sigma - deuxN, formeAcceptee: euclideOk(2 ** 10 * 2047) ? 1 : 0, note: 'witness: sigma(2^10 x 2047) - 2 x (2^10 x 2047), with 2047 = 23 x 89 not prime : not 0, not perfect' } } };
 }
 
+// ---------- 45 : les nombres de Bernoulli (idee et valeurs : codex Grok Bot ; MathWorld « Bernoulli Number », OEIS A027641 / A027642, lus par Grok) ----------
+// B_0 = 1 et B_m = -1/(m + 1) somme_{k < m} binom(m + 1, k) B_k (convention B_1 = -1/2) : 1, -1/2, 1/6, 0, -1/30, 0, 1/42, ..., B_12 = -691/2730.
+// Exact ici, en fractions BigInt, jusqu au rang du curseur ; et deux verifications INDEPENDANTES de la recurrence :
+//   Faulhaber : 0^p + 1^p + ... + (m - 1)^p = 1/(p + 1) somme_j binom(p + 1, j) B_j m^(p + 1 - j), pour p <= 20 et m = 1..12, a l identique ;
+//   von Staudt-Clausen : B_2k + somme des 1/q pour les premiers q avec (q - 1) qui divise 2k est un ENTIER.
+// Et les B impairs au-dela de B_1 sont nuls. Valeurs de Grok : B_0 .. B_12.
+// Temoin : avec l ancienne convention B_1 = +1/2, la formule de Faulhaber pour 0 .. m - 1 se trompe (elle donne la somme de 1 a m).
+// Dessin (vue de face) : (n, log10 |B_n|) pour les B non nuls, etiquette 1 si B_n > 0, 0 sinon.
+function bernoulliSuite(N) { const B = [[1n, 1n]];
+  for (let m = 1; m <= N; m++) { let s = [0n, 1n]; for (let k = 0; k < m; k++) s = feuAdd(s, feuMul(feuF(binomB(m + 1, k), 1n), B[k])); B.push(feuMul(s, feuF(-1n, BigInt(m + 1)))); }
+  return B; }
+function bernFaulhaber(B, p, m, b1) { /* somme exacte 0..m-1 de k^p contre la formule */
+  let gauche = 0n; for (let k = 0n; k < BigInt(m); k++) gauche += k ** BigInt(p);
+  let droite = [0n, 1n]; for (let j = 0; j <= p; j++) { const Bj = j === 1 ? b1 : B[j]; droite = feuAdd(droite, feuMul(feuF(binomB(p + 1, j) * BigInt(m) ** BigInt(p + 1 - j), 1n), Bj)); }
+  droite = feuMul(droite, feuF(1n, BigInt(p + 1))); return feuEq(droite, [gauche, 1n]); }
+function nombresBernoulli(P, n) {
+  const N = P.rangB, B = bernoulliSuite(N); let fauxF = 0, fauxF2 = 0, fauxS = 0, impairs = 0;
+  for (let p = 0; p <= Math.min(N, 20); p++) for (let m = 1; m <= 12; m++) { if (!bernFaulhaber(B, p, m, B[1])) fauxF++; if (!bernFaulhaber(B, p, m, [1n, 2n])) fauxF2++; }
+  for (let k = 3; k <= N; k += 2) if (B[k][0] !== 0n) impairs++;
+  for (let k = 2; k <= N; k += 2) { let s = B[k]; for (let q = 2; q <= k + 1; q++) { let prem = true; for (let d = 2; d * d <= q; d++) if (q % d === 0) prem = false; if (prem && k % (q - 1) === 0) s = feuAdd(s, feuF(1n, BigInt(q))); } if (s[1] !== 1n) fauxS++; }
+  const pts = []; for (let k = 0; k <= N; k++) if (B[k][0] !== 0n) { const v = Math.abs(feuNb(B[k])); pts.push([k, lnD(v) / lnD(10), B[k][0] > 0n ? 1 : 0]); }
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const bp = pts[Math.floor(l * pts.length / n)], o = 3 * l; brut[o] = bp[0]; brut[o + 1] = bp[1]; brut[o + 2] = bp[2]; }
+  return { D: 3, brut, nuage: true, unite: 'sans objet', invariants: {
+    faulhaber: { mesure: fauxF, formule: 0, b12: feuTexte(B[Math.min(12, N)]), note: 'pairs (p <= 20, m <= 12) where the sum 0^p + ... + (m - 1)^p differs from Faulhaber s formula with these B (exact)' },
+    vonStaudt: { mesure: fauxS, formule: 0, note: 'even indices 2k where B_2k + sum of 1/q over primes q with (q - 1) | 2k is not a whole number (von Staudt-Clausen)' },
+    impairsNuls: { mesure: impairs, formule: 0, note: 'odd indices above 1 where B is not 0' },
+    temoin: { mesure: fauxF2, note: 'witness: with the old convention B_1 = +1/2, Faulhaber s formula for 0 .. m - 1 fails this many times (it gives 1 .. m)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  nombresBernoulli: { colonnes: ['n', 'log10 |B_n|', 'sign (label; 1 positive, 0 negative)'], memeLongueur: [], autres: [0, 1, 2] },
   parfaitsAmicaux: { colonnes: ['n / limit', 's(n) / n', 'kind (label; 2 perfect, 1 amicable, 0 other)'], memeLongueur: [], autres: [0, 1, 2] },
   fonctionMertens: { colonnes: ['n / limit', 'M(n) / sqrt(limit)', 'mu(n) + 1 (label)'], memeLongueur: [], autres: [0, 1, 2] },
   theoremeWilson: { colonnes: ['n / limit', '((n - 1)! mod n) / n', 'prime (label; 1 prime, 0 composite)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -1704,9 +1734,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'parfaitsAmicaux', nom: 'Perfect and amicable numbers', science: 'Number theory', D: 3, nuage: true, params: { limite: 10000 },
     bornes: { limite: [300, 20000] },
     phrase: 'A visualisation of perfect and amicable numbers: n is perfect when its proper divisors add up to n (6 = 1 + 2 + 3), and two numbers are amicable when each one\'s divisors add up to the other (220 and 284). They are found exactly up to the slider, each even perfect number is checked to have Euclid\'s form 2^(p-1)(2^p - 1); 2047 = 23 x 89, which breaks that form, is the witness.' },
+  { id: 'nombresBernoulli', nom: 'Bernoulli numbers', science: 'Number theory', D: 3, nuage: true, params: { rangB: 30 },
+    bornes: { rangB: [12, 60] },
+    phrase: 'A visualisation of the Bernoulli numbers 1, -1/2, 1/6, 0, -1/30, ..., computed as exact fractions. They are checked against sums of powers 0^p + 1^p + ... (Faulhaber\'s formula) and against the von Staudt-Clausen rule that makes B_2k plus some unit fractions a whole number; the old convention B_1 = +1/2 is the witness that breaks the power sums.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'], parfaitsAmicaux: ['limite'] };
-const FONCTIONS = { parfaitsAmicaux, fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'], parfaitsAmicaux: ['limite'], nombresBernoulli: ['rangB'] };
+const FONCTIONS = { nombresBernoulli, parfaitsAmicaux, fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

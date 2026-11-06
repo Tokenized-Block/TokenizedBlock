@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game188 */
+  b12: 'B_12',
   /* game187 */
   formeAcceptee: 'Euclid s form accepted for 2^10 x 2047 (must be 0)',
   /* game186 */
@@ -481,6 +483,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game188 */
+  faulhaber: 'Power sums vs Faulhaber s formula (pairs that differ)', vonStaudt: 'von Staudt-Clausen failures', impairsNuls: 'Odd-index B that are not 0',
   /* game187 */
   parfaits: 'Perfect numbers found', amicaux: 'Amicable pairs found', euclideEuler: 'Even perfect numbers not of Euclid s form',
   /* game186 */

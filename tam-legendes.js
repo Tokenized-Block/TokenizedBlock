@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game188 (idee : codex Grok Bot) */
+  nombresBernoulli: {
+    titre: 'Bernoulli numbers',
+    enUnePhrase: 'A strange list of fractions that holds the formula for adding up the first n squares, cubes, and higher powers.',
+    colonnes: ['n', 'size (powers of ten)', 'sign'],
+    aRegarder: ['They shrink at first, then grow huge, changing sign every second step.', 'With them, the sum of the first m p-th powers is a short exact formula.', 'Writing B_1 = +1/2 (an older habit) shifts every such sum by one term.'],
+    fin: null,
+  },
   /* game187 (idee : codex Grok Bot) */
   parfaitsAmicaux: {
     titre: 'Perfect and amicable numbers',
