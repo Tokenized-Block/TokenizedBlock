@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-maths.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires'];
+const IDS = ['marcheAleatoire', 'aiguilleBuffon', 'anniversaires', 'spiraleUlam', 'pascalSierpinski', 'solidesPlatoniques', 'montyHall', 'apollonius', 'tasDeSable', 'vergerEuclide', 'cerclesFord', 'fermatSteiner', 'causticTasse', 'papillonHofstadter', 'dominosKasteleyn', 'ising', 'aztecDiamond', 'collectionneur', 'ruineJoueur', 'catalanDyck', 'partitionEuler', 'courbeDragon', 'theoremePick', 'percolationLiens', 'napoleon', 'billardElliptique', 'feuerbach', 'jeuDeLaVie', 'marcheAutoEvitante', 'eulerSolides', 'morley', 'bale', 'simsonDroite', 'distinctesImpaires', 'triangulations'];
 
 // ---------- references independantes ----------
 function momentsMarche(n) { let s2 = 0, s4 = 0, tot = 0; const rec = (k, x, y) => { if (k === n) { const r2 = x * x + y * y; s2 += r2; s4 += r2 * r2; tot++; return; } rec(k + 1, x + 1, y); rec(k + 1, x - 1, y); rec(k + 1, x, y + 1); rec(k + 1, x, y - 1); }; rec(0, 0, 0); return { m2: s2 / tot, m4: s4 / tot }; }
@@ -726,6 +726,20 @@ function suite(T, bavard = false, seul = null) {
     const coupe = (x) => x % 2 ? [x] : [...coupe(x / 2), ...coupe(x / 2)]; assert.equal(d.flatMap(coupe).sort((x, y) => y - x).join(), o.join(), 'Glaisher');
     let mal = 0; for (let q = 0; q < R.n; q++) { const e = R.brut[3 * q + 2]; if (e !== 0 && e !== 1) mal++; } assert.equal(mal, 0); return I.glaisher.distincte + ' -> ' + I.glaisher.impaire;
   });
+  /* game178 : triangulations — reference INDEPENDANTE : ENUMERATION de tous les ensembles de diagonales sans croisement de taille maximale
+   *   (N <= 9), par recursion sur les diagonales ; valeurs de Grok Bot C_1..C_10 = 1, 2, 5, 14, 42, 132, 429, 1430, 4862, 16796 */
+  const triRef = (N) => { const D = []; for (let a = 0; a < N; a++) for (let b = a + 2; b < N; b++) if (!(a === 0 && b === N - 1)) D.push([a, b]);
+    const x = (u, v) => (u[0] < v[0] && v[0] < u[1] && u[1] < v[1]) || (v[0] < u[0] && u[0] < v[1] && v[1] < u[1]); let n = 0;
+    const go = (i, pris) => { if (pris.length === N - 3) { n++; return; } for (let k = i; k < D.length; k++) if (pris.every((p) => !x(p, D[k]))) go(k + 1, [...pris, D[k]]); }; go(0, []); return n; };
+  ok('triangulations : enumeration (N = 3..9) = valeurs de Grok Bot', () => { assert.deepEqual([3, 4, 5, 6, 7, 8, 9].map(triRef), [1, 2, 5, 14, 42, 132, 429]); return 'ok'; });
+  for (const p of [...extremes(sys('triangulations')), { cotes: 12, graine: 4242 }, { cotes: 7, graine: 99 }]) ok(`triangulations ${JSON.stringify(p)} : Catalan, la triangulation tiree, temoin`, () => {
+    const R = S('triangulations', p), I = R.invariants, N = R.params.cotes, att = ['1', '1', '2', '5', '14', '42', '132', '429', '1430', '4862', '16796'];
+    assert.ok(I.catalan.mesure === 0 && I.diagonales.mesure === 0 && I.temoin.mesure === '5 / 10', JSON.stringify(I));
+    if (N - 2 <= 10) assert.equal(I.catalan.tn, att[N - 2]); if (N <= 9) assert.equal(I.catalan.tn, String(triRef(N)));
+    const d = I.diagonales.tirees ? I.diagonales.tirees.split(' ').map((s) => s.split('-').map(Number)) : []; assert.equal(d.length, N - 3);
+    /* recompte des triangles par la formule d Euler du graphe plan : faces internes = aretes - sommets + 1 = (N + N - 3) - N + 1 = N - 2 ; et chaque diagonale relie deux sommets non voisins */
+    assert.ok(d.every(([a, b]) => b - a >= 2 && !(a === 0 && b === N - 1)), 'diagonale invalide'); return 'T(' + N + ') = ' + I.catalan.tn;
+  });
   ok('montyHall : etalonnage sur 20 graines (ecart-type des z dans [0.5, 1.7])', () => { const zs = []; for (let g = 1; g <= 20; g++) zs.push(z(T.simuler('montyHall', { graine: g }).invariants.changer)); const m = zs.reduce((a, x) => a + x, 0) / 20, sd = Math.sqrt(zs.reduce((a, x) => a + (x - m) ** 2, 0) / 19); assert.ok(sd >= 0.5 && sd <= 1.7 && Math.abs(m) < 1.2, m + ' ' + sd); return m.toFixed(2) + '/' + sd.toFixed(2); });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (r^2, croisements, partage)', () => {
     const zs = { r2: [], buffon: [], anniv: [] };
@@ -928,6 +942,10 @@ const MUTANTS = [
   ['distinctes : Glaisher coupe en 2 au lieu de 2^a', 'for (let i = 0; i < 2 ** a; i++) image.push(b);', 'for (let i = 0; i < 2 * a + 1; i++) image.push(b);'],
   /* comparer p(n) aux parts IMPAIRES serait EQUIVALENT (distinctes = impaires : c est le theoreme) : on mute vers un decalage */
   ['distinctes : temoin decale d un rang', 'if (tous[m] !== A[m]) premier = m;', 'if (tous[m] !== A[m]) premier = m + 1;'],
+  ['triangulations : recursion sans le produit', 'for (let k = 1; k <= m - 2; k++) s += T[k + 1] * T[m - k];', 'for (let k = 1; k <= m - 2; k++) s += T[k + 1] + T[m - k];'],
+  ['triangulations : croisement mal detecte', 'return (p < r && r < q && q < s) || (r < p && p < s && s < q); };', 'return (p < r && r < q && q < s); };'],
+  ['triangulations : tirage sans la seconde moitie', 'triTirage(i, k, T, rng, diag); triTirage(k, j, T, rng, diag); return; }', 'triTirage(i, k, T, rng, diag); return; }'],
+  ['triangulations : temoin sur un hexagone', 'const D5 = [[2, 4], [1, 4], [1, 3], [0, 3], [0, 2]];', 'const D5 = [[2, 5], [1, 4], [1, 3], [0, 3], [0, 2]];'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],
 ];
@@ -942,7 +960,7 @@ try {
     const f = join(dossier, `mutant-${i + 1}.mjs`);
     writeFileSync(f, src.replace(de, vers).replace("from './tam-moteur.js'", `from '${moteur}'`));
     /* le systeme vise par le mutant, d apres le premier mot de son nom ; « bornage » et le reste : tout */
-    const CIBLES = { distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
+    const CIBLES = { triangulations: ['triangulations'], distinctes: ['distinctesImpaires'], simson: ['simsonDroite'], bale: ['bale'], morley: ['morley'], euler: ['eulerSolides'], saw: ['marcheAutoEvitante'], vie: ['jeuDeLaVie'], feuerbach: ['feuerbach'], billard: ['billardElliptique'], napoleon: ['napoleon'], percolation: ['percolationLiens'], pick: ['theoremePick'], dragon: ['courbeDragon'], partitions: ['partitionEuler'], catalan: ['catalanDyck'], marche: ['marcheAleatoire'], buffon: ['aiguilleBuffon'], anniversaires: ['anniversaires'], ulam: ['spiraleUlam'], pascal: ['pascalSierpinski'], solides: ['solidesPlatoniques'], monty: ['montyHall'], apollo: ['apollonius'], sable: ['tasDeSable'], verger: ['vergerEuclide'], ford: ['cerclesFord'], steiner: ['fermatSteiner'], caustique: ['causticTasse'], hofstadter: ['papillonHofstadter'], dominos: ['dominosKasteleyn'], ising: ['ising'], azteque: ['aztecDiamond'], coupons: ['collectionneur'], ruine: ['ruineJoueur'] };
     const cible = CIBLES[nom.split(' ')[0]] || null;
     let r; try { r = suite(await import(pathToFileURL(f).href), false, cible); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
     const rouges = r.filter((x) => !x.ok);

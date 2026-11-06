@@ -1268,7 +1268,36 @@ function distinctesImpaires(P, n) {
     temoin: { mesure: premier === null ? NaN : premier, formule: 2, absente: 'n below 2', note: 'witness: distinct parts is a real restriction : p(n) > q(n) from n = 2 (1 + 1 repeats a part)' } } };
 }
 
+// ---------- 35 : les triangulations d un polygone (Catalan) (idee et valeurs : codex Grok Bot) ----------
+// Couper un polygone convexe a N cotes en triangles par des diagonales qui ne se croisent pas : il y a C(N - 2) facons (nombres de Catalan).
+// Exact ici : T(N) par la decomposition « le triangle pose sur le cote (0, N-1) a son sommet en k » (T(N) = somme T(k + 1) T(N - k)), en
+//   BigInt, compare pour chaque polygone de 3 a N cotes a la formule binom(2m, m) / (m + 1), m = N - 2 ; valeurs de Grok : 1, 2, 5, 14, ... 16796.
+// Une triangulation tiree uniformement (graine) : on verifie N - 3 diagonales, aucune paire qui se croise, N - 2 triangles.
+// Temoin : dans un pentagone il y a binom(5, 2) = 10 paires de diagonales, mais seulement 5 ne se croisent pas : l absence de croisement compte.
+// Dessin (vue de face) : le polygone regulier (0), les diagonales tirees (1).
+function triCompte(N) { const T = new Array(N + 1).fill(0n); T[2] = 1n; for (let m = 3; m <= N; m++) { let s = 0n; for (let k = 1; k <= m - 2; k++) s += T[k + 1] * T[m - k]; T[m] = s; } return T; }
+function triTirage(i, j, T, rng, diag) { /* polygone des sommets i..j (j - i + 1 sommets), uniforme */
+  const m = j - i + 1; if (m < 3) return; let u = 0n; for (let r = 0; r < 3; r++) u = (u << 30n) + BigInt(Math.floor(rng() * 1073741824)); u %= T[m];
+  for (let k = i + 1; k <= j - 1; k++) { const w = T[k - i + 1] * T[j - k + 1]; if (u < w) { if (k - i >= 2) diag.push([i, k]); if (j - k >= 2) diag.push([k, j]); triTirage(i, k, T, rng, diag); triTirage(k, j, T, rng, diag); return; } u -= w; } }
+const triCroise = (a, b) => { const [p, q] = a[0] < a[1] ? a : [a[1], a[0]], [r, s] = b[0] < b[1] ? b : [b[1], b[0]]; return (p < r && r < q && q < s) || (r < p && p < s && s < q); };
+function triangulations(P, n) {
+  const N = P.cotes, rng = mulberry32(P.graine), T = triCompte(N);
+  let ecarts = 0; for (let m = 3; m <= N; m++) if (T[m] !== binomB(2 * (m - 2), m - 2) / BigInt(m - 1)) ecarts++;
+  const diag = []; triTirage(0, N - 1, T, rng, diag);
+  let croisements = 0; for (let a = 0; a < diag.length; a++) for (let b = a + 1; b < diag.length; b++) if (triCroise(diag[a], diag[b])) croisements++;
+  let paires = 0, sansCroiser = 0; const D5 = [[2, 4], [1, 4], [1, 3], [0, 3], [0, 2]]; /* ordre decroissant : le test de croisement sert dans les DEUX sens */ for (let a = 0; a < 5; a++) for (let b = a + 1; b < 5; b++) { paires++; if (!triCroise(D5[a], D5[b])) sansCroiser++; }
+  const S = Array.from({ length: N }, (_, k) => [cosD(2 * PI * k / N + PI / 2), sinD(2 * PI * k / N + PI / 2)]), segs = [];
+  for (let k = 0; k < N; k++) segs.push([S[k], S[(k + 1) % N], 0]); for (const [a, b] of diag) segs.push([S[a], S[b], 1]);
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const t = l * segs.length / n, j = Math.floor(t), u = t - j, sg = segs[j], o = 3 * l;
+    brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
+  return { D: 3, brut, nuage: true, unite: 'rayon 1', invariants: {
+    catalan: { mesure: ecarts, formule: 0, tn: String(T[N]), note: 'polygons with 3 to N sides where the triangulation count differs from binom(2m, m)/(m + 1), m = sides - 2' },
+    diagonales: { mesure: (diag.length === N - 3 ? 0 : 1) + croisements, formule: 0, tirees: diag.map(([a, b]) => a + '-' + b).join(' '), note: 'the drawn triangulation : wrong number of diagonals (N - 3) plus pairs that cross' },
+    temoin: { mesure: sansCroiser + ' / ' + paires, formule: '5 / 10', note: 'witness: a pentagon has 10 pairs of diagonals, only 5 pairs do not cross (one triangulation each)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  triangulations: { colonnes: ['x', 'y', 'what (label; 0 = polygon, 1 = diagonals)'], memeLongueur: [[0, 1]], autres: [2] },
   distinctesImpaires: { colonnes: ['column', 'row (downwards)', 'which side (label; 0 = distinct parts, 1 = odd parts)'], memeLongueur: [[0, 1]], autres: [2] },
   simsonDroite: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = circle, 2 = perpendiculars, 3 = Simson line)'], memeLongueur: [[0, 1]], autres: [2] },
   bale: { colonnes: ['1/n', 'value', 'what (label; 0 = S_n, 1 = pi^2/6, 2 = the band 1/(n+1) .. 1/n under it)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -1408,9 +1437,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'distinctesImpaires', nom: 'Distinct parts equal odd parts (Euler)', science: 'Number theory', D: 3, nuage: true, params: { entier: 30, graine: 1 },
     bornes: { entier: [3, 120], graine: [1, 1000000] },
     phrase: 'A visualisation of Euler\'s partition theorem: there are as many ways to write n as a sum of different numbers as there are ways to write it as a sum of odd numbers. Both are counted separately for every n, and a random partition is carried across by Glaisher\'s halving map and back again.' },
+  { id: 'triangulations', nom: 'Triangulations of a polygon (Catalan numbers)', science: 'Combinatorics', D: 3, nuage: true, params: { cotes: 9, graine: 1 },
+    bornes: { cotes: [3, 30], graine: [1, 1000000] },
+    phrase: 'A visualisation of polygon triangulations: cut a convex polygon into triangles with diagonals that never cross. The number of ways is a Catalan number (1, 2, 5, 14, 42, ...), counted by splitting along one side and checked against binom(2m, m)/(m + 1); a random triangulation is drawn and checked for crossings.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'] };
-const FONCTIONS = { distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'] };
+const FONCTIONS = { triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

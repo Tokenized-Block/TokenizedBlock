@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game178 */
+  tn: 'triangulations of the N-gon', tirees: 'diagonals drawn',
   /* game177 */
   qn: 'q(n)', q20: 'q(1..20)', distincte: 'distinct partition drawn', impaire: 'its odd image',
   /* game176 */
@@ -461,6 +463,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game178 */
+  catalan: 'Triangulation counts vs binom(2m, m)/(m + 1) (polygons that differ)', diagonales: 'Drawn triangulation: wrong count plus crossings',
   /* game177 */
   egalite: 'Distinct-part vs odd-part counts that differ', glaisher: 'Glaisher map there and back (0 = exact)',
   /* game176 */

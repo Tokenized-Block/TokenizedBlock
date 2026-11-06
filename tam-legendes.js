@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game178 (idee : codex Grok Bot) */
+  triangulations: {
+    titre: 'Triangulations of a polygon (Catalan numbers)',
+    enUnePhrase: 'Cut a polygon into triangles with lines from corner to corner that never cross: count the ways.',
+    colonnes: ['across', 'up', 'polygon or diagonal'],
+    aRegarder: ['A hexagon can be cut 14 ways, a decagon 1430 ways: the Catalan numbers.', 'Change the seed to draw another cut, chosen fairly among all of them.', 'In a pentagon, half of the pairs of diagonals cross: crossing is what is forbidden.'],
+    fin: null,
+  },
   /* game177 (idee : codex Grok Bot) */
   distinctesImpaires: {
     titre: 'Distinct parts equal odd parts (Euler)',

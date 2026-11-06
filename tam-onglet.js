@@ -111,6 +111,8 @@ THEMES.maths.push('bale');
 THEMES.maths.push('simsonDroite');
 /* game177 : parts distinctes = parts impaires (idee : codex Grok Bot) */
 THEMES.maths.push('distinctesImpaires');
+/* game178 : triangulations et Catalan (idee : codex Grok Bot) */
+THEMES.maths.push('triangulations');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -233,7 +235,7 @@ const NOMS_PARAMS_SYS = { 'eulerSolides.solide': 'solid (0 prism, 1 antiprism, 2
   /* game134 (« espacement » existe deja : mode spacing, vide quantique) */
   'reseauFentes.espacement': 'slit spacing d / lambda' };
 const nomParam = (sid, cle) => NOMS_PARAMS_SYS[sid + '.' + cle] || NOMS_PARAMS_EN[cle];
-const NOMS_PARAMS_EN = { qmax: 'largest denominator q', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
+const NOMS_PARAMS_EN = { qmax: 'largest denominator q', cotes: 'sides N', corde: 'slope of the chord through A (k / 7)', termes: 'terms n', angleA: 'angle A (degrees)', angleB: 'angle B (degrees)', etapes: 'steps n', oscillateur: 'oscillator (0 blinker, 1 pulsar, 2 pentadecathlon)', petitAxe: 'short half-axis b', lancer: 'start on the rim (degrees)', tir: 'shot direction (degrees)', rebonds: 'bounces', taille: 'size', sommets: 'corners k', rayon: 'radius', plis: 'folds n', entier: 'the number n', demi: 'half-length n', gain: 'chance of winning one bet', objectif: 'target', vignettes: 'different coupons n', annees: 'years', atomes: 'atoms', champ: 'field', cote: 'side', ordre: 'order n (largest denominator)', coups: 'kicks', coupure: 'cutoff', decalage: 'shift',
   densite: 'density', duree: 'duration', echantillons: 'samples', ellipticite: 'ellipticity', energie: 'energy', essais: 'trials', etoiles: 'stars',
   excentricite: 'eccentricity', frequence: 'frequency', graine: 'seed', grille: 'grid', groupe: 'group', hauteur: 'height', heures: 'hours',
   horloges: 'clocks', images: 'frames', inclinaison: 'inclination', inclinaison1: 'inclination 1', inclinaison2: 'inclination 2', jours: 'days',
@@ -1213,6 +1215,8 @@ export function monter(racine, ctx = {}) {
     'simsonDroite',
     /* game177 */
     'distinctesImpaires',
+    /* game178 */
+    'triangulations',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */
