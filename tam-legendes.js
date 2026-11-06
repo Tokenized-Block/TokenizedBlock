@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game224 (idee : codex 21, sous-agent Claude) */
+  energieLiaison: {
+    titre: 'Nuclear binding energy',
+    enUnePhrase: 'How hard each nucleus holds together: the reason stars shine and uranium splits.',
+    colonnes: ['how heavy the nucleus is', 'how tightly it is held, per particle', 'part of the chosen reaction'],
+    aRegarder: ['Light nuclei gain binding when they fuse: that energy lights the stars.', 'The curve peaks around iron and nickel, then slowly falls.', 'Nickel-62, not iron-56, is the most tightly bound.'],
+    fin: null,
+  },
   /* game223 (idee : codex 21, sous-agent Claude) */
   mareeVivesEaux: {
     titre: 'Tides: spring and neap',

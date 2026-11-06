@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game224 */
+  energieLiaison: 'Light-nucleus fusions that would not release energy, or uranium not below iron', QkeV: 'Energy released by D+D, triple alpha and C12+He4 (keV)', plusLie: 'Most tightly bound nucleus in the list', reactionChoisie: 'Reaction drawn',
   /* game223 */
   mareeVivesEaux: 'Daily delay, spring-tide period or spring/neap ratio off the M2 + S2 prediction', periodeM2Heures: 'Lunar tide period M2 (h)', retardMinutes: 'Measured daily delay of high water (min)', retardTheoMinutes: 'Predicted daily delay (min)', vivesEauxJours: 'Measured time between spring tides (days)', vivesEauxTheoJours: 'Predicted time between spring tides (days)', rapportVivesMortes: 'Highest high water / lowest high water',
   /* game222 */
