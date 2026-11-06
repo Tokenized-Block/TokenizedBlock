@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game209 */
+  suitePerrin: 'Primes p that do not divide P(p)', composesDivisent: 'Composites up to the slider that divide P(n)', vingtSix: 'P(0..25)', diviseur: 'Smallest divisor found',
   /* game208 */
   suiteKolakoski: 'Runs whose length differs from the term they should match', unsSoixante: 'Number of 1s among the first 60 terms', proportionUns: 'Share of 1s up to the slider (measured)',
   /* game207 */

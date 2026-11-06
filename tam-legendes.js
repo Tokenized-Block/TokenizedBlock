@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game209 (idee : codex Grok Bot) */
+  suitePerrin: {
+    titre: 'The Perrin sequence and its pseudoprimes',
+    enUnePhrase: 'Add the terms two and three back: every prime n divides the n-th term.',
+    colonnes: ['which n', 'remainder of the n-th term divided by n', 'is n prime'],
+    aRegarder: ['Every prime sits on the floor: remainder 0.', 'No composite number here divides its term.', 'The first one that does is 271441, far beyond the slider: a prime test that can be fooled.'],
+    fin: null,
+  },
   /* game208 (idee : codex Grok Bot) */
   suiteKolakoski: {
     titre: 'The Kolakoski sequence',
