@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game197 */
+  suiteCollatz: 'Starts that do not reach 1, and m where flight(2m) is not flight(m) + 1 (finite check)',
   /* game196 */
   nombresHarmoniques: 'n where H(n) leaves its log bounds, is whole, or misses 2^floor(log2 n)',
   /* game195 */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game197 (idee : codex Grok Bot) */
+  suiteCollatz: {
+    titre: 'The Collatz sequence (3n + 1)',
+    enUnePhrase: 'Halve it if even, triple it and add 1 if odd: does every number fall back to 1?',
+    colonnes: ['which start', 'how long it flies (relative)', 'how many times it was tripled'],
+    aRegarder: ['Neighbouring numbers can fly for very different times.', 'Every start shown here does come down to 1: nobody knows if all do.', 'Change 3n + 1 to 3n - 1 and 5 loops forever.'],
+    fin: null,
+  },
   /* game196 (idee : codex Grok Bot) */
   nombresHarmoniques: {
     titre: 'Harmonic numbers',
