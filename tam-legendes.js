@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game203 (idee : codex Grok Bot) */
+  goldbachPaires: {
+    titre: 'Goldbach splits (two odd primes)',
+    enUnePhrase: 'Can every even number be written as the sum of two odd primes? Each one here is split and its splits counted.',
+    colonnes: ['which even number', 'how many ways it splits', 'what is left after dividing by 3'],
+    aRegarder: ['The cloud climbs: bigger even numbers have more ways to split.', 'Here, multiples of 3 sit higher on average than the other even numbers (measured from 30 on).', 'Nobody has proved it for all even numbers; 4 is the one that cannot (it would need 2 + 2).'],
+    fin: null,
+  },
   /* game202 (idee : codex Grok Bot) */
   indicatriceEuler: {
     titre: 'Euler totient function',
