@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game215 (idee : codex Grok Bot) */
+  geometrieVSEPR: {
+    titre: 'Molecule shapes (VSEPR)',
+    enUnePhrase: 'Electron groups around an atom push each other away: that decides the shape of the molecule.',
+    colonnes: ['east-west', 'north-south', 'up-down'],
+    aRegarder: ['Methane is a perfect pyramid with four corners: every angle is about 109.47 degrees.', 'Ammonia and water keep the same four groups, but lone pairs squeeze the bonds closer.', 'Carbon dioxide is a straight line and boron trifluoride a flat triangle.'],
+    fin: null,
+  },
   /* game214 (idee : codex Grok Bot) */
   titrageAcideFaible: {
     titre: 'Titrating vinegar acid with lye',

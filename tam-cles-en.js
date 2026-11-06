@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game215 */
+  geometrieVSEPR: 'Lone-pair-free molecules off their ideal angle, or angles not falling CH4 > NH3 > H2O', angleTetraedre: 'Tetrahedral angle arccos(-1/3), degrees', angleMesure: 'Measured bond angle (NIST), degrees', angleDessine: 'Bond angle read back from the drawing, degrees',
   /* game214 */
   titrageAcideFaible: 'Charge residual too big, pH going down, or half-equivalence pH far from pKa', residuMax: 'Largest charge balance residual (relative)', demiEquivalence: 'pH at half-equivalence', quatrePoints: 'pH at 0, 50, 100 and 150 percent',
   /* game213 */

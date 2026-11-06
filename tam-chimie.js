@@ -26,6 +26,17 @@ export const SOURCES = Object.freeze({
   pKaAcetique: S(4.756, '', 'https://opentextbc.ca/introductorychemistry/back-matter/appendix-selected-acid-dissociation-constants-at-25c/', '4.756'),
   // https://openstax.org/books/chemistry-2e/pages/14-2-ph-and-poh : Kw = 1.0 x 10^-14 a 25 C
   Kw: S(1.0e-14, '', 'https://openstax.org/books/chemistry-2e/pages/14-2-ph-and-poh', '1.0e-14'),
+  /* game215 : angles de liaison EXPERIMENTAUX, NIST CCCBDB « Listing of experimental geometry data », Internal coordinates (lus par Grok Bot 19) */
+  // https://cccbdb.nist.gov/expgeom2x.asp?casno=74828&charge=0 : aHCH = 109.471 (1974sve/kov)
+  angleCH4: S(109.471, 'deg', 'https://cccbdb.nist.gov/expgeom2x.asp?casno=74828&charge=0', '109.471'),
+  // https://cccbdb.nist.gov/expgeom2x.asp?casno=7664417&charge=0 : aHNH = 106.67 (1966Herzberg)
+  angleNH3: S(106.67, 'deg', 'https://cccbdb.nist.gov/expgeom2x.asp?casno=7664417&charge=0', '106.67'),
+  // https://cccbdb.nist.gov/expgeom2x.asp?casno=7732185&charge=0 : aHOH = 104.4776 (1979Hoy/Bun, equilibrium)
+  angleH2O: S(104.4776, 'deg', 'https://cccbdb.nist.gov/expgeom2x.asp?casno=7732185&charge=0', '104.4776'),
+  // https://cccbdb.nist.gov/expgeom2x.asp?casno=124389&charge=0 : aOCO = 180 (1966Herzberg)
+  angleCO2: S(180, 'deg', 'https://cccbdb.nist.gov/expgeom2x.asp?casno=124389&charge=0', '180'),
+  // https://cccbdb.nist.gov/expgeom2x.asp?casno=7637072&charge=0 : aFBF = 120 (1998Kuc)
+  angleBF3: S(120, 'deg', 'https://cccbdb.nist.gov/expgeom2x.asp?casno=7637072&charge=0', '120'),
 });
 
 function expNegD(x) {
@@ -257,7 +268,37 @@ function titrageAcideFaible(P, n) {
     temoin: { mesure: equiv, formule: 7, note: 'witness: at equivalence the pH is not 7, because acetate is itself a weak base' } } };
 }
 
+// ---------- game215 : la geometrie VSEPR (idee et angles : codex Grok Bot 19 ; angles : SOURCES, NIST CCCBDB) ----------
+// VSEPR : les domaines d electrons autour de l atome central s ecartent au maximum : 2 -> ligne (180), 3 -> triangle (120),
+//   4 -> tetraedre, d angle arccos(-1/3) CALCULE ici par dichotomie sur cosD (aucun acos natif). Cinq molecules : CH4 (4 domaines,
+//   0 doublet libre), NH3 (4, 1), H2O (4, 2), CO2 (2, 0), BF3 (3, 0). MESURE : sans doublet libre, angle mesure = angle ideal a 0.001 deg ;
+//   avec doublets libres, l angle mesure baisse a chaque doublet (CH4 > NH3 > H2O).
+// Temoin : NH3 et H2O ont 4 domaines comme CH4 mais leurs angles MESURES (106.67 et 104.4776) s ecartent de l ideal : les doublets libres poussent.
+// Dessin : la molecule choisie en 3-D, liaisons echantillonnees de l atome central aux voisins, avec l angle MESURE ; les doublets libres
+//   (pointilles courts) vers le haut. Colonnes x, y, z.
+function arccosD(c) { let lo = 0, hi = Math.PI; for (let i = 0; i < 80; i++) { const m = (lo + hi) / 2; if (cosD(m) > c) lo = m; else hi = m; } return (lo + hi) / 2; }
+function geometrieVSEPR(P, n) {
+  const MOL = [['CH4', 4, 0, SOURCES.angleCH4.valeur], ['NH3', 4, 1, SOURCES.angleNH3.valeur], ['H2O', 4, 2, SOURCES.angleH2O.valeur], ['CO2', 2, 0, SOURCES.angleCO2.valeur], ['BF3', 3, 0, SOURCES.angleBF3.valeur]];
+  const tetra = arccosD(-1 / 3) * 180 / Math.PI, ideal = (dom) => (dom === 2 ? 180 : dom === 3 ? 120 : tetra);
+  let ecarts = 0; for (const [, dom, libres, ang] of MOL) if (libres === 0 && Math.abs(ang - ideal(dom)) > 0.001) ecarts++;
+  if (!(MOL[0][3] > MOL[1][3] && MOL[1][3] > MOL[2][3])) ecarts++;
+  const [nom, dom, libres, ang] = MOL[P.molecule], th = ang * Math.PI / 180, liens = [];
+  if (dom === 2) { liens.push([1, 0, 0], [-1, 0, 0]); }
+  else if (dom === 3 && libres === 0) { for (let k = 0; k < 3; k++) liens.push([cosD(2 * Math.PI * k / 3), sinD(2 * Math.PI * k / 3), 0]); }
+  else if (libres === 2) { liens.push([sinD(th / 2), 0, -cosD(th / 2)], [-sinD(th / 2), 0, -cosD(th / 2)]); }
+  else { const nb = 4 - libres, c = cosD(th); let lo = 0, hi = Math.PI; for (let i = 0; i < 80; i++) { const a = (lo + hi) / 2, ca = cosD(a), sa = sinD(a); if (ca * ca - 0.5 * sa * sa > c) lo = a; else hi = a; }
+    const al = (lo + hi) / 2; for (let k = 0; k < 3; k++) liens.push([sinD(al) * cosD(2 * Math.PI * k / 3), sinD(al) * sinD(2 * Math.PI * k / 3), -cosD(al)]); if (nb === 4) liens.push([0, 0, 1]); }
+  const doublets = []; for (let k = 0; k < libres; k++) doublets.push(libres === 1 ? [0, 0, 1] : [0, (k ? -1 : 1) * sinD(th / 2), cosD(th / 2)]);
+  const segs = [...liens.map((v) => [v, 1]), ...doublets.map((v) => [v, 0.45])], brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const [v, L] = segs[l % segs.length], f = L * (Math.floor(l / segs.length) % 50) / 49, o = 3 * l; brut[o] = v[0] * f; brut[o + 1] = v[1] * f; brut[o + 2] = v[2] * f; }
+  const dessine = liens.length >= 2 ? arccosD(liens[0][0] * liens[1][0] + liens[0][1] * liens[1][1] + liens[0][2] * liens[1][2]) * 180 / Math.PI : NaN;
+  return { D: 3, brut, nuage: true, unite: 'longueur de liaison', invariants: {
+    geometrieVSEPR: { mesure: ecarts, formule: 0, angleTetraedre: tetra, molecule: nom, angleMesure: ang, angleDessine: dessine, note: 'molecules without lone pairs whose measured angle is more than 0.001 deg from the VSEPR ideal, or measured angles not falling CH4 > NH3 > H2O' },
+    temoin: { mesure: tetra - MOL[2][3], formule: 0, note: 'witness: H2O has 4 electron domains like CH4, yet its measured angle sits about 5 degrees below the tetrahedral ideal: lone pairs push' } } };
+}
+
 export const COLONNES = Object.freeze({
+  geometrieVSEPR: { colonnes: ['x (bond lengths)', 'y (same)', 'z (same)'], memeLongueur: [[0, 1, 2]], autres: [] },
   titrageAcideFaible: { colonnes: ['base added / base needed (half scale)', 'pH / 14', 'share of acid still as HA (label)'], memeLongueur: [], autres: [0, 1, 2] },
   reactionsChaine: { colonnes: ['time t', 'share of the molecules (0..1)', 'which species (0 = A, 1 = B, 2 = C)'], memeLongueur: [], autres: [0, 1, 2] },
   equilibreChimique: { colonnes: ['x: well A on the left, well B on the right (placement inside a well is drawn)', 'y (drawn)', 'time t'], memeLongueur: [[0, 1]], autres: [2] },
@@ -285,9 +326,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'titrageAcideFaible', nom: 'Titrating vinegar acid with lye (acetic acid and NaOH)', science: 'Chemistry', D: 3, nuage: true, params: { acide: 0.1, base: 0.1 },
     bornes: { acide: [0.001, 0.5], base: [0.001, 0.5] },
     phrase: 'A visualisation of a titration: lye is poured into acetic acid and the pH is solved exactly from the charge balance at every drop (ideal solution, pKa and Kw from published tables). Halfway, the pH sits at the pKa of the acid. At the equivalence point the pH is not 7 but higher, since acetate is a base: that is the witness.' },
+  { id: 'geometrieVSEPR', nom: 'Molecule shapes (VSEPR) with measured bond angles', science: 'Chemistry', D: 3, nuage: true, params: { molecule: 1 },
+    bornes: { molecule: [0, 4] },
+    phrase: 'A visualisation of molecule shapes (VSEPR): the electron groups around the central atom push each other as far apart as they can. Five molecules are drawn in 3-D with their bond angles measured by spectroscopy (NIST). Water has four electron groups like methane, yet its angle is about five degrees narrower, because two of the groups are lone pairs: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [] };
-const FONCTIONS = { titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
+export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [], geometrieVSEPR: ['molecule'] };
+const FONCTIONS = { geometrieVSEPR, titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

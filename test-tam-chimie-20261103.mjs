@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-chimie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible'];
+const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible', 'geometrieVSEPR'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const aRef = (k1, t) => Math.exp(-k1 * t);
@@ -58,7 +58,7 @@ function suite(T, bavard = false) {
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
   ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
-    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw', 'angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -149,6 +149,19 @@ function suite(T, bavard = false) {
     assert.ok(I.titrageAcideFaible.mesure === 0 && I.titrageAcideFaible.quatrePoints === [0, 0.5, 1, 1.5].map((x) => titRef(Ca, Cb, x).toFixed(6)).join(' ') && I.temoin.mesure > 7.5, JSON.stringify(I));
     return 'equivalence pH ' + I.temoin.mesure.toFixed(4);
   });
+  /* game215 : VSEPR - reference INDEPENDANTE : Math.acos (autorise ici) ; angles de Grok Bot (codex 19, NIST CCCBDB) ;
+   *   l angle est RELU depuis les coordonnees dessinees (deux premieres liaisons) */
+  ok('geometrieVSEPR : arccos(-1/3) = 109.4712206 deg ; angles de Grok Bot', () => {
+    assert.ok(Math.abs(Math.acos(-1 / 3) * 180 / Math.PI - 109.47122063449069) < 1e-12); assert.deepEqual(['angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3'].map((k) => T.SOURCES[k].valeur), [109.471, 106.67, 104.4776, 180, 120]); return 'ok'; });
+  for (let m = 0; m <= 4; m++) ok(`geometrieVSEPR molecule ${m} : angle ideal, ordre CH4 > NH3 > H2O, angle relu sur le dessin, temoin`, () => {
+    const R = S('geometrieVSEPR', { molecule: m }), I = R.invariants, ang = I.geometrieVSEPR.angleMesure;
+    assert.ok(I.geometrieVSEPR.mesure === 0 && Math.abs(I.geometrieVSEPR.angleTetraedre - Math.acos(-1 / 3) * 180 / Math.PI) < 1e-9 && I.temoin.mesure > 4.5 && I.temoin.mesure < 5.5, JSON.stringify(I));
+    const vs = []; for (let q = 0; q < R.n && vs.length < 2; q++) { const v = [R.brut[3 * q], R.brut[3 * q + 1], R.brut[3 * q + 2]], L = Math.hypot(...v); if (L > 0.9) { const u = v.map((x) => x / L); if (!vs.some((w) => Math.abs(w[0] - u[0]) + Math.abs(w[1] - u[1]) + Math.abs(w[2] - u[2]) < 1e-9)) vs.push(u); } }
+    const lu = Math.acos(vs[0][0] * vs[1][0] + vs[0][1] * vs[1][1] + vs[0][2] * vs[1][2]) * 180 / Math.PI; assert.ok(Math.abs(lu - ang) < 1e-6, 'angle dessine ' + lu + ' vs ' + ang);
+    const dirs = []; for (let q = 0; q < R.n; q++) { const v = [R.brut[3 * q], R.brut[3 * q + 1], R.brut[3 * q + 2]], L = Math.hypot(...v); if (L > 0.9) { const u = v.map((x) => x / L); if (!dirs.some((w) => Math.abs(w[0] - u[0]) + Math.abs(w[1] - u[1]) + Math.abs(w[2] - u[2]) < 1e-9)) dirs.push(u); } }
+    assert.equal(dirs.length, [4, 3, 2, 2, 3][m], 'nombre de liaisons dessinees');
+    return I.geometrieVSEPR.molecule + ' ' + lu.toFixed(4);
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation, gaz, vitesse moyenne)', () => {
     const zs = { picB: [], partB: [], relaxation: [], gaz: [], vitesse: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation));
@@ -196,6 +209,11 @@ const MUTANTS = [
   ['titrage : Ka = 10^(-pKa) en log decimal oublie', 'Ka = expNegD(SOURCES.pKaAcetique.valeur * lnD(10))', 'Ka = expNegD(SOURCES.pKaAcetique.valeur)'],
   ['titrage : dichotomie inversee', 'if (f(m) > 0) lo = m; else hi = m; }', 'if (f(m) > 0) hi = m; else lo = m; }'],
   ['titrage : temoin a mi-equivalence', 'equiv = phDe(Veq).pH,', 'equiv = phDe(Veq / 2).pH,'],
+  ['vsepr : arccos decale', 'if (cosD(m) > c) lo = m; else hi = m; } return (lo + hi) / 2; }', 'if (cosD(m) > c) lo = m; else hi = m; } return (lo + hi) / 2 + 0.001; }'],
+  /* « ordre des doublets non controle » etait EQUIVALENT (l ordre porte sur des angles SOURCES fixes) : remplace par un mutant du modele */
+  ['vsepr : NH3 avec deux doublets libres', "['NH3', 4, 1, SOURCES.angleNH3.valeur]", "['NH3', 4, 2, SOURCES.angleNH3.valeur]"],
+  ['vsepr : pyramide a 120 au lieu de l angle mesure', 'if (ca * ca - 0.5 * sa * sa > c) lo = a; else hi = a; }', 'if (ca * ca - 0.5 * sa * sa > -0.5) lo = a; else hi = a; }'],
+  ['vsepr : temoin sur NH3', 'temoin: { mesure: tetra - MOL[2][3], formule: 0,', 'temoin: { mesure: tetra - MOL[1][3], formule: 0,'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (chaine)', 'rng = mulberry32(P.graine), T = 5', 'rng = Math.random, T = 5'],
 ];
