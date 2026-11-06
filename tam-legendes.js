@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game177 (idee : codex Grok Bot) */
+  distinctesImpaires: {
+    titre: 'Distinct parts equal odd parts (Euler)',
+    enUnePhrase: 'Writing n with all-different numbers can be done exactly as many ways as writing it with only odd numbers.',
+    colonnes: ['across', 'down', 'distinct side or odd side'],
+    aRegarder: ['Left: a sum of different numbers. Right: the same total made only of odd numbers.', 'Each even part is halved again and again until it is odd: that is the bridge between the two sides.', 'Allowing any parts gives more ways: from n = 2 on (1 + 1 repeats a part), the restriction counts.'],
+    fin: null,
+  },
   /* game176 (idee : codex Grok Bot) */
   simsonDroite: {
     titre: 'The Simson line (three feet on one line)',

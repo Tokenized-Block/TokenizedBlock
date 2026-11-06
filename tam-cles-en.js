@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game177 */
+  qn: 'q(n)', q20: 'q(1..20)', distincte: 'distinct partition drawn', impaire: 'its odd image',
   /* game176 */
   point: 'the point P',
   /* game175 */
@@ -459,6 +461,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game177 */
+  egalite: 'Distinct-part vs odd-part counts that differ', glaisher: 'Glaisher map there and back (0 = exact)',
   /* game176 */
   alignes: 'Twice the area of the three feet (0 = aligned, exact)', surCercle: 'P on the circumscribed circle: |OP|^2 - R^2 (exact)',
   /* game175 */

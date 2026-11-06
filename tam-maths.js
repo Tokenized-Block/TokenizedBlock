@@ -1230,7 +1230,46 @@ function simsonDroite(P0, n) {
     temoin: { mesure: feuNb(aireQ), exact: feuTexte(aireQ), note: 'witness: P pushed outside the circle (O + 5/4 (P - O)) : the three feet are no longer on one line' } } };
 }
 
+// ---------- 34 : parts distinctes = parts impaires (Euler) (idee et valeurs : codex Grok Bot ; OEIS A000009, lu par Grok) ----------
+// Le nombre de facons d ecrire n comme somme de parts TOUTES DIFFERENTES egale le nombre de facons de l ecrire avec des parts TOUTES IMPAIRES.
+// Exact ici : deux comptages INDEPENDANTS en entiers BigInt (sac a dos 0/1 sur les parts 1..n ; sac a dos non borne sur les parts impaires),
+//   compares pour chaque m de 1 a n ; q(1..20) = 1, 1, 2, 2, 3, 4, 5, 6, 8, 10, 12, 15, 18, 22, 27, 32, 38, 46, 54, 64 (Grok).
+// Et la bijection de Glaisher : une partition en parts distinctes tiree au hasard (uniforme, graine) ; chaque part 2^a b (b impair) devient
+//   2^a parts egales a b ; on verifie que le resultat est en parts impaires, de somme n, et qu en regroupant (ecriture binaire des
+//   multiplicites) on retrouve EXACTEMENT la partition de depart.
+// Temoin : « toutes differentes » n est pas « quelconques » : p(n) depasse q(n) des n = 2 (2 = 1 + 1 a une part repetee).
+// Dessin (vue de face) : la partition distincte (0, a gauche) et son image impaire (1, a droite), une ligne par part.
+function distParts(N) { const q = new Array(N + 1).fill(0n); q[0] = 1n; for (let k = 1; k <= N; k++) for (let m = N; m >= k; m--) q[m] += q[m - k]; return q; }
+function distImpaires(N) { const q = new Array(N + 1).fill(0n); q[0] = 1n; for (let k = 1; k <= N; k += 2) for (let m = k; m <= N; m++) q[m] += q[m - k]; return q; }
+function distTirage(N, rng) { /* T[m][k] = partitions de m en parts distinctes <= k */
+  const T = Array.from({ length: N + 1 }, () => new Array(N + 1).fill(0n)); for (let k = 0; k <= N; k++) T[0][k] = 1n;
+  for (let m = 1; m <= N; m++) for (let k = 1; k <= N; k++) T[m][k] = T[m][k - 1] + (k <= m ? T[m - k][k - 1] : 0n);
+  const parts = []; let m = N, k = N;
+  /* a chaque etape : la part k est laissee avec la probabilite T[m][k-1] / T[m][k], prise sinon -> chaque partition a la meme chance */
+  while (m > 0) { let u = 0n; for (let i = 0; i < 3; i++) u = (u << 30n) + BigInt(Math.floor(rng() * 1073741824)); u %= T[m][k];
+    if (u < T[m][k - 1]) k--; else { parts.push(k); m -= k; k = Math.min(k - 1, m); } }
+  return parts; }
+function distinctesImpaires(P, n) {
+  const N = P.entier, rng = mulberry32(P.graine), A = distParts(N), B = distImpaires(N), tous = partPieces(N);
+  let ecarts = 0; for (let m = 1; m <= N; m++) if (A[m] !== B[m]) ecarts++;
+  let premier = null; for (let m = 1; m <= N && premier === null; m++) if (tous[m] !== A[m]) premier = m;
+  const D0 = distTirage(N, rng), image = [];
+  for (const p of D0) { let a = 0, b = p; while (b % 2 === 0) { b /= 2; a++; } for (let i = 0; i < 2 ** a; i++) image.push(b); }
+  const mult = new Map(); for (const b of image) mult.set(b, (mult.get(b) || 0) + 1);
+  const retour = []; for (const [b, c] of mult) { let r = c, a = 0; while (r) { if (r & 1) retour.push(b * 2 ** a); r >>= 1; a++; } }
+  const ok = image.every((b) => b % 2 === 1) && image.reduce((x, y) => x + y, 0) === N && D0.reduce((x, y) => x + y, 0) === N && new Set(D0).size === D0.length
+    && retour.sort((x, y) => y - x).join() === [...D0].sort((x, y) => y - x).join();
+  const cases = []; D0.forEach((p, r) => { for (let c = 0; c < p; c++) cases.push([c, -r, 0]); });
+  const im = [...image].sort((x, y) => y - x), off = Math.max(...D0) + 2; im.forEach((p, r) => { for (let c = 0; c < p; c++) cases.push([off + c, -r, 1]); });
+  const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const cs = cases[Math.floor(l * cases.length / n)], o = 3 * l; brut[o] = cs[0]; brut[o + 1] = cs[1]; brut[o + 2] = cs[2]; }
+  return { D: 3, brut, nuage: true, unite: 'cases', invariants: {
+    egalite: { mesure: ecarts, formule: 0, qn: String(A[N]), q20: N >= 20 ? A.slice(1, 21).join(', ') : null, note: 'values m = 1..n where the count with distinct parts and the count with odd parts (two separate knapsack counts) differ' },
+    glaisher: { mesure: ok ? 0 : 1, formule: 0, distincte: D0.join(' + '), impaire: im.join(' + '), note: 'Glaisher s map : the drawn distinct partition, each part 2^a b split into 2^a parts b, is all odd, sums to n, and merges back to itself' },
+    temoin: { mesure: premier === null ? NaN : premier, formule: 2, absente: 'n below 2', note: 'witness: distinct parts is a real restriction : p(n) > q(n) from n = 2 (1 + 1 repeats a part)' } } };
+}
+
 export const COLONNES = Object.freeze({
+  distinctesImpaires: { colonnes: ['column', 'row (downwards)', 'which side (label; 0 = distinct parts, 1 = odd parts)'], memeLongueur: [[0, 1]], autres: [2] },
   simsonDroite: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = circle, 2 = perpendiculars, 3 = Simson line)'], memeLongueur: [[0, 1]], autres: [2] },
   bale: { colonnes: ['1/n', 'value', 'what (label; 0 = S_n, 1 = pi^2/6, 2 = the band 1/(n+1) .. 1/n under it)'], memeLongueur: [], autres: [0, 1, 2] },
   morley: { colonnes: ['x', 'y', 'what (label; 0 = triangle, 1 = trisectors, 2 = Morley triangle)'], memeLongueur: [[0, 1]], autres: [2] },
@@ -1366,9 +1405,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'simsonDroite', nom: 'The Simson line', science: 'Geometry', D: 3, nuage: true, params: { taille: 12, corde: 3, graine: 1 },
     bornes: { taille: [4, 30], corde: [-30, 30], graine: [1, 1000000] },
     phrase: 'A visualisation of the Simson line: from any point on the circle through the corners of a triangle, drop perpendiculars to the three sides; their feet always lie on one straight line. Everything is computed in exact fractions, so the line is checked exactly; a point just outside the circle breaks it.' },
+  { id: 'distinctesImpaires', nom: 'Distinct parts equal odd parts (Euler)', science: 'Number theory', D: 3, nuage: true, params: { entier: 30, graine: 1 },
+    bornes: { entier: [3, 120], graine: [1, 1000000] },
+    phrase: 'A visualisation of Euler\'s partition theorem: there are as many ways to write n as a sum of different numbers as there are ways to write it as a sum of odd numbers. Both are counted separately for every n, and a random partition is carried across by Glaisher\'s halving map and back again.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'] };
-const FONCTIONS = { simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'] };
+const FONCTIONS = { distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

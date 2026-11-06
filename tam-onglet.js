@@ -109,6 +109,8 @@ THEMES.maths.push('morley');
 THEMES.maths.push('bale');
 /* game176 : la droite de Simson (idee : codex Grok Bot) */
 THEMES.maths.push('simsonDroite');
+/* game177 : parts distinctes = parts impaires (idee : codex Grok Bot) */
+THEMES.maths.push('distinctesImpaires');
 /* game124 : les solides de Platon rejoignent les maths */
 THEMES.maths.push('solidesPlatoniques');
 /* game125 */
@@ -1209,6 +1211,8 @@ export function monter(racine, ctx = {}) {
     'bale',
     /* game176 */
     'simsonDroite',
+    /* game177 */
+    'distinctesImpaires',
     /* game123 */
     'billardPi', 'modesNormaux',
     /* game124 (les solides de Platon restent en 3-D, la vue tourne) */
