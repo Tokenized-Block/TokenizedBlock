@@ -352,6 +352,8 @@ export const CLES_EN_MODULES = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game191 */
+  pUtilise: 'p used (a non-prime goes to the next prime)', mod3: 'rows 0..9 mod 3', vrai: 'true value',
   /* game190 */
   termesZ: 'number of terms for n = 1..30',
   /* game189 */
@@ -487,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game191 */
+  lucas: 'Pascal mod p vs the base-p digit rule (cells that differ)',
   /* game190 */
   unicite: 'Greedy writings with neighbours, or not exactly one writing',
   /* game189 */

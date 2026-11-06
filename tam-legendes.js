@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game191 (idee : codex Grok Bot) */
+  theoremeLucas: {
+    titre: 'Lucas\'s theorem (Pascal\'s triangle modulo a prime)',
+    enUnePhrase: 'Colour Pascal\'s triangle by remainders modulo a prime and a fractal appears; Lucas\'s rule predicts every cell.',
+    colonnes: ['across', 'down', 'remainder'],
+    aRegarder: ['Modulo 2 the triangle becomes Sierpinski\'s gasket; modulo 3 and 5 other fractals appear.', 'Each cell is the product of small binomials of the digits in base p.', 'With 4, which is not prime, the digit rule breaks.'],
+    fin: null,
+  },
   /* game190 (idee : codex Grok Bot) */
   zeckendorf: {
     titre: 'Zeckendorf representation (numbers made of Fibonacci)',
