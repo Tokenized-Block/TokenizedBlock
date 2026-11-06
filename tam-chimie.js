@@ -49,6 +49,14 @@ export const SOURCES = Object.freeze({
   E0Cu: S(0.337, 'V', 'https://openstax.org/books/chemistry-2e/pages/l-standard-electrode-half-cell-potentials', '0.337'),
   // meme page : Zn2+ + 2e- -> Zn, -0.7618 V
   E0Zn: S(-0.7618, 'V', 'https://openstax.org/books/chemistry-2e/pages/l-standard-electrode-half-cell-potentials', '-0.7618'),
+  /* game222 : H2 + I2 -> 2 HI, cours CHM1046 (Florida State University), « Activation Energy », exemple « Let's try a problem », lu par
+   *   Grok Bot 19 (source pedagogique publiee, pas l article experimental primaire). Ea et A sont RECALCULES ici, pas tapes. */
+  // https://www.chem.fsu.edu/chemlab/chm1046course/activation.html : T1 = 326 C, k1 = 5.4 x 10^-4 M^-1 s^-1
+  T1arrhenius: S(326, 'C', 'https://www.chem.fsu.edu/chemlab/chm1046course/activation.html', '326'),
+  k1arrhenius: S(5.4e-4, 'L/(mol s)', 'https://www.chem.fsu.edu/chemlab/chm1046course/activation.html', '5.4e-4'),
+  // meme page : T2 = 410 C, k2 = 2.8 x 10^-2 M^-1 s^-1
+  T2arrhenius: S(410, 'C', 'https://www.chem.fsu.edu/chemlab/chm1046course/activation.html', '410'),
+  k2arrhenius: S(2.8e-2, 'L/(mol s)', 'https://www.chem.fsu.edu/chemlab/chm1046course/activation.html', '2.8e-2'),
 });
 
 function expNegD(x) {
@@ -334,7 +342,31 @@ function pileDaniell(P, n) {
     temoin: { mesure: temoinE, formule: E0, note: 'witness: with both ions at 0.01 mol/L (far from 1), Q = 1 and the cell still gives exactly E0: only the ratio matters' } } };
 }
 
+// ---------- game222 : la loi d Arrhenius (idee et valeurs : codex Grok Bot 19 ; deux mesures publiees : SOURCES) ----------
+// k = A e^(-Ea / R T). Deux points (T1, k1), (T2, k2) donnent Ea = R ln(k2/k1) / (1/T1 - 1/T2) et A = k1 e^(Ea / R T1), R = N_A k_B.
+//   (Ea = 159965.618705 J/mol, calcul de Grok ; le cours publie 160 kJ/mol.) Reaction H2 + I2 -> 2 HI d ordre 2, [H2] = [I2] = c au depart :
+//   exact c(t) = c0 / (1 + c0 k t). La reaction est INTEGREE pas a pas (RK4, 60 000 pas) sur une fenetre FIXE de 3600 s a la temperature du curseur.
+// MESURE : k(T1) = k1 et k(T2) = k2 a 1e-12 relatif ; integration = solution exacte a 1e-9 relatif a chaque pas.
+// Temoin : la regle « la vitesse double tous les 10 degres » ne vaut pas ici : a 326 C, k(336 C) / k(326 C) vaut environ 1.69.
+// Dessin (vue de face) : (t / 3600 s, c / c0) ; etiquette = part de HI formee.
+function arrhenius(P, n) {
+  const R = SOURCES.NA.valeur * SOURCES.kB.valeur, T1 = SOURCES.T1arrhenius.valeur + 273.15, T2 = SOURCES.T2arrhenius.valeur + 273.15, k1 = SOURCES.k1arrhenius.valeur, k2 = SOURCES.k2arrhenius.valeur;
+  const Ea = R * lnD(k2 / k1) / (1 / T1 - 1 / T2), A = k1 / expNegD(Ea / (R * T1)), kDe = (T) => A * expNegD(Ea / (R * T));
+  const T = P.celsius + 273.15, k = kDe(T), c0 = P.concH2;
+  let ecarts = (Math.abs(kDe(T1) / k1 - 1) < 1e-12 ? 0 : 1) + (Math.abs(kDe(T2) / k2 - 1) < 1e-12 ? 0 : 1);
+  const dt = 3600 / 3000, g = (c) => -k * c * c, pts = []; let c = c0, t = 0;
+  for (let i = 0; i <= 3000; i++) { const exact = c0 / (1 + c0 * k * t); if (Math.abs(c - exact) / exact > 1e-9) ecarts++; pts.push([t / 3600, c / c0, 1 - c / c0]);
+    for (let sp = 0; sp < 20; sp++) { const h = dt / 20, a = g(c), b = g(c + h * a / 2), d = g(c + h * b / 2), e = g(c + h * d); c += h * (a + 2 * b + 2 * d + e) / 6; t += h; } }
+  const temoin = kDe(T1 + 10) / kDe(T1);
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const [ta, ca, ha] = pts[Math.floor(l * pts.length / n)], o = 3 * l; brut[o] = ta; brut[o + 1] = ca; brut[o + 2] = ha; }
+  return { D: 3, brut, nuage: true, unite: 'mol/L', invariants: {
+    arrhenius: { mesure: ecarts, formule: 0, Ea, A, kCurseur: k, note: 'k off the two published points by more than 1e-12, or step-by-step integration off c0/(1 + c0 k t) by more than 1e-9' },
+    temoin: { mesure: temoin, formule: 2, note: 'witness: the rule that rates double every 10 degrees fails here: going from 326 C to 336 C multiplies k by about 1.69' } } };
+}
+
 export const COLONNES = Object.freeze({
+  arrhenius: { colonnes: ['time / 3600 s', 'H2 left / H2 at start', 'share turned into HI (label)'], memeLongueur: [], autres: [0, 1, 2] },
   pileDaniell: { colonnes: ['time (steps / 600)', 'cell voltage E / E0', 'log10 of the ratio Q (label)'], memeLongueur: [], autres: [0, 1, 2] },
   geometrieVSEPR: { colonnes: ['x (bond lengths)', 'y (same)', 'z (same)'], memeLongueur: [[0, 1, 2]], autres: [] },
   titrageAcideFaible: { colonnes: ['base added / base needed (half scale)', 'pH / 14', 'share of acid still as HA (label)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -370,9 +402,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'pileDaniell', nom: 'A zinc-copper battery running down (Nernst equation)', science: 'Electrochemistry', D: 3, nuage: true, params: { cuivre: 1, zinc: 0.01, kelvins: 298.15 },
     bornes: { cuivre: [0.01, 2], zinc: [0.001, 1], kelvins: [273.15, 373.15] },
     phrase: 'A visualisation of a Daniell cell (zinc and copper) running down: copper ions plate out, zinc ions pile up, and the voltage follows the Nernst equation at every step, with the gas and Faraday constants built from exact SI values. With both ions at the same low concentration the cell still gives its standard voltage: that is the witness.' },
+  { id: 'arrhenius', nom: 'How heat speeds up a reaction (Arrhenius law)', science: 'Chemical kinetics', D: 3, nuage: true, params: { celsius: 380, concH2: 0.1 },
+    bornes: { celsius: [300, 450], concH2: [0.01, 1] },
+    phrase: 'A visualisation of the Arrhenius law on hydrogen and iodine forming hydrogen iodide: two published rate measurements give the activation energy, and the reaction is run for one hour at the chosen temperature. A little more heat makes it much faster. The classroom rule that rates double every 10 degrees does not hold here: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [], geometrieVSEPR: ['molecule'], pileDaniell: [] };
-const FONCTIONS = { pileDaniell, geometrieVSEPR, titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
+export const ENTIERS = { reactionsChaine: ['molecules', 'graine'], equilibreChimique: ['molecules', 'graine'], brusselator: [], gazParfait: ['molecules', 'graine'], carnot: ['liberte'], titrageAcideFaible: [], geometrieVSEPR: ['molecule'], pileDaniell: [], arrhenius: [] };
+const FONCTIONS = { arrhenius, pileDaniell, geometrieVSEPR, titrageAcideFaible, reactionsChaine, equilibreChimique, brusselator, gazParfait, carnot };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {

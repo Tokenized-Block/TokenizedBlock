@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game222 */
+  arrhenius: 'Rate off the published points, or integration off the exact second-order curve', Ea: 'Activation energy (J/mol)', A: 'Pre-exponential factor (L/(mol s))', kCurseur: 'Rate constant at the chosen temperature (L/(mol s))',
   /* game221 */
   gutenbergRichter: 'Re-estimated b more than 4 standard errors off, or catalogue counts that do not add up', bEstime: 'b measured back from the drawn quakes (Aki)', totalCatalogue: 'Quakes in the 2024 world catalogue', cumulCatalogue: 'Quakes at least as strong as each class (2024)',
   /* game220 */

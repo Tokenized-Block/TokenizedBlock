@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-chimie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible', 'geometrieVSEPR', 'pileDaniell'];
+const IDS = ['reactionsChaine', 'equilibreChimique', 'brusselator', 'gazParfait', 'carnot', 'titrageAcideFaible', 'geometrieVSEPR', 'pileDaniell', 'arrhenius'];
 
 // ---------- references independantes (Math autorise ici) ----------
 const aRef = (k1, t) => Math.exp(-k1 * t);
@@ -58,7 +58,7 @@ function suite(T, bavard = false) {
   const cache = new Map(), S = (id, p = {}) => { const k = id + JSON.stringify(p); if (!cache.has(k)) cache.set(k, T.simuler(id, p)); return cache.get(k); };
   const sys = (id) => T.SYSTEMES.find((s) => s.id === id);
   ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
-    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw', 'angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3', 'NA', 'kB', 'e', 'E0Cu', 'E0Zn']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+    assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.deepEqual(Object.keys(T.SOURCES), ['pKaAcetique', 'Kw', 'angleCH4', 'angleNH3', 'angleH2O', 'angleCO2', 'angleBF3', 'NA', 'kB', 'e', 'E0Cu', 'E0Zn', 'T1arrhenius', 'k1arrhenius', 'T2arrhenius', 'k2arrhenius']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === Number(v.lu) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -173,6 +173,16 @@ function suite(T, bavard = false) {
     assert.ok(I.pileDaniell.mesure === 0 && Math.abs(I.pileDaniell.E0 - 1.0988) < 1e-12 && I.pileDaniell.penteDecade298mV.toFixed(10) === '29.5796748424' && I.pileDaniell.troisExemples === '1.098800000 1.069220325 1.128379675' && Math.abs(I.temoin.mesure - I.temoin.formule) < 1e-12, JSON.stringify(I));
     return 'ok';
   });
+  /* game222 : Arrhenius - reference INDEPENDANTE : Math.log / Math.exp ; valeurs de Grok Bot (codex 19) : Ea = 159965.618705 J/mol,
+   *   A = 4.76565363807e10 ; courbe d ordre 2 exacte c0/(1 + c0 k t) */
+  const arrRef = () => { const R = 6.02214076e23 * 1.380649e-23, T1 = 599.15, T2 = 683.15; const Ea = R * Math.log(2.8e-2 / 5.4e-4) / (1 / T1 - 1 / T2); return { R, Ea, A: 5.4e-4 * Math.exp(Ea / (R * T1)) }; };
+  ok('arrhenius : Ea et A de Grok Bot', () => { const r = arrRef(); assert.equal(r.Ea.toFixed(6), '159965.618705'); assert.equal(r.A.toExponential(11), '4.76565363807e+10'); return 'ok'; });
+  for (const p of [...extremes(sys('arrhenius')), { celsius: 326, concH2: 0.5 }]) ok(`arrhenius ${JSON.stringify(p)} : Ea, A, k aux deux points, courbe exacte, temoin`, () => {
+    const R = S('arrhenius', p), I = R.invariants, r = arrRef(), k = r.A * Math.exp(-r.Ea / (r.R * (R.params.celsius + 273.15))), c0 = R.params.concH2;
+    assert.ok(I.arrhenius.mesure === 0 && Math.abs(I.arrhenius.Ea / r.Ea - 1) < 1e-10 && Math.abs(I.arrhenius.kCurseur / k - 1) < 1e-9 && Math.abs(I.temoin.mesure - Math.exp(r.Ea / r.R * (1 / 599.15 - 1 / 609.15))) < 1e-9 && I.temoin.mesure < 1.8, JSON.stringify(I));
+    const fin = R.brut[3 * (R.n - 1) + 1], tFin = R.brut[3 * (R.n - 1)] * 3600; assert.ok(Math.abs(fin - 1 / (1 + c0 * k * tFin)) < 1e-6, 'fin de courbe ' + fin);
+    return 'k = ' + I.arrhenius.kCurseur.toExponential(4);
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (pic de B, part de B, relaxation, gaz, vitesse moyenne)', () => {
     const zs = { picB: [], partB: [], relaxation: [], gaz: [], vitesse: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('reactionsChaine', { graine: g }).invariants, e = T.simuler('equilibreChimique', { graine: g }).invariants; zs.picB.push(z(a.picB)); zs.partB.push(z(e.partB)); zs.relaxation.push(z(e.relaxation));
@@ -229,6 +239,10 @@ const MUTANTS = [
   ['nernst : signe du terme ln Q inverse', 'const EdeQ = (Q) => E0 - (R * T / (ne * F)) * lnD(Q),', 'const EdeQ = (Q) => E0 + (R * T / (ne * F)) * lnD(Q),'],
   ['nernst : F avec k_B au lieu de e', 'F = SOURCES.NA.valeur * SOURCES.e.valeur,', 'F = SOURCES.NA.valeur * SOURCES.kB.valeur * 1e4,'],
   ['nernst : temoin a 0.01 et 0.001', 'temoinE = EdeQ(0.01 / 0.01);', 'temoinE = EdeQ(0.01 / 0.001);'],
+  ['arrhenius : Celsius pris pour des kelvins', 'const T = P.celsius + 273.15, k = kDe(T), c0 = P.concH2;', 'const T = P.celsius, k = kDe(T), c0 = P.concH2;'],
+  ['arrhenius : Ea sans R', 'const Ea = R * lnD(k2 / k1) / (1 / T1 - 1 / T2),', 'const Ea = lnD(k2 / k1) / (1 / T1 - 1 / T2),'],
+  ['arrhenius : ordre 1 au lieu de 2', 'g = (c) => -k * c * c, pts = [];', 'g = (c) => -k * c, pts = [];'],
+  ['arrhenius : temoin sur 20 degres', 'const temoin = kDe(T1 + 10) / kDe(T1);', 'const temoin = kDe(T1 + 20) / kDe(T1);'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (chaine)', 'rng = mulberry32(P.graine), T = 5', 'rng = Math.random, T = 5'],
 ];

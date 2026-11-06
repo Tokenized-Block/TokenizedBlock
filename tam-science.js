@@ -248,6 +248,8 @@ export const ECHELLE_PROPRE = {
   marcheAleatoire: [2], aiguilleBuffon: [2], anniversaires: [2], spiraleUlam: [2],
   /* game118 : vitesse (etiquette) ; copies, generation et numero (3 grandeurs) */
   gazParfait: [2], hardyWeinberg: [0, 1, 2],
+  /* game222 : temps et concentration de natures differentes ; part de HI (etiquette) */
+  arrhenius: [2],
   /* game216 : part consommee et tension de natures differentes ; log Q (etiquette) */
   pileDaniell: [2],
   /* game214 : volume et pH de natures differentes ; part d acide (etiquette) */

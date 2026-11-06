@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game222 (idee : codex Grok Bot) */
+  arrhenius: {
+    titre: 'How heat speeds up a reaction',
+    enUnePhrase: 'Hydrogen and iodine react faster when hot: a little more heat, a lot more speed.',
+    colonnes: ['time (one hour)', 'how much hydrogen is left', 'how much hydrogen iodide was made'],
+    aRegarder: ['At 300 degrees almost nothing happens in an hour.', 'At 450 degrees most of the hydrogen is gone.', 'Each extra 10 degrees multiplies the speed by less than 2 here.'],
+    fin: null,
+  },
   /* game221 (idee : codex Grok Bot) */
   gutenbergRichter: {
     titre: 'Earthquake sizes',
