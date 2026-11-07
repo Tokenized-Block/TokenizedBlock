@@ -33,6 +33,13 @@
   .log { max-height: 260px; overflow-y: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
   .log p { margin: 0 0 6px; padding-left: 8px; border-left: 2px solid #263252; }
   .log p.sim { border-left-color: var(--dan); }
+  .log p.live { border-left-color: var(--pn); }
+  .log p.verdict { border-left-color: var(--kc); color: #f3e3b5; }
+  #spark { display: block; width: 100%; height: 48px; margin-top: 8px; }
+  .dial { position: relative; height: 10px; border-radius: 5px; margin: 10px 0 6px; background: linear-gradient(90deg, #f472b6, #1a2234 50%, #4ade80); }
+  #needle { position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: #fff; left: 50%; transition: left .4s; box-shadow: 0 0 10px #fff; }
+  .dialEnds { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  #verdict { font-size: 20px; margin-top: 4px; }
   .bounds { font-size: 12px; color: var(--muted); }
   .bounds li { margin-bottom: 4px; }
   a { color: #93c5fd; }
@@ -40,8 +47,8 @@
 </head>
 <body>
 <header>
-  <h1>A real fly's memory circuit, wired to tokenized stocks</h1>
-  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain). The price comes from the Chainlink feed read by the server. Nothing is signed, nothing is advice.</div>
+  <h1>A real fly's memory circuit, living on tokenized stocks</h1>
+  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), fed the live on-chain price, 24/7. It reacts, learns and leans one way or the other; five minutes later the market says what happened. Nothing is signed, nothing is advice.</div>
 </header>
 <main>
   <section class="scene">
@@ -50,7 +57,8 @@
       <span><b style="background:var(--pn)"></b>PN · olfactory input</span>
       <span><b style="background:var(--kc)"></b>Kenyon · coding</span>
       <span><b style="background:var(--mbon)"></b>MBON · output</span>
-      <span><b style="background:var(--dan)"></b>Dopamine · reinforcement</span>
+      <span><b style="background:var(--dan)"></b>Dopamine · reward (PAM)</span>
+      <span><b style="background:#fb923c"></b>Dopamine · punishment (PPL1)</span>
       <span><b style="background:var(--apl)"></b>APL · inhibition</span>
     </div>
   </section>
@@ -60,6 +68,17 @@
       <select id="pick"></select>
       <div class="price" id="price">—</div>
       <div class="state" id="state">reading…</div>
+      <canvas id="spark" width="600" height="96"></canvas>
+      <div class="state" id="ref"></div>
+    </div>
+    <div class="card">
+      <h2>Computed tendency</h2>
+      <div id="verdict">Quiet</div>
+      <div class="dial"><span id="needle"></span></div>
+      <div class="dialEnds"><span>avoid</span><span>approach</span></div>
+      <div class="state" id="tally" style="margin-top:8px"></div>
+      <button id="listen">Listen to the brain</button>
+      <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
     </div>
     <div class="card">
       <h2>Computed activity</h2>
@@ -77,12 +96,22 @@
       <div class="log" id="log"></div>
     </div>
     <div class="card bounds">
+      <h2>How it differs from a block's brain</h2>
+      <ul>
+        <li><b>A block's brain</b>: 128 spiking neurons whose wiring is derived from the block's own address, so every block has a brain of its own. It is fed the block's own on-chain facts (market cap, GMs, messages, new holders, whether its creator still holds) and shows how the block moves and its mood. A toy network, not a biological copy.</li>
+        <li><b>This brain</b>: 1,119 neurons wired exactly as a real fly's, the same circuit for everyone, measured under the microscope. It is fed a stock's live market price, and it <b>learns</b>: dopamine reshapes its synapses, the memory forms and fades, and it leans toward or away, then meets the consequence.</li>
+        <li><b>Both</b>: no language model, no randomness, public inputs only. Anyone can replay them and get the same result.</li>
+      </ul>
+    </div>
+    <div class="card bounds">
       <h2>What this model is, and is not</h2>
       <ul>
-        <li>The neurons and the synapse counts between them are <b>measured</b> (electron microscopy). Threshold: 5 synapses; 300 Kenyon cells out of ~2,000, taken by ascending id.</li>
-        <li>The dynamics are <b>ours</b>: activity spreads in proportion to synapse counts, all excitatory except APL, modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
-        <li>Which PNs receive a rise or a fall is an <b>arbitrary choice</b> (id parity): a fly does not smell prices.</li>
-        <li>Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
+        <li>The neurons, the synapse counts between them, and which dopamine neurons reach which output neuron are <b>measured</b> (electron microscopy). Threshold: 5 synapses; 300 Kenyon cells out of ~2,000, taken by ascending id.</li>
+        <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), read every 10 s, weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
+        <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies; here they carry that teaching signal only, not the circuit's own activity. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening.</li>
+        <li>Activity spreads in proportion to synapse counts and fades within ~2 s once a move has passed. APL (inhibitory) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
+        <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and which PNs receive a rise or a fall (id parity) are <b>ours</b>: a fly does not smell prices.</li>
+        <li>Consequences are judged on the live price 5 minutes later, misses counted next to matches. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
       </ul>
       Data: <a href="https://www.janelia.org/project-team/flyem/hemibrain" rel="noopener" target="_blank">hemibrain v1.2, Janelia FlyEM</a>, CC BY 4.0 licence.
     </div>

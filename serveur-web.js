@@ -131,6 +131,7 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
  *   fonction et rend un silence qu on lirait comme un fait. */
 import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
+import { readPoolPrice } from './fly-price.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -2945,6 +2946,8 @@ async function lireMarcheServeur(token) {
  *   lecture. Une adresse hors du registre des actions ne coute AUCUN appel (NON_DISPONIBLE). */
 const referencesServeur = new Map(), referencesEnCours = new Map();
 let referencesEnVol = 0;
+/* /api/fly/price/: last live pool price per stock (bounded by the pool table, ~40 entries) */
+const flyPrices = new Map(), flyPricesInFlight = new Map();
 async function lireReferenceServeur(token) {
   const c = referencesServeur.get(token);
   if (c && Date.now() - c.t < 60000) return { ...c.r, depuisCache: true };
@@ -7109,6 +7112,26 @@ function traiterRequete(req, res) {
     if (!/^0x[0-9a-f]{40}$/.test(token)) { rendreR(400, { ok: false, pourquoi: 'whole address required' }); return; }
     lireReferenceServeur(token).then((r) => rendreR(r && r.occupe ? 429 : 200, r))
       .catch((e) => rendreR(200, { ok: false, pourquoi: String((e && e.message) || e).slice(0, 120) }));
+    return;
+  }
+  /* 2026-11-07 (human-brain branch): the LIVE on-chain price of a tokenized stock, from its Aerodrome pool (slot0), 24/7, read-only.
+   *   Only stocks of the measured pool table: never an open price proxy. 8 s cache, one read in flight per stock. */
+  if (chemin.startsWith('/api/fly/price/')) {
+    const token = chemin.slice('/api/fly/price/'.length).toLowerCase();
+    const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+    if (req.method !== 'GET') { send(405, { ok: false, why: 'GET only' }); return; }
+    const entry = POOLS_ACTIONS_AERODROME.get(token);
+    if (!entry) { send(404, { ok: false, why: 'not a stock of the measured pool table' }); return; }
+    const hit = flyPrices.get(token);
+    if (hit && Date.now() - hit.t < 8000) { send(200, { ...hit.r, cached: true }); return; }
+    if (!flyPricesInFlight.has(token)) {
+      flyPricesInFlight.set(token, readPoolPrice({ rpc: rpcRails, pool: entry.pool, token })
+        .then((p) => { const r = { ok: true, token, symbol: entry.symbole, pool: entry.pool, ...p, readAt: new Date().toISOString(), source: 'Aerodrome CL slot0' };
+          flyPrices.set(token, { t: Date.now(), r }); return r; })
+        .catch((e) => ({ ok: false, why: 'price not read: ' + String((e && e.message) || e).slice(0, 120) }))
+        .finally(() => flyPricesInFlight.delete(token)));
+    }
+    flyPricesInFlight.get(token).then((r) => send(200, r));
     return;
   }
   /* le marche d un block lu par le serveur (repli du navigateur quand ses noeuds publics le refusent) : /api/marche/0x… */
