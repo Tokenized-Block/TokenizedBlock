@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game252 (idee : codex 26, sous-agent Claude) */
+  regressionGalton: {
+    titre: 'Galton: regression towards the mean',
+    enUnePhrase: 'Children of very tall parents are tall, but closer to average than their parents were.',
+    colonnes: ['parents height', 'children height', 'which way the averages were taken'],
+    aRegarder: ['The child medians lie on a flatter line than parents = children.', 'Read it the other way: parents also regress.', 'Set the slope to 1: the short families fall off.'],
+    fin: null,
+  },
   /* game251 (idee : codex 26, sous-agent Claude) */
   lumiereMichelson: {
     titre: 'Michelson: the speed of light',

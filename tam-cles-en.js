@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game252 */
+  regressionGalton: 'Totals off, direct slope outside 0.6-0.75, or reverse slope 0.4 or more', totalEnfants: 'Adult children counted', totalParents: 'Mid-parents counted', penteMedianes: 'Child medians against mid-parent: slope', pentePonderee: 'Same, weighted by children', penteInverse: 'Mid-parent medians against child: slope', medianeBasse: 'Children of the 64.5 row: median', predictionPente1: 'Like parent, like child: predicted', predictionDeuxTiers: 'Two-thirds law around 68 1/4: predicted',
   /* game251 */
   lumiereMichelson: 'Mean, correction chain or greatest value not recovered', moyenne100: 'Mean of the 100 measurements (km/s)', finalRefait: 'Mean + 12 + 80, his final value', ecartMoyen100: 'Average gap to the mean (printed 60)', minimumTable: 'Smallest value in his tables', minimumImprime: 'Smallest value as printed', airMoinsC: 'In air, minus exact c (km/s)', ecartC: 'Final value minus exact c (km/s)', enIncertitudes: 'Same, in units of his limiting error',
   /* game250 */
