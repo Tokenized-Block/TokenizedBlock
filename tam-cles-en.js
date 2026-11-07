@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game238 */
+  diffusionAlpha: 'A series off the sin^4 law by more than 1.7, slope off -4, or printed column off', rapportMaxMin: 'Largest / smallest N sin^4, per metal and series', orMinMax: 'Gold, first series: smallest / largest N sin^4', penteLogLogOr: 'Slope of log N against log sin(angle / 2), gold', ecartImprime: 'Largest gap to the printed column (share)', loiSinusCarre: 'A 1 / sin^2 law, predicted at 15 degrees', observe15: 'Counted at 15 degrees',
   /* game237 */
   michaelisMenten: 'Fitted K more than 15 % from the 1913 constant', kAjuste: 'Fitted half-saturation K (mol/L)', vMaxAjuste: 'Fitted maximum rate (relative)', k1913: 'Michaelis and Menten 1913 constant (mol/L)', rapportK: 'Fitted / 1913', doublements: 'Rate ratio when the sugar doubles (low, middle, top)',
   /* game236 */

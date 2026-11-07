@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game238 (idee : codex 24, sous-agent Claude) */
+  diffusionAlpha: {
+    titre: 'Geiger and Marsden 1913',
+    enUnePhrase: 'A few alpha particles bounce straight back off gold: the atom has a tiny, heavy, charged core.',
+    colonnes: ['angle (log scale)', 'particles counted (log scale)', 'measured or test law'],
+    aRegarder: ['The counts fall on a straight line.', 'Its slope is close to minus 4.', 'Change the power: only 4 follows the dots.'],
+    fin: null,
+  },
   /* game237 (idee : codex 23, sous-agent Claude) */
   michaelisMenten: {
     titre: 'Michaelis and Menten 1913',
