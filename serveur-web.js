@@ -132,6 +132,7 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { readPoolPrice } from './fly-price.js';
+import { createFly, createSession } from './fly-core.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -2948,6 +2949,59 @@ const referencesServeur = new Map(), referencesEnCours = new Map();
 let referencesEnVol = 0;
 /* /api/fly/price/: last live pool price per stock (bounded by the pool table, ~40 entries) */
 const flyPrices = new Map(), flyPricesInFlight = new Map();
+function lirePrixMouche(token) {
+  const entry = POOLS_ACTIONS_AERODROME.get(token);
+  if (!entry) return Promise.resolve({ ok: false, why: 'not a stock of the measured pool table' });
+  const hit = flyPrices.get(token);
+  if (hit && Date.now() - hit.t < 8000) return Promise.resolve({ ...hit.r, cached: true });
+  if (!flyPricesInFlight.has(token)) {
+    flyPricesInFlight.set(token, readPoolPrice({ rpc: rpcRails, pool: entry.pool, token })
+      .then((p) => { const r = { ok: true, token, symbol: entry.symbole, pool: entry.pool, ...p, readAt: new Date().toISOString(), source: 'Aerodrome CL slot0' };
+        flyPrices.set(token, { t: Date.now(), r }); return r; })
+      .catch((e) => ({ ok: false, why: 'price not read: ' + String((e && e.message) || e).slice(0, 120) }))
+      .finally(() => flyPricesInFlight.delete(token)));
+  }
+  return flyPricesInFlight.get(token);
+}
+
+/* ── THE SHARED FLY (2026-11-08) ──────────────────────────────────────────────────────────────────────────────────────────────
+ * The page's fly lives in each visitor's browser; this one lives in the server and trains on SNDKc (the most traded stock, Coinbase
+ * 24 h volume 2026-11-07) every minute, whether anyone watches or not. SAME code as the page (fly-core.js).
+ * ⛔ RPC BUDGET: one stock, one window a minute, sharing the 20 s activity cache and the 8 s price cache with visitors; a window whose
+ *   price or trades are not read is skipped (nothing taught on a guess) and the next one waits 5 minutes. FLY_SERVER=off stops it.
+ * ⛔ VOLATILE: its memory starts again at each restart (a deploy); /api/fly/state says since when. */
+const MOUCHE = { symbol: 'SNDKc', fly: null, session: null, events: [], aliveSince: null, windows: 0, windowsRead: 0, windowsMissed: 0, why: null };
+function etatMoucheServeur() {
+  if (!MOUCHE.fly) return { ok: false, why: MOUCHE.why || 'not started' };
+  const m = MOUCHE.fly.exportMemory();
+  return { ok: true, symbol: MOUCHE.symbol, aliveSince: MOUCHE.aliveSince, windows: MOUCHE.windows, windowsRead: MOUCHE.windowsRead, windowsMissed: MOUCHE.windowsMissed,
+    weakened: m.filter((x) => x < 99900).length, session: MOUCHE.session.state(), events: MOUCHE.events.slice(-40) };
+}
+async function fenetreMouche() {
+  const token = [...POOLS_ACTIONS_AERODROME.entries()].find(([, t]) => t.symbole === MOUCHE.symbol);
+  if (!token) { MOUCHE.why = MOUCHE.symbol + ' not in the pool table'; return 3600000; }
+  const [price, ac] = await Promise.all([lirePrixMouche(token[0]), lireActiviteServeur(token[0]).catch(() => null)]);
+  MOUCHE.windows++;
+  if (!price || !price.ok || !ac || !ac.ok || !Array.isArray(ac.transactions)) { MOUCHE.windowsMissed++; return 300000; }
+  MOUCHE.windowsRead++;
+  MOUCHE.session.window({ symbol: MOUCHE.symbol, price, transactions: ac.transactions });
+  MOUCHE.fly.drain();
+  return 60000;
+}
+function demarrerMoucheServeur() {
+  if (process.env.FLY_SERVER === 'off' || ESSAI_SRV.actif) { MOUCHE.why = 'switched off on this server'; return; }
+  try {
+    const circuit = JSON.parse(readFileSync(join(ici, 'fly-brain-circuit.json'), 'utf8'));
+    MOUCHE.fly = createFly(circuit);
+    MOUCHE.session = createSession(MOUCHE.fly, (e) => {
+      const ev = { ...e, at: Date.now() }; if (Array.isArray(ev.top)) ev.top = ev.top.slice(0, 5);
+      MOUCHE.events.push(ev); if (MOUCHE.events.length > 120) MOUCHE.events.splice(0, MOUCHE.events.length - 120);
+    });
+    MOUCHE.aliveSince = new Date().toISOString();
+  } catch (e) { MOUCHE.why = 'circuit not loaded: ' + String((e && e.message) || e).slice(0, 120); return; }
+  const cycle = () => fenetreMouche().catch(() => { MOUCHE.windowsMissed++; return 300000; }).then((ms) => { const t = setTimeout(cycle, ms); if (t.unref) t.unref(); });
+  const t = setTimeout(cycle, 20000); if (t.unref) t.unref();
+}
 async function lireReferenceServeur(token) {
   const c = referencesServeur.get(token);
   if (c && Date.now() - c.t < 60000) return { ...c.r, depuisCache: true };
@@ -5764,7 +5818,7 @@ const SERVIS = [
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-11-07 (human-brain branch): the real fly memory circuit (hemibrain v1.2, Janelia, CC BY 4.0) wired to stock prices, read-only */
-  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json',
+  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
   'cles-v4-mesurees.js',
   /* 2026-10-03 : les 20 pools v4 USDC des actions tokenisees, logs bruts (importe par cles-v4-mesurees.js) */
@@ -7120,18 +7174,15 @@ function traiterRequete(req, res) {
     const token = chemin.slice('/api/fly/price/'.length).toLowerCase();
     const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
     if (req.method !== 'GET') { send(405, { ok: false, why: 'GET only' }); return; }
-    const entry = POOLS_ACTIONS_AERODROME.get(token);
-    if (!entry) { send(404, { ok: false, why: 'not a stock of the measured pool table' }); return; }
-    const hit = flyPrices.get(token);
-    if (hit && Date.now() - hit.t < 8000) { send(200, { ...hit.r, cached: true }); return; }
-    if (!flyPricesInFlight.has(token)) {
-      flyPricesInFlight.set(token, readPoolPrice({ rpc: rpcRails, pool: entry.pool, token })
-        .then((p) => { const r = { ok: true, token, symbol: entry.symbole, pool: entry.pool, ...p, readAt: new Date().toISOString(), source: 'Aerodrome CL slot0' };
-          flyPrices.set(token, { t: Date.now(), r }); return r; })
-        .catch((e) => ({ ok: false, why: 'price not read: ' + String((e && e.message) || e).slice(0, 120) }))
-        .finally(() => flyPricesInFlight.delete(token)));
-    }
-    flyPricesInFlight.get(token).then((r) => send(200, r));
+    if (!POOLS_ACTIONS_AERODROME.get(token)) { send(404, { ok: false, why: 'not a stock of the measured pool table' }); return; }
+    lirePrixMouche(token).then((r) => send(200, r));
+    return;
+  }
+  /* 2026-11-08 (human-brain branch): the SHARED fly the server trains on one stock every minute (fly-core.js, the page's own brain) */
+  if (chemin === '/api/fly/state') {
+    const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+    if (req.method !== 'GET') { send(405, { ok: false, why: 'GET only' }); return; }
+    send(200, etatMoucheServeur());
     return;
   }
   /* le marche d un block lu par le serveur (repli du navigateur quand ses noeuds publics le refusent) : /api/marche/0x… */
@@ -8423,6 +8474,8 @@ createServer((req, res) => consommateurArchive.run(etiquetteRequete(req), () => 
   console.log('tokenized-block sert ' + cache.size + ' fichier(s) sur le port ' + PORT);
   console.log('racine -> ' + RACINE + '  ·  HTML et JS en no-cache, images 24 h');
   consommateurArchive.run('fond prechauffage prix', () => prechaufferFaitsDePool());
+  /* 2026-11-08 : la mouche partagee demarre quand le VRAI serveur ecoute (jamais dans un banc qui evalue une tranche du fichier) */
+  consommateurArchive.run('fond mouche', () => demarrerMoucheServeur());
 });
 
 /* ── ⛔⛔ POURQUOI UN PRECHAUFFAGE, ET PAS UNE LECTURE A L OUVERTURE DE LA PAGE ──────────────────
