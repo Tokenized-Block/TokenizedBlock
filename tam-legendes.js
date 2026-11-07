@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game242 (idee : codex 25, sous-agent Claude) */
+  fievreSemmelweis: {
+    titre: 'Semmelweis: washing hands',
+    enUnePhrase: 'Doctors who came from the dissecting room carried death to mothers until they washed their hands in chlorine.',
+    colonnes: ['year', 'mothers who died, per hundred', 'which clinic, or when chlorine began'],
+    aRegarder: ['The doctors clinic stays far above the midwives clinic.', 'Both drop after the chlorine line.', 'In 1848 the two clinics meet.'],
+    fin: null,
+  },
   /* game241 (idee : codex 24, sous-agent Claude) */
   oubliEbbinghaus: {
     titre: 'The forgetting curve',

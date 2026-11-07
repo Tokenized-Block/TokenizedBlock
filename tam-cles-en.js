@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game242 */
+  fievreSemmelweis: 'Doctors clinic not deadlier every year, printed 9.92 not recovered, or clinics still apart in 1848', tauxAvant: 'Deaths per hundred, 1841-1846: doctors / midwives', totaux: 'Deaths / births, 1841-1846: doctors ; midwives', z1848: 'Gap between clinics in 1848 (standard errors)', tauxApres: 'Deaths per hundred, 1848: doctors / midwives', coquilleSemmelweis: 'Printed totals that do not follow from the counts', anneeVue: 'Year shown: doctors / midwives (per hundred)', zAvant: 'Gap between clinics 1841-1846 (standard errors)',
   /* game241 */
   oubliEbbinghaus: 'His calculated column not recovered, or other points beyond 2', calculRefait: 'His formula, recomputed (per cent)', ecartColonneCalculee: 'Largest gap to his printed calculated column', horsErreur: 'Points more than 2 off his formula (minutes)', tauMinutes: 'Exponential through the first two points: time constant (minutes)', expoA1440: 'That exponential after one day (per cent)', observe1440: 'Measured after one day (per cent)',
   /* game240 */
