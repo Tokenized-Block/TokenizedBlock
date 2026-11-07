@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game236 */
+  especesAire: 'Refitted coefficients off the published ones', semiLogA: 'Species at 1 square mile (fit on near islands)', semiLogB: 'Species gained per tenfold area', ilesSemiLog: 'Near islands in that fit', cAjuste: 'log species at 1 square mile (power fit)', zAjuste: 'Power exponent z (near islands above 1 square mile)', ilesPuissance: 'Islands in that fit', droiteAffichee: 'Line drawn', nusavePredit: 'Nusave predicted by z = 0.25 from Bougainville', nusaveObserve: 'Nusave observed',
   /* game235 */
   loiOhm: 'Free b off 20 1/4, a reading off the law by 3 %, or the brass check off', bLibre: 'b fitted freely, series I to V (Zoll)', aLibre: 'a fitted freely, series I to V', laitonZoll: 'Brass wires as copper length (Zoll)', serieChoisie: 'Series shown', aSerie: 'Ohm a for that series', sansResistanceInterne130: 'Without b: predicted twist at 130 Zoll',
   /* game234 */

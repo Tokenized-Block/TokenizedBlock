@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game236 (idee : codex 23, sous-agent Claude) */
+  especesAire: {
+    titre: 'Birds of the Solomon Islands',
+    enUnePhrase: 'Bigger islands hold more bird species, but only a dozen more for every tenfold of land.',
+    colonnes: ['island area (log scale)', 'number of bird species', 'near or far island, and the fitted lines'],
+    aRegarder: ['Near islands sit on one straight line.', 'Far islands fall below it.', 'The steep classic curve misses the small islands.'],
+    fin: null,
+  },
   /* game235 (idee : codex 23, sous-agent Claude) */
   loiOhm: {
     titre: 'Ohm 1826: longer wire, weaker current',
