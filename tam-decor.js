@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game246 */
+  lynxHudson: (P, o, B) => [pt([38 / 61, 4.896 / 5, B.centre[2]], C.repere, '1886: 78773 skins')],
   /* game245 */
   eclipseEddington: (P, o, B) => [pt([0.88, 0.88, B.centre[2]], C.repere, 'Einstein line')],
   /* game244 */

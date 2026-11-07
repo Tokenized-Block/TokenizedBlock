@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game246 (idee : codex 25, sous-agent Claude) */
+  lynxHudson: {
+    titre: 'The ten-year lynx cycle',
+    enUnePhrase: 'Lynx numbers in Canada boom and crash about every ten years, following the snowshoe hares they eat.',
+    colonnes: ['year', 'lynx skins sold (log scale)', 'the series, its peaks, or the series shifted'],
+    aRegarder: ['Peaks come back about every ten years.', 'Shift by 10 years: the curves line up.', 'Shift by 5: they are opposite.'],
+    fin: null,
+  },
   /* game245 (idee : codex 25, sous-agent Claude) */
   eclipseEddington: {
     titre: 'The 1919 eclipse',

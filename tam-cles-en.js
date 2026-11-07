@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game246 */
+  lynxHudson: 'Peak period off 9.63, or the cycle table inconsistent', anneesPics: 'Peak years', periodePics: 'Mean years between peaks', periodeLongue: 'Elton and Nicholson, 1752-1935: years per cycle', neufDixPourCent: 'Cycles of 9 or 10 years (percent, recomputed)', imprime78: 'Same, as printed', acfDecalage: 'Autocorrelation at the chosen lag', acf10: 'Autocorrelation at 10 years', acf10Melange: 'Same, years shuffled (20 seeds)',
   /* game245 */
   eclipseEddington: 'Sobral or Principe off Einstein by 2 probable errors, or stars closer to Newton', bordAjuste: 'Seven stars, line through zero: deflection at the limb (arcseconds)', rmsEinstein: 'Stars: rms gap to Einstein (arcseconds)', rmsNewton: 'Stars: rms gap to Newton (arcseconds)', sobralEnEp: 'Sobral minus Einstein (probable errors)', principeEnEp: 'Principe minus Einstein (probable errors)', newtonEnEp: 'Sobral minus Newton (probable errors)',
   /* game244 */
