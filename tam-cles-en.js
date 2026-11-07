@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game239 */
+  argonRayleigh: 'Recomputed means or grams per litre off the printed figures', moyenneChimique: 'Chemical nitrogen, mean (grams in the globe)', moyenneAtmospherique: 'Air nitrogen, mean (grams in the globe)', litreChimique: 'Chemical nitrogen (grams per litre)', litreAtmospherique: 'Air nitrogen (grams per litre)', litreAbregeErrone: 'Chemical, with the correction subtracted as in the 1895 abstract', ecartGrammes: 'Air minus chemical (grams)', ecartPourCent: 'Air minus chemical (percent)', enEtendues: 'Gap in whole spreads of the chemical methods', enEcartsTypes: 'Gap in standard deviations of the chemical methods',
   /* game238 */
   diffusionAlpha: 'A series off the sin^4 law by more than 1.7, slope off -4, or printed column off', rapportMaxMin: 'Largest / smallest N sin^4, per metal and series', orMinMax: 'Gold, first series: smallest / largest N sin^4', penteLogLogOr: 'Slope of log N against log sin(angle / 2), gold', ecartImprime: 'Largest gap to the printed column (share)', loiSinusCarre: 'A 1 / sin^2 law, predicted at 15 degrees', observe15: 'Counted at 15 degrees',
   /* game237 */

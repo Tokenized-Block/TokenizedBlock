@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game239 (idee : codex 24, sous-agent Claude) */
+  argonRayleigh: {
+    titre: 'The nitrogen that weighed too much',
+    enUnePhrase: 'Nitrogen taken from air was half a percent heavier than nitrogen made in the lab: the extra was argon.',
+    colonnes: ['how the nitrogen was made', 'how much a litre weighs', 'lab, air or the printed value'],
+    aRegarder: ['The five lab methods agree closely.', 'The three air methods sit higher, together.', 'Flip the correction sign: the printed values no longer match.'],
+    fin: null,
+  },
   /* game238 (idee : codex 24, sous-agent Claude) */
   diffusionAlpha: {
     titre: 'Geiger and Marsden 1913',
