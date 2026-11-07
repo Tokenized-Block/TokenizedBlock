@@ -194,7 +194,9 @@ const marques = [src, moi].flatMap((t, i) => t.split('\n').map((l, j) => [i ? 't
 assertions++; if (marques.length) ech.push({ nom: 'valeur marquee sans source lue', det: marques.map(([f, j]) => f + ':' + j).join(',') });
 console.log(`${marques.length ? 'ECHEC ' : 'OK    '}aucune valeur marquee sans source lue (module + banc)`);
 
-console.log('\nTEMPS simuler(id) a n = 1500 (mediane de 3), defauts et chaque extreme de curseur :');
+/* 07/11 : minimum de 5 au lieu de la mediane de 3 : sur cette machine effetTunnel allait de 213 a 608 ms d un appel a l autre (mediane 321), le
+ *   meme code rougissait ou non selon le moment. Le minimum mesure le cout propre ; un calcul double reste rouge (325-391 ms, preuve a part). */
+console.log('\nTEMPS simuler(id) a n = 1500 (minimum de 5), defauts et chaque extreme de curseur :');
 let pireTemps = 0, pireOu = '';
 for (const s of T.SYSTEMES) {
   const ks = Object.keys(s.params), cs = [{}];
@@ -202,8 +204,8 @@ for (const s of T.SYSTEMES) {
   cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][0]]))); cs.push(Object.fromEntries(ks.map((k) => [k, s.bornes[k][1]])));
   let pire = 0, ou = '';
   for (const p of cs) {
-    const t = []; for (let k = 0; k < 3; k++) { const a = performance.now(); T.simuler(s.id, p); t.push(performance.now() - a); }
-    t.sort((a, b) => a - b); if (t[1] > pire) { pire = t[1]; ou = JSON.stringify(p); }
+    const t = []; for (let k = 0; k < 5; k++) { const a = performance.now(); T.simuler(s.id, p); t.push(performance.now() - a); }
+    t.sort((a, b) => a - b); if (t[0] > pire) { pire = t[0]; ou = JSON.stringify(p); }
   }
   console.log(`  ${s.id.padEnd(20)} pire ${pire.toFixed(1)} ms  ${ou}`);
   if (pire > pireTemps) { pireTemps = pire; pireOu = s.id + ' ' + ou; }

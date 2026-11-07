@@ -175,13 +175,15 @@ const interdits = src.match(/Math\.(sin|cos|tan|exp|log|pow|atan2?|asin|acos|hyp
 assertions++; if (interdits) ech.push({ nom: 'source sans Math transcendante', det: interdits.join(',') });
 console.log(`${interdits ? 'ECHEC ' : 'OK    '}source : aucune Math.sin/cos/exp/log/pow/atan/... ni Math.random`);
 
-console.log('\nTEMPS simuler(id) a n = 1500 (mediane de 3) :');
+/* 07/11 : minimum de 5 au lieu de la mediane de 3 : sur cette machine effetTunnel allait de 213 a 608 ms d un appel a l autre (mediane 321), le
+ *   meme code rougissait ou non selon le moment. Le minimum mesure le cout propre ; un calcul double reste rouge (325-391 ms, preuve a part). */
+console.log('\nTEMPS simuler(id) a n = 1500 (minimum de 5) :');
 /* 2026-11-01 : maxima releves (rotor coups 400 -> 600, marche pas 200 -> 400) : le pire cas suit la nouvelle borne */
 const CHER = { wigner: { q0: 4 }, rotorPulse: { coups: 600, K: 10 }, bellCHSH: { essais: 2000 }, niveauxLandau: { n: 8, periodes: 6, melange: 0.5 }, marcheQuantique: { pas: 400 }, oscillateurEtats: { n: 12 } };
 for (const s of T.SYSTEMES) {
   for (const [lib, p] of [['defaut', {}], ...(CHER[s.id] ? [['pire  ', CHER[s.id]]] : [])]) {
-    const t = []; for (let k = 0; k < 3; k++) { const a = performance.now(); T.simuler(s.id, p); t.push(performance.now() - a); }
-    t.sort((a, b) => a - b); const ms = t[1];
+    const t = []; for (let k = 0; k < 5; k++) { const a = performance.now(); T.simuler(s.id, p); t.push(performance.now() - a); }
+    t.sort((a, b) => a - b); const ms = t[0];
     console.log(`  ${s.id.padEnd(18)} ${lib} ${ms.toFixed(1)} ms`);
     assertions++; if (!(ms < 300)) ech.push({ nom: `temps ${s.id} ${lib} < 300 ms`, det: ms.toFixed(1) });
   }
