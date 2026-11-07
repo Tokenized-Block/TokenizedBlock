@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game247 (idee : codex 25, sous-agent Claude) */
+  gouttesMillikan: {
+    titre: 'Millikan: the charge of the electron',
+    enUnePhrase: 'Charged oil drops floating between two plates all carry whole numbers of one tiny charge.',
+    colonnes: ['which drop', 'charge measured on that drop', 'drop group, or the running average'],
+    aRegarder: ['All 58 drops sit in a narrow band.', 'Average more drops: the line settles.', 'No drop strays even 1 percent.'],
+    fin: null,
+  },
   /* game246 (idee : codex 25, sous-agent Claude) */
   lynxHudson: {
     titre: 'The ten-year lynx cycle',

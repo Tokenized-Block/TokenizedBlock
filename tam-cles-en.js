@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game247 */
+  gouttesMillikan: '61.120, 4.774 or 6.062 not recovered, or a drop beyond 1 %', moyenne23: 'First 23 drops: mean e^(2/3) x 10^8', moyenne58: 'All 58 drops: mean', moyenne58Imprimee: 'All 58, as printed', eFinal: 'e (10^-10 esu)', nAvogadro: 'Avogadro number N', ecartMaxPourCent: 'Largest drop gap to the mean (percent)', ecartTypePourCent: 'Standard deviation (percent)', moyenneCourante: 'Running mean drawn', e1911EnIncertitudes: 'Earlier value minus final (final uncertainties)',
   /* game246 */
   lynxHudson: 'Peak period off 9.63, or the cycle table inconsistent', anneesPics: 'Peak years', periodePics: 'Mean years between peaks', periodeLongue: 'Elton and Nicholson, 1752-1935: years per cycle', neufDixPourCent: 'Cycles of 9 or 10 years (percent, recomputed)', imprime78: 'Same, as printed', acfDecalage: 'Autocorrelation at the chosen lag', acf10: 'Autocorrelation at 10 years', acf10Melange: 'Same, years shuffled (20 seeds)',
   /* game245 */
