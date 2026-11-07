@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game250 */
+  loiMoseley: 'lambda Q^2 not constant, Q - (N - 1) off below zinc, or the gap shrinking above', rydbergImplicite: 'Constant implied by lambda Q^2 (per cm)', ecartRydbergPourCent: 'Largest row gap to it (percent)', pireLigne: 'Row furthest from it', residusN: 'Q_K - (N - 1), element by element', avecTrouResidu: 'Largest Q - (N - 1) with the empty place 43', sansTrouResidu: 'Same without the empty place',
   /* game249 */
   loiHubble1929: 'Magnitudes not recovered, or slope through zero off 465 by more than 50', kOrigine: 'Slope through zero (km/s per Mpc)', kAvecOrdonnee: 'Slope with an intercept (km/s per Mpc)', correlationHubble: 'Correlation of velocity with distance', magnitudeMoyenne: 'Absolute magnitudes recomputed: mean', ecartMagnitudes: 'Largest gap to the printed magnitudes', correlationMelangee: 'Same correlation, velocities shuffled (20 seeds)',
   /* game248 */

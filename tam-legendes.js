@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game250 (idee : codex 26, sous-agent Claude) */
+  loiMoseley: {
+    titre: 'Moseley: counting the elements with X-rays',
+    enUnePhrase: 'Each element shines X-rays whose frequency steps up by one notch per element: atomic number is real.',
+    colonnes: ['atomic number', 'Moseley Q (square root of the X-ray frequency)', 'element or the straight line'],
+    aRegarder: ['The points sit on one straight line.', 'Element 43 is missing: no one had found it yet.', 'Remove that gap and the heavy elements fall off.'],
+    fin: null,
+  },
   /* game249 (idee : codex 26, sous-agent Claude) */
   loiHubble1929: {
     titre: 'Hubble 1929: the farther, the faster',

@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game250 */
+  loiMoseley: (P, o, B) => [pt([43 / 50, 42 / 50, B.centre[2]], C.repere, 'Empty place: 43')],
   /* game249 */
   loiHubble1929: (P, o, B) => [pt([1, 1000 / 1100, B.centre[2]], C.repere, 'Virgo cluster, 2 Mpc')],
   /* game248 */
