@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game269 */
+  critiqueReynolds: 'A log of time, log V, log B_s beyond the named rows, the mean or 43.79 off', logTempsRetrouves: 'Log of time recovered at 1e-5 (of 29)', logVRetrouves: 'Log V by the chain of logs at 1e-5 (of 29)', logBsRetrouves5: 'Log B_s recovered at 1e-5 (of 29)', logBsRetrouves4: 'Log B_s recovered at 1e-4 (of 29)', vitessesDepuisLog: 'Velocity recovered from its log (of 29)', moyenneLogBs: 'Mean of the 29 printed log B_s', diametresDepuisLog: 'Diameters his printed logs stand for', sigmaLogBs: 'Spread of log B_s', ligne23Temps: 'Row 23: time its log stands for (printed 116)', penteDiametre: 'Slope of log(V / P) against log D',
   /* game268 */
   effetJoule: 'Half-hour column, the named 4.55, a reduction, the mean, 1.27 or a 4 % agreement off', kDemiHeure: 'Heat per current squared, half hour', colonneDemiHeure: 'Half-hour squares column recovered (of 4)', kHeure: 'Heat per current squared, one hour', casesDiscriminantes: 'One-hour cells printed with decimals', exposantDemiHeure: 'Power of current, half hour (log-log)', exposantHeure: 'Power of current, one hour (log-log)', reduction1: 'First experiment reduced to 1.88 Q, one hour', reduction2: 'Second experiment reduced likewise', resistanceFinGros: 'Thin wire resistance from 3 feet = 8 feet', accordsChaleurResistance: 'Heat ratio against resistance ratio, Exp. 1-3 (%)', enIntensite: 'Heat ratio if proportional to the current', observe: 'Heat ratio measured', enCarre: 'Heat ratio for the square of the current',
   /* game267 */
