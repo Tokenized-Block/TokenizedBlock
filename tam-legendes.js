@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game282 (idee : codex 31, sous-agent Claude) */
+  poisMendel: {
+    titre: 'Mendel: the counts of the pea crosses',
+    enUnePhrase: 'Cross two kinds of pea and the hidden form comes back in about one plant in four.',
+    colonnes: ['experiment', 'share of the plants', 'dominant, recessive or expected'],
+    aRegarder: ['At 3 the expected line runs through the recessive dots.', 'At 1 it sits far above them.', 'Seed shape and seed colour, the biggest counts, sit closest.'],
+    fin: null,
+  },
   /* game281 (idee : codex 30, sous-agent Claude) */
   spiraleMoseley: {
     titre: 'Moseley: shells grow as logarithmic spirals',

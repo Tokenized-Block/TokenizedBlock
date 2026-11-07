@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game282 */
+  poisMendel: 'A sum or printed ratio off, the 2.98 not recovered, or a second generation ratio off', sommesMendel: 'Dominant plus recessive equal to the total', rapportsMendel: 'Printed ratios recovered to the hundredth', totauxMendel: 'Dominant and recessive, all seven', deuxCheminsMendel: 'Ratio of the totals, mean of the ratios', secondeGeneration: 'Hybrids over constant forms, two experiments', khiDeuxTroisUn: 'Chi-square against three to one (7 degrees)', khiDeuxUnUn: 'Chi-square against one to one',
   /* game281 */
   spiraleMoseley: 'A progression term besides duplicatus 3, a fitted ratio off, a formula besides the 1.1806, or a mu besides the third', progressionHors: 'Printed progression terms more than one unit off', raisonsAjustees: 'Ratios fitted to the widths (duplicatus, Buccinum)', formulesMoseley: 'His three powers, recomputed', muBuccinum: 'Six whorls over three (printed 2.45)', ecartArithmetique: 'Mean miss, fixed shrink per whorl (inch)', ecartGeometrique: 'Mean miss, fixed ratio per whorl (inch)',
   /* game280 */
