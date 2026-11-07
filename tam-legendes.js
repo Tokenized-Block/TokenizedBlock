@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game241 (idee : codex 24, sous-agent Claude) */
+  oubliEbbinghaus: {
+    titre: 'The forgetting curve',
+    enUnePhrase: 'We forget fast at first, then slower and slower: a month later some memory still helps.',
+    colonnes: ['time since learning (log scale)', 'time saved when learning again', 'measured, formula or constant-rate forgetting'],
+    aRegarder: ['The steep drop in the first hour.', 'The long, slow tail over days.', 'The constant-rate curve dives to zero far too early.'],
+    fin: null,
+  },
   /* game240 (idee : codex 24, sous-agent Claude) */
   carteSturtevant: {
     titre: 'The first genetic map',

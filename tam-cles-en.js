@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game241 */
+  oubliEbbinghaus: 'His calculated column not recovered, or other points beyond 2', calculRefait: 'His formula, recomputed (per cent)', ecartColonneCalculee: 'Largest gap to his printed calculated column', horsErreur: 'Points more than 2 off his formula (minutes)', tauMinutes: 'Exponential through the first two points: time constant (minutes)', expoA1440: 'That exponential after one day (per cent)', observe1440: 'Measured after one day (per cent)',
   /* game240 */
   carteSturtevant: 'Sums off, map not recovered, or a middle pair off additivity', positionsRefaites: 'Map positions rebuilt from short intervals', ecartsCourts: 'Observed minus map for BP, BR, (C,O)R', coquillesSturtevant: 'Printed per cents that do not follow from the fractions', pairesMontrees: 'Pairs shown', additifBM: 'B to M on the map', observeBM: 'B to M observed (per cent)',
   /* game239 */
