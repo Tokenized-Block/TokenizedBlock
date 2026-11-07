@@ -31,6 +31,10 @@ export const SOURCES = Object.freeze({
   /* game228 : Hodgkin et Huxley 1952 (J. Physiol. 117), table 3 p. 520, constantes CHOISIES pour le calcul, convention ORIGINALE
    *   (V = deplacement depuis le repos, depolarisation NEGATIVE), lues par Grok Bot (codex 19). Le module convertit lui-meme : E = -65 - V. */
   // https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf : table 3, C_M = 1 microF/cm2
+  /* game229 : Kleiber 1932 (Hilgardia 6(11)), table 1 p. 317 : masse moyenne (kg) et chaleur basale (kcal par 24 h et par animal) de huit
+   *   animaux, valeurs PUBLIEES (pas calculees par M^(3/4)), lues par Grok Bot (codex 19). Format nom:kg:kcal. */
+  // https://pdodds.w3.uvm.edu/files/papers/others/1932/kleiber1932a.pdf : table 1, lignes 1, 4, 6, 7, 9, 10, 11, 13
+  kleiber1932: S('Steer:679:8274 Man:64.1:1632 Sheep:45.6:1219.9 MaleDog:15.5:525 Hen:1.96:106 Pigeon:0.300:30.8 MaleRat:0.226:25.5 RingDove:0.150:19.5', 'kg et kcal/24 h', 'https://pdodds.w3.uvm.edu/files/papers/others/1932/kleiber1932a.pdf', 'Steer:679:8274 Man:64.1:1632 Sheep:45.6:1219.9 MaleDog:15.5:525 Hen:1.96:106 Pigeon:0.300:30.8 MaleRat:0.226:25.5 RingDove:0.150:19.5'),
   hhCm: S(1, 'microF/cm2', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '1'),
   // meme table : gNa = 120, gK = 36, gL = 0.3 (mmho/cm2 = mS/cm2)
   hhGNa: S(120, 'mS/cm2', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '120'),
@@ -449,7 +453,30 @@ function hodgkinHuxley(P, n) {
     temoin: { mesure: piege.pics, formule: actif.pics, note: 'witness: copying the 1952 potentials without flipping their sign gives a neuron that never fires' } } };
 }
 
+// ---------- game229 : la loi de Kleiber (idee et donnees : codex Grok Bot 19 ; table de 1932 : SOURCES) ----------
+// Metabolisme de base B (chaleur par jour) contre masse M de huit animaux, de la tourterelle (150 g) au boeuf (679 kg). Loi d echelle
+//   B = c M^k. Exact ici : droite des moindres carres de log10 B contre log10 M -> exposant k MESURE (0.727 sur ces huit animaux, R2 0.99927),
+//   ni 1 (proportionnel a la masse) ni 2/3 (a la surface) ; Kleiber ecrit W^(3/4) : 3/4 n est pas affirme ici comme loi universelle.
+// MESURE : k a moins de 0.05 de 3/4 et R2 au-dessus de 0.99. Le curseur trace la droite d exposant choisi (ordonnee ajustee aux donnees).
+// Temoin : la depense PAR KILO n est pas la meme : la tourterelle brule 130 kcal par kg et par jour, le boeuf 12.2, soit 10.7 fois moins.
+// Dessin (vue de face) : (log10 M, log10 B) normalises ; etiquette = 0 animal mesure, 1 droite de l exposant du curseur.
+function loiKleiber(P, n) {
+  const d = SOURCES.kleiber1932.valeur.split(' ').map((x) => { const [nom, m, b] = x.split(':'); return [nom, Number(m), Number(b)]; }), lg = (x) => lnD(x) / lnD(10);
+  const xs = d.map((r) => lg(r[1])), ys = d.map((r) => lg(r[2])), mx = xs.reduce((a, b) => a + b, 0) / d.length, my = ys.reduce((a, b) => a + b, 0) / d.length;
+  let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < d.length; i++) { sxy += (xs[i] - mx) * (ys[i] - my); sxx += (xs[i] - mx) * (xs[i] - mx); syy += (ys[i] - my) * (ys[i] - my); }
+  const k = sxy / sxx, r2 = sxy * sxy / (sxx * syy), ecarts = (Math.abs(k - 0.75) < 0.05 ? 0 : 1) + (r2 > 0.99 ? 0 : 1);
+  const kT = P.exposantTest, origine = my - kT * mx, xmin = Math.min(...xs), xmax = Math.max(...xs), ymin = Math.min(...ys), ymax = Math.max(...ys);
+  const pts = d.map((_, i) => [xs[i], ys[i], 0]); for (let j = 0; j <= 60; j++) { const x = xmin + (xmax - xmin) * j / 60; pts.push([x, origine + kT * x, 1]); }
+  const parKg = d.map((r) => r[2] / r[1]), petit = d.reduce((a, b) => (b[1] < a[1] ? b : a)), gros = d.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const [kx, ky, ke] = pts[l % pts.length], o = 3 * l; brut[o] = (kx - xmin) / (xmax - xmin); brut[o + 1] = (ky - ymin) / (ymax - ymin); brut[o + 2] = ke; }
+  return { D: 3, brut, nuage: true, unite: 'kcal/24 h', invariants: {
+    loiKleiber: { mesure: ecarts, formule: 0, exposant: k, r2, parKgExtremes: (petit[2] / petit[1]).toFixed(1) + ' / ' + (gros[2] / gros[1]).toFixed(2), note: 'fitted exponent more than 0.05 from 3/4, or R2 below 0.99 on the eight animals of the 1932 table' },
+    temoin: { mesure: (petit[2] / petit[1]) / (gros[2] / gros[1]), formule: 1, note: 'witness: metabolism per kilogram is not the same for all animals: the ring dove burns about 10.7 times more per kg than the steer' } } };
+}
+
 export const COLONNES = Object.freeze({
+  loiKleiber: { colonnes: ['log10 body mass (scaled)', 'log10 basal metabolism (scaled)', 'measured animal 0, line of the chosen exponent 1 (label)'], memeLongueur: [], autres: [0, 1, 2] },
   hodgkinHuxley: { colonnes: ['time / 50 ms', '(membrane potential + 80 mV) / 130', 'sodium gate m (label)'], memeLongueur: [], autres: [0, 1, 2] },
   codeGenetique: { colonnes: ['codon rank / L', 'share of its 9 point mutations that keep the amino acid', 'amino acid (label, 20 = stop)'], memeLongueur: [], autres: [0, 1, 2] },
   adnMutations: { colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base (0 = A, 1 = C, 2 = G, 3 = T)', 'time t'], memeLongueur: [[0, 1, 2]], autres: [3, 4] },
@@ -490,9 +517,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'hodgkinHuxley', nom: 'A nerve impulse (Hodgkin-Huxley model, 1952)', science: 'Neuroscience', D: 3, nuage: true, params: { courantHH: 10 },
     bornes: { courantHH: [0, 40] },
     phrase: 'A visualisation of the Hodgkin-Huxley model of the squid giant axon (1952), with the constants of their paper: sodium and potassium channels open and close, and a strong enough current makes the membrane fire spikes. With no current it rests at -65 mV. Copying the 1952 potentials without flipping their sign gives a neuron that never fires: that is the witness.' },
+  { id: 'loiKleiber', nom: "Kleiber's law (metabolism and body size, 1932 data)", science: 'Physiology', D: 3, nuage: true, params: { exposantTest: 0.75 },
+    bornes: { exposantTest: [0.5, 1] },
+    phrase: "A visualisation of Kleiber's law with his own 1932 measurements of eight animals, from a dove to a steer: basal metabolism grows like body mass to a power near 3/4 (0.727 on these eight). Try other powers with the slider. A small animal burns far more energy per kilogram than a large one: the dove about 10.7 times the steer. That is the witness." },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [], hardyWeinberg: ['individus', 'graine'], codeGenetique: ['longueur', 'graine'], hodgkinHuxley: [] };
-const FONCTIONS = { hodgkinHuxley, codeGenetique, adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone, hardyWeinberg };
+export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [], hardyWeinberg: ['individus', 'graine'], codeGenetique: ['longueur', 'graine'], hodgkinHuxley: [], loiKleiber: [] };
+const FONCTIONS = { loiKleiber, hodgkinHuxley, codeGenetique, adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone, hardyWeinberg };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game229 (idee : codex Grok Bot) */
+  loiKleiber: {
+    titre: "Kleiber's law",
+    enUnePhrase: 'Bigger animals burn more energy, but less per kilogram: metabolism grows like mass to the power 3/4.',
+    colonnes: ['how heavy (log scale)', 'how much energy at rest (log scale)', 'animal or test line'],
+    aRegarder: ['The eight animals fall on a straight line on log scales.', 'Its slope is near 3/4, not 1.', 'A dove burns about ten times more energy per kilogram than a steer.'],
+    fin: null,
+  },
   /* game228 (idee : codex Grok Bot) */
   hodgkinHuxley: {
     titre: 'A nerve impulse (Hodgkin-Huxley)',

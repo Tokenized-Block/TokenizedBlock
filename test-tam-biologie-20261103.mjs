@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-biologie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg', 'codeGenetique', 'hodgkinHuxley'];
+const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg', 'codeGenetique', 'hodgkinHuxley', 'loiKleiber'];
 
 // ---------- references independantes (Math autorise ici) ----------
 /* game114 : Mendel par ENUMERATION des 16 paires de gametes (AB, ab : (1-r)/2 ; Ab, aB : r/2), sans les formules du module */
@@ -79,7 +79,7 @@ function suite(T, bavard = false) {
   // 1. forme, bornes, determinisme
   ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.ok(Object.isFrozen(T.SYSTEMES[0].params));
-    assert.deepEqual(Object.keys(T.SOURCES), ['hhCm', 'hhGNa', 'hhGK', 'hhGL', 'hhVNa', 'hhVK', 'hhVL', 'codeStandard']); for (const v of Object.values(T.SOURCES)) assert.ok((v.valeur === v.lu || v.valeur === Number(v.lu)) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+    assert.deepEqual(Object.keys(T.SOURCES), ['kleiber1932', 'hhCm', 'hhGNa', 'hhGK', 'hhGL', 'hhVNa', 'hhVK', 'hhVL', 'codeStandard']); for (const v of Object.values(T.SOURCES)) assert.ok((v.valeur === v.lu || v.valeur === Number(v.lu)) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -216,6 +216,16 @@ function suite(T, bavard = false) {
     assert.ok(I.hodgkinHuxley.mesure === 0 && I.hodgkinHuxley.ENa === 50 && I.hodgkinHuxley.EK === -77 && Math.abs(I.hodgkinHuxley.EL + 54.387) < 1e-9 && I.hodgkinHuxley.portesRepos === '0.052932485 0.317676914 0.596120754' && I.hodgkinHuxley.pics === ref.pics && I.temoin.mesure === 0, JSON.stringify(I) + ' ref ' + ref.pics);
     return I.hodgkinHuxley.pics + ' pics en 50 ms';
   });
+  /* game229 : Kleiber - reference INDEPENDANTE : Math.log10, regression centree ; table 1 de 1932 lue par Grok Bot (codex 19) :
+   *   chien 525 (pas 625), poule 106 (pas 100) ; exposant 0.7269, R2 0.99927 ; tourterelle 130.0 kcal/kg, boeuf 12.19 */
+  ok('loiKleiber : table de 1932 (pieges 525 et 106), exposant 0.7269', () => { const t = T.SOURCES.kleiber1932.valeur; assert.ok(t.includes('MaleDog:15.5:525') && t.includes('Hen:1.96:106') && t.includes('Steer:679:8274'), t);
+    const d = t.split(' ').map((x) => x.split(':').slice(1).map(Number)), xs = d.map((r) => Math.log10(r[0])), ys = d.map((r) => Math.log10(r[1])), mx = xs.reduce((a, b) => a + b) / 8, my = ys.reduce((a, b) => a + b) / 8;
+    let a = 0, b = 0; for (let i = 0; i < 8; i++) { a += (xs[i] - mx) * (ys[i] - my); b += (xs[i] - mx) ** 2; } assert.equal((a / b).toFixed(4), '0.7269'); return 'ok'; });
+  for (const p of [{}, { exposantTest: 0.5 }, { exposantTest: 1 }, { exposantTest: 0.67 }]) ok(`loiKleiber ${JSON.stringify(p)} : exposant, R2, temoin, droite dessinee`, () => {
+    const R = S('loiKleiber', p), I = R.invariants;
+    assert.ok(I.loiKleiber.mesure === 0 && I.loiKleiber.exposant.toFixed(4) === '0.7269' && I.loiKleiber.r2.toFixed(5) === '0.99927' && I.loiKleiber.parKgExtremes === '130.0 / 12.19' && Math.abs(I.temoin.mesure - 130 / (8274 / 679)) < 1e-9, JSON.stringify(I));
+    return 'k = ' + I.loiKleiber.exposant.toFixed(4);
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (differences, substitutions, Fano proteine, covariance, derive : moyenne et heterozygotie)', () => {
     const zs = { differences: [], substitutions: [], bruitProteine: [], covariance: [], frequenceMoyenne: [], heterozygotie: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('adnMutations', { graine: g }).invariants, d = T.simuler('dogmeCentral', { graine: g }).invariants;
@@ -271,6 +281,10 @@ const MUTANTS = [
   ['hh : potassium en n^3', '- gK * nn * nn * nn * nn * (v - EK)', '- gK * nn * nn * nn * (v - EK)'],
   ['hh : sodium sans la porte h', '- gNa * m * m * m * h * (v - EN)', '- gNa * m * m * m * (v - EN)'],
   ['hh : temoin avec le bon signe', 'piege = simule(P.courantHH, 1, 1250);', 'piege = simule(P.courantHH, -1, 1250);'],
+  ['kleiber : exposant sans la covariance centree', 'const k = sxy / sxx, r2 = sxy * sxy / (sxx * syy),', 'const k = sxy / syy, r2 = sxy * sxy / (sxx * syy),'],
+  ['kleiber : log naturel pour la masse', "const xs = d.map((r) => lg(r[1])), ys", "const xs = d.map((r) => lnD(r[1])), ys"],
+  ['kleiber : droite du curseur a l exposant mesure', 'const kT = P.exposantTest, origine = my - kT * mx,', 'const kT = k, origine = my - kT * mx,'],
+  ['kleiber : temoin sur deux animaux voisins', "petit = d.reduce((a, b) => (b[1] < a[1] ? b : a)),", "petit = d[d.length - 2],"],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['derive : 1 - 1/N au lieu de 1 - 1/(2N)', 'lam = 1 - 1 / N2, lG', 'lam = 1 - 1 / P.individus, lG'],
   ['derive : tirage biaise (+0.01)', 'for (let j = 0; j < N2; j++) if (rng() < q) x++;', 'for (let j = 0; j < N2; j++) if (rng() < q + 0.01) x++;'],

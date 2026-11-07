@@ -256,6 +256,8 @@ export const ECHELLE_PROPRE = {
   pileDaniell: [2],
   /* game214 : volume et pH de natures differentes ; part d acide (etiquette) */
   titrageAcideFaible: [2],
+  /* game229 : log masse et log metabolisme de natures differentes ; mesure ou droite (etiquette) */
+  loiKleiber: [2],
   /* game228 : temps et potentiel de natures differentes ; porte m (etiquette) */
   hodgkinHuxley: [2],
   /* game213 : rang et part de natures differentes ; acide amine (etiquette) */
