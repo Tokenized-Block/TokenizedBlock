@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game271 */
+  deplacementsPerrin: 'A sum, a half-normal fit, 500 x P besides ring 2, or d / e off', sommesProjections: 'Found and calculated totals, two series', trouvesAnneaux: 'Jumps on the target (text: 500)', sigmas: 'Half-normal spread fitted to his calculated columns (micron)', aUneUnite: 'Calculated cells matched within one (rounded model, then raw)', deCalcule: 'Square root of pi over two (he found 0.886)', khiGauss: 'Chi-square, found against calculated', khiUniforme: 'Chi-square if spread evenly',
   /* game270 */
   filtreDarcy: 'A ratio besides the named one, a slope, 0.286 / 0.165, a difference besides row 5 or a February ratio off', rapportsRetrouves: 'Flow / pressure ratios within 0.01 (of 16)', rapportsArrondis: 'The same at strict rounding (of 16)', pentesSeries: 'Slopes through the origin, l/s per m2 per m (printed 0.493, 0.145)', differencesRetrouvees: 'February pressure differences recovered (of 12)', rapportsFevrier: 'February flow / difference ratios (of 12)', kFevrier: 'February slope, l/s per m2 per m of head', rmsChoisi: 'Error for the chosen share of the pressure below (l/min)', rmsDessusOrigine: 'Error, pressure above only, through the origin', rmsDessusAffine: 'Error, pressure above only, best straight line', rmsDifference: 'Error, printed pressure difference', rmsDifferenceAffine: 'Error, pressure difference, best straight line',
   /* game269 */

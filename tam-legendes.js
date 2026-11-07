@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game271 (idee : codex 29, sous-agent Claude) */
+  deplacementsPerrin: {
+    titre: 'Perrin: Brownian jumps obey chance',
+    enUnePhrase: 'The jumps of a jiggling grain follow the bell curve of chance, as Perrin counted them.',
+    colonnes: ['jump size', 'number of grains', 'model, found or calculated'],
+    aRegarder: ['Near 6.3 microns the bell meets the counts.', 'Too narrow and it overshoots the small jumps.', 'His own calculated column hugs the same bell.'],
+    fin: null,
+  },
   /* game270 (idee : codex 29, sous-agent Claude) */
   filtreDarcy: {
     titre: 'Darcy: water through sand',
