@@ -19,7 +19,7 @@ import { tmpdir } from 'node:os';
 const ICI = dirname(fileURLToPath(import.meta.url));
 const SOURCE = join(ICI, 'tam-biologie.js');
 const octets = (a) => Buffer.from(a.buffer, a.byteOffset, a.byteLength);
-const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg', 'codeGenetique'];
+const IDS = ['adnMutations', 'dogmeCentral', 'deriveGenetique', 'enzyme', 'mendel', 'neurone', 'hardyWeinberg', 'codeGenetique', 'hodgkinHuxley'];
 
 // ---------- references independantes (Math autorise ici) ----------
 /* game114 : Mendel par ENUMERATION des 16 paires de gametes (AB, ab : (1-r)/2 ; Ab, aB : r/2), sans les formules du module */
@@ -79,7 +79,7 @@ function suite(T, bavard = false) {
   // 1. forme, bornes, determinisme
   ok('SYSTEMES gele, SOURCES = texte lu + https, COLONNES couvre chaque colonne, ENTIERS par systeme', () => {
     assert.ok(Object.isFrozen(T.SYSTEMES)); assert.deepEqual(T.SYSTEMES.map((s) => s.id), IDS); assert.ok(Object.isFrozen(T.SYSTEMES[0].params));
-    assert.deepEqual(Object.keys(T.SOURCES), ['codeStandard']); for (const v of Object.values(T.SOURCES)) assert.ok(v.valeur === v.lu && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
+    assert.deepEqual(Object.keys(T.SOURCES), ['hhCm', 'hhGNa', 'hhGK', 'hhGL', 'hhVNa', 'hhVK', 'hhVL', 'codeStandard']); for (const v of Object.values(T.SOURCES)) assert.ok((v.valeur === v.lu || v.valeur === Number(v.lu)) && /^https:\/\//.test(v.url), JSON.stringify(v)); assert.deepEqual(Object.keys(T.ENTIERS), IDS);
     for (const s of T.SYSTEMES) { const C = T.COLONNES[s.id]; assert.equal(C.colonnes.length, s.D); assert.deepEqual([...C.memeLongueur.flat(), ...C.autres].sort(), [...Array(s.D).keys()]);
       for (const k of T.ENTIERS[s.id]) assert.ok(Number.isInteger(s.params[k]) && Number.isInteger(s.bornes[k][0]) && Number.isInteger(s.bornes[k][1]), k); }
   });
@@ -202,6 +202,20 @@ function suite(T, bavard = false) {
     assert.ok(I.codeGenetique.mesure === 0 && I.codeGenetique.synonymesParPosition === cgRef() && I.temoin.mesure < I.temoin.formule / 2, JSON.stringify(I));
     return 'synonymes ' + I.codeGenetique.synonymesParPosition + ', decalage ' + I.temoin.mesure.toFixed(3);
   });
+  /* game228 : Hodgkin-Huxley - reference INDEPENDANTE : Math.exp, RK4 refait ICI au pas 0.005 ms ; valeurs de Grok Bot (codex 19) :
+   *   E_Na = 50, E_K = -77, E_L = -54.387 mV ; portes au repos m 0.052932485, n 0.317676914, h 0.596120754 */
+  const hhRef = (I, signe) => { const EN = -65 + signe * -115, EK = -65 + signe * 12, EL = -65 + signe * -10.613, E = Math.exp;
+    const am = (v) => (Math.abs(v + 40) < 1e-9 ? 1 : 0.1 * (v + 40) / (1 - E(-(v + 40) / 10))), bm = (v) => 4 * E(-(v + 65) / 18), an = (v) => (Math.abs(v + 55) < 1e-9 ? 0.1 : 0.01 * (v + 55) / (1 - E(-(v + 55) / 10))), bn = (v) => 0.125 * E(-(v + 65) / 80), ah = (v) => 0.07 * E(-(v + 65) / 20), bh = (v) => 1 / (1 + E(-(v + 35) / 10));
+    const f = ([v, m, n, h]) => [I - 120 * m ** 3 * h * (v - EN) - 36 * n ** 4 * (v - EK) - 0.3 * (v - EL), am(v) * (1 - m) - bm(v) * m, an(v) * (1 - n) - bn(v) * n, ah(v) * (1 - h) - bh(v) * h];
+    let y = [-65, am(-65) / (am(-65) + bm(-65)), an(-65) / (an(-65) + bn(-65)), ah(-65) / (ah(-65) + bh(-65))], pics = 0, haut = false; const dt = 0.005;
+    for (let k = 1; k <= 10000; k++) { const a = f(y), b = f(y.map((x, i) => x + dt * a[i] / 2)), c = f(y.map((x, i) => x + dt * b[i] / 2)), d = f(y.map((x, i) => x + dt * c[i])); y = y.map((x, i) => x + dt * (a[i] + 2 * b[i] + 2 * c[i] + d[i]) / 6); if (!haut && y[0] > 0) { haut = true; pics++; } else if (haut && y[0] < -60) haut = false; }
+    return { pics, portes: [am(-65) / (am(-65) + bm(-65)), an(-65) / (an(-65) + bn(-65)), ah(-65) / (ah(-65) + bh(-65))].map((x) => x.toFixed(9)).join(' ') }; };
+  ok('hodgkinHuxley : portes au repos de Grok Bot et potentiels modernes', () => { assert.equal(hhRef(0, -1).portes, '0.052932485 0.317676914 0.596120754'); assert.deepEqual([-65 + 115, -65 - 12, -65 + 10.613].map((x) => +x.toFixed(3)), [50, -77, -54.387]); return 'ok'; });
+  for (const p of [{}, { courantHH: 0 }, { courantHH: 3 }, { courantHH: 40 }, { courantHH: 20 }]) ok(`hodgkinHuxley ${JSON.stringify(p)} : repos, potentiels, pics de reference, temoin`, () => {
+    const R = S('hodgkinHuxley', p), I = R.invariants, ref = hhRef(R.params.courantHH, -1);
+    assert.ok(I.hodgkinHuxley.mesure === 0 && I.hodgkinHuxley.ENa === 50 && I.hodgkinHuxley.EK === -77 && Math.abs(I.hodgkinHuxley.EL + 54.387) < 1e-9 && I.hodgkinHuxley.portesRepos === '0.052932485 0.317676914 0.596120754' && I.hodgkinHuxley.pics === ref.pics && I.temoin.mesure === 0, JSON.stringify(I) + ' ref ' + ref.pics);
+    return I.hodgkinHuxley.pics + ' pics en 50 ms';
+  });
   ok('etalonnage : 20 graines aux defauts, ecart-type des z dans [0.5, 1.7] (differences, substitutions, Fano proteine, covariance, derive : moyenne et heterozygotie)', () => {
     const zs = { differences: [], substitutions: [], bruitProteine: [], covariance: [], frequenceMoyenne: [], heterozygotie: [] };
     for (let g = 1; g <= 20; g++) { const a = T.simuler('adnMutations', { graine: g }).invariants, d = T.simuler('dogmeCentral', { graine: g }).invariants;
@@ -253,6 +267,10 @@ const MUTANTS = [
   ['code : classement des positions inverse', '(parPos[2] > parPos[0] && parPos[0] > parPos[1] ? 0 : 1)', '(parPos[0] > parPos[2] && parPos[0] > parPos[1] ? 0 : 1)'],
   ['code : decalage de deux bases', '=== T[idx(bases[3 * k + 1], bases[3 * k + 2], bases[3 * k + 3])]) memes++;', '=== T[idx(bases[3 * k], bases[3 * k + 1], bases[3 * k + 2])]) memes++;'],
   ['code : stops comptes comme sens', "for (let i = 0; i < 64; i++) { if (T[i] === '*') continue; const bs", "for (let i = 0; i < 64; i++) { const bs"],
+  ['hh : convention originale sans changement de signe', 'const repos = simule(0, -1, 500), actif = simule(P.courantHH, -1, 2500),', 'const repos = simule(0, 1, 500), actif = simule(P.courantHH, 1, 2500),'],
+  ['hh : potassium en n^3', '- gK * nn * nn * nn * nn * (v - EK)', '- gK * nn * nn * nn * (v - EK)'],
+  ['hh : sodium sans la porte h', '- gNa * m * m * m * h * (v - EN)', '- gNa * m * m * m * (v - EN)'],
+  ['hh : temoin avec le bon signe', 'piege = simule(P.courantHH, 1, 1250);', 'piege = simule(P.courantHH, -1, 1250);'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['derive : 1 - 1/N au lieu de 1 - 1/(2N)', 'lam = 1 - 1 / N2, lG', 'lam = 1 - 1 / P.individus, lG'],
   ['derive : tirage biaise (+0.01)', 'for (let j = 0; j < N2; j++) if (rng() < q) x++;', 'for (let j = 0; j < N2; j++) if (rng() < q + 0.01) x++;'],

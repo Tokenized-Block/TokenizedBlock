@@ -28,6 +28,18 @@ const DEUX_PI = 2 * Math.PI;
 const S = (valeur, unite, url, lu) => Object.freeze({ valeur, unite, url, lu });
 export const SOURCES = Object.freeze({
   // https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi#SG1 : « 1. The Standard Code », ligne AAs (T affiche U ici)
+  /* game228 : Hodgkin et Huxley 1952 (J. Physiol. 117), table 3 p. 520, constantes CHOISIES pour le calcul, convention ORIGINALE
+   *   (V = deplacement depuis le repos, depolarisation NEGATIVE), lues par Grok Bot (codex 19). Le module convertit lui-meme : E = -65 - V. */
+  // https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf : table 3, C_M = 1 microF/cm2
+  hhCm: S(1, 'microF/cm2', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '1'),
+  // meme table : gNa = 120, gK = 36, gL = 0.3 (mmho/cm2 = mS/cm2)
+  hhGNa: S(120, 'mS/cm2', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '120'),
+  hhGK: S(36, 'mS/cm2', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '36'),
+  hhGL: S(0.3, 'mS/cm2', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '0.3'),
+  // meme table : V_Na = -115, V_K = +12, V_L = -10.613 mV (convention originale, depolarisation negative)
+  hhVNa: S(-115, 'mV', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '-115'),
+  hhVK: S(12, 'mV', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '12'),
+  hhVL: S(-10.613, 'mV', 'https://www.its.caltech.edu/~jkenny/nb250c/papers/Hodgkin-1952e.pdf', '-10.613'),
   codeStandard: S('FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG', 'acides amines (une lettre), * = stop', 'https://www.ncbi.nlm.nih.gov/Taxonomy/Utils/wprintgc.cgi#SG1', 'FFLLSSSSYY**CC*WLLLLPPPPHHQQRRRRIIIMTTTTNNKKSSRRVVVVAAAADDEEGGGG'),
 });
 
@@ -406,7 +418,39 @@ function codeGenetique(P, n) {
     temoin: { mesure: memes / (L - 1), formule: global, note: 'witness: reading the same messenger shifted by one base keeps far fewer amino acids than a point mutation does' } } };
 }
 
+// ---------- game228 : le neurone de Hodgkin et Huxley (idee et valeurs : codex Grok Bot 19 ; constantes de 1952 : SOURCES) ----------
+// Potentiel absolu moderne v (mV), repos a -65 mV ; E_i = -65 - V_i depuis la convention ORIGINALE (E_Na = +50, E_K = -77, E_L = -54.387).
+//   C dv/dt = I - gNa m^3 h (v - E_Na) - gK n^4 (v - E_K) - gL (v - E_L) ; dx/dt = alpha_x (1 - x) - beta_x x pour x = m, n, h (taux a 6.3 C,
+//   formes modernes du codex ; singularites amovibles alpha_m(-40) = 1, alpha_n(-55) = 0.1 traitees par leur limite). RK4, pas 0.02 ms, 50 ms (repos : 10 ms ; temoin : 25 ms) ; le banc recompte les pics au pas 0.005 ms.
+// MESURE : (1) sans courant, la membrane reste a -65 mV a 0.5 mV pres et les portes a leurs valeurs d equilibre ; (2) chaque potentiel
+//   d action depasse 0 mV puis redescend sous -60 mV ; (3) avec le courant du curseur, le nombre de pics est compte.
+// Temoin : le piege de convention : recopier les potentiels de 1952 SANS changer le signe (E = -65 + V_i) donne un neurone qui ne tire jamais.
+// Dessin (vue de face) : (t / 50 ms, (v + 80) / 130) ; etiquette = porte m (activation du sodium).
+function hodgkinHuxley(P, n) {
+  const ex = (x) => (x <= 0 ? expNegD(-x) : 1 / expNegD(x)), C = SOURCES.hhCm.valeur, gNa = SOURCES.hhGNa.valeur, gK = SOURCES.hhGK.valeur, gL = SOURCES.hhGL.valeur;
+  const am = (v) => (Math.abs(v + 40) < 1e-9 ? 1 : 0.1 * (v + 40) / (1 - ex(-(v + 40) / 10))), bm = (v) => 4 * ex(-(v + 65) / 18);
+  const an = (v) => (Math.abs(v + 55) < 1e-9 ? 0.1 : 0.01 * (v + 55) / (1 - ex(-(v + 55) / 10))), bn = (v) => 0.125 * ex(-(v + 65) / 80);
+  const ah = (v) => 0.07 * ex(-(v + 65) / 20), bh = (v) => 1 / (1 + ex(-(v + 35) / 10));
+  const simule = (I, signe, nbPas) => { const EN = -65 + signe * SOURCES.hhVNa.valeur, EK = -65 + signe * SOURCES.hhVK.valeur, EL = -65 + signe * SOURCES.hhVL.valeur;
+    const f = ([v, m, nn, h]) => [(I - gNa * m * m * m * h * (v - EN) - gK * nn * nn * nn * nn * (v - EK) - gL * (v - EL)) / C, am(v) * (1 - m) - bm(v) * m, an(v) * (1 - nn) - bn(v) * nn, ah(v) * (1 - h) - bh(v) * h];
+    let y = [-65, am(-65) / (am(-65) + bm(-65)), an(-65) / (an(-65) + bn(-65)), ah(-65) / (ah(-65) + bh(-65))]; const dt = 0.02, trace = [[0, y[0], y[1]]];
+    let pics = 0, haut = false;
+    for (let k = 1; k <= nbPas; k++) { const a = f(y), b = f(y.map((x, i) => x + dt * a[i] / 2)), c = f(y.map((x, i) => x + dt * b[i] / 2)), d = f(y.map((x, i) => x + dt * c[i])); y = y.map((x, i) => x + dt * (a[i] + 2 * b[i] + 2 * c[i] + d[i]) / 6);
+      if (!haut && y[0] > 0) { haut = true; pics++; } else if (haut && y[0] < -60) haut = false; if (k % 2 === 0) trace.push([k * dt, y[0], y[1]]); }
+    return { pics, trace, final: y }; };
+  const repos = simule(0, -1, 500), actif = simule(P.courantHH, -1, 2500), piege = simule(P.courantHH, 1, 1250);
+  let derive = 0; for (const [, v] of repos.trace) derive = Math.max(derive, Math.abs(v + 65));
+  const ecarts = (derive < 0.5 ? 0 : 1);
+  const brut = new Float64Array(n * 3);
+  for (let l = 0; l < n; l++) { const [t, v, m] = actif.trace[Math.floor(l * actif.trace.length / n)], o = 3 * l; brut[o] = t / 50; brut[o + 1] = (v + 80) / 130; brut[o + 2] = m; }
+  return { D: 3, brut, nuage: true, unite: 'mV', invariants: {
+    hodgkinHuxley: { mesure: ecarts, formule: 0, ENa: -65 - SOURCES.hhVNa.valeur, EK: -65 - SOURCES.hhVK.valeur, EL: -65 - SOURCES.hhVL.valeur, deriveRepos: derive, pics: actif.pics,
+      portesRepos: [am(-65) / (am(-65) + bm(-65)), an(-65) / (an(-65) + bn(-65)), ah(-65) / (ah(-65) + bh(-65))].map((x) => x.toFixed(9)).join(' '), note: 'membrane with no input current drifting more than 0.5 mV from -65 mV' },
+    temoin: { mesure: piege.pics, formule: actif.pics, note: 'witness: copying the 1952 potentials without flipping their sign gives a neuron that never fires' } } };
+}
+
 export const COLONNES = Object.freeze({
+  hodgkinHuxley: { colonnes: ['time / 50 ms', '(membrane potential + 80 mV) / 130', 'sodium gate m (label)'], memeLongueur: [], autres: [0, 1, 2] },
   codeGenetique: { colonnes: ['codon rank / L', 'share of its 9 point mutations that keep the amino acid', 'amino acid (label, 20 = stop)'], memeLongueur: [], autres: [0, 1, 2] },
   adnMutations: { colonnes: ['x (drawn double helix, not to scale)', 'y (same)', 'position along the sequence (drawn)', 'base (0 = A, 1 = C, 2 = G, 3 = T)', 'time t'], memeLongueur: [[0, 1, 2]], autres: [3, 4] },
   dogmeCentral: { colonnes: ['time t (mRNA lifetimes, last 30)', 'count divided by its exact mean (1 = the mean)', 'which molecule (0 = mRNA, 1 = protein)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -443,9 +487,12 @@ export const SYSTEMES = Object.freeze([
   { id: 'codeGenetique', nom: 'The genetic code (codons to amino acids)', science: 'Molecular biology', D: 3, nuage: true, params: { longueur: 600, graine: 1 },
     bornes: { longueur: [100, 3000], graine: [1, 1000000] },
     phrase: 'A visualisation of the standard genetic code (NCBI table 1): 64 three-letter codons spell 20 amino acids and a stop. For every codon, each of its 9 single-letter mutations is checked: the third letter forgives most of them, the second none at all. Reading a messenger one letter off changes almost every amino acid: that is the witness.' },
+  { id: 'hodgkinHuxley', nom: 'A nerve impulse (Hodgkin-Huxley model, 1952)', science: 'Neuroscience', D: 3, nuage: true, params: { courantHH: 10 },
+    bornes: { courantHH: [0, 40] },
+    phrase: 'A visualisation of the Hodgkin-Huxley model of the squid giant axon (1952), with the constants of their paper: sodium and potassium channels open and close, and a strong enough current makes the membrane fire spikes. With no current it rests at -65 mV. Copying the 1952 potentials without flipping their sign gives a neuron that never fires: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [], hardyWeinberg: ['individus', 'graine'], codeGenetique: ['longueur', 'graine'] };
-const FONCTIONS = { codeGenetique, adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone, hardyWeinberg };
+export const ENTIERS = { adnMutations: ['bases', 'graine'], dogmeCentral: ['graine'], deriveGenetique: ['individus', 'generations', 'populations', 'graine'], enzyme: [], mendel: ['descendants', 'graine'], neurone: [], hardyWeinberg: ['individus', 'graine'], codeGenetique: ['longueur', 'graine'], hodgkinHuxley: [] };
+const FONCTIONS = { hodgkinHuxley, codeGenetique, adnMutations, dogmeCentral, deriveGenetique, enzyme, mendel, neurone, hardyWeinberg };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 /** params bornes : non fini -> defaut ; hors bornes -> ramene ; entiers arrondis */

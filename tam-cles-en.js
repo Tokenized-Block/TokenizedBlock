@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game228 */
+  hodgkinHuxley: 'Membrane at rest drifting more than 0.5 mV', ENa: 'Sodium reversal potential (mV, modern)', EK: 'Potassium reversal potential (mV, modern)', EL: 'Leak reversal potential (mV, modern)', deriveRepos: 'Largest drift at rest (mV)', pics: 'Spikes in 50 ms', portesRepos: 'Gates m, n, h at rest',
   /* game227 */
   electronegativite: 'Steps where electronegativity does not rise along a period, or does not fall down a column', correlationIonisation: 'Correlation with ionization energy (r)', creuxIonisation: 'Where ionization energy drops along a period',
   /* game226 */
