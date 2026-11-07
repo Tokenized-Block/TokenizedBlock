@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game254 */
+  interferenceStroop: 'Differences or D / NC not recovered for all and for women', effetRelatif1: 'Reading words: slowdown from clashing ink (share)', effetRelatif2: 'Naming ink: slowdown from clashing words (share)', coquillesStroop: 'Printed differences that do not follow from the columns', moyennePondereeNCWd: 'Experiment 2, men and women averaged by size (s)', ncwdAvantCorrection: 'Mean before the error correction, as stated (s)', asymetrie: 'Naming slowdown / reading slowdown',
   /* game253 */
   aberrationBradley: 'A star off the mean maximum by 1", the ratio 10210 or the light times not recovered', maximumMoyen: 'Seven stars: mean maximum (arcseconds)', etendueMaxima: 'Largest gap to it (arcseconds)', rapportVitesses: 'Speed of light / speed of the Earth', tempsLumiere: 'Light from the Sun, from 20.2" (seconds)', tempsAdopte: 'Same from 40.5" (seconds)', maximumRomer: 'Maximum implied by Roemer\'s 11 minutes (arcseconds)',
   /* game252 */
