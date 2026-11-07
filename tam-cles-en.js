@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game274 */
+  tubesPoiseuille: 'A pressure series, the fourth power, the named mean, or the 25 mm lengths not recovered', etenduesPression: 'Spread of pressure x time, two tube lengths (%)', pentesPression: 'Log time against log pressure (two lengths)', ecartsD4: 'Flow / D^4 of each tube, gap to the mean (%)', penteDiametrePoiseuille: 'Log flow against log diameter', moyenneKRecalculee: 'Mean of his seven k (he printed 2495.224)', longueursImplicites: 'Tube length his k and table imply (mm)', facteurNavier: 'Mean miss factor, flow as D cubed', facteurD4: 'Mean miss factor, flow as D to the fourth',
   /* game273 */
   unitesWeber: 'A tau, a ratio beyond 0.05 %, the mean, or a printed product not recovered', tauWeber: 'Times tau = A phi recovered to 7 decimals', rapportsWeber: 'E / 2 tau from the printed tau (millions)', ecartMaxWeber: 'Largest gap to the printed ratio (%)', moyenneWeber: 'Mean of the five printed ratios (millions)', produitsWeber: 'Mean x root(1/2), x 106 2/3 (billions), x 4 / root 2', meileWeber: 'Mile implied by 59320 miles a second (metres)', ecartProportionnel: 'Mean miss, swing in proportion to the charge (%)', ecartConstant: 'Mean miss, swing ignoring the charge (%)',
   /* game272 */
