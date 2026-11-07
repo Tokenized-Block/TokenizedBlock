@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game277 */
+  tempsOldham: 'An arc, depth, chord, speed or modulus off besides the named, or the text ratios matching the table', arcsOldham: 'Arc lengths recovered (cut to 0.1 km)', profondeursOldham: 'Chord depths recovered (1 - cos)', cordesOldham: 'Chords within 1.6 km', vitessesHorsOldham: 'Speeds not recovered (phase, arc or chord, degrees)', distorsionOldham: 'Rigidity from density and second phase speed (1e10 CGS)', compressionOldham: 'Bulk modulus from both speeds (1e10 CGS)', texteTableOldham: 'Text ratios equal to his table (none)', predit150et180: 'Second phase at its 120 degree speed (minutes)',
   /* game276 */
   spiralesBeal: 'Tree 1 not 155, a total off, or the right-left balance rejected other than in Norway tree 3 and the European larch', conesTotal: 'Cones counted', conesArbre1: 'Cones on Norway spruce tree 1 (text: 155)', partVoisins: 'Share with two neighbouring Fibonacci numbers', partDeuxFib: 'Share with two Fibonacci numbers', conesQuatreSept: 'Cones with 4 and 7 spirals', droiteGauche: 'Smaller number on the right, on the left', pSymetrie: 'Exact binomial p, right against left, all cones', pMelezeEurope: 'Same p, European larch', pArbre3: 'Same p, Norway spruce tree 3', conesExclusAiry: 'Cones of an order Airy excluded',
   /* game275 */

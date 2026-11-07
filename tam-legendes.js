@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game277 (idee : codex 30, sous-agent Claude) */
+  tempsOldham: {
+    titre: 'Oldham: earthquake waves through the Earth',
+    enUnePhrase: 'The farther away, the deeper the tremors travel and the faster they seem, until something deep slows the second one.',
+    colonnes: ['distance from the quake', 'travel time', 'phase or your straight path'],
+    aRegarder: ['At 6 km per second the line follows the second phase out to 120 degrees.', 'Beyond 120 degrees the second phase falls far behind.', 'The first phase needs about 10 km per second.'],
+    fin: null,
+  },
   /* game276 (idee : codex 30, sous-agent Claude) */
   spiralesBeal: {
     titre: 'Beal: the spirals of 895 cones',
