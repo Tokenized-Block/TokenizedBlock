@@ -1,0 +1,20 @@
+{
+  "mesure": "Coinbase search_tokens (Base MCP), chaine base, 2026-11-07 vers 22:45 heure de Bruxelles, lecture seule ; une ligne par action du registre, retenue par ADRESSE exacte (jamais par symbole : chaque symbole a des imitations au prefixe 0xb2, spamScore 0.4 ou 0.42).",
+  "piege": "GOOGLC 0xc39f1ac587caf70cd82210129e00ba322bff4784 annonce marketCapUsd 6673746 (plus que la vraie GOOGLc) avec spamScore 0.42 et volume24hUsd 0 : un tri par capitalisation sans filtre d adresse le choisirait. Meme piege pour SNDKC 0x98c1957887a141ca58f128d6efb61e0e6cb4c61b (18 decimales, marketCapUsd 878593, spamScore 0.42, volume 0). Et le PREFIXE 0xb2 ne suffit pas : SNDKCAT 0xb2000000000000000000005c17d4b1ac87501217 et ACAT 0xb200000000000000000000894a42052235509c01 portent 18 decimales et spamScore 0.4.",
+  "actions": [
+    { "symbole": "NVDAc", "adresse": "0xb20000000000000000000078ee7ce2fe4908108c", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 187.7802250021517, "marketCapUsd": 4485715, "volume24hUsd": 7923653 },
+    { "symbole": "METAc", "adresse": "0xb2000000000000000000008bc8786b856e61707c", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 611.6771222487622, "marketCapUsd": 3526201, "volume24hUsd": 5419308 },
+    { "symbole": "AAPLc", "adresse": "0xb200000000000000000000c2e324d24d7eecd1fb", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 342.53402070540477, "marketCapUsd": 2827183, "volume24hUsd": 2556927 },
+    { "symbole": "GOOGLc", "adresse": "0xb2000000000000000000002d0ba3164cc74f58b7", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 284.6490940859269, "marketCapUsd": 2812034, "volume24hUsd": 6179498 },
+    { "symbole": "AMZNc", "adresse": "0xb200000000000000000000d9192b6b456483c2e8", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 259.3209756179873, "marketCapUsd": 2544240, "volume24hUsd": 6260827 },
+    { "symbole": "TSLAc", "adresse": "0xb2000000000000000000001e800a7f5189430cd0", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 357.6616780696681, "marketCapUsd": 1952216, "volume24hUsd": 3453746 },
+    { "symbole": "MSFTc", "adresse": "0xb200000000000000000000ab99cfa739e253872b", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 530.1233800337646, "marketCapUsd": 1895317, "volume24hUsd": 4906211 },
+    { "symbole": "MSTRc", "adresse": "0xb2000000000000000000004884b426556b92883d", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 126.9849009598295, "marketCapUsd": 1673356, "volume24hUsd": 13236502 },
+    { "symbole": "SPCXc", "adresse": "0xb2000000000000000000007b9fcbd005511acbd5", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 134.4966085867933, "marketCapUsd": 1592874, "volume24hUsd": 10676156 },
+    { "symbole": "SNDKc", "adresse": "0xb200000000000000000000397293cb8cda9a10c5", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 835.4234813038009, "marketCapUsd": 643792, "volume24hUsd": 18269746 },
+    { "symbole": "PLTRc", "adresse": "0xb2000000000000000000007d16372840df4dabbe", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 160.1441231632152, "marketCapUsd": 538100, "volume24hUsd": 1535251 },
+    { "symbole": "MUc", "adresse": "0xb200000000000000000000fd2f87532b90095211", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 693.0065701950226, "marketCapUsd": 458654, "volume24hUsd": 3335318 },
+    { "symbole": "SKHYc", "adresse": "0xb200000000000000000000187f7071d6e321a7d2", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 128.49639533022, "marketCapUsd": 278541, "volume24hUsd": 145684 },
+    { "symbole": "ARMc", "adresse": "0xb20000000000000000000026215d755356e5043f", "decimales": 8, "spamScore": 0.0010000000474974513, "priceUsd": 185.17434708384104, "marketCapUsd": 44412, "volume24hUsd": 77 }
+  ]
+}

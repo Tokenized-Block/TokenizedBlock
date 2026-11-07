@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Cerveau de mouche</title>
+<style>
+  :root { --fond: #05070d; --texte: #dfe6f3; --doux: #8a96ad; --pn: #4fd1c5; --kc: #f6c453; --mbon: #f472b6; --dan: #a78bfa; --apl: #f87171; --ligne: #1a2234; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--fond); color: var(--texte); font: 14px/1.45 system-ui, sans-serif; }
+  header { padding: 16px 16px 6px; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: .02em; }
+  .sous { color: var(--doux); font-size: 13px; margin-top: 4px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; padding: 8px 16px 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .scene { position: relative; background: radial-gradient(ellipse at 50% 40%, #0c1222 0%, var(--fond) 70%); border: 1px solid var(--ligne); border-radius: 12px; overflow: hidden; }
+  canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; }
+  .legende { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--ligne); font-size: 12px; color: var(--doux); }
+  .legende b { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .carte { background: #0a0f1b; border: 1px solid var(--ligne); border-radius: 12px; padding: 12px; }
+  .carte h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--doux); }
+  select, button, input[type=range] { width: 100%; }
+  select, button { background: #111a2c; color: var(--texte); border: 1px solid #263252; border-radius: 8px; padding: 8px; font: inherit; }
+  button { cursor: pointer; margin-top: 8px; }
+  button:hover { border-color: #3d4f80; }
+  .prix { font-size: 26px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+  .etat { font-size: 12px; color: var(--doux); }
+  .jauges div { display: grid; grid-template-columns: 52px 1fr 44px; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0; }
+  .barre { height: 7px; background: #141c2e; border-radius: 4px; overflow: hidden; }
+  .barre i { display: block; height: 100%; width: 0; transition: width .25s; }
+  .journal { max-height: 260px; overflow-y: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .journal p { margin: 0 0 6px; padding-left: 8px; border-left: 2px solid #263252; }
+  .journal p.sim { border-left-color: var(--dan); }
+  .borne { font-size: 12px; color: var(--doux); }
+  .borne li { margin-bottom: 4px; }
+  a { color: #93c5fd; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Le circuit mémoire d’une vraie mouche, branché sur les actions tokenisées</h1>
+  <div class="sous">1 119 neurones et leurs synapses réelles (hemibrain v1.2, cerveau de <i>Drosophila</i>). Le cours vient du flux Chainlink lu par le serveur. Rien n’est signé, rien n’est conseillé.</div>
+</header>
+<main>
+  <section class="scene">
+    <canvas id="toile" width="1280" height="800"></canvas>
+    <div class="legende">
+      <span><b style="background:var(--pn)"></b>PN · entrée olfactive</span>
+      <span><b style="background:var(--kc)"></b>Kenyon · codage</span>
+      <span><b style="background:var(--mbon)"></b>MBON · sortie</span>
+      <span><b style="background:var(--dan)"></b>Dopamine · renforcement</span>
+      <span><b style="background:var(--apl)"></b>APL · inhibition</span>
+    </div>
+  </section>
+  <aside>
+    <div class="carte">
+      <h2>Action</h2>
+      <select id="choix"></select>
+      <div class="prix" id="prix">—</div>
+      <div class="etat" id="etat">lecture…</div>
+    </div>
+    <div class="carte">
+      <h2>Activité calculée</h2>
+      <div class="jauges" id="jauges"></div>
+      <div class="etat" id="sortie"></div>
+    </div>
+    <div class="carte">
+      <h2>Simulation</h2>
+      <label class="etat" for="ampleur">Variation injectée : <span id="valeur">−4,0 %</span></label>
+      <input type="range" id="ampleur" min="-80" max="80" step="1" value="-40">
+      <button id="injecter">Injecter cette variation (simulation)</button>
+    </div>
+    <div class="carte">
+      <h2>Journal</h2>
+      <div class="journal" id="journal"></div>
+    </div>
+    <div class="carte borne">
+      <h2>Ce que ce modèle est, et n’est pas</h2>
+      <ul>
+        <li>Les neurones et le nombre de synapses entre eux sont <b>mesurés</b> (microscopie électronique). Seuil : 5 synapses ; 300 Kenyon sur ~2 000, choisis par identifiant croissant.</li>
+        <li>La dynamique est <b>la nôtre</b> : activité propagée au prorata des synapses, toutes excitatrices sauf APL, modélisée comme une inhibition globale qui ne laisse passer que les 10 % de Kenyon les plus actives.</li>
+        <li>Quels PN reçoivent la hausse ou la baisse est un <b>choix arbitraire</b> (parité de l’identifiant) : une mouche ne sent pas les cours.</li>
+        <li>Rien ici ne ressent : c’est un état calculé, rejouable par n’importe qui avec les mêmes données.</li>
+      </ul>
+      Données : <a href="https://www.janelia.org/project-team/flyem/hemibrain" rel="noopener" target="_blank">hemibrain v1.2, Janelia FlyEM</a>, licence CC BY 4.0.
+    </div>
+  </aside>
+</main>
+<script type="module" src="cerveau-mouche.js"></script>
+</body>
+</html>
