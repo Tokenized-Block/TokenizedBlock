@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game243 */
+  densiteCavendish: (P, o, B) => [pt([0.5, (5.48 - 4.8) / 1.1, B.centre[2]], C.repere, '5.48 times water')],
   /* game242 */
   fievreSemmelweis: (P, o, B) => [pt([(1847.37 - 1841) / 7, 1, B.centre[2]], C.repere, 'Chlorine, May 1847')],
   /* game241 */

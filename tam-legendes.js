@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game243 (idee : codex 25, sous-agent Claude) */
+  densiteCavendish: {
+    titre: 'Cavendish: weighing the Earth',
+    enUnePhrase: 'Lead balls pulling on lead balls told how heavy the whole Earth is: five and a half times water.',
+    colonnes: ['which measurement', 'density of the Earth', 'which wire, or the average'],
+    aRegarder: ['The second wire results crowd around 5.48.', 'One first-wire result, 4.88, sits low.', 'Switch the average: all 29 give 5.45, the first wire 5.31.'],
+    fin: null,
+  },
   /* game242 (idee : codex 25, sous-agent Claude) */
   fievreSemmelweis: {
     titre: 'Semmelweis: washing hands',

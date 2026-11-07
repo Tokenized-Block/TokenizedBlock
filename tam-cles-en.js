@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game243 */
+  densiteCavendish: 'Second-wire mean, range or extreme not as in the text', moyenneFil2: 'Second wire, 23 results: mean', etendue23: 'Second wire: range', ecartMax23: 'Second wire: largest gap to 5.48', moyenne29: 'All 29 results: mean', moyenneChoisie: 'Mean drawn', moyenneFil1: 'First wire, 6 results: mean',
   /* game242 */
   fievreSemmelweis: 'Doctors clinic not deadlier every year, printed 9.92 not recovered, or clinics still apart in 1848', tauxAvant: 'Deaths per hundred, 1841-1846: doctors / midwives', totaux: 'Deaths / births, 1841-1846: doctors ; midwives', z1848: 'Gap between clinics in 1848 (standard errors)', tauxApres: 'Deaths per hundred, 1848: doctors / midwives', coquilleSemmelweis: 'Printed totals that do not follow from the counts', anneeVue: 'Year shown: doctors / midwives (per hundred)', zAvant: 'Gap between clinics 1841-1846 (standard errors)',
   /* game241 */
