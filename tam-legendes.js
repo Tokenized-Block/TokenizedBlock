@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game288 (idee : codex 31, sous-agent Claude) */
+  reststrahlenRubens: {
+    titre: 'Rubens and Kurlbaum: Planck wins at long wavelengths',
+    enUnePhrase: 'Heat a black body and measure its long infrared glow: only the new law of Planck follows the readings.',
+    colonnes: ['temperature', 'energy received', 'readings, printed law or its formula'],
+    aRegarder: ['At 4 (Planck) the law runs through the readings.', 'At 0 (Wien) it flattens out far too early.', 'Below room temperature the readings go negative: the body is colder than the detector.'],
+    fin: null,
+  },
   /* game287 (idee : codex 31, sous-agent Claude) */
   etherMichelson: {
     titre: 'Michelson and Morley: no ether wind',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game288 */
+  reststrahlenRubens: 'A law column off its formula, the infinite Wien value, or the order of the five laws broken', ecartMaxLois: 'Largest gap between a printed law value and its formula', wienInfiniRubens: 'Wien at infinite temperature (printed 194)', rmsLoisRubens: 'Mean miss to the readings: Wien, Thiesen, Rayleigh, Lummer-Jahnke, Planck', wienSurPlanck: 'Wien miss over Planck miss',
   /* game287 */
   etherMichelson: 'A table rule off, the 0.4 fringe, or the one-fourth and one-sixth bounds', reglesMidi: 'Noon: Means, w. l., second row, Final means recovered', reglesSoir: 'Evening: the same', frangeAttendue: 'Fringe shift expected (0.4)', creteMidiSoir: 'Fitted swing, peak to peak (noon, evening)', deriveTour: 'Drift over one turn (noon, evening)', foisMichelson: 'Expected over fitted (noon, evening)',
   /* game286 */

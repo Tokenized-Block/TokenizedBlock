@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game288 */
+  reststrahlenRubens: (P, o, B) => [pt([1773 / 1800, 196.8 / 210, B.centre[2]], C.repere, '1500 C: 196.8 measured, Wien 147.5')],
   /* game287 */
   etherMichelson: (P, o, B) => [pt([0, 0.2, B.centre[2]], C.repere, 'Expected half-swing: 0.2 wave-length')],
   /* game286 */
