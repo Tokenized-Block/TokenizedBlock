@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game268 (idee : codex 29, sous-agent Claude) */
+  effetJoule: {
+    titre: 'Joule: heat grows as the square of the current',
+    enUnePhrase: 'Triple the current through a wire and it gives out about nine times the heat.',
+    colonnes: ['current', 'heat', 'law, half hour or one hour'],
+    aRegarder: ['At power 2 the curve threads the points.', 'Power 1 falls far below them.', 'The one-hour points climb twice as high.'],
+    fin: null,
+  },
   /* game267 (idee : codex 29, sous-agent Claude) */
   balanceCoulomb: {
     titre: 'Coulomb: the torsion balance and the inverse square',

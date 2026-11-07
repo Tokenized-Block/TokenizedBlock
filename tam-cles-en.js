@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game268 */
+  effetJoule: 'Half-hour column, the named 4.55, a reduction, the mean, 1.27 or a 4 % agreement off', kDemiHeure: 'Heat per current squared, half hour', colonneDemiHeure: 'Half-hour squares column recovered (of 4)', kHeure: 'Heat per current squared, one hour', casesDiscriminantes: 'One-hour cells printed with decimals', exposantDemiHeure: 'Power of current, half hour (log-log)', exposantHeure: 'Power of current, one hour (log-log)', reduction1: 'First experiment reduced to 1.88 Q, one hour', reduction2: 'Second experiment reduced likewise', resistanceFinGros: 'Thin wire resistance from 3 feet = 8 feet', accordsChaleurResistance: 'Heat ratio against resistance ratio, Exp. 1-3 (%)', enIntensite: 'Heat ratio if proportional to the current', observe: 'Heat ratio measured', enCarre: 'Heat ratio for the square of the current',
   /* game267 */
   balanceCoulomb: 'A printed torsion, the 576, 1/3400, a theory time besides 54, the 1/10, 57 or 1/20 off', torsions: 'Total torsion in the three trials (degrees)', forceFoisD2: 'Torsion x distance squared', ecartTroisieme: 'Third trial against the first (%)', exposant12: 'Power of distance, trials 1 to 2', exposant23: 'Power of distance, trials 2 to 3', penteCoulomb: 'Log-log slope over the three trials', theorieTroisieme: 'Oscillation time the law gives at 24 inches (printed 54)', tempsCorrige: 'His corrected time for the charge lost (s)', carreInverseTroisieme: 'Inverse square from trial 1, at 8.5 degrees', enUnSurD18: 'A 1 / distance force at 18 degrees', enUnSurD85: 'A 1 / distance force at 8.5 degrees',
   /* game266 */
