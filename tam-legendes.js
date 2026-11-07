@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game231 (idee : codex Grok Bot) */
+  demiViesNPL: {
+    titre: 'Six published half-lives',
+    enUnePhrase: 'Unstable atoms disappear by halves: the same share goes in each half-life, never all at once.',
+    colonnes: ['time, on a log scale', 'share of atoms left', 'which isotope'],
+    aRegarder: ['Every curve drops the same way, just at its own time.', 'After three half-lives an eighth is left.', 'The carbon-14 clock: an eighth left means about 17100 years.'],
+    fin: null,
+  },
   /* game230 (idee : codex Grok Bot) */
   effetPhotoelectrique: {
     titre: 'The photoelectric effect',

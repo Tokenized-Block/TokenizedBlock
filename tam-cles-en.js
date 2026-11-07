@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game231 */
+  demiViesNPL: 'Isotopes not leaving exactly 1/2 after one half-life and 1/8 after three', lambdasParJour: 'Decay constant per day +- its uncertainty', isotopeChoisi: 'Isotope chosen', resteChoisi: 'Share left at the chosen number of half-lives', ageTroisDemiViesC14: 'Carbon-14 sample with 1/8 left: age (years)', incertitudeAgeC14: 'Its uncertainty (years)', lineaireVideApres: 'A straight-line decay is empty after (half-lives)',
   /* game230 */
   effetPhotoelectrique: 'Metals whose stopping-voltage line misses slope h/e or intercept -phi/e', hSurE: 'Planck constant / electron charge (V s)', hcSurENm: 'hc/e (eV nm)', seuilNm: 'Threshold wavelength of each metal (nm)', K200Ag: 'Silver at 200 nm: maximum electron energy (eV)', metalChoisi: 'Metal chosen', KchoisiEv: 'Maximum electron energy at the chosen light (eV, negative = none)', photon300: 'Photon energy at 300 nm (eV)',
   /* game229 */
