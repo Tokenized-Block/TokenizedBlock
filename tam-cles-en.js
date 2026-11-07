@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game287 */
+  etherMichelson: 'A table rule off, the 0.4 fringe, or the one-fourth and one-sixth bounds', reglesMidi: 'Noon: Means, w. l., second row, Final means recovered', reglesSoir: 'Evening: the same', frangeAttendue: 'Fringe shift expected (0.4)', creteMidiSoir: 'Fitted swing, peak to peak (noon, evening)', deriveTour: 'Drift over one turn (noon, evening)', foisMichelson: 'Expected over fitted (noon, evening)',
   /* game286 */
   emanationRutherford: 'A fitted half-life off 60 s, the 86 not cut from 60 / ln 2, or the 20 minute remainder not near a millionth', lambdaAjuste: 'Decay constant fitted (per second)', demiVieAjustee: 'Half-life fitted (s)', demiVieOrigine: 'Half-life through the starting point (s)', unSurLambda: '60 / ln 2 (he prints 86)', resteVingtMinutes: 'Share left after 20 minutes', ecartDroite: 'Mean miss of a straight line', ecartExponentielle: 'Mean miss of the halving law', droiteA360: 'Straight line at 360 s',
   /* game285 */

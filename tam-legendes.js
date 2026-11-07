@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game287 (idee : codex 31, sous-agent Claude) */
+  etherMichelson: {
+    titre: 'Michelson and Morley: no ether wind',
+    enUnePhrase: 'Light should have been slowed by the Earth\'s motion through the ether, and it was not.',
+    colonnes: ['mark of the turn', 'fringe position', 'noon, evening or expected'],
+    aRegarder: ['At 1 the expected wave dwarfs both readings.', 'Near 0.2 it shrinks to their size.', 'The readings drift over a turn more than they wave.'],
+    fin: null,
+  },
   /* game286 (idee : codex 31, sous-agent Claude) */
   emanationRutherford: {
     titre: 'Rutherford: thorium emanation halves every minute',
