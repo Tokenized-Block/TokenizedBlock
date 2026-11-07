@@ -1130,6 +1130,38 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game263 (idee : codex 28, sous-agent Claude) */
+  parallaxeBessel: {
+    titre: 'Bessel: the first distance to a star',
+    enUnePhrase: 'Two comparison stars give two parallaxes; weighting them gives the first measured distance to a star.',
+    colonnes: ['weight of star b', 'parallax', 'curve, chosen weight or separate values'],
+    aRegarder: ['The common value lies between the two separate ones.', 'Weight 0.6889 gives 0.3136.', 'Slide the weight and watch it move.'],
+    fin: null,
+  },
+  /* game262 (idee : codex 28, sous-agent Claude) */
+  motsMendenhall: {
+    titre: 'Mendenhall: the curve of word lengths',
+    enUnePhrase: 'How many words of each length an author uses, per thousand: a fingerprint, but a noisy one.',
+    colonnes: ['letters', 'words per thousand', 'which text'],
+    aRegarder: ['Three-letter words lead in every text.', 'The two Vanity Fair groups nearly overlap.', 'Merge the long words and compare.'],
+    fin: null,
+  },
+  /* game261 (idee : codex 28, sous-agent Claude) */
+  chaleurLondres: {
+    titre: 'Howard: London is warmer than the country',
+    enUnePhrase: 'Thirty years of London means and twelve of the country: the city record runs about one and a half degrees warmer.',
+    colonnes: ['year', 'mean temperature', 'London, country or smoothed'],
+    aRegarder: ['The country line sits below London.', 'Except in 1813.', 'Smooth London over several years.'],
+    fin: null,
+  },
+  /* game260 (idee : codex 28, sous-agent Claude) */
+  survieHalley: {
+    titre: 'Halley: the Breslau life table',
+    enUnePhrase: 'How many of a thousand are still alive at each age, and what a life annuity is worth.',
+    colonnes: ['age', 'alive or annuity', 'alive, annuity or constant risk'],
+    aRegarder: ['The steep fall in the first years.', 'The annuity peaks around ten.', 'The constant-risk curve sinks far too fast.'],
+    fin: null,
+  },
   /* game259 (idee : codex 28, sous-agent Claude) */
   repliquesOmori: {
     titre: 'Omori: the aftershocks fade like 1 / t',

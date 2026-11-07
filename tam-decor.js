@@ -501,6 +501,14 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game263 */
+  parallaxeBessel: (P, o, B) => [pt([0.6889 / 1.5, 0.3136 / 0.4, B.centre[2]], C.repere, 'Weight 0.6889: 0.3136 arcsecond')],
+  /* game262 */
+  motsMendenhall: (P, o, B) => [pt([3 / 15, 248 / 260, B.centre[2]], C.repere, 'Three letters: about a quarter of all words')],
+  /* game261 */
+  chaleurLondres: (P, o, B) => [pt([(1813 - 1789) / 29, (49.762 - 46) / 8, B.centre[2]], C.repere, '1813: the country warmer than London')],
+  /* game260 */
+  survieHalley: (P, o, B) => [pt([0.42, 427 / 1000, B.centre[2]], C.repere, 'Age 42: 427 of 1000')],
   /* game259 */
   repliquesOmori: (P, o, B) => [pt([0, 171 / 200, B.centre[2]], C.repere, 'First half day: 171 shocks')],
   /* game258 */

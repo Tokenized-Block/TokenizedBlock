@@ -304,6 +304,43 @@ export const SOURCES = Object.freeze({
   omoriTable: S('171 147 109 64 71 55 58 41 46 46|0:190 1:133 2:102 3.5:76 5.5:56 8:42|3-4:68 5-6:57 7-9:44', 'shocks per half day', 'https://archive.org/download/journalofcollege07toky/page/n136_w1500.jpg', '171 147 109 64 71 55 58 41 46 46|0:190 1:133 2:102 3.5:76 5.5:56 8:42|3-4:68 5-6:57 7-9:44'),
   // https://archive.org/download/journalofcollege07toky/page/n135_w1500.jpg (equation (c), 440.7 et 2.31), https://archive.org/download/journalofcollege07toky/page/n136_w1500.jpg (1892, 1893, x = 19, note « log y = 2.25 - x x 0.106 ») et p. 120 (equation (d), 42 et 37 ans)
   omoriTexte: S('k:440.7 h:2.31 x1892:493 x1893:1225 y1892:0.9 y1893:0.36 shocks1892:867 shocks1893:308 obs1892:1.2 obs1893:0.42 curvature:19 kd:16.9 hd:0.397 xd1892:7.5 xd1893:19.5 yd1892:2.1 yd1893:0.84 obsd1892:2.4 obsd1893:0.84 years30:42 years60:37 expA:2.25 expB:0.106 exp0:175 exp1:138 exp2:108', 'half days, shocks', 'https://archive.org/download/journalofcollege07toky/page/n136_w1500.jpg', 'k:440.7 h:2.31 x1892:493 x1893:1225 y1892:0.9 y1893:0.36 shocks1892:867 shocks1893:308 obs1892:1.2 obs1893:0.42 curvature:19 kd:16.9 hd:0.397 xd1892:7.5 xd1893:19.5 yd1892:2.1 yd1893:0.84 obsd1892:2.4 obsd1893:0.84 years30:42 years60:37 expA:2.25 expB:0.106 exp0:175 exp1:138 exp2:108'),
+  /* game260 : Halley 1693, « An Estimate of the Degrees of the Mortality of Mankind », Phil. Trans. 17 : 596, pages 598, 600, 601 et 603 relues
+   *   par moi sur les images (Internet Archive paper-doi-10_1098_rstl_1693_0007, The Royal Society, Public Domain Mark). Seuls des chiffres de
+   *   resultats sont repris. Idee : codex 28, sous-agent Claude. */
+  // https://archive.org/download/paper-doi-10_1098_rstl_1693_0007/page/n4_w1500.jpg : « Age Curt. / Persons », vivants dans l annee d age 1 a 84 (l etiquette 66 est imprimee « 65 » : seuls les nombres sont repris)
+  halleyVivants: S('1000 855 798 760 732 710 692 680 670 661 653 646 640 634 628 622 616 610 604 598 592 586 579 573 567 560 553 546 539 531 523 515 507 499 490 481 472 463 454 445 436 427 417 407 397 387 377 367 357 346 335 324 313 302 292 282 272 262 252 242 232 222 212 202 192 182 172 162 152 142 131 120 109 98 88 78 68 58 49 41 34 28 23 20', 'persons alive', 'https://archive.org/download/paper-doi-10_1098_rstl_1693_0007/page/n4_w1500.jpg', '1000 855 798 760 732 710 692 680 670 661 653 646 640 634 628 622 616 610 604 598 592 586 579 573 567 560 553 546 539 531 523 515 507 499 490 481 472 463 454 445 436 427 417 407 397 387 377 367 357 346 335 324 313 302 292 282 272 262 252 242 232 222 212 202 192 182 172 162 152 142 131 120 109 98 88 78 68 58 49 41 34 28 23 20'),
+  // meme page, colonne de droite : sommes par 7 ans | 85 a 100 en bloc | « Sum Total »
+  halleySommes: S('5547 4584 4270 3964 3604 3178 2709 2194 1694 1204 692 253|107|34000', 'persons', 'https://archive.org/download/paper-doi-10_1098_rstl_1693_0007/page/n4_w1500.jpg', '5547 4584 4270 3964 3604 3178 2709 2194 1694 1204 692 253|107|34000'),
+  // https://archive.org/download/paper-doi-10_1098_rstl_1693_0007/page/n7_w1500.jpg : « Years Purchase » a « Six per Cent », age:valeur
+  halleyAnnuites: S('1:10.28 5:13.40 10:13.44 15:13.33 20:12.78 25:12.27 30:11.72 35:11.12 40:10.57 45:9.91 50:9.21 55:8.51 60:7.60 65:6.54 70:5.32', 'years purchase', 'https://archive.org/download/paper-doi-10_1098_rstl_1693_0007/page/n7_w1500.jpg', '1:10.28 5:13.40 10:13.44 15:13.33 20:12.78 25:12.27 30:11.72 35:11.12 40:10.57 45:9.91 50:9.21 55:8.51 60:7.60 65:6.54 70:5.32'),
+  // https://archive.org/download/paper-doi-10_1098_rstl_1693_0007/page/n2_w1000.jpg (1687-1691 : 6193 nes, 5869 enterres, 1238, 1174, 64, 348, 890, 198, 692), p. 601 (« 80 to 1 »), p. 603 (6 %, « 9, 974694 »)
+  halleyTexte: S('born:6193 buried:5869 years:5 born1:1238 buried1:1174 increase:64 die1:348 reach1:890 die5:198 survive6:692 odds:80 rate:6 complement:9.974694', 'persons, per cent', 'https://archive.org/download/paper-doi-10_1098_rstl_1693_0007/page/n2_w1000.jpg', 'born:6193 buried:5869 years:5 born1:1238 buried1:1174 increase:64 die1:348 reach1:890 die5:198 survive6:692 odds:80 rate:6 complement:9.974694'),
+  /* game261 : Howard, « The Climate of London », 2e ed., vol. I, 1833, pages 3, 4, 6 et 7 relues par moi sur les images (Internet Archive
+   *   b29350529_0001, Wellcome Library, Public Domain Mark). Seuls des chiffres de resultats sont repris. Idee : codex 28, sous-agent Claude. */
+  // https://archive.org/download/b29350529_0001/page/n97_w1500.jpg et https://archive.org/download/b29350529_0001/page/n98_w1500.jpg : « Annual mean temperature », Londres (registre de la Royal Society), annee:degres F
+  howardLondres: S('1789:49.491 1790:50.892 1791:50.833 1792:50.483 1793:50.820 1794:51.200 1795:49.700 1796:50.083 1797:49.398 1798:50.999 1799:47.920 1800:50.522 1801:51.080 1802:50.200 1803:50.329 1804:51.731 1805:49.998 1806:52.734 1807:50.733 1808:50.466 1809:50.633 1810:50.976 1811:52.666 1812:49.208 1813:49.741 1814:48.241 1815:51.550 1816:49.433 1817:50.316 1818:53.003', 'degrees Fahrenheit', 'https://archive.org/download/b29350529_0001/page/n97_w1500.jpg', '1789:49.491 1790:50.892 1791:50.833 1792:50.483 1793:50.820 1794:51.200 1795:49.700 1796:50.083 1797:49.398 1798:50.999 1799:47.920 1800:50.522 1801:51.080 1802:50.200 1803:50.329 1804:51.731 1805:49.998 1806:52.734 1807:50.733 1808:50.466 1809:50.633 1810:50.976 1811:52.666 1812:49.208 1813:49.741 1814:48.241 1815:51.550 1816:49.433 1817:50.316 1818:53.003'),
+  // memes pages, « In the Country » (Plaistow, Stratford puis Tottenham), annee:degres F
+  howardCampagne: S('1807:48.367 1808:48.633 1809:49.546 1810:49.507 1811:51.190 1812:47.743 1813:49.762 1814:46.967 1815:49.630 1816:46.572 1817:47.834 1818:50.028', 'degrees Fahrenheit', 'https://archive.org/download/b29350529_0001/page/n98_w1500.jpg', '1807:48.367 1808:48.633 1809:49.546 1810:49.507 1811:51.190 1812:47.743 1813:49.762 1814:46.967 1815:49.630 1816:46.572 1817:47.834 1818:50.028'),
+  // https://archive.org/download/b29350529_0001/page/n98_w1500.jpg : « AVERAGES », serie:annees:depuis:moyenne imprimee
+  howardMoyennes: S('Lo:5:1790:50.845 Lo:5:1807:51.095 Ca:5:1807:49.448 Lo:5:1795:49.620 Lo:5:1812:49.634 Ca:5:1812:48.135 Lo:10:1790:50.233 Lo:10:1807:50.364 Ca:10:1807:48.791 Lo:17:1790:50.530 Lo:17:1800:50.600 Lo:7:1800:50.912', 'degrees Fahrenheit', 'https://archive.org/download/b29350529_0001/page/n98_w1500.jpg', 'Lo:5:1790:50.845 Lo:5:1807:51.095 Ca:5:1807:49.448 Lo:5:1795:49.620 Lo:5:1812:49.634 Ca:5:1812:48.135 Lo:10:1790:50.233 Lo:10:1807:50.364 Ca:10:1807:48.791 Lo:17:1790:50.530 Lo:17:1800:50.600 Lo:7:1800:50.912'),
+  // https://archive.org/download/b29350529_0001/page/n94_w1500.jpg (decennies, 50.456, 1807-1809) et https://archive.org/download/b29350529_0001/page/n95_w1500.jpg (1810-1812, 1813-1816, « 1 579 ») ; https://archive.org/download/b29350529_0001/page/n98_w1500.jpg (p. 7) « Extent of variation » (« [1818, not then out.] »)
+  howardTexte: S('c1807:48.848 l1807:50.608 e1807:1.760 c1810:49.480 l1810:50.949 e1810:1.469 c1813:48.233 l1813:49.741 e1813:1.508 excess:1.579 dec1:50.516 dec2:50.490 dec3:50.364 city:50.456 extentLondon:4.814 extentCountry:4.618', 'degrees Fahrenheit', 'https://archive.org/download/b29350529_0001/page/n94_w1500.jpg', 'c1807:48.848 l1807:50.608 e1807:1.760 c1810:49.480 l1810:50.949 e1810:1.469 c1813:48.233 l1813:49.741 e1813:1.508 excess:1.579 dec1:50.516 dec2:50.490 dec3:50.364 city:50.456 extentLondon:4.814 extentCountry:4.618'),
+  /* game262 : Mendenhall, « The Characteristic Curves of Composition », Science 9 (11 mars 1887) : 237, pages 240, 241 et 243 relues par moi sur
+   *   les images (Internet Archive jstor-1764604 ; texte de 1887, domaine public ; JSTOR : scan libre pour usage non commercial ; seuls des
+   *   chiffres de resultats sont repris, aucune image). Idee : codex 28, sous-agent Claude. */
+  // https://archive.org/download/jstor-1764604/page/n4_w1500.jpg (Oliver Twist, 1000 premiers mots, lettres 1 a 12) | https://archive.org/download/jstor-1764604/page/n5_w1500.jpg (Vanity Fair, deux groupes de 1000 mots, lettres 1 a 14)
+  mendenhallOliver: S('38 170 235 175 123 91 62 41 35 10 13 7', 'words of k letters', 'https://archive.org/download/jstor-1764604/page/n4_w1500.jpg', '38 170 235 175 123 91 62 41 35 10 13 7'),
+  mendenhallVanity: S('25 169 232 187 109 78 79 48 28 20 10 10 2 3|33 146 248 164 135 76 73 52 35 23 6 5 2 2', 'words of k letters', 'https://archive.org/download/jstor-1764604/page/n5_w1500.jpg', '25 169 232 187 109 78 79 48 28 20 10 10 2 3|33 146 248 164 135 76 73 52 35 23 6 5 2 2'),
+  // https://archive.org/download/jstor-1764604/page/n5_w1500.jpg (« 4,507 », « 4,508 ») et https://archive.org/download/jstor-1764604/page/n7_w1500.jpg (moyennes sur 10 000 mots ; Bible, chiffres que l auteur dit ne pas garantir)
+  mendenhallTexte: S('letters1:4507 letters2:4508 atkinson:4.298 dickens:4.342 thackeray:4.481 mill:4.775 otWords:592493 otLetters:2728100 ntWords:181253 ntLetters:838380 otMean:4.604 ntMean:4.625', 'letters per word', 'https://archive.org/download/jstor-1764604/page/n7_w1500.jpg', 'letters1:4507 letters2:4508 atkinson:4.298 dickens:4.342 thackeray:4.481 mill:4.775 otWords:592493 otLetters:2728100 ntWords:181253 ntLetters:838380 otMean:4.604 ntMean:4.625'),
+  /* game263 : Bessel, « Bestimmung der Entfernung des 61sten Sterns des Schwans », Astronomische Nachrichten Nr. 365-366, pages 85 a 90 relues
+   *   par moi sur les images (Internet Archive bub_gb_PFc_AAAAcAAJ, Public Domain Mark). Seuls des chiffres de resultats sont repris. Idee : codex 28. */
+  // https://iiif.archive.org/image/iiif/3/bub_gb_PFc_AAAAcAAJ%2fbub_gb_PFc_AAAAcAAJ_jp2.zip%2fbub_gb_PFc_AAAAcAAJ_jp2%2fbub_gb_PFc_AAAAcAAJ_0050.jp2/pct:5,70,95,23/2200,/0/default.jpg : equations normales de l etoile a (coefficients de alpha, alpha', alpha'' puis second membre), une ligne par equation
+  besselA: S('85 27.743 24.399 8.295|27.743 21.4782 13.5709 4.1016|24.399 13.5709 31.5999 11.1517', 'arcseconds', 'https://iiif.archive.org/image/iiif/3/bub_gb_PFc_AAAAcAAJ%2fbub_gb_PFc_AAAAcAAJ_jp2.zip%2fbub_gb_PFc_AAAAcAAJ_jp2%2fbub_gb_PFc_AAAAcAAJ_0050.jp2/pct:5,70,95,23/2200,/0/default.jpg', '85 27.743 24.399 8.295|27.743 21.4782 13.5709 4.1016|24.399 13.5709 31.5999 11.1517'),
+  // https://iiif.archive.org/image/iiif/3/bub_gb_PFc_AAAAcAAJ%2fbub_gb_PFc_AAAAcAAJ_jp2.zip%2fbub_gb_PFc_AAAAcAAJ_jp2%2fbub_gb_PFc_AAAAcAAJ_0051.jp2/pct:0,0,100,50/2000,/0/default.jpg : equations normales de l etoile b (beta, beta', beta'' puis second membre)
+  besselB: S('98 32.645 23.593 13.172|32.645 24.5663 8.6625 7.9193|23.593 8.6625 39.0826 12.0683', 'arcseconds', 'https://iiif.archive.org/image/iiif/3/bub_gb_PFc_AAAAcAAJ%2fbub_gb_PFc_AAAAcAAJ_jp2.zip%2fbub_gb_PFc_AAAAcAAJ_jp2%2fbub_gb_PFc_AAAAcAAJ_0051.jp2/pct:0,0,100,50/2000,/0/default.jpg', '98 32.645 23.593 13.172|32.645 24.5663 8.6625 7.9193|23.593 8.6625 39.0826 12.0683'),
+  // https://iiif.archive.org/image/iiif/3/bub_gb_PFc_AAAAcAAJ%2fbub_gb_PFc_AAAAcAAJ_jp2.zip%2fbub_gb_PFc_AAAAcAAJ_jp2%2fbub_gb_PFc_AAAAcAAJ_0051.jp2/pct:0,0,100,50/2000,/0/default.jpg (solutions, « Gew. », sommes de carres, erreurs moyennes) et https://archive.org/download/bub_gb_PFc_AAAAcAAJ/page/n52_w1500.jpg (0.6889, solutions II, « 0 3136 ») ; p. 88 en bas (ponderation par 0.6889, solution commune, ± 0 1354 et ± 0 0202) : https://iiif.archive.org/image/iiif/3/bub_gb_PFc_AAAAcAAJ%2fbub_gb_PFc_AAAAcAAJ_jp2.zip%2fbub_gb_PFc_AAAAcAAJ_jp2%2fbub_gb_PFc_AAAAcAAJ_0051.jp2/pct:50,70,50,30/1600,/0/default.jpg
+  besselTexte: S('alpha:0.0094 alpha1:-0.0543 alpha2:0.3690 beta:-0.0091 beta1:0.2426 beta2:0.2605 wA1:11.145 wA2:24.065 wB1:13.672 wB2:33.356 ssA0:4.4487 ssB0:4.7108 ssA:1.4448 ssB:2.4469 nA:85 nB:98 mA:0.1327 mB:0.1605 meA1:0.0398 meA2:0.0283 meB1:0.0434 meB2:0.0278 poids:0.6889 IIalpha:0.0171 IIalpha1:-0.0293 IIbeta:-0.0209 IIbeta1:0.2395 parallaxe:0.3136 m1:0.1354 meP:0.0202', 'arcseconds', 'https://archive.org/download/bub_gb_PFc_AAAAcAAJ/page/n52_w1500.jpg', 'alpha:0.0094 alpha1:-0.0543 alpha2:0.3690 beta:-0.0091 beta1:0.2426 beta2:0.2605 wA1:11.145 wA2:24.065 wB1:13.672 wB2:33.356 ssA0:4.4487 ssB0:4.7108 ssA:1.4448 ssB:2.4469 nA:85 nB:98 mA:0.1327 mB:0.1605 meA1:0.0398 meA2:0.0283 meB1:0.0434 meB2:0.0278 poids:0.6889 IIalpha:0.0171 IIalpha1:-0.0293 IIbeta:-0.0209 IIbeta1:0.2395 parallaxe:0.3136 m1:0.1354 meP:0.0202'),
   lettresAnglais: S('E:21912 T:16587 A:14810 O:14003 I:13318 N:12666 S:11450 R:10977 H:10795 D:7874 L:7253 U:5246 C:4943 M:4761 F:4200 Y:3853 W:3819 G:3693 P:3316 B:2715 V:2019 K:1257 X:315 Q:205 J:188 Z:128', 'effectifs', 'https://pi.math.cornell.edu/~mec/2003-2004/cryptography/subs/frequencies.html', 'E:21912 T:16587 A:14810 O:14003 I:13318 N:12666 S:11450 R:10977 H:10795 D:7874 L:7253 U:5246 C:4943 M:4761 F:4200 Y:3853 W:3819 G:3693 P:3316 B:2715 V:2019 K:1257 X:315 Q:205 J:188 Z:128'),
 });
 
@@ -3549,7 +3586,188 @@ function repliquesOmori(P, n) {
     temoin: { mesure: expo(v('x1892')) < 1e-6 && hyp(v('x1892')) / (v('shocks1892') / (2 * 366)) > 0.5 ? 0 : 1, formule: 0, expoQueue: expo(v('x1892')), note: 'witness: the exponential law gives 1e-50 shocks per half day in 1892; there were 1.18; the hyperbola says 0.89' } } };
 }
 
+// ---------- 109 : la table de Breslau, Halley 1693 (idee : codex 28, sous-agent Claude ; tables et texte : SOURCES, Phil. Trans. 17) ----------
+// Avec les registres de Breslau (1687-1691), Halley construit la premiere table de survie vraiment utilisable : 1000 vivants dans leur premiere
+//   annee, 20 a 84 ans, 107 de 85 a 100, 34 000 en tout ; puis il en tire le prix d une rente viagere a 6 %.
+// Exact ici : les 12 sommes de 7 ans et 34 000 ; la chaine du texte 1238 - 348 = 890, 890 - 198 = 692 = la table a 7 ans ; la cote « 80 to 1 »
+//   a 25 ans (560 / 7) ; 10 - log(1.06) = 9.974694. Rente refaite (somme de v^t l(x+t) / l(x), rien au-dela de 84 ans) : a moins de 0.05 pour
+//   1, 10, 20, 25, 30, 35 et 40 ans. Nommes : 5 ans (13.40 imprime, 13.01 refait) et 15 ans (13.33 / 13.18) ; divisees par l(x+1) au lieu de
+//   l(x) elles donnent 13.41 et 13.31 : compatible, pas tranche (1 et 10 ans, eux, tombent juste avec l(x)). Au-dela de 40 ans l ecart grandit
+//   en grande partie parce que les 85-100 ans ne sont pas detailles : meme places au plus tot, les 107 laissent 0.06 a 65 ans et 0.08 a 70 ans
+//   (reste non explique). 6193 / 5 = 1238.6 imprime 1238 (tronque) ; 5869 / 5 = 1173.8 imprime 1174.
+// Ce que la table suppose : une population stationnaire (Halley le pose) ; 34 000 n est pas un recensement.
+// MESURE : sommes, total, chaine du texte, cote, complement, et les rentes de 1 a 40 ans hors 5 et 15 a 0.05.
+// Temoin : un risque de deces constant passant par 1000 et 20 donne 145 vivants a 42 ans au lieu de 427, et une rente de 9.00 a tout age.
+// Dessin (vue de face) : age / 100 ; etiquette 0 les vivants / 1000, 1 la rente refaite au taux tauxHalley / 15, 2 les rentes imprimees / 15,
+//   3 le risque constant / 1000.
+function survieHalley(P, n) {
+  const L = SOURCES.halleyVivants.valeur.split(' ').map(Number), l = (a) => (a >= 1 && a <= L.length ? L[a - 1] : 0);
+  const [sommesTxt, resteTxt, totalTxt] = SOURCES.halleySommes.valeur.split('|'), sommes = sommesTxt.split(' ').map(Number);
+  const t = Object.fromEntries(SOURCES.halleyTexte.valeur.split(' ').map((x) => x.split(':'))), nb = (cle) => Number(t[cle]);
+  const imprimees = SOURCES.halleyAnnuites.valeur.split(' ').map((x) => x.split(':').map(Number));
+  let ecarts = 0, sommesRetrouvees = 0;
+  sommes.forEach((s, k) => { if (L.slice(7 * k, 7 * k + 7).reduce((a, b) => a + b, 0) === s) sommesRetrouvees++; else ecarts++; });
+  const totalHalley = L.reduce((a, b) => a + b, 0) + Number(resteTxt);
+  if (totalHalley !== Number(totalTxt)) ecarts++;
+  if (nb('born1') - nb('die1') !== nb('reach1') || nb('reach1') - nb('die5') !== l(7) || nb('survive6') !== l(7) || nb('born1') - nb('buried1') !== nb('increase')) ecarts++;
+  const coteVingtCinq = l(26) / (l(25) - l(26));
+  if (coteVingtCinq !== nb('odds')) ecarts++;
+  const complementLog = 10 - lnD(1 + nb('rate') / 100) / lnD(10);
+  if (complementLog.toFixed(6) !== t.complement) ecarts++;
+  const rente = (x, taux, base) => { const v = 1 / (1 + taux / 100); let s = 0, vt = 1; for (let k = 1; x + k <= L.length; k++) { vt *= v; s += vt * l(x + k) / l(base ?? x); } return s; };
+  const NOMMES = [5, 15], ecartRente = ([a, p]) => Math.abs(rente(a, nb('rate')) - p);
+  ecarts += imprimees.filter(([a]) => a <= 40 && !NOMMES.includes(a)).filter((q) => ecartRente(q) > 0.05).length;
+  ecarts += imprimees.filter(([a]) => NOMMES.includes(a)).filter((q) => ecartRente(q) <= 0.05).length;
+  const ecartsRentes = imprimees.filter((q) => ecartRente(q) > 0.05).map(([a, p]) => a + ' ' + p.toFixed(2) + ' vs ' + rente(a, nb('rate')).toFixed(2)).join(' ; ');
+  const renteBaseDecalee = NOMMES.map((a) => a + ' ' + rente(a, nb('rate'), a + 1).toFixed(2)).join(' ; ');
+  const lam = lnD(l(1) / l(84)) / 83, vivantsConstant42 = l(1) * expD(-lam * 41), q = expD(-lam) / (1 + nb('rate') / 100), renteConstante = q / (1 - q);
+  const taux = P.tauxHalley, pts = [];
+  for (let a = 1; a <= 84; a++) { for (let r = 0; r < 4; r++) pts.push([a / 100, l(a) / 1000, 0]); pts.push([a / 100, rente(a, taux) / 15, 1]); pts.push([a / 100, l(1) * expD(-lam * (a - 1)) / 1000, 3]); }
+  for (const [a, p] of imprimees) for (let r = 0; r < 8; r++) pts.push([a / 100, p / 15, 2]);
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pe] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pe; }
+  return { D: 3, brut, nuage: true, unite: 'persons alive, years purchase', invariants: {
+    survieHalley: { mesure: ecarts, formule: 0, sommesRetrouvees, totalHalley, coteVingtCinq, complementLog, naissancesAn: nb('born') / nb('years'), ecartsRentes, renteBaseDecalee, renteChoisie10: rente(10, taux),
+      note: 'a 7-year sum, the total, the text chain, the 80 to 1 odds, 9.974694, or an annuity from 1 to 40 (except 5 and 15) more than 0.05 off' },
+    temoin: { mesure: vivantsConstant42 < l(42) / 2 ? 0 : 1, formule: 0, vivantsConstant42, renteConstante, note: 'witness: a constant risk through 1000 and 20 leaves 145 alive at 42 instead of 427, and an annuity of 9.00 at every age' } } };
+}
+
+// ---------- 110 : la chaleur de la ville, Howard 1833 (idee : codex 28, sous-agent Claude ; tables et texte : SOURCES, The Climate of London) ----------
+// Luke Howard compare la moyenne annuelle de Londres (registre de la Royal Society) a celle de la campagne voisine, sur trois sites successifs :
+//   « London always warmer than the country, the average excess of its temperature being 1 579 » (degres Fahrenheit). Il l attribue a la ville : « induced by its structure, by a crowded
+//   population, and the consumption of great quantities of fuel in fires » (p. 3) ; mais les deux registres ont des sites et des instruments
+//   differents (p. 3-4), et il le dit.
+// Exact ici : les trois moyennes de campagne, les trois ecarts imprimes (1.760, 1.469, 1.508 = Londres - campagne imprimes) et leur moyenne
+//   1.579 ; la moyenne des trois decennies (50.456) ; 9 des 12 « AVERAGES » a moins d un millieme ; l etendue 4.814 seulement sans 1818 (la
+//   note « [1818, not then out.] » l explique), 4.618 a la campagne. Nommes : Londres 1807-1809 (50.608 imprime, 50.6107 refait), 17 ans depuis
+//   1790 (50.530 / 50.5248), 17 ans depuis 1800 (50.600 / 50.6024), 7 ans depuis 1800 (50.912 / 50.9420).
+// « Toujours plus chaud » vaut pour les trois periodes, pas pour chaque annee : en 1813 la campagne (49.762) bat Londres (49.741).
+// MESURE : tout ce qui precede a un millieme, hors les quatre nommes.
+// Temoin : « aucune difference entre les deux registres » : ecart moyen 1.766 sur 12 ans, t = 7.30, Londres plus chaude 11 annees sur 12 ;
+//   que l ecart soit urbain est l interpretation de Howard, pas une mesure.
+// Dessin (vue de face) : (annee - 1789) / 29 contre (degres - 46) / 8 ; etiquette 0 Londres, 1 la campagne, 2 Londres lissee sur lissageHoward ans.
+function chaleurLondres(P, n) {
+  const serie = (src) => Object.fromEntries(src.split(' ').map((x) => x.split(':').map(Number)));
+  const Lo = serie(SOURCES.howardLondres.valeur), Ca = serie(SOURCES.howardCampagne.valeur), t = Object.fromEntries(SOURCES.howardTexte.valeur.split(' ').map((x) => x.split(':')));
+  const moyenneAns = (o, a, k) => { let s = 0; for (let y = a; y < a + k; y++) s += o[y]; return s / k; };
+  const etendue = (o, a, b) => { const v = []; for (let y = a; y <= b; y++) v.push(o[y]); return Math.max(...v) - Math.min(...v); };
+  const verifs = [];
+  for (const [a, k] of [[1807, 3], [1810, 3], [1813, 4]]) { verifs.push(['campagne ' + a, moyenneAns(Ca, a, k), t['c' + a]]); verifs.push(['Londres ' + a, moyenneAns(Lo, a, k), t['l' + a]]); verifs.push(['ecart ' + a, Number(t['l' + a]) - Number(t['c' + a]), t['e' + a]]); }
+  verifs.push(['exces moyen', (Number(t.e1807) + Number(t.e1810) + Number(t.e1813)) / 3, t.excess], ['ville', (Number(t.dec1) + Number(t.dec2) + Number(t.dec3)) / 3, t.city]);
+  for (const x of SOURCES.howardMoyennes.valeur.split(' ')) { const [w, k, a, s] = x.split(':'); verifs.push([(w === 'Lo' ? 'Londres ' : 'Campagne ') + k + ' ans ' + a, moyenneAns(w === 'Lo' ? Lo : Ca, Number(a), Number(k)), s]); }
+  verifs.push(['etendue Londres', etendue(Lo, 1789, 1817), t.extentLondon], ['etendue campagne', etendue(Ca, 1807, 1818), t.extentCountry]);
+  const NOMMES = ['Londres 1807', 'Londres 17 ans 1790', 'Londres 17 ans 1800', 'Londres 7 ans 1800'], hors = (q) => !(Math.abs(q[1] - Number(q[2])) <= 0.001 + 1e-9); /* au plus une unite du dernier chiffre : 1810-1812 refait 50.950 exactement, imprime 50.949 */
+  const ecarts = verifs.filter((q) => hors(q) !== NOMMES.includes(q[0])).length;
+  const nonRetrouves = verifs.filter(hors).map(([nom, val, s]) => nom + ' ' + s + ' vs ' + val.toFixed(4)).join(' ; ');
+  const ecartsAnnuels = Object.keys(Ca).map(Number).map((y) => [y, Lo[y] - Ca[y]]), d = ecartsAnnuels.map((q) => q[1]);
+  const moyenneEcart = d.reduce((s, x) => s + x, 0) / d.length, sd = Math.sqrt(d.reduce((s, x) => s + (x - moyenneEcart) * (x - moyenneEcart), 0) / (d.length - 1));
+  const tStudent = moyenneEcart / (sd / Math.sqrt(d.length)), positifs = d.filter((x) => x > 0).length, exceptions = ecartsAnnuels.filter((q) => q[1] <= 0).map((q) => q[0]).join(' ');
+  const w = P.lissageHoward, ans = Object.keys(Lo).map(Number), pts = [];
+  for (const y of ans) {
+    for (let r = 0; r < 6; r++) { pts.push([(y - 1789) / 29, (Lo[y] - 46) / 8, 0]); if (Ca[y] !== undefined) pts.push([(y - 1789) / 29, (Ca[y] - 46) / 8, 1]); }
+    const fen = ans.filter((z) => Math.abs(z - y) <= (w - 1) / 2), lisse = fen.reduce((s, z) => s + Lo[z], 0) / fen.length;
+    for (let r = 0; r < 6; r++) pts.push([(y - 1789) / 29, (lisse - 46) / 8, 2]);
+  }
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pe] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pe; }
+  return { D: 3, brut, nuage: true, unite: 'degrees Fahrenheit', invariants: {
+    chaleurLondres: { mesure: ecarts, formule: 0, retrouvesHoward: verifs.length - verifs.filter(hors).length, nonRetrouvesHoward: nonRetrouves, etendueAvec1818: etendue(Lo, 1789, 1818),
+      note: 'a period mean, printed excess, the 1.579, the city mean, an average or an extent off by more than a thousandth, other than the four named' },
+    temoin: { mesure: tStudent > 3 && positifs >= 10 ? 0 : 1, formule: 0, moyenneEcart, tStudent, positifs, exceptions, note: 'witness: no difference between the two records is refuted, 1.766 on average over 12 years, t = 7.30, London warmer 11 years in 12; 1813 is the exception' } } };
+}
+
+// ---------- 111 : la longueur des mots, Mendenhall 1887 (idee : codex 28, sous-agent Claude ; tables et texte : SOURCES, Science 9) ----------
+// Mendenhall compte les mots de 1, 2, 3... lettres par paquets de 1000 et dessine la « courbe caracteristique » d un auteur.
+// Exact ici : les trois groupes font 1000 mots ; Vanity Fair 4507 et 4508 lettres comme imprime (Oliver Twist 4348) ; Bible 2728100 / 592493
+//   = 4.604 et 838380 / 181253 = 4.625, a moins d un demi pour cent l un de l autre comme il l ecrit (il ne garantit pas ces chiffres de presse).
+// Ce que ses nombres ne montrent pas : il dit les deux groupes de Vanity Fair « in reality quite different » ; un khi-deux sur ses cellules
+//   (queue fusionnee a partir de queueMendenhall lettres) reste pres de ses degres de liberte : z = (khi2 - ddl) / racine(2 ddl) sous 1 pour toute
+//   fusion de 8 a 14. Mesure, sans valeur p tiree d une table.
+// MESURE : sommes, lettres, moyennes bibliques et leur ecart.
+// Temoin : « meme longueur moyenne pour tous les auteurs » : Mill 4.775 contre Dickens 4.342, 13.5 erreurs-types sur 10 000 mots si les mots sont
+//   independants (ecart-type tire d Oliver Twist, 2.271 lettres ; avec celui de Vanity Fair, 12.9 ; des mots groupes, ses « runs », l abaisseraient) ; Dickens et Atkinson, eux, ne sont pas separes (1.4).
+// Dessin (vue de face) : lettres / 15 contre mots / 260 ; etiquette 0 Oliver Twist, 1 et 2 les deux groupes de Vanity Fair, queue fusionnee.
+function motsMendenhall(P, n) {
+  const ot = SOURCES.mendenhallOliver.valeur.split(' ').map(Number), [v1, v2] = SOURCES.mendenhallVanity.valeur.split('|').map((g) => g.split(' ').map(Number));
+  const t = Object.fromEntries(SOURCES.mendenhallTexte.valeur.split(' ').map((x) => x.split(':'))), nb = (cle) => Number(t[cle]);
+  const somme = (a) => a.reduce((s, x) => s + x, 0), lettres = (a) => a.reduce((s, c, i) => s + c * (i + 1), 0);
+  let ecarts = 0;
+  if (![ot, v1, v2].every((a) => somme(a) === 1000)) ecarts++;
+  if (lettres(v1) !== nb('letters1') || lettres(v2) !== nb('letters2')) ecarts++;
+  const bibleAncien = nb('otLetters') / nb('otWords'), bibleNouveau = nb('ntLetters') / nb('ntWords'), ecartBible = bibleNouveau / bibleAncien - 1;
+  if (bibleAncien.toFixed(3) !== t.otMean || bibleNouveau.toFixed(3) !== t.ntMean) ecarts++;
+  if (!(ecartBible < 0.005)) ecarts++;
+  const moyOt = lettres(ot) / somme(ot), ecartType = Math.sqrt(ot.reduce((s, c, i) => s + c * (i + 1 - moyOt) * (i + 1 - moyOt), 0) / somme(ot)), se = ecartType * Math.sqrt(2 / 10000);
+  const ecartTypesMill = (nb('mill') - nb('dickens')) / se, ecartTypesAtkinson = (nb('dickens') - nb('atkinson')) / se;
+  const fusion = (a, q) => [...a.slice(0, q - 1), a.slice(q - 1).reduce((s, x) => s + x, 0)];
+  const zVanity = (q) => { const A = fusion(v1, q), B = fusion(v2, q), na = somme(A), nb2 = somme(B); let c = 0;
+    for (let i = 0; i < A.length; i++) { const tot = A[i] + B[i], ea = tot * na / (na + nb2), eb = tot * nb2 / (na + nb2); if (tot > 0) c += (A[i] - ea) * (A[i] - ea) / ea + (B[i] - eb) * (B[i] - eb) / eb; }
+    const ddl = A.length - 1; return [c, ddl, (c - ddl) / Math.sqrt(2 * ddl)]; };
+  let zMaxVanity = -Infinity; for (let q = 8; q <= 14; q++) zMaxVanity = Math.max(zMaxVanity, zVanity(q)[2]);
+  const q = P.queueMendenhall, [chi2Choisi, ddlChoisi, zChoisi] = zVanity(q), pts = [];
+  [ot, v1, v2].forEach((a, e) => fusion(a, Math.min(q, a.length)).forEach((c, i) => { for (let r = 0; r < 12; r++) pts.push([(i + 1) / 15, c / 260, e]); }));
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pe] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pe; }
+  return { D: 3, brut, nuage: true, unite: 'words per thousand', invariants: {
+    motsMendenhall: { mesure: ecarts, formule: 0, lettresOliver: lettres(ot), moyennesBible: bibleAncien.toFixed(4) + ' ' + bibleNouveau.toFixed(4), ecartBible, chi2Choisi, ddlChoisi, zChoisi, zMaxVanity,
+      note: 'a group not 1000 words, the printed letter totals, the Bible means or their half per cent not recovered' },
+    temoin: { mesure: ecartTypesMill > 3 ? 0 : 1, formule: 0, ecartTypeOliver: ecartType, ecartTypesMill, ecartTypesAtkinson, note: 'witness: the same mean for every author is refuted: Mill and Dickens are 13.5 standard errors apart over 10,000 independent words' } } };
+}
+
+// ---------- 112 : la parallaxe de 61 Cygni, Bessel 1838 (idee : codex 28, sous-agent Claude ; equations : SOURCES, Astron. Nachr. 365-366) ----------
+// Au cours d une annee, 61 Cygni se deplace un peu par rapport a deux etoiles lointaines (a et b) : c est la parallaxe, la premiere mesuree.
+//   Bessel reduit ses mesures a deux systemes de trois equations normales (moindres carres) et les resout.
+// Exact ici : les six inconnues de ses deux systemes (0.3690 et 0.2605 pour la difference de parallaxe) ; les poids et les erreurs moyennes
+//   (sqrt(somme des carres / (n - 3)) et m sqrt(inverse diagonal)) ; la solution commune ou les deux parallaxes sont egales, les equations de b
+//   ponderees par 0.6889 : 0.0171, -0.0293, -0.0209, 0.2395 et 0.3136, comme imprime.
+// Nommes : le poids imprime 24.065 de alpha'' ; le systeme donne 22.065, et l erreur moyenne qu il imprime lui-meme (0.0283) est celle du poids
+//   22.065 (24.065 donnerait 0.0271) : coquille. Le poids 0.6889 vaut 0.83 au carre ; le rapport exact des erreurs (0.1327 / 0.1605) au carre vaut
+//   0.6836 et donnerait 0.3139 : compatible avec un rapport arrondi a 0.83 puis eleve au carre ;
+//   Bessel ne dit pas comment il l obtient (p. 88 : « so finde ich das Gewicht einer Beobachtung von b = 0,6889 »). Refait aussi : l erreur de la
+//   parallaxe commune, 0.1354 / racine(poids 45.04) = 0.0202, comme imprime. Sans ponderation : 0.3037.
+// MESURE : tout ce qui precede a une unite du dernier chiffre imprime, hors le poids nomme.
+// Temoin : parallaxe nulle (sa colonne III) : les sommes de carres restent 3.08 fois (a) et 1.93 fois (b) plus grandes.
+// Dessin (vue de face) : poids des observations de b / 1.5 contre la parallaxe commune / 0.4 ; etiquette 0 la courbe, 1 le poids choisi
+//   (poidsBessel), 2 les deux parallaxes separees 0.3690 et 0.2605.
+function parallaxeBessel(P, n) {
+  const lire = (src) => src.split('|').map((l) => l.split(' ').map(Number)), ea = lire(SOURCES.besselA.valeur), eb = lire(SOURCES.besselB.valeur);
+  const t = Object.fromEntries(SOURCES.besselTexte.valeur.split(' ').map((x) => x.split(':'))), nb = (cle) => Number(t[cle]);
+  const resoudreBessel = (A, b) => { const k = b.length, M = A.map((r, i) => [...r, b[i]]);
+    for (let c = 0; c < k; c++) { let p = c; for (let r = c + 1; r < k; r++) if (Math.abs(M[r][c]) > Math.abs(M[p][c])) p = r; const tmp = M[c]; M[c] = M[p]; M[p] = tmp;
+      for (let r = 0; r < k; r++) { if (r === c) continue; const f = M[r][c] / M[c][c]; for (let j = c; j <= k; j++) M[r][j] -= f * M[c][j]; } }
+    return M.map((r, i) => r[k] / r[i]); };
+  const diagInverse = (A) => A.map((_, j) => resoudreBessel(A, A.map((__, i) => (i === j ? 1 : 0)))[j]);
+  const Na = ea.map((r) => r.slice(0, 3)), ba = ea.map((r) => r[3]), Nb = eb.map((r) => r.slice(0, 3)), bb = eb.map((r) => r[3]);
+  const sa = resoudreBessel(Na, ba), sb = resoudreBessel(Nb, bb), da = diagInverse(Na), db = diagInverse(Nb);
+  const mA = Math.sqrt(nb('ssA') / (nb('nA') - 3)), mB = Math.sqrt(nb('ssB') / (nb('nB') - 3));
+  const matCommune = (w) => [[Na[0][0], Na[0][1], 0, 0, Na[0][2]], [Na[1][0], Na[1][1], 0, 0, Na[1][2]], [0, 0, w * Nb[0][0], w * Nb[0][1], w * Nb[0][2]], [0, 0, w * Nb[1][0], w * Nb[1][1], w * Nb[1][2]],
+    [Na[2][0], Na[2][1], w * Nb[2][0], w * Nb[2][1], Na[2][2] + w * Nb[2][2]]], commune = (w) => resoudreBessel(matCommune(w), [ba[0], ba[1], w * bb[0], w * bb[1], ba[2] + w * bb[2]]);
+  const sII = commune(nb('poids'));
+  const meP = nb('m1') * Math.sqrt(diagInverse(matCommune(nb('poids')))[4]);
+  const verifs = [['alpha', sa[0]], ['alpha1', sa[1]], ['alpha2', sa[2]], ['beta', sb[0]], ['beta1', sb[1]], ['beta2', sb[2]], ['wA1', 1 / da[1]], ['wA2', 1 / da[2]], ['wB1', 1 / db[1]], ['wB2', 1 / db[2]],
+    ['mA', mA], ['mB', mB], ['meA1', mA * Math.sqrt(da[1])], ['meA2', mA * Math.sqrt(da[2])], ['meB1', mB * Math.sqrt(db[1])], ['meB2', mB * Math.sqrt(db[2])],
+    ['IIalpha', sII[0]], ['IIalpha1', sII[1]], ['IIbeta', sII[2]], ['IIbeta1', sII[3]], ['parallaxe', sII[4]], ['meP', meP]];
+  const decimales = (s) => (s.includes('.') ? s.split('.')[1].length : 0), hors = ([cle, val]) => !(Math.abs(val - nb(cle)) <= Number('1e-' + decimales(t[cle])) + 1e-9);
+  const NOMMES = ['wA2'], ecarts = verifs.filter((q) => hors(q) !== NOMMES.includes(q[0])).length;
+  const nonRetrouves = verifs.filter(hors).map(([cle, val]) => cle + ' ' + t[cle] + ' vs ' + val.toFixed(decimales(t[cle]))).join(' ; ');
+  const rapportExact = (nb('mA') / nb('mB')) * (nb('mA') / nb('mB')), SEC = 180 * 3600 / PI, p = nb('parallaxe') / SEC; /* la distance de SA valeur imprimee 0.3136 */
+  const wChoisi = P.poidsBessel, pts = [];
+  for (let k = 0; k <= 60; k++) { const w = 0.3 + 1.2 * k / 60; pts.push([w / 1.5, commune(w)[4] / 0.4, 0]); }
+  for (let r = 0; r < 30; r++) pts.push([wChoisi / 1.5, commune(wChoisi)[4] / 0.4, 1]);
+  for (let k = 0; k <= 30; k++) { pts.push([0.2 + 0.8 * k / 30, sa[2] / 0.4, 2]); pts.push([0.2 + 0.8 * k / 30, sb[2] / 0.4, 2]); }
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pe] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pe; }
+  return { D: 3, brut, nuage: true, unite: 'arcseconds', invariants: {
+    parallaxeBessel: { mesure: ecarts, formule: 0, retrouvesBessel: verifs.length - verifs.filter(hors).length, nonRetrouvesBessel: nonRetrouves, parallaxeSansPoids: commune(1)[4], rapportExact, parallaxeRapportExact: commune(rapportExact)[4],
+      parallaxeChoisie: commune(wChoisi)[4], distanceUA: cosD(p) / sinD(p), note: 'a solution, weight, mean error or the common solution more than one unit of its last printed digit away, other than the named weight' },
+    temoin: { mesure: nb('ssA0') / nb('ssA') > 1.5 && nb('ssB0') / nb('ssB') > 1.5 ? 0 : 1, formule: 0, rapportSommesA: nb('ssA0') / nb('ssA'), rapportSommesB: nb('ssB0') / nb('ssB'), note: 'witness: with zero parallax the sums of squares stay 3.08 (a) and 1.93 (b) times larger' } } };
+}
+
 export const COLONNES = Object.freeze({
+  parallaxeBessel: { colonnes: ['weight of star b / 1.5', 'parallax / 0.4 arcsec', 'common solution, chosen weight or separate parallaxes (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  motsMendenhall: { colonnes: ['letters / 15', 'words / 260', 'Oliver Twist or a Vanity Fair group (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  chaleurLondres: { colonnes: ['(year - 1789) / 29', '(degrees F - 46) / 8', 'London, country or London smoothed (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  survieHalley: { colonnes: ['age / 100', 'alive / 1000 or annuity / 15', 'alive, annuity recomputed, annuity printed or constant risk (label)'], memeLongueur: [], autres: [0, 1, 2] },
   repliquesOmori: { colonnes: ['half day / horizon', 'shocks / 200', 'counts, hyperbola, exponential or yearly mean (label)'], memeLongueur: [], autres: [0, 1, 2] },
   chaleursPetitDulong: { colonnes: ['atomic weight / 14', 'specific heat / 0.2', 'element or the law (label)'], memeLongueur: [], autres: [0, 1, 2] },
   equivalentsFaraday: { colonnes: ['table equivalent / 130', 'grains / 25 or measured equivalent / 130', 'deposited mass, retained trial or explained miss (label)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -3985,9 +4203,21 @@ export const SYSTEMES = Object.freeze([
   { id: 'repliquesOmori', nom: 'Omori 1894: the aftershocks fade like 1 / t', science: 'Seismology', D: 3, nuage: true, params: { horizonOmori: 20 },
     bornes: { horizonOmori: [10, 1300] },
     phrase: 'A visualisation of Fusakichi Omori\'s 1894 count of aftershocks at Gifu: five days of half-daily counts give y = 440.7 / (x + 2.31), which still predicts 0.89 shocks per half day a year later, when 1.18 were felt. The exponential law he tried first predicts 1e-50: that is the witness.' },
+  { id: 'survieHalley', nom: 'Halley 1693: the Breslau life table', science: 'Demography', D: 3, nuage: true, params: { tauxHalley: 6 },
+    bornes: { tauxHalley: [3, 10] },
+    phrase: 'A visualisation of Edmond Halley\'s 1693 table of the living at Breslau: 1000 in their first year, 427 at 42, 20 at 84, 34,000 in all, and the price of a life annuity at six per cent that he drew from it. A constant risk of death would leave only 145 alive at 42: that is the witness.' },
+  { id: 'chaleurLondres', nom: 'Howard 1833: London is warmer than the country', science: 'Meteorology', D: 3, nuage: true, params: { lissageHoward: 1 },
+    bornes: { lissageHoward: [1, 9] },
+    phrase: 'A visualisation of Luke Howard\'s annual means for London and the nearby country, 1789 to 1818: over three periods the city record is warmer by 1.579 degrees Fahrenheit on average, which Howard put down to the city\'s fires and crowding. If the two records did not differ, London would not come out warmer 11 years in 12: that is the witness.' },
+  { id: 'motsMendenhall', nom: 'Mendenhall 1887: the curve of word lengths', science: 'Linguistics', D: 3, nuage: true, params: { queueMendenhall: 11 },
+    bornes: { queueMendenhall: [8, 14] },
+    phrase: 'A visualisation of Thomas Mendenhall\'s 1887 counts of words by length, a thousand at a time, from Oliver Twist and Vanity Fair. His two Vanity Fair groups, which he called quite different, differ no more than chance would make them. Mill and Dickens, 13.5 standard errors apart if words are independent, cannot share one mean: that is the witness.' },
+  { id: 'parallaxeBessel', nom: 'Bessel 1838: the first distance to a star', science: 'Astronomy', D: 3, nuage: true, params: { poidsBessel: 0.6889 },
+    bornes: { poidsBessel: [0.3, 1.5] },
+    phrase: 'A visualisation of Friedrich Bessel\'s 1838 least squares for 61 Cygni: two comparison stars give 0.3690 and 0.2605 arcsecond, and weighting the second by 0.6889 gives his 0.3136, about 658,000 times the Sun\'s distance. With no parallax the misfit stays three and two times larger: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'], parfaitsAmicaux: ['limite'], nombresBernoulli: ['rangB'], problemeJosephus: ['personnes', 'pasK'], zeckendorf: ['entier'], theoremeLucas: ['baseP', 'lignesL'], calkinWilf: ['niveaux'], toursHanoi: ['disques'], regarderDire: ['rangs'], derangements: ['objets', 'graine'], nombresHarmoniques: ['rangs'], suiteCollatz: ['limite'], routineKaprekar: ['longueurK'], stirlingBell: ['elements', 'graine'], motzkinChemins: ['longueurM', 'graine'], periodePisano: ['moduleMax'], indicatriceEuler: ['jusquaN'], goldbachPaires: ['pairMax'], frobeniusPieces: ['pieceMax'], schroderChemins: ['longueurS', 'graine'], triangleNarayana: ['rangN'], suiteRecaman: ['rangR'], suiteKolakoski: ['rangK'], suitePerrin: ['perrinMax'], thueMorse: ['rangT'], suitePadovan: ['rangP'], fourmiLangton: ['pasL'], gammeTemperee: ['divisions'], entropieShannon: ['lettres', 'graine'], atmosphereStandard: [], loiZipf: ['rangsZipf'], gutenbergRichter: ['seismes', 'graine'], mareeVivesEaux: ['jours'], energieLiaison: ['reaction'], courbeKeeling: ['anDebut', 'anFin'], populationMonde: ['decennies'], effetPhotoelectrique: ['metal'], demiViesNPL: ['isotope'], choleraSnow: ['septSemaines', 'graine'], raiesBalmer: ['nPlusHaut'], loiBoyle: ['lignesBoyle'], loiOhm: ['serie'], especesAire: ['inclureIsolees'], michaelisMenten: ['axeLog'], diffusionAlpha: ['orArgent'], argonRayleigh: ['signeCorrection'], carteSturtevant: [], oubliEbbinghaus: [], fievreSemmelweis: ['anneeVue'], densiteCavendish: ['filChoisi'], equivalentJoule: ['colonneVide'], eclipseEddington: [], lynxHudson: ['decalageAns'], gouttesMillikan: ['gouttesMoyennees'], vieGraunt: [], loiHubble1929: [], loiMoseley: ['numerotation'], lumiereMichelson: ['correctionVide'], regressionGalton: [], aberrationBradley: [], interferenceStroop: ['experienceStroop'], exclusionGause: [], mortaliteNightingale: ['anneeNightingale'], equivalentsFaraday: [], chaleursPetitDulong: ['decalagePoids'], repliquesOmori: ['horizonOmori'] };
-const FONCTIONS = { repliquesOmori, chaleursPetitDulong, equivalentsFaraday, mortaliteNightingale, exclusionGause, interferenceStroop, aberrationBradley, regressionGalton, lumiereMichelson, loiMoseley, loiHubble1929, vieGraunt, gouttesMillikan, lynxHudson, eclipseEddington, equivalentJoule, densiteCavendish, fievreSemmelweis, oubliEbbinghaus, carteSturtevant, argonRayleigh, diffusionAlpha, michaelisMenten, especesAire, loiOhm, loiBoyle, raiesBalmer, choleraSnow, demiViesNPL, effetPhotoelectrique, populationMonde, courbeKeeling, energieLiaison, mareeVivesEaux, gutenbergRichter, loiZipf, atmosphereStandard, entropieShannon, gammeTemperee, fourmiLangton, suitePadovan, thueMorse, suitePerrin, suiteKolakoski, suiteRecaman, triangleNarayana, schroderChemins, frobeniusPieces, goldbachPaires, indicatriceEuler, periodePisano, motzkinChemins, stirlingBell, routineKaprekar, suiteCollatz, nombresHarmoniques, derangements, regarderDire, toursHanoi, calkinWilf, theoremeLucas, zeckendorf, problemeJosephus, nombresBernoulli, parfaitsAmicaux, fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'], parfaitsAmicaux: ['limite'], nombresBernoulli: ['rangB'], problemeJosephus: ['personnes', 'pasK'], zeckendorf: ['entier'], theoremeLucas: ['baseP', 'lignesL'], calkinWilf: ['niveaux'], toursHanoi: ['disques'], regarderDire: ['rangs'], derangements: ['objets', 'graine'], nombresHarmoniques: ['rangs'], suiteCollatz: ['limite'], routineKaprekar: ['longueurK'], stirlingBell: ['elements', 'graine'], motzkinChemins: ['longueurM', 'graine'], periodePisano: ['moduleMax'], indicatriceEuler: ['jusquaN'], goldbachPaires: ['pairMax'], frobeniusPieces: ['pieceMax'], schroderChemins: ['longueurS', 'graine'], triangleNarayana: ['rangN'], suiteRecaman: ['rangR'], suiteKolakoski: ['rangK'], suitePerrin: ['perrinMax'], thueMorse: ['rangT'], suitePadovan: ['rangP'], fourmiLangton: ['pasL'], gammeTemperee: ['divisions'], entropieShannon: ['lettres', 'graine'], atmosphereStandard: [], loiZipf: ['rangsZipf'], gutenbergRichter: ['seismes', 'graine'], mareeVivesEaux: ['jours'], energieLiaison: ['reaction'], courbeKeeling: ['anDebut', 'anFin'], populationMonde: ['decennies'], effetPhotoelectrique: ['metal'], demiViesNPL: ['isotope'], choleraSnow: ['septSemaines', 'graine'], raiesBalmer: ['nPlusHaut'], loiBoyle: ['lignesBoyle'], loiOhm: ['serie'], especesAire: ['inclureIsolees'], michaelisMenten: ['axeLog'], diffusionAlpha: ['orArgent'], argonRayleigh: ['signeCorrection'], carteSturtevant: [], oubliEbbinghaus: [], fievreSemmelweis: ['anneeVue'], densiteCavendish: ['filChoisi'], equivalentJoule: ['colonneVide'], eclipseEddington: [], lynxHudson: ['decalageAns'], gouttesMillikan: ['gouttesMoyennees'], vieGraunt: [], loiHubble1929: [], loiMoseley: ['numerotation'], lumiereMichelson: ['correctionVide'], regressionGalton: [], aberrationBradley: [], interferenceStroop: ['experienceStroop'], exclusionGause: [], mortaliteNightingale: ['anneeNightingale'], equivalentsFaraday: [], chaleursPetitDulong: ['decalagePoids'], repliquesOmori: ['horizonOmori'], survieHalley: ['tauxHalley'], chaleurLondres: ['lissageHoward'], motsMendenhall: ['queueMendenhall'], parallaxeBessel: [] };
+const FONCTIONS = { parallaxeBessel, motsMendenhall, chaleurLondres, survieHalley, repliquesOmori, chaleursPetitDulong, equivalentsFaraday, mortaliteNightingale, exclusionGause, interferenceStroop, aberrationBradley, regressionGalton, lumiereMichelson, loiMoseley, loiHubble1929, vieGraunt, gouttesMillikan, lynxHudson, eclipseEddington, equivalentJoule, densiteCavendish, fievreSemmelweis, oubliEbbinghaus, carteSturtevant, argonRayleigh, diffusionAlpha, michaelisMenten, especesAire, loiOhm, loiBoyle, raiesBalmer, choleraSnow, demiViesNPL, effetPhotoelectrique, populationMonde, courbeKeeling, energieLiaison, mareeVivesEaux, gutenbergRichter, loiZipf, atmosphereStandard, entropieShannon, gammeTemperee, fourmiLangton, suitePadovan, thueMorse, suitePerrin, suiteKolakoski, suiteRecaman, triangleNarayana, schroderChemins, frobeniusPieces, goldbachPaires, indicatriceEuler, periodePisano, motzkinChemins, stirlingBell, routineKaprekar, suiteCollatz, nombresHarmoniques, derangements, regarderDire, toursHanoi, calkinWilf, theoremeLucas, zeckendorf, problemeJosephus, nombresBernoulli, parfaitsAmicaux, fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
