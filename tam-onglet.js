@@ -282,6 +282,8 @@ THEMES.ondes.push('anneauxNewton');
 /* game149 : le halo de 22 degres (idee : codex Grok Bot) */
 THEMES.ondes.push('haloGlace');
 const groupeDe = (s) => THEMES.electricite.includes(s.id) ? 'electricite' : THEMES.ondes.includes(s.id) ? 'ondes' : THEMES.maths.includes(s.id) ? 'maths' : THEMES.chimie.includes(s.id) ? 'chimie' : THEMES.biologie.includes(s.id) ? 'biologie' : THEMES.theories.includes(s.id) ? 'theories' : THEMES.champs.includes(s.id) ? 'champs' : THEMES.questions.includes(s.id) ? 'questions' : THEMES.astres.includes(s.id) ? 'astres' : THEMES.trousNoirs.includes(s.id) ? 'trousNoirs'
+  /* correctif 07/11 : information, terre et humanite avaient leur liste et leur entree de menu mais n etaient jamais testees ici (groupes vides) */
+  : THEMES.information.includes(s.id) ? 'information' : THEMES.terre.includes(s.id) ? 'terre' : THEMES.humanite.includes(s.id) ? 'humanite'
   : s.science === 'Quantum mechanics' ? 'quantique' : s.science === 'Fluid mechanics' ? 'fluides'
   : s.science === 'Fractals' || s.science === 'Golden ratio' ? 'fractales' : 'physique';
 /* game79 : la formule de la personne (ou du cerveau) passe par la MEME scene : un « systeme » adapte, vue seule (pas de mint) */

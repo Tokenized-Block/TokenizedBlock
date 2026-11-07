@@ -565,6 +565,12 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok(tous.length >= 55, 'game78 : au moins 55 systemes de science (7 modules) : ' + tous.length);
     for (const f of fichiers) ok(serveur.includes("'" + f.slice(2) + "'"), f + ' est dans la liste servie');
     /* chaque systeme est dans un groupe du menu (aucun orphelin) */
+    /* 2026-11-07 : information, terre et humanite avaient leur liste THEMES.x et leur entree GROUPES mais groupeDe ne les testait jamais :
+     *   trois groupes VIDES en prod depuis game218. Toute liste THEMES.x creee doit etre testee par groupeDe (physique = groupe par defaut). */
+    { const corpsGroupe = (onglet.match(/const groupeDe = \(s\) =>[\s\S]*?: 'physique';/) || [''])[0];
+      const listes = [...new Set([...onglet.matchAll(/THEMES\.([a-zA-Z]+) = \[/g)].map((m) => m[1]).concat([...(onglet.match(/const THEMES = \{[\s\S]*?\n\};/) || [''])[0].matchAll(/^  ([a-zA-Z]+): \[/gm)].map((m) => m[1])))].filter((k) => k !== 'physique' && onglet.includes("['" + k + "', "));
+      const oublies = listes.filter((k) => !corpsGroupe.includes('THEMES.' + k + '.includes(s.id)'));
+      ok(corpsGroupe.length > 0 && listes.length >= 13 && oublies.length === 0, 'groupeDe teste chaque liste THEMES du menu (' + listes.length + ' listes) ; oubliees : ' + oublies.join(', ')); }
     ok(/const groupeDe = \(s\) => THEMES\.electricite\.includes\(s\.id\) \? 'electricite' : THEMES\.ondes\.includes\(s\.id\) \? 'ondes' : THEMES\.maths\.includes\(s\.id\) \? 'maths' : THEMES\.chimie\.includes\(s\.id\) \? 'chimie' : THEMES\.biologie\.includes\(s\.id\) \? 'biologie' : THEMES\.theories\.includes\(s\.id\) \? 'theories' : THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet)
       && /\['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet)
       && /\['biologie', 'Life sciences: DNA, RNA, genes, enzymes, neurons'\]/.test(onglet) && /\['chimie', 'Chemistry: reactions, equilibrium, clocks, gases'\]/.test(onglet) && /\['maths', 'Mathematics: chance, primes, random walks'\]/.test(onglet) && /\['ondes', 'Waves, light & sound'\]/.test(onglet) && /\['electricite', 'Electricity: charges, fields, circuits'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
