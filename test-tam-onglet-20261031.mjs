@@ -280,6 +280,9 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok(/measured 0\.\d+ vs formula 0\.\d+$/.test(ligne('equilibre', run('epidemieSIR', { perteImmunite: 0.1 }).equilibre)), 'temoin : SIRS pose = compare');
     ok(/measured \d+\.\d+ vs exact GR/.test(ligne('precession', run('schwarzschild', {}).precession)), 'temoin : un run normal garde sa mesure');
   }
+  /* 2026-11-07 (vu en prod, rouge prouve par un groupe vide injecte) : quitter une science vide S.P ; S.o doit partir avec, sinon la boucle
+   *   dessine l ancienne oeuvre sans parametres (TypeError a chaque image) quand le groupe suivant ne charge rien. */
+  ok(onglet.includes('if (S.science) { S.origine = null; S.choix = null; S.P = null; S.science = null; S.o = null; }'),'quitter une science efface aussi l oeuvre dessinee (S.o)');
   /* game82 (Phil : « mets les variables au dessus ») : dans la page montee, les curseurs viennent AVANT la scene */
   const corps = onglet.slice(onglet.indexOf('racine.replaceChildren('));
   ok(corps.indexOf('curseurs, verdictTxt') > 0 && corps.indexOf('curseurs, verdictTxt') < corps.indexOf('      scene,') && corps.indexOf('selGroupe, selSys') < corps.indexOf('curseurs, verdictTxt'), 'les variables sont en haut, avec les selecteurs, avant la scene');
@@ -671,6 +674,7 @@ if (!process.env.TAM_MUTANT) {
     ['garde CPU : plafond simultane retire', 'tam-serveur.js', 'if (garde.enCours >= TAM_CALCULS_MAX) return', 'if (false) return'],
     ['garde CPU : budget par IP retire', 'tam-serveur.js', 'if (n > TAM_BUDGET_IP_MINUTE) return', 'if (false) return'],
     ['garde CPU : un cache touche compte dans le budget', 'tam-serveur.js', 'if (parReglage.has(cle)) return parReglage.get(cle);', 'if (parReglage.has(cle)) { const a = admettre(ip); if (a) return a; garde.enCours--; return parReglage.get(cle); }'],
+    ['quitter une science garde l oeuvre dessinee (S.o)', 'tam-onglet.js', 'S.P = null; S.science = null; S.o = null; }', 'S.P = null; S.science = null; }'],
   ];
   /* 2026-11-04 : le dossier etait FIXE (D:\tmp\tam-mut) — deux copies de travail testees en meme temps s ecrasaient leurs mutants
    *   (rouges « pre-existants » vus par un agent sur sa branche). Un dossier unique par execution, sur D: (C: plein), retire a la fin. */

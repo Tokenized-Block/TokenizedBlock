@@ -994,7 +994,9 @@ export function monter(racine, ctx = {}) {
   selGroupe.addEventListener('change', () => {
     peindreGroupe();
     /* revue game79 : en quittant une science, son cerveau (S.origine) et sa graine ne passent pas a un attracteur qu il n a pas dessine */
-    if (S.science) { S.origine = null; S.choix = null; S.P = null; S.science = null; }
+    /* 2026-11-07 : S.P vide mais S.o garde : si le groupe suivant ne charge rien (groupe vide, simuler qui jette), la boucle redessinait
+     *   l ancienne oeuvre avec S.P = null -> TypeError « reading 'ordre' » a chaque image (vu en prod quand 3 groupes etaient vides). */
+    if (S.science) { S.origine = null; S.choix = null; S.P = null; S.science = null; S.o = null; }
     if (selGroupe.value === 'attracteurs') depuisExplorateur();
     else if (selGroupe.value === 'formule') { const spec = F.normaliserSpec({ mode: selMode.value }); peindreExpressions(spec); chargerFormule(spec); }
     else chargerScience(selSys.value);
