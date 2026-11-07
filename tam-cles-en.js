@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game240 */
+  carteSturtevant: 'Sums off, map not recovered, or a middle pair off additivity', positionsRefaites: 'Map positions rebuilt from short intervals', ecartsCourts: 'Observed minus map for BP, BR, (C,O)R', coquillesSturtevant: 'Printed per cents that do not follow from the fractions', pairesMontrees: 'Pairs shown', additifBM: 'B to M on the map', observeBM: 'B to M observed (per cent)',
   /* game239 */
   argonRayleigh: 'Recomputed means or grams per litre off the printed figures', moyenneChimique: 'Chemical nitrogen, mean (grams in the globe)', moyenneAtmospherique: 'Air nitrogen, mean (grams in the globe)', litreChimique: 'Chemical nitrogen (grams per litre)', litreAtmospherique: 'Air nitrogen (grams per litre)', litreAbregeErrone: 'Chemical, with the correction subtracted as in the 1895 abstract', ecartGrammes: 'Air minus chemical (grams)', ecartPourCent: 'Air minus chemical (percent)', enEtendues: 'Gap in whole spreads of the chemical methods', enEcartsTypes: 'Gap in standard deviations of the chemical methods',
   /* game238 */
