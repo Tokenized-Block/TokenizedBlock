@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game265 (idee : codex 29, sous-agent Claude) */
+  ondulationsYoung: {
+    titre: 'Young: the first table of light wavelengths',
+    enUnePhrase: 'Each colour gets a wavelength and a frequency, from red to violet, less than an octave apart.',
+    colonnes: ['colour', 'frequency or length', 'which column'],
+    aRegarder: ['Frequency climbs as the wavelength shrinks.', 'Red to violet spans 1.587, not 2.', 'Change the assumed light time.'],
+    fin: null,
+  },
   /* game264 (idee : codex 29, sous-agent Claude) */
   vitesseNyquist: {
     titre: 'Nyquist: more levels, logarithmically faster',

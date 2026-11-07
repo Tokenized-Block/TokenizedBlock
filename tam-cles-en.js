@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game265 */
+  ondulationsYoung: 'A length or frequency besides the three named off, or a frequency a unit away', longueursRetrouvees: 'Wavelengths recovered from undulations per inch (of 15)', frequencesRetrouvees: 'Frequencies recovered from undulations per inch (of 15)', vitesseSupposee: 'Light speed he assumed (inches per second)', ligne652DepuisL: 'The 652 row recomputed from its wavelength', facteurPuissance: 'His 561 against 2^48', etendueYoung: 'Visible range, violet / red undulations', huitSeptSix: 'Red, yellow, blue scaled to 8 (he says 8, 7, 6)', quarte: 'Red / blue wavelength (he says a fourth, 1.333)', frequenceChoisie: 'Yellow-green frequency for the chosen time', octave: 'An octave', etendueVisible: 'Visible range in the table',
   /* game264 */
   vitesseNyquist: 'A table row besides m = 5, a relative number, the 26 characters or the 2.2 gain off', loiCinq: 'The log law at five levels (printed 230)', mPour230: 'Levels that 230 would mean', lignesQuiTestent: 'Table rows that are not powers of two', rapportIdeaux: 'Ideal three-value / ideal two-value code', morseSurIdeal: 'American and Continental Morse / ideal', gainContinental: 'Continental Morse, two values to three', gainAmericain: 'American Morse to three-value Continental', lineaire16: 'Speed at 16 levels if it grew like m', imprime16: 'Speed at 16 levels in the table',
   /* game263 */
