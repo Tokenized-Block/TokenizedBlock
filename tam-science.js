@@ -266,6 +266,8 @@ export const ECHELLE_PROPRE = {
   arcEnCiel: [2], cordeVibrante: [0, 1, 2], effetDoppler: [2],
   /* game122 : numero de ligne ; temps et courbe ; numero de ligne du triangle */
   lignesChamp: [2], circuitRC: [0, 2], pascalSierpinski: [2],
+  /* game256 : une rose (deux coordonnees du plan) ; cause (etiquette) */
+  mortaliteNightingale: [2],
   /* game255 : jours et volumes ; serie (etiquette) */
   exclusionGause: [2],
   /* game254 : groupe et temps de natures differentes ; condition (etiquette) */

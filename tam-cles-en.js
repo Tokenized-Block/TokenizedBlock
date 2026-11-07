@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game256 */
+  mortaliteNightingale: 'Rates not recovered, one-sided dashes, no January 1855 peak or no 4-fold fall', tauxRetrouves: 'Printed rates recovered from deaths and strength', totalDeces: 'Deaths, April 1854 to March 1856', deces1: 'Deaths, April 1854 to March 1855', deces2: 'Deaths, April 1855 to March 1856', tauxAnnuel1: 'All causes, first year (per 1000)', tauxAnnuel2: 'All causes, second year (per 1000)', partZymotique1: 'Share of deaths from disease, first year', partZymotique2: 'Share of deaths from disease, second year', hiverAvant: 'Disease rate, October 1854 to March 1855 (mean)', hiverApres: 'Disease rate, October 1855 to March 1856 (mean)', janvierConstant: 'January 1855 at constant strength (per 1000)', decembreConstant: 'December 1855 at constant strength (per 1000)',
   /* game255 */
   exclusionGause: 'Constants, K1 or the day-16 exclusion not recovered', volumesTableX: 'Table X volumes from a x b x b', constantesNonArrondies: 'Printed constants that are not the rounded value', k1Retrouve: 'P. aurelia, half loop, days 8-16, volume units', k2Moyen: 'P. caudatum, half loop, days 7-16 (Gause: 64)', uneBoucleAurelia: 'P. aurelia, one loop, volume units (text: 195)', uneBoucleCaudatum: 'P. caudatum, one loop (text: 137)', pcModeleChoisi: 'Model P. caudatum on day 16, chosen beta', paModeleJour16: 'Constant model, P. aurelia on day 16', pcModeleJour16: 'Constant model, P. caudatum on day 16',
   /* game254 */
