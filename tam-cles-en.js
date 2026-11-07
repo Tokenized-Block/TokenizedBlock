@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game285 */
+  maisDarwin: 'A printed total, the crossed mean or the 87 off, or the 17.57 not the named one', huitiemesDarwin: 'Totals in eighths of an inch (crossed, self)', moyennesDarwin: 'Mean heights (inches)', rapportDarwin: 'Self against crossed, crossed = 100', lignesCroiseesPlusHautes: 'Rows where the crossed plant is taller', pSigneDarwin: 'Two-sided sign test', ecartMoyenDarwin: 'Mean difference (inches)',
   /* game284 */
   magnitudesPogson: 'An aperture, the period, a text number, or an observer column off besides Struve 7 and Herschel 14', ouverturesPogson: 'Apertures recovered (cut to 3 figures)', periodePogson: 'Apertures ten times larger five magnitudes on', limiteCalculee: 'Limit of a 15 inch refractor (he prints 15.1)', colonnesHorsPogson: 'Observer magnitudes not recovered', exactementCinq: 'His exactly 5 (1 / half log 2.512)', ouvertureDawes15: 'Aperture for the 15th with a ratio of 4 (inches)',
   /* game283 */

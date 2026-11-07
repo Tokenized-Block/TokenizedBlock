@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game285 (idee : codex 31, sous-agent Claude) */
+  maisDarwin: {
+    titre: 'Darwin: crossed and self-fertilised maize',
+    enUnePhrase: 'Maize grown from crossed seed came up taller than its self-fertilised twin in 13 rows of 15.',
+    colonnes: ['row of the table', 'height', 'crossed, self or self plus your gain'],
+    aRegarder: ['At about 15 percent your dots reach the crossed ones.', 'Two rows go the other way.', 'Both short crossed plants measured 12 inches.'],
+    fin: null,
+  },
   /* game284 (idee : codex 31, sous-agent Claude) */
   magnitudesPogson: {
     titre: 'Pogson: the 2.512 scale of star magnitudes',
