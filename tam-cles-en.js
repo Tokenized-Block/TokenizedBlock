@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game244 */
+  equivalentJoule: 'Material means, vacuum / air ratio or last-series division off', moyennesMateriaux: 'Means in vacuo: water, mercury, cast iron', rapportsVideAirJoule: 'Vacuum / air, series 1 to 5', derniereSerie: 'Last series: 2057.336 / 2.65504', etendueCinq: 'Spread of the five series (share)', moyenneCinq: 'Average of the five series', retenue: 'Value Joule kept (water)',
   /* game243 */
   densiteCavendish: 'Second-wire mean, range or extreme not as in the text', moyenneFil2: 'Second wire, 23 results: mean', etendue23: 'Second wire: range', ecartMax23: 'Second wire: largest gap to 5.48', moyenne29: 'All 29 results: mean', moyenneChoisie: 'Mean drawn', moyenneFil1: 'First wire, 6 results: mean',
   /* game242 */
