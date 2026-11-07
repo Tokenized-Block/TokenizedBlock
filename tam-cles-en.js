@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game266 */
+  picLummer: 'A or B off besides the named rows, a temperature, a Diff or a printed mean off', retrouvesA: 'Rows where lambda_m T matches A (of 8)', retrouvesB: 'Rows where E_m / T^5 matches B (of 8)', diffsRetrouvees: 'Diff column recovered (of 8)', moyenneA: 'Mean of the printed A (Mittel 2940)', moyenneB: 'Mean of the printed B (2188)', penteLambda: 'Log-log slope of lambda_m against T', penteEnergie: 'Log-log slope of E_m against T', rapportT4: 'Largest / smallest E_m / T^4', ecartMaxB: 'Largest gap of B from 2188 (%)',
   /* game265 */
   ondulationsYoung: 'A length or frequency besides the three named off, or a frequency a unit away', longueursRetrouvees: 'Wavelengths recovered from undulations per inch (of 15)', frequencesRetrouvees: 'Frequencies recovered from undulations per inch (of 15)', vitesseSupposee: 'Light speed he assumed (inches per second)', ligne652DepuisL: 'The 652 row recomputed from its wavelength', facteurPuissance: 'His 561 against 2^48', etendueYoung: 'Visible range, violet / red undulations', huitSeptSix: 'Red, yellow, blue scaled to 8 (he says 8, 7, 6)', quarte: 'Red / blue wavelength (he says a fourth, 1.333)', frequenceChoisie: 'Yellow-green frequency for the chosen time', octave: 'An octave', etendueVisible: 'Visible range in the table',
   /* game264 */

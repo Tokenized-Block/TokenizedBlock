@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game266 */
+  picLummer: (P, o, B) => [pt([1646 / 1700, 2928 / 3000, B.centre[2]], C.repere, '1646 K: lambda_m T = 2928')],
   /* game265 */
   ondulationsYoung: (P, o, B) => [pt([6 / 14, 561 / 800, B.centre[2]], C.repere, '561 million million: 2^49, not 2^48')],
   /* game264 */

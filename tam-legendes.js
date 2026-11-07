@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game266 (idee : codex 29, sous-agent Claude) */
+  picLummer: {
+    titre: 'Lummer and Pringsheim: the black body peak',
+    enUnePhrase: 'Heat a black body: its brightest wavelength moves inward and its peak grows as the fifth power of temperature.',
+    colonnes: ['temperature', 'scaled quantity', 'which quantity'],
+    aRegarder: ['At power 5 the first row lies flat.', 'Wavelength times temperature stays level.', 'Try power 4 and watch it climb.'],
+    fin: null,
+  },
   /* game265 (idee : codex 29, sous-agent Claude) */
   ondulationsYoung: {
     titre: 'Young: the first table of light wavelengths',
