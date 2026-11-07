@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game248 */
+  vieGraunt: 'Survivors, his subtractions or the fifth not recovered', esperanceNaissance: 'Life expectancy at birth from his table (years)', entre16et56: 'Alive between 16 and 56 (out of 100)', combattantsRecalcul: '34 % of 199112 men, recomputed', combattantsImprime: 'Same, as printed', geometrique16: 'His geometric method: alive at 16', raisonTable: 'His table: alive at 16 / alive at 6',
   /* game247 */
   gouttesMillikan: '61.120, 4.774 or 6.062 not recovered, or a drop beyond 1 %', moyenne23: 'First 23 drops: mean e^(2/3) x 10^8', moyenne58: 'All 58 drops: mean', moyenne58Imprimee: 'All 58, as printed', eFinal: 'e (10^-10 esu)', nAvogadro: 'Avogadro number N', ecartMaxPourCent: 'Largest drop gap to the mean (percent)', ecartTypePourCent: 'Standard deviation (percent)', moyenneCourante: 'Running mean drawn', e1911EnIncertitudes: 'Earlier value minus final (final uncertainties)',
   /* game246 */

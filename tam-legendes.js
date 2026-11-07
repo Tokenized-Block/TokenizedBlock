@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game248 (idee : codex 26, sous-agent Claude) */
+  vieGraunt: {
+    titre: 'Graunt: the first life table',
+    enUnePhrase: 'In 1662 London, of 100 children only 40 reached sixteen and 1 reached seventy-six.',
+    colonnes: ['age', 'still alive out of 100', 'the table, or a smooth curve'],
+    aRegarder: ['Over a third die before six.', 'Then about a third of the rest each decade.', 'His own formula falls too fast.'],
+    fin: null,
+  },
   /* game247 (idee : codex 25, sous-agent Claude) */
   gouttesMillikan: {
     titre: 'Millikan: the charge of the electron',
