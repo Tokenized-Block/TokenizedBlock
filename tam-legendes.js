@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game232 (idee : codex 23, sous-agent Claude) */
+  choleraSnow: {
+    titre: 'John Snow and the cholera of 1854',
+    enUnePhrase: 'Same streets, two water companies: the houses drinking from the dirty river died eight times as often.',
+    colonnes: ['where the house is', 'where the house is', 'which water, and whether someone died'],
+    aRegarder: ['Both kinds of houses are mixed in the same streets.', 'Deaths cluster in the dirty-water houses.', 'Compare per house, not just deaths.'],
+    fin: null,
+  },
   /* game231 (idee : codex Grok Bot) */
   demiViesNPL: {
     titre: 'Six published half-lives',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game232 */
+  choleraSnow: 'Recomputed ratios outside the range Snow wrote', tauxPour10000: 'Deaths per 10,000 houses, recomputed', rapportRisque: 'Southwark and Vauxhall / Lambeth, first seven weeks', rapportDeuxiemePeriode: 'Same ratio, next seven weeks', coquilles: 'Printed rates that do not follow from the counts', echantillonSV: 'Drawn sample: Southwark and Vauxhall', echantillonLambeth: 'Drawn sample: Lambeth', rapportNaif: 'Deaths alone, without houses (times)',
   /* game231 */
   demiViesNPL: 'Isotopes not leaving exactly 1/2 after one half-life and 1/8 after three', lambdasParJour: 'Decay constant per day +- its uncertainty', isotopeChoisi: 'Isotope chosen', resteChoisi: 'Share left at the chosen number of half-lives', ageTroisDemiViesC14: 'Carbon-14 sample with 1/8 left: age (years)', incertitudeAgeC14: 'Its uncertainty (years)', lineaireVideApres: 'A straight-line decay is empty after (half-lives)',
   /* game230 */
