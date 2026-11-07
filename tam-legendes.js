@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game279 (idee : codex 30, sous-agent Claude) */
+  syllabesKaeding: {
+    titre: 'Kaeding: eleven million German words by length',
+    enUnePhrase: 'Half of all German words have one syllable, and longer words get rarer faster and faster.',
+    colonnes: ['number of syllables', 'number of words', 'corpus or the witness'],
+    aRegarder: ['The classics use the shortest words, law the longest.', 'The geometric line overshoots from 4 syllables on.', 'A few words reach 15 syllables.'],
+    fin: null,
+  },
   /* game278 (idee : codex 30, sous-agent Claude) */
   fonteMacKellar: {
     titre: 'MacKellar: how many of each letter a printer buys',

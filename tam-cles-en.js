@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game279 */
+  syllabesKaeding: 'A summary, row, column or total check off besides the named 8b cell, row 2 mean and 49.76', motsTotal: 'Words counted', syllabesTotal: 'Syllables counted', moyenneKaeding: 'Syllables per word', lignesHors: 'Rows that do not add up (words | syllables)', colonnesHors: 'Columns that do not add up', manque8b: 'Words and syllables missing in row 8b', moyennesHors: 'Row means off the printed one', pourCentUn: 'One-syllable words (%)', geometriqueCinq: 'Five-syllable words if the ratio stayed constant',
   /* game278 */
   fonteMacKellar: 'A count not in hundreds, or a small capital other than T not half its capital', sommeMinuscules: 'Lower-case sorts in the fount', eSurZ: 'e against z', valeursDistinctes: 'Distinct counts among 26 letters', entropieFonte: 'Entropy of the 26 letters (bits)', entropieUniforme: 'Entropy if every letter served alike (bits)', petitesCapitalesHors: 'Small capitals not half their capital', lettresAuDessus: 'Letters above one in 26', eFoisUniforme: 'Share of e against an even share',
   /* game277 */
