@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game257 (idee : codex 27, sous-agent Claude) */
+  equivalentsFaraday: {
+    titre: 'Faraday: one current, chemical equivalents',
+    enUnePhrase: 'The same current frees each substance in proportion to its chemical equivalent, not in equal weights.',
+    colonnes: ['equivalent', 'grains or measured equivalent', 'mass, kept trial or miss'],
+    aRegarder: ['Kept trials sit near the diagonal.', 'The misses fall well below it.', 'More gas, more of every metal, same proportions.'],
+    fin: null,
+  },
   /* game256 (idee : codex 27, sous-agent Claude) */
   mortaliteNightingale: {
     titre: 'Nightingale: an army killed by disease',

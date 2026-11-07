@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game257 */
+  equivalentsFaraday: 'Paragraph 791 chain, retained trials or explained misses not as stated', eauDecomposee: 'Water decomposed, paragraph 791 (grains)', chaineEtain: 'Tin from paragraph 791 (hydrogen = 1)', ecartMoyenFaraday: 'Retained trials: mean distance to the table (%)', ecartMaxEssais: 'Retained trials: largest distance to the table (%)', manquesExpliques: 'Misses Faraday explains (paragraph and value)', moyenneHuitPlomb: 'All eight lead trials averaged, misses included', texte851: 'Paragraph 851 against his own table', masseProportionnelle: 'Tin expected, mass in proportion to the equivalent (grains)', rapportMasses: 'Tin weighed / water decomposed',
   /* game256 */
   mortaliteNightingale: 'Rates not recovered, one-sided dashes, no January 1855 peak or no 4-fold fall', tauxRetrouves: 'Printed rates recovered from deaths and strength', totalDeces: 'Deaths, April 1854 to March 1856', deces1: 'Deaths, April 1854 to March 1855', deces2: 'Deaths, April 1855 to March 1856', tauxAnnuel1: 'All causes, first year (per 1000)', tauxAnnuel2: 'All causes, second year (per 1000)', partZymotique1: 'Share of deaths from disease, first year', partZymotique2: 'Share of deaths from disease, second year', hiverAvant: 'Disease rate, October 1854 to March 1855 (mean)', hiverApres: 'Disease rate, October 1855 to March 1856 (mean)', janvierConstant: 'January 1855 at constant strength (per 1000)', decembreConstant: 'December 1855 at constant strength (per 1000)',
   /* game255 */
