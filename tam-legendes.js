@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game267 (idee : codex 29, sous-agent Claude) */
+  balanceCoulomb: {
+    titre: 'Coulomb: the torsion balance and the inverse square',
+    enUnePhrase: 'Halve the distance between two charged balls and the push needed grows about four times.',
+    colonnes: ['distance', 'twist or time', 'law, trials or oscillations'],
+    aRegarder: ['At power 2 the curve meets the trials.', 'The third trial falls a little short.', 'Try power 1 and the curve misses badly.'],
+    fin: null,
+  },
   /* game266 (idee : codex 29, sous-agent Claude) */
   picLummer: {
     titre: 'Lummer and Pringsheim: the black body peak',
