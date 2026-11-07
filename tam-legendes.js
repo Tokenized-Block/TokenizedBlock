@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game276 (idee : codex 30, sous-agent Claude) */
+  spiralesBeal: {
+    titre: 'Beal: the spirals of 895 cones',
+    enUnePhrase: 'Most cones wind 5 one way and 8 the other, two Fibonacci neighbours, but not all.',
+    colonnes: ['spirals to the right', 'spirals to the left', 'kind of pair'],
+    aRegarder: ['The two big clouds are 5 and 8, both ways round.', 'The European larch shows 5 and 13 instead.', 'The 4 and 7 cones sit off the Fibonacci clouds.'],
+    fin: null,
+  },
   /* game275 (idee : codex 30, sous-agent Claude) */
   variationsHalley: {
     titre: 'Halley: the compass needle drifts west',

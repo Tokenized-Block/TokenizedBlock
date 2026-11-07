@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game276 */
+  spiralesBeal: 'Tree 1 not 155, a total off, or the right-left balance rejected other than in Norway tree 3 and the European larch', conesTotal: 'Cones counted', conesArbre1: 'Cones on Norway spruce tree 1 (text: 155)', partVoisins: 'Share with two neighbouring Fibonacci numbers', partDeuxFib: 'Share with two Fibonacci numbers', conesQuatreSept: 'Cones with 4 and 7 spirals', droiteGauche: 'Smaller number on the right, on the left', pSymetrie: 'Exact binomial p, right against left, all cones', pMelezeEurope: 'Same p, European larch', pArbre3: 'Same p, Norway spruce tree 3', conesExclusAiry: 'Cones of an order Airy excluded',
   /* game275 */
   variationsHalley: 'The 15 degrees, the speeding drift, the westward moves, the text against the table, or Hudson and the Plate not recovered', changeLondres: 'Change at London, 1580 to 1683 (degrees)', tauxLondres: 'Drift at London, four intervals (minutes a year)', versOuest: 'Changes of one place that go west', texteTable: 'Numbers of the text found in the table', londresInterpolee: 'London at the chosen year (degrees, East positive)', plusPetitChangement: 'Smallest change at one place (degrees)',
   /* game274 */
