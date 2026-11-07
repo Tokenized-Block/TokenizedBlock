@@ -574,6 +574,14 @@ ok(/chemin === '\/api\/tam\/choix' \|\| chemin === '\/api\/tam\/oeuvres'/.test(s
     ok(/const groupeDe = \(s\) => THEMES\.electricite\.includes\(s\.id\) \? 'electricite' : THEMES\.ondes\.includes\(s\.id\) \? 'ondes' : THEMES\.maths\.includes\(s\.id\) \? 'maths' : THEMES\.chimie\.includes\(s\.id\) \? 'chimie' : THEMES\.biologie\.includes\(s\.id\) \? 'biologie' : THEMES\.theories\.includes\(s\.id\) \? 'theories' : THEMES\.champs\.includes\(s\.id\) \? 'champs' : THEMES\.questions\.includes\(s\.id\) \? 'questions' : THEMES\.astres\.includes\(s\.id\)/.test(onglet) && /\['astres', 'Stars & our space'\]/.test(onglet)
       && /\['theories', 'Classic theories: magnets, life, chaos, heat, chance, waves'\]/.test(onglet) && /\['questions', 'Big questions: space, quantum, Earth'\]/.test(onglet)
       && /\['biologie', 'Life sciences: DNA, RNA, genes, enzymes, neurons'\]/.test(onglet) && /\['chimie', 'Chemistry: reactions, equilibrium, clocks, gases'\]/.test(onglet) && /\['maths', 'Mathematics: chance, primes, random walks'\]/.test(onglet) && /\['ondes', 'Waves, light & sound'\]/.test(onglet) && /\['electricite', 'Electricity: charges, fields, circuits'\]/.test(onglet), 'menu : groupes par theme (grandes questions, astres, trous noirs, ...)');
+    /* 2026-11-07 : un systeme range dans THEMES.x doit ATTERRIR dans x : si une liste testee plus tot par groupeDe le contient aussi,
+     *   il s affiche ailleurs. On reconstruit THEMES depuis le source (litteral + affectations + push) et on rejoue l ordre de groupeDe. */
+    { const lit = (onglet.match(/const THEMES = \{[\s\S]*?\n\};/) || [''])[0].replace('const THEMES =', 'return');
+      const TH = new Function(lit)(); for (const m of onglet.matchAll(/^THEMES\.([a-zA-Z]+)(?: = (\[[\s\S]*?\]);|\.push\(([^;]*)\);)/gm)) {
+        if (m[2]) TH[m[1]] = new Function('return ' + m[2])(); else TH[m[1]].push(...new Function('return [' + m[3] + ']')()); }
+      const corps = (onglet.match(/const groupeDe = \(s\) =>[\s\S]*?: 'physique';/) || [''])[0], ordre = [...corps.matchAll(/THEMES\.([a-zA-Z]+)\.includes\(s\.id\)/g)].map((m) => m[1]);
+      const mal = []; let total = 0; for (const [g, ids] of Object.entries(TH)) { if (g === 'physique') continue; for (const id of ids) { total++; const premier = ordre.find((k) => TH[k] && TH[k].includes(id)); if (premier !== g) mal.push(id + ' (voulu ' + g + ', obtenu ' + premier + ')'); } }
+      ok(total >= 190 && mal.length === 0, 'chaque systeme d une liste THEMES atterrit dans son groupe (' + total + ' systemes) ; mal classes : ' + mal.join(', ')); }
     /* game112 (vu a l ecran : « Speed: measured 0.0715 » — ma cle vitesse etait redefinie plus bas dans la MEME table, la derniere
      *   gagne en silence ; game111 : « A » et « k » deja pris) : aucune cle en double dans les tables de noms anglais */
     { const t = readFileSync(new URL('./tam-cles-en.js', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, ''), doublons = [];
