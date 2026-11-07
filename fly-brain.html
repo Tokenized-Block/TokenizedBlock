@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Fly brain</title>
+<style>
+  :root { --bg: #05070d; --text: #dfe6f3; --muted: #8a96ad; --pn: #4fd1c5; --kc: #f6c453; --mbon: #f472b6; --dan: #a78bfa; --apl: #f87171; --line: #1a2234; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  header { padding: 16px 16px 6px; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: .02em; }
+  .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; padding: 8px 16px 16px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .scene { position: relative; background: radial-gradient(ellipse at 50% 40%, #0c1222 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+  .legend b { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card { background: #0a0f1b; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  select, button, input[type=range] { width: 100%; }
+  select, button { background: #111a2c; color: var(--text); border: 1px solid #263252; border-radius: 8px; padding: 8px; font: inherit; }
+  button { cursor: pointer; margin-top: 8px; }
+  button:hover { border-color: #3d4f80; }
+  .price { font-size: 26px; font-variant-numeric: tabular-nums; margin-top: 8px; }
+  .state { font-size: 12px; color: var(--muted); }
+  .gauges div { display: grid; grid-template-columns: 52px 1fr 44px; align-items: center; gap: 8px; font-size: 12px; margin: 4px 0; }
+  .bar { height: 7px; background: #141c2e; border-radius: 4px; overflow: hidden; }
+  .bar i { display: block; height: 100%; width: 0; transition: width .25s; }
+  .log { max-height: 260px; overflow-y: auto; font-size: 12px; font-variant-numeric: tabular-nums; }
+  .log p { margin: 0 0 6px; padding-left: 8px; border-left: 2px solid #263252; }
+  .log p.sim { border-left-color: var(--dan); }
+  .log p.live { border-left-color: var(--pn); }
+  .log p.verdict { border-left-color: var(--kc); color: #f3e3b5; }
+  #spark { display: block; width: 100%; height: 48px; margin-top: 8px; }
+  .dial { position: relative; height: 10px; border-radius: 5px; margin: 10px 0 6px; background: linear-gradient(90deg, #f472b6, #1a2234 50%, #4ade80); }
+  #needle { position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: #fff; left: 50%; transition: left .4s; box-shadow: 0 0 10px #fff; }
+  .dialEnds { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+  #verdict { font-size: 20px; margin-top: 4px; }
+  .bounds { font-size: 12px; color: var(--muted); }
+  .bounds li { margin-bottom: 4px; }
+  a { color: #93c5fd; }
+</style>
+</head>
+<body>
+<header>
+  <h1>A real fly's memory circuit, living on tokenized stocks</h1>
+  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), fed the live on-chain price, 24/7. It reacts, learns and leans one way or the other; five minutes later the market says what happened. Nothing is signed, nothing is advice.</div>
+</header>
+<main>
+  <section class="scene">
+    <canvas id="canvas" width="1280" height="800"></canvas>
+    <div class="legend">
+      <span><b style="background:var(--pn)"></b>PN · olfactory input</span>
+      <span><b style="background:var(--kc)"></b>Kenyon · coding</span>
+      <span><b style="background:var(--mbon)"></b>MBON · output</span>
+      <span><b style="background:var(--dan)"></b>Dopamine · reward (PAM)</span>
+      <span><b style="background:#fb923c"></b>Dopamine · punishment (PPL1)</span>
+      <span><b style="background:var(--apl)"></b>APL · inhibition</span>
+    </div>
+  </section>
+  <aside>
+    <div class="card">
+      <h2>Stock</h2>
+      <select id="pick"></select>
+      <div class="price" id="price">—</div>
+      <div class="state" id="state">reading…</div>
+      <canvas id="spark" width="600" height="96"></canvas>
+      <div class="state" id="ref"></div>
+    </div>
+    <div class="card">
+      <h2>Computed tendency</h2>
+      <div id="verdict">Quiet</div>
+      <div class="dial"><span id="needle"></span></div>
+      <div class="dialEnds"><span>avoid</span><span>approach</span></div>
+      <div class="state" id="tally" style="margin-top:8px"></div>
+      <button id="listen">Listen to the brain</button>
+      <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
+    </div>
+    <div class="card">
+      <h2>Computed activity</h2>
+      <div class="gauges" id="gauges"></div>
+      <div class="state" id="output"></div>
+    </div>
+    <div class="card">
+      <h2>Simulation</h2>
+      <label class="state" for="size">Injected move: <span id="sizeValue">−4.0%</span></label>
+      <input type="range" id="size" min="-80" max="80" step="1" value="-40">
+      <button id="inject">Inject this move (simulation)</button>
+    </div>
+    <div class="card">
+      <h2>Log</h2>
+      <div class="log" id="log"></div>
+    </div>
+    <div class="card bounds">
+      <h2>How it differs from a block's brain</h2>
+      <ul>
+        <li><b>A block's brain</b>: 128 spiking neurons whose wiring is derived from the block's own address, so every block has a brain of its own. It is fed the block's own on-chain facts (market cap, GMs, messages, new holders, whether its creator still holds) and shows how the block moves and its mood. A toy network, not a biological copy.</li>
+        <li><b>This brain</b>: 1,119 neurons wired exactly as a real fly's, the same circuit for everyone, measured under the microscope. It is fed a stock's live market price, and it <b>learns</b>: dopamine reshapes its synapses, the memory forms and fades, and it leans toward or away, then meets the consequence.</li>
+        <li><b>Both</b>: no language model, no randomness, public inputs only. Anyone can replay them and get the same result.</li>
+      </ul>
+    </div>
+    <div class="card bounds">
+      <h2>What this model is, and is not</h2>
+      <ul>
+        <li>The neurons, the synapse counts between them, and which dopamine neurons reach which output neuron are <b>measured</b> (electron microscopy). Threshold: 5 synapses; 300 Kenyon cells out of ~2,000, taken by ascending id.</li>
+        <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), read every 10 s, weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
+        <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies; here they carry that teaching signal only, not the circuit's own activity. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening.</li>
+        <li>Activity spreads in proportion to synapse counts and fades within ~2 s once a move has passed. APL (inhibitory) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
+        <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and which PNs receive a rise or a fall (id parity) are <b>ours</b>: a fly does not smell prices.</li>
+        <li>Consequences are judged on the live price 5 minutes later, misses counted next to matches. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
+      </ul>
+      Data: <a href="https://www.janelia.org/project-team/flyem/hemibrain" rel="noopener" target="_blank">hemibrain v1.2, Janelia FlyEM</a>, CC BY 4.0 licence.
+    </div>
+  </aside>
+</main>
+<script type="module" src="fly-brain.js"></script>
+</body>
+</html>
