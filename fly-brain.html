@@ -40,6 +40,11 @@
   #needle { position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: #fff; left: 50%; transition: left .4s; box-shadow: 0 0 10px #fff; }
   .dialEnds { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
   #verdict { font-size: 20px; margin-top: 4px; }
+  .legend span[data-family] { cursor: pointer; user-select: none; }
+  .legend span.off { opacity: .35; text-decoration: line-through; }
+  canvas { cursor: crosshair; touch-action: manipulation; }
+  .neuron { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 13px; min-height: 64px; }
+  .neuron .nname { font-weight: 600; }
   .book { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
   .book .row { display: grid; grid-template-columns: 1fr 70px 110px; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; margin: 3px 0; }
   .bounds { font-size: 12px; color: var(--muted); }
@@ -56,13 +61,14 @@
   <section class="scene">
     <canvas id="canvas" width="1280" height="800"></canvas>
     <div class="legend">
-      <span><b style="background:var(--pn)"></b>PN · olfactory input</span>
-      <span><b style="background:var(--kc)"></b>Kenyon · coding</span>
-      <span><b style="background:var(--mbon)"></b>MBON · output</span>
-      <span><b style="background:var(--dan)"></b>Dopamine · reward (PAM)</span>
-      <span><b style="background:#fb923c"></b>Dopamine · punishment (PPL1)</span>
-      <span><b style="background:var(--apl)"></b>APL · inhibition</span>
+      <span data-family="PN"><b style="background:var(--pn)"></b>PN · olfactory input</span>
+      <span data-family="KC"><b style="background:var(--kc)"></b>Kenyon · coding</span>
+      <span data-family="MBON"><b style="background:var(--mbon)"></b>MBON · output</span>
+      <span data-family="DAN"><b style="background:var(--dan)"></b>Dopamine · reward (PAM)</span>
+      <span data-family="DAN"><b style="background:#fb923c"></b>Dopamine · punishment (PPL1)</span>
+      <span data-family="APL"><b style="background:var(--apl)"></b>APL · inhibition</span>
     </div>
+    <div class="neuron" id="neuron"></div>
   </section>
   <aside>
     <div class="card">
@@ -81,6 +87,8 @@
       <div class="state" id="tally" style="margin-top:8px"></div>
       <div id="book" class="book"></div>
       <button id="listen">Listen to the brain</button>
+      <button id="forget">Erase what it learned on this stock</button>
+      <div class="state" style="margin-top:6px">What it learns is kept in this browser, per stock, so it keeps training from visit to visit. A private window starts a naive fly.</div>
       <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
     </div>
     <div class="card">

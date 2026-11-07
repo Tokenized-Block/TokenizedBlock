@@ -87,6 +87,9 @@ function prepare(circuit) {
   N.edges = circuit.edges.map(([a, b, w]) => [index.get(a), index.get(b), w]).sort((x, y) => y[2] - x[2]).slice(0, 1800);
   N.wMax = N.edges[0][2];
   N.counts = { approach: N.filter((n) => n.valence === 'approach').length, avoid: N.filter((n) => n.valence === 'avoid').length };
+  /* every measured connection of every neuron, for the map: [other neuron, synapses] */
+  N.out = N.map(() => []); N.in = N.map(() => []);
+  for (const [a, b, w] of circuit.edges) { const i = index.get(a), j = index.get(b); N.out[i].push([j, w]); N.in[j].push([i, w]); }
   place(N);
 }
 
@@ -185,6 +188,7 @@ function learn(mix, move, kind) {
   present(drive, { onStart: () => { before = snapshot(); }, onPeak: () => {
     log(`taught: ${mixText(mix)} was followed by ${pct(move, 3)} → ${move > 0 ? 'reward (PAM)' : 'punishment (PPL1)'} dopamine ${fmt(s * 100, 0)}%`, kind);
     showTrace(weakened(before), kind);
+    if (kind === 'live') saveMemory();
   } });
 }
 
@@ -210,7 +214,7 @@ function settle(win, move) {
     b.ret *= 1 + b.pos * move;
   }
   settled++;
-  renderBook();
+  renderBook(); saveMemory();
 }
 function renderBook() {
   $('book').innerHTML = `<div class="state">Paper P&amp;L after ${settled} windows, pool fee ${feePips == null ? '?' : fmt(feePips / 1e4, 2) + '%'} per switch:</div>`
@@ -236,13 +240,25 @@ function draw() {
   const W = canvas.width, H = canvas.height;
   ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(5,7,13,0.35)'; ctx.fillRect(0, 0, W, H);
   ctx.globalCompositeOperation = 'lighter';
+  const focus = selected != null ? selected : hovered;
   for (const [i, j, w] of N.edges) {
-    const a = act[i], base = 0.025 + 0.05 * (w / N.wMax);
+    if (hidden.has(N[i].family) || hidden.has(N[j].family)) continue;
+    const a = act[i], base = (focus != null ? 0.008 : 0.025) + 0.05 * (w / N.wMax);
     ctx.strokeStyle = COLOR[N[i].family]; ctx.globalAlpha = Math.min(0.9, base + a * 0.45 * (0.3 + w / N.wMax));
     ctx.lineWidth = 0.4 + a * 1.2; ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke();
   }
+  /* the focused neuron's real connections: inputs in cyan, outputs in gold, width by synapse count */
+  if (focus != null) {
+    const wMax = Math.max(1, ...N.in[focus].map(([, w]) => w), ...N.out[focus].map(([, w]) => w));
+    for (const [list, color] of [[N.in[focus], '#67e8f9'], [N.out[focus], '#fde68a']]) {
+      ctx.strokeStyle = color;
+      for (const [k, w] of list) { if (hidden.has(N[k].family)) continue; ctx.globalAlpha = 0.25 + 0.6 * w / wMax; ctx.lineWidth = 0.6 + 2.4 * w / wMax;
+        ctx.beginPath(); ctx.moveTo(N[focus].x, N[focus].y); ctx.lineTo(N[k].x, N[k].y); ctx.stroke(); }
+    }
+  }
   for (let j = 0; j < N.length; j++) {
-    const n = N[j], a = act[j], r = (n.family === 'APL' ? 7 : n.family === 'MBON' ? 3.2 : 2.2) + a * 5;
+    if (hidden.has(N[j].family)) continue;
+    const n = N[j], a = act[j], r = (n.family === 'APL' ? 7 : n.family === 'MBON' ? 3.2 : 2.2) + a * 5 + (j === focus ? 5 : 0);
     const c = n.family === 'DAN' && n.dan === 'punishment' ? '#fb923c' : COLOR[n.family];
     ctx.globalAlpha = 0.35 + a * 0.65; ctx.fillStyle = c;
     if (a > 0.08) { ctx.shadowColor = c; ctx.shadowBlur = 14 * a; } else ctx.shadowBlur = 0;
@@ -276,6 +292,78 @@ function gauges() {
   const pos = 50 + 50 * Math.max(-1, Math.min(1, t.t * 4));
   $('needle').style.left = pos + '%';
   $('verdict').textContent = { approach: 'Approach', avoid: 'Avoid', undecided: 'Undecided', quiet: 'Quiet' }[t.word];
+}
+
+/* ── THE MAP, INTERACTIVE: hover or tap a neuron to see what it is, its real connections, and what it has learned. ── */
+const ROLE = {
+  PN: 'Projection neuron: carries a smell from the antenna into the memory centre. Here it carries one kind of transaction.',
+  KC: 'Kenyon cell: one of the cells that code which smell it is. Only about 10% fire at once, so each smell has its own small set.',
+  MBON: 'Output neuron: its vote pushes the fly toward or away from the smell.',
+  DAN: 'Dopamine neuron: the teacher. It weakens the Kenyon to output synapses that were active when it fired.',
+  APL: 'APL: one giant inhibitory cell that keeps Kenyon activity sparse.',
+};
+let hovered = null, selected = null;
+const hidden = new Set();
+function nearest(e) {
+  const r = canvas.getBoundingClientRect(), x = (e.clientX - r.left) * canvas.width / r.width, y = (e.clientY - r.top) * canvas.height / r.height;
+  let best = null, bd = 18 * 18;
+  N.forEach((n, j) => { if (hidden.has(n.family)) return; const d = (n.x - x) ** 2 + (n.y - y) ** 2; if (d < bd) { bd = d; best = j; } });
+  return best;
+}
+function describe(j) {
+  if (j == null) { $('neuron').innerHTML = '<div class="state">Hover or tap a neuron on the map. Tap the legend to hide a family.</div>'; return; }
+  const n = N[j], ins = N.in[j], outs = N.out[j], syn = (l) => l.reduce((s, [, w]) => s + w, 0);
+  const role = n.family === 'DAN' ? ROLE.DAN + (n.dan === 'reward' ? ' This one is a reward neuron (PAM): rises drive it.' : n.dan === 'punishment' ? ' This one is a punishment neuron (PPL1): falls drive it.' : ' Not used as a teacher here (neither PAM nor PPL1).')
+    : n.family === 'MBON' ? ROLE.MBON + (n.valence ? ` Its compartment gets most of its dopamine from ${n.valence === 'avoid' ? 'reward' : 'punishment'} neurons, so here it sits on the ${n.valence} side.` : ' It receives no dopamine in this circuit.')
+    : ROLE[n.family];
+  let learned = '';
+  if (n.family === 'KC') {
+    const w = []; for (const [k] of outs) if (N[k].family === 'MBON') for (const e of inputs[k]) if (e[0] === j && e[2] != null && e[2] < 0.999) w.push(`${N[k].type} ${pct(e[2] - 1, 1)}`);
+    learned = w.length ? `<div class="state">Learned so far (weaker synapses): ${w.slice(0, 6).join(' · ')}</div>` : '<div class="state">Nothing learned through this cell yet.</div>';
+  }
+  if (n.family === 'MBON') {
+    let low = 0, tot = 0; for (const e of inputs[j]) if (e[2] != null) { tot++; if (e[2] < 0.999) low++; }
+    learned = `<div class="state">${low} of its ${tot} Kenyon synapses have been weakened by learning.</div>`;
+  }
+  $('neuron').innerHTML = `<div class="nname" style="color:${COLOR[n.family]}">${n.family} · ${n.type || 'untyped'}</div>`
+    + `<div class="state">Body id ${n.id} (hemibrain v1.2) · activity now ${fmt(act[j] * 100, 1)}%</div>`
+    + `<div style="margin:6px 0">${role}</div>`
+    + `<div class="state">Inputs: ${ins.length} neurons, ${syn(ins)} synapses (cyan) · Outputs: ${outs.length} neurons, ${syn(outs)} synapses (gold), counted at 5 synapses or more within this circuit.</div>`
+    + learned;
+}
+function wireMap() {
+  canvas.addEventListener('pointermove', (e) => { const j = nearest(e); if (j !== hovered) { hovered = j; if (selected == null) describe(j); } });
+  canvas.addEventListener('pointerleave', () => { hovered = null; if (selected == null) describe(null); });
+  canvas.addEventListener('click', (e) => { const j = nearest(e); selected = j === selected ? null : j; describe(selected != null ? selected : null); });
+  document.querySelectorAll('.legend span[data-family]').forEach((s) => s.addEventListener('click', () => {
+    const f = s.dataset.family; if (hidden.has(f)) hidden.delete(f); else hidden.add(f);
+    document.querySelectorAll(`.legend span[data-family="${f}"]`).forEach((x) => x.classList.toggle('off', hidden.has(f)));
+  }));
+  describe(null);
+}
+
+/* ── TRAINING THAT LASTS: what the fly learned on a stock is kept in this browser (per stock), so it keeps training from visit to visit.
+ * Per viewer only; a private window or cleared site data starts a naive fly, and the page says so. ── */
+const memKey = (s) => 'fly-brain-memory-v1-' + s;
+function saveMemory() {
+  try {
+    const m = []; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) m.push(Math.round(e[2] * 1e5));
+    localStorage.setItem(memKey(current.symbol), JSON.stringify({ m, tally, books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { ret: b.ret, switches: b.switches }])), settled, at: Date.now() }));
+  } catch (_) { /* storage refused: the fly still learns, it just forgets on reload */ }
+}
+function loadMemory() {
+  let x = null; try { x = JSON.parse(localStorage.getItem(memKey(current.symbol)) || 'null'); } catch (_) { x = null; }
+  let k = 0;
+  for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) { e[2] = x && Array.isArray(x.m) && Number.isFinite(x.m[k]) ? x.m[k] / 1e5 : 1; k++; }
+  if (x && x.tally) Object.assign(tally, x.tally); else Object.assign(tally, { consistent: 0, opposite: 0, flat: 0, undecided: 0 });
+  for (const [key, b] of Object.entries(books)) Object.assign(b, { pos: 0, ret: x && x.books && x.books[key] ? x.books[key].ret : 1, switches: x && x.books && x.books[key] ? x.books[key].switches : 0 });
+  settled = x && Number.isFinite(x.settled) ? x.settled : 0;
+  log(x ? `memory restored for ${current.symbol}: trained since ${new Date(x.at).toLocaleString('en-GB')}, ${settled} windows` : `a naive fly for ${current.symbol} (no memory kept in this browser yet)`);
+  renderTally(); renderBook();
+}
+function forget() {
+  try { localStorage.removeItem(memKey(current.symbol)); } catch (_) { /* nothing kept */ }
+  loadMemory(); log('memory erased: the fly is naive again');
 }
 
 /* ── BEATS: the computed activity, played. A neuron "fires" on a step when a hash of (step, neuron) falls under its activity: no
@@ -412,7 +500,7 @@ async function readReference() {
 
 function select(i) {
   current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); seen = new Set(); prevWin = null; firstWindow = true;
-  for (const b of Object.values(books)) Object.assign(b, { pos: 0, ret: 1, switches: 0 }); settled = 0; feePips = null; renderBook();
+  feePips = null; loadMemory();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
   clearInterval(timer); clearInterval(refTimer);
   readWindow().then(readReference); timer = setInterval(readWindow, POLL_MS); refTimer = setInterval(readReference, REF_MS);
@@ -424,6 +512,7 @@ async function start() {
   const slider = $('size'), show = () => { const v = Number(slider.value) / 1000; $('sizeValue').textContent = pct(v, 1); };
   slider.addEventListener('input', show); show();
   $('listen').addEventListener('click', listen);
+  $('forget').addEventListener('click', forget);
   /* simulation: a $5,000 "received" odor followed by the chosen move — taught, then asked again */
   $('inject').addEventListener('click', () => { const v = Number(slider.value) / 1000; if (!v) return;
     const mix = { received: 5000, sent: 0, moved: 0 };
@@ -432,7 +521,7 @@ async function start() {
   prepare(circuit);
   log(`circuit loaded: ${N.length} neurons, ${circuit.edges.length} connections ≥ ${circuit.synapseThreshold} synapses; `
     + `${N.counts.approach} approach-side and ${N.counts.avoid} avoid-side MBONs, from measured dopamine inputs`);
-  renderTally();
+  renderTally(); wireMap();
   setInterval(tick, 120);
   requestAnimationFrame(loop);
   select(0);
