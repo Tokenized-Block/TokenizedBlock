@@ -1,7 +1,11 @@
-/* The real memory circuit of the fly (hemibrain v1.2, Janelia FlyEM, CC BY 4.0) living READ-ONLY on the live price of a tokenized stock.
- * Price: /api/fly/price/<address> = the stock's Aerodrome pool (slot0), 24/7, weekends included. Reference: /api/actions/reference/
- * (Chainlink, holds its last value while US markets are closed) — shown next to it, never used as the stimulus.
- * Measured: neurons, synapse counts, which dopamine neurons reach which MBON. Ours, and stated on the page: the dynamics, the rise/fall
+/* The real memory circuit of the fly (hemibrain v1.2, Janelia FlyEM, CC BY 4.0) living READ-ONLY on a tokenized stock's real trades.
+ * The lab protocol for a fly, with the market as the world: every 30 s, the transactions of the window are an ODOR (what the signer did:
+ * received, sent, or a transfer between others, each on its own PN group, strength by USD size); the price move of the NEXT window is the
+ * reward (PAM) or punishment (PPL1). The fly is asked BEFORE it sees the outcome (prediction), then taught with the outcome (learning),
+ * and every learning step shows which synapses it changed.
+ * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
+ * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed.
+ * Measured: neurons, synapse counts, which dopamine neurons reach which MBON. Ours, and stated on the page: the dynamics, the odor
  * mapping onto PNs, the learning constants, the approach/avoid reading. Nothing is signed, nothing is advice. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 
@@ -14,10 +18,11 @@ const STOCKS = ORDER.map((s) => [...POOLS_ACTIONS_AERODROME.entries()].find(([, 
 const COLOR = { PN: '#4fd1c5', KC: '#f6c453', MBON: '#f472b6', DAN: '#a78bfa', APL: '#f87171' };
 const FAMILIES = ['PN', 'KC', 'MBON', 'DAN', 'APL'];
 /* our constants */
-const KC_SHARE = 0.10, DECAY = 0.6, GAIN = 0.5, POLL_MS = 10000, REF_MS = 60000;
+const KC_SHARE = 0.10, DECAY = 0.6, GAIN = 0.5, POLL_MS = 30000, REF_MS = 60000;
 const WEBER_UNIT = 0.0005, WEBER_SPAN = 200;            // a 0.05% move is one unit; strength saturates near 10%
+const ODOR_UNIT_USD = 50, ODOR_SPAN = 2000;              // a $50 trade is one unit; strength saturates near $100k
 const LEARN = 0.15, RECOVER = 0.0002, FLOOR = 0.05;      // a strong move weakens its pattern's synapses by a few %; forgotten over ~10 min (0.12 s / 0.0002)
-const HORIZON_MS = 5 * 60000, FLAT = 0.0005;             // consequences are judged 5 min later; under 0.05% = flat
+const FLAT = 0.0005, REST_TICKS = 14;                     // under 0.05% = flat, no verdict; ~1.7 s of rest between two pulses
 
 const canvas = document.getElementById('canvas'), ctx = canvas.getContext('2d');
 const spark = document.getElementById('spark'), sctx = spark.getContext('2d');
@@ -27,11 +32,14 @@ const pct = (x, d = 2) => (x > 0 ? '+' : x < 0 ? '−' : '') + fmt(Math.abs(x) *
 const clock = (t = Date.now()) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
 let N = [], inputs = [], act, next, kcIdx = [], mbonIdx = [], aplIdx = -1;
-let current = STOCKS[0], lastPrice = null, history = [], pending = [], tally = { consistent: 0, opposite: 0, flat: 0 }, timer = null, refTimer = null;
+let current = STOCKS[0], lastPrice = null, history = [], tally = { consistent: 0, opposite: 0, flat: 0, undecided: 0 }, timer = null, refTimer = null;
+let seen = new Set(), prevWin = null, firstWindow = true;
 
-function log(text, kind) {
+function log(text, kind, link) {
   const p = document.createElement('p'); if (kind) p.className = kind;
-  p.textContent = clock() + ' · ' + text; $('log').prepend(p);
+  p.textContent = clock() + ' · ' + text;
+  if (link) { const a = document.createElement('a'); a.href = link.href; a.textContent = link.text; a.target = '_blank'; a.rel = 'noopener'; p.append(' · ', a); }
+  $('log').prepend(p);
   while ($('log').children.length > 80) $('log').lastChild.remove();
 }
 
@@ -106,18 +114,26 @@ function step(drive) {
   [act, next] = [next, act];
 }
 
-/* A price move becomes a pulse: rises on even-id PNs, falls on odd-id PNs (arbitrary); strength = Weber-Fechner, log of the relative
- * move; a rise drives the PAM (reward) dopamine neurons, a fall the PPL1 (punishment) ones. */
-function pulse(move) {
+/* Weber-Fechner: felt strength = log of the size in units, 0..1 */
+const weber = (x, unit, span) => Math.min(1, Math.log1p(Math.abs(x) / unit) / Math.log1p(span));
+/* The odor of a window: each kind of transaction on its own third of the PNs (id mod 3, arbitrary), strength by its USD size. */
+const ODOR_OF = { received: 0n, sent: 1n, moved: 2n };
+function odorDrive(mix) {
   const drive = new Float64Array(N.length);
-  const strength = Math.min(1, Math.log1p(Math.abs(move) / WEBER_UNIT) / Math.log1p(WEBER_SPAN));
-  const parity = move > 0 ? 0n : 1n, dan = move > 0 ? 'reward' : 'punishment';
   N.forEach((n, j) => {
-    if (n.family === 'PN' && BigInt(n.id) % 2n === parity) drive[j] = strength * (0.6 + 0.4 * ((j * 7919) % 97) / 97);
-    if (n.dan === dan) drive[j] = strength * 0.5;
+    if (n.family !== 'PN') return;
+    for (const [kind, usd] of Object.entries(mix)) if (usd > 0 && ODOR_OF[kind] === BigInt(n.id) % 3n)
+      drive[j] = Math.max(drive[j], weber(usd, ODOR_UNIT_USD, ODOR_SPAN) * (0.6 + 0.4 * ((j * 7919) % 97) / 97));
   });
-  return { drive, strength };
+  return drive;
 }
+/* The outcome: a rise drives the PAM (reward) dopamine neurons, a fall the PPL1 (punishment) ones, strength by Weber-Fechner. */
+function addDopamine(drive, move) {
+  const s = weber(move, WEBER_UNIT, WEBER_SPAN), dan = move > 0 ? 'reward' : 'punishment';
+  if (move) N.forEach((n, j) => { if (n.dan === dan) drive[j] = s * 0.5; });
+  return s;
+}
+const mixText = (mix) => Object.entries(mix).filter(([, v]) => v > 0).map(([k, v]) => `${k} $${fmt(v, 0)}`).join(', ') || 'nothing';
 
 /* The tendency is what the active Kenyon cells still send to each side, against what a naive fly would send (100% = nothing learned):
  * a pattern whose approach synapses were weakened by punishment now drives the avoid side harder, and the other way round. */
@@ -131,44 +147,80 @@ function tendency() {
   return { ap, av, t, word: t > 0.02 ? 'approach' : t < -0.02 ? 'avoid' : 'undecided' };
 }
 
-function memory() {
-  const r = { approach: [0, 0], avoid: [0, 0] };
-  for (const j of mbonIdx) { const v = N[j].valence; if (!v) continue; for (const e of inputs[j]) if (e[2] != null) { r[v][0] += 1 - e[2]; r[v][1]++; } }
-  return { approach: r.approach[1] ? r.approach[0] / r.approach[1] : 0, avoid: r.avoid[1] ? r.avoid[0] / r.avoid[1] : 0 };
+
+/* Pulses are queued and never overlap: each one drives the circuit for 6 steps, then the circuit rests ~1.7 s and fades. */
+const queue = [];
+let pulseSteps = 0, pulseDrive = null, onPeak = null, rest = 0;
+function present(drive, { onStart, onPeak: peakFn } = {}) { queue.push({ drive, onStart, peakFn }); }
+
+/* Synapse trace: the KC->MBON multipliers before a learning pulse, and which ones it weakened. */
+function snapshot() { const s = []; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) s.push(e[2]); return s; }
+function weakened(before) {
+  const out = []; let k = 0;
+  for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) { const d = e[2] - before[k++]; if (d < -0.002) out.push({ i: e[0], j, d }); }
+  return out.sort((a, b) => a.d - b.d);
+}
+let flash = [];
+function showTrace(list, kind) {
+  const until = Date.now() + 6000; flash = list.slice(0, 40).map(({ i, j }) => [i, j, until]);
+  if (!list.length) { log('… no synapse changed enough to show (below 0.2%)', kind); return; }
+  const side = (j) => N[j].valence === 'approach' ? 'approach side' : 'avoid side';
+  const sides = list.reduce((o, x) => { o[side(x.j)] = (o[side(x.j)] || 0) + 1; return o; }, {});
+  log(`… ${list.length} synapses weakened (${Object.entries(sides).map(([s, c]) => c + ' ' + s).join(', ')}); strongest: `
+    + list.slice(0, 3).map(({ i, j, d }) => `${N[i].type} #${N[i].id} → ${N[j].type} ${pct(d, 1)}`).join(' · '), kind);
 }
 
-let pulseSteps = 0, pulseDrive = null, onPeak = null;
-function fire(move, sim, price) {
-  const { drive, strength } = pulse(move);
-  pulseDrive = drive; pulseSteps = 6;
-  log(`${sim ? 'SIMULATION · ' : ''}${current.symbol} ${pct(move, 3)} ${price ? 'to $' + fmt(price) + ' ' : ''}→ input ${fmt(strength * 100, 0)}% `
-    + `(Weber–Fechner), ${move > 0 ? 'reward (PAM)' : 'punishment (PPL1)'} dopamine`, sim ? 'sim' : 'live');
-  onPeak = (t) => {
-    const m = measure(), mem = memory();
-    const say = { approach: 'leans toward it', avoid: 'pulls away from it', undecided: 'is undecided', quiet: 'barely reacts' }[t.word];
-    log(`… the circuit ${say} (this pattern still drives approach at ${fmt(t.ap * 100, 1)}% and avoid at ${fmt(t.av * 100, 1)}% of a naive fly), Kenyon ${m.KC.n}/${m.KC.total}, `
-      + `memory trace: approach side −${fmt(mem.approach * 100, 1)}%, avoid side −${fmt(mem.avoid * 100, 1)}%`, sim ? 'sim' : 'live');
-    if (!sim && price && (t.word === 'approach' || t.word === 'avoid')) pending.push({ t: Date.now(), word: t.word, price, symbol: current.symbol });
-  };
+const SAY = { approach: 'leans toward it', avoid: 'pulls away from it', undecided: 'is undecided', quiet: 'barely reacts' };
+/* Prediction: the odor alone, read at its peak, before the outcome is known. */
+function predict(mix, kind, done) {
+  present(odorDrive(mix), { onPeak: (t) => {
+    log(`smells ${mixText(mix)} → the circuit ${SAY[t.word]} (approach ${fmt(t.ap * 100, 1)}% / avoid ${fmt(t.av * 100, 1)}% of a naive fly) — prediction for the next window`, kind);
+    if (done) done(t.word);
+  } });
+}
+/* Learning: the same odor again, now with the outcome's dopamine; the synapses it weakened are listed and flashed. */
+function learn(mix, move, kind) {
+  const drive = odorDrive(mix), s = addDopamine(drive, move);
+  let before = null;
+  present(drive, { onStart: () => { before = snapshot(); }, onPeak: () => {
+    log(`taught: ${mixText(mix)} was followed by ${pct(move, 3)} → ${move > 0 ? 'reward (PAM)' : 'punishment (PPL1)'} dopamine ${fmt(s * 100, 0)}%`, kind);
+    showTrace(weakened(before), kind);
+  } });
 }
 
-/* Consequences: 5 min after a computed approach/avoid, what did the live price do? Misses are counted next to hits. */
-function judge(priceNow) {
-  const due = pending.filter((p) => Date.now() - p.t >= HORIZON_MS && p.symbol === current.symbol);
-  pending = pending.filter((p) => !due.includes(p));
-  for (const p of due) {
-    const move = priceNow / p.price - 1;
-    const kind = Math.abs(move) < FLAT ? 'flat' : (move > 0) === (p.word === 'approach') ? 'consistent' : 'opposite';
-    tally[kind]++;
-    log(`consequence of ${clock(p.t)} (${p.word}): ${p.symbol} moved ${pct(move, 3)} in 5 min → ${kind === 'flat' ? 'flat, no verdict' : kind === 'consistent' ? 'the tendency matched the move' : 'the move went the other way'}`, 'verdict');
-  }
+/* Consequence: the prediction made on the last window, against the move that followed. Misses next to matches. */
+function judge(prediction, move) {
+  if (prediction !== 'approach' && prediction !== 'avoid') { tally.undecided++; renderTally(); return; }
+  const kind = Math.abs(move) < FLAT ? 'flat' : (move > 0) === (prediction === 'approach') ? 'consistent' : 'opposite';
+  tally[kind]++;
+  log(`consequence: predicted ${prediction}, the price moved ${pct(move, 3)} → ${kind === 'flat' ? 'flat, no verdict' : kind === 'consistent' ? 'it matched' : 'it went the other way'}`, 'verdict');
   renderTally();
+}
+
+/* PAPER book, never real funds, never a signature. The position for a window is decided BEFORE its move: the fly is in the stock when
+ * it predicted "approach", out otherwise (no short: a spot holder cannot). Two dumb witnesses next to it, because a P&L alone proves
+ * nothing: always in, and "in if the last window rose". Every change of position pays the pool's own fee, read on chain. */
+const books = { fly: { label: 'Fly', pos: 0, ret: 1, switches: 0 }, hold: { label: 'Always in', pos: 0, ret: 1, switches: 0 }, momentum: { label: 'Follow last move', pos: 0, ret: 1, switches: 0 } };
+let feePips = null, settled = 0;
+function settle(win, move) {
+  if (feePips == null) return;
+  const want = { fly: win.prediction === 'approach' ? 1 : 0, hold: 1, momentum: win.lastMove > 0 ? 1 : 0 };
+  for (const [k, b] of Object.entries(books)) {
+    if (want[k] !== b.pos) { b.ret *= 1 - feePips / 1e6; b.switches++; b.pos = want[k]; }
+    b.ret *= 1 + b.pos * move;
+  }
+  settled++;
+  renderBook();
+}
+function renderBook() {
+  $('book').innerHTML = `<div class="state">Paper P&amp;L after ${settled} windows, pool fee ${feePips == null ? '?' : fmt(feePips / 1e4, 2) + '%'} per switch:</div>`
+    + Object.values(books).map((b) => `<div class="row"><span>${b.label}</span><span>${pct(b.ret - 1, 3)}</span><span>${b.pos ? 'in' : 'out'} · ${b.switches} switches</span></div>`).join('');
 }
 
 function renderTally() {
   const n = tally.consistent + tally.opposite;
-  $('tally').textContent = `${tally.consistent} matched · ${tally.opposite} opposite · ${tally.flat} flat`
-    + (n ? ` · ${fmt((tally.consistent / n) * 100, 0)}% on ${n} judged` : ' · nothing judged yet') + ` · ${pending.length} waiting`;
+  $('tally').textContent = `${tally.consistent} matched · ${tally.opposite} opposite · ${tally.flat} flat · ${tally.undecided} undecided`
+    + (n ? ` · ${fmt((tally.consistent / n) * 100, 0)}% on ${n} judged` : ' · nothing judged yet');
 }
 
 function measure() {
@@ -196,6 +248,10 @@ function draw() {
     if (a > 0.08) { ctx.shadowColor = c; ctx.shadowBlur = 14 * a; } else ctx.shadowBlur = 0;
     ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
   }
+  /* the synapses the last learning step weakened, in white for 6 s */
+  const now = Date.now(); flash = flash.filter((f) => f[2] > now);
+  ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6;
+  for (const [i, j, until] of flash) { ctx.globalAlpha = Math.min(0.9, (until - now) / 3000); ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke(); }
   ctx.shadowBlur = 0; ctx.globalAlpha = 0.75; ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#8a96ad'; ctx.font = '22px system-ui'; ctx.textAlign = 'center';
   ctx.fillText('approach', W * 0.86, H * 0.08); ctx.fillText('avoid', W * 0.86, H * 0.80);
@@ -268,32 +324,76 @@ function listen() {
  * stimulus, and a later reading would describe that attractor, not the market move. */
 let ticks = 0, peak = null;
 function tick() {
-  const d = pulseSteps > 0 ? pulseDrive : null; if (pulseSteps > 0) pulseSteps--;
+  if (pulseSteps === 0 && rest === 0 && queue.length) {
+    const q = queue.shift(); if (q.onStart) q.onStart();
+    pulseDrive = q.drive; pulseSteps = 6; onPeak = q.peakFn || null;
+  }
+  const d = pulseSteps > 0 ? pulseDrive : null; if (pulseSteps > 0) pulseSteps--; else if (rest > 0) rest--;
   step(d || []);
-  if (d && pulseSteps === 0) { peak = tendency(); if (onPeak) { const f = onPeak; onPeak = null; f(peak); } }
+  if (d && pulseSteps === 0) { peak = tendency(); rest = REST_TICKS; if (onPeak) { const f = onPeak; onPeak = null; f(peak); } }
   beat();
   if (++ticks % 4 === 0) gauges();
 }
 function loop() { draw(); requestAnimationFrame(loop); }
 
-async function readPrice() {
+/* What the chain proves about a transaction, from its Transfer movements and its SIGNER (tx.from, read by the server — a Transfer log
+ * alone can be emitted by anyone): the signer received the stock, sent it, or it moved between two others. Never "buy" or "sell". */
+function classify(t) {
+  const s = t.signataire, mv = Array.isArray(t.mouvements) ? t.mouvements : [];
+  if (s && mv.some((m) => m.vers === s)) return 'received';
+  if (s && mv.some((m) => m.de === s)) return 'sent';
+  return 'moved';
+}
+
+/* One window, every 30 s: price + new transactions. Judge and teach with the last window's odor, then ask about this one. */
+async function readWindow() {
   const stock = current;
-  try {
-    const r = await fetch('/api/fly/price/' + stock.address, { cache: 'no-store' }).then((x) => x.json());
-    if (stock !== current) return;
-    if (!r || !r.ok || typeof r.priceUsd !== 'number') {
-      const last = history.length ? ` · showing the last price read at ${clock(history[history.length - 1].t)}` : '';
-      $('state').textContent = 'live price not read this time (' + ((r && r.why) || 'empty response') + ')' + last + ' · next try in 10 s'; return;
-    }
-    $('price').textContent = '$' + fmt(r.priceUsd);
+  const [r, ac] = await Promise.all([
+    fetch('/api/fly/price/' + stock.address, { cache: 'no-store' }).then((x) => x.json()).catch(() => null),
+    fetch('/api/activite/' + stock.address, { cache: 'no-store' }).then((x) => x.json()).catch(() => null),
+  ]);
+  if (stock !== current) return;
+  let p = null, decimals = null;
+  if (!r || !r.ok || typeof r.priceUsd !== 'number') {
+    const last = history.length ? ` · showing the last price read at ${clock(history[history.length - 1].t)}` : '';
+    $('state').textContent = 'live price not read this time (' + ((r && r.why) || 'empty response') + ')' + last + ' · next try in 30 s';
+  } else {
+    p = r.priceUsd; decimals = r.tokenDecimals; if (Number.isInteger(r.feePips)) feePips = r.feePips;
+    $('price').textContent = '$' + fmt(p);
     $('state').textContent = `live on-chain price · Aerodrome pool · block ${r.block.toLocaleString('en-US')} · ${clock(Date.parse(r.readAt))}`;
-    history.push({ t: Date.now(), p: r.priceUsd }); while (history.length && Date.now() - history[0].t > 3600000) history.shift();
+    history.push({ t: Date.now(), p }); while (history.length && Date.now() - history[0].t > 3600000) history.shift();
     drawSpark();
-    if (lastPrice == null) log(`${stock.symbol} live at $${fmt(r.priceUsd)} (on-chain pool, block ${r.block.toLocaleString('en-US')})`);
-    else if (r.priceUsd !== lastPrice) fire(r.priceUsd / lastPrice - 1, false, r.priceUsd);
-    lastPrice = r.priceUsd;
-    judge(r.priceUsd);
-  } catch (e) { $('state').textContent = 'live price not read: ' + (e && e.message || e); }
+    if (lastPrice == null) log(`${stock.symbol} live at $${fmt(p)} (on-chain pool, block ${r.block.toLocaleString('en-US')})`);
+    lastPrice = p;
+  }
+
+  const mix = { received: 0, sent: 0, moved: 0 };
+  let fresh = [];
+  if (ac && ac.ok && Array.isArray(ac.transactions)) {
+    fresh = ac.transactions.filter((t) => t && t.tx && !seen.has(t.tx)).sort((a, b) => a.bloc - b.bloc);
+    fresh.forEach((t) => seen.add(t.tx));
+    if (firstWindow) { log(`${fresh.length} recent transactions already on chain: the fly starts smelling from the next ones`); fresh = []; }
+  } else if (ac && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
+  firstWindow = false;
+  if (p != null && decimals != null) {
+    fresh.forEach((t, k) => {
+      const units = (Array.isArray(t.mouvements) ? t.mouvements : []).reduce((s, m) => s + Number(BigInt(m.montant || 0)), 0) / 10 ** decimals;
+      const kind = classify(t), usd = units * p; mix[kind] += usd;
+      if (k < 5) log(`${kind}: ${fmt(units, 4)} ${stock.symbol} ($${fmt(usd, 0)})`, 'live', { href: 'https://basescan.org/tx/' + t.tx, text: 'tx ' + t.tx.slice(0, 10) + '…' });
+    });
+    if (fresh.length > 5) log(`… and ${fresh.length - 5} more transactions in this window`, 'live');
+  }
+
+  let lastMove = 0;
+  if (prevWin && p != null && prevWin.price != null) {
+    const move = lastMove = p / prevWin.price - 1;
+    settle(prevWin, move);
+    if (prevWin.hasOdor) { judge(prevWin.prediction, move); if (move !== 0) learn(prevWin.mix, move, 'live'); }
+  }
+  const hasOdor = mix.received + mix.sent + mix.moved > 0;
+  const win = { price: p, mix, hasOdor, prediction: null, lastMove };
+  if (hasOdor) predict(mix, 'live', (word) => { win.prediction = word; });
+  prevWin = win;
 }
 
 /* The Chainlink reference next to the live price: on a weekend it holds Friday's close, and the gap is the market's own view. */
@@ -311,10 +411,11 @@ async function readReference() {
 }
 
 function select(i) {
-  current = STOCKS[i]; lastPrice = null; history = []; drawSpark();
+  current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); seen = new Set(); prevWin = null; firstWindow = true;
+  for (const b of Object.values(books)) Object.assign(b, { pos: 0, ret: 1, switches: 0 }); settled = 0; feePips = null; renderBook();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
   clearInterval(timer); clearInterval(refTimer);
-  readPrice().then(readReference); timer = setInterval(readPrice, POLL_MS); refTimer = setInterval(readReference, REF_MS);
+  readWindow().then(readReference); timer = setInterval(readWindow, POLL_MS); refTimer = setInterval(readReference, REF_MS);
 }
 
 async function start() {
@@ -323,7 +424,10 @@ async function start() {
   const slider = $('size'), show = () => { const v = Number(slider.value) / 1000; $('sizeValue').textContent = pct(v, 1); };
   slider.addEventListener('input', show); show();
   $('listen').addEventListener('click', listen);
-  $('inject').addEventListener('click', () => { const v = Number(slider.value) / 1000; if (v) fire(v, true, null); });
+  /* simulation: a $5,000 "received" odor followed by the chosen move — taught, then asked again */
+  $('inject').addEventListener('click', () => { const v = Number(slider.value) / 1000; if (!v) return;
+    const mix = { received: 5000, sent: 0, moved: 0 };
+    log(`SIMULATION · ${mixText(mix)} followed by ${pct(v, 1)}`, 'sim'); learn(mix, v, 'sim'); predict(mix, 'sim'); });
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
   prepare(circuit);
   log(`circuit loaded: ${N.length} neurons, ${circuit.edges.length} connections ≥ ${circuit.synapseThreshold} synapses; `
