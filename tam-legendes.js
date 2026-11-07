@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game272 (idee : codex 30, sous-agent Claude) */
+  aimantGauss: {
+    titre: 'Gauss: a magnet pulls as the cube of the distance',
+    enUnePhrase: 'Move a magnet twice as far and the needle turns about eight times less.',
+    colonnes: ['distance', 'deflection of the needle', 'position or fitted law'],
+    aRegarder: ['At power 3 the curves run through his dots.', 'At power 2 they overshoot far from the magnet.', 'The second position turns the needle about half as much.'],
+    fin: null,
+  },
   /* game271 (idee : codex 29, sous-agent Claude) */
   deplacementsPerrin: {
     titre: 'Perrin: Brownian jumps obey chance',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game272 */
+  aimantGauss: 'A printed difference or angle off besides v\' at 3.5 m, a1 not 2 a2, or a power not near 3', anglesGauss: 'Deflections read (two positions)', differencesGauss: 'Printed differences equal to observed minus calculated', formulesGauss: 'Calculated angles given back by his coefficients within 0.1 second (strict rounding)', rapportGauss: 'His a1 / a2', exposantsGauss: 'Power of the distance, pure power law, two positions', rmsCubeGauss: 'Mean miss of a one-constant cube law (seconds)', rmsCarreGauss: 'Mean miss of a one-constant square law (seconds)',
   /* game271 */
   deplacementsPerrin: 'A sum, a half-normal fit, 500 x P besides ring 2, or d / e off', sommesProjections: 'Found and calculated totals, two series', trouvesAnneaux: 'Jumps on the target (text: 500)', sigmas: 'Half-normal spread fitted to his calculated columns (micron)', aUneUnite: 'Calculated cells matched within one (rounded model, then raw)', deCalcule: 'Square root of pi over two (he found 0.886)', khiGauss: 'Chi-square, found against calculated', khiUniforme: 'Chi-square if spread evenly',
   /* game270 */
