@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game245 */
+  eclipseEddington: 'Sobral or Principe off Einstein by 2 probable errors, or stars closer to Newton', bordAjuste: 'Seven stars, line through zero: deflection at the limb (arcseconds)', rmsEinstein: 'Stars: rms gap to Einstein (arcseconds)', rmsNewton: 'Stars: rms gap to Newton (arcseconds)', sobralEnEp: 'Sobral minus Einstein (probable errors)', principeEnEp: 'Principe minus Einstein (probable errors)', newtonEnEp: 'Sobral minus Newton (probable errors)',
   /* game244 */
   equivalentJoule: 'Material means, vacuum / air ratio or last-series division off', moyennesMateriaux: 'Means in vacuo: water, mercury, cast iron', rapportsVideAirJoule: 'Vacuum / air, series 1 to 5', derniereSerie: 'Last series: 2057.336 / 2.65504', etendueCinq: 'Spread of the five series (share)', moyenneCinq: 'Average of the five series', retenue: 'Value Joule kept (water)',
   /* game243 */

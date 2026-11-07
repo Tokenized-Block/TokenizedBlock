@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game245 (idee : codex 25, sous-agent Claude) */
+  eclipseEddington: {
+    titre: 'The 1919 eclipse',
+    enUnePhrase: 'During an eclipse, stars beside the Sun looked shifted outward: the Sun bends light, as much as Einstein said.',
+    colonnes: ['shift predicted by Einstein', 'shift measured', 'star, or a prediction line'],
+    aRegarder: ['The stars follow the Einstein line.', 'The Newton line, half as steep, runs below them.', 'Set the factor to 0: no bending fits nothing.'],
+    fin: null,
+  },
   /* game244 (idee : codex 25, sous-agent Claude) */
   equivalentJoule: {
     titre: 'Joule: work becomes heat',
