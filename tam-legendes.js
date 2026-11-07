@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game290 (idee : codex 31, sous-agent Claude) */
+  jaugesHerschel: {
+    titre: 'Herschel: sounding the depth of the Milky Way',
+    enUnePhrase: 'Eight times more stars in the eyepiece means the Milky Way runs twice as deep in that direction.',
+    colonnes: ['stars in the field', 'depth (distances of Sirius)', 'table, 15 minute field or yours'],
+    aRegarder: ['At 15 minutes your curve lies on his table.', 'A wider field makes every depth shallower.', 'The two nebulosity rows sit far to the right.'],
+    fin: null,
+  },
   /* game289 (idee : codex 31, sous-agent Claude) */
   constantesPlanck: {
     titre: 'Planck: the first values of h and k',

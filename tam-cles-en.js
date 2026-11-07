@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game290 */
+  jaugesHerschel: 'A visual ray off the formula besides S = 120 and 290, or the 588 example not 498', lignesHerschel: 'Rows of Table II', BHerschel: '1 / tan(half field)', horsArrondiHerschel: 'Star counts where rounding misses', horsUniteHerschel: 'Star counts more than one unit off', sansMoinsUnHerschel: 'Rows matched without the minus one', exemple588: 'n for 588 stars (printed 498)', penteHerschel: 'Log-log slope of his table', racineCarree100k: 'Square root law at 100 000 stars',
   /* game289 */
   constantesPlanck: 'A printed step not recovered, or the density no longer one unit off', densitePlanck: 'Radiation density at 1 K (printed 7.061e-15)', seriePlanck: 'Sum of 1 / n^4', k4h3Planck: 'k^4 / h^3 from unrounded values', racinePlanck: 'Root of the peak equation', hkPlanck: 'h / k', hPlanck: 'h from his printed steps', kPlanck: 'k from his printed steps', repriseesPlanck: 'Steps recovered at his rounding', residuWien: 'Peak equation with Wien x = 5',
   /* game288 */
