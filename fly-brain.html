@@ -93,6 +93,11 @@
       <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
     </div>
     <div class="card">
+      <h2>The shared fly (server)</h2>
+      <div class="state" style="margin-bottom:6px">The same brain, run by the server on one stock every minute, whether anyone watches or not. Its memory starts again when the server restarts.</div>
+      <div id="shared"><div class="state">reading…</div></div>
+    </div>
+    <div class="card">
       <h2>Computed activity</h2>
       <div class="gauges" id="gauges"></div>
       <div class="state" id="output"></div>
@@ -122,7 +127,7 @@
         <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
         <li>The <b>odor</b> is what the chain proves about each transaction of the window, from its Transfers and its signer: the signer received the stock, sent it, or it moved between others. Never called "buy" or "sell". Each kind lands on its own third of the PNs (id mod 3, our choice), stronger with USD size.</li>
         <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies; here they carry that teaching signal only, not the circuit's own activity. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening.</li>
-        <li>Activity spreads in proportion to synapse counts and fades within ~2 s once a move has passed. APL (inhibitory) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
+        <li>Activity spreads in proportion to synapse counts and fades in about 3 to 4 s once a stimulus has passed; the next one waits for that. APL (inhibitory) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
         <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and which PNs receive a rise or a fall (id parity) are <b>ours</b>: a fly does not smell prices.</li>
         <li>The <b>paper</b> P&amp;L is virtual: no funds, no signature, ever. The fly is in the stock for a window when it predicted "approach", out otherwise; each switch pays the pool's own fee, read on chain. It is shown next to two dumb witnesses (always in; in if the last window rose), because a P&amp;L alone proves nothing.</li>
         <li>The fly is asked <b>before</b> the outcome: its prediction on one window is judged on the next window's price move (under 0.05% = flat, no verdict), misses counted next to matches; then it is taught with that move, and the synapses it weakened flash white. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
