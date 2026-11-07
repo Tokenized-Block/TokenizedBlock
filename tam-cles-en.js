@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game230 */
+  effetPhotoelectrique: 'Metals whose stopping-voltage line misses slope h/e or intercept -phi/e', hSurE: 'Planck constant / electron charge (V s)', hcSurENm: 'hc/e (eV nm)', seuilNm: 'Threshold wavelength of each metal (nm)', K200Ag: 'Silver at 200 nm: maximum electron energy (eV)', metalChoisi: 'Metal chosen', KchoisiEv: 'Maximum electron energy at the chosen light (eV, negative = none)', photon300: 'Photon energy at 300 nm (eV)',
   /* game229 */
   loiKleiber: 'Fitted exponent far from 3/4, or a poor fit', r2: 'Fit quality R2', parKgExtremes: 'kcal per kg per day: smallest / largest animal',
   /* game228 */
