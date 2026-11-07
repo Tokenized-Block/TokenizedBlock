@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game255 */
+  exclusionGause: 'Constants, K1 or the day-16 exclusion not recovered', volumesTableX: 'Table X volumes from a x b x b', constantesNonArrondies: 'Printed constants that are not the rounded value', k1Retrouve: 'P. aurelia, half loop, days 8-16, volume units', k2Moyen: 'P. caudatum, half loop, days 7-16 (Gause: 64)', uneBoucleAurelia: 'P. aurelia, one loop, volume units (text: 195)', uneBoucleCaudatum: 'P. caudatum, one loop (text: 137)', pcModeleChoisi: 'Model P. caudatum on day 16, chosen beta', paModeleJour16: 'Constant model, P. aurelia on day 16', pcModeleJour16: 'Constant model, P. caudatum on day 16',
   /* game254 */
   interferenceStroop: 'Differences or D / NC not recovered for all and for women', effetRelatif1: 'Reading words: slowdown from clashing ink (share)', effetRelatif2: 'Naming ink: slowdown from clashing words (share)', coquillesStroop: 'Printed differences that do not follow from the columns', moyennePondereeNCWd: 'Experiment 2, men and women averaged by size (s)', ncwdAvantCorrection: 'Mean before the error correction, as stated (s)', asymetrie: 'Naming slowdown / reading slowdown',
   /* game253 */

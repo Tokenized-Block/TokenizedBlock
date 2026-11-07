@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game255 (idee : codex 27, sous-agent Claude) */
+  exclusionGause: {
+    titre: 'Gause: two species, one food, one survivor',
+    enUnePhrase: 'Two Paramecium species on the same bacteria: together, one of them disappears in 16 days.',
+    colonnes: ['day', 'volume', 'observed or model, each species'],
+    aRegarder: ['P. caudatum climbs, then sinks to 0.', 'The constant model keeps both alive.', 'Raise beta to make the model exclude.'],
+    fin: null,
+  },
   /* game254 (idee : codex 27, sous-agent Claude) */
   interferenceStroop: {
     titre: 'Stroop: when the word fights the colour',
