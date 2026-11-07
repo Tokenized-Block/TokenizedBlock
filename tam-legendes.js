@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game284 (idee : codex 31, sous-agent Claude) */
+  magnitudesPogson: {
+    titre: 'Pogson: the 2.512 scale of star magnitudes',
+    enUnePhrase: 'Five magnitudes fainter means a hundred times less light and a telescope ten times wider.',
+    colonnes: ['magnitude', 'aperture or other scale', 'his table, your ratio, other observers'],
+    aRegarder: ['At 2.512 your line runs through his apertures.', 'At 4 it climbs far too fast.', 'Bond and Herschel stretched their scales well past his.'],
+    fin: null,
+  },
   /* game283 (idee : codex 31, sous-agent Claude) */
   rayonsThomson: {
     titre: 'J. J. Thomson: the mass to charge of cathode rays',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game284 */
+  magnitudesPogson: 'An aperture, the period, a text number, or an observer column off besides Struve 7 and Herschel 14', ouverturesPogson: 'Apertures recovered (cut to 3 figures)', periodePogson: 'Apertures ten times larger five magnitudes on', limiteCalculee: 'Limit of a 15 inch refractor (he prints 15.1)', colonnesHorsPogson: 'Observer magnitudes not recovered', exactementCinq: 'His exactly 5 (1 / half log 2.512)', ouvertureDawes15: 'Aperture for the 15th with a ratio of 4 (inches)',
   /* game283 */
   rayonsThomson: 'An m / e or v off besides the named rows, or m / e times v not I within 15 % besides row 10', lignesThomson: 'Rows of his table', meHors: 'Rows where m / e is not recovered', vHors: 'Rows where v is not recovered', produitHors: 'Rows where m / e times v is not I', moyenneMeThomson: 'Mean printed m / e', foisPlusPetit: 'Hydrogen ion m / e over his mean',
   /* game282 */
