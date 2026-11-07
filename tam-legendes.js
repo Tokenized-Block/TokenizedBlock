@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game283 (idee : codex 31, sous-agent Claude) */
+  rayonsThomson: {
+    titre: 'J. J. Thomson: the mass to charge of cathode rays',
+    enUnePhrase: 'Whatever the gas, the particles of a cathode ray carry a thousand times more charge for their mass than any ion.',
+    colonnes: ['speed', 'mass over charge', 'printed or recomputed'],
+    aRegarder: ['At 1 the recomputed dots sit on the printed ones.', 'A larger bending field moves them up and to the left.', 'One hydrogen row sits far away: its printed power of ten is off.'],
+    fin: null,
+  },
   /* game282 (idee : codex 31, sous-agent Claude) */
   poisMendel: {
     titre: 'Mendel: the counts of the pea crosses',

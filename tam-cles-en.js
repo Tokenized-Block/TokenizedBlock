@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game283 */
+  rayonsThomson: 'An m / e or v off besides the named rows, or m / e times v not I within 15 % besides row 10', lignesThomson: 'Rows of his table', meHors: 'Rows where m / e is not recovered', vHors: 'Rows where v is not recovered', produitHors: 'Rows where m / e times v is not I', moyenneMeThomson: 'Mean printed m / e', foisPlusPetit: 'Hydrogen ion m / e over his mean',
   /* game282 */
   poisMendel: 'A sum or printed ratio off, the 2.98 not recovered, or a second generation ratio off', sommesMendel: 'Dominant plus recessive equal to the total', rapportsMendel: 'Printed ratios recovered to the hundredth', totauxMendel: 'Dominant and recessive, all seven', deuxCheminsMendel: 'Ratio of the totals, mean of the ratios', secondeGeneration: 'Hybrids over constant forms, two experiments', khiDeuxTroisUn: 'Chi-square against three to one (7 degrees)', khiDeuxUnUn: 'Chi-square against one to one',
   /* game281 */
