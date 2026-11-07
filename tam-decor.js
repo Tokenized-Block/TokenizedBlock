@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game270 */
+  filtreDarcy: (P, o, B) => [pt([2.98 / 14, 4.15 / 20, B.centre[2]], C.repere, '12.86 m above, 9.88 m below: 4.15 l/min')],
   /* game269 */
   critiqueReynolds: (P, o, B) => [pt([(-2.10217 + 2.2) / 0.7, 2.289 / 3, B.centre[2]], C.repere, 'Narrowest pipe: about 2.3 m/s')],
   /* game268 */

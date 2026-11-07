@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game270 */
+  filtreDarcy: 'A ratio besides the named one, a slope, 0.286 / 0.165, a difference besides row 5 or a February ratio off', rapportsRetrouves: 'Flow / pressure ratios within 0.01 (of 16)', rapportsArrondis: 'The same at strict rounding (of 16)', pentesSeries: 'Slopes through the origin, l/s per m2 per m (printed 0.493, 0.145)', differencesRetrouvees: 'February pressure differences recovered (of 12)', rapportsFevrier: 'February flow / difference ratios (of 12)', kFevrier: 'February slope, l/s per m2 per m of head', rmsChoisi: 'Error for the chosen share of the pressure below (l/min)', rmsDessusOrigine: 'Error, pressure above only, through the origin', rmsDessusAffine: 'Error, pressure above only, best straight line', rmsDifference: 'Error, printed pressure difference', rmsDifferenceAffine: 'Error, pressure difference, best straight line',
   /* game269 */
   critiqueReynolds: 'A log of time, log V, log B_s beyond the named rows, the mean or 43.79 off', logTempsRetrouves: 'Log of time recovered at 1e-5 (of 29)', logVRetrouves: 'Log V by the chain of logs at 1e-5 (of 29)', logBsRetrouves5: 'Log B_s recovered at 1e-5 (of 29)', logBsRetrouves4: 'Log B_s recovered at 1e-4 (of 29)', vitessesDepuisLog: 'Velocity recovered from its log (of 29)', moyenneLogBs: 'Mean of the 29 printed log B_s', diametresDepuisLog: 'Diameters his printed logs stand for', sigmaLogBs: 'Spread of log B_s', ligne23Temps: 'Row 23: time its log stands for (printed 116)', penteDiametre: 'Slope of log(V / P) against log D',
   /* game268 */

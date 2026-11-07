@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game270 (idee : codex 29, sous-agent Claude) */
+  filtreDarcy: {
+    titre: 'Darcy: water through sand',
+    enUnePhrase: 'Water seeps through sand in proportion to the drop in pressure across it.',
+    colonnes: ['effective head', 'flow', 'February, fit or first series'],
+    aRegarder: ['With the full pressure below counted, the points line up.', 'Count none of it and they scatter.', 'The first series grows straight with the head.'],
+    fin: null,
+  },
   /* game269 (idee : codex 29, sous-agent Claude) */
   critiqueReynolds: {
     titre: 'Reynolds: when a stream of water turns sinuous',
