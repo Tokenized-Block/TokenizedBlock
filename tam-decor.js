@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game253 */
+  aberrationBradley: (P, o, B) => [pt([0, 40.4 / 60, B.centre[2]], C.repere, 'Maximum about 40.4"')],
   /* game252 */
   regressionGalton: (P, o, B) => [pt([(68.25 - 63) / 11, (68.25 - 63) / 11, B.centre[2]], C.repere, 'Mediocrity: 68 1/4 in')],
   /* game251 */

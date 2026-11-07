@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game253 (idee : codex 27, sous-agent Claude) */
+  aberrationBradley: {
+    titre: 'Bradley: starlight arrives at an angle',
+    enUnePhrase: 'Because the Earth moves, starlight seems to come in slightly tilted, like rain when you run.',
+    colonnes: ['which star', 'arcseconds', 'deduced maximum, observed change or prediction'],
+    aRegarder: ['The observed changes differ a lot from star to star.', 'The deduced maximum is the same for all.', 'Slide the light time: only about 8 minutes fits.'],
+    fin: null,
+  },
   /* game252 (idee : codex 26, sous-agent Claude) */
   regressionGalton: {
     titre: 'Galton: regression towards the mean',

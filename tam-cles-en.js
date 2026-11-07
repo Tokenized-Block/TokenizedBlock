@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game253 */
+  aberrationBradley: 'A star off the mean maximum by 1", the ratio 10210 or the light times not recovered', maximumMoyen: 'Seven stars: mean maximum (arcseconds)', etendueMaxima: 'Largest gap to it (arcseconds)', rapportVitesses: 'Speed of light / speed of the Earth', tempsLumiere: 'Light from the Sun, from 20.2" (seconds)', tempsAdopte: 'Same from 40.5" (seconds)', maximumRomer: 'Maximum implied by Roemer\'s 11 minutes (arcseconds)',
   /* game252 */
   regressionGalton: 'Totals off, direct slope outside 0.6-0.75, or reverse slope 0.4 or more', totalEnfants: 'Adult children counted', totalParents: 'Mid-parents counted', penteMedianes: 'Child medians against mid-parent: slope', pentePonderee: 'Same, weighted by children', penteInverse: 'Mid-parent medians against child: slope', medianeBasse: 'Children of the 64.5 row: median', predictionPente1: 'Like parent, like child: predicted', predictionDeuxTiers: 'Two-thirds law around 68 1/4: predicted',
   /* game251 */
