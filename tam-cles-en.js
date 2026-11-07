@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game275 */
+  variationsHalley: 'The 15 degrees, the speeding drift, the westward moves, the text against the table, or Hudson and the Plate not recovered', changeLondres: 'Change at London, 1580 to 1683 (degrees)', tauxLondres: 'Drift at London, four intervals (minutes a year)', versOuest: 'Changes of one place that go west', texteTable: 'Numbers of the text found in the table', londresInterpolee: 'London at the chosen year (degrees, East positive)', plusPetitChangement: 'Smallest change at one place (degrees)',
   /* game274 */
   tubesPoiseuille: 'A pressure series, the fourth power, the named mean, or the 25 mm lengths not recovered', etenduesPression: 'Spread of pressure x time, two tube lengths (%)', pentesPression: 'Log time against log pressure (two lengths)', ecartsD4: 'Flow / D^4 of each tube, gap to the mean (%)', penteDiametrePoiseuille: 'Log flow against log diameter', moyenneKRecalculee: 'Mean of his seven k (he printed 2495.224)', longueursImplicites: 'Tube length his k and table imply (mm)', facteurNavier: 'Mean miss factor, flow as D cubed', facteurD4: 'Mean miss factor, flow as D to the fourth',
   /* game273 */

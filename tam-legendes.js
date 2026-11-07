@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game275 (idee : codex 30, sous-agent Claude) */
+  variationsHalley: {
+    titre: 'Halley: the compass needle drifts west',
+    enUnePhrase: 'The needle that pointed east of north at London in 1580 pointed west of it a century later.',
+    colonnes: ['year', 'variation of the needle', 'place or chosen year'],
+    aRegarder: ['London crosses true north between 1634 and 1672.', 'Each step to the west is steeper than the last.', 'Paris and Copenhagen go the same way.'],
+    fin: null,
+  },
   /* game274 (idee : codex 30, sous-agent Claude) */
   tubesPoiseuille: {
     titre: 'Poiseuille: flow in fine tubes',
