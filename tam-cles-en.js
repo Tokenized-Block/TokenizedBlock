@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game259 */
+  repliquesOmori: 'Printed means, calculated values, tails, x = 19 or equation (d) not recovered, or k not refitted', kRefait: 'k refitted from the 10 counts (least squares of x y on y)', hRefait: 'h refitted the same way (printed 2.31)', nonArrondisOmori: 'Printed values that are not the rounded ones', prediction1892: 'Hyperbola, middle of 1892 (shocks per half day)', observe1892: 'Observed in 1892 (867 / 732)', rmsHyperbole: 'Hyperbola: rms over the 10 half days', rmsExpo: 'Exponential: rms over the 10 half days', expoNote: 'Exponential note recomputed at x = 0, 1, 2 (printed 175, 138, 108)', anneesD: 'Equation (d): years to 1 shock in 30 days (printed 42)', anneesC: 'Equation (c): years to 1 shock in 60 half days (printed 37)', expoQueue: 'Exponential law in 1892 (shocks per half day)',
   /* game258 */
   chaleursPetitDulong: 'A product off besides platinum, platinum not off, or printed spread over 1.5 %', produitsRetrouves: 'Printed products recovered from their columns', coquillePlatine: 'Platinum: printed against its own columns', cPlatine: 'Specific heat platinum would need for 0.3740', nonArrondis: 'Products truncated, not rounded', cvProduits: 'Spread of the printed products (%)', cvRecalcules: 'Spread of the recomputed products (%)', cvDecale: 'Spread with the chosen shift of weights (%)', cvChaleurs: 'Spread of the specific heats alone (%)', cvCinq: 'Spread with weights shifted by five rows (%)', rapportChaleurs: 'Largest / smallest specific heat',
   /* game257 */

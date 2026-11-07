@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game259 (idee : codex 28, sous-agent Claude) */
+  repliquesOmori: {
+    titre: 'Omori: the aftershocks fade like 1 / t',
+    enUnePhrase: 'Aftershocks thin out in inverse proportion to time, not exponentially: a year on, they still come.',
+    colonnes: ['half days', 'shocks', 'counts, hyperbola, exponential or yearly mean'],
+    aRegarder: ['The first ten counts hug the hyperbola.', 'The exponential dives to nothing.', 'Stretch the horizon to 1892 and 1893.'],
+    fin: null,
+  },
   /* game258 (idee : codex 28, sous-agent Claude) */
   chaleursPetitDulong: {
     titre: 'Petit and Dulong: the same heat for every atom',
