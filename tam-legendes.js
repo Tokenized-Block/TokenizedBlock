@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game278 (idee : codex 30, sous-agent Claude) */
+  fonteMacKellar: {
+    titre: 'MacKellar: how many of each letter a printer buys',
+    enUnePhrase: 'A printer ordered sixty e for every z, because that is how English is written.',
+    colonnes: ['rank of the letter', 'share of the fount', 'fount, even share or your mix'],
+    aRegarder: ['At 0 your curve is his fount: e, t and a lead.', 'At 1 every letter gets the same share.', 'Ten letters sit above the even line.'],
+    fin: null,
+  },
   /* game277 (idee : codex 30, sous-agent Claude) */
   tempsOldham: {
     titre: 'Oldham: earthquake waves through the Earth',

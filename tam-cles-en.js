@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game278 */
+  fonteMacKellar: 'A count not in hundreds, or a small capital other than T not half its capital', sommeMinuscules: 'Lower-case sorts in the fount', eSurZ: 'e against z', valeursDistinctes: 'Distinct counts among 26 letters', entropieFonte: 'Entropy of the 26 letters (bits)', entropieUniforme: 'Entropy if every letter served alike (bits)', petitesCapitalesHors: 'Small capitals not half their capital', lettresAuDessus: 'Letters above one in 26', eFoisUniforme: 'Share of e against an even share',
   /* game277 */
   tempsOldham: 'An arc, depth, chord, speed or modulus off besides the named, or the text ratios matching the table', arcsOldham: 'Arc lengths recovered (cut to 0.1 km)', profondeursOldham: 'Chord depths recovered (1 - cos)', cordesOldham: 'Chords within 1.6 km', vitessesHorsOldham: 'Speeds not recovered (phase, arc or chord, degrees)', distorsionOldham: 'Rigidity from density and second phase speed (1e10 CGS)', compressionOldham: 'Bulk modulus from both speeds (1e10 CGS)', texteTableOldham: 'Text ratios equal to his table (none)', predit150et180: 'Second phase at its 120 degree speed (minutes)',
   /* game276 */
