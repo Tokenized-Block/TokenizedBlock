@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game281 (idee : codex 30, sous-agent Claude) */
+  spiraleMoseley: {
+    titre: 'Moseley: shells grow as logarithmic spirals',
+    enUnePhrase: 'Each whorl of a shell is the same fraction narrower than the one before.',
+    colonnes: ['whorl', 'width', 'shell or your ratio'],
+    aRegarder: ['At 1.18 your dots follow Turbo duplicatus.', 'At 1.13 they follow Buccinum.', 'A ratio of 1.3 shrinks far too fast.'],
+    fin: null,
+  },
   /* game280 (idee : codex 30, sous-agent Claude) */
   tubesHagen: {
     titre: 'Hagen: water through narrow brass tubes',

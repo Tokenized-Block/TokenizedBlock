@@ -501,6 +501,8 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game281 */
+  spiraleMoseley: (P, o, B) => [pt([0.5 / 8, 1.31 / 1.4, B.centre[2]], C.repere, 'Widest whorl of Turbo duplicatus: 1.31 inch')],
   /* game280 */
   tubesHagen: (P, o, B) => [pt([0.3288 / 0.85, 14.887 / 15, B.centre[2]], C.repere, 'Narrow tube: 14.887 inches for 0.3288 Loth a second')],
   /* game279 */

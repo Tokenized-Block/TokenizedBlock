@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game281 */
+  spiraleMoseley: 'A progression term besides duplicatus 3, a fitted ratio off, a formula besides the 1.1806, or a mu besides the third', progressionHors: 'Printed progression terms more than one unit off', raisonsAjustees: 'Ratios fitted to the widths (duplicatus, Buccinum)', formulesMoseley: 'His three powers, recomputed', muBuccinum: 'Six whorls over three (printed 2.45)', ecartArithmetique: 'Mean miss, fixed shrink per whorl (inch)', ecartGeometrique: 'Mean miss, fixed ratio per whorl (inch)',
   /* game280 */
   tubesHagen: 'A residual or probable error off, a head besides the three named, or the r and s claims of p. 431 not met', ecartsHagen: 'Printed residuals recovered', erreursProbablesHagen: 'Probable errors of the head recovered', hHorsHagen: 'Heads more than 0.001 off (series-reading)', rFoisErreur: 'Spread of r over its largest probable error', sFoisErreur: 'Largest gap of s to its mean, in probable errors', ecartLineaire: 'Mean miss, head in proportion to flow only (inch)', ecartDeuxTermes: 'Mean miss of his two-term fit (inch)',
   /* game279 */
