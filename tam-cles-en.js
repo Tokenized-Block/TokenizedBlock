@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game280 */
+  tubesHagen: 'A residual or probable error off, a head besides the three named, or the r and s claims of p. 431 not met', ecartsHagen: 'Printed residuals recovered', erreursProbablesHagen: 'Probable errors of the head recovered', hHorsHagen: 'Heads more than 0.001 off (series-reading)', rFoisErreur: 'Spread of r over its largest probable error', sFoisErreur: 'Largest gap of s to its mean, in probable errors', ecartLineaire: 'Mean miss, head in proportion to flow only (inch)', ecartDeuxTermes: 'Mean miss of his two-term fit (inch)',
   /* game279 */
   syllabesKaeding: 'A summary, row, column or total check off besides the named 8b cell, row 2 mean and 49.76', motsTotal: 'Words counted', syllabesTotal: 'Syllables counted', moyenneKaeding: 'Syllables per word', lignesHors: 'Rows that do not add up (words | syllables)', colonnesHors: 'Columns that do not add up', manque8b: 'Words and syllables missing in row 8b', moyennesHors: 'Row means off the printed one', pourCentUn: 'One-syllable words (%)', geometriqueCinq: 'Five-syllable words if the ratio stayed constant',
   /* game278 */

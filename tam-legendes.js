@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game280 (idee : codex 30, sous-agent Claude) */
+  tubesHagen: {
+    titre: 'Hagen: water through narrow brass tubes',
+    enUnePhrase: 'Part of the push fights friction, part speeds the water up: the second grows with the square of the flow.',
+    colonnes: ['flow', 'head of water', 'readings, his curves or your curves'],
+    aRegarder: ['At 1 your curves sit on his.', 'At 0 the friction line falls short of the fast flows.', 'The narrowest tube needs the highest head.'],
+    fin: null,
+  },
   /* game279 (idee : codex 30, sous-agent Claude) */
   syllabesKaeding: {
     titre: 'Kaeding: eleven million German words by length',
