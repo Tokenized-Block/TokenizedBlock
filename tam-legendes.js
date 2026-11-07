@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game264 (idee : codex 29, sous-agent Claude) */
+  vitesseNyquist: {
+    titre: 'Nyquist: more levels, logarithmically faster',
+    enUnePhrase: 'Sending with more current levels speeds the telegraph only as the logarithm of the number of levels.',
+    colonnes: ['levels', 'relative speed', 'log law, straight line or printed'],
+    aRegarder: ['The printed points sit on the log curve.', 'Five levels: 230 printed, 232 by the law.', 'The straight line runs away from them.'],
+    fin: null,
+  },
   /* game263 (idee : codex 28, sous-agent Claude) */
   parallaxeBessel: {
     titre: 'Bessel: the first distance to a star',

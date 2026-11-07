@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game264 */
+  vitesseNyquist: 'A table row besides m = 5, a relative number, the 26 characters or the 2.2 gain off', loiCinq: 'The log law at five levels (printed 230)', mPour230: 'Levels that 230 would mean', lignesQuiTestent: 'Table rows that are not powers of two', rapportIdeaux: 'Ideal three-value / ideal two-value code', morseSurIdeal: 'American and Continental Morse / ideal', gainContinental: 'Continental Morse, two values to three', gainAmericain: 'American Morse to three-value Continental', lineaire16: 'Speed at 16 levels if it grew like m', imprime16: 'Speed at 16 levels in the table',
   /* game263 */
   parallaxeBessel: 'A solution, weight, mean error or the common solution off, other than the named weight', retrouvesBessel: 'Printed figures recovered (of 22)', nonRetrouvesBessel: 'Printed figures not recovered (named)', parallaxeSansPoids: 'Common parallax with both stars weighted alike', rapportExact: 'Exact squared ratio of the two mean errors', parallaxeRapportExact: 'Common parallax with that exact ratio', parallaxeChoisie: 'Common parallax for the chosen weight', distanceUA: 'Distance in Sun distances for 0.3136', rapportSommesA: 'Star a: zero parallax misfit / fitted misfit', rapportSommesB: 'Star b: zero parallax misfit / fitted misfit',
   /* game262 */
