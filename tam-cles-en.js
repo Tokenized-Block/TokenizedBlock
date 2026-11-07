@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game234 */
+  loiBoyle: 'Volume x pressure off its mean by more than 1 %, or slope off -1', produitMoyen: 'Mean volume x pressure', produitMin: 'Smallest volume x pressure', produitMax: 'Largest volume x pressure', ecartRelatifMax: 'Largest gap to the mean (share)', penteLogLog: 'Slope of log pressure against log volume', penteDebut: 'Slope on the first readings only (shown, not judged)', lignesPrises: 'First readings in that fit', lineaireA12: 'Straight line, predicted at A = 12 (inches)', mesureA12: 'Boyle at A = 12 (inches)',
   /* game233 */
   raiesBalmer: 'Fitted Rydberg constant off R_H, or a Bohr line off NIST', rydbergAjuste: 'Rydberg constant fitted on NIST lines (m^-1)', rapportRH: 'Fitted / R_H', ordonneeSurQuart: 'Intercept / (R / 4)', ecartBohrMaxNm: 'Largest Bohr minus NIST gap (nm)', ecartsBohrNm: 'Bohr minus NIST, line by line (nm)', rapportVideAir: 'Vacuum / air wavelength', ecartRInfiniHalpha: 'H-alpha with an infinite nucleus minus NIST (nm)',
   /* game232 */
