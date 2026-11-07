@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game286 (idee : codex 31, sous-agent Claude) */
+  emanationRutherford: {
+    titre: 'Rutherford: thorium emanation halves every minute',
+    enUnePhrase: 'The radioactive gas from thorium loses half its power every minute, whatever is left.',
+    colonnes: ['time', 'current through the gas', 'readings, halving law or straight line'],
+    aRegarder: ['At 60 seconds your curve runs through his readings.', 'The straight line dives below zero.', 'After six minutes less than two percent remains.'],
+    fin: null,
+  },
   /* game285 (idee : codex 31, sous-agent Claude) */
   maisDarwin: {
     titre: 'Darwin: crossed and self-fertilised maize',

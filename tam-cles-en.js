@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game286 */
+  emanationRutherford: 'A fitted half-life off 60 s, the 86 not cut from 60 / ln 2, or the 20 minute remainder not near a millionth', lambdaAjuste: 'Decay constant fitted (per second)', demiVieAjustee: 'Half-life fitted (s)', demiVieOrigine: 'Half-life through the starting point (s)', unSurLambda: '60 / ln 2 (he prints 86)', resteVingtMinutes: 'Share left after 20 minutes', ecartDroite: 'Mean miss of a straight line', ecartExponentielle: 'Mean miss of the halving law', droiteA360: 'Straight line at 360 s',
   /* game285 */
   maisDarwin: 'A printed total, the crossed mean or the 87 off, or the 17.57 not the named one', huitiemesDarwin: 'Totals in eighths of an inch (crossed, self)', moyennesDarwin: 'Mean heights (inches)', rapportDarwin: 'Self against crossed, crossed = 100', lignesCroiseesPlusHautes: 'Rows where the crossed plant is taller', pSigneDarwin: 'Two-sided sign test', ecartMoyenDarwin: 'Mean difference (inches)',
   /* game284 */
