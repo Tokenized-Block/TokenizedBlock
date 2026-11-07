@@ -109,6 +109,112 @@ function suspects(src) {
   return trouves;
 }
 
+/* ══ TROISIEME MOTIF, AJOUTE LE 2026-11-07 : L ANCRE DE MUTANT RANGEE DANS UN TABLEAU ══════════════
+ * ⛔⛔⛔ MESURE DU JOUR : `test-tam-maths` ROUGE dans la serie complete (M69 « hofstadter : Jacobi
+ *      arrete trop tot » NON APPLIQUE, motif trouve 0 fois), VERT (490/490) dans un worktree LF. Le
+ *      `git merge` sous core.autocrlf=true avait reecrit `tam-maths.js` en CRLF ; l ancre
+ *      `'if (off < 1e-30) break;\n    for (…'` ne trouvait plus rien. Corrige en 71ea8a9.
+ *   ⛔ POURQUOI LE PREMIER MOTIF NE L A PAS VU : il lit l APPEL, `src.split('…\n…')`. Ici l appel est
+ *     `src.split(de)` — le motif vit dans une ligne `MUTANTS = [[nom, de, vers], …]`, loin de l appel.
+ *   ⇒ ON ACCUSE un fichier quand les DEUX moities sont la :
+ *       1. un litteral, ELEMENT D UN TABLEAU, dont un `\n` est colle a un caractere non-blanc ;
+ *       2. une variable lue par `readFileSync(…)` SANS `.replace(/\r…/)` (ni reaffectee ainsi plus
+ *          bas), appliquee a un motif VARIABLE : `src.split(de)`, `src.replace(de, …)`, `includes(de)`…
+ *          ET ce motif sort de la COLONNE ou est l ancre (`[nom, de, vers] = MUTANTS[i]`, `of MUTANTS`).
+ *   ⚠️ CE QU IL LAISSE PASSER, nomme : un motif passe par une fonction (`motif(de)`, qui fait souvent
+ *     `\r?\n` — muter-slots-regleur), une lecture cachee dans une fonction (`lire(f)`), un motif
+ *     renomme avant l appel (`deN = de.replace(…)`), une boucle sans destructuration (`m[1]`). Il vise
+ *     la forme qui a casse, pas le flot de donnees.
+ *   ⛔ VERIFIE PAR EXECUTION, pas seulement par lecture : le 2026-11-07, les 460 bancs a lecture brute
+ *     ont tourne sur un checkout CRLF et un LF, avec une sonde qui note chaque split/replace/includes
+ *     dont le resultat change entre CRLF et LF. Aucun banc vivant ne divergeait ; cette garde rend 0 sur
+ *     le depot et accuse le banc d avant 71ea8a9. */
+const RE_ANCRE = /\n[ \t]*[^\s]|[^\s][ \t]*\n/;
+function ancresDeMutants(brut) {
+  /* le banc lui-meme peut etre en CRLF : on le lit en LF, sinon un `\r` venu du checkout passerait pour un `\r` voulu */
+  const src = brut.replace(/\r\n/g, '\n');
+  const ancres = [];
+  const pile = [];
+  let i = 0, avant = '';
+  const ligneDe = (p) => src.slice(0, p).split('\n').length;
+  while (i < src.length) {
+    const c = src[i], d = src[i + 1];
+    if (c === '/' && d === '/') { const j = src.indexOf('\n', i); i = j < 0 ? src.length : j; continue; }
+    if (c === '/' && d === '*') { const j = src.indexOf('*/', i + 2); i = j < 0 ? src.length : j + 2; continue; }
+    if (c === '"' || c === "'" || c === '`') {
+      let j = i + 1, val = '', prof = 0;
+      while (j < src.length) {
+        const x = src[j];
+        if (x === '\\') { val += src[j + 1] === 'n' ? '\n' : src[j + 1] === 'r' ? '\r' : src[j + 1]; j += 2; continue; }
+        if (c === '`' && x === '$' && src[j + 1] === '{') { prof += 1; j += 2; continue; }
+        if (c === '`' && prof && x === '}') { prof -= 1; j += 1; continue; }
+        if (x === c && !prof) break;
+        if (x === '\n' && c !== '`') break;
+        val += x; j += 1;
+      }
+      const haut = pile[pile.length - 1];
+      if (haut && haut.c === '[' && (avant === '[' || avant === ',') && !val.includes('\r') && RE_ANCRE.test(val)) {
+        const nomme = [...pile].reverse().find((x) => x.nom);
+        if (nomme) ancres.push({ l: ligneDe(i), quoi: JSON.stringify(val.slice(0, 60)), tableau: nomme.nom, col: haut.k });
+      }
+      i = j + 1; avant = 'x'; continue;
+    }
+    if (c === '/' && /^$|[(,=:[!&|?{};]$/.test(avant)) {
+      let j = i + 1, classe = false;
+      while (j < src.length && src[j] !== '\n') {
+        const x = src[j];
+        if (x === '\\') { j += 2; continue; }
+        if (x === '[') classe = true; else if (x === ']') classe = false; else if (x === '/' && !classe) break;
+        j += 1;
+      }
+      i = j + 1; avant = 'x'; continue;
+    }
+    if ('([{'.includes(c)) pile.push({ c, k: 0, nom: c === '[' ? (src.slice(Math.max(0, i - 60), i).match(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*$/) || [])[1] : undefined });
+    else if (')]}'.includes(c)) pile.pop();
+    else if (c === ',' && pile.length) pile[pile.length - 1].k += 1;
+    if (!/\s/.test(c)) avant = /[\w$)\]]/.test(c) ? 'x' : c;
+    i += 1;
+  }
+  if (!ancres.length) return [];
+  /* les variables lues BRUTES : `X = readFileSync(…)` sans `.replace(/\r` juste apres la parenthese fermante */
+  const brutes = new Set();
+  const RE_LECTURE = /\b([A-Za-z_$][\w$]*)\s*=\s*(?:fs\.)?readFileSync\(/g;
+  let m;
+  while ((m = RE_LECTURE.exec(src))) {
+    let j = m.index + m[0].length, prof = 1;
+    while (j < src.length && prof) { if (src[j] === '(') prof += 1; else if (src[j] === ')') prof -= 1; j += 1; }
+    if (/^\s*\.replace\(\s*\/\\r/.test(src.slice(j, j + 40))) continue;
+    const x = m[1];
+    if (new RegExp('\\b' + x.replace(/\$/g, '\\$') + '\\s*=\\s*' + x.replace(/\$/g, '\\$') + '\\.replace\\(\\s*\\/\\\\r').test(src)) continue;
+    brutes.add(x);
+  }
+  const usages = [];
+  for (const x of brutes) {
+    const re = new RegExp('\\b' + x.replace(/\$/g, '\\$') + '\\.(?:split|replace|replaceAll|includes|indexOf|lastIndexOf|startsWith|endsWith)\\(\\s*([A-Za-z_$][\\w$]*)\\s*[,)]', 'g');
+    let u;
+    while ((u = re.exec(src))) {
+      /* ⛔ le tableau doit ALIMENTER cet appel, et par la BONNE COLONNE : on relit, dans les 400 caracteres d avant,
+       *   la destructuration `[nom, de, vers] = NOM[` ou `of NOM`, et l ancre doit etre a la place de `de`.
+       *   Mesure du jour, sans ce lien : 9 accuses, 0 coupable. test-payer-arret (ancres de MUT_APP, appliquees a APP
+       *   et non a la lecture brute SRC_PA) ; test-tam-formule et test-panneau-place (le `\n` est dans `vers` : un LF
+       *   insere dans un fichier CRLF, l ancre, elle, est trouvee). Sans destructuration lisible : innocent. */
+      const avantU = src.slice(Math.max(0, u.index - 400), u.index);
+      for (const nom of new Set(ancres.map((a) => a.tableau))) {
+        const e = nom.replace(/\$/g, '\\$');
+        const ds = [...avantU.matchAll(new RegExp('\\[([^\\[\\]]*)\\]\\s*(?:=\\s*' + e + '\\s*\\[|of\\s+' + e + '\\b)', 'g'))];
+        if (!ds.length) continue;
+        const col = ds[ds.length - 1][1].split(',').map((v) => v.trim()).indexOf(u[1]);
+        const a = ancres.find((x) => x.tableau === nom && x.col === col);
+        if (col >= 0 && a) usages.push({ l: ligneDe(u.index), quoi: u[0].slice(0, 50), a });
+      }
+    }
+  }
+  if (!usages.length) return [];
+  const { a } = usages[0];
+  return [{ l: usages[0].l, quoi: usages[0].quoi + ' <- ' + a.tableau + ' L' + a.l + ' ' + a.quoi,
+    pourquoi: 'ancre de mutant multi-ligne sur une lecture brute (' + ancres.filter((x) => x.tableau === a.tableau).length + ' ancre(s))' }];
+}
+
 /* ⛔⛔ LE TEMOIN D ABORD : la sonde sait-elle dire OUI ? Sans lui, « 0 fichier fautif » serait
  *     indiscernable d un detecteur casse — et ce depot a deja vu un harnais rendre « tout va bien »
  *     parce que son motif ne matchait plus rien. */
@@ -137,11 +243,32 @@ const SAIN_CHEMIN = "  const E = await import(pathToFileURL(path.join(ICI, 'echa
 ok('TEMOIN NEGATIF — les formes corrigees et `new URL(...)` passe a readFileSync ne sont PAS accusees',
   suspects(SAIN_CHEMIN).length === 0, JSON.stringify(suspects(SAIN_CHEMIN)));
 
+/* ⛔⛔ ET LES DEUX TEMOINS DU TROISIEME MOTIF, sur la forme EXACTE de test-tam-maths avant 71ea8a9. */
+const TEMOIN_MUTANT = "const src = readFileSync(SOURCE, 'utf8'), moi = readFileSync(fileURLToPath(import.meta.url), 'utf8');\n"
+  + "const MUTANTS = [\n"
+  + "  ['hofstadter : Jacobi arrete trop tot', 'if (off < 1e-30) break;\\n    for (let p = 0; p < n; p++)', 'if (off < 1e-2) break;\\n    for (let p = 0; p < n; p++)'],\n"
+  + "];\n"
+  + "const [nom, de, vers] = MUTANTS[i], k = src.split(de).length - 1;\n";
+const vusMutant = ancresDeMutants(TEMOIN_MUTANT);
+ok('TEMOIN — la sonde attrape l ancre de mutant qui a rendu M69 « NON APPLIQUE » le 2026-11-07',
+  vusMutant.length === 1, JSON.stringify(vusMutant));
+const SAIN_MUTANT = TEMOIN_MUTANT.replace("readFileSync(SOURCE, 'utf8'),", "readFileSync(SOURCE, 'utf8').replace(/\\r\\n/g, '\\n'),")
+  + "const brut = readFileSync(AUTRE, 'utf8');\nconst MONO = [['un', 'a + b', 'a - b']];\nconsole.log(['x', 'fin;\\nsuite'].join(''));\n";
+ok('TEMOIN NEGATIF — la lecture normalisee (forme de 71ea8a9) n est PAS accusee',
+  ancresDeMutants(SAIN_MUTANT).length === 0, JSON.stringify(ancresDeMutants(SAIN_MUTANT)));
+/* ⛔ ET LE `\n` DANS `vers` SEULEMENT (forme de test-tam-formule) : l ancre est trouvee, rien a accuser. */
+const SAIN_VERS = "const brut = readFileSync(SOURCE, 'utf8');\n"
+  + "const MUTANTS = [\n  ['moins unaire', \"if (t && t.t === '-') { i++; }\", \"if (t && t.t === '-') { i++; }\\n    function f(b) { return b; }\"],\n];\n"
+  + "const [nom, de, vers] = MUTANTS[i], k = brut.split(de).length - 1;\n";
+ok('TEMOIN NEGATIF — un saut de ligne dans `vers` seulement n est PAS accuse',
+  ancresDeMutants(SAIN_VERS).length === 0, JSON.stringify(ancresDeMutants(SAIN_VERS)));
+
 console.log('');
 console.log('  ' + FICHIERS.length + ' fichiers de test/banc examines');
 let fautifs = 0;
 for (const f of FICHIERS) {
-  const t = suspects(readFileSync(new URL(f, D), 'utf8'));
+  const s = readFileSync(new URL(f, D), 'utf8');
+  const t = suspects(s).concat(ancresDeMutants(s));
   if (!t.length) continue;
   fautifs += 1;
   console.log('  KO  ' + f);
