@@ -266,6 +266,8 @@ export const ECHELLE_PROPRE = {
   arcEnCiel: [2], cordeVibrante: [0, 1, 2], effetDoppler: [2],
   /* game122 : numero de ligne ; temps et courbe ; numero de ligne du triangle */
   lignesChamp: [2], circuitRC: [0, 2], pascalSierpinski: [2],
+  /* game237 : concentration et vitesse de natures differentes ; mesure ou courbe (etiquette) */
+  michaelisMenten: [2],
   /* game236 : aire et especes de natures differentes ; ile ou courbe (etiquette) */
   especesAire: [2],
   /* game235 : longueur et torsion de natures differentes ; serie ou loi (etiquette) */

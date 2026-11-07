@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game237 (idee : codex 23, sous-agent Claude) */
+  michaelisMenten: {
+    titre: 'Michaelis and Menten 1913',
+    enUnePhrase: 'An enzyme works faster with more sugar, until it is busy all the time.',
+    colonnes: ['how much sugar', 'how fast it is cut', 'measured or curve'],
+    aRegarder: ['At low sugar the rate climbs fast.', 'At high sugar it flattens out.', 'Halfway up is the constant K.'],
+    fin: null,
+  },
   /* game236 (idee : codex 23, sous-agent Claude) */
   especesAire: {
     titre: 'Birds of the Solomon Islands',

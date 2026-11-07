@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game237 */
+  michaelisMenten: 'Fitted K more than 15 % from the 1913 constant', kAjuste: 'Fitted half-saturation K (mol/L)', vMaxAjuste: 'Fitted maximum rate (relative)', k1913: 'Michaelis and Menten 1913 constant (mol/L)', rapportK: 'Fitted / 1913', doublements: 'Rate ratio when the sugar doubles (low, middle, top)',
   /* game236 */
   especesAire: 'Refitted coefficients off the published ones', semiLogA: 'Species at 1 square mile (fit on near islands)', semiLogB: 'Species gained per tenfold area', ilesSemiLog: 'Near islands in that fit', cAjuste: 'log species at 1 square mile (power fit)', zAjuste: 'Power exponent z (near islands above 1 square mile)', ilesPuissance: 'Islands in that fit', droiteAffichee: 'Line drawn', nusavePredit: 'Nusave predicted by z = 0.25 from Bougainville', nusaveObserve: 'Nusave observed',
   /* game235 */
