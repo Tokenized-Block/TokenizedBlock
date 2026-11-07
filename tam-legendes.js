@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game235 (idee : codex 23, sous-agent Claude) */
+  loiOhm: {
+    titre: 'Ohm 1826: longer wire, weaker current',
+    enUnePhrase: 'A longer wire lets less current through, but the rest of the circuit counts too.',
+    colonnes: ['wire length', 'how far the needle turns', 'which series'],
+    aRegarder: ['The twist falls as the wire grows.', 'It never falls to nothing: the rest of the circuit adds about 20 inches.', 'Move the b slider away from 20: the curve leaves the dots.'],
+    fin: null,
+  },
   /* game234 (idee : codex 23, sous-agent Claude) */
   loiBoyle: {
     titre: 'Boyle 1662: squeezing air',

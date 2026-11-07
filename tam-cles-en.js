@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game235 */
+  loiOhm: 'Free b off 20 1/4, a reading off the law by 3 %, or the brass check off', bLibre: 'b fitted freely, series I to V (Zoll)', aLibre: 'a fitted freely, series I to V', laitonZoll: 'Brass wires as copper length (Zoll)', serieChoisie: 'Series shown', aSerie: 'Ohm a for that series', sansResistanceInterne130: 'Without b: predicted twist at 130 Zoll',
   /* game234 */
   loiBoyle: 'Volume x pressure off its mean by more than 1 %, or slope off -1', produitMoyen: 'Mean volume x pressure', produitMin: 'Smallest volume x pressure', produitMax: 'Largest volume x pressure', ecartRelatifMax: 'Largest gap to the mean (share)', penteLogLog: 'Slope of log pressure against log volume', penteDebut: 'Slope on the first readings only (shown, not judged)', lignesPrises: 'First readings in that fit', lineaireA12: 'Straight line, predicted at A = 12 (inches)', mesureA12: 'Boyle at A = 12 (inches)',
   /* game233 */
