@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game289 */
+  constantesPlanck: 'A printed step not recovered, or the density no longer one unit off', densitePlanck: 'Radiation density at 1 K (printed 7.061e-15)', seriePlanck: 'Sum of 1 / n^4', k4h3Planck: 'k^4 / h^3 from unrounded values', racinePlanck: 'Root of the peak equation', hkPlanck: 'h / k', hPlanck: 'h from his printed steps', kPlanck: 'k from his printed steps', repriseesPlanck: 'Steps recovered at his rounding', residuWien: 'Peak equation with Wien x = 5',
   /* game288 */
   reststrahlenRubens: 'A law column off its formula, the infinite Wien value, or the order of the five laws broken', ecartMaxLois: 'Largest gap between a printed law value and its formula', wienInfiniRubens: 'Wien at infinite temperature (printed 194)', rmsLoisRubens: 'Mean miss to the readings: Wien, Thiesen, Rayleigh, Lummer-Jahnke, Planck', wienSurPlanck: 'Wien miss over Planck miss',
   /* game287 */
