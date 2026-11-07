@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game251 (idee : codex 26, sous-agent Claude) */
+  lumiereMichelson: {
+    titre: 'Michelson: the speed of light',
+    enUnePhrase: 'A spinning mirror timed light over a few hundred metres: about 300000 kilometres every second.',
+    colonnes: ['which measurement', 'speed measured', 'measurement, his result or the exact value'],
+    aRegarder: ['The 100 values scatter by a few hundred km/s.', 'His final line sits above the exact one.', 'Without the vacuum correction it lands closer, by luck.'],
+    fin: null,
+  },
   /* game250 (idee : codex 26, sous-agent Claude) */
   loiMoseley: {
     titre: 'Moseley: counting the elements with X-rays',
