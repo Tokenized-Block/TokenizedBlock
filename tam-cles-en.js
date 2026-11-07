@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game249 */
+  loiHubble1929: 'Magnitudes not recovered, or slope through zero off 465 by more than 50', kOrigine: 'Slope through zero (km/s per Mpc)', kAvecOrdonnee: 'Slope with an intercept (km/s per Mpc)', correlationHubble: 'Correlation of velocity with distance', magnitudeMoyenne: 'Absolute magnitudes recomputed: mean', ecartMagnitudes: 'Largest gap to the printed magnitudes', correlationMelangee: 'Same correlation, velocities shuffled (20 seeds)',
   /* game248 */
   vieGraunt: 'Survivors, his subtractions or the fifth not recovered', esperanceNaissance: 'Life expectancy at birth from his table (years)', entre16et56: 'Alive between 16 and 56 (out of 100)', combattantsRecalcul: '34 % of 199112 men, recomputed', combattantsImprime: 'Same, as printed', geometrique16: 'His geometric method: alive at 16', raisonTable: 'His table: alive at 16 / alive at 6',
   /* game247 */

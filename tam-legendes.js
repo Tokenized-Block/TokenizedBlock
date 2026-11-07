@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game249 (idee : codex 26, sous-agent Claude) */
+  loiHubble1929: {
+    titre: 'Hubble 1929: the farther, the faster',
+    enUnePhrase: 'Distant galaxies race away from us, and the farther they are the faster they go.',
+    colonnes: ['how far the galaxy is', 'how fast it moves away', 'galaxy, or a straight line'],
+    aRegarder: ['The points climb to the right.', 'The nearest ones even come towards us.', 'Tilt the test line to fit the cloud.'],
+    fin: null,
+  },
   /* game248 (idee : codex 26, sous-agent Claude) */
   vieGraunt: {
     titre: 'Graunt: the first life table',
