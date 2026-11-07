@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game258 */
+  chaleursPetitDulong: 'A product off besides platinum, platinum not off, or printed spread over 1.5 %', produitsRetrouves: 'Printed products recovered from their columns', coquillePlatine: 'Platinum: printed against its own columns', cPlatine: 'Specific heat platinum would need for 0.3740', nonArrondis: 'Products truncated, not rounded', cvProduits: 'Spread of the printed products (%)', cvRecalcules: 'Spread of the recomputed products (%)', cvDecale: 'Spread with the chosen shift of weights (%)', cvChaleurs: 'Spread of the specific heats alone (%)', cvCinq: 'Spread with weights shifted by five rows (%)', rapportChaleurs: 'Largest / smallest specific heat',
   /* game257 */
   equivalentsFaraday: 'Paragraph 791 chain, retained trials or explained misses not as stated', eauDecomposee: 'Water decomposed, paragraph 791 (grains)', chaineEtain: 'Tin from paragraph 791 (hydrogen = 1)', ecartMoyenFaraday: 'Retained trials: mean distance to the table (%)', ecartMaxEssais: 'Retained trials: largest distance to the table (%)', manquesExpliques: 'Misses Faraday explains (paragraph and value)', moyenneHuitPlomb: 'All eight lead trials averaged, misses included', texte851: 'Paragraph 851 against his own table', masseProportionnelle: 'Tin expected, mass in proportion to the equivalent (grains)', rapportMasses: 'Tin weighed / water decomposed',
   /* game256 */

@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game258 (idee : codex 28, sous-agent Claude) */
+  chaleursPetitDulong: {
+    titre: 'Petit and Dulong: the same heat for every atom',
+    enUnePhrase: 'Heavy atoms need little heat per gram, light ones a lot: per atom it is the same.',
+    colonnes: ['atomic weight', 'specific heat', 'element or the law'],
+    aRegarder: ['The thirteen elements hug one curve.', 'Platinum sits off its printed product.', 'Shift the weights and the curve breaks.'],
+    fin: null,
+  },
   /* game257 (idee : codex 27, sous-agent Claude) */
   equivalentsFaraday: {
     titre: 'Faraday: one current, chemical equivalents',
