@@ -342,7 +342,8 @@ for (const s of SCI.SYSTEMES) {
 }
 
 /* ---------- 5. mutants (copies) ---------- */
-const SRC = readFileSync(join(ICI, 'tam-decor.js'), 'utf8');
+/* LF force : un checkout CRLF (core.autocrlf=true) faisait rater les motifs de mutants qui contiennent \n (incident du 07/11 sur le banc maths) */
+const SRC = readFileSync(join(ICI, 'tam-decor.js'), 'utf8').replace(/\r\n/g, '\n');
 const SCIENCE_URL = pathToFileURL(join(ICI, 'tam-science.js')).href;
 const MUTANTS = [
   ['horizon 2M -> 3M', 'const R_HORIZON = 2 * M_GEO;', 'const R_HORIZON = 3 * M_GEO;'],
@@ -363,7 +364,7 @@ try {
   ok(passe(await charger(SRC, 'temoin')) === null, 'la copie NON mutee passe tous les controles (le banc ne tue pas par construction)');
   for (const [k, [nom, de, vers]] of MUTANTS.entries()) {
     ok(SRC.split(de).length === 2, 'mutant ' + nom + ' : motif unique');
-    const tueur = passe(await charger(SRC.replace(de, vers), 'mutant-' + k));
+    const tueur = passe(await charger(SRC.replace(de, () => vers), 'mutant-' + k));
     if (tueur) { tues++; console.log('  mutant "' + nom + '" tue par : ' + tueur.split(' : ')[0]); } else console.log('MUTANT SURVIVANT : ' + nom);
   }
 } finally { rmSync(dossier, { recursive: true, force: true }); }
