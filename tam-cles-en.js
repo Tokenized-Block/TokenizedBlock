@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game292 */
+  penduleKater: 'Beats not falling to the south, a length off N squared, or the Unst-Dunnose line not 39.00734', stationsKater: 'Stations', decroitKater: 'Steps south where beats and length both fall', ecartN2Kater: 'Largest gap to L ~ N squared (1e-5 inch)', equateurKater: 'Equator length from Unst and Dunnose (printed 39.00734)', equateurAjusteKater: 'Equator length, all stations fitted', diminutionKater: 'Gravity diminution pole to equator', aplatissementKater: 'Flattening 1 in', oteeKater: 'Station left out', aplatissementSansKater: 'Flattening 1 in, without it', rapportNewtonKater: 'Diminution over a homogeneous Earth',
   /* game290 */
   jaugesHerschel: 'A visual ray off the formula besides S = 120 and 290, or the 588 example not 498', lignesHerschel: 'Rows of Table II', BHerschel: '1 / tan(half field)', horsArrondiHerschel: 'Star counts where rounding misses', horsUniteHerschel: 'Star counts more than one unit off', sansMoinsUnHerschel: 'Rows matched without the minus one', exemple588: 'n for 588 stars (printed 498)', penteHerschel: 'Log-log slope of his table', racineCarree100k: 'Square root law at 100 000 stars',
   /* game289 */

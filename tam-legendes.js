@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game292 (idee : codex 31, sous-agent Claude) */
+  penduleKater: {
+    titre: 'Kater: the shape of the Earth from one pendulum',
+    enUnePhrase: 'Further north the same pendulum swings faster, because the flattened Earth pulls harder near the pole.',
+    colonnes: ['sine of latitude squared', 'length of the seconds pendulum', 'stations, fitted line, homogeneous Earth'],
+    aRegarder: ['The seven stations sit close to one line.', 'The homogeneous Earth line is flatter.', 'Leave out Clifton or Arbury Hill and the flattening moves.'],
+    fin: null,
+  },
   /* game290 (idee : codex 31, sous-agent Claude) */
   jaugesHerschel: {
     titre: 'Herschel: sounding the depth of the Milky Way',
