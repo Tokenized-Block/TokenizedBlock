@@ -40,6 +40,8 @@
   #needle { position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: #fff; left: 50%; transition: left .4s; box-shadow: 0 0 10px #fff; }
   .dialEnds { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
   #verdict { font-size: 20px; margin-top: 4px; }
+  .book { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+  .book .row { display: grid; grid-template-columns: 1fr 70px 110px; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; margin: 3px 0; }
   .bounds { font-size: 12px; color: var(--muted); }
   .bounds li { margin-bottom: 4px; }
   a { color: #93c5fd; }
@@ -48,7 +50,7 @@
 <body>
 <header>
   <h1>A real fly's memory circuit, living on tokenized stocks</h1>
-  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), fed the live on-chain price, 24/7. It reacts, learns and leans one way or the other; five minutes later the market says what happened. Nothing is signed, nothing is advice.</div>
+  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), living on a stock's real trades, 24/7. Every 30 s the trades are an odor; the fly predicts, then the next price move rewards or punishes it, and you see which synapses it changed. Nothing is signed, nothing is advice.</div>
 </header>
 <main>
   <section class="scene">
@@ -77,6 +79,7 @@
       <div class="dial"><span id="needle"></span></div>
       <div class="dialEnds"><span>avoid</span><span>approach</span></div>
       <div class="state" id="tally" style="margin-top:8px"></div>
+      <div id="book" class="book"></div>
       <button id="listen">Listen to the brain</button>
       <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
     </div>
@@ -107,11 +110,13 @@
       <h2>What this model is, and is not</h2>
       <ul>
         <li>The neurons, the synapse counts between them, and which dopamine neurons reach which output neuron are <b>measured</b> (electron microscopy). Threshold: 5 synapses; 300 Kenyon cells out of ~2,000, taken by ascending id.</li>
-        <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), read every 10 s, weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
+        <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
+        <li>The <b>odor</b> is what the chain proves about each transaction of the window, from its Transfers and its signer: the signer received the stock, sent it, or it moved between others. Never called "buy" or "sell". Each kind lands on its own third of the PNs (id mod 3, our choice), stronger with USD size.</li>
         <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies; here they carry that teaching signal only, not the circuit's own activity. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening.</li>
         <li>Activity spreads in proportion to synapse counts and fades within ~2 s once a move has passed. APL (inhibitory) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
         <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and which PNs receive a rise or a fall (id parity) are <b>ours</b>: a fly does not smell prices.</li>
-        <li>Consequences are judged on the live price 5 minutes later, misses counted next to matches. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
+        <li>The <b>paper</b> P&amp;L is virtual: no funds, no signature, ever. The fly is in the stock for a window when it predicted "approach", out otherwise; each switch pays the pool's own fee, read on chain. It is shown next to two dumb witnesses (always in; in if the last window rose), because a P&amp;L alone proves nothing.</li>
+        <li>The fly is asked <b>before</b> the outcome: its prediction on one window is judged on the next window's price move (under 0.05% = flat, no verdict), misses counted next to matches; then it is taught with that move, and the synapses it weakened flash white. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
       </ul>
       Data: <a href="https://www.janelia.org/project-team/flyem/hemibrain" rel="noopener" target="_blank">hemibrain v1.2, Janelia FlyEM</a>, CC BY 4.0 licence.
     </div>

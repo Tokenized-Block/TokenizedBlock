@@ -6,7 +6,7 @@
 import { selecteur } from './keccak.js';
 
 /* selectors are computed, never typed: a typed one that is wrong does not fail, it asks ANOTHER function */
-const SEL = { slot0: selecteur('slot0()'), token0: selecteur('token0()'), token1: selecteur('token1()'), decimals: selecteur('decimals()') };
+const SEL = { slot0: selecteur('slot0()'), token0: selecteur('token0()'), token1: selecteur('token1()'), decimals: selecteur('decimals()'), fee: selecteur('fee()') };
 const word = (hex, i) => '0x' + String(hex).slice(2 + 64 * i, 2 + 64 * (i + 1));
 const asAddress = (hex) => '0x' + String(hex).slice(-40).toLowerCase();
 
@@ -33,12 +33,15 @@ export async function readPoolPrice({ rpc, pool, token }) {
   const t = String(token).toLowerCase(), key = String(pool).toLowerCase();
   /* a pool's tokens and decimals never change: read once, then each price costs slot0 + blockNumber */
   if (!poolCache.has(key)) {
-    const [a0, a1] = await Promise.all([rpc('eth_call', [{ to: pool, data: SEL.token0 }, 'latest']), rpc('eth_call', [{ to: pool, data: SEL.token1 }, 'latest'])]);
+    const [a0, a1, f] = await Promise.all([SEL.token0, SEL.token1, SEL.fee].map((data) => rpc('eth_call', [{ to: pool, data }, 'latest'])));
     const token0 = asAddress(a0), token1 = asAddress(a1);
     const [decimals0, decimals1] = await Promise.all([decimalsOf(rpc, token0), decimalsOf(rpc, token1)]);
-    poolCache.set(key, { token0, token1, decimals0, decimals1 });
+    /* the swap fee in millionths (500 = 0.05%), read on the pool: a paper trade pays it, never a typed guess */
+    const feePips = Number(BigInt(f));
+    if (!Number.isInteger(feePips) || feePips < 0 || feePips > 1000000) throw new Error('fee not read');
+    poolCache.set(key, { token0, token1, decimals0, decimals1, feePips });
   }
-  const { token0, token1, decimals0, decimals1 } = poolCache.get(key);
+  const { token0, token1, decimals0, decimals1, feePips } = poolCache.get(key);
   if (token0 !== t && token1 !== t) throw new Error('pool does not hold this token');
   const [s0, blockHex] = await Promise.all([rpc('eth_call', [{ to: pool, data: SEL.slot0 }, 'latest']), rpc('eth_blockNumber', [])]);
   const sqrtPriceX96 = BigInt(word(s0, 0));
@@ -47,5 +50,5 @@ export async function readPoolPrice({ rpc, pool, token }) {
   const tick = Number(tickRaw >= 1n << 23n ? tickRaw - (1n << 24n) : tickRaw);
   const priceUsd = priceFromSqrt({ sqrtPriceX96, tokenIsToken0: token0 === t, decimals0, decimals1 });
   if (priceUsd == null) throw new Error('price not computable');
-  return { priceUsd, tick, block: Number(BigInt(blockHex)) };
+  return { priceUsd, tick, block: Number(BigInt(blockHex)), tokenDecimals: token0 === t ? decimals0 : decimals1, feePips };
 }
