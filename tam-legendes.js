@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game233 (idee : codex 23, sous-agent Claude) */
+  raiesBalmer: {
+    titre: 'Balmer lines of hydrogen',
+    enUnePhrase: 'The colours of glowing hydrogen sit on one straight line, and its slope is a constant of nature.',
+    colonnes: ['one over n squared', 'one over the wavelength', 'measured line or the fitted line'],
+    aRegarder: ['The measured dots fall on the line.', 'More lines, same slope.', 'The slope is the Rydberg constant of hydrogen.'],
+    fin: null,
+  },
   /* game232 (idee : codex 23, sous-agent Claude) */
   choleraSnow: {
     titre: 'John Snow and the cholera of 1854',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game233 */
+  raiesBalmer: 'Fitted Rydberg constant off R_H, or a Bohr line off NIST', rydbergAjuste: 'Rydberg constant fitted on NIST lines (m^-1)', rapportRH: 'Fitted / R_H', ordonneeSurQuart: 'Intercept / (R / 4)', ecartBohrMaxNm: 'Largest Bohr minus NIST gap (nm)', ecartsBohrNm: 'Bohr minus NIST, line by line (nm)', rapportVideAir: 'Vacuum / air wavelength', ecartRInfiniHalpha: 'H-alpha with an infinite nucleus minus NIST (nm)',
   /* game232 */
   choleraSnow: 'Recomputed ratios outside the range Snow wrote', tauxPour10000: 'Deaths per 10,000 houses, recomputed', rapportRisque: 'Southwark and Vauxhall / Lambeth, first seven weeks', rapportDeuxiemePeriode: 'Same ratio, next seven weeks', coquilles: 'Printed rates that do not follow from the counts', echantillonSV: 'Drawn sample: Southwark and Vauxhall', echantillonLambeth: 'Drawn sample: Lambeth', rapportNaif: 'Deaths alone, without houses (times)',
   /* game231 */
