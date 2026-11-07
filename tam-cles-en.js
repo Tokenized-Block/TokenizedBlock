@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game273 */
+  unitesWeber: 'A tau, a ratio beyond 0.05 %, the mean, or a printed product not recovered', tauWeber: 'Times tau = A phi recovered to 7 decimals', rapportsWeber: 'E / 2 tau from the printed tau (millions)', ecartMaxWeber: 'Largest gap to the printed ratio (%)', moyenneWeber: 'Mean of the five printed ratios (millions)', produitsWeber: 'Mean x root(1/2), x 106 2/3 (billions), x 4 / root 2', meileWeber: 'Mile implied by 59320 miles a second (metres)', ecartProportionnel: 'Mean miss, swing in proportion to the charge (%)', ecartConstant: 'Mean miss, swing ignoring the charge (%)',
   /* game272 */
   aimantGauss: 'A printed difference or angle off besides v\' at 3.5 m, a1 not 2 a2, or a power not near 3', anglesGauss: 'Deflections read (two positions)', differencesGauss: 'Printed differences equal to observed minus calculated', formulesGauss: 'Calculated angles given back by his coefficients within 0.1 second (strict rounding)', rapportGauss: 'His a1 / a2', exposantsGauss: 'Power of the distance, pure power law, two positions', rmsCubeGauss: 'Mean miss of a one-constant cube law (seconds)', rmsCarreGauss: 'Mean miss of a one-constant square law (seconds)',
   /* game271 */

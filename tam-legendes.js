@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game273 (idee : codex 30, sous-agent Claude) */
+  unitesWeber: {
+    titre: 'Weber and Kohlrausch: the ratio of the units',
+    enUnePhrase: 'Discharge a known charge through a coil and the swing tells how two units of current compare.',
+    colonnes: ['discharge', 'ratio of the units', 'your share, printed or mean'],
+    aRegarder: ['At one half your dots sit on their printed values.', 'At one, everything doubles.', 'The five discharges scatter by about 3 percent around the mean.'],
+    fin: null,
+  },
   /* game272 (idee : codex 30, sous-agent Claude) */
   aimantGauss: {
     titre: 'Gauss: a magnet pulls as the cube of the distance',
