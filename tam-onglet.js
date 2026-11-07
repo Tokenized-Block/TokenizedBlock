@@ -203,6 +203,9 @@ THEMES.terre.push('gutenbergRichter');
 THEMES.chimie.push('arrhenius');
 /* game223 : la maree rejoint la Terre (idee : codex 21, sous-agent Claude) */
 THEMES.terre.push('mareeVivesEaux');
+/* correctif 07/11 : physique est le groupe PAR DEFAUT de groupeDe et THEMES.physique n existait pas : chaque push ci-dessous faisait
+ *   planter le CHARGEMENT du module (onglet TAM casse en prod depuis game224). La liste ne sert qu a nommer les systemes qui y tombent. */
+THEMES.physique = [];
 /* game224 : l energie de liaison rejoint la physique (idee : codex 21, sous-agent Claude) */
 THEMES.physique.push('energieLiaison');
 /* game225 : la courbe de Keeling rejoint la Terre (idee : codex 22, sous-agent Claude) */

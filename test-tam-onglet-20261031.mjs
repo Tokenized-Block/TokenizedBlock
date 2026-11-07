@@ -54,6 +54,10 @@ ok(V.mintVisible({ ...DEP, adresse: '0x1234' }) === false, 'adresse tronquee : p
 ok(V.mintVisible(null) === false && V.mintVisible(undefined) === false, 'pas de fiche : pas de bouton');
 /* 2026-11-04 : un checkout neuf est en CRLF (core.autocrlf) ; les motifs ci-dessous contiennent \n -> le source est relu en LF */
 const onglet = readFileSync(new URL('./tam-onglet.js', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+/* 2026-11-07 : ce banc lisait tam-onglet.js comme du TEXTE ; un `THEMES.physique.push` sur une cle jamais creee faisait planter le CHARGEMENT
+ *   du module (onglet TAM mort en prod depuis game224) sans qu aucune assertion ne rougisse. On EXECUTE donc le module, une fois. */
+const chargement = await import(new URL('./tam-onglet.js?banc=' + process.pid, import.meta.url).href).then(() => 'charge').catch((e) => 'ERREUR ' + e.message);
+ok(chargement === 'charge', 'tam-onglet.js se CHARGE (le module s execute jusqu au bout) : ' + chargement);
 ok(/const visible = V\.mintVisible\(TAMART_DEPLOIEMENT\) && /.test(onglet) && /zMint\.hidden = !visible/.test(onglet), 'l onglet cache la zone Mint par CETTE regle');
 ok(/if \(!visible\) \{ zMint\.replaceChildren\(\); return; \}/.test(onglet), 'sans adresse, la zone Mint est VIDEE (aucun bouton construit)');
 
