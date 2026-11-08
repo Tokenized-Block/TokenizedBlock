@@ -1942,12 +1942,17 @@ function suite(T, bavard = false, seul = null) {
       assert.ok(C.mesure === 0 && C.edgesWiring === '1190 non-zero, 441 with w >= 8' && C.componentsWiring === 1 && C.isolatedWiring === 0
         && C.unmappedWiring === 'PAG, Left ventral tegmental area, Left substantia nigra, Right ventral tegmental area, Right claustrum'
         && C.seedsWiring === SEEDS[c] && C.travelShownWiring === tr && C.sharedWiring === '15 of 38' && C.insulaWiring === 'Anger, Shame and embarrassment, Guilt, Empathy for pain'
-        && C.amygdalaWiring === 'Disgust, Fear, Maternal love' && C.keptMeanWiring === '7.07' && C.shownWiring.startsWith('1190 of 1190 connections, ')
+        && C.amygdalaWiring === 'Disgust, Fear, Maternal love' && C.keptMeanWiring === '7.07' && C.shownWiring.startsWith('1190 of 1190 connections as lines, 82 of 82 regions, ')
         && I.temoin.mesure === 0 && I.temoin.sharedRegionsWiring.split(' ').length === 15, JSON.stringify(I));
       const reached = Number(C.reachedWiring.split(' ')[0]);
       if (tr && ns) assert.ok(C.impulsesWiring > 0 && reached > ns && Number(C.carriedMeanWiring) > 7.5, 'travel ' + JSON.stringify(C));
       else assert.ok(C.impulsesWiring === 0 && reached === ns && C.carriedMeanWiring === '0.00', 'no travel ' + JSON.stringify(C));
       const xs = []; for (let k = 0; k < 1190 * 3; k += 3) xs.push(R.brut[k]); assert.ok(Math.max(...xs) - Math.min(...xs) > 1, 'layout spread');
+      /* 2026-11-08 : the connections are LINES between two of the 82 region points (label 3) ; opacity = the measured weight : 441 at w >= 8 */
+      const regions = new Set(); for (let k = 0; k < 82; k++) { assert.ok(R.brut[3 * k + 2] === 3, 'region label'); regions.add(R.brut[3 * k] + ',' + R.brut[3 * k + 1]); }
+      assert.ok(Array.isArray(R.segments) && R.segments.length === 1190 && R.segments.every((s) => s.a[2] === 3 && s.b[2] === 3 && regions.has(s.a[0] + ',' + s.a[1]) && regions.has(s.b[0] + ',' + s.b[1])), 'lines join two regions');
+      const ws = R.segments.map((s) => s.w), u8 = (8 - 0.14292) / (12.615 - 0.14292);
+      assert.ok(Math.min(...ws) === 0 && Math.max(...ws) === 1 && ws.filter((w) => w >= u8 - 1e-12).length === 441, 'line weights ' + ws.filter((w) => w >= u8 - 1e-12).length);
       return C.categoryShownWiring + ' travel ' + tr + ' ; ' + C.impulsesWiring + ' impulses, ' + C.reachedWiring + ', crossed mean ' + C.carriedMeanWiring + ' ; ' + C.shownWiring;
     });
   }
@@ -2793,7 +2798,9 @@ const MUTANTS = [
   ['wiringEmotions : travel slider ignored', 'travel = Math.max(0, Math.min(1, Math.round(P.travelWiring)));', 'travel = 1;'],
   ['wiringEmotions : category slider ignored', 'const cat = Math.max(0, Math.min(LQ.length - 1, Math.round(P.categoryWiring)))', 'const cat = 5'],
   ['wiringEmotions : trivial vector kept', 'basis = [unit(sq.slice())];', 'basis = [];'],
-  ['wiringEmotions : connections drawn last', 'const pts = edges.map((e) => [(XY[e.i][0] + XY[e.j][0]) / 2, (XY[e.i][1] + XY[e.j][1]) / 2, e.w >= text.strong ? 3 : 4]);', 'const pts = [];'],
+  ['wiringEmotions : regions not drawn first', 'const pts = XY.map(([x, y]) => [x, y, 3]);', 'const pts = [[0, 0, 3]];'],
+  ['wiringEmotions : connections not drawn as lines', 'const segments = edges.map((e) => ({', 'const segments = [].map((e) => ({'],
+  ['wiringEmotions : line weight ignored', 'w: (e.w - text.min) / (text.max - text.min) }));', 'w: 1 }));'],
   ['wiringEmotions : witness reversed', 'mesure: shared.length > 0 && (byNode.Lamyg || new Set()).size >= 2 ? 0 : 1,', 'mesure: shared.length > 0 && (byNode.Lamyg || new Set()).size >= 2 ? 1 : 0,'],
   ['bornage retire', 'v = Math.min(b, Math.max(a, v));', ''],
   ['Math.random injecte (marche)', 'rng = mulberry32(P.graine), K =', 'rng = Math.random, K ='],

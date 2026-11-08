@@ -928,7 +928,9 @@ function solidesPlatoniques(P, n) {
   const deg = 180 / PI;
   /* vu a l ecran (03/11) : trace en CHEMIN, la fin d une arete etait reliee au debut de la suivante (cordes parasites) et la scene affichait
    *   « start / end » : un nuage de points denses le long des aretes */
-  return { D: 3, brut, nuage: true, unite: 'sans objet (geometrie)', invariants: {
+  /* 2026-11-08 : the edges as lines (the solid itself), the points stay along them */
+  const segments = aretes.map(([i, j]) => ({ a: V[i].slice(), b: V[j].slice() }));
+  return { D: 3, brut, nuage: true, segments, unite: 'sans objet (geometrie)', invariants: {
     euler: { mesure: nv - aretes.length + faces.length, formule: 2, sommets: nv, aretes: aretes.length, faces: faces.length, note: NOMS_SOLIDES[k] + ' : vertices - edges + faces, all three COUNTED from the geometry, against Euler\'s 2' },
     schlafli: { mesure: aretes.length, formule: faces.length * p / 2, cotesParFace: p, aretesParSommet: q, note: 'edges against F p / 2 (each face has p sides, each edge borders 2 faces) ; the solid is {p, q} in Schlafli\'s notation' },
     diedre: { mesure: diedre * deg, formule: diedreTh * deg, note: 'angle between two neighbouring faces (degrees) measured from their normals against sin(theta / 2) = cos(pi / q) / sin(pi / p)' },
@@ -1152,8 +1154,10 @@ function fermatSteiner(P, n) {
   const brut = new Float64Array(n * 3), moitie = Math.ceil(n * 0.7);
   const tracer = (f, de, a, lab) => { const tot = f.segs.reduce((u, [p, q]) => u + dist(p, q), 0); for (let l = de; l < a; l++) { let t = (l - de + 0.5) / (a - de) * tot, i = 0; while (i < 4 && t > dist(...f.segs[i])) { t -= dist(...f.segs[i]); i++; } const [p, q] = f.segs[i], u = Math.min(1, t / dist(p, q)), o = 3 * l; brut[o] = p[0] + u * (q[0] - p[0]); brut[o + 1] = p[1] + u * (q[1] - p[1]); brut[o + 2] = lab; } };
   tracer(best, 0, moitie, 0); tracer(autre, moitie, n, 1);
+  /* 2026-11-08 : the roads as lines, at the depth of their points : the shortest (label 0) green, the other shape (label 1) faint */
+  const segments = [...best.segs.map(([p, q]) => ({ a: [p[0], p[1], 0], b: [q[0], q[1], 0], w: 1, c: 4 })), ...autre.segs.map(([p, q]) => ({ a: [p[0], p[1], 1], b: [q[0], q[1], 1], w: 0.3, c: 0 }))];
   const ex = Math.min(L + r3, 1 + r3 * L), sEx = best.vertical ? null : [1 / (2 * r3), 0.5];
-  return { D: 3, brut, nuage: true, unite: 'sans objet (rectangle L x 1)', invariants: {
+  return { D: 3, brut, nuage: true, segments, unite: 'sans objet (rectangle L x 1)', invariants: {
     longueur: { mesure: best.long, formule: ex, pont: best.vertical ? 'vertical' : 'horizontal', note: 'length of the shortest network FOUND (two free crossroads moved to the Fermat point of their neighbours, Weiszfeld) against min(L + sqrt 3, 1 + sqrt(3) L) ; 1 + sqrt 3 for the square' },
     angles: { mesure: best.ecart, formule: 0, note: 'largest |cos + 1/2| between two roads at a crossroad : 0 means exactly 120 degrees everywhere' },
     carrefour: { mesure: sEx ? Math.max(Math.abs(best.S[0] - sEx[0]), Math.abs(best.S[1] - sEx[1])) : Math.max(Math.abs(best.S[0] - L / 2), Math.abs(best.S[1] - L / (2 * r3))), formule: 0, note: 'distance of the first crossroad found from (1/(2 sqrt 3), 1/2) (or (L/2, L/(2 sqrt 3)) for the vertical bridge : its arms start from the two bottom towns, L apart)' },
@@ -1515,7 +1519,9 @@ function courbeDragon(P, n) {
   pas(); for (const c of hR) { const ndx = c === 'R' ? dy : -dy, ndy = c === 'R' ? -dx : dx; dx = ndx; dy = ndy; pas(); }
   const segs = pts.length - 1, gen = (s) => { if (s === 0) return 0; let k = s, m = 0; while (k % 2 === 0) { k /= 2; m++; } return N - m; };
   const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const t = l * segs / n, s = Math.floor(t), u = t - s, a = pts[s], b = pts[s + 1], o = 3 * l; brut[o] = a[0] + u * (b[0] - a[0]); brut[o + 1] = a[1] + u * (b[1] - a[1]); brut[o + 2] = gen(s); }
-  return { D: 3, brut, nuage: true, unite: 'sans objet (segments unitaires)', invariants: {
+  /* 2026-11-08 : every unit segment of the trace as a line (2^n of them ; the points sample 1,500), at the depth of its generation */
+  const segments = []; for (let q = 0; q < segs; q++) segments.push({ a: [pts[q][0], pts[q][1], gen(q)], b: [pts[q + 1][0], pts[q + 1][1], gen(q)] });
+  return { D: 3, brut, nuage: true, segments, unite: 'sans objet (segments unitaires)', invariants: {
     virages: { mesure: differents, formule: 0, virages: hR.length, debut: hR.slice(0, 15), note: 'turns where the recurrence H R (reverse complement of H) and the bit rule (k = 2^m (2j + 1) : R when j is even) disagree' },
     segments: { mesure: segs, formule: 2 ** N, recouvrements: doublons, note: 'unit segments drawn against 2^n ; segments travelled twice (none : the dragon never overlaps itself)' },
     bouts: { mesure: x * x + y * y, formule: 2 ** N, note: 'squared distance between the two ends against 2^n : each fold multiplies the chord by sqrt 2' } } };
@@ -2036,7 +2042,9 @@ function ramseyR33(P, n) {
   const segs = E.map(([a, b], k) => [S[a], S[b], tri && tri.includes(k) ? 2 : (m >> k) & 1]);
   const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const t = l * segs.length / n, j = Math.floor(t), u = t - j, sg = segs[j], o = 3 * l;
     brut[o] = sg[0][0] + u * (sg[1][0] - sg[0][0]); brut[o + 1] = sg[0][1] + u * (sg[1][1] - sg[0][1]); brut[o + 2] = sg[2]; }
-  return { D: 3, brut, nuage: true, unite: 'rayon 1', invariants: {
+  /* 2026-11-08 : each edge of K_n as a line in ITS colour : label 0 red, 1 blue, 2 the one-colour triangle (gold) */
+  const segments = segs.map(([p, q, lab]) => ({ a: [p[0], p[1], lab], b: [q[0], q[1], lab], c: lab + 1 }));
+  return { D: 3, brut, nuage: true, segments, unite: 'rayon 1', invariants: {
     sansTriangle: { mesure: bonnes.length, formule: N === 5 ? 12 : N === 6 ? 0 : null, colorations: 2 ** E.length, note: 'colourings of the edges of K_n in two colours with no one-colour triangle, all of them enumerated (K_5 : 12, K_6 : 0, so R(3, 3) = 6)' },
     cycles5: { mesure: cyclesFaux, formule: 0, note: 'K_5 only : good colourings where a colour class is NOT a single 5-cycle (every vertex of degree 2, connected)' },
     temoin: { mesure: rougeSeul, note: 'witness: forbidding only RED triangles, this many colourings of K_n survive (for K_6 still many) : both colours are needed' } } };
@@ -2350,7 +2358,10 @@ function calkinWilf(P, n) {
   const cantor = new Set(); let repetes = 0, vus = 0; for (let s = 2; vus < 30; s++) for (let p = 1; p < s && vus < 30; p++) { const q = s - p, d = g(p, q), cle = (p / d) + '/' + (q / d); if (cantor.has(cle)) repetes++; cantor.add(cle); vus++; }
   const brut = new Float64Array(n * 3); for (let l = 0; l < n; l++) { const i = Math.floor(l * total / n); let d = 0; while (2 ** (d + 1) <= i + 1) d++;
     const o = 3 * l, [a, b] = fr[i]; brut[o] = (i + 1 - 2 ** d + 0.5) / 2 ** d; brut[o + 1] = -d / Dn; brut[o + 2] = a > b ? 1 : 0; }
-  return { D: 3, brut, nuage: true, unite: 'sans objet', invariants: {
+  /* 2026-11-08 : the tree as lines, each fraction to its two children (index i -> 2i + 1, 2i + 2 in the breadth-first list) */
+  const noeud = (i) => { let d = 0; while (2 ** (d + 1) <= i + 1) d++; const [a, b] = fr[i]; return [(i + 1 - 2 ** d + 0.5) / 2 ** d, -d / Dn, a > b ? 1 : 0]; };
+  const segments = []; for (let i = 0; 2 * i + 1 < total; i++) for (const c of [2 * i + 1, 2 * i + 2]) if (c < total) segments.push({ a: noeud(i), b: noeud(c) });
+  return { D: 3, brut, nuage: true, segments, unite: 'sans objet', invariants: {
     calkinWilf: { mesure: nonReduites + doublons + horsStern, formule: 0, trente: fr.slice(0, 30).map(([a, b]) => a + '/' + b).join(' '), note: 'fractions in the first 2^D - 1 that are not reduced, appear twice, or differ from fusc(n)/fusc(n + 1)' },
     complet: { mesure: manquantes, formule: 0, note: 'reduced fractions p/q with p + q <= D + 1 missing from the first 2^D - 1 (every one must be there)' },
     temoin: { mesure: repetes, note: 'witness: the first 30 fractions of Cantor s diagonal listing repeat this many values (2/2 = 1/1, ...)' } } };
@@ -5800,12 +5811,13 @@ function bodyMapsNummenmaa(P, n) {
 //   every mapped region is one of the 82.
 // OUR choices: the mapping; the layout (two leading non-trivial eigenvectors of the normalised wiring, left hemisphere turned to the left);
 //   reported regions fire at steps 0, 10 and 20 of 30; an impulse crosses an edge with chance 0.05 + 0.7 x u^2, u = (w - 0.14292) / (12.615 - 0.14292);
-//   a region rests 3 steps after firing; each connection is one point at its middle, darker when w >= 8, and comes first, so that all 1,190
-//   are drawn whenever n >= 1,190, the firing events after them in time order.
+//   a region rests 3 steps after firing. 2026-11-08 (Phil: lines, not only points): the 1,190 connections are LINES (segments) between the
+//   two regions they join, opacity and width = u (the measured weight, rescaled 0..1); the points are the 82 regions first (label 3), then the
+//   firing events in time order (before: one point per connection used 1,190 of the 1,500 points).
 // Witness: "one emotion, one place": no region would serve two emotions; here 15 of the 38 regions mapped from the ten emotions serve two or
 //   more (the four summary rows are left out of this count), the left insula four, the left amygdala three (disgust, fear, maternal love).
-// Drawing (front view): layout x and y; label 0 a reported region firing, 1 an impulse crossing, 2 another region firing, 3 a strong
-//   connection (w >= 8), 4 a weaker connection.
+// Drawing (front view): layout x and y; label 0 a reported region firing, 1 an impulse crossing, 2 another region firing, 3 a region (the
+//   lines join the regions, at that same depth).
 function emotionWiringHCP(P, n) {
   const names = SOURCES.emotionWiringLabels.valeur.split(' '), N = names.length;
   const edges = SOURCES.emotionWiringEdges.valeur.split(' ').map((x) => { const [i, j, w] = x.split(':'); return { i: Number(i), j: Number(j), w: Number(w) }; });
@@ -5845,7 +5857,7 @@ function emotionWiringHCP(P, n) {
   const seeds = seedsOf(cat).map((nd) => names.indexOf(nd)), isSeed = new Set(seeds), adj = names.map(() => []);
   edges.forEach((e) => { adj[e.i].push([e.j, e.w]); adj[e.j].push([e.i, e.w]); });
   const STEPS = 30, REST = 3, alea = mulberry32(0xe40 + 17 * cat + 5 * travel), last = names.map(() => -99), reached = new Set(), carried = [];
-  const pts = edges.map((e) => [(XY[e.i][0] + XY[e.j][0]) / 2, (XY[e.i][1] + XY[e.j][1]) / 2, e.w >= text.strong ? 3 : 4]);
+  const pts = XY.map(([x, y]) => [x, y, 3]);
   let active = new Set();
   for (let t = 0; t < STEPS; t++) {
     if (t % 10 === 0) seeds.forEach((s) => { if (t - last[s] > REST) active.add(s); });
@@ -5856,22 +5868,23 @@ function emotionWiringHCP(P, n) {
         next.add(b); carried.push(w); pts.push([XY[a][0] + (XY[b][0] - XY[a][0]) / 3, XY[a][1] + (XY[b][1] - XY[a][1]) / 3, 1]); } }));
     active = next;
   }
-  const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0), amyg = XY[names.indexOf('Lamyg')], events = pts.length - edges.length;
+  const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0), amyg = XY[names.indexOf('Lamyg')], events = pts.length - N;
   const brut = new Float64Array(n * 3);
   for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
-  return { D: 3, brut, nuage: true, unite: 'layout units (our choice)', invariants: {
+  const segments = edges.map((e) => ({ a: [XY[e.i][0], XY[e.i][1], 3], b: [XY[e.j][0], XY[e.j][1], 3], w: (e.w - text.min) / (text.max - text.min) }));
+  return { D: 3, brut, nuage: true, segments, unite: 'layout units (our choice)', invariants: {
     emotionWiringHCP: { mesure: gaps, formule: 0, edgesWiring: edges.length + ' non-zero, ' + edges.filter((e) => e.w >= text.strong).length + ' with w >= ' + text.strong, componentsWiring: components, isolatedWiring: isolated,
       unmappedWiring: unmapped.join(', '), categoryShownWiring: LQ[cat].c, travelShownWiring: travel, seedsWiring: seeds.map((s) => names[s]).join(' '),
       sharedWiring: shared.length + ' of ' + mapped.length, insulaWiring: [...(byNode.L_insula || [])].join(', '), amygdalaWiring: [...(byNode.Lamyg || [])].join(', '), amygdalaPlaceWiring: amyg.map((v) => v.toFixed(3)).join(' '),
       impulsesWiring: carried.length, reachedWiring: reached.size + ' of ' + N, carriedMeanWiring: mean(carried).toFixed(2), keptMeanWiring: mean(edges.map((e) => e.w)).toFixed(2),
-      shownWiring: Math.min(n, edges.length) + ' of ' + edges.length + ' connections, ' + Math.max(0, Math.min(events, n - edges.length)) + ' of ' + events + ' firing events',
+      shownWiring: segments.length + ' of ' + edges.length + ' connections as lines, ' + Math.min(n, N) + ' of ' + N + ' regions, ' + Math.max(0, Math.min(events, n - N)) + ' of ' + events + ' firing events',
       note: 'the edge list not as stated, a split or isolated network, or printed areas without a region other than the brainstem and claustrum ones' },
     temoin: { mesure: shared.length > 0 && (byNode.Lamyg || new Set()).size >= 2 ? 0 : 1, formule: 0, sharedRegionsWiring: shared.join(' '),
       note: 'witness: with one place per emotion no region would serve two; here 15 of 38 do, the left insula serves four emotions, the left amygdala three' } } };
 }
 
 export const COLONNES = Object.freeze({
-  emotionWiringHCP: { colonnes: ['layout across (our choice, from the wiring)', 'layout up (our choice, from the wiring)', 'reported region, impulse, other region, strong or weaker connection (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  emotionWiringHCP: { colonnes: ['layout across (our choice, from the wiring)', 'layout up (our choice, from the wiring)', 'reported region firing, impulse, other region firing, region (label); connections are lines'], memeLongueur: [], autres: [0, 1, 2] },
   bodyMapsNummenmaa: { colonnes: ['answer: anger, fear, disgust, happiness, sadness, surprise, neutral', 'shown emotion (same order, from the bottom) and reader', 'right or wrong answer (label)'], memeLongueur: [], autres: [0, 1, 2] },
   emotionsSiegel: { colonnes: ['step / 120 (our clock)', 'body signal and unit (heart rate at the bottom, skin conductance response at the top)', 'heart, blood pressure, breathing or skin (label)'], memeLongueur: [], autres: [0, 1, 2] },
   connectomeSizes: { colonnes: ['log10 neurons / 11', 'log10 synapses / 8 (0 where none were counted)', 'worm, hemibrain, whole fly, human (label)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -6516,5 +6529,6 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   const o = { params: P, D: r.D, n, bornee: true, brut: r.brut, lyapunov: null, uniteLyapunov: r.unite, points: null, invariants: r.invariants };
   if (s.nuage || r.nuage) o.nuage = true;
   if (r.film) o.film = r.film;
+  if (Array.isArray(r.segments) && r.segments.length) o.segments = r.segments; /* 2026-11-08 : optional lines (tam-vue.js#projeterSegments) */
   return o;
 }
