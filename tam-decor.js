@@ -523,6 +523,8 @@ const DECORS = {
   emotionsSiegel: (P, o, B) => [pt([1, (4 * 6 + 3) / 42, B.centre[2]], C.repere, 'Breathing rate: d = 1.47 in anger, 0.91 in fear')],
   /* game310 */
   bodyMapsNummenmaa: (P, o, B) => [pt([(1 + 0.5) / 7, (1 * 87 + 43.5) / (7 * 87), B.centre[2]], C.repere, 'Fear: named right 8 % of the time, under chance')],
+  /* game311 */
+  emotionWiringHCP: (P, o, B) => { const a = (((o.invariants || {}).emotionWiringHCP || {}).amygdalaPlaceWiring || '').split(' ').map(Number); return a.length === 2 && a.every(Number.isFinite) ? [pt([a[0], a[1], B.centre[2]], C.repere, 'Left amygdala: disgust, fear, maternal love')] : []; },
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */
