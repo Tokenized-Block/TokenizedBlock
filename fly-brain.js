@@ -4,7 +4,8 @@
  * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { createFly, createSession, foreseeNext } from './fly-core.js';
+import { createFly, createSession, foreseeNext, decide } from './fly-core.js';
+import { checkPlanCalls } from './fly-guard.js';
 import { USDC_BASE, displayShort } from './frais-creation.js';
 import { selecteur } from './keccak.js';
 
@@ -29,6 +30,8 @@ const fmt = (x, d = 2) => x.toLocaleString('en-US', { minimumFractionDigits: d, 
 const pct = (x, d = 2) => (x > 0 ? '+' : x < 0 ? '−' : '') + fmt(Math.abs(x) * 100, d) + '%';
 const clock = (t = Date.now()) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const mixText = (mix) => Object.entries(mix).filter(([, v]) => v > 0).map(([k, v]) => `${k} $${fmt(v, 0)}`).join(', ') || 'nothing';
+/* text from the server, a node or storage, before it enters HTML (security review H2) */
+const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const SAY = { approach: 'leans toward it', avoid: 'pulls away from it', undecided: 'is undecided', quiet: 'barely reacts' };
 
 let fly = null, shadow = null, session = null, N = [], act = new Float64Array(0);
@@ -98,7 +101,7 @@ function renderDecision(e) {
         : 'It is out, and this smell does not draw it in: <b>it stays out</b>.';
   $('why').innerHTML = `${e.sim ? (simOnLive ? '<b>Simulation</b> on the smell of the last real window. ' : '<b>Simulation</b> on a stand-in smell (no real trade smelled yet). ') : ''}`
     + `<b>Smelled</b>${e.sim && !simOnLive ? '' : ' in the last window'}: ${mixText(e.mix)} (${n} kind${n > 1 ? 's' : ''} of trade). `
-    + `${memory} ${rule} <span class="state">Paper only, not advice. Judged on the next window's price.</span>`;
+    + `${memory} ${rule} <span class="state">${auto.s && auto.s.running ? 'Its own wallet acts on this decision with real money (card below); not advice.' : 'Paper only, not advice.'} Judged on the next window's price.</span>`;
 }
 
 /* ── TRADE FOR REAL: the user's own wallet signs each order the fly proposes. The fly NEVER signs, nothing is sent without a click.
@@ -144,8 +147,8 @@ async function proposeLive(e) {
     const dPay = e.action === 'buy' ? 6 : (live.decimals ?? 8), dGet = e.action === 'buy' ? (live.decimals ?? 8) : 6;
     const units = (v, d) => v == null ? '?' : fmt(Number(BigInt(v)) / 10 ** d, d > 6 ? 6 : 2);
     $('livePlan').innerHTML = `<b>The fly's live order: ${ACT[e.action]} ${current.symbol}</b> · pay ${units(s.paye, dPay)} ${e.action === 'buy' ? 'USDC' : current.symbol}, `
-      + `receive at least ${units(s.recoitAuMoins, dGet)} ${e.action === 'buy' ? current.symbol : 'USDC'} (quote ${units(s.quote, dGet)}), fee ${s.fraisBps ?? '?'} bps, price impact ${s.impactBps ?? '?'} bps, venue ${s.venue || '?'}. `
-      + `Plan state: <b>${r.etat}</b>${r.pourquoi ? ' — ' + String(r.pourquoi).slice(0, 140) : ''}${r.suite ? ' — ' + r.suite : ''}.`;
+      + `receive at least ${units(s.recoitAuMoins, dGet)} ${e.action === 'buy' ? current.symbol : 'USDC'} (quote ${units(s.quote, dGet)}), fee ${esc(s.fraisBps ?? '?')} bps, price impact ${esc(s.impactBps ?? '?')} bps, venue ${esc(s.venue || '?')}. `
+      + `Plan state: <b>${esc(r.etat)}</b>${r.pourquoi ? ' — ' + esc(String(r.pourquoi).slice(0, 140)) : ''}${r.suite ? ' — ' + esc(r.suite) : ''}.`;
     $('sign').disabled = !(r.ok && Array.isArray(r.aSigner) && r.aSigner.length);
   } catch (err) { $('livePlan').textContent = 'The order could not be built: ' + String((err && err.message) || err).slice(0, 140); }
 }
@@ -161,11 +164,11 @@ async function signLive() {
       const calls = r.aSigner || [];
       if (r.atomique && calls.length > 1) {
         const id = await eth().request({ method: 'wallet_sendCalls', params: [{ version: '1.0', chainId: '0x2105', from: live.account, calls: calls.map((c) => ({ to: c.to, data: c.data, value: c.value })) }] });
-        liveNote('batch sent: ' + String(id && (id.id || id)).slice(0, 20) + '…');
+        liveNote('batch sent: ' + esc(String(id && (id.id || id)).slice(0, 20)) + '…');
       } else {
         for (const c of calls) {
           const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: live.account, to: c.to, data: c.data, value: c.value }] });
-          liveNote(`${c.nom || c.role || 'transaction'} sent · <a href="https://basescan.org/tx/${h}" target="_blank" rel="noopener">tx ${String(h).slice(0, 10)}…</a>`);
+          liveNote(`${esc(c.nom || c.role || 'transaction')} sent · ` + (/^0x[0-9a-fA-F]{64}$/.test(String(h)) ? `<a href="https://basescan.org/tx/${h}" target="_blank" rel="noopener">tx ${String(h).slice(0, 10)}…</a>` : esc(String(h).slice(0, 20))));
           await waitReceipt(h);
         }
       }
@@ -187,30 +190,58 @@ async function waitReceipt(h) {
 function stopFly() { live.stopped = true; live.plan = null; $('sign').disabled = true; $('livePlan').textContent = ''; liveSay('The fly is stopped: it proposes no order. Connect again to resume.'); }
 
 /* ── THE FLY ALONE (CLAUDE.md exception decided by Phil 2026-11-08): the user signs ONE transaction that funds the fly's own wallet;
- * after it, the fly trades that budget on its own, on its live (never simulated) BUY / SELL decisions, within the user's caps; Stop
- * halts it at once, Withdraw all sends everything back to the wallet that funded it. The key is made and kept ONLY in this browser
- * (fly-wallet.js, @noble); the server never sees it, only relays what the fly signed (fly-relay.js guard). The money path was proven
- * on a fork (banc-fly-wallet-fork: buy, sell, withdraw 17/0); the stock leg cannot run on a fork (B20 precompile) and is NOT proven. */
+ * after it, the fly trades that budget on its own, on its live (never simulated) decisions, within the user's caps; Stop halts it,
+ * Withdraw all sends everything back to the wallet that funded it. The key is made and kept ONLY in this browser (fly-wallet.js,
+ * @noble). The server plans each order, but the fly signs a call only if fly-guard.js (here, in the browser) finds it is an exact
+ * approval, the app fee, or a swap that pays the fly itself and names no unknown address (security review 2026-11-08, H1). Text from
+ * the server or a node is never written as HTML (H2). The money path was proven on a fork through the relay (18/0); the stock leg
+ * cannot run on a fork (B20 precompile) and is NOT proven until a real small trade. ── */
 const AUTO_KEY = 'fly-auto-wallet-v1', AUTO_GAS_ETH = 200000000000000n /* 0.0002 ETH */, AUTO_ETH_KEEP = 5000000000000n /* L1 fee dust */;
+const ADDR_RE = /^0x[0-9a-f]{40}$/, HASH_RE = /^0x[0-9a-f]{64}$/;
 const auto = { W: null, s: null, busy: false };
-function autoLoad() { try { const x = JSON.parse(localStorage.getItem(AUTO_KEY) || 'null'); if (x && /^0x[0-9a-f]{64}$/.test(x.key) && /^0x[0-9a-f]{40}$/.test(x.address)) return x; } catch (_) { /* storage refused */ } return null; }
+function autoLoad() {
+  try {
+    const x = JSON.parse(localStorage.getItem(AUTO_KEY) || 'null');
+    if (!x || !/^0x[0-9a-f]{64}$/.test(x.key) || !ADDR_RE.test(x.address)) return null;
+    /* everything else is re-checked: it becomes a destination (owner) or a token to withdraw (traded) */
+    x.owner = ADDR_RE.test(String(x.owner)) ? x.owner : null;
+    x.traded = Array.isArray(x.traded) ? x.traded.filter((a) => STOCKS.some((s) => s.address === a)) : [];
+    x.today = Number.isInteger(x.today) && x.today >= 0 ? x.today : 0; x.running = x.running === true; x.day = String(x.day || '').slice(0, 10);
+    return x;
+  } catch (_) { return null; }
+}
 function autoSave() { try { localStorage.setItem(AUTO_KEY, JSON.stringify(auto.s)); return JSON.parse(localStorage.getItem(AUTO_KEY)).key === auto.s.key; } catch (_) { return false; } }
+/* several tabs share one key: re-read the stored state before acting, so a Stop pressed in another tab is obeyed (review M2) */
+function autoRefresh() { const x = autoLoad(); if (x && auto.s && x.key === auto.s.key) auto.s = x; return auto.s; }
 async function flyWallet() { if (!auto.W) auto.W = await import('./fly-wallet.js'); return auto.W; }
 function autoSay(t) { $('autoState').textContent = t; }
-function autoNote(html) { const p = document.createElement('div'); p.innerHTML = clock() + ' · ' + html; $('autoLog').prepend(p); }
-const txLink = (h) => `<a href="https://basescan.org/tx/${h}" target="_blank" rel="noopener">tx ${String(h).slice(0, 10)}…</a>`;
+/* a log line from plain parts: strings are TEXT, { tx } a Basescan link (only a well-formed hash), { b } bold text */
+function autoNote(...parts) {
+  const p = document.createElement('div'); p.append(clock() + ' · ');
+  for (const x of parts) {
+    if (x && x.tx && HASH_RE.test(String(x.tx).toLowerCase())) { const a = document.createElement('a'); a.href = 'https://basescan.org/tx/' + x.tx; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'tx ' + x.tx.slice(0, 10) + '…'; p.append(a); }
+    else if (x && x.b != null) { const b = document.createElement('b'); b.textContent = String(x.b); p.append(b); }
+    else p.append(String(x));
+  }
+  $('autoLog').prepend(p);
+}
 const usd6 = (x) => fmt(Number(BigInt(x)) / 1e6, 2);
 function autoRender() {
-  const s = auto.s;
-  $('autoWallet').innerHTML = !s ? 'No fly wallet in this browser yet.'
-    : `Fly wallet <b>${displayShort(s.address)}</b> (<a href="https://basescan.org/address/${s.address}" target="_blank" rel="noopener">Basescan</a>) · funded by ${s.owner ? displayShort(s.owner) : 'nobody yet'}`
-      + ` · ${s.running ? '<b>trading alone</b>' : 'stopped'} · ${s.today} trade${s.today === 1 ? '' : 's'} today`;
+  const s = auto.s, el = $('autoWallet');
+  el.textContent = '';
+  if (!s) el.textContent = 'No fly wallet in this browser yet.';
+  else {
+    el.append('Fly wallet ', Object.assign(document.createElement('b'), { textContent: displayShort(s.address) }), ' (');
+    el.append(Object.assign(document.createElement('a'), { href: 'https://basescan.org/address/' + s.address, target: '_blank', rel: 'noopener', textContent: 'Basescan' }));
+    el.append(`) · funded by ${s.owner ? displayShort(s.owner) : 'nobody yet'} · ${s.running ? 'TRADING ALONE' : 'stopped'} · ${s.today} trade${s.today === 1 ? '' : 's'} today`);
+  }
   $('autoCreate').disabled = !!s; $('autoFund').disabled = !s; $('autoStart').disabled = !s || !s.owner || s.running;
   $('autoWithdraw').disabled = !s || !s.owner; $('autoExport').disabled = !s;
+  $('inject').disabled = !!(s && s.running);
 }
 async function autoAccount(token) {
   const r = await fetch('/api/fly/account/' + auto.s.address + (token ? '?token=' + token : ''), { cache: 'no-store' }).then((x) => x.json());
-  if (!r || !r.ok) throw new Error('balances not read: ' + ((r && r.why) || 'no answer'));
+  if (!r || !r.ok) throw new Error('balances not read: ' + String((r && r.why) || 'no answer').slice(0, 120));
   return r;
 }
 const postJson = (u, b) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((x) => x.json());
@@ -230,21 +261,30 @@ async function autoFund() {
   if (!auto.s || !$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
   if (!live.account) await connect();
   if (!live.account) { autoSay('Connect your wallet first (button above).'); return; }
+  /* the network is read again right before sending: a wallet switched to another chain since "connect" would send there (review L1) */
+  const chain = String(await eth().request({ method: 'eth_chainId' }).catch(() => '')).toLowerCase();
+  if (chain !== '0x2105') { autoSay('Your wallet is not on Base right now (chain ' + chain + '): nothing sent. Switch to Base and press again.'); return; }
+  const payer = live.account.toLowerCase();
   const usdc = BigInt(Math.round(Math.min(100, Math.max(1, Number($('autoBudget').value) || 0)) * 1e6));
   const word = (a) => a.slice(2).toLowerCase().padStart(64, '0');
   const calls = [{ to: USDC_BASE, data: selecteur('transfer(address,uint256)') + word(auto.s.address) + usdc.toString(16).padStart(64, '0'), value: '0x0' },
     { to: auto.s.address, data: '0x', value: '0x' + AUTO_GAS_ETH.toString(16) }];
-  auto.s.owner = live.account.toLowerCase(); autoSave(); autoRender();
   try {
+    let batched = false;
     try {
-      const id = await eth().request({ method: 'wallet_sendCalls', params: [{ version: '1.0', chainId: '0x2105', from: live.account, atomicRequired: true, calls }] });
-      autoNote(`funding sent in ONE signature: ${usd6(usdc)} USDC + 0.0002 ETH for gas (batch ${String(id && (id.id || id)).slice(0, 16)}…)`);
+      const id = await eth().request({ method: 'wallet_sendCalls', params: [{ version: '2.0.0', chainId: '0x2105', from: payer, atomicRequired: true, calls }] });
+      batched = true; autoNote(`funding sent in ONE signature: ${usd6(usdc)} USDC + 0.0002 ETH for gas (batch ${String(id && (id.id || id)).slice(0, 16)}…)`);
     } catch (err) {
-      if (err && err.code === 4001) throw err; /* the user said no: never ask again in another form */
-      autoNote('your wallet does not batch calls: two signatures instead (USDC, then the gas ETH)');
-      for (const c of calls) { const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: live.account, ...c }] }); autoNote('sent ' + txLink(h)); await waitReceipt(h); }
+      /* only a wallet that does not know the method gets the two-signature path: any other error may mean the batch went out */
+      if (!(err && (err.code === 4200 || err.code === -32601 || /not supported|does not exist|unsupported/i.test(String(err.message))))) throw err;
     }
-    autoSay('Funded. Check its balance below once the transaction is mined, then press "Let it trade alone".');
+    if (!batched) {
+      autoNote('your wallet does not batch calls: two signatures instead (USDC, then the gas ETH)');
+      for (const c of calls) { const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: payer, ...c }] }); autoNote('sent ', { tx: h }); await waitReceipt(h); }
+    }
+    /* the owner (where Withdraw sends) is the wallet that paid, set only once the funding went out (review L2) */
+    autoRefresh(); auto.s.owner = payer; autoSave(); autoRender();
+    autoSay('Funded. Its balance shows below once the transaction is mined; then press "Let it trade alone".');
     setTimeout(autoShowBalance, 8000);
   } catch (err) { autoSay('Not funded: ' + String((err && err.message) || err).slice(0, 140)); }
 }
@@ -254,92 +294,119 @@ async function autoShowBalance() {
     autoSay(`In the fly's wallet: ${usd6(a.usdc)} USDC · ${current.symbol} ${a.stock == null ? '?' : fmt(Number(BigInt(a.stock)) / 10 ** (live.decimals ?? 8), 6)} · ${fmt(Number(BigInt(a.eth)) / 1e18, 6)} ETH for gas (block ${a.block}).`);
   } catch (e) { autoSay(String(e.message)); }
 }
-/* one call, signed by the fly's key and relayed; waits for its receipt (status 0x1 or it throws) */
-async function flySend(c) {
+/* one call, signed by the fly's key and relayed; waits for its receipt (status 0x1 or it throws). `sweep`: send all the ETH left,
+ * computed with the SAME gas and fee as the signature (review M4). */
+async function flySend(c, { sweep = false } = {}) {
   const W = await flyWallet(), a = await autoAccount();
-  const g = await postJson('/api/fly/estimate', { from: auto.s.address, to: c.to, data: c.data, value: c.value || '0x0' });
+  const g = await postJson('/api/fly/estimate', { from: auto.s.address, to: c.to, data: c.data, value: sweep ? '0x1' : (c.value || '0x0') });
   if (!g || !g.ok) throw new Error('the chain refuses this call (gas estimate): ' + String((g && g.why) || '').slice(0, 120));
-  const gas = BigInt(g.gas) * 12n / 10n, prio = 1000000n, maxFee = BigInt(a.baseFeePerGas) * 2n + prio, value = BigInt(c.value || '0x0');
-  if (BigInt(a.eth) < gas * maxFee + value + AUTO_ETH_KEEP) throw new Error('out of ETH for gas: the fly stops (send it a little ETH, or withdraw)');
+  const gas = BigInt(g.gas) * 13n / 10n, prio = 1000000n, maxFee = BigInt(a.baseFeePerGas) * 2n + prio;
+  const value = sweep ? BigInt(a.eth) - gas * maxFee - AUTO_ETH_KEEP : BigInt(c.value || '0x0');
+  if (sweep && value <= 0n) return null;
+  if (BigInt(a.eth) < gas * maxFee + value + (sweep ? 0n : AUTO_ETH_KEEP)) throw new Error('out of ETH for gas: the fly stops (send it a little ETH, or withdraw)');
   const s = W.signTx({ chainId: 8453, nonce: BigInt(a.nonce), maxPriorityFeePerGas: prio, maxFeePerGas: maxFee, gas, to: c.to, value, data: c.data || '0x' }, auto.s.key);
   const r = await postJson('/api/fly/relay', { raw: s.raw });
   if (!r || !r.ok) throw new Error('not sent: ' + String((r && r.why) || 'no answer').slice(0, 140));
   if (String(r.hash).toLowerCase() !== s.hash.toLowerCase()) throw new Error('the relay answered another transaction hash: stopped');
   for (let k = 0; k < 60; k++) {
     const q = await fetch('/api/fly/receipt/' + s.hash, { cache: 'no-store' }).then((x) => x.json()).catch(() => null);
-    if (q && q.ok && q.receipt) { if (q.receipt.status !== '0x1') throw new Error('failed on chain: ' + txLink(s.hash)); return s.hash; }
+    if (q && q.ok && q.receipt) { if (q.receipt.status !== '0x1') throw new Error('failed on chain: ' + s.hash); return { hash: s.hash, value }; }
     await new Promise((o) => setTimeout(o, 2000));
   }
-  throw new Error('no receipt after 2 minutes: check ' + txLink(s.hash) + ' before anything else');
+  throw new Error('no receipt after 2 minutes: check ' + s.hash + ' on Basescan before anything else');
 }
+/* one tab trades at a time (Web Locks where the browser has them) */
+const withLock = (fn) => (navigator.locks ? navigator.locks.request('fly-auto', { ifAvailable: true }, (l) => (l ? fn() : 'locked')) : fn());
 async function autoTrade(e) {
+  if (!auto.s || e.sim || e.type !== 'decision') return;
+  autoRefresh();
   const s = auto.s;
-  if (!s || !s.running || auto.busy || e.sim || (e.action !== 'buy' && e.action !== 'sell')) return;
-  const today = new Date().toISOString().slice(0, 10);
-  if (s.day !== today) { s.day = today; s.today = 0; }
-  const maxDay = Math.min(50, Math.max(1, Math.floor(Number($('autoDay').value) || 0)));
-  if (s.today >= maxDay) { autoNote(`decided ${ACT[e.action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
+  if (!s.running) return;
+  if (auto.busy) { autoNote(`decided ${ACT[e.action]} while a trade was still in flight: this decision is skipped`); return; }
   auto.busy = true;
   const stock = current;
   try {
-    const a = await autoAccount(stock.address);
-    let de, vers, montant;
-    if (e.action === 'buy') {
-      const cap = BigInt(Math.round(Math.min(100, Math.max(0.5, Number($('autoCap').value) || 0)) * 1e6)), have = BigInt(a.usdc);
-      const amt = have < cap ? have : cap;
-      if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
-      de = USDC_BASE; vers = stock.address; montant = amt.toString();
-    } else {
-      if (!a.stock || BigInt(a.stock) === 0n) { autoNote(`decided SELL ${stock.symbol}, but it holds none: nothing to sell`); return; }
-      de = stock.address; vers = USDC_BASE; montant = a.stock;
-    }
-    const q = new URLSearchParams({ de, vers, montant, compte: s.address });
-    let p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
-    for (let round = 0; round < 3; round++) {
-      if (!p || !p.ok) { autoNote(`decided ${ACT[e.action]} ${stock.symbol}: no order (${(p && p.etat) || '?'}${p && p.pourquoi ? ' — ' + String(p.pourquoi).slice(0, 120) : ''})`); return; }
-      for (const c of p.aSigner) {
-        if (!s.running) { autoNote('stopped before sending: nothing more goes out'); return; }
-        const h = await flySend(c);
-        autoNote(`${ACT[e.action]} ${stock.symbol} · ${c.nom || c.role || 'call'} mined · ${txLink(h)}`);
+    const done = await withLock(async () => {
+      const today = new Date().toISOString().slice(0, 10);
+      if (s.day !== today) { s.day = today; s.today = 0; }
+      const maxDay = Math.min(50, Math.max(1, Math.floor(Number($('autoDay').value) || 0)));
+      const a = await autoAccount(stock.address), held = a.stock ? BigInt(a.stock) : 0n;
+      /* the REAL position decides, not the paper book: after a reload or a stock switch the paper book starts out (review L3) */
+      const action = decide(e.word, held > 0n ? 1 : 0);
+      if (action !== 'buy' && action !== 'sell') return;
+      if (s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
+      let de, vers, montant;
+      if (action === 'buy') {
+        const cap = BigInt(Math.round(Math.min(100, Math.max(0.5, Number($('autoCap').value) || 0)) * 1e6)), have = BigInt(a.usdc);
+        const amt = have < cap ? have : cap;
+        if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
+        de = USDC_BASE; vers = stock.address; montant = amt.toString();
+      } else { de = stock.address; vers = USDC_BASE; montant = held.toString(); }
+      const q = new URLSearchParams({ de, vers, montant, compte: s.address });
+      let p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
+      for (let round = 0; round < 3; round++) {
+        if (!p || !p.ok) { autoNote(`decided ${ACT[action]} ${stock.symbol}: no order (${String((p && p.etat) || '?')}${p && p.pourquoi ? ' — ' + String(p.pourquoi).slice(0, 120) : ''})`); return; }
+        if (!p.resume || String(p.resume.paye) !== montant) throw new Error('the plan does not pay the amount asked (' + String(p.resume && p.resume.paye) + ' vs ' + montant + ')');
+        /* ⛔ H1: nothing is signed that the browser's own guard does not accept */
+        const refused = checkPlanCalls({ calls: p.aSigner, fly: s.address, pay: de, receive: vers, amount: montant, nowSec: Math.floor(Date.now() / 1000) });
+        if (refused) throw new Error('the fly refused to sign: ' + refused.why);
+        for (const c of p.aSigner) {
+          if (!autoRefresh().running) { autoNote('stopped before sending: nothing more goes out'); return; }
+          const r = await flySend(c);
+          autoNote(`${ACT[action]} ${stock.symbol} · ${String(c.nom || c.role || 'call').slice(0, 80)} mined · `, { tx: r.hash });
+        }
+        if (p.etat !== 'APPROBATIONS') break;
+        p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
       }
-      if (p.etat !== 'APPROBATIONS') break;
-      p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
-    }
-    s.today++; if (!s.traded.includes(stock.address)) s.traded.push(stock.address); autoSave();
-    autoNote(`<b>${ACT[e.action]} ${stock.symbol} done</b> on its own (${s.today}/${maxDay} today). Paid at most what the plan said; see Basescan.`);
+      autoRefresh(); auto.s.today++; if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
+      autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${auto.s.today}/${maxDay} today). The app's interface fee was in the plan (${String((p.resume && p.resume.fraisBps) || '?')} bps); see Basescan.`);
+    });
+    if (done === 'locked') autoNote('another tab of this page is trading with the same fly: this tab does nothing');
   } catch (err) {
-    const m = String((err && err.message) || err);
-    autoNote('<b>error, the fly stops</b>: ' + m.slice(0, 200)); s.running = false; autoSave();
+    autoNote({ b: 'error, the fly stops' }, ': ' + String((err && err.message) || err).slice(0, 200));
+    autoRefresh(); auto.s.running = false; autoSave();
   } finally { auto.busy = false; autoRender(); autoShowBalance(); }
 }
 function autoStart() { if (!auto.s || !auto.s.owner) return; if (!$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
-  auto.s.running = true; autoSave(); autoRender(); autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${$('autoCap').value} USDC per buy, ${$('autoDay').value} trades a day. Stop halts it at once.`); }
-function autoStop() { if (!auto.s) return; auto.s.running = false; autoSave(); autoRender(); autoNote('<b>stopped</b>: it sends nothing more' + (auto.busy ? ' after the call in flight' : '') + '.'); }
+  autoRefresh(); auto.s.running = true; autoSave(); autoRender();
+  autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${$('autoCap').value} USDC per buy, ${$('autoDay').value} trades a day. Stop halts it.`); }
+function autoStop() { if (!auto.s) return; autoRefresh(); auto.s.running = false; autoSave(); autoRender(); autoNote({ b: 'stopped' }, ': it sends nothing more' + (auto.busy ? ' after the call already in flight' : '') + '.'); }
 async function autoWithdraw() {
   if (!auto.s || !auto.s.owner) return;
   autoStop();
   if (!confirm('Send everything in the fly wallet back to ' + auto.s.owner + ' (the wallet that funded it)?')) return;
-  const word = (a) => a.slice(2).toLowerCase().padStart(64, '0'), T = selecteur('transfer(address,uint256)');
+  /* a trade in flight finishes first, so its result is withdrawn too (review M4) */
+  for (let k = 0; k < 90 && auto.busy; k++) await new Promise((o) => setTimeout(o, 2000));
+  if (auto.busy) { autoNote('a trade is still in flight after 3 minutes: withdraw not started, press again later'); return; }
+  const word = (a) => a.slice(2).toLowerCase().padStart(64, '0'), T = selecteur('transfer(address,uint256)'), to = auto.s.owner;
   try {
-    for (const tok of [...new Set([...auto.s.traded, current.address])]) {
-      const a = await autoAccount(tok);
-      if (a.stock && BigInt(a.stock) > 0n) autoNote('stock back: ' + txLink(await flySend({ to: tok, data: T + word(auto.s.owner) + BigInt(a.stock).toString(16).padStart(64, '0'), value: '0x0' })));
+    /* each stock on its own: one balance that cannot be read must not keep the USDC and the ETH from coming back */
+    const unread = [];
+    for (const tok of [...new Set([...auto.s.traded, ...STOCKS.map((x) => x.address)])].slice(0, 40)) {
+      let a = null;
+      try { a = await autoAccount(tok); } catch (_) { unread.push((STOCKS.find((x) => x.address === tok) || {}).symbol || displayShort(tok)); }
+      if (a && a.stock && BigInt(a.stock) > 0n) autoNote('stock back: ', { tx: (await flySend({ to: tok, data: T + word(to) + BigInt(a.stock).toString(16).padStart(64, '0'), value: '0x0' })).hash });
+      await new Promise((o) => setTimeout(o, 2100)); /* the server's per-minute budget for balance reads */
     }
+    if (unread.length) autoNote({ b: 'not read' }, ': ' + unread.join(', ') + ' — their balance could not be read this time; press Withdraw again later for them.');
     const u = await autoAccount();
-    if (BigInt(u.usdc) > 0n) autoNote(usd6(u.usdc) + ' USDC back: ' + txLink(await flySend({ to: USDC_BASE, data: T + word(auto.s.owner) + BigInt(u.usdc).toString(16).padStart(64, '0'), value: '0x0' })));
-    const e = await autoAccount(), maxFee = BigInt(e.baseFeePerGas) * 2n + 1000000n, left = BigInt(e.eth) - 21000n * maxFee * 12n / 10n - AUTO_ETH_KEEP;
-    if (left > 0n) autoNote(fmt(Number(left) / 1e18, 6) + ' ETH back: ' + txLink(await flySend({ to: auto.s.owner, data: '0x', value: '0x' + left.toString(16) })));
-    autoNote('<b>withdrawn</b>. A dust of ETH (under 0.000006) stays for the network fee of that last send.');
-  } catch (err) { autoNote('<b>withdraw stopped</b>: ' + String((err && err.message) || err).slice(0, 200) + ' — what was sent is above; press again to retry.'); }
+    if (BigInt(u.usdc) > 0n) autoNote(usd6(u.usdc) + ' USDC back: ', { tx: (await flySend({ to: USDC_BASE, data: T + word(to) + BigInt(u.usdc).toString(16).padStart(64, '0'), value: '0x0' })).hash });
+    const r = await flySend({ to, data: '0x' }, { sweep: true });
+    if (r) autoNote(fmt(Number(r.value) / 1e18, 6) + ' ETH back: ', { tx: r.hash });
+    autoNote({ b: 'withdrawn' }, '. A dust of ETH (about 0.000005) stays for the network fee of that last send.');
+  } catch (err) { autoNote({ b: 'withdraw stopped' }, ': ' + String((err && err.message) || err).slice(0, 200) + ' — what was sent is above; press again to retry.'); }
   autoShowBalance();
 }
 function autoExport() {
   if (!auto.s || !confirm('Show the fly wallet key? Anyone who sees it can take the money in it. Copy it somewhere only you can read.')) return;
-  autoSay('Key (keep it secret): ' + auto.s.key);
+  autoSay('Key (keep it secret, hidden again in 60 s): ' + auto.s.key);
+  setTimeout(() => { if ($('autoState').textContent.includes(auto.s.key)) autoSay('Key hidden again.'); }, 60000);
 }
 function autoWire() {
   auto.s = autoLoad();
-  if (auto.s && auto.s.running) { auto.s.running = false; autoSave(); autoNote('page reopened: the fly was trading alone, it is now <b>stopped</b> until you press "Let it trade alone" again.'); }
+  if (auto.s && auto.s.running) { auto.s.running = false; autoSave(); autoNote('page reopened: the fly was trading alone, it is now ', { b: 'stopped' }, ' until you press "Let it trade alone" again.'); }
+  /* another tab pressed Stop (or started it): obey at once */
+  window.addEventListener('storage', (ev) => { if (ev.key === AUTO_KEY) { const x = autoLoad(); if (x && auto.s && x.key === auto.s.key) { auto.s = x; autoRender(); } } });
   $('autoCreate').addEventListener('click', autoCreate); $('autoFund').addEventListener('click', autoFund); $('autoStart').addEventListener('click', autoStart);
   $('autoStop').addEventListener('click', autoStop); $('autoWithdraw').addEventListener('click', autoWithdraw); $('autoExport').addEventListener('click', autoExport);
   autoRender(); if (auto.s) autoShowBalance();
@@ -622,16 +689,16 @@ function forget() {
 async function readShared() {
   try {
     const s = await fetch('/api/fly/state', { cache: 'no-store' }).then((x) => x.json());
-    if (!s || !s.ok) { $('shared').innerHTML = `<div class="state">The shared fly is not running: ${(s && s.why) || 'no answer'}.</div>`; return; }
+    if (!s || !s.ok) { $('shared').innerHTML = `<div class="state">The shared fly is not running: ${esc((s && s.why) || 'no answer')}.</div>`; return; }
     const since = new Date(s.trainingSince || s.aliveSince).toLocaleString('en-GB');
     const mem = s.persisted ? 'memory kept across server restarts' + (s.restored ? ' (reloaded at the last restart, ' + new Date(s.aliveSince).toLocaleString('en-GB') + ')' : '')
-      : 'memory NOT kept: it starts again when the server restarts' + (s.saveError ? ' (' + s.saveError + ')' : '');
-    $('shared').innerHTML = `<div class="state">${s.symbol} · training since ${since} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far · ${mem}</div>`
+      : 'memory NOT kept: it starts again when the server restarts' + (s.saveError ? ' (' + esc(s.saveError) + ')' : '');
+    $('shared').innerHTML = `<div class="state">${esc(s.symbol)} · training since ${esc(since)} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far · ${mem}</div>`
       + `<div class="state" style="margin-top:4px">${tallyText(s.session.tally)}</div><div id="sharedBook" class="book"></div>`
       + (s.foresight && s.foresight.exact && s.foresight.scenarios.length ? `<div class="state" style="margin-top:4px">Next, computed on its shadow (${s.foresight.pos ? 'holding' : 'out'}, if the next trades smell like the last): `
         + s.foresight.scenarios.map((sc) => `${sc.move ? pct(sc.move, 0) : '0%'} → <span class="act ${sc.action}">${ACT[sc.action]}</span>`).join(' · ') + '</div>'
-        : `<div class="state" style="margin-top:4px">Next: no forecast yet (${(s.foresight && s.foresight.why) || 'not computed yet'}).</div>`)
-      + `<div class="log" style="margin-top:6px;max-height:180px">${s.events.slice(-12).reverse().map((e) => `<p class="${e.type === 'verdict' ? 'verdict' : 'live'}">${clock(e.at)} · ${eventText(e, s.symbol)}</p>`).join('')}</div>`;
+        : `<div class="state" style="margin-top:4px">Next: no forecast yet (${esc((s.foresight && s.foresight.why) || 'not computed yet')}).</div>`)
+      + `<div class="log" style="margin-top:6px;max-height:180px">${s.events.slice(-12).reverse().map((e) => `<p class="${e.type === 'verdict' ? 'verdict' : 'live'}">${clock(e.at)} · ${esc(eventText(e, s.symbol))}</p>`).join('')}</div>`;
     renderBook(s.session, $('sharedBook'));
   } catch (_) { $('shared').innerHTML = '<div class="state">The shared fly could not be read this time.</div>'; }
 }
@@ -762,6 +829,8 @@ async function start() {
    *   chosen move — taught, then asked again on that same live odor, so the needle moves on the market's own smell. Before any real trade
    *   was smelled, a $5,000 "received" odor stands in, and the log says so. */
   $('inject').addEventListener('click', () => { const v = Number(slider.value) / 1000; if (!v) return;
+    /* a simulation teaches THIS fly: while its wallet trades alone, it would steer real orders (security review M1) */
+    if (auto.s && auto.s.running) { log('SIMULATION refused: the fly wallet is trading alone on these decisions; stop it first', 'sim'); return; }
     const live = session.lastOdor, mix = live || { received: 5000, sent: 0, moved: 0 }; simOnLive = !!live;
     log(`SIMULATION · ${live ? 'on the last real window (' + mixText(mix) + ')' : 'no real trade smelled yet, a stand-in ' + mixText(mix)} followed by ${pct(v, 1)}`, 'sim');
     if (live) for (const [k, usd] of Object.entries(mix)) if (usd > 0) ripple(k, usd);

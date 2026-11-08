@@ -3022,7 +3022,7 @@ async function fenetreMouche() {
 /* the autonomous fly's relay guard (fly-relay.js): only calls this server planned, withdraw transfers, plain ETH sends */
 const GARDE_MOUCHE = createRelayGuard({ usdc: USDC_BASE, isStock: (a) => !!POOLS_ACTIONS_AERODROME.get(a), transferSelector: selecteurSrv('transfer(address,uint256)') });
 /* per IP and per minute, for each fly route */
-const FLY_BUDGET = { minute: -1, parIp: new Map() }, FLY_LIMITES = { account: 30, estimate: 30, relay: 12, receipt: 60 };
+const FLY_BUDGET = { minute: -1, parIp: new Map() }, FLY_LIMITES = { account: 60, estimate: 30, relay: 12, receipt: 60 };
 function budgetMouche(req, route) {
   const m = Math.floor(Date.now() / 60000);
   if (FLY_BUDGET.minute !== m) { FLY_BUDGET.minute = m; FLY_BUDGET.parIp.clear(); }
@@ -3033,7 +3033,7 @@ function budgetMouche(req, route) {
 async function compteMouche(adresse, token) {
   const mot = adresse.slice(2).toLowerCase().padStart(64, '0'), bal = selecteurSrv('balanceOf(address)') + mot;
   const [nonce, blk, eth, usdc, stock] = await Promise.all([
-    rpcServeurBrut('eth_getTransactionCount', [adresse, 'pending']), rpcServeurBrut('eth_getBlockByNumber', ['latest', false]), rpcServeurBrut('eth_getBalance', [adresse, 'latest']),
+    rpcServeur('eth_getTransactionCount', [adresse, 'pending']), rpcServeur('eth_getBlockByNumber', ['latest', false]), rpcServeur('eth_getBalance', [adresse, 'latest']),
     rpcRails('eth_call', [{ to: USDC_BASE, data: bal }, 'latest']), token ? rpcRails('eth_call', [{ to: token, data: bal }, 'latest']) : Promise.resolve(null)]);
   return { ok: true, address: adresse, nonce: BigInt(nonce).toString(), baseFeePerGas: BigInt(blk.baseFeePerGas).toString(), block: Number(BigInt(blk.number)),
     eth: BigInt(eth).toString(), usdc: BigInt(usdc).toString(), stock: stock == null ? null : BigInt(stock).toString(), token: token || null };
@@ -5878,7 +5878,7 @@ const SERVIS = [
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-11-07 (human-brain branch): the real fly memory circuit (hemibrain v1.2, Janelia, CC BY 4.0) wired to stock prices, read-only */
-  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js', 'fly-tx.js', 'fly-wallet.js',
+  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js', 'fly-tx.js', 'fly-wallet.js', 'fly-guard.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
   'cles-v4-mesurees.js',
   /* 2026-10-03 : les 20 pools v4 USDC des actions tokenisees, logs bruts (importe par cles-v4-mesurees.js) */
@@ -6117,6 +6117,15 @@ try {
   }
 } catch (e) { nobleRefuses.push('manifest unreadable: ' + String(e.message).slice(0, 80)); }
 if (nobleRefuses.length) console.error('[servi] ⛔ lib/noble NOT served: ' + nobleRefuses.join(', '));
+/* 2026-11-08 (security review H2): the fly page holds a wallet key in this origin's storage. A strict CSP: scripts only from this
+ *   site plus its ONE inline import map, pinned by its own sha256 (computed here from the served bytes, never typed); no frames, no
+ *   plugins, network only to this site. A changed import map without a new hash is simply blocked: fail-closed. */
+{
+  const fb = cache.get('/fly-brain.html');
+  const im = fb && /<script type="importmap">([\s\S]*?)<\/script>/.exec(fb.corps.toString('utf8'));
+  if (fb) fb.csp = "default-src 'self'; script-src 'self'" + (im ? " 'sha256-" + createHash('sha256').update(im[1], 'utf8').digest('base64') + "'" : '')
+    + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+}
 
 /** Le build du fichier SERVI, lu dans son `data-build` — jamais une constante tapee a cote. */
 function buildServi() {
@@ -6273,6 +6282,7 @@ const entete = (e, gz = false) => ({
     : (e.vendorEpingle ? 'public, max-age=31536000, immutable' : 'no-store, max-age=0'),
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
+  ...(e.csp ? { 'content-security-policy': e.csp } : {}),
 });
 
 /** L etiquette d une requete pour le compteur d archive : la route, adresses et nombres generalises (une cle par ROUTE, pas par
@@ -7273,7 +7283,7 @@ function traiterRequete(req, res) {
     if (route === 'receipt') {
       const h = chemin.slice('/api/fly/receipt/'.length).toLowerCase();
       if (!/^0x[0-9a-f]{64}$/.test(h)) { send(400, { ok: false, why: 'usage: /api/fly/receipt/<transaction hash>' }); return; }
-      rpcServeurBrut('eth_getTransactionReceipt', [h]).then((r) => send(200, { ok: true, receipt: r ? { status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed } : null })).catch(panne);
+      rpcServeur('eth_getTransactionReceipt', [h]).then((r) => send(200, { ok: true, receipt: r ? { status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed } : null })).catch(panne);
       return;
     }
     lireCorpsMouche(req, route === 'relay' ? 64 * 1024 : 16 * 1024).then(async (b) => {
@@ -7281,7 +7291,7 @@ function traiterRequete(req, res) {
         const ok = (x) => typeof x === 'string';
         if (!b || !/^0x[0-9a-fA-F]{40}$/.test(b.from) || !/^0x[0-9a-fA-F]{40}$/.test(b.to) || !ok(b.data) || !/^0x[0-9a-fA-F]*$/.test(b.data) || (b.value != null && !/^0x[0-9a-fA-F]{1,64}$/.test(b.value))) {
           send(400, { ok: false, why: 'body: {from, to, data, value?} as hex' }); return; }
-        const gas = await rpcServeurBrut('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]);
+        const gas = await rpcServeur('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]);
         send(200, { ok: true, gas: BigInt(gas).toString() }); return;
       }
       /* relay */
@@ -7290,7 +7300,7 @@ function traiterRequete(req, res) {
       const refus = GARDE_MOUCHE.refusal(t);
       if (refus) { send(403, { ok: false, why: refus }); return; }
       const hash = keccak256HexSrv(t.bytes);
-      try { await rpcServeurBrut('eth_sendRawTransaction', [b.raw]); send(200, { ok: true, hash }); }
+      try { await rpcServeur('eth_sendRawTransaction', [b.raw]); send(200, { ok: true, hash }); }
       catch (e) { const m = String((e && e.message) || e);
         /* the same bytes sent twice (a retry on another node): already in the pool, same hash */
         if (/already known|known transaction/i.test(m)) send(200, { ok: true, hash, already: true }); else send(200, { ok: false, hash, why: m.slice(0, 160) }); }

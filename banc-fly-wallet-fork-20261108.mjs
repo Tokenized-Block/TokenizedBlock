@@ -4,7 +4,8 @@
 //   fork (TB_RPC_TEST) -> a fresh fly key (fly-wallet.js) -> the user's ONE opt-in (simulated on the fork: USDC + a little ETH sent to the
 //   fly) -> BUY SNDKc with 10 USDC through the app's planner (/api/rails/plan), every call signed by fly-wallet.js and sent RAW ->
 //   SELL it all back -> WITHDRAW the USDC to the user. Each step: receipt status 0x1 AND the balances that should move did move.
-// Usage: anvil --fork-url https://base-rpc.publicnode.com --port 8611 ; node banc-fly-wallet-fork-20261108.mjs
+// Usage: base-anvil --fork-url https://mainnet.base.org --port 8612 ; FORK_RPC=http://127.0.0.1:8612 node banc-fly-wallet-fork-20261108.mjs
+//   (base-anvil = foundryup --network base: Base precompiles, so tokenized stocks run; the stock anvil cannot run them)
 // It is NOT in the test series (it needs anvil): it is the gate before mainnet. Nothing here touches mainnet; no real value moves.
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -70,9 +71,8 @@ try {
     return null;
   }
 
-  /* ⛔ A tokenized stock (B20, a Base precompile) does NOT execute on an anvil fork (OpcodeNotFound; memory b20-reads-only-on-base-node):
-   *   the stock leg cannot be proven here. The fork proves the same money path with an ordinary asset: USDC -> ETH -> USDC through the
-   *   same planner, approvals and signer. The stock leg needs a tiny mainnet trade, decided by Phil. */
+  /* First the money path with an ordinary asset (USDC -> ETH -> USDC); the tokenized-stock leg follows below. ⛔ CORRECTED 2026-11-08:
+   *   I first wrote that a stock 'cannot run on a fork'. True only of the stock anvil (OpcodeNotFound): base-anvil executes them. */
   const ethBal = async (a) => BigInt(await rpc('eth_getBalance', [a, 'latest']));
   /* the relay refuses what no plan produced: an approve of the fly's USDC to an arbitrary spender */
   { const nonce = await rpc('eth_getTransactionCount', [fly, 'pending']), blk = await rpc('eth_getBlockByNumber', ['latest', false]);
@@ -87,35 +87,48 @@ try {
   const sell = await run('ETH', USDC, vendre, 'SELL that ETH back to USDC');
   const u2 = await bal(USDC, fly);
   ok(sell && u2 > u1 && u2 - u1 >= BigInt(sell.resume.recoitAuMoins), 'SELL: ' + vendre + ' wei sold, ' + (u2 - u1) + ' USDC units back (at least ' + (sell && sell.resume.recoitAuMoins) + ')');
-  /* STOCK LEG (NVDAc, AAPLc by default; FLY_STOCKS=SYM,SYM): the same planner and signer, 2 USDC each. Reported PROVEN only if the
-   * receipt is 0x1 AND the fly's stock balance went up; otherwise UNPROVEN with the node's own reason. Never counted as green. */
-  const stocks = String(process.env.FLY_STOCKS || 'NVDAc,AAPLc').split(',').filter(Boolean);
+  /* STOCK LEG (NVDAc, AAPLc by default; FLY_STOCKS=SYM,SYM), BUY with 2 USDC then SELL it all back, through the same planner, the
+   * browser's own guard (fly-guard.js checkPlanCalls, exactly as the page applies it), the fly's signer and the relay.
+   * ⛔ Tokenized stocks run only on a node with Base's precompiles: `base-anvil` (foundryup --network base) executes them, the stock
+   * anvil does not (OpcodeNotFound, measured 2026-11-08). On a stock anvil the leg is reported UNPROVEN and not counted; on base-anvil
+   * every step is an assertion. A busy planner (NON_MESURE) is retried after a minute, up to 3 times. */
+  const { checkPlanCalls } = await import('./fly-guard.js');
+  const stockNode = await (async () => { try { await bal([...POOLS_ACTIONS_AERODROME.keys()][0], fly); return true; } catch (_) { return false; } })();
+  if (!stockNode) console.log('UNPROVEN stock leg: this fork cannot execute tokenized stocks (use base-anvil)');
+  async function trade(de, vers, montant, label) {
+    for (let round = 0, busy = 0; round < 3; ) {
+      const q = new URLSearchParams({ de, vers, montant: String(montant), compte: fly });
+      const p = await fetch(BASE + '/api/rails/plan?' + q).then((x) => x.json());
+      if (p.etat === 'NON_MESURE' && busy < 3) { busy++; await new Promise((o) => setTimeout(o, 65000)); continue; }
+      if (!p.ok) return label + ': plan ' + p.etat + ' (' + String(p.pourquoi || '').slice(0, 140) + ')';
+      const refused = checkPlanCalls({ calls: p.aSigner, fly, pay: de, receive: vers, amount: String(montant), nowSec: Number(BigInt((await rpc('eth_getBlockByNumber', ['latest', false])).timestamp)) });
+      ok(refused === null && String(p.resume.paye) === String(montant), label + ': the browser guard accepts this real plan (' + p.aSigner.map((c) => c.nom || c.role || 'call').join(' + ').slice(0, 90) + ')' + (refused ? ' — ' + refused.why : ''));
+      if (refused) return label + ': refused by the guard';
+      for (const c of p.aSigner) {
+        const nonce = await rpc('eth_getTransactionCount', [fly, 'pending']), blk = await rpc('eth_getBlockByNumber', ['latest', false]);
+        const gas = BigInt(await rpc('eth_estimateGas', [{ from: fly, to: c.to, data: c.data, value: c.value }])) * 12n / 10n;
+        const sg = signTx({ chainId: 8453, nonce: BigInt(nonce), maxPriorityFeePerGas: 1000000n, maxFeePerGas: BigInt(blk.baseFeePerGas) * 2n + 1000000n, gas, to: c.to, value: BigInt(c.value || '0x0'), data: c.data }, key);
+        const r = await receipt(await relay(sg.raw));
+        ok(r.status === '0x1', label + ': receipt 0x1 (' + (c.nom || c.role || 'call') + ', gas ' + Number(BigInt(r.gasUsed)) + ')');
+        if (r.status !== '0x1') return label + ': reverted';
+      }
+      if (p.etat !== 'APPROBATIONS') return null;
+      round++;
+    }
+    return label + ': planner still busy after 3 tries';
+  }
+  const stocks = stockNode ? String(process.env.FLY_STOCKS || 'NVDAc,AAPLc').split(',').filter(Boolean) : [];
   for (const sym of stocks) {
     const e = [...POOLS_ACTIONS_AERODROME.entries()].find(([, t]) => t.symbole === sym);
-    if (!e) { console.log('UNPROVEN ' + sym + ': not in the pool registry'); continue; }
-    const tok = e[0];
-    let verdict, s0 = null;
-    try {
-      try { s0 = await bal(tok, fly); } catch (x) { s0 = null; console.log('  ' + sym + ' balanceOf on the fork: ' + String(x.message).slice(0, 160)); }
-      const q = new URLSearchParams({ de: USDC, vers: tok, montant: String(2n * 10n ** 6n), compte: fly });
-      let p = await fetch(BASE + '/api/rails/plan?' + q).then((x) => x.json());
-      verdict = 'plan ' + p.etat + (p.pourquoi ? ' (' + String(p.pourquoi).slice(0, 160) + ')' : '');
-      for (let round = 0; p.ok && round < 3; round++) {
-        let failed = null;
-        for (const c of p.aSigner) {
-          const nonce = await rpc('eth_getTransactionCount', [fly, 'pending']), blk = await rpc('eth_getBlockByNumber', ['latest', false]);
-          let gas; try { gas = BigInt(await rpc('eth_estimateGas', [{ from: fly, to: c.to, data: c.data, value: c.value }])) * 12n / 10n; }
-          catch (x) { failed = 'estimateGas refused (' + (c.nom || c.role || 'call') + '): ' + String(x.message).slice(0, 200); break; }
-          const sg = signTx({ chainId: 8453, nonce: BigInt(nonce), maxPriorityFeePerGas: 1000000n, maxFeePerGas: BigInt(blk.baseFeePerGas) * 2n + 1000000n, gas, to: c.to, value: BigInt(c.value || '0x0'), data: c.data }, key);
-          const r = await receipt(await relay(sg.raw));
-          if (r.status !== '0x1') { failed = 'receipt ' + r.status + ' (' + (c.nom || c.role || 'call') + ')'; break; }
-        }
-        if (failed) { verdict = failed; break; }
-        if (p.etat !== 'APPROBATIONS') { const s1 = await bal(tok, fly); verdict = s0 !== null && s1 > s0 ? 'PROVEN: +' + (s1 - s0) + ' units' : 'swap mined but balance did not rise (' + s0 + ' -> ' + s1 + ')'; break; }
-        p = await fetch(BASE + '/api/rails/plan?' + q).then((x) => x.json());
-      }
-    } catch (x) { verdict = 'error: ' + String(x.message).slice(0, 200); }
-    console.log((/^PROVEN/.test(verdict) ? '' : 'UNPROVEN ') + sym + ' BUY 2 USDC on the fork: ' + verdict);
+    if (!e) { ok(false, sym + ': not in the pool registry'); continue; }
+    const tok = e[0], s0 = await bal(tok, fly), uA = await bal(USDC, fly);
+    const why = await trade(USDC, tok, 2n * 10n ** 6n, 'BUY ' + sym + ' with 2 USDC');
+    const s1 = await bal(tok, fly), uB = await bal(USDC, fly);
+    ok(!why && s1 > s0 && uA - uB === 2n * 10n ** 6n, 'BUY ' + sym + ': 2 USDC spent, +' + (s1 - s0) + ' units of ' + sym + (why ? ' — ' + why : ''));
+    if (why || s1 === 0n) continue;
+    const why2 = await trade(tok, USDC, s1, 'SELL all the ' + sym);
+    const s2 = await bal(tok, fly), uC = await bal(USDC, fly);
+    ok(!why2 && s2 === 0n && uC > uB, 'SELL ' + sym + ': all ' + s1 + ' units sold, ' + (uC - uB) + ' USDC units back (round trip cost ' + (2n * 10n ** 6n - (uC - uB)) + ' units, fees and impact included)' + (why2 ? ' — ' + why2 : ''));
   }
   /* WITHDRAW: everything back to the user, signed by the fly */
   const u3 = await bal(USDC, fly);
@@ -125,7 +138,7 @@ try {
   const rw = await receipt(await relay(w.raw));
   ok(rw.status === '0x1' && (await bal(USDC, fly)) === 0n && (await bal(USDC, user)) - before === u3, 'WITHDRAW: all ' + u3 + ' USDC units back to the user, the fly holds 0');
   /* not a cost: only 9/10 of the ETH bought was sold back, the rest stays with the fly; a PROVEN stock leg also keeps its stock */
-  console.log('USDC not back: ' + (20n * 10n ** 6n - u3) + ' units of 20,000,000, which INCLUDES the 1/10 of the ETH kept unsold (and any stock bought), plus fees and price impact');
+  console.log('USDC not back: ' + (20n * 10n ** 6n - u3) + ' units of 20,000,000, which INCLUDES the 1/10 of the ETH kept unsold, plus fees and price impact (stocks bought are sold back above)');
 } catch (e) { ok(false, 'error: ' + String((e && e.message) || e).slice(0, 200)); }
 finally { stop(); }
 console.log(n + ' assertions, ' + ko + ' KO');
