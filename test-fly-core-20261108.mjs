@@ -66,6 +66,22 @@ async function banc(dir) {
   const t2 = events.filter((e) => e.type === 'tx');
   ok(t2.length === 1 && t2[0].tx === '0x02' && t2[0].kind === 'sent' && Math.abs(t2[0].usd - 200) < 1e-9, 'second window: only the new trade, sent $200');
   ok(events.some((e) => e.type === 'predict' && e.word === 'undecided'), 'a naive prediction is made BEFORE the outcome');
+  ok(JSON.stringify(ses.lastOdor) === JSON.stringify({ received: 0, sent: 200, moved: 0 }), 'the live odor a simulation is injected on: ' + JSON.stringify(ses.lastOdor));
+  /* the paper trader's rule */
+  const { decide } = await import(pathToFileURL(join(dir, 'fly-core.js')).href + '?d=' + Date.now() + Math.random());
+  ok(decide('approach', 0) === 'buy' && decide('avoid', 1) === 'sell' && decide('approach', 1) === 'hold' && decide('undecided', 1) === 'hold'
+    && decide('avoid', 0) === 'stay_out' && decide('undecided', 0) === 'stay_out', 'decide: buy / sell / hold / stay_out, never a short');
+  ok(events.some((e) => e.type === 'decision' && e.action === 'stay_out' && e.inBefore === false), 'a naive fly that is out stays out (decision event)');
+  /* a trained fly buys on "received", then windows without any trade keep its position: no smell, no move */
+  const ev4 = [], f4 = createFly(circuit), s4 = createSession(f4, (e) => ev4.push(e));
+  for (let k = 0; k < 3; k++) { const d = f4.odorDrive(rise); f4.addDopamine(d, 0.01); f4.present(d); f4.drain(); }
+  s4.window({ symbol: 'X', price: px(100), transactions: [] }); f4.drain();
+  s4.window({ symbol: 'X', price: px(100), transactions: [tx('0x10', 'received', 50)] }); f4.drain();
+  const achat = ev4.filter((e) => e.type === 'decision').pop();
+  s4.window({ symbol: 'X', price: px(101), transactions: [] }); f4.drain();
+  s4.window({ symbol: 'X', price: px(102), transactions: [] }); f4.drain();
+  const b4 = s4.state().books.fly;
+  ok(achat && achat.action === 'buy' && b4.pos === 1 && b4.switches === 1, 'trained fly buys, then holds through windows without trades (' + (achat && achat.action) + ', pos ' + b4.pos + ', ' + b4.switches + ' switch)');
   ses.window({ symbol: 'X', price: px(99), transactions: [] }); f3.drain();
   const st = ses.state();
   ok(st.tally.undecided === 1 && st.settled === 2, 'the undecided prediction is counted, two windows settled ' + JSON.stringify(st.tally) + ' ' + st.settled);
@@ -86,6 +102,8 @@ const MUTANTS = [
   ['frais oublies', (s) => s.replace('b.ret *= 1 - feePips / 1e6; b.switches++;', 'b.switches++;')],
   ['passe senti a la premiere fenetre', (s) => s.replace("if (firstWindow) { emit({ type: 'skipped', n: fresh.length }); fresh = []; }", '')],
   ['recu et envoye inverses', (s) => s.replace("if (s && mv.some((m) => m.vers === s)) return 'received';", "if (s && mv.some((m) => m.vers === s)) return 'sent';")],
+  ['vend sans tenir', (s) => s.replace("return word === 'approach' ? 'buy' : 'stay_out';", "return word === 'approach' ? 'buy' : word === 'avoid' ? 'sell' : 'stay_out';")],
+  ['fenetre sans odeur vend', (s) => s.replace("const flyWants = win.decision ? (win.decision === 'buy' || win.decision === 'hold' ? 1 : 0) : books.fly.pos;", "const flyWants = win.decision === 'buy' || win.decision === 'hold' ? 1 : 0;")],
   ['apprentissage sans dopamine', (s) => s.replace('let d = 0; for (const [i, w] of N[j].danIn) d += w * next[i];', 'let d = 0;')],
 ];
 let tues = 0;

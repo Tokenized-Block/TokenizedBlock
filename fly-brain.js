@@ -70,8 +70,35 @@ function show(e, symbol) {
   else if (e.type === 'taught') { log(`taught: ${mixText(e.mix)} was followed by ${pct(e.move, 3)} → ${e.move > 0 ? 'reward (PAM)' : 'punishment (PPL1)'} dopamine ${fmt(e.strength * 100, 0)}%`, kind); showTrace(e, kind); }
   else if (e.type === 'verdict') log(`consequence: predicted ${e.prediction}, the price moved ${pct(e.move, 3)} → ${e.kind === 'flat' ? 'flat, no verdict' : e.kind === 'consistent' ? 'it matched' : 'it went the other way'}`, 'verdict');
 }
+/* ── THE FLY TRADER: its decision on the live smell, said in full. Paper only, never an order, never advice. ── */
+const ACT = { buy: 'BUY', sell: 'SELL', hold: 'HOLD', stay_out: 'STAY OUT' };
+let lastDecision = null, simOnLive = false;
+function renderDecision(e) {
+  lastDecision = e;
+  const el = $('verdict'); el.textContent = (e.sim ? 'SIMULATED · ' : '') + ACT[e.action];
+  el.className = 'decision ' + e.action; void el.offsetWidth; el.classList.add('flash');
+  const n = Object.values(e.mix).filter((v) => v > 0).length;
+  /* who taught it: real windows, or (for a simulation) the move just injected — said as it is */
+  const fell = e.sim ? 'the injected move was a <b>fall</b> (punishment dopamine), on top of what real windows taught it' : 'windows that smelled like this were followed by <b>falls</b> (punishment dopamine)';
+  const rose = e.sim ? 'the injected move was a <b>rise</b> (reward dopamine), on top of what real windows taught it' : 'windows that smelled like this were followed by <b>rises</b> (reward dopamine)';
+  const memory = Math.abs(e.ap - e.av) < 0.005
+    ? (e.ap > 0.995 ? 'It has learned nothing yet about this smell: both sides answer like a naive fly.'
+      : `It has learned this smell both ways about equally (approach ${fmt(e.ap * 100, 1)}%, avoid ${fmt(e.av * 100, 1)}% of a naive fly): rises and falls cancel out, no pull either way.`)
+    : e.ap < e.av ? `Its approach synapses for this smell are weaker (<b>${fmt(e.ap * 100, 1)}%</b> left, avoid side ${fmt(e.av * 100, 1)}%): ${fell}.`
+      : `Its avoid synapses for this smell are weaker (<b>${fmt(e.av * 100, 1)}%</b> left, approach side ${fmt(e.ap * 100, 1)}%): ${rose}.`;
+  const rule = e.action === 'buy' ? 'It was out of the stock and is drawn to this smell: <b>it buys</b> (on paper).'
+    : e.action === 'sell' ? 'It held the stock and is repelled by this smell: <b>it sells</b> (on paper).'
+      : e.action === 'hold' ? 'It holds the stock and this smell does not repel it: <b>it keeps it</b>.'
+        : 'It is out, and this smell does not draw it in: <b>it stays out</b>.';
+  $('why').innerHTML = `${e.sim ? (simOnLive ? '<b>Simulation</b> on the smell of the last real window. ' : '<b>Simulation</b> on a stand-in smell (no real trade smelled yet). ') : ''}`
+    + `<b>Smelled</b>${e.sim && !simOnLive ? '' : ' in the last window'}: ${mixText(e.mix)} (${n} kind${n > 1 ? 's' : ''} of trade). `
+    + `${memory} ${rule} <span class="state">Paper only, not advice. Judged on the next window's price.</span>`;
+}
+
 function onEvent(e) {
   show(e, current.symbol);
+  if (e.type === 'tx') ripple(e.kind, e.usd);
+  if (e.type === 'decision') renderDecision(e);
   if (e.type === 'verdict' || e.type === 'taught') { renderTally(); }
   if (e.type === 'taught' && !e.sim) saveMemory();
 }
@@ -95,18 +122,58 @@ function measure() {
   return r;
 }
 
-function draw() {
+/* ── TRANSACTIONS ARRIVING, SHOWN: each real trade of a window is a ring on its PN group (received, sent, moved), spread over the window
+ * instead of one burst. Visual only: the neural activity stays what fly-core computes. ── */
+const KIND_COLOR = { received: '#4fd1c5', sent: '#f472b6', moved: '#a78bfa' };
+const KIND_OF = { received: 0n, sent: 1n, moved: 2n };
+let ripples = [], txSlot = 0;
+function ripple(kind, usd) {
+  const at = Date.now() + (txSlot++ % 10) * 2400;
+  ripples.push({ kind, at, size: Math.min(1, Math.log10(Math.max(10, usd)) / 5) });
+}
+function pnCenter(kind) {
+  if (!N.pnCenter) {
+    N.pnCenter = {};
+    for (const [k, r] of Object.entries(KIND_OF)) {
+      const l = N.filter((n) => n.family === 'PN' && BigInt(n.id) % 3n === r);
+      N.pnCenter[k] = { x: l.reduce((s, n) => s + n.x, 0) / l.length, y: l.reduce((s, n) => s + n.y, 0) / l.length, ids: new Set(l.map((n) => n.id)) };
+    }
+  }
+  return N.pnCenter[kind];
+}
+
+/* Drawing is batched (one stroke per colour and intensity, no shadow blur): the old one stroke per edge and blurred glow cost too much
+ * on phones. Quiet circuit = ~10 frames/s, activity = ~30. */
+const ALPHAS = 6;
+function draw(now) {
   if (!N.edges) return;
-  const W = canvas.width, H = canvas.height;
+  const W = canvas.width, H = canvas.height, t = Date.now();
   ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(5,7,13,0.35)'; ctx.fillRect(0, 0, W, H);
   ctx.globalCompositeOperation = 'lighter';
   const focus = selected != null ? selected : hovered;
+  const buckets = new Map();
   for (const [i, j, w] of N.edges) {
     if (hidden.has(N[i].family) || hidden.has(N[j].family)) continue;
     const a = act[i], base = (focus != null ? 0.008 : 0.025) + 0.05 * (w / N.wMax);
-    ctx.strokeStyle = COLOR[N[i].family]; ctx.globalAlpha = Math.min(0.9, base + a * 0.45 * (0.3 + w / N.wMax));
-    ctx.lineWidth = 0.4 + a * 1.2; ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke();
+    const alpha = Math.min(0.9, base + a * 0.45 * (0.3 + w / N.wMax)), q = Math.min(ALPHAS - 1, Math.floor(alpha * ALPHAS / 0.9)), thick = a > 0.3 ? 1 : 0;
+    const key = N[i].family + '|' + q + '|' + thick;
+    let b = buckets.get(key); if (!b) { b = []; buckets.set(key, b); } b.push(i, j);
   }
+  for (const [key, list] of buckets) {
+    const [fam, q, thick] = key.split('|');
+    ctx.strokeStyle = COLOR[fam]; ctx.globalAlpha = (Number(q) + 0.5) * 0.9 / ALPHAS; ctx.lineWidth = thick === '1' ? 1.4 : 0.5;
+    ctx.beginPath(); for (let k = 0; k < list.length; k += 2) { ctx.moveTo(N[list[k]].x, N[list[k]].y); ctx.lineTo(N[list[k + 1]].x, N[list[k + 1]].y); } ctx.stroke();
+  }
+  /* signals travelling along the active connections */
+  let dots = 0; const byColor = new Map();
+  for (const [i, j] of N.edges) {
+    if (dots >= 220) break;
+    if (act[i] < 0.25 || hidden.has(N[i].family) || hidden.has(N[j].family)) continue;
+    const f = ((t / 900) + ((i * 31 + j * 17) % 97) / 97) % 1, c = COLOR[N[i].family];
+    let l = byColor.get(c); if (!l) { l = []; byColor.set(c, l); } l.push(N[i].x + (N[j].x - N[i].x) * f, N[i].y + (N[j].y - N[i].y) * f); dots++;
+  }
+  ctx.globalAlpha = 0.9;
+  for (const [c, l] of byColor) { ctx.fillStyle = c; ctx.beginPath(); for (let k = 0; k < l.length; k += 2) { ctx.moveTo(l[k] + 2.2, l[k + 1]); ctx.arc(l[k], l[k + 1], 2.2, 0, Math.PI * 2); } ctx.fill(); }
   /* the focused neuron's real connections: inputs in cyan, outputs in gold, width by synapse count */
   if (focus != null) {
     const wMax = Math.max(1, ...N.in[focus].map(([, w]) => w), ...N.out[focus].map(([, w]) => w));
@@ -116,19 +183,33 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(N[focus].x, N[focus].y); ctx.lineTo(N[k].x, N[k].y); ctx.stroke(); }
     }
   }
+  /* rings of the transactions arriving now, and their PN group lit for as long as the ring lives */
+  ripples = ripples.filter((r) => t < r.at + 1800);
+  const lit = new Set();
+  for (const r of ripples) {
+    if (t < r.at) continue;
+    const p = (t - r.at) / 1800, c = pnCenter(r.kind);
+    ctx.strokeStyle = KIND_COLOR[r.kind]; ctx.globalAlpha = 0.8 * (1 - p); ctx.lineWidth = 2 + 4 * r.size;
+    ctx.beginPath(); ctx.arc(c.x, c.y, 20 + p * (90 + 120 * r.size), 0, Math.PI * 2); ctx.stroke();
+    for (const id of c.ids) lit.add(id);
+  }
+  /* quiet neurons in one fill per colour; active ones get a soft halo (no shadow blur) */
+  const quiet = new Map();
   for (let j = 0; j < N.length; j++) {
     if (hidden.has(N[j].family)) continue;
-    const n = N[j], a = act[j], r = (n.family === 'APL' ? 7 : n.family === 'MBON' ? 3.2 : 2.2) + a * 5 + (j === focus ? 5 : 0);
+    const n = N[j], a = Math.max(act[j], lit.has(n.id) ? 0.35 : 0), r = (n.family === 'APL' ? 7 : n.family === 'MBON' ? 3.2 : 2.2) + a * 5 + (j === focus ? 5 : 0);
     const c = n.family === 'DAN' && n.dan === 'punishment' ? '#fb923c' : COLOR[n.family];
-    ctx.globalAlpha = 0.35 + a * 0.65; ctx.fillStyle = c;
-    if (a > 0.08) { ctx.shadowColor = c; ctx.shadowBlur = 14 * a; } else ctx.shadowBlur = 0;
-    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+    if (a <= 0.08 && j !== focus) { let l = quiet.get(c); if (!l) { l = []; quiet.set(c, l); } l.push(n.x, n.y, r); continue; }
+    ctx.fillStyle = c; ctx.globalAlpha = 0.18 * a; ctx.beginPath(); ctx.arc(n.x, n.y, r * 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.35 + a * 0.65; ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.globalAlpha = 0.35;
+  for (const [c, l] of quiet) { ctx.fillStyle = c; ctx.beginPath(); for (let k = 0; k < l.length; k += 3) { ctx.moveTo(l[k] + l[k + 2], l[k + 1]); ctx.arc(l[k], l[k + 1], l[k + 2], 0, Math.PI * 2); } ctx.fill(); }
   /* the synapses the last learning step weakened, in white for 6 s */
-  const now = Date.now(); flash = flash.filter((f) => f[2] > now);
+  flash = flash.filter((f) => f[2] > t);
   ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6;
-  for (const [i, j, until] of flash) { ctx.globalAlpha = Math.min(0.9, (until - now) / 3000); ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke(); }
-  ctx.shadowBlur = 0; ctx.globalAlpha = 0.75; ctx.globalCompositeOperation = 'source-over';
+  for (const [i, j, until] of flash) { ctx.globalAlpha = Math.min(0.9, (until - t) / 3000); ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke(); }
+  ctx.globalAlpha = 0.75; ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#8a96ad'; ctx.font = '22px system-ui'; ctx.textAlign = 'center';
   ctx.fillText('approach', W * 0.86, H * 0.08); ctx.fillText('avoid', W * 0.86, H * 0.80);
   ctx.globalAlpha = 1;
@@ -145,13 +226,13 @@ function drawSpark() {
 }
 
 function gauges() {
-  const m = measure(), t = fly.peak || { t: 0, word: 'quiet' }, names = { PN: 'PN', KC: 'Kenyon', MBON: 'MBON', DAN: 'Dopa.', APL: 'APL' };
+  const m = measure(), names = { PN: 'PN', KC: 'Kenyon', MBON: 'MBON', DAN: 'Dopa.', APL: 'APL' };
+  const t = lastDecision ? { t: (lastDecision.ap - lastDecision.av) / Math.max(1e-6, lastDecision.ap + lastDecision.av) } : { t: 0 };
   $('gauges').innerHTML = FAMILIES.map((f) => { const p = m[f].total ? m[f].s / m[f].total : 0;
     return `<div><span>${names[f]}</span><span class="bar"><i style="width:${Math.min(100, p * 100 * 3)}%;background:${COLOR[f]}"></i></span><span>${fmt(p * 100, 1)}%</span></div>`; }).join('');
   $('output').textContent = `Most active output: ${m.top}`;
   const pos = 50 + 50 * Math.max(-1, Math.min(1, t.t * 4));
   $('needle').style.left = pos + '%';
-  $('verdict').textContent = { approach: 'Approach', avoid: 'Avoid', undecided: 'Undecided', quiet: 'Quiet' }[t.word];
 }
 
 /* ── THE MAP, INTERACTIVE: hover or tap a neuron to see what it is, its real connections, and what it has learned. ── */
@@ -170,12 +251,45 @@ function nearest(e) {
   N.forEach((n, j) => { if (hidden.has(n.family)) return; const d = (n.x - x) ** 2 + (n.y - y) ** 2; if (d < bd) { bd = d; best = j; } });
   return best;
 }
+/* which smell each Kenyon cell belongs to: the cells in the top 10% for one kind of trade (computed once, from the measured synapses) */
+let kcCode = null;
+function codeOf(j) {
+  if (!kcCode) {
+    kcCode = new Map();
+    for (const kind of Object.keys(KIND_OF)) {
+      const d = fly.odorDrive({ received: 0, sent: 0, moved: 0, [kind]: 5000 });
+      const sc = fly.kcIdx.map((k) => [k, fly.inputs[k].reduce((s, [i, w]) => s + w * (d[i] || 0), 0)]).sort((a, b) => b[1] - a[1]);
+      sc.slice(0, Math.round(fly.kcIdx.length * 0.1)).forEach(([k, v]) => { if (v > 0) kcCode.set(k, [...(kcCode.get(k) || []), kind]); });
+    }
+  }
+  return kcCode.get(j) || [];
+}
+const back = [];
+function walkTo(k) { if (selected != null && selected !== k) back.push(selected); selected = k; describe(k); }
+function chips(list, title) {
+  if (!list.length) return '';
+  const top = [...list].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  return `<div class="state" style="margin-top:6px">${title}</div><div class="walk">`
+    + top.map(([k, w]) => `<button data-walk="${k}" style="border-color:${COLOR[N[k].family]}">${N[k].family} ${N[k].type || ''} · ${w} syn.</button>`).join('') + '</div>';
+}
 function describe(j) {
-  if (j == null) { $('neuron').innerHTML = '<div class="state">Hover or tap a neuron on the map. Tap the legend to hide a family.</div>'; return; }
+  if (j == null) { $('neuron').innerHTML = '<div class="state">Hover or tap a neuron on the map, then walk through its synapses with the buttons. Tap the legend to hide a family.</div>'; return; }
   const n = N[j], ins = N.in[j], outs = N.out[j], syn = (l) => l.reduce((s, [, w]) => s + w, 0), inputs = fly.inputs;
-  const role = n.family === 'DAN' ? ROLE.DAN + (n.dan === 'reward' ? ' This one is a reward neuron (PAM): rises drive it.' : n.dan === 'punishment' ? ' This one is a punishment neuron (PPL1): falls drive it.' : ' Not used as a teacher here (neither PAM nor PPL1).')
-    : n.family === 'MBON' ? ROLE.MBON + (n.valence ? ` Its compartment gets most of its dopamine from ${n.valence === 'avoid' ? 'reward' : 'punishment'} neurons, so here it sits on the ${n.valence} side.` : ' It receives no dopamine in this circuit.')
-    : ROLE[n.family];
+  let role;
+  if (n.family === 'PN') {
+    const kind = Object.keys(KIND_OF).find((k) => KIND_OF[k] === BigInt(n.id) % 3n);
+    role = ROLE.PN + ` Here it belongs to the <b>${kind}</b> group: it lights up when a window has trades where ${kind === 'received' ? 'the signer received the stock' : kind === 'sent' ? 'the signer sent the stock' : 'the stock moved between two other addresses'}, harder for bigger trades (our mapping, by id).`;
+  } else if (n.family === 'KC') {
+    const c = codeOf(j);
+    role = ROLE.KC + (c.length ? ` In this model it is part of the code for <b>${c.join(' and ')}</b> trades: those smells reach it among the strongest 10%.` : ' None of the three trade smells reaches it among the strongest 10%: it stays silent for them.');
+  } else if (n.family === 'DAN') {
+    const comp = outs.filter(([k]) => N[k].family === 'MBON').map(([k]) => N[k].type);
+    role = ROLE.DAN + (n.dan === 'reward' ? ' This one is a <b>reward</b> neuron (PAM): a price rise after a smell drives it, and it weakens that smell\'s Kenyon synapses onto ' + (comp.length ? comp.slice(0, 4).join(', ') : 'its output neurons') + ' (the avoid side), so the fly leans toward that smell next time.'
+      : n.dan === 'punishment' ? ' This one is a <b>punishment</b> neuron (PPL1): a price fall after a smell drives it, and it weakens that smell\'s Kenyon synapses onto ' + (comp.length ? comp.slice(0, 4).join(', ') : 'its output neurons') + ' (the approach side), so the fly pulls away next time.'
+        : ' It is neither PAM nor PPL1, so it teaches nothing here.');
+  } else if (n.family === 'MBON') {
+    role = ROLE.MBON + (n.valence ? ` Most of its dopamine comes from ${n.valence === 'avoid' ? 'reward (PAM)' : 'punishment (PPL1)'} neurons, so it sits on the <b>${n.valence}</b> side: when learning weakens its Kenyon synapses, its vote drops and the fly is pulled the other way. Its votes are what the trader card reads.` : ' It receives no dopamine in this circuit, so learning never changes it.');
+  } else role = ROLE[n.family];
   let learned = '';
   if (n.family === 'KC') {
     const w = []; for (const [k] of outs) if (N[k].family === 'MBON') for (const e of inputs[k]) if (e[0] === j && e[2] != null && e[2] < 0.999) w.push(`${N[k].type} ${pct(e[2] - 1, 1)}`);
@@ -189,7 +303,11 @@ function describe(j) {
     + `<div class="state">Body id ${n.id} (hemibrain v1.2) · activity now ${fmt(act[j] * 100, 1)}%</div>`
     + `<div style="margin:6px 0">${role}</div>`
     + `<div class="state">Inputs: ${ins.length} neurons, ${syn(ins)} synapses (cyan) · Outputs: ${outs.length} neurons, ${syn(outs)} synapses (gold), counted at 5 synapses or more within this circuit.</div>`
-    + learned;
+    + learned
+    + chips(ins, 'Walk upstream (who talks to it):') + chips(outs, 'Walk downstream (who it talks to):')
+    + (back.length ? '<div class="walk" style="margin-top:8px"><button data-back="1">← back</button></div>' : '');
+  $('neuron').querySelectorAll('button[data-walk]').forEach((b) => b.addEventListener('click', () => walkTo(Number(b.dataset.walk))));
+  const bb = $('neuron').querySelector('button[data-back]'); if (bb) bb.addEventListener('click', () => { selected = back.pop(); describe(selected); });
 }
 function wireMap() {
   canvas.addEventListener('pointermove', (e) => { const j = nearest(e); if (j !== hovered) { hovered = j; if (selected == null) describe(j); } });
@@ -226,8 +344,10 @@ async function readShared() {
   try {
     const s = await fetch('/api/fly/state', { cache: 'no-store' }).then((x) => x.json());
     if (!s || !s.ok) { $('shared').innerHTML = `<div class="state">The shared fly is not running: ${(s && s.why) || 'no answer'}.</div>`; return; }
-    const since = new Date(s.aliveSince).toLocaleString('en-GB');
-    $('shared').innerHTML = `<div class="state">${s.symbol} · training since ${since} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far</div>`
+    const since = new Date(s.trainingSince || s.aliveSince).toLocaleString('en-GB');
+    const mem = s.persisted ? 'memory kept across server restarts' + (s.restored ? ' (reloaded at the last restart, ' + new Date(s.aliveSince).toLocaleString('en-GB') + ')' : '')
+      : 'memory NOT kept: it starts again when the server restarts' + (s.saveError ? ' (' + s.saveError + ')' : '');
+    $('shared').innerHTML = `<div class="state">${s.symbol} · training since ${since} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far · ${mem}</div>`
       + `<div class="state" style="margin-top:4px">${tallyText(s.session.tally)}</div><div id="sharedBook" class="book"></div>`
       + `<div class="log" style="margin-top:6px;max-height:180px">${s.events.slice(-12).reverse().map((e) => `<p class="${e.type === 'verdict' ? 'verdict' : 'live'}">${clock(e.at)} · ${eventText(e, s.symbol)}</p>`).join('')}</div>`;
     renderBook(s.session, $('sharedBook'));
@@ -238,6 +358,7 @@ function eventText(e, symbol) {
   if (e.type === 'predict') return `smells ${mixText(e.mix)} → ${SAY[e.word]}`;
   if (e.type === 'taught') return `taught: followed by ${pct(e.move, 3)}, ${e.weakened} synapses weakened`;
   if (e.type === 'verdict') return `predicted ${e.prediction}, moved ${pct(e.move, 3)} → ${e.kind}`;
+  if (e.type === 'decision') return `decides ${ACT[e.action]} (paper)`;
   if (e.type === 'skipped') return `${e.n} past transactions skipped at start`;
   return e.type;
 }
@@ -279,7 +400,12 @@ function listen() {
 
 /* The brain steps on a timer, the drawing on animation frames: a background tab gets no frames, and its fly must keep living. */
 function tick() { fly.tick(); act = fly.act; beat(); if (fly.ticks % 4 === 0) gauges(); }
-function loop() { draw(); requestAnimationFrame(loop); }
+let lastDraw = 0;
+function loop(now) {
+  const busy = flash.length || ripples.length || hovered != null || selected != null || (fly && fly.peak && act.some((a) => a > 0.01));
+  if (now - lastDraw >= (busy ? 33 : 100)) { lastDraw = now; draw(now); }
+  requestAnimationFrame(loop);
+}
 
 /* One window, every 30 s: price + new transactions, handed to the shared protocol. */
 async function readWindow() {
@@ -302,6 +428,7 @@ async function readWindow() {
     lastPrice = price.priceUsd;
   }
   if (ac && !ac.ok && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
+  txSlot = 0;
   session.window({ symbol: stock.symbol, price, transactions: ac && ac.ok && Array.isArray(ac.transactions) ? ac.transactions : null });
   renderBook(); renderTally(); saveMemory();
 }
@@ -321,7 +448,9 @@ async function readReference() {
 }
 
 function select(i) {
-  current = STOCKS[i]; lastPrice = null; history = []; drawSpark();
+  current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); lastDecision = null;
+  $('watching').textContent = `watching ${current.symbol} · every 30 s its real trades are a smell`;
+  $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
   session.reset(); loadMemory();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
   clearInterval(timer); clearInterval(refTimer);
@@ -340,13 +469,17 @@ async function start() {
   session = createSession(fly, onEvent);
   const idx = new Map(N.map((n, i) => [n.id, i]));
   N.edges = circuit.edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]);
-  /* drawn edges: the 1,800 strongest, so the canvas stays readable */
-  N.edges = N.edges.sort((x, y) => y[2] - x[2]).slice(0, 1800); N.wMax = N.edges[0][2];
+  /* drawn edges: the 1,800 strongest (900 on a phone), so the canvas stays readable and light */
+  N.edges = N.edges.sort((x, y) => y[2] - x[2]).slice(0, canvas.clientWidth && canvas.clientWidth < 600 ? 900 : 1800); N.wMax = N.edges[0][2];
   place(N);
-  /* simulation: a $5,000 "received" odor followed by the chosen move — taught, then asked again */
+  /* simulation, injected on what is REALLY happening (Phil 08/11): the odor of the last window that had real trades, followed by the
+   *   chosen move — taught, then asked again on that same live odor, so the needle moves on the market's own smell. Before any real trade
+   *   was smelled, a $5,000 "received" odor stands in, and the log says so. */
   $('inject').addEventListener('click', () => { const v = Number(slider.value) / 1000; if (!v) return;
-    const mix = { received: 5000, sent: 0, moved: 0 };
-    log(`SIMULATION · ${mixText(mix)} followed by ${pct(v, 1)}`, 'sim'); session.learn(mix, v, true); session.predict(mix, true); });
+    const live = session.lastOdor, mix = live || { received: 5000, sent: 0, moved: 0 }; simOnLive = !!live;
+    log(`SIMULATION · ${live ? 'on the last real window (' + mixText(mix) + ')' : 'no real trade smelled yet, a stand-in ' + mixText(mix)} followed by ${pct(v, 1)}`, 'sim');
+    if (live) for (const [k, usd] of Object.entries(mix)) if (usd > 0) ripple(k, usd);
+    session.learn(mix, v, true); session.predict(mix, true); });
   log(`circuit loaded: ${N.length} neurons, ${circuit.edges.length} connections ≥ ${circuit.synapseThreshold} synapses; `
     + `${N.counts.approach} approach-side and ${N.counts.avoid} avoid-side MBONs, from measured dopamine inputs`);
   wireMap();
