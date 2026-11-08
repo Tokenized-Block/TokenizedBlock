@@ -12,12 +12,28 @@
   header { padding: 16px 16px 6px; }
   h1 { margin: 0; font-size: 20px; letter-spacing: .02em; }
   .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
-  /* one page (Phil 08/11): the map and every card side by side in a dashboard grid, not one long falling column */
-  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); grid-auto-flow: row dense; gap: 12px; padding: 8px 16px 16px; align-items: start; }
-  main > aside { display: contents; }
-  .scene { grid-column: span 2; grid-row: span 3; }
-  @media (max-width: 720px) { main { grid-template-columns: 1fr; } .scene { grid-column: auto; grid-row: auto; } }
-  .card .log { max-height: 220px; }
+  /* Phil 08/11 "a bit mixed": the page reads top to bottom in bands, in the order a visitor asks the questions — what it looks like
+   *   and decides now, what it thinks, how to teach it and keep its memory, how to trade with it (real money, set apart), how it works */
+  main.page { padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 18px; }
+  .hero { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 12px; align-items: start; }
+  .now { display: flex; flex-direction: column; gap: 12px; }
+  .jump { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; z-index: 2; padding: 8px 0; background: linear-gradient(var(--bg) 70%, transparent); }
+  .jump a { color: var(--text); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid #263252; border-radius: 999px; background: #0a0f1b; }
+  .jump a:hover { border-color: #3d4f80; }
+  .band { scroll-margin-top: 52px; }
+  .bandTitle { margin: 0 0 10px; font-size: 16px; letter-spacing: .02em; }
+  .bandTitle .warn { font-size: 12px; font-weight: 600; color: #fbbf24; border: 1px solid #fbbf2455; border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+  .cards .wide { grid-column: span 2; }
+  .hint { font-size: 12px; color: var(--muted); padding: 0 12px 8px; }
+  .more summary { cursor: pointer; font-size: 13px; color: #c3cbe0; margin-top: 8px; }
+  .risks { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #c3cbe0; } .risks li { margin: 3px 0; }
+  .check { display: flex; gap: 8px; align-items: flex-start; margin-top: 8px; } .check input { width: auto; margin-top: 3px; }
+  .field { width: 100%; background: #111a2c; color: var(--text); border: 1px solid #263252; border-radius: 8px; padding: 8px; font: inherit; }
+  .btns { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 8px; }
+  .card .log { max-height: 320px; }
+  #b-trade .card { border-color: #3a2f12; }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .cards .wide { grid-column: auto; } }
   .scene { position: relative; background: radial-gradient(ellipse at 50% 40%, #0c1222 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; }
   .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
@@ -80,133 +96,182 @@
   <h1>Hemibrain connectome, living and trading on tokenized stocks</h1>
   <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), living on a stock's real trades, 24/7. Every 30 s the trades are an odor; the fly predicts, then the next price move rewards or punishes it, and you see which synapses it changed. Paper trades by default; its own small wallet trades only if you fund it. Nothing here is advice.</div>
 </header>
-<main>
-  <section class="scene">
-    <canvas id="canvas" width="1280" height="800"></canvas>
-    <div class="viewbar"><button id="zoomIn" aria-label="Zoom in">+</button><button id="zoomOut" aria-label="Zoom out">−</button><button id="viewFlat">Flat</button><button id="viewReset">Reset</button></div>
-    <div class="legend">
-      <span data-family="PN"><b style="background:var(--pn)"></b>PN · olfactory input</span>
-      <span data-family="KC"><b style="background:var(--kc)"></b>Kenyon · coding</span>
-      <span data-family="MBON"><b style="background:var(--mbon)"></b>MBON · output</span>
-      <span data-family="DAN"><b style="background:var(--dan)"></b>Dopamine · reward (PAM)</span>
-      <span data-family="DAN"><b style="background:#fb923c"></b>Dopamine · punishment (PPL1)</span>
-      <span data-family="APL"><b style="background:var(--apl)"></b>APL · inhibition</span>
-      <span>◯ ring · a real transaction arriving</span>
-      <span>Drag to turn · wheel or two fingers to zoom · shift-drag to move. 3D is schematic: depth groups each family (inputs at the back, outputs in front); the circuit file has no anatomical positions.</span>
-    </div>
-    <div class="neuron" id="neuron"></div>
-  </section>
-  <aside>
-    <div class="card">
-      <h2>Stock</h2>
-      <select id="pick"></select>
-      <div class="price" id="price">—</div>
-      <div class="state" id="state">reading…</div>
-      <canvas id="spark" width="600" height="96"></canvas>
-      <div class="state" id="ref"></div>
-    </div>
-    <div class="card">
-      <h2>Fly trader · its decisions</h2>
-      <div class="state" id="watching">watching —</div>
-      <div id="verdict" class="decision">Waiting for a smell</div>
-      <div class="dial"><span id="needle"></span></div>
-      <div class="dialEnds"><span>sell / stay out</span><span>buy / hold</span></div>
-      <div class="why" id="why">The fly decides only when a window brings real trades. Its rule: out and drawn to the smell → buy; in and repelled → sell; otherwise it holds, or stays out.</div>
-      <div class="state" id="tally" style="margin-top:8px"></div>
-      <div id="book" class="book"></div>
-      <button id="listen">Listen to the brain</button>
-      <button id="forget">Erase what it learned on this stock</button>
-      <button id="seal">Seal its memory on Base (your wallet signs)</button>
-      <button id="sealCheck" disabled>Check the seal on chain</button>
-      <div class="state" id="sealState" style="margin-top:6px"></div>
-      <div class="state" style="margin-top:6px">Sealing: your wallet sends 0 ETH to itself with a 66-byte public note — the fingerprint (keccak-256) of what the fly learned on this stock and after how many windows. Only a network fee is paid. The memory itself stays in this browser; the chain proves it existed then and was not changed since, not that the fly is right.</div>
-      <div class="state" style="margin-top:6px">What it learns is kept in this browser, per stock, so it keeps training from visit to visit. A private window starts a naive fly.</div>
-      <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
-    </div>
-    <div class="card">
-      <h2>Its thoughts · before, now, next</h2>
-      <div class="state">Each decision is a set of synapses firing: the Kenyon cells the smell woke up, through the synapses it learned, into approach or avoid outputs. Tap a synapse to light it on the map and walk from there.</div>
-      <div id="thoughts" class="thoughts"></div>
-      <div class="glossary"><b>Smell cell</b> = a Kenyon cell: a few of them fire for each smell, they are its memory. <b>“Go toward” / “keep away” output</b> = an output neuron of the memory centre (MBON): when it fires the fly is pushed toward the smell, or away from it. <b>% strength</b> = how much the synapse between them keeps of what it had in a newborn fly: learning weakens the side that was wrong (a fall weakens “go toward”). <b>Pull toward / push away</b> = the same, summed over the cells this smell wakes up (100% = nothing learned yet).</div>
-      <div class="state" style="margin-top:6px">“Next” is computed, not guessed: the fly is deterministic, so a shadow copy of it, loaded with its exact state, is run ahead once per possible move (Laplace's demon, at the scale of this model). It forecasts the FLY's next decision, never the market: which move comes is unknown, so all three are shown and none is picked.</div>
-    </div>
-    <div class="card live">
-      <h2>Trade for real · your wallet signs</h2>
-      <div class="why">When the fly decides <b>BUY</b> or <b>SELL</b>, it shows a real, simulated order for your budget. Nothing leaves your wallet unless <b>you</b> sign that order. The fly never signs. Its decisions come from a model of a fly brain, not from advice: <b>you can lose this money</b>. Tokenized stocks are only for eligible persons outside the U.S.</div>
-      <label class="state" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="risk" style="width:auto;margin-top:3px"> I understand I can lose the money I trade, that the fly's decision is not advice, and that each trade is signed by me.</label>
-      <button id="connect">Connect my wallet</button>
-      <label class="state" for="budget" style="display:block;margin-top:8px">Budget per buy (USDC)</label>
-      <input id="budget" type="number" min="1" step="1" value="5" style="width:100%;background:#111a2c;color:var(--text);border:1px solid #263252;border-radius:8px;padding:8px;font:inherit">
-      <div class="state" id="liveState" style="margin-top:8px">Not connected.</div>
-      <div class="why" id="livePlan"></div>
-      <button id="sign" disabled>Sign this trade with my wallet</button>
-      <button id="stop">Stop the fly (no more orders proposed)</button>
-      <div class="state" id="liveLog" style="margin-top:6px"></div>
-    </div>
-    <div class="card live">
-      <h2>Let the fly trade alone · one signature</h2>
-      <div class="why">The fly gets its <b>own small wallet, created in this browser</b>. You sign <b>one</b> transaction that sends it a budget (USDC, plus a little ETH for its gas). From then on it trades that budget <b>on its own</b> on the stock you watch, each time it decides BUY or SELL, within your caps. <b>Stop</b> halts it at once; <b>Withdraw all</b> sends everything back to your wallet. It trades <b>only while this page is open</b>; reopened, it starts stopped.
-        <br><b>Read before you fund it:</b> you can lose this money; its decisions are a model of a fly brain, not advice. Its key is kept <b>only in this browser</b> (this site's storage), unencrypted: the server never receives it, so nobody can recover it for you — clear this site's data or lose this device and the money in it is lost unless you exported the key. Anyone (or any extension) with access to this browser can use it, and the code this site serves could too: you trust this site's code with the budget. The server plans each order; before signing, this page checks every call itself and refuses anything that is not an exact approval, the app's fee, or a swap paying the fly. The app takes its interface fee on each trade (shown in each order, 0.1% on the measured routes). If the site is busy, a decision can pass without a trade, a SELL included. Its decisions follow its real holdings, not the paper book. Its money path was run on a copy of Base (fork with Base's own precompiles): NVDAc and AAPLc bought and sold back, every order checked by this page, round trip cost about 0.3%; not yet by a real trade on Base itself. Keep the budget small. Tokenized stocks are only for eligible persons outside the U.S.</div>
-      <label class="state" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="autoRisk" style="width:auto;margin-top:3px"> I understand that I can lose this money, that the key lives only in this browser, and that the fly trades without asking me each time.</label>
-      <div class="row2">
-        <label class="state">Budget sent to the fly (USDC)<input id="autoBudget" type="number" min="1" max="100" step="1" value="1"></label>
-        <label class="state">Max per trade (USDC)<input id="autoCap" type="number" min="0.5" max="100" step="0.5" value="1"></label>
-        <label class="state">Max trades per day<input id="autoDay" type="number" min="1" max="50" step="1" value="10"></label>
+<main class="page">
+  <!-- 0 · the brain and what it decides now: one glance -->
+  <div class="hero">
+    <section class="scene">
+      <canvas id="canvas" width="1280" height="800"></canvas>
+      <div class="viewbar"><button id="zoomIn" aria-label="Zoom in">+</button><button id="zoomOut" aria-label="Zoom out">−</button><button id="viewFlat">Flat</button><button id="viewReset">Reset</button></div>
+      <div class="legend">
+        <span data-family="PN"><b style="background:var(--pn)"></b>Smell inputs (PN)</span>
+        <span data-family="KC"><b style="background:var(--kc)"></b>Smell cells · memory (Kenyon)</span>
+        <span data-family="MBON"><b style="background:var(--mbon)"></b>Outputs · go toward / keep away (MBON)</span>
+        <span data-family="DAN"><b style="background:var(--dan)"></b>Dopamine · reward (PAM)</span>
+        <span data-family="DAN"><b style="background:#fb923c"></b>Dopamine · punishment (PPL1)</span>
+        <span data-family="APL"><b style="background:var(--apl)"></b>Brake (APL)</span>
+        <span>◯ a real trade arriving</span>
       </div>
-      <div class="state" id="autoWallet" style="margin-top:8px">No fly wallet in this browser yet.</div>
-      <button id="autoCreate">Create the fly's wallet (in this browser)</button>
-      <button id="autoFund" disabled>Fund it: one signature from my wallet</button>
-      <button id="autoStart" disabled>Let it trade alone</button>
-      <button id="autoStop">Stop the fly now</button>
-      <button id="autoWithdraw" disabled>Withdraw all to my wallet</button>
-      <button id="autoExport" disabled>Show its key (to keep a copy)</button>
-      <div class="state" id="autoState" style="margin-top:8px"></div>
-      <div class="state" id="autoLog" style="margin-top:6px;max-height:200px;overflow:auto"></div>
+      <div class="hint">Drag to turn · wheel or two fingers to zoom · shift-drag to move · tap a neuron to walk its synapses · tap the legend to hide a family. The 3D is schematic: depth groups each family (inputs at the back, outputs in front); the circuit file has no anatomical positions.</div>
+      <div class="neuron" id="neuron"></div>
+    </section>
+    <div class="now">
+      <div class="card">
+        <h2>Stock</h2>
+        <select id="pick"></select>
+        <div class="price" id="price">—</div>
+        <div class="state" id="state">reading…</div>
+        <canvas id="spark" width="600" height="96"></canvas>
+        <div class="state" id="ref"></div>
+      </div>
+      <div class="card">
+        <h2>Its decision now</h2>
+        <div class="state" id="watching">watching —</div>
+        <div id="verdict" class="decision">Waiting for a smell</div>
+        <div class="dial"><span id="needle"></span></div>
+        <div class="dialEnds"><span>sell / stay out</span><span>buy / hold</span></div>
+        <div class="why" id="why">The fly decides only when a window brings real trades. Its rule: out and drawn to the smell → buy; in and repelled → sell; otherwise it holds, or stays out.</div>
+        <div class="state" id="tally" style="margin-top:8px"></div>
+        <div id="book" class="book"></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>The shared fly (server)</h2>
-      <div class="state" style="margin-bottom:6px">The same brain, run by the server on one stock every minute, whether anyone watches or not. What it learns is saved on the server, and the line below says whether that memory survives a restart.</div>
-      <div id="shared"><div class="state">reading…</div></div>
+  </div>
+
+  <nav class="jump"><a href="#b-think">1 · What it thinks</a><a href="#b-teach">2 · Teach it, keep its memory</a><a href="#b-trade">3 · Trade with it</a><a href="#b-how">4 · How it works</a></nav>
+
+  <!-- 1 · its thoughts, live -->
+  <section class="band" id="b-think">
+    <h2 class="bandTitle">1 · What it thinks</h2>
+    <div class="cards">
+      <div class="card wide">
+        <h2>Its thoughts · before, now, next</h2>
+        <div class="state">Each decision is a set of synapses firing: the smell cells a smell wakes up, through the synapses it learned, into “go toward” or “keep away” outputs. Tap a synapse to light it on the map.</div>
+        <div id="thoughts" class="thoughts"></div>
+        <details class="more"><summary>What the words mean</summary>
+          <div class="glossary"><b>Smell cell</b> = a Kenyon cell: a few of them fire for each smell, they are its memory. <b>“Go toward” / “keep away” output</b> = an output neuron of the memory centre (MBON): when it fires the fly is pushed toward the smell, or away from it. <b>% strength</b> = how much the synapse between them keeps of what it had in a newborn fly: learning weakens the side that was wrong (a fall weakens “go toward”). <b>Pull toward / push away</b> = the same, summed over the cells this smell wakes up (100% = nothing learned yet). <b>“Next”</b> is computed, not guessed: the fly is deterministic, so a shadow copy loaded with its exact state is run ahead once per possible move (Laplace's demon, at the scale of this model). It forecasts the FLY's next decision, never the market.</div>
+        </details>
+      </div>
+      <div class="card">
+        <h2>Activity right now</h2>
+        <div class="gauges" id="gauges"></div>
+        <div class="state" id="output"></div>
+      </div>
+      <div class="card">
+        <h2>What happened · log</h2>
+        <div class="log" id="log"></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>Computed activity</h2>
-      <div class="gauges" id="gauges"></div>
-      <div class="state" id="output"></div>
+  </section>
+
+  <!-- 2 · teaching and memory -->
+  <section class="band" id="b-teach">
+    <h2 class="bandTitle">2 · Teach it, keep its memory</h2>
+    <div class="cards">
+      <div class="card">
+        <h2>Teach it a move (simulation)</h2>
+        <label class="state" for="size">Injected move: <span id="sizeValue">−4.0%</span></label>
+        <input type="range" id="size" min="-80" max="80" step="1" value="-40">
+        <button id="inject">Inject this move (simulation)</button>
+        <div class="state" style="margin-top:6px">Injected on the smell of the last real window of trades: the fly learns what this move would teach it, then answers again on that same live smell. It really trains this browser's fly, so it is blocked while the fly's own wallet trades.</div>
+      </div>
+      <div class="card">
+        <h2>Its memory</h2>
+        <div class="state">What it learns is kept in this browser, per stock, so it keeps training from visit to visit. A private window starts a naive fly.</div>
+        <button id="seal">Seal its memory on Base (your wallet signs)</button>
+        <button id="sealCheck" disabled>Check the seal on chain</button>
+        <div class="state" id="sealState" style="margin-top:6px"></div>
+        <div class="state" style="margin-top:6px">Sealing: your wallet sends 0 ETH to itself with a 66-byte public note — the fingerprint (keccak-256) of what the fly learned on this stock and after how many windows. Only a network fee is paid. The chain proves this memory existed then and was not changed since, not that the fly is right.</div>
+        <button id="listen">Listen to the brain</button>
+        <button id="forget">Erase what it learned on this stock</button>
+        <div class="state" style="margin-top:6px">Sound: smell cells pluck notes, outputs hum high (go toward) or low (keep away), reward rings, punishment drums. Same moves, same rhythm.</div>
+      </div>
+      <div class="card">
+        <h2>The shared fly (server)</h2>
+        <div class="state" style="margin-bottom:6px">The same brain, run by the server on one stock every minute, whether anyone watches or not. Its memory is saved on the server.</div>
+        <div id="shared"><div class="state">reading…</div></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>Simulation</h2>
-      <label class="state" for="size">Injected move: <span id="sizeValue">−4.0%</span></label>
-      <input type="range" id="size" min="-80" max="80" step="1" value="-40">
-      <button id="inject">Inject this move (simulation)</button>
-      <div class="state" style="margin-top:6px">Injected on the smell of the last real window of trades: the fly learns what this move would teach it, then answers again on that same live smell. A simulation really trains this browser's fly (the shared fly on the server only learns from the market).</div>
+  </section>
+
+  <!-- 3 · real money, the user's choice -->
+  <section class="band" id="b-trade">
+    <h2 class="bandTitle">3 · Trade with it <span class="warn">real money · your risk · not advice</span></h2>
+    <div class="cards">
+      <div class="card live">
+        <h2>You sign each trade</h2>
+        <div class="why">When the fly decides <b>BUY</b> or <b>SELL</b>, it shows a real, simulated order for your budget. Nothing leaves your wallet unless <b>you</b> sign that order. You can lose this money. Tokenized stocks are only for eligible persons outside the U.S.</div>
+        <label class="state check"><input type="checkbox" id="risk"> I understand I can lose the money I trade, that the fly's decision is not advice, and that each trade is signed by me.</label>
+        <button id="connect">Connect my wallet</button>
+        <label class="state" for="budget" style="display:block;margin-top:8px">Budget per buy (USDC)</label>
+        <input id="budget" class="field" type="number" min="1" step="1" value="5">
+        <div class="state" id="liveState" style="margin-top:8px">Not connected.</div>
+        <div class="why" id="livePlan"></div>
+        <button id="sign" disabled>Sign this trade with my wallet</button>
+        <button id="stop">Stop the fly (no more orders proposed)</button>
+        <div class="state" id="liveLog" style="margin-top:6px"></div>
+      </div>
+      <div class="card live">
+        <h2>Let it trade alone · one signature</h2>
+        <div class="why">The fly gets its <b>own small wallet, created in this browser</b>. You sign <b>one</b> transaction that sends it a budget (USDC, plus a little ETH for gas). Then it trades that budget <b>on its own</b> on the stock you watch, within your caps. <b>Stop</b> halts it; <b>Withdraw all</b> sends everything back. It trades <b>only while this page is open</b>; reopened, it starts stopped.</div>
+        <details class="more" open><summary>Read before you fund it</summary>
+          <ul class="risks">
+            <li>You can lose this money. Its decisions are a model of a fly brain, not advice.</li>
+            <li>Its key is kept <b>only in this browser</b>, unencrypted. The server never receives it, so nobody can recover it: clear this site's data or lose this device and the money is lost unless you exported the key.</li>
+            <li>Anyone or any extension with access to this browser can use it, and so could the code this site serves: you trust this site's code with the budget.</li>
+            <li>The server plans each order; before signing, this page checks every call itself and refuses anything that is not an exact approval, the app's fee, or a swap paying the fly.</li>
+            <li>The app takes its interface fee on each trade (shown in each order, 0.1% on the measured routes). If the site is busy, a decision can pass without a trade, a SELL included. Its decisions follow its real holdings, not the paper book.</li>
+            <li>Proven on a copy of Base with Base's own precompiles: NVDAc and AAPLc bought and sold back, every order checked by this page, round trip about 0.3%. Not yet by a real trade on Base itself. Keep the budget small.</li>
+            <li>Tokenized stocks are only for eligible persons outside the U.S.</li>
+          </ul>
+        </details>
+        <label class="state check"><input type="checkbox" id="autoRisk"> I understand that I can lose this money, that the key lives only in this browser, and that the fly trades without asking me each time.</label>
+        <div class="row2">
+          <label class="state">Budget sent to the fly (USDC)<input id="autoBudget" type="number" min="1" max="100" step="1" value="1"></label>
+          <label class="state">Max per trade (USDC)<input id="autoCap" type="number" min="0.5" max="100" step="0.5" value="1"></label>
+          <label class="state">Max trades per day<input id="autoDay" type="number" min="1" max="50" step="1" value="10"></label>
+        </div>
+        <div class="state" id="autoWallet" style="margin-top:8px">No fly wallet in this browser yet.</div>
+        <div class="btns">
+          <button id="autoCreate">1 · Create its wallet (in this browser)</button>
+          <button id="autoFund" disabled>2 · Fund it: one signature</button>
+          <button id="autoStart" disabled>3 · Let it trade alone</button>
+          <button id="autoStop">Stop the fly now</button>
+          <button id="autoWithdraw" disabled>Withdraw all to my wallet</button>
+          <button id="autoExport" disabled>Show its key (to keep a copy)</button>
+        </div>
+        <div class="state" id="autoState" style="margin-top:8px"></div>
+        <div class="state" id="autoLog" style="margin-top:6px;max-height:200px;overflow:auto"></div>
+      </div>
     </div>
-    <div class="card">
-      <h2>Log</h2>
-      <div class="log" id="log"></div>
+  </section>
+
+  <!-- 4 · what it is -->
+  <section class="band" id="b-how">
+    <h2 class="bandTitle">4 · How it works</h2>
+    <div class="cards">
+      <div class="card bounds">
+        <h2>How it differs from a block's brain</h2>
+        <ul>
+          <li><b>A block's brain</b>: 128 spiking neurons whose wiring is derived from the block's own address, so every block has a brain of its own. It is fed the block's own on-chain facts (market cap, GMs, messages, new holders, whether its creator still holds) and shows how the block moves and its mood. A toy network, not a biological copy.</li>
+          <li><b>This brain</b>: 1,119 neurons wired exactly as a real fly's, the same circuit for everyone, measured under the microscope. It is fed a stock's live market price, and it <b>learns</b>: dopamine reshapes its synapses, the memory forms and fades, and it leans toward or away, then meets the consequence.</li>
+          <li><b>Both</b>: no language model, no randomness, public inputs only. Anyone can replay them and get the same result.</li>
+        </ul>
+      </div>
+      <div class="card bounds">
+        <h2>What this model is, and is not</h2>
+        <ul>
+          <li>The neurons, the synapse counts between them, and which dopamine neurons reach which output neuron are <b>measured</b> (electron microscopy). Threshold: 5 synapses; 300 Kenyon cells out of ~2,000, taken by ascending id.</li>
+          <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
+          <li>The <b>odor</b> is what the chain proves about each transaction of the window, from its Transfers and its signer: the signer received the stock, sent it, or it moved between others. Never called "buy" or "sell". Each kind lands on its own third of the PNs (id mod 3, our choice), stronger with USD size.</li>
+          <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies. Their strength is the move against <b>this stock's usual move</b>, because dopamine neurons adapt to the range of rewards they expect (Tobler, Fiorillo &amp; Schultz 2005, Science): a usual move teaches at half strength, twice the usual saturates. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening; it fades a little at each new experience, never while idle.</li>
+          <li>Activity spreads in proportion to synapse counts and fades in about 3 to 4 s once a stimulus has passed; the next one waits for that. The brake (APL) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
+          <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and the odor mapping are <b>ours</b>: a fly does not smell prices.</li>
+          <li>The <b>paper</b> trader is virtual — unless YOU fund the fly's own wallet (“Let it trade alone”): then those same decisions move that wallet's real money. Its rule: out and drawn to the smell → buy; in and repelled → sell; otherwise hold if in, stay out if out; a window without trades changes nothing. No short. Each switch pays the pool's own fee, read on chain. It is shown next to two dumb witnesses (always in; in if the last window rose), because a P&amp;L alone proves nothing.</li>
+          <li>The fly is asked <b>before</b> the outcome: its prediction on one window is judged on the next window's price move (under 0.05% = flat, no verdict), misses counted next to matches; then it is taught with that move, and the synapses it weakened flash white. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
+        </ul>
+        Data: <a href="https://www.janelia.org/project-team/flyem/hemibrain" rel="noopener" target="_blank">hemibrain v1.2, Janelia FlyEM</a>, CC BY 4.0 licence.
+      </div>
     </div>
-    <div class="card bounds">
-      <h2>How it differs from a block's brain</h2>
-      <ul>
-        <li><b>A block's brain</b>: 128 spiking neurons whose wiring is derived from the block's own address, so every block has a brain of its own. It is fed the block's own on-chain facts (market cap, GMs, messages, new holders, whether its creator still holds) and shows how the block moves and its mood. A toy network, not a biological copy.</li>
-        <li><b>This brain</b>: 1,119 neurons wired exactly as a real fly's, the same circuit for everyone, measured under the microscope. It is fed a stock's live market price, and it <b>learns</b>: dopamine reshapes its synapses, the memory forms and fades, and it leans toward or away, then meets the consequence.</li>
-        <li><b>Both</b>: no language model, no randomness, public inputs only. Anyone can replay them and get the same result.</li>
-      </ul>
-    </div>
-    <div class="card bounds">
-      <h2>What this model is, and is not</h2>
-      <ul>
-        <li>The neurons, the synapse counts between them, and which dopamine neurons reach which output neuron are <b>measured</b> (electron microscopy). Threshold: 5 synapses; 300 Kenyon cells out of ~2,000, taken by ascending id.</li>
-        <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
-        <li>The <b>odor</b> is what the chain proves about each transaction of the window, from its Transfers and its signer: the signer received the stock, sent it, or it moved between others. Never called "buy" or "sell". Each kind lands on its own third of the PNs (id mod 3, our choice), stronger with USD size.</li>
-        <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies; here they carry that teaching signal only, not the circuit's own activity. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening.</li>
-        <li>Activity spreads in proportion to synapse counts and fades in about 3 to 4 s once a stimulus has passed; the next one waits for that. APL (inhibitory) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
-        <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and which PNs receive a rise or a fall (id parity) are <b>ours</b>: a fly does not smell prices.</li>
-        <li>The <b>paper</b> trader is virtual: no funds, no signature, and not advice — unless YOU fund the fly's own wallet (card “Let the fly trade alone”): then those same decisions move that wallet's real money. Its rule: out and drawn to the smell (approach) → buy; in and repelled (avoid) → sell; otherwise hold if in, stay out if out; a window without trades changes nothing. No short. Each switch pays the pool's own fee, read on chain. It is shown next to two dumb witnesses (always in; in if the last window rose), because a P&amp;L alone proves nothing.</li>
-        <li>The fly is asked <b>before</b> the outcome: its prediction on one window is judged on the next window's price move (under 0.05% = flat, no verdict), misses counted next to matches; then it is taught with that move, and the synapses it weakened flash white. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
-      </ul>
-      Data: <a href="https://www.janelia.org/project-team/flyem/hemibrain" rel="noopener" target="_blank">hemibrain v1.2, Janelia FlyEM</a>, CC BY 4.0 licence.
-    </div>
-  </aside>
+  </section>
 </main>
 <!-- the vendored @noble files keep their own bare imports (@noble/hashes/...): resolved here, to the verified copies in lib/noble -->
 <script type="importmap">{"imports":{"@noble/hashes/":"./lib/noble/hashes/","@noble/curves/":"./lib/noble/curves/"}}</script>
