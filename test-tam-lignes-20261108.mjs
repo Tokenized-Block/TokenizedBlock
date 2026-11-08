@@ -194,7 +194,7 @@ for (const r of res) console.log((r.ok ? 'OK    ' : 'ECHEC ') + r.nom + (r.det ?
 let assertions = res.length;
 
 /* tam-onglet.js (DOM, not importable here): the lines are drawn BEFORE the points loop, through `projeter` (the camera of the points) */
-{ const o = readFileSync(join(ICI, 'tam-onglet.js'), 'utf8').replace(/\r\n/g, '\n'), iL = o.indexOf('V.dessinerSegments(g, sv, projeter, { sc, dpr, aplati: aplati() })'), iP = o.indexOf('const film = filmDe();\n    if (film) {');
+{ const o = readFileSync(join(ICI, 'tam-onglet.js'), 'utf8').replace(/\r\n/g, '\n'), iL = o.indexOf('V.dessinerSegments(g, sv, projeter, { sc, dpr, aplati: aplati() })'), iP = o.indexOf('const film = filmDe();'); /* one-line anchor (test-tests-portables forbids line breaks in anchors); unique in tam-onglet.js */
   assertions++; if (!(iL > 0 && iP > iL)) ech.push({ nom: 'tam-onglet : lines drawn under the points, same camera', det: iL + ' ' + iP }); else console.log('OK    tam-onglet : lines drawn under the points, same camera'); }
 
 /* mutants on COPIES (relative imports rewritten to the real files) */
