@@ -198,6 +198,13 @@ await cas('⛔⛔ un manque de FONDS et un refus de MARCHE sont dits differemmen
   assert.equal(marche.sansFonds, false);
   assert.match(marche.pourquoi, /chain refuses this exact transaction/i);
   assert.match(marche.pourquoi, /TooLittleReceived/, 'le detail technique doit etre garde quand on ne sait pas');
+  /* 2026-11-08 (prod game293, sonde echange) : un 429 du NOEUD rendait « the chain refuses this exact transaction » - une panne de lecture
+   *   dite comme un refus certain, et la relecture des sondes (reservee aux NON_MESURE) ne partait pas. */
+  for (const message of ['HTTP 429', 'Public endpoint rate limit, please upgrade', 'request timed out', 'fetch failed']) {
+    const panne = await planAchatUsdcV3({ rpc: faireRpc({ jeter: (to, sel, sim) => sim, message }).rpc, ...base });
+    assert.equal(panne.etat, 'NON_MESURE', message + ' : ' + panne.etat);
+    assert.ok(!/chain refuses/i.test(panne.pourquoi), 'une panne de noeud ne se dit jamais refus de la chaine : ' + panne.pourquoi);
+  }
 });
 
 await cas('⛔ le deadline vient d un instant FOURNI, jamais de l horloge du module', async () => {

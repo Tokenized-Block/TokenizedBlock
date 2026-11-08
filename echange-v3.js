@@ -25,7 +25,7 @@
 import { selecteur } from './pool.js';
 import { etapesPermit2Exactes } from './approbations-exactes.js';
 import { PERMIT2 } from './lancer-pool.js';
-import { ROUTEUR } from './echange.js';
+import { ROUTEUR, estPanneDeNoeud } from './echange.js';
 import { planUsdcVersBlock, USDC_BASE } from './plan-usdc-block.js';
 import { FEE_WALLET } from './frais-creation.js';
 import { ROUTEUR_AERODROME_CL, FACTORY_AERODROME_CL, calldataApprove } from './calldata-aerodrome.js';
@@ -303,6 +303,8 @@ export async function planAchatUsdcV3({ rpc, compte, block, pool, montantUsdc,
      *     appellent deux reponses opposees : l un envoie vers le Bridge, l autre vers le montant.
      *     Confondre les deux a deja ete mesure sur le chemin v4 (capture de Phil, Rabby mobile). */
     const sansFonds = /OutOfFunds|insufficient funds|exceeds balance|TRANSFER_FROM_FAILED|\bSTF\b/i.test(sim.message);
+    /* 2026-11-08 : une PANNE de noeud n est pas un refus de la chaine (estPanneDeNoeud, echange.js) */
+    if (!sansFonds && estPanneDeNoeud(sim)) return { etat: 'NON_MESURE', plan, pourquoi: 'the transaction could not be simulated right now (node unavailable: ' + sim.message.slice(0, 120) + ') — try again', sansFonds: false };
     return {
       etat: 'REFUSE', plan,
       pourquoi: sansFonds

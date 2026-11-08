@@ -19,7 +19,7 @@ import { TBLOCK, HOOK_PREVU, HOOK_V8, estNotreHook, hookPaieDejaA6cf, deviseFrai
   HOOKS_PAIENT_DEJA_A6CF, refusMarcheOuvertIncoherent, estHook7030, fraisHookBps,
   HOOK_V9, V9_PAIE_DEJA_A6CF, HOOK_7030, HOOK_7030_ACTIF } from './tokenomics.js';
 import { encodeV4Swap, encodeQuote, formeAcceptee, paramsAction, paramsSwapExactInSingle, ACTIONS_V4, selecteur,
-  AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId } from './pool.js';
+  AVEC_MINHOP, SANS_MINHOP, cleDePool, poolId, estErreurTransportRpc } from './pool.js';
 import { etapesPermit2Exactes } from './approbations-exactes.js';
 import { vieDuBlock, cleEstUnMarche } from './marche.js';
 import { choisirPool, MARGE_BPS } from './choix-de-pool.js';
@@ -681,6 +681,8 @@ async function finaliser({ lire, R, compte, jeton, sens, m, maintenant, deadline
     if (!sim.error) return { etat: 'PRET', etapes: [], tx, resume, cle, forme, pourquoi: null };
     refus = sim.error;
   }
+  /* 2026-11-08 : une PANNE de noeud (429, debit, delai, reseau) n est pas un refus de la chaine : NON_MESURE, et la relecture peut partir */
+  if (estPanneDeNoeud(refus)) return { etat: 'NON_MESURE', resume, cle, pourquoi: 'the transaction could not be simulated right now (node unavailable: ' + refus.message.slice(0, 120) + ') — try again' };
   return { etat: 'REFUSE', resume, cle, pourquoi: 'the chain refuses this exact transaction: ' + refus.message.slice(0, 160) };
 }
 
@@ -724,6 +726,12 @@ export function estRevertDeChaine(e) {
   const msg = String((e && e.message) || e || '');
   /* 2026-10-18 : « 429 » seulement comme NOMBRE isole — il apparaissait dans les octets d un revert (0x82b42900) et le classait en limite de debit */
   return /revert/i.test(msg) && !/rate|limit|\b429\b|too many|timeout|timed out|capacity|unavailable|busy/i.test(msg);
+}
+/** L echec d une simulation est-il une PANNE DE NOEUD, a dire NON_MESURE ? Seulement si le message parle clairement de transport ET n est
+ *  pas un revert. Le reste reste REFUSE : un vrai refus sans le mot « revert » (« insufficient funds for gas ») n est jamais efface.
+ *  ⛔ 2026-11-08 (prod game293) : la sonde echange disait « the chain refuses this exact transaction: HTTP 429 ». */
+export function estPanneDeNoeud(e) {
+  return estErreurTransportRpc(String((e && e.message) || e || ''), e && e.code);
 }
 /** Une pool qui revert sur m cote-t-elle m/10, m/100 ou m/1000 ? Rend le diviseur qui cote (> 0), sinon 0.
  *  ⛔ Seulement apres un ECHEC (zero lecture de plus sur le chemin heureux) ; au plus 3 lectures, en file, arret au premier. */

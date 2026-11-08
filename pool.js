@@ -510,10 +510,14 @@ export function encodeQuote({ cle, zeroForOne, montant }) {
  *    les deux formes a l identique : dans ce cas on rend `null` et on le DIT, au lieu de choisir
  *    au hasard celle qui « semble » bonne.
  */
-function estErreurTransportRpc(msg, code) {
+/* ⛔ 2026-11-08 : LE critere unique « panne de noeud » (echange.js estPanneDeNoeud l appelle). Il ratait « request timed out » et le
+ *   « fetch failed » de node (une panne dite « the router refuses this swap »), et lisait 429 DANS les octets d un revert (0x82b42900) :
+ *   un revert n est jamais une panne, et 429 ne compte que comme nombre isole. */
+export function estErreurTransportRpc(msg, code) {
   const s = String(msg || '');
+  if (/revert/i.test(s)) return false;
   if (code === -32016 || code === 429) return true;
-  return /rate limit|over rate limit|429|timeout|throttl|ECONNRESET|Failed to fetch|HTTP 429/i.test(s);
+  return /rate.?limit|\b429\b|too many requests|timeout|timed out|throttl|ECONNRESET|ECONNREFUSED|ENOTFOUND|socket hang up|Failed to fetch|fetch failed|unavailable|capacity|busy/i.test(s);
 }
 
 export async function formeAcceptee({ appelBrut, ur, de, cle, zeroForOne, montant, deadline, value }) {
