@@ -5,7 +5,7 @@
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { createFly, createSession } from './fly-core.js';
-import { USDC_BASE } from './frais-creation.js';
+import { USDC_BASE, displayShort } from './frais-creation.js';
 import { selecteur } from './keccak.js';
 
 /* Order: 24 h volume measured by Coinbase search_tokens on 2026-11-07 (mesures/coinbase-actions-20261107.json). ADDRESSES come from the
@@ -116,7 +116,7 @@ async function connect() {
     const chain = await eth().request({ method: 'eth_chainId' });
     if (String(chain).toLowerCase() !== '0x2105') { liveSay('Your wallet is not on Base (chain ' + chain + '). Switch to Base and connect again.'); return; }
     live.account = String(accs[0] || '').toLowerCase(); live.stopped = false;
-    liveSay('Connected: ' + live.account.slice(0, 6) + '…' + live.account.slice(-4) + ' on Base. The fly will propose an order at its next BUY or SELL.');
+    liveSay('Connected: ' + displayShort(live.account) + ' on Base. The fly will propose an order at its next BUY or SELL.');
   } catch (err) { liveSay('Connection refused: ' + String((err && err.message) || err).slice(0, 120)); }
 }
 async function stockBalance() {
