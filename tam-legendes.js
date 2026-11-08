@@ -1162,6 +1162,14 @@ const L = {
     aRegarder: ['A flat floor in the middle: Weber law holds there.', 'The points climb steeply toward the dark end.', 'At 605, the brightest fields need a larger step again.'],
     fin: null,
   },
+  /* game304 (idea: codex "human brain", Claude sub-agent) */
+  glycosuriaCannon: {
+    titre: 'Cannon: excitement and sugar in the urine',
+    enUnePhrase: 'After fear, rage or a big examination, the body releases sugar; calm, cold and the removal of the adrenal glands do not.',
+    colonnes: ['group', 'share with sugar in the urine', 'cats, people, controls'],
+    aRegarder: ['The cat bars reach the top: every excited cat.', 'People: fewer, but never none, after an examination or a match.', 'The control bars stay at zero.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
