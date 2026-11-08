@@ -503,6 +503,8 @@ const DECORS = {
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
   /* game300 */
   attentionCattell: (P, o, B) => [pt([0, 158 / 250, B.centre[2]], C.repere, 'C, electric light 1884: 26 ms slower when concentrating')],
+  /* game301 */
+  pressurePeirceJastrow: (P, o, B) => [pt([0.05, 0.4, B.centre[2]], C.repere, 'Ratio 1.005: 200 errors in 500, not 250')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */

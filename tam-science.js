@@ -219,6 +219,8 @@ export function vueCorps(o, k) {
 /* game133 : la luminance de Planck (le pic chaud T^5 fois plus haut, le reste pres de 0) : 3.46 x 7.05 a l ecran -> 3.46 x 3.46 */
 export const ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1], corpsNoir: [1] });
 export const ECHELLE_PROPRE = {
+  /* game301 */
+  pressurePeirceJastrow: [2],
   /* game300 */
   attentionCattell: [2],
   supernova: [3], supernovaHydro: [3, 4], versMars: [2], fusionTrousNoirs: [0, 3], binaireFusion: [0, 3],

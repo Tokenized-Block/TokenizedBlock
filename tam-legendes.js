@@ -1138,6 +1138,14 @@ const L = {
     aRegarder: ['The distracted column sits highest for every light, shock and sound.', 'Concentrated and normal are close; for C under electric light, concentrated is higher.', 'Table VIII is the same gaps, with normal set to zero.'],
     fin: null,
   },
+  /* game301 (idea: codex "human brain", Claude sub-agent) */
+  pressurePeirceJastrow: {
+    titre: 'Peirce and Jastrow: differences too small to notice',
+    enUnePhrase: 'Even a difference you are not aware of feeling is judged right more often than by chance, and errors follow the normal law.',
+    colonnes: ['(ratio of pressures - 1) x 10', 'errors in 50, scaled to 1', 'single sets, printed means, curve'],
+    aRegarder: ['The points fall as the difference grows, close to the curve.', 'The second group sits lower: practice made the finger finer.', 'At the far left, the errors stay below one half.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
