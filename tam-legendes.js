@@ -1202,6 +1202,14 @@ const L = {
     aRegarder: ['Each map holds hundreds of times more than the one before.', 'The fly makes hundreds of synapses per neuron, the worm about seventeen.', 'The human point stands far to the right, with no synapse count: it has never been mapped.'],
     fin: null,
   },
+  /* game309 (idea: Phil, emotions as impulses from measured open data) */
+  emotionsSiegel: {
+    titre: 'Siegel: the body in six emotions, as impulses',
+    enUnePhrase: 'Seven body signals fire faster where people\'s heart, blood pressure, breathing or skin changed more in an emotion; the changes overlap so much that a classifier sorted only 31.5 % of cases.',
+    colonnes: ['time (our 120 steps)', 'body signal: heart rate and its variability, diastolic and systolic pressure, breathing rate, skin conductance level and response', 'heart, blood pressure, breathing or skin'],
+    aRegarder: ['Measured: the mean change d of each signal in each emotion (Table 9). Ours: a 15 % firing chance per step, times 1 + d.', 'Switch from anger to fear: breathing leads in both.', 'With the spread on, units cover the printed 95 % interval: the emotions overlap.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',

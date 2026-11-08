@@ -519,6 +519,8 @@ const DECORS = {
   neuronsHerculanoHouzel: (P, o, B) => [pt([Math.log10(6376.16) / 4, Math.log10(87.346) / 2, B.centre[2]], C.repere, 'Macaque: 6.4 billion neurons in 87 g')],
   /* game308 */
   connectomeSizes: (P, o, B) => [pt([Math.log10(86.1e9) / 11, 0, B.centre[2]], C.repere, 'Human: 86.1 billion neurons, no map')],
+  /* game309 */
+  emotionsSiegel: (P, o, B) => [pt([1, (4 * 6 + 3) / 42, B.centre[2]], C.repere, 'Breathing rate: d = 1.47 in anger, 0.91 in fear')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */
