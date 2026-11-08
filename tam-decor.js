@@ -515,6 +515,8 @@ const DECORS = {
   brainBoyd: (P, o, B) => [pt([10 / 17, 48.54 / 50, B.centre[2]], C.repere, 'Men, 14 to 20 years: 48.54 oz., the heaviest')],
   /* game306 */
   allOrNoneLucas: (P, o, B) => [pt([(25.9 - 25.4) / 6.4, 3.08 / 4.1, B.centre[2]], C.repere, 'Observation 6: between two steps')],
+  /* game307 */
+  neuronsHerculanoHouzel: (P, o, B) => [pt([Math.log10(6376.16) / 4, Math.log10(87.346) / 2, B.centre[2]], C.repere, 'Macaque: 6.4 billion neurons in 87 g')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */

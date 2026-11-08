@@ -1186,6 +1186,14 @@ const L = {
     aRegarder: ['Two flat steps, then a slow creep near the top.', 'The jumps between them are sudden.', 'The straight line misses the steps badly.'],
     fin: null,
   },
+  /* game307 (idea: Phil, other forms of the brain) */
+  neuronsHerculanoHouzel: {
+    titre: 'Herculano-Houzel: how primate brains add neurons',
+    enUnePhrase: 'In primates, ten times more neurons make a brain about ten times heavier; in rodents the same gain makes it far heavier.',
+    colonnes: ['neurons (log scale)', 'brain mass (log scale)', 'species, primate line, rodent power'],
+    aRegarder: ['The seven species sit on one straight line.', 'Its slope is close to one: mass follows neurons.', 'The rodent line climbs much more steeply.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
