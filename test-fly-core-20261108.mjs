@@ -137,6 +137,22 @@ async function banc(dir) {
   const m0 = JSON.stringify(f7.exportMemory()); for (let k = 0; k < 3000; k++) f7.step([]);
   ok(JSON.stringify(f7.exportMemory()) === m0, 'three thousand idle steps change no synapse');
   ok(f7.addDopamine(new Float64Array(f7.N.length), 0.0001, 0.0001) === 0.5 && f7.addDopamine(new Float64Array(f7.N.length), 0.0003, 0.0001) === 1, 'a usual move teaches at 1/2, three times the usual saturates');
+  /* boldness: the threshold to act. The shared fly's measured state on 08/11 (pull 93.2% / push 94.3%, t = -0.006) is undecided at
+   *   the default 2% and "avoid" at 0.5%; the setter refuses absurd values; the forecast uses the session's own threshold */
+  const { wordOf, FLY: F2 } = await import(pathToFileURL(join(dir, 'fly-core.js')).href + '?w=' + Date.now() + Math.random());
+  const tProd = (0.932 - 0.943) / (0.932 + 0.943);
+  ok(F2.DECIDE === 0.02 && wordOf(tProd) === 'undecided' && wordOf(tProd, 0.005) === 'avoid' && wordOf(-tProd, 0.005) === 'approach', 'the measured shared-fly state: undecided at 2%, decided at 0.5%');
+  const s8 = createSession(createFly(circuit), () => {}); s8.threshold = 0.5; s8.threshold = 0; s8.threshold = NaN;
+  ok(s8.threshold === 0.02, 'the threshold refuses 50%, 0 and NaN (stays ' + s8.threshold + ')');
+  s8.threshold = 0.005; ok(s8.threshold === 0.005, 'a bold threshold of 0.5% is taken');
+  const ev9 = [], f9 = createFly(circuit), s9 = createSession(f9, (e) => ev9.push(e), { threshold: 0.001 });
+  for (let k = 0; k < 1; k++) { const d = f9.odorDrive(rise); f9.addDopamine(d, 0.0005); f9.present(d); f9.drain(); }
+  s9.window({ symbol: 'X', price: px(100), transactions: [] }); f9.drain();
+  s9.window({ symbol: 'X', price: px(100), transactions: [tx('0x90', 'received', 50)] }); f9.drain();
+  const d9 = ev9.filter((e) => e.type === 'decision').pop();
+  ok(d9 && d9.threshold === 0.001 && d9.word === wordOf(d9.t, 0.001) && d9.word !== wordOf(d9.t), 'a session decides with ITS threshold, and the event says which (' + (d9 && d9.word) + ' at 0.1%, ' + (d9 && wordOf(d9.t)) + ' at 2%)');
+  const fc9 = foreseeNext(shadow, f9, s9);
+  ok(fc9.exact && fc9.scenarios.find((x) => x.move === 0).word === d9.word, 'the forecast uses the same threshold as the session');
   return n;
 }
 
@@ -165,6 +181,9 @@ const MUTANTS = [
   ['oubli au repos', (s) => s.replace("(driven ? FLY.RECOVER * (1 - e[2]) : 0)", 'FLY.RECOVER * (1 - e[2])')],
   ['habituel jamais mis a jour', (s) => s.replace('if (move !== 0) typical = typical > 0 ?', 'if (false) typical = typical > 0 ?')],
   ['habituel non sauve', (s) => s.replace("settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null, typical };", "settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null };")],
+  ['seuil de session ignore', (s) => s.replace("const word = t.word === 'quiet' ? 'quiet' : wordOf(t.t, decideAt);", 'const word = t.word;')],
+  ['prevision au seuil par defaut', (s) => s.replace("{ ...nx, threshold: session.threshold }", 'nx')],
+  ['seuil sans borne', (s) => s.replace("if (Number.isFinite(v) && v >= 0.001 && v <= 0.2) decideAt = v;", 'decideAt = v;')],
   ['apprentissage sans dopamine', (s) => s.replace('let d = 0; for (const [i, w] of N[j].danIn) d += w * next[i];', 'let d = 0;')],
 ];
 let tues = 0;
