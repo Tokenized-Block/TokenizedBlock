@@ -3033,7 +3033,7 @@ function budgetMouche(req, route) {
 async function compteMouche(adresse, token) {
   const mot = adresse.slice(2).toLowerCase().padStart(64, '0'), bal = selecteurSrv('balanceOf(address)') + mot;
   const [nonce, blk, eth, usdc, stock] = await Promise.all([
-    rpcServeurBrut('eth_getTransactionCount', [adresse, 'pending']), rpcServeurBrut('eth_getBlockByNumber', ['latest', false]), rpcServeurBrut('eth_getBalance', [adresse, 'latest']),
+    rpcServeur('eth_getTransactionCount', [adresse, 'pending']), rpcServeur('eth_getBlockByNumber', ['latest', false]), rpcServeur('eth_getBalance', [adresse, 'latest']),
     rpcRails('eth_call', [{ to: USDC_BASE, data: bal }, 'latest']), token ? rpcRails('eth_call', [{ to: token, data: bal }, 'latest']) : Promise.resolve(null)]);
   return { ok: true, address: adresse, nonce: BigInt(nonce).toString(), baseFeePerGas: BigInt(blk.baseFeePerGas).toString(), block: Number(BigInt(blk.number)),
     eth: BigInt(eth).toString(), usdc: BigInt(usdc).toString(), stock: stock == null ? null : BigInt(stock).toString(), token: token || null };
@@ -7283,7 +7283,7 @@ function traiterRequete(req, res) {
     if (route === 'receipt') {
       const h = chemin.slice('/api/fly/receipt/'.length).toLowerCase();
       if (!/^0x[0-9a-f]{64}$/.test(h)) { send(400, { ok: false, why: 'usage: /api/fly/receipt/<transaction hash>' }); return; }
-      rpcServeurBrut('eth_getTransactionReceipt', [h]).then((r) => send(200, { ok: true, receipt: r ? { status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed } : null })).catch(panne);
+      rpcServeur('eth_getTransactionReceipt', [h]).then((r) => send(200, { ok: true, receipt: r ? { status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed } : null })).catch(panne);
       return;
     }
     lireCorpsMouche(req, route === 'relay' ? 64 * 1024 : 16 * 1024).then(async (b) => {
@@ -7291,7 +7291,7 @@ function traiterRequete(req, res) {
         const ok = (x) => typeof x === 'string';
         if (!b || !/^0x[0-9a-fA-F]{40}$/.test(b.from) || !/^0x[0-9a-fA-F]{40}$/.test(b.to) || !ok(b.data) || !/^0x[0-9a-fA-F]*$/.test(b.data) || (b.value != null && !/^0x[0-9a-fA-F]{1,64}$/.test(b.value))) {
           send(400, { ok: false, why: 'body: {from, to, data, value?} as hex' }); return; }
-        const gas = await rpcServeurBrut('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]);
+        const gas = await rpcServeur('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]);
         send(200, { ok: true, gas: BigInt(gas).toString() }); return;
       }
       /* relay */
@@ -7300,7 +7300,7 @@ function traiterRequete(req, res) {
       const refus = GARDE_MOUCHE.refusal(t);
       if (refus) { send(403, { ok: false, why: refus }); return; }
       const hash = keccak256HexSrv(t.bytes);
-      try { await rpcServeurBrut('eth_sendRawTransaction', [b.raw]); send(200, { ok: true, hash }); }
+      try { await rpcServeur('eth_sendRawTransaction', [b.raw]); send(200, { ok: true, hash }); }
       catch (e) { const m = String((e && e.message) || e);
         /* the same bytes sent twice (a retry on another node): already in the pool, same hash */
         if (/already known|known transaction/i.test(m)) send(200, { ok: true, hash, already: true }); else send(200, { ok: false, hash, why: m.slice(0, 160) }); }
