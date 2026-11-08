@@ -6,6 +6,7 @@
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { createFly, createSession, foreseeNext, decide } from './fly-core.js';
 import { checkPlanCalls } from './fly-guard.js';
+import { memoryFingerprint, sealData, checkSeal } from './fly-seal.js';
 import { USDC_BASE, displayShort } from './frais-creation.js';
 import { selecteur } from './keccak.js';
 
@@ -735,6 +736,40 @@ function loadMemory() {
   log(x ? `memory restored for ${current.symbol}: trained since ${new Date(x.at).toLocaleString('en-GB')}, ${session.settled} windows` : `a naive fly for ${current.symbol} (no memory kept in this browser yet)`);
   renderTally(); renderBook();
 }
+/* ── ITS MEMORY, SEALED ON BASE (Phil 08/11): the memory stays here; its fingerprint goes on chain in a transaction YOUR wallet signs
+ * (0 ETH to yourself, a 66-byte note, fly-seal.js). Re-checked from the transaction itself: its sender and receiver are your wallet. ── */
+const sealKey = (s) => 'fly-seal-v1-' + s;
+function sealSay(t) { $('sealState').textContent = t; }
+function renderSeal() {
+  let x = null; try { x = JSON.parse(localStorage.getItem(sealKey(current.symbol)) || 'null'); } catch (_) { x = null; }
+  if (!x || !/^0x[0-9a-f]{64}$/.test(String(x.tx))) { sealSay('Not sealed yet for ' + current.symbol + '.'); $('sealCheck').disabled = true; return; }
+  const now = memoryFingerprint(fly.exportMemory());
+  sealSay(`Sealed ${new Date(x.at).toLocaleString('en-GB')} after ${x.windows} windows (tx ${x.tx.slice(0, 10)}…). ${now === x.fingerprint ? 'Its memory is the same as sealed.' : 'It has learned since: its memory no longer matches that seal (seal again to record the new one).'}`);
+  $('sealCheck').disabled = false;
+}
+async function sealMemory() {
+  if (!live.account) await connect();
+  if (!live.account) { sealSay('Connect your wallet first (card "Trade for real").'); return; }
+  const chain = String(await eth().request({ method: 'eth_chainId' }).catch(() => '')).toLowerCase();
+  if (chain !== '0x2105') { sealSay('Your wallet is not on Base right now: nothing sent.'); return; }
+  try {
+    const memory = fly.exportMemory(), fingerprint = memoryFingerprint(memory), windows = session.settled;
+    const data = sealData({ stock: current.address, fingerprint, windows });
+    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: live.account, to: live.account, value: '0x0', data }] });
+    sealSay('Sent, waiting for the block…'); await waitReceipt(tx);
+    try { localStorage.setItem(sealKey(current.symbol), JSON.stringify({ tx, fingerprint, windows, at: Date.now(), sealer: live.account })); } catch (_) { /* kept on chain anyway */ }
+    renderSeal();
+  } catch (err) { sealSay('Not sealed: ' + String((err && err.message) || err).slice(0, 140)); }
+}
+async function checkSealNow() {
+  let x = null; try { x = JSON.parse(localStorage.getItem(sealKey(current.symbol)) || 'null'); } catch (_) { x = null; }
+  if (!x || !eth()) { sealSay('Nothing to check here (no seal kept, or no wallet to read the chain with).'); return; }
+  try {
+    const tx = await eth().request({ method: 'eth_getTransactionByHash', params: [x.tx] });
+    const c = checkSeal(tx, { sealer: x.sealer, stock: current.address, memory: fly.exportMemory() });
+    sealSay(c.ok ? `Read from the chain: a seal by ${displayShort(x.sealer)} after ${c.windows} windows — ${c.same ? 'the memory held now is exactly the one sealed.' : 'the memory held now has changed since.'}` : 'Not confirmed: ' + c.why + '.');
+  } catch (err) { sealSay('The chain could not be read: ' + String((err && err.message) || err).slice(0, 120)); }
+}
 function forget() {
   try { localStorage.removeItem(memKey(current.symbol)); } catch (_) { /* nothing kept */ }
   loadMemory(); log('memory erased: the fly is naive again');
@@ -856,7 +891,7 @@ function select(i) {
   current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); lastDecision = null;
   $('watching').textContent = `watching ${current.symbol} · every 30 s its real trades are a smell`;
   $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
-  session.reset(); loadMemory(); thoughts.length = 0; renderThoughts();
+  session.reset(); loadMemory(); thoughts.length = 0; renderThoughts(); renderSeal();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
   clearInterval(timer); clearInterval(refTimer);
   readWindow().then(readReference); timer = setInterval(readWindow, POLL_MS); refTimer = setInterval(readReference, REF_MS);
@@ -872,6 +907,7 @@ async function start() {
   $('connect').addEventListener('click', connect);
   $('sign').addEventListener('click', signLive);
   $('stop').addEventListener('click', stopFly);
+  $('seal').addEventListener('click', sealMemory); $('sealCheck').addEventListener('click', checkSealNow);
   autoWire();
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
   fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
