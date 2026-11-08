@@ -20,7 +20,25 @@ export const FLY = Object.freeze({
   /* how sure it must be to act: the pull-minus-push it needs, as a share of their sum (0.02 = 2%). The page lets a user lower or
    *   raise it ("boldness"); the server's shared fly keeps this default. */
   DECIDE: 0.02,
+  /* eligibility trace (Handler et al. 2019, Cell 178:60, Drosophila: an odor leaves a Kenyon-cell trace that dopamine arriving
+   *   AFTER it can still act on): a smell is taught by the moves of the next TRACE windows, each weighted TRACE_DECAY^age. 1 = the
+   *   next window only (the model before 2026-11-08). */
+  TRACE: 3, TRACE_DECAY: 0.5,
+  /* measured 2026-11-08 (banc-fly-trace, 16 seeds x 50 windows, noise 0.08%/window): signal 2 windows late, trace 1 -> 4 right /
+   *   2 wrong, trace 3 -> 9 right / 0 wrong; signal 1 window late: 16/16 both; NO signal: it still "decides" 13/16 (trace 1) and 15/16
+   *   (trace 3) -- a learner sees patterns in noise. Hence the record gate below for real money. */
 });
+/** Its track record against a coin flip: k right out of n judged predictions, and the exact one-sided binomial p-value P(X >= k)
+ *  when it is a coin (p = 0.5). Real money waits for a small p: a fly that sees patterns in noise has not earned trust yet. */
+export function recordEdge({ consistent = 0, opposite = 0 } = {}) {
+  const k = Math.max(0, Math.floor(consistent)), n = k + Math.max(0, Math.floor(opposite));
+  if (!n) return { k, n, rate: null, p: 1 };
+  /* P(X = i) = C(n, i) / 2^n, summed from i = k to n, in log space to stay exact enough for thousands of windows */
+  let lc = 0; const terms = [];
+  for (let i = 0; i <= n; i++) { if (i > 0) lc += Math.log((n - i + 1) / i); if (i >= k) terms.push(lc - n * Math.LN2); }
+  const m = Math.max(...terms), p = Math.min(1, Math.exp(m) * terms.reduce((a, t) => a + Math.exp(t - m), 0));
+  return { k, n, rate: k / n, p };
+}
 /** The word a tendency gives at a given threshold: approach, avoid or undecided. */
 export const wordOf = (t, threshold = FLY.DECIDE) => (t > threshold ? 'approach' : t < -threshold ? 'avoid' : 'undecided');
 
@@ -178,20 +196,22 @@ export function decide(word, pos) {
  * scenario of the price move it has not yet seen: learn from the last smell with that move (as the next window would), then smell
  * `nextMix` and decide. Exact for a fly at rest with nothing queued (the server's fly after drain); the page's live fly may be mid-pulse.
  * It forecasts the FLY, never the market: which move comes is unknown, so every scenario is shown, none is picked. */
-export function foresee(shadow, fly, { lastMix, nextMix, pos, moves = [0.01, 0, -0.01], typical = 0, threshold = FLY.DECIDE }) {
+export function foresee(shadow, fly, { lastMix, lessons = null, nextMix, pos, moves = [0.01, 0, -0.01], typical = 0, threshold = FLY.DECIDE }) {
+  const taught = lessons || (lastMix ? [{ mix: lastMix, weight: 1 }] : []);
   const start = fly.saveState();
   if (start.queued || start.pulseSteps) return { exact: false, scenarios: [] };
   return { exact: true, scenarios: moves.map((move) => {
     shadow.loadState(start);
-    if (lastMix && move) { const d = shadow.odorDrive(lastMix); shadow.addDopamine(d, move, typical); shadow.present(d); shadow.drain(); }
+    if (move) for (const l of taught) { const d = shadow.odorDrive(l.mix); shadow.addDopamine(d, move * l.weight, typical); shadow.present(d); shadow.drain(); }
     let r = null; shadow.present(shadow.odorDrive(nextMix), { onPeak: (t) => { r = { ...t, path: shadow.thought(8) }; } }); shadow.drain();
     const word = r.word === 'quiet' ? 'quiet' : wordOf(r.t, threshold);
     return { move, word, ap: r.ap, av: r.av, action: decide(word, pos), path: r.path };
   }) };
 }
 
-export function createSession(fly, emit, { threshold = FLY.DECIDE } = {}) {
-  let decideAt = threshold;
+export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.TRACE } = {}) {
+  let decideAt = threshold, recent = []; /* the smells of the last `trace` windows, most recent first (null: no trade) */
+  const H = Math.max(1, Math.min(6, Math.floor(trace)));
   const tally = { consistent: 0, opposite: 0, flat: 0, undecided: 0 };
   /* PAPER book, never real funds, never a signature: the fly is in the stock for a window when it predicted approach, out otherwise;
    * two dumb witnesses next to it; every change of position pays the pool's own fee, read on chain. */
@@ -259,13 +279,16 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE } = {}) {
     if (prevWin && p != null && prevWin.price != null) {
       const move = lastMove = p / prevWin.price - 1;
       settle(prevWin, move);
-      if (prevWin.hasOdor) { judge(prevWin.prediction, move); if (move !== 0) learn(prevWin.mix, move, false); }
+      if (prevWin.hasOdor) judge(prevWin.prediction, move);
+      /* each recent smell is taught by this move, weighted by how long ago it was smelled (the trace) */
+      if (move !== 0) recent.forEach((m, k) => { if (m) learn(m, move * FLY.TRACE_DECAY ** k, false); });
       /* the usual move is updated AFTER this lesson: the surprise is measured against what was expected before it */
       if (move !== 0) typical = typical > 0 ? typical * (1 - FLY.TYPICAL_ALPHA) + Math.abs(move) * FLY.TYPICAL_ALPHA : Math.abs(move);
     }
     const hasOdor = mix.received + mix.sent + mix.moved > 0;
     if (hasOdor) lastOdor = { ...mix };
     const win = { price: p, mix, hasOdor, prediction: null, decision: null, lastMove };
+    if (p != null) { recent.unshift(hasOdor ? { ...mix } : null); recent.length = Math.min(recent.length, H); }
     if (hasOdor) predict(mix, false, (word, action) => { win.prediction = word; win.decision = action; });
     prevWin = win;
     return { price: p, hasOdor };
@@ -282,7 +305,7 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE } = {}) {
     const lo = x && x.lastOdor;
     lastOdor = lo && ['received', 'sent', 'moved'].every((k) => Number.isFinite(lo[k]) && lo[k] >= 0) && lo.received + lo.sent + lo.moved > 0 ? { received: lo.received, sent: lo.sent, moved: lo.moved } : null;
   }
-  function reset() { seen = new Set(); prevWin = null; firstWindow = true; feePips = null; lastOdor = null; typical = 0; }
+  function reset() { seen = new Set(); prevWin = null; firstWindow = true; feePips = null; lastOdor = null; typical = 0; recent = []; }
   /* the odor of the last window that had real trades: a simulation is injected on what is really happening, not on a made-up smell */
   /* The next window, as the session will run it: what it will learn from (this window's smell, if any), the smell it assumes comes
    * next (the last REAL trades, repeated: an assumption, said as such), and the position the paper book will hold by then. */
@@ -291,7 +314,8 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE } = {}) {
     const pos = prevWin && prevWin.decision ? (prevWin.decision === 'buy' || prevWin.decision === 'hold' ? 1 : 0) : books.fly.pos;
     /* scenarios: a usual rise, no move, a usual fall (of THIS stock), or +-1% before any move was seen */
     const u = typical > 0 ? typical : 0.01;
-    return { lastMix: prevWin && prevWin.hasOdor ? { ...prevWin.mix } : null, nextMix: { ...lastOdor }, pos, typical, moves: [u, 0, -u] };
+    const lessons = recent.map((m, k) => (m ? { mix: { ...m }, weight: FLY.TRACE_DECAY ** k } : null)).filter(Boolean);
+    return { lastMix: recent[0] ? { ...recent[0] } : null, lessons, nextMix: { ...lastOdor }, pos, typical, moves: [u, 0, -u] };
   }
   return { window, predict, learn, state, restore, reset, next, get feePips() { return feePips; }, get settled() { return settled; }, get typical() { return typical; },
     get threshold() { return decideAt; }, set threshold(v) { if (Number.isFinite(v) && v >= 0.001 && v <= 0.2) decideAt = v; },

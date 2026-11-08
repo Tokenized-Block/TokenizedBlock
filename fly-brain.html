@@ -16,7 +16,7 @@
    *   and decides now, what it thinks, how to teach it and keep its memory, how to trade with it (real money, set apart), how it works */
   main.page { padding: 8px 16px 24px; display: flex; flex-direction: column; gap: 18px; }
   .hero { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 12px; align-items: start; }
-  .now { display: flex; flex-direction: column; gap: 12px; }
+  .now { display: flex; flex-direction: column; gap: 12px; } .hero { align-items: stretch; } .now > .card:last-child { flex: 1; }
   .jump { display: flex; flex-wrap: wrap; gap: 8px; position: sticky; top: 0; z-index: 2; padding: 8px 0; background: linear-gradient(var(--bg) 70%, transparent); }
   .jump a { color: var(--text); text-decoration: none; font-size: 13px; padding: 6px 12px; border: 1px solid #263252; border-radius: 999px; background: #0a0f1b; }
   .jump a:hover { border-color: #3d4f80; }
@@ -25,6 +25,13 @@
   .bandTitle .warn { font-size: 12px; font-weight: 600; color: #fbbf24; border: 1px solid #fbbf2455; border-radius: 999px; padding: 2px 8px; margin-left: 8px; vertical-align: middle; }
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
   .cards .wide { grid-column: span 2; }
+  /* Phil 08/11 "there are still holes": measured 1071 / 177 / 372 px in band 1. Cards of a row now share its height, the thoughts
+   *   scroll inside, and band 1 stacks activity and log next to them, the log filling what is left. */
+  .cards { align-items: stretch; } .cards > .card, .stack > .card { display: flex; flex-direction: column; }
+  .cards.think { grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); }
+  .cards.think .wide { grid-column: auto; max-height: 720px; overflow: auto; }
+  .stack { display: flex; flex-direction: column; gap: 12px; max-height: 720px; }
+  .stack .grow { flex: 1; min-height: 0; } .stack .grow .log { max-height: none; flex: 1; overflow: auto; }
   .hint { font-size: 12px; color: var(--muted); padding: 0 12px 8px; }
   .more summary { cursor: pointer; font-size: 13px; color: #c3cbe0; margin-top: 8px; }
   .risks { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: #c3cbe0; } .risks li { margin: 3px 0; }
@@ -33,7 +40,7 @@
   .btns { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0 8px; }
   .card .log { max-height: 320px; }
   #b-trade .card { border-color: #3a2f12; }
-  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .cards .wide { grid-column: auto; } }
+  @media (max-width: 900px) { .hero { grid-template-columns: 1fr; } .cards .wide { grid-column: auto; } .cards.think { grid-template-columns: 1fr; } .stack { max-height: none; } .stack .grow .log { max-height: 320px; } }
   .scene { position: relative; background: radial-gradient(ellipse at 50% 40%, #0c1222 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; }
   .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
@@ -143,7 +150,7 @@
   <!-- 1 · its thoughts, live -->
   <section class="band" id="b-think">
     <h2 class="bandTitle">1 · What it thinks</h2>
-    <div class="cards">
+    <div class="cards think">
       <div class="card wide">
         <h2>Its thoughts · before, now, next</h2>
         <div class="state">Each decision is a set of synapses firing: the smell cells a smell wakes up, through the synapses it learned, into “go toward” or “keep away” outputs. Tap a synapse to light it on the map.</div>
@@ -152,14 +159,16 @@
           <div class="glossary"><b>Smell cell</b> = a Kenyon cell: a few of them fire for each smell, they are its memory. <b>“Go toward” / “keep away” output</b> = an output neuron of the memory centre (MBON): when it fires the fly is pushed toward the smell, or away from it. <b>% strength</b> = how much the synapse between them keeps of what it had in a newborn fly: learning weakens the side that was wrong (a fall weakens “go toward”). <b>Pull toward / push away</b> = the same, summed over the cells this smell wakes up (100% = nothing learned yet). <b>“Next”</b> is computed, not guessed: the fly is deterministic, so a shadow copy loaded with its exact state is run ahead once per possible move (Laplace's demon, at the scale of this model). It forecasts the FLY's next decision, never the market.</div>
         </details>
       </div>
+      <div class="stack">
       <div class="card">
         <h2>Activity right now</h2>
         <div class="gauges" id="gauges"></div>
         <div class="state" id="output"></div>
       </div>
-      <div class="card">
+      <div class="card grow">
         <h2>What happened · log</h2>
         <div class="log" id="log"></div>
+      </div>
       </div>
     </div>
   </section>
@@ -224,6 +233,7 @@
             <li>Tokenized stocks are only for eligible persons outside the U.S.</li>
           </ul>
         </details>
+        <label class="state check"><input type="checkbox" id="autoProven" checked> Trade real money only once its predictions beat a coin flip on this stock (at least 10 judged, less than a 10% chance of doing as well by luck). Recommended: tested on a synthetic market with NO pattern, this brain still leaned one way 13 to 15 times out of 16.</label>
         <label class="state check"><input type="checkbox" id="autoRisk"> I understand that I can lose this money, that the key lives only in this browser, and that the fly trades without asking me each time.</label>
         <div class="row2">
           <label class="state">Budget sent to the fly (USDC)<input id="autoBudget" type="number" min="1" max="100" step="1" value="1"></label>
@@ -264,6 +274,7 @@
           <li>The price is the stock's <b>live on-chain pool</b> (Aerodrome, Base), weekends included. The Chainlink reference is shown next to it, not fed to the fly.</li>
           <li>The <b>odor</b> is what the chain proves about each transaction of the window, from its Transfers and its signer: the signer received the stock, sent it, or it moved between others. Never called "buy" or "sell". Each kind lands on its own third of the PNs (id mod 3, our choice), stronger with USD size.</li>
           <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies. Their strength is the move against <b>this stock's usual move</b>, because dopamine neurons adapt to the range of rewards they expect (Tobler, Fiorillo &amp; Schultz 2005, Science): a usual move teaches at half strength, twice the usual saturates. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening; it fades a little at each new experience, never while idle.</li>
+          <li>A smell is taught by the moves of the <b>next three windows</b>, each half as much as the one before: an odor leaves a trace in the Kenyon cells that dopamine arriving later can still act on (Handler et al. 2019, Cell). Measured on a synthetic market (16 runs): with a pattern two windows late it was right 9 times and wrong 0 (4 right, 2 wrong without the trace); with no pattern at all it still leaned one way 15 times out of 16 — a learner sees patterns in noise. That is why its <b>record</b> is shown against a coin flip, and why its own wallet waits for that record by default.</li>
           <li>Activity spreads in proportion to synapse counts and fades in about 3 to 4 s once a stimulus has passed; the next one waits for that. The brake (APL) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
           <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and the odor mapping are <b>ours</b>: a fly does not smell prices.</li>
           <li>The <b>paper</b> trader is virtual — unless YOU fund the fly's own wallet (“Let it trade alone”): then those same decisions move that wallet's real money. Its rule: out and drawn to the smell → buy; in and repelled → sell; otherwise hold if in, stay out if out; a window without trades changes nothing. No short. Each switch pays the pool's own fee, read on chain. It is shown next to two dumb witnesses (always in; in if the last window rose), because a P&amp;L alone proves nothing.</li>

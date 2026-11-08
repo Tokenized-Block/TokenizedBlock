@@ -153,6 +153,26 @@ async function banc(dir) {
   ok(d9 && d9.threshold === 0.001 && d9.word === wordOf(d9.t, 0.001) && d9.word !== wordOf(d9.t), 'a session decides with ITS threshold, and the event says which (' + (d9 && d9.word) + ' at 0.1%, ' + (d9 && wordOf(d9.t)) + ' at 2%)');
   const fc9 = foreseeNext(shadow, f9, s9);
   ok(fc9.exact && fc9.scenarios.find((x) => x.move === 0).word === d9.word, 'the forecast uses the same threshold as the session');
+  /* the trace: a smell is taught by the next windows' moves too, half as much per window of age (measured gain: banc-fly-trace) */
+  const { recordEdge, FLY: F3 } = await import(pathToFileURL(join(dir, 'fly-core.js')).href + '?r=' + Date.now() + Math.random());
+  ok(F3.TRACE === 3 && F3.TRACE_DECAY === 0.5, 'default trace: 3 windows, halving');
+  const ev10 = [], f10 = createFly(circuit), s10 = createSession(f10, (e) => ev10.push(e));
+  s10.window({ symbol: 'X', price: px(100), transactions: [] }); f10.drain();
+  s10.window({ symbol: 'X', price: px(100), transactions: [tx('0xa1', 'sent', 3)] }); f10.drain();   /* smell, no move yet */
+  s10.window({ symbol: 'X', price: px(100), transactions: [] }); f10.drain();                       /* no trade, no move */
+  s10.window({ symbol: 'X', price: px(99), transactions: [] }); f10.drain();                        /* -1%, two windows after the smell */
+  const tg = ev10.filter((e) => e.type === 'taught');
+  ok(tg.length === 1 && Math.abs(tg[0].move - (-0.01 * 0.5)) < 1e-12 && tg[0].mix.sent === 300, 'a move two windows later still teaches that smell, at half weight (' + (tg[0] && tg[0].move) + ')');
+  const ev11 = [], f11 = createFly(circuit), s11 = createSession(f11, (e) => ev11.push(e), { trace: 1 });
+  for (const [p, t] of [[100, []], [100, [tx('0xb1', 'sent', 3)]], [100, []], [99, []]]) { s11.window({ symbol: 'X', price: px(p), transactions: t }); f11.drain(); }
+  ok(ev11.filter((e) => e.type === 'taught').length === 0, 'with trace 1 (the old model) that late move teaches nothing');
+  const fc10 = foreseeNext(shadow, f10, s10);
+  const ls10 = s10.next().lessons;
+  ok(fc10.exact && ls10.length === 1 && ls10[0].weight === 0.25 && ls10[0].mix.sent === 300, 'the next lesson is that smell, now two windows older (weight 0.25): ' + JSON.stringify(ls10));
+  /* its record against a coin flip (exact binomial, values checked by hand: 10/10 = 1/1024, 7/10 = 176/1024, 5/10 = 638/1024) */
+  ok(recordEdge({}).p === 1 && Math.abs(recordEdge({ consistent: 10 }).p - 1 / 1024) < 1e-12 && Math.abs(recordEdge({ consistent: 7, opposite: 3 }).p - 176 / 1024) < 1e-12
+    && Math.abs(recordEdge({ consistent: 5, opposite: 5 }).p - 638 / 1024) < 1e-12, 'record p-values exact');
+  ok(Math.abs(recordEdge({ consistent: 60, opposite: 40 }).p - 0.0284439668) < 1e-8 && recordEdge({ consistent: 600, opposite: 400 }).p < 1e-9, 'record p-value stays finite and right for large n');
   return n;
 }
 
@@ -170,7 +190,7 @@ const MUTANTS = [
   ['vend sans tenir', (s) => s.replace("return word === 'approach' ? 'buy' : 'stay_out';", "return word === 'approach' ? 'buy' : word === 'avoid' ? 'sell' : 'stay_out';")],
   ['fenetre sans odeur vend', (s) => s.replace("const flyWants = win.decision ? (win.decision === 'buy' || win.decision === 'hold' ? 1 : 0) : books.fly.pos;", "const flyWants = win.decision === 'buy' || win.decision === 'hold' ? 1 : 0;")],
   ['prevision sur la vraie mouche', (s) => s.replace('    shadow.loadState(start);\n', '    shadow = fly; shadow.loadState(start);\n')],
-  ['prevision sans le mouvement', (s) => s.replace('shadow.addDopamine(d, move, typical); shadow.present(d);', 'shadow.present(d);')],
+  ['prevision sans le mouvement', (s) => s.replace('shadow.addDopamine(d, move * l.weight, typical); shadow.present(d);', 'shadow.present(d);')],
   ['etat copie sans la memoire', (s) => s.replace('act.set(s.act); let k = 0; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) e[2] = s.m[k++];', 'act.set(s.act);')],
   ['pensee non triee', (s) => s.replace('return out.sort((a, b) => b.c - a.c).slice(0, limit);', 'return out.slice(0, limit);')],
   ['exact meme en pleine impulsion', (s) => s.replace('if (start.queued || start.pulseSteps) return { exact: false, scenarios: [] };', '')],
@@ -184,6 +204,9 @@ const MUTANTS = [
   ['seuil de session ignore', (s) => s.replace("const word = t.word === 'quiet' ? 'quiet' : wordOf(t.t, decideAt);", 'const word = t.word;')],
   ['prevision au seuil par defaut', (s) => s.replace("{ ...nx, threshold: session.threshold }", 'nx')],
   ['seuil sans borne', (s) => s.replace("if (Number.isFinite(v) && v >= 0.001 && v <= 0.2) decideAt = v;", 'decideAt = v;')],
+  ['trace oubliee', (s) => s.replace('if (move !== 0) recent.forEach((m, k) => { if (m) learn(m, move * FLY.TRACE_DECAY ** k, false); });', 'if (move !== 0 && recent[0]) learn(recent[0], move, false);')],
+  ['trace sans attenuation', (s) => s.replace('learn(m, move * FLY.TRACE_DECAY ** k, false)', 'learn(m, move, false)')],
+  ['binomiale depuis k+1', (s) => s.replace('if (i >= k) terms.push(lc - n * Math.LN2);', 'if (i > k) terms.push(lc - n * Math.LN2);')],
   ['apprentissage sans dopamine', (s) => s.replace('let d = 0; for (const [i, w] of N[j].danIn) d += w * next[i];', 'let d = 0;')],
 ];
 let tues = 0;

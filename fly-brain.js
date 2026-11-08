@@ -4,7 +4,7 @@
  * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { createFly, createSession, foreseeNext, decide } from './fly-core.js';
+import { createFly, createSession, foreseeNext, decide, recordEdge } from './fly-core.js';
 import { checkPlanCalls } from './fly-guard.js';
 import { memoryFingerprint, sealData, checkSeal } from './fly-seal.js';
 import { USDC_BASE, displayShort } from './frais-creation.js';
@@ -338,6 +338,8 @@ async function autoTrade(e) {
       /* the REAL position decides, not the paper book: after a reload or a stock switch the paper book starts out (review L3) */
       const action = decide(e.word, held > 0n ? 1 : 0);
       if (action !== 'buy' && action !== 'sell') return;
+      if ($('autoProven').checked && !proven(session.state().tally)) { const r = recordEdge(session.state().tally);
+        autoNote(`decided ${ACT[action]}, but its record (${r.k} right of ${r.n} judged) does not beat a coin flip yet: no real trade (untick “only once it beats chance” to override)`); return; }
       if (s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
       let de, vers, montant;
       if (action === 'buy') {
@@ -459,7 +461,11 @@ function renderBook(st = session.state(), el = $('book')) {
 }
 function tallyText(t) {
   const n = t.consistent + t.opposite;
-  return `${t.consistent} matched · ${t.opposite} opposite · ${t.flat} flat · ${t.undecided} undecided` + (n ? ` · ${fmt((t.consistent / n) * 100, 0)}% on ${n} judged` : ' · nothing judged yet');
+  const r = recordEdge(t);
+  return `${t.consistent} matched · ${t.opposite} opposite · ${t.flat} flat · ${t.undecided} undecided` + (n ? ` · ${fmt((t.consistent / n) * 100, 0)}% on ${n} judged · a coin flip would do this well ${r.p < 0.001 ? 'under 0.1%' : fmt(r.p * 100, 1) + '%'} of the time${proven(t) ? ' — it beats chance' : ''}` : ' · nothing judged yet');
+}
+/* real money waits for a record that beats a coin flip: at least 10 judged and p < 10% (banc-fly-trace: a learner "decides" on noise) */
+function proven(t) { const r = recordEdge(t); return r.n >= 10 && r.p < 0.1;
 }
 function renderTally() { $('tally').textContent = tallyText(session.state().tally); }
 
