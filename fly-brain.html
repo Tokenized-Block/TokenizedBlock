@@ -116,6 +116,10 @@
       <div id="book" class="book"></div>
       <button id="listen">Listen to the brain</button>
       <button id="forget">Erase what it learned on this stock</button>
+      <button id="seal">Seal its memory on Base (your wallet signs)</button>
+      <button id="sealCheck" disabled>Check the seal on chain</button>
+      <div class="state" id="sealState" style="margin-top:6px"></div>
+      <div class="state" style="margin-top:6px">Sealing: your wallet sends 0 ETH to itself with a 66-byte public note — the fingerprint (keccak-256) of what the fly learned on this stock and after how many windows. Only a network fee is paid. The memory itself stays in this browser; the chain proves it existed then and was not changed since, not that the fly is right.</div>
       <div class="state" style="margin-top:6px">What it learns is kept in this browser, per stock, so it keeps training from visit to visit. A private window starts a naive fly.</div>
       <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
     </div>
