@@ -519,6 +519,10 @@ const DECORS = {
   neuronsHerculanoHouzel: (P, o, B) => [pt([Math.log10(6376.16) / 4, Math.log10(87.346) / 2, B.centre[2]], C.repere, 'Macaque: 6.4 billion neurons in 87 g')],
   /* game308 */
   connectomeSizes: (P, o, B) => [pt([Math.log10(86.1e9) / 11, 0, B.centre[2]], C.repere, 'Human: 86.1 billion neurons, no map')],
+  /* game309 */
+  emotionsSiegel: (P, o, B) => [pt([1, (4 * 6 + 3) / 42, B.centre[2]], C.repere, 'Breathing rate: d = 1.47 in anger, 0.91 in fear')],
+  /* game310 */
+  bodyMapsNummenmaa: (P, o, B) => [pt([(1 + 0.5) / 7, (1 * 87 + 43.5) / (7 * 87), B.centre[2]], C.repere, 'Fear: named right 8 % of the time, under chance')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */
@@ -597,8 +601,6 @@ const DECORS = {
   mortaliteNightingale: (P, o, B) => [pt([0.5, 1, B.centre[2]], C.repere, P.anneeNightingale === 1 ? 'Winter 1854-55: up to 1022.8 per 1,000 a year' : 'Winter 1855-56: up to 56.4 per 1,000 a year')],
   /* game255 */
   exclusionGause: (P, o, B) => [pt([1, 0, B.centre[2]], C.repere, 'Day 16: no P. caudatum left')],
-  /* game254 */
-  interferenceStroop: (P, o, B) => [pt([1, 110.3 / 120, B.centre[2]], C.repere, 'Naming with conflict: 110.3 s')],
   /* game253 */
   aberrationBradley: (P, o, B) => [pt([0, 40.4 / 60, B.centre[2]], C.repere, 'Maximum about 40.4"')],
   /* game252 */

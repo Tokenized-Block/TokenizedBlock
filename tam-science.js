@@ -219,6 +219,10 @@ export function vueCorps(o, k) {
 /* game133 : la luminance de Planck (le pic chaud T^5 fois plus haut, le reste pres de 0) : 3.46 x 7.05 a l ecran -> 3.46 x 3.46 */
 export const ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1], corpsNoir: [1] });
 export const ECHELLE_PROPRE = {
+  /* game310 */
+  bodyMapsNummenmaa: [2],
+  /* game309 */
+  emotionsSiegel: [2],
   /* game308 */
   connectomeSizes: [2],
   /* game307 */
@@ -362,8 +366,6 @@ export const ECHELLE_PROPRE = {
   mortaliteNightingale: [2],
   /* game255 : jours et volumes ; serie (etiquette) */
   exclusionGause: [2],
-  /* game254 : groupe et temps de natures differentes ; condition (etiquette) */
-  interferenceStroop: [2],
   /* game253 : rang et secondes d arc de natures differentes ; maximum, ecart ou prediction (etiquette) */
   aberrationBradley: [2],
   /* game252 : tailles de meme grandeur ; ligne, colonne ou droite (etiquette) */

@@ -1202,6 +1202,22 @@ const L = {
     aRegarder: ['Each map holds hundreds of times more than the one before.', 'The fly makes hundreds of synapses per neuron, the worm about seventeen.', 'The human point stands far to the right, with no synapse count: it has never been mapped.'],
     fin: null,
   },
+  /* game309 (idea: Phil, emotions as impulses from measured open data) */
+  emotionsSiegel: {
+    titre: 'Siegel: the body in six emotions, as impulses',
+    enUnePhrase: 'Seven body signals fire faster where people\'s heart, blood pressure, breathing or skin changed more in an emotion; the changes overlap so much that a classifier sorted only 31.5 % of cases.',
+    colonnes: ['time (our 120 steps)', 'body signal: heart rate and its variability, diastolic and systolic pressure, breathing rate, skin conductance level and response', 'heart, blood pressure, breathing or skin'],
+    aRegarder: ['Measured: the mean change d of each signal in each emotion (Table 9). Ours: a 15 % firing chance per step, times 1 + d.', 'Switch from anger to fear: breathing leads in both.', 'With the spread on, units cover the printed 95 % interval: the emotions overlap.'],
+    fin: null,
+  },
+  /* game310 (idea: Phil, emotions as impulses from measured open data) */
+  bodyMapsNummenmaa: {
+    titre: 'Nummenmaa: naming an emotion from a body map',
+    enUnePhrase: 'Shown where other people felt their body change, readers named the emotion 46 % of the time where guessing gives 14 %: neutral almost always, fear almost never.',
+    colonnes: ['answer', 'shown emotion and reader', 'right or wrong'],
+    aRegarder: ['Measured: the share of readers right for each map. Ours: 87 simulated readers per map, wrong answers spread evenly.', 'Neutral fills its own column; fear scatters everywhere.', 'Set the slider to 1 to see blind guessers.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
@@ -1512,14 +1528,6 @@ const L = {
     enUnePhrase: 'Two Paramecium species on the same bacteria: together, one of them disappears in 16 days.',
     colonnes: ['day', 'volume', 'observed or model, each species'],
     aRegarder: ['P. caudatum climbs, then sinks to 0.', 'The constant model keeps both alive.', 'Raise beta to make the model exclude.'],
-    fin: null,
-  },
-  /* game254 (idee : codex 27, sous-agent Claude) */
-  interferenceStroop: {
-    titre: 'Stroop: when the word fights the colour',
-    enUnePhrase: 'Naming the ink of a word that spells another colour is slow: reading wins over seeing.',
-    colonnes: ['who', 'time for 100 items', 'without conflict, with conflict, difference'],
-    aRegarder: ['Experiment 1: reading barely slows down.', 'Experiment 2: naming slows by three quarters.', 'Switch experiments to compare.'],
     fin: null,
   },
   /* game253 (idee : codex 27, sous-agent Claude) */
