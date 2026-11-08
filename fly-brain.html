@@ -187,10 +187,8 @@
       <div class="card">
         <h2>Its memory</h2>
         <div class="state">What it learns is kept in this browser, per stock, so it keeps training from visit to visit. A private window starts a naive fly.</div>
-        <button id="seal">Seal its memory on Base (your wallet signs)</button>
-        <button id="sealCheck" disabled>Check the seal on chain</button>
         <div class="state" id="sealState" style="margin-top:6px"></div>
-        <div class="state" style="margin-top:6px">Sealing: your wallet sends 0 ETH to itself with a 66-byte public note — the fingerprint (keccak-256) of what the fly learned on this stock and after how many windows. Only a network fee is paid. The chain proves this memory existed then and was not changed since, not that the fly is right.</div>
+        <div class="state" style="margin-top:6px">Sealed automatically: after each real trade, the fly's own wallet sends 0 ETH to itself with a 66-byte public note — the fingerprint (keccak-256) of what it learned on this stock and after how many windows (about 23,000 gas, measured on a fork). No funded fly wallet, no seal. The chain proves this memory existed then and was not changed since, not that the fly is right.</div>
         <button id="listen">Listen to the brain</button>
         <div class="state" style="margin-top:6px">Sound: smell cells pluck notes, outputs hum high (go toward) or low (keep away), reward rings, punishment drums. Same moves, same rhythm.</div>
       </div>
@@ -206,19 +204,6 @@
   <section class="band" id="b-trade">
     <h2 class="bandTitle">3 · Trade with it <span class="warn">real money · your risk · not advice</span></h2>
     <div class="cards">
-      <div class="card live">
-        <h2>You sign each trade</h2>
-        <div class="why">When the fly decides <b>BUY</b> or <b>SELL</b>, it shows a real, simulated order for your budget. Nothing leaves your wallet unless <b>you</b> sign that order. You can lose this money. Tokenized stocks are only for eligible persons outside the U.S.</div>
-        <label class="state check"><input type="checkbox" id="risk"> I understand I can lose the money I trade, that the fly's decision is not advice, and that each trade is signed by me.</label>
-        <button id="connect">Connect my wallet</button>
-        <label class="state" for="budget" style="display:block;margin-top:8px">Budget per buy (USDC)</label>
-        <input id="budget" class="field" type="number" min="1" step="1" value="5">
-        <div class="state" id="liveState" style="margin-top:8px">Not connected.</div>
-        <div class="why" id="livePlan"></div>
-        <button id="sign" disabled>Sign this trade with my wallet</button>
-        <button id="stop">Stop the fly (no more orders proposed)</button>
-        <div class="state" id="liveLog" style="margin-top:6px"></div>
-      </div>
       <div class="card live">
         <h2>Let it trade alone · one signature</h2>
         <div class="why">The fly gets its <b>own small wallet, created in this browser</b>. You sign <b>one</b> transaction that sends it a budget (USDC, plus a little ETH for gas). Then it trades that budget <b>on its own</b> on the stock you watch, within your caps. <b>Stop</b> halts it; <b>Withdraw all</b> sends everything back. It trades <b>only while this page is open</b>; reopened, it starts stopped.</div>
@@ -240,6 +225,8 @@
           <label class="state">Max per trade (USDC)<input id="autoCap" type="number" min="0.5" max="100" step="0.5" value="1"></label>
           <label class="state">Max trades per day<input id="autoDay" type="number" min="1" max="50" step="1" value="10"></label>
         </div>
+        <button id="connect">Connect my wallet (it funds the fly and gets everything back)</button>
+        <div class="state" id="liveState" style="margin-top:6px">Not connected.</div>
         <div class="state" id="autoWallet" style="margin-top:8px">No fly wallet in this browser yet.</div>
         <div class="btns">
           <button id="autoCreate">1 · Create its wallet (in this browser)</button>

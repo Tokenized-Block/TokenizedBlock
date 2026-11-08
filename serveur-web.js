@@ -7283,7 +7283,9 @@ function traiterRequete(req, res) {
     if (route === 'receipt') {
       const h = chemin.slice('/api/fly/receipt/'.length).toLowerCase();
       if (!/^0x[0-9a-f]{64}$/.test(h)) { send(400, { ok: false, why: 'usage: /api/fly/receipt/<transaction hash>' }); return; }
-      rpcServeur('eth_getTransactionReceipt', [h]).then((r) => send(200, { ok: true, receipt: r ? { status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed } : null })).catch(panne);
+      const avecTx = new URL(req.url, 'http://x').searchParams.get('tx') === '1';
+      Promise.all([rpcServeur('eth_getTransactionReceipt', [h]), avecTx ? rpcServeur('eth_getTransactionByHash', [h]) : null]).then(([r, t]) => send(200, { ok: true,
+        receipt: r ? { status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed } : null, ...(avecTx ? { tx: t ? { from: t.from, to: t.to, input: t.input } : null } : {}) })).catch(panne);
       return;
     }
     lireCorpsMouche(req, route === 'relay' ? 64 * 1024 : 16 * 1024).then(async (b) => {
