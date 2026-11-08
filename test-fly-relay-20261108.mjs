@@ -43,6 +43,10 @@ async function banc(dir) {
   ok(g.refusal(tx({ to: USDC_BASE, data: T + word(user) + amt(5) + '00' }), T0) !== null, 'a transfer with trailing bytes is refused');
   /* chain and plain ETH */
   ok(g.refusal(tx({ to: user, value: 1000 }), T0) === null, 'a plain ETH send is relayed');
+  const { sealData } = await import(pathToFileURL(join(ICI, 'fly-seal.js')).href);
+  const seal = sealData({ stock: NVDA, fingerprint: '0x' + 'ab'.repeat(32), windows: 7 });
+  ok(g.refusal(tx({ to: user, data: seal }), T0) === null, 'a memory seal (66-byte note, no ETH) is relayed');
+  ok(g.refusal(tx({ to: user, data: seal, value: 1 }), T0) !== null && g.refusal(tx({ to: user, data: seal + '00' }), T0) !== null, 'a seal carrying ETH, or with one byte more, is refused');
   ok(/8453/.test(g.refusal(tx({ to: user, value: 1000, chainId: 1 }), T0) || ''), 'another chain is refused, even for a plain send');
   for (let k = 0; k < 2100; k++) g.remember({ ok: true, aSigner: [{ to: router, data: '0x' + k.toString(16).padStart(8, '0'), value: '0x0' }] }, T0);
   ok(g.size === 2000, 'the memory of planned calls is bounded (' + g.size + ')');
@@ -52,6 +56,7 @@ async function banc(dir) {
 const total = await banc(ICI);
 console.log('test-fly-relay-20261108 : ' + total + ' assertions OK');
 const MUTANTS = [
+  ['sceau avec ETH', (s) => s.replace('if (t.value === 0n && readSeal(t.data)) return null;', 'if (readSeal(t.data)) return null;')],
   ['toute chaine acceptee', (s) => s.replace("if (t.chainId !== 8453n) return 'chain ' + t.chainId + ' refused: Base (8453) only';", '')],
   ['valeur ignoree dans la cle', (s) => s.replace("+ '|' + BigInt(value || 0).toString();", ';')],
   ['jamais d expiration', (s) => s.replace('if (at !== undefined && now - at < ttlMs) return null;', 'if (at !== undefined) return null;')],
@@ -68,7 +73,7 @@ for (const [nom, muter] of MUTANTS) {
   const muted = muter(source);
   if (muted === source) { console.log('  ' + nom + ' : MOTIF ABSENT'); continue; }
   const d = mkdtempSync(join(tmpdir(), 'flyrelay-mut-'));
-  writeFileSync(join(d, 'fly-relay.js'), muted);
+  writeFileSync(join(d, 'fly-relay.js'), muted); cpSync(join(ICI, 'fly-seal.js'), join(d, 'fly-seal.js')); cpSync(join(ICI, 'keccak.js'), join(d, 'keccak.js'));
   try { await banc(d); console.log('  ' + nom + ' : SURVIT'); } catch (e) { tues++; console.log('  ' + nom + ' : TUE (' + String(e.message).slice(0, 80) + ')'); }
 }
 assert.equal(tues, MUTANTS.length, 'MUTANTS : ' + tues + '/' + MUTANTS.length);

@@ -115,7 +115,6 @@ function renderDecision(e) {
 const live = { account: null, stopped: false, plan: null, action: null, busy: false, decimals: null };
 const eth = () => (typeof window !== 'undefined' ? window.ethereum : null);
 function liveSay(t) { $('liveState').textContent = t; }
-function liveNote(html) { const p = document.createElement('div'); p.innerHTML = clock() + ' · ' + html; $('liveLog').prepend(p); }
 async function connect() {
   if (!eth()) { liveSay('No browser wallet found on this page (install one, or open the page inside your wallet).'); return; }
   try {
@@ -123,65 +122,8 @@ async function connect() {
     const chain = await eth().request({ method: 'eth_chainId' });
     if (String(chain).toLowerCase() !== '0x2105') { liveSay('Your wallet is not on Base (chain ' + chain + '). Switch to Base and connect again.'); return; }
     live.account = String(accs[0] || '').toLowerCase(); live.stopped = false;
-    liveSay('Connected: ' + displayShort(live.account) + ' on Base. The fly will propose an order at its next BUY or SELL.');
+    liveSay('Connected: ' + displayShort(live.account) + ' on Base. You can now fund the fly\'s own wallet (step 2).');
   } catch (err) { liveSay('Connection refused: ' + String((err && err.message) || err).slice(0, 120)); }
-}
-async function stockBalance() {
-  const data = selecteur('balanceOf(address)') + live.account.slice(2).padStart(64, '0');
-  return BigInt(await eth().request({ method: 'eth_call', params: [{ to: current.address, data }, 'latest'] }));
-}
-async function proposeLive(e) {
-  if (e.sim || live.stopped || !live.account || (e.action !== 'buy' && e.action !== 'sell')) return;
-  live.action = e.action; live.plan = null; $('sign').disabled = true;
-  try {
-    let de, vers, montant;
-    if (e.action === 'buy') {
-      const usdc = Math.floor(Number($('budget').value) * 1e6);
-      if (!(usdc >= 1e6)) { $('livePlan').textContent = 'Set a budget of at least 1 USDC.'; return; }
-      de = USDC_BASE; vers = current.address; montant = String(usdc);
-    } else {
-      const bal = await stockBalance();
-      if (bal <= 0n) { $('livePlan').innerHTML = 'The fly decided <b>SELL</b>, but this wallet holds no ' + current.symbol + ': nothing to sell.'; return; }
-      de = current.address; vers = USDC_BASE; montant = bal.toString();
-    }
-    const q = new URLSearchParams({ de, vers, montant, compte: live.account });
-    const r = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
-    live.plan = { r, de, vers, montant, action: e.action };
-    const s = r.resume || {};
-    const dPay = e.action === 'buy' ? 6 : (live.decimals ?? 8), dGet = e.action === 'buy' ? (live.decimals ?? 8) : 6;
-    const units = (v, d) => v == null ? '?' : fmt(Number(BigInt(v)) / 10 ** d, d > 6 ? 6 : 2);
-    $('livePlan').innerHTML = `<b>The fly's live order: ${ACT[e.action]} ${current.symbol}</b> · pay ${units(s.paye, dPay)} ${e.action === 'buy' ? 'USDC' : current.symbol}, `
-      + `receive at least ${units(s.recoitAuMoins, dGet)} ${e.action === 'buy' ? current.symbol : 'USDC'} (quote ${units(s.quote, dGet)}), fee ${esc(s.fraisBps ?? '?')} bps, price impact ${esc(s.impactBps ?? '?')} bps, venue ${esc(s.venue || '?')}. `
-      + `Plan state: <b>${esc(r.etat)}</b>${r.pourquoi ? ' — ' + esc(String(r.pourquoi).slice(0, 140)) : ''}${r.suite ? ' — ' + esc(r.suite) : ''}.`;
-    $('sign').disabled = !(r.ok && Array.isArray(r.aSigner) && r.aSigner.length);
-  } catch (err) { $('livePlan').textContent = 'The order could not be built: ' + String((err && err.message) || err).slice(0, 140); }
-}
-async function signLive() {
-  if (live.busy || !live.plan || !live.account || live.stopped) return;
-  if (!$('risk').checked) { liveSay('Tick the risk box first: you can lose the money you trade.'); return; }
-  live.busy = true; $('sign').disabled = true;
-  try {
-    /* re-plan right before signing: prices move, and approvals change what is returned */
-    const q = new URLSearchParams({ de: live.plan.de, vers: live.plan.vers, montant: live.plan.montant, compte: live.account });
-    let r = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
-    for (let round = 0; round < 2 && r && r.ok; round++) {
-      const calls = r.aSigner || [];
-      if (r.atomique && calls.length > 1) {
-        const id = await eth().request({ method: 'wallet_sendCalls', params: [{ version: '1.0', chainId: '0x2105', from: live.account, calls: calls.map((c) => ({ to: c.to, data: c.data, value: c.value })) }] });
-        liveNote('batch sent: ' + esc(String(id && (id.id || id)).slice(0, 20)) + '…');
-      } else {
-        for (const c of calls) {
-          const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: live.account, to: c.to, data: c.data, value: c.value }] });
-          liveNote(`${esc(c.nom || c.role || 'transaction')} sent · ` + (/^0x[0-9a-fA-F]{64}$/.test(String(h)) ? `<a href="https://basescan.org/tx/${h}" target="_blank" rel="noopener">tx ${String(h).slice(0, 10)}…</a>` : esc(String(h).slice(0, 20))));
-          await waitReceipt(h);
-        }
-      }
-      if (r.etat !== 'APPROBATIONS') break;
-      r = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json()); /* approvals done: now the swap */
-    }
-    liveSay(r && r.ok ? 'Done. Check the transactions above on Basescan.' : 'Stopped: ' + String((r && r.pourquoi) || 'plan refused').slice(0, 140));
-  } catch (err) { liveSay('Not sent: ' + String((err && err.message) || err).slice(0, 140)); }
-  finally { live.busy = false; live.plan = null; }
 }
 async function waitReceipt(h) {
   for (let k = 0; k < 60; k++) {
@@ -191,8 +133,6 @@ async function waitReceipt(h) {
   }
   throw new Error('no receipt after 2 minutes (' + h.slice(0, 10) + '…): check it on Basescan before trying again');
 }
-function stopFly() { live.stopped = true; live.plan = null; $('sign').disabled = true; $('livePlan').textContent = ''; liveSay('The fly is stopped: it proposes no order. Connect again to resume.'); }
-
 /* ── THE FLY ALONE (CLAUDE.md exception decided by Phil 2026-11-08): the user signs ONE transaction that funds the fly's own wallet;
  * after it, the fly trades that budget on its own, on its live (never simulated) decisions, within the user's caps; Stop halts it,
  * Withdraw all sends everything back to the wallet that funded it. The key is made and kept ONLY in this browser (fly-wallet.js,
@@ -214,7 +154,24 @@ function autoLoad() {
     return x;
   } catch (_) { return null; }
 }
-function autoSave() { try { localStorage.setItem(AUTO_KEY, JSON.stringify(auto.s)); return JSON.parse(localStorage.getItem(AUTO_KEY)).key === auto.s.key; } catch (_) { return false; } }
+/* this site's storage is shared with the whole app: when it is full, the fly memories of OTHER stocks are dropped, oldest first,
+ * and the page says which; a refusal reports the browser's own error, not a guess (the old text blamed a "private window") */
+function storeSafely(key, value) {
+  try { localStorage.setItem(key, value); return { ok: true, dropped: [] }; } catch (e0) {
+    const olds = [];
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i);
+      if (k && k.startsWith('fly-brain-memory-v1-') && k !== key && k !== memKey(current.symbol)) { let at = 0; try { at = JSON.parse(localStorage.getItem(k)).at || 0; } catch (_) { at = 0; } olds.push([at, k]); } } } catch (_) { /* storage unreadable */ }
+    olds.sort((a, b) => a[0] - b[0]); const dropped = [];
+    for (const [, k] of olds) { try { localStorage.removeItem(k); dropped.push(k.slice('fly-brain-memory-v1-'.length)); localStorage.setItem(key, value); return { ok: true, dropped }; } catch (_) { /* still full */ } }
+    return { ok: false, dropped, why: String((e0 && e0.name) || 'Error') + ': ' + String((e0 && e0.message) || e0).slice(0, 120) };
+  }
+}
+function storageUsedKb() { let n = 0; try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); n += (k.length + (localStorage.getItem(k) || '').length) * 2; } } catch (_) { return null; } return Math.round(n / 1024); }
+function autoSave() {
+  const r = storeSafely(AUTO_KEY, JSON.stringify(auto.s)); auto.lastStore = r;
+  if (r.dropped.length) autoNote('this site\'s storage was full: the fly memories of ' + r.dropped.join(', ') + ' were dropped to keep its wallet');
+  try { return r.ok && JSON.parse(localStorage.getItem(AUTO_KEY)).key === auto.s.key; } catch (_) { return false; }
+}
 /* several tabs share one key: re-read the stored state before acting, so a Stop pressed in another tab is obeyed (review M2) */
 function autoRefresh() { const x = autoLoad(); if (x && auto.s && x.key === auto.s.key) auto.s = x; return auto.s; }
 async function flyWallet() { if (!auto.W) auto.W = await import('./fly-wallet.js'); return auto.W; }
@@ -256,7 +213,8 @@ async function autoCreate() {
     const W = await flyWallet(), key = W.newKeyHex();
     auto.s = { v: 1, key, address: W.addressOf(key), owner: null, running: false, day: '', today: 0, traded: [], created: Date.now() };
     /* a key this browser cannot keep would lose the money sent to it: then no wallet at all */
-    if (!autoSave()) { auto.s = null; autoSay('This browser refuses to keep data for this site (private window?). No fly wallet was created: its key could not be kept.'); return; }
+    if (!autoSave()) { const w = (auto.lastStore && auto.lastStore.why) || 'written but not read back'; auto.s = null;
+      autoSay(`This browser did not keep the key (${w}; this site uses ${storageUsedKb() ?? '?'} KB of storage). No fly wallet was created, because a key that is not kept would lose the money sent to it.`); return; }
     autoNote('fly wallet created in this browser: ' + displayShort(auto.s.address) + '. Nothing is in it yet.');
   } catch (e) { autoSay('The fly wallet could not be created: ' + String((e && e.message) || e).slice(0, 120)); }
   autoRender();
@@ -366,6 +324,8 @@ async function autoTrade(e) {
       }
       autoRefresh(); auto.s.today++; if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
       autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${auto.s.today}/${maxDay} today). The app's interface fee was in the plan (${String((p.resume && p.resume.fraisBps) || '?')} bps); see Basescan.`);
+      /* its memory, sealed by its own wallet right after the trade it decided (a failed seal is said, it does not stop the fly) */
+      try { await flySeal(stock); } catch (err) { autoNote('memory not sealed this time: ' + String((err && err.message) || err).slice(0, 140)); }
     });
     if (done === 'locked') autoNote('another tab of this page is trading with the same fly: this tab does nothing');
   } catch (err) {
@@ -421,7 +381,7 @@ function autoWire() {
 function onEvent(e) {
   show(e, current.symbol);
   if (e.type === 'tx') ripple(e.kind, e.usd);
-  if (e.type === 'decision') { renderDecision(e); proposeLive(e); autoTrade(e); if (!e.sim) { thoughts.push({ ...e, at: Date.now() }); if (thoughts.length > 6) thoughts.shift(); }
+  if (e.type === 'decision') { renderDecision(e); autoTrade(e); if (!e.sim) { thoughts.push({ ...e, at: Date.now() }); if (thoughts.length > 6) thoughts.shift(); }
     /* after the session has recorded this decision (its callback runs right after the event) */
     setTimeout(renderThoughts, 0); }
   if (e.type === 'verdict' || e.type === 'taught') { renderTally(); }
@@ -736,8 +696,7 @@ function wireMap() {
  * or cleared site data starts a naive fly, and the page says so. The shared fly (server) is the one that trains when nobody watches. ── */
 const memKey = (s) => 'fly-brain-memory-v1-' + s;
 function saveMemory() {
-  try { localStorage.setItem(memKey(current.symbol), JSON.stringify({ m: fly.exportMemory(), ...session.state(), at: Date.now() })); }
-  catch (_) { /* storage refused: the fly still learns, it just forgets on reload */ }
+  storeSafely(memKey(current.symbol), JSON.stringify({ m: fly.exportMemory(), ...session.state(), at: Date.now() })); /* refused: it still learns, it forgets on reload */
 }
 function loadMemory() {
   let x = null; try { x = JSON.parse(localStorage.getItem(memKey(current.symbol)) || 'null'); } catch (_) { x = null; }
@@ -745,39 +704,31 @@ function loadMemory() {
   log(x ? `memory restored for ${current.symbol}: trained since ${new Date(x.at).toLocaleString('en-GB')}, ${session.settled} windows` : `a naive fly for ${current.symbol} (no memory kept in this browser yet)`);
   renderTally(); renderBook();
 }
-/* ── ITS MEMORY, SEALED ON BASE (Phil 08/11): the memory stays here; its fingerprint goes on chain in a transaction YOUR wallet signs
- * (0 ETH to yourself, a 66-byte note, fly-seal.js). Re-checked from the transaction itself: its sender and receiver are your wallet. ── */
+/* ── ITS MEMORY, SEALED ON BASE, AUTOMATICALLY (Phil 08/11): after each real trade the fly's OWN wallet sends 0 ETH to itself with a
+ * 66-byte note, the fingerprint of its memory (fly-seal.js). Re-checked from the transaction itself (sender = receiver = the fly). ── */
 const sealKey = (s) => 'fly-seal-v1-' + s;
 function sealSay(t) { $('sealState').textContent = t; }
 function renderSeal() {
   let x = null; try { x = JSON.parse(localStorage.getItem(sealKey(current.symbol)) || 'null'); } catch (_) { x = null; }
-  if (!x || !/^0x[0-9a-f]{64}$/.test(String(x.tx))) { sealSay('Not sealed yet for ' + current.symbol + '.'); $('sealCheck').disabled = true; return; }
+  if (!x || !/^0x[0-9a-f]{64}$/.test(String(x.tx))) { sealSay('Not sealed yet for ' + current.symbol + ': its own wallet seals it after its next real trade.'); return; }
   const now = memoryFingerprint(fly.exportMemory());
-  sealSay(`Sealed ${new Date(x.at).toLocaleString('en-GB')} after ${x.windows} windows (tx ${x.tx.slice(0, 10)}…). ${now === x.fingerprint ? 'Its memory is the same as sealed.' : 'It has learned since: its memory no longer matches that seal (seal again to record the new one).'}`);
-  $('sealCheck').disabled = false;
-}
-async function sealMemory() {
-  if (!live.account) await connect();
-  if (!live.account) { sealSay('Connect your wallet first (card "Trade for real").'); return; }
-  const chain = String(await eth().request({ method: 'eth_chainId' }).catch(() => '')).toLowerCase();
-  if (chain !== '0x2105') { sealSay('Your wallet is not on Base right now: nothing sent.'); return; }
-  try {
-    const memory = fly.exportMemory(), fingerprint = memoryFingerprint(memory), windows = session.settled;
-    const data = sealData({ stock: current.address, fingerprint, windows });
-    const tx = await eth().request({ method: 'eth_sendTransaction', params: [{ from: live.account, to: live.account, value: '0x0', data }] });
-    sealSay('Sent, waiting for the block…'); await waitReceipt(tx);
-    try { localStorage.setItem(sealKey(current.symbol), JSON.stringify({ tx, fingerprint, windows, at: Date.now(), sealer: live.account })); } catch (_) { /* kept on chain anyway */ }
-    renderSeal();
-  } catch (err) { sealSay('Not sealed: ' + String((err && err.message) || err).slice(0, 140)); }
+  sealSay(`Sealed ${new Date(x.at).toLocaleString('en-GB')} after ${x.windows} windows (tx ${x.tx.slice(0, 10)}…). ${now === x.fingerprint ? 'Its memory is the same as sealed.' : 'It has learned since: its memory no longer matches that seal (it seals again after its next real trade).'}`);
 }
 async function checkSealNow() {
   let x = null; try { x = JSON.parse(localStorage.getItem(sealKey(current.symbol)) || 'null'); } catch (_) { x = null; }
-  if (!x || !eth()) { sealSay('Nothing to check here (no seal kept, or no wallet to read the chain with).'); return; }
+  if (!x) return;
   try {
-    const tx = await eth().request({ method: 'eth_getTransactionByHash', params: [x.tx] });
+    const q = await fetch('/api/fly/receipt/' + x.tx + '?tx=1', { cache: 'no-store' }).then((r) => r.json());
+    const tx = q && q.ok ? q.tx : null;
     const c = checkSeal(tx, { sealer: x.sealer, stock: current.address, memory: fly.exportMemory() });
     sealSay(c.ok ? `Read from the chain: a seal by ${displayShort(x.sealer)} after ${c.windows} windows — ${c.same ? 'the memory held now is exactly the one sealed.' : 'the memory held now has changed since.'}` : 'Not confirmed: ' + c.why + '.');
   } catch (err) { sealSay('The chain could not be read: ' + String((err && err.message) || err).slice(0, 120)); }
+}
+async function flySeal(stock) {
+  const memory = fly.exportMemory(), fingerprint = memoryFingerprint(memory), windows = session.settled;
+  const r = await flySend({ to: auto.s.address, data: sealData({ stock: stock.address, fingerprint, windows }), value: '0x0' });
+  storeSafely(sealKey(stock.symbol), JSON.stringify({ tx: r.hash, fingerprint, windows, at: Date.now(), sealer: auto.s.address }));
+  autoNote('memory sealed on Base by its own wallet: ', { tx: r.hash }); renderSeal(); checkSealNow();
 }
 function forget() {
   try { localStorage.removeItem(memKey(current.symbol)); } catch (_) { /* nothing kept */ }
@@ -913,9 +864,6 @@ async function start() {
   slider.addEventListener('input', showSize); showSize();
   $('listen').addEventListener('click', listen);
   $('connect').addEventListener('click', connect);
-  $('sign').addEventListener('click', signLive);
-  $('stop').addEventListener('click', stopFly);
-  $('seal').addEventListener('click', sealMemory); $('sealCheck').addEventListener('click', checkSealNow);
   autoWire();
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
   fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
@@ -946,5 +894,7 @@ async function start() {
   requestAnimationFrame(loop);
   select(0);
   readShared(); setInterval(readShared, SHARED_MS);
+  /* the page's own functions, for the fork end-to-end test only: never exposed on the real site */
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__flyTest = { autoTrade, autoStart, autoStop, autoWithdraw, autoAccount, auto, session, fly, decide, current: () => current };
 }
 start().catch((e) => log('error: ' + (e && e.message || e)));
