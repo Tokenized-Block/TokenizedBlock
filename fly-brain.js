@@ -4,8 +4,8 @@
  * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { createFly, createSession } from './fly-core.js';
-import { USDC_BASE } from './frais-creation.js';
+import { createFly, createSession, foreseeNext } from './fly-core.js';
+import { USDC_BASE, displayShort } from './frais-creation.js';
 import { selecteur } from './keccak.js';
 
 /* Order: 24 h volume measured by Coinbase search_tokens on 2026-11-07 (mesures/coinbase-actions-20261107.json). ADDRESSES come from the
@@ -31,7 +31,7 @@ const clock = (t = Date.now()) => new Date(t).toLocaleTimeString('en-GB', { hour
 const mixText = (mix) => Object.entries(mix).filter(([, v]) => v > 0).map(([k, v]) => `${k} $${fmt(v, 0)}`).join(', ') || 'nothing';
 const SAY = { approach: 'leans toward it', avoid: 'pulls away from it', undecided: 'is undecided', quiet: 'barely reacts' };
 
-let fly = null, session = null, N = [], act = new Float64Array(0);
+let fly = null, shadow = null, session = null, N = [], act = new Float64Array(0);
 let current = STOCKS[0], lastPrice = null, history = [], timer = null, refTimer = null;
 
 function log(text, kind, link) {
@@ -116,7 +116,7 @@ async function connect() {
     const chain = await eth().request({ method: 'eth_chainId' });
     if (String(chain).toLowerCase() !== '0x2105') { liveSay('Your wallet is not on Base (chain ' + chain + '). Switch to Base and connect again.'); return; }
     live.account = String(accs[0] || '').toLowerCase(); live.stopped = false;
-    liveSay('Connected: ' + live.account.slice(0, 6) + '…' + live.account.slice(-4) + ' on Base. The fly will propose an order at its next BUY or SELL.');
+    liveSay('Connected: ' + displayShort(live.account) + ' on Base. The fly will propose an order at its next BUY or SELL.');
   } catch (err) { liveSay('Connection refused: ' + String((err && err.message) || err).slice(0, 120)); }
 }
 async function stockBalance() {
@@ -186,12 +186,200 @@ async function waitReceipt(h) {
 }
 function stopFly() { live.stopped = true; live.plan = null; $('sign').disabled = true; $('livePlan').textContent = ''; liveSay('The fly is stopped: it proposes no order. Connect again to resume.'); }
 
+/* ── THE FLY ALONE (CLAUDE.md exception decided by Phil 2026-11-08): the user signs ONE transaction that funds the fly's own wallet;
+ * after it, the fly trades that budget on its own, on its live (never simulated) BUY / SELL decisions, within the user's caps; Stop
+ * halts it at once, Withdraw all sends everything back to the wallet that funded it. The key is made and kept ONLY in this browser
+ * (fly-wallet.js, @noble); the server never sees it, only relays what the fly signed (fly-relay.js guard). The money path was proven
+ * on a fork (banc-fly-wallet-fork: buy, sell, withdraw 17/0); the stock leg cannot run on a fork (B20 precompile) and is NOT proven. */
+const AUTO_KEY = 'fly-auto-wallet-v1', AUTO_GAS_ETH = 200000000000000n /* 0.0002 ETH */, AUTO_ETH_KEEP = 5000000000000n /* L1 fee dust */;
+const auto = { W: null, s: null, busy: false };
+function autoLoad() { try { const x = JSON.parse(localStorage.getItem(AUTO_KEY) || 'null'); if (x && /^0x[0-9a-f]{64}$/.test(x.key) && /^0x[0-9a-f]{40}$/.test(x.address)) return x; } catch (_) { /* storage refused */ } return null; }
+function autoSave() { try { localStorage.setItem(AUTO_KEY, JSON.stringify(auto.s)); return JSON.parse(localStorage.getItem(AUTO_KEY)).key === auto.s.key; } catch (_) { return false; } }
+async function flyWallet() { if (!auto.W) auto.W = await import('./fly-wallet.js'); return auto.W; }
+function autoSay(t) { $('autoState').textContent = t; }
+function autoNote(html) { const p = document.createElement('div'); p.innerHTML = clock() + ' · ' + html; $('autoLog').prepend(p); }
+const txLink = (h) => `<a href="https://basescan.org/tx/${h}" target="_blank" rel="noopener">tx ${String(h).slice(0, 10)}…</a>`;
+const usd6 = (x) => fmt(Number(BigInt(x)) / 1e6, 2);
+function autoRender() {
+  const s = auto.s;
+  $('autoWallet').innerHTML = !s ? 'No fly wallet in this browser yet.'
+    : `Fly wallet <b>${displayShort(s.address)}</b> (<a href="https://basescan.org/address/${s.address}" target="_blank" rel="noopener">Basescan</a>) · funded by ${s.owner ? displayShort(s.owner) : 'nobody yet'}`
+      + ` · ${s.running ? '<b>trading alone</b>' : 'stopped'} · ${s.today} trade${s.today === 1 ? '' : 's'} today`;
+  $('autoCreate').disabled = !!s; $('autoFund').disabled = !s; $('autoStart').disabled = !s || !s.owner || s.running;
+  $('autoWithdraw').disabled = !s || !s.owner; $('autoExport').disabled = !s;
+}
+async function autoAccount(token) {
+  const r = await fetch('/api/fly/account/' + auto.s.address + (token ? '?token=' + token : ''), { cache: 'no-store' }).then((x) => x.json());
+  if (!r || !r.ok) throw new Error('balances not read: ' + ((r && r.why) || 'no answer'));
+  return r;
+}
+const postJson = (u, b) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((x) => x.json());
+async function autoCreate() {
+  if (!$('autoRisk').checked) { autoSay('Tick the box first: you can lose this money, and the key lives only in this browser.'); return; }
+  if (auto.s) return;
+  try {
+    const W = await flyWallet(), key = W.newKeyHex();
+    auto.s = { v: 1, key, address: W.addressOf(key), owner: null, running: false, day: '', today: 0, traded: [], created: Date.now() };
+    /* a key this browser cannot keep would lose the money sent to it: then no wallet at all */
+    if (!autoSave()) { auto.s = null; autoSay('This browser refuses to keep data for this site (private window?). No fly wallet was created: its key could not be kept.'); return; }
+    autoNote('fly wallet created in this browser: ' + displayShort(auto.s.address) + '. Nothing is in it yet.');
+  } catch (e) { autoSay('The fly wallet could not be created: ' + String((e && e.message) || e).slice(0, 120)); }
+  autoRender();
+}
+async function autoFund() {
+  if (!auto.s || !$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
+  if (!live.account) await connect();
+  if (!live.account) { autoSay('Connect your wallet first (button above).'); return; }
+  const usdc = BigInt(Math.round(Math.min(100, Math.max(1, Number($('autoBudget').value) || 0)) * 1e6));
+  const word = (a) => a.slice(2).toLowerCase().padStart(64, '0');
+  const calls = [{ to: USDC_BASE, data: selecteur('transfer(address,uint256)') + word(auto.s.address) + usdc.toString(16).padStart(64, '0'), value: '0x0' },
+    { to: auto.s.address, data: '0x', value: '0x' + AUTO_GAS_ETH.toString(16) }];
+  auto.s.owner = live.account.toLowerCase(); autoSave(); autoRender();
+  try {
+    try {
+      const id = await eth().request({ method: 'wallet_sendCalls', params: [{ version: '1.0', chainId: '0x2105', from: live.account, atomicRequired: true, calls }] });
+      autoNote(`funding sent in ONE signature: ${usd6(usdc)} USDC + 0.0002 ETH for gas (batch ${String(id && (id.id || id)).slice(0, 16)}…)`);
+    } catch (err) {
+      if (err && err.code === 4001) throw err; /* the user said no: never ask again in another form */
+      autoNote('your wallet does not batch calls: two signatures instead (USDC, then the gas ETH)');
+      for (const c of calls) { const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: live.account, ...c }] }); autoNote('sent ' + txLink(h)); await waitReceipt(h); }
+    }
+    autoSay('Funded. Check its balance below once the transaction is mined, then press "Let it trade alone".');
+    setTimeout(autoShowBalance, 8000);
+  } catch (err) { autoSay('Not funded: ' + String((err && err.message) || err).slice(0, 140)); }
+}
+async function autoShowBalance() {
+  if (!auto.s) return;
+  try { const a = await autoAccount(current.address);
+    autoSay(`In the fly's wallet: ${usd6(a.usdc)} USDC · ${current.symbol} ${a.stock == null ? '?' : fmt(Number(BigInt(a.stock)) / 10 ** (live.decimals ?? 8), 6)} · ${fmt(Number(BigInt(a.eth)) / 1e18, 6)} ETH for gas (block ${a.block}).`);
+  } catch (e) { autoSay(String(e.message)); }
+}
+/* one call, signed by the fly's key and relayed; waits for its receipt (status 0x1 or it throws) */
+async function flySend(c) {
+  const W = await flyWallet(), a = await autoAccount();
+  const g = await postJson('/api/fly/estimate', { from: auto.s.address, to: c.to, data: c.data, value: c.value || '0x0' });
+  if (!g || !g.ok) throw new Error('the chain refuses this call (gas estimate): ' + String((g && g.why) || '').slice(0, 120));
+  const gas = BigInt(g.gas) * 12n / 10n, prio = 1000000n, maxFee = BigInt(a.baseFeePerGas) * 2n + prio, value = BigInt(c.value || '0x0');
+  if (BigInt(a.eth) < gas * maxFee + value + AUTO_ETH_KEEP) throw new Error('out of ETH for gas: the fly stops (send it a little ETH, or withdraw)');
+  const s = W.signTx({ chainId: 8453, nonce: BigInt(a.nonce), maxPriorityFeePerGas: prio, maxFeePerGas: maxFee, gas, to: c.to, value, data: c.data || '0x' }, auto.s.key);
+  const r = await postJson('/api/fly/relay', { raw: s.raw });
+  if (!r || !r.ok) throw new Error('not sent: ' + String((r && r.why) || 'no answer').slice(0, 140));
+  if (String(r.hash).toLowerCase() !== s.hash.toLowerCase()) throw new Error('the relay answered another transaction hash: stopped');
+  for (let k = 0; k < 60; k++) {
+    const q = await fetch('/api/fly/receipt/' + s.hash, { cache: 'no-store' }).then((x) => x.json()).catch(() => null);
+    if (q && q.ok && q.receipt) { if (q.receipt.status !== '0x1') throw new Error('failed on chain: ' + txLink(s.hash)); return s.hash; }
+    await new Promise((o) => setTimeout(o, 2000));
+  }
+  throw new Error('no receipt after 2 minutes: check ' + txLink(s.hash) + ' before anything else');
+}
+async function autoTrade(e) {
+  const s = auto.s;
+  if (!s || !s.running || auto.busy || e.sim || (e.action !== 'buy' && e.action !== 'sell')) return;
+  const today = new Date().toISOString().slice(0, 10);
+  if (s.day !== today) { s.day = today; s.today = 0; }
+  const maxDay = Math.min(50, Math.max(1, Math.floor(Number($('autoDay').value) || 0)));
+  if (s.today >= maxDay) { autoNote(`decided ${ACT[e.action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
+  auto.busy = true;
+  const stock = current;
+  try {
+    const a = await autoAccount(stock.address);
+    let de, vers, montant;
+    if (e.action === 'buy') {
+      const cap = BigInt(Math.round(Math.min(100, Math.max(0.5, Number($('autoCap').value) || 0)) * 1e6)), have = BigInt(a.usdc);
+      const amt = have < cap ? have : cap;
+      if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
+      de = USDC_BASE; vers = stock.address; montant = amt.toString();
+    } else {
+      if (!a.stock || BigInt(a.stock) === 0n) { autoNote(`decided SELL ${stock.symbol}, but it holds none: nothing to sell`); return; }
+      de = stock.address; vers = USDC_BASE; montant = a.stock;
+    }
+    const q = new URLSearchParams({ de, vers, montant, compte: s.address });
+    let p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
+    for (let round = 0; round < 3; round++) {
+      if (!p || !p.ok) { autoNote(`decided ${ACT[e.action]} ${stock.symbol}: no order (${(p && p.etat) || '?'}${p && p.pourquoi ? ' — ' + String(p.pourquoi).slice(0, 120) : ''})`); return; }
+      for (const c of p.aSigner) {
+        if (!s.running) { autoNote('stopped before sending: nothing more goes out'); return; }
+        const h = await flySend(c);
+        autoNote(`${ACT[e.action]} ${stock.symbol} · ${c.nom || c.role || 'call'} mined · ${txLink(h)}`);
+      }
+      if (p.etat !== 'APPROBATIONS') break;
+      p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
+    }
+    s.today++; if (!s.traded.includes(stock.address)) s.traded.push(stock.address); autoSave();
+    autoNote(`<b>${ACT[e.action]} ${stock.symbol} done</b> on its own (${s.today}/${maxDay} today). Paid at most what the plan said; see Basescan.`);
+  } catch (err) {
+    const m = String((err && err.message) || err);
+    autoNote('<b>error, the fly stops</b>: ' + m.slice(0, 200)); s.running = false; autoSave();
+  } finally { auto.busy = false; autoRender(); autoShowBalance(); }
+}
+function autoStart() { if (!auto.s || !auto.s.owner) return; if (!$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
+  auto.s.running = true; autoSave(); autoRender(); autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${$('autoCap').value} USDC per buy, ${$('autoDay').value} trades a day. Stop halts it at once.`); }
+function autoStop() { if (!auto.s) return; auto.s.running = false; autoSave(); autoRender(); autoNote('<b>stopped</b>: it sends nothing more' + (auto.busy ? ' after the call in flight' : '') + '.'); }
+async function autoWithdraw() {
+  if (!auto.s || !auto.s.owner) return;
+  autoStop();
+  if (!confirm('Send everything in the fly wallet back to ' + auto.s.owner + ' (the wallet that funded it)?')) return;
+  const word = (a) => a.slice(2).toLowerCase().padStart(64, '0'), T = selecteur('transfer(address,uint256)');
+  try {
+    for (const tok of [...new Set([...auto.s.traded, current.address])]) {
+      const a = await autoAccount(tok);
+      if (a.stock && BigInt(a.stock) > 0n) autoNote('stock back: ' + txLink(await flySend({ to: tok, data: T + word(auto.s.owner) + BigInt(a.stock).toString(16).padStart(64, '0'), value: '0x0' })));
+    }
+    const u = await autoAccount();
+    if (BigInt(u.usdc) > 0n) autoNote(usd6(u.usdc) + ' USDC back: ' + txLink(await flySend({ to: USDC_BASE, data: T + word(auto.s.owner) + BigInt(u.usdc).toString(16).padStart(64, '0'), value: '0x0' })));
+    const e = await autoAccount(), maxFee = BigInt(e.baseFeePerGas) * 2n + 1000000n, left = BigInt(e.eth) - 21000n * maxFee * 12n / 10n - AUTO_ETH_KEEP;
+    if (left > 0n) autoNote(fmt(Number(left) / 1e18, 6) + ' ETH back: ' + txLink(await flySend({ to: auto.s.owner, data: '0x', value: '0x' + left.toString(16) })));
+    autoNote('<b>withdrawn</b>. A dust of ETH (under 0.000006) stays for the network fee of that last send.');
+  } catch (err) { autoNote('<b>withdraw stopped</b>: ' + String((err && err.message) || err).slice(0, 200) + ' — what was sent is above; press again to retry.'); }
+  autoShowBalance();
+}
+function autoExport() {
+  if (!auto.s || !confirm('Show the fly wallet key? Anyone who sees it can take the money in it. Copy it somewhere only you can read.')) return;
+  autoSay('Key (keep it secret): ' + auto.s.key);
+}
+function autoWire() {
+  auto.s = autoLoad();
+  if (auto.s && auto.s.running) { auto.s.running = false; autoSave(); autoNote('page reopened: the fly was trading alone, it is now <b>stopped</b> until you press "Let it trade alone" again.'); }
+  $('autoCreate').addEventListener('click', autoCreate); $('autoFund').addEventListener('click', autoFund); $('autoStart').addEventListener('click', autoStart);
+  $('autoStop').addEventListener('click', autoStop); $('autoWithdraw').addEventListener('click', autoWithdraw); $('autoExport').addEventListener('click', autoExport);
+  autoRender(); if (auto.s) autoShowBalance();
+}
+
 function onEvent(e) {
   show(e, current.symbol);
   if (e.type === 'tx') ripple(e.kind, e.usd);
-  if (e.type === 'decision') { renderDecision(e); proposeLive(e); }
+  if (e.type === 'decision') { renderDecision(e); proposeLive(e); autoTrade(e); if (!e.sim) { thoughts.push({ ...e, at: Date.now() }); if (thoughts.length > 6) thoughts.shift(); }
+    /* after the session has recorded this decision (its callback runs right after the event) */
+    setTimeout(renderThoughts, 0); }
   if (e.type === 'verdict' || e.type === 'taught') { renderTally(); }
   if (e.type === 'taught' && !e.sim) saveMemory();
+}
+
+/* ── ITS THOUGHTS: before (the live decisions, with the synapses that carried them), now, and next (computed on a shadow fly). ── */
+const thoughts = [];
+function synapseChips(path, limit = 3) {
+  return '<div class="walk">' + path.slice(0, limit).map(({ i, j, side, m }) => `<button data-walk="${i}" data-to="${j}" style="border-color:${side === 'approach' ? '#4ade80' : '#f87171'}" title="this Kenyon cell's synapse keeps ${fmt(m * 100, 1)}% of its naive strength">`
+    + `KC #${N[i].id} → ${N[j].type} (${side}) · ${fmt(m * 100, 0)}%</button>`).join('') + '</div>';
+}
+function thoughtLine(when, e, extra = '') {
+  return `<div class="th"><div class="when">${when}</div><span class="act ${e.action}">${ACT[e.action]}</span> · ${SAY[e.word]} (approach ${fmt(e.ap * 100, 1)}% / avoid ${fmt(e.av * 100, 1)}%)${extra}${e.path && e.path.length ? synapseChips(e.path) : ''}</div>`;
+}
+function renderThoughts() {
+  if (!fly || !session) return;
+  const past = thoughts.slice(0, -1).reverse(), now = thoughts[thoughts.length - 1];
+  let html = past.length ? past.map((e) => thoughtLine('before · ' + clock(e.at), e, ' · smelled ' + mixText(e.mix))).join('') : '<div class="th"><div class="when">before</div><span class="state">no earlier live decision in this visit</span></div>';
+  html += now ? thoughtLine('now · ' + clock(now.at), now, ' · smelled ' + mixText(now.mix)) : '<div class="th"><div class="when">now</div><span class="state">waiting for a window with real trades</span></div>';
+  const fc = foreseeNext(shadow, fly, session);
+  if (!fc.exact) html += `<div class="th"><div class="when">next</div><span class="state">${fc.why || 'the fly is mid-thought: the forecast waits until it rests'}</span></div>`;
+  else {
+    const learn = fc.learnsFrom ? 'it will first learn from the last smell (' + mixText(fc.learnsFrom) + ') with that move' : 'the last window had no trade: nothing to learn';
+    html += `<div class="th"><div class="when">next · if the next window smells like the last real trades (${mixText(fc.nextMix)}) · ${fc.pos ? 'holding' : 'out of'} the stock</div><span class="state">${learn}, then:</span></div>`
+      + fc.scenarios.map((sc) => thoughtLine('if the price moves ' + (sc.move ? pct(sc.move, 0) : '0% (no lesson)'), sc)).join('');
+  }
+  $('thoughts').innerHTML = html;
+  $('thoughts').querySelectorAll('button[data-walk]').forEach((b) => b.addEventListener('click', () => {
+    const i = Number(b.dataset.walk), j = Number(b.dataset.to); flash = [[i, j, Date.now() + 6000]]; walkTo(i);
+  }));
 }
 
 function renderBook(st = session.state(), el = $('book')) {
@@ -440,6 +628,9 @@ async function readShared() {
       : 'memory NOT kept: it starts again when the server restarts' + (s.saveError ? ' (' + s.saveError + ')' : '');
     $('shared').innerHTML = `<div class="state">${s.symbol} · training since ${since} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far · ${mem}</div>`
       + `<div class="state" style="margin-top:4px">${tallyText(s.session.tally)}</div><div id="sharedBook" class="book"></div>`
+      + (s.foresight && s.foresight.exact && s.foresight.scenarios.length ? `<div class="state" style="margin-top:4px">Next, computed on its shadow (${s.foresight.pos ? 'holding' : 'out'}, if the next trades smell like the last): `
+        + s.foresight.scenarios.map((sc) => `${sc.move ? pct(sc.move, 0) : '0%'} → <span class="act ${sc.action}">${ACT[sc.action]}</span>`).join(' · ') + '</div>'
+        : `<div class="state" style="margin-top:4px">Next: no forecast yet (${(s.foresight && s.foresight.why) || 'not computed yet'}).</div>`)
       + `<div class="log" style="margin-top:6px;max-height:180px">${s.events.slice(-12).reverse().map((e) => `<p class="${e.type === 'verdict' ? 'verdict' : 'live'}">${clock(e.at)} · ${eventText(e, s.symbol)}</p>`).join('')}</div>`;
     renderBook(s.session, $('sharedBook'));
   } catch (_) { $('shared').innerHTML = '<div class="state">The shared fly could not be read this time.</div>'; }
@@ -542,7 +733,7 @@ function select(i) {
   current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); lastDecision = null;
   $('watching').textContent = `watching ${current.symbol} · every 30 s its real trades are a smell`;
   $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
-  session.reset(); loadMemory();
+  session.reset(); loadMemory(); thoughts.length = 0; renderThoughts();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
   clearInterval(timer); clearInterval(refTimer);
   readWindow().then(readReference); timer = setInterval(readWindow, POLL_MS); refTimer = setInterval(readReference, REF_MS);
@@ -558,8 +749,9 @@ async function start() {
   $('connect').addEventListener('click', connect);
   $('sign').addEventListener('click', signLive);
   $('stop').addEventListener('click', stopFly);
+  autoWire();
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
-  fly = createFly(circuit); N = fly.N; act = fly.act;
+  fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
   session = createSession(fly, onEvent);
   const idx = new Map(N.map((n, i) => [n.id, i]));
   N.edges = circuit.edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]);

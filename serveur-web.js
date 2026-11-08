@@ -129,10 +129,12 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 /* ⛔ LE SELECTEUR SE CALCULE, IL NE SE TAPE PAS. `keccak.js` est pur (zero dependance) et c est la
  *   seule source du depot : un selecteur ecrit a la main ne plante pas, il interroge une AUTRE
  *   fonction et rend un silence qu on lirait comme un fait. */
-import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
+import { selecteur as selecteurSrv, topic as topicSrv, keccak256Hex as keccak256HexSrv } from './keccak.js';
+import { parseTx } from './fly-tx.js';
+import { createRelayGuard } from './fly-relay.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { readPoolPrice } from './fly-price.js';
-import { createFly, createSession } from './fly-core.js';
+import { createFly, createSession, foreseeNext } from './fly-core.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -2974,13 +2976,13 @@ function lirePrixMouche(token) {
  *   (`persisted: false`) and stays volatile. Written atomically (.tmp then rename), like faits-pool.json. */
 const FICHIER_MOUCHE = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'mouche-partagee.json') : null;
-const MOUCHE = { symbol: 'SNDKc', fly: null, session: null, events: [], aliveSince: null, trainingSince: null, restored: false, windows: 0, windowsRead: 0, windowsMissed: 0, why: null, saveError: null };
+const MOUCHE = { symbol: 'SNDKc', fly: null, shadow: null, foresight: null, session: null, events: [], aliveSince: null, trainingSince: null, restored: false, windows: 0, windowsRead: 0, windowsMissed: 0, why: null, saveError: null };
 function etatMoucheServeur() {
   if (!MOUCHE.fly) return { ok: false, why: MOUCHE.why || 'not started' };
   const m = MOUCHE.fly.exportMemory();
   return { ok: true, symbol: MOUCHE.symbol, aliveSince: MOUCHE.aliveSince, trainingSince: MOUCHE.trainingSince, persisted: !!FICHIER_MOUCHE && !MOUCHE.saveError,
     restored: MOUCHE.restored, saveError: MOUCHE.saveError, windows: MOUCHE.windows, windowsRead: MOUCHE.windowsRead, windowsMissed: MOUCHE.windowsMissed,
-    weakened: m.filter((x) => x < 99900).length, session: MOUCHE.session.state(), events: MOUCHE.events.slice(-40) };
+    weakened: m.filter((x) => x < 99900).length, session: MOUCHE.session.state(), events: MOUCHE.events.slice(-40), foresight: MOUCHE.foresight };
 }
 function sauverMouche() {
   if (!FICHIER_MOUCHE) return;
@@ -3012,14 +3014,41 @@ async function fenetreMouche() {
   MOUCHE.windowsRead++;
   MOUCHE.session.window({ symbol: MOUCHE.symbol, price, transactions: ac.transactions });
   MOUCHE.fly.drain();
+  /* Laplace's demon at this scale: the fly's NEXT decision, computed on a shadow copy per scenario of the coming move (never the market) */
+  try { MOUCHE.foresight = { at: Date.now(), ...foreseeNext(MOUCHE.shadow, MOUCHE.fly, MOUCHE.session) }; } catch (e) { MOUCHE.foresight = { at: Date.now(), exact: false, scenarios: [], why: String((e && e.message) || e).slice(0, 100) }; }
   sauverMouche();
   return 60000;
+}
+/* the autonomous fly's relay guard (fly-relay.js): only calls this server planned, withdraw transfers, plain ETH sends */
+const GARDE_MOUCHE = createRelayGuard({ usdc: USDC_BASE, isStock: (a) => !!POOLS_ACTIONS_AERODROME.get(a), transferSelector: selecteurSrv('transfer(address,uint256)') });
+/* per IP and per minute, for each fly route */
+const FLY_BUDGET = { minute: -1, parIp: new Map() }, FLY_LIMITES = { account: 30, estimate: 30, relay: 12, receipt: 60 };
+function budgetMouche(req, route) {
+  const m = Math.floor(Date.now() / 60000);
+  if (FLY_BUDGET.minute !== m) { FLY_BUDGET.minute = m; FLY_BUDGET.parIp.clear(); }
+  const k = ipClient(req) + '|' + route, n = (FLY_BUDGET.parIp.get(k) || 0) + 1;
+  if (n > FLY_LIMITES[route]) return false;
+  FLY_BUDGET.parIp.set(k, n); return true;
+}
+async function compteMouche(adresse, token) {
+  const mot = adresse.slice(2).toLowerCase().padStart(64, '0'), bal = selecteurSrv('balanceOf(address)') + mot;
+  const [nonce, blk, eth, usdc, stock] = await Promise.all([
+    rpcServeurBrut('eth_getTransactionCount', [adresse, 'pending']), rpcServeurBrut('eth_getBlockByNumber', ['latest', false]), rpcServeurBrut('eth_getBalance', [adresse, 'latest']),
+    rpcRails('eth_call', [{ to: USDC_BASE, data: bal }, 'latest']), token ? rpcRails('eth_call', [{ to: token, data: bal }, 'latest']) : Promise.resolve(null)]);
+  return { ok: true, address: adresse, nonce: BigInt(nonce).toString(), baseFeePerGas: BigInt(blk.baseFeePerGas).toString(), block: Number(BigInt(blk.number)),
+    eth: BigInt(eth).toString(), usdc: BigInt(usdc).toString(), stock: stock == null ? null : BigInt(stock).toString(), token: token || null };
+}
+function lireCorpsMouche(req, max) {
+  return new Promise((ok, ko) => { let brut = '', trop = false;
+    req.on('data', (c) => { if (trop) return; brut += c; if (brut.length > max) { trop = true; ko(new Error('request too large')); req.destroy(); } });
+    req.on('end', () => { if (trop) return; try { ok(JSON.parse(brut)); } catch (_) { ko(new Error('JSON body expected')); } });
+    req.on('error', ko); });
 }
 function demarrerMoucheServeur() {
   if (process.env.FLY_SERVER === 'off' || ESSAI_SRV.actif) { MOUCHE.why = 'switched off on this server'; return; }
   try {
     const circuit = JSON.parse(readFileSync(join(ici, 'fly-brain-circuit.json'), 'utf8'));
-    MOUCHE.fly = createFly(circuit);
+    MOUCHE.fly = createFly(circuit); MOUCHE.shadow = createFly(circuit);
     MOUCHE.session = createSession(MOUCHE.fly, (e) => {
       const ev = { ...e, at: Date.now() }; if (Array.isArray(ev.top)) ev.top = ev.top.slice(0, 5);
       MOUCHE.events.push(ev); if (MOUCHE.events.length > 120) MOUCHE.events.splice(0, MOUCHE.events.length - 120);
@@ -5849,7 +5878,7 @@ const SERVIS = [
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-11-07 (human-brain branch): the real fly memory circuit (hemibrain v1.2, Janelia, CC BY 4.0) wired to stock prices, read-only */
-  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js',
+  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js', 'fly-tx.js', 'fly-wallet.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
   'cles-v4-mesurees.js',
   /* 2026-10-03 : les 20 pools v4 USDC des actions tokenisees, logs bruts (importe par cles-v4-mesurees.js) */
@@ -6072,6 +6101,22 @@ for (const nom of SERVIS) {
     image,
   });
 }
+
+/* 2026-11-08: @noble/curves + @noble/hashes for the fly's in-browser wallet, served ONLY if each file's sha256 matches
+ *   lib/noble/manifeste.json (the bytes of the npm tarballs, sha512-checked when vendored). A mismatch is logged and that file is not
+ *   served: the fly's wallet then fails to load and says so, nothing else stops. Only the manifest's own paths, no directory walk. */
+const nobleRefuses = [];
+try {
+  const man = JSON.parse(readFileSync(join(ici, 'lib', 'noble', 'manifeste.json'), 'utf8')).fichiers || {};
+  for (const [p, h] of Object.entries(man)) {
+    if (!/^lib\/noble\/(curves|hashes)\/[A-Za-z0-9_/-]+\.js$/.test(p) || p.includes('..')) { nobleRefuses.push(p + ' (path)'); continue; }
+    const corps = readFileSync(join(ici, p));
+    if (createHash('sha256').update(corps).digest('hex') !== h) { nobleRefuses.push(p + ' (sha256)'); continue; }
+    const gz = gzipSync(corps, { level: 9 });
+    cache.set('/' + p, { corps, gz: gz.length < corps.length ? gz : null, type: TYPES['.js'], etag: '"' + h.slice(0, 24) + '"', image: false });
+  }
+} catch (e) { nobleRefuses.push('manifest unreadable: ' + String(e.message).slice(0, 80)); }
+if (nobleRefuses.length) console.error('[servi] ⛔ lib/noble NOT served: ' + nobleRefuses.join(', '));
 
 /** Le build du fichier SERVI, lu dans son `data-build` — jamais une constante tapee a cote. */
 function buildServi() {
@@ -7209,6 +7254,49 @@ function traiterRequete(req, res) {
     lirePrixMouche(token).then((r) => send(200, r));
     return;
   }
+  /* 2026-11-08 (human-brain branch): THE AUTONOMOUS FLY (CLAUDE.md exception, Phil 2026-11-08). Its key is in the user's browser; these
+   *   routes read for it and relay what it signed, through the guard of fly-relay.js. The server holds no key and signs nothing. */
+  if (chemin.startsWith('/api/fly/account/') || chemin === '/api/fly/estimate' || chemin === '/api/fly/relay' || chemin.startsWith('/api/fly/receipt/')) {
+    const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+    const route = chemin.startsWith('/api/fly/account/') ? 'account' : chemin.startsWith('/api/fly/receipt/') ? 'receipt' : chemin === '/api/fly/estimate' ? 'estimate' : 'relay';
+    const post = route === 'estimate' || route === 'relay';
+    if (req.method !== (post ? 'POST' : 'GET')) { send(405, { ok: false, why: (post ? 'POST' : 'GET') + ' only' }); return; }
+    if (!budgetMouche(req, route)) { send(429, { ok: false, why: 'too many requests this minute: retry in a minute' }); return; }
+    const panne = (e) => send(200, { ok: false, why: String((e && e.message) || e).slice(0, 160) });
+    if (route === 'account') {
+      const adr = chemin.slice('/api/fly/account/'.length).toLowerCase(), q = new URL(req.url, 'http://x').searchParams, tok = String(q.get('token') || '').toLowerCase();
+      if (!/^0x[0-9a-f]{40}$/.test(adr)) { send(400, { ok: false, why: 'usage: /api/fly/account/<address>[?token=<stock of the pool table>]' }); return; }
+      if (tok && !POOLS_ACTIONS_AERODROME.get(tok)) { send(404, { ok: false, why: 'token: not a stock of the measured pool table' }); return; }
+      compteMouche(adr, tok || null).then((r) => send(200, r)).catch(panne);
+      return;
+    }
+    if (route === 'receipt') {
+      const h = chemin.slice('/api/fly/receipt/'.length).toLowerCase();
+      if (!/^0x[0-9a-f]{64}$/.test(h)) { send(400, { ok: false, why: 'usage: /api/fly/receipt/<transaction hash>' }); return; }
+      rpcServeurBrut('eth_getTransactionReceipt', [h]).then((r) => send(200, { ok: true, receipt: r ? { status: r.status, blockNumber: r.blockNumber, gasUsed: r.gasUsed } : null })).catch(panne);
+      return;
+    }
+    lireCorpsMouche(req, route === 'relay' ? 64 * 1024 : 16 * 1024).then(async (b) => {
+      if (route === 'estimate') {
+        const ok = (x) => typeof x === 'string';
+        if (!b || !/^0x[0-9a-fA-F]{40}$/.test(b.from) || !/^0x[0-9a-fA-F]{40}$/.test(b.to) || !ok(b.data) || !/^0x[0-9a-fA-F]*$/.test(b.data) || (b.value != null && !/^0x[0-9a-fA-F]{1,64}$/.test(b.value))) {
+          send(400, { ok: false, why: 'body: {from, to, data, value?} as hex' }); return; }
+        const gas = await rpcServeurBrut('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]);
+        send(200, { ok: true, gas: BigInt(gas).toString() }); return;
+      }
+      /* relay */
+      if (!b || typeof b.raw !== 'string') { send(400, { ok: false, why: 'body: {raw: "0x02..."}' }); return; }
+      let t; try { t = parseTx(b.raw); } catch (e) { send(400, { ok: false, why: 'not a signed type-2 transaction: ' + String(e.message).slice(0, 80) }); return; }
+      const refus = GARDE_MOUCHE.refusal(t);
+      if (refus) { send(403, { ok: false, why: refus }); return; }
+      const hash = keccak256HexSrv(t.bytes);
+      try { await rpcServeurBrut('eth_sendRawTransaction', [b.raw]); send(200, { ok: true, hash }); }
+      catch (e) { const m = String((e && e.message) || e);
+        /* the same bytes sent twice (a retry on another node): already in the pool, same hash */
+        if (/already known|known transaction/i.test(m)) send(200, { ok: true, hash, already: true }); else send(200, { ok: false, hash, why: m.slice(0, 160) }); }
+    }).catch(panne);
+    return;
+  }
   /* 2026-11-08 (human-brain branch): the SHARED fly the server trains on one stock every minute (fly-core.js, the page's own brain) */
   if (chemin === '/api/fly/state') {
     const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
@@ -7416,7 +7504,7 @@ function traiterRequete(req, res) {
     const sonde = req.headers['x-ms-monitor'] === '1';
     const cleR = [demande.de, demande.vers, demande.montant, demande.compte].join('|').toLowerCase();
     const enCache = railsCache.get(cleR);
-    if (enCache && Date.now() - enCache.t < RAILS_CACHE_MS) { rendreR(200, { ...enCache.corps, depuisCache: true }); return; }
+    if (enCache && Date.now() - enCache.t < RAILS_CACHE_MS) { GARDE_MOUCHE.remember(enCache.corps); rendreR(200, { ...enCache.corps, depuisCache: true }); return; }
     const ipR = ipClient(req);
     const minuteR = Math.floor(Date.now() / 60000);
     if (railsBudget.minute !== minuteR) { railsBudget.minute = minuteR; railsBudget.n = 0; railsBudget.parIp.clear(); }
@@ -7448,6 +7536,7 @@ function traiterRequete(req, res) {
         railsCache.set(cleR, { t: Date.now(), corps: r });
         while (railsCache.size > 200) railsCache.delete(railsCache.keys().next().value);
       }
+      GARDE_MOUCHE.remember(r);
       rendreR(200, r);
     }).catch((e) => {
       rendreR(200, { ok: false, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 120) });

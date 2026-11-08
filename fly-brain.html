@@ -49,6 +49,11 @@
   .walk { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .walk button { width: auto; margin: 0; padding: 4px 8px; font-size: 12px; border-radius: 999px; }
   @media (prefers-reduced-motion: reduce) { .decision.flash { animation: none; } }
+  .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; margin-top: 8px; }
+  .row2 input { width: 100%; box-sizing: border-box; background: #111a2c; color: var(--text); border: 1px solid #263252; border-radius: 8px; padding: 8px; font: inherit; margin-top: 4px; }
+  .thoughts .th { border-top: 1px solid var(--line); padding: 6px 0; font-size: 13px; }
+  .thoughts .when { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+  .thoughts .act { font-weight: 700; } .act.buy { color: #4ade80; } .act.sell { color: #f87171; } .act.hold { color: #f6c453; } .act.stay_out { color: #8a96ad; }
   .legend span[data-family] { cursor: pointer; user-select: none; }
   .legend span.off { opacity: .35; text-decoration: line-through; }
   canvas { cursor: crosshair; touch-action: manipulation; }
@@ -104,6 +109,12 @@
       <div class="state" style="margin-top:6px">What it learns is kept in this browser, per stock, so it keeps training from visit to visit. A private window starts a naive fly.</div>
       <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
     </div>
+    <div class="card">
+      <h2>Its thoughts · before, now, next</h2>
+      <div class="state">Each decision is a set of synapses firing: the Kenyon cells the smell woke up, through the synapses it learned, into approach or avoid outputs. Tap a synapse to light it on the map and walk from there.</div>
+      <div id="thoughts" class="thoughts"></div>
+      <div class="state" style="margin-top:6px">“Next” is computed, not guessed: the fly is deterministic, so a shadow copy of it, loaded with its exact state, is run ahead once per possible move (Laplace's demon, at the scale of this model). It forecasts the FLY's next decision, never the market: which move comes is unknown, so all three are shown and none is picked.</div>
+    </div>
     <div class="card live">
       <h2>Trade for real · your wallet signs</h2>
       <div class="why">When the fly decides <b>BUY</b> or <b>SELL</b>, it shows a real, simulated order for your budget. Nothing leaves your wallet unless <b>you</b> sign that order. The fly never signs. Its decisions come from a model of a fly brain, not from advice: <b>you can lose this money</b>. Tokenized stocks are only for eligible persons outside the U.S.</div>
@@ -116,6 +127,26 @@
       <button id="sign" disabled>Sign this trade with my wallet</button>
       <button id="stop">Stop the fly (no more orders proposed)</button>
       <div class="state" id="liveLog" style="margin-top:6px"></div>
+    </div>
+    <div class="card live">
+      <h2>Let the fly trade alone · one signature</h2>
+      <div class="why">The fly gets its <b>own small wallet, created in this browser</b>. You sign <b>one</b> transaction that sends it a budget (USDC, plus a little ETH for its gas). From then on it trades that budget <b>on its own</b> on the stock you watch, each time it decides BUY or SELL, within your caps. <b>Stop</b> halts it at once; <b>Withdraw all</b> sends everything back to your wallet. It trades <b>only while this page is open</b>; reopened, it starts stopped.
+        <br><b>Read before you fund it:</b> you can lose this money; its decisions are a model of a fly brain, not advice. Its key is kept <b>only in this browser</b> (this site's storage): the site and its server never have it, so nobody can recover it for you — clear this site's data or lose this device and the money in it is lost unless you exported the key. Anyone with access to this browser can use it. Keep the budget small. Tokenized stocks are only for eligible persons outside the U.S.</div>
+      <label class="state" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="autoRisk" style="width:auto;margin-top:3px"> I understand that I can lose this money, that the key lives only in this browser, and that the fly trades without asking me each time.</label>
+      <div class="row2">
+        <label class="state">Budget sent to the fly (USDC)<input id="autoBudget" type="number" min="1" max="100" step="1" value="1"></label>
+        <label class="state">Max per trade (USDC)<input id="autoCap" type="number" min="0.5" max="100" step="0.5" value="1"></label>
+        <label class="state">Max trades per day<input id="autoDay" type="number" min="1" max="50" step="1" value="10"></label>
+      </div>
+      <div class="state" id="autoWallet" style="margin-top:8px">No fly wallet in this browser yet.</div>
+      <button id="autoCreate">Create the fly's wallet (in this browser)</button>
+      <button id="autoFund" disabled>Fund it: one signature from my wallet</button>
+      <button id="autoStart" disabled>Let it trade alone</button>
+      <button id="autoStop">Stop the fly now</button>
+      <button id="autoWithdraw" disabled>Withdraw all to my wallet</button>
+      <button id="autoExport" disabled>Show its key (to keep a copy)</button>
+      <div class="state" id="autoState" style="margin-top:8px"></div>
+      <div class="state" id="autoLog" style="margin-top:6px;max-height:200px;overflow:auto"></div>
     </div>
     <div class="card">
       <h2>The shared fly (server)</h2>
@@ -162,6 +193,8 @@
     </div>
   </aside>
 </main>
+<!-- the vendored @noble files keep their own bare imports (@noble/hashes/...): resolved here, to the verified copies in lib/noble -->
+<script type="importmap">{"imports":{"@noble/hashes/":"./lib/noble/hashes/","@noble/curves/":"./lib/noble/curves/"}}</script>
 <script type="module" src="fly-brain.js"></script>
 </body>
 </html>

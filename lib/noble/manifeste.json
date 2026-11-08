@@ -1,0 +1,30 @@
+{
+ "source": "@noble/curves 2.4.0 + @noble/hashes 2.4.0 (npm, sha512 verified)",
+ "fichiers": {
+  "lib/noble/curves/abstract/curve.js": "dbaeee3b41ff47efb76b78e14170fe4dda7c7ecdc387c402f16c5118e0bac356",
+  "lib/noble/curves/abstract/der.js": "7f80d698611b131368ecf732b8740bb97f72cd42fef77c4b0bb923e2e2d44159",
+  "lib/noble/curves/abstract/edwards.js": "f24a9c221a549a8fff259eb8f245ab0dc17679b13c532c3970d91acc4df9fffd",
+  "lib/noble/curves/abstract/fft.js": "a4b2ff7ca33f4acc85d61f0e83ec3303c3f6b38ecc19b20d0f6462d820e518cf",
+  "lib/noble/curves/abstract/frost.js": "9a95f1fdf7e17b9d93a16049db675ee2967ed2a04cf59b1bd981d4662acbedf5",
+  "lib/noble/curves/abstract/hash-to-curve.js": "e3c97e7d0827b728b14e3311ed11d8e386d8a70d8fc77e0b9fd2a3090f19d955",
+  "lib/noble/curves/abstract/modular.js": "9ced3aa10598277a735e54f7b61d88e929d565da884ba5385f9006ebb3b6aab2",
+  "lib/noble/curves/abstract/montgomery.js": "cdafa8816dad5a24475ec51952c5f71fdd5d1b46880ab982694c4f8ff605fc46",
+  "lib/noble/curves/abstract/oprf.js": "2ca36b3e4930092db1f91559410e86975816c036e248067bc65a8055aa1c504c",
+  "lib/noble/curves/abstract/weierstrass.js": "d007e949c0d5b912e8c54132983219c8ff8f69bda058a70563b5cc7a8783331c",
+  "lib/noble/curves/ed25519.js": "e13f6c50c36feb0d18bf7986d5f881bcefb5f1f5b16de3cc5ee7693254c7a0b5",
+  "lib/noble/curves/misc.js": "2db54e6ade644c4c1371903b7c88e2b77093fd3b1012d42b0a18258d1c09096d",
+  "lib/noble/curves/nist.js": "0a692b98e22c56c0354f78eb1759cfbf6aec89eafc78cd2984a4f2e8428081e6",
+  "lib/noble/curves/secp256k1.js": "b4e7383e0de5064cd200d22f21890bc8730ddaf987b1e989e5e24bbfaae5cf1f",
+  "lib/noble/curves/utils.js": "be9ff86aef76419376e4d66cf01a134f3117f1f8dd62d81f1b79100145503367",
+  "lib/noble/hashes/_blake.js": "cabbff61d1f373bac45594ad758df7c42e176464ddbb94b44f5533fa977a4f56",
+  "lib/noble/hashes/_md.js": "60cf3010fda89e3e4d3f0e7ff1ce249e9c467f34b4fd41b6fd6101d9f69be763",
+  "lib/noble/hashes/_u64.js": "b09da8c07fe8187c07649494cdb7cd0bcf13df90b506a9473d19e4d5f8c2e102",
+  "lib/noble/hashes/blake1.js": "da1d08b4d0702ad4f185a796df8fce3fec2855de53b02190eba3bd8555677b5c",
+  "lib/noble/hashes/blake2.js": "03f00237bcc0b4d822a80f7c0ac22e42632c48e246c3b6da584e6452186e32f0",
+  "lib/noble/hashes/hmac.js": "fec9f8f3aeda785ea2de91cc4c059d54ef98196261c026c43f48341007ae52c9",
+  "lib/noble/hashes/legacy.js": "690553a41af2fdd1e32ff6b534ba8508e95f1861c09c2d62fe762b6b501e09be",
+  "lib/noble/hashes/sha2.js": "471746bba6ec4c6238ca41358d1d3b40b6ff31cf3363f0b4d550c649c1a8e83b",
+  "lib/noble/hashes/sha3.js": "9a81e1edb24eae27b335533220167609cfb58008c5690e140ce478acdc669f32",
+  "lib/noble/hashes/utils.js": "037ad49adb78168b6b699598fd33f85f7877456b1d28b4d032e2a1a16807947c"
+ }
+}
