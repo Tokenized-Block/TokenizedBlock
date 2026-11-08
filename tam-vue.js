@@ -67,6 +67,87 @@ export function projeterVivant({ z, n, D, actives, angles = [], t = 0 }) {
   return normaliser(out);
 }
 
+/* ── 2026-11-08 (Phil: "add lines to TAM, not only points") : the OPTIONAL line channel ──
+ *   A subject may return `segments`: [{ a: [x0..xD-1], b: [x0..xD-1], w?: 0..1, c?: class }], both ends in the SAME raw columns as its
+ *   points (brut). They go through the SAME transform as the points (column scale m, k; the live N-D -> 3-D rotation; the frame of the
+ *   POINTS alone), so a line lands exactly where its two ends would land as points. w = opacity and width (default 1), c = colour class.
+ *   A subject without segments: projeterSegments returns null and nothing is drawn (the points are untouched). */
+export const SEGMENTS_MAX = 40000;
+/* colour classes: 0 neutral, 1 red, 2 blue, 3 gold, 4 green, 5 violet (never the colours of the dimensions: those colour the points) */
+export const COULEURS_SEGMENTS = Object.freeze(['#a9b8d8', '#ff6b6b', '#5aa9ff', '#ffd36b', '#6bffb0', '#c58cff']);
+export const PAQUETS_POIDS = 4;
+/** the segments a view can draw: both ends finite on the D columns, w clamped to 0..1 (missing = 1), c an integer class (missing = 0) */
+export function segmentsValides(segments, D) {
+  if (!Array.isArray(segments) || !(D >= 1)) return [];
+  const out = [];
+  for (const s of segments) {
+    if (out.length >= SEGMENTS_MAX) break;
+    if (!s || !Array.isArray(s.a) || !Array.isArray(s.b) || s.a.length < D || s.b.length < D) continue;
+    let fini = true; for (let j = 0; j < D && fini; j++) fini = Number.isFinite(s.a[j]) && Number.isFinite(s.b[j]);
+    if (!fini) continue;
+    const w = s.w === undefined ? 1 : Number(s.w), c = Number.isInteger(s.c) && s.c >= 0 && s.c < COULEURS_SEGMENTS.length ? s.c : 0;
+    out.push({ a: s.a, b: s.b, w: Number.isFinite(w) ? Math.max(0, Math.min(1, w)) : 1, c });
+  }
+  return out;
+}
+/**
+ * The segments in the view of the points: { xyz: Float64Array(q * 6) (a then b, normalised like positions()), poids, classes, q }, or null.
+ * m, k = the column scale of the points (tam-science.js#echelleIso) ; z = the standardised points (n x D). Joint projection then the frame of
+ * the points alone (the same recipe as the decor in tam-onglet.js#decorVue). D = 2 has no line (its 3rd axis is the previous point).
+ */
+export function projeterSegments({ segments, m, k, z, n, D, actives, angles = [], t = 0 }) {
+  if (!(D >= 3) || !z || !m || !k) return null;
+  const S = segmentsValides(segments, D), q = S.length;
+  if (!q) return null;
+  const zc = new Float64Array((n + 2 * q) * D); zc.set(z.subarray(0, n * D));
+  for (let r = 0; r < q; r++) for (let j = 0; j < D; j++) {
+    zc[(n + 2 * r) * D + j] = (S[r].a[j] - m[j]) * k[j];
+    zc[(n + 2 * r + 1) * D + j] = (S[r].b[j] - m[j]) * k[j];
+  }
+  const pr = projeterVivant({ z: zc, n: n + 2 * q, D, actives, angles, t });
+  const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < n; i++) for (let c = 0; c < 3; c++) { const v = pr[3 * i + c]; if (v < lo[c]) lo[c] = v; if (v > hi[c]) hi[c] = v; }
+  const r0 = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2 || 1, mil = [(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, (lo[2] + hi[2]) / 2];
+  const xyz = new Float64Array(q * 6), poids = new Float32Array(q), classes = new Uint8Array(q);
+  for (let r = 0; r < q; r++) {
+    for (let e = 0; e < 2; e++) for (let c = 0; c < 3; c++) xyz[6 * r + 3 * e + c] = (pr[3 * (n + 2 * r + e) + c] - mil[c]) / r0;
+    poids[r] = S[r].w; classes[r] = S[r].c;
+  }
+  return { xyz, poids, classes, q };
+}
+/** one stroke per (class, weight bucket): [{ classe, paquet, couleur, alpha, largeur (css px), indices }] — a few strokes, not one per line */
+export function paquetsSegments(sv) {
+  if (!sv || !sv.q) return [];
+  const par = new Map();
+  for (let r = 0; r < sv.q; r++) {
+    const p = Math.min(PAQUETS_POIDS - 1, Math.floor(sv.poids[r] * PAQUETS_POIDS)), cle = sv.classes[r] * PAQUETS_POIDS + p;
+    let g = par.get(cle); if (!g) { g = { classe: sv.classes[r], paquet: p, indices: [] }; par.set(cle, g); }
+    g.indices.push(r);
+  }
+  return [...par.values()].sort((x, y) => x.paquet - y.paquet || x.classe - y.classe).map((g) => ({ ...g,
+    couleur: COULEURS_SEGMENTS[g.classe], alpha: 0.05 + 0.13 * g.paquet, largeur: 0.5 + 0.35 * g.paquet }));
+}
+/**
+ * Draws the segments on a 2-D canvas context, UNDER the points (call it before them). `ecran(x, y, z)` = the same camera as the points,
+ * in scene units (called as the points are: x * sc, -y * sc, z * sc) -> { sx, sy } or null. `aplati` = the front view flattens depth to 0.
+ */
+export function dessinerSegments(g, sv, ecran, { sc = 1, dpr = 1, aplati = false } = {}) {
+  const P = paquetsSegments(sv); if (!P.length) return 0;
+  const X = sv.xyz; let traits = 0;
+  g.shadowBlur = 0; g.lineCap = 'round';
+  for (const p of P) {
+    g.strokeStyle = p.couleur; g.globalAlpha = p.alpha; g.lineWidth = Math.max(0.5, p.largeur * dpr); g.beginPath();
+    for (const r of p.indices) {
+      const o = 6 * r, u = ecran(X[o] * sc, -X[o + 1] * sc, aplati ? 0 : X[o + 2] * sc), v = ecran(X[o + 3] * sc, -X[o + 4] * sc, aplati ? 0 : X[o + 5] * sc);
+      if (!u || !v || !Number.isFinite(u.sx) || !Number.isFinite(v.sx)) continue;
+      g.moveTo(u.sx, u.sy); g.lineTo(v.sx, v.sy); traits++;
+    }
+    g.stroke();
+  }
+  g.globalAlpha = 1;
+  return traits;
+}
+
 /* ── les couches : une par dimension ── */
 export const couleurDim = (j) => 'hsl(' + Math.round((j * 137.508 + 195) % 360) + ' 85% 62%)';
 export const etatCouches = (D) => ({ D, actives: Array.from({ length: D }, () => true) });

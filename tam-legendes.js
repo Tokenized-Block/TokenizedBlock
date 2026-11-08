@@ -1222,7 +1222,7 @@ const L = {
   emotionWiringHCP: {
     titre: 'A wired human brain facing emotion categories',
     enUnePhrase: 'All the measured wiring between 82 regions of the human brain carries impulses from the regions reported active in a category; the same regions keep coming back from one emotion to another.',
-    colonnes: ['layout across', 'layout up', 'reported region, impulse, other region, strong or weaker connection'],
+    colonnes: ['layout across', 'layout up', 'reported region firing, impulse, other region firing, region; each connection is a line, brighter when stronger'],
     aRegarder: ['Measured: the wiring (ENIGMA, 207 HCP adults, 1,190 connections, log streamline density) and the reported areas (Lindquist 2012; shame and guilt 2023; love 2022; empathy for pain 2020). Ours: the mapping onto the regions, the layout, the timing, the crossing chance.', 'The left insula comes back in anger, shame, guilt and empathy for pain; the left amygdala in disgust, fear and maternal love.', 'Network 1: impulses follow the resting-state couplings instead (468 of the 1,190 strongest join wired regions; both amygdalae have none at this cut). Passionate love lights nothing: its areas are in the brainstem.'],
     fin: null,
   },

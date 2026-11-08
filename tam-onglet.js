@@ -1805,6 +1805,18 @@ export function monter(racine, ctx = {}) {
     /* game77 : la vue vivante d un MELANGE garde son motif (avant : la porteuse seule des qu une couche etait eteinte ou que ca tournait) */
     return !S.science && (S.P.operateur === 'somme' || S.P.operateur === 'composition') ? M.combinerVue(vif, S.P) : vif;
   }
+  /* 2026-11-08 (Phil: "add lines to TAM, not only points") : a subject MAY return segments (tam-vue.js#projeterSegments) ; the plain path
+   *   only (not the bodies, a blend, or a film: their views are not the projection of brut). No segments -> null -> nothing changes. */
+  let segCache = null;
+  function segmentsScene() {
+    const o = S.o;
+    if (!S.science || !o || !Array.isArray(o.segments) || !o.segments.length || !o.brut || S.corps || (S.P && S.P.melange) || filmDe()) return null;
+    const cle = [S.t, S.couches.actives.join(','), (S.P.angles || []).join(',')].join('|');
+    if (segCache && segCache.o === o && segCache.cle === cle) return segCache.sv;
+    let sv = null;
+    try { const { m, k } = TS.echelleIso(o.brut, S.n, S.D, S.science.s.id); sv = V.projeterSegments({ segments: o.segments, m, k, z: S.z, n: S.n, D: S.D, actives: S.couches.actives, angles: S.P.angles, t: S.t }); } catch (_) { sv = null; }
+    segCache = { o, cle, sv }; return sv;
+  }
   function dimDominante() {
     const d = new Int8Array(S.n), act = S.couches.actives;
     for (let i = 0; i < S.n; i++) { let b = -1, m = -1; for (let j = 0; j < S.D; j++) if (act[j]) { const v = Math.abs(S.z[i * S.D + j]); if (v > m) { m = v; b = j; } } d[i] = b; }
@@ -1846,6 +1858,8 @@ export function monter(racine, ctx = {}) {
       const u = projeter(pos[3 * i] * sc, -pos[3 * i + 1] * sc, pos[3 * i + 2] * sc);
       projSx[i] = u ? u.sx : NaN; projSy[i] = u ? u.sy : NaN; pz[i] = u ? u.zc : 0;
     }
+    /* 2026-11-08 : the subject's lines (if any), UNDER the points, through the same camera ; one stroke per colour and weight bucket */
+    { const sv = segmentsScene(); racine.dataset.segments = sv ? String(V.dessinerSegments(g, sv, projeter, { sc, dpr, aplati: aplati() })) : '0'; }
     const nuage = S.P.ordre === 1 || !!(S.science && TS.estNuage(S.P, S.o));
     /* game77 : un nuage se dessinait en points de 0,6 px a peine visibles — des points ronds de ~2 px, plus lisibles */
     g.lineWidth = nuage ? Math.max(2, dpr * 2.2) : Math.max(1, dpr * 1.1); g.lineCap = 'round';

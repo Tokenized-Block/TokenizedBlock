@@ -3,9 +3,12 @@
  * only one of:
  *   (a) a call the server's own planner (/api/rails/plan) produced in the last 10 minutes: same to, data and value;
  *   (b) transfer(address,uint256) of USDC or of a stock of the pool table, with no ETH: the user's withdraw;
- *   (c) a plain ETH send (no data): the gas left, sent back.
+ *   (c) a plain ETH send (no data): the gas left, sent back;
+ *   (d) a memory seal (fly-seal.js note, 66 bytes, no ETH): the fly sealing its own memory on chain, automatically.
  * Base (8453) only, no contract creation. ⛔ This keeps the server from being an OPEN relay; it does NOT protect the fly's funds
  * (whoever holds the key can broadcast through any node). The user's protection is the small budget, Stop and Withdraw all. */
+import { readSeal } from './fly-seal.js';
+
 export function createRelayGuard({ usdc, isStock, transferSelector, ttlMs = 600000, max = 2000 }) {
   const planned = new Map();
   const key = (to, data, value) => String(to).toLowerCase() + '|' + String(data || '0x').toLowerCase() + '|' + BigInt(value || 0).toString();
@@ -23,11 +26,12 @@ export function createRelayGuard({ usdc, isStock, transferSelector, ttlMs = 6000
     if (t.chainId !== 8453n) return 'chain ' + t.chainId + ' refused: Base (8453) only';
     if (!t.to) return 'contract creation refused';
     if (t.data === '0x') return null;
+    if (t.value === 0n && readSeal(t.data)) return null;
     const at = planned.get(key(t.to, t.data, t.value));
     if (at !== undefined && now - at < ttlMs) return null;
     const to = t.to.toLowerCase(), d = t.data.toLowerCase();
     if (d.startsWith(sel) && d.length === 2 + 8 + 128 && t.value === 0n && (to === usdcL || isStock(to))) return null;
-    return 'refused: not a call this server planned in the last ' + Math.round(ttlMs / 60000) + ' minutes, nor a USDC / stock transfer, nor a plain ETH send';
+    return 'refused: not a call this server planned in the last ' + Math.round(ttlMs / 60000) + ' minutes, nor a USDC / stock transfer, nor a plain ETH send, nor a memory seal';
   }
   return { remember, refusal, get size() { return planned.size; } };
 }
