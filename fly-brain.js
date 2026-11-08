@@ -858,6 +858,9 @@ async function readWindow() {
   if (ac && !ac.ok && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
   txSlot = 0;
   session.window({ symbol: stock.symbol, price, transactions: ac && ac.ok && Array.isArray(ac.transactions) ? ac.transactions : null });
+  /* a hidden tab ticks about once a second instead of 8 times: the queued pulses (lessons + prediction, ~36 ticks each) would fall
+   *   behind without end. Hidden = nobody watches: run them at once, exactly as the server's fly does (measured reasoning 08/11). */
+  if (document.hidden) fly.drain();
   renderBook(); renderTally(); saveMemory();
 }
 
@@ -922,7 +925,9 @@ async function start() {
   requestAnimationFrame(loop);
   select(0);
   readShared(); setInterval(readShared, SHARED_MS);
+  /* leaving the tab: whatever is queued is run at once (no animation is lost: nobody sees it) */
+  document.addEventListener('visibilitychange', () => { if (document.hidden && fly) fly.drain(); });
   /* the page's own functions, for the fork end-to-end test only: never exposed on the real site */
-  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__flyTest = { autoTrade, autoStart, autoStop, autoWithdraw, autoAccount, auto, session, fly, decide, current: () => current };
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__flyTest = { readWindow, autoTrade, autoStart, autoStop, autoWithdraw, autoAccount, auto, session, fly, decide, current: () => current };
 }
 start().catch((e) => log('error: ' + (e && e.message || e)));
