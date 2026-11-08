@@ -3022,7 +3022,7 @@ async function fenetreMouche() {
 /* the autonomous fly's relay guard (fly-relay.js): only calls this server planned, withdraw transfers, plain ETH sends */
 const GARDE_MOUCHE = createRelayGuard({ usdc: USDC_BASE, isStock: (a) => !!POOLS_ACTIONS_AERODROME.get(a), transferSelector: selecteurSrv('transfer(address,uint256)') });
 /* per IP and per minute, for each fly route */
-const FLY_BUDGET = { minute: -1, parIp: new Map() }, FLY_LIMITES = { account: 30, estimate: 30, relay: 12, receipt: 60 };
+const FLY_BUDGET = { minute: -1, parIp: new Map() }, FLY_LIMITES = { account: 60, estimate: 30, relay: 12, receipt: 60 };
 function budgetMouche(req, route) {
   const m = Math.floor(Date.now() / 60000);
   if (FLY_BUDGET.minute !== m) { FLY_BUDGET.minute = m; FLY_BUDGET.parIp.clear(); }
@@ -5878,7 +5878,7 @@ const SERVIS = [
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-11-07 (human-brain branch): the real fly memory circuit (hemibrain v1.2, Janelia, CC BY 4.0) wired to stock prices, read-only */
-  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js', 'fly-tx.js', 'fly-wallet.js',
+  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js', 'fly-tx.js', 'fly-wallet.js', 'fly-guard.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
   'cles-v4-mesurees.js',
   /* 2026-10-03 : les 20 pools v4 USDC des actions tokenisees, logs bruts (importe par cles-v4-mesurees.js) */
@@ -6117,6 +6117,15 @@ try {
   }
 } catch (e) { nobleRefuses.push('manifest unreadable: ' + String(e.message).slice(0, 80)); }
 if (nobleRefuses.length) console.error('[servi] ⛔ lib/noble NOT served: ' + nobleRefuses.join(', '));
+/* 2026-11-08 (security review H2): the fly page holds a wallet key in this origin's storage. A strict CSP: scripts only from this
+ *   site plus its ONE inline import map, pinned by its own sha256 (computed here from the served bytes, never typed); no frames, no
+ *   plugins, network only to this site. A changed import map without a new hash is simply blocked: fail-closed. */
+{
+  const fb = cache.get('/fly-brain.html');
+  const im = fb && /<script type="importmap">([\s\S]*?)<\/script>/.exec(fb.corps.toString('utf8'));
+  if (fb) fb.csp = "default-src 'self'; script-src 'self'" + (im ? " 'sha256-" + createHash('sha256').update(im[1], 'utf8').digest('base64') + "'" : '')
+    + "; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+}
 
 /** Le build du fichier SERVI, lu dans son `data-build` — jamais une constante tapee a cote. */
 function buildServi() {
@@ -6273,6 +6282,7 @@ const entete = (e, gz = false) => ({
     : (e.vendorEpingle ? 'public, max-age=31536000, immutable' : 'no-store, max-age=0'),
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
+  ...(e.csp ? { 'content-security-policy': e.csp } : {}),
 });
 
 /** L etiquette d une requete pour le compteur d archive : la route, adresses et nombres generalises (une cle par ROUTE, pas par
