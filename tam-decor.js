@@ -513,6 +513,8 @@ const DECORS = {
   glycosuriaCannon: (P, o, B) => [pt([0.4, 12 / 25, B.centre[2]], C.repere, 'Football 1913: 12 of 25, five never played')],
   /* game305 */
   brainBoyd: (P, o, B) => [pt([10 / 17, 48.54 / 50, B.centre[2]], C.repere, 'Men, 14 to 20 years: 48.54 oz., the heaviest')],
+  /* game306 */
+  allOrNoneLucas: (P, o, B) => [pt([(25.9 - 25.4) / 6.4, 3.08 / 4.1, B.centre[2]], C.repere, 'Observation 6: between two steps')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */

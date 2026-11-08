@@ -1178,6 +1178,14 @@ const L = {
     aRegarder: ['A steep climb over the first years.', 'A top at 14 to 20, then a slow slope down.', 'The sum of the parts strays from the total where parts were weighed on fewer people.'],
     fin: null,
   },
+  /* game306 (idea: codex "human brain", Claude sub-agent) */
+  allOrNoneLucas: {
+    titre: 'Keith Lucas: all or none',
+    enUnePhrase: 'A muscle driven by a few nerve fibres steps up in jumps as the stimulus grows: each fibre fires fully or not at all.',
+    colonnes: ['stimulus strength (coil distance, reversed)', 'contraction (mm on the record)', 'observations, steps, straight line'],
+    aRegarder: ['Two flat steps, then a slow creep near the top.', 'The jumps between them are sudden.', 'The straight line misses the steps badly.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
