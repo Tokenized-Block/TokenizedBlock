@@ -501,6 +501,24 @@ const DECORS = {
   /* ---------- game122 : tam-electricite.js, Pascal ---------- */
   lignesChamp: (P, o, B) => [pt([-1, 0, B.centre[2]], C.repere, 'Charge +1'), pt([1, 0, B.centre[2]], C.zone, 'Charge q2 = ' + P.charge)],
   circuitRC: (P, o, B) => [hyper(B, 1, 1, C.repere, 'Battery voltage (1)'), hyper(B, 0, 6, C.zone, 'Battery removed: discharge')],
+  /* game300 */
+  attentionCattell: (P, o, B) => [pt([0, 158 / 250, B.centre[2]], C.repere, 'C, electric light 1884: 26 ms slower when concentrating')],
+  /* game301 */
+  pressurePeirceJastrow: (P, o, B) => [pt([0.05, 0.4, B.centre[2]], C.repere, 'Ratio 1.005: 200 errors in 500, not 250')],
+  /* game302 */
+  extinctionPavlov: (P, o, B) => [pt([119 / 120, 0.1 / 0.7, B.centre[2]], C.repere, '16 minutes apart: still 0.1 c.c. after 2 hours')],
+  /* game303 */
+  weberKonig: (P, o, B) => [pt([(Math.log10(0.5) + 1) / 6.3, (Math.log10(0.793) + 2) / 2, B.centre[2]], C.repere, 'Brodhun, faintest light: a 79 percent change needed')],
+  /* game304 */
+  glycosuriaCannon: (P, o, B) => [pt([0.4, 12 / 25, B.centre[2]], C.repere, 'Football 1913: 12 of 25, five never played')],
+  /* game305 */
+  brainBoyd: (P, o, B) => [pt([10 / 17, 48.54 / 50, B.centre[2]], C.repere, 'Men, 14 to 20 years: 48.54 oz., the heaviest')],
+  /* game306 */
+  allOrNoneLucas: (P, o, B) => [pt([(25.9 - 25.4) / 6.4, 3.08 / 4.1, B.centre[2]], C.repere, 'Observation 6: between two steps')],
+  /* game307 */
+  neuronsHerculanoHouzel: (P, o, B) => [pt([Math.log10(6376.16) / 4, Math.log10(87.346) / 2, B.centre[2]], C.repere, 'Macaque: 6.4 billion neurons in 87 g')],
+  /* game308 */
+  connectomeSizes: (P, o, B) => [pt([Math.log10(86.1e9) / 11, 0, B.centre[2]], C.repere, 'Human: 86.1 billion neurons, no map')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */

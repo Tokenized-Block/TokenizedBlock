@@ -219,6 +219,24 @@ export function vueCorps(o, k) {
 /* game133 : la luminance de Planck (le pic chaud T^5 fois plus haut, le reste pres de 0) : 3.46 x 7.05 a l ecran -> 3.46 x 3.46 */
 export const ECHELLE_ETENDUE = Object.freeze({ dogmeCentral: [1], circuitRC: [1], corpsNoir: [1] });
 export const ECHELLE_PROPRE = {
+  /* game308 */
+  connectomeSizes: [2],
+  /* game307 */
+  neuronsHerculanoHouzel: [2],
+  /* game306 */
+  allOrNoneLucas: [2],
+  /* game305 */
+  brainBoyd: [2],
+  /* game304 */
+  glycosuriaCannon: [2],
+  /* game303 */
+  weberKonig: [2],
+  /* game302 */
+  extinctionPavlov: [2],
+  /* game301 */
+  pressurePeirceJastrow: [2],
+  /* game300 */
+  attentionCattell: [2],
   supernova: [3], supernovaHydro: [3, 4], versMars: [2], fusionTrousNoirs: [0, 3], binaireFusion: [0, 3],
   mandelbrot: [2], karman: [2], evaporationTrouNoir: [0, 1, 2, 3],
   /* game88 (vu a l ecran : Higgs dessine en LIGNE, le temps ~260 et V ecrasaient phi ~1) : les principes du vide — seules les colonnes de

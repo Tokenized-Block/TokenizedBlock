@@ -1130,6 +1130,78 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game300 (idea: codex "human brain", Claude sub-agent) */
+  attentionCattell: {
+    titre: 'Cattell: attention and distraction',
+    enUnePhrase: 'Doing sums in your head slows a simple reaction by a few hundredths of a second; trying hard barely speeds it up.',
+    colonnes: ['attention: concentrated, normal, distracted', 'reaction time (ms)', 'single series, printed means, Table VIII'],
+    aRegarder: ['The distracted column sits highest for every light, shock and sound.', 'Concentrated and normal are close; for C under electric light, concentrated is higher.', 'Table VIII is the same gaps, with normal set to zero.'],
+    fin: null,
+  },
+  /* game301 (idea: codex "human brain", Claude sub-agent) */
+  pressurePeirceJastrow: {
+    titre: 'Peirce and Jastrow: differences too small to notice',
+    enUnePhrase: 'Even a difference you are not aware of feeling is judged right more often than by chance, and errors follow the normal law.',
+    colonnes: ['(ratio of pressures - 1) x 10', 'errors in 50, scaled to 1', 'single sets, printed means, curve'],
+    aRegarder: ['The points fall as the difference grows, close to the curve.', 'The second group sits lower: practice made the finger finer.', 'At the far left, the errors stay below one half.'],
+    fin: null,
+  },
+  /* game302 (idea: codex "human brain", Claude sub-agent) */
+  extinctionPavlov: {
+    titre: 'Pavlov: a learnt response fades, then returns',
+    enUnePhrase: 'A signal that stops being followed by food loses its effect, faster when it is repeated close together, but the response comes back after a rest.',
+    colonnes: ['minutes since the first showing', 'saliva in one minute', 'series'],
+    aRegarder: ['Each series falls toward zero, with small rises on the way.', 'The 16-minute series is still above zero after two hours.', 'The two 2-minute series, the same day, took 15 and 18 minutes.'],
+    fin: null,
+  },
+  /* game303 (idea: codex "human brain", Claude sub-agent) */
+  weberKonig: {
+    titre: 'Konig and Brodhun: the smallest change of brightness we see',
+    enUnePhrase: 'In ordinary light we notice a change of about one and a half percent; in dim light the change must be far larger.',
+    colonnes: ['brightness (log scale)', 'smallest visible change / brightness (log scale)', 'table'],
+    aRegarder: ['A flat floor in the middle: Weber law holds there.', 'The points climb steeply toward the dark end.', 'At 605, the brightest fields need a larger step again.'],
+    fin: null,
+  },
+  /* game304 (idea: codex "human brain", Claude sub-agent) */
+  glycosuriaCannon: {
+    titre: 'Cannon: excitement and sugar in the urine',
+    enUnePhrase: 'After fear, rage or a big examination, the body releases sugar; calm, cold and the removal of the adrenal glands do not.',
+    colonnes: ['group', 'share with sugar in the urine', 'cats, people, controls'],
+    aRegarder: ['The cat bars reach the top: every excited cat.', 'People: fewer, but never none, after an examination or a match.', 'The control bars stay at zero.'],
+    fin: null,
+  },
+  /* game305 (idea: codex "human brain", Claude sub-agent) */
+  brainBoyd: {
+    titre: 'Boyd: the weight of the brain through life',
+    enUnePhrase: 'The brain grows fast in childhood, is heaviest in the late teens, then slowly gets lighter; it says nothing about what anyone can do.',
+    colonnes: ['period of life', 'weight of the brain (oz.)', 'men, women, sum of the parts'],
+    aRegarder: ['A steep climb over the first years.', 'A top at 14 to 20, then a slow slope down.', 'The sum of the parts strays from the total where parts were weighed on fewer people.'],
+    fin: null,
+  },
+  /* game306 (idea: codex "human brain", Claude sub-agent) */
+  allOrNoneLucas: {
+    titre: 'Keith Lucas: all or none',
+    enUnePhrase: 'A muscle driven by a few nerve fibres steps up in jumps as the stimulus grows: each fibre fires fully or not at all.',
+    colonnes: ['stimulus strength (coil distance, reversed)', 'contraction (mm on the record)', 'observations, steps, straight line'],
+    aRegarder: ['Two flat steps, then a slow creep near the top.', 'The jumps between them are sudden.', 'The straight line misses the steps badly.'],
+    fin: null,
+  },
+  /* game307 (idea: Phil, other forms of the brain) */
+  neuronsHerculanoHouzel: {
+    titre: 'Herculano-Houzel: how primate brains add neurons',
+    enUnePhrase: 'In primates, ten times more neurons make a brain about ten times heavier; in rodents the same gain makes it far heavier.',
+    colonnes: ['neurons (log scale)', 'brain mass (log scale)', 'species, primate line, rodent power'],
+    aRegarder: ['The seven species sit on one straight line.', 'Its slope is close to one: mass follows neurons.', 'The rodent line climbs much more steeply.'],
+    fin: null,
+  },
+  /* game308 (idea: Phil, other forms of the brain) */
+  connectomeSizes: {
+    titre: 'Mapped brains: worm, fly, and the human count',
+    enUnePhrase: 'Three nervous systems have been mapped synapse by synapse; the largest, a fly, has fewer than two millionths of the human neuron count.',
+    colonnes: ['neurons (log scale)', 'synapses (log scale)', 'organism'],
+    aRegarder: ['Each map holds hundreds of times more than the one before.', 'The fly makes hundreds of synapses per neuron, the worm about seventeen.', 'The human point stands far to the right, with no synapse count: it has never been mapped.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',

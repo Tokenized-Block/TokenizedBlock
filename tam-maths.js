@@ -576,6 +576,113 @@ export const SOURCES = Object.freeze({
   // https://archive.org/download/archivfuranatom00boisgoog/page/n690_w1500.jpg : rouleau XVI B, essai par essai (« H. ruft, D. antwortet ») ; methode a, essai 2 « ausgeblieben »
   reactionDondersEssais: S('a:45/54/53/60/45.5 b:77.5/72/72/76/74.5/74 c:71.5/61/62/59', 'vibrations', 'https://archive.org/download/archivfuranatom00boisgoog/page/n690_w1500.jpg', 'a:45/54/53/60/45.5 b:77.5/72/72/76/74.5/74 c:71.5/61/62/59'),
   reactionDondersTexte: S('diapason:261 msBaMoyennes:83 msCaMoyennes:36.32 msBaMinima:67.05 determinations:15', 'Hz, thousandths of a second, count', 'https://archive.org/download/archivfuranatom00boisgoog/page/n691_w1500.jpg', 'diapason:261 msBaMoyennes:83 msCaMoyennes:36.32 msBaMinima:67.05 determinations:15'),
+  /* game300: J. McKeen Cattell, "The Time Taken up by Cerebral Operations", Mind 11, no. 42 (April 1886), 220-242; Tables VI, VII and VIII
+   *   read by me on the page images (Internet Archive sim_mind_1886-04_11_42, leaf n = page image; Cattell died 1944 per Wikidata; published 1886).
+   *   Idea: codex "human brain", Claude sub-agent. Only the R columns (mean reaction time, thousandths of a second) are wired.
+   *   Keys: B and C are the observers; E electric light and K induction shock (Table VI, 1884); L daylight and S sound (Table VII, 1885). */
+  // https://archive.org/download/sim_mind_1886-04_11_42/page/n85_w1500.jpg (p. 238): Table VI, R concentrated / normal / distracted (each the mean of 10 series)
+  attentionCattellSix: S('BE:189/201/245 CE:158/132/153 BK:160/165/190 CK:147/150/184', 'thousandths of a second', 'https://archive.org/download/sim_mind_1886-04_11_42/page/n85_w1500.jpg', 'BE:189/201/245 CE:158/132/153 BK:160/165/190 CK:147/150/184'),
+  // https://archive.org/download/sim_mind_1886-04_11_42/page/n86_w1500.jpg (p. 239): Table VII, five series a block, R concentrated, normal, distracted (26 reactions a series)
+  attentionCattellSeven: S('BL:144/131/141/137/143,148/160/139/161/152,196/186/178/179/194 CL:149/149/146/146/140,146/144/149/146/144,166/154/157/154/163 BS:132/129/127/123/127,157/158/155/147/138,193/188/174/169/188 CS:129/135/125/123/131,145/133/141/142/136,166/156/158/155/157', 'thousandths of a second', 'https://archive.org/download/sim_mind_1886-04_11_42/page/n86_w1500.jpg', 'BL:144/131/141/137/143,148/160/139/161/152,196/186/178/179/194 CL:149/149/146/146/140,146/144/149/146/144,166/154/157/154/163 BS:132/129/127/123/127,157/158/155/147/138,193/188/174/169/188 CS:129/135/125/123/131,145/133/141/142/136,166/156/158/155/157'),
+  // https://archive.org/download/sim_mind_1886-04_11_42/page/n86_w1500.jpg: the printed A line under each block of Table VII (R columns)
+  attentionCattellSevenA: S('BL:139/152/187 CL:146/146/159 BS:128/151/182 CS:129/139/159', 'thousandths of a second', 'https://archive.org/download/sim_mind_1886-04_11_42/page/n86_w1500.jpg', 'BL:139/152/187 CL:146/146/159 BS:128/151/182 CS:129/139/159'),
+  // https://archive.org/download/sim_mind_1886-04_11_42/page/n87_w1500.jpg (p. 240): Table VIII, "the time when the attention was normal being taken as 0", concentrated / distracted; rows electric light, shock, daylight, sound, A
+  attentionCattellEight: S('B:-12/44,-5/25,-13/35,-23/31,-13/34 C:26/21,-3/34,0/13,-10/20,3/22', 'thousandths of a second', 'https://archive.org/download/sim_mind_1886-04_11_42/page/n87_w1500.jpg', 'B:-12/44,-5/25,-13/35,-23/31,-13/34 C:26/21,-3/34,0/13,-10/20,3/22'),
+  /* game301: C. S. Peirce and J. Jastrow, "On Small Differences of Sensation", Memoirs of the National Academy of Sciences 3 (1885), Fifth
+   *   Memoir, 73-83 (read October 17, 1884); pages 76 and 81 read by me on the page images (Internet Archive memoirsofnationa03nati;
+   *   Government Printing Office; Peirce died 1914, Jastrow 1944 per the archive catalogue). Idea: codex "human brain", Claude sub-agent.
+   *   Jastrow judged which of two pressures on a finger was the greater, 50 judgments a set; numbers are errors out of 50. */
+  // https://archive.org/download/memoirsofnationa03nati/page/n104_w1500.jpg (p. 81): Jastrow's daily errors, first group (December 10 to January 22) and second group (January 24 to February 24), by ratio of pressures
+  pressurePeirceJastrowDaily: S('G1|1.100:5|1.080:9|1.060:15/14/10/8/7/12/11|1.050:19|1.040:15|1.030:23/17/14/13/6/10|1.015:25/24/17/22/16 G2|1.060:4/1/2/2/2|1.030:11/7/10/11/8|1.015:18/18/17/17/15', 'errors in 50', 'https://archive.org/download/memoirsofnationa03nati/page/n104_w1500.jpg', 'G1|1.100:5|1.080:9|1.060:15/14/10/8/7/12/11|1.050:19|1.040:15|1.030:23/17/14/13/6/10|1.015:25/24/17/22/16 G2|1.060:4/1/2/2/2|1.030:11/7/10/11/8|1.015:18/18/17/17/15'),
+  // https://archive.org/download/memoirsofnationa03nati/page/n104_w1500.jpg (p. 81): "First group [Probable error=0.05]" and "Second group [Probable error=0.0235]": ratio, observed mean errors, calculated from probable error
+  pressurePeirceJastrowGroups: S('G1|0.05|1.100:5:4.4|1.080:9:7.0|1.060:11.0:10.4|1.050:19:12.5|1.040:15:14.7|1.030:13.8:17.0|1.015:20.8:21.0 G2|0.0235|1.060:2.2:2.1|1.030:9.4:9.6|1.015:17.0:16.6', 'errors in 50', 'https://archive.org/download/memoirsofnationa03nati/page/n104_w1500.jpg', 'G1|0.05|1.100:5:4.4|1.080:9:7.0|1.060:11.0:10.4|1.050:19:12.5|1.040:15:14.7|1.030:13.8:17.0|1.015:20.8:21.0 G2|0.0235|1.060:2.2:2.1|1.030:9.4:9.6|1.015:17.0:16.6'),
+  // https://archive.org/download/memoirsofnationa03nati/page/n104_w1500.jpg (p. 81): the two finest ratios, March 4 to April 7 (1.010) and March 18 to April 7 (1.005; the March 18 "25" is a slightly blurred glyph)
+  pressurePeirceJastrowFine: S('1.010:16/17/19/21/17/16/16/15/17/18/15/15 1.005:25/18/18/18/21/21/21/20/21/17', 'errors in 50', 'https://archive.org/download/memoirsofnationa03nati/page/n104_w1500.jpg', '1.010:16/17/19/21/17/16/16/15/17/18/15/15 1.005:25/18/18/18/21/21/21/20/21/17'),
+  // https://archive.org/download/memoirsofnationa03nati/page/n99_w1500.jpg (p. 76, footnote): quotient (log of the ratio / probable error) and the proportion of erroneous judgments, (1 - theta t) / 2 with t = 0.477 x quotient
+  pressurePeirceJastrowTable: S('0:0.50 0.05:0.49 0.1:0.47 0.25:0.43 0.5:0.37 1.0:0.25', 'proportion of errors', 'https://archive.org/download/memoirsofnationa03nati/page/n99_w1500.jpg', '0:0.50 0.05:0.49 0.1:0.47 0.25:0.43 0.5:0.37 1.0:0.25'),
+  /* game302: I. P. Pavlov, Conditioned Reflexes, translated and edited by G. V. Anrep, Oxford University Press, 1927, Lecture IV,
+   *   p. 52, 53, 58, read by me on the page images (Internet Archive item with a "Non-commercial use only" digitisation note: only the
+   *   numbers are used here, no image is republished; Pavlov died 1936, Anrep 1955). Experiments by Dr. Babkin on one dog in a single day.
+   *   Idea: codex "human brain", Claude sub-agent. Clock times are printed h.mm on a 12-hour clock. */
+  // https://archive.org/download/conditioned-reflexes-an-investigation-of-the-physiological-activity-of-the-cerebral-cortex/page/n67_w1500.jpg and https://archive.org/download/conditioned-reflexes-an-investigation-of-the-physiological-activity-of-the-cerebral-cortex/page/n68_w1500.jpg (p. 52-53): meat powder shown for one minute, not reinforced, at intervals of 2, 4, 8, 16 then 2 minutes; saliva in c.c.
+  extinctionPavlovSeries: S('i2:11.46/11.49/11.52/11.55/11.58/12.01=0.6/0.3/0.1/0.2/0.15/0.0 i4:12.10/12.15/12.20/12.25/12.30=0.7/0.4/0.3/0.1/0.0 i8:1.47/1.56/2.05/2.14/2.23/2.32/2.41=0.4/0.3/0.2/0.15/0.1/0.2/0.0 i16:3.23/3.40/3.57/4.14/4.31/4.48/5.05/5.22=0.6/0.6/0.5/0.3/0.1/0.2/0.1/0.1 i2b:5.27/5.30/5.33/5.36/5.39/5.42/5.45=0.6/0.3/0.3/0.2/0.1/0.05/0.0', 'clock time = c.c. in one minute', 'https://archive.org/download/conditioned-reflexes-an-investigation-of-the-physiological-activity-of-the-cerebral-cortex/page/n68_w1500.jpg', 'i2:11.46/11.49/11.52/11.55/11.58/12.01=0.6/0.3/0.1/0.2/0.15/0.0 i4:12.10/12.15/12.20/12.25/12.30=0.7/0.4/0.3/0.1/0.0 i8:1.47/1.56/2.05/2.14/2.23/2.32/2.41=0.4/0.3/0.2/0.15/0.1/0.2/0.0 i16:3.23/3.40/3.57/4.14/4.31/4.48/5.05/5.22=0.6/0.6/0.5/0.3/0.1/0.2/0.1/0.1 i2b:5.27/5.30/5.33/5.36/5.39/5.42/5.45=0.6/0.3/0.3/0.2/0.1/0.05/0.0'),
+  // https://archive.org/download/conditioned-reflexes-an-investigation-of-the-physiological-activity-of-the-cerebral-cortex/page/n68_w1500.jpg (p. 53): "To sum up": extinction obtained in 15, 20, 54 minutes, "incomplete in 2 hours", "occurred in 18 minutes"
+  extinctionPavlovSummary: S('i2:15 i4:20 i8:54 i16:incomplete-in-2-hours i2b:18', 'minutes', 'https://archive.org/download/conditioned-reflexes-an-investigation-of-the-physiological-activity-of-the-cerebral-cortex/page/n68_w1500.jpg', 'i2:15 i4:20 i8:54 i16:incomplete-in-2-hours i2b:18'),
+  // https://archive.org/download/conditioned-reflexes-an-investigation-of-the-physiological-activity-of-the-cerebral-cortex/page/n73_w1500.jpg (p. 58): extinction at intervals of three minutes then "Interval of 2 hours" (c.c.); a second dog at ten minutes then "Interval of 20 minutes" (drops)
+  extinctionPavlovRecovery: S('threeMinutes:1.0/0.6/0.3/0.1/0.0/0.0>0.15 tenMinutes:8/3/0>7', 'c.c. ; drops', 'https://archive.org/download/conditioned-reflexes-an-investigation-of-the-physiological-activity-of-the-cerebral-cortex/page/n73_w1500.jpg', 'threeMinutes:1.0/0.6/0.3/0.1/0.0/0.0>0.15 tenMinutes:8/3/0>7'),
+  /* game303: A. Konig and E. Brodhun, "Experimentelle Untersuchungen uber die psychophysische Fundamentalformel in Bezug auf den
+   *   Gesichtssinn", Sitzungsberichte der Kgl. Preuss. Akademie der Wissenschaften zu Berlin 1888, 917-931 (title page https://archive.org/download/sitzungsberichte1888deutsch/page/n262_w1500.jpg);
+   *   the four tables of p. 922 read by me on the page image (Internet Archive sitzungsberichte1888deutsch; Konig died 1901, Brodhun 1938
+   *   per Wikidata). K. is Konig (normal colour vision), B. is Brodhun ("grunblind"). Idea: codex "human brain", Claude sub-agent. */
+  // https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg (p. 922): wavelength 670 millionths of a mm, observer K.; rows J (= r + dr) @ alpha (degrees.minutes) @ dr / r (= tg alpha squared), as printed
+  weberKonig670K: S('50000@8.20@0.0215 20000@7.16@0.0163 10000@7.10@0.0158 5000@7.38@0.0180 2000@7.24@0.0169 1000@7.29@0.0172 500@8.10@0.0206 200@8.31@0.0224 100@9.50@0.0300 50@11.11@0.0391 20@12.10@0.0465 10@14.50@0.0701 5@17.38@0.101 2@24.27@0.207 1@30.31@0.347 0.5@37.50@0.603', 'brightness units @ degrees.minutes @ fraction', 'https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg', '50000@8.20@0.0215 20000@7.16@0.0163 10000@7.10@0.0158 5000@7.38@0.0180 2000@7.24@0.0169 1000@7.29@0.0172 500@8.10@0.0206 200@8.31@0.0224 100@9.50@0.0300 50@11.11@0.0391 20@12.10@0.0465 10@14.50@0.0701 5@17.38@0.101 2@24.27@0.207 1@30.31@0.347 0.5@37.50@0.603'),
+  // https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg (p. 922): wavelength 670, observer B.; rows J (= r + dr) @ alpha (degrees.minutes) @ dr / r (= tg alpha squared), as printed
+  weberKonig670B: S('50000@8.33@0.0226 20000@7.47@0.0187 10000@7.19@0.0165 5000@7.2@0.0152 2000@7.25@0.0169 1000@7.41@0.0182 500@8.22@0.0216 200@8.38@0.0230 100@9.21@0.0271 50@10.26@0.0339 20@11.44@0.0431 10@13.23@0.0566 5@16.41@0.0898 2@23.27@0.188 1@32.20@0.401 0.5@41.41@0.793', 'brightness units @ degrees.minutes @ fraction', 'https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg', '50000@8.33@0.0226 20000@7.47@0.0187 10000@7.19@0.0165 5000@7.2@0.0152 2000@7.25@0.0169 1000@7.41@0.0182 500@8.22@0.0216 200@8.38@0.0230 100@9.21@0.0271 50@10.26@0.0339 20@11.44@0.0431 10@13.23@0.0566 5@16.41@0.0898 2@23.27@0.188 1@32.20@0.401 0.5@41.41@0.793'),
+  // https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg (p. 922): wavelength 605, observer K. (19 rows, the 20th cell is empty); rows J (= r + dr) @ alpha (degrees.minutes) @ dr / r (= tg alpha squared), as printed
+  weberKonig605K: S('200000@11.55@0.0445 100000@8.56@0.0247 50000@8.6@0.0203 20000@7.46@0.0186 10000@7.21@0.0166 5000@7.14@0.0161 2000@7.43@0.0184 1000@8.5@0.0202 500@8.25@0.0219 200@8.39@0.0231 100@9.36@0.0286 50@11.12@0.0392 20@12.25@0.0485 10@14.18@0.0650 5@18.44@0.115 2@23.23@0.187 1@27.25@0.269 0.5@31.45@0.383 0.2@35.13@0.498', 'brightness units @ degrees.minutes @ fraction', 'https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg', '200000@11.55@0.0445 100000@8.56@0.0247 50000@8.6@0.0203 20000@7.46@0.0186 10000@7.21@0.0166 5000@7.14@0.0161 2000@7.43@0.0184 1000@8.5@0.0202 500@8.25@0.0219 200@8.39@0.0231 100@9.36@0.0286 50@11.12@0.0392 20@12.25@0.0485 10@14.18@0.0650 5@18.44@0.115 2@23.23@0.187 1@27.25@0.269 0.5@31.45@0.383 0.2@35.13@0.498'),
+  // https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg (p. 922): wavelength 605, observer B.; rows J (= r + dr) @ alpha (degrees.minutes) @ dr / r (= tg alpha squared), as printed
+  weberKonig605B: S('200000@13.10@0.0547 100000@10.30@0.0343 50000@7.50@0.0189 20000@7.0@0.0151 10000@7.2@0.0152 5000@6.49@0.0143 2000@7.12@0.0160 1000@7.28@0.0172 500@7.43@0.0184 200@8.38@0.0230 100@8.47@0.0239 50@9.26@0.0276 20@10.34@0.0348 10@13.4@0.0539 5@16.11@0.0842 2@24.17@0.204 1@27.38@0.274 0.5@29.13@0.313 0.2@32.13@0.397 0.1@37.47@0.601', 'brightness units @ degrees.minutes @ fraction', 'https://archive.org/download/sitzungsberichte1888deutsch/page/n267_w1500.jpg', '200000@13.10@0.0547 100000@10.30@0.0343 50000@7.50@0.0189 20000@7.0@0.0151 10000@7.2@0.0152 5000@6.49@0.0143 2000@7.12@0.0160 1000@7.28@0.0172 500@7.43@0.0184 200@8.38@0.0230 100@8.47@0.0239 50@9.26@0.0276 20@10.34@0.0348 10@13.4@0.0539 5@16.11@0.0842 2@24.17@0.204 1@27.38@0.274 0.5@29.13@0.313 0.2@32.13@0.397 0.1@37.47@0.601'),
+  /* game304: W. B. Cannon, Bodily Changes in Pain, Hunger, Fear and Rage, New York and London, D. Appleton, 1915, chapter IV
+   *   "Increase of blood sugar", p. 71-78, read by me on the page images (Internet Archive cu31924022542470; Cannon died 1945).
+   *   Counts of subjects with sugar in the urine (glycosuria), a yes / no sign, not a dose. The cat counts are Cannon, Shohl and Wright's;
+   *   the student counts are Smillie's and Folin, Denis and Smillie's as reported by Cannon. Idea: codex "human brain", Claude sub-agent. */
+  // https://archive.org/download/cu31924022542470/page/n86_w1200.jpg (p. 71: "twelve cats ... in every one"), https://archive.org/download/cu31924022542470/page/n87_w1200.jpg (p. 72: three calm cats bound up to four hours; one cat cooled to 36 C, no sugar),
+  //   https://archive.org/download/cu31924022542470/page/n88_w1200.jpg (p. 73: the same three, barked at by a dog for half an hour, all with sugar), https://archive.org/download/cu31924022542470/page/n93_w1200.jpg (p. 78: three cats without adrenals, "no trace")
+  glycosuriaCannonCats: S('excitedBound:12/12 calmBound:0/3 sameCatsBarkedAt:3/3 cooled:0/1 noAdrenals:0/3', 'cats with sugar / cats', 'https://archive.org/download/cu31924022542470/page/n88_w1200.jpg', 'excitedBound:12/12 calmBound:0/3 sameCatsBarkedAt:3/3 cooled:0/1 noAdrenals:0/3'),
+  // https://archive.org/download/cu31924022542470/page/n90_w1200.jpg (p. 75: four of nine students after a hard examination, one after an easier one; twelve of twenty-five football players, five of
+  //   them substitutes "not called upon to enter the game"), https://archive.org/download/cu31924022542470/page/n91_w1200.jpg (p. 76: of 34, one had sugar before; of the remaining 33, six, "or 18
+  //   per cent"; of 36 women students, six, "or 17 per cent")
+  glycosuriaCannonPeople: S('hardExam:4/9 easyExam:1/9 football:12/25 footballBench:5 menExam:6/33 menPrinted:18 menTested:34 menBefore:1 womenExam:6/36 womenPrinted:17', 'people with sugar / people', 'https://archive.org/download/cu31924022542470/page/n91_w1200.jpg', 'hardExam:4/9 easyExam:1/9 football:12/25 footballBench:5 menExam:6/33 menPrinted:18 menTested:34 menBefore:1 womenExam:6/36 womenPrinted:17'),
+  /* game305: R. Boyd, "Tables of the Weights of the Human Body and Internal Organs in the Sane and Insane of both Sexes at various Ages,
+   *   arranged from 2614 post-mortem examinations", Phil. Trans. R. Soc. Lond. 151 (1861), 241-262 (Internet Archive philtrans02353690,
+   *   Public Domain Mark); Table I, the "Average" and "Number examined" lines of the cerebral organs, read by me on the page images (p. 243
+   *   to 253; odd pages carry the weights). St. Marylebone infirmary, 1839-1847: people who died there, not a sample of the living. Ounces
+   *   avoirdupois, written here with a dot (the table prints a raised point; ".5" as 0.5). Idea: codex "human brain", Claude sub-agent. */
+  // https://archive.org/download/philtrans02353690/page/n2_w1500.jpg (p. 243)
+  brainBoydP243: S('premature|M|5.33/0.28/0.12/5.6|21/19/19/25 premature|F|4.42/0.36/0.1/4.62|10/6/6/18 stillborn|M|12.87/0.8/0.02/13.87|42/43/43/43 stillborn|F|11.25/0.75/0.16/12.25|30/29/29/31 newborn|M|10.84/0.69/0.2/11.67|44/40/40/42 newborn|F|9.26/0.62/0.16/10|38/35/35/39', 'oz. ; numbers examined', 'https://archive.org/download/philtrans02353690/page/n2_w1500.jpg', 'premature|M|5.33/0.28/0.12/5.6|21/19/19/25 premature|F|4.42/0.36/0.1/4.62|10/6/6/18 stillborn|M|12.87/0.8/0.02/13.87|42/43/43/43 stillborn|F|11.25/0.75/0.16/12.25|30/29/29/31 newborn|M|10.84/0.69/0.2/11.67|44/40/40/42 newborn|F|9.26/0.62/0.16/10|38/35/35/39'),
+  // https://archive.org/download/philtrans02353690/page/n4_w1500.jpg (p. 245)
+  brainBoydP245: S('under3m|M|16.2/1.07/0.24/17.42|15/15/15/16 under3m|F|14.81/0.9/0.25/15.94|19/18/18/20 3to6m|M|20/1.72/0.29/21.29|14/14/14/15 3to6m|F|18.05/1.69/0.30/19.76|23/21/21/25 6to12m|M|24.29/2.74/0.39/27.42|46/46/46/46 6to12m|F|22.68/2.32/0.35/25.7|38/38/38/40 1to2|M|29.21/3.54/0.5/33.25|34/34/34/34 1to2|F|26.19/3.15/0.46/29.8|33/33/33/33', 'oz. ; numbers examined', 'https://archive.org/download/philtrans02353690/page/n4_w1500.jpg', 'under3m|M|16.2/1.07/0.24/17.42|15/15/15/16 under3m|F|14.81/0.9/0.25/15.94|19/18/18/20 3to6m|M|20/1.72/0.29/21.29|14/14/14/15 3to6m|F|18.05/1.69/0.30/19.76|23/21/21/25 6to12m|M|24.29/2.74/0.39/27.42|46/46/46/46 6to12m|F|22.68/2.32/0.35/25.7|38/38/38/40 1to2|M|29.21/3.54/0.5/33.25|34/34/34/34 1to2|F|26.19/3.15/0.46/29.8|33/33/33/33'),
+  // https://archive.org/download/philtrans02353690/page/n6_w1500.jpg (p. 247)
+  brainBoydP247: S('2to4|M|34.03/4.02/0.66/38.71|28/28/28/29 2to4|F|30.77/3.7/0.5/34.97|29/29/29/29 4to7|M|35.44/4.17/0.62/40.23|27/27/27/27 4to7|F|35.04/4.19/0.68/40.11|17/17/17/19 7to14|M|40.36/4.84/0.76/45.96|22/22/22/22 7to14|F|35.86/4.27/0.65/40.78|18/18/18/18', 'oz. ; numbers examined', 'https://archive.org/download/philtrans02353690/page/n6_w1500.jpg', '2to4|M|34.03/4.02/0.66/38.71|28/28/28/29 2to4|F|30.77/3.7/0.5/34.97|29/29/29/29 4to7|M|35.44/4.17/0.62/40.23|27/27/27/27 4to7|F|35.04/4.19/0.68/40.11|17/17/17/19 7to14|M|40.36/4.84/0.76/45.96|22/22/22/22 7to14|F|35.86/4.27/0.65/40.78|18/18/18/18'),
+  // https://archive.org/download/philtrans02353690/page/n8_w1500.jpg (p. 249)
+  brainBoydP249: S('14to20|M|41.77/5.32/1/48.54|18/17/17/19 14to20|F|38.88/4.65/0.85/43.94|15/15/15/16 20to30|M|41.98/5.19/0.93/47.9|52/52/52/59 20to30|F|38/4.82/0.88/43.7|69/69/69/72 30to40|M|42.06/5.15/0.98/48.2|99/99/99/110 30to40|F|37.92/4.74/0.91/43.09|79/80/80/89', 'oz. ; numbers examined', 'https://archive.org/download/philtrans02353690/page/n8_w1500.jpg', '14to20|M|41.77/5.32/1/48.54|18/17/17/19 14to20|F|38.88/4.65/0.85/43.94|15/15/15/16 20to30|M|41.98/5.19/0.93/47.9|52/52/52/59 20to30|F|38/4.82/0.88/43.7|69/69/69/72 30to40|M|42.06/5.15/0.98/48.2|99/99/99/110 30to40|F|37.92/4.74/0.91/43.09|79/80/80/89'),
+  // https://archive.org/download/philtrans02353690/page/n10_w1500.jpg (p. 251)
+  brainBoydP251: S('40to50|M|41.48/5.22/1.06/47.75|121/120/120/137 40to50|F|37.12/4.69/0.89/42.81|94/94/94/106 50to60|M|41.09/5.13/0.98/47.44|111/111/111/119 50to60|F|37.38/4.62/0.86/43.12|91/91/91/103 60to70|M|40.21/4.98/0.97/46.4|119/119/119/127 60to70|F|37.13/4.68/0.83/42.69|136/134/134/149', 'oz. ; numbers examined', 'https://archive.org/download/philtrans02353690/page/n10_w1500.jpg', '40to50|M|41.48/5.22/1.06/47.75|121/120/120/137 40to50|F|37.12/4.69/0.89/42.81|94/94/94/106 50to60|M|41.09/5.13/0.98/47.44|111/111/111/119 50to60|F|37.38/4.62/0.86/43.12|91/91/91/103 60to70|M|40.21/4.98/0.97/46.4|119/119/119/127 60to70|F|37.13/4.68/0.83/42.69|136/134/134/149'),
+  // https://archive.org/download/philtrans02353690/page/n12_w1500.jpg (p. 253)
+  brainBoydP253: S('70to80|M|39.6/4.97/0.94/45.5|95/95/95/104 70to80|F|35.58/4.47/0.88/41.27|128/127/126/148 over80|M|39.62/4.79/0.89/45.34|23/23/23/24 over80|F|34.47/4.47/0.82/39.77|68/68/68/77', 'oz. ; numbers examined', 'https://archive.org/download/philtrans02353690/page/n12_w1500.jpg', '70to80|M|39.6/4.97/0.94/45.5|95/95/95/104 70to80|F|35.58/4.47/0.88/41.27|128/127/126/148 over80|M|39.62/4.79/0.89/45.34|23/23/23/24 over80|F|34.47/4.47/0.82/39.77|68/68/68/77'),
+  // https://archive.org/download/philtrans02353690/page/n19_w1500.jpg (p. 260: "The highest average weight of the brain in both sexes was from 14 to 20 years; the next highest was in the males from
+  //   30 to 40, and in the females from 20 to 30 years") and https://archive.org/download/philtrans02353690/page/n21_w1500.jpg (p. 262: "the average varied in the male from 48.2 to 45.34, and in the female from 43.7 to 39.77")
+  brainBoydText: S('highestBoth:14to20 nextMale:30to40 nextFemale:20to30 adultMale:48.2-45.34 adultFemale:43.7-39.77', 'age periods ; oz.', 'https://archive.org/download/philtrans02353690/page/n21_w1500.jpg', 'highestBoth:14to20 nextMale:30to40 nextFemale:20to30 adultMale:48.2-45.34 adultFemale:43.7-39.77'),
+  /* game306: Keith Lucas, "The 'all or none' contraction of the amphibian skeletal muscle fibre", Journal of Physiology 38 (1909), 113 sq.;
+   *   Exp. 1, p. 119-120, read by me on the page images and on the codex zooms (Internet Archive microfilm
+   *   sim_journal-of-physiology_the-journal-of-physiology_1909_38; Lucas died by 1917, per Starling's preface to his 1917 book). Frog muscle,
+   *   about eight or nine motor nerve fibres, excited through the nerve. The microfilm blurs 3 and 8: observation 16 reads 3.98 next to 3.90
+   *   and 3.91 and is kept as read. Idea: codex "human brain", Claude sub-agent. */
+  // https://archive.org/download/sim_journal-of-physiology_the-journal-of-physiology_1909_38/page/n127_w1500.jpg (p. 120): Exp. 1, coil distance (cm; shorter = stronger current) : contraction (mm on the record), observations 1 to 35
+  allOrNoneLucasExp1: S('25.9:0 25.8:1.51 25.7:1.46 25.6:1.54 25.5:1.50 25.4:3.08 25.3:3.70 25.2:3.64 25.1:3.65 25.0:3.69 24.9:3.84 24.8:3.87 24.7:3.88 24.6:3.90 24.5:3.90 24.4:3.98 24.3:3.91 24.2:3.91 24.1:3.93 24.0:3.94 23.8:3.96 23.6:3.99 23.4:4.01 23.2:4.02 23.0:4.02 22.8:4.05 22.6:4.04 22.4:4.03 22.2:4.05 22.0:4.05 21.5:4.07 21.0:4.05 20.5:4.06 20.0:4.07 19.5:4.09', 'cm : mm', 'https://archive.org/download/sim_journal-of-physiology_the-journal-of-physiology_1909_38/page/n127_w1500.jpg', '25.9:0 25.8:1.51 25.7:1.46 25.6:1.54 25.5:1.50 25.4:3.08 25.3:3.70 25.2:3.64 25.1:3.65 25.0:3.69 24.9:3.84 24.8:3.87 24.7:3.88 24.6:3.90 24.5:3.90 24.4:3.98 24.3:3.91 24.2:3.91 24.1:3.93 24.0:3.94 23.8:3.96 23.6:3.99 23.4:4.01 23.2:4.02 23.0:4.02 22.8:4.05 22.6:4.04 22.4:4.03 22.2:4.05 22.0:4.05 21.5:4.07 21.0:4.05 20.5:4.06 20.0:4.07 19.5:4.09'),
+  // https://archive.org/download/sim_journal-of-physiology_the-journal-of-physiology_1909_38/page/n126_w1500.jpg (p. 119: "a definite step which is of average height 1.50 ranging over observations 2 to 5") and https://archive.org/download/sim_journal-of-physiology_the-journal-of-physiology_1909_38/page/n127_w1500.jpg (p. 120: "flat step of
+  //   average level 3.67", "a continuous rise from observation 11 to 35. The percentage increase ... is 6.5 %")
+  allOrNoneLucasText: S('step2to5:1.50 step7to10:3.67 rise11to35:6.5', 'mm ; per cent', 'https://archive.org/download/sim_journal-of-physiology_the-journal-of-physiology_1909_38/page/n127_w1500.jpg', 'step2to5:1.50 step7to10:3.67 rise11to35:6.5'),
+  /* game307: S. Herculano-Houzel, C. E. Collins, P. Wong and J. H. Kaas, "Cellular scaling rules for primate brains", PNAS 104 (2007)
+   *   3562-3567, doi 10.1073/pnas.0611396104; Table 1 (whole-brain totals of seven primate species counted with the isotropic fractionator)
+   *   and the exponents of its Results and Discussion, read on the open PubMed Central text. Idea: Phil (other forms of the brain). */
+  // https://pmc.ncbi.nlm.nih.gov/articles/PMC1805542/: Table 1, species : brain mass (g) : neurons (millions) : other cells (millions); the commas of thousands are dropped
+  neuronsHerculanoHouzelTable: S('treeShrew:2.752:261.40:199.65 marmoset:7.780:635.80:590.74 galago:10.150:936.00:666.59 owlMonkey:15.730:1468.41:1195.13 squirrelMonkey:30.216:3246.43:2075.03 capuchin:52.208:3690.52:3297.74 macaque:87.346:6376.16:7162.90', 'g : millions : millions', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC1805542/', 'treeShrew:2.752:261.40:199.65 marmoset:7.780:635.80:590.74 galago:10.150:936.00:666.59 owlMonkey:15.730:1468.41:1195.13 squirrelMonkey:30.216:3246.43:2075.03 capuchin:52.208:3690.52:3297.74 macaque:87.346:6376.16:7162.90'),
+  // https://pmc.ncbi.nlm.nih.gov/articles/PMC1805542/: "Variation, macaque/marmoset" 11.2x, 10.0x, 12.1x; Results: brain mass ~ neurons^1.054 (95% C.I. 0.910-1.197) and ~ other cells^0.991;
+  //   Discussion: rodent brains "increase rapidly in mass as a function of the NN to the power of 1.587"
+  neuronsHerculanoHouzelText: S('variationMass:11.2 variationNeurons:10.0 variationOther:12.1 exponentNeurons:1.054 ciLow:0.910 ciHigh:1.197 exponentOther:0.991 rodentExponent:1.587', 'ratios ; exponents', 'https://pmc.ncbi.nlm.nih.gov/articles/PMC1805542/', 'variationMass:11.2 variationNeurons:10.0 variationOther:12.1 exponentNeurons:1.054 ciLow:0.910 ciHigh:1.197 exponentOther:0.991 rodentExponent:1.587'),
+  /* game308: the sizes of the nervous systems mapped synapse by synapse, and of the human brain, each from its own paper (abstracts
+   *   read through PubMed; the hemibrain from its eLife introduction; FlyWire's synapse count from its main text). Idea: Phil (other forms
+   *   of the brain). No human connectome exists: the human line is a cell count, not a map. */
+  // https://doi.org/10.1098/rstb.1986.0056: White, Southgate, Thomson and Brenner 1986, C. elegans hermaphrodite: "a total complement of 302 neurons", "118 such classes",
+  //   "about 5000 chemical synapses, 2000 neuromuscular junctions and 600 gap junctions"
+  connectomeWorm: S('neurons:302 classes:118 chemicalSynapses:5000 neuromuscular:2000 gapJunctions:600', 'count', 'https://doi.org/10.1098/rstb.1986.0056', 'neurons:302 classes:118 chemicalSynapses:5000 neuromuscular:2000 gapJunctions:600'),
+  // https://elifesciences.org/articles/57443: Scheffer et al. 2020, the fly hemibrain: "around 25,000 neurons", "about 20 million chemical synapses between them"
+  connectomeHemibrain: S('neurons:25000 chemicalSynapses:20000000', 'count', 'https://elifesciences.org/articles/57443', 'neurons:25000 chemicalSynapses:20000000'),
+  // https://doi.org/10.1038/s41586-024-07558-y: Dorkenwald et al. 2024, FlyWire, a whole adult fly brain: "139,255 neurons" and "54.5 million synapses between these neurons"
+  connectomeFlyWire: S('neurons:139255 synapses:54500000', 'count', 'https://doi.org/10.1038/s41586-024-07558-y', 'neurons:139255 synapses:54500000'),
+  // https://doi.org/10.1002/cne.21974: Azevedo et al. 2009, adult male human brain: "86.1 +/- 8.1 billion NeuN-positive cells" and "84.6 +/- 9.8 billion NeuN-negative"
+  connectomeHuman: S('neurons:86.1e9 sd:8.1e9 nonNeurons:84.6e9', 'count', 'https://doi.org/10.1002/cne.21974', 'neurons:86.1e9 sd:8.1e9 nonNeurons:84.6e9'),
   lettresAnglais: S('E:21912 T:16587 A:14810 O:14003 I:13318 N:12666 S:11450 R:10977 H:10795 D:7874 L:7253 U:5246 C:4943 M:4761 F:4200 Y:3853 W:3819 G:3693 P:3316 B:2715 V:2019 K:1257 X:315 Q:205 J:188 Z:128', 'effectifs', 'https://pi.math.cornell.edu/~mec/2003-2004/cryptography/subs/frequencies.html', 'E:21912 T:16587 A:14810 O:14003 I:13318 N:12666 S:11450 R:10977 H:10795 D:7874 L:7253 U:5246 C:4943 M:4761 F:4200 Y:3853 W:3819 G:3693 P:3316 B:2715 V:2019 K:1257 X:315 Q:205 J:188 Z:128'),
 });
 
@@ -5221,7 +5328,364 @@ function reactionDonders(P, n) {
       note: 'witness: deciding would cost nothing (b = a): it costs 83 ms; recognising would cost as much as choosing (c = b): c - a is 36 ms' } } };
 }
 
+// ---------- 143: attention and distraction, Cattell 1886 (idea: codex "human brain", Claude sub-agent; tables: SOURCES, p. 238-240) ----------
+// Two trained observers, B (Berger) and C (Cattell), react to a light, a shock or a sound with the attention "concentrated" (a voluntary
+//   effort), "normal", or "distracted" (adding 17 after 17 in the head). R is the mean time in thousandths of a second.
+// Exact here: Table VIII (20 cells) = Table VI and the A lines of Table VII with normal taken as 0, its A line = mean of the four rows, rounded;
+//   every A line of Table VII lies within 1 of the mean of its five series (12/12; rounded exactly 11/12: C sound distracted 158.4, printed 159);
+//   distraction lengthens the time in 8/8 blocks (+13 to +44) and in 20/20 single series.
+// Witness: "concentrating always makes you faster": C under electric light was 26 slower concentrated; single series agree 15/20 only.
+// Drawing (front view): attention (concentrated, normal, distracted) against time / 250 ms; label 0 single series of Table VII, 1 printed
+//   block means (Tables VI and VII), 2 Table VIII differences around a line at 0.4; slider: observer (0 both, 1 B, 2 C).
+function attentionCattell(P, n) {
+  const blocksCattell = (key) => Object.fromEntries(SOURCES[key].valeur.split(' ').map((x) => { const [k, v] = x.split(':'); return [k, v.split(',').map((g) => g.split('/').map(Number))]; }));
+  const six = blocksCattell('attentionCattellSix'), seven = blocksCattell('attentionCattellSeven'), sevenA = blocksCattell('attentionCattellSevenA'), eight = blocksCattell('attentionCattellEight');
+  const meanCattell = (l) => l.reduce((a, b) => a + b, 0) / l.length, blocks7 = ['BL', 'CL', 'BS', 'CS'];
+  let gaps = 0, withinOne = 0, roundedExact = 0;
+  for (const b of blocks7) for (let j = 0; j < 3; j++) { const m = meanCattell(seven[b][j]); if (Math.abs(m - sevenA[b][0][j]) <= 1) withinOne++; if (Math.round(m) === sevenA[b][0][j]) roundedExact++; }
+  if (withinOne !== 12) gaps++;
+  const normalised = { B: [six.BE[0], six.BK[0], sevenA.BL[0], sevenA.BS[0]], C: [six.CE[0], six.CK[0], sevenA.CL[0], sevenA.CS[0]] };
+  let eightOk = 0; const conc = [], dist = [];
+  for (const o of ['B', 'C']) {
+    const d = normalised[o].map(([c, nn, ds]) => [c - nn, ds - nn]);
+    d.forEach(([dc, dd], i) => { conc.push(dc); dist.push(dd); if (dc === eight[o][i][0]) eightOk++; if (dd === eight[o][i][1]) eightOk++; });
+    if (Math.round(meanCattell(d.map((x) => x[0]))) === eight[o][4][0]) eightOk++;
+    if (Math.round(meanCattell(d.map((x) => x[1]))) === eight[o][4][1]) eightOk++;
+  }
+  if (eightOk !== 20) gaps++;
+  const distLonger = dist.filter((x) => x > 0).length;
+  if (distLonger !== 8) gaps++;
+  let seriesDist = 0, seriesConc = 0;
+  for (const b of blocks7) seven[b][1].forEach((nn, i) => { if (seven[b][2][i] > nn) seriesDist++; if (seven[b][0][i] < nn) seriesConc++; });
+  if (seriesDist !== 20) gaps++;
+  const who = Math.max(0, Math.min(2, Math.round(P.sujetCattell))), keep = (b) => who === 0 || b[0] === 'BC'[who - 1];
+  const xAtt = [0, 0.5, 1], Y = (ms) => ms / 250, pts = [];
+  blocks7.filter(keep).forEach((b, i) => { for (let j = 0; j < 3; j++) {
+    seven[b][j].forEach((v) => { for (let q = 0; q < 4; q++) pts.push([xAtt[j] + 0.03 * i, Y(v), 0]); });
+    for (let q = 0; q < 12; q++) pts.push([xAtt[j] + 0.03 * i + 0.12, Y(sevenA[b][0][j]), 1]); } });
+  ['BE', 'CE', 'BK', 'CK'].filter(keep).forEach((b, i) => { for (let j = 0; j < 3; j++) for (let q = 0; q < 12; q++) pts.push([xAtt[j] + 0.03 * i + 0.2, Y(six[b][0][j]), 1]); });
+  for (const o of ['B', 'C']) if (keep(o)) eight[o].slice(0, 4).forEach(([dc, dd], i) => { for (let q = 0; q < 8; q++) { pts.push([0.25, 0.4 + dc / 250 + 0.01 * i, 2]); pts.push([0.75, 0.4 + dd / 250 + 0.01 * i, 2]); } });
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pe] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pe; }
+  return { D: 3, brut, nuage: true, unite: 'milliseconds', invariants: {
+    attentionCattell: { mesure: gaps, formule: 0, tableEightCattell: eightOk + '/20', sevenWithinOneCattell: withinOne + '/12', sevenRoundedCattell: roundedExact + '/12',
+      distractedLongerCattell: distLonger + '/8', distractedRangeCattell: '+' + Math.min(...dist) + ' to +' + Math.max(...dist), seriesDistractedCattell: seriesDist + '/20',
+      seriesConcentratedCattell: seriesConc + '/20', observerCattell: ['both', 'B', 'C'][who],
+      note: 'a Table VIII cell not equal to Tables VI and VII, an A line more than 1 from its five series, or a distracted time not longer' },
+    temoin: { mesure: Math.max(...conc) > 0 ? 0 : 1, formule: 0, concentratedSlowerCattell: '+' + Math.max(...conc),
+      note: 'witness: concentrating would always make you faster; C under electric light was 26 thousandths slower, and single series agree 15 times in 20' } } };
+}
+
+// ---------- 144: small differences of sensation, Peirce and Jastrow 1884 (idea: codex "human brain", Claude sub-agent; tables: SOURCES, p. 76, 81) ----------
+// Two weights pressed on a finger differ by a ratio from 1.100 down to 1.005; the observer says which is heavier, 50 times a set. If there were
+//   a threshold below which the difference is not felt, errors there would be one in two.
+// Exact here: the footnote table of p. 76 = (1 - erf(0.477 q)) / 2 rounded to the hundredth (6/6); Jastrow's printed group means = his daily
+//   sets cut at the dates of the text, rounded to a tenth (10/10); the "calculated from probable error" column comes back within 0.15 error
+//   (10/10) when the quotient is (ratio - 1) / probable error (the footnote says logarithm of the ratio: with ln, only 2/10 do).
+// The probable error falls from 0.05 to 0.0235 between the two groups (practice, p. 81).
+// Witness: "below a threshold one errs half the time": at a ratio of 1.005, 200 errors in 500 judgments, not 250 (chance alone: P = 4.5e-6).
+// Drawing (front view): (ratio - 1) x 10 against errors / 50; label 0 single sets, 1 printed means, 2 the normal-error curve of the group
+//   chosen with the slider (1 or 2).
+function pressurePeirceJastrow(P, n) {
+  const erfPeirceJastrow = (x) => { let s = 0, t = x, k = 0; while (Math.abs(t) > 1e-17) { s += t / (2 * k + 1); k++; t *= -x * x / k; } return 2 / Math.sqrt(Math.PI) * s; };
+  const errorsPJ = (q) => (1 - erfPeirceJastrow(0.477 * q)) / 2, meanPJ = (l) => l.reduce((a, b) => a + b, 0) / l.length;
+  const daily = Object.fromEntries(SOURCES.pressurePeirceJastrowDaily.valeur.split(' ').map((g) => { const [k, ...c] = g.split('|'); return [k, Object.fromEntries(c.map((x) => { const [r, v] = x.split(':'); return [r, v.split('/').map(Number)]; }))]; }));
+  const groups = Object.fromEntries(SOURCES.pressurePeirceJastrowGroups.valeur.split(' ').map((g) => { const [k, pe, ...c] = g.split('|'); return [k, { pe: Number(pe), rows: c.map((x) => x.split(':').map(Number)) }]; }));
+  const fine = Object.fromEntries(SOURCES.pressurePeirceJastrowFine.valeur.split(' ').map((x) => { const [r, v] = x.split(':'); return [r, v.split('/').map(Number)]; }));
+  const table = SOURCES.pressurePeirceJastrowTable.valeur.split(' ').map((x) => x.split(':').map(Number));
+  let gaps = 0;
+  const tableOk = table.filter(([q, p]) => Math.round(errorsPJ(q) * 100) / 100 === p).length;
+  if (tableOk !== 6) gaps++;
+  let meansOk = 0, calcOk = 0, calcLn = 0;
+  for (const g of ['G1', 'G2']) for (const [R, obs, calc] of groups[g].rows) {
+    const sets = daily[g][R.toFixed(3)];
+    if (Math.round(sets.reduce((a, b) => a + b, 0) / sets.length * 10) / 10 === obs) meansOk++;
+    if (Math.abs(50 * errorsPJ((R - 1) / groups[g].pe) - calc) <= 0.15) calcOk++;
+    if (Math.abs(50 * errorsPJ(lnD(R) / groups[g].pe) - calc) <= 0.15) calcLn++;
+  }
+  if (meansOk !== 10) gaps++;
+  if (calcOk !== 10) gaps++;
+  const fineErrors = fine['1.005'].reduce((a, b) => a + b, 0), fineTrials = 50 * fine['1.005'].length;
+  let tailPJ = 0, binomPJ = 1; const halfPowPJ = 0.5 ** fineTrials;
+  for (let i = 0; i <= fineErrors; i++) { tailPJ += binomPJ * halfPowPJ; binomPJ = binomPJ * (fineTrials - i) / (i + 1); }
+  const g = Math.max(1, Math.min(2, Math.round(P.groupeJastrow))), pe = groups['G' + g].pe, pts = [];
+  for (const k of ['G1', 'G2']) for (const [r, sets] of Object.entries(daily[k])) sets.forEach((v) => { for (let q = 0; q < 3; q++) pts.push([(Number(r) - 1) * 10, v / 50, 0]); });
+  for (const [r, sets] of Object.entries(fine)) sets.forEach((v) => { for (let q = 0; q < 3; q++) pts.push([(Number(r) - 1) * 10, v / 50, 0]); });
+  for (const k of ['G1', 'G2']) for (const [R, obs] of groups[k].rows) for (let q = 0; q < 10; q++) pts.push([(R - 1) * 10, obs / 50, 1]);
+  for (let i = 0; i <= 100; i++) { const x = 0.1 * i / 100; pts.push([x * 10, errorsPJ(x / pe), 2]); }
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'errors in 50', invariants: {
+    pressurePeirceJastrow: { mesure: gaps, formule: 0, tableP76PeirceJastrow: tableOk + '/6', groupMeansPeirceJastrow: meansOk + '/10', calculatedPeirceJastrow: calcOk + '/10',
+      calculatedLnPeirceJastrow: calcLn + '/10', practicePeirceJastrow: (groups.G1.pe / groups.G2.pe).toFixed(2), groupPeirceJastrow: g,
+      note: 'a p. 76 proportion not (1 - erf(0.477 q)) / 2, a group mean not its daily sets, or a calculated error more than 0.15 from the normal law' },
+    temoin: { mesure: fineErrors < fineTrials / 2 && tailPJ < 1e-3 ? 0 : 1, formule: 0, finestPeirceJastrow: fineErrors + ' / ' + fineTrials, chancePeirceJastrow: tailPJ.toExponential(1),
+      note: 'witness: below a threshold one would err half the time; at a ratio of 1.005 Jastrow erred 200 times in 500' } } };
+}
+
+// ---------- 145: extinction of a conditioned reflex, Pavlov 1927 (idea: codex "human brain", Claude sub-agent; tables: SOURCES, p. 52-58) ----------
+// A dog salivates at the sight of meat powder. Shown again and again without being fed, the response fades: experimental extinction.
+// Exact here: the printed summary (15, 20, 54, 18 minutes) = last printed time - first printed time of each series (4/4); the 16-minute
+//   series spans 119 minutes and still ends above zero ("incomplete in 2 hours"); between two printed times there are always the stated
+//   interval plus the one minute of stimulation (28/28); the longer the pause, the longer extinction takes (15 < 20 < 54 < 119).
+// Witness: "no reward erases what was learnt": after a rest the response comes back in 2/2 experiments (0.15 c.c. after 2 hours, 7 drops
+//   after 20 minutes), though both had fallen to zero.
+// Drawing (front view): minutes since the first showing / 120 against saliva / 0.7 c.c.; label: the series (0 to 4 in the order printed);
+//   slider: series shown (0 all, 1 to 5).
+function extinctionPavlov(P, n) {
+  const clockPavlov = (s) => { const [h, m] = s.split('.'); return Number(h) * 60 + Number(m); };
+  const series = SOURCES.extinctionPavlovSeries.valeur.split(' ').map((x) => { const [k, rest] = x.split(':'), [t, v] = rest.split('=');
+    return { k, iv: Number(k.replace(/\D/g, '')), t: t.split('/').map(clockPavlov), v: v.split('/').map(Number) }; });
+  const summary = Object.fromEntries(SOURCES.extinctionPavlovSummary.valeur.split(' ').map((x) => x.split(':')));
+  const recovery = SOURCES.extinctionPavlovRecovery.valeur.split(' ').map((x) => { const [, r] = x.split(':'), [a, b] = r.split('>'); return { before: a.split('/').map(Number), after: Number(b) }; });
+  let gaps = 0, spacingOk = 0, steps = 0, rises = 0, summaryOk = 0;
+  const durations = series.map((s) => s.t[s.t.length - 1] - s.t[0]);
+  series.forEach((s, j) => {
+    for (let i = 1; i < s.t.length; i++) { steps++; if (s.t[i] - s.t[i - 1] === s.iv + 1) spacingOk++; if (s.v[i] > s.v[i - 1]) rises++; }
+    const printed = summary[s.k];
+    if (/^\d+$/.test(printed) ? durations[j] === Number(printed) : durations[j] < 2 * 60 && s.v[s.v.length - 1] > 0) summaryOk++;
+  });
+  if (summaryOk !== 5 || spacingOk !== steps) gaps++;
+  const longerWithPause = durations[0] < durations[1] && durations[1] < durations[2] && durations[2] < durations[3];
+  if (!longerWithPause) gaps++;
+  const firstZero = series.map((s) => { const i = s.v.findIndex((v) => v === 0); return i < 0 ? 'none' : String(i + 1); });
+  const recovered = recovery.filter((r) => r.before[r.before.length - 1] === 0 && r.after > 0).length;
+  const shown = Math.max(0, Math.min(5, Math.round(P.seriePavlov))), pts = [];
+  series.forEach((s, j) => { if (shown === 0 || shown === j + 1) s.t.forEach((t, i) => { for (let q = 0; q < 8; q++) pts.push([(t - s.t[0]) / 120, s.v[i] / 0.7, j]); }); });
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'c.c. of saliva', invariants: {
+    extinctionPavlov: { mesure: gaps, formule: 0, summaryPavlov: summaryOk + '/5', spacingPavlov: spacingOk + '/' + steps, durationsPavlov: durations.join(' '),
+      showingsToZeroPavlov: firstZero.join(' '), risesPavlov: rises + '/' + steps, seriesShownPavlov: shown,
+      note: 'a printed extinction time not equal to its clock times, a gap not the interval plus one minute, or extinction not slower with longer pauses' },
+    temoin: { mesure: recovered === recovery.length ? 0 : 1, formule: 0, recoveredPavlov: recovered + '/' + recovery.length, recoveryValuesPavlov: recovery.map((r) => r.after).join(' '),
+      note: 'witness: no reward would erase what was learnt; after a rest the response came back in both experiments' } } };
+}
+
+// ---------- 146: the smallest visible change of brightness, Konig and Brodhun 1888 (idea: codex "human brain", Claude sub-agent; tables: SOURCES, p. 922) ----------
+// Two halves of a field, one brighter by dr; the observer turns a polariser to the angle alpha where the difference is just seen, so that
+//   dr / r = tg(alpha)^2. Weber's law would make dr / r the same at every brightness J.
+// Exact here: dr / r recomputed from the printed angle lies within one unit of the last printed digit in 71/71 rows (rounded exactly 67/71);
+//   the fraction is smallest at J = 5000 to 10000 (0.0143 to 0.0161) and between J = 1000 and 20000 stays within 0.0143 to 0.0202 (20 cells).
+// Witness: "Weber's law: the same fraction at every brightness": the largest fraction is 31 to 52 times the smallest in each table, rising
+//   toward darkness (0.498 to 0.793) and again at the most dazzling J of 605 (0.0445, 0.0547).
+// Drawing (front view): (log10 J + 1) / 6.3 against (log10 of the fraction + 2) / 2; label: table (0 670 K., 1 670 B., 2 605 K., 3 605 B.);
+//   slider: table shown (0 all, 1 to 4).
+function weberKonig(P, n) {
+  const keysKonig = ['670K', '670B', '605K', '605B'];
+  const tables = keysKonig.map((k) => SOURCES['weberKonig' + k].valeur.split(' ').map((x) => { const [J, a, f] = x.split('@'), [d, m] = a.split('.');
+    return { J: Number(J), alpha: (Number(d) + Number(m) / 60) * Math.PI / 180, f: Number(f), unit: 10 ** -f.split('.')[1].length }; }));
+  let gaps = 0, withinUnit = 0, rounded = 0, rows = 0, midCells = 0, midLo = Infinity, midHi = 0;
+  const ratios = [], minima = [];
+  for (const t of tables) {
+    for (const r of t) { rows++; const tg2 = (sinD(r.alpha) / cosD(r.alpha)) ** 2;
+      if (Math.abs(tg2 - r.f) <= r.unit * (1 + 1e-9)) withinUnit++;
+      if (Math.round(tg2 / r.unit) === Math.round(r.f / r.unit)) rounded++;
+      if (r.J >= 1000 && r.J <= 20000) { midCells++; midLo = Math.min(midLo, r.f); midHi = Math.max(midHi, r.f); } }
+    const fs = t.map((r) => r.f); ratios.push(Math.max(...fs) / Math.min(...fs)); minima.push(Math.min(...fs));
+  }
+  if (withinUnit !== rows) gaps++;
+  const shown = Math.max(0, Math.min(4, Math.round(P.tableKonig))), pts = [];
+  tables.forEach((t, j) => { if (shown === 0 || shown === j + 1) t.forEach((r) => { for (let q = 0; q < 10; q++) pts.push([(lnD(r.J) / lnD(10) + 1) / 6.3, (lnD(r.f) / lnD(10) + 2) / 2, j]); }); });
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'fraction dr / r', invariants: {
+    weberKonig: { mesure: gaps, formule: 0, rowsKonig: rows, withinUnitKonig: withinUnit + '/' + rows, roundedKonig: rounded + '/' + rows, smallestKonig: minima.join(' '),
+      plateauKonig: midCells + ' cells, ' + midLo + ' to ' + midHi, tableShownKonig: shown,
+      note: 'a printed fraction more than one unit of its last digit from tg(alpha) squared' },
+    temoin: { mesure: ratios.every((x) => x > 10) ? 0 : 1, formule: 0, largestOverSmallestKonig: ratios.map((x) => x.toFixed(1)).join(' '),
+      note: 'witness: Weber law would give the same fraction at every brightness; in each table the largest is 31 to 52 times the smallest' } } };
+}
+
+// ---------- 147: excitement and sugar in the urine, Cannon 1915 (idea: codex "human brain", Claude sub-agent; counts: SOURCES, p. 71-78) ----------
+// Strong excitement (fear, rage, a hard examination, a big match) is followed by sugar in the urine; calm, cold, and cats without adrenal
+//   glands are not. These are counts of yes / no, on small groups: the code says how many, never how strongly anyone felt anything.
+// Exact here: 6 / 33 and 6 / 36 rounded give the printed 18 and 17 per cent (2/2; truncation gives 16); 34 tested minus the one with sugar
+//   before = 33; every excited group has positives (cats 12/12 and 3/3, people 4/9, 12/25, 6/33, 6/36) and every control has none (0/3
+//   calm, 0/1 cooled, 0/3 without adrenals).
+// Witness: "the sugar comes from physical effort": 5 of the 12 positive football players never entered the game, and students sitting an
+//   examination are positive too; at the rate before the examination (1 / 34), 6 or more of 33 would happen by chance with P = 3.6e-4.
+// Drawing (front view): group (cats, then people, then controls) against share with sugar; label 0 cats, 1 people, 2 controls;
+//   slider: groups shown (0 all, 1 cats and controls, 2 people).
+function glycosuriaCannon(P, n) {
+  const readCannon = (key) => Object.fromEntries(SOURCES[key].valeur.split(' ').map((x) => { const [k, v] = x.split(':'); const [a, b] = v.split('/').map(Number); return [k, b === undefined ? a : { pos: a, n: b }]; }));
+  const cats = readCannon('glycosuriaCannonCats'), people = readCannon('glycosuriaCannonPeople');
+  const pctCannon = (g) => Math.round(100 * g.pos / g.n);
+  let gaps = 0;
+  const remaining = people.menTested - people.menBefore;
+  const percentOk = (pctCannon(people.menExam) === people.menPrinted ? 1 : 0) + (pctCannon(people.womenExam) === people.womenPrinted ? 1 : 0) + (remaining === people.menExam.n ? 1 : 0);
+  if (percentOk !== 3) gaps++;
+  const excited = [cats.excitedBound, cats.sameCatsBarkedAt, people.hardExam, people.football, people.menExam, people.womenExam], controls = [cats.calmBound, cats.cooled, cats.noAdrenals];
+  const excitedPositive = excited.filter((g) => g.pos > 0).length, controlsClean = controls.filter((g) => g.pos === 0).length;
+  if (excitedPositive !== excited.length || controlsClean !== controls.length) gaps++;
+  const base = people.menBefore / people.menTested, m = people.menExam.n;
+  let tailCannon = 0, c = 1;
+  for (let k = 0; k <= m; k++) { if (k >= people.menExam.pos) tailCannon += c * base ** k * (1 - base) ** (m - k); c = c * (m - k) / (k + 1); }
+  const shown = Math.max(0, Math.min(2, Math.round(P.groupeCannon))), pts = [];
+  const bars = [[cats.excitedBound, 0], [cats.sameCatsBarkedAt, 0], [people.hardExam, 1], [people.easyExam, 1], [people.football, 1], [people.menExam, 1], [people.womenExam, 1], [cats.calmBound, 2], [cats.cooled, 2], [cats.noAdrenals, 2]];
+  bars.forEach(([g, lab], i) => { if (shown === 0 || (shown === 1 && lab !== 1) || (shown === 2 && lab === 1)) for (let q = 0; q <= 20; q++) pts.push([i / 10, (g.pos / g.n) * q / 20, lab]); });
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'share with sugar', invariants: {
+    glycosuriaCannon: { mesure: gaps, formule: 0, percentsCannon: percentOk + '/3', excitedPositiveCannon: excitedPositive + '/' + excited.length, controlsCleanCannon: controlsClean + '/' + controls.length,
+      hardEasyCannon: people.hardExam.pos + ' vs ' + people.easyExam.pos + ' of 9', groupsShownCannon: shown,
+      note: 'a printed per cent not the rounded count, an excited group with no positive, or a control with one' },
+    temoin: { mesure: people.footballBench > 0 && tailCannon < 1e-3 ? 0 : 1, formule: 0, benchPositiveCannon: people.footballBench + ' of ' + people.football.pos, chanceAtBaseCannon: tailCannon.toExponential(1),
+      note: 'witness: if the sugar came from physical effort, players left on the bench would have none; 5 of the 12 positives never played' } } };
+}
+
+// ---------- 148: weight of the brain with age, Boyd 1861 (idea: codex "human brain", Claude sub-agent; table: SOURCES, p. 243-262) ----------
+// The average weight of the encephalon and of its parts, in ounces, for each sex and 18 periods of life, from 2086 post-mortem
+//   examinations at one London infirmary. Not every part was weighed in every case: each column has its own number examined.
+// Exact here: the male encephalon is heavier than the female in 18/18 periods; the heaviest period is 14 to 20 years in both sexes and the
+//   next is 30 to 40 (men) and 20 to 30 (women), as written p. 260; from 20 to 30 years onward the range is 48.2 to 45.34 (men) and 43.7 to
+//   39.77 (women), as written p. 262; the parts add up to the encephalon (within 0.005 oz.) in 7/7 rows where the four numbers examined are
+//   equal, and only in 2/29 rows where they differ (averages over different people do not add up).
+// Witness: "the brain grows with the body through life": it is heaviest at 14 to 20 and is 6.6 % (men) and 9.5 % (women) lighter after 80.
+// Drawing (front view): period (0 premature ... 17 over 80) / 17 against encephalon / 50 oz.; label 0 men, 1 women, 2 the sum of the parts;
+//   slider: sex shown (0 both, 1 men, 2 women).
+function brainBoyd(P, n) {
+  const rowsBoyd = [243, 245, 247, 249, 251, 253].flatMap((p) => SOURCES['brainBoydP' + p].valeur.split(' ').map((x) => { const [age, sex, w, c] = x.split('|');
+    return { age, sex, w: w.split('/').map(Number), c: c.split('/').map(Number) }; }));
+  const text = Object.fromEntries(SOURCES.brainBoydText.valeur.split(' ').map((x) => x.split(':')));
+  const ages = [...new Set(rowsBoyd.map((r) => r.age))], bySex = (s) => ages.map((a) => rowsBoyd.find((r) => r.age === a && r.sex === s));
+  const men = bySex('M'), women = bySex('F');
+  let gaps = 0;
+  const heavierMen = ages.filter((a, i) => men[i].w[3] > women[i].w[3]).length;
+  if (heavierMen !== ages.length) gaps++;
+  const rank = (l) => [...l].sort((x, y) => y.w[3] - x.w[3]).map((r) => r.age);
+  const rm = rank(men), rf = rank(women);
+  const ranksOk = (rm[0] === text.highestBoth) + (rf[0] === text.highestBoth) + (rm[1] === text.nextMale) + (rf[1] === text.nextFemale);
+  if (ranksOk !== 4) gaps++;
+  const adult = (l) => { const k = l.slice(ages.indexOf('20to30')).map((r) => r.w[3]); return Math.max(...k) + '-' + Math.min(...k); };
+  const rangesOk = (adult(men) === text.adultMale) + (adult(women) === text.adultFemale);
+  if (rangesOk !== 2) gaps++;
+  let sumEqual = 0, equalRows = 0, sumUnequal = 0, unequalRows = 0;
+  for (const r of rowsBoyd) { const same = r.c.every((x) => x === r.c[0]), adds = Math.abs(r.w[0] + r.w[1] + r.w[2] - r.w[3]) < 0.005;
+    if (same) { equalRows++; if (adds) sumEqual++; } else { unequalRows++; if (adds) sumUnequal++; } }
+  if (sumEqual !== equalRows) gaps++;
+  const peak = ages.indexOf(text.highestBoth), last = ages.length - 1;
+  const declineMen = 100 * (men[last].w[3] / men[peak].w[3] - 1), declineWomen = 100 * (women[last].w[3] / women[peak].w[3] - 1);
+  const shown = Math.max(0, Math.min(2, Math.round(P.sexeBoyd))), pts = [];
+  [[men, 0, 1], [women, 1, 2]].forEach(([l, lab, s]) => { if (shown === 0 || shown === s) l.forEach((r, i) => { for (let q = 0; q < 10; q++) pts.push([i / 17, r.w[3] / 50, lab]); for (let q = 0; q < 3; q++) pts.push([i / 17 + 0.01, (r.w[0] + r.w[1] + r.w[2]) / 50, 2]); }); });
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'ounces', invariants: {
+    brainBoyd: { mesure: gaps, formule: 0, menHeavierBoyd: heavierMen + '/' + ages.length, ranksBoyd: ranksOk + '/4', adultRangesBoyd: rangesOk + '/2',
+      partsAddEqualBoyd: sumEqual + '/' + equalRows, partsAddUnequalBoyd: sumUnequal + '/' + unequalRows, sexShownBoyd: shown,
+      note: 'a period where women weigh more, a rank or an adult range not the one written p. 260 and 262, or parts not adding up when all were weighed' },
+    temoin: { mesure: declineMen < 0 && declineWomen < 0 && peak < last ? 0 : 1, formule: 0, peakToOver80Boyd: declineMen.toFixed(2) + ' % men, ' + declineWomen.toFixed(2) + ' % women',
+      note: 'witness: if the brain kept growing with the body it would be heaviest in old age; it is heaviest at 14 to 20 years' } } };
+}
+
+// ---------- 149: all or none, Keith Lucas 1909 (idea: codex "human brain", Claude sub-agent; table: SOURCES, p. 119-120) ----------
+// A frog muscle is excited through its nerve by shocks of slowly rising strength. Each nerve fibre and its muscle fibres either contract
+//   fully or not at all, so the whole muscle climbs in a few steps instead of smoothly.
+// Exact here: the printed step levels come back from the table (observations 2 to 5: 1.50; 7 to 10: 3.67; rise from 11 to 35: 6.5 %);
+//   3 of the 34 steps between observations are larger than 0.3 mm and carry 90.7 % of the whole rise, no other step exceeds 0.15 mm.
+// Witness: "the contraction grows in proportion to the stimulus": a straight line through the 35 points explains only 32 % of their spread.
+// Drawing (front view): (25.9 - coil distance) / 6.4 against contraction / 4.1 mm; label 0 observations, 1 the two printed step levels,
+//   2 the straight line (slider: 0 hidden, 1 shown).
+function allOrNoneLucas(P, n) {
+  const obs = SOURCES.allOrNoneLucasExp1.valeur.split(' ').map((x) => x.split(':').map(Number)), mm = obs.map((o) => o[1]), cm = obs.map((o) => o[0]);
+  const text = Object.fromEntries(SOURCES.allOrNoneLucasText.valeur.split(' ').map((x) => { const [k, v] = x.split(':'); return [k, Number(v)]; }));
+  const meanLucas = (l) => l.reduce((a, b) => a + b, 0) / l.length;
+  const lowStep = meanLucas(mm.slice(1, 5)), highStep = meanLucas(mm.slice(6, 10)), rise = 100 * (mm[34] - mm[10]) / mm[10];
+  const printedOk = (lowStep.toFixed(2) === text.step2to5.toFixed(2)) + (highStep.toFixed(2) === text.step7to10.toFixed(2)) + (rise.toFixed(1) === text.rise11to35.toFixed(1));
+  let gaps = printedOk === 3 ? 0 : 1;
+  const steps = mm.slice(1).map((v, i) => v - mm[i]), big = steps.filter((d) => Math.abs(d) > 0.3);
+  const share = 100 * big.reduce((a, b) => a + b, 0) / (mm[34] - mm[0]), otherMax = Math.max(...steps.filter((d) => Math.abs(d) <= 0.3).map(Math.abs));
+  if (big.length !== 3) gaps++;
+  const mx = meanLucas(cm), my = meanLucas(mm);
+  let sxy = 0, sxx = 0; cm.forEach((x, i) => { sxy += (x - mx) * (mm[i] - my); sxx += (x - mx) ** 2; });
+  const slope = sxy / sxx, ssRes = mm.reduce((a, y, i) => a + (y - my - slope * (cm[i] - mx)) ** 2, 0), ssTot = mm.reduce((a, y) => a + (y - my) ** 2, 0);
+  const r2 = 1 - ssRes / ssTot;
+  const line = Math.max(0, Math.min(1, Math.round(P.droiteLucas))), X = (c) => (25.9 - c) / 6.4, pts = [];
+  obs.forEach(([c, v]) => { for (let q = 0; q < 12; q++) pts.push([X(c), v / 4.1, 0]); });
+  for (let q = 0; q <= 20; q++) { pts.push([X(25.8) + (X(25.5) - X(25.8)) * q / 20, text.step2to5 / 4.1, 1]); pts.push([X(25.3) + (X(25.0) - X(25.3)) * q / 20, text.step7to10 / 4.1, 1]); }
+  if (line) for (let q = 0; q <= 60; q++) { const c = 25.9 - 6.4 * q / 60; pts.push([X(c), (my + slope * (c - mx)) / 4.1, 2]); }
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'mm on the record', invariants: {
+    allOrNoneLucas: { mesure: gaps, formule: 0, printedLevelsLucas: printedOk + '/3', bigStepsLucas: big.length + '/' + steps.length, bigShareLucas: share.toFixed(1),
+      otherStepsMaxLucas: otherMax.toFixed(2), lineShownLucas: line,
+      note: 'a printed step level or rise not given by the table, or a number of big steps other than three' },
+    temoin: { mesure: r2 < 0.5 ? 0 : 1, formule: 0, straightLineR2Lucas: r2.toFixed(2),
+      note: 'witness: a contraction growing in proportion to the stimulus would lie on a straight line; the line explains 32 % of the spread' } } };
+}
+
+// ---------- 150: primate brains are scaled-up copies in cell numbers, Herculano-Houzel 2007 (idea: Phil; table: SOURCES, PNAS 104) ----------
+// Seven primate brains, from the tree shrew (2.75 g) to the macaque (87 g), dissolved into a suspension of nuclei and counted. Brain mass
+//   grows almost exactly in proportion to the number of neurons; in rodents it grows much faster (power 1.587, from the same group).
+// Exact here: the printed macaque / marmoset ratios (11.2, 10.0, 12.1) come back from the table (3/3); a least-squares line of log mass on
+//   log neurons over the seven species gives 1.054, the printed exponent, inside its printed interval; on log other cells, 0.991 (2/2).
+// Witness: "every brain grows like a rodent brain": with the rodent power, the marmoset scaled up to the macaque's 6.4 billion neurons would
+//   weigh 302 g; the macaque brain weighs 87 g.
+// Drawing (front view): log10 neurons (millions) / 4 against log10 brain mass (g) / 2; label 0 species, 1 the fitted primate line, 2 the
+//   rodent power from the marmoset (slider: 0 hidden, 1 shown).
+function neuronsHerculanoHouzel(P, n) {
+  const rowsHH = SOURCES.neuronsHerculanoHouzelTable.valeur.split(' ').map((x) => { const [sp, m, nn, o] = x.split(':'); return { sp, m: Number(m), nn: Number(nn), o: Number(o) }; });
+  const text = Object.fromEntries(SOURCES.neuronsHerculanoHouzelText.valeur.split(' ').map((x) => { const [k, v] = x.split(':'); return [k, Number(v)]; }));
+  const lg = (x) => lnD(x) / lnD(10), byName = (s) => rowsHH.find((r) => r.sp === s), mac = byName('macaque'), mar = byName('marmoset');
+  const ratiosOk = ((mac.m / mar.m).toFixed(1) === text.variationMass.toFixed(1)) + ((mac.nn / mar.nn).toFixed(1) === text.variationNeurons.toFixed(1)) + ((mac.o / mar.o).toFixed(1) === text.variationOther.toFixed(1));
+  const slopeHH = (xs, ys) => { const k = xs.length, mx = xs.reduce((a, b) => a + b, 0) / k, my = ys.reduce((a, b) => a + b, 0) / k; let sxy = 0, sxx = 0;
+    xs.forEach((x, i) => { sxy += (x - mx) * (ys[i] - my); sxx += (x - mx) ** 2; }); return { b: sxy / sxx, a: my - (sxy / sxx) * mx }; };
+  const fitN = slopeHH(rowsHH.map((r) => lg(r.nn)), rowsHH.map((r) => lg(r.m))), fitO = slopeHH(rowsHH.map((r) => lg(r.o)), rowsHH.map((r) => lg(r.m)));
+  const exponentsOk = (fitN.b.toFixed(3) === text.exponentNeurons.toFixed(3) && fitN.b >= text.ciLow && fitN.b <= text.ciHigh) + (fitO.b.toFixed(3) === text.exponentOther.toFixed(3));
+  const gaps = (ratiosOk === 3 ? 0 : 1) + (exponentsOk === 2 ? 0 : 1);
+  const rodentMass = mar.m * (mac.nn / mar.nn) ** text.rodentExponent;
+  const showRodent = Math.max(0, Math.min(1, Math.round(P.rongeurHerculano))), pts = [];
+  rowsHH.forEach((r) => { for (let q = 0; q < 20; q++) pts.push([lg(r.nn) / 4, lg(r.m) / 2, 0]); });
+  for (let q = 0; q <= 60; q++) { const x = lg(200) + (lg(8000) - lg(200)) * q / 60; pts.push([x / 4, (fitN.a + fitN.b * x) / 2, 1]);
+    if (showRodent) pts.push([x / 4, (lg(mar.m) + text.rodentExponent * (x - lg(mar.nn))) / 2, 2]); }
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'grams and millions of cells', invariants: {
+    neuronsHerculanoHouzel: { mesure: gaps, formule: 0, ratiosHerculano: ratiosOk + '/3', exponentNeuronsHerculano: fitN.b.toFixed(3), exponentOtherHerculano: fitO.b.toFixed(3),
+      exponentsHerculano: exponentsOk + '/2', rodentShownHerculano: showRodent,
+      note: 'a printed macaque / marmoset ratio not from the table, or a fitted exponent not the printed one' },
+    temoin: { mesure: rodentMass > 3 * mac.m ? 0 : 1, formule: 0, rodentRuleMassHerculano: rodentMass.toFixed(0) + ' g vs ' + mac.m + ' g',
+      note: 'witness: a primate brain growing like a rodent brain would weigh 302 g at the macaque neuron count; the macaque brain weighs 87 g' } } };
+}
+
+// ---------- 151: the sizes of mapped brains, worm 1986 to fly 2024, against the human count (idea: Phil; counts: SOURCES) ----------
+// A connectome lists every neuron and every synapse. Three have been published for whole or half nervous systems: the worm C. elegans
+//   (302 neurons, 1986), half a fly brain (about 25,000, 2020) and a whole fly brain (139,255, 2024). The human brain has been counted,
+//   86.1 billion neurons, never mapped.
+// Exact here: synapses per neuron 16.6 (worm, chemical only), 800 (hemibrain, its rounded figures), 391.4 (FlyWire); the whole fly brain has
+//   461 times the worm's neurons; human neurons and other cells differ by less than one standard deviation (86.1 vs 84.6 billion, SD 8.1).
+// Witness: "with a whole fly mapped, a human map is near": the human brain has 618,000 times more neurons than the mapped fly brain.
+// Drawing (front view): log10 neurons / 11 against log10 synapses / 8 (the human point sits at 0: no synapse count was measured);
+//   label: 0 worm, 1 hemibrain, 2 FlyWire, 3 human; slider: organism shown (0 all, 1 to 4).
+function connectomeSizes(P, n) {
+  const readC = (key) => Object.fromEntries(SOURCES[key].valeur.split(' ').map((x) => { const [k, v] = x.split(':'); return [k, Number(v)]; }));
+  const worm = readC('connectomeWorm'), hemi = readC('connectomeHemibrain'), fly = readC('connectomeFlyWire'), human = readC('connectomeHuman');
+  const perNeuron = [worm.chemicalSynapses / worm.neurons, hemi.chemicalSynapses / hemi.neurons, fly.synapses / fly.neurons];
+  const flyOverWorm = fly.neurons / worm.neurons, humanOverFly = human.neurons / fly.neurons;
+  const gaps = (perNeuron.every((x) => x > 1) && fly.neurons > hemi.neurons && hemi.neurons > worm.neurons ? 0 : 1) + (Math.abs(human.neurons - human.nonNeurons) < human.sd ? 0 : 1);
+  const shown = Math.max(0, Math.min(4, Math.round(P.organismeConnectome))), lgC = (x) => lnD(x) / lnD(10), pts = [];
+  const dots = [[worm.neurons, worm.chemicalSynapses], [hemi.neurons, hemi.chemicalSynapses], [fly.neurons, fly.synapses], [human.neurons, 0]];
+  dots.forEach(([nn, ss], j) => { if (shown === 0 || shown === j + 1) for (let q = 0; q < 30; q++) pts.push([lgC(nn) / 11, ss > 0 ? lgC(ss) / 8 : 0, j]); });
+  const brut = new Float64Array(n * 3);
+  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, brut, nuage: true, unite: 'neurons and synapses', invariants: {
+    connectomeSizes: { mesure: gaps, formule: 0, synapsesPerNeuronConnectome: perNeuron.map((x) => x.toFixed(1)).join(' '), flyOverWormConnectome: flyOverWorm.toFixed(0),
+      humanNonNeuronsConnectome: (human.nonNeurons / 1e9).toFixed(1) + ' vs ' + (human.neurons / 1e9).toFixed(1) + ' billion', shownConnectome: shown,
+      note: 'the counts out of order, or human neurons and other cells further apart than one standard deviation' },
+    temoin: { mesure: humanOverFly > 1e5 ? 0 : 1, formule: 0, humanOverFlyConnectome: humanOverFly.toFixed(0),
+      note: 'witness: a whole fly brain mapped is not close to a human map; the human brain has 618,000 times more neurons' } } };
+}
+
 export const COLONNES = Object.freeze({
+  connectomeSizes: { colonnes: ['log10 neurons / 11', 'log10 synapses / 8 (0 where none were counted)', 'worm, hemibrain, whole fly, human (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  neuronsHerculanoHouzel: { colonnes: ['log10 neurons (millions) / 4', 'log10 brain mass (g) / 2', 'species, primate line, or rodent power (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  allOrNoneLucas: { colonnes: ['(25.9 - coil distance in cm) / 6.4, stronger to the right', 'contraction / 4.1 mm', 'observations, printed steps, or a straight line (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  brainBoyd: { colonnes: ['period of life (premature to over 80) / 17', 'encephalon (oz.) / 50', 'men, women, or the sum of the parts (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  glycosuriaCannon: { colonnes: ['group: cats, people, controls', 'share with sugar in the urine', 'cats, people, or controls (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  weberKonig: { colonnes: ['(log10 brightness J + 1) / 6.3', '(log10 of dr / r + 2) / 2', 'table: 670 K., 670 B., 605 K., 605 B. (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  extinctionPavlov: { colonnes: ['minutes since the first showing / 120', 'saliva in one minute / 0.7 c.c.', 'series, in the order printed (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  pressurePeirceJastrow: { colonnes: ['(ratio of pressures - 1) x 10', 'errors / 50', 'single sets, printed means, or the normal-error curve (label)'], memeLongueur: [], autres: [0, 1, 2] },
+  attentionCattell: { colonnes: ['attention (concentrated, normal, distracted)', 'reaction time (ms) / 250', 'single series, printed means, or Table VIII differences (label)'], memeLongueur: [], autres: [0, 1, 2] },
   reactionDonders: { colonnes: ['method (a, c, b)', 'reaction time (ms)', 'roll means, single trials, or all-observation mean and minimum (label)'], memeLongueur: [], autres: [0, 1, 2] },
   essaisThorndike: { colonnes: ['trial', 'log of the time to escape', 'his times, moving average, or a power law (label)'], memeLongueur: [], autres: [0, 1, 2] },
   penduleKater: { colonnes: ['sine of latitude squared', 'length of the seconds pendulum', 'stations, fitted line, or a homogeneous Earth (label)'], memeLongueur: [], autres: [0, 1, 2] },
@@ -5793,9 +6257,36 @@ export const SYSTEMES = Object.freeze([
   { id: 'reactionDonders', nom: 'Donders 1868: how long a decision takes', science: 'Psychology', D: 3, nuage: true, params: { rouleauDonders: 0 },
     bornes: { rouleauDonders: [0, 3] },
     phrase: 'A visualisation of Franciscus Donders\'s 1868 reaction times, counted on a tuning fork at 261 vibrations a second: repeating a syllable you expect, repeating whichever of several you hear, or answering only one of them. Subtracting the times measures each decision, and his ten printed differences come back from his table to the hundredth. If deciding cost nothing the first two would take as long; choosing adds 83 thousandths of a second: that is the witness.' },
+  { id: 'attentionCattell', nom: 'Cattell 1886: attention and distraction', science: 'Psychology', D: 3, nuage: true, params: { sujetCattell: 0 },
+    bornes: { sujetCattell: [0, 2] },
+    phrase: 'A visualisation of James McKeen Cattell\'s 1886 reaction times: two trained observers reacted to a light, a shock or a sound with the attention concentrated, normal, or busy adding 17 after 17 in the head. Adding in the head made every block slower, by 13 to 44 thousandths of a second, and his summary table comes back from the others cell for cell. If concentrating always made you faster, no block would be slower for it; one was slower by 26: that is the witness.' },
+  { id: 'pressurePeirceJastrow', nom: 'Peirce and Jastrow 1884: differences too small to notice', science: 'Psychology', D: 3, nuage: true, params: { groupeJastrow: 1 },
+    bornes: { groupeJastrow: [1, 2] },
+    phrase: 'A visualisation of Charles Peirce and Joseph Jastrow\'s 1884 experiment: two weights pressed on a finger, differing by as little as half a percent, and the observer says which is heavier, fifty times a set. Errors fall smoothly as the difference grows, along the normal law of errors, and after two months of practice the same differences gave half as many errors. If there were a threshold below which nothing is felt, the finest difference would give one error in two; it gave 200 in 500: that is the witness.' },
+  { id: 'extinctionPavlov', nom: 'Pavlov 1927: a learnt response fades, then returns', science: 'Psychology', D: 3, nuage: true, params: { seriePavlov: 0 },
+    bornes: { seriePavlov: [0, 5] },
+    phrase: 'A visualisation of experimental extinction in Ivan Pavlov\'s laboratory: a dog that had learnt to salivate at the sight of meat powder was shown it again and again without being fed, and the saliva dried up, in 15 minutes when the showings were 2 minutes apart, 54 minutes at 8 minutes apart, and not even in 2 hours at 16. If no reward erased what was learnt, the response would stay at zero; after a rest it came back both times: that is the witness.' },
+  { id: 'weberKonig', nom: 'Konig and Brodhun 1888: the smallest change of brightness we see', science: 'Psychology', D: 3, nuage: true, params: { tableKonig: 0 },
+    bornes: { tableKonig: [0, 4] },
+    phrase: 'A visualisation of Arthur Konig and Eugen Brodhun\'s 1888 measurements: how much brighter one half of a coloured field must be before the eye sees a difference, from the faintest light to a dazzling one. In the middle of the range the step is about one and a half to two percent of the brightness, as Weber\'s law says, and the printed fractions come back from the printed angles in 71 rows out of 71. If Weber\'s law held everywhere the fraction would never change; near darkness it is 31 to 52 times larger: that is the witness.' },
+  { id: 'glycosuriaCannon', nom: 'Cannon 1915: excitement and sugar in the urine', science: 'Physiology', D: 3, nuage: true, params: { groupeCannon: 0 },
+    bornes: { groupeCannon: [0, 2] },
+    phrase: 'A visualisation of counts reported by Walter Cannon in 1915: cats that struggled when held, or were barked at by a dog, had sugar in their urine, and so did 4 of 9 students after a hard examination, 12 of 25 football players after the last match of 1913, and 6 of 33 students after an important examination. Calm cats, a cooled cat and cats without adrenal glands had none. If the sugar came from physical effort, players who stayed on the bench would have none; 5 of the 12 never played: that is the witness.' },
+  { id: 'brainBoyd', nom: 'Boyd 1861: the weight of the brain through life', science: 'Anatomy', D: 3, nuage: true, params: { sexeBoyd: 0 },
+    bornes: { sexeBoyd: [0, 2] },
+    phrase: 'A visualisation of Robert Boyd\'s 1861 table of brain weights, from 2086 post-mortem examinations at a London infirmary: the brain weighs about 12 ounces at birth, nearly 49 ounces for men and 44 for women at 14 to 20, and the heaviest and next heaviest periods come back from the table exactly as Boyd wrote them. If the brain kept growing with the body it would be heaviest in old age; it is heaviest at 14 to 20 years and lighter by 7 to 9 percent after 80: that is the witness.' },
+  { id: 'allOrNoneLucas', nom: 'Keith Lucas 1909: all or none', science: 'Physiology', D: 3, nuage: true, params: { droiteLucas: 1 },
+    bornes: { droiteLucas: [0, 1] },
+    phrase: 'A visualisation of Keith Lucas\'s 1909 experiment on a frog muscle driven by eight or nine nerve fibres: as the electric shock grows slowly, the contraction does not grow smoothly but jumps, from nothing to 1.5 mm, then to 3.7, then creeps to 4.1, and three jumps carry 91 percent of the whole rise. Each fibre answers fully or not at all. If the contraction grew in proportion to the shock the points would lie on a straight line; the line explains a third of their spread: that is the witness.' },
+  { id: 'neuronsHerculanoHouzel', nom: 'Herculano-Houzel 2007: how primate brains add neurons', science: 'Neuroscience', D: 3, nuage: true, params: { rongeurHerculano: 1 },
+    bornes: { rongeurHerculano: [0, 1] },
+    phrase: 'A visualisation of Suzana Herculano-Houzel\'s 2007 counts of the cells in seven primate brains, from the tree shrew to the macaque: an 11 times heavier brain holds 10 times more neurons, and the line through the seven points has the printed slope, 1.054, to the third decimal. Primate brains add neurons without swelling much. If they grew like rodent brains, the marmoset brain scaled up to the macaque neuron count would weigh 302 grams; the macaque brain weighs 87: that is the witness.' },
+  { id: 'connectomeSizes', nom: 'Mapped brains 1986-2024: worm, fly, and the human count', science: 'Neuroscience', D: 3, nuage: true, params: { organismeConnectome: 0 },
+    bornes: { organismeConnectome: [0, 4] },
+    phrase: 'A visualisation of the nervous systems that have been mapped neuron by neuron and synapse by synapse: the worm C. elegans with 302 neurons in 1986, half a fly brain with about 25,000 in 2020, a whole fly brain with 139,255 neurons and 54.5 million synapses in 2024, beside the human brain, counted at 86.1 billion neurons but never mapped. If a whole fly brain brought a human map close, the gap would be small; the human brain has 618,000 times more neurons: that is the witness.' },
 ].map((s) => Object.freeze({ ...s, params: Object.freeze({ ...s.params }), bornes: Object.freeze({ ...s.bornes }) })));
-export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'], parfaitsAmicaux: ['limite'], nombresBernoulli: ['rangB'], problemeJosephus: ['personnes', 'pasK'], zeckendorf: ['entier'], theoremeLucas: ['baseP', 'lignesL'], calkinWilf: ['niveaux'], toursHanoi: ['disques'], regarderDire: ['rangs'], derangements: ['objets', 'graine'], nombresHarmoniques: ['rangs'], suiteCollatz: ['limite'], routineKaprekar: ['longueurK'], stirlingBell: ['elements', 'graine'], motzkinChemins: ['longueurM', 'graine'], periodePisano: ['moduleMax'], indicatriceEuler: ['jusquaN'], goldbachPaires: ['pairMax'], frobeniusPieces: ['pieceMax'], schroderChemins: ['longueurS', 'graine'], triangleNarayana: ['rangN'], suiteRecaman: ['rangR'], suiteKolakoski: ['rangK'], suitePerrin: ['perrinMax'], thueMorse: ['rangT'], suitePadovan: ['rangP'], fourmiLangton: ['pasL'], gammeTemperee: ['divisions'], entropieShannon: ['lettres', 'graine'], atmosphereStandard: [], loiZipf: ['rangsZipf'], gutenbergRichter: ['seismes', 'graine'], mareeVivesEaux: ['jours'], energieLiaison: ['reaction'], courbeKeeling: ['anDebut', 'anFin'], populationMonde: ['decennies'], effetPhotoelectrique: ['metal'], demiViesNPL: ['isotope'], choleraSnow: ['septSemaines', 'graine'], raiesBalmer: ['nPlusHaut'], loiBoyle: ['lignesBoyle'], loiOhm: ['serie'], especesAire: ['inclureIsolees'], michaelisMenten: ['axeLog'], diffusionAlpha: ['orArgent'], argonRayleigh: ['signeCorrection'], carteSturtevant: [], oubliEbbinghaus: [], fievreSemmelweis: ['anneeVue'], densiteCavendish: ['filChoisi'], equivalentJoule: ['colonneVide'], eclipseEddington: [], lynxHudson: ['decalageAns'], gouttesMillikan: ['gouttesMoyennees'], vieGraunt: [], loiHubble1929: [], loiMoseley: ['numerotation'], lumiereMichelson: ['correctionVide'], regressionGalton: [], aberrationBradley: [], interferenceStroop: ['experienceStroop'], exclusionGause: [], mortaliteNightingale: ['anneeNightingale'], equivalentsFaraday: [], chaleursPetitDulong: ['decalagePoids'], repliquesOmori: ['horizonOmori'], survieHalley: ['tauxHalley'], chaleurLondres: ['lissageHoward'], motsMendenhall: ['queueMendenhall'], parallaxeBessel: [], vitesseNyquist: ['niveauxNyquist'], ondulationsYoung: [], picLummer: [], balanceCoulomb: [], effetJoule: [], critiqueReynolds: [], filtreDarcy: [], deplacementsPerrin: [], aimantGauss: [], unitesWeber: [], tubesPoiseuille: [], variationsHalley: ['anneeHalley'], spiralesBeal: ['groupeBeal'], tempsOldham: [], fonteMacKellar: [], syllabesKaeding: ['zaehlstoffKaeding'], tubesHagen: [], spiraleMoseley: [], poisMendel: [], rayonsThomson: [], magnitudesPogson: [], maisDarwin: [], emanationRutherford: [], etherMichelson: [], reststrahlenRubens: ['loiRubens'], constantesPlanck: [], jaugesHerschel: [], penduleKater: ['stationOteeKater'], essaisThorndike: ['moyenneThorndike'], reactionDonders: ['rouleauDonders'] };
-const FONCTIONS = { reactionDonders, essaisThorndike, penduleKater, jaugesHerschel, constantesPlanck, reststrahlenRubens, etherMichelson, emanationRutherford, maisDarwin, magnitudesPogson, rayonsThomson, poisMendel, spiraleMoseley, tubesHagen, syllabesKaeding, fonteMacKellar, tempsOldham, spiralesBeal, variationsHalley, tubesPoiseuille, unitesWeber, aimantGauss, deplacementsPerrin, filtreDarcy, critiqueReynolds, effetJoule, balanceCoulomb, picLummer, ondulationsYoung, vitesseNyquist, parallaxeBessel, motsMendenhall, chaleurLondres, survieHalley, repliquesOmori, chaleursPetitDulong, equivalentsFaraday, mortaliteNightingale, exclusionGause, interferenceStroop, aberrationBradley, regressionGalton, lumiereMichelson, loiMoseley, loiHubble1929, vieGraunt, gouttesMillikan, lynxHudson, eclipseEddington, equivalentJoule, densiteCavendish, fievreSemmelweis, oubliEbbinghaus, carteSturtevant, argonRayleigh, diffusionAlpha, michaelisMenten, especesAire, loiOhm, loiBoyle, raiesBalmer, choleraSnow, demiViesNPL, effetPhotoelectrique, populationMonde, courbeKeeling, energieLiaison, mareeVivesEaux, gutenbergRichter, loiZipf, atmosphereStandard, entropieShannon, gammeTemperee, fourmiLangton, suitePadovan, thueMorse, suitePerrin, suiteKolakoski, suiteRecaman, triangleNarayana, schroderChemins, frobeniusPieces, goldbachPaires, indicatriceEuler, periodePisano, motzkinChemins, stirlingBell, routineKaprekar, suiteCollatz, nombresHarmoniques, derangements, regarderDire, toursHanoi, calkinWilf, theoremeLucas, zeckendorf, problemeJosephus, nombresBernoulli, parfaitsAmicaux, fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
+export const ENTIERS = { marcheAleatoire: ['marcheurs', 'pas', 'graine'], aiguilleBuffon: ['aiguilles', 'graine'], anniversaires: ['personnes', 'jours', 'groupes', 'graine'], spiraleUlam: ['jusqua'], pascalSierpinski: ['lignes'], solidesPlatoniques: ['solide'], montyHall: ['portes', 'parties', 'graine'], apollonius: ['generations'], tasDeSable: ['cote'], vergerEuclide: ['cote'], cerclesFord: ['ordre'], fermatSteiner: [], causticTasse: ['rayons'], papillonHofstadter: ['qmax'], dominosKasteleyn: ['hauteur', 'largeur', 'graine'], ising: ['graine'], aztecDiamond: ['ordre', 'graine'], collectionneur: ['vignettes', 'graine'], ruineJoueur: ['depart', 'objectif', 'graine'], catalanDyck: ['demi', 'graine'], partitionEuler: ['entier', 'graine'], courbeDragon: ['plis'], theoremePick: ['sommets', 'rayon', 'graine'], percolationLiens: ['cote', 'graine'], napoleon: ['taille', 'graine'], billardElliptique: ['lancer', 'tir', 'rebonds'], feuerbach: ['taille', 'graine'], jeuDeLaVie: ['oscillateur'], marcheAutoEvitante: ['etapes', 'graine'], eulerSolides: ['solide'], morley: [], bale: ['termes'], simsonDroite: ['taille', 'corde', 'graine'], distinctesImpaires: ['entier', 'graine'], triangulations: ['cotes', 'graine'], ramseyR33: ['sommetsK', 'graine'], pascalHexagramme: ['croise', 'graine'], ptolemee: ['graine'], sommesCarres: ['entier'], equationPell: ['radical'], nombresCarmichael: ['limite'], theoremeWilson: ['limite'], fonctionMertens: ['limite'], parfaitsAmicaux: ['limite'], nombresBernoulli: ['rangB'], problemeJosephus: ['personnes', 'pasK'], zeckendorf: ['entier'], theoremeLucas: ['baseP', 'lignesL'], calkinWilf: ['niveaux'], toursHanoi: ['disques'], regarderDire: ['rangs'], derangements: ['objets', 'graine'], nombresHarmoniques: ['rangs'], suiteCollatz: ['limite'], routineKaprekar: ['longueurK'], stirlingBell: ['elements', 'graine'], motzkinChemins: ['longueurM', 'graine'], periodePisano: ['moduleMax'], indicatriceEuler: ['jusquaN'], goldbachPaires: ['pairMax'], frobeniusPieces: ['pieceMax'], schroderChemins: ['longueurS', 'graine'], triangleNarayana: ['rangN'], suiteRecaman: ['rangR'], suiteKolakoski: ['rangK'], suitePerrin: ['perrinMax'], thueMorse: ['rangT'], suitePadovan: ['rangP'], fourmiLangton: ['pasL'], gammeTemperee: ['divisions'], entropieShannon: ['lettres', 'graine'], atmosphereStandard: [], loiZipf: ['rangsZipf'], gutenbergRichter: ['seismes', 'graine'], mareeVivesEaux: ['jours'], energieLiaison: ['reaction'], courbeKeeling: ['anDebut', 'anFin'], populationMonde: ['decennies'], effetPhotoelectrique: ['metal'], demiViesNPL: ['isotope'], choleraSnow: ['septSemaines', 'graine'], raiesBalmer: ['nPlusHaut'], loiBoyle: ['lignesBoyle'], loiOhm: ['serie'], especesAire: ['inclureIsolees'], michaelisMenten: ['axeLog'], diffusionAlpha: ['orArgent'], argonRayleigh: ['signeCorrection'], carteSturtevant: [], oubliEbbinghaus: [], fievreSemmelweis: ['anneeVue'], densiteCavendish: ['filChoisi'], equivalentJoule: ['colonneVide'], eclipseEddington: [], lynxHudson: ['decalageAns'], gouttesMillikan: ['gouttesMoyennees'], vieGraunt: [], loiHubble1929: [], loiMoseley: ['numerotation'], lumiereMichelson: ['correctionVide'], regressionGalton: [], aberrationBradley: [], interferenceStroop: ['experienceStroop'], exclusionGause: [], mortaliteNightingale: ['anneeNightingale'], equivalentsFaraday: [], chaleursPetitDulong: ['decalagePoids'], repliquesOmori: ['horizonOmori'], survieHalley: ['tauxHalley'], chaleurLondres: ['lissageHoward'], motsMendenhall: ['queueMendenhall'], parallaxeBessel: [], vitesseNyquist: ['niveauxNyquist'], ondulationsYoung: [], picLummer: [], balanceCoulomb: [], effetJoule: [], critiqueReynolds: [], filtreDarcy: [], deplacementsPerrin: [], aimantGauss: [], unitesWeber: [], tubesPoiseuille: [], variationsHalley: ['anneeHalley'], spiralesBeal: ['groupeBeal'], tempsOldham: [], fonteMacKellar: [], syllabesKaeding: ['zaehlstoffKaeding'], tubesHagen: [], spiraleMoseley: [], poisMendel: [], rayonsThomson: [], magnitudesPogson: [], maisDarwin: [], emanationRutherford: [], etherMichelson: [], reststrahlenRubens: ['loiRubens'], constantesPlanck: [], jaugesHerschel: [], penduleKater: ['stationOteeKater'], essaisThorndike: ['moyenneThorndike'], reactionDonders: ['rouleauDonders'], attentionCattell: ['sujetCattell'], pressurePeirceJastrow: ['groupeJastrow'], extinctionPavlov: ['seriePavlov'], weberKonig: ['tableKonig'], glycosuriaCannon: ['groupeCannon'], brainBoyd: ['sexeBoyd'], allOrNoneLucas: ['droiteLucas'], neuronsHerculanoHouzel: ['rongeurHerculano'], connectomeSizes: ['organismeConnectome'] };
+const FONCTIONS = { connectomeSizes, neuronsHerculanoHouzel, allOrNoneLucas, brainBoyd, glycosuriaCannon, weberKonig, extinctionPavlov, pressurePeirceJastrow, attentionCattell, reactionDonders, essaisThorndike, penduleKater, jaugesHerschel, constantesPlanck, reststrahlenRubens, etherMichelson, emanationRutherford, maisDarwin, magnitudesPogson, rayonsThomson, poisMendel, spiraleMoseley, tubesHagen, syllabesKaeding, fonteMacKellar, tempsOldham, spiralesBeal, variationsHalley, tubesPoiseuille, unitesWeber, aimantGauss, deplacementsPerrin, filtreDarcy, critiqueReynolds, effetJoule, balanceCoulomb, picLummer, ondulationsYoung, vitesseNyquist, parallaxeBessel, motsMendenhall, chaleurLondres, survieHalley, repliquesOmori, chaleursPetitDulong, equivalentsFaraday, mortaliteNightingale, exclusionGause, interferenceStroop, aberrationBradley, regressionGalton, lumiereMichelson, loiMoseley, loiHubble1929, vieGraunt, gouttesMillikan, lynxHudson, eclipseEddington, equivalentJoule, densiteCavendish, fievreSemmelweis, oubliEbbinghaus, carteSturtevant, argonRayleigh, diffusionAlpha, michaelisMenten, especesAire, loiOhm, loiBoyle, raiesBalmer, choleraSnow, demiViesNPL, effetPhotoelectrique, populationMonde, courbeKeeling, energieLiaison, mareeVivesEaux, gutenbergRichter, loiZipf, atmosphereStandard, entropieShannon, gammeTemperee, fourmiLangton, suitePadovan, thueMorse, suitePerrin, suiteKolakoski, suiteRecaman, triangleNarayana, schroderChemins, frobeniusPieces, goldbachPaires, indicatriceEuler, periodePisano, motzkinChemins, stirlingBell, routineKaprekar, suiteCollatz, nombresHarmoniques, derangements, regarderDire, toursHanoi, calkinWilf, theoremeLucas, zeckendorf, problemeJosephus, nombresBernoulli, parfaitsAmicaux, fonctionMertens, theoremeWilson, nombresCarmichael, equationPell, sommesCarres, ptolemee, pascalHexagramme, ramseyR33, triangulations, distinctesImpaires, simsonDroite, bale, morley, eulerSolides, marcheAutoEvitante, jeuDeLaVie, feuerbach, billardElliptique, napoleon, percolationLiens, theoremePick, courbeDragon, partitionEuler, catalanDyck, ruineJoueur, collectionneur, aztecDiamond, ising, dominosKasteleyn, papillonHofstadter, causticTasse, fermatSteiner, cerclesFord, vergerEuclide, tasDeSable, apollonius, marcheAleatoire, aiguilleBuffon, anniversaires, spiraleUlam, pascalSierpinski, solidesPlatoniques, montyHall };
 const parId = (id) => { const s = SYSTEMES.find((x) => x.id === id); if (!s) throw new Error('systeme inconnu: ' + id); return s; };
 
 function borner(id, params) {
