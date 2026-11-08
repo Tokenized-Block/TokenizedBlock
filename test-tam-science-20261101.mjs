@@ -125,7 +125,7 @@ ok(/'tam-science\.js'/.test(web), 'tam-science.js est servi');
 
 /* 5. mutants sur COPIES */
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'tam-science-mut-'));
-for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'tam-grandes-questions.js', 'tam-grandes-questions-2.js', 'tam-champs-quantiques.js', 'tam-vide-quantique.js', 'tam-theories-2.js', 'tam-theories-3.js', 'tam-biologie.js', 'tam-chimie.js', 'tam-maths.js', 'tam-ondes.js', 'tam-electricite.js', 'tam-mecanique.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
+for (const f of ['tam-moteur.js', 'tam-physique.js', 'tam-sciences.js', 'tam-fluides.js', 'tam-astro.js', 'tam-cosmos.js', 'tam-invisible.js', 'tam-quantique.js', 'tam-fusion.js', 'tam-grandes-questions.js', 'tam-grandes-questions-2.js', 'tam-champs-quantiques.js', 'tam-vide-quantique.js', 'tam-theories-2.js', 'tam-theories-3.js', 'tam-biologie.js', 'tam-chimie.js', 'tam-maths.js', 'human-brain-data.js', 'human-brain-anatomy.js', 'tam-ondes.js', 'tam-electricite.js', 'tam-mecanique.js', 'keccak.js']) fs.copyFileSync(path.join(ICI, f), path.join(TMP, f));
 const SRC = fs.readFileSync(path.join(ICI, 'tam-science.js'), 'utf8');
 const MUTANTS = [
   ['params hors bornes acceptes', (s) => s.replace("if (canon(o.params) !== canon(P.params)) return non('parametres hors bornes (le module les ramene)');", '')],

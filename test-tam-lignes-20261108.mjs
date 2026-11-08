@@ -19,6 +19,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import * as TS from './tam-science.js';
+import * as HB from './human-brain-data.js';
 
 const ICI = dirname(fileURLToPath(import.meta.url));
 const AVEC_LIGNES = ['emotionWiringHCP', 'solidesPlatoniques', 'fermatSteiner', 'courbeDragon', 'ramseyR33', 'calkinWilf'];
@@ -69,12 +70,12 @@ function suite(V, T, complet = true) {
   ok('projection : the real brain, every line end on its region point (as drawn)', () => {
     const o = T.simuler('emotionWiringHCP', {}), D = o.D, n = o.n, { m, k } = TS.echelleIso(o.brut, n, D, 'emotionWiringHCP'), z = TS.standardiserIso(o.brut, n, D, 'emotionWiringHCP');
     const pos = V.projeterVivant({ z, n, D, actives: null, angles: [], t: 0 }), sv = V.projeterSegments({ segments: o.segments, m, k, z, n, D, actives: null, angles: [], t: 0 });
-    const ou = new Map(); for (let i = 0; i < 82; i++) ou.set(o.brut[3 * i] + ',' + o.brut[3 * i + 1], i);
+    const ou = new Map(); for (let i = 0; i < 89; i++) ou.set(o.brut[3 * i] + ',' + o.brut[3 * i + 1], i); /* 82 regions, then the 7 deep parts (game315) */
     let pire = 0;
-    o.segments.forEach((s, r) => { const ia = ou.get(s.a[0] + ',' + s.a[1]), ib = ou.get(s.b[0] + ',' + s.b[1]);
+    o.segments.forEach((s, r) => { const ia = s.ia ?? ou.get(s.a[0] + ',' + s.a[1]), ib = s.ib ?? ou.get(s.b[0] + ',' + s.b[1]); /* game316: two mirror regions can share (y, z) : the line names its points */
       for (let c = 0; c < 3; c++) pire = Math.max(pire, Math.abs(sv.xyz[6 * r + c] - pos[3 * ia + c]), Math.abs(sv.xyz[6 * r + 3 + c] - pos[3 * ib + c])); });
-    assert.ok(sv.q === 1190 && pire < 1e-9, sv.q + ' ' + pire);
-    return '1190 lines, worst ' + pire.toExponential(1);
+    assert.ok(sv.q === 1225 && pire < 1e-9, sv.q + ' ' + pire);
+    return '1225 lines, worst ' + pire.toExponential(1);
   });
 
   /* 2. validation */
@@ -109,7 +110,7 @@ function suite(V, T, complet = true) {
       const g = ctxEnregistreur(), zs = [], ecran = (x, y, zz) => { zs.push(zz); return { sx: 100 + x * 2, sy: 50 + y * 3 }; };
       const traits = V.dessinerSegments(g, sv, ecran, { sc: 10, dpr: 2, aplati });
       const strokes = g.appels.filter((c) => c[0] === 'stroke').length, moves = g.appels.filter((c) => c[0] === 'moveTo'), lines = g.appels.filter((c) => c[0] === 'lineTo');
-      assert.ok(traits === 1190 && strokes === P.length && moves.length === 1190 && lines.length === 1190, traits + ' ' + strokes + '/' + P.length);
+      assert.ok(traits === 1225 && strokes === P.length && moves.length === 1225 && lines.length === 1225, traits + ' ' + strokes + '/' + P.length);
       /* the r-th line of the first group goes from ecran(a) to ecran(b) */
       const r0 = P[0].indices[0]; assert.deepEqual(moves[0].slice(1), [100 + sv.xyz[6 * r0] * 10 * 2, 50 - sv.xyz[6 * r0 + 1] * 10 * 3]);
       assert.deepEqual(lines[0].slice(1), [100 + sv.xyz[6 * r0 + 3] * 10 * 2, 50 - sv.xyz[6 * r0 + 4] * 10 * 3]);
@@ -118,7 +119,7 @@ function suite(V, T, complet = true) {
       assert.deepEqual(alphas.slice(0, P.length), P.map((p) => p.alpha)); assert.equal(alphas[alphas.length - 1], 1);
     }
     const g0 = ctxEnregistreur(); assert.equal(V.dessinerSegments(g0, null, () => ({ sx: 0, sy: 0 })), 0); assert.equal(g0.appels.length, 0, 'no call');
-    return P.length + ' strokes for 1190 lines';
+    return P.length + ' strokes for 1225 lines';
   });
 
   /* 4. the subjects */
@@ -129,16 +130,17 @@ function suite(V, T, complet = true) {
     assert.deepEqual(avec.sort(), [...AVEC_LIGNES].sort());
     return T.SYSTEMES.length + ' subjects, ' + avec.length + ' with lines';
   });
-  ok('emotionWiringHCP : 1,190 lines between region points, weights = measured strengths (441 at w >= 8), all categories', () => {
-    for (let c = 0; c <= 16; c++) for (const tr of [0, 1]) {
-      const o = T.simuler('emotionWiringHCP', { categoryWiring: c, travelWiring: tr }), reg = new Set();
+  ok('emotionWiringHCP : 1,190 measured lines between region points (weights = measured strengths, 441 at w >= 8) and 35 violet named pathways, every pack and emotion', () => {
+    for (let pk = 0; pk <= 5; pk++) for (let ek = 0; ek < [8, 4, 4, 2, 2, 2][pk]; ek++) for (const tr of [0, 1]) {
+      const o = T.simuler('emotionWiringHCP', { packWiring: pk, emotionWiring: ek, travelWiring: tr }), reg = new Set();
       for (let i = 0; i < 82; i++) reg.add(o.brut[3 * i] + ',' + o.brut[3 * i + 1]);
-      assert.ok(reg.size === 82 && o.segments.length === 1190 && o.segments.every((s) => reg.has(s.a[0] + ',' + s.a[1]) && reg.has(s.b[0] + ',' + s.b[1]) && s.w >= 0 && s.w <= 1), 'cat ' + c);
-      assert.equal(o.segments.filter((s) => s.w >= (8 - 0.14292) / (12.615 - 0.14292) - 1e-12).length, 441);
+      const meas = o.segments.filter((x) => x.c === 0), named = o.segments.filter((x) => x.c === 5);
+      assert.ok(reg.size === 82 && meas.length === 1190 && named.length === 35 && meas.every((x) => reg.has(x.a[0] + ',' + x.a[1]) && reg.has(x.b[0] + ',' + x.b[1]) && x.w >= 0 && x.w <= 1), 'pack ' + pk + ' emotion ' + ek);
+      assert.equal(meas.filter((x) => x.w >= (8 - 0.14292) / (12.615 - 0.14292) - 1e-12).length, 441);
     }
-    /* the weight of each line = the measured edge read here from SOURCES (not from the module's own parse) */
-    const ed = T.SOURCES.emotionWiringEdges.valeur.split(' ').map((x) => Number(x.split(':')[2])), o = T.simuler('emotionWiringHCP', {});
-    assert.ok(o.segments.every((s, r) => Math.abs(s.w - (ed[r] - 0.14292) / (12.615 - 0.14292)) < 1e-12), 'w = measured');
+    /* the weight of each line = the measured edge read here from human-brain-data.js (not from the subject's own parse) */
+    const o = T.simuler('emotionWiringHCP', {}), meas = o.segments.filter((x) => x.c === 0);
+    assert.ok(meas.every((x, r) => Math.abs(x.w - (HB.WIRING[r][2] - 0.14292) / (12.615 - 0.14292)) < 1e-12), 'w = measured');
   });
   ok('solidesPlatoniques : the edges (6, 12, 12, 30, 30), equal lengths, ends on the circumsphere', () => {
     const out = [];
@@ -215,8 +217,8 @@ const MUT_VUE = [
 ];
 const MUT_MATHS = [
   ['maths : simuler drops segments', 'if (Array.isArray(r.segments) && r.segments.length) o.segments = r.segments;', ''],
-  ['maths : brain lines weight flat', 'w: (e.w - text.min) / (text.max - text.min) }));', 'w: 0.5 }));'],
-  ['maths : brain lines off their regions', 'const segments = edges.map((e) => ({ a: [XY[e.i][0], XY[e.i][1], 3],', 'const segments = edges.map((e) => ({ a: [XY[e.i][0], XY[e.i][1], 4],'],
+  ['maths : brain lines weight flat', 'w: (e.w - lo) / (hi - lo), c: 0,', 'w: 0.5, c: 0,'],
+  ['maths : brain lines off their regions', 'const segments = use.map((e) => ({ a: P3[e.i].slice(),', 'const segments = use.map((e) => ({ a: P3[e.i].map((v) => v + 0.01),'],
   ['maths : solid misses an edge', 'const segments = aretes.map(([i, j])', 'const segments = aretes.slice(1).map(([i, j])'],
   ['maths : Steiner colours swapped', 'w: 1, c: 4 }))', 'w: 1, c: 0 }))'],
   ['maths : dragon misses its last segment', 'for (let q = 0; q < segs; q++) segments.push', 'for (let q = 0; q < segs - 1; q++) segments.push'],
