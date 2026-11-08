@@ -3000,7 +3000,9 @@ function demarrerMoucheServeur() {
     MOUCHE.aliveSince = new Date().toISOString();
   } catch (e) { MOUCHE.why = 'circuit not loaded: ' + String((e && e.message) || e).slice(0, 120); return; }
   const cycle = () => fenetreMouche().catch(() => { MOUCHE.windowsMissed++; return 300000; }).then((ms) => { const t = setTimeout(cycle, ms); if (t.unref) t.unref(); });
-  const t = setTimeout(cycle, 20000); if (t.unref) t.unref();
+  /* 3 min apres le boot : pas au milieu des sondes de /sante (45 s) ni des prechauffages, que le noeud public limite deja (game293 :
+   *   sonde echange en 429 au 1er passage, quand la mouche lisait aussi a +20 s) */
+  const t = setTimeout(cycle, 180000); if (t.unref) t.unref();
 }
 async function lireReferenceServeur(token) {
   const c = referencesServeur.get(token);
