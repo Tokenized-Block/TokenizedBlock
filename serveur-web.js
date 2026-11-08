@@ -5879,7 +5879,7 @@ const SERVIS = [
   /* 2026-10-03 : la pool Aerodrome mesuree des actions tokenisees (importee par app.html) */
   'pools-actions-aerodrome.js',
   /* 2026-11-07 (human-brain branch): the real fly memory circuit (hemibrain v1.2, Janelia, CC BY 4.0) wired to stock prices, read-only */
-  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js', 'fly-tx.js', 'fly-wallet.js', 'fly-guard.js', 'fly-seal.js',
+  'fly-brain.html', 'fly-brain.js', 'fly-brain-circuit.json', 'fly-core.js', 'fly-tx.js', 'fly-wallet.js', 'fly-guard.js', 'fly-seal.js', 'fly-day.js',
   /* 2026-10-03 : les Initialize mesures (OUSD/USDC v4) — aretes de fait de « Pay with » (importe par app.html) */
   'cles-v4-mesurees.js',
   /* 2026-10-03 : les 20 pools v4 USDC des actions tokenisees, logs bruts (importe par cles-v4-mesurees.js) */

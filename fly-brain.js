@@ -7,6 +7,7 @@ import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { createFly, createSession, foreseeNext, decide, recordEdge } from './fly-core.js';
 import { checkPlanCalls } from './fly-guard.js';
 import { memoryFingerprint, sealData, checkSeal } from './fly-seal.js';
+import { dayOf, countedToday, mayTrade, reserveTrade } from './fly-day.js';
 import { USDC_BASE, displayShort } from './frais-creation.js';
 import { selecteur } from './keccak.js';
 
@@ -327,8 +328,11 @@ async function autoTrade(e) {
     const done = await withLock(async () => {
       /* the day counter lives in the STORED state: a reset done on a copy was overwritten by the next autoRefresh(), so the counter
        *   fell back to 0 at every decision and the daily cap never held (Phil's live test 08/11: "0 trades today" after a trade) */
-      const today = new Date().toISOString().slice(0, 10);
-      autoRefresh(); if (auto.s.day !== today) { auto.s.day = today; auto.s.today = 0; autoSave(); }
+      const today = dayOf();
+      /* 09/11: a slot is reserved (and saved) right before the FIRST transaction goes out, not counted after the swap: a reload in
+       *   between left a real trade uncounted (fly-day.js) */
+      let reserved = false;
+      const reserve = () => { if (reserved) return; autoRefresh(); Object.assign(auto.s, reserveTrade(auto.s, today)); autoSave(); reserved = true; };
       const maxDay = field('autoDay', 1, 50, 1);
       const a = await autoAccount(stock.address), held = a.stock ? BigInt(a.stock) : 0n;
       /* the REAL position decides, not the paper book: after a reload or a stock switch the paper book starts out (review L3) */
@@ -344,7 +348,7 @@ async function autoTrade(e) {
        *   record fell back under chance (QA 08/11) */
       if (action === 'buy' && $('autoProven').checked && !proven(session.state().tally)) { const r = recordEdge(session.state().tally);
         autoNote(`decided BUY, but its record (${r.k} right of ${r.n} judged) does not beat a coin flip yet: no real buy (untick “only once it beats chance” to override; a SELL is never held back)`); return; }
-      if (auto.s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
+      if (!mayTrade(autoRefresh(), today, maxDay)) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
       let de, vers, montant;
       if (action === 'buy') {
         const cap = BigInt(Math.round(field('autoCap', 0.1, 100, 0.1) * 1e6)), have = BigInt(a.usdc);
@@ -362,6 +366,7 @@ async function autoTrade(e) {
         if (refused) throw new Error('the fly refused to sign: ' + refused.why);
         for (const c of p.aSigner) {
           if (!autoRefresh().running) { autoNote('stopped before sending: nothing more goes out'); return; }
+          reserve();
           const r = await flySend(c);
           autoNote(`${ACT[action]} ${stock.symbol} · ${String(c.nom || c.role || 'call').slice(0, 80)} mined · `, { tx: r.hash });
         }
@@ -369,9 +374,9 @@ async function autoTrade(e) {
         p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
       }
       /* three rounds of approvals and still no swap: nothing was traded, so nothing is counted or sealed (QA 08/11: it said "done") */
-      if (!swapped) { autoNote(`${ACT[action]} ${stock.symbol}: approvals sent, but the planner still asked for approvals after 3 rounds: no swap, nothing traded`); return; }
-      autoRefresh(); if (auto.s.day !== today) { auto.s.day = today; auto.s.today = 0; } auto.s.today++; if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
-      autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${auto.s.today}/${maxDay} today). The app's interface fee was in the plan (${String((p.resume && p.resume.fraisBps) || '?')} bps); see Basescan.`);
+      if (!swapped) { autoNote(`${ACT[action]} ${stock.symbol}: approvals sent, but the planner still asked for approvals after 3 rounds: no swap, nothing traded (its slot stays counted today: the cap errs toward fewer trades)`); return; }
+      autoRefresh(); if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
+      autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${countedToday(auto.s, today)}/${maxDay} today). The app's interface fee was in the plan (${String((p.resume && p.resume.fraisBps) || '?')} bps); see Basescan.`);
       /* its memory, sealed by its own wallet right after the trade it decided (a failed seal is said, it does not stop the fly) */
       try { await flySeal(stock, decided); } catch (err) { autoNote('memory not sealed this time: ' + String((err && err.message) || err).slice(0, 140)); }
     });
