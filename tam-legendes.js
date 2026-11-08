@@ -1154,6 +1154,14 @@ const L = {
     aRegarder: ['Each series falls toward zero, with small rises on the way.', 'The 16-minute series is still above zero after two hours.', 'The two 2-minute series, the same day, took 15 and 18 minutes.'],
     fin: null,
   },
+  /* game303 (idea: codex "human brain", Claude sub-agent) */
+  weberKonig: {
+    titre: 'Konig and Brodhun: the smallest change of brightness we see',
+    enUnePhrase: 'In ordinary light we notice a change of about one and a half percent; in dim light the change must be far larger.',
+    colonnes: ['brightness (log scale)', 'smallest visible change / brightness (log scale)', 'table'],
+    aRegarder: ['A flat floor in the middle: Weber law holds there.', 'The points climb steeply toward the dark end.', 'At 605, the brightest fields need a larger step again.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',

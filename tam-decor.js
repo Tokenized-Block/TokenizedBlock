@@ -507,6 +507,8 @@ const DECORS = {
   pressurePeirceJastrow: (P, o, B) => [pt([0.05, 0.4, B.centre[2]], C.repere, 'Ratio 1.005: 200 errors in 500, not 250')],
   /* game302 */
   extinctionPavlov: (P, o, B) => [pt([119 / 120, 0.1 / 0.7, B.centre[2]], C.repere, '16 minutes apart: still 0.1 c.c. after 2 hours')],
+  /* game303 */
+  weberKonig: (P, o, B) => [pt([(Math.log10(0.5) + 1) / 6.3, (Math.log10(0.793) + 2) / 2, B.centre[2]], C.repere, 'Brodhun, faintest light: a 79 percent change needed')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */
