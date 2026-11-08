@@ -132,7 +132,7 @@ import { glissementBps, TAILLE_REFERENCE_USDC } from './porte-achat.js';
 import { selecteur as selecteurSrv, topic as topicSrv } from './keccak.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { readPoolPrice } from './fly-price.js';
-import { createFly, createSession } from './fly-core.js';
+import { createFly, createSession, foreseeNext } from './fly-core.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -2974,13 +2974,13 @@ function lirePrixMouche(token) {
  *   (`persisted: false`) and stays volatile. Written atomically (.tmp then rename), like faits-pool.json. */
 const FICHIER_MOUCHE = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
   ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'mouche-partagee.json') : null;
-const MOUCHE = { symbol: 'SNDKc', fly: null, session: null, events: [], aliveSince: null, trainingSince: null, restored: false, windows: 0, windowsRead: 0, windowsMissed: 0, why: null, saveError: null };
+const MOUCHE = { symbol: 'SNDKc', fly: null, shadow: null, foresight: null, session: null, events: [], aliveSince: null, trainingSince: null, restored: false, windows: 0, windowsRead: 0, windowsMissed: 0, why: null, saveError: null };
 function etatMoucheServeur() {
   if (!MOUCHE.fly) return { ok: false, why: MOUCHE.why || 'not started' };
   const m = MOUCHE.fly.exportMemory();
   return { ok: true, symbol: MOUCHE.symbol, aliveSince: MOUCHE.aliveSince, trainingSince: MOUCHE.trainingSince, persisted: !!FICHIER_MOUCHE && !MOUCHE.saveError,
     restored: MOUCHE.restored, saveError: MOUCHE.saveError, windows: MOUCHE.windows, windowsRead: MOUCHE.windowsRead, windowsMissed: MOUCHE.windowsMissed,
-    weakened: m.filter((x) => x < 99900).length, session: MOUCHE.session.state(), events: MOUCHE.events.slice(-40) };
+    weakened: m.filter((x) => x < 99900).length, session: MOUCHE.session.state(), events: MOUCHE.events.slice(-40), foresight: MOUCHE.foresight };
 }
 function sauverMouche() {
   if (!FICHIER_MOUCHE) return;
@@ -3012,6 +3012,8 @@ async function fenetreMouche() {
   MOUCHE.windowsRead++;
   MOUCHE.session.window({ symbol: MOUCHE.symbol, price, transactions: ac.transactions });
   MOUCHE.fly.drain();
+  /* Laplace's demon at this scale: the fly's NEXT decision, computed on a shadow copy per scenario of the coming move (never the market) */
+  try { MOUCHE.foresight = { at: Date.now(), ...foreseeNext(MOUCHE.shadow, MOUCHE.fly, MOUCHE.session) }; } catch (e) { MOUCHE.foresight = { at: Date.now(), exact: false, scenarios: [], why: String((e && e.message) || e).slice(0, 100) }; }
   sauverMouche();
   return 60000;
 }
@@ -3019,7 +3021,7 @@ function demarrerMoucheServeur() {
   if (process.env.FLY_SERVER === 'off' || ESSAI_SRV.actif) { MOUCHE.why = 'switched off on this server'; return; }
   try {
     const circuit = JSON.parse(readFileSync(join(ici, 'fly-brain-circuit.json'), 'utf8'));
-    MOUCHE.fly = createFly(circuit);
+    MOUCHE.fly = createFly(circuit); MOUCHE.shadow = createFly(circuit);
     MOUCHE.session = createSession(MOUCHE.fly, (e) => {
       const ev = { ...e, at: Date.now() }; if (Array.isArray(ev.top)) ev.top = ev.top.slice(0, 5);
       MOUCHE.events.push(ev); if (MOUCHE.events.length > 120) MOUCHE.events.splice(0, MOUCHE.events.length - 120);

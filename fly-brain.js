@@ -4,7 +4,7 @@
  * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { createFly, createSession } from './fly-core.js';
+import { createFly, createSession, foreseeNext } from './fly-core.js';
 import { USDC_BASE, displayShort } from './frais-creation.js';
 import { selecteur } from './keccak.js';
 
@@ -31,7 +31,7 @@ const clock = (t = Date.now()) => new Date(t).toLocaleTimeString('en-GB', { hour
 const mixText = (mix) => Object.entries(mix).filter(([, v]) => v > 0).map(([k, v]) => `${k} $${fmt(v, 0)}`).join(', ') || 'nothing';
 const SAY = { approach: 'leans toward it', avoid: 'pulls away from it', undecided: 'is undecided', quiet: 'barely reacts' };
 
-let fly = null, session = null, N = [], act = new Float64Array(0);
+let fly = null, shadow = null, session = null, N = [], act = new Float64Array(0);
 let current = STOCKS[0], lastPrice = null, history = [], timer = null, refTimer = null;
 
 function log(text, kind, link) {
@@ -189,9 +189,38 @@ function stopFly() { live.stopped = true; live.plan = null; $('sign').disabled =
 function onEvent(e) {
   show(e, current.symbol);
   if (e.type === 'tx') ripple(e.kind, e.usd);
-  if (e.type === 'decision') { renderDecision(e); proposeLive(e); }
+  if (e.type === 'decision') { renderDecision(e); proposeLive(e); if (!e.sim) { thoughts.push({ ...e, at: Date.now() }); if (thoughts.length > 6) thoughts.shift(); }
+    /* after the session has recorded this decision (its callback runs right after the event) */
+    setTimeout(renderThoughts, 0); }
   if (e.type === 'verdict' || e.type === 'taught') { renderTally(); }
   if (e.type === 'taught' && !e.sim) saveMemory();
+}
+
+/* ── ITS THOUGHTS: before (the live decisions, with the synapses that carried them), now, and next (computed on a shadow fly). ── */
+const thoughts = [];
+function synapseChips(path, limit = 3) {
+  return '<div class="walk">' + path.slice(0, limit).map(({ i, j, side, m }) => `<button data-walk="${i}" data-to="${j}" style="border-color:${side === 'approach' ? '#4ade80' : '#f87171'}" title="this Kenyon cell's synapse keeps ${fmt(m * 100, 1)}% of its naive strength">`
+    + `KC #${N[i].id} → ${N[j].type} (${side}) · ${fmt(m * 100, 0)}%</button>`).join('') + '</div>';
+}
+function thoughtLine(when, e, extra = '') {
+  return `<div class="th"><div class="when">${when}</div><span class="act ${e.action}">${ACT[e.action]}</span> · ${SAY[e.word]} (approach ${fmt(e.ap * 100, 1)}% / avoid ${fmt(e.av * 100, 1)}%)${extra}${e.path && e.path.length ? synapseChips(e.path) : ''}</div>`;
+}
+function renderThoughts() {
+  if (!fly || !session) return;
+  const past = thoughts.slice(0, -1).reverse(), now = thoughts[thoughts.length - 1];
+  let html = past.length ? past.map((e) => thoughtLine('before · ' + clock(e.at), e, ' · smelled ' + mixText(e.mix))).join('') : '<div class="th"><div class="when">before</div><span class="state">no earlier live decision in this visit</span></div>';
+  html += now ? thoughtLine('now · ' + clock(now.at), now, ' · smelled ' + mixText(now.mix)) : '<div class="th"><div class="when">now</div><span class="state">waiting for a window with real trades</span></div>';
+  const fc = foreseeNext(shadow, fly, session);
+  if (!fc.exact) html += `<div class="th"><div class="when">next</div><span class="state">${fc.why || 'the fly is mid-thought: the forecast waits until it rests'}</span></div>`;
+  else {
+    const learn = fc.learnsFrom ? 'it will first learn from the last smell (' + mixText(fc.learnsFrom) + ') with that move' : 'the last window had no trade: nothing to learn';
+    html += `<div class="th"><div class="when">next · if the next window smells like the last real trades (${mixText(fc.nextMix)}) · ${fc.pos ? 'holding' : 'out of'} the stock</div><span class="state">${learn}, then:</span></div>`
+      + fc.scenarios.map((sc) => thoughtLine('if the price moves ' + (sc.move ? pct(sc.move, 0) : '0% (no lesson)'), sc)).join('');
+  }
+  $('thoughts').innerHTML = html;
+  $('thoughts').querySelectorAll('button[data-walk]').forEach((b) => b.addEventListener('click', () => {
+    const i = Number(b.dataset.walk), j = Number(b.dataset.to); flash = [[i, j, Date.now() + 6000]]; walkTo(i);
+  }));
 }
 
 function renderBook(st = session.state(), el = $('book')) {
@@ -440,6 +469,9 @@ async function readShared() {
       : 'memory NOT kept: it starts again when the server restarts' + (s.saveError ? ' (' + s.saveError + ')' : '');
     $('shared').innerHTML = `<div class="state">${s.symbol} · training since ${since} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far · ${mem}</div>`
       + `<div class="state" style="margin-top:4px">${tallyText(s.session.tally)}</div><div id="sharedBook" class="book"></div>`
+      + (s.foresight && s.foresight.exact && s.foresight.scenarios.length ? `<div class="state" style="margin-top:4px">Next, computed on its shadow (${s.foresight.pos ? 'holding' : 'out'}, if the next trades smell like the last): `
+        + s.foresight.scenarios.map((sc) => `${sc.move ? pct(sc.move, 0) : '0%'} → <span class="act ${sc.action}">${ACT[sc.action]}</span>`).join(' · ') + '</div>'
+        : `<div class="state" style="margin-top:4px">Next: no forecast yet (${(s.foresight && s.foresight.why) || 'not computed yet'}).</div>`)
       + `<div class="log" style="margin-top:6px;max-height:180px">${s.events.slice(-12).reverse().map((e) => `<p class="${e.type === 'verdict' ? 'verdict' : 'live'}">${clock(e.at)} · ${eventText(e, s.symbol)}</p>`).join('')}</div>`;
     renderBook(s.session, $('sharedBook'));
   } catch (_) { $('shared').innerHTML = '<div class="state">The shared fly could not be read this time.</div>'; }
@@ -542,7 +574,7 @@ function select(i) {
   current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); lastDecision = null;
   $('watching').textContent = `watching ${current.symbol} · every 30 s its real trades are a smell`;
   $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
-  session.reset(); loadMemory();
+  session.reset(); loadMemory(); thoughts.length = 0; renderThoughts();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
   clearInterval(timer); clearInterval(refTimer);
   readWindow().then(readReference); timer = setInterval(readWindow, POLL_MS); refTimer = setInterval(readReference, REF_MS);
@@ -559,7 +591,7 @@ async function start() {
   $('sign').addEventListener('click', signLive);
   $('stop').addEventListener('click', stopFly);
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
-  fly = createFly(circuit); N = fly.N; act = fly.act;
+  fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
   session = createSession(fly, onEvent);
   const idx = new Map(N.map((n, i) => [n.id, i]));
   N.edges = circuit.edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]);

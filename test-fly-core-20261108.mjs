@@ -88,6 +88,42 @@ async function banc(dir) {
   ok(Math.abs(st.books.hold.ret - (1 - 500 / 1e6) * 0.99) < 1e-12 && st.books.hold.switches === 1, 'always-in pays one fee then the -1%: ' + st.books.hold.ret);
   ok(st.books.fly.ret === 1 && st.books.fly.switches === 0, 'an undecided fly stays out: 0%');
   ok(events.some((e) => e.type === 'taught' && e.move < 0 && e.weakened > 0), 'the move that followed teaches the fly (synapses weakened)');
+  const dec = events.find((e) => e.type === 'decision');
+  ok(dec && Array.isArray(dec.path) && dec.path.length > 0 && dec.path.every((p, k, a) => !k || a[k - 1].c >= p.c), 'a decision carries the synapses of its thought, strongest first');
+
+  /* Laplace's demon: the shadow's forecast of the fly's NEXT decision is exactly what the fly then does, per scenario of move */
+  const { foresee } = await import(pathToFileURL(join(dir, 'fly-core.js')).href + '?t=' + Date.now() + Math.random());
+  const shadow = createFly(circuit), before = JSON.stringify([...fly.saveState().act, ...fly.saveState().m]);
+  const fs1 = foresee(shadow, fly, { lastMix: fall, nextMix: fall, pos: 0, moves: [0.02, 0, -0.02] });
+  ok(fs1.exact && fs1.scenarios.length === 3, 'a fly at rest is forecast exactly, 3 scenarios');
+  ok(JSON.stringify([...fly.saveState().act, ...fly.saveState().m]) === before, 'forecasting never changes the real fly');
+  const real = (move) => { const c = createFly(circuit); c.loadState(fly.saveState());
+    if (move) { const d = c.odorDrive(fall); c.addDopamine(d, move); c.present(d); c.drain(); }
+    let t = null; c.present(c.odorDrive(fall), { onPeak: (x) => { t = x; } }); c.drain(); return t; };
+  for (const sc of fs1.scenarios) { const t = real(sc.move); ok(t.ap === sc.ap && t.av === sc.av && t.word === sc.word, 'scenario ' + sc.move + ': forecast = what the fly does, bit for bit (' + sc.word + ')'); }
+  /* and on the REAL fly itself, not a clone: teach the fall, then ask */
+  const sc2 = fs1.scenarios[2]; teach(fall, -0.02); const now = ask(fall);
+  ok(now.ap === sc2.ap && now.av === sc2.av, 'the real fly, taught -2% then asked, lands exactly on the forecast');
+  ok(fs1.scenarios[0].ap !== fs1.scenarios[2].ap, 'a rise and a fall forecast different futures (the move is used)');
+  fly.present(fly.odorDrive(rise));
+  ok(!foresee(shadow, fly, { nextMix: rise, pos: 0 }).exact, 'a fly with a pulse queued is NOT claimed exact'); fly.drain();
+  /* through the SESSION: forecast the next window, then run it (same price, the same trade again) -> the decision is the forecast */
+  const { foreseeNext } = await import(pathToFileURL(join(dir, 'fly-core.js')).href + '?f=' + Date.now() + Math.random());
+  const ev5 = [], f5 = createFly(circuit), s5 = createSession(f5, (e) => ev5.push(e));
+  ok(foreseeNext(shadow, f5, s5).exact === false, 'nothing smelled yet: no forecast claimed');
+  for (let k = 0; k < 3; k++) { const d = f5.odorDrive(rise); f5.addDopamine(d, 0.01); f5.present(d); f5.drain(); }
+  s5.window({ symbol: 'X', price: px(100), transactions: [] }); f5.drain();
+  s5.window({ symbol: 'X', price: px(100), transactions: [tx('0x20', 'received', 50)] }); f5.drain();
+  const fc = foreseeNext(shadow, f5, s5), flat = fc.scenarios.find((x) => x.move === 0);
+  ok(fc.exact && fc.pos === 1 && fc.learnsFrom && fc.learnsFrom.received === 5000, 'the forecast knows it will hold the stock and learn from $5000 received');
+  s5.window({ symbol: 'X', price: px(100), transactions: [tx('0x21', 'received', 50)] }); f5.drain();
+  const got = ev5.filter((e) => e.type === 'decision').pop();
+  ok(got.ap === flat.ap && got.av === flat.av && got.action === flat.action, 'the next window\'s real decision = the flat-move forecast (' + got.action + ')');
+  /* the last real smell is kept across a restart (state -> restore), and a corrupt one is refused */
+  const s6 = createSession(createFly(circuit), () => {}); s6.restore(JSON.parse(JSON.stringify(s5.state())));
+  ok(JSON.stringify(s6.lastOdor) === JSON.stringify(s5.lastOdor) && s6.next() && s6.next().nextMix.received === 5000, 'the last real smell survives a restart: ' + JSON.stringify(s6.lastOdor));
+  s6.restore({ lastOdor: { received: -5, sent: 10, moved: 0 } }); ok(s6.lastOdor === null, 'a corrupt saved smell (negative) is refused');
+  s6.restore({ lastOdor: { received: NaN, sent: 1, moved: 0 } }); ok(s6.lastOdor === null, 'a corrupt saved smell (NaN) is refused');
   return n;
 }
 
@@ -104,6 +140,14 @@ const MUTANTS = [
   ['recu et envoye inverses', (s) => s.replace("if (s && mv.some((m) => m.vers === s)) return 'received';", "if (s && mv.some((m) => m.vers === s)) return 'sent';")],
   ['vend sans tenir', (s) => s.replace("return word === 'approach' ? 'buy' : 'stay_out';", "return word === 'approach' ? 'buy' : word === 'avoid' ? 'sell' : 'stay_out';")],
   ['fenetre sans odeur vend', (s) => s.replace("const flyWants = win.decision ? (win.decision === 'buy' || win.decision === 'hold' ? 1 : 0) : books.fly.pos;", "const flyWants = win.decision === 'buy' || win.decision === 'hold' ? 1 : 0;")],
+  ['prevision sur la vraie mouche', (s) => s.replace('    shadow.loadState(start);\n', '    shadow = fly; shadow.loadState(start);\n')],
+  ['prevision sans le mouvement', (s) => s.replace('if (lastMix && move) { const d = shadow.odorDrive(lastMix); shadow.addDopamine(d, move);', 'if (lastMix && move) { const d = shadow.odorDrive(lastMix);')],
+  ['etat copie sans la memoire', (s) => s.replace('act.set(s.act); let k = 0; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) e[2] = s.m[k++];', 'act.set(s.act);')],
+  ['pensee non triee', (s) => s.replace('return out.sort((a, b) => b.c - a.c).slice(0, limit);', 'return out.slice(0, limit);')],
+  ['exact meme en pleine impulsion', (s) => s.replace('if (start.queued || start.pulseSteps) return { exact: false, scenarios: [] };', '')],
+  ['prevision sur la position d avant la decision', (s) => s.replace("const pos = prevWin && prevWin.decision ? (prevWin.decision === 'buy' || prevWin.decision === 'hold' ? 1 : 0) : books.fly.pos;", 'const pos = books.fly.pos;')],
+  ['odeur perdue au redemarrage', (s) => s.replace('settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null };', 'settled, feePips };')],
+  ['odeur corrompue acceptee', (s) => s.replace("lastOdor = lo && ['received', 'sent', 'moved'].every((k) => Number.isFinite(lo[k]) && lo[k] >= 0) &&", 'lastOdor = lo &&')],
   ['apprentissage sans dopamine', (s) => s.replace('let d = 0; for (const [i, w] of N[j].danIn) d += w * next[i];', 'let d = 0;')],
 ];
 let tues = 0;

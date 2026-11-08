@@ -133,8 +133,22 @@ export function createFly(circuit) {
   /* the server has no screen: it runs the queued pulses to the end at once */
   function drain(max = 10000) { let k = 0; while ((queue.length || pulseSteps || rest) && k++ < max) tick(); }
 
+  /* The synapses of a thought: what each active Kenyon cell sends right now through its learned KC->MBON synapse, strongest first. */
+  function thought(limit = 12) {
+    const out = [];
+    for (const j of mbonIdx) { const v = N[j].valence; if (!v) continue;
+      for (const [i, w, m] of inputs[j]) if (m != null && act[i] > 0) out.push({ i, j, side: v, c: act[i] * w * m, m }); }
+    return out.sort((a, b) => b.c - a.c).slice(0, limit);
+  }
+  /* The whole dynamic state, exactly (floats, not the rounded memory): a shadow fly loaded with it computes the same future. */
+  function saveState() { const m = []; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) m.push(e[2]); return { act: Float64Array.from(act), m, rest, pulseSteps, queued: queue.length }; }
+  function loadState(s) {
+    act.set(s.act); let k = 0; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) e[2] = s.m[k++];
+    queue.length = 0; pulseSteps = 0; pulseDrive = null; onPeak = null; rest = s.rest || 0; peak = null;
+  }
+
   return { N, inputs, kcIdx, mbonIdx, get act() { return act; }, get peak() { return peak; }, get ticks() { return ticks; },
-    step, odorDrive, addDopamine, tendency, snapshot, weakened, exportMemory, importMemory, present, tick, drain };
+    step, odorDrive, addDopamine, tendency, snapshot, weakened, exportMemory, importMemory, present, tick, drain, thought, saveState, loadState };
 }
 
 /* The market protocol around a fly. One window: price + new transactions. Judge and teach with the last window's odor, then ask about
@@ -144,6 +158,22 @@ export function createFly(circuit) {
 export function decide(word, pos) {
   if (pos === 1) return word === 'avoid' ? 'sell' : 'hold';
   return word === 'approach' ? 'buy' : 'stay_out';
+}
+
+/* Laplace's demon, at the scale of this model: the fly is deterministic, so with its exact state and a given input its next decision is
+ * COMPUTED, not guessed. A shadow fly (createFly on the same circuit) is loaded with the real fly's state and run ahead, once per
+ * scenario of the price move it has not yet seen: learn from the last smell with that move (as the next window would), then smell
+ * `nextMix` and decide. Exact for a fly at rest with nothing queued (the server's fly after drain); the page's live fly may be mid-pulse.
+ * It forecasts the FLY, never the market: which move comes is unknown, so every scenario is shown, none is picked. */
+export function foresee(shadow, fly, { lastMix, nextMix, pos, moves = [0.01, 0, -0.01] }) {
+  const start = fly.saveState();
+  if (start.queued || start.pulseSteps) return { exact: false, scenarios: [] };
+  return { exact: true, scenarios: moves.map((move) => {
+    shadow.loadState(start);
+    if (lastMix && move) { const d = shadow.odorDrive(lastMix); shadow.addDopamine(d, move); shadow.present(d); shadow.drain(); }
+    let r = null; shadow.present(shadow.odorDrive(nextMix), { onPeak: (t) => { r = { ...t, path: shadow.thought(8) }; } }); shadow.drain();
+    return { move, word: r.word, ap: r.ap, av: r.av, action: decide(r.word, pos), path: r.path };
+  }) };
 }
 
 export function createSession(fly, emit) {
@@ -157,7 +187,7 @@ export function createSession(fly, emit) {
     fly.present(fly.odorDrive(mix), { onPeak: (t) => {
       emit({ type: 'predict', sim, mix, ap: t.ap, av: t.av, word: t.word });
       const action = decide(t.word, books.fly.pos);
-      emit({ type: 'decision', sim, mix, ap: t.ap, av: t.av, word: t.word, action, inBefore: books.fly.pos === 1 });
+      emit({ type: 'decision', sim, mix, ap: t.ap, av: t.av, word: t.word, action, inBefore: books.fly.pos === 1, path: fly.thought(8) });
       if (done) done(t.word, action);
     } });
   }
@@ -223,15 +253,31 @@ export function createSession(fly, emit) {
     return { price: p, hasOdor };
   }
   function state() {
-    return { tally: { ...tally }, books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { label: b.label, pos: b.pos, ret: b.ret, switches: b.switches }])), settled, feePips };
+    return { tally: { ...tally }, books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { label: b.label, pos: b.pos, ret: b.ret, switches: b.switches }])), settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null };
   }
   function restore(x) {
     Object.assign(tally, { consistent: 0, opposite: 0, flat: 0, undecided: 0 }, x && x.tally ? x.tally : {});
     for (const [k, b] of Object.entries(books)) Object.assign(b, { pos: 0, ret: x && x.books && x.books[k] ? x.books[k].ret : 1, switches: x && x.books && x.books[k] ? x.books[k].switches : 0 });
     settled = x && Number.isFinite(x.settled) ? x.settled : 0;
+    /* the last real smell survives a restart: the forecast can run before the next trade arrives */
+    const lo = x && x.lastOdor;
+    lastOdor = lo && ['received', 'sent', 'moved'].every((k) => Number.isFinite(lo[k]) && lo[k] >= 0) && lo.received + lo.sent + lo.moved > 0 ? { received: lo.received, sent: lo.sent, moved: lo.moved } : null;
   }
   function reset() { seen = new Set(); prevWin = null; firstWindow = true; feePips = null; lastOdor = null; }
   /* the odor of the last window that had real trades: a simulation is injected on what is really happening, not on a made-up smell */
-  return { window, predict, learn, state, restore, reset, get feePips() { return feePips; }, get settled() { return settled; },
+  /* The next window, as the session will run it: what it will learn from (this window's smell, if any), the smell it assumes comes
+   * next (the last REAL trades, repeated: an assumption, said as such), and the position the paper book will hold by then. */
+  function next() {
+    if (!lastOdor) return null;
+    const pos = prevWin && prevWin.decision ? (prevWin.decision === 'buy' || prevWin.decision === 'hold' ? 1 : 0) : books.fly.pos;
+    return { lastMix: prevWin && prevWin.hasOdor ? { ...prevWin.mix } : null, nextMix: { ...lastOdor }, pos };
+  }
+  return { window, predict, learn, state, restore, reset, next, get feePips() { return feePips; }, get settled() { return settled; },
     get lastOdor() { return lastOdor ? { ...lastOdor } : null; } };
+}
+/** The fly's next decision, forecast from the session (page and server share this). Scenarios: the next price move is +1%, 0, -1%. */
+export function foreseeNext(shadow, fly, session) {
+  const nx = session.next();
+  if (!nx) return { exact: false, scenarios: [], why: 'no real trade smelled yet' };
+  return { ...foresee(shadow, fly, nx), nextMix: nx.nextMix, learnsFrom: nx.lastMix, pos: nx.pos };
 }
