@@ -40,6 +40,15 @@
   #needle { position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px; border-radius: 2px; background: #fff; left: 50%; transition: left .4s; box-shadow: 0 0 10px #fff; }
   .dialEnds { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
   #verdict { font-size: 20px; margin-top: 4px; }
+  .decision { font-size: 26px !important; font-weight: 700; letter-spacing: .04em; transition: color .3s; }
+  .decision.buy { color: #4ade80; } .decision.sell { color: #f87171; } .decision.hold { color: #f6c453; } .decision.stay_out { color: #8a96ad; }
+  .decision.flash { animation: decFlash 1.2s ease-out; }
+  @keyframes decFlash { 0% { text-shadow: 0 0 18px currentColor; transform: scale(1.08); } 100% { text-shadow: none; transform: scale(1); } }
+  .why { font-size: 13px; color: #c3cbe0; margin-top: 8px; line-height: 1.5; }
+  .why b { color: #dfe6f3; }
+  .walk { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .walk button { width: auto; margin: 0; padding: 4px 8px; font-size: 12px; border-radius: 999px; }
+  @media (prefers-reduced-motion: reduce) { .decision.flash { animation: none; } }
   .legend span[data-family] { cursor: pointer; user-select: none; }
   .legend span.off { opacity: .35; text-decoration: line-through; }
   canvas { cursor: crosshair; touch-action: manipulation; }
@@ -82,10 +91,12 @@
       <div class="state" id="ref"></div>
     </div>
     <div class="card">
-      <h2>Computed tendency</h2>
-      <div id="verdict">Quiet</div>
+      <h2>Fly trader · paper only</h2>
+      <div class="state" id="watching">watching —</div>
+      <div id="verdict" class="decision">Waiting for a smell</div>
       <div class="dial"><span id="needle"></span></div>
-      <div class="dialEnds"><span>avoid</span><span>approach</span></div>
+      <div class="dialEnds"><span>sell / stay out</span><span>buy / hold</span></div>
+      <div class="why" id="why">The fly decides only when a window brings real trades. Its rule: out and drawn to the smell → buy; in and repelled → sell; otherwise it holds, or stays out.</div>
       <div class="state" id="tally" style="margin-top:8px"></div>
       <div id="book" class="book"></div>
       <button id="listen">Listen to the brain</button>
@@ -95,7 +106,7 @@
     </div>
     <div class="card">
       <h2>The shared fly (server)</h2>
-      <div class="state" style="margin-bottom:6px">The same brain, run by the server on one stock every minute, whether anyone watches or not. Its memory starts again when the server restarts.</div>
+      <div class="state" style="margin-bottom:6px">The same brain, run by the server on one stock every minute, whether anyone watches or not. What it learns is saved on the server, and the line below says whether that memory survives a restart.</div>
       <div id="shared"><div class="state">reading…</div></div>
     </div>
     <div class="card">
@@ -108,7 +119,7 @@
       <label class="state" for="size">Injected move: <span id="sizeValue">−4.0%</span></label>
       <input type="range" id="size" min="-80" max="80" step="1" value="-40">
       <button id="inject">Inject this move (simulation)</button>
-      <div class="state" style="margin-top:6px">Injected on the smell of the last real window of trades: the fly learns what this move would teach it, then answers again on that same live smell.</div>
+      <div class="state" style="margin-top:6px">Injected on the smell of the last real window of trades: the fly learns what this move would teach it, then answers again on that same live smell. A simulation really trains this browser's fly (the shared fly on the server only learns from the market).</div>
     </div>
     <div class="card">
       <h2>Log</h2>
@@ -131,7 +142,7 @@
         <li>Rises drive the reward dopamine neurons (PAM), falls the punishment ones (PPL1), as in fly studies; here they carry that teaching signal only, not the circuit's own activity. Dopamine is not spread as excitation: it weakens the Kenyon→output synapses of co-active cells, the fly's known learning rule. Its <b>memory trace</b> is that weakening.</li>
         <li>Activity spreads in proportion to synapse counts and fades in about 3 to 4 s once a stimulus has passed; the next one waits for that. APL (inhibitory) is modelled as global inhibition that lets only the top 10% of Kenyon cells through.</li>
         <li>Approach/avoid is read from output neurons sorted by their measured dopamine input. The constants, the activity rule and which PNs receive a rise or a fall (id parity) are <b>ours</b>: a fly does not smell prices.</li>
-        <li>The <b>paper</b> P&amp;L is virtual: no funds, no signature, ever. The fly is in the stock for a window when it predicted "approach", out otherwise; each switch pays the pool's own fee, read on chain. It is shown next to two dumb witnesses (always in; in if the last window rose), because a P&amp;L alone proves nothing.</li>
+        <li>The <b>paper</b> trader is virtual: no funds, no signature, ever, and not advice. Its rule: out and drawn to the smell (approach) → buy; in and repelled (avoid) → sell; otherwise hold if in, stay out if out; a window without trades changes nothing. No short. Each switch pays the pool's own fee, read on chain. It is shown next to two dumb witnesses (always in; in if the last window rose), because a P&amp;L alone proves nothing.</li>
         <li>The fly is asked <b>before</b> the outcome: its prediction on one window is judged on the next window's price move (under 0.05% = flat, no verdict), misses counted next to matches; then it is taught with that move, and the synapses it weakened flash white. A tendency is not a forecast and not advice. Nothing here feels anything: it is a computed state, replayable by anyone with the same data.</li>
       </ul>
       Data: <a href="https://www.janelia.org/project-team/flyem/hemibrain" rel="noopener" target="_blank">hemibrain v1.2, Janelia FlyEM</a>, CC BY 4.0 licence.

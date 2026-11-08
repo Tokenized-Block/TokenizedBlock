@@ -70,9 +70,35 @@ function show(e, symbol) {
   else if (e.type === 'taught') { log(`taught: ${mixText(e.mix)} was followed by ${pct(e.move, 3)} → ${e.move > 0 ? 'reward (PAM)' : 'punishment (PPL1)'} dopamine ${fmt(e.strength * 100, 0)}%`, kind); showTrace(e, kind); }
   else if (e.type === 'verdict') log(`consequence: predicted ${e.prediction}, the price moved ${pct(e.move, 3)} → ${e.kind === 'flat' ? 'flat, no verdict' : e.kind === 'consistent' ? 'it matched' : 'it went the other way'}`, 'verdict');
 }
+/* ── THE FLY TRADER: its decision on the live smell, said in full. Paper only, never an order, never advice. ── */
+const ACT = { buy: 'BUY', sell: 'SELL', hold: 'HOLD', stay_out: 'STAY OUT' };
+let lastDecision = null, simOnLive = false;
+function renderDecision(e) {
+  lastDecision = e;
+  const el = $('verdict'); el.textContent = (e.sim ? 'SIMULATED · ' : '') + ACT[e.action];
+  el.className = 'decision ' + e.action; void el.offsetWidth; el.classList.add('flash');
+  const n = Object.values(e.mix).filter((v) => v > 0).length;
+  /* who taught it: real windows, or (for a simulation) the move just injected — said as it is */
+  const fell = e.sim ? 'the injected move was a <b>fall</b> (punishment dopamine), on top of what real windows taught it' : 'windows that smelled like this were followed by <b>falls</b> (punishment dopamine)';
+  const rose = e.sim ? 'the injected move was a <b>rise</b> (reward dopamine), on top of what real windows taught it' : 'windows that smelled like this were followed by <b>rises</b> (reward dopamine)';
+  const memory = Math.abs(e.ap - e.av) < 0.005
+    ? (e.ap > 0.995 ? 'It has learned nothing yet about this smell: both sides answer like a naive fly.'
+      : `It has learned this smell both ways about equally (approach ${fmt(e.ap * 100, 1)}%, avoid ${fmt(e.av * 100, 1)}% of a naive fly): rises and falls cancel out, no pull either way.`)
+    : e.ap < e.av ? `Its approach synapses for this smell are weaker (<b>${fmt(e.ap * 100, 1)}%</b> left, avoid side ${fmt(e.av * 100, 1)}%): ${fell}.`
+      : `Its avoid synapses for this smell are weaker (<b>${fmt(e.av * 100, 1)}%</b> left, approach side ${fmt(e.ap * 100, 1)}%): ${rose}.`;
+  const rule = e.action === 'buy' ? 'It was out of the stock and is drawn to this smell: <b>it buys</b> (on paper).'
+    : e.action === 'sell' ? 'It held the stock and is repelled by this smell: <b>it sells</b> (on paper).'
+      : e.action === 'hold' ? 'It holds the stock and this smell does not repel it: <b>it keeps it</b>.'
+        : 'It is out, and this smell does not draw it in: <b>it stays out</b>.';
+  $('why').innerHTML = `${e.sim ? (simOnLive ? '<b>Simulation</b> on the smell of the last real window. ' : '<b>Simulation</b> on a stand-in smell (no real trade smelled yet). ') : ''}`
+    + `<b>Smelled</b>${e.sim && !simOnLive ? '' : ' in the last window'}: ${mixText(e.mix)} (${n} kind${n > 1 ? 's' : ''} of trade). `
+    + `${memory} ${rule} <span class="state">Paper only, not advice. Judged on the next window's price.</span>`;
+}
+
 function onEvent(e) {
   show(e, current.symbol);
   if (e.type === 'tx') ripple(e.kind, e.usd);
+  if (e.type === 'decision') renderDecision(e);
   if (e.type === 'verdict' || e.type === 'taught') { renderTally(); }
   if (e.type === 'taught' && !e.sim) saveMemory();
 }
@@ -200,13 +226,13 @@ function drawSpark() {
 }
 
 function gauges() {
-  const m = measure(), t = fly.peak || { t: 0, word: 'quiet' }, names = { PN: 'PN', KC: 'Kenyon', MBON: 'MBON', DAN: 'Dopa.', APL: 'APL' };
+  const m = measure(), names = { PN: 'PN', KC: 'Kenyon', MBON: 'MBON', DAN: 'Dopa.', APL: 'APL' };
+  const t = lastDecision ? { t: (lastDecision.ap - lastDecision.av) / Math.max(1e-6, lastDecision.ap + lastDecision.av) } : { t: 0 };
   $('gauges').innerHTML = FAMILIES.map((f) => { const p = m[f].total ? m[f].s / m[f].total : 0;
     return `<div><span>${names[f]}</span><span class="bar"><i style="width:${Math.min(100, p * 100 * 3)}%;background:${COLOR[f]}"></i></span><span>${fmt(p * 100, 1)}%</span></div>`; }).join('');
   $('output').textContent = `Most active output: ${m.top}`;
   const pos = 50 + 50 * Math.max(-1, Math.min(1, t.t * 4));
   $('needle').style.left = pos + '%';
-  $('verdict').textContent = { approach: 'Approach', avoid: 'Avoid', undecided: 'Undecided', quiet: 'Quiet' }[t.word];
 }
 
 /* ── THE MAP, INTERACTIVE: hover or tap a neuron to see what it is, its real connections, and what it has learned. ── */
@@ -225,12 +251,45 @@ function nearest(e) {
   N.forEach((n, j) => { if (hidden.has(n.family)) return; const d = (n.x - x) ** 2 + (n.y - y) ** 2; if (d < bd) { bd = d; best = j; } });
   return best;
 }
+/* which smell each Kenyon cell belongs to: the cells in the top 10% for one kind of trade (computed once, from the measured synapses) */
+let kcCode = null;
+function codeOf(j) {
+  if (!kcCode) {
+    kcCode = new Map();
+    for (const kind of Object.keys(KIND_OF)) {
+      const d = fly.odorDrive({ received: 0, sent: 0, moved: 0, [kind]: 5000 });
+      const sc = fly.kcIdx.map((k) => [k, fly.inputs[k].reduce((s, [i, w]) => s + w * (d[i] || 0), 0)]).sort((a, b) => b[1] - a[1]);
+      sc.slice(0, Math.round(fly.kcIdx.length * 0.1)).forEach(([k, v]) => { if (v > 0) kcCode.set(k, [...(kcCode.get(k) || []), kind]); });
+    }
+  }
+  return kcCode.get(j) || [];
+}
+const back = [];
+function walkTo(k) { if (selected != null && selected !== k) back.push(selected); selected = k; describe(k); }
+function chips(list, title) {
+  if (!list.length) return '';
+  const top = [...list].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  return `<div class="state" style="margin-top:6px">${title}</div><div class="walk">`
+    + top.map(([k, w]) => `<button data-walk="${k}" style="border-color:${COLOR[N[k].family]}">${N[k].family} ${N[k].type || ''} · ${w} syn.</button>`).join('') + '</div>';
+}
 function describe(j) {
-  if (j == null) { $('neuron').innerHTML = '<div class="state">Hover or tap a neuron on the map. Tap the legend to hide a family.</div>'; return; }
+  if (j == null) { $('neuron').innerHTML = '<div class="state">Hover or tap a neuron on the map, then walk through its synapses with the buttons. Tap the legend to hide a family.</div>'; return; }
   const n = N[j], ins = N.in[j], outs = N.out[j], syn = (l) => l.reduce((s, [, w]) => s + w, 0), inputs = fly.inputs;
-  const role = n.family === 'DAN' ? ROLE.DAN + (n.dan === 'reward' ? ' This one is a reward neuron (PAM): rises drive it.' : n.dan === 'punishment' ? ' This one is a punishment neuron (PPL1): falls drive it.' : ' Not used as a teacher here (neither PAM nor PPL1).')
-    : n.family === 'MBON' ? ROLE.MBON + (n.valence ? ` Its compartment gets most of its dopamine from ${n.valence === 'avoid' ? 'reward' : 'punishment'} neurons, so here it sits on the ${n.valence} side.` : ' It receives no dopamine in this circuit.')
-    : ROLE[n.family];
+  let role;
+  if (n.family === 'PN') {
+    const kind = Object.keys(KIND_OF).find((k) => KIND_OF[k] === BigInt(n.id) % 3n);
+    role = ROLE.PN + ` Here it belongs to the <b>${kind}</b> group: it lights up when a window has trades where ${kind === 'received' ? 'the signer received the stock' : kind === 'sent' ? 'the signer sent the stock' : 'the stock moved between two other addresses'}, harder for bigger trades (our mapping, by id).`;
+  } else if (n.family === 'KC') {
+    const c = codeOf(j);
+    role = ROLE.KC + (c.length ? ` In this model it is part of the code for <b>${c.join(' and ')}</b> trades: those smells reach it among the strongest 10%.` : ' None of the three trade smells reaches it among the strongest 10%: it stays silent for them.');
+  } else if (n.family === 'DAN') {
+    const comp = outs.filter(([k]) => N[k].family === 'MBON').map(([k]) => N[k].type);
+    role = ROLE.DAN + (n.dan === 'reward' ? ' This one is a <b>reward</b> neuron (PAM): a price rise after a smell drives it, and it weakens that smell\'s Kenyon synapses onto ' + (comp.length ? comp.slice(0, 4).join(', ') : 'its output neurons') + ' (the avoid side), so the fly leans toward that smell next time.'
+      : n.dan === 'punishment' ? ' This one is a <b>punishment</b> neuron (PPL1): a price fall after a smell drives it, and it weakens that smell\'s Kenyon synapses onto ' + (comp.length ? comp.slice(0, 4).join(', ') : 'its output neurons') + ' (the approach side), so the fly pulls away next time.'
+        : ' It is neither PAM nor PPL1, so it teaches nothing here.');
+  } else if (n.family === 'MBON') {
+    role = ROLE.MBON + (n.valence ? ` Most of its dopamine comes from ${n.valence === 'avoid' ? 'reward (PAM)' : 'punishment (PPL1)'} neurons, so it sits on the <b>${n.valence}</b> side: when learning weakens its Kenyon synapses, its vote drops and the fly is pulled the other way. Its votes are what the trader card reads.` : ' It receives no dopamine in this circuit, so learning never changes it.');
+  } else role = ROLE[n.family];
   let learned = '';
   if (n.family === 'KC') {
     const w = []; for (const [k] of outs) if (N[k].family === 'MBON') for (const e of inputs[k]) if (e[0] === j && e[2] != null && e[2] < 0.999) w.push(`${N[k].type} ${pct(e[2] - 1, 1)}`);
@@ -244,7 +303,11 @@ function describe(j) {
     + `<div class="state">Body id ${n.id} (hemibrain v1.2) · activity now ${fmt(act[j] * 100, 1)}%</div>`
     + `<div style="margin:6px 0">${role}</div>`
     + `<div class="state">Inputs: ${ins.length} neurons, ${syn(ins)} synapses (cyan) · Outputs: ${outs.length} neurons, ${syn(outs)} synapses (gold), counted at 5 synapses or more within this circuit.</div>`
-    + learned;
+    + learned
+    + chips(ins, 'Walk upstream (who talks to it):') + chips(outs, 'Walk downstream (who it talks to):')
+    + (back.length ? '<div class="walk" style="margin-top:8px"><button data-back="1">← back</button></div>' : '');
+  $('neuron').querySelectorAll('button[data-walk]').forEach((b) => b.addEventListener('click', () => walkTo(Number(b.dataset.walk))));
+  const bb = $('neuron').querySelector('button[data-back]'); if (bb) bb.addEventListener('click', () => { selected = back.pop(); describe(selected); });
 }
 function wireMap() {
   canvas.addEventListener('pointermove', (e) => { const j = nearest(e); if (j !== hovered) { hovered = j; if (selected == null) describe(j); } });
@@ -281,8 +344,10 @@ async function readShared() {
   try {
     const s = await fetch('/api/fly/state', { cache: 'no-store' }).then((x) => x.json());
     if (!s || !s.ok) { $('shared').innerHTML = `<div class="state">The shared fly is not running: ${(s && s.why) || 'no answer'}.</div>`; return; }
-    const since = new Date(s.aliveSince).toLocaleString('en-GB');
-    $('shared').innerHTML = `<div class="state">${s.symbol} · training since ${since} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far</div>`
+    const since = new Date(s.trainingSince || s.aliveSince).toLocaleString('en-GB');
+    const mem = s.persisted ? 'memory kept across server restarts' + (s.restored ? ' (reloaded at the last restart, ' + new Date(s.aliveSince).toLocaleString('en-GB') + ')' : '')
+      : 'memory NOT kept: it starts again when the server restarts' + (s.saveError ? ' (' + s.saveError + ')' : '');
+    $('shared').innerHTML = `<div class="state">${s.symbol} · training since ${since} · ${s.windows} windows (${s.windowsRead} read, ${s.windowsMissed} not read) · ${s.weakened} synapses weakened so far · ${mem}</div>`
       + `<div class="state" style="margin-top:4px">${tallyText(s.session.tally)}</div><div id="sharedBook" class="book"></div>`
       + `<div class="log" style="margin-top:6px;max-height:180px">${s.events.slice(-12).reverse().map((e) => `<p class="${e.type === 'verdict' ? 'verdict' : 'live'}">${clock(e.at)} · ${eventText(e, s.symbol)}</p>`).join('')}</div>`;
     renderBook(s.session, $('sharedBook'));
@@ -293,6 +358,7 @@ function eventText(e, symbol) {
   if (e.type === 'predict') return `smells ${mixText(e.mix)} → ${SAY[e.word]}`;
   if (e.type === 'taught') return `taught: followed by ${pct(e.move, 3)}, ${e.weakened} synapses weakened`;
   if (e.type === 'verdict') return `predicted ${e.prediction}, moved ${pct(e.move, 3)} → ${e.kind}`;
+  if (e.type === 'decision') return `decides ${ACT[e.action]} (paper)`;
   if (e.type === 'skipped') return `${e.n} past transactions skipped at start`;
   return e.type;
 }
@@ -382,7 +448,9 @@ async function readReference() {
 }
 
 function select(i) {
-  current = STOCKS[i]; lastPrice = null; history = []; drawSpark();
+  current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); lastDecision = null;
+  $('watching').textContent = `watching ${current.symbol} · every 30 s its real trades are a smell`;
+  $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
   session.reset(); loadMemory();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
   clearInterval(timer); clearInterval(refTimer);
@@ -408,7 +476,7 @@ async function start() {
    *   chosen move — taught, then asked again on that same live odor, so the needle moves on the market's own smell. Before any real trade
    *   was smelled, a $5,000 "received" odor stands in, and the log says so. */
   $('inject').addEventListener('click', () => { const v = Number(slider.value) / 1000; if (!v) return;
-    const live = session.lastOdor, mix = live || { received: 5000, sent: 0, moved: 0 };
+    const live = session.lastOdor, mix = live || { received: 5000, sent: 0, moved: 0 }; simOnLive = !!live;
     log(`SIMULATION · ${live ? 'on the last real window (' + mixText(mix) + ')' : 'no real trade smelled yet, a stand-in ' + mixText(mix)} followed by ${pct(v, 1)}`, 'sim');
     if (live) for (const [k, usd] of Object.entries(mix)) if (usd > 0) ripple(k, usd);
     session.learn(mix, v, true); session.predict(mix, true); });

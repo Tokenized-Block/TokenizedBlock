@@ -2969,13 +2969,39 @@ function lirePrixMouche(token) {
  * 24 h volume 2026-11-07) every minute, whether anyone watches or not. SAME code as the page (fly-core.js).
  * ⛔ RPC BUDGET: one stock, one window a minute, sharing the 20 s activity cache and the 8 s price cache with visitors; a window whose
  *   price or trades are not read is skipped (nothing taught on a guess) and the next one waits 5 minutes. FLY_SERVER=off stops it.
- * ⛔ VOLATILE: its memory starts again at each restart (a deploy); /api/fly/state says since when. */
-const MOUCHE = { symbol: 'SNDKc', fly: null, session: null, events: [], aliveSince: null, windows: 0, windowsRead: 0, windowsMissed: 0, why: null };
+ * 2026-11-08 (Phil : « ajoute lui une memoire persistante ») : its memory (synapses, tally, paper book, counters, last events) is kept on
+ *   the Railway volume after every read window and reloaded at boot, so a deploy no longer makes it naive. Without a volume it says so
+ *   (`persisted: false`) and stays volatile. Written atomically (.tmp then rename), like faits-pool.json. */
+const FICHIER_MOUCHE = (process.env.RAILWAY_VOLUME_MOUNT_PATH || (existsSync('/data') ? '/data' : null))
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH || '/data', 'mouche-partagee.json') : null;
+const MOUCHE = { symbol: 'SNDKc', fly: null, session: null, events: [], aliveSince: null, trainingSince: null, restored: false, windows: 0, windowsRead: 0, windowsMissed: 0, why: null, saveError: null };
 function etatMoucheServeur() {
   if (!MOUCHE.fly) return { ok: false, why: MOUCHE.why || 'not started' };
   const m = MOUCHE.fly.exportMemory();
-  return { ok: true, symbol: MOUCHE.symbol, aliveSince: MOUCHE.aliveSince, windows: MOUCHE.windows, windowsRead: MOUCHE.windowsRead, windowsMissed: MOUCHE.windowsMissed,
+  return { ok: true, symbol: MOUCHE.symbol, aliveSince: MOUCHE.aliveSince, trainingSince: MOUCHE.trainingSince, persisted: !!FICHIER_MOUCHE && !MOUCHE.saveError,
+    restored: MOUCHE.restored, saveError: MOUCHE.saveError, windows: MOUCHE.windows, windowsRead: MOUCHE.windowsRead, windowsMissed: MOUCHE.windowsMissed,
     weakened: m.filter((x) => x < 99900).length, session: MOUCHE.session.state(), events: MOUCHE.events.slice(-40) };
+}
+function sauverMouche() {
+  if (!FICHIER_MOUCHE) return;
+  try {
+    const x = { v: 1, symbol: MOUCHE.symbol, trainingSince: MOUCHE.trainingSince, windows: MOUCHE.windows, windowsRead: MOUCHE.windowsRead, windowsMissed: MOUCHE.windowsMissed,
+      memory: MOUCHE.fly.exportMemory(), session: MOUCHE.session.state(), events: MOUCHE.events.slice(-120), savedAt: new Date().toISOString() };
+    writeFileSync(FICHIER_MOUCHE + '.tmp', JSON.stringify(x)); renameSync(FICHIER_MOUCHE + '.tmp', FICHIER_MOUCHE);
+    MOUCHE.saveError = null;
+  } catch (e) { MOUCHE.saveError = String((e && e.message) || e).slice(0, 120); }
+}
+function chargerMouche() {
+  if (!FICHIER_MOUCHE || !existsSync(FICHIER_MOUCHE)) return;
+  try {
+    const x = JSON.parse(readFileSync(FICHIER_MOUCHE, 'utf8'));
+    if (!x || x.v !== 1 || x.symbol !== MOUCHE.symbol || !Array.isArray(x.memory)) return;
+    MOUCHE.fly.importMemory(x.memory); MOUCHE.session.restore(x.session);
+    MOUCHE.events = Array.isArray(x.events) ? x.events.slice(-120) : [];
+    for (const k of ['windows', 'windowsRead', 'windowsMissed']) if (Number.isFinite(x[k])) MOUCHE[k] = x[k];
+    if (x.trainingSince) MOUCHE.trainingSince = x.trainingSince;
+    MOUCHE.restored = true;
+  } catch (e) { MOUCHE.why = null; MOUCHE.saveError = 'memory not reloaded: ' + String((e && e.message) || e).slice(0, 100); }
 }
 async function fenetreMouche() {
   const token = [...POOLS_ACTIONS_AERODROME.entries()].find(([, t]) => t.symbole === MOUCHE.symbol);
@@ -2986,6 +3012,7 @@ async function fenetreMouche() {
   MOUCHE.windowsRead++;
   MOUCHE.session.window({ symbol: MOUCHE.symbol, price, transactions: ac.transactions });
   MOUCHE.fly.drain();
+  sauverMouche();
   return 60000;
 }
 function demarrerMoucheServeur() {
@@ -2997,12 +3024,14 @@ function demarrerMoucheServeur() {
       const ev = { ...e, at: Date.now() }; if (Array.isArray(ev.top)) ev.top = ev.top.slice(0, 5);
       MOUCHE.events.push(ev); if (MOUCHE.events.length > 120) MOUCHE.events.splice(0, MOUCHE.events.length - 120);
     });
-    MOUCHE.aliveSince = new Date().toISOString();
+    MOUCHE.aliveSince = MOUCHE.trainingSince = new Date().toISOString();
+    chargerMouche();
   } catch (e) { MOUCHE.why = 'circuit not loaded: ' + String((e && e.message) || e).slice(0, 120); return; }
   const cycle = () => fenetreMouche().catch(() => { MOUCHE.windowsMissed++; return 300000; }).then((ms) => { const t = setTimeout(cycle, ms); if (t.unref) t.unref(); });
   /* 3 min apres le boot : pas au milieu des sondes de /sante (45 s) ni des prechauffages, que le noeud public limite deja (game293 :
    *   sonde echange en 429 au 1er passage, quand la mouche lisait aussi a +20 s) */
-  const t = setTimeout(cycle, 180000); if (t.unref) t.unref();
+  const debut = Number(process.env.FLY_START_MS); /* reglable pour un essai local ; 3 min par defaut */
+  const t = setTimeout(cycle, Number.isFinite(debut) && debut >= 0 ? debut : 180000); if (t.unref) t.unref();
 }
 async function lireReferenceServeur(token) {
   const c = referencesServeur.get(token);
