@@ -2998,7 +2998,8 @@ function chargerMouche() {
   try {
     const x = JSON.parse(readFileSync(FICHIER_MOUCHE, 'utf8'));
     if (!x || x.v !== 1 || x.symbol !== MOUCHE.symbol || !Array.isArray(x.memory)) return;
-    MOUCHE.fly.importMemory(x.memory); MOUCHE.session.restore(x.session);
+    /* the trace (smells still waiting for their lessons) only if the save is recent: a smell of an hour ago is not taught by today's move */
+    MOUCHE.fly.importMemory(x.memory); MOUCHE.session.restore(Date.now() - Date.parse(x.savedAt) < 600000 ? x.session : { ...x.session, recent: [] });
     MOUCHE.events = Array.isArray(x.events) ? x.events.slice(-120) : [];
     for (const k of ['windows', 'windowsRead', 'windowsMissed']) if (Number.isFinite(x[k])) MOUCHE[k] = x[k];
     if (x.trainingSince) MOUCHE.trainingSince = x.trainingSince;
@@ -7293,7 +7294,10 @@ function traiterRequete(req, res) {
         const ok = (x) => typeof x === 'string';
         if (!b || !/^0x[0-9a-fA-F]{40}$/.test(b.from) || !/^0x[0-9a-fA-F]{40}$/.test(b.to) || !ok(b.data) || !/^0x[0-9a-fA-F]*$/.test(b.data) || (b.value != null && !/^0x[0-9a-fA-F]{1,64}$/.test(b.value))) {
           send(400, { ok: false, why: 'body: {from, to, data, value?} as hex' }); return; }
-        const gas = await rpcServeur('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]);
+        /* `refused`: the CHAIN said no (a revert, no funds); otherwise the node did not answer, and the page must not call that a refusal
+         *   (QA 08/11: a 429 was shown as "the chain refuses this call") */
+        let gas; try { gas = await rpcServeur('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]); }
+        catch (e) { const m = String((e && e.message) || e); send(200, { ok: false, refused: /revert|insufficient funds|gas required exceeds/i.test(m) || (e && e.data != null), why: m.slice(0, 160) }); return; }
         send(200, { ok: true, gas: BigInt(gas).toString() }); return;
       }
       /* relay */

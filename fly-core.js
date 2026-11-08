@@ -266,8 +266,10 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
       fresh.forEach((t) => seen.add(t.tx));
       if (seen.size > 5000) seen = new Set([...seen].slice(-2000));
       if (firstWindow) { emit({ type: 'skipped', n: fresh.length }); fresh = []; }
+      /* only a window whose trades WERE read ends the first window: a failed first read left the flag down, and the next window
+       *   smelled the whole backlog of past trades as fresh (QA 2026-11-08: 50 old transactions -> 50 "tx" events and a decision) */
+      firstWindow = false;
     }
-    firstWindow = false;
     if (p != null && decimals != null) {
       fresh.forEach((t) => {
         const units = (Array.isArray(t.mouvements) ? t.mouvements : []).reduce((s, m) => s + Number(BigInt(m.montant || 0)), 0) / 10 ** decimals;
@@ -294,12 +296,20 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
     return { price: p, hasOdor };
   }
   function state() {
-    return { tally: { ...tally }, books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { label: b.label, pos: b.pos, ret: b.ret, switches: b.switches }])), settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null, typical };
+    return { tally: { ...tally }, books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { label: b.label, pos: b.pos, ret: b.ret, switches: b.switches }])), recent: recent.map((m) => (m ? { ...m } : null)), settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null, typical };
+  }
+  /* the eligibility trace survives a restart too (QA 08/11: a deploy or a reload dropped the smells still waiting for their lessons);
+   *   only well-formed smells are taken back, at most the trace length */
+  function restoredTrace(x) {
+    const good = (m) => m && typeof m === 'object' && ['received', 'sent', 'moved'].every((k) => Number.isFinite(m[k]) && m[k] >= 0);
+    return x && Array.isArray(x.recent) ? x.recent.slice(0, H).map((m) => (good(m) ? { received: m.received, sent: m.sent, moved: m.moved } : null)) : [];
   }
   function restore(x) {
     Object.assign(tally, { consistent: 0, opposite: 0, flat: 0, undecided: 0 }, x && x.tally ? x.tally : {});
-    for (const [k, b] of Object.entries(books)) Object.assign(b, { pos: 0, ret: x && x.books && x.books[k] ? x.books[k].ret : 1, switches: x && x.books && x.books[k] ? x.books[k].switches : 0 });
+    /* the positions are kept too: put back out at each restart, "Always in" paid one fake switch fee per deploy or reload (QA 08/11) */
+    for (const [k, b] of Object.entries(books)) Object.assign(b, { pos: x && x.books && x.books[k] && x.books[k].pos === 1 ? 1 : 0, ret: x && x.books && x.books[k] ? x.books[k].ret : 1, switches: x && x.books && x.books[k] ? x.books[k].switches : 0 });
     settled = x && Number.isFinite(x.settled) ? x.settled : 0;
+    recent = restoredTrace(x);
     typical = x && Number.isFinite(x.typical) && x.typical > 0 && x.typical < 1 ? x.typical : 0;
     /* the last real smell survives a restart: the forecast can run before the next trade arrives */
     const lo = x && x.lastOdor;
