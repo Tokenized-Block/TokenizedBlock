@@ -105,7 +105,7 @@ function renderDecision(e) {
         : 'It is out, and this smell does not draw it in: <b>it stays out</b>.';
   $('why').innerHTML = `${e.sim ? (simOnLive ? '<b>Simulation</b> on the smell of the last real window. ' : '<b>Simulation</b> on a stand-in smell (no real trade smelled yet). ') : ''}`
     + `<b>Smelled</b>${e.sim && !simOnLive ? '' : ' in the last window'}: ${mixText(e.mix)} (${n} kind${n > 1 ? 's' : ''} of trade). `
-    + `${memory} ${rule} <span class="state">${auto.s && auto.s.running ? 'Its own wallet acts on this decision with real money (card below); not advice.' : 'Simulated score only, not advice.'} Judged on the next window's price.</span>`;
+    + `${memory} ${rule} <span class="state">${auto.s && auto.s.running ? 'Its own wallet acts on its live decisions with real money, from what it really holds, not from this paper position: its log (band 3) says what it did; not advice.' : 'Simulated score only, not advice.'} Judged on the next window's price.</span>`;
 }
 
 /* ── TRADE FOR REAL: the user's own wallet signs each order the fly proposes. The fly NEVER signs, nothing is sent without a click.
@@ -138,11 +138,11 @@ async function waitReceipt(h) {
  * Withdraw all sends everything back to the wallet that funded it. The key is made and kept ONLY in this browser (fly-wallet.js,
  * @noble). The server plans each order, but the fly signs a call only if fly-guard.js (here, in the browser) finds it is an exact
  * approval, the app fee, or a swap that pays the fly itself and names no unknown address (security review 2026-11-08, H1). Text from
- * the server or a node is never written as HTML (H2). The money path was proven on a fork through the relay (18/0); the stock leg
- * cannot run on a fork (B20 precompile) and is NOT proven until a real small trade. ── */
+ * the server or a node is never written as HTML (H2). The money path was proven on a fork through the relay; the stock leg too, on base-anvil (a fork with Base's
+ * precompiles: banc-fly-wallet-fork-20261108.mjs), but not yet by a real trade on Base itself. ── */
 const AUTO_KEY = 'fly-auto-wallet-v1', AUTO_GAS_ETH = 200000000000000n /* 0.0002 ETH */, AUTO_ETH_KEEP = 5000000000000n /* L1 fee dust */;
-const ADDR_RE = /^0x[0-9a-f]{40}$/, HASH_RE = /^0x[0-9a-f]{64}$/;
-const auto = { W: null, s: null, busy: false };
+const ADDR_RE = /^0x[0-9a-f]{40}$/, HASH_RE = /^0x[0-9a-f]{64}$/, AUTO_LOG_MAX = 200;
+const auto = { W: null, s: null, busy: false, funding: false, withdrawing: false };
 function autoLoad() {
   try {
     const x = JSON.parse(localStorage.getItem(AUTO_KEY) || 'null');
@@ -188,6 +188,8 @@ function autoNote(...parts) {
     else p.append(String(x));
   }
   $('autoLog').prepend(p);
+  /* bounded: a fly trading for days says something at every decision (QA 08/11: 400 decisions = 400 lines, never dropped) */
+  while ($('autoLog').children.length > AUTO_LOG_MAX) $('autoLog').lastChild.remove();
 }
 const usd6 = (x) => fmt(Number(BigInt(x)) / 1e6, 2);
 /* the value really used, bounded, and written back into the field so the user sees it (Phil's live test 08/11: 0.3 typed, 1 USDC sent) */
@@ -201,8 +203,11 @@ function autoRender() {
     el.append(Object.assign(document.createElement('a'), { href: 'https://basescan.org/address/' + s.address, target: '_blank', rel: 'noopener', textContent: 'Basescan' }));
     el.append(`) · funded by ${s.owner ? displayShort(s.owner) : 'nobody yet'} · ${s.running ? 'TRADING ALONE' : 'stopped'} · ${(s.day === new Date().toISOString().slice(0, 10) ? s.today : 0)} trade${(s.day === new Date().toISOString().slice(0, 10) ? s.today : 0) === 1 ? '' : 's'} today`);
   }
-  $('autoCreate').disabled = !!s; $('autoFund').disabled = !s; $('autoStart').disabled = !s || !s.owner || s.running;
-  $('autoWithdraw').disabled = !s || !s.owner; $('autoExport').disabled = !s;
+  /* while a funding or a withdraw is in flight, nothing else that moves money can be pressed (QA 08/11: Fund twice = two fundings,
+   *   Withdraw twice = two withdraws racing on one nonce, Start pressed during a withdraw) */
+  const moving = auto.funding || auto.withdrawing;
+  $('autoCreate').disabled = !!s; $('autoFund').disabled = !s || moving; $('autoStart').disabled = !s || !s.owner || s.running || moving;
+  $('autoWithdraw').disabled = !s || !s.owner || moving; $('autoExport').disabled = !s;
   $('inject').disabled = !!(s && s.running);
 }
 async function autoAccount(token) {
@@ -225,6 +230,11 @@ async function autoCreate() {
   autoRender();
 }
 async function autoFund() {
+  if (auto.funding || auto.withdrawing) return;
+  auto.funding = true; autoRender();
+  try { await autoFundOnce(); } finally { auto.funding = false; autoRender(); }
+}
+async function autoFundOnce() {
   if (!auto.s || !$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
   if (!live.account) await connect();
   if (!live.account) { autoSay('Connect your wallet first (button above).'); return; }
@@ -253,6 +263,15 @@ async function autoFund() {
         if (!unsupported(err)) throw err;
       }
     }
+    /* a batch returns before it is mined: Fund stays off until the balance shows it (QA 08/11: pressed again 1 s later, the balance
+     *   still read 0 and a SECOND batch went out) */
+    if (batched) {
+      autoSay('Funding sent: waiting until it is mined (Fund stays off meanwhile)…');
+      let seen = false;
+      for (let k = 0; k < 60 && !seen; k++) { await new Promise((o) => setTimeout(o, 2000));
+        try { const a = await autoAccount(); seen = BigInt(a.usdc) >= BigInt(held.usdc) + needUsdc && (!needEth || BigInt(a.eth) >= AUTO_GAS_ETH / 2n); } catch (_) { /* read again */ } }
+      if (!seen) autoNote('the funding batch is not seen mined after 2 minutes: check your wallet before pressing Fund again');
+    }
     if (!batched) {
       if (calls.length > 1) autoNote('your wallet does not batch calls: one signature per transfer instead (USDC, then the gas ETH)');
       for (const c of calls) { const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: payer, ...c }] }); autoNote('sent ', { tx: h }); await waitReceipt(h); }
@@ -274,7 +293,7 @@ async function autoShowBalance() {
 async function flySend(c, { sweep = false } = {}) {
   const W = await flyWallet(), a = await autoAccount();
   const g = await postJson('/api/fly/estimate', { from: auto.s.address, to: c.to, data: c.data, value: sweep ? '0x1' : (c.value || '0x0') });
-  if (!g || !g.ok) throw new Error('the chain refuses this call (gas estimate): ' + String((g && g.why) || '').slice(0, 120));
+  if (!g || !g.ok) throw new Error((g && g.refused ? 'the chain refuses this call (gas estimate): ' : 'the gas estimate was not answered (node busy or down; nothing sent): ') + String((g && g.why) || 'no answer').slice(0, 120));
   const gas = BigInt(g.gas) * 13n / 10n, prio = 1000000n, maxFee = BigInt(a.baseFeePerGas) * 2n + prio;
   const value = sweep ? BigInt(a.eth) - gas * maxFee - AUTO_ETH_KEEP : BigInt(c.value || '0x0');
   if (sweep && value <= 0n) return null;
@@ -299,7 +318,9 @@ async function autoTrade(e) {
   if (!s.running) return;
   if (auto.busy) { autoNote(`decided ${ACT[e.action]} while a trade was still in flight: this decision is skipped`); return; }
   auto.busy = true;
-  const stock = current;
+  /* the memory that DECIDED, taken now: a stock switched while the trade is in flight loads another memory (QA 08/11: the seal of
+   *   SNDKc's trade carried the next stock's memory) */
+  const stock = current, decided = { memory: fly.exportMemory(), windows: session.settled };
   try {
     const done = await withLock(async () => {
       /* the day counter lives in the STORED state: a reset done on a copy was overwritten by the next autoRefresh(), so the counter
@@ -317,8 +338,10 @@ async function autoTrade(e) {
         autoNote(`${ACT[action]} ${stock.symbol} · ${why}${sure} · ${held > 0n ? 'holds ' + fmt(Number(held) / 10 ** (live.decimals ?? 8), 6) + ' ' + stock.symbol : 'out of the stock'}: no trade`);
         return;
       }
-      if ($('autoProven').checked && !proven(session.state().tally)) { const r = recordEdge(session.state().tally);
-        autoNote(`decided ${ACT[action]}, but its record (${r.k} right of ${r.n} judged) does not beat a coin flip yet: no real trade (untick “only once it beats chance” to override)`); return; }
+      /* the record gate holds back a BUY only: a SELL takes the money OUT of risk, and a gate on it kept the fly holding a stock once its
+       *   record fell back under chance (QA 08/11) */
+      if (action === 'buy' && $('autoProven').checked && !proven(session.state().tally)) { const r = recordEdge(session.state().tally);
+        autoNote(`decided BUY, but its record (${r.k} right of ${r.n} judged) does not beat a coin flip yet: no real buy (untick “only once it beats chance” to override; a SELL is never held back)`); return; }
       if (auto.s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
       let de, vers, montant;
       if (action === 'buy') {
@@ -328,7 +351,7 @@ async function autoTrade(e) {
         de = USDC_BASE; vers = stock.address; montant = amt.toString();
       } else { de = stock.address; vers = USDC_BASE; montant = held.toString(); }
       const q = new URLSearchParams({ de, vers, montant, compte: s.address });
-      let p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
+      let p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json()), swapped = false;
       for (let round = 0; round < 3; round++) {
         if (!p || !p.ok) { autoNote(`decided ${ACT[action]} ${stock.symbol}: no order (${String((p && p.etat) || '?')}${p && p.pourquoi ? ' — ' + String(p.pourquoi).slice(0, 120) : ''})`); return; }
         if (!p.resume || String(p.resume.paye) !== montant) throw new Error('the plan does not pay the amount asked (' + String(p.resume && p.resume.paye) + ' vs ' + montant + ')');
@@ -340,13 +363,15 @@ async function autoTrade(e) {
           const r = await flySend(c);
           autoNote(`${ACT[action]} ${stock.symbol} · ${String(c.nom || c.role || 'call').slice(0, 80)} mined · `, { tx: r.hash });
         }
-        if (p.etat !== 'APPROBATIONS') break;
+        if (p.etat !== 'APPROBATIONS') { swapped = true; break; }
         p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
       }
+      /* three rounds of approvals and still no swap: nothing was traded, so nothing is counted or sealed (QA 08/11: it said "done") */
+      if (!swapped) { autoNote(`${ACT[action]} ${stock.symbol}: approvals sent, but the planner still asked for approvals after 3 rounds: no swap, nothing traded`); return; }
       autoRefresh(); if (auto.s.day !== today) { auto.s.day = today; auto.s.today = 0; } auto.s.today++; if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
       autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${auto.s.today}/${maxDay} today). The app's interface fee was in the plan (${String((p.resume && p.resume.fraisBps) || '?')} bps); see Basescan.`);
       /* its memory, sealed by its own wallet right after the trade it decided (a failed seal is said, it does not stop the fly) */
-      try { await flySeal(stock); } catch (err) { autoNote('memory not sealed this time: ' + String((err && err.message) || err).slice(0, 140)); }
+      try { await flySeal(stock, decided); } catch (err) { autoNote('memory not sealed this time: ' + String((err && err.message) || err).slice(0, 140)); }
     });
     if (done === 'locked') autoNote('another tab of this page is trading with the same fly: this tab does nothing');
   } catch (err) {
@@ -358,12 +383,16 @@ async function autoTrade(e) {
  * the settings, and whether it was trading alone. Reopened, it resumes as it was; Stop still halts it. */
 function autoSettings() { return { budget: field('autoBudget', 0.1, 100, 0.1), cap: field('autoCap', 0.1, 100, 0.1), day: field('autoDay', 1, 50, 1), proven: $('autoProven').checked }; }
 function autoRemember() { if (!auto.s) return; autoRefresh(); auto.s.settings = autoSettings(); if ($('autoRisk').checked && !auto.s.consentAt) auto.s.consentAt = Date.now(); autoSave(); }
-function autoStart() { if (!auto.s || !auto.s.owner) return; if (!$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
+function autoStart() { if (!auto.s || !auto.s.owner || auto.withdrawing || auto.funding) return; if (!$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
   autoRefresh(); auto.s.running = true; auto.s.consentAt = auto.s.consentAt || Date.now(); auto.s.settings = autoSettings(); autoSave(); autoRender();
-  autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', and only once its record beats a coin flip' : ''}. Stop halts it.`); }
+  autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', buying only once its record beats a coin flip' : ''}. Stop halts it.`); }
 function autoStop() { if (!auto.s) return; autoRefresh(); auto.s.running = false; autoSave(); autoRender(); autoNote({ b: 'stopped' }, ': it sends nothing more' + (auto.busy ? ' after the call already in flight' : '') + '.'); }
 async function autoWithdraw() {
-  if (!auto.s || !auto.s.owner) return;
+  if (!auto.s || !auto.s.owner || auto.withdrawing || auto.funding) return;
+  auto.withdrawing = true;
+  try { await autoWithdrawOnce(); } finally { auto.withdrawing = false; autoRender(); }
+}
+async function autoWithdrawOnce() {
   autoStop();
   if (!confirm('Send everything in the fly wallet back to ' + auto.s.owner + ' (the wallet that funded it)?')) return;
   /* a trade in flight finishes first, so its result is withdrawn too (review M4) */
@@ -384,7 +413,7 @@ async function autoWithdraw() {
     if (BigInt(u.usdc) > 0n) autoNote(usd6(u.usdc) + ' USDC back: ', { tx: (await flySend({ to: USDC_BASE, data: T + word(to) + BigInt(u.usdc).toString(16).padStart(64, '0'), value: '0x0' })).hash });
     const r = await flySend({ to, data: '0x' }, { sweep: true });
     if (r) autoNote(fmt(Number(r.value) / 1e18, 6) + ' ETH back: ', { tx: r.hash });
-    autoNote({ b: 'withdrawn' }, '. A dust of ETH (about 0.000005) stays for the network fee of that last send.');
+    autoNote({ b: unread.length ? 'withdrawn, except ' + unread.join(', ') : 'withdrawn' }, (unread.length ? ' (not read: press Withdraw again for them)' : '') + '. A dust of ETH (about 0.000005) stays for the network fee of that last send.');
   } catch (err) { autoNote({ b: 'withdraw stopped' }, ': ' + String((err && err.message) || err).slice(0, 200) + ' — what was sent is above; press again to retry.'); }
   autoShowBalance();
 }
@@ -402,7 +431,7 @@ function autoWire() {
     if (Number.isFinite(st.day)) $('autoDay').value = String(st.day);
     if (typeof st.proven === 'boolean') $('autoProven').checked = st.proven;
     if (Number.isFinite(auto.s.consentAt)) $('autoRisk').checked = true;
-    if (auto.s.running) autoNote('page reopened: ', { b: 'still trading alone' }, ` on its live decisions, with your settings (max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', only once its record beats a coin flip' : ''}). Stop halts it.`);
+    if (auto.s.running) autoNote('page reopened: ', { b: 'still trading alone' }, ` on its live decisions, with your settings (max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', buying only once its record beats a coin flip' : ''}). Stop halts it.`);
   }
   for (const id of ['autoBudget', 'autoCap', 'autoDay', 'autoProven', 'autoRisk']) $(id).addEventListener('change', autoRemember);
   /* another tab pressed Stop (or started it): obey at once */
@@ -478,7 +507,9 @@ const KIND_COLOR = { received: '#4fd1c5', sent: '#f472b6', moved: '#a78bfa' };
 const KIND_OF = { received: 0n, sent: 1n, moved: 2n };
 let ripples = [], txSlot = 0;
 function ripple(kind, usd) {
-  const at = Date.now() + (txSlot++ % 10) * 2400;
+  /* pruned here too: a hidden tab draws no frame, and its ripples piled up without end (QA 08/11: 500 trades, 500 ripples held) */
+  const now = Date.now(); ripples = ripples.filter((r) => now < r.at + 1800).slice(-199);
+  const at = now + (txSlot++ % 10) * 2400;
   ripples.push({ kind, at, size: Math.min(1, Math.log10(Math.max(10, usd)) / 5) });
 }
 function pnCenter(kind) {
@@ -734,7 +765,9 @@ function saveMemory() {
 }
 function loadMemory() {
   let x = null; try { x = JSON.parse(localStorage.getItem(memKey(current.symbol)) || 'null'); } catch (_) { x = null; }
-  fly.importMemory(x && x.m); session.restore(x);
+  /* the smells still waiting for their lessons are taken back only from a save of the last 3 windows: a smell of yesterday is not
+   *   taught by today's move */
+  fly.importMemory(x && x.m); session.restore(x && !(Date.now() - x.at < 3 * POLL_MS) ? { ...x, recent: [] } : x);
   log(x ? `memory restored for ${current.symbol}: trained since ${new Date(x.at).toLocaleString('en-GB')}, ${session.settled} windows` : `a naive fly for ${current.symbol} (no memory kept in this browser yet)`);
   renderTally(); renderBook();
 }
@@ -758,8 +791,8 @@ async function checkSealNow() {
     sealSay(c.ok ? `Read from the chain: a seal by ${displayShort(x.sealer)} after ${c.windows} windows — ${c.same ? 'the memory held now is exactly the one sealed.' : 'the memory held now has changed since.'}` : 'Not confirmed: ' + c.why + '.');
   } catch (err) { sealSay('The chain could not be read: ' + String((err && err.message) || err).slice(0, 120)); }
 }
-async function flySeal(stock) {
-  const memory = fly.exportMemory(), fingerprint = memoryFingerprint(memory), windows = session.settled;
+async function flySeal(stock, { memory, windows }) {
+  const fingerprint = memoryFingerprint(memory);
   const r = await flySend({ to: auto.s.address, data: sealData({ stock: stock.address, fingerprint, windows }), value: '0x0' });
   storeSafely(sealKey(stock.symbol), JSON.stringify({ tx: r.hash, fingerprint, windows, at: Date.now(), sealer: auto.s.address }));
   autoNote('memory sealed on Base by its own wallet: ', { tx: r.hash }); renderSeal(); checkSealNow();
@@ -885,7 +918,10 @@ async function readReference() {
 }
 
 function select(i) {
-  current = STOCKS[i]; lastPrice = null; history = []; drawSpark(); lastDecision = null;
+  const prev = current;
+  current = STOCKS[i];
+  /* the fly trades only the stock watched: what it still holds of the one left is said, not forgotten (QA 08/11) */
+  if (auto.s && auto.s.owner && prev && prev !== current) autoAccount(prev.address).then((a) => { if (a.stock && BigInt(a.stock) > 0n) autoNote(`it still holds ${fmt(Number(BigInt(a.stock)) / 10 ** (live.decimals ?? 8), 6)} ${prev.symbol}: it trades only the stock you watch, so it sells that only when you watch ${prev.symbol} again (or Withdraw all brings it back)`); }).catch(() => { /* said at the next balance read */ }); lastPrice = null; history = []; drawSpark(); lastDecision = null;
   $('watching').textContent = `watching ${current.symbol} · every 30 s its real trades are a smell`;
   $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
   session.reset(); loadMemory(); thoughts.length = 0; renderThoughts(); renderSeal();
@@ -934,6 +970,6 @@ async function start() {
   /* leaving the tab: whatever is queued is run at once (no animation is lost: nobody sees it) */
   document.addEventListener('visibilitychange', () => { if (document.hidden && fly) fly.drain(); });
   /* the page's own functions, for the fork end-to-end test only: never exposed on the real site */
-  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__flyTest = { readWindow, autoTrade, autoStart, autoStop, autoWithdraw, autoAccount, auto, session, fly, decide, current: () => current };
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__flyTest = { ripples: () => ripples.length, readWindow, autoTrade, autoStart, autoStop, autoWithdraw, autoAccount, auto, session, fly, decide, current: () => current };
 }
 start().catch((e) => log('error: ' + (e && e.message || e)));

@@ -7294,7 +7294,10 @@ function traiterRequete(req, res) {
         const ok = (x) => typeof x === 'string';
         if (!b || !/^0x[0-9a-fA-F]{40}$/.test(b.from) || !/^0x[0-9a-fA-F]{40}$/.test(b.to) || !ok(b.data) || !/^0x[0-9a-fA-F]*$/.test(b.data) || (b.value != null && !/^0x[0-9a-fA-F]{1,64}$/.test(b.value))) {
           send(400, { ok: false, why: 'body: {from, to, data, value?} as hex' }); return; }
-        const gas = await rpcServeur('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]);
+        /* `refused`: the CHAIN said no (a revert, no funds); otherwise the node did not answer, and the page must not call that a refusal
+         *   (QA 08/11: a 429 was shown as "the chain refuses this call") */
+        let gas; try { gas = await rpcServeur('eth_estimateGas', [{ from: b.from, to: b.to, data: b.data, value: b.value || '0x0' }]); }
+        catch (e) { const m = String((e && e.message) || e); send(200, { ok: false, refused: /revert|insufficient funds|gas required exceeds/i.test(m) || (e && e.data != null), why: m.slice(0, 160) }); return; }
         send(200, { ok: true, gas: BigInt(gas).toString() }); return;
       }
       /* relay */
