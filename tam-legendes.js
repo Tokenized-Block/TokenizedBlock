@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game300 (idea: codex "human brain", Claude sub-agent) */
+  attentionCattell: {
+    titre: 'Cattell: attention and distraction',
+    enUnePhrase: 'Doing sums in your head slows a simple reaction by a few hundredths of a second; trying hard barely speeds it up.',
+    colonnes: ['attention: concentrated, normal, distracted', 'reaction time (ms)', 'single series, printed means, Table VIII'],
+    aRegarder: ['The distracted column sits highest for every light, shock and sound.', 'Concentrated and normal are close; for C under electric light, concentrated is higher.', 'Table VIII is the same gaps, with normal set to zero.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
