@@ -1210,6 +1210,14 @@ const L = {
     aRegarder: ['Measured: the mean change d of each signal in each emotion (Table 9). Ours: a 15 % firing chance per step, times 1 + d.', 'Switch from anger to fear: breathing leads in both.', 'With the spread on, units cover the printed 95 % interval: the emotions overlap.'],
     fin: null,
   },
+  /* game310 (idea: Phil, emotions as impulses from measured open data) */
+  bodyMapsNummenmaa: {
+    titre: 'Nummenmaa: naming an emotion from a body map',
+    enUnePhrase: 'Shown where other people felt their body change, readers named the emotion 46 % of the time where guessing gives 14 %: neutral almost always, fear almost never.',
+    colonnes: ['answer', 'shown emotion and reader', 'right or wrong'],
+    aRegarder: ['Measured: the share of readers right for each map. Ours: 87 simulated readers per map, wrong answers spread evenly.', 'Neutral fills its own column; fear scatters everywhere.', 'Set the slider to 1 to see blind guessers.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
