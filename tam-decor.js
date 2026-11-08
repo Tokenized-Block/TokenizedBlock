@@ -597,8 +597,6 @@ const DECORS = {
   mortaliteNightingale: (P, o, B) => [pt([0.5, 1, B.centre[2]], C.repere, P.anneeNightingale === 1 ? 'Winter 1854-55: up to 1022.8 per 1,000 a year' : 'Winter 1855-56: up to 56.4 per 1,000 a year')],
   /* game255 */
   exclusionGause: (P, o, B) => [pt([1, 0, B.centre[2]], C.repere, 'Day 16: no P. caudatum left')],
-  /* game254 */
-  interferenceStroop: (P, o, B) => [pt([1, 110.3 / 120, B.centre[2]], C.repere, 'Naming with conflict: 110.3 s')],
   /* game253 */
   aberrationBradley: (P, o, B) => [pt([0, 40.4 / 60, B.centre[2]], C.repere, 'Maximum about 40.4"')],
   /* game252 */

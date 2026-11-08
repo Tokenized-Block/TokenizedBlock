@@ -362,8 +362,6 @@ export const ECHELLE_PROPRE = {
   mortaliteNightingale: [2],
   /* game255 : jours et volumes ; serie (etiquette) */
   exclusionGause: [2],
-  /* game254 : groupe et temps de natures differentes ; condition (etiquette) */
-  interferenceStroop: [2],
   /* game253 : rang et secondes d arc de natures differentes ; maximum, ecart ou prediction (etiquette) */
   aberrationBradley: [2],
   /* game252 : tailles de meme grandeur ; ligne, colonne ou droite (etiquette) */

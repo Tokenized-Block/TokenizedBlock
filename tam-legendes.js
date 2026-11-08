@@ -1514,14 +1514,6 @@ const L = {
     aRegarder: ['P. caudatum climbs, then sinks to 0.', 'The constant model keeps both alive.', 'Raise beta to make the model exclude.'],
     fin: null,
   },
-  /* game254 (idee : codex 27, sous-agent Claude) */
-  interferenceStroop: {
-    titre: 'Stroop: when the word fights the colour',
-    enUnePhrase: 'Naming the ink of a word that spells another colour is slow: reading wins over seeing.',
-    colonnes: ['who', 'time for 100 items', 'without conflict, with conflict, difference'],
-    aRegarder: ['Experiment 1: reading barely slows down.', 'Experiment 2: naming slows by three quarters.', 'Switch experiments to compare.'],
-    fin: null,
-  },
   /* game253 (idee : codex 27, sous-agent Claude) */
   aberrationBradley: {
     titre: 'Bradley: starlight arrives at an angle',
