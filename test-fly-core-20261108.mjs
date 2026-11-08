@@ -66,6 +66,7 @@ async function banc(dir) {
   const t2 = events.filter((e) => e.type === 'tx');
   ok(t2.length === 1 && t2[0].tx === '0x02' && t2[0].kind === 'sent' && Math.abs(t2[0].usd - 200) < 1e-9, 'second window: only the new trade, sent $200');
   ok(events.some((e) => e.type === 'predict' && e.word === 'undecided'), 'a naive prediction is made BEFORE the outcome');
+  ok(JSON.stringify(ses.lastOdor) === JSON.stringify({ received: 0, sent: 200, moved: 0 }), 'the live odor a simulation is injected on: ' + JSON.stringify(ses.lastOdor));
   ses.window({ symbol: 'X', price: px(99), transactions: [] }); f3.drain();
   const st = ses.state();
   ok(st.tally.undecided === 1 && st.settled === 2, 'the undecided prediction is counted, two windows settled ' + JSON.stringify(st.tally) + ' ' + st.settled);

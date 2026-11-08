@@ -2468,6 +2468,29 @@ details[open] > summary::before{transform:rotate(90deg)}
        ⛔ UN MODELE, ET IL LE DIT. Ce n est pas un connectome biologique : 128 neurones a fuite,
           semes par l adresse du block. Ce qu il fait est visible ici plutot que raconte. -->
   <section class="volet" id="v-brain" aria-label="Brain AI">
+    <!-- 2026-11-08 (Phil : « deplace vers brain section », « glow up ») : le lien vers la mouche vivante, en tete de l onglet Brain.
+         Animation CSS seule (aucun script) ; prefers-reduced-motion la coupe. -->
+    <style>
+      .flyLien { position: relative; display: block; margin: 0 0 12px; padding: 14px 16px; border-radius: 14px; overflow: hidden; text-decoration: none; color: #dfe6f3;
+        background: radial-gradient(120% 140% at 0% 0%, rgba(79,209,197,.18), transparent 55%), radial-gradient(120% 140% at 100% 100%, rgba(244,114,182,.16), transparent 55%), #0a0f1b;
+        border: 1px solid rgba(246,196,83,.45); animation: flyRespire 3.2s ease-in-out infinite; }
+      .flyLien b { color: #f6c453; font-size: 15px; }
+      .flyLien span { display: block; font-size: 13px; color: #a9b4c8; margin-top: 4px; }
+      .flyLien .flyPts { display: flex; gap: 6px; margin-top: 10px; }
+      .flyLien .flyPts i { width: 7px; height: 7px; border-radius: 50%; background: #4fd1c5; opacity: .25; animation: flyFeu 1.6s ease-in-out infinite; }
+      .flyLien .flyPts i:nth-child(3n+2) { background: #f6c453; } .flyLien .flyPts i:nth-child(3n) { background: #f472b6; }
+      .flyLien .flyPts i:nth-child(2) { animation-delay: .15s } .flyLien .flyPts i:nth-child(3) { animation-delay: .3s } .flyLien .flyPts i:nth-child(4) { animation-delay: .45s }
+      .flyLien .flyPts i:nth-child(5) { animation-delay: .6s } .flyLien .flyPts i:nth-child(6) { animation-delay: .75s } .flyLien .flyPts i:nth-child(7) { animation-delay: .9s }
+      .flyLien .flyPts i:nth-child(8) { animation-delay: 1.05s } .flyLien .flyPts i:nth-child(9) { animation-delay: 1.2s }
+      @keyframes flyRespire { 0%, 100% { box-shadow: 0 0 0 rgba(246,196,83,0); } 50% { box-shadow: 0 0 22px rgba(246,196,83,.35); } }
+      @keyframes flyFeu { 0%, 100% { opacity: .2; transform: scale(1); } 40% { opacity: 1; transform: scale(1.5); } }
+      @media (prefers-reduced-motion: reduce) { .flyLien, .flyLien .flyPts i { animation: none; } }
+    </style>
+    <a class="flyLien" href="fly-brain.html">
+      <b>A real fly's brain, living on tokenized stocks →</b>
+      <span>1,119 real neurons smell each trade, predict, learn from the next move. Tap any neuron to see its connections. Paper only, nothing signed.</span>
+      <div class="flyPts" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </a>
     <!-- ══ LE PANNEAU DE COMMANDE (2026-10-04) — une EXTENSION de cet onglet : il montre le MEME cerveau (memoire, nourriture, journal,
          raster) que les cartes du dessous, pas une copie. On ecrit une commande ou on en touche une ; le cerveau la juge ; le plan
          est construit et simule ; le wallet signe. Un agent (Claude, Grok…) peut PROPOSER par le MCP — jamais signer. -->
@@ -4476,11 +4499,6 @@ details[open] > summary::before{transform:rotate(90deg)}
 
   <!-- 2026-10-31 (TAM phase C) : l onglet TAM. Le contenu est peint par tam-onglet.js a la premiere ouverture (ouvrirTam). -->
 <section class="volet" id="v-tam" aria-label="TAM math art">
-  <!-- 2026-11-08 (branche cerveau humain) : le lien vers la mouche vivante, hors de tamRacine que tam-onglet.js repeint -->
-  <a class="flyLien" href="fly-brain.html" style="display:block;margin:0 0 12px;padding:12px 14px;border:1px solid #263252;border-radius:12px;background:#0a0f1b;color:#dfe6f3;text-decoration:none">
-    <b style="color:#f6c453">A real fly's brain, living on tokenized stocks →</b><br>
-    <span style="font-size:13px;color:#8a96ad">1,119 real neurons smell each trade, predict, learn from the next move. Tap any neuron to see its connections. Paper only, nothing signed.</span>
-  </a>
   <div id="tamRacine"><p class="note">Loading…</p></div></section>
 <section class="volet" id="v-bridge" aria-label="Bridge">
     <div class="carte">

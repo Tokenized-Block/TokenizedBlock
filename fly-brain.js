@@ -72,6 +72,7 @@ function show(e, symbol) {
 }
 function onEvent(e) {
   show(e, current.symbol);
+  if (e.type === 'tx') ripple(e.kind, e.usd);
   if (e.type === 'verdict' || e.type === 'taught') { renderTally(); }
   if (e.type === 'taught' && !e.sim) saveMemory();
 }
@@ -95,18 +96,58 @@ function measure() {
   return r;
 }
 
-function draw() {
+/* ── TRANSACTIONS ARRIVING, SHOWN: each real trade of a window is a ring on its PN group (received, sent, moved), spread over the window
+ * instead of one burst. Visual only: the neural activity stays what fly-core computes. ── */
+const KIND_COLOR = { received: '#4fd1c5', sent: '#f472b6', moved: '#a78bfa' };
+const KIND_OF = { received: 0n, sent: 1n, moved: 2n };
+let ripples = [], txSlot = 0;
+function ripple(kind, usd) {
+  const at = Date.now() + (txSlot++ % 10) * 2400;
+  ripples.push({ kind, at, size: Math.min(1, Math.log10(Math.max(10, usd)) / 5) });
+}
+function pnCenter(kind) {
+  if (!N.pnCenter) {
+    N.pnCenter = {};
+    for (const [k, r] of Object.entries(KIND_OF)) {
+      const l = N.filter((n) => n.family === 'PN' && BigInt(n.id) % 3n === r);
+      N.pnCenter[k] = { x: l.reduce((s, n) => s + n.x, 0) / l.length, y: l.reduce((s, n) => s + n.y, 0) / l.length, ids: new Set(l.map((n) => n.id)) };
+    }
+  }
+  return N.pnCenter[kind];
+}
+
+/* Drawing is batched (one stroke per colour and intensity, no shadow blur): the old one stroke per edge and blurred glow cost too much
+ * on phones. Quiet circuit = ~10 frames/s, activity = ~30. */
+const ALPHAS = 6;
+function draw(now) {
   if (!N.edges) return;
-  const W = canvas.width, H = canvas.height;
+  const W = canvas.width, H = canvas.height, t = Date.now();
   ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(5,7,13,0.35)'; ctx.fillRect(0, 0, W, H);
   ctx.globalCompositeOperation = 'lighter';
   const focus = selected != null ? selected : hovered;
+  const buckets = new Map();
   for (const [i, j, w] of N.edges) {
     if (hidden.has(N[i].family) || hidden.has(N[j].family)) continue;
     const a = act[i], base = (focus != null ? 0.008 : 0.025) + 0.05 * (w / N.wMax);
-    ctx.strokeStyle = COLOR[N[i].family]; ctx.globalAlpha = Math.min(0.9, base + a * 0.45 * (0.3 + w / N.wMax));
-    ctx.lineWidth = 0.4 + a * 1.2; ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke();
+    const alpha = Math.min(0.9, base + a * 0.45 * (0.3 + w / N.wMax)), q = Math.min(ALPHAS - 1, Math.floor(alpha * ALPHAS / 0.9)), thick = a > 0.3 ? 1 : 0;
+    const key = N[i].family + '|' + q + '|' + thick;
+    let b = buckets.get(key); if (!b) { b = []; buckets.set(key, b); } b.push(i, j);
   }
+  for (const [key, list] of buckets) {
+    const [fam, q, thick] = key.split('|');
+    ctx.strokeStyle = COLOR[fam]; ctx.globalAlpha = (Number(q) + 0.5) * 0.9 / ALPHAS; ctx.lineWidth = thick === '1' ? 1.4 : 0.5;
+    ctx.beginPath(); for (let k = 0; k < list.length; k += 2) { ctx.moveTo(N[list[k]].x, N[list[k]].y); ctx.lineTo(N[list[k + 1]].x, N[list[k + 1]].y); } ctx.stroke();
+  }
+  /* signals travelling along the active connections */
+  let dots = 0; const byColor = new Map();
+  for (const [i, j] of N.edges) {
+    if (dots >= 220) break;
+    if (act[i] < 0.25 || hidden.has(N[i].family) || hidden.has(N[j].family)) continue;
+    const f = ((t / 900) + ((i * 31 + j * 17) % 97) / 97) % 1, c = COLOR[N[i].family];
+    let l = byColor.get(c); if (!l) { l = []; byColor.set(c, l); } l.push(N[i].x + (N[j].x - N[i].x) * f, N[i].y + (N[j].y - N[i].y) * f); dots++;
+  }
+  ctx.globalAlpha = 0.9;
+  for (const [c, l] of byColor) { ctx.fillStyle = c; ctx.beginPath(); for (let k = 0; k < l.length; k += 2) { ctx.moveTo(l[k] + 2.2, l[k + 1]); ctx.arc(l[k], l[k + 1], 2.2, 0, Math.PI * 2); } ctx.fill(); }
   /* the focused neuron's real connections: inputs in cyan, outputs in gold, width by synapse count */
   if (focus != null) {
     const wMax = Math.max(1, ...N.in[focus].map(([, w]) => w), ...N.out[focus].map(([, w]) => w));
@@ -116,19 +157,33 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(N[focus].x, N[focus].y); ctx.lineTo(N[k].x, N[k].y); ctx.stroke(); }
     }
   }
+  /* rings of the transactions arriving now, and their PN group lit for as long as the ring lives */
+  ripples = ripples.filter((r) => t < r.at + 1800);
+  const lit = new Set();
+  for (const r of ripples) {
+    if (t < r.at) continue;
+    const p = (t - r.at) / 1800, c = pnCenter(r.kind);
+    ctx.strokeStyle = KIND_COLOR[r.kind]; ctx.globalAlpha = 0.8 * (1 - p); ctx.lineWidth = 2 + 4 * r.size;
+    ctx.beginPath(); ctx.arc(c.x, c.y, 20 + p * (90 + 120 * r.size), 0, Math.PI * 2); ctx.stroke();
+    for (const id of c.ids) lit.add(id);
+  }
+  /* quiet neurons in one fill per colour; active ones get a soft halo (no shadow blur) */
+  const quiet = new Map();
   for (let j = 0; j < N.length; j++) {
     if (hidden.has(N[j].family)) continue;
-    const n = N[j], a = act[j], r = (n.family === 'APL' ? 7 : n.family === 'MBON' ? 3.2 : 2.2) + a * 5 + (j === focus ? 5 : 0);
+    const n = N[j], a = Math.max(act[j], lit.has(n.id) ? 0.35 : 0), r = (n.family === 'APL' ? 7 : n.family === 'MBON' ? 3.2 : 2.2) + a * 5 + (j === focus ? 5 : 0);
     const c = n.family === 'DAN' && n.dan === 'punishment' ? '#fb923c' : COLOR[n.family];
-    ctx.globalAlpha = 0.35 + a * 0.65; ctx.fillStyle = c;
-    if (a > 0.08) { ctx.shadowColor = c; ctx.shadowBlur = 14 * a; } else ctx.shadowBlur = 0;
-    ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
+    if (a <= 0.08 && j !== focus) { let l = quiet.get(c); if (!l) { l = []; quiet.set(c, l); } l.push(n.x, n.y, r); continue; }
+    ctx.fillStyle = c; ctx.globalAlpha = 0.18 * a; ctx.beginPath(); ctx.arc(n.x, n.y, r * 3.2, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.35 + a * 0.65; ctx.beginPath(); ctx.arc(n.x, n.y, r, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.globalAlpha = 0.35;
+  for (const [c, l] of quiet) { ctx.fillStyle = c; ctx.beginPath(); for (let k = 0; k < l.length; k += 3) { ctx.moveTo(l[k] + l[k + 2], l[k + 1]); ctx.arc(l[k], l[k + 1], l[k + 2], 0, Math.PI * 2); } ctx.fill(); }
   /* the synapses the last learning step weakened, in white for 6 s */
-  const now = Date.now(); flash = flash.filter((f) => f[2] > now);
+  flash = flash.filter((f) => f[2] > t);
   ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1.6;
-  for (const [i, j, until] of flash) { ctx.globalAlpha = Math.min(0.9, (until - now) / 3000); ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke(); }
-  ctx.shadowBlur = 0; ctx.globalAlpha = 0.75; ctx.globalCompositeOperation = 'source-over';
+  for (const [i, j, until] of flash) { ctx.globalAlpha = Math.min(0.9, (until - t) / 3000); ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke(); }
+  ctx.globalAlpha = 0.75; ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#8a96ad'; ctx.font = '22px system-ui'; ctx.textAlign = 'center';
   ctx.fillText('approach', W * 0.86, H * 0.08); ctx.fillText('avoid', W * 0.86, H * 0.80);
   ctx.globalAlpha = 1;
@@ -279,7 +334,12 @@ function listen() {
 
 /* The brain steps on a timer, the drawing on animation frames: a background tab gets no frames, and its fly must keep living. */
 function tick() { fly.tick(); act = fly.act; beat(); if (fly.ticks % 4 === 0) gauges(); }
-function loop() { draw(); requestAnimationFrame(loop); }
+let lastDraw = 0;
+function loop(now) {
+  const busy = flash.length || ripples.length || hovered != null || selected != null || (fly && fly.peak && act.some((a) => a > 0.01));
+  if (now - lastDraw >= (busy ? 33 : 100)) { lastDraw = now; draw(now); }
+  requestAnimationFrame(loop);
+}
 
 /* One window, every 30 s: price + new transactions, handed to the shared protocol. */
 async function readWindow() {
@@ -302,6 +362,7 @@ async function readWindow() {
     lastPrice = price.priceUsd;
   }
   if (ac && !ac.ok && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
+  txSlot = 0;
   session.window({ symbol: stock.symbol, price, transactions: ac && ac.ok && Array.isArray(ac.transactions) ? ac.transactions : null });
   renderBook(); renderTally(); saveMemory();
 }
@@ -340,13 +401,17 @@ async function start() {
   session = createSession(fly, onEvent);
   const idx = new Map(N.map((n, i) => [n.id, i]));
   N.edges = circuit.edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]);
-  /* drawn edges: the 1,800 strongest, so the canvas stays readable */
-  N.edges = N.edges.sort((x, y) => y[2] - x[2]).slice(0, 1800); N.wMax = N.edges[0][2];
+  /* drawn edges: the 1,800 strongest (900 on a phone), so the canvas stays readable and light */
+  N.edges = N.edges.sort((x, y) => y[2] - x[2]).slice(0, canvas.clientWidth && canvas.clientWidth < 600 ? 900 : 1800); N.wMax = N.edges[0][2];
   place(N);
-  /* simulation: a $5,000 "received" odor followed by the chosen move — taught, then asked again */
+  /* simulation, injected on what is REALLY happening (Phil 08/11): the odor of the last window that had real trades, followed by the
+   *   chosen move — taught, then asked again on that same live odor, so the needle moves on the market's own smell. Before any real trade
+   *   was smelled, a $5,000 "received" odor stands in, and the log says so. */
   $('inject').addEventListener('click', () => { const v = Number(slider.value) / 1000; if (!v) return;
-    const mix = { received: 5000, sent: 0, moved: 0 };
-    log(`SIMULATION · ${mixText(mix)} followed by ${pct(v, 1)}`, 'sim'); session.learn(mix, v, true); session.predict(mix, true); });
+    const live = session.lastOdor, mix = live || { received: 5000, sent: 0, moved: 0 };
+    log(`SIMULATION · ${live ? 'on the last real window (' + mixText(mix) + ')' : 'no real trade smelled yet, a stand-in ' + mixText(mix)} followed by ${pct(v, 1)}`, 'sim');
+    if (live) for (const [k, usd] of Object.entries(mix)) if (usd > 0) ripple(k, usd);
+    session.learn(mix, v, true); session.predict(mix, true); });
   log(`circuit loaded: ${N.length} neurons, ${circuit.edges.length} connections ≥ ${circuit.synapseThreshold} synapses; `
     + `${N.counts.approach} approach-side and ${N.counts.avoid} avoid-side MBONs, from measured dopamine inputs`);
   wireMap();

@@ -144,7 +144,7 @@ export function createSession(fly, emit) {
   /* PAPER book, never real funds, never a signature: the fly is in the stock for a window when it predicted approach, out otherwise;
    * two dumb witnesses next to it; every change of position pays the pool's own fee, read on chain. */
   const books = { fly: { label: 'Fly', pos: 0, ret: 1, switches: 0 }, hold: { label: 'Always in', pos: 0, ret: 1, switches: 0 }, momentum: { label: 'Follow last move', pos: 0, ret: 1, switches: 0 } };
-  let feePips = null, settled = 0, seen = new Set(), prevWin = null, firstWindow = true;
+  let feePips = null, settled = 0, seen = new Set(), prevWin = null, firstWindow = true, lastOdor = null;
 
   function predict(mix, sim, done) {
     fly.present(fly.odorDrive(mix), { onPeak: (t) => { emit({ type: 'predict', sim, mix, ap: t.ap, av: t.av, word: t.word }); if (done) done(t.word); } });
@@ -202,6 +202,7 @@ export function createSession(fly, emit) {
       if (prevWin.hasOdor) { judge(prevWin.prediction, move); if (move !== 0) learn(prevWin.mix, move, false); }
     }
     const hasOdor = mix.received + mix.sent + mix.moved > 0;
+    if (hasOdor) lastOdor = { ...mix };
     const win = { price: p, mix, hasOdor, prediction: null, lastMove };
     if (hasOdor) predict(mix, false, (word) => { win.prediction = word; });
     prevWin = win;
@@ -215,6 +216,8 @@ export function createSession(fly, emit) {
     for (const [k, b] of Object.entries(books)) Object.assign(b, { pos: 0, ret: x && x.books && x.books[k] ? x.books[k].ret : 1, switches: x && x.books && x.books[k] ? x.books[k].switches : 0 });
     settled = x && Number.isFinite(x.settled) ? x.settled : 0;
   }
-  function reset() { seen = new Set(); prevWin = null; firstWindow = true; feePips = null; }
-  return { window, predict, learn, state, restore, reset, get feePips() { return feePips; }, get settled() { return settled; } };
+  function reset() { seen = new Set(); prevWin = null; firstWindow = true; feePips = null; lastOdor = null; }
+  /* the odor of the last window that had real trades: a simulation is injected on what is really happening, not on a made-up smell */
+  return { window, predict, learn, state, restore, reset, get feePips() { return feePips; }, get settled() { return settled; },
+    get lastOdor() { return lastOdor ? { ...lastOdor } : null; } };
 }
