@@ -8,6 +8,7 @@
  *   (tam-science.js#CORPS) dessinent chaque corps dans le meme espace, une couleur par corps ; un nuage = des tirages ;
  *   un FILM (o.film du module) se dessine image par image, une couleur par moment — sa disposition ici = celle du module. */
 import { SYSTEMES, CORPS } from './tam-science.js';
+import * as HB from './human-brain-data.js';
 
 const N_DEFAUT = 1500;
 /* la couleur hors corps (tam-onglet.js#dimDominante) : la colonne la plus loin de sa moyenne en ce point */
@@ -1218,12 +1219,17 @@ const L = {
     aRegarder: ['Measured: the share of readers right for each map. Ours: 87 simulated readers per map, wrong answers spread evenly.', 'Neutral fills its own column; fear scatters everywhere.', 'Set the slider to 1 to see blind guessers.'],
     fin: null,
   },
-  /* game311 (idea: Phil, a connected human brain live facing emotions, all connections, more emotions) */
+  /* game311 / game315 / game316 (Phil: "the legend is still false"): it says exactly what is drawn, every number read from human-brain-data.js
+   *   (the same numbers the subject draws; test-tam-cerveau-lignes-20261108.mjs checks them against the subject's invariants) */
   emotionWiringHCP: {
-    titre: 'A wired human brain facing emotion categories',
-    enUnePhrase: 'All the measured wiring between 82 regions of the human brain carries impulses from the regions reported active in a category; the same regions keep coming back from one emotion to another.',
-    colonnes: ['layout across', 'layout up', 'reported region firing, impulse, other region firing, region; each connection is a line, brighter when stronger'],
-    aRegarder: ['Measured: the wiring (ENIGMA, 207 HCP adults, 1,190 connections, log streamline density) and the reported areas (Lindquist 2012; shame and guilt 2023; love 2022; empathy for pain 2020). Ours: the mapping onto the regions, the layout, the timing, the crossing chance.', 'The left insula comes back in anger, shame, guilt and empathy for pain; the left amygdala in disgust, fear and maternal love.', 'Network 1: impulses follow the resting-state couplings instead (468 of the 1,190 strongest join wired regions; both amygdalae have none at this cut). Passionate love lights nothing: its areas are in the brainstem.'],
+    titre: (P) => 'Wired brain: ' + HB.selectEmotion(P).emotion.name,
+    enUnePhrase: (P) => { const { pack, emotion: e } = HB.selectEmotion(P); return e.name + ' (' + pack.name + '): ' + e.regions.length + ' regions reported by ' + e.source.short + ' (' + e.source.design + ', ' + e.source.n + '); ' + e.shared.length + ' of them also reported for another emotion of this pack.'; },
+    colonnes: ['front to back of the real brain (mm / 100)', 'bottom to top (mm / 100)', 'left to right (mm / 100)'],
+    aRegarder: (P) => { const { emotion: e, other } = HB.selectEmotion(P), K = HB.COUNTS, nm = (id) => HB.REGIONS.find((r) => r.id === id).name.toLowerCase();
+      const net = Math.round(Number(P.networkWiring)) === 1, nPath = HB.DEEP_LINKS.length, nDeep = K.regions - K.hcpRegions;
+      return ['Its regions (our mapping of the areas its source prints): ' + (e.regions.length ? e.regions.map(nm).join(', ') : 'none among these parts') + '. Shared within this pack: ' + (e.shared.length ? e.shared.map(nm).join(', ') : 'none') + (other ? '; with ' + other.name.toLowerCase() + ': ' + e.regions.filter((r) => other.regions.includes(r)).length + ' regions' : '') + '.',
+        'Drawn: lines = the ' + (net ? K.functionKept.toLocaleString('en-US') + ' strongest couplings at rest' : K.wiringNonzero.toLocaleString('en-US') + ' connections measured by tractography') + ' in ' + K.subjects + ' adults, opacity = strength, plus ' + nPath + ' violet pathways named in studies (no strength measured); points = the ' + K.hcpRegions + ' regions at their real places (fsaverage5 surface), the ' + nDeep + ' deep parts, a faint outline of the cortex and deep structures, then the firing events.',
+        'Measured: ' + e.measured + '. Ours: ' + e.ours + ', and the places of ' + Object.values(HB.POS3D_SOURCE).filter((x) => x.startsWith('our placement')).length + ' deep parts. Over all packs ' + HB.SHARED.shared + ' of ' + HB.SHARED.mapped + ' mapped regions serve two or more emotions, ' + HB.SHARED.single + ' serve one.']; },
     fin: null,
   },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
@@ -2493,9 +2499,11 @@ export function legende(id, params = {}) {
     /* game81 : un « moment » d un film de champs quantiques n est pas toujours un instant : le module le dit, la legende aussi */
     + (film && FILMS_DU_MODULE[id] && FILMS_DU_MODULE[id].note ? ' Here ' + FILMS_DU_MODULE[id].note + '.' : '')
     + (noms && !CORPS[id] && e.objets ? ' ' + e.objets(noms) : '');
+  /* game315: a legend may depend on the settings (titre, enUnePhrase, aRegarder given as functions of the params) */
+  const val = (v) => (typeof v === 'function' ? v(params) : v);
   return Object.freeze({
-    titre: e.titre, enUnePhrase: e.enUnePhrase, colonnes, couleurs,
-    aRegarder: Object.freeze(e.aRegarder.slice()), fin: e.fin,
+    titre: val(e.titre), enUnePhrase: val(e.enUnePhrase), colonnes, couleurs,
+    aRegarder: Object.freeze(val(e.aRegarder).slice()), fin: e.fin,
     film: film ? Object.freeze(film) : null, noms: noms ? Object.freeze(noms) : null,
   });
 }

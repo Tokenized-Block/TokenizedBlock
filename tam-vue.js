@@ -148,6 +148,39 @@ export function dessinerSegments(g, sv, ecran, { sc = 1, dpr = 1, aplati = false
   return traits;
 }
 
+/* ── 2026-11-08 (Phil's production screenshot: the brain's lines in a block on the right, its points on the left) : INDEXED segments ──
+ *   A segment may name the two POINTS it joins: ia, ib = indices into the subject's point order. It is then drawn between the screen
+ *   positions ACTUALLY used for those points (sx, sy: whatever path drew them: the stored view of a work, the live projection, a rotation,
+ *   layers off), so a line can never leave its points. Segments without ia/ib keep projeterSegments (ends that are not points). */
+/** the indexed segments of a subject: null when any segment lacks integer ia/ib (then the coordinate path is used); pairs outside 0..n-1 dropped */
+export function segmentsIndexes(segments, n) {
+  if (!Array.isArray(segments) || !segments.length || !(n >= 1)) return null;
+  const ia = [], ib = [], poids = [], classes = [];
+  for (const s of segments) {
+    if (!s || !Number.isInteger(s.ia) || !Number.isInteger(s.ib)) return null;
+    if (ia.length >= SEGMENTS_MAX || s.ia < 0 || s.ib < 0 || s.ia >= n || s.ib >= n) continue;
+    const w = s.w === undefined ? 1 : Number(s.w), c = Number.isInteger(s.c) && s.c >= 0 && s.c < COULEURS_SEGMENTS.length ? s.c : 0;
+    ia.push(s.ia); ib.push(s.ib); poids.push(Number.isFinite(w) ? Math.max(0, Math.min(1, w)) : 1); classes.push(c);
+  }
+  return { q: ia.length, ia: Int32Array.from(ia), ib: Int32Array.from(ib), poids: Float32Array.from(poids), classes: Uint8Array.from(classes) };
+}
+/** draws indexed segments between the DRAWN screen positions sx[i], sy[i] of their points; one stroke per (class, weight bucket) */
+export function dessinerSegmentsIndexes(g, si, sx, sy, { dpr = 1 } = {}) {
+  const P = paquetsSegments(si); if (!P.length) return 0;
+  let traits = 0; g.shadowBlur = 0; g.lineCap = 'round';
+  for (const p of P) {
+    g.strokeStyle = p.couleur; g.globalAlpha = p.alpha; g.lineWidth = Math.max(0.5, p.largeur * dpr); g.beginPath();
+    for (const r of p.indices) {
+      const a = si.ia[r], b = si.ib[r];
+      if (!Number.isFinite(sx[a]) || !Number.isFinite(sy[a]) || !Number.isFinite(sx[b]) || !Number.isFinite(sy[b])) continue;
+      g.moveTo(sx[a], sy[a]); g.lineTo(sx[b], sy[b]); traits++;
+    }
+    g.stroke();
+  }
+  g.globalAlpha = 1;
+  return traits;
+}
+
 /* ── les couches : une par dimension ── */
 export const couleurDim = (j) => 'hsl(' + Math.round((j * 137.508 + 195) % 360) + ' 85% 62%)';
 export const etatCouches = (D) => ({ D, actives: Array.from({ length: D }, () => true) });

@@ -524,7 +524,11 @@ const DECORS = {
   /* game310 */
   bodyMapsNummenmaa: (P, o, B) => [pt([(1 + 0.5) / 7, (1 * 87 + 43.5) / (7 * 87), B.centre[2]], C.repere, 'Fear: named right 8 % of the time, under chance')],
   /* game311 */
-  emotionWiringHCP: (P, o, B) => { const a = (((o.invariants || {}).emotionWiringHCP || {}).amygdalaPlaceWiring || '').split(' ').map(Number); return a.length === 2 && a.every(Number.isFinite) ? [pt([a[0], a[1], B.centre[2]], C.repere, 'Left amygdala: disgust, fear, maternal love')] : []; },
+  emotionWiringHCP: (P, o, B) => { const I = (o.invariants || {}).emotionWiringHCP || {}, out = [];
+    (I.seedPlacesWiring || '').split('|').filter(Boolean).forEach((s) => { const [nm, ...c] = s.split('@'), p = c.map(Number); if (nm !== 'Left amygdala' && p.length === 3 && p.every(Number.isFinite)) out.push(pt(p, C.repere, nm)); });
+    const a = (I.amygdalaPlaceWiring || '').split(' ').map(Number);
+    if (a.length === 3 && a.every(Number.isFinite)) out.push(pt(a, C.repere, 'Left amygdala: ' + (I.amygdalaWiring || '')));
+    return out; },
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */
