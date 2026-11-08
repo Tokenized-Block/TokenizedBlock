@@ -5976,7 +5976,7 @@ const SERVIS = [
   /* game115 : mathematiques */
   'tam-maths.js',
   /* game315: the human brain numbers shared by tam-maths.js, tam-legendes.js and human-brain.html */
-  'human-brain-data.js', 'human-brain-anatomy.js',
+  'human-brain-data.js', 'human-brain-anatomy.js', 'human-brain.html', 'human-brain.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
