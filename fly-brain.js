@@ -187,6 +187,8 @@ function autoNote(...parts) {
   $('autoLog').prepend(p);
 }
 const usd6 = (x) => fmt(Number(BigInt(x)) / 1e6, 2);
+/* the value really used, bounded, and written back into the field so the user sees it (Phil's live test 08/11: 0.3 typed, 1 USDC sent) */
+function field(id, min, max, step) { const el = $(id), raw = Number(el.value); let v = Number.isFinite(raw) ? Math.min(max, Math.max(min, raw)) : min; v = Math.round(v / step) * step; v = Number(v.toFixed(6)); if (String(v) !== String(el.value)) el.value = String(v); return v; }
 function autoRender() {
   const s = auto.s, el = $('autoWallet');
   el.textContent = '';
@@ -227,21 +229,29 @@ async function autoFund() {
   const chain = String(await eth().request({ method: 'eth_chainId' }).catch(() => '')).toLowerCase();
   if (chain !== '0x2105') { autoSay('Your wallet is not on Base right now (chain ' + chain + '): nothing sent. Switch to Base and press again.'); return; }
   const payer = live.account.toLowerCase();
-  const usdc = BigInt(Math.round(Math.min(100, Math.max(1, Number($('autoBudget').value) || 0)) * 1e6));
+  const usdc = BigInt(Math.round(field('autoBudget', 0.1, 100, 0.1) * 1e6));
+  /* what the fly already holds is not sent again: a retry after a half-done funding only completes it */
+  let held; try { held = await autoAccount(); } catch (e) { autoSay('The balance of the fly wallet could not be read, so nothing is sent (a retry could send twice): ' + String(e.message).slice(0, 100)); return; }
+  const needUsdc = usdc > BigInt(held.usdc) ? usdc - BigInt(held.usdc) : 0n, needEth = BigInt(held.eth) < AUTO_GAS_ETH / 2n ? AUTO_GAS_ETH : 0n;
+  if (!needUsdc && !needEth) { autoRefresh(); if (!auto.s.owner) { auto.s.owner = payer; autoSave(); } autoRender(); autoSay(`Already funded: it holds ${usd6(held.usdc)} USDC and gas. Nothing sent.`); return; }
   const word = (a) => a.slice(2).toLowerCase().padStart(64, '0');
-  const calls = [{ to: USDC_BASE, data: selecteur('transfer(address,uint256)') + word(auto.s.address) + usdc.toString(16).padStart(64, '0'), value: '0x0' },
-    { to: auto.s.address, data: '0x', value: '0x' + AUTO_GAS_ETH.toString(16) }];
+  const calls = [...(needUsdc ? [{ to: USDC_BASE, data: selecteur('transfer(address,uint256)') + word(auto.s.address) + needUsdc.toString(16).padStart(64, '0'), value: '0x0' }] : []),
+    ...(needEth ? [{ to: auto.s.address, data: '0x', value: '0x' + needEth.toString(16) }] : [])];
   try {
     let batched = false;
-    try {
-      const id = await eth().request({ method: 'wallet_sendCalls', params: [{ version: '2.0.0', chainId: '0x2105', from: payer, atomicRequired: true, calls }] });
-      batched = true; autoNote(`funding sent in ONE signature: ${usd6(usdc)} USDC + 0.0002 ETH for gas (batch ${String(id && (id.id || id)).slice(0, 16)}…)`);
-    } catch (err) {
-      /* only a wallet that does not know the method gets the two-signature path: any other error may mean the batch went out */
-      if (!(err && (err.code === 4200 || err.code === -32601 || /not supported|does not exist|unsupported/i.test(String(err.message))))) throw err;
+    const unsupported = (err) => err && (err.code === 4200 || err.code === -32601 || err.code === -32602 || /not supported|does not exist|unsupported|version/i.test(String(err.message)));
+    for (const params of [{ version: '2.0.0', chainId: '0x2105', from: payer, atomicRequired: true, calls }, { version: '1.0', chainId: '0x2105', from: payer, calls }]) {
+      if (calls.length < 2 || batched) break;
+      try {
+        const id = await eth().request({ method: 'wallet_sendCalls', params: [params] });
+        batched = true; autoNote(`funding sent in ONE signature (batch ${params.version}): ${usd6(needUsdc)} USDC + ${fmt(Number(needEth) / 1e18, 4)} ETH for gas (${String(id && (id.id || id)).slice(0, 16)}…)`);
+      } catch (err) {
+        /* only a wallet that does not know this batch format moves on: any other error may mean the batch went out */
+        if (!unsupported(err)) throw err;
+      }
     }
     if (!batched) {
-      autoNote('your wallet does not batch calls: two signatures instead (USDC, then the gas ETH)');
+      if (calls.length > 1) autoNote('your wallet does not batch calls: one signature per transfer instead (USDC, then the gas ETH)');
       for (const c of calls) { const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: payer, ...c }] }); autoNote('sent ', { tx: h }); await waitReceipt(h); }
     }
     /* the owner (where Withdraw sends) is the wallet that paid, set only once the funding went out (review L2) */
@@ -291,7 +301,7 @@ async function autoTrade(e) {
     const done = await withLock(async () => {
       const today = new Date().toISOString().slice(0, 10);
       if (s.day !== today) { s.day = today; s.today = 0; }
-      const maxDay = Math.min(50, Math.max(1, Math.floor(Number($('autoDay').value) || 0)));
+      const maxDay = field('autoDay', 1, 50, 1);
       const a = await autoAccount(stock.address), held = a.stock ? BigInt(a.stock) : 0n;
       /* the REAL position decides, not the paper book: after a reload or a stock switch the paper book starts out (review L3) */
       const action = decide(e.word, held > 0n ? 1 : 0);
@@ -301,7 +311,7 @@ async function autoTrade(e) {
       if (s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
       let de, vers, montant;
       if (action === 'buy') {
-        const cap = BigInt(Math.round(Math.min(100, Math.max(0.5, Number($('autoCap').value) || 0)) * 1e6)), have = BigInt(a.usdc);
+        const cap = BigInt(Math.round(field('autoCap', 0.1, 100, 0.1) * 1e6)), have = BigInt(a.usdc);
         const amt = have < cap ? have : cap;
         if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
         de = USDC_BASE; vers = stock.address; montant = amt.toString();
@@ -335,7 +345,7 @@ async function autoTrade(e) {
 }
 function autoStart() { if (!auto.s || !auto.s.owner) return; if (!$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
   autoRefresh(); auto.s.running = true; autoSave(); autoRender();
-  autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${$('autoCap').value} USDC per buy, ${$('autoDay').value} trades a day. Stop halts it.`); }
+  autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', and only once its record beats a coin flip' : ''}. Stop halts it.`); }
 function autoStop() { if (!auto.s) return; autoRefresh(); auto.s.running = false; autoSave(); autoRender(); autoNote({ b: 'stopped' }, ': it sends nothing more' + (auto.busy ? ' after the call already in flight' : '') + '.'); }
 async function autoWithdraw() {
   if (!auto.s || !auto.s.owner) return;
