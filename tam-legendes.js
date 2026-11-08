@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
+  reactionDonders: {
+    titre: 'Donders: timing a decision',
+    enUnePhrase: 'Repeating a sound you expect is fast; having to recognise it and pick your answer adds about a twelfth of a second.',
+    colonnes: ['method a, c or b', 'reaction time (ms)', 'roll means, single trials, overall'],
+    aRegarder: ['Method b sits highest in every roll.', 'Method c, one answer only, falls in between.', 'Single trials of roll XVI B scatter around their mean.'],
+    fin: null,
+  },
   /* game297 (idee : codex « cerveau humain », sous-agent Claude) */
   essaisThorndike: {
     titre: 'Thorndike: learning by trial and error',

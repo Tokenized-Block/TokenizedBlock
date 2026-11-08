@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game299 */
+  reactionDonders: 'A printed difference off the table, a roll mean off its trials, or the order b - a > c - a > 0 failing', differencesDonders: 'Printed differences matching the table', moyennesXVIBDonders: 'Roll XVI B means matching its trials (truncated)', determinationsDonders: 'Timed answers in roll XVI B', conversionsDonders: 'Thousandths of a second matching (x 1000 / 261)', ordreDonders: 'Columns where choosing costs more than recognising', baMsDonders: 'Choosing adds (ms)', caMsDonders: 'Recognising adds (ms)', rouleauDonders: 'Roll shown', ecartMinimaDonders: 'Same gaps on the minima (vibrations)',
   /* game297 */
   essaisThorndike: 'Not the 24 printed trials, or six-trial averages not falling', essaisN: 'Trials', sommeThorndike: 'Total time (s)', minimumThorndike: 'Fastest', haussesThorndike: 'Trials slower than the one before', blocsThorndike: 'Average of each six trials (s)', premierDixThorndike: 'First trial under 10 s', ensuiteDixThorndike: 'Trials under 10 s from then on', exposantPuissanceThorndike: 'Power law exponent (my fit)', ssrPuissanceThorndike: 'Power law misfit (log)', ssrExpoThorndike: 'Exponential misfit (log)', moyenneSurThorndike: 'Moving average over (trials)', retoursThorndike: 'Slow trials after the fast second one (s)',
   /* game292 */
