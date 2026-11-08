@@ -1130,6 +1130,14 @@ const L = {
     aRegarder: ['The voltage climbs as 1 - e^(-t/tau): two thirds of the way after one tau.', 'The resistor turns into heat exactly as much energy as the capacitor keeps: half of what the battery gives, for a full charge.', 'A large tau is too slow to finish by t = 6: then less than half is lost.'],
     fin: null,
   },
+  /* game297 (idee : codex « cerveau humain », sous-agent Claude) */
+  essaisThorndike: {
+    titre: 'Thorndike: learning by trial and error',
+    enUnePhrase: 'The cat gets faster at escaping, but by fits and starts, not in one flash of insight.',
+    colonnes: ['trial', 'time to escape (log)', 'his times, moving average or power law'],
+    aRegarder: ['The third trial is slower than the second.', 'A longer average smooths the steps into one slide.', 'From trial 14 on, almost every escape takes 10 s or less.'],
+    fin: null,
+  },
   /* game292 (idee : codex 31, sous-agent Claude) */
   penduleKater: {
     titre: 'Kater: the shape of the Earth from one pendulum',

@@ -489,6 +489,8 @@ export const NOMS_MESURES_EN = Object.freeze({
   /* game124 */
   /* game125 */
   /* game127 */
+  /* game297 */
+  essaisThorndike: 'Not the 24 printed trials, or six-trial averages not falling', essaisN: 'Trials', sommeThorndike: 'Total time (s)', minimumThorndike: 'Fastest', haussesThorndike: 'Trials slower than the one before', blocsThorndike: 'Average of each six trials (s)', premierDixThorndike: 'First trial under 10 s', ensuiteDixThorndike: 'Trials under 10 s from then on', exposantPuissanceThorndike: 'Power law exponent (my fit)', ssrPuissanceThorndike: 'Power law misfit (log)', ssrExpoThorndike: 'Exponential misfit (log)', moyenneSurThorndike: 'Moving average over (trials)', retoursThorndike: 'Slow trials after the fast second one (s)',
   /* game292 */
   penduleKater: 'Beats not falling to the south, a length off N squared, or the Unst-Dunnose line not 39.00734', stationsKater: 'Stations', decroitKater: 'Steps south where beats and length both fall', ecartN2Kater: 'Largest gap to L ~ N squared (1e-5 inch)', equateurKater: 'Equator length from Unst and Dunnose (printed 39.00734)', equateurAjusteKater: 'Equator length, all stations fitted', diminutionKater: 'Gravity diminution pole to equator', aplatissementKater: 'Flattening 1 in', oteeKater: 'Station left out', aplatissementSansKater: 'Flattening 1 in, without it', rapportNewtonKater: 'Diminution over a homogeneous Earth',
   /* game290 */
