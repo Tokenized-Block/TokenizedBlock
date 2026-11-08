@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
-<title>Fly brain</title>
+<title>Hemibrain trader</title>
 <style>
   :root { --bg: #05070d; --text: #dfe6f3; --muted: #8a96ad; --pn: #4fd1c5; --kc: #f6c453; --mbon: #f472b6; --dan: #a78bfa; --apl: #f87171; --line: #1a2234; }
   * { box-sizing: border-box; }
@@ -64,7 +64,7 @@
 <body>
 <header>
   <a href="/" style="font-size:13px;color:#93c5fd;text-decoration:none">← Back to the app</a>
-  <h1>A real fly's memory circuit, living on tokenized stocks</h1>
+  <h1>Hemibrain connectome, living and trading on tokenized stocks</h1>
   <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), living on a stock's real trades, 24/7. Every 30 s the trades are an odor; the fly predicts, then the next price move rewards or punishes it, and you see which synapses it changed. Nothing is signed, nothing is advice.</div>
 </header>
 <main>
@@ -103,6 +103,19 @@
       <button id="forget">Erase what it learned on this stock</button>
       <div class="state" style="margin-top:6px">What it learns is kept in this browser, per stock, so it keeps training from visit to visit. A private window starts a naive fly.</div>
       <div class="state" style="margin-top:6px">Kenyon cells pluck notes, outputs hum high (approach) or low (avoid), reward rings, punishment drums. Same moves, same rhythm.</div>
+    </div>
+    <div class="card live">
+      <h2>Trade for real · your wallet signs</h2>
+      <div class="why">When the fly decides <b>BUY</b> or <b>SELL</b>, it shows a real, simulated order for your budget. Nothing leaves your wallet unless <b>you</b> sign that order. The fly never signs. Its decisions come from a model of a fly brain, not from advice: <b>you can lose this money</b>. Tokenized stocks are only for eligible persons outside the U.S.</div>
+      <label class="state" style="display:flex;gap:8px;align-items:flex-start;margin-top:8px"><input type="checkbox" id="risk" style="width:auto;margin-top:3px"> I understand I can lose the money I trade, that the fly's decision is not advice, and that each trade is signed by me.</label>
+      <button id="connect">Connect my wallet</button>
+      <label class="state" for="budget" style="display:block;margin-top:8px">Budget per buy (USDC)</label>
+      <input id="budget" type="number" min="1" step="1" value="5" style="width:100%;background:#111a2c;color:var(--text);border:1px solid #263252;border-radius:8px;padding:8px;font:inherit">
+      <div class="state" id="liveState" style="margin-top:8px">Not connected.</div>
+      <div class="why" id="livePlan"></div>
+      <button id="sign" disabled>Sign this trade with my wallet</button>
+      <button id="stop">Stop the fly (no more orders proposed)</button>
+      <div class="state" id="liveLog" style="margin-top:6px"></div>
     </div>
     <div class="card">
       <h2>The shared fly (server)</h2>
