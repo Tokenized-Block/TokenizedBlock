@@ -12,8 +12,12 @@
   header { padding: 16px 16px 6px; }
   h1 { margin: 0; font-size: 20px; letter-spacing: .02em; }
   .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
-  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; padding: 8px 16px 16px; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  /* one page (Phil 08/11): the map and every card side by side in a dashboard grid, not one long falling column */
+  main { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); grid-auto-flow: row dense; gap: 12px; padding: 8px 16px 16px; align-items: start; }
+  main > aside { display: contents; }
+  .scene { grid-column: span 2; grid-row: span 3; }
+  @media (max-width: 720px) { main { grid-template-columns: 1fr; } .scene { grid-column: auto; grid-row: auto; } }
+  .card .log { max-height: 220px; }
   .scene { position: relative; background: radial-gradient(ellipse at 50% 40%, #0c1222 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; }
   .legend { display: flex; flex-wrap: wrap; gap: 10px; padding: 8px 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
@@ -56,7 +60,11 @@
   .thoughts .act { font-weight: 700; } .act.buy { color: #4ade80; } .act.sell { color: #f87171; } .act.hold { color: #f6c453; } .act.stay_out { color: #8a96ad; }
   .legend span[data-family] { cursor: pointer; user-select: none; }
   .legend span.off { opacity: .35; text-decoration: line-through; }
-  canvas { cursor: crosshair; touch-action: manipulation; }
+  canvas { cursor: grab; touch-action: none; }
+  .viewbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+  .viewbar button { width: auto; margin: 0; padding: 4px 10px; font-size: 13px; background: rgba(17,26,44,.85); }
+  .glossary { font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); margin-top: 6px; padding-top: 6px; }
+  .glossary b { color: #c3cbe0; }
   .neuron { padding: 10px 12px; border-top: 1px solid var(--line); font-size: 13px; min-height: 64px; }
   .neuron .nname { font-weight: 600; }
   .book { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
@@ -70,11 +78,12 @@
 <header>
   <a href="/" style="font-size:13px;color:#93c5fd;text-decoration:none">← Back to the app</a>
   <h1>Hemibrain connectome, living and trading on tokenized stocks</h1>
-  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), living on a stock's real trades, 24/7. Every 30 s the trades are an odor; the fly predicts, then the next price move rewards or punishes it, and you see which synapses it changed. Nothing is signed, nothing is advice.</div>
+  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), living on a stock's real trades, 24/7. Every 30 s the trades are an odor; the fly predicts, then the next price move rewards or punishes it, and you see which synapses it changed. Paper trades by default; its own small wallet trades only if you fund it. Nothing here is advice.</div>
 </header>
 <main>
   <section class="scene">
     <canvas id="canvas" width="1280" height="800"></canvas>
+    <div class="viewbar"><button id="zoomIn" aria-label="Zoom in">+</button><button id="zoomOut" aria-label="Zoom out">−</button><button id="viewFlat">Flat</button><button id="viewReset">Reset</button></div>
     <div class="legend">
       <span data-family="PN"><b style="background:var(--pn)"></b>PN · olfactory input</span>
       <span data-family="KC"><b style="background:var(--kc)"></b>Kenyon · coding</span>
@@ -83,6 +92,7 @@
       <span data-family="DAN"><b style="background:#fb923c"></b>Dopamine · punishment (PPL1)</span>
       <span data-family="APL"><b style="background:var(--apl)"></b>APL · inhibition</span>
       <span>◯ ring · a real transaction arriving</span>
+      <span>Drag to turn · wheel or two fingers to zoom · shift-drag to move. 3D is schematic: depth groups each family (inputs at the back, outputs in front); the circuit file has no anatomical positions.</span>
     </div>
     <div class="neuron" id="neuron"></div>
   </section>
@@ -96,7 +106,7 @@
       <div class="state" id="ref"></div>
     </div>
     <div class="card">
-      <h2>Fly trader · paper only</h2>
+      <h2>Fly trader · its decisions</h2>
       <div class="state" id="watching">watching —</div>
       <div id="verdict" class="decision">Waiting for a smell</div>
       <div class="dial"><span id="needle"></span></div>
@@ -113,6 +123,7 @@
       <h2>Its thoughts · before, now, next</h2>
       <div class="state">Each decision is a set of synapses firing: the Kenyon cells the smell woke up, through the synapses it learned, into approach or avoid outputs. Tap a synapse to light it on the map and walk from there.</div>
       <div id="thoughts" class="thoughts"></div>
+      <div class="glossary"><b>Smell cell</b> = a Kenyon cell: a few of them fire for each smell, they are its memory. <b>“Go toward” / “keep away” output</b> = an output neuron of the memory centre (MBON): when it fires the fly is pushed toward the smell, or away from it. <b>% strength</b> = how much the synapse between them keeps of what it had in a newborn fly: learning weakens the side that was wrong (a fall weakens “go toward”). <b>Pull toward / push away</b> = the same, summed over the cells this smell wakes up (100% = nothing learned yet).</div>
       <div class="state" style="margin-top:6px">“Next” is computed, not guessed: the fly is deterministic, so a shadow copy of it, loaded with its exact state, is run ahead once per possible move (Laplace's demon, at the scale of this model). It forecasts the FLY's next decision, never the market: which move comes is unknown, so all three are shown and none is picked.</div>
     </div>
     <div class="card live">
