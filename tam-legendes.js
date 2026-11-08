@@ -1146,6 +1146,14 @@ const L = {
     aRegarder: ['The points fall as the difference grows, close to the curve.', 'The second group sits lower: practice made the finger finer.', 'At the far left, the errors stay below one half.'],
     fin: null,
   },
+  /* game302 (idea: codex "human brain", Claude sub-agent) */
+  extinctionPavlov: {
+    titre: 'Pavlov: a learnt response fades, then returns',
+    enUnePhrase: 'A signal that stops being followed by food loses its effect, faster when it is repeated close together, but the response comes back after a rest.',
+    colonnes: ['minutes since the first showing', 'saliva in one minute', 'series'],
+    aRegarder: ['Each series falls toward zero, with small rises on the way.', 'The 16-minute series is still above zero after two hours.', 'The two 2-minute series, the same day, took 15 and 18 minutes.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
