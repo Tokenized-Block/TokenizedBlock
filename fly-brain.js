@@ -879,7 +879,7 @@ async function start() {
   fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
   session = createSession(fly, onEvent);
   /* boldness: how sure it must be to act (kept per viewer). Lower = it acts on weaker pulls, and pays the fee more often. */
-  const bold = $('bold'), showBold = () => { const v = Number(bold.value) / 1000; session.threshold = v; $('boldValue').textContent = fmt(v * 100, 1) + '%'; try { localStorage.setItem('fly-boldness-v1', String(bold.value)); } catch (_) { /* per visit */ } };
+  const bold = $('bold'), showBold = () => { const v = Number(bold.value) / 1000; session.threshold = v; $('boldValue').textContent = fmt(v * 100, 1) + '%'; $('boldMirror').textContent = fmt(v * 100, 1) + '%'; try { localStorage.setItem('fly-boldness-v1', String(bold.value)); } catch (_) { /* per visit */ } };
   try { const v = localStorage.getItem('fly-boldness-v1'); if (v && Number(v) >= 2 && Number(v) <= 50) bold.value = v; } catch (_) { /* default */ }
   bold.addEventListener('input', showBold); showBold();
   const idx = new Map(N.map((n, i) => [n.id, i]));
