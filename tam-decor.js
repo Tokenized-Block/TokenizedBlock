@@ -511,6 +511,8 @@ const DECORS = {
   weberKonig: (P, o, B) => [pt([(Math.log10(0.5) + 1) / 6.3, (Math.log10(0.793) + 2) / 2, B.centre[2]], C.repere, 'Brodhun, faintest light: a 79 percent change needed')],
   /* game304 */
   glycosuriaCannon: (P, o, B) => [pt([0.4, 12 / 25, B.centre[2]], C.repere, 'Football 1913: 12 of 25, five never played')],
+  /* game305 */
+  brainBoyd: (P, o, B) => [pt([10 / 17, 48.54 / 50, B.centre[2]], C.repere, 'Men, 14 to 20 years: 48.54 oz., the heaviest')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */

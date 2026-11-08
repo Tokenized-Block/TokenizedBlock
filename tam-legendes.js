@@ -1170,6 +1170,14 @@ const L = {
     aRegarder: ['The cat bars reach the top: every excited cat.', 'People: fewer, but never none, after an examination or a match.', 'The control bars stay at zero.'],
     fin: null,
   },
+  /* game305 (idea: codex "human brain", Claude sub-agent) */
+  brainBoyd: {
+    titre: 'Boyd: the weight of the brain through life',
+    enUnePhrase: 'The brain grows fast in childhood, is heaviest in the late teens, then slowly gets lighter; it says nothing about what anyone can do.',
+    colonnes: ['period of life', 'weight of the brain (oz.)', 'men, women, sum of the parts'],
+    aRegarder: ['A steep climb over the first years.', 'A top at 14 to 20, then a slow slope down.', 'The sum of the parts strays from the total where parts were weighed on fewer people.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
