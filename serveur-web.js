@@ -2998,7 +2998,8 @@ function chargerMouche() {
   try {
     const x = JSON.parse(readFileSync(FICHIER_MOUCHE, 'utf8'));
     if (!x || x.v !== 1 || x.symbol !== MOUCHE.symbol || !Array.isArray(x.memory)) return;
-    MOUCHE.fly.importMemory(x.memory); MOUCHE.session.restore(x.session);
+    /* the trace (smells still waiting for their lessons) only if the save is recent: a smell of an hour ago is not taught by today's move */
+    MOUCHE.fly.importMemory(x.memory); MOUCHE.session.restore(Date.now() - Date.parse(x.savedAt) < 600000 ? x.session : { ...x.session, recent: [] });
     MOUCHE.events = Array.isArray(x.events) ? x.events.slice(-120) : [];
     for (const k of ['windows', 'windowsRead', 'windowsMissed']) if (Number.isFinite(x[k])) MOUCHE[k] = x[k];
     if (x.trainingSince) MOUCHE.trainingSince = x.trainingSince;
