@@ -124,6 +124,19 @@ async function banc(dir) {
   ok(JSON.stringify(s6.lastOdor) === JSON.stringify(s5.lastOdor) && s6.next() && s6.next().nextMix.received === 5000, 'the last real smell survives a restart: ' + JSON.stringify(s6.lastOdor));
   s6.restore({ lastOdor: { received: -5, sent: 10, moved: 0 } }); ok(s6.lastOdor === null, 'a corrupt saved smell (negative) is refused');
   s6.restore({ lastOdor: { received: NaN, sent: 1, moved: 0 } }); ok(s6.lastOdor === null, 'a corrupt saved smell (NaN) is refused');
+  /* Phil 08/11 "129 undecided": tiny but regular moves must teach. 12 windows: a "sent" smell, then a -0.01% fall each time */
+  const ev7 = [], f7 = createFly(circuit), s7 = createSession(f7, (e) => ev7.push(e));
+  let px7 = 100; s7.window({ symbol: 'X', price: px(px7), transactions: [] }); f7.drain();
+  for (let k = 0; k < 12; k++) { s7.window({ symbol: 'X', price: px(px7), transactions: [tx('0x7' + k.toString(16).padStart(3, '0'), 'sent', 3)] }); f7.drain(); px7 *= 0.9999; }
+  s7.window({ symbol: 'X', price: px(px7), transactions: [tx('0x7fff', 'sent', 3)] }); f7.drain();
+  const d7 = ev7.filter((e) => e.type === 'decision').pop();
+  ok(Math.abs(s7.typical - 0.0001) < 1e-6, 'the usual move is learned from the moves themselves: ' + s7.typical);
+  ok(d7 && d7.word === 'avoid', 'after 12 small (-0.01%) falls the fly DECIDES: avoid (approach ' + (d7 && d7.ap.toFixed(3)) + ' / avoid ' + (d7 && d7.av.toFixed(3)) + ')');
+  ok(JSON.stringify(createSession(createFly(circuit), () => {}).state().typical) === '0' && s7.state().typical === s7.typical, 'the usual move is saved with the state');
+  /* idle ticks do not forget: the page ticks at rest, the server does not, and both must keep the same memory */
+  const m0 = JSON.stringify(f7.exportMemory()); for (let k = 0; k < 3000; k++) f7.step([]);
+  ok(JSON.stringify(f7.exportMemory()) === m0, 'three thousand idle steps change no synapse');
+  ok(f7.addDopamine(new Float64Array(f7.N.length), 0.0001, 0.0001) === 0.5 && f7.addDopamine(new Float64Array(f7.N.length), 0.0003, 0.0001) === 1, 'a usual move teaches at 1/2, three times the usual saturates');
   return n;
 }
 
@@ -141,13 +154,17 @@ const MUTANTS = [
   ['vend sans tenir', (s) => s.replace("return word === 'approach' ? 'buy' : 'stay_out';", "return word === 'approach' ? 'buy' : word === 'avoid' ? 'sell' : 'stay_out';")],
   ['fenetre sans odeur vend', (s) => s.replace("const flyWants = win.decision ? (win.decision === 'buy' || win.decision === 'hold' ? 1 : 0) : books.fly.pos;", "const flyWants = win.decision === 'buy' || win.decision === 'hold' ? 1 : 0;")],
   ['prevision sur la vraie mouche', (s) => s.replace('    shadow.loadState(start);\n', '    shadow = fly; shadow.loadState(start);\n')],
-  ['prevision sans le mouvement', (s) => s.replace('if (lastMix && move) { const d = shadow.odorDrive(lastMix); shadow.addDopamine(d, move);', 'if (lastMix && move) { const d = shadow.odorDrive(lastMix);')],
+  ['prevision sans le mouvement', (s) => s.replace('shadow.addDopamine(d, move, typical); shadow.present(d);', 'shadow.present(d);')],
   ['etat copie sans la memoire', (s) => s.replace('act.set(s.act); let k = 0; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) e[2] = s.m[k++];', 'act.set(s.act);')],
   ['pensee non triee', (s) => s.replace('return out.sort((a, b) => b.c - a.c).slice(0, limit);', 'return out.slice(0, limit);')],
   ['exact meme en pleine impulsion', (s) => s.replace('if (start.queued || start.pulseSteps) return { exact: false, scenarios: [] };', '')],
   ['prevision sur la position d avant la decision', (s) => s.replace("const pos = prevWin && prevWin.decision ? (prevWin.decision === 'buy' || prevWin.decision === 'hold' ? 1 : 0) : books.fly.pos;", 'const pos = books.fly.pos;')],
-  ['odeur perdue au redemarrage', (s) => s.replace('settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null };', 'settled, feePips };')],
+  ['odeur perdue au redemarrage', (s) => s.replace('settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null, typical };', 'settled, feePips, typical };')],
   ['odeur corrompue acceptee', (s) => s.replace("lastOdor = lo && ['received', 'sent', 'moved'].every((k) => Number.isFinite(lo[k]) && lo[k] >= 0) &&", 'lastOdor = lo &&')],
+  ['dopamine non adaptee', (s) => s.replace('const s = typical > 0 ? Math.min(1, Math.abs(move) / (FLY.SURPRISE * typical)) : weber(', 'const s = (0) ? 0 : weber(')],
+  ['oubli au repos', (s) => s.replace("(driven ? FLY.RECOVER * (1 - e[2]) : 0)", 'FLY.RECOVER * (1 - e[2])')],
+  ['habituel jamais mis a jour', (s) => s.replace('if (move !== 0) typical = typical > 0 ?', 'if (false) typical = typical > 0 ?')],
+  ['habituel non sauve', (s) => s.replace("settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null, typical };", "settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null };")],
   ['apprentissage sans dopamine', (s) => s.replace('let d = 0; for (const [i, w] of N[j].danIn) d += w * next[i];', 'let d = 0;')],
 ];
 let tues = 0;

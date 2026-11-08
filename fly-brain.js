@@ -425,11 +425,11 @@ function onEvent(e) {
 /* ── ITS THOUGHTS: before (the live decisions, with the synapses that carried them), now, and next (computed on a shadow fly). ── */
 const thoughts = [];
 function synapseChips(path, limit = 3) {
-  return '<div class="walk">' + path.slice(0, limit).map(({ i, j, side, m }) => `<button data-walk="${i}" data-to="${j}" style="border-color:${side === 'approach' ? '#4ade80' : '#f87171'}" title="this Kenyon cell's synapse keeps ${fmt(m * 100, 1)}% of its naive strength">`
-    + `KC #${N[i].id} → ${N[j].type} (${side}) · ${fmt(m * 100, 0)}%</button>`).join('') + '</div>';
+  return '<div class="walk">' + path.slice(0, limit).map(({ i, j, side, m }) => `<button data-walk="${i}" data-to="${j}" style="border-color:${side === 'approach' ? '#4ade80' : '#f87171'}" title="Kenyon cell #${N[i].id} (smell memory) → output ${esc(N[j].type)} (${side}); this synapse keeps ${fmt(m * 100, 1)}% of the strength it had in a newborn fly">`
+    + `smell cell → “${side === 'approach' ? 'go toward' : 'keep away'}” output · ${fmt(m * 100, 0)}% strength</button>`).join('') + '</div>';
 }
 function thoughtLine(when, e, extra = '') {
-  return `<div class="th"><div class="when">${when}</div><span class="act ${e.action}">${ACT[e.action]}</span> · ${SAY[e.word]} (approach ${fmt(e.ap * 100, 1)}% / avoid ${fmt(e.av * 100, 1)}%)${extra}${e.path && e.path.length ? synapseChips(e.path) : ''}</div>`;
+  return `<div class="th"><div class="when">${when}</div><span class="act ${e.action}">${ACT[e.action]}</span> · ${SAY[e.word]} (pull toward ${fmt(e.ap * 100, 1)}% · push away ${fmt(e.av * 100, 1)}%)${extra}${e.path && e.path.length ? synapseChips(e.path) : ''}</div>`;
 }
 function renderThoughts() {
   if (!fly || !session) return;
@@ -441,7 +441,7 @@ function renderThoughts() {
   else {
     const learn = fc.learnsFrom ? 'it will first learn from the last smell (' + mixText(fc.learnsFrom) + ') with that move' : 'the last window had no trade: nothing to learn';
     html += `<div class="th"><div class="when">next · if the next window smells like the last real trades (${mixText(fc.nextMix)}) · ${fc.pos ? 'holding' : 'out of'} the stock</div><span class="state">${learn}, then:</span></div>`
-      + fc.scenarios.map((sc) => thoughtLine('if the price moves ' + (sc.move ? pct(sc.move, 0) : '0% (no lesson)'), sc)).join('');
+      + fc.scenarios.map((sc) => thoughtLine(sc.move ? 'if the price makes a usual ' + (sc.move > 0 ? 'rise' : 'fall') + ' (' + pct(sc.move, 3) + ')' : 'if the price does not move (no lesson)', sc)).join('');
   }
   $('thoughts').innerHTML = html;
   $('thoughts').querySelectorAll('button[data-walk]').forEach((b) => b.addEventListener('click', () => {
@@ -482,19 +482,73 @@ function pnCenter(kind) {
     N.pnCenter = {};
     for (const [k, r] of Object.entries(KIND_OF)) {
       const l = N.filter((n) => n.family === 'PN' && BigInt(n.id) % 3n === r);
-      N.pnCenter[k] = { x: l.reduce((s, n) => s + n.x, 0) / l.length, y: l.reduce((s, n) => s + n.y, 0) / l.length, ids: new Set(l.map((n) => n.id)) };
+      N.pnCenter[k] = { list: l, ids: new Set(l.map((n) => n.id)) };
     }
   }
-  return N.pnCenter[kind];
+  const g = N.pnCenter[kind]; return { ...centre(g.list), ids: g.ids };
 }
 
 /* Drawing is batched (one stroke per colour and intensity, no shadow blur): the old one stroke per edge and blurred glow cost too much
  * on phones. Quiet circuit = ~10 frames/s, activity = ~30. */
+/* ── 3D VIEW (Phil 08/11: "see the connections in 3D, zoom in and out"). The circuit file carries NO positions (hemibrain coordinates
+ * need neuPrint), so depth is OURS: each family on its own layer (smell inputs at the back, Kenyon cells in the middle, outputs at the
+ * front), a fixed per-neuron jitter, and the 2D layout above for the rest. Drag to turn, wheel or two fingers to zoom, shift-drag to
+ * move. Every drawing routine keeps using n.x / n.y: they are the projection of (bx, by, bz) through the camera, at every frame. ── */
+const cam = { yaw: -0.55, pitch: 0.22, zoom: 1, panX: 0, panY: 0, moving: 0 };
+const CAM_HOME = { yaw: -0.55, pitch: 0.22, zoom: 1, panX: 0, panY: 0 };
+const DEPTH = { PN: -320, KC: 0, MBON: 300, APL: 40 };
+function init3d(list) {
+  const W = canvas.width, H = canvas.height;
+  list.forEach((n, j) => {
+    n.bx = n.x - W / 2; n.by = n.y - H / 2;
+    const jitter = (((j * 7919) % 97) / 97 - 0.5) * 140;
+    n.bz = (n.family === 'DAN' ? (j % 2 ? 200 : -200) : DEPTH[n.family] ?? 0) + jitter;
+  });
+}
+function project() {
+  const W = canvas.width, H = canvas.height, cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw), cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch), D = 1700;
+  for (const n of N) {
+    const x1 = n.bx * cy - n.bz * sy, z1 = n.bx * sy + n.bz * cy;
+    const y2 = n.by * cp - z1 * sp, z2 = n.by * sp + z1 * cp, f = D / Math.max(200, D + z2) * cam.zoom;
+    n.x = W / 2 + x1 * f + cam.panX; n.y = H / 2 + y2 * f + cam.panY; n.f = f;
+  }
+}
+/* the screen point of a group's centre (labels, rings) */
+function centre(list) { let x = 0, y = 0; for (const n of list) { x += n.x; y += n.y; } return { x: x / list.length, y: y / list.length }; }
+function zoomBy(k) { cam.zoom = Math.min(8, Math.max(0.35, cam.zoom * k)); cam.moving = Date.now(); }
+function wire3d() {
+  const ptrs = new Map(); let dragged = 0, lastPinch = null;
+  const pos = (e) => { const r = canvas.getBoundingClientRect(); return { x: (e.clientX - r.left) * canvas.width / r.width, y: (e.clientY - r.top) * canvas.height / r.height }; };
+  canvas.addEventListener('pointerdown', (e) => { ptrs.set(e.pointerId, pos(e)); dragged = 0; lastPinch = null; canvas.setPointerCapture(e.pointerId); });
+  canvas.addEventListener('pointermove', (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    const p = pos(e), q = ptrs.get(e.pointerId); ptrs.set(e.pointerId, p);
+    if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (lastPinch) zoomBy(d / lastPinch); lastPinch = d; dragged += 10; return;
+    }
+    const dx = p.x - q.x, dy = p.y - q.y; dragged += Math.abs(dx) + Math.abs(dy);
+    if (e.shiftKey) { cam.panX += dx; cam.panY += dy; } else { cam.yaw += dx * 0.006; cam.pitch = Math.max(-1.3, Math.min(1.3, cam.pitch + dy * 0.006)); }
+    cam.moving = Date.now();
+  });
+  const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) lastPinch = null; };
+  canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  /* a drag must not also select the neuron under the finger */
+  canvas.addEventListener('click', (e) => { if (dragged > 6) { e.stopImmediatePropagation(); dragged = 0; } }, true);
+  canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomBy(Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
+  $('zoomIn').addEventListener('click', () => zoomBy(1.25));
+  $('zoomOut').addEventListener('click', () => zoomBy(0.8));
+  $('viewReset').addEventListener('click', () => { Object.assign(cam, CAM_HOME); cam.moving = Date.now(); });
+  $('viewFlat').addEventListener('click', () => { Object.assign(cam, { yaw: 0, pitch: 0 }); cam.moving = Date.now(); });
+}
+
 const ALPHAS = 6;
 function draw(now) {
   if (!N.edges) return;
   const W = canvas.width, H = canvas.height, t = Date.now();
-  ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = 'rgba(5,7,13,0.35)'; ctx.fillRect(0, 0, W, H);
+  project();
+  /* while the view turns, a full clear (the soft trail would smear the whole map) */
+  ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = t - cam.moving < 400 ? 'rgb(5,7,13)' : 'rgba(5,7,13,0.35)'; ctx.fillRect(0, 0, W, H);
   ctx.globalCompositeOperation = 'lighter';
   const focus = selected != null ? selected : hovered;
   const buckets = new Map();
@@ -557,7 +611,9 @@ function draw(now) {
   for (const [i, j, until] of flash) { ctx.globalAlpha = Math.min(0.9, (until - t) / 3000); ctx.beginPath(); ctx.moveTo(N[i].x, N[i].y); ctx.lineTo(N[j].x, N[j].y); ctx.stroke(); }
   ctx.globalAlpha = 0.75; ctx.globalCompositeOperation = 'source-over';
   ctx.fillStyle = '#8a96ad'; ctx.font = '22px system-ui'; ctx.textAlign = 'center';
-  ctx.fillText('approach', W * 0.86, H * 0.08); ctx.fillText('avoid', W * 0.86, H * 0.80);
+  if (!N.sides) N.sides = { ap: N.filter((n) => n.family === 'MBON' && n.valence === 'approach'), av: N.filter((n) => n.family === 'MBON' && n.valence && n.valence !== 'approach') };
+  const ca = centre(N.sides.ap), cv = centre(N.sides.av);
+  ctx.fillText('go toward', ca.x, ca.y - 70 * cam.zoom); ctx.fillText('keep away', cv.x, cv.y + 80 * cam.zoom);
   ctx.globalAlpha = 1;
 }
 
@@ -751,7 +807,7 @@ function listen() {
 function tick() { fly.tick(); act = fly.act; beat(); if (fly.ticks % 4 === 0) gauges(); }
 let lastDraw = 0;
 function loop(now) {
-  const busy = flash.length || ripples.length || hovered != null || selected != null || (fly && fly.peak && act.some((a) => a > 0.01));
+  const busy = flash.length || ripples.length || hovered != null || selected != null || Date.now() - cam.moving < 400 || (fly && fly.peak && act.some((a) => a > 0.01));
   if (now - lastDraw >= (busy ? 33 : 100)) { lastDraw = now; draw(now); }
   requestAnimationFrame(loop);
 }
@@ -824,7 +880,7 @@ async function start() {
   N.edges = circuit.edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]);
   /* drawn edges: the 1,800 strongest (900 on a phone), so the canvas stays readable and light */
   N.edges = N.edges.sort((x, y) => y[2] - x[2]).slice(0, canvas.clientWidth && canvas.clientWidth < 600 ? 900 : 1800); N.wMax = N.edges[0][2];
-  place(N);
+  place(N); init3d(N);
   /* simulation, injected on what is REALLY happening (Phil 08/11): the odor of the last window that had real trades, followed by the
    *   chosen move — taught, then asked again on that same live odor, so the needle moves on the market's own smell. Before any real trade
    *   was smelled, a $5,000 "received" odor stands in, and the log says so. */
@@ -837,7 +893,7 @@ async function start() {
     session.learn(mix, v, true); session.predict(mix, true); });
   log(`circuit loaded: ${N.length} neurons, ${circuit.edges.length} connections ≥ ${circuit.synapseThreshold} synapses; `
     + `${N.counts.approach} approach-side and ${N.counts.avoid} avoid-side MBONs, from measured dopamine inputs`);
-  wireMap();
+  wireMap(); wire3d();
   setInterval(tick, 120);
   requestAnimationFrame(loop);
   select(0);
