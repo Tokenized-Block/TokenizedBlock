@@ -151,6 +151,9 @@ function autoLoad() {
     x.owner = ADDR_RE.test(String(x.owner)) ? x.owner : null;
     x.traded = Array.isArray(x.traded) ? x.traded.filter((a) => STOCKS.some((s) => s.address === a)) : [];
     x.today = Number.isInteger(x.today) && x.today >= 0 ? x.today : 0; x.running = x.running === true; x.day = String(x.day || '').slice(0, 10);
+    x.consentAt = Number.isFinite(x.consentAt) ? x.consentAt : null;
+    const st = x.settings && typeof x.settings === 'object' ? x.settings : {};
+    x.settings = { budget: Number.isFinite(st.budget) ? st.budget : undefined, cap: Number.isFinite(st.cap) ? st.cap : undefined, day: Number.isInteger(st.day) ? st.day : undefined, proven: typeof st.proven === 'boolean' ? st.proven : undefined };
     return x;
   } catch (_) { return null; }
 }
@@ -196,7 +199,7 @@ function autoRender() {
   else {
     el.append('Fly wallet ', Object.assign(document.createElement('b'), { textContent: displayShort(s.address) }), ' (');
     el.append(Object.assign(document.createElement('a'), { href: 'https://basescan.org/address/' + s.address, target: '_blank', rel: 'noopener', textContent: 'Basescan' }));
-    el.append(`) · funded by ${s.owner ? displayShort(s.owner) : 'nobody yet'} · ${s.running ? 'TRADING ALONE' : 'stopped'} · ${s.today} trade${s.today === 1 ? '' : 's'} today`);
+    el.append(`) · funded by ${s.owner ? displayShort(s.owner) : 'nobody yet'} · ${s.running ? 'TRADING ALONE' : 'stopped'} · ${(s.day === new Date().toISOString().slice(0, 10) ? s.today : 0)} trade${(s.day === new Date().toISOString().slice(0, 10) ? s.today : 0) === 1 ? '' : 's'} today`);
   }
   $('autoCreate').disabled = !!s; $('autoFund').disabled = !s; $('autoStart').disabled = !s || !s.owner || s.running;
   $('autoWithdraw').disabled = !s || !s.owner; $('autoExport').disabled = !s;
@@ -299,8 +302,10 @@ async function autoTrade(e) {
   const stock = current;
   try {
     const done = await withLock(async () => {
+      /* the day counter lives in the STORED state: a reset done on a copy was overwritten by the next autoRefresh(), so the counter
+       *   fell back to 0 at every decision and the daily cap never held (Phil's live test 08/11: "0 trades today" after a trade) */
       const today = new Date().toISOString().slice(0, 10);
-      if (s.day !== today) { s.day = today; s.today = 0; }
+      autoRefresh(); if (auto.s.day !== today) { auto.s.day = today; auto.s.today = 0; autoSave(); }
       const maxDay = field('autoDay', 1, 50, 1);
       const a = await autoAccount(stock.address), held = a.stock ? BigInt(a.stock) : 0n;
       /* the REAL position decides, not the paper book: after a reload or a stock switch the paper book starts out (review L3) */
@@ -308,7 +313,7 @@ async function autoTrade(e) {
       if (action !== 'buy' && action !== 'sell') return;
       if ($('autoProven').checked && !proven(session.state().tally)) { const r = recordEdge(session.state().tally);
         autoNote(`decided ${ACT[action]}, but its record (${r.k} right of ${r.n} judged) does not beat a coin flip yet: no real trade (untick “only once it beats chance” to override)`); return; }
-      if (s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
+      if (auto.s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
       let de, vers, montant;
       if (action === 'buy') {
         const cap = BigInt(Math.round(field('autoCap', 0.1, 100, 0.1) * 1e6)), have = BigInt(a.usdc);
@@ -332,7 +337,7 @@ async function autoTrade(e) {
         if (p.etat !== 'APPROBATIONS') break;
         p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
       }
-      autoRefresh(); auto.s.today++; if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
+      autoRefresh(); if (auto.s.day !== today) { auto.s.day = today; auto.s.today = 0; } auto.s.today++; if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
       autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${auto.s.today}/${maxDay} today). The app's interface fee was in the plan (${String((p.resume && p.resume.fraisBps) || '?')} bps); see Basescan.`);
       /* its memory, sealed by its own wallet right after the trade it decided (a failed seal is said, it does not stop the fly) */
       try { await flySeal(stock); } catch (err) { autoNote('memory not sealed this time: ' + String((err && err.message) || err).slice(0, 140)); }
@@ -343,8 +348,12 @@ async function autoTrade(e) {
     autoRefresh(); auto.s.running = false; autoSave();
   } finally { auto.busy = false; autoRender(); autoShowBalance(); }
 }
+/* the session is remembered (Phil 08/11: reopening the page stopped the fly and asked to tick the box again): the consent with its date,
+ * the settings, and whether it was trading alone. Reopened, it resumes as it was; Stop still halts it. */
+function autoSettings() { return { budget: field('autoBudget', 0.1, 100, 0.1), cap: field('autoCap', 0.1, 100, 0.1), day: field('autoDay', 1, 50, 1), proven: $('autoProven').checked }; }
+function autoRemember() { if (!auto.s) return; autoRefresh(); auto.s.settings = autoSettings(); if ($('autoRisk').checked && !auto.s.consentAt) auto.s.consentAt = Date.now(); autoSave(); }
 function autoStart() { if (!auto.s || !auto.s.owner) return; if (!$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
-  autoRefresh(); auto.s.running = true; autoSave(); autoRender();
+  autoRefresh(); auto.s.running = true; auto.s.consentAt = auto.s.consentAt || Date.now(); auto.s.settings = autoSettings(); autoSave(); autoRender();
   autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', and only once its record beats a coin flip' : ''}. Stop halts it.`); }
 function autoStop() { if (!auto.s) return; autoRefresh(); auto.s.running = false; autoSave(); autoRender(); autoNote({ b: 'stopped' }, ': it sends nothing more' + (auto.busy ? ' after the call already in flight' : '') + '.'); }
 async function autoWithdraw() {
@@ -380,7 +389,16 @@ function autoExport() {
 }
 function autoWire() {
   auto.s = autoLoad();
-  if (auto.s && auto.s.running) { auto.s.running = false; autoSave(); autoNote('page reopened: the fly was trading alone, it is now ', { b: 'stopped' }, ' until you press "Let it trade alone" again.'); }
+  if (auto.s) {
+    const st = auto.s.settings || {};
+    if (Number.isFinite(st.budget)) $('autoBudget').value = String(st.budget);
+    if (Number.isFinite(st.cap)) $('autoCap').value = String(st.cap);
+    if (Number.isFinite(st.day)) $('autoDay').value = String(st.day);
+    if (typeof st.proven === 'boolean') $('autoProven').checked = st.proven;
+    if (Number.isFinite(auto.s.consentAt)) $('autoRisk').checked = true;
+    if (auto.s.running) autoNote('page reopened: ', { b: 'still trading alone' }, ` on its live decisions, with your settings (max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', only once its record beats a coin flip' : ''}). Stop halts it.`);
+  }
+  for (const id of ['autoBudget', 'autoCap', 'autoDay', 'autoProven', 'autoRisk']) $(id).addEventListener('change', autoRemember);
   /* another tab pressed Stop (or started it): obey at once */
   window.addEventListener('storage', (ev) => { if (ev.key === AUTO_KEY) { const x = autoLoad(); if (x && auto.s && x.key === auto.s.key) { auto.s = x; autoRender(); } } });
   $('autoCreate').addEventListener('click', autoCreate); $('autoFund').addEventListener('click', autoFund); $('autoStart').addEventListener('click', autoStart);
