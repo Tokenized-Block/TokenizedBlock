@@ -25,6 +25,8 @@ const rpc = async (method, params = []) => { const r = await fetch(FORK, { metho
 async function surFork() { try { const r = await rpc('anvil_nodeInfo'); return !!(r && r.currentBlockNumber); } catch (_) { return false; } }
 const word = (a) => String(a).slice(2).toLowerCase().padStart(64, '0');
 const bal = async (token, who) => BigInt(await rpc('eth_call', [{ to: token, data: selecteur('balanceOf(address)') + word(who) }, 'latest']));
+/* every signed transaction goes through the server's RELAY (/api/fly/relay, fly-relay.js guard), as the page sends them */
+const relay = async (raw) => { const r = await fetch(BASE + '/api/fly/relay', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ raw }) }); const j = await r.json(); if (!j.ok) throw new Error('relay ' + r.status + ': ' + j.why); return j.hash; };
 const receipt = async (h) => { for (let k = 0; k < 60; k++) { const r = await rpc('eth_getTransactionReceipt', [h]); if (r) return r; await new Promise((o) => setTimeout(o, 500)); } throw new Error('no receipt ' + h); };
 
 if (!(await surFork())) { console.log('REFUSED: ' + FORK + ' is not an anvil fork (anvil_nodeInfo). Nothing sent.'); process.exit(2); }
@@ -57,7 +59,7 @@ try {
         const gas = BigInt(await rpc('eth_estimateGas', [{ from: fly, to: c.to, data: c.data, value: c.value }])) * 12n / 10n;
         const s = signTx({ chainId: 8453, nonce: BigInt(nonce), maxPriorityFeePerGas: prio, maxFeePerGas: maxFee, gas, to: c.to, value: BigInt(c.value || '0x0'), data: c.data }, key);
         ok(decodeTx(s.raw).from === fly, label + ': the signed raw transaction recovers to the fly (' + (c.nom || c.role || 'call') + ')');
-        const h = await rpc('eth_sendRawTransaction', [s.raw]);
+        const h = await relay(s.raw);
         ok(h.toLowerCase() === s.hash.toLowerCase(), label + ': the node computes the same transaction hash');
         const r = await receipt(h);
         ok(r.status === '0x1', label + ': receipt status 0x1 (' + (c.nom || c.role || 'call') + ', gas ' + Number(BigInt(r.gasUsed)) + ')');
@@ -72,6 +74,11 @@ try {
    *   the stock leg cannot be proven here. The fork proves the same money path with an ordinary asset: USDC -> ETH -> USDC through the
    *   same planner, approvals and signer. The stock leg needs a tiny mainnet trade, decided by Phil. */
   const ethBal = async (a) => BigInt(await rpc('eth_getBalance', [a, 'latest']));
+  /* the relay refuses what no plan produced: an approve of the fly's USDC to an arbitrary spender */
+  { const nonce = await rpc('eth_getTransactionCount', [fly, 'pending']), blk = await rpc('eth_getBlockByNumber', ['latest', false]);
+    const bad = signTx({ chainId: 8453, nonce: BigInt(nonce), maxPriorityFeePerGas: 1000000n, maxFeePerGas: BigInt(blk.baseFeePerGas) * 2n + 1000000n, gas: 80000n, to: USDC, value: 0n, data: selecteur('approve(address,uint256)') + word(user) + 'f'.repeat(64) }, key);
+    let refused = null; try { await relay(bad.raw); } catch (e) { refused = e.message; }
+    ok(refused && /403/.test(refused) && (await rpc('eth_getTransactionCount', [fly, 'pending'])) === nonce, 'the relay refuses an unplanned approve (403), nothing reaches the chain: ' + String(refused).slice(0, 60)); }
   const u0 = await bal(USDC, fly), e0 = await ethBal(fly);
   const buy = await run(USDC, 'ETH', 10n * 10n ** 6n, 'BUY ETH with 10 USDC');
   const u1 = await bal(USDC, fly), e1 = await ethBal(fly);
@@ -100,7 +107,7 @@ try {
           let gas; try { gas = BigInt(await rpc('eth_estimateGas', [{ from: fly, to: c.to, data: c.data, value: c.value }])) * 12n / 10n; }
           catch (x) { failed = 'estimateGas refused (' + (c.nom || c.role || 'call') + '): ' + String(x.message).slice(0, 200); break; }
           const sg = signTx({ chainId: 8453, nonce: BigInt(nonce), maxPriorityFeePerGas: 1000000n, maxFeePerGas: BigInt(blk.baseFeePerGas) * 2n + 1000000n, gas, to: c.to, value: BigInt(c.value || '0x0'), data: c.data }, key);
-          const r = await receipt(await rpc('eth_sendRawTransaction', [sg.raw]));
+          const r = await receipt(await relay(sg.raw));
           if (r.status !== '0x1') { failed = 'receipt ' + r.status + ' (' + (c.nom || c.role || 'call') + ')'; break; }
         }
         if (failed) { verdict = failed; break; }
@@ -115,7 +122,7 @@ try {
   const before = await bal(USDC, user), nonce = await rpc('eth_getTransactionCount', [fly, 'pending']), blk = await rpc('eth_getBlockByNumber', ['latest', false]);
   const w = signTx({ chainId: 8453, nonce: BigInt(nonce), maxPriorityFeePerGas: 1000000n, maxFeePerGas: BigInt(blk.baseFeePerGas) * 2n + 1000000n, gas: 100000n, to: USDC, value: 0n,
     data: selecteur('transfer(address,uint256)') + word(user) + u3.toString(16).padStart(64, '0') }, key);
-  const rw = await receipt(await rpc('eth_sendRawTransaction', [w.raw]));
+  const rw = await receipt(await relay(w.raw));
   ok(rw.status === '0x1' && (await bal(USDC, fly)) === 0n && (await bal(USDC, user)) - before === u3, 'WITHDRAW: all ' + u3 + ' USDC units back to the user, the fly holds 0');
   /* not a cost: only 9/10 of the ETH bought was sold back, the rest stays with the fly; a PROVEN stock leg also keeps its stock */
   console.log('USDC not back: ' + (20n * 10n ** 6n - u3) + ' units of 20,000,000, which INCLUDES the 1/10 of the ETH kept unsold (and any stock bought), plus fees and price impact');
