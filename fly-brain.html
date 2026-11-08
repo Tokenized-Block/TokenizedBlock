@@ -130,6 +130,8 @@
         <div class="dial"><span id="needle"></span></div>
         <div class="dialEnds"><span>sell / stay out</span><span>buy / hold</span></div>
         <div class="why" id="why">The fly decides only when a window brings real trades. Its rule: out and drawn to the smell → buy; in and repelled → sell; otherwise it holds, or stays out.</div>
+        <label class="state" for="bold" style="display:block;margin-top:8px">Its boldness — acts from <b id="boldValue">2.0%</b> sure (lower = acts on weaker pulls, pays the fee more often)</label>
+        <input type="range" id="bold" min="2" max="50" step="1" value="20">
         <div class="state" id="tally" style="margin-top:8px"></div>
         <div id="book" class="book"></div>
       </div>
@@ -181,7 +183,6 @@
         <div class="state" id="sealState" style="margin-top:6px"></div>
         <div class="state" style="margin-top:6px">Sealing: your wallet sends 0 ETH to itself with a 66-byte public note — the fingerprint (keccak-256) of what the fly learned on this stock and after how many windows. Only a network fee is paid. The chain proves this memory existed then and was not changed since, not that the fly is right.</div>
         <button id="listen">Listen to the brain</button>
-        <button id="forget">Erase what it learned on this stock</button>
         <div class="state" style="margin-top:6px">Sound: smell cells pluck notes, outputs hum high (go toward) or low (keep away), reward rings, punishment drums. Same moves, same rhythm.</div>
       </div>
       <div class="card">

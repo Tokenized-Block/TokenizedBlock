@@ -80,29 +80,32 @@ function show(e, symbol) {
   else if (e.type === 'taught') { log(`taught: ${mixText(e.mix)} was followed by ${pct(e.move, 3)} → ${e.move > 0 ? 'reward (PAM)' : 'punishment (PPL1)'} dopamine ${fmt(e.strength * 100, 0)}%`, kind); showTrace(e, kind); }
   else if (e.type === 'verdict') log(`consequence: predicted ${e.prediction}, the price moved ${pct(e.move, 3)} → ${e.kind === 'flat' ? 'flat, no verdict' : e.kind === 'consistent' ? 'it matched' : 'it went the other way'}`, 'verdict');
 }
-/* ── THE FLY TRADER: its decision on the live smell, said in full. Paper only, never an order, never advice. ── */
+/* ── THE FLY TRADER: its decision on the live smell, said in full, with how sure it is. Scored as if each were a trade (simulated); real orders only through the cards of band 3. Never advice. ── */
 const ACT = { buy: 'BUY', sell: 'SELL', hold: 'HOLD', stay_out: 'STAY OUT' };
 let lastDecision = null, simOnLive = false;
 function renderDecision(e) {
   lastDecision = e;
-  const el = $('verdict'); el.textContent = (e.sim ? 'SIMULATED · ' : '') + ACT[e.action];
+  const el = $('verdict'); el.textContent = (e.sim ? 'SIMULATED · ' : '') + ACT[e.action]
+    + (e.action === 'stay_out' ? (e.word === 'avoid' ? ' · repelled' : ' · not drawn') : e.action === 'hold' ? (e.word === 'approach' ? ' · still drawn' : ' · not repelled') : '');
   el.className = 'decision ' + e.action; void el.offsetWidth; el.classList.add('flash');
   const n = Object.values(e.mix).filter((v) => v > 0).length;
   /* who taught it: real windows, or (for a simulation) the move just injected — said as it is */
   const fell = e.sim ? 'the injected move was a <b>fall</b> (punishment dopamine), on top of what real windows taught it' : 'windows that smelled like this were followed by <b>falls</b> (punishment dopamine)';
   const rose = e.sim ? 'the injected move was a <b>rise</b> (reward dopamine), on top of what real windows taught it' : 'windows that smelled like this were followed by <b>rises</b> (reward dopamine)';
-  const memory = Math.abs(e.ap - e.av) < 0.005
+  const sure = Number.isFinite(e.t) ? `It is ${fmt(Math.abs(e.t) * 100, 1)}% sure ${e.t >= 0 ? 'toward' : 'away'}; it acts from ${fmt((e.threshold ?? 0.02) * 100, 1)}% (its boldness, below). ` : '';
+  const memory0 = Math.abs(e.ap - e.av) < 0.005
     ? (e.ap > 0.995 ? 'It has learned nothing yet about this smell: both sides answer like a naive fly.'
       : `It has learned this smell both ways about equally (approach ${fmt(e.ap * 100, 1)}%, avoid ${fmt(e.av * 100, 1)}% of a naive fly): rises and falls cancel out, no pull either way.`)
     : e.ap < e.av ? `Its approach synapses for this smell are weaker (<b>${fmt(e.ap * 100, 1)}%</b> left, avoid side ${fmt(e.av * 100, 1)}%): ${fell}.`
       : `Its avoid synapses for this smell are weaker (<b>${fmt(e.av * 100, 1)}%</b> left, approach side ${fmt(e.ap * 100, 1)}%): ${rose}.`;
+  const memory = sure + memory0;
   const rule = e.action === 'buy' ? 'It was out of the stock and is drawn to this smell: <b>it buys</b> (on paper).'
     : e.action === 'sell' ? 'It held the stock and is repelled by this smell: <b>it sells</b> (on paper).'
       : e.action === 'hold' ? 'It holds the stock and this smell does not repel it: <b>it keeps it</b>.'
         : 'It is out, and this smell does not draw it in: <b>it stays out</b>.';
   $('why').innerHTML = `${e.sim ? (simOnLive ? '<b>Simulation</b> on the smell of the last real window. ' : '<b>Simulation</b> on a stand-in smell (no real trade smelled yet). ') : ''}`
     + `<b>Smelled</b>${e.sim && !simOnLive ? '' : ' in the last window'}: ${mixText(e.mix)} (${n} kind${n > 1 ? 's' : ''} of trade). `
-    + `${memory} ${rule} <span class="state">${auto.s && auto.s.running ? 'Its own wallet acts on this decision with real money (card below); not advice.' : 'Paper only, not advice.'} Judged on the next window's price.</span>`;
+    + `${memory} ${rule} <span class="state">${auto.s && auto.s.running ? 'Its own wallet acts on this decision with real money (card below); not advice.' : 'Simulated score only, not advice.'} Judged on the next window's price.</span>`;
 }
 
 /* ── TRADE FOR REAL: the user's own wallet signs each order the fly proposes. The fly NEVER signs, nothing is sent without a click.
@@ -451,7 +454,7 @@ function renderThoughts() {
 }
 
 function renderBook(st = session.state(), el = $('book')) {
-  el.innerHTML = `<div class="state">Paper P&amp;L after ${st.settled} windows, pool fee ${st.feePips == null ? '?' : fmt(st.feePips / 1e4, 2) + '%'} per switch:</div>`
+  el.innerHTML = `<div class="state">Score of its decisions, as if each were a trade (simulated, not money), after ${st.settled} windows, pool fee ${st.feePips == null ? '?' : fmt(st.feePips / 1e4, 2) + '%'} per switch — next to two simple rules:</div>`
     + Object.values(st.books).map((b) => `<div class="row"><span>${b.label}</span><span>${pct(b.ret - 1, 3)}</span><span>${b.pos ? 'in' : 'out'} · ${b.switches} switches</span></div>`).join('');
 }
 function tallyText(t) {
@@ -903,7 +906,6 @@ async function start() {
   const slider = $('size'), showSize = () => { const v = Number(slider.value) / 1000; $('sizeValue').textContent = pct(v, 1); };
   slider.addEventListener('input', showSize); showSize();
   $('listen').addEventListener('click', listen);
-  $('forget').addEventListener('click', forget);
   $('connect').addEventListener('click', connect);
   $('sign').addEventListener('click', signLive);
   $('stop').addEventListener('click', stopFly);
@@ -912,6 +914,10 @@ async function start() {
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
   fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
   session = createSession(fly, onEvent);
+  /* boldness: how sure it must be to act (kept per viewer). Lower = it acts on weaker pulls, and pays the fee more often. */
+  const bold = $('bold'), showBold = () => { const v = Number(bold.value) / 1000; session.threshold = v; $('boldValue').textContent = fmt(v * 100, 1) + '%'; try { localStorage.setItem('fly-boldness-v1', String(bold.value)); } catch (_) { /* per visit */ } };
+  try { const v = localStorage.getItem('fly-boldness-v1'); if (v && Number(v) >= 2 && Number(v) <= 50) bold.value = v; } catch (_) { /* default */ }
+  bold.addEventListener('input', showBold); showBold();
   const idx = new Map(N.map((n, i) => [n.id, i]));
   N.edges = circuit.edges.map(([a, b, w]) => [idx.get(a), idx.get(b), w]);
   /* drawn edges: the 1,800 strongest (900 on a phone), so the canvas stays readable and light */

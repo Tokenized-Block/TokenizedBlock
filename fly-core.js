@@ -17,7 +17,12 @@ export const FLY = Object.freeze({
    *   weight TYPICAL_ALPHA): a usual move teaches at 1/SURPRISE, twice the usual saturates. With a fixed 0.05% unit, the 0.01% moves of
    *   a 30 s window taught ~2% and the fly stayed undecided for 129 windows. */
   SURPRISE: 2, TYPICAL_ALPHA: 0.1,
+  /* how sure it must be to act: the pull-minus-push it needs, as a share of their sum (0.02 = 2%). The page lets a user lower or
+   *   raise it ("boldness"); the server's shared fly keeps this default. */
+  DECIDE: 0.02,
 });
+/** The word a tendency gives at a given threshold: approach, avoid or undecided. */
+export const wordOf = (t, threshold = FLY.DECIDE) => (t > threshold ? 'approach' : t < -threshold ? 'avoid' : 'undecided');
 
 /* Weber-Fechner: felt strength = log of the size in units, 0..1 */
 export const weber = (x, unit, span) => Math.min(1, Math.log1p(Math.abs(x) / unit) / Math.log1p(span));
@@ -111,7 +116,7 @@ export function createFly(circuit) {
     if (!sum.approach[1] && !sum.avoid[1]) return { ap: 1, av: 1, t: 0, word: 'quiet' };
     const ap = sum.approach[1] ? sum.approach[0] / sum.approach[1] : 1, av = sum.avoid[1] ? sum.avoid[0] / sum.avoid[1] : 1;
     const t = (ap - av) / Math.max(1e-6, ap + av);
-    return { ap, av, t, word: t > 0.02 ? 'approach' : t < -0.02 ? 'avoid' : 'undecided' };
+    return { ap, av, t, word: wordOf(t) };
   }
   /* Synapse trace: the KC->MBON multipliers before a learning pulse, and which ones it weakened. */
   function snapshot() { const s = []; for (const j of mbonIdx) for (const e of inputs[j]) if (e[2] != null) s.push(e[2]); return s; }
@@ -173,18 +178,20 @@ export function decide(word, pos) {
  * scenario of the price move it has not yet seen: learn from the last smell with that move (as the next window would), then smell
  * `nextMix` and decide. Exact for a fly at rest with nothing queued (the server's fly after drain); the page's live fly may be mid-pulse.
  * It forecasts the FLY, never the market: which move comes is unknown, so every scenario is shown, none is picked. */
-export function foresee(shadow, fly, { lastMix, nextMix, pos, moves = [0.01, 0, -0.01], typical = 0 }) {
+export function foresee(shadow, fly, { lastMix, nextMix, pos, moves = [0.01, 0, -0.01], typical = 0, threshold = FLY.DECIDE }) {
   const start = fly.saveState();
   if (start.queued || start.pulseSteps) return { exact: false, scenarios: [] };
   return { exact: true, scenarios: moves.map((move) => {
     shadow.loadState(start);
     if (lastMix && move) { const d = shadow.odorDrive(lastMix); shadow.addDopamine(d, move, typical); shadow.present(d); shadow.drain(); }
     let r = null; shadow.present(shadow.odorDrive(nextMix), { onPeak: (t) => { r = { ...t, path: shadow.thought(8) }; } }); shadow.drain();
-    return { move, word: r.word, ap: r.ap, av: r.av, action: decide(r.word, pos), path: r.path };
+    const word = r.word === 'quiet' ? 'quiet' : wordOf(r.t, threshold);
+    return { move, word, ap: r.ap, av: r.av, action: decide(word, pos), path: r.path };
   }) };
 }
 
-export function createSession(fly, emit) {
+export function createSession(fly, emit, { threshold = FLY.DECIDE } = {}) {
+  let decideAt = threshold;
   const tally = { consistent: 0, opposite: 0, flat: 0, undecided: 0 };
   /* PAPER book, never real funds, never a signature: the fly is in the stock for a window when it predicted approach, out otherwise;
    * two dumb witnesses next to it; every change of position pays the pool's own fee, read on chain. */
@@ -193,10 +200,11 @@ export function createSession(fly, emit) {
 
   function predict(mix, sim, done) {
     fly.present(fly.odorDrive(mix), { onPeak: (t) => {
-      emit({ type: 'predict', sim, mix, ap: t.ap, av: t.av, word: t.word });
-      const action = decide(t.word, books.fly.pos);
-      emit({ type: 'decision', sim, mix, ap: t.ap, av: t.av, word: t.word, action, inBefore: books.fly.pos === 1, path: fly.thought(8) });
-      if (done) done(t.word, action);
+      const word = t.word === 'quiet' ? 'quiet' : wordOf(t.t, decideAt);
+      emit({ type: 'predict', sim, mix, ap: t.ap, av: t.av, word });
+      const action = decide(word, books.fly.pos);
+      emit({ type: 'decision', sim, mix, ap: t.ap, av: t.av, t: t.t, threshold: decideAt, word, action, inBefore: books.fly.pos === 1, path: fly.thought(8) });
+      if (done) done(word, action);
     } });
   }
   function learn(mix, move, sim) {
@@ -286,11 +294,12 @@ export function createSession(fly, emit) {
     return { lastMix: prevWin && prevWin.hasOdor ? { ...prevWin.mix } : null, nextMix: { ...lastOdor }, pos, typical, moves: [u, 0, -u] };
   }
   return { window, predict, learn, state, restore, reset, next, get feePips() { return feePips; }, get settled() { return settled; }, get typical() { return typical; },
+    get threshold() { return decideAt; }, set threshold(v) { if (Number.isFinite(v) && v >= 0.001 && v <= 0.2) decideAt = v; },
     get lastOdor() { return lastOdor ? { ...lastOdor } : null; } };
 }
 /** The fly's next decision, forecast from the session (page and server share this). Scenarios: the next price move is +1%, 0, -1%. */
 export function foreseeNext(shadow, fly, session) {
   const nx = session.next();
   if (!nx) return { exact: false, scenarios: [], why: 'no real trade smelled yet' };
-  return { ...foresee(shadow, fly, nx), nextMix: nx.nextMix, learnsFrom: nx.lastMix, pos: nx.pos, typical: nx.typical };
+  return { ...foresee(shadow, fly, { ...nx, threshold: session.threshold }), nextMix: nx.nextMix, learnsFrom: nx.lastMix, pos: nx.pos, typical: nx.typical };
 }
