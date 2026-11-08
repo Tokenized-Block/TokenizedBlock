@@ -138,6 +138,7 @@ function suite(V, T, complet = true) {
       assert.ok(reg.size === 82 && meas.length === 1190 && named.length === 35 && meas.every((x) => reg.has(x.a[0] + ',' + x.a[1]) && reg.has(x.b[0] + ',' + x.b[1]) && x.w >= 0 && x.w <= 1), 'pack ' + pk + ' emotion ' + ek);
       assert.equal(meas.filter((x) => x.w >= (8 - 0.14292) / (12.615 - 0.14292) - 1e-12).length, 441);
     }
+    { const o4 = T.simuler('emotionWiringHCP', { resolutionWiring: 1 }); assert.ok(o4.segments.filter((x) => x.c === 0).length === 6117 && o4.segments.every((x) => Number.isInteger(x.ia) && Number.isInteger(x.ib)), '414: 6117 lines'); }
     /* the weight of each line = the measured edge read here from human-brain-data.js (not from the subject's own parse) */
     const o = T.simuler('emotionWiringHCP', {}), meas = o.segments.filter((x) => x.c === 0);
     assert.ok(meas.every((x, r) => Math.abs(x.w - (HB.WIRING[r][2] - 0.14292) / (12.615 - 0.14292)) < 1e-12), 'w = measured');
