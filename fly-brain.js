@@ -5,11 +5,17 @@
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { createFly, createSession } from './fly-core.js';
+import { USDC_BASE } from './frais-creation.js';
+import { selecteur } from './keccak.js';
 
 /* Order: 24 h volume measured by Coinbase search_tokens on 2026-11-07 (mesures/coinbase-actions-20261107.json). ADDRESSES come from the
  * registry, never from here. */
 const ORDER = ['SNDKc', 'MSTRc', 'SPCXc', 'NVDAc', 'AMZNc', 'GOOGLc', 'METAc', 'MSFTc', 'TSLAc', 'MUc', 'AAPLc', 'PLTRc'];
-const STOCKS = ORDER.map((s) => [...POOLS_ACTIONS_AERODROME.entries()].find(([, t]) => t.symbole === s)).filter(Boolean)
+/* then every other stock of the measured pool table with at least 10,000 USDC in its pool (the liquidity rule of misables.js), deepest
+ *   first: a near-empty pool would give absurd orders */
+const LIQUIDITE_MIN_USDC = 10000;
+const STOCKS = [...ORDER.map((s) => [...POOLS_ACTIONS_AERODROME.entries()].find(([, t]) => t.symbole === s)).filter(Boolean),
+  ...[...POOLS_ACTIONS_AERODROME.entries()].filter(([, t]) => !ORDER.includes(t.symbole) && t.usdcMesure >= LIQUIDITE_MIN_USDC).sort((a, b) => b[1].usdcMesure - a[1].usdcMesure)]
   .map(([address, t]) => ({ address, symbol: t.symbole }));
 
 const COLOR = { PN: '#4fd1c5', KC: '#f6c453', MBON: '#f472b6', DAN: '#a78bfa', APL: '#f87171' };
@@ -95,10 +101,95 @@ function renderDecision(e) {
     + `${memory} ${rule} <span class="state">Paper only, not advice. Judged on the next window's price.</span>`;
 }
 
+/* ── TRADE FOR REAL: the user's own wallet signs each order the fly proposes. The fly NEVER signs, nothing is sent without a click.
+ * The order is built and simulated by the app's own planner (/api/rails/plan, the same one as the control panel): approvals first,
+ * then the swap, re-planned after the approvals. BUY spends the user's budget in USDC; SELL sells the whole stock balance read on chain.
+ * ⛔ A simulated decision never proposes a real order. "Stop" ends proposals at once. ── */
+const live = { account: null, stopped: false, plan: null, action: null, busy: false, decimals: null };
+const eth = () => (typeof window !== 'undefined' ? window.ethereum : null);
+function liveSay(t) { $('liveState').textContent = t; }
+function liveNote(html) { const p = document.createElement('div'); p.innerHTML = clock() + ' · ' + html; $('liveLog').prepend(p); }
+async function connect() {
+  if (!eth()) { liveSay('No browser wallet found on this page (install one, or open the page inside your wallet).'); return; }
+  try {
+    const accs = await eth().request({ method: 'eth_requestAccounts' });
+    const chain = await eth().request({ method: 'eth_chainId' });
+    if (String(chain).toLowerCase() !== '0x2105') { liveSay('Your wallet is not on Base (chain ' + chain + '). Switch to Base and connect again.'); return; }
+    live.account = String(accs[0] || '').toLowerCase(); live.stopped = false;
+    liveSay('Connected: ' + live.account.slice(0, 6) + '…' + live.account.slice(-4) + ' on Base. The fly will propose an order at its next BUY or SELL.');
+  } catch (err) { liveSay('Connection refused: ' + String((err && err.message) || err).slice(0, 120)); }
+}
+async function stockBalance() {
+  const data = selecteur('balanceOf(address)') + live.account.slice(2).padStart(64, '0');
+  return BigInt(await eth().request({ method: 'eth_call', params: [{ to: current.address, data }, 'latest'] }));
+}
+async function proposeLive(e) {
+  if (e.sim || live.stopped || !live.account || (e.action !== 'buy' && e.action !== 'sell')) return;
+  live.action = e.action; live.plan = null; $('sign').disabled = true;
+  try {
+    let de, vers, montant;
+    if (e.action === 'buy') {
+      const usdc = Math.floor(Number($('budget').value) * 1e6);
+      if (!(usdc >= 1e6)) { $('livePlan').textContent = 'Set a budget of at least 1 USDC.'; return; }
+      de = USDC_BASE; vers = current.address; montant = String(usdc);
+    } else {
+      const bal = await stockBalance();
+      if (bal <= 0n) { $('livePlan').innerHTML = 'The fly decided <b>SELL</b>, but this wallet holds no ' + current.symbol + ': nothing to sell.'; return; }
+      de = current.address; vers = USDC_BASE; montant = bal.toString();
+    }
+    const q = new URLSearchParams({ de, vers, montant, compte: live.account });
+    const r = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
+    live.plan = { r, de, vers, montant, action: e.action };
+    const s = r.resume || {};
+    const dPay = e.action === 'buy' ? 6 : (live.decimals ?? 8), dGet = e.action === 'buy' ? (live.decimals ?? 8) : 6;
+    const units = (v, d) => v == null ? '?' : fmt(Number(BigInt(v)) / 10 ** d, d > 6 ? 6 : 2);
+    $('livePlan').innerHTML = `<b>The fly's live order: ${ACT[e.action]} ${current.symbol}</b> · pay ${units(s.paye, dPay)} ${e.action === 'buy' ? 'USDC' : current.symbol}, `
+      + `receive at least ${units(s.recoitAuMoins, dGet)} ${e.action === 'buy' ? current.symbol : 'USDC'} (quote ${units(s.quote, dGet)}), fee ${s.fraisBps ?? '?'} bps, price impact ${s.impactBps ?? '?'} bps, venue ${s.venue || '?'}. `
+      + `Plan state: <b>${r.etat}</b>${r.pourquoi ? ' — ' + String(r.pourquoi).slice(0, 140) : ''}${r.suite ? ' — ' + r.suite : ''}.`;
+    $('sign').disabled = !(r.ok && Array.isArray(r.aSigner) && r.aSigner.length);
+  } catch (err) { $('livePlan').textContent = 'The order could not be built: ' + String((err && err.message) || err).slice(0, 140); }
+}
+async function signLive() {
+  if (live.busy || !live.plan || !live.account || live.stopped) return;
+  if (!$('risk').checked) { liveSay('Tick the risk box first: you can lose the money you trade.'); return; }
+  live.busy = true; $('sign').disabled = true;
+  try {
+    /* re-plan right before signing: prices move, and approvals change what is returned */
+    const q = new URLSearchParams({ de: live.plan.de, vers: live.plan.vers, montant: live.plan.montant, compte: live.account });
+    let r = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json());
+    for (let round = 0; round < 2 && r && r.ok; round++) {
+      const calls = r.aSigner || [];
+      if (r.atomique && calls.length > 1) {
+        const id = await eth().request({ method: 'wallet_sendCalls', params: [{ version: '1.0', chainId: '0x2105', from: live.account, calls: calls.map((c) => ({ to: c.to, data: c.data, value: c.value })) }] });
+        liveNote('batch sent: ' + String(id && (id.id || id)).slice(0, 20) + '…');
+      } else {
+        for (const c of calls) {
+          const h = await eth().request({ method: 'eth_sendTransaction', params: [{ from: live.account, to: c.to, data: c.data, value: c.value }] });
+          liveNote(`${c.nom || c.role || 'transaction'} sent · <a href="https://basescan.org/tx/${h}" target="_blank" rel="noopener">tx ${String(h).slice(0, 10)}…</a>`);
+          await waitReceipt(h);
+        }
+      }
+      if (r.etat !== 'APPROBATIONS') break;
+      r = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json()); /* approvals done: now the swap */
+    }
+    liveSay(r && r.ok ? 'Done. Check the transactions above on Basescan.' : 'Stopped: ' + String((r && r.pourquoi) || 'plan refused').slice(0, 140));
+  } catch (err) { liveSay('Not sent: ' + String((err && err.message) || err).slice(0, 140)); }
+  finally { live.busy = false; live.plan = null; }
+}
+async function waitReceipt(h) {
+  for (let k = 0; k < 60; k++) {
+    const rc = await eth().request({ method: 'eth_getTransactionReceipt', params: [h] }).catch(() => null);
+    if (rc) { if (rc.status !== '0x1') throw new Error('transaction failed on chain (' + h.slice(0, 10) + '…)'); return rc; }
+    await new Promise((o) => setTimeout(o, 2000));
+  }
+  throw new Error('no receipt after 2 minutes (' + h.slice(0, 10) + '…): check it on Basescan before trying again');
+}
+function stopFly() { live.stopped = true; live.plan = null; $('sign').disabled = true; $('livePlan').textContent = ''; liveSay('The fly is stopped: it proposes no order. Connect again to resume.'); }
+
 function onEvent(e) {
   show(e, current.symbol);
   if (e.type === 'tx') ripple(e.kind, e.usd);
-  if (e.type === 'decision') renderDecision(e);
+  if (e.type === 'decision') { renderDecision(e); proposeLive(e); }
   if (e.type === 'verdict' || e.type === 'taught') { renderTally(); }
   if (e.type === 'taught' && !e.sim) saveMemory();
 }
@@ -425,7 +516,7 @@ async function readWindow() {
     history.push({ t: Date.now(), p: price.priceUsd }); while (history.length && Date.now() - history[0].t > 3600000) history.shift();
     drawSpark();
     if (lastPrice == null) log(`${stock.symbol} live at $${fmt(price.priceUsd)} (on-chain pool, block ${price.block.toLocaleString('en-US')})`);
-    lastPrice = price.priceUsd;
+    lastPrice = price.priceUsd; if (Number.isInteger(price.tokenDecimals)) live.decimals = price.tokenDecimals;
   }
   if (ac && !ac.ok && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
   txSlot = 0;
@@ -464,6 +555,9 @@ async function start() {
   slider.addEventListener('input', showSize); showSize();
   $('listen').addEventListener('click', listen);
   $('forget').addEventListener('click', forget);
+  $('connect').addEventListener('click', connect);
+  $('sign').addEventListener('click', signLive);
+  $('stop').addEventListener('click', stopFly);
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
   fly = createFly(circuit); N = fly.N; act = fly.act;
   session = createSession(fly, onEvent);
