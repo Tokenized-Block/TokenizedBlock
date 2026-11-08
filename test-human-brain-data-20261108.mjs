@@ -83,6 +83,28 @@ function suite(D) {
     const s = D.selectEmotion({ packWiring: 9, emotionWiring: 0, compareWiring: 9 }); assert.equal(s.pack.id, 'curiosity'); assert.equal(s.emotion.id, 'surprise'); assert.equal(s.other.id, 'curiosity'); assert.equal(D.selectEmotion({ packWiring: 5, emotionWiring: 9, compareWiring: 9 }).other, null);
     assert.equal(D.selectEmotion({}).emotion.id, 'angerExperience'); assert.equal(D.selectEmotion({ packWiring: 0, emotionWiring: 5, compareWiring: 6 }).other, null);
   });
+  ok('414 parcelles (game317) : reseaux, paires, couplages, centroides, regle de la majorite', () => {
+    /* references : derive-400.cjs (mon script sur les csv : 6117 paires de 0.015276 a 11.649 ; 83061 couplages positifs, 2430 negatifs, coupure 0.35914 ; 1472 communes) */
+    assert.equal(D.REGIONS_400.length, 414); const nets = {}; D.REGIONS_400.slice(0, 400).forEach((r) => { nets[r.network] = (nets[r.network] || 0) + 1; });
+    assert.deepEqual(nets, { Vis: 61, SomMot: 77, DorsAttn: 46, SalVentAttn: 47, Limbic: 26, Cont: 52, Default: 91 });
+    assert.deepEqual(D.REGIONS_400.slice(400).map((r) => r.id), ids.slice(68, 82));
+    assert.ok(D.WIRING_400.length === 6117 && D.WIRING_400.every(([i, j, w]) => i < j && j < 414 && w > 0) && new Set(D.WIRING_400.map(([i, j]) => i + '-' + j)).size === 6117);
+    assert.equal(Math.min(...D.WIRING_400.map((e) => e[2])), 0.015276); assert.equal(Math.max(...D.WIRING_400.map((e) => e[2])), 11.649);
+    assert.ok(D.FUNCTION_400.length === 6117 && D.FUNCTION_400.every(([i, j, r]) => i < j && j < 414 && r >= 0.35914 && r <= 1.3384) && new Set(D.FUNCTION_400.map(([i, j]) => i + '-' + j)).size === 6117);
+    const w4 = new Set(D.WIRING_400.map(([i, j]) => i + '-' + j)); assert.equal(D.FUNCTION_400.filter(([i, j]) => w4.has(i + '-' + j)).length, 1472);
+    assert.deepEqual([D.COUNTS_400.functionPositive, D.COUNTS_400.functionNegative, D.COUNTS_400.overlap], [83061, 2430, 1472]);
+    assert.ok(D.CENTROIDS_400.length === 414 && D.CENTROIDS_400.every((c) => c.length === 3 && c.every(Number.isFinite)));
+    assert.equal(new Set(D.DK_OF_400.slice(0, 400)).size, 64); assert.deepEqual(D.lostAt400(ids.slice(0, 68)), ['L_parsorbitalis', 'L_frontalpole', 'L_transversetemporal', 'R_parsorbitalis']);
+    assert.deepEqual([D.parcelFor('Laccumb'), D.parcelFor('L_frontalpole'), D.parcelsOf(['Lamyg']).join(',')], [400, -1, '401']);
+    const big = D.parcelFor('L_insula'); assert.ok(D.DK_OF_400[big] === 'L_insula' && D.DK_OF_400.every((d, q) => d !== 'L_insula' || D.VERTICES_400[q] <= D.VERTICES_400[big]), 'largest parcel');
+  });
+  ok('theories (game318) : cinq ordres, etapes, regions existantes, sources lues', () => {
+    assert.deepEqual(D.THEORIES.map((t) => t.id), ['data', 'jamesLange', 'cannonBard', 'schachterSinger', 'constructionist']);
+    assert.deepEqual(D.THEORIES.map((t) => t.stages.map((x) => x.step).join(',')), ['0,10,20', '0,4,8', '0,1', '0,5,10', '0,3']);
+    assert.ok(D.THEORIES.slice(1).every((t) => t.name.startsWith('THEORY: ') && t.statement.length > 40 && D.SOURCES.some((x) => x.key === t.source)));
+    assert.ok(D.THEORIES.every((t) => t.stages.every((x) => ['emotion', 'emotion+body', 'shared'].includes(x.regions) || (Array.isArray(x.regions) && x.regions.every((r) => ids.includes(r))))));
+    assert.deepEqual(D.THEORIES[1].stages[0].regions, ['Hypothal', 'PAG']); assert.equal(D.THEORIES[3].stages[1].regions.length, 14);
+  });
   ok('pur : ni DOM, ni hasard, ni import', () => { assert.ok(!/\bdocument\.|\bwindow\.|Math\.random|^import\b/m.test(src.replace(/^\/\/.*$/gm, ''))); });
   return res;
 }
@@ -101,6 +123,11 @@ const MUTANTS = [
   ['sans region : filtre inverse', '.filter((a) => !(MAPPING[a] || []).length))]);', '.filter((a) => (MAPPING[a] || []).length))]);'],
   ['positions : pic de l aire tegmentale gauche faux', 'VTA_L: [-2, -14, -10]', 'VTA_L: [-2, -14, -20]'],
   ['positions : les 82 regions sur une position inventee', '(a < COUNTS.hcpRegions ? null :', '(a < COUNTS.hcpRegions ? [0, 0, 0] :'],
+  /* (les sous-corticales par la region majoritaire : mutant equivalent, leur region majoritaire est elles-memes) */
+  ['414 : sous-corticales oubliees', '(k < 400 ? want.has(DK_OF_400[k]) : want.has(r.id))', '(k < 400 ? want.has(DK_OF_400[k]) : false)'],
+  ['414 : la plus petite parcelle pour une voie', 'VERTICES_400[q] > VERTICES_400[best]', 'VERTICES_400[q] < VERTICES_400[best]'],
+  ['414 : perdues inversees', 'return regionIds.filter((r) => !have.has(r) &&', 'return regionIds.filter((r) => have.has(r) &&'],
+  ['theories : le corps de James-Lange senti plus tard', "{ step: 4, regions: ['L_insula', 'R_insula']", "{ step: 6, regions: ['L_insula', 'R_insula']"],
   ['selection : comparaison decalee', 'other: ck && ck - 1 !== ek ? pack.emotions[ck - 1] : null', 'other: ck && ck !== ek ? pack.emotions[ck % pack.emotions.length] : null'],
   ['correspondance : amygdale gauche perdue', '"L. amygdala":["Lamyg"]', '"L. amygdala":[]'],
 ];

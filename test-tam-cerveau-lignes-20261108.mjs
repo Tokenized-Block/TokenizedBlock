@@ -87,6 +87,18 @@ function suite(V, L, ongletSrc) {
     }
     return vus + ' legends checked';
   });
+  ok('legend = invariants at 414 parcels and in THEORY mode (game317, game318)', () => {
+    let vus = 0;
+    for (let pk = 0; pk < 6; pk++) for (let ek = 0; ek < PACKS[pk]; ek++) for (const th of [0, 1, 4]) {
+      const p = { packWiring: pk, emotionWiring: ek, resolutionWiring: 1, theoryWiring: th }, o = T.simuler('emotionWiringHCP', p), C = o.invariants.emotionWiringHCP, l = L.legende('emotionWiringHCP', o.params);
+      const [nLinks] = C.shownWiring.match(/^(\d+) connections/).slice(1), [nPath] = C.pathwaysWiring.match(/^(\d+) named pathways/).slice(1), nParts = Number(C.positionsWiring.match(/for (\d+) parcels/)[1]);
+      assert.ok(l.aRegarder[1].includes(Number(nLinks).toLocaleString('en-US') + ' connections measured by tractography') && l.aRegarder[1].includes(' plus ' + nPath + ' violet pathways') && l.aRegarder[1].includes('the ' + nParts + ' parcels'), l.aRegarder[1]);
+      const lost = C.lostWiring === 'none' ? 0 : C.lostWiring.split(' ').length; assert.equal(l.aRegarder[1].includes('none for ' + lost + ' of its regions'), lost > 0, 'lost ' + lost);
+      assert.equal(l.enUnePhrase.includes(C.theoryShownWiring + ', not data: '), th > 0, 'theory said');
+      vus++;
+    }
+    return vus + ' legends checked at 414';
+  });
   return res;
 }
 
