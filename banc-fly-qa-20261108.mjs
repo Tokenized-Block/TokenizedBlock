@@ -4,8 +4,9 @@
 //   drained, the stored memory per stock and for all of them (what the page writes to localStorage), heap growth, and that a restart
 //   (server deploy / page reload) costs no fake fee. PROD_SIZES=1 takes the trade sizes from the shared fly's real events
 //   (https://tokenizedblock.space/api/fly/state, read-only, x-ms-monitor: 1).
-// --harness: serves banc-fly-page-qa-20261108.js on http://127.0.0.1:9094 (CORS) for the page harness, and with FORK_RPC set funds a
-//   test user ON THE FORK ONLY (refused unless the RPC answers anvil_nodeInfo).
+// --fund <fly address> / --balance <address>: fund a fly wallet / read a balance ON THE FORK ONLY (refused unless FORK_RPC answers
+//   anvil_nodeInfo). The page harness (banc-fly-page-qa-20261108.js) is PASTED into the page: the page CSP refuses a script or a fetch
+//   from any other origin, so --harness (a CORS file server on 9094) does not work for it; it is kept only to fund a test user.
 // Usage: node --expose-gc banc-fly-qa-20261108.mjs [windows=300]   |   FORK_RPC=http://127.0.0.1:8612 node banc-fly-qa-20261108.mjs --harness
 import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
