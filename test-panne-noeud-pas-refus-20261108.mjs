@@ -46,6 +46,22 @@ for (const message of ['HTTP 429', 'fetch failed']) {
   const p = await E.planEchange({ rpc, chaine: 8453, jeton: BLOC, compte, sens: 'ACHAT', montant: 10n ** 15n, marcheLu: { etat: 'LUE', cle: v8Eth, paire: 'ETH' } });
   ok(appels >= 2 && p.etat === 'NON_MESURE' && !/chain refuses/i.test(p.pourquoi || ''), 'simulation finale en panne « ' + message + ' » -> NON_MESURE (' + appels + ' appels routeur ; ' + p.etat + ' : ' + p.pourquoi + ')');
 }
+/* Le devis saut par saut (planEchangeMultiSauts) : une reponse VIDE « 0x » d un noeud est une lecture RATEE (memoire : « 0x sur mainnet =
+ *   NON LU »), pas une pool qui ne rend rien. Seul un zero DECODE est un refus. Serie 294 : test-bloc-vers-action rouge « hop 1 returns
+ *   nothing for this amount » puis vert deux fois sur le meme code. Route ETH -> USDC -> ETH (devises seules : aucune garde block). */
+{
+  const { USDC_BASE } = await import(pathToFileURL(path.join(ICI, 'frais-creation.js')).href);
+  const Q = String(E.QUOTEUR[8453]).toLowerCase(), USDC = USDC_BASE.toLowerCase();
+  const mot = (x) => '0x' + BigInt(x).toString(16).padStart(64, '0') + '0'.repeat(64);
+  const cleEU = { currency0: ETH, currency1: USDC, fee: 500, tickSpacing: 10, hooks: ETH };
+  const multi = async (reponse) => E.planEchangeMultiSauts({ chaine: 8453, compte, entree: ETH, sortie: ETH, montant: 10n ** 15n, maintenant: 1790000000000,
+    sauts: [{ cle: cleEU, zeroForOne: true }, { cle: cleEU, zeroForOne: false }],
+    rpc: async (m, params) => (m === 'eth_chainId' ? '0x2105' : m === 'eth_call' && String(params[0].to).toLowerCase() === Q ? reponse : m === 'eth_call' ? mot(10n ** 18n) : '0x' + '0'.repeat(64)) });
+  const sainM = await multi(mot(10n ** 18n)), vide = await multi('0x'), zero = await multi(mot(0));
+  ok(sainM.etat === 'PRET', 'temoin multi-sauts : cotation normale -> PRET (' + sainM.etat + ')');
+  ok(vide.etat === 'NON_MESURE' && !/returns nothing/i.test(vide.pourquoi || ''), 'reponse vide « 0x » du quoteur -> NON_MESURE, jamais « returns nothing » (' + vide.etat + ' : ' + vide.pourquoi + ')');
+  ok(zero.etat === 'REFUSE' && /returns nothing/i.test(zero.pourquoi || ''), 'un zero DECODE reste un refus (' + zero.etat + ')');
+}
 ok(E.estPanneDeNoeud({ message: 'execution reverted: 0x82b42900' }) === false && E.estPanneDeNoeud({ message: 'HTTP 429' }) === true
   && E.estPanneDeNoeud({ message: 'execution reverted: rate' }) === false, 'estPanneDeNoeud : un revert n est jamais une panne, meme avec « rate » ou 0x..429..');
 

@@ -1214,8 +1214,12 @@ export async function planEchangeMultiSauts({ rpc, chaine, compte, sauts, entree
       return { etat: 'NON_MESURE',
         pourquoi: 'hop ' + (i + 1) + ' could not be quoted: ' + String((e && e.message) || e).slice(0, 120) };
     }
-    let out;
-    try { out = BigInt('0x' + String(brut).slice(2, 66)); } catch (_) { out = 0n; }
+    /* ⛔ 2026-11-08 : une reponse VIDE (« 0x ») ou tronquee n est pas un prix nul : c est une lecture RATEE (un noeud public sous charge
+     *   rend « 0x »). Avant, l echec du decodage valait 0 et la route vivante etait REFUSEE « returns nothing ». Seul un zero DECODE refuse. */
+    if (!/^0x[0-9a-fA-F]{64}/.test(String(brut))) {
+      return { etat: 'NON_MESURE', pourquoi: 'hop ' + (i + 1) + ' could not be quoted: empty answer from the node' };
+    }
+    const out = BigInt('0x' + String(brut).slice(2, 66));
     if (out <= 0n) {
       return { etat: 'REFUSE', pourquoi: 'hop ' + (i + 1) + ' returns nothing for this amount' };
     }
