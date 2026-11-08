@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Human brain, wired</title>
+<style>
+  :root { --bg: #05070d; --text: #dfe6f3; --muted: #8a96ad; --line: #1a2234; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+  header { padding: 16px 16px 6px; } h1 { margin: 0; font-size: 20px; } .sub { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  a { color: #93c5fd; }
+  main { display: grid; grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr); gap: 12px; padding: 8px 16px 24px; align-items: start; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .scene { position: relative; background: radial-gradient(ellipse at 50% 40%, #0c1222 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 11; cursor: grab; touch-action: none; }
+  .viewbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
+  .viewbar button { width: auto; margin: 0; padding: 4px 10px; background: rgba(17,26,44,.85); }
+  .hint { font-size: 12px; color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--line); }
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card { background: #0a0f1b; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .card h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  h3 { margin: 0 0 4px; font-size: 16px; }
+  select, button { width: 100%; background: #111a2c; color: var(--text); border: 1px solid #263252; border-radius: 8px; padding: 8px; font: inherit; }
+  button { cursor: pointer; margin-top: 8px; } label { display: block; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .muted { color: var(--muted); font-size: 12px; } .tag { font-size: 11px; color: #fde68a; border: 1px solid #fde68a55; border-radius: 999px; padding: 0 6px; }
+  ul.regions { list-style: none; padding: 0; margin: 6px 0; } ul.regions button { text-align: left; margin-top: 4px; padding: 6px 8px; font-size: 13px; }
+  .walk { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; } .walk button { width: auto; margin: 0; padding: 4px 8px; font-size: 12px; border-radius: 999px; }
+  .src { font-size: 12px; margin-top: 6px; } .small { width: auto; padding: 4px 10px; font-size: 12px; }
+  .bounds ul { margin: 0; padding-left: 18px; color: #c3cbe0; font-size: 13px; } .bounds li { margin: 4px 0; }
+</style>
+</head>
+<body>
+<header>
+  <a href="app.html">← Back to the app</a>
+  <h1>A human brain, wired — region by region</h1>
+  <div class="sub">The real shape of an average human brain (fsaverage5 surface), its 82 regions at their real positions, and the connections measured between them in 207 adults (Human Connectome Project). Pick an emotion: the regions studies reported for it light up, and impulses travel along the measured connections. It shows what was measured in people; it feels nothing.</div>
+</header>
+<main>
+  <section class="scene">
+    <canvas id="canvas" width="1280" height="880"></canvas>
+    <div class="viewbar"><button id="zoomIn" aria-label="Zoom in">+</button><button id="zoomOut" aria-label="Zoom out">−</button><button id="viewReset">Reset</button></div>
+    <div class="hint"><span id="netCount"></span>. Drag to turn · wheel or two fingers to zoom · shift-drag to move · tap a region to walk its connections. Grey dots: the cortex surface; pink: deep structures; blue lines: measured connections (brighter = stronger); dashed gold: known pathways with no measured strength.</div>
+  </section>
+  <aside>
+    <div class="card">
+      <h2>What lights up</h2>
+      <label for="pack">Pack of emotions</label><select id="pack"></select>
+      <label for="emotion">Emotion</label><select id="emotion"></select>
+      <label for="compare">Compare with</label><select id="compare"></select>
+      <label for="net">Network</label>
+      <select id="net"><option value="wiring">Wiring — measured tracts (structure)</option><option value="function">Talking together at rest (function)</option></select>
+      <div class="muted" id="compareInfo" style="margin-top:8px"></div>
+    </div>
+    <div class="card"><h2>This emotion</h2><div id="emotionInfo"></div></div>
+    <div class="card"><h2>This region</h2><div id="regionInfo"></div></div>
+    <div class="card bounds">
+      <h2>What is measured, what is ours</h2>
+      <ul>
+        <li><b>Measured</b>: the brain's shape and where each region lies (real surface), the strength of the connections between regions (diffusion MRI tractography, 207 adults), which regions each study reported for an emotion.</li>
+        <li><b>Ours</b>: the rule by which impulses travel (more often along stronger connections), their speed, the colours, and the mapping of each study's areas onto these 82 regions (stated per emotion).</li>
+        <li>A region-level map, not neurons: about 86 billion neurons and no complete human neuron-level connectome exist. The finest human map here has 82 regions; the fly's page shows a real neuron-level circuit.</li>
+        <li>No region belongs to one emotion: studies report shared regions, and the page counts them.</li>
+      </ul>
+      <h2 style="margin-top:10px">Sources</h2>
+      <ul id="sources"></ul>
+    </div>
+  </aside>
+</main>
+<script type="module" src="human-brain.js"></script>
+</body>
+</html>

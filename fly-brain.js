@@ -310,7 +310,13 @@ async function autoTrade(e) {
       const a = await autoAccount(stock.address), held = a.stock ? BigInt(a.stock) : 0n;
       /* the REAL position decides, not the paper book: after a reload or a stock switch the paper book starts out (review L3) */
       const action = decide(e.word, held > 0n ? 1 : 0);
-      if (action !== 'buy' && action !== 'sell') return;
+      /* every live decision is said, trade or not (Phil 08/11: "it does not talk any more" — a HOLD left no line at all) */
+      if (action !== 'buy' && action !== 'sell') {
+        const why = e.word === 'approach' ? 'still drawn' : e.word === 'avoid' ? 'repelled' : 'not sure enough';
+        const sure = Number.isFinite(e.t) ? ` (${fmt(Math.abs(e.t) * 100, 1)}% sure ${e.t >= 0 ? 'toward' : 'away'}, acts from ${fmt((e.threshold ?? 0.02) * 100, 1)}%)` : '';
+        autoNote(`${ACT[action]} ${stock.symbol} · ${why}${sure} · ${held > 0n ? 'holds ' + fmt(Number(held) / 10 ** (live.decimals ?? 8), 6) + ' ' + stock.symbol : 'out of the stock'}: no trade`);
+        return;
+      }
       if ($('autoProven').checked && !proven(session.state().tally)) { const r = recordEdge(session.state().tally);
         autoNote(`decided ${ACT[action]}, but its record (${r.k} right of ${r.n} judged) does not beat a coin flip yet: no real trade (untick “only once it beats chance” to override)`); return; }
       if (auto.s.today >= maxDay) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
@@ -858,6 +864,9 @@ async function readWindow() {
   if (ac && !ac.ok && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
   txSlot = 0;
   session.window({ symbol: stock.symbol, price, transactions: ac && ac.ok && Array.isArray(ac.transactions) ? ac.transactions : null });
+  /* a hidden tab ticks about once a second instead of 8 times: the queued pulses (lessons + prediction, ~36 ticks each) would fall
+   *   behind without end. Hidden = nobody watches: run them at once, exactly as the server's fly does (measured reasoning 08/11). */
+  if (document.hidden) fly.drain();
   renderBook(); renderTally(); saveMemory();
 }
 
@@ -922,7 +931,9 @@ async function start() {
   requestAnimationFrame(loop);
   select(0);
   readShared(); setInterval(readShared, SHARED_MS);
+  /* leaving the tab: whatever is queued is run at once (no animation is lost: nobody sees it) */
+  document.addEventListener('visibilitychange', () => { if (document.hidden && fly) fly.drain(); });
   /* the page's own functions, for the fork end-to-end test only: never exposed on the real site */
-  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__flyTest = { autoTrade, autoStart, autoStop, autoWithdraw, autoAccount, auto, session, fly, decide, current: () => current };
+  if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__flyTest = { readWindow, autoTrade, autoStart, autoStop, autoWithdraw, autoAccount, auto, session, fly, decide, current: () => current };
 }
 start().catch((e) => log('error: ' + (e && e.message || e)));
