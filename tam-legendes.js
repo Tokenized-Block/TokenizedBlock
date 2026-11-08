@@ -1225,6 +1225,9 @@ const L = {
     titre: (P) => 'Wired brain: ' + HB.selectEmotion(P).emotion.name,
     enUnePhrase: (P) => { const { pack, emotion: e } = HB.selectEmotion(P); return e.name + ' (' + pack.name + '): ' + e.regions.length + ' regions reported by ' + e.source.short + ' (' + e.source.design + ', ' + e.source.n + '); ' + e.shared.length + ' of them also reported for another emotion of this pack.'; },
     colonnes: ['front to back of the real brain (mm / 100)', 'bottom to top (mm / 100)', 'left to right (mm / 100)'],
+    /* game311 (Phil: "always the same false legend"): the generic sentence named a column per colour, true of the code but not a brain fact */
+    couleurs: 'Lines: grey-blue = a measured link (fainter = weaker), violet = a pathway named in studies. Points: the white labelled ones are the regions of the emotion shown, and the left amygdala always (with the emotions it serves); '
+      + 'every other dot takes the colour of the direction in which it sits farthest from the middle of all dots, each direction scaled to its own spread (colour 1 = front or back, colour 2 = top or bottom, colour 3 = left or right): a position, not a function.',
     aRegarder: (P) => { const { emotion: e, other } = HB.selectEmotion(P), K = HB.COUNTS, nm = (id) => HB.REGIONS.find((r) => r.id === id).name.toLowerCase();
       const net = Math.round(Number(P.networkWiring)) === 1, nPath = HB.DEEP_LINKS.length, nDeep = K.regions - K.hcpRegions;
       return ['Its regions (our mapping of the areas its source prints): ' + (e.regions.length ? e.regions.map(nm).join(', ') : 'none among these parts') + '. Shared within this pack: ' + (e.shared.length ? e.shared.map(nm).join(', ') : 'none') + (other ? '; with ' + other.name.toLowerCase() + ': ' + e.regions.filter((r) => other.regions.includes(r)).length + ' regions' : '') + '.',
@@ -2488,6 +2491,8 @@ const L = {
   },
 };
 
+/* a legend may say its own colour sentence (string or function of the params) when the generic one would say nothing true about the subject */
+const val0 = (v, params) => (typeof v === 'function' ? v(params) : v);
 /** la legende complete d un systeme, noms, colonnes et film resolus pour ces params ; null si inconnu */
 export function legende(id, params = {}) {
   const e = L[id]; if (!e) return null;
@@ -2495,7 +2500,7 @@ export function legende(id, params = {}) {
   const noms = nomsDe(id, params);
   const film = filmDe(id, params);
   /* game80 : un film se colore par moment (pas par colonne) ; des objets nommes hors systeme de corps sont dits en plus */
-  const couleurs = (CORPS[id] && noms ? couleursCorps(noms, CENTRES[id]) : film ? couleursFilm(film) : couleursDominantes(colonnes))
+  const couleurs = (e.couleurs ? val0(e.couleurs, params) : CORPS[id] && noms ? couleursCorps(noms, CENTRES[id]) : film ? couleursFilm(film) : couleursDominantes(colonnes))
     /* game81 : un « moment » d un film de champs quantiques n est pas toujours un instant : le module le dit, la legende aussi */
     + (film && FILMS_DU_MODULE[id] && FILMS_DU_MODULE[id].note ? ' Here ' + FILMS_DU_MODULE[id].note + '.' : '')
     + (noms && !CORPS[id] && e.objets ? ' ' + e.objets(noms) : '');

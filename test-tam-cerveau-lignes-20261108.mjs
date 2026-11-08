@@ -87,6 +87,16 @@ function suite(V, L, ongletSrc) {
     }
     return vus + ' legends checked';
   });
+  ok('legend colours = what is drawn : classes 0 (grey-blue) and 5 (violet) only, the brain sentence, not the generic column one', () => {
+    const o = T.simuler('emotionWiringHCP', {}), l = L.legende('emotionWiringHCP', o.params);
+    const cls = new Set(o.segments.map((s) => s.c));
+    assert.deepStrictEqual([...cls].sort(), [0, 5], 'segment classes');
+    assert.strictEqual(V.COULEURS_SEGMENTS[0], '#a9b8d8'); assert.strictEqual(V.COULEURS_SEGMENTS[5], '#c58cff');
+    assert.ok(l.couleurs.startsWith('Lines: grey-blue = a measured link (fainter = weaker), violet = a pathway named in studies.'), l.couleurs.slice(0, 80));
+    assert.ok(!/column that is farthest/.test(l.couleurs), 'generic sentence gone');
+    assert.ok(/farthest from its own average/.test(L.legende('bodyMapsNummenmaa', {}).couleurs), 'other subjects keep the generic sentence');
+    return 'ok';
+  });
   return res;
 }
 
@@ -102,7 +112,8 @@ const MUT = [
   ['tam-onglet.js', 'tab draws from its own projection', 'V.dessinerSegmentsIndexes(g, si, projSx, projSy, { dpr })', 'V.dessinerSegmentsIndexes(g, si, projSy, projSx, { dpr })'],
   ['tam-legendes.js', 'legend: adults hard-coded wrong', "' in ' + K.subjects + ' adults, opacity = strength", "' in 205 adults, opacity = strength"],
   ['tam-legendes.js', 'legend: shared names from the regions', "'. Shared within this pack: ' + (e.shared.length ? e.shared.map(nm)", "'. Shared within this pack: ' + (e.shared.length ? e.regions.map(nm)"],
-  ['tam-legendes.js', 'legend: always the wiring', "const net = Math.round(Number(P.networkWiring)) === 1,", 'const net = false,'],
+  ['tam-legendes.js', 'legend: own colour sentence ignored', 'const couleurs = (e.couleurs ? val0(e.couleurs, params) : ', 'const couleurs = (false ? val0(e.couleurs, params) : '],
+  ['tam-legendes.js', 'legend: always the wiring',"const net = Math.round(Number(P.networkWiring)) === 1,", 'const net = false,'],
 ];
 const absolu = (src) => src.replace(/from '\.\/([^']+)'/g, (_, f) => `from '${pathToFileURL(join(ICI, f)).href}'`);
 const dossier = mkdtempSync(join(process.env.TAM_TMP || tmpdir(), 'tam-cerveau-lignes-mut-'));

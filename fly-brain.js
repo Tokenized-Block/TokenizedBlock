@@ -29,7 +29,9 @@ const spark = document.getElementById('spark'), sctx = spark.getContext('2d');
 const $ = (id) => document.getElementById(id);
 const fmt = (x, d = 2) => x.toLocaleString('en-US', { minimumFractionDigits: d, maximumFractionDigits: d });
 const pct = (x, d = 2) => (x > 0 ? '+' : x < 0 ? '−' : '') + fmt(Math.abs(x) * 100, d) + '%';
-const clock = (t = Date.now()) => new Date(t).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+/* 2026-11-08 (Phil: "update the date of the test"): every log line carries its local date, not only the time — a log read the next day says which day */
+const clock = (t = Date.now()) => { const d = new Date(t), p = (x) => String(x).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }); };
 const mixText = (mix) => Object.entries(mix).filter(([, v]) => v > 0).map(([k, v]) => `${k} $${fmt(v, 0)}`).join(', ') || 'nothing';
 /* text from the server, a node or storage, before it enters HTML (security review H2) */
 const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
