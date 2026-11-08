@@ -517,6 +517,8 @@ const DECORS = {
   allOrNoneLucas: (P, o, B) => [pt([(25.9 - 25.4) / 6.4, 3.08 / 4.1, B.centre[2]], C.repere, 'Observation 6: between two steps')],
   /* game307 */
   neuronsHerculanoHouzel: (P, o, B) => [pt([Math.log10(6376.16) / 4, Math.log10(87.346) / 2, B.centre[2]], C.repere, 'Macaque: 6.4 billion neurons in 87 g')],
+  /* game308 */
+  connectomeSizes: (P, o, B) => [pt([Math.log10(86.1e9) / 11, 0, B.centre[2]], C.repere, 'Human: 86.1 billion neurons, no map')],
   /* game299 */
   reactionDonders: (P, o, B) => [pt([1, 74.08 * 1000 / 261 / 320, B.centre[2]], C.repere, 'Method b: about 284 ms, the slowest')],
   /* game297 */

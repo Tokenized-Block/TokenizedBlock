@@ -1194,6 +1194,14 @@ const L = {
     aRegarder: ['The seven species sit on one straight line.', 'Its slope is close to one: mass follows neurons.', 'The rodent line climbs much more steeply.'],
     fin: null,
   },
+  /* game308 (idea: Phil, other forms of the brain) */
+  connectomeSizes: {
+    titre: 'Mapped brains: worm, fly, and the human count',
+    enUnePhrase: 'Three nervous systems have been mapped synapse by synapse; the largest, a fly, has fewer than two millionths of the human neuron count.',
+    colonnes: ['neurons (log scale)', 'synapses (log scale)', 'organism'],
+    aRegarder: ['Each map holds hundreds of times more than the one before.', 'The fly makes hundreds of synapses per neuron, the worm about seventeen.', 'The human point stands far to the right, with no synapse count: it has never been mapped.'],
+    fin: null,
+  },
   /* game299 (idee : codex « cerveau humain », sous-agent Claude) */
   reactionDonders: {
     titre: 'Donders: timing a decision',
