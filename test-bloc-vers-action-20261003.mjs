@@ -19,7 +19,8 @@ const { vieDuBlock } = await imp('marche.js');
 const { V4_ADRESSES } = await imp('lancer-pool.js');
 const { CLES_PRIX } = await imp('prix-eth.js');
 const { USDC_BASE, FEE_WALLET } = await imp('frais-creation.js');
-let n = 0, ko = 0;
+let n = 0, ko = 0, nonMesure = '';
+const ATTENTES_NON_LUE = [2000, 5000, 10000];
 const ok = (c, m) => { n += 1; if (c) console.log('ok  ' + m); else { ko += 1; console.log('KO  ' + m); } };
 const bas = (a) => String(a || '').toLowerCase();
 const ETH = '0x' + '0'.repeat(40), USDC = bas(USDC_BASE);
@@ -77,11 +78,21 @@ try {
     const sup = k ? [{ fee: Number(k.fee), tickSpacing: Number(k.tickSpacing), hooks: k.hooks }] : [];
     return E.meilleureClePourMontant({ rpc, chaine: 8453, de, vers, montant, candidates: sup.concat(CLES_PRIX) });
   };
-  const pf = await PF.planFranchissement({ rpc, chaine: 8453, compte: COMPTE, chemin: c.chemin, devise: IB, block: NV, montant: 10n ** 24n,
-    decimalesEntree: 18, prixUsdEntree: null, resoudreV4: resoudre, beneficiaireFrais: FEE_WALLET, fraisDevisesOk: new Set([USDC]) });
+  /* ⛔ 2026-11-08 (serie 295) : meme regle que test-bloc-vers-bloc — NON_MESURE = une lecture du plan a echoue (une reponse vide « 0x » du
+   *   noeud public en est une depuis game295), pas un refus de route : replanifie au plus 3 fois, puis NON MESURE (exit 2), jamais un vert.
+   *   PRET / APPROBATIONS / REFUSE ne sont pas rejoues : ils sont juges au premier coup. */
+  let pf;
+  for (let k = 0; ; k += 1) {
+    pf = await PF.planFranchissement({ rpc, chaine: 8453, compte: COMPTE, chemin: c.chemin, devise: IB, block: NV, montant: 10n ** 24n,
+      decimalesEntree: 18, prixUsdEntree: null, resoudreV4: resoudre, beneficiaireFrais: FEE_WALLET, fraisDevisesOk: new Set([USDC]) });
+    if (pf.etat !== 'NON_MESURE' || k === ATTENTES_NON_LUE.length) break;
+    console.log('note  plan NON_MESURE (essai ' + (k + 1) + '/' + (ATTENTES_NON_LUE.length + 1) + ') : ' + String(pf.pourquoi || '').slice(0, 120));
+    await new Promise((o) => setTimeout(o, ATTENTES_NON_LUE[k]));
+  }
   const r = pf.resume || {};
   console.log('    plan :', pf.etat, String(pf.pourquoi || pf.etape || '').slice(0, 120));
-  ok(['PRET', 'APPROBATIONS'].includes(pf.etat) || (pf.etat === 'REFUSE' && /not enough|approval|balance|insufficient/i.test(String(pf.pourquoi))),
+  if (pf.etat === 'NON_MESURE') nonMesure = 'plan NON_MESURE (' + String(pf.pourquoi || '').slice(0, 120) + ') apres ' + (ATTENTES_NON_LUE.length + 1) + ' essais — la route n est PAS jugee';
+  else ok(['PRET', 'APPROBATIONS'].includes(pf.etat) || (pf.etat === 'REFUSE' && /not enough|approval|balance|insufficient/i.test(String(pf.pourquoi))),
     'IB022 -> NVDAc : forme acceptee, jambe 1 (vente sur V8) cotee et simulee jusqu au solde — ' + pf.etat
       /* 2026-10-10 : la RAISON part dans le libelle - un KO en serie la jetait (le runner n imprime que les lignes KO) */
       + (pf.etat === 'REFUSE' ? ' (' + String(pf.pourquoi || '').slice(0, 140) + ')' : '')
@@ -93,4 +104,7 @@ try {
   ok(false, 'lecture reseau impossible — NON MESURE, pas un vert : ' + String(err && err.message).slice(0, 100));
 }
 console.log(n + ' assertions, ' + ko + ' KO');
-process.exit(ko ? 1 : 0);
+/* un KO l emporte sur NON MESURE (exit 1) ; NON MESURE seul = exit 2, jamais 0. exitCode, pas process.exit() : sous Node 24 / Windows,
+ *   exit() pendant la fermeture des sockets undici plantait (0xC0000409) et le code etait perdu (constat de test-bloc-vers-bloc). */
+if (nonMesure) console.log('NON MESURE  ' + nonMesure);
+process.exitCode = ko ? 1 : nonMesure ? 2 : 0;
