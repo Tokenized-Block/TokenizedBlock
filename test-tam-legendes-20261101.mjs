@@ -50,6 +50,9 @@ for (const id of ids) {
     else ok(L.noms === null, id + ' : noms null hors systeme de corps et hors objets nommes');
     /* un film se colore par MOMENT (tam-onglet.js : couleurDim(q % 12)) ; sinon une couleur par colonne */
     if (L.film) ok(L.couleurs.startsWith('A film of ' + L.film.images + ' moments'), id + ' : couleurs d un film = par moment');
+    /* 2026-11-09 : a subject that colours its points by class (o.pointClasses, emotionWiringHCP: its brain parts) has a colour KEY instead,
+     *   the same names and colours as the palette it draws (test-tam-cerveau-parties-20261109.mjs checks every class) */
+    else if (L.pointColours) ok(!!o.pointClasses && L.pointColours.length === o.pointPalette.length && L.pointColours.every((p, j) => p.name === o.pointPalette[j].name && p.color === o.pointPalette[j].color && L.couleurs.includes('key below')), id + ' : la cle des couleurs = la palette dessinee');
     else ok(L.colonnes.every((c, j) => L.couleurs.includes('colour ' + (j + 1) + ' = ')), id + ' : chaque colonne a sa couleur nommee');
   }
   /* films : la legende dit EXACTEMENT le film que le module declare (o.film), et rien quand il n en declare pas */

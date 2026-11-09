@@ -38,6 +38,13 @@ export function partOf(id) {
 }
 export const partById = (pid) => PARTS.find((p) => p.id === pid) || null;
 
+/* 2026-11-09 (Phil: "the TAM brain is still messy; parts of the brain, readable by people who don't understand"): the TAM subject
+ *   emotionWiringHCP colours each point by its part, with these colours. */
+/** the colour key of a part-coloured drawing: the 12 parts in PARTS order (class k = entry k) */
+export const pointPalette = () => Object.freeze(PARTS.map((p) => Object.freeze({ id: p.id, name: p.name, color: p.color, knownFor: p.knownFor })));
+/** the class of a node id in pointPalette(): its part's index in PARTS, or -1 when it has none */
+export function partIndexOf(id) { const pid = partOf(id); return pid === null ? -1 : PARTS.findIndex((p) => p.id === pid); }
+
 /** a short readable name: "Left amygdala" -> "Amygdala (L)"; keeps the anatomical name, puts the side last */
 export function shortName(r) {
   const m = /^(Left|Right) (.+)$/.exec(String(r && r.name || ''));

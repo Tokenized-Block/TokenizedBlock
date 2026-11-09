@@ -1819,6 +1819,14 @@ export function monter(racine, ctx = {}) {
   }
   /* the same guard as segmentsScene (plain path only), without projecting : indexed segments are drawn from the drawn points */
   function indexables() { const o = S.o; return !!(S.science && o && Array.isArray(o.segments) && o.segments.length && o.brut && !S.corps && !(S.P && S.P.melange) && !filmDe()); }
+  /* 2026-11-09 (Phil: "parts of the brain, readable by people who don't understand"): a subject MAY colour its points by class
+   *   (o.pointClasses, one per point, into o.pointPalette [{ color, name }]); same plain-path guard as the lines (points in the subject's order) ;
+   *   otherwise null and the direction colours stay (every other subject) */
+  function classesPoints() {
+    const o = S.o;
+    if (!S.science || !o || !o.pointClasses || o.pointClasses.length !== S.n || !Array.isArray(o.pointPalette) || !o.pointPalette.length || S.corps || (S.P && S.P.melange) || filmDe()) return null;
+    return { classes: o.pointClasses, palette: o.pointPalette };
+  }
   function dimDominante() {
     const d = new Int8Array(S.n), act = S.couches.actives;
     for (let i = 0; i < S.n; i++) { let b = -1, m = -1; for (let j = 0; j < S.D; j++) if (act[j]) { const v = Math.abs(S.z[i * S.D + j]); if (v > m) { m = v; b = j; } } d[i] = b; }
@@ -1884,7 +1892,20 @@ export function monter(racine, ctx = {}) {
       }
       g.globalAlpha = 1;
     }
-    for (let i = 1; i < (corps || film ? 0 : n); i++) { /* game78 : les corps ont leur propre boucle (plus bas) ; game80 : le film aussi */
+    /* 2026-11-09 : points coloured by the subject's classes (the brain's parts) : one path per class, the same dot as a cloud below */
+    const pc = corps || film ? null : classesPoints();
+    racine.dataset.classesPoints = pc ? String(pc.palette.length) : '';
+    if (pc) {
+      /* larger dots than a plain cloud: the colour IS the information here (which part), it must be seen over the lines */
+      g.stroke(); g.globalAlpha = 0.9; const lw = g.lineWidth; g.lineWidth = Math.max(3, dpr * 3.4);
+      for (let c = 0; c < pc.palette.length; c++) {
+        g.beginPath(); g.strokeStyle = g.shadowColor = pc.palette[c].color;
+        for (let i = 0; i < n; i++) if (pc.classes[i] === c && Number.isFinite(projSx[i])) { g.moveTo(projSx[i], projSy[i]); g.lineTo(projSx[i] + 0.6, projSy[i]); }
+        g.stroke();
+      }
+      g.globalAlpha = 1; g.lineWidth = lw; g.beginPath();
+    }
+    for (let i = 1; i < (corps || film || pc ? 0 : n); i++) { /* game78 : les corps ont leur propre boucle (plus bas) ; game80 : le film aussi */
       if (!Number.isFinite(projSx[i]) || !Number.isFinite(projSx[i - 1])) continue;
       const c = dominant[i];
       if (c !== cour) { g.stroke(); g.beginPath(); g.strokeStyle = g.shadowColor = c >= 0 ? V.couleurDim(c) : '#556'; g.globalAlpha = 0.8; cour = c; g.moveTo(projSx[i - 1], projSy[i - 1]); }
@@ -2112,13 +2133,18 @@ export function monter(racine, ctx = {}) {
     if (!L) { legende.hidden = true; return; }
     legende.hidden = false;
     const ligne = (k, v) => el('p', { class: 'tamDoux' }, el('b', { text: k + ' ' }), document.createTextNode(v));
-    const cols = (L.colonnes || []).map((c, j) => el('li', {}, el('i', { class: 'tamPastille', style: 'background:' + V.couleurDim(j) }), document.createTextNode(' x' + (j + 1) + ' — ' + c)));
+    /* 2026-11-09 : with a colour key by part (L.pointColours), a column is not a colour any more : no swatch beside the columns */
+    const parts = Array.isArray(L.pointColours) && L.pointColours.length ? L.pointColours : null;
+    const cols = (L.colonnes || []).map((c, j) => el('li', {}, ...(parts ? [] : [el('i', { class: 'tamPastille', style: 'background:' + V.couleurDim(j) })]), document.createTextNode((parts ? '' : ' ') + 'x' + (j + 1) + ' — ' + c)));
+    const cle = parts ? [el('p', { class: 'tamDoux' }, el('b', { text: 'Colour of a dot = its part of the brain:' })),
+      el('ul', { class: 'tamPayListe', id: 'tamPartsKey' }, ...parts.map((p) => el('li', {}, el('i', { class: 'tamPastille', style: 'background:' + p.color }), el('b', { text: ' ' + p.name }), document.createTextNode(': ' + p.knownFor))))] : [];
     legende.replaceChildren(el('summary', { text: 'What you are seeing' + (L.titre ? ': ' + L.titre : '') }),
       /* 09/11 (Phil: "an interactive map of the human brain, readable by anyone"): the same data as a map to visit, part by part */
       ...(id === 'emotionWiringHCP' ? [el('p', { class: 'tamDoux' }, el('a', { href: 'human-brain.html', id: 'tamCarteCerveau', text: 'Open the brain map: visit its parts, its emotions and its live connections →' }))] : []),
       ...(L.enUnePhrase ? [ligne('In one sentence:', L.enUnePhrase)] : []),
       ...(cols.length ? [el('p', { class: 'tamDoux' }, el('b', { text: 'Each value of a point:' })), el('ul', { class: 'tamPayListe' }, ...cols)] : []),
       ...(L.couleurs ? [ligne('Colours:', L.couleurs)] : []),
+      ...cle,
       ...((L.aRegarder || []).length ? [el('p', { class: 'tamDoux' }, el('b', { text: 'What to notice:' })), el('ul', { class: 'tamPayListe' }, ...L.aRegarder.map((t) => el('li', { text: t })))] : []),
       ...(L.fin ? [ligne('How it ends:', L.fin)] : []));
   }

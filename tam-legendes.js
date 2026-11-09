@@ -9,6 +9,7 @@
  *   un FILM (o.film du module) se dessine image par image, une couleur par moment — sa disposition ici = celle du module. */
 import { SYSTEMES, CORPS } from './tam-science.js';
 import * as HB from './human-brain-data.js';
+import { pointPalette } from './human-brain-parts.js';
 
 const N_DEFAUT = 1500;
 /* la couleur hors corps (tam-onglet.js#dimDominante) : la colonne la plus loin de sa moyenne en ce point */
@@ -1227,8 +1228,12 @@ const L = {
       return e.name + ' (' + pack.name + '): ' + e.regions.length + ' regions reported by ' + e.source.short + ' (' + e.source.design + ', ' + e.source.n + '); ' + e.shared.length + ' of them also reported for another emotion of this pack.' + (th.id === 'data' ? '' : ' ' + th.name + ', not data: ' + th.statement); },
     colonnes: ['front to back of the real brain (mm / 100)', 'bottom to top (mm / 100)', 'left to right (mm / 100)'],
     /* game311 (Phil: "always the same false legend"): the generic sentence named a column per colour, true of the code but not a brain fact */
+    /* 2026-11-09 (Phil: "parts of the brain, readable by people who don't understand"): the dots wear the colour of their brain PART
+     *   (human-brain-parts.js, the same colours as the brain map); pointColours = the key the tab draws as swatches, = o.pointPalette */
     couleurs: 'Lines: grey-blue = a measured link (fainter = weaker), violet = a pathway named in studies. Points: the white labelled ones are the regions of the emotion shown, and the left amygdala always (with the emotions it serves); '
-      + 'every other dot takes the colour of the direction in which it sits farthest from the middle of all dots, each direction scaled to its own spread (colour 1 = front or back, colour 2 = top or bottom, colour 3 = left or right): a position, not a function.',
+      + 'every other dot wears the colour of the brain part it belongs to (key below). The faint surface dots take the part of the nearest region centre on the same side: our approximation, the true borders between parts are not stored here. '
+      + 'A firing dot between two regions wears the colour of the part it left. Which part does what is a textbook summary, not measured here.',
+    pointColours: () => pointPalette(),
     aRegarder: (P) => { const { emotion: e, other } = HB.selectEmotion(P), K = HB.COUNTS, nm = (id) => HB.REGIONS.find((r) => r.id === id).name.toLowerCase();
       const net = Math.round(Number(P.networkWiring)) === 1, res = Math.round(Number(P.resolutionWiring)) === 1, K4 = HB.COUNTS_400, nDeep = K.regions - K.hcpRegions;
       const nPath = res ? HB.DEEP_LINKS.filter(([, j]) => j >= K.hcpRegions || HB.parcelFor(HB.REGIONS[j].id) >= 0).length : HB.DEEP_LINKS.length, lost = res ? HB.lostAt400(e.regions) : [];
@@ -2511,6 +2516,8 @@ export function legende(id, params = {}) {
   return Object.freeze({
     titre: val(e.titre), enUnePhrase: val(e.enUnePhrase), colonnes, couleurs,
     aRegarder: Object.freeze(val(e.aRegarder).slice()), fin: e.fin,
+    /* 2026-11-09 : an optional colour key [{ name, color, knownFor }] when a subject colours its points by class (emotionWiringHCP: its parts) */
+    pointColours: e.pointColours ? Object.freeze(val(e.pointColours).slice()) : null,
     film: film ? Object.freeze(film) : null, noms: noms ? Object.freeze(noms) : null,
   });
 }

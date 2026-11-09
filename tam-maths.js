@@ -16,6 +16,7 @@
 import { sinD, cosD, lnD } from './tam-moteur.js';
 import * as HB from './human-brain-data.js';
 import * as HA from './human-brain-anatomy.js';
+import { pointPalette, partIndexOf } from './human-brain-parts.js';
 
 /* atan avec + - * / et sqrt (meme methode que tam-theories-3.js) */
 function atanD(x) { if (!(x - x === 0)) return x === Infinity ? Math.PI / 2 : x === -Infinity ? -Math.PI / 2 : NaN; if (x < 0) return -atanD(-x); if (x > 1) return Math.PI / 2 - atanD(1 / x);
@@ -5849,21 +5850,34 @@ function emotionWiringHCP(P, n) {
   const STEPS = 30, REST = 3, alea = mulberry32(0xe40 + 101 * pk + 17 * ek + 5 * travel + 3 * net + 7 * res + 11 * th), last = nodeIds.map(() => -99), reached = new Set(), carried = [];
   let viaPathways = 0;
   const pts = P3.slice(0, NR).map((p) => p.slice());
+  /* 2026-11-09 (Phil: "parts of the brain, readable by people who don't understand"): each point also carries the CLASS of its brain part
+   *   (human-brain-parts.js: 12 parts), kept beside pts (cls[k] = the class of pts[k]); the brut does not change. A node's
+   *   part: its region; a parcel's: its majority region (DK_OF_400, the rule already used to light parcels); an impulse dot: the part it left
+   *   (OUR choice); a deep outline dot: the region its vertex is labelled with (ENIGMA, measured); a cortex outline dot: the region whose
+   *   centre is nearest on the same side (OUR approximation: the cortex labels are not stored; on the 400 parcel centres this rule gives the
+   *   part of their majority region 334 times in 400 (84 %): outline dots near a border can wear a neighbour's colour). */
+  const palette = pointPalette(), NC = HA.ANATOMY_NAMES.length - 14, half = HA.CORTEX.length / 6;
+  const nearestCortex = (x, y, z, left) => { let best = -1, dm = Infinity; for (let r = left ? 0 : NC / 2; r < (left ? NC / 2 : NC); r++) { const [cx, cy, cz] = HA.CENTROIDS[r], d = (x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2; if (d < dm) { dm = d; best = r; } } return partIndexOf(HA.ANATOMY_NAMES[best]); };
+  const nodeClass = (a) => partIndexOf(a < NR ? (res ? HB.REGIONS_400[a].dk || HB.REGIONS_400[a].id : all[a]) : all[N + a - NR]);
+  const cls = nodeIds.slice(0, NR).map((_, a) => nodeClass(a));
   const segments = use.map((e) => ({ a: P3[e.i].slice(), b: P3[e.j].slice(), w: (e.w - lo) / (hi - lo), c: 0, ia: e.i, ib: e.j })).concat(links.map((p) => ({ a: P3[p.i].slice(), b: P3[p.j].slice(), w: 0.5, c: 5, ia: p.i, ib: p.j })));
   nodeIds.slice(NR).forEach((_, k) => pts.push(P3[NR + k].slice()));
+  nodeIds.slice(NR).forEach((_, k) => cls.push(nodeClass(NR + k)));
   for (let v = 0; v < HA.CORTEX.length / 3; v += OUTLINE_CORTEX_STEP) pts.push([HA.CORTEX[3 * v + 1] / 100, HA.CORTEX[3 * v + 2] / 100, HA.CORTEX[3 * v] / 100]);
+  for (let v = 0; v < HA.CORTEX.length / 3; v += OUTLINE_CORTEX_STEP) cls.push(nearestCortex(HA.CORTEX[3 * v], HA.CORTEX[3 * v + 1], HA.CORTEX[3 * v + 2], v < half));
   for (let v = 0; v < HA.DEEP.length / 4; v += OUTLINE_DEEP_STEP) pts.push([HA.DEEP[4 * v + 1] / 100, HA.DEEP[4 * v + 2] / 100, HA.DEEP[4 * v] / 100]);
+  for (let v = 0; v < HA.DEEP.length / 4; v += OUTLINE_DEEP_STEP) cls.push(partIndexOf(HA.ANATOMY_NAMES[HA.DEEP[4 * v + 3]]));
   const second = toNodes(regionsOf(other)), bothN = new Set(toNodes(both));
-  second.forEach((a) => { for (let q = 0; q < (bothN.has(a) ? 3 : 2); q++) pts.push(P3[a].slice()); });
+  second.forEach((a) => { for (let q = 0; q < (bothN.has(a) ? 3 : 2); q++) { pts.push(P3[a].slice()); cls.push(nodeClass(a)); } });
   const fixedPts = pts.length;
   let active = new Set();
   for (let t = 0; t < STEPS; t++) {
     plan.forEach((s) => { if (s.step === t) s.nodes.forEach((a) => { if (t - last[a] > REST) active.add(a); }); });
     const next = new Set();
-    active.forEach((a) => { last[a] = t; reached.add(a); pts.push(P3[a].slice()); if (isSeed.has(a)) pts.push(P3[a].slice()); });
+    active.forEach((a) => { last[a] = t; reached.add(a); pts.push(P3[a].slice()); cls.push(nodeClass(a)); if (isSeed.has(a)) { pts.push(P3[a].slice()); cls.push(nodeClass(a)); } });
     if (travel) active.forEach((a) => adj[a].forEach(([b, w]) => {
       if (t + 1 - last[b] > REST && !next.has(b) && alea() < (w === null ? 0.3 : 0.05 + 0.7 * ((w - lo) / (hi - lo)) ** 2)) {
-        next.add(b); if (w === null) viaPathways++; else carried.push(w); pts.push(P3[a].map((v, c) => v + (P3[b][c] - v) / 3)); } }));
+        next.add(b); if (w === null) viaPathways++; else carried.push(w); pts.push(P3[a].map((v, c) => v + (P3[b][c] - v) / 3)); cls.push(nodeClass(a)); } }));
     active = next;
   }
   const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0), events = pts.length - fixedPts, amyg = P3[nodeIds.indexOf('Lamyg')];
@@ -5872,9 +5886,11 @@ function emotionWiringHCP(P, n) {
    *  firing events, which come LAST, were dropped without a word. Now: every place, then the firing events — all of them when they fit in
    *  WIRING_POINTS_MAX, else EVENLY sampled across time (every step keeps its share), and the subject says how many; simuler takes its n. */
   const keptIdx = sampleEvenly(events, Math.max(0, WIRING_POINTS_MAX - fixedPts)), keptEvents = keptIdx.length, nOut = fixedPts + keptEvents, brut = new Float64Array(nOut * 3);
-  for (let k = 0; k < nOut; k++) { const src = k < fixedPts ? k : fixedPts + keptIdx[k - fixedPts], [px, py, pz] = pts[src], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
-  return { D: 3, n: nOut, brut, nuage: true, segments, unite: 'layout units (our choice)', invariants: {
-    emotionWiringHCP: { mesure: gaps + (fineOk ? 0 : 1) + (fixedPts <= WIRING_POINTS_MAX ? 0 : 1), formule: 0, drawnWiring: nOut + ' points: ' + fixedPts + ' places, ' + keptEvents + ' of ' + events + ' firing events' + (keptEvents < events ? ' (evenly sampled)' : ''), edgesWiring: edges.length + ' non-zero, ' + edges.filter((e) => e.w >= K.wiringStrongCut).length + ' with w >= ' + K.wiringStrongCut, componentsWiring: components, isolatedWiring: isolated,
+  const pointClasses = new Uint8Array(nOut);
+  for (let k = 0; k < nOut; k++) { const src = k < fixedPts ? k : fixedPts + keptIdx[k - fixedPts], [px, py, pz] = pts[src], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; pointClasses[k] = Math.max(0, cls[src]); }
+  const classesOk = cls.length === pts.length && cls.every((c) => c >= 0 && c < palette.length);
+  return { D: 3, n: nOut, brut, nuage: true, segments, pointClasses, pointPalette: palette, unite: 'layout units (our choice)', invariants: {
+    emotionWiringHCP: { mesure: gaps + (fineOk ? 0 : 1) + (fixedPts <= WIRING_POINTS_MAX ? 0 : 1) + (classesOk ? 0 : 1), formule: 0, drawnWiring: nOut + ' points: ' + fixedPts + ' places, ' + keptEvents + ' of ' + events + ' firing events' + (keptEvents < events ? ' (evenly sampled)' : ''), edgesWiring: edges.length + ' non-zero, ' + edges.filter((e) => e.w >= K.wiringStrongCut).length + ' with w >= ' + K.wiringStrongCut, componentsWiring: components, isolatedWiring: isolated,
       unmappedWiring: HB.UNMAPPED.join(', '), packShownWiring: pack.name, emotionShownWiring: emotion.name, printedWiring: emotion.printedName,
       sourceWiring: emotion.source.short + ', ' + emotion.source.design + ', ' + emotion.source.n, seedsWiring: emotion.regions.join(' '),
       regionsWiring: emotion.regions.length + (emotion.regions.length ? ': ' + emotion.regions.map(nameOf).join(', ') : ' (none among these parts)'),
@@ -6546,5 +6562,7 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   if (s.nuage || r.nuage) o.nuage = true;
   if (r.film) o.film = r.film;
   if (Array.isArray(r.segments) && r.segments.length) o.segments = r.segments; /* 2026-11-08 : optional lines (tam-vue.js#projeterSegments) */
+  /* 2026-11-09 : optional point colours by class (emotionWiringHCP: the brain part of each point); one class per point, every class in the palette */
+  if (r.pointClasses && r.pointClasses.length === n && Array.isArray(r.pointPalette) && r.pointPalette.length && r.pointClasses.every((c) => c < r.pointPalette.length)) { o.pointClasses = r.pointClasses; o.pointPalette = r.pointPalette; }
   return o;
 }
