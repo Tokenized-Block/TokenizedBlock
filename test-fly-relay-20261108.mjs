@@ -48,6 +48,12 @@ async function banc(dir) {
   ok(g.refusal(tx({ to: user, data: seal }), T0) === null, 'a memory seal (66-byte note, no ETH) is relayed');
   ok(g.refusal(tx({ to: user, data: seal, value: 1 }), T0) !== null && g.refusal(tx({ to: user, data: seal + '00' }), T0) !== null, 'a seal carrying ETH, or with one byte more, is refused');
   ok(/8453/.test(g.refusal(tx({ to: user, value: 1000, chainId: 1 }), T0) || ''), 'another chain is refused, even for a plain send');
+  /* 09/11: a seal is the only path that names no allowed `to`: the route must check that address has no code */
+  ok(g.sealOnlyTarget(tx({ to: router, data: seal }), T0) === router, 'a seal to a contract address is flagged for the no-code check (' + g.sealOnlyTarget(tx({ to: router, data: seal }), T0) + ')');
+  ok(g.sealOnlyTarget(tx({ to: user, data: seal }), T0) === user, 'a seal to the fly\'s own wallet is flagged too (the route then finds no code)');
+  ok(g.sealOnlyTarget(tx({ to: USDC_BASE, data: T + word(user) + amt(5) }), T0) === null && g.sealOnlyTarget(tx({ to: user, value: 1000 }), T0) === null && g.sealOnlyTarget(tx({ to: user, data: seal, value: 1 }), T0) === null, 'a transfer, a plain send, a refused seal: not flagged');
+  g.remember({ ok: true, aSigner: [{ to: router, data: seal, value: '0x0' }] }, T0);
+  ok(g.sealOnlyTarget(tx({ to: router, data: seal }), T0 + 1000) === null, 'the same bytes, once PLANNED by the server, pass as planned (no code check)');
   for (let k = 0; k < 2100; k++) g.remember({ ok: true, aSigner: [{ to: router, data: '0x' + k.toString(16).padStart(8, '0'), value: '0x0' }] }, T0);
   ok(g.size === 2000, 'the memory of planned calls is bounded (' + g.size + ')');
   return n;
@@ -65,7 +71,9 @@ const MUTANTS = [
   ['transfer avec ETH', (s) => s.replace('&& t.value === 0n && (to === usdcL', '&& (to === usdcL')],
   ['longueur du transfer ignoree', (s) => s.replace('&& d.length === 2 + 8 + 128 ', '')],
   ['memoire sans borne', (s) => s.replace('while (planned.size > max)', 'while (false)')],
-  ['casse comptee', (s) => s.replace("const key = (to, data, value) => String(to).toLowerCase() + '|' + String(data || '0x').toLowerCase()", "const key = (to, data, value) => String(to) + '|' + String(data || '0x').toLowerCase()")],
+  ['sceau jamais signale', (s) => s.replace('return t.to;\n  }', 'return null;\n  }').replace('return t.to;\r\n  }', 'return null;\r\n  }')],
+  ['sceau planifie signale quand meme', (s) => s.replace("    const at = planned.get(key(t.to, t.data, t.value));\n    if (at !== undefined && now - at < ttlMs) return null;\n    return t.to;", '    return t.to;')],
+  ['casse comptee',(s) => s.replace("const key = (to, data, value) => String(to).toLowerCase() + '|' + String(data || '0x').toLowerCase()", "const key = (to, data, value) => String(to) + '|' + String(data || '0x').toLowerCase()")],
 ];
 let tues = 0;
 const source = readFileSync(join(ICI, 'fly-relay.js'), 'utf8');

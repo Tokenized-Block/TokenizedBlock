@@ -7307,6 +7307,12 @@ function traiterRequete(req, res) {
       let t; try { t = parseTx(b.raw); } catch (e) { send(400, { ok: false, why: 'not a signed type-2 transaction: ' + String(e.message).slice(0, 80) }); return; }
       const refus = GARDE_MOUCHE.refusal(t);
       if (refus) { send(403, { ok: false, why: refus }); return; }
+      /* 09/11: a memory seal is relayed only to an address WITHOUT code (fly-relay.js sealOnlyTarget) ; a silent node is not a refusal */
+      const sealTo = GARDE_MOUCHE.sealOnlyTarget(t);
+      if (sealTo) {
+        let code; try { code = await rpcServeur('eth_getCode', [sealTo, 'latest']); } catch (e) { send(503, { ok: false, why: 'node did not answer while checking the seal address: ' + String((e && e.message) || e).slice(0, 120) }); return; }
+        if (typeof code !== 'string' || code !== '0x') { send(403, { ok: false, why: 'refused: a memory seal goes to an address without code (the fly\'s own wallet), not to a contract' }); return; }
+      }
       const hash = keccak256HexSrv(t.bytes);
       try { await rpcServeur('eth_sendRawTransaction', [b.raw]); send(200, { ok: true, hash }); }
       catch (e) { const m = String((e && e.message) || e);

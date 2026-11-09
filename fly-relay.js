@@ -33,5 +33,14 @@ export function createRelayGuard({ usdc, isStock, transferSelector, ttlMs = 6000
     if (d.startsWith(sel) && d.length === 2 + 8 + 128 && t.value === 0n && (to === usdcL || isStock(to))) return null;
     return 'refused: not a call this server planned in the last ' + Math.round(ttlMs / 60000) + ' minutes, nor a USDC / stock transfer, nor a plain ETH send, nor a memory seal';
   }
-  return { remember, refusal, get size() { return planned.size; } };
+  /** 09/11 (QA open item): the address a transaction allowed ONLY as a memory seal goes to, else null. A seal path open to any `to` made the
+   *   server an open relay for 0-ETH calls whose data starts with the seal note (a contract whose fallback acts on any data); the route
+   *   relays it only when that address has NO code (the page seals to the fly's own wallet; a 7702-delegated account has code: refused). */
+  function sealOnlyTarget(t, now = Date.now()) {
+    if (refusal(t, now) !== null || t.data === '0x' || !(t.value === 0n && readSeal(t.data))) return null;
+    const at = planned.get(key(t.to, t.data, t.value));
+    if (at !== undefined && now - at < ttlMs) return null;
+    return t.to;
+  }
+  return { remember, refusal, sealOnlyTarget, get size() { return planned.size; } };
 }
