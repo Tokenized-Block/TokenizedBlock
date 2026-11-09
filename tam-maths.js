@@ -5800,6 +5800,12 @@ function bodyMapsNummenmaa(P, n) {
 // Points, all at real places: the 82 regions first, the 7 deep parts, the outline (513 cortex, 203 deep-structure points), the compared
 //   emotion's regions (3 points each when reported for both, 2 otherwise), then the firing events in time order (a reported region fires
 //   twice as bright: 2 points; an impulse is a point one third of the way along its link).
+/* 09/11: the outline was 1 cortex vertex in 20 (513 points) and 1 deep vertex in 30 (203): at 82 regions the 1,190 lines drowned it and the
+ *  screen showed a web, not a brain. Same real surfaces (fsaverage5), sampled denser. WIRING_POINTS_MAX: a minted work must fit TamArt's
+ *  MAX_DATA = 16,384 bytes (about 4.5 bytes a point): 3,500 points stay under it at every setting (the bench measures the bytes). */
+const OUTLINE_CORTEX_STEP = 8, OUTLINE_DEEP_STEP = 20, WIRING_POINTS_MAX = 3500;
+/** kept indices (0..total-1) of `kept` items spread evenly over `total`, in order: the first, then one every total/kept (all when kept >= total) */
+export function sampleEvenly(total, kept) { const k = Math.max(0, Math.min(total, kept)); return Array.from({ length: k }, (_, j) => Math.floor(j * total / k)); }
 function emotionWiringHCP(P, n) {
   const K = HB.COUNTS, N = K.hcpRegions, all = HB.REGIONS.map((r) => r.id), nameOf = (id) => HB.REGIONS[all.indexOf(id)].name;
   const edges = HB.WIRING.map(([i, j, w]) => ({ i, j, w })), fedges = HB.FUNCTION.map(([i, j, w]) => ({ i, j, w })), paths = HB.DEEP_LINKS.map(([i, j, s]) => ({ i, j, s }));
@@ -5845,8 +5851,8 @@ function emotionWiringHCP(P, n) {
   const pts = P3.slice(0, NR).map((p) => p.slice());
   const segments = use.map((e) => ({ a: P3[e.i].slice(), b: P3[e.j].slice(), w: (e.w - lo) / (hi - lo), c: 0, ia: e.i, ib: e.j })).concat(links.map((p) => ({ a: P3[p.i].slice(), b: P3[p.j].slice(), w: 0.5, c: 5, ia: p.i, ib: p.j })));
   nodeIds.slice(NR).forEach((_, k) => pts.push(P3[NR + k].slice()));
-  for (let v = 0; v < HA.CORTEX.length / 3; v += 20) pts.push([HA.CORTEX[3 * v + 1] / 100, HA.CORTEX[3 * v + 2] / 100, HA.CORTEX[3 * v] / 100]);
-  for (let v = 0; v < HA.DEEP.length / 4; v += 30) pts.push([HA.DEEP[4 * v + 1] / 100, HA.DEEP[4 * v + 2] / 100, HA.DEEP[4 * v] / 100]);
+  for (let v = 0; v < HA.CORTEX.length / 3; v += OUTLINE_CORTEX_STEP) pts.push([HA.CORTEX[3 * v + 1] / 100, HA.CORTEX[3 * v + 2] / 100, HA.CORTEX[3 * v] / 100]);
+  for (let v = 0; v < HA.DEEP.length / 4; v += OUTLINE_DEEP_STEP) pts.push([HA.DEEP[4 * v + 1] / 100, HA.DEEP[4 * v + 2] / 100, HA.DEEP[4 * v] / 100]);
   const second = toNodes(regionsOf(other)), bothN = new Set(toNodes(both));
   second.forEach((a) => { for (let q = 0; q < (bothN.has(a) ? 3 : 2); q++) pts.push(P3[a].slice()); });
   const fixedPts = pts.length;
@@ -5862,10 +5868,13 @@ function emotionWiringHCP(P, n) {
   }
   const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0), events = pts.length - fixedPts, amyg = P3[nodeIds.indexOf('Lamyg')];
   const nameNode = (a) => (a < NR ? (res ? HB.REGIONS_400[a].name : HB.REGIONS[a].name) : HB.REGIONS[N + a - NR].name);
-  const brut = new Float64Array(n * 3);
-  for (let k = 0; k < n; k++) { const [px, py, pz] = pts[k % pts.length], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
-  return { D: 3, brut, nuage: true, segments, unite: 'layout units (our choice)', invariants: {
-    emotionWiringHCP: { mesure: gaps + (fineOk ? 0 : 1), formule: 0, edgesWiring: edges.length + ' non-zero, ' + edges.filter((e) => e.w >= K.wiringStrongCut).length + ' with w >= ' + K.wiringStrongCut, componentsWiring: components, isolatedWiring: isolated,
+  /* 09/11: the brut was the FIRST n (1,500) points, cycled: 18 of 48 settings made more (up to 7,448 at 414 parcels with travel), and the
+   *  firing events, which come LAST, were dropped without a word. Now: every place, then the firing events — all of them when they fit in
+   *  WIRING_POINTS_MAX, else EVENLY sampled across time (every step keeps its share), and the subject says how many; simuler takes its n. */
+  const keptIdx = sampleEvenly(events, Math.max(0, WIRING_POINTS_MAX - fixedPts)), keptEvents = keptIdx.length, nOut = fixedPts + keptEvents, brut = new Float64Array(nOut * 3);
+  for (let k = 0; k < nOut; k++) { const src = k < fixedPts ? k : fixedPts + keptIdx[k - fixedPts], [px, py, pz] = pts[src], o = 3 * k; brut[o] = px; brut[o + 1] = py; brut[o + 2] = pz; }
+  return { D: 3, n: nOut, brut, nuage: true, segments, unite: 'layout units (our choice)', invariants: {
+    emotionWiringHCP: { mesure: gaps + (fineOk ? 0 : 1) + (fixedPts <= WIRING_POINTS_MAX ? 0 : 1), formule: 0, drawnWiring: nOut + ' points: ' + fixedPts + ' places, ' + keptEvents + ' of ' + events + ' firing events' + (keptEvents < events ? ' (evenly sampled)' : ''), edgesWiring: edges.length + ' non-zero, ' + edges.filter((e) => e.w >= K.wiringStrongCut).length + ' with w >= ' + K.wiringStrongCut, componentsWiring: components, isolatedWiring: isolated,
       unmappedWiring: HB.UNMAPPED.join(', '), packShownWiring: pack.name, emotionShownWiring: emotion.name, printedWiring: emotion.printedName,
       sourceWiring: emotion.source.short + ', ' + emotion.source.design + ', ' + emotion.source.n, seedsWiring: emotion.regions.join(' '),
       regionsWiring: emotion.regions.length + (emotion.regions.length ? ': ' + emotion.regions.map(nameOf).join(', ') : ' (none among these parts)'),
@@ -5874,7 +5883,7 @@ function emotionWiringHCP(P, n) {
       sharedWiring: HB.SHARED.shared + ' of ' + HB.SHARED.mapped + ' (' + HB.SHARED.single + ' serve one)', insulaWiring: (HB.SHARED.families.L_insula || []).join(', '),
       amygdalaWiring: (HB.SHARED.families.Lamyg || []).join(', '), amygdalaPlaceWiring: amyg.map((v) => v.toFixed(3)).join(' '),
       positionsWiring: 'real centroids (fsaverage5, mm) for ' + NR + (res ? ' parcels; ' : ' regions; ') + all.slice(N).filter((id) => !HB.POS3D_SOURCE[id].startsWith('our placement')).length + ' deep parts at printed peaks, ' + all.slice(N).filter((id) => HB.POS3D_SOURCE[id].startsWith('our placement')).length + ' placed by us',
-      silhouetteWiring: Math.ceil(HA.CORTEX.length / 3 / 20) + ' cortex and ' + Math.ceil(HA.DEEP.length / 4 / 30) + ' deep-structure points',
+      silhouetteWiring: Math.ceil(HA.CORTEX.length / 3 / OUTLINE_CORTEX_STEP) + ' cortex and ' + Math.ceil(HA.DEEP.length / 4 / OUTLINE_DEEP_STEP) + ' deep-structure points',
       seedPlacesWiring: seeds.map((s) => nameNode(s) + '@' + P3[s].map((v) => v.toFixed(3)).join('@')).join('|'),
       resolutionShownWiring: res ? '414 parcels (Schaefer-400 and 14 subcortical)' : '82 regions (Desikan-Killiany and 14 subcortical)', seedNodesWiring: seeds.length,
       lostWiring: lost.length ? lost.join(' ') : 'none', fineWiring: K4.wiringNonzero + ' connections, ' + K4.functionKept + ' couplings, ' + overlap4 + ' both, at 414',
@@ -6529,6 +6538,8 @@ export function simuler(id, params = {}, { n = 1500 } = {}) {
   const s = parId(id), P = borner(id, params);
   n = Math.max(2, Math.floor(n));
   const r = FONCTIONS[id](P, n);
+  /* 09/11: a subject MAY say its own point count (emotionWiringHCP: every point it makes, none cut) ; the brut must then hold exactly that */
+  if (Number.isSafeInteger(r.n) && r.n >= 2 && r.brut && r.brut.length === r.n * r.D) n = r.n;
   let fini = true; for (let i = 0; i < r.brut.length; i++) if (!Number.isFinite(r.brut[i])) { fini = false; break; }
   if (!fini) return { params: P, D: r.D, n, bornee: false, raison: 'NaN', brut: null, lyapunov: NaN, uniteLyapunov: r.unite, points: null, invariants: null };
   const o = { params: P, D: r.D, n, bornee: true, brut: r.brut, lyapunov: null, uniteLyapunov: r.unite, points: null, invariants: r.invariants };

@@ -146,5 +146,65 @@ try {
 } finally { rmSync(dossier, { recursive: true, force: true }); }
 n++; if (tues !== MUT.length) ech.push({ nom: 'mutants', d: tues + '/' + MUT.length });
 console.log(`\nMUTANTS : ${tues}/${MUT.length} killed`);
+
+/* 09/11: the brut was the first 1,500 points, cycled: 18 of 48 settings made more (up to 7,448) and the firing events, which come last,
+ *  were cut without a word. Now every place, then the events, all of them or EVENLY sampled to fit 3,500 points: TamArt's MAX_DATA is
+ *  16,384 bytes (measured below with the real encoder, tam-science.rejouerScience, at every setting). */
+const SC = await import('./tam-science.js');
+function pointsSuite(TM) {
+  const out = [], ok2 = (nom, f) => { try { out.push({ nom, ok: true, d: f() }); } catch (e) { out.push({ nom, ok: false, d: (e && e.message || String(e)).slice(0, 300) }); } };
+  ok2('every place kept, events all or evenly sampled, n <= 3,500 : brut = n x 3, no gap', () => {
+    let vus = 0, plusDe1500 = 0, echant = 0, max = 0;
+    for (const resolutionWiring of [0, 1]) for (const travelWiring of [0, 1]) for (let packWiring = 0; packWiring < 6; packWiring++) for (const theoryWiring of [0, 4]) for (const compareWiring of [0, 1]) {
+      const o = TM.simuler('emotionWiringHCP', { packWiring, emotionWiring: 0, compareWiring, networkWiring: 0, travelWiring, resolutionWiring, theoryWiring }), C = o.invariants.emotionWiringHCP;
+      const m = C.drawnWiring.match(/^(\d+) points: (\d+) places, (\d+) of (\d+) firing events( \(evenly sampled\))?$/); assert.ok(m, C.drawnWiring);
+      const [x, fixed, kept, events] = m.slice(1, 5).map(Number);
+      assert.ok(x === fixed + kept && o.n === x && o.brut.length === 3 * x && x <= 3500 && kept === Math.min(events, 3500 - fixed) && kept > 0 && !!m[5] === (kept < events),
+        JSON.stringify({ resolutionWiring, travelWiring, packWiring, theoryWiring, compareWiring, n: o.n, d: C.drawnWiring }));
+      assert.equal(C.mesure, 0, 'gaps');
+      vus++; if (x > 1500) plusDe1500++; if (kept < events) echant++; max = Math.max(max, x);
+    }
+    assert.ok(plusDe1500 > 0 && echant > 0, 'some settings above 1,500 points, some sampled');
+    return vus + ' settings, ' + plusDe1500 + ' above 1,500, ' + echant + ' sampled, max ' + max;
+  });
+  ok2('sampleEvenly : first kept, spread over the whole run, all when it fits', () => {
+    assert.deepEqual(TM.sampleEvenly(10, 5), [0, 2, 4, 6, 8]); assert.deepEqual(TM.sampleEvenly(3, 5), [0, 1, 2]); assert.deepEqual(TM.sampleEvenly(7, 0), []);
+    const k = TM.sampleEvenly(6311, 1430); assert.ok(k.length === 1430 && k[0] === 0 && k[k.length - 1] > 6311 - 6311 / 1430 - 1 && k.every((v, j) => j === 0 || v > k[j - 1]));
+  });
+  ok2('outline = the real surfaces, denser : 1281 cortex and 304 deep-structure points', () => {
+    const C = TM.simuler('emotionWiringHCP', {}).invariants.emotionWiringHCP; assert.equal(C.silhouetteWiring, '1281 cortex and 304 deep-structure points'); return C.drawnWiring;
+  });
+  return out;
+}
+/* the minted bytes, with the REAL encoder, at every setting (not under mutation: tam-science imports the real tam-maths) */
+{ let maxO = 0, vus = 0;
+  for (const resolutionWiring of [0, 1]) for (const travelWiring of [0, 1]) for (let packWiring = 0; packWiring < 6; packWiring++) for (const theoryWiring of [0, 4]) for (const compareWiring of [0, 1]) {
+    const P = SC.paramsScience('emotionWiringHCP', { packWiring, emotionWiring: 0, compareWiring, networkWiring: 0, travelWiring, resolutionWiring, theoryWiring }, { minteur: '0x' + 'ab'.repeat(20) });
+    const r = SC.rejouerScience(JSON.parse(JSON.stringify(P))); maxO = Math.max(maxO, r.octets.length); vus++;
+  }
+  n++; const bon = maxO <= 16384; console.log((bon ? 'OK    ' : 'ECHEC ') + 'minted bytes <= MAX_DATA (16,384) at every setting  ' + vus + ' settings, max ' + maxO + ' bytes');
+  if (!bon) ech.push({ nom: 'MAX_DATA', d: maxO }); }
+const MATHS = readFileSync(join(ICI, 'tam-maths.js'), 'utf8').replace(/\r\n/g, '\n');
+for (const r of pointsSuite(T)) { n++; console.log((r.ok ? 'OK    ' : 'ECHEC ') + r.nom + (r.d ? '  ' + r.d : '')); if (!r.ok) ech.push(r); }
+const MUT_MATHS = [
+  ['budget lifted (12,000)', 'WIRING_POINTS_MAX = 3500;', 'WIRING_POINTS_MAX = 12000;'],
+  ['events cut at the end again', 'return Array.from({ length: k }, (_, j) => Math.floor(j * total / k));', 'return Array.from({ length: k }, (_, j) => j);'],
+  ['places cut to fit', 'const keptIdx = sampleEvenly(events, Math.max(0, WIRING_POINTS_MAX - fixedPts))', 'const keptIdx = sampleEvenly(events, Math.max(1, WIRING_POINTS_MAX - fixedPts - 400))'],
+  ['simuler ignores the subject\'s own n', 'if (Number.isSafeInteger(r.n) && r.n >= 2 && r.brut && r.brut.length === r.n * r.D) n = r.n;', ''],
+];
+const dossierM = mkdtempSync(join(process.env.TAM_TMP || tmpdir(), 'tam-cerveau-points-mut-'));
+let tuesM = 0;
+try {
+  for (let i = 0; i < MUT_MATHS.length; i++) {
+    const [nom, de, vers] = MUT_MATHS[i], k = MATHS.split(de).length - 1;
+    if (k !== 1) { console.log(`  P${i + 1} ${nom} : NOT APPLIED (pattern found ${k} times) -> SURVIVES`); continue; }
+    const p = join(dossierM, `p${i + 1}-tam-maths.mjs`); writeFileSync(p, absolu(MATHS.replace(de, () => vers)));
+    let r; try { r = pointsSuite(await import(pathToFileURL(p).href)); } catch (e) { r = [{ nom: 'exception: ' + e.message, ok: false }]; }
+    const rouges = r.filter((x) => !x.ok); if (rouges.length) tuesM++;
+    console.log(`  P${i + 1} ${nom} : ${rouges.length ? 'KILLED' : 'SURVIVES'} (${rouges.length} red${rouges.length ? ', e.g. ' + rouges[0].d.slice(0, 90) : ''})`);
+  }
+} finally { rmSync(dossierM, { recursive: true, force: true }); }
+n++; if (tuesM !== MUT_MATHS.length) ech.push({ nom: 'point mutants', d: tuesM + '/' + MUT_MATHS.length });
+console.log(`POINT MUTANTS : ${tuesM}/${MUT_MATHS.length} killed`);
 if (ech.length) { console.log('\nECHECS :'); for (const e of ech) console.log('  ' + e.nom + '  ' + (e.d || '')); process.exit(1); }
 console.log(`test-tam-cerveau-lignes-20261108 : ${n} assertions OK`);
