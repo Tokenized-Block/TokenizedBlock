@@ -1,0 +1,66 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Deploy BlockContest</title>
+<!--
+  game325 — the page that offers the UNSIGNED deployment of BlockContest to the CONNECTED wallet (on Phil's GO).
+  ⛔ The data sent is EXACTLY block-contest-deploiement.js (contracts/preparer-deploiement-contest.mjs), proven on a fork by
+     banc-contest-deploy-fork-20261109.mjs. Base (8453) only; the sha256 of the data is checked before the button opens.
+-->
+<style>
+:root{--bg:#050d24;--card:#0f1d3d;--line:#1e2f57;--fg:#e9f0ff;--dim:#8ba0c9;--or:#f7a318}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:16px}
+main{max-width:720px;margin:0 auto}h1{font-size:19px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.k{color:var(--dim);flex:0 0 170px;font-size:12px}.v{flex:1;font-size:12px;word-break:break-all}
+button{width:100%;background:var(--or);color:#20160a;border:0;border-radius:8px;padding:14px;font:inherit;font-weight:700;margin-top:10px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.note{color:var(--dim);font-size:12px}
+</style>
+<main>
+<h1>Deploy BlockContest (Base)</h1>
+<p class="note">Weekly block contest paid in TBLOCK. Only a block's creator can enter it; votes are paid in TBLOCK and 100% of each vote goes to
+0x…dEaD; a round pays only if 2 entries each get 3 votes from 3 addresses; the winner takes the pot (at most 862,000 TBLOCK). No owner, no withdraw.</p>
+<div class="card" id="what"></div>
+<div class="card">
+  <button id="connect">Connect wallet</button>
+  <button id="deploy" disabled>Deploy (sign in the wallet)</button>
+  <div id="state" class="note" style="margin-top:10px"></div>
+</div>
+</main>
+<script type="module">
+import { CONTEST_DEPLOIEMENT as D } from './block-contest-deploiement.js';
+const $ = (s) => document.querySelector(s);
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const row = (k, v) => '<div class="row"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>';
+const C = D.config, tok = (raw) => (BigInt(raw) / 10n ** 18n).toLocaleString('en-US') + ' TBLOCK';
+$('#what').innerHTML = row('contract', D.contrat) + row('network', 'Base mainnet (chain id ' + D.chaine + ')') + row('compiler', D.compilateur)
+  + row('sha256 of the source', D.sha256Source) + row('sha256 of the data signed', D.sha256Creation) + row('size', D.octetsCreation + ' bytes')
+  + row('TBLOCK', C.tblock) + row('hook (creators)', C.hook) + row('first round starts', new Date(C.genesis * 1000).toISOString())
+  + row('entry / vote periods', C.entryPeriod / 86400 + ' d / ' + C.votePeriod / 86400 + ' d') + row('vote price', tok(C.votePrice) + ', 100% to 0x…dEaD')
+  + row('entry fee', tok(C.entryFee)) + row('winner share', '100% of the pot') + row('quorum', C.minQualifiedEntries + ' entries with ' + C.minVotes + ' votes from ' + C.minVoters + ' addresses')
+  + row('pot cap', tok(C.maxPot)) + row('pair currencies refused', D.devisesPaire);
+let acct = null;
+async function sha256Hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+$('#connect').onclick = async () => {
+  if (!window.ethereum) { $('#state').textContent = 'No wallet in this browser.'; return; }
+  try { [acct] = await window.ethereum.request({ method: 'eth_requestAccounts' }); } catch (e) { $('#state').textContent = 'Wallet refused: ' + (e.message || e); return; }
+  const chain = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+  const shaOk = (await sha256Hex(D.creation)) === D.sha256Creation;
+  const early = Date.now() / 1000 < C.genesis;
+  $('#state').innerHTML = 'Connected: ' + esc(acct) + ' · network ' + chain + (chain === 8453 ? '' : ' — switch to Base first') + ' · data integrity ' + (shaOk ? 'OK' : 'MISMATCH')
+    + (early ? '' : ' · the first round start is already past: this data would be refused by the contract, regenerate it');
+  $('#deploy').disabled = !(chain === 8453 && shaOk && early);
+};
+$('#deploy').onclick = async () => {
+  $('#deploy').disabled = true;
+  let h;
+  try { h = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: acct, data: D.creation }] }); }
+  catch (e) { $('#state').textContent = 'Not sent: ' + (e.message || e); $('#deploy').disabled = false; return; }
+  $('#state').innerHTML = 'Sent: <a href="https://basescan.org/tx/' + esc(h) + '" target="_blank" rel="noopener">' + esc(h) + '</a> · waiting for the receipt…';
+  let r = null;
+  for (let k = 0; k < 90 && !r; k++) { r = await window.ethereum.request({ method: 'eth_getTransactionReceipt', params: [h] }).catch(() => null); if (!r) await new Promise((o) => setTimeout(o, 2000)); }
+  if (!r) { $('#state').innerHTML += ' · no receipt yet: check Basescan.'; return; }
+  $('#state').innerHTML = (r.status === '0x1' ? 'Deployed at <b>' + esc(r.contractAddress) + '</b>' : 'FAILED on chain') + ' · tx <a href="https://basescan.org/tx/' + esc(h) + '" target="_blank" rel="noopener">' + esc(h) + '</a>';
+};
+</script>

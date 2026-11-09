@@ -6050,6 +6050,8 @@ const SERVIS = [
   'holders.html',
   /* game324: the unsigned deployment of the TBLOCK buyback contract (generated) and the page that offers it to the connected wallet */
   'deployer-tblock-buyback.html', 'tblock-buyback-deploiement.js',
+  /* game325: the unsigned deployment of the block contest (generated) and its page */
+  'deployer-block-contest.html', 'block-contest-deploiement.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */

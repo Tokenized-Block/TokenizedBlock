@@ -23,7 +23,8 @@ if (!h.includes('tip 20260923-map-buy-cta: amplify Instant Birth Map CTA')) thro
  *       defaut qu un test qui verrouille un prix faux.
  * ⛔ CE N EST PAS UN AFFAIBLISSEMENT : le chemin Instant Birth depuis la Map reste exige, et le
  *    doublon passe de REQUIS a INTERDIT. */
-if (!h.includes('id="mapCta" class="mapCta">✦ Instant Birth')) throw new Error('header CTA manquant');
+/* game325 (Phil 2026-11-09): the header CTA reads "✦ Create your Block" (was "✦ Instant Birth — 0.001 ETH") */
+if (!h.includes('id="mapCta" class="mapCta">✦ Create your Block</button>')) throw new Error('header CTA manquant');
 if (!h.includes("poserIntent({ kind: 'ib' }); allerA('creer')")) throw new Error('l entonnoir Instant Birth a disparu');
 if (h.includes('id="mapCtaDock"') || h.includes('Map works')) throw new Error('le doublon de CTA est revenu');
 if (!h.includes("data-acheter=\"' + enTexte(l.adr) + '\">Buy")) throw new Error('trending buy');
