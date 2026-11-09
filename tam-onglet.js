@@ -2114,6 +2114,8 @@ export function monter(racine, ctx = {}) {
     const ligne = (k, v) => el('p', { class: 'tamDoux' }, el('b', { text: k + ' ' }), document.createTextNode(v));
     const cols = (L.colonnes || []).map((c, j) => el('li', {}, el('i', { class: 'tamPastille', style: 'background:' + V.couleurDim(j) }), document.createTextNode(' x' + (j + 1) + ' — ' + c)));
     legende.replaceChildren(el('summary', { text: 'What you are seeing' + (L.titre ? ': ' + L.titre : '') }),
+      /* 09/11 (Phil: "an interactive map of the human brain, readable by anyone"): the same data as a map to visit, part by part */
+      ...(id === 'emotionWiringHCP' ? [el('p', { class: 'tamDoux' }, el('a', { href: 'human-brain.html', id: 'tamCarteCerveau', text: 'Open the brain map: visit its parts, its emotions and its live connections →' }))] : []),
       ...(L.enUnePhrase ? [ligne('In one sentence:', L.enUnePhrase)] : []),
       ...(cols.length ? [el('p', { class: 'tamDoux' }, el('b', { text: 'Each value of a point:' })), el('ul', { class: 'tamPayListe' }, ...cols)] : []),
       ...(L.couleurs ? [ligne('Colours:', L.couleurs)] : []),
