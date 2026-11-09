@@ -198,8 +198,16 @@ const couvert = (j) => j.couvertureDepuis === P && j.premierBlocDuJour === P;
 const texteTx = (j, kx) => { const e = j && Array.isArray(j.evenements) ? j.evenements.find((x) => x.tx === txh(kx)) : null; return e ? e.text : null; };
 const ATT_A = court(W2) + ' bid on skin #12 · 2.50 USDC', ATT_B = court(W1) + ' bid on skin #12 · 0.01 ETH', ATT_C = court(W3) + ' bid on skin #12 · 0.02 ETH';
 /* B1 : relisting. Couvert -> la tete avance de 100 blocs -> Bid C lu par le direct APRES le rattrapage du listing USDC */
+/* 09/11 : the server reads up to tete - margeBlocsRolls() = ceil(ROLLS_MARGE_S / sB) blocks. sB comes from the time of day (midnight sits
+ *  14 000 blocks down), so between ~00:12 and ~00:28 UTC that margin passed 50 blocks and a fixed +100 head left Bid C (H + 50) unread:
+ *  red at 00:20 UTC, green at 05:00 (repro with a shifted clock). The head now moves past Bid C by the margin the server will use. */
+const margeS = Number((fs.readFileSync(path.join(ICI, 'serveur-web.js'), 'utf8').match(/const ROLLS_MARGE_S = (\d+(?:\.\d+)?);/) || [])[1]);
+ok(Number.isFinite(margeS) && margeS > 0, 'ROLLS_MARGE_S read from serveur-web.js (' + margeS + ' s)');
+const { blocsPour } = await import(pathToFileURL(path.join(ICI, 'temps-de-bloc.js')).href);
+const margeServeur = Math.max(3, blocsPour(margeS, sB) ?? 3);
+const AVANCE = Math.max(100, 50 + margeServeur + 20);
 async function avancer(j0, lire, etat) {
-  etat.tete = H + 100;
+  etat.tete = H + AVANCE;
   let j = j0;
   for (let i = 0; i < 40; i++) { j = await lire(); if (j && texteTx(j, 705) !== null) break; await dormir(500); }
   return j;
