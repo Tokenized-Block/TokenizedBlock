@@ -52,6 +52,10 @@ const decision = (word, extra = {}) => ({ type: 'decision', sim: false, word, ac
 const swapCall = (fly) => ({ to: ROUTER, data: '0x12345678' + word(fly), value: '0x0', nom: 'swap (stub)' });
 
 const results = [];
+/* 09/11: a BUY is sized by the fly's record (Kelly): with no record it buys nothing. A scenario that needs a buy gives it an EARNED record
+ *   (300 right / 100 wrong: kellyFraction = 0.238) */
+const EARNED = { consistent: 300, opposite: 100, flat: 0, undecided: 0 };
+const earned = () => T().session.restore({ ...T().session.state(), tally: { ...EARNED } });
 const check = (name, ok, detail) => { results.push({ name, ok: !!ok, detail }); console.log((ok ? 'ok  ' : 'KO  ') + name + ' — ' + detail); return ok; };
 
 /* ── LOGIC: every scenario on stubbed endpoints ── */
@@ -75,16 +79,18 @@ async function runLogic() {
     check('the fly log is bounded over 400 decisions', $('autoLog').children.length <= 200, $('autoLog').children.length + ' lines kept'); }
 
   /* 3. approvals that never end in a swap are not a trade */
-  { await freshWallet(); $('autoProven').checked = false;
+  { await freshWallet(); $('autoProven').checked = false; earned();
     const fly = T().auto.s.address;
     stubFetch(moneyStubs({ plan: (q) => ({ ok: true, etat: 'APPROBATIONS', resume: { paye: q.get('montant'), fraisBps: 10 }, aSigner: [{ to: USDC, data: '0x095ea7b3' + word(ROUTER) + BigInt(q.get('montant')).toString(16).padStart(64, '0'), value: '0x0', nom: 'approve (stub)' }] }) }));
     await T().autoTrade(decision('approach'));
     const st = JSON.parse(localStorage.getItem('fly-auto-wallet-v1'));
-    check('approvals without a swap are not counted as a trade', st.today === 0 && !notes().some((x) => /done on its own/.test(x)), 'today=' + st.today + ' · ' + notes()[0].slice(0, 120));
+    /* game313: the day's slot is RESERVED before sending (a reload mid-trade must not lift the cap), so it stays counted: today = 1, but no
+     *   trade is reported done and the note says nothing was traded */
+    check('approvals without a swap are not reported as a trade (the reserved slot stays counted)', st.today === 1 && !notes().some((x) => /done on its own/.test(x)) && /nothing traded/.test(notes()[0]), 'today=' + st.today + ' · ' + notes()[0].slice(0, 120));
     void fly; }
 
   /* 4. a stock switched while a trade is in flight: the seal is the memory that DECIDED, under its own stock */
-  { await freshWallet(); $('autoProven').checked = false;
+  { await freshWallet(); $('autoProven').checked = false; earned();
     const first = T().current(), fly = T().auto.s.address, F = await import('/fly-seal.js');
     const decided = Array(T().fly.exportMemory().length).fill(50000); T().fly.importMemory(decided);
     let switched = false;
@@ -155,7 +161,7 @@ async function runLogic() {
     check('a batched funding is not sent twice while it is being mined', batches.length === 1, batches.length + ' batches sent; then: ' + $('autoState').textContent.slice(0, 80)); }
 
   /* 10. a node that does not answer the gas estimate is not called a refusal by the chain */
-  { await freshWallet(); $('autoProven').checked = false; const fly = T().auto.s.address;
+  { await freshWallet(); $('autoProven').checked = false; earned(); const fly = T().auto.s.address;
     stubFetch(moneyStubs({ plan: (q) => ({ ok: true, etat: 'PRET', resume: { paye: q.get('montant'), fraisBps: 10 }, aSigner: [swapCall(fly)] }), estimate: () => ({ ok: false, why: '429 Too Many Requests' }) }));
     await T().autoTrade(decision('approach'));
     const all = notes().join(' | ');
@@ -170,6 +176,17 @@ async function runLogic() {
     $('pick').value = '1'; $('pick').dispatchEvent(new Event('change')); await sleep(1500);
     check('switching stock while holding says what it still holds', notes().some((x) => x.includes('still holds') && x.includes(left.symbol)), (notes()[0] || 'no note').slice(0, 140));
     unstub(); $('pick').value = '0'; $('pick').dispatchEvent(new Event('change')); await sleep(300); }
+
+  /* 12. Kelly: no record -> no buy, nothing planned; an earned record -> the planned amount IS the Kelly share of min(USDC, cap) */
+  { await freshWallet(); $('autoProven').checked = false; T().session.restore({ ...T().session.state(), tally: { consistent: 0, opposite: 0, flat: 0, undecided: 0 } });
+    const calls = stubFetch(moneyStubs());
+    await T().autoTrade(decision('approach'));
+    check('no record: Kelly buys nothing, nothing planned', !calls.some((u) => u.includes('/api/rails/plan')) && /Kelly\), under the 0\.10 USDC minimum: no buy/.test(notes()[0]), notes()[0].slice(0, 160));
+    await freshWallet(); earned(); const asked = [];
+    stubFetch(moneyStubs({ plan: (q) => { asked.push(q.get('montant')); return { ok: false, etat: 'NON_MESURE', pourquoi: 'stub' }; } }));
+    await T().autoTrade(decision('approach'));
+    const K = await import('/fly-core.js'), want = String(Math.floor(500000 * K.kellyFraction(EARNED)));
+    check('an earned record: the amount planned is its Kelly share', asked[0] === want, 'planned ' + asked[0] + ', Kelly share of 0.5 USDC = ' + want); }
 
   unstub(); delete window.ethereum; await freshWallet({ running: false, owner: null }); localStorage.removeItem('fly-auto-wallet-v1'); T().auto.s = null;
   const ko = results.filter((r) => !r.ok).length;
@@ -190,10 +207,16 @@ async function runFork() {
   $('autoProven').checked = false; $('autoCap').value = '2'; $('autoDay').value = '10';
   T().auto.s.running = true; localStorage.setItem('fly-auto-wallet-v1', JSON.stringify(T().auto.s)); window.dispatchEvent(new StorageEvent('storage', { key: 'fly-auto-wallet-v1' }));
 
-  /* F1 BUY, real, then its seal read back from the chain */
+  /* F0 no record: Kelly buys nothing on the fork either */
+  T().session.restore({ ...T().session.state(), tally: { consistent: 0, opposite: 0, flat: 0, undecided: 0 } });
+  await T().autoTrade(decision('approach'));
+  const a00 = await acct();
+  check('no record: no buy on the fork, balances unchanged', /no buy/.test(notes()[0]) && a00.usdc === a0.usdc && BigInt(a00.stock) === 0n, notes()[0].slice(0, 160));
+  /* F1 BUY, real, sized by an earned record (Kelly share of the 2 USDC cap), then its seal read back from the chain */
+  earned(); const K = await import('/fly-core.js'), kellyAmt = BigInt(Math.floor(2000000 * K.kellyFraction(EARNED)));
   await T().autoTrade(decision('approach'));
   const a1 = await acct(), seal = JSON.parse(localStorage.getItem('fly-seal-v1-' + sym) || 'null');
-  check('BUY ' + sym + ' on the fork', notes().some((x) => /BUY .* done on its own \(1\/10/.test(x)) && BigInt(a1.stock) > 0n && BigInt(a0.usdc) - BigInt(a1.usdc) === 2000000n,
+  check('BUY ' + sym + ' on the fork, Kelly-sized (' + kellyAmt + ' of 2,000,000)', notes().some((x) => /BUY .* done on its own \(1\/10/.test(x)) && BigInt(a1.stock) > 0n && BigInt(a0.usdc) - BigInt(a1.usdc) === kellyAmt,
     'stock ' + a1.stock + ', USDC ' + a0.usdc + ' -> ' + a1.usdc + ' · ' + notes().slice(0, 3).join(' | ').slice(0, 200));
   let sealGas = null;
   if (seal) { const q = await fetch('/api/fly/receipt/' + seal.tx + '?tx=1').then((x) => x.json()); sealGas = q.receipt ? Number(BigInt(q.receipt.gasUsed)) : null; }
@@ -222,7 +245,7 @@ async function runFork() {
   T().autoStart(); await T().autoTrade(decision('avoid'));
   const a5 = await acct();
   check('SELL ' + sym + ' on the fork with the record gate on', BigInt(a5.stock) === 0n && BigInt(a5.usdc) > BigInt(a1.usdc) && notes().some((x) => /SELL .* done on its own/.test(x)),
-    'stock ' + a5.stock + ', USDC ' + a1.usdc + ' -> ' + a5.usdc + ' (round trip cost ' + (BigInt(a0.usdc) - BigInt(a5.usdc)) + ' units of 2,000,000)');
+    'stock ' + a5.stock + ', USDC ' + a1.usdc + ' -> ' + a5.usdc + ' (round trip cost ' + (BigInt(a0.usdc) - BigInt(a5.usdc)) + ' units of ' + kellyAmt + ')');
 
   /* F6 the planner busy (NON_MESURE): no order, the fly keeps running */
   stubFetch([[/\/api\/rails\/plan/, () => ({ ok: false, etat: 'NON_MESURE', pourquoi: 'planner busy (stub)' })]]);
@@ -237,7 +260,7 @@ async function runFork() {
   /* F8 Withdraw all, real: everything back to the wallet that funded it */
   window.confirm = () => true; await T().autoWithdraw();
   const a8 = await acct();
-  check('Withdraw all on the fork', BigInt(a8.usdc) === 0n && BigInt(a8.stock) === 0n && BigInt(a8.eth) < 10000000000000n && notes().some((x) => /^.{0,12}withdrawn/.test(x)),
+  check('Withdraw all on the fork', BigInt(a8.usdc) === 0n && BigInt(a8.stock) === 0n && BigInt(a8.eth) < 10000000000000n && notes().some((x) => /^(\d{4}-\d\d-\d\d )?[\d:]{8} · withdrawn/.test(x)),
     'left: USDC ' + a8.usdc + ', stock ' + a8.stock + ', ETH ' + a8.eth + ' wei · ' + notes().slice(0, 3).join(' | ').slice(0, 200));
   const ko = results.filter((r) => !r.ok).length; console.log(results.length + ' fork scenarios, ' + ko + ' KO');
   return { n: results.length, ko, results };

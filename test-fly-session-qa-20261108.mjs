@@ -73,7 +73,7 @@ console.log('test-fly-session-qa-20261108 : ' + total + ' assertions OK');
 
 const MUTANTS = [
   ['premiere fenetre levee sans transactions lues', (s) => s.replace('      firstWindow = false;\n    }\n', '    }\n    firstWindow = false;\n')],
-  ['positions perdues au redemarrage', (s) => s.replace('pos: x && x.books && x.books[k] && x.books[k].pos === 1 ? 1 : 0,', 'pos: 0,')],
+  ['positions perdues au redemarrage', (s) => s.replace('pos: x && x.books && x.books[k] ? posOf(x.books[k].pos) : 0,', 'pos: 0,')],
   ['trace perdue au redemarrage', (s) => s.replace('recent = restoredTrace(x);', 'recent = [];')],
   ['trace corrompue acceptee', (s) => s.replace("const good = (m) => m && typeof m === 'object' && ['received', 'sent', 'moved'].every((k) => Number.isFinite(m[k]) && m[k] >= 0);", 'const good = (m) => !!m;')],
 ];

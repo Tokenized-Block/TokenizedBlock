@@ -20,12 +20,12 @@ export const FLY = Object.freeze({
   /* how sure it must be to act: the pull-minus-push it needs, as a share of their sum (0.02 = 2%). The page lets a user lower or
    *   raise it ("boldness"); the server's shared fly keeps this default. */
   DECIDE: 0.02,
-  /* 2026-11-09, fixed BEFORE any measure (a shadow book, prequential): the fly's paper book lost -5.3% over 1,088 windows, and its 106
-   *   switches at 0.05% each make 0.9995^106 = 0.948 of it: the fees, not the timing (before fees it was about flat while "Always in" lost
-   *   about 2%). The PATIENT book follows the same fly but changes position only on a tendency PATIENT x DECIDE strong; a lukewarm call
-   *   keeps the position and its fee. 3 is our choice, not fitted: there is no stored history to fit on, and it is judged on windows
-   *   it has never seen, next to the fly on the same windows. */
-  PATIENT: 3,
+  /* 2026-11-09 (Phil: "check traders who use math and add it to the fly"). Measured on the shared fly, 1,088 windows: its paper book lost
+   *   -5.3%, and its 106 all-in switches at the pool fee (0.05%) make 0.9995^106 = 0.948 of it: it bet everything on an edge it had not
+   *   shown (192 right / 180 wrong). The math traders' answer: bet in proportion to the MEASURED edge (Kelly 1956; Thorp: a FRACTION of
+   *   Kelly when the edge is estimated), the edge shrunk toward a coin by a Beta(KELLY_PRIOR, KELLY_PRIOR) prior, and no rebalancing for
+   *   a change smaller than KELLY_BAND (the no-trade band of trading with costs: Davis & Norman 1990). Our constants, not fitted. */
+  KELLY_PRIOR: 10, KELLY_FRACTION: 0.5, KELLY_BAND: 0.005,
   /* eligibility trace (Handler et al. 2019, Cell 178:60, Drosophila: an odor leaves a Kenyon-cell trace that dopamine arriving
    *   AFTER it can still act on): a smell is taught by the moves of the next TRACE windows, each weighted TRACE_DECAY^age. 1 = the
    *   next window only (the model before 2026-11-08). */
@@ -44,6 +44,13 @@ export function recordEdge({ consistent = 0, opposite = 0 } = {}) {
   for (let i = 0; i <= n; i++) { if (i > 0) lc += Math.log((n - i + 1) / i); if (i >= k) terms.push(lc - n * Math.LN2); }
   const m = Math.max(...terms), p = Math.min(1, Math.exp(m) * terms.reduce((a, t) => a + Math.exp(t - m), 0));
   return { k, n, rate: k / n, p };
+}
+/** The share of its budget the fly may put in, from its record (Kelly for an even-odds call: f* = 2p - 1): p shrunk toward 1/2 by the
+ *  prior, times KELLY_FRACTION, clamped to [0, 1]. No measured edge (or a negative one) -> 0: it does not bet. */
+export function kellyFraction({ consistent = 0, opposite = 0 } = {}) {
+  const k = Math.max(0, Math.floor(consistent) || 0), n = k + Math.max(0, Math.floor(opposite) || 0), a = FLY.KELLY_PRIOR;
+  const p = (k + a) / (n + 2 * a);
+  return Math.max(0, Math.min(1, FLY.KELLY_FRACTION * (2 * p - 1)));
 }
 /** The word a tendency gives at a given threshold: approach, avoid or undecided. */
 export const wordOf = (t, threshold = FLY.DECIDE) => (t > threshold ? 'approach' : t < -threshold ? 'avoid' : 'undecided');
@@ -222,11 +229,10 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
   /* PAPER book, never real funds, never a signature: the fly is in the stock for a window when it predicted approach, out otherwise;
    * two dumb witnesses next to it; every change of position pays the pool's own fee, read on chain. */
   const books = { fly: { label: 'Fly', pos: 0, ret: 1, switches: 0 }, hold: { label: 'Always in', pos: 0, ret: 1, switches: 0 }, momentum: { label: 'Follow last move', pos: 0, ret: 1, switches: 0 },
-    patient: { label: 'Fly, patient (shadow)', pos: 0, ret: 1, switches: 0 } };
-  /* where the patient book started: the window count and the other books' returns then, so the three are compared on the SAME windows */
-  let patientFrom = null;
-  /** the patient rule: change only on a strong tendency; no tendency (no smell, quiet) keeps the position */
-  const patientWants = (t, pos) => (!Number.isFinite(t) ? pos : pos === 0 && t > FLY.PATIENT * decideAt ? 1 : pos === 1 && t < -FLY.PATIENT * decideAt ? 0 : pos);
+    kelly: { label: 'Fly, Kelly-sized', pos: 0, ret: 1, switches: 0 } };
+  /* the Kelly book: the SAME calls as the fly, but in for kellyFraction(record) of the budget, not all of it; fees on the share traded.
+   *   kellyFrom: where it started (window count, the other books then), so it is compared with them on the SAME windows */
+  let kellyFrom = null;
   let feePips = null, settled = 0, seen = new Set(), prevWin = null, firstWindow = true, lastOdor = null, typical = 0;
 
   function predict(mix, sim, done) {
@@ -235,7 +241,7 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
       emit({ type: 'predict', sim, mix, ap: t.ap, av: t.av, word });
       const action = decide(word, books.fly.pos);
       emit({ type: 'decision', sim, mix, ap: t.ap, av: t.av, t: t.t, threshold: decideAt, word, action, inBefore: books.fly.pos === 1, path: fly.thought(8) });
-      if (done) done(word, action, t.t);
+      if (done) done(word, action);
     } });
   }
   function learn(mix, move, sim) {
@@ -258,10 +264,14 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
     if (feePips == null) return;
     /* the fly's paper position follows its DECISION; a window without a smell (no trade) keeps the position: no smell, no move */
     const flyWants = win.decision ? (win.decision === 'buy' || win.decision === 'hold' ? 1 : 0) : books.fly.pos;
-    const want = { fly: flyWants, hold: 1, momentum: win.lastMove > 0 ? 1 : 0, patient: patientWants(win.t, books.patient.pos) };
-    if (!patientFrom) patientFrom = { settled, fly: books.fly.ret, hold: books.hold.ret, at: Date.now() };
+    /* Kelly: the record known when the call was made (this window is judged AFTER settling: no look-ahead) */
+    const share = flyWants ? kellyFraction(tally) : 0, kb = books.kelly;
+    const kellyTo = share === 0 ? 0 : Math.abs(share - kb.pos) > FLY.KELLY_BAND ? share : kb.pos;
+    const want = { fly: flyWants, hold: 1, momentum: win.lastMove > 0 ? 1 : 0, kelly: kellyTo };
+    if (!kellyFrom) kellyFrom = { settled, fly: books.fly.ret, hold: books.hold.ret, at: Date.now() };
     for (const [k, b] of Object.entries(books)) {
-      if (want[k] !== b.pos) { b.ret *= 1 - feePips / 1e6; b.switches++; b.pos = want[k]; }
+      /* a change of position pays the fee on the share that changes hands (all of it for the all-in books) */
+      if (want[k] !== b.pos) { b.ret *= 1 - Math.abs(want[k] - b.pos) * feePips / 1e6; b.switches++; b.pos = want[k]; }
       b.ret *= 1 + b.pos * move;
     }
     settled++;
@@ -301,15 +311,16 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
     }
     const hasOdor = mix.received + mix.sent + mix.moved > 0;
     if (hasOdor) lastOdor = { ...mix };
-    const win = { price: p, mix, hasOdor, prediction: null, decision: null, t: null, lastMove };
+    const win = { price: p, mix, hasOdor, prediction: null, decision: null, lastMove };
     if (p != null) { recent.unshift(hasOdor ? { ...mix } : null); recent.length = Math.min(recent.length, H); }
-    if (hasOdor) predict(mix, false, (word, action, t) => { win.prediction = word; win.decision = action; win.t = word === 'quiet' ? null : t; });
+    if (hasOdor) predict(mix, false, (word, action) => { win.prediction = word; win.decision = action; });
     prevWin = win;
     return { price: p, hasOdor };
   }
   function state() {
     return { tally: { ...tally }, books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { label: b.label, pos: b.pos, ret: b.ret, switches: b.switches }])), recent: recent.map((m) => (m ? { ...m } : null)), settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null, typical,
-      patientFrom: patientFrom ? { ...patientFrom } : null, sameWindows: patientFrom ? { windows: settled - patientFrom.settled, patient: books.patient.ret, fly: books.fly.ret / patientFrom.fly, hold: books.hold.ret / patientFrom.hold } : null };
+      kellyShare: kellyFraction(tally),
+      kellyFrom: kellyFrom ? { ...kellyFrom } : null, sameWindows: kellyFrom ? { windows: settled - kellyFrom.settled, kelly: books.kelly.ret, fly: books.fly.ret / kellyFrom.fly, hold: books.hold.ret / kellyFrom.hold } : null };
   }
   /* the eligibility trace survives a restart too (QA 08/11: a deploy or a reload dropped the smells still waiting for their lessons);
    *   only well-formed smells are taken back, at most the trace length */
@@ -320,12 +331,14 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
   function restore(x) {
     Object.assign(tally, { consistent: 0, opposite: 0, flat: 0, undecided: 0 }, x && x.tally ? x.tally : {});
     /* the positions are kept too: put back out at each restart, "Always in" paid one fake switch fee per deploy or reload (QA 08/11) */
-    for (const [k, b] of Object.entries(books)) Object.assign(b, { pos: x && x.books && x.books[k] && x.books[k].pos === 1 ? 1 : 0, ret: x && x.books && x.books[k] ? x.books[k].ret : 1, switches: x && x.books && x.books[k] ? x.books[k].switches : 0 });
+    /* a position is a share in [0, 1] (the Kelly book holds a fraction; the others 0 or 1) */
+    const posOf = (v) => (Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0);
+    for (const [k, b] of Object.entries(books)) Object.assign(b, { pos: x && x.books && x.books[k] ? posOf(x.books[k].pos) : 0, ret: x && x.books && x.books[k] ? x.books[k].ret : 1, switches: x && x.books && x.books[k] ? x.books[k].switches : 0 });
     settled = x && Number.isFinite(x.settled) ? x.settled : 0;
-    /* the patient book is NEW on 2026-11-09: a state saved before it has no `patient` book and no start; it starts at the next window */
-    const pf = x && x.patientFrom;
-    patientFrom = pf && Number.isFinite(pf.settled) && Number.isFinite(pf.fly) && pf.fly > 0 && Number.isFinite(pf.hold) && pf.hold > 0 && x.books && x.books.patient ? { settled: pf.settled, fly: pf.fly, hold: pf.hold, at: Number(pf.at) || null } : null;
-    if (!patientFrom) Object.assign(books.patient, { pos: 0, ret: 1, switches: 0 });
+    /* the Kelly book is NEW on 2026-11-09: a state saved before it has no `kelly` book and no start; it starts at the next window */
+    const kf = x && x.kellyFrom;
+    kellyFrom = kf && Number.isFinite(kf.settled) && Number.isFinite(kf.fly) && kf.fly > 0 && Number.isFinite(kf.hold) && kf.hold > 0 && x.books && x.books.kelly ? { settled: kf.settled, fly: kf.fly, hold: kf.hold, at: Number(kf.at) || null } : null;
+    if (!kellyFrom) Object.assign(books.kelly, { pos: 0, ret: 1, switches: 0 });
     recent = restoredTrace(x);
     typical = x && Number.isFinite(x.typical) && x.typical > 0 && x.typical < 1 ? x.typical : 0;
     /* the last real smell survives a restart: the forecast can run before the next trade arrives */

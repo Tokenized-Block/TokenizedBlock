@@ -184,7 +184,7 @@ const MUTANTS = [
   ['APL excitatrice', (s) => s.replace("if (N[i].family === 'DAN' || N[i].family === 'APL') continue;", "if (N[i].family === 'DAN') continue;")],
   ['plus de parcimonie Kenyon', (s) => s.replace('if (next[j] <= cut || next[j] < 0.01) next[j] = 0; else activeKc++;', 'activeKc++;')],
   ['recompense et punition inversees', (s) => s.replace("dan = move > 0 ? 'reward' : 'punishment';", "dan = move > 0 ? 'punishment' : 'reward';")],
-  ['frais oublies', (s) => s.replace('b.ret *= 1 - feePips / 1e6; b.switches++;', 'b.switches++;')],
+  ['frais oublies', (s) => s.replace('b.ret *= 1 - Math.abs(want[k] - b.pos) * feePips / 1e6; b.switches++;', 'b.switches++;')],
   ['passe senti a la premiere fenetre', (s) => s.replace("if (firstWindow) { emit({ type: 'skipped', n: fresh.length }); fresh = []; }", '')],
   ['recu et envoye inverses', (s) => s.replace("if (s && mv.some((m) => m.vers === s)) return 'received';", "if (s && mv.some((m) => m.vers === s)) return 'sent';")],
   ['vend sans tenir', (s) => s.replace("return word === 'approach' ? 'buy' : 'stay_out';", "return word === 'approach' ? 'buy' : word === 'avoid' ? 'sell' : 'stay_out';")],

@@ -4,7 +4,7 @@
  * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { createFly, createSession, foreseeNext, decide, recordEdge, FLY } from './fly-core.js';
+import { createFly, createSession, foreseeNext, decide, recordEdge, kellyFraction } from './fly-core.js';
 import { checkPlanCalls } from './fly-guard.js';
 import { memoryFingerprint, sealData, checkSeal } from './fly-seal.js';
 import { dayOf, countedToday, mayTrade, reserveTrade } from './fly-day.js';
@@ -352,8 +352,13 @@ async function autoTrade(e) {
       let de, vers, montant;
       if (action === 'buy') {
         const cap = BigInt(Math.round(field('autoCap', 0.1, 100, 0.1) * 1e6)), have = BigInt(a.usdc);
-        const amt = have < cap ? have : cap;
-        if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
+        const base = have < cap ? have : cap;
+        if (base < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
+        /* 09/11 (Kelly, fly-core.kellyFraction): it buys the share of the money its RECORD earns, not all of it; under 0.10 USDC the fees and
+         *   the gas outweigh the edge, so it does not buy at all */
+        const share = kellyFraction(session.state().tally), r = recordEdge(session.state().tally);
+        const amt = BigInt(Math.floor(Number(base) * share));
+        if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but its record (${r.k} right, ${r.n - r.k} wrong) earns ${fmt(share * 100, 1)}% of ${usd6(base)} USDC = ${usd6(amt)} USDC (Kelly), under the 0.10 USDC minimum: no buy`); return; }
         de = USDC_BASE; vers = stock.address; montant = amt.toString();
       } else { de = stock.address; vers = USDC_BASE; montant = held.toString(); }
       const q = new URLSearchParams({ de, vers, montant, compte: s.address });
@@ -487,9 +492,10 @@ function renderThoughts() {
 
 function renderBook(st = session.state(), el = $('book')) {
   el.innerHTML = `<div class="state">Score of its decisions, as if each were a trade (simulated, not money), after ${st.settled} windows, pool fee ${st.feePips == null ? '?' : fmt(st.feePips / 1e4, 2) + '%'} per switch — next to two simple rules:</div>`
-    + Object.values(st.books).map((b) => `<div class="row"><span>${b.label}</span><span>${pct(b.ret - 1, 3)}</span><span>${b.pos ? 'in' : 'out'} · ${b.switches} switches</span></div>`).join('')
-    /* 09/11: the patient shadow book, judged on the windows it has seen only, next to the fly and "Always in" on the SAME windows */
-    + (st.sameWindows ? `<div class="state">Patient (moves only on a tendency ${FLY.PATIENT}x the decision threshold; our rule, fixed 9 Nov, not fitted): over the same ${st.sameWindows.windows} windows, patient ${pct(st.sameWindows.patient - 1, 3)} · fly ${pct(st.sameWindows.fly - 1, 3)} · always in ${pct(st.sameWindows.hold - 1, 3)}.</div>` : '');
+    + Object.values(st.books).map((b) => `<div class="row"><span>${b.label}</span><span>${pct(b.ret - 1, 3)}</span><span>${b.pos === 1 ? 'in' : b.pos > 0 ? 'in ' + fmt(b.pos * 100, 1) + '%' : 'out'} · ${b.switches} switches</span></div>`).join('')
+    /* 09/11: the Kelly-sized book (the rule its real trades now follow), next to the fly and "Always in" on the SAME windows */
+    + `<div class="state">Kelly-sized: the same calls, in for ${fmt((st.kellyShare ?? 0) * 100, 1)}% of the money — the share its record earns (Kelly 1956, half of it, record shrunk toward a coin). Real buys follow this rule.`
+    + (st.sameWindows ? ` Since it started, over the same ${st.sameWindows.windows} windows: Kelly ${pct(st.sameWindows.kelly - 1, 3)} · all-in fly ${pct(st.sameWindows.fly - 1, 3)} · always in ${pct(st.sameWindows.hold - 1, 3)}.` : '') + '</div>';
 }
 function tallyText(t) {
   const n = t.consistent + t.opposite;
