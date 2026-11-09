@@ -76,6 +76,11 @@ function suite(H, serveur = SERVEUR) {
 }
 
 let n = 0; const ech = [];
+/* 09/11: the page scripts are browser modules this bench does not run: at least they must PARSE (a broken line once got through a shell
+ *   string: `const loadingEl = ;` would have killed the whole page) */
+{ const { execFileSync } = await import('node:child_process');
+  for (const f of ['human-brain.js', 'human-brain-parts.js']) { execFileSync(process.execPath, ['--check', join(ICI, f)]); }
+  n++; console.log('OK    human-brain.js and human-brain-parts.js parse'); }
 const H0 = await import(pathToFileURL(join(ICI, 'human-brain-parts.js')).href);
 for (const r of suite(H0)) { n++; console.log((r.ok ? 'OK    ' : 'ECHEC ') + r.nom + (r.d ? '  ' + r.d : '')); if (!r.ok) ech.push(r); }
 

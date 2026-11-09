@@ -456,7 +456,11 @@ function autoWire() {
   autoRender(); if (auto.s) autoShowBalance();
 }
 
+/* the decision window being gathered (fly-core 'gathering'): only its countdown is shown, no log line every read */
+let gatherClosesIn = null;
+const nextDecisionIn = () => gatherClosesIn;
 function onEvent(e) {
+  if (e.type === 'gathering') { gatherClosesIn = e.closesIn; return; }
   show(e, current.symbol);
   if (e.type === 'tx') ripple(e.kind, e.usd);
   if (e.type === 'decision') { renderDecision(e); autoTrade(e); if (!e.sim) { thoughts.push({ ...e, at: Date.now() }); if (thoughts.length > 6) thoughts.shift(); }
@@ -914,7 +918,8 @@ async function readWindow() {
   }
   if (ac && !ac.ok && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
   txSlot = 0;
-  session.window({ symbol: stock.symbol, price, transactions: ac && ac.ok && Array.isArray(ac.transactions) ? ac.transactions : null });
+  const w = session.window({ symbol: stock.symbol, price, transactions: ac && ac.ok && Array.isArray(ac.transactions) ? ac.transactions : null });
+  if (w && w.gathering && price) $('state').textContent += ` · next decision in ${Math.ceil((nextDecisionIn() || 0) / 60000)} min (it decides every ${FLY.WINDOW_MS / 60000} min)`;
   /* a hidden tab ticks about once a second instead of 8 times: the queued pulses (lessons + prediction, ~36 ticks each) would fall
    *   behind without end. Hidden = nobody watches: run them at once, exactly as the server's fly does (measured reasoning 08/11). */
   if (document.hidden) fly.drain();
@@ -958,7 +963,8 @@ async function start() {
   autoWire();
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
   fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
-  session = createSession(fly, onEvent);
+  /* 09/11: it decides once per FLY.WINDOW_MS (5 min) on the trades summed over it; every trade is still shown as it comes */
+  session = createSession(fly, onEvent, { windowMs: FLY.WINDOW_MS });
   /* boldness: how sure it must be to act (kept per viewer). Lower = it acts on weaker pulls, and pays the fee more often. */
   const bold = $('bold'), showBold = () => { const v = Number(bold.value) / 1000; session.threshold = v; $('boldValue').textContent = fmt(v * 100, 1) + '%'; $('boldMirror').textContent = fmt(v * 100, 1) + '%'; try { localStorage.setItem('fly-boldness-v1', String(bold.value)); } catch (_) { /* per visit */ } };
   try { const v = localStorage.getItem('fly-boldness-v1'); if (v && Number(v) >= 2 && Number(v) <= 50) bold.value = v; } catch (_) { /* default */ }

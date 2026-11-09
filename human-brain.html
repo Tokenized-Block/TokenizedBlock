@@ -15,6 +15,7 @@
   @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
   .scene { position: relative; background: radial-gradient(ellipse at 50% 40%, #0c1222 0%, var(--bg) 70%); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
   canvas { display: block; width: 100%; height: auto; aspect-ratio: 16 / 11; cursor: grab; touch-action: none; }
+  .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; pointer-events: none; }
   .viewbar { position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; }
   .viewbar button { width: auto; margin: 0; padding: 4px 10px; background: rgba(17,26,44,.85); }
   .hint { font-size: 12px; color: var(--muted); padding: 8px 12px; border-top: 1px solid var(--line); }
@@ -48,6 +49,7 @@
 <main>
   <section class="scene">
     <canvas id="canvas" width="1280" height="880"></canvas>
+    <div id="loading" class="loading">Loading the real brain surface (about 0.6 MB)…</div>
     <div class="viewbar"><button id="zoomIn" aria-label="Zoom in">+</button><button id="zoomOut" aria-label="Zoom out">−</button><button id="viewReset">Reset</button><button id="tour">Guided tour</button></div>
     <div class="hint"><span id="netCount"></span>. Drag to turn · wheel or two fingers to zoom · tap a glowing dot to walk its connections. <b>Coloured dots</b>: the real brain surface, one colour per part (each surface point takes the part of the nearest region centre: our approximation). <b>Curves</b>: measured connections of what is lit, in the colour of the part they reach (brighter = stronger; drawn curved by us). <b>Moving lights</b>: impulses, by our rule. <b>Dashed gold</b>: known pathways with no measured strength.</div>
   </section>

@@ -152,10 +152,8 @@ function draw(now) {
 let placed = [];
 /* the text keeps a readable size on screen: the canvas is drawn at 1280 px and shown at the page width (about 330 px on a phone) */
 const fontScale = () => Math.max(1, canvas.width / Math.max(1, canvas.clientWidth) / 2.1);
-const narrow = () => canvas.clientWidth < 520; /* a phone: the label says the part only; what it is known for stays in the panel */
-function pill(x, y, title, sub, color) {
-  if (narrow()) sub = null;
-  let z = fontScale();
+function pill(x, y, title, sub, color, size = 1) {
+  let z = fontScale() * size;
   ctx.font = '600 ' + Math.round(27 * z) + 'px system-ui'; let w1 = ctx.measureText(title).width; ctx.font = Math.round(21 * z) + 'px system-ui'; let w2 = sub ? ctx.measureText(sub).width : 0;
   /* a label wider than the canvas shrinks to fit (text width is proportional to the font size) */
   const fit = Math.min(1, (canvas.width - 12) / (Math.max(w1, w2) + 30 * z)); z *= fit; w1 *= fit; w2 *= fit;
@@ -172,21 +170,27 @@ function pill(x, y, title, sub, color) {
   ctx.textAlign = 'left'; ctx.fillStyle = '#f1f5f9'; ctx.font = '600 ' + F1 + 'px system-ui'; ctx.fillText(title, x0 + 15 * z, y0 + 31 * z);
   if (sub) { ctx.fillStyle = '#a5b4cb'; ctx.font = F2 + 'px system-ui'; ctx.fillText(sub, x0 + 15 * z, y0 + 58 * z); }
 }
+/* 09/11 (Phil: "the labels invade, we see nothing; show them when the cursor passes over"): NO label by default. The region under the
+ *   cursor (or the finger) gets one, with what its part is known for; a part chip under the cursor names its part on the brain; a visited
+ *   part shows only its name, small. */
+let hoverPart = null;
 function drawLabels(emo, other, focus) {
-  const groups = new Map(); placed = [];
-  const add = (i) => { const k = regionPart[i] + '|' + (REGIONS[i].side || ''); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i); };
-  if (visited != null) REGIONS.forEach((_, i) => { if (regionPart[i] === visited) add(i); }); else for (const i of new Set([...emo, ...other])) add(i);
-  for (const [k, list] of groups) {
-    if (focus != null && list.includes(focus)) continue;
-    const pk = Number(k.split('|')[0]), side = k.split('|')[1], x = list.reduce((s, i) => s + scr[i].x, 0) / list.length, y = Math.min(...list.map((i) => scr[i].y));
-    pill(x, y, PARTS[pk].name + (side === 'L' ? ' · left' : side === 'R' ? ' · right' : ''), PARTS[pk].knownFor, PARTS[pk].color);
+  placed = [];
+  const centre = (list) => ({ x: list.reduce((s, i) => s + scr[i].x, 0) / list.length, y: Math.min(...list.map((i) => scr[i].y)) });
+  if (visited != null && focus == null) {
+    for (const side of ['L', 'R', '']) { const list = REGIONS.map((_, i) => i).filter((i) => regionPart[i] === visited && (REGIONS[i].side || '') === side); if (!list.length) continue;
+      const c = centre(list); pill(c.x, c.y, PARTS[visited].name + (side === 'L' ? ' · left' : side === 'R' ? ' · right' : ''), null, PARTS[visited].color, 0.7); }
   }
-  if (focus != null) pill(scr[focus].x, scr[focus].y, shortName(REGIONS[focus]), PARTS[regionPart[focus]].name + ' · ' + adj[focus].length + ' connections', colorOf(focus));
+  if (hoverPart != null && hoverPart !== visited && focus == null) {
+    const list = REGIONS.map((_, i) => i).filter((i) => regionPart[i] === hoverPart); if (list.length) { const c = centre(list); pill(c.x, c.y, PARTS[hoverPart].name, PARTS[hoverPart].knownFor, PARTS[hoverPart].color); }
+  }
+  if (focus != null) pill(scr[focus].x, scr[focus].y, shortName(REGIONS[focus]) + ' · ' + PARTS[regionPart[focus]].name, PARTS[regionPart[focus]].knownFor, colorOf(focus));
 }
 
 /* ── panels ── */
 const chip = (pk, extra = '') => `<button class="chip" data-part="${pk}" style="--c:${PARTS[pk].color}"><i></i>${esc(PARTS[pk].name)}${extra}</button>`;
-function bindChips(root) { root.querySelectorAll('button[data-part]').forEach((b) => b.addEventListener('click', () => visitPart(Number(b.dataset.part)))); }
+function bindChips(root) { root.querySelectorAll('button[data-part]').forEach((b) => { b.addEventListener('click', () => visitPart(Number(b.dataset.part)));
+  b.addEventListener('mouseenter', () => { hoverPart = Number(b.dataset.part); }); b.addEventListener('mouseleave', () => { hoverPart = null; }); }); }
 function renderParts() { $('partList').innerHTML = PARTS.map((_, k) => chip(k)).join(''); bindChips($('partList')); }
 function visitPart(pk) {
   visited = pk; selected = null; glow.fill(0); pulses = []; visit(pk); renderPart();
@@ -273,6 +277,8 @@ function wire() {
   });
   const up = (e) => { ptrs.delete(e.pointerId); if (ptrs.size < 2) lastPinch = null; };
   canvas.addEventListener('pointerup', up); canvas.addEventListener('pointercancel', up);
+  /* the cursor leaves the brain: its label goes with it */
+  canvas.addEventListener('pointerleave', () => { if (!ptrs.size) { hovered = null; if (selected == null) renderRegion(null); } });
   canvas.addEventListener('click', (e) => { if (dragged > 6) { dragged = 0; return; } const j = nearest(pos(e)); if (j == null) { selected = null; back.length = 0; renderRegion(null); } else walkTo(j); });
   canvas.addEventListener('wheel', (e) => { e.preventDefault(); zoomBy(Math.exp(-e.deltaY * 0.0015)); }, { passive: false });
   $('sources').innerHTML = SOURCES.map((s) => `<li>${esc(s.cite)}${s.doi ? ` · <a href="https://doi.org/${esc(s.doi)}" target="_blank" rel="noopener">doi</a>` : ''} · ${esc(s.licence || '')} — ${esc(s.what || '')}</li>`).join('');
@@ -280,5 +286,7 @@ function wire() {
 function loop(now) { step(now); draw(now); requestAnimationFrame(loop); }
 
 useNetwork('wiring'); wire(); renderParts(); fillEmotions(); renderEmotion(); renderPart(); renderRegion(null); requestAnimationFrame(loop);
+/* the brain is drawn from here on: the loading line goes (if a module failed to load, it stays and says the page is not ready) */
+const loadingEl = $('loading'); if (loadingEl) loadingEl.remove();
 /* for the bench (test-human-brain-map): what the page computed, read-only */
 window.__brainMap = { PARTS, silPart, deepPart, regionPart, links: () => links, visit: visitPart, leave: leavePart, frameMs: () => { const t = performance.now(); step(t); draw(t); return performance.now() - t; }, state: () => ({ visited, showAll, pulses: pulses.length, cam: { ...cam } }) };

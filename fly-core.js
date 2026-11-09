@@ -33,6 +33,11 @@ export const FLY = Object.freeze({
    *   test-fly-edge): a side costs the pool fee PLUS this (fork 09/11: a round trip of 6,000 units on 2,000,000 = 2 x (0.05% + 0.10%)).
    *   The real buy uses the fee the planner states for ITS route (resume.fraisBps) */
   INTERFACE_FEE: 0.001,
+  /* 2026-11-09, simulated at the REAL cost (0.15% a side): on 30 s windows (moves ~0.15%) no per-window edge pays it, the rule never
+   *   trades; on 10x longer windows the same rule made +2.23% on a real signal and 0.00% elsewhere. The page and the server read every
+   *   30 s / 60 s (the screen stays live: every trade is shown as it comes), but the fly smells, is judged, learns and DECIDES once per
+   *   WINDOW_MS, on the trades summed over it and the move since its last decision. A session made with windowMs 0 decides at every read. */
+  WINDOW_MS: 300000,
   /* eligibility trace (Handler et al. 2019, Cell 178:60, Drosophila: an odor leaves a Kenyon-cell trace that dopamine arriving
    *   AFTER it can still act on): a smell is taught by the moves of the next TRACE windows, each weighted TRACE_DECAY^age. 1 = the
    *   next window only (the model before 2026-11-08). */
@@ -234,7 +239,10 @@ export function foresee(shadow, fly, { lastMix, lessons = null, nextMix, pos, mo
   }) };
 }
 
-export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.TRACE } = {}) {
+export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.TRACE, windowMs = 0 } = {}) {
+  /* the decision window (FLY.WINDOW_MS for the page and the server): the trades read between two decisions are summed here */
+  const W_MS = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 0;
+  let pend = { received: 0, sent: 0, moved: 0 }, pendFrom = null;
   let decideAt = threshold, recent = []; /* the smells of the last `trace` windows, most recent first (null: no trade) */
   const H = Math.max(1, Math.min(6, Math.floor(trace)));
   const tally = { consistent: 0, opposite: 0, flat: 0, undecided: 0 };
@@ -291,7 +299,7 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
   }
 
   /* price: { priceUsd, tokenDecimals, feePips, block } or null; transactions: the /api/activite rows or null */
-  function window({ symbol, price, transactions }) {
+  function window({ symbol, price, transactions, at = Date.now() }) {
     let p = null, decimals = null;
     if (price && typeof price.priceUsd === 'number') { p = price.priceUsd; decimals = price.tokenDecimals; if (Number.isInteger(price.feePips)) feePips = price.feePips; }
     const mix = { received: 0, sent: 0, moved: 0 };
@@ -311,6 +319,15 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
         const kind = classify(t), usd = units * p; mix[kind] += usd;
         emit({ type: 'tx', symbol, kind, units, usd, tx: t.tx, bloc: t.bloc });
       });
+    }
+    /* a decision window: the reads inside it only add their trades; it closes (judge, learn, decide) at its first read with a price once
+     *   W_MS have passed. The very first read with a price closes at once: it is the reference the first move is measured from. */
+    if (W_MS) {
+      for (const k of ['received', 'sent', 'moved']) pend[k] += mix[k];
+      if (pendFrom === null) pendFrom = at;
+      if (prevWin && (at - pendFrom < W_MS || p == null)) { emit({ type: 'gathering', sim: false, mix: { ...pend }, closesIn: Math.max(0, W_MS - (at - pendFrom)) }); return { price: p, hasOdor: false, gathering: true }; }
+      for (const k of ['received', 'sent', 'moved']) mix[k] = pend[k];
+      pend = { received: 0, sent: 0, moved: 0 }; pendFrom = at;
     }
     let lastMove = 0;
     if (prevWin && p != null && prevWin.price != null) {
@@ -358,7 +375,7 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
     const lo = x && x.lastOdor;
     lastOdor = lo && ['received', 'sent', 'moved'].every((k) => Number.isFinite(lo[k]) && lo[k] >= 0) && lo.received + lo.sent + lo.moved > 0 ? { received: lo.received, sent: lo.sent, moved: lo.moved } : null;
   }
-  function reset() { seen = new Set(); prevWin = null; firstWindow = true; feePips = null; lastOdor = null; typical = 0; recent = []; }
+  function reset() { seen = new Set(); prevWin = null; firstWindow = true; feePips = null; lastOdor = null; typical = 0; recent = []; pend = { received: 0, sent: 0, moved: 0 }; pendFrom = null; }
   /* the odor of the last window that had real trades: a simulation is injected on what is really happening, not on a made-up smell */
   /* The next window, as the session will run it: what it will learn from (this window's smell, if any), the smell it assumes comes
    * next (the last REAL trades, repeated: an assumption, said as such), and the position the paper book will hold by then. */

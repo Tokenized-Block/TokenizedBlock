@@ -134,7 +134,7 @@ import { parseTx } from './fly-tx.js';
 import { createRelayGuard } from './fly-relay.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { readPoolPrice } from './fly-price.js';
-import { createFly, createSession, foreseeNext } from './fly-core.js';
+import { createFly, createSession, foreseeNext, FLY } from './fly-core.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -3050,10 +3050,12 @@ function demarrerMoucheServeur() {
   try {
     const circuit = JSON.parse(readFileSync(join(ici, 'fly-brain-circuit.json'), 'utf8'));
     MOUCHE.fly = createFly(circuit); MOUCHE.shadow = createFly(circuit);
+    /* 09/11: one decision per FLY.WINDOW_MS (5 min) on the trades summed over it, like the page; the countdown events are not kept */
     MOUCHE.session = createSession(MOUCHE.fly, (e) => {
+      if (e.type === 'gathering') return;
       const ev = { ...e, at: Date.now() }; if (Array.isArray(ev.top)) ev.top = ev.top.slice(0, 5);
       MOUCHE.events.push(ev); if (MOUCHE.events.length > 120) MOUCHE.events.splice(0, MOUCHE.events.length - 120);
-    });
+    }, { windowMs: FLY.WINDOW_MS });
     MOUCHE.aliveSince = MOUCHE.trainingSince = new Date().toISOString();
     chargerMouche();
   } catch (e) { MOUCHE.why = 'circuit not loaded: ' + String((e && e.message) || e).slice(0, 120); return; }
