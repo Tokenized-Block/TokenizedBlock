@@ -3036,8 +3036,12 @@ async function compteMouche(adresse, token) {
   const [nonce, blk, eth, usdc, stock] = await Promise.all([
     rpcServeur('eth_getTransactionCount', [adresse, 'pending']), rpcServeur('eth_getBlockByNumber', ['latest', false]), rpcServeur('eth_getBalance', [adresse, 'latest']),
     rpcRails('eth_call', [{ to: USDC_BASE, data: bal }, 'latest']), token ? rpcRails('eth_call', [{ to: token, data: bal }, 'latest']) : Promise.resolve(null)]);
-  return { ok: true, address: adresse, nonce: BigInt(nonce).toString(), baseFeePerGas: BigInt(blk.baseFeePerGas).toString(), block: Number(BigInt(blk.number)),
-    eth: BigInt(eth).toString(), usdc: BigInt(usdc).toString(), stock: stock == null ? null : BigInt(stock).toString(), token: token || null };
+  /* 09/11 (Phil's live fly: "Cannot convert undefined to a BigInt"): a node that answers nothing (rate limit) gave undefined; every value is
+   *   checked and the one missing is NAMED, so the page knows it is a read that failed, not the chain refusing */
+  const hex = (v, what) => { if (typeof v !== 'string' || !/^0x[0-9a-f]*$/i.test(v) || v === '0x') throw new Error('the node did not answer ' + what); return BigInt(v); };
+  if (!blk || typeof blk !== 'object') throw new Error('the node did not answer the latest block');
+  return { ok: true, address: adresse, nonce: hex(nonce, 'the nonce').toString(), baseFeePerGas: hex(blk.baseFeePerGas, 'the base fee').toString(), block: Number(hex(blk.number, 'the block number')),
+    eth: hex(eth, 'the ETH balance').toString(), usdc: hex(usdc, 'the USDC balance').toString(), stock: token ? hex(stock, 'the stock balance').toString() : null, token: token || null };
 }
 function lireCorpsMouche(req, max) {
   return new Promise((ok, ko) => { let brut = '', trop = false;

@@ -215,7 +215,8 @@ function autoRender() {
 }
 async function autoAccount(token) {
   const r = await fetch('/api/fly/account/' + auto.s.address + (token ? '?token=' + token : ''), { cache: 'no-store' }).then((x) => x.json());
-  if (!r || !r.ok) throw new Error('balances not read: ' + String((r && r.why) || 'no answer').slice(0, 120));
+  /* a read that failed is a TRANSIENT error (09/11, Phil's live fly stopped on a node rate limit): the decision is skipped, the fly runs on */
+  if (!r || !r.ok) throw Object.assign(new Error('balances not read: ' + String((r && r.why) || 'no answer').slice(0, 120)), { transient: true });
   return r;
 }
 const postJson = (u, b) => fetch(u, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(b) }).then((x) => x.json());
@@ -324,6 +325,7 @@ async function autoTrade(e) {
   /* the memory that DECIDED, taken now: a stock switched while the trade is in flight loads another memory (QA 08/11: the seal of
    *   SNDKc's trade carried the next stock's memory) */
   const stock = current, decided = { memory: fly.exportMemory(), windows: session.settled };
+  let sendingStarted = false; /* set right before the first transaction goes out: after it, a failure is never "nothing sent" */
   try {
     const done = await withLock(async () => {
       /* the day counter lives in the STORED state: a reset done on a copy was overwritten by the next autoRefresh(), so the counter
@@ -332,7 +334,7 @@ async function autoTrade(e) {
       /* 09/11: a slot is reserved (and saved) right before the FIRST transaction goes out, not counted after the swap: a reload in
        *   between left a real trade uncounted (fly-day.js) */
       let reserved = false;
-      const reserve = () => { if (reserved) return; autoRefresh(); Object.assign(auto.s, reserveTrade(auto.s, today)); autoSave(); reserved = true; };
+      const reserve = () => { if (reserved) return; autoRefresh(); Object.assign(auto.s, reserveTrade(auto.s, today)); autoSave(); reserved = true; sendingStarted = true; };
       const maxDay = field('autoDay', 1, 50, 1);
       const a = await autoAccount(stock.address), held = a.stock ? BigInt(a.stock) : 0n;
       /* the REAL position decides, not the paper book: after a reload or a stock switch the paper book starts out (review L3) */
@@ -390,8 +392,10 @@ async function autoTrade(e) {
     });
     if (done === 'locked') autoNote('another tab of this page is trading with the same fly: this tab does nothing');
   } catch (err) {
-    autoNote({ b: 'error, the fly stops' }, ': ' + String((err && err.message) || err).slice(0, 200));
-    autoRefresh(); auto.s.running = false; autoSave();
+    /* a balances read that failed BEFORE anything was sent: this decision is skipped, the fly keeps running (it reads again at the next
+     *   decision); any other error still stops it */
+    if (err && err.transient && !sendingStarted) autoNote(`${ACT[e.action] || 'decision'} ${stock.symbol} skipped: ${String(err.message).slice(0, 160)} — nothing sent, it keeps running and reads again at its next decision`);
+    else { autoNote({ b: 'error, the fly stops' }, ': ' + String((err && err.message) || err).slice(0, 200)); autoRefresh(); auto.s.running = false; autoSave(); }
   } finally { auto.busy = false; autoRender(); autoShowBalance(); }
 }
 /* the session is remembered (Phil 08/11: reopening the page stopped the fly and asked to tick the box again): the consent with its date,
@@ -896,7 +900,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-/* One window, every 30 s: price + new transactions, handed to the shared protocol. */
+/* One read, every 30 s: price + new transactions, handed to the shared protocol (which decides once per FLY.WINDOW_MS). */
 async function readWindow() {
   const stock = current;
   const [r, ac] = await Promise.all([
@@ -945,7 +949,7 @@ function select(i) {
   current = STOCKS[i];
   /* the fly trades only the stock watched: what it still holds of the one left is said, not forgotten (QA 08/11) */
   if (auto.s && auto.s.owner && prev && prev !== current) autoAccount(prev.address).then((a) => { if (a.stock && BigInt(a.stock) > 0n) autoNote(`it still holds ${fmt(Number(BigInt(a.stock)) / 10 ** (live.decimals ?? 8), 6)} ${prev.symbol}: it trades only the stock you watch, so it sells that only when you watch ${prev.symbol} again (or Withdraw all brings it back)`); }).catch(() => { /* said at the next balance read */ }); lastPrice = null; history = []; drawSpark(); lastDecision = null;
-  $('watching').textContent = `watching ${current.symbol} · every 30 s its real trades are a smell`;
+  $('watching').textContent = `watching ${current.symbol} · its real trades are read every 30 s and smelled together every ${FLY.WINDOW_MS / 60000} min`;
   $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
   session.reset(); loadMemory(); thoughts.length = 0; renderThoughts(); renderSeal();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';

@@ -197,6 +197,14 @@ async function runLogic() {
     await T().autoTrade(decision('approach'));
     check('a route costing more than its edge: nothing signed', relayed.length === 0 && /this route costs 0\.50% interface .* nothing signed/.test(notes()[0]), relayed.length + ' relayed · ' + notes()[0].slice(0, 180)); }
 
+  /* 14. a balances read that fails (node rate limit; Phil's live fly 09/11 stopped on it): the decision is skipped, nothing is planned or
+   *   sent, the fly keeps running */
+  { await freshWallet({ running: true }); const calls = stubFetch([[/\/api\/fly\/account\//, () => ({ ok: false, why: 'the node did not answer the USDC balance' })], ...moneyStubs()]);
+    await T().autoTrade(decision('approach'));
+    const st = JSON.parse(localStorage.getItem('fly-auto-wallet-v1'));
+    check('a balances read that fails: decision skipped, nothing planned, still running', st.running === true && !calls.some((u) => /\/api\/rails\/plan|\/api\/fly\/relay/.test(u)) && /skipped: balances not read: the node did not answer the USDC balance .* keeps running/.test(notes()[0]),
+      'running=' + st.running + ' · ' + notes()[0].slice(0, 200)); }
+
   unstub(); delete window.ethereum; await freshWallet({ running: false, owner: null }); localStorage.removeItem('fly-auto-wallet-v1'); T().auto.s = null;
   const ko = results.filter((r) => !r.ok).length;
   console.log(results.length + ' scenarios, ' + ko + ' KO');
