@@ -16,14 +16,16 @@ async function banc(dir) {
   const { createSession, edgeOf, edgePaysFee, FLY } = await import(pathToFileURL(join(dir, 'fly-core.js')).href + '?t=' + Date.now() + Math.random());
   let n = 0; const ok = (c, m) => { assert.ok(c, m); n++; };
   const near = (a, b) => Math.abs(a - b) < 1e-15;
-  ok(FLY.EDGE_PRIOR === 10 && FLY.INTERFACE_FEE === 0.001, 'the prior and the interface fee as fixed');
-  const { FRAIS_INTERFACE_BPS_CL } = await import(pathToFileURL(join(ICI, 'calldata-aerodrome.js')).href);
-  ok(FLY.INTERFACE_FEE * 1e4 === Number(FRAIS_INTERFACE_BPS_CL), 'the interface fee IS the one the swap takes on Aerodrome (' + FRAIS_INTERFACE_BPS_CL + ' bps)');
+  ok(FLY.EDGE_PRIOR === 10 && FLY.INTERFACE_FEE === 0, 'the prior, and NO interface fee for the fly (game323, Phil 09/11)');
+  /* game323: the fly's trades are built at 0 bps (rails-api.js `mouche: true` -> planAerodromeSegment fraisBps 0n) and the page asks for it */
+  const railsSrc = readFileSync(join(ICI, 'rails-api.js'), 'utf8'), pageSrc = readFileSync(join(ICI, 'fly-brain.js'), 'utf8');
+  ok(/q\.mouche === true[\s\S]{0,400}fraisBps: 0n/.test(railsSrc), 'rails-api builds the fly trade at 0 bps when mouche is set');
+  ok(/URLSearchParams\(\{[^}]*mouche: '1'/.test(pageSrc), 'the fly page asks its plans with mouche=1');
   /* 1. the edge */
   ok(edgeOf({}, 0.0015) === 0 && edgeOf({ consistent: 50, opposite: 10 }, 0) === 0, 'no record, or no usual move yet: no edge');
   ok(near(edgeOf({ consistent: 192, opposite: 180 }, 0.0015), (2 * 202 / 392 - 1) * 0.0015), 'the shared fly today: ' + edgeOf({ consistent: 192, opposite: 180 }, 0.0015));
-  ok(!edgePaysFee({ consistent: 192, opposite: 180 }, 0.0015, FEE), 'the shared fly today: its edge (0.005%) does not pay a side (0.05% pool + 0.10% interface)');
-  ok(!edgePaysFee({ consistent: 300, opposite: 100 }, 0.0015, FEE) && edgePaysFee({ consistent: 300, opposite: 100 }, 0.0015, FEE, 0), 'a 75% record on a 0.15% move pays the pool fee alone (0.071%) but not the real cost (0.15%)');
+  ok(!edgePaysFee({ consistent: 192, opposite: 180 }, 0.0015, FEE), 'the shared fly today: its edge (0.005%) does not pay even the pool fee alone (0.05%)');
+  ok(!edgePaysFee({ consistent: 300, opposite: 100 }, 0.0015, FEE, 0.001) && edgePaysFee({ consistent: 300, opposite: 100 }, 0.0015, FEE), 'a 75% record on a 0.15% move (edge 0.071%): blocked with the old 0.10% interface fee, PAYS now that the fly pays the pool fee alone (0.05%)');
   ok(edgePaysFee({ consistent: 300, opposite: 100 }, 0.004, FEE), 'the same record on a 0.4% usual move pays the real cost: ' + edgeOf({ consistent: 300, opposite: 100 }, 0.004));
   ok(!edgePaysFee({ consistent: 300, opposite: 100 }, 0.004, FEE, 0.005), 'a route with a 0.5% interface fee does not');
   ok(edgeOf({ consistent: 10, opposite: 30 }, 0.0015) < 0 && !edgePaysFee({ consistent: 10, opposite: 30 }, 0.0015, FEE), 'a losing record: negative edge, no trade');
@@ -102,7 +104,7 @@ const MUT = [
   ['usual move ignored', 'return Number.isFinite(typical) && typical > 0 ? (2 * p - 1) * typical : 0;', 'return (2 * p - 1);'],
   ['fee ignored', 'edgeOf(tally, typical) > feePips / 1e6 + interfaceFee;', 'edgeOf(tally, typical) > 0;'],
   ['interface fee ignored', 'edgeOf(tally, typical) > feePips / 1e6 + interfaceFee;', 'edgeOf(tally, typical) > feePips / 1e6;'],
-  ['edge book charged the pool fee only', "(k === 'edge' ? FLY.INTERFACE_FEE : 0)", '0'],
+  /* game323: 'edge book charged the pool fee only' removed — with INTERFACE_FEE = 0 it is an EQUIVALENT mutant (it changes nothing) */
   ['unknown fee trades', 'return Number.isFinite(feePips) && feePips >= 0 && Number.isFinite(interfaceFee) && interfaceFee >= 0 && edgeOf', 'return edgeOf'],
   ['book ignores the edge', 'const edgeIn = flyWants && edgePaysFee(tally, typical, feePips) ? 1 : 0;', 'const edgeIn = flyWants;'],
   ['start re-taken each window', 'if (!edgeFrom) edgeFrom = { settled,', 'edgeFrom = { settled,'],

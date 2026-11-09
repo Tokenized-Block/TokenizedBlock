@@ -7671,7 +7671,10 @@ function traiterRequete(req, res) {
       return;
     }
     const sonde = req.headers['x-ms-monitor'] === '1';
-    const cleR = [demande.de, demande.vers, demande.montant, demande.compte].join('|').toLowerCase();
+    /* game323: mouche=1 -> the fly's USDC <-> stock trade without the interface fee (rails-api.js); part of the cache key, so a plan with
+     *   a fee is never served to the fly and a fee-free plan never to anyone who did not ask */
+    demande.mouche = q.get('mouche') === '1';
+    const cleR = [demande.de, demande.vers, demande.montant, demande.compte, demande.mouche ? 'mouche' : ''].join('|').toLowerCase();
     const enCache = railsCache.get(cleR);
     if (enCache && Date.now() - enCache.t < RAILS_CACHE_MS) { GARDE_MOUCHE.remember(enCache.corps); rendreR(200, { ...enCache.corps, depuisCache: true }); return; }
     const ipR = ipClient(req);

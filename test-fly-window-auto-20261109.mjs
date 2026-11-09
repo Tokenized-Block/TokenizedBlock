@@ -26,7 +26,8 @@ async function banc(dir) {
     return { ses, ev, read };
   };
   /* a stock whose price alternates by exactly m per read, every 30 s: usual move per read -> m, interval -> 30 s */
-  const expected = (m, feePips = 500) => Math.min(7200000, Math.max(300000, Math.round(30000 * (((feePips / 1e6 + 0.001) / 0.3) / m) ** 2)));
+  /* game323: a side costs the pool fee only (the fly pays no interface fee) */
+  const expected = (m, feePips = 500) => Math.min(7200000, Math.max(300000, Math.round(30000 * (((feePips / 1e6 + 0) / 0.3) / m) ** 2)));
   const T0 = 1_000_000;
   for (const [m, label] of [[0.0003, 'quiet (0.03% a read)'], [0.0008, 'GOOGLc-like (0.08%)'], [0.002, 'nervous (0.2%)'], [0.00005, 'asleep (0.005%)']]) {
     const { ses, read } = make(); let p = 100;
@@ -41,10 +42,12 @@ async function banc(dir) {
   }
   { /* the decision falls when the fitted window closes, not at 5 min */
     const { ses, ev, read } = make(); let p = 100, i = 0;
-    for (; i < 200; i++) { read(T0 + i * 30000, p); p *= i % 2 ? 1 / 1.0006 : 1.0006; }
+    /* game323: 0.02 % a read (was 0.06 %): with the pool fee alone as the cost, 0.06 % fits the 5-minute floor, and this case is about a
+     *   window LONGER than the floor */
+    for (; i < 200; i++) { read(T0 + i * 30000, p); p *= i % 2 ? 1 / 1.0002 : 1.0002; }
     const w = ses.state().windowMs, before = ev.filter((e) => e.type === 'decision').length;
     const t1 = T0 + i * 30000; let firstAfter = null;
-    for (let j = 0; j * 30000 < w + 60000; j++) { const r = read(t1 + j * 30000, p); p *= (i + j) % 2 ? 1 / 1.0006 : 1.0006; if (!r.gathering && firstAfter === null && j > 0) firstAfter = j * 30000; }
+    for (let j = 0; j * 30000 < w + 60000; j++) { const r = read(t1 + j * 30000, p); p *= (i + j) % 2 ? 1 / 1.0002 : 1.0002; if (!r.gathering && firstAfter === null && j > 0) firstAfter = j * 30000; }
     ok(w > 600000 && ev.filter((e) => e.type === 'decision').length >= before + 1 && firstAfter !== null && firstAfter <= w + 30000, 'decided when the fitted window (' + Math.round(w / 60000) + ' min) closed: after ' + Math.round(firstAfter / 60000) + ' min');
   }
   { /* a reset (stock switch) forgets the stock's moves */
@@ -67,7 +70,7 @@ const MUT = [
   ['linear, not squared', 'readDt * (target / readMove) ** 2', 'readDt * (target / readMove)'],
   ['no 2 h cap', 'Math.min(FLY.WINDOW_MAX_MS, Math.max(FLY.WINDOW_MIN_MS,', 'Math.min(Infinity, Math.max(FLY.WINDOW_MIN_MS,'],
   ['no 5 min floor', 'Math.max(FLY.WINDOW_MIN_MS, readDt', 'Math.max(0, readDt'],
-  ['interface fee left out', 'const cost = (feePips == null ? 500 : feePips) / 1e6 + FLY.INTERFACE_FEE,', 'const cost = (feePips == null ? 500 : feePips) / 1e6,'],
+  /* game323: 'interface fee left out' removed — with INTERFACE_FEE = 0 it is an EQUIVALENT mutant (it changes nothing) */
   ['pool fee left out', 'const cost = (feePips == null ? 500 : feePips) / 1e6 + FLY.INTERFACE_FEE,', 'const cost = FLY.INTERFACE_FEE,'],
   ['reset keeps the moves', 'pendFrom = null; readMove = 0; readDt = 0; lastRead = null; }', 'pendFrom = null; }'],
 ];

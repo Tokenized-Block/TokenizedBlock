@@ -362,7 +362,8 @@ async function autoTrade(e) {
         if (!edgePaysFee(st.tally, st.typical, st.feePips)) { autoNote(`decided BUY ${stock.symbol}, but its edge does not pay the fee yet: record ${r.k} right, ${r.n - r.k} wrong, usual move ${fmt(st.typical * 100, 3)}% -> expected ${fmt(edgeOf(st.tally, st.typical) * 100, 4)}% a window, cost of a side ${st.feePips == null ? '?' : fmt(st.feePips / 1e4, 3) + '% pool + ' + fmt(FLY.INTERFACE_FEE * 100, 2) + '% interface'}: no buy`); return; }
         de = USDC_BASE; vers = stock.address; montant = amt.toString();
       } else { de = stock.address; vers = USDC_BASE; montant = held.toString(); }
-      const q = new URLSearchParams({ de, vers, montant, compte: s.address });
+      /* game323: mouche=1 -> the fly's own trades carry no interface fee (Phil 09/11); the route's real fee is still checked below */
+      const q = new URLSearchParams({ de, vers, montant, compte: s.address, mouche: '1' });
       let p = await fetch('/api/rails/plan?' + q, { cache: 'no-store' }).then((x) => x.json()), swapped = false;
       for (let round = 0; round < 3; round++) {
         if (!p || !p.ok) { autoNote(`decided ${ACT[action]} ${stock.symbol}: no order (${String((p && p.etat) || '?')}${p && p.pourquoi ? ' — ' + String(p.pourquoi).slice(0, 120) : ''})`); return; }
@@ -386,7 +387,7 @@ async function autoTrade(e) {
       /* three rounds of approvals and still no swap: nothing was traded, so nothing is counted or sealed (QA 08/11: it said "done") */
       if (!swapped) { autoNote(`${ACT[action]} ${stock.symbol}: approvals sent, but the planner still asked for approvals after 3 rounds: no swap, nothing traded (its slot stays counted today: the cap errs toward fewer trades)`); return; }
       autoRefresh(); if (!auto.s.traded.includes(stock.address)) auto.s.traded.push(stock.address); autoSave();
-      autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${countedToday(auto.s, today)}/${maxDay} today). The app's interface fee was in the plan (${String((p.resume && p.resume.fraisBps) || '?')} bps); see Basescan.`);
+      autoNote({ b: `${ACT[action]} ${stock.symbol} done` }, ` on its own (${countedToday(auto.s, today)}/${maxDay} today). Interface fee in this plan: ${p.resume && p.resume.fraisBps != null ? String(p.resume.fraisBps) : '?'} bps (the fly's trades carry none); see Basescan.`);
       /* its memory, sealed by its own wallet right after the trade it decided (a failed seal is said, it does not stop the fly) */
       try { await flySeal(stock, decided); } catch (err) { autoNote('memory not sealed this time: ' + String((err && err.message) || err).slice(0, 140)); }
     });

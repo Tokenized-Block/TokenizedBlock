@@ -386,6 +386,16 @@ async function planRailBrut(q, deps) {
   /* USDC + les 12 actions de la table MESUREE (pools Aerodrome profondes, >= 360 k$ d USDC lus le 2026-10-03) : un frais pris
    * dans l une d elles se revend. Toute autre devise reste refusee cote serveur (l app, elle, lit prix + liquidite). */
   const fraisDevisesOk = new Set([USDC, ...POOLS_ACTIONS_AERODROME.keys()]);
+  /* ⛔ game323 (Phil 2026-11-09: "ok on fait ca"): THE FLY PAYS NO INTERFACE FEE. Measured: on a quiet stock (SPCXc, usual move 0.110 % a
+   *   window) the 0.10 % interface fee + 0.05 % pool fee made a buy impossible even with a perfect record. With `mouche: true` (the
+   *   fly page asks with mouche=1), a USDC <-> stock trade on the stock's Aerodrome pool is built with fraisBps 0. Nothing else
+   *   changes: every other route, and every request without the flag, keeps its fee. ⛔ BORNE: anyone can pass mouche=1; the
+   *   interface fee was never enforced on chain (Uniswap/Aerodrome can be used directly without it), so this opens nothing new. */
+  if (q && q.mouche === true && ((nd === 'USDC' && nv === 'ACTION' && POOLS_ACTIONS_AERODROME.has(vers))
+    || (nd === 'ACTION' && nv === 'USDC' && POOLS_ACTIONS_AERODROME.has(de)))) {
+    return normaliser(route, await planAerodromeSegment({ rpc, chemin: [{ de, vers, famille: 'aerodrome' }], devise: de, block: vers,
+      montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant, fraisBps: 0n }), { via: 'planAerodromeSegment', pool: 'aerodrome', sansFraisInterface: true });
+  }
   /* une action du registre est cotee en devise (USDC) : sa cle exacte est lue D ABORD — 17 lectures de pools ETH inexistantes
    * en moins par plan (mesure du 2026-10-04, voir marche.js). Un block garde l ordre d avant. */
   const marcheDe = async (a) => vieDuBlock({ rpc, stateView, jeton: a, clesExactes: await clesDe(a), deviseDAbord: natureJeton(a) === 'ACTION' });

@@ -31,8 +31,10 @@ export const FLY = Object.freeze({
   EDGE_PRIOR: 10,
   /* the app's interface fee on an Aerodrome concentrated-liquidity swap (calldata-aerodrome.js FRAIS_INTERFACE_BPS_CL = 10 bps, checked by
    *   test-fly-edge): a side costs the pool fee PLUS this (fork 09/11: a round trip of 6,000 units on 2,000,000 = 2 x (0.05% + 0.10%)).
-   *   The real buy uses the fee the planner states for ITS route (resume.fraisBps) */
-  INTERFACE_FEE: 0.001,
+   *   The real buy uses the fee the planner states for ITS route (resume.fraisBps).
+   * ⛔ game323 (Phil 09/11): the fly's own trades carry NO interface fee (rails-api.js mouche=1 builds them at 0 bps), so a side costs the
+   *   pool fee only. Measured before: SPCXc moved 0.110 % a window, under the 0.15 % side cost, so it could never buy there. */
+  INTERFACE_FEE: 0,
   /* 2026-11-09, simulated at the REAL cost (0.15% a side): on 30 s windows (moves ~0.15%) no per-window edge pays it, the rule never
    *   trades; on 10x longer windows the same rule made +2.23% on a real signal and 0.00% elsewhere. The page and the server read every
    *   30 s / 60 s (the screen stays live: every trade is shown as it comes), but the fly smells, is judged, learns and DECIDES once per
