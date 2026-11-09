@@ -47,7 +47,10 @@ export const CONTEST_DEPLOIEMENT = Object.freeze({
   sha256Creation: '${crypto.createHash('sha256').update(creation).digest('hex')}',
   octetsCreation: ${(creation.length - 2) / 2},
   pret: true,
-  adresse: null,
+  /* filled after the deployment was READ on chain (status 1, code identical to the fork's) */
+  adresse: ${process.env.ADRESSE ? `'${String(process.env.ADRESSE).toLowerCase()}'` : 'null'},
+  bloc: ${process.env.BLOC ? Number(process.env.BLOC) : 'null'},
+  tx: ${process.env.TX ? `'${String(process.env.TX).toLowerCase()}'` : 'null'},
   creation: '${creation}',
 });
 `);

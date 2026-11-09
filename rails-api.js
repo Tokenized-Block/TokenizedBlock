@@ -48,6 +48,8 @@ import { decoderInitialize } from './pools-du-jeton.js';
 import { planVenueNeuve, planVenueNeuveFraisEntree, venteParVenues, choisirVenteVenue, lieuxVente, phraseVente, referenceRepli } from './liquidite-actions.js';
 /* 2026-10-27 — USDC <-> CADD / MXNB / USDT par le meme lieu 'aero-new', derriere la mesure FRAICHE du serveur (stables-neuve.js) */
 import { estStableNeuve, porteStableNeuve, CHOIX_STABLE_NEUVE } from './stables-neuve.js';
+import { planRouteTblock, routeTblockDe, cheminRouteTblock } from './tblock-route.js';
+import { WTCOIN as WTCOIN_TBLOCK } from './tblock-hold.js';
 
 export const ETH = '0x0000000000000000000000000000000000000000';
 const ADR = /^0x[0-9a-f]{40}$/;
@@ -383,6 +385,14 @@ async function planRailBrut(q, deps) {
    *   lecture (aucune route, meme une adresse tapee a la main, ne la touche) */
   { const ban = phraseDeviseBannie(de) || phraseDeviseBannie(vers); if (ban) return normaliser('?', { etat: 'REFUSE', pourquoi: ban }); }
   const nd = natureJeton(de), nv = natureJeton(vers), route = nd + '>' + nv;
+  /* 2026-11-09 (Phil): BUY / SELL TBLOCK in the app — USDC or ETH -> wtCOIN (Aerodrome) -> TBLOCK (Uniswap v4, the ONE pinned key),
+   *   and TBLOCK -> wtCOIN -> USDC. tblock-route.js pins every pool and simulates the whole batch; the generic router below keeps
+   *   refusing TBLOCK (ROUTE_VIA_TBLOCK), so no guessed key can reach it. One app fee per batch (FRAIS_INTERFACE_BPS_CL). */
+  if (routeTblockDe(de, vers)) {
+    const sens = routeTblockDe(de, vers);
+    return normaliser(route, await planRouteTblock({ rpc, compte, de, vers, montant: m, beneficiaireFrais: FEE_WALLET, maintenant }),
+      { via: 'planRouteTblock', pool: 'aerodrome+uniswap-v4', cotation: WTCOIN_TBLOCK, chemin: cheminRouteTblock(sens) });
+  }
   /* USDC + les 12 actions de la table MESUREE (pools Aerodrome profondes, >= 360 k$ d USDC lus le 2026-10-03) : un frais pris
    * dans l une d elles se revend. Toute autre devise reste refusee cote serveur (l app, elle, lit prix + liquidite). */
   const fraisDevisesOk = new Set([USDC, ...POOLS_ACTIONS_AERODROME.keys()]);

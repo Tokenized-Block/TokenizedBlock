@@ -47,6 +47,18 @@ In the TokenizedBlock group, send <b>/hold</b>: @TblockHoldersBot brings you her
 </div>
 
 <div class="card">
+  <h2>Buy TBLOCK here</h2>
+  <p class="note" style="margin-top:0">USDC → wtCOIN (Aerodrome) → TBLOCK (its Uniswap pool), in ONE batch your wallet signs. The app's fee is 0.1% of the
+  USDC; the pool's own hook keeps about 1% of the TBLOCK and sends part of it to 0x…dEaD. Measured on a fork: a $5 buy costs about 1.7% in all,
+  and up to ~1% stays in your wallet as wtCOIN. Your wallet must support batched calls.</p>
+  <label class="note" for="montantUsdc">USDC to spend</label>
+  <input id="montantUsdc" value="5" inputmode="decimal" style="width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit">
+  <button class="sec" id="devis">See the plan</button>
+  <div id="vueAchat" style="margin-top:10px"></div>
+  <button id="acheterIci" disabled>Buy TBLOCK (one batch)</button>
+</div>
+
+<div class="card">
   <h2>1 · Your wallet</h2>
   <button id="connecter">Connect my wallet (Base)</button>
   <div id="vueSolde" style="margin-top:10px"></div>
@@ -150,4 +162,53 @@ $('#signer').onclick = async () => {
 };
 
 lirePrix();
+
+/* game326: buy TBLOCK here — the server builds the plan (/api/rails/plan, tblock-route.js, proven on a fork 53/53), the wallet signs ONE
+ * atomic batch (EIP-5792 wallet_sendCalls). A wallet that cannot batch is told so: the first leg must never pass alone. */
+const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', TBLOCK_ADR = '0xb200000000000000000000ba9bf8330307f8830e';
+let planAchat = null;
+async function compteOuConnecte() {
+  if (etat.wallet) return etat.wallet;
+  if (!window.ethereum) return null;
+  try { const [w] = await window.ethereum.request({ method: 'eth_requestAccounts' }); return String(w || '').toLowerCase() || null; } catch (_) { return null; }
+}
+$('#devis').onclick = async () => {
+  const box = $('#vueAchat'); $('#acheterIci').disabled = true; planAchat = null;
+  const usd = Number(String($('#montantUsdc').value).replace(',', '.'));
+  if (!Number.isFinite(usd) || usd < 0.5 || usd > 500) { box.innerHTML = row('state', pill('ENTER 0.5 TO 500 USDC', 'warn')); return; }
+  const w = await compteOuConnecte();
+  if (!w) { box.innerHTML = row('state', pill('CONNECT A WALLET FIRST', 'warn')); return; }
+  box.innerHTML = row('state', 'building the plan on chain…');
+  const montant = String(Math.round(usd * 1e6));
+  let p;
+  try { p = await api('/api/rails/plan?' + new URLSearchParams({ de: USDC, vers: TBLOCK_ADR, montant, compte: w })); }
+  catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); return; }
+  const calls = p && (p.aSigner || p.appels);
+  if (!p || p.etat !== 'PRET' || !Array.isArray(calls) || !calls.length) { box.innerHTML = row('state', pill(String((p && p.etat) || 'NO PLAN'), 'warn')) + row('why', esc((p && p.pourquoi) || 'no route right now')); return; }
+  const r = p.resume || {};
+  box.innerHTML = row('you pay', usd.toFixed(2) + ' USDC') + row('you get at least', fmtTok(r.recoitAuMoins) + ' TBLOCK')
+    + row('app fee', (r.fraisBps != null ? (Number(r.fraisBps) / 100).toFixed(2) + '%' : '?')) + row('note', esc(r.resteAuCompte || ''))
+    + row('signatures', calls.length + ' calls, one batch');
+  planAchat = { w, calls };
+  $('#acheterIci').disabled = false;
+};
+$('#acheterIci').onclick = async () => {
+  const box = $('#vueAchat'); if (!planAchat) return;
+  $('#acheterIci').disabled = true;
+  let id;
+  try {
+    id = await window.ethereum.request({ method: 'wallet_sendCalls', params: [{ version: '2.0.0', chainId: '0x2105', from: planAchat.w, atomicRequired: true,
+      calls: planAchat.calls.map((c) => ({ to: c.to, data: c.data, value: c.value || '0x0' })) }] });
+  } catch (e) { box.innerHTML += row('state', pill('NOT SENT', 'warn')) + row('why', esc((e && e.message) || e) + ' — your wallet must support batched calls; nothing was sent'); return; }
+  const bid = id && (id.id || id);
+  box.innerHTML += row('state', 'sent, waiting for the chain…');
+  for (let k = 0; k < 60; k++) {
+    await new Promise((o) => setTimeout(o, 3000));
+    const s = await window.ethereum.request({ method: 'wallet_getCallsStatus', params: [bid] }).catch(() => null);
+    const st = s && (s.status === 200 || s.status === 'CONFIRMED' || s.status === 'success') ? 'ok' : (s && (s.status >= 400 || s.status === 'FAILED') ? 'ko' : null);
+    if (st === 'ok') { box.innerHTML += row('state', pill('BOUGHT', 'ok')) + row('next', 'press "Connect my wallet" above to read your TBLOCK again'); planAchat = null; return; }
+    if (st === 'ko') { box.innerHTML += row('state', pill('FAILED ON CHAIN', 'bad')); planAchat = null; return; }
+  }
+  box.innerHTML += row('state', pill('STILL PENDING', 'warn')) + row('next', 'check your wallet activity');
+};
 </script>

@@ -40,6 +40,12 @@ $('#what').innerHTML = row('contract', D.contrat) + row('network', 'Base mainnet
   + row('entry / vote periods', C.entryPeriod / 86400 + ' d / ' + C.votePeriod / 86400 + ' d') + row('vote price', tok(C.votePrice) + ', 100% to 0x…dEaD')
   + row('entry fee', tok(C.entryFee)) + row('winner share', '100% of the pot') + row('quorum', C.minQualifiedEntries + ' entries with ' + C.minVotes + ' votes from ' + C.minVoters + ' addresses')
   + row('pot cap', tok(C.maxPot)) + row('pair currencies refused', D.devisesPaire);
+/* already deployed (read on chain): show it and never offer a second deployment */
+if (D.adresse) {
+  $('#what').innerHTML = row('DEPLOYED AT', D.adresse) + row('block', D.bloc) + row('transaction', D.tx) + $('#what').innerHTML;
+  $('#connect').disabled = true; $('#deploy').disabled = true;
+  $('#state').innerHTML = 'Already deployed: <a href="https://basescan.org/address/' + esc(D.adresse) + '" target="_blank" rel="noopener">' + esc(D.adresse) + '</a>.';
+}
 let acct = null;
 async function sha256Hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
 $('#connect').onclick = async () => {
