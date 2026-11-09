@@ -44,7 +44,7 @@ function suite(D, brainSrc) {
   ok('fly-brain.js : reserve() right before flySend in the trade loop, no count after the swap, cap read on the stored state', () => {
     const i = brainSrc.indexOf('async function autoTrade('), body = brainSrc.slice(i).split(/\r?\n\}\r?\n/)[0];
     assert.ok(/reserve\(\);\s*const r = await flySend\(c\);/.test(body), 'reserve before send');
-    assert.ok(/const reserve = \(\) => \{ if \(reserved\) return; autoRefresh\(\); Object\.assign\(auto\.s, reserveTrade\(auto\.s, today\)\); autoSave\(\); reserved = true; \};/.test(body), 'reserve saves');
+    assert.ok(/const reserve = \(\) => \{ if \(reserved\) return; autoRefresh\(\); Object\.assign\(auto\.s, reserveTrade\(auto\.s, today\)\); autoSave\(\); reserved = true;( sendingStarted = true;)? \};/.test(body), 'reserve saves');
     assert.ok(!/today\+\+/.test(body), 'no late counting');
     assert.ok(/if \(!mayTrade\(autoRefresh\(\), today, maxDay\)\)/.test(body), 'cap on stored state');
     assert.ok(/import \{ dayOf, countedToday, mayTrade, reserveTrade \} from '\.\/fly-day\.js';/.test(brainSrc), 'imported');
