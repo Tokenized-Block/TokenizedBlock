@@ -22,10 +22,17 @@ export const FLY = Object.freeze({
   DECIDE: 0.02,
   /* 2026-11-09 (Phil: "check traders who use math and add it to the fly"). Measured on the shared fly, 1,088 windows: its paper book lost
    *   -5.3%, and its 106 all-in switches at the pool fee (0.05%) make 0.9995^106 = 0.948 of it: it bet everything on an edge it had not
-   *   shown (192 right / 180 wrong). The math traders' answer: bet in proportion to the MEASURED edge (Kelly 1956; Thorp: a FRACTION of
-   *   Kelly when the edge is estimated), the edge shrunk toward a coin by a Beta(KELLY_PRIOR, KELLY_PRIOR) prior, and no rebalancing for
-   *   a change smaller than KELLY_BAND (the no-trade band of trading with costs: Davis & Norman 1990). Our constants, not fitted. */
-  KELLY_PRIOR: 10, KELLY_FRACTION: 0.5, KELLY_BAND: 0.005,
+   *   shown (192 right / 180 wrong). Simulated (banc-fly-sim-20261109: the real fly on 5 synthetic markets x 12 seeds x 200 windows,
+   *   the truth known), the rule kept is the one of trading with costs: ENTER only when the expected gain of a window in pays the fee.
+   *   Expected gain = (2p - 1) x the usual move, p = its record shrunk toward a coin by a Beta(EDGE_PRIOR, EDGE_PRIOR) prior; fee = the
+   *   pool's. Measured: 0.00% on the 4 markets where the edge does not pay (noise, slow fall, signal 2 windows late, weak signal: the
+   *   old all-in fly lost up to -2.09%), +1.11% where the signal is real (old fly +2.34%: it keeps about half). Half-Kelly (2p - 1) was
+   *   tried first and dropped: the binary formula is the wrong model for small continuous moves (+0.40% on a real signal). */
+  EDGE_PRIOR: 10,
+  /* the app's interface fee on an Aerodrome concentrated-liquidity swap (calldata-aerodrome.js FRAIS_INTERFACE_BPS_CL = 10 bps, checked by
+   *   test-fly-edge): a side costs the pool fee PLUS this (fork 09/11: a round trip of 6,000 units on 2,000,000 = 2 x (0.05% + 0.10%)).
+   *   The real buy uses the fee the planner states for ITS route (resume.fraisBps) */
+  INTERFACE_FEE: 0.001,
   /* eligibility trace (Handler et al. 2019, Cell 178:60, Drosophila: an odor leaves a Kenyon-cell trace that dopamine arriving
    *   AFTER it can still act on): a smell is taught by the moves of the next TRACE windows, each weighted TRACE_DECAY^age. 1 = the
    *   next window only (the model before 2026-11-08). */
@@ -45,12 +52,17 @@ export function recordEdge({ consistent = 0, opposite = 0 } = {}) {
   const m = Math.max(...terms), p = Math.min(1, Math.exp(m) * terms.reduce((a, t) => a + Math.exp(t - m), 0));
   return { k, n, rate: k / n, p };
 }
-/** The share of its budget the fly may put in, from its record (Kelly for an even-odds call: f* = 2p - 1): p shrunk toward 1/2 by the
- *  prior, times KELLY_FRACTION, clamped to [0, 1]. No measured edge (or a negative one) -> 0: it does not bet. */
-export function kellyFraction({ consistent = 0, opposite = 0 } = {}) {
-  const k = Math.max(0, Math.floor(consistent) || 0), n = k + Math.max(0, Math.floor(opposite) || 0), a = FLY.KELLY_PRIOR;
+/** The expected gain of one window in, from its record and the usual move: (2p - 1) x typical, p shrunk toward 1/2 by the prior.
+ *  No record, or no usual move yet -> 0. A losing record gives a negative edge. */
+export function edgeOf({ consistent = 0, opposite = 0 } = {}, typical = 0) {
+  const k = Math.max(0, Math.floor(consistent) || 0), n = k + Math.max(0, Math.floor(opposite) || 0), a = FLY.EDGE_PRIOR;
   const p = (k + a) / (n + 2 * a);
-  return Math.max(0, Math.min(1, FLY.KELLY_FRACTION * (2 * p - 1)));
+  return Number.isFinite(typical) && typical > 0 ? (2 * p - 1) * typical : 0;
+}
+/** true when that expected gain pays one side of the trade: the pool fee (feePips: millionths, read on chain) plus the interface fee
+ *  (default the Aerodrome one; the real buy passes its route's); unknown fee -> false: it does not trade */
+export function edgePaysFee(tally, typical, feePips, interfaceFee = FLY.INTERFACE_FEE) {
+  return Number.isFinite(feePips) && feePips >= 0 && Number.isFinite(interfaceFee) && interfaceFee >= 0 && edgeOf(tally, typical) > feePips / 1e6 + interfaceFee;
 }
 /** The word a tendency gives at a given threshold: approach, avoid or undecided. */
 export const wordOf = (t, threshold = FLY.DECIDE) => (t > threshold ? 'approach' : t < -threshold ? 'avoid' : 'undecided');
@@ -229,10 +241,10 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
   /* PAPER book, never real funds, never a signature: the fly is in the stock for a window when it predicted approach, out otherwise;
    * two dumb witnesses next to it; every change of position pays the pool's own fee, read on chain. */
   const books = { fly: { label: 'Fly', pos: 0, ret: 1, switches: 0 }, hold: { label: 'Always in', pos: 0, ret: 1, switches: 0 }, momentum: { label: 'Follow last move', pos: 0, ret: 1, switches: 0 },
-    kelly: { label: 'Fly, Kelly-sized', pos: 0, ret: 1, switches: 0 } };
-  /* the Kelly book: the SAME calls as the fly, but in for kellyFraction(record) of the budget, not all of it; fees on the share traded.
-   *   kellyFrom: where it started (window count, the other books then), so it is compared with them on the SAME windows */
-  let kellyFrom = null;
+    edge: { label: 'Fly, only when its edge pays the fee', pos: 0, ret: 1, switches: 0 } };
+  /* the edge book (the rule its real buys follow): the SAME calls as the fly, but in only while edgePaysFee(record, usual move, fee).
+   *   edgeFrom: where it started (window count, the other books then), so it is compared with them on the SAME windows */
+  let edgeFrom = null;
   let feePips = null, settled = 0, seen = new Set(), prevWin = null, firstWindow = true, lastOdor = null, typical = 0;
 
   function predict(mix, sim, done) {
@@ -264,14 +276,15 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
     if (feePips == null) return;
     /* the fly's paper position follows its DECISION; a window without a smell (no trade) keeps the position: no smell, no move */
     const flyWants = win.decision ? (win.decision === 'buy' || win.decision === 'hold' ? 1 : 0) : books.fly.pos;
-    /* Kelly: the record known when the call was made (this window is judged AFTER settling: no look-ahead) */
-    const share = flyWants ? kellyFraction(tally) : 0, kb = books.kelly;
-    const kellyTo = share === 0 ? 0 : Math.abs(share - kb.pos) > FLY.KELLY_BAND ? share : kb.pos;
-    const want = { fly: flyWants, hold: 1, momentum: win.lastMove > 0 ? 1 : 0, kelly: kellyTo };
-    if (!kellyFrom) kellyFrom = { settled, fly: books.fly.ret, hold: books.hold.ret, at: Date.now() };
+    /* edge: the record and the usual move known when the call was made (this window is judged, and its move learnt, AFTER settling) */
+    const edgeIn = flyWants && edgePaysFee(tally, typical, feePips) ? 1 : 0;
+    const want = { fly: flyWants, hold: 1, momentum: win.lastMove > 0 ? 1 : 0, edge: edgeIn };
+    if (!edgeFrom) edgeFrom = { settled, fly: books.fly.ret, hold: books.hold.ret, at: Date.now() };
     for (const [k, b] of Object.entries(books)) {
       /* a change of position pays the fee on the share that changes hands (all of it for the all-in books) */
-      if (want[k] !== b.pos) { b.ret *= 1 - Math.abs(want[k] - b.pos) * feePips / 1e6; b.switches++; b.pos = want[k]; }
+      /* the edge book pays the REAL cost of a side (pool + interface fee); the older books keep their pool-fee-only definition, so this
+       *   comparison is biased AGAINST the edge rule, never for it */
+      if (want[k] !== b.pos) { b.ret *= 1 - Math.abs(want[k] - b.pos) * (feePips / 1e6 + (k === 'edge' ? FLY.INTERFACE_FEE : 0)); b.switches++; b.pos = want[k]; }
       b.ret *= 1 + b.pos * move;
     }
     settled++;
@@ -319,8 +332,8 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
   }
   function state() {
     return { tally: { ...tally }, books: Object.fromEntries(Object.entries(books).map(([k, b]) => [k, { label: b.label, pos: b.pos, ret: b.ret, switches: b.switches }])), recent: recent.map((m) => (m ? { ...m } : null)), settled, feePips, lastOdor: lastOdor ? { ...lastOdor } : null, typical,
-      kellyShare: kellyFraction(tally),
-      kellyFrom: kellyFrom ? { ...kellyFrom } : null, sameWindows: kellyFrom ? { windows: settled - kellyFrom.settled, kelly: books.kelly.ret, fly: books.fly.ret / kellyFrom.fly, hold: books.hold.ret / kellyFrom.hold } : null };
+      edgeNow: { edge: edgeOf(tally, typical), fee: feePips == null ? null : feePips / 1e6 + FLY.INTERFACE_FEE, pays: edgePaysFee(tally, typical, feePips) },
+      edgeFrom: edgeFrom ? { ...edgeFrom } : null, sameWindows: edgeFrom ? { windows: settled - edgeFrom.settled, edge: books.edge.ret, fly: books.fly.ret / edgeFrom.fly, hold: books.hold.ret / edgeFrom.hold } : null };
   }
   /* the eligibility trace survives a restart too (QA 08/11: a deploy or a reload dropped the smells still waiting for their lessons);
    *   only well-formed smells are taken back, at most the trace length */
@@ -331,14 +344,14 @@ export function createSession(fly, emit, { threshold = FLY.DECIDE, trace = FLY.T
   function restore(x) {
     Object.assign(tally, { consistent: 0, opposite: 0, flat: 0, undecided: 0 }, x && x.tally ? x.tally : {});
     /* the positions are kept too: put back out at each restart, "Always in" paid one fake switch fee per deploy or reload (QA 08/11) */
-    /* a position is a share in [0, 1] (the Kelly book holds a fraction; the others 0 or 1) */
+    /* a position is a share in [0, 1] (every book holds 0 or 1 today; a malformed value is out) */
     const posOf = (v) => (Number.isFinite(v) && v >= 0 && v <= 1 ? v : 0);
     for (const [k, b] of Object.entries(books)) Object.assign(b, { pos: x && x.books && x.books[k] ? posOf(x.books[k].pos) : 0, ret: x && x.books && x.books[k] ? x.books[k].ret : 1, switches: x && x.books && x.books[k] ? x.books[k].switches : 0 });
     settled = x && Number.isFinite(x.settled) ? x.settled : 0;
-    /* the Kelly book is NEW on 2026-11-09: a state saved before it has no `kelly` book and no start; it starts at the next window */
-    const kf = x && x.kellyFrom;
-    kellyFrom = kf && Number.isFinite(kf.settled) && Number.isFinite(kf.fly) && kf.fly > 0 && Number.isFinite(kf.hold) && kf.hold > 0 && x.books && x.books.kelly ? { settled: kf.settled, fly: kf.fly, hold: kf.hold, at: Number(kf.at) || null } : null;
-    if (!kellyFrom) Object.assign(books.kelly, { pos: 0, ret: 1, switches: 0 });
+    /* the edge book is NEW on 2026-11-09: a state saved before it has no `edge` book and no start; it starts at the next window */
+    const ef = x && x.edgeFrom;
+    edgeFrom = ef && Number.isFinite(ef.settled) && Number.isFinite(ef.fly) && ef.fly > 0 && Number.isFinite(ef.hold) && ef.hold > 0 && x.books && x.books.edge ? { settled: ef.settled, fly: ef.fly, hold: ef.hold, at: Number(ef.at) || null } : null;
+    if (!edgeFrom) Object.assign(books.edge, { pos: 0, ret: 1, switches: 0 });
     recent = restoredTrace(x);
     typical = x && Number.isFinite(x.typical) && x.typical > 0 && x.typical < 1 ? x.typical : 0;
     /* the last real smell survives a restart: the forecast can run before the next trade arrives */

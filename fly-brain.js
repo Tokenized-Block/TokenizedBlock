@@ -4,7 +4,7 @@
  * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { createFly, createSession, foreseeNext, decide, recordEdge, kellyFraction } from './fly-core.js';
+import { createFly, createSession, foreseeNext, decide, recordEdge, edgeOf, edgePaysFee, FLY } from './fly-core.js';
 import { checkPlanCalls } from './fly-guard.js';
 import { memoryFingerprint, sealData, checkSeal } from './fly-seal.js';
 import { dayOf, countedToday, mayTrade, reserveTrade } from './fly-day.js';
@@ -352,13 +352,12 @@ async function autoTrade(e) {
       let de, vers, montant;
       if (action === 'buy') {
         const cap = BigInt(Math.round(field('autoCap', 0.1, 100, 0.1) * 1e6)), have = BigInt(a.usdc);
-        const base = have < cap ? have : cap;
-        if (base < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
-        /* 09/11 (Kelly, fly-core.kellyFraction): it buys the share of the money its RECORD earns, not all of it; under 0.10 USDC the fees and
-         *   the gas outweigh the edge, so it does not buy at all */
-        const share = kellyFraction(session.state().tally), r = recordEdge(session.state().tally);
-        const amt = BigInt(Math.floor(Number(base) * share));
-        if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but its record (${r.k} right, ${r.n - r.k} wrong) earns ${fmt(share * 100, 1)}% of ${usd6(base)} USDC = ${usd6(amt)} USDC (Kelly), under the 0.10 USDC minimum: no buy`); return; }
+        const amt = have < cap ? have : cap;
+        if (amt < 100000n) { autoNote(`decided BUY ${stock.symbol}, but it holds ${usd6(have)} USDC: nothing to buy with`); return; }
+        /* 09/11 (fly-core.edgePaysFee, kept by simulation): it buys only when the expected gain of a window in, from its RECORD and the
+         *   usual move, pays the pool fee; otherwise the fees eat a small edge, and it does not buy */
+        const st = session.state(), r = recordEdge(st.tally);
+        if (!edgePaysFee(st.tally, st.typical, st.feePips)) { autoNote(`decided BUY ${stock.symbol}, but its edge does not pay the fee yet: record ${r.k} right, ${r.n - r.k} wrong, usual move ${fmt(st.typical * 100, 3)}% -> expected ${fmt(edgeOf(st.tally, st.typical) * 100, 4)}% a window, cost of a side ${st.feePips == null ? '?' : fmt(st.feePips / 1e4, 3) + '% pool + ' + fmt(FLY.INTERFACE_FEE * 100, 2) + '% interface'}: no buy`); return; }
         de = USDC_BASE; vers = stock.address; montant = amt.toString();
       } else { de = stock.address; vers = USDC_BASE; montant = held.toString(); }
       const q = new URLSearchParams({ de, vers, montant, compte: s.address });
@@ -366,6 +365,10 @@ async function autoTrade(e) {
       for (let round = 0; round < 3; round++) {
         if (!p || !p.ok) { autoNote(`decided ${ACT[action]} ${stock.symbol}: no order (${String((p && p.etat) || '?')}${p && p.pourquoi ? ' — ' + String(p.pourquoi).slice(0, 120) : ''})`); return; }
         if (!p.resume || String(p.resume.paye) !== montant) throw new Error('the plan does not pay the amount asked (' + String(p.resume && p.resume.paye) + ' vs ' + montant + ')');
+        /* 09/11: the REAL cost of this route (the pool fee + the interface fee the planner states for it): a BUY whose edge does not pay it
+         *   is dropped before anything is signed (fork 09/11: a round trip cost 0.30%, three times the pool fee alone) */
+        if (action === 'buy' && round === 0) { const st2 = session.state(), bps = Number(p.resume.fraisBps);
+          if (!Number.isFinite(bps) || !edgePaysFee(st2.tally, st2.typical, st2.feePips, bps / 1e4)) { autoNote(`decided BUY ${stock.symbol}, but this route costs ${Number.isFinite(bps) ? fmt(bps / 100, 2) + '% interface + ' : 'an unknown interface fee + '}${st2.feePips == null ? '?' : fmt(st2.feePips / 1e4, 3) + '%'} pool fee a side, more than its expected ${fmt(edgeOf(st2.tally, st2.typical) * 100, 4)}% a window: nothing signed`); return; } }
         /* ⛔ H1: nothing is signed that the browser's own guard does not accept */
         const refused = checkPlanCalls({ calls: p.aSigner, fly: s.address, pay: de, receive: vers, amount: montant, nowSec: Math.floor(Date.now() / 1000) });
         if (refused) throw new Error('the fly refused to sign: ' + refused.why);
@@ -493,9 +496,9 @@ function renderThoughts() {
 function renderBook(st = session.state(), el = $('book')) {
   el.innerHTML = `<div class="state">Score of its decisions, as if each were a trade (simulated, not money), after ${st.settled} windows, pool fee ${st.feePips == null ? '?' : fmt(st.feePips / 1e4, 2) + '%'} per switch — next to two simple rules:</div>`
     + Object.values(st.books).map((b) => `<div class="row"><span>${b.label}</span><span>${pct(b.ret - 1, 3)}</span><span>${b.pos === 1 ? 'in' : b.pos > 0 ? 'in ' + fmt(b.pos * 100, 1) + '%' : 'out'} · ${b.switches} switches</span></div>`).join('')
-    /* 09/11: the Kelly-sized book (the rule its real trades now follow), next to the fly and "Always in" on the SAME windows */
-    + `<div class="state">Kelly-sized: the same calls, in for ${fmt((st.kellyShare ?? 0) * 100, 1)}% of the money — the share its record earns (Kelly 1956, half of it, record shrunk toward a coin). Real buys follow this rule.`
-    + (st.sameWindows ? ` Since it started, over the same ${st.sameWindows.windows} windows: Kelly ${pct(st.sameWindows.kelly - 1, 3)} · all-in fly ${pct(st.sameWindows.fly - 1, 3)} · always in ${pct(st.sameWindows.hold - 1, 3)}.` : '') + '</div>';
+    /* 09/11: the edge book (the rule its real buys now follow), next to the fly and "Always in" on the SAME windows */
+    + (st.edgeNow ? `<div class="state">Real buys follow the edge rule: it buys only when the gain it can expect from a window in — its record (shrunk toward a coin) times the usual move — pays the pool fee. Now: ${fmt(st.edgeNow.edge * 100, 4)}% expected vs ${st.edgeNow.fee == null ? '?' : fmt(st.edgeNow.fee * 100, 3) + '%'} fee: ${st.edgeNow.pays ? 'it pays, it may buy' : 'it does not pay, it will not buy'}. Kept after simulating 5 markets where the truth is known: 0.00% where the edge does not pay, about half the gain where it does.`
+      + (st.sameWindows ? ` Since it started, over the same ${st.sameWindows.windows} windows: edge rule ${pct(st.sameWindows.edge - 1, 3)} · all-in fly ${pct(st.sameWindows.fly - 1, 3)} · always in ${pct(st.sameWindows.hold - 1, 3)}.` : '') + '</div>' : '');
 }
 function tallyText(t) {
   const n = t.consistent + t.opposite;
