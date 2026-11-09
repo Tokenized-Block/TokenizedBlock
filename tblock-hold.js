@@ -83,11 +83,35 @@ export function holdVerdict({ balance, priceNow, priceBefore, thresholdUsd = HOL
     : { ok: false, usd, price, tblockNeeded, why: 'holds $' + usd.toFixed(2) + ' of TBLOCK, below $' + thresholdUsd };
 }
 
+/** the last block whose timestamp is <= ts, searched among RECENT blocks only. ⛔ game320 in prod: blocAuTemps starts at block 1, and
+ *  reading block 1's timestamp needs an archive node — the public node refuses anything ~10,000 blocks deep, so "10 minutes ago" was
+ *  never read and every proof failed closed. Base makes a block every 0.2 s (measured 05/11): 10 min = 3,000 blocks; the window starts
+ *  at 6,000 blocks back and widens x3 (at most twice) if the chain was slower. null if not found. */
+export async function recentBlockAt({ lireTs, tete, ts, span = 6000, tries = 3 }) {
+  let s = span;
+  for (let k = 0; k < tries; k++, s *= 3) {
+    const lo = Math.max(1, Number(tete) - s);
+    const tLo = await lireTs(lo).catch(() => null);
+    if (!Number.isFinite(tLo)) return null;
+    if (tLo > ts) { if (lo === 1) return null; continue; }
+    let a = lo, b = Number(tete);
+    const tB = await lireTs(b).catch(() => null);
+    if (!Number.isFinite(tB) || tB <= ts) return null;
+    while (b - a > 1) {
+      const m = Math.floor((a + b) / 2), t = await lireTs(m).catch(() => null);
+      if (!Number.isFinite(t)) return null;
+      if (t <= ts) a = m; else b = m;
+    }
+    return a;
+  }
+  return null;
+}
+
 /** the TBLOCK price at the head and ~10 min earlier (the server caches this; it costs a block search) */
 export async function readPrices({ lire, lireTs, tete }) {
   const tsHead = await lireTs(tete).catch(() => null);
   if (!Number.isFinite(tsHead)) return { tete, before: null, now: { usd: null, why: 'head block not read' }, prev: { usd: null, why: 'head block not read' } };
-  const before = await blocAuTemps({ lireTs, tete, ts: tsHead - RECUL_PRIX_S }).catch(() => null);
+  const before = await recentBlockAt({ lireTs, tete, ts: tsHead - RECUL_PRIX_S });
   const now = await tblockUsdAt({ lire, bloc: tete });
   const prev = before === null ? { usd: null, why: 'block 10 minutes ago not read' } : await tblockUsdAt({ lire, bloc: before });
   return { tete, before, now, prev };

@@ -111,6 +111,25 @@ let sentJr = null;
 await telegramInvite({ token: 'T', chatId: '-100', wallet: ME, nowS: 1000, joinRequest: true, fetchImpl: async (u, i) => { sentJr = JSON.parse(i.body); return { json: async () => ({ ok: true, result: { invite_link: 'https://t.me/+jr' } }) }; } });
 t('join-request link: creates_join_request, no member_limit', sentJr.creates_join_request === true && !('member_limit' in sentJr));
 
+// 5c. "10 minutes ago" must be found on a node that REFUSES anything deeper than 10,000 blocks (prod game320: priceBefore null)
+const { recentBlockAt, readPrices } = await import('./tblock-hold.js');
+const { blocAuTemps } = await import('./eligibilite-unit.js');
+const HEAD = 55_000_000, tsOf = (n) => 1_700_000_000 + Math.floor(n / 5); /* 0.2 s per block */
+const nodeNoArchive = async (n) => { if (HEAD - n > 10_000) throw new Error('archive refused'); return tsOf(n); };
+const target = tsOf(HEAD) - 600;
+const found = await recentBlockAt({ lireTs: nodeNoArchive, tete: HEAD, ts: target });
+t('recent search finds the block 10 min ago on a non-archive node', found !== null && tsOf(found) <= target && tsOf(found + 1) > target, String(found));
+const old = await blocAuTemps({ lireTs: nodeNoArchive, tete: HEAD, ts: target }).catch(() => null);
+t('WITNESS: the old search from block 1 fails on that node (the prod bug)', old === null);
+/* a FASTER chain (0.05 s blocks): 10 min = 12,000 blocks, beyond the first 6,000-block window -> the window must widen */
+const fastTs = (n) => 1_700_000_000 + Math.floor(n / 20);
+const fast = async (n) => { if (HEAD - n > 200_000) throw new Error('archive refused'); return fastTs(n); };
+const tgt2 = fastTs(HEAD) - 600;
+const f2 = await recentBlockAt({ lireTs: fast, tete: HEAD, ts: tgt2 });
+t('a faster chain widens the window and still finds it', f2 !== null && fastTs(f2) <= tgt2 && fastTs(f2 + 1) > tgt2 && HEAD - f2 > 6000, String(f2));
+const pr = await readPrices({ lire: lireFake([136, 137, 138], 20_000_000), lireTs: nodeNoArchive, tete: HEAD });
+t('readPrices gives BOTH prices on a non-archive node', Number.isFinite(pr.now.usd) && Number.isFinite(pr.prev.usd) && pr.before !== null, JSON.stringify(pr.prev));
+
 // 6. LIVE (read-only, Base mainnet)
 if (process.env.LIVE === '1') {
   const RPCS = ['https://base-rpc.publicnode.com', 'https://mainnet.base.org'];
