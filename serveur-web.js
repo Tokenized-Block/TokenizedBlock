@@ -6048,6 +6048,8 @@ const SERVIS = [
   'human-brain-data.js', 'human-brain-anatomy.js', 'human-brain.html', 'human-brain.js', 'human-brain-parts.js',
   /* game320: TBLOCK proof of hold (the page only; tblock-hold.js runs on the server) */
   'holders.html',
+  /* game324: the unsigned deployment of the TBLOCK buyback contract (generated) and the page that offers it to the connected wallet */
+  'deployer-tblock-buyback.html', 'tblock-buyback-deploiement.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
