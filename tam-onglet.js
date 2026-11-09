@@ -2269,6 +2269,9 @@ export function monter(racine, ctx = {}) {
       ['x', 'y', 'z'].slice(0, k).forEach((n, q) => lignes.push([n, nb4(b[src * D + c * k + q])]));
     } else {
       const nuageB = S.P.ordre === 1 || (S.science && TS.estNuage(S.P, S.o));
+      /* 09/11 (subagent's open item: "the hover bubble does not name the part"): a subject coloured by class says the class of this point */
+      const pc = classesPoints(), cls = pc ? pc.classes[i] : null;
+      if (pc && Number.isInteger(cls) && pc.palette[cls] && pc.palette[cls].name) lignes.push(['part', pc.palette[cls].name]);
       lignes.push([nuageB ? 'sample' : 't', String(i) + ' of ' + (S.n - 1)]);
       for (const j of V.dimsVisibles(S.couches).slice(0, 12)) lignes.push(['x' + (j + 1), nb4(b[i * D + j])]);
     }

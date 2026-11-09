@@ -100,6 +100,9 @@ function suite(T, H, L, onglet) {
     assert.ok(onglet.includes("el('i', { class: 'tamPastille', style: 'background:' + p.color })"), 'key swatch = the part colour');
     assert.ok(onglet.includes('...(parts ? [] : [el(\'i\', { class: \'tamPastille\', style: \'background:\' + V.couleurDim(j) })])'), 'no column swatch with a key');
     assert.ok(/\.\.\.cle,/.test(onglet), 'key rendered');
+    /* 09/11: the hover bubble names the part of the point under the cursor (same classes as the colours) */
+    const bub = onglet.slice(onglet.indexOf('function peindreBulle('), onglet.indexOf('bulle.replaceChildren('));
+    assert.ok(bub.includes('const pc = classesPoints(), cls = pc ? pc.classes[i] : null;') && bub.includes("lignes.push(['part', pc.palette[cls].name]);"), 'bubble names the part');
   });
   return out;
 }
@@ -122,6 +125,7 @@ const MUT = [
   ['tam-legendes.js', 'legend key dropped', 'pointColours: e.pointColours ? Object.freeze(val(e.pointColours).slice()) : null,', 'pointColours: null,'],
   ['tam-legendes.js', 'legend back to directions', "every other dot wears the colour of the brain part it belongs to (key below).", "every other dot takes the colour of its direction: a position, not a function."],
   ['tam-onglet.js', 'tab ignores the classes', 'return { classes: o.pointClasses, palette: o.pointPalette };', 'return null;'],
+  ['tam-onglet.js', 'bubble does not name the part', "lignes.push(['part', pc.palette[cls].name]);", ''],
   ['tam-onglet.js', 'tab colours classes by direction', 'g.beginPath(); g.strokeStyle = g.shadowColor = pc.palette[c].color;', 'g.beginPath(); g.strokeStyle = g.shadowColor = V.couleurDim(c);'],
   ['tam-onglet.js', 'direction dots drawn over the classes', 'for (let i = 1; i < (corps || film || pc ? 0 : n); i++)', 'for (let i = 1; i < (corps || film ? 0 : n); i++)'],
   ['tam-onglet.js', 'classes under a blend', '|| S.corps || (S.P && S.P.melange) || filmDe()) return null;\n    return { classes', '|| S.corps || filmDe()) return null;\n    return { classes'],
