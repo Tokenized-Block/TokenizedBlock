@@ -74,17 +74,18 @@ async function banc(dir) {
 
 const total = await banc(ICI);
 const page = readFileSync(join(ICI, 'fly-brain.js'), 'utf8'), srv = readFileSync(join(ICI, 'serveur-web.js'), 'utf8');
-assert.ok(page.includes('session = createSession(fly, onEvent, { windowMs: FLY.WINDOW_MS });'), 'the page decides per window');
-assert.ok(/MOUCHE\.session = createSession\(MOUCHE\.fly, [\s\S]{0,700}\}, \{ windowMs: FLY\.WINDOW_MS \}\);/.test(srv), 'the server fly decides per window');
+/* game317: the page and the server fit the window to the stock ('auto', see test-fly-window-auto); this bench keeps the window mechanics */
+assert.ok(page.includes("session = createSession(fly, onEvent, { windowMs: 'auto' });"), 'the page decides per window');
+assert.ok(/MOUCHE\.session = createSession\(MOUCHE\.fly, [\s\S]{0,700}\}, \{ windowMs: 'auto' \}\);/.test(srv), 'the server fly decides per window');
 console.log('test-fly-window-20261109 : ' + (total + 2) + ' assertions OK');
 
 const MUT = [
-  ['no window (decides every read)', 'const W_MS = Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 0;', 'const W_MS = 0;'],
+  ['no window (decides every read)', 'W_MS = AUTO ? FLY.WINDOW_MIN_MS : Number.isFinite(windowMs) && windowMs > 0 ? windowMs : 0;', 'W_MS = 0;'],
   ['last read only, not the sum', "for (const k of ['received', 'sent', 'moved']) mix[k] = pend[k];", ''],
-  ['closes without a price', 'if (prevWin && (at - pendFrom < W_MS || p == null))', 'if (prevWin && (at - pendFrom < W_MS))'],
-  ['never closes', 'if (prevWin && (at - pendFrom < W_MS || p == null))', 'if (prevWin)'],
+  ['closes without a price', 'if (prevWin && (at - pendFrom < wNow || p == null))', 'if (prevWin && (at - pendFrom < wNow))'],
+  ['never closes', 'if (prevWin && (at - pendFrom < wNow || p == null))', 'if (prevWin)'],
   ['window not restarted at close', "pend = { received: 0, sent: 0, moved: 0 }; pendFrom = at;\n    }", "pend = { received: 0, sent: 0, moved: 0 };\n    }"],
-  ['reset keeps the gathered trades', 'recent = []; pend = { received: 0, sent: 0, moved: 0 }; pendFrom = null; }', 'recent = []; }'],
+  ['reset keeps the gathered trades', 'recent = []; pend = { received: 0, sent: 0, moved: 0 }; pendFrom = null; readMove = 0;', 'recent = []; readMove = 0;'],
 ];
 const src = readFileSync(join(ICI, 'fly-core.js'), 'utf8').replace(/\r\n/g, '\n');
 let tues = 0;

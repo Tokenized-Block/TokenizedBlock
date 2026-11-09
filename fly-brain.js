@@ -900,7 +900,7 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 
-/* One read, every 30 s: price + new transactions, handed to the shared protocol (which decides once per FLY.WINDOW_MS). */
+/* One read, every 30 s: price + new transactions, handed to the shared protocol (which decides once per window, fitted to the stock). */
 async function readWindow() {
   const stock = current;
   const [r, ac] = await Promise.all([
@@ -923,7 +923,7 @@ async function readWindow() {
   if (ac && !ac.ok && ac.pourquoi) log('trades not read this time: ' + ac.pourquoi);
   txSlot = 0;
   const w = session.window({ symbol: stock.symbol, price, transactions: ac && ac.ok && Array.isArray(ac.transactions) ? ac.transactions : null });
-  if (w && w.gathering && price) $('state').textContent += ` · next decision in ${Math.ceil((nextDecisionIn() || 0) / 60000)} min (it decides every ${FLY.WINDOW_MS / 60000} min)`;
+  if (w && w.gathering && price) $('state').textContent += ` · next decision in ${Math.ceil((nextDecisionIn() || 0) / 60000)} min (window fitted to ${current.symbol}: ${Math.round(session.state().windowMs / 60000)} min)`;
   /* a hidden tab ticks about once a second instead of 8 times: the queued pulses (lessons + prediction, ~36 ticks each) would fall
    *   behind without end. Hidden = nobody watches: run them at once, exactly as the server's fly does (measured reasoning 08/11). */
   if (document.hidden) fly.drain();
@@ -949,7 +949,7 @@ function select(i) {
   current = STOCKS[i];
   /* the fly trades only the stock watched: what it still holds of the one left is said, not forgotten (QA 08/11) */
   if (auto.s && auto.s.owner && prev && prev !== current) autoAccount(prev.address).then((a) => { if (a.stock && BigInt(a.stock) > 0n) autoNote(`it still holds ${fmt(Number(BigInt(a.stock)) / 10 ** (live.decimals ?? 8), 6)} ${prev.symbol}: it trades only the stock you watch, so it sells that only when you watch ${prev.symbol} again (or Withdraw all brings it back)`); }).catch(() => { /* said at the next balance read */ }); lastPrice = null; history = []; drawSpark(); lastDecision = null;
-  $('watching').textContent = `watching ${current.symbol} · its real trades are read every 30 s and smelled together every ${FLY.WINDOW_MS / 60000} min`;
+  $('watching').textContent = `watching ${current.symbol} · its real trades are read every 30 s and smelled together over a window fitted to how much it moves (5 min to 2 h)`;
   $('verdict').textContent = 'Waiting for a smell'; $('verdict').className = 'decision';
   session.reset(); loadMemory(); thoughts.length = 0; renderThoughts(); renderSeal();
   $('price').textContent = '—'; $('state').textContent = 'reading…'; $('ref').textContent = '';
@@ -967,8 +967,9 @@ async function start() {
   autoWire();
   const circuit = await fetch('fly-brain-circuit.json').then((r) => r.json());
   fly = createFly(circuit); shadow = createFly(circuit); N = fly.N; act = fly.act;
-  /* 09/11: it decides once per FLY.WINDOW_MS (5 min) on the trades summed over it; every trade is still shown as it comes */
-  session = createSession(fly, onEvent, { windowMs: FLY.WINDOW_MS });
+  /* 09/11: it decides once per window FITTED TO THE STOCK (fly-core 'auto': long enough for its usual move to pay the cost), on the
+   *   trades summed over it; every trade is still shown as it comes */
+  session = createSession(fly, onEvent, { windowMs: 'auto' });
   /* boldness: how sure it must be to act (kept per viewer). Lower = it acts on weaker pulls, and pays the fee more often. */
   const bold = $('bold'), showBold = () => { const v = Number(bold.value) / 1000; session.threshold = v; $('boldValue').textContent = fmt(v * 100, 1) + '%'; $('boldMirror').textContent = fmt(v * 100, 1) + '%'; try { localStorage.setItem('fly-boldness-v1', String(bold.value)); } catch (_) { /* per visit */ } };
   try { const v = localStorage.getItem('fly-boldness-v1'); if (v && Number(v) >= 2 && Number(v) <= 50) bold.value = v; } catch (_) { /* default */ }

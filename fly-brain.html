@@ -101,7 +101,7 @@
 <header>
   <a href="/" style="font-size:13px;color:#93c5fd;text-decoration:none">← Back to the app</a>
   <h1>Hemibrain connectome, living and trading on tokenized stocks</h1>
-  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), living on a stock's real trades, 24/7. Its trades, summed over 5 minutes, are an odor; the fly predicts, then the next price move rewards or punishes it, and you see which synapses it changed. Paper trades by default; its own small wallet trades only if you fund it. Nothing here is advice.</div>
+  <div class="sub">1,119 neurons and their real synapses (hemibrain v1.2, <i>Drosophila</i> brain), living on a stock's real trades, 24/7. Its trades, summed over a window fitted to the stock (5 min to 2 h), are an odor; the fly predicts, then the next price move rewards or punishes it, and you see which synapses it changed. Paper trades by default; its own small wallet trades only if you fund it. Nothing here is advice.</div>
 </header>
 <main class="page">
   <!-- 0 · the brain and what it decides now: one glance -->
@@ -193,7 +193,7 @@
       </div>
       <div class="card">
         <h2>The shared fly (server)</h2>
-        <div class="state" style="margin-bottom:6px">The same brain, run by the server on one stock, read every minute and deciding every 5 minutes, whether anyone watches or not. Its memory is saved on the server.</div>
+        <div class="state" style="margin-bottom:6px">The same brain, run by the server on one stock, read every minute and deciding once per window fitted to the stock, whether anyone watches or not. Its memory is saved on the server.</div>
         <div id="shared"><div class="state">reading…</div></div>
       </div>
     </div>
@@ -213,7 +213,7 @@
             <li>Anyone or any extension with access to this browser can use it, and so could the code this site serves: you trust this site's code with the budget.</li>
             <li>The server plans each order; before signing, this page checks every call itself and refuses anything that is not an exact approval, the app's fee, or a swap paying the fly.</li>
             <li>The app takes its interface fee on each trade (shown in each order, 0.1% on the measured routes). If the site is busy, a decision can pass without a trade, a SELL included. Its decisions follow its real holdings, not the paper book.</li>
-            <li><b>It buys only when its edge pays the real cost.</b> It decides every 5 minutes; it buys only when the gain it can expect from that window — its record (pulled toward a coin flip while it is short) times the stock's usual 5-minute move — is larger than one side of the trade: the pool fee plus the app's fee of that route. Otherwise it says so and signs nothing. On a quiet stock, or with a young record, that can mean no trade for a long time: that is the rule working, not a fault.</li>
+            <li><b>It buys only when its edge pays the real cost.</b> It decides once per window fitted to the stock: a quiet stock gets a longer window (up to 2 h), a nervous one a shorter one (from 5 min), so that its usual move can pay the fees. It buys only when the gain it can expect from that window — its record (pulled toward a coin flip while it is short) times the stock's usual move over the window — is larger than one side of the trade: the pool fee plus the app's fee of that route. Otherwise it says so and signs nothing. On a quiet stock, or with a young record, that can mean no trade for a long time: that is the rule working, not a fault.</li>
             <li>Proven on a copy of Base with Base's own precompiles: NVDAc, AAPLc and SNDKc bought and sold back, every order checked by this page, round trip about 0.3%. On Base itself: one real buy (SNDKc, 0.5 USDC, 8 Nov) and one real Withdraw all (9 Nov); no real sell yet. Keep the budget small.</li>
             <li>Tokenized stocks are only for eligible persons outside the U.S.</li>
           </ul>
