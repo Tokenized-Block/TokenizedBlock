@@ -136,7 +136,7 @@ import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { readPoolPrice } from './fly-price.js';
 import { createFly, createSession, foreseeNext, FLY } from './fly-core.js';
 import { readPrices as tbReadPrices, readHold as tbReadHold, holdMessage as tbHoldMessage, verifyOwnership as tbVerifyOwnership,
-  telegramInvite as tbTelegramInvite, telegramReply as tbTelegramReply, joinRequestDecision as tbJoinRequestDecision, HOLD_THRESHOLD_USD as TB_HOLD_USD, CHALLENGE_TTL_S as TB_CHALLENGE_TTL_S, TBLOCK_POOL as TB_POOL } from './tblock-hold.js';
+  telegramInvite as tbTelegramInvite, telegramReply as tbTelegramReply, joinRequestDecision as tbJoinRequestDecision, holderTagCall as tbHolderTagCall, HOLD_THRESHOLD_USD as TB_HOLD_USD, CHALLENGE_TTL_S as TB_CHALLENGE_TTL_S, TBLOCK_POOL as TB_POOL } from './tblock-hold.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -3056,7 +3056,8 @@ function lireCorpsMouche(req, max) {
 /* tgCodes: one-time code -> { tgId, exp } (made when someone opens the bot in private); approved: String(tgId) -> { wallet, exp }
  * (the account that passed the proof; its join request to the private channel is the only one accepted). In memory: a deploy
  * forgets them and the person simply runs /hold again. */
-const TB_HOLD = { prices: null, at: 0, pending: null, challenges: new Map(), invited: new Map(), tgCodes: new Map(), approved: new Map() };
+/* tgGroup: String(tgId) -> the group chat id where that account sent /hold (game322: where the bot puts the "TBLOCK Holder" tag) */
+const TB_HOLD = { prices: null, at: 0, pending: null, challenges: new Map(), invited: new Map(), tgCodes: new Map(), approved: new Map(), tgGroup: new Map() };
 function tbNewTgCode(tgId) {
   const now = Date.now();
   for (const [k, c] of TB_HOLD.tgCodes) if (c.exp < now) TB_HOLD.tgCodes.delete(k);
@@ -7412,7 +7413,11 @@ function traiterRequete(req, res) {
         return;
       }
       const reply = tbTelegramReply(u, { newCode: tbNewTgCode });
-      if (reply) await tbTelegram('sendMessage', reply);
+      if (reply) {
+        const gm = u && u.message;
+        if (gm && gm.chat && (gm.chat.type === 'group' || gm.chat.type === 'supergroup') && gm.from && TB_HOLD.tgGroup.size < 20000) TB_HOLD.tgGroup.set(String(gm.from.id), gm.chat.id);
+        await tbTelegram('sendMessage', reply);
+      }
     }).catch(() => fin(400));
     return;
   }
@@ -7449,7 +7454,7 @@ function traiterRequete(req, res) {
       const last = TB_HOLD.invited.get(w);
       if (last && Date.now() - last < 86400000) { send(200, { ok: false, state: 'ALREADY_INVITED', why: 'one invite per wallet per 24 h' }); return; }
       const inv = await tbTelegramInvite({ token: process.env.TELEGRAM_BOT_TOKEN || '', chatId: process.env.TELEGRAM_CHAT_ID || '', wallet: w, nowS: Date.now() / 1000, joinRequest: !!tgc });
-      let sentInTelegram = false;
+      let sentInTelegram = false, tagged = false;
       if (inv.ok) {
         TB_HOLD.invited.set(w, Date.now());
         if (tgc) {
@@ -7459,9 +7464,12 @@ function traiterRequete(req, res) {
             text: 'Proof accepted: this wallet holds $' + (h.usd || 0).toFixed(2) + ' of TBLOCK. Tap to ask to join the holders channel; I approve this account only (15 minutes).',
             reply_markup: { inline_keyboard: [[{ text: 'Join the holders channel', url: inv.link }]] } });
           sentInTelegram = !!(dm && dm.ok);
+          /* game322: the visible "TBLOCK Holder" tag in the public group where this account asked (/hold) — best effort, said in the answer */
+          const tagCall = tbHolderTagCall(TB_HOLD.tgGroup.get(tgc.tgId), tgc.tgId);
+          if (tagCall) { const tr = await tbTelegram('setChatMemberTag', tagCall); tagged = !!(tr && tr.ok); }
         }
       }
-      send(200, { ...inv, hold: pubHold(h), kind: own.kind, sentInTelegram, joinRequest: !!tgc });
+      send(200, { ...inv, hold: pubHold(h), kind: own.kind, sentInTelegram, tagged, joinRequest: !!tgc });
     }).catch((e) => /too large|JSON body/.test(String(e && e.message)) ? send(400, { ok: false, why: String(e.message) }) : panneTb(e));
     return;
   }

@@ -140,7 +140,7 @@ $('#signer').onclick = async () => {
     box.innerHTML = row('state', pill('INVITED', 'ok')) + row('proof', esc(r.kind === 'erc1271' ? 'smart wallet (ERC-1271)' : 'wallet signature'))
       + '<a class="btn" href="' + esc(r.link) + '" target="_blank" rel="noopener">Join the holders’ channel</a>'
       + '<p class="note">' + (r.joinRequest
-        ? (r.sentInTelegram ? 'The bot also sent this link to you in Telegram. ' : '') + 'Tap it to ask to join: the bot approves your Telegram account only, within 15 minutes.'
+        ? (r.sentInTelegram ? 'The bot also sent this link to you in Telegram. ' : '') + (r.tagged ? 'You now carry the TBLOCK Holder tag in the group. ' : '') + 'Tap it to ask to join: the bot approves your Telegram account only, within 15 minutes.'
         : 'Single use, expires in 15 minutes.') + '</p>';
     return;
   }

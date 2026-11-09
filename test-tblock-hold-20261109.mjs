@@ -130,6 +130,14 @@ t('a faster chain widens the window and still finds it', f2 !== null && fastTs(f
 const pr = await readPrices({ lire: lireFake([136, 137, 138], 20_000_000), lireTs: nodeNoArchive, tete: HEAD });
 t('readPrices gives BOTH prices on a non-archive node', Number.isFinite(pr.now.usd) && Number.isFinite(pr.prev.usd) && pr.before !== null, JSON.stringify(pr.prev));
 
+// 5d. the holder tag (Bot API setChatMemberTag: 0-16 characters, no emoji)
+const { holderTagCall, HOLDER_TAG } = await import('./tblock-hold.js');
+t('holder tag fits Telegram limits', [...HOLDER_TAG].length <= 16 && !/\p{Extended_Pictographic}/u.test(HOLDER_TAG));
+const tc = holderTagCall(-1001, '7');
+t('tag call: group, numeric user, tag', tc && tc.chat_id === -1001 && tc.user_id === 7 && tc.tag === HOLDER_TAG);
+t('no group known -> no tag call', holderTagCall(undefined, 7) === null && holderTagCall(null, 7) === null);
+t('a tag over 16 chars or with an emoji is refused', holderTagCall(-1, 7, 'TBLOCK Holder 2026!') === null && holderTagCall(-1, 7, 'Holder 🔥') === null);
+
 // 6. LIVE (read-only, Base mainnet)
 if (process.env.LIVE === '1') {
   const RPCS = ['https://base-rpc.publicnode.com', 'https://mainnet.base.org'];

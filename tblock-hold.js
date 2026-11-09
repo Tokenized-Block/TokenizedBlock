@@ -223,6 +223,15 @@ export function telegramReply(update, { pageUrl = HOLD_PAGE_URL, botUsername = B
   };
 }
 
+/** The visible tag the bot puts on a proven holder in the public group (Bot API setChatMemberTag: 0-16 characters, no emoji;
+ *  the bot needs the can_manage_tags admin right there). null when the group or the user is unknown. */
+export const HOLDER_TAG = 'TBLOCK Holder';
+export function holderTagCall(groupChatId, userId, tag = HOLDER_TAG) {
+  if (groupChatId === undefined || groupChatId === null || groupChatId === '' || !Number.isSafeInteger(Number(userId))) return null;
+  if (typeof tag !== 'string' || [...tag].length > 16 || /\p{Extended_Pictographic}/u.test(tag)) return null;
+  return { chat_id: groupChatId, user_id: Number(userId), tag };
+}
+
 /** A join request to the private channel is approved ONLY for the Telegram account that passed the proof (approved: Map
  *  String(userId) -> { wallet, exp }); any other request is declined. null when the update is not a join request to OUR chat. */
 export function joinRequestDecision(update, { chatId, approved, nowMs }) {
