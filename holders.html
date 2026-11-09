@@ -1,0 +1,153 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>TBLOCK holders</title>
+<!--
+  2026-11-09 — PROOF OF HOLD for TBLOCK (tblock-hold.js, /api/tblock/hold, /api/tblock/telegram-invite).
+  ⛔ This page SIGNS A MESSAGE only. It never sends a transaction: no funds move, nothing is approved.
+  ⛔ Only perks that work today get a button. The price is read on chain by the server (v4 pool TBLOCK/wtCOIN x three wtCOIN/USDC
+     pools), the lower of now and ~10 minutes ago, so a pool pushed for one block does not open the door.
+-->
+<style>
+:root{--bg:#050d24;--bg2:#0a1633;--card:#0f1d3d;--line:#1e2f57;--fg:#e9f0ff;--dim:#8ba0c9;
+--or:#f7a318;--ok:#22c55e;--warn:#f5a317;--bad:#ef4444}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:radial-gradient(120% 80% at 50% 0%,#0b2a7a 0%,var(--bg) 60%) no-repeat fixed;
+color:var(--fg);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:16px}
+main{max-width:640px;margin:0 auto}
+h1{font-size:20px;margin:0 0 4px}.sub{color:var(--dim);font-size:13px;margin:0 0 16px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px;margin-bottom:12px}
+h2{font-size:12.5px;margin:0 0 12px;color:var(--dim);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
+button,.btn{display:block;width:100%;background:var(--or);color:#20160a;border:0;border-radius:8px;padding:15px;text-align:center;
+font:inherit;font-weight:700;margin-top:10px;min-height:44px;cursor:pointer;text-decoration:none}
+button.sec,.btn.sec{background:transparent;color:var(--fg);border:1px solid var(--line)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
+.row:last-child{border-bottom:0}.k{color:var(--dim);flex:0 0 130px;font-size:12px}
+.v{flex:1;font-size:12.5px;word-break:break-all}
+.pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
+.p-ok{background:#0d3b23;color:#7ff0b0}.p-bad{background:#4a1414;color:#ffb3b3}
+.p-warn{background:#3a2a10;color:#ffd48a}.p-dim{background:var(--bg2);color:var(--dim)}
+.note{color:var(--dim);font-size:12px;margin-top:10px}
+ul{margin:6px 0 0;padding-left:18px}li{margin:4px 0}
+a{color:var(--fg)}
+</style>
+
+<main>
+<h1>TBLOCK holders</h1>
+<p class="sub">TBLOCK is the TokenizedBlock token on Base (a B20, <span id="adr">0xb200…830e</span>).
+Hold at least <b id="thr">$15</b> of it and the holders' Telegram channel opens to you.
+In the TokenizedBlock group, send <b>/hold</b>: @TblockHoldersBot brings you here with a link tied to your Telegram account.</p>
+
+<div class="card">
+  <h2>The price, read on chain</h2>
+  <div id="vuePrix"><span class="k">reading…</span></div>
+  <p class="note">TBLOCK trades in one Uniswap pool against wtCOIN; wtCOIN is priced by three wtCOIN/USDC pools that must
+  agree within 5%. The lower of the price now and ~10 minutes ago counts.</p>
+  <a class="btn sec" id="acheter" href="https://basestonk.io/tokens/0xb200000000000000000000ba9bf8330307f8830e" target="_blank" rel="noopener">Get TBLOCK on basestonk</a>
+</div>
+
+<div class="card">
+  <h2>1 · Your wallet</h2>
+  <button id="connecter">Connect my wallet (Base)</button>
+  <div id="vueSolde" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
+  <h2>2 · Prove it is yours</h2>
+  <p class="note" style="margin-top:0">A <b>message</b> signature, not a transaction: no funds move, no gas, nothing is approved.
+  Read it in your wallet before accepting.</p>
+  <button id="signer" disabled>Sign and get my Telegram invite</button>
+  <div id="vueInvite" style="margin-top:10px"></div>
+</div>
+
+<div class="card">
+  <h2>What this proves, and what it does not</h2>
+  <ul class="note" style="margin-top:0">
+    <li>It proves the wallet held $15 of TBLOCK when you asked, and that you control it (ordinary wallets and smart wallets).</li>
+    <li>The invite works once and expires after 15 minutes; one invite per wallet per day.</li>
+    <li>It does not check that you keep holding after joining.</li>
+    <li>TBLOCK can lose value. Holding it is not an investment we promise anything on.</li>
+  </ul>
+</div>
+</main>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const row = (k, v) => '<div class="row"><span class="k">' + esc(k) + '</span><span class="v">' + v + '</span></div>';
+const pill = (t, c) => '<span class="pill p-' + c + '">' + esc(t) + '</span>';
+const fmtUsd = (x) => Number.isFinite(x) ? '$' + (x >= 1 ? x.toFixed(2) : x.toPrecision(3)) : '—';
+const fmtTok = (raw) => { try { const n = BigInt(raw) / 10n ** 18n; return n.toLocaleString('en-US'); } catch (_) { return '—'; } };
+let etat = { wallet: null, challenge: null };
+/* the bot's private link carries ?tg=<code>: it ties this proof to the Telegram account that asked, so the bot lets that account in */
+const TG = (() => { try { const c = new URLSearchParams(location.search).get('tg') || ''; return /^[0-9a-f]{24}$/.test(c) ? c : ''; } catch (_) { return ''; } })();
+
+async function api(path, init) {
+  const r = await fetch(path, init);
+  return r.json();
+}
+
+async function lirePrix() {
+  try {
+    const p = await api('/api/tblock/hold');
+    if (!Number.isFinite(p.priceNow) || !Number.isFinite(p.priceBefore)) { $('#vuePrix').innerHTML = row('state', pill('PRICE NOT READ', 'warn')) + row('why', esc(p.why || 'unknown')); return; }
+    const low = Math.min(p.priceNow, p.priceBefore);
+    $('#thr').textContent = '$' + p.thresholdUsd;
+    $('#vuePrix').innerHTML = row('1 TBLOCK', fmtUsd(p.priceNow) + ' now · ' + fmtUsd(p.priceBefore) + ' ~10 min ago')
+      + row('wtCOIN', fmtUsd(p.wtcoinUsd)) + row('$' + p.thresholdUsd + ' needs', '<b>' + Math.ceil(p.thresholdUsd / low).toLocaleString('en-US') + ' TBLOCK</b>')
+      + row('block', esc(p.block));
+  } catch (e) { $('#vuePrix').innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')) + row('why', esc(e.message || e)); }
+}
+
+$('#connecter').onclick = async () => {
+  const box = $('#vueSolde');
+  $('#signer').disabled = true; etat = { wallet: null, challenge: null }; $('#vueInvite').innerHTML = '';
+  if (!window.ethereum) { box.innerHTML = row('state', pill('NO WALLET IN THIS BROWSER', 'warn')); return; }
+  let w;
+  try { [w] = await window.ethereum.request({ method: 'eth_requestAccounts' }); }
+  catch (e) { box.innerHTML = row('state', pill('WALLET REFUSED', 'warn')) + row('why', esc(e.message || e)); return; }
+  w = String(w || '').toLowerCase();
+  box.innerHTML = row('wallet', esc(w)) + row('state', 'reading your TBLOCK on Base…');
+  let h;
+  try { h = await api('/api/tblock/hold?wallet=' + w); }
+  catch (e) { box.innerHTML = row('wallet', esc(w)) + row('state', pill('SERVER NOT REACHED', 'warn')); return; }
+  const base = row('wallet', esc(w)) + row('holds', h.balance == null ? '—' : fmtTok(h.balance) + ' TBLOCK') + row('worth', fmtUsd(h.usd) + (h.price ? ' (at ' + fmtUsd(h.price) + ')' : ''));
+  if (!h.ok) {
+    const lack = h.tblockNeeded && h.balance != null ? Math.max(0, h.tblockNeeded - Number(BigInt(h.balance) / 10n ** 18n)) : null;
+    box.innerHTML = base + row('state', pill(h.usd == null ? 'NOT READ' : 'BELOW $' + (h.thresholdUsd || 15), h.usd == null ? 'warn' : 'bad'))
+      + row('why', esc(h.why)) + (lack ? row('missing', '~' + lack.toLocaleString('en-US') + ' TBLOCK') : '');
+    return;
+  }
+  etat = { wallet: w, challenge: h.challenge };
+  box.innerHTML = base + row('state', pill('HOLDER', 'ok'));
+  $('#signer').disabled = !h.challenge;
+  if (!h.challenge) $('#vueInvite').innerHTML = row('state', pill('BUSY', 'warn')) + row('why', 'too many open requests, try again in a minute');
+};
+
+$('#signer').onclick = async () => {
+  const box = $('#vueInvite'), c = etat.challenge, w = etat.wallet;
+  if (!c || !w) return;
+  $('#signer').disabled = true;
+  let sig;
+  try { sig = await window.ethereum.request({ method: 'personal_sign', params: [c.message, w] }); }
+  catch (e) { box.innerHTML = row('state', pill('SIGNATURE REFUSED', 'warn')) + row('why', esc(e.message || e)); $('#signer').disabled = false; return; }
+  box.innerHTML = row('state', 'checking the signature and your balance…');
+  let r;
+  try { r = await api('/api/tblock/telegram-invite', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ wallet: w, nonce: c.nonce, signature: sig, ...(TG ? { tg: TG } : {}) }) }); }
+  catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); return; }
+  etat.challenge = null;
+  if (r.ok && /^https:\/\/t\.me\//.test(String(r.link))) {
+    box.innerHTML = row('state', pill('INVITED', 'ok')) + row('proof', esc(r.kind === 'erc1271' ? 'smart wallet (ERC-1271)' : 'wallet signature'))
+      + '<a class="btn" href="' + esc(r.link) + '" target="_blank" rel="noopener">Join the holders’ channel</a>'
+      + '<p class="note">' + (r.joinRequest
+        ? (r.sentInTelegram ? 'The bot also sent this link to you in Telegram. ' : '') + 'Tap it to ask to join: the bot approves your Telegram account only, within 15 minutes.'
+        : 'Single use, expires in 15 minutes.') + '</p>';
+    return;
+  }
+  box.innerHTML = row('state', pill(r.state || 'REFUSED', 'warn')) + row('why', esc(r.why || 'unknown'))
+    + (r.state === 'CHALLENGE_EXPIRED' ? '<p class="note">Press "Connect my wallet" again for a new message.</p>' : '')
+    + (r.state === 'TG_CODE_EXPIRED' ? '<p class="note">Send /hold to @TblockHoldersBot again for a new link.</p>' : '');
+};
+
+lirePrix();
+</script>

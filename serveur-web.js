@@ -33,7 +33,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { readFileSync, existsSync, statSync, writeFileSync, renameSync } from 'node:fs';
 import { dirname, join, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createHash } from 'node:crypto';
+import { createHash, timingSafeEqual } from 'node:crypto';
 /* ⛔⛔ AJOUTE LE 2026-09-22, APRES MESURE ET PAS PAR PRINCIPE. Le serveur n envoyait AUCUNE
  * compression : une requete HEAD avec Accept-Encoding gzip ne rendait pas de content-encoding, et
  * app.html partait en 672 523 octets BRUTS a chaque visite — la ou il en fait 213 210 en gzip.
@@ -135,6 +135,8 @@ import { createRelayGuard } from './fly-relay.js';
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
 import { readPoolPrice } from './fly-price.js';
 import { createFly, createSession, foreseeNext, FLY } from './fly-core.js';
+import { readPrices as tbReadPrices, readHold as tbReadHold, holdMessage as tbHoldMessage, verifyOwnership as tbVerifyOwnership,
+  telegramInvite as tbTelegramInvite, telegramReply as tbTelegramReply, joinRequestDecision as tbJoinRequestDecision, HOLD_THRESHOLD_USD as TB_HOLD_USD, CHALLENGE_TTL_S as TB_CHALLENGE_TTL_S, TBLOCK_POOL as TB_POOL } from './tblock-hold.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -3048,6 +3050,66 @@ function lireCorpsMouche(req, max) {
     req.on('data', (c) => { if (trop) return; brut += c; if (brut.length > max) { trop = true; ko(new Error('request too large')); req.destroy(); } });
     req.on('end', () => { if (trop) return; try { ok(JSON.parse(brut)); } catch (_) { ko(new Error('JSON body expected')); } });
     req.on('error', ko); });
+}
+/* 2026-11-09 TBLOCK proof of hold (tblock-hold.js). The price pair (now, ~10 min ago) is cached 60 s: it costs a block search.
+ * Challenges are single-use and expire; one invite per wallet per 24 h. The bot token and chat id are env secrets, never logged. */
+/* tgCodes: one-time code -> { tgId, exp } (made when someone opens the bot in private); approved: String(tgId) -> { wallet, exp }
+ * (the account that passed the proof; its join request to the private channel is the only one accepted). In memory: a deploy
+ * forgets them and the person simply runs /hold again. */
+const TB_HOLD = { prices: null, at: 0, pending: null, challenges: new Map(), invited: new Map(), tgCodes: new Map(), approved: new Map() };
+function tbNewTgCode(tgId) {
+  const now = Date.now();
+  for (const [k, c] of TB_HOLD.tgCodes) if (c.exp < now) TB_HOLD.tgCodes.delete(k);
+  if (TB_HOLD.tgCodes.size > 5000) return null;
+  const code = randomBytes(12).toString('hex');
+  TB_HOLD.tgCodes.set(code, { tgId: String(tgId), exp: now + 900000 });
+  return code;
+}
+async function tbTelegram(method, body) {
+  const token = process.env.TELEGRAM_BOT_TOKEN || '';
+  if (!token) return null;
+  return fetch('https://api.telegram.org/bot' + token + '/' + method, { method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }).then((r) => r.json()).catch(() => null);
+}
+const tbLire = (to, data, b) => rpcRails('eth_call', [{ to, data }, '0x' + Number(b).toString(16)]);
+const tbLireTs = async (n) => { const b = await rpcServeur('eth_getBlockByNumber', ['0x' + Number(n).toString(16), false]); return b ? Number(BigInt(b.timestamp)) : NaN; };
+async function tbPrices() {
+  if (TB_HOLD.prices && Date.now() - TB_HOLD.at < 60000 && Number.isFinite(TB_HOLD.prices.now.usd) && Number.isFinite(TB_HOLD.prices.prev.usd)) return TB_HOLD.prices;
+  if (!TB_HOLD.pending) {
+    TB_HOLD.pending = (async () => {
+      const tete = Number(BigInt(await rpcServeur('eth_blockNumber', [])));
+      const p = await tbReadPrices({ lire: tbLire, lireTs: tbLireTs, tete });
+      TB_HOLD.prices = p; TB_HOLD.at = Date.now();
+      return p;
+    })().finally(() => { TB_HOLD.pending = null; });
+  }
+  return TB_HOLD.pending;
+}
+async function tbHoldOf(wallet) {
+  const prices = await tbPrices();
+  return tbReadHold({ lire: tbLire, lireTs: tbLireTs, tete: prices.tete, wallet, prices });
+}
+/* the bot token is never printed: only 'registered' / the reason without the URL */
+async function tbRegisterWebhook() {
+  const token = process.env.TELEGRAM_BOT_TOKEN || '', secret = process.env.TELEGRAM_WEBHOOK_SECRET || '', base = process.env.TELEGRAM_WEBHOOK_BASE || 'https://tokenizedblock.space';
+  if (!token || !secret) return 'off (TELEGRAM_BOT_TOKEN and TELEGRAM_WEBHOOK_SECRET not both set)';
+  if (!/^[A-Za-z0-9_-]{16,256}$/.test(secret)) return 'off (TELEGRAM_WEBHOOK_SECRET must be 16+ letters, digits, _ or -)';
+  const r = await fetch('https://api.telegram.org/bot' + token + '/setWebhook', { method: 'POST', headers: { 'content-type': 'application/json' }, signal: AbortSignal.timeout(15000),
+    body: JSON.stringify({ url: base + '/api/tblock/telegram-webhook', secret_token: secret, allowed_updates: ['message', 'chat_join_request'], drop_pending_updates: true }) });
+  const j = await r.json().catch(() => null);
+  return j && j.ok ? 'registered' : 'refused: ' + String((j && j.description) || r.status).slice(0, 80);
+}
+function tbSecretOk(got) {
+  const want = Buffer.from(process.env.TELEGRAM_WEBHOOK_SECRET || ''), g = Buffer.from(String(got || ''));
+  return want.length >= 16 && g.length === want.length && timingSafeEqual(g, want);
+}
+function tbChallenge(wallet) {
+  const now = Date.now();
+  for (const [k, c] of TB_HOLD.challenges) if (c.exp < now) TB_HOLD.challenges.delete(k);
+  if (TB_HOLD.challenges.size > 5000) return null;
+  const nonce = randomBytes(12).toString('hex'), issuedIso = new Date(now).toISOString();
+  TB_HOLD.challenges.set(nonce, { wallet: String(wallet).toLowerCase(), issuedIso, exp: now + TB_CHALLENGE_TTL_S * 1000 });
+  return { nonce, issuedIso, message: tbHoldMessage({ wallet, nonce, issuedIso }) };
 }
 function demarrerMoucheServeur() {
   if (process.env.FLY_SERVER === 'off' || ESSAI_SRV.actif) { MOUCHE.why = 'switched off on this server'; return; }
@@ -5983,6 +6045,8 @@ const SERVIS = [
   'tam-maths.js',
   /* game315: the human brain numbers shared by tam-maths.js, tam-legendes.js and human-brain.html */
   'human-brain-data.js', 'human-brain-anatomy.js', 'human-brain.html', 'human-brain.js', 'human-brain-parts.js',
+  /* game320: TBLOCK proof of hold (the page only; tblock-hold.js runs on the server) */
+  'holders.html',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
@@ -7334,6 +7398,73 @@ function traiterRequete(req, res) {
     send(200, etatMoucheServeur());
     return;
   }
+  /* 2026-11-09 TBLOCK holders bot webhook: Telegram proves itself with the secret header; the bot only answers /start with the page link */
+  if (chemin === '/api/tblock/telegram-webhook') {
+    const fin = (code) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' }); res.end('{"ok":' + (code === 200) + '}'); };
+    if (req.method !== 'POST') { fin(405); return; }
+    if (!tbSecretOk(req.headers['x-telegram-bot-api-secret-token'])) { fin(401); return; }
+    lireCorpsMouche(req, 64 * 1024).then(async (u) => {
+      fin(200); /* answer Telegram first: a slow sendMessage must not make it retry the update */
+      const jr = tbJoinRequestDecision(u, { chatId: process.env.TELEGRAM_CHAT_ID || '', approved: TB_HOLD.approved, nowMs: Date.now() });
+      if (jr) {
+        await tbTelegram(jr.approve ? 'approveChatJoinRequest' : 'declineChatJoinRequest', { chat_id: process.env.TELEGRAM_CHAT_ID, user_id: jr.userId });
+        if (jr.approve) TB_HOLD.approved.delete(String(jr.userId));
+        return;
+      }
+      const reply = tbTelegramReply(u, { newCode: tbNewTgCode });
+      if (reply) await tbTelegram('sendMessage', reply);
+    }).catch(() => fin(400));
+    return;
+  }
+  /* 2026-11-09 TBLOCK proof of hold: GET /api/tblock/hold?wallet=0x… (status + a message to sign), POST /api/tblock/telegram-invite */
+  if (chemin === '/api/tblock/hold' || chemin === '/api/tblock/telegram-invite') {
+    const send = (code, body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+    const pubHold = (h) => ({ ok: h.ok, usd: h.usd, price: h.price, tblockNeeded: h.tblockNeeded, why: h.why, balance: h.balance, block: h.block,
+      priceNow: h.priceNow, priceBefore: h.priceBefore, wtcoinUsd: h.wtcoinUsd, thresholdUsd: h.thresholdUsd ?? TB_HOLD_USD, poolId: TB_POOL.poolId });
+    const panneTb = (e) => send(200, { ok: false, state: 'NOT_READ', why: 'the chain did not answer: ' + String((e && e.message) || e).slice(0, 100) });
+    if (chemin === '/api/tblock/hold') {
+      if (req.method !== 'GET') { send(405, { ok: false, why: 'GET only' }); return; }
+      const w = String(new URL(req.url, 'http://x').searchParams.get('wallet') || '').toLowerCase();
+      if (!w) { tbPrices().then((p) => send(200, { ok: true, thresholdUsd: TB_HOLD_USD, priceNow: p.now.usd, priceBefore: p.prev.usd, why: p.now.why || p.prev.why || null,
+        wtcoinUsd: p.now.wtcoinUsd ?? null, poolId: TB_POOL.poolId, block: p.tete })).catch(panneTb); return; }
+      if (!/^0x[0-9a-f]{40}$/.test(w)) { send(400, { ok: false, why: 'whole wallet address required' }); return; }
+      tbHoldOf(w).then((h) => { const c = h.ok ? tbChallenge(w) : null; send(200, { ...pubHold(h), challenge: c }); }).catch(panneTb);
+      return;
+    }
+    if (req.method !== 'POST') { send(405, { ok: false, why: 'POST only' }); return; }
+    lireCorpsMouche(req, 8 * 1024).then(async (b) => {
+      const w = String((b && b.wallet) || '').toLowerCase(), nonce = String((b && b.nonce) || ''), sig = String((b && b.signature) || '');
+      const tgCode = String((b && b.tg) || '');
+      if (!/^0x[0-9a-f]{40}$/.test(w) || !/^[0-9a-f]{24}$/.test(nonce) || !/^0x[0-9a-fA-F]{130,3000}$/.test(sig) || (tgCode && !/^[0-9a-f]{24}$/.test(tgCode))) {
+        send(400, { ok: false, why: 'body: {wallet, nonce, signature, tg?}' }); return; }
+      const tgc = tgCode ? TB_HOLD.tgCodes.get(tgCode) : null;
+      if (tgCode && (!tgc || tgc.exp < Date.now())) { send(200, { ok: false, state: 'TG_CODE_EXPIRED', why: 'this Telegram link expired: send /hold to the bot again' }); return; }
+      const c = TB_HOLD.challenges.get(nonce);
+      if (!c || c.exp < Date.now() || c.wallet !== w) { send(200, { ok: false, state: 'CHALLENGE_EXPIRED', why: 'this message expired or was already used: ask for a new one' }); return; }
+      TB_HOLD.challenges.delete(nonce); /* single use, even when the rest fails */
+      const own = await tbVerifyOwnership({ rpc: rpcServeur, wallet: w, message: tbHoldMessage({ wallet: w, nonce, issuedIso: c.issuedIso }), signature: sig });
+      if (!own.ok) { send(200, { ok: false, state: 'NOT_OWNER', why: own.why }); return; }
+      const h = await tbHoldOf(w);
+      if (!h.ok) { send(200, { ok: false, state: 'NOT_HOLDER', ...pubHold(h) }); return; }
+      const last = TB_HOLD.invited.get(w);
+      if (last && Date.now() - last < 86400000) { send(200, { ok: false, state: 'ALREADY_INVITED', why: 'one invite per wallet per 24 h' }); return; }
+      const inv = await tbTelegramInvite({ token: process.env.TELEGRAM_BOT_TOKEN || '', chatId: process.env.TELEGRAM_CHAT_ID || '', wallet: w, nowS: Date.now() / 1000, joinRequest: !!tgc });
+      let sentInTelegram = false;
+      if (inv.ok) {
+        TB_HOLD.invited.set(w, Date.now());
+        if (tgc) {
+          TB_HOLD.tgCodes.delete(tgCode);
+          TB_HOLD.approved.set(tgc.tgId, { wallet: w, exp: Date.now() + 900000 });
+          const dm = await tbTelegram('sendMessage', { chat_id: Number(tgc.tgId), disable_web_page_preview: true,
+            text: 'Proof accepted: this wallet holds $' + (h.usd || 0).toFixed(2) + ' of TBLOCK. Tap to ask to join the holders channel; I approve this account only (15 minutes).',
+            reply_markup: { inline_keyboard: [[{ text: 'Join the holders channel', url: inv.link }]] } });
+          sentInTelegram = !!(dm && dm.ok);
+        }
+      }
+      send(200, { ...inv, hold: pubHold(h), kind: own.kind, sentInTelegram, joinRequest: !!tgc });
+    }).catch((e) => /too large|JSON body/.test(String(e && e.message)) ? send(400, { ok: false, why: String(e.message) }) : panneTb(e));
+    return;
+  }
   /* le marche d un block lu par le serveur (repli du navigateur quand ses noeuds publics le refusent) : /api/marche/0x… */
   if (chemin.startsWith('/api/marche/')) {
     const token = chemin.slice('/api/marche/'.length).toLowerCase();
@@ -8626,6 +8757,8 @@ createServer((req, res) => consommateurArchive.run(etiquetteRequete(req), () => 
   consommateurArchive.run('fond prechauffage prix', () => prechaufferFaitsDePool());
   /* 2026-11-08 : la mouche partagee demarre quand le VRAI serveur ecoute (jamais dans un banc qui evalue une tranche du fichier) */
   consommateurArchive.run('fond mouche', () => demarrerMoucheServeur());
+  /* 2026-11-09 TBLOCK holders bot: register the webhook once the real server listens, only if the three env values exist */
+  tbRegisterWebhook().then((r) => console.log('telegram webhook: ' + r)).catch(() => console.log('telegram webhook: not registered'));
 });
 
 /* ── ⛔⛔ POURQUOI UN PRECHAUFFAGE, ET PAS UNE LECTURE A L OUVERTURE DE LA PAGE ──────────────────
