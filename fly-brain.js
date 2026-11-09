@@ -156,7 +156,7 @@ function autoLoad() {
     x.today = Number.isInteger(x.today) && x.today >= 0 ? x.today : 0; x.running = x.running === true; x.day = String(x.day || '').slice(0, 10);
     x.consentAt = Number.isFinite(x.consentAt) ? x.consentAt : null;
     const st = x.settings && typeof x.settings === 'object' ? x.settings : {};
-    x.settings = { budget: Number.isFinite(st.budget) ? st.budget : undefined, cap: Number.isFinite(st.cap) ? st.cap : undefined, day: Number.isInteger(st.day) ? st.day : undefined, proven: typeof st.proven === 'boolean' ? st.proven : undefined };
+    x.settings = { budget: Number.isFinite(st.budget) ? st.budget : undefined, cap: Number.isFinite(st.cap) ? st.cap : undefined, day: Number.isInteger(st.day) ? st.day : undefined };
     return x;
   } catch (_) { return null; }
 }
@@ -346,10 +346,10 @@ async function autoTrade(e) {
         autoNote(`${ACT[action]} ${stock.symbol} · ${why}${sure} · ${held > 0n ? 'holds ' + fmt(Number(held) / 10 ** (live.decimals ?? 8), 6) + ' ' + stock.symbol : 'out of the stock'}: no trade`);
         return;
       }
-      /* the record gate holds back a BUY only: a SELL takes the money OUT of risk, and a gate on it kept the fly holding a stock once its
-       *   record fell back under chance (QA 08/11) */
-      if (action === 'buy' && $('autoProven').checked && !proven(session.state().tally)) { const r = recordEdge(session.state().tally);
-        autoNote(`decided BUY, but its record (${r.k} right of ${r.n} judged) does not beat a coin flip yet: no real buy (untick “only once it beats chance” to override; a SELL is never held back)`); return; }
+      /* 09/11 (Phil: "the button makes it worse, remove it?"): the "only once it beats a coin flip" gate is gone. Simulated (banc-fly-sim,
+       *   5 markets), "gate AND edge pays the fee" gave exactly what "edge pays the fee" alone gave: the edge rule below already pulls a
+       *   short record toward a coin (Beta(10, 10)) and asks the edge to pay the real cost, which is stricter; the gate only added a second
+       *   refusal message. The record against a coin flip is still SHOWN (tallyText). */
       if (!mayTrade(autoRefresh(), today, maxDay)) { autoNote(`decided ${ACT[action]}, but today's cap of ${maxDay} trades is reached: nothing sent`); return; }
       let de, vers, montant;
       if (action === 'buy') {
@@ -400,11 +400,11 @@ async function autoTrade(e) {
 }
 /* the session is remembered (Phil 08/11: reopening the page stopped the fly and asked to tick the box again): the consent with its date,
  * the settings, and whether it was trading alone. Reopened, it resumes as it was; Stop still halts it. */
-function autoSettings() { return { budget: field('autoBudget', 0.1, 100, 0.1), cap: field('autoCap', 0.1, 100, 0.1), day: field('autoDay', 1, 50, 1), proven: $('autoProven').checked }; }
+function autoSettings() { return { budget: field('autoBudget', 0.1, 100, 0.1), cap: field('autoCap', 0.1, 100, 0.1), day: field('autoDay', 1, 50, 1) }; }
 function autoRemember() { if (!auto.s) return; autoRefresh(); auto.s.settings = autoSettings(); if ($('autoRisk').checked && !auto.s.consentAt) auto.s.consentAt = Date.now(); autoSave(); }
 function autoStart() { if (!auto.s || !auto.s.owner || auto.withdrawing || auto.funding) return; if (!$('autoRisk').checked) { autoSay('Tick the box first.'); return; }
   autoRefresh(); auto.s.running = true; auto.s.consentAt = auto.s.consentAt || Date.now(); auto.s.settings = autoSettings(); autoSave(); autoRender();
-  autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', buying only once its record beats a coin flip' : ''}. Stop halts it.`); }
+  autoNote(`trading alone on ${current.symbol}, on its live decisions only, max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day, buying only when its edge pays the real cost. Stop halts it.`); }
 function autoStop() { if (!auto.s) return; autoRefresh(); auto.s.running = false; autoSave(); autoRender(); autoNote({ b: 'stopped' }, ': it sends nothing more' + (auto.busy ? ' after the call already in flight' : '') + '.'); }
 async function autoWithdraw() {
   if (!auto.s || !auto.s.owner || auto.withdrawing || auto.funding) return;
@@ -448,11 +448,10 @@ function autoWire() {
     if (Number.isFinite(st.budget)) $('autoBudget').value = String(st.budget);
     if (Number.isFinite(st.cap)) $('autoCap').value = String(st.cap);
     if (Number.isFinite(st.day)) $('autoDay').value = String(st.day);
-    if (typeof st.proven === 'boolean') $('autoProven').checked = st.proven;
     if (Number.isFinite(auto.s.consentAt)) $('autoRisk').checked = true;
-    if (auto.s.running) autoNote('page reopened: ', { b: 'still trading alone' }, ` on its live decisions, with your settings (max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day${$('autoProven').checked ? ', buying only once its record beats a coin flip' : ''}). Stop halts it.`);
+    if (auto.s.running) autoNote('page reopened: ', { b: 'still trading alone' }, ` on its live decisions, with your settings (max ${field('autoCap', 0.1, 100, 0.1)} USDC per buy, ${field('autoDay', 1, 50, 1)} trades a day, buying only when its edge pays the real cost). Stop halts it.`);
   }
-  for (const id of ['autoBudget', 'autoCap', 'autoDay', 'autoProven', 'autoRisk']) $(id).addEventListener('change', autoRemember);
+  for (const id of ['autoBudget', 'autoCap', 'autoDay', 'autoRisk']) $(id).addEventListener('change', autoRemember);
   /* another tab pressed Stop (or started it): obey at once */
   window.addEventListener('storage', (ev) => { if (ev.key === AUTO_KEY) { const x = autoLoad(); if (x && auto.s && x.key === auto.s.key) { auto.s = x; autoRender(); } } });
   $('autoCreate').addEventListener('click', autoCreate); $('autoFund').addEventListener('click', autoFund); $('autoStart').addEventListener('click', autoStart);
@@ -513,7 +512,8 @@ function tallyText(t) {
   const r = recordEdge(t);
   return `${t.consistent} matched · ${t.opposite} opposite · ${t.flat} flat · ${t.undecided} undecided` + (n ? ` · ${fmt((t.consistent / n) * 100, 0)}% on ${n} judged · a coin flip would do this well ${r.p < 0.001 ? 'under 0.1%' : fmt(r.p * 100, 1) + '%'} of the time${proven(t) ? ' — it beats chance' : ''}` : ' · nothing judged yet');
 }
-/* real money waits for a record that beats a coin flip: at least 10 judged and p < 10% (banc-fly-trace: a learner "decides" on noise) */
+/* whether its record beats a coin flip (at least 10 judged, p < 10%): SHOWN next to the tally (banc-fly-trace: a learner "decides" on
+ *   noise); since 09/11 it no longer gates real buys, the edge rule does (see autoTrade) */
 function proven(t) { const r = recordEdge(t); return r.n >= 10 && r.p < 0.1;
 }
 function renderTally() { $('tally').textContent = tallyText(session.state().tally); }

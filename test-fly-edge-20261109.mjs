@@ -91,7 +91,11 @@ assert.ok(/const st = session\.state\(\), r = recordEdge\(st\.tally\);\s*if \(!e
 assert.ok(/const amt = have < cap \? have : cap;[\s\S]{0,900}de = USDC_BASE; vers = stock\.address; montant = amt\.toString\(\);/.test(page), 'when it pays, the amount planned is min(USDC, cap)');
 { const i = page.indexOf("if (action === 'buy' && round === 0) { const st2 = session.state(), bps = Number(p.resume.fraisBps);"), j = page.indexOf('if (!Number.isFinite(bps) || !edgePaysFee(st2.tally, st2.typical, st2.feePips, bps / 1e4))'), h1 = page.indexOf('/* ⛔ H1: nothing is signed');
   assert.ok(i > 0 && j > i && j - i < 200 && h1 > j, 'the real BUY checks the cost of ITS route before anything is signed'); }
-console.log('test-fly-edge-20261109 : ' + (total + 3) + ' assertions OK');
+/* 09/11: the coin-flip gate is gone (it changed nothing on top of the edge rule in simulation, and added a second refusal): no checkbox,
+ *   no gate left in the trade path */
+{ const html = readFileSync(join(ICI, 'fly-brain.html'), 'utf8');
+  assert.ok(!html.includes('autoProven') && !page.includes("$('autoProven')") && !/does not beat a coin flip yet: no real buy/.test(page), 'no coin-flip gate left on the page'); }
+console.log('test-fly-edge-20261109 : ' + (total + 4) + ' assertions OK');
 
 const MUT = [
   ['no prior (raw record)', 'a = FLY.EDGE_PRIOR;', 'a = 0;'],

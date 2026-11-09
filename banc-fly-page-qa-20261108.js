@@ -64,17 +64,17 @@ const check = (name, ok, detail) => { results.push({ name, ok: !!ok, detail }); 
 /* ── LOGIC: every scenario on stubbed endpoints ── */
 async function runLogic() {
   results.length = 0;
-  $('autoProven').checked = true; $('autoDay').value = '10'; $('autoCap').value = '0.5';
+  $('autoDay').value = '10'; $('autoCap').value = '0.5';
 
-  /* 1. the record gate must not trap a position: a SELL is a way OUT of risk */
+  /* 1. nothing traps a position: a SELL is a way OUT of risk (no record needed); a BUY with no record is held back by the edge rule */
   { await freshWallet(); T().session.restore({});
     const calls = stubFetch(moneyStubs({ account: (u) => ({ stock: u.includes('token=') ? '123456789' : null }) }));
     await T().autoTrade(decision('avoid'));
     const n = notes().join(' | ');
-    check('record gate lets a SELL out', calls.some((u) => u.includes('/api/rails/plan')) && !/does not beat a coin flip/.test(n), n.slice(0, 160));
+    check('a SELL goes out with no record (nothing holds a SELL back)', calls.some((u) => u.includes('/api/rails/plan')) && !/does not pay the fee/.test(n), n.slice(0, 160));
     await freshWallet(); stubFetch(moneyStubs());
     await T().autoTrade(decision('approach'));
-    check('record gate still holds a BUY', /does not beat a coin flip/.test(notes().join(' | ')), notes()[0].slice(0, 120)); }
+    check('no record: the edge rule holds a BUY back', /does not pay the fee yet/.test(notes().join(' | ')), notes()[0].slice(0, 120)); }
 
   /* 2. the fly's own log is bounded: a long run must not grow the page without end */
   { await freshWallet(); stubFetch(moneyStubs());
@@ -82,7 +82,7 @@ async function runLogic() {
     check('the fly log is bounded over 400 decisions', $('autoLog').children.length <= 200, $('autoLog').children.length + ' lines kept'); }
 
   /* 3. approvals that never end in a swap are not a trade */
-  { await freshWallet(); $('autoProven').checked = false; await earned();
+  { await freshWallet(); await earned();
     const fly = T().auto.s.address;
     stubFetch(moneyStubs({ plan: (q) => ({ ok: true, etat: 'APPROBATIONS', resume: { paye: q.get('montant'), fraisBps: 10 }, aSigner: [{ to: USDC, data: '0x095ea7b3' + word(ROUTER) + BigInt(q.get('montant')).toString(16).padStart(64, '0'), value: '0x0', nom: 'approve (stub)' }] }) }));
     await T().autoTrade(decision('approach'));
@@ -93,7 +93,7 @@ async function runLogic() {
     void fly; }
 
   /* 4. a stock switched while a trade is in flight: the seal is the memory that DECIDED, under its own stock */
-  { await freshWallet(); $('autoProven').checked = false; await earned();
+  { await freshWallet(); await earned();
     const first = T().current(), fly = T().auto.s.address, F = await import('/fly-seal.js');
     localStorage.removeItem('fly-seal-v1-' + first.symbol); /* a seal left by an earlier run of this page would be read as this one */
     const decided = Array(T().fly.exportMemory().length).fill(50000); T().fly.importMemory(decided);
@@ -165,7 +165,7 @@ async function runLogic() {
     check('a batched funding is not sent twice while it is being mined', batches.length === 1, batches.length + ' batches sent; then: ' + $('autoState').textContent.slice(0, 80)); }
 
   /* 10. a node that does not answer the gas estimate is not called a refusal by the chain */
-  { await freshWallet(); $('autoProven').checked = false; await earned(); const fly = T().auto.s.address;
+  { await freshWallet(); await earned(); const fly = T().auto.s.address;
     stubFetch(moneyStubs({ plan: (q) => ({ ok: true, etat: 'PRET', resume: { paye: q.get('montant'), fraisBps: 10 }, aSigner: [swapCall(fly)] }), estimate: () => ({ ok: false, why: '429 Too Many Requests' }) }));
     await T().autoTrade(decision('approach'));
     const all = notes().join(' | ');
@@ -182,7 +182,7 @@ async function runLogic() {
     unstub(); $('pick').value = '0'; $('pick').dispatchEvent(new Event('change')); await sleep(300); }
 
   /* 12. edge: no record -> no buy, nothing planned; an earned record whose edge pays the fee -> the planned amount IS min(USDC, cap) */
-  { await freshWallet(); $('autoProven').checked = false; T().session.restore({ ...T().session.state(), tally: { consistent: 0, opposite: 0, flat: 0, undecided: 0 }, typical: 0.0015 });
+  { await freshWallet(); T().session.restore({ ...T().session.state(), tally: { consistent: 0, opposite: 0, flat: 0, undecided: 0 }, typical: 0.0015 });
     const calls = stubFetch(moneyStubs());
     await T().autoTrade(decision('approach'));
     check('no record: its edge does not pay the fee, nothing planned', !calls.some((u) => u.includes('/api/rails/plan')) && /does not pay the fee yet: .* no buy/.test(notes()[0]), notes()[0].slice(0, 200));
@@ -192,7 +192,7 @@ async function runLogic() {
     check('an earned record whose edge pays the fee: min(USDC, cap) is planned', asked[0] === '500000', 'planned ' + asked[0] + ' (cap 0.5 USDC, fee read: ' + T().session.feePips + ')'); }
 
   /* 13. a route whose interface fee is higher (0.5%): the edge that paid on Aerodrome (0.19% vs 0.15%) does not pay it, nothing is signed */
-  { await freshWallet(); $('autoProven').checked = false; await earned(); const fly = T().auto.s.address, relayed = [];
+  { await freshWallet(); await earned(); const fly = T().auto.s.address, relayed = [];
     stubFetch(moneyStubs({ plan: (q) => ({ ok: true, etat: 'PRET', resume: { paye: q.get('montant'), fraisBps: 50 }, aSigner: [swapCall(fly)] }), relay: async (b) => { relayed.push(b); return { ok: true, hash: await hashOf(b.raw) }; } }));
     await T().autoTrade(decision('approach'));
     check('a route costing more than its edge: nothing signed', relayed.length === 0 && /this route costs 0\.50% interface .* nothing signed/.test(notes()[0]), relayed.length + ' relayed · ' + notes()[0].slice(0, 180)); }
@@ -221,7 +221,7 @@ async function runFork() {
   const acct = () => T().autoAccount(stock);
   const a0 = await acct();
   if (!check('fork wallet funded', BigInt(a0.usdc) >= 2000000n && BigInt(a0.eth) > 0n, 'USDC ' + a0.usdc + ', ETH ' + a0.eth + ', block ' + a0.block)) return results;
-  $('autoProven').checked = false; $('autoCap').value = '2'; $('autoDay').value = '10';
+  $('autoCap').value = '2'; $('autoDay').value = '10';
   T().auto.s.running = true; localStorage.setItem('fly-auto-wallet-v1', JSON.stringify(T().auto.s)); window.dispatchEvent(new StorageEvent('storage', { key: 'fly-auto-wallet-v1' }));
 
   /* F0 no record: its edge does not pay the fee, no buy on the fork either */
@@ -249,8 +249,7 @@ async function runFork() {
   $('autoDay').value = '1'; await T().autoTrade(decision('avoid'));
   check('daily cap holds a SELL back once reached', /cap of 1 trades is reached/.test(notes()[0]), notes()[0].slice(0, 140)); $('autoDay').value = '10';
 
-  /* F4 Stop pressed while a SELL is in flight (record gate ON: a SELL is not held back by it) */
-  $('autoProven').checked = true;
+  /* F4 Stop pressed while a SELL is in flight */
   { let stopped = false; const real = window.__realFetch || window.fetch.bind(window); window.__realFetch = real;
     window.fetch = async (u, i) => { if (!stopped && String(u).includes('/api/fly/relay')) { stopped = true; T().autoStop(); } return real(u, i); };
     await T().autoTrade(decision('avoid')); unstub();
@@ -261,12 +260,12 @@ async function runFork() {
   /* F5 SELL, real, gate ON and record at 0: allowed */
   T().autoStart(); await T().autoTrade(decision('avoid'));
   const a5 = await acct();
-  check('SELL ' + sym + ' on the fork with the record gate on', BigInt(a5.stock) === 0n && BigInt(a5.usdc) > BigInt(a1.usdc) && notes().some((x) => /SELL .* done on its own/.test(x)),
+  check('SELL ' + sym + ' on the fork', BigInt(a5.stock) === 0n && BigInt(a5.usdc) > BigInt(a1.usdc) && notes().some((x) => /SELL .* done on its own/.test(x)),
     'stock ' + a5.stock + ', USDC ' + a1.usdc + ' -> ' + a5.usdc + ' (round trip cost ' + (BigInt(a0.usdc) - BigInt(a5.usdc)) + ' units of ' + kellyAmt + ')');
 
   /* F6 the planner busy (NON_MESURE): no order, the fly keeps running */
   stubFetch([[/\/api\/rails\/plan/, () => ({ ok: false, etat: 'NON_MESURE', pourquoi: 'planner busy (stub)' })]]);
-  $('autoProven').checked = false; await T().autoTrade(decision('approach')); unstub();
+  await T().autoTrade(decision('approach')); unstub();
   check('planner NON_MESURE: no order, still running', /no order \(NON_MESURE/.test(notes()[0]) && JSON.parse(localStorage.getItem('fly-auto-wallet-v1')).running, notes()[0].slice(0, 140));
 
   /* F7 out of gas: balances read as almost no ETH -> it stops before signing */
