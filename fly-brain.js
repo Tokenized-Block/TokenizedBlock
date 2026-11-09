@@ -4,7 +4,7 @@
  * Price: /api/fly/price/<address> (the stock's Aerodrome pool, slot0, 24/7). Trades: /api/activite/<address> (Transfer logs, each
  * confirmed by its transaction's signer). Reference: /api/actions/reference/ (Chainlink) shown, never fed. Shared fly: /api/fly/state. */
 import { POOLS_ACTIONS_AERODROME } from './pools-actions-aerodrome.js';
-import { createFly, createSession, foreseeNext, decide, recordEdge } from './fly-core.js';
+import { createFly, createSession, foreseeNext, decide, recordEdge, FLY } from './fly-core.js';
 import { checkPlanCalls } from './fly-guard.js';
 import { memoryFingerprint, sealData, checkSeal } from './fly-seal.js';
 import { dayOf, countedToday, mayTrade, reserveTrade } from './fly-day.js';
@@ -487,7 +487,9 @@ function renderThoughts() {
 
 function renderBook(st = session.state(), el = $('book')) {
   el.innerHTML = `<div class="state">Score of its decisions, as if each were a trade (simulated, not money), after ${st.settled} windows, pool fee ${st.feePips == null ? '?' : fmt(st.feePips / 1e4, 2) + '%'} per switch — next to two simple rules:</div>`
-    + Object.values(st.books).map((b) => `<div class="row"><span>${b.label}</span><span>${pct(b.ret - 1, 3)}</span><span>${b.pos ? 'in' : 'out'} · ${b.switches} switches</span></div>`).join('');
+    + Object.values(st.books).map((b) => `<div class="row"><span>${b.label}</span><span>${pct(b.ret - 1, 3)}</span><span>${b.pos ? 'in' : 'out'} · ${b.switches} switches</span></div>`).join('')
+    /* 09/11: the patient shadow book, judged on the windows it has seen only, next to the fly and "Always in" on the SAME windows */
+    + (st.sameWindows ? `<div class="state">Patient (moves only on a tendency ${FLY.PATIENT}x the decision threshold; our rule, fixed 9 Nov, not fitted): over the same ${st.sameWindows.windows} windows, patient ${pct(st.sameWindows.patient - 1, 3)} · fly ${pct(st.sameWindows.fly - 1, 3)} · always in ${pct(st.sameWindows.hold - 1, 3)}.</div>` : '');
 }
 function tallyText(t) {
   const n = t.consistent + t.opposite;
