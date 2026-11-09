@@ -670,7 +670,10 @@ const vuesPartenaires = new Map();
 export function vuePartenaire(id, n, params = null) {
   const k = id + ':' + n + ':' + (params ? canon(params) : ''); if (vuesPartenaires.has(k)) return vuesPartenaires.get(k);
   const s = systeme(id), o = s.mod.simuler(id, params || {}, { n });
-  const v = o.bornee && o.brut ? normaliser3(projeterND(standardiserIso(o.brut, n, o.D, id), n, o.D, anglesDefaut(o.D))) : null;
+  /* 09/11: a subject may draw its OWN count (emotionWiringHCP): fewer points than asked are cycled to n, more are cut at n (the view is n points) */
+  let brut = o.brut;
+  if (brut && o.n !== n && o.n > 0) { brut = new Float64Array(n * o.D); for (let k = 0; k < n; k++) for (let c = 0; c < o.D; c++) brut[o.D * k + c] = o.brut[o.D * (k % o.n) + c]; }
+  const v = o.bornee && brut ? normaliser3(projeterND(standardiserIso(brut, n, o.D, id), n, o.D, anglesDefaut(o.D))) : null;
   if (vuesPartenaires.size > 64) vuesPartenaires.clear();
   vuesPartenaires.set(k, v); return v;
 }

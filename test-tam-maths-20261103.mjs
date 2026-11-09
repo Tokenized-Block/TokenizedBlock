@@ -95,11 +95,12 @@ function suite(T, bavard = false, seul = null) {
       assert.equal(r.lyapunov, null); assert.ok(/^A visualisation of /.test(s.phrase) && !/[^\x20-\x7e]/.test(s.phrase + s.nom));
     });
     ok(`${s.id} : determinisme`, () => { const a = T.simuler(s.id, {}), b = T.simuler(s.id, {}); assert.ok(octets(a.brut).equals(octets(b.brut))); assert.equal(JSON.stringify(a.invariants), JSON.stringify(b.invariants)); });
-    ok(`${s.id} : petits n (2 et 7) bornes et finis`, () => { for (const n of [2, 7]) { const r = T.simuler(s.id, {}, { n }); assert.ok(r.bornee && r.brut.length === n * s.D); } });
+    /* a subject of OWN_N draws its own count whatever n is asked (09/11): its brut must hold exactly that count */
+    ok(`${s.id} : petits n (2 et 7) bornes et finis`, () => { for (const n of [2, 7]) { const r = T.simuler(s.id, {}, { n }); assert.ok(r.bornee && r.brut.length === (OWN_N.has(s.id) ? r.n : n) * s.D && r.brut.every(Number.isFinite)); } });
     ok(`${s.id} : bornee a chaque extreme de curseur`, () => { const e = extremes(s); for (const p of e) assert.ok(S(s.id, p).bornee, JSON.stringify(p)); return e.length + ' reglages'; });
     ok(`${s.id} : chaque curseur change le DESSIN (standardise), min et max`, () => {
       const C = T.COLONNES[s.id], d0 = S(s.id), z0 = standardiser(d0.brut, d0.n, d0.D, C.memeLongueur), out = [];
-      for (const k of Object.keys(s.params)) for (const v of s.bornes[k]) { if (v === s.params[k]) continue; const r = S(s.id, { [k]: v }), e = ecartDessin(z0, standardiser(r.brut, r.n, r.D, C.memeLongueur)); assert.ok(e > 1e-3, k + '=' + v + ' : ' + e); out.push(k + ' ' + e.toFixed(2)); }
+      for (const k of Object.keys(s.params)) for (const v of s.bornes[k]) { if (v === s.params[k]) continue; const r = S(s.id, { [k]: v }), e = r.n !== d0.n && OWN_N.has(s.id) ? Infinity /* another point count: another drawing */ : ecartDessin(z0, standardiser(r.brut, r.n, r.D, C.memeLongueur)); assert.ok(e > 1e-3, k + '=' + v + ' : ' + e); out.push(k + ' ' + e.toFixed(2)); }
       return out.join(' ; ');
     });
   }
@@ -1972,7 +1973,8 @@ function suite(T, bavard = false, seul = null) {
       const meas = R.segments.filter((s) => s.c === 0), named = R.segments.filter((s) => s.c === 5);
       assert.ok(meas.length === 1190 && named.length === 35 && R.segments.length === 1225 && meas.every((s) => regs.has(s.a[0] + ',' + s.a[1]) && regs.has(s.b[0] + ',' + s.b[1])) && named.every((s) => s.w === 0.5 && s.ia >= 82), 'lines');
       assert.ok(R.segments.every((s) => [[s.ia, s.a], [s.ib, s.b]].every(([i, e]) => R.brut[3 * i] === e[0] && R.brut[3 * i + 1] === e[1] && R.brut[3 * i + 2] === e[2])), 'each line names the points it joins');
-      for (let q = 0; q < 513; q++) { const v = 20 * q, k = 89 + q; assert.ok(Math.abs(R.brut[3 * k] - ANAT.CORTEX[3 * v + 1] / 100) < 1e-6 && Math.abs(R.brut[3 * k + 1] - ANAT.CORTEX[3 * v + 2] / 100) < 1e-6 && Math.abs(R.brut[3 * k + 2] - ANAT.CORTEX[3 * v] / 100) < 1e-6, 'outline point ' + q); }
+      /* 09/11: the outline is 1 cortex vertex in 8 (1,281 points), was 1 in 20 (513) */
+      for (let q = 0; q < 1281; q++) { const v = 8 * q, k = 89 + q; assert.ok(Math.abs(R.brut[3 * k] - ANAT.CORTEX[3 * v + 1] / 100) < 1e-6 && Math.abs(R.brut[3 * k + 1] - ANAT.CORTEX[3 * v + 2] / 100) < 1e-6 && Math.abs(R.brut[3 * k + 2] - ANAT.CORTEX[3 * v] / 100) < 1e-6, 'outline point ' + q); }
       const ws = meas.map((s) => s.w), u8 = (8 - 0.14292) / (12.615 - 0.14292); assert.ok(Math.min(...ws) === 0 && Math.max(...ws) === 1 && (nw || ws.filter((w) => w >= u8 - 1e-12).length === 441), 'line weights');
       return C.emotionShownWiring + ' (' + C.sourceWiring + ') net ' + nw + ' ; ' + C.impulsesWiring + ' impulses, ' + C.reachedWiring + ', crossed mean ' + C.carriedMeanWiring;
     });
@@ -2841,7 +2843,7 @@ const MUTANTS = [
   ['wiringEmotions : both taken as the compared list', 'const both = other ? emotion.regions.filter((r) => other.regions.includes(r)) : [];', 'const both = other ? other.regions.slice() : [];'],
   ['wiringEmotions : positions from the data module only', '(res ? HB.CENTROIDS_400[a] : HA.CENTROIDS[a])', '(res ? HB.CENTROIDS_400[a] : [0, a, 0])'],
   ['wiringEmotions : columns swapped', 'P3 = XYZ.map(([x, y, z]) => [y / 100, z / 100, x / 100]);', 'P3 = XYZ.map(([x, y, z]) => [x / 100, z / 100, y / 100]);'],
-  ['wiringEmotions : no silhouette', 'for (let v = 0; v < HA.CORTEX.length / 3; v += 20)', 'for (let v = 0; v < 0; v += 20)'],
+  ['wiringEmotions : no silhouette', 'for (let v = 0; v < HA.CORTEX.length / 3; v += OUTLINE_CORTEX_STEP)', 'for (let v = 0; v < 0; v += OUTLINE_CORTEX_STEP)'],
   ['wiringEmotions : regions not drawn first', 'const pts = P3.slice(0, NR).map((p) => p.slice());', 'const pts = [[0, 0, 0]];'],
   ['wiringEmotions : connections not drawn as lines', 'const segments = use.map((e) =>', 'const segments = [].map((e) =>'],
   ['wiringEmotions : line weight ignored', 'w: (e.w - lo) / (hi - lo), c: 0,', 'w: 1, c: 0,'],

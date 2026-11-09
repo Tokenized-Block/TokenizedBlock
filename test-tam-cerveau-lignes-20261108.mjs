@@ -182,6 +182,11 @@ function pointsSuite(TM) {
     const P = SC.paramsScience('emotionWiringHCP', { packWiring, emotionWiring: 0, compareWiring, networkWiring: 0, travelWiring, resolutionWiring, theoryWiring }, { minteur: '0x' + 'ab'.repeat(20) });
     const r = SC.rejouerScience(JSON.parse(JSON.stringify(P))); maxO = Math.max(maxO, r.octets.length); vus++;
   }
+  /* a blend partner view asks n points: the brain may hold fewer (1,698 at the defaults vs 3,500 asked: 1,802 read past the end before 09/11) */
+  { const P0 = { packWiring: 0, emotionWiring: 0, compareWiring: 0, networkWiring: 0, travelWiring: 0, resolutionWiring: 0, theoryWiring: 0 };
+    const vues = [7, 1500, 3500].map((k) => SC.vuePartenaire('emotionWiringHCP', k, P0)), bonV = vues.every((v, i) => v && v.length === 3 * [7, 1500, 3500][i] && v.every(Number.isFinite));
+    n++; console.log((bonV ? 'OK    ' : 'ECHEC ') + 'partner view: exactly n finite points whatever the brain holds  ' + vues.map((v) => v && v.length).join(' / '));
+    if (!bonV) ech.push({ nom: 'partner view', d: 'NaN or wrong length' }); }
   n++; const bon = maxO <= 16384; console.log((bon ? 'OK    ' : 'ECHEC ') + 'minted bytes <= MAX_DATA (16,384) at every setting  ' + vus + ' settings, max ' + maxO + ' bytes');
   if (!bon) ech.push({ nom: 'MAX_DATA', d: maxO }); }
 const MATHS = readFileSync(join(ICI, 'tam-maths.js'), 'utf8').replace(/\r\n/g, '\n');
