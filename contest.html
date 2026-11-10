@@ -125,7 +125,7 @@ async function refresh() {
 async function readWallet() {
   const r = S.chainRound, w = wallet;
   const out = { balance: C.decodeUint(await rd(C.VIEW.balanceOf(w))), claimable: C.decodeUint(await rd(C.VIEW.claimable(w))),
-    enteredBy: C.decodeBool(await rd(C.VIEW.enteredBy(r, w))), voted: new Map() };
+    enteredBy: C.decodeBool(await rd(C.VIEW.enteredBy(r, w))), room: C.decodeUint(await rd(C.VIEW.fundRoom(r))), voted: new Map() };
   for (const e of S.current.entries) out.voted.set(e.id, C.decodeBool(await rd(C.VIEW.hasVoted(r, e.id, w))));
   my = out;
 }
@@ -230,6 +230,12 @@ function render() {
   let r = '<h2>' + (w.phase === 'BEFORE_START' ? 'First round (round 0)' : 'Round ' + S.chainRound) + '</h2>';
   r += row('Pot', tok(cur.pot) + dollars(cur.pot));
   if (cur.pot === 0n) r += '<div class="warnbox">The pot of this round holds 0 TBLOCK. If it still holds 0 when the round ends, the winner receives 0.</div>';
+  /* anyone can add to the pot: fund() is public. Shown only once the room under the cap was read for this wallet. */
+  if (wallet && my && !S.clockMismatch) {
+    r += '<div class="entry" id="fundBox"><div class="top"><span><b>Add TBLOCK to this pot</b></span><span class="note">room left under the cap: ' + tok(my.room) + '</span></div>';
+    if (my.room > 0n) r += '<div class="act"><input class="a" id="fundAmt" inputmode="decimal" placeholder="TBLOCK amount" aria-label="TBLOCK amount to add"><button data-fund="1">Add to the pot</button></div>';
+    r += '<p class="note">Anyone can add. It is paid out only by the rules below; nobody can take it back, you included. If the round does not pay, the pot is carried to later rounds, and what does not fit under their cap goes to the dead address.</p></div>';
+  } else if (!wallet) r += '<div class="act"><button class="ghost" data-connect="1">Connect a wallet to add TBLOCK to this pot</button></div>';
   r += row('Blocks entered', String(cur.entryCount));
   r += row('Votes bought', String(cur.totalVotes));
   r += row('Entries that qualify', String(cur.qualifiedCount) + ' of the ' + p.minQualifiedEntries + ' needed ' + (S.qualified ? pill('round will pay', 'ok') : pill('round will not pay as it stands', 'warn')));
@@ -323,6 +329,13 @@ document.addEventListener('click', async (ev) => {
     if (!b) return;
     if (my && my.balance < P.entryFee) { message = 'Entering costs ' + C.formatUnits18(P.entryFee) + ' TBLOCK; this wallet holds ' + C.formatUnits18(my.balance) + '.'; return render(); }
     return send(C.enterBatch({ blockToken: b.block, key: b.key, entryFee: P.entryFee }), 'entry of your block for ' + C.formatUnits18(P.entryFee) + ' TBLOCK, not refundable');
+  }
+  if (d.fund) {
+    if (!my) return;
+    const plan = C.fundPlan({ text: ($('fundAmt') || {}).value, room: my.room, balance: my.balance });
+    if (!plan.ok) { message = plan.why; return render(); }
+    return send(C.fundBatch({ round: S.chainRound, amount: plan.amount, room: my.room }), 'adding ' + C.formatUnits18(plan.amount) + ' TBLOCK to the pot of round ' + S.chainRound
+      + (plan.clipped ? ' (cut to the room left under the cap)' : '') + ', not refundable');
   }
   if (d.settle !== undefined) return send([C.buildSettle(BigInt(d.settle))], 'settling round ' + d.settle);
   if (d.claim) return send([C.buildClaim(wallet)], 'claim to this wallet');

@@ -326,6 +326,26 @@ export function formatUnits18(raw, digits = 2) {
   const whole = n / unit, frac = (n % unit).toString().padStart(18, '0').slice(0, digits).replace(/0+$/, '');
   return whole.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',') + (frac ? '.' + frac : '');
 }
+/** "1,234.5" typed by a person -> raw 18-decimal units, exact (no float). null if it is not a plain positive amount. */
+export function parseUnits18(text) {
+  const s = String(text == null ? '' : text).trim().replace(/[,_\s]/g, '');
+  if (!/^\d+(\.\d+)?$/.test(s)) return null;
+  const [w, f = ''] = s.split('.');
+  if (f.length > 18) return null;
+  const raw = BigInt(w) * 10n ** 18n + BigInt((f + '0'.repeat(18)).slice(0, 18));
+  return raw > 0n ? raw : null;
+}
+/** what an "Add to the pot" click would pull, checked BEFORE the wallet opens. room = fundRoom(round), balance = the wallet's TBLOCK.
+ *  { ok:true, amount, clipped } or { ok:false, why }. The contract clips to the room too; this only says it first. */
+export function fundPlan({ text, room, balance }) {
+  const a = parseUnits18(text);
+  if (a === null) return { ok: false, why: 'Type an amount of TBLOCK, for example 100000.' };
+  const r = BigInt(room), b = BigInt(balance);
+  if (r <= 0n) return { ok: false, why: 'This round is already at its cap: nothing more can be added to it.' };
+  const amount = a < r ? a : r;
+  if (b < amount) return { ok: false, why: 'This wallet holds ' + formatUnits18(b) + ' TBLOCK; adding ' + formatUnits18(amount) + ' needs more.' };
+  return { ok: true, amount, clipped: amount < a };
+}
 /** seconds -> "1d 02h 03m 04s" */
 export function formatDuration(seconds) {
   let s = Number(seconds);
