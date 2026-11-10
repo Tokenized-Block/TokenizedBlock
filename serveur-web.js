@@ -7700,7 +7700,9 @@ function traiterRequete(req, res) {
      *   PROPRES corps, exactement comme le client les jugerait (meme chargeur, meme fraicheur) : index incomplet ou tete
      *   figee = sources non lues = tout B20 inconnu reste un block (fail-closed), et la reponse le DIT. */
     try { chargerIndexRouteur(JSON.parse(blocksRouteurCorps())); chargerNosBlocksTb(JSON.parse(nosBlocksCorps())); } catch (_) { /* sources non lues : fail-closed */ }
-    planRail(demande, { rpc: rpcNaissance, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie, venueStable: venueStableServie }).then((r) => { /* rpcNaissance : voir faireRail */
+    /* game327: estHolderTblock = the proof-of-hold rule ($15 of TBLOCK, lower of now and ~10 min ago) on the paying wallet */
+    const estHolderTblock = async (w) => { try { return (await tbHoldOf(w)).ok === true; } catch (_) { return false; } };
+    planRail(demande, { rpc: rpcNaissance, estHolderTblock, clesDe: clesRails, chaine: 8453, reference: lireReferenceServeur, venueAction: venueActionServie, venueStable: venueStableServie }).then((r) => { /* rpcNaissance : voir faireRail */
       if (!sourcesTbLues() && r.etat === 'REFUSE') r.sourcesTb = 'not read on the server: router index or our-blocks list incomplete or stale — a block born elsewhere is refused until they are';
       if (!sonde) {
         if (r.etat === 'PRET') railsCompteurs.prets += 1;

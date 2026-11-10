@@ -388,10 +388,18 @@ async function planRailBrut(q, deps) {
   /* 2026-11-09 (Phil): BUY / SELL TBLOCK in the app — USDC or ETH -> wtCOIN (Aerodrome) -> TBLOCK (Uniswap v4, the ONE pinned key),
    *   and TBLOCK -> wtCOIN -> USDC. tblock-route.js pins every pool and simulates the whole batch; the generic router below keeps
    *   refusing TBLOCK (ROUTE_VIA_TBLOCK), so no guessed key can reach it. One app fee per batch (FRAIS_INTERFACE_BPS_CL). */
+  /* game327 (Grok's idea, Phil's GO 2026-11-09): a wallet that holds >= $15 of TBLOCK (the proof-of-hold rule, read by the server:
+   *   deps.estHolderTblock) pays NO interface fee on the TBLOCK route and on USDC <-> stock trades on Aerodrome. Read only in those
+   *   two branches; a failed read means "not a holder" (the fee stays), never the other way round. */
+  const holderTblock = async () => (deps && typeof deps.estHolderTblock === 'function' ? (await deps.estHolderTblock(compte).catch(() => false)) === true : false);
   if (routeTblockDe(de, vers)) {
     const sens = routeTblockDe(de, vers);
-    return normaliser(route, await planRouteTblock({ rpc, compte, de, vers, montant: m, beneficiaireFrais: FEE_WALLET, maintenant }),
-      { via: 'planRouteTblock', pool: 'aerodrome+uniswap-v4', cotation: WTCOIN_TBLOCK, chemin: cheminRouteTblock(sens) });
+    /* 2026-11-10: buys AND sells. A first fork run saw the 0-bps buy revert; the cause was the plan deadline (server clock) against a
+     *   fork whose chain clock had jumped, not the 0-bps path: tblock-route.js now takes the later of the two clocks
+     *   (banc-tblock-holder-horloge-fork-20261110.mjs). */
+    const holder = await holderTblock();
+    return normaliser(route, await planRouteTblock({ rpc, compte, de, vers, montant: m, beneficiaireFrais: FEE_WALLET, maintenant, ...(holder ? { fraisBps: 0n } : {}) }),
+      { via: 'planRouteTblock', pool: 'aerodrome+uniswap-v4', cotation: WTCOIN_TBLOCK, chemin: cheminRouteTblock(sens), ...(holder ? { sansFraisInterface: true, holderTblock: true } : {}) });
   }
   /* USDC + les 12 actions de la table MESUREE (pools Aerodrome profondes, >= 360 k$ d USDC lus le 2026-10-03) : un frais pris
    * dans l une d elles se revend. Toute autre devise reste refusee cote serveur (l app, elle, lit prix + liquidite). */
@@ -401,10 +409,11 @@ async function planRailBrut(q, deps) {
    *   fly page asks with mouche=1), a USDC <-> stock trade on the stock's Aerodrome pool is built with fraisBps 0. Nothing else
    *   changes: every other route, and every request without the flag, keeps its fee. ⛔ BORNE: anyone can pass mouche=1; the
    *   interface fee was never enforced on chain (Uniswap/Aerodrome can be used directly without it), so this opens nothing new. */
-  if (q && q.mouche === true && ((nd === 'USDC' && nv === 'ACTION' && POOLS_ACTIONS_AERODROME.has(vers))
-    || (nd === 'ACTION' && nv === 'USDC' && POOLS_ACTIONS_AERODROME.has(de)))) {
+  const actionAero = (nd === 'USDC' && nv === 'ACTION' && POOLS_ACTIONS_AERODROME.has(vers)) || (nd === 'ACTION' && nv === 'USDC' && POOLS_ACTIONS_AERODROME.has(de));
+  const holderAero = actionAero && !(q && q.mouche === true) ? await holderTblock() : false;
+  if (actionAero && ((q && q.mouche === true) || holderAero)) {
     return normaliser(route, await planAerodromeSegment({ rpc, chemin: [{ de, vers, famille: 'aerodrome' }], devise: de, block: vers,
-      montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant, fraisBps: 0n }), { via: 'planAerodromeSegment', pool: 'aerodrome', sansFraisInterface: true });
+      montant: m, compte, beneficiaireFrais: FEE_WALLET, maintenant, fraisBps: 0n }), { via: 'planAerodromeSegment', pool: 'aerodrome', sansFraisInterface: true, ...(holderAero ? { holderTblock: true } : {}) });
   }
   /* une action du registre est cotee en devise (USDC) : sa cle exacte est lue D ABORD — 17 lectures de pools ETH inexistantes
    * en moins par plan (mesure du 2026-10-04, voir marche.js). Un block garde l ordre d avant. */

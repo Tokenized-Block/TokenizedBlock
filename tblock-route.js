@@ -187,7 +187,17 @@ export async function planRouteTblock({ rpc, compte, de, vers, montant, fraisBps
   if (tol < 0n || tol >= 10000n) return { etat: 'REFUSE', pourquoi: 'slippage out of range' };
   const cleOk = verifierCleTblock();
   if (!cleOk.ok) return { etat: 'REFUSE', pourquoi: cleOk.pourquoi };
-  const t = Math.floor(Number(maintenant) / 1000), deadline = t + DEADLINE_S;
+  /* ⛔ 2026-11-10 (holder buy reverted on a shared fork): the routers judge the deadline against the CHAIN's clock, not ours. Measured on
+   *   base-anvil: the same 0-bps plan executes, and after evm_increaseTime(700) its Aerodrome call reverts with empty data, nothing debited;
+   *   a chain clock already 609 s ahead makes the simulation REFUSE. The reference instant is the LATER of the server clock and the latest
+   *   block's timestamp (equal within seconds on Base mainnet); a block not read leaves the server clock. */
+  let t = Math.floor(Number(maintenant) / 1000);
+  try {
+    const blk = await rpc('eth_getBlockByNumber', ['latest', false]);
+    const ts = blk && blk.timestamp ? Number(BigInt(blk.timestamp)) : 0;
+    if (Number.isSafeInteger(ts) && ts > t) t = ts;
+  } catch (_) { /* not read: the server clock stays the reference */ }
+  const deadline = t + DEADLINE_S;
   /* the balance of what is paid, read first: a short wallet gets a plain sentence, not a revert code. Unread: the simulation judges. */
   try {
     const paid = sens === 'ETH>TBLOCK' ? ETH : (sens === 'USDC>TBLOCK' ? USDC : bas(TBLOCK));

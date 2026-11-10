@@ -54,15 +54,17 @@ ok(TR.routeTblockDe(T, ETH) === null && TR.routeTblockDe(W, T) === null && TR.ro
 
 /* ── a scripted chain: pinned pools, price 1:1 at mid, quotes 1 % under, every simulated call status 0x1 ── */
 const QUOTER_CODE = '0x' + 'aa'.repeat(800) + [1, 2, 3].map(() => FACTORY_AERODROME_CL.slice(2).toLowerCase() + 'bb'.repeat(10)).join('');
-function chaine({ getPool = null, sim = 'ok', solde = 10n ** 30n, appelsVus = [] } = {}) {
+function chaine({ getPool = null, sim = 'ok', solde = 10n ** 30n, appelsVus = [], tsChaine = null, simVus = null } = {}) {
   return async (method, params) => {
     appelsVus.push(method);
     if (method === 'eth_getBalance') return '0x' + solde.toString(16);
     if (method === 'eth_getCode') return QUOTER_CODE;
+    if (method === 'eth_getBlockByNumber') { if (tsChaine === null) throw new Error('block not read'); return { timestamp: '0x' + BigInt(tsChaine).toString(16) }; }
     if (method === 'eth_simulateV1') {
       if (sim === 'throw') throw new Error('timeout');
       if (sim === 'funds') throw new Error('Insufficient funds for gas * price + value');
       const calls = params[0].blockStateCalls[0].calls;
+      if (simVus) simVus.push(calls.length);
       return [{ calls: calls.map((_, i) => (sim === 'revert' && i === calls.length - 1 ? { status: '0x0', error: { message: 'execution reverted' } } : { status: '0x1', gasUsed: '0x5208' })) }];
     }
     if (method !== 'eth_call') throw new Error('unexpected ' + method);
@@ -102,6 +104,24 @@ const NOW = Date.UTC(2026, 10, 9, 12);
   ok(p.appels[2].data.endsWith(w(min1)) && p.appels[2].to === W, 'USDC>TBLOCK: the wtCOIN approval to Permit2 is EXACTLY leg 1’s minimum');
   const p0 = await TR.planRouteTblock({ rpc: chaine(), compte: COMPTE, de: USDC, vers: T, montant: 5_000_000n, maintenant: NOW, fraisBps: 0n });
   ok(p0.etat === 'PRET' && p0.appels.length === 5 && !p0.appels.some((c) => /fee/.test(c.role)) && BigInt(p0.resume.fraisMontant) === 0n, 'fraisBps 0 (holder): no fee call, nothing taken');
+
+  /* 2026-11-10 — the holder (0 bps) buys, USDC and ETH, are SIMULATED before PRET and carry no fee anywhere */
+  const vus0 = [];
+  const h0 = await TR.planRouteTblock({ rpc: chaine({ simVus: vus0 }), compte: COMPTE, de: USDC, vers: T, montant: 2_000_000n, maintenant: NOW, fraisBps: 0n });
+  ok(h0.etat === 'PRET' && vus0.length === 1 && vus0[0] === h0.appels.length && BigInt(h0.resume.montantEchange) === 2_000_000n
+    && !h0.appels.some((c) => c.data.toLowerCase().includes(FEE_WALLET.slice(2).toLowerCase())),
+    'fraisBps 0 USDC>TBLOCK: PRET only after the whole 5-call batch was simulated; the full amount is swapped; the fee wallet appears nowhere');
+  const vusE = [];
+  const e0 = await TR.planRouteTblock({ rpc: chaine({ simVus: vusE }), compte: COMPTE, de: ETH, vers: T, montant: 10n ** 15n, maintenant: NOW, fraisBps: 0n });
+  ok(e0.etat === 'PRET' && vusE[0] === e0.appels.length && e0.appels.length === 4 && e0.appels[0].value === '0x' + (10n ** 15n).toString(16)
+    && !e0.appels.some((c) => bas(c.to) === bas(FEE_WALLET)), 'fraisBps 0 ETH>TBLOCK: 4 calls, all the ETH swapped, no ETH transfer to the fee wallet, simulated');
+  /* the deadline follows the CHAIN clock when it runs ahead of the server's (a fork moved by evm_increaseTime) */
+  const tsAvance = Math.floor(NOW / 1000) + 5000;
+  const ca = await TR.planRouteTblock({ rpc: chaine({ tsChaine: tsAvance }), compte: COMPTE, de: USDC, vers: T, montant: 2_000_000n, maintenant: NOW, fraisBps: 0n });
+  ok(ca.etat === 'PRET' && ca.appels[1].data.includes(w(tsAvance + TR.DEADLINE_S)) && ca.appels[4].data.includes(w(tsAvance + TR.DEADLINE_S)),
+    'chain clock 5000 s ahead: both deadlines (Aerodrome and v4) = chain time + ' + TR.DEADLINE_S + ' s');
+  const cb = await TR.planRouteTblock({ rpc: chaine({ tsChaine: Math.floor(NOW / 1000) - 5000 }), compte: COMPTE, de: USDC, vers: T, montant: 2_000_000n, maintenant: NOW, fraisBps: 0n });
+  ok(cb.etat === 'PRET' && cb.appels[1].data.includes(w(Math.floor(NOW / 1000) + TR.DEADLINE_S)), 'chain clock behind: the server clock stays the reference (never an earlier deadline)');
   const pk = await TR.planRouteTblock({ rpc: chaine(), compte: COMPTE, de: USDC, vers: T, montant: 5_000_000n, maintenant: NOW, fraisBps: 101n });
   ok(pk.etat === 'REFUSE', 'fraisBps above 100 is refused');
   const pd = await TR.planRouteTblock({ rpc: chaine(), compte: COMPTE, de: USDC, vers: T, montant: 999n, maintenant: NOW });
