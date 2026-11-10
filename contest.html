@@ -5,15 +5,31 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Block contest — TokenizedBlock</title>
 <style>
-  :root { --bg:#0b0d12; --card:#141821; --line:#232a38; --txt:#e8ecf3; --mut:#93a0b5; --ok:#3ddc97; --ko:#ff6b6b; --acc:#7aa2ff; --warn:#ffc857; }
+  :root { --bg:#07080d; --card:rgba(20,24,35,.78); --line:#232a38; --txt:#eef1f7; --mut:#93a0b5; --ok:#3ddc97; --ko:#ff6b6b; --acc:#8fb0ff; --acc2:#c18cff; --gold:#ffd166; --warn:#ffc857; }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--txt); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  main { max-width:720px; margin:0 auto; padding:20px 16px 60px; }
-  h1 { font-size:22px; margin:6px 0 4px; }
-  h2 { font-size:16px; margin:0 0 10px; }
+  body { margin:0; color:var(--txt); font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; min-height:100vh;
+    background: radial-gradient(900px 500px at 15% -10%, rgba(143,176,255,.18), transparent 60%), radial-gradient(800px 500px at 100% 0%, rgba(193,140,255,.16), transparent 60%), var(--bg); background-attachment: fixed; }
+  main { max-width:760px; margin:0 auto; padding:18px 16px 70px; }
+  .brand { display:flex; align-items:center; justify-content:space-between; gap:10px; font-size:13px; color:var(--mut); }
+  .brand a { text-decoration:none; }
+  h1 { font-size:30px; line-height:1.15; margin:14px 0 6px; letter-spacing:-.02em;
+    background: linear-gradient(90deg, #fff, var(--acc) 55%, var(--acc2)); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  h2 { font-size:16px; margin:0 0 10px; letter-spacing:.01em; }
   p { margin:8px 0; }
   .mut { color:var(--mut); }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin:14px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:18px; margin:14px 0; backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+  .hero { border-color: rgba(143,176,255,.35); box-shadow: 0 0 0 1px rgba(143,176,255,.08), 0 0 50px rgba(143,176,255,.12), 0 10px 30px rgba(0,0,0,.3); }
+  .phase { display:flex; gap:6px; margin:4px 0 12px; }
+  .phase span { flex:1; text-align:center; font-size:12px; padding:6px 4px; border-radius:99px; border:1px solid var(--line); color:var(--mut); }
+  .phase span.on { color:#08101f; background: linear-gradient(90deg, var(--acc), var(--acc2)); border-color:transparent; font-weight:650; }
+  .potline { display:flex; align-items:baseline; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+  .pot { font-size:34px; font-weight:750; font-variant-numeric:tabular-nums; color:var(--gold); text-shadow: 0 0 24px rgba(255,209,102,.35); }
+  .bar { height:10px; border-radius:99px; background:#0e121a; border:1px solid var(--line); overflow:hidden; margin:10px 0 4px; }
+  .bar i { display:block; height:100%; background: linear-gradient(90deg, var(--gold), #ff9f43); box-shadow: 0 0 14px rgba(255,209,102,.6); }
+  .fund { border-color: rgba(255,209,102,.4); box-shadow: 0 0 40px rgba(255,209,102,.08), 0 10px 30px rgba(0,0,0,.3); }
+  .fund button:not(.ghost) { background: linear-gradient(90deg, var(--gold), #ff9f43); }
+  details summary { cursor:pointer; font-weight:650; list-style:none; } details summary::-webkit-details-marker { display:none; }
+  details summary::after { content:' ▾'; color:var(--mut); } details[open] summary::after { content:' ▴'; }
   .row { display:flex; justify-content:space-between; gap:12px; padding:7px 0; border-bottom:1px solid var(--line); }
   .row:last-child { border-bottom:0; }
   .row span:first-child { color:var(--mut); }
@@ -37,10 +53,12 @@
 </head>
 <body>
 <main>
+  <div class="brand"><a href="/">← TokenizedBlock</a><span>Base mainnet · paid in TBLOCK</span></div>
   <h1>Block contest</h1>
   <p class="mut">Creators enter their block. Anyone pays TBLOCK to vote. The contract pays by fixed rules; nobody decides by hand. Every number on this page is read from the contract on Base.</p>
 
-  <div class="card" id="status"><p class="mut">Reading the contract on Base…</p></div>
+  <div class="card hero" id="status"><p class="mut">Reading the contract on Base…</p></div>
+  <div class="card fund" id="fund" hidden></div>
   <div class="card" id="round" hidden></div>
   <div class="card" id="me" hidden></div>
   <div class="card" id="rules" hidden></div>
@@ -222,6 +240,11 @@ function render() {
     h += '<h2>Round ' + w.round + ' — voting is open</h2><p>Entries for this round are closed.</p>'
       + '<p class="mut">The round ends in</p><div class="big" id="cd">' + esc(countdownText()) + '</div><p class="note">End: ' + esc(utc(w.endsAt)) + '. Votes sent after that second are refused by the contract.</p>';
   }
+  const fill = p.maxPot > 0n ? Number(cur.pot * 1000n / p.maxPot) / 10 : 0;
+  h = '<div class="phase"><span' + (w.phase === 'BEFORE_START' ? ' class="on"' : '') + '>Starts</span><span' + (w.phase === 'ENTRY' ? ' class="on"' : '') + '>Entries</span><span' + (w.phase === 'VOTE' ? ' class="on"' : '') + '>Voting</span><span>Paid</span></div>' + h
+    + '<div class="potline"><span class="mut">Pot of ' + (w.phase === 'BEFORE_START' ? 'the first round' : 'round ' + S.chainRound) + '</span><span class="pot">' + tok(cur.pot) + '</span></div>'
+    + '<div class="bar" role="img" aria-label="pot ' + fill + '% of its cap"><i style="width:' + Math.min(100, fill) + '%"></i></div>'
+    + '<p class="note">' + fill + '% of the cap of ' + tok(p.maxPot) + dollars(p.maxPot) + '.</p>';
   if (S.readError) h += '<div class="warnbox">The last refresh failed (' + esc(S.readError.slice(0, 100)) + '). The figures below are from the previous read.</div>';
   if (message) h += '<div class="warnbox">' + esc(message) + '</div>';
   $('status').innerHTML = h;
@@ -230,12 +253,24 @@ function render() {
   let r = '<h2>' + (w.phase === 'BEFORE_START' ? 'First round (round 0)' : 'Round ' + S.chainRound) + '</h2>';
   r += row('Pot', tok(cur.pot) + dollars(cur.pot));
   if (cur.pot === 0n) r += '<div class="warnbox">The pot of this round holds 0 TBLOCK. If it still holds 0 when the round ends, the winner receives 0.</div>';
-  /* anyone can add to the pot: fund() is public. Shown only once the room under the cap was read for this wallet. */
-  if (wallet && my && !S.clockMismatch) {
-    r += '<div class="entry" id="fundBox"><div class="top"><span><b>Add TBLOCK to this pot</b></span><span class="note">room left under the cap: ' + tok(my.room) + '</span></div>';
-    if (my.room > 0n) r += '<div class="act"><input class="a" id="fundAmt" inputmode="decimal" placeholder="TBLOCK amount" aria-label="TBLOCK amount to add"><button data-fund="1">Add to the pot</button></div>';
-    r += '<p class="note">Anyone can add. It is paid out only by the rules below; nobody can take it back, you included. If the round does not pay, the pot is carried to later rounds, and what does not fit under their cap goes to the dead address.</p></div>';
-  } else if (!wallet) r += '<div class="act"><button class="ghost" data-connect="1">Connect a wallet to add TBLOCK to this pot</button></div>';
+  /* anyone can add to the pot: fund() is public. Always shown; the field appears once the room under the cap was read for this wallet. */
+  let f = '<h2>Add TBLOCK to the pot</h2><p>Anyone can add to the pot of this round. The contract pays it to the winners by the rules below; nobody can take it back, you included.</p>';
+  if (!wallet) f += '<div class="act"><button data-connect="1">Connect wallet to add</button></div>';
+  else if (!my) f += '<p class="note">Reading this wallet…</p>';
+  else if (S.clockMismatch) f += '<p class="note">The clock of this device and the chain disagree on the round; the field comes back when they agree.</p>';
+  else {
+    f += '<div id="fundBox">' + row('TBLOCK in this wallet', tok(my.balance)) + row('Room left under the cap', tok(my.room));
+    if (my.room > 0n) {
+      const most = my.balance < my.room ? my.balance : my.room;
+      f += '<div class="act"><input class="a" id="fundAmt" inputmode="decimal" placeholder="TBLOCK amount" aria-label="TBLOCK amount to add">'
+        + (most > 0n ? '<button class="ghost" data-max="' + esc(C.formatUnits18(most, 18).replace(/,/g, '')) + '">Max</button>' : '') + '<button data-fund="1">Add to the pot</button></div>';
+    }
+    f += '</div>';
+  }
+  f += '<p class="note">If the round does not pay, the pot is carried to later rounds, and what does not fit under their cap goes to the dead address.</p>';
+  const typed = ($('fundAmt') || {}).value || ''; /* a refresh redraws the card: keep what the person was typing */
+  $('fund').innerHTML = f; $('fund').hidden = false;
+  if (typed && $('fundAmt')) $('fundAmt').value = typed;
   r += row('Blocks entered', String(cur.entryCount));
   r += row('Votes bought', String(cur.totalVotes));
   r += row('Entries that qualify', String(cur.qualifiedCount) + ' of the ' + p.minQualifiedEntries + ' needed ' + (S.qualified ? pill('round will pay', 'ok') : pill('round will not pay as it stands', 'warn')));
@@ -277,7 +312,8 @@ function render() {
 
   /* rules, written from the values read */
   const toPot = C.BPS - p.burnBps, places = [['First', p.split1], ['second', p.split2], ['third', p.split3]].filter((x) => x[1] > 0n);
-  let u = '<h2>Rules, as the contract applies them</h2><ol>';
+  const wasOpen = !!document.querySelector('#rules details[open]');
+  let u = '<details' + (wasOpen ? ' open' : '') + '><summary>Rules, as the contract applies them</summary><ol>';
   u += '<li><b>Who can enter.</b> Only the wallet recorded as the creator of a block in the TokenizedBlock creator registry. One entry per block and one entry per wallet in each round.</li>';
   u += '<li><b>Entering.</b> ' + (p.entryFee > 0n ? 'Costs ' + tok(p.entryFee) + ', added to the pot of that round. Not refundable.' : 'Free.') + '</li>';
   u += '<li><b>Rounds.</b> A round lasts ' + esc(span(C.roundLength(p))) + ': ' + esc(span(p.entryPeriod)) + ' to enter, then ' + esc(span(p.votePeriod)) + ' to vote. The next round starts the second the previous one ends.</li>';
@@ -289,7 +325,7 @@ function render() {
   u += '<li><b>What is paid.</b> ' + places.map((x) => x[0] + ' place: ' + pct(x[1]) + ' of the pot').join(', ') + '. A pot never exceeds ' + tok(p.maxPot) + dollars(p.maxPot) + '. The pot is what was deposited into the round plus its entry fees. Nobody is obliged to deposit; a pot can hold 0.</li>';
   u += '<li><b>Paying.</b> After a round ends, anyone can ask the contract to settle it. The contract then pays the recorded creator wallet by the rules above. No account can withdraw a pot or change these numbers.</li>';
   u += '</ol><p class="note">TBLOCK spent on votes or on an entry is gone. This page promises no gain. Contract: ' + scan(C.CONTEST) + '.</p>';
-  $('rules').innerHTML = u; $('rules').hidden = false;
+  $('rules').innerHTML = u + '</details>'; $('rules').hidden = false;
 
   /* past rounds */
   if (S.past.length) {
@@ -330,6 +366,7 @@ document.addEventListener('click', async (ev) => {
     if (my && my.balance < P.entryFee) { message = 'Entering costs ' + C.formatUnits18(P.entryFee) + ' TBLOCK; this wallet holds ' + C.formatUnits18(my.balance) + '.'; return render(); }
     return send(C.enterBatch({ blockToken: b.block, key: b.key, entryFee: P.entryFee }), 'entry of your block for ' + C.formatUnits18(P.entryFee) + ' TBLOCK, not refundable');
   }
+  if (d.max) { const i = $('fundAmt'); if (i) i.value = d.max; return; }
   if (d.fund) {
     if (!my) return;
     const plan = C.fundPlan({ text: ($('fundAmt') || {}).value, room: my.room, balance: my.balance });
