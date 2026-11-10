@@ -3605,7 +3605,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game341" hidden>Build <code>20261109-game341</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game342" hidden>Build <code>20261109-game342</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3940,6 +3940,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- ⛔ RESERVE AUX BLOCKS ENDORMIS : un block qui a deja un marche n a rien a reveiller. -->
         <p class="note" id="pWakeGate" hidden></p>
         <button class="bouton" id="pReveiller" type="button" hidden style="grid-column:1/-1">Wake it — open its market</button>
+        <!-- game342 (live test by Grok): a block created but never opened could not be resumed from its own page -->
+        <button class="bouton" id="pReprendreVie" type="button" hidden style="grid-column:1/-1">Continue: open its market (step 2 of 3)</button>
         <button class="bouton sec" id="pGarderTrusted" type="button" hidden style="grid-column:1/-1">Mark as trusted</button>
         <button class="bouton sec" id="pRelire" type="button" hidden style="grid-column:1/-1">Market unread — retry</button>
         <button class="bouton sec" id="pRescanMarche" type="button" hidden style="grid-column:1/-1">Re-scan market</button>
@@ -12437,6 +12439,7 @@ async function connecter() {
   if (!compte) { try { etape('wallet_connect_refus'); } catch (_) {} dire('The wallet returned no address.'); return; }
   try { etape('wallet_connect_ok'); } catch (_) {}
   try { peindreTirage(); } catch (_) {} /* 2026-10-17 : la progression du tirage apparait des la connexion */
+  void majReprendreVie(); /* game342: an open profile of an unopened block now offers to continue */
   try { void peindreSkinsJeu(); } catch (_) {} /* 2026-10-18 (Phil : « Start an auction n apparait pas ») : tes skins a lister, des la connexion */
   try { noterWalletUtilise(compte); } catch (_) { /* airdrop log optional */ }
   /* ⛔⛔ ON MESURE LA CAPACITE DE GROUPEMENT ICI, A LA CONNEXION, ET PAS AILLEURS. Mesure du
@@ -13391,6 +13394,7 @@ if (window.ethereum && typeof window.ethereum.on === 'function') {
     $('#pCompte').classList.toggle('connecte', !!compte);
     $('#sEtat').textContent = '';
     if (compte) { try { noterWalletUtilise(compte); } catch (_) {} void listerMesBlocks(); }
+    void majReprendreVie(); /* game342 */
     void majWallet();
     void tbBanquePeindre();
     if (bcBanque.marches) void bcBanqueCharger(); else { void bcBanquePourToi(); void bcBanquePositions(); }
@@ -15510,6 +15514,12 @@ async function lireProfil(adr, sym, perime, opts) {
     }
   }
   $('#pRelire').hidden = etatVieProfil !== 'NON_LUE';
+  /* ⛔⛔ game342 (live test by Grok 2026-11-10): on Base, a block whose market does not exist yet had NO way forward from its own page.
+   *   The launch card opened only when `lancementLien` was set (coming from Create, the local asleep list, or a ?lancer link): someone who
+   *   came back later, switched browser or followed ?block= saw "Re-scan market" and nothing else, with the block created, the
+   *   approvals given and the hook registration paid. The wallet that holds the block's supply now gets "Continue: open its market",
+   *   which runs the SAME resume path as the asleep list. The simulation still judges every call before the wallet opens. */
+  void majReprendreVie();
   const rs = $('#pRescanMarche');
   if (rs) {
     rs.hidden = !(etatVieProfil === 'NON_TROUVEE' && CHAINE === 8453);
@@ -20266,7 +20276,17 @@ async function calculerLancement() {
            *   lui le hook facture aussi fraisCreation : un block deja paye a Create aurait coute 0,0017 ETH. Sel inconnu ET index
            *   non lu = on ne sait pas encore comment ce block est ne : on attend, on ne fait pas payer deux fois. */
           const selNe = estHook7030(hooks) ? await selRouteurPour(adr) : null;
-          if (estHook7030(hooks) && selNe === null && !indexRouteurLu()) {
+          /* ⛔⛔ game342 (live test by Grok 2026-11-10): the salt is only needed to REGISTER without paying fraisCreation twice. When the
+           *   pool is ALREADY registered on the hook (createurs(poolId) != 0: the registration tx went through, as for TEST 0x2fd57f8b),
+           *   no registration is asked (completerInscriptionPayee skips it), so an unknown salt must not block the market opening. The
+           *   salt lived only in the creating browser's storage or the router index: from another browser, or later, it was unknown and
+           *   "how this block was created could not be read yet" stopped the resume for good. Unread: the old guard stays. */
+          let dejaInscrit = false;
+          if (estHook7030(hooks) && selNe === null && plan && plan.cle) {
+            try { dejaInscrit = !/^0x0*$/.test(String(await rpc('eth_call', [{ to: hooks, data: '0x' + selecteur('createurs(bytes32)') + poolIdV4(plan.cle).slice(2) }, 'latest']))); }
+            catch (_) { dejaInscrit = false; }
+          }
+          if (estHook7030(hooks) && !dejaInscrit && selNe === null && !indexRouteurLu()) {
             plan = { ...plan, etat: 'NON_MESURE', etapes: [], pourquoi: 'how this block was created could not be read yet, so nothing was asked — try again in a moment' };
           } else {
           plan = await completerInscriptionPayee({ rpc, plan, compte, fraisWei: w != null ? BigInt(w) : null, hook: hooks,
@@ -21199,6 +21219,39 @@ async function lancerMarcheBlock(adr) {
   }
 }
 
+/* game342: show "Continue: open its market" on the profile of a block with NO market yet, to the wallet that holds its supply.
+ *   Run at every profile paint AND at every wallet connection / account change (someone who opens ?block= then connects). */
+async function majReprendreVie() {
+  const rep = $('#pReprendreVie'), p = $('#profil');
+  if (!rep || !p) return;
+  rep.hidden = true;
+  const adrRep = String(p.dataset.block || '').toLowerCase();
+  if (CHAINE !== 8453 || etatVieProfil !== 'NON_TROUVEE' || !compte || !/^0x[0-9a-f]{40}$/.test(adrRep)) return;
+  try {
+    const bal = BigInt(await rpc('eth_call', [{ to: adrRep, data: '0x70a08231' + String(compte).toLowerCase().slice(2).padStart(64, '0') }, 'latest']));
+    if (bal <= 0n || String(p.dataset.block || '').toLowerCase() !== adrRep) return;
+    const el = await eligibleNaissanceV8(adrRep);
+    if (!el.ok || String(p.dataset.block || '').toLowerCase() !== adrRep || etatVieProfil !== 'NON_TROUVEE') return;
+    rep.hidden = false;
+  } catch (_) { /* not read: the button stays hidden; Re-scan market stays */ }
+}
+/* game342: resume a created-but-unopened block from its own page — the same sequence as the asleep-list resume (ETH pair, 99.9 %, auto) */
+$('#pReprendreVie').addEventListener('click', () => {
+  const p = $('#profil'); const adr = p && p.dataset.block;
+  if (!adr) return;
+  $('#pReprendreVie').hidden = true;
+  lancementLien = String(adr).toLowerCase();
+  try {
+    const d = $('#plDevise');
+    if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+    const part = $('#plPart'); if (part) part.value = '99.9';
+    ouvrirLancement();
+    vieAuto = true;
+    majProgressionVie('Step 1 — reading its market and your approvals…');
+    void calculerLancement();
+    const pl = $('#pLancement'); if (pl) pl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  } catch (_) { $('#pReprendreVie').hidden = false; }
+});
 $('#pReveiller').addEventListener('click', () => {
   /* tip 20260922-2125: Give birth · V8 = Instant Birth vieAuto (open fee + seed), NEVER Create/createB20 */
   try {
@@ -35518,7 +35571,7 @@ if (blockLien && ADRESSE.test(blockLien) && !retourFiat) {
       const n = document.createElement('div');
       n.id = 'lienRecu'; n.className = 'lienRecu';
       n.innerHTML = '<b>Someone shared this block with you.</b> You can buy it below — or make your own in a minute.'
-        + '<div class="partage"><button type="button" id="lrAcheter">Buy it</button><button type="button" id="lrCreer">Create my own — 0.001 ETH</button></div>';
+        + '<div class="partage"><button type="button" id="lrAcheter">Buy it</button><button type="button" id="lrCreer">Create my own — $5</button></div>';
       p.insertBefore(n, p.firstChild);
       $('#lrAcheter').addEventListener('click', () => { const x = $('#pEchange'); if (x && !x.hidden) x.scrollIntoView({ behavior: 'smooth', block: 'center' }); });
       $('#lrCreer').addEventListener('click', () => { etape('map_cta'); allerA('creer'); });

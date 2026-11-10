@@ -124,7 +124,9 @@ const { R, BLOC } = await jeu(ICI, ok);
 console.log('— C. app.html');
 const html = fs.readFileSync(path.join(ICI, 'app.html'), 'utf8').replace(/\r\n/g, '\n');
 ok(/caution: await cautionCreateurPour\(hook, devise\), sel: selDansInput\(adresse, appelCreate\.data\) \}\);/.test(html), 'C pre-controle Instant Birth : sel = selDansInput(adresse, appelCreate.data)');
-ok(/const selNe = estHook7030\(hooks\) \? await selRouteurPour\(adr\) : null;\n\s+if \(estHook7030\(hooks\) && selNe === null && !indexRouteurLu\(\)\) \{\n\s+plan = \{ \.\.\.plan, etat: 'NON_MESURE', etapes: \[\]/.test(html)
+/* game342 (live test 2026-11-10): an ALREADY registered pool (hook createurs(poolId) != 0) needs no salt — only the unknown salt of an
+ *   UNREGISTERED pool, with the index unread, stops (fail-closed: an unread registration counts as not registered). */
+ok(/const selNe = estHook7030\(hooks\) \? await selRouteurPour\(adr\) : null;[\s\S]{0,1600}?let dejaInscrit = false;[\s\S]{0,400}?createurs\(bytes32\)[\s\S]{0,200}?catch \(_\) \{ dejaInscrit = false; \}\s*\}\s*if \(estHook7030\(hooks\) && !dejaInscrit && selNe === null && !indexRouteurLu\(\)\) \{\n\s+plan = \{ \.\.\.plan, etat: 'NON_MESURE', etapes: \[\]/.test(html)
   && /caution: await cautionCreateurPour\(hooks, deviseLancement \|\| null\), sel: selNe \}\);/.test(html), 'C Launch : sel lu ; inconnu ET index non lu -> NON_MESURE (on ne fait pas payer deux fois), sinon passe au plan');
 ok(/if \(plan && plan\.etat === 'REFUSE' && plan\.pourquoi\) return \{ etat: 'REFUSE', pourquoi: plan\.pourquoi \};/.test(html), 'C le refus nomme du module remonte au pre-controle');
 ok(/if \(isInscrire && et\.du != null\) return et;\n\s+if \(isInscrire && !hookPayee\) \{/.test(html), 'C reecriture « prepaye » : une etape dont le frais vient du hook (du) n est pas touchee');
