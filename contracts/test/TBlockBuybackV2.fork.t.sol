@@ -119,6 +119,7 @@ contract TBlockBuybackForkTestV2 is Test {
 
     function setUp() public {
         if (PM.code.length == 0 || block.chainid != 8453) vm.skip(true);
+        vm.etch(DEST, hex"fe"); // V2: DEST must be a contract (the vault)
         bb = new TBlockBuyback(_cfg());
     }
 

@@ -55,6 +55,7 @@ contract TBlockBuybackUnitTestV2 is Test {
         weth = new BBToken(); wt = new BBToken(); tb = new BBToken();
         v3 = new BBMockV3(address(weth), address(wt));
         pm = new BBMockPM(bytes32(uint256(1) << 100)); // "initialized" pool
+        vm.etch(DEST, hex"fe"); // V2: DEST must be a contract (the vault)
         bb = new TBlockBuyback(_cfg());
     }
 

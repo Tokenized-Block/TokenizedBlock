@@ -33,9 +33,10 @@ interface IContestFund {
 /// "free" = TBLOCK held - TBLOCK reserved for open epochs.
 /// 3. DEV RESCUE (Phil 2026-11-10: "le dev peut deverouiller le coffre au besoin"; then: TWO wallets, the TBLOCK dev wallet and Grok's).
 ///    DEV and DEV2 (immutable, set at construction, NOT the deployer) can take TBLOCK out by hand, but only in public and slowly:
-///    either announces (announceRescue) a RESCUE_DELAY countdown visible on chain (event + rescueAt); after it, either executes rescue(),
-///    which pays at most min(amount, free) to the dev who executes it, never a reserved player budget. Either can cancel, and either can
-///    renounce the power FOR BOTH, for good (renounceRescue): after that nobody can ever move the vault by hand.
+///    either announces (announceRescue) a RESCUE_DELAY countdown visible on chain (event with who, amount, when, free now); after it,
+///    ONLY the announcer can execute rescue(), and only during RESCUE_WINDOW (then the announcement expires and must be made again in
+///    public); it pays at most min(amount, free) to the announcer, never a reserved player budget. Either dev can cancel any
+///    announcement (the other's veto), and either can renounce the power FOR BOTH, for good: after that nobody can move the vault by hand.
 contract TBlockVault {
     uint256 public constant BPS = 10_000;
 
@@ -56,8 +57,10 @@ contract TBlockVault {
     uint256 public constant FEED_QUIET = 1 days;  // no feeding in the last day of an epoch that has players
     uint256 public closeCursor;                   // every epoch below it is closed or had no players
 
+    uint256 public constant RESCUE_WINDOW = 2 days; // an announcement can be executed only in [rescueAt, rescueAt + RESCUE_WINDOW]
     uint256 public rescueAmount;   // announced amount, 0 = none pending
     uint256 public rescueAt;       // earliest time rescue() can run
+    address public rescueBy;       // the dev who announced: the only one who can execute it
     bool public rescueRenounced;
 
     struct Epoch { uint256 budget; uint256 paid; uint64 closedAt; bool closed; bool released; }
@@ -71,10 +74,10 @@ contract TBlockVault {
     event Claimed(uint256 indexed epoch, address indexed player, uint256 share, uint256 topBonus);
     event Released(uint256 indexed epoch, uint256 amount);
     event ContestFed(uint256 indexed round, uint256 amount);
-    event RescueAnnounced(uint256 amount, uint256 executableAt);
-    event RescueCancelled();
-    event Rescued(uint256 amount);
-    event RescueRenounced();
+    event RescueAnnounced(address indexed by, uint256 amount, uint256 executableAt, uint256 expiresAt, uint256 freeNow);
+    event RescueCancelled(address indexed by);
+    event Rescued(address indexed by, uint256 amount);
+    event RescueRenounced(address indexed by);
 
     error BadParams();
     error Locked();
@@ -94,6 +97,8 @@ contract TBlockVault {
     error Renounced();
     error NoRescue();
     error TooEarly(uint256 at);
+    error Expired(uint256 at);
+    error NotAnnouncer(address announcer);
     error TransferFailed();
 
     modifier lock() {
@@ -130,31 +135,37 @@ contract TBlockVault {
         if (amount == 0) revert BadParams();
         rescueAmount = amount;
         rescueAt = block.timestamp + RESCUE_DELAY;
-        emit RescueAnnounced(amount, rescueAt);
+        rescueBy = msg.sender;
+        emit RescueAnnounced(msg.sender, amount, rescueAt, rescueAt + RESCUE_WINDOW, free());
     }
+    /// @notice either dev can cancel any announcement (the other dev's veto during the 7 days)
     function cancelRescue() external lock {
         _onlyDev();
         if (rescueAmount == 0) revert NoRescue();
-        rescueAmount = 0; rescueAt = 0;
-        emit RescueCancelled();
+        rescueAmount = 0; rescueAt = 0; rescueBy = address(0);
+        emit RescueCancelled(msg.sender);
     }
+    /// @notice only the dev who announced, only within RESCUE_WINDOW after the delay, only the free part; paid to that dev
     function rescue() external lock returns (uint256 amount) {
         _onlyDev();
         if (rescueRenounced) revert Renounced();
         if (rescueAmount == 0) revert NoRescue();
+        if (msg.sender != rescueBy) revert NotAnnouncer(rescueBy);
         if (block.timestamp < rescueAt) revert TooEarly(rescueAt);
+        if (block.timestamp > rescueAt + RESCUE_WINDOW) revert Expired(rescueAt + RESCUE_WINDOW);
         amount = rescueAmount;
         uint256 f = free();
         if (amount > f) amount = f; // never a reserved player budget
-        rescueAmount = 0; rescueAt = 0;
+        rescueAmount = 0; rescueAt = 0; rescueBy = address(0);
         if (amount == 0) revert NoRescue();
-        _send(msg.sender, amount); // the dev who executes receives it
-        emit Rescued(amount);
+        _send(msg.sender, amount);
+        emit Rescued(msg.sender, amount);
     }
     function renounceRescue() external lock {
         _onlyDev();
-        rescueRenounced = true; rescueAmount = 0; rescueAt = 0;
-        emit RescueRenounced();
+        if (rescueRenounced) revert Renounced();
+        rescueRenounced = true; rescueAmount = 0; rescueAt = 0; rescueBy = address(0);
+        emit RescueRenounced(msg.sender);
     }
 
     // ------------------------------------------------------------------ views

@@ -17,5 +17,23 @@ contract TBlockBuybackDestTestV2 is TBlockBuybackUnitTestV2 {
         vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
         c = _cfg(); c.dest = c.tblock;
         vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
+        c = _cfg(); c.dest = c.keeper;                                    // a single key: refused
+        vm.etch(c.keeper, hex"fe");                                       // even if it had code
+        vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
+        vm.etch(c.keeper, "");
+        c = _cfg(); c.dest = address(0xBEEF);                             // no code (an EOA): refused
+        vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
+        c = _cfg(); c.dest = c.weth;
+        vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
+        c = _cfg(); c.dest = c.wtcoin;
+        vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
+        c = _cfg(); c.dest = c.v4Key.hooks; vm.etch(c.v4Key.hooks, hex"fe");
+        vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
+    }
+
+    function test_dest_cannot_be_itself() public {
+        TBlockBuyback.Config memory c = _cfg();
+        c.dest = vm.computeCreateAddress(address(this), vm.getNonce(address(this))); // the address it is about to get
+        vm.expectRevert(TBlockBuyback.BadParams.selector); new TBlockBuyback(c);
     }
 }

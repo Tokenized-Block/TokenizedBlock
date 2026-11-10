@@ -235,6 +235,33 @@ contract TBlockVaultTest is Test {
         vm.expectRevert(TBlockVault.Renounced.selector); V.announceRescue(1);
     }
 
+    function test_only_the_announcer_executes_and_it_expires() public {
+        t.mint(address(V), 1_000e18);
+        V.announceRescue(100e18);                                   // dev 1 announces
+        assertEq(V.rescueBy(), address(this));
+        vm.warp(block.timestamp + 7 days);
+        vm.prank(D2); vm.expectRevert(abi.encodeWithSelector(TBlockVault.NotAnnouncer.selector, address(this))); V.rescue();
+        vm.warp(block.timestamp + 2 days);                          // last second of the window: still allowed
+        uint256 snap = vm.snapshotState();
+        assertEq(V.rescue(), 100e18);
+        vm.revertToState(snap);
+        vm.warp(block.timestamp + 1);                               // one second after: expired
+        vm.expectRevert(abi.encodeWithSelector(TBlockVault.Expired.selector, block.timestamp - 1)); V.rescue();
+        V.announceRescue(100e18);                                   // must be announced again, in public, with a new 7-day delay
+        assertEq(V.rescueAt(), block.timestamp + 7 days);
+    }
+
+    function test_rescue_events_name_who() public {
+        t.mint(address(V), 1_000e18);
+        vm.expectEmit(true, false, false, true);
+        emit TBlockVault.RescueAnnounced(D2, 5e18, block.timestamp + 7 days, block.timestamp + 9 days, 1_000e18);
+        vm.prank(D2); V.announceRescue(5e18);
+        vm.expectEmit(true, false, false, false);
+        emit TBlockVault.RescueCancelled(address(this));
+        V.cancelRescue();
+        assertEq(V.rescueBy(), address(0));
+    }
+
     function test_two_devs_must_be_distinct_and_set() public {
         TBlockVault.Config memory c = TBlockVault.Config({ tblock: address(t), likes: address(L), contest: address(C), minHold: 1,
             rewardBps: 5_000, topBps: 2_000, rebateBps: 5_000, maxEpochBudget: 1, claimWindow: 1, maxFeedPerCall: 1, feedCooldown: 0, dev: address(this), dev2: address(this) });

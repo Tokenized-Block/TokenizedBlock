@@ -4,7 +4,10 @@ pragma solidity ^0.8.24;
 /// @title TBlockBuybackV2 — ownerless TBLOCK buyback that pays the COMMUNITY VAULT (Phil 2026-11-10: "burn = last resort").
 /// @notice V2 = TBlockBuyback rev 4 (reviews SEC-001..006, NEW-1..4, L-1/L-2/T-1) with ONE change: every TBLOCK bought (and any stray
 ///         TBLOCK held here) goes to the immutable DEST (the TBlockVault) instead of 0x...dEaD. Everything else, guards included, is the
-///         reviewed v1 code. Below, "0x...dEaD" in the v1 text reads DEST. The pool hook's own cut is unchanged (the hook decides it).
+///         reviewed v1 code. Below, "0x...dEaD" / "burn" in the v1 text read DEST; `tblockToDead` is the TBLOCK that reached DEST. The pool
+///         hook's own cut is unchanged (the hook decides it). Since DEST is the vault, the v1 sentence "no ETH ever flows back to the
+///         owner's side" now reads: the bought TBLOCK sits in the vault, whose only manual exit is its public, delayed dev rescue.
+///         sweepToDead() is renamed sweepToDest(). DEST must be a contract other than this, the pool hook, the keeper or a token.
 /// @notice v1 notes:
 ///
 /// WHAT IT DOES
@@ -151,6 +154,9 @@ contract TBlockBuybackV2 {
         if (c.maxV3DevTicks <= 0 || c.maxV4ImpactTicks <= 0 || c.tipBps > 100 || (c.tipBps != 0 && c.maxTip == 0)) revert BadParams();
         if (c.keeper != address(0) && c.publicDelay == 0) revert BadParams();
         if (c.dest == address(0) || c.dest == c.poolManager || c.dest == c.v3Pool || c.dest == c.tblock) revert BadParams();
+        /* review L-1: not itself (would brick every buy), not the pool hook, not the keeper, not a token, and a CONTRACT (the vault,
+         * deployed first): the bought TBLOCK can never land on a single key */
+        if (c.dest == address(this) || c.dest == c.v4Key.hooks || c.dest == c.keeper || c.dest == c.weth || c.dest == c.wtcoin || c.dest.code.length == 0) revert BadParams();
         DEST = c.dest;
         PoolKey memory k = c.v4Key;
         if (k.fee & DYNAMIC_FEE_FLAG != 0) revert BadPool(); // the floor needs a static LP fee
