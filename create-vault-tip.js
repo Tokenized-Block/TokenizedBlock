@@ -21,6 +21,13 @@ export function usdLeft(ethUsd) {
   return left > 0n ? left : 0n; /* micro-dollars */
 }
 
+/** game337: the ETH that buys the TBLOCK part when the wallet holds too little TBLOCK; wei, rounded DOWN; null when unread or nothing to add */
+export function ethWeiForTopUp(ethUsd) {
+  const left = usdLeft(ethUsd), e = micro(ethUsd);
+  if (left === null || e === null || left === 0n) return null;
+  return (left * 10n ** 18n) / e; /* (left / 1e6 dollars) / (e / 1e6 dollars per ETH) * 1e18 */
+}
+
 /**
  * plan({ ethUsd, tblockUsd, balance }) -> { ok:true, usdMicro, amount, call } | { ok:false, why }
  * amount is in TBLOCK wei (18 decimals), rounded DOWN so the creator never pays above the target.

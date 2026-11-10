@@ -52,9 +52,17 @@ const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 t('module is served', /'create-vault-tip\.js'/.test(srv));
 /* game336: the split is shown BEFORE signing, on the Create tab, with live numbers */
 t('the pre-signing split line exists on the Create tab, hidden until read', /<div class="stadeLigne" id="cTipApercu" hidden/.test(app) && app.indexOf('id="cTipApercu"') > app.indexOf('id="v-creer"'));
-const ap = app.slice(app.indexOf('async function peindreTipApercu('), app.indexOf('async function proposerTipCoffre('));
+const ap = app.slice(app.indexOf('async function peindreTipApercu('), app.indexOf('const planAchatCoffre = '));
 t('it prices part 2 with TIP.usdLeft and TIP.plan (same maths as the send)', /TIP\.usdLeft\(ethUsd\)/.test(ap) && /TIP\.plan\(\{ ethUsd, tblockUsd: px/.test(ap));
-t('it says the birth still works with ETH only when TBLOCK is short', /the birth still works with ETH only/.test(ap));
+t('it says part 2 is bought with ETH when TBLOCK is short', /part 2 buys it with/.test(ap) && /TIP\.ethWeiForTopUp\(ethUsd\)/.test(ap));
+/* game337: the ETH path */
+t('ethWeiForTopUp at ETH 2000 = $3 of ETH = 0.0015 ETH', T.ethWeiForTopUp(2000) === 1500000000000000n, String(T.ethWeiForTopUp(2000)));
+t('ethWeiForTopUp is null when unread or nothing to add', T.ethWeiForTopUp(null) === null && T.ethWeiForTopUp(6000) === null);
+const ac = app.slice(app.indexOf('async function proposerAchatCoffre('), app.indexOf('async function proposerTipCoffre('));
+t('a short TBLOCK balance switches to the ETH buy (not a dead end)', /if \(!q\.ok && \/\^This needs\/\.test\(String\(q\.why \|\| ''\)\)\) \{ proposerAchatCoffre\(p, btn\); return; \}/.test(app));
+t('the ETH buy asks the server plan with the computed wei and rebuilds it at the click', (ac.match(/planAchatCoffre\(wei\)/g) || []).length === 2);
+t('it sends exactly the served calls, in order', /envoyerAppels\(fresh\.appels\.map\(\(c\) => \(\{ to: c\.to, data: c\.data, value: c\.value \}\)\), compte\)/.test(ac));
+t('the server route exists, takes the vault from the deployment file, never from the request', /chemin === '\/api\/tblock\/vault-buy'/.test(srv) && /const coffreV = ECONOMIE_DEPLOIEMENT\.adresseVault;/.test(srv) && !/q\.get\('coffre'\)|q\.get\('vault'\)/.test(srv));
 t('it says the deposit is not a fee', /is not a fee: it stays yours/.test(ap));
 t('it builds no call and sends nothing', !/envoyerAppels|eth_sendTransaction|wallet_sendCalls/.test(ap));
 console.log(ko === 0 ? 'GREEN' : 'RED', ok + '/' + (ok + ko));

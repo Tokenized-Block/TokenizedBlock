@@ -259,6 +259,8 @@ import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
 import { lireAvoirs, classeLot } from './avoirs.js';
 import { planRail, echangesDevisesAnnonces } from './rails-api.js';
+import { planAchatPourCoffre } from './tblock-route.js'; /* game337: ETH -> TBLOCK -> community vault, one atomic batch */
+import { ECONOMIE_DEPLOIEMENT } from './economie-deploiement.js';
 import { lireMarchesMorpho, lireFraisMorphoChaine, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
@@ -7686,6 +7688,35 @@ function traiterRequete(req, res) {
     });
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
     res.end(JSON.stringify({ ok: true, maxAgeMs: STABLE_NEUVE_MAX_MS, stables: lignes }));
+    return;
+  }
+  /* game337 (Phil 2026-11-10): GET /api/tblock/vault-buy?compte=0x…&eth=<wei> — the TBLOCK part of a birth bought with ETH, sent to the
+   *   community vault in the same batch (tblock-route.js planAchatPourCoffre: no app fee, whole batch simulated from the account).
+   *   Same per-minute budget as /api/rails/plan; the vault address comes from the deployment file, never from the request. */
+  if (chemin === '/api/tblock/vault-buy') {
+    const rendreV = (code, corps, extra = {}) => {
+      res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra });
+      res.end(JSON.stringify(corps, (k, v) => (typeof v === 'bigint' ? v.toString() : v)));
+    };
+    if (req.method !== 'GET') { rendreV(405, { ok: false, pourquoi: 'GET only' }); return; }
+    const q = new URL(req.url, 'http://x').searchParams;
+    const compteV = String(q.get('compte') || '').toLowerCase(), ethV = String(q.get('eth') || '');
+    const coffreV = ECONOMIE_DEPLOIEMENT.adresseVault;
+    if (!coffreV) { rendreV(200, { ok: false, etat: 'REFUSE', pourquoi: 'the community vault is not deployed yet' }); return; }
+    if (!/^0x[0-9a-f]{40}$/.test(compteV) || !/^[1-9][0-9]{0,20}$/.test(ethV) || BigInt(ethV) > 10n ** 17n) {
+      rendreV(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/tblock/vault-buy?compte=<the wallet that will sign>&eth=<wei, at most 0.1 ETH>' }); return;
+    }
+    const ipV = ipClient(req), minuteV = Math.floor(Date.now() / 60000);
+    if (railsBudget.minute !== minuteV) { railsBudget.minute = minuteV; railsBudget.n = 0; railsBudget.parIp.clear(); }
+    const nIpV = (railsBudget.parIp.get(ipV) || 0) + 1;
+    if (nIpV > RAILS_IP_MINUTE || railsBudget.n >= RAILS_MINUTE || railsEnVol >= RAILS_EN_VOL_MAX) {
+      rendreV(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'busy: retry in a minute' }, { 'retry-after': '60' }); return;
+    }
+    railsBudget.parIp.set(ipV, nIpV); railsBudget.n += 1; railsEnVol += 1;
+    planAchatPourCoffre({ rpc: rpcNaissance, compte: compteV, montantEth: BigInt(ethV), coffre: coffreV })
+      .then((r) => rendreV(200, { ok: r.etat === 'PRET', ...r }))
+      .catch((e) => rendreV(200, { ok: false, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160) }))
+      .finally(() => { railsEnVol -= 1; });
     return;
   }
   if (chemin === '/api/rails/plan') {

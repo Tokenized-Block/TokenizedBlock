@@ -2079,7 +2079,7 @@ details[open] > summary::before{transform:rotate(90deg)}
                      Ecrire « Buy with ETH » tout court laisserait le visiteur ignorer ce qu il vient
                      de gagner. -->
               <button class="bouton" id="fAcheterEth" type="button" hidden>Buy with ETH · one transaction</button>
-              <button class="bouton sec" id="fIb" type="button" hidden>Instant Birth · 0.001 ETH</button>
+              <button class="bouton sec" id="fIb" type="button" hidden>Instant Birth · $5</button>
               <button class="bouton sec" id="fPairer" type="button" hidden>Pair with it</button>
               <button class="bouton plein sec" id="fProfil">Open profile</button>
             </div>
@@ -2155,7 +2155,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="creaNom" id="cApercuNom">Your block</p>
       <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
       <!-- tip 20260922-fee-funnel -->
-      <p class="creaPrix"><b>0.001 ETH</b><span>born, face and brain engraved, market open</span></p>
+      <p class="creaPrix"><b>$5</b><span>born, face and brain engraved, market open · 0.001 ETH + the rest in TBLOCK</span></p>
       <!-- ⛔ PHIL (2026-09-17) : « pourquoi t as retire les parametres » — ils n ont pas ete retires, ils
            ont ete replies deux cartes plus bas, ce qui revient au meme pour qui ne fouille pas. Ce
            bouton les ouvre et y emmene, et son libelle dit dans quel sens il va. -->
@@ -2338,7 +2338,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="cPaireNote"></p>
       <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
       </details>
-      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the Birth fee: 0.001 ETH, signed in two parts: 0.0007 ETH when you create, then 0.0003 ETH plus your creator deposit when its market opens. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
+      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the price: $5 in all. 0.001 ETH goes to the birth, signed in two parts: 0.0007 ETH when you create, then 0.0003 ETH plus your creator deposit (not a fee: it stays yours) when its market opens. The rest of the $5 goes to the community vault in TBLOCK right after: from your TBLOCK, or bought with your ETH in the same step if you hold none. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
       <!-- game326 (Phil 2026-11-09): the app recommends holding TBLOCK; the birth path itself is unchanged (the deployed contracts take ETH) -->
       <p class="note" id="cTblockReco">Recommended: hold TBLOCK, the app's own token. About $5 of it can be bought in the app in one batch
         (<a href="holders.html" target="_blank" rel="noopener">Buy TBLOCK</a>); $15 opens the holders' channel. Each buy goes through its pool, whose hook sends
@@ -2372,7 +2372,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <!-- tip 20260922-2140 HARD: Instant Birth hooked V8 DIRECT on Create — primary CTA only.
              One path: create + open V8 market + FRAIS_OUVERTURE 0.001 ETH → FEE_WALLET (vieAuto / one-sig). -->
         <!-- tip 20260922-create-sign-ux: kill Advanced free-asleep CTA; Connect→review→sign Instant Birth -->
-        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → review → Instant Birth · 0.001 ETH</button>
+        <button class="bouton creaGo" id="cCreer" type="button">Connect wallet → review → Instant Birth · $5</button>
         <!-- SAFE CTA Plan A (2026-09-22): external Coinbase Onramp only — funds USER wallet.
              No TB custody, no Instant Birth / fee math change, never show fee sink.
              Hosted one-click URL needs CDP sessionToken; public landing used until CDP wired. -->
@@ -3600,7 +3600,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game336" hidden>Build <code>20261109-game336</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game337" hidden>Build <code>20261109-game337</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3653,7 +3653,7 @@ details[open] > summary::before{transform:rotate(90deg)}
            — TB earns $0 there ». Trois choses qui ne concernent pas le lecteur : la version du
            protocole, le mot « hook », et surtout CE QUE NOUS GAGNONS. Ce qui le concerne, c est
            que ces jetons ne paient rien a leur createur — et qu ouvrir un marche ici change ca. -->
-      <p class="sous">Tokens from <b>openlaunch.lol</b>, read on chain. Their whole supply is locked in a pool, and <b>no trade pays their creator</b>. Opening a market here changes that — Instant Birth · 0.001 ETH.</p>
+      <p class="sous">Tokens from <b>openlaunch.lol</b>, read on chain. Their whole supply is locked in a pool, and <b>no trade pays their creator</b>. Opening a market here changes that — Instant Birth · $5.</p>
       <ul class="fil" id="sfOl"></ul>
       <p class="note" id="sfOlNote">Open this tab to read OpenLaunch.</p>
     </div>
@@ -23829,10 +23829,10 @@ function majFraisEtRecap() {
      * (create + open V8 + FRAIS_OUVERTURE 0.001 ETH → FEE_WALLET via creerEtVivreUneSignature / vieAuto). */
     /* tip 20260922-create-sign-ux: Connect→review→sign Instant Birth; Advanced free-asleep CTA removed.
      * Practice stays honest free-wake — never invent MAIN free. #cCreerFree gone (null-guarded below). */
-    if (!compte) boutonCreer.textContent = 'Connect wallet → review → Instant Birth · 0.001 ETH';
+    if (!compte) boutonCreer.textContent = 'Connect wallet → review → Instant Birth · $5';
     else if (aLancerBloque) boutonCreer.textContent = 'Finish Bring life first';
     else boutonCreer.textContent = Number(CHAINE) === 8453
-      ? 'Review → sign Instant Birth · 0.001 ETH'
+      ? 'Review → sign Instant Birth · $5'
       : 'Instant Birth (practice, free)';
     /* E0: a pair no launch hook can price closes payment — the 0.001 ETH is never requested. */
     if (motifRefusPaire) { boutonCreer.disabled = true; boutonCreer.textContent = 'Pick another pair'; boutonCreer.title = ''; }
@@ -24948,7 +24948,7 @@ async function creerBlock() {
   if (Number(CHAINE) === 8453 && creerSansVie) {
     creerSansVie = false;
     e.className = 'note wKo';
-    e.textContent = 'Free create is retired on Base. Use Instant Birth · 0.001 ETH — nothing was signed.';
+    e.textContent = 'Free create is retired on Base. Use Instant Birth · $5 — nothing was signed.';
     majFraisEtRecap();
     try { etape('cree_refus_gratuit'); } catch (_) {}
     return;
@@ -24973,7 +24973,7 @@ async function creerBlock() {
     try { reconcilierALancer(); } catch (_) { /* une reconciliation ratee ne doit pas bloquer */ }
     if (aLancerLire().length > 0 && bloqueLaCreation()) {
       e.className = 'note wKo';
-      e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · 0.001 ETH — nothing was signed.';
+      e.textContent = 'Finish Bring life on your existing block(s), or dismiss them first. Then Instant Birth · $5 — nothing was signed.';
       majFraisEtRecap();
       try { etape('cree_refus_a_lancer'); } catch (_) {}
       return;
@@ -25216,7 +25216,7 @@ async function creerBlock() {
       /* ⛔ BUG vu par Phil (capture, mainnet) : avec le hook V2 deploye, on tombait ici et l ecran disait « Practice » */
       /* tip 20260922-ib-batch: never sell factory create as Instant Birth — fee moment is V8 inscription. */
       e.textContent = Number(CHAINE) === 8453
-        ? 'Review — Instant Birth · 0.001 ETH…'
+        ? 'Review — Instant Birth · $5…'
         : 'Practice — create it. Check it in your wallet.';
     }
     /* ⛔ AUDIT 2026-09-20 (bloquant) : cet appel jette quand les metadonnees gravees sont trop grosses, et
@@ -32230,17 +32230,45 @@ async function peindreTipApercu() {
     const sim = TIP.plan({ ethUsd, tblockUsd: px, balance: 10n ** 40n });
     rows.push(ligne('Pay for a birth, $' + TIP.TARGET_USD + ' in all:', ''));
     rows.push(ligne('1. In ETH, when you sign the birth:', '0.001 ETH (about $' + ethPart.toFixed(2) + ')'));
-    rows.push(ligne('2. In TBLOCK, right after it is alive (optional):', sim.ok ? ECO.fmt(sim.amount) + ' TBLOCK (about $' + (Number(left) / 1e6).toFixed(2) + ') to the community vault' : sim.why));
+    rows.push(ligne('2. In TBLOCK, right after it is alive:', sim.ok ? ECO.fmt(sim.amount) + ' TBLOCK (about $' + (Number(left) / 1e6).toFixed(2) + ') to the community vault' : sim.why));
+    const wei = TIP.ethWeiForTopUp(ethUsd);
     if (compte && sim.ok) {
       const v = ECO.VIEW.balanceOf(String(compte).toLowerCase());
       const bal = ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
-      rows.push(ligne('Your TBLOCK:', ECO.fmt(bal) + (bal >= sim.amount ? ' — enough for part 2' : ' — not enough for part 2; the birth still works with ETH only')));
-    }
+      rows.push(ligne('Your TBLOCK:', ECO.fmt(bal) + (bal >= sim.amount ? ' — enough for part 2'
+        : ' — not enough: part 2 buys it with ' + (wei ? (Number(wei) / 1e18).toFixed(6) : '?') + ' ETH from your wallet, in one batch')));
+    } else if (sim.ok && wei) rows.push(ligne('No TBLOCK?', 'part 2 buys it with about ' + (Number(wei) / 1e18).toFixed(6) + ' ETH, in one batch, no app fee.'));
     rows.push(ligne('', 'The creator deposit (about $1 in ETH) is not a fee: it stays yours.'));
-  } catch (_) { rows = [ligne('Pay for a birth:', '0.001 ETH; the optional TBLOCK part could not be priced just now.')]; tipApercuLu = Date.now() - 45000; }
+  } catch (_) { rows = [ligne('Pay for a birth:', '$' + TIP.TARGET_USD + ' = 0.001 ETH + the rest in TBLOCK; reading today’s prices…')]; tipApercuLu = Date.now() - 55000; }
   box.replaceChildren(...rows); box.hidden = false;
 }
 setInterval(() => { void peindreTipApercu().catch(() => {}); }, 5000);
+
+/* the ETH path of the TBLOCK part: buy TBLOCK with ETH, the vault receives the buy's guaranteed minimum, in ONE batch */
+const planAchatCoffre = async (wei) => fetch('/api/tblock/vault-buy?compte=' + String(compte).toLowerCase() + '&eth=' + wei, { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json());
+async function proposerAchatCoffre(p, btn) {
+  const wei = TIP.ethWeiForTopUp(ethUsd);
+  if (wei === null) { p.textContent = 'The ETH price could not be read just now: the TBLOCK part is not offered.'; return; }
+  let pl;
+  try { pl = await planAchatCoffre(wei); } catch (err) { pl = { ok: false, pourquoi: 'the plan could not be read just now' }; }
+  if (!pl || !pl.ok) { p.textContent = 'TBLOCK part for the community vault: not offered just now (' + String((pl && pl.pourquoi) || 'no plan').slice(0, 140) + ').'; return; }
+  const eth = (Number(wei) / 1e18).toFixed(6);
+  p.textContent = 'Next: the rest of your $' + TIP.TARGET_USD + ' in TBLOCK, bought with ' + eth + ' ETH (about $' + (Number(wei) / 1e18 * ethUsd).toFixed(2) + ') and sent to the community vault: at least '
+    + ECO.fmt(BigInt(pl.resume.versCoffre)) + ' TBLOCK. Each buy goes through the TBLOCK pool, whose hook burns part of it. No app fee. One batch to sign.';
+  btn.textContent = 'Buy TBLOCK for the vault · ' + eth + ' ETH'; btn.hidden = false;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; p.textContent = 'Rebuilding the plan at today’s price…';
+    try {
+      const fresh = await planAchatCoffre(wei);
+      if (!fresh || !fresh.ok) { p.textContent = 'Not sent: ' + String((fresh && fresh.pourquoi) || 'no plan').slice(0, 160); btn.disabled = false; return; }
+      p.textContent = 'Waiting for your wallet: ' + eth + ' ETH -> TBLOCK -> community vault (at least ' + ECO.fmt(BigInt(fresh.resume.versCoffre)) + ' TBLOCK)…';
+      const r = await envoyerAppels(fresh.appels.map((c) => ({ to: c.to, data: c.data, value: c.value })), compte);
+      if (r && r.etat === 'CONFIRME') { p.textContent = 'Done: TBLOCK bought and ' + ECO.fmt(BigInt(fresh.resume.versCoffre)) + ' TBLOCK sent to the community vault.'; btn.hidden = true; return; }
+      p.textContent = 'Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160);
+    } catch (err) { p.textContent = 'Not sent: ' + String((err && err.message) || err).slice(0, 160); }
+    btn.disabled = false;
+  });
+}
 
 async function proposerTipCoffre(hote) {
   if (!hote || !ECO.VAULT || !compte) return;
@@ -32257,6 +32285,9 @@ async function proposerTipCoffre(hote) {
     const bal = ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
     q = TIP.plan({ ethUsd, tblockUsd: h && h.ok ? Number(h.priceNow) : null, balance: bal });
   } catch (err) { q = { ok: false, why: 'It could not be read just now.' }; }
+  /* game337 (Phil 2026-11-10): not enough TBLOCK -> the same part is BOUGHT WITH ETH and sent to the vault in one batch
+   *   (GET /api/tblock/vault-buy: no app fee, the whole batch simulated from this wallet; the plan is rebuilt at the click) */
+  if (!q.ok && /^This needs/.test(String(q.why || ''))) { proposerAchatCoffre(p, btn); return; }
   if (!q.ok) { p.textContent = 'Optional: top your birth up to $' + TIP.TARGET_USD + ' in TBLOCK for the community vault. ' + q.why; return; }
   p.textContent = 'Optional: add $' + (Number(q.usdMicro) / 1e6).toFixed(2) + ' of TBLOCK to the community vault, so your birth totals $' + TIP.TARGET_USD
     + '. The vault pays the players of each week first. One more signature; skipping it changes nothing for your block.';

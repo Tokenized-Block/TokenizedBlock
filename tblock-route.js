@@ -325,3 +325,23 @@ export async function planRouteTblock({ rpc, compte, de, vers, montant, fraisBps
   }
 }
 
+/**
+ * game337 (Phil 2026-11-10): the TBLOCK part of a birth, BOUGHT WITH ETH and sent to the community vault, in ONE atomic batch:
+ * the ETH > TBLOCK buy above (with NO app fee: it is a gift to the vault) + TBLOCK.transfer(vault, the buy's guaranteed minimum).
+ * Anything the pools give above that minimum stays with the buyer. The WHOLE batch is simulated from the account; PRET only if
+ * every call passes. Returns the same shape as planRouteTblock, with resume.versCoffre = what the vault receives for sure.
+ */
+export async function planAchatPourCoffre({ rpc, compte, montantEth, coffre, maintenant = Date.now() } = {}) {
+  if (!ADR.test(bas(coffre))) return { etat: 'REFUSE', pourquoi: 'a whole vault address is required, with no default' };
+  const p = await planRouteTblock({ rpc, compte, de: ETH, vers: bas(TBLOCK), montant: montantEth, fraisBps: 0n, maintenant });
+  if (p.etat !== 'PRET') return p;
+  const versCoffre = BigInt(p.resume.recoitAuMoins);
+  if (versCoffre <= 0n) return { etat: 'REFUSE', pourquoi: 'the buy guarantees no TBLOCK for this amount' };
+  const tr = calldataTransfer({ token: TBLOCK, to: coffre, montant: versCoffre });
+  const appels = [...p.appels, { ...tr, role: 'send the TBLOCK bought (its guaranteed minimum) to the community vault' }];
+  const s = await simuler(rpc, compte, appels);
+  if (s.etat !== 'OK') return { ...s, resume: null };
+  return { etat: 'PRET', exigeAtomique: true, appels, pourquoi: null,
+    resume: { ...p.resume, fraisBps: 0n, versCoffre, coffre: bas(coffre), gasSimule: s.gas.reduce((x, y) => x + y, 0n) } };
+}
+

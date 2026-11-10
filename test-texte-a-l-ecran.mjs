@@ -144,7 +144,10 @@ const MOTIFS = [
    *    Ce que la regle traque, c est un prix en dollars qui DIVERGE du montant en ETH quand le
    *    marche bouge. Zero ne diverge pas. Accuser du texte correct fait desactiver la garde, et on
    *    perd les vraies prises avec. */
-  { re: /\$\s?(?!0(?![.\d]))\d[^\n]{0,60}0\.001 ETH|0\.001 ETH[^\n]{0,60}\$\s?(?!0(?![.\d]))\d/,
+  /* ⛔ game337 : « $5 in all » EST EXCLU, meme raison que `$0` : ce total ne diverge pas. La part TBLOCK est recalculee au prix
+   *    lu (create-vault-tip.js usdLeft = 5 $ - valeur de 0,001 ETH), donc les 5 $ restent 5 $ quand l ETH bouge. Seule la forme
+   *    exacte « $5 in all » est exclue : tout autre dollar colle a 0,001 ETH reste accuse. */
+  { re: /\$\s?(?!0(?![.\d]))(?!5 in all)\d[^\n]{0,60}0\.001 ETH|0\.001 ETH[^\n]{0,60}\$\s?(?!0(?![.\d]))(?!5 in all)\d/,
     quoi: 'un prix en DOLLARS fige colle au frais en ETH — l un bouge avec le marche, l autre non' },
   /* ⛔⛔ UN « ≈ $N » ECRIT EN DUR EST UNE APPROXIMATION QUE LE CODE NE CALCULE PAS. La regle
    *     ci-dessus ne mordait QUE si le dollar etait colle a « 0.001 ETH » dans la meme chaine —

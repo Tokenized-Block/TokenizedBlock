@@ -129,7 +129,7 @@ ok('create button: "Pick another pair" and DISABLED while refused',
 const recap = app.slice(app.indexOf('function majFraisEtRecap()'), app.indexOf("const feeTxt = usd > 0"));
 ok('…set AFTER every other label/disabled write in majFraisEtRecap (nothing re-opens it)',
   recap.lastIndexOf('if (motifRefusPaire)') > recap.lastIndexOf('boutonCreer.disabled = aLancerBloque')
-  && recap.lastIndexOf('if (motifRefusPaire)') > recap.lastIndexOf("'Review → sign Instant Birth · 0.001 ETH'"));
+  && recap.lastIndexOf('if (motifRefusPaire)') > recap.lastIndexOf("'Review → sign Instant Birth · $5'"));
 ok('the only click path to payment goes through validerCreation',
   /async function creerBlock\(\)[\s\S]{0,400}validerCreation\(\)/.test(app) || app.split('validerCreation()').length - 1 >= 4);
 
