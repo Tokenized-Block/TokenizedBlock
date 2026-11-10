@@ -6052,6 +6052,8 @@ const SERVIS = [
   'deployer-tblock-buyback.html', 'tblock-buyback-deploiement.js',
   /* game325: the unsigned deployment of the block contest (generated) and its page */
   'deployer-block-contest.html', 'block-contest-deploiement.js',
+  /* the block contest page for users (reads Base, builds unsigned calls for the wallet of the user) and its pure module */
+  'contest.html', 'block-contest.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
