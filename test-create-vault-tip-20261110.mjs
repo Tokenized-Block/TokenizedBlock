@@ -50,4 +50,11 @@ t('the send uses TIP.plan and envoyerAppels with that ONE call', /TIP\.plan\(/.t
 t('no birth plan carries the tip', !/appels[^\n]{0,200}TIP\./.test(app.replace(fn, '')));
 const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 t('module is served', /'create-vault-tip\.js'/.test(srv));
+/* game336: the split is shown BEFORE signing, on the Create tab, with live numbers */
+t('the pre-signing split line exists on the Create tab, hidden until read', /<div class="stadeLigne" id="cTipApercu" hidden/.test(app) && app.indexOf('id="cTipApercu"') > app.indexOf('id="v-creer"'));
+const ap = app.slice(app.indexOf('async function peindreTipApercu('), app.indexOf('async function proposerTipCoffre('));
+t('it prices part 2 with TIP.usdLeft and TIP.plan (same maths as the send)', /TIP\.usdLeft\(ethUsd\)/.test(ap) && /TIP\.plan\(\{ ethUsd, tblockUsd: px/.test(ap));
+t('it says the birth still works with ETH only when TBLOCK is short', /the birth still works with ETH only/.test(ap));
+t('it says the deposit is not a fee', /is not a fee: it stays yours/.test(ap));
+t('it builds no call and sends nothing', !/envoyerAppels|eth_sendTransaction|wallet_sendCalls/.test(ap));
 console.log(ko === 0 ? 'GREEN' : 'RED', ok + '/' + (ok + ko));

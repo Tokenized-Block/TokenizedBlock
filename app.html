@@ -2345,6 +2345,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         part of every trade to the dead address. Once your block is alive, you can add the rest up to $5 in TBLOCK to the community vault
         (optional, one more signature). Creators can also enter their block in the
         <a href="contest.html" target="_blank" rel="noopener">block contest</a>, where entries and votes are paid in TBLOCK.</p>
+      <!-- game336 (Phil 2026-11-10): the ETH part + TBLOCK part split is shown BEFORE signing, with live numbers (create-vault-tip.js) -->
+      <div class="stadeLigne" id="cTipApercu" hidden style="flex-direction:column;align-items:flex-start;gap:4px;margin-top:8px"></div>
       <p class="note" id="cCautionNote" hidden></p>
       <details class="bDetail" style="margin-top:6px"><summary class="note">Review before your wallet request</summary>
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px" hidden>
@@ -3598,7 +3600,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game335" hidden>Build <code>20261109-game335</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game336" hidden>Build <code>20261109-game336</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -32207,6 +32209,39 @@ $('#bcLikeBtn').addEventListener('click', async () => {
 /* ── Optional TBLOCK part of a birth (Phil 2026-11-10: optional, tops the 0.001 ETH fee up to $5, into the community vault).
  *   Offered INSIDE the success note, AFTER the block is alive: it is never part of the birth batch, so it can never stop a birth.
  *   One call, TBLOCK.transfer(vault, amount), signed by the creator; amount from create-vault-tip.js (rounded down, never above $5). */
+/* Pay split shown BEFORE signing on the Create tab: ETH part (fixed by the contracts) + TBLOCK part (optional, after birth).
+ * Read every 60 s while the Create tab is visible; numbers are live or the line says it could not read them. */
+let tipApercuLu = 0;
+async function peindreTipApercu() {
+  const box = $('#cTipApercu');
+  if (!box || !ECO.VAULT) return;
+  const vol = $('#v-creer');
+  if (document.hidden || (vol && vol.offsetParent === null) || Date.now() - tipApercuLu < 60000) return;
+  tipApercuLu = Date.now();
+  const ligne = (k, v) => { const d = document.createElement('div'); const a = document.createElement('span'); a.textContent = k + ' '; const b = document.createElement('b'); b.textContent = v; d.append(a, b); return d; };
+  let rows = [];
+  try {
+    if (ethUsd === null) await lirePrixEth();
+    const h = await fetch('/api/tblock/hold', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((x) => x.json());
+    const px = h && h.ok ? Number(h.priceNow) : null;
+    const left = TIP.usdLeft(ethUsd);
+    if (left === null || !(px > 0)) throw new Error('price not read');
+    const ethPart = (Number(TIP.BIRTH_FEE_WEI) / 1e18) * ethUsd;
+    const sim = TIP.plan({ ethUsd, tblockUsd: px, balance: 10n ** 40n });
+    rows.push(ligne('Pay for a birth, $' + TIP.TARGET_USD + ' in all:', ''));
+    rows.push(ligne('1. In ETH, when you sign the birth:', '0.001 ETH (about $' + ethPart.toFixed(2) + ')'));
+    rows.push(ligne('2. In TBLOCK, right after it is alive (optional):', sim.ok ? ECO.fmt(sim.amount) + ' TBLOCK (about $' + (Number(left) / 1e6).toFixed(2) + ') to the community vault' : sim.why));
+    if (compte && sim.ok) {
+      const v = ECO.VIEW.balanceOf(String(compte).toLowerCase());
+      const bal = ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
+      rows.push(ligne('Your TBLOCK:', ECO.fmt(bal) + (bal >= sim.amount ? ' — enough for part 2' : ' — not enough for part 2; the birth still works with ETH only')));
+    }
+    rows.push(ligne('', 'The creator deposit (about $1 in ETH) is not a fee: it stays yours.'));
+  } catch (_) { rows = [ligne('Pay for a birth:', '0.001 ETH; the optional TBLOCK part could not be priced just now.')]; tipApercuLu = Date.now() - 45000; }
+  box.replaceChildren(...rows); box.hidden = false;
+}
+setInterval(() => { void peindreTipApercu().catch(() => {}); }, 5000);
+
 async function proposerTipCoffre(hote) {
   if (!hote || !ECO.VAULT || !compte) return;
   const box = document.createElement('div'); box.className = 'cVaultTip'; box.style.marginTop = '10px';
