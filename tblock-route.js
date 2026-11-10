@@ -331,10 +331,13 @@ export async function planRouteTblock({ rpc, compte, de, vers, montant, fraisBps
  * Anything the pools give above that minimum stays with the buyer. The WHOLE batch is simulated from the account; PRET only if
  * every call passes. Returns the same shape as planRouteTblock, with resume.versCoffre = what the vault receives for sure.
  */
-export async function planAchatPourCoffre({ rpc, compte, montantEth, coffre, maintenant = Date.now() } = {}) {
+export async function planAchatPourCoffre({ rpc, compte, montantEth, coffre, garder = false, maintenant = Date.now() } = {}) {
   if (!ADR.test(bas(coffre))) return { etat: 'REFUSE', pourquoi: 'a whole vault address is required, with no default' };
   const p = await planRouteTblock({ rpc, compte, de: ETH, vers: bas(TBLOCK), montant: montantEth, fraisBps: 0n, maintenant });
   if (p.etat !== 'PRET') return p;
+  /* game338 (Phil 2026-11-10): `garder` = STEP 1 of a birth, the TBLOCK is bought BEFORE the birth and stays in the buyer's wallet
+   *   (no app fee: it is bought to pay the vault at step 3). The buy alone was already simulated whole by planRouteTblock. */
+  if (garder) return { ...p, resume: { ...p.resume, fraisBps: 0n, garde: true } };
   const versCoffre = BigInt(p.resume.recoitAuMoins);
   if (versCoffre <= 0n) return { etat: 'REFUSE', pourquoi: 'the buy guarantees no TBLOCK for this amount' };
   const tr = calldataTransfer({ token: TBLOCK, to: coffre, montant: versCoffre });

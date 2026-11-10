@@ -21,6 +21,20 @@ export function usdLeft(ethUsd) {
   return left > 0n ? left : 0n; /* micro-dollars */
 }
 
+/** game338: ETH kept for the birth itself when step 1 buys TBLOCK first: 0.001 ETH fee + the creator deposit (about $1, 0.000479 ETH
+ *  measured on /api/naissance/plan 2026-11-10) + gas, with room: 0.0023 ETH. Step 1 never spends below it. */
+export const BIRTH_ETH_RESERVE_WEI = 2300000000000000n;
+
+/** game338: the ETH that buys `tblock` (wei) at the read prices, plus `bufferBps` so the guaranteed minimum still covers it
+ *  (two 1 % slippage bounds + the TBLOCK hook's ~1 % + pool fees): rounded UP; null when a price is unread */
+export function ethWeiForTblock({ tblock, tblockUsd, ethUsd, bufferBps = 400n }) {
+  const t = micro(tblockUsd * 1e6), e = micro(ethUsd); /* tblockUsd is tiny: scaled by 1e6 before micro() */
+  if (t === null || e === null || typeof tblock !== 'bigint' || tblock <= 0n) return null;
+  /* dollars = tblock/1e18 * tblockUsd ; eth = dollars / ethUsd ; wei = eth * 1e18  =>  wei = tblock * (t/1e12) / (e/1e6) */
+  const base = (tblock * t) / (e * 1000000n);
+  return (base * (10000n + BigInt(bufferBps)) + 9999n) / 10000n;
+}
+
 /** game337: the ETH that buys the TBLOCK part when the wallet holds too little TBLOCK; wei, rounded DOWN; null when unread or nothing to add */
 export function ethWeiForTopUp(ethUsd) {
   const left = usdLeft(ethUsd), e = micro(ethUsd);

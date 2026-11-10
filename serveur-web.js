@@ -7713,7 +7713,8 @@ function traiterRequete(req, res) {
       rendreV(429, { ok: false, etat: 'NON_MESURE', pourquoi: 'busy: retry in a minute' }, { 'retry-after': '60' }); return;
     }
     railsBudget.parIp.set(ipV, nIpV); railsBudget.n += 1; railsEnVol += 1;
-    planAchatPourCoffre({ rpc: rpcNaissance, compte: compteV, montantEth: BigInt(ethV), coffre: coffreV })
+    /* garder=1 (game338): step 1 of a birth, the TBLOCK bought stays in the buyer's wallet; it pays the vault at step 3 */
+    planAchatPourCoffre({ rpc: rpcNaissance, compte: compteV, montantEth: BigInt(ethV), coffre: coffreV, garder: q.get('garder') === '1' })
       .then((r) => rendreV(200, { ok: r.etat === 'PRET', ...r }))
       .catch((e) => rendreV(200, { ok: false, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160) }))
       .finally(() => { railsEnVol -= 1; });

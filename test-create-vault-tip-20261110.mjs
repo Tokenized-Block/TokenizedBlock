@@ -52,9 +52,25 @@ const srv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 t('module is served', /'create-vault-tip\.js'/.test(srv));
 /* game336: the split is shown BEFORE signing, on the Create tab, with live numbers */
 t('the pre-signing split line exists on the Create tab, hidden until read', /<div class="stadeLigne" id="cTipApercu" hidden/.test(app) && app.indexOf('id="cTipApercu"') > app.indexOf('id="v-creer"'));
-const ap = app.slice(app.indexOf('async function peindreTipApercu('), app.indexOf('const planAchatCoffre = '));
+const ap = app.slice(app.indexOf('async function peindreTipApercu('), app.indexOf('let tipAuto = false;'));
 t('it prices part 2 with TIP.usdLeft and TIP.plan (same maths as the send)', /TIP\.usdLeft\(ethUsd\)/.test(ap) && /TIP\.plan\(\{ ethUsd, tblockUsd: px/.test(ap));
-t('it says part 2 is bought with ETH when TBLOCK is short', /part 2 buys it with/.test(ap) && /TIP\.ethWeiForTopUp\(ethUsd\)/.test(ap));
+t('the preview shows the 3 steps in order, TBLOCK first', ap.indexOf("'1. Before the birth, if you lack TBLOCK:'") > 0
+  && ap.indexOf("'1. Before the birth") < ap.indexOf("'2. The birth, in ETH:'") && ap.indexOf("'2. The birth") < ap.indexOf("'3. Right after, pay the block in TBLOCK:'"));
+t('the preview prices step 1 with the same buy maths as step 1', /TIP\.ethWeiForTblock\(\{ tblock: manque, tblockUsd: px, ethUsd \}\)/.test(ap));
+/* game338: step 1 BEFORE the birth */
+const cb = app.slice(app.indexOf('async function creerBlock('), app.indexOf('async function creerBlock(') + 20000);
+t('step 1 runs inside creerBlock BEFORE the birth preflight', cb.indexOf('if (!(await acheterTblockAvantNaissance(e))) return;') > 0
+  && cb.indexOf('if (!(await acheterTblockAvantNaissance(e))) return;') < cb.indexOf('const ibDirectPre ='));
+const e1 = app.slice(app.indexOf('async function etape1AchatTblock('), app.indexOf('const planAchatCoffre = '));
+t('step 1 keeps the ETH the birth needs (reserve checked before buying)', /if \(ethBal < wei \+ TIP\.BIRTH_ETH_RESERVE_WEI\)/.test(e1) && e1.indexOf('BIRTH_ETH_RESERVE_WEI') < e1.indexOf('envoyerAppels('));
+t('step 1 asks a KEEP plan (TBLOCK stays in the wallet), never the vault plan', /vault-buy\?garder=1&compte=/.test(e1));
+t('step 1 refused by the wallet: the birth does not start', /if \(!r \|\| r\.etat !== 'CONFIRME'\) \{[\s\S]{0,260}return false;/.test(e1));
+t('step 1 unread prices or plan: the birth goes on (fail-open on a node outage)', /catch \(_\) \{ return true; \}/.test(e1) && /return true; \/\* plan unread/.test(e1));
+t('a second click during step 1 starts nothing', /if \(achatTblockEnCours\) return false;/.test(app));
+t('step 3 opens the wallet on its own after a birth that ran step 1', /if \(tipAuto\) \{ tipAuto = false; btn\.click\(\); \}/.test(app));
+t('ethWeiForTblock: 500,000 TBLOCK at $0.00000576, ETH $2,090, +4 % = 0.001433110 ETH', T.ethWeiForTblock({ tblock: 500000n * E18, tblockUsd: 5.76e-6, ethUsd: 2090 }) === 1433110047846890n);
+t('ethWeiForTblock is null on an unread price or nothing to buy', T.ethWeiForTblock({ tblock: 1n, tblockUsd: null, ethUsd: 2000 }) === null && T.ethWeiForTblock({ tblock: 0n, tblockUsd: 1e-6, ethUsd: 2000 }) === null);
+t('the server passes garder only when asked', /garder: q\.get\('garder'\) === '1'/.test(srv));
 /* game337: the ETH path */
 t('ethWeiForTopUp at ETH 2000 = $3 of ETH = 0.0015 ETH', T.ethWeiForTopUp(2000) === 1500000000000000n, String(T.ethWeiForTopUp(2000)));
 t('ethWeiForTopUp is null when unread or nothing to add', T.ethWeiForTopUp(null) === null && T.ethWeiForTopUp(6000) === null);
