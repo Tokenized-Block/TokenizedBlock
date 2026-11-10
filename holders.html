@@ -47,6 +47,13 @@ In the TokenizedBlock group, send <b>/hold</b>: @TblockHoldersBot brings you her
 </div>
 
 <div class="card">
+  <h2>Out of circulation</h2>
+  <div id="vueBurn"><span class="k">reading…</span></div>
+  <p class="note">TBLOCK has no burn function and its supply never shrinks. What sits at 0x…dEaD, an address nobody holds the key of,
+  is out of circulation for good. The pool's hook sends a cut of each trade there, and each block contest vote sends its whole fee there.</p>
+</div>
+
+<div class="card">
   <h2>Buy TBLOCK here</h2>
   <p class="note" style="margin-top:0">USDC → wtCOIN (Aerodrome) → TBLOCK (its Uniswap pool), in ONE batch your wallet signs. The app's fee is 0.1% of the
   USDC; the pool's own hook keeps about 1% of the TBLOCK and sends part of it to 0x…dEaD. Measured on a fork: a $5 buy costs about 1.7% in all,
@@ -161,7 +168,19 @@ $('#signer').onclick = async () => {
     + (r.state === 'TG_CODE_EXPIRED' ? '<p class="note">Send /hold to @TblockHoldersBot again for a new link.</p>' : '');
 };
 
+/* game329: what 0x…dEaD holds, read by the server at one block (/api/tblock/burn). A missing read is said, never shown as 0. */
+async function lireBurn() {
+  const box = $('#vueBurn');
+  try {
+    const b = await api('/api/tblock/burn');
+    if (!b.ok || !Number.isFinite(b.tokens) || !Number.isFinite(b.pct)) { box.innerHTML = row('state', pill('NOT READ', 'warn')) + row('why', esc(b.why || 'unknown')); return; }
+    box.innerHTML = row('held by 0x…dEaD', '<b>' + b.tokens.toLocaleString('en-US') + ' TBLOCK</b>') + row('share of the supply', esc(b.pct.toFixed(4)) + ' %')
+      + row('supply (fixed)', fmtTok(b.supply) + ' TBLOCK') + row('block', esc(b.block));
+  } catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')) + row('why', esc(e.message || e)); }
+}
+
 lirePrix();
+lireBurn();
 
 /* game326: buy TBLOCK here — the server builds the plan (/api/rails/plan, tblock-route.js, proven on a fork 53/53), the wallet signs ONE
  * atomic batch (EIP-5792 wallet_sendCalls). A wallet that cannot batch is told so: the first leg must never pass alone. */

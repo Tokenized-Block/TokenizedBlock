@@ -137,6 +137,7 @@ import { readPoolPrice } from './fly-price.js';
 import { createFly, createSession, foreseeNext, FLY } from './fly-core.js';
 import { readPrices as tbReadPrices, readHold as tbReadHold, holdMessage as tbHoldMessage, verifyOwnership as tbVerifyOwnership,
   telegramInvite as tbTelegramInvite, telegramReply as tbTelegramReply, joinRequestDecision as tbJoinRequestDecision, holderTagCall as tbHolderTagCall, HOLD_THRESHOLD_USD as TB_HOLD_USD, CHALLENGE_TTL_S as TB_CHALLENGE_TTL_S, TBLOCK_POOL as TB_POOL } from './tblock-hold.js';
+import { readBurn as tbReadBurn } from './tblock-burn.js';
 import { verifierFrais, compterRevenu, walletsInternes, devisesComptees, LIGNES_FRAIS } from './revenu-externe.js';
 import { ligneRegistre, totauxParCreateur } from './ref-vitrine.js';
 import { saisonDe, valeurUsd, crediter, tickets, racine, tirer, F_USD_V1, jourDe, moisDe, joursEntre, entreesPeriode, SEUIL_VOLUME_JOUR_USD, JOUR_MS, ticketsJour, joursPass, crediterPassSemaine } from './tirage-saison.js';
@@ -3089,6 +3090,23 @@ async function tbPrices() {
 async function tbHoldOf(wallet) {
   const prices = await tbPrices();
   return tbReadHold({ lire: tbLire, lireTs: tbLireTs, tete: prices.tete, wallet, prices });
+}
+/* game329: TBLOCK out of circulation (tblock-burn.js). A whole read is kept 60 s, a failed one 10 s so an outage is not paid per visitor. */
+const TB_BURN = { val: null, until: 0, pending: null };
+function tbBurn() {
+  if (TB_BURN.val && Date.now() < TB_BURN.until) return Promise.resolve(TB_BURN.val);
+  if (!TB_BURN.pending) {
+    TB_BURN.pending = (async () => {
+      let b;
+      try {
+        const tete = Number(BigInt(await rpcServeur('eth_blockNumber', [])));
+        b = await tbReadBurn({ lire: tbLire, block: tete });
+      } catch (e) { b = { ok: false, state: 'NOT_READ', why: 'the chain did not answer: ' + String((e && e.message) || e).slice(0, 100) }; }
+      TB_BURN.val = b; TB_BURN.until = Date.now() + (b.ok ? 60000 : 10000);
+      return b;
+    })().finally(() => { TB_BURN.pending = null; });
+  }
+  return TB_BURN.pending;
 }
 /* the bot token is never printed: only 'registered' / the reason without the URL */
 async function tbRegisterWebhook() {
@@ -7425,6 +7443,14 @@ function traiterRequete(req, res) {
         await tbTelegram('sendMessage', reply);
       }
     }).catch(() => fin(400));
+    return;
+  }
+  /* game329: GET /api/tblock/burn -> what 0x…dEaD holds of TBLOCK and its share of the supply, read at one block */
+  if (chemin === '/api/tblock/burn') {
+    const code = req.method === 'GET' ? 200 : 405;
+    const out = (body) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' }); res.end(JSON.stringify(body)); };
+    if (code === 405) { out({ ok: false, why: 'GET only' }); return; }
+    tbBurn().then(out);
     return;
   }
   /* 2026-11-09 TBLOCK proof of hold: GET /api/tblock/hold?wallet=0x… (status + a message to sign), POST /api/tblock/telegram-invite */
