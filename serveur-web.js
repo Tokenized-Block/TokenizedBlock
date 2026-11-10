@@ -261,6 +261,7 @@ import { lireAvoirs, classeLot } from './avoirs.js';
 import { planRail, echangesDevisesAnnonces } from './rails-api.js';
 import { planAchatPourCoffre, planWtcoinVersTblock } from './tblock-route.js'; /* game337: ETH -> TBLOCK -> community vault; game339: resume */
 import { ECONOMIE_DEPLOIEMENT } from './economie-deploiement.js';
+import { validerRelais, RELAIS_CORPS_MAX } from './relais-rpc.js'; /* game341: the page's last-resort read relay */
 import { lireMarchesMorpho, lireFraisMorphoChaine, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
@@ -1184,6 +1185,16 @@ const RPC_ARCHIVE = (() => {
   const u = String(process.env.BASE_RPC_ARCHIVE || '').trim();
   try { const x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password ? x.href : null; } catch { return null; }
 })();
+/* game341: the relay's keyed node — BASE_RPC_RELAIS if set (its own quota), else the archive node above; https only, no credentials in
+ *   the URL authority; never in test mode. Its label is the host only (libelleNoeud), the key in the path is never printed. */
+const RELAIS_CLE = (() => {
+  if (ESSAI_SRV.actif || process.env.TB_REPLIS === '0') return null;
+  const u = String(process.env.BASE_RPC_RELAIS || '').trim();
+  if (!u) return RPC_ARCHIVE;
+  try { const x = new URL(u); return x.protocol === 'https:' && !x.username && !x.password ? x.href : null; } catch { return null; }
+})();
+const RELAIS_MAX_JOUR = Number.isSafeInteger(Number(process.env.RELAIS_MAX_JOUR)) && Number(process.env.RELAIS_MAX_JOUR) >= 0 ? Number(process.env.RELAIS_MAX_JOUR) : 20000;
+const RELAIS = { minute: 0, parIp: new Map(), jour: '', cles: 0, servis: 0, refus: 0, echecs: 0 };
 const ARCHIVE_MAX_JOUR = Number.isSafeInteger(Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR)) && Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) >= 0
   ? Number(process.env.BASE_RPC_ARCHIVE_MAX_JOUR) : 3000;
 const archiveCompte = { jour: null, appels: 0, refusBudget: 0, erreurs: 0, servis: 0, relances: 0, derniereErreur: null, par: {}, erreursPar: {}, refusPar: {}, parQui: {}, refusParQui: {},
@@ -6079,7 +6090,7 @@ const SERVIS = [
   /* the block contest page for users (reads Base, builds unsigned calls for the wallet of the user) and its pure module */
   'contest.html', 'block-contest.js',
   /* holders economy: the +1 burn and the community vault, their page module, the unsigned deployment (generated) and its page */
-  'economie.js', 'economie-deploiement.js', 'deployer-economie.html', 'create-vault-tip.js',
+  'economie.js', 'economie-deploiement.js', 'deployer-economie.html', 'create-vault-tip.js', 'relais-rpc.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
@@ -7694,6 +7705,43 @@ function traiterRequete(req, res) {
     res.end(JSON.stringify({ ok: true, maxAgeMs: STABLE_NEUVE_MAX_MS, stables: lignes }));
     return;
   }
+  /* game341 (live test 2026-11-10): POST /api/rpc { method, params } — the page's LAST resort when every public node refused (429).
+   *   Reads only (relais-rpc.js validerRelais); node = BASE_RPC_RELAIS if set, else the keyed archive node (CDP), then RPC_LIST.
+   *   Budgets: per IP 60 / min, and RELAIS_MAX_JOUR keyed calls per UTC day (20,000 by default, its own counter, apart from the archive's).
+   *   A node's JSON-RPC error (a revert) is returned as is, with its data: the page must see a revert as a revert, never as an outage. */
+  if (chemin === '/api/rpc') {
+    const rendreP = (code, corps, extra = {}) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra }); res.end(JSON.stringify(corps)); };
+    if (req.method !== 'POST') { rendreP(405, { error: { message: 'POST only' } }); return; }
+    const ipP = ipClient(req), minuteP = Math.floor(Date.now() / 60000), jourP = new Date().toISOString().slice(0, 10);
+    if (RELAIS.minute !== minuteP) { RELAIS.minute = minuteP; RELAIS.parIp.clear(); }
+    if (RELAIS.jour !== jourP) { RELAIS.jour = jourP; RELAIS.cles = 0; }
+    const nIpP = (RELAIS.parIp.get(ipP) || 0) + 1;
+    if (nIpP > 60) { rendreP(429, { error: { message: 'relay busy for this address: retry in a minute' } }, { 'retry-after': '60' }); return; }
+    RELAIS.parIp.set(ipP, nIpP);
+    lireCorpsMouche(req, RELAIS_CORPS_MAX).then(async (b) => {
+      const v = validerRelais(b);
+      if (!v.ok) { RELAIS.refus++; rendreP(400, { error: { message: v.why } }); return; }
+      const cle = RELAIS_CLE && RELAIS.cles < RELAIS_MAX_JOUR ? [RELAIS_CLE] : [];
+      let derniere = 'no node answered';
+      for (const url of [...cle, ...RPC_LIST]) {
+        try {
+          if (url === RELAIS_CLE) RELAIS.cles++;
+          const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: b.method, params: b.params }), signal: AbortSignal.timeout(12000) });
+          compterEnvoi(url, r.status === 429 ? 'limite' : (r.ok ? 'ok' : 'erreur'));
+          if (r.status === 429) { derniere = 'rate limited'; continue; }
+          if (!r.ok) { derniere = 'HTTP ' + r.status; continue; }
+          const j = await r.json();
+          if (j && j.error && /rate limit|too many requests|usage limit|request limit/i.test(String(j.error.message))) { derniere = 'rate limited'; continue; }
+          RELAIS.servis++;
+          if (j && j.error) { rendreP(200, { error: { message: String(j.error.message || 'error'), data: j.error.data, revert: true } }); return; }
+          rendreP(200, { result: j ? j.result : null }); return;
+        } catch (e) { compterEnvoi(url, 'reseau'); derniere = String((e && e.message) || e).slice(0, 80); }
+      }
+      RELAIS.echecs++;
+      rendreP(503, { error: { message: 'every node refused just now (' + derniere + ')' + (RELAIS_CLE && RELAIS.cles >= RELAIS_MAX_JOUR ? '; the keyed node budget of the day is spent' : '') } }, { 'retry-after': '10' });
+    }).catch((e) => rendreP(400, { error: { message: String((e && e.message) || e).slice(0, 80) } }));
+    return;
+  }
   /* game337 (Phil 2026-11-10): GET /api/tblock/vault-buy?compte=0x…&eth=<wei> — the TBLOCK part of a birth bought with ETH, sent to the
    *   community vault in the same batch (tblock-route.js planAchatPourCoffre: no app fee, whole batch simulated from the account).
    *   Same per-minute budget as /api/rails/plan; the vault address comes from the deployment file, never from the request. */
@@ -8785,6 +8833,9 @@ function traiterRequete(req, res) {
       /* 2026-10-10 : chaque requete JSON-RPC envoyee, par hote (jamais le chemin) et par issue, depuis le demarrage (compterEnvoi ;
        *   ce qui est compte et ce qui ne l est pas : voir envoisNoeuds) */
       envois: envoisNoeuds,
+      /* game341: the page's last-resort read relay — counts only; the keyed node is named by its host, never its path */
+      relais: { noeudCle: RELAIS_CLE ? libelleNoeud(RELAIS_CLE) : null, cleDediee: !!String(process.env.BASE_RPC_RELAIS || '').trim(),
+        maxJour: RELAIS_MAX_JOUR, jour: RELAIS.jour, appelsCle: RELAIS.cles, servis: RELAIS.servis, refus: RELAIS.refus, echecs: RELAIS.echecs },
       /* 2026-10-10 : requetes /api/prix-usd identiques fusionnees depuis le demarrage (en memoire) */
       prixUsdFusions,
       /* le mode essai se DIT (et seulement quand il est actif : hors essai, cette reponse est celle d avant) */

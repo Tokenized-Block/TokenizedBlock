@@ -155,7 +155,10 @@ export async function planNaissance(q, deps) {
     /* ── le plan de l ecran, lu comme si le block existait deja (rpcAvecBlockPrevu), puis l inscription dictee par le hook ── */
     const rpcPrevu = rpcAvecBlockPrevu(rpc, { jeton: adresse, compte, supply: SUPPLY_FIXE, dec: DECIMALES_FIXES, solde: SUPPLY_FIXE, permit2: PERMIT2 });
     let plan = await planLancement({ rpc: rpcPrevu, chaine, jeton: adresse, compte, valorisationEth: valo, partPourMille: 999, hooks: hook,
-      ...(devise ? { devise } : { quoteEthWei: CREATE_FEE_WEI_FLOOR, soldePresume: SUPPLY_FIXE }) });
+      /* game341 (Phil 2026-11-10, confirming his 2026-09-26 rule "birth without a seed"): the pool opens 100 % block, the creator puts
+       *   no ETH in it — the same as the app's own Create (app.html calculerLancement, quoteEthWei = 0n). This plan seeded 0.0003 ETH,
+       *   so an agent and the app built two different births. */
+      ...(devise ? { devise } : { quoteEthWei: 0n, soldePresume: SUPPLY_FIXE }) });
     if (!plan || (plan.etat !== 'PRET' && plan.etat !== 'APPROBATIONS')) {
       return (plan && plan.etat === 'REFUSE' ? refus : nonMesure)('the market plan could not be built: ' + ((plan && plan.pourquoi) || 'no answer'));
     }

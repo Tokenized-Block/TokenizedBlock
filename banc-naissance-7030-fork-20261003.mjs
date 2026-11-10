@@ -109,7 +109,8 @@ async function naissance({ etiquette, devise, decimales, prixUsd, valorisation, 
   const minimum = plancher !== null && plancher > BigInt(minimumApp) ? plancher : BigInt(minimumApp);
   if (financer) await financer(compte, minimum);
   let plan = await L.planLancement({ rpc, chaine: 8453, jeton: adr, compte, valorisationEth: valorisation, partPourMille: 999, hooks: H,
-    ...(devise !== ETH ? { devise } : { quoteEthWei: F.CREATE_FEE_WEI_FLOOR, soldePresume: T.SUPPLY_FIXE }) });
+    /* game341: no seed, like the app and naissance-api.js (Phil 2026-09-26, confirmed 2026-11-10) */
+    ...(devise !== ETH ? { devise } : { quoteEthWei: 0n, soldePresume: T.SUPPLY_FIXE }) });
   ok(plan && (plan.etat === 'PRET' || plan.etat === 'APPROBATIONS') && plan.tx, etiquette + ' : planLancement ' + (plan && plan.etat) + (plan && plan.pourquoi ? ' — ' + plan.pourquoi : ''));
   if (!plan || !plan.tx) return null;
   /* TEMOIN : sans le sel, le module refuse AVANT toute signature (c etait le revert de prod) */

@@ -3605,7 +3605,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game340" hidden>Build <code>20261109-game340</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game341" hidden>Build <code>20261109-game341</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5260,7 +5260,8 @@ import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeB
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import * as ECO from './economie.js'; /* holders economy: the +1 burn and the community vault (unsigned calls only) */
-import * as TIP from './create-vault-tip.js'; /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
+import * as TIP from './create-vault-tip.js';
+import { RELAIS_METHODES } from './relais-rpc.js'; /* game341: what the server relay reads for the page when every public node refused */ /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
@@ -9429,6 +9430,21 @@ async function rpcReseau(methode, params) {
       res.push(...r);
     }
     return res;
+  }
+  /* ⛔⛔ game341 (live test by Grok 2026-11-10): every public node answered 429 and a birth stopped in the middle could not be
+   *   resumed ("this block's market could not be read right now"). LAST resort, only after every node above refused: the app's own
+   *   server relay (/api/rpc), reads only, on a keyed node. Never for the pinned B20 factory reads (viseFactory: a wrong secours there
+   *   would read an empty list as "no event"). A node's JSON-RPC error comes back as a revert WITH its data, never as an outage. */
+  /* typeof guard: benches EXTRACT rpcReseau from this page and run it alone, where the module import does not exist (no relay there) */
+  if (typeof RELAIS_METHODES !== 'undefined' && RELAIS_METHODES.has(methode) && !viseFactory) {
+    let jr = null;
+    try {
+      const rr = await fetch('/api/rpc', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ method: methode, params }), signal: AbortSignal.timeout(15000) });
+      jr = await rr.json().catch(() => null);
+    } catch (_) { jr = null; }
+    if (jr && Object.prototype.hasOwnProperty.call(jr, 'result') && !jr.error) { try { rpcCompte.relais = (rpcCompte.relais || 0) + 1; } catch (_) {} return jr.result; }
+    if (jr && jr.error && jr.error.revert) { const e = new Error(jr.error.message); e.data = jr.error.data; throw e; }
   }
   throw derniere || new Error('RPC unreachable on all nodes');
 }
