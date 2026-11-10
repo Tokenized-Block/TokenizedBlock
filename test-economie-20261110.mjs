@@ -73,7 +73,7 @@ const serv = readFileSync(new URL('./serveur-web.js', import.meta.url), 'utf8');
 t('served: economie.js, economie-deploiement.js, deployer-economie.html', ["'economie.js'", "'economie-deploiement.js'", "'deployer-economie.html'"].every((s) => serv.includes(s)));
 const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 t('app: +1 sits on the name line', /<div class="bcNomLigne"><div class="bcNom" id="bcNom">[^<]*<\/div>\s*<span class="bcLike" id="bcLike" hidden>/.test(app));
-t('app: the click checks then sends the likeBatch', /ECO\.likeCheck\(\{ balance: bal, n: 1 \}\)[\s\S]{0,400}ECO\.likeBatch\(\{ block: a, n: 1 \}\)/.test(app));
+t('app: the click checks (contract hold + $15 now) then sends the likeBatch', /ECO\.likeCheckUsd\(\{ balance: bal, n: 1, prixUsd \}\)[\s\S]{0,400}ECO\.likeBatch\(\{ block: a, n: 1 \}\)/.test(app));
 t('app: Community vault card in the Wallet tab, hidden while the vault is null', /<section class="volet" id="v-wallet"[\s\S]*?<div class="carte" id="wVault" hidden>[\s\S]*?<\/section>/.test(app)
   && /if \(!ECO\.VAULT \|\| !ECO\.LIKES\) \{ carte\.hidden = true; return; \}/.test(app));
 t('app: hidden while BlockLikes is null', /if \(!ECO\.LIKES \|\| !ECO\.isB20\(a\)\) \{ box\.hidden = true;/.test(app));
@@ -85,5 +85,18 @@ t('app: hidden while BlockLikes is null', /if \(!ECO\.LIKES \|\| !ECO\.isB20\(a\
 t('likes address wired', E.LIKES === '0x343a289d5469a17726be9a0d219ee00721646f8a');
 t('vault address wired', E.VAULT === '0x025d751752d3aa695fdb3d9eedee69bc9553f331');
 t('buyback v2 address wired', D.adresseBuyback === '0x1afc3d27c37c9474a17ce83f03a18c4f95f102a3');
+/* game345: the heart's hold = the LARGER of the contract's fixed amount and $15 at the price read (Phil: "$15 at the current price") */
+{ const E18 = 10n ** 18n, P = E.LIKE_PRICE;
+  t('$15 at $0.000005 = 3,000,000 TBLOCK', E.tblockPourUsd(15, 0.000005) === 3000000n * E18);
+  t('price unread: no amount', E.tblockPourUsd(15, null) === null && E.tblockPourUsd(15, 0) === null);
+  const ok3m = E.likeCheckUsd({ balance: P + 3000000n * E18, prixUsd: 0.000005 });
+  t('price low: $15 rule stricter than the contract, exactly enough passes', ok3m.ok === true);
+  const ko3m = E.likeCheckUsd({ balance: P + 2999999n * E18, prixUsd: 0.000005 });
+  t('price low: one TBLOCK short of $15 is refused, with the amount', ko3m.ok === false && /\$15 of TBLOCK/.test(ko3m.why) && /3,000,000/.test(ko3m.why), ko3m.why);
+  const hi = E.likeCheckUsd({ balance: P + E.LIKE_MIN_HOLD - 1n, prixUsd: 1 });
+  t('price high: the contract fixed hold still applies (never looser than the contract)', hi.ok === false);
+  t('price unread: refused with a sentence, never assumed', E.likeCheckUsd({ balance: P * 1000n, prixUsd: null }).ok === false);
+  const appH = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
+  t('app: the heart button uses likeCheckUsd with the lower price', /const chk = ECO\.likeCheckUsd\(\{ balance: bal, n: 1, prixUsd \}\);/.test(appH) && /Math\.min\(Number\(h\.priceNow\), Number\(h\.priceBefore \|\| h\.priceNow\)\)/.test(appH)); }
 console.log(ko === 0 ? 'GREEN' : 'RED', ok + '/' + (ok + ko));
 process.exitCode = ko ? 1 : 0;

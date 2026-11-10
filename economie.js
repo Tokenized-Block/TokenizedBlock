@@ -43,6 +43,23 @@ export function likeCheck({ balance, n = 1 }) {
   if (b - cost < LIKE_MIN_HOLD) return { ok: false, why: 'after paying, this wallet must still hold ' + fmt(LIKE_MIN_HOLD) + ' TBLOCK (it would hold ' + fmt(b - cost) + ')' };
   return { ok: true, cost };
 }
+/* game345 (Phil 2026-11-10: "$15 at the current price, computed"): the app ADDS the live $15 rule on top of the contract's fixed
+ *   LIKE_MIN_HOLD — after paying, the wallet must still hold the LARGER of the two. `prixUsd` = the lower of the price now and ~10 min ago
+ *   (the server's hold rule), so a pool pushed for one block does not open the door. Unread price -> refused with a sentence, never assumed. */
+export const SEUIL_USD = 15;
+export function tblockPourUsd(usd, prixUsd) {
+  if (!(typeof prixUsd === 'number' && Number.isFinite(prixUsd) && prixUsd > 0)) return null;
+  return BigInt(Math.ceil(usd / prixUsd)) * 10n ** 18n;
+}
+export function likeCheckUsd({ balance, n = 1, prixUsd, seuilUsd = SEUIL_USD }) {
+  const base = likeCheck({ balance, n });
+  if (!base.ok) return base;
+  const need = tblockPourUsd(seuilUsd, prixUsd);
+  if (need === null) return { ok: false, why: 'the TBLOCK price could not be read just now, so the $' + seuilUsd + ' rule cannot be checked — try again in a moment' };
+  const reste = BigInt(balance) - base.cost;
+  if (reste < need) return { ok: false, why: 'after paying, this wallet must still hold $' + seuilUsd + ' of TBLOCK at the price read now (' + fmt(need) + ' TBLOCK); it would hold ' + fmt(reste) };
+  return { ok: true, cost: base.cost, minHold: need > LIKE_MIN_HOLD ? need : LIKE_MIN_HOLD };
+}
 export const claimCall = (epoch) => { if (!VAULT) throw new Error('the vault is not deployed yet'); return call(VAULT, SEL.claim, wUint(epoch)); };
 export const VIEW = Object.freeze({
   likesOf: (b) => ({ to: LIKES, data: '0x' + SEL.likesOf + wAddr(b) }),

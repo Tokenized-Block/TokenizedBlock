@@ -3,144 +3,177 @@
 <title>TBLOCK holders</title>
 <!--
   2026-11-09 — PROOF OF HOLD for TBLOCK (tblock-hold.js, /api/tblock/hold, /api/tblock/telegram-invite).
-  ⛔ This page SIGNS A MESSAGE only. It never sends a transaction: no funds move, nothing is approved.
-  ⛔ Only perks that work today get a button. The price is read on chain by the server (v4 pool TBLOCK/wtCOIN x three wtCOIN/USDC
-     pools), the lower of now and ~10 minutes ago, so a pool pushed for one block does not open the door.
+  game345 (Phil 2026-11-10): rebuilt — live price on top, what each amount of TBLOCK unlocks (the REAL thresholds: on chain for the heart and
+  the vault claim, server-checked for the holders' channel), and a per-wallet yes/no. Same two flows as before, unchanged: buy in one batch,
+  prove the hold by a message signature.
+  ⛔ This page SIGNS A MESSAGE or sends the batch the server planned; nothing else. Only perks that work today are listed.
+  ⛔ Thresholds are read from economie.js (the deployed contracts' own constants), never typed here; their dollar value moves with the price.
 -->
 <style>
-:root{--bg:#050d24;--bg2:#0a1633;--card:#0f1d3d;--line:#1e2f57;--fg:#e9f0ff;--dim:#8ba0c9;
---or:#f7a318;--ok:#22c55e;--warn:#f5a317;--bad:#ef4444}
+:root{--bg:#0b0716;--bg2:#140e26;--card:#16102b;--line:#2a2148;--fg:#efeaff;--dim:#a49bc6;--acc:#a78bfa;--acc2:#2fe0c8;
+--ok:#2fe0c8;--warn:#f5b942;--bad:#ff6b8a}
 *{box-sizing:border-box}html,body{margin:0}
-body{background:radial-gradient(120% 80% at 50% 0%,#0b2a7a 0%,var(--bg) 60%) no-repeat fixed;
-color:var(--fg);font:15px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:16px}
+body{background:radial-gradient(120% 80% at 50% 0%,#2a1460 0%,var(--bg) 60%) no-repeat fixed;color:var(--fg);
+font:15px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}
 main{max-width:640px;margin:0 auto}
-h1{font-size:20px;margin:0 0 4px}.sub{color:var(--dim);font-size:13px;margin:0 0 16px}
-.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px;margin-bottom:12px}
-h2{font-size:12.5px;margin:0 0 12px;color:var(--dim);font-weight:700;letter-spacing:.5px;text-transform:uppercase}
-button,.btn{display:block;width:100%;background:var(--or);color:#20160a;border:0;border-radius:8px;padding:15px;text-align:center;
+a{color:var(--acc)}
+.top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.top b{font-size:18px}.top a{font-size:13px}
+.hero{background:linear-gradient(135deg,rgb(167 139 250 / .18),rgb(47 224 200 / .10));border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:12px}
+.hero .lab{color:var(--dim);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.hero .px{font-size:30px;font-weight:800;font-variant-numeric:tabular-nums}
+.hero .sub{color:var(--dim);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:15px;margin-bottom:12px}
+h2{font-size:15px;margin:0 0 10px}
+button,.btn{display:block;width:100%;background:linear-gradient(135deg,#9560f0,#bd51ec);color:#fff;border:0;border-radius:10px;padding:14px;text-align:center;
 font:inherit;font-weight:700;margin-top:10px;min-height:44px;cursor:pointer;text-decoration:none}
 button.sec,.btn.sec{background:transparent;color:var(--fg);border:1px solid var(--line)}
 button:disabled{opacity:.45;cursor:not-allowed}
-.row{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--line);align-items:baseline}
-.row:last-child{border-bottom:0}.k{color:var(--dim);flex:0 0 130px;font-size:12px}
-.v{flex:1;font-size:12.5px;word-break:break-all}
+.perk{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)}
+.perk:last-child{border-bottom:0}.perk .ic{font-size:18px;text-align:center}
+.perk .t b{display:block}.perk .t small{color:var(--dim)}
+.perk .need{text-align:right;font-size:12.5px;font-variant-numeric:tabular-nums}.perk .need small{display:block;color:var(--dim)}
+.st{display:inline-block;margin-top:3px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.04em}
+.st.ok{background:rgb(47 224 200 / .15);color:var(--ok)}.st.no{background:rgb(255 107 138 / .15);color:var(--bad)}.st.na{background:var(--bg2);color:var(--dim)}
+.row{display:flex;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);align-items:baseline}.row:last-child{border-bottom:0}
+.k{color:var(--dim);flex:0 0 120px;font-size:12.5px}.v{flex:1;font-size:13px;word-break:break-all}
 .pill{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:700}
-.p-ok{background:#0d3b23;color:#7ff0b0}.p-bad{background:#4a1414;color:#ffb3b3}
-.p-warn{background:#3a2a10;color:#ffd48a}.p-dim{background:var(--bg2);color:var(--dim)}
-.note{color:var(--dim);font-size:12px;margin-top:10px}
-ul{margin:6px 0 0;padding-left:18px}li{margin:4px 0}
-a{color:var(--fg)}
+.p-ok{background:rgb(47 224 200 / .15);color:var(--ok)}.p-bad{background:rgb(255 107 138 / .15);color:var(--bad)}.p-warn{background:rgb(245 185 66 / .15);color:var(--warn)}
+.note{color:var(--dim);font-size:12.5px;margin-top:10px}
+details{margin-top:6px}summary{cursor:pointer;color:var(--dim);font-size:13px}
+input{width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:12px;font:inherit}
 </style>
 
 <main>
-<h1>TBLOCK holders</h1>
-<p class="sub">TBLOCK is the TokenizedBlock token on Base (a B20, <span id="adr">0xb200…830e</span>).
-Hold at least <b id="thr">$15</b> of it and the holders' Telegram channel opens to you.
-In the TokenizedBlock group, send <b>/hold</b>: @TblockHoldersBot brings you here with a link tied to your Telegram account.</p>
+<div class="top"><b>TBLOCK holders</b><a href="/">← back to the app</a></div>
 
-<div class="card">
-  <h2>The price, read on chain</h2>
-  <div id="vuePrix"><span class="k">reading…</span></div>
-  <p class="note">TBLOCK trades in one Uniswap pool against wtCOIN; wtCOIN is priced by three wtCOIN/USDC pools that must
-  agree within 5%. The lower of the price now and ~10 minutes ago counts.</p>
-  <a class="btn sec" id="acheter" href="https://basestonk.io/tokens/0xb200000000000000000000ba9bf8330307f8830e" target="_blank" rel="noopener">Get TBLOCK on basestonk</a>
+<div class="hero">
+  <div class="lab">TBLOCK, live from its pool</div>
+  <div class="px" id="px">reading…</div>
+  <div class="sub" id="pxSub">1,000,000 TBLOCK = …</div>
+  <div class="sub" id="pxAge"></div>
 </div>
 
 <div class="card">
-  <h2>Out of circulation</h2>
-  <div id="vueBurn"><span class="k">reading…</span></div>
-  <p class="note">TBLOCK has no burn function and its supply never shrinks. What sits at 0x…dEaD, an address nobody holds the key of,
-  is out of circulation for good. The pool's hook sends a cut of each trade there, and each block contest vote sends its whole fee there.</p>
+  <h2>What your TBLOCK unlocks</h2>
+  <div id="perks"><span class="note">reading the thresholds…</span></div>
+  <p class="note">The heart and the vault claim are enforced by their contracts: nobody can pass them, from this app or any other.
+  The holders' channel is checked by our server before the invite. Thresholds are counted in TBLOCK, so their dollar value moves with the price.</p>
 </div>
 
 <div class="card">
-  <h2>Buy TBLOCK here</h2>
-  <p class="note" style="margin-top:0">USDC → wtCOIN (Aerodrome) → TBLOCK (its Uniswap pool), in ONE batch your wallet signs. The app's fee is 0.1% of the
-  USDC; the pool's own hook keeps about 1% of the TBLOCK and sends part of it to 0x…dEaD. Measured on a fork: a $5 buy costs about 1.7% in all,
-  and up to ~1% stays in your wallet as wtCOIN. Your wallet must support batched calls.</p>
-  <label class="note" for="montantUsdc">USDC to spend</label>
-  <input id="montantUsdc" value="5" inputmode="decimal" style="width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:12px;font:inherit">
-  <button class="sec" id="devis">See the plan</button>
-  <div id="vueAchat" style="margin-top:10px"></div>
-  <button id="acheterIci" disabled>Buy TBLOCK (one batch)</button>
-</div>
-
-<div class="card">
-  <h2>1 · Your wallet</h2>
+  <h2>Your wallet</h2>
   <button id="connecter">Connect my wallet (Base)</button>
   <div id="vueSolde" style="margin-top:10px"></div>
 </div>
 
 <div class="card">
-  <h2>2 · Prove it is yours</h2>
-  <p class="note" style="margin-top:0">A <b>message</b> signature, not a transaction: no funds move, no gas, nothing is approved.
-  Read it in your wallet before accepting.</p>
+  <h2>Join the holders' channel</h2>
+  <p class="note" style="margin-top:0">In the TokenizedBlock Telegram group, send <b>/hold</b> to @TblockHoldersBot, or connect here. Then sign a <b>message</b>
+  (not a transaction: no funds move, no gas) to prove the wallet is yours.</p>
   <button id="signer" disabled>Sign and get my Telegram invite</button>
   <div id="vueInvite" style="margin-top:10px"></div>
 </div>
 
 <div class="card">
-  <h2>What this proves, and what it does not</h2>
-  <ul class="note" style="margin-top:0">
-    <li>It proves the wallet held $15 of TBLOCK when you asked, and that you control it (ordinary wallets and smart wallets).</li>
-    <li>The invite works once and expires after 15 minutes; one invite per wallet per day.</li>
-    <li>It does not check that you keep holding after joining.</li>
+  <h2>Buy TBLOCK here</h2>
+  <p class="note" style="margin-top:0">USDC → wtCOIN (Aerodrome) → TBLOCK (its pool), in ONE batch your wallet signs. The pool's hook burns part of every trade.</p>
+  <label class="note" for="montantUsdc">USDC to spend</label>
+  <input id="montantUsdc" value="15" inputmode="decimal">
+  <button class="sec" id="devis">See the plan</button>
+  <div id="vueAchat" style="margin-top:10px"></div>
+  <button id="acheterIci" disabled>Buy TBLOCK (one batch)</button>
+  <details><summary>Fees and limits</summary>
+  <p class="note">The app's fee is 0.1% of the USDC (0% for a wallet that already holds $15 of TBLOCK); the pool's hook keeps about 1% of the TBLOCK.
+  Measured on a fork: a $5 buy costs about 1.7% in all, and up to ~1% may stay in your wallet as wtCOIN. Your wallet must support batched calls.</p></details>
+</div>
+
+<div class="card">
+  <h2>Out of circulation</h2>
+  <div id="vueBurn"><span class="note">reading…</span></div>
+  <details><summary>What this means</summary>
+  <p class="note">TBLOCK has no burn function and its supply never shrinks. What sits at 0x…dEaD, an address nobody holds the key of, is out of
+  circulation for good. The pool's hook sends a cut of each trade there, every heart burns its price there, and each contest vote sends its fee there.</p></details>
+</div>
+
+<details class="card"><summary>What the proof shows, and what it does not</summary>
+  <ul class="note">
+    <li>It proves the wallet held enough TBLOCK when you asked, and that you control it (ordinary and smart wallets).</li>
+    <li>The invite works once and expires after 15 minutes; one invite per wallet per day. It does not check that you keep holding after joining.</li>
     <li>TBLOCK can lose value. Holding it is not an investment we promise anything on.</li>
   </ul>
-</div>
+</details>
 </main>
 
 <script type="module">
+import { LIKE_PRICE, LIKE_MIN_HOLD, CLAIM_MIN_HOLD, tblockPourUsd } from './economie.js';
+import { displayShort } from './frais-creation.js'; /* the one shortener: a fee wallet address is never displayed */
 const $ = (s) => document.querySelector(s);
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const row = (k, v) => '<div class="row"><span class="k">' + esc(k) + '</span><span class="v">' + v + '</span></div>';
 const pill = (t, c) => '<span class="pill p-' + c + '">' + esc(t) + '</span>';
-const fmtUsd = (x) => Number.isFinite(x) ? '$' + (x >= 1 ? x.toFixed(2) : x.toPrecision(3)) : '—';
-const fmtTok = (raw) => { try { const n = BigInt(raw) / 10n ** 18n; return n.toLocaleString('en-US'); } catch (_) { return '—'; } };
-let etat = { wallet: null, challenge: null };
-/* the bot's private link carries ?tg=<code>: it ties this proof to the Telegram account that asked, so the bot lets that account in */
+const fmtUsd = (x) => Number.isFinite(x) ? '$' + (x >= 1 ? x.toFixed(2) : x >= 0.01 ? x.toFixed(4) : x.toPrecision(3)) : '—';
+const tok = (raw) => { try { return (BigInt(raw) / 10n ** 18n).toLocaleString('en-US'); } catch (_) { return '—'; } };
+let etat = { wallet: null, challenge: null, balance: null, holder: null };
+let prix = { usd: null, t: 0, seuil: 15 };
 const TG = (() => { try { const c = new URLSearchParams(location.search).get('tg') || ''; return /^[0-9a-f]{24}$/.test(c) ? c : ''; } catch (_) { return ''; } })();
+async function api(path, init) { const r = await fetch(path, init); return r.json(); }
 
-async function api(path, init) {
-  const r = await fetch(path, init);
-  return r.json();
+/* the perks, from the contracts' own constants; "you" is filled once a wallet is read */
+function peindrePerks() {
+  const u = prix.usd, val = (raw) => (u ? ' ≈ ' + fmtUsd(Number(BigInt(raw) / 10n ** 18n) * u) : '');
+  const b = etat.balance != null ? BigInt(etat.balance) : null;
+  const st = (ok) => (b == null && etat.holder == null ? '<span class="st na">connect to check</span>' : ok ? '<span class="st ok">✓ YOU CAN</span>' : '<span class="st no">✗ NOT YET</span>');
+  /* game345 (Phil: "$15 at the current price, computed"): the heart's hold = the LARGER of the contract's fixed amount and $15 now */
+  const usd15 = tblockPourUsd(prix.seuil, prix.bas || u);
+  const garde = usd15 !== null && usd15 > LIKE_MIN_HOLD ? usd15 : LIKE_MIN_HOLD;
+  const p = [
+    ['💬', 'Holders\' channel on Telegram', 'checked by our server before the invite', '$' + prix.seuil + ' of TBLOCK', etat.holder === true, etat.holder != null],
+    ['♥', 'Heart a block', 'burns ' + tok(LIKE_PRICE) + ' TBLOCK, and you keep $' + prix.seuil + ' of TBLOCK at the price read now; counts as play for the weekly rewards', tok(LIKE_PRICE + garde) + ' TBLOCK' + val(LIKE_PRICE + garde), b != null && b >= LIKE_PRICE + garde, b != null],
+    ['🏦', 'Claim from the community vault', 'only for the week\'s players, after the week closes', tok(CLAIM_MIN_HOLD) + ' TBLOCK' + val(CLAIM_MIN_HOLD), b != null && b >= CLAIM_MIN_HOLD, b != null],
+  ];
+  $('#perks').innerHTML = p.map(([ic, t, d, need, ok, lu]) => '<div class="perk"><span class="ic">' + ic + '</span><span class="t"><b>' + esc(t) + '</b><small>' + esc(d) + '</small></span>'
+    + '<span class="need">' + esc(need) + '<small>' + (lu ? st(ok) : (b == null && etat.holder == null ? st(false) : '<span class="st na">not read</span>')) + '</small></span></div>').join('');
 }
 
+/* the live price: read every 30 s; a failed read keeps the last good one with its age, never a blank or an invented number */
 async function lirePrix() {
   try {
     const p = await api('/api/tblock/hold');
-    if (!Number.isFinite(p.priceNow) || !Number.isFinite(p.priceBefore)) { $('#vuePrix').innerHTML = row('state', pill('PRICE NOT READ', 'warn')) + row('why', esc(p.why || 'unknown')); return; }
-    const low = Math.min(p.priceNow, p.priceBefore);
-    $('#thr').textContent = '$' + p.thresholdUsd;
-    $('#vuePrix').innerHTML = row('1 TBLOCK', fmtUsd(p.priceNow) + ' now · ' + fmtUsd(p.priceBefore) + ' ~10 min ago')
-      + row('wtCOIN', fmtUsd(p.wtcoinUsd)) + row('$' + p.thresholdUsd + ' needs', '<b>' + Math.ceil(p.thresholdUsd / low).toLocaleString('en-US') + ' TBLOCK</b>')
-      + row('block', esc(p.block));
-  } catch (e) { $('#vuePrix').innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')) + row('why', esc(e.message || e)); }
+    if (Number.isFinite(p.priceNow) && p.priceNow > 0) {
+      /* bas = the lower of now and ~10 min ago: the price the $15 rules are judged at (same as the server and the app's heart) */
+      const bas = Number.isFinite(p.priceBefore) && p.priceBefore > 0 ? Math.min(p.priceNow, p.priceBefore) : p.priceNow;
+      prix = { usd: p.priceNow, bas, t: Date.now(), seuil: p.thresholdUsd || 15 };
+    }
+  } catch (_) { /* keep the last price */ }
+  if (prix.usd) {
+    $('#px').textContent = fmtUsd(prix.usd);
+    $('#pxSub').textContent = '1,000,000 TBLOCK = ' + fmtUsd(prix.usd * 1e6) + ' · $' + prix.seuil + ' = ' + Math.ceil(prix.seuil / prix.usd).toLocaleString('en-US') + ' TBLOCK';
+    const age = Math.round((Date.now() - prix.t) / 1000);
+    $('#pxAge').textContent = age > 90 ? 'last read ' + Math.round(age / 60) + ' min ago (the pool did not answer since)' : 'read from its pool just now · refreshes every 30 s';
+  } else { $('#px').textContent = 'not read yet'; $('#pxAge').textContent = 'retrying…'; }
+  peindrePerks();
 }
 
 $('#connecter').onclick = async () => {
   const box = $('#vueSolde');
-  $('#signer').disabled = true; etat = { wallet: null, challenge: null }; $('#vueInvite').innerHTML = '';
+  $('#signer').disabled = true; etat = { wallet: null, challenge: null, balance: null, holder: null }; $('#vueInvite').innerHTML = '';
   if (!window.ethereum) { box.innerHTML = row('state', pill('NO WALLET IN THIS BROWSER', 'warn')); return; }
   let w;
   try { [w] = await window.ethereum.request({ method: 'eth_requestAccounts' }); }
   catch (e) { box.innerHTML = row('state', pill('WALLET REFUSED', 'warn')) + row('why', esc(e.message || e)); return; }
   w = String(w || '').toLowerCase();
-  box.innerHTML = row('wallet', esc(w)) + row('state', 'reading your TBLOCK on Base…');
+  box.innerHTML = row('wallet', esc(displayShort(w))) + row('state', 'reading your TBLOCK on Base…');
   let h;
   try { h = await api('/api/tblock/hold?wallet=' + w); }
-  catch (e) { box.innerHTML = row('wallet', esc(w)) + row('state', pill('SERVER NOT REACHED', 'warn')); return; }
-  const base = row('wallet', esc(w)) + row('holds', h.balance == null ? '—' : fmtTok(h.balance) + ' TBLOCK') + row('worth', fmtUsd(h.usd) + (h.price ? ' (at ' + fmtUsd(h.price) + ')' : ''));
-  if (!h.ok) {
-    const lack = h.tblockNeeded && h.balance != null ? Math.max(0, h.tblockNeeded - Number(BigInt(h.balance) / 10n ** 18n)) : null;
-    box.innerHTML = base + row('state', pill(h.usd == null ? 'NOT READ' : 'BELOW $' + (h.thresholdUsd || 15), h.usd == null ? 'warn' : 'bad'))
-      + row('why', esc(h.why)) + (lack ? row('missing', '~' + lack.toLocaleString('en-US') + ' TBLOCK') : '');
-    return;
-  }
-  etat = { wallet: w, challenge: h.challenge };
-  box.innerHTML = base + row('state', pill('HOLDER', 'ok'));
-  $('#signer').disabled = !h.challenge;
-  if (!h.challenge) $('#vueInvite').innerHTML = row('state', pill('BUSY', 'warn')) + row('why', 'too many open requests, try again in a minute');
+  catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); return; }
+  etat = { wallet: w, challenge: h.ok ? h.challenge : null, balance: h.balance ?? null, holder: h.usd == null ? null : !!h.ok };
+  box.innerHTML = row('wallet', esc(displayShort(w))) + row('holds', h.balance == null ? 'not read' : tok(h.balance) + ' TBLOCK')
+    + row('worth', fmtUsd(h.usd)) + row('state', h.ok ? pill('HOLDER', 'ok') : pill(h.usd == null ? 'NOT READ' : 'BELOW $' + (h.thresholdUsd || 15), h.usd == null ? 'warn' : 'bad'))
+    + (!h.ok && h.why ? row('why', esc(h.why)) : '');
+  $('#signer').disabled = !(h.ok && h.challenge);
+  if (h.ok && !h.challenge) $('#vueInvite').innerHTML = row('state', pill('BUSY', 'warn')) + row('why', 'too many open requests, try again in a minute');
+  peindrePerks();
 };
 
 $('#signer').onclick = async () => {
@@ -156,11 +189,9 @@ $('#signer').onclick = async () => {
   catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); return; }
   etat.challenge = null;
   if (r.ok && /^https:\/\/t\.me\//.test(String(r.link))) {
-    box.innerHTML = row('state', pill('INVITED', 'ok')) + row('proof', esc(r.kind === 'erc1271' ? 'smart wallet (ERC-1271)' : 'wallet signature'))
-      + '<a class="btn" href="' + esc(r.link) + '" target="_blank" rel="noopener">Join the holders’ channel</a>'
-      + '<p class="note">' + (r.joinRequest
-        ? (r.sentInTelegram ? 'The bot also sent this link to you in Telegram. ' : '') + (r.tagged ? 'You now carry the TBLOCK Holder tag in the group. ' : '') + 'Tap it to ask to join: the bot approves your Telegram account only, within 15 minutes.'
-        : 'Single use, expires in 15 minutes.') + '</p>';
+    box.innerHTML = row('state', pill('INVITED', 'ok')) + '<a class="btn" href="' + esc(r.link) + '" target="_blank" rel="noopener">Join the holders’ channel</a>'
+      + '<p class="note">' + (r.joinRequest ? (r.sentInTelegram ? 'The bot also sent this link to you in Telegram. ' : '') + (r.tagged ? 'You now carry the TBLOCK Holder tag in the group. ' : '')
+        + 'Tap it to ask to join: the bot approves your Telegram account only, within 15 minutes.' : 'Single use, expires in 15 minutes.') + '</p>';
     return;
   }
   box.innerHTML = row('state', pill(r.state || 'REFUSED', 'warn')) + row('why', esc(r.why || 'unknown'))
@@ -168,22 +199,22 @@ $('#signer').onclick = async () => {
     + (r.state === 'TG_CODE_EXPIRED' ? '<p class="note">Send /hold to @TblockHoldersBot again for a new link.</p>' : '');
 };
 
-/* game329: what 0x…dEaD holds, read by the server at one block (/api/tblock/burn). A missing read is said, never shown as 0. */
+/* what 0x…dEaD holds, read by the server at one block (/api/tblock/burn). A missing read is said, never shown as 0. */
 async function lireBurn() {
   const box = $('#vueBurn');
   try {
     const b = await api('/api/tblock/burn');
     if (!b.ok || !Number.isFinite(b.tokens) || !Number.isFinite(b.pct)) { box.innerHTML = row('state', pill('NOT READ', 'warn')) + row('why', esc(b.why || 'unknown')); return; }
-    box.innerHTML = row('held by 0x…dEaD', '<b>' + b.tokens.toLocaleString('en-US') + ' TBLOCK</b>') + row('share of the supply', esc(b.pct.toFixed(4)) + ' %')
-      + row('supply (fixed)', fmtTok(b.supply) + ' TBLOCK') + row('block', esc(b.block));
-  } catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')) + row('why', esc(e.message || e)); }
+    box.innerHTML = row('burned', '<b>' + b.tokens.toLocaleString('en-US') + ' TBLOCK</b> · ' + esc(b.pct.toFixed(4)) + ' % of the supply') + row('supply (fixed)', tok(b.supply) + ' TBLOCK');
+  } catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); }
 }
 
-lirePrix();
-lireBurn();
+peindrePerks();
+void lirePrix();
+setInterval(() => { if (!document.hidden) void lirePrix(); }, 30000);
+void lireBurn();
 
-/* game326: buy TBLOCK here — the server builds the plan (/api/rails/plan, tblock-route.js, proven on a fork 53/53), the wallet signs ONE
- * atomic batch (EIP-5792 wallet_sendCalls). A wallet that cannot batch is told so: the first leg must never pass alone. */
+/* buy TBLOCK here — the server builds the plan (/api/rails/plan, tblock-route.js), the wallet signs ONE atomic batch (EIP-5792). */
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', TBLOCK_ADR = '0xb200000000000000000000ba9bf8330307f8830e';
 let planAchat = null;
 async function compteOuConnecte() {
@@ -198,16 +229,14 @@ $('#devis').onclick = async () => {
   const w = await compteOuConnecte();
   if (!w) { box.innerHTML = row('state', pill('CONNECT A WALLET FIRST', 'warn')); return; }
   box.innerHTML = row('state', 'building the plan on chain…');
-  const montant = String(Math.round(usd * 1e6));
   let p;
-  try { p = await api('/api/rails/plan?' + new URLSearchParams({ de: USDC, vers: TBLOCK_ADR, montant, compte: w })); }
+  try { p = await api('/api/rails/plan?' + new URLSearchParams({ de: USDC, vers: TBLOCK_ADR, montant: String(Math.round(usd * 1e6)), compte: w })); }
   catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); return; }
   const calls = p && (p.aSigner || p.appels);
   if (!p || p.etat !== 'PRET' || !Array.isArray(calls) || !calls.length) { box.innerHTML = row('state', pill(String((p && p.etat) || 'NO PLAN'), 'warn')) + row('why', esc((p && p.pourquoi) || 'no route right now')); return; }
   const r = p.resume || {};
-  box.innerHTML = row('you pay', usd.toFixed(2) + ' USDC') + row('you get at least', fmtTok(r.recoitAuMoins) + ' TBLOCK')
-    + row('app fee', (r.fraisBps != null ? (Number(r.fraisBps) / 100).toFixed(2) + '%' : '?')) + row('note', esc(r.resteAuCompte || ''))
-    + row('signatures', calls.length + ' calls, one batch');
+  box.innerHTML = row('you pay', usd.toFixed(2) + ' USDC') + row('you get at least', tok(r.recoitAuMoins) + ' TBLOCK')
+    + row('app fee', (r.fraisBps != null ? (Number(r.fraisBps) / 100).toFixed(2) + '%' : '?')) + row('signatures', calls.length + ' calls, one batch');
   planAchat = { w, calls };
   $('#acheterIci').disabled = false;
 };

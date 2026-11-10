@@ -842,7 +842,8 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcNom{font-size:22px;font-weight:800;line-height:1.15;overflow-wrap:anywhere}
 .bcNomLigne{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .bcLike{display:inline-flex;align-items:center;gap:6px}
-.bcLike button{background:linear-gradient(90deg,#ffd166,#ff9f43);color:#1c1204;border:0;border-radius:99px;padding:5px 12px;font:inherit;font-weight:800;cursor:pointer;box-shadow:0 0 14px rgba(255,209,102,.45)}
+.bcLike button{background:rgb(var(--accentRgb) / .16);color:#ff5c8a;border:1px solid rgb(var(--accentRgb) / .5);border-radius:99px;padding:3px 12px;font:inherit;font-size:1.15em;font-weight:800;cursor:pointer;line-height:1.2}
+.bcLike button:hover{background:rgb(var(--accentRgb) / .28)}
 .bcLike button:disabled{opacity:.5;cursor:wait}
 .bcLike b{font-variant-numeric:tabular-nums}
 /* le symbole en grand, le nom en petit dessous, puis l humeur et QUATRE chiffres sur une seule rangee (1er jet : le titre tenait sur
@@ -2573,7 +2574,7 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="bcAvatar" id="bcAvatar" data-phase="NON_LU"><div id="bcAvatarIn">◈</div></div>
         <div class="bcInfos">
           <div class="bcNomLigne"><div class="bcNom" id="bcNom">Pick a block in the Brain tab</div>
-            <span class="bcLike" id="bcLike" hidden><button type="button" id="bcLikeBtn" title="+1 this block: burns TBLOCK, counts as play for the weekly holders rewards">+1</button><b id="bcLikeN" title="+1 received by this block">—</b></span></div>
+            <span class="bcLike" id="bcLike" hidden><button type="button" id="bcLikeBtn" aria-label="Heart this block" title="Heart this block: burns 86,000 TBLOCK, counts as play for the weekly holders rewards (you keep at least 2,580,000 TBLOCK)">♥</button><b id="bcLikeN" title="Hearts received by this block">—</b></span></div>
           <p class="note" id="bcLikeNote" hidden></p>
           <div class="note" id="bcSousNom" hidden></div>
           <button type="button" class="bcAdr" id="bcAdr" hidden title="Copy this block’s B20 address"></button>
@@ -3632,7 +3633,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game344" hidden>Build <code>20261109-game344</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game345" hidden>Build <code>20261109-game345</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -32370,16 +32371,19 @@ $('#bcLikeBtn').addEventListener('click', async () => {
   const a = $('#bcLike').dataset.adr, note = $('#bcLikeNote'), btn = $('#bcLikeBtn');
   const dire = (t) => { note.hidden = false; note.textContent = t; };
   if (!a || !ECO.LIKES) return;
-  if (!compte) { dire('Connect your wallet first. A +1 costs ' + ECO.fmt(ECO.LIKE_PRICE) + ' TBLOCK (burned) and needs ' + ECO.fmt(ECO.LIKE_MIN_HOLD) + ' TBLOCK left after paying.'); return; }
+  if (!compte) { dire('Connect your wallet first. A heart costs ' + ECO.fmt(ECO.LIKE_PRICE) + ' TBLOCK (burned) and needs ' + ECO.fmt(ECO.LIKE_MIN_HOLD) + ' TBLOCK left after paying.'); return; }
   btn.disabled = true;
   try {
     const v = ECO.VIEW.balanceOf(String(compte).toLowerCase());
     const bal = ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
-    const chk = ECO.likeCheck({ balance: bal, n: 1 });
+    /* game345: the contract's fixed hold AND $15 at the price read now (lower of now and ~10 min ago), the larger of the two */
+    let prixUsd = null;
+    try { const h = await fetch('/api/tblock/hold', { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json()); prixUsd = h && h.ok ? Math.min(Number(h.priceNow), Number(h.priceBefore || h.priceNow)) : null; } catch (_) { prixUsd = null; }
+    const chk = ECO.likeCheckUsd({ balance: bal, n: 1, prixUsd });
     if (!chk.ok) { dire('Not sent: ' + chk.why + '.'); return; }
-    dire('Waiting for your wallet: +1 for ' + ECO.fmt(chk.cost) + ' TBLOCK, burned, not refundable…');
+    dire('Waiting for your wallet: a heart for ' + ECO.fmt(chk.cost) + ' TBLOCK, burned, not refundable…');
     const r = await envoyerAppels(ECO.likeBatch({ block: a, n: 1 }).map((c) => ({ to: c.to, data: c.data, value: c.value })), compte);
-    if (r && r.etat === 'CONFIRME') { dire('+1 confirmed. It counts as play for this week’s holders rewards.'); bcLikeEtat.lu = 0; bcPeindreLike(a); }
+    if (r && r.etat === 'CONFIRME') { dire('♥ confirmed. It counts as play for this week’s holders rewards.'); bcLikeEtat.lu = 0; bcPeindreLike(a); }
     else dire('Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160));
   } catch (e) { dire('Not sent: ' + String((e && e.message) || e).slice(0, 160)); }
   finally { btn.disabled = false; }
@@ -32685,6 +32689,18 @@ async function peindreVaultWallet() {
     }
     const ra = await lit(ECO.VIEW.rescueAmount());
     if (ra > 0n) ligne('Dev rescue announced', 'up to ' + ECO.fmt(ra) + ' TBLOCK of the free part, after ' + new Date(Number(await lit(ECO.VIEW.rescueAt())) * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC');
+    /* game345 (Phil): a visible link to the holders' channel for an ELIGIBLE wallet only (the server's $15 rule, /api/tblock/hold) */
+    if (compte) {
+      try {
+        const h = await fetch('/api/tblock/hold?wallet=' + String(compte).toLowerCase(), { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json());
+        if (h && h.ok) {
+          const d = document.createElement('div'); d.className = 'stadeLigne';
+          const a = document.createElement('a'); a.href = 'holders.html'; a.target = '_blank'; a.rel = 'noopener';
+          a.textContent = 'You hold $' + Number(h.usd).toFixed(2) + ' of TBLOCK — join the holders’ channel →';
+          d.append(a); rows.append(d);
+        }
+      } catch (_) { /* not read: no link, never a wrong one */ }
+    }
   } catch (e) { ligne('Not read just now', String((e && e.message) || e).slice(0, 80)); wVaultLu = Date.now() - 45000; }
   carte.hidden = false;
 }
