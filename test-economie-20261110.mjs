@@ -77,5 +77,13 @@ t('app: the click checks then sends the likeBatch', /ECO\.likeCheck\(\{ balance:
 t('app: Community vault card in the Wallet tab, hidden while the vault is null', /<section class="volet" id="v-wallet"[\s\S]*?<div class="carte" id="wVault" hidden>[\s\S]*?<\/section>/.test(app)
   && /if \(!ECO\.VAULT \|\| !ECO\.LIKES\) \{ carte\.hidden = true; return; \}/.test(app));
 t('app: hidden while BlockLikes is null', /if \(!ECO\.LIKES \|\| !ECO\.isB20\(a\)\) \{ box\.hidden = true;/.test(app));
+/* contest.html: its $ is getElementById, so a '#' selector returns null and stops the render after the fund card (game333) */
+{ const ch = readFileSync(new URL('./contest.html', import.meta.url), 'utf8');
+  t('contest.html $ is getElementById', /const \$ = \(id\) => document\.getElementById\(id\)/.test(ch));
+  t('contest.html never passes a # selector to its $', !/\$\(\s*['"]#/.test(ch), (ch.match(/\$\(\s*['"]#[^'"]*/g) || []).join(' ')); }
+/* the addresses wired after the mainnet deployment was replayed byte for byte on a fork (2026-11-10, deployer 0x31e0...de3b nonces 144-146) */
+t('likes address wired', E.LIKES === '0x343a289d5469a17726be9a0d219ee00721646f8a');
+t('vault address wired', E.VAULT === '0x025d751752d3aa695fdb3d9eedee69bc9553f331');
+t('buyback v2 address wired', D.adresseBuyback === '0x1afc3d27c37c9474a17ce83f03a18c4f95f102a3');
 console.log(ko === 0 ? 'GREEN' : 'RED', ok + '/' + (ok + ko));
 process.exitCode = ko ? 1 : 0;
