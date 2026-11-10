@@ -3078,7 +3078,11 @@ async function tbTelegram(method, body) {
 const tbLire = (to, data, b) => rpcRails('eth_call', [{ to, data }, '0x' + Number(b).toString(16)]);
 const tbLireTs = async (n) => { const b = await rpcServeur('eth_getBlockByNumber', ['0x' + Number(n).toString(16), false]); return b ? Number(BigInt(b.timestamp)) : NaN; };
 async function tbPrices() {
-  if (TB_HOLD.prices && Date.now() - TB_HOLD.at < 60000 && Number.isFinite(TB_HOLD.prices.now.usd) && Number.isFinite(TB_HOLD.prices.prev.usd)) return TB_HOLD.prices;
+  /* ⛔ game340: a read where only the ~10-min-ago price failed was NEVER kept, so every visitor paid the whole read again (13 s
+   *   measured locally, the archive read timing out each time) and the TBLOCK price button showed "not read". A whole read is kept
+   *   60 s; a read with the current price but no older one 20 s (the hold rule still sees the missing price and stays fail-closed). */
+  if (TB_HOLD.prices && Number.isFinite(TB_HOLD.prices.now.usd)
+    && Date.now() - TB_HOLD.at < (Number.isFinite(TB_HOLD.prices.prev.usd) ? 60000 : 20000)) return TB_HOLD.prices;
   if (!TB_HOLD.pending) {
     TB_HOLD.pending = (async () => {
       const tete = Number(BigInt(await rpcServeur('eth_blockNumber', [])));

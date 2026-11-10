@@ -1359,6 +1359,9 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 .dexCol .champ{margin-top:0}
 .dexCol .bouton{width:100%;margin:0;grid-column:auto}
 .pConnect{cursor:pointer;font-weight:700}
+/* game340: TBLOCK button + live price — Base app blue fill, white text (5.75:1) */
+.tete .puce.pTblock{cursor:pointer;font-weight:700;background:#0052FF;color:#fff;border-color:#0052FF;white-space:nowrap}
+.tete .puce.pTblock:hover{background:#0047E8}.pTblock b{font-weight:600;font-variant-numeric:tabular-nums;margin-left:4px}
 .pConnect:not(.connecte){background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-color:transparent;
   box-shadow:0 0 0 1px rgb(var(--accentRgb) / .35),0 6px 18px rgb(var(--boutonRgb) / .35)}
 .mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:center;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:var(--texte);margin:0 8px;
@@ -1963,6 +1966,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ PHIL (2026-09-18) : « mets un bouton connect wallet en haut a droite, a cote de ? Learn ». La puce
            disait « not connected » sans qu on puisse rien en faire. C est maintenant le bouton : il connecte, puis
            montre l adresse courte et ouvre l onglet Wallet. -->
+      <!-- game340 (Phil 2026-11-10): the TBLOCK button + its live price, top right; opens the buy page -->
+      <button class="puce pTblock" id="pTblock" type="button" title="TBLOCK, the app's token — price read from its pool. Click to buy." aria-label="TBLOCK price">TBLOCK <b id="pTblockPx">…</b></button>
       <button class="puce pConnect" id="pCompte" type="button">Connect wallet</button>
     </div>
   </header>
@@ -3600,7 +3605,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game339" hidden>Build <code>20261109-game339</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game340" hidden>Build <code>20261109-game340</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -25464,7 +25469,8 @@ async function creerBlock() {
     } else {
       e.className = 'note wKo';
       const feeKept = utiliseCreateRouter()
-        ? ' Nothing was charged: the payment only goes through if creation succeeds.'
+        /* game340 (live test by Grok): "Nothing was charged" was false after a confirmed step 1 (its gas, its TBLOCK). Say what holds. */
+        ? ' The birth fee was not taken: it is paid only if creation succeeds. Anything confirmed before it (a TBLOCK buy in step 1, its network fee) stays done; the TBLOCK stays in your wallet.'
         : '';
       /* ⛔ ON COMPTE L ECHEC, ET ON LE REND COPIABLE. Jusqu ici un echec de creation ne laissait
        *    aucune trace : ni dans l entonnoir, ni dans une ligne que la personne puisse nous envoyer. */
@@ -32211,6 +32217,34 @@ $('#bcLikeBtn').addEventListener('click', async () => {
 /* ── Optional TBLOCK part of a birth (Phil 2026-11-10: optional, tops the 0.001 ETH fee up to $5, into the community vault).
  *   Offered INSIDE the success note, AFTER the block is alive: it is never part of the birth batch, so it can never stop a birth.
  *   One call, TBLOCK.transfer(vault, amount), signed by the creator; amount from create-vault-tip.js (rounded down, never above $5). */
+/* ── game340 (Phil 2026-11-10: "the TBLOCK price top right, live, I am tired of it bugging"): the price comes from /api/tblock/hold
+ *   (the pool read by the server, the same source as the $15 rule and the Create split). Read every 30 s while the page is visible.
+ *   A failed read KEEPS the last good price and says its age in the tooltip: never blank, never an invented number; before any good
+ *   read it says "not read". Click opens the buy page. */
+let tbPilule = { usd: null, t: 0, enVol: false };
+const fmtPrixTblock = (u) => (u >= 0.01 ? u.toFixed(4) : Number(u.toPrecision(3)).toFixed(Math.min(12, 2 - Math.floor(Math.log10(u)))));
+async function peindrePiluleTblock() {
+  const b = $('#pTblockPx'), btn = $('#pTblock');
+  if (!b || !btn || tbPilule.enVol || document.hidden) return;
+  tbPilule.enVol = true;
+  try {
+    /* 20 s: the FIRST read of a cold server reads the pool and a 10-min-old block; later reads come from its cache in ms */
+    const h = await fetch('/api/tblock/hold', { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json());
+    const u = h && h.ok ? Number(h.priceNow) : NaN;
+    if (Number.isFinite(u) && u > 0) tbPilule = { ...tbPilule, usd: u, t: Date.now() };
+  } catch (_) { /* keep the last good price */ }
+  tbPilule.enVol = false;
+  /* no good read yet (a cold server, a slow first answer): retry in 5 s, not 30 */
+  if (tbPilule.usd === null) { b.textContent = 'not read'; btn.title = 'TBLOCK price not read yet — retrying. Click to buy TBLOCK.'; setTimeout(() => { void peindrePiluleTblock(); }, 5000); return; }
+  const age = Math.round((Date.now() - tbPilule.t) / 1000);
+  b.textContent = '$' + fmtPrixTblock(tbPilule.usd);
+  btn.title = 'TBLOCK $' + fmtPrixTblock(tbPilule.usd) + ' — 1,000,000 TBLOCK = $' + (tbPilule.usd * 1e6).toFixed(2)
+    + (age > 90 ? ' · last read ' + Math.round(age / 60) + ' min ago (the pool did not answer since)' : ' · read from its pool just now') + '. Click to buy.';
+}
+$('#pTblock').addEventListener('click', () => { window.open('holders.html', '_blank', 'noopener'); });
+void peindrePiluleTblock();
+setInterval(() => { void peindrePiluleTblock(); }, 30000);
+
 /* Pay split shown BEFORE signing on the Create tab: ETH part (fixed by the contracts) + TBLOCK part (optional, after birth).
  * Read every 60 s while the Create tab is visible; numbers are live or the line says it could not read them. */
 let tipApercuLu = 0;

@@ -87,6 +87,16 @@ const s0 = texteEtape1Arretee({ etat: 'REFUSE', pourquoi: 'you declined', hashes
 t('0 sent: says nothing was sent', /Nothing was sent/.test(s0) && !/stopped after/.test(s0), s0);
 const rt = readFileSync(new URL('./tblock-route.js', import.meta.url), 'utf8');
 t('the resume route exists, no app fee, simulated whole', /export async function planWtcoinVersTblock\(/.test(rt) && /resume: \{ fraisBps: 0n, paye: m, payeDevise: WTCOIN/.test(rt) && /const s = await simuler\(rpc, compte, appels\);/.test(rt.slice(rt.indexOf('planWtcoinVersTblock'))));
+/* game340: the TBLOCK button + live price, top right */
+t('the TBLOCK button sits in the header next to Connect wallet', /<button class="puce pTblock" id="pTblock"[^>]*>TBLOCK <b id="pTblockPx">/.test(app)
+  && app.indexOf('id="pTblock"') < app.indexOf('id="pCompte"') && app.indexOf('id="pTblock"') > app.indexOf('<header class="tete">'));
+const pt = app.slice(app.indexOf('async function peindrePiluleTblock('), app.indexOf('/* Pay split shown BEFORE signing'));
+t('its price comes from the served pool read, never a constant', /fetch\('\/api\/tblock\/hold'/.test(pt) && !/\$0\.0000\d/.test(pt));
+t('a failed read keeps the last good price (never blank), "not read" only before any good read', /catch \(_\) \{ \/\* keep the last good price \*\/ \}/.test(pt) && /if \(tbPilule\.usd === null\) \{ b\.textContent = 'not read';/.test(pt));
+t('it refreshes every 30 s and only one read at a time', /setInterval\(\(\) => \{ void peindrePiluleTblock\(\); \}, 30000\)/.test(pt) && /tbPilule\.enVol/.test(pt));
+const fmtPrixTblock = new Function('u', 'return ' + app.match(/const fmtPrixTblock = \(u\) => \((.+)\);\r?\n/)[1]);
+t('price format: 0.000005818 -> 0.00000582, 0.5 -> 0.5000', fmtPrixTblock(0.000005818) === '0.00000582' && fmtPrixTblock(0.5) === '0.5000', fmtPrixTblock(0.000005818));
+t('"Nothing was charged" is gone from the birth failure', !/Nothing was charged: the payment only goes through if creation succeeds/.test(app));
 t('the server serves reprise only with a whole account and a raw amount', /if \(repriseV && \(!\/\^0x\[0-9a-f\]\{40\}\$\/\.test\(compteV\)/.test(srv));
 /* game337: the ETH path */
 t('ethWeiForTopUp at ETH 2000 = $3 of ETH = 0.0015 ETH', T.ethWeiForTopUp(2000) === 1500000000000000n, String(T.ethWeiForTopUp(2000)));
