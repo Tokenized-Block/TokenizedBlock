@@ -1,0 +1,93 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Deploy the holders economy</title>
+<!--
+  2026-11-10 (Phil: "je signe le deploy final") — offers the UNSIGNED deployment of BlockLikes then TBlockVault to the CONNECTED wallet.
+  ⛔ The data is EXACTLY economie-deploiement.js (contracts/preparer-deploiement-economie.mjs), deployed on a base-anvil fork by
+     banc-economie-deploy-fork-20261110.mjs. Base (8453) only; the sha256 of each piece is checked before its button opens.
+  ⛔ The vault's DEV (the only hand allowed to announce a 7-day public rescue of its free part) is the wallet that signs step 2.
+-->
+<style>
+:root{--bg:#050d24;--card:#0f1d3d;--line:#1e2f57;--fg:#e9f0ff;--dim:#8ba0c9;--or:#f7a318}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:16px}
+main{max-width:720px;margin:0 auto}h1{font-size:19px}h2{font-size:15px;margin:0 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.row{display:flex;gap:10px;padding:5px 0;border-bottom:1px solid var(--line)}.row:last-child{border:0}
+.k{color:var(--dim);flex:0 0 170px;font-size:12px}.v{flex:1;font-size:12px;word-break:break-all}
+button{width:100%;background:var(--or);color:#20160a;border:0;border-radius:8px;padding:14px;font:inherit;font-weight:700;margin-top:10px;cursor:pointer}
+button:disabled{opacity:.45;cursor:not-allowed}.note{color:var(--dim);font-size:12px}
+</style>
+<main>
+<h1>Deploy the holders economy (Base)</h1>
+<p class="note">Two contracts, two signatures. <b>BlockLikes</b>: "+1" a block by burning TBLOCK; it records who played. <b>TBlockVault</b>: the community
+vault; it pays the players of each week first (never more than they burned), then fills the contest pot. Its only manual hand is a dev
+rescue of the free part, announced on chain 7 days before, renounceable.</p>
+<div class="card" id="what"></div>
+<div class="card">
+  <button id="connect">Connect wallet</button>
+  <button id="d1" disabled>1. Deploy BlockLikes (sign in the wallet)</button>
+  <button id="d2" disabled>2. Deploy TBlockVault (sign in the wallet)</button>
+  <button id="d3" disabled>3. Deploy TBlockBuybackV2 (sign in the wallet)</button>
+  <div id="state" class="note" style="margin-top:10px"></div>
+</div>
+</main>
+<script type="module">
+import { ECONOMIE_DEPLOIEMENT as D } from './economie-deploiement.js';
+import { vaultCreation, buybackCreation } from './economie.js';
+const $ = (s) => document.querySelector(s);
+const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const row = (k, v) => '<div class="row"><span class="k">' + esc(k) + '</span><span class="v">' + esc(v) + '</span></div>';
+const tok = (raw) => (BigInt(raw) / 10n ** 18n).toLocaleString('en-US') + ' TBLOCK';
+const L = D.likes.config, V = D.vault.config, B = D.buyback.config;
+$('#what').innerHTML = '<h2>BlockLikes</h2>' + row('+1 costs', tok(L.likePrice) + ', sent to 0x…dEaD') + row('hold to like', tok(L.minHold) + ' left after paying')
+  + row('weeks start', new Date(L.genesis * 1000).toISOString() + ', every ' + L.epoch / 86400 + ' days') + row('sha256 of the data', D.likes.sha256Creation)
+  + '<h2 style="margin-top:12px">TBlockVault</h2>' + row('hold to claim', tok(V.minHold)) + row('players budget', V.rewardBps / 100 + '% of the free vault each week, at most ' + tok(V.maxEpochBudget))
+  + row('top contributor', V.topBps / 100 + '% of that budget') + row('nobody gets back more than', V.rebateBps / 100 + '% of what they burned, per part')
+  + row('claim window', V.claimWindow / 86400 + ' days') + row('contest pot', 'at most ' + tok(V.maxFeedPerCall) + ' per feed, once a day') + row('contest', V.contest)
+  + row('rescue wallets (2)', V.dev + ' · ' + V.dev2) + row('rescue rule', 'announced on chain, 7 days of delay, free part only, renounceable by either')
+  + row('sha256 of the code', D.vault.sha256Init)
+  + '<h2 style="margin-top:12px">TBlockBuybackV2</h2>' + row('buys TBLOCK with ETH sent to it, and sends it to', 'the vault deployed at step 2 (not 0x…dEaD)')
+  + row('same guards as v1', 'max ' + Number(B.maxPerCall) / 1e18 + ' ETH per buy, once per ' + B.cooldown / 60 + ' min, TWAP ' + B.twapWindow / 60 + ' min')
+  + row('keeper', B.keeper) + row('sha256 of the code', D.buyback.sha256Init) + row('compiler', D.compilateur);
+let acct = null, likesAt = D.adresseLikes || null, vaultAt = D.adresseVault || null, okB = false;
+async function sha256Hex(s) { const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s)); return [...new Uint8Array(b)].map((x) => x.toString(16).padStart(2, '0')).join(''); }
+async function receipt(h) {
+  for (let k = 0; k < 90; k++) { const r = await window.ethereum.request({ method: 'eth_getTransactionReceipt', params: [h] }).catch(() => null); if (r) return r; await new Promise((o) => setTimeout(o, 2000)); }
+  return null;
+}
+function buttons(chain, okL, okV) {
+  $('#d1').disabled = !(chain === 8453 && okL && !likesAt);
+  $('#d2').disabled = !(chain === 8453 && okV && likesAt && !vaultAt);
+  $('#d3').disabled = !(chain === 8453 && okB && vaultAt && !D.adresseBuyback);
+}
+if (D.adresseLikes && D.adresseVault && D.adresseBuyback) {
+  $('#state').innerHTML = 'Already deployed. BlockLikes ' + esc(D.adresseLikes) + ' · TBlockVault ' + esc(D.adresseVault) + ' · TBlockBuybackV2 ' + esc(D.adresseBuyback);
+  $('#connect').disabled = true;
+}
+$('#connect').onclick = async () => {
+  if (!window.ethereum) { $('#state').textContent = 'No wallet in this browser.'; return; }
+  try { [acct] = await window.ethereum.request({ method: 'eth_requestAccounts' }); } catch (e) { $('#state').textContent = 'Wallet refused: ' + (e.message || e); return; }
+  const chain = parseInt(await window.ethereum.request({ method: 'eth_chainId' }), 16);
+  const okL = (await sha256Hex(D.likes.creation)) === D.likes.sha256Creation, okV = (await sha256Hex(D.vault.init)) === D.vault.sha256Init;
+  okB = (await sha256Hex(D.buyback.init)) === D.buyback.sha256Init;
+  $('#state').innerHTML = 'Connected: ' + esc(acct) + ' · network ' + chain + (chain === 8453 ? '' : ' — switch to Base first') + ' · data integrity ' + (okL && okV && okB ? 'OK' : 'MISMATCH')
+    + '<br>Any wallet can deploy; the vault rescue rights go to the 2 wallets listed above, not to the deployer.' + (likesAt ? '<br>BlockLikes: ' + esc(likesAt) : '') + (vaultAt ? '<br>TBlockVault: ' + esc(vaultAt) : '');
+  buttons(chain, okL, okV);
+};
+async function deploy(btn, data, what) {
+  btn.disabled = true;
+  let h;
+  try { h = await window.ethereum.request({ method: 'eth_sendTransaction', params: [{ from: acct, data }] }); }
+  catch (e) { $('#state').textContent = 'Not sent: ' + (e.message || e); btn.disabled = false; return null; }
+  $('#state').innerHTML = what + ' sent: <a href="https://basescan.org/tx/' + esc(h) + '" target="_blank" rel="noopener">' + esc(h) + '</a> · waiting for the receipt…';
+  const r = await receipt(h);
+  if (!r) { $('#state').innerHTML += ' · no receipt yet: check Basescan before anything else.'; return null; }
+  if (r.status !== '0x1') { $('#state').innerHTML = what + ' FAILED on chain · tx ' + esc(h); return null; }
+  $('#state').innerHTML = what + ' deployed at <b>' + esc(r.contractAddress) + '</b> · tx <a href="https://basescan.org/tx/' + esc(h) + '" target="_blank" rel="noopener">' + esc(h) + '</a>';
+  return String(r.contractAddress).toLowerCase();
+}
+$('#d1').onclick = async () => { const a = await deploy($('#d1'), D.likes.creation, 'BlockLikes'); if (a) { likesAt = a; $('#d2').disabled = false; $('#state').innerHTML += '<br>Now step 2.'; } };
+$('#d2').onclick = async () => { if (!likesAt) return; const a = await deploy($('#d2'), vaultCreation(likesAt), 'TBlockVault'); if (a) { vaultAt = a; $('#d3').disabled = !okB; $('#state').innerHTML += '<br>Now step 3.'; } };
+$('#d3').onclick = async () => { if (!vaultAt) return; await deploy($('#d3'), buybackCreation(vaultAt), 'TBlockBuybackV2'); };
+</script>

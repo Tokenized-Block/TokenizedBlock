@@ -840,6 +840,11 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcAvatar[data-phase="EXCITE"]{filter:drop-shadow(0 0 16px rgb(var(--accentRgb) / .75))}
 .bcAvatar[data-phase="DORMANT"],.bcAvatar[data-phase="NON_LU"]{filter:grayscale(.7)}
 .bcNom{font-size:22px;font-weight:800;line-height:1.15;overflow-wrap:anywhere}
+.bcNomLigne{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.bcLike{display:inline-flex;align-items:center;gap:6px}
+.bcLike button{background:linear-gradient(90deg,#ffd166,#ff9f43);color:#1c1204;border:0;border-radius:99px;padding:5px 12px;font:inherit;font-weight:800;cursor:pointer;box-shadow:0 0 14px rgba(255,209,102,.45)}
+.bcLike button:disabled{opacity:.5;cursor:wait}
+.bcLike b{font-variant-numeric:tabular-nums}
 /* le symbole en grand, le nom en petit dessous, puis l humeur et QUATRE chiffres sur une seule rangee (1er jet : le titre tenait sur
    trois lignes et les chiffres sur deux — la scene mangeait la moitie d un ecran de telephone) */
 .bcScene .bcHumeur{grid-column:1/-1;margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -2532,7 +2537,9 @@ details[open] > summary::before{transform:rotate(90deg)}
       <div class="bcScene">
         <div class="bcAvatar" id="bcAvatar" data-phase="NON_LU"><div id="bcAvatarIn">◈</div></div>
         <div class="bcInfos">
-          <div class="bcNom" id="bcNom">Pick a block in the Brain tab</div>
+          <div class="bcNomLigne"><div class="bcNom" id="bcNom">Pick a block in the Brain tab</div>
+            <span class="bcLike" id="bcLike" hidden><button type="button" id="bcLikeBtn" title="+1 this block: burns TBLOCK, counts as play for the weekly holders rewards">+1</button><b id="bcLikeN" title="+1 received by this block">—</b></span></div>
+          <p class="note" id="bcLikeNote" hidden></p>
           <div class="note" id="bcSousNom" hidden></div>
           <button type="button" class="bcAdr" id="bcAdr" hidden title="Copy this block’s B20 address"></button>
         </div>
@@ -3303,6 +3310,15 @@ details[open] > summary::before{transform:rotate(90deg)}
       </div>
     </div>
 
+    <!-- COMMUNITY VAULT (Phil 2026-11-10): what the holders economy holds and what this wallet can claim. Hidden until TBlockVault is
+         deployed (economie.js VAULT); the full card with Claim buttons lives on contest.html, this one reads and links there. -->
+    <div class="carte" id="wVault" hidden>
+      <p class="titre">Community vault</p>
+      <p class="sous">Fed by buybacks and fees. It pays the players of each week first (a share of the TBLOCK they burned with +1, never more than they burned), then fills the contest pot.</p>
+      <div id="wVaultRows"></div>
+      <a class="bouton sec" href="/contest.html" style="display:inline-block;margin-top:8px">Claim and details</a>
+    </div>
+
     <div class="carte" id="wReceive" hidden>
       <p class="titre">Receive</p>
       <p class="sous">Send to this address on <b id="wRecReseau"></b> only. The same address on
@@ -3581,7 +3597,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game331" hidden>Build <code>20261109-game331</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game332" hidden>Build <code>20261109-game332</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5235,6 +5251,7 @@ import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
+import * as ECO from './economie.js'; /* holders economy: the +1 burn and the community vault (unsigned calls only) */
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
@@ -32143,6 +32160,73 @@ async function bcAifiProposerSkin() {
 }
 setInterval(() => { if (bc.aifi && !document.hidden) void bcAifiProposerSkin(); }, 30000);
 /** Peint le panneau depuis LE snapshot du cerveau de l app (appele a chaque battement par publierSnapshotBrain). */
+/* ── « +1 » (Phil 2026-11-10) : next to the block's name. Burns ECO.LIKE_PRICE TBLOCK per +1 (BlockLikes), counted for this block and as
+ *   play for the weekly holders rewards (TBlockVault). Hidden until BlockLikes is deployed: a button waiting for a contract is a draft.
+ *   ⛔ The person's wallet signs ONE batch: approve EXACTLY the price, then like(). Checked before the wallet opens (pay + keep the hold). */
+const bcLikeEtat = { de: null, n: null, lu: 0, enVol: false };
+function bcPeindreLike(a) {
+  const box = $('#bcLike'), note = $('#bcLikeNote');
+  if (!box) return;
+  if (!ECO.LIKES || !ECO.isB20(a)) { box.hidden = true; if (note) note.hidden = true; return; }
+  box.hidden = false; box.dataset.adr = a;
+  if (bcLikeEtat.de !== a) { bcLikeEtat.de = a; bcLikeEtat.n = null; $('#bcLikeN').textContent = '…'; if (note) note.hidden = true; }
+  if (bcLikeEtat.enVol || (bcLikeEtat.n !== null && Date.now() - bcLikeEtat.lu < 30000)) return;
+  bcLikeEtat.enVol = true;
+  void (async () => {
+    try {
+      const v = ECO.VIEW.likesOf(a);
+      const n = ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
+      if (bcLikeEtat.de === a) { bcLikeEtat.n = n; bcLikeEtat.lu = Date.now(); $('#bcLikeN').textContent = n.toString(); }
+    } catch (_) { if (bcLikeEtat.de === a) $('#bcLikeN').textContent = 'not read'; }
+    bcLikeEtat.enVol = false;
+  })();
+}
+$('#bcLikeBtn').addEventListener('click', async () => {
+  const a = $('#bcLike').dataset.adr, note = $('#bcLikeNote'), btn = $('#bcLikeBtn');
+  const dire = (t) => { note.hidden = false; note.textContent = t; };
+  if (!a || !ECO.LIKES) return;
+  if (!compte) { dire('Connect your wallet first. A +1 costs ' + ECO.fmt(ECO.LIKE_PRICE) + ' TBLOCK (burned) and needs ' + ECO.fmt(ECO.LIKE_MIN_HOLD) + ' TBLOCK left after paying.'); return; }
+  btn.disabled = true;
+  try {
+    const v = ECO.VIEW.balanceOf(String(compte).toLowerCase());
+    const bal = ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
+    const chk = ECO.likeCheck({ balance: bal, n: 1 });
+    if (!chk.ok) { dire('Not sent: ' + chk.why + '.'); return; }
+    dire('Waiting for your wallet: +1 for ' + ECO.fmt(chk.cost) + ' TBLOCK, burned, not refundable…');
+    const r = await envoyerAppels(ECO.likeBatch({ block: a, n: 1 }).map((c) => ({ to: c.to, data: c.data, value: c.value })), compte);
+    if (r && r.etat === 'CONFIRME') { dire('+1 confirmed. It counts as play for this week’s holders rewards.'); bcLikeEtat.lu = 0; bcPeindreLike(a); }
+    else dire('Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160));
+  } catch (e) { dire('Not sent: ' + String((e && e.message) || e).slice(0, 160)); }
+  finally { btn.disabled = false; }
+});
+
+/* ── Community vault card of the Wallet tab: read-only, every 60 s while the tab is visible. Hidden until TBlockVault is deployed. */
+let wVaultLu = 0;
+async function peindreVaultWallet() {
+  const carte = $('#wVault');
+  if (!carte) return;
+  if (!ECO.VAULT || !ECO.LIKES) { carte.hidden = true; return; }
+  const vol = $('#v-wallet');
+  if (document.hidden || (vol && vol.offsetParent === null) || Date.now() - wVaultLu < 60000) return;
+  wVaultLu = Date.now();
+  const lit = async (v) => ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
+  const rows = $('#wVaultRows'); rows.textContent = '';
+  const ligne = (k, v) => { const d = document.createElement('div'); d.className = 'stadeLigne'; const a = document.createElement('span'); a.textContent = k; const b = document.createElement('b'); b.textContent = v; d.append(a, ' ', b); rows.append(d); };
+  try {
+    const bal = await lit(ECO.VIEW.vaultBalance()), res = await lit(ECO.VIEW.reserved()), ep = await lit(ECO.VIEW.currentEpoch());
+    ligne('In the vault', ECO.fmt(bal) + ' TBLOCK'); ligne('Reserved for players', ECO.fmt(res) + ' TBLOCK'); ligne('This week', 'week ' + ep);
+    if (compte && ep > 0n) {
+      const o = await rpc('eth_call', [ECO.VIEW.owed(ep - 1n, String(compte).toLowerCase()), 'latest']);
+      const s = ECO.word(o, 0) + ECO.word(o, 1);
+      ligne('Yours from last week', s > 0n ? ECO.fmt(s) + ' TBLOCK to claim' : 'nothing to claim (or the week is not closed yet)');
+    }
+    const ra = await lit(ECO.VIEW.rescueAmount());
+    if (ra > 0n) ligne('Dev rescue announced', 'up to ' + ECO.fmt(ra) + ' TBLOCK of the free part, after ' + new Date(Number(await lit(ECO.VIEW.rescueAt())) * 1000).toISOString().slice(0, 16).replace('T', ' ') + ' UTC');
+  } catch (e) { ligne('Not read just now', String((e && e.message) || e).slice(0, 80)); wVaultLu = Date.now() - 45000; }
+  carte.hidden = false;
+}
+setInterval(() => { void peindreVaultWallet().catch(() => {}); }, 5000);
+
 function bcPeindre(snap) {
   if (!snap || !snap.address) return;
   const a = String(snap.address).toLowerCase(), mk = marcheParAdr.get(a) || null;
@@ -32175,6 +32259,7 @@ function bcPeindre(snap) {
     const sn = $('#bcSousNom'); sn.hidden = !(sym && nom); sn.textContent = sym && nom ? nom : '';
     const ad = $('#bcAdr'); ad.hidden = false; ad.textContent = a; ad.dataset.adr = a;
     bcPeindreActions(a, sym);
+    bcPeindreLike(a);
     /* un autre block : la liste d activite du precedent ne reste pas affichee sous son nom (meme hors de la vue Market) */
     { const ua = $('#bcActivite'); if (ua && ua.dataset.de !== a) { ua.textContent = ''; ua.append(bcEl('li', { cls: 'note', text: 'Reading…' })); ua.dataset.de = ''; $('#bcActiviteNote').textContent = ''; bc.activiteLue = 0; } }
     if (bc.session) bcNoter({ type: 'ready', block: a, ...(compte ? { account: String(compte).toLowerCase() } : {}) });

@@ -59,6 +59,7 @@
 
   <div class="card hero" id="status"><p class="mut">Reading the contract on Base…</p></div>
   <div class="card fund" id="fund" hidden></div>
+  <div class="card fund" id="vault" hidden></div>
   <div class="card" id="round" hidden></div>
   <div class="card" id="me" hidden></div>
   <div class="card" id="rules" hidden></div>
@@ -69,6 +70,7 @@
 <script type="module">
 import * as C from './block-contest.js';
 import { displayShort, isFeeAddress } from './frais-creation.js';
+import * as ECO from './economie.js';
 
 /* ---------------------------------------------------------------- reads: Base public nodes, straight from the browser */
 const NODES = ['https://base-rpc.publicnode.com', 'https://mainnet.base.org'];
@@ -132,6 +134,7 @@ async function refresh() {
       usd = h && h.ok && Number(h.priceNow) > 0 ? Number(h.priceNow) : null;
     } catch (_) { usd = null; }
     if (wallet) await readWallet();
+    await readVault();
     S.readError = '';
   } catch (e) {
     S = S || null;
@@ -146,6 +149,43 @@ async function readWallet() {
     enteredBy: C.decodeBool(await rd(C.VIEW.enteredBy(r, w))), room: C.decodeUint(await rd(C.VIEW.fundRoom(r))), voted: new Map() };
   for (const e of S.current.entries) out.voted.set(e.id, C.decodeBool(await rd(C.VIEW.hasVoted(r, e.id, w))));
   my = out;
+}
+
+/* ---------------------------------------------------------------- the community vault (TBlockVault) — hidden until it is deployed */
+let V = null;
+async function readVault() {
+  if (!ECO.VAULT || !ECO.LIKES) { V = null; return; }
+  try {
+    const w = (v) => rd(v).then((h) => ECO.word(h));
+    const v = { balance: await w(ECO.VIEW.vaultBalance()), reserved: await w(ECO.VIEW.reserved()), rescueAmount: await w(ECO.VIEW.rescueAmount()),
+      rescueAt: await w(ECO.VIEW.rescueAt()), renounced: (await w(ECO.VIEW.rescueRenounced())) !== 0n, epoch: await w(ECO.VIEW.currentEpoch()), mine: [] };
+    if (wallet) for (const e of [v.epoch - 1n, v.epoch - 2n].filter((x) => x >= 0n)) {
+      const ep = await rd(ECO.VIEW.epochs(e));
+      const closed = ECO.word(ep, 3) !== 0n;
+      const o = await rd(ECO.VIEW.owed(e, wallet));
+      v.mine.push({ e, closed, share: ECO.word(o, 0), bonus: ECO.word(o, 1) });
+    }
+    V = v;
+  } catch (e) { V = { error: String((e && e.message) || e).slice(0, 100) }; }
+}
+function renderVault() {
+  if (!V) { $('#vault').hidden = true; return; }
+  let h = '<h2>Community vault</h2>';
+  if (V.error) { $('#vault').innerHTML = h + '<p class="note">Not read just now (' + esc(V.error) + ').</p>'; $('#vault').hidden = false; return; }
+  h += '<p>It pays the players of each week first (a share of what they burned with +1, never more than they burned), then fills the contest pot. Holders of ' + tok(ECO.CLAIM_MIN_HOLD) + ' or more can claim.</p>';
+  h += row('In the vault', tok(V.balance) + dollars(V.balance)) + row('Reserved for players', tok(V.reserved)) + row('This week', 'week ' + V.epoch);
+  if (V.renounced) h += row('Dev rescue', pill('renounced for good', 'ok'));
+  else if (V.rescueAmount > 0n) h += '<div class="warnbox">The dev announced taking up to ' + tok(V.rescueAmount) + ' of the free part, not before ' + esc(utc(V.rescueAt)) + '. Player budgets are never touched.</div>';
+  else h += row('Dev rescue', 'none announced (it would show here 7 days before)');
+  if (!wallet) h += '<div class="act"><button class="ghost" data-connect="1">Connect wallet to see your rewards</button></div>';
+  for (const m of V.mine) {
+    const sum = m.share + m.bonus;
+    h += '<div class="entry"><div class="top"><span><b>Week ' + m.e + '</b></span><span>' + (m.closed ? (sum > 0n ? pill('to claim', 'ok') : pill('nothing for this wallet', 'warn')) : pill('not closed yet', 'warn')) + '</span></div>';
+    if (m.closed && sum > 0n) h += row('Your share', tok(m.share)) + (m.bonus > 0n ? row('Top contributor bonus', tok(m.bonus)) : '') + '<div class="act"><button data-claimweek="' + m.e + '">Claim ' + tok(sum) + '</button></div>';
+    if (!m.closed) h += '<p class="note">Anyone can close a finished week; then each player claims.</p><div class="act"><button class="ghost" data-closeweek="' + m.e + '">Close week ' + m.e + '</button></div>';
+    h += '</div>';
+  }
+  $('#vault').innerHTML = h; $('#vault').hidden = false;
 }
 
 /* ---------------------------------------------------------------- the connected wallet's own blocks */
@@ -270,6 +310,7 @@ function render() {
   f += '<p class="note">If the round does not pay, the pot is carried to later rounds, and what does not fit under their cap goes to the dead address.</p>';
   const typed = ($('fundAmt') || {}).value || ''; /* a refresh redraws the card: keep what the person was typing */
   $('fund').innerHTML = f; $('fund').hidden = false;
+  renderVault();
   if (typed && $('fundAmt')) $('fundAmt').value = typed;
   r += row('Blocks entered', String(cur.entryCount));
   r += row('Votes bought', String(cur.totalVotes));
@@ -367,6 +408,11 @@ document.addEventListener('click', async (ev) => {
     return send(C.enterBatch({ blockToken: b.block, key: b.key, entryFee: P.entryFee }), 'entry of your block for ' + C.formatUnits18(P.entryFee) + ' TBLOCK, not refundable');
   }
   if (d.max) { const i = $('fundAmt'); if (i) i.value = d.max; return; }
+  if (d.claimweek !== undefined) {
+    if (my && my.balance < ECO.CLAIM_MIN_HOLD) { message = 'Claiming needs ' + C.formatUnits18(ECO.CLAIM_MIN_HOLD) + ' TBLOCK in this wallet; it holds ' + C.formatUnits18(my.balance) + '.'; return render(); }
+    return send([ECO.claimCall(BigInt(d.claimweek))], 'claim of week ' + d.claimweek + ' rewards');
+  }
+  if (d.closeweek !== undefined) return send([{ to: ECO.VAULT, data: '0x' + ECO.SEL.closeEpoch + ECO.wUint(BigInt(d.closeweek)) }], 'closing week ' + d.closeweek);
   if (d.fund) {
     if (!my) return;
     const plan = C.fundPlan({ text: ($('fundAmt') || {}).value, room: my.room, balance: my.balance });
