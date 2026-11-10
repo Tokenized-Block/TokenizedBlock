@@ -2342,7 +2342,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- game326 (Phil 2026-11-09): the app recommends holding TBLOCK; the birth path itself is unchanged (the deployed contracts take ETH) -->
       <p class="note" id="cTblockReco">Recommended: hold TBLOCK, the app's own token. About $5 of it can be bought in the app in one batch
         (<a href="holders.html" target="_blank" rel="noopener">Buy TBLOCK</a>); $15 opens the holders' channel. Each buy goes through its pool, whose hook sends
-        part of every trade to the dead address. Creators can also enter their block in the
+        part of every trade to the dead address. Once your block is alive, you can add the rest up to $5 in TBLOCK to the community vault
+        (optional, one more signature). Creators can also enter their block in the
         <a href="contest.html" target="_blank" rel="noopener">block contest</a>, where entries and votes are paid in TBLOCK.</p>
       <p class="note" id="cCautionNote" hidden></p>
       <details class="bDetail" style="margin-top:6px"><summary class="note">Review before your wallet request</summary>
@@ -3597,7 +3598,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game334" hidden>Build <code>20261109-game334</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game335" hidden>Build <code>20261109-game335</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5252,6 +5253,7 @@ import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeB
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import * as ECO from './economie.js'; /* holders economy: the +1 burn and the community vault (unsigned calls only) */
+import * as TIP from './create-vault-tip.js'; /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
@@ -21114,6 +21116,7 @@ async function lancerMarcheBlock(adr) {
     etape('vivant');
     e.innerHTML = (naissance ? 'Instant Birth complete — ETH seeded + LP locked' + (planCourant.microSwap ? ' (+ indexer micro-swap when it lands)' : '') + '. ' : 'It is alive. Its market is open. ')
       + (atomiqueOk ? '(atomic) ' : '') + lien + blocPartage(adr, symProfil);
+    void proposerTipCoffre(e);
     $('#plActions').innerHTML = '';
     planCourant = null;
     /* ⛔ `true` = REUSSITE : sans ça, l arret de fin de parcours compterait un echec a l etape
@@ -24909,6 +24912,7 @@ async function creerEtVivreUneSignature({ v, calldata, to, adresse, faceGravee, 
   etape('vivant');
   e.className = 'note wOk';
   e.innerHTML = '<b>' + enTexte(v.sym) + '</b> is alive — Instant Birth (ETH seeded + first micro-swap + open fee). One signature.' + lien + blocPartage(adresse, v.sym);
+  void proposerTipCoffre(e);
   majProgressionVie('Done — it is alive.');
   lancementLien = String(adresse).toLowerCase();
   void ouvrirProfil(adresse, v.sym).then(() => { setTimeout(() => montrerPremierAcheteur(adresse), 1500); });
@@ -32199,6 +32203,39 @@ $('#bcLikeBtn').addEventListener('click', async () => {
   } catch (e) { dire('Not sent: ' + String((e && e.message) || e).slice(0, 160)); }
   finally { btn.disabled = false; }
 });
+
+/* ── Optional TBLOCK part of a birth (Phil 2026-11-10: optional, tops the 0.001 ETH fee up to $5, into the community vault).
+ *   Offered INSIDE the success note, AFTER the block is alive: it is never part of the birth batch, so it can never stop a birth.
+ *   One call, TBLOCK.transfer(vault, amount), signed by the creator; amount from create-vault-tip.js (rounded down, never above $5). */
+async function proposerTipCoffre(hote) {
+  if (!hote || !ECO.VAULT || !compte) return;
+  const box = document.createElement('div'); box.className = 'cVaultTip'; box.style.marginTop = '10px';
+  const p = document.createElement('p'); p.className = 'note';
+  const btn = document.createElement('button'); btn.className = 'bouton sec'; btn.type = 'button'; btn.hidden = true;
+  box.append(p, btn); hote.append(box);
+  p.textContent = 'Reading the TBLOCK top-up…';
+  let q;
+  try {
+    if (ethUsd === null) await lirePrixEth();
+    const h = await fetch('/api/tblock/hold', { cache: 'no-store', signal: AbortSignal.timeout(8000) }).then((x) => x.json());
+    const v = ECO.VIEW.balanceOf(String(compte).toLowerCase());
+    const bal = ECO.word(await rpc('eth_call', [{ to: v.to, data: v.data }, 'latest']));
+    q = TIP.plan({ ethUsd, tblockUsd: h && h.ok ? Number(h.priceNow) : null, balance: bal });
+  } catch (err) { q = { ok: false, why: 'It could not be read just now.' }; }
+  if (!q.ok) { p.textContent = 'Optional: top your birth up to $' + TIP.TARGET_USD + ' in TBLOCK for the community vault. ' + q.why; return; }
+  p.textContent = 'Optional: add $' + (Number(q.usdMicro) / 1e6).toFixed(2) + ' of TBLOCK to the community vault, so your birth totals $' + TIP.TARGET_USD
+    + '. The vault pays the players of each week first. One more signature; skipping it changes nothing for your block.';
+  btn.textContent = 'Add ' + ECO.fmt(q.amount) + ' TBLOCK to the vault'; btn.hidden = false;
+  btn.addEventListener('click', async () => {
+    btn.disabled = true; p.textContent = 'Waiting for your wallet: ' + ECO.fmt(q.amount) + ' TBLOCK to the community vault…';
+    try {
+      const r = await envoyerAppels([{ to: q.call.to, data: q.call.data, value: q.call.value }], compte);
+      if (r && r.etat === 'CONFIRME') { p.textContent = 'Sent: ' + ECO.fmt(q.amount) + ' TBLOCK are in the community vault.'; btn.hidden = true; return; }
+      p.textContent = 'Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160);
+    } catch (err) { p.textContent = 'Not sent: ' + String((err && err.message) || err).slice(0, 160); }
+    btn.disabled = false;
+  });
+}
 
 /* ── Community vault card of the Wallet tab: read-only, every 60 s while the tab is visible. Hidden until TBlockVault is deployed. */
 let wVaultLu = 0;

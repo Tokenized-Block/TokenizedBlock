@@ -6073,7 +6073,7 @@ const SERVIS = [
   /* the block contest page for users (reads Base, builds unsigned calls for the wallet of the user) and its pure module */
   'contest.html', 'block-contest.js',
   /* holders economy: the +1 burn and the community vault, their page module, the unsigned deployment (generated) and its page */
-  'economie.js', 'economie-deploiement.js', 'deployer-economie.html',
+  'economie.js', 'economie-deploiement.js', 'deployer-economie.html', 'create-vault-tip.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
