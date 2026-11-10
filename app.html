@@ -1360,8 +1360,28 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 .dexCol .bouton{width:100%;margin:0;grid-column:auto}
 .pConnect{cursor:pointer;font-weight:700}
 /* game340: TBLOCK button + live price — Base app blue fill, white text (5.75:1) */
-.tete .puce.pTblock{cursor:pointer;font-weight:700;background:#0052FF;color:#fff;border-color:#0052FF;white-space:nowrap}
-.tete .puce.pTblock:hover{background:#0047E8}.pTblock b{font-weight:600;font-variant-numeric:tabular-nums;margin-left:4px}
+/* game343 (Phil: "the TBLOCK button must match the site's colours"): it follows the chosen theme (accent), like the other header pills */
+.tete .puce.pTblock{cursor:pointer;font-weight:700;background:rgb(var(--accentRgb) / .14);color:var(--accent);border-color:rgb(var(--accentRgb) / .55);white-space:nowrap}
+.tete .puce.pTblock:hover{background:rgb(var(--accentRgb) / .24)}.pTblock b{font-weight:600;font-variant-numeric:tabular-nums;margin-left:4px;color:var(--texte, inherit)}
+/* game343 CREATE-ONE-PATH — the one birth card (Grok's v5.3): next = Base blue, done = teal, waiting = dimmed, busy/expired = amber */
+.cnCarte{border:1px solid rgb(47 224 200 / .25);border-radius:14px;padding:14px;background:rgb(8 20 32 / .85);display:flex;flex-direction:column;gap:10px;text-align:left}
+.cnTitre{font-weight:800;font-size:1.05em}.cnLead,.cnPied{font-size:.85em;opacity:.8;margin:0}.cnPied{text-align:center}
+.cnOccupe{border:1px solid #F5B942;border-radius:10px;padding:8px 10px;color:#F5D58A;font-size:.85em}
+.cnEtape{border:1px solid rgb(255 255 255 / .1);border-radius:12px;padding:10px}.cnEtape.cnSUIVANT{border-color:#0052FF;box-shadow:0 0 0 1px #0052FF inset}
+.cnEtape.cnATTENTE{opacity:.6}.cnTete{display:flex;align-items:center;gap:10px}.cnNom{flex:1;display:flex;flex-direction:column}.cnNom small{opacity:.7}
+.cnNum{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;border:1px solid rgb(255 255 255 / .3);font-weight:700;flex:none}
+.cnFAIT .cnNum{background:#0E3B3A;color:#2FE0C8;border-color:#2FE0C8}.cnSUIVANT .cnNum{background:#0052FF;border-color:#4C8FFF}
+.cnPill{font-size:.72em;font-weight:800;letter-spacing:.06em;padding:3px 8px;border-radius:999px;border:1px solid rgb(255 255 255 / .25);white-space:nowrap}
+.cnFAIT .cnPill{color:#2FE0C8;border-color:#2FE0C8}.cnSUIVANT .cnPill{background:linear-gradient(90deg,#0052FF,#4C8FFF);border-color:transparent;color:#fff}
+.cnFait{font-size:.82em;color:#2FE0C8;margin:6px 0 0 36px}
+.cnSig{display:flex;gap:8px;align-items:flex-start;margin:8px 0 0 36px;font-size:.85em}.cnSig.cnATTENTE{opacity:.6}
+.cnPuce{width:16px;height:16px;border-radius:50%;border:1px solid rgb(255 255 255 / .35);font-size:.75em;display:grid;place-items:center;flex:none}
+.cnSig.cnFAIT .cnPuce{color:#2FE0C8;border-color:#2FE0C8}.cnSig.cnSUIVANT .cnPuce{background:#0052FF;border-color:#4C8FFF;color:#fff}
+.cnSigTxt{flex:1;display:flex;flex-direction:column}.cnSigTxt small{opacity:.65}.cnSigTxt em{font-style:normal;color:#2FE0C8}
+.cnEtat{font-size:.7em;font-weight:800;letter-spacing:.06em;opacity:.8}.cnSig.cnSUIVANT .cnEtat{color:#4C8FFF}
+.cnContinue{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;padding:12px}.cnContinue small{font-weight:500;opacity:.85}
+.cnContinue:disabled{opacity:.55;cursor:not-allowed}
+.cnCarte #cCreer{width:100%;margin:0}.cnSousBouton{display:block;text-align:center;opacity:.85;margin-top:-4px}
 .pConnect:not(.connecte){background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-color:transparent;
   box-shadow:0 0 0 1px rgb(var(--accentRgb) / .35),0 6px 18px rgb(var(--boutonRgb) / .35)}
 .mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:center;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:var(--texte);margin:0 8px;
@@ -3605,7 +3625,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game342" hidden>Build <code>20261109-game342</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game343" hidden>Build <code>20261109-game343</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -3942,6 +3962,8 @@ details[open] > summary::before{transform:rotate(90deg)}
         <button class="bouton" id="pReveiller" type="button" hidden style="grid-column:1/-1">Wake it — open its market</button>
         <!-- game342 (live test by Grok): a block created but never opened could not be resumed from its own page -->
         <button class="bouton" id="pReprendreVie" type="button" hidden style="grid-column:1/-1">Continue: open its market (step 2 of 3)</button>
+        <!-- game343 CREATE-ONE-PATH: the one birth card (carte-naissance.js), painted from the chain reader for the wallet that holds it -->
+        <div id="bOne" hidden style="grid-column:1/-1"></div>
         <button class="bouton sec" id="pGarderTrusted" type="button" hidden style="grid-column:1/-1">Mark as trusted</button>
         <button class="bouton sec" id="pRelire" type="button" hidden style="grid-column:1/-1">Market unread — retry</button>
         <button class="bouton sec" id="pRescanMarche" type="button" hidden style="grid-column:1/-1">Re-scan market</button>
@@ -5263,7 +5285,8 @@ import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phra
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
 import * as ECO from './economie.js'; /* holders economy: the +1 burn and the community vault (unsigned calls only) */
 import * as TIP from './create-vault-tip.js';
-import { RELAIS_METHODES } from './relais-rpc.js'; /* game341: what the server relay reads for the page when every public node refused */ /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
+import { RELAIS_METHODES } from './relais-rpc.js';
+import { peindreCarteNaissance } from './carte-naissance.js'; /* game343 CREATE-ONE-PATH: the one birth card */ /* game341: what the server relay reads for the page when every public node refused */ /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
@@ -21233,7 +21256,41 @@ async function majReprendreVie() {
     const el = await eligibleNaissanceV8(adrRep);
     if (!el.ok || String(p.dataset.block || '').toLowerCase() !== adrRep || etatVieProfil !== 'NON_TROUVEE') return;
     rep.hidden = false;
+    void peindreBOne(adrRep);
   } catch (_) { /* not read: the button stays hidden; Re-scan market stays */ }
+}
+/* game343 CREATE-ONE-PATH: the block page shows the ONE card, from the server's chain read (/api/naissance/etat). Its Continue runs the
+ *   flow of the step the reader names: 1 or 3 -> the vault part (proposerTipCoffre buys with ETH when TBLOCK is short), 2 -> the resume.
+ *   Not read: the card says "nodes busy" and the plain Continue button above stays. */
+async function peindreBOne(adrRep, essai = 1) {
+  const hote = $('#bOne'), p = $('#profil');
+  if (!hote || !compte) return;
+  let part = '';
+  try {
+    if (ethUsd === null) await lirePrixEth();
+    const h = await fetch('/api/tblock/hold', { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json());
+    const q = TIP.plan({ ethUsd, tblockUsd: h && h.ok ? Number(h.priceNow) : null, balance: 10n ** 40n });
+    if (q.ok) part = q.amount.toString();
+  } catch (_) { part = ''; }
+  let r = null;
+  try {
+    r = await fetch('/api/naissance/etat?compte=' + String(compte).toLowerCase() + '&bloc=' + adrRep + (part ? '&part=' + part : ''), { cache: 'no-store', signal: AbortSignal.timeout(30000) }).then((x) => x.json());
+  } catch (_) { r = { etat: 'NON_MESURE' }; }
+  if (String(p.dataset.block || '').toLowerCase() !== adrRep) return;
+  /* not read: the card says "busy — retrying in 8 s · attempt k" and reads again by itself (v5.3), at most 30 times (4 min) */
+  const lu = r && r.etat === 'LU';
+  if (!lu && essai < 30) setTimeout(() => { if (String(p.dataset.block || '').toLowerCase() === adrRep) void peindreBOne(adrRep, essai + 1); }, 8000);
+  peindreCarteNaissance(hote, r, {
+    occupe: lu ? null : { secondes: 8, essai },
+    titre: 'Finish this birth — same card as Create',
+    onContinue: (rr) => {
+      const n = rr && rr.prochaine;
+      if (!n) return;
+      if (n.etape === 2) { const b = $('#pReprendreVie'); if (b) { b.hidden = false; b.click(); } return; }
+      const zone = document.createElement('div'); hote.append(zone); void proposerTipCoffre(zone);
+    },
+  });
+  const b = $('#pReprendreVie'); if (b && r && r.etat === 'LU') b.hidden = true; /* the card's Continue replaces it */
 }
 /* game342: resume a created-but-unopened block from its own page — the same sequence as the asleep-list resume (ETH pair, 99.9 %, auto) */
 $('#pReprendreVie').addEventListener('click', () => {
@@ -21389,6 +21446,10 @@ $('#pCompte').addEventListener('click', async () => {
    *   ⇒ LE VOYAGE SE FAIT DANS LES DEUX CAS : connecte on va voir son adresse, pas connecte on va
    *     voir POURQUOI. Un bouton qui ne mene nulle part se fait taper encore et encore. */
   if (!compte) await connecter();
+  /* ⛔ game343 (Phil 2026-11-10: "Connect wallet must connect the wallet on the site", he never asked for a trip to the Wallet tab —
+   *   the quote above was wrong). Connected = the person STAYS where they are (a block page keeps its birth card in sight). Only a
+   *   connection that failed goes to the Wallet tab, where the reason is written (no wallet installed, declined). */
+  if (compte) { void majReprendreVie(); return; }
   try { allerA('wallet'); } catch (_) { /* onglet Wallet absent : la puce reste une etiquette */ }
 });
 
@@ -32317,11 +32378,47 @@ setInterval(() => { void peindrePiluleTblock(); }, 30000);
 /* Pay split shown BEFORE signing on the Create tab: ETH part (fixed by the contracts) + TBLOCK part (optional, after birth).
  * Read every 60 s while the Create tab is visible; numbers are live or the line says it could not read them. */
 let tipApercuLu = 0;
+/* game343 CREATE-ONE-PATH on Create (Grok's v5.3): with a wallet and the block's predicted address, #cTipApercu becomes the ONE card,
+ *   read from the chain (/api/naissance/etat) and repainted every 12 s while Create is visible, and the page's own #cCreer — its flow
+ *   unchanged — is moved into the card as its one Continue. Without a wallet or an address yet: the plain price split below, and #cCreer
+ *   goes back to its place. */
+const cCreerChez = { parent: null, apres: null };
+function rendreCCreer() {
+  const b = $('#cCreer'); if (!b || !cCreerChez.parent || b.parentNode === cCreerChez.parent) return;
+  cCreerChez.parent.insertBefore(b, cCreerChez.apres && cCreerChez.apres.parentNode === cCreerChez.parent ? cCreerChez.apres : null);
+}
+let carteCreeLue = 0, carteCreeEssai = 0;
+async function peindreCarteCreate(box) {
+  const adr = adressePrevue && adressePrevue.adresse ? String(adressePrevue.adresse).toLowerCase() : null;
+  if (!compte || !adr) return false;
+  if (Date.now() - carteCreeLue < 12000) return true;
+  carteCreeLue = Date.now();
+  let part = '';
+  try {
+    if (ethUsd === null) await lirePrixEth();
+    const h = await fetch('/api/tblock/hold', { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json());
+    const q = TIP.plan({ ethUsd, tblockUsd: h && h.ok ? Number(h.priceNow) : null, balance: 10n ** 40n });
+    if (q.ok) part = q.amount.toString();
+  } catch (_) { part = ''; }
+  let r;
+  try { r = await fetch('/api/naissance/etat?compte=' + String(compte).toLowerCase() + '&bloc=' + adr + (part ? '&part=' + part : ''), { cache: 'no-store', signal: AbortSignal.timeout(30000) }).then((x) => x.json()); }
+  catch (_) { r = { etat: 'NON_MESURE' }; }
+  const lu = r && r.etat === 'LU';
+  carteCreeEssai = lu ? 0 : carteCreeEssai + 1;
+  if (!lu) carteCreeLue = Date.now() - 4000; /* not read: again in 8 s */
+  const b = $('#cCreer');
+  if (b && !cCreerChez.parent) { cCreerChez.parent = b.parentNode; cCreerChez.apres = b.nextSibling; }
+  peindreCarteNaissance(box, r, { bouton: b, occupe: lu ? null : { secondes: 8, essai: carteCreeEssai } });
+  return true;
+}
 async function peindreTipApercu() {
   const box = $('#cTipApercu');
   if (!box || !ECO.VAULT) return;
   const vol = $('#v-creer');
-  if (document.hidden || (vol && vol.offsetParent === null) || Date.now() - tipApercuLu < 60000) return;
+  if (document.hidden || (vol && vol.offsetParent === null)) return;
+  if (await peindreCarteCreate(box).catch(() => false)) return;
+  rendreCCreer();
+  if (Date.now() - tipApercuLu < 60000) return;
   tipApercuLu = Date.now();
   const ligne = (k, v) => { const d = document.createElement('div'); const a = document.createElement('span'); a.textContent = k + ' '; const b = document.createElement('b'); b.textContent = v; d.append(a, b); return d; };
   let rows = [];

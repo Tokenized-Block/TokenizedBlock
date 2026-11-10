@@ -44,7 +44,7 @@ const app = readFileSync(new URL('./app.html', import.meta.url), 'utf8');
 t('app imports the module', /import \* as TIP from '\.\/create-vault-tip\.js'/.test(app));
 t('the tip is built inside the success note (class cVaultTip), its button hidden until a plan is ok', /box.className = 'cVaultTip'/.test(app) && /btn.type = 'button'; btn.hidden = true;/.test(app));
 const calls = app.match(/proposerTipCoffre\(/g) || [];
-t('offered at both success points (+ its definition)', calls.length === 3, String(calls.length));
+t('offered at both success points, the block-page card (+ its definition)', calls.length === 4, String(calls.length));
 const fn = app.slice(app.indexOf('function proposerTipCoffre('), app.indexOf('function proposerTipCoffre(') + 4000);
 t('the send uses TIP.plan and envoyerAppels with that ONE call', /TIP\.plan\(/.test(fn) && /envoyerAppels\(\[\s*\{ to: q\.call\.to, data: q\.call\.data, value: q\.call\.value \}\s*\]/.test(fn));
 t('no birth plan carries the tip', !/appels[^\n]{0,200}TIP\./.test(app.replace(fn, '')));

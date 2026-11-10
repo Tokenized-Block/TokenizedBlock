@@ -14,7 +14,7 @@ const f = app.slice(app.indexOf('async function majReprendreVie('), app.indexOf(
 t('shown only on Base, for a block with NO market, to a connected wallet', /if \(CHAINE !== 8453 \|\| etatVieProfil !== 'NON_TROUVEE' \|\| !compte/.test(f));
 t('shown only to a wallet that holds the block', /if \(bal <= 0n \|\|/.test(f));
 t('shown only when the birth gate agrees', /const el = await eligibleNaissanceV8\(adrRep\);/.test(f) && /if \(!el\.ok/.test(f));
-t('re-checked at profile paint, at connect and at account change', (app.match(/void majReprendreVie\(\);/g) || []).length === 3, String((app.match(/void majReprendreVie\(\);/g) || []).length));
+t('re-checked at profile paint, at connect (twice: connecter and the header pill) and at account change', (app.match(/void majReprendreVie\(\);/g) || []).length === 4, String((app.match(/void majReprendreVie\(\);/g) || []).length));
 const c = app.slice(app.indexOf("$('#pReprendreVie').addEventListener('click'"), app.indexOf("$('#pReveiller').addEventListener('click'"));
 t('the click runs the asleep-list resume: ETH pair, 99.9 %, auto, plan', /lancementLien = String\(adr\)\.toLowerCase\(\);/.test(c) && /part\.value = '99\.9'/.test(c) && /ouvrirLancement\(\);/.test(c) && /vieAuto = true;/.test(c) && /void calculerLancement\(\);/.test(c));
 const g = app.slice(app.indexOf('let dejaInscrit = false;'), app.indexOf('let dejaInscrit = false;') + 900);

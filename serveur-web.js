@@ -262,6 +262,10 @@ import { planRail, echangesDevisesAnnonces } from './rails-api.js';
 import { planAchatPourCoffre, planWtcoinVersTblock } from './tblock-route.js'; /* game337: ETH -> TBLOCK -> community vault; game339: resume */
 import { ECONOMIE_DEPLOIEMENT } from './economie-deploiement.js';
 import { validerRelais, RELAIS_CORPS_MAX } from './relais-rpc.js'; /* game341: the page's last-resort read relay */
+import { lireEtatNaissance } from './etat-naissance.js'; /* game343 CREATE-ONE-PATH: the one reader of a birth */
+import { lireCoffrePaye } from './coffre-paye.js';
+const TBLOCK_ADR = '0xb200000000000000000000ba9bf8330307f8830e';
+const NAISS_ETAT = { cache: new Map(), minute: 0, parIp: new Map() };
 import { lireMarchesMorpho, lireFraisMorphoChaine, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
 import { planNaissance, pairesDeNaissance } from './naissance-api.js';
@@ -6090,7 +6094,7 @@ const SERVIS = [
   /* the block contest page for users (reads Base, builds unsigned calls for the wallet of the user) and its pure module */
   'contest.html', 'block-contest.js',
   /* holders economy: the +1 burn and the community vault, their page module, the unsigned deployment (generated) and its page */
-  'economie.js', 'economie-deploiement.js', 'deployer-economie.html', 'create-vault-tip.js', 'relais-rpc.js',
+  'economie.js', 'economie-deploiement.js', 'deployer-economie.html', 'create-vault-tip.js', 'relais-rpc.js', 'etat-naissance.js', 'coffre-paye.js', 'carte-naissance.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
@@ -7703,6 +7707,50 @@ function traiterRequete(req, res) {
     });
     res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
     res.end(JSON.stringify({ ok: true, maxAgeMs: STABLE_NEUVE_MAX_MS, stables: lignes }));
+    return;
+  }
+  /* game343 CREATE-ONE-PATH: GET /api/naissance/etat?compte=0x…&bloc=0x…[&part=<TBLOCK wei>] — where a birth stands, read on chain
+   *   (etat-naissance.js), with step 3 from coffre-paye.js (a TBLOCK transfer from this wallet to the vault after the block existed,
+   *   checked against its transaction). On the keyed node first, then RPC_LIST. Cached 15 s per (wallet, block, part); 20 per IP per min. */
+  if (chemin === '/api/naissance/etat') {
+    const rendreE = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(corps, (k, v) => (typeof v === 'bigint' ? v.toString() : v))); };
+    if (req.method !== 'GET') { rendreE(405, { etat: 'REFUSE', pourquoi: 'GET only' }); return; }
+    const q = new URL(req.url, 'http://x').searchParams;
+    const compteE = String(q.get('compte') || '').toLowerCase(), blocE = String(q.get('bloc') || '').toLowerCase(), partE = String(q.get('part') || '');
+    if (!/^0x[0-9a-f]{40}$/.test(compteE) || !/^0x[0-9a-f]{40}$/.test(blocE) || (partE && !/^[0-9]{1,40}$/.test(partE))) {
+      rendreE(400, { etat: 'REFUSE', pourquoi: 'usage: /api/naissance/etat?compte=<wallet>&bloc=<block address>[&part=<TBLOCK wei of the vault step>]' }); return;
+    }
+    const cleE = compteE + '|' + blocE + '|' + partE, enC = NAISS_ETAT.cache.get(cleE);
+    if (enC && Date.now() - enC.t < 15000) { rendreE(200, { ...enC.corps, depuisCache: true }); return; }
+    const ipE = ipClient(req), minE = Math.floor(Date.now() / 60000);
+    if (NAISS_ETAT.minute !== minE) { NAISS_ETAT.minute = minE; NAISS_ETAT.parIp.clear(); }
+    const nE = (NAISS_ETAT.parIp.get(ipE) || 0) + 1;
+    if (nE > 20) { rendreE(429, { etat: 'NON_MESURE', pourquoi: 'busy: retry in a minute' }); return; }
+    NAISS_ETAT.parIp.set(ipE, nE);
+    const rpcE = async (methode, params) => {
+      let derniere = 'no node answered';
+      for (const url of [...(RELAIS_CLE ? [RELAIS_CLE] : []), ...RPC_LIST]) {
+        try {
+          const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }), signal: AbortSignal.timeout(12000) });
+          compterEnvoi(url, r.status === 429 ? 'limite' : (r.ok ? 'ok' : 'erreur'));
+          if (!r.ok) { derniere = 'HTTP ' + r.status; continue; }
+          const j = await r.json();
+          if (j && j.error) { if (/rate limit|too many|request limit/i.test(String(j.error.message))) { derniere = 'rate limited'; continue; } throw new Error(String(j.error.message)); }
+          return j.result;
+        } catch (e) { if (/execution reverted/i.test(String(e && e.message))) throw e; derniere = String((e && e.message) || e).slice(0, 80); }
+      }
+      throw new Error(derniere);
+    };
+    (async () => {
+      const coffre = ECONOMIE_DEPLOIEMENT.adresseVault;
+      const cp = coffre ? await lireCoffrePaye({ rpc: rpcE, compte: compteE, bloc: blocE, coffre, tblock: TBLOCK_ADR }) : { etat: 'NON_MESURE', pourquoi: 'no vault' };
+      const coffrePaye = cp.etat === 'LU' ? cp.paye === true : null;
+      const r = await lireEtatNaissance({ rpc: rpcE, compte: compteE, bloc: blocE, partTblock: partE ? BigInt(partE) : null, coffrePaye });
+      const corps = { ...r, coffre: cp };
+      if (r.etat === 'LU') { NAISS_ETAT.cache.set(cleE, { t: Date.now(), corps }); if (NAISS_ETAT.cache.size > 500) NAISS_ETAT.cache.delete(NAISS_ETAT.cache.keys().next().value); }
+      rendreE(200, corps);
+    })().catch((e) => rendreE(200, { etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 140) }));
     return;
   }
   /* game341 (live test 2026-11-10): POST /api/rpc { method, params } — the page's LAST resort when every public node refused (429).
