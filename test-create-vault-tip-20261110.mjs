@@ -62,7 +62,7 @@ const cb = app.slice(app.indexOf('async function creerBlock('), app.indexOf('asy
 t('step 1 runs inside creerBlock BEFORE the birth preflight', cb.indexOf('if (!(await acheterTblockAvantNaissance(e))) return;') > 0
   && cb.indexOf('if (!(await acheterTblockAvantNaissance(e))) return;') < cb.indexOf('const ibDirectPre ='));
 const e1 = app.slice(app.indexOf('async function etape1AchatTblock('), app.indexOf('const planAchatCoffre = '));
-t('step 1 keeps the ETH the birth needs (reserve checked before buying)', /if \(ethBal < wei \+ TIP\.BIRTH_ETH_RESERVE_WEI\)/.test(e1) && e1.indexOf('BIRTH_ETH_RESERVE_WEI') < e1.indexOf('envoyerAppels('));
+t('step 1 keeps the ETH the birth needs (reserve checked before the ETH buy is sent)', /if \(ethBal < wei \+ TIP\.BIRTH_ETH_RESERVE_WEI\)/.test(e1) && e1.indexOf('BIRTH_ETH_RESERVE_WEI') < e1.indexOf('envoyerAppels(pl.appels'));
 t('step 1 asks a KEEP plan (TBLOCK stays in the wallet), never the vault plan', /vault-buy\?garder=1&compte=/.test(e1));
 t('step 1 refused by the wallet: the birth does not start', /if \(!r \|\| r\.etat !== 'CONFIRME'\) \{[\s\S]{0,260}return false;/.test(e1));
 t('step 1 unread prices or plan: the birth goes on (fail-open on a node outage)', /catch \(_\) \{ return true; \}/.test(e1) && /return true; \/\* plan unread/.test(e1));
@@ -71,6 +71,23 @@ t('step 3 opens the wallet on its own after a birth that ran step 1', /if \(tipA
 t('ethWeiForTblock: 500,000 TBLOCK at $0.00000576, ETH $2,090, +4 % = 0.001433110 ETH', T.ethWeiForTblock({ tblock: 500000n * E18, tblockUsd: 5.76e-6, ethUsd: 2090 }) === 1433110047846890n);
 t('ethWeiForTblock is null on an unread price or nothing to buy', T.ethWeiForTblock({ tblock: 1n, tblockUsd: null, ethUsd: 2000 }) === null && T.ethWeiForTblock({ tblock: 0n, tblockUsd: 1e-6, ethUsd: 2000 }) === null);
 t('the server passes garder only when asked', /garder: q\.get\('garder'\) === '1'/.test(srv));
+/* game339: resume + the stop sentence */
+const hold = readFileSync(new URL('./tblock-hold.js', import.meta.url), 'utf8');
+t('TIP.WTCOIN is the same wtCOIN as tblock-hold.js', new RegExp("WTCOIN\\s*=\\s*'" + T.WTCOIN + "'", 'i').test(hold), T.WTCOIN);
+const e1b = app.slice(app.indexOf('async function etape1AchatTblock('), app.indexOf('function texteEtape1Arretee('));
+t('step 1 resumes from leftover wtCOIN BEFORE any new ETH buy', e1b.indexOf('reprise=1&compte=') > 0 && e1b.indexOf('reprise=1&compte=') < e1b.indexOf('TIP.ethWeiForTblock({ tblock: need - bal'));
+t('the resume is skipped below the dust floor', /if \(bal < need && wt >= TIP\.WTCOIN_RESUME_MIN\)/.test(e1b));
+t('both stops use the counting sentence', (e1b.match(/texteEtape1Arretee\(/g) || []).length === 2);
+const fx0 = app.indexOf('function texteEtape1Arretee(r, n) {');
+const fx1 = fx0 + app.slice(fx0).search(/\r?\n\}\r?\n/); /* LF or CRLF checkout */
+const texteEtape1Arretee = new Function('r', 'n', app.slice(fx0 + 'function texteEtape1Arretee(r, n) {'.length, fx1));
+const s1 = texteEtape1Arretee({ etat: 'REFUSE', pourquoi: 'you declined in your wallet — nothing was sent', hashes: ['0xa', '0xb'] }, 4);
+t('2 of 4 sent: says so, never "nothing was sent"', /stopped after 2 of 4 signatures/.test(s1) && !/nothing was sent/i.test(s1), s1);
+const s0 = texteEtape1Arretee({ etat: 'REFUSE', pourquoi: 'you declined', hashes: [] }, 4);
+t('0 sent: says nothing was sent', /Nothing was sent/.test(s0) && !/stopped after/.test(s0), s0);
+const rt = readFileSync(new URL('./tblock-route.js', import.meta.url), 'utf8');
+t('the resume route exists, no app fee, simulated whole', /export async function planWtcoinVersTblock\(/.test(rt) && /resume: \{ fraisBps: 0n, paye: m, payeDevise: WTCOIN/.test(rt) && /const s = await simuler\(rpc, compte, appels\);/.test(rt.slice(rt.indexOf('planWtcoinVersTblock'))));
+t('the server serves reprise only with a whole account and a raw amount', /if \(repriseV && \(!\/\^0x\[0-9a-f\]\{40\}\$\/\.test\(compteV\)/.test(srv));
 /* game337: the ETH path */
 t('ethWeiForTopUp at ETH 2000 = $3 of ETH = 0.0015 ETH', T.ethWeiForTopUp(2000) === 1500000000000000n, String(T.ethWeiForTopUp(2000)));
 t('ethWeiForTopUp is null when unread or nothing to add', T.ethWeiForTopUp(null) === null && T.ethWeiForTopUp(6000) === null);

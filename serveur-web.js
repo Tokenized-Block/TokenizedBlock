@@ -259,7 +259,7 @@ import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
 import { lireAvoirs, classeLot } from './avoirs.js';
 import { planRail, echangesDevisesAnnonces } from './rails-api.js';
-import { planAchatPourCoffre } from './tblock-route.js'; /* game337: ETH -> TBLOCK -> community vault, one atomic batch */
+import { planAchatPourCoffre, planWtcoinVersTblock } from './tblock-route.js'; /* game337: ETH -> TBLOCK -> community vault; game339: resume */
 import { ECONOMIE_DEPLOIEMENT } from './economie-deploiement.js';
 import { lireMarchesMorpho, lireFraisMorphoChaine, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
 /* 2026-10-04 : la naissance planifiee pour un agent, le MCP, et la sortie du minimum du createur (hook 7030) */
@@ -7701,9 +7701,14 @@ function traiterRequete(req, res) {
     if (req.method !== 'GET') { rendreV(405, { ok: false, pourquoi: 'GET only' }); return; }
     const q = new URL(req.url, 'http://x').searchParams;
     const compteV = String(q.get('compte') || '').toLowerCase(), ethV = String(q.get('eth') || '');
+    /* game339: reprise=1&wt=<raw wtCOIN> resumes an interrupted step 1 from the wtCOIN already in the wallet (leg 2 only) */
+    const repriseV = q.get('reprise') === '1', wtV = String(q.get('wt') || '');
     const coffreV = ECONOMIE_DEPLOIEMENT.adresseVault;
     if (!coffreV) { rendreV(200, { ok: false, etat: 'REFUSE', pourquoi: 'the community vault is not deployed yet' }); return; }
-    if (!/^0x[0-9a-f]{40}$/.test(compteV) || !/^[1-9][0-9]{0,20}$/.test(ethV) || BigInt(ethV) > 10n ** 17n) {
+    if (repriseV && (!/^0x[0-9a-f]{40}$/.test(compteV) || !/^[1-9][0-9]{0,30}$/.test(wtV))) {
+      rendreV(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/tblock/vault-buy?reprise=1&compte=<the wallet that will sign>&wt=<raw wtCOIN to resume from>' }); return;
+    }
+    if (!repriseV && (!/^0x[0-9a-f]{40}$/.test(compteV) || !/^[1-9][0-9]{0,20}$/.test(ethV) || BigInt(ethV) > 10n ** 17n)) {
       rendreV(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/tblock/vault-buy?compte=<the wallet that will sign>&eth=<wei, at most 0.1 ETH>' }); return;
     }
     const ipV = ipClient(req), minuteV = Math.floor(Date.now() / 60000);
@@ -7714,7 +7719,8 @@ function traiterRequete(req, res) {
     }
     railsBudget.parIp.set(ipV, nIpV); railsBudget.n += 1; railsEnVol += 1;
     /* garder=1 (game338): step 1 of a birth, the TBLOCK bought stays in the buyer's wallet; it pays the vault at step 3 */
-    planAchatPourCoffre({ rpc: rpcNaissance, compte: compteV, montantEth: BigInt(ethV), coffre: coffreV, garder: q.get('garder') === '1' })
+    (repriseV ? planWtcoinVersTblock({ rpc: rpcNaissance, compte: compteV, montant: BigInt(wtV) })
+      : planAchatPourCoffre({ rpc: rpcNaissance, compte: compteV, montantEth: BigInt(ethV), coffre: coffreV, garder: q.get('garder') === '1' }))
       .then((r) => rendreV(200, { ok: r.etat === 'PRET', ...r }))
       .catch((e) => rendreV(200, { ok: false, etat: 'NON_MESURE', pourquoi: String((e && e.message) || e).slice(0, 160) }))
       .finally(() => { railsEnVol -= 1; });

@@ -326,6 +326,44 @@ export async function planRouteTblock({ rpc, compte, de, vers, montant, fraisBps
 }
 
 /**
+ * game339 (Grok's live test 2026-11-10): RESUME an interrupted ETH > TBLOCK buy. Leg 1 (ETH -> wtCOIN) went through, then the wallet
+ * stopped before leg 2: the wtCOIN sits in the buyer's wallet. This plans leg 2 alone on the pinned TBLOCK pool, from `montant` wtCOIN:
+ * exact Permit2 steps + the v4 swap, no app fee, the whole batch simulated from the account. Same shape as planRouteTblock.
+ */
+export async function planWtcoinVersTblock({ rpc, compte, montant, toleranceBps = 100n, maintenant = Date.now() } = {}) {
+  if (typeof rpc !== 'function') return { etat: 'NON_MESURE', pourquoi: 'no chain reader' };
+  if (!ADR.test(bas(compte))) return { etat: 'REFUSE', pourquoi: 'compte (the wallet that will sign) is required' };
+  let m; try { m = BigInt(montant); } catch (_) { m = 0n; }
+  if (m <= 0n) return { etat: 'REFUSE', pourquoi: 'no wtCOIN to resume from' };
+  const tol = BigInt(toleranceBps);
+  const cleOk = verifierCleTblock();
+  if (!cleOk.ok) return { etat: 'REFUSE', pourquoi: cleOk.pourquoi };
+  let t = Math.floor(Number(maintenant) / 1000);
+  try { const blk = await rpc('eth_getBlockByNumber', ['latest', false]); const ts = blk && blk.timestamp ? Number(BigInt(blk.timestamp)) : 0; if (Number.isSafeInteger(ts) && ts > t) t = ts; } catch (_) { /* server clock */ }
+  const deadline = t + DEADLINE_S;
+  try {
+    const bal = firstWord(await rpc('eth_call', [{ to: WTCOIN, data: selecteur('balanceOf(address)') + wordA(compte) }, 'latest']));
+    if (bal < m) return { etat: 'REFUSE', sansFonds: true, pourquoi: 'this wallet holds less wtCOIN than the amount to resume' };
+    const q = await quoteV4(rpc, WTCOIN, m);
+    if (!(q > 0n)) return { etat: 'REFUSE', pourquoi: 'the TBLOCK pool quotes nothing for this amount' };
+    const min = minus(q, tol);
+    const appels = [];
+    const p2 = etapesPermit2Exactes({ jeton: WTCOIN, permit2: PERMIT2, routeur: UNIVERSAL_ROUTER, montant: m, maintenantSec: t, libelleJeton: 'wtCOIN' });
+    if (p2.etat !== 'OK') return { etat: 'REFUSE', pourquoi: p2.pourquoi };
+    for (const s of p2.etapes) appels.push({ to: s.to, data: s.data, value: '0x0', role: s.nom });
+    const v4 = calldataSwapTblock({ entree: WTCOIN, montant: m, min, deadline });
+    appels.push({ to: v4.to, data: v4.data, value: '0x0', role: 'swap wtCOIN to TBLOCK on Uniswap v4 (the pinned TBLOCK pool)' });
+    const s = await simuler(rpc, compte, appels);
+    if (s.etat !== 'OK') return { ...s, resume: null };
+    return { etat: 'PRET', exigeAtomique: true, appels, pourquoi: null,
+      resume: { fraisBps: 0n, paye: m, payeDevise: WTCOIN, recoitAuMoins: min, recoitDevise: bas(TBLOCK), devis: q, reprise: true, chemin: ['wtCOIN', 'TBLOCK'],
+        gasSimule: s.gas.reduce((x, y) => x + y, 0n) } };
+  } catch (e) {
+    return isRevert(e) ? { etat: 'REFUSE', pourquoi: 'a quote reverted: ' + short(e) } : { etat: 'NON_MESURE', pourquoi: 'a read failed just now: ' + short(e) };
+  }
+}
+
+/**
  * game337 (Phil 2026-11-10): the TBLOCK part of a birth, BOUGHT WITH ETH and sent to the community vault, in ONE atomic batch:
  * the ETH > TBLOCK buy above (with NO app fee: it is a gift to the vault) + TBLOCK.transfer(vault, the buy's guaranteed minimum).
  * Anything the pools give above that minimum stays with the buyer. The WHOLE batch is simulated from the account; PRET only if

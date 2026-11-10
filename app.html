@@ -3600,7 +3600,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game338" hidden>Build <code>20261109-game338</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game339" hidden>Build <code>20261109-game339</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -32278,6 +32278,23 @@ async function etape1AchatTblock(e) {
     ethBal = BigInt(await rpc('eth_getBalance', [String(compte).toLowerCase(), 'latest']));
   } catch (_) { return true; }
   tipAuto = true; /* step 3 follows the birth on its own */
+  /* game339 (Grok's live test 2026-11-10): a step 1 that stopped between its two legs left wtCOIN in this wallet. Finish it FROM that
+   *   wtCOIN first (allowances + wtCOIN -> TBLOCK), never buy again with ETH on top of it; then buy with ETH only what is still missing. */
+  let wt = 0n;
+  try { wt = ECO.word(await rpc('eth_call', [{ to: TIP.WTCOIN, data: '0x70a08231' + ECO.wAddr(String(compte).toLowerCase()) }, 'latest'])); } catch (_) { wt = 0n; }
+  if (bal < need && wt >= TIP.WTCOIN_RESUME_MIN) {
+    let pr = null;
+    try { pr = await fetch('/api/tblock/vault-buy?reprise=1&compte=' + String(compte).toLowerCase() + '&wt=' + wt, { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json()); } catch (_) { pr = null; }
+    if (pr && pr.ok) {
+      e.className = 'note';
+      e.textContent = 'Step 1 of 3: finishing your earlier TBLOCK buy from the ' + (Number(wt) / 1e18).toFixed(4) + ' wtCOIN already in your wallet ('
+        + pr.appels.length + ' signatures: the allowances, then wtCOIN to TBLOCK; no new ETH). Confirm in your wallet…';
+      const rr = await envoyerAppels(pr.appels.map((c) => ({ to: c.to, data: c.data, value: c.value })), compte);
+      if (!rr || rr.etat !== 'CONFIRME') { e.className = 'note wKo'; e.textContent = texteEtape1Arretee(rr, pr.appels.length); tipAuto = false; return false; }
+      try { const v2 = ECO.VIEW.balanceOf(String(compte).toLowerCase()); bal = ECO.word(await rpc('eth_call', [{ to: v2.to, data: v2.data }, 'latest'])); } catch (_) { /* keep the old reading */ }
+      if (bal >= need) { e.textContent = 'Step 1 of 3 done: TBLOCK bought. Step 2 of 3: the birth in ETH…'; return true; }
+    }
+  }
   if (bal >= need) return true;
   const wei = TIP.ethWeiForTblock({ tblock: need - bal, tblockUsd: px, ethUsd });
   if (wei === null) return true;
@@ -32296,16 +32313,31 @@ async function etape1AchatTblock(e) {
     return true; /* plan unread: the birth goes on, step 3 will offer the ETH buy after it */
   }
   e.className = 'note';
-  e.textContent = 'Step 1 of 3: buy ' + ECO.fmt(need - bal) + ' TBLOCK with ' + (Number(wei) / 1e18).toFixed(6) + ' ETH (no app fee; each buy goes through the TBLOCK pool, whose hook burns part of it). Confirm in your wallet…';
+  /* game339 (Grok's live test 2026-11-10): a careful signer rejected call 1 because the wallet showed wtCOIN received, not TBLOCK.
+   *   Say what each signature is BEFORE the wallet opens: a wallet that does not batch shows them one by one. */
+  e.textContent = 'Step 1 of 3: buy ' + ECO.fmt(need - bal) + ' TBLOCK with ' + (Number(wei) / 1e18).toFixed(6) + ' ETH (no app fee; each buy goes through the TBLOCK pool, whose hook burns part of it). '
+    + 'A wallet that does not batch asks ' + pl.appels.length + ' signatures: first ETH to wtCOIN (the price pivot, so your wallet shows wtCOIN received), then two exact allowances, then wtCOIN to TBLOCK. Confirm in your wallet…';
   const r = await envoyerAppels(pl.appels.map((c) => ({ to: c.to, data: c.data, value: c.value })), compte);
   if (!r || r.etat !== 'CONFIRME') {
     e.className = 'note wKo';
-    e.textContent = 'Step 1 of 3 not done (' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 120) + '). The birth was not started.';
+    e.textContent = texteEtape1Arretee(r, pl.appels.length);
     tipAuto = false;
     return false;
   }
   e.textContent = 'Step 1 of 3 done: TBLOCK bought. Step 2 of 3: the birth in ETH…';
   return true;
+}
+/* game339: the sentence after a step 1 that stopped. ⛔ It said "nothing was sent" while 2 of 4 signatures had gone through (Grok's live
+ *   test, nonces 148-149): count the confirmed hashes the wallet path returns, and say where the bought part sits. */
+function texteEtape1Arretee(r, n) {
+  const faits = r && Array.isArray(r.hashes) ? r.hashes.length : 0;
+  const raison = String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 120);
+  if (faits > 0) {
+    /* the wallet layer's own reason may end with "nothing was sent": true of the LAST call only, false of the batch */
+    return 'Step 1 of 3 stopped after ' + faits + ' of ' + n + ' signatures (' + raison.replace(/\s*[—-]\s*nothing was sent\.?/i, '') + '). The ' + faits + ' sent are confirmed on Base; nothing is lost: '
+      + 'what was bought sits in your wallet. Press Instant Birth again: the app finishes from it, without new ETH for that part. The birth was not started.';
+  }
+  return 'Step 1 of 3 not done (' + raison + '). Nothing was sent. The birth was not started.';
 }
 
 /* the ETH path of the TBLOCK part: buy TBLOCK with ETH, the vault receives the buy's guaranteed minimum, in ONE batch */

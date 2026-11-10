@@ -6,6 +6,9 @@
 import { TBLOCK, VAULT, wAddr, wUint, fmt } from './economie.js';
 
 export const TARGET_USD = 5;
+/* game339: the price pivot of the TBLOCK buy; leftover wtCOIN in a wallet = a step 1 that stopped between its two legs (resumed, not re-bought) */
+export const WTCOIN = '0x5cda0e1ca4ce2af96315f7f8963c85399c172204';
+export const WTCOIN_RESUME_MIN = 100000000000000n; /* 0.0001 wtCOIN (about $0.01): below it, dust is left alone */
 export const BIRTH_FEE_WEI = 1000000000000000n; /* 0.001 ETH, the birth fee every page shows */
 const SCALE = 1000000n; /* prices handled in millionths of a cent-free unit: exact BigInt maths after one rounding */
 
