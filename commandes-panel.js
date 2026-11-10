@@ -39,6 +39,9 @@ export const PRECOMMANDES = Object.freeze([
    *   `direct` : la puce ENVOIE sa commande au clic (rien a ajuster : ni montant, ni block, ni adresse) — la reponse montre le prix et les
    *   appels AVANT le bouton de signature ; « settle spin » ouvre le wallet tout de suite (la fenetre peut ne durer que ~51 s). Les deux
    *   reprennent les fonctions de la carte Draws (slotsAgir, Slots.planSpin) : aucune copie. */
+  /* game346 (Phil 2026-11-10: "heart another block in one simple click from the control panel"): `direct` = the chip SENDS « heart this »;
+   *   the answer checks the price and the hold first, then the wallet signs ONE batch (approve exactly the price, then like). */
+  { cle: 'heart', libelle: '♥ Heart this block', modele: 'heart this', ceBlock: true, direct: true },
   { cle: 'spin', libelle: 'Spin', modele: 'spin', direct: true },
   { cle: 'settle_spin', libelle: 'Settle my spin', modele: 'settle spin', direct: true },
   { cle: 'roll', libelle: 'Roll', modele: 'roll' },
@@ -75,6 +78,7 @@ export const AIDE_COMMANDES = Object.freeze([
   'tasks                                  what this block’s brain accepts right now',
   'game                                   the Game: your ticket, today’s tickets, the pot, the last rolls',
   'log · today                            what happened in the game today (the last 10)',
+  'heart <block>                          e.g. heart this — a heart for a block: burns TBLOCK, counts as play for the holders vault; you sign',
   'spin                                   BlockSlots: three Base blocks draw three faces; the answer shows the price and the steps before you sign',
   'settle spin                            settle your spin that can be settled now (the prize goes to you; your wallet signs)',
   'roll · roll x5 · roll x10              the classic roll (0.50 USDC a roll with the contract, 10 at most; practice without it)',
@@ -168,6 +172,12 @@ export const COMMANDES = Object.freeze([
     }
     return { ok: false, pourquoi: 'post task needs: post task <reward per player> <players> <must hold> — in block units, e.g. post task 100 10 10' };
   }, palette: [{ nom: 'Post a task', modele: PRE.post_task.modele, mots: 'mission reward players hold board', ecrire: true }] },
+  /* game346: « heart this », « heart FOO », « like 0x… », « ♥ this » — one heart per command (the ♥ next to the name, in words) */
+  { cle: 'heart', lire: (t) => {
+    if (!/^(?:heart|like|♥)(?: |$)/i.test(t)) return null;
+    if ((m = new RegExp('^(?:heart|like|♥) ' + JETON + '$', 'i').exec(t))) return { ok: true, commande: { type: 'heart', jeton: m[1] } };
+    return { ok: false, pourquoi: 'heart needs: heart <block> — a symbol, a whole address, or “this” for the block shown' };
+  }, palette: [{ nom: '♥ Heart a block — burns TBLOCK, counts as play', modele: PRE.heart.modele, mots: 'heart like love support vote favorite' }] },
   { cle: 'view', lire: (t) => ((m = /^(market|trade|brain|chat)$/i.exec(t)) ? { ok: true, commande: { type: 'show', tab: m[1].toLowerCase() } } : null),
     palette: [
       { nom: 'Panel · Chat view', modele: 'chat', mots: 'panel view talk' },

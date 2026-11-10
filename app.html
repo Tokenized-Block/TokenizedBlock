@@ -844,6 +844,12 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .bcLike{display:inline-flex;align-items:center;gap:6px}
 .bcLike button{background:rgb(var(--accentRgb) / .16);color:#ff5c8a;border:1px solid rgb(var(--accentRgb) / .5);border-radius:99px;padding:3px 12px;font:inherit;font-size:1.15em;font-weight:800;cursor:pointer;line-height:1.2}
 .bcLike button:hover{background:rgb(var(--accentRgb) / .28)}
+/* game346: the signals between blocks, and the hearts board of the holders vault */
+.bcSignaux{margin:4px 0 0;color:#ff5c8a}
+.bcSignaux button.lien,.wCoeurs button.lien{background:none;border:0;padding:0 2px;font:inherit;color:var(--accent);cursor:pointer;text-decoration:underline}
+.wCoeurs{margin-top:10px;padding-top:8px;border-top:1px solid rgb(127 127 127 / .25)}
+.wCoeurs .sousTitre{font-weight:700;margin:8px 0 4px}
+.wCoeurs .moi{font-weight:800}
 .bcLike button:disabled{opacity:.5;cursor:wait}
 .bcLike b{font-variant-numeric:tabular-nums}
 /* le symbole en grand, le nom en petit dessous, puis l humeur et QUATRE chiffres sur une seule rangee (1er jet : le titre tenait sur
@@ -2315,8 +2321,10 @@ details[open] > summary::before{transform:rotate(90deg)}
       <details class="bDetail" id="cReglagesDetail"><summary class="note">Manual settings — every dial</summary>
       <div class="reglages" id="cReglages"></div>
       </details>
-      <label class="wConsent" style="color:var(--doux);margin-top:12px"><input type="checkbox" id="cCerveau" checked>
-        Give it a brain — 128 neurons that move it on the map and react to its market. Signs nothing.</label>
+      <!-- game346 (Phil 2026-11-10: "Give it a brain must not be an option, nobody unticks it, otherwise no living block"): the brain is
+           always on. The input stays (hidden, checked, disabled) because the birth reads #cCerveau.checked; nobody can untick it. -->
+      <input type="checkbox" id="cCerveau" checked disabled hidden>
+      <p class="note" id="cCerveauNote" style="margin-top:12px">🧠 Its brain is built in — 128 neurons that move it on the map and react to its market. Signs nothing.</p>
       <label class="champ" style="margin-top:10px">Its role<select id="cRole"></select></label>
       <p class="note" id="cRoleNote">You can change it later on its profile.</p>
       <!-- 2026-11-04 « block marchand » : FACULTATIF. Grave pour toujours dans les metadonnees du block (shopify_store) ;
@@ -2331,27 +2339,8 @@ details[open] > summary::before{transform:rotate(90deg)}
     <div class="carte">
       <!-- tip 20260922-create-sign-ux: Instant Birth > vague Bring it to life -->
       <p class="titre"><span class="creaEtape">3</span> Instant Birth</p>
-      <ol class="creaPas">
-        <!-- ⛔ Phil (capture 2026-09-19) : l ordre « payer d abord » etait celui de l ancien hook ; aujourd hui creation,
-             ≈ $1 et marche partent ensemble (une signature quand le wallet sait grouper). -->
-        <li><b>Create</b> <span>its face and brain are engraved</span></li>
-        <li><b>0.001 ETH</b> <span>brings it to life</span></li>
-        <li><b>Its market opens</b> <span>it lives on the map</span></li>
-        <!-- ⛔⛔ CETTE LIGNE DISAIT « And it pays you — every trade on your block sends you a share ».
-             C ETAIT FAUX, ET C ETAIT SERVI EN PRODUCTION, SUR DE L ARGENT.
-             Mesure du 2026-09-26, LUE sur la chaine et non deduite : le hook V8 — le seul que la
-             naissance accepte sur mainnet — emet `ToutAuWallet` (topic grave dans son bytecode).
-             QUATRE emissions en 14 jours, et QUATRE hausses correspondantes du solde du wallet au
-             bloc EXACT. Le frais part a 100 %. `dime()` rend toujours 20, mais c est un GETTER
-             MORT : la repartition ne le lit plus.
-             ⛔ LA PHRASE AVAIT ETE ECRITE POUR LE V5, qui versait vraiment pendant le swap — le
-             commentaire du plan de lancement le dit encore. Le hook a change, le texte est reste.
-             Une promesse ecrite pour une ancienne configuration ne la suit pas quand elle change,
-             et ici elle portait sur le revenu de quelqu un d autre.
-             ⛔ AUCUN POURCENTAGE ET AUCUNE ADRESSE A L ECRAN : la regle tient toujours. On ne dit
-             pas ou va le frais ; on cesse seulement d affirmer qu il revient. -->
-        <li><b>And it has a market</b> <span>every trade there pays a fee that keeps it running — that fee does not come back to you today</span></li>
-      </ol>
+      <!-- game346 (Phil 2026-11-10: "this list is useless, the card already says it"): the old 4-line list (Create · 0.001 ETH · market · fee)
+           is gone; the one Create card (carte-naissance.js) shows the real steps and the price. -->
       <p class="note" id="cReseauAvert"></p>
       <!-- tip 0032 : la paire se choisit ici, repliee (TBLOCK par defaut) -->
       <!-- ⛔ LE RESUME REPLIE DISAIT « TBLOCK by default » MEME QUAND ETH ETAIT CHOISI (Phil, 2026-09-17).
@@ -2370,11 +2359,11 @@ details[open] > summary::before{transform:rotate(90deg)}
       </details>
       <!-- game344 (Phil: "one version, the new one, no overload"): the long texts fold under ONE line; the card below is the path -->
       <details class="bDetail" id="cDetailsFrais" style="margin-top:6px"><summary class="note">Fees, deposit and why TBLOCK</summary>
-      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the price: $5 in all, TBLOCK first. Step 1, only if you lack TBLOCK: the app buys it with your ETH (no app fee). Step 2, the birth: 0.001 ETH, signed in two parts: 0.0007 ETH when you create, then 0.0003 ETH plus your creator deposit (not a fee: it stays yours) when its market opens. Step 3: your block is paid in TBLOCK to the community vault. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
+      <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the price: $5 in all, TBLOCK first. Step 1, only if you lack TBLOCK: the app buys it with your ETH (no app fee). Step 2, the birth: 0.001 ETH, signed in two parts: 0.0007 ETH when you create, then 0.0003 ETH plus your creator deposit (not a fee: it stays yours) when its market opens. Step 3: your block is paid in TBLOCK to the holders vault. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
       <!-- game326 (Phil 2026-11-09): the app recommends holding TBLOCK; the birth path itself is unchanged (the deployed contracts take ETH) -->
       <p class="note" id="cTblockReco">Recommended: hold TBLOCK, the app's own token. About $5 of it can be bought in the app in one batch
         (<a href="holders.html" target="_blank" rel="noopener">Buy TBLOCK</a>); $15 opens the holders' channel. Each buy goes through its pool, whose hook sends
-        part of every trade to the dead address. Once your block is alive, you can add the rest up to $5 in TBLOCK to the community vault
+        part of every trade to the dead address. Once your block is alive, you can add the rest up to $5 in TBLOCK to the holders vault
         (optional, one more signature). Creators can also enter their block in the
         <a href="contest.html" target="_blank" rel="noopener">block contest</a>, where entries and votes are paid in TBLOCK.</p>
       <p class="note" id="cCautionNote" hidden></p>
@@ -2574,8 +2563,9 @@ details[open] > summary::before{transform:rotate(90deg)}
         <div class="bcAvatar" id="bcAvatar" data-phase="NON_LU"><div id="bcAvatarIn">◈</div></div>
         <div class="bcInfos">
           <div class="bcNomLigne"><div class="bcNom" id="bcNom">Pick a block in the Brain tab</div>
-            <span class="bcLike" id="bcLike" hidden><button type="button" id="bcLikeBtn" aria-label="Heart this block" title="Heart this block: burns 86,000 TBLOCK, counts as play for the weekly holders rewards (you keep at least 2,580,000 TBLOCK)">♥</button><b id="bcLikeN" title="Hearts received by this block">—</b></span></div>
+            <span class="bcLike" id="bcLike" hidden><button type="button" id="bcLikeBtn" aria-label="Heart this block" title="Heart this block: burns 86,000 TBLOCK, counts as play for the holders vault (you keep at least 2,580,000 TBLOCK, and $15 of TBLOCK at the live price)">♥</button><b id="bcLikeN" title="Hearts received by this block">—</b></span></div>
           <p class="note" id="bcLikeNote" hidden></p>
+          <p class="note bcSignaux" id="bcSignaux" hidden aria-live="polite"></p>
           <div class="note" id="bcSousNom" hidden></div>
           <button type="button" class="bcAdr" id="bcAdr" hidden title="Copy this block’s B20 address"></button>
         </div>
@@ -3349,9 +3339,15 @@ details[open] > summary::before{transform:rotate(90deg)}
     <!-- COMMUNITY VAULT (Phil 2026-11-10): what the holders economy holds and what this wallet can claim. Hidden until TBlockVault is
          deployed (economie.js VAULT); the full card with Claim buttons lives on contest.html, this one reads and links there. -->
     <div class="carte" id="wVault" hidden>
-      <p class="titre">Community vault</p>
-      <p class="sous">Fed by buybacks and fees. It pays the players of each week first (a share of the TBLOCK they burned with +1, never more than they burned), then fills the contest pot.</p>
+      <p class="titre">Holders vault</p>
+      <p class="sous">Reserved for TBLOCK holders. Fed by buybacks and fees, it pays each week’s players first — a share of the TBLOCK they burned with hearts ♥, never more than they burned — then fills the contest pot. A claim needs 17,200,000 TBLOCK in your wallet, checked by the contract.</p>
       <div id="wVaultRows"></div>
+      <!-- game346 (Phil 2026-11-10): the hearts in YOUR wallet — given, received on your blocks, who gave and what you gave back — and the live
+           board of the contributors. From /api/coeurs (BlockLikes' own Liked events); read-only. -->
+      <div class="wCoeurs" id="wCoeurs" hidden>
+        <p class="sousTitre">Your hearts ♥</p><div id="wCoeursMoi"></div>
+        <p class="sousTitre">Most active holders — live</p><div id="wCoeursBoard"></div>
+      </div>
       <a class="bouton sec" href="/contest.html" style="display:inline-block;margin-top:8px">Claim and details</a>
     </div>
 
@@ -3633,7 +3629,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game345" hidden>Build <code>20261109-game345</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game346" hidden>Build <code>20261109-game346</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5291,11 +5287,12 @@ import { frappesVers, fusionnerCache } from './mes-blocks.js';
 import { confirmerBridgeStub, planBridgeFeeSkim, buildBridgeFeeCall, lireBridgeBlock, ecrireBridgeBlock, BRIDGE_FEE_LABEL, phraseBridgeLegs, HUB_SWAP_LIVE, unitsFromHuman } from './bridge.js';
 import { recordPropose, recordPay, recordJournalHook, feeAlreadyRecognized, phraseOptionA, mayUseX402, assertNoDoubleChargeWithBridge, listX402Events } from './x402-pay.js';
 import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PREVU, HOOK_V2, HOOK_V3, HOOK_V4, HOOK_V5, HOOK_V6, HOOK_V7, HOOK_V8, HOOK_V9, HOOK_7030_ACTIF, estHook7030, fraisHookBps, OPTIONS_LANCEMENT, estHookDeNaissance, estNotreHook, hookCourant, hookDeploye, hookV3Deploye, hookV8Deploye, blockPorteLeLabel, HOOKS_PAIENT_DEJA_A6CF } from './tokenomics.js';
-import * as ECO from './economie.js'; /* holders economy: the +1 burn and the community vault (unsigned calls only) */
+import * as ECO from './economie.js'; /* holders economy: the heart burn and the holders vault (unsigned calls only) */
+import * as CV from './coeurs-vue.js'; /* game346: hearts given / received, the board, the signals between blocks (text only) */
 import * as TIP from './create-vault-tip.js';
 import { RELAIS_METHODES } from './relais-rpc.js';
 import { peindreCarteNaissance } from './carte-naissance.js'; /* game343 CREATE-ONE-PATH: the one birth card */
-import { libelleContinue, modeleEtapes } from './etat-naissance.js'; /* game341: what the server relay reads for the page when every public node refused */ /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
+import { libelleContinue, modeleEtapes } from './etat-naissance.js'; /* game341: what the server relay reads for the page when every public node refused */ /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the holders vault */
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
@@ -30753,6 +30750,8 @@ async function bcExecuterTexte(texte, note = $('#bcNote'), garde = null) {
   if (c.type === 'post_task') { bcCommandePostTask(c); return true; }
   if (c.type === 'duel') { void bcCommandeDuel(); return true; }
   /* 2026-10-25 : BlockSlots par le panneau — les fonctions de la carte Draws (slotsAgir), voir « LE PANNEAU EN QUATRE GROUPES » */
+  /* game346 (Phil): a heart in one click from the panel — the ♥ chip sends « heart this »; bcCoeur checks, then the wallet signs */
+  if (c.type === 'heart') { void bcCommandeCoeur(c.jeton); return true; }
   if (c.type === 'spin') { void bcCommandeSpin(); return true; }
   if (c.type === 'settle_spin') { void bcCommandeSettleSpin(); return true; }
   /* ── LE BRAIN OS (2026-10-18) : quatre LECTURES (brain-os.js), rien a signer ── */
@@ -32366,12 +32365,45 @@ function bcPeindreLike(a) {
     } catch (_) { if (bcLikeEtat.de === a) $('#bcLikeN').textContent = 'not read'; }
     bcLikeEtat.enVol = false;
   })();
+  void bcPeindreSignaux(a);
 }
-$('#bcLikeBtn').addEventListener('click', async () => {
-  const a = $('#bcLike').dataset.adr, note = $('#bcLikeNote'), btn = $('#bcLikeBtn');
-  const dire = (t) => { note.hidden = false; note.textContent = t; };
-  if (!a || !ECO.LIKES) return;
-  if (!compte) { dire('Connect your wallet first. A heart costs ' + ECO.fmt(ECO.LIKE_PRICE) + ' TBLOCK (burned) and needs ' + ECO.fmt(ECO.LIKE_MIN_HOLD) + ' TBLOCK left after paying.'); return; }
+/* ── game346 (Phil 2026-11-10: "a signal between blocks for those who heart"): under the block's name, who hearted it, named by THEIR own
+ *   block when they have one (from /api/coeurs, BlockLikes' own Liked events). A tap shows that block: blocks greet each other, visibly.
+ *   Read-only; refreshed at most every 60 s per block; an unread answer hides the line (never a wrong one). */
+const bcSignauxEtat = { de: null, lu: 0, enVol: false };
+async function bcPeindreSignaux(a) {
+  const p = $('#bcSignaux');
+  if (!p) return;
+  if (bcSignauxEtat.de !== a) { bcSignauxEtat.de = a; bcSignauxEtat.lu = 0; p.hidden = true; p.textContent = ''; }
+  if (bcSignauxEtat.enVol || Date.now() - bcSignauxEtat.lu < 60000) return;
+  bcSignauxEtat.enVol = true;
+  try {
+    const r = await fetch('/api/coeurs?bloc=' + a, { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json());
+    if (bcSignauxEtat.de !== a) return;
+    bcSignauxEtat.lu = Date.now();
+    const nom = (x) => (r.symboles && r.symboles[x]) || bcResoudre(x).sym || court(x);
+    const s = r && r.ok ? CV.signauxBloc(r.bloc, nom) : null;
+    p.textContent = '';
+    if (!s) { p.hidden = true; return; }
+    p.append(s.texte);
+    for (const b of s.blocs) {
+      if (b === a) continue;
+      const k = document.createElement('button'); k.type = 'button'; k.className = 'lien'; k.textContent = ' → ' + nom(b);
+      k.title = 'Show ' + nom(b) + ' in this panel'; k.addEventListener('click', () => { choisirBrain(b); bcRepeindre(); });
+      p.append(k);
+    }
+    p.hidden = false;
+  } catch (_) { if (bcSignauxEtat.de === a) p.hidden = true; } finally { bcSignauxEtat.enVol = false; }
+}
+$('#bcLikeBtn').addEventListener('click', () => { void bcCoeur($('#bcLike').dataset.adr); });
+/** ONE heart for block `a`, from the ♥ next to the name or from the panel command « heart <block> ». Checked before the wallet opens
+ *  (pay + keep the larger of the contract's hold and $15 at the live price); `dire` writes where the person looks (the note, or the thread). */
+async function bcCoeur(a, dire = null) {
+  const note = $('#bcLikeNote'), btn = $('#bcLikeBtn');
+  dire = dire || ((t) => { note.hidden = false; note.textContent = t; });
+  if (!a || !ECO.LIKES) return { ok: false };
+  if (!ECO.isB20(a)) { dire('Only a block can get a heart (a B20 address).'); return { ok: false }; }
+  if (!compte) { dire('Connect your wallet first. A heart costs ' + ECO.fmt(ECO.LIKE_PRICE) + ' TBLOCK (burned) and needs ' + ECO.fmt(ECO.LIKE_MIN_HOLD) + ' TBLOCK left after paying.'); return { ok: false }; }
   btn.disabled = true;
   try {
     const v = ECO.VIEW.balanceOf(String(compte).toLowerCase());
@@ -32380,16 +32412,26 @@ $('#bcLikeBtn').addEventListener('click', async () => {
     let prixUsd = null;
     try { const h = await fetch('/api/tblock/hold', { cache: 'no-store', signal: AbortSignal.timeout(20000) }).then((x) => x.json()); prixUsd = h && h.ok ? Math.min(Number(h.priceNow), Number(h.priceBefore || h.priceNow)) : null; } catch (_) { prixUsd = null; }
     const chk = ECO.likeCheckUsd({ balance: bal, n: 1, prixUsd });
-    if (!chk.ok) { dire('Not sent: ' + chk.why + '.'); return; }
+    if (!chk.ok) { dire('Not sent: ' + chk.why + '.'); return { ok: false }; }
     dire('Waiting for your wallet: a heart for ' + ECO.fmt(chk.cost) + ' TBLOCK, burned, not refundable…');
     const r = await envoyerAppels(ECO.likeBatch({ block: a, n: 1 }).map((c) => ({ to: c.to, data: c.data, value: c.value })), compte);
-    if (r && r.etat === 'CONFIRME') { dire('♥ confirmed. It counts as play for this week’s holders rewards.'); bcLikeEtat.lu = 0; bcPeindreLike(a); }
-    else dire('Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160));
-  } catch (e) { dire('Not sent: ' + String((e && e.message) || e).slice(0, 160)); }
+    if (r && r.etat === 'CONFIRME') { dire('♥ confirmed. It counts as play for this week’s holders vault.'); bcLikeEtat.lu = 0; bcSignauxEtat.lu = 0; wVaultLu = 0; bcPeindreLike(a); return { ok: true }; }
+    dire('Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160));
+    return { ok: false };
+  } catch (e) { dire('Not sent: ' + String((e && e.message) || e).slice(0, 160)); return { ok: false }; }
   finally { btn.disabled = false; }
-});
+}
+/** the panel command « heart <block> » (and the ♥ chip, « heart this »): the answer is written in the thread, the same bcCoeur signs */
+async function bcCommandeCoeur(jeton) {
+  const j = bcResoudre(jeton);
+  const m = bcMessage('♥ Heart', '', j.ok ? 'A heart for ' + j.sym + ': ' + ECO.fmt(ECO.LIKE_PRICE) + ' TBLOCK burned, checked before your wallet opens.' : j.pourquoi);
+  bcVue('chat');
+  if (!j.ok) return;
+  if (!ECO.LIKES) { bcEtape(m, 'Hearts open with their contract.', 'non'); return; }
+  await bcCoeur(j.adr, (t) => bcEtape(m, t, /^(Not|Only|Connect)/.test(t) ? 'non' : 'oui'));
+}
 
-/* ── Optional TBLOCK part of a birth (Phil 2026-11-10: optional, tops the 0.001 ETH fee up to $5, into the community vault).
+/* ── Optional TBLOCK part of a birth (Phil 2026-11-10: optional, tops the 0.001 ETH fee up to $5, into the holders vault).
  *   Offered INSIDE the success note, AFTER the block is alive: it is never part of the birth batch, so it can never stop a birth.
  *   One call, TBLOCK.transfer(vault, amount), signed by the creator; amount from create-vault-tip.js (rounded down, never above $5). */
 /* ── game340 (Phil 2026-11-10: "the TBLOCK price top right, live, I am tired of it bugging"): the price comes from /api/tblock/hold
@@ -32507,7 +32549,7 @@ async function peindreTipApercu() {
     const weiBuy = sim.ok && manque > 0n ? TIP.ethWeiForTblock({ tblock: manque, tblockUsd: px, ethUsd }) : null;
     rows.push(ligne('1. Before the birth, if you lack TBLOCK:', weiBuy ? 'buy it with about ' + (Number(weiBuy) / 1e18).toFixed(6) + ' ETH (no app fee)' : (compte ? 'nothing to buy' : 'the app buys it with your ETH (no app fee)')));
     rows.push(ligne('2. The birth, in ETH:', '0.001 ETH (about $' + ethPart.toFixed(2) + '), fixed by the birth contracts'));
-    rows.push(ligne('3. Right after, pay the block in TBLOCK:', sim.ok ? ECO.fmt(sim.amount) + ' TBLOCK (about $' + (Number(left) / 1e6).toFixed(2) + ') to the community vault' : sim.why));
+    rows.push(ligne('3. Right after, pay the block in TBLOCK:', sim.ok ? ECO.fmt(sim.amount) + ' TBLOCK (about $' + (Number(left) / 1e6).toFixed(2) + ') to the holders vault' : sim.why));
     rows.push(ligne('', 'The creator deposit (about $1 in ETH) is not a fee: it stays yours.'));
   } catch (_) { rows = [ligne('Pay for a birth:', '$' + TIP.TARGET_USD + ' = 0.001 ETH + the rest in TBLOCK; reading today’s prices…')]; tipApercuLu = Date.now() - 55000; }
   box.replaceChildren(...rows); box.hidden = false;
@@ -32517,7 +32559,7 @@ setInterval(() => { void peindreTipApercu().catch(() => {}); }, 5000);
 /* ── game338 (Phil 2026-11-10): the payment order of a birth.
  *   STEP 1 (only if the wallet holds less than the TBLOCK part): buy the missing TBLOCK with ETH, no app fee, into THIS wallet.
  *   STEP 2: the birth in ETH (0.001 ETH, fixed by the deployed contracts, + the creator deposit that stays the creator's).
- *   STEP 3: pay the block's TBLOCK part from the wallet to the community vault (proposerTipCoffre, started on its own after step 2).
+ *   STEP 3: pay the block's TBLOCK part from the wallet to the holders vault (proposerTipCoffre, started on its own after step 2).
  *   Step 1 runs BEFORE the birth preflight, so that preflight judges the ETH left after the buy: a buy can never starve the birth.
  *   Returns true to go on with the birth. Unread prices or plan: true (a node outage never blocks a birth; step 3 still asks later).
  *   The wallet refusing the buy, or too little ETH for buy + birth: false, with a sentence, nothing else sent. */
@@ -32613,9 +32655,9 @@ async function proposerAchatCoffre(p, btn) {
   if (wei === null) { p.textContent = 'The ETH price could not be read just now: the TBLOCK part is not offered.'; return; }
   let pl;
   try { pl = await planAchatCoffre(wei); } catch (err) { pl = { ok: false, pourquoi: 'the plan could not be read just now' }; }
-  if (!pl || !pl.ok) { p.textContent = 'TBLOCK part for the community vault: not offered just now (' + String((pl && pl.pourquoi) || 'no plan').slice(0, 140) + ').'; return; }
+  if (!pl || !pl.ok) { p.textContent = 'TBLOCK part for the holders vault: not offered just now (' + String((pl && pl.pourquoi) || 'no plan').slice(0, 140) + ').'; return; }
   const eth = (Number(wei) / 1e18).toFixed(6);
-  p.textContent = 'Next: the rest of your $' + TIP.TARGET_USD + ' in TBLOCK, bought with ' + eth + ' ETH (about $' + (Number(wei) / 1e18 * ethUsd).toFixed(2) + ') and sent to the community vault: at least '
+  p.textContent = 'Next: the rest of your $' + TIP.TARGET_USD + ' in TBLOCK, bought with ' + eth + ' ETH (about $' + (Number(wei) / 1e18 * ethUsd).toFixed(2) + ') and sent to the holders vault: at least '
     + ECO.fmt(BigInt(pl.resume.versCoffre)) + ' TBLOCK. Each buy goes through the TBLOCK pool, whose hook burns part of it. No app fee. One batch to sign.';
   btn.textContent = 'Buy TBLOCK for the vault · ' + eth + ' ETH'; btn.hidden = false;
   btn.addEventListener('click', async () => {
@@ -32623,9 +32665,9 @@ async function proposerAchatCoffre(p, btn) {
     try {
       const fresh = await planAchatCoffre(wei);
       if (!fresh || !fresh.ok) { p.textContent = 'Not sent: ' + String((fresh && fresh.pourquoi) || 'no plan').slice(0, 160); btn.disabled = false; return; }
-      p.textContent = 'Waiting for your wallet: ' + eth + ' ETH -> TBLOCK -> community vault (at least ' + ECO.fmt(BigInt(fresh.resume.versCoffre)) + ' TBLOCK)…';
+      p.textContent = 'Waiting for your wallet: ' + eth + ' ETH -> TBLOCK -> holders vault (at least ' + ECO.fmt(BigInt(fresh.resume.versCoffre)) + ' TBLOCK)…';
       const r = await envoyerAppels(fresh.appels.map((c) => ({ to: c.to, data: c.data, value: c.value })), compte);
-      if (r && r.etat === 'CONFIRME') { p.textContent = 'Done: TBLOCK bought and ' + ECO.fmt(BigInt(fresh.resume.versCoffre)) + ' TBLOCK sent to the community vault.'; btn.hidden = true; return; }
+      if (r && r.etat === 'CONFIRME') { p.textContent = 'Done: TBLOCK bought and ' + ECO.fmt(BigInt(fresh.resume.versCoffre)) + ' TBLOCK sent to the holders vault.'; btn.hidden = true; return; }
       p.textContent = 'Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160);
     } catch (err) { p.textContent = 'Not sent: ' + String((err && err.message) || err).slice(0, 160); }
     btn.disabled = false;
@@ -32650,15 +32692,15 @@ async function proposerTipCoffre(hote) {
   /* game337 (Phil 2026-11-10): not enough TBLOCK -> the same part is BOUGHT WITH ETH and sent to the vault in one batch
    *   (GET /api/tblock/vault-buy: no app fee, the whole batch simulated from this wallet; the plan is rebuilt at the click) */
   if (!q.ok && /^This needs/.test(String(q.why || ''))) { proposerAchatCoffre(p, btn); return; }
-  if (!q.ok) { p.textContent = 'Optional: top your birth up to $' + TIP.TARGET_USD + ' in TBLOCK for the community vault. ' + q.why; return; }
-  p.textContent = 'Step 3 of 3: pay your block in TBLOCK — ' + ECO.fmt(q.amount) + ' TBLOCK (about $' + (Number(q.usdMicro) / 1e6).toFixed(2) + ') to the community vault, so your birth totals $' + TIP.TARGET_USD
+  if (!q.ok) { p.textContent = 'Optional: top your birth up to $' + TIP.TARGET_USD + ' in TBLOCK for the holders vault. ' + q.why; return; }
+  p.textContent = 'Step 3 of 3: pay your block in TBLOCK — ' + ECO.fmt(q.amount) + ' TBLOCK (about $' + (Number(q.usdMicro) / 1e6).toFixed(2) + ') to the holders vault, so your birth totals $' + TIP.TARGET_USD
     + '. The vault pays the players of each week first.';
   btn.textContent = 'Pay ' + ECO.fmt(q.amount) + ' TBLOCK to the vault'; btn.hidden = false;
   btn.addEventListener('click', async () => {
-    btn.disabled = true; p.textContent = 'Waiting for your wallet: ' + ECO.fmt(q.amount) + ' TBLOCK to the community vault…';
+    btn.disabled = true; p.textContent = 'Waiting for your wallet: ' + ECO.fmt(q.amount) + ' TBLOCK to the holders vault…';
     try {
       const r = await envoyerAppels([{ to: q.call.to, data: q.call.data, value: q.call.value }], compte);
-      if (r && r.etat === 'CONFIRME') { p.textContent = 'Step 3 of 3 done: ' + ECO.fmt(q.amount) + ' TBLOCK are in the community vault.'; btn.hidden = true; return; }
+      if (r && r.etat === 'CONFIRME') { p.textContent = 'Step 3 of 3 done: ' + ECO.fmt(q.amount) + ' TBLOCK are in the holders vault.'; btn.hidden = true; return; }
       p.textContent = 'Not done: ' + String((r && (r.pourquoi || r.etat)) || 'no answer').slice(0, 160);
     } catch (err) { p.textContent = 'Not sent: ' + String((err && err.message) || err).slice(0, 160); }
     btn.disabled = false;
@@ -32667,7 +32709,7 @@ async function proposerTipCoffre(hote) {
   if (tipAuto) { tipAuto = false; btn.click(); }
 }
 
-/* ── Community vault card of the Wallet tab: read-only, every 60 s while the tab is visible. Hidden until TBlockVault is deployed. */
+/* ── Holders vault card of the Wallet tab: read-only, every 60 s while the tab is visible. Hidden until TBlockVault is deployed. */
 let wVaultLu = 0;
 async function peindreVaultWallet() {
   const carte = $('#wVault');
@@ -32703,6 +32745,34 @@ async function peindreVaultWallet() {
     }
   } catch (e) { ligne('Not read just now', String((e && e.message) || e).slice(0, 80)); wVaultLu = Date.now() - 45000; }
   carte.hidden = false;
+  void peindreCoeursWallet();
+}
+/* game346 (Phil 2026-11-10: "the hearts given must show in the user's wallet: who gave them hearts and how many the holder gave back; a
+ *   leaderboard of the best contributors, live, to see the holders who use the app"). Painted with the holders vault card (same 60 s pace).
+ *   A heart from someone with a block offers that block in one tap ("give one back"): it opens in the Brain panel, where ♥ is one click. */
+async function peindreCoeursWallet() {
+  const box = $('#wCoeurs');
+  if (!box) return;
+  let r = null;
+  try { r = await fetch('/api/coeurs' + (compte ? '?compte=' + String(compte).toLowerCase() : ''), { cache: 'no-store', signal: AbortSignal.timeout(15000) }).then((x) => x.json()); } catch (_) { r = null; }
+  const nom = (x) => (r && r.symboles && r.symboles[x]) || bcResoudre(x).sym || court(x);
+  const peindre = (hote, lignes) => {
+    hote.textContent = '';
+    for (const l of lignes) {
+      const d = document.createElement('div'); d.className = 'stadeLigne' + (l.moi ? ' moi' : '');
+      const a = document.createElement('span'); a.textContent = l.k; const b = document.createElement('b'); b.textContent = l.v; d.append(a, ' ', b);
+      if (l.bloc) {
+        const k = document.createElement('button'); k.type = 'button'; k.className = 'lien'; k.textContent = '♥ open ' + nom(l.bloc);
+        k.title = 'Show ' + nom(l.bloc) + ' in the Brain panel, where its ♥ is one click';
+        k.addEventListener('click', () => { allerA('brain'); choisirBrain(l.bloc); bcRepeindre(); });
+        d.append(' ', k);
+      }
+      hote.append(d);
+    }
+  };
+  peindre($('#wCoeursMoi'), compte ? (r && r.ok && r.compte ? CV.lignesCompte(r.compte, nom) : [{ k: 'Your hearts', v: 'not read just now' }]) : [{ k: 'Your hearts', v: 'connect your wallet to see them' }]);
+  peindre($('#wCoeursBoard'), CV.lignesBoard(r, nom, compte));
+  box.hidden = false;
 }
 setInterval(() => { void peindreVaultWallet().catch(() => {}); }, 5000);
 

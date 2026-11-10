@@ -259,11 +259,13 @@ import { avecRepliLogs, lecteurUrl as lecteurUrlNu, classeEnvoi } from './repli-
 import { pairesProposees, pairesLancables, ACTIONS_COINBASE, DEVISES_BASE } from './paires.js';
 import { lireAvoirs, classeLot } from './avoirs.js';
 import { planRail, echangesDevisesAnnonces } from './rails-api.js';
-import { planAchatPourCoffre, planWtcoinVersTblock } from './tblock-route.js'; /* game337: ETH -> TBLOCK -> community vault; game339: resume */
+import { planAchatPourCoffre, planWtcoinVersTblock } from './tblock-route.js'; /* game337: ETH -> TBLOCK -> holders vault; game339: resume */
 import { ECONOMIE_DEPLOIEMENT } from './economie-deploiement.js';
 import { validerRelais, RELAIS_CORPS_MAX } from './relais-rpc.js'; /* game341: the page's last-resort read relay */
 import { lireEtatNaissance } from './etat-naissance.js'; /* game343 CREATE-ONE-PATH: the one reader of a birth */
 import { lireCoffrePaye } from './coffre-paye.js';
+import { classement, vueCompte } from './coeurs.js'; /* game346: hearts given / received / board */
+import { creerIndexCoeurs, LIKES_DEPLOY_BLOC } from './coeurs-index.js';
 const TBLOCK_ADR = '0xb200000000000000000000ba9bf8330307f8830e';
 const NAISS_ETAT = { cache: new Map(), minute: 0, parIp: new Map() };
 import { lireMarchesMorpho, lireFraisMorphoChaine, lirePositionsMorpho, planEmprunter, planPreter, planRembourser, planRetirerGarantie, planRetirerPret, planEmprunterPanier, PANIER_MAX } from './banque-morpho.js';
@@ -3975,6 +3977,41 @@ let blocsLusJusqua = null, trCache = { a: 0, corps: null }, trEnCours = null;
  *   `faitsDepuis` = le premier bloc a partir duquel CHAQUE creation lue est notee (pose au premier scan vers l avant qui avance) :
  *   en dessous, le navigateur relit lui-meme (creations-index.js). Sert aussi la Map (/api/creations-recentes). */
 const faitsCreation = new Map();
+/* ── game346 (Phil 2026-11-10: "the hearts given must show in the user's wallet, who gave them and how many the holder gave back; a
+ *   leaderboard of the best contributors, live"; "a signal between blocks for those who heart"). The index reads BlockLikes' own `Liked`
+ *   logs from its deploy block (coeurs-index.js: a failed window is read again, never skipped); creators come from `createurParBlock`
+ *   (tx.from of each birth, already resolved by the trending index). Read-only; nothing signs. */
+const COEURS = { index: null, minute: 0, parIp: new Map(), inverse: { t: 0, map: new Map() } };
+const rpcCoeurs = async (methode, params) => {
+  let derniere = 'no node answered';
+  for (const url of [...(RELAIS_CLE ? [RELAIS_CLE] : []), ...RPC_LIST]) {
+    try {
+      const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: methode, params }), signal: AbortSignal.timeout(15000) });
+      compterEnvoi(url, r.status === 429 ? 'limite' : (r.ok ? 'ok' : 'erreur'));
+      if (!r.ok) { derniere = 'HTTP ' + r.status; continue; }
+      const j = await r.json();
+      if (j && j.error) { derniere = String(j.error.message || 'node error').slice(0, 80); continue; }
+      return j.result;
+    } catch (e) { derniere = String((e && e.message) || e).slice(0, 80); }
+  }
+  throw new Error(derniere);
+};
+if (ECONOMIE_DEPLOIEMENT.adresseLikes) {
+  COEURS.index = creerIndexCoeurs({ rpc: rpcCoeurs, likes: String(ECONOMIE_DEPLOIEMENT.adresseLikes).toLowerCase() });
+  if (process.env.TB_SONDES !== '0' && !ESSAI_SRV.actif) {
+    setTimeout(() => { void COEURS.index.avancer(); setInterval(() => { void COEURS.index.avancer(); }, 60000).unref?.(); }, 20000).unref?.();
+  }
+}
+/** creator -> its blocks (from createurParBlock), rebuilt at most once a minute */
+function blocksDuCreateur() {
+  if (Date.now() - COEURS.inverse.t > 60000) {
+    const m = new Map();
+    for (const [b, c] of createurParBlock) { const l = m.get(c); if (l) l.push(b); else m.set(c, [b]); }
+    COEURS.inverse = { t: Date.now(), map: m };
+  }
+  return COEURS.inverse.map;
+}
+
 let faitsDepuis = null;
 /* ⛔ DENIM (2026-11-05, 0,2 s/bloc mesure par nous ET par Grok) : 3 x 43 200 blocs faisaient 3 jours a 2 s, 7,2 h a 0,2 s — passe ce
  *   delai, la Wallet et la Map retombaient sur « ? ». La garde est en SECONDES (3 jours) au temps SERVI (sParBlocServi : la mesure courte
@@ -6093,8 +6130,8 @@ const SERVIS = [
   'deployer-block-contest.html', 'block-contest-deploiement.js',
   /* the block contest page for users (reads Base, builds unsigned calls for the wallet of the user) and its pure module */
   'contest.html', 'block-contest.js',
-  /* holders economy: the +1 burn and the community vault, their page module, the unsigned deployment (generated) and its page */
-  'economie.js', 'economie-deploiement.js', 'deployer-economie.html', 'create-vault-tip.js', 'relais-rpc.js', 'etat-naissance.js', 'coffre-paye.js', 'carte-naissance.js',
+  /* holders economy: the +1 burn and the holders vault, their page module, the unsigned deployment (generated) and its page */
+  'economie.js', 'economie-deploiement.js', 'deployer-economie.html', 'create-vault-tip.js', 'relais-rpc.js', 'etat-naissance.js', 'coffre-paye.js', 'carte-naissance.js', 'coeurs-vue.js',
   /* game120 : ondes, lumiere et son */
   'tam-ondes.js',
   /* game122 : electricite */
@@ -7757,6 +7794,48 @@ function traiterRequete(req, res) {
    *   Reads only (relais-rpc.js validerRelais); node = BASE_RPC_RELAIS if set, else the keyed archive node (CDP), then RPC_LIST.
    *   Budgets: per IP 60 / min, and RELAIS_MAX_JOUR keyed calls per UTC day (20,000 by default, its own counter, apart from the archive's).
    *   A node's JSON-RPC error (a revert) is returned as is, with its data: the page must see a revert as a revert, never as an outage. */
+  if (chemin === '/api/coeurs') {
+    const rendreC = (code, corps) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
+      res.end(JSON.stringify(corps, (k, v) => (typeof v === 'bigint' ? v.toString() : v))); };
+    if (req.method !== 'GET') { rendreC(405, { ok: false, pourquoi: 'GET only' }); return; }
+    const q = new URL(req.url, 'http://x').searchParams;
+    const compteC = String(q.get('compte') || '').toLowerCase(), blocC = String(q.get('bloc') || '').toLowerCase();
+    if ((compteC && !/^0x[0-9a-f]{40}$/.test(compteC)) || (blocC && !/^0x[0-9a-f]{40}$/.test(blocC))) { rendreC(400, { ok: false, pourquoi: 'usage: /api/coeurs[?compte=<wallet>][&bloc=<block>]' }); return; }
+    const ipC = ipClient(req), minC = Math.floor(Date.now() / 60000);
+    if (COEURS.minute !== minC) { COEURS.minute = minC; COEURS.parIp.clear(); }
+    const nC = (COEURS.parIp.get(ipC) || 0) + 1;
+    if (nC > 60) { rendreC(429, { ok: false, pourquoi: 'busy: retry in a minute' }); return; }
+    COEURS.parIp.set(ipC, nC);
+    if (!COEURS.index) { rendreC(200, { ok: false, pourquoi: 'BlockLikes is not deployed' }); return; }
+    const ix = COEURS.index, tous = ix.coeurs(), inv = blocksDuCreateur();
+    const crDe = (b) => createurParBlock.get(b) || null;
+    const sesBlocks = (a) => (inv.get(a) || []).slice(0, 3);
+    let likes = 0n, burned = 0n; for (const c of tous) { likes += c.likes; burned += c.burned; }
+    const corps = {
+      ok: true, complet: ix.complet(), lusJusqua: ix.etat.prochain - 1, tete: ix.etat.tete, trou: ix.etat.trou, depuis: LIKES_DEPLOY_BLOC,
+      total: { coeurs: likes, burned, donneurs: new Set(tous.map((c) => c.liker)).size },
+      board: classement(tous, 10).map((e) => ({ ...e, sesBlocks: sesBlocks(e.liker) })),
+    };
+    if (compteC) {
+      const v = vueCompte(tous, compteC, crDe);
+      corps.compte = { ...v, recus: { ...v.recus, de: v.recus.de.slice(0, 20).map((d) => ({ ...d, sesBlocks: sesBlocks(d.liker) })) }, donnes: { ...v.donnes, vers: v.donnes.vers.slice(0, 20) }, sesBlocks: sesBlocks(compteC) };
+    }
+    if (blocC) {
+      const par = new Map(); let n = 0n;
+      for (const c of tous) if (c.bloc === blocC) { n += c.likes; par.set(c.liker, (par.get(c.liker) || 0n) + c.likes); }
+      corps.bloc = { adr: blocC, likes: n, createur: crDe(blocC), signaux: [...par.entries()].sort((a, b) => (b[1] > a[1] ? 1 : b[1] < a[1] ? -1 : 0)).slice(0, 8).map(([liker, k]) => ({ liker, likes: k, sesBlocks: sesBlocks(liker) })) };
+    }
+    /* the blocks named in this answer, with the symbol the server already knows (its births, then the trending list); unknown = absent */
+    const adrsC = new Set();
+    for (const e of corps.board) for (const b of e.sesBlocks) adrsC.add(b);
+    if (corps.compte) { for (const d of corps.compte.recus.de) for (const b of d.sesBlocks) adrsC.add(b); for (const v of corps.compte.donnes.vers) adrsC.add(v.bloc); for (const b of corps.compte.sesBlocks) adrsC.add(b); }
+    if (corps.bloc) for (const s of corps.bloc.signaux) for (const b of s.sesBlocks) adrsC.add(b);
+    const trendC = new Map((lignesNomsTrending.lignes || []).map((l) => [String(l.adr || '').toLowerCase(), l.sym]));
+    corps.symboles = {};
+    for (const b of adrsC) { const f = faitsCreation.get(b); const s = (f && f.symbole) || trendC.get(b); if (s) corps.symboles[b] = String(s).slice(0, 16); }
+    rendreC(200, corps);
+    return;
+  }
   if (chemin === '/api/rpc') {
     const rendreP = (code, corps, extra = {}) => { res.writeHead(code, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', ...extra }); res.end(JSON.stringify(corps)); };
     if (req.method !== 'POST') { rendreP(405, { error: { message: 'POST only' } }); return; }
@@ -7791,7 +7870,7 @@ function traiterRequete(req, res) {
     return;
   }
   /* game337 (Phil 2026-11-10): GET /api/tblock/vault-buy?compte=0x…&eth=<wei> — the TBLOCK part of a birth bought with ETH, sent to the
-   *   community vault in the same batch (tblock-route.js planAchatPourCoffre: no app fee, whole batch simulated from the account).
+   *   holders vault in the same batch (tblock-route.js planAchatPourCoffre: no app fee, whole batch simulated from the account).
    *   Same per-minute budget as /api/rails/plan; the vault address comes from the deployment file, never from the request. */
   if (chemin === '/api/tblock/vault-buy') {
     const rendreV = (code, corps, extra = {}) => {
@@ -7804,7 +7883,7 @@ function traiterRequete(req, res) {
     /* game339: reprise=1&wt=<raw wtCOIN> resumes an interrupted step 1 from the wtCOIN already in the wallet (leg 2 only) */
     const repriseV = q.get('reprise') === '1', wtV = String(q.get('wt') || '');
     const coffreV = ECONOMIE_DEPLOIEMENT.adresseVault;
-    if (!coffreV) { rendreV(200, { ok: false, etat: 'REFUSE', pourquoi: 'the community vault is not deployed yet' }); return; }
+    if (!coffreV) { rendreV(200, { ok: false, etat: 'REFUSE', pourquoi: 'the holders vault is not deployed yet' }); return; }
     if (repriseV && (!/^0x[0-9a-f]{40}$/.test(compteV) || !/^[1-9][0-9]{0,30}$/.test(wtV))) {
       rendreV(400, { ok: false, etat: 'REFUSE', pourquoi: 'usage: /api/tblock/vault-buy?reprise=1&compte=<the wallet that will sign>&wt=<raw wtCOIN to resume from>' }); return;
     }

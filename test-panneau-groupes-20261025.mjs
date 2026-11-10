@@ -453,7 +453,9 @@ function verifierPalette() {
   for (const m of ['spin', 'settle spin']) if (!e.some((x) => x.modele === m)) ko.push('palette sans « ' + m + ' »');
   for (const p of C.PRECOMMANDES) { const a = C.analyserCommande(PHRASE(p)); if (!a.ok) ko.push('puce ' + p.cle + ' non comprise'); }
   if (!/b\.addEventListener\('click', \(\) => \{\n[^\n]*\n\s+if \(p\.cle === 'tasks'\)[^\n]*if \(p\.direct\) \{ void bcExecuterTexte\(p\.modele\); return; \}\n\s+bcEcrireModele\(p\);/.test(APP)) ko.push('la boucle des puces : « direct » ou bcEcrireModele absent');
-  if (!C.PRECOMMANDES.filter((p) => p.direct).every((p) => ['spin', 'settle_spin'].includes(p.cle))) ko.push('une puce existante est devenue « direct »');
+  /* game346 (Phil 2026-11-10: "heart another block in ONE simple click from the control panel"): « ♥ Heart this block » is a NEW chip,
+   *   direct by decision; it signs only after bcCoeur's checks, in the wallet. Every other chip still writes its model first. */
+  if (!C.PRECOMMANDES.filter((p) => p.direct).every((p) => ['spin', 'settle_spin', 'heart'].includes(p.cle))) ko.push('une puce existante est devenue « direct »');
   return ko;
 }
 
@@ -561,8 +563,7 @@ const MUTANTS = [
   ['B', 'le roll etiquete « reads » meme avec son contrat', 'module', "roll: 'contrat', roll_x5: 'contrat'", "roll: 'lit', roll_x5: 'contrat'"],
   ['B', 'Send etiquete « reads »', 'module', "swap: 'signe', send: 'signe'", "swap: 'signe', send: 'lit'"],
   ['B', 'Gas etiquete « you sign »', 'module', "gas: 'lit', show", "gas: 'signe', show"],
-  ['G', 'Spin apres Settle (ordre)', 'module', "cmds: Object.freeze(['spin', 'settle_spin', 'roll'", "cmds: Object.freeze(['settle_spin', 'spin', 'roll'"],
-  ['G', 'Brain OS avant Trade', 'module', "Object.freeze({ cle: 'trade', titre: 'Trade', cmds: Object.freeze(['buy_stock', 'sell_stock', 'buy_block', 'sell_block', 'swap', 'send']) }),\n  Object.freeze({ cle: 'os', titre: 'Brain OS', cmds: Object.freeze(['safety', 'explain', 'wallet', 'gas', 'show']) }),",
+  ['G', 'Spin apres Settle (ordre)', 'module', "cmds: Object.freeze(['spin', 'heart', 'settle_spin', 'roll'", "cmds: Object.freeze(['settle_spin', 'heart', 'spin', 'roll'"],  ['G', 'Brain OS avant Trade', 'module', "Object.freeze({ cle: 'trade', titre: 'Trade', cmds: Object.freeze(['buy_stock', 'sell_stock', 'buy_block', 'sell_block', 'swap', 'send']) }),\n  Object.freeze({ cle: 'os', titre: 'Brain OS', cmds: Object.freeze(['safety', 'explain', 'wallet', 'gas', 'show']) }),",
     "Object.freeze({ cle: 'os', titre: 'Brain OS', cmds: Object.freeze(['safety', 'explain', 'wallet', 'gas', 'show']) }),\n  Object.freeze({ cle: 'trade', titre: 'Trade', cmds: Object.freeze(['buy_stock', 'sell_stock', 'buy_block', 'sell_block', 'swap', 'send']) }),"],
   ['S', 'le Spin du panneau recopie le plan (prix +1)', 'section', "    await slotsAgir('spin');\n    bcBoutons(m, []);", "    await envoyerAppels(Slots.planSpin({ contrat, usdc: USDC_BASE, spinPrice: prix + 1n }).appels, compte);\n    bcBoutons(m, []);"],
   ['S', 'le Spin du panneau ignore « Pay with »', 'section', "    await slotsAgir('spin');\n    bcBoutons(m, []);", "    await envoyerAppels(plan.appels, compte);\n    bcBoutons(m, []);"],

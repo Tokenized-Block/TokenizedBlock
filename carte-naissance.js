@@ -11,7 +11,7 @@ const STAT = { FAIT: 'DONE', SUIVANT: 'NEXT', ATTENTE: 'WAITING' };
 const SOUS = {
   1: 'Only if this wallet lacks it · no app fee',
   2: '0.001 ETH in all + ≈ $1 deposit that stays yours',
-  3: 'The rest of your $5, in TBLOCK, to the community vault',
+  3: 'The rest of your $5, in TBLOCK, to the holders vault',
 };
 function el(tag, cls, txt) { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; }
 

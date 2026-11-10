@@ -46,7 +46,7 @@ export function modeleEtapes(bloc = null, hook = HOOK_7030) {
       { cle: 'open', nom: 'Open the market', to: POSITION_MANAGER, raison: 'The pool opens with 100 % block, no ETH added.' },
     ] },
     { n: 3, nom: 'Pay the vault', signatures: [
-      { cle: 'vault', nom: 'Pay the vault in TBLOCK', to: TBLOCK, raison: 'The rest of your $5, in TBLOCK, to the community vault.' },
+      { cle: 'vault', nom: 'Pay the vault in TBLOCK', to: TBLOCK, raison: 'The rest of your $5, in TBLOCK, to the holders vault.' },
     ] },
   ];
 }

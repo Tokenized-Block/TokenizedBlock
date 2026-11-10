@@ -1,5 +1,5 @@
 // create-vault-tip.js — the OPTIONAL TBLOCK part of a birth (Phil 2026-11-10: "a bit in ETH, the rest in TBLOCK, up to $5,
-// into the community vault"; chosen: optional, top-up to $5). Pure, no network.
+// into the holders vault"; chosen: optional, top-up to $5). Pure, no network.
 // The birth itself never changes: 0.001 ETH is fixed in the deployed router and hook. This is a SEPARATE signature, offered
 // only after the block is alive, so a missing TBLOCK balance can never stop a birth.
 // One call: TBLOCK.transfer(VAULT, amount) from the creator's own wallet. Nothing else, no approval, no contract of ours in between.
@@ -50,7 +50,7 @@ export function ethWeiForTopUp(ethUsd) {
  * amount is in TBLOCK wei (18 decimals), rounded DOWN so the creator never pays above the target.
  */
 export function plan({ ethUsd, tblockUsd, balance }) {
-  if (!VAULT) return { ok: false, why: 'The community vault is not deployed yet.' };
+  if (!VAULT) return { ok: false, why: 'The holders vault is not deployed yet.' };
   const left = usdLeft(ethUsd);
   if (left === null) return { ok: false, why: 'The ETH price could not be read just now.' };
   if (left === 0n) return { ok: false, why: 'The ETH fee already reaches $' + TARGET_USD + ': nothing to add.' };

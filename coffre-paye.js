@@ -1,4 +1,4 @@
-// coffre-paye.js — CREATE-ONE-PATH step 3: has this wallet paid the community vault in TBLOCK for this block? Pure, injected reader.
+// coffre-paye.js — CREATE-ONE-PATH step 3: has this wallet paid the holders vault in TBLOCK for this block? Pure, injected reader.
 // A TBLOCK transfer does not name the block, so "paid for this block" = a TBLOCK Transfer from this wallet to the vault mined AFTER the
 // block existed (and after the vault was deployed). An event is not a transaction: each candidate is checked against its transaction
 // (tx.from = the wallet, tx.to = TBLOCK) before it counts. The scan is bounded; beyond the bound the answer is NON_MESURE, never "unpaid".

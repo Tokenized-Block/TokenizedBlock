@@ -43,7 +43,9 @@ const EMPREINTES_PROD_D07AFC5 = {
   /* integ9 2026-10-25 (d07afc5 : 9df99397…d300) : + show -> bcTerminer, + spin / settle_spin, voir l en-tete D */
   /* claude/market-buy-form 2026-10-26 (13b33a98…a027 avant) : diff relu = un 3e parametre `garde = null` passe tel quel a
    *   bcProposerSwap (6e argument) ; la branche swap, l analyse et les refus sont inchanges */
-  'async function bcExecuterTexte(': 'ffaec8a7b684dfa3fa0b034e52be2ac5bb4ac3b3fe0580cc176021cef377eca3',
+  /* game346 2026-11-10 (ffaec8a7…eca3 avant) : diff relu = 2 lignes AJOUTEES, un commentaire et `if (c.type === 'heart') { void
+   *   bcCommandeCoeur(c.jeton); return true; }` avant spin ; la branche swap, l analyse et les refus sont inchanges */
+  'async function bcExecuterTexte(': '17470832f6988267b9ab610043e5cda11baaaaedcc18e14f6528673be26dfbf6',
   /* integ11 2026-10-25 (d07afc5 : cd36ee9d…84db) : + ligne de vente avant signature, venteLoin, bcLibelleSigner ; integ13 2026-10-26
    *   (integ12 : ef52c7fa…b5a3) : + rangee Dismiss + Try again d un devis refuse par la chaine — voir l en-tete D */
   /* claude/market-buy-form 2026-10-26 (bab21590…d573 avant) : diff relu = un 6e parametre `garde = null` ; `tient()` (garde absente =

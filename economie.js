@@ -1,4 +1,4 @@
-/* economie.js — the page side of the holders economy (BlockLikes "+1" and the TBlockVault community vault), Phil 2026-11-10.
+/* economie.js — the page side of the holders economy (BlockLikes "+1" and the TBlockVault holders vault), Phil 2026-11-10.
  * Builds UNSIGNED calls only; the person's own wallet signs everything. Nothing here holds, signs or sends.
  * Addresses come from economie-deploiement.js once each contract was READ on chain; until then they are null and the buttons stay hidden
  * (a button waiting for a contract is a draft, not a feature). */

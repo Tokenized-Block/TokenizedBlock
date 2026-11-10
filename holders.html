@@ -65,6 +65,16 @@ input{width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--li
   <h2>Your wallet</h2>
   <button id="connecter">Connect my wallet (Base)</button>
   <div id="vueSolde" style="margin-top:10px"></div>
+  <div id="vueCoeurs" style="margin-top:10px"></div>
+</div>
+
+<!-- game346 (Phil 2026-11-10): "a leaderboard of the best contributors: see live the holders who use the app". From /api/coeurs, read from
+     BlockLikes' own Liked events: TBLOCK burned in hearts, then hearts. Read-only, every 60 s. -->
+<div class="card">
+  <h2>Most active holders — live ♥</h2>
+  <div id="vueBoard"><span class="note">reading the hearts…</span></div>
+  <p class="note">Ranked by TBLOCK burned in hearts, then by hearts; a tie goes to who came first. A holder with a block is named by it.
+  Each heart is read from the heart contract itself, never from a claim.</p>
 </div>
 
 <div class="card">
@@ -108,6 +118,7 @@ input{width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--li
 <script type="module">
 import { LIKE_PRICE, LIKE_MIN_HOLD, CLAIM_MIN_HOLD, tblockPourUsd } from './economie.js';
 import { displayShort } from './frais-creation.js'; /* the one shortener: a fee wallet address is never displayed */
+import { lignesBoard, lignesCompte } from './coeurs-vue.js'; /* game346: the hearts board and this wallet's hearts */
 const $ = (s) => document.querySelector(s);
 const esc = (x) => String(x ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const row = (k, v) => '<div class="row"><span class="k">' + esc(k) + '</span><span class="v">' + v + '</span></div>';
@@ -130,7 +141,7 @@ function peindrePerks() {
   const p = [
     ['💬', 'Holders\' channel on Telegram', 'checked by our server before the invite', '$' + prix.seuil + ' of TBLOCK', etat.holder === true, etat.holder != null],
     ['♥', 'Heart a block', 'burns ' + tok(LIKE_PRICE) + ' TBLOCK, and you keep $' + prix.seuil + ' of TBLOCK at the price read now; counts as play for the weekly rewards', tok(LIKE_PRICE + garde) + ' TBLOCK' + val(LIKE_PRICE + garde), b != null && b >= LIKE_PRICE + garde, b != null],
-    ['🏦', 'Claim from the community vault', 'only for the week\'s players, after the week closes', tok(CLAIM_MIN_HOLD) + ' TBLOCK' + val(CLAIM_MIN_HOLD), b != null && b >= CLAIM_MIN_HOLD, b != null],
+    ['🏦', 'Claim from the holders vault', 'only for the week\'s players, after the week closes', tok(CLAIM_MIN_HOLD) + ' TBLOCK' + val(CLAIM_MIN_HOLD), b != null && b >= CLAIM_MIN_HOLD, b != null],
   ];
   $('#perks').innerHTML = p.map(([ic, t, d, need, ok, lu]) => '<div class="perk"><span class="ic">' + ic + '</span><span class="t"><b>' + esc(t) + '</b><small>' + esc(d) + '</small></span>'
     + '<span class="need">' + esc(need) + '<small>' + (lu ? st(ok) : (b == null && etat.holder == null ? st(false) : '<span class="st na">not read</span>')) + '</small></span></div>').join('');
@@ -168,6 +179,7 @@ $('#connecter').onclick = async () => {
   try { h = await api('/api/tblock/hold?wallet=' + w); }
   catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); return; }
   etat = { wallet: w, challenge: h.ok ? h.challenge : null, balance: h.balance ?? null, holder: h.usd == null ? null : !!h.ok };
+  void lireCoeurs();
   box.innerHTML = row('wallet', esc(displayShort(w))) + row('holds', h.balance == null ? 'not read' : tok(h.balance) + ' TBLOCK')
     + row('worth', fmtUsd(h.usd)) + row('state', h.ok ? pill('HOLDER', 'ok') : pill(h.usd == null ? 'NOT READ' : 'BELOW $' + (h.thresholdUsd || 15), h.usd == null ? 'warn' : 'bad'))
     + (!h.ok && h.why ? row('why', esc(h.why)) : '');
@@ -209,10 +221,21 @@ async function lireBurn() {
   } catch (e) { box.innerHTML = row('state', pill('SERVER NOT REACHED', 'warn')); }
 }
 
+/* game346: the hearts board, and this wallet's hearts once connected (coeurs-vue.js: the same words as the app's Wallet tab) */
+async function lireCoeurs() {
+  let r = null;
+  try { r = await api('/api/coeurs' + (etat.wallet ? '?compte=' + etat.wallet : '')); } catch (_) { r = null; }
+  const nom = (x) => (r && r.symboles && r.symboles[x]) || displayShort(x);
+  $('#vueBoard').innerHTML = lignesBoard(r, nom, etat.wallet).map((l) => (l.moi ? '<b>' : '') + row(l.k, esc(l.v)) + (l.moi ? '</b>' : '')).join('');
+  $('#vueCoeurs').innerHTML = etat.wallet && r && r.ok && r.compte ? lignesCompte(r.compte, nom).map((l) => row(l.k, esc(l.v))).join('') : '';
+}
+
 peindrePerks();
 void lirePrix();
 setInterval(() => { if (!document.hidden) void lirePrix(); }, 30000);
 void lireBurn();
+void lireCoeurs();
+setInterval(() => { if (!document.hidden) void lireCoeurs(); }, 60000);
 
 /* buy TBLOCK here — the server builds the plan (/api/rails/plan, tblock-route.js), the wallet signs ONE atomic batch (EIP-5792). */
 const USDC = '0x833589fcd6edb6e08f4c7c32d4f71b54bda02913', TBLOCK_ADR = '0xb200000000000000000000ba9bf8330307f8830e';

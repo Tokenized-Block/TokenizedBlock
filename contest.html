@@ -151,7 +151,7 @@ async function readWallet() {
   my = out;
 }
 
-/* ---------------------------------------------------------------- the community vault (TBlockVault) — hidden until it is deployed */
+/* ---------------------------------------------------------------- the holders vault (TBlockVault) — hidden until it is deployed */
 let V = null;
 async function readVault() {
   if (!ECO.VAULT || !ECO.LIKES) { V = null; return; }
@@ -170,7 +170,7 @@ async function readVault() {
 }
 function renderVault() {
   if (!V) { $('vault').hidden = true; return; }
-  let h = '<h2>Community vault</h2>';
+  let h = '<h2>Holders vault</h2>';
   if (V.error) { $('vault').innerHTML = h + '<p class="note">Not read just now (' + esc(V.error) + ').</p>'; $('vault').hidden = false; return; }
   h += '<p>It pays the players of each week first (a share of what they burned with +1, never more than they burned), then fills the contest pot. Holders of ' + tok(ECO.CLAIM_MIN_HOLD) + ' or more can claim.</p>';
   h += row('In the vault', tok(V.balance) + dollars(V.balance)) + row('Reserved for players', tok(V.reserved)) + row('This week', 'week ' + V.epoch);

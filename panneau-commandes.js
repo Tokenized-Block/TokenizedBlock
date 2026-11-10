@@ -19,7 +19,7 @@ export const BADGES = Object.freeze({ lit: 'reads', signe: 'you sign' });
 /** Les quatre groupes, dans l ordre ; chaque commande est une cle de PRECOMMANDES (commandes-panel.js) ou de PARLER (ci-dessous). */
 export const GROUPES = Object.freeze([
   Object.freeze({ cle: 'talk', titre: 'Talk', cmds: Object.freeze(['how', 'would', 'trade_for_me', 'circle']) }),
-  Object.freeze({ cle: 'play', titre: 'Play', cmds: Object.freeze(['spin', 'settle_spin', 'roll', 'roll_x5', 'duel', 'post_task', 'game', 'level', 'log']) }),
+  Object.freeze({ cle: 'play', titre: 'Play', cmds: Object.freeze(['spin', 'heart', 'settle_spin', 'roll', 'roll_x5', 'duel', 'post_task', 'game', 'level', 'log']) }),
   Object.freeze({ cle: 'trade', titre: 'Trade', cmds: Object.freeze(['buy_stock', 'sell_stock', 'buy_block', 'sell_block', 'swap', 'send']) }),
   Object.freeze({ cle: 'os', titre: 'Brain OS', cmds: Object.freeze(['safety', 'explain', 'wallet', 'gas', 'show']) }),
 ]);
@@ -35,7 +35,7 @@ export const PARLER = Object.freeze([
 /** Ce que fait chaque commande : 'lit' | 'signe' | 'contrat' (le roll : signe avec le contrat des rolls servi, sinon practice, rien a signer). */
 export const GESTES = Object.freeze({
   how: 'lit', would: 'lit', trade_for_me: 'signe', circle: 'lit',
-  spin: 'signe', settle_spin: 'signe', roll: 'contrat', roll_x5: 'contrat', duel: 'lit', post_task: 'lit', game: 'lit', level: 'lit', log: 'lit',
+  heart: 'signe', spin: 'signe', settle_spin: 'signe', roll: 'contrat', roll_x5: 'contrat', duel: 'lit', post_task: 'lit', game: 'lit', level: 'lit', log: 'lit',
   buy_stock: 'signe', sell_stock: 'signe', buy_block: 'signe', sell_block: 'signe', swap: 'signe', send: 'signe',
   safety: 'lit', explain: 'lit', wallet: 'lit', gas: 'lit', show: 'lit',
 });
@@ -46,6 +46,7 @@ export const DESCRIPTIONS = Object.freeze({
   would: 'Its brain suggests a move from its mood. Nothing to sign.',
   trade_for_me: 'Its brain picks buy or sell from its mood and prepares the trade card. You sign.',
   circle: 'The brains that fire with its own; let two of them meet. Nothing to sign.',
+  heart: 'A heart for this block: burns its TBLOCK price, counts as play for the holders vault. Checked first. You sign.',
   spin: 'BlockSlots: three Base blocks draw three faces; matching traits win a prize. You sign.',
   settle_spin: 'Settles your spin before its window closes; the prize goes to you. You sign.',
   roll: { contrat: 'Classic roll, paid on its contract. You sign.', practice: 'Classic roll, practice: free, nothing to sign.' },
