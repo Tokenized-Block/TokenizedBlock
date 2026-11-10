@@ -1381,7 +1381,11 @@ dialog.bvPop .bvPetit{flex:0 0 auto;width:auto;padding:6px 14px;min-height:0}
 .cnEtat{font-size:.7em;font-weight:800;letter-spacing:.06em;opacity:.8}.cnSig.cnSUIVANT .cnEtat{color:#4C8FFF}
 .cnContinue{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;padding:12px}.cnContinue small{font-weight:500;opacity:.85}
 .cnContinue:disabled{opacity:.55;cursor:not-allowed}
-.cnCarte #cCreer{width:100%;margin:0}.cnSousBouton{display:block;text-align:center;opacity:.85;margin-top:-4px}
+.cnCarte #cCreer{width:100%;margin:0}
+/* game344 (Phil: "no mix of the old and the new"): on Create, only the card speaks. Kept in the DOM (their guards read them), not shown:
+ *   the funding notes and Bridge link under the button, the pair chips row (the pair stays in its folded "Paired with" section). */
+#v-creer #cFundHint,#v-creer #cBridgeRetarget,#v-creer #cGoBridge,#v-creer #cPaireChips{display:none!important}
+.cnApercu .cnSig{opacity:.75}.cnSousBouton{display:block;text-align:center;opacity:.85;margin-top:-4px}
 .pConnect:not(.connecte){background:linear-gradient(135deg,var(--g1),var(--g2));color:#fff;border-color:transparent;
   box-shadow:0 0 0 1px rgb(var(--accentRgb) / .35),0 6px 18px rgb(var(--boutonRgb) / .35)}
 .mapCentre{display:block;flex:1 1 auto;min-width:0;text-align:center;cursor:pointer;background:none;border:0;padding:4px 6px;border-radius:10px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:800;letter-spacing:.2px;color:var(--texte);margin:0 8px;
@@ -2180,7 +2184,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="creaNom" id="cApercuNom">Your block</p>
       <p class="note" id="cApercuSym" style="margin:2px 0 0">no symbol yet</p>
       <!-- tip 20260922-fee-funnel -->
-      <p class="creaPrix"><b>$5</b><span>born, face and brain engraved, market open · 0.001 ETH + the rest in TBLOCK</span></p>
+      <p class="creaPrix"><b>$5</b><span>born, face and brain engraved, market open · TBLOCK first</span></p>
       <!-- ⛔ PHIL (2026-09-17) : « pourquoi t as retire les parametres » — ils n ont pas ete retires, ils
            ont ete replies deux cartes plus bas, ce qui revient au meme pour qui ne fouille pas. Ce
            bouton les ouvre et y emmene, et son libelle dit dans quel sens il va. -->
@@ -2363,6 +2367,8 @@ details[open] > summary::before{transform:rotate(90deg)}
       <p class="note" id="cPaireNote"></p>
       <p class="puce" id="cPaireChip" style="display:inline-block;margin-top:6px" hidden></p>
       </details>
+      <!-- game344 (Phil: "one version, the new one, no overload"): the long texts fold under ONE line; the card below is the path -->
+      <details class="bDetail" id="cDetailsFrais" style="margin-top:6px"><summary class="note">Fees, deposit and why TBLOCK</summary>
       <p class="note" id="cReviewDisclosure">Before your wallet opens, review your name, symbol, engraved face and brain, selected pair, and the price: $5 in all, TBLOCK first. Step 1, only if you lack TBLOCK: the app buys it with your ETH (no app fee). Step 2, the birth: 0.001 ETH, signed in two parts: 0.0007 ETH when you create, then 0.0003 ETH plus your creator deposit (not a fee: it stays yours) when its market opens. Step 3: your block is paid in TBLOCK to the community vault. Your wallet shows the exact transaction(s) before you approve; nothing is sent until you confirm.</p>
       <!-- game326 (Phil 2026-11-09): the app recommends holding TBLOCK; the birth path itself is unchanged (the deployed contracts take ETH) -->
       <p class="note" id="cTblockReco">Recommended: hold TBLOCK, the app's own token. About $5 of it can be bought in the app in one batch
@@ -2370,9 +2376,10 @@ details[open] > summary::before{transform:rotate(90deg)}
         part of every trade to the dead address. Once your block is alive, you can add the rest up to $5 in TBLOCK to the community vault
         (optional, one more signature). Creators can also enter their block in the
         <a href="contest.html" target="_blank" rel="noopener">block contest</a>, where entries and votes are paid in TBLOCK.</p>
+      <p class="note" id="cCautionNote" hidden></p>
+      </details>
       <!-- game336 (Phil 2026-11-10): the ETH part + TBLOCK part split is shown BEFORE signing, with live numbers (create-vault-tip.js) -->
       <div class="stadeLigne" id="cTipApercu" hidden style="flex-direction:column;align-items:flex-start;gap:4px;margin-top:8px"></div>
-      <p class="note" id="cCautionNote" hidden></p>
       <details class="bDetail" style="margin-top:6px"><summary class="note">Review before your wallet request</summary>
       <div class="stadeLigne" data-itabs="cCost" role="tablist" style="margin-top:8px" hidden>
         <button type="button" class="puce on" role="tab" aria-selected="true" data-itab="cost">Costs</button>
@@ -3625,7 +3632,7 @@ details[open] > summary::before{transform:rotate(90deg)}
       <!-- ⛔ L EMPREINTE EST AFFICHEE, DONC ELLE EST DE L ANGLAIS. `20261001-pont-dans-lui` a fait
            rougir `test-texte-a-l-ecran.mjs` : le mot « dans » est de la prose francaise partie a
            l ecran anglais. La garde a fait son travail du premier coup. -->
-      <p class="note" data-build="20261109-game343" hidden>Build <code>20261109-game343</code> ·Contract labels say what they do, not our internal names.</p>
+      <p class="note" data-build="20261109-game344" hidden>Build <code>20261109-game344</code> ·Contract labels say what they do, not our internal names.</p>
       <p class="sous">Everything happening to blocks on Base, live.</p>
       <!-- tip 0013: sticky — Hooked chip = Dex fees; unhooked → Launch beside. No fee addr. -->
       <p class="note" id="sfHookedSticky" hidden>Blocks alive on TokenizedBlock pay their creator on every trade. Example:<button type="button" class="puce" id="sfStickyTbgas">Open TBGAS</button>.</p>
@@ -5286,7 +5293,8 @@ import { repartitionFrappe, TBLOCK, TBGAS, SUPPLY_FIXE, DECIMALES_FIXES, HOOK_PR
 import * as ECO from './economie.js'; /* holders economy: the +1 burn and the community vault (unsigned calls only) */
 import * as TIP from './create-vault-tip.js';
 import { RELAIS_METHODES } from './relais-rpc.js';
-import { peindreCarteNaissance } from './carte-naissance.js'; /* game343 CREATE-ONE-PATH: the one birth card */ /* game341: what the server relay reads for the page when every public node refused */ /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
+import { peindreCarteNaissance } from './carte-naissance.js'; /* game343 CREATE-ONE-PATH: the one birth card */
+import { libelleContinue, modeleEtapes } from './etat-naissance.js'; /* game341: what the server relay reads for the page when every public node refused */ /* optional TBLOCK part of a birth, offered AFTER it succeeded, into the community vault */
 import { plancher7030 } from './hook-7030-descripteur.js';
 import { completerInscriptionHook, completerInscriptionPayee, estEtapeInscription } from './lancer-pool-v2.js';
 import { lireEtatLancement, etapesGuidees, texteMarcheOuvert } from './lancement-guide.js';
@@ -24068,7 +24076,7 @@ function majFraisEtRecap() {
   }
   /* tip 20260922-fee-funnel */
   $('#cReseauAvert').textContent = CHAINE === 8453
-    ? '⚠️ Base — Birth fee: 0.001 ETH. Cannot be undone.'
+    ? '⚠️ Base mainnet — a birth cannot be undone.'
     : 'Practice — everything is free.';
   $('#cReseauAvert').className = 'note' + (CHAINE === 8453 ? ' wKo' : '');
 }
@@ -25475,6 +25483,8 @@ async function creerBlock() {
       try { etape('create_sign_refus'); } catch (_) {}
     }
     if (rc.etat === 'CONFIRME' && adresseCreee) {
+      blocEnCours = { adr: String(adresseCreee).toLowerCase(), compte: String(compte || '').toLowerCase() }; /* game344: the card follows THIS block */
+      carteCreeLue = 0;
       etape('cree');
       /* ⛔ R8 (C2 R6-4) : le createur connait le sel de SON block — prouve TB tout de suite, sans attendre l index servi. */
       if (ibDirect) { try { const sNe = selDeCreatePaid(dataSend); if (sNe) ajouterNeDuRouteur(adresseCreee, sNe); } catch (_) {} }
@@ -28979,7 +28989,38 @@ for (const id of ['#cNom', '#cSym', '#cSel']) {
   });
 }
 let creerSansVie = false; /* tip 20260922-2140 Advanced escape (removed tip 20260922-create-sign-ux); leave flag dead */
-$('#cCreer').addEventListener('click', () => { creerSansVie = false; void creerBlock(); });
+/* ⛔⛔ game344 (live test 2 by Phil, 2026-11-10): after Create was signed, the same button kept running creerBlock — the block already
+ *   existed, so nothing new was asked and "Review" did nothing. The button now follows the ONE reader (carteCreeR): block created ->
+ *   resume step 2 from the chain; market open -> pay the vault; otherwise (nothing created yet, or not read) -> the birth as before. */
+$('#cCreer').addEventListener('click', () => {
+  const r = carteCreeR, n = r && r.etat === 'LU' ? r.prochaine : null;
+  const adr = blocDeLaCarte();
+  /* all done: Done shows it on the map and frees Create for the next birth */
+  if (r && r.etat === 'LU' && r.ne && r.restantes === 0) { blocEnCours = null; carteCreeR = null; carteCreeLue = 0; try { allerA('map'); } catch (_) {} return; }
+  if (n && adr && r.ne && n.etape === 2) { void reprendreDepuisCreate(adr); return; }
+  if (n && adr && r.ne && (n.etape === 3 || n.etape === 1)) { const z = document.createElement('div'); ($('#cTipApercu') || document.body).append(z); void proposerTipCoffre(z); return; }
+  creerSansVie = false; void creerBlock();
+});
+/* resume step 2 of a block created from this Create tab: the same sequence as the block page (ETH pair, 99.9 %, auto), its progress
+ *   mirrored in Create (miroirVieDansCreate) so the person stays here; the launch plan simulates its calls before the wallet opens. */
+async function reprendreDepuisCreate(adr) {
+  const e = $('#cEtat');
+  if (e) { e.className = 'note'; e.textContent = 'Reading your block on the chain to continue where you stopped…'; }
+  miroirVieDansCreate = true;
+  if (e && !$('#cVieProgression')) { const p = document.createElement('p'); p.className = 'note'; p.id = 'cVieProgression'; p.style.marginTop = '8px'; e.appendChild(p); }
+  try {
+    await ouvrirProfil(adr, String(($('#cSym') || {}).value || '').trim() || null, { sansNaviguer: true });
+    lancementLien = adr;
+    const d = $('#plDevise'); if (d) { d.value = 'ETH'; d.dispatchEvent(new Event('change')); }
+    const part = $('#plPart'); if (part) part.value = '99.9';
+    ouvrirLancement();
+    vieAuto = true;
+    majProgressionVie('Step 1 — reading its market and your approvals…');
+    void calculerLancement();
+  } catch (err) {
+    if (e) { e.className = 'note wKo'; e.textContent = 'Could not read your block just now — nothing was asked. Try Continue again in a moment.'; }
+  }
+}
 /* tip 20260922-create-sign-ux: #cCreerFree removed from DOM — null-guard so paint/handlers never throw */
 const cCreerFree = $('#cCreerFree');
 if (cCreerFree) cCreerFree.addEventListener('click', () => { creerSansVie = true; void creerBlock(); });
@@ -32387,10 +32428,28 @@ function rendreCCreer() {
   const b = $('#cCreer'); if (!b || !cCreerChez.parent || b.parentNode === cCreerChez.parent) return;
   cCreerChez.parent.insertBefore(b, cCreerChez.apres && cCreerChez.apres.parentNode === cCreerChez.parent ? cCreerChez.apres : null);
 }
-let carteCreeLue = 0, carteCreeEssai = 0;
+let carteCreeLue = 0, carteCreeEssai = 0, carteCreeR = null, blocEnCours = null;
+/* game344: the block the Create card follows — the one created in this session for this wallet, else the predicted address of the
+ *   form. Never a fresh salt over a born block. (A block left from another visit is resumed from its own page or My blocks.) */
+function blocDeLaCarte() {
+  const moi = String(compte || '').toLowerCase();
+  if (blocEnCours && blocEnCours.compte === moi) return blocEnCours.adr;
+  return adressePrevue && adressePrevue.adresse ? String(adressePrevue.adresse).toLowerCase() : null;
+}
 async function peindreCarteCreate(box) {
-  const adr = adressePrevue && adressePrevue.adresse ? String(adressePrevue.adresse).toLowerCase() : null;
-  if (!compte || !adr) return false;
+  const adr = blocDeLaCarte();
+  if (!compte || !adr) {
+    /* game344 (Phil: "one version, the new one, no overload"): before a wallet or a name, the SAME card as a preview — every step and
+     *   signature named, all waiting; the button inside is the page's own #cCreer ("Connect wallet → review → Instant Birth · $5"). */
+    const b = $('#cCreer');
+    if (b && !cCreerChez.parent) { cCreerChez.parent = b.parentNode; cCreerChez.apres = b.nextSibling; }
+    if (!box.querySelector('.cnApercu')) {
+      const etapes = modeleEtapes(null).map((e) => ({ ...e, statut: 'ATTENTE', faites: 0, signatures: e.signatures.map((s) => ({ ...s, statut: 'ATTENTE' })) }));
+      peindreCarteNaissance(box, { etat: 'LU', apercu: true, etapes, prochaine: null, restantes: 10, faites: 0 }, { bouton: b });
+      const c = box.querySelector('.cnCarte'); if (c) c.classList.add('cnApercu');
+    }
+    return true;
+  }
   if (Date.now() - carteCreeLue < 12000) return true;
   carteCreeLue = Date.now();
   let part = '';
@@ -32408,6 +32467,9 @@ async function peindreCarteCreate(box) {
   if (!lu) carteCreeLue = Date.now() - 4000; /* not read: again in 8 s */
   const b = $('#cCreer');
   if (b && !cCreerChez.parent) { cCreerChez.parent = b.parentNode; cCreerChez.apres = b.nextSibling; }
+  if (lu) carteCreeR = r;
+  /* the button's own label follows the reader once the block exists (its creerBlock label would say "Instant Birth" again) */
+  if (b && lu && r.ne) { const lib = libelleContinue(r); b.textContent = lib.l1; }
   peindreCarteNaissance(box, r, { bouton: b, occupe: lu ? null : { secondes: 8, essai: carteCreeEssai } });
   return true;
 }

@@ -27,6 +27,30 @@ const bas = (a) => String(a || '').toLowerCase();
 const pad = (a) => bas(a).replace(/^0x/, '').padStart(64, '0');
 const mot = (h, i) => BigInt('0x' + (String(h).replace(/^0x/, '').slice(64 * i, 64 * (i + 1)) || '0'));
 
+/** the 3 steps and their 10 signatures, all waiting: the ONE list of names and contracts (the reader fills statuses into a copy;
+ *  the card shows this as a preview before a wallet is connected). `bloc` may be null (not known yet). */
+export function modeleEtapes(bloc = null, hook = HOOK_7030) {
+  const b = bloc ? bas(bloc) : null;
+  return [
+    { n: 1, nom: 'Get TBLOCK', signatures: [
+      { cle: 'buy1', nom: 'ETH → wtCOIN', to: AERODROME_ROUTER, raison: 'Buys the price pivot on Aerodrome. wtCOIN is not a second fee: the next signatures turn it into TBLOCK.' },
+      { cle: 'buy2', nom: 'Approve wtCOIN to Permit2', to: WTCOIN, raison: 'Exactly the wtCOIN just bought.' },
+      { cle: 'buy3', nom: 'Permit2 permit', to: PERMIT2, raison: 'A one-hour permit so the swap can take that wtCOIN.' },
+      { cle: 'buy4', nom: 'Swap wtCOIN → TBLOCK', to: UNIVERSAL_ROUTER, raison: 'Through the TBLOCK pool, whose hook burns part of every trade.' },
+    ] },
+    { n: 2, nom: 'Birth + market', signatures: [
+      { cle: 'create', nom: 'Create', to: CREATE_ROUTER, raison: 'Face and brain are engraved. Your block is born.' },
+      { cle: 'approve', nom: 'Approve the block to Permit2', to: b, raison: 'The whole offer of your block goes into its pool.' },
+      { cle: 'permit2', nom: 'Permit2', to: PERMIT2, raison: 'A one-hour permit so the market can take that offer.' },
+      { cle: 'register', nom: 'Hook registration', to: bas(hook), raison: 'The birth fee, plus the creator deposit (about $1) that stays yours.' },
+      { cle: 'open', nom: 'Open the market', to: POSITION_MANAGER, raison: 'The pool opens with 100 % block, no ETH added.' },
+    ] },
+    { n: 3, nom: 'Pay the vault', signatures: [
+      { cle: 'vault', nom: 'Pay the vault in TBLOCK', to: TBLOCK, raison: 'The rest of your $5, in TBLOCK, to the community vault.' },
+    ] },
+  ];
+}
+
 /** the ETH pool key of a block on the 7030 hook (the key TEST and every Instant Birth on ETH uses) */
 export const cleEth = (bloc, hook = HOOK_7030) => ({ currency0: ETH0, currency1: bas(bloc), fee: 0, tickSpacing: 200, hooks: bas(hook) });
 
@@ -59,12 +83,8 @@ export async function lireEtatNaissance({ rpc, compte, bloc, partTblock = null, 
 
     /* ── step 1: TBLOCK for the vault part. Not needed (or already spent on the vault) = done. */
     const tbl = await bal(TBLOCK, moi);
-    const s1 = [
-      { cle: 'buy1', nom: 'ETH → wtCOIN', to: AERODROME_ROUTER, raison: 'Buys the price pivot on Aerodrome. wtCOIN is not a second fee: the next signatures turn it into TBLOCK.' },
-      { cle: 'buy2', nom: 'Approve wtCOIN to Permit2', to: WTCOIN, raison: 'Exactly the wtCOIN just bought.' },
-      { cle: 'buy3', nom: 'Permit2 permit', to: PERMIT2, raison: 'A one-hour permit so the swap can take that wtCOIN.' },
-      { cle: 'buy4', nom: 'Swap wtCOIN → TBLOCK', to: UNIVERSAL_ROUTER, raison: 'Through the TBLOCK pool, whose hook burns part of every trade.' },
-    ];
+    const modele = modeleEtapes(b, hook);
+    const s1 = modele[0].signatures;
     let etape1Faite;
     if (coffrePaye === true) etape1Faite = true;
     else if (typeof partTblock === 'bigint') etape1Faite = tbl >= partTblock;
@@ -84,13 +104,7 @@ export async function lireEtatNaissance({ rpc, compte, bloc, partTblock = null, 
     } else s1.forEach((s) => { s.statut = 'NON_LU'; });
 
     /* ── step 2: the 5 signatures of the birth */
-    const s2 = [
-      { cle: 'create', nom: 'Create', to: CREATE_ROUTER, raison: 'Face and brain are engraved. Your block is born.' },
-      { cle: 'approve', nom: 'Approve the block to Permit2', to: b, raison: 'The whole offer of your block goes into its pool.' },
-      { cle: 'permit2', nom: 'Permit2', to: PERMIT2, raison: 'A one-hour permit so the market can take that offer.' },
-      { cle: 'register', nom: 'Hook registration', to: hook, raison: 'The birth fee, plus the creator deposit (about $1) that stays yours.' },
-      { cle: 'open', nom: 'Open the market', to: POSITION_MANAGER, raison: 'The pool opens with 100 % block, no ETH added.' },
-    ];
+    const s2 = modele[1].signatures;
     if (!lanc.ne) s2.forEach((s) => { s.statut = 'A'; });
     else if (ouvert) s2.forEach((s) => { s.statut = 'FAIT'; });
     else {
@@ -106,7 +120,7 @@ export async function lireEtatNaissance({ rpc, compte, bloc, partTblock = null, 
     }
 
     /* ── step 3: the vault payment (read by the server; unknown = not read) */
-    const s3 = [{ cle: 'vault', nom: 'Pay the vault in TBLOCK', to: TBLOCK, raison: 'The rest of your $5, in TBLOCK, to the community vault.' }];
+    const s3 = modele[2].signatures;
     s3[0].statut = coffrePaye === true ? 'FAIT' : coffrePaye === false ? 'A' : 'NON_LU';
 
     /* ── one next signature in order; the rest of the undone ones wait */

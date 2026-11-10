@@ -25,7 +25,8 @@ export function peindreCarteNaissance(hote, r, { titre = 'Your birth, in one car
   const carte = el('div', 'cnCarte');
   const tout = r && r.etat === 'LU' && r.restantes === 0;
   carte.append(el('div', 'cnTitre', tout ? 'Born · market open · vault paid' : titre));
-  carte.append(el('p', 'cnLead', tout ? 'Nothing left to sign. Every step below was read on the chain just now.'
+  carte.append(el('p', 'cnLead', r && r.apercu ? 'Connect your wallet: this card then reads the chain and shows exactly what is left. Up to 10 signatures without batching (e.g. Rabby), each named; you can stop and come back.'
+    : tout ? 'Nothing left to sign. Every step below was read on the chain just now.'
     : 'Three steps. One Continue button. ' + (r && r.etat === 'LU' ? r.restantes + ' signature' + (r.restantes > 1 ? 's' : '') + ' left' : 'Up to 10 signatures')
       + ' without batching (e.g. Rabby), each named. The app reads the chain before every step, so you can stop and come back: this card picks up where you are.'));
   if (occupe || !r || r.etat !== 'LU') {
@@ -58,7 +59,7 @@ export function peindreCarteNaissance(hote, r, { titre = 'Your birth, in one car
       carte.append(box);
     }
   }
-  const lib = occupe ? { l1: 'Waiting for Base nodes…', l2: 'Continue comes back by itself' } : libelleContinue(r);
+  const lib = occupe ? { l1: 'Waiting for Base nodes…', l2: 'Continue comes back by itself' } : r && r.apercu ? { l1: '', l2: '' } : libelleContinue(r);
   let btn;
   if (bouton) {
     /* Create: the page's own #cCreer (its flow, its label) is MOVED into the card — one button, never two; the signature line under it */
